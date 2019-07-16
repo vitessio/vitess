@@ -7,6 +7,8 @@ import (
 	fmt "fmt"
 	io "io"
 	math "math"
+	reflect "reflect"
+	strings "strings"
 
 	proto "github.com/gogo/protobuf/proto"
 	logutil "vitess.io/vitess/go/vt/proto/logutil"
@@ -25,15 +27,11 @@ const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
 
 // ExecuteVtworkerCommandRequest is the payload for ExecuteVtworkerCommand.
 type ExecuteVtworkerCommandRequest struct {
-	Args                 []string `protobuf:"bytes,1,rep,name=args,proto3" json:"args,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Args []string `protobuf:"bytes,1,rep,name=args,proto3" json:"args,omitempty"`
 }
 
-func (m *ExecuteVtworkerCommandRequest) Reset()         { *m = ExecuteVtworkerCommandRequest{} }
-func (m *ExecuteVtworkerCommandRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteVtworkerCommandRequest) ProtoMessage()    {}
+func (m *ExecuteVtworkerCommandRequest) Reset()      { *m = ExecuteVtworkerCommandRequest{} }
+func (*ExecuteVtworkerCommandRequest) ProtoMessage() {}
 func (*ExecuteVtworkerCommandRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_32a791ab99179e8e, []int{0}
 }
@@ -73,15 +71,11 @@ func (m *ExecuteVtworkerCommandRequest) GetArgs() []string {
 
 // ExecuteVtworkerCommandResponse is streamed back by ExecuteVtworkerCommand.
 type ExecuteVtworkerCommandResponse struct {
-	Event                *logutil.Event `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+	Event *logutil.Event `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
 }
 
-func (m *ExecuteVtworkerCommandResponse) Reset()         { *m = ExecuteVtworkerCommandResponse{} }
-func (m *ExecuteVtworkerCommandResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteVtworkerCommandResponse) ProtoMessage()    {}
+func (m *ExecuteVtworkerCommandResponse) Reset()      { *m = ExecuteVtworkerCommandResponse{} }
+func (*ExecuteVtworkerCommandResponse) ProtoMessage() {}
 func (*ExecuteVtworkerCommandResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_32a791ab99179e8e, []int{1}
 }
@@ -127,7 +121,7 @@ func init() {
 func init() { proto.RegisterFile("vtworkerdata.proto", fileDescriptor_32a791ab99179e8e) }
 
 var fileDescriptor_32a791ab99179e8e = []byte{
-	// 188 bytes of a gzipped FileDescriptorProto
+	// 230 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0x2a, 0x2b, 0x29, 0xcf,
 	0x2f, 0xca, 0x4e, 0x2d, 0x4a, 0x49, 0x2c, 0x49, 0xd4, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0xe2,
 	0x41, 0x16, 0x93, 0xe2, 0xcd, 0xc9, 0x4f, 0x2f, 0x2d, 0xc9, 0xcc, 0x81, 0x48, 0x2a, 0x19, 0x73,
@@ -136,12 +130,98 @@ var fileDescriptor_32a791ab99179e8e = []byte{
 	0x17, 0x4b, 0x30, 0x2a, 0x30, 0x6b, 0x70, 0x06, 0x81, 0xd9, 0x4a, 0x6e, 0x5c, 0x72, 0xb8, 0x34,
 	0x15, 0x17, 0xe4, 0xe7, 0x15, 0xa7, 0x0a, 0xa9, 0x70, 0xb1, 0xa6, 0x96, 0xa5, 0xe6, 0x95, 0x48,
 	0x30, 0x2a, 0x30, 0x6a, 0x70, 0x1b, 0xf1, 0xe9, 0xc1, 0x6c, 0x75, 0x05, 0x89, 0x06, 0x41, 0x24,
-	0x9d, 0xcc, 0x4f, 0x3c, 0x92, 0x63, 0xbc, 0xf0, 0x48, 0x8e, 0x71, 0xc1, 0x63, 0x39, 0xc6, 0x28,
-	0xcd, 0xb2, 0xcc, 0x92, 0xd4, 0xe2, 0x62, 0xbd, 0xcc, 0x7c, 0x7d, 0x08, 0x4b, 0x3f, 0x3d, 0x5f,
-	0xbf, 0xac, 0x44, 0x1f, 0xec, 0x50, 0x7d, 0x64, 0x4f, 0x24, 0xb1, 0x81, 0xc5, 0x8c, 0x01, 0x01,
-	0x00, 0x00, 0xff, 0xff, 0xeb, 0xab, 0x81, 0x95, 0xef, 0x00, 0x00, 0x00,
+	0x9d, 0xe2, 0x2f, 0x3c, 0x94, 0x63, 0xb8, 0xf1, 0x50, 0x8e, 0xe1, 0xc3, 0x43, 0x39, 0xc6, 0x86,
+	0x47, 0x72, 0x8c, 0x2b, 0x1e, 0xc9, 0x31, 0x9e, 0x78, 0x24, 0xc7, 0x78, 0xe1, 0x91, 0x1c, 0xe3,
+	0x8b, 0x47, 0x72, 0x0c, 0x1f, 0x1e, 0xc9, 0x31, 0x4e, 0x78, 0x2c, 0xc7, 0xb0, 0xe0, 0xb1, 0x1c,
+	0xe3, 0x85, 0xc7, 0x72, 0x0c, 0x37, 0x1e, 0xcb, 0x31, 0x44, 0x69, 0x96, 0x65, 0x96, 0xa4, 0x16,
+	0x17, 0xeb, 0x65, 0xe6, 0xeb, 0x43, 0x58, 0xfa, 0xe9, 0xf9, 0xfa, 0x65, 0x25, 0xfa, 0x60, 0x0f,
+	0xe9, 0x23, 0x7b, 0x36, 0x89, 0x0d, 0x2c, 0x66, 0x0c, 0x08, 0x00, 0x00, 0xff, 0xff, 0x98, 0xe3,
+	0xab, 0xce, 0x17, 0x01, 0x00, 0x00,
 }
 
+func (this *ExecuteVtworkerCommandRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteVtworkerCommandRequest)
+	if !ok {
+		that2, ok := that.(ExecuteVtworkerCommandRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Args) != len(that1.Args) {
+		return false
+	}
+	for i := range this.Args {
+		if this.Args[i] != that1.Args[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *ExecuteVtworkerCommandResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteVtworkerCommandResponse)
+	if !ok {
+		that2, ok := that.(ExecuteVtworkerCommandResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Event.Equal(that1.Event) {
+		return false
+	}
+	return true
+}
+func (this *ExecuteVtworkerCommandRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&vtworkerdata.ExecuteVtworkerCommandRequest{")
+	s = append(s, "Args: "+fmt.Sprintf("%#v", this.Args)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteVtworkerCommandResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&vtworkerdata.ExecuteVtworkerCommandResponse{")
+	if this.Event != nil {
+		s = append(s, "Event: "+fmt.Sprintf("%#v", this.Event)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func valueToGoStringVtworkerdata(v interface{}, typ string) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("func(v %v) *%v { return &v } ( %#v )", typ, typ, pv)
+}
 func (m *ExecuteVtworkerCommandRequest) Marshal() (dAtA []byte, err error) {
 	size := m.ProtoSize()
 	dAtA = make([]byte, size)
@@ -172,9 +252,6 @@ func (m *ExecuteVtworkerCommandRequest) MarshalTo(dAtA []byte) (int, error) {
 			i += copy(dAtA[i:], s)
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -203,9 +280,6 @@ func (m *ExecuteVtworkerCommandResponse) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n1
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -230,9 +304,6 @@ func (m *ExecuteVtworkerCommandRequest) ProtoSize() (n int) {
 			n += 1 + l + sovVtworkerdata(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -245,9 +316,6 @@ func (m *ExecuteVtworkerCommandResponse) ProtoSize() (n int) {
 	if m.Event != nil {
 		l = m.Event.ProtoSize()
 		n += 1 + l + sovVtworkerdata(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -264,6 +332,34 @@ func sovVtworkerdata(x uint64) (n int) {
 }
 func sozVtworkerdata(x uint64) (n int) {
 	return sovVtworkerdata(uint64((x << 1) ^ uint64((int64(x) >> 63))))
+}
+func (this *ExecuteVtworkerCommandRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ExecuteVtworkerCommandRequest{`,
+		`Args:` + fmt.Sprintf("%v", this.Args) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteVtworkerCommandResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ExecuteVtworkerCommandResponse{`,
+		`Event:` + strings.Replace(fmt.Sprintf("%v", this.Event), "Event", "logutil.Event", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func valueToStringVtworkerdata(v interface{}) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("*%v", pv)
 }
 func (m *ExecuteVtworkerCommandRequest) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
@@ -341,7 +437,6 @@ func (m *ExecuteVtworkerCommandRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -431,7 +526,6 @@ func (m *ExecuteVtworkerCommandResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}

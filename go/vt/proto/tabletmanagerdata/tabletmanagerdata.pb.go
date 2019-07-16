@@ -4,11 +4,15 @@
 package tabletmanagerdata
 
 import (
+	bytes "bytes"
 	fmt "fmt"
 	io "io"
 	math "math"
+	reflect "reflect"
+	strings "strings"
 
 	proto "github.com/gogo/protobuf/proto"
+	github_com_gogo_protobuf_sortkeys "github.com/gogo/protobuf/sortkeys"
 	logutil "vitess.io/vitess/go/vt/proto/logutil"
 	query "vitess.io/vitess/go/vt/proto/query"
 	replicationdata "vitess.io/vitess/go/vt/proto/replicationdata"
@@ -40,15 +44,11 @@ type TableDefinition struct {
 	// how much space the data file takes.
 	DataLength uint64 `protobuf:"varint,6,opt,name=data_length,json=dataLength,proto3" json:"data_length,omitempty"`
 	// approximate number of rows
-	RowCount             uint64   `protobuf:"varint,7,opt,name=row_count,json=rowCount,proto3" json:"row_count,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	RowCount uint64 `protobuf:"varint,7,opt,name=row_count,json=rowCount,proto3" json:"row_count,omitempty"`
 }
 
-func (m *TableDefinition) Reset()         { *m = TableDefinition{} }
-func (m *TableDefinition) String() string { return proto.CompactTextString(m) }
-func (*TableDefinition) ProtoMessage()    {}
+func (m *TableDefinition) Reset()      { *m = TableDefinition{} }
+func (*TableDefinition) ProtoMessage() {}
 func (*TableDefinition) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{0}
 }
@@ -129,17 +129,13 @@ func (m *TableDefinition) GetRowCount() uint64 {
 }
 
 type SchemaDefinition struct {
-	DatabaseSchema       string             `protobuf:"bytes,1,opt,name=database_schema,json=databaseSchema,proto3" json:"database_schema,omitempty"`
-	TableDefinitions     []*TableDefinition `protobuf:"bytes,2,rep,name=table_definitions,json=tableDefinitions,proto3" json:"table_definitions,omitempty"`
-	Version              string             `protobuf:"bytes,3,opt,name=version,proto3" json:"version,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
-	XXX_unrecognized     []byte             `json:"-"`
-	XXX_sizecache        int32              `json:"-"`
+	DatabaseSchema   string             `protobuf:"bytes,1,opt,name=database_schema,json=databaseSchema,proto3" json:"database_schema,omitempty"`
+	TableDefinitions []*TableDefinition `protobuf:"bytes,2,rep,name=table_definitions,json=tableDefinitions,proto3" json:"table_definitions,omitempty"`
+	Version          string             `protobuf:"bytes,3,opt,name=version,proto3" json:"version,omitempty"`
 }
 
-func (m *SchemaDefinition) Reset()         { *m = SchemaDefinition{} }
-func (m *SchemaDefinition) String() string { return proto.CompactTextString(m) }
-func (*SchemaDefinition) ProtoMessage()    {}
+func (m *SchemaDefinition) Reset()      { *m = SchemaDefinition{} }
+func (*SchemaDefinition) ProtoMessage() {}
 func (*SchemaDefinition) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{1}
 }
@@ -195,15 +191,11 @@ type SchemaChangeResult struct {
 	// before_schema holds the schema before each change.
 	BeforeSchema *SchemaDefinition `protobuf:"bytes,1,opt,name=before_schema,json=beforeSchema,proto3" json:"before_schema,omitempty"`
 	// after_schema holds the schema after each change.
-	AfterSchema          *SchemaDefinition `protobuf:"bytes,2,opt,name=after_schema,json=afterSchema,proto3" json:"after_schema,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
+	AfterSchema *SchemaDefinition `protobuf:"bytes,2,opt,name=after_schema,json=afterSchema,proto3" json:"after_schema,omitempty"`
 }
 
-func (m *SchemaChangeResult) Reset()         { *m = SchemaChangeResult{} }
-func (m *SchemaChangeResult) String() string { return proto.CompactTextString(m) }
-func (*SchemaChangeResult) ProtoMessage()    {}
+func (m *SchemaChangeResult) Reset()      { *m = SchemaChangeResult{} }
+func (*SchemaChangeResult) ProtoMessage() {}
 func (*SchemaChangeResult) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{2}
 }
@@ -252,18 +244,14 @@ func (m *SchemaChangeResult) GetAfterSchema() *SchemaDefinition {
 // Primary key is Host+User
 // PasswordChecksum is the crc64 of the password, for security reasons
 type UserPermission struct {
-	Host                 string            `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"`
-	User                 string            `protobuf:"bytes,2,opt,name=user,proto3" json:"user,omitempty"`
-	PasswordChecksum     uint64            `protobuf:"varint,3,opt,name=password_checksum,json=passwordChecksum,proto3" json:"password_checksum,omitempty"`
-	Privileges           map[string]string `protobuf:"bytes,4,rep,name=privileges,proto3" json:"privileges,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
+	Host             string            `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"`
+	User             string            `protobuf:"bytes,2,opt,name=user,proto3" json:"user,omitempty"`
+	PasswordChecksum uint64            `protobuf:"varint,3,opt,name=password_checksum,json=passwordChecksum,proto3" json:"password_checksum,omitempty"`
+	Privileges       map[string]string `protobuf:"bytes,4,rep,name=privileges,proto3" json:"privileges,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
-func (m *UserPermission) Reset()         { *m = UserPermission{} }
-func (m *UserPermission) String() string { return proto.CompactTextString(m) }
-func (*UserPermission) ProtoMessage()    {}
+func (m *UserPermission) Reset()      { *m = UserPermission{} }
+func (*UserPermission) ProtoMessage() {}
 func (*UserPermission) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{3}
 }
@@ -325,18 +313,14 @@ func (m *UserPermission) GetPrivileges() map[string]string {
 // DbPermission describes a single row in the mysql.db table
 // Primary key is Host+Db+User
 type DbPermission struct {
-	Host                 string            `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"`
-	Db                   string            `protobuf:"bytes,2,opt,name=db,proto3" json:"db,omitempty"`
-	User                 string            `protobuf:"bytes,3,opt,name=user,proto3" json:"user,omitempty"`
-	Privileges           map[string]string `protobuf:"bytes,4,rep,name=privileges,proto3" json:"privileges,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
+	Host       string            `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"`
+	Db         string            `protobuf:"bytes,2,opt,name=db,proto3" json:"db,omitempty"`
+	User       string            `protobuf:"bytes,3,opt,name=user,proto3" json:"user,omitempty"`
+	Privileges map[string]string `protobuf:"bytes,4,rep,name=privileges,proto3" json:"privileges,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
-func (m *DbPermission) Reset()         { *m = DbPermission{} }
-func (m *DbPermission) String() string { return proto.CompactTextString(m) }
-func (*DbPermission) ProtoMessage()    {}
+func (m *DbPermission) Reset()      { *m = DbPermission{} }
+func (*DbPermission) ProtoMessage() {}
 func (*DbPermission) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{4}
 }
@@ -398,16 +382,12 @@ func (m *DbPermission) GetPrivileges() map[string]string {
 // Permissions have all the rows in mysql.{user,db} tables,
 // (all rows are sorted by primary key)
 type Permissions struct {
-	UserPermissions      []*UserPermission `protobuf:"bytes,1,rep,name=user_permissions,json=userPermissions,proto3" json:"user_permissions,omitempty"`
-	DbPermissions        []*DbPermission   `protobuf:"bytes,2,rep,name=db_permissions,json=dbPermissions,proto3" json:"db_permissions,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
+	UserPermissions []*UserPermission `protobuf:"bytes,1,rep,name=user_permissions,json=userPermissions,proto3" json:"user_permissions,omitempty"`
+	DbPermissions   []*DbPermission   `protobuf:"bytes,2,rep,name=db_permissions,json=dbPermissions,proto3" json:"db_permissions,omitempty"`
 }
 
-func (m *Permissions) Reset()         { *m = Permissions{} }
-func (m *Permissions) String() string { return proto.CompactTextString(m) }
-func (*Permissions) ProtoMessage()    {}
+func (m *Permissions) Reset()      { *m = Permissions{} }
+func (*Permissions) ProtoMessage() {}
 func (*Permissions) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{5}
 }
@@ -453,15 +433,11 @@ func (m *Permissions) GetDbPermissions() []*DbPermission {
 }
 
 type PingRequest struct {
-	Payload              string   `protobuf:"bytes,1,opt,name=payload,proto3" json:"payload,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Payload string `protobuf:"bytes,1,opt,name=payload,proto3" json:"payload,omitempty"`
 }
 
-func (m *PingRequest) Reset()         { *m = PingRequest{} }
-func (m *PingRequest) String() string { return proto.CompactTextString(m) }
-func (*PingRequest) ProtoMessage()    {}
+func (m *PingRequest) Reset()      { *m = PingRequest{} }
+func (*PingRequest) ProtoMessage() {}
 func (*PingRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{6}
 }
@@ -500,15 +476,11 @@ func (m *PingRequest) GetPayload() string {
 }
 
 type PingResponse struct {
-	Payload              string   `protobuf:"bytes,1,opt,name=payload,proto3" json:"payload,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Payload string `protobuf:"bytes,1,opt,name=payload,proto3" json:"payload,omitempty"`
 }
 
-func (m *PingResponse) Reset()         { *m = PingResponse{} }
-func (m *PingResponse) String() string { return proto.CompactTextString(m) }
-func (*PingResponse) ProtoMessage()    {}
+func (m *PingResponse) Reset()      { *m = PingResponse{} }
+func (*PingResponse) ProtoMessage() {}
 func (*PingResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{7}
 }
@@ -548,15 +520,11 @@ func (m *PingResponse) GetPayload() string {
 
 type SleepRequest struct {
 	// duration is in nanoseconds
-	Duration             int64    `protobuf:"varint,1,opt,name=duration,proto3" json:"duration,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Duration int64 `protobuf:"varint,1,opt,name=duration,proto3" json:"duration,omitempty"`
 }
 
-func (m *SleepRequest) Reset()         { *m = SleepRequest{} }
-func (m *SleepRequest) String() string { return proto.CompactTextString(m) }
-func (*SleepRequest) ProtoMessage()    {}
+func (m *SleepRequest) Reset()      { *m = SleepRequest{} }
+func (*SleepRequest) ProtoMessage() {}
 func (*SleepRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{8}
 }
@@ -595,14 +563,10 @@ func (m *SleepRequest) GetDuration() int64 {
 }
 
 type SleepResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *SleepResponse) Reset()         { *m = SleepResponse{} }
-func (m *SleepResponse) String() string { return proto.CompactTextString(m) }
-func (*SleepResponse) ProtoMessage()    {}
+func (m *SleepResponse) Reset()      { *m = SleepResponse{} }
+func (*SleepResponse) ProtoMessage() {}
 func (*SleepResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{9}
 }
@@ -634,17 +598,13 @@ func (m *SleepResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_SleepResponse proto.InternalMessageInfo
 
 type ExecuteHookRequest struct {
-	Name                 string            `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Parameters           []string          `protobuf:"bytes,2,rep,name=parameters,proto3" json:"parameters,omitempty"`
-	ExtraEnv             map[string]string `protobuf:"bytes,3,rep,name=extra_env,json=extraEnv,proto3" json:"extra_env,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
+	Name       string            `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Parameters []string          `protobuf:"bytes,2,rep,name=parameters,proto3" json:"parameters,omitempty"`
+	ExtraEnv   map[string]string `protobuf:"bytes,3,rep,name=extra_env,json=extraEnv,proto3" json:"extra_env,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
-func (m *ExecuteHookRequest) Reset()         { *m = ExecuteHookRequest{} }
-func (m *ExecuteHookRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteHookRequest) ProtoMessage()    {}
+func (m *ExecuteHookRequest) Reset()      { *m = ExecuteHookRequest{} }
+func (*ExecuteHookRequest) ProtoMessage() {}
 func (*ExecuteHookRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{10}
 }
@@ -697,17 +657,13 @@ func (m *ExecuteHookRequest) GetExtraEnv() map[string]string {
 }
 
 type ExecuteHookResponse struct {
-	ExitStatus           int64    `protobuf:"varint,1,opt,name=exit_status,json=exitStatus,proto3" json:"exit_status,omitempty"`
-	Stdout               string   `protobuf:"bytes,2,opt,name=stdout,proto3" json:"stdout,omitempty"`
-	Stderr               string   `protobuf:"bytes,3,opt,name=stderr,proto3" json:"stderr,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	ExitStatus int64  `protobuf:"varint,1,opt,name=exit_status,json=exitStatus,proto3" json:"exit_status,omitempty"`
+	Stdout     string `protobuf:"bytes,2,opt,name=stdout,proto3" json:"stdout,omitempty"`
+	Stderr     string `protobuf:"bytes,3,opt,name=stderr,proto3" json:"stderr,omitempty"`
 }
 
-func (m *ExecuteHookResponse) Reset()         { *m = ExecuteHookResponse{} }
-func (m *ExecuteHookResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteHookResponse) ProtoMessage()    {}
+func (m *ExecuteHookResponse) Reset()      { *m = ExecuteHookResponse{} }
+func (*ExecuteHookResponse) ProtoMessage() {}
 func (*ExecuteHookResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{11}
 }
@@ -760,17 +716,13 @@ func (m *ExecuteHookResponse) GetStderr() string {
 }
 
 type GetSchemaRequest struct {
-	Tables               []string `protobuf:"bytes,1,rep,name=tables,proto3" json:"tables,omitempty"`
-	IncludeViews         bool     `protobuf:"varint,2,opt,name=include_views,json=includeViews,proto3" json:"include_views,omitempty"`
-	ExcludeTables        []string `protobuf:"bytes,3,rep,name=exclude_tables,json=excludeTables,proto3" json:"exclude_tables,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Tables        []string `protobuf:"bytes,1,rep,name=tables,proto3" json:"tables,omitempty"`
+	IncludeViews  bool     `protobuf:"varint,2,opt,name=include_views,json=includeViews,proto3" json:"include_views,omitempty"`
+	ExcludeTables []string `protobuf:"bytes,3,rep,name=exclude_tables,json=excludeTables,proto3" json:"exclude_tables,omitempty"`
 }
 
-func (m *GetSchemaRequest) Reset()         { *m = GetSchemaRequest{} }
-func (m *GetSchemaRequest) String() string { return proto.CompactTextString(m) }
-func (*GetSchemaRequest) ProtoMessage()    {}
+func (m *GetSchemaRequest) Reset()      { *m = GetSchemaRequest{} }
+func (*GetSchemaRequest) ProtoMessage() {}
 func (*GetSchemaRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{12}
 }
@@ -823,15 +775,11 @@ func (m *GetSchemaRequest) GetExcludeTables() []string {
 }
 
 type GetSchemaResponse struct {
-	SchemaDefinition     *SchemaDefinition `protobuf:"bytes,1,opt,name=schema_definition,json=schemaDefinition,proto3" json:"schema_definition,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
+	SchemaDefinition *SchemaDefinition `protobuf:"bytes,1,opt,name=schema_definition,json=schemaDefinition,proto3" json:"schema_definition,omitempty"`
 }
 
-func (m *GetSchemaResponse) Reset()         { *m = GetSchemaResponse{} }
-func (m *GetSchemaResponse) String() string { return proto.CompactTextString(m) }
-func (*GetSchemaResponse) ProtoMessage()    {}
+func (m *GetSchemaResponse) Reset()      { *m = GetSchemaResponse{} }
+func (*GetSchemaResponse) ProtoMessage() {}
 func (*GetSchemaResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{13}
 }
@@ -870,14 +818,10 @@ func (m *GetSchemaResponse) GetSchemaDefinition() *SchemaDefinition {
 }
 
 type GetPermissionsRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *GetPermissionsRequest) Reset()         { *m = GetPermissionsRequest{} }
-func (m *GetPermissionsRequest) String() string { return proto.CompactTextString(m) }
-func (*GetPermissionsRequest) ProtoMessage()    {}
+func (m *GetPermissionsRequest) Reset()      { *m = GetPermissionsRequest{} }
+func (*GetPermissionsRequest) ProtoMessage() {}
 func (*GetPermissionsRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{14}
 }
@@ -909,15 +853,11 @@ func (m *GetPermissionsRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_GetPermissionsRequest proto.InternalMessageInfo
 
 type GetPermissionsResponse struct {
-	Permissions          *Permissions `protobuf:"bytes,1,opt,name=permissions,proto3" json:"permissions,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
-	XXX_unrecognized     []byte       `json:"-"`
-	XXX_sizecache        int32        `json:"-"`
+	Permissions *Permissions `protobuf:"bytes,1,opt,name=permissions,proto3" json:"permissions,omitempty"`
 }
 
-func (m *GetPermissionsResponse) Reset()         { *m = GetPermissionsResponse{} }
-func (m *GetPermissionsResponse) String() string { return proto.CompactTextString(m) }
-func (*GetPermissionsResponse) ProtoMessage()    {}
+func (m *GetPermissionsResponse) Reset()      { *m = GetPermissionsResponse{} }
+func (*GetPermissionsResponse) ProtoMessage() {}
 func (*GetPermissionsResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{15}
 }
@@ -956,14 +896,10 @@ func (m *GetPermissionsResponse) GetPermissions() *Permissions {
 }
 
 type SetReadOnlyRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *SetReadOnlyRequest) Reset()         { *m = SetReadOnlyRequest{} }
-func (m *SetReadOnlyRequest) String() string { return proto.CompactTextString(m) }
-func (*SetReadOnlyRequest) ProtoMessage()    {}
+func (m *SetReadOnlyRequest) Reset()      { *m = SetReadOnlyRequest{} }
+func (*SetReadOnlyRequest) ProtoMessage() {}
 func (*SetReadOnlyRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{16}
 }
@@ -995,14 +931,10 @@ func (m *SetReadOnlyRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_SetReadOnlyRequest proto.InternalMessageInfo
 
 type SetReadOnlyResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *SetReadOnlyResponse) Reset()         { *m = SetReadOnlyResponse{} }
-func (m *SetReadOnlyResponse) String() string { return proto.CompactTextString(m) }
-func (*SetReadOnlyResponse) ProtoMessage()    {}
+func (m *SetReadOnlyResponse) Reset()      { *m = SetReadOnlyResponse{} }
+func (*SetReadOnlyResponse) ProtoMessage() {}
 func (*SetReadOnlyResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{17}
 }
@@ -1034,14 +966,10 @@ func (m *SetReadOnlyResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_SetReadOnlyResponse proto.InternalMessageInfo
 
 type SetReadWriteRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *SetReadWriteRequest) Reset()         { *m = SetReadWriteRequest{} }
-func (m *SetReadWriteRequest) String() string { return proto.CompactTextString(m) }
-func (*SetReadWriteRequest) ProtoMessage()    {}
+func (m *SetReadWriteRequest) Reset()      { *m = SetReadWriteRequest{} }
+func (*SetReadWriteRequest) ProtoMessage() {}
 func (*SetReadWriteRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{18}
 }
@@ -1073,14 +1001,10 @@ func (m *SetReadWriteRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_SetReadWriteRequest proto.InternalMessageInfo
 
 type SetReadWriteResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *SetReadWriteResponse) Reset()         { *m = SetReadWriteResponse{} }
-func (m *SetReadWriteResponse) String() string { return proto.CompactTextString(m) }
-func (*SetReadWriteResponse) ProtoMessage()    {}
+func (m *SetReadWriteResponse) Reset()      { *m = SetReadWriteResponse{} }
+func (*SetReadWriteResponse) ProtoMessage() {}
 func (*SetReadWriteResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{19}
 }
@@ -1112,15 +1036,11 @@ func (m *SetReadWriteResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_SetReadWriteResponse proto.InternalMessageInfo
 
 type ChangeTypeRequest struct {
-	TabletType           topodata.TabletType `protobuf:"varint,1,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}            `json:"-"`
-	XXX_unrecognized     []byte              `json:"-"`
-	XXX_sizecache        int32               `json:"-"`
+	TabletType topodata.TabletType `protobuf:"varint,1,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 }
 
-func (m *ChangeTypeRequest) Reset()         { *m = ChangeTypeRequest{} }
-func (m *ChangeTypeRequest) String() string { return proto.CompactTextString(m) }
-func (*ChangeTypeRequest) ProtoMessage()    {}
+func (m *ChangeTypeRequest) Reset()      { *m = ChangeTypeRequest{} }
+func (*ChangeTypeRequest) ProtoMessage() {}
 func (*ChangeTypeRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{20}
 }
@@ -1155,18 +1075,14 @@ func (m *ChangeTypeRequest) GetTabletType() topodata.TabletType {
 	if m != nil {
 		return m.TabletType
 	}
-	return topodata.TabletType_UNKNOWN
+	return topodata.UNKNOWN
 }
 
 type ChangeTypeResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *ChangeTypeResponse) Reset()         { *m = ChangeTypeResponse{} }
-func (m *ChangeTypeResponse) String() string { return proto.CompactTextString(m) }
-func (*ChangeTypeResponse) ProtoMessage()    {}
+func (m *ChangeTypeResponse) Reset()      { *m = ChangeTypeResponse{} }
+func (*ChangeTypeResponse) ProtoMessage() {}
 func (*ChangeTypeResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{21}
 }
@@ -1198,14 +1114,10 @@ func (m *ChangeTypeResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_ChangeTypeResponse proto.InternalMessageInfo
 
 type RefreshStateRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *RefreshStateRequest) Reset()         { *m = RefreshStateRequest{} }
-func (m *RefreshStateRequest) String() string { return proto.CompactTextString(m) }
-func (*RefreshStateRequest) ProtoMessage()    {}
+func (m *RefreshStateRequest) Reset()      { *m = RefreshStateRequest{} }
+func (*RefreshStateRequest) ProtoMessage() {}
 func (*RefreshStateRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{22}
 }
@@ -1237,14 +1149,10 @@ func (m *RefreshStateRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_RefreshStateRequest proto.InternalMessageInfo
 
 type RefreshStateResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *RefreshStateResponse) Reset()         { *m = RefreshStateResponse{} }
-func (m *RefreshStateResponse) String() string { return proto.CompactTextString(m) }
-func (*RefreshStateResponse) ProtoMessage()    {}
+func (m *RefreshStateResponse) Reset()      { *m = RefreshStateResponse{} }
+func (*RefreshStateResponse) ProtoMessage() {}
 func (*RefreshStateResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{23}
 }
@@ -1276,14 +1184,10 @@ func (m *RefreshStateResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_RefreshStateResponse proto.InternalMessageInfo
 
 type RunHealthCheckRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *RunHealthCheckRequest) Reset()         { *m = RunHealthCheckRequest{} }
-func (m *RunHealthCheckRequest) String() string { return proto.CompactTextString(m) }
-func (*RunHealthCheckRequest) ProtoMessage()    {}
+func (m *RunHealthCheckRequest) Reset()      { *m = RunHealthCheckRequest{} }
+func (*RunHealthCheckRequest) ProtoMessage() {}
 func (*RunHealthCheckRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{24}
 }
@@ -1315,14 +1219,10 @@ func (m *RunHealthCheckRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_RunHealthCheckRequest proto.InternalMessageInfo
 
 type RunHealthCheckResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *RunHealthCheckResponse) Reset()         { *m = RunHealthCheckResponse{} }
-func (m *RunHealthCheckResponse) String() string { return proto.CompactTextString(m) }
-func (*RunHealthCheckResponse) ProtoMessage()    {}
+func (m *RunHealthCheckResponse) Reset()      { *m = RunHealthCheckResponse{} }
+func (*RunHealthCheckResponse) ProtoMessage() {}
 func (*RunHealthCheckResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{25}
 }
@@ -1354,15 +1254,11 @@ func (m *RunHealthCheckResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_RunHealthCheckResponse proto.InternalMessageInfo
 
 type IgnoreHealthErrorRequest struct {
-	Pattern              string   `protobuf:"bytes,1,opt,name=pattern,proto3" json:"pattern,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Pattern string `protobuf:"bytes,1,opt,name=pattern,proto3" json:"pattern,omitempty"`
 }
 
-func (m *IgnoreHealthErrorRequest) Reset()         { *m = IgnoreHealthErrorRequest{} }
-func (m *IgnoreHealthErrorRequest) String() string { return proto.CompactTextString(m) }
-func (*IgnoreHealthErrorRequest) ProtoMessage()    {}
+func (m *IgnoreHealthErrorRequest) Reset()      { *m = IgnoreHealthErrorRequest{} }
+func (*IgnoreHealthErrorRequest) ProtoMessage() {}
 func (*IgnoreHealthErrorRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{26}
 }
@@ -1401,14 +1297,10 @@ func (m *IgnoreHealthErrorRequest) GetPattern() string {
 }
 
 type IgnoreHealthErrorResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *IgnoreHealthErrorResponse) Reset()         { *m = IgnoreHealthErrorResponse{} }
-func (m *IgnoreHealthErrorResponse) String() string { return proto.CompactTextString(m) }
-func (*IgnoreHealthErrorResponse) ProtoMessage()    {}
+func (m *IgnoreHealthErrorResponse) Reset()      { *m = IgnoreHealthErrorResponse{} }
+func (*IgnoreHealthErrorResponse) ProtoMessage() {}
 func (*IgnoreHealthErrorResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{27}
 }
@@ -1443,15 +1335,11 @@ type ReloadSchemaRequest struct {
 	// wait_position allows scheduling a schema reload to occur after a
 	// given DDL has replicated to this slave, by specifying a replication
 	// position to wait for. Leave empty to trigger the reload immediately.
-	WaitPosition         string   `protobuf:"bytes,1,opt,name=wait_position,json=waitPosition,proto3" json:"wait_position,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	WaitPosition string `protobuf:"bytes,1,opt,name=wait_position,json=waitPosition,proto3" json:"wait_position,omitempty"`
 }
 
-func (m *ReloadSchemaRequest) Reset()         { *m = ReloadSchemaRequest{} }
-func (m *ReloadSchemaRequest) String() string { return proto.CompactTextString(m) }
-func (*ReloadSchemaRequest) ProtoMessage()    {}
+func (m *ReloadSchemaRequest) Reset()      { *m = ReloadSchemaRequest{} }
+func (*ReloadSchemaRequest) ProtoMessage() {}
 func (*ReloadSchemaRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{28}
 }
@@ -1490,14 +1378,10 @@ func (m *ReloadSchemaRequest) GetWaitPosition() string {
 }
 
 type ReloadSchemaResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *ReloadSchemaResponse) Reset()         { *m = ReloadSchemaResponse{} }
-func (m *ReloadSchemaResponse) String() string { return proto.CompactTextString(m) }
-func (*ReloadSchemaResponse) ProtoMessage()    {}
+func (m *ReloadSchemaResponse) Reset()      { *m = ReloadSchemaResponse{} }
+func (*ReloadSchemaResponse) ProtoMessage() {}
 func (*ReloadSchemaResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{29}
 }
@@ -1529,15 +1413,11 @@ func (m *ReloadSchemaResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_ReloadSchemaResponse proto.InternalMessageInfo
 
 type PreflightSchemaRequest struct {
-	Changes              []string `protobuf:"bytes,1,rep,name=changes,proto3" json:"changes,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Changes []string `protobuf:"bytes,1,rep,name=changes,proto3" json:"changes,omitempty"`
 }
 
-func (m *PreflightSchemaRequest) Reset()         { *m = PreflightSchemaRequest{} }
-func (m *PreflightSchemaRequest) String() string { return proto.CompactTextString(m) }
-func (*PreflightSchemaRequest) ProtoMessage()    {}
+func (m *PreflightSchemaRequest) Reset()      { *m = PreflightSchemaRequest{} }
+func (*PreflightSchemaRequest) ProtoMessage() {}
 func (*PreflightSchemaRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{30}
 }
@@ -1578,15 +1458,11 @@ func (m *PreflightSchemaRequest) GetChanges() []string {
 type PreflightSchemaResponse struct {
 	// change_results has for each change the schema before and after it.
 	// The number of elements is identical to the length of "changes" in the request.
-	ChangeResults        []*SchemaChangeResult `protobuf:"bytes,1,rep,name=change_results,json=changeResults,proto3" json:"change_results,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	ChangeResults []*SchemaChangeResult `protobuf:"bytes,1,rep,name=change_results,json=changeResults,proto3" json:"change_results,omitempty"`
 }
 
-func (m *PreflightSchemaResponse) Reset()         { *m = PreflightSchemaResponse{} }
-func (m *PreflightSchemaResponse) String() string { return proto.CompactTextString(m) }
-func (*PreflightSchemaResponse) ProtoMessage()    {}
+func (m *PreflightSchemaResponse) Reset()      { *m = PreflightSchemaResponse{} }
+func (*PreflightSchemaResponse) ProtoMessage() {}
 func (*PreflightSchemaResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{31}
 }
@@ -1625,19 +1501,15 @@ func (m *PreflightSchemaResponse) GetChangeResults() []*SchemaChangeResult {
 }
 
 type ApplySchemaRequest struct {
-	Sql                  string            `protobuf:"bytes,1,opt,name=sql,proto3" json:"sql,omitempty"`
-	Force                bool              `protobuf:"varint,2,opt,name=force,proto3" json:"force,omitempty"`
-	AllowReplication     bool              `protobuf:"varint,3,opt,name=allow_replication,json=allowReplication,proto3" json:"allow_replication,omitempty"`
-	BeforeSchema         *SchemaDefinition `protobuf:"bytes,4,opt,name=before_schema,json=beforeSchema,proto3" json:"before_schema,omitempty"`
-	AfterSchema          *SchemaDefinition `protobuf:"bytes,5,opt,name=after_schema,json=afterSchema,proto3" json:"after_schema,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
+	Sql              string            `protobuf:"bytes,1,opt,name=sql,proto3" json:"sql,omitempty"`
+	Force            bool              `protobuf:"varint,2,opt,name=force,proto3" json:"force,omitempty"`
+	AllowReplication bool              `protobuf:"varint,3,opt,name=allow_replication,json=allowReplication,proto3" json:"allow_replication,omitempty"`
+	BeforeSchema     *SchemaDefinition `protobuf:"bytes,4,opt,name=before_schema,json=beforeSchema,proto3" json:"before_schema,omitempty"`
+	AfterSchema      *SchemaDefinition `protobuf:"bytes,5,opt,name=after_schema,json=afterSchema,proto3" json:"after_schema,omitempty"`
 }
 
-func (m *ApplySchemaRequest) Reset()         { *m = ApplySchemaRequest{} }
-func (m *ApplySchemaRequest) String() string { return proto.CompactTextString(m) }
-func (*ApplySchemaRequest) ProtoMessage()    {}
+func (m *ApplySchemaRequest) Reset()      { *m = ApplySchemaRequest{} }
+func (*ApplySchemaRequest) ProtoMessage() {}
 func (*ApplySchemaRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{32}
 }
@@ -1704,16 +1576,12 @@ func (m *ApplySchemaRequest) GetAfterSchema() *SchemaDefinition {
 }
 
 type ApplySchemaResponse struct {
-	BeforeSchema         *SchemaDefinition `protobuf:"bytes,1,opt,name=before_schema,json=beforeSchema,proto3" json:"before_schema,omitempty"`
-	AfterSchema          *SchemaDefinition `protobuf:"bytes,2,opt,name=after_schema,json=afterSchema,proto3" json:"after_schema,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
+	BeforeSchema *SchemaDefinition `protobuf:"bytes,1,opt,name=before_schema,json=beforeSchema,proto3" json:"before_schema,omitempty"`
+	AfterSchema  *SchemaDefinition `protobuf:"bytes,2,opt,name=after_schema,json=afterSchema,proto3" json:"after_schema,omitempty"`
 }
 
-func (m *ApplySchemaResponse) Reset()         { *m = ApplySchemaResponse{} }
-func (m *ApplySchemaResponse) String() string { return proto.CompactTextString(m) }
-func (*ApplySchemaResponse) ProtoMessage()    {}
+func (m *ApplySchemaResponse) Reset()      { *m = ApplySchemaResponse{} }
+func (*ApplySchemaResponse) ProtoMessage() {}
 func (*ApplySchemaResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{33}
 }
@@ -1759,14 +1627,10 @@ func (m *ApplySchemaResponse) GetAfterSchema() *SchemaDefinition {
 }
 
 type LockTablesRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *LockTablesRequest) Reset()         { *m = LockTablesRequest{} }
-func (m *LockTablesRequest) String() string { return proto.CompactTextString(m) }
-func (*LockTablesRequest) ProtoMessage()    {}
+func (m *LockTablesRequest) Reset()      { *m = LockTablesRequest{} }
+func (*LockTablesRequest) ProtoMessage() {}
 func (*LockTablesRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{34}
 }
@@ -1798,14 +1662,10 @@ func (m *LockTablesRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_LockTablesRequest proto.InternalMessageInfo
 
 type LockTablesResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *LockTablesResponse) Reset()         { *m = LockTablesResponse{} }
-func (m *LockTablesResponse) String() string { return proto.CompactTextString(m) }
-func (*LockTablesResponse) ProtoMessage()    {}
+func (m *LockTablesResponse) Reset()      { *m = LockTablesResponse{} }
+func (*LockTablesResponse) ProtoMessage() {}
 func (*LockTablesResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{35}
 }
@@ -1837,14 +1697,10 @@ func (m *LockTablesResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_LockTablesResponse proto.InternalMessageInfo
 
 type UnlockTablesRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *UnlockTablesRequest) Reset()         { *m = UnlockTablesRequest{} }
-func (m *UnlockTablesRequest) String() string { return proto.CompactTextString(m) }
-func (*UnlockTablesRequest) ProtoMessage()    {}
+func (m *UnlockTablesRequest) Reset()      { *m = UnlockTablesRequest{} }
+func (*UnlockTablesRequest) ProtoMessage() {}
 func (*UnlockTablesRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{36}
 }
@@ -1876,14 +1732,10 @@ func (m *UnlockTablesRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_UnlockTablesRequest proto.InternalMessageInfo
 
 type UnlockTablesResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *UnlockTablesResponse) Reset()         { *m = UnlockTablesResponse{} }
-func (m *UnlockTablesResponse) String() string { return proto.CompactTextString(m) }
-func (*UnlockTablesResponse) ProtoMessage()    {}
+func (m *UnlockTablesResponse) Reset()      { *m = UnlockTablesResponse{} }
+func (*UnlockTablesResponse) ProtoMessage() {}
 func (*UnlockTablesResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{37}
 }
@@ -1915,19 +1767,15 @@ func (m *UnlockTablesResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_UnlockTablesResponse proto.InternalMessageInfo
 
 type ExecuteFetchAsDbaRequest struct {
-	Query                []byte   `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
-	DbName               string   `protobuf:"bytes,2,opt,name=db_name,json=dbName,proto3" json:"db_name,omitempty"`
-	MaxRows              uint64   `protobuf:"varint,3,opt,name=max_rows,json=maxRows,proto3" json:"max_rows,omitempty"`
-	DisableBinlogs       bool     `protobuf:"varint,4,opt,name=disable_binlogs,json=disableBinlogs,proto3" json:"disable_binlogs,omitempty"`
-	ReloadSchema         bool     `protobuf:"varint,5,opt,name=reload_schema,json=reloadSchema,proto3" json:"reload_schema,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Query          []byte `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
+	DbName         string `protobuf:"bytes,2,opt,name=db_name,json=dbName,proto3" json:"db_name,omitempty"`
+	MaxRows        uint64 `protobuf:"varint,3,opt,name=max_rows,json=maxRows,proto3" json:"max_rows,omitempty"`
+	DisableBinlogs bool   `protobuf:"varint,4,opt,name=disable_binlogs,json=disableBinlogs,proto3" json:"disable_binlogs,omitempty"`
+	ReloadSchema   bool   `protobuf:"varint,5,opt,name=reload_schema,json=reloadSchema,proto3" json:"reload_schema,omitempty"`
 }
 
-func (m *ExecuteFetchAsDbaRequest) Reset()         { *m = ExecuteFetchAsDbaRequest{} }
-func (m *ExecuteFetchAsDbaRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteFetchAsDbaRequest) ProtoMessage()    {}
+func (m *ExecuteFetchAsDbaRequest) Reset()      { *m = ExecuteFetchAsDbaRequest{} }
+func (*ExecuteFetchAsDbaRequest) ProtoMessage() {}
 func (*ExecuteFetchAsDbaRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{38}
 }
@@ -1994,15 +1842,11 @@ func (m *ExecuteFetchAsDbaRequest) GetReloadSchema() bool {
 }
 
 type ExecuteFetchAsDbaResponse struct {
-	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
-	XXX_unrecognized     []byte             `json:"-"`
-	XXX_sizecache        int32              `json:"-"`
+	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 }
 
-func (m *ExecuteFetchAsDbaResponse) Reset()         { *m = ExecuteFetchAsDbaResponse{} }
-func (m *ExecuteFetchAsDbaResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteFetchAsDbaResponse) ProtoMessage()    {}
+func (m *ExecuteFetchAsDbaResponse) Reset()      { *m = ExecuteFetchAsDbaResponse{} }
+func (*ExecuteFetchAsDbaResponse) ProtoMessage() {}
 func (*ExecuteFetchAsDbaResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{39}
 }
@@ -2041,18 +1885,14 @@ func (m *ExecuteFetchAsDbaResponse) GetResult() *query.QueryResult {
 }
 
 type ExecuteFetchAsAllPrivsRequest struct {
-	Query                []byte   `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
-	DbName               string   `protobuf:"bytes,2,opt,name=db_name,json=dbName,proto3" json:"db_name,omitempty"`
-	MaxRows              uint64   `protobuf:"varint,3,opt,name=max_rows,json=maxRows,proto3" json:"max_rows,omitempty"`
-	ReloadSchema         bool     `protobuf:"varint,4,opt,name=reload_schema,json=reloadSchema,proto3" json:"reload_schema,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Query        []byte `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
+	DbName       string `protobuf:"bytes,2,opt,name=db_name,json=dbName,proto3" json:"db_name,omitempty"`
+	MaxRows      uint64 `protobuf:"varint,3,opt,name=max_rows,json=maxRows,proto3" json:"max_rows,omitempty"`
+	ReloadSchema bool   `protobuf:"varint,4,opt,name=reload_schema,json=reloadSchema,proto3" json:"reload_schema,omitempty"`
 }
 
-func (m *ExecuteFetchAsAllPrivsRequest) Reset()         { *m = ExecuteFetchAsAllPrivsRequest{} }
-func (m *ExecuteFetchAsAllPrivsRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteFetchAsAllPrivsRequest) ProtoMessage()    {}
+func (m *ExecuteFetchAsAllPrivsRequest) Reset()      { *m = ExecuteFetchAsAllPrivsRequest{} }
+func (*ExecuteFetchAsAllPrivsRequest) ProtoMessage() {}
 func (*ExecuteFetchAsAllPrivsRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{40}
 }
@@ -2112,15 +1952,11 @@ func (m *ExecuteFetchAsAllPrivsRequest) GetReloadSchema() bool {
 }
 
 type ExecuteFetchAsAllPrivsResponse struct {
-	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
-	XXX_unrecognized     []byte             `json:"-"`
-	XXX_sizecache        int32              `json:"-"`
+	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 }
 
-func (m *ExecuteFetchAsAllPrivsResponse) Reset()         { *m = ExecuteFetchAsAllPrivsResponse{} }
-func (m *ExecuteFetchAsAllPrivsResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteFetchAsAllPrivsResponse) ProtoMessage()    {}
+func (m *ExecuteFetchAsAllPrivsResponse) Reset()      { *m = ExecuteFetchAsAllPrivsResponse{} }
+func (*ExecuteFetchAsAllPrivsResponse) ProtoMessage() {}
 func (*ExecuteFetchAsAllPrivsResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{41}
 }
@@ -2159,16 +1995,12 @@ func (m *ExecuteFetchAsAllPrivsResponse) GetResult() *query.QueryResult {
 }
 
 type ExecuteFetchAsAppRequest struct {
-	Query                []byte   `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
-	MaxRows              uint64   `protobuf:"varint,2,opt,name=max_rows,json=maxRows,proto3" json:"max_rows,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Query   []byte `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
+	MaxRows uint64 `protobuf:"varint,2,opt,name=max_rows,json=maxRows,proto3" json:"max_rows,omitempty"`
 }
 
-func (m *ExecuteFetchAsAppRequest) Reset()         { *m = ExecuteFetchAsAppRequest{} }
-func (m *ExecuteFetchAsAppRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteFetchAsAppRequest) ProtoMessage()    {}
+func (m *ExecuteFetchAsAppRequest) Reset()      { *m = ExecuteFetchAsAppRequest{} }
+func (*ExecuteFetchAsAppRequest) ProtoMessage() {}
 func (*ExecuteFetchAsAppRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{42}
 }
@@ -2214,15 +2046,11 @@ func (m *ExecuteFetchAsAppRequest) GetMaxRows() uint64 {
 }
 
 type ExecuteFetchAsAppResponse struct {
-	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
-	XXX_unrecognized     []byte             `json:"-"`
-	XXX_sizecache        int32              `json:"-"`
+	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 }
 
-func (m *ExecuteFetchAsAppResponse) Reset()         { *m = ExecuteFetchAsAppResponse{} }
-func (m *ExecuteFetchAsAppResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteFetchAsAppResponse) ProtoMessage()    {}
+func (m *ExecuteFetchAsAppResponse) Reset()      { *m = ExecuteFetchAsAppResponse{} }
+func (*ExecuteFetchAsAppResponse) ProtoMessage() {}
 func (*ExecuteFetchAsAppResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{43}
 }
@@ -2261,14 +2089,10 @@ func (m *ExecuteFetchAsAppResponse) GetResult() *query.QueryResult {
 }
 
 type SlaveStatusRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *SlaveStatusRequest) Reset()         { *m = SlaveStatusRequest{} }
-func (m *SlaveStatusRequest) String() string { return proto.CompactTextString(m) }
-func (*SlaveStatusRequest) ProtoMessage()    {}
+func (m *SlaveStatusRequest) Reset()      { *m = SlaveStatusRequest{} }
+func (*SlaveStatusRequest) ProtoMessage() {}
 func (*SlaveStatusRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{44}
 }
@@ -2300,15 +2124,11 @@ func (m *SlaveStatusRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_SlaveStatusRequest proto.InternalMessageInfo
 
 type SlaveStatusResponse struct {
-	Status               *replicationdata.Status `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
-	XXX_unrecognized     []byte                  `json:"-"`
-	XXX_sizecache        int32                   `json:"-"`
+	Status *replicationdata.Status `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
 }
 
-func (m *SlaveStatusResponse) Reset()         { *m = SlaveStatusResponse{} }
-func (m *SlaveStatusResponse) String() string { return proto.CompactTextString(m) }
-func (*SlaveStatusResponse) ProtoMessage()    {}
+func (m *SlaveStatusResponse) Reset()      { *m = SlaveStatusResponse{} }
+func (*SlaveStatusResponse) ProtoMessage() {}
 func (*SlaveStatusResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{45}
 }
@@ -2347,14 +2167,10 @@ func (m *SlaveStatusResponse) GetStatus() *replicationdata.Status {
 }
 
 type MasterPositionRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *MasterPositionRequest) Reset()         { *m = MasterPositionRequest{} }
-func (m *MasterPositionRequest) String() string { return proto.CompactTextString(m) }
-func (*MasterPositionRequest) ProtoMessage()    {}
+func (m *MasterPositionRequest) Reset()      { *m = MasterPositionRequest{} }
+func (*MasterPositionRequest) ProtoMessage() {}
 func (*MasterPositionRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{46}
 }
@@ -2386,15 +2202,11 @@ func (m *MasterPositionRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_MasterPositionRequest proto.InternalMessageInfo
 
 type MasterPositionResponse struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Position string `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 }
 
-func (m *MasterPositionResponse) Reset()         { *m = MasterPositionResponse{} }
-func (m *MasterPositionResponse) String() string { return proto.CompactTextString(m) }
-func (*MasterPositionResponse) ProtoMessage()    {}
+func (m *MasterPositionResponse) Reset()      { *m = MasterPositionResponse{} }
+func (*MasterPositionResponse) ProtoMessage() {}
 func (*MasterPositionResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{47}
 }
@@ -2433,14 +2245,10 @@ func (m *MasterPositionResponse) GetPosition() string {
 }
 
 type StopSlaveRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *StopSlaveRequest) Reset()         { *m = StopSlaveRequest{} }
-func (m *StopSlaveRequest) String() string { return proto.CompactTextString(m) }
-func (*StopSlaveRequest) ProtoMessage()    {}
+func (m *StopSlaveRequest) Reset()      { *m = StopSlaveRequest{} }
+func (*StopSlaveRequest) ProtoMessage() {}
 func (*StopSlaveRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{48}
 }
@@ -2472,14 +2280,10 @@ func (m *StopSlaveRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_StopSlaveRequest proto.InternalMessageInfo
 
 type StopSlaveResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *StopSlaveResponse) Reset()         { *m = StopSlaveResponse{} }
-func (m *StopSlaveResponse) String() string { return proto.CompactTextString(m) }
-func (*StopSlaveResponse) ProtoMessage()    {}
+func (m *StopSlaveResponse) Reset()      { *m = StopSlaveResponse{} }
+func (*StopSlaveResponse) ProtoMessage() {}
 func (*StopSlaveResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{49}
 }
@@ -2511,16 +2315,12 @@ func (m *StopSlaveResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_StopSlaveResponse proto.InternalMessageInfo
 
 type StopSlaveMinimumRequest struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
-	WaitTimeout          int64    `protobuf:"varint,2,opt,name=wait_timeout,json=waitTimeout,proto3" json:"wait_timeout,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Position    string `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
+	WaitTimeout int64  `protobuf:"varint,2,opt,name=wait_timeout,json=waitTimeout,proto3" json:"wait_timeout,omitempty"`
 }
 
-func (m *StopSlaveMinimumRequest) Reset()         { *m = StopSlaveMinimumRequest{} }
-func (m *StopSlaveMinimumRequest) String() string { return proto.CompactTextString(m) }
-func (*StopSlaveMinimumRequest) ProtoMessage()    {}
+func (m *StopSlaveMinimumRequest) Reset()      { *m = StopSlaveMinimumRequest{} }
+func (*StopSlaveMinimumRequest) ProtoMessage() {}
 func (*StopSlaveMinimumRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{50}
 }
@@ -2566,15 +2366,11 @@ func (m *StopSlaveMinimumRequest) GetWaitTimeout() int64 {
 }
 
 type StopSlaveMinimumResponse struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Position string `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 }
 
-func (m *StopSlaveMinimumResponse) Reset()         { *m = StopSlaveMinimumResponse{} }
-func (m *StopSlaveMinimumResponse) String() string { return proto.CompactTextString(m) }
-func (*StopSlaveMinimumResponse) ProtoMessage()    {}
+func (m *StopSlaveMinimumResponse) Reset()      { *m = StopSlaveMinimumResponse{} }
+func (*StopSlaveMinimumResponse) ProtoMessage() {}
 func (*StopSlaveMinimumResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{51}
 }
@@ -2613,14 +2409,10 @@ func (m *StopSlaveMinimumResponse) GetPosition() string {
 }
 
 type StartSlaveRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *StartSlaveRequest) Reset()         { *m = StartSlaveRequest{} }
-func (m *StartSlaveRequest) String() string { return proto.CompactTextString(m) }
-func (*StartSlaveRequest) ProtoMessage()    {}
+func (m *StartSlaveRequest) Reset()      { *m = StartSlaveRequest{} }
+func (*StartSlaveRequest) ProtoMessage() {}
 func (*StartSlaveRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{52}
 }
@@ -2652,14 +2444,10 @@ func (m *StartSlaveRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_StartSlaveRequest proto.InternalMessageInfo
 
 type StartSlaveResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *StartSlaveResponse) Reset()         { *m = StartSlaveResponse{} }
-func (m *StartSlaveResponse) String() string { return proto.CompactTextString(m) }
-func (*StartSlaveResponse) ProtoMessage()    {}
+func (m *StartSlaveResponse) Reset()      { *m = StartSlaveResponse{} }
+func (*StartSlaveResponse) ProtoMessage() {}
 func (*StartSlaveResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{53}
 }
@@ -2691,16 +2479,12 @@ func (m *StartSlaveResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_StartSlaveResponse proto.InternalMessageInfo
 
 type StartSlaveUntilAfterRequest struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
-	WaitTimeout          int64    `protobuf:"varint,2,opt,name=wait_timeout,json=waitTimeout,proto3" json:"wait_timeout,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Position    string `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
+	WaitTimeout int64  `protobuf:"varint,2,opt,name=wait_timeout,json=waitTimeout,proto3" json:"wait_timeout,omitempty"`
 }
 
-func (m *StartSlaveUntilAfterRequest) Reset()         { *m = StartSlaveUntilAfterRequest{} }
-func (m *StartSlaveUntilAfterRequest) String() string { return proto.CompactTextString(m) }
-func (*StartSlaveUntilAfterRequest) ProtoMessage()    {}
+func (m *StartSlaveUntilAfterRequest) Reset()      { *m = StartSlaveUntilAfterRequest{} }
+func (*StartSlaveUntilAfterRequest) ProtoMessage() {}
 func (*StartSlaveUntilAfterRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{54}
 }
@@ -2746,14 +2530,10 @@ func (m *StartSlaveUntilAfterRequest) GetWaitTimeout() int64 {
 }
 
 type StartSlaveUntilAfterResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *StartSlaveUntilAfterResponse) Reset()         { *m = StartSlaveUntilAfterResponse{} }
-func (m *StartSlaveUntilAfterResponse) String() string { return proto.CompactTextString(m) }
-func (*StartSlaveUntilAfterResponse) ProtoMessage()    {}
+func (m *StartSlaveUntilAfterResponse) Reset()      { *m = StartSlaveUntilAfterResponse{} }
+func (*StartSlaveUntilAfterResponse) ProtoMessage() {}
 func (*StartSlaveUntilAfterResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{55}
 }
@@ -2788,15 +2568,11 @@ type TabletExternallyReparentedRequest struct {
 	// external_id is an string value that may be provided by an external
 	// agent for tracking purposes. The tablet will emit this string in
 	// events triggered by TabletExternallyReparented, such as VitessReparent.
-	ExternalId           string   `protobuf:"bytes,1,opt,name=external_id,json=externalId,proto3" json:"external_id,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	ExternalId string `protobuf:"bytes,1,opt,name=external_id,json=externalId,proto3" json:"external_id,omitempty"`
 }
 
-func (m *TabletExternallyReparentedRequest) Reset()         { *m = TabletExternallyReparentedRequest{} }
-func (m *TabletExternallyReparentedRequest) String() string { return proto.CompactTextString(m) }
-func (*TabletExternallyReparentedRequest) ProtoMessage()    {}
+func (m *TabletExternallyReparentedRequest) Reset()      { *m = TabletExternallyReparentedRequest{} }
+func (*TabletExternallyReparentedRequest) ProtoMessage() {}
 func (*TabletExternallyReparentedRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{56}
 }
@@ -2835,14 +2611,10 @@ func (m *TabletExternallyReparentedRequest) GetExternalId() string {
 }
 
 type TabletExternallyReparentedResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *TabletExternallyReparentedResponse) Reset()         { *m = TabletExternallyReparentedResponse{} }
-func (m *TabletExternallyReparentedResponse) String() string { return proto.CompactTextString(m) }
-func (*TabletExternallyReparentedResponse) ProtoMessage()    {}
+func (m *TabletExternallyReparentedResponse) Reset()      { *m = TabletExternallyReparentedResponse{} }
+func (*TabletExternallyReparentedResponse) ProtoMessage() {}
 func (*TabletExternallyReparentedResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{57}
 }
@@ -2874,14 +2646,10 @@ func (m *TabletExternallyReparentedResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_TabletExternallyReparentedResponse proto.InternalMessageInfo
 
 type TabletExternallyElectedRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *TabletExternallyElectedRequest) Reset()         { *m = TabletExternallyElectedRequest{} }
-func (m *TabletExternallyElectedRequest) String() string { return proto.CompactTextString(m) }
-func (*TabletExternallyElectedRequest) ProtoMessage()    {}
+func (m *TabletExternallyElectedRequest) Reset()      { *m = TabletExternallyElectedRequest{} }
+func (*TabletExternallyElectedRequest) ProtoMessage() {}
 func (*TabletExternallyElectedRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{58}
 }
@@ -2913,14 +2681,10 @@ func (m *TabletExternallyElectedRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_TabletExternallyElectedRequest proto.InternalMessageInfo
 
 type TabletExternallyElectedResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *TabletExternallyElectedResponse) Reset()         { *m = TabletExternallyElectedResponse{} }
-func (m *TabletExternallyElectedResponse) String() string { return proto.CompactTextString(m) }
-func (*TabletExternallyElectedResponse) ProtoMessage()    {}
+func (m *TabletExternallyElectedResponse) Reset()      { *m = TabletExternallyElectedResponse{} }
+func (*TabletExternallyElectedResponse) ProtoMessage() {}
 func (*TabletExternallyElectedResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{59}
 }
@@ -2952,14 +2716,10 @@ func (m *TabletExternallyElectedResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_TabletExternallyElectedResponse proto.InternalMessageInfo
 
 type GetSlavesRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *GetSlavesRequest) Reset()         { *m = GetSlavesRequest{} }
-func (m *GetSlavesRequest) String() string { return proto.CompactTextString(m) }
-func (*GetSlavesRequest) ProtoMessage()    {}
+func (m *GetSlavesRequest) Reset()      { *m = GetSlavesRequest{} }
+func (*GetSlavesRequest) ProtoMessage() {}
 func (*GetSlavesRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{60}
 }
@@ -2991,15 +2751,11 @@ func (m *GetSlavesRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_GetSlavesRequest proto.InternalMessageInfo
 
 type GetSlavesResponse struct {
-	Addrs                []string `protobuf:"bytes,1,rep,name=addrs,proto3" json:"addrs,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Addrs []string `protobuf:"bytes,1,rep,name=addrs,proto3" json:"addrs,omitempty"`
 }
 
-func (m *GetSlavesResponse) Reset()         { *m = GetSlavesResponse{} }
-func (m *GetSlavesResponse) String() string { return proto.CompactTextString(m) }
-func (*GetSlavesResponse) ProtoMessage()    {}
+func (m *GetSlavesResponse) Reset()      { *m = GetSlavesResponse{} }
+func (*GetSlavesResponse) ProtoMessage() {}
 func (*GetSlavesResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{61}
 }
@@ -3038,14 +2794,10 @@ func (m *GetSlavesResponse) GetAddrs() []string {
 }
 
 type ResetReplicationRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *ResetReplicationRequest) Reset()         { *m = ResetReplicationRequest{} }
-func (m *ResetReplicationRequest) String() string { return proto.CompactTextString(m) }
-func (*ResetReplicationRequest) ProtoMessage()    {}
+func (m *ResetReplicationRequest) Reset()      { *m = ResetReplicationRequest{} }
+func (*ResetReplicationRequest) ProtoMessage() {}
 func (*ResetReplicationRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{62}
 }
@@ -3077,14 +2829,10 @@ func (m *ResetReplicationRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_ResetReplicationRequest proto.InternalMessageInfo
 
 type ResetReplicationResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *ResetReplicationResponse) Reset()         { *m = ResetReplicationResponse{} }
-func (m *ResetReplicationResponse) String() string { return proto.CompactTextString(m) }
-func (*ResetReplicationResponse) ProtoMessage()    {}
+func (m *ResetReplicationResponse) Reset()      { *m = ResetReplicationResponse{} }
+func (*ResetReplicationResponse) ProtoMessage() {}
 func (*ResetReplicationResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{63}
 }
@@ -3116,15 +2864,11 @@ func (m *ResetReplicationResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_ResetReplicationResponse proto.InternalMessageInfo
 
 type VReplicationExecRequest struct {
-	Query                string   `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Query string `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
 }
 
-func (m *VReplicationExecRequest) Reset()         { *m = VReplicationExecRequest{} }
-func (m *VReplicationExecRequest) String() string { return proto.CompactTextString(m) }
-func (*VReplicationExecRequest) ProtoMessage()    {}
+func (m *VReplicationExecRequest) Reset()      { *m = VReplicationExecRequest{} }
+func (*VReplicationExecRequest) ProtoMessage() {}
 func (*VReplicationExecRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{64}
 }
@@ -3163,15 +2907,11 @@ func (m *VReplicationExecRequest) GetQuery() string {
 }
 
 type VReplicationExecResponse struct {
-	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
-	XXX_unrecognized     []byte             `json:"-"`
-	XXX_sizecache        int32              `json:"-"`
+	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 }
 
-func (m *VReplicationExecResponse) Reset()         { *m = VReplicationExecResponse{} }
-func (m *VReplicationExecResponse) String() string { return proto.CompactTextString(m) }
-func (*VReplicationExecResponse) ProtoMessage()    {}
+func (m *VReplicationExecResponse) Reset()      { *m = VReplicationExecResponse{} }
+func (*VReplicationExecResponse) ProtoMessage() {}
 func (*VReplicationExecResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{65}
 }
@@ -3210,16 +2950,12 @@ func (m *VReplicationExecResponse) GetResult() *query.QueryResult {
 }
 
 type VReplicationWaitForPosRequest struct {
-	Id                   int64    `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	Position             string   `protobuf:"bytes,2,opt,name=position,proto3" json:"position,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Id       int64  `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Position string `protobuf:"bytes,2,opt,name=position,proto3" json:"position,omitempty"`
 }
 
-func (m *VReplicationWaitForPosRequest) Reset()         { *m = VReplicationWaitForPosRequest{} }
-func (m *VReplicationWaitForPosRequest) String() string { return proto.CompactTextString(m) }
-func (*VReplicationWaitForPosRequest) ProtoMessage()    {}
+func (m *VReplicationWaitForPosRequest) Reset()      { *m = VReplicationWaitForPosRequest{} }
+func (*VReplicationWaitForPosRequest) ProtoMessage() {}
 func (*VReplicationWaitForPosRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{66}
 }
@@ -3265,14 +3001,10 @@ func (m *VReplicationWaitForPosRequest) GetPosition() string {
 }
 
 type VReplicationWaitForPosResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *VReplicationWaitForPosResponse) Reset()         { *m = VReplicationWaitForPosResponse{} }
-func (m *VReplicationWaitForPosResponse) String() string { return proto.CompactTextString(m) }
-func (*VReplicationWaitForPosResponse) ProtoMessage()    {}
+func (m *VReplicationWaitForPosResponse) Reset()      { *m = VReplicationWaitForPosResponse{} }
+func (*VReplicationWaitForPosResponse) ProtoMessage() {}
 func (*VReplicationWaitForPosResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{67}
 }
@@ -3304,14 +3036,10 @@ func (m *VReplicationWaitForPosResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_VReplicationWaitForPosResponse proto.InternalMessageInfo
 
 type InitMasterRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *InitMasterRequest) Reset()         { *m = InitMasterRequest{} }
-func (m *InitMasterRequest) String() string { return proto.CompactTextString(m) }
-func (*InitMasterRequest) ProtoMessage()    {}
+func (m *InitMasterRequest) Reset()      { *m = InitMasterRequest{} }
+func (*InitMasterRequest) ProtoMessage() {}
 func (*InitMasterRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{68}
 }
@@ -3343,15 +3071,11 @@ func (m *InitMasterRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_InitMasterRequest proto.InternalMessageInfo
 
 type InitMasterResponse struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Position string `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 }
 
-func (m *InitMasterResponse) Reset()         { *m = InitMasterResponse{} }
-func (m *InitMasterResponse) String() string { return proto.CompactTextString(m) }
-func (*InitMasterResponse) ProtoMessage()    {}
+func (m *InitMasterResponse) Reset()      { *m = InitMasterResponse{} }
+func (*InitMasterResponse) ProtoMessage() {}
 func (*InitMasterResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{69}
 }
@@ -3390,18 +3114,14 @@ func (m *InitMasterResponse) GetPosition() string {
 }
 
 type PopulateReparentJournalRequest struct {
-	TimeCreatedNs        int64                 `protobuf:"varint,1,opt,name=time_created_ns,json=timeCreatedNs,proto3" json:"time_created_ns,omitempty"`
-	ActionName           string                `protobuf:"bytes,2,opt,name=action_name,json=actionName,proto3" json:"action_name,omitempty"`
-	MasterAlias          *topodata.TabletAlias `protobuf:"bytes,3,opt,name=master_alias,json=masterAlias,proto3" json:"master_alias,omitempty"`
-	ReplicationPosition  string                `protobuf:"bytes,4,opt,name=replication_position,json=replicationPosition,proto3" json:"replication_position,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	TimeCreatedNs       int64                 `protobuf:"varint,1,opt,name=time_created_ns,json=timeCreatedNs,proto3" json:"time_created_ns,omitempty"`
+	ActionName          string                `protobuf:"bytes,2,opt,name=action_name,json=actionName,proto3" json:"action_name,omitempty"`
+	MasterAlias         *topodata.TabletAlias `protobuf:"bytes,3,opt,name=master_alias,json=masterAlias,proto3" json:"master_alias,omitempty"`
+	ReplicationPosition string                `protobuf:"bytes,4,opt,name=replication_position,json=replicationPosition,proto3" json:"replication_position,omitempty"`
 }
 
-func (m *PopulateReparentJournalRequest) Reset()         { *m = PopulateReparentJournalRequest{} }
-func (m *PopulateReparentJournalRequest) String() string { return proto.CompactTextString(m) }
-func (*PopulateReparentJournalRequest) ProtoMessage()    {}
+func (m *PopulateReparentJournalRequest) Reset()      { *m = PopulateReparentJournalRequest{} }
+func (*PopulateReparentJournalRequest) ProtoMessage() {}
 func (*PopulateReparentJournalRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{70}
 }
@@ -3461,14 +3181,10 @@ func (m *PopulateReparentJournalRequest) GetReplicationPosition() string {
 }
 
 type PopulateReparentJournalResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *PopulateReparentJournalResponse) Reset()         { *m = PopulateReparentJournalResponse{} }
-func (m *PopulateReparentJournalResponse) String() string { return proto.CompactTextString(m) }
-func (*PopulateReparentJournalResponse) ProtoMessage()    {}
+func (m *PopulateReparentJournalResponse) Reset()      { *m = PopulateReparentJournalResponse{} }
+func (*PopulateReparentJournalResponse) ProtoMessage() {}
 func (*PopulateReparentJournalResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{71}
 }
@@ -3500,17 +3216,13 @@ func (m *PopulateReparentJournalResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_PopulateReparentJournalResponse proto.InternalMessageInfo
 
 type InitSlaveRequest struct {
-	Parent               *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
-	ReplicationPosition  string                `protobuf:"bytes,2,opt,name=replication_position,json=replicationPosition,proto3" json:"replication_position,omitempty"`
-	TimeCreatedNs        int64                 `protobuf:"varint,3,opt,name=time_created_ns,json=timeCreatedNs,proto3" json:"time_created_ns,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	Parent              *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
+	ReplicationPosition string                `protobuf:"bytes,2,opt,name=replication_position,json=replicationPosition,proto3" json:"replication_position,omitempty"`
+	TimeCreatedNs       int64                 `protobuf:"varint,3,opt,name=time_created_ns,json=timeCreatedNs,proto3" json:"time_created_ns,omitempty"`
 }
 
-func (m *InitSlaveRequest) Reset()         { *m = InitSlaveRequest{} }
-func (m *InitSlaveRequest) String() string { return proto.CompactTextString(m) }
-func (*InitSlaveRequest) ProtoMessage()    {}
+func (m *InitSlaveRequest) Reset()      { *m = InitSlaveRequest{} }
+func (*InitSlaveRequest) ProtoMessage() {}
 func (*InitSlaveRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{72}
 }
@@ -3563,14 +3275,10 @@ func (m *InitSlaveRequest) GetTimeCreatedNs() int64 {
 }
 
 type InitSlaveResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *InitSlaveResponse) Reset()         { *m = InitSlaveResponse{} }
-func (m *InitSlaveResponse) String() string { return proto.CompactTextString(m) }
-func (*InitSlaveResponse) ProtoMessage()    {}
+func (m *InitSlaveResponse) Reset()      { *m = InitSlaveResponse{} }
+func (*InitSlaveResponse) ProtoMessage() {}
 func (*InitSlaveResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{73}
 }
@@ -3602,14 +3310,10 @@ func (m *InitSlaveResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_InitSlaveResponse proto.InternalMessageInfo
 
 type DemoteMasterRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *DemoteMasterRequest) Reset()         { *m = DemoteMasterRequest{} }
-func (m *DemoteMasterRequest) String() string { return proto.CompactTextString(m) }
-func (*DemoteMasterRequest) ProtoMessage()    {}
+func (m *DemoteMasterRequest) Reset()      { *m = DemoteMasterRequest{} }
+func (*DemoteMasterRequest) ProtoMessage() {}
 func (*DemoteMasterRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{74}
 }
@@ -3641,15 +3345,11 @@ func (m *DemoteMasterRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_DemoteMasterRequest proto.InternalMessageInfo
 
 type DemoteMasterResponse struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Position string `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 }
 
-func (m *DemoteMasterResponse) Reset()         { *m = DemoteMasterResponse{} }
-func (m *DemoteMasterResponse) String() string { return proto.CompactTextString(m) }
-func (*DemoteMasterResponse) ProtoMessage()    {}
+func (m *DemoteMasterResponse) Reset()      { *m = DemoteMasterResponse{} }
+func (*DemoteMasterResponse) ProtoMessage() {}
 func (*DemoteMasterResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{75}
 }
@@ -3688,14 +3388,10 @@ func (m *DemoteMasterResponse) GetPosition() string {
 }
 
 type UndoDemoteMasterRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *UndoDemoteMasterRequest) Reset()         { *m = UndoDemoteMasterRequest{} }
-func (m *UndoDemoteMasterRequest) String() string { return proto.CompactTextString(m) }
-func (*UndoDemoteMasterRequest) ProtoMessage()    {}
+func (m *UndoDemoteMasterRequest) Reset()      { *m = UndoDemoteMasterRequest{} }
+func (*UndoDemoteMasterRequest) ProtoMessage() {}
 func (*UndoDemoteMasterRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{76}
 }
@@ -3727,14 +3423,10 @@ func (m *UndoDemoteMasterRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_UndoDemoteMasterRequest proto.InternalMessageInfo
 
 type UndoDemoteMasterResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *UndoDemoteMasterResponse) Reset()         { *m = UndoDemoteMasterResponse{} }
-func (m *UndoDemoteMasterResponse) String() string { return proto.CompactTextString(m) }
-func (*UndoDemoteMasterResponse) ProtoMessage()    {}
+func (m *UndoDemoteMasterResponse) Reset()      { *m = UndoDemoteMasterResponse{} }
+func (*UndoDemoteMasterResponse) ProtoMessage() {}
 func (*UndoDemoteMasterResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{77}
 }
@@ -3766,15 +3458,11 @@ func (m *UndoDemoteMasterResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_UndoDemoteMasterResponse proto.InternalMessageInfo
 
 type PromoteSlaveWhenCaughtUpRequest struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Position string `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 }
 
-func (m *PromoteSlaveWhenCaughtUpRequest) Reset()         { *m = PromoteSlaveWhenCaughtUpRequest{} }
-func (m *PromoteSlaveWhenCaughtUpRequest) String() string { return proto.CompactTextString(m) }
-func (*PromoteSlaveWhenCaughtUpRequest) ProtoMessage()    {}
+func (m *PromoteSlaveWhenCaughtUpRequest) Reset()      { *m = PromoteSlaveWhenCaughtUpRequest{} }
+func (*PromoteSlaveWhenCaughtUpRequest) ProtoMessage() {}
 func (*PromoteSlaveWhenCaughtUpRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{78}
 }
@@ -3813,15 +3501,11 @@ func (m *PromoteSlaveWhenCaughtUpRequest) GetPosition() string {
 }
 
 type PromoteSlaveWhenCaughtUpResponse struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Position string `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 }
 
-func (m *PromoteSlaveWhenCaughtUpResponse) Reset()         { *m = PromoteSlaveWhenCaughtUpResponse{} }
-func (m *PromoteSlaveWhenCaughtUpResponse) String() string { return proto.CompactTextString(m) }
-func (*PromoteSlaveWhenCaughtUpResponse) ProtoMessage()    {}
+func (m *PromoteSlaveWhenCaughtUpResponse) Reset()      { *m = PromoteSlaveWhenCaughtUpResponse{} }
+func (*PromoteSlaveWhenCaughtUpResponse) ProtoMessage() {}
 func (*PromoteSlaveWhenCaughtUpResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{79}
 }
@@ -3860,14 +3544,10 @@ func (m *PromoteSlaveWhenCaughtUpResponse) GetPosition() string {
 }
 
 type SlaveWasPromotedRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *SlaveWasPromotedRequest) Reset()         { *m = SlaveWasPromotedRequest{} }
-func (m *SlaveWasPromotedRequest) String() string { return proto.CompactTextString(m) }
-func (*SlaveWasPromotedRequest) ProtoMessage()    {}
+func (m *SlaveWasPromotedRequest) Reset()      { *m = SlaveWasPromotedRequest{} }
+func (*SlaveWasPromotedRequest) ProtoMessage() {}
 func (*SlaveWasPromotedRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{80}
 }
@@ -3899,14 +3579,10 @@ func (m *SlaveWasPromotedRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_SlaveWasPromotedRequest proto.InternalMessageInfo
 
 type SlaveWasPromotedResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *SlaveWasPromotedResponse) Reset()         { *m = SlaveWasPromotedResponse{} }
-func (m *SlaveWasPromotedResponse) String() string { return proto.CompactTextString(m) }
-func (*SlaveWasPromotedResponse) ProtoMessage()    {}
+func (m *SlaveWasPromotedResponse) Reset()      { *m = SlaveWasPromotedResponse{} }
+func (*SlaveWasPromotedResponse) ProtoMessage() {}
 func (*SlaveWasPromotedResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{81}
 }
@@ -3938,17 +3614,13 @@ func (m *SlaveWasPromotedResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_SlaveWasPromotedResponse proto.InternalMessageInfo
 
 type SetMasterRequest struct {
-	Parent               *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
-	TimeCreatedNs        int64                 `protobuf:"varint,2,opt,name=time_created_ns,json=timeCreatedNs,proto3" json:"time_created_ns,omitempty"`
-	ForceStartSlave      bool                  `protobuf:"varint,3,opt,name=force_start_slave,json=forceStartSlave,proto3" json:"force_start_slave,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	Parent          *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
+	TimeCreatedNs   int64                 `protobuf:"varint,2,opt,name=time_created_ns,json=timeCreatedNs,proto3" json:"time_created_ns,omitempty"`
+	ForceStartSlave bool                  `protobuf:"varint,3,opt,name=force_start_slave,json=forceStartSlave,proto3" json:"force_start_slave,omitempty"`
 }
 
-func (m *SetMasterRequest) Reset()         { *m = SetMasterRequest{} }
-func (m *SetMasterRequest) String() string { return proto.CompactTextString(m) }
-func (*SetMasterRequest) ProtoMessage()    {}
+func (m *SetMasterRequest) Reset()      { *m = SetMasterRequest{} }
+func (*SetMasterRequest) ProtoMessage() {}
 func (*SetMasterRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{82}
 }
@@ -4001,14 +3673,10 @@ func (m *SetMasterRequest) GetForceStartSlave() bool {
 }
 
 type SetMasterResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *SetMasterResponse) Reset()         { *m = SetMasterResponse{} }
-func (m *SetMasterResponse) String() string { return proto.CompactTextString(m) }
-func (*SetMasterResponse) ProtoMessage()    {}
+func (m *SetMasterResponse) Reset()      { *m = SetMasterResponse{} }
+func (*SetMasterResponse) ProtoMessage() {}
 func (*SetMasterResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{83}
 }
@@ -4041,15 +3709,11 @@ var xxx_messageInfo_SetMasterResponse proto.InternalMessageInfo
 
 type SlaveWasRestartedRequest struct {
 	// the parent alias the tablet should have
-	Parent               *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	Parent *topodata.TabletAlias `protobuf:"bytes,1,opt,name=parent,proto3" json:"parent,omitempty"`
 }
 
-func (m *SlaveWasRestartedRequest) Reset()         { *m = SlaveWasRestartedRequest{} }
-func (m *SlaveWasRestartedRequest) String() string { return proto.CompactTextString(m) }
-func (*SlaveWasRestartedRequest) ProtoMessage()    {}
+func (m *SlaveWasRestartedRequest) Reset()      { *m = SlaveWasRestartedRequest{} }
+func (*SlaveWasRestartedRequest) ProtoMessage() {}
 func (*SlaveWasRestartedRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{84}
 }
@@ -4088,14 +3752,10 @@ func (m *SlaveWasRestartedRequest) GetParent() *topodata.TabletAlias {
 }
 
 type SlaveWasRestartedResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *SlaveWasRestartedResponse) Reset()         { *m = SlaveWasRestartedResponse{} }
-func (m *SlaveWasRestartedResponse) String() string { return proto.CompactTextString(m) }
-func (*SlaveWasRestartedResponse) ProtoMessage()    {}
+func (m *SlaveWasRestartedResponse) Reset()      { *m = SlaveWasRestartedResponse{} }
+func (*SlaveWasRestartedResponse) ProtoMessage() {}
 func (*SlaveWasRestartedResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{85}
 }
@@ -4127,14 +3787,10 @@ func (m *SlaveWasRestartedResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_SlaveWasRestartedResponse proto.InternalMessageInfo
 
 type StopReplicationAndGetStatusRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *StopReplicationAndGetStatusRequest) Reset()         { *m = StopReplicationAndGetStatusRequest{} }
-func (m *StopReplicationAndGetStatusRequest) String() string { return proto.CompactTextString(m) }
-func (*StopReplicationAndGetStatusRequest) ProtoMessage()    {}
+func (m *StopReplicationAndGetStatusRequest) Reset()      { *m = StopReplicationAndGetStatusRequest{} }
+func (*StopReplicationAndGetStatusRequest) ProtoMessage() {}
 func (*StopReplicationAndGetStatusRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{86}
 }
@@ -4166,15 +3822,11 @@ func (m *StopReplicationAndGetStatusRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_StopReplicationAndGetStatusRequest proto.InternalMessageInfo
 
 type StopReplicationAndGetStatusResponse struct {
-	Status               *replicationdata.Status `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
-	XXX_unrecognized     []byte                  `json:"-"`
-	XXX_sizecache        int32                   `json:"-"`
+	Status *replicationdata.Status `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
 }
 
-func (m *StopReplicationAndGetStatusResponse) Reset()         { *m = StopReplicationAndGetStatusResponse{} }
-func (m *StopReplicationAndGetStatusResponse) String() string { return proto.CompactTextString(m) }
-func (*StopReplicationAndGetStatusResponse) ProtoMessage()    {}
+func (m *StopReplicationAndGetStatusResponse) Reset()      { *m = StopReplicationAndGetStatusResponse{} }
+func (*StopReplicationAndGetStatusResponse) ProtoMessage() {}
 func (*StopReplicationAndGetStatusResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{87}
 }
@@ -4213,14 +3865,10 @@ func (m *StopReplicationAndGetStatusResponse) GetStatus() *replicationdata.Statu
 }
 
 type PromoteSlaveRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *PromoteSlaveRequest) Reset()         { *m = PromoteSlaveRequest{} }
-func (m *PromoteSlaveRequest) String() string { return proto.CompactTextString(m) }
-func (*PromoteSlaveRequest) ProtoMessage()    {}
+func (m *PromoteSlaveRequest) Reset()      { *m = PromoteSlaveRequest{} }
+func (*PromoteSlaveRequest) ProtoMessage() {}
 func (*PromoteSlaveRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{88}
 }
@@ -4252,15 +3900,11 @@ func (m *PromoteSlaveRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_PromoteSlaveRequest proto.InternalMessageInfo
 
 type PromoteSlaveResponse struct {
-	Position             string   `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Position string `protobuf:"bytes,1,opt,name=position,proto3" json:"position,omitempty"`
 }
 
-func (m *PromoteSlaveResponse) Reset()         { *m = PromoteSlaveResponse{} }
-func (m *PromoteSlaveResponse) String() string { return proto.CompactTextString(m) }
-func (*PromoteSlaveResponse) ProtoMessage()    {}
+func (m *PromoteSlaveResponse) Reset()      { *m = PromoteSlaveResponse{} }
+func (*PromoteSlaveResponse) ProtoMessage() {}
 func (*PromoteSlaveResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{89}
 }
@@ -4299,16 +3943,12 @@ func (m *PromoteSlaveResponse) GetPosition() string {
 }
 
 type BackupRequest struct {
-	Concurrency          int64    `protobuf:"varint,1,opt,name=concurrency,proto3" json:"concurrency,omitempty"`
-	AllowMaster          bool     `protobuf:"varint,2,opt,name=allowMaster,proto3" json:"allowMaster,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Concurrency int64 `protobuf:"varint,1,opt,name=concurrency,proto3" json:"concurrency,omitempty"`
+	AllowMaster bool  `protobuf:"varint,2,opt,name=allowMaster,proto3" json:"allowMaster,omitempty"`
 }
 
-func (m *BackupRequest) Reset()         { *m = BackupRequest{} }
-func (m *BackupRequest) String() string { return proto.CompactTextString(m) }
-func (*BackupRequest) ProtoMessage()    {}
+func (m *BackupRequest) Reset()      { *m = BackupRequest{} }
+func (*BackupRequest) ProtoMessage() {}
 func (*BackupRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{90}
 }
@@ -4354,15 +3994,11 @@ func (m *BackupRequest) GetAllowMaster() bool {
 }
 
 type BackupResponse struct {
-	Event                *logutil.Event `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+	Event *logutil.Event `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
 }
 
-func (m *BackupResponse) Reset()         { *m = BackupResponse{} }
-func (m *BackupResponse) String() string { return proto.CompactTextString(m) }
-func (*BackupResponse) ProtoMessage()    {}
+func (m *BackupResponse) Reset()      { *m = BackupResponse{} }
+func (*BackupResponse) ProtoMessage() {}
 func (*BackupResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{91}
 }
@@ -4401,14 +4037,10 @@ func (m *BackupResponse) GetEvent() *logutil.Event {
 }
 
 type RestoreFromBackupRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *RestoreFromBackupRequest) Reset()         { *m = RestoreFromBackupRequest{} }
-func (m *RestoreFromBackupRequest) String() string { return proto.CompactTextString(m) }
-func (*RestoreFromBackupRequest) ProtoMessage()    {}
+func (m *RestoreFromBackupRequest) Reset()      { *m = RestoreFromBackupRequest{} }
+func (*RestoreFromBackupRequest) ProtoMessage() {}
 func (*RestoreFromBackupRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{92}
 }
@@ -4440,15 +4072,11 @@ func (m *RestoreFromBackupRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_RestoreFromBackupRequest proto.InternalMessageInfo
 
 type RestoreFromBackupResponse struct {
-	Event                *logutil.Event `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+	Event *logutil.Event `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
 }
 
-func (m *RestoreFromBackupResponse) Reset()         { *m = RestoreFromBackupResponse{} }
-func (m *RestoreFromBackupResponse) String() string { return proto.CompactTextString(m) }
-func (*RestoreFromBackupResponse) ProtoMessage()    {}
+func (m *RestoreFromBackupResponse) Reset()      { *m = RestoreFromBackupResponse{} }
+func (*RestoreFromBackupResponse) ProtoMessage() {}
 func (*RestoreFromBackupResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_ff9ac4f89e61ffa4, []int{93}
 }
@@ -4589,140 +4217,3509 @@ func init() {
 func init() { proto.RegisterFile("tabletmanagerdata.proto", fileDescriptor_ff9ac4f89e61ffa4) }
 
 var fileDescriptor_ff9ac4f89e61ffa4 = []byte{
-	// 2093 bytes of a gzipped FileDescriptorProto
+	// 2142 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xcc, 0x59, 0xcd, 0x6f, 0x1b, 0xc7,
-	0x15, 0xc7, 0x92, 0x92, 0x2c, 0x3d, 0x7e, 0x88, 0x5c, 0x52, 0x22, 0x25, 0x37, 0x94, 0xbc, 0x76,
-	0x1a, 0xd7, 0x45, 0xa9, 0x46, 0x49, 0x83, 0x20, 0x6d, 0x8a, 0xca, 0xb2, 0x64, 0x3b, 0x71, 0x62,
-	0x65, 0xe5, 0x8f, 0x22, 0x28, 0xb0, 0x18, 0x72, 0x47, 0xe4, 0x42, 0xcb, 0x9d, 0xf5, 0xcc, 0x2c,
-	0x25, 0xfe, 0x13, 0xbd, 0xf5, 0xd6, 0x43, 0x81, 0x02, 0xed, 0xbd, 0x7f, 0x45, 0x8f, 0x3d, 0xa5,
-	0xe8, 0x35, 0xfd, 0x23, 0x7a, 0xe8, 0xa5, 0x98, 0x8f, 0x25, 0x67, 0xf9, 0x61, 0xcb, 0x82, 0x0b,
-	0xe4, 0x22, 0xf0, 0xfd, 0xde, 0x9b, 0xf7, 0x35, 0xef, 0xbd, 0x79, 0x0b, 0x41, 0x83, 0xa3, 0x4e,
-	0x88, 0xf9, 0x00, 0x45, 0xa8, 0x87, 0xa9, 0x8f, 0x38, 0x6a, 0xc7, 0x94, 0x70, 0x62, 0x57, 0x67,
-	0x18, 0xdb, 0x85, 0x57, 0x09, 0xa6, 0x23, 0xc5, 0xdf, 0x2e, 0x73, 0x12, 0x93, 0x89, 0xfc, 0xf6,
-	0x06, 0xc5, 0x71, 0x18, 0x74, 0x11, 0x0f, 0x48, 0x64, 0xc0, 0xa5, 0x90, 0xf4, 0x12, 0x1e, 0x84,
-	0x8a, 0x74, 0xfe, 0x65, 0xc1, 0xfa, 0x33, 0xa1, 0xf8, 0x01, 0x3e, 0x0b, 0xa2, 0x40, 0x08, 0xdb,
-	0x36, 0x2c, 0x45, 0x68, 0x80, 0x9b, 0xd6, 0xae, 0x75, 0x77, 0xcd, 0x95, 0xbf, 0xed, 0x4d, 0x58,
-	0x61, 0xdd, 0x3e, 0x1e, 0xa0, 0x66, 0x4e, 0xa2, 0x9a, 0xb2, 0x9b, 0x70, 0xa3, 0x4b, 0xc2, 0x64,
-	0x10, 0xb1, 0x66, 0x7e, 0x37, 0x7f, 0x77, 0xcd, 0x4d, 0x49, 0xbb, 0x0d, 0xb5, 0x98, 0x06, 0x03,
-	0x44, 0x47, 0xde, 0x39, 0x1e, 0x79, 0xa9, 0xd4, 0x92, 0x94, 0xaa, 0x6a, 0xd6, 0x97, 0x78, 0x74,
-	0xa8, 0xe5, 0x6d, 0x58, 0xe2, 0xa3, 0x18, 0x37, 0x97, 0x95, 0x55, 0xf1, 0xdb, 0xde, 0x81, 0x82,
-	0x70, 0xdd, 0x0b, 0x71, 0xd4, 0xe3, 0xfd, 0xe6, 0xca, 0xae, 0x75, 0x77, 0xc9, 0x05, 0x01, 0x3d,
-	0x91, 0x88, 0x7d, 0x13, 0xd6, 0x28, 0xb9, 0xf0, 0xba, 0x24, 0x89, 0x78, 0xf3, 0x86, 0x64, 0xaf,
-	0x52, 0x72, 0x71, 0x28, 0x68, 0xe7, 0x2f, 0x16, 0x54, 0x4e, 0xa5, 0x9b, 0x46, 0x70, 0x1f, 0xc0,
-	0xba, 0x38, 0xdf, 0x41, 0x0c, 0x7b, 0x3a, 0x22, 0x15, 0x67, 0x39, 0x85, 0xd5, 0x11, 0xfb, 0x29,
-	0xa8, 0x8c, 0x7b, 0xfe, 0xf8, 0x30, 0x6b, 0xe6, 0x76, 0xf3, 0x77, 0x0b, 0xfb, 0x4e, 0x7b, 0xf6,
-	0x92, 0xa6, 0x92, 0xe8, 0x56, 0x78, 0x16, 0x60, 0x22, 0x55, 0x43, 0x4c, 0x59, 0x40, 0xa2, 0x66,
-	0x5e, 0x5a, 0x4c, 0x49, 0xe1, 0xa8, 0xad, 0xac, 0x1e, 0xf6, 0x51, 0xd4, 0xc3, 0x2e, 0x66, 0x49,
-	0xc8, 0xed, 0x47, 0x50, 0xea, 0xe0, 0x33, 0x42, 0x33, 0x8e, 0x16, 0xf6, 0x6f, 0xcf, 0xb1, 0x3e,
-	0x1d, 0xa6, 0x5b, 0x54, 0x27, 0x75, 0x2c, 0xc7, 0x50, 0x44, 0x67, 0x1c, 0x53, 0xcf, 0xb8, 0xc3,
-	0x2b, 0x2a, 0x2a, 0xc8, 0x83, 0x0a, 0x76, 0xfe, 0x63, 0x41, 0xf9, 0x39, 0xc3, 0xf4, 0x04, 0xd3,
-	0x41, 0xc0, 0x98, 0x2e, 0x96, 0x3e, 0x61, 0x3c, 0x2d, 0x16, 0xf1, 0x5b, 0x60, 0x09, 0xc3, 0x54,
-	0x97, 0x8a, 0xfc, 0x6d, 0xff, 0x14, 0xaa, 0x31, 0x62, 0xec, 0x82, 0x50, 0xdf, 0xeb, 0xf6, 0x71,
-	0xf7, 0x9c, 0x25, 0x03, 0x99, 0x87, 0x25, 0xb7, 0x92, 0x32, 0x0e, 0x35, 0x6e, 0x7f, 0x03, 0x10,
-	0xd3, 0x60, 0x18, 0x84, 0xb8, 0x87, 0x55, 0xc9, 0x14, 0xf6, 0x3f, 0x9c, 0xe3, 0x6d, 0xd6, 0x97,
-	0xf6, 0xc9, 0xf8, 0xcc, 0x51, 0xc4, 0xe9, 0xc8, 0x35, 0x94, 0x6c, 0x7f, 0x0e, 0xeb, 0x53, 0x6c,
-	0xbb, 0x02, 0xf9, 0x73, 0x3c, 0xd2, 0x9e, 0x8b, 0x9f, 0x76, 0x1d, 0x96, 0x87, 0x28, 0x4c, 0xb0,
-	0xf6, 0x5c, 0x11, 0x9f, 0xe5, 0x3e, 0xb5, 0x9c, 0xef, 0x2c, 0x28, 0x3e, 0xe8, 0xbc, 0x21, 0xee,
-	0x32, 0xe4, 0xfc, 0x8e, 0x3e, 0x9b, 0xf3, 0x3b, 0xe3, 0x3c, 0xe4, 0x8d, 0x3c, 0x3c, 0x9d, 0x13,
-	0xda, 0xde, 0x9c, 0xd0, 0x4c, 0x63, 0xff, 0xcf, 0xc0, 0xfe, 0x6c, 0x41, 0x61, 0x62, 0x89, 0xd9,
-	0x4f, 0xa0, 0x22, 0xfc, 0xf4, 0xe2, 0x09, 0xd6, 0xb4, 0xa4, 0x97, 0xb7, 0xde, 0x78, 0x01, 0xee,
-	0x7a, 0x92, 0xa1, 0x99, 0x7d, 0x0c, 0x65, 0xbf, 0x93, 0xd1, 0xa5, 0x3a, 0x68, 0xe7, 0x0d, 0x11,
-	0xbb, 0x25, 0xdf, 0xa0, 0x98, 0xf3, 0x01, 0x14, 0x4e, 0x82, 0xa8, 0xe7, 0xe2, 0x57, 0x09, 0x66,
-	0x5c, 0xb4, 0x52, 0x8c, 0x46, 0x21, 0x41, 0xbe, 0x0e, 0x32, 0x25, 0x9d, 0xbb, 0x50, 0x54, 0x82,
-	0x2c, 0x26, 0x11, 0xc3, 0xaf, 0x91, 0xbc, 0x07, 0xc5, 0xd3, 0x10, 0xe3, 0x38, 0xd5, 0xb9, 0x0d,
-	0xab, 0x7e, 0x42, 0xe5, 0xb8, 0x94, 0xa2, 0x79, 0x77, 0x4c, 0x3b, 0xeb, 0x50, 0xd2, 0xb2, 0x4a,
-	0xad, 0xf3, 0x4f, 0x0b, 0xec, 0xa3, 0x4b, 0xdc, 0x4d, 0x38, 0x7e, 0x44, 0xc8, 0x79, 0xaa, 0x63,
-	0xde, 0xe4, 0x6c, 0x01, 0xc4, 0x88, 0xa2, 0x01, 0xe6, 0x98, 0xaa, 0xf0, 0xd7, 0x5c, 0x03, 0xb1,
-	0x4f, 0x60, 0x0d, 0x5f, 0x72, 0x8a, 0x3c, 0x1c, 0x0d, 0xe5, 0x0c, 0x2d, 0xec, 0x7f, 0x34, 0x27,
-	0x3b, 0xb3, 0xd6, 0xda, 0x47, 0xe2, 0xd8, 0x51, 0x34, 0x54, 0x35, 0xb1, 0x8a, 0x35, 0xb9, 0xfd,
-	0x4b, 0x28, 0x65, 0x58, 0x6f, 0x55, 0x0f, 0x67, 0x50, 0xcb, 0x98, 0xd2, 0x79, 0xdc, 0x81, 0x02,
-	0xbe, 0x0c, 0xb8, 0xc7, 0x38, 0xe2, 0x09, 0xd3, 0x09, 0x02, 0x01, 0x9d, 0x4a, 0x44, 0x3e, 0x10,
-	0xdc, 0x27, 0x09, 0x1f, 0x3f, 0x10, 0x92, 0xd2, 0x38, 0xa6, 0x69, 0x17, 0x68, 0xca, 0x19, 0x42,
-	0xe5, 0x21, 0xe6, 0x6a, 0xae, 0xa4, 0xe9, 0xdb, 0x84, 0x15, 0x19, 0xb8, 0xaa, 0xb8, 0x35, 0x57,
-	0x53, 0xf6, 0x6d, 0x28, 0x05, 0x51, 0x37, 0x4c, 0x7c, 0xec, 0x0d, 0x03, 0x7c, 0xc1, 0xa4, 0x89,
-	0x55, 0xb7, 0xa8, 0xc1, 0x17, 0x02, 0xb3, 0xdf, 0x87, 0x32, 0xbe, 0x54, 0x42, 0x5a, 0x89, 0x7a,
-	0x90, 0x4a, 0x1a, 0x95, 0x03, 0x9a, 0x39, 0x18, 0xaa, 0x86, 0x5d, 0x1d, 0xdd, 0x09, 0x54, 0xd5,
-	0x64, 0x34, 0x86, 0xfd, 0xdb, 0x4c, 0xdb, 0x0a, 0x9b, 0x42, 0x9c, 0x06, 0x6c, 0x3c, 0xc4, 0xdc,
-	0x28, 0x61, 0x1d, 0xa3, 0xf3, 0x2d, 0x6c, 0x4e, 0x33, 0xb4, 0x13, 0xbf, 0x81, 0x42, 0xb6, 0xe9,
-	0x84, 0xf9, 0xd6, 0x1c, 0xf3, 0xe6, 0x61, 0xf3, 0x88, 0x53, 0x07, 0xfb, 0x14, 0x73, 0x17, 0x23,
-	0xff, 0x69, 0x14, 0x8e, 0x52, 0x8b, 0x1b, 0x50, 0xcb, 0xa0, 0xba, 0x84, 0x27, 0xf0, 0x4b, 0x1a,
-	0x70, 0x9c, 0x4a, 0x6f, 0x42, 0x3d, 0x0b, 0x6b, 0xf1, 0x2f, 0xa0, 0xaa, 0x1e, 0xa7, 0x67, 0xa3,
-	0x38, 0x15, 0xb6, 0x7f, 0x01, 0x05, 0xe5, 0x9e, 0x27, 0x9f, 0x6e, 0xe1, 0x72, 0x79, 0xbf, 0xde,
-	0x1e, 0x6f, 0x22, 0x32, 0xe7, 0x5c, 0x9e, 0x00, 0x3e, 0xfe, 0x2d, 0xfc, 0x34, 0x75, 0x4d, 0x1c,
-	0x72, 0xf1, 0x19, 0xc5, 0xac, 0x2f, 0x4a, 0xca, 0x74, 0x28, 0x0b, 0x6b, 0xf1, 0x06, 0x6c, 0xb8,
-	0x49, 0xf4, 0x08, 0xa3, 0x90, 0xf7, 0xe5, 0xc3, 0x91, 0x1e, 0x68, 0xc2, 0xe6, 0x34, 0x43, 0x1f,
-	0xf9, 0x18, 0x9a, 0x8f, 0x7b, 0x11, 0xa1, 0x58, 0x31, 0x8f, 0x28, 0x25, 0x34, 0x33, 0x52, 0x38,
-	0xc7, 0x34, 0x9a, 0x0c, 0x0a, 0x49, 0x3a, 0x37, 0x61, 0x6b, 0xce, 0x29, 0xad, 0xf2, 0x33, 0xe1,
-	0xb4, 0x98, 0x27, 0xd9, 0x4a, 0xbe, 0x0d, 0xa5, 0x0b, 0x14, 0x70, 0x2f, 0x26, 0x6c, 0x52, 0x4c,
-	0x6b, 0x6e, 0x51, 0x80, 0x27, 0x1a, 0x53, 0x91, 0x99, 0x67, 0xb5, 0xce, 0x7d, 0xd8, 0x3c, 0xa1,
-	0xf8, 0x2c, 0x0c, 0x7a, 0xfd, 0xa9, 0x06, 0x11, 0xdb, 0x96, 0x4c, 0x5c, 0xda, 0x21, 0x29, 0xe9,
-	0xf4, 0xa0, 0x31, 0x73, 0x46, 0xd7, 0xd5, 0x13, 0x28, 0x2b, 0x29, 0x8f, 0xca, 0xbd, 0x22, 0x9d,
-	0xe7, 0xef, 0x2f, 0xac, 0x6c, 0x73, 0x0b, 0x71, 0x4b, 0x5d, 0x83, 0x62, 0xce, 0x7f, 0x2d, 0xb0,
-	0x0f, 0xe2, 0x38, 0x1c, 0x65, 0x3d, 0xab, 0x40, 0x9e, 0xbd, 0x0a, 0xd3, 0x11, 0xc3, 0x5e, 0x85,
-	0x62, 0xc4, 0x9c, 0x11, 0xda, 0xc5, 0xba, 0x59, 0x15, 0x21, 0xd6, 0x00, 0x14, 0x86, 0xe4, 0xc2,
-	0x33, 0xb6, 0x53, 0x39, 0x19, 0x56, 0xdd, 0x8a, 0x64, 0xb8, 0x13, 0x7c, 0x76, 0x01, 0x5a, 0x7a,
-	0x57, 0x0b, 0xd0, 0xf2, 0x35, 0x17, 0xa0, 0xbf, 0x5a, 0x50, 0xcb, 0x44, 0xaf, 0x73, 0xfc, 0xc3,
-	0x5b, 0xd5, 0x6a, 0x50, 0x7d, 0x42, 0xba, 0xe7, 0x6a, 0xea, 0xa5, 0xad, 0x51, 0x07, 0xdb, 0x04,
-	0x27, 0x8d, 0xf7, 0x3c, 0x0a, 0x67, 0x84, 0x37, 0xa1, 0x9e, 0x85, 0xb5, 0xf8, 0xdf, 0x2c, 0x68,
-	0xea, 0x27, 0xe2, 0x18, 0xf3, 0x6e, 0xff, 0x80, 0x3d, 0xe8, 0x8c, 0xeb, 0xa0, 0x0e, 0xcb, 0xf2,
-	0xa3, 0x44, 0x26, 0xa0, 0xe8, 0x2a, 0xc2, 0x6e, 0xc0, 0x0d, 0xbf, 0xe3, 0xc9, 0xa7, 0x51, 0xbf,
-	0x0e, 0x7e, 0xe7, 0x6b, 0xf1, 0x38, 0x6e, 0xc1, 0xea, 0x00, 0x5d, 0x7a, 0x94, 0x5c, 0x30, 0xbd,
-	0x0c, 0xde, 0x18, 0xa0, 0x4b, 0x97, 0x5c, 0x30, 0xb9, 0xa8, 0x07, 0x4c, 0x6e, 0xe0, 0x9d, 0x20,
-	0x0a, 0x49, 0x8f, 0xc9, 0xeb, 0x5f, 0x75, 0xcb, 0x1a, 0xbe, 0xaf, 0x50, 0xd1, 0x6b, 0x54, 0xb6,
-	0x91, 0x79, 0xb9, 0xab, 0x6e, 0x91, 0x1a, 0xbd, 0xe5, 0x3c, 0x84, 0xad, 0x39, 0x3e, 0xeb, 0xdb,
-	0xbb, 0x07, 0x2b, 0xaa, 0x35, 0xf4, 0xb5, 0xd9, 0x6d, 0xf5, 0x61, 0xf5, 0x8d, 0xf8, 0xab, 0xdb,
-	0x40, 0x4b, 0x38, 0xbf, 0xb7, 0xe0, 0xbd, 0xac, 0xa6, 0x83, 0x30, 0x14, 0x0b, 0x18, 0x7b, 0xf7,
-	0x29, 0x98, 0x89, 0x6c, 0x69, 0x4e, 0x64, 0x4f, 0xa0, 0xb5, 0xc8, 0x9f, 0x6b, 0x84, 0xf7, 0xe5,
-	0xf4, 0xdd, 0x1e, 0xc4, 0xf1, 0xeb, 0x03, 0x33, 0xfd, 0xcf, 0x65, 0xfc, 0x9f, 0x4d, 0xba, 0x54,
-	0x76, 0x0d, 0xaf, 0xc4, 0xc3, 0x16, 0xa2, 0x21, 0x56, 0xbb, 0x46, 0x5a, 0xa0, 0xc7, 0x50, 0xcb,
-	0xa0, 0x5a, 0xf1, 0x9e, 0xd8, 0x38, 0xc6, 0x5b, 0x4a, 0x61, 0xbf, 0xd1, 0x9e, 0xfe, 0x12, 0xd6,
-	0x07, 0xb4, 0x98, 0x78, 0x49, 0xbe, 0x42, 0x8c, 0x63, 0x9a, 0x4e, 0xe6, 0xd4, 0xc0, 0xc7, 0xb0,
-	0x39, 0xcd, 0xd0, 0x36, 0xb6, 0x61, 0x75, 0x6a, 0xb4, 0x8f, 0x69, 0xc7, 0x86, 0xca, 0x29, 0x27,
-	0xb1, 0x74, 0x2d, 0xd5, 0x54, 0x83, 0xaa, 0x81, 0xe9, 0x46, 0xfa, 0x2d, 0x34, 0xc6, 0xe0, 0x57,
-	0x41, 0x14, 0x0c, 0x92, 0x81, 0xb1, 0x8c, 0x2e, 0xd2, 0x6f, 0xdf, 0x02, 0xf9, 0x8c, 0x78, 0x3c,
-	0x18, 0xe0, 0x74, 0xdf, 0xca, 0xbb, 0x05, 0x81, 0x3d, 0x53, 0x90, 0xf3, 0x09, 0x34, 0x67, 0x35,
-	0x5f, 0xc1, 0x75, 0xe9, 0x26, 0xa2, 0x3c, 0xe3, 0xbb, 0x48, 0xbe, 0x01, 0x6a, 0xe7, 0x7f, 0x07,
-	0x37, 0x27, 0xe8, 0xf3, 0x88, 0x07, 0xe1, 0x81, 0x98, 0x3e, 0xef, 0x28, 0x80, 0x16, 0xfc, 0x68,
-	0xbe, 0x76, 0x6d, 0xfd, 0x01, 0xdc, 0x52, 0xbb, 0xc5, 0xd1, 0xa5, 0x78, 0xa3, 0x51, 0x28, 0x16,
-	0x9b, 0x18, 0x51, 0x1c, 0x71, 0xec, 0xa7, 0x3e, 0xc8, 0x9d, 0x55, 0xb1, 0xbd, 0x20, 0xdd, 0xff,
-	0x21, 0x85, 0x1e, 0xfb, 0xce, 0x1d, 0x70, 0x5e, 0xa7, 0x45, 0xdb, 0xda, 0x85, 0xd6, 0xb4, 0xd4,
-	0x51, 0x88, 0xbb, 0x13, 0x43, 0xce, 0x2d, 0xd8, 0x59, 0x28, 0xa1, 0x95, 0xd8, 0x6a, 0xdd, 0x15,
-	0xe1, 0x8c, 0xeb, 0xf7, 0x27, 0x6a, 0x15, 0xd5, 0x98, 0xbe, 0x9e, 0x3a, 0x2c, 0x23, 0xdf, 0xa7,
-	0xe9, 0x03, 0xaf, 0x08, 0x67, 0x0b, 0x1a, 0x2e, 0x66, 0x62, 0x2f, 0x1b, 0x57, 0x72, 0xaa, 0x65,
-	0x1b, 0x9a, 0xb3, 0x2c, 0x6d, 0x75, 0x0f, 0x1a, 0x2f, 0x0c, 0x5c, 0x34, 0xe3, 0xdc, 0x66, 0x5e,
-	0xd3, 0xcd, 0xec, 0x1c, 0x43, 0x73, 0xf6, 0xc0, 0xb5, 0xc6, 0xc8, 0x7b, 0xa6, 0x9e, 0x97, 0x28,
-	0xe0, 0xc7, 0x44, 0xb4, 0x51, 0x6a, 0xbe, 0x0c, 0x39, 0x7d, 0x25, 0x79, 0x37, 0x17, 0xf8, 0x99,
-	0x7a, 0xc9, 0x4d, 0x55, 0xe5, 0x2e, 0xb4, 0x16, 0x29, 0xd3, 0x71, 0xd6, 0xa0, 0xfa, 0x38, 0x0a,
-	0xb8, 0x6a, 0xd6, 0x34, 0x31, 0x3f, 0x07, 0xdb, 0x04, 0xaf, 0x50, 0xfe, 0xdf, 0x59, 0xd0, 0x3a,
-	0x21, 0x71, 0x12, 0xca, 0x3d, 0x53, 0x15, 0xc2, 0x17, 0x24, 0x11, 0x37, 0x9a, 0xfa, 0xfd, 0x63,
-	0x58, 0x17, 0x65, 0xeb, 0x75, 0x29, 0x46, 0x1c, 0xfb, 0x5e, 0x94, 0x7e, 0x0b, 0x95, 0x04, 0x7c,
-	0xa8, 0xd0, 0xaf, 0x99, 0xa8, 0x3d, 0xd4, 0x15, 0x4a, 0xcd, 0x91, 0x0f, 0x0a, 0x92, 0x63, 0xff,
-	0x53, 0x28, 0x0e, 0xa4, 0x67, 0x1e, 0x0a, 0x03, 0xa4, 0x46, 0x7f, 0x61, 0x7f, 0x63, 0x7a, 0x77,
-	0x3e, 0x10, 0x4c, 0xb7, 0xa0, 0x44, 0x25, 0x61, 0x7f, 0x08, 0x75, 0x63, 0xa0, 0x4d, 0x56, 0xcc,
-	0x25, 0x69, 0xa3, 0x66, 0xf0, 0xc6, 0x9b, 0xe6, 0x2d, 0xd8, 0x59, 0x18, 0x97, 0x4e, 0xe1, 0x1f,
-	0x2d, 0xa8, 0x88, 0x74, 0x99, 0xad, 0x6f, 0xff, 0x0c, 0x56, 0x94, 0xb4, 0xbe, 0xf2, 0x05, 0xee,
-	0x69, 0xa1, 0x85, 0x9e, 0xe5, 0x16, 0x7a, 0x36, 0x2f, 0x9f, 0xf9, 0x39, 0xf9, 0x4c, 0x6f, 0x38,
-	0x3b, 0x83, 0x36, 0xa0, 0xf6, 0x00, 0x0f, 0x08, 0xc7, 0xd9, 0x8b, 0xdf, 0x87, 0x7a, 0x16, 0xbe,
-	0xc2, 0xd5, 0x6f, 0x41, 0xe3, 0x79, 0xe4, 0x93, 0x79, 0xea, 0xb6, 0xa1, 0x39, 0xcb, 0xd2, 0x1e,
-	0x7c, 0x0e, 0x3b, 0x27, 0x94, 0x08, 0x86, 0xf4, 0xec, 0x65, 0x1f, 0x47, 0x87, 0x28, 0xe9, 0xf5,
-	0xf9, 0xf3, 0xf8, 0x0a, 0x93, 0xd0, 0xf9, 0x35, 0xec, 0x2e, 0x3e, 0x7e, 0x35, 0xaf, 0xd5, 0x41,
-	0xc4, 0xb4, 0x1e, 0xdf, 0xf0, 0x7a, 0x96, 0xa5, 0xbd, 0xfe, 0x83, 0x05, 0x95, 0x53, 0x9c, 0x6d,
-	0x97, 0xb7, 0xbd, 0xeb, 0x39, 0x17, 0x97, 0x9b, 0xd7, 0x08, 0xf7, 0xa0, 0x2a, 0x37, 0x7f, 0x8f,
-	0x89, 0x79, 0xee, 0x31, 0xe1, 0x93, 0x5e, 0xf8, 0xd7, 0x25, 0x63, 0x32, 0xe7, 0xe5, 0xf3, 0x83,
-	0xa7, 0x1a, 0xd6, 0x79, 0x3c, 0x09, 0xc4, 0xc5, 0x52, 0xc9, 0x64, 0xc2, 0xbf, 0x9d, 0xcf, 0xe2,
-	0x4b, 0x6e, 0x8e, 0x2a, 0x6d, 0xe7, 0x0e, 0x38, 0xe2, 0xcd, 0x34, 0x06, 0xcd, 0x41, 0xe4, 0x8b,
-	0xf9, 0x9c, 0xd9, 0x39, 0x5e, 0xc0, 0xed, 0xd7, 0x4a, 0x5d, 0x77, 0x07, 0xd9, 0x80, 0x9a, 0x59,
-	0x09, 0x46, 0x29, 0x67, 0xe1, 0x2b, 0x14, 0xc5, 0x29, 0x94, 0xee, 0xa3, 0xee, 0x79, 0x32, 0xae,
-	0xc0, 0x5d, 0x28, 0x74, 0x49, 0xd4, 0x4d, 0x28, 0xc5, 0x51, 0x77, 0xa4, 0xe7, 0x95, 0x09, 0x09,
-	0x09, 0xf9, 0xf1, 0xa5, 0x52, 0xaf, 0xbf, 0xd8, 0x4c, 0xc8, 0xf9, 0x04, 0xca, 0xa9, 0x52, 0xed,
-	0xc2, 0x1d, 0x58, 0xc6, 0xc3, 0x49, 0xea, 0xcb, 0xed, 0xf4, 0x1f, 0x0b, 0x47, 0x02, 0x75, 0x15,
-	0x53, 0xbf, 0x4e, 0x9c, 0x50, 0x7c, 0x4c, 0xc9, 0x20, 0xe3, 0x97, 0x73, 0x00, 0x5b, 0x73, 0x78,
-	0x6f, 0xa3, 0xfe, 0xfe, 0xaf, 0xfe, 0xfe, 0x7d, 0xcb, 0xfa, 0xc7, 0xf7, 0x2d, 0xeb, 0x4f, 0xff,
-	0x6e, 0x59, 0xdf, 0xb6, 0x87, 0x01, 0xc7, 0x8c, 0xb5, 0x03, 0xb2, 0xa7, 0x7e, 0xed, 0xf5, 0xc8,
-	0xde, 0x90, 0xef, 0xc9, 0x7f, 0x75, 0xec, 0xcd, 0x7c, 0x41, 0x75, 0x56, 0x24, 0xe3, 0xa3, 0xff,
-	0x05, 0x00, 0x00, 0xff, 0xff, 0xcf, 0x85, 0x62, 0x76, 0x74, 0x19, 0x00, 0x00,
+	0x15, 0xd7, 0x92, 0x92, 0x2c, 0x3d, 0x8a, 0x14, 0xb9, 0xa4, 0x44, 0x4a, 0x69, 0x56, 0xf2, 0xda,
+	0x69, 0x5c, 0x17, 0xa5, 0x1a, 0x25, 0x0d, 0x82, 0x14, 0x29, 0x2a, 0xcb, 0x92, 0xed, 0xc4, 0x89,
+	0x95, 0x95, 0x3f, 0x8a, 0xa0, 0xc0, 0x62, 0xc8, 0x1d, 0x91, 0x0b, 0x2d, 0x77, 0xd6, 0x33, 0xb3,
+	0x94, 0x78, 0xeb, 0x5f, 0x50, 0xf4, 0xd2, 0x5b, 0x0f, 0x05, 0x0a, 0xb4, 0x3d, 0xf7, 0xaf, 0xe8,
+	0xd1, 0xa7, 0x34, 0x3d, 0x5a, 0xbe, 0xf4, 0x98, 0x5b, 0x0f, 0xbd, 0x14, 0xf3, 0xb1, 0xe4, 0x2e,
+	0x3f, 0x6c, 0xd9, 0x70, 0x81, 0x5e, 0x04, 0xbe, 0xdf, 0x7b, 0xf3, 0xbe, 0xe6, 0xbd, 0x37, 0x6f,
+	0x21, 0xa8, 0x73, 0xd4, 0x0a, 0x30, 0xef, 0xa1, 0x10, 0x75, 0x30, 0xf5, 0x10, 0x47, 0xcd, 0x88,
+	0x12, 0x4e, 0xcc, 0xca, 0x04, 0x63, 0xb3, 0xf0, 0x34, 0xc6, 0x74, 0xa0, 0xf8, 0x9b, 0x25, 0x4e,
+	0x22, 0x32, 0x92, 0xdf, 0x5c, 0xa3, 0x38, 0x0a, 0xfc, 0x36, 0xe2, 0x3e, 0x09, 0x53, 0x70, 0x31,
+	0x20, 0x9d, 0x98, 0xfb, 0x81, 0x22, 0xed, 0x7f, 0x1a, 0xb0, 0xfa, 0x50, 0x28, 0xbe, 0x8d, 0x4f,
+	0xfc, 0xd0, 0x17, 0xc2, 0xa6, 0x09, 0xf3, 0x21, 0xea, 0xe1, 0x86, 0xb1, 0x6d, 0xdc, 0x58, 0x76,
+	0xe4, 0x6f, 0x73, 0x1d, 0x16, 0x59, 0xbb, 0x8b, 0x7b, 0xa8, 0x91, 0x93, 0xa8, 0xa6, 0xcc, 0x06,
+	0x5c, 0x69, 0x93, 0x20, 0xee, 0x85, 0xac, 0x91, 0xdf, 0xce, 0xdf, 0x58, 0x76, 0x12, 0xd2, 0x6c,
+	0x42, 0x35, 0xa2, 0x7e, 0x0f, 0xd1, 0x81, 0x7b, 0x8a, 0x07, 0x6e, 0x22, 0x35, 0x2f, 0xa5, 0x2a,
+	0x9a, 0xf5, 0x05, 0x1e, 0xec, 0x6b, 0x79, 0x13, 0xe6, 0xf9, 0x20, 0xc2, 0x8d, 0x05, 0x65, 0x55,
+	0xfc, 0x36, 0xb7, 0xa0, 0x20, 0x5c, 0x77, 0x03, 0x1c, 0x76, 0x78, 0xb7, 0xb1, 0xb8, 0x6d, 0xdc,
+	0x98, 0x77, 0x40, 0x40, 0xf7, 0x25, 0x62, 0xbe, 0x03, 0xcb, 0x94, 0x9c, 0xb9, 0x6d, 0x12, 0x87,
+	0xbc, 0x71, 0x45, 0xb2, 0x97, 0x28, 0x39, 0xdb, 0x17, 0xb4, 0xfd, 0x67, 0x03, 0xca, 0xc7, 0xd2,
+	0xcd, 0x54, 0x70, 0xef, 0xc3, 0xaa, 0x38, 0xdf, 0x42, 0x0c, 0xbb, 0x3a, 0x22, 0x15, 0x67, 0x29,
+	0x81, 0xd5, 0x11, 0xf3, 0x01, 0xa8, 0x8c, 0xbb, 0xde, 0xf0, 0x30, 0x6b, 0xe4, 0xb6, 0xf3, 0x37,
+	0x0a, 0xbb, 0x76, 0x73, 0xf2, 0x92, 0xc6, 0x92, 0xe8, 0x94, 0x79, 0x16, 0x60, 0x22, 0x55, 0x7d,
+	0x4c, 0x99, 0x4f, 0xc2, 0x46, 0x5e, 0x5a, 0x4c, 0x48, 0xe1, 0xa8, 0xa9, 0xac, 0xee, 0x77, 0x51,
+	0xd8, 0xc1, 0x0e, 0x66, 0x71, 0xc0, 0xcd, 0xbb, 0x50, 0x6c, 0xe1, 0x13, 0x42, 0x33, 0x8e, 0x16,
+	0x76, 0xaf, 0x4d, 0xb1, 0x3e, 0x1e, 0xa6, 0xb3, 0xa2, 0x4e, 0xea, 0x58, 0x0e, 0x61, 0x05, 0x9d,
+	0x70, 0x4c, 0xdd, 0xd4, 0x1d, 0x5e, 0x52, 0x51, 0x41, 0x1e, 0x54, 0xb0, 0xfd, 0x6f, 0x03, 0x4a,
+	0x8f, 0x18, 0xa6, 0x47, 0x98, 0xf6, 0x7c, 0xc6, 0x74, 0xb1, 0x74, 0x09, 0xe3, 0x49, 0xb1, 0x88,
+	0xdf, 0x02, 0x8b, 0x19, 0xa6, 0xba, 0x54, 0xe4, 0x6f, 0xf3, 0xc7, 0x50, 0x89, 0x10, 0x63, 0x67,
+	0x84, 0x7a, 0x6e, 0xbb, 0x8b, 0xdb, 0xa7, 0x2c, 0xee, 0xc9, 0x3c, 0xcc, 0x3b, 0xe5, 0x84, 0xb1,
+	0xaf, 0x71, 0xf3, 0x6b, 0x80, 0x88, 0xfa, 0x7d, 0x3f, 0xc0, 0x1d, 0xac, 0x4a, 0xa6, 0xb0, 0xfb,
+	0xc1, 0x14, 0x6f, 0xb3, 0xbe, 0x34, 0x8f, 0x86, 0x67, 0x0e, 0x42, 0x4e, 0x07, 0x4e, 0x4a, 0xc9,
+	0xe6, 0x67, 0xb0, 0x3a, 0xc6, 0x36, 0xcb, 0x90, 0x3f, 0xc5, 0x03, 0xed, 0xb9, 0xf8, 0x69, 0xd6,
+	0x60, 0xa1, 0x8f, 0x82, 0x18, 0x6b, 0xcf, 0x15, 0xf1, 0x69, 0xee, 0x13, 0xc3, 0xfe, 0xd6, 0x80,
+	0x95, 0xdb, 0xad, 0x57, 0xc4, 0x5d, 0x82, 0x9c, 0xd7, 0xd2, 0x67, 0x73, 0x5e, 0x6b, 0x98, 0x87,
+	0x7c, 0x2a, 0x0f, 0x0f, 0xa6, 0x84, 0xb6, 0x33, 0x25, 0xb4, 0xb4, 0xb1, 0xff, 0x65, 0x60, 0x7f,
+	0x32, 0xa0, 0x30, 0xb2, 0xc4, 0xcc, 0xfb, 0x50, 0x16, 0x7e, 0xba, 0xd1, 0x08, 0x6b, 0x18, 0xd2,
+	0xcb, 0xab, 0xaf, 0xbc, 0x00, 0x67, 0x35, 0xce, 0xd0, 0xcc, 0x3c, 0x84, 0x92, 0xd7, 0xca, 0xe8,
+	0x52, 0x1d, 0xb4, 0xf5, 0x8a, 0x88, 0x9d, 0xa2, 0x97, 0xa2, 0x98, 0xfd, 0x3e, 0x14, 0x8e, 0xfc,
+	0xb0, 0xe3, 0xe0, 0xa7, 0x31, 0x66, 0x5c, 0xb4, 0x52, 0x84, 0x06, 0x01, 0x41, 0x9e, 0x0e, 0x32,
+	0x21, 0xed, 0x1b, 0xb0, 0xa2, 0x04, 0x59, 0x44, 0x42, 0x86, 0x5f, 0x22, 0x79, 0x13, 0x56, 0x8e,
+	0x03, 0x8c, 0xa3, 0x44, 0xe7, 0x26, 0x2c, 0x79, 0x31, 0x95, 0xe3, 0x52, 0x8a, 0xe6, 0x9d, 0x21,
+	0x6d, 0xaf, 0x42, 0x51, 0xcb, 0x2a, 0xb5, 0xf6, 0x3f, 0x0c, 0x30, 0x0f, 0xce, 0x71, 0x3b, 0xe6,
+	0xf8, 0x2e, 0x21, 0xa7, 0x89, 0x8e, 0x69, 0x93, 0xd3, 0x02, 0x88, 0x10, 0x45, 0x3d, 0xcc, 0x31,
+	0x55, 0xe1, 0x2f, 0x3b, 0x29, 0xc4, 0x3c, 0x82, 0x65, 0x7c, 0xce, 0x29, 0x72, 0x71, 0xd8, 0x97,
+	0x33, 0xb4, 0xb0, 0xfb, 0xe1, 0x94, 0xec, 0x4c, 0x5a, 0x6b, 0x1e, 0x88, 0x63, 0x07, 0x61, 0x5f,
+	0xd5, 0xc4, 0x12, 0xd6, 0xe4, 0xe6, 0xcf, 0xa1, 0x98, 0x61, 0xbd, 0x56, 0x3d, 0x9c, 0x40, 0x35,
+	0x63, 0x4a, 0xe7, 0x71, 0x0b, 0x0a, 0xf8, 0xdc, 0xe7, 0x2e, 0xe3, 0x88, 0xc7, 0x4c, 0x27, 0x08,
+	0x04, 0x74, 0x2c, 0x11, 0xf9, 0x40, 0x70, 0x8f, 0xc4, 0x7c, 0xf8, 0x40, 0x48, 0x4a, 0xe3, 0x98,
+	0x26, 0x5d, 0xa0, 0x29, 0xbb, 0x0f, 0xe5, 0x3b, 0x98, 0xab, 0xb9, 0x92, 0xa4, 0x6f, 0x1d, 0x16,
+	0x65, 0xe0, 0xaa, 0xe2, 0x96, 0x1d, 0x4d, 0x99, 0xd7, 0xa0, 0xe8, 0x87, 0xed, 0x20, 0xf6, 0xb0,
+	0xdb, 0xf7, 0xf1, 0x19, 0x93, 0x26, 0x96, 0x9c, 0x15, 0x0d, 0x3e, 0x16, 0x98, 0xf9, 0x1e, 0x94,
+	0xf0, 0xb9, 0x12, 0xd2, 0x4a, 0xd4, 0x83, 0x54, 0xd4, 0xa8, 0x1c, 0xd0, 0xcc, 0xc6, 0x50, 0x49,
+	0xd9, 0xd5, 0xd1, 0x1d, 0x41, 0x45, 0x4d, 0xc6, 0xd4, 0xb0, 0x7f, 0x9d, 0x69, 0x5b, 0x66, 0x63,
+	0x88, 0x5d, 0x87, 0xb5, 0x3b, 0x98, 0xa7, 0x4a, 0x58, 0xc7, 0x68, 0x7f, 0x03, 0xeb, 0xe3, 0x0c,
+	0xed, 0xc4, 0x2f, 0xa1, 0x90, 0x6d, 0x3a, 0x61, 0xde, 0x9a, 0x62, 0x3e, 0x7d, 0x38, 0x7d, 0xc4,
+	0xae, 0x81, 0x79, 0x8c, 0xb9, 0x83, 0x91, 0xf7, 0x20, 0x0c, 0x06, 0x89, 0xc5, 0x35, 0xa8, 0x66,
+	0x50, 0x5d, 0xc2, 0x23, 0xf8, 0x09, 0xf5, 0x39, 0x4e, 0xa4, 0xd7, 0xa1, 0x96, 0x85, 0xb5, 0xf8,
+	0xe7, 0x50, 0x51, 0x8f, 0xd3, 0xc3, 0x41, 0x94, 0x08, 0x9b, 0x3f, 0x83, 0x82, 0x72, 0xcf, 0x95,
+	0x4f, 0xb7, 0x70, 0xb9, 0xb4, 0x5b, 0x6b, 0x0e, 0x37, 0x11, 0x99, 0x73, 0x2e, 0x4f, 0x00, 0x1f,
+	0xfe, 0x16, 0x7e, 0xa6, 0x75, 0x8d, 0x1c, 0x72, 0xf0, 0x09, 0xc5, 0xac, 0x2b, 0x4a, 0x2a, 0xed,
+	0x50, 0x16, 0xd6, 0xe2, 0x75, 0x58, 0x73, 0xe2, 0xf0, 0x2e, 0x46, 0x01, 0xef, 0xca, 0x87, 0x23,
+	0x39, 0xd0, 0x80, 0xf5, 0x71, 0x86, 0x3e, 0xf2, 0x11, 0x34, 0xee, 0x75, 0x42, 0x42, 0xb1, 0x62,
+	0x1e, 0x50, 0x4a, 0x68, 0x66, 0xa4, 0x70, 0x8e, 0x69, 0x38, 0x1a, 0x14, 0x92, 0xb4, 0xdf, 0x81,
+	0x8d, 0x29, 0xa7, 0xb4, 0xca, 0x4f, 0x85, 0xd3, 0x62, 0x9e, 0x64, 0x2b, 0xf9, 0x1a, 0x14, 0xcf,
+	0x90, 0xcf, 0xdd, 0x88, 0xb0, 0x51, 0x31, 0x2d, 0x3b, 0x2b, 0x02, 0x3c, 0xd2, 0x98, 0x8a, 0x2c,
+	0x7d, 0x56, 0xeb, 0xdc, 0x85, 0xf5, 0x23, 0x8a, 0x4f, 0x02, 0xbf, 0xd3, 0x1d, 0x6b, 0x10, 0xb1,
+	0x6d, 0xc9, 0xc4, 0x25, 0x1d, 0x92, 0x90, 0x76, 0x07, 0xea, 0x13, 0x67, 0x74, 0x5d, 0xdd, 0x87,
+	0x92, 0x92, 0x72, 0xa9, 0xdc, 0x2b, 0x92, 0x79, 0xfe, 0xde, 0xcc, 0xca, 0x4e, 0x6f, 0x21, 0x4e,
+	0xb1, 0x9d, 0xa2, 0x98, 0xfd, 0x1f, 0x03, 0xcc, 0xbd, 0x28, 0x0a, 0x06, 0x59, 0xcf, 0xca, 0x90,
+	0x67, 0x4f, 0x83, 0x64, 0xc4, 0xb0, 0xa7, 0x81, 0x18, 0x31, 0x27, 0x84, 0xb6, 0xb1, 0x6e, 0x56,
+	0x45, 0x88, 0x35, 0x00, 0x05, 0x01, 0x39, 0x73, 0x53, 0xdb, 0xa9, 0x9c, 0x0c, 0x4b, 0x4e, 0x59,
+	0x32, 0x9c, 0x11, 0x3e, 0xb9, 0x00, 0xcd, 0xbf, 0xad, 0x05, 0x68, 0xe1, 0x0d, 0x17, 0xa0, 0xbf,
+	0x18, 0x50, 0xcd, 0x44, 0xaf, 0x73, 0xfc, 0xff, 0xb7, 0xaa, 0x55, 0xa1, 0x72, 0x9f, 0xb4, 0x4f,
+	0xd5, 0xd4, 0x4b, 0x5a, 0xa3, 0x06, 0x66, 0x1a, 0x1c, 0x35, 0xde, 0xa3, 0x30, 0x98, 0x10, 0x5e,
+	0x87, 0x5a, 0x16, 0xd6, 0xe2, 0x7f, 0x33, 0xa0, 0xa1, 0x9f, 0x88, 0x43, 0xcc, 0xdb, 0xdd, 0x3d,
+	0x76, 0xbb, 0x35, 0xac, 0x83, 0x1a, 0x2c, 0xc8, 0x8f, 0x12, 0x99, 0x80, 0x15, 0x47, 0x11, 0x66,
+	0x1d, 0xae, 0x78, 0x2d, 0x57, 0x3e, 0x8d, 0xfa, 0x75, 0xf0, 0x5a, 0x5f, 0x89, 0xc7, 0x71, 0x03,
+	0x96, 0x7a, 0xe8, 0xdc, 0xa5, 0xe4, 0x8c, 0xe9, 0x65, 0xf0, 0x4a, 0x0f, 0x9d, 0x3b, 0xe4, 0x8c,
+	0xc9, 0x45, 0xdd, 0x67, 0x72, 0x03, 0x6f, 0xf9, 0x61, 0x40, 0x3a, 0x4c, 0x5e, 0xff, 0x92, 0x53,
+	0xd2, 0xf0, 0x2d, 0x85, 0x8a, 0x5e, 0xa3, 0xb2, 0x8d, 0xd2, 0x97, 0xbb, 0xe4, 0xac, 0xd0, 0x54,
+	0x6f, 0xd9, 0x77, 0x60, 0x63, 0x8a, 0xcf, 0xfa, 0xf6, 0x6e, 0xc2, 0xa2, 0x6a, 0x0d, 0x7d, 0x6d,
+	0x66, 0x53, 0x7d, 0x58, 0x7d, 0x2d, 0xfe, 0xea, 0x36, 0xd0, 0x12, 0xf6, 0x6f, 0x0d, 0x78, 0x37,
+	0xab, 0x69, 0x2f, 0x08, 0xc4, 0x02, 0xc6, 0xde, 0x7e, 0x0a, 0x26, 0x22, 0x9b, 0x9f, 0x12, 0xd9,
+	0x7d, 0xb0, 0x66, 0xf9, 0xf3, 0x06, 0xe1, 0x7d, 0x31, 0x7e, 0xb7, 0x7b, 0x51, 0xf4, 0xf2, 0xc0,
+	0xd2, 0xfe, 0xe7, 0x32, 0xfe, 0x4f, 0x26, 0x5d, 0x2a, 0x7b, 0x03, 0xaf, 0xc4, 0xc3, 0x16, 0xa0,
+	0x3e, 0x56, 0xbb, 0x46, 0x52, 0xa0, 0x87, 0x50, 0xcd, 0xa0, 0x5a, 0xf1, 0x8e, 0xd8, 0x38, 0x86,
+	0x5b, 0x4a, 0x61, 0xb7, 0xde, 0x1c, 0xff, 0x12, 0xd6, 0x07, 0xb4, 0x98, 0x78, 0x49, 0xbe, 0x44,
+	0x8c, 0x63, 0x9a, 0x4c, 0xe6, 0xc4, 0xc0, 0x47, 0xb0, 0x3e, 0xce, 0xd0, 0x36, 0x36, 0x61, 0x69,
+	0x6c, 0xb4, 0x0f, 0x69, 0xdb, 0x84, 0xf2, 0x31, 0x27, 0x91, 0x74, 0x2d, 0xd1, 0x54, 0x85, 0x4a,
+	0x0a, 0xd3, 0x8d, 0xf4, 0x2b, 0xa8, 0x0f, 0xc1, 0x2f, 0xfd, 0xd0, 0xef, 0xc5, 0xbd, 0xd4, 0x32,
+	0x3a, 0x4b, 0xbf, 0x79, 0x15, 0xe4, 0x33, 0xe2, 0x72, 0xbf, 0x87, 0x93, 0x7d, 0x2b, 0xef, 0x14,
+	0x04, 0xf6, 0x50, 0x41, 0xf6, 0xc7, 0xd0, 0x98, 0xd4, 0x7c, 0x09, 0xd7, 0xa5, 0x9b, 0x88, 0xf2,
+	0x8c, 0xef, 0x22, 0xf9, 0x29, 0x50, 0x3b, 0xff, 0x6b, 0x78, 0x67, 0x84, 0x3e, 0x0a, 0xb9, 0x1f,
+	0xec, 0x89, 0xe9, 0xf3, 0x96, 0x02, 0xb0, 0xe0, 0x07, 0xd3, 0xb5, 0x6b, 0xeb, 0xb7, 0xe1, 0xaa,
+	0xda, 0x2d, 0x0e, 0xce, 0xc5, 0x1b, 0x8d, 0x02, 0xb1, 0xd8, 0x44, 0x88, 0xe2, 0x90, 0x63, 0x2f,
+	0xf1, 0x41, 0xee, 0xac, 0x8a, 0xed, 0xfa, 0xc9, 0xfe, 0x0f, 0x09, 0x74, 0xcf, 0xb3, 0xaf, 0x83,
+	0xfd, 0x32, 0x2d, 0xda, 0xd6, 0x36, 0x58, 0xe3, 0x52, 0x07, 0x01, 0x6e, 0x8f, 0x0c, 0xd9, 0x57,
+	0x61, 0x6b, 0xa6, 0x84, 0x56, 0x62, 0xaa, 0x75, 0x57, 0x84, 0x33, 0xac, 0xdf, 0x1f, 0xa9, 0x55,
+	0x54, 0x63, 0xfa, 0x7a, 0x6a, 0xb0, 0x80, 0x3c, 0x8f, 0x26, 0x0f, 0xbc, 0x22, 0xec, 0x0d, 0xa8,
+	0x3b, 0x98, 0x89, 0xbd, 0x6c, 0x58, 0xc9, 0x89, 0x96, 0x4d, 0x68, 0x4c, 0xb2, 0xb4, 0xd5, 0x1d,
+	0xa8, 0x3f, 0x4e, 0xe1, 0xa2, 0x19, 0xa7, 0x36, 0xf3, 0xb2, 0x6e, 0x66, 0xfb, 0x10, 0x1a, 0x93,
+	0x07, 0xde, 0x68, 0x8c, 0xbc, 0x9b, 0xd6, 0xf3, 0x04, 0xf9, 0xfc, 0x90, 0x88, 0x36, 0x4a, 0xcc,
+	0x97, 0x20, 0xa7, 0xaf, 0x24, 0xef, 0xe4, 0x7c, 0x2f, 0x53, 0x2f, 0xb9, 0xb1, 0xaa, 0xdc, 0x06,
+	0x6b, 0x96, 0x32, 0x1d, 0x67, 0x15, 0x2a, 0xf7, 0x42, 0x9f, 0xab, 0x66, 0x4d, 0x12, 0xf3, 0x53,
+	0x30, 0xd3, 0xe0, 0x25, 0xca, 0xff, 0x5b, 0x03, 0xac, 0x23, 0x12, 0xc5, 0x81, 0xdc, 0x33, 0x55,
+	0x21, 0x7c, 0x4e, 0x62, 0x71, 0xa3, 0x89, 0xdf, 0x3f, 0x84, 0x55, 0x51, 0xb6, 0x6e, 0x9b, 0x62,
+	0xc4, 0xb1, 0xe7, 0x86, 0xc9, 0xb7, 0x50, 0x51, 0xc0, 0xfb, 0x0a, 0xfd, 0x8a, 0x89, 0xda, 0x43,
+	0x6d, 0xa1, 0x34, 0x3d, 0xf2, 0x41, 0x41, 0x72, 0xec, 0x7f, 0x02, 0x2b, 0x3d, 0xe9, 0x99, 0x8b,
+	0x02, 0x1f, 0xa9, 0xd1, 0x5f, 0xd8, 0x5d, 0x1b, 0xdf, 0x9d, 0xf7, 0x04, 0xd3, 0x29, 0x28, 0x51,
+	0x49, 0x98, 0x1f, 0x40, 0x2d, 0x35, 0xd0, 0x46, 0x2b, 0xe6, 0xbc, 0xb4, 0x51, 0x4d, 0xf1, 0x86,
+	0x9b, 0xe6, 0x55, 0xd8, 0x9a, 0x19, 0x97, 0x4e, 0xe1, 0x1f, 0x0c, 0x28, 0x8b, 0x74, 0xa5, 0x5b,
+	0xdf, 0xfc, 0x09, 0x2c, 0x2a, 0x69, 0x7d, 0xe5, 0x33, 0xdc, 0xd3, 0x42, 0x33, 0x3d, 0xcb, 0xcd,
+	0xf4, 0x6c, 0x5a, 0x3e, 0xf3, 0x53, 0xf2, 0x99, 0xdc, 0x70, 0x76, 0x06, 0xad, 0x41, 0xf5, 0x36,
+	0xee, 0x11, 0x8e, 0xb3, 0x17, 0xbf, 0x0b, 0xb5, 0x2c, 0x7c, 0x89, 0xab, 0xdf, 0x80, 0xfa, 0xa3,
+	0xd0, 0x23, 0xd3, 0xd4, 0x6d, 0x42, 0x63, 0x92, 0xa5, 0x3d, 0xf8, 0x0c, 0xb6, 0x8e, 0x28, 0x11,
+	0x0c, 0xe9, 0xd9, 0x93, 0x2e, 0x0e, 0xf7, 0x51, 0xdc, 0xe9, 0xf2, 0x47, 0xd1, 0x25, 0x26, 0xa1,
+	0xfd, 0x0b, 0xd8, 0x9e, 0x7d, 0xfc, 0x72, 0x5e, 0xab, 0x83, 0x88, 0x69, 0x3d, 0x5e, 0xca, 0xeb,
+	0x49, 0x96, 0xf6, 0xfa, 0xf7, 0x06, 0x94, 0x8f, 0x71, 0xb6, 0x5d, 0x5e, 0xf7, 0xae, 0xa7, 0x5c,
+	0x5c, 0x6e, 0x5a, 0x23, 0xdc, 0x84, 0x8a, 0xdc, 0xfc, 0x5d, 0x26, 0xe6, 0xb9, 0xcb, 0x84, 0x4f,
+	0x7a, 0xe1, 0x5f, 0x95, 0x8c, 0xd1, 0x9c, 0x97, 0xcf, 0x0f, 0x1e, 0x6b, 0x58, 0xfb, 0xde, 0x28,
+	0x10, 0x07, 0x4b, 0x25, 0xa3, 0x09, 0xff, 0x7a, 0x3e, 0x8b, 0x2f, 0xb9, 0x29, 0xaa, 0xb4, 0x9d,
+	0xeb, 0x60, 0x8b, 0x37, 0x33, 0x35, 0x68, 0xf6, 0x42, 0x4f, 0xcc, 0xe7, 0xcc, 0xce, 0xf1, 0x18,
+	0xae, 0xbd, 0x54, 0xea, 0x4d, 0x77, 0x90, 0x35, 0xa8, 0xa6, 0x2b, 0x21, 0x55, 0xca, 0x59, 0xf8,
+	0x12, 0x45, 0x71, 0x0c, 0xc5, 0x5b, 0xa8, 0x7d, 0x1a, 0x0f, 0x2b, 0x70, 0x1b, 0x0a, 0x6d, 0x12,
+	0xb6, 0x63, 0x4a, 0x71, 0xd8, 0x1e, 0xe8, 0x79, 0x95, 0x86, 0x84, 0x84, 0xfc, 0xf8, 0x52, 0xa9,
+	0xd7, 0x5f, 0x6c, 0x69, 0xc8, 0xfe, 0x18, 0x4a, 0x89, 0x52, 0xed, 0xc2, 0x75, 0x58, 0xc0, 0xfd,
+	0x51, 0xea, 0x4b, 0xcd, 0xe4, 0x1f, 0x0b, 0x07, 0x02, 0x75, 0x14, 0x53, 0xbf, 0x4e, 0x9c, 0x50,
+	0x7c, 0x48, 0x49, 0x2f, 0xe3, 0x97, 0xbd, 0x07, 0x1b, 0x53, 0x78, 0xaf, 0xa3, 0xfe, 0x96, 0xf7,
+	0xec, 0xb9, 0x35, 0xf7, 0xdd, 0x73, 0x6b, 0xee, 0xfb, 0xe7, 0x96, 0xf1, 0x9b, 0x0b, 0xcb, 0xf8,
+	0xeb, 0x85, 0x65, 0xfc, 0xfd, 0xc2, 0x32, 0x9e, 0x5d, 0x58, 0xc6, 0xbf, 0x2e, 0xac, 0xb9, 0xef,
+	0x2f, 0x2c, 0xe3, 0x77, 0x2f, 0xac, 0xb9, 0x3f, 0xbe, 0xb0, 0x8c, 0x67, 0x2f, 0xac, 0xb9, 0xef,
+	0x5e, 0x58, 0x73, 0xdf, 0x34, 0xfb, 0x3e, 0xc7, 0x8c, 0x35, 0x7d, 0xb2, 0xa3, 0x7e, 0xed, 0x74,
+	0xc8, 0x4e, 0x9f, 0xef, 0xc8, 0x7f, 0x89, 0xec, 0x4c, 0x7c, 0x69, 0xb5, 0x16, 0x25, 0xe3, 0xc3,
+	0xff, 0x06, 0x00, 0x00, 0xff, 0xff, 0x8c, 0x29, 0xb6, 0xa0, 0x9c, 0x19, 0x00, 0x00,
 }
 
+func (this *TableDefinition) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*TableDefinition)
+	if !ok {
+		that2, ok := that.(TableDefinition)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	if this.Schema != that1.Schema {
+		return false
+	}
+	if len(this.Columns) != len(that1.Columns) {
+		return false
+	}
+	for i := range this.Columns {
+		if this.Columns[i] != that1.Columns[i] {
+			return false
+		}
+	}
+	if len(this.PrimaryKeyColumns) != len(that1.PrimaryKeyColumns) {
+		return false
+	}
+	for i := range this.PrimaryKeyColumns {
+		if this.PrimaryKeyColumns[i] != that1.PrimaryKeyColumns[i] {
+			return false
+		}
+	}
+	if this.Type != that1.Type {
+		return false
+	}
+	if this.DataLength != that1.DataLength {
+		return false
+	}
+	if this.RowCount != that1.RowCount {
+		return false
+	}
+	return true
+}
+func (this *SchemaDefinition) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SchemaDefinition)
+	if !ok {
+		that2, ok := that.(SchemaDefinition)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.DatabaseSchema != that1.DatabaseSchema {
+		return false
+	}
+	if len(this.TableDefinitions) != len(that1.TableDefinitions) {
+		return false
+	}
+	for i := range this.TableDefinitions {
+		if !this.TableDefinitions[i].Equal(that1.TableDefinitions[i]) {
+			return false
+		}
+	}
+	if this.Version != that1.Version {
+		return false
+	}
+	return true
+}
+func (this *SchemaChangeResult) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SchemaChangeResult)
+	if !ok {
+		that2, ok := that.(SchemaChangeResult)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.BeforeSchema.Equal(that1.BeforeSchema) {
+		return false
+	}
+	if !this.AfterSchema.Equal(that1.AfterSchema) {
+		return false
+	}
+	return true
+}
+func (this *UserPermission) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*UserPermission)
+	if !ok {
+		that2, ok := that.(UserPermission)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Host != that1.Host {
+		return false
+	}
+	if this.User != that1.User {
+		return false
+	}
+	if this.PasswordChecksum != that1.PasswordChecksum {
+		return false
+	}
+	if len(this.Privileges) != len(that1.Privileges) {
+		return false
+	}
+	for i := range this.Privileges {
+		if this.Privileges[i] != that1.Privileges[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *DbPermission) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*DbPermission)
+	if !ok {
+		that2, ok := that.(DbPermission)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Host != that1.Host {
+		return false
+	}
+	if this.Db != that1.Db {
+		return false
+	}
+	if this.User != that1.User {
+		return false
+	}
+	if len(this.Privileges) != len(that1.Privileges) {
+		return false
+	}
+	for i := range this.Privileges {
+		if this.Privileges[i] != that1.Privileges[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *Permissions) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Permissions)
+	if !ok {
+		that2, ok := that.(Permissions)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.UserPermissions) != len(that1.UserPermissions) {
+		return false
+	}
+	for i := range this.UserPermissions {
+		if !this.UserPermissions[i].Equal(that1.UserPermissions[i]) {
+			return false
+		}
+	}
+	if len(this.DbPermissions) != len(that1.DbPermissions) {
+		return false
+	}
+	for i := range this.DbPermissions {
+		if !this.DbPermissions[i].Equal(that1.DbPermissions[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *PingRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*PingRequest)
+	if !ok {
+		that2, ok := that.(PingRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Payload != that1.Payload {
+		return false
+	}
+	return true
+}
+func (this *PingResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*PingResponse)
+	if !ok {
+		that2, ok := that.(PingResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Payload != that1.Payload {
+		return false
+	}
+	return true
+}
+func (this *SleepRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SleepRequest)
+	if !ok {
+		that2, ok := that.(SleepRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Duration != that1.Duration {
+		return false
+	}
+	return true
+}
+func (this *SleepResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SleepResponse)
+	if !ok {
+		that2, ok := that.(SleepResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *ExecuteHookRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteHookRequest)
+	if !ok {
+		that2, ok := that.(ExecuteHookRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	if len(this.Parameters) != len(that1.Parameters) {
+		return false
+	}
+	for i := range this.Parameters {
+		if this.Parameters[i] != that1.Parameters[i] {
+			return false
+		}
+	}
+	if len(this.ExtraEnv) != len(that1.ExtraEnv) {
+		return false
+	}
+	for i := range this.ExtraEnv {
+		if this.ExtraEnv[i] != that1.ExtraEnv[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *ExecuteHookResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteHookResponse)
+	if !ok {
+		that2, ok := that.(ExecuteHookResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.ExitStatus != that1.ExitStatus {
+		return false
+	}
+	if this.Stdout != that1.Stdout {
+		return false
+	}
+	if this.Stderr != that1.Stderr {
+		return false
+	}
+	return true
+}
+func (this *GetSchemaRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*GetSchemaRequest)
+	if !ok {
+		that2, ok := that.(GetSchemaRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Tables) != len(that1.Tables) {
+		return false
+	}
+	for i := range this.Tables {
+		if this.Tables[i] != that1.Tables[i] {
+			return false
+		}
+	}
+	if this.IncludeViews != that1.IncludeViews {
+		return false
+	}
+	if len(this.ExcludeTables) != len(that1.ExcludeTables) {
+		return false
+	}
+	for i := range this.ExcludeTables {
+		if this.ExcludeTables[i] != that1.ExcludeTables[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *GetSchemaResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*GetSchemaResponse)
+	if !ok {
+		that2, ok := that.(GetSchemaResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.SchemaDefinition.Equal(that1.SchemaDefinition) {
+		return false
+	}
+	return true
+}
+func (this *GetPermissionsRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*GetPermissionsRequest)
+	if !ok {
+		that2, ok := that.(GetPermissionsRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *GetPermissionsResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*GetPermissionsResponse)
+	if !ok {
+		that2, ok := that.(GetPermissionsResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Permissions.Equal(that1.Permissions) {
+		return false
+	}
+	return true
+}
+func (this *SetReadOnlyRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SetReadOnlyRequest)
+	if !ok {
+		that2, ok := that.(SetReadOnlyRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *SetReadOnlyResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SetReadOnlyResponse)
+	if !ok {
+		that2, ok := that.(SetReadOnlyResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *SetReadWriteRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SetReadWriteRequest)
+	if !ok {
+		that2, ok := that.(SetReadWriteRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *SetReadWriteResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SetReadWriteResponse)
+	if !ok {
+		that2, ok := that.(SetReadWriteResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *ChangeTypeRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ChangeTypeRequest)
+	if !ok {
+		that2, ok := that.(ChangeTypeRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.TabletType != that1.TabletType {
+		return false
+	}
+	return true
+}
+func (this *ChangeTypeResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ChangeTypeResponse)
+	if !ok {
+		that2, ok := that.(ChangeTypeResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *RefreshStateRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*RefreshStateRequest)
+	if !ok {
+		that2, ok := that.(RefreshStateRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *RefreshStateResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*RefreshStateResponse)
+	if !ok {
+		that2, ok := that.(RefreshStateResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *RunHealthCheckRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*RunHealthCheckRequest)
+	if !ok {
+		that2, ok := that.(RunHealthCheckRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *RunHealthCheckResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*RunHealthCheckResponse)
+	if !ok {
+		that2, ok := that.(RunHealthCheckResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *IgnoreHealthErrorRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*IgnoreHealthErrorRequest)
+	if !ok {
+		that2, ok := that.(IgnoreHealthErrorRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Pattern != that1.Pattern {
+		return false
+	}
+	return true
+}
+func (this *IgnoreHealthErrorResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*IgnoreHealthErrorResponse)
+	if !ok {
+		that2, ok := that.(IgnoreHealthErrorResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *ReloadSchemaRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ReloadSchemaRequest)
+	if !ok {
+		that2, ok := that.(ReloadSchemaRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.WaitPosition != that1.WaitPosition {
+		return false
+	}
+	return true
+}
+func (this *ReloadSchemaResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ReloadSchemaResponse)
+	if !ok {
+		that2, ok := that.(ReloadSchemaResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *PreflightSchemaRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*PreflightSchemaRequest)
+	if !ok {
+		that2, ok := that.(PreflightSchemaRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Changes) != len(that1.Changes) {
+		return false
+	}
+	for i := range this.Changes {
+		if this.Changes[i] != that1.Changes[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *PreflightSchemaResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*PreflightSchemaResponse)
+	if !ok {
+		that2, ok := that.(PreflightSchemaResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.ChangeResults) != len(that1.ChangeResults) {
+		return false
+	}
+	for i := range this.ChangeResults {
+		if !this.ChangeResults[i].Equal(that1.ChangeResults[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *ApplySchemaRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ApplySchemaRequest)
+	if !ok {
+		that2, ok := that.(ApplySchemaRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Sql != that1.Sql {
+		return false
+	}
+	if this.Force != that1.Force {
+		return false
+	}
+	if this.AllowReplication != that1.AllowReplication {
+		return false
+	}
+	if !this.BeforeSchema.Equal(that1.BeforeSchema) {
+		return false
+	}
+	if !this.AfterSchema.Equal(that1.AfterSchema) {
+		return false
+	}
+	return true
+}
+func (this *ApplySchemaResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ApplySchemaResponse)
+	if !ok {
+		that2, ok := that.(ApplySchemaResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.BeforeSchema.Equal(that1.BeforeSchema) {
+		return false
+	}
+	if !this.AfterSchema.Equal(that1.AfterSchema) {
+		return false
+	}
+	return true
+}
+func (this *LockTablesRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*LockTablesRequest)
+	if !ok {
+		that2, ok := that.(LockTablesRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *LockTablesResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*LockTablesResponse)
+	if !ok {
+		that2, ok := that.(LockTablesResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *UnlockTablesRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*UnlockTablesRequest)
+	if !ok {
+		that2, ok := that.(UnlockTablesRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *UnlockTablesResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*UnlockTablesResponse)
+	if !ok {
+		that2, ok := that.(UnlockTablesResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *ExecuteFetchAsDbaRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteFetchAsDbaRequest)
+	if !ok {
+		that2, ok := that.(ExecuteFetchAsDbaRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !bytes.Equal(this.Query, that1.Query) {
+		return false
+	}
+	if this.DbName != that1.DbName {
+		return false
+	}
+	if this.MaxRows != that1.MaxRows {
+		return false
+	}
+	if this.DisableBinlogs != that1.DisableBinlogs {
+		return false
+	}
+	if this.ReloadSchema != that1.ReloadSchema {
+		return false
+	}
+	return true
+}
+func (this *ExecuteFetchAsDbaResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteFetchAsDbaResponse)
+	if !ok {
+		that2, ok := that.(ExecuteFetchAsDbaResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Result.Equal(that1.Result) {
+		return false
+	}
+	return true
+}
+func (this *ExecuteFetchAsAllPrivsRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteFetchAsAllPrivsRequest)
+	if !ok {
+		that2, ok := that.(ExecuteFetchAsAllPrivsRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !bytes.Equal(this.Query, that1.Query) {
+		return false
+	}
+	if this.DbName != that1.DbName {
+		return false
+	}
+	if this.MaxRows != that1.MaxRows {
+		return false
+	}
+	if this.ReloadSchema != that1.ReloadSchema {
+		return false
+	}
+	return true
+}
+func (this *ExecuteFetchAsAllPrivsResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteFetchAsAllPrivsResponse)
+	if !ok {
+		that2, ok := that.(ExecuteFetchAsAllPrivsResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Result.Equal(that1.Result) {
+		return false
+	}
+	return true
+}
+func (this *ExecuteFetchAsAppRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteFetchAsAppRequest)
+	if !ok {
+		that2, ok := that.(ExecuteFetchAsAppRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !bytes.Equal(this.Query, that1.Query) {
+		return false
+	}
+	if this.MaxRows != that1.MaxRows {
+		return false
+	}
+	return true
+}
+func (this *ExecuteFetchAsAppResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteFetchAsAppResponse)
+	if !ok {
+		that2, ok := that.(ExecuteFetchAsAppResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Result.Equal(that1.Result) {
+		return false
+	}
+	return true
+}
+func (this *SlaveStatusRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SlaveStatusRequest)
+	if !ok {
+		that2, ok := that.(SlaveStatusRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *SlaveStatusResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SlaveStatusResponse)
+	if !ok {
+		that2, ok := that.(SlaveStatusResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Status.Equal(that1.Status) {
+		return false
+	}
+	return true
+}
+func (this *MasterPositionRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*MasterPositionRequest)
+	if !ok {
+		that2, ok := that.(MasterPositionRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *MasterPositionResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*MasterPositionResponse)
+	if !ok {
+		that2, ok := that.(MasterPositionResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Position != that1.Position {
+		return false
+	}
+	return true
+}
+func (this *StopSlaveRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StopSlaveRequest)
+	if !ok {
+		that2, ok := that.(StopSlaveRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *StopSlaveResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StopSlaveResponse)
+	if !ok {
+		that2, ok := that.(StopSlaveResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *StopSlaveMinimumRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StopSlaveMinimumRequest)
+	if !ok {
+		that2, ok := that.(StopSlaveMinimumRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Position != that1.Position {
+		return false
+	}
+	if this.WaitTimeout != that1.WaitTimeout {
+		return false
+	}
+	return true
+}
+func (this *StopSlaveMinimumResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StopSlaveMinimumResponse)
+	if !ok {
+		that2, ok := that.(StopSlaveMinimumResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Position != that1.Position {
+		return false
+	}
+	return true
+}
+func (this *StartSlaveRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StartSlaveRequest)
+	if !ok {
+		that2, ok := that.(StartSlaveRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *StartSlaveResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StartSlaveResponse)
+	if !ok {
+		that2, ok := that.(StartSlaveResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *StartSlaveUntilAfterRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StartSlaveUntilAfterRequest)
+	if !ok {
+		that2, ok := that.(StartSlaveUntilAfterRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Position != that1.Position {
+		return false
+	}
+	if this.WaitTimeout != that1.WaitTimeout {
+		return false
+	}
+	return true
+}
+func (this *StartSlaveUntilAfterResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StartSlaveUntilAfterResponse)
+	if !ok {
+		that2, ok := that.(StartSlaveUntilAfterResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *TabletExternallyReparentedRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*TabletExternallyReparentedRequest)
+	if !ok {
+		that2, ok := that.(TabletExternallyReparentedRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.ExternalId != that1.ExternalId {
+		return false
+	}
+	return true
+}
+func (this *TabletExternallyReparentedResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*TabletExternallyReparentedResponse)
+	if !ok {
+		that2, ok := that.(TabletExternallyReparentedResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *TabletExternallyElectedRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*TabletExternallyElectedRequest)
+	if !ok {
+		that2, ok := that.(TabletExternallyElectedRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *TabletExternallyElectedResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*TabletExternallyElectedResponse)
+	if !ok {
+		that2, ok := that.(TabletExternallyElectedResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *GetSlavesRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*GetSlavesRequest)
+	if !ok {
+		that2, ok := that.(GetSlavesRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *GetSlavesResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*GetSlavesResponse)
+	if !ok {
+		that2, ok := that.(GetSlavesResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Addrs) != len(that1.Addrs) {
+		return false
+	}
+	for i := range this.Addrs {
+		if this.Addrs[i] != that1.Addrs[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *ResetReplicationRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ResetReplicationRequest)
+	if !ok {
+		that2, ok := that.(ResetReplicationRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *ResetReplicationResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ResetReplicationResponse)
+	if !ok {
+		that2, ok := that.(ResetReplicationResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *VReplicationExecRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*VReplicationExecRequest)
+	if !ok {
+		that2, ok := that.(VReplicationExecRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Query != that1.Query {
+		return false
+	}
+	return true
+}
+func (this *VReplicationExecResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*VReplicationExecResponse)
+	if !ok {
+		that2, ok := that.(VReplicationExecResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Result.Equal(that1.Result) {
+		return false
+	}
+	return true
+}
+func (this *VReplicationWaitForPosRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*VReplicationWaitForPosRequest)
+	if !ok {
+		that2, ok := that.(VReplicationWaitForPosRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Id != that1.Id {
+		return false
+	}
+	if this.Position != that1.Position {
+		return false
+	}
+	return true
+}
+func (this *VReplicationWaitForPosResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*VReplicationWaitForPosResponse)
+	if !ok {
+		that2, ok := that.(VReplicationWaitForPosResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *InitMasterRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*InitMasterRequest)
+	if !ok {
+		that2, ok := that.(InitMasterRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *InitMasterResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*InitMasterResponse)
+	if !ok {
+		that2, ok := that.(InitMasterResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Position != that1.Position {
+		return false
+	}
+	return true
+}
+func (this *PopulateReparentJournalRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*PopulateReparentJournalRequest)
+	if !ok {
+		that2, ok := that.(PopulateReparentJournalRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.TimeCreatedNs != that1.TimeCreatedNs {
+		return false
+	}
+	if this.ActionName != that1.ActionName {
+		return false
+	}
+	if !this.MasterAlias.Equal(that1.MasterAlias) {
+		return false
+	}
+	if this.ReplicationPosition != that1.ReplicationPosition {
+		return false
+	}
+	return true
+}
+func (this *PopulateReparentJournalResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*PopulateReparentJournalResponse)
+	if !ok {
+		that2, ok := that.(PopulateReparentJournalResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *InitSlaveRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*InitSlaveRequest)
+	if !ok {
+		that2, ok := that.(InitSlaveRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Parent.Equal(that1.Parent) {
+		return false
+	}
+	if this.ReplicationPosition != that1.ReplicationPosition {
+		return false
+	}
+	if this.TimeCreatedNs != that1.TimeCreatedNs {
+		return false
+	}
+	return true
+}
+func (this *InitSlaveResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*InitSlaveResponse)
+	if !ok {
+		that2, ok := that.(InitSlaveResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *DemoteMasterRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*DemoteMasterRequest)
+	if !ok {
+		that2, ok := that.(DemoteMasterRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *DemoteMasterResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*DemoteMasterResponse)
+	if !ok {
+		that2, ok := that.(DemoteMasterResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Position != that1.Position {
+		return false
+	}
+	return true
+}
+func (this *UndoDemoteMasterRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*UndoDemoteMasterRequest)
+	if !ok {
+		that2, ok := that.(UndoDemoteMasterRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *UndoDemoteMasterResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*UndoDemoteMasterResponse)
+	if !ok {
+		that2, ok := that.(UndoDemoteMasterResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *PromoteSlaveWhenCaughtUpRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*PromoteSlaveWhenCaughtUpRequest)
+	if !ok {
+		that2, ok := that.(PromoteSlaveWhenCaughtUpRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Position != that1.Position {
+		return false
+	}
+	return true
+}
+func (this *PromoteSlaveWhenCaughtUpResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*PromoteSlaveWhenCaughtUpResponse)
+	if !ok {
+		that2, ok := that.(PromoteSlaveWhenCaughtUpResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Position != that1.Position {
+		return false
+	}
+	return true
+}
+func (this *SlaveWasPromotedRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SlaveWasPromotedRequest)
+	if !ok {
+		that2, ok := that.(SlaveWasPromotedRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *SlaveWasPromotedResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SlaveWasPromotedResponse)
+	if !ok {
+		that2, ok := that.(SlaveWasPromotedResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *SetMasterRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SetMasterRequest)
+	if !ok {
+		that2, ok := that.(SetMasterRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Parent.Equal(that1.Parent) {
+		return false
+	}
+	if this.TimeCreatedNs != that1.TimeCreatedNs {
+		return false
+	}
+	if this.ForceStartSlave != that1.ForceStartSlave {
+		return false
+	}
+	return true
+}
+func (this *SetMasterResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SetMasterResponse)
+	if !ok {
+		that2, ok := that.(SetMasterResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *SlaveWasRestartedRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SlaveWasRestartedRequest)
+	if !ok {
+		that2, ok := that.(SlaveWasRestartedRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Parent.Equal(that1.Parent) {
+		return false
+	}
+	return true
+}
+func (this *SlaveWasRestartedResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SlaveWasRestartedResponse)
+	if !ok {
+		that2, ok := that.(SlaveWasRestartedResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *StopReplicationAndGetStatusRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StopReplicationAndGetStatusRequest)
+	if !ok {
+		that2, ok := that.(StopReplicationAndGetStatusRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *StopReplicationAndGetStatusResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StopReplicationAndGetStatusResponse)
+	if !ok {
+		that2, ok := that.(StopReplicationAndGetStatusResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Status.Equal(that1.Status) {
+		return false
+	}
+	return true
+}
+func (this *PromoteSlaveRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*PromoteSlaveRequest)
+	if !ok {
+		that2, ok := that.(PromoteSlaveRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *PromoteSlaveResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*PromoteSlaveResponse)
+	if !ok {
+		that2, ok := that.(PromoteSlaveResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Position != that1.Position {
+		return false
+	}
+	return true
+}
+func (this *BackupRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*BackupRequest)
+	if !ok {
+		that2, ok := that.(BackupRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Concurrency != that1.Concurrency {
+		return false
+	}
+	if this.AllowMaster != that1.AllowMaster {
+		return false
+	}
+	return true
+}
+func (this *BackupResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*BackupResponse)
+	if !ok {
+		that2, ok := that.(BackupResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Event.Equal(that1.Event) {
+		return false
+	}
+	return true
+}
+func (this *RestoreFromBackupRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*RestoreFromBackupRequest)
+	if !ok {
+		that2, ok := that.(RestoreFromBackupRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *RestoreFromBackupResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*RestoreFromBackupResponse)
+	if !ok {
+		that2, ok := that.(RestoreFromBackupResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Event.Equal(that1.Event) {
+		return false
+	}
+	return true
+}
+func (this *TableDefinition) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 11)
+	s = append(s, "&tabletmanagerdata.TableDefinition{")
+	s = append(s, "Name: "+fmt.Sprintf("%#v", this.Name)+",\n")
+	s = append(s, "Schema: "+fmt.Sprintf("%#v", this.Schema)+",\n")
+	s = append(s, "Columns: "+fmt.Sprintf("%#v", this.Columns)+",\n")
+	s = append(s, "PrimaryKeyColumns: "+fmt.Sprintf("%#v", this.PrimaryKeyColumns)+",\n")
+	s = append(s, "Type: "+fmt.Sprintf("%#v", this.Type)+",\n")
+	s = append(s, "DataLength: "+fmt.Sprintf("%#v", this.DataLength)+",\n")
+	s = append(s, "RowCount: "+fmt.Sprintf("%#v", this.RowCount)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SchemaDefinition) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&tabletmanagerdata.SchemaDefinition{")
+	s = append(s, "DatabaseSchema: "+fmt.Sprintf("%#v", this.DatabaseSchema)+",\n")
+	if this.TableDefinitions != nil {
+		s = append(s, "TableDefinitions: "+fmt.Sprintf("%#v", this.TableDefinitions)+",\n")
+	}
+	s = append(s, "Version: "+fmt.Sprintf("%#v", this.Version)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SchemaChangeResult) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&tabletmanagerdata.SchemaChangeResult{")
+	if this.BeforeSchema != nil {
+		s = append(s, "BeforeSchema: "+fmt.Sprintf("%#v", this.BeforeSchema)+",\n")
+	}
+	if this.AfterSchema != nil {
+		s = append(s, "AfterSchema: "+fmt.Sprintf("%#v", this.AfterSchema)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *UserPermission) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&tabletmanagerdata.UserPermission{")
+	s = append(s, "Host: "+fmt.Sprintf("%#v", this.Host)+",\n")
+	s = append(s, "User: "+fmt.Sprintf("%#v", this.User)+",\n")
+	s = append(s, "PasswordChecksum: "+fmt.Sprintf("%#v", this.PasswordChecksum)+",\n")
+	keysForPrivileges := make([]string, 0, len(this.Privileges))
+	for k := range this.Privileges {
+		keysForPrivileges = append(keysForPrivileges, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForPrivileges)
+	mapStringForPrivileges := "map[string]string{"
+	for _, k := range keysForPrivileges {
+		mapStringForPrivileges += fmt.Sprintf("%#v: %#v,", k, this.Privileges[k])
+	}
+	mapStringForPrivileges += "}"
+	if this.Privileges != nil {
+		s = append(s, "Privileges: "+mapStringForPrivileges+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *DbPermission) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&tabletmanagerdata.DbPermission{")
+	s = append(s, "Host: "+fmt.Sprintf("%#v", this.Host)+",\n")
+	s = append(s, "Db: "+fmt.Sprintf("%#v", this.Db)+",\n")
+	s = append(s, "User: "+fmt.Sprintf("%#v", this.User)+",\n")
+	keysForPrivileges := make([]string, 0, len(this.Privileges))
+	for k := range this.Privileges {
+		keysForPrivileges = append(keysForPrivileges, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForPrivileges)
+	mapStringForPrivileges := "map[string]string{"
+	for _, k := range keysForPrivileges {
+		mapStringForPrivileges += fmt.Sprintf("%#v: %#v,", k, this.Privileges[k])
+	}
+	mapStringForPrivileges += "}"
+	if this.Privileges != nil {
+		s = append(s, "Privileges: "+mapStringForPrivileges+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Permissions) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&tabletmanagerdata.Permissions{")
+	if this.UserPermissions != nil {
+		s = append(s, "UserPermissions: "+fmt.Sprintf("%#v", this.UserPermissions)+",\n")
+	}
+	if this.DbPermissions != nil {
+		s = append(s, "DbPermissions: "+fmt.Sprintf("%#v", this.DbPermissions)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *PingRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.PingRequest{")
+	s = append(s, "Payload: "+fmt.Sprintf("%#v", this.Payload)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *PingResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.PingResponse{")
+	s = append(s, "Payload: "+fmt.Sprintf("%#v", this.Payload)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SleepRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.SleepRequest{")
+	s = append(s, "Duration: "+fmt.Sprintf("%#v", this.Duration)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SleepResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.SleepResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteHookRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&tabletmanagerdata.ExecuteHookRequest{")
+	s = append(s, "Name: "+fmt.Sprintf("%#v", this.Name)+",\n")
+	s = append(s, "Parameters: "+fmt.Sprintf("%#v", this.Parameters)+",\n")
+	keysForExtraEnv := make([]string, 0, len(this.ExtraEnv))
+	for k := range this.ExtraEnv {
+		keysForExtraEnv = append(keysForExtraEnv, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForExtraEnv)
+	mapStringForExtraEnv := "map[string]string{"
+	for _, k := range keysForExtraEnv {
+		mapStringForExtraEnv += fmt.Sprintf("%#v: %#v,", k, this.ExtraEnv[k])
+	}
+	mapStringForExtraEnv += "}"
+	if this.ExtraEnv != nil {
+		s = append(s, "ExtraEnv: "+mapStringForExtraEnv+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteHookResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&tabletmanagerdata.ExecuteHookResponse{")
+	s = append(s, "ExitStatus: "+fmt.Sprintf("%#v", this.ExitStatus)+",\n")
+	s = append(s, "Stdout: "+fmt.Sprintf("%#v", this.Stdout)+",\n")
+	s = append(s, "Stderr: "+fmt.Sprintf("%#v", this.Stderr)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *GetSchemaRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&tabletmanagerdata.GetSchemaRequest{")
+	s = append(s, "Tables: "+fmt.Sprintf("%#v", this.Tables)+",\n")
+	s = append(s, "IncludeViews: "+fmt.Sprintf("%#v", this.IncludeViews)+",\n")
+	s = append(s, "ExcludeTables: "+fmt.Sprintf("%#v", this.ExcludeTables)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *GetSchemaResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.GetSchemaResponse{")
+	if this.SchemaDefinition != nil {
+		s = append(s, "SchemaDefinition: "+fmt.Sprintf("%#v", this.SchemaDefinition)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *GetPermissionsRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.GetPermissionsRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *GetPermissionsResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.GetPermissionsResponse{")
+	if this.Permissions != nil {
+		s = append(s, "Permissions: "+fmt.Sprintf("%#v", this.Permissions)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SetReadOnlyRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.SetReadOnlyRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SetReadOnlyResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.SetReadOnlyResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SetReadWriteRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.SetReadWriteRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SetReadWriteResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.SetReadWriteResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ChangeTypeRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.ChangeTypeRequest{")
+	s = append(s, "TabletType: "+fmt.Sprintf("%#v", this.TabletType)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ChangeTypeResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.ChangeTypeResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *RefreshStateRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.RefreshStateRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *RefreshStateResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.RefreshStateResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *RunHealthCheckRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.RunHealthCheckRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *RunHealthCheckResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.RunHealthCheckResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *IgnoreHealthErrorRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.IgnoreHealthErrorRequest{")
+	s = append(s, "Pattern: "+fmt.Sprintf("%#v", this.Pattern)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *IgnoreHealthErrorResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.IgnoreHealthErrorResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ReloadSchemaRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.ReloadSchemaRequest{")
+	s = append(s, "WaitPosition: "+fmt.Sprintf("%#v", this.WaitPosition)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ReloadSchemaResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.ReloadSchemaResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *PreflightSchemaRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.PreflightSchemaRequest{")
+	s = append(s, "Changes: "+fmt.Sprintf("%#v", this.Changes)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *PreflightSchemaResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.PreflightSchemaResponse{")
+	if this.ChangeResults != nil {
+		s = append(s, "ChangeResults: "+fmt.Sprintf("%#v", this.ChangeResults)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ApplySchemaRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 9)
+	s = append(s, "&tabletmanagerdata.ApplySchemaRequest{")
+	s = append(s, "Sql: "+fmt.Sprintf("%#v", this.Sql)+",\n")
+	s = append(s, "Force: "+fmt.Sprintf("%#v", this.Force)+",\n")
+	s = append(s, "AllowReplication: "+fmt.Sprintf("%#v", this.AllowReplication)+",\n")
+	if this.BeforeSchema != nil {
+		s = append(s, "BeforeSchema: "+fmt.Sprintf("%#v", this.BeforeSchema)+",\n")
+	}
+	if this.AfterSchema != nil {
+		s = append(s, "AfterSchema: "+fmt.Sprintf("%#v", this.AfterSchema)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ApplySchemaResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&tabletmanagerdata.ApplySchemaResponse{")
+	if this.BeforeSchema != nil {
+		s = append(s, "BeforeSchema: "+fmt.Sprintf("%#v", this.BeforeSchema)+",\n")
+	}
+	if this.AfterSchema != nil {
+		s = append(s, "AfterSchema: "+fmt.Sprintf("%#v", this.AfterSchema)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *LockTablesRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.LockTablesRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *LockTablesResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.LockTablesResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *UnlockTablesRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.UnlockTablesRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *UnlockTablesResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.UnlockTablesResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteFetchAsDbaRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 9)
+	s = append(s, "&tabletmanagerdata.ExecuteFetchAsDbaRequest{")
+	s = append(s, "Query: "+fmt.Sprintf("%#v", this.Query)+",\n")
+	s = append(s, "DbName: "+fmt.Sprintf("%#v", this.DbName)+",\n")
+	s = append(s, "MaxRows: "+fmt.Sprintf("%#v", this.MaxRows)+",\n")
+	s = append(s, "DisableBinlogs: "+fmt.Sprintf("%#v", this.DisableBinlogs)+",\n")
+	s = append(s, "ReloadSchema: "+fmt.Sprintf("%#v", this.ReloadSchema)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteFetchAsDbaResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.ExecuteFetchAsDbaResponse{")
+	if this.Result != nil {
+		s = append(s, "Result: "+fmt.Sprintf("%#v", this.Result)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteFetchAsAllPrivsRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&tabletmanagerdata.ExecuteFetchAsAllPrivsRequest{")
+	s = append(s, "Query: "+fmt.Sprintf("%#v", this.Query)+",\n")
+	s = append(s, "DbName: "+fmt.Sprintf("%#v", this.DbName)+",\n")
+	s = append(s, "MaxRows: "+fmt.Sprintf("%#v", this.MaxRows)+",\n")
+	s = append(s, "ReloadSchema: "+fmt.Sprintf("%#v", this.ReloadSchema)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteFetchAsAllPrivsResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.ExecuteFetchAsAllPrivsResponse{")
+	if this.Result != nil {
+		s = append(s, "Result: "+fmt.Sprintf("%#v", this.Result)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteFetchAsAppRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&tabletmanagerdata.ExecuteFetchAsAppRequest{")
+	s = append(s, "Query: "+fmt.Sprintf("%#v", this.Query)+",\n")
+	s = append(s, "MaxRows: "+fmt.Sprintf("%#v", this.MaxRows)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteFetchAsAppResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.ExecuteFetchAsAppResponse{")
+	if this.Result != nil {
+		s = append(s, "Result: "+fmt.Sprintf("%#v", this.Result)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SlaveStatusRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.SlaveStatusRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SlaveStatusResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.SlaveStatusResponse{")
+	if this.Status != nil {
+		s = append(s, "Status: "+fmt.Sprintf("%#v", this.Status)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *MasterPositionRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.MasterPositionRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *MasterPositionResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.MasterPositionResponse{")
+	s = append(s, "Position: "+fmt.Sprintf("%#v", this.Position)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StopSlaveRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.StopSlaveRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StopSlaveResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.StopSlaveResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StopSlaveMinimumRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&tabletmanagerdata.StopSlaveMinimumRequest{")
+	s = append(s, "Position: "+fmt.Sprintf("%#v", this.Position)+",\n")
+	s = append(s, "WaitTimeout: "+fmt.Sprintf("%#v", this.WaitTimeout)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StopSlaveMinimumResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.StopSlaveMinimumResponse{")
+	s = append(s, "Position: "+fmt.Sprintf("%#v", this.Position)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StartSlaveRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.StartSlaveRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StartSlaveResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.StartSlaveResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StartSlaveUntilAfterRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&tabletmanagerdata.StartSlaveUntilAfterRequest{")
+	s = append(s, "Position: "+fmt.Sprintf("%#v", this.Position)+",\n")
+	s = append(s, "WaitTimeout: "+fmt.Sprintf("%#v", this.WaitTimeout)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StartSlaveUntilAfterResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.StartSlaveUntilAfterResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *TabletExternallyReparentedRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.TabletExternallyReparentedRequest{")
+	s = append(s, "ExternalId: "+fmt.Sprintf("%#v", this.ExternalId)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *TabletExternallyReparentedResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.TabletExternallyReparentedResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *TabletExternallyElectedRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.TabletExternallyElectedRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *TabletExternallyElectedResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.TabletExternallyElectedResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *GetSlavesRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.GetSlavesRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *GetSlavesResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.GetSlavesResponse{")
+	s = append(s, "Addrs: "+fmt.Sprintf("%#v", this.Addrs)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ResetReplicationRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.ResetReplicationRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ResetReplicationResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.ResetReplicationResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *VReplicationExecRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.VReplicationExecRequest{")
+	s = append(s, "Query: "+fmt.Sprintf("%#v", this.Query)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *VReplicationExecResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.VReplicationExecResponse{")
+	if this.Result != nil {
+		s = append(s, "Result: "+fmt.Sprintf("%#v", this.Result)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *VReplicationWaitForPosRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&tabletmanagerdata.VReplicationWaitForPosRequest{")
+	s = append(s, "Id: "+fmt.Sprintf("%#v", this.Id)+",\n")
+	s = append(s, "Position: "+fmt.Sprintf("%#v", this.Position)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *VReplicationWaitForPosResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.VReplicationWaitForPosResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *InitMasterRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.InitMasterRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *InitMasterResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.InitMasterResponse{")
+	s = append(s, "Position: "+fmt.Sprintf("%#v", this.Position)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *PopulateReparentJournalRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&tabletmanagerdata.PopulateReparentJournalRequest{")
+	s = append(s, "TimeCreatedNs: "+fmt.Sprintf("%#v", this.TimeCreatedNs)+",\n")
+	s = append(s, "ActionName: "+fmt.Sprintf("%#v", this.ActionName)+",\n")
+	if this.MasterAlias != nil {
+		s = append(s, "MasterAlias: "+fmt.Sprintf("%#v", this.MasterAlias)+",\n")
+	}
+	s = append(s, "ReplicationPosition: "+fmt.Sprintf("%#v", this.ReplicationPosition)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *PopulateReparentJournalResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.PopulateReparentJournalResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *InitSlaveRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&tabletmanagerdata.InitSlaveRequest{")
+	if this.Parent != nil {
+		s = append(s, "Parent: "+fmt.Sprintf("%#v", this.Parent)+",\n")
+	}
+	s = append(s, "ReplicationPosition: "+fmt.Sprintf("%#v", this.ReplicationPosition)+",\n")
+	s = append(s, "TimeCreatedNs: "+fmt.Sprintf("%#v", this.TimeCreatedNs)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *InitSlaveResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.InitSlaveResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *DemoteMasterRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.DemoteMasterRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *DemoteMasterResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.DemoteMasterResponse{")
+	s = append(s, "Position: "+fmt.Sprintf("%#v", this.Position)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *UndoDemoteMasterRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.UndoDemoteMasterRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *UndoDemoteMasterResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.UndoDemoteMasterResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *PromoteSlaveWhenCaughtUpRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.PromoteSlaveWhenCaughtUpRequest{")
+	s = append(s, "Position: "+fmt.Sprintf("%#v", this.Position)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *PromoteSlaveWhenCaughtUpResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.PromoteSlaveWhenCaughtUpResponse{")
+	s = append(s, "Position: "+fmt.Sprintf("%#v", this.Position)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SlaveWasPromotedRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.SlaveWasPromotedRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SlaveWasPromotedResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.SlaveWasPromotedResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SetMasterRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&tabletmanagerdata.SetMasterRequest{")
+	if this.Parent != nil {
+		s = append(s, "Parent: "+fmt.Sprintf("%#v", this.Parent)+",\n")
+	}
+	s = append(s, "TimeCreatedNs: "+fmt.Sprintf("%#v", this.TimeCreatedNs)+",\n")
+	s = append(s, "ForceStartSlave: "+fmt.Sprintf("%#v", this.ForceStartSlave)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SetMasterResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.SetMasterResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SlaveWasRestartedRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.SlaveWasRestartedRequest{")
+	if this.Parent != nil {
+		s = append(s, "Parent: "+fmt.Sprintf("%#v", this.Parent)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SlaveWasRestartedResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.SlaveWasRestartedResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StopReplicationAndGetStatusRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.StopReplicationAndGetStatusRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StopReplicationAndGetStatusResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.StopReplicationAndGetStatusResponse{")
+	if this.Status != nil {
+		s = append(s, "Status: "+fmt.Sprintf("%#v", this.Status)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *PromoteSlaveRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.PromoteSlaveRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *PromoteSlaveResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.PromoteSlaveResponse{")
+	s = append(s, "Position: "+fmt.Sprintf("%#v", this.Position)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *BackupRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&tabletmanagerdata.BackupRequest{")
+	s = append(s, "Concurrency: "+fmt.Sprintf("%#v", this.Concurrency)+",\n")
+	s = append(s, "AllowMaster: "+fmt.Sprintf("%#v", this.AllowMaster)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *BackupResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.BackupResponse{")
+	if this.Event != nil {
+		s = append(s, "Event: "+fmt.Sprintf("%#v", this.Event)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *RestoreFromBackupRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&tabletmanagerdata.RestoreFromBackupRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *RestoreFromBackupResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&tabletmanagerdata.RestoreFromBackupResponse{")
+	if this.Event != nil {
+		s = append(s, "Event: "+fmt.Sprintf("%#v", this.Event)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func valueToGoStringTabletmanagerdata(v interface{}, typ string) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("func(v %v) *%v { return &v } ( %#v )", typ, typ, pv)
+}
 func (m *TableDefinition) Marshal() (dAtA []byte, err error) {
 	size := m.ProtoSize()
 	dAtA = make([]byte, size)
@@ -4796,9 +7793,6 @@ func (m *TableDefinition) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintTabletmanagerdata(dAtA, i, uint64(m.RowCount))
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -4841,9 +7835,6 @@ func (m *SchemaDefinition) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintTabletmanagerdata(dAtA, i, uint64(len(m.Version)))
 		i += copy(dAtA[i:], m.Version)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -4881,9 +7872,6 @@ func (m *SchemaChangeResult) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err2
 		}
 		i += n2
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -4936,9 +7924,6 @@ func (m *UserPermission) MarshalTo(dAtA []byte) (int, error) {
 			i = encodeVarintTabletmanagerdata(dAtA, i, uint64(len(v)))
 			i += copy(dAtA[i:], v)
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -4993,9 +7978,6 @@ func (m *DbPermission) MarshalTo(dAtA []byte) (int, error) {
 			i += copy(dAtA[i:], v)
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5038,9 +8020,6 @@ func (m *Permissions) MarshalTo(dAtA []byte) (int, error) {
 			i += n
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5064,9 +8043,6 @@ func (m *PingRequest) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintTabletmanagerdata(dAtA, i, uint64(len(m.Payload)))
 		i += copy(dAtA[i:], m.Payload)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -5092,9 +8068,6 @@ func (m *PingResponse) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintTabletmanagerdata(dAtA, i, uint64(len(m.Payload)))
 		i += copy(dAtA[i:], m.Payload)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5118,9 +8091,6 @@ func (m *SleepRequest) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintTabletmanagerdata(dAtA, i, uint64(m.Duration))
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5139,9 +8109,6 @@ func (m *SleepResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5198,9 +8165,6 @@ func (m *ExecuteHookRequest) MarshalTo(dAtA []byte) (int, error) {
 			i += copy(dAtA[i:], v)
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5235,9 +8199,6 @@ func (m *ExecuteHookResponse) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintTabletmanagerdata(dAtA, i, uint64(len(m.Stderr)))
 		i += copy(dAtA[i:], m.Stderr)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -5297,9 +8258,6 @@ func (m *GetSchemaRequest) MarshalTo(dAtA []byte) (int, error) {
 			i += copy(dAtA[i:], s)
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5328,9 +8286,6 @@ func (m *GetSchemaResponse) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n3
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5349,9 +8304,6 @@ func (m *GetPermissionsRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5380,9 +8332,6 @@ func (m *GetPermissionsResponse) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n4
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5401,9 +8350,6 @@ func (m *SetReadOnlyRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5422,9 +8368,6 @@ func (m *SetReadOnlyResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5443,9 +8386,6 @@ func (m *SetReadWriteRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5464,9 +8404,6 @@ func (m *SetReadWriteResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5490,9 +8427,6 @@ func (m *ChangeTypeRequest) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintTabletmanagerdata(dAtA, i, uint64(m.TabletType))
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5511,9 +8445,6 @@ func (m *ChangeTypeResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5532,9 +8463,6 @@ func (m *RefreshStateRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5553,9 +8481,6 @@ func (m *RefreshStateResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5574,9 +8499,6 @@ func (m *RunHealthCheckRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5595,9 +8517,6 @@ func (m *RunHealthCheckResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5622,9 +8541,6 @@ func (m *IgnoreHealthErrorRequest) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintTabletmanagerdata(dAtA, i, uint64(len(m.Pattern)))
 		i += copy(dAtA[i:], m.Pattern)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5643,9 +8559,6 @@ func (m *IgnoreHealthErrorResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5670,9 +8583,6 @@ func (m *ReloadSchemaRequest) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintTabletmanagerdata(dAtA, i, uint64(len(m.WaitPosition)))
 		i += copy(dAtA[i:], m.WaitPosition)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5691,9 +8601,6 @@ func (m *ReloadSchemaResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5727,9 +8634,6 @@ func (m *PreflightSchemaRequest) MarshalTo(dAtA []byte) (int, error) {
 			i += copy(dAtA[i:], s)
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5759,9 +8663,6 @@ func (m *PreflightSchemaResponse) MarshalTo(dAtA []byte) (int, error) {
 			}
 			i += n
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -5827,9 +8728,6 @@ func (m *ApplySchemaRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n6
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5868,9 +8766,6 @@ func (m *ApplySchemaResponse) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n8
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5889,9 +8784,6 @@ func (m *LockTablesRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5910,9 +8802,6 @@ func (m *LockTablesResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5931,9 +8820,6 @@ func (m *UnlockTablesRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5952,9 +8838,6 @@ func (m *UnlockTablesResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6010,9 +8893,6 @@ func (m *ExecuteFetchAsDbaRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i++
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6040,9 +8920,6 @@ func (m *ExecuteFetchAsDbaResponse) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err9
 		}
 		i += n9
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -6089,9 +8966,6 @@ func (m *ExecuteFetchAsAllPrivsRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i++
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6119,9 +8993,6 @@ func (m *ExecuteFetchAsAllPrivsResponse) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err10
 		}
 		i += n10
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -6152,9 +9023,6 @@ func (m *ExecuteFetchAsAppRequest) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintTabletmanagerdata(dAtA, i, uint64(m.MaxRows))
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6183,9 +9051,6 @@ func (m *ExecuteFetchAsAppResponse) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n11
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6204,9 +9069,6 @@ func (m *SlaveStatusRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6235,9 +9097,6 @@ func (m *SlaveStatusResponse) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n12
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6256,9 +9115,6 @@ func (m *MasterPositionRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6283,9 +9139,6 @@ func (m *MasterPositionResponse) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintTabletmanagerdata(dAtA, i, uint64(len(m.Position)))
 		i += copy(dAtA[i:], m.Position)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6304,9 +9157,6 @@ func (m *StopSlaveRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6325,9 +9175,6 @@ func (m *StopSlaveResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6357,9 +9204,6 @@ func (m *StopSlaveMinimumRequest) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintTabletmanagerdata(dAtA, i, uint64(m.WaitTimeout))
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6384,9 +9228,6 @@ func (m *StopSlaveMinimumResponse) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintTabletmanagerdata(dAtA, i, uint64(len(m.Position)))
 		i += copy(dAtA[i:], m.Position)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6405,9 +9246,6 @@ func (m *StartSlaveRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6426,9 +9264,6 @@ func (m *StartSlaveResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6458,9 +9293,6 @@ func (m *StartSlaveUntilAfterRequest) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintTabletmanagerdata(dAtA, i, uint64(m.WaitTimeout))
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6479,9 +9311,6 @@ func (m *StartSlaveUntilAfterResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6506,9 +9335,6 @@ func (m *TabletExternallyReparentedRequest) MarshalTo(dAtA []byte) (int, error) 
 		i = encodeVarintTabletmanagerdata(dAtA, i, uint64(len(m.ExternalId)))
 		i += copy(dAtA[i:], m.ExternalId)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6527,9 +9353,6 @@ func (m *TabletExternallyReparentedResponse) MarshalTo(dAtA []byte) (int, error)
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6548,9 +9371,6 @@ func (m *TabletExternallyElectedRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6569,9 +9389,6 @@ func (m *TabletExternallyElectedResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6590,9 +9407,6 @@ func (m *GetSlavesRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6626,9 +9440,6 @@ func (m *GetSlavesResponse) MarshalTo(dAtA []byte) (int, error) {
 			i += copy(dAtA[i:], s)
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6647,9 +9458,6 @@ func (m *ResetReplicationRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6668,9 +9476,6 @@ func (m *ResetReplicationResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6694,9 +9499,6 @@ func (m *VReplicationExecRequest) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintTabletmanagerdata(dAtA, i, uint64(len(m.Query)))
 		i += copy(dAtA[i:], m.Query)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -6725,9 +9527,6 @@ func (m *VReplicationExecResponse) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err13
 		}
 		i += n13
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -6758,9 +9557,6 @@ func (m *VReplicationWaitForPosRequest) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintTabletmanagerdata(dAtA, i, uint64(len(m.Position)))
 		i += copy(dAtA[i:], m.Position)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6779,9 +9575,6 @@ func (m *VReplicationWaitForPosResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6800,9 +9593,6 @@ func (m *InitMasterRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6826,9 +9616,6 @@ func (m *InitMasterResponse) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintTabletmanagerdata(dAtA, i, uint64(len(m.Position)))
 		i += copy(dAtA[i:], m.Position)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -6875,9 +9662,6 @@ func (m *PopulateReparentJournalRequest) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintTabletmanagerdata(dAtA, i, uint64(len(m.ReplicationPosition)))
 		i += copy(dAtA[i:], m.ReplicationPosition)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6896,9 +9680,6 @@ func (m *PopulateReparentJournalResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6938,9 +9719,6 @@ func (m *InitSlaveRequest) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintTabletmanagerdata(dAtA, i, uint64(m.TimeCreatedNs))
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6959,9 +9737,6 @@ func (m *InitSlaveResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6980,9 +9755,6 @@ func (m *DemoteMasterRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7007,9 +9779,6 @@ func (m *DemoteMasterResponse) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintTabletmanagerdata(dAtA, i, uint64(len(m.Position)))
 		i += copy(dAtA[i:], m.Position)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7028,9 +9797,6 @@ func (m *UndoDemoteMasterRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7049,9 +9815,6 @@ func (m *UndoDemoteMasterResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7075,9 +9838,6 @@ func (m *PromoteSlaveWhenCaughtUpRequest) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintTabletmanagerdata(dAtA, i, uint64(len(m.Position)))
 		i += copy(dAtA[i:], m.Position)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -7103,9 +9863,6 @@ func (m *PromoteSlaveWhenCaughtUpResponse) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintTabletmanagerdata(dAtA, i, uint64(len(m.Position)))
 		i += copy(dAtA[i:], m.Position)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7124,9 +9881,6 @@ func (m *SlaveWasPromotedRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7145,9 +9899,6 @@ func (m *SlaveWasPromotedResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7191,9 +9942,6 @@ func (m *SetMasterRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i++
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7212,9 +9960,6 @@ func (m *SetMasterResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7243,9 +9988,6 @@ func (m *SlaveWasRestartedRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n17
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7264,9 +10006,6 @@ func (m *SlaveWasRestartedResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7285,9 +10024,6 @@ func (m *StopReplicationAndGetStatusRequest) MarshalTo(dAtA []byte) (int, error)
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7316,9 +10052,6 @@ func (m *StopReplicationAndGetStatusResponse) MarshalTo(dAtA []byte) (int, error
 		}
 		i += n18
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7337,9 +10070,6 @@ func (m *PromoteSlaveRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7363,9 +10093,6 @@ func (m *PromoteSlaveResponse) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintTabletmanagerdata(dAtA, i, uint64(len(m.Position)))
 		i += copy(dAtA[i:], m.Position)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -7400,9 +10127,6 @@ func (m *BackupRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i++
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7431,9 +10155,6 @@ func (m *BackupResponse) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n19
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7452,9 +10173,6 @@ func (m *RestoreFromBackupRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7482,9 +10200,6 @@ func (m *RestoreFromBackupResponse) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err20
 		}
 		i += n20
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -7534,9 +10249,6 @@ func (m *TableDefinition) ProtoSize() (n int) {
 	if m.RowCount != 0 {
 		n += 1 + sovTabletmanagerdata(uint64(m.RowCount))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7560,9 +10272,6 @@ func (m *SchemaDefinition) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7579,9 +10288,6 @@ func (m *SchemaChangeResult) ProtoSize() (n int) {
 	if m.AfterSchema != nil {
 		l = m.AfterSchema.ProtoSize()
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -7610,9 +10316,6 @@ func (m *UserPermission) ProtoSize() (n int) {
 			mapEntrySize := 1 + len(k) + sovTabletmanagerdata(uint64(len(k))) + 1 + len(v) + sovTabletmanagerdata(uint64(len(v)))
 			n += mapEntrySize + 1 + sovTabletmanagerdata(uint64(mapEntrySize))
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -7643,9 +10346,6 @@ func (m *DbPermission) ProtoSize() (n int) {
 			n += mapEntrySize + 1 + sovTabletmanagerdata(uint64(mapEntrySize))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7667,9 +10367,6 @@ func (m *Permissions) ProtoSize() (n int) {
 			n += 1 + l + sovTabletmanagerdata(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7682,9 +10379,6 @@ func (m *PingRequest) ProtoSize() (n int) {
 	l = len(m.Payload)
 	if l > 0 {
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -7699,9 +10393,6 @@ func (m *PingResponse) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7714,9 +10405,6 @@ func (m *SleepRequest) ProtoSize() (n int) {
 	if m.Duration != 0 {
 		n += 1 + sovTabletmanagerdata(uint64(m.Duration))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7726,9 +10414,6 @@ func (m *SleepResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7756,9 +10441,6 @@ func (m *ExecuteHookRequest) ProtoSize() (n int) {
 			n += mapEntrySize + 1 + sovTabletmanagerdata(uint64(mapEntrySize))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7778,9 +10460,6 @@ func (m *ExecuteHookResponse) ProtoSize() (n int) {
 	l = len(m.Stderr)
 	if l > 0 {
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -7806,9 +10485,6 @@ func (m *GetSchemaRequest) ProtoSize() (n int) {
 			n += 1 + l + sovTabletmanagerdata(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7822,9 +10498,6 @@ func (m *GetSchemaResponse) ProtoSize() (n int) {
 		l = m.SchemaDefinition.ProtoSize()
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7834,9 +10507,6 @@ func (m *GetPermissionsRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7850,9 +10520,6 @@ func (m *GetPermissionsResponse) ProtoSize() (n int) {
 		l = m.Permissions.ProtoSize()
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7862,9 +10529,6 @@ func (m *SetReadOnlyRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7874,9 +10538,6 @@ func (m *SetReadOnlyResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7886,9 +10547,6 @@ func (m *SetReadWriteRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7898,9 +10556,6 @@ func (m *SetReadWriteResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7913,9 +10568,6 @@ func (m *ChangeTypeRequest) ProtoSize() (n int) {
 	if m.TabletType != 0 {
 		n += 1 + sovTabletmanagerdata(uint64(m.TabletType))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7925,9 +10577,6 @@ func (m *ChangeTypeResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7937,9 +10586,6 @@ func (m *RefreshStateRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7949,9 +10595,6 @@ func (m *RefreshStateResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7961,9 +10604,6 @@ func (m *RunHealthCheckRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7973,9 +10613,6 @@ func (m *RunHealthCheckResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7989,9 +10626,6 @@ func (m *IgnoreHealthErrorRequest) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8001,9 +10635,6 @@ func (m *IgnoreHealthErrorResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8017,9 +10648,6 @@ func (m *ReloadSchemaRequest) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8029,9 +10657,6 @@ func (m *ReloadSchemaResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8047,9 +10672,6 @@ func (m *PreflightSchemaRequest) ProtoSize() (n int) {
 			n += 1 + l + sovTabletmanagerdata(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8064,9 +10686,6 @@ func (m *PreflightSchemaResponse) ProtoSize() (n int) {
 			l = e.ProtoSize()
 			n += 1 + l + sovTabletmanagerdata(uint64(l))
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8095,9 +10714,6 @@ func (m *ApplySchemaRequest) ProtoSize() (n int) {
 		l = m.AfterSchema.ProtoSize()
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8115,9 +10731,6 @@ func (m *ApplySchemaResponse) ProtoSize() (n int) {
 		l = m.AfterSchema.ProtoSize()
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8127,9 +10740,6 @@ func (m *LockTablesRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8139,9 +10749,6 @@ func (m *LockTablesResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8151,9 +10758,6 @@ func (m *UnlockTablesRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8163,9 +10767,6 @@ func (m *UnlockTablesResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8192,9 +10793,6 @@ func (m *ExecuteFetchAsDbaRequest) ProtoSize() (n int) {
 	if m.ReloadSchema {
 		n += 2
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8207,9 +10805,6 @@ func (m *ExecuteFetchAsDbaResponse) ProtoSize() (n int) {
 	if m.Result != nil {
 		l = m.Result.ProtoSize()
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8234,9 +10829,6 @@ func (m *ExecuteFetchAsAllPrivsRequest) ProtoSize() (n int) {
 	if m.ReloadSchema {
 		n += 2
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8249,9 +10841,6 @@ func (m *ExecuteFetchAsAllPrivsResponse) ProtoSize() (n int) {
 	if m.Result != nil {
 		l = m.Result.ProtoSize()
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8269,9 +10858,6 @@ func (m *ExecuteFetchAsAppRequest) ProtoSize() (n int) {
 	if m.MaxRows != 0 {
 		n += 1 + sovTabletmanagerdata(uint64(m.MaxRows))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8285,9 +10871,6 @@ func (m *ExecuteFetchAsAppResponse) ProtoSize() (n int) {
 		l = m.Result.ProtoSize()
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8297,9 +10880,6 @@ func (m *SlaveStatusRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8313,9 +10893,6 @@ func (m *SlaveStatusResponse) ProtoSize() (n int) {
 		l = m.Status.ProtoSize()
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8325,9 +10902,6 @@ func (m *MasterPositionRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8341,9 +10915,6 @@ func (m *MasterPositionResponse) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8353,9 +10924,6 @@ func (m *StopSlaveRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8365,9 +10933,6 @@ func (m *StopSlaveResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8384,9 +10949,6 @@ func (m *StopSlaveMinimumRequest) ProtoSize() (n int) {
 	if m.WaitTimeout != 0 {
 		n += 1 + sovTabletmanagerdata(uint64(m.WaitTimeout))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8400,9 +10962,6 @@ func (m *StopSlaveMinimumResponse) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8412,9 +10971,6 @@ func (m *StartSlaveRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8424,9 +10980,6 @@ func (m *StartSlaveResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8443,9 +10996,6 @@ func (m *StartSlaveUntilAfterRequest) ProtoSize() (n int) {
 	if m.WaitTimeout != 0 {
 		n += 1 + sovTabletmanagerdata(uint64(m.WaitTimeout))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8455,9 +11005,6 @@ func (m *StartSlaveUntilAfterResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8471,9 +11018,6 @@ func (m *TabletExternallyReparentedRequest) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8483,9 +11027,6 @@ func (m *TabletExternallyReparentedResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8495,9 +11036,6 @@ func (m *TabletExternallyElectedRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8507,9 +11045,6 @@ func (m *TabletExternallyElectedResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8519,9 +11054,6 @@ func (m *GetSlavesRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8537,9 +11069,6 @@ func (m *GetSlavesResponse) ProtoSize() (n int) {
 			n += 1 + l + sovTabletmanagerdata(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8549,9 +11078,6 @@ func (m *ResetReplicationRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8561,9 +11087,6 @@ func (m *ResetReplicationResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8577,9 +11100,6 @@ func (m *VReplicationExecRequest) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8592,9 +11112,6 @@ func (m *VReplicationExecResponse) ProtoSize() (n int) {
 	if m.Result != nil {
 		l = m.Result.ProtoSize()
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8612,9 +11129,6 @@ func (m *VReplicationWaitForPosRequest) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8624,9 +11138,6 @@ func (m *VReplicationWaitForPosResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8636,9 +11147,6 @@ func (m *InitMasterRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8651,9 +11159,6 @@ func (m *InitMasterResponse) ProtoSize() (n int) {
 	l = len(m.Position)
 	if l > 0 {
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8679,9 +11184,6 @@ func (m *PopulateReparentJournalRequest) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8691,9 +11193,6 @@ func (m *PopulateReparentJournalResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8714,9 +11213,6 @@ func (m *InitSlaveRequest) ProtoSize() (n int) {
 	if m.TimeCreatedNs != 0 {
 		n += 1 + sovTabletmanagerdata(uint64(m.TimeCreatedNs))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8726,9 +11222,6 @@ func (m *InitSlaveResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8738,9 +11231,6 @@ func (m *DemoteMasterRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8754,9 +11244,6 @@ func (m *DemoteMasterResponse) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8766,9 +11253,6 @@ func (m *UndoDemoteMasterRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8778,9 +11262,6 @@ func (m *UndoDemoteMasterResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8793,9 +11274,6 @@ func (m *PromoteSlaveWhenCaughtUpRequest) ProtoSize() (n int) {
 	l = len(m.Position)
 	if l > 0 {
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8810,9 +11288,6 @@ func (m *PromoteSlaveWhenCaughtUpResponse) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8822,9 +11297,6 @@ func (m *SlaveWasPromotedRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8834,9 +11306,6 @@ func (m *SlaveWasPromotedResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8856,9 +11325,6 @@ func (m *SetMasterRequest) ProtoSize() (n int) {
 	if m.ForceStartSlave {
 		n += 2
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8868,9 +11334,6 @@ func (m *SetMasterResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8884,9 +11347,6 @@ func (m *SlaveWasRestartedRequest) ProtoSize() (n int) {
 		l = m.Parent.ProtoSize()
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8896,9 +11356,6 @@ func (m *SlaveWasRestartedResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8908,9 +11365,6 @@ func (m *StopReplicationAndGetStatusRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8924,9 +11378,6 @@ func (m *StopReplicationAndGetStatusResponse) ProtoSize() (n int) {
 		l = m.Status.ProtoSize()
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8936,9 +11387,6 @@ func (m *PromoteSlaveRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8951,9 +11399,6 @@ func (m *PromoteSlaveResponse) ProtoSize() (n int) {
 	l = len(m.Position)
 	if l > 0 {
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8970,9 +11415,6 @@ func (m *BackupRequest) ProtoSize() (n int) {
 	if m.AllowMaster {
 		n += 2
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8986,9 +11428,6 @@ func (m *BackupResponse) ProtoSize() (n int) {
 		l = m.Event.ProtoSize()
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8998,9 +11437,6 @@ func (m *RestoreFromBackupRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -9013,9 +11449,6 @@ func (m *RestoreFromBackupResponse) ProtoSize() (n int) {
 	if m.Event != nil {
 		l = m.Event.ProtoSize()
 		n += 1 + l + sovTabletmanagerdata(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -9032,6 +11465,1006 @@ func sovTabletmanagerdata(x uint64) (n int) {
 }
 func sozTabletmanagerdata(x uint64) (n int) {
 	return sovTabletmanagerdata(uint64((x << 1) ^ uint64((int64(x) >> 63))))
+}
+func (this *TableDefinition) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&TableDefinition{`,
+		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
+		`Schema:` + fmt.Sprintf("%v", this.Schema) + `,`,
+		`Columns:` + fmt.Sprintf("%v", this.Columns) + `,`,
+		`PrimaryKeyColumns:` + fmt.Sprintf("%v", this.PrimaryKeyColumns) + `,`,
+		`Type:` + fmt.Sprintf("%v", this.Type) + `,`,
+		`DataLength:` + fmt.Sprintf("%v", this.DataLength) + `,`,
+		`RowCount:` + fmt.Sprintf("%v", this.RowCount) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SchemaDefinition) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForTableDefinitions := "[]*TableDefinition{"
+	for _, f := range this.TableDefinitions {
+		repeatedStringForTableDefinitions += strings.Replace(f.String(), "TableDefinition", "TableDefinition", 1) + ","
+	}
+	repeatedStringForTableDefinitions += "}"
+	s := strings.Join([]string{`&SchemaDefinition{`,
+		`DatabaseSchema:` + fmt.Sprintf("%v", this.DatabaseSchema) + `,`,
+		`TableDefinitions:` + repeatedStringForTableDefinitions + `,`,
+		`Version:` + fmt.Sprintf("%v", this.Version) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SchemaChangeResult) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SchemaChangeResult{`,
+		`BeforeSchema:` + strings.Replace(this.BeforeSchema.String(), "SchemaDefinition", "SchemaDefinition", 1) + `,`,
+		`AfterSchema:` + strings.Replace(this.AfterSchema.String(), "SchemaDefinition", "SchemaDefinition", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *UserPermission) String() string {
+	if this == nil {
+		return "nil"
+	}
+	keysForPrivileges := make([]string, 0, len(this.Privileges))
+	for k := range this.Privileges {
+		keysForPrivileges = append(keysForPrivileges, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForPrivileges)
+	mapStringForPrivileges := "map[string]string{"
+	for _, k := range keysForPrivileges {
+		mapStringForPrivileges += fmt.Sprintf("%v: %v,", k, this.Privileges[k])
+	}
+	mapStringForPrivileges += "}"
+	s := strings.Join([]string{`&UserPermission{`,
+		`Host:` + fmt.Sprintf("%v", this.Host) + `,`,
+		`User:` + fmt.Sprintf("%v", this.User) + `,`,
+		`PasswordChecksum:` + fmt.Sprintf("%v", this.PasswordChecksum) + `,`,
+		`Privileges:` + mapStringForPrivileges + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *DbPermission) String() string {
+	if this == nil {
+		return "nil"
+	}
+	keysForPrivileges := make([]string, 0, len(this.Privileges))
+	for k := range this.Privileges {
+		keysForPrivileges = append(keysForPrivileges, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForPrivileges)
+	mapStringForPrivileges := "map[string]string{"
+	for _, k := range keysForPrivileges {
+		mapStringForPrivileges += fmt.Sprintf("%v: %v,", k, this.Privileges[k])
+	}
+	mapStringForPrivileges += "}"
+	s := strings.Join([]string{`&DbPermission{`,
+		`Host:` + fmt.Sprintf("%v", this.Host) + `,`,
+		`Db:` + fmt.Sprintf("%v", this.Db) + `,`,
+		`User:` + fmt.Sprintf("%v", this.User) + `,`,
+		`Privileges:` + mapStringForPrivileges + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Permissions) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForUserPermissions := "[]*UserPermission{"
+	for _, f := range this.UserPermissions {
+		repeatedStringForUserPermissions += strings.Replace(f.String(), "UserPermission", "UserPermission", 1) + ","
+	}
+	repeatedStringForUserPermissions += "}"
+	repeatedStringForDbPermissions := "[]*DbPermission{"
+	for _, f := range this.DbPermissions {
+		repeatedStringForDbPermissions += strings.Replace(f.String(), "DbPermission", "DbPermission", 1) + ","
+	}
+	repeatedStringForDbPermissions += "}"
+	s := strings.Join([]string{`&Permissions{`,
+		`UserPermissions:` + repeatedStringForUserPermissions + `,`,
+		`DbPermissions:` + repeatedStringForDbPermissions + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *PingRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&PingRequest{`,
+		`Payload:` + fmt.Sprintf("%v", this.Payload) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *PingResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&PingResponse{`,
+		`Payload:` + fmt.Sprintf("%v", this.Payload) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SleepRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SleepRequest{`,
+		`Duration:` + fmt.Sprintf("%v", this.Duration) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SleepResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SleepResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteHookRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	keysForExtraEnv := make([]string, 0, len(this.ExtraEnv))
+	for k := range this.ExtraEnv {
+		keysForExtraEnv = append(keysForExtraEnv, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForExtraEnv)
+	mapStringForExtraEnv := "map[string]string{"
+	for _, k := range keysForExtraEnv {
+		mapStringForExtraEnv += fmt.Sprintf("%v: %v,", k, this.ExtraEnv[k])
+	}
+	mapStringForExtraEnv += "}"
+	s := strings.Join([]string{`&ExecuteHookRequest{`,
+		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
+		`Parameters:` + fmt.Sprintf("%v", this.Parameters) + `,`,
+		`ExtraEnv:` + mapStringForExtraEnv + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteHookResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ExecuteHookResponse{`,
+		`ExitStatus:` + fmt.Sprintf("%v", this.ExitStatus) + `,`,
+		`Stdout:` + fmt.Sprintf("%v", this.Stdout) + `,`,
+		`Stderr:` + fmt.Sprintf("%v", this.Stderr) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *GetSchemaRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&GetSchemaRequest{`,
+		`Tables:` + fmt.Sprintf("%v", this.Tables) + `,`,
+		`IncludeViews:` + fmt.Sprintf("%v", this.IncludeViews) + `,`,
+		`ExcludeTables:` + fmt.Sprintf("%v", this.ExcludeTables) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *GetSchemaResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&GetSchemaResponse{`,
+		`SchemaDefinition:` + strings.Replace(this.SchemaDefinition.String(), "SchemaDefinition", "SchemaDefinition", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *GetPermissionsRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&GetPermissionsRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *GetPermissionsResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&GetPermissionsResponse{`,
+		`Permissions:` + strings.Replace(this.Permissions.String(), "Permissions", "Permissions", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SetReadOnlyRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SetReadOnlyRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SetReadOnlyResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SetReadOnlyResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SetReadWriteRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SetReadWriteRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SetReadWriteResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SetReadWriteResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ChangeTypeRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ChangeTypeRequest{`,
+		`TabletType:` + fmt.Sprintf("%v", this.TabletType) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ChangeTypeResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ChangeTypeResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *RefreshStateRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&RefreshStateRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *RefreshStateResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&RefreshStateResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *RunHealthCheckRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&RunHealthCheckRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *RunHealthCheckResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&RunHealthCheckResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *IgnoreHealthErrorRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&IgnoreHealthErrorRequest{`,
+		`Pattern:` + fmt.Sprintf("%v", this.Pattern) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *IgnoreHealthErrorResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&IgnoreHealthErrorResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ReloadSchemaRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ReloadSchemaRequest{`,
+		`WaitPosition:` + fmt.Sprintf("%v", this.WaitPosition) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ReloadSchemaResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ReloadSchemaResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *PreflightSchemaRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&PreflightSchemaRequest{`,
+		`Changes:` + fmt.Sprintf("%v", this.Changes) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *PreflightSchemaResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForChangeResults := "[]*SchemaChangeResult{"
+	for _, f := range this.ChangeResults {
+		repeatedStringForChangeResults += strings.Replace(f.String(), "SchemaChangeResult", "SchemaChangeResult", 1) + ","
+	}
+	repeatedStringForChangeResults += "}"
+	s := strings.Join([]string{`&PreflightSchemaResponse{`,
+		`ChangeResults:` + repeatedStringForChangeResults + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ApplySchemaRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ApplySchemaRequest{`,
+		`Sql:` + fmt.Sprintf("%v", this.Sql) + `,`,
+		`Force:` + fmt.Sprintf("%v", this.Force) + `,`,
+		`AllowReplication:` + fmt.Sprintf("%v", this.AllowReplication) + `,`,
+		`BeforeSchema:` + strings.Replace(this.BeforeSchema.String(), "SchemaDefinition", "SchemaDefinition", 1) + `,`,
+		`AfterSchema:` + strings.Replace(this.AfterSchema.String(), "SchemaDefinition", "SchemaDefinition", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ApplySchemaResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ApplySchemaResponse{`,
+		`BeforeSchema:` + strings.Replace(this.BeforeSchema.String(), "SchemaDefinition", "SchemaDefinition", 1) + `,`,
+		`AfterSchema:` + strings.Replace(this.AfterSchema.String(), "SchemaDefinition", "SchemaDefinition", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *LockTablesRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&LockTablesRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *LockTablesResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&LockTablesResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *UnlockTablesRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&UnlockTablesRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *UnlockTablesResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&UnlockTablesResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteFetchAsDbaRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ExecuteFetchAsDbaRequest{`,
+		`Query:` + fmt.Sprintf("%v", this.Query) + `,`,
+		`DbName:` + fmt.Sprintf("%v", this.DbName) + `,`,
+		`MaxRows:` + fmt.Sprintf("%v", this.MaxRows) + `,`,
+		`DisableBinlogs:` + fmt.Sprintf("%v", this.DisableBinlogs) + `,`,
+		`ReloadSchema:` + fmt.Sprintf("%v", this.ReloadSchema) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteFetchAsDbaResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ExecuteFetchAsDbaResponse{`,
+		`Result:` + strings.Replace(fmt.Sprintf("%v", this.Result), "QueryResult", "query.QueryResult", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteFetchAsAllPrivsRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ExecuteFetchAsAllPrivsRequest{`,
+		`Query:` + fmt.Sprintf("%v", this.Query) + `,`,
+		`DbName:` + fmt.Sprintf("%v", this.DbName) + `,`,
+		`MaxRows:` + fmt.Sprintf("%v", this.MaxRows) + `,`,
+		`ReloadSchema:` + fmt.Sprintf("%v", this.ReloadSchema) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteFetchAsAllPrivsResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ExecuteFetchAsAllPrivsResponse{`,
+		`Result:` + strings.Replace(fmt.Sprintf("%v", this.Result), "QueryResult", "query.QueryResult", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteFetchAsAppRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ExecuteFetchAsAppRequest{`,
+		`Query:` + fmt.Sprintf("%v", this.Query) + `,`,
+		`MaxRows:` + fmt.Sprintf("%v", this.MaxRows) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteFetchAsAppResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ExecuteFetchAsAppResponse{`,
+		`Result:` + strings.Replace(fmt.Sprintf("%v", this.Result), "QueryResult", "query.QueryResult", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SlaveStatusRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SlaveStatusRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SlaveStatusResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SlaveStatusResponse{`,
+		`Status:` + strings.Replace(fmt.Sprintf("%v", this.Status), "Status", "replicationdata.Status", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *MasterPositionRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&MasterPositionRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *MasterPositionResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&MasterPositionResponse{`,
+		`Position:` + fmt.Sprintf("%v", this.Position) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StopSlaveRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StopSlaveRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StopSlaveResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StopSlaveResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StopSlaveMinimumRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StopSlaveMinimumRequest{`,
+		`Position:` + fmt.Sprintf("%v", this.Position) + `,`,
+		`WaitTimeout:` + fmt.Sprintf("%v", this.WaitTimeout) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StopSlaveMinimumResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StopSlaveMinimumResponse{`,
+		`Position:` + fmt.Sprintf("%v", this.Position) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StartSlaveRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StartSlaveRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StartSlaveResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StartSlaveResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StartSlaveUntilAfterRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StartSlaveUntilAfterRequest{`,
+		`Position:` + fmt.Sprintf("%v", this.Position) + `,`,
+		`WaitTimeout:` + fmt.Sprintf("%v", this.WaitTimeout) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StartSlaveUntilAfterResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StartSlaveUntilAfterResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *TabletExternallyReparentedRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&TabletExternallyReparentedRequest{`,
+		`ExternalId:` + fmt.Sprintf("%v", this.ExternalId) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *TabletExternallyReparentedResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&TabletExternallyReparentedResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *TabletExternallyElectedRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&TabletExternallyElectedRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *TabletExternallyElectedResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&TabletExternallyElectedResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *GetSlavesRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&GetSlavesRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *GetSlavesResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&GetSlavesResponse{`,
+		`Addrs:` + fmt.Sprintf("%v", this.Addrs) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ResetReplicationRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ResetReplicationRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ResetReplicationResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ResetReplicationResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *VReplicationExecRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&VReplicationExecRequest{`,
+		`Query:` + fmt.Sprintf("%v", this.Query) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *VReplicationExecResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&VReplicationExecResponse{`,
+		`Result:` + strings.Replace(fmt.Sprintf("%v", this.Result), "QueryResult", "query.QueryResult", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *VReplicationWaitForPosRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&VReplicationWaitForPosRequest{`,
+		`Id:` + fmt.Sprintf("%v", this.Id) + `,`,
+		`Position:` + fmt.Sprintf("%v", this.Position) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *VReplicationWaitForPosResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&VReplicationWaitForPosResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *InitMasterRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&InitMasterRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *InitMasterResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&InitMasterResponse{`,
+		`Position:` + fmt.Sprintf("%v", this.Position) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *PopulateReparentJournalRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&PopulateReparentJournalRequest{`,
+		`TimeCreatedNs:` + fmt.Sprintf("%v", this.TimeCreatedNs) + `,`,
+		`ActionName:` + fmt.Sprintf("%v", this.ActionName) + `,`,
+		`MasterAlias:` + strings.Replace(fmt.Sprintf("%v", this.MasterAlias), "TabletAlias", "topodata.TabletAlias", 1) + `,`,
+		`ReplicationPosition:` + fmt.Sprintf("%v", this.ReplicationPosition) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *PopulateReparentJournalResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&PopulateReparentJournalResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *InitSlaveRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&InitSlaveRequest{`,
+		`Parent:` + strings.Replace(fmt.Sprintf("%v", this.Parent), "TabletAlias", "topodata.TabletAlias", 1) + `,`,
+		`ReplicationPosition:` + fmt.Sprintf("%v", this.ReplicationPosition) + `,`,
+		`TimeCreatedNs:` + fmt.Sprintf("%v", this.TimeCreatedNs) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *InitSlaveResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&InitSlaveResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *DemoteMasterRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&DemoteMasterRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *DemoteMasterResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&DemoteMasterResponse{`,
+		`Position:` + fmt.Sprintf("%v", this.Position) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *UndoDemoteMasterRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&UndoDemoteMasterRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *UndoDemoteMasterResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&UndoDemoteMasterResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *PromoteSlaveWhenCaughtUpRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&PromoteSlaveWhenCaughtUpRequest{`,
+		`Position:` + fmt.Sprintf("%v", this.Position) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *PromoteSlaveWhenCaughtUpResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&PromoteSlaveWhenCaughtUpResponse{`,
+		`Position:` + fmt.Sprintf("%v", this.Position) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SlaveWasPromotedRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SlaveWasPromotedRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SlaveWasPromotedResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SlaveWasPromotedResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SetMasterRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SetMasterRequest{`,
+		`Parent:` + strings.Replace(fmt.Sprintf("%v", this.Parent), "TabletAlias", "topodata.TabletAlias", 1) + `,`,
+		`TimeCreatedNs:` + fmt.Sprintf("%v", this.TimeCreatedNs) + `,`,
+		`ForceStartSlave:` + fmt.Sprintf("%v", this.ForceStartSlave) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SetMasterResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SetMasterResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SlaveWasRestartedRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SlaveWasRestartedRequest{`,
+		`Parent:` + strings.Replace(fmt.Sprintf("%v", this.Parent), "TabletAlias", "topodata.TabletAlias", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SlaveWasRestartedResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SlaveWasRestartedResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StopReplicationAndGetStatusRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StopReplicationAndGetStatusRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StopReplicationAndGetStatusResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StopReplicationAndGetStatusResponse{`,
+		`Status:` + strings.Replace(fmt.Sprintf("%v", this.Status), "Status", "replicationdata.Status", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *PromoteSlaveRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&PromoteSlaveRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *PromoteSlaveResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&PromoteSlaveResponse{`,
+		`Position:` + fmt.Sprintf("%v", this.Position) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *BackupRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&BackupRequest{`,
+		`Concurrency:` + fmt.Sprintf("%v", this.Concurrency) + `,`,
+		`AllowMaster:` + fmt.Sprintf("%v", this.AllowMaster) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *BackupResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&BackupResponse{`,
+		`Event:` + strings.Replace(fmt.Sprintf("%v", this.Event), "Event", "logutil.Event", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *RestoreFromBackupRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&RestoreFromBackupRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *RestoreFromBackupResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&RestoreFromBackupResponse{`,
+		`Event:` + strings.Replace(fmt.Sprintf("%v", this.Event), "Event", "logutil.Event", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func valueToStringTabletmanagerdata(v interface{}) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("*%v", pv)
 }
 func (m *TableDefinition) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
@@ -9275,7 +12708,6 @@ func (m *TableDefinition) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -9427,7 +12859,6 @@ func (m *SchemaDefinition) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -9553,7 +12984,6 @@ func (m *SchemaChangeResult) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -9817,7 +13247,6 @@ func (m *UserPermission) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -10094,7 +13523,6 @@ func (m *DbPermission) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -10216,7 +13644,6 @@ func (m *Permissions) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -10302,7 +13729,6 @@ func (m *PingRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -10388,7 +13814,6 @@ func (m *PingResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -10461,7 +13886,6 @@ func (m *SleepRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -10515,7 +13939,6 @@ func (m *SleepResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -10760,7 +14183,6 @@ func (m *ExecuteHookRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -10897,7 +14319,6 @@ func (m *ExecuteHookResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11035,7 +14456,6 @@ func (m *GetSchemaRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11125,7 +14545,6 @@ func (m *GetSchemaResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11179,7 +14598,6 @@ func (m *GetPermissionsRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11269,7 +14687,6 @@ func (m *GetPermissionsResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11323,7 +14740,6 @@ func (m *SetReadOnlyRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11377,7 +14793,6 @@ func (m *SetReadOnlyResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11431,7 +14846,6 @@ func (m *SetReadWriteRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11485,7 +14899,6 @@ func (m *SetReadWriteResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11558,7 +14971,6 @@ func (m *ChangeTypeRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11612,7 +15024,6 @@ func (m *ChangeTypeResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11666,7 +15077,6 @@ func (m *RefreshStateRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11720,7 +15130,6 @@ func (m *RefreshStateResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11774,7 +15183,6 @@ func (m *RunHealthCheckRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11828,7 +15236,6 @@ func (m *RunHealthCheckResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11914,7 +15321,6 @@ func (m *IgnoreHealthErrorRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11968,7 +15374,6 @@ func (m *IgnoreHealthErrorResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -12054,7 +15459,6 @@ func (m *ReloadSchemaRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -12108,7 +15512,6 @@ func (m *ReloadSchemaResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -12194,7 +15597,6 @@ func (m *PreflightSchemaRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -12282,7 +15684,6 @@ func (m *PreflightSchemaResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -12480,7 +15881,6 @@ func (m *ApplySchemaRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -12606,7 +16006,6 @@ func (m *ApplySchemaResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -12660,7 +16059,6 @@ func (m *LockTablesRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -12714,7 +16112,6 @@ func (m *LockTablesResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -12768,7 +16165,6 @@ func (m *UnlockTablesRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -12822,7 +16218,6 @@ func (m *UnlockTablesResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13001,7 +16396,6 @@ func (m *ExecuteFetchAsDbaRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13091,7 +16485,6 @@ func (m *ExecuteFetchAsDbaResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13250,7 +16643,6 @@ func (m *ExecuteFetchAsAllPrivsRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13340,7 +16732,6 @@ func (m *ExecuteFetchAsAllPrivsResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13447,7 +16838,6 @@ func (m *ExecuteFetchAsAppRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13537,7 +16927,6 @@ func (m *ExecuteFetchAsAppResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13591,7 +16980,6 @@ func (m *SlaveStatusRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13681,7 +17069,6 @@ func (m *SlaveStatusResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13735,7 +17122,6 @@ func (m *MasterPositionRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13821,7 +17207,6 @@ func (m *MasterPositionResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13875,7 +17260,6 @@ func (m *StopSlaveRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13929,7 +17313,6 @@ func (m *StopSlaveResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14034,7 +17417,6 @@ func (m *StopSlaveMinimumRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14120,7 +17502,6 @@ func (m *StopSlaveMinimumResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14174,7 +17555,6 @@ func (m *StartSlaveRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14228,7 +17608,6 @@ func (m *StartSlaveResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14333,7 +17712,6 @@ func (m *StartSlaveUntilAfterRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14387,7 +17765,6 @@ func (m *StartSlaveUntilAfterResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14473,7 +17850,6 @@ func (m *TabletExternallyReparentedRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14527,7 +17903,6 @@ func (m *TabletExternallyReparentedResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14581,7 +17956,6 @@ func (m *TabletExternallyElectedRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14635,7 +18009,6 @@ func (m *TabletExternallyElectedResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14689,7 +18062,6 @@ func (m *GetSlavesRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14775,7 +18147,6 @@ func (m *GetSlavesResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14829,7 +18200,6 @@ func (m *ResetReplicationRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14883,7 +18253,6 @@ func (m *ResetReplicationResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14969,7 +18338,6 @@ func (m *VReplicationExecRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15059,7 +18427,6 @@ func (m *VReplicationExecResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15164,7 +18531,6 @@ func (m *VReplicationWaitForPosRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15218,7 +18584,6 @@ func (m *VReplicationWaitForPosResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15272,7 +18637,6 @@ func (m *InitMasterRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15358,7 +18722,6 @@ func (m *InitMasterResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15531,7 +18894,6 @@ func (m *PopulateReparentJournalRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15585,7 +18947,6 @@ func (m *PopulateReparentJournalResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15726,7 +19087,6 @@ func (m *InitSlaveRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15780,7 +19140,6 @@ func (m *InitSlaveResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15834,7 +19193,6 @@ func (m *DemoteMasterRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15920,7 +19278,6 @@ func (m *DemoteMasterResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15974,7 +19331,6 @@ func (m *UndoDemoteMasterRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16028,7 +19384,6 @@ func (m *UndoDemoteMasterResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16114,7 +19469,6 @@ func (m *PromoteSlaveWhenCaughtUpRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16200,7 +19554,6 @@ func (m *PromoteSlaveWhenCaughtUpResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16254,7 +19607,6 @@ func (m *SlaveWasPromotedRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16308,7 +19660,6 @@ func (m *SlaveWasPromotedResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16437,7 +19788,6 @@ func (m *SetMasterRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16491,7 +19841,6 @@ func (m *SetMasterResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16581,7 +19930,6 @@ func (m *SlaveWasRestartedRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16635,7 +19983,6 @@ func (m *SlaveWasRestartedResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16689,7 +20036,6 @@ func (m *StopReplicationAndGetStatusRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16779,7 +20125,6 @@ func (m *StopReplicationAndGetStatusResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16833,7 +20178,6 @@ func (m *PromoteSlaveRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16919,7 +20263,6 @@ func (m *PromoteSlaveResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -17012,7 +20355,6 @@ func (m *BackupRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -17102,7 +20444,6 @@ func (m *BackupResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -17156,7 +20497,6 @@ func (m *RestoreFromBackupRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -17246,7 +20586,6 @@ func (m *RestoreFromBackupResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}

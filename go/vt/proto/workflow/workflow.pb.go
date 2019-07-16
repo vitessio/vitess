@@ -4,11 +4,16 @@
 package workflow
 
 import (
+	bytes "bytes"
 	fmt "fmt"
 	io "io"
 	math "math"
+	reflect "reflect"
+	strconv "strconv"
+	strings "strings"
 
 	proto "github.com/gogo/protobuf/proto"
+	github_com_gogo_protobuf_sortkeys "github.com/gogo/protobuf/sortkeys"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -29,9 +34,9 @@ const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
 type WorkflowState int32
 
 const (
-	WorkflowState_NotStarted WorkflowState = 0
-	WorkflowState_Running    WorkflowState = 1
-	WorkflowState_Done       WorkflowState = 2
+	NotStarted WorkflowState = 0
+	Running    WorkflowState = 1
+	Done       WorkflowState = 2
 )
 
 var WorkflowState_name = map[int32]string{
@@ -46,10 +51,6 @@ var WorkflowState_value = map[string]int32{
 	"Done":       2,
 }
 
-func (x WorkflowState) String() string {
-	return proto.EnumName(WorkflowState_name, int32(x))
-}
-
 func (WorkflowState) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_892c7f566756b0be, []int{0}
 }
@@ -57,9 +58,9 @@ func (WorkflowState) EnumDescriptor() ([]byte, []int) {
 type TaskState int32
 
 const (
-	TaskState_TaskNotStarted TaskState = 0
-	TaskState_TaskRunning    TaskState = 1
-	TaskState_TaskDone       TaskState = 2
+	TaskNotStarted TaskState = 0
+	TaskRunning    TaskState = 1
+	TaskDone       TaskState = 2
 )
 
 var TaskState_name = map[int32]string{
@@ -72,10 +73,6 @@ var TaskState_value = map[string]int32{
 	"TaskNotStarted": 0,
 	"TaskRunning":    1,
 	"TaskDone":       2,
-}
-
-func (x TaskState) String() string {
-	return proto.EnumName(TaskState_name, int32(x))
 }
 
 func (TaskState) EnumDescriptor() ([]byte, []int) {
@@ -117,15 +114,11 @@ type Workflow struct {
 	// This field only makes sense if 'state' is Done.
 	EndTime int64 `protobuf:"varint,8,opt,name=end_time,json=endTime,proto3" json:"end_time,omitempty"`
 	// create_time is set when the workflow is created.
-	CreateTime           int64    `protobuf:"varint,9,opt,name=create_time,json=createTime,proto3" json:"create_time,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	CreateTime int64 `protobuf:"varint,9,opt,name=create_time,json=createTime,proto3" json:"create_time,omitempty"`
 }
 
-func (m *Workflow) Reset()         { *m = Workflow{} }
-func (m *Workflow) String() string { return proto.CompactTextString(m) }
-func (*Workflow) ProtoMessage()    {}
+func (m *Workflow) Reset()      { *m = Workflow{} }
+func (*Workflow) ProtoMessage() {}
 func (*Workflow) Descriptor() ([]byte, []int) {
 	return fileDescriptor_892c7f566756b0be, []int{0}
 }
@@ -181,7 +174,7 @@ func (m *Workflow) GetState() WorkflowState {
 	if m != nil {
 		return m.State
 	}
-	return WorkflowState_NotStarted
+	return NotStarted
 }
 
 func (m *Workflow) GetData() []byte {
@@ -230,15 +223,11 @@ type WorkflowCheckpoint struct {
 	Tasks map[string]*Task `protobuf:"bytes,2,rep,name=tasks,proto3" json:"tasks,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 	// settings includes workflow specific data, e.g. the resharding workflow
 	// would store the source shards and destination shards.
-	Settings             map[string]string `protobuf:"bytes,3,rep,name=settings,proto3" json:"settings,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
+	Settings map[string]string `protobuf:"bytes,3,rep,name=settings,proto3" json:"settings,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
-func (m *WorkflowCheckpoint) Reset()         { *m = WorkflowCheckpoint{} }
-func (m *WorkflowCheckpoint) String() string { return proto.CompactTextString(m) }
-func (*WorkflowCheckpoint) ProtoMessage()    {}
+func (m *WorkflowCheckpoint) Reset()      { *m = WorkflowCheckpoint{} }
+func (*WorkflowCheckpoint) ProtoMessage() {}
 func (*WorkflowCheckpoint) Descriptor() ([]byte, []int) {
 	return fileDescriptor_892c7f566756b0be, []int{1}
 }
@@ -294,16 +283,12 @@ type Task struct {
 	Id    string    `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	State TaskState `protobuf:"varint,2,opt,name=state,proto3,enum=workflow.TaskState" json:"state,omitempty"`
 	// attributes includes the parameters the task needs.
-	Attributes           map[string]string `protobuf:"bytes,3,rep,name=attributes,proto3" json:"attributes,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	Error                string            `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
+	Attributes map[string]string `protobuf:"bytes,3,rep,name=attributes,proto3" json:"attributes,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	Error      string            `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
 }
 
-func (m *Task) Reset()         { *m = Task{} }
-func (m *Task) String() string { return proto.CompactTextString(m) }
-func (*Task) ProtoMessage()    {}
+func (m *Task) Reset()      { *m = Task{} }
+func (*Task) ProtoMessage() {}
 func (*Task) Descriptor() ([]byte, []int) {
 	return fileDescriptor_892c7f566756b0be, []int{2}
 }
@@ -345,7 +330,7 @@ func (m *Task) GetState() TaskState {
 	if m != nil {
 		return m.State
 	}
-	return TaskState_TaskNotStarted
+	return TaskNotStarted
 }
 
 func (m *Task) GetAttributes() map[string]string {
@@ -376,43 +361,273 @@ func init() {
 func init() { proto.RegisterFile("workflow.proto", fileDescriptor_892c7f566756b0be) }
 
 var fileDescriptor_892c7f566756b0be = []byte{
-	// 534 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x53, 0xdd, 0x6a, 0x13, 0x41,
-	0x14, 0x76, 0x36, 0xd9, 0x76, 0x73, 0x36, 0xdd, 0x86, 0xb1, 0xe0, 0x1a, 0x30, 0xc6, 0xa0, 0x18,
-	0x03, 0x26, 0x90, 0x82, 0x88, 0xd2, 0x82, 0xbf, 0x78, 0xd5, 0x8b, 0x4d, 0x51, 0xf0, 0x26, 0x4c,
-	0xb3, 0xd3, 0x38, 0xa4, 0x99, 0x29, 0xb3, 0x27, 0x29, 0x79, 0x04, 0xdf, 0xc2, 0x97, 0x11, 0xbc,
-	0xf4, 0xca, 0x07, 0xa8, 0x2f, 0x22, 0x33, 0x93, 0xdd, 0x64, 0x55, 0x04, 0xef, 0xce, 0x39, 0xdf,
-	0xf9, 0xbe, 0xb3, 0x73, 0xce, 0xb7, 0x10, 0x5d, 0x29, 0x3d, 0x3b, 0xbf, 0x50, 0x57, 0xfd, 0x4b,
-	0xad, 0x50, 0xd1, 0x20, 0xcf, 0x3b, 0x9f, 0x3d, 0x08, 0x3e, 0xac, 0x13, 0x4a, 0xa1, 0xba, 0x58,
-	0x88, 0x34, 0x26, 0x6d, 0xd2, 0xad, 0x25, 0x36, 0xa6, 0xf7, 0xa0, 0x7e, 0xce, 0x26, 0xa8, 0xf4,
-	0x6a, 0x2c, 0xd9, 0x9c, 0xc7, 0x9e, 0xc5, 0xc2, 0x75, 0xed, 0x84, 0xcd, 0xb9, 0xa1, 0x59, 0xa8,
-	0xe2, 0x68, 0x26, 0xa6, 0x8f, 0xc1, 0xcf, 0x90, 0x21, 0x8f, 0xab, 0x6d, 0xd2, 0x8d, 0x86, 0xb7,
-	0xfa, 0xc5, 0x17, 0xe4, 0xd3, 0x46, 0x06, 0x4e, 0x5c, 0x97, 0x91, 0x48, 0x19, 0xb2, 0xd8, 0x6f,
-	0x93, 0x6e, 0x3d, 0xb1, 0x31, 0x3d, 0x00, 0x9f, 0x6b, 0xad, 0x74, 0xbc, 0x63, 0x75, 0x5d, 0x42,
-	0xef, 0x00, 0x64, 0xc8, 0x34, 0x8e, 0x51, 0xcc, 0x79, 0xbc, 0xdb, 0x26, 0xdd, 0x4a, 0x52, 0xb3,
-	0x95, 0x53, 0x31, 0xe7, 0xf4, 0x36, 0x04, 0x5c, 0xa6, 0x0e, 0x0c, 0x2c, 0xb8, 0xcb, 0x65, 0x6a,
-	0xa1, 0xbb, 0x10, 0x4e, 0x34, 0x67, 0xc8, 0x1d, 0x5a, 0xb3, 0x28, 0xb8, 0x92, 0x69, 0xe8, 0x7c,
-	0xf5, 0x80, 0xe6, 0x5f, 0xf7, 0xea, 0x13, 0x9f, 0xcc, 0x2e, 0x95, 0x90, 0x68, 0x36, 0x30, 0x51,
-	0x29, 0x1f, 0x2f, 0xb9, 0xce, 0x84, 0x92, 0x76, 0x3b, 0x7e, 0x12, 0x9a, 0xda, 0x7b, 0x57, 0xa2,
-	0x47, 0xe0, 0x23, 0xcb, 0x66, 0x59, 0xec, 0xb5, 0x2b, 0xdd, 0x70, 0xf8, 0xf0, 0xcf, 0xd7, 0x6e,
-	0xf4, 0xfa, 0xa7, 0xa6, 0xf3, 0x8d, 0x44, 0xbd, 0x4a, 0x1c, 0x8b, 0xbe, 0x85, 0x20, 0xe3, 0x88,
-	0x42, 0x4e, 0xb3, 0xb8, 0x62, 0x15, 0x7a, 0xff, 0x54, 0x18, 0xad, 0x9b, 0x9d, 0x48, 0xc1, 0x6d,
-	0xbe, 0x03, 0xd8, 0x88, 0xd3, 0x06, 0x54, 0x66, 0x7c, 0xb5, 0x3e, 0xa6, 0x09, 0xe9, 0x7d, 0xf0,
-	0x97, 0xec, 0x62, 0xe1, 0x8e, 0x18, 0x0e, 0xa3, 0xcd, 0x10, 0x43, 0x4b, 0x1c, 0xf8, 0xcc, 0x7b,
-	0x4a, 0x9a, 0xcf, 0x61, 0xaf, 0x34, 0xe4, 0x2f, 0x62, 0x07, 0xdb, 0x62, 0xb5, 0x2d, 0x72, 0xe7,
-	0x07, 0x81, 0xaa, 0x11, 0xa4, 0x11, 0x78, 0x85, 0x9b, 0x3c, 0x91, 0xd2, 0x47, 0xb9, 0x29, 0x3c,
-	0x6b, 0x8a, 0x9b, 0xe5, 0xf9, 0x25, 0x43, 0x1c, 0x03, 0x30, 0x44, 0x2d, 0xce, 0x16, 0xc8, 0xf3,
-	0xa5, 0xb4, 0xca, 0xfd, 0xfd, 0x17, 0x45, 0x83, 0x5b, 0xc4, 0x16, 0x63, 0x63, 0x9e, 0xea, 0x96,
-	0x79, 0x9a, 0x47, 0xb0, 0xff, 0x1b, 0xe9, 0x7f, 0x1e, 0xd6, 0x7b, 0x02, 0x7b, 0x25, 0xf7, 0xd2,
-	0x08, 0xe0, 0x44, 0xe1, 0xc8, 0xb8, 0x8f, 0xa7, 0x8d, 0x1b, 0x34, 0x84, 0xdd, 0x64, 0x21, 0xa5,
-	0x90, 0xd3, 0x06, 0xa1, 0x01, 0x54, 0x5f, 0x2b, 0xc9, 0x1b, 0x5e, 0xef, 0x18, 0x6a, 0xc5, 0x03,
-	0x29, 0x85, 0xc8, 0x24, 0x25, 0xde, 0x3e, 0x84, 0xf6, 0x02, 0x05, 0xb7, 0x0e, 0x81, 0x29, 0x38,
-	0xfe, 0xcb, 0xc3, 0x6f, 0xd7, 0x2d, 0xf2, 0xfd, 0xba, 0x45, 0xbe, 0xfc, 0x6c, 0x91, 0x8f, 0x0f,
-	0x96, 0x02, 0x79, 0x96, 0xf5, 0x85, 0x1a, 0xb8, 0x68, 0x30, 0x55, 0x83, 0x25, 0x0e, 0xec, 0xaf,
-	0x3d, 0xc8, 0x57, 0x74, 0xb6, 0x63, 0xf3, 0xc3, 0x5f, 0x01, 0x00, 0x00, 0xff, 0xff, 0xeb, 0x09,
-	0x28, 0x55, 0xfc, 0x03, 0x00, 0x00,
+	// 579 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x94, 0x54, 0x4f, 0x6f, 0xd3, 0x4e,
+	0x10, 0xf5, 0x3a, 0x71, 0xeb, 0x8c, 0x5b, 0x37, 0xda, 0x5f, 0xa5, 0x9f, 0x89, 0xc4, 0x12, 0x22,
+	0x10, 0x21, 0x12, 0x89, 0x14, 0x24, 0x84, 0x40, 0xad, 0xc4, 0x5f, 0x71, 0xea, 0xc1, 0xa9, 0x40,
+	0x82, 0x43, 0xe4, 0xc6, 0xdb, 0x60, 0xa5, 0xf1, 0x56, 0xeb, 0x4d, 0xaa, 0xdc, 0xb8, 0x72, 0xe3,
+	0x23, 0x70, 0xe4, 0x8b, 0x20, 0x71, 0xcc, 0x09, 0xf5, 0x1a, 0xe7, 0xc2, 0xb1, 0x1f, 0x01, 0xed,
+	0x6e, 0xec, 0xc4, 0x80, 0x90, 0xb8, 0xcd, 0xcc, 0x9b, 0xf7, 0xc6, 0x3b, 0xf3, 0x64, 0x70, 0x2f,
+	0x18, 0x1f, 0x9d, 0x9e, 0xb1, 0x8b, 0xf6, 0x39, 0x67, 0x82, 0x61, 0x3b, 0xcb, 0x1b, 0x1f, 0x4d,
+	0xb0, 0xdf, 0xac, 0x12, 0x8c, 0xa1, 0x3c, 0x99, 0x44, 0xa1, 0x87, 0xea, 0xa8, 0x59, 0xf1, 0x55,
+	0x8c, 0x6f, 0xc2, 0xce, 0x69, 0x30, 0x10, 0x8c, 0xcf, 0xfa, 0x71, 0x30, 0xa6, 0x9e, 0xa9, 0x30,
+	0x67, 0x55, 0x3b, 0x0a, 0xc6, 0x54, 0xd2, 0x14, 0x54, 0xd2, 0x34, 0x19, 0xe3, 0x7b, 0x60, 0x25,
+	0x22, 0x10, 0xd4, 0x2b, 0xd7, 0x51, 0xd3, 0xed, 0xfe, 0xdf, 0xce, 0xbf, 0x20, 0x9b, 0xd6, 0x93,
+	0xb0, 0xaf, 0xbb, 0xa4, 0x44, 0x18, 0x88, 0xc0, 0xb3, 0xea, 0xa8, 0xb9, 0xe3, 0xab, 0x18, 0xef,
+	0x83, 0x45, 0x39, 0x67, 0xdc, 0xdb, 0x52, 0xba, 0x3a, 0xc1, 0xd7, 0x01, 0x12, 0x11, 0x70, 0xd1,
+	0x17, 0xd1, 0x98, 0x7a, 0xdb, 0x75, 0xd4, 0x2c, 0xf9, 0x15, 0x55, 0x39, 0x8e, 0xc6, 0x14, 0x5f,
+	0x03, 0x9b, 0xc6, 0xa1, 0x06, 0x6d, 0x05, 0x6e, 0xd3, 0x38, 0x54, 0xd0, 0x0d, 0x70, 0x06, 0x9c,
+	0x06, 0x82, 0x6a, 0xb4, 0xa2, 0x50, 0xd0, 0x25, 0xd9, 0xd0, 0xf8, 0x6a, 0x02, 0xce, 0xbe, 0xee,
+	0xd9, 0x7b, 0x3a, 0x18, 0x9d, 0xb3, 0x28, 0x16, 0x72, 0x03, 0x03, 0x16, 0xd2, 0xfe, 0x94, 0xf2,
+	0x24, 0x62, 0xb1, 0xda, 0x8e, 0xe5, 0x3b, 0xb2, 0xf6, 0x5a, 0x97, 0xf0, 0x01, 0x58, 0x22, 0x48,
+	0x46, 0x89, 0x67, 0xd6, 0x4b, 0x4d, 0xa7, 0x7b, 0xe7, 0xf7, 0xd7, 0xae, 0xf5, 0xda, 0xc7, 0xb2,
+	0xf3, 0x45, 0x2c, 0xf8, 0xcc, 0xd7, 0x2c, 0xfc, 0x12, 0xec, 0x84, 0x0a, 0x11, 0xc5, 0xc3, 0xc4,
+	0x2b, 0x29, 0x85, 0xd6, 0x5f, 0x15, 0x7a, 0xab, 0x66, 0x2d, 0x92, 0x73, 0x6b, 0xaf, 0x00, 0xd6,
+	0xe2, 0xb8, 0x0a, 0xa5, 0x11, 0x9d, 0xad, 0x8e, 0x29, 0x43, 0x7c, 0x0b, 0xac, 0x69, 0x70, 0x36,
+	0xd1, 0x47, 0x74, 0xba, 0xee, 0x7a, 0x88, 0xa4, 0xf9, 0x1a, 0x7c, 0x64, 0x3e, 0x44, 0xb5, 0xc7,
+	0xb0, 0x5b, 0x18, 0xf2, 0x07, 0xb1, 0xfd, 0x4d, 0xb1, 0xca, 0x06, 0xb9, 0xf1, 0x1d, 0x41, 0x59,
+	0x0a, 0x62, 0x17, 0xcc, 0xdc, 0x4d, 0x66, 0x14, 0xe2, 0xbb, 0x99, 0x29, 0x4c, 0x65, 0x8a, 0xff,
+	0x8a, 0xf3, 0x0b, 0x86, 0x38, 0x04, 0x08, 0x84, 0xe0, 0xd1, 0xc9, 0x44, 0xd0, 0x6c, 0x29, 0xa4,
+	0xd8, 0xdf, 0x7e, 0x92, 0x37, 0xe8, 0x45, 0x6c, 0x30, 0xd6, 0xe6, 0x29, 0x6f, 0x98, 0xa7, 0x76,
+	0x00, 0x7b, 0xbf, 0x90, 0xfe, 0xe5, 0x61, 0xad, 0x07, 0xb0, 0x5b, 0x70, 0x2f, 0x76, 0x01, 0x8e,
+	0x98, 0xe8, 0x49, 0xf7, 0xd1, 0xb0, 0x6a, 0x60, 0x07, 0xb6, 0xfd, 0x49, 0x1c, 0x47, 0xf1, 0xb0,
+	0x8a, 0xb0, 0x0d, 0xe5, 0xe7, 0x2c, 0xa6, 0x55, 0xb3, 0x75, 0x08, 0x95, 0xfc, 0x81, 0x18, 0x83,
+	0x2b, 0x93, 0x02, 0x6f, 0x0f, 0x1c, 0x75, 0x81, 0x9c, 0xbb, 0x03, 0xb6, 0x2c, 0x68, 0xfe, 0xd3,
+	0x77, 0xf3, 0x05, 0x31, 0x2e, 0x17, 0xc4, 0xb8, 0x5a, 0x10, 0xf4, 0x21, 0x25, 0xe8, 0x4b, 0x4a,
+	0xd0, 0xb7, 0x94, 0xa0, 0x79, 0x4a, 0xd0, 0x8f, 0x94, 0x18, 0x57, 0x29, 0x41, 0x9f, 0x96, 0xc4,
+	0xf8, 0xbc, 0x24, 0x68, 0xbe, 0x24, 0xc6, 0xe5, 0x92, 0x18, 0x6f, 0x6f, 0x4f, 0x23, 0x41, 0x93,
+	0xa4, 0x1d, 0xb1, 0x8e, 0x8e, 0x3a, 0x43, 0xd6, 0x99, 0x8a, 0x8e, 0xfa, 0x05, 0x74, 0xb2, 0x55,
+	0x9e, 0x6c, 0xa9, 0xfc, 0xfe, 0xcf, 0x00, 0x00, 0x00, 0xff, 0xff, 0x1a, 0x36, 0x21, 0x6d, 0x24,
+	0x04, 0x00, 0x00,
 }
 
+func (x WorkflowState) String() string {
+	s, ok := WorkflowState_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (x TaskState) String() string {
+	s, ok := TaskState_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (this *Workflow) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Workflow)
+	if !ok {
+		that2, ok := that.(Workflow)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Uuid != that1.Uuid {
+		return false
+	}
+	if this.FactoryName != that1.FactoryName {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	if this.State != that1.State {
+		return false
+	}
+	if !bytes.Equal(this.Data, that1.Data) {
+		return false
+	}
+	if this.Error != that1.Error {
+		return false
+	}
+	if this.StartTime != that1.StartTime {
+		return false
+	}
+	if this.EndTime != that1.EndTime {
+		return false
+	}
+	if this.CreateTime != that1.CreateTime {
+		return false
+	}
+	return true
+}
+func (this *WorkflowCheckpoint) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*WorkflowCheckpoint)
+	if !ok {
+		that2, ok := that.(WorkflowCheckpoint)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.CodeVersion != that1.CodeVersion {
+		return false
+	}
+	if len(this.Tasks) != len(that1.Tasks) {
+		return false
+	}
+	for i := range this.Tasks {
+		if !this.Tasks[i].Equal(that1.Tasks[i]) {
+			return false
+		}
+	}
+	if len(this.Settings) != len(that1.Settings) {
+		return false
+	}
+	for i := range this.Settings {
+		if this.Settings[i] != that1.Settings[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *Task) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Task)
+	if !ok {
+		that2, ok := that.(Task)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Id != that1.Id {
+		return false
+	}
+	if this.State != that1.State {
+		return false
+	}
+	if len(this.Attributes) != len(that1.Attributes) {
+		return false
+	}
+	for i := range this.Attributes {
+		if this.Attributes[i] != that1.Attributes[i] {
+			return false
+		}
+	}
+	if this.Error != that1.Error {
+		return false
+	}
+	return true
+}
+func (this *Workflow) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 13)
+	s = append(s, "&workflow.Workflow{")
+	s = append(s, "Uuid: "+fmt.Sprintf("%#v", this.Uuid)+",\n")
+	s = append(s, "FactoryName: "+fmt.Sprintf("%#v", this.FactoryName)+",\n")
+	s = append(s, "Name: "+fmt.Sprintf("%#v", this.Name)+",\n")
+	s = append(s, "State: "+fmt.Sprintf("%#v", this.State)+",\n")
+	s = append(s, "Data: "+fmt.Sprintf("%#v", this.Data)+",\n")
+	s = append(s, "Error: "+fmt.Sprintf("%#v", this.Error)+",\n")
+	s = append(s, "StartTime: "+fmt.Sprintf("%#v", this.StartTime)+",\n")
+	s = append(s, "EndTime: "+fmt.Sprintf("%#v", this.EndTime)+",\n")
+	s = append(s, "CreateTime: "+fmt.Sprintf("%#v", this.CreateTime)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *WorkflowCheckpoint) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&workflow.WorkflowCheckpoint{")
+	s = append(s, "CodeVersion: "+fmt.Sprintf("%#v", this.CodeVersion)+",\n")
+	keysForTasks := make([]string, 0, len(this.Tasks))
+	for k := range this.Tasks {
+		keysForTasks = append(keysForTasks, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForTasks)
+	mapStringForTasks := "map[string]*Task{"
+	for _, k := range keysForTasks {
+		mapStringForTasks += fmt.Sprintf("%#v: %#v,", k, this.Tasks[k])
+	}
+	mapStringForTasks += "}"
+	if this.Tasks != nil {
+		s = append(s, "Tasks: "+mapStringForTasks+",\n")
+	}
+	keysForSettings := make([]string, 0, len(this.Settings))
+	for k := range this.Settings {
+		keysForSettings = append(keysForSettings, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForSettings)
+	mapStringForSettings := "map[string]string{"
+	for _, k := range keysForSettings {
+		mapStringForSettings += fmt.Sprintf("%#v: %#v,", k, this.Settings[k])
+	}
+	mapStringForSettings += "}"
+	if this.Settings != nil {
+		s = append(s, "Settings: "+mapStringForSettings+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Task) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&workflow.Task{")
+	s = append(s, "Id: "+fmt.Sprintf("%#v", this.Id)+",\n")
+	s = append(s, "State: "+fmt.Sprintf("%#v", this.State)+",\n")
+	keysForAttributes := make([]string, 0, len(this.Attributes))
+	for k := range this.Attributes {
+		keysForAttributes = append(keysForAttributes, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForAttributes)
+	mapStringForAttributes := "map[string]string{"
+	for _, k := range keysForAttributes {
+		mapStringForAttributes += fmt.Sprintf("%#v: %#v,", k, this.Attributes[k])
+	}
+	mapStringForAttributes += "}"
+	if this.Attributes != nil {
+		s = append(s, "Attributes: "+mapStringForAttributes+",\n")
+	}
+	s = append(s, "Error: "+fmt.Sprintf("%#v", this.Error)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func valueToGoStringWorkflow(v interface{}, typ string) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("func(v %v) *%v { return &v } ( %#v )", typ, typ, pv)
+}
 func (m *Workflow) Marshal() (dAtA []byte, err error) {
 	size := m.ProtoSize()
 	dAtA = make([]byte, size)
@@ -477,9 +692,6 @@ func (m *Workflow) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x48
 		i++
 		i = encodeVarintWorkflow(dAtA, i, uint64(m.CreateTime))
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -549,9 +761,6 @@ func (m *WorkflowCheckpoint) MarshalTo(dAtA []byte) (int, error) {
 			i += copy(dAtA[i:], v)
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -604,9 +813,6 @@ func (m *Task) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintWorkflow(dAtA, i, uint64(len(m.Error)))
 		i += copy(dAtA[i:], m.Error)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -657,9 +863,6 @@ func (m *Workflow) ProtoSize() (n int) {
 	if m.CreateTime != 0 {
 		n += 1 + sovWorkflow(uint64(m.CreateTime))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -693,9 +896,6 @@ func (m *WorkflowCheckpoint) ProtoSize() (n int) {
 			n += mapEntrySize + 1 + sovWorkflow(uint64(mapEntrySize))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -724,9 +924,6 @@ func (m *Task) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovWorkflow(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -742,6 +939,87 @@ func sovWorkflow(x uint64) (n int) {
 }
 func sozWorkflow(x uint64) (n int) {
 	return sovWorkflow(uint64((x << 1) ^ uint64((int64(x) >> 63))))
+}
+func (this *Workflow) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&Workflow{`,
+		`Uuid:` + fmt.Sprintf("%v", this.Uuid) + `,`,
+		`FactoryName:` + fmt.Sprintf("%v", this.FactoryName) + `,`,
+		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
+		`State:` + fmt.Sprintf("%v", this.State) + `,`,
+		`Data:` + fmt.Sprintf("%v", this.Data) + `,`,
+		`Error:` + fmt.Sprintf("%v", this.Error) + `,`,
+		`StartTime:` + fmt.Sprintf("%v", this.StartTime) + `,`,
+		`EndTime:` + fmt.Sprintf("%v", this.EndTime) + `,`,
+		`CreateTime:` + fmt.Sprintf("%v", this.CreateTime) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *WorkflowCheckpoint) String() string {
+	if this == nil {
+		return "nil"
+	}
+	keysForTasks := make([]string, 0, len(this.Tasks))
+	for k := range this.Tasks {
+		keysForTasks = append(keysForTasks, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForTasks)
+	mapStringForTasks := "map[string]*Task{"
+	for _, k := range keysForTasks {
+		mapStringForTasks += fmt.Sprintf("%v: %v,", k, this.Tasks[k])
+	}
+	mapStringForTasks += "}"
+	keysForSettings := make([]string, 0, len(this.Settings))
+	for k := range this.Settings {
+		keysForSettings = append(keysForSettings, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForSettings)
+	mapStringForSettings := "map[string]string{"
+	for _, k := range keysForSettings {
+		mapStringForSettings += fmt.Sprintf("%v: %v,", k, this.Settings[k])
+	}
+	mapStringForSettings += "}"
+	s := strings.Join([]string{`&WorkflowCheckpoint{`,
+		`CodeVersion:` + fmt.Sprintf("%v", this.CodeVersion) + `,`,
+		`Tasks:` + mapStringForTasks + `,`,
+		`Settings:` + mapStringForSettings + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Task) String() string {
+	if this == nil {
+		return "nil"
+	}
+	keysForAttributes := make([]string, 0, len(this.Attributes))
+	for k := range this.Attributes {
+		keysForAttributes = append(keysForAttributes, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForAttributes)
+	mapStringForAttributes := "map[string]string{"
+	for _, k := range keysForAttributes {
+		mapStringForAttributes += fmt.Sprintf("%v: %v,", k, this.Attributes[k])
+	}
+	mapStringForAttributes += "}"
+	s := strings.Join([]string{`&Task{`,
+		`Id:` + fmt.Sprintf("%v", this.Id) + `,`,
+		`State:` + fmt.Sprintf("%v", this.State) + `,`,
+		`Attributes:` + mapStringForAttributes + `,`,
+		`Error:` + fmt.Sprintf("%v", this.Error) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func valueToStringWorkflow(v interface{}) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("*%v", pv)
 }
 func (m *Workflow) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
@@ -1025,7 +1303,6 @@ func (m *Workflow) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -1354,7 +1631,6 @@ func (m *WorkflowCheckpoint) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -1618,7 +1894,6 @@ func (m *Task) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}

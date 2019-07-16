@@ -7,8 +7,12 @@ import (
 	fmt "fmt"
 	io "io"
 	math "math"
+	reflect "reflect"
+	strconv "strconv"
+	strings "strings"
 
 	proto "github.com/gogo/protobuf/proto"
+	github_com_gogo_protobuf_sortkeys "github.com/gogo/protobuf/sortkeys"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -25,10 +29,10 @@ const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
 type ClusterOperationState int32
 
 const (
-	ClusterOperationState_UNKNOWN_CLUSTER_OPERATION_STATE ClusterOperationState = 0
-	ClusterOperationState_CLUSTER_OPERATION_NOT_STARTED   ClusterOperationState = 1
-	ClusterOperationState_CLUSTER_OPERATION_RUNNING       ClusterOperationState = 2
-	ClusterOperationState_CLUSTER_OPERATION_DONE          ClusterOperationState = 3
+	UNKNOWN_CLUSTER_OPERATION_STATE ClusterOperationState = 0
+	CLUSTER_OPERATION_NOT_STARTED   ClusterOperationState = 1
+	CLUSTER_OPERATION_RUNNING       ClusterOperationState = 2
+	CLUSTER_OPERATION_DONE          ClusterOperationState = 3
 )
 
 var ClusterOperationState_name = map[int32]string{
@@ -45,10 +49,6 @@ var ClusterOperationState_value = map[string]int32{
 	"CLUSTER_OPERATION_DONE":          3,
 }
 
-func (x ClusterOperationState) String() string {
-	return proto.EnumName(ClusterOperationState_name, int32(x))
-}
-
 func (ClusterOperationState) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_06e15ad07c41cb38, []int{0}
 }
@@ -56,10 +56,10 @@ func (ClusterOperationState) EnumDescriptor() ([]byte, []int) {
 type TaskState int32
 
 const (
-	TaskState_UNKNOWN_TASK_STATE TaskState = 0
-	TaskState_NOT_STARTED        TaskState = 1
-	TaskState_RUNNING            TaskState = 2
-	TaskState_DONE               TaskState = 3
+	UNKNOWN_TASK_STATE TaskState = 0
+	NOT_STARTED        TaskState = 1
+	RUNNING            TaskState = 2
+	DONE               TaskState = 3
 )
 
 var TaskState_name = map[int32]string{
@@ -76,10 +76,6 @@ var TaskState_value = map[string]int32{
 	"DONE":               3,
 }
 
-func (x TaskState) String() string {
-	return proto.EnumName(TaskState_name, int32(x))
-}
-
 func (TaskState) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_06e15ad07c41cb38, []int{1}
 }
@@ -91,15 +87,11 @@ type ClusterOperation struct {
 	// Cached value. This has to be re-evaluated e.g. after a checkpoint load because running tasks may have already finished.
 	State ClusterOperationState `protobuf:"varint,3,opt,name=state,proto3,enum=automation.ClusterOperationState" json:"state,omitempty"`
 	// Error of the first task which failed. Set after state advanced to CLUSTER_OPERATION_DONE. If empty, all tasks succeeded. Cached value, see state above.
-	Error                string   `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Error string `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
 }
 
-func (m *ClusterOperation) Reset()         { *m = ClusterOperation{} }
-func (m *ClusterOperation) String() string { return proto.CompactTextString(m) }
-func (*ClusterOperation) ProtoMessage()    {}
+func (m *ClusterOperation) Reset()      { *m = ClusterOperation{} }
+func (*ClusterOperation) ProtoMessage() {}
 func (*ClusterOperation) Descriptor() ([]byte, []int) {
 	return fileDescriptor_06e15ad07c41cb38, []int{0}
 }
@@ -148,7 +140,7 @@ func (m *ClusterOperation) GetState() ClusterOperationState {
 	if m != nil {
 		return m.State
 	}
-	return ClusterOperationState_UNKNOWN_CLUSTER_OPERATION_STATE
+	return UNKNOWN_CLUSTER_OPERATION_STATE
 }
 
 func (m *ClusterOperation) GetError() string {
@@ -161,16 +153,12 @@ func (m *ClusterOperation) GetError() string {
 // TaskContainer holds one or more task which may be executed in parallel.
 // "concurrency", if > 0, limits the amount of concurrently executed tasks.
 type TaskContainer struct {
-	ParallelTasks        []*Task  `protobuf:"bytes,1,rep,name=parallel_tasks,json=parallelTasks,proto3" json:"parallel_tasks,omitempty"`
-	Concurrency          int32    `protobuf:"varint,2,opt,name=concurrency,proto3" json:"concurrency,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	ParallelTasks []*Task `protobuf:"bytes,1,rep,name=parallel_tasks,json=parallelTasks,proto3" json:"parallel_tasks,omitempty"`
+	Concurrency   int32   `protobuf:"varint,2,opt,name=concurrency,proto3" json:"concurrency,omitempty"`
 }
 
-func (m *TaskContainer) Reset()         { *m = TaskContainer{} }
-func (m *TaskContainer) String() string { return proto.CompactTextString(m) }
-func (*TaskContainer) ProtoMessage()    {}
+func (m *TaskContainer) Reset()      { *m = TaskContainer{} }
+func (*TaskContainer) ProtoMessage() {}
 func (*TaskContainer) Descriptor() ([]byte, []int) {
 	return fileDescriptor_06e15ad07c41cb38, []int{1}
 }
@@ -226,15 +214,11 @@ type Task struct {
 	// Set after state advanced to DONE.
 	Output string `protobuf:"bytes,5,opt,name=output,proto3" json:"output,omitempty"`
 	// Set after state advanced to DONE. If empty, the task did succeed.
-	Error                string   `protobuf:"bytes,6,opt,name=error,proto3" json:"error,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Error string `protobuf:"bytes,6,opt,name=error,proto3" json:"error,omitempty"`
 }
 
-func (m *Task) Reset()         { *m = Task{} }
-func (m *Task) String() string { return proto.CompactTextString(m) }
-func (*Task) ProtoMessage()    {}
+func (m *Task) Reset()      { *m = Task{} }
+func (*Task) ProtoMessage() {}
 func (*Task) Descriptor() ([]byte, []int) {
 	return fileDescriptor_06e15ad07c41cb38, []int{2}
 }
@@ -290,7 +274,7 @@ func (m *Task) GetState() TaskState {
 	if m != nil {
 		return m.State
 	}
-	return TaskState_UNKNOWN_TASK_STATE
+	return UNKNOWN_TASK_STATE
 }
 
 func (m *Task) GetOutput() string {
@@ -308,16 +292,12 @@ func (m *Task) GetError() string {
 }
 
 type EnqueueClusterOperationRequest struct {
-	Name                 string            `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Parameters           map[string]string `protobuf:"bytes,2,rep,name=parameters,proto3" json:"parameters,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
+	Name       string            `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Parameters map[string]string `protobuf:"bytes,2,rep,name=parameters,proto3" json:"parameters,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
-func (m *EnqueueClusterOperationRequest) Reset()         { *m = EnqueueClusterOperationRequest{} }
-func (m *EnqueueClusterOperationRequest) String() string { return proto.CompactTextString(m) }
-func (*EnqueueClusterOperationRequest) ProtoMessage()    {}
+func (m *EnqueueClusterOperationRequest) Reset()      { *m = EnqueueClusterOperationRequest{} }
+func (*EnqueueClusterOperationRequest) ProtoMessage() {}
 func (*EnqueueClusterOperationRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_06e15ad07c41cb38, []int{3}
 }
@@ -363,15 +343,11 @@ func (m *EnqueueClusterOperationRequest) GetParameters() map[string]string {
 }
 
 type EnqueueClusterOperationResponse struct {
-	Id                   string   `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 }
 
-func (m *EnqueueClusterOperationResponse) Reset()         { *m = EnqueueClusterOperationResponse{} }
-func (m *EnqueueClusterOperationResponse) String() string { return proto.CompactTextString(m) }
-func (*EnqueueClusterOperationResponse) ProtoMessage()    {}
+func (m *EnqueueClusterOperationResponse) Reset()      { *m = EnqueueClusterOperationResponse{} }
+func (*EnqueueClusterOperationResponse) ProtoMessage() {}
 func (*EnqueueClusterOperationResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_06e15ad07c41cb38, []int{4}
 }
@@ -410,15 +386,11 @@ func (m *EnqueueClusterOperationResponse) GetId() string {
 }
 
 type GetClusterOperationStateRequest struct {
-	Id                   string   `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 }
 
-func (m *GetClusterOperationStateRequest) Reset()         { *m = GetClusterOperationStateRequest{} }
-func (m *GetClusterOperationStateRequest) String() string { return proto.CompactTextString(m) }
-func (*GetClusterOperationStateRequest) ProtoMessage()    {}
+func (m *GetClusterOperationStateRequest) Reset()      { *m = GetClusterOperationStateRequest{} }
+func (*GetClusterOperationStateRequest) ProtoMessage() {}
 func (*GetClusterOperationStateRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_06e15ad07c41cb38, []int{5}
 }
@@ -457,15 +429,11 @@ func (m *GetClusterOperationStateRequest) GetId() string {
 }
 
 type GetClusterOperationStateResponse struct {
-	State                ClusterOperationState `protobuf:"varint,1,opt,name=state,proto3,enum=automation.ClusterOperationState" json:"state,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	State ClusterOperationState `protobuf:"varint,1,opt,name=state,proto3,enum=automation.ClusterOperationState" json:"state,omitempty"`
 }
 
-func (m *GetClusterOperationStateResponse) Reset()         { *m = GetClusterOperationStateResponse{} }
-func (m *GetClusterOperationStateResponse) String() string { return proto.CompactTextString(m) }
-func (*GetClusterOperationStateResponse) ProtoMessage()    {}
+func (m *GetClusterOperationStateResponse) Reset()      { *m = GetClusterOperationStateResponse{} }
+func (*GetClusterOperationStateResponse) ProtoMessage() {}
 func (*GetClusterOperationStateResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_06e15ad07c41cb38, []int{6}
 }
@@ -500,19 +468,15 @@ func (m *GetClusterOperationStateResponse) GetState() ClusterOperationState {
 	if m != nil {
 		return m.State
 	}
-	return ClusterOperationState_UNKNOWN_CLUSTER_OPERATION_STATE
+	return UNKNOWN_CLUSTER_OPERATION_STATE
 }
 
 type GetClusterOperationDetailsRequest struct {
-	Id                   string   `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 }
 
-func (m *GetClusterOperationDetailsRequest) Reset()         { *m = GetClusterOperationDetailsRequest{} }
-func (m *GetClusterOperationDetailsRequest) String() string { return proto.CompactTextString(m) }
-func (*GetClusterOperationDetailsRequest) ProtoMessage()    {}
+func (m *GetClusterOperationDetailsRequest) Reset()      { *m = GetClusterOperationDetailsRequest{} }
+func (*GetClusterOperationDetailsRequest) ProtoMessage() {}
 func (*GetClusterOperationDetailsRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_06e15ad07c41cb38, []int{7}
 }
@@ -552,15 +516,11 @@ func (m *GetClusterOperationDetailsRequest) GetId() string {
 
 type GetClusterOperationDetailsResponse struct {
 	// Full snapshot of the execution e.g. including output of each task.
-	ClusterOp            *ClusterOperation `protobuf:"bytes,2,opt,name=cluster_op,json=clusterOp,proto3" json:"cluster_op,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
+	ClusterOp *ClusterOperation `protobuf:"bytes,2,opt,name=cluster_op,json=clusterOp,proto3" json:"cluster_op,omitempty"`
 }
 
-func (m *GetClusterOperationDetailsResponse) Reset()         { *m = GetClusterOperationDetailsResponse{} }
-func (m *GetClusterOperationDetailsResponse) String() string { return proto.CompactTextString(m) }
-func (*GetClusterOperationDetailsResponse) ProtoMessage()    {}
+func (m *GetClusterOperationDetailsResponse) Reset()      { *m = GetClusterOperationDetailsResponse{} }
+func (*GetClusterOperationDetailsResponse) ProtoMessage() {}
 func (*GetClusterOperationDetailsResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_06e15ad07c41cb38, []int{8}
 }
@@ -617,47 +577,468 @@ func init() {
 func init() { proto.RegisterFile("automation.proto", fileDescriptor_06e15ad07c41cb38) }
 
 var fileDescriptor_06e15ad07c41cb38 = []byte{
-	// 604 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xa4, 0x94, 0xdf, 0x4e, 0x13, 0x41,
-	0x14, 0xc6, 0x9d, 0x6d, 0x8b, 0xf6, 0x54, 0x60, 0x33, 0x11, 0xb2, 0x10, 0x29, 0xcb, 0x7a, 0x61,
-	0x83, 0x49, 0x1b, 0x21, 0x06, 0x83, 0x9a, 0x88, 0xb0, 0x21, 0x04, 0xb3, 0x4b, 0xa6, 0x4b, 0x4c,
-	0xf0, 0xa2, 0x19, 0xcb, 0xc4, 0xac, 0x2c, 0x3b, 0xcb, 0xcc, 0x2c, 0x09, 0x2f, 0xe0, 0x43, 0x78,
-	0xe5, 0x1b, 0xf8, 0x1a, 0xde, 0xe9, 0x33, 0xe0, 0x8b, 0x98, 0xfd, 0xd7, 0x2e, 0x4b, 0x69, 0x62,
-	0xbc, 0x9b, 0x39, 0xf3, 0x9d, 0xef, 0x7c, 0xf3, 0x6b, 0x67, 0x41, 0xa7, 0xb1, 0xe2, 0xe7, 0x54,
-	0xf9, 0x3c, 0xec, 0x46, 0x82, 0x2b, 0x8e, 0x61, 0x5c, 0xb1, 0x7e, 0x20, 0xd0, 0x77, 0x83, 0x58,
-	0x2a, 0x26, 0xdc, 0x88, 0x89, 0xb4, 0x88, 0xe7, 0x40, 0xf3, 0x4f, 0x0d, 0x64, 0xa2, 0x4e, 0x93,
-	0x68, 0xfe, 0x29, 0x7e, 0x0d, 0x0f, 0x25, 0x13, 0x3e, 0x0d, 0x06, 0x8a, 0xca, 0x33, 0x69, 0x68,
-	0x66, 0xad, 0xd3, 0xda, 0x58, 0xea, 0x96, 0x9c, 0x3d, 0x2a, 0xcf, 0x76, 0x79, 0xa8, 0xa8, 0x1f,
-	0x32, 0x41, 0x5a, 0x99, 0x3c, 0x29, 0x4a, 0xbc, 0x05, 0x0d, 0xa9, 0xa8, 0x62, 0x46, 0xcd, 0x44,
-	0x9d, 0xb9, 0x8d, 0xb5, 0x72, 0x5b, 0x75, 0x74, 0x3f, 0x11, 0x92, 0x4c, 0x8f, 0x1f, 0x41, 0x83,
-	0x09, 0xc1, 0x85, 0x51, 0x4f, 0x93, 0x64, 0x1b, 0xeb, 0x0b, 0xcc, 0xde, 0x18, 0x86, 0xb7, 0x60,
-	0x2e, 0xa2, 0x82, 0x06, 0x01, 0x2b, 0xf2, 0xa1, 0x34, 0x9f, 0x5e, 0xcd, 0x47, 0x66, 0x0b, 0x5d,
-	0x16, 0xcc, 0x84, 0xd6, 0x90, 0x87, 0xc3, 0x58, 0x08, 0x16, 0x0e, 0xaf, 0x0c, 0xcd, 0x44, 0x9d,
-	0x06, 0x29, 0x97, 0xac, 0xaf, 0x1a, 0xd4, 0x13, 0x2d, 0xc6, 0x50, 0x0f, 0xe9, 0x39, 0xcb, 0x99,
-	0xa4, 0x6b, 0xfc, 0x16, 0x20, 0xf1, 0x3b, 0x67, 0x8a, 0x89, 0x82, 0x89, 0x59, 0x9d, 0xd9, 0x3d,
-	0x1a, 0x49, 0xec, 0x50, 0x89, 0x2b, 0x52, 0xea, 0xc9, 0x39, 0xd7, 0x46, 0x9c, 0x9f, 0x15, 0xa4,
-	0xea, 0x29, 0xa9, 0x85, 0xaa, 0xd9, 0x0d, 0x3a, 0x8b, 0x30, 0xc3, 0x63, 0x15, 0xc5, 0xca, 0x68,
-	0xa4, 0x06, 0xf9, 0x6e, 0x4c, 0x6d, 0xa6, 0x44, 0x6d, 0xf9, 0x0d, 0xcc, 0x57, 0x92, 0x60, 0x1d,
-	0x6a, 0x67, 0xec, 0x2a, 0xbf, 0x52, 0xb2, 0x4c, 0x5a, 0x2f, 0x69, 0x10, 0xb3, 0x14, 0x45, 0x93,
-	0x64, 0x9b, 0x6d, 0xed, 0x25, 0xb2, 0x7e, 0x21, 0x68, 0xdb, 0xe1, 0x45, 0xcc, 0x62, 0x56, 0xfd,
-	0xc9, 0x08, 0xbb, 0x88, 0x99, 0x54, 0x13, 0x11, 0x9d, 0x4c, 0x40, 0xb4, 0x5d, 0xbe, 0xd5, 0x74,
-	0xcf, 0x69, 0xf0, 0xfe, 0xf7, 0x46, 0xcf, 0x61, 0xf5, 0xce, 0xe1, 0x32, 0xe2, 0xa1, 0x64, 0xd5,
-	0x67, 0x90, 0xb4, 0xec, 0x33, 0x35, 0xf9, 0x2f, 0x9b, 0x43, 0xa8, 0xb6, 0x7c, 0x04, 0xf3, 0xee,
-	0x96, 0x7c, 0xcc, 0xe8, 0x7d, 0xa0, 0x7f, 0x7b, 0x1f, 0xd6, 0x26, 0xac, 0x4d, 0x30, 0xdf, 0x63,
-	0x8a, 0xfa, 0x81, 0xbc, 0x2b, 0x11, 0x05, 0x6b, 0x5a, 0x53, 0x9e, 0xe9, 0x15, 0xc0, 0x30, 0x93,
-	0x0c, 0x78, 0x94, 0xc2, 0x6b, 0x6d, 0x3c, 0x9e, 0x16, 0x8c, 0x34, 0x87, 0x45, 0x65, 0xfd, 0x1b,
-	0x82, 0x85, 0x89, 0xc1, 0xf1, 0x13, 0x58, 0x3d, 0x76, 0x0e, 0x1d, 0xf7, 0x83, 0x33, 0xd8, 0x7d,
-	0x7f, 0xdc, 0xf7, 0x6c, 0x32, 0x70, 0x8f, 0x6c, 0xb2, 0xe3, 0x1d, 0xb8, 0xce, 0xa0, 0xef, 0xed,
-	0x78, 0xb6, 0x7e, 0x0f, 0xaf, 0xc1, 0xca, 0xed, 0x43, 0xc7, 0xf5, 0x12, 0x01, 0xf1, 0xec, 0x3d,
-	0x1d, 0xe1, 0x15, 0x58, 0xba, 0x2d, 0x21, 0xc7, 0x8e, 0x73, 0xe0, 0xec, 0xeb, 0x1a, 0x5e, 0x86,
-	0xc5, 0xdb, 0xc7, 0x7b, 0xae, 0x63, 0xeb, 0xb5, 0xf5, 0x43, 0x68, 0x8e, 0x9e, 0x12, 0x5e, 0x04,
-	0x5c, 0xe4, 0xf1, 0x76, 0xfa, 0x87, 0xa3, 0x08, 0xf3, 0xd0, 0xba, 0x39, 0xb0, 0x05, 0xf7, 0xc7,
-	0xf6, 0x0f, 0xa0, 0x9e, 0x99, 0xbd, 0x7b, 0xf1, 0xf3, 0xba, 0x8d, 0x7e, 0x5f, 0xb7, 0xd1, 0xf7,
-	0x3f, 0x6d, 0x74, 0xf2, 0xf4, 0xd2, 0x57, 0x4c, 0xca, 0xae, 0xcf, 0x7b, 0xd9, 0xaa, 0xf7, 0x99,
-	0xf7, 0x2e, 0x55, 0x2f, 0xfd, 0xea, 0xf6, 0xc6, 0xf0, 0x3e, 0xcd, 0xa4, 0x95, 0xcd, 0xbf, 0x01,
-	0x00, 0x00, 0xff, 0xff, 0x5e, 0x57, 0x1f, 0x7a, 0x9b, 0x05, 0x00, 0x00,
+	// 648 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xa4, 0x94, 0xcf, 0x4f, 0x13, 0x4f,
+	0x18, 0xc6, 0x77, 0xb6, 0x2d, 0xdf, 0x6f, 0xdf, 0x0a, 0x6c, 0x26, 0x42, 0x0a, 0x91, 0x61, 0xa9,
+	0x07, 0x1b, 0x4c, 0xda, 0x08, 0x07, 0x0c, 0x6a, 0x22, 0xc2, 0x86, 0x10, 0xcc, 0x96, 0x4c, 0x97,
+	0x98, 0x60, 0x4c, 0x33, 0x96, 0x89, 0x59, 0x29, 0xbb, 0x65, 0x66, 0x96, 0x84, 0x9b, 0x27, 0xcf,
+	0x9e, 0x3d, 0x79, 0xf4, 0xe6, 0xbf, 0xe1, 0x4d, 0x8e, 0x5c, 0x69, 0x2f, 0x1e, 0xf9, 0x13, 0xcc,
+	0xfe, 0xe8, 0x0f, 0x96, 0xb6, 0x89, 0xf1, 0x36, 0xf3, 0xce, 0xf3, 0x3e, 0xef, 0x33, 0x9f, 0x76,
+	0x16, 0x0c, 0x16, 0x28, 0xff, 0x94, 0x29, 0xd7, 0xf7, 0x2a, 0x6d, 0xe1, 0x2b, 0x1f, 0xc3, 0xa0,
+	0x52, 0xfa, 0x81, 0xc0, 0xd8, 0x6e, 0x05, 0x52, 0x71, 0x51, 0x6b, 0x73, 0x11, 0x15, 0xf1, 0x0c,
+	0xe8, 0xee, 0x71, 0x11, 0x99, 0xa8, 0x9c, 0xa7, 0xba, 0x7b, 0x8c, 0x9f, 0xc3, 0x3d, 0xc9, 0x85,
+	0xcb, 0x5a, 0x0d, 0xc5, 0xe4, 0x89, 0x2c, 0xea, 0x66, 0xa6, 0x5c, 0x58, 0x5b, 0xa8, 0x0c, 0x39,
+	0x3b, 0x4c, 0x9e, 0x6c, 0xfb, 0x9e, 0x62, 0xae, 0xc7, 0x05, 0x2d, 0xc4, 0xf2, 0xb0, 0x28, 0xf1,
+	0x06, 0xe4, 0xa4, 0x62, 0x8a, 0x17, 0x33, 0x26, 0x2a, 0xcf, 0xac, 0xad, 0x0c, 0xb7, 0xa5, 0x47,
+	0xd7, 0x43, 0x21, 0x8d, 0xf5, 0xf8, 0x3e, 0xe4, 0xb8, 0x10, 0xbe, 0x28, 0x66, 0xa3, 0x24, 0xf1,
+	0xa6, 0xf4, 0x11, 0xa6, 0x6f, 0x0d, 0xc3, 0x1b, 0x30, 0xd3, 0x66, 0x82, 0xb5, 0x5a, 0xbc, 0x97,
+	0x0f, 0x45, 0xf9, 0x8c, 0x74, 0x3e, 0x3a, 0xdd, 0xd3, 0xc5, 0xc1, 0x4c, 0x28, 0x34, 0x7d, 0xaf,
+	0x19, 0x08, 0xc1, 0xbd, 0xe6, 0x45, 0x51, 0x37, 0x51, 0x39, 0x47, 0x87, 0x4b, 0xa5, 0xcf, 0x3a,
+	0x64, 0x43, 0x2d, 0xc6, 0x90, 0xf5, 0xd8, 0x29, 0x4f, 0x98, 0x44, 0x6b, 0xfc, 0x12, 0x20, 0xf4,
+	0x3b, 0xe5, 0x8a, 0x8b, 0x1e, 0x13, 0x33, 0x3d, 0xb3, 0x72, 0xd0, 0x97, 0x58, 0x9e, 0x12, 0x17,
+	0x74, 0xa8, 0x27, 0xe1, 0x9c, 0xe9, 0x73, 0x7e, 0xdc, 0x23, 0x95, 0x8d, 0x48, 0xcd, 0xa5, 0xcd,
+	0x6e, 0xd1, 0x99, 0x87, 0x29, 0x3f, 0x50, 0xed, 0x40, 0x15, 0x73, 0x91, 0x41, 0xb2, 0x1b, 0x50,
+	0x9b, 0x1a, 0xa2, 0xb6, 0xf8, 0x02, 0x66, 0x53, 0x49, 0xb0, 0x01, 0x99, 0x13, 0x7e, 0x91, 0x5c,
+	0x29, 0x5c, 0x86, 0xad, 0xe7, 0xac, 0x15, 0xf0, 0x08, 0x45, 0x9e, 0xc6, 0x9b, 0x4d, 0xfd, 0x29,
+	0x2a, 0xfd, 0x42, 0x40, 0x2c, 0xef, 0x2c, 0xe0, 0x01, 0x4f, 0xff, 0x64, 0x94, 0x9f, 0x05, 0x5c,
+	0xaa, 0x91, 0x88, 0x8e, 0x46, 0x20, 0xda, 0x1c, 0xbe, 0xd5, 0x64, 0xcf, 0x49, 0xf0, 0xfe, 0xf5,
+	0x46, 0x4f, 0x60, 0x79, 0xec, 0x70, 0xd9, 0xf6, 0x3d, 0xc9, 0xd3, 0xcf, 0x20, 0x6c, 0xd9, 0xe5,
+	0x6a, 0xf4, 0x5f, 0x36, 0x81, 0x90, 0x6e, 0x79, 0x0b, 0xe6, 0xf8, 0x96, 0x64, 0x4c, 0xff, 0x7d,
+	0xa0, 0xbf, 0x7b, 0x1f, 0xa5, 0x75, 0x58, 0x19, 0x61, 0xbe, 0xc3, 0x15, 0x73, 0x5b, 0x72, 0x5c,
+	0x22, 0x06, 0xa5, 0x49, 0x4d, 0x49, 0xa6, 0x67, 0x00, 0xcd, 0x58, 0xd2, 0xf0, 0xdb, 0x11, 0xbc,
+	0xc2, 0xda, 0x83, 0x49, 0xc1, 0x68, 0xbe, 0xd9, 0xab, 0xac, 0x7e, 0x45, 0x30, 0x37, 0x32, 0x38,
+	0x7e, 0x08, 0xcb, 0x87, 0xf6, 0xbe, 0x5d, 0x7b, 0x63, 0x37, 0xb6, 0x5f, 0x1f, 0xd6, 0x1d, 0x8b,
+	0x36, 0x6a, 0x07, 0x16, 0xdd, 0x72, 0xf6, 0x6a, 0x76, 0xa3, 0xee, 0x6c, 0x39, 0x96, 0xa1, 0xe1,
+	0x15, 0x58, 0xba, 0x7b, 0x68, 0xd7, 0x9c, 0x50, 0x40, 0x1d, 0x6b, 0xc7, 0x40, 0x78, 0x09, 0x16,
+	0xee, 0x4a, 0xe8, 0xa1, 0x6d, 0xef, 0xd9, 0xbb, 0x86, 0x8e, 0x17, 0x61, 0xfe, 0xee, 0xf1, 0x4e,
+	0xcd, 0xb6, 0x8c, 0xcc, 0xea, 0x3e, 0xe4, 0xfb, 0x4f, 0x09, 0xcf, 0x03, 0xee, 0xe5, 0x71, 0xb6,
+	0xea, 0xfb, 0xfd, 0x08, 0xb3, 0x50, 0xb8, 0x3d, 0xb0, 0x00, 0xff, 0x0d, 0xec, 0xff, 0x87, 0x6c,
+	0x6c, 0xf6, 0xea, 0xdd, 0xe5, 0x35, 0xd1, 0xae, 0xae, 0x89, 0x76, 0x73, 0x4d, 0xd0, 0xa7, 0x0e,
+	0x41, 0xdf, 0x3b, 0x04, 0xfd, 0xec, 0x10, 0x74, 0xd9, 0x21, 0xe8, 0x77, 0x87, 0x68, 0x37, 0x1d,
+	0x82, 0xbe, 0x74, 0x89, 0xf6, 0xad, 0x4b, 0xd0, 0x65, 0x97, 0x68, 0x57, 0x5d, 0xa2, 0x1d, 0x3d,
+	0x3a, 0x77, 0x15, 0x97, 0xb2, 0xe2, 0xfa, 0xd5, 0x78, 0x55, 0xfd, 0xe0, 0x57, 0xcf, 0x55, 0x35,
+	0xfa, 0x3a, 0x57, 0x07, 0x90, 0xdf, 0x4f, 0x45, 0x95, 0xf5, 0x3f, 0x01, 0x00, 0x00, 0xff, 0xff,
+	0x66, 0x28, 0xf8, 0xcf, 0xc3, 0x05, 0x00, 0x00,
 }
 
+func (x ClusterOperationState) String() string {
+	s, ok := ClusterOperationState_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (x TaskState) String() string {
+	s, ok := TaskState_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (this *ClusterOperation) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ClusterOperation)
+	if !ok {
+		that2, ok := that.(ClusterOperation)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Id != that1.Id {
+		return false
+	}
+	if len(this.SerialTasks) != len(that1.SerialTasks) {
+		return false
+	}
+	for i := range this.SerialTasks {
+		if !this.SerialTasks[i].Equal(that1.SerialTasks[i]) {
+			return false
+		}
+	}
+	if this.State != that1.State {
+		return false
+	}
+	if this.Error != that1.Error {
+		return false
+	}
+	return true
+}
+func (this *TaskContainer) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*TaskContainer)
+	if !ok {
+		that2, ok := that.(TaskContainer)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.ParallelTasks) != len(that1.ParallelTasks) {
+		return false
+	}
+	for i := range this.ParallelTasks {
+		if !this.ParallelTasks[i].Equal(that1.ParallelTasks[i]) {
+			return false
+		}
+	}
+	if this.Concurrency != that1.Concurrency {
+		return false
+	}
+	return true
+}
+func (this *Task) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Task)
+	if !ok {
+		that2, ok := that.(Task)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	if len(this.Parameters) != len(that1.Parameters) {
+		return false
+	}
+	for i := range this.Parameters {
+		if this.Parameters[i] != that1.Parameters[i] {
+			return false
+		}
+	}
+	if this.Id != that1.Id {
+		return false
+	}
+	if this.State != that1.State {
+		return false
+	}
+	if this.Output != that1.Output {
+		return false
+	}
+	if this.Error != that1.Error {
+		return false
+	}
+	return true
+}
+func (this *EnqueueClusterOperationRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*EnqueueClusterOperationRequest)
+	if !ok {
+		that2, ok := that.(EnqueueClusterOperationRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	if len(this.Parameters) != len(that1.Parameters) {
+		return false
+	}
+	for i := range this.Parameters {
+		if this.Parameters[i] != that1.Parameters[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *EnqueueClusterOperationResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*EnqueueClusterOperationResponse)
+	if !ok {
+		that2, ok := that.(EnqueueClusterOperationResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Id != that1.Id {
+		return false
+	}
+	return true
+}
+func (this *GetClusterOperationStateRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*GetClusterOperationStateRequest)
+	if !ok {
+		that2, ok := that.(GetClusterOperationStateRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Id != that1.Id {
+		return false
+	}
+	return true
+}
+func (this *GetClusterOperationStateResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*GetClusterOperationStateResponse)
+	if !ok {
+		that2, ok := that.(GetClusterOperationStateResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.State != that1.State {
+		return false
+	}
+	return true
+}
+func (this *GetClusterOperationDetailsRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*GetClusterOperationDetailsRequest)
+	if !ok {
+		that2, ok := that.(GetClusterOperationDetailsRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Id != that1.Id {
+		return false
+	}
+	return true
+}
+func (this *GetClusterOperationDetailsResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*GetClusterOperationDetailsResponse)
+	if !ok {
+		that2, ok := that.(GetClusterOperationDetailsResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.ClusterOp.Equal(that1.ClusterOp) {
+		return false
+	}
+	return true
+}
+func (this *ClusterOperation) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&automation.ClusterOperation{")
+	s = append(s, "Id: "+fmt.Sprintf("%#v", this.Id)+",\n")
+	if this.SerialTasks != nil {
+		s = append(s, "SerialTasks: "+fmt.Sprintf("%#v", this.SerialTasks)+",\n")
+	}
+	s = append(s, "State: "+fmt.Sprintf("%#v", this.State)+",\n")
+	s = append(s, "Error: "+fmt.Sprintf("%#v", this.Error)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *TaskContainer) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&automation.TaskContainer{")
+	if this.ParallelTasks != nil {
+		s = append(s, "ParallelTasks: "+fmt.Sprintf("%#v", this.ParallelTasks)+",\n")
+	}
+	s = append(s, "Concurrency: "+fmt.Sprintf("%#v", this.Concurrency)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Task) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 10)
+	s = append(s, "&automation.Task{")
+	s = append(s, "Name: "+fmt.Sprintf("%#v", this.Name)+",\n")
+	keysForParameters := make([]string, 0, len(this.Parameters))
+	for k := range this.Parameters {
+		keysForParameters = append(keysForParameters, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForParameters)
+	mapStringForParameters := "map[string]string{"
+	for _, k := range keysForParameters {
+		mapStringForParameters += fmt.Sprintf("%#v: %#v,", k, this.Parameters[k])
+	}
+	mapStringForParameters += "}"
+	if this.Parameters != nil {
+		s = append(s, "Parameters: "+mapStringForParameters+",\n")
+	}
+	s = append(s, "Id: "+fmt.Sprintf("%#v", this.Id)+",\n")
+	s = append(s, "State: "+fmt.Sprintf("%#v", this.State)+",\n")
+	s = append(s, "Output: "+fmt.Sprintf("%#v", this.Output)+",\n")
+	s = append(s, "Error: "+fmt.Sprintf("%#v", this.Error)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *EnqueueClusterOperationRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&automation.EnqueueClusterOperationRequest{")
+	s = append(s, "Name: "+fmt.Sprintf("%#v", this.Name)+",\n")
+	keysForParameters := make([]string, 0, len(this.Parameters))
+	for k := range this.Parameters {
+		keysForParameters = append(keysForParameters, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForParameters)
+	mapStringForParameters := "map[string]string{"
+	for _, k := range keysForParameters {
+		mapStringForParameters += fmt.Sprintf("%#v: %#v,", k, this.Parameters[k])
+	}
+	mapStringForParameters += "}"
+	if this.Parameters != nil {
+		s = append(s, "Parameters: "+mapStringForParameters+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *EnqueueClusterOperationResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&automation.EnqueueClusterOperationResponse{")
+	s = append(s, "Id: "+fmt.Sprintf("%#v", this.Id)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *GetClusterOperationStateRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&automation.GetClusterOperationStateRequest{")
+	s = append(s, "Id: "+fmt.Sprintf("%#v", this.Id)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *GetClusterOperationStateResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&automation.GetClusterOperationStateResponse{")
+	s = append(s, "State: "+fmt.Sprintf("%#v", this.State)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *GetClusterOperationDetailsRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&automation.GetClusterOperationDetailsRequest{")
+	s = append(s, "Id: "+fmt.Sprintf("%#v", this.Id)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *GetClusterOperationDetailsResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&automation.GetClusterOperationDetailsResponse{")
+	if this.ClusterOp != nil {
+		s = append(s, "ClusterOp: "+fmt.Sprintf("%#v", this.ClusterOp)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func valueToGoStringAutomation(v interface{}, typ string) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("func(v %v) *%v { return &v } ( %#v )", typ, typ, pv)
+}
 func (m *ClusterOperation) Marshal() (dAtA []byte, err error) {
 	size := m.ProtoSize()
 	dAtA = make([]byte, size)
@@ -702,9 +1083,6 @@ func (m *ClusterOperation) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintAutomation(dAtA, i, uint64(len(m.Error)))
 		i += copy(dAtA[i:], m.Error)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -739,9 +1117,6 @@ func (m *TaskContainer) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x10
 		i++
 		i = encodeVarintAutomation(dAtA, i, uint64(m.Concurrency))
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -807,9 +1182,6 @@ func (m *Task) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintAutomation(dAtA, i, uint64(len(m.Error)))
 		i += copy(dAtA[i:], m.Error)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -851,9 +1223,6 @@ func (m *EnqueueClusterOperationRequest) MarshalTo(dAtA []byte) (int, error) {
 			i += copy(dAtA[i:], v)
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -877,9 +1246,6 @@ func (m *EnqueueClusterOperationResponse) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintAutomation(dAtA, i, uint64(len(m.Id)))
 		i += copy(dAtA[i:], m.Id)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -905,9 +1271,6 @@ func (m *GetClusterOperationStateRequest) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintAutomation(dAtA, i, uint64(len(m.Id)))
 		i += copy(dAtA[i:], m.Id)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -930,9 +1293,6 @@ func (m *GetClusterOperationStateResponse) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x8
 		i++
 		i = encodeVarintAutomation(dAtA, i, uint64(m.State))
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -957,9 +1317,6 @@ func (m *GetClusterOperationDetailsRequest) MarshalTo(dAtA []byte) (int, error) 
 		i++
 		i = encodeVarintAutomation(dAtA, i, uint64(len(m.Id)))
 		i += copy(dAtA[i:], m.Id)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -988,9 +1345,6 @@ func (m *GetClusterOperationDetailsResponse) MarshalTo(dAtA []byte) (int, error)
 			return 0, err1
 		}
 		i += n1
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -1027,9 +1381,6 @@ func (m *ClusterOperation) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovAutomation(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -1047,9 +1398,6 @@ func (m *TaskContainer) ProtoSize() (n int) {
 	}
 	if m.Concurrency != 0 {
 		n += 1 + sovAutomation(uint64(m.Concurrency))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -1087,9 +1435,6 @@ func (m *Task) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovAutomation(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -1111,9 +1456,6 @@ func (m *EnqueueClusterOperationRequest) ProtoSize() (n int) {
 			n += mapEntrySize + 1 + sovAutomation(uint64(mapEntrySize))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -1126,9 +1468,6 @@ func (m *EnqueueClusterOperationResponse) ProtoSize() (n int) {
 	l = len(m.Id)
 	if l > 0 {
 		n += 1 + l + sovAutomation(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -1143,9 +1482,6 @@ func (m *GetClusterOperationStateRequest) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovAutomation(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -1157,9 +1493,6 @@ func (m *GetClusterOperationStateResponse) ProtoSize() (n int) {
 	_ = l
 	if m.State != 0 {
 		n += 1 + sovAutomation(uint64(m.State))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -1174,9 +1507,6 @@ func (m *GetClusterOperationDetailsRequest) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovAutomation(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -1189,9 +1519,6 @@ func (m *GetClusterOperationDetailsResponse) ProtoSize() (n int) {
 	if m.ClusterOp != nil {
 		l = m.ClusterOp.ProtoSize()
 		n += 1 + l + sovAutomation(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -1208,6 +1535,144 @@ func sovAutomation(x uint64) (n int) {
 }
 func sozAutomation(x uint64) (n int) {
 	return sovAutomation(uint64((x << 1) ^ uint64((int64(x) >> 63))))
+}
+func (this *ClusterOperation) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForSerialTasks := "[]*TaskContainer{"
+	for _, f := range this.SerialTasks {
+		repeatedStringForSerialTasks += strings.Replace(f.String(), "TaskContainer", "TaskContainer", 1) + ","
+	}
+	repeatedStringForSerialTasks += "}"
+	s := strings.Join([]string{`&ClusterOperation{`,
+		`Id:` + fmt.Sprintf("%v", this.Id) + `,`,
+		`SerialTasks:` + repeatedStringForSerialTasks + `,`,
+		`State:` + fmt.Sprintf("%v", this.State) + `,`,
+		`Error:` + fmt.Sprintf("%v", this.Error) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *TaskContainer) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForParallelTasks := "[]*Task{"
+	for _, f := range this.ParallelTasks {
+		repeatedStringForParallelTasks += strings.Replace(f.String(), "Task", "Task", 1) + ","
+	}
+	repeatedStringForParallelTasks += "}"
+	s := strings.Join([]string{`&TaskContainer{`,
+		`ParallelTasks:` + repeatedStringForParallelTasks + `,`,
+		`Concurrency:` + fmt.Sprintf("%v", this.Concurrency) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Task) String() string {
+	if this == nil {
+		return "nil"
+	}
+	keysForParameters := make([]string, 0, len(this.Parameters))
+	for k := range this.Parameters {
+		keysForParameters = append(keysForParameters, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForParameters)
+	mapStringForParameters := "map[string]string{"
+	for _, k := range keysForParameters {
+		mapStringForParameters += fmt.Sprintf("%v: %v,", k, this.Parameters[k])
+	}
+	mapStringForParameters += "}"
+	s := strings.Join([]string{`&Task{`,
+		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
+		`Parameters:` + mapStringForParameters + `,`,
+		`Id:` + fmt.Sprintf("%v", this.Id) + `,`,
+		`State:` + fmt.Sprintf("%v", this.State) + `,`,
+		`Output:` + fmt.Sprintf("%v", this.Output) + `,`,
+		`Error:` + fmt.Sprintf("%v", this.Error) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *EnqueueClusterOperationRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	keysForParameters := make([]string, 0, len(this.Parameters))
+	for k := range this.Parameters {
+		keysForParameters = append(keysForParameters, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForParameters)
+	mapStringForParameters := "map[string]string{"
+	for _, k := range keysForParameters {
+		mapStringForParameters += fmt.Sprintf("%v: %v,", k, this.Parameters[k])
+	}
+	mapStringForParameters += "}"
+	s := strings.Join([]string{`&EnqueueClusterOperationRequest{`,
+		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
+		`Parameters:` + mapStringForParameters + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *EnqueueClusterOperationResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&EnqueueClusterOperationResponse{`,
+		`Id:` + fmt.Sprintf("%v", this.Id) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *GetClusterOperationStateRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&GetClusterOperationStateRequest{`,
+		`Id:` + fmt.Sprintf("%v", this.Id) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *GetClusterOperationStateResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&GetClusterOperationStateResponse{`,
+		`State:` + fmt.Sprintf("%v", this.State) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *GetClusterOperationDetailsRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&GetClusterOperationDetailsRequest{`,
+		`Id:` + fmt.Sprintf("%v", this.Id) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *GetClusterOperationDetailsResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&GetClusterOperationDetailsResponse{`,
+		`ClusterOp:` + strings.Replace(this.ClusterOp.String(), "ClusterOperation", "ClusterOperation", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func valueToStringAutomation(v interface{}) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("*%v", pv)
 }
 func (m *ClusterOperation) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
@@ -1370,7 +1835,6 @@ func (m *ClusterOperation) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -1477,7 +1941,6 @@ func (m *TaskContainer) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -1805,7 +2268,6 @@ func (m *Task) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2018,7 +2480,6 @@ func (m *EnqueueClusterOperationRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2104,7 +2565,6 @@ func (m *EnqueueClusterOperationResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2190,7 +2650,6 @@ func (m *GetClusterOperationStateRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2263,7 +2722,6 @@ func (m *GetClusterOperationStateResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2349,7 +2807,6 @@ func (m *GetClusterOperationDetailsRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2439,7 +2896,6 @@ func (m *GetClusterOperationDetailsResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}

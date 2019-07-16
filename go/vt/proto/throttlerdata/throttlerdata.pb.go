@@ -8,8 +8,11 @@ import (
 	fmt "fmt"
 	io "io"
 	math "math"
+	reflect "reflect"
+	strings "strings"
 
 	proto "github.com/gogo/protobuf/proto"
+	github_com_gogo_protobuf_sortkeys "github.com/gogo/protobuf/sortkeys"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -25,14 +28,10 @@ const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
 
 // MaxRatesRequest is the payload for the MaxRates RPC.
 type MaxRatesRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *MaxRatesRequest) Reset()         { *m = MaxRatesRequest{} }
-func (m *MaxRatesRequest) String() string { return proto.CompactTextString(m) }
-func (*MaxRatesRequest) ProtoMessage()    {}
+func (m *MaxRatesRequest) Reset()      { *m = MaxRatesRequest{} }
+func (*MaxRatesRequest) ProtoMessage() {}
 func (*MaxRatesRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_b67db2b008a2453d, []int{0}
 }
@@ -67,15 +66,11 @@ var xxx_messageInfo_MaxRatesRequest proto.InternalMessageInfo
 type MaxRatesResponse struct {
 	// max_rates returns the max rate for each throttler. It's keyed by the
 	// throttler name.
-	Rates                map[string]int64 `protobuf:"bytes,1,rep,name=rates,proto3" json:"rates,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"`
-	XXX_NoUnkeyedLiteral struct{}         `json:"-"`
-	XXX_unrecognized     []byte           `json:"-"`
-	XXX_sizecache        int32            `json:"-"`
+	Rates map[string]int64 `protobuf:"bytes,1,rep,name=rates,proto3" json:"rates,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"`
 }
 
-func (m *MaxRatesResponse) Reset()         { *m = MaxRatesResponse{} }
-func (m *MaxRatesResponse) String() string { return proto.CompactTextString(m) }
-func (*MaxRatesResponse) ProtoMessage()    {}
+func (m *MaxRatesResponse) Reset()      { *m = MaxRatesResponse{} }
+func (*MaxRatesResponse) ProtoMessage() {}
 func (*MaxRatesResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_b67db2b008a2453d, []int{1}
 }
@@ -115,15 +110,11 @@ func (m *MaxRatesResponse) GetRates() map[string]int64 {
 
 // SetMaxRateRequest is the payload for the SetMaxRate RPC.
 type SetMaxRateRequest struct {
-	Rate                 int64    `protobuf:"varint,1,opt,name=rate,proto3" json:"rate,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Rate int64 `protobuf:"varint,1,opt,name=rate,proto3" json:"rate,omitempty"`
 }
 
-func (m *SetMaxRateRequest) Reset()         { *m = SetMaxRateRequest{} }
-func (m *SetMaxRateRequest) String() string { return proto.CompactTextString(m) }
-func (*SetMaxRateRequest) ProtoMessage()    {}
+func (m *SetMaxRateRequest) Reset()      { *m = SetMaxRateRequest{} }
+func (*SetMaxRateRequest) ProtoMessage() {}
 func (*SetMaxRateRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_b67db2b008a2453d, []int{2}
 }
@@ -164,15 +155,11 @@ func (m *SetMaxRateRequest) GetRate() int64 {
 // SetMaxRateResponse is returned by the SetMaxRate RPC.
 type SetMaxRateResponse struct {
 	// names is the list of throttler names which were updated.
-	Names                []string `protobuf:"bytes,1,rep,name=names,proto3" json:"names,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Names []string `protobuf:"bytes,1,rep,name=names,proto3" json:"names,omitempty"`
 }
 
-func (m *SetMaxRateResponse) Reset()         { *m = SetMaxRateResponse{} }
-func (m *SetMaxRateResponse) String() string { return proto.CompactTextString(m) }
-func (*SetMaxRateResponse) ProtoMessage()    {}
+func (m *SetMaxRateResponse) Reset()      { *m = SetMaxRateResponse{} }
+func (*SetMaxRateResponse) ProtoMessage() {}
 func (*SetMaxRateResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_b67db2b008a2453d, []int{3}
 }
@@ -290,15 +277,11 @@ type Configuration struct {
 	// is below target_replication_lag_sec, if the current rate limit is 100, then the actual
 	// rate must exceed 100*max_rate_approach_threshold for the throttler to increase the current
 	// limit.
-	MaxRateApproachThreshold float64  `protobuf:"fixed64,14,opt,name=max_rate_approach_threshold,json=maxRateApproachThreshold,proto3" json:"max_rate_approach_threshold,omitempty"`
-	XXX_NoUnkeyedLiteral     struct{} `json:"-"`
-	XXX_unrecognized         []byte   `json:"-"`
-	XXX_sizecache            int32    `json:"-"`
+	MaxRateApproachThreshold float64 `protobuf:"fixed64,14,opt,name=max_rate_approach_threshold,json=maxRateApproachThreshold,proto3" json:"max_rate_approach_threshold,omitempty"`
 }
 
-func (m *Configuration) Reset()         { *m = Configuration{} }
-func (m *Configuration) String() string { return proto.CompactTextString(m) }
-func (*Configuration) ProtoMessage()    {}
+func (m *Configuration) Reset()      { *m = Configuration{} }
+func (*Configuration) ProtoMessage() {}
 func (*Configuration) Descriptor() ([]byte, []int) {
 	return fileDescriptor_b67db2b008a2453d, []int{4}
 }
@@ -431,15 +414,11 @@ func (m *Configuration) GetMaxRateApproachThreshold() float64 {
 type GetConfigurationRequest struct {
 	// throttler_name specifies which throttler to select. If empty, all active
 	// throttlers will be selected.
-	ThrottlerName        string   `protobuf:"bytes,1,opt,name=throttler_name,json=throttlerName,proto3" json:"throttler_name,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	ThrottlerName string `protobuf:"bytes,1,opt,name=throttler_name,json=throttlerName,proto3" json:"throttler_name,omitempty"`
 }
 
-func (m *GetConfigurationRequest) Reset()         { *m = GetConfigurationRequest{} }
-func (m *GetConfigurationRequest) String() string { return proto.CompactTextString(m) }
-func (*GetConfigurationRequest) ProtoMessage()    {}
+func (m *GetConfigurationRequest) Reset()      { *m = GetConfigurationRequest{} }
+func (*GetConfigurationRequest) ProtoMessage() {}
 func (*GetConfigurationRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_b67db2b008a2453d, []int{5}
 }
@@ -481,15 +460,11 @@ func (m *GetConfigurationRequest) GetThrottlerName() string {
 type GetConfigurationResponse struct {
 	// max_rates returns the configurations for each throttler.
 	// It's keyed by the throttler name.
-	Configurations       map[string]*Configuration `protobuf:"bytes,1,rep,name=configurations,proto3" json:"configurations,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	XXX_NoUnkeyedLiteral struct{}                  `json:"-"`
-	XXX_unrecognized     []byte                    `json:"-"`
-	XXX_sizecache        int32                     `json:"-"`
+	Configurations map[string]*Configuration `protobuf:"bytes,1,rep,name=configurations,proto3" json:"configurations,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
-func (m *GetConfigurationResponse) Reset()         { *m = GetConfigurationResponse{} }
-func (m *GetConfigurationResponse) String() string { return proto.CompactTextString(m) }
-func (*GetConfigurationResponse) ProtoMessage()    {}
+func (m *GetConfigurationResponse) Reset()      { *m = GetConfigurationResponse{} }
+func (*GetConfigurationResponse) ProtoMessage() {}
 func (*GetConfigurationResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_b67db2b008a2453d, []int{6}
 }
@@ -536,15 +511,11 @@ type UpdateConfigurationRequest struct {
 	Configuration *Configuration `protobuf:"bytes,2,opt,name=configuration,proto3" json:"configuration,omitempty"`
 	// copy_zero_values specifies whether fields with zero values should be copied
 	// as well.
-	CopyZeroValues       bool     `protobuf:"varint,3,opt,name=copy_zero_values,json=copyZeroValues,proto3" json:"copy_zero_values,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	CopyZeroValues bool `protobuf:"varint,3,opt,name=copy_zero_values,json=copyZeroValues,proto3" json:"copy_zero_values,omitempty"`
 }
 
-func (m *UpdateConfigurationRequest) Reset()         { *m = UpdateConfigurationRequest{} }
-func (m *UpdateConfigurationRequest) String() string { return proto.CompactTextString(m) }
-func (*UpdateConfigurationRequest) ProtoMessage()    {}
+func (m *UpdateConfigurationRequest) Reset()      { *m = UpdateConfigurationRequest{} }
+func (*UpdateConfigurationRequest) ProtoMessage() {}
 func (*UpdateConfigurationRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_b67db2b008a2453d, []int{7}
 }
@@ -599,15 +570,11 @@ func (m *UpdateConfigurationRequest) GetCopyZeroValues() bool {
 // UpdateConfigurationResponse is returned by the UpdateConfiguration RPC.
 type UpdateConfigurationResponse struct {
 	// names is the list of throttler names which were updated.
-	Names                []string `protobuf:"bytes,1,rep,name=names,proto3" json:"names,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Names []string `protobuf:"bytes,1,rep,name=names,proto3" json:"names,omitempty"`
 }
 
-func (m *UpdateConfigurationResponse) Reset()         { *m = UpdateConfigurationResponse{} }
-func (m *UpdateConfigurationResponse) String() string { return proto.CompactTextString(m) }
-func (*UpdateConfigurationResponse) ProtoMessage()    {}
+func (m *UpdateConfigurationResponse) Reset()      { *m = UpdateConfigurationResponse{} }
+func (*UpdateConfigurationResponse) ProtoMessage() {}
 func (*UpdateConfigurationResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_b67db2b008a2453d, []int{8}
 }
@@ -649,15 +616,11 @@ func (m *UpdateConfigurationResponse) GetNames() []string {
 type ResetConfigurationRequest struct {
 	// throttler_name specifies which throttler to reset. If empty, all active
 	// throttlers will be reset.
-	ThrottlerName        string   `protobuf:"bytes,1,opt,name=throttler_name,json=throttlerName,proto3" json:"throttler_name,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	ThrottlerName string `protobuf:"bytes,1,opt,name=throttler_name,json=throttlerName,proto3" json:"throttler_name,omitempty"`
 }
 
-func (m *ResetConfigurationRequest) Reset()         { *m = ResetConfigurationRequest{} }
-func (m *ResetConfigurationRequest) String() string { return proto.CompactTextString(m) }
-func (*ResetConfigurationRequest) ProtoMessage()    {}
+func (m *ResetConfigurationRequest) Reset()      { *m = ResetConfigurationRequest{} }
+func (*ResetConfigurationRequest) ProtoMessage() {}
 func (*ResetConfigurationRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_b67db2b008a2453d, []int{9}
 }
@@ -698,15 +661,11 @@ func (m *ResetConfigurationRequest) GetThrottlerName() string {
 // ResetConfigurationResponse is returned by the ResetConfiguration RPC.
 type ResetConfigurationResponse struct {
 	// names is the list of throttler names which were updated.
-	Names                []string `protobuf:"bytes,1,rep,name=names,proto3" json:"names,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Names []string `protobuf:"bytes,1,rep,name=names,proto3" json:"names,omitempty"`
 }
 
-func (m *ResetConfigurationResponse) Reset()         { *m = ResetConfigurationResponse{} }
-func (m *ResetConfigurationResponse) String() string { return proto.CompactTextString(m) }
-func (*ResetConfigurationResponse) ProtoMessage()    {}
+func (m *ResetConfigurationResponse) Reset()      { *m = ResetConfigurationResponse{} }
+func (*ResetConfigurationResponse) ProtoMessage() {}
 func (*ResetConfigurationResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_b67db2b008a2453d, []int{10}
 }
@@ -763,57 +722,549 @@ func init() {
 func init() { proto.RegisterFile("throttlerdata.proto", fileDescriptor_b67db2b008a2453d) }
 
 var fileDescriptor_b67db2b008a2453d = []byte{
-	// 755 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xa4, 0x55, 0xdd, 0x6e, 0xeb, 0x44,
-	0x10, 0x96, 0x4f, 0x4e, 0xca, 0xe9, 0xe4, 0xa4, 0xa7, 0xd9, 0x53, 0x5a, 0x9f, 0x14, 0x45, 0xc1,
-	0x12, 0x22, 0x8a, 0x44, 0x22, 0xa5, 0x42, 0x14, 0x2a, 0xa4, 0x36, 0x14, 0x21, 0x10, 0xf4, 0xc2,
-	0x05, 0x2e, 0x7a, 0xb3, 0xda, 0xd8, 0x53, 0xc7, 0xaa, 0xed, 0x35, 0xbb, 0xdb, 0x36, 0xe1, 0x21,
-	0x78, 0x06, 0xae, 0xb9, 0xe3, 0x2d, 0xb8, 0xe4, 0x11, 0x50, 0x79, 0x11, 0xe4, 0xdd, 0xcd, 0x8f,
-	0xd3, 0xb4, 0x45, 0xea, 0xdd, 0xee, 0xcc, 0x37, 0xdf, 0x7c, 0xb3, 0x9e, 0x19, 0xc3, 0x5b, 0x35,
-	0x16, 0x5c, 0xa9, 0x04, 0x45, 0xc8, 0x14, 0xeb, 0xe5, 0x82, 0x2b, 0x4e, 0xea, 0x25, 0xa3, 0xd7,
-	0x80, 0x37, 0x3f, 0xb0, 0x89, 0xcf, 0x14, 0x4a, 0x1f, 0x7f, 0xb9, 0x46, 0xa9, 0xbc, 0xdf, 0x1c,
-	0xd8, 0x5e, 0xd8, 0x64, 0xce, 0x33, 0x89, 0xe4, 0x18, 0xaa, 0xa2, 0x30, 0xb8, 0x4e, 0xbb, 0xd2,
-	0xa9, 0x0d, 0xba, 0xbd, 0x32, 0xf7, 0x2a, 0xbe, 0xa7, 0x6f, 0x5f, 0x67, 0x4a, 0x4c, 0x7d, 0x13,
-	0xd8, 0x3c, 0x04, 0x58, 0x18, 0xc9, 0x36, 0x54, 0xae, 0x70, 0xea, 0x3a, 0x6d, 0xa7, 0xb3, 0xe9,
-	0x17, 0x47, 0xb2, 0x03, 0xd5, 0x1b, 0x96, 0x5c, 0xa3, 0xfb, 0xa2, 0xed, 0x74, 0x2a, 0xbe, 0xb9,
-	0x7c, 0xf1, 0xe2, 0xd0, 0xf1, 0x3e, 0x86, 0xc6, 0x39, 0x2a, 0x9b, 0xc2, 0xaa, 0x24, 0x04, 0x5e,
-	0x16, 0xbc, 0x9a, 0xa1, 0xe2, 0xeb, 0xb3, 0xd7, 0x05, 0xb2, 0x0c, 0xb4, 0xd2, 0x77, 0xa0, 0x9a,
-	0xb1, 0xd4, 0x4a, 0xdf, 0xf4, 0xcd, 0xc5, 0xfb, 0x63, 0x03, 0xea, 0x5f, 0xf1, 0xec, 0x32, 0x8e,
-	0xae, 0x05, 0x53, 0x31, 0xcf, 0xc8, 0x11, 0x34, 0x15, 0x13, 0x11, 0x2a, 0x2a, 0x30, 0x4f, 0xe2,
-	0x40, 0x5b, 0x69, 0xc2, 0x22, 0x2a, 0x31, 0xb0, 0x79, 0xf6, 0x0c, 0xc2, 0x5f, 0x00, 0xbe, 0x67,
-	0xd1, 0x39, 0x06, 0xe4, 0x53, 0xd8, 0x4b, 0xd9, 0x64, 0x6d, 0xa4, 0xa9, 0x67, 0x27, 0x65, 0x93,
-	0xfb, 0x61, 0x1f, 0xc2, 0xeb, 0x38, 0x8b, 0x55, 0xcc, 0x12, 0xaa, 0xab, 0xa9, 0x68, 0x6c, 0xcd,
-	0xda, 0x8a, 0x32, 0x0a, 0x48, 0xc1, 0x1c, 0x67, 0x81, 0x40, 0x26, 0xd1, 0x7d, 0xd9, 0x76, 0x3a,
-	0x8e, 0x5f, 0x4b, 0xd9, 0xe4, 0x5b, 0x6b, 0x22, 0x9f, 0x00, 0xc1, 0x14, 0x45, 0x84, 0x59, 0x30,
-	0xa5, 0x21, 0x5a, 0x60, 0x55, 0x03, 0x1b, 0x73, 0xcf, 0xa9, 0x75, 0x90, 0xef, 0xc0, 0x4b, 0xe3,
-	0x8c, 0x86, 0xb6, 0x70, 0x3a, 0x42, 0x75, 0x8b, 0x98, 0xcd, 0x53, 0x48, 0x2d, 0x7b, 0x43, 0x4b,
-	0x69, 0xa5, 0x71, 0x76, 0x6a, 0x81, 0x43, 0x83, 0x9b, 0xa5, 0x95, 0x45, 0x01, 0x05, 0x17, 0x9b,
-	0x3c, 0xc5, 0xf5, 0x9e, 0xe5, 0x62, 0x93, 0xa7, 0xb8, 0xd6, 0xe9, 0x9a, 0x55, 0x64, 0xb8, 0x5e,
-	0x3d, 0xa4, 0x6b, 0x56, 0x9f, 0xe6, 0xfa, 0x1c, 0xde, 0xc9, 0x5c, 0x20, 0x0b, 0xe9, 0x88, 0x05,
-	0x57, 0x09, 0x8f, 0x28, 0x0b, 0x04, 0x97, 0x86, 0x62, 0x53, 0x53, 0xec, 0x1a, 0xc0, 0xd0, 0xf8,
-	0x4f, 0xb4, 0xdb, 0x86, 0xc6, 0x51, 0xc6, 0x05, 0xd2, 0x8c, 0xca, 0x84, 0xdf, 0xa2, 0x9c, 0x77,
-	0x84, 0x74, 0xa1, 0xed, 0x74, 0xaa, 0xfe, 0xae, 0x01, 0x9c, 0x9d, 0x1b, 0xb7, 0xfd, 0xae, 0x92,
-	0x7c, 0x06, 0xee, 0xfd, 0xd0, 0x90, 0x67, 0xc9, 0x54, 0xba, 0x35, 0x1d, 0xf9, 0xfe, 0x4a, 0xa4,
-	0x71, 0x92, 0x01, 0xec, 0xb2, 0x08, 0xe9, 0x88, 0x85, 0xba, 0x0f, 0x28, 0xbb, 0x54, 0x28, 0xb4,
-	0xd6, 0xd7, 0x5a, 0x2b, 0x61, 0x11, 0x0e, 0x59, 0x58, 0x34, 0xc4, 0x49, 0xe1, 0x2a, 0x74, 0x76,
-	0xa1, 0x31, 0xc7, 0xcf, 0xbb, 0xa3, 0xae, 0x3f, 0xfa, 0x9b, 0x91, 0xc1, 0xce, 0x3b, 0xe4, 0x4b,
-	0xd8, 0xd7, 0xed, 0xa9, 0xb9, 0xf3, 0x5c, 0x70, 0x16, 0x8c, 0xa9, 0x1a, 0x0b, 0x94, 0x63, 0x9e,
-	0x84, 0xee, 0x96, 0x8e, 0x72, 0x53, 0x33, 0x39, 0x27, 0x16, 0xf0, 0xe3, 0xcc, 0xef, 0x1d, 0xc3,
-	0xde, 0x37, 0xa8, 0x4a, 0xe3, 0x32, 0x9b, 0xc3, 0x8f, 0x60, 0x6b, 0xbe, 0x0a, 0x68, 0x31, 0x5a,
-	0x76, 0xa6, 0x17, 0x7b, 0xe6, 0x8c, 0xa5, 0xe8, 0xfd, 0xe3, 0x80, 0x7b, 0x9f, 0xc2, 0x4e, 0x68,
-	0x00, 0x5b, 0xc1, 0xb2, 0x63, 0xb6, 0x65, 0x8e, 0x56, 0xb6, 0xcc, 0x43, 0x04, 0xbd, 0x92, 0xd5,
-	0xae, 0x9d, 0x15, 0xca, 0x26, 0x85, 0xb7, 0x6b, 0x60, 0x6b, 0x16, 0xd1, 0x60, 0x79, 0x11, 0xd5,
-	0x06, 0x1f, 0xac, 0x88, 0x28, 0x2b, 0x58, 0x5a, 0x53, 0x7f, 0x3a, 0xd0, 0xfc, 0x29, 0x0f, 0x99,
-	0xc2, 0x67, 0x3c, 0x14, 0x19, 0x42, 0xbd, 0x24, 0xfc, 0x7f, 0xa9, 0x28, 0x87, 0x90, 0x0e, 0x6c,
-	0x07, 0x3c, 0x9f, 0xd2, 0x5f, 0x51, 0x70, 0xaa, 0x05, 0x4a, 0xbd, 0x59, 0x5e, 0x15, 0x8f, 0x92,
-	0x4f, 0x2f, 0x50, 0xf0, 0x9f, 0xb5, 0xd5, 0x3b, 0x80, 0xfd, 0xb5, 0x92, 0x1f, 0x5d, 0x9d, 0x43,
-	0x78, 0xe7, 0xa3, 0x7c, 0x5e, 0x3f, 0x0c, 0xa0, 0xb9, 0x8e, 0xe3, 0xb1, 0xbc, 0xc3, 0xc3, 0xbf,
-	0xee, 0x5a, 0xce, 0xdf, 0x77, 0x2d, 0xe7, 0xf7, 0x7f, 0x5b, 0xce, 0x45, 0xf7, 0x26, 0x56, 0x28,
-	0x65, 0x2f, 0xe6, 0x7d, 0x73, 0xea, 0x47, 0xbc, 0x7f, 0xa3, 0xfa, 0xfa, 0x37, 0xd7, 0x2f, 0xbd,
-	0xd6, 0x68, 0x43, 0x1b, 0x0f, 0xfe, 0x0b, 0x00, 0x00, 0xff, 0xff, 0xa9, 0xb2, 0x22, 0x32, 0x12,
+	// 803 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xa4, 0x55, 0x4f, 0x6f, 0x1b, 0x45,
+	0x14, 0xf7, 0xd4, 0x75, 0x68, 0x9e, 0x9b, 0x34, 0x99, 0x86, 0x64, 0xeb, 0xa2, 0x95, 0x59, 0x09,
+	0x61, 0x45, 0xc2, 0x96, 0x5c, 0x21, 0x0a, 0x15, 0x52, 0x63, 0x8a, 0x10, 0x08, 0x7a, 0xd8, 0x00,
+	0x87, 0x5e, 0x86, 0xf1, 0xee, 0xeb, 0x66, 0xd5, 0xdd, 0x9d, 0x65, 0x66, 0x92, 0xda, 0x9c, 0xf8,
+	0x04, 0x88, 0x8f, 0xc0, 0x11, 0x71, 0xe3, 0x5b, 0x70, 0xcc, 0xb1, 0x47, 0xe2, 0x5c, 0x38, 0xf6,
+	0x23, 0xa0, 0x9d, 0x19, 0x3b, 0xb6, 0xe3, 0xfe, 0x91, 0x72, 0x9b, 0x79, 0xef, 0xf7, 0x7e, 0xef,
+	0xf7, 0x66, 0xdf, 0x7b, 0x0b, 0xb7, 0xf5, 0x91, 0x14, 0x5a, 0x67, 0x28, 0x63, 0xae, 0x79, 0xb7,
+	0x94, 0x42, 0x0b, 0xba, 0xb1, 0x60, 0x0c, 0xb6, 0xe1, 0xd6, 0x77, 0x7c, 0x14, 0x72, 0x8d, 0x2a,
+	0xc4, 0x9f, 0x8f, 0x51, 0xe9, 0xe0, 0x37, 0x02, 0x5b, 0x17, 0x36, 0x55, 0x8a, 0x42, 0x21, 0x7d,
+	0x08, 0x0d, 0x59, 0x19, 0x3c, 0xd2, 0xae, 0x77, 0x9a, 0xfd, 0xfd, 0xee, 0x22, 0xf7, 0x32, 0xbe,
+	0x6b, 0x6e, 0x5f, 0x16, 0x5a, 0x8e, 0x43, 0x1b, 0xd8, 0xba, 0x0f, 0x70, 0x61, 0xa4, 0x5b, 0x50,
+	0x7f, 0x86, 0x63, 0x8f, 0xb4, 0x49, 0x67, 0x3d, 0xac, 0x8e, 0x74, 0x07, 0x1a, 0x27, 0x3c, 0x3b,
+	0x46, 0xef, 0x5a, 0x9b, 0x74, 0xea, 0xa1, 0xbd, 0x7c, 0x76, 0xed, 0x3e, 0x09, 0x3e, 0x84, 0xed,
+	0x43, 0xd4, 0x2e, 0x85, 0x53, 0x49, 0x29, 0x5c, 0xaf, 0x78, 0x0d, 0x43, 0x3d, 0x34, 0xe7, 0x60,
+	0x1f, 0xe8, 0x3c, 0xd0, 0x49, 0xdf, 0x81, 0x46, 0xc1, 0x73, 0x27, 0x7d, 0x3d, 0xb4, 0x97, 0xe0,
+	0xaf, 0x35, 0xd8, 0xf8, 0x42, 0x14, 0x4f, 0xd3, 0xe4, 0x58, 0x72, 0x9d, 0x8a, 0x82, 0x3e, 0x80,
+	0x96, 0xe6, 0x32, 0x41, 0xcd, 0x24, 0x96, 0x59, 0x1a, 0x19, 0x2b, 0xcb, 0x78, 0xc2, 0x14, 0x46,
+	0x2e, 0xcf, 0x9e, 0x45, 0x84, 0x17, 0x80, 0x6f, 0x79, 0x72, 0x88, 0x11, 0xfd, 0x18, 0xf6, 0x72,
+	0x3e, 0x5a, 0x19, 0x69, 0xeb, 0xd9, 0xc9, 0xf9, 0xe8, 0x72, 0xd8, 0xfb, 0x70, 0x33, 0x2d, 0x52,
+	0x9d, 0xf2, 0x8c, 0x99, 0x6a, 0xea, 0x06, 0xdb, 0x74, 0xb6, 0xaa, 0x8c, 0x0a, 0x52, 0x31, 0xa7,
+	0x45, 0x24, 0x91, 0x2b, 0xf4, 0xae, 0xb7, 0x49, 0x87, 0x84, 0xcd, 0x9c, 0x8f, 0xbe, 0x76, 0x26,
+	0xfa, 0x11, 0x50, 0xcc, 0x51, 0x26, 0x58, 0x44, 0x63, 0x16, 0xa3, 0x03, 0x36, 0x0c, 0x70, 0x7b,
+	0xe6, 0x79, 0xe4, 0x1c, 0xf4, 0x1b, 0x08, 0xf2, 0xb4, 0x60, 0xb1, 0x2b, 0x9c, 0x0d, 0x51, 0x3f,
+	0x47, 0x2c, 0x66, 0x29, 0x94, 0x91, 0xbd, 0x66, 0xa4, 0xf8, 0x79, 0x5a, 0x3c, 0x72, 0xc0, 0x81,
+	0xc5, 0x4d, 0xd3, 0xaa, 0xaa, 0x80, 0x8a, 0x8b, 0x8f, 0xde, 0xc4, 0xf5, 0x8e, 0xe3, 0xe2, 0xa3,
+	0x37, 0x71, 0xad, 0xd2, 0x35, 0xad, 0xc8, 0x72, 0xdd, 0x78, 0x95, 0xae, 0x69, 0x7d, 0x86, 0xeb,
+	0x53, 0xb8, 0xa3, 0x4a, 0x89, 0x3c, 0x66, 0x43, 0x1e, 0x3d, 0xcb, 0x44, 0xc2, 0x78, 0x24, 0x85,
+	0xb2, 0x14, 0xeb, 0x86, 0x62, 0xd7, 0x02, 0x06, 0xd6, 0x7f, 0x60, 0xdc, 0x2e, 0x34, 0x4d, 0x0a,
+	0x21, 0x91, 0x15, 0x4c, 0x65, 0xe2, 0x39, 0xaa, 0x59, 0x47, 0x28, 0x0f, 0xda, 0xa4, 0xd3, 0x08,
+	0x77, 0x2d, 0xe0, 0xf1, 0xa1, 0x75, 0xbb, 0xef, 0xaa, 0xe8, 0x27, 0xe0, 0x5d, 0x0e, 0x8d, 0x45,
+	0x91, 0x8d, 0x95, 0xd7, 0x34, 0x91, 0xef, 0x2e, 0x45, 0x5a, 0x27, 0xed, 0xc3, 0x2e, 0x4f, 0x90,
+	0x0d, 0x79, 0x6c, 0xfa, 0x80, 0xf1, 0xa7, 0x1a, 0xa5, 0xd1, 0x7a, 0xd3, 0x68, 0xa5, 0x3c, 0xc1,
+	0x01, 0x8f, 0xab, 0x86, 0x38, 0xa8, 0x5c, 0x95, 0xce, 0x7d, 0xd8, 0x9e, 0xe1, 0x67, 0xdd, 0xb1,
+	0x61, 0x3e, 0xfa, 0xad, 0xa1, 0xc5, 0xce, 0x3a, 0xe4, 0x73, 0xb8, 0x6b, 0xda, 0xd3, 0x70, 0x97,
+	0xa5, 0x14, 0x3c, 0x3a, 0x62, 0xfa, 0x48, 0xa2, 0x3a, 0x12, 0x59, 0xec, 0x6d, 0x9a, 0x28, 0x2f,
+	0xb7, 0x93, 0x73, 0xe0, 0x00, 0xdf, 0x4f, 0xfd, 0xc1, 0x43, 0xd8, 0xfb, 0x0a, 0xf5, 0xc2, 0xb8,
+	0x4c, 0xe7, 0xf0, 0x03, 0xd8, 0x9c, 0xad, 0x02, 0x56, 0x8d, 0x96, 0x9b, 0xe9, 0x8b, 0x3d, 0xf3,
+	0x98, 0xe7, 0x18, 0xfc, 0x4b, 0xc0, 0xbb, 0x4c, 0xe1, 0x26, 0x34, 0x82, 0xcd, 0x68, 0xde, 0x31,
+	0xdd, 0x32, 0x0f, 0x96, 0xb6, 0xcc, 0xab, 0x08, 0xba, 0x0b, 0x56, 0xb7, 0x76, 0x96, 0x28, 0x5b,
+	0x0c, 0x6e, 0xaf, 0x80, 0xad, 0x58, 0x44, 0xfd, 0xf9, 0x45, 0xd4, 0xec, 0xbf, 0xb7, 0x24, 0x62,
+	0x51, 0xc1, 0xdc, 0x9a, 0xfa, 0x9b, 0x40, 0xeb, 0x87, 0x32, 0xe6, 0x1a, 0xaf, 0xf0, 0x50, 0x74,
+	0x00, 0x1b, 0x0b, 0xc2, 0xdf, 0x4a, 0xc5, 0x62, 0x08, 0xed, 0xc0, 0x56, 0x24, 0xca, 0x31, 0xfb,
+	0x05, 0xa5, 0x60, 0x46, 0xa0, 0x32, 0x9b, 0xe5, 0x46, 0xf5, 0x28, 0xe5, 0xf8, 0x09, 0x4a, 0xf1,
+	0xa3, 0xb1, 0x06, 0xf7, 0xe0, 0xee, 0x4a, 0xc9, 0xaf, 0x5d, 0x9d, 0x03, 0xb8, 0x13, 0xa2, 0xba,
+	0x5a, 0x3f, 0xf4, 0xa1, 0xb5, 0x8a, 0xe3, 0x75, 0x79, 0x07, 0x3f, 0x9d, 0x9e, 0xf9, 0xb5, 0x17,
+	0x67, 0x7e, 0xed, 0xe5, 0x99, 0x4f, 0x7e, 0x9d, 0xf8, 0xe4, 0xcf, 0x89, 0x4f, 0xfe, 0x99, 0xf8,
+	0xe4, 0x74, 0xe2, 0x93, 0xff, 0x26, 0x7e, 0xed, 0xe5, 0xc4, 0x27, 0xbf, 0x9f, 0xfb, 0xb5, 0x3f,
+	0xce, 0x7d, 0x72, 0x7a, 0xee, 0xd7, 0x5e, 0x9c, 0xfb, 0xb5, 0x27, 0xfb, 0x27, 0xa9, 0x46, 0xa5,
+	0xba, 0xa9, 0xe8, 0xd9, 0x53, 0x2f, 0x11, 0xbd, 0x13, 0xdd, 0x33, 0xbf, 0xc3, 0xde, 0xc2, 0xab,
+	0x0e, 0xd7, 0x8c, 0xf1, 0xde, 0xff, 0x01, 0x00, 0x00, 0xff, 0xff, 0xca, 0x11, 0x74, 0xb7, 0x3a,
 	0x07, 0x00, 0x00,
 }
 
+func (this *MaxRatesRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*MaxRatesRequest)
+	if !ok {
+		that2, ok := that.(MaxRatesRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *MaxRatesResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*MaxRatesResponse)
+	if !ok {
+		that2, ok := that.(MaxRatesResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Rates) != len(that1.Rates) {
+		return false
+	}
+	for i := range this.Rates {
+		if this.Rates[i] != that1.Rates[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *SetMaxRateRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SetMaxRateRequest)
+	if !ok {
+		that2, ok := that.(SetMaxRateRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Rate != that1.Rate {
+		return false
+	}
+	return true
+}
+func (this *SetMaxRateResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SetMaxRateResponse)
+	if !ok {
+		that2, ok := that.(SetMaxRateResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Names) != len(that1.Names) {
+		return false
+	}
+	for i := range this.Names {
+		if this.Names[i] != that1.Names[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *Configuration) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Configuration)
+	if !ok {
+		that2, ok := that.(Configuration)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.TargetReplicationLagSec != that1.TargetReplicationLagSec {
+		return false
+	}
+	if this.MaxReplicationLagSec != that1.MaxReplicationLagSec {
+		return false
+	}
+	if this.InitialRate != that1.InitialRate {
+		return false
+	}
+	if this.MaxIncrease != that1.MaxIncrease {
+		return false
+	}
+	if this.EmergencyDecrease != that1.EmergencyDecrease {
+		return false
+	}
+	if this.MinDurationBetweenIncreasesSec != that1.MinDurationBetweenIncreasesSec {
+		return false
+	}
+	if this.MaxDurationBetweenIncreasesSec != that1.MaxDurationBetweenIncreasesSec {
+		return false
+	}
+	if this.MinDurationBetweenDecreasesSec != that1.MinDurationBetweenDecreasesSec {
+		return false
+	}
+	if this.SpreadBacklogAcrossSec != that1.SpreadBacklogAcrossSec {
+		return false
+	}
+	if this.IgnoreNSlowestReplicas != that1.IgnoreNSlowestReplicas {
+		return false
+	}
+	if this.IgnoreNSlowestRdonlys != that1.IgnoreNSlowestRdonlys {
+		return false
+	}
+	if this.AgeBadRateAfterSec != that1.AgeBadRateAfterSec {
+		return false
+	}
+	if this.BadRateIncrease != that1.BadRateIncrease {
+		return false
+	}
+	if this.MaxRateApproachThreshold != that1.MaxRateApproachThreshold {
+		return false
+	}
+	return true
+}
+func (this *GetConfigurationRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*GetConfigurationRequest)
+	if !ok {
+		that2, ok := that.(GetConfigurationRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.ThrottlerName != that1.ThrottlerName {
+		return false
+	}
+	return true
+}
+func (this *GetConfigurationResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*GetConfigurationResponse)
+	if !ok {
+		that2, ok := that.(GetConfigurationResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Configurations) != len(that1.Configurations) {
+		return false
+	}
+	for i := range this.Configurations {
+		if !this.Configurations[i].Equal(that1.Configurations[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *UpdateConfigurationRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*UpdateConfigurationRequest)
+	if !ok {
+		that2, ok := that.(UpdateConfigurationRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.ThrottlerName != that1.ThrottlerName {
+		return false
+	}
+	if !this.Configuration.Equal(that1.Configuration) {
+		return false
+	}
+	if this.CopyZeroValues != that1.CopyZeroValues {
+		return false
+	}
+	return true
+}
+func (this *UpdateConfigurationResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*UpdateConfigurationResponse)
+	if !ok {
+		that2, ok := that.(UpdateConfigurationResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Names) != len(that1.Names) {
+		return false
+	}
+	for i := range this.Names {
+		if this.Names[i] != that1.Names[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *ResetConfigurationRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ResetConfigurationRequest)
+	if !ok {
+		that2, ok := that.(ResetConfigurationRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.ThrottlerName != that1.ThrottlerName {
+		return false
+	}
+	return true
+}
+func (this *ResetConfigurationResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ResetConfigurationResponse)
+	if !ok {
+		that2, ok := that.(ResetConfigurationResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Names) != len(that1.Names) {
+		return false
+	}
+	for i := range this.Names {
+		if this.Names[i] != that1.Names[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *MaxRatesRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&throttlerdata.MaxRatesRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *MaxRatesResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&throttlerdata.MaxRatesResponse{")
+	keysForRates := make([]string, 0, len(this.Rates))
+	for k := range this.Rates {
+		keysForRates = append(keysForRates, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForRates)
+	mapStringForRates := "map[string]int64{"
+	for _, k := range keysForRates {
+		mapStringForRates += fmt.Sprintf("%#v: %#v,", k, this.Rates[k])
+	}
+	mapStringForRates += "}"
+	if this.Rates != nil {
+		s = append(s, "Rates: "+mapStringForRates+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SetMaxRateRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&throttlerdata.SetMaxRateRequest{")
+	s = append(s, "Rate: "+fmt.Sprintf("%#v", this.Rate)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SetMaxRateResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&throttlerdata.SetMaxRateResponse{")
+	s = append(s, "Names: "+fmt.Sprintf("%#v", this.Names)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Configuration) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 18)
+	s = append(s, "&throttlerdata.Configuration{")
+	s = append(s, "TargetReplicationLagSec: "+fmt.Sprintf("%#v", this.TargetReplicationLagSec)+",\n")
+	s = append(s, "MaxReplicationLagSec: "+fmt.Sprintf("%#v", this.MaxReplicationLagSec)+",\n")
+	s = append(s, "InitialRate: "+fmt.Sprintf("%#v", this.InitialRate)+",\n")
+	s = append(s, "MaxIncrease: "+fmt.Sprintf("%#v", this.MaxIncrease)+",\n")
+	s = append(s, "EmergencyDecrease: "+fmt.Sprintf("%#v", this.EmergencyDecrease)+",\n")
+	s = append(s, "MinDurationBetweenIncreasesSec: "+fmt.Sprintf("%#v", this.MinDurationBetweenIncreasesSec)+",\n")
+	s = append(s, "MaxDurationBetweenIncreasesSec: "+fmt.Sprintf("%#v", this.MaxDurationBetweenIncreasesSec)+",\n")
+	s = append(s, "MinDurationBetweenDecreasesSec: "+fmt.Sprintf("%#v", this.MinDurationBetweenDecreasesSec)+",\n")
+	s = append(s, "SpreadBacklogAcrossSec: "+fmt.Sprintf("%#v", this.SpreadBacklogAcrossSec)+",\n")
+	s = append(s, "IgnoreNSlowestReplicas: "+fmt.Sprintf("%#v", this.IgnoreNSlowestReplicas)+",\n")
+	s = append(s, "IgnoreNSlowestRdonlys: "+fmt.Sprintf("%#v", this.IgnoreNSlowestRdonlys)+",\n")
+	s = append(s, "AgeBadRateAfterSec: "+fmt.Sprintf("%#v", this.AgeBadRateAfterSec)+",\n")
+	s = append(s, "BadRateIncrease: "+fmt.Sprintf("%#v", this.BadRateIncrease)+",\n")
+	s = append(s, "MaxRateApproachThreshold: "+fmt.Sprintf("%#v", this.MaxRateApproachThreshold)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *GetConfigurationRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&throttlerdata.GetConfigurationRequest{")
+	s = append(s, "ThrottlerName: "+fmt.Sprintf("%#v", this.ThrottlerName)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *GetConfigurationResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&throttlerdata.GetConfigurationResponse{")
+	keysForConfigurations := make([]string, 0, len(this.Configurations))
+	for k := range this.Configurations {
+		keysForConfigurations = append(keysForConfigurations, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForConfigurations)
+	mapStringForConfigurations := "map[string]*Configuration{"
+	for _, k := range keysForConfigurations {
+		mapStringForConfigurations += fmt.Sprintf("%#v: %#v,", k, this.Configurations[k])
+	}
+	mapStringForConfigurations += "}"
+	if this.Configurations != nil {
+		s = append(s, "Configurations: "+mapStringForConfigurations+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *UpdateConfigurationRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&throttlerdata.UpdateConfigurationRequest{")
+	s = append(s, "ThrottlerName: "+fmt.Sprintf("%#v", this.ThrottlerName)+",\n")
+	if this.Configuration != nil {
+		s = append(s, "Configuration: "+fmt.Sprintf("%#v", this.Configuration)+",\n")
+	}
+	s = append(s, "CopyZeroValues: "+fmt.Sprintf("%#v", this.CopyZeroValues)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *UpdateConfigurationResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&throttlerdata.UpdateConfigurationResponse{")
+	s = append(s, "Names: "+fmt.Sprintf("%#v", this.Names)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ResetConfigurationRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&throttlerdata.ResetConfigurationRequest{")
+	s = append(s, "ThrottlerName: "+fmt.Sprintf("%#v", this.ThrottlerName)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ResetConfigurationResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&throttlerdata.ResetConfigurationResponse{")
+	s = append(s, "Names: "+fmt.Sprintf("%#v", this.Names)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func valueToGoStringThrottlerdata(v interface{}, typ string) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("func(v %v) *%v { return &v } ( %#v )", typ, typ, pv)
+}
 func (m *MaxRatesRequest) Marshal() (dAtA []byte, err error) {
 	size := m.ProtoSize()
 	dAtA = make([]byte, size)
@@ -829,9 +1280,6 @@ func (m *MaxRatesRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -866,9 +1314,6 @@ func (m *MaxRatesResponse) MarshalTo(dAtA []byte) (int, error) {
 			i = encodeVarintThrottlerdata(dAtA, i, uint64(v))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -891,9 +1336,6 @@ func (m *SetMaxRateRequest) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x8
 		i++
 		i = encodeVarintThrottlerdata(dAtA, i, uint64(m.Rate))
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -927,9 +1369,6 @@ func (m *SetMaxRateResponse) MarshalTo(dAtA []byte) (int, error) {
 			i++
 			i += copy(dAtA[i:], s)
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -1023,9 +1462,6 @@ func (m *Configuration) MarshalTo(dAtA []byte) (int, error) {
 		encoding_binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.MaxRateApproachThreshold))))
 		i += 8
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -1049,9 +1485,6 @@ func (m *GetConfigurationRequest) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintThrottlerdata(dAtA, i, uint64(len(m.ThrottlerName)))
 		i += copy(dAtA[i:], m.ThrottlerName)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -1099,9 +1532,6 @@ func (m *GetConfigurationResponse) MarshalTo(dAtA []byte) (int, error) {
 			}
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -1146,9 +1576,6 @@ func (m *UpdateConfigurationRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i++
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -1182,9 +1609,6 @@ func (m *UpdateConfigurationResponse) MarshalTo(dAtA []byte) (int, error) {
 			i += copy(dAtA[i:], s)
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -1208,9 +1632,6 @@ func (m *ResetConfigurationRequest) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintThrottlerdata(dAtA, i, uint64(len(m.ThrottlerName)))
 		i += copy(dAtA[i:], m.ThrottlerName)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -1245,9 +1666,6 @@ func (m *ResetConfigurationResponse) MarshalTo(dAtA []byte) (int, error) {
 			i += copy(dAtA[i:], s)
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -1266,9 +1684,6 @@ func (m *MaxRatesRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -1286,9 +1701,6 @@ func (m *MaxRatesResponse) ProtoSize() (n int) {
 			n += mapEntrySize + 1 + sovThrottlerdata(uint64(mapEntrySize))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -1300,9 +1712,6 @@ func (m *SetMaxRateRequest) ProtoSize() (n int) {
 	_ = l
 	if m.Rate != 0 {
 		n += 1 + sovThrottlerdata(uint64(m.Rate))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -1318,9 +1727,6 @@ func (m *SetMaxRateResponse) ProtoSize() (n int) {
 			l = len(s)
 			n += 1 + l + sovThrottlerdata(uint64(l))
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -1373,9 +1779,6 @@ func (m *Configuration) ProtoSize() (n int) {
 	if m.MaxRateApproachThreshold != 0 {
 		n += 9
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -1388,9 +1791,6 @@ func (m *GetConfigurationRequest) ProtoSize() (n int) {
 	l = len(m.ThrottlerName)
 	if l > 0 {
 		n += 1 + l + sovThrottlerdata(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -1414,9 +1814,6 @@ func (m *GetConfigurationResponse) ProtoSize() (n int) {
 			n += mapEntrySize + 1 + sovThrottlerdata(uint64(mapEntrySize))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -1437,9 +1834,6 @@ func (m *UpdateConfigurationRequest) ProtoSize() (n int) {
 	if m.CopyZeroValues {
 		n += 2
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -1455,9 +1849,6 @@ func (m *UpdateConfigurationResponse) ProtoSize() (n int) {
 			n += 1 + l + sovThrottlerdata(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -1470,9 +1861,6 @@ func (m *ResetConfigurationRequest) ProtoSize() (n int) {
 	l = len(m.ThrottlerName)
 	if l > 0 {
 		n += 1 + l + sovThrottlerdata(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -1489,9 +1877,6 @@ func (m *ResetConfigurationResponse) ProtoSize() (n int) {
 			n += 1 + l + sovThrottlerdata(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -1507,6 +1892,158 @@ func sovThrottlerdata(x uint64) (n int) {
 }
 func sozThrottlerdata(x uint64) (n int) {
 	return sovThrottlerdata(uint64((x << 1) ^ uint64((int64(x) >> 63))))
+}
+func (this *MaxRatesRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&MaxRatesRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *MaxRatesResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	keysForRates := make([]string, 0, len(this.Rates))
+	for k := range this.Rates {
+		keysForRates = append(keysForRates, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForRates)
+	mapStringForRates := "map[string]int64{"
+	for _, k := range keysForRates {
+		mapStringForRates += fmt.Sprintf("%v: %v,", k, this.Rates[k])
+	}
+	mapStringForRates += "}"
+	s := strings.Join([]string{`&MaxRatesResponse{`,
+		`Rates:` + mapStringForRates + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SetMaxRateRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SetMaxRateRequest{`,
+		`Rate:` + fmt.Sprintf("%v", this.Rate) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SetMaxRateResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SetMaxRateResponse{`,
+		`Names:` + fmt.Sprintf("%v", this.Names) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Configuration) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&Configuration{`,
+		`TargetReplicationLagSec:` + fmt.Sprintf("%v", this.TargetReplicationLagSec) + `,`,
+		`MaxReplicationLagSec:` + fmt.Sprintf("%v", this.MaxReplicationLagSec) + `,`,
+		`InitialRate:` + fmt.Sprintf("%v", this.InitialRate) + `,`,
+		`MaxIncrease:` + fmt.Sprintf("%v", this.MaxIncrease) + `,`,
+		`EmergencyDecrease:` + fmt.Sprintf("%v", this.EmergencyDecrease) + `,`,
+		`MinDurationBetweenIncreasesSec:` + fmt.Sprintf("%v", this.MinDurationBetweenIncreasesSec) + `,`,
+		`MaxDurationBetweenIncreasesSec:` + fmt.Sprintf("%v", this.MaxDurationBetweenIncreasesSec) + `,`,
+		`MinDurationBetweenDecreasesSec:` + fmt.Sprintf("%v", this.MinDurationBetweenDecreasesSec) + `,`,
+		`SpreadBacklogAcrossSec:` + fmt.Sprintf("%v", this.SpreadBacklogAcrossSec) + `,`,
+		`IgnoreNSlowestReplicas:` + fmt.Sprintf("%v", this.IgnoreNSlowestReplicas) + `,`,
+		`IgnoreNSlowestRdonlys:` + fmt.Sprintf("%v", this.IgnoreNSlowestRdonlys) + `,`,
+		`AgeBadRateAfterSec:` + fmt.Sprintf("%v", this.AgeBadRateAfterSec) + `,`,
+		`BadRateIncrease:` + fmt.Sprintf("%v", this.BadRateIncrease) + `,`,
+		`MaxRateApproachThreshold:` + fmt.Sprintf("%v", this.MaxRateApproachThreshold) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *GetConfigurationRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&GetConfigurationRequest{`,
+		`ThrottlerName:` + fmt.Sprintf("%v", this.ThrottlerName) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *GetConfigurationResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	keysForConfigurations := make([]string, 0, len(this.Configurations))
+	for k := range this.Configurations {
+		keysForConfigurations = append(keysForConfigurations, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForConfigurations)
+	mapStringForConfigurations := "map[string]*Configuration{"
+	for _, k := range keysForConfigurations {
+		mapStringForConfigurations += fmt.Sprintf("%v: %v,", k, this.Configurations[k])
+	}
+	mapStringForConfigurations += "}"
+	s := strings.Join([]string{`&GetConfigurationResponse{`,
+		`Configurations:` + mapStringForConfigurations + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *UpdateConfigurationRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&UpdateConfigurationRequest{`,
+		`ThrottlerName:` + fmt.Sprintf("%v", this.ThrottlerName) + `,`,
+		`Configuration:` + strings.Replace(this.Configuration.String(), "Configuration", "Configuration", 1) + `,`,
+		`CopyZeroValues:` + fmt.Sprintf("%v", this.CopyZeroValues) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *UpdateConfigurationResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&UpdateConfigurationResponse{`,
+		`Names:` + fmt.Sprintf("%v", this.Names) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ResetConfigurationRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ResetConfigurationRequest{`,
+		`ThrottlerName:` + fmt.Sprintf("%v", this.ThrottlerName) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ResetConfigurationResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ResetConfigurationResponse{`,
+		`Names:` + fmt.Sprintf("%v", this.Names) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func valueToStringThrottlerdata(v interface{}) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("*%v", pv)
 }
 func (m *MaxRatesRequest) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
@@ -1552,7 +2089,6 @@ func (m *MaxRatesRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -1719,7 +2255,6 @@ func (m *MaxRatesResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -1792,7 +2327,6 @@ func (m *SetMaxRateRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -1878,7 +2412,6 @@ func (m *SetMaxRateResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2166,7 +2699,6 @@ func (m *Configuration) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2252,7 +2784,6 @@ func (m *GetConfigurationRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2435,7 +2966,6 @@ func (m *GetConfigurationResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2577,7 +3107,6 @@ func (m *UpdateConfigurationRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2663,7 +3192,6 @@ func (m *UpdateConfigurationResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2749,7 +3277,6 @@ func (m *ResetConfigurationRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2835,7 +3362,6 @@ func (m *ResetConfigurationResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}

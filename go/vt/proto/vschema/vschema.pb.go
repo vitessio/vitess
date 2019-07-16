@@ -7,8 +7,11 @@ import (
 	fmt "fmt"
 	io "io"
 	math "math"
+	reflect "reflect"
+	strings "strings"
 
 	proto "github.com/gogo/protobuf/proto"
+	github_com_gogo_protobuf_sortkeys "github.com/gogo/protobuf/sortkeys"
 	query "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -28,15 +31,11 @@ type RoutingRules struct {
 	// rules should ideally be a map. However protos dont't allow
 	// repeated fields as elements of a map. So, we use a list
 	// instead.
-	Rules                []*RoutingRule `protobuf:"bytes,1,rep,name=rules,proto3" json:"rules,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+	Rules []*RoutingRule `protobuf:"bytes,1,rep,name=rules,proto3" json:"rules,omitempty"`
 }
 
-func (m *RoutingRules) Reset()         { *m = RoutingRules{} }
-func (m *RoutingRules) String() string { return proto.CompactTextString(m) }
-func (*RoutingRules) ProtoMessage()    {}
+func (m *RoutingRules) Reset()      { *m = RoutingRules{} }
+func (*RoutingRules) ProtoMessage() {}
 func (*RoutingRules) Descriptor() ([]byte, []int) {
 	return fileDescriptor_3f6849254fea3e77, []int{0}
 }
@@ -76,16 +75,12 @@ func (m *RoutingRules) GetRules() []*RoutingRule {
 
 // RoutingRule specifies a routing rule.
 type RoutingRule struct {
-	FromTable            string   `protobuf:"bytes,1,opt,name=from_table,json=fromTable,proto3" json:"from_table,omitempty"`
-	ToTables             []string `protobuf:"bytes,2,rep,name=to_tables,json=toTables,proto3" json:"to_tables,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	FromTable string   `protobuf:"bytes,1,opt,name=from_table,json=fromTable,proto3" json:"from_table,omitempty"`
+	ToTables  []string `protobuf:"bytes,2,rep,name=to_tables,json=toTables,proto3" json:"to_tables,omitempty"`
 }
 
-func (m *RoutingRule) Reset()         { *m = RoutingRule{} }
-func (m *RoutingRule) String() string { return proto.CompactTextString(m) }
-func (*RoutingRule) ProtoMessage()    {}
+func (m *RoutingRule) Reset()      { *m = RoutingRule{} }
+func (*RoutingRule) ProtoMessage() {}
 func (*RoutingRule) Descriptor() ([]byte, []int) {
 	return fileDescriptor_3f6849254fea3e77, []int{1}
 }
@@ -133,17 +128,13 @@ func (m *RoutingRule) GetToTables() []string {
 // Keyspace is the vschema for a keyspace.
 type Keyspace struct {
 	// If sharded is false, vindexes and tables are ignored.
-	Sharded              bool               `protobuf:"varint,1,opt,name=sharded,proto3" json:"sharded,omitempty"`
-	Vindexes             map[string]*Vindex `protobuf:"bytes,2,rep,name=vindexes,proto3" json:"vindexes,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	Tables               map[string]*Table  `protobuf:"bytes,3,rep,name=tables,proto3" json:"tables,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
-	XXX_unrecognized     []byte             `json:"-"`
-	XXX_sizecache        int32              `json:"-"`
+	Sharded  bool               `protobuf:"varint,1,opt,name=sharded,proto3" json:"sharded,omitempty"`
+	Vindexes map[string]*Vindex `protobuf:"bytes,2,rep,name=vindexes,proto3" json:"vindexes,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	Tables   map[string]*Table  `protobuf:"bytes,3,rep,name=tables,proto3" json:"tables,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
-func (m *Keyspace) Reset()         { *m = Keyspace{} }
-func (m *Keyspace) String() string { return proto.CompactTextString(m) }
-func (*Keyspace) ProtoMessage()    {}
+func (m *Keyspace) Reset()      { *m = Keyspace{} }
+func (*Keyspace) ProtoMessage() {}
 func (*Keyspace) Descriptor() ([]byte, []int) {
 	return fileDescriptor_3f6849254fea3e77, []int{2}
 }
@@ -209,15 +200,11 @@ type Vindex struct {
 	// If so, rows in the lookup table are created or
 	// deleted in sync with corresponding rows in the
 	// owner table.
-	Owner                string   `protobuf:"bytes,3,opt,name=owner,proto3" json:"owner,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Owner string `protobuf:"bytes,3,opt,name=owner,proto3" json:"owner,omitempty"`
 }
 
-func (m *Vindex) Reset()         { *m = Vindex{} }
-func (m *Vindex) String() string { return proto.CompactTextString(m) }
-func (*Vindex) ProtoMessage()    {}
+func (m *Vindex) Reset()      { *m = Vindex{} }
+func (*Vindex) ProtoMessage() {}
 func (*Vindex) Descriptor() ([]byte, []int) {
 	return fileDescriptor_3f6849254fea3e77, []int{3}
 }
@@ -289,15 +276,11 @@ type Table struct {
 	// column_list_authoritative is set to true if columns is
 	// an authoritative list for the table. This allows
 	// us to expand 'select *' expressions.
-	ColumnListAuthoritative bool     `protobuf:"varint,6,opt,name=column_list_authoritative,json=columnListAuthoritative,proto3" json:"column_list_authoritative,omitempty"`
-	XXX_NoUnkeyedLiteral    struct{} `json:"-"`
-	XXX_unrecognized        []byte   `json:"-"`
-	XXX_sizecache           int32    `json:"-"`
+	ColumnListAuthoritative bool `protobuf:"varint,6,opt,name=column_list_authoritative,json=columnListAuthoritative,proto3" json:"column_list_authoritative,omitempty"`
 }
 
-func (m *Table) Reset()         { *m = Table{} }
-func (m *Table) String() string { return proto.CompactTextString(m) }
-func (*Table) ProtoMessage()    {}
+func (m *Table) Reset()      { *m = Table{} }
+func (*Table) ProtoMessage() {}
 func (*Table) Descriptor() ([]byte, []int) {
 	return fileDescriptor_3f6849254fea3e77, []int{4}
 }
@@ -377,15 +360,11 @@ type ColumnVindex struct {
 	// The name must match a vindex defined in Keyspace.
 	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
 	// List of columns that define this Vindex
-	Columns              []string `protobuf:"bytes,3,rep,name=columns,proto3" json:"columns,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Columns []string `protobuf:"bytes,3,rep,name=columns,proto3" json:"columns,omitempty"`
 }
 
-func (m *ColumnVindex) Reset()         { *m = ColumnVindex{} }
-func (m *ColumnVindex) String() string { return proto.CompactTextString(m) }
-func (*ColumnVindex) ProtoMessage()    {}
+func (m *ColumnVindex) Reset()      { *m = ColumnVindex{} }
+func (*ColumnVindex) ProtoMessage() {}
 func (*ColumnVindex) Descriptor() ([]byte, []int) {
 	return fileDescriptor_3f6849254fea3e77, []int{5}
 }
@@ -441,15 +420,11 @@ func (m *ColumnVindex) GetColumns() []string {
 type AutoIncrement struct {
 	Column string `protobuf:"bytes,1,opt,name=column,proto3" json:"column,omitempty"`
 	// The sequence must match a table of type SEQUENCE.
-	Sequence             string   `protobuf:"bytes,2,opt,name=sequence,proto3" json:"sequence,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Sequence string `protobuf:"bytes,2,opt,name=sequence,proto3" json:"sequence,omitempty"`
 }
 
-func (m *AutoIncrement) Reset()         { *m = AutoIncrement{} }
-func (m *AutoIncrement) String() string { return proto.CompactTextString(m) }
-func (*AutoIncrement) ProtoMessage()    {}
+func (m *AutoIncrement) Reset()      { *m = AutoIncrement{} }
+func (*AutoIncrement) ProtoMessage() {}
 func (*AutoIncrement) Descriptor() ([]byte, []int) {
 	return fileDescriptor_3f6849254fea3e77, []int{6}
 }
@@ -496,16 +471,12 @@ func (m *AutoIncrement) GetSequence() string {
 
 // Column describes a column.
 type Column struct {
-	Name                 string     `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Type                 query.Type `protobuf:"varint,2,opt,name=type,proto3,enum=query.Type" json:"type,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
-	XXX_unrecognized     []byte     `json:"-"`
-	XXX_sizecache        int32      `json:"-"`
+	Name string     `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Type query.Type `protobuf:"varint,2,opt,name=type,proto3,enum=query.Type" json:"type,omitempty"`
 }
 
-func (m *Column) Reset()         { *m = Column{} }
-func (m *Column) String() string { return proto.CompactTextString(m) }
-func (*Column) ProtoMessage()    {}
+func (m *Column) Reset()      { *m = Column{} }
+func (*Column) ProtoMessage() {}
 func (*Column) Descriptor() ([]byte, []int) {
 	return fileDescriptor_3f6849254fea3e77, []int{7}
 }
@@ -547,22 +518,18 @@ func (m *Column) GetType() query.Type {
 	if m != nil {
 		return m.Type
 	}
-	return query.Type_NULL_TYPE
+	return query.NULL_TYPE
 }
 
 // SrvVSchema is the roll-up of all the Keyspace schema for a cell.
 type SrvVSchema struct {
 	// keyspaces is a map of keyspace name -> Keyspace object.
-	Keyspaces            map[string]*Keyspace `protobuf:"bytes,1,rep,name=keyspaces,proto3" json:"keyspaces,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	RoutingRules         *RoutingRules        `protobuf:"bytes,2,opt,name=routing_rules,json=routingRules,proto3" json:"routing_rules,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
-	XXX_unrecognized     []byte               `json:"-"`
-	XXX_sizecache        int32                `json:"-"`
+	Keyspaces    map[string]*Keyspace `protobuf:"bytes,1,rep,name=keyspaces,proto3" json:"keyspaces,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	RoutingRules *RoutingRules        `protobuf:"bytes,2,opt,name=routing_rules,json=routingRules,proto3" json:"routing_rules,omitempty"`
 }
 
-func (m *SrvVSchema) Reset()         { *m = SrvVSchema{} }
-func (m *SrvVSchema) String() string { return proto.CompactTextString(m) }
-func (*SrvVSchema) ProtoMessage()    {}
+func (m *SrvVSchema) Reset()      { *m = SrvVSchema{} }
+func (*SrvVSchema) ProtoMessage() {}
 func (*SrvVSchema) Descriptor() ([]byte, []int) {
 	return fileDescriptor_3f6849254fea3e77, []int{8}
 }
@@ -626,51 +593,531 @@ func init() {
 func init() { proto.RegisterFile("vschema.proto", fileDescriptor_3f6849254fea3e77) }
 
 var fileDescriptor_3f6849254fea3e77 = []byte{
-	// 662 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x74, 0x54, 0xcf, 0x6e, 0xd3, 0x4e,
-	0x10, 0x96, 0x93, 0xc6, 0x4d, 0xc6, 0x4d, 0xfa, 0xfb, 0xad, 0xda, 0x62, 0x52, 0xb5, 0x8d, 0xac,
-	0x22, 0x02, 0x87, 0x44, 0x4a, 0x85, 0x04, 0x41, 0x45, 0x94, 0x8a, 0x43, 0x45, 0x25, 0x90, 0x5b,
-	0xf5, 0xc0, 0x25, 0xda, 0x26, 0x4b, 0x6b, 0x35, 0xf1, 0xa6, 0xbb, 0x6b, 0x83, 0x1f, 0x85, 0x1b,
-	0xe2, 0x0d, 0x78, 0x0b, 0x8e, 0xdc, 0xb9, 0x95, 0x17, 0x41, 0xde, 0x3f, 0xee, 0xba, 0x0d, 0xb7,
-	0xfd, 0x76, 0x66, 0xbe, 0xf9, 0x66, 0x76, 0x67, 0xa0, 0x99, 0xf2, 0xf1, 0x25, 0x99, 0xe1, 0xde,
-	0x9c, 0x51, 0x41, 0xd1, 0xb2, 0x86, 0x6d, 0xef, 0x3a, 0x21, 0x2c, 0x53, 0xb7, 0xc1, 0x10, 0x56,
-	0x42, 0x9a, 0x88, 0x28, 0xbe, 0x08, 0x93, 0x29, 0xe1, 0xe8, 0x29, 0xd4, 0x58, 0x7e, 0xf0, 0x9d,
-	0x4e, 0xb5, 0xeb, 0x0d, 0xd6, 0x7a, 0x86, 0xc4, 0xf2, 0x0a, 0x95, 0x4b, 0x70, 0x04, 0x9e, 0x75,
-	0x8b, 0xb6, 0x00, 0x3e, 0x31, 0x3a, 0x1b, 0x09, 0x7c, 0x3e, 0x25, 0xbe, 0xd3, 0x71, 0xba, 0x8d,
-	0xb0, 0x91, 0xdf, 0x9c, 0xe6, 0x17, 0x68, 0x13, 0x1a, 0x82, 0x2a, 0x23, 0xf7, 0x2b, 0x9d, 0x6a,
-	0xb7, 0x11, 0xd6, 0x05, 0x95, 0x36, 0x1e, 0xfc, 0xa8, 0x40, 0xfd, 0x1d, 0xc9, 0xf8, 0x1c, 0x8f,
-	0x09, 0xf2, 0x61, 0x99, 0x5f, 0x62, 0x36, 0x21, 0x13, 0xc9, 0x52, 0x0f, 0x0d, 0x44, 0x2f, 0xa1,
-	0x9e, 0x46, 0xf1, 0x84, 0x7c, 0xd1, 0x14, 0xde, 0x60, 0xa7, 0x10, 0x68, 0xc2, 0x7b, 0x67, 0xda,
-	0xe3, 0x6d, 0x2c, 0x58, 0x16, 0x16, 0x01, 0xe8, 0x19, 0xb8, 0x3a, 0x7b, 0x55, 0x86, 0x6e, 0xdd,
-	0x0f, 0x55, 0x6a, 0x54, 0xa0, 0x76, 0x6e, 0x1f, 0x43, 0xb3, 0xc4, 0x88, 0xfe, 0x83, 0xea, 0x15,
-	0xc9, 0x74, 0x81, 0xf9, 0x11, 0x3d, 0x82, 0x5a, 0x8a, 0xa7, 0x09, 0xf1, 0x2b, 0x1d, 0xa7, 0xeb,
-	0x0d, 0x56, 0x0b, 0x62, 0x15, 0x18, 0x2a, 0xeb, 0xb0, 0xf2, 0xdc, 0x69, 0x1f, 0x81, 0x67, 0x25,
-	0x59, 0xc0, 0xb5, 0x5b, 0xe6, 0x6a, 0x15, 0x5c, 0x32, 0xcc, 0xa2, 0x0a, 0xbe, 0x3b, 0xe0, 0xaa,
-	0x04, 0x08, 0xc1, 0x92, 0xc8, 0xe6, 0xa6, 0xe9, 0xf2, 0x8c, 0xf6, 0xc0, 0x9d, 0x63, 0x86, 0x67,
-	0xa6, 0x53, 0x9b, 0x77, 0x54, 0xf5, 0x3e, 0x48, 0xab, 0x2e, 0x56, 0xb9, 0xa2, 0x35, 0xa8, 0xd1,
-	0xcf, 0x31, 0x61, 0x7e, 0x55, 0x32, 0x29, 0xd0, 0x7e, 0x01, 0x9e, 0xe5, 0xbc, 0x40, 0xf4, 0x9a,
-	0x2d, 0xba, 0x61, 0x8b, 0xfc, 0x5a, 0x81, 0x9a, 0x7a, 0xff, 0x45, 0x1a, 0x5f, 0xc1, 0xea, 0x98,
-	0x4e, 0x93, 0x59, 0x3c, 0xba, 0xf3, 0xac, 0xeb, 0x85, 0xd8, 0x43, 0x69, 0xd7, 0x8d, 0x6c, 0x8d,
-	0x2d, 0x44, 0x38, 0xda, 0x87, 0x16, 0x4e, 0x04, 0x1d, 0x45, 0xf1, 0x98, 0x91, 0x19, 0x89, 0x85,
-	0xd4, 0xed, 0x0d, 0x36, 0x8a, 0xf0, 0x83, 0x44, 0xd0, 0x23, 0x63, 0x0d, 0x9b, 0xd8, 0x86, 0xe8,
-	0x09, 0x2c, 0x2b, 0x42, 0xee, 0x2f, 0xc9, 0xb4, 0xab, 0x77, 0xd2, 0x86, 0xc6, 0x8e, 0x36, 0xc0,
-	0x9d, 0x47, 0x71, 0x4c, 0x26, 0x7e, 0x4d, 0xea, 0xd7, 0x08, 0x0d, 0xe1, 0xa1, 0xae, 0x60, 0x1a,
-	0x71, 0x31, 0xc2, 0x89, 0xb8, 0xa4, 0x2c, 0x12, 0x58, 0x44, 0x29, 0xf1, 0x5d, 0xf9, 0x7b, 0x1f,
-	0x28, 0x87, 0xe3, 0x88, 0x8b, 0x03, 0xdb, 0x1c, 0x9c, 0xc2, 0x8a, 0x5d, 0x5d, 0x9e, 0x43, 0xb9,
-	0xea, 0x1e, 0x69, 0x94, 0x77, 0x2e, 0xc6, 0x33, 0xd3, 0x5c, 0x79, 0xce, 0x67, 0xc4, 0x48, 0xaf,
-	0xca, 0x59, 0x32, 0x30, 0x38, 0x84, 0x66, 0xa9, 0xe8, 0x7f, 0xd2, 0xb6, 0xa1, 0xce, 0xc9, 0x75,
-	0x42, 0xe2, 0xb1, 0xa1, 0x2e, 0x70, 0xb0, 0x0f, 0xee, 0x61, 0x39, 0xb9, 0x63, 0x25, 0xdf, 0xd1,
-	0x4f, 0x99, 0x47, 0xb5, 0x06, 0x5e, 0x4f, 0x2d, 0x94, 0xd3, 0x6c, 0x4e, 0xd4, 0xbb, 0x06, 0xbf,
-	0x1d, 0x80, 0x13, 0x96, 0x9e, 0x9d, 0xc8, 0x66, 0xa2, 0xd7, 0xd0, 0xb8, 0xd2, 0x23, 0x66, 0x16,
-	0x4b, 0x50, 0x74, 0xfa, 0xd6, 0xaf, 0x98, 0x43, 0xfd, 0x29, 0x6f, 0x83, 0xd0, 0x10, 0x9a, 0x4c,
-	0xad, 0x9a, 0x91, 0x5a, 0x4f, 0x6a, 0x3a, 0xd6, 0x17, 0xad, 0x27, 0x1e, 0xae, 0x30, 0x0b, 0xb5,
-	0xdf, 0x43, 0xab, 0x4c, 0xbc, 0xe0, 0x03, 0x3f, 0x2e, 0x4f, 0xdd, 0xff, 0xf7, 0x56, 0x83, 0xf5,
-	0xa7, 0xdf, 0x0c, 0x7e, 0xde, 0x6c, 0x3b, 0xbf, 0x6e, 0xb6, 0x9d, 0x6f, 0x7f, 0xb6, 0x9d, 0x8f,
-	0xbb, 0x69, 0x24, 0x08, 0xe7, 0xbd, 0x88, 0xf6, 0xd5, 0xa9, 0x7f, 0x41, 0xfb, 0xa9, 0xe8, 0xcb,
-	0xfd, 0xda, 0xd7, 0x3c, 0xe7, 0xae, 0x84, 0x7b, 0x7f, 0x03, 0x00, 0x00, 0xff, 0xff, 0x5c, 0xe9,
-	0x81, 0xce, 0x95, 0x05, 0x00, 0x00,
+	// 706 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x74, 0x54, 0x41, 0x4f, 0x13, 0x41,
+	0x14, 0xee, 0xb4, 0xb4, 0xb4, 0x6f, 0x69, 0xd1, 0x09, 0xe0, 0x5a, 0xc2, 0xd2, 0x6c, 0x30, 0x56,
+	0x0f, 0x6d, 0x52, 0x62, 0xa2, 0x35, 0x18, 0x91, 0x78, 0x20, 0x92, 0x68, 0x16, 0xc2, 0x81, 0x4b,
+	0xb3, 0xb4, 0x23, 0x6c, 0x68, 0x77, 0xcb, 0xcc, 0xec, 0x6a, 0x6f, 0xfe, 0x04, 0xaf, 0xde, 0x8c,
+	0x27, 0xaf, 0xfe, 0x0b, 0x8f, 0x1c, 0x49, 0x3c, 0xd1, 0x5e, 0x3c, 0xf2, 0x13, 0xcc, 0xce, 0xcc,
+	0x2e, 0x53, 0xa8, 0xb7, 0xf9, 0xe6, 0xbd, 0xf7, 0xbd, 0xef, 0xbd, 0x99, 0xf7, 0xa0, 0x1c, 0xb1,
+	0xee, 0x29, 0x19, 0xb8, 0x8d, 0x21, 0x0d, 0x78, 0x80, 0xe7, 0x15, 0xac, 0x1a, 0xe7, 0x21, 0xa1,
+	0x23, 0x79, 0x6b, 0xb7, 0x61, 0xc1, 0x09, 0x42, 0xee, 0xf9, 0x27, 0x4e, 0xd8, 0x27, 0x0c, 0x3f,
+	0x85, 0x3c, 0x8d, 0x0f, 0x26, 0xaa, 0xe5, 0xea, 0x46, 0x6b, 0xa9, 0x91, 0x90, 0x68, 0x5e, 0x8e,
+	0x74, 0xb1, 0x77, 0xc1, 0xd0, 0x6e, 0xf1, 0x1a, 0xc0, 0x47, 0x1a, 0x0c, 0x3a, 0xdc, 0x3d, 0xee,
+	0x13, 0x13, 0xd5, 0x50, 0xbd, 0xe4, 0x94, 0xe2, 0x9b, 0x83, 0xf8, 0x02, 0xaf, 0x42, 0x89, 0x07,
+	0xd2, 0xc8, 0xcc, 0x6c, 0x2d, 0x57, 0x2f, 0x39, 0x45, 0x1e, 0x08, 0x1b, 0xb3, 0x7f, 0x65, 0xa1,
+	0xf8, 0x8e, 0x8c, 0xd8, 0xd0, 0xed, 0x12, 0x6c, 0xc2, 0x3c, 0x3b, 0x75, 0x69, 0x8f, 0xf4, 0x04,
+	0x4b, 0xd1, 0x49, 0x20, 0x7e, 0x09, 0xc5, 0xc8, 0xf3, 0x7b, 0xe4, 0xb3, 0xa2, 0x30, 0x5a, 0xeb,
+	0xa9, 0xc0, 0x24, 0xbc, 0x71, 0xa8, 0x3c, 0xde, 0xfa, 0x9c, 0x8e, 0x9c, 0x34, 0x00, 0x3f, 0x83,
+	0x82, 0xca, 0x9e, 0x13, 0xa1, 0x6b, 0x77, 0x43, 0xa5, 0x1a, 0x19, 0xa8, 0x9c, 0xab, 0x7b, 0x50,
+	0x9e, 0x62, 0xc4, 0xf7, 0x20, 0x77, 0x46, 0x46, 0xaa, 0xc0, 0xf8, 0x88, 0x1f, 0x41, 0x3e, 0x72,
+	0xfb, 0x21, 0x31, 0xb3, 0x35, 0x54, 0x37, 0x5a, 0x8b, 0x29, 0xb1, 0x0c, 0x74, 0xa4, 0xb5, 0x9d,
+	0x7d, 0x8e, 0xaa, 0xbb, 0x60, 0x68, 0x49, 0x66, 0x70, 0x6d, 0x4c, 0x73, 0x55, 0x52, 0x2e, 0x11,
+	0xa6, 0x51, 0xd9, 0x3f, 0x10, 0x14, 0x64, 0x02, 0x8c, 0x61, 0x8e, 0x8f, 0x86, 0x49, 0xd3, 0xc5,
+	0x19, 0x6f, 0x42, 0x61, 0xe8, 0x52, 0x77, 0x90, 0x74, 0x6a, 0xf5, 0x96, 0xaa, 0xc6, 0x07, 0x61,
+	0x55, 0xc5, 0x4a, 0x57, 0xbc, 0x04, 0xf9, 0xe0, 0x93, 0x4f, 0xa8, 0x99, 0x13, 0x4c, 0x12, 0x54,
+	0x5f, 0x80, 0xa1, 0x39, 0xcf, 0x10, 0xbd, 0xa4, 0x8b, 0x2e, 0xe9, 0x22, 0xbf, 0x65, 0x21, 0x2f,
+	0xdf, 0x7f, 0x96, 0xc6, 0x57, 0xb0, 0xd8, 0x0d, 0xfa, 0xe1, 0xc0, 0xef, 0xdc, 0x7a, 0xd6, 0xe5,
+	0x54, 0xec, 0x8e, 0xb0, 0xab, 0x46, 0x56, 0xba, 0x1a, 0x22, 0x0c, 0x6f, 0x41, 0xc5, 0x0d, 0x79,
+	0xd0, 0xf1, 0xfc, 0x2e, 0x25, 0x03, 0xe2, 0x73, 0xa1, 0xdb, 0x68, 0xad, 0xa4, 0xe1, 0xdb, 0x21,
+	0x0f, 0x76, 0x13, 0xab, 0x53, 0x76, 0x75, 0x88, 0x9f, 0xc0, 0xbc, 0x24, 0x64, 0xe6, 0x9c, 0x48,
+	0xbb, 0x78, 0x2b, 0xad, 0x93, 0xd8, 0xf1, 0x0a, 0x14, 0x86, 0x9e, 0xef, 0x93, 0x9e, 0x99, 0x17,
+	0xfa, 0x15, 0xc2, 0x6d, 0x78, 0xa8, 0x2a, 0xe8, 0x7b, 0x8c, 0x77, 0xdc, 0x90, 0x9f, 0x06, 0xd4,
+	0xe3, 0x2e, 0xf7, 0x22, 0x62, 0x16, 0xc4, 0xef, 0x7d, 0x20, 0x1d, 0xf6, 0x3c, 0xc6, 0xb7, 0x75,
+	0xb3, 0x7d, 0x00, 0x0b, 0x7a, 0x75, 0x71, 0x0e, 0xe9, 0xaa, 0x7a, 0xa4, 0x50, 0xdc, 0x39, 0xdf,
+	0x1d, 0x24, 0xcd, 0x15, 0xe7, 0x78, 0x46, 0x12, 0xe9, 0x39, 0x31, 0x4b, 0x09, 0xb4, 0x77, 0xa0,
+	0x3c, 0x55, 0xf4, 0x7f, 0x69, 0xab, 0x50, 0x64, 0xe4, 0x3c, 0x24, 0x7e, 0x37, 0xa1, 0x4e, 0xb1,
+	0xbd, 0x05, 0x85, 0x9d, 0xe9, 0xe4, 0x48, 0x4b, 0xbe, 0xae, 0x9e, 0x32, 0x8e, 0xaa, 0xb4, 0x8c,
+	0x86, 0x5c, 0x28, 0x07, 0xa3, 0x21, 0x91, 0xef, 0x6a, 0xff, 0x41, 0x00, 0xfb, 0x34, 0x3a, 0xdc,
+	0x17, 0xcd, 0xc4, 0xaf, 0xa1, 0x74, 0xa6, 0x46, 0x2c, 0x59, 0x2c, 0x76, 0xda, 0xe9, 0x1b, 0xbf,
+	0x74, 0x0e, 0xd5, 0xa7, 0xbc, 0x09, 0xc2, 0x6d, 0x28, 0x53, 0xb9, 0x6a, 0x3a, 0x72, 0x3d, 0xc9,
+	0xe9, 0x58, 0x9e, 0xb5, 0x9e, 0x98, 0xb3, 0x40, 0x35, 0x54, 0x7d, 0x0f, 0x95, 0x69, 0xe2, 0x19,
+	0x1f, 0xf8, 0xf1, 0xf4, 0xd4, 0xdd, 0xbf, 0xb3, 0x1a, 0xb4, 0x3f, 0xfd, 0xe6, 0xe8, 0xe2, 0xca,
+	0xca, 0x5c, 0x5e, 0x59, 0x99, 0xeb, 0x2b, 0x0b, 0x7d, 0x19, 0x5b, 0xe8, 0xe7, 0xd8, 0x42, 0xbf,
+	0xc7, 0x16, 0xba, 0x18, 0x5b, 0xe8, 0xef, 0xd8, 0xca, 0x5c, 0x8f, 0x2d, 0xf4, 0x75, 0x62, 0x65,
+	0xbe, 0x4f, 0x2c, 0x74, 0x31, 0xb1, 0x32, 0x97, 0x13, 0x2b, 0x73, 0xb4, 0x11, 0x79, 0x9c, 0x30,
+	0xd6, 0xf0, 0x82, 0xa6, 0x3c, 0x35, 0x4f, 0x82, 0x66, 0xc4, 0x9b, 0x62, 0x0f, 0x37, 0x55, 0xbe,
+	0xe3, 0x82, 0x80, 0x9b, 0xff, 0x02, 0x00, 0x00, 0xff, 0xff, 0x58, 0x38, 0xd2, 0x00, 0xbd, 0x05,
+	0x00, 0x00,
 }
 
+func (this *RoutingRules) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*RoutingRules)
+	if !ok {
+		that2, ok := that.(RoutingRules)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Rules) != len(that1.Rules) {
+		return false
+	}
+	for i := range this.Rules {
+		if !this.Rules[i].Equal(that1.Rules[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *RoutingRule) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*RoutingRule)
+	if !ok {
+		that2, ok := that.(RoutingRule)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.FromTable != that1.FromTable {
+		return false
+	}
+	if len(this.ToTables) != len(that1.ToTables) {
+		return false
+	}
+	for i := range this.ToTables {
+		if this.ToTables[i] != that1.ToTables[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *Keyspace) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Keyspace)
+	if !ok {
+		that2, ok := that.(Keyspace)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Sharded != that1.Sharded {
+		return false
+	}
+	if len(this.Vindexes) != len(that1.Vindexes) {
+		return false
+	}
+	for i := range this.Vindexes {
+		if !this.Vindexes[i].Equal(that1.Vindexes[i]) {
+			return false
+		}
+	}
+	if len(this.Tables) != len(that1.Tables) {
+		return false
+	}
+	for i := range this.Tables {
+		if !this.Tables[i].Equal(that1.Tables[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *Vindex) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Vindex)
+	if !ok {
+		that2, ok := that.(Vindex)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Type != that1.Type {
+		return false
+	}
+	if len(this.Params) != len(that1.Params) {
+		return false
+	}
+	for i := range this.Params {
+		if this.Params[i] != that1.Params[i] {
+			return false
+		}
+	}
+	if this.Owner != that1.Owner {
+		return false
+	}
+	return true
+}
+func (this *Table) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Table)
+	if !ok {
+		that2, ok := that.(Table)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Type != that1.Type {
+		return false
+	}
+	if len(this.ColumnVindexes) != len(that1.ColumnVindexes) {
+		return false
+	}
+	for i := range this.ColumnVindexes {
+		if !this.ColumnVindexes[i].Equal(that1.ColumnVindexes[i]) {
+			return false
+		}
+	}
+	if !this.AutoIncrement.Equal(that1.AutoIncrement) {
+		return false
+	}
+	if len(this.Columns) != len(that1.Columns) {
+		return false
+	}
+	for i := range this.Columns {
+		if !this.Columns[i].Equal(that1.Columns[i]) {
+			return false
+		}
+	}
+	if this.Pinned != that1.Pinned {
+		return false
+	}
+	if this.ColumnListAuthoritative != that1.ColumnListAuthoritative {
+		return false
+	}
+	return true
+}
+func (this *ColumnVindex) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ColumnVindex)
+	if !ok {
+		that2, ok := that.(ColumnVindex)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Column != that1.Column {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	if len(this.Columns) != len(that1.Columns) {
+		return false
+	}
+	for i := range this.Columns {
+		if this.Columns[i] != that1.Columns[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *AutoIncrement) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*AutoIncrement)
+	if !ok {
+		that2, ok := that.(AutoIncrement)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Column != that1.Column {
+		return false
+	}
+	if this.Sequence != that1.Sequence {
+		return false
+	}
+	return true
+}
+func (this *Column) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Column)
+	if !ok {
+		that2, ok := that.(Column)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	if this.Type != that1.Type {
+		return false
+	}
+	return true
+}
+func (this *SrvVSchema) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SrvVSchema)
+	if !ok {
+		that2, ok := that.(SrvVSchema)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Keyspaces) != len(that1.Keyspaces) {
+		return false
+	}
+	for i := range this.Keyspaces {
+		if !this.Keyspaces[i].Equal(that1.Keyspaces[i]) {
+			return false
+		}
+	}
+	if !this.RoutingRules.Equal(that1.RoutingRules) {
+		return false
+	}
+	return true
+}
+func (this *RoutingRules) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&vschema.RoutingRules{")
+	if this.Rules != nil {
+		s = append(s, "Rules: "+fmt.Sprintf("%#v", this.Rules)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *RoutingRule) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&vschema.RoutingRule{")
+	s = append(s, "FromTable: "+fmt.Sprintf("%#v", this.FromTable)+",\n")
+	s = append(s, "ToTables: "+fmt.Sprintf("%#v", this.ToTables)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Keyspace) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&vschema.Keyspace{")
+	s = append(s, "Sharded: "+fmt.Sprintf("%#v", this.Sharded)+",\n")
+	keysForVindexes := make([]string, 0, len(this.Vindexes))
+	for k := range this.Vindexes {
+		keysForVindexes = append(keysForVindexes, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForVindexes)
+	mapStringForVindexes := "map[string]*Vindex{"
+	for _, k := range keysForVindexes {
+		mapStringForVindexes += fmt.Sprintf("%#v: %#v,", k, this.Vindexes[k])
+	}
+	mapStringForVindexes += "}"
+	if this.Vindexes != nil {
+		s = append(s, "Vindexes: "+mapStringForVindexes+",\n")
+	}
+	keysForTables := make([]string, 0, len(this.Tables))
+	for k := range this.Tables {
+		keysForTables = append(keysForTables, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForTables)
+	mapStringForTables := "map[string]*Table{"
+	for _, k := range keysForTables {
+		mapStringForTables += fmt.Sprintf("%#v: %#v,", k, this.Tables[k])
+	}
+	mapStringForTables += "}"
+	if this.Tables != nil {
+		s = append(s, "Tables: "+mapStringForTables+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Vindex) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&vschema.Vindex{")
+	s = append(s, "Type: "+fmt.Sprintf("%#v", this.Type)+",\n")
+	keysForParams := make([]string, 0, len(this.Params))
+	for k := range this.Params {
+		keysForParams = append(keysForParams, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForParams)
+	mapStringForParams := "map[string]string{"
+	for _, k := range keysForParams {
+		mapStringForParams += fmt.Sprintf("%#v: %#v,", k, this.Params[k])
+	}
+	mapStringForParams += "}"
+	if this.Params != nil {
+		s = append(s, "Params: "+mapStringForParams+",\n")
+	}
+	s = append(s, "Owner: "+fmt.Sprintf("%#v", this.Owner)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Table) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 10)
+	s = append(s, "&vschema.Table{")
+	s = append(s, "Type: "+fmt.Sprintf("%#v", this.Type)+",\n")
+	if this.ColumnVindexes != nil {
+		s = append(s, "ColumnVindexes: "+fmt.Sprintf("%#v", this.ColumnVindexes)+",\n")
+	}
+	if this.AutoIncrement != nil {
+		s = append(s, "AutoIncrement: "+fmt.Sprintf("%#v", this.AutoIncrement)+",\n")
+	}
+	if this.Columns != nil {
+		s = append(s, "Columns: "+fmt.Sprintf("%#v", this.Columns)+",\n")
+	}
+	s = append(s, "Pinned: "+fmt.Sprintf("%#v", this.Pinned)+",\n")
+	s = append(s, "ColumnListAuthoritative: "+fmt.Sprintf("%#v", this.ColumnListAuthoritative)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ColumnVindex) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&vschema.ColumnVindex{")
+	s = append(s, "Column: "+fmt.Sprintf("%#v", this.Column)+",\n")
+	s = append(s, "Name: "+fmt.Sprintf("%#v", this.Name)+",\n")
+	s = append(s, "Columns: "+fmt.Sprintf("%#v", this.Columns)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *AutoIncrement) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&vschema.AutoIncrement{")
+	s = append(s, "Column: "+fmt.Sprintf("%#v", this.Column)+",\n")
+	s = append(s, "Sequence: "+fmt.Sprintf("%#v", this.Sequence)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Column) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&vschema.Column{")
+	s = append(s, "Name: "+fmt.Sprintf("%#v", this.Name)+",\n")
+	s = append(s, "Type: "+fmt.Sprintf("%#v", this.Type)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SrvVSchema) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&vschema.SrvVSchema{")
+	keysForKeyspaces := make([]string, 0, len(this.Keyspaces))
+	for k := range this.Keyspaces {
+		keysForKeyspaces = append(keysForKeyspaces, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForKeyspaces)
+	mapStringForKeyspaces := "map[string]*Keyspace{"
+	for _, k := range keysForKeyspaces {
+		mapStringForKeyspaces += fmt.Sprintf("%#v: %#v,", k, this.Keyspaces[k])
+	}
+	mapStringForKeyspaces += "}"
+	if this.Keyspaces != nil {
+		s = append(s, "Keyspaces: "+mapStringForKeyspaces+",\n")
+	}
+	if this.RoutingRules != nil {
+		s = append(s, "RoutingRules: "+fmt.Sprintf("%#v", this.RoutingRules)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func valueToGoStringVschema(v interface{}, typ string) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("func(v %v) *%v { return &v } ( %#v )", typ, typ, pv)
+}
 func (m *RoutingRules) Marshal() (dAtA []byte, err error) {
 	size := m.ProtoSize()
 	dAtA = make([]byte, size)
@@ -697,9 +1144,6 @@ func (m *RoutingRules) MarshalTo(dAtA []byte) (int, error) {
 			}
 			i += n
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -739,9 +1183,6 @@ func (m *RoutingRule) MarshalTo(dAtA []byte) (int, error) {
 			i++
 			i += copy(dAtA[i:], s)
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -827,9 +1268,6 @@ func (m *Keyspace) MarshalTo(dAtA []byte) (int, error) {
 			}
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -876,9 +1314,6 @@ func (m *Vindex) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintVschema(dAtA, i, uint64(len(m.Owner)))
 		i += copy(dAtA[i:], m.Owner)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -954,9 +1389,6 @@ func (m *Table) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i++
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -1002,9 +1434,6 @@ func (m *ColumnVindex) MarshalTo(dAtA []byte) (int, error) {
 			i += copy(dAtA[i:], s)
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -1035,9 +1464,6 @@ func (m *AutoIncrement) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintVschema(dAtA, i, uint64(len(m.Sequence)))
 		i += copy(dAtA[i:], m.Sequence)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -1066,9 +1492,6 @@ func (m *Column) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x10
 		i++
 		i = encodeVarintVschema(dAtA, i, uint64(m.Type))
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -1126,9 +1549,6 @@ func (m *SrvVSchema) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n5
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -1153,9 +1573,6 @@ func (m *RoutingRules) ProtoSize() (n int) {
 			n += 1 + l + sovVschema(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -1174,9 +1591,6 @@ func (m *RoutingRule) ProtoSize() (n int) {
 			l = len(s)
 			n += 1 + l + sovVschema(uint64(l))
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -1216,9 +1630,6 @@ func (m *Keyspace) ProtoSize() (n int) {
 			n += mapEntrySize + 1 + sovVschema(uint64(mapEntrySize))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -1243,9 +1654,6 @@ func (m *Vindex) ProtoSize() (n int) {
 	l = len(m.Owner)
 	if l > 0 {
 		n += 1 + l + sovVschema(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -1283,9 +1691,6 @@ func (m *Table) ProtoSize() (n int) {
 	if m.ColumnListAuthoritative {
 		n += 2
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -1309,9 +1714,6 @@ func (m *ColumnVindex) ProtoSize() (n int) {
 			n += 1 + l + sovVschema(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -1329,9 +1731,6 @@ func (m *AutoIncrement) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovVschema(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -1347,9 +1746,6 @@ func (m *Column) ProtoSize() (n int) {
 	}
 	if m.Type != 0 {
 		n += 1 + sovVschema(uint64(m.Type))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -1377,9 +1773,6 @@ func (m *SrvVSchema) ProtoSize() (n int) {
 		l = m.RoutingRules.ProtoSize()
 		n += 1 + l + sovVschema(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -1395,6 +1788,174 @@ func sovVschema(x uint64) (n int) {
 }
 func sozVschema(x uint64) (n int) {
 	return sovVschema(uint64((x << 1) ^ uint64((int64(x) >> 63))))
+}
+func (this *RoutingRules) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForRules := "[]*RoutingRule{"
+	for _, f := range this.Rules {
+		repeatedStringForRules += strings.Replace(f.String(), "RoutingRule", "RoutingRule", 1) + ","
+	}
+	repeatedStringForRules += "}"
+	s := strings.Join([]string{`&RoutingRules{`,
+		`Rules:` + repeatedStringForRules + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *RoutingRule) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&RoutingRule{`,
+		`FromTable:` + fmt.Sprintf("%v", this.FromTable) + `,`,
+		`ToTables:` + fmt.Sprintf("%v", this.ToTables) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Keyspace) String() string {
+	if this == nil {
+		return "nil"
+	}
+	keysForVindexes := make([]string, 0, len(this.Vindexes))
+	for k := range this.Vindexes {
+		keysForVindexes = append(keysForVindexes, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForVindexes)
+	mapStringForVindexes := "map[string]*Vindex{"
+	for _, k := range keysForVindexes {
+		mapStringForVindexes += fmt.Sprintf("%v: %v,", k, this.Vindexes[k])
+	}
+	mapStringForVindexes += "}"
+	keysForTables := make([]string, 0, len(this.Tables))
+	for k := range this.Tables {
+		keysForTables = append(keysForTables, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForTables)
+	mapStringForTables := "map[string]*Table{"
+	for _, k := range keysForTables {
+		mapStringForTables += fmt.Sprintf("%v: %v,", k, this.Tables[k])
+	}
+	mapStringForTables += "}"
+	s := strings.Join([]string{`&Keyspace{`,
+		`Sharded:` + fmt.Sprintf("%v", this.Sharded) + `,`,
+		`Vindexes:` + mapStringForVindexes + `,`,
+		`Tables:` + mapStringForTables + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Vindex) String() string {
+	if this == nil {
+		return "nil"
+	}
+	keysForParams := make([]string, 0, len(this.Params))
+	for k := range this.Params {
+		keysForParams = append(keysForParams, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForParams)
+	mapStringForParams := "map[string]string{"
+	for _, k := range keysForParams {
+		mapStringForParams += fmt.Sprintf("%v: %v,", k, this.Params[k])
+	}
+	mapStringForParams += "}"
+	s := strings.Join([]string{`&Vindex{`,
+		`Type:` + fmt.Sprintf("%v", this.Type) + `,`,
+		`Params:` + mapStringForParams + `,`,
+		`Owner:` + fmt.Sprintf("%v", this.Owner) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Table) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForColumnVindexes := "[]*ColumnVindex{"
+	for _, f := range this.ColumnVindexes {
+		repeatedStringForColumnVindexes += strings.Replace(f.String(), "ColumnVindex", "ColumnVindex", 1) + ","
+	}
+	repeatedStringForColumnVindexes += "}"
+	repeatedStringForColumns := "[]*Column{"
+	for _, f := range this.Columns {
+		repeatedStringForColumns += strings.Replace(f.String(), "Column", "Column", 1) + ","
+	}
+	repeatedStringForColumns += "}"
+	s := strings.Join([]string{`&Table{`,
+		`Type:` + fmt.Sprintf("%v", this.Type) + `,`,
+		`ColumnVindexes:` + repeatedStringForColumnVindexes + `,`,
+		`AutoIncrement:` + strings.Replace(this.AutoIncrement.String(), "AutoIncrement", "AutoIncrement", 1) + `,`,
+		`Columns:` + repeatedStringForColumns + `,`,
+		`Pinned:` + fmt.Sprintf("%v", this.Pinned) + `,`,
+		`ColumnListAuthoritative:` + fmt.Sprintf("%v", this.ColumnListAuthoritative) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ColumnVindex) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ColumnVindex{`,
+		`Column:` + fmt.Sprintf("%v", this.Column) + `,`,
+		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
+		`Columns:` + fmt.Sprintf("%v", this.Columns) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *AutoIncrement) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&AutoIncrement{`,
+		`Column:` + fmt.Sprintf("%v", this.Column) + `,`,
+		`Sequence:` + fmt.Sprintf("%v", this.Sequence) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Column) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&Column{`,
+		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
+		`Type:` + fmt.Sprintf("%v", this.Type) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SrvVSchema) String() string {
+	if this == nil {
+		return "nil"
+	}
+	keysForKeyspaces := make([]string, 0, len(this.Keyspaces))
+	for k := range this.Keyspaces {
+		keysForKeyspaces = append(keysForKeyspaces, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForKeyspaces)
+	mapStringForKeyspaces := "map[string]*Keyspace{"
+	for _, k := range keysForKeyspaces {
+		mapStringForKeyspaces += fmt.Sprintf("%v: %v,", k, this.Keyspaces[k])
+	}
+	mapStringForKeyspaces += "}"
+	s := strings.Join([]string{`&SrvVSchema{`,
+		`Keyspaces:` + mapStringForKeyspaces + `,`,
+		`RoutingRules:` + strings.Replace(this.RoutingRules.String(), "RoutingRules", "RoutingRules", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func valueToStringVschema(v interface{}) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("*%v", pv)
 }
 func (m *RoutingRules) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
@@ -1474,7 +2035,6 @@ func (m *RoutingRules) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -1592,7 +2152,6 @@ func (m *RoutingRule) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -1924,7 +2483,6 @@ func (m *Keyspace) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2169,7 +2727,6 @@ func (m *Vindex) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2411,7 +2968,6 @@ func (m *Table) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2561,7 +3117,6 @@ func (m *ColumnVindex) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2679,7 +3234,6 @@ func (m *AutoIncrement) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -2784,7 +3338,6 @@ func (m *Column) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -3003,7 +3556,6 @@ func (m *SrvVSchema) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}

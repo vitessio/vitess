@@ -7,6 +7,8 @@ import (
 	fmt "fmt"
 	io "io"
 	math "math"
+	reflect "reflect"
+	strings "strings"
 
 	proto "github.com/gogo/protobuf/proto"
 )
@@ -31,15 +33,11 @@ type Shard struct {
 	// db_name_override is the mysql db name for this shard. Has to be
 	// globally unique. If not specified, we will by default use
 	// 'vt_<keyspace>_<shard>'.
-	DbNameOverride       string   `protobuf:"bytes,2,opt,name=db_name_override,json=dbNameOverride,proto3" json:"db_name_override,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	DbNameOverride string `protobuf:"bytes,2,opt,name=db_name_override,json=dbNameOverride,proto3" json:"db_name_override,omitempty"`
 }
 
-func (m *Shard) Reset()         { *m = Shard{} }
-func (m *Shard) String() string { return proto.CompactTextString(m) }
-func (*Shard) ProtoMessage()    {}
+func (m *Shard) Reset()      { *m = Shard{} }
+func (*Shard) ProtoMessage() {}
 func (*Shard) Descriptor() ([]byte, []int) {
 	return fileDescriptor_b9b3dc07179a1ec9, []int{0}
 }
@@ -99,15 +97,11 @@ type Keyspace struct {
 	// number of replica tablets to instantiate. This includes the master tablet.
 	ReplicaCount int32 `protobuf:"varint,6,opt,name=replica_count,json=replicaCount,proto3" json:"replica_count,omitempty"`
 	// number of rdonly tablets to instantiate.
-	RdonlyCount          int32    `protobuf:"varint,7,opt,name=rdonly_count,json=rdonlyCount,proto3" json:"rdonly_count,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	RdonlyCount int32 `protobuf:"varint,7,opt,name=rdonly_count,json=rdonlyCount,proto3" json:"rdonly_count,omitempty"`
 }
 
-func (m *Keyspace) Reset()         { *m = Keyspace{} }
-func (m *Keyspace) String() string { return proto.CompactTextString(m) }
-func (*Keyspace) ProtoMessage()    {}
+func (m *Keyspace) Reset()      { *m = Keyspace{} }
+func (*Keyspace) ProtoMessage() {}
 func (*Keyspace) Descriptor() ([]byte, []int) {
 	return fileDescriptor_b9b3dc07179a1ec9, []int{1}
 }
@@ -192,15 +186,11 @@ type VTTestTopology struct {
 	// all keyspaces in the topology.
 	Keyspaces []*Keyspace `protobuf:"bytes,1,rep,name=keyspaces,proto3" json:"keyspaces,omitempty"`
 	// list of cells the keyspaces reside in. Vtgate is started in only the first cell.
-	Cells                []string `protobuf:"bytes,2,rep,name=cells,proto3" json:"cells,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Cells []string `protobuf:"bytes,2,rep,name=cells,proto3" json:"cells,omitempty"`
 }
 
-func (m *VTTestTopology) Reset()         { *m = VTTestTopology{} }
-func (m *VTTestTopology) String() string { return proto.CompactTextString(m) }
-func (*VTTestTopology) ProtoMessage()    {}
+func (m *VTTestTopology) Reset()      { *m = VTTestTopology{} }
+func (*VTTestTopology) ProtoMessage() {}
 func (*VTTestTopology) Descriptor() ([]byte, []int) {
 	return fileDescriptor_b9b3dc07179a1ec9, []int{2}
 }
@@ -254,31 +244,194 @@ func init() {
 func init() { proto.RegisterFile("vttest.proto", fileDescriptor_b9b3dc07179a1ec9) }
 
 var fileDescriptor_b9b3dc07179a1ec9 = []byte{
-	// 340 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x51, 0x4d, 0x4e, 0xf3, 0x30,
-	0x14, 0x94, 0xdb, 0x26, 0xdf, 0xd7, 0xd7, 0x1f, 0x55, 0x56, 0x17, 0x5e, 0x95, 0xd2, 0x0a, 0x29,
-	0xab, 0x84, 0x9f, 0x1b, 0x50, 0xc1, 0x06, 0x09, 0xa4, 0x10, 0x75, 0xc1, 0x26, 0x4a, 0x93, 0x47,
-	0x89, 0x48, 0xe2, 0xc8, 0x76, 0x23, 0xe5, 0x1a, 0x9c, 0x80, 0xe3, 0xb0, 0xe4, 0x0c, 0xe5, 0x22,
-	0x28, 0x76, 0x2a, 0x36, 0xd9, 0xcd, 0x9b, 0x19, 0xbf, 0x79, 0x1a, 0xc3, 0xb8, 0x52, 0x0a, 0xa5,
-	0x72, 0x4b, 0xc1, 0x15, 0xa7, 0xb6, 0x99, 0x56, 0x77, 0x60, 0x3d, 0xbf, 0x45, 0x22, 0xa1, 0x14,
-	0x06, 0x45, 0x94, 0x23, 0x23, 0x4b, 0xe2, 0x0c, 0x7d, 0x8d, 0xa9, 0x03, 0xb3, 0x64, 0x17, 0x36,
-	0x30, 0xe4, 0x15, 0x0a, 0x91, 0x26, 0xc8, 0x7a, 0x5a, 0x9f, 0x26, 0xbb, 0xc7, 0x28, 0xc7, 0xa7,
-	0x96, 0x5d, 0x7d, 0xf4, 0xe0, 0xff, 0x03, 0xd6, 0xb2, 0x8c, 0x62, 0xec, 0x5c, 0x75, 0x01, 0xb6,
-	0x6c, 0x72, 0x24, 0xeb, 0x2d, 0xfb, 0xce, 0xe8, 0x7a, 0xe2, 0xb6, 0xe7, 0xe8, 0x74, 0xbf, 0x15,
-	0xe9, 0x25, 0xcc, 0x35, 0x4a, 0x8b, 0x7d, 0x18, 0xf3, 0xec, 0x90, 0x17, 0x3a, 0x9e, 0xf5, 0xf5,
-	0x2a, 0x7a, 0xd2, 0x36, 0x5a, 0x6a, 0x2e, 0xe8, 0x7a, 0xa1, 0xea, 0x12, 0xd9, 0xa0, 0xeb, 0x45,
-	0x50, 0x97, 0x48, 0xcf, 0x60, 0x24, 0x51, 0x54, 0x98, 0x84, 0xaf, 0x82, 0xe7, 0xcc, 0xd2, 0x46,
-	0x30, 0xd4, 0xbd, 0xe0, 0x39, 0x5d, 0xc3, 0x44, 0x60, 0x99, 0xa5, 0x71, 0x14, 0xc6, 0xfc, 0x50,
-	0x28, 0x66, 0x2f, 0x89, 0x63, 0xf9, 0xe3, 0x96, 0xdc, 0x34, 0x1c, 0x3d, 0x87, 0xb1, 0x48, 0x78,
-	0x91, 0xd5, 0xad, 0xe7, 0x9f, 0xf6, 0x8c, 0x0c, 0xa7, 0x2d, 0xab, 0x2d, 0x4c, 0xb7, 0x41, 0x80,
-	0x52, 0x05, 0xbc, 0xe4, 0x19, 0xdf, 0xd7, 0xd4, 0x85, 0xe1, 0x7b, 0xdb, 0x92, 0x64, 0x44, 0x17,
-	0x31, 0x3b, 0x15, 0x71, 0xaa, 0xcf, 0xff, 0xb3, 0xd0, 0x39, 0x58, 0x31, 0x66, 0x99, 0x29, 0x6d,
-	0xe8, 0x9b, 0xe1, 0xf6, 0xea, 0xeb, 0xb8, 0x20, 0xdf, 0xc7, 0x05, 0xf9, 0xfc, 0x59, 0x90, 0x97,
-	0x75, 0x95, 0x2a, 0x94, 0xd2, 0x4d, 0xb9, 0x67, 0x90, 0xb7, 0xe7, 0x5e, 0xa5, 0x3c, 0xfd, 0xcf,
-	0x9e, 0x59, 0xbe, 0xb3, 0xf5, 0x74, 0xf3, 0x1b, 0x00, 0x00, 0xff, 0xff, 0x69, 0xaf, 0xe3, 0x02,
-	0x05, 0x02, 0x00, 0x00,
+	// 384 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x52, 0xbd, 0x6a, 0xe3, 0x40,
+	0x18, 0xd4, 0xda, 0x96, 0xee, 0xbc, 0xfe, 0xc1, 0x2c, 0x2e, 0xb6, 0xda, 0xf3, 0xd9, 0x1c, 0xa8,
+	0x92, 0x8e, 0xbb, 0x37, 0x38, 0x73, 0x69, 0x02, 0x09, 0x28, 0xc2, 0x90, 0x34, 0x42, 0x96, 0x36,
+	0x8e, 0x88, 0xa4, 0x15, 0xbb, 0x6b, 0x81, 0xba, 0x3c, 0x42, 0xc8, 0x13, 0xa4, 0xcc, 0xa3, 0xa4,
+	0x74, 0xe9, 0xd6, 0x52, 0x93, 0xd2, 0x8f, 0x10, 0xb4, 0x92, 0x49, 0xe3, 0x6e, 0xbe, 0x99, 0xd9,
+	0xef, 0x1b, 0x86, 0x85, 0xc3, 0x5c, 0x4a, 0x2a, 0xa4, 0x95, 0x71, 0x26, 0x19, 0x32, 0x9a, 0x69,
+	0xfe, 0x1f, 0xea, 0x37, 0x0f, 0x3e, 0x0f, 0x11, 0x82, 0xbd, 0xd4, 0x4f, 0x28, 0x06, 0x33, 0x60,
+	0xf6, 0x1d, 0x85, 0x91, 0x09, 0x27, 0xe1, 0xda, 0xab, 0xa1, 0xc7, 0x72, 0xca, 0x79, 0x14, 0x52,
+	0xdc, 0x51, 0xfa, 0x38, 0x5c, 0x5f, 0xf9, 0x09, 0xbd, 0x6e, 0xd9, 0xf9, 0x4b, 0x07, 0x7e, 0xbf,
+	0xa4, 0x85, 0xc8, 0xfc, 0x80, 0x9e, 0x5d, 0xf5, 0x0b, 0x1a, 0xa2, 0xbe, 0x23, 0x70, 0x67, 0xd6,
+	0x35, 0x07, 0x7f, 0x46, 0x56, 0x1b, 0x47, 0x5d, 0x77, 0x5a, 0x11, 0xfd, 0x86, 0x53, 0x85, 0xa2,
+	0x74, 0xe3, 0x05, 0x2c, 0xde, 0x26, 0xa9, 0x3a, 0x8f, 0xbb, 0x6a, 0x15, 0x3a, 0x69, 0x4b, 0x25,
+	0xd5, 0x09, 0xce, 0xbd, 0x90, 0x45, 0x46, 0x71, 0xef, 0xdc, 0x0b, 0xb7, 0xc8, 0x28, 0xfa, 0x01,
+	0x07, 0x82, 0xf2, 0x9c, 0x86, 0xde, 0x3d, 0x67, 0x09, 0xd6, 0x95, 0x11, 0x36, 0xd4, 0x05, 0x67,
+	0x09, 0x5a, 0xc0, 0x11, 0xa7, 0x59, 0x1c, 0x05, 0xbe, 0x17, 0xb0, 0x6d, 0x2a, 0xb1, 0x31, 0x03,
+	0xa6, 0xee, 0x0c, 0x5b, 0x72, 0x59, 0x73, 0xe8, 0x27, 0x1c, 0xf2, 0x90, 0xa5, 0x71, 0xd1, 0x7a,
+	0xbe, 0x29, 0xcf, 0xa0, 0xe1, 0x94, 0x65, 0xbe, 0x82, 0xe3, 0x95, 0xeb, 0x52, 0x21, 0x5d, 0x96,
+	0xb1, 0x98, 0x6d, 0x0a, 0x64, 0xc1, 0xfe, 0x63, 0xdb, 0x92, 0xc0, 0x40, 0x15, 0x31, 0x39, 0x15,
+	0x71, 0xaa, 0xcf, 0xf9, 0xb2, 0xa0, 0x29, 0xd4, 0x03, 0x1a, 0xc7, 0x4d, 0x69, 0x7d, 0xa7, 0x19,
+	0xfe, 0xdd, 0xee, 0x0e, 0x44, 0xdb, 0x1f, 0x88, 0x76, 0x3c, 0x10, 0xf0, 0x54, 0x12, 0xf0, 0x56,
+	0x12, 0xf0, 0x5e, 0x12, 0xb0, 0x2b, 0x09, 0xf8, 0x28, 0x89, 0x76, 0x2c, 0x09, 0x78, 0xae, 0x88,
+	0xf6, 0x5a, 0x11, 0xb0, 0xab, 0x88, 0xb6, 0xaf, 0x88, 0x76, 0xb7, 0xc8, 0x23, 0x49, 0x85, 0xb0,
+	0x22, 0x66, 0x37, 0xc8, 0xde, 0x30, 0x3b, 0x97, 0xb6, 0xfa, 0x0f, 0x76, 0x13, 0x62, 0x6d, 0xa8,
+	0xe9, 0xef, 0x67, 0x00, 0x00, 0x00, 0xff, 0xff, 0xbb, 0xd3, 0xed, 0xc3, 0x2d, 0x02, 0x00, 0x00,
 }
 
+func (this *Shard) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Shard)
+	if !ok {
+		that2, ok := that.(Shard)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	if this.DbNameOverride != that1.DbNameOverride {
+		return false
+	}
+	return true
+}
+func (this *Keyspace) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Keyspace)
+	if !ok {
+		that2, ok := that.(Keyspace)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	if len(this.Shards) != len(that1.Shards) {
+		return false
+	}
+	for i := range this.Shards {
+		if !this.Shards[i].Equal(that1.Shards[i]) {
+			return false
+		}
+	}
+	if this.ShardingColumnName != that1.ShardingColumnName {
+		return false
+	}
+	if this.ShardingColumnType != that1.ShardingColumnType {
+		return false
+	}
+	if this.ServedFrom != that1.ServedFrom {
+		return false
+	}
+	if this.ReplicaCount != that1.ReplicaCount {
+		return false
+	}
+	if this.RdonlyCount != that1.RdonlyCount {
+		return false
+	}
+	return true
+}
+func (this *VTTestTopology) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*VTTestTopology)
+	if !ok {
+		that2, ok := that.(VTTestTopology)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Keyspaces) != len(that1.Keyspaces) {
+		return false
+	}
+	for i := range this.Keyspaces {
+		if !this.Keyspaces[i].Equal(that1.Keyspaces[i]) {
+			return false
+		}
+	}
+	if len(this.Cells) != len(that1.Cells) {
+		return false
+	}
+	for i := range this.Cells {
+		if this.Cells[i] != that1.Cells[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *Shard) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&vttest.Shard{")
+	s = append(s, "Name: "+fmt.Sprintf("%#v", this.Name)+",\n")
+	s = append(s, "DbNameOverride: "+fmt.Sprintf("%#v", this.DbNameOverride)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Keyspace) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 11)
+	s = append(s, "&vttest.Keyspace{")
+	s = append(s, "Name: "+fmt.Sprintf("%#v", this.Name)+",\n")
+	if this.Shards != nil {
+		s = append(s, "Shards: "+fmt.Sprintf("%#v", this.Shards)+",\n")
+	}
+	s = append(s, "ShardingColumnName: "+fmt.Sprintf("%#v", this.ShardingColumnName)+",\n")
+	s = append(s, "ShardingColumnType: "+fmt.Sprintf("%#v", this.ShardingColumnType)+",\n")
+	s = append(s, "ServedFrom: "+fmt.Sprintf("%#v", this.ServedFrom)+",\n")
+	s = append(s, "ReplicaCount: "+fmt.Sprintf("%#v", this.ReplicaCount)+",\n")
+	s = append(s, "RdonlyCount: "+fmt.Sprintf("%#v", this.RdonlyCount)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *VTTestTopology) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&vttest.VTTestTopology{")
+	if this.Keyspaces != nil {
+		s = append(s, "Keyspaces: "+fmt.Sprintf("%#v", this.Keyspaces)+",\n")
+	}
+	s = append(s, "Cells: "+fmt.Sprintf("%#v", this.Cells)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func valueToGoStringVttest(v interface{}, typ string) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("func(v %v) *%v { return &v } ( %#v )", typ, typ, pv)
+}
 func (m *Shard) Marshal() (dAtA []byte, err error) {
 	size := m.ProtoSize()
 	dAtA = make([]byte, size)
@@ -305,9 +458,6 @@ func (m *Shard) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintVttest(dAtA, i, uint64(len(m.DbNameOverride)))
 		i += copy(dAtA[i:], m.DbNameOverride)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -373,9 +523,6 @@ func (m *Keyspace) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintVttest(dAtA, i, uint64(m.RdonlyCount))
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -421,9 +568,6 @@ func (m *VTTestTopology) MarshalTo(dAtA []byte) (int, error) {
 			i += copy(dAtA[i:], s)
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -449,9 +593,6 @@ func (m *Shard) ProtoSize() (n int) {
 	l = len(m.DbNameOverride)
 	if l > 0 {
 		n += 1 + l + sovVttest(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -490,9 +631,6 @@ func (m *Keyspace) ProtoSize() (n int) {
 	if m.RdonlyCount != 0 {
 		n += 1 + sovVttest(uint64(m.RdonlyCount))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -514,9 +652,6 @@ func (m *VTTestTopology) ProtoSize() (n int) {
 			n += 1 + l + sovVttest(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -532,6 +667,62 @@ func sovVttest(x uint64) (n int) {
 }
 func sozVttest(x uint64) (n int) {
 	return sovVttest(uint64((x << 1) ^ uint64((int64(x) >> 63))))
+}
+func (this *Shard) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&Shard{`,
+		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
+		`DbNameOverride:` + fmt.Sprintf("%v", this.DbNameOverride) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Keyspace) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForShards := "[]*Shard{"
+	for _, f := range this.Shards {
+		repeatedStringForShards += strings.Replace(f.String(), "Shard", "Shard", 1) + ","
+	}
+	repeatedStringForShards += "}"
+	s := strings.Join([]string{`&Keyspace{`,
+		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
+		`Shards:` + repeatedStringForShards + `,`,
+		`ShardingColumnName:` + fmt.Sprintf("%v", this.ShardingColumnName) + `,`,
+		`ShardingColumnType:` + fmt.Sprintf("%v", this.ShardingColumnType) + `,`,
+		`ServedFrom:` + fmt.Sprintf("%v", this.ServedFrom) + `,`,
+		`ReplicaCount:` + fmt.Sprintf("%v", this.ReplicaCount) + `,`,
+		`RdonlyCount:` + fmt.Sprintf("%v", this.RdonlyCount) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *VTTestTopology) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForKeyspaces := "[]*Keyspace{"
+	for _, f := range this.Keyspaces {
+		repeatedStringForKeyspaces += strings.Replace(f.String(), "Keyspace", "Keyspace", 1) + ","
+	}
+	repeatedStringForKeyspaces += "}"
+	s := strings.Join([]string{`&VTTestTopology{`,
+		`Keyspaces:` + repeatedStringForKeyspaces + `,`,
+		`Cells:` + fmt.Sprintf("%v", this.Cells) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func valueToStringVttest(v interface{}) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("*%v", pv)
 }
 func (m *Shard) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
@@ -641,7 +832,6 @@ func (m *Shard) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -895,7 +1085,6 @@ func (m *Keyspace) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -1015,7 +1204,6 @@ func (m *VTTestTopology) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}

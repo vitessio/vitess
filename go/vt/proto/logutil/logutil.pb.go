@@ -7,6 +7,9 @@ import (
 	fmt "fmt"
 	io "io"
 	math "math"
+	reflect "reflect"
+	strconv "strconv"
+	strings "strings"
 
 	proto "github.com/gogo/protobuf/proto"
 )
@@ -28,12 +31,12 @@ type Level int32
 const (
 	// The usual logging levels.
 	// Should be logged using logging facility.
-	Level_INFO    Level = 0
-	Level_WARNING Level = 1
-	Level_ERROR   Level = 2
+	INFO    Level = 0
+	WARNING Level = 1
+	ERROR   Level = 2
 	// For messages that may contains non-logging events.
 	// Should be logged to console directly.
-	Level_CONSOLE Level = 3
+	CONSOLE Level = 3
 )
 
 var Level_name = map[int32]string{
@@ -50,10 +53,6 @@ var Level_value = map[string]int32{
 	"CONSOLE": 3,
 }
 
-func (x Level) String() string {
-	return proto.EnumName(Level_name, int32(x))
-}
-
 func (Level) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_31f5dd3702a8edf9, []int{0}
 }
@@ -61,16 +60,12 @@ func (Level) EnumDescriptor() ([]byte, []int) {
 // Time represents a time stamp in nanoseconds. In go, use logutil library
 // to convert times.
 type Time struct {
-	Seconds              int64    `protobuf:"varint,1,opt,name=seconds,proto3" json:"seconds,omitempty"`
-	Nanoseconds          int32    `protobuf:"varint,2,opt,name=nanoseconds,proto3" json:"nanoseconds,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Seconds     int64 `protobuf:"varint,1,opt,name=seconds,proto3" json:"seconds,omitempty"`
+	Nanoseconds int32 `protobuf:"varint,2,opt,name=nanoseconds,proto3" json:"nanoseconds,omitempty"`
 }
 
-func (m *Time) Reset()         { *m = Time{} }
-func (m *Time) String() string { return proto.CompactTextString(m) }
-func (*Time) ProtoMessage()    {}
+func (m *Time) Reset()      { *m = Time{} }
+func (*Time) ProtoMessage() {}
 func (*Time) Descriptor() ([]byte, []int) {
 	return fileDescriptor_31f5dd3702a8edf9, []int{0}
 }
@@ -117,19 +112,15 @@ func (m *Time) GetNanoseconds() int32 {
 
 // Event is a single logging event
 type Event struct {
-	Time                 *Time    `protobuf:"bytes,1,opt,name=time,proto3" json:"time,omitempty"`
-	Level                Level    `protobuf:"varint,2,opt,name=level,proto3,enum=logutil.Level" json:"level,omitempty"`
-	File                 string   `protobuf:"bytes,3,opt,name=file,proto3" json:"file,omitempty"`
-	Line                 int64    `protobuf:"varint,4,opt,name=line,proto3" json:"line,omitempty"`
-	Value                string   `protobuf:"bytes,5,opt,name=value,proto3" json:"value,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Time  *Time  `protobuf:"bytes,1,opt,name=time,proto3" json:"time,omitempty"`
+	Level Level  `protobuf:"varint,2,opt,name=level,proto3,enum=logutil.Level" json:"level,omitempty"`
+	File  string `protobuf:"bytes,3,opt,name=file,proto3" json:"file,omitempty"`
+	Line  int64  `protobuf:"varint,4,opt,name=line,proto3" json:"line,omitempty"`
+	Value string `protobuf:"bytes,5,opt,name=value,proto3" json:"value,omitempty"`
 }
 
-func (m *Event) Reset()         { *m = Event{} }
-func (m *Event) String() string { return proto.CompactTextString(m) }
-func (*Event) ProtoMessage()    {}
+func (m *Event) Reset()      { *m = Event{} }
+func (*Event) ProtoMessage() {}
 func (*Event) Descriptor() ([]byte, []int) {
 	return fileDescriptor_31f5dd3702a8edf9, []int{1}
 }
@@ -171,7 +162,7 @@ func (m *Event) GetLevel() Level {
 	if m != nil {
 		return m.Level
 	}
-	return Level_INFO
+	return INFO
 }
 
 func (m *Event) GetFile() string {
@@ -204,27 +195,134 @@ func init() {
 func init() { proto.RegisterFile("logutil.proto", fileDescriptor_31f5dd3702a8edf9) }
 
 var fileDescriptor_31f5dd3702a8edf9 = []byte{
-	// 277 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x4c, 0x90, 0xc1, 0x4a, 0xc3, 0x40,
-	0x10, 0x86, 0xdd, 0x26, 0x6b, 0xec, 0x84, 0x96, 0x30, 0x78, 0xc8, 0x29, 0xc4, 0xd2, 0x43, 0xf0,
-	0x90, 0x40, 0x04, 0xef, 0x56, 0xa2, 0x14, 0x4a, 0x02, 0xab, 0x20, 0x78, 0xab, 0xba, 0x96, 0x85,
-	0x6d, 0x56, 0xcc, 0x36, 0x8f, 0xe1, 0x33, 0xf8, 0x38, 0x1e, 0x7d, 0x86, 0xfa, 0x22, 0x92, 0x49,
-	0x23, 0xde, 0xfe, 0xff, 0xfb, 0x87, 0x7f, 0x86, 0x81, 0x89, 0x36, 0x9b, 0x9d, 0x55, 0x3a, 0x7d,
-	0x7b, 0x37, 0xd6, 0xa0, 0x77, 0xb0, 0xb3, 0x05, 0xb8, 0xf7, 0x6a, 0x2b, 0x31, 0x04, 0xaf, 0x91,
-	0xcf, 0xa6, 0x7e, 0x69, 0x42, 0x16, 0xb3, 0xc4, 0x11, 0x83, 0xc5, 0x18, 0xfc, 0x7a, 0x5d, 0x9b,
-	0x21, 0x1d, 0xc5, 0x2c, 0xe1, 0xe2, 0x3f, 0x9a, 0x7d, 0x30, 0xe0, 0x45, 0x2b, 0x6b, 0x8b, 0x67,
-	0xe0, 0x5a, 0xb5, 0x95, 0x54, 0xe1, 0xe7, 0x93, 0x74, 0x58, 0xda, 0xad, 0x10, 0x14, 0xe1, 0x1c,
-	0xb8, 0x96, 0xad, 0xd4, 0x54, 0x34, 0xcd, 0xa7, 0x7f, 0x33, 0xab, 0x8e, 0x8a, 0x3e, 0x44, 0x04,
-	0xf7, 0x55, 0x69, 0x19, 0x3a, 0x31, 0x4b, 0xc6, 0x82, 0x74, 0xc7, 0xb4, 0xaa, 0x65, 0xe8, 0xd2,
-	0x7d, 0xa4, 0xf1, 0x14, 0x78, 0xbb, 0xd6, 0x3b, 0x19, 0x72, 0x1a, 0xec, 0xcd, 0xf9, 0x25, 0x70,
-	0x6a, 0xc3, 0x13, 0x70, 0x97, 0xe5, 0x4d, 0x15, 0x1c, 0xa1, 0x0f, 0xde, 0xc3, 0x95, 0x28, 0x97,
-	0xe5, 0x6d, 0xc0, 0x70, 0x0c, 0xbc, 0x10, 0xa2, 0x12, 0xc1, 0xa8, 0xe3, 0xd7, 0x55, 0x79, 0x57,
-	0xad, 0x8a, 0xc0, 0x59, 0xe4, 0x5f, 0xfb, 0x88, 0x7d, 0xef, 0x23, 0xf6, 0xf9, 0x13, 0xb1, 0xc7,
-	0x79, 0xab, 0xac, 0x6c, 0x9a, 0x54, 0x99, 0xac, 0x57, 0xd9, 0xc6, 0x64, 0xad, 0xcd, 0xe8, 0x83,
-	0xd9, 0xe1, 0xec, 0xa7, 0x63, 0xb2, 0x17, 0xbf, 0x01, 0x00, 0x00, 0xff, 0xff, 0x4a, 0x3b, 0x72,
-	0xe6, 0x61, 0x01, 0x00, 0x00,
+	// 317 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x4c, 0x90, 0x31, 0x4b, 0xc3, 0x40,
+	0x14, 0xc7, 0xef, 0xda, 0x9c, 0xb5, 0xaf, 0xb4, 0x84, 0xc3, 0x21, 0xd3, 0x23, 0x96, 0x0e, 0xc5,
+	0xa1, 0x81, 0x0a, 0xee, 0x56, 0xaa, 0x14, 0x4a, 0x02, 0xa7, 0x20, 0x74, 0xab, 0x7a, 0x96, 0x83,
+	0x6b, 0x4e, 0x4c, 0x9a, 0xd9, 0x4f, 0x20, 0x7e, 0x04, 0x47, 0x3f, 0x8a, 0x63, 0xc7, 0xae, 0x4d,
+	0x16, 0xc7, 0x7e, 0x04, 0xc9, 0xb5, 0x11, 0xb7, 0xff, 0xff, 0xf7, 0x7f, 0xfc, 0xdf, 0xdd, 0x83,
+	0xb6, 0x36, 0x8b, 0x55, 0xaa, 0xf4, 0xe0, 0xe5, 0xd5, 0xa4, 0x86, 0x37, 0x0e, 0xb6, 0x3b, 0x02,
+	0xe7, 0x4e, 0x2d, 0x25, 0xf7, 0xa0, 0x91, 0xc8, 0x47, 0x13, 0x3f, 0x25, 0x1e, 0xf5, 0x69, 0xbf,
+	0x2e, 0x2a, 0xcb, 0x7d, 0x68, 0xc5, 0xf3, 0xd8, 0x54, 0x69, 0xcd, 0xa7, 0x7d, 0x26, 0xfe, 0xa3,
+	0xee, 0x3b, 0x05, 0x36, 0xce, 0x64, 0x9c, 0xf2, 0x53, 0x70, 0x52, 0xb5, 0x94, 0xb6, 0xa2, 0x35,
+	0x6c, 0x0f, 0xaa, 0xa5, 0xe5, 0x0a, 0x61, 0x23, 0xde, 0x03, 0xa6, 0x65, 0x26, 0xb5, 0x2d, 0xea,
+	0x0c, 0x3b, 0x7f, 0x33, 0xd3, 0x92, 0x8a, 0x7d, 0xc8, 0x39, 0x38, 0xcf, 0x4a, 0x4b, 0xaf, 0xee,
+	0xd3, 0x7e, 0x53, 0x58, 0x5d, 0x32, 0xad, 0x62, 0xe9, 0x39, 0xf6, 0x7d, 0x56, 0xf3, 0x13, 0x60,
+	0xd9, 0x5c, 0xaf, 0xa4, 0xc7, 0xec, 0xe0, 0xde, 0x9c, 0x5d, 0x00, 0xb3, 0x6d, 0xfc, 0x18, 0x9c,
+	0x49, 0x78, 0x1d, 0xb9, 0x84, 0xb7, 0xa0, 0x71, 0x7f, 0x29, 0xc2, 0x49, 0x78, 0xe3, 0x52, 0xde,
+	0x04, 0x36, 0x16, 0x22, 0x12, 0x6e, 0xad, 0xe4, 0x57, 0x51, 0x78, 0x1b, 0x4d, 0xc7, 0x6e, 0x7d,
+	0x34, 0x5b, 0x6f, 0x91, 0x6c, 0xb6, 0x48, 0x76, 0x5b, 0xa4, 0x6f, 0x39, 0xd2, 0xaf, 0x1c, 0xe9,
+	0x77, 0x8e, 0x74, 0x9d, 0x23, 0xfd, 0xc9, 0x91, 0xec, 0x72, 0xa4, 0x1f, 0x05, 0x92, 0xcf, 0x02,
+	0xe9, 0xba, 0x40, 0xb2, 0x29, 0x90, 0xcc, 0x7a, 0x99, 0x4a, 0x65, 0x92, 0x0c, 0x94, 0x09, 0xf6,
+	0x2a, 0x58, 0x98, 0x20, 0x4b, 0x03, 0x7b, 0xe9, 0xe0, 0xf0, 0xbd, 0x87, 0x23, 0x6b, 0xcf, 0x7f,
+	0x03, 0x00, 0x00, 0xff, 0xff, 0x29, 0xdb, 0x97, 0x83, 0x89, 0x01, 0x00, 0x00,
 }
 
+func (x Level) String() string {
+	s, ok := Level_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (this *Time) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Time)
+	if !ok {
+		that2, ok := that.(Time)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Seconds != that1.Seconds {
+		return false
+	}
+	if this.Nanoseconds != that1.Nanoseconds {
+		return false
+	}
+	return true
+}
+func (this *Event) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Event)
+	if !ok {
+		that2, ok := that.(Event)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Time.Equal(that1.Time) {
+		return false
+	}
+	if this.Level != that1.Level {
+		return false
+	}
+	if this.File != that1.File {
+		return false
+	}
+	if this.Line != that1.Line {
+		return false
+	}
+	if this.Value != that1.Value {
+		return false
+	}
+	return true
+}
+func (this *Time) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&logutil.Time{")
+	s = append(s, "Seconds: "+fmt.Sprintf("%#v", this.Seconds)+",\n")
+	s = append(s, "Nanoseconds: "+fmt.Sprintf("%#v", this.Nanoseconds)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Event) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 9)
+	s = append(s, "&logutil.Event{")
+	if this.Time != nil {
+		s = append(s, "Time: "+fmt.Sprintf("%#v", this.Time)+",\n")
+	}
+	s = append(s, "Level: "+fmt.Sprintf("%#v", this.Level)+",\n")
+	s = append(s, "File: "+fmt.Sprintf("%#v", this.File)+",\n")
+	s = append(s, "Line: "+fmt.Sprintf("%#v", this.Line)+",\n")
+	s = append(s, "Value: "+fmt.Sprintf("%#v", this.Value)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func valueToGoStringLogutil(v interface{}, typ string) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("func(v %v) *%v { return &v } ( %#v )", typ, typ, pv)
+}
 func (m *Time) Marshal() (dAtA []byte, err error) {
 	size := m.ProtoSize()
 	dAtA = make([]byte, size)
@@ -249,9 +347,6 @@ func (m *Time) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x10
 		i++
 		i = encodeVarintLogutil(dAtA, i, uint64(m.Nanoseconds))
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -303,9 +398,6 @@ func (m *Event) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintLogutil(dAtA, i, uint64(len(m.Value)))
 		i += copy(dAtA[i:], m.Value)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -329,9 +421,6 @@ func (m *Time) ProtoSize() (n int) {
 	}
 	if m.Nanoseconds != 0 {
 		n += 1 + sovLogutil(uint64(m.Nanoseconds))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -360,9 +449,6 @@ func (m *Event) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovLogutil(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -378,6 +464,39 @@ func sovLogutil(x uint64) (n int) {
 }
 func sozLogutil(x uint64) (n int) {
 	return sovLogutil(uint64((x << 1) ^ uint64((int64(x) >> 63))))
+}
+func (this *Time) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&Time{`,
+		`Seconds:` + fmt.Sprintf("%v", this.Seconds) + `,`,
+		`Nanoseconds:` + fmt.Sprintf("%v", this.Nanoseconds) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Event) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&Event{`,
+		`Time:` + strings.Replace(this.Time.String(), "Time", "Time", 1) + `,`,
+		`Level:` + fmt.Sprintf("%v", this.Level) + `,`,
+		`File:` + fmt.Sprintf("%v", this.File) + `,`,
+		`Line:` + fmt.Sprintf("%v", this.Line) + `,`,
+		`Value:` + fmt.Sprintf("%v", this.Value) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func valueToStringLogutil(v interface{}) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("*%v", pv)
 }
 func (m *Time) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
@@ -461,7 +580,6 @@ func (m *Time) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -653,7 +771,6 @@ func (m *Event) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}

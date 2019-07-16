@@ -8,6 +8,8 @@ import (
 	fmt "fmt"
 	io "io"
 	math "math"
+	reflect "reflect"
+	strings "strings"
 
 	proto "github.com/gogo/protobuf/proto"
 	grpc "google.golang.org/grpc"
@@ -25,15 +27,11 @@ var _ = math.Inf
 const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
 
 type StartRequest struct {
-	MysqldArgs           []string `protobuf:"bytes,1,rep,name=mysqld_args,json=mysqldArgs,proto3" json:"mysqld_args,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	MysqldArgs []string `protobuf:"bytes,1,rep,name=mysqld_args,json=mysqldArgs,proto3" json:"mysqld_args,omitempty"`
 }
 
-func (m *StartRequest) Reset()         { *m = StartRequest{} }
-func (m *StartRequest) String() string { return proto.CompactTextString(m) }
-func (*StartRequest) ProtoMessage()    {}
+func (m *StartRequest) Reset()      { *m = StartRequest{} }
+func (*StartRequest) ProtoMessage() {}
 func (*StartRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_cd8c110e42f9cbb9, []int{0}
 }
@@ -72,14 +70,10 @@ func (m *StartRequest) GetMysqldArgs() []string {
 }
 
 type StartResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *StartResponse) Reset()         { *m = StartResponse{} }
-func (m *StartResponse) String() string { return proto.CompactTextString(m) }
-func (*StartResponse) ProtoMessage()    {}
+func (m *StartResponse) Reset()      { *m = StartResponse{} }
+func (*StartResponse) ProtoMessage() {}
 func (*StartResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_cd8c110e42f9cbb9, []int{1}
 }
@@ -111,15 +105,11 @@ func (m *StartResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_StartResponse proto.InternalMessageInfo
 
 type ShutdownRequest struct {
-	WaitForMysqld        bool     `protobuf:"varint,1,opt,name=wait_for_mysqld,json=waitForMysqld,proto3" json:"wait_for_mysqld,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	WaitForMysqld bool `protobuf:"varint,1,opt,name=wait_for_mysqld,json=waitForMysqld,proto3" json:"wait_for_mysqld,omitempty"`
 }
 
-func (m *ShutdownRequest) Reset()         { *m = ShutdownRequest{} }
-func (m *ShutdownRequest) String() string { return proto.CompactTextString(m) }
-func (*ShutdownRequest) ProtoMessage()    {}
+func (m *ShutdownRequest) Reset()      { *m = ShutdownRequest{} }
+func (*ShutdownRequest) ProtoMessage() {}
 func (*ShutdownRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_cd8c110e42f9cbb9, []int{2}
 }
@@ -158,14 +148,10 @@ func (m *ShutdownRequest) GetWaitForMysqld() bool {
 }
 
 type ShutdownResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *ShutdownResponse) Reset()         { *m = ShutdownResponse{} }
-func (m *ShutdownResponse) String() string { return proto.CompactTextString(m) }
-func (*ShutdownResponse) ProtoMessage()    {}
+func (m *ShutdownResponse) Reset()      { *m = ShutdownResponse{} }
+func (*ShutdownResponse) ProtoMessage() {}
 func (*ShutdownResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_cd8c110e42f9cbb9, []int{3}
 }
@@ -197,14 +183,10 @@ func (m *ShutdownResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_ShutdownResponse proto.InternalMessageInfo
 
 type RunMysqlUpgradeRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *RunMysqlUpgradeRequest) Reset()         { *m = RunMysqlUpgradeRequest{} }
-func (m *RunMysqlUpgradeRequest) String() string { return proto.CompactTextString(m) }
-func (*RunMysqlUpgradeRequest) ProtoMessage()    {}
+func (m *RunMysqlUpgradeRequest) Reset()      { *m = RunMysqlUpgradeRequest{} }
+func (*RunMysqlUpgradeRequest) ProtoMessage() {}
 func (*RunMysqlUpgradeRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_cd8c110e42f9cbb9, []int{4}
 }
@@ -236,14 +218,10 @@ func (m *RunMysqlUpgradeRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_RunMysqlUpgradeRequest proto.InternalMessageInfo
 
 type RunMysqlUpgradeResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *RunMysqlUpgradeResponse) Reset()         { *m = RunMysqlUpgradeResponse{} }
-func (m *RunMysqlUpgradeResponse) String() string { return proto.CompactTextString(m) }
-func (*RunMysqlUpgradeResponse) ProtoMessage()    {}
+func (m *RunMysqlUpgradeResponse) Reset()      { *m = RunMysqlUpgradeResponse{} }
+func (*RunMysqlUpgradeResponse) ProtoMessage() {}
 func (*RunMysqlUpgradeResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_cd8c110e42f9cbb9, []int{5}
 }
@@ -275,14 +253,10 @@ func (m *RunMysqlUpgradeResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_RunMysqlUpgradeResponse proto.InternalMessageInfo
 
 type ReinitConfigRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *ReinitConfigRequest) Reset()         { *m = ReinitConfigRequest{} }
-func (m *ReinitConfigRequest) String() string { return proto.CompactTextString(m) }
-func (*ReinitConfigRequest) ProtoMessage()    {}
+func (m *ReinitConfigRequest) Reset()      { *m = ReinitConfigRequest{} }
+func (*ReinitConfigRequest) ProtoMessage() {}
 func (*ReinitConfigRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_cd8c110e42f9cbb9, []int{6}
 }
@@ -314,14 +288,10 @@ func (m *ReinitConfigRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_ReinitConfigRequest proto.InternalMessageInfo
 
 type ReinitConfigResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *ReinitConfigResponse) Reset()         { *m = ReinitConfigResponse{} }
-func (m *ReinitConfigResponse) String() string { return proto.CompactTextString(m) }
-func (*ReinitConfigResponse) ProtoMessage()    {}
+func (m *ReinitConfigResponse) Reset()      { *m = ReinitConfigResponse{} }
+func (*ReinitConfigResponse) ProtoMessage() {}
 func (*ReinitConfigResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_cd8c110e42f9cbb9, []int{7}
 }
@@ -353,14 +323,10 @@ func (m *ReinitConfigResponse) XXX_DiscardUnknown() {
 var xxx_messageInfo_ReinitConfigResponse proto.InternalMessageInfo
 
 type RefreshConfigRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *RefreshConfigRequest) Reset()         { *m = RefreshConfigRequest{} }
-func (m *RefreshConfigRequest) String() string { return proto.CompactTextString(m) }
-func (*RefreshConfigRequest) ProtoMessage()    {}
+func (m *RefreshConfigRequest) Reset()      { *m = RefreshConfigRequest{} }
+func (*RefreshConfigRequest) ProtoMessage() {}
 func (*RefreshConfigRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_cd8c110e42f9cbb9, []int{8}
 }
@@ -392,14 +358,10 @@ func (m *RefreshConfigRequest) XXX_DiscardUnknown() {
 var xxx_messageInfo_RefreshConfigRequest proto.InternalMessageInfo
 
 type RefreshConfigResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *RefreshConfigResponse) Reset()         { *m = RefreshConfigResponse{} }
-func (m *RefreshConfigResponse) String() string { return proto.CompactTextString(m) }
-func (*RefreshConfigResponse) ProtoMessage()    {}
+func (m *RefreshConfigResponse) Reset()      { *m = RefreshConfigResponse{} }
+func (*RefreshConfigResponse) ProtoMessage() {}
 func (*RefreshConfigResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_cd8c110e42f9cbb9, []int{9}
 }
@@ -446,30 +408,355 @@ func init() {
 func init() { proto.RegisterFile("mysqlctl.proto", fileDescriptor_cd8c110e42f9cbb9) }
 
 var fileDescriptor_cd8c110e42f9cbb9 = []byte{
-	// 356 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x92, 0xcf, 0x4e, 0xc2, 0x30,
-	0x1c, 0xc7, 0x5d, 0x88, 0x66, 0xfe, 0x04, 0x67, 0xaa, 0xfc, 0x5b, 0xe2, 0xc0, 0x25, 0x1a, 0x4e,
-	0x2c, 0x91, 0x93, 0xde, 0x94, 0xc4, 0x9b, 0x31, 0x19, 0x31, 0x31, 0x5e, 0xc8, 0x94, 0x32, 0x9a,
-	0xe0, 0x0a, 0x6d, 0x81, 0xf8, 0x0a, 0x3e, 0x85, 0x8f, 0xe3, 0xd1, 0x67, 0xc0, 0x17, 0x31, 0x76,
-	0xed, 0xd8, 0x18, 0x78, 0x5b, 0xbf, 0xff, 0x9a, 0x7d, 0x36, 0x38, 0x7c, 0x7b, 0xe7, 0xd3, 0xf1,
-	0xab, 0x18, 0xb7, 0x27, 0x8c, 0x0a, 0x8a, 0x4c, 0x7d, 0x76, 0x3d, 0x28, 0xf6, 0x44, 0xc0, 0x84,
-	0x8f, 0xa7, 0x33, 0xcc, 0x05, 0x6a, 0xc0, 0x81, 0xf4, 0x06, 0xfd, 0x80, 0x85, 0xbc, 0x66, 0x34,
-	0x0b, 0xad, 0x7d, 0x1f, 0x62, 0xe9, 0x86, 0x85, 0xdc, 0xb5, 0xa0, 0xa4, 0x0a, 0x7c, 0x42, 0x23,
-	0x8e, 0xdd, 0x2b, 0xb0, 0x7a, 0xa3, 0x99, 0x18, 0xd0, 0x45, 0xa4, 0x47, 0x2e, 0xc0, 0x5a, 0x04,
-	0x44, 0xf4, 0x87, 0x94, 0xf5, 0xe3, 0x6a, 0xcd, 0x68, 0x1a, 0x2d, 0xd3, 0x2f, 0xfd, 0xc9, 0x77,
-	0x94, 0xdd, 0x4b, 0xd1, 0x45, 0x70, 0xb4, 0xaa, 0xaa, 0xb9, 0x1a, 0x54, 0xfc, 0x59, 0x24, 0x03,
-	0x8f, 0x93, 0x90, 0x05, 0x03, 0xac, 0x56, 0xdd, 0x3a, 0x54, 0x73, 0x8e, 0x2a, 0x95, 0xe1, 0xd8,
-	0xc7, 0x24, 0x22, 0xa2, 0x4b, 0xa3, 0x21, 0x09, 0x75, 0xa3, 0x02, 0x27, 0x59, 0x59, 0xc5, 0xa5,
-	0x3e, 0x64, 0x98, 0x8f, 0xb2, 0xf9, 0x2a, 0x94, 0xd7, 0xf4, 0xb8, 0x70, 0xf9, 0x51, 0x00, 0x53,
-	0x5e, 0xdc, 0x15, 0x63, 0x74, 0x0d, 0xbb, 0x92, 0x00, 0xaa, 0xb4, 0x13, 0xac, 0x69, 0x86, 0x76,
-	0x35, 0xa7, 0xab, 0x7b, 0x77, 0x50, 0x17, 0x4c, 0xfd, 0xc6, 0xa8, 0x9e, 0x8a, 0x65, 0x01, 0xda,
-	0xf6, 0x26, 0x2b, 0x19, 0x79, 0x02, 0x6b, 0x0d, 0x04, 0x6a, 0xae, 0x0a, 0x9b, 0xe9, 0xd9, 0x67,
-	0xff, 0x24, 0x92, 0xe5, 0x07, 0x28, 0xa6, 0x81, 0xa1, 0xd3, 0x54, 0x29, 0xcf, 0xd7, 0x76, 0xb6,
-	0xd9, 0xc9, 0xa0, 0x0f, 0xa5, 0x0c, 0x51, 0x94, 0xa9, 0xe4, 0x3f, 0x81, 0xdd, 0xd8, 0xea, 0xeb,
-	0xcd, 0xdb, 0xce, 0xd7, 0xd2, 0x31, 0xbe, 0x97, 0x8e, 0xf1, 0xf9, 0xe3, 0x18, 0xcf, 0xe7, 0x73,
-	0x22, 0x30, 0xe7, 0x6d, 0x42, 0xbd, 0xf8, 0xc9, 0x0b, 0xa9, 0x37, 0x17, 0x9e, 0xfc, 0xd1, 0x3d,
-	0x3d, 0xf6, 0xb2, 0x27, 0xcf, 0x9d, 0xdf, 0x00, 0x00, 0x00, 0xff, 0xff, 0x94, 0x96, 0x3f, 0xae,
-	0x0a, 0x03, 0x00, 0x00,
+	// 401 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x7c, 0x93, 0x3d, 0x6f, 0xda, 0x40,
+	0x18, 0xc7, 0x7d, 0x42, 0xad, 0xdc, 0xa7, 0x50, 0x57, 0xd7, 0xf2, 0x66, 0xa9, 0x07, 0xb5, 0xd4,
+	0x8a, 0x09, 0x4b, 0xed, 0xd4, 0x6e, 0x2d, 0x52, 0xb7, 0xaa, 0x92, 0x51, 0xa5, 0x28, 0x19, 0x90,
+	0x13, 0x8c, 0xb1, 0x44, 0x7c, 0x70, 0x77, 0x80, 0xb2, 0x65, 0xce, 0x94, 0x8f, 0x90, 0x31, 0x1f,
+	0x25, 0x23, 0x23, 0x2b, 0xf6, 0x92, 0x91, 0x8f, 0x10, 0xe5, 0xfc, 0x82, 0x8d, 0x21, 0x9b, 0xef,
+	0xff, 0x76, 0xf2, 0xcf, 0x32, 0xbc, 0xbb, 0xbc, 0xe2, 0xb3, 0xc9, 0x85, 0x98, 0x74, 0xa7, 0x8c,
+	0x0a, 0x8a, 0xd5, 0xe4, 0x6c, 0x98, 0x50, 0xee, 0x0b, 0x9b, 0x09, 0xcb, 0x99, 0xcd, 0x1d, 0x2e,
+	0x70, 0x0b, 0xde, 0x4a, 0x6f, 0x38, 0xb0, 0x99, 0xcb, 0x1b, 0xa8, 0x5d, 0xea, 0xbc, 0xb1, 0x20,
+	0x92, 0x7e, 0x31, 0x97, 0x1b, 0x1a, 0x54, 0xe2, 0x02, 0x9f, 0x52, 0x9f, 0x3b, 0xc6, 0x0f, 0xd0,
+	0xfa, 0xe3, 0xb9, 0x18, 0xd2, 0xa5, 0x9f, 0x8c, 0x7c, 0x05, 0x6d, 0x69, 0x7b, 0x62, 0x30, 0xa2,
+	0x6c, 0x10, 0x55, 0x1b, 0xa8, 0x8d, 0x3a, 0xaa, 0x55, 0x79, 0x96, 0xff, 0x50, 0xf6, 0x57, 0x8a,
+	0x06, 0x86, 0xf7, 0xbb, 0x6a, 0x3c, 0xd7, 0x80, 0x9a, 0x35, 0xf7, 0x65, 0xe0, 0xff, 0xd4, 0x65,
+	0xf6, 0xd0, 0x89, 0x57, 0x8d, 0x26, 0xd4, 0x0b, 0x4e, 0x5c, 0xaa, 0xc2, 0x07, 0xcb, 0xf1, 0x7c,
+	0x4f, 0xf4, 0xa8, 0x3f, 0xf2, 0xdc, 0xa4, 0x51, 0x83, 0x8f, 0x79, 0x39, 0x8e, 0x4b, 0x7d, 0xc4,
+	0x1c, 0x3e, 0xce, 0xe7, 0xeb, 0x50, 0xdd, 0xd3, 0xa3, 0xc2, 0xb7, 0x9b, 0x12, 0xa8, 0xf2, 0xe2,
+	0x9e, 0x98, 0xe0, 0x9f, 0xf0, 0x4a, 0x12, 0xc0, 0xb5, 0x6e, 0x8a, 0x35, 0xcb, 0x50, 0xaf, 0x17,
+	0xf4, 0xf8, 0x5e, 0x05, 0xf7, 0x40, 0x4d, 0xde, 0x18, 0x37, 0x33, 0xb1, 0x3c, 0x40, 0x5d, 0x3f,
+	0x64, 0xa5, 0x23, 0x27, 0xa0, 0xed, 0x81, 0xc0, 0xed, 0x5d, 0xe1, 0x30, 0x3d, 0xfd, 0xf3, 0x0b,
+	0x89, 0x74, 0xf9, 0x1f, 0x94, 0xb3, 0xc0, 0xf0, 0xa7, 0x4c, 0xa9, 0xc8, 0x57, 0x27, 0xc7, 0xec,
+	0x74, 0xd0, 0x82, 0x4a, 0x8e, 0x28, 0xce, 0x55, 0x8a, 0x9f, 0x40, 0x6f, 0x1d, 0xf5, 0x93, 0xcd,
+	0xdf, 0x67, 0xab, 0x0d, 0x51, 0xd6, 0x1b, 0xa2, 0x6c, 0x37, 0x04, 0x5d, 0x07, 0x04, 0xdd, 0x07,
+	0x04, 0x3d, 0x04, 0x04, 0xad, 0x02, 0x82, 0x1e, 0x03, 0xa2, 0x6c, 0x03, 0x82, 0x6e, 0x43, 0xa2,
+	0xdc, 0x85, 0x04, 0xad, 0x42, 0xa2, 0xac, 0x43, 0xa2, 0x9c, 0x7e, 0x59, 0x78, 0xc2, 0xe1, 0xbc,
+	0xeb, 0x51, 0x33, 0x7a, 0x32, 0x5d, 0x6a, 0x2e, 0x84, 0x29, 0x7f, 0x08, 0x33, 0xb9, 0xf4, 0xfc,
+	0xb5, 0x3c, 0x7f, 0x7f, 0x0a, 0x00, 0x00, 0xff, 0xff, 0x00, 0xcb, 0xe3, 0xc7, 0x32, 0x03, 0x00,
+	0x00,
+}
+
+func (this *StartRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StartRequest)
+	if !ok {
+		that2, ok := that.(StartRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.MysqldArgs) != len(that1.MysqldArgs) {
+		return false
+	}
+	for i := range this.MysqldArgs {
+		if this.MysqldArgs[i] != that1.MysqldArgs[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *StartResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StartResponse)
+	if !ok {
+		that2, ok := that.(StartResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *ShutdownRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ShutdownRequest)
+	if !ok {
+		that2, ok := that.(ShutdownRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.WaitForMysqld != that1.WaitForMysqld {
+		return false
+	}
+	return true
+}
+func (this *ShutdownResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ShutdownResponse)
+	if !ok {
+		that2, ok := that.(ShutdownResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *RunMysqlUpgradeRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*RunMysqlUpgradeRequest)
+	if !ok {
+		that2, ok := that.(RunMysqlUpgradeRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *RunMysqlUpgradeResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*RunMysqlUpgradeResponse)
+	if !ok {
+		that2, ok := that.(RunMysqlUpgradeResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *ReinitConfigRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ReinitConfigRequest)
+	if !ok {
+		that2, ok := that.(ReinitConfigRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *ReinitConfigResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ReinitConfigResponse)
+	if !ok {
+		that2, ok := that.(ReinitConfigResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *RefreshConfigRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*RefreshConfigRequest)
+	if !ok {
+		that2, ok := that.(RefreshConfigRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *RefreshConfigResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*RefreshConfigResponse)
+	if !ok {
+		that2, ok := that.(RefreshConfigResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *StartRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&mysqlctl.StartRequest{")
+	s = append(s, "MysqldArgs: "+fmt.Sprintf("%#v", this.MysqldArgs)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StartResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&mysqlctl.StartResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ShutdownRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&mysqlctl.ShutdownRequest{")
+	s = append(s, "WaitForMysqld: "+fmt.Sprintf("%#v", this.WaitForMysqld)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ShutdownResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&mysqlctl.ShutdownResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *RunMysqlUpgradeRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&mysqlctl.RunMysqlUpgradeRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *RunMysqlUpgradeResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&mysqlctl.RunMysqlUpgradeResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ReinitConfigRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&mysqlctl.ReinitConfigRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ReinitConfigResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&mysqlctl.ReinitConfigResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *RefreshConfigRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&mysqlctl.RefreshConfigRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *RefreshConfigResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&mysqlctl.RefreshConfigResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func valueToGoStringMysqlctl(v interface{}, typ string) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("func(v %v) *%v { return &v } ( %#v )", typ, typ, pv)
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -706,9 +993,6 @@ func (m *StartRequest) MarshalTo(dAtA []byte) (int, error) {
 			i += copy(dAtA[i:], s)
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -727,9 +1011,6 @@ func (m *StartResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -758,9 +1039,6 @@ func (m *ShutdownRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i++
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -779,9 +1057,6 @@ func (m *ShutdownResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -800,9 +1075,6 @@ func (m *RunMysqlUpgradeRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -821,9 +1093,6 @@ func (m *RunMysqlUpgradeResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -842,9 +1111,6 @@ func (m *ReinitConfigRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -863,9 +1129,6 @@ func (m *ReinitConfigResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -884,9 +1147,6 @@ func (m *RefreshConfigRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -905,9 +1165,6 @@ func (m *RefreshConfigResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -932,9 +1189,6 @@ func (m *StartRequest) ProtoSize() (n int) {
 			n += 1 + l + sovMysqlctl(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -944,9 +1198,6 @@ func (m *StartResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -959,9 +1210,6 @@ func (m *ShutdownRequest) ProtoSize() (n int) {
 	if m.WaitForMysqld {
 		n += 2
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -971,9 +1219,6 @@ func (m *ShutdownResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -983,9 +1228,6 @@ func (m *RunMysqlUpgradeRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -995,9 +1237,6 @@ func (m *RunMysqlUpgradeResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -1007,9 +1246,6 @@ func (m *ReinitConfigRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -1019,9 +1255,6 @@ func (m *ReinitConfigResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -1031,9 +1264,6 @@ func (m *RefreshConfigRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -1043,9 +1273,6 @@ func (m *RefreshConfigResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -1061,6 +1288,106 @@ func sovMysqlctl(x uint64) (n int) {
 }
 func sozMysqlctl(x uint64) (n int) {
 	return sovMysqlctl(uint64((x << 1) ^ uint64((int64(x) >> 63))))
+}
+func (this *StartRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StartRequest{`,
+		`MysqldArgs:` + fmt.Sprintf("%v", this.MysqldArgs) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StartResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StartResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ShutdownRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ShutdownRequest{`,
+		`WaitForMysqld:` + fmt.Sprintf("%v", this.WaitForMysqld) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ShutdownResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ShutdownResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *RunMysqlUpgradeRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&RunMysqlUpgradeRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *RunMysqlUpgradeResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&RunMysqlUpgradeResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ReinitConfigRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ReinitConfigRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ReinitConfigResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ReinitConfigResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *RefreshConfigRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&RefreshConfigRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *RefreshConfigResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&RefreshConfigResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func valueToStringMysqlctl(v interface{}) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("*%v", pv)
 }
 func (m *StartRequest) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
@@ -1138,7 +1465,6 @@ func (m *StartRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -1192,7 +1518,6 @@ func (m *StartResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -1266,7 +1591,6 @@ func (m *ShutdownRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -1320,7 +1644,6 @@ func (m *ShutdownResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -1374,7 +1697,6 @@ func (m *RunMysqlUpgradeRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -1428,7 +1750,6 @@ func (m *RunMysqlUpgradeResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -1482,7 +1803,6 @@ func (m *ReinitConfigRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -1536,7 +1856,6 @@ func (m *ReinitConfigResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -1590,7 +1909,6 @@ func (m *RefreshConfigRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -1644,7 +1962,6 @@ func (m *RefreshConfigResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}

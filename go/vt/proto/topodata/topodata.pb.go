@@ -4,11 +4,16 @@
 package topodata
 
 import (
+	bytes "bytes"
 	fmt "fmt"
 	io "io"
 	math "math"
+	reflect "reflect"
+	strconv "strconv"
+	strings "strings"
 
 	proto "github.com/gogo/protobuf/proto"
+	github_com_gogo_protobuf_sortkeys "github.com/gogo/protobuf/sortkeys"
 )
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -28,13 +33,13 @@ type KeyspaceIdType int32
 
 const (
 	// UNSET is the default value, when range-based sharding is not used.
-	KeyspaceIdType_UNSET KeyspaceIdType = 0
+	UNSET KeyspaceIdType = 0
 	// UINT64 is when uint64 value is used.
 	// This is represented as 'unsigned bigint' in mysql
-	KeyspaceIdType_UINT64 KeyspaceIdType = 1
+	UINT64 KeyspaceIdType = 1
 	// BYTES is when an array of bytes is used.
 	// This is represented as 'varbinary' in mysql
-	KeyspaceIdType_BYTES KeyspaceIdType = 2
+	BYTES KeyspaceIdType = 2
 )
 
 var KeyspaceIdType_name = map[int32]string{
@@ -49,10 +54,6 @@ var KeyspaceIdType_value = map[string]int32{
 	"BYTES":  2,
 }
 
-func (x KeyspaceIdType) String() string {
-	return proto.EnumName(KeyspaceIdType_name, int32(x))
-}
-
 func (KeyspaceIdType) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_52c350cb619f972e, []int{0}
 }
@@ -62,36 +63,36 @@ type TabletType int32
 
 const (
 	// UNKNOWN is not a valid value.
-	TabletType_UNKNOWN TabletType = 0
+	UNKNOWN TabletType = 0
 	// MASTER is the master server for the shard. Only MASTER allows DMLs.
-	TabletType_MASTER TabletType = 1
+	MASTER TabletType = 1
 	// REPLICA is a slave type. It is used to serve live traffic.
 	// A REPLICA can be promoted to MASTER. A demoted MASTER will go to REPLICA.
-	TabletType_REPLICA TabletType = 2
+	REPLICA TabletType = 2
 	// RDONLY (old name) / BATCH (new name) is used to serve traffic for
 	// long-running jobs. It is a separate type from REPLICA so
 	// long-running queries don't affect web-like traffic.
-	TabletType_RDONLY TabletType = 3
-	TabletType_BATCH  TabletType = 3
+	RDONLY TabletType = 3
+	BATCH  TabletType = 3
 	// SPARE is a type of servers that cannot serve queries, but is available
 	// in case an extra server is needed.
-	TabletType_SPARE TabletType = 4
+	SPARE TabletType = 4
 	// EXPERIMENTAL is like SPARE, except it can serve queries. This
 	// type can be used for usages not planned by Vitess, like online
 	// export to another storage engine.
-	TabletType_EXPERIMENTAL TabletType = 5
+	EXPERIMENTAL TabletType = 5
 	// BACKUP is the type a server goes to when taking a backup. No queries
 	// can be served in BACKUP mode.
-	TabletType_BACKUP TabletType = 6
+	BACKUP TabletType = 6
 	// RESTORE is the type a server uses when restoring a backup, at
 	// startup time.  No queries can be served in RESTORE mode.
-	TabletType_RESTORE TabletType = 7
+	RESTORE TabletType = 7
 	// DRAINED is the type a server goes into when used by Vitess tools
 	// to perform an offline action. It is a serving type (as
 	// the tools processes may need to run queries), but it's not used
 	// to route queries from Vitess users. In this state,
 	// this tablet is dedicated to the process that uses it.
-	TabletType_DRAINED TabletType = 8
+	DRAINED TabletType = 8
 )
 
 var TabletType_name = map[int32]string{
@@ -120,10 +121,6 @@ var TabletType_value = map[string]int32{
 	"DRAINED":      8,
 }
 
-func (x TabletType) String() string {
-	return proto.EnumName(TabletType_name, int32(x))
-}
-
 func (TabletType) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_52c350cb619f972e, []int{1}
 }
@@ -131,16 +128,12 @@ func (TabletType) EnumDescriptor() ([]byte, []int) {
 // KeyRange describes a range of sharding keys, when range-based
 // sharding is used.
 type KeyRange struct {
-	Start                []byte   `protobuf:"bytes,1,opt,name=start,proto3" json:"start,omitempty"`
-	End                  []byte   `protobuf:"bytes,2,opt,name=end,proto3" json:"end,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Start []byte `protobuf:"bytes,1,opt,name=start,proto3" json:"start,omitempty"`
+	End   []byte `protobuf:"bytes,2,opt,name=end,proto3" json:"end,omitempty"`
 }
 
-func (m *KeyRange) Reset()         { *m = KeyRange{} }
-func (m *KeyRange) String() string { return proto.CompactTextString(m) }
-func (*KeyRange) ProtoMessage()    {}
+func (m *KeyRange) Reset()      { *m = KeyRange{} }
+func (*KeyRange) ProtoMessage() {}
 func (*KeyRange) Descriptor() ([]byte, []int) {
 	return fileDescriptor_52c350cb619f972e, []int{0}
 }
@@ -191,15 +184,11 @@ type TabletAlias struct {
 	Cell string `protobuf:"bytes,1,opt,name=cell,proto3" json:"cell,omitempty"`
 	// uid is a unique id for this tablet within the shard
 	// (this is the MySQL server id as well).
-	Uid                  uint32   `protobuf:"varint,2,opt,name=uid,proto3" json:"uid,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Uid uint32 `protobuf:"varint,2,opt,name=uid,proto3" json:"uid,omitempty"`
 }
 
-func (m *TabletAlias) Reset()         { *m = TabletAlias{} }
-func (m *TabletAlias) String() string { return proto.CompactTextString(m) }
-func (*TabletAlias) ProtoMessage()    {}
+func (m *TabletAlias) Reset()      { *m = TabletAlias{} }
+func (*TabletAlias) ProtoMessage() {}
 func (*TabletAlias) Descriptor() ([]byte, []int) {
 	return fileDescriptor_52c350cb619f972e, []int{1}
 }
@@ -276,15 +265,11 @@ type Tablet struct {
 	// MySQL port. Use topoproto.MysqlPort and topoproto.SetMysqlPort
 	// to access this variable. The functions provide support
 	// for legacy behavior.
-	MysqlPort            int32    `protobuf:"varint,13,opt,name=mysql_port,json=mysqlPort,proto3" json:"mysql_port,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	MysqlPort int32 `protobuf:"varint,13,opt,name=mysql_port,json=mysqlPort,proto3" json:"mysql_port,omitempty"`
 }
 
-func (m *Tablet) Reset()         { *m = Tablet{} }
-func (m *Tablet) String() string { return proto.CompactTextString(m) }
-func (*Tablet) ProtoMessage()    {}
+func (m *Tablet) Reset()      { *m = Tablet{} }
+func (*Tablet) ProtoMessage() {}
 func (*Tablet) Descriptor() ([]byte, []int) {
 	return fileDescriptor_52c350cb619f972e, []int{2}
 }
@@ -361,7 +346,7 @@ func (m *Tablet) GetType() TabletType {
 	if m != nil {
 		return m.Type
 	}
-	return TabletType_UNKNOWN
+	return UNKNOWN
 }
 
 func (m *Tablet) GetDbNameOverride() string {
@@ -420,15 +405,11 @@ type Shard struct {
 	TabletControls []*Shard_TabletControl `protobuf:"bytes,6,rep,name=tablet_controls,json=tabletControls,proto3" json:"tablet_controls,omitempty"`
 	// is_master_serving sets whether this shard master is serving traffic or not.
 	// The keyspace lock is always taken when changing this.
-	IsMasterServing      bool     `protobuf:"varint,7,opt,name=is_master_serving,json=isMasterServing,proto3" json:"is_master_serving,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	IsMasterServing bool `protobuf:"varint,7,opt,name=is_master_serving,json=isMasterServing,proto3" json:"is_master_serving,omitempty"`
 }
 
-func (m *Shard) Reset()         { *m = Shard{} }
-func (m *Shard) String() string { return proto.CompactTextString(m) }
-func (*Shard) ProtoMessage()    {}
+func (m *Shard) Reset()      { *m = Shard{} }
+func (*Shard) ProtoMessage() {}
 func (*Shard) Descriptor() ([]byte, []int) {
 	return fileDescriptor_52c350cb619f972e, []int{3}
 }
@@ -503,16 +484,12 @@ func (m *Shard) GetIsMasterServing() bool {
 
 // ServedType is an entry in the served_types
 type Shard_ServedType struct {
-	TabletType           TabletType `protobuf:"varint,1,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
-	Cells                []string   `protobuf:"bytes,2,rep,name=cells,proto3" json:"cells,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
-	XXX_unrecognized     []byte     `json:"-"`
-	XXX_sizecache        int32      `json:"-"`
+	TabletType TabletType `protobuf:"varint,1,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	Cells      []string   `protobuf:"bytes,2,rep,name=cells,proto3" json:"cells,omitempty"`
 }
 
-func (m *Shard_ServedType) Reset()         { *m = Shard_ServedType{} }
-func (m *Shard_ServedType) String() string { return proto.CompactTextString(m) }
-func (*Shard_ServedType) ProtoMessage()    {}
+func (m *Shard_ServedType) Reset()      { *m = Shard_ServedType{} }
+func (*Shard_ServedType) ProtoMessage() {}
 func (*Shard_ServedType) Descriptor() ([]byte, []int) {
 	return fileDescriptor_52c350cb619f972e, []int{3, 0}
 }
@@ -547,7 +524,7 @@ func (m *Shard_ServedType) GetTabletType() TabletType {
 	if m != nil {
 		return m.TabletType
 	}
-	return TabletType_UNKNOWN
+	return UNKNOWN
 }
 
 func (m *Shard_ServedType) GetCells() []string {
@@ -570,15 +547,11 @@ type Shard_SourceShard struct {
 	// the source shard keyrange
 	KeyRange *KeyRange `protobuf:"bytes,4,opt,name=key_range,json=keyRange,proto3" json:"key_range,omitempty"`
 	// the source table list to replicate
-	Tables               []string `protobuf:"bytes,5,rep,name=tables,proto3" json:"tables,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Tables []string `protobuf:"bytes,5,rep,name=tables,proto3" json:"tables,omitempty"`
 }
 
-func (m *Shard_SourceShard) Reset()         { *m = Shard_SourceShard{} }
-func (m *Shard_SourceShard) String() string { return proto.CompactTextString(m) }
-func (*Shard_SourceShard) ProtoMessage()    {}
+func (m *Shard_SourceShard) Reset()      { *m = Shard_SourceShard{} }
+func (*Shard_SourceShard) ProtoMessage() {}
 func (*Shard_SourceShard) Descriptor() ([]byte, []int) {
 	return fileDescriptor_52c350cb619f972e, []int{3, 1}
 }
@@ -652,15 +625,11 @@ type Shard_TabletControl struct {
 	BlacklistedTables []string   `protobuf:"bytes,4,rep,name=blacklisted_tables,json=blacklistedTables,proto3" json:"blacklisted_tables,omitempty"`
 	// frozen is set if we've started failing over traffic for
 	// the master. If set, this record should not be removed.
-	Frozen               bool     `protobuf:"varint,5,opt,name=frozen,proto3" json:"frozen,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Frozen bool `protobuf:"varint,5,opt,name=frozen,proto3" json:"frozen,omitempty"`
 }
 
-func (m *Shard_TabletControl) Reset()         { *m = Shard_TabletControl{} }
-func (m *Shard_TabletControl) String() string { return proto.CompactTextString(m) }
-func (*Shard_TabletControl) ProtoMessage()    {}
+func (m *Shard_TabletControl) Reset()      { *m = Shard_TabletControl{} }
+func (*Shard_TabletControl) ProtoMessage() {}
 func (*Shard_TabletControl) Descriptor() ([]byte, []int) {
 	return fileDescriptor_52c350cb619f972e, []int{3, 2}
 }
@@ -695,7 +664,7 @@ func (m *Shard_TabletControl) GetTabletType() TabletType {
 	if m != nil {
 		return m.TabletType
 	}
-	return TabletType_UNKNOWN
+	return UNKNOWN
 }
 
 func (m *Shard_TabletControl) GetCells() []string {
@@ -729,15 +698,11 @@ type Keyspace struct {
 	ShardingColumnType KeyspaceIdType `protobuf:"varint,2,opt,name=sharding_column_type,json=shardingColumnType,proto3,enum=topodata.KeyspaceIdType" json:"sharding_column_type,omitempty"`
 	// ServedFrom will redirect the appropriate traffic to
 	// another keyspace.
-	ServedFroms          []*Keyspace_ServedFrom `protobuf:"bytes,4,rep,name=served_froms,json=servedFroms,proto3" json:"served_froms,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}               `json:"-"`
-	XXX_unrecognized     []byte                 `json:"-"`
-	XXX_sizecache        int32                  `json:"-"`
+	ServedFroms []*Keyspace_ServedFrom `protobuf:"bytes,4,rep,name=served_froms,json=servedFroms,proto3" json:"served_froms,omitempty"`
 }
 
-func (m *Keyspace) Reset()         { *m = Keyspace{} }
-func (m *Keyspace) String() string { return proto.CompactTextString(m) }
-func (*Keyspace) ProtoMessage()    {}
+func (m *Keyspace) Reset()      { *m = Keyspace{} }
+func (*Keyspace) ProtoMessage() {}
 func (*Keyspace) Descriptor() ([]byte, []int) {
 	return fileDescriptor_52c350cb619f972e, []int{4}
 }
@@ -779,7 +744,7 @@ func (m *Keyspace) GetShardingColumnType() KeyspaceIdType {
 	if m != nil {
 		return m.ShardingColumnType
 	}
-	return KeyspaceIdType_UNSET
+	return UNSET
 }
 
 func (m *Keyspace) GetServedFroms() []*Keyspace_ServedFrom {
@@ -797,15 +762,11 @@ type Keyspace_ServedFrom struct {
 	// the cells to limit this to
 	Cells []string `protobuf:"bytes,2,rep,name=cells,proto3" json:"cells,omitempty"`
 	// the keyspace name that's serving it
-	Keyspace             string   `protobuf:"bytes,3,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Keyspace string `protobuf:"bytes,3,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 }
 
-func (m *Keyspace_ServedFrom) Reset()         { *m = Keyspace_ServedFrom{} }
-func (m *Keyspace_ServedFrom) String() string { return proto.CompactTextString(m) }
-func (*Keyspace_ServedFrom) ProtoMessage()    {}
+func (m *Keyspace_ServedFrom) Reset()      { *m = Keyspace_ServedFrom{} }
+func (*Keyspace_ServedFrom) ProtoMessage() {}
 func (*Keyspace_ServedFrom) Descriptor() ([]byte, []int) {
 	return fileDescriptor_52c350cb619f972e, []int{4, 0}
 }
@@ -840,7 +801,7 @@ func (m *Keyspace_ServedFrom) GetTabletType() TabletType {
 	if m != nil {
 		return m.TabletType
 	}
-	return TabletType_UNKNOWN
+	return UNKNOWN
 }
 
 func (m *Keyspace_ServedFrom) GetCells() []string {
@@ -862,15 +823,11 @@ func (m *Keyspace_ServedFrom) GetKeyspace() string {
 type ShardReplication struct {
 	// Note there can be only one Node in this array
 	// for a given tablet.
-	Nodes                []*ShardReplication_Node `protobuf:"bytes,1,rep,name=nodes,proto3" json:"nodes,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}                 `json:"-"`
-	XXX_unrecognized     []byte                   `json:"-"`
-	XXX_sizecache        int32                    `json:"-"`
+	Nodes []*ShardReplication_Node `protobuf:"bytes,1,rep,name=nodes,proto3" json:"nodes,omitempty"`
 }
 
-func (m *ShardReplication) Reset()         { *m = ShardReplication{} }
-func (m *ShardReplication) String() string { return proto.CompactTextString(m) }
-func (*ShardReplication) ProtoMessage()    {}
+func (m *ShardReplication) Reset()      { *m = ShardReplication{} }
+func (*ShardReplication) ProtoMessage() {}
 func (*ShardReplication) Descriptor() ([]byte, []int) {
 	return fileDescriptor_52c350cb619f972e, []int{5}
 }
@@ -910,15 +867,11 @@ func (m *ShardReplication) GetNodes() []*ShardReplication_Node {
 
 // Node describes a tablet instance within the cell
 type ShardReplication_Node struct {
-	TabletAlias          *TabletAlias `protobuf:"bytes,1,opt,name=tablet_alias,json=tabletAlias,proto3" json:"tablet_alias,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
-	XXX_unrecognized     []byte       `json:"-"`
-	XXX_sizecache        int32        `json:"-"`
+	TabletAlias *TabletAlias `protobuf:"bytes,1,opt,name=tablet_alias,json=tabletAlias,proto3" json:"tablet_alias,omitempty"`
 }
 
-func (m *ShardReplication_Node) Reset()         { *m = ShardReplication_Node{} }
-func (m *ShardReplication_Node) String() string { return proto.CompactTextString(m) }
-func (*ShardReplication_Node) ProtoMessage()    {}
+func (m *ShardReplication_Node) Reset()      { *m = ShardReplication_Node{} }
+func (*ShardReplication_Node) ProtoMessage() {}
 func (*ShardReplication_Node) Descriptor() ([]byte, []int) {
 	return fileDescriptor_52c350cb619f972e, []int{5, 0}
 }
@@ -959,16 +912,12 @@ func (m *ShardReplication_Node) GetTabletAlias() *TabletAlias {
 // ShardReference is used as a pointer from a SrvKeyspace to a Shard
 type ShardReference struct {
 	// Copied from Shard.
-	Name                 string    `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	KeyRange             *KeyRange `protobuf:"bytes,2,opt,name=key_range,json=keyRange,proto3" json:"key_range,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}  `json:"-"`
-	XXX_unrecognized     []byte    `json:"-"`
-	XXX_sizecache        int32     `json:"-"`
+	Name     string    `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	KeyRange *KeyRange `protobuf:"bytes,2,opt,name=key_range,json=keyRange,proto3" json:"key_range,omitempty"`
 }
 
-func (m *ShardReference) Reset()         { *m = ShardReference{} }
-func (m *ShardReference) String() string { return proto.CompactTextString(m) }
-func (*ShardReference) ProtoMessage()    {}
+func (m *ShardReference) Reset()      { *m = ShardReference{} }
+func (*ShardReference) ProtoMessage() {}
 func (*ShardReference) Descriptor() ([]byte, []int) {
 	return fileDescriptor_52c350cb619f972e, []int{6}
 }
@@ -1019,15 +968,11 @@ type ShardTabletControl struct {
 	Name     string    `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	KeyRange *KeyRange `protobuf:"bytes,2,opt,name=key_range,json=keyRange,proto3" json:"key_range,omitempty"`
 	// Disable query serving in this shard
-	QueryServiceDisabled bool     `protobuf:"varint,3,opt,name=query_service_disabled,json=queryServiceDisabled,proto3" json:"query_service_disabled,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	QueryServiceDisabled bool `protobuf:"varint,3,opt,name=query_service_disabled,json=queryServiceDisabled,proto3" json:"query_service_disabled,omitempty"`
 }
 
-func (m *ShardTabletControl) Reset()         { *m = ShardTabletControl{} }
-func (m *ShardTabletControl) String() string { return proto.CompactTextString(m) }
-func (*ShardTabletControl) ProtoMessage()    {}
+func (m *ShardTabletControl) Reset()      { *m = ShardTabletControl{} }
+func (*ShardTabletControl) ProtoMessage() {}
 func (*ShardTabletControl) Descriptor() ([]byte, []int) {
 	return fileDescriptor_52c350cb619f972e, []int{7}
 }
@@ -1084,17 +1029,13 @@ type SrvKeyspace struct {
 	// The partitions this keyspace is serving, per tablet type.
 	Partitions []*SrvKeyspace_KeyspacePartition `protobuf:"bytes,1,rep,name=partitions,proto3" json:"partitions,omitempty"`
 	// copied from Keyspace
-	ShardingColumnName   string                    `protobuf:"bytes,2,opt,name=sharding_column_name,json=shardingColumnName,proto3" json:"sharding_column_name,omitempty"`
-	ShardingColumnType   KeyspaceIdType            `protobuf:"varint,3,opt,name=sharding_column_type,json=shardingColumnType,proto3,enum=topodata.KeyspaceIdType" json:"sharding_column_type,omitempty"`
-	ServedFrom           []*SrvKeyspace_ServedFrom `protobuf:"bytes,4,rep,name=served_from,json=servedFrom,proto3" json:"served_from,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}                  `json:"-"`
-	XXX_unrecognized     []byte                    `json:"-"`
-	XXX_sizecache        int32                     `json:"-"`
+	ShardingColumnName string                    `protobuf:"bytes,2,opt,name=sharding_column_name,json=shardingColumnName,proto3" json:"sharding_column_name,omitempty"`
+	ShardingColumnType KeyspaceIdType            `protobuf:"varint,3,opt,name=sharding_column_type,json=shardingColumnType,proto3,enum=topodata.KeyspaceIdType" json:"sharding_column_type,omitempty"`
+	ServedFrom         []*SrvKeyspace_ServedFrom `protobuf:"bytes,4,rep,name=served_from,json=servedFrom,proto3" json:"served_from,omitempty"`
 }
 
-func (m *SrvKeyspace) Reset()         { *m = SrvKeyspace{} }
-func (m *SrvKeyspace) String() string { return proto.CompactTextString(m) }
-func (*SrvKeyspace) ProtoMessage()    {}
+func (m *SrvKeyspace) Reset()      { *m = SrvKeyspace{} }
+func (*SrvKeyspace) ProtoMessage() {}
 func (*SrvKeyspace) Descriptor() ([]byte, []int) {
 	return fileDescriptor_52c350cb619f972e, []int{8}
 }
@@ -1143,7 +1084,7 @@ func (m *SrvKeyspace) GetShardingColumnType() KeyspaceIdType {
 	if m != nil {
 		return m.ShardingColumnType
 	}
-	return KeyspaceIdType_UNSET
+	return UNSET
 }
 
 func (m *SrvKeyspace) GetServedFrom() []*SrvKeyspace_ServedFrom {
@@ -1159,15 +1100,11 @@ type SrvKeyspace_KeyspacePartition struct {
 	// List of non-overlapping continuous shards sorted by range.
 	ShardReferences []*ShardReference `protobuf:"bytes,2,rep,name=shard_references,json=shardReferences,proto3" json:"shard_references,omitempty"`
 	// List of shard tablet controls
-	ShardTabletControls  []*ShardTabletControl `protobuf:"bytes,3,rep,name=shard_tablet_controls,json=shardTabletControls,proto3" json:"shard_tablet_controls,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	ShardTabletControls []*ShardTabletControl `protobuf:"bytes,3,rep,name=shard_tablet_controls,json=shardTabletControls,proto3" json:"shard_tablet_controls,omitempty"`
 }
 
-func (m *SrvKeyspace_KeyspacePartition) Reset()         { *m = SrvKeyspace_KeyspacePartition{} }
-func (m *SrvKeyspace_KeyspacePartition) String() string { return proto.CompactTextString(m) }
-func (*SrvKeyspace_KeyspacePartition) ProtoMessage()    {}
+func (m *SrvKeyspace_KeyspacePartition) Reset()      { *m = SrvKeyspace_KeyspacePartition{} }
+func (*SrvKeyspace_KeyspacePartition) ProtoMessage() {}
 func (*SrvKeyspace_KeyspacePartition) Descriptor() ([]byte, []int) {
 	return fileDescriptor_52c350cb619f972e, []int{8, 0}
 }
@@ -1202,7 +1139,7 @@ func (m *SrvKeyspace_KeyspacePartition) GetServedType() TabletType {
 	if m != nil {
 		return m.ServedType
 	}
-	return TabletType_UNKNOWN
+	return UNKNOWN
 }
 
 func (m *SrvKeyspace_KeyspacePartition) GetShardReferences() []*ShardReference {
@@ -1225,15 +1162,11 @@ type SrvKeyspace_ServedFrom struct {
 	// the tablet type
 	TabletType TabletType `protobuf:"varint,1,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	// the keyspace name that's serving it
-	Keyspace             string   `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Keyspace string `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 }
 
-func (m *SrvKeyspace_ServedFrom) Reset()         { *m = SrvKeyspace_ServedFrom{} }
-func (m *SrvKeyspace_ServedFrom) String() string { return proto.CompactTextString(m) }
-func (*SrvKeyspace_ServedFrom) ProtoMessage()    {}
+func (m *SrvKeyspace_ServedFrom) Reset()      { *m = SrvKeyspace_ServedFrom{} }
+func (*SrvKeyspace_ServedFrom) ProtoMessage() {}
 func (*SrvKeyspace_ServedFrom) Descriptor() ([]byte, []int) {
 	return fileDescriptor_52c350cb619f972e, []int{8, 1}
 }
@@ -1268,7 +1201,7 @@ func (m *SrvKeyspace_ServedFrom) GetTabletType() TabletType {
 	if m != nil {
 		return m.TabletType
 	}
-	return TabletType_UNKNOWN
+	return UNKNOWN
 }
 
 func (m *SrvKeyspace_ServedFrom) GetKeyspace() string {
@@ -1289,15 +1222,11 @@ type CellInfo struct {
 	ServerAddress string `protobuf:"bytes,1,opt,name=server_address,json=serverAddress,proto3" json:"server_address,omitempty"`
 	// Root is the path to store data in. It is only used when talking
 	// to server_address.
-	Root                 string   `protobuf:"bytes,2,opt,name=root,proto3" json:"root,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Root string `protobuf:"bytes,2,opt,name=root,proto3" json:"root,omitempty"`
 }
 
-func (m *CellInfo) Reset()         { *m = CellInfo{} }
-func (m *CellInfo) String() string { return proto.CompactTextString(m) }
-func (*CellInfo) ProtoMessage()    {}
+func (m *CellInfo) Reset()      { *m = CellInfo{} }
+func (*CellInfo) ProtoMessage() {}
 func (*CellInfo) Descriptor() ([]byte, []int) {
 	return fileDescriptor_52c350cb619f972e, []int{9}
 }
@@ -1345,15 +1274,11 @@ func (m *CellInfo) GetRoot() string {
 // CellsAlias
 type CellsAlias struct {
 	// Cells that map to this alias
-	Cells                []string `protobuf:"bytes,2,rep,name=cells,proto3" json:"cells,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Cells []string `protobuf:"bytes,2,rep,name=cells,proto3" json:"cells,omitempty"`
 }
 
-func (m *CellsAlias) Reset()         { *m = CellsAlias{} }
-func (m *CellsAlias) String() string { return proto.CompactTextString(m) }
-func (*CellsAlias) ProtoMessage()    {}
+func (m *CellsAlias) Reset()      { *m = CellsAlias{} }
+func (*CellsAlias) ProtoMessage() {}
 func (*CellsAlias) Descriptor() ([]byte, []int) {
 	return fileDescriptor_52c350cb619f972e, []int{10}
 }
@@ -1419,87 +1344,1023 @@ func init() {
 func init() { proto.RegisterFile("topodata.proto", fileDescriptor_52c350cb619f972e) }
 
 var fileDescriptor_52c350cb619f972e = []byte{
-	// 1236 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x57, 0x51, 0x6f, 0x1b, 0xc5,
-	0x13, 0xff, 0x9f, 0x7d, 0x76, 0xec, 0xb1, 0xe3, 0x5c, 0xf7, 0x9f, 0x56, 0xa7, 0x83, 0x96, 0xc8,
-	0x52, 0x45, 0x54, 0x84, 0x83, 0xd2, 0x16, 0xaa, 0x4a, 0x48, 0x75, 0x1d, 0x97, 0xa6, 0x69, 0x1c,
-	0x6b, 0xed, 0x08, 0xca, 0xcb, 0xe9, 0xe2, 0xdb, 0xa4, 0xa7, 0x9c, 0x6f, 0xdd, 0xdd, 0x4d, 0x24,
-	0xf3, 0x15, 0x78, 0x00, 0x5e, 0x79, 0xe2, 0x95, 0x8f, 0xc0, 0x27, 0x80, 0x47, 0xbe, 0x02, 0xe5,
-	0x8b, 0xa0, 0x9d, 0xbd, 0xb3, 0xcf, 0x4e, 0x5b, 0x52, 0x94, 0xb7, 0x99, 0xdd, 0x99, 0xb9, 0x99,
-	0xdf, 0xcc, 0x6f, 0xd6, 0x86, 0x86, 0xe2, 0x13, 0x1e, 0x06, 0x2a, 0x68, 0x4d, 0x04, 0x57, 0x9c,
-	0x54, 0x32, 0xbd, 0xb9, 0x0d, 0x95, 0x3d, 0x36, 0xa5, 0x41, 0x72, 0xc2, 0xc8, 0x3a, 0x94, 0xa4,
-	0x0a, 0x84, 0x72, 0xad, 0x0d, 0x6b, 0xb3, 0x4e, 0x8d, 0x42, 0x1c, 0x28, 0xb2, 0x24, 0x74, 0x0b,
-	0x78, 0xa6, 0xc5, 0xe6, 0x5d, 0xa8, 0x0d, 0x83, 0xa3, 0x98, 0xa9, 0x76, 0x1c, 0x05, 0x92, 0x10,
-	0xb0, 0x47, 0x2c, 0x8e, 0xd1, 0xab, 0x4a, 0x51, 0xd6, 0x4e, 0x67, 0x91, 0x71, 0x5a, 0xa5, 0x5a,
-	0x6c, 0xfe, 0x66, 0x43, 0xd9, 0x78, 0x91, 0x4f, 0xa0, 0x14, 0x68, 0x4f, 0xf4, 0xa8, 0x6d, 0x5f,
-	0x6f, 0xcd, 0xb2, 0xcb, 0x85, 0xa5, 0xc6, 0x86, 0x78, 0x50, 0x79, 0xc9, 0xa5, 0x4a, 0x82, 0x31,
-	0xc3, 0x70, 0x55, 0x3a, 0xd3, 0xc9, 0x03, 0xa8, 0x4c, 0xb8, 0x50, 0xfe, 0x38, 0x98, 0xb8, 0xf6,
-	0x46, 0x71, 0xb3, 0xb6, 0x7d, 0x73, 0x39, 0x56, 0xab, 0xcf, 0x85, 0xda, 0x0f, 0x26, 0xdd, 0x44,
-	0x89, 0x29, 0x5d, 0x99, 0x18, 0x4d, 0x47, 0x3d, 0x65, 0x53, 0x39, 0x09, 0x46, 0xcc, 0x2d, 0x99,
-	0xa8, 0x99, 0x8e, 0x30, 0xbc, 0x0c, 0x44, 0xe8, 0x96, 0xf1, 0xc2, 0x28, 0x64, 0x0b, 0xaa, 0xa7,
-	0x6c, 0xea, 0x0b, 0x8d, 0x94, 0xbb, 0x82, 0x89, 0x93, 0xf9, 0xc7, 0x32, 0x0c, 0x31, 0x8c, 0x41,
-	0x73, 0x13, 0x6c, 0x35, 0x9d, 0x30, 0xb7, 0xb2, 0x61, 0x6d, 0x36, 0xb6, 0xd7, 0x97, 0x13, 0x1b,
-	0x4e, 0x27, 0x8c, 0xa2, 0x05, 0xd9, 0x04, 0x27, 0x3c, 0xf2, 0x75, 0x45, 0x3e, 0x3f, 0x67, 0x42,
-	0x44, 0x21, 0x73, 0xab, 0xf8, 0xed, 0x46, 0x78, 0xd4, 0x0b, 0xc6, 0xec, 0x20, 0x3d, 0x25, 0x2d,
-	0xb0, 0x55, 0x70, 0x22, 0x5d, 0xc0, 0x62, 0xbd, 0x0b, 0xc5, 0x0e, 0x83, 0x13, 0x69, 0x2a, 0x45,
-	0x3b, 0x72, 0x1b, 0x1a, 0xe3, 0xa9, 0x7c, 0x15, 0xfb, 0x33, 0x08, 0xeb, 0x18, 0x77, 0x15, 0x4f,
-	0x9f, 0x66, 0x38, 0xde, 0x04, 0x30, 0x66, 0x1a, 0x1e, 0x77, 0x75, 0xc3, 0xda, 0x2c, 0xd1, 0x2a,
-	0x9e, 0x68, 0xf4, 0xbc, 0x87, 0x50, 0xcf, 0xa3, 0xa8, 0x9b, 0x7b, 0xca, 0xa6, 0x69, 0xbf, 0xb5,
-	0xa8, 0x21, 0x3b, 0x0f, 0xe2, 0x33, 0xd3, 0xa1, 0x12, 0x35, 0xca, 0xc3, 0xc2, 0x03, 0xcb, 0xfb,
-	0x02, 0xaa, 0xb3, 0xa4, 0xfe, 0xcd, 0xb1, 0x9a, 0x73, 0x7c, 0x66, 0x57, 0x8a, 0x8e, 0xfd, 0xcc,
-	0xae, 0xd4, 0x9c, 0x7a, 0xf3, 0xa7, 0x32, 0x94, 0x06, 0xd8, 0x85, 0x07, 0x50, 0x1f, 0x07, 0x52,
-	0x31, 0xe1, 0x5f, 0x62, 0x82, 0x6a, 0xc6, 0xd4, 0x4c, 0xe9, 0x42, 0xff, 0x0a, 0x97, 0xe8, 0xdf,
-	0x97, 0x50, 0x97, 0x4c, 0x9c, 0xb3, 0xd0, 0xd7, 0x4d, 0x92, 0x6e, 0x71, 0x19, 0x73, 0xcc, 0xa8,
-	0x35, 0x40, 0x1b, 0xec, 0x66, 0x4d, 0xce, 0x64, 0x49, 0x1e, 0xc1, 0xaa, 0xe4, 0x67, 0x62, 0xc4,
-	0x7c, 0x9c, 0x1f, 0x99, 0x0e, 0xe8, 0x07, 0x17, 0xfc, 0xd1, 0x08, 0x65, 0x5a, 0x97, 0x73, 0x45,
-	0x92, 0x27, 0xb0, 0xa6, 0xb0, 0x1a, 0x7f, 0xc4, 0x13, 0x25, 0x78, 0x2c, 0xdd, 0xf2, 0xf2, 0x90,
-	0x9b, 0x18, 0xa6, 0xe8, 0x8e, 0xb1, 0xa2, 0x0d, 0x95, 0x57, 0x25, 0xb9, 0x03, 0xd7, 0x22, 0xe9,
-	0xa7, 0xb0, 0xe9, 0x14, 0xa3, 0xe4, 0x04, 0x27, 0xb8, 0x42, 0xd7, 0x22, 0xb9, 0x8f, 0xe7, 0x03,
-	0x73, 0xec, 0xbd, 0x00, 0x98, 0x17, 0x44, 0xee, 0x43, 0x2d, 0xcd, 0x00, 0x27, 0xd9, 0x7a, 0xc7,
-	0x24, 0x83, 0x9a, 0xc9, 0xba, 0xa9, 0x7a, 0x09, 0x48, 0xb7, 0xb0, 0x51, 0xd4, 0x4d, 0x45, 0xc5,
-	0xfb, 0xd9, 0x82, 0x5a, 0xae, 0xd8, 0x6c, 0x45, 0x58, 0xb3, 0x15, 0xb1, 0x40, 0xca, 0xc2, 0xdb,
-	0x48, 0x59, 0x7c, 0x2b, 0x29, 0xed, 0x4b, 0x34, 0xf5, 0x06, 0x94, 0x31, 0x51, 0xe9, 0x96, 0x30,
-	0xb7, 0x54, 0xf3, 0x7e, 0xb5, 0x60, 0x75, 0x01, 0xc5, 0x2b, 0xad, 0x9d, 0x7c, 0x0a, 0xe4, 0x28,
-	0x0e, 0x46, 0xa7, 0x71, 0x24, 0x95, 0x1e, 0x28, 0x93, 0x82, 0x8d, 0x26, 0xd7, 0x72, 0x37, 0x18,
-	0x54, 0xea, 0x2c, 0x8f, 0x05, 0xff, 0x8e, 0x25, 0xb8, 0x9b, 0x2a, 0x34, 0xd5, 0x66, 0x9c, 0x28,
-	0x39, 0xe5, 0xe6, 0xef, 0x05, 0xdc, 0xdc, 0x06, 0x9d, 0xcf, 0x60, 0x1d, 0x01, 0x89, 0x92, 0x13,
-	0x7f, 0xc4, 0xe3, 0xb3, 0x71, 0x82, 0xeb, 0x24, 0x65, 0x1a, 0xc9, 0xee, 0x3a, 0x78, 0xa5, 0x37,
-	0x0a, 0x79, 0x76, 0xd1, 0x03, 0xeb, 0x2c, 0x60, 0x9d, 0xee, 0x02, 0x88, 0xf8, 0x8d, 0x5d, 0x33,
-	0xe3, 0x4b, 0xb1, 0xb0, 0xe6, 0x47, 0x33, 0xa6, 0x1c, 0x0b, 0x3e, 0x96, 0x17, 0x57, 0x71, 0x16,
-	0x23, 0x25, 0xcb, 0x13, 0xc1, 0xc7, 0x19, 0x59, 0xb4, 0x2c, 0xbd, 0xb3, 0x6c, 0xec, 0xb4, 0x7a,
-	0xb5, 0xd0, 0xe7, 0x87, 0xaa, 0xb8, 0x38, 0x54, 0x06, 0xcf, 0xe6, 0xf7, 0x16, 0x38, 0x86, 0x7f,
-	0x6c, 0x12, 0x47, 0xa3, 0x40, 0x45, 0x3c, 0x21, 0xf7, 0xa1, 0x94, 0xf0, 0x90, 0xe9, 0x0d, 0xa3,
-	0x8b, 0xf9, 0x68, 0x89, 0x72, 0x39, 0xd3, 0x56, 0x8f, 0x87, 0x8c, 0x1a, 0x6b, 0xef, 0x11, 0xd8,
-	0x5a, 0xd5, 0x7b, 0x2a, 0x2d, 0xe1, 0x32, 0x7b, 0x4a, 0xcd, 0x95, 0xe6, 0x21, 0x34, 0xd2, 0x2f,
-	0x1c, 0x33, 0xc1, 0x92, 0x11, 0xd3, 0xef, 0x6b, 0xae, 0x99, 0x28, 0xbf, 0xf7, 0x36, 0x6b, 0xfe,
-	0x60, 0x01, 0xc1, 0xb8, 0x8b, 0x53, 0x7e, 0x15, 0xb1, 0xc9, 0x3d, 0xb8, 0xf1, 0xea, 0x8c, 0x89,
-	0xa9, 0x59, 0x2e, 0x23, 0xe6, 0x87, 0x91, 0xd4, 0x5f, 0x31, 0x64, 0xad, 0xd0, 0x75, 0xbc, 0x1d,
-	0x98, 0xcb, 0x9d, 0xf4, 0xae, 0xf9, 0xda, 0x86, 0xda, 0x40, 0x9c, 0xcf, 0x66, 0xf8, 0x2b, 0x80,
-	0x49, 0x20, 0x54, 0xa4, 0x31, 0xcd, 0x60, 0xff, 0x38, 0x07, 0xfb, 0xdc, 0x74, 0x36, 0x4f, 0xfd,
-	0xcc, 0x9e, 0xe6, 0x5c, 0xdf, 0x4a, 0x86, 0xc2, 0x7b, 0x93, 0xa1, 0xf8, 0x1f, 0xc8, 0xd0, 0x86,
-	0x5a, 0x8e, 0x0c, 0x29, 0x17, 0x36, 0xde, 0x5c, 0x47, 0x8e, 0x0e, 0x30, 0xa7, 0x83, 0xf7, 0x97,
-	0x05, 0xd7, 0x2e, 0x94, 0xa8, 0x59, 0x91, 0x7b, 0x8f, 0xde, 0xcd, 0x8a, 0xf9, 0x43, 0x44, 0x3a,
-	0xe0, 0x60, 0x96, 0xbe, 0xc8, 0x06, 0xca, 0x10, 0xa4, 0x96, 0xaf, 0x6b, 0x71, 0xe2, 0xe8, 0x9a,
-	0x5c, 0xd0, 0x25, 0xe9, 0xc3, 0x75, 0x13, 0x64, 0xf9, 0x41, 0x32, 0x8f, 0xe2, 0x87, 0x4b, 0x91,
-	0x16, 0xdf, 0xa3, 0xff, 0xcb, 0x0b, 0x67, 0xd2, 0xf3, 0xaf, 0x82, 0xf1, 0xef, 0x78, 0x30, 0xd2,
-	0x2d, 0xb9, 0x07, 0x95, 0x0e, 0x8b, 0xe3, 0xdd, 0xe4, 0x98, 0xeb, 0x1f, 0x43, 0x88, 0x8b, 0xf0,
-	0x83, 0x30, 0x14, 0x4c, 0xca, 0x74, 0xea, 0x57, 0xcd, 0x69, 0xdb, 0x1c, 0x6a, 0x4a, 0x08, 0xce,
-	0x55, 0x1a, 0x10, 0xe5, 0x74, 0x51, 0x34, 0x01, 0x74, 0x30, 0x69, 0x7e, 0x50, 0xbc, 0x71, 0xdd,
-	0xdc, 0xd9, 0x86, 0xc6, 0xe2, 0x90, 0x90, 0x2a, 0x94, 0x0e, 0x7b, 0x83, 0xee, 0xd0, 0xf9, 0x1f,
-	0x01, 0x28, 0x1f, 0xee, 0xf6, 0x86, 0x9f, 0xdf, 0x73, 0x2c, 0x7d, 0xfc, 0xf8, 0xc5, 0xb0, 0x3b,
-	0x70, 0x0a, 0x77, 0x7e, 0xb4, 0x00, 0xe6, 0x15, 0x92, 0x1a, 0xac, 0x1c, 0xf6, 0xf6, 0x7a, 0x07,
-	0x5f, 0xf7, 0x8c, 0xcb, 0x7e, 0x7b, 0x30, 0xec, 0x52, 0xc7, 0xd2, 0x17, 0xb4, 0xdb, 0x7f, 0xbe,
-	0xdb, 0x69, 0x3b, 0x05, 0x7d, 0x41, 0x77, 0x0e, 0x7a, 0xcf, 0x5f, 0x38, 0x45, 0x8c, 0xd5, 0x1e,
-	0x76, 0x9e, 0x1a, 0x71, 0xd0, 0x6f, 0xd3, 0xae, 0x63, 0x13, 0x07, 0xea, 0xdd, 0x6f, 0xfa, 0x5d,
-	0xba, 0xbb, 0xdf, 0xed, 0x0d, 0xdb, 0xcf, 0x9d, 0x92, 0xf6, 0x79, 0xdc, 0xee, 0xec, 0x1d, 0xf6,
-	0x9d, 0xb2, 0x09, 0x36, 0x18, 0x1e, 0xd0, 0xae, 0xb3, 0xa2, 0x95, 0x1d, 0xda, 0xde, 0xed, 0x75,
-	0x77, 0x9c, 0x8a, 0x57, 0x70, 0xac, 0xc7, 0x3b, 0x7f, 0xbc, 0xbe, 0x65, 0xfd, 0xf9, 0xfa, 0x96,
-	0xf5, 0xcb, 0xdf, 0xb7, 0x2c, 0x58, 0x8b, 0x78, 0xeb, 0x3c, 0x52, 0x4c, 0x4a, 0xf3, 0xff, 0xe1,
-	0xdb, 0xdb, 0xa9, 0x16, 0xf1, 0x2d, 0x23, 0x6d, 0x9d, 0xf0, 0xad, 0x73, 0xb5, 0x85, 0xb7, 0x5b,
-	0x59, 0xdb, 0x8e, 0xca, 0xa8, 0xdf, 0xfd, 0x27, 0x00, 0x00, 0xff, 0xff, 0x2d, 0xdc, 0x1c, 0xd8,
-	0x7f, 0x0c, 0x00, 0x00,
+	// 1282 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xac, 0x57, 0x41, 0x6f, 0x1a, 0xd7,
+	0x13, 0x67, 0x61, 0xc1, 0x30, 0x60, 0xbc, 0x79, 0x7f, 0x27, 0x5a, 0xf1, 0x6f, 0xb6, 0x16, 0x52,
+	0x54, 0x2b, 0x55, 0x71, 0xe5, 0x24, 0x6d, 0x14, 0xa9, 0x52, 0x08, 0x26, 0x8d, 0xe3, 0x18, 0xa3,
+	0x07, 0x56, 0x9b, 0x5e, 0x56, 0x6b, 0x78, 0x76, 0x56, 0x5e, 0x76, 0xc9, 0xbe, 0x67, 0x4b, 0xf4,
+	0xd4, 0x7b, 0x0f, 0x4d, 0xaf, 0x3d, 0xf5, 0xd8, 0x7e, 0x84, 0x7e, 0x82, 0xf6, 0x98, 0x63, 0xae,
+	0xc6, 0x97, 0x1e, 0xf3, 0x11, 0xaa, 0x37, 0x6f, 0x17, 0x16, 0x48, 0x5c, 0xa7, 0xf2, 0x6d, 0xe6,
+	0xbd, 0x99, 0xd9, 0x99, 0xdf, 0xcc, 0x6f, 0x1e, 0x40, 0x59, 0x04, 0xc3, 0xa0, 0xef, 0x08, 0xa7,
+	0x36, 0x0c, 0x03, 0x11, 0x90, 0x7c, 0xac, 0x57, 0x37, 0x21, 0xbf, 0xc3, 0x46, 0xd4, 0xf1, 0x8f,
+	0x18, 0x59, 0x85, 0x2c, 0x17, 0x4e, 0x28, 0x4c, 0x6d, 0x4d, 0x5b, 0x2f, 0x51, 0xa5, 0x10, 0x03,
+	0x32, 0xcc, 0xef, 0x9b, 0x69, 0x3c, 0x93, 0x62, 0xf5, 0x0e, 0x14, 0xbb, 0xce, 0x81, 0xc7, 0x44,
+	0xdd, 0x73, 0x1d, 0x4e, 0x08, 0xe8, 0x3d, 0xe6, 0x79, 0xe8, 0x55, 0xa0, 0x28, 0x4b, 0xa7, 0x13,
+	0x57, 0x39, 0x2d, 0x53, 0x29, 0x56, 0xff, 0xd0, 0x21, 0xa7, 0xbc, 0xc8, 0xa7, 0x90, 0x75, 0xa4,
+	0x27, 0x7a, 0x14, 0x37, 0xaf, 0xd7, 0x26, 0xd9, 0x25, 0xc2, 0x52, 0x65, 0x43, 0x2a, 0x90, 0x7f,
+	0x11, 0x70, 0xe1, 0x3b, 0x03, 0x86, 0xe1, 0x0a, 0x74, 0xa2, 0x93, 0xfb, 0x90, 0x1f, 0x06, 0xa1,
+	0xb0, 0x07, 0xce, 0xd0, 0xd4, 0xd7, 0x32, 0xeb, 0xc5, 0xcd, 0x9b, 0xf3, 0xb1, 0x6a, 0xed, 0x20,
+	0x14, 0xbb, 0xce, 0xb0, 0xe9, 0x8b, 0x70, 0x44, 0x97, 0x86, 0x4a, 0x93, 0x51, 0x8f, 0xd9, 0x88,
+	0x0f, 0x9d, 0x1e, 0x33, 0xb3, 0x2a, 0x6a, 0xac, 0x23, 0x0c, 0x2f, 0x9c, 0xb0, 0x6f, 0xe6, 0xf0,
+	0x42, 0x29, 0x64, 0x03, 0x0a, 0xc7, 0x6c, 0x64, 0x87, 0x12, 0x29, 0x73, 0x09, 0x13, 0x27, 0xd3,
+	0x8f, 0xc5, 0x18, 0x62, 0x18, 0x85, 0xe6, 0x3a, 0xe8, 0x62, 0x34, 0x64, 0x66, 0x7e, 0x4d, 0x5b,
+	0x2f, 0x6f, 0xae, 0xce, 0x27, 0xd6, 0x1d, 0x0d, 0x19, 0x45, 0x0b, 0xb2, 0x0e, 0x46, 0xff, 0xc0,
+	0x96, 0x15, 0xd9, 0xc1, 0x29, 0x0b, 0x43, 0xb7, 0xcf, 0xcc, 0x02, 0x7e, 0xbb, 0xdc, 0x3f, 0x68,
+	0x39, 0x03, 0xb6, 0x17, 0x9d, 0x92, 0x1a, 0xe8, 0xc2, 0x39, 0xe2, 0x26, 0x60, 0xb1, 0x95, 0x85,
+	0x62, 0xbb, 0xce, 0x11, 0x57, 0x95, 0xa2, 0x1d, 0xb9, 0x05, 0xe5, 0xc1, 0x88, 0xbf, 0xf4, 0xec,
+	0x09, 0x84, 0x25, 0x8c, 0xbb, 0x8c, 0xa7, 0x4f, 0x62, 0x1c, 0x6f, 0x02, 0x28, 0x33, 0x09, 0x8f,
+	0xb9, 0xbc, 0xa6, 0xad, 0x67, 0x69, 0x01, 0x4f, 0x24, 0x7a, 0x95, 0x07, 0x50, 0x4a, 0xa2, 0x28,
+	0x9b, 0x7b, 0xcc, 0x46, 0x51, 0xbf, 0xa5, 0x28, 0x21, 0x3b, 0x75, 0xbc, 0x13, 0xd5, 0xa1, 0x2c,
+	0x55, 0xca, 0x83, 0xf4, 0x7d, 0xad, 0xf2, 0x25, 0x14, 0x26, 0x49, 0xfd, 0x9b, 0x63, 0x21, 0xe1,
+	0xf8, 0x54, 0xcf, 0x67, 0x0c, 0xfd, 0xa9, 0x9e, 0x2f, 0x1a, 0xa5, 0xea, 0xcf, 0x39, 0xc8, 0x76,
+	0xb0, 0x0b, 0xf7, 0xa1, 0x34, 0x70, 0xb8, 0x60, 0xa1, 0x7d, 0x89, 0x09, 0x2a, 0x2a, 0x53, 0x35,
+	0xa5, 0x33, 0xfd, 0x4b, 0x5f, 0xa2, 0x7f, 0x5f, 0x41, 0x89, 0xb3, 0xf0, 0x94, 0xf5, 0x6d, 0xd9,
+	0x24, 0x6e, 0x66, 0xe6, 0x31, 0xc7, 0x8c, 0x6a, 0x1d, 0xb4, 0xc1, 0x6e, 0x16, 0xf9, 0x44, 0xe6,
+	0xe4, 0x21, 0x2c, 0xf3, 0xe0, 0x24, 0xec, 0x31, 0x1b, 0xe7, 0x87, 0x47, 0x03, 0xfa, 0xff, 0x05,
+	0x7f, 0x34, 0x42, 0x99, 0x96, 0xf8, 0x54, 0xe1, 0xe4, 0x31, 0xac, 0x08, 0xac, 0xc6, 0xee, 0x05,
+	0xbe, 0x08, 0x03, 0x8f, 0x9b, 0xb9, 0xf9, 0x21, 0x57, 0x31, 0x54, 0xd1, 0x0d, 0x65, 0x45, 0xcb,
+	0x22, 0xa9, 0x72, 0x72, 0x1b, 0xae, 0xb9, 0xdc, 0x8e, 0x60, 0x93, 0x29, 0xba, 0xfe, 0x11, 0x4e,
+	0x70, 0x9e, 0xae, 0xb8, 0x7c, 0x17, 0xcf, 0x3b, 0xea, 0xb8, 0xf2, 0x1c, 0x60, 0x5a, 0x10, 0xb9,
+	0x07, 0xc5, 0x28, 0x03, 0x9c, 0x64, 0xed, 0x82, 0x49, 0x06, 0x31, 0x91, 0x65, 0x53, 0xe5, 0x12,
+	0xe0, 0x66, 0x7a, 0x2d, 0x23, 0x9b, 0x8a, 0x4a, 0xe5, 0x17, 0x0d, 0x8a, 0x89, 0x62, 0xe3, 0x15,
+	0xa1, 0x4d, 0x56, 0xc4, 0x0c, 0x29, 0xd3, 0xef, 0x23, 0x65, 0xe6, 0xbd, 0xa4, 0xd4, 0x2f, 0xd1,
+	0xd4, 0x1b, 0x90, 0xc3, 0x44, 0xb9, 0x99, 0xc5, 0xdc, 0x22, 0xad, 0xf2, 0xbb, 0x06, 0xcb, 0x33,
+	0x28, 0x5e, 0x69, 0xed, 0xe4, 0x33, 0x20, 0x07, 0x9e, 0xd3, 0x3b, 0xf6, 0x5c, 0x2e, 0xe4, 0x40,
+	0xa9, 0x14, 0x74, 0x34, 0xb9, 0x96, 0xb8, 0xc1, 0xa0, 0x5c, 0x66, 0x79, 0x18, 0x06, 0xdf, 0x33,
+	0x1f, 0x77, 0x53, 0x9e, 0x46, 0xda, 0x84, 0x13, 0x59, 0x23, 0x57, 0xfd, 0x33, 0x8d, 0x9b, 0x5b,
+	0xa1, 0xf3, 0x39, 0xac, 0x22, 0x20, 0xae, 0x7f, 0x64, 0xf7, 0x02, 0xef, 0x64, 0xe0, 0xe3, 0x3a,
+	0x89, 0x98, 0x46, 0xe2, 0xbb, 0x06, 0x5e, 0xc9, 0x8d, 0x42, 0x9e, 0x2e, 0x7a, 0x60, 0x9d, 0x69,
+	0xac, 0xd3, 0x9c, 0x01, 0x11, 0xbf, 0xb1, 0xad, 0x66, 0x7c, 0x2e, 0x16, 0xd6, 0xfc, 0x70, 0xc2,
+	0x94, 0xc3, 0x30, 0x18, 0xf0, 0xc5, 0x55, 0x1c, 0xc7, 0x88, 0xc8, 0xf2, 0x38, 0x0c, 0x06, 0x31,
+	0x59, 0xa4, 0xcc, 0x2b, 0x27, 0xf1, 0xd8, 0x49, 0xf5, 0x6a, 0xa1, 0x4f, 0x0e, 0x55, 0x66, 0x76,
+	0xa8, 0x14, 0x9e, 0xd5, 0x1f, 0x35, 0x30, 0x14, 0xff, 0xd8, 0xd0, 0x73, 0x7b, 0x8e, 0x70, 0x03,
+	0x9f, 0xdc, 0x83, 0xac, 0x1f, 0xf4, 0x99, 0xdc, 0x30, 0xb2, 0x98, 0x8f, 0xe7, 0x28, 0x97, 0x30,
+	0xad, 0xb5, 0x82, 0x3e, 0xa3, 0xca, 0xba, 0xf2, 0x10, 0x74, 0xa9, 0xca, 0x3d, 0x15, 0x95, 0x70,
+	0x99, 0x3d, 0x25, 0xa6, 0x4a, 0x75, 0x1f, 0xca, 0xd1, 0x17, 0x0e, 0x59, 0xc8, 0xfc, 0x1e, 0x93,
+	0xef, 0x6b, 0xa2, 0x99, 0x28, 0x7f, 0xf0, 0x36, 0xab, 0xfe, 0xa4, 0x01, 0xc1, 0xb8, 0xb3, 0x53,
+	0x7e, 0x15, 0xb1, 0xc9, 0x5d, 0xb8, 0xf1, 0xf2, 0x84, 0x85, 0x23, 0xb5, 0x5c, 0x7a, 0xcc, 0xee,
+	0xbb, 0x5c, 0x7e, 0x45, 0x91, 0x35, 0x4f, 0x57, 0xf1, 0xb6, 0xa3, 0x2e, 0xb7, 0xa2, 0xbb, 0xea,
+	0x58, 0x87, 0x62, 0x27, 0x3c, 0x9d, 0xcc, 0xf0, 0xd7, 0x00, 0x43, 0x27, 0x14, 0xae, 0xc4, 0x34,
+	0x86, 0xfd, 0x93, 0x04, 0xec, 0x53, 0xd3, 0xc9, 0x3c, 0xb5, 0x63, 0x7b, 0x9a, 0x70, 0x7d, 0x2f,
+	0x19, 0xd2, 0x1f, 0x4c, 0x86, 0xcc, 0x7f, 0x20, 0x43, 0x1d, 0x8a, 0x09, 0x32, 0x44, 0x5c, 0x58,
+	0x7b, 0x77, 0x1d, 0x09, 0x3a, 0xc0, 0x94, 0x0e, 0x95, 0x33, 0x0d, 0xae, 0x2d, 0x94, 0x28, 0x59,
+	0x91, 0x78, 0x8f, 0x2e, 0x66, 0xc5, 0xf4, 0x21, 0x22, 0x0d, 0x30, 0x30, 0x4b, 0x3b, 0x8c, 0x07,
+	0x4a, 0x11, 0xa4, 0x98, 0xac, 0x6b, 0x76, 0xe2, 0xe8, 0x0a, 0x9f, 0xd1, 0x39, 0x69, 0xc3, 0x75,
+	0x15, 0x64, 0xfe, 0x41, 0x52, 0x8f, 0xe2, 0x47, 0x73, 0x91, 0x66, 0xdf, 0xa3, 0xff, 0xf1, 0x85,
+	0x33, 0x5e, 0xb1, 0xaf, 0x82, 0xf1, 0x17, 0x3c, 0x18, 0xd1, 0x96, 0xdc, 0x81, 0x7c, 0x83, 0x79,
+	0xde, 0xb6, 0x7f, 0x18, 0xc8, 0x1f, 0x43, 0x88, 0x4b, 0x68, 0x3b, 0xfd, 0x7e, 0xc8, 0x38, 0x8f,
+	0xa6, 0x7e, 0x59, 0x9d, 0xd6, 0xd5, 0xa1, 0xa4, 0x44, 0x18, 0x04, 0x22, 0x0a, 0x88, 0x72, 0xb4,
+	0x28, 0xaa, 0x00, 0x32, 0x18, 0x57, 0x3f, 0x28, 0xde, 0xb9, 0x6e, 0x6e, 0x6f, 0x42, 0x79, 0x76,
+	0x48, 0x48, 0x01, 0xb2, 0xfb, 0xad, 0x4e, 0xb3, 0x6b, 0xa4, 0x08, 0x40, 0x6e, 0x7f, 0xbb, 0xd5,
+	0xfd, 0xe2, 0xae, 0xa1, 0xc9, 0xe3, 0x47, 0xcf, 0xbb, 0xcd, 0x8e, 0x91, 0xbe, 0xfd, 0x4a, 0x03,
+	0x98, 0x56, 0x48, 0x8a, 0xb0, 0xb4, 0xdf, 0xda, 0x69, 0xed, 0x7d, 0xd3, 0x52, 0x2e, 0xbb, 0xf5,
+	0x4e, 0xb7, 0x49, 0x0d, 0x4d, 0x5e, 0xd0, 0x66, 0xfb, 0xd9, 0x76, 0xa3, 0x6e, 0xa4, 0xe5, 0x05,
+	0xdd, 0xda, 0x6b, 0x3d, 0x7b, 0x6e, 0x64, 0x30, 0x56, 0xbd, 0xdb, 0x78, 0xa2, 0xc4, 0x4e, 0xbb,
+	0x4e, 0x9b, 0x86, 0x4e, 0x0c, 0x28, 0x35, 0xbf, 0x6d, 0x37, 0xe9, 0xf6, 0x6e, 0xb3, 0xd5, 0xad,
+	0x3f, 0x33, 0xb2, 0xd2, 0xe7, 0x51, 0xbd, 0xb1, 0xb3, 0xdf, 0x36, 0x72, 0x2a, 0x58, 0xa7, 0xbb,
+	0x47, 0x9b, 0xc6, 0x92, 0x54, 0xb6, 0x68, 0x7d, 0xbb, 0xd5, 0xdc, 0x32, 0xf2, 0x95, 0xb4, 0xa1,
+	0x3d, 0xf2, 0x5e, 0x9f, 0x59, 0xa9, 0x37, 0x67, 0x56, 0xea, 0xed, 0x99, 0xa5, 0xfd, 0x30, 0xb6,
+	0xb4, 0xdf, 0xc6, 0x96, 0xf6, 0xd7, 0xd8, 0xd2, 0x5e, 0x8f, 0x2d, 0xed, 0xef, 0xb1, 0x95, 0x7a,
+	0x3b, 0xb6, 0xb4, 0x57, 0xe7, 0x56, 0xea, 0xd7, 0x73, 0x4b, 0x7b, 0x7d, 0x6e, 0xa5, 0xde, 0x9c,
+	0x5b, 0x29, 0x58, 0x71, 0x83, 0xda, 0xa9, 0x2b, 0x18, 0xe7, 0xea, 0x7f, 0xc6, 0x77, 0xb7, 0x22,
+	0xcd, 0x0d, 0x36, 0x94, 0xb4, 0x71, 0x14, 0x6c, 0x9c, 0x8a, 0x0d, 0xbc, 0xdd, 0x88, 0xdb, 0x7b,
+	0x90, 0x43, 0xfd, 0xce, 0x3f, 0x01, 0x00, 0x00, 0xff, 0xff, 0x15, 0x36, 0xa6, 0xce, 0xa7, 0x0c,
+	0x00, 0x00,
 }
 
+func (x KeyspaceIdType) String() string {
+	s, ok := KeyspaceIdType_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (x TabletType) String() string {
+	s, ok := TabletType_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (this *KeyRange) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*KeyRange)
+	if !ok {
+		that2, ok := that.(KeyRange)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !bytes.Equal(this.Start, that1.Start) {
+		return false
+	}
+	if !bytes.Equal(this.End, that1.End) {
+		return false
+	}
+	return true
+}
+func (this *TabletAlias) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*TabletAlias)
+	if !ok {
+		that2, ok := that.(TabletAlias)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Cell != that1.Cell {
+		return false
+	}
+	if this.Uid != that1.Uid {
+		return false
+	}
+	return true
+}
+func (this *Tablet) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Tablet)
+	if !ok {
+		that2, ok := that.(Tablet)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Alias.Equal(that1.Alias) {
+		return false
+	}
+	if this.Hostname != that1.Hostname {
+		return false
+	}
+	if len(this.PortMap) != len(that1.PortMap) {
+		return false
+	}
+	for i := range this.PortMap {
+		if this.PortMap[i] != that1.PortMap[i] {
+			return false
+		}
+	}
+	if this.Keyspace != that1.Keyspace {
+		return false
+	}
+	if this.Shard != that1.Shard {
+		return false
+	}
+	if !this.KeyRange.Equal(that1.KeyRange) {
+		return false
+	}
+	if this.Type != that1.Type {
+		return false
+	}
+	if this.DbNameOverride != that1.DbNameOverride {
+		return false
+	}
+	if len(this.Tags) != len(that1.Tags) {
+		return false
+	}
+	for i := range this.Tags {
+		if this.Tags[i] != that1.Tags[i] {
+			return false
+		}
+	}
+	if this.MysqlHostname != that1.MysqlHostname {
+		return false
+	}
+	if this.MysqlPort != that1.MysqlPort {
+		return false
+	}
+	return true
+}
+func (this *Shard) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Shard)
+	if !ok {
+		that2, ok := that.(Shard)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.MasterAlias.Equal(that1.MasterAlias) {
+		return false
+	}
+	if !this.KeyRange.Equal(that1.KeyRange) {
+		return false
+	}
+	if len(this.ServedTypes) != len(that1.ServedTypes) {
+		return false
+	}
+	for i := range this.ServedTypes {
+		if !this.ServedTypes[i].Equal(that1.ServedTypes[i]) {
+			return false
+		}
+	}
+	if len(this.SourceShards) != len(that1.SourceShards) {
+		return false
+	}
+	for i := range this.SourceShards {
+		if !this.SourceShards[i].Equal(that1.SourceShards[i]) {
+			return false
+		}
+	}
+	if len(this.TabletControls) != len(that1.TabletControls) {
+		return false
+	}
+	for i := range this.TabletControls {
+		if !this.TabletControls[i].Equal(that1.TabletControls[i]) {
+			return false
+		}
+	}
+	if this.IsMasterServing != that1.IsMasterServing {
+		return false
+	}
+	return true
+}
+func (this *Shard_ServedType) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Shard_ServedType)
+	if !ok {
+		that2, ok := that.(Shard_ServedType)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.TabletType != that1.TabletType {
+		return false
+	}
+	if len(this.Cells) != len(that1.Cells) {
+		return false
+	}
+	for i := range this.Cells {
+		if this.Cells[i] != that1.Cells[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *Shard_SourceShard) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Shard_SourceShard)
+	if !ok {
+		that2, ok := that.(Shard_SourceShard)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Uid != that1.Uid {
+		return false
+	}
+	if this.Keyspace != that1.Keyspace {
+		return false
+	}
+	if this.Shard != that1.Shard {
+		return false
+	}
+	if !this.KeyRange.Equal(that1.KeyRange) {
+		return false
+	}
+	if len(this.Tables) != len(that1.Tables) {
+		return false
+	}
+	for i := range this.Tables {
+		if this.Tables[i] != that1.Tables[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *Shard_TabletControl) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Shard_TabletControl)
+	if !ok {
+		that2, ok := that.(Shard_TabletControl)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.TabletType != that1.TabletType {
+		return false
+	}
+	if len(this.Cells) != len(that1.Cells) {
+		return false
+	}
+	for i := range this.Cells {
+		if this.Cells[i] != that1.Cells[i] {
+			return false
+		}
+	}
+	if len(this.BlacklistedTables) != len(that1.BlacklistedTables) {
+		return false
+	}
+	for i := range this.BlacklistedTables {
+		if this.BlacklistedTables[i] != that1.BlacklistedTables[i] {
+			return false
+		}
+	}
+	if this.Frozen != that1.Frozen {
+		return false
+	}
+	return true
+}
+func (this *Keyspace) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Keyspace)
+	if !ok {
+		that2, ok := that.(Keyspace)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.ShardingColumnName != that1.ShardingColumnName {
+		return false
+	}
+	if this.ShardingColumnType != that1.ShardingColumnType {
+		return false
+	}
+	if len(this.ServedFroms) != len(that1.ServedFroms) {
+		return false
+	}
+	for i := range this.ServedFroms {
+		if !this.ServedFroms[i].Equal(that1.ServedFroms[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *Keyspace_ServedFrom) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Keyspace_ServedFrom)
+	if !ok {
+		that2, ok := that.(Keyspace_ServedFrom)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.TabletType != that1.TabletType {
+		return false
+	}
+	if len(this.Cells) != len(that1.Cells) {
+		return false
+	}
+	for i := range this.Cells {
+		if this.Cells[i] != that1.Cells[i] {
+			return false
+		}
+	}
+	if this.Keyspace != that1.Keyspace {
+		return false
+	}
+	return true
+}
+func (this *ShardReplication) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ShardReplication)
+	if !ok {
+		that2, ok := that.(ShardReplication)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Nodes) != len(that1.Nodes) {
+		return false
+	}
+	for i := range this.Nodes {
+		if !this.Nodes[i].Equal(that1.Nodes[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *ShardReplication_Node) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ShardReplication_Node)
+	if !ok {
+		that2, ok := that.(ShardReplication_Node)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.TabletAlias.Equal(that1.TabletAlias) {
+		return false
+	}
+	return true
+}
+func (this *ShardReference) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ShardReference)
+	if !ok {
+		that2, ok := that.(ShardReference)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	if !this.KeyRange.Equal(that1.KeyRange) {
+		return false
+	}
+	return true
+}
+func (this *ShardTabletControl) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ShardTabletControl)
+	if !ok {
+		that2, ok := that.(ShardTabletControl)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	if !this.KeyRange.Equal(that1.KeyRange) {
+		return false
+	}
+	if this.QueryServiceDisabled != that1.QueryServiceDisabled {
+		return false
+	}
+	return true
+}
+func (this *SrvKeyspace) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SrvKeyspace)
+	if !ok {
+		that2, ok := that.(SrvKeyspace)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Partitions) != len(that1.Partitions) {
+		return false
+	}
+	for i := range this.Partitions {
+		if !this.Partitions[i].Equal(that1.Partitions[i]) {
+			return false
+		}
+	}
+	if this.ShardingColumnName != that1.ShardingColumnName {
+		return false
+	}
+	if this.ShardingColumnType != that1.ShardingColumnType {
+		return false
+	}
+	if len(this.ServedFrom) != len(that1.ServedFrom) {
+		return false
+	}
+	for i := range this.ServedFrom {
+		if !this.ServedFrom[i].Equal(that1.ServedFrom[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *SrvKeyspace_KeyspacePartition) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SrvKeyspace_KeyspacePartition)
+	if !ok {
+		that2, ok := that.(SrvKeyspace_KeyspacePartition)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.ServedType != that1.ServedType {
+		return false
+	}
+	if len(this.ShardReferences) != len(that1.ShardReferences) {
+		return false
+	}
+	for i := range this.ShardReferences {
+		if !this.ShardReferences[i].Equal(that1.ShardReferences[i]) {
+			return false
+		}
+	}
+	if len(this.ShardTabletControls) != len(that1.ShardTabletControls) {
+		return false
+	}
+	for i := range this.ShardTabletControls {
+		if !this.ShardTabletControls[i].Equal(that1.ShardTabletControls[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *SrvKeyspace_ServedFrom) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SrvKeyspace_ServedFrom)
+	if !ok {
+		that2, ok := that.(SrvKeyspace_ServedFrom)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.TabletType != that1.TabletType {
+		return false
+	}
+	if this.Keyspace != that1.Keyspace {
+		return false
+	}
+	return true
+}
+func (this *CellInfo) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*CellInfo)
+	if !ok {
+		that2, ok := that.(CellInfo)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.ServerAddress != that1.ServerAddress {
+		return false
+	}
+	if this.Root != that1.Root {
+		return false
+	}
+	return true
+}
+func (this *CellsAlias) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*CellsAlias)
+	if !ok {
+		that2, ok := that.(CellsAlias)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Cells) != len(that1.Cells) {
+		return false
+	}
+	for i := range this.Cells {
+		if this.Cells[i] != that1.Cells[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *KeyRange) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&topodata.KeyRange{")
+	s = append(s, "Start: "+fmt.Sprintf("%#v", this.Start)+",\n")
+	s = append(s, "End: "+fmt.Sprintf("%#v", this.End)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *TabletAlias) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&topodata.TabletAlias{")
+	s = append(s, "Cell: "+fmt.Sprintf("%#v", this.Cell)+",\n")
+	s = append(s, "Uid: "+fmt.Sprintf("%#v", this.Uid)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Tablet) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 15)
+	s = append(s, "&topodata.Tablet{")
+	if this.Alias != nil {
+		s = append(s, "Alias: "+fmt.Sprintf("%#v", this.Alias)+",\n")
+	}
+	s = append(s, "Hostname: "+fmt.Sprintf("%#v", this.Hostname)+",\n")
+	keysForPortMap := make([]string, 0, len(this.PortMap))
+	for k := range this.PortMap {
+		keysForPortMap = append(keysForPortMap, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForPortMap)
+	mapStringForPortMap := "map[string]int32{"
+	for _, k := range keysForPortMap {
+		mapStringForPortMap += fmt.Sprintf("%#v: %#v,", k, this.PortMap[k])
+	}
+	mapStringForPortMap += "}"
+	if this.PortMap != nil {
+		s = append(s, "PortMap: "+mapStringForPortMap+",\n")
+	}
+	s = append(s, "Keyspace: "+fmt.Sprintf("%#v", this.Keyspace)+",\n")
+	s = append(s, "Shard: "+fmt.Sprintf("%#v", this.Shard)+",\n")
+	if this.KeyRange != nil {
+		s = append(s, "KeyRange: "+fmt.Sprintf("%#v", this.KeyRange)+",\n")
+	}
+	s = append(s, "Type: "+fmt.Sprintf("%#v", this.Type)+",\n")
+	s = append(s, "DbNameOverride: "+fmt.Sprintf("%#v", this.DbNameOverride)+",\n")
+	keysForTags := make([]string, 0, len(this.Tags))
+	for k := range this.Tags {
+		keysForTags = append(keysForTags, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForTags)
+	mapStringForTags := "map[string]string{"
+	for _, k := range keysForTags {
+		mapStringForTags += fmt.Sprintf("%#v: %#v,", k, this.Tags[k])
+	}
+	mapStringForTags += "}"
+	if this.Tags != nil {
+		s = append(s, "Tags: "+mapStringForTags+",\n")
+	}
+	s = append(s, "MysqlHostname: "+fmt.Sprintf("%#v", this.MysqlHostname)+",\n")
+	s = append(s, "MysqlPort: "+fmt.Sprintf("%#v", this.MysqlPort)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Shard) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 10)
+	s = append(s, "&topodata.Shard{")
+	if this.MasterAlias != nil {
+		s = append(s, "MasterAlias: "+fmt.Sprintf("%#v", this.MasterAlias)+",\n")
+	}
+	if this.KeyRange != nil {
+		s = append(s, "KeyRange: "+fmt.Sprintf("%#v", this.KeyRange)+",\n")
+	}
+	if this.ServedTypes != nil {
+		s = append(s, "ServedTypes: "+fmt.Sprintf("%#v", this.ServedTypes)+",\n")
+	}
+	if this.SourceShards != nil {
+		s = append(s, "SourceShards: "+fmt.Sprintf("%#v", this.SourceShards)+",\n")
+	}
+	if this.TabletControls != nil {
+		s = append(s, "TabletControls: "+fmt.Sprintf("%#v", this.TabletControls)+",\n")
+	}
+	s = append(s, "IsMasterServing: "+fmt.Sprintf("%#v", this.IsMasterServing)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Shard_ServedType) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&topodata.Shard_ServedType{")
+	s = append(s, "TabletType: "+fmt.Sprintf("%#v", this.TabletType)+",\n")
+	s = append(s, "Cells: "+fmt.Sprintf("%#v", this.Cells)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Shard_SourceShard) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 9)
+	s = append(s, "&topodata.Shard_SourceShard{")
+	s = append(s, "Uid: "+fmt.Sprintf("%#v", this.Uid)+",\n")
+	s = append(s, "Keyspace: "+fmt.Sprintf("%#v", this.Keyspace)+",\n")
+	s = append(s, "Shard: "+fmt.Sprintf("%#v", this.Shard)+",\n")
+	if this.KeyRange != nil {
+		s = append(s, "KeyRange: "+fmt.Sprintf("%#v", this.KeyRange)+",\n")
+	}
+	s = append(s, "Tables: "+fmt.Sprintf("%#v", this.Tables)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Shard_TabletControl) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&topodata.Shard_TabletControl{")
+	s = append(s, "TabletType: "+fmt.Sprintf("%#v", this.TabletType)+",\n")
+	s = append(s, "Cells: "+fmt.Sprintf("%#v", this.Cells)+",\n")
+	s = append(s, "BlacklistedTables: "+fmt.Sprintf("%#v", this.BlacklistedTables)+",\n")
+	s = append(s, "Frozen: "+fmt.Sprintf("%#v", this.Frozen)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Keyspace) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&topodata.Keyspace{")
+	s = append(s, "ShardingColumnName: "+fmt.Sprintf("%#v", this.ShardingColumnName)+",\n")
+	s = append(s, "ShardingColumnType: "+fmt.Sprintf("%#v", this.ShardingColumnType)+",\n")
+	if this.ServedFroms != nil {
+		s = append(s, "ServedFroms: "+fmt.Sprintf("%#v", this.ServedFroms)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Keyspace_ServedFrom) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&topodata.Keyspace_ServedFrom{")
+	s = append(s, "TabletType: "+fmt.Sprintf("%#v", this.TabletType)+",\n")
+	s = append(s, "Cells: "+fmt.Sprintf("%#v", this.Cells)+",\n")
+	s = append(s, "Keyspace: "+fmt.Sprintf("%#v", this.Keyspace)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ShardReplication) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&topodata.ShardReplication{")
+	if this.Nodes != nil {
+		s = append(s, "Nodes: "+fmt.Sprintf("%#v", this.Nodes)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ShardReplication_Node) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&topodata.ShardReplication_Node{")
+	if this.TabletAlias != nil {
+		s = append(s, "TabletAlias: "+fmt.Sprintf("%#v", this.TabletAlias)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ShardReference) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&topodata.ShardReference{")
+	s = append(s, "Name: "+fmt.Sprintf("%#v", this.Name)+",\n")
+	if this.KeyRange != nil {
+		s = append(s, "KeyRange: "+fmt.Sprintf("%#v", this.KeyRange)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ShardTabletControl) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&topodata.ShardTabletControl{")
+	s = append(s, "Name: "+fmt.Sprintf("%#v", this.Name)+",\n")
+	if this.KeyRange != nil {
+		s = append(s, "KeyRange: "+fmt.Sprintf("%#v", this.KeyRange)+",\n")
+	}
+	s = append(s, "QueryServiceDisabled: "+fmt.Sprintf("%#v", this.QueryServiceDisabled)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SrvKeyspace) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&topodata.SrvKeyspace{")
+	if this.Partitions != nil {
+		s = append(s, "Partitions: "+fmt.Sprintf("%#v", this.Partitions)+",\n")
+	}
+	s = append(s, "ShardingColumnName: "+fmt.Sprintf("%#v", this.ShardingColumnName)+",\n")
+	s = append(s, "ShardingColumnType: "+fmt.Sprintf("%#v", this.ShardingColumnType)+",\n")
+	if this.ServedFrom != nil {
+		s = append(s, "ServedFrom: "+fmt.Sprintf("%#v", this.ServedFrom)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SrvKeyspace_KeyspacePartition) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&topodata.SrvKeyspace_KeyspacePartition{")
+	s = append(s, "ServedType: "+fmt.Sprintf("%#v", this.ServedType)+",\n")
+	if this.ShardReferences != nil {
+		s = append(s, "ShardReferences: "+fmt.Sprintf("%#v", this.ShardReferences)+",\n")
+	}
+	if this.ShardTabletControls != nil {
+		s = append(s, "ShardTabletControls: "+fmt.Sprintf("%#v", this.ShardTabletControls)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SrvKeyspace_ServedFrom) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&topodata.SrvKeyspace_ServedFrom{")
+	s = append(s, "TabletType: "+fmt.Sprintf("%#v", this.TabletType)+",\n")
+	s = append(s, "Keyspace: "+fmt.Sprintf("%#v", this.Keyspace)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *CellInfo) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&topodata.CellInfo{")
+	s = append(s, "ServerAddress: "+fmt.Sprintf("%#v", this.ServerAddress)+",\n")
+	s = append(s, "Root: "+fmt.Sprintf("%#v", this.Root)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *CellsAlias) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&topodata.CellsAlias{")
+	s = append(s, "Cells: "+fmt.Sprintf("%#v", this.Cells)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func valueToGoStringTopodata(v interface{}, typ string) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("func(v %v) *%v { return &v } ( %#v )", typ, typ, pv)
+}
 func (m *KeyRange) Marshal() (dAtA []byte, err error) {
 	size := m.ProtoSize()
 	dAtA = make([]byte, size)
@@ -1526,9 +2387,6 @@ func (m *KeyRange) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintTopodata(dAtA, i, uint64(len(m.End)))
 		i += copy(dAtA[i:], m.End)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -1558,9 +2416,6 @@ func (m *TabletAlias) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x10
 		i++
 		i = encodeVarintTopodata(dAtA, i, uint64(m.Uid))
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -1673,9 +2528,6 @@ func (m *Tablet) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintTopodata(dAtA, i, uint64(m.MysqlPort))
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -1760,9 +2612,6 @@ func (m *Shard) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i++
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -1800,9 +2649,6 @@ func (m *Shard_ServedType) MarshalTo(dAtA []byte) (int, error) {
 			i++
 			i += copy(dAtA[i:], s)
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -1863,9 +2709,6 @@ func (m *Shard_SourceShard) MarshalTo(dAtA []byte) (int, error) {
 			i++
 			i += copy(dAtA[i:], s)
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -1930,9 +2773,6 @@ func (m *Shard_TabletControl) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i++
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -1973,9 +2813,6 @@ func (m *Keyspace) MarshalTo(dAtA []byte) (int, error) {
 			}
 			i += n
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -2021,9 +2858,6 @@ func (m *Keyspace_ServedFrom) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintTopodata(dAtA, i, uint64(len(m.Keyspace)))
 		i += copy(dAtA[i:], m.Keyspace)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -2054,9 +2888,6 @@ func (m *ShardReplication) MarshalTo(dAtA []byte) (int, error) {
 			i += n
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -2084,9 +2915,6 @@ func (m *ShardReplication_Node) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err6
 		}
 		i += n6
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -2121,9 +2949,6 @@ func (m *ShardReference) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err7
 		}
 		i += n7
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -2168,9 +2993,6 @@ func (m *ShardTabletControl) MarshalTo(dAtA []byte) (int, error) {
 			dAtA[i] = 0
 		}
 		i++
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -2225,9 +3047,6 @@ func (m *SrvKeyspace) MarshalTo(dAtA []byte) (int, error) {
 			i += n
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -2275,9 +3094,6 @@ func (m *SrvKeyspace_KeyspacePartition) MarshalTo(dAtA []byte) (int, error) {
 			i += n
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -2306,9 +3122,6 @@ func (m *SrvKeyspace_ServedFrom) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintTopodata(dAtA, i, uint64(len(m.Keyspace)))
 		i += copy(dAtA[i:], m.Keyspace)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -2339,9 +3152,6 @@ func (m *CellInfo) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintTopodata(dAtA, i, uint64(len(m.Root)))
 		i += copy(dAtA[i:], m.Root)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -2376,9 +3186,6 @@ func (m *CellsAlias) MarshalTo(dAtA []byte) (int, error) {
 			i += copy(dAtA[i:], s)
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -2405,9 +3212,6 @@ func (m *KeyRange) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovTopodata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -2423,9 +3227,6 @@ func (m *TabletAlias) ProtoSize() (n int) {
 	}
 	if m.Uid != 0 {
 		n += 1 + sovTopodata(uint64(m.Uid))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -2486,9 +3287,6 @@ func (m *Tablet) ProtoSize() (n int) {
 	if m.MysqlPort != 0 {
 		n += 1 + sovTopodata(uint64(m.MysqlPort))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -2527,9 +3325,6 @@ func (m *Shard) ProtoSize() (n int) {
 	if m.IsMasterServing {
 		n += 2
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -2547,9 +3342,6 @@ func (m *Shard_ServedType) ProtoSize() (n int) {
 			l = len(s)
 			n += 1 + l + sovTopodata(uint64(l))
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -2581,9 +3373,6 @@ func (m *Shard_SourceShard) ProtoSize() (n int) {
 			n += 1 + l + sovTopodata(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -2611,9 +3400,6 @@ func (m *Shard_TabletControl) ProtoSize() (n int) {
 	if m.Frozen {
 		n += 2
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -2635,9 +3421,6 @@ func (m *Keyspace) ProtoSize() (n int) {
 			l = e.ProtoSize()
 			n += 1 + l + sovTopodata(uint64(l))
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -2661,9 +3444,6 @@ func (m *Keyspace_ServedFrom) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovTopodata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -2679,9 +3459,6 @@ func (m *ShardReplication) ProtoSize() (n int) {
 			n += 1 + l + sovTopodata(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -2694,9 +3471,6 @@ func (m *ShardReplication_Node) ProtoSize() (n int) {
 	if m.TabletAlias != nil {
 		l = m.TabletAlias.ProtoSize()
 		n += 1 + l + sovTopodata(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -2714,9 +3488,6 @@ func (m *ShardReference) ProtoSize() (n int) {
 	if m.KeyRange != nil {
 		l = m.KeyRange.ProtoSize()
 		n += 1 + l + sovTopodata(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -2737,9 +3508,6 @@ func (m *ShardTabletControl) ProtoSize() (n int) {
 	}
 	if m.QueryServiceDisabled {
 		n += 2
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -2769,9 +3537,6 @@ func (m *SrvKeyspace) ProtoSize() (n int) {
 			n += 1 + l + sovTopodata(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -2796,9 +3561,6 @@ func (m *SrvKeyspace_KeyspacePartition) ProtoSize() (n int) {
 			n += 1 + l + sovTopodata(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -2814,9 +3576,6 @@ func (m *SrvKeyspace_ServedFrom) ProtoSize() (n int) {
 	l = len(m.Keyspace)
 	if l > 0 {
 		n += 1 + l + sovTopodata(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -2835,9 +3594,6 @@ func (m *CellInfo) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovTopodata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -2852,9 +3608,6 @@ func (m *CellsAlias) ProtoSize() (n int) {
 			l = len(s)
 			n += 1 + l + sovTopodata(uint64(l))
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -2871,6 +3624,298 @@ func sovTopodata(x uint64) (n int) {
 }
 func sozTopodata(x uint64) (n int) {
 	return sovTopodata(uint64((x << 1) ^ uint64((int64(x) >> 63))))
+}
+func (this *KeyRange) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&KeyRange{`,
+		`Start:` + fmt.Sprintf("%v", this.Start) + `,`,
+		`End:` + fmt.Sprintf("%v", this.End) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *TabletAlias) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&TabletAlias{`,
+		`Cell:` + fmt.Sprintf("%v", this.Cell) + `,`,
+		`Uid:` + fmt.Sprintf("%v", this.Uid) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Tablet) String() string {
+	if this == nil {
+		return "nil"
+	}
+	keysForPortMap := make([]string, 0, len(this.PortMap))
+	for k := range this.PortMap {
+		keysForPortMap = append(keysForPortMap, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForPortMap)
+	mapStringForPortMap := "map[string]int32{"
+	for _, k := range keysForPortMap {
+		mapStringForPortMap += fmt.Sprintf("%v: %v,", k, this.PortMap[k])
+	}
+	mapStringForPortMap += "}"
+	keysForTags := make([]string, 0, len(this.Tags))
+	for k := range this.Tags {
+		keysForTags = append(keysForTags, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForTags)
+	mapStringForTags := "map[string]string{"
+	for _, k := range keysForTags {
+		mapStringForTags += fmt.Sprintf("%v: %v,", k, this.Tags[k])
+	}
+	mapStringForTags += "}"
+	s := strings.Join([]string{`&Tablet{`,
+		`Alias:` + strings.Replace(this.Alias.String(), "TabletAlias", "TabletAlias", 1) + `,`,
+		`Hostname:` + fmt.Sprintf("%v", this.Hostname) + `,`,
+		`PortMap:` + mapStringForPortMap + `,`,
+		`Keyspace:` + fmt.Sprintf("%v", this.Keyspace) + `,`,
+		`Shard:` + fmt.Sprintf("%v", this.Shard) + `,`,
+		`KeyRange:` + strings.Replace(this.KeyRange.String(), "KeyRange", "KeyRange", 1) + `,`,
+		`Type:` + fmt.Sprintf("%v", this.Type) + `,`,
+		`DbNameOverride:` + fmt.Sprintf("%v", this.DbNameOverride) + `,`,
+		`Tags:` + mapStringForTags + `,`,
+		`MysqlHostname:` + fmt.Sprintf("%v", this.MysqlHostname) + `,`,
+		`MysqlPort:` + fmt.Sprintf("%v", this.MysqlPort) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Shard) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForServedTypes := "[]*Shard_ServedType{"
+	for _, f := range this.ServedTypes {
+		repeatedStringForServedTypes += strings.Replace(fmt.Sprintf("%v", f), "Shard_ServedType", "Shard_ServedType", 1) + ","
+	}
+	repeatedStringForServedTypes += "}"
+	repeatedStringForSourceShards := "[]*Shard_SourceShard{"
+	for _, f := range this.SourceShards {
+		repeatedStringForSourceShards += strings.Replace(fmt.Sprintf("%v", f), "Shard_SourceShard", "Shard_SourceShard", 1) + ","
+	}
+	repeatedStringForSourceShards += "}"
+	repeatedStringForTabletControls := "[]*Shard_TabletControl{"
+	for _, f := range this.TabletControls {
+		repeatedStringForTabletControls += strings.Replace(fmt.Sprintf("%v", f), "Shard_TabletControl", "Shard_TabletControl", 1) + ","
+	}
+	repeatedStringForTabletControls += "}"
+	s := strings.Join([]string{`&Shard{`,
+		`MasterAlias:` + strings.Replace(this.MasterAlias.String(), "TabletAlias", "TabletAlias", 1) + `,`,
+		`KeyRange:` + strings.Replace(this.KeyRange.String(), "KeyRange", "KeyRange", 1) + `,`,
+		`ServedTypes:` + repeatedStringForServedTypes + `,`,
+		`SourceShards:` + repeatedStringForSourceShards + `,`,
+		`TabletControls:` + repeatedStringForTabletControls + `,`,
+		`IsMasterServing:` + fmt.Sprintf("%v", this.IsMasterServing) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Shard_ServedType) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&Shard_ServedType{`,
+		`TabletType:` + fmt.Sprintf("%v", this.TabletType) + `,`,
+		`Cells:` + fmt.Sprintf("%v", this.Cells) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Shard_SourceShard) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&Shard_SourceShard{`,
+		`Uid:` + fmt.Sprintf("%v", this.Uid) + `,`,
+		`Keyspace:` + fmt.Sprintf("%v", this.Keyspace) + `,`,
+		`Shard:` + fmt.Sprintf("%v", this.Shard) + `,`,
+		`KeyRange:` + strings.Replace(this.KeyRange.String(), "KeyRange", "KeyRange", 1) + `,`,
+		`Tables:` + fmt.Sprintf("%v", this.Tables) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Shard_TabletControl) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&Shard_TabletControl{`,
+		`TabletType:` + fmt.Sprintf("%v", this.TabletType) + `,`,
+		`Cells:` + fmt.Sprintf("%v", this.Cells) + `,`,
+		`BlacklistedTables:` + fmt.Sprintf("%v", this.BlacklistedTables) + `,`,
+		`Frozen:` + fmt.Sprintf("%v", this.Frozen) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Keyspace) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForServedFroms := "[]*Keyspace_ServedFrom{"
+	for _, f := range this.ServedFroms {
+		repeatedStringForServedFroms += strings.Replace(fmt.Sprintf("%v", f), "Keyspace_ServedFrom", "Keyspace_ServedFrom", 1) + ","
+	}
+	repeatedStringForServedFroms += "}"
+	s := strings.Join([]string{`&Keyspace{`,
+		`ShardingColumnName:` + fmt.Sprintf("%v", this.ShardingColumnName) + `,`,
+		`ShardingColumnType:` + fmt.Sprintf("%v", this.ShardingColumnType) + `,`,
+		`ServedFroms:` + repeatedStringForServedFroms + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Keyspace_ServedFrom) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&Keyspace_ServedFrom{`,
+		`TabletType:` + fmt.Sprintf("%v", this.TabletType) + `,`,
+		`Cells:` + fmt.Sprintf("%v", this.Cells) + `,`,
+		`Keyspace:` + fmt.Sprintf("%v", this.Keyspace) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ShardReplication) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForNodes := "[]*ShardReplication_Node{"
+	for _, f := range this.Nodes {
+		repeatedStringForNodes += strings.Replace(fmt.Sprintf("%v", f), "ShardReplication_Node", "ShardReplication_Node", 1) + ","
+	}
+	repeatedStringForNodes += "}"
+	s := strings.Join([]string{`&ShardReplication{`,
+		`Nodes:` + repeatedStringForNodes + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ShardReplication_Node) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ShardReplication_Node{`,
+		`TabletAlias:` + strings.Replace(this.TabletAlias.String(), "TabletAlias", "TabletAlias", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ShardReference) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ShardReference{`,
+		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
+		`KeyRange:` + strings.Replace(this.KeyRange.String(), "KeyRange", "KeyRange", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ShardTabletControl) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ShardTabletControl{`,
+		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
+		`KeyRange:` + strings.Replace(this.KeyRange.String(), "KeyRange", "KeyRange", 1) + `,`,
+		`QueryServiceDisabled:` + fmt.Sprintf("%v", this.QueryServiceDisabled) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SrvKeyspace) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForPartitions := "[]*SrvKeyspace_KeyspacePartition{"
+	for _, f := range this.Partitions {
+		repeatedStringForPartitions += strings.Replace(fmt.Sprintf("%v", f), "SrvKeyspace_KeyspacePartition", "SrvKeyspace_KeyspacePartition", 1) + ","
+	}
+	repeatedStringForPartitions += "}"
+	repeatedStringForServedFrom := "[]*SrvKeyspace_ServedFrom{"
+	for _, f := range this.ServedFrom {
+		repeatedStringForServedFrom += strings.Replace(fmt.Sprintf("%v", f), "SrvKeyspace_ServedFrom", "SrvKeyspace_ServedFrom", 1) + ","
+	}
+	repeatedStringForServedFrom += "}"
+	s := strings.Join([]string{`&SrvKeyspace{`,
+		`Partitions:` + repeatedStringForPartitions + `,`,
+		`ShardingColumnName:` + fmt.Sprintf("%v", this.ShardingColumnName) + `,`,
+		`ShardingColumnType:` + fmt.Sprintf("%v", this.ShardingColumnType) + `,`,
+		`ServedFrom:` + repeatedStringForServedFrom + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SrvKeyspace_KeyspacePartition) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForShardReferences := "[]*ShardReference{"
+	for _, f := range this.ShardReferences {
+		repeatedStringForShardReferences += strings.Replace(f.String(), "ShardReference", "ShardReference", 1) + ","
+	}
+	repeatedStringForShardReferences += "}"
+	repeatedStringForShardTabletControls := "[]*ShardTabletControl{"
+	for _, f := range this.ShardTabletControls {
+		repeatedStringForShardTabletControls += strings.Replace(f.String(), "ShardTabletControl", "ShardTabletControl", 1) + ","
+	}
+	repeatedStringForShardTabletControls += "}"
+	s := strings.Join([]string{`&SrvKeyspace_KeyspacePartition{`,
+		`ServedType:` + fmt.Sprintf("%v", this.ServedType) + `,`,
+		`ShardReferences:` + repeatedStringForShardReferences + `,`,
+		`ShardTabletControls:` + repeatedStringForShardTabletControls + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SrvKeyspace_ServedFrom) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SrvKeyspace_ServedFrom{`,
+		`TabletType:` + fmt.Sprintf("%v", this.TabletType) + `,`,
+		`Keyspace:` + fmt.Sprintf("%v", this.Keyspace) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *CellInfo) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&CellInfo{`,
+		`ServerAddress:` + fmt.Sprintf("%v", this.ServerAddress) + `,`,
+		`Root:` + fmt.Sprintf("%v", this.Root) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *CellsAlias) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&CellsAlias{`,
+		`Cells:` + fmt.Sprintf("%v", this.Cells) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func valueToStringTopodata(v interface{}) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("*%v", pv)
 }
 func (m *KeyRange) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
@@ -2984,7 +4029,6 @@ func (m *KeyRange) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -3089,7 +4133,6 @@ func (m *TabletAlias) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -3653,7 +4696,6 @@ func (m *Tablet) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -3901,7 +4943,6 @@ func (m *Shard) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4006,7 +5047,6 @@ func (m *Shard_ServedType) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4211,7 +5251,6 @@ func (m *Shard_SourceShard) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4368,7 +5407,6 @@ func (m *Shard_TabletControl) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4507,7 +5545,6 @@ func (m *Keyspace) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4644,7 +5681,6 @@ func (m *Keyspace_ServedFrom) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4732,7 +5768,6 @@ func (m *ShardReplication) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4822,7 +5857,6 @@ func (m *ShardReplication_Node) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4944,7 +5978,6 @@ func (m *ShardReference) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -5086,7 +6119,6 @@ func (m *ShardTabletControl) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -5259,7 +6291,6 @@ func (m *SrvKeyspace) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -5400,7 +6431,6 @@ func (m *SrvKeyspace_KeyspacePartition) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -5505,7 +6535,6 @@ func (m *SrvKeyspace_ServedFrom) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -5623,7 +6652,6 @@ func (m *CellInfo) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -5709,7 +6737,6 @@ func (m *CellsAlias) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}

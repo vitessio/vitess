@@ -4,9 +4,13 @@
 package binlogdata
 
 import (
+	bytes "bytes"
 	fmt "fmt"
 	io "io"
 	math "math"
+	reflect "reflect"
+	strconv "strconv"
+	strings "strings"
 
 	proto "github.com/gogo/protobuf/proto"
 	query "vitess.io/vitess/go/vt/proto/query"
@@ -29,10 +33,10 @@ const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
 type OnDDLAction int32
 
 const (
-	OnDDLAction_IGNORE      OnDDLAction = 0
-	OnDDLAction_STOP        OnDDLAction = 1
-	OnDDLAction_EXEC        OnDDLAction = 2
-	OnDDLAction_EXEC_IGNORE OnDDLAction = 3
+	IGNORE      OnDDLAction = 0
+	STOP        OnDDLAction = 1
+	EXEC        OnDDLAction = 2
+	EXEC_IGNORE OnDDLAction = 3
 )
 
 var OnDDLAction_name = map[int32]string{
@@ -49,10 +53,6 @@ var OnDDLAction_value = map[string]int32{
 	"EXEC_IGNORE": 3,
 }
 
-func (x OnDDLAction) String() string {
-	return proto.EnumName(OnDDLAction_name, int32(x))
-}
-
 func (OnDDLAction) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_5fd02bcb2e350dad, []int{0}
 }
@@ -63,22 +63,22 @@ func (OnDDLAction) EnumDescriptor() ([]byte, []int) {
 type VEventType int32
 
 const (
-	VEventType_UNKNOWN   VEventType = 0
-	VEventType_GTID      VEventType = 1
-	VEventType_BEGIN     VEventType = 2
-	VEventType_COMMIT    VEventType = 3
-	VEventType_ROLLBACK  VEventType = 4
-	VEventType_DDL       VEventType = 5
-	VEventType_INSERT    VEventType = 6
-	VEventType_REPLACE   VEventType = 7
-	VEventType_UPDATE    VEventType = 8
-	VEventType_DELETE    VEventType = 9
-	VEventType_SET       VEventType = 10
-	VEventType_OTHER     VEventType = 11
-	VEventType_ROW       VEventType = 12
-	VEventType_FIELD     VEventType = 13
-	VEventType_HEARTBEAT VEventType = 14
-	VEventType_VGTID     VEventType = 15
+	UNKNOWN   VEventType = 0
+	GTID      VEventType = 1
+	BEGIN     VEventType = 2
+	COMMIT    VEventType = 3
+	ROLLBACK  VEventType = 4
+	DDL       VEventType = 5
+	INSERT    VEventType = 6
+	REPLACE   VEventType = 7
+	UPDATE    VEventType = 8
+	DELETE    VEventType = 9
+	SET       VEventType = 10
+	OTHER     VEventType = 11
+	ROW       VEventType = 12
+	FIELD     VEventType = 13
+	HEARTBEAT VEventType = 14
+	VGTID     VEventType = 15
 )
 
 var VEventType_name = map[int32]string{
@@ -119,10 +119,6 @@ var VEventType_value = map[string]int32{
 	"VGTID":     15,
 }
 
-func (x VEventType) String() string {
-	return proto.EnumName(VEventType_name, int32(x))
-}
-
 func (VEventType) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_5fd02bcb2e350dad, []int{1}
 }
@@ -130,17 +126,17 @@ func (VEventType) EnumDescriptor() ([]byte, []int) {
 type BinlogTransaction_Statement_Category int32
 
 const (
-	BinlogTransaction_Statement_BL_UNRECOGNIZED BinlogTransaction_Statement_Category = 0
-	BinlogTransaction_Statement_BL_BEGIN        BinlogTransaction_Statement_Category = 1
-	BinlogTransaction_Statement_BL_COMMIT       BinlogTransaction_Statement_Category = 2
-	BinlogTransaction_Statement_BL_ROLLBACK     BinlogTransaction_Statement_Category = 3
+	BL_UNRECOGNIZED BinlogTransaction_Statement_Category = 0
+	BL_BEGIN        BinlogTransaction_Statement_Category = 1
+	BL_COMMIT       BinlogTransaction_Statement_Category = 2
+	BL_ROLLBACK     BinlogTransaction_Statement_Category = 3
 	// BL_DML is deprecated.
-	BinlogTransaction_Statement_BL_DML_DEPRECATED BinlogTransaction_Statement_Category = 4
-	BinlogTransaction_Statement_BL_DDL            BinlogTransaction_Statement_Category = 5
-	BinlogTransaction_Statement_BL_SET            BinlogTransaction_Statement_Category = 6
-	BinlogTransaction_Statement_BL_INSERT         BinlogTransaction_Statement_Category = 7
-	BinlogTransaction_Statement_BL_UPDATE         BinlogTransaction_Statement_Category = 8
-	BinlogTransaction_Statement_BL_DELETE         BinlogTransaction_Statement_Category = 9
+	BL_DML_DEPRECATED BinlogTransaction_Statement_Category = 4
+	BL_DDL            BinlogTransaction_Statement_Category = 5
+	BL_SET            BinlogTransaction_Statement_Category = 6
+	BL_INSERT         BinlogTransaction_Statement_Category = 7
+	BL_UPDATE         BinlogTransaction_Statement_Category = 8
+	BL_DELETE         BinlogTransaction_Statement_Category = 9
 )
 
 var BinlogTransaction_Statement_Category_name = map[int32]string{
@@ -169,10 +165,6 @@ var BinlogTransaction_Statement_Category_value = map[string]int32{
 	"BL_DELETE":         9,
 }
 
-func (x BinlogTransaction_Statement_Category) String() string {
-	return proto.EnumName(BinlogTransaction_Statement_Category_name, int32(x))
-}
-
 func (BinlogTransaction_Statement_Category) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_5fd02bcb2e350dad, []int{1, 0, 0}
 }
@@ -184,15 +176,11 @@ type Charset struct {
 	// @@session.collation_connection
 	Conn int32 `protobuf:"varint,2,opt,name=conn,proto3" json:"conn,omitempty"`
 	// @@session.collation_server
-	Server               int32    `protobuf:"varint,3,opt,name=server,proto3" json:"server,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Server int32 `protobuf:"varint,3,opt,name=server,proto3" json:"server,omitempty"`
 }
 
-func (m *Charset) Reset()         { *m = Charset{} }
-func (m *Charset) String() string { return proto.CompactTextString(m) }
-func (*Charset) ProtoMessage()    {}
+func (m *Charset) Reset()      { *m = Charset{} }
+func (*Charset) ProtoMessage() {}
 func (*Charset) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5fd02bcb2e350dad, []int{0}
 }
@@ -250,15 +238,11 @@ type BinlogTransaction struct {
 	// the statements in this transaction
 	Statements []*BinlogTransaction_Statement `protobuf:"bytes,1,rep,name=statements,proto3" json:"statements,omitempty"`
 	// The Event Token for this event.
-	EventToken           *query.EventToken `protobuf:"bytes,4,opt,name=event_token,json=eventToken,proto3" json:"event_token,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
+	EventToken *query.EventToken `protobuf:"bytes,4,opt,name=event_token,json=eventToken,proto3" json:"event_token,omitempty"`
 }
 
-func (m *BinlogTransaction) Reset()         { *m = BinlogTransaction{} }
-func (m *BinlogTransaction) String() string { return proto.CompactTextString(m) }
-func (*BinlogTransaction) ProtoMessage()    {}
+func (m *BinlogTransaction) Reset()      { *m = BinlogTransaction{} }
+func (*BinlogTransaction) ProtoMessage() {}
 func (*BinlogTransaction) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5fd02bcb2e350dad, []int{1}
 }
@@ -309,15 +293,11 @@ type BinlogTransaction_Statement struct {
 	// charset of this statement, if different from pre-negotiated default.
 	Charset *Charset `protobuf:"bytes,2,opt,name=charset,proto3" json:"charset,omitempty"`
 	// the sql
-	Sql                  []byte   `protobuf:"bytes,3,opt,name=sql,proto3" json:"sql,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Sql []byte `protobuf:"bytes,3,opt,name=sql,proto3" json:"sql,omitempty"`
 }
 
-func (m *BinlogTransaction_Statement) Reset()         { *m = BinlogTransaction_Statement{} }
-func (m *BinlogTransaction_Statement) String() string { return proto.CompactTextString(m) }
-func (*BinlogTransaction_Statement) ProtoMessage()    {}
+func (m *BinlogTransaction_Statement) Reset()      { *m = BinlogTransaction_Statement{} }
+func (*BinlogTransaction_Statement) ProtoMessage() {}
 func (*BinlogTransaction_Statement) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5fd02bcb2e350dad, []int{1, 0}
 }
@@ -352,7 +332,7 @@ func (m *BinlogTransaction_Statement) GetCategory() BinlogTransaction_Statement_
 	if m != nil {
 		return m.Category
 	}
-	return BinlogTransaction_Statement_BL_UNRECOGNIZED
+	return BL_UNRECOGNIZED
 }
 
 func (m *BinlogTransaction_Statement) GetCharset() *Charset {
@@ -376,15 +356,11 @@ type StreamKeyRangeRequest struct {
 	// what to get
 	KeyRange *topodata.KeyRange `protobuf:"bytes,2,opt,name=key_range,json=keyRange,proto3" json:"key_range,omitempty"`
 	// default charset on the player side
-	Charset              *Charset `protobuf:"bytes,3,opt,name=charset,proto3" json:"charset,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Charset *Charset `protobuf:"bytes,3,opt,name=charset,proto3" json:"charset,omitempty"`
 }
 
-func (m *StreamKeyRangeRequest) Reset()         { *m = StreamKeyRangeRequest{} }
-func (m *StreamKeyRangeRequest) String() string { return proto.CompactTextString(m) }
-func (*StreamKeyRangeRequest) ProtoMessage()    {}
+func (m *StreamKeyRangeRequest) Reset()      { *m = StreamKeyRangeRequest{} }
+func (*StreamKeyRangeRequest) ProtoMessage() {}
 func (*StreamKeyRangeRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5fd02bcb2e350dad, []int{2}
 }
@@ -438,15 +414,11 @@ func (m *StreamKeyRangeRequest) GetCharset() *Charset {
 
 // StreamKeyRangeResponse is the response from StreamKeyRange
 type StreamKeyRangeResponse struct {
-	BinlogTransaction    *BinlogTransaction `protobuf:"bytes,1,opt,name=binlog_transaction,json=binlogTransaction,proto3" json:"binlog_transaction,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
-	XXX_unrecognized     []byte             `json:"-"`
-	XXX_sizecache        int32              `json:"-"`
+	BinlogTransaction *BinlogTransaction `protobuf:"bytes,1,opt,name=binlog_transaction,json=binlogTransaction,proto3" json:"binlog_transaction,omitempty"`
 }
 
-func (m *StreamKeyRangeResponse) Reset()         { *m = StreamKeyRangeResponse{} }
-func (m *StreamKeyRangeResponse) String() string { return proto.CompactTextString(m) }
-func (*StreamKeyRangeResponse) ProtoMessage()    {}
+func (m *StreamKeyRangeResponse) Reset()      { *m = StreamKeyRangeResponse{} }
+func (*StreamKeyRangeResponse) ProtoMessage() {}
 func (*StreamKeyRangeResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5fd02bcb2e350dad, []int{3}
 }
@@ -491,15 +463,11 @@ type StreamTablesRequest struct {
 	// what to get
 	Tables []string `protobuf:"bytes,2,rep,name=tables,proto3" json:"tables,omitempty"`
 	// default charset on the player side
-	Charset              *Charset `protobuf:"bytes,3,opt,name=charset,proto3" json:"charset,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Charset *Charset `protobuf:"bytes,3,opt,name=charset,proto3" json:"charset,omitempty"`
 }
 
-func (m *StreamTablesRequest) Reset()         { *m = StreamTablesRequest{} }
-func (m *StreamTablesRequest) String() string { return proto.CompactTextString(m) }
-func (*StreamTablesRequest) ProtoMessage()    {}
+func (m *StreamTablesRequest) Reset()      { *m = StreamTablesRequest{} }
+func (*StreamTablesRequest) ProtoMessage() {}
 func (*StreamTablesRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5fd02bcb2e350dad, []int{4}
 }
@@ -553,15 +521,11 @@ func (m *StreamTablesRequest) GetCharset() *Charset {
 
 // StreamTablesResponse is the response from StreamTables
 type StreamTablesResponse struct {
-	BinlogTransaction    *BinlogTransaction `protobuf:"bytes,1,opt,name=binlog_transaction,json=binlogTransaction,proto3" json:"binlog_transaction,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
-	XXX_unrecognized     []byte             `json:"-"`
-	XXX_sizecache        int32              `json:"-"`
+	BinlogTransaction *BinlogTransaction `protobuf:"bytes,1,opt,name=binlog_transaction,json=binlogTransaction,proto3" json:"binlog_transaction,omitempty"`
 }
 
-func (m *StreamTablesResponse) Reset()         { *m = StreamTablesResponse{} }
-func (m *StreamTablesResponse) String() string { return proto.CompactTextString(m) }
-func (*StreamTablesResponse) ProtoMessage()    {}
+func (m *StreamTablesResponse) Reset()      { *m = StreamTablesResponse{} }
+func (*StreamTablesResponse) ProtoMessage() {}
 func (*StreamTablesResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5fd02bcb2e350dad, []int{5}
 }
@@ -607,15 +571,11 @@ type Rule struct {
 	// filter can be an empty string or keyrange if the match
 	// is a regular expression. Otherwise, it must be a select
 	// query.
-	Filter               string   `protobuf:"bytes,2,opt,name=filter,proto3" json:"filter,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Filter string `protobuf:"bytes,2,opt,name=filter,proto3" json:"filter,omitempty"`
 }
 
-func (m *Rule) Reset()         { *m = Rule{} }
-func (m *Rule) String() string { return proto.CompactTextString(m) }
-func (*Rule) ProtoMessage()    {}
+func (m *Rule) Reset()      { *m = Rule{} }
+func (*Rule) ProtoMessage() {}
 func (*Rule) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5fd02bcb2e350dad, []int{6}
 }
@@ -663,15 +623,11 @@ func (m *Rule) GetFilter() string {
 // Filter represents a list of ordered rules. First match
 // wins.
 type Filter struct {
-	Rules                []*Rule  `protobuf:"bytes,1,rep,name=rules,proto3" json:"rules,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Rules []*Rule `protobuf:"bytes,1,rep,name=rules,proto3" json:"rules,omitempty"`
 }
 
-func (m *Filter) Reset()         { *m = Filter{} }
-func (m *Filter) String() string { return proto.CompactTextString(m) }
-func (*Filter) ProtoMessage()    {}
+func (m *Filter) Reset()      { *m = Filter{} }
+func (*Filter) ProtoMessage() {}
 func (*Filter) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5fd02bcb2e350dad, []int{7}
 }
@@ -727,15 +683,11 @@ type BinlogSource struct {
 	// for the filter.
 	Filter *Filter `protobuf:"bytes,6,opt,name=filter,proto3" json:"filter,omitempty"`
 	// on_ddl specifies the action to be taken when a DDL is encountered.
-	OnDdl                OnDDLAction `protobuf:"varint,7,opt,name=on_ddl,json=onDdl,proto3,enum=binlogdata.OnDDLAction" json:"on_ddl,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
-	XXX_unrecognized     []byte      `json:"-"`
-	XXX_sizecache        int32       `json:"-"`
+	OnDdl OnDDLAction `protobuf:"varint,7,opt,name=on_ddl,json=onDdl,proto3,enum=binlogdata.OnDDLAction" json:"on_ddl,omitempty"`
 }
 
-func (m *BinlogSource) Reset()         { *m = BinlogSource{} }
-func (m *BinlogSource) String() string { return proto.CompactTextString(m) }
-func (*BinlogSource) ProtoMessage()    {}
+func (m *BinlogSource) Reset()      { *m = BinlogSource{} }
+func (*BinlogSource) ProtoMessage() {}
 func (*BinlogSource) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5fd02bcb2e350dad, []int{8}
 }
@@ -784,7 +736,7 @@ func (m *BinlogSource) GetTabletType() topodata.TabletType {
 	if m != nil {
 		return m.TabletType
 	}
-	return topodata.TabletType_UNKNOWN
+	return topodata.UNKNOWN
 }
 
 func (m *BinlogSource) GetKeyRange() *topodata.KeyRange {
@@ -812,21 +764,17 @@ func (m *BinlogSource) GetOnDdl() OnDDLAction {
 	if m != nil {
 		return m.OnDdl
 	}
-	return OnDDLAction_IGNORE
+	return IGNORE
 }
 
 // RowChange represents one row change
 type RowChange struct {
-	Before               *query.Row `protobuf:"bytes,1,opt,name=before,proto3" json:"before,omitempty"`
-	After                *query.Row `protobuf:"bytes,2,opt,name=after,proto3" json:"after,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}   `json:"-"`
-	XXX_unrecognized     []byte     `json:"-"`
-	XXX_sizecache        int32      `json:"-"`
+	Before *query.Row `protobuf:"bytes,1,opt,name=before,proto3" json:"before,omitempty"`
+	After  *query.Row `protobuf:"bytes,2,opt,name=after,proto3" json:"after,omitempty"`
 }
 
-func (m *RowChange) Reset()         { *m = RowChange{} }
-func (m *RowChange) String() string { return proto.CompactTextString(m) }
-func (*RowChange) ProtoMessage()    {}
+func (m *RowChange) Reset()      { *m = RowChange{} }
+func (*RowChange) ProtoMessage() {}
 func (*RowChange) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5fd02bcb2e350dad, []int{9}
 }
@@ -873,16 +821,12 @@ func (m *RowChange) GetAfter() *query.Row {
 
 // RowEvent represent row events for one table
 type RowEvent struct {
-	TableName            string       `protobuf:"bytes,1,opt,name=table_name,json=tableName,proto3" json:"table_name,omitempty"`
-	RowChanges           []*RowChange `protobuf:"bytes,2,rep,name=row_changes,json=rowChanges,proto3" json:"row_changes,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
-	XXX_unrecognized     []byte       `json:"-"`
-	XXX_sizecache        int32        `json:"-"`
+	TableName  string       `protobuf:"bytes,1,opt,name=table_name,json=tableName,proto3" json:"table_name,omitempty"`
+	RowChanges []*RowChange `protobuf:"bytes,2,rep,name=row_changes,json=rowChanges,proto3" json:"row_changes,omitempty"`
 }
 
-func (m *RowEvent) Reset()         { *m = RowEvent{} }
-func (m *RowEvent) String() string { return proto.CompactTextString(m) }
-func (*RowEvent) ProtoMessage()    {}
+func (m *RowEvent) Reset()      { *m = RowEvent{} }
+func (*RowEvent) ProtoMessage() {}
 func (*RowEvent) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5fd02bcb2e350dad, []int{10}
 }
@@ -928,16 +872,12 @@ func (m *RowEvent) GetRowChanges() []*RowChange {
 }
 
 type FieldEvent struct {
-	TableName            string         `protobuf:"bytes,1,opt,name=table_name,json=tableName,proto3" json:"table_name,omitempty"`
-	Fields               []*query.Field `protobuf:"bytes,2,rep,name=fields,proto3" json:"fields,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+	TableName string         `protobuf:"bytes,1,opt,name=table_name,json=tableName,proto3" json:"table_name,omitempty"`
+	Fields    []*query.Field `protobuf:"bytes,2,rep,name=fields,proto3" json:"fields,omitempty"`
 }
 
-func (m *FieldEvent) Reset()         { *m = FieldEvent{} }
-func (m *FieldEvent) String() string { return proto.CompactTextString(m) }
-func (*FieldEvent) ProtoMessage()    {}
+func (m *FieldEvent) Reset()      { *m = FieldEvent{} }
+func (*FieldEvent) ProtoMessage() {}
 func (*FieldEvent) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5fd02bcb2e350dad, []int{11}
 }
@@ -983,17 +923,13 @@ func (m *FieldEvent) GetFields() []*query.Field {
 }
 
 type ShardGtid struct {
-	Keyspace             string   `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
-	Shard                string   `protobuf:"bytes,2,opt,name=shard,proto3" json:"shard,omitempty"`
-	Gtid                 string   `protobuf:"bytes,3,opt,name=gtid,proto3" json:"gtid,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Keyspace string `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	Shard    string `protobuf:"bytes,2,opt,name=shard,proto3" json:"shard,omitempty"`
+	Gtid     string `protobuf:"bytes,3,opt,name=gtid,proto3" json:"gtid,omitempty"`
 }
 
-func (m *ShardGtid) Reset()         { *m = ShardGtid{} }
-func (m *ShardGtid) String() string { return proto.CompactTextString(m) }
-func (*ShardGtid) ProtoMessage()    {}
+func (m *ShardGtid) Reset()      { *m = ShardGtid{} }
+func (*ShardGtid) ProtoMessage() {}
 func (*ShardGtid) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5fd02bcb2e350dad, []int{12}
 }
@@ -1046,15 +982,11 @@ func (m *ShardGtid) GetGtid() string {
 }
 
 type VGtid struct {
-	ShardGtids           []*ShardGtid `protobuf:"bytes,1,rep,name=shard_gtids,json=shardGtids,proto3" json:"shard_gtids,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
-	XXX_unrecognized     []byte       `json:"-"`
-	XXX_sizecache        int32        `json:"-"`
+	ShardGtids []*ShardGtid `protobuf:"bytes,1,rep,name=shard_gtids,json=shardGtids,proto3" json:"shard_gtids,omitempty"`
 }
 
-func (m *VGtid) Reset()         { *m = VGtid{} }
-func (m *VGtid) String() string { return proto.CompactTextString(m) }
-func (*VGtid) ProtoMessage()    {}
+func (m *VGtid) Reset()      { *m = VGtid{} }
+func (*VGtid) ProtoMessage() {}
 func (*VGtid) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5fd02bcb2e350dad, []int{13}
 }
@@ -1102,15 +1034,11 @@ type VEvent struct {
 	FieldEvent *FieldEvent `protobuf:"bytes,6,opt,name=field_event,json=fieldEvent,proto3" json:"field_event,omitempty"`
 	Vgtid      *VGtid      `protobuf:"bytes,7,opt,name=vgtid,proto3" json:"vgtid,omitempty"`
 	// current_time specifies the current time to handle clock skew.
-	CurrentTime          int64    `protobuf:"varint,20,opt,name=current_time,json=currentTime,proto3" json:"current_time,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	CurrentTime int64 `protobuf:"varint,20,opt,name=current_time,json=currentTime,proto3" json:"current_time,omitempty"`
 }
 
-func (m *VEvent) Reset()         { *m = VEvent{} }
-func (m *VEvent) String() string { return proto.CompactTextString(m) }
-func (*VEvent) ProtoMessage()    {}
+func (m *VEvent) Reset()      { *m = VEvent{} }
+func (*VEvent) ProtoMessage() {}
 func (*VEvent) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5fd02bcb2e350dad, []int{14}
 }
@@ -1145,7 +1073,7 @@ func (m *VEvent) GetType() VEventType {
 	if m != nil {
 		return m.Type
 	}
-	return VEventType_UNKNOWN
+	return UNKNOWN
 }
 
 func (m *VEvent) GetTimestamp() int64 {
@@ -1199,19 +1127,15 @@ func (m *VEvent) GetCurrentTime() int64 {
 
 // VStreamRequest is the payload for VStream
 type VStreamRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID       `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *query.VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
-	Target               *query.Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
-	Position             string                `protobuf:"bytes,4,opt,name=position,proto3" json:"position,omitempty"`
-	Filter               *Filter               `protobuf:"bytes,5,opt,name=filter,proto3" json:"filter,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	EffectiveCallerId *vtrpc.CallerID       `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *query.VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *query.Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Position          string                `protobuf:"bytes,4,opt,name=position,proto3" json:"position,omitempty"`
+	Filter            *Filter               `protobuf:"bytes,5,opt,name=filter,proto3" json:"filter,omitempty"`
 }
 
-func (m *VStreamRequest) Reset()         { *m = VStreamRequest{} }
-func (m *VStreamRequest) String() string { return proto.CompactTextString(m) }
-func (*VStreamRequest) ProtoMessage()    {}
+func (m *VStreamRequest) Reset()      { *m = VStreamRequest{} }
+func (*VStreamRequest) ProtoMessage() {}
 func (*VStreamRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5fd02bcb2e350dad, []int{15}
 }
@@ -1279,15 +1203,11 @@ func (m *VStreamRequest) GetFilter() *Filter {
 
 // VStreamResponse is the response from VStream
 type VStreamResponse struct {
-	Events               []*VEvent `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}  `json:"-"`
-	XXX_unrecognized     []byte    `json:"-"`
-	XXX_sizecache        int32     `json:"-"`
+	Events []*VEvent `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
 }
 
-func (m *VStreamResponse) Reset()         { *m = VStreamResponse{} }
-func (m *VStreamResponse) String() string { return proto.CompactTextString(m) }
-func (*VStreamResponse) ProtoMessage()    {}
+func (m *VStreamResponse) Reset()      { *m = VStreamResponse{} }
+func (*VStreamResponse) ProtoMessage() {}
 func (*VStreamResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5fd02bcb2e350dad, []int{16}
 }
@@ -1327,19 +1247,15 @@ func (m *VStreamResponse) GetEvents() []*VEvent {
 
 // VStreamRowsRequest is the payload for VStreamRows
 type VStreamRowsRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID       `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *query.VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
-	Target               *query.Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
-	Query                string                `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
-	Lastpk               *query.QueryResult    `protobuf:"bytes,5,opt,name=lastpk,proto3" json:"lastpk,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	EffectiveCallerId *vtrpc.CallerID       `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *query.VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *query.Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Query             string                `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
+	Lastpk            *query.QueryResult    `protobuf:"bytes,5,opt,name=lastpk,proto3" json:"lastpk,omitempty"`
 }
 
-func (m *VStreamRowsRequest) Reset()         { *m = VStreamRowsRequest{} }
-func (m *VStreamRowsRequest) String() string { return proto.CompactTextString(m) }
-func (*VStreamRowsRequest) ProtoMessage()    {}
+func (m *VStreamRowsRequest) Reset()      { *m = VStreamRowsRequest{} }
+func (*VStreamRowsRequest) ProtoMessage() {}
 func (*VStreamRowsRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5fd02bcb2e350dad, []int{17}
 }
@@ -1407,19 +1323,15 @@ func (m *VStreamRowsRequest) GetLastpk() *query.QueryResult {
 
 // VStreamRowsResponse is the response from VStreamRows
 type VStreamRowsResponse struct {
-	Fields               []*query.Field `protobuf:"bytes,1,rep,name=fields,proto3" json:"fields,omitempty"`
-	Pkfields             []*query.Field `protobuf:"bytes,2,rep,name=pkfields,proto3" json:"pkfields,omitempty"`
-	Gtid                 string         `protobuf:"bytes,3,opt,name=gtid,proto3" json:"gtid,omitempty"`
-	Rows                 []*query.Row   `protobuf:"bytes,4,rep,name=rows,proto3" json:"rows,omitempty"`
-	Lastpk               *query.Row     `protobuf:"bytes,5,opt,name=lastpk,proto3" json:"lastpk,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+	Fields   []*query.Field `protobuf:"bytes,1,rep,name=fields,proto3" json:"fields,omitempty"`
+	Pkfields []*query.Field `protobuf:"bytes,2,rep,name=pkfields,proto3" json:"pkfields,omitempty"`
+	Gtid     string         `protobuf:"bytes,3,opt,name=gtid,proto3" json:"gtid,omitempty"`
+	Rows     []*query.Row   `protobuf:"bytes,4,rep,name=rows,proto3" json:"rows,omitempty"`
+	Lastpk   *query.Row     `protobuf:"bytes,5,opt,name=lastpk,proto3" json:"lastpk,omitempty"`
 }
 
-func (m *VStreamRowsResponse) Reset()         { *m = VStreamRowsResponse{} }
-func (m *VStreamRowsResponse) String() string { return proto.CompactTextString(m) }
-func (*VStreamRowsResponse) ProtoMessage()    {}
+func (m *VStreamRowsResponse) Reset()      { *m = VStreamRowsResponse{} }
+func (*VStreamRowsResponse) ProtoMessage() {}
 func (*VStreamRowsResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5fd02bcb2e350dad, []int{18}
 }
@@ -1514,96 +1426,1087 @@ func init() {
 func init() { proto.RegisterFile("binlogdata.proto", fileDescriptor_5fd02bcb2e350dad) }
 
 var fileDescriptor_5fd02bcb2e350dad = []byte{
-	// 1391 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xd4, 0x57, 0xcb, 0x6e, 0xdb, 0x56,
-	0x13, 0x0e, 0x25, 0xea, 0x36, 0x74, 0x6c, 0xfa, 0xf8, 0xf2, 0x0b, 0xc6, 0x1f, 0xc3, 0x25, 0xda,
-	0xc6, 0x30, 0x50, 0x39, 0x55, 0x9b, 0x74, 0xd5, 0x06, 0xba, 0x30, 0x8a, 0x12, 0x5a, 0x72, 0x8e,
-	0x18, 0xa7, 0xc8, 0x86, 0xa0, 0xa5, 0x23, 0x9b, 0x30, 0x45, 0xca, 0xe4, 0x91, 0x5c, 0x3d, 0x40,
-	0xd1, 0x07, 0xe8, 0xb6, 0x8b, 0x6e, 0xbb, 0xeb, 0x0b, 0x74, 0x57, 0x14, 0x5d, 0xf6, 0x19, 0x52,
-	0xf4, 0x3d, 0x8a, 0x73, 0x21, 0x25, 0x39, 0x69, 0xe2, 0x16, 0xe8, 0xa2, 0x1b, 0x63, 0xee, 0x67,
-	0xe6, 0x9b, 0xd1, 0x70, 0x0c, 0xfa, 0xa9, 0x17, 0xf8, 0xe1, 0xd9, 0xc0, 0xa5, 0x6e, 0x65, 0x1c,
-	0x85, 0x34, 0x44, 0x30, 0x97, 0xec, 0x68, 0x53, 0x1a, 0x8d, 0xfb, 0x42, 0xb1, 0xa3, 0x5d, 0x4e,
-	0x48, 0x34, 0x93, 0xcc, 0x2a, 0x0d, 0xc7, 0xe1, 0xdc, 0xcb, 0x38, 0x82, 0x42, 0xe3, 0xdc, 0x8d,
-	0x62, 0x42, 0xd1, 0x36, 0xe4, 0xfb, 0xbe, 0x47, 0x02, 0x5a, 0x56, 0xf6, 0x94, 0xfd, 0x1c, 0x96,
-	0x1c, 0x42, 0xa0, 0xf6, 0xc3, 0x20, 0x28, 0x67, 0xb8, 0x94, 0xd3, 0xcc, 0x36, 0x26, 0xd1, 0x94,
-	0x44, 0xe5, 0xac, 0xb0, 0x15, 0x9c, 0xf1, 0x47, 0x16, 0xd6, 0xeb, 0x3c, 0x0f, 0x3b, 0x72, 0x83,
-	0xd8, 0xed, 0x53, 0x2f, 0x0c, 0x50, 0x0b, 0x20, 0xa6, 0x2e, 0x25, 0x23, 0x12, 0xd0, 0xb8, 0xac,
-	0xec, 0x65, 0xf7, 0xb5, 0xea, 0xdd, 0xca, 0x42, 0x05, 0xaf, 0xb9, 0x54, 0x7a, 0x89, 0x3d, 0x5e,
-	0x70, 0x45, 0x55, 0xd0, 0xc8, 0x94, 0x04, 0xd4, 0xa1, 0xe1, 0x05, 0x09, 0xca, 0xea, 0x9e, 0xb2,
-	0xaf, 0x55, 0xd7, 0x2b, 0xa2, 0x40, 0x93, 0x69, 0x6c, 0xa6, 0xc0, 0x40, 0x52, 0x7a, 0xe7, 0x97,
-	0x0c, 0x94, 0xd2, 0x68, 0xc8, 0x82, 0x62, 0xdf, 0xa5, 0xe4, 0x2c, 0x8c, 0x66, 0xbc, 0xcc, 0xd5,
-	0xea, 0xbd, 0x1b, 0x26, 0x52, 0x69, 0x48, 0x3f, 0x9c, 0x46, 0x40, 0x1f, 0x41, 0xa1, 0x2f, 0xd0,
-	0xe3, 0xe8, 0x68, 0xd5, 0x8d, 0xc5, 0x60, 0x12, 0x58, 0x9c, 0xd8, 0x20, 0x1d, 0xb2, 0xf1, 0xa5,
-	0xcf, 0x21, 0x5b, 0xc1, 0x8c, 0x34, 0x7e, 0x50, 0xa0, 0x98, 0xc4, 0x45, 0x1b, 0xb0, 0x56, 0xb7,
-	0x9c, 0xe7, 0x1d, 0x6c, 0x36, 0xba, 0xad, 0x4e, 0xfb, 0xa5, 0xd9, 0xd4, 0x6f, 0xa1, 0x15, 0x28,
-	0xd6, 0x2d, 0xa7, 0x6e, 0xb6, 0xda, 0x1d, 0x5d, 0x41, 0xb7, 0xa1, 0x54, 0xb7, 0x9c, 0x46, 0xf7,
-	0xe8, 0xa8, 0x6d, 0xeb, 0x19, 0xb4, 0x06, 0x5a, 0xdd, 0x72, 0x70, 0xd7, 0xb2, 0xea, 0xb5, 0xc6,
-	0x53, 0x3d, 0x8b, 0xb6, 0x60, 0xbd, 0x6e, 0x39, 0xcd, 0x23, 0xcb, 0x69, 0x9a, 0xc7, 0xd8, 0x6c,
-	0xd4, 0x6c, 0xb3, 0xa9, 0xab, 0x08, 0x20, 0xcf, 0xc4, 0x4d, 0x4b, 0xcf, 0x49, 0xba, 0x67, 0xda,
-	0x7a, 0x5e, 0x86, 0x6b, 0x77, 0x7a, 0x26, 0xb6, 0xf5, 0x82, 0x64, 0x9f, 0x1f, 0x37, 0x6b, 0xb6,
-	0xa9, 0x17, 0x25, 0xdb, 0x34, 0x2d, 0xd3, 0x36, 0xf5, 0xd2, 0x13, 0xb5, 0x98, 0xd1, 0xb3, 0x4f,
-	0xd4, 0x62, 0x56, 0x57, 0x8d, 0x6f, 0x15, 0xd8, 0xea, 0xd1, 0x88, 0xb8, 0xa3, 0xa7, 0x64, 0x86,
-	0xdd, 0xe0, 0x8c, 0x60, 0x72, 0x39, 0x21, 0x31, 0x45, 0x3b, 0x50, 0x1c, 0x87, 0xb1, 0xc7, 0xb0,
-	0xe3, 0x00, 0x97, 0x70, 0xca, 0xa3, 0x43, 0x28, 0x5d, 0x90, 0x99, 0x13, 0x31, 0x7b, 0x09, 0x18,
-	0xaa, 0xa4, 0x03, 0x99, 0x46, 0x2a, 0x5e, 0x48, 0x6a, 0x11, 0xdf, 0xec, 0xbb, 0xf1, 0x35, 0x86,
-	0xb0, 0x7d, 0x3d, 0xa9, 0x78, 0x1c, 0x06, 0x31, 0x41, 0x16, 0x20, 0xe1, 0xe8, 0xd0, 0x79, 0x6f,
-	0x79, 0x7e, 0x5a, 0xf5, 0xce, 0x5b, 0x07, 0x00, 0xaf, 0x9f, 0x5e, 0x17, 0x19, 0x5f, 0xc1, 0x86,
-	0x78, 0xc7, 0x76, 0x4f, 0x7d, 0x12, 0xdf, 0xa4, 0xf4, 0x6d, 0xc8, 0x53, 0x6e, 0x5c, 0xce, 0xec,
-	0x65, 0xf7, 0x4b, 0x58, 0x72, 0x7f, 0xb7, 0xc2, 0x01, 0x6c, 0x2e, 0xbf, 0xfc, 0xaf, 0xd4, 0xf7,
-	0x29, 0xa8, 0x78, 0xe2, 0x13, 0xb4, 0x09, 0xb9, 0x91, 0x4b, 0xfb, 0xe7, 0xb2, 0x1a, 0xc1, 0xb0,
-	0x52, 0x86, 0x9e, 0x4f, 0x49, 0xc4, 0x5b, 0x58, 0xc2, 0x92, 0x33, 0xee, 0x41, 0xfe, 0x11, 0xa7,
-	0xd0, 0x87, 0x90, 0x8b, 0x26, 0xac, 0x56, 0xf1, 0x53, 0xd7, 0x17, 0x13, 0x60, 0x81, 0xb1, 0x50,
-	0x1b, 0xdf, 0x65, 0x60, 0x45, 0x24, 0xd4, 0x0b, 0x27, 0x51, 0x9f, 0x30, 0x04, 0x2f, 0xc8, 0x2c,
-	0x1e, 0xbb, 0x7d, 0x92, 0x20, 0x98, 0xf0, 0x2c, 0x99, 0xf8, 0xdc, 0x8d, 0x06, 0xf2, 0x55, 0xc1,
-	0xa0, 0xfb, 0xa0, 0x71, 0x24, 0xa9, 0x43, 0x67, 0x63, 0xc2, 0x31, 0x5c, 0xad, 0x6e, 0xce, 0x87,
-	0x8a, 0xe3, 0x44, 0xed, 0xd9, 0x98, 0x60, 0xa0, 0x29, 0xbd, 0x3c, 0x89, 0xea, 0x0d, 0x26, 0x71,
-	0xde, 0xbf, 0xdc, 0x52, 0xff, 0x0e, 0x52, 0x30, 0xf2, 0x32, 0xca, 0x42, 0xad, 0x02, 0x8e, 0x04,
-	0x20, 0x54, 0x81, 0x7c, 0x18, 0x38, 0x83, 0x81, 0x5f, 0x2e, 0xf0, 0x34, 0xff, 0xb7, 0x68, 0xdb,
-	0x0d, 0x9a, 0x4d, 0xab, 0x26, 0x5a, 0x92, 0x0b, 0x83, 0xe6, 0xc0, 0x37, 0x9e, 0x41, 0x09, 0x87,
-	0x57, 0x8d, 0x73, 0x9e, 0x80, 0x01, 0xf9, 0x53, 0x32, 0x0c, 0x23, 0x22, 0xbb, 0x0a, 0x72, 0xeb,
-	0xe1, 0xf0, 0x0a, 0x4b, 0x0d, 0xda, 0x83, 0x9c, 0x3b, 0x4c, 0x1a, 0xb3, 0x6c, 0x22, 0x14, 0x86,
-	0x0b, 0x45, 0x1c, 0x5e, 0xf1, 0x4d, 0x89, 0xee, 0x80, 0x40, 0xc4, 0x09, 0xdc, 0x51, 0x02, 0x77,
-	0x89, 0x4b, 0x3a, 0xee, 0x88, 0xa0, 0x07, 0xa0, 0x45, 0xe1, 0x95, 0xd3, 0xe7, 0xcf, 0x8b, 0xb1,
-	0xd5, 0xaa, 0x5b, 0x4b, 0xad, 0x4c, 0x92, 0xc3, 0x10, 0x25, 0x64, 0x6c, 0x3c, 0x03, 0x78, 0xe4,
-	0x11, 0x7f, 0x70, 0xa3, 0x47, 0xde, 0x67, 0xf0, 0x11, 0x7f, 0x90, 0xc4, 0x5f, 0x91, 0x29, 0xf3,
-	0x08, 0x58, 0xea, 0x18, 0x10, 0x3d, 0xd6, 0xed, 0x16, 0xf5, 0x06, 0xff, 0x60, 0x46, 0x10, 0xa8,
-	0x67, 0xd4, 0x1b, 0xf0, 0xe1, 0x28, 0x61, 0x4e, 0x1b, 0x0f, 0x21, 0x77, 0xc2, 0xc3, 0x3d, 0x00,
-	0x8d, 0x5b, 0x39, 0x4c, 0x9c, 0x4c, 0xec, 0x52, 0x99, 0xe9, 0xd3, 0x18, 0xe2, 0x84, 0x8c, 0x8d,
-	0x1f, 0x33, 0x90, 0x3f, 0x11, 0x35, 0x1e, 0x80, 0xca, 0x87, 0x4f, 0x7c, 0x4f, 0xb6, 0x17, 0x7d,
-	0x85, 0x05, 0x1f, 0x3f, 0x6e, 0x83, 0xfe, 0x0f, 0x25, 0xea, 0x8d, 0x48, 0x4c, 0xdd, 0xd1, 0x98,
-	0x67, 0x99, 0xc5, 0x73, 0xc1, 0x9b, 0x32, 0x65, 0x1f, 0x0d, 0x36, 0x32, 0x2a, 0x17, 0x31, 0x12,
-	0x7d, 0x0c, 0x25, 0xd6, 0x19, 0xfe, 0x8d, 0x2b, 0xe7, 0x78, 0xab, 0x37, 0xaf, 0xf5, 0x85, 0x3f,
-	0x8b, 0x8b, 0x51, 0xd2, 0xeb, 0xcf, 0x40, 0xe3, 0x58, 0x4a, 0x27, 0x31, 0xab, 0xdb, 0xcb, 0xb3,
-	0x9a, 0xf4, 0x0c, 0xc3, 0x70, 0xde, 0xbf, 0xbb, 0x90, 0x9b, 0xf2, 0x94, 0x0a, 0xf2, 0x5b, 0xbb,
-	0x58, 0x1c, 0x07, 0x45, 0xe8, 0xd1, 0x7b, 0xb0, 0xd2, 0x9f, 0x44, 0x11, 0xff, 0x38, 0x7b, 0x23,
-	0x52, 0xde, 0xe4, 0xb5, 0x69, 0x52, 0x66, 0x7b, 0x23, 0x62, 0x7c, 0x93, 0x81, 0xd5, 0x13, 0xb1,
-	0xbe, 0x92, 0x95, 0xf9, 0x10, 0x36, 0xc8, 0x70, 0x48, 0xfa, 0xd4, 0x9b, 0x12, 0xa7, 0xef, 0xfa,
-	0x3e, 0x89, 0x1c, 0x6f, 0x20, 0x47, 0x7c, 0xad, 0x22, 0xce, 0x98, 0x06, 0x97, 0xb7, 0x9b, 0x78,
-	0x3d, 0xb5, 0x95, 0xa2, 0x01, 0x32, 0x61, 0xc3, 0x1b, 0x8d, 0xc8, 0xc0, 0x73, 0xe9, 0x62, 0x00,
-	0xf1, 0x03, 0xd8, 0x92, 0xd3, 0x74, 0x62, 0xb7, 0x5c, 0x4a, 0xe6, 0x61, 0x52, 0x8f, 0x34, 0xcc,
-	0x07, 0xec, 0xe7, 0x1d, 0x9d, 0xa5, 0x5b, 0xf8, 0xb6, 0xf4, 0xb4, 0xb9, 0x10, 0x4b, 0xe5, 0xd2,
-	0x86, 0x57, 0xaf, 0x6d, 0xf8, 0xf9, 0x26, 0xc8, 0xbd, 0x6b, 0x13, 0x18, 0x9f, 0xc3, 0x5a, 0x0a,
-	0x84, 0xdc, 0xe0, 0x07, 0x90, 0xe7, 0xbd, 0x49, 0x46, 0x10, 0xbd, 0x3e, 0x46, 0x58, 0x5a, 0x18,
-	0x5f, 0x67, 0x00, 0x25, 0xfe, 0xe1, 0x55, 0xfc, 0x1f, 0x05, 0x73, 0x13, 0x72, 0x5c, 0x2e, 0x91,
-	0x14, 0x0c, 0xc3, 0xc1, 0x77, 0x63, 0x3a, 0xbe, 0x48, 0x61, 0x14, 0xce, 0xcf, 0xd8, 0x5f, 0x4c,
-	0xe2, 0x89, 0x4f, 0xb1, 0xb4, 0x30, 0x7e, 0x52, 0x60, 0x63, 0x09, 0x07, 0x89, 0xe5, 0x7c, 0xab,
-	0x28, 0x7f, 0xbd, 0x55, 0xd0, 0x3e, 0x14, 0xc7, 0x17, 0x6f, 0xd9, 0x3e, 0xa9, 0xf6, 0x8d, 0x3f,
-	0xcb, 0x5d, 0x50, 0xa3, 0xf0, 0x2a, 0x2e, 0xab, 0xdc, 0x73, 0x71, 0xd5, 0x72, 0x39, 0xdb, 0xd7,
-	0x4b, 0x75, 0x2c, 0xed, 0x6b, 0xa1, 0x39, 0xf8, 0x02, 0xb4, 0x85, 0xb5, 0xcf, 0x2e, 0xb3, 0x76,
-	0xab, 0xd3, 0xc5, 0xa6, 0x7e, 0x0b, 0x15, 0x41, 0xed, 0xd9, 0xdd, 0x63, 0x5d, 0x61, 0x94, 0xf9,
-	0xa5, 0xd9, 0x10, 0xd7, 0x1e, 0xa3, 0x1c, 0x69, 0x94, 0x3d, 0xf8, 0x59, 0x01, 0x98, 0x6f, 0x18,
-	0xa4, 0x41, 0xe1, 0x79, 0xe7, 0x69, 0xa7, 0xfb, 0xa2, 0x23, 0x02, 0xb4, 0xec, 0x76, 0x53, 0x57,
-	0x50, 0x09, 0x72, 0xe2, 0x7c, 0xcc, 0xb0, 0x17, 0xe4, 0xed, 0x98, 0x65, 0x87, 0x65, 0x7a, 0x38,
-	0xaa, 0xa8, 0x00, 0xd9, 0xf4, 0x3c, 0x94, 0xf7, 0x60, 0x9e, 0x05, 0xc4, 0xe6, 0xb1, 0x55, 0x6b,
-	0x98, 0x7a, 0x81, 0x29, 0xd2, 0xcb, 0x10, 0x20, 0x9f, 0x9c, 0x85, 0xcc, 0x93, 0x1d, 0x93, 0xc0,
-	0xde, 0xe9, 0xda, 0x8f, 0x4d, 0xac, 0x6b, 0x4c, 0x86, 0xbb, 0x2f, 0xf4, 0x15, 0x26, 0x7b, 0xd4,
-	0x36, 0xad, 0xa6, 0x7e, 0x9b, 0x5d, 0x93, 0x8f, 0xcd, 0x1a, 0xb6, 0xeb, 0x66, 0xcd, 0xd6, 0x57,
-	0x99, 0xe6, 0x84, 0x27, 0xb8, 0x56, 0xbf, 0xff, 0xeb, 0xab, 0x5d, 0xe5, 0xb7, 0x57, 0xbb, 0xca,
-	0xf7, 0xbf, 0xef, 0x2a, 0x2f, 0xef, 0x4e, 0x3d, 0x4a, 0xe2, 0xb8, 0xe2, 0x85, 0x87, 0x82, 0x3a,
-	0x3c, 0x0b, 0x0f, 0xa7, 0xf4, 0x90, 0xff, 0xbf, 0x72, 0x38, 0xff, 0x51, 0x9c, 0xe6, 0xb9, 0xe4,
-	0x93, 0x3f, 0x03, 0x00, 0x00, 0xff, 0xff, 0xbd, 0x72, 0xb8, 0xcf, 0x0b, 0x0d, 0x00, 0x00,
+	// 1439 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xd4, 0x57, 0x4b, 0x6f, 0x1b, 0xd5,
+	0x17, 0xf7, 0xd8, 0xe3, 0xd7, 0x99, 0x34, 0x99, 0xdc, 0x3c, 0xfe, 0x56, 0xf4, 0xaf, 0x15, 0x46,
+	0x40, 0xa3, 0x48, 0x38, 0xc5, 0x40, 0x59, 0x41, 0x15, 0xdb, 0xd3, 0xd4, 0xed, 0xc4, 0x4e, 0x6f,
+	0xa6, 0x29, 0xaa, 0x84, 0x46, 0x13, 0xfb, 0x26, 0x19, 0x65, 0x3c, 0xe3, 0xce, 0xdc, 0x24, 0x78,
+	0xc7, 0x06, 0xb1, 0x45, 0x62, 0xcb, 0x82, 0x25, 0xec, 0xf8, 0x02, 0xec, 0x10, 0x62, 0xd9, 0x65,
+	0xb7, 0x4d, 0x84, 0xc4, 0xb2, 0x1f, 0x01, 0xdd, 0xc7, 0x8c, 0xed, 0xb4, 0xb4, 0x01, 0x89, 0x05,
+	0x9b, 0xe8, 0xbc, 0xef, 0x39, 0xbf, 0x73, 0x7c, 0xe6, 0x04, 0xf4, 0x7d, 0x2f, 0xf0, 0xc3, 0xc3,
+	0xbe, 0x4b, 0xdd, 0xda, 0x30, 0x0a, 0x69, 0x88, 0x60, 0x2c, 0x59, 0xd1, 0x4e, 0x69, 0x34, 0xec,
+	0x09, 0xc5, 0x8a, 0xf6, 0xe4, 0x84, 0x44, 0x23, 0xc9, 0xcc, 0xd2, 0x70, 0x18, 0x8e, 0xbd, 0x8c,
+	0x6d, 0x28, 0x36, 0x8f, 0xdc, 0x28, 0x26, 0x14, 0x2d, 0x43, 0xa1, 0xe7, 0x7b, 0x24, 0xa0, 0x15,
+	0x65, 0x55, 0x59, 0xcb, 0x63, 0xc9, 0x21, 0x04, 0x6a, 0x2f, 0x0c, 0x82, 0x4a, 0x96, 0x4b, 0x39,
+	0xcd, 0x6c, 0x63, 0x12, 0x9d, 0x92, 0xa8, 0x92, 0x13, 0xb6, 0x82, 0x33, 0x7e, 0xcf, 0xc1, 0x7c,
+	0x83, 0xe7, 0x61, 0x47, 0x6e, 0x10, 0xbb, 0x3d, 0xea, 0x85, 0x01, 0xda, 0x02, 0x88, 0xa9, 0x4b,
+	0xc9, 0x80, 0x04, 0x34, 0xae, 0x28, 0xab, 0xb9, 0x35, 0xad, 0x7e, 0xa3, 0x36, 0x51, 0xc1, 0x4b,
+	0x2e, 0xb5, 0xdd, 0xc4, 0x1e, 0x4f, 0xb8, 0xa2, 0x3a, 0x68, 0xe4, 0x94, 0x04, 0xd4, 0xa1, 0xe1,
+	0x31, 0x09, 0x2a, 0xea, 0xaa, 0xb2, 0xa6, 0xd5, 0xe7, 0x6b, 0xa2, 0x40, 0x93, 0x69, 0x6c, 0xa6,
+	0xc0, 0x40, 0x52, 0x7a, 0xe5, 0xd7, 0x2c, 0x94, 0xd3, 0x68, 0xc8, 0x82, 0x52, 0xcf, 0xa5, 0xe4,
+	0x30, 0x8c, 0x46, 0xbc, 0xcc, 0xd9, 0xfa, 0xcd, 0x2b, 0x26, 0x52, 0x6b, 0x4a, 0x3f, 0x9c, 0x46,
+	0x40, 0xef, 0x41, 0xb1, 0x27, 0xd0, 0xe3, 0xe8, 0x68, 0xf5, 0x85, 0xc9, 0x60, 0x12, 0x58, 0x9c,
+	0xd8, 0x20, 0x1d, 0x72, 0xf1, 0x13, 0x9f, 0x43, 0x36, 0x83, 0x19, 0x69, 0xfc, 0xa8, 0x40, 0x29,
+	0x89, 0x8b, 0x16, 0x60, 0xae, 0x61, 0x39, 0x0f, 0x3b, 0xd8, 0x6c, 0x76, 0xb7, 0x3a, 0xed, 0xc7,
+	0x66, 0x4b, 0xcf, 0xa0, 0x19, 0x28, 0x35, 0x2c, 0xa7, 0x61, 0x6e, 0xb5, 0x3b, 0xba, 0x82, 0xae,
+	0x41, 0xb9, 0x61, 0x39, 0xcd, 0xee, 0xf6, 0x76, 0xdb, 0xd6, 0xb3, 0x68, 0x0e, 0xb4, 0x86, 0xe5,
+	0xe0, 0xae, 0x65, 0x35, 0x36, 0x9b, 0xf7, 0xf5, 0x1c, 0x5a, 0x82, 0xf9, 0x86, 0xe5, 0xb4, 0xb6,
+	0x2d, 0xa7, 0x65, 0xee, 0x60, 0xb3, 0xb9, 0x69, 0x9b, 0x2d, 0x5d, 0x45, 0x00, 0x05, 0x26, 0x6e,
+	0x59, 0x7a, 0x5e, 0xd2, 0xbb, 0xa6, 0xad, 0x17, 0x64, 0xb8, 0x76, 0x67, 0xd7, 0xc4, 0xb6, 0x5e,
+	0x94, 0xec, 0xc3, 0x9d, 0xd6, 0xa6, 0x6d, 0xea, 0x25, 0xc9, 0xb6, 0x4c, 0xcb, 0xb4, 0x4d, 0xbd,
+	0x7c, 0x4f, 0x2d, 0x65, 0xf5, 0xdc, 0x3d, 0xb5, 0x94, 0xd3, 0x55, 0xe3, 0x5b, 0x05, 0x96, 0x76,
+	0x69, 0x44, 0xdc, 0xc1, 0x7d, 0x32, 0xc2, 0x6e, 0x70, 0x48, 0x30, 0x79, 0x72, 0x42, 0x62, 0x8a,
+	0x56, 0xa0, 0x34, 0x0c, 0x63, 0x8f, 0x61, 0xc7, 0x01, 0x2e, 0xe3, 0x94, 0x47, 0x1b, 0x50, 0x3e,
+	0x26, 0x23, 0x27, 0x62, 0xf6, 0x12, 0x30, 0x54, 0x4b, 0x07, 0x32, 0x8d, 0x54, 0x3a, 0x96, 0xd4,
+	0x24, 0xbe, 0xb9, 0x37, 0xe3, 0x6b, 0x1c, 0xc0, 0xf2, 0xe5, 0xa4, 0xe2, 0x61, 0x18, 0xc4, 0x04,
+	0x59, 0x80, 0x84, 0xa3, 0x43, 0xc7, 0xbd, 0xe5, 0xf9, 0x69, 0xf5, 0xeb, 0xaf, 0x1d, 0x00, 0x3c,
+	0xbf, 0x7f, 0x59, 0x64, 0x7c, 0x01, 0x0b, 0xe2, 0x1d, 0xdb, 0xdd, 0xf7, 0x49, 0x7c, 0x95, 0xd2,
+	0x97, 0xa1, 0x40, 0xb9, 0x71, 0x25, 0xbb, 0x9a, 0x5b, 0x2b, 0x63, 0xc9, 0xfd, 0xdd, 0x0a, 0xfb,
+	0xb0, 0x38, 0xfd, 0xf2, 0xbf, 0x52, 0xdf, 0x87, 0xa0, 0xe2, 0x13, 0x9f, 0xa0, 0x45, 0xc8, 0x0f,
+	0x5c, 0xda, 0x3b, 0x92, 0xd5, 0x08, 0x86, 0x95, 0x72, 0xe0, 0xf9, 0x94, 0x44, 0xbc, 0x85, 0x65,
+	0x2c, 0x39, 0xe3, 0x26, 0x14, 0xee, 0x70, 0x0a, 0xbd, 0x0b, 0xf9, 0xe8, 0x84, 0xd5, 0x2a, 0x7e,
+	0xea, 0xfa, 0x64, 0x02, 0x2c, 0x30, 0x16, 0x6a, 0xe3, 0xbb, 0x2c, 0xcc, 0x88, 0x84, 0x76, 0xc3,
+	0x93, 0xa8, 0x47, 0x18, 0x82, 0xc7, 0x64, 0x14, 0x0f, 0xdd, 0x1e, 0x49, 0x10, 0x4c, 0x78, 0x96,
+	0x4c, 0x7c, 0xe4, 0x46, 0x7d, 0xf9, 0xaa, 0x60, 0xd0, 0x47, 0xa0, 0x71, 0x24, 0xa9, 0x43, 0x47,
+	0x43, 0xc2, 0x31, 0x9c, 0xad, 0x2f, 0x8e, 0x87, 0x8a, 0xe3, 0x44, 0xed, 0xd1, 0x90, 0x60, 0xa0,
+	0x29, 0x3d, 0x3d, 0x89, 0xea, 0x15, 0x26, 0x71, 0xdc, 0xbf, 0xfc, 0x54, 0xff, 0xd6, 0x53, 0x30,
+	0x0a, 0x32, 0xca, 0x44, 0xad, 0x02, 0x8e, 0x04, 0x20, 0x54, 0x83, 0x42, 0x18, 0x38, 0xfd, 0xbe,
+	0x5f, 0x29, 0xf2, 0x34, 0xff, 0x37, 0x69, 0xdb, 0x0d, 0x5a, 0x2d, 0x6b, 0x53, 0xb4, 0x24, 0x1f,
+	0x06, 0xad, 0xbe, 0x6f, 0x3c, 0x80, 0x32, 0x0e, 0xcf, 0x9a, 0x47, 0x3c, 0x01, 0x03, 0x0a, 0xfb,
+	0xe4, 0x20, 0x8c, 0x88, 0xec, 0x2a, 0xc8, 0xad, 0x87, 0xc3, 0x33, 0x2c, 0x35, 0x68, 0x15, 0xf2,
+	0xee, 0x41, 0xd2, 0x98, 0x69, 0x13, 0xa1, 0x30, 0x5c, 0x28, 0xe1, 0xf0, 0x8c, 0x6f, 0x4a, 0x74,
+	0x1d, 0x04, 0x22, 0x4e, 0xe0, 0x0e, 0x12, 0xb8, 0xcb, 0x5c, 0xd2, 0x71, 0x07, 0x04, 0xdd, 0x02,
+	0x2d, 0x0a, 0xcf, 0x9c, 0x1e, 0x7f, 0x5e, 0x8c, 0xad, 0x56, 0x5f, 0x9a, 0x6a, 0x65, 0x92, 0x1c,
+	0x86, 0x28, 0x21, 0x63, 0xe3, 0x01, 0xc0, 0x1d, 0x8f, 0xf8, 0xfd, 0x2b, 0x3d, 0xf2, 0x36, 0x83,
+	0x8f, 0xf8, 0xfd, 0x24, 0xfe, 0x8c, 0x4c, 0x99, 0x47, 0xc0, 0x52, 0xc7, 0x80, 0xd8, 0x65, 0xdd,
+	0xde, 0xa2, 0x5e, 0xff, 0x1f, 0xcc, 0x08, 0x02, 0xf5, 0x90, 0x7a, 0x7d, 0x3e, 0x1c, 0x65, 0xcc,
+	0x69, 0xe3, 0x36, 0xe4, 0xf7, 0x78, 0xb8, 0x5b, 0xa0, 0x71, 0x2b, 0x87, 0x89, 0x93, 0x89, 0x9d,
+	0x2a, 0x33, 0x7d, 0x1a, 0x43, 0x9c, 0x90, 0xb1, 0xf1, 0x53, 0x16, 0x0a, 0x7b, 0xa2, 0xc6, 0x75,
+	0x50, 0xf9, 0xf0, 0x89, 0xef, 0xc9, 0xf2, 0xa4, 0xaf, 0xb0, 0xe0, 0xe3, 0xc7, 0x6d, 0xd0, 0xff,
+	0xa1, 0x4c, 0xbd, 0x01, 0x89, 0xa9, 0x3b, 0x18, 0xf2, 0x2c, 0x73, 0x78, 0x2c, 0x78, 0x55, 0xa6,
+	0xec, 0xa3, 0xc1, 0x46, 0x46, 0xe5, 0x22, 0x46, 0xa2, 0xf7, 0xa1, 0xcc, 0x3a, 0xc3, 0xbf, 0x71,
+	0x95, 0x3c, 0x6f, 0xf5, 0xe2, 0xa5, 0xbe, 0xf0, 0x67, 0x71, 0x29, 0x4a, 0x7a, 0xfd, 0x31, 0x68,
+	0x1c, 0x4b, 0xe9, 0x24, 0x66, 0x75, 0x79, 0x7a, 0x56, 0x93, 0x9e, 0x61, 0x38, 0x18, 0xf7, 0xef,
+	0x06, 0xe4, 0x4f, 0x79, 0x4a, 0x45, 0xf9, 0xad, 0x9d, 0x2c, 0x8e, 0x83, 0x22, 0xf4, 0xe8, 0x2d,
+	0x98, 0xe9, 0x9d, 0x44, 0x11, 0xff, 0x38, 0x7b, 0x03, 0x52, 0x59, 0xe4, 0xb5, 0x69, 0x52, 0x66,
+	0x7b, 0x03, 0x62, 0x7c, 0x9d, 0x85, 0xd9, 0x3d, 0xb1, 0xbe, 0x92, 0x95, 0x79, 0x1b, 0x16, 0xc8,
+	0xc1, 0x01, 0xe9, 0x51, 0xef, 0x94, 0x38, 0x3d, 0xd7, 0xf7, 0x49, 0xe4, 0x78, 0x7d, 0x39, 0xe2,
+	0x73, 0x35, 0x71, 0xc6, 0x34, 0xb9, 0xbc, 0xdd, 0xc2, 0xf3, 0xa9, 0xad, 0x14, 0xf5, 0x91, 0x09,
+	0x0b, 0xde, 0x60, 0x40, 0xfa, 0x9e, 0x4b, 0x27, 0x03, 0x88, 0x1f, 0xc0, 0x92, 0x9c, 0xa6, 0x3d,
+	0x7b, 0xcb, 0xa5, 0x64, 0x1c, 0x26, 0xf5, 0x48, 0xc3, 0xbc, 0xc3, 0x7e, 0xde, 0xd1, 0x61, 0xba,
+	0x85, 0xaf, 0x49, 0x4f, 0x9b, 0x0b, 0xb1, 0x54, 0x4e, 0x6d, 0x78, 0xf5, 0xd2, 0x86, 0x1f, 0x6f,
+	0x82, 0xfc, 0x9b, 0x36, 0x81, 0xf1, 0x09, 0xcc, 0xa5, 0x40, 0xc8, 0x0d, 0xbe, 0x0e, 0x05, 0xde,
+	0x9b, 0x64, 0x04, 0xd1, 0xcb, 0x63, 0x84, 0xa5, 0x85, 0xf1, 0x55, 0x16, 0x50, 0xe2, 0x1f, 0x9e,
+	0xc5, 0xff, 0x51, 0x30, 0x17, 0x21, 0xcf, 0xe5, 0x12, 0x49, 0xc1, 0x30, 0x1c, 0x7c, 0x37, 0xa6,
+	0xc3, 0xe3, 0x14, 0x46, 0xe1, 0xfc, 0x80, 0xfd, 0xc5, 0x24, 0x3e, 0xf1, 0x29, 0x96, 0x16, 0xc6,
+	0xcf, 0x0a, 0x2c, 0x4c, 0xe1, 0x20, 0xb1, 0x1c, 0x6f, 0x15, 0xe5, 0xaf, 0xb7, 0x0a, 0x5a, 0x83,
+	0xd2, 0xf0, 0xf8, 0x35, 0xdb, 0x27, 0xd5, 0xbe, 0xf2, 0x67, 0x59, 0x05, 0x35, 0x0a, 0xcf, 0xe2,
+	0x8a, 0xca, 0x3d, 0x27, 0x57, 0x2d, 0x97, 0xb3, 0x7d, 0x3d, 0x55, 0xc7, 0xd4, 0xbe, 0x16, 0x9a,
+	0xf5, 0x4f, 0x41, 0x9b, 0x58, 0xfb, 0xec, 0x32, 0x6b, 0x6f, 0x75, 0xba, 0xd8, 0xd4, 0x33, 0xa8,
+	0x04, 0xea, 0xae, 0xdd, 0xdd, 0xd1, 0x15, 0x46, 0x99, 0x9f, 0x99, 0x4d, 0x71, 0xed, 0x31, 0xca,
+	0x91, 0x46, 0xb9, 0xf5, 0x5f, 0x14, 0x80, 0xf1, 0x86, 0x41, 0x1a, 0x14, 0x1f, 0x76, 0xee, 0x77,
+	0xba, 0x8f, 0x3a, 0x22, 0xc0, 0x96, 0xdd, 0x6e, 0xe9, 0x0a, 0x2a, 0x43, 0x5e, 0x9c, 0x8f, 0x59,
+	0xf6, 0x82, 0xbc, 0x1d, 0x73, 0xec, 0xb0, 0x4c, 0x0f, 0x47, 0x15, 0x15, 0x21, 0x97, 0x9e, 0x87,
+	0xf2, 0x1e, 0x2c, 0xb0, 0x80, 0xd8, 0xdc, 0xb1, 0x36, 0x9b, 0xa6, 0x5e, 0x64, 0x8a, 0xf4, 0x32,
+	0x04, 0x28, 0x24, 0x67, 0x21, 0xf3, 0x64, 0xc7, 0x24, 0xb0, 0x77, 0xba, 0xf6, 0x5d, 0x13, 0xeb,
+	0x1a, 0x93, 0xe1, 0xee, 0x23, 0x7d, 0x86, 0xc9, 0xee, 0xb4, 0x4d, 0xab, 0xa5, 0x5f, 0x63, 0xd7,
+	0xe4, 0x5d, 0x73, 0x13, 0xdb, 0x0d, 0x73, 0xd3, 0xd6, 0x67, 0x99, 0x66, 0x8f, 0x27, 0x38, 0xd7,
+	0xf8, 0xfc, 0xe9, 0xf3, 0x6a, 0xe6, 0xd9, 0xf3, 0x6a, 0xe6, 0xc5, 0xf3, 0xaa, 0xf2, 0xe5, 0x79,
+	0x55, 0xf9, 0xe1, 0xbc, 0xaa, 0xfc, 0x76, 0x5e, 0x55, 0x9e, 0x9e, 0x57, 0x95, 0x3f, 0xce, 0xab,
+	0x99, 0x17, 0xe7, 0x55, 0xe5, 0x9b, 0x8b, 0x6a, 0xe6, 0xfb, 0x8b, 0xaa, 0xf2, 0xf4, 0xa2, 0x9a,
+	0x79, 0x76, 0x51, 0xcd, 0x3c, 0xbe, 0x71, 0xea, 0x51, 0x12, 0xc7, 0x35, 0x2f, 0xdc, 0x10, 0xd4,
+	0xc6, 0x61, 0xb8, 0x71, 0x4a, 0x37, 0xf8, 0xff, 0x35, 0x1b, 0xe3, 0x1f, 0xcf, 0x7e, 0x81, 0x4b,
+	0x3e, 0xf8, 0x33, 0x00, 0x00, 0xff, 0xff, 0x3e, 0xa4, 0x10, 0x79, 0x33, 0x0d, 0x00, 0x00,
 }
 
+func (x OnDDLAction) String() string {
+	s, ok := OnDDLAction_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (x VEventType) String() string {
+	s, ok := VEventType_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (x BinlogTransaction_Statement_Category) String() string {
+	s, ok := BinlogTransaction_Statement_Category_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (this *Charset) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Charset)
+	if !ok {
+		that2, ok := that.(Charset)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Client != that1.Client {
+		return false
+	}
+	if this.Conn != that1.Conn {
+		return false
+	}
+	if this.Server != that1.Server {
+		return false
+	}
+	return true
+}
+func (this *BinlogTransaction) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*BinlogTransaction)
+	if !ok {
+		that2, ok := that.(BinlogTransaction)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Statements) != len(that1.Statements) {
+		return false
+	}
+	for i := range this.Statements {
+		if !this.Statements[i].Equal(that1.Statements[i]) {
+			return false
+		}
+	}
+	if !this.EventToken.Equal(that1.EventToken) {
+		return false
+	}
+	return true
+}
+func (this *BinlogTransaction_Statement) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*BinlogTransaction_Statement)
+	if !ok {
+		that2, ok := that.(BinlogTransaction_Statement)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Category != that1.Category {
+		return false
+	}
+	if !this.Charset.Equal(that1.Charset) {
+		return false
+	}
+	if !bytes.Equal(this.Sql, that1.Sql) {
+		return false
+	}
+	return true
+}
+func (this *StreamKeyRangeRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StreamKeyRangeRequest)
+	if !ok {
+		that2, ok := that.(StreamKeyRangeRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Position != that1.Position {
+		return false
+	}
+	if !this.KeyRange.Equal(that1.KeyRange) {
+		return false
+	}
+	if !this.Charset.Equal(that1.Charset) {
+		return false
+	}
+	return true
+}
+func (this *StreamKeyRangeResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StreamKeyRangeResponse)
+	if !ok {
+		that2, ok := that.(StreamKeyRangeResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.BinlogTransaction.Equal(that1.BinlogTransaction) {
+		return false
+	}
+	return true
+}
+func (this *StreamTablesRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StreamTablesRequest)
+	if !ok {
+		that2, ok := that.(StreamTablesRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Position != that1.Position {
+		return false
+	}
+	if len(this.Tables) != len(that1.Tables) {
+		return false
+	}
+	for i := range this.Tables {
+		if this.Tables[i] != that1.Tables[i] {
+			return false
+		}
+	}
+	if !this.Charset.Equal(that1.Charset) {
+		return false
+	}
+	return true
+}
+func (this *StreamTablesResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StreamTablesResponse)
+	if !ok {
+		that2, ok := that.(StreamTablesResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.BinlogTransaction.Equal(that1.BinlogTransaction) {
+		return false
+	}
+	return true
+}
+func (this *Rule) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Rule)
+	if !ok {
+		that2, ok := that.(Rule)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Match != that1.Match {
+		return false
+	}
+	if this.Filter != that1.Filter {
+		return false
+	}
+	return true
+}
+func (this *Filter) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Filter)
+	if !ok {
+		that2, ok := that.(Filter)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Rules) != len(that1.Rules) {
+		return false
+	}
+	for i := range this.Rules {
+		if !this.Rules[i].Equal(that1.Rules[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *BinlogSource) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*BinlogSource)
+	if !ok {
+		that2, ok := that.(BinlogSource)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Keyspace != that1.Keyspace {
+		return false
+	}
+	if this.Shard != that1.Shard {
+		return false
+	}
+	if this.TabletType != that1.TabletType {
+		return false
+	}
+	if !this.KeyRange.Equal(that1.KeyRange) {
+		return false
+	}
+	if len(this.Tables) != len(that1.Tables) {
+		return false
+	}
+	for i := range this.Tables {
+		if this.Tables[i] != that1.Tables[i] {
+			return false
+		}
+	}
+	if !this.Filter.Equal(that1.Filter) {
+		return false
+	}
+	if this.OnDdl != that1.OnDdl {
+		return false
+	}
+	return true
+}
+func (this *RowChange) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*RowChange)
+	if !ok {
+		that2, ok := that.(RowChange)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Before.Equal(that1.Before) {
+		return false
+	}
+	if !this.After.Equal(that1.After) {
+		return false
+	}
+	return true
+}
+func (this *RowEvent) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*RowEvent)
+	if !ok {
+		that2, ok := that.(RowEvent)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.TableName != that1.TableName {
+		return false
+	}
+	if len(this.RowChanges) != len(that1.RowChanges) {
+		return false
+	}
+	for i := range this.RowChanges {
+		if !this.RowChanges[i].Equal(that1.RowChanges[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *FieldEvent) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*FieldEvent)
+	if !ok {
+		that2, ok := that.(FieldEvent)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.TableName != that1.TableName {
+		return false
+	}
+	if len(this.Fields) != len(that1.Fields) {
+		return false
+	}
+	for i := range this.Fields {
+		if !this.Fields[i].Equal(that1.Fields[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *ShardGtid) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ShardGtid)
+	if !ok {
+		that2, ok := that.(ShardGtid)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Keyspace != that1.Keyspace {
+		return false
+	}
+	if this.Shard != that1.Shard {
+		return false
+	}
+	if this.Gtid != that1.Gtid {
+		return false
+	}
+	return true
+}
+func (this *VGtid) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*VGtid)
+	if !ok {
+		that2, ok := that.(VGtid)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.ShardGtids) != len(that1.ShardGtids) {
+		return false
+	}
+	for i := range this.ShardGtids {
+		if !this.ShardGtids[i].Equal(that1.ShardGtids[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *VEvent) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*VEvent)
+	if !ok {
+		that2, ok := that.(VEvent)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Type != that1.Type {
+		return false
+	}
+	if this.Timestamp != that1.Timestamp {
+		return false
+	}
+	if this.Gtid != that1.Gtid {
+		return false
+	}
+	if this.Ddl != that1.Ddl {
+		return false
+	}
+	if !this.RowEvent.Equal(that1.RowEvent) {
+		return false
+	}
+	if !this.FieldEvent.Equal(that1.FieldEvent) {
+		return false
+	}
+	if !this.Vgtid.Equal(that1.Vgtid) {
+		return false
+	}
+	if this.CurrentTime != that1.CurrentTime {
+		return false
+	}
+	return true
+}
+func (this *VStreamRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*VStreamRequest)
+	if !ok {
+		that2, ok := that.(VStreamRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.EffectiveCallerId.Equal(that1.EffectiveCallerId) {
+		return false
+	}
+	if !this.ImmediateCallerId.Equal(that1.ImmediateCallerId) {
+		return false
+	}
+	if !this.Target.Equal(that1.Target) {
+		return false
+	}
+	if this.Position != that1.Position {
+		return false
+	}
+	if !this.Filter.Equal(that1.Filter) {
+		return false
+	}
+	return true
+}
+func (this *VStreamResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*VStreamResponse)
+	if !ok {
+		that2, ok := that.(VStreamResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Events) != len(that1.Events) {
+		return false
+	}
+	for i := range this.Events {
+		if !this.Events[i].Equal(that1.Events[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *VStreamRowsRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*VStreamRowsRequest)
+	if !ok {
+		that2, ok := that.(VStreamRowsRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.EffectiveCallerId.Equal(that1.EffectiveCallerId) {
+		return false
+	}
+	if !this.ImmediateCallerId.Equal(that1.ImmediateCallerId) {
+		return false
+	}
+	if !this.Target.Equal(that1.Target) {
+		return false
+	}
+	if this.Query != that1.Query {
+		return false
+	}
+	if !this.Lastpk.Equal(that1.Lastpk) {
+		return false
+	}
+	return true
+}
+func (this *VStreamRowsResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*VStreamRowsResponse)
+	if !ok {
+		that2, ok := that.(VStreamRowsResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Fields) != len(that1.Fields) {
+		return false
+	}
+	for i := range this.Fields {
+		if !this.Fields[i].Equal(that1.Fields[i]) {
+			return false
+		}
+	}
+	if len(this.Pkfields) != len(that1.Pkfields) {
+		return false
+	}
+	for i := range this.Pkfields {
+		if !this.Pkfields[i].Equal(that1.Pkfields[i]) {
+			return false
+		}
+	}
+	if this.Gtid != that1.Gtid {
+		return false
+	}
+	if len(this.Rows) != len(that1.Rows) {
+		return false
+	}
+	for i := range this.Rows {
+		if !this.Rows[i].Equal(that1.Rows[i]) {
+			return false
+		}
+	}
+	if !this.Lastpk.Equal(that1.Lastpk) {
+		return false
+	}
+	return true
+}
+func (this *Charset) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&binlogdata.Charset{")
+	s = append(s, "Client: "+fmt.Sprintf("%#v", this.Client)+",\n")
+	s = append(s, "Conn: "+fmt.Sprintf("%#v", this.Conn)+",\n")
+	s = append(s, "Server: "+fmt.Sprintf("%#v", this.Server)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *BinlogTransaction) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&binlogdata.BinlogTransaction{")
+	if this.Statements != nil {
+		s = append(s, "Statements: "+fmt.Sprintf("%#v", this.Statements)+",\n")
+	}
+	if this.EventToken != nil {
+		s = append(s, "EventToken: "+fmt.Sprintf("%#v", this.EventToken)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *BinlogTransaction_Statement) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&binlogdata.BinlogTransaction_Statement{")
+	s = append(s, "Category: "+fmt.Sprintf("%#v", this.Category)+",\n")
+	if this.Charset != nil {
+		s = append(s, "Charset: "+fmt.Sprintf("%#v", this.Charset)+",\n")
+	}
+	s = append(s, "Sql: "+fmt.Sprintf("%#v", this.Sql)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StreamKeyRangeRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&binlogdata.StreamKeyRangeRequest{")
+	s = append(s, "Position: "+fmt.Sprintf("%#v", this.Position)+",\n")
+	if this.KeyRange != nil {
+		s = append(s, "KeyRange: "+fmt.Sprintf("%#v", this.KeyRange)+",\n")
+	}
+	if this.Charset != nil {
+		s = append(s, "Charset: "+fmt.Sprintf("%#v", this.Charset)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StreamKeyRangeResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&binlogdata.StreamKeyRangeResponse{")
+	if this.BinlogTransaction != nil {
+		s = append(s, "BinlogTransaction: "+fmt.Sprintf("%#v", this.BinlogTransaction)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StreamTablesRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&binlogdata.StreamTablesRequest{")
+	s = append(s, "Position: "+fmt.Sprintf("%#v", this.Position)+",\n")
+	s = append(s, "Tables: "+fmt.Sprintf("%#v", this.Tables)+",\n")
+	if this.Charset != nil {
+		s = append(s, "Charset: "+fmt.Sprintf("%#v", this.Charset)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StreamTablesResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&binlogdata.StreamTablesResponse{")
+	if this.BinlogTransaction != nil {
+		s = append(s, "BinlogTransaction: "+fmt.Sprintf("%#v", this.BinlogTransaction)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Rule) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&binlogdata.Rule{")
+	s = append(s, "Match: "+fmt.Sprintf("%#v", this.Match)+",\n")
+	s = append(s, "Filter: "+fmt.Sprintf("%#v", this.Filter)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Filter) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&binlogdata.Filter{")
+	if this.Rules != nil {
+		s = append(s, "Rules: "+fmt.Sprintf("%#v", this.Rules)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *BinlogSource) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 11)
+	s = append(s, "&binlogdata.BinlogSource{")
+	s = append(s, "Keyspace: "+fmt.Sprintf("%#v", this.Keyspace)+",\n")
+	s = append(s, "Shard: "+fmt.Sprintf("%#v", this.Shard)+",\n")
+	s = append(s, "TabletType: "+fmt.Sprintf("%#v", this.TabletType)+",\n")
+	if this.KeyRange != nil {
+		s = append(s, "KeyRange: "+fmt.Sprintf("%#v", this.KeyRange)+",\n")
+	}
+	s = append(s, "Tables: "+fmt.Sprintf("%#v", this.Tables)+",\n")
+	if this.Filter != nil {
+		s = append(s, "Filter: "+fmt.Sprintf("%#v", this.Filter)+",\n")
+	}
+	s = append(s, "OnDdl: "+fmt.Sprintf("%#v", this.OnDdl)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *RowChange) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&binlogdata.RowChange{")
+	if this.Before != nil {
+		s = append(s, "Before: "+fmt.Sprintf("%#v", this.Before)+",\n")
+	}
+	if this.After != nil {
+		s = append(s, "After: "+fmt.Sprintf("%#v", this.After)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *RowEvent) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&binlogdata.RowEvent{")
+	s = append(s, "TableName: "+fmt.Sprintf("%#v", this.TableName)+",\n")
+	if this.RowChanges != nil {
+		s = append(s, "RowChanges: "+fmt.Sprintf("%#v", this.RowChanges)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *FieldEvent) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&binlogdata.FieldEvent{")
+	s = append(s, "TableName: "+fmt.Sprintf("%#v", this.TableName)+",\n")
+	if this.Fields != nil {
+		s = append(s, "Fields: "+fmt.Sprintf("%#v", this.Fields)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ShardGtid) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&binlogdata.ShardGtid{")
+	s = append(s, "Keyspace: "+fmt.Sprintf("%#v", this.Keyspace)+",\n")
+	s = append(s, "Shard: "+fmt.Sprintf("%#v", this.Shard)+",\n")
+	s = append(s, "Gtid: "+fmt.Sprintf("%#v", this.Gtid)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *VGtid) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&binlogdata.VGtid{")
+	if this.ShardGtids != nil {
+		s = append(s, "ShardGtids: "+fmt.Sprintf("%#v", this.ShardGtids)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *VEvent) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 12)
+	s = append(s, "&binlogdata.VEvent{")
+	s = append(s, "Type: "+fmt.Sprintf("%#v", this.Type)+",\n")
+	s = append(s, "Timestamp: "+fmt.Sprintf("%#v", this.Timestamp)+",\n")
+	s = append(s, "Gtid: "+fmt.Sprintf("%#v", this.Gtid)+",\n")
+	s = append(s, "Ddl: "+fmt.Sprintf("%#v", this.Ddl)+",\n")
+	if this.RowEvent != nil {
+		s = append(s, "RowEvent: "+fmt.Sprintf("%#v", this.RowEvent)+",\n")
+	}
+	if this.FieldEvent != nil {
+		s = append(s, "FieldEvent: "+fmt.Sprintf("%#v", this.FieldEvent)+",\n")
+	}
+	if this.Vgtid != nil {
+		s = append(s, "Vgtid: "+fmt.Sprintf("%#v", this.Vgtid)+",\n")
+	}
+	s = append(s, "CurrentTime: "+fmt.Sprintf("%#v", this.CurrentTime)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *VStreamRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 9)
+	s = append(s, "&binlogdata.VStreamRequest{")
+	if this.EffectiveCallerId != nil {
+		s = append(s, "EffectiveCallerId: "+fmt.Sprintf("%#v", this.EffectiveCallerId)+",\n")
+	}
+	if this.ImmediateCallerId != nil {
+		s = append(s, "ImmediateCallerId: "+fmt.Sprintf("%#v", this.ImmediateCallerId)+",\n")
+	}
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	s = append(s, "Position: "+fmt.Sprintf("%#v", this.Position)+",\n")
+	if this.Filter != nil {
+		s = append(s, "Filter: "+fmt.Sprintf("%#v", this.Filter)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *VStreamResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&binlogdata.VStreamResponse{")
+	if this.Events != nil {
+		s = append(s, "Events: "+fmt.Sprintf("%#v", this.Events)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *VStreamRowsRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 9)
+	s = append(s, "&binlogdata.VStreamRowsRequest{")
+	if this.EffectiveCallerId != nil {
+		s = append(s, "EffectiveCallerId: "+fmt.Sprintf("%#v", this.EffectiveCallerId)+",\n")
+	}
+	if this.ImmediateCallerId != nil {
+		s = append(s, "ImmediateCallerId: "+fmt.Sprintf("%#v", this.ImmediateCallerId)+",\n")
+	}
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	s = append(s, "Query: "+fmt.Sprintf("%#v", this.Query)+",\n")
+	if this.Lastpk != nil {
+		s = append(s, "Lastpk: "+fmt.Sprintf("%#v", this.Lastpk)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *VStreamRowsResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 9)
+	s = append(s, "&binlogdata.VStreamRowsResponse{")
+	if this.Fields != nil {
+		s = append(s, "Fields: "+fmt.Sprintf("%#v", this.Fields)+",\n")
+	}
+	if this.Pkfields != nil {
+		s = append(s, "Pkfields: "+fmt.Sprintf("%#v", this.Pkfields)+",\n")
+	}
+	s = append(s, "Gtid: "+fmt.Sprintf("%#v", this.Gtid)+",\n")
+	if this.Rows != nil {
+		s = append(s, "Rows: "+fmt.Sprintf("%#v", this.Rows)+",\n")
+	}
+	if this.Lastpk != nil {
+		s = append(s, "Lastpk: "+fmt.Sprintf("%#v", this.Lastpk)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func valueToGoStringBinlogdata(v interface{}, typ string) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("func(v %v) *%v { return &v } ( %#v )", typ, typ, pv)
+}
 func (m *Charset) Marshal() (dAtA []byte, err error) {
 	size := m.ProtoSize()
 	dAtA = make([]byte, size)
@@ -1633,9 +2536,6 @@ func (m *Charset) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x18
 		i++
 		i = encodeVarintBinlogdata(dAtA, i, uint64(m.Server))
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -1677,9 +2577,6 @@ func (m *BinlogTransaction) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n1
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -1718,9 +2615,6 @@ func (m *BinlogTransaction_Statement) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintBinlogdata(dAtA, i, uint64(len(m.Sql)))
 		i += copy(dAtA[i:], m.Sql)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -1766,9 +2660,6 @@ func (m *StreamKeyRangeRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n4
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -1796,9 +2687,6 @@ func (m *StreamKeyRangeResponse) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err5
 		}
 		i += n5
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -1849,9 +2737,6 @@ func (m *StreamTablesRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n6
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -1879,9 +2764,6 @@ func (m *StreamTablesResponse) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err7
 		}
 		i += n7
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -1913,9 +2795,6 @@ func (m *Rule) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintBinlogdata(dAtA, i, uint64(len(m.Filter)))
 		i += copy(dAtA[i:], m.Filter)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -1945,9 +2824,6 @@ func (m *Filter) MarshalTo(dAtA []byte) (int, error) {
 			}
 			i += n
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -2024,9 +2900,6 @@ func (m *BinlogSource) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintBinlogdata(dAtA, i, uint64(m.OnDdl))
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -2065,9 +2938,6 @@ func (m *RowChange) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n11
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -2103,9 +2973,6 @@ func (m *RowEvent) MarshalTo(dAtA []byte) (int, error) {
 			}
 			i += n
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -2143,9 +3010,6 @@ func (m *FieldEvent) MarshalTo(dAtA []byte) (int, error) {
 			i += n
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -2182,9 +3046,6 @@ func (m *ShardGtid) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintBinlogdata(dAtA, i, uint64(len(m.Gtid)))
 		i += copy(dAtA[i:], m.Gtid)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -2214,9 +3075,6 @@ func (m *VGtid) MarshalTo(dAtA []byte) (int, error) {
 			}
 			i += n
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -2295,9 +3153,6 @@ func (m *VEvent) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintBinlogdata(dAtA, i, uint64(m.CurrentTime))
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -2362,9 +3217,6 @@ func (m *VStreamRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n18
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -2394,9 +3246,6 @@ func (m *VStreamResponse) MarshalTo(dAtA []byte) (int, error) {
 			}
 			i += n
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -2461,9 +3310,6 @@ func (m *VStreamRowsRequest) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err22
 		}
 		i += n22
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -2535,9 +3381,6 @@ func (m *VStreamRowsResponse) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n23
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -2565,9 +3408,6 @@ func (m *Charset) ProtoSize() (n int) {
 	if m.Server != 0 {
 		n += 1 + sovBinlogdata(uint64(m.Server))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -2586,9 +3426,6 @@ func (m *BinlogTransaction) ProtoSize() (n int) {
 	if m.EventToken != nil {
 		l = m.EventToken.ProtoSize()
 		n += 1 + l + sovBinlogdata(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -2609,9 +3446,6 @@ func (m *BinlogTransaction_Statement) ProtoSize() (n int) {
 	l = len(m.Sql)
 	if l > 0 {
 		n += 1 + l + sovBinlogdata(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -2634,9 +3468,6 @@ func (m *StreamKeyRangeRequest) ProtoSize() (n int) {
 		l = m.Charset.ProtoSize()
 		n += 1 + l + sovBinlogdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -2649,9 +3480,6 @@ func (m *StreamKeyRangeResponse) ProtoSize() (n int) {
 	if m.BinlogTransaction != nil {
 		l = m.BinlogTransaction.ProtoSize()
 		n += 1 + l + sovBinlogdata(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -2676,9 +3504,6 @@ func (m *StreamTablesRequest) ProtoSize() (n int) {
 		l = m.Charset.ProtoSize()
 		n += 1 + l + sovBinlogdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -2691,9 +3516,6 @@ func (m *StreamTablesResponse) ProtoSize() (n int) {
 	if m.BinlogTransaction != nil {
 		l = m.BinlogTransaction.ProtoSize()
 		n += 1 + l + sovBinlogdata(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -2712,9 +3534,6 @@ func (m *Rule) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovBinlogdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -2729,9 +3548,6 @@ func (m *Filter) ProtoSize() (n int) {
 			l = e.ProtoSize()
 			n += 1 + l + sovBinlogdata(uint64(l))
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -2770,9 +3586,6 @@ func (m *BinlogSource) ProtoSize() (n int) {
 	if m.OnDdl != 0 {
 		n += 1 + sovBinlogdata(uint64(m.OnDdl))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -2789,9 +3602,6 @@ func (m *RowChange) ProtoSize() (n int) {
 	if m.After != nil {
 		l = m.After.ProtoSize()
 		n += 1 + l + sovBinlogdata(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -2812,9 +3622,6 @@ func (m *RowEvent) ProtoSize() (n int) {
 			n += 1 + l + sovBinlogdata(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -2833,9 +3640,6 @@ func (m *FieldEvent) ProtoSize() (n int) {
 			l = e.ProtoSize()
 			n += 1 + l + sovBinlogdata(uint64(l))
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -2858,9 +3662,6 @@ func (m *ShardGtid) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovBinlogdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -2875,9 +3676,6 @@ func (m *VGtid) ProtoSize() (n int) {
 			l = e.ProtoSize()
 			n += 1 + l + sovBinlogdata(uint64(l))
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -2917,9 +3715,6 @@ func (m *VEvent) ProtoSize() (n int) {
 	if m.CurrentTime != 0 {
 		n += 2 + sovBinlogdata(uint64(m.CurrentTime))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -2949,9 +3744,6 @@ func (m *VStreamRequest) ProtoSize() (n int) {
 		l = m.Filter.ProtoSize()
 		n += 1 + l + sovBinlogdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -2966,9 +3758,6 @@ func (m *VStreamResponse) ProtoSize() (n int) {
 			l = e.ProtoSize()
 			n += 1 + l + sovBinlogdata(uint64(l))
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -2998,9 +3787,6 @@ func (m *VStreamRowsRequest) ProtoSize() (n int) {
 	if m.Lastpk != nil {
 		l = m.Lastpk.ProtoSize()
 		n += 1 + l + sovBinlogdata(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -3037,9 +3823,6 @@ func (m *VStreamRowsResponse) ProtoSize() (n int) {
 		l = m.Lastpk.ProtoSize()
 		n += 1 + l + sovBinlogdata(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -3055,6 +3838,299 @@ func sovBinlogdata(x uint64) (n int) {
 }
 func sozBinlogdata(x uint64) (n int) {
 	return sovBinlogdata(uint64((x << 1) ^ uint64((int64(x) >> 63))))
+}
+func (this *Charset) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&Charset{`,
+		`Client:` + fmt.Sprintf("%v", this.Client) + `,`,
+		`Conn:` + fmt.Sprintf("%v", this.Conn) + `,`,
+		`Server:` + fmt.Sprintf("%v", this.Server) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *BinlogTransaction) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForStatements := "[]*BinlogTransaction_Statement{"
+	for _, f := range this.Statements {
+		repeatedStringForStatements += strings.Replace(fmt.Sprintf("%v", f), "BinlogTransaction_Statement", "BinlogTransaction_Statement", 1) + ","
+	}
+	repeatedStringForStatements += "}"
+	s := strings.Join([]string{`&BinlogTransaction{`,
+		`Statements:` + repeatedStringForStatements + `,`,
+		`EventToken:` + strings.Replace(fmt.Sprintf("%v", this.EventToken), "EventToken", "query.EventToken", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *BinlogTransaction_Statement) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&BinlogTransaction_Statement{`,
+		`Category:` + fmt.Sprintf("%v", this.Category) + `,`,
+		`Charset:` + strings.Replace(this.Charset.String(), "Charset", "Charset", 1) + `,`,
+		`Sql:` + fmt.Sprintf("%v", this.Sql) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StreamKeyRangeRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StreamKeyRangeRequest{`,
+		`Position:` + fmt.Sprintf("%v", this.Position) + `,`,
+		`KeyRange:` + strings.Replace(fmt.Sprintf("%v", this.KeyRange), "KeyRange", "topodata.KeyRange", 1) + `,`,
+		`Charset:` + strings.Replace(this.Charset.String(), "Charset", "Charset", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StreamKeyRangeResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StreamKeyRangeResponse{`,
+		`BinlogTransaction:` + strings.Replace(this.BinlogTransaction.String(), "BinlogTransaction", "BinlogTransaction", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StreamTablesRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StreamTablesRequest{`,
+		`Position:` + fmt.Sprintf("%v", this.Position) + `,`,
+		`Tables:` + fmt.Sprintf("%v", this.Tables) + `,`,
+		`Charset:` + strings.Replace(this.Charset.String(), "Charset", "Charset", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StreamTablesResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StreamTablesResponse{`,
+		`BinlogTransaction:` + strings.Replace(this.BinlogTransaction.String(), "BinlogTransaction", "BinlogTransaction", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Rule) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&Rule{`,
+		`Match:` + fmt.Sprintf("%v", this.Match) + `,`,
+		`Filter:` + fmt.Sprintf("%v", this.Filter) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Filter) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForRules := "[]*Rule{"
+	for _, f := range this.Rules {
+		repeatedStringForRules += strings.Replace(f.String(), "Rule", "Rule", 1) + ","
+	}
+	repeatedStringForRules += "}"
+	s := strings.Join([]string{`&Filter{`,
+		`Rules:` + repeatedStringForRules + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *BinlogSource) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&BinlogSource{`,
+		`Keyspace:` + fmt.Sprintf("%v", this.Keyspace) + `,`,
+		`Shard:` + fmt.Sprintf("%v", this.Shard) + `,`,
+		`TabletType:` + fmt.Sprintf("%v", this.TabletType) + `,`,
+		`KeyRange:` + strings.Replace(fmt.Sprintf("%v", this.KeyRange), "KeyRange", "topodata.KeyRange", 1) + `,`,
+		`Tables:` + fmt.Sprintf("%v", this.Tables) + `,`,
+		`Filter:` + strings.Replace(this.Filter.String(), "Filter", "Filter", 1) + `,`,
+		`OnDdl:` + fmt.Sprintf("%v", this.OnDdl) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *RowChange) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&RowChange{`,
+		`Before:` + strings.Replace(fmt.Sprintf("%v", this.Before), "Row", "query.Row", 1) + `,`,
+		`After:` + strings.Replace(fmt.Sprintf("%v", this.After), "Row", "query.Row", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *RowEvent) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForRowChanges := "[]*RowChange{"
+	for _, f := range this.RowChanges {
+		repeatedStringForRowChanges += strings.Replace(f.String(), "RowChange", "RowChange", 1) + ","
+	}
+	repeatedStringForRowChanges += "}"
+	s := strings.Join([]string{`&RowEvent{`,
+		`TableName:` + fmt.Sprintf("%v", this.TableName) + `,`,
+		`RowChanges:` + repeatedStringForRowChanges + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *FieldEvent) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForFields := "[]*Field{"
+	for _, f := range this.Fields {
+		repeatedStringForFields += strings.Replace(fmt.Sprintf("%v", f), "Field", "query.Field", 1) + ","
+	}
+	repeatedStringForFields += "}"
+	s := strings.Join([]string{`&FieldEvent{`,
+		`TableName:` + fmt.Sprintf("%v", this.TableName) + `,`,
+		`Fields:` + repeatedStringForFields + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ShardGtid) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ShardGtid{`,
+		`Keyspace:` + fmt.Sprintf("%v", this.Keyspace) + `,`,
+		`Shard:` + fmt.Sprintf("%v", this.Shard) + `,`,
+		`Gtid:` + fmt.Sprintf("%v", this.Gtid) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *VGtid) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForShardGtids := "[]*ShardGtid{"
+	for _, f := range this.ShardGtids {
+		repeatedStringForShardGtids += strings.Replace(f.String(), "ShardGtid", "ShardGtid", 1) + ","
+	}
+	repeatedStringForShardGtids += "}"
+	s := strings.Join([]string{`&VGtid{`,
+		`ShardGtids:` + repeatedStringForShardGtids + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *VEvent) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&VEvent{`,
+		`Type:` + fmt.Sprintf("%v", this.Type) + `,`,
+		`Timestamp:` + fmt.Sprintf("%v", this.Timestamp) + `,`,
+		`Gtid:` + fmt.Sprintf("%v", this.Gtid) + `,`,
+		`Ddl:` + fmt.Sprintf("%v", this.Ddl) + `,`,
+		`RowEvent:` + strings.Replace(this.RowEvent.String(), "RowEvent", "RowEvent", 1) + `,`,
+		`FieldEvent:` + strings.Replace(this.FieldEvent.String(), "FieldEvent", "FieldEvent", 1) + `,`,
+		`Vgtid:` + strings.Replace(this.Vgtid.String(), "VGtid", "VGtid", 1) + `,`,
+		`CurrentTime:` + fmt.Sprintf("%v", this.CurrentTime) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *VStreamRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&VStreamRequest{`,
+		`EffectiveCallerId:` + strings.Replace(fmt.Sprintf("%v", this.EffectiveCallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`ImmediateCallerId:` + strings.Replace(fmt.Sprintf("%v", this.ImmediateCallerId), "VTGateCallerID", "query.VTGateCallerID", 1) + `,`,
+		`Target:` + strings.Replace(fmt.Sprintf("%v", this.Target), "Target", "query.Target", 1) + `,`,
+		`Position:` + fmt.Sprintf("%v", this.Position) + `,`,
+		`Filter:` + strings.Replace(this.Filter.String(), "Filter", "Filter", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *VStreamResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForEvents := "[]*VEvent{"
+	for _, f := range this.Events {
+		repeatedStringForEvents += strings.Replace(f.String(), "VEvent", "VEvent", 1) + ","
+	}
+	repeatedStringForEvents += "}"
+	s := strings.Join([]string{`&VStreamResponse{`,
+		`Events:` + repeatedStringForEvents + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *VStreamRowsRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&VStreamRowsRequest{`,
+		`EffectiveCallerId:` + strings.Replace(fmt.Sprintf("%v", this.EffectiveCallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`ImmediateCallerId:` + strings.Replace(fmt.Sprintf("%v", this.ImmediateCallerId), "VTGateCallerID", "query.VTGateCallerID", 1) + `,`,
+		`Target:` + strings.Replace(fmt.Sprintf("%v", this.Target), "Target", "query.Target", 1) + `,`,
+		`Query:` + fmt.Sprintf("%v", this.Query) + `,`,
+		`Lastpk:` + strings.Replace(fmt.Sprintf("%v", this.Lastpk), "QueryResult", "query.QueryResult", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *VStreamRowsResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForFields := "[]*Field{"
+	for _, f := range this.Fields {
+		repeatedStringForFields += strings.Replace(fmt.Sprintf("%v", f), "Field", "query.Field", 1) + ","
+	}
+	repeatedStringForFields += "}"
+	repeatedStringForPkfields := "[]*Field{"
+	for _, f := range this.Pkfields {
+		repeatedStringForPkfields += strings.Replace(fmt.Sprintf("%v", f), "Field", "query.Field", 1) + ","
+	}
+	repeatedStringForPkfields += "}"
+	repeatedStringForRows := "[]*Row{"
+	for _, f := range this.Rows {
+		repeatedStringForRows += strings.Replace(fmt.Sprintf("%v", f), "Row", "query.Row", 1) + ","
+	}
+	repeatedStringForRows += "}"
+	s := strings.Join([]string{`&VStreamRowsResponse{`,
+		`Fields:` + repeatedStringForFields + `,`,
+		`Pkfields:` + repeatedStringForPkfields + `,`,
+		`Gtid:` + fmt.Sprintf("%v", this.Gtid) + `,`,
+		`Rows:` + repeatedStringForRows + `,`,
+		`Lastpk:` + strings.Replace(fmt.Sprintf("%v", this.Lastpk), "Row", "query.Row", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func valueToStringBinlogdata(v interface{}) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("*%v", pv)
 }
 func (m *Charset) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
@@ -3157,7 +4233,6 @@ func (m *Charset) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -3281,7 +4356,6 @@ func (m *BinlogTransaction) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -3424,7 +4498,6 @@ func (m *BinlogTransaction_Statement) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -3582,7 +4655,6 @@ func (m *StreamKeyRangeRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -3672,7 +4744,6 @@ func (m *StreamKeyRangeResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -3826,7 +4897,6 @@ func (m *StreamTablesRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -3916,7 +4986,6 @@ func (m *StreamTablesResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4034,7 +5103,6 @@ func (m *Rule) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4122,7 +5190,6 @@ func (m *Filter) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4382,7 +5449,6 @@ func (m *BinlogSource) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4508,7 +5574,6 @@ func (m *RowChange) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4628,7 +5693,6 @@ func (m *RowEvent) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4748,7 +5812,6 @@ func (m *FieldEvent) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4898,7 +5961,6 @@ func (m *ShardGtid) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -4986,7 +6048,6 @@ func (m *VGtid) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -5269,7 +6330,6 @@ func (m *VEvent) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -5499,7 +6559,6 @@ func (m *VStreamRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -5587,7 +6646,6 @@ func (m *VStreamResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -5817,7 +6875,6 @@ func (m *VStreamRowsRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -6041,7 +7098,6 @@ func (m *VStreamRowsResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}

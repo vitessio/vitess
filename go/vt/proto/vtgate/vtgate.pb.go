@@ -4,9 +4,13 @@
 package vtgate
 
 import (
+	bytes "bytes"
 	fmt "fmt"
 	io "io"
 	math "math"
+	reflect "reflect"
+	strconv "strconv"
+	strings "strings"
 
 	proto "github.com/gogo/protobuf/proto"
 	binlogdata "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -32,13 +36,13 @@ type TransactionMode int32
 
 const (
 	// UNSPECIFIED uses the transaction mode set by the VTGate flag 'transaction_mode'.
-	TransactionMode_UNSPECIFIED TransactionMode = 0
+	UNSPECIFIED TransactionMode = 0
 	// SINGLE disallows distributed transactions.
-	TransactionMode_SINGLE TransactionMode = 1
+	SINGLE TransactionMode = 1
 	// MULTI allows distributed transactions with best effort commit.
-	TransactionMode_MULTI TransactionMode = 2
+	MULTI TransactionMode = 2
 	// TWOPC is for distributed transactions with atomic commits.
-	TransactionMode_TWOPC TransactionMode = 3
+	TWOPC TransactionMode = 3
 )
 
 var TransactionMode_name = map[int32]string{
@@ -55,10 +59,6 @@ var TransactionMode_value = map[string]int32{
 	"TWOPC":       3,
 }
 
-func (x TransactionMode) String() string {
-	return proto.EnumName(TransactionMode_name, int32(x))
-}
-
 func (TransactionMode) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{0}
 }
@@ -69,13 +69,13 @@ type CommitOrder int32
 
 const (
 	// NORMAL is the default commit order.
-	CommitOrder_NORMAL CommitOrder = 0
+	NORMAL CommitOrder = 0
 	// PRE is used to designate pre_sessions.
-	CommitOrder_PRE CommitOrder = 1
+	PRE CommitOrder = 1
 	// POST is used to designate post_sessions.
-	CommitOrder_POST CommitOrder = 2
+	POST CommitOrder = 2
 	// AUTOCOMMIT is used to run the statement as autocommitted transaction.
-	CommitOrder_AUTOCOMMIT CommitOrder = 3
+	AUTOCOMMIT CommitOrder = 3
 )
 
 var CommitOrder_name = map[int32]string{
@@ -90,10 +90,6 @@ var CommitOrder_value = map[string]int32{
 	"PRE":        1,
 	"POST":       2,
 	"AUTOCOMMIT": 3,
-}
-
-func (x CommitOrder) String() string {
-	return proto.EnumName(CommitOrder_name, int32(x))
 }
 
 func (CommitOrder) EnumDescriptor() ([]byte, []int) {
@@ -136,15 +132,11 @@ type Session struct {
 	// pre_sessions contains sessions that have to be committed first.
 	PreSessions []*Session_ShardSession `protobuf:"bytes,9,rep,name=pre_sessions,json=preSessions,proto3" json:"pre_sessions,omitempty"`
 	// post_sessions contains sessions that have to be committed last.
-	PostSessions         []*Session_ShardSession `protobuf:"bytes,10,rep,name=post_sessions,json=postSessions,proto3" json:"post_sessions,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
-	XXX_unrecognized     []byte                  `json:"-"`
-	XXX_sizecache        int32                   `json:"-"`
+	PostSessions []*Session_ShardSession `protobuf:"bytes,10,rep,name=post_sessions,json=postSessions,proto3" json:"post_sessions,omitempty"`
 }
 
-func (m *Session) Reset()         { *m = Session{} }
-func (m *Session) String() string { return proto.CompactTextString(m) }
-func (*Session) ProtoMessage()    {}
+func (m *Session) Reset()      { *m = Session{} }
+func (*Session) ProtoMessage() {}
 func (*Session) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{0}
 }
@@ -221,7 +213,7 @@ func (m *Session) GetTransactionMode() TransactionMode {
 	if m != nil {
 		return m.TransactionMode
 	}
-	return TransactionMode_UNSPECIFIED
+	return UNSPECIFIED
 }
 
 func (m *Session) GetWarnings() []*query.QueryWarning {
@@ -246,16 +238,12 @@ func (m *Session) GetPostSessions() []*Session_ShardSession {
 }
 
 type Session_ShardSession struct {
-	Target               *query.Target `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
-	TransactionId        int64         `protobuf:"varint,2,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
-	XXX_unrecognized     []byte        `json:"-"`
-	XXX_sizecache        int32         `json:"-"`
+	Target        *query.Target `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
+	TransactionId int64         `protobuf:"varint,2,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
 }
 
-func (m *Session_ShardSession) Reset()         { *m = Session_ShardSession{} }
-func (m *Session_ShardSession) String() string { return proto.CompactTextString(m) }
-func (*Session_ShardSession) ProtoMessage()    {}
+func (m *Session_ShardSession) Reset()      { *m = Session_ShardSession{} }
+func (*Session_ShardSession) ProtoMessage() {}
 func (*Session_ShardSession) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{0, 0}
 }
@@ -311,18 +299,14 @@ type ExecuteRequest struct {
 	Query *query.BoundQuery `protobuf:"bytes,3,opt,name=query,proto3" json:"query,omitempty"`
 	// These values are deprecated. Use session instead.
 	// TODO(sougou): remove in 3.1
-	TabletType           topodata.TabletType   `protobuf:"varint,4,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
-	NotInTransaction     bool                  `protobuf:"varint,5,opt,name=not_in_transaction,json=notInTransaction,proto3" json:"not_in_transaction,omitempty"`
-	KeyspaceShard        string                `protobuf:"bytes,6,opt,name=keyspace_shard,json=keyspaceShard,proto3" json:"keyspace_shard,omitempty"`
-	Options              *query.ExecuteOptions `protobuf:"bytes,7,opt,name=options,proto3" json:"options,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	TabletType       topodata.TabletType   `protobuf:"varint,4,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	NotInTransaction bool                  `protobuf:"varint,5,opt,name=not_in_transaction,json=notInTransaction,proto3" json:"not_in_transaction,omitempty"`
+	KeyspaceShard    string                `protobuf:"bytes,6,opt,name=keyspace_shard,json=keyspaceShard,proto3" json:"keyspace_shard,omitempty"`
+	Options          *query.ExecuteOptions `protobuf:"bytes,7,opt,name=options,proto3" json:"options,omitempty"`
 }
 
-func (m *ExecuteRequest) Reset()         { *m = ExecuteRequest{} }
-func (m *ExecuteRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteRequest) ProtoMessage()    {}
+func (m *ExecuteRequest) Reset()      { *m = ExecuteRequest{} }
+func (*ExecuteRequest) ProtoMessage() {}
 func (*ExecuteRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{1}
 }
@@ -378,7 +362,7 @@ func (m *ExecuteRequest) GetTabletType() topodata.TabletType {
 	if m != nil {
 		return m.TabletType
 	}
-	return topodata.TabletType_UNKNOWN
+	return topodata.UNKNOWN
 }
 
 func (m *ExecuteRequest) GetNotInTransaction() bool {
@@ -411,15 +395,11 @@ type ExecuteResponse struct {
 	// session is the updated session information.
 	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	// result contains the query result, only set if error is unset.
-	Result               *query.QueryResult `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
-	XXX_unrecognized     []byte             `json:"-"`
-	XXX_sizecache        int32              `json:"-"`
+	Result *query.QueryResult `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
 }
 
-func (m *ExecuteResponse) Reset()         { *m = ExecuteResponse{} }
-func (m *ExecuteResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteResponse) ProtoMessage()    {}
+func (m *ExecuteResponse) Reset()      { *m = ExecuteResponse{} }
+func (*ExecuteResponse) ProtoMessage() {}
 func (*ExecuteResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{2}
 }
@@ -490,15 +470,11 @@ type ExecuteShardsRequest struct {
 	// not_in_transaction is deprecated.
 	NotInTransaction bool `protobuf:"varint,7,opt,name=not_in_transaction,json=notInTransaction,proto3" json:"not_in_transaction,omitempty"`
 	// options
-	Options              *query.ExecuteOptions `protobuf:"bytes,8,opt,name=options,proto3" json:"options,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	Options *query.ExecuteOptions `protobuf:"bytes,8,opt,name=options,proto3" json:"options,omitempty"`
 }
 
-func (m *ExecuteShardsRequest) Reset()         { *m = ExecuteShardsRequest{} }
-func (m *ExecuteShardsRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteShardsRequest) ProtoMessage()    {}
+func (m *ExecuteShardsRequest) Reset()      { *m = ExecuteShardsRequest{} }
+func (*ExecuteShardsRequest) ProtoMessage() {}
 func (*ExecuteShardsRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{3}
 }
@@ -568,7 +544,7 @@ func (m *ExecuteShardsRequest) GetTabletType() topodata.TabletType {
 	if m != nil {
 		return m.TabletType
 	}
-	return topodata.TabletType_UNKNOWN
+	return topodata.UNKNOWN
 }
 
 func (m *ExecuteShardsRequest) GetNotInTransaction() bool {
@@ -594,15 +570,11 @@ type ExecuteShardsResponse struct {
 	// session is the updated session information (only returned inside a transaction).
 	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	// result contains the query result, only set if error is unset.
-	Result               *query.QueryResult `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
-	XXX_unrecognized     []byte             `json:"-"`
-	XXX_sizecache        int32              `json:"-"`
+	Result *query.QueryResult `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
 }
 
-func (m *ExecuteShardsResponse) Reset()         { *m = ExecuteShardsResponse{} }
-func (m *ExecuteShardsResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteShardsResponse) ProtoMessage()    {}
+func (m *ExecuteShardsResponse) Reset()      { *m = ExecuteShardsResponse{} }
+func (*ExecuteShardsResponse) ProtoMessage() {}
 func (*ExecuteShardsResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{4}
 }
@@ -674,15 +646,11 @@ type ExecuteKeyspaceIdsRequest struct {
 	// not_in_transaction is deprecated.
 	NotInTransaction bool `protobuf:"varint,7,opt,name=not_in_transaction,json=notInTransaction,proto3" json:"not_in_transaction,omitempty"`
 	// options
-	Options              *query.ExecuteOptions `protobuf:"bytes,8,opt,name=options,proto3" json:"options,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	Options *query.ExecuteOptions `protobuf:"bytes,8,opt,name=options,proto3" json:"options,omitempty"`
 }
 
-func (m *ExecuteKeyspaceIdsRequest) Reset()         { *m = ExecuteKeyspaceIdsRequest{} }
-func (m *ExecuteKeyspaceIdsRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteKeyspaceIdsRequest) ProtoMessage()    {}
+func (m *ExecuteKeyspaceIdsRequest) Reset()      { *m = ExecuteKeyspaceIdsRequest{} }
+func (*ExecuteKeyspaceIdsRequest) ProtoMessage() {}
 func (*ExecuteKeyspaceIdsRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{5}
 }
@@ -752,7 +720,7 @@ func (m *ExecuteKeyspaceIdsRequest) GetTabletType() topodata.TabletType {
 	if m != nil {
 		return m.TabletType
 	}
-	return topodata.TabletType_UNKNOWN
+	return topodata.UNKNOWN
 }
 
 func (m *ExecuteKeyspaceIdsRequest) GetNotInTransaction() bool {
@@ -778,15 +746,11 @@ type ExecuteKeyspaceIdsResponse struct {
 	// session is the updated session information (only returned inside a transaction).
 	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	// result contains the query result, only set if error is unset.
-	Result               *query.QueryResult `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
-	XXX_unrecognized     []byte             `json:"-"`
-	XXX_sizecache        int32              `json:"-"`
+	Result *query.QueryResult `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
 }
 
-func (m *ExecuteKeyspaceIdsResponse) Reset()         { *m = ExecuteKeyspaceIdsResponse{} }
-func (m *ExecuteKeyspaceIdsResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteKeyspaceIdsResponse) ProtoMessage()    {}
+func (m *ExecuteKeyspaceIdsResponse) Reset()      { *m = ExecuteKeyspaceIdsResponse{} }
+func (*ExecuteKeyspaceIdsResponse) ProtoMessage() {}
 func (*ExecuteKeyspaceIdsResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{6}
 }
@@ -858,15 +822,11 @@ type ExecuteKeyRangesRequest struct {
 	// not_in_transaction is deprecated.
 	NotInTransaction bool `protobuf:"varint,7,opt,name=not_in_transaction,json=notInTransaction,proto3" json:"not_in_transaction,omitempty"`
 	// options
-	Options              *query.ExecuteOptions `protobuf:"bytes,8,opt,name=options,proto3" json:"options,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	Options *query.ExecuteOptions `protobuf:"bytes,8,opt,name=options,proto3" json:"options,omitempty"`
 }
 
-func (m *ExecuteKeyRangesRequest) Reset()         { *m = ExecuteKeyRangesRequest{} }
-func (m *ExecuteKeyRangesRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteKeyRangesRequest) ProtoMessage()    {}
+func (m *ExecuteKeyRangesRequest) Reset()      { *m = ExecuteKeyRangesRequest{} }
+func (*ExecuteKeyRangesRequest) ProtoMessage() {}
 func (*ExecuteKeyRangesRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{7}
 }
@@ -936,7 +896,7 @@ func (m *ExecuteKeyRangesRequest) GetTabletType() topodata.TabletType {
 	if m != nil {
 		return m.TabletType
 	}
-	return topodata.TabletType_UNKNOWN
+	return topodata.UNKNOWN
 }
 
 func (m *ExecuteKeyRangesRequest) GetNotInTransaction() bool {
@@ -962,15 +922,11 @@ type ExecuteKeyRangesResponse struct {
 	// session is the updated session information (only returned inside a transaction).
 	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	// result contains the query result, only set if error is unset.
-	Result               *query.QueryResult `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
-	XXX_unrecognized     []byte             `json:"-"`
-	XXX_sizecache        int32              `json:"-"`
+	Result *query.QueryResult `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
 }
 
-func (m *ExecuteKeyRangesResponse) Reset()         { *m = ExecuteKeyRangesResponse{} }
-func (m *ExecuteKeyRangesResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteKeyRangesResponse) ProtoMessage()    {}
+func (m *ExecuteKeyRangesResponse) Reset()      { *m = ExecuteKeyRangesResponse{} }
+func (*ExecuteKeyRangesResponse) ProtoMessage() {}
 func (*ExecuteKeyRangesResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{8}
 }
@@ -1044,15 +1000,11 @@ type ExecuteEntityIdsRequest struct {
 	// not_in_transaction is deprecated.
 	NotInTransaction bool `protobuf:"varint,8,opt,name=not_in_transaction,json=notInTransaction,proto3" json:"not_in_transaction,omitempty"`
 	// options
-	Options              *query.ExecuteOptions `protobuf:"bytes,9,opt,name=options,proto3" json:"options,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	Options *query.ExecuteOptions `protobuf:"bytes,9,opt,name=options,proto3" json:"options,omitempty"`
 }
 
-func (m *ExecuteEntityIdsRequest) Reset()         { *m = ExecuteEntityIdsRequest{} }
-func (m *ExecuteEntityIdsRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteEntityIdsRequest) ProtoMessage()    {}
+func (m *ExecuteEntityIdsRequest) Reset()      { *m = ExecuteEntityIdsRequest{} }
+func (*ExecuteEntityIdsRequest) ProtoMessage() {}
 func (*ExecuteEntityIdsRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{9}
 }
@@ -1129,7 +1081,7 @@ func (m *ExecuteEntityIdsRequest) GetTabletType() topodata.TabletType {
 	if m != nil {
 		return m.TabletType
 	}
-	return topodata.TabletType_UNKNOWN
+	return topodata.UNKNOWN
 }
 
 func (m *ExecuteEntityIdsRequest) GetNotInTransaction() bool {
@@ -1152,15 +1104,11 @@ type ExecuteEntityIdsRequest_EntityId struct {
 	// value is the value for the entity. Not set if type is NULL_TYPE.
 	Value []byte `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 	// keyspace_id is the associated keyspace_id for the entity.
-	KeyspaceId           []byte   `protobuf:"bytes,3,opt,name=keyspace_id,json=keyspaceId,proto3" json:"keyspace_id,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	KeyspaceId []byte `protobuf:"bytes,3,opt,name=keyspace_id,json=keyspaceId,proto3" json:"keyspace_id,omitempty"`
 }
 
-func (m *ExecuteEntityIdsRequest_EntityId) Reset()         { *m = ExecuteEntityIdsRequest_EntityId{} }
-func (m *ExecuteEntityIdsRequest_EntityId) String() string { return proto.CompactTextString(m) }
-func (*ExecuteEntityIdsRequest_EntityId) ProtoMessage()    {}
+func (m *ExecuteEntityIdsRequest_EntityId) Reset()      { *m = ExecuteEntityIdsRequest_EntityId{} }
+func (*ExecuteEntityIdsRequest_EntityId) ProtoMessage() {}
 func (*ExecuteEntityIdsRequest_EntityId) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{9, 0}
 }
@@ -1195,7 +1143,7 @@ func (m *ExecuteEntityIdsRequest_EntityId) GetType() query.Type {
 	if m != nil {
 		return m.Type
 	}
-	return query.Type_NULL_TYPE
+	return query.NULL_TYPE
 }
 
 func (m *ExecuteEntityIdsRequest_EntityId) GetValue() []byte {
@@ -1221,15 +1169,11 @@ type ExecuteEntityIdsResponse struct {
 	// session is the updated session information (only returned inside a transaction).
 	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	// result contains the query result, only set if error is unset.
-	Result               *query.QueryResult `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
-	XXX_unrecognized     []byte             `json:"-"`
-	XXX_sizecache        int32              `json:"-"`
+	Result *query.QueryResult `protobuf:"bytes,3,opt,name=result,proto3" json:"result,omitempty"`
 }
 
-func (m *ExecuteEntityIdsResponse) Reset()         { *m = ExecuteEntityIdsResponse{} }
-func (m *ExecuteEntityIdsResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteEntityIdsResponse) ProtoMessage()    {}
+func (m *ExecuteEntityIdsResponse) Reset()      { *m = ExecuteEntityIdsResponse{} }
+func (*ExecuteEntityIdsResponse) ProtoMessage() {}
 func (*ExecuteEntityIdsResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{10}
 }
@@ -1292,18 +1236,14 @@ type ExecuteBatchRequest struct {
 	Queries []*query.BoundQuery `protobuf:"bytes,3,rep,name=queries,proto3" json:"queries,omitempty"`
 	// These values are deprecated. Use session instead.
 	// TODO(sougou): remove in 3.1
-	TabletType           topodata.TabletType   `protobuf:"varint,4,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
-	AsTransaction        bool                  `protobuf:"varint,5,opt,name=as_transaction,json=asTransaction,proto3" json:"as_transaction,omitempty"`
-	KeyspaceShard        string                `protobuf:"bytes,6,opt,name=keyspace_shard,json=keyspaceShard,proto3" json:"keyspace_shard,omitempty"`
-	Options              *query.ExecuteOptions `protobuf:"bytes,7,opt,name=options,proto3" json:"options,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	TabletType    topodata.TabletType   `protobuf:"varint,4,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
+	AsTransaction bool                  `protobuf:"varint,5,opt,name=as_transaction,json=asTransaction,proto3" json:"as_transaction,omitempty"`
+	KeyspaceShard string                `protobuf:"bytes,6,opt,name=keyspace_shard,json=keyspaceShard,proto3" json:"keyspace_shard,omitempty"`
+	Options       *query.ExecuteOptions `protobuf:"bytes,7,opt,name=options,proto3" json:"options,omitempty"`
 }
 
-func (m *ExecuteBatchRequest) Reset()         { *m = ExecuteBatchRequest{} }
-func (m *ExecuteBatchRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteBatchRequest) ProtoMessage()    {}
+func (m *ExecuteBatchRequest) Reset()      { *m = ExecuteBatchRequest{} }
+func (*ExecuteBatchRequest) ProtoMessage() {}
 func (*ExecuteBatchRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{11}
 }
@@ -1359,7 +1299,7 @@ func (m *ExecuteBatchRequest) GetTabletType() topodata.TabletType {
 	if m != nil {
 		return m.TabletType
 	}
-	return topodata.TabletType_UNKNOWN
+	return topodata.UNKNOWN
 }
 
 func (m *ExecuteBatchRequest) GetAsTransaction() bool {
@@ -1392,15 +1332,11 @@ type ExecuteBatchResponse struct {
 	// session is the updated session information.
 	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	// results contains the query results, only set if application level error is unset.
-	Results              []*query.ResultWithError `protobuf:"bytes,3,rep,name=results,proto3" json:"results,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}                 `json:"-"`
-	XXX_unrecognized     []byte                   `json:"-"`
-	XXX_sizecache        int32                    `json:"-"`
+	Results []*query.ResultWithError `protobuf:"bytes,3,rep,name=results,proto3" json:"results,omitempty"`
 }
 
-func (m *ExecuteBatchResponse) Reset()         { *m = ExecuteBatchResponse{} }
-func (m *ExecuteBatchResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteBatchResponse) ProtoMessage()    {}
+func (m *ExecuteBatchResponse) Reset()      { *m = ExecuteBatchResponse{} }
+func (*ExecuteBatchResponse) ProtoMessage() {}
 func (*ExecuteBatchResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{12}
 }
@@ -1461,15 +1397,11 @@ type BoundShardQuery struct {
 	// keyspace to target the query to.
 	Keyspace string `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// shards to target the query to. A DML can only target one shard.
-	Shards               []string `protobuf:"bytes,3,rep,name=shards,proto3" json:"shards,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Shards []string `protobuf:"bytes,3,rep,name=shards,proto3" json:"shards,omitempty"`
 }
 
-func (m *BoundShardQuery) Reset()         { *m = BoundShardQuery{} }
-func (m *BoundShardQuery) String() string { return proto.CompactTextString(m) }
-func (*BoundShardQuery) ProtoMessage()    {}
+func (m *BoundShardQuery) Reset()      { *m = BoundShardQuery{} }
+func (*BoundShardQuery) ProtoMessage() {}
 func (*BoundShardQuery) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{13}
 }
@@ -1538,15 +1470,11 @@ type ExecuteBatchShardsRequest struct {
 	// Only makes sense if tablet_type is master. If set, the Session is ignored.
 	AsTransaction bool `protobuf:"varint,5,opt,name=as_transaction,json=asTransaction,proto3" json:"as_transaction,omitempty"`
 	// options
-	Options              *query.ExecuteOptions `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	Options *query.ExecuteOptions `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
 }
 
-func (m *ExecuteBatchShardsRequest) Reset()         { *m = ExecuteBatchShardsRequest{} }
-func (m *ExecuteBatchShardsRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteBatchShardsRequest) ProtoMessage()    {}
+func (m *ExecuteBatchShardsRequest) Reset()      { *m = ExecuteBatchShardsRequest{} }
+func (*ExecuteBatchShardsRequest) ProtoMessage() {}
 func (*ExecuteBatchShardsRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{14}
 }
@@ -1602,7 +1530,7 @@ func (m *ExecuteBatchShardsRequest) GetTabletType() topodata.TabletType {
 	if m != nil {
 		return m.TabletType
 	}
-	return topodata.TabletType_UNKNOWN
+	return topodata.UNKNOWN
 }
 
 func (m *ExecuteBatchShardsRequest) GetAsTransaction() bool {
@@ -1628,15 +1556,11 @@ type ExecuteBatchShardsResponse struct {
 	// session is the updated session information (only returned inside a transaction).
 	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	// result contains the query result, only set if error is unset.
-	Results              []*query.QueryResult `protobuf:"bytes,3,rep,name=results,proto3" json:"results,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
-	XXX_unrecognized     []byte               `json:"-"`
-	XXX_sizecache        int32                `json:"-"`
+	Results []*query.QueryResult `protobuf:"bytes,3,rep,name=results,proto3" json:"results,omitempty"`
 }
 
-func (m *ExecuteBatchShardsResponse) Reset()         { *m = ExecuteBatchShardsResponse{} }
-func (m *ExecuteBatchShardsResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteBatchShardsResponse) ProtoMessage()    {}
+func (m *ExecuteBatchShardsResponse) Reset()      { *m = ExecuteBatchShardsResponse{} }
+func (*ExecuteBatchShardsResponse) ProtoMessage() {}
 func (*ExecuteBatchShardsResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{15}
 }
@@ -1698,15 +1622,11 @@ type BoundKeyspaceIdQuery struct {
 	Keyspace string `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// keyspace_ids contains the list of keyspace_ids affected by this query.
 	// Will be used to find the shards to send the query to.
-	KeyspaceIds          [][]byte `protobuf:"bytes,3,rep,name=keyspace_ids,json=keyspaceIds,proto3" json:"keyspace_ids,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	KeyspaceIds [][]byte `protobuf:"bytes,3,rep,name=keyspace_ids,json=keyspaceIds,proto3" json:"keyspace_ids,omitempty"`
 }
 
-func (m *BoundKeyspaceIdQuery) Reset()         { *m = BoundKeyspaceIdQuery{} }
-func (m *BoundKeyspaceIdQuery) String() string { return proto.CompactTextString(m) }
-func (*BoundKeyspaceIdQuery) ProtoMessage()    {}
+func (m *BoundKeyspaceIdQuery) Reset()      { *m = BoundKeyspaceIdQuery{} }
+func (*BoundKeyspaceIdQuery) ProtoMessage() {}
 func (*BoundKeyspaceIdQuery) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{16}
 }
@@ -1774,15 +1694,11 @@ type ExecuteBatchKeyspaceIdsRequest struct {
 	// Only makes sense if tablet_type is master. If set, the Session is ignored.
 	AsTransaction bool `protobuf:"varint,5,opt,name=as_transaction,json=asTransaction,proto3" json:"as_transaction,omitempty"`
 	// options
-	Options              *query.ExecuteOptions `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	Options *query.ExecuteOptions `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
 }
 
-func (m *ExecuteBatchKeyspaceIdsRequest) Reset()         { *m = ExecuteBatchKeyspaceIdsRequest{} }
-func (m *ExecuteBatchKeyspaceIdsRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteBatchKeyspaceIdsRequest) ProtoMessage()    {}
+func (m *ExecuteBatchKeyspaceIdsRequest) Reset()      { *m = ExecuteBatchKeyspaceIdsRequest{} }
+func (*ExecuteBatchKeyspaceIdsRequest) ProtoMessage() {}
 func (*ExecuteBatchKeyspaceIdsRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{17}
 }
@@ -1838,7 +1754,7 @@ func (m *ExecuteBatchKeyspaceIdsRequest) GetTabletType() topodata.TabletType {
 	if m != nil {
 		return m.TabletType
 	}
-	return topodata.TabletType_UNKNOWN
+	return topodata.UNKNOWN
 }
 
 func (m *ExecuteBatchKeyspaceIdsRequest) GetAsTransaction() bool {
@@ -1864,15 +1780,11 @@ type ExecuteBatchKeyspaceIdsResponse struct {
 	// session is the updated session information (only returned inside a transaction).
 	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 	// result contains the query result, only set if error is unset.
-	Results              []*query.QueryResult `protobuf:"bytes,3,rep,name=results,proto3" json:"results,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
-	XXX_unrecognized     []byte               `json:"-"`
-	XXX_sizecache        int32                `json:"-"`
+	Results []*query.QueryResult `protobuf:"bytes,3,rep,name=results,proto3" json:"results,omitempty"`
 }
 
-func (m *ExecuteBatchKeyspaceIdsResponse) Reset()         { *m = ExecuteBatchKeyspaceIdsResponse{} }
-func (m *ExecuteBatchKeyspaceIdsResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteBatchKeyspaceIdsResponse) ProtoMessage()    {}
+func (m *ExecuteBatchKeyspaceIdsResponse) Reset()      { *m = ExecuteBatchKeyspaceIdsResponse{} }
+func (*ExecuteBatchKeyspaceIdsResponse) ProtoMessage() {}
 func (*ExecuteBatchKeyspaceIdsResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{18}
 }
@@ -1937,15 +1849,11 @@ type StreamExecuteRequest struct {
 	KeyspaceShard string                `protobuf:"bytes,4,opt,name=keyspace_shard,json=keyspaceShard,proto3" json:"keyspace_shard,omitempty"`
 	Options       *query.ExecuteOptions `protobuf:"bytes,5,opt,name=options,proto3" json:"options,omitempty"`
 	// session carries the session state.
-	Session              *Session `protobuf:"bytes,6,opt,name=session,proto3" json:"session,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Session *Session `protobuf:"bytes,6,opt,name=session,proto3" json:"session,omitempty"`
 }
 
-func (m *StreamExecuteRequest) Reset()         { *m = StreamExecuteRequest{} }
-func (m *StreamExecuteRequest) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteRequest) ProtoMessage()    {}
+func (m *StreamExecuteRequest) Reset()      { *m = StreamExecuteRequest{} }
+func (*StreamExecuteRequest) ProtoMessage() {}
 func (*StreamExecuteRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{19}
 }
@@ -1994,7 +1902,7 @@ func (m *StreamExecuteRequest) GetTabletType() topodata.TabletType {
 	if m != nil {
 		return m.TabletType
 	}
-	return topodata.TabletType_UNKNOWN
+	return topodata.UNKNOWN
 }
 
 func (m *StreamExecuteRequest) GetKeyspaceShard() string {
@@ -2025,15 +1933,11 @@ type StreamExecuteResponse struct {
 	// result contains the result data.
 	// The first value contains only Fields information.
 	// The next values contain the actual rows, a few values per result.
-	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
-	XXX_unrecognized     []byte             `json:"-"`
-	XXX_sizecache        int32              `json:"-"`
+	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 }
 
-func (m *StreamExecuteResponse) Reset()         { *m = StreamExecuteResponse{} }
-func (m *StreamExecuteResponse) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteResponse) ProtoMessage()    {}
+func (m *StreamExecuteResponse) Reset()      { *m = StreamExecuteResponse{} }
+func (*StreamExecuteResponse) ProtoMessage() {}
 func (*StreamExecuteResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{20}
 }
@@ -2085,15 +1989,11 @@ type StreamExecuteShardsRequest struct {
 	// tablet_type is the type of tablets that this query is targeted to.
 	TabletType topodata.TabletType `protobuf:"varint,5,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	// options
-	Options              *query.ExecuteOptions `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	Options *query.ExecuteOptions `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
 }
 
-func (m *StreamExecuteShardsRequest) Reset()         { *m = StreamExecuteShardsRequest{} }
-func (m *StreamExecuteShardsRequest) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteShardsRequest) ProtoMessage()    {}
+func (m *StreamExecuteShardsRequest) Reset()      { *m = StreamExecuteShardsRequest{} }
+func (*StreamExecuteShardsRequest) ProtoMessage() {}
 func (*StreamExecuteShardsRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{21}
 }
@@ -2156,7 +2056,7 @@ func (m *StreamExecuteShardsRequest) GetTabletType() topodata.TabletType {
 	if m != nil {
 		return m.TabletType
 	}
-	return topodata.TabletType_UNKNOWN
+	return topodata.UNKNOWN
 }
 
 func (m *StreamExecuteShardsRequest) GetOptions() *query.ExecuteOptions {
@@ -2171,15 +2071,11 @@ type StreamExecuteShardsResponse struct {
 	// result contains the result data.
 	// The first value contains only Fields information.
 	// The next values contain the actual rows, a few values per result.
-	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
-	XXX_unrecognized     []byte             `json:"-"`
-	XXX_sizecache        int32              `json:"-"`
+	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 }
 
-func (m *StreamExecuteShardsResponse) Reset()         { *m = StreamExecuteShardsResponse{} }
-func (m *StreamExecuteShardsResponse) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteShardsResponse) ProtoMessage()    {}
+func (m *StreamExecuteShardsResponse) Reset()      { *m = StreamExecuteShardsResponse{} }
+func (*StreamExecuteShardsResponse) ProtoMessage() {}
 func (*StreamExecuteShardsResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{22}
 }
@@ -2232,15 +2128,11 @@ type StreamExecuteKeyspaceIdsRequest struct {
 	// tablet_type is the type of tablets that this query is targeted to.
 	TabletType topodata.TabletType `protobuf:"varint,5,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	// options
-	Options              *query.ExecuteOptions `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	Options *query.ExecuteOptions `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
 }
 
-func (m *StreamExecuteKeyspaceIdsRequest) Reset()         { *m = StreamExecuteKeyspaceIdsRequest{} }
-func (m *StreamExecuteKeyspaceIdsRequest) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteKeyspaceIdsRequest) ProtoMessage()    {}
+func (m *StreamExecuteKeyspaceIdsRequest) Reset()      { *m = StreamExecuteKeyspaceIdsRequest{} }
+func (*StreamExecuteKeyspaceIdsRequest) ProtoMessage() {}
 func (*StreamExecuteKeyspaceIdsRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{23}
 }
@@ -2303,7 +2195,7 @@ func (m *StreamExecuteKeyspaceIdsRequest) GetTabletType() topodata.TabletType {
 	if m != nil {
 		return m.TabletType
 	}
-	return topodata.TabletType_UNKNOWN
+	return topodata.UNKNOWN
 }
 
 func (m *StreamExecuteKeyspaceIdsRequest) GetOptions() *query.ExecuteOptions {
@@ -2318,15 +2210,11 @@ type StreamExecuteKeyspaceIdsResponse struct {
 	// result contains the result data.
 	// The first value contains only Fields information.
 	// The next values contain the actual rows, a few values per result.
-	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
-	XXX_unrecognized     []byte             `json:"-"`
-	XXX_sizecache        int32              `json:"-"`
+	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 }
 
-func (m *StreamExecuteKeyspaceIdsResponse) Reset()         { *m = StreamExecuteKeyspaceIdsResponse{} }
-func (m *StreamExecuteKeyspaceIdsResponse) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteKeyspaceIdsResponse) ProtoMessage()    {}
+func (m *StreamExecuteKeyspaceIdsResponse) Reset()      { *m = StreamExecuteKeyspaceIdsResponse{} }
+func (*StreamExecuteKeyspaceIdsResponse) ProtoMessage() {}
 func (*StreamExecuteKeyspaceIdsResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{24}
 }
@@ -2379,15 +2267,11 @@ type StreamExecuteKeyRangesRequest struct {
 	// tablet_type is the type of tablets that this query is targeted to.
 	TabletType topodata.TabletType `protobuf:"varint,5,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	// options
-	Options              *query.ExecuteOptions `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	Options *query.ExecuteOptions `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
 }
 
-func (m *StreamExecuteKeyRangesRequest) Reset()         { *m = StreamExecuteKeyRangesRequest{} }
-func (m *StreamExecuteKeyRangesRequest) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteKeyRangesRequest) ProtoMessage()    {}
+func (m *StreamExecuteKeyRangesRequest) Reset()      { *m = StreamExecuteKeyRangesRequest{} }
+func (*StreamExecuteKeyRangesRequest) ProtoMessage() {}
 func (*StreamExecuteKeyRangesRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{25}
 }
@@ -2450,7 +2334,7 @@ func (m *StreamExecuteKeyRangesRequest) GetTabletType() topodata.TabletType {
 	if m != nil {
 		return m.TabletType
 	}
-	return topodata.TabletType_UNKNOWN
+	return topodata.UNKNOWN
 }
 
 func (m *StreamExecuteKeyRangesRequest) GetOptions() *query.ExecuteOptions {
@@ -2465,15 +2349,11 @@ type StreamExecuteKeyRangesResponse struct {
 	// result contains the result data.
 	// The first value contains only Fields information.
 	// The next values contain the actual rows, a few values per result.
-	Result               *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
-	XXX_unrecognized     []byte             `json:"-"`
-	XXX_sizecache        int32              `json:"-"`
+	Result *query.QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 }
 
-func (m *StreamExecuteKeyRangesResponse) Reset()         { *m = StreamExecuteKeyRangesResponse{} }
-func (m *StreamExecuteKeyRangesResponse) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteKeyRangesResponse) ProtoMessage()    {}
+func (m *StreamExecuteKeyRangesResponse) Reset()      { *m = StreamExecuteKeyRangesResponse{} }
+func (*StreamExecuteKeyRangesResponse) ProtoMessage() {}
 func (*StreamExecuteKeyRangesResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{26}
 }
@@ -2520,15 +2400,11 @@ type BeginRequest struct {
 	// The value specifies if the transaction should be restricted
 	// to a single database.
 	// TODO(sougou): remove in 3.1
-	SingleDb             bool     `protobuf:"varint,2,opt,name=single_db,json=singleDb,proto3" json:"single_db,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	SingleDb bool `protobuf:"varint,2,opt,name=single_db,json=singleDb,proto3" json:"single_db,omitempty"`
 }
 
-func (m *BeginRequest) Reset()         { *m = BeginRequest{} }
-func (m *BeginRequest) String() string { return proto.CompactTextString(m) }
-func (*BeginRequest) ProtoMessage()    {}
+func (m *BeginRequest) Reset()      { *m = BeginRequest{} }
+func (*BeginRequest) ProtoMessage() {}
 func (*BeginRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{27}
 }
@@ -2576,15 +2452,11 @@ func (m *BeginRequest) GetSingleDb() bool {
 // BeginResponse is the returned value from Begin.
 type BeginResponse struct {
 	// session is the initial session information to use for subsequent queries.
-	Session              *Session `protobuf:"bytes,1,opt,name=session,proto3" json:"session,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Session *Session `protobuf:"bytes,1,opt,name=session,proto3" json:"session,omitempty"`
 }
 
-func (m *BeginResponse) Reset()         { *m = BeginResponse{} }
-func (m *BeginResponse) String() string { return proto.CompactTextString(m) }
-func (*BeginResponse) ProtoMessage()    {}
+func (m *BeginResponse) Reset()      { *m = BeginResponse{} }
+func (*BeginResponse) ProtoMessage() {}
 func (*BeginResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{28}
 }
@@ -2633,15 +2505,11 @@ type CommitRequest struct {
 	// The value specifies if the commit should go through the
 	// 2PC workflow to ensure atomicity.
 	// TODO(sougou): remove in 3.1
-	Atomic               bool     `protobuf:"varint,3,opt,name=atomic,proto3" json:"atomic,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Atomic bool `protobuf:"varint,3,opt,name=atomic,proto3" json:"atomic,omitempty"`
 }
 
-func (m *CommitRequest) Reset()         { *m = CommitRequest{} }
-func (m *CommitRequest) String() string { return proto.CompactTextString(m) }
-func (*CommitRequest) ProtoMessage()    {}
+func (m *CommitRequest) Reset()      { *m = CommitRequest{} }
+func (*CommitRequest) ProtoMessage() {}
 func (*CommitRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{29}
 }
@@ -2695,14 +2563,10 @@ func (m *CommitRequest) GetAtomic() bool {
 
 // CommitResponse is the returned value from Commit.
 type CommitResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *CommitResponse) Reset()         { *m = CommitResponse{} }
-func (m *CommitResponse) String() string { return proto.CompactTextString(m) }
-func (*CommitResponse) ProtoMessage()    {}
+func (m *CommitResponse) Reset()      { *m = CommitResponse{} }
+func (*CommitResponse) ProtoMessage() {}
 func (*CommitResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{30}
 }
@@ -2739,15 +2603,11 @@ type RollbackRequest struct {
 	// set by the application to further identify the caller.
 	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	// session carries the current transaction data to rollback.
-	Session              *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Session *Session `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
 }
 
-func (m *RollbackRequest) Reset()         { *m = RollbackRequest{} }
-func (m *RollbackRequest) String() string { return proto.CompactTextString(m) }
-func (*RollbackRequest) ProtoMessage()    {}
+func (m *RollbackRequest) Reset()      { *m = RollbackRequest{} }
+func (*RollbackRequest) ProtoMessage() {}
 func (*RollbackRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{31}
 }
@@ -2794,14 +2654,10 @@ func (m *RollbackRequest) GetSession() *Session {
 
 // RollbackResponse is the returned value from Rollback.
 type RollbackResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *RollbackResponse) Reset()         { *m = RollbackResponse{} }
-func (m *RollbackResponse) String() string { return proto.CompactTextString(m) }
-func (*RollbackResponse) ProtoMessage()    {}
+func (m *RollbackResponse) Reset()      { *m = RollbackResponse{} }
+func (*RollbackResponse) ProtoMessage() {}
 func (*RollbackResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{32}
 }
@@ -2838,15 +2694,11 @@ type ResolveTransactionRequest struct {
 	// set by the application to further identify the caller.
 	CallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
 	// dtid is the dtid of the transaction to be resolved.
-	Dtid                 string   `protobuf:"bytes,2,opt,name=dtid,proto3" json:"dtid,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Dtid string `protobuf:"bytes,2,opt,name=dtid,proto3" json:"dtid,omitempty"`
 }
 
-func (m *ResolveTransactionRequest) Reset()         { *m = ResolveTransactionRequest{} }
-func (m *ResolveTransactionRequest) String() string { return proto.CompactTextString(m) }
-func (*ResolveTransactionRequest) ProtoMessage()    {}
+func (m *ResolveTransactionRequest) Reset()      { *m = ResolveTransactionRequest{} }
+func (*ResolveTransactionRequest) ProtoMessage() {}
 func (*ResolveTransactionRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{33}
 }
@@ -2903,15 +2755,11 @@ type MessageStreamRequest struct {
 	// KeyRange to target the query to, for sharded keyspaces.
 	KeyRange *topodata.KeyRange `protobuf:"bytes,4,opt,name=key_range,json=keyRange,proto3" json:"key_range,omitempty"`
 	// name is the message table name.
-	Name                 string   `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Name string `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
 }
 
-func (m *MessageStreamRequest) Reset()         { *m = MessageStreamRequest{} }
-func (m *MessageStreamRequest) String() string { return proto.CompactTextString(m) }
-func (*MessageStreamRequest) ProtoMessage()    {}
+func (m *MessageStreamRequest) Reset()      { *m = MessageStreamRequest{} }
+func (*MessageStreamRequest) ProtoMessage() {}
 func (*MessageStreamRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{34}
 }
@@ -2987,15 +2835,11 @@ type MessageAckRequest struct {
 	// name is the message table name.
 	Name string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
 	// ids is the list of ids to ack.
-	Ids                  []*query.Value `protobuf:"bytes,4,rep,name=ids,proto3" json:"ids,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+	Ids []*query.Value `protobuf:"bytes,4,rep,name=ids,proto3" json:"ids,omitempty"`
 }
 
-func (m *MessageAckRequest) Reset()         { *m = MessageAckRequest{} }
-func (m *MessageAckRequest) String() string { return proto.CompactTextString(m) }
-func (*MessageAckRequest) ProtoMessage()    {}
+func (m *MessageAckRequest) Reset()      { *m = MessageAckRequest{} }
+func (*MessageAckRequest) ProtoMessage() {}
 func (*MessageAckRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{35}
 }
@@ -3060,15 +2904,11 @@ type IdKeyspaceId struct {
 	// id represents the message id.
 	Id *query.Value `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// keyspace_id is the associated keyspace_id for the id.
-	KeyspaceId           []byte   `protobuf:"bytes,2,opt,name=keyspace_id,json=keyspaceId,proto3" json:"keyspace_id,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	KeyspaceId []byte `protobuf:"bytes,2,opt,name=keyspace_id,json=keyspaceId,proto3" json:"keyspace_id,omitempty"`
 }
 
-func (m *IdKeyspaceId) Reset()         { *m = IdKeyspaceId{} }
-func (m *IdKeyspaceId) String() string { return proto.CompactTextString(m) }
-func (*IdKeyspaceId) ProtoMessage()    {}
+func (m *IdKeyspaceId) Reset()      { *m = IdKeyspaceId{} }
+func (*IdKeyspaceId) ProtoMessage() {}
 func (*IdKeyspaceId) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{36}
 }
@@ -3121,16 +2961,12 @@ type MessageAckKeyspaceIdsRequest struct {
 	// Optional keyspace for message table.
 	Keyspace string `protobuf:"bytes,2,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// name is the message table name.
-	Name                 string          `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	IdKeyspaceIds        []*IdKeyspaceId `protobuf:"bytes,4,rep,name=id_keyspace_ids,json=idKeyspaceIds,proto3" json:"id_keyspace_ids,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
-	XXX_unrecognized     []byte          `json:"-"`
-	XXX_sizecache        int32           `json:"-"`
+	Name          string          `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	IdKeyspaceIds []*IdKeyspaceId `protobuf:"bytes,4,rep,name=id_keyspace_ids,json=idKeyspaceIds,proto3" json:"id_keyspace_ids,omitempty"`
 }
 
-func (m *MessageAckKeyspaceIdsRequest) Reset()         { *m = MessageAckKeyspaceIdsRequest{} }
-func (m *MessageAckKeyspaceIdsRequest) String() string { return proto.CompactTextString(m) }
-func (*MessageAckKeyspaceIdsRequest) ProtoMessage()    {}
+func (m *MessageAckKeyspaceIdsRequest) Reset()      { *m = MessageAckKeyspaceIdsRequest{} }
+func (*MessageAckKeyspaceIdsRequest) ProtoMessage() {}
 func (*MessageAckKeyspaceIdsRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{37}
 }
@@ -3191,14 +3027,10 @@ func (m *MessageAckKeyspaceIdsRequest) GetIdKeyspaceIds() []*IdKeyspaceId {
 
 // ResolveTransactionResponse is the returned value from Rollback.
 type ResolveTransactionResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *ResolveTransactionResponse) Reset()         { *m = ResolveTransactionResponse{} }
-func (m *ResolveTransactionResponse) String() string { return proto.CompactTextString(m) }
-func (*ResolveTransactionResponse) ProtoMessage()    {}
+func (m *ResolveTransactionResponse) Reset()      { *m = ResolveTransactionResponse{} }
+func (*ResolveTransactionResponse) ProtoMessage() {}
 func (*ResolveTransactionResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{38}
 }
@@ -3317,15 +3149,11 @@ type SplitQueryRequest struct {
 	// Remove this field after this new server code is released to prod.
 	// We must keep it for now, so that clients can still send it to the old
 	// server code currently in production.
-	UseSplitQueryV2      bool     `protobuf:"varint,8,opt,name=use_split_query_v2,json=useSplitQueryV2,proto3" json:"use_split_query_v2,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	UseSplitQueryV2 bool `protobuf:"varint,8,opt,name=use_split_query_v2,json=useSplitQueryV2,proto3" json:"use_split_query_v2,omitempty"`
 }
 
-func (m *SplitQueryRequest) Reset()         { *m = SplitQueryRequest{} }
-func (m *SplitQueryRequest) String() string { return proto.CompactTextString(m) }
-func (*SplitQueryRequest) ProtoMessage()    {}
+func (m *SplitQueryRequest) Reset()      { *m = SplitQueryRequest{} }
+func (*SplitQueryRequest) ProtoMessage() {}
 func (*SplitQueryRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{39}
 }
@@ -3402,7 +3230,7 @@ func (m *SplitQueryRequest) GetAlgorithm() query.SplitQueryRequest_Algorithm {
 	if m != nil {
 		return m.Algorithm
 	}
-	return query.SplitQueryRequest_EQUAL_SPLITS
+	return query.EQUAL_SPLITS
 }
 
 func (m *SplitQueryRequest) GetUseSplitQueryV2() bool {
@@ -3415,15 +3243,11 @@ func (m *SplitQueryRequest) GetUseSplitQueryV2() bool {
 // SplitQueryResponse is the returned value from SplitQuery.
 type SplitQueryResponse struct {
 	// splits contains the queries to run to fetch the entire data set.
-	Splits               []*SplitQueryResponse_Part `protobuf:"bytes,1,rep,name=splits,proto3" json:"splits,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}                   `json:"-"`
-	XXX_unrecognized     []byte                     `json:"-"`
-	XXX_sizecache        int32                      `json:"-"`
+	Splits []*SplitQueryResponse_Part `protobuf:"bytes,1,rep,name=splits,proto3" json:"splits,omitempty"`
 }
 
-func (m *SplitQueryResponse) Reset()         { *m = SplitQueryResponse{} }
-func (m *SplitQueryResponse) String() string { return proto.CompactTextString(m) }
-func (*SplitQueryResponse) ProtoMessage()    {}
+func (m *SplitQueryResponse) Reset()      { *m = SplitQueryResponse{} }
+func (*SplitQueryResponse) ProtoMessage() {}
 func (*SplitQueryResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{40}
 }
@@ -3465,15 +3289,11 @@ type SplitQueryResponse_KeyRangePart struct {
 	// keyspace to target the query to.
 	Keyspace string `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// key ranges to target the query to.
-	KeyRanges            []*topodata.KeyRange `protobuf:"bytes,2,rep,name=key_ranges,json=keyRanges,proto3" json:"key_ranges,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
-	XXX_unrecognized     []byte               `json:"-"`
-	XXX_sizecache        int32                `json:"-"`
+	KeyRanges []*topodata.KeyRange `protobuf:"bytes,2,rep,name=key_ranges,json=keyRanges,proto3" json:"key_ranges,omitempty"`
 }
 
-func (m *SplitQueryResponse_KeyRangePart) Reset()         { *m = SplitQueryResponse_KeyRangePart{} }
-func (m *SplitQueryResponse_KeyRangePart) String() string { return proto.CompactTextString(m) }
-func (*SplitQueryResponse_KeyRangePart) ProtoMessage()    {}
+func (m *SplitQueryResponse_KeyRangePart) Reset()      { *m = SplitQueryResponse_KeyRangePart{} }
+func (*SplitQueryResponse_KeyRangePart) ProtoMessage() {}
 func (*SplitQueryResponse_KeyRangePart) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{40, 0}
 }
@@ -3522,15 +3342,11 @@ type SplitQueryResponse_ShardPart struct {
 	// keyspace to target the query to.
 	Keyspace string `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	// shards to target the query to.
-	Shards               []string `protobuf:"bytes,2,rep,name=shards,proto3" json:"shards,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Shards []string `protobuf:"bytes,2,rep,name=shards,proto3" json:"shards,omitempty"`
 }
 
-func (m *SplitQueryResponse_ShardPart) Reset()         { *m = SplitQueryResponse_ShardPart{} }
-func (m *SplitQueryResponse_ShardPart) String() string { return proto.CompactTextString(m) }
-func (*SplitQueryResponse_ShardPart) ProtoMessage()    {}
+func (m *SplitQueryResponse_ShardPart) Reset()      { *m = SplitQueryResponse_ShardPart{} }
+func (*SplitQueryResponse_ShardPart) ProtoMessage() {}
 func (*SplitQueryResponse_ShardPart) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{40, 1}
 }
@@ -3584,15 +3400,11 @@ type SplitQueryResponse_Part struct {
 	// shard_part is set if the query should be executed by ExecuteShards.
 	ShardPart *SplitQueryResponse_ShardPart `protobuf:"bytes,3,opt,name=shard_part,json=shardPart,proto3" json:"shard_part,omitempty"`
 	// size is the approximate number of rows this query will return.
-	Size                 int64    `protobuf:"varint,4,opt,name=size,proto3" json:"size,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Size int64 `protobuf:"varint,4,opt,name=size,proto3" json:"size,omitempty"`
 }
 
-func (m *SplitQueryResponse_Part) Reset()         { *m = SplitQueryResponse_Part{} }
-func (m *SplitQueryResponse_Part) String() string { return proto.CompactTextString(m) }
-func (*SplitQueryResponse_Part) ProtoMessage()    {}
+func (m *SplitQueryResponse_Part) Reset()      { *m = SplitQueryResponse_Part{} }
+func (*SplitQueryResponse_Part) ProtoMessage() {}
 func (*SplitQueryResponse_Part) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{40, 2}
 }
@@ -3654,15 +3466,11 @@ func (m *SplitQueryResponse_Part) GetSize() int64 {
 // GetSrvKeyspaceRequest is the payload to GetSrvKeyspace.
 type GetSrvKeyspaceRequest struct {
 	// keyspace name to fetch.
-	Keyspace             string   `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Keyspace string `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 }
 
-func (m *GetSrvKeyspaceRequest) Reset()         { *m = GetSrvKeyspaceRequest{} }
-func (m *GetSrvKeyspaceRequest) String() string { return proto.CompactTextString(m) }
-func (*GetSrvKeyspaceRequest) ProtoMessage()    {}
+func (m *GetSrvKeyspaceRequest) Reset()      { *m = GetSrvKeyspaceRequest{} }
+func (*GetSrvKeyspaceRequest) ProtoMessage() {}
 func (*GetSrvKeyspaceRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{41}
 }
@@ -3703,15 +3511,11 @@ func (m *GetSrvKeyspaceRequest) GetKeyspace() string {
 // GetSrvKeyspaceResponse is the returned value from GetSrvKeyspace.
 type GetSrvKeyspaceResponse struct {
 	// srv_keyspace is the topology object for the SrvKeyspace.
-	SrvKeyspace          *topodata.SrvKeyspace `protobuf:"bytes,1,opt,name=srv_keyspace,json=srvKeyspace,proto3" json:"srv_keyspace,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	SrvKeyspace *topodata.SrvKeyspace `protobuf:"bytes,1,opt,name=srv_keyspace,json=srvKeyspace,proto3" json:"srv_keyspace,omitempty"`
 }
 
-func (m *GetSrvKeyspaceResponse) Reset()         { *m = GetSrvKeyspaceResponse{} }
-func (m *GetSrvKeyspaceResponse) String() string { return proto.CompactTextString(m) }
-func (*GetSrvKeyspaceResponse) ProtoMessage()    {}
+func (m *GetSrvKeyspaceResponse) Reset()      { *m = GetSrvKeyspaceResponse{} }
+func (*GetSrvKeyspaceResponse) ProtoMessage() {}
 func (*GetSrvKeyspaceResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{42}
 }
@@ -3756,16 +3560,12 @@ type VStreamRequest struct {
 	// position specifies the starting point of the bin log positions
 	// as well as the keyspace-shards to pull events from.
 	// position is of the form 'ks1:0@MySQL56/<mysql_pos>|ks2:-80@MySQL56/<mysql_pos>'.
-	Vgtid                *binlogdata.VGtid  `protobuf:"bytes,3,opt,name=vgtid,proto3" json:"vgtid,omitempty"`
-	Filter               *binlogdata.Filter `protobuf:"bytes,4,opt,name=filter,proto3" json:"filter,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
-	XXX_unrecognized     []byte             `json:"-"`
-	XXX_sizecache        int32              `json:"-"`
+	Vgtid  *binlogdata.VGtid  `protobuf:"bytes,3,opt,name=vgtid,proto3" json:"vgtid,omitempty"`
+	Filter *binlogdata.Filter `protobuf:"bytes,4,opt,name=filter,proto3" json:"filter,omitempty"`
 }
 
-func (m *VStreamRequest) Reset()         { *m = VStreamRequest{} }
-func (m *VStreamRequest) String() string { return proto.CompactTextString(m) }
-func (*VStreamRequest) ProtoMessage()    {}
+func (m *VStreamRequest) Reset()      { *m = VStreamRequest{} }
+func (*VStreamRequest) ProtoMessage() {}
 func (*VStreamRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{43}
 }
@@ -3807,7 +3607,7 @@ func (m *VStreamRequest) GetTabletType() topodata.TabletType {
 	if m != nil {
 		return m.TabletType
 	}
-	return topodata.TabletType_UNKNOWN
+	return topodata.UNKNOWN
 }
 
 func (m *VStreamRequest) GetVgtid() *binlogdata.VGtid {
@@ -3826,15 +3626,11 @@ func (m *VStreamRequest) GetFilter() *binlogdata.Filter {
 
 // VStreamResponse is streamed by VStream.
 type VStreamResponse struct {
-	Events               []*binlogdata.VEvent `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
-	XXX_unrecognized     []byte               `json:"-"`
-	XXX_sizecache        int32                `json:"-"`
+	Events []*binlogdata.VEvent `protobuf:"bytes,1,rep,name=events,proto3" json:"events,omitempty"`
 }
 
-func (m *VStreamResponse) Reset()         { *m = VStreamResponse{} }
-func (m *VStreamResponse) String() string { return proto.CompactTextString(m) }
-func (*VStreamResponse) ProtoMessage()    {}
+func (m *VStreamResponse) Reset()      { *m = VStreamResponse{} }
+func (*VStreamResponse) ProtoMessage() {}
 func (*VStreamResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{44}
 }
@@ -3893,15 +3689,11 @@ type UpdateStreamRequest struct {
 	// Note it is only used if we are streaming from exactly the same shard
 	// as this event was coming from. Otherwise we can't use this event,
 	// and will use the timestamp as a starting point.
-	Event                *query.EventToken `protobuf:"bytes,7,opt,name=event,proto3" json:"event,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
-	XXX_unrecognized     []byte            `json:"-"`
-	XXX_sizecache        int32             `json:"-"`
+	Event *query.EventToken `protobuf:"bytes,7,opt,name=event,proto3" json:"event,omitempty"`
 }
 
-func (m *UpdateStreamRequest) Reset()         { *m = UpdateStreamRequest{} }
-func (m *UpdateStreamRequest) String() string { return proto.CompactTextString(m) }
-func (*UpdateStreamRequest) ProtoMessage()    {}
+func (m *UpdateStreamRequest) Reset()      { *m = UpdateStreamRequest{} }
+func (*UpdateStreamRequest) ProtoMessage() {}
 func (*UpdateStreamRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{45}
 }
@@ -3964,7 +3756,7 @@ func (m *UpdateStreamRequest) GetTabletType() topodata.TabletType {
 	if m != nil {
 		return m.TabletType
 	}
-	return topodata.TabletType_UNKNOWN
+	return topodata.UNKNOWN
 }
 
 func (m *UpdateStreamRequest) GetTimestamp() int64 {
@@ -3990,15 +3782,11 @@ type UpdateStreamResponse struct {
 	// shard, this is equal to event.timestamp. If the Update Stream
 	// goes to multiple shards and aggregates, this is the minimum value
 	// of the current timestamp for all shards.
-	ResumeTimestamp      int64    `protobuf:"varint,2,opt,name=resume_timestamp,json=resumeTimestamp,proto3" json:"resume_timestamp,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	ResumeTimestamp int64 `protobuf:"varint,2,opt,name=resume_timestamp,json=resumeTimestamp,proto3" json:"resume_timestamp,omitempty"`
 }
 
-func (m *UpdateStreamResponse) Reset()         { *m = UpdateStreamResponse{} }
-func (m *UpdateStreamResponse) String() string { return proto.CompactTextString(m) }
-func (*UpdateStreamResponse) ProtoMessage()    {}
+func (m *UpdateStreamResponse) Reset()      { *m = UpdateStreamResponse{} }
+func (*UpdateStreamResponse) ProtoMessage() {}
 func (*UpdateStreamResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_aab96496ceaf1ebb, []int{46}
 }
@@ -4103,138 +3891,2841 @@ func init() {
 func init() { proto.RegisterFile("vtgate.proto", fileDescriptor_aab96496ceaf1ebb) }
 
 var fileDescriptor_aab96496ceaf1ebb = []byte{
-	// 2054 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xd4, 0x5a, 0x5b, 0x8f, 0x1b, 0x49,
-	0x15, 0xde, 0xee, 0xf6, 0xf5, 0xf8, 0x9a, 0xca, 0x24, 0xf1, 0x7a, 0x87, 0x99, 0xd9, 0x5e, 0x46,
-	0xf1, 0x66, 0x23, 0x0f, 0xeb, 0xe5, 0x26, 0xb4, 0x68, 0x99, 0x71, 0x66, 0x23, 0x6b, 0x33, 0x17,
-	0xca, 0xce, 0x04, 0x10, 0xab, 0x56, 0x8f, 0x5d, 0x38, 0xcd, 0xd8, 0xdd, 0xde, 0xae, 0xb2, 0xc3,
-	0xf0, 0x80, 0xf6, 0x1f, 0xac, 0x78, 0x40, 0x42, 0x2b, 0x24, 0x40, 0x42, 0xe2, 0x89, 0x57, 0x24,
-	0xe0, 0x85, 0x37, 0x10, 0x2f, 0xc0, 0x13, 0x8f, 0x48, 0xe1, 0x07, 0x20, 0xf1, 0x0b, 0x50, 0x57,
-	0x55, 0x5f, 0xdc, 0x73, 0xf3, 0x78, 0x32, 0x91, 0xf3, 0x62, 0x75, 0xd5, 0x39, 0x55, 0x75, 0xce,
-	0x77, 0xbe, 0x3a, 0x75, 0xba, 0xdc, 0x90, 0x9f, 0xb0, 0xbe, 0xc9, 0x48, 0x7d, 0xe4, 0x3a, 0xcc,
-	0x41, 0x29, 0xd1, 0xaa, 0x96, 0x0f, 0x2d, 0x7b, 0xe0, 0xf4, 0x7b, 0x26, 0x33, 0x85, 0xa4, 0x9a,
-	0xfb, 0x64, 0x4c, 0xdc, 0x63, 0xd9, 0x28, 0x32, 0x67, 0xe4, 0x44, 0x85, 0x13, 0xe6, 0x8e, 0xba,
-	0xa2, 0xa1, 0xff, 0x3b, 0x01, 0xe9, 0x36, 0xa1, 0xd4, 0x72, 0x6c, 0xb4, 0x0e, 0x45, 0xcb, 0x36,
-	0x98, 0x6b, 0xda, 0xd4, 0xec, 0x32, 0xcb, 0xb1, 0x2b, 0xca, 0x9a, 0x52, 0xcb, 0xe0, 0x82, 0x65,
-	0x77, 0xc2, 0x4e, 0xd4, 0x84, 0x22, 0x7d, 0x6a, 0xba, 0x3d, 0x83, 0x8a, 0x71, 0xb4, 0xa2, 0xae,
-	0x69, 0xb5, 0x5c, 0x63, 0xb9, 0x2e, 0xad, 0x93, 0xf3, 0xd5, 0xdb, 0x9e, 0x96, 0x6c, 0xe0, 0x02,
-	0x8d, 0xb4, 0x28, 0x7a, 0x03, 0xb2, 0xd4, 0xb2, 0xfb, 0x03, 0x62, 0xf4, 0x0e, 0x2b, 0x1a, 0x5f,
-	0x26, 0x23, 0x3a, 0x1e, 0x1c, 0xa2, 0x15, 0x00, 0x73, 0xcc, 0x9c, 0xae, 0x33, 0x1c, 0x5a, 0xac,
-	0x92, 0xe0, 0xd2, 0x48, 0x0f, 0x7a, 0x0b, 0x0a, 0xcc, 0x74, 0xfb, 0x84, 0x19, 0x94, 0xb9, 0x96,
-	0xdd, 0xaf, 0x24, 0xd7, 0x94, 0x5a, 0x16, 0xe7, 0x45, 0x67, 0x9b, 0xf7, 0xa1, 0x0d, 0x48, 0x3b,
-	0x23, 0xc6, 0xed, 0x4b, 0xad, 0x29, 0xb5, 0x5c, 0xe3, 0x56, 0x5d, 0xa0, 0xb2, 0xfd, 0x23, 0xd2,
-	0x1d, 0x33, 0xb2, 0x27, 0x84, 0xd8, 0xd7, 0x42, 0x5b, 0x50, 0x8e, 0xf8, 0x6e, 0x0c, 0x9d, 0x1e,
-	0xa9, 0xa4, 0xd7, 0x94, 0x5a, 0xb1, 0x71, 0xc7, 0xf7, 0x2c, 0x02, 0xc3, 0x8e, 0xd3, 0x23, 0xb8,
-	0xc4, 0xa6, 0x3b, 0xd0, 0x06, 0x64, 0x9e, 0x99, 0xae, 0x6d, 0xd9, 0x7d, 0x5a, 0xc9, 0x70, 0x54,
-	0x6e, 0xca, 0x55, 0xbf, 0xed, 0xfd, 0x3e, 0x11, 0x32, 0x1c, 0x28, 0xa1, 0x0f, 0x20, 0x3f, 0x72,
-	0x49, 0x08, 0x65, 0x76, 0x06, 0x28, 0x73, 0x23, 0x97, 0x04, 0x40, 0x6e, 0x42, 0x61, 0xe4, 0x50,
-	0x16, 0xce, 0x00, 0x33, 0xcc, 0x90, 0xf7, 0x86, 0xf8, 0x53, 0x54, 0xbf, 0x0f, 0xf9, 0xa8, 0x14,
-	0xad, 0x43, 0x4a, 0x20, 0xc9, 0xe3, 0x9f, 0x6b, 0x14, 0xa4, 0x0b, 0x1d, 0xde, 0x89, 0xa5, 0xd0,
-	0xa3, 0x4b, 0x14, 0x2f, 0xab, 0x57, 0x51, 0xd7, 0x94, 0x9a, 0x86, 0x0b, 0x91, 0xde, 0x56, 0x4f,
-	0xff, 0xbb, 0x0a, 0x45, 0x09, 0x39, 0x26, 0x9f, 0x8c, 0x09, 0x65, 0xe8, 0x3e, 0x64, 0xbb, 0xe6,
-	0x60, 0x40, 0x5c, 0x6f, 0x90, 0x58, 0xa3, 0x54, 0x17, 0xac, 0x6c, 0xf2, 0xfe, 0xd6, 0x03, 0x9c,
-	0x11, 0x1a, 0xad, 0x1e, 0x7a, 0x1b, 0xd2, 0xd2, 0x39, 0xbe, 0x80, 0xd0, 0x8d, 0xfa, 0x86, 0x7d,
-	0x39, 0xba, 0x0b, 0x49, 0x6e, 0x2a, 0x67, 0x54, 0xae, 0x71, 0x43, 0x1a, 0xbe, 0xe5, 0x8c, 0xed,
-	0x1e, 0x0f, 0x00, 0x16, 0x72, 0xf4, 0x15, 0xc8, 0x31, 0xf3, 0x70, 0x40, 0x98, 0xc1, 0x8e, 0x47,
-	0x84, 0x53, 0xac, 0xd8, 0x58, 0xaa, 0x07, 0x3b, 0xa5, 0xc3, 0x85, 0x9d, 0xe3, 0x11, 0xc1, 0xc0,
-	0x82, 0x67, 0x74, 0x1f, 0x90, 0xed, 0x30, 0x23, 0xb6, 0x4b, 0x92, 0x9c, 0xa0, 0x65, 0xdb, 0x61,
-	0xad, 0xa9, 0x8d, 0xb2, 0x0e, 0xc5, 0x23, 0x72, 0x4c, 0x47, 0x66, 0x97, 0x18, 0x9c, 0xfd, 0x9c,
-	0x88, 0x59, 0x5c, 0xf0, 0x7b, 0x39, 0xea, 0x51, 0xa2, 0xa6, 0x67, 0x21, 0xaa, 0xfe, 0x99, 0x02,
-	0xa5, 0x00, 0x51, 0x3a, 0x72, 0x6c, 0x4a, 0xd0, 0x3a, 0x24, 0x89, 0xeb, 0x3a, 0x6e, 0x0c, 0x4e,
-	0xbc, 0xdf, 0xdc, 0xf6, 0xba, 0xb1, 0x90, 0x5e, 0x06, 0xcb, 0x7b, 0x90, 0x72, 0x09, 0x1d, 0x0f,
-	0x98, 0x04, 0x13, 0x45, 0x89, 0x8c, 0xb9, 0x04, 0x4b, 0x0d, 0xfd, 0xb9, 0x0a, 0x4b, 0xd2, 0x22,
-	0xee, 0x13, 0x5d, 0x9c, 0x48, 0x57, 0x21, 0xe3, 0xc3, 0xcd, 0xc3, 0x9c, 0xc5, 0x41, 0x1b, 0xdd,
-	0x86, 0x14, 0x8f, 0x0b, 0xad, 0x24, 0xd7, 0xb4, 0x5a, 0x16, 0xcb, 0x56, 0x9c, 0x1d, 0xa9, 0x2b,
-	0xb1, 0x23, 0x7d, 0x06, 0x3b, 0x22, 0x61, 0xcf, 0xcc, 0x14, 0xf6, 0x9f, 0x29, 0x70, 0x2b, 0x06,
-	0xf2, 0x42, 0x04, 0xff, 0x7f, 0x2a, 0xbc, 0x2e, 0xed, 0xfa, 0x48, 0x22, 0xdb, 0x7a, 0x55, 0x18,
-	0xf0, 0x26, 0xe4, 0x83, 0x2d, 0x6a, 0x49, 0x1e, 0xe4, 0x71, 0xee, 0x28, 0xf4, 0x63, 0x41, 0xc9,
-	0xf0, 0xb9, 0x02, 0xd5, 0xd3, 0x40, 0x5f, 0x08, 0x46, 0x7c, 0xaa, 0xc1, 0x9d, 0xd0, 0x38, 0x6c,
-	0xda, 0x7d, 0xf2, 0x8a, 0xf0, 0xe1, 0x5d, 0x80, 0x23, 0x72, 0x6c, 0xb8, 0xdc, 0x64, 0xce, 0x06,
-	0xcf, 0xd3, 0x20, 0xd6, 0xbe, 0x37, 0x38, 0x7b, 0xe4, 0xfb, 0xb5, 0xa0, 0xfc, 0xf8, 0xb9, 0x02,
-	0x95, 0x93, 0x21, 0x58, 0x08, 0x76, 0xfc, 0x21, 0x11, 0xb0, 0x63, 0xdb, 0x66, 0x16, 0x3b, 0x7e,
-	0x65, 0xb2, 0xc5, 0x7d, 0x40, 0x84, 0x5b, 0x6c, 0x74, 0x9d, 0xc1, 0x78, 0x68, 0x1b, 0xb6, 0x39,
-	0x24, 0xb2, 0xf8, 0x2c, 0x0b, 0x49, 0x93, 0x0b, 0x76, 0xcd, 0x21, 0x41, 0xdf, 0x81, 0x9b, 0x52,
-	0x7b, 0x2a, 0xc5, 0xa4, 0x38, 0xa9, 0x6a, 0xbe, 0xa5, 0x67, 0x20, 0x51, 0xf7, 0x3b, 0xf0, 0x0d,
-	0x31, 0xc9, 0x47, 0x67, 0xa7, 0xa4, 0xf4, 0x95, 0x28, 0x97, 0xb9, 0x98, 0x72, 0xd9, 0x59, 0x28,
-	0x57, 0x3d, 0x84, 0x8c, 0x6f, 0x34, 0x5a, 0x85, 0x04, 0x37, 0x4d, 0xe1, 0xa6, 0xe5, 0xfc, 0x02,
-	0xd2, 0xb3, 0x88, 0x0b, 0xd0, 0x12, 0x24, 0x27, 0xe6, 0x60, 0x4c, 0x78, 0xe0, 0xf2, 0x58, 0x34,
-	0xd0, 0x2a, 0xe4, 0x22, 0x58, 0xf1, 0x58, 0xe5, 0x31, 0x84, 0xd9, 0x38, 0x4a, 0xeb, 0x08, 0x62,
-	0x0b, 0x41, 0xeb, 0x7f, 0xaa, 0x70, 0x53, 0x9a, 0xb6, 0x65, 0xb2, 0xee, 0xd3, 0x6b, 0xa7, 0xf4,
-	0x3b, 0x90, 0xf6, 0xac, 0xb1, 0x08, 0xad, 0x68, 0x9c, 0x53, 0xa7, 0x90, 0xda, 0xd7, 0x98, 0xb7,
-	0xe0, 0x5d, 0x87, 0xa2, 0x49, 0x4f, 0x29, 0x76, 0x0b, 0x26, 0x7d, 0x19, 0x95, 0xee, 0xe7, 0x4a,
-	0x50, 0x57, 0x4a, 0x4c, 0xaf, 0x2d, 0xd4, 0x5f, 0x82, 0xb4, 0x08, 0xa4, 0x8f, 0xe6, 0x6d, 0x69,
-	0x9b, 0x08, 0xf3, 0x13, 0x8b, 0x3d, 0x15, 0x53, 0xfb, 0x6a, 0xba, 0x0d, 0x25, 0x8e, 0x34, 0xf7,
-	0x8d, 0xc3, 0x1d, 0x66, 0x19, 0xe5, 0x12, 0x59, 0x46, 0x3d, 0xb3, 0x2a, 0xd5, 0xa2, 0x55, 0xa9,
-	0xfe, 0xfb, 0xb0, 0xce, 0xe2, 0x60, 0xbc, 0xa4, 0x4a, 0xfb, 0xdd, 0x38, 0xcd, 0x82, 0xb7, 0xe1,
-	0x98, 0xf7, 0x2f, 0x8b, 0x6c, 0x97, 0x7d, 0xb1, 0xd7, 0x7f, 0x11, 0xd6, 0x4a, 0x53, 0xc0, 0x5d,
-	0x1b, 0x97, 0xee, 0xc7, 0xb9, 0x74, 0x5a, 0xde, 0x08, 0x78, 0xf4, 0x13, 0x58, 0xe2, 0x48, 0x86,
-	0x19, 0xfe, 0x05, 0x92, 0x29, 0x5e, 0xe0, 0x6a, 0x27, 0x0a, 0x5c, 0xfd, 0xcf, 0x2a, 0xac, 0x44,
-	0xe1, 0x79, 0x99, 0x45, 0xfc, 0x57, 0xe3, 0xe4, 0x5a, 0x9e, 0x22, 0x57, 0x0c, 0x92, 0x85, 0x65,
-	0xd8, 0xaf, 0x15, 0x58, 0x3d, 0x13, 0xc2, 0x05, 0xa1, 0xd9, 0x6f, 0x55, 0x58, 0x6a, 0x33, 0x97,
-	0x98, 0xc3, 0x2b, 0xdd, 0xc6, 0x04, 0xac, 0x54, 0x2f, 0x77, 0xc5, 0xa2, 0xcd, 0x1e, 0xa2, 0xd8,
-	0x51, 0x92, 0xb8, 0xe0, 0x28, 0x49, 0xce, 0x74, 0xbb, 0x17, 0xc1, 0x35, 0x75, 0x3e, 0xae, 0x7a,
-	0x13, 0x6e, 0xc5, 0x80, 0x92, 0x21, 0x0c, 0xcb, 0x01, 0xe5, 0xc2, 0x72, 0xe0, 0x33, 0x15, 0xaa,
-	0x53, 0xb3, 0x5c, 0x25, 0x5d, 0xcf, 0x0c, 0x7a, 0x34, 0x15, 0x68, 0x67, 0x9e, 0x2b, 0x89, 0xf3,
-	0x6e, 0x3b, 0x92, 0x33, 0x06, 0xea, 0xd2, 0x9b, 0xa4, 0x05, 0x6f, 0x9c, 0x0a, 0xc8, 0x1c, 0xe0,
-	0xfe, 0x52, 0x85, 0xd5, 0xa9, 0xb9, 0xae, 0x9c, 0xb3, 0x5e, 0x08, 0xc2, 0xf1, 0x64, 0x9b, 0xb8,
-	0xf0, 0x36, 0xe1, 0xda, 0xc0, 0xde, 0x85, 0xb5, 0xb3, 0x01, 0x9a, 0x03, 0xf1, 0xdf, 0xa9, 0xf0,
-	0x85, 0xf8, 0x84, 0x57, 0x79, 0xb1, 0x7f, 0x21, 0x78, 0x4f, 0xbf, 0xad, 0x27, 0xe6, 0x78, 0x5b,
-	0xbf, 0x36, 0xfc, 0x1f, 0xc1, 0xca, 0x59, 0x70, 0xcd, 0x81, 0xfe, 0x77, 0x21, 0xbf, 0x45, 0xfa,
-	0x96, 0x3d, 0x1f, 0xd6, 0x53, 0xff, 0xb5, 0xa8, 0xd3, 0xff, 0xb5, 0xe8, 0xdf, 0x80, 0x82, 0x9c,
-	0x5a, 0xda, 0x15, 0x49, 0x94, 0xca, 0x05, 0x89, 0xf2, 0x53, 0x05, 0x0a, 0x4d, 0xfe, 0x97, 0xcc,
-	0xb5, 0x17, 0x0a, 0xb7, 0x21, 0x65, 0x32, 0x67, 0x68, 0x75, 0xe5, 0x9f, 0x45, 0xb2, 0xa5, 0x97,
-	0xa1, 0xe8, 0x5b, 0x20, 0xec, 0xd7, 0x7f, 0x08, 0x25, 0xec, 0x0c, 0x06, 0x87, 0x66, 0xf7, 0xe8,
-	0xba, 0xad, 0xd2, 0x11, 0x94, 0xc3, 0xb5, 0xe4, 0xfa, 0x1f, 0xc3, 0xeb, 0x98, 0x50, 0x67, 0x30,
-	0x21, 0x91, 0x92, 0x62, 0x3e, 0x4b, 0x10, 0x24, 0x7a, 0x4c, 0xfe, 0xaf, 0x92, 0xc5, 0xfc, 0x59,
-	0xff, 0x93, 0x02, 0x4b, 0x3b, 0x84, 0x52, 0xb3, 0x4f, 0x04, 0xc1, 0xe6, 0x9b, 0xfa, 0xbc, 0x9a,
-	0x71, 0x09, 0x92, 0xe2, 0xe4, 0x15, 0xfb, 0x4d, 0x34, 0xd0, 0x06, 0x64, 0x83, 0xcd, 0xc6, 0xcf,
-	0xe4, 0xd3, 0xf7, 0x5a, 0xc6, 0xdf, 0x6b, 0x9e, 0xf5, 0x91, 0xfb, 0x11, 0xfe, 0xac, 0xff, 0x54,
-	0x81, 0x1b, 0xd2, 0xfa, 0xcd, 0x79, 0xe3, 0x73, 0x9e, 0xe9, 0xfe, 0x9a, 0x5a, 0xb8, 0x26, 0x5a,
-	0x01, 0xcd, 0x4f, 0xc6, 0xb9, 0x46, 0x5e, 0xee, 0xb2, 0x03, 0x73, 0x30, 0x26, 0xd8, 0x13, 0xe8,
-	0x3b, 0x90, 0x6f, 0x45, 0x2a, 0x4d, 0xb4, 0x0c, 0x6a, 0x60, 0xc6, 0xb4, 0xba, 0x6a, 0xf5, 0xe2,
-	0x57, 0x14, 0xea, 0x89, 0x2b, 0x8a, 0x3f, 0x2a, 0xb0, 0x1c, 0xba, 0x78, 0xe5, 0x83, 0xe9, 0xb2,
-	0xde, 0xbe, 0x0f, 0x25, 0xab, 0x67, 0x9c, 0x38, 0x86, 0x72, 0x8d, 0x25, 0x9f, 0xc5, 0x51, 0x67,
-	0x71, 0xc1, 0x8a, 0xb4, 0xa8, 0xbe, 0x0c, 0xd5, 0xd3, 0xc8, 0x2b, 0xa9, 0xfd, 0x5f, 0x15, 0x6e,
-	0xb4, 0x47, 0x03, 0x8b, 0xc9, 0x1c, 0xf5, 0xa2, 0xfd, 0x99, 0xf9, 0x92, 0xee, 0x4d, 0xc8, 0x53,
-	0xcf, 0x0e, 0x79, 0x0f, 0x27, 0x0b, 0x9a, 0x1c, 0xef, 0x13, 0x37, 0x70, 0x5e, 0x9c, 0x7c, 0x95,
-	0xb1, 0xcd, 0x38, 0x09, 0x35, 0x0c, 0x52, 0x63, 0x6c, 0x33, 0xf4, 0x65, 0xb8, 0x63, 0x8f, 0x87,
-	0x86, 0xeb, 0x3c, 0xa3, 0xc6, 0x88, 0xb8, 0x06, 0x9f, 0xd9, 0x18, 0x99, 0x2e, 0xe3, 0x29, 0x5e,
-	0xc3, 0x37, 0xed, 0xf1, 0x10, 0x3b, 0xcf, 0xe8, 0x3e, 0x71, 0xf9, 0xe2, 0xfb, 0xa6, 0xcb, 0xd0,
-	0xb7, 0x20, 0x6b, 0x0e, 0xfa, 0x8e, 0x6b, 0xb1, 0xa7, 0x43, 0x79, 0xf1, 0xa6, 0x4b, 0x33, 0x4f,
-	0x20, 0x53, 0xdf, 0xf4, 0x35, 0x71, 0x38, 0x08, 0xbd, 0x03, 0x68, 0x4c, 0x89, 0x21, 0x8c, 0x13,
-	0x8b, 0x4e, 0x1a, 0xf2, 0x16, 0xae, 0x34, 0xa6, 0x24, 0x9c, 0xe6, 0xa0, 0xa1, 0xff, 0x45, 0x03,
-	0x14, 0x9d, 0x57, 0xe6, 0xe8, 0xaf, 0x41, 0x8a, 0x8f, 0xa7, 0x15, 0x85, 0xc7, 0x76, 0x35, 0xc8,
-	0x50, 0x27, 0x74, 0xeb, 0x9e, 0xd9, 0x58, 0xaa, 0x57, 0x3f, 0x86, 0xbc, 0xbf, 0x53, 0xb9, 0x3b,
-	0xd1, 0x68, 0x28, 0xe7, 0x9e, 0xae, 0xea, 0x0c, 0xa7, 0x6b, 0xf5, 0x03, 0xc8, 0xf2, 0xaa, 0xee,
-	0xc2, 0xb9, 0xc3, 0x5a, 0x54, 0x8d, 0xd6, 0xa2, 0xd5, 0x7f, 0x29, 0x90, 0xe0, 0x83, 0x67, 0x7e,
-	0xf9, 0xdd, 0xe1, 0xef, 0x0b, 0xc2, 0x4a, 0x11, 0x3d, 0x91, 0xb4, 0xef, 0x9e, 0x03, 0x49, 0x14,
-	0x02, 0x9c, 0x3f, 0x8a, 0x02, 0xd2, 0x04, 0x10, 0x1f, 0x37, 0xf0, 0xa9, 0x04, 0x0f, 0xbf, 0x78,
-	0xce, 0x54, 0x81, 0xbb, 0x38, 0x4b, 0x03, 0xcf, 0x11, 0x24, 0xa8, 0xf5, 0x63, 0x91, 0x25, 0x35,
-	0xcc, 0x9f, 0xf5, 0xf7, 0xe0, 0xd6, 0x43, 0xc2, 0xda, 0xee, 0xc4, 0xdf, 0x6e, 0xfe, 0xf6, 0x39,
-	0x07, 0x26, 0x1d, 0xc3, 0xed, 0xf8, 0x20, 0xc9, 0x80, 0xaf, 0x43, 0x9e, 0xba, 0x13, 0x63, 0x6a,
-	0xa4, 0x57, 0x95, 0x04, 0xe1, 0x89, 0x0e, 0xca, 0xd1, 0xb0, 0xa1, 0xff, 0x4d, 0x81, 0xe2, 0xc1,
-	0x55, 0x8e, 0x8e, 0x58, 0x09, 0xa5, 0xce, 0x58, 0x42, 0xdd, 0x85, 0xe4, 0xa4, 0xcf, 0xe4, 0xad,
-	0xae, 0x17, 0xd1, 0xc8, 0x57, 0x2b, 0x07, 0x0f, 0x99, 0xd5, 0xc3, 0x42, 0xee, 0x15, 0x46, 0x3f,
-	0xb0, 0x06, 0x8c, 0xb8, 0xc1, 0x29, 0x13, 0xd1, 0xfc, 0x90, 0x4b, 0xb0, 0xd4, 0xd0, 0xbf, 0x09,
-	0xa5, 0xc0, 0x97, 0xb0, 0xae, 0x22, 0x13, 0x62, 0x07, 0x7b, 0x63, 0x6a, 0xf8, 0xc1, 0xb6, 0x27,
-	0xc2, 0x52, 0x43, 0xff, 0x8d, 0x0a, 0x37, 0x1f, 0x8f, 0x7a, 0x26, 0x5b, 0xf4, 0xb3, 0x74, 0xce,
-	0xb2, 0x75, 0x19, 0xb2, 0xcc, 0x1a, 0x12, 0xca, 0xcc, 0xe1, 0x48, 0x66, 0xb5, 0xb0, 0xc3, 0x8b,
-	0x08, 0xc7, 0x41, 0x5e, 0xc6, 0xfa, 0x7b, 0x8c, 0x43, 0xd4, 0x71, 0x8e, 0x88, 0x8d, 0x85, 0x5c,
-	0x3f, 0x82, 0xa5, 0x69, 0x94, 0x24, 0xd4, 0x35, 0x7f, 0x82, 0xe9, 0x0a, 0x56, 0x16, 0xbe, 0x1c,
-	0x69, 0xa1, 0x80, 0xde, 0x86, 0xb2, 0x57, 0xca, 0x0e, 0x89, 0x11, 0xda, 0x23, 0xbe, 0x16, 0x29,
-	0x89, 0xfe, 0x8e, 0xdf, 0x7d, 0xef, 0x01, 0x94, 0x62, 0x9f, 0xd9, 0xa0, 0x12, 0xe4, 0x1e, 0xef,
-	0xb6, 0xf7, 0xb7, 0x9b, 0xad, 0x0f, 0x5b, 0xdb, 0x0f, 0xca, 0xaf, 0x21, 0x80, 0x54, 0xbb, 0xb5,
-	0xfb, 0xf0, 0xd1, 0x76, 0x59, 0x41, 0x59, 0x48, 0xee, 0x3c, 0x7e, 0xd4, 0x69, 0x95, 0x55, 0xef,
-	0xb1, 0xf3, 0x64, 0x6f, 0xbf, 0x59, 0xd6, 0xee, 0xbd, 0x0f, 0x39, 0x51, 0x17, 0xee, 0xb9, 0x3d,
-	0xe2, 0x7a, 0x03, 0x76, 0xf7, 0xf0, 0xce, 0xe6, 0xa3, 0xf2, 0x6b, 0x28, 0x0d, 0xda, 0x3e, 0xf6,
-	0x46, 0x66, 0x20, 0xb1, 0xbf, 0xd7, 0xee, 0x94, 0x55, 0x54, 0x04, 0xd8, 0x7c, 0xdc, 0xd9, 0x6b,
-	0xee, 0xed, 0xec, 0xb4, 0x3a, 0x65, 0x6d, 0x6b, 0xeb, 0xaf, 0xcf, 0x57, 0x94, 0x7f, 0x3c, 0x5f,
-	0x51, 0x7e, 0xf5, 0x9f, 0x15, 0x05, 0x4a, 0x96, 0x53, 0x9f, 0x58, 0x8c, 0x50, 0x2a, 0x3e, 0x9a,
-	0xfa, 0xde, 0x5b, 0xb2, 0x65, 0x39, 0x1b, 0xe2, 0x69, 0xa3, 0xef, 0x6c, 0x4c, 0xd8, 0x06, 0x97,
-	0x6e, 0x88, 0x64, 0x71, 0x98, 0xe2, 0xad, 0xf7, 0xfe, 0x1f, 0x00, 0x00, 0xff, 0xff, 0x92, 0xe3,
-	0x87, 0x6b, 0xb4, 0x25, 0x00, 0x00,
+	// 2100 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xd4, 0x5a, 0xcd, 0x8f, 0x1b, 0x49,
+	0x15, 0x9f, 0xee, 0xf6, 0xe7, 0xf3, 0x67, 0x2a, 0x93, 0xac, 0xd7, 0x3b, 0x38, 0xb3, 0xbd, 0x8c,
+	0x32, 0x9b, 0x8d, 0x3c, 0xac, 0x97, 0x2f, 0xa1, 0x45, 0xcb, 0x8c, 0x33, 0x1b, 0x59, 0x9b, 0xf9,
+	0xa0, 0xc6, 0x99, 0x00, 0x62, 0xd5, 0xea, 0xb1, 0x0b, 0xa7, 0x77, 0xec, 0x6e, 0x6f, 0x57, 0xd9,
+	0x61, 0x38, 0xa0, 0xfc, 0x07, 0x0b, 0x07, 0x24, 0xb4, 0x42, 0x02, 0x24, 0x24, 0xb8, 0x70, 0x45,
+	0x02, 0x2e, 0xdc, 0x40, 0x5c, 0x08, 0x27, 0xf6, 0x86, 0x32, 0xb9, 0x70, 0x63, 0xc5, 0x5f, 0x80,
+	0xba, 0xaa, 0xfa, 0xc3, 0x9e, 0x2f, 0x8f, 0x27, 0x13, 0x39, 0x17, 0xab, 0xab, 0xde, 0xab, 0xaa,
+	0xf7, 0x7e, 0xef, 0x57, 0xaf, 0x5e, 0x97, 0x1b, 0xb2, 0x43, 0xd6, 0x31, 0x19, 0xa9, 0xf6, 0x5d,
+	0x87, 0x39, 0x28, 0x21, 0x5a, 0xe5, 0xe2, 0x9e, 0x65, 0x77, 0x9d, 0x4e, 0xdb, 0x64, 0xa6, 0x90,
+	0x94, 0x33, 0x1f, 0x0f, 0x88, 0x7b, 0x20, 0x1b, 0x79, 0xe6, 0xf4, 0x9d, 0xa8, 0x70, 0xc8, 0xdc,
+	0x7e, 0x4b, 0x34, 0xf4, 0x7f, 0xc7, 0x20, 0xb9, 0x43, 0x28, 0xb5, 0x1c, 0x1b, 0x2d, 0x41, 0xde,
+	0xb2, 0x0d, 0xe6, 0x9a, 0x36, 0x35, 0x5b, 0xcc, 0x72, 0xec, 0x92, 0xb2, 0xa8, 0x2c, 0xa7, 0x70,
+	0xce, 0xb2, 0x9b, 0x61, 0x27, 0xaa, 0x43, 0x9e, 0x3e, 0x34, 0xdd, 0xb6, 0x41, 0xc5, 0x38, 0x5a,
+	0x52, 0x17, 0xb5, 0xe5, 0x4c, 0x6d, 0xa1, 0x2a, 0xad, 0x93, 0xf3, 0x55, 0x77, 0x3c, 0x2d, 0xd9,
+	0xc0, 0x39, 0x1a, 0x69, 0x51, 0xf4, 0x1a, 0xa4, 0xa9, 0x65, 0x77, 0xba, 0xc4, 0x68, 0xef, 0x95,
+	0x34, 0xbe, 0x4c, 0x4a, 0x74, 0xdc, 0xd9, 0x43, 0x15, 0x00, 0x73, 0xc0, 0x9c, 0x96, 0xd3, 0xeb,
+	0x59, 0xac, 0x14, 0xe3, 0xd2, 0x48, 0x0f, 0x7a, 0x03, 0x72, 0xcc, 0x74, 0x3b, 0x84, 0x19, 0x94,
+	0xb9, 0x96, 0xdd, 0x29, 0xc5, 0x17, 0x95, 0xe5, 0x34, 0xce, 0x8a, 0xce, 0x1d, 0xde, 0x87, 0x56,
+	0x20, 0xe9, 0xf4, 0x19, 0xb7, 0x2f, 0xb1, 0xa8, 0x2c, 0x67, 0x6a, 0xd7, 0xaa, 0x02, 0x95, 0xf5,
+	0x1f, 0x92, 0xd6, 0x80, 0x91, 0x2d, 0x21, 0xc4, 0xbe, 0x16, 0x5a, 0x83, 0x62, 0xc4, 0x77, 0xa3,
+	0xe7, 0xb4, 0x49, 0x29, 0xb9, 0xa8, 0x2c, 0xe7, 0x6b, 0xaf, 0xf8, 0x9e, 0x45, 0x60, 0xd8, 0x70,
+	0xda, 0x04, 0x17, 0xd8, 0x68, 0x07, 0x5a, 0x81, 0xd4, 0x23, 0xd3, 0xb5, 0x2d, 0xbb, 0x43, 0x4b,
+	0x29, 0x8e, 0xca, 0x55, 0xb9, 0xea, 0xb7, 0xbd, 0xdf, 0x07, 0x42, 0x86, 0x03, 0x25, 0xf4, 0x1e,
+	0x64, 0xfb, 0x2e, 0x09, 0xa1, 0x4c, 0x4f, 0x00, 0x65, 0xa6, 0xef, 0x92, 0x00, 0xc8, 0x55, 0xc8,
+	0xf5, 0x1d, 0xca, 0xc2, 0x19, 0x60, 0x82, 0x19, 0xb2, 0xde, 0x10, 0x7f, 0x8a, 0xf2, 0xf7, 0x21,
+	0x1b, 0x95, 0xa2, 0x25, 0x48, 0x08, 0x24, 0x79, 0xfc, 0x33, 0xb5, 0x9c, 0x74, 0xa1, 0xc9, 0x3b,
+	0xb1, 0x14, 0x7a, 0x74, 0x89, 0xe2, 0x65, 0xb5, 0x4b, 0xea, 0xa2, 0xb2, 0xac, 0xe1, 0x5c, 0xa4,
+	0xb7, 0xd1, 0xd6, 0xff, 0xa1, 0x42, 0x5e, 0x42, 0x8e, 0xc9, 0xc7, 0x03, 0x42, 0x19, 0xba, 0x0d,
+	0xe9, 0x96, 0xd9, 0xed, 0x12, 0xd7, 0x1b, 0x24, 0xd6, 0x28, 0x54, 0x05, 0x2b, 0xeb, 0xbc, 0xbf,
+	0x71, 0x07, 0xa7, 0x84, 0x46, 0xa3, 0x8d, 0xde, 0x84, 0xa4, 0x74, 0x8e, 0x2f, 0x20, 0x74, 0xa3,
+	0xbe, 0x61, 0x5f, 0x8e, 0x6e, 0x42, 0x9c, 0x9b, 0xca, 0x19, 0x95, 0xa9, 0x5d, 0x91, 0x86, 0xaf,
+	0x39, 0x03, 0xbb, 0xcd, 0x03, 0x80, 0x85, 0x1c, 0x7d, 0x05, 0x32, 0xcc, 0xdc, 0xeb, 0x12, 0x66,
+	0xb0, 0x83, 0x3e, 0xe1, 0x14, 0xcb, 0xd7, 0xe6, 0xab, 0xc1, 0x4e, 0x69, 0x72, 0x61, 0xf3, 0xa0,
+	0x4f, 0x30, 0xb0, 0xe0, 0x19, 0xdd, 0x06, 0x64, 0x3b, 0xcc, 0x18, 0xdb, 0x25, 0x71, 0x4e, 0xd0,
+	0xa2, 0xed, 0xb0, 0xc6, 0xc8, 0x46, 0x59, 0x82, 0xfc, 0x3e, 0x39, 0xa0, 0x7d, 0xb3, 0x45, 0x0c,
+	0xce, 0x7e, 0x4e, 0xc4, 0x34, 0xce, 0xf9, 0xbd, 0x1c, 0xf5, 0x28, 0x51, 0x93, 0x93, 0x10, 0x55,
+	0xff, 0x44, 0x81, 0x42, 0x80, 0x28, 0xed, 0x3b, 0x36, 0x25, 0x68, 0x09, 0xe2, 0xc4, 0x75, 0x1d,
+	0x77, 0x0c, 0x4e, 0xbc, 0x5d, 0x5f, 0xf7, 0xba, 0xb1, 0x90, 0x9e, 0x07, 0xcb, 0x5b, 0x90, 0x70,
+	0x09, 0x1d, 0x74, 0x99, 0x04, 0x13, 0x45, 0x89, 0x8c, 0xb9, 0x04, 0x4b, 0x0d, 0xfd, 0x50, 0x85,
+	0x79, 0x69, 0x11, 0xf7, 0x89, 0xce, 0x4e, 0xa4, 0xcb, 0x90, 0xf2, 0xe1, 0xe6, 0x61, 0x4e, 0xe3,
+	0xa0, 0x8d, 0xae, 0x43, 0x82, 0xc7, 0x85, 0x96, 0xe2, 0x8b, 0xda, 0x72, 0x1a, 0xcb, 0xd6, 0x38,
+	0x3b, 0x12, 0x17, 0x62, 0x47, 0xf2, 0x04, 0x76, 0x44, 0xc2, 0x9e, 0x9a, 0x28, 0xec, 0x3f, 0x53,
+	0xe0, 0xda, 0x18, 0xc8, 0x33, 0x11, 0xfc, 0xff, 0xa9, 0xf0, 0xaa, 0xb4, 0xeb, 0x03, 0x89, 0x6c,
+	0xe3, 0x65, 0x61, 0xc0, 0xeb, 0x90, 0x0d, 0xb6, 0xa8, 0x25, 0x79, 0x90, 0xc5, 0x99, 0xfd, 0xd0,
+	0x8f, 0x19, 0x25, 0xc3, 0xa7, 0x0a, 0x94, 0x8f, 0x03, 0x7d, 0x26, 0x18, 0xf1, 0x58, 0x83, 0x57,
+	0x42, 0xe3, 0xb0, 0x69, 0x77, 0xc8, 0x4b, 0xc2, 0x87, 0xb7, 0x01, 0xf6, 0xc9, 0x81, 0xe1, 0x72,
+	0x93, 0x39, 0x1b, 0x3c, 0x4f, 0x83, 0x58, 0xfb, 0xde, 0xe0, 0xf4, 0xbe, 0xef, 0xd7, 0x8c, 0xf2,
+	0xe3, 0xe7, 0x0a, 0x94, 0x8e, 0x86, 0x60, 0x26, 0xd8, 0xf1, 0xc7, 0x58, 0xc0, 0x8e, 0x75, 0x9b,
+	0x59, 0xec, 0xe0, 0xa5, 0xc9, 0x16, 0xb7, 0x01, 0x11, 0x6e, 0xb1, 0xd1, 0x72, 0xba, 0x83, 0x9e,
+	0x6d, 0xd8, 0x66, 0x8f, 0xc8, 0xe2, 0xb3, 0x28, 0x24, 0x75, 0x2e, 0xd8, 0x34, 0x7b, 0x04, 0x7d,
+	0x07, 0xae, 0x4a, 0xed, 0x91, 0x14, 0x93, 0xe0, 0xa4, 0x5a, 0xf6, 0x2d, 0x3d, 0x01, 0x89, 0xaa,
+	0xdf, 0x81, 0xaf, 0x88, 0x49, 0x3e, 0x38, 0x39, 0x25, 0x25, 0x2f, 0x44, 0xb9, 0xd4, 0xd9, 0x94,
+	0x4b, 0x4f, 0x42, 0xb9, 0xf2, 0x1e, 0xa4, 0x7c, 0xa3, 0xd1, 0x0d, 0x88, 0x71, 0xd3, 0x14, 0x6e,
+	0x5a, 0xc6, 0x2f, 0x20, 0x3d, 0x8b, 0xb8, 0x00, 0xcd, 0x43, 0x7c, 0x68, 0x76, 0x07, 0x84, 0x07,
+	0x2e, 0x8b, 0x45, 0x03, 0xdd, 0x80, 0x4c, 0x04, 0x2b, 0x1e, 0xab, 0x2c, 0x86, 0x30, 0x1b, 0x47,
+	0x69, 0x1d, 0x41, 0x6c, 0x26, 0x68, 0xfd, 0x4f, 0x15, 0xae, 0x4a, 0xd3, 0xd6, 0x4c, 0xd6, 0x7a,
+	0x78, 0xe9, 0x94, 0x7e, 0x0b, 0x92, 0x9e, 0x35, 0x16, 0xa1, 0x25, 0x8d, 0x73, 0xea, 0x18, 0x52,
+	0xfb, 0x1a, 0xd3, 0x16, 0xbc, 0x4b, 0x90, 0x37, 0xe9, 0x31, 0xc5, 0x6e, 0xce, 0xa4, 0x2f, 0xa2,
+	0xd2, 0xfd, 0x54, 0x09, 0xea, 0x4a, 0x89, 0xe9, 0xa5, 0x85, 0xfa, 0x4b, 0x90, 0x14, 0x81, 0xf4,
+	0xd1, 0xbc, 0x2e, 0x6d, 0x13, 0x61, 0x7e, 0x60, 0xb1, 0x87, 0x62, 0x6a, 0x5f, 0x4d, 0xb7, 0xa1,
+	0xc0, 0x91, 0xe6, 0xbe, 0x71, 0xb8, 0xc3, 0x2c, 0xa3, 0x9c, 0x23, 0xcb, 0xa8, 0x27, 0x56, 0xa5,
+	0x5a, 0xb4, 0x2a, 0xd5, 0xff, 0x10, 0xd6, 0x59, 0x1c, 0x8c, 0x17, 0x54, 0x69, 0xbf, 0x3d, 0x4e,
+	0xb3, 0xe0, 0x6d, 0x78, 0xcc, 0xfb, 0x17, 0x45, 0xb6, 0xf3, 0xbe, 0xd8, 0xeb, 0xbf, 0x08, 0x6b,
+	0xa5, 0x11, 0xe0, 0x2e, 0x8d, 0x4b, 0xb7, 0xc7, 0xb9, 0x74, 0x5c, 0xde, 0x08, 0x78, 0xf4, 0x63,
+	0x98, 0xe7, 0x48, 0x86, 0x19, 0xfe, 0x39, 0x92, 0x69, 0xbc, 0xc0, 0xd5, 0x8e, 0x14, 0xb8, 0xfa,
+	0x5f, 0x54, 0xa8, 0x44, 0xe1, 0x79, 0x91, 0x45, 0xfc, 0x57, 0xc7, 0xc9, 0xb5, 0x30, 0x42, 0xae,
+	0x31, 0x48, 0x66, 0x96, 0x61, 0xbf, 0x56, 0xe0, 0xc6, 0x89, 0x10, 0xce, 0x08, 0xcd, 0x7e, 0xab,
+	0xc2, 0xfc, 0x0e, 0x73, 0x89, 0xd9, 0xbb, 0xd0, 0x6d, 0x4c, 0xc0, 0x4a, 0xf5, 0x7c, 0x57, 0x2c,
+	0xda, 0xe4, 0x21, 0x1a, 0x3b, 0x4a, 0x62, 0x67, 0x1c, 0x25, 0xf1, 0x89, 0x6e, 0xf7, 0x22, 0xb8,
+	0x26, 0x4e, 0xc7, 0x55, 0xaf, 0xc3, 0xb5, 0x31, 0xa0, 0x64, 0x08, 0xc3, 0x72, 0x40, 0x39, 0xb3,
+	0x1c, 0xf8, 0x44, 0x85, 0xf2, 0xc8, 0x2c, 0x17, 0x49, 0xd7, 0x13, 0x83, 0x1e, 0x4d, 0x05, 0xda,
+	0x89, 0xe7, 0x4a, 0xec, 0xb4, 0xdb, 0x8e, 0xf8, 0x84, 0x81, 0x3a, 0xf7, 0x26, 0x69, 0xc0, 0x6b,
+	0xc7, 0x02, 0x32, 0x05, 0xb8, 0xbf, 0x54, 0xe1, 0xc6, 0xc8, 0x5c, 0x17, 0xce, 0x59, 0xcf, 0x05,
+	0xe1, 0xf1, 0x64, 0x1b, 0x3b, 0xf3, 0x36, 0xe1, 0xd2, 0xc0, 0xde, 0x84, 0xc5, 0x93, 0x01, 0x9a,
+	0x02, 0xf1, 0xdf, 0xab, 0xf0, 0x85, 0xf1, 0x09, 0x2f, 0xf2, 0x62, 0xff, 0x5c, 0xf0, 0x1e, 0x7d,
+	0x5b, 0x8f, 0x4d, 0xf1, 0xb6, 0x7e, 0x69, 0xf8, 0xdf, 0x83, 0xca, 0x49, 0x70, 0x4d, 0x81, 0xfe,
+	0x77, 0x21, 0xbb, 0x46, 0x3a, 0x96, 0x3d, 0x1d, 0xd6, 0x23, 0xff, 0xb5, 0xa8, 0xa3, 0xff, 0xb5,
+	0xe8, 0xdf, 0x80, 0x9c, 0x9c, 0x5a, 0xda, 0x15, 0x49, 0x94, 0xca, 0x19, 0x89, 0xf2, 0xb1, 0x02,
+	0xb9, 0x3a, 0xff, 0x4b, 0xe6, 0xd2, 0x0b, 0x85, 0xeb, 0x90, 0x30, 0x99, 0xd3, 0xb3, 0x5a, 0xf2,
+	0xcf, 0x22, 0xd9, 0xd2, 0x8b, 0x90, 0xf7, 0x2d, 0x10, 0xf6, 0xeb, 0x1f, 0x41, 0x01, 0x3b, 0xdd,
+	0xee, 0x9e, 0xd9, 0xda, 0xbf, 0x6c, 0xab, 0x74, 0x04, 0xc5, 0x70, 0x2d, 0xb9, 0xfe, 0x87, 0xf0,
+	0x2a, 0x26, 0xd4, 0xe9, 0x0e, 0x49, 0xa4, 0xa4, 0x98, 0xce, 0x12, 0x04, 0xb1, 0x36, 0x93, 0xff,
+	0xab, 0xa4, 0x31, 0x7f, 0xd6, 0xff, 0xac, 0xc0, 0xfc, 0x06, 0xa1, 0xd4, 0xec, 0x10, 0x41, 0xb0,
+	0xe9, 0xa6, 0x3e, 0xad, 0x66, 0x9c, 0x87, 0xb8, 0x38, 0x79, 0xc5, 0x7e, 0x13, 0x0d, 0xb4, 0x02,
+	0xe9, 0x60, 0xb3, 0xf1, 0x33, 0xf9, 0xf8, 0xbd, 0x96, 0xf2, 0xf7, 0x9a, 0x67, 0x7d, 0xe4, 0x7e,
+	0x84, 0x3f, 0xeb, 0x3f, 0x55, 0xe0, 0x8a, 0xb4, 0x7e, 0x75, 0xda, 0xf8, 0x9c, 0x66, 0xba, 0xbf,
+	0xa6, 0x16, 0xae, 0x89, 0x2a, 0xa0, 0xf9, 0xc9, 0x38, 0x53, 0xcb, 0xca, 0x5d, 0xb6, 0x6b, 0x76,
+	0x07, 0x04, 0x7b, 0x02, 0x7d, 0x03, 0xb2, 0x8d, 0x48, 0xa5, 0x89, 0x16, 0x40, 0x0d, 0xcc, 0x18,
+	0x55, 0x57, 0xad, 0xf6, 0xf8, 0x15, 0x85, 0x7a, 0xe4, 0x8a, 0xe2, 0x4f, 0x0a, 0x2c, 0x84, 0x2e,
+	0x5e, 0xf8, 0x60, 0x3a, 0xaf, 0xb7, 0xef, 0x42, 0xc1, 0x6a, 0x1b, 0x47, 0x8e, 0xa1, 0x4c, 0x6d,
+	0xde, 0x67, 0x71, 0xd4, 0x59, 0x9c, 0xb3, 0x22, 0x2d, 0xaa, 0x2f, 0x40, 0xf9, 0x38, 0xf2, 0x4a,
+	0x6a, 0xff, 0x57, 0x85, 0x2b, 0x3b, 0xfd, 0xae, 0xc5, 0x64, 0x8e, 0x7a, 0xde, 0xfe, 0x4c, 0x7c,
+	0x49, 0xf7, 0x3a, 0x64, 0xa9, 0x67, 0x87, 0xbc, 0x87, 0x93, 0x05, 0x4d, 0x86, 0xf7, 0x89, 0x1b,
+	0x38, 0x2f, 0x4e, 0xbe, 0xca, 0xc0, 0x66, 0x9c, 0x84, 0x1a, 0x06, 0xa9, 0x31, 0xb0, 0x19, 0xfa,
+	0x32, 0xbc, 0x62, 0x0f, 0x7a, 0x86, 0xeb, 0x3c, 0xa2, 0x46, 0x9f, 0xb8, 0x06, 0x9f, 0xd9, 0xe8,
+	0x9b, 0x2e, 0xe3, 0x29, 0x5e, 0xc3, 0x57, 0xed, 0x41, 0x0f, 0x3b, 0x8f, 0xe8, 0x36, 0x71, 0xf9,
+	0xe2, 0xdb, 0xa6, 0xcb, 0xd0, 0xb7, 0x20, 0x6d, 0x76, 0x3b, 0x8e, 0x6b, 0xb1, 0x87, 0x3d, 0x79,
+	0xf1, 0xa6, 0x4b, 0x33, 0x8f, 0x20, 0x53, 0x5d, 0xf5, 0x35, 0x71, 0x38, 0x08, 0xbd, 0x05, 0x68,
+	0x40, 0x89, 0x21, 0x8c, 0x13, 0x8b, 0x0e, 0x6b, 0xf2, 0x16, 0xae, 0x30, 0xa0, 0x24, 0x9c, 0x66,
+	0xb7, 0xa6, 0xff, 0x55, 0x03, 0x14, 0x9d, 0x57, 0xe6, 0xe8, 0xaf, 0x41, 0x82, 0x8f, 0xa7, 0x25,
+	0x85, 0xc7, 0xf6, 0x46, 0x90, 0xa1, 0x8e, 0xe8, 0x56, 0x3d, 0xb3, 0xb1, 0x54, 0x2f, 0x7f, 0x08,
+	0x59, 0x7f, 0xa7, 0x72, 0x77, 0xa2, 0xd1, 0x50, 0x4e, 0x3d, 0x5d, 0xd5, 0x09, 0x4e, 0xd7, 0xf2,
+	0x7b, 0x90, 0xe6, 0x55, 0xdd, 0x99, 0x73, 0x87, 0xb5, 0xa8, 0x1a, 0xad, 0x45, 0xcb, 0xff, 0x52,
+	0x20, 0xc6, 0x07, 0x4f, 0xfc, 0xf2, 0xbb, 0xc1, 0xdf, 0x17, 0x84, 0x95, 0x22, 0x7a, 0x22, 0x69,
+	0xdf, 0x3c, 0x05, 0x92, 0x28, 0x04, 0x38, 0xbb, 0x1f, 0x05, 0xa4, 0x0e, 0x20, 0x3e, 0x6e, 0xe0,
+	0x53, 0x09, 0x1e, 0x7e, 0xf1, 0x94, 0xa9, 0x02, 0x77, 0x71, 0x9a, 0x06, 0x9e, 0x23, 0x88, 0x51,
+	0xeb, 0x47, 0x22, 0x4b, 0x6a, 0x98, 0x3f, 0xeb, 0xef, 0xc0, 0xb5, 0xbb, 0x84, 0xed, 0xb8, 0x43,
+	0x7f, 0xbb, 0xf9, 0xdb, 0xe7, 0x14, 0x98, 0x74, 0x0c, 0xd7, 0xc7, 0x07, 0x49, 0x06, 0x7c, 0x1d,
+	0xb2, 0xd4, 0x1d, 0x1a, 0x23, 0x23, 0xbd, 0xaa, 0x24, 0x08, 0x4f, 0x74, 0x50, 0x86, 0x86, 0x0d,
+	0xfd, 0xef, 0x0a, 0xe4, 0x77, 0x2f, 0x72, 0x74, 0x8c, 0x95, 0x50, 0xea, 0x84, 0x25, 0xd4, 0x4d,
+	0x88, 0x0f, 0x3b, 0x4c, 0xde, 0xea, 0x7a, 0x11, 0x8d, 0x7c, 0xb5, 0xb2, 0x7b, 0x97, 0x59, 0x6d,
+	0x2c, 0xe4, 0x5e, 0x61, 0xf4, 0x03, 0xab, 0xcb, 0x88, 0x1b, 0x9c, 0x32, 0x11, 0xcd, 0xf7, 0xb9,
+	0x04, 0x4b, 0x0d, 0xfd, 0x9b, 0x50, 0x08, 0x7c, 0x09, 0xeb, 0x2a, 0x32, 0x24, 0x76, 0xb0, 0x37,
+	0x46, 0x86, 0xef, 0xae, 0x7b, 0x22, 0x2c, 0x35, 0xf4, 0xdf, 0xa8, 0x70, 0xf5, 0x7e, 0xbf, 0x6d,
+	0xb2, 0x59, 0x3f, 0x4b, 0xa7, 0x2c, 0x5b, 0x17, 0x20, 0xcd, 0xac, 0x1e, 0xa1, 0xcc, 0xec, 0xf5,
+	0x65, 0x56, 0x0b, 0x3b, 0xbc, 0x88, 0x70, 0x1c, 0xe4, 0x65, 0xac, 0xbf, 0xc7, 0x38, 0x44, 0x4d,
+	0x67, 0x9f, 0xd8, 0x58, 0xc8, 0xf5, 0x7d, 0x98, 0x1f, 0x45, 0x49, 0x42, 0xbd, 0xec, 0x4f, 0x30,
+	0x5a, 0xc1, 0xca, 0xc2, 0x97, 0x23, 0x2d, 0x14, 0xd0, 0x9b, 0x50, 0xf4, 0x4a, 0xd9, 0x1e, 0x31,
+	0x42, 0x7b, 0xc4, 0xd7, 0x22, 0x05, 0xd1, 0xdf, 0xf4, 0xbb, 0x6f, 0xdd, 0x81, 0xc2, 0xd8, 0x67,
+	0x36, 0xa8, 0x00, 0x99, 0xfb, 0x9b, 0x3b, 0xdb, 0xeb, 0xf5, 0xc6, 0xfb, 0x8d, 0xf5, 0x3b, 0xc5,
+	0x39, 0x04, 0x90, 0xd8, 0x69, 0x6c, 0xde, 0xbd, 0xb7, 0x5e, 0x54, 0x50, 0x1a, 0xe2, 0x1b, 0xf7,
+	0xef, 0x35, 0x1b, 0x45, 0xd5, 0x7b, 0x6c, 0x3e, 0xd8, 0xda, 0xae, 0x17, 0xb5, 0x5b, 0xef, 0x42,
+	0x46, 0xd4, 0x85, 0x5b, 0x6e, 0x9b, 0xb8, 0xde, 0x80, 0xcd, 0x2d, 0xbc, 0xb1, 0x7a, 0xaf, 0x38,
+	0x87, 0x92, 0xa0, 0x6d, 0x63, 0x6f, 0x64, 0x0a, 0x62, 0xdb, 0x5b, 0x3b, 0xcd, 0xa2, 0x8a, 0xf2,
+	0x00, 0xab, 0xf7, 0x9b, 0x5b, 0xf5, 0xad, 0x8d, 0x8d, 0x46, 0xb3, 0xa8, 0xad, 0x7d, 0xf4, 0xe4,
+	0x69, 0x65, 0xee, 0xb3, 0xa7, 0x95, 0xb9, 0xcf, 0x9f, 0x56, 0x94, 0xc7, 0x87, 0x15, 0xe5, 0x77,
+	0x87, 0x15, 0xe5, 0x6f, 0x87, 0x15, 0xe5, 0xc9, 0x61, 0x45, 0xf9, 0xcf, 0x61, 0x65, 0xee, 0xf3,
+	0xc3, 0x8a, 0xf2, 0x93, 0x67, 0x95, 0xb9, 0x5f, 0x3d, 0xab, 0x28, 0x4f, 0x9e, 0x55, 0xe6, 0x3e,
+	0x7b, 0x56, 0x99, 0x83, 0x82, 0xe5, 0x54, 0x87, 0x16, 0x23, 0x94, 0x8a, 0x8f, 0xab, 0xbe, 0xf7,
+	0x86, 0x6c, 0x59, 0xce, 0x8a, 0x78, 0x5a, 0xe9, 0x38, 0x2b, 0x43, 0xb6, 0xc2, 0xa5, 0x2b, 0x22,
+	0xa9, 0xec, 0x25, 0x78, 0xeb, 0x9d, 0xff, 0x07, 0x00, 0x00, 0xff, 0xff, 0x39, 0x0b, 0xc9, 0xb0,
+	0xdc, 0x25, 0x00, 0x00,
 }
 
+func (x TransactionMode) String() string {
+	s, ok := TransactionMode_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (x CommitOrder) String() string {
+	s, ok := CommitOrder_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (this *Session) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Session)
+	if !ok {
+		that2, ok := that.(Session)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.InTransaction != that1.InTransaction {
+		return false
+	}
+	if len(this.ShardSessions) != len(that1.ShardSessions) {
+		return false
+	}
+	for i := range this.ShardSessions {
+		if !this.ShardSessions[i].Equal(that1.ShardSessions[i]) {
+			return false
+		}
+	}
+	if this.SingleDb != that1.SingleDb {
+		return false
+	}
+	if this.Autocommit != that1.Autocommit {
+		return false
+	}
+	if this.TargetString != that1.TargetString {
+		return false
+	}
+	if !this.Options.Equal(that1.Options) {
+		return false
+	}
+	if this.TransactionMode != that1.TransactionMode {
+		return false
+	}
+	if len(this.Warnings) != len(that1.Warnings) {
+		return false
+	}
+	for i := range this.Warnings {
+		if !this.Warnings[i].Equal(that1.Warnings[i]) {
+			return false
+		}
+	}
+	if len(this.PreSessions) != len(that1.PreSessions) {
+		return false
+	}
+	for i := range this.PreSessions {
+		if !this.PreSessions[i].Equal(that1.PreSessions[i]) {
+			return false
+		}
+	}
+	if len(this.PostSessions) != len(that1.PostSessions) {
+		return false
+	}
+	for i := range this.PostSessions {
+		if !this.PostSessions[i].Equal(that1.PostSessions[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *Session_ShardSession) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Session_ShardSession)
+	if !ok {
+		that2, ok := that.(Session_ShardSession)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Target.Equal(that1.Target) {
+		return false
+	}
+	if this.TransactionId != that1.TransactionId {
+		return false
+	}
+	return true
+}
+func (this *ExecuteRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteRequest)
+	if !ok {
+		that2, ok := that.(ExecuteRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.CallerId.Equal(that1.CallerId) {
+		return false
+	}
+	if !this.Session.Equal(that1.Session) {
+		return false
+	}
+	if !this.Query.Equal(that1.Query) {
+		return false
+	}
+	if this.TabletType != that1.TabletType {
+		return false
+	}
+	if this.NotInTransaction != that1.NotInTransaction {
+		return false
+	}
+	if this.KeyspaceShard != that1.KeyspaceShard {
+		return false
+	}
+	if !this.Options.Equal(that1.Options) {
+		return false
+	}
+	return true
+}
+func (this *ExecuteResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteResponse)
+	if !ok {
+		that2, ok := that.(ExecuteResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Error.Equal(that1.Error) {
+		return false
+	}
+	if !this.Session.Equal(that1.Session) {
+		return false
+	}
+	if !this.Result.Equal(that1.Result) {
+		return false
+	}
+	return true
+}
+func (this *ExecuteShardsRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteShardsRequest)
+	if !ok {
+		that2, ok := that.(ExecuteShardsRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.CallerId.Equal(that1.CallerId) {
+		return false
+	}
+	if !this.Session.Equal(that1.Session) {
+		return false
+	}
+	if !this.Query.Equal(that1.Query) {
+		return false
+	}
+	if this.Keyspace != that1.Keyspace {
+		return false
+	}
+	if len(this.Shards) != len(that1.Shards) {
+		return false
+	}
+	for i := range this.Shards {
+		if this.Shards[i] != that1.Shards[i] {
+			return false
+		}
+	}
+	if this.TabletType != that1.TabletType {
+		return false
+	}
+	if this.NotInTransaction != that1.NotInTransaction {
+		return false
+	}
+	if !this.Options.Equal(that1.Options) {
+		return false
+	}
+	return true
+}
+func (this *ExecuteShardsResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteShardsResponse)
+	if !ok {
+		that2, ok := that.(ExecuteShardsResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Error.Equal(that1.Error) {
+		return false
+	}
+	if !this.Session.Equal(that1.Session) {
+		return false
+	}
+	if !this.Result.Equal(that1.Result) {
+		return false
+	}
+	return true
+}
+func (this *ExecuteKeyspaceIdsRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteKeyspaceIdsRequest)
+	if !ok {
+		that2, ok := that.(ExecuteKeyspaceIdsRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.CallerId.Equal(that1.CallerId) {
+		return false
+	}
+	if !this.Session.Equal(that1.Session) {
+		return false
+	}
+	if !this.Query.Equal(that1.Query) {
+		return false
+	}
+	if this.Keyspace != that1.Keyspace {
+		return false
+	}
+	if len(this.KeyspaceIds) != len(that1.KeyspaceIds) {
+		return false
+	}
+	for i := range this.KeyspaceIds {
+		if !bytes.Equal(this.KeyspaceIds[i], that1.KeyspaceIds[i]) {
+			return false
+		}
+	}
+	if this.TabletType != that1.TabletType {
+		return false
+	}
+	if this.NotInTransaction != that1.NotInTransaction {
+		return false
+	}
+	if !this.Options.Equal(that1.Options) {
+		return false
+	}
+	return true
+}
+func (this *ExecuteKeyspaceIdsResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteKeyspaceIdsResponse)
+	if !ok {
+		that2, ok := that.(ExecuteKeyspaceIdsResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Error.Equal(that1.Error) {
+		return false
+	}
+	if !this.Session.Equal(that1.Session) {
+		return false
+	}
+	if !this.Result.Equal(that1.Result) {
+		return false
+	}
+	return true
+}
+func (this *ExecuteKeyRangesRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteKeyRangesRequest)
+	if !ok {
+		that2, ok := that.(ExecuteKeyRangesRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.CallerId.Equal(that1.CallerId) {
+		return false
+	}
+	if !this.Session.Equal(that1.Session) {
+		return false
+	}
+	if !this.Query.Equal(that1.Query) {
+		return false
+	}
+	if this.Keyspace != that1.Keyspace {
+		return false
+	}
+	if len(this.KeyRanges) != len(that1.KeyRanges) {
+		return false
+	}
+	for i := range this.KeyRanges {
+		if !this.KeyRanges[i].Equal(that1.KeyRanges[i]) {
+			return false
+		}
+	}
+	if this.TabletType != that1.TabletType {
+		return false
+	}
+	if this.NotInTransaction != that1.NotInTransaction {
+		return false
+	}
+	if !this.Options.Equal(that1.Options) {
+		return false
+	}
+	return true
+}
+func (this *ExecuteKeyRangesResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteKeyRangesResponse)
+	if !ok {
+		that2, ok := that.(ExecuteKeyRangesResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Error.Equal(that1.Error) {
+		return false
+	}
+	if !this.Session.Equal(that1.Session) {
+		return false
+	}
+	if !this.Result.Equal(that1.Result) {
+		return false
+	}
+	return true
+}
+func (this *ExecuteEntityIdsRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteEntityIdsRequest)
+	if !ok {
+		that2, ok := that.(ExecuteEntityIdsRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.CallerId.Equal(that1.CallerId) {
+		return false
+	}
+	if !this.Session.Equal(that1.Session) {
+		return false
+	}
+	if !this.Query.Equal(that1.Query) {
+		return false
+	}
+	if this.Keyspace != that1.Keyspace {
+		return false
+	}
+	if this.EntityColumnName != that1.EntityColumnName {
+		return false
+	}
+	if len(this.EntityKeyspaceIds) != len(that1.EntityKeyspaceIds) {
+		return false
+	}
+	for i := range this.EntityKeyspaceIds {
+		if !this.EntityKeyspaceIds[i].Equal(that1.EntityKeyspaceIds[i]) {
+			return false
+		}
+	}
+	if this.TabletType != that1.TabletType {
+		return false
+	}
+	if this.NotInTransaction != that1.NotInTransaction {
+		return false
+	}
+	if !this.Options.Equal(that1.Options) {
+		return false
+	}
+	return true
+}
+func (this *ExecuteEntityIdsRequest_EntityId) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteEntityIdsRequest_EntityId)
+	if !ok {
+		that2, ok := that.(ExecuteEntityIdsRequest_EntityId)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Type != that1.Type {
+		return false
+	}
+	if !bytes.Equal(this.Value, that1.Value) {
+		return false
+	}
+	if !bytes.Equal(this.KeyspaceId, that1.KeyspaceId) {
+		return false
+	}
+	return true
+}
+func (this *ExecuteEntityIdsResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteEntityIdsResponse)
+	if !ok {
+		that2, ok := that.(ExecuteEntityIdsResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Error.Equal(that1.Error) {
+		return false
+	}
+	if !this.Session.Equal(that1.Session) {
+		return false
+	}
+	if !this.Result.Equal(that1.Result) {
+		return false
+	}
+	return true
+}
+func (this *ExecuteBatchRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteBatchRequest)
+	if !ok {
+		that2, ok := that.(ExecuteBatchRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.CallerId.Equal(that1.CallerId) {
+		return false
+	}
+	if !this.Session.Equal(that1.Session) {
+		return false
+	}
+	if len(this.Queries) != len(that1.Queries) {
+		return false
+	}
+	for i := range this.Queries {
+		if !this.Queries[i].Equal(that1.Queries[i]) {
+			return false
+		}
+	}
+	if this.TabletType != that1.TabletType {
+		return false
+	}
+	if this.AsTransaction != that1.AsTransaction {
+		return false
+	}
+	if this.KeyspaceShard != that1.KeyspaceShard {
+		return false
+	}
+	if !this.Options.Equal(that1.Options) {
+		return false
+	}
+	return true
+}
+func (this *ExecuteBatchResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteBatchResponse)
+	if !ok {
+		that2, ok := that.(ExecuteBatchResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Error.Equal(that1.Error) {
+		return false
+	}
+	if !this.Session.Equal(that1.Session) {
+		return false
+	}
+	if len(this.Results) != len(that1.Results) {
+		return false
+	}
+	for i := range this.Results {
+		if !this.Results[i].Equal(that1.Results[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *BoundShardQuery) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*BoundShardQuery)
+	if !ok {
+		that2, ok := that.(BoundShardQuery)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Query.Equal(that1.Query) {
+		return false
+	}
+	if this.Keyspace != that1.Keyspace {
+		return false
+	}
+	if len(this.Shards) != len(that1.Shards) {
+		return false
+	}
+	for i := range this.Shards {
+		if this.Shards[i] != that1.Shards[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *ExecuteBatchShardsRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteBatchShardsRequest)
+	if !ok {
+		that2, ok := that.(ExecuteBatchShardsRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.CallerId.Equal(that1.CallerId) {
+		return false
+	}
+	if !this.Session.Equal(that1.Session) {
+		return false
+	}
+	if len(this.Queries) != len(that1.Queries) {
+		return false
+	}
+	for i := range this.Queries {
+		if !this.Queries[i].Equal(that1.Queries[i]) {
+			return false
+		}
+	}
+	if this.TabletType != that1.TabletType {
+		return false
+	}
+	if this.AsTransaction != that1.AsTransaction {
+		return false
+	}
+	if !this.Options.Equal(that1.Options) {
+		return false
+	}
+	return true
+}
+func (this *ExecuteBatchShardsResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteBatchShardsResponse)
+	if !ok {
+		that2, ok := that.(ExecuteBatchShardsResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Error.Equal(that1.Error) {
+		return false
+	}
+	if !this.Session.Equal(that1.Session) {
+		return false
+	}
+	if len(this.Results) != len(that1.Results) {
+		return false
+	}
+	for i := range this.Results {
+		if !this.Results[i].Equal(that1.Results[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *BoundKeyspaceIdQuery) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*BoundKeyspaceIdQuery)
+	if !ok {
+		that2, ok := that.(BoundKeyspaceIdQuery)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Query.Equal(that1.Query) {
+		return false
+	}
+	if this.Keyspace != that1.Keyspace {
+		return false
+	}
+	if len(this.KeyspaceIds) != len(that1.KeyspaceIds) {
+		return false
+	}
+	for i := range this.KeyspaceIds {
+		if !bytes.Equal(this.KeyspaceIds[i], that1.KeyspaceIds[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *ExecuteBatchKeyspaceIdsRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteBatchKeyspaceIdsRequest)
+	if !ok {
+		that2, ok := that.(ExecuteBatchKeyspaceIdsRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.CallerId.Equal(that1.CallerId) {
+		return false
+	}
+	if !this.Session.Equal(that1.Session) {
+		return false
+	}
+	if len(this.Queries) != len(that1.Queries) {
+		return false
+	}
+	for i := range this.Queries {
+		if !this.Queries[i].Equal(that1.Queries[i]) {
+			return false
+		}
+	}
+	if this.TabletType != that1.TabletType {
+		return false
+	}
+	if this.AsTransaction != that1.AsTransaction {
+		return false
+	}
+	if !this.Options.Equal(that1.Options) {
+		return false
+	}
+	return true
+}
+func (this *ExecuteBatchKeyspaceIdsResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteBatchKeyspaceIdsResponse)
+	if !ok {
+		that2, ok := that.(ExecuteBatchKeyspaceIdsResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Error.Equal(that1.Error) {
+		return false
+	}
+	if !this.Session.Equal(that1.Session) {
+		return false
+	}
+	if len(this.Results) != len(that1.Results) {
+		return false
+	}
+	for i := range this.Results {
+		if !this.Results[i].Equal(that1.Results[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *StreamExecuteRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StreamExecuteRequest)
+	if !ok {
+		that2, ok := that.(StreamExecuteRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.CallerId.Equal(that1.CallerId) {
+		return false
+	}
+	if !this.Query.Equal(that1.Query) {
+		return false
+	}
+	if this.TabletType != that1.TabletType {
+		return false
+	}
+	if this.KeyspaceShard != that1.KeyspaceShard {
+		return false
+	}
+	if !this.Options.Equal(that1.Options) {
+		return false
+	}
+	if !this.Session.Equal(that1.Session) {
+		return false
+	}
+	return true
+}
+func (this *StreamExecuteResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StreamExecuteResponse)
+	if !ok {
+		that2, ok := that.(StreamExecuteResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Result.Equal(that1.Result) {
+		return false
+	}
+	return true
+}
+func (this *StreamExecuteShardsRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StreamExecuteShardsRequest)
+	if !ok {
+		that2, ok := that.(StreamExecuteShardsRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.CallerId.Equal(that1.CallerId) {
+		return false
+	}
+	if !this.Query.Equal(that1.Query) {
+		return false
+	}
+	if this.Keyspace != that1.Keyspace {
+		return false
+	}
+	if len(this.Shards) != len(that1.Shards) {
+		return false
+	}
+	for i := range this.Shards {
+		if this.Shards[i] != that1.Shards[i] {
+			return false
+		}
+	}
+	if this.TabletType != that1.TabletType {
+		return false
+	}
+	if !this.Options.Equal(that1.Options) {
+		return false
+	}
+	return true
+}
+func (this *StreamExecuteShardsResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StreamExecuteShardsResponse)
+	if !ok {
+		that2, ok := that.(StreamExecuteShardsResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Result.Equal(that1.Result) {
+		return false
+	}
+	return true
+}
+func (this *StreamExecuteKeyspaceIdsRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StreamExecuteKeyspaceIdsRequest)
+	if !ok {
+		that2, ok := that.(StreamExecuteKeyspaceIdsRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.CallerId.Equal(that1.CallerId) {
+		return false
+	}
+	if !this.Query.Equal(that1.Query) {
+		return false
+	}
+	if this.Keyspace != that1.Keyspace {
+		return false
+	}
+	if len(this.KeyspaceIds) != len(that1.KeyspaceIds) {
+		return false
+	}
+	for i := range this.KeyspaceIds {
+		if !bytes.Equal(this.KeyspaceIds[i], that1.KeyspaceIds[i]) {
+			return false
+		}
+	}
+	if this.TabletType != that1.TabletType {
+		return false
+	}
+	if !this.Options.Equal(that1.Options) {
+		return false
+	}
+	return true
+}
+func (this *StreamExecuteKeyspaceIdsResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StreamExecuteKeyspaceIdsResponse)
+	if !ok {
+		that2, ok := that.(StreamExecuteKeyspaceIdsResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Result.Equal(that1.Result) {
+		return false
+	}
+	return true
+}
+func (this *StreamExecuteKeyRangesRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StreamExecuteKeyRangesRequest)
+	if !ok {
+		that2, ok := that.(StreamExecuteKeyRangesRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.CallerId.Equal(that1.CallerId) {
+		return false
+	}
+	if !this.Query.Equal(that1.Query) {
+		return false
+	}
+	if this.Keyspace != that1.Keyspace {
+		return false
+	}
+	if len(this.KeyRanges) != len(that1.KeyRanges) {
+		return false
+	}
+	for i := range this.KeyRanges {
+		if !this.KeyRanges[i].Equal(that1.KeyRanges[i]) {
+			return false
+		}
+	}
+	if this.TabletType != that1.TabletType {
+		return false
+	}
+	if !this.Options.Equal(that1.Options) {
+		return false
+	}
+	return true
+}
+func (this *StreamExecuteKeyRangesResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StreamExecuteKeyRangesResponse)
+	if !ok {
+		that2, ok := that.(StreamExecuteKeyRangesResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Result.Equal(that1.Result) {
+		return false
+	}
+	return true
+}
+func (this *BeginRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*BeginRequest)
+	if !ok {
+		that2, ok := that.(BeginRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.CallerId.Equal(that1.CallerId) {
+		return false
+	}
+	if this.SingleDb != that1.SingleDb {
+		return false
+	}
+	return true
+}
+func (this *BeginResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*BeginResponse)
+	if !ok {
+		that2, ok := that.(BeginResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Session.Equal(that1.Session) {
+		return false
+	}
+	return true
+}
+func (this *CommitRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*CommitRequest)
+	if !ok {
+		that2, ok := that.(CommitRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.CallerId.Equal(that1.CallerId) {
+		return false
+	}
+	if !this.Session.Equal(that1.Session) {
+		return false
+	}
+	if this.Atomic != that1.Atomic {
+		return false
+	}
+	return true
+}
+func (this *CommitResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*CommitResponse)
+	if !ok {
+		that2, ok := that.(CommitResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *RollbackRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*RollbackRequest)
+	if !ok {
+		that2, ok := that.(RollbackRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.CallerId.Equal(that1.CallerId) {
+		return false
+	}
+	if !this.Session.Equal(that1.Session) {
+		return false
+	}
+	return true
+}
+func (this *RollbackResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*RollbackResponse)
+	if !ok {
+		that2, ok := that.(RollbackResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *ResolveTransactionRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ResolveTransactionRequest)
+	if !ok {
+		that2, ok := that.(ResolveTransactionRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.CallerId.Equal(that1.CallerId) {
+		return false
+	}
+	if this.Dtid != that1.Dtid {
+		return false
+	}
+	return true
+}
+func (this *MessageStreamRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*MessageStreamRequest)
+	if !ok {
+		that2, ok := that.(MessageStreamRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.CallerId.Equal(that1.CallerId) {
+		return false
+	}
+	if this.Keyspace != that1.Keyspace {
+		return false
+	}
+	if this.Shard != that1.Shard {
+		return false
+	}
+	if !this.KeyRange.Equal(that1.KeyRange) {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	return true
+}
+func (this *MessageAckRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*MessageAckRequest)
+	if !ok {
+		that2, ok := that.(MessageAckRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.CallerId.Equal(that1.CallerId) {
+		return false
+	}
+	if this.Keyspace != that1.Keyspace {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	if len(this.Ids) != len(that1.Ids) {
+		return false
+	}
+	for i := range this.Ids {
+		if !this.Ids[i].Equal(that1.Ids[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *IdKeyspaceId) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*IdKeyspaceId)
+	if !ok {
+		that2, ok := that.(IdKeyspaceId)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Id.Equal(that1.Id) {
+		return false
+	}
+	if !bytes.Equal(this.KeyspaceId, that1.KeyspaceId) {
+		return false
+	}
+	return true
+}
+func (this *MessageAckKeyspaceIdsRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*MessageAckKeyspaceIdsRequest)
+	if !ok {
+		that2, ok := that.(MessageAckKeyspaceIdsRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.CallerId.Equal(that1.CallerId) {
+		return false
+	}
+	if this.Keyspace != that1.Keyspace {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	if len(this.IdKeyspaceIds) != len(that1.IdKeyspaceIds) {
+		return false
+	}
+	for i := range this.IdKeyspaceIds {
+		if !this.IdKeyspaceIds[i].Equal(that1.IdKeyspaceIds[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *ResolveTransactionResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ResolveTransactionResponse)
+	if !ok {
+		that2, ok := that.(ResolveTransactionResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *SplitQueryRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SplitQueryRequest)
+	if !ok {
+		that2, ok := that.(SplitQueryRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.CallerId.Equal(that1.CallerId) {
+		return false
+	}
+	if this.Keyspace != that1.Keyspace {
+		return false
+	}
+	if !this.Query.Equal(that1.Query) {
+		return false
+	}
+	if len(this.SplitColumn) != len(that1.SplitColumn) {
+		return false
+	}
+	for i := range this.SplitColumn {
+		if this.SplitColumn[i] != that1.SplitColumn[i] {
+			return false
+		}
+	}
+	if this.SplitCount != that1.SplitCount {
+		return false
+	}
+	if this.NumRowsPerQueryPart != that1.NumRowsPerQueryPart {
+		return false
+	}
+	if this.Algorithm != that1.Algorithm {
+		return false
+	}
+	if this.UseSplitQueryV2 != that1.UseSplitQueryV2 {
+		return false
+	}
+	return true
+}
+func (this *SplitQueryResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SplitQueryResponse)
+	if !ok {
+		that2, ok := that.(SplitQueryResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Splits) != len(that1.Splits) {
+		return false
+	}
+	for i := range this.Splits {
+		if !this.Splits[i].Equal(that1.Splits[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *SplitQueryResponse_KeyRangePart) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SplitQueryResponse_KeyRangePart)
+	if !ok {
+		that2, ok := that.(SplitQueryResponse_KeyRangePart)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Keyspace != that1.Keyspace {
+		return false
+	}
+	if len(this.KeyRanges) != len(that1.KeyRanges) {
+		return false
+	}
+	for i := range this.KeyRanges {
+		if !this.KeyRanges[i].Equal(that1.KeyRanges[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *SplitQueryResponse_ShardPart) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SplitQueryResponse_ShardPart)
+	if !ok {
+		that2, ok := that.(SplitQueryResponse_ShardPart)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Keyspace != that1.Keyspace {
+		return false
+	}
+	if len(this.Shards) != len(that1.Shards) {
+		return false
+	}
+	for i := range this.Shards {
+		if this.Shards[i] != that1.Shards[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *SplitQueryResponse_Part) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SplitQueryResponse_Part)
+	if !ok {
+		that2, ok := that.(SplitQueryResponse_Part)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Query.Equal(that1.Query) {
+		return false
+	}
+	if !this.KeyRangePart.Equal(that1.KeyRangePart) {
+		return false
+	}
+	if !this.ShardPart.Equal(that1.ShardPart) {
+		return false
+	}
+	if this.Size != that1.Size {
+		return false
+	}
+	return true
+}
+func (this *GetSrvKeyspaceRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*GetSrvKeyspaceRequest)
+	if !ok {
+		that2, ok := that.(GetSrvKeyspaceRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Keyspace != that1.Keyspace {
+		return false
+	}
+	return true
+}
+func (this *GetSrvKeyspaceResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*GetSrvKeyspaceResponse)
+	if !ok {
+		that2, ok := that.(GetSrvKeyspaceResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.SrvKeyspace.Equal(that1.SrvKeyspace) {
+		return false
+	}
+	return true
+}
+func (this *VStreamRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*VStreamRequest)
+	if !ok {
+		that2, ok := that.(VStreamRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.CallerId.Equal(that1.CallerId) {
+		return false
+	}
+	if this.TabletType != that1.TabletType {
+		return false
+	}
+	if !this.Vgtid.Equal(that1.Vgtid) {
+		return false
+	}
+	if !this.Filter.Equal(that1.Filter) {
+		return false
+	}
+	return true
+}
+func (this *VStreamResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*VStreamResponse)
+	if !ok {
+		that2, ok := that.(VStreamResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Events) != len(that1.Events) {
+		return false
+	}
+	for i := range this.Events {
+		if !this.Events[i].Equal(that1.Events[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *UpdateStreamRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*UpdateStreamRequest)
+	if !ok {
+		that2, ok := that.(UpdateStreamRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.CallerId.Equal(that1.CallerId) {
+		return false
+	}
+	if this.Keyspace != that1.Keyspace {
+		return false
+	}
+	if this.Shard != that1.Shard {
+		return false
+	}
+	if !this.KeyRange.Equal(that1.KeyRange) {
+		return false
+	}
+	if this.TabletType != that1.TabletType {
+		return false
+	}
+	if this.Timestamp != that1.Timestamp {
+		return false
+	}
+	if !this.Event.Equal(that1.Event) {
+		return false
+	}
+	return true
+}
+func (this *UpdateStreamResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*UpdateStreamResponse)
+	if !ok {
+		that2, ok := that.(UpdateStreamResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Event.Equal(that1.Event) {
+		return false
+	}
+	if this.ResumeTimestamp != that1.ResumeTimestamp {
+		return false
+	}
+	return true
+}
+func (this *Session) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 14)
+	s = append(s, "&vtgate.Session{")
+	s = append(s, "InTransaction: "+fmt.Sprintf("%#v", this.InTransaction)+",\n")
+	if this.ShardSessions != nil {
+		s = append(s, "ShardSessions: "+fmt.Sprintf("%#v", this.ShardSessions)+",\n")
+	}
+	s = append(s, "SingleDb: "+fmt.Sprintf("%#v", this.SingleDb)+",\n")
+	s = append(s, "Autocommit: "+fmt.Sprintf("%#v", this.Autocommit)+",\n")
+	s = append(s, "TargetString: "+fmt.Sprintf("%#v", this.TargetString)+",\n")
+	if this.Options != nil {
+		s = append(s, "Options: "+fmt.Sprintf("%#v", this.Options)+",\n")
+	}
+	s = append(s, "TransactionMode: "+fmt.Sprintf("%#v", this.TransactionMode)+",\n")
+	if this.Warnings != nil {
+		s = append(s, "Warnings: "+fmt.Sprintf("%#v", this.Warnings)+",\n")
+	}
+	if this.PreSessions != nil {
+		s = append(s, "PreSessions: "+fmt.Sprintf("%#v", this.PreSessions)+",\n")
+	}
+	if this.PostSessions != nil {
+		s = append(s, "PostSessions: "+fmt.Sprintf("%#v", this.PostSessions)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Session_ShardSession) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&vtgate.Session_ShardSession{")
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	s = append(s, "TransactionId: "+fmt.Sprintf("%#v", this.TransactionId)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 11)
+	s = append(s, "&vtgate.ExecuteRequest{")
+	if this.CallerId != nil {
+		s = append(s, "CallerId: "+fmt.Sprintf("%#v", this.CallerId)+",\n")
+	}
+	if this.Session != nil {
+		s = append(s, "Session: "+fmt.Sprintf("%#v", this.Session)+",\n")
+	}
+	if this.Query != nil {
+		s = append(s, "Query: "+fmt.Sprintf("%#v", this.Query)+",\n")
+	}
+	s = append(s, "TabletType: "+fmt.Sprintf("%#v", this.TabletType)+",\n")
+	s = append(s, "NotInTransaction: "+fmt.Sprintf("%#v", this.NotInTransaction)+",\n")
+	s = append(s, "KeyspaceShard: "+fmt.Sprintf("%#v", this.KeyspaceShard)+",\n")
+	if this.Options != nil {
+		s = append(s, "Options: "+fmt.Sprintf("%#v", this.Options)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&vtgate.ExecuteResponse{")
+	if this.Error != nil {
+		s = append(s, "Error: "+fmt.Sprintf("%#v", this.Error)+",\n")
+	}
+	if this.Session != nil {
+		s = append(s, "Session: "+fmt.Sprintf("%#v", this.Session)+",\n")
+	}
+	if this.Result != nil {
+		s = append(s, "Result: "+fmt.Sprintf("%#v", this.Result)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteShardsRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 12)
+	s = append(s, "&vtgate.ExecuteShardsRequest{")
+	if this.CallerId != nil {
+		s = append(s, "CallerId: "+fmt.Sprintf("%#v", this.CallerId)+",\n")
+	}
+	if this.Session != nil {
+		s = append(s, "Session: "+fmt.Sprintf("%#v", this.Session)+",\n")
+	}
+	if this.Query != nil {
+		s = append(s, "Query: "+fmt.Sprintf("%#v", this.Query)+",\n")
+	}
+	s = append(s, "Keyspace: "+fmt.Sprintf("%#v", this.Keyspace)+",\n")
+	s = append(s, "Shards: "+fmt.Sprintf("%#v", this.Shards)+",\n")
+	s = append(s, "TabletType: "+fmt.Sprintf("%#v", this.TabletType)+",\n")
+	s = append(s, "NotInTransaction: "+fmt.Sprintf("%#v", this.NotInTransaction)+",\n")
+	if this.Options != nil {
+		s = append(s, "Options: "+fmt.Sprintf("%#v", this.Options)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteShardsResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&vtgate.ExecuteShardsResponse{")
+	if this.Error != nil {
+		s = append(s, "Error: "+fmt.Sprintf("%#v", this.Error)+",\n")
+	}
+	if this.Session != nil {
+		s = append(s, "Session: "+fmt.Sprintf("%#v", this.Session)+",\n")
+	}
+	if this.Result != nil {
+		s = append(s, "Result: "+fmt.Sprintf("%#v", this.Result)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteKeyspaceIdsRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 12)
+	s = append(s, "&vtgate.ExecuteKeyspaceIdsRequest{")
+	if this.CallerId != nil {
+		s = append(s, "CallerId: "+fmt.Sprintf("%#v", this.CallerId)+",\n")
+	}
+	if this.Session != nil {
+		s = append(s, "Session: "+fmt.Sprintf("%#v", this.Session)+",\n")
+	}
+	if this.Query != nil {
+		s = append(s, "Query: "+fmt.Sprintf("%#v", this.Query)+",\n")
+	}
+	s = append(s, "Keyspace: "+fmt.Sprintf("%#v", this.Keyspace)+",\n")
+	s = append(s, "KeyspaceIds: "+fmt.Sprintf("%#v", this.KeyspaceIds)+",\n")
+	s = append(s, "TabletType: "+fmt.Sprintf("%#v", this.TabletType)+",\n")
+	s = append(s, "NotInTransaction: "+fmt.Sprintf("%#v", this.NotInTransaction)+",\n")
+	if this.Options != nil {
+		s = append(s, "Options: "+fmt.Sprintf("%#v", this.Options)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteKeyspaceIdsResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&vtgate.ExecuteKeyspaceIdsResponse{")
+	if this.Error != nil {
+		s = append(s, "Error: "+fmt.Sprintf("%#v", this.Error)+",\n")
+	}
+	if this.Session != nil {
+		s = append(s, "Session: "+fmt.Sprintf("%#v", this.Session)+",\n")
+	}
+	if this.Result != nil {
+		s = append(s, "Result: "+fmt.Sprintf("%#v", this.Result)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteKeyRangesRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 12)
+	s = append(s, "&vtgate.ExecuteKeyRangesRequest{")
+	if this.CallerId != nil {
+		s = append(s, "CallerId: "+fmt.Sprintf("%#v", this.CallerId)+",\n")
+	}
+	if this.Session != nil {
+		s = append(s, "Session: "+fmt.Sprintf("%#v", this.Session)+",\n")
+	}
+	if this.Query != nil {
+		s = append(s, "Query: "+fmt.Sprintf("%#v", this.Query)+",\n")
+	}
+	s = append(s, "Keyspace: "+fmt.Sprintf("%#v", this.Keyspace)+",\n")
+	if this.KeyRanges != nil {
+		s = append(s, "KeyRanges: "+fmt.Sprintf("%#v", this.KeyRanges)+",\n")
+	}
+	s = append(s, "TabletType: "+fmt.Sprintf("%#v", this.TabletType)+",\n")
+	s = append(s, "NotInTransaction: "+fmt.Sprintf("%#v", this.NotInTransaction)+",\n")
+	if this.Options != nil {
+		s = append(s, "Options: "+fmt.Sprintf("%#v", this.Options)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteKeyRangesResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&vtgate.ExecuteKeyRangesResponse{")
+	if this.Error != nil {
+		s = append(s, "Error: "+fmt.Sprintf("%#v", this.Error)+",\n")
+	}
+	if this.Session != nil {
+		s = append(s, "Session: "+fmt.Sprintf("%#v", this.Session)+",\n")
+	}
+	if this.Result != nil {
+		s = append(s, "Result: "+fmt.Sprintf("%#v", this.Result)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteEntityIdsRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 13)
+	s = append(s, "&vtgate.ExecuteEntityIdsRequest{")
+	if this.CallerId != nil {
+		s = append(s, "CallerId: "+fmt.Sprintf("%#v", this.CallerId)+",\n")
+	}
+	if this.Session != nil {
+		s = append(s, "Session: "+fmt.Sprintf("%#v", this.Session)+",\n")
+	}
+	if this.Query != nil {
+		s = append(s, "Query: "+fmt.Sprintf("%#v", this.Query)+",\n")
+	}
+	s = append(s, "Keyspace: "+fmt.Sprintf("%#v", this.Keyspace)+",\n")
+	s = append(s, "EntityColumnName: "+fmt.Sprintf("%#v", this.EntityColumnName)+",\n")
+	if this.EntityKeyspaceIds != nil {
+		s = append(s, "EntityKeyspaceIds: "+fmt.Sprintf("%#v", this.EntityKeyspaceIds)+",\n")
+	}
+	s = append(s, "TabletType: "+fmt.Sprintf("%#v", this.TabletType)+",\n")
+	s = append(s, "NotInTransaction: "+fmt.Sprintf("%#v", this.NotInTransaction)+",\n")
+	if this.Options != nil {
+		s = append(s, "Options: "+fmt.Sprintf("%#v", this.Options)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteEntityIdsRequest_EntityId) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&vtgate.ExecuteEntityIdsRequest_EntityId{")
+	s = append(s, "Type: "+fmt.Sprintf("%#v", this.Type)+",\n")
+	s = append(s, "Value: "+fmt.Sprintf("%#v", this.Value)+",\n")
+	s = append(s, "KeyspaceId: "+fmt.Sprintf("%#v", this.KeyspaceId)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteEntityIdsResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&vtgate.ExecuteEntityIdsResponse{")
+	if this.Error != nil {
+		s = append(s, "Error: "+fmt.Sprintf("%#v", this.Error)+",\n")
+	}
+	if this.Session != nil {
+		s = append(s, "Session: "+fmt.Sprintf("%#v", this.Session)+",\n")
+	}
+	if this.Result != nil {
+		s = append(s, "Result: "+fmt.Sprintf("%#v", this.Result)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteBatchRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 11)
+	s = append(s, "&vtgate.ExecuteBatchRequest{")
+	if this.CallerId != nil {
+		s = append(s, "CallerId: "+fmt.Sprintf("%#v", this.CallerId)+",\n")
+	}
+	if this.Session != nil {
+		s = append(s, "Session: "+fmt.Sprintf("%#v", this.Session)+",\n")
+	}
+	if this.Queries != nil {
+		s = append(s, "Queries: "+fmt.Sprintf("%#v", this.Queries)+",\n")
+	}
+	s = append(s, "TabletType: "+fmt.Sprintf("%#v", this.TabletType)+",\n")
+	s = append(s, "AsTransaction: "+fmt.Sprintf("%#v", this.AsTransaction)+",\n")
+	s = append(s, "KeyspaceShard: "+fmt.Sprintf("%#v", this.KeyspaceShard)+",\n")
+	if this.Options != nil {
+		s = append(s, "Options: "+fmt.Sprintf("%#v", this.Options)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteBatchResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&vtgate.ExecuteBatchResponse{")
+	if this.Error != nil {
+		s = append(s, "Error: "+fmt.Sprintf("%#v", this.Error)+",\n")
+	}
+	if this.Session != nil {
+		s = append(s, "Session: "+fmt.Sprintf("%#v", this.Session)+",\n")
+	}
+	if this.Results != nil {
+		s = append(s, "Results: "+fmt.Sprintf("%#v", this.Results)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *BoundShardQuery) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&vtgate.BoundShardQuery{")
+	if this.Query != nil {
+		s = append(s, "Query: "+fmt.Sprintf("%#v", this.Query)+",\n")
+	}
+	s = append(s, "Keyspace: "+fmt.Sprintf("%#v", this.Keyspace)+",\n")
+	s = append(s, "Shards: "+fmt.Sprintf("%#v", this.Shards)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteBatchShardsRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 10)
+	s = append(s, "&vtgate.ExecuteBatchShardsRequest{")
+	if this.CallerId != nil {
+		s = append(s, "CallerId: "+fmt.Sprintf("%#v", this.CallerId)+",\n")
+	}
+	if this.Session != nil {
+		s = append(s, "Session: "+fmt.Sprintf("%#v", this.Session)+",\n")
+	}
+	if this.Queries != nil {
+		s = append(s, "Queries: "+fmt.Sprintf("%#v", this.Queries)+",\n")
+	}
+	s = append(s, "TabletType: "+fmt.Sprintf("%#v", this.TabletType)+",\n")
+	s = append(s, "AsTransaction: "+fmt.Sprintf("%#v", this.AsTransaction)+",\n")
+	if this.Options != nil {
+		s = append(s, "Options: "+fmt.Sprintf("%#v", this.Options)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteBatchShardsResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&vtgate.ExecuteBatchShardsResponse{")
+	if this.Error != nil {
+		s = append(s, "Error: "+fmt.Sprintf("%#v", this.Error)+",\n")
+	}
+	if this.Session != nil {
+		s = append(s, "Session: "+fmt.Sprintf("%#v", this.Session)+",\n")
+	}
+	if this.Results != nil {
+		s = append(s, "Results: "+fmt.Sprintf("%#v", this.Results)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *BoundKeyspaceIdQuery) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&vtgate.BoundKeyspaceIdQuery{")
+	if this.Query != nil {
+		s = append(s, "Query: "+fmt.Sprintf("%#v", this.Query)+",\n")
+	}
+	s = append(s, "Keyspace: "+fmt.Sprintf("%#v", this.Keyspace)+",\n")
+	s = append(s, "KeyspaceIds: "+fmt.Sprintf("%#v", this.KeyspaceIds)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteBatchKeyspaceIdsRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 10)
+	s = append(s, "&vtgate.ExecuteBatchKeyspaceIdsRequest{")
+	if this.CallerId != nil {
+		s = append(s, "CallerId: "+fmt.Sprintf("%#v", this.CallerId)+",\n")
+	}
+	if this.Session != nil {
+		s = append(s, "Session: "+fmt.Sprintf("%#v", this.Session)+",\n")
+	}
+	if this.Queries != nil {
+		s = append(s, "Queries: "+fmt.Sprintf("%#v", this.Queries)+",\n")
+	}
+	s = append(s, "TabletType: "+fmt.Sprintf("%#v", this.TabletType)+",\n")
+	s = append(s, "AsTransaction: "+fmt.Sprintf("%#v", this.AsTransaction)+",\n")
+	if this.Options != nil {
+		s = append(s, "Options: "+fmt.Sprintf("%#v", this.Options)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteBatchKeyspaceIdsResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&vtgate.ExecuteBatchKeyspaceIdsResponse{")
+	if this.Error != nil {
+		s = append(s, "Error: "+fmt.Sprintf("%#v", this.Error)+",\n")
+	}
+	if this.Session != nil {
+		s = append(s, "Session: "+fmt.Sprintf("%#v", this.Session)+",\n")
+	}
+	if this.Results != nil {
+		s = append(s, "Results: "+fmt.Sprintf("%#v", this.Results)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StreamExecuteRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 10)
+	s = append(s, "&vtgate.StreamExecuteRequest{")
+	if this.CallerId != nil {
+		s = append(s, "CallerId: "+fmt.Sprintf("%#v", this.CallerId)+",\n")
+	}
+	if this.Query != nil {
+		s = append(s, "Query: "+fmt.Sprintf("%#v", this.Query)+",\n")
+	}
+	s = append(s, "TabletType: "+fmt.Sprintf("%#v", this.TabletType)+",\n")
+	s = append(s, "KeyspaceShard: "+fmt.Sprintf("%#v", this.KeyspaceShard)+",\n")
+	if this.Options != nil {
+		s = append(s, "Options: "+fmt.Sprintf("%#v", this.Options)+",\n")
+	}
+	if this.Session != nil {
+		s = append(s, "Session: "+fmt.Sprintf("%#v", this.Session)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StreamExecuteResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&vtgate.StreamExecuteResponse{")
+	if this.Result != nil {
+		s = append(s, "Result: "+fmt.Sprintf("%#v", this.Result)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StreamExecuteShardsRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 10)
+	s = append(s, "&vtgate.StreamExecuteShardsRequest{")
+	if this.CallerId != nil {
+		s = append(s, "CallerId: "+fmt.Sprintf("%#v", this.CallerId)+",\n")
+	}
+	if this.Query != nil {
+		s = append(s, "Query: "+fmt.Sprintf("%#v", this.Query)+",\n")
+	}
+	s = append(s, "Keyspace: "+fmt.Sprintf("%#v", this.Keyspace)+",\n")
+	s = append(s, "Shards: "+fmt.Sprintf("%#v", this.Shards)+",\n")
+	s = append(s, "TabletType: "+fmt.Sprintf("%#v", this.TabletType)+",\n")
+	if this.Options != nil {
+		s = append(s, "Options: "+fmt.Sprintf("%#v", this.Options)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StreamExecuteShardsResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&vtgate.StreamExecuteShardsResponse{")
+	if this.Result != nil {
+		s = append(s, "Result: "+fmt.Sprintf("%#v", this.Result)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StreamExecuteKeyspaceIdsRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 10)
+	s = append(s, "&vtgate.StreamExecuteKeyspaceIdsRequest{")
+	if this.CallerId != nil {
+		s = append(s, "CallerId: "+fmt.Sprintf("%#v", this.CallerId)+",\n")
+	}
+	if this.Query != nil {
+		s = append(s, "Query: "+fmt.Sprintf("%#v", this.Query)+",\n")
+	}
+	s = append(s, "Keyspace: "+fmt.Sprintf("%#v", this.Keyspace)+",\n")
+	s = append(s, "KeyspaceIds: "+fmt.Sprintf("%#v", this.KeyspaceIds)+",\n")
+	s = append(s, "TabletType: "+fmt.Sprintf("%#v", this.TabletType)+",\n")
+	if this.Options != nil {
+		s = append(s, "Options: "+fmt.Sprintf("%#v", this.Options)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StreamExecuteKeyspaceIdsResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&vtgate.StreamExecuteKeyspaceIdsResponse{")
+	if this.Result != nil {
+		s = append(s, "Result: "+fmt.Sprintf("%#v", this.Result)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StreamExecuteKeyRangesRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 10)
+	s = append(s, "&vtgate.StreamExecuteKeyRangesRequest{")
+	if this.CallerId != nil {
+		s = append(s, "CallerId: "+fmt.Sprintf("%#v", this.CallerId)+",\n")
+	}
+	if this.Query != nil {
+		s = append(s, "Query: "+fmt.Sprintf("%#v", this.Query)+",\n")
+	}
+	s = append(s, "Keyspace: "+fmt.Sprintf("%#v", this.Keyspace)+",\n")
+	if this.KeyRanges != nil {
+		s = append(s, "KeyRanges: "+fmt.Sprintf("%#v", this.KeyRanges)+",\n")
+	}
+	s = append(s, "TabletType: "+fmt.Sprintf("%#v", this.TabletType)+",\n")
+	if this.Options != nil {
+		s = append(s, "Options: "+fmt.Sprintf("%#v", this.Options)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StreamExecuteKeyRangesResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&vtgate.StreamExecuteKeyRangesResponse{")
+	if this.Result != nil {
+		s = append(s, "Result: "+fmt.Sprintf("%#v", this.Result)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *BeginRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&vtgate.BeginRequest{")
+	if this.CallerId != nil {
+		s = append(s, "CallerId: "+fmt.Sprintf("%#v", this.CallerId)+",\n")
+	}
+	s = append(s, "SingleDb: "+fmt.Sprintf("%#v", this.SingleDb)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *BeginResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&vtgate.BeginResponse{")
+	if this.Session != nil {
+		s = append(s, "Session: "+fmt.Sprintf("%#v", this.Session)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *CommitRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&vtgate.CommitRequest{")
+	if this.CallerId != nil {
+		s = append(s, "CallerId: "+fmt.Sprintf("%#v", this.CallerId)+",\n")
+	}
+	if this.Session != nil {
+		s = append(s, "Session: "+fmt.Sprintf("%#v", this.Session)+",\n")
+	}
+	s = append(s, "Atomic: "+fmt.Sprintf("%#v", this.Atomic)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *CommitResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&vtgate.CommitResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *RollbackRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&vtgate.RollbackRequest{")
+	if this.CallerId != nil {
+		s = append(s, "CallerId: "+fmt.Sprintf("%#v", this.CallerId)+",\n")
+	}
+	if this.Session != nil {
+		s = append(s, "Session: "+fmt.Sprintf("%#v", this.Session)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *RollbackResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&vtgate.RollbackResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ResolveTransactionRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&vtgate.ResolveTransactionRequest{")
+	if this.CallerId != nil {
+		s = append(s, "CallerId: "+fmt.Sprintf("%#v", this.CallerId)+",\n")
+	}
+	s = append(s, "Dtid: "+fmt.Sprintf("%#v", this.Dtid)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *MessageStreamRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 9)
+	s = append(s, "&vtgate.MessageStreamRequest{")
+	if this.CallerId != nil {
+		s = append(s, "CallerId: "+fmt.Sprintf("%#v", this.CallerId)+",\n")
+	}
+	s = append(s, "Keyspace: "+fmt.Sprintf("%#v", this.Keyspace)+",\n")
+	s = append(s, "Shard: "+fmt.Sprintf("%#v", this.Shard)+",\n")
+	if this.KeyRange != nil {
+		s = append(s, "KeyRange: "+fmt.Sprintf("%#v", this.KeyRange)+",\n")
+	}
+	s = append(s, "Name: "+fmt.Sprintf("%#v", this.Name)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *MessageAckRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&vtgate.MessageAckRequest{")
+	if this.CallerId != nil {
+		s = append(s, "CallerId: "+fmt.Sprintf("%#v", this.CallerId)+",\n")
+	}
+	s = append(s, "Keyspace: "+fmt.Sprintf("%#v", this.Keyspace)+",\n")
+	s = append(s, "Name: "+fmt.Sprintf("%#v", this.Name)+",\n")
+	if this.Ids != nil {
+		s = append(s, "Ids: "+fmt.Sprintf("%#v", this.Ids)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *IdKeyspaceId) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&vtgate.IdKeyspaceId{")
+	if this.Id != nil {
+		s = append(s, "Id: "+fmt.Sprintf("%#v", this.Id)+",\n")
+	}
+	s = append(s, "KeyspaceId: "+fmt.Sprintf("%#v", this.KeyspaceId)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *MessageAckKeyspaceIdsRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&vtgate.MessageAckKeyspaceIdsRequest{")
+	if this.CallerId != nil {
+		s = append(s, "CallerId: "+fmt.Sprintf("%#v", this.CallerId)+",\n")
+	}
+	s = append(s, "Keyspace: "+fmt.Sprintf("%#v", this.Keyspace)+",\n")
+	s = append(s, "Name: "+fmt.Sprintf("%#v", this.Name)+",\n")
+	if this.IdKeyspaceIds != nil {
+		s = append(s, "IdKeyspaceIds: "+fmt.Sprintf("%#v", this.IdKeyspaceIds)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ResolveTransactionResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&vtgate.ResolveTransactionResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SplitQueryRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 12)
+	s = append(s, "&vtgate.SplitQueryRequest{")
+	if this.CallerId != nil {
+		s = append(s, "CallerId: "+fmt.Sprintf("%#v", this.CallerId)+",\n")
+	}
+	s = append(s, "Keyspace: "+fmt.Sprintf("%#v", this.Keyspace)+",\n")
+	if this.Query != nil {
+		s = append(s, "Query: "+fmt.Sprintf("%#v", this.Query)+",\n")
+	}
+	s = append(s, "SplitColumn: "+fmt.Sprintf("%#v", this.SplitColumn)+",\n")
+	s = append(s, "SplitCount: "+fmt.Sprintf("%#v", this.SplitCount)+",\n")
+	s = append(s, "NumRowsPerQueryPart: "+fmt.Sprintf("%#v", this.NumRowsPerQueryPart)+",\n")
+	s = append(s, "Algorithm: "+fmt.Sprintf("%#v", this.Algorithm)+",\n")
+	s = append(s, "UseSplitQueryV2: "+fmt.Sprintf("%#v", this.UseSplitQueryV2)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SplitQueryResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&vtgate.SplitQueryResponse{")
+	if this.Splits != nil {
+		s = append(s, "Splits: "+fmt.Sprintf("%#v", this.Splits)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SplitQueryResponse_KeyRangePart) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&vtgate.SplitQueryResponse_KeyRangePart{")
+	s = append(s, "Keyspace: "+fmt.Sprintf("%#v", this.Keyspace)+",\n")
+	if this.KeyRanges != nil {
+		s = append(s, "KeyRanges: "+fmt.Sprintf("%#v", this.KeyRanges)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SplitQueryResponse_ShardPart) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&vtgate.SplitQueryResponse_ShardPart{")
+	s = append(s, "Keyspace: "+fmt.Sprintf("%#v", this.Keyspace)+",\n")
+	s = append(s, "Shards: "+fmt.Sprintf("%#v", this.Shards)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SplitQueryResponse_Part) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&vtgate.SplitQueryResponse_Part{")
+	if this.Query != nil {
+		s = append(s, "Query: "+fmt.Sprintf("%#v", this.Query)+",\n")
+	}
+	if this.KeyRangePart != nil {
+		s = append(s, "KeyRangePart: "+fmt.Sprintf("%#v", this.KeyRangePart)+",\n")
+	}
+	if this.ShardPart != nil {
+		s = append(s, "ShardPart: "+fmt.Sprintf("%#v", this.ShardPart)+",\n")
+	}
+	s = append(s, "Size: "+fmt.Sprintf("%#v", this.Size)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *GetSrvKeyspaceRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&vtgate.GetSrvKeyspaceRequest{")
+	s = append(s, "Keyspace: "+fmt.Sprintf("%#v", this.Keyspace)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *GetSrvKeyspaceResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&vtgate.GetSrvKeyspaceResponse{")
+	if this.SrvKeyspace != nil {
+		s = append(s, "SrvKeyspace: "+fmt.Sprintf("%#v", this.SrvKeyspace)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *VStreamRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&vtgate.VStreamRequest{")
+	if this.CallerId != nil {
+		s = append(s, "CallerId: "+fmt.Sprintf("%#v", this.CallerId)+",\n")
+	}
+	s = append(s, "TabletType: "+fmt.Sprintf("%#v", this.TabletType)+",\n")
+	if this.Vgtid != nil {
+		s = append(s, "Vgtid: "+fmt.Sprintf("%#v", this.Vgtid)+",\n")
+	}
+	if this.Filter != nil {
+		s = append(s, "Filter: "+fmt.Sprintf("%#v", this.Filter)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *VStreamResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&vtgate.VStreamResponse{")
+	if this.Events != nil {
+		s = append(s, "Events: "+fmt.Sprintf("%#v", this.Events)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *UpdateStreamRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 11)
+	s = append(s, "&vtgate.UpdateStreamRequest{")
+	if this.CallerId != nil {
+		s = append(s, "CallerId: "+fmt.Sprintf("%#v", this.CallerId)+",\n")
+	}
+	s = append(s, "Keyspace: "+fmt.Sprintf("%#v", this.Keyspace)+",\n")
+	s = append(s, "Shard: "+fmt.Sprintf("%#v", this.Shard)+",\n")
+	if this.KeyRange != nil {
+		s = append(s, "KeyRange: "+fmt.Sprintf("%#v", this.KeyRange)+",\n")
+	}
+	s = append(s, "TabletType: "+fmt.Sprintf("%#v", this.TabletType)+",\n")
+	s = append(s, "Timestamp: "+fmt.Sprintf("%#v", this.Timestamp)+",\n")
+	if this.Event != nil {
+		s = append(s, "Event: "+fmt.Sprintf("%#v", this.Event)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *UpdateStreamResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&vtgate.UpdateStreamResponse{")
+	if this.Event != nil {
+		s = append(s, "Event: "+fmt.Sprintf("%#v", this.Event)+",\n")
+	}
+	s = append(s, "ResumeTimestamp: "+fmt.Sprintf("%#v", this.ResumeTimestamp)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func valueToGoStringVtgate(v interface{}, typ string) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("func(v %v) *%v { return &v } ( %#v )", typ, typ, pv)
+}
 func (m *Session) Marshal() (dAtA []byte, err error) {
 	size := m.ProtoSize()
 	dAtA = make([]byte, size)
@@ -4349,9 +6840,6 @@ func (m *Session) MarshalTo(dAtA []byte) (int, error) {
 			i += n
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -4384,9 +6872,6 @@ func (m *Session_ShardSession) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x10
 		i++
 		i = encodeVarintVtgate(dAtA, i, uint64(m.TransactionId))
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -4467,9 +6952,6 @@ func (m *ExecuteRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n6
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -4517,9 +6999,6 @@ func (m *ExecuteResponse) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err9
 		}
 		i += n9
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -4615,9 +7094,6 @@ func (m *ExecuteShardsRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n13
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -4665,9 +7141,6 @@ func (m *ExecuteShardsResponse) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err16
 		}
 		i += n16
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -4756,9 +7229,6 @@ func (m *ExecuteKeyspaceIdsRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n20
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -4806,9 +7276,6 @@ func (m *ExecuteKeyspaceIdsResponse) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err23
 		}
 		i += n23
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -4901,9 +7368,6 @@ func (m *ExecuteKeyRangesRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n27
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -4951,9 +7415,6 @@ func (m *ExecuteKeyRangesResponse) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err30
 		}
 		i += n30
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -5052,9 +7513,6 @@ func (m *ExecuteEntityIdsRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n34
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5089,9 +7547,6 @@ func (m *ExecuteEntityIdsRequest_EntityId) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintVtgate(dAtA, i, uint64(len(m.KeyspaceId)))
 		i += copy(dAtA[i:], m.KeyspaceId)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -5140,9 +7595,6 @@ func (m *ExecuteEntityIdsResponse) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err37
 		}
 		i += n37
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -5225,9 +7677,6 @@ func (m *ExecuteBatchRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n40
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5278,9 +7727,6 @@ func (m *ExecuteBatchResponse) MarshalTo(dAtA []byte) (int, error) {
 			i += n
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5329,9 +7775,6 @@ func (m *BoundShardQuery) MarshalTo(dAtA []byte) (int, error) {
 			i++
 			i += copy(dAtA[i:], s)
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -5408,9 +7851,6 @@ func (m *ExecuteBatchShardsRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n46
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5461,9 +7901,6 @@ func (m *ExecuteBatchShardsResponse) MarshalTo(dAtA []byte) (int, error) {
 			i += n
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5505,9 +7942,6 @@ func (m *BoundKeyspaceIdQuery) MarshalTo(dAtA []byte) (int, error) {
 			i = encodeVarintVtgate(dAtA, i, uint64(len(b)))
 			i += copy(dAtA[i:], b)
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -5584,9 +8018,6 @@ func (m *ExecuteBatchKeyspaceIdsRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n52
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5636,9 +8067,6 @@ func (m *ExecuteBatchKeyspaceIdsResponse) MarshalTo(dAtA []byte) (int, error) {
 			}
 			i += n
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -5709,9 +8137,6 @@ func (m *StreamExecuteRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n58
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5739,9 +8164,6 @@ func (m *StreamExecuteResponse) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err59
 		}
 		i += n59
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -5817,9 +8239,6 @@ func (m *StreamExecuteShardsRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n62
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5847,9 +8266,6 @@ func (m *StreamExecuteShardsResponse) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err63
 		}
 		i += n63
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -5918,9 +8334,6 @@ func (m *StreamExecuteKeyspaceIdsRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n66
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5948,9 +8361,6 @@ func (m *StreamExecuteKeyspaceIdsResponse) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err67
 		}
 		i += n67
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -6023,9 +8433,6 @@ func (m *StreamExecuteKeyRangesRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n70
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6053,9 +8460,6 @@ func (m *StreamExecuteKeyRangesResponse) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err71
 		}
 		i += n71
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -6095,9 +8499,6 @@ func (m *BeginRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i++
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6125,9 +8526,6 @@ func (m *BeginResponse) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err73
 		}
 		i += n73
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -6177,9 +8575,6 @@ func (m *CommitRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i++
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6198,9 +8593,6 @@ func (m *CommitResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6239,9 +8631,6 @@ func (m *RollbackRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n77
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6260,9 +8649,6 @@ func (m *RollbackResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6296,9 +8682,6 @@ func (m *ResolveTransactionRequest) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintVtgate(dAtA, i, uint64(len(m.Dtid)))
 		i += copy(dAtA[i:], m.Dtid)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -6356,9 +8739,6 @@ func (m *MessageStreamRequest) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintVtgate(dAtA, i, uint64(len(m.Name)))
 		i += copy(dAtA[i:], m.Name)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6411,9 +8791,6 @@ func (m *MessageAckRequest) MarshalTo(dAtA []byte) (int, error) {
 			i += n
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6447,9 +8824,6 @@ func (m *IdKeyspaceId) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintVtgate(dAtA, i, uint64(len(m.KeyspaceId)))
 		i += copy(dAtA[i:], m.KeyspaceId)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -6503,9 +8877,6 @@ func (m *MessageAckKeyspaceIdsRequest) MarshalTo(dAtA []byte) (int, error) {
 			i += n
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6524,9 +8895,6 @@ func (m *ResolveTransactionResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6611,9 +8979,6 @@ func (m *SplitQueryRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i++
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6643,9 +9008,6 @@ func (m *SplitQueryResponse) MarshalTo(dAtA []byte) (int, error) {
 			}
 			i += n
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -6682,9 +9044,6 @@ func (m *SplitQueryResponse_KeyRangePart) MarshalTo(dAtA []byte) (int, error) {
 			}
 			i += n
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -6724,9 +9083,6 @@ func (m *SplitQueryResponse_ShardPart) MarshalTo(dAtA []byte) (int, error) {
 			i++
 			i += copy(dAtA[i:], s)
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -6781,9 +9137,6 @@ func (m *SplitQueryResponse_Part) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintVtgate(dAtA, i, uint64(m.Size))
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6807,9 +9160,6 @@ func (m *GetSrvKeyspaceRequest) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintVtgate(dAtA, i, uint64(len(m.Keyspace)))
 		i += copy(dAtA[i:], m.Keyspace)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -6838,9 +9188,6 @@ func (m *GetSrvKeyspaceResponse) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err89
 		}
 		i += n89
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -6895,9 +9242,6 @@ func (m *VStreamRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n92
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6927,9 +9271,6 @@ func (m *VStreamResponse) MarshalTo(dAtA []byte) (int, error) {
 			}
 			i += n
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -7001,9 +9342,6 @@ func (m *UpdateStreamRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n95
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7036,9 +9374,6 @@ func (m *UpdateStreamResponse) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x10
 		i++
 		i = encodeVarintVtgate(dAtA, i, uint64(m.ResumeTimestamp))
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -7102,9 +9437,6 @@ func (m *Session) ProtoSize() (n int) {
 			n += 1 + l + sovVtgate(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7120,9 +9452,6 @@ func (m *Session_ShardSession) ProtoSize() (n int) {
 	}
 	if m.TransactionId != 0 {
 		n += 1 + sovVtgate(uint64(m.TransactionId))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -7159,9 +9488,6 @@ func (m *ExecuteRequest) ProtoSize() (n int) {
 		l = m.Options.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7182,9 +9508,6 @@ func (m *ExecuteResponse) ProtoSize() (n int) {
 	if m.Result != nil {
 		l = m.Result.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -7227,9 +9550,6 @@ func (m *ExecuteShardsRequest) ProtoSize() (n int) {
 		l = m.Options.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7250,9 +9570,6 @@ func (m *ExecuteShardsResponse) ProtoSize() (n int) {
 	if m.Result != nil {
 		l = m.Result.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -7295,9 +9612,6 @@ func (m *ExecuteKeyspaceIdsRequest) ProtoSize() (n int) {
 		l = m.Options.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7318,9 +9632,6 @@ func (m *ExecuteKeyspaceIdsResponse) ProtoSize() (n int) {
 	if m.Result != nil {
 		l = m.Result.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -7363,9 +9674,6 @@ func (m *ExecuteKeyRangesRequest) ProtoSize() (n int) {
 		l = m.Options.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7386,9 +9694,6 @@ func (m *ExecuteKeyRangesResponse) ProtoSize() (n int) {
 	if m.Result != nil {
 		l = m.Result.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -7435,9 +9740,6 @@ func (m *ExecuteEntityIdsRequest) ProtoSize() (n int) {
 		l = m.Options.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7457,9 +9759,6 @@ func (m *ExecuteEntityIdsRequest_EntityId) ProtoSize() (n int) {
 	l = len(m.KeyspaceId)
 	if l > 0 {
 		n += 1 + l + sovVtgate(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -7481,9 +9780,6 @@ func (m *ExecuteEntityIdsResponse) ProtoSize() (n int) {
 	if m.Result != nil {
 		l = m.Result.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -7522,9 +9818,6 @@ func (m *ExecuteBatchRequest) ProtoSize() (n int) {
 		l = m.Options.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7548,9 +9841,6 @@ func (m *ExecuteBatchResponse) ProtoSize() (n int) {
 			n += 1 + l + sovVtgate(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7573,9 +9863,6 @@ func (m *BoundShardQuery) ProtoSize() (n int) {
 			l = len(s)
 			n += 1 + l + sovVtgate(uint64(l))
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -7610,9 +9897,6 @@ func (m *ExecuteBatchShardsRequest) ProtoSize() (n int) {
 		l = m.Options.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7636,9 +9920,6 @@ func (m *ExecuteBatchShardsResponse) ProtoSize() (n int) {
 			n += 1 + l + sovVtgate(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7661,9 +9942,6 @@ func (m *BoundKeyspaceIdQuery) ProtoSize() (n int) {
 			l = len(b)
 			n += 1 + l + sovVtgate(uint64(l))
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -7698,9 +9976,6 @@ func (m *ExecuteBatchKeyspaceIdsRequest) ProtoSize() (n int) {
 		l = m.Options.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7723,9 +9998,6 @@ func (m *ExecuteBatchKeyspaceIdsResponse) ProtoSize() (n int) {
 			l = e.ProtoSize()
 			n += 1 + l + sovVtgate(uint64(l))
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -7759,9 +10031,6 @@ func (m *StreamExecuteRequest) ProtoSize() (n int) {
 		l = m.Session.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7774,9 +10043,6 @@ func (m *StreamExecuteResponse) ProtoSize() (n int) {
 	if m.Result != nil {
 		l = m.Result.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -7812,9 +10078,6 @@ func (m *StreamExecuteShardsRequest) ProtoSize() (n int) {
 		l = m.Options.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7827,9 +10090,6 @@ func (m *StreamExecuteShardsResponse) ProtoSize() (n int) {
 	if m.Result != nil {
 		l = m.Result.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -7865,9 +10125,6 @@ func (m *StreamExecuteKeyspaceIdsRequest) ProtoSize() (n int) {
 		l = m.Options.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7880,9 +10137,6 @@ func (m *StreamExecuteKeyspaceIdsResponse) ProtoSize() (n int) {
 	if m.Result != nil {
 		l = m.Result.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -7918,9 +10172,6 @@ func (m *StreamExecuteKeyRangesRequest) ProtoSize() (n int) {
 		l = m.Options.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7933,9 +10184,6 @@ func (m *StreamExecuteKeyRangesResponse) ProtoSize() (n int) {
 	if m.Result != nil {
 		l = m.Result.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -7953,9 +10201,6 @@ func (m *BeginRequest) ProtoSize() (n int) {
 	if m.SingleDb {
 		n += 2
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7968,9 +10213,6 @@ func (m *BeginResponse) ProtoSize() (n int) {
 	if m.Session != nil {
 		l = m.Session.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -7992,9 +10234,6 @@ func (m *CommitRequest) ProtoSize() (n int) {
 	if m.Atomic {
 		n += 2
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8004,9 +10243,6 @@ func (m *CommitResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8024,9 +10260,6 @@ func (m *RollbackRequest) ProtoSize() (n int) {
 		l = m.Session.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8036,9 +10269,6 @@ func (m *RollbackResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8055,9 +10285,6 @@ func (m *ResolveTransactionRequest) ProtoSize() (n int) {
 	l = len(m.Dtid)
 	if l > 0 {
 		n += 1 + l + sovVtgate(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8088,9 +10315,6 @@ func (m *MessageStreamRequest) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovVtgate(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8118,9 +10342,6 @@ func (m *MessageAckRequest) ProtoSize() (n int) {
 			n += 1 + l + sovVtgate(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8137,9 +10358,6 @@ func (m *IdKeyspaceId) ProtoSize() (n int) {
 	l = len(m.KeyspaceId)
 	if l > 0 {
 		n += 1 + l + sovVtgate(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8168,9 +10386,6 @@ func (m *MessageAckKeyspaceIdsRequest) ProtoSize() (n int) {
 			n += 1 + l + sovVtgate(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8180,9 +10395,6 @@ func (m *ResolveTransactionResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8222,9 +10434,6 @@ func (m *SplitQueryRequest) ProtoSize() (n int) {
 	if m.UseSplitQueryV2 {
 		n += 2
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8239,9 +10448,6 @@ func (m *SplitQueryResponse) ProtoSize() (n int) {
 			l = e.ProtoSize()
 			n += 1 + l + sovVtgate(uint64(l))
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8262,9 +10468,6 @@ func (m *SplitQueryResponse_KeyRangePart) ProtoSize() (n int) {
 			n += 1 + l + sovVtgate(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8283,9 +10486,6 @@ func (m *SplitQueryResponse_ShardPart) ProtoSize() (n int) {
 			l = len(s)
 			n += 1 + l + sovVtgate(uint64(l))
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8311,9 +10511,6 @@ func (m *SplitQueryResponse_Part) ProtoSize() (n int) {
 	if m.Size != 0 {
 		n += 1 + sovVtgate(uint64(m.Size))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8327,9 +10524,6 @@ func (m *GetSrvKeyspaceRequest) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovVtgate(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8342,9 +10536,6 @@ func (m *GetSrvKeyspaceResponse) ProtoSize() (n int) {
 	if m.SrvKeyspace != nil {
 		l = m.SrvKeyspace.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8370,9 +10561,6 @@ func (m *VStreamRequest) ProtoSize() (n int) {
 		l = m.Filter.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8387,9 +10575,6 @@ func (m *VStreamResponse) ProtoSize() (n int) {
 			l = e.ProtoSize()
 			n += 1 + l + sovVtgate(uint64(l))
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8426,9 +10611,6 @@ func (m *UpdateStreamRequest) ProtoSize() (n int) {
 		l = m.Event.ProtoSize()
 		n += 1 + l + sovVtgate(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8445,9 +10627,6 @@ func (m *UpdateStreamResponse) ProtoSize() (n int) {
 	if m.ResumeTimestamp != 0 {
 		n += 1 + sovVtgate(uint64(m.ResumeTimestamp))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8463,6 +10642,762 @@ func sovVtgate(x uint64) (n int) {
 }
 func sozVtgate(x uint64) (n int) {
 	return sovVtgate(uint64((x << 1) ^ uint64((int64(x) >> 63))))
+}
+func (this *Session) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForShardSessions := "[]*Session_ShardSession{"
+	for _, f := range this.ShardSessions {
+		repeatedStringForShardSessions += strings.Replace(fmt.Sprintf("%v", f), "Session_ShardSession", "Session_ShardSession", 1) + ","
+	}
+	repeatedStringForShardSessions += "}"
+	repeatedStringForWarnings := "[]*QueryWarning{"
+	for _, f := range this.Warnings {
+		repeatedStringForWarnings += strings.Replace(fmt.Sprintf("%v", f), "QueryWarning", "query.QueryWarning", 1) + ","
+	}
+	repeatedStringForWarnings += "}"
+	repeatedStringForPreSessions := "[]*Session_ShardSession{"
+	for _, f := range this.PreSessions {
+		repeatedStringForPreSessions += strings.Replace(fmt.Sprintf("%v", f), "Session_ShardSession", "Session_ShardSession", 1) + ","
+	}
+	repeatedStringForPreSessions += "}"
+	repeatedStringForPostSessions := "[]*Session_ShardSession{"
+	for _, f := range this.PostSessions {
+		repeatedStringForPostSessions += strings.Replace(fmt.Sprintf("%v", f), "Session_ShardSession", "Session_ShardSession", 1) + ","
+	}
+	repeatedStringForPostSessions += "}"
+	s := strings.Join([]string{`&Session{`,
+		`InTransaction:` + fmt.Sprintf("%v", this.InTransaction) + `,`,
+		`ShardSessions:` + repeatedStringForShardSessions + `,`,
+		`SingleDb:` + fmt.Sprintf("%v", this.SingleDb) + `,`,
+		`Autocommit:` + fmt.Sprintf("%v", this.Autocommit) + `,`,
+		`TargetString:` + fmt.Sprintf("%v", this.TargetString) + `,`,
+		`Options:` + strings.Replace(fmt.Sprintf("%v", this.Options), "ExecuteOptions", "query.ExecuteOptions", 1) + `,`,
+		`TransactionMode:` + fmt.Sprintf("%v", this.TransactionMode) + `,`,
+		`Warnings:` + repeatedStringForWarnings + `,`,
+		`PreSessions:` + repeatedStringForPreSessions + `,`,
+		`PostSessions:` + repeatedStringForPostSessions + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Session_ShardSession) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&Session_ShardSession{`,
+		`Target:` + strings.Replace(fmt.Sprintf("%v", this.Target), "Target", "query.Target", 1) + `,`,
+		`TransactionId:` + fmt.Sprintf("%v", this.TransactionId) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ExecuteRequest{`,
+		`CallerId:` + strings.Replace(fmt.Sprintf("%v", this.CallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`Session:` + strings.Replace(this.Session.String(), "Session", "Session", 1) + `,`,
+		`Query:` + strings.Replace(fmt.Sprintf("%v", this.Query), "BoundQuery", "query.BoundQuery", 1) + `,`,
+		`TabletType:` + fmt.Sprintf("%v", this.TabletType) + `,`,
+		`NotInTransaction:` + fmt.Sprintf("%v", this.NotInTransaction) + `,`,
+		`KeyspaceShard:` + fmt.Sprintf("%v", this.KeyspaceShard) + `,`,
+		`Options:` + strings.Replace(fmt.Sprintf("%v", this.Options), "ExecuteOptions", "query.ExecuteOptions", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ExecuteResponse{`,
+		`Error:` + strings.Replace(fmt.Sprintf("%v", this.Error), "RPCError", "vtrpc.RPCError", 1) + `,`,
+		`Session:` + strings.Replace(this.Session.String(), "Session", "Session", 1) + `,`,
+		`Result:` + strings.Replace(fmt.Sprintf("%v", this.Result), "QueryResult", "query.QueryResult", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteShardsRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ExecuteShardsRequest{`,
+		`CallerId:` + strings.Replace(fmt.Sprintf("%v", this.CallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`Session:` + strings.Replace(this.Session.String(), "Session", "Session", 1) + `,`,
+		`Query:` + strings.Replace(fmt.Sprintf("%v", this.Query), "BoundQuery", "query.BoundQuery", 1) + `,`,
+		`Keyspace:` + fmt.Sprintf("%v", this.Keyspace) + `,`,
+		`Shards:` + fmt.Sprintf("%v", this.Shards) + `,`,
+		`TabletType:` + fmt.Sprintf("%v", this.TabletType) + `,`,
+		`NotInTransaction:` + fmt.Sprintf("%v", this.NotInTransaction) + `,`,
+		`Options:` + strings.Replace(fmt.Sprintf("%v", this.Options), "ExecuteOptions", "query.ExecuteOptions", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteShardsResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ExecuteShardsResponse{`,
+		`Error:` + strings.Replace(fmt.Sprintf("%v", this.Error), "RPCError", "vtrpc.RPCError", 1) + `,`,
+		`Session:` + strings.Replace(this.Session.String(), "Session", "Session", 1) + `,`,
+		`Result:` + strings.Replace(fmt.Sprintf("%v", this.Result), "QueryResult", "query.QueryResult", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteKeyspaceIdsRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ExecuteKeyspaceIdsRequest{`,
+		`CallerId:` + strings.Replace(fmt.Sprintf("%v", this.CallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`Session:` + strings.Replace(this.Session.String(), "Session", "Session", 1) + `,`,
+		`Query:` + strings.Replace(fmt.Sprintf("%v", this.Query), "BoundQuery", "query.BoundQuery", 1) + `,`,
+		`Keyspace:` + fmt.Sprintf("%v", this.Keyspace) + `,`,
+		`KeyspaceIds:` + fmt.Sprintf("%v", this.KeyspaceIds) + `,`,
+		`TabletType:` + fmt.Sprintf("%v", this.TabletType) + `,`,
+		`NotInTransaction:` + fmt.Sprintf("%v", this.NotInTransaction) + `,`,
+		`Options:` + strings.Replace(fmt.Sprintf("%v", this.Options), "ExecuteOptions", "query.ExecuteOptions", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteKeyspaceIdsResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ExecuteKeyspaceIdsResponse{`,
+		`Error:` + strings.Replace(fmt.Sprintf("%v", this.Error), "RPCError", "vtrpc.RPCError", 1) + `,`,
+		`Session:` + strings.Replace(this.Session.String(), "Session", "Session", 1) + `,`,
+		`Result:` + strings.Replace(fmt.Sprintf("%v", this.Result), "QueryResult", "query.QueryResult", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteKeyRangesRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForKeyRanges := "[]*KeyRange{"
+	for _, f := range this.KeyRanges {
+		repeatedStringForKeyRanges += strings.Replace(fmt.Sprintf("%v", f), "KeyRange", "topodata.KeyRange", 1) + ","
+	}
+	repeatedStringForKeyRanges += "}"
+	s := strings.Join([]string{`&ExecuteKeyRangesRequest{`,
+		`CallerId:` + strings.Replace(fmt.Sprintf("%v", this.CallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`Session:` + strings.Replace(this.Session.String(), "Session", "Session", 1) + `,`,
+		`Query:` + strings.Replace(fmt.Sprintf("%v", this.Query), "BoundQuery", "query.BoundQuery", 1) + `,`,
+		`Keyspace:` + fmt.Sprintf("%v", this.Keyspace) + `,`,
+		`KeyRanges:` + repeatedStringForKeyRanges + `,`,
+		`TabletType:` + fmt.Sprintf("%v", this.TabletType) + `,`,
+		`NotInTransaction:` + fmt.Sprintf("%v", this.NotInTransaction) + `,`,
+		`Options:` + strings.Replace(fmt.Sprintf("%v", this.Options), "ExecuteOptions", "query.ExecuteOptions", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteKeyRangesResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ExecuteKeyRangesResponse{`,
+		`Error:` + strings.Replace(fmt.Sprintf("%v", this.Error), "RPCError", "vtrpc.RPCError", 1) + `,`,
+		`Session:` + strings.Replace(this.Session.String(), "Session", "Session", 1) + `,`,
+		`Result:` + strings.Replace(fmt.Sprintf("%v", this.Result), "QueryResult", "query.QueryResult", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteEntityIdsRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForEntityKeyspaceIds := "[]*ExecuteEntityIdsRequest_EntityId{"
+	for _, f := range this.EntityKeyspaceIds {
+		repeatedStringForEntityKeyspaceIds += strings.Replace(fmt.Sprintf("%v", f), "ExecuteEntityIdsRequest_EntityId", "ExecuteEntityIdsRequest_EntityId", 1) + ","
+	}
+	repeatedStringForEntityKeyspaceIds += "}"
+	s := strings.Join([]string{`&ExecuteEntityIdsRequest{`,
+		`CallerId:` + strings.Replace(fmt.Sprintf("%v", this.CallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`Session:` + strings.Replace(this.Session.String(), "Session", "Session", 1) + `,`,
+		`Query:` + strings.Replace(fmt.Sprintf("%v", this.Query), "BoundQuery", "query.BoundQuery", 1) + `,`,
+		`Keyspace:` + fmt.Sprintf("%v", this.Keyspace) + `,`,
+		`EntityColumnName:` + fmt.Sprintf("%v", this.EntityColumnName) + `,`,
+		`EntityKeyspaceIds:` + repeatedStringForEntityKeyspaceIds + `,`,
+		`TabletType:` + fmt.Sprintf("%v", this.TabletType) + `,`,
+		`NotInTransaction:` + fmt.Sprintf("%v", this.NotInTransaction) + `,`,
+		`Options:` + strings.Replace(fmt.Sprintf("%v", this.Options), "ExecuteOptions", "query.ExecuteOptions", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteEntityIdsRequest_EntityId) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ExecuteEntityIdsRequest_EntityId{`,
+		`Type:` + fmt.Sprintf("%v", this.Type) + `,`,
+		`Value:` + fmt.Sprintf("%v", this.Value) + `,`,
+		`KeyspaceId:` + fmt.Sprintf("%v", this.KeyspaceId) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteEntityIdsResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ExecuteEntityIdsResponse{`,
+		`Error:` + strings.Replace(fmt.Sprintf("%v", this.Error), "RPCError", "vtrpc.RPCError", 1) + `,`,
+		`Session:` + strings.Replace(this.Session.String(), "Session", "Session", 1) + `,`,
+		`Result:` + strings.Replace(fmt.Sprintf("%v", this.Result), "QueryResult", "query.QueryResult", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteBatchRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForQueries := "[]*BoundQuery{"
+	for _, f := range this.Queries {
+		repeatedStringForQueries += strings.Replace(fmt.Sprintf("%v", f), "BoundQuery", "query.BoundQuery", 1) + ","
+	}
+	repeatedStringForQueries += "}"
+	s := strings.Join([]string{`&ExecuteBatchRequest{`,
+		`CallerId:` + strings.Replace(fmt.Sprintf("%v", this.CallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`Session:` + strings.Replace(this.Session.String(), "Session", "Session", 1) + `,`,
+		`Queries:` + repeatedStringForQueries + `,`,
+		`TabletType:` + fmt.Sprintf("%v", this.TabletType) + `,`,
+		`AsTransaction:` + fmt.Sprintf("%v", this.AsTransaction) + `,`,
+		`KeyspaceShard:` + fmt.Sprintf("%v", this.KeyspaceShard) + `,`,
+		`Options:` + strings.Replace(fmt.Sprintf("%v", this.Options), "ExecuteOptions", "query.ExecuteOptions", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteBatchResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForResults := "[]*ResultWithError{"
+	for _, f := range this.Results {
+		repeatedStringForResults += strings.Replace(fmt.Sprintf("%v", f), "ResultWithError", "query.ResultWithError", 1) + ","
+	}
+	repeatedStringForResults += "}"
+	s := strings.Join([]string{`&ExecuteBatchResponse{`,
+		`Error:` + strings.Replace(fmt.Sprintf("%v", this.Error), "RPCError", "vtrpc.RPCError", 1) + `,`,
+		`Session:` + strings.Replace(this.Session.String(), "Session", "Session", 1) + `,`,
+		`Results:` + repeatedStringForResults + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *BoundShardQuery) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&BoundShardQuery{`,
+		`Query:` + strings.Replace(fmt.Sprintf("%v", this.Query), "BoundQuery", "query.BoundQuery", 1) + `,`,
+		`Keyspace:` + fmt.Sprintf("%v", this.Keyspace) + `,`,
+		`Shards:` + fmt.Sprintf("%v", this.Shards) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteBatchShardsRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForQueries := "[]*BoundShardQuery{"
+	for _, f := range this.Queries {
+		repeatedStringForQueries += strings.Replace(f.String(), "BoundShardQuery", "BoundShardQuery", 1) + ","
+	}
+	repeatedStringForQueries += "}"
+	s := strings.Join([]string{`&ExecuteBatchShardsRequest{`,
+		`CallerId:` + strings.Replace(fmt.Sprintf("%v", this.CallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`Session:` + strings.Replace(this.Session.String(), "Session", "Session", 1) + `,`,
+		`Queries:` + repeatedStringForQueries + `,`,
+		`TabletType:` + fmt.Sprintf("%v", this.TabletType) + `,`,
+		`AsTransaction:` + fmt.Sprintf("%v", this.AsTransaction) + `,`,
+		`Options:` + strings.Replace(fmt.Sprintf("%v", this.Options), "ExecuteOptions", "query.ExecuteOptions", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteBatchShardsResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForResults := "[]*QueryResult{"
+	for _, f := range this.Results {
+		repeatedStringForResults += strings.Replace(fmt.Sprintf("%v", f), "QueryResult", "query.QueryResult", 1) + ","
+	}
+	repeatedStringForResults += "}"
+	s := strings.Join([]string{`&ExecuteBatchShardsResponse{`,
+		`Error:` + strings.Replace(fmt.Sprintf("%v", this.Error), "RPCError", "vtrpc.RPCError", 1) + `,`,
+		`Session:` + strings.Replace(this.Session.String(), "Session", "Session", 1) + `,`,
+		`Results:` + repeatedStringForResults + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *BoundKeyspaceIdQuery) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&BoundKeyspaceIdQuery{`,
+		`Query:` + strings.Replace(fmt.Sprintf("%v", this.Query), "BoundQuery", "query.BoundQuery", 1) + `,`,
+		`Keyspace:` + fmt.Sprintf("%v", this.Keyspace) + `,`,
+		`KeyspaceIds:` + fmt.Sprintf("%v", this.KeyspaceIds) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteBatchKeyspaceIdsRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForQueries := "[]*BoundKeyspaceIdQuery{"
+	for _, f := range this.Queries {
+		repeatedStringForQueries += strings.Replace(f.String(), "BoundKeyspaceIdQuery", "BoundKeyspaceIdQuery", 1) + ","
+	}
+	repeatedStringForQueries += "}"
+	s := strings.Join([]string{`&ExecuteBatchKeyspaceIdsRequest{`,
+		`CallerId:` + strings.Replace(fmt.Sprintf("%v", this.CallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`Session:` + strings.Replace(this.Session.String(), "Session", "Session", 1) + `,`,
+		`Queries:` + repeatedStringForQueries + `,`,
+		`TabletType:` + fmt.Sprintf("%v", this.TabletType) + `,`,
+		`AsTransaction:` + fmt.Sprintf("%v", this.AsTransaction) + `,`,
+		`Options:` + strings.Replace(fmt.Sprintf("%v", this.Options), "ExecuteOptions", "query.ExecuteOptions", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteBatchKeyspaceIdsResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForResults := "[]*QueryResult{"
+	for _, f := range this.Results {
+		repeatedStringForResults += strings.Replace(fmt.Sprintf("%v", f), "QueryResult", "query.QueryResult", 1) + ","
+	}
+	repeatedStringForResults += "}"
+	s := strings.Join([]string{`&ExecuteBatchKeyspaceIdsResponse{`,
+		`Error:` + strings.Replace(fmt.Sprintf("%v", this.Error), "RPCError", "vtrpc.RPCError", 1) + `,`,
+		`Session:` + strings.Replace(this.Session.String(), "Session", "Session", 1) + `,`,
+		`Results:` + repeatedStringForResults + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StreamExecuteRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StreamExecuteRequest{`,
+		`CallerId:` + strings.Replace(fmt.Sprintf("%v", this.CallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`Query:` + strings.Replace(fmt.Sprintf("%v", this.Query), "BoundQuery", "query.BoundQuery", 1) + `,`,
+		`TabletType:` + fmt.Sprintf("%v", this.TabletType) + `,`,
+		`KeyspaceShard:` + fmt.Sprintf("%v", this.KeyspaceShard) + `,`,
+		`Options:` + strings.Replace(fmt.Sprintf("%v", this.Options), "ExecuteOptions", "query.ExecuteOptions", 1) + `,`,
+		`Session:` + strings.Replace(this.Session.String(), "Session", "Session", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StreamExecuteResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StreamExecuteResponse{`,
+		`Result:` + strings.Replace(fmt.Sprintf("%v", this.Result), "QueryResult", "query.QueryResult", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StreamExecuteShardsRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StreamExecuteShardsRequest{`,
+		`CallerId:` + strings.Replace(fmt.Sprintf("%v", this.CallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`Query:` + strings.Replace(fmt.Sprintf("%v", this.Query), "BoundQuery", "query.BoundQuery", 1) + `,`,
+		`Keyspace:` + fmt.Sprintf("%v", this.Keyspace) + `,`,
+		`Shards:` + fmt.Sprintf("%v", this.Shards) + `,`,
+		`TabletType:` + fmt.Sprintf("%v", this.TabletType) + `,`,
+		`Options:` + strings.Replace(fmt.Sprintf("%v", this.Options), "ExecuteOptions", "query.ExecuteOptions", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StreamExecuteShardsResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StreamExecuteShardsResponse{`,
+		`Result:` + strings.Replace(fmt.Sprintf("%v", this.Result), "QueryResult", "query.QueryResult", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StreamExecuteKeyspaceIdsRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StreamExecuteKeyspaceIdsRequest{`,
+		`CallerId:` + strings.Replace(fmt.Sprintf("%v", this.CallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`Query:` + strings.Replace(fmt.Sprintf("%v", this.Query), "BoundQuery", "query.BoundQuery", 1) + `,`,
+		`Keyspace:` + fmt.Sprintf("%v", this.Keyspace) + `,`,
+		`KeyspaceIds:` + fmt.Sprintf("%v", this.KeyspaceIds) + `,`,
+		`TabletType:` + fmt.Sprintf("%v", this.TabletType) + `,`,
+		`Options:` + strings.Replace(fmt.Sprintf("%v", this.Options), "ExecuteOptions", "query.ExecuteOptions", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StreamExecuteKeyspaceIdsResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StreamExecuteKeyspaceIdsResponse{`,
+		`Result:` + strings.Replace(fmt.Sprintf("%v", this.Result), "QueryResult", "query.QueryResult", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StreamExecuteKeyRangesRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForKeyRanges := "[]*KeyRange{"
+	for _, f := range this.KeyRanges {
+		repeatedStringForKeyRanges += strings.Replace(fmt.Sprintf("%v", f), "KeyRange", "topodata.KeyRange", 1) + ","
+	}
+	repeatedStringForKeyRanges += "}"
+	s := strings.Join([]string{`&StreamExecuteKeyRangesRequest{`,
+		`CallerId:` + strings.Replace(fmt.Sprintf("%v", this.CallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`Query:` + strings.Replace(fmt.Sprintf("%v", this.Query), "BoundQuery", "query.BoundQuery", 1) + `,`,
+		`Keyspace:` + fmt.Sprintf("%v", this.Keyspace) + `,`,
+		`KeyRanges:` + repeatedStringForKeyRanges + `,`,
+		`TabletType:` + fmt.Sprintf("%v", this.TabletType) + `,`,
+		`Options:` + strings.Replace(fmt.Sprintf("%v", this.Options), "ExecuteOptions", "query.ExecuteOptions", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StreamExecuteKeyRangesResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StreamExecuteKeyRangesResponse{`,
+		`Result:` + strings.Replace(fmt.Sprintf("%v", this.Result), "QueryResult", "query.QueryResult", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *BeginRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&BeginRequest{`,
+		`CallerId:` + strings.Replace(fmt.Sprintf("%v", this.CallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`SingleDb:` + fmt.Sprintf("%v", this.SingleDb) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *BeginResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&BeginResponse{`,
+		`Session:` + strings.Replace(this.Session.String(), "Session", "Session", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *CommitRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&CommitRequest{`,
+		`CallerId:` + strings.Replace(fmt.Sprintf("%v", this.CallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`Session:` + strings.Replace(this.Session.String(), "Session", "Session", 1) + `,`,
+		`Atomic:` + fmt.Sprintf("%v", this.Atomic) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *CommitResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&CommitResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *RollbackRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&RollbackRequest{`,
+		`CallerId:` + strings.Replace(fmt.Sprintf("%v", this.CallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`Session:` + strings.Replace(this.Session.String(), "Session", "Session", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *RollbackResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&RollbackResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ResolveTransactionRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ResolveTransactionRequest{`,
+		`CallerId:` + strings.Replace(fmt.Sprintf("%v", this.CallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`Dtid:` + fmt.Sprintf("%v", this.Dtid) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *MessageStreamRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&MessageStreamRequest{`,
+		`CallerId:` + strings.Replace(fmt.Sprintf("%v", this.CallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`Keyspace:` + fmt.Sprintf("%v", this.Keyspace) + `,`,
+		`Shard:` + fmt.Sprintf("%v", this.Shard) + `,`,
+		`KeyRange:` + strings.Replace(fmt.Sprintf("%v", this.KeyRange), "KeyRange", "topodata.KeyRange", 1) + `,`,
+		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *MessageAckRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForIds := "[]*Value{"
+	for _, f := range this.Ids {
+		repeatedStringForIds += strings.Replace(fmt.Sprintf("%v", f), "Value", "query.Value", 1) + ","
+	}
+	repeatedStringForIds += "}"
+	s := strings.Join([]string{`&MessageAckRequest{`,
+		`CallerId:` + strings.Replace(fmt.Sprintf("%v", this.CallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`Keyspace:` + fmt.Sprintf("%v", this.Keyspace) + `,`,
+		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
+		`Ids:` + repeatedStringForIds + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *IdKeyspaceId) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&IdKeyspaceId{`,
+		`Id:` + strings.Replace(fmt.Sprintf("%v", this.Id), "Value", "query.Value", 1) + `,`,
+		`KeyspaceId:` + fmt.Sprintf("%v", this.KeyspaceId) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *MessageAckKeyspaceIdsRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForIdKeyspaceIds := "[]*IdKeyspaceId{"
+	for _, f := range this.IdKeyspaceIds {
+		repeatedStringForIdKeyspaceIds += strings.Replace(f.String(), "IdKeyspaceId", "IdKeyspaceId", 1) + ","
+	}
+	repeatedStringForIdKeyspaceIds += "}"
+	s := strings.Join([]string{`&MessageAckKeyspaceIdsRequest{`,
+		`CallerId:` + strings.Replace(fmt.Sprintf("%v", this.CallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`Keyspace:` + fmt.Sprintf("%v", this.Keyspace) + `,`,
+		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
+		`IdKeyspaceIds:` + repeatedStringForIdKeyspaceIds + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ResolveTransactionResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ResolveTransactionResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SplitQueryRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SplitQueryRequest{`,
+		`CallerId:` + strings.Replace(fmt.Sprintf("%v", this.CallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`Keyspace:` + fmt.Sprintf("%v", this.Keyspace) + `,`,
+		`Query:` + strings.Replace(fmt.Sprintf("%v", this.Query), "BoundQuery", "query.BoundQuery", 1) + `,`,
+		`SplitColumn:` + fmt.Sprintf("%v", this.SplitColumn) + `,`,
+		`SplitCount:` + fmt.Sprintf("%v", this.SplitCount) + `,`,
+		`NumRowsPerQueryPart:` + fmt.Sprintf("%v", this.NumRowsPerQueryPart) + `,`,
+		`Algorithm:` + fmt.Sprintf("%v", this.Algorithm) + `,`,
+		`UseSplitQueryV2:` + fmt.Sprintf("%v", this.UseSplitQueryV2) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SplitQueryResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForSplits := "[]*SplitQueryResponse_Part{"
+	for _, f := range this.Splits {
+		repeatedStringForSplits += strings.Replace(fmt.Sprintf("%v", f), "SplitQueryResponse_Part", "SplitQueryResponse_Part", 1) + ","
+	}
+	repeatedStringForSplits += "}"
+	s := strings.Join([]string{`&SplitQueryResponse{`,
+		`Splits:` + repeatedStringForSplits + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SplitQueryResponse_KeyRangePart) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForKeyRanges := "[]*KeyRange{"
+	for _, f := range this.KeyRanges {
+		repeatedStringForKeyRanges += strings.Replace(fmt.Sprintf("%v", f), "KeyRange", "topodata.KeyRange", 1) + ","
+	}
+	repeatedStringForKeyRanges += "}"
+	s := strings.Join([]string{`&SplitQueryResponse_KeyRangePart{`,
+		`Keyspace:` + fmt.Sprintf("%v", this.Keyspace) + `,`,
+		`KeyRanges:` + repeatedStringForKeyRanges + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SplitQueryResponse_ShardPart) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SplitQueryResponse_ShardPart{`,
+		`Keyspace:` + fmt.Sprintf("%v", this.Keyspace) + `,`,
+		`Shards:` + fmt.Sprintf("%v", this.Shards) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SplitQueryResponse_Part) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SplitQueryResponse_Part{`,
+		`Query:` + strings.Replace(fmt.Sprintf("%v", this.Query), "BoundQuery", "query.BoundQuery", 1) + `,`,
+		`KeyRangePart:` + strings.Replace(fmt.Sprintf("%v", this.KeyRangePart), "SplitQueryResponse_KeyRangePart", "SplitQueryResponse_KeyRangePart", 1) + `,`,
+		`ShardPart:` + strings.Replace(fmt.Sprintf("%v", this.ShardPart), "SplitQueryResponse_ShardPart", "SplitQueryResponse_ShardPart", 1) + `,`,
+		`Size:` + fmt.Sprintf("%v", this.Size) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *GetSrvKeyspaceRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&GetSrvKeyspaceRequest{`,
+		`Keyspace:` + fmt.Sprintf("%v", this.Keyspace) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *GetSrvKeyspaceResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&GetSrvKeyspaceResponse{`,
+		`SrvKeyspace:` + strings.Replace(fmt.Sprintf("%v", this.SrvKeyspace), "SrvKeyspace", "topodata.SrvKeyspace", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *VStreamRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&VStreamRequest{`,
+		`CallerId:` + strings.Replace(fmt.Sprintf("%v", this.CallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`TabletType:` + fmt.Sprintf("%v", this.TabletType) + `,`,
+		`Vgtid:` + strings.Replace(fmt.Sprintf("%v", this.Vgtid), "VGtid", "binlogdata.VGtid", 1) + `,`,
+		`Filter:` + strings.Replace(fmt.Sprintf("%v", this.Filter), "Filter", "binlogdata.Filter", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *VStreamResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForEvents := "[]*VEvent{"
+	for _, f := range this.Events {
+		repeatedStringForEvents += strings.Replace(fmt.Sprintf("%v", f), "VEvent", "binlogdata.VEvent", 1) + ","
+	}
+	repeatedStringForEvents += "}"
+	s := strings.Join([]string{`&VStreamResponse{`,
+		`Events:` + repeatedStringForEvents + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *UpdateStreamRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&UpdateStreamRequest{`,
+		`CallerId:` + strings.Replace(fmt.Sprintf("%v", this.CallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`Keyspace:` + fmt.Sprintf("%v", this.Keyspace) + `,`,
+		`Shard:` + fmt.Sprintf("%v", this.Shard) + `,`,
+		`KeyRange:` + strings.Replace(fmt.Sprintf("%v", this.KeyRange), "KeyRange", "topodata.KeyRange", 1) + `,`,
+		`TabletType:` + fmt.Sprintf("%v", this.TabletType) + `,`,
+		`Timestamp:` + fmt.Sprintf("%v", this.Timestamp) + `,`,
+		`Event:` + strings.Replace(fmt.Sprintf("%v", this.Event), "EventToken", "query.EventToken", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *UpdateStreamResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&UpdateStreamResponse{`,
+		`Event:` + strings.Replace(fmt.Sprintf("%v", this.Event), "StreamEvent", "query.StreamEvent", 1) + `,`,
+		`ResumeTimestamp:` + fmt.Sprintf("%v", this.ResumeTimestamp) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func valueToStringVtgate(v interface{}) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("*%v", pv)
 }
 func (m *Session) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
@@ -8791,7 +11726,6 @@ func (m *Session) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -8900,7 +11834,6 @@ func (m *Session_ShardSession) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -9169,7 +12102,6 @@ func (m *ExecuteRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -9331,7 +12263,6 @@ func (m *ExecuteResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -9632,7 +12563,6 @@ func (m *ExecuteShardsRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -9794,7 +12724,6 @@ func (m *ExecuteShardsResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -10095,7 +13024,6 @@ func (m *ExecuteKeyspaceIdsRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -10257,7 +13185,6 @@ func (m *ExecuteKeyspaceIdsResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -10560,7 +13487,6 @@ func (m *ExecuteKeyRangesRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -10722,7 +13648,6 @@ func (m *ExecuteKeyRangesResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11057,7 +13982,6 @@ func (m *ExecuteEntityIdsRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11198,7 +14122,6 @@ func (m *ExecuteEntityIdsRequest_EntityId) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11360,7 +14283,6 @@ func (m *ExecuteEntityIdsResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11627,7 +14549,6 @@ func (m *ExecuteBatchRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11787,7 +14708,6 @@ func (m *ExecuteBatchResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11941,7 +14861,6 @@ func (m *BoundShardQuery) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -12176,7 +15095,6 @@ func (m *ExecuteBatchShardsRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -12336,7 +15254,6 @@ func (m *ExecuteBatchShardsResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -12490,7 +15407,6 @@ func (m *BoundKeyspaceIdQuery) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -12725,7 +15641,6 @@ func (m *ExecuteBatchKeyspaceIdsRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -12885,7 +15800,6 @@ func (m *ExecuteBatchKeyspaceIdsResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13134,7 +16048,6 @@ func (m *StreamExecuteRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13224,7 +16137,6 @@ func (m *StreamExecuteResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13469,7 +16381,6 @@ func (m *StreamExecuteShardsRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13559,7 +16470,6 @@ func (m *StreamExecuteShardsResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13804,7 +16714,6 @@ func (m *StreamExecuteKeyspaceIdsRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13894,7 +16803,6 @@ func (m *StreamExecuteKeyspaceIdsResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14141,7 +17049,6 @@ func (m *StreamExecuteKeyRangesRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14231,7 +17138,6 @@ func (m *StreamExecuteKeyRangesResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14341,7 +17247,6 @@ func (m *BeginRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14431,7 +17336,6 @@ func (m *BeginResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14577,7 +17481,6 @@ func (m *CommitRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14631,7 +17534,6 @@ func (m *CommitResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14757,7 +17659,6 @@ func (m *RollbackRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14811,7 +17712,6 @@ func (m *RollbackResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14933,7 +17833,6 @@ func (m *ResolveTransactionRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15155,7 +18054,6 @@ func (m *MessageStreamRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15343,7 +18241,6 @@ func (m *MessageAckRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15467,7 +18364,6 @@ func (m *IdKeyspaceId) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15655,7 +18551,6 @@ func (m *MessageAckKeyspaceIdsRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15709,7 +18604,6 @@ func (m *ResolveTransactionResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15976,7 +18870,6 @@ func (m *SplitQueryRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16064,7 +18957,6 @@ func (m *SplitQueryResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16184,7 +19076,6 @@ func (m *SplitQueryResponse_KeyRangePart) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16302,7 +19193,6 @@ func (m *SplitQueryResponse_ShardPart) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16483,7 +19373,6 @@ func (m *SplitQueryResponse_Part) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16569,7 +19458,6 @@ func (m *GetSrvKeyspaceRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16659,7 +19547,6 @@ func (m *GetSrvKeyspaceResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16840,7 +19727,6 @@ func (m *VStreamRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16928,7 +19814,6 @@ func (m *VStreamResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -17192,7 +20077,6 @@ func (m *UpdateStreamRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -17301,7 +20185,6 @@ func (m *UpdateStreamResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}

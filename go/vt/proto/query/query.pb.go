@@ -4,12 +4,17 @@
 package query
 
 import (
+	bytes "bytes"
 	encoding_binary "encoding/binary"
 	fmt "fmt"
 	io "io"
 	math "math"
+	reflect "reflect"
+	strconv "strconv"
+	strings "strings"
 
 	proto "github.com/gogo/protobuf/proto"
+	github_com_gogo_protobuf_sortkeys "github.com/gogo/protobuf/sortkeys"
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpc "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -29,26 +34,26 @@ const _ = proto.GoGoProtoPackageIsVersion2 // please upgrade the proto package
 type MySqlFlag int32
 
 const (
-	MySqlFlag_EMPTY                 MySqlFlag = 0
-	MySqlFlag_NOT_NULL_FLAG         MySqlFlag = 1
-	MySqlFlag_PRI_KEY_FLAG          MySqlFlag = 2
-	MySqlFlag_UNIQUE_KEY_FLAG       MySqlFlag = 4
-	MySqlFlag_MULTIPLE_KEY_FLAG     MySqlFlag = 8
-	MySqlFlag_BLOB_FLAG             MySqlFlag = 16
-	MySqlFlag_UNSIGNED_FLAG         MySqlFlag = 32
-	MySqlFlag_ZEROFILL_FLAG         MySqlFlag = 64
-	MySqlFlag_BINARY_FLAG           MySqlFlag = 128
-	MySqlFlag_ENUM_FLAG             MySqlFlag = 256
-	MySqlFlag_AUTO_INCREMENT_FLAG   MySqlFlag = 512
-	MySqlFlag_TIMESTAMP_FLAG        MySqlFlag = 1024
-	MySqlFlag_SET_FLAG              MySqlFlag = 2048
-	MySqlFlag_NO_DEFAULT_VALUE_FLAG MySqlFlag = 4096
-	MySqlFlag_ON_UPDATE_NOW_FLAG    MySqlFlag = 8192
-	MySqlFlag_NUM_FLAG              MySqlFlag = 32768
-	MySqlFlag_PART_KEY_FLAG         MySqlFlag = 16384
-	MySqlFlag_GROUP_FLAG            MySqlFlag = 32768
-	MySqlFlag_UNIQUE_FLAG           MySqlFlag = 65536
-	MySqlFlag_BINCMP_FLAG           MySqlFlag = 131072
+	EMPTY                 MySqlFlag = 0
+	NOT_NULL_FLAG         MySqlFlag = 1
+	PRI_KEY_FLAG          MySqlFlag = 2
+	UNIQUE_KEY_FLAG       MySqlFlag = 4
+	MULTIPLE_KEY_FLAG     MySqlFlag = 8
+	BLOB_FLAG             MySqlFlag = 16
+	UNSIGNED_FLAG         MySqlFlag = 32
+	ZEROFILL_FLAG         MySqlFlag = 64
+	BINARY_FLAG           MySqlFlag = 128
+	ENUM_FLAG             MySqlFlag = 256
+	AUTO_INCREMENT_FLAG   MySqlFlag = 512
+	TIMESTAMP_FLAG        MySqlFlag = 1024
+	SET_FLAG              MySqlFlag = 2048
+	NO_DEFAULT_VALUE_FLAG MySqlFlag = 4096
+	ON_UPDATE_NOW_FLAG    MySqlFlag = 8192
+	NUM_FLAG              MySqlFlag = 32768
+	PART_KEY_FLAG         MySqlFlag = 16384
+	GROUP_FLAG            MySqlFlag = 32768
+	UNIQUE_FLAG           MySqlFlag = 65536
+	BINCMP_FLAG           MySqlFlag = 131072
 )
 
 var MySqlFlag_name = map[int32]string{
@@ -97,10 +102,6 @@ var MySqlFlag_value = map[string]int32{
 	"BINCMP_FLAG":           131072,
 }
 
-func (x MySqlFlag) String() string {
-	return proto.EnumName(MySqlFlag_name, int32(x))
-}
-
 func (MySqlFlag) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{0}
 }
@@ -109,13 +110,13 @@ func (MySqlFlag) EnumDescriptor() ([]byte, []int) {
 type Flag int32
 
 const (
-	Flag_NONE       Flag = 0
-	Flag_ISINTEGRAL Flag = 256
-	Flag_ISUNSIGNED Flag = 512
-	Flag_ISFLOAT    Flag = 1024
-	Flag_ISQUOTED   Flag = 2048
-	Flag_ISTEXT     Flag = 4096
-	Flag_ISBINARY   Flag = 8192
+	NONE       Flag = 0
+	ISINTEGRAL Flag = 256
+	ISUNSIGNED Flag = 512
+	ISFLOAT    Flag = 1024
+	ISQUOTED   Flag = 2048
+	ISTEXT     Flag = 4096
+	ISBINARY   Flag = 8192
 )
 
 var Flag_name = map[int32]string{
@@ -138,10 +139,6 @@ var Flag_value = map[string]int32{
 	"ISBINARY":   8192,
 }
 
-func (x Flag) String() string {
-	return proto.EnumName(Flag_name, int32(x))
-}
-
 func (Flag) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{1}
 }
@@ -152,103 +149,103 @@ type Type int32
 
 const (
 	// NULL_TYPE specifies a NULL type.
-	Type_NULL_TYPE Type = 0
+	NULL_TYPE Type = 0
 	// INT8 specifies a TINYINT type.
 	// Properties: 1, IsNumber.
-	Type_INT8 Type = 257
+	INT8 Type = 257
 	// UINT8 specifies a TINYINT UNSIGNED type.
 	// Properties: 2, IsNumber, IsUnsigned.
-	Type_UINT8 Type = 770
+	UINT8 Type = 770
 	// INT16 specifies a SMALLINT type.
 	// Properties: 3, IsNumber.
-	Type_INT16 Type = 259
+	INT16 Type = 259
 	// UINT16 specifies a SMALLINT UNSIGNED type.
 	// Properties: 4, IsNumber, IsUnsigned.
-	Type_UINT16 Type = 772
+	UINT16 Type = 772
 	// INT24 specifies a MEDIUMINT type.
 	// Properties: 5, IsNumber.
-	Type_INT24 Type = 261
+	INT24 Type = 261
 	// UINT24 specifies a MEDIUMINT UNSIGNED type.
 	// Properties: 6, IsNumber, IsUnsigned.
-	Type_UINT24 Type = 774
+	UINT24 Type = 774
 	// INT32 specifies a INTEGER type.
 	// Properties: 7, IsNumber.
-	Type_INT32 Type = 263
+	INT32 Type = 263
 	// UINT32 specifies a INTEGER UNSIGNED type.
 	// Properties: 8, IsNumber, IsUnsigned.
-	Type_UINT32 Type = 776
+	UINT32 Type = 776
 	// INT64 specifies a BIGINT type.
 	// Properties: 9, IsNumber.
-	Type_INT64 Type = 265
+	INT64 Type = 265
 	// UINT64 specifies a BIGINT UNSIGNED type.
 	// Properties: 10, IsNumber, IsUnsigned.
-	Type_UINT64 Type = 778
+	UINT64 Type = 778
 	// FLOAT32 specifies a FLOAT type.
 	// Properties: 11, IsFloat.
-	Type_FLOAT32 Type = 1035
+	FLOAT32 Type = 1035
 	// FLOAT64 specifies a DOUBLE or REAL type.
 	// Properties: 12, IsFloat.
-	Type_FLOAT64 Type = 1036
+	FLOAT64 Type = 1036
 	// TIMESTAMP specifies a TIMESTAMP type.
 	// Properties: 13, IsQuoted.
-	Type_TIMESTAMP Type = 2061
+	TIMESTAMP Type = 2061
 	// DATE specifies a DATE type.
 	// Properties: 14, IsQuoted.
-	Type_DATE Type = 2062
+	DATE Type = 2062
 	// TIME specifies a TIME type.
 	// Properties: 15, IsQuoted.
-	Type_TIME Type = 2063
+	TIME Type = 2063
 	// DATETIME specifies a DATETIME type.
 	// Properties: 16, IsQuoted.
-	Type_DATETIME Type = 2064
+	DATETIME Type = 2064
 	// YEAR specifies a YEAR type.
 	// Properties: 17, IsNumber, IsUnsigned.
-	Type_YEAR Type = 785
+	YEAR Type = 785
 	// DECIMAL specifies a DECIMAL or NUMERIC type.
 	// Properties: 18, None.
-	Type_DECIMAL Type = 18
+	DECIMAL Type = 18
 	// TEXT specifies a TEXT type.
 	// Properties: 19, IsQuoted, IsText.
-	Type_TEXT Type = 6163
+	TEXT Type = 6163
 	// BLOB specifies a BLOB type.
 	// Properties: 20, IsQuoted, IsBinary.
-	Type_BLOB Type = 10260
+	BLOB Type = 10260
 	// VARCHAR specifies a VARCHAR type.
 	// Properties: 21, IsQuoted, IsText.
-	Type_VARCHAR Type = 6165
+	VARCHAR Type = 6165
 	// VARBINARY specifies a VARBINARY type.
 	// Properties: 22, IsQuoted, IsBinary.
-	Type_VARBINARY Type = 10262
+	VARBINARY Type = 10262
 	// CHAR specifies a CHAR type.
 	// Properties: 23, IsQuoted, IsText.
-	Type_CHAR Type = 6167
+	CHAR Type = 6167
 	// BINARY specifies a BINARY type.
 	// Properties: 24, IsQuoted, IsBinary.
-	Type_BINARY Type = 10264
+	BINARY Type = 10264
 	// BIT specifies a BIT type.
 	// Properties: 25, IsQuoted.
-	Type_BIT Type = 2073
+	BIT Type = 2073
 	// ENUM specifies an ENUM type.
 	// Properties: 26, IsQuoted.
-	Type_ENUM Type = 2074
+	ENUM Type = 2074
 	// SET specifies a SET type.
 	// Properties: 27, IsQuoted.
-	Type_SET Type = 2075
+	SET Type = 2075
 	// TUPLE specifies a tuple. This cannot
 	// be returned in a QueryResult, but it can
 	// be sent as a bind var.
 	// Properties: 28, None.
-	Type_TUPLE Type = 28
+	TUPLE Type = 28
 	// GEOMETRY specifies a GEOMETRY type.
 	// Properties: 29, IsQuoted.
-	Type_GEOMETRY Type = 2077
+	GEOMETRY Type = 2077
 	// JSON specifies a JSON type.
 	// Properties: 30, IsQuoted.
-	Type_JSON Type = 2078
+	JSON Type = 2078
 	// EXPRESSION specifies a SQL expression.
 	// This type is for internal use only.
 	// Properties: 31, None.
-	Type_EXPRESSION Type = 31
+	EXPRESSION Type = 31
 )
 
 var Type_name = map[int32]string{
@@ -321,10 +318,6 @@ var Type_value = map[string]int32{
 	"EXPRESSION": 31,
 }
 
-func (x Type) String() string {
-	return proto.EnumName(Type_name, int32(x))
-}
-
 func (Type) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{2}
 }
@@ -333,10 +326,10 @@ func (Type) EnumDescriptor() ([]byte, []int) {
 type TransactionState int32
 
 const (
-	TransactionState_UNKNOWN  TransactionState = 0
-	TransactionState_PREPARE  TransactionState = 1
-	TransactionState_COMMIT   TransactionState = 2
-	TransactionState_ROLLBACK TransactionState = 3
+	UNKNOWN  TransactionState = 0
+	PREPARE  TransactionState = 1
+	COMMIT   TransactionState = 2
+	ROLLBACK TransactionState = 3
 )
 
 var TransactionState_name = map[int32]string{
@@ -353,10 +346,6 @@ var TransactionState_value = map[string]int32{
 	"ROLLBACK": 3,
 }
 
-func (x TransactionState) String() string {
-	return proto.EnumName(TransactionState_name, int32(x))
-}
-
 func (TransactionState) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{3}
 }
@@ -364,9 +353,9 @@ func (TransactionState) EnumDescriptor() ([]byte, []int) {
 type ExecuteOptions_IncludedFields int32
 
 const (
-	ExecuteOptions_TYPE_AND_NAME ExecuteOptions_IncludedFields = 0
-	ExecuteOptions_TYPE_ONLY     ExecuteOptions_IncludedFields = 1
-	ExecuteOptions_ALL           ExecuteOptions_IncludedFields = 2
+	TYPE_AND_NAME ExecuteOptions_IncludedFields = 0
+	TYPE_ONLY     ExecuteOptions_IncludedFields = 1
+	ALL           ExecuteOptions_IncludedFields = 2
 )
 
 var ExecuteOptions_IncludedFields_name = map[int32]string{
@@ -381,10 +370,6 @@ var ExecuteOptions_IncludedFields_value = map[string]int32{
 	"ALL":           2,
 }
 
-func (x ExecuteOptions_IncludedFields) String() string {
-	return proto.EnumName(ExecuteOptions_IncludedFields_name, int32(x))
-}
-
 func (ExecuteOptions_IncludedFields) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{6, 0}
 }
@@ -392,10 +377,10 @@ func (ExecuteOptions_IncludedFields) EnumDescriptor() ([]byte, []int) {
 type ExecuteOptions_Workload int32
 
 const (
-	ExecuteOptions_UNSPECIFIED ExecuteOptions_Workload = 0
-	ExecuteOptions_OLTP        ExecuteOptions_Workload = 1
-	ExecuteOptions_OLAP        ExecuteOptions_Workload = 2
-	ExecuteOptions_DBA         ExecuteOptions_Workload = 3
+	UNSPECIFIED ExecuteOptions_Workload = 0
+	OLTP        ExecuteOptions_Workload = 1
+	OLAP        ExecuteOptions_Workload = 2
+	DBA         ExecuteOptions_Workload = 3
 )
 
 var ExecuteOptions_Workload_name = map[int32]string{
@@ -412,10 +397,6 @@ var ExecuteOptions_Workload_value = map[string]int32{
 	"DBA":         3,
 }
 
-func (x ExecuteOptions_Workload) String() string {
-	return proto.EnumName(ExecuteOptions_Workload_name, int32(x))
-}
-
 func (ExecuteOptions_Workload) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{6, 1}
 }
@@ -423,17 +404,17 @@ func (ExecuteOptions_Workload) EnumDescriptor() ([]byte, []int) {
 type ExecuteOptions_TransactionIsolation int32
 
 const (
-	ExecuteOptions_DEFAULT          ExecuteOptions_TransactionIsolation = 0
-	ExecuteOptions_REPEATABLE_READ  ExecuteOptions_TransactionIsolation = 1
-	ExecuteOptions_READ_COMMITTED   ExecuteOptions_TransactionIsolation = 2
-	ExecuteOptions_READ_UNCOMMITTED ExecuteOptions_TransactionIsolation = 3
-	ExecuteOptions_SERIALIZABLE     ExecuteOptions_TransactionIsolation = 4
+	DEFAULT          ExecuteOptions_TransactionIsolation = 0
+	REPEATABLE_READ  ExecuteOptions_TransactionIsolation = 1
+	READ_COMMITTED   ExecuteOptions_TransactionIsolation = 2
+	READ_UNCOMMITTED ExecuteOptions_TransactionIsolation = 3
+	SERIALIZABLE     ExecuteOptions_TransactionIsolation = 4
 	// This is not an "official" transaction level but it will do a
 	// START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY
-	ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY ExecuteOptions_TransactionIsolation = 5
+	CONSISTENT_SNAPSHOT_READ_ONLY ExecuteOptions_TransactionIsolation = 5
 	// This not an "official" transaction level, it will send queries to mysql
 	// without wrapping them in a transaction
-	ExecuteOptions_AUTOCOMMIT ExecuteOptions_TransactionIsolation = 6
+	AUTOCOMMIT ExecuteOptions_TransactionIsolation = 6
 )
 
 var ExecuteOptions_TransactionIsolation_name = map[int32]string{
@@ -456,10 +437,6 @@ var ExecuteOptions_TransactionIsolation_value = map[string]int32{
 	"AUTOCOMMIT":                    6,
 }
 
-func (x ExecuteOptions_TransactionIsolation) String() string {
-	return proto.EnumName(ExecuteOptions_TransactionIsolation_name, int32(x))
-}
-
 func (ExecuteOptions_TransactionIsolation) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{6, 2}
 }
@@ -468,9 +445,9 @@ func (ExecuteOptions_TransactionIsolation) EnumDescriptor() ([]byte, []int) {
 type StreamEvent_Statement_Category int32
 
 const (
-	StreamEvent_Statement_Error StreamEvent_Statement_Category = 0
-	StreamEvent_Statement_DML   StreamEvent_Statement_Category = 1
-	StreamEvent_Statement_DDL   StreamEvent_Statement_Category = 2
+	Error StreamEvent_Statement_Category = 0
+	DML   StreamEvent_Statement_Category = 1
+	DDL   StreamEvent_Statement_Category = 2
 )
 
 var StreamEvent_Statement_Category_name = map[int32]string{
@@ -485,10 +462,6 @@ var StreamEvent_Statement_Category_value = map[string]int32{
 	"DDL":   2,
 }
 
-func (x StreamEvent_Statement_Category) String() string {
-	return proto.EnumName(StreamEvent_Statement_Category_name, int32(x))
-}
-
 func (StreamEvent_Statement_Category) EnumDescriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{12, 0, 0}
 }
@@ -496,8 +469,8 @@ func (StreamEvent_Statement_Category) EnumDescriptor() ([]byte, []int) {
 type SplitQueryRequest_Algorithm int32
 
 const (
-	SplitQueryRequest_EQUAL_SPLITS SplitQueryRequest_Algorithm = 0
-	SplitQueryRequest_FULL_SCAN    SplitQueryRequest_Algorithm = 1
+	EQUAL_SPLITS SplitQueryRequest_Algorithm = 0
+	FULL_SCAN    SplitQueryRequest_Algorithm = 1
 )
 
 var SplitQueryRequest_Algorithm_name = map[int32]string{
@@ -508,10 +481,6 @@ var SplitQueryRequest_Algorithm_name = map[int32]string{
 var SplitQueryRequest_Algorithm_value = map[string]int32{
 	"EQUAL_SPLITS": 0,
 	"FULL_SCAN":    1,
-}
-
-func (x SplitQueryRequest_Algorithm) String() string {
-	return proto.EnumName(SplitQueryRequest_Algorithm_name, int32(x))
 }
 
 func (SplitQueryRequest_Algorithm) EnumDescriptor() ([]byte, []int) {
@@ -526,15 +495,11 @@ type Target struct {
 	TabletType topodata.TabletType `protobuf:"varint,3,opt,name=tablet_type,json=tabletType,proto3,enum=topodata.TabletType" json:"tablet_type,omitempty"`
 	// cell is used for routing queries between vtgate and vttablets. It
 	// is not used when Target is part of the Session sent by the client.
-	Cell                 string   `protobuf:"bytes,4,opt,name=cell,proto3" json:"cell,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Cell string `protobuf:"bytes,4,opt,name=cell,proto3" json:"cell,omitempty"`
 }
 
-func (m *Target) Reset()         { *m = Target{} }
-func (m *Target) String() string { return proto.CompactTextString(m) }
-func (*Target) ProtoMessage()    {}
+func (m *Target) Reset()      { *m = Target{} }
+func (*Target) ProtoMessage() {}
 func (*Target) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{0}
 }
@@ -583,7 +548,7 @@ func (m *Target) GetTabletType() topodata.TabletType {
 	if m != nil {
 		return m.TabletType
 	}
-	return topodata.TabletType_UNKNOWN
+	return topodata.UNKNOWN
 }
 
 func (m *Target) GetCell() string {
@@ -602,16 +567,12 @@ func (m *Target) GetCell() string {
 // structure, which is not secure at all, because it is provided
 // by the Vitess client.
 type VTGateCallerID struct {
-	Username             string   `protobuf:"bytes,1,opt,name=username,proto3" json:"username,omitempty"`
-	Groups               []string `protobuf:"bytes,2,rep,name=groups,proto3" json:"groups,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Username string   `protobuf:"bytes,1,opt,name=username,proto3" json:"username,omitempty"`
+	Groups   []string `protobuf:"bytes,2,rep,name=groups,proto3" json:"groups,omitempty"`
 }
 
-func (m *VTGateCallerID) Reset()         { *m = VTGateCallerID{} }
-func (m *VTGateCallerID) String() string { return proto.CompactTextString(m) }
-func (*VTGateCallerID) ProtoMessage()    {}
+func (m *VTGateCallerID) Reset()      { *m = VTGateCallerID{} }
+func (*VTGateCallerID) ProtoMessage() {}
 func (*VTGateCallerID) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{1}
 }
@@ -668,15 +629,11 @@ type EventToken struct {
 	Shard string `protobuf:"bytes,2,opt,name=shard,proto3" json:"shard,omitempty"`
 	// The position on the replication stream after this statement was applied.
 	// It is not the transaction ID / GTID, but the position / GTIDSet.
-	Position             string   `protobuf:"bytes,3,opt,name=position,proto3" json:"position,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Position string `protobuf:"bytes,3,opt,name=position,proto3" json:"position,omitempty"`
 }
 
-func (m *EventToken) Reset()         { *m = EventToken{} }
-func (m *EventToken) String() string { return proto.CompactTextString(m) }
-func (*EventToken) ProtoMessage()    {}
+func (m *EventToken) Reset()      { *m = EventToken{} }
+func (*EventToken) ProtoMessage() {}
 func (*EventToken) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{2}
 }
@@ -730,16 +687,12 @@ func (m *EventToken) GetPosition() string {
 
 // Value represents a typed value.
 type Value struct {
-	Type                 Type     `protobuf:"varint,1,opt,name=type,proto3,enum=query.Type" json:"type,omitempty"`
-	Value                []byte   `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Type  Type   `protobuf:"varint,1,opt,name=type,proto3,enum=query.Type" json:"type,omitempty"`
+	Value []byte `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 }
 
-func (m *Value) Reset()         { *m = Value{} }
-func (m *Value) String() string { return proto.CompactTextString(m) }
-func (*Value) ProtoMessage()    {}
+func (m *Value) Reset()      { *m = Value{} }
+func (*Value) ProtoMessage() {}
 func (*Value) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{3}
 }
@@ -774,7 +727,7 @@ func (m *Value) GetType() Type {
 	if m != nil {
 		return m.Type
 	}
-	return Type_NULL_TYPE
+	return NULL_TYPE
 }
 
 func (m *Value) GetValue() []byte {
@@ -789,15 +742,11 @@ type BindVariable struct {
 	Type  Type   `protobuf:"varint,1,opt,name=type,proto3,enum=query.Type" json:"type,omitempty"`
 	Value []byte `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 	// values are set if type is TUPLE.
-	Values               []*Value `protobuf:"bytes,3,rep,name=values,proto3" json:"values,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Values []*Value `protobuf:"bytes,3,rep,name=values,proto3" json:"values,omitempty"`
 }
 
-func (m *BindVariable) Reset()         { *m = BindVariable{} }
-func (m *BindVariable) String() string { return proto.CompactTextString(m) }
-func (*BindVariable) ProtoMessage()    {}
+func (m *BindVariable) Reset()      { *m = BindVariable{} }
+func (*BindVariable) ProtoMessage() {}
 func (*BindVariable) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{4}
 }
@@ -832,7 +781,7 @@ func (m *BindVariable) GetType() Type {
 	if m != nil {
 		return m.Type
 	}
-	return Type_NULL_TYPE
+	return NULL_TYPE
 }
 
 func (m *BindVariable) GetValue() []byte {
@@ -855,15 +804,11 @@ type BoundQuery struct {
 	Sql string `protobuf:"bytes,1,opt,name=sql,proto3" json:"sql,omitempty"`
 	// bind_variables is a map of all bind variables to expand in the query.
 	// nil values are not allowed. Use NULL_TYPE to express a NULL value.
-	BindVariables        map[string]*BindVariable `protobuf:"bytes,2,rep,name=bind_variables,json=bindVariables,proto3" json:"bind_variables,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	XXX_NoUnkeyedLiteral struct{}                 `json:"-"`
-	XXX_unrecognized     []byte                   `json:"-"`
-	XXX_sizecache        int32                    `json:"-"`
+	BindVariables map[string]*BindVariable `protobuf:"bytes,2,rep,name=bind_variables,json=bindVariables,proto3" json:"bind_variables,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
 }
 
-func (m *BoundQuery) Reset()         { *m = BoundQuery{} }
-func (m *BoundQuery) String() string { return proto.CompactTextString(m) }
-func (*BoundQuery) ProtoMessage()    {}
+func (m *BoundQuery) Reset()      { *m = BoundQuery{} }
+func (*BoundQuery) ProtoMessage() {}
 func (*BoundQuery) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{5}
 }
@@ -938,15 +883,11 @@ type ExecuteOptions struct {
 	TransactionIsolation ExecuteOptions_TransactionIsolation `protobuf:"varint,9,opt,name=transaction_isolation,json=transactionIsolation,proto3,enum=query.ExecuteOptions_TransactionIsolation" json:"transaction_isolation,omitempty"`
 	// skip_query_plan_cache specifies if the query plan should be cached by vitess.
 	// By default all query plans are cached.
-	SkipQueryPlanCache   bool     `protobuf:"varint,10,opt,name=skip_query_plan_cache,json=skipQueryPlanCache,proto3" json:"skip_query_plan_cache,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	SkipQueryPlanCache bool `protobuf:"varint,10,opt,name=skip_query_plan_cache,json=skipQueryPlanCache,proto3" json:"skip_query_plan_cache,omitempty"`
 }
 
-func (m *ExecuteOptions) Reset()         { *m = ExecuteOptions{} }
-func (m *ExecuteOptions) String() string { return proto.CompactTextString(m) }
-func (*ExecuteOptions) ProtoMessage()    {}
+func (m *ExecuteOptions) Reset()      { *m = ExecuteOptions{} }
+func (*ExecuteOptions) ProtoMessage() {}
 func (*ExecuteOptions) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{6}
 }
@@ -995,7 +936,7 @@ func (m *ExecuteOptions) GetIncludedFields() ExecuteOptions_IncludedFields {
 	if m != nil {
 		return m.IncludedFields
 	}
-	return ExecuteOptions_TYPE_AND_NAME
+	return TYPE_AND_NAME
 }
 
 func (m *ExecuteOptions) GetClientFoundRows() bool {
@@ -1009,7 +950,7 @@ func (m *ExecuteOptions) GetWorkload() ExecuteOptions_Workload {
 	if m != nil {
 		return m.Workload
 	}
-	return ExecuteOptions_UNSPECIFIED
+	return UNSPECIFIED
 }
 
 func (m *ExecuteOptions) GetSqlSelectLimit() int64 {
@@ -1023,7 +964,7 @@ func (m *ExecuteOptions) GetTransactionIsolation() ExecuteOptions_TransactionIso
 	if m != nil {
 		return m.TransactionIsolation
 	}
-	return ExecuteOptions_DEFAULT
+	return DEFAULT
 }
 
 func (m *ExecuteOptions) GetSkipQueryPlanCache() bool {
@@ -1053,15 +994,11 @@ type Field struct {
 	// decimals is actualy a uint8. Only the lower 8 bits are used.
 	Decimals uint32 `protobuf:"varint,9,opt,name=decimals,proto3" json:"decimals,omitempty"`
 	// flags is actually a uint16. Only the lower 16 bits are used.
-	Flags                uint32   `protobuf:"varint,10,opt,name=flags,proto3" json:"flags,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Flags uint32 `protobuf:"varint,10,opt,name=flags,proto3" json:"flags,omitempty"`
 }
 
-func (m *Field) Reset()         { *m = Field{} }
-func (m *Field) String() string { return proto.CompactTextString(m) }
-func (*Field) ProtoMessage()    {}
+func (m *Field) Reset()      { *m = Field{} }
+func (*Field) ProtoMessage() {}
 func (*Field) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{7}
 }
@@ -1103,7 +1040,7 @@ func (m *Field) GetType() Type {
 	if m != nil {
 		return m.Type
 	}
-	return Type_NULL_TYPE
+	return NULL_TYPE
 }
 
 func (m *Field) GetTable() string {
@@ -1170,15 +1107,11 @@ type Row struct {
 	// to know the offset where the next value begins in values.
 	Lengths []int64 `protobuf:"zigzag64,1,rep,packed,name=lengths,proto3" json:"lengths,omitempty"`
 	// values contains a concatenation of all values in the row.
-	Values               []byte   `protobuf:"bytes,2,opt,name=values,proto3" json:"values,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Values []byte `protobuf:"bytes,2,opt,name=values,proto3" json:"values,omitempty"`
 }
 
-func (m *Row) Reset()         { *m = Row{} }
-func (m *Row) String() string { return proto.CompactTextString(m) }
-func (*Row) ProtoMessage()    {}
+func (m *Row) Reset()      { *m = Row{} }
+func (*Row) ProtoMessage() {}
 func (*Row) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{8}
 }
@@ -1231,15 +1164,11 @@ type ResultExtras struct {
 	EventToken *EventToken `protobuf:"bytes,1,opt,name=event_token,json=eventToken,proto3" json:"event_token,omitempty"`
 	// If set, it means the data returned with this result is fresher
 	// than the compare_token passed in the ExecuteOptions.
-	Fresher              bool     `protobuf:"varint,2,opt,name=fresher,proto3" json:"fresher,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Fresher bool `protobuf:"varint,2,opt,name=fresher,proto3" json:"fresher,omitempty"`
 }
 
-func (m *ResultExtras) Reset()         { *m = ResultExtras{} }
-func (m *ResultExtras) String() string { return proto.CompactTextString(m) }
-func (*ResultExtras) ProtoMessage()    {}
+func (m *ResultExtras) Reset()      { *m = ResultExtras{} }
+func (*ResultExtras) ProtoMessage() {}
 func (*ResultExtras) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{9}
 }
@@ -1294,19 +1223,15 @@ func (m *ResultExtras) GetFresher() bool {
 // len(QueryResult[0].fields) is always equal to len(row) (for each
 // row in rows for each QueryResult in QueryResult[1:]).
 type QueryResult struct {
-	Fields               []*Field      `protobuf:"bytes,1,rep,name=fields,proto3" json:"fields,omitempty"`
-	RowsAffected         uint64        `protobuf:"varint,2,opt,name=rows_affected,json=rowsAffected,proto3" json:"rows_affected,omitempty"`
-	InsertId             uint64        `protobuf:"varint,3,opt,name=insert_id,json=insertId,proto3" json:"insert_id,omitempty"`
-	Rows                 []*Row        `protobuf:"bytes,4,rep,name=rows,proto3" json:"rows,omitempty"`
-	Extras               *ResultExtras `protobuf:"bytes,5,opt,name=extras,proto3" json:"extras,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
-	XXX_unrecognized     []byte        `json:"-"`
-	XXX_sizecache        int32         `json:"-"`
+	Fields       []*Field      `protobuf:"bytes,1,rep,name=fields,proto3" json:"fields,omitempty"`
+	RowsAffected uint64        `protobuf:"varint,2,opt,name=rows_affected,json=rowsAffected,proto3" json:"rows_affected,omitempty"`
+	InsertId     uint64        `protobuf:"varint,3,opt,name=insert_id,json=insertId,proto3" json:"insert_id,omitempty"`
+	Rows         []*Row        `protobuf:"bytes,4,rep,name=rows,proto3" json:"rows,omitempty"`
+	Extras       *ResultExtras `protobuf:"bytes,5,opt,name=extras,proto3" json:"extras,omitempty"`
 }
 
-func (m *QueryResult) Reset()         { *m = QueryResult{} }
-func (m *QueryResult) String() string { return proto.CompactTextString(m) }
-func (*QueryResult) ProtoMessage()    {}
+func (m *QueryResult) Reset()      { *m = QueryResult{} }
+func (*QueryResult) ProtoMessage() {}
 func (*QueryResult) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{10}
 }
@@ -1375,16 +1300,12 @@ func (m *QueryResult) GetExtras() *ResultExtras {
 // QueryWarning is used to convey out of band query execution warnings
 // by storing in the vtgate.Session
 type QueryWarning struct {
-	Code                 uint32   `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
-	Message              string   `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Code    uint32 `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
+	Message string `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
 }
 
-func (m *QueryWarning) Reset()         { *m = QueryWarning{} }
-func (m *QueryWarning) String() string { return proto.CompactTextString(m) }
-func (*QueryWarning) ProtoMessage()    {}
+func (m *QueryWarning) Reset()      { *m = QueryWarning{} }
+func (*QueryWarning) ProtoMessage() {}
 func (*QueryWarning) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{11}
 }
@@ -1436,15 +1357,11 @@ type StreamEvent struct {
 	// The statements in this transaction.
 	Statements []*StreamEvent_Statement `protobuf:"bytes,1,rep,name=statements,proto3" json:"statements,omitempty"`
 	// The Event Token for this event.
-	EventToken           *EventToken `protobuf:"bytes,2,opt,name=event_token,json=eventToken,proto3" json:"event_token,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}    `json:"-"`
-	XXX_unrecognized     []byte      `json:"-"`
-	XXX_sizecache        int32       `json:"-"`
+	EventToken *EventToken `protobuf:"bytes,2,opt,name=event_token,json=eventToken,proto3" json:"event_token,omitempty"`
 }
 
-func (m *StreamEvent) Reset()         { *m = StreamEvent{} }
-func (m *StreamEvent) String() string { return proto.CompactTextString(m) }
-func (*StreamEvent) ProtoMessage()    {}
+func (m *StreamEvent) Reset()      { *m = StreamEvent{} }
+func (*StreamEvent) ProtoMessage() {}
 func (*StreamEvent) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{12}
 }
@@ -1498,15 +1415,11 @@ type StreamEvent_Statement struct {
 	PrimaryKeyValues []*Row   `protobuf:"bytes,4,rep,name=primary_key_values,json=primaryKeyValues,proto3" json:"primary_key_values,omitempty"`
 	// sql is set for all queries.
 	// FIXME(alainjobart) we may not need it for DMLs.
-	Sql                  []byte   `protobuf:"bytes,5,opt,name=sql,proto3" json:"sql,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Sql []byte `protobuf:"bytes,5,opt,name=sql,proto3" json:"sql,omitempty"`
 }
 
-func (m *StreamEvent_Statement) Reset()         { *m = StreamEvent_Statement{} }
-func (m *StreamEvent_Statement) String() string { return proto.CompactTextString(m) }
-func (*StreamEvent_Statement) ProtoMessage()    {}
+func (m *StreamEvent_Statement) Reset()      { *m = StreamEvent_Statement{} }
+func (*StreamEvent_Statement) ProtoMessage() {}
 func (*StreamEvent_Statement) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{12, 0}
 }
@@ -1541,7 +1454,7 @@ func (m *StreamEvent_Statement) GetCategory() StreamEvent_Statement_Category {
 	if m != nil {
 		return m.Category
 	}
-	return StreamEvent_Statement_Error
+	return Error
 }
 
 func (m *StreamEvent_Statement) GetTableName() string {
@@ -1574,20 +1487,16 @@ func (m *StreamEvent_Statement) GetSql() []byte {
 
 // ExecuteRequest is the payload to Execute
 type ExecuteRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
-	Query                *BoundQuery     `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
-	TransactionId        int64           `protobuf:"varint,5,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
-	Options              *ExecuteOptions `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
-	XXX_unrecognized     []byte          `json:"-"`
-	XXX_sizecache        int32           `json:"-"`
+	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Query             *BoundQuery     `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
+	TransactionId     int64           `protobuf:"varint,5,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	Options           *ExecuteOptions `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
 }
 
-func (m *ExecuteRequest) Reset()         { *m = ExecuteRequest{} }
-func (m *ExecuteRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteRequest) ProtoMessage()    {}
+func (m *ExecuteRequest) Reset()      { *m = ExecuteRequest{} }
+func (*ExecuteRequest) ProtoMessage() {}
 func (*ExecuteRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{13}
 }
@@ -1662,15 +1571,11 @@ func (m *ExecuteRequest) GetOptions() *ExecuteOptions {
 
 // ExecuteResponse is the returned value from Execute
 type ExecuteResponse struct {
-	Result               *QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
-	XXX_unrecognized     []byte       `json:"-"`
-	XXX_sizecache        int32        `json:"-"`
+	Result *QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 }
 
-func (m *ExecuteResponse) Reset()         { *m = ExecuteResponse{} }
-func (m *ExecuteResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteResponse) ProtoMessage()    {}
+func (m *ExecuteResponse) Reset()      { *m = ExecuteResponse{} }
+func (*ExecuteResponse) ProtoMessage() {}
 func (*ExecuteResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{14}
 }
@@ -1715,15 +1620,11 @@ type ResultWithError struct {
 	// error contains an query level error, only set if result is unset.
 	Error *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
 	// result contains the query result, only set if error is unset.
-	Result               *QueryResult `protobuf:"bytes,2,opt,name=result,proto3" json:"result,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
-	XXX_unrecognized     []byte       `json:"-"`
-	XXX_sizecache        int32        `json:"-"`
+	Result *QueryResult `protobuf:"bytes,2,opt,name=result,proto3" json:"result,omitempty"`
 }
 
-func (m *ResultWithError) Reset()         { *m = ResultWithError{} }
-func (m *ResultWithError) String() string { return proto.CompactTextString(m) }
-func (*ResultWithError) ProtoMessage()    {}
+func (m *ResultWithError) Reset()      { *m = ResultWithError{} }
+func (*ResultWithError) ProtoMessage() {}
 func (*ResultWithError) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{15}
 }
@@ -1770,21 +1671,17 @@ func (m *ResultWithError) GetResult() *QueryResult {
 
 // ExecuteBatchRequest is the payload to ExecuteBatch
 type ExecuteBatchRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
-	Queries              []*BoundQuery   `protobuf:"bytes,4,rep,name=queries,proto3" json:"queries,omitempty"`
-	AsTransaction        bool            `protobuf:"varint,5,opt,name=as_transaction,json=asTransaction,proto3" json:"as_transaction,omitempty"`
-	TransactionId        int64           `protobuf:"varint,6,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
-	Options              *ExecuteOptions `protobuf:"bytes,7,opt,name=options,proto3" json:"options,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
-	XXX_unrecognized     []byte          `json:"-"`
-	XXX_sizecache        int32           `json:"-"`
+	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Queries           []*BoundQuery   `protobuf:"bytes,4,rep,name=queries,proto3" json:"queries,omitempty"`
+	AsTransaction     bool            `protobuf:"varint,5,opt,name=as_transaction,json=asTransaction,proto3" json:"as_transaction,omitempty"`
+	TransactionId     int64           `protobuf:"varint,6,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	Options           *ExecuteOptions `protobuf:"bytes,7,opt,name=options,proto3" json:"options,omitempty"`
 }
 
-func (m *ExecuteBatchRequest) Reset()         { *m = ExecuteBatchRequest{} }
-func (m *ExecuteBatchRequest) String() string { return proto.CompactTextString(m) }
-func (*ExecuteBatchRequest) ProtoMessage()    {}
+func (m *ExecuteBatchRequest) Reset()      { *m = ExecuteBatchRequest{} }
+func (*ExecuteBatchRequest) ProtoMessage() {}
 func (*ExecuteBatchRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{16}
 }
@@ -1866,15 +1763,11 @@ func (m *ExecuteBatchRequest) GetOptions() *ExecuteOptions {
 
 // ExecuteBatchResponse is the returned value from ExecuteBatch
 type ExecuteBatchResponse struct {
-	Results              []*QueryResult `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}       `json:"-"`
-	XXX_unrecognized     []byte         `json:"-"`
-	XXX_sizecache        int32          `json:"-"`
+	Results []*QueryResult `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"`
 }
 
-func (m *ExecuteBatchResponse) Reset()         { *m = ExecuteBatchResponse{} }
-func (m *ExecuteBatchResponse) String() string { return proto.CompactTextString(m) }
-func (*ExecuteBatchResponse) ProtoMessage()    {}
+func (m *ExecuteBatchResponse) Reset()      { *m = ExecuteBatchResponse{} }
+func (*ExecuteBatchResponse) ProtoMessage() {}
 func (*ExecuteBatchResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{17}
 }
@@ -1914,20 +1807,16 @@ func (m *ExecuteBatchResponse) GetResults() []*QueryResult {
 
 // StreamExecuteRequest is the payload to StreamExecute
 type StreamExecuteRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
-	Query                *BoundQuery     `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
-	Options              *ExecuteOptions `protobuf:"bytes,5,opt,name=options,proto3" json:"options,omitempty"`
-	TransactionId        int64           `protobuf:"varint,6,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
-	XXX_unrecognized     []byte          `json:"-"`
-	XXX_sizecache        int32           `json:"-"`
+	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Query             *BoundQuery     `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
+	Options           *ExecuteOptions `protobuf:"bytes,5,opt,name=options,proto3" json:"options,omitempty"`
+	TransactionId     int64           `protobuf:"varint,6,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
 }
 
-func (m *StreamExecuteRequest) Reset()         { *m = StreamExecuteRequest{} }
-func (m *StreamExecuteRequest) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteRequest) ProtoMessage()    {}
+func (m *StreamExecuteRequest) Reset()      { *m = StreamExecuteRequest{} }
+func (*StreamExecuteRequest) ProtoMessage() {}
 func (*StreamExecuteRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{18}
 }
@@ -2002,15 +1891,11 @@ func (m *StreamExecuteRequest) GetTransactionId() int64 {
 
 // StreamExecuteResponse is the returned value from StreamExecute
 type StreamExecuteResponse struct {
-	Result               *QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
-	XXX_unrecognized     []byte       `json:"-"`
-	XXX_sizecache        int32        `json:"-"`
+	Result *QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 }
 
-func (m *StreamExecuteResponse) Reset()         { *m = StreamExecuteResponse{} }
-func (m *StreamExecuteResponse) String() string { return proto.CompactTextString(m) }
-func (*StreamExecuteResponse) ProtoMessage()    {}
+func (m *StreamExecuteResponse) Reset()      { *m = StreamExecuteResponse{} }
+func (*StreamExecuteResponse) ProtoMessage() {}
 func (*StreamExecuteResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{19}
 }
@@ -2050,18 +1935,14 @@ func (m *StreamExecuteResponse) GetResult() *QueryResult {
 
 // BeginRequest is the payload to Begin
 type BeginRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
-	Options              *ExecuteOptions `protobuf:"bytes,4,opt,name=options,proto3" json:"options,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
-	XXX_unrecognized     []byte          `json:"-"`
-	XXX_sizecache        int32           `json:"-"`
+	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Options           *ExecuteOptions `protobuf:"bytes,4,opt,name=options,proto3" json:"options,omitempty"`
 }
 
-func (m *BeginRequest) Reset()         { *m = BeginRequest{} }
-func (m *BeginRequest) String() string { return proto.CompactTextString(m) }
-func (*BeginRequest) ProtoMessage()    {}
+func (m *BeginRequest) Reset()      { *m = BeginRequest{} }
+func (*BeginRequest) ProtoMessage() {}
 func (*BeginRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{20}
 }
@@ -2122,15 +2003,11 @@ func (m *BeginRequest) GetOptions() *ExecuteOptions {
 
 // BeginResponse is the returned value from Begin
 type BeginResponse struct {
-	TransactionId        int64    `protobuf:"varint,1,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	TransactionId int64 `protobuf:"varint,1,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
 }
 
-func (m *BeginResponse) Reset()         { *m = BeginResponse{} }
-func (m *BeginResponse) String() string { return proto.CompactTextString(m) }
-func (*BeginResponse) ProtoMessage()    {}
+func (m *BeginResponse) Reset()      { *m = BeginResponse{} }
+func (*BeginResponse) ProtoMessage() {}
 func (*BeginResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{21}
 }
@@ -2170,18 +2047,14 @@ func (m *BeginResponse) GetTransactionId() int64 {
 
 // CommitRequest is the payload to Commit
 type CommitRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
-	TransactionId        int64           `protobuf:"varint,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
-	XXX_unrecognized     []byte          `json:"-"`
-	XXX_sizecache        int32           `json:"-"`
+	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	TransactionId     int64           `protobuf:"varint,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
 }
 
-func (m *CommitRequest) Reset()         { *m = CommitRequest{} }
-func (m *CommitRequest) String() string { return proto.CompactTextString(m) }
-func (*CommitRequest) ProtoMessage()    {}
+func (m *CommitRequest) Reset()      { *m = CommitRequest{} }
+func (*CommitRequest) ProtoMessage() {}
 func (*CommitRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{22}
 }
@@ -2242,14 +2115,10 @@ func (m *CommitRequest) GetTransactionId() int64 {
 
 // CommitResponse is the returned value from Commit
 type CommitResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *CommitResponse) Reset()         { *m = CommitResponse{} }
-func (m *CommitResponse) String() string { return proto.CompactTextString(m) }
-func (*CommitResponse) ProtoMessage()    {}
+func (m *CommitResponse) Reset()      { *m = CommitResponse{} }
+func (*CommitResponse) ProtoMessage() {}
 func (*CommitResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{23}
 }
@@ -2282,18 +2151,14 @@ var xxx_messageInfo_CommitResponse proto.InternalMessageInfo
 
 // RollbackRequest is the payload to Rollback
 type RollbackRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
-	TransactionId        int64           `protobuf:"varint,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
-	XXX_unrecognized     []byte          `json:"-"`
-	XXX_sizecache        int32           `json:"-"`
+	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	TransactionId     int64           `protobuf:"varint,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
 }
 
-func (m *RollbackRequest) Reset()         { *m = RollbackRequest{} }
-func (m *RollbackRequest) String() string { return proto.CompactTextString(m) }
-func (*RollbackRequest) ProtoMessage()    {}
+func (m *RollbackRequest) Reset()      { *m = RollbackRequest{} }
+func (*RollbackRequest) ProtoMessage() {}
 func (*RollbackRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{24}
 }
@@ -2354,14 +2219,10 @@ func (m *RollbackRequest) GetTransactionId() int64 {
 
 // RollbackResponse is the returned value from Rollback
 type RollbackResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *RollbackResponse) Reset()         { *m = RollbackResponse{} }
-func (m *RollbackResponse) String() string { return proto.CompactTextString(m) }
-func (*RollbackResponse) ProtoMessage()    {}
+func (m *RollbackResponse) Reset()      { *m = RollbackResponse{} }
+func (*RollbackResponse) ProtoMessage() {}
 func (*RollbackResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{25}
 }
@@ -2394,19 +2255,15 @@ var xxx_messageInfo_RollbackResponse proto.InternalMessageInfo
 
 // PrepareRequest is the payload to Prepare
 type PrepareRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
-	TransactionId        int64           `protobuf:"varint,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
-	Dtid                 string          `protobuf:"bytes,5,opt,name=dtid,proto3" json:"dtid,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
-	XXX_unrecognized     []byte          `json:"-"`
-	XXX_sizecache        int32           `json:"-"`
+	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	TransactionId     int64           `protobuf:"varint,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	Dtid              string          `protobuf:"bytes,5,opt,name=dtid,proto3" json:"dtid,omitempty"`
 }
 
-func (m *PrepareRequest) Reset()         { *m = PrepareRequest{} }
-func (m *PrepareRequest) String() string { return proto.CompactTextString(m) }
-func (*PrepareRequest) ProtoMessage()    {}
+func (m *PrepareRequest) Reset()      { *m = PrepareRequest{} }
+func (*PrepareRequest) ProtoMessage() {}
 func (*PrepareRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{26}
 }
@@ -2474,14 +2331,10 @@ func (m *PrepareRequest) GetDtid() string {
 
 // PrepareResponse is the returned value from Prepare
 type PrepareResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *PrepareResponse) Reset()         { *m = PrepareResponse{} }
-func (m *PrepareResponse) String() string { return proto.CompactTextString(m) }
-func (*PrepareResponse) ProtoMessage()    {}
+func (m *PrepareResponse) Reset()      { *m = PrepareResponse{} }
+func (*PrepareResponse) ProtoMessage() {}
 func (*PrepareResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{27}
 }
@@ -2514,18 +2367,14 @@ var xxx_messageInfo_PrepareResponse proto.InternalMessageInfo
 
 // CommitPreparedRequest is the payload to CommitPrepared
 type CommitPreparedRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
-	Dtid                 string          `protobuf:"bytes,4,opt,name=dtid,proto3" json:"dtid,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
-	XXX_unrecognized     []byte          `json:"-"`
-	XXX_sizecache        int32           `json:"-"`
+	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Dtid              string          `protobuf:"bytes,4,opt,name=dtid,proto3" json:"dtid,omitempty"`
 }
 
-func (m *CommitPreparedRequest) Reset()         { *m = CommitPreparedRequest{} }
-func (m *CommitPreparedRequest) String() string { return proto.CompactTextString(m) }
-func (*CommitPreparedRequest) ProtoMessage()    {}
+func (m *CommitPreparedRequest) Reset()      { *m = CommitPreparedRequest{} }
+func (*CommitPreparedRequest) ProtoMessage() {}
 func (*CommitPreparedRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{28}
 }
@@ -2586,14 +2435,10 @@ func (m *CommitPreparedRequest) GetDtid() string {
 
 // CommitPreparedResponse is the returned value from CommitPrepared
 type CommitPreparedResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *CommitPreparedResponse) Reset()         { *m = CommitPreparedResponse{} }
-func (m *CommitPreparedResponse) String() string { return proto.CompactTextString(m) }
-func (*CommitPreparedResponse) ProtoMessage()    {}
+func (m *CommitPreparedResponse) Reset()      { *m = CommitPreparedResponse{} }
+func (*CommitPreparedResponse) ProtoMessage() {}
 func (*CommitPreparedResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{29}
 }
@@ -2626,19 +2471,15 @@ var xxx_messageInfo_CommitPreparedResponse proto.InternalMessageInfo
 
 // RollbackPreparedRequest is the payload to RollbackPrepared
 type RollbackPreparedRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
-	TransactionId        int64           `protobuf:"varint,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
-	Dtid                 string          `protobuf:"bytes,5,opt,name=dtid,proto3" json:"dtid,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
-	XXX_unrecognized     []byte          `json:"-"`
-	XXX_sizecache        int32           `json:"-"`
+	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	TransactionId     int64           `protobuf:"varint,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	Dtid              string          `protobuf:"bytes,5,opt,name=dtid,proto3" json:"dtid,omitempty"`
 }
 
-func (m *RollbackPreparedRequest) Reset()         { *m = RollbackPreparedRequest{} }
-func (m *RollbackPreparedRequest) String() string { return proto.CompactTextString(m) }
-func (*RollbackPreparedRequest) ProtoMessage()    {}
+func (m *RollbackPreparedRequest) Reset()      { *m = RollbackPreparedRequest{} }
+func (*RollbackPreparedRequest) ProtoMessage() {}
 func (*RollbackPreparedRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{30}
 }
@@ -2706,14 +2547,10 @@ func (m *RollbackPreparedRequest) GetDtid() string {
 
 // RollbackPreparedResponse is the returned value from RollbackPrepared
 type RollbackPreparedResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *RollbackPreparedResponse) Reset()         { *m = RollbackPreparedResponse{} }
-func (m *RollbackPreparedResponse) String() string { return proto.CompactTextString(m) }
-func (*RollbackPreparedResponse) ProtoMessage()    {}
+func (m *RollbackPreparedResponse) Reset()      { *m = RollbackPreparedResponse{} }
+func (*RollbackPreparedResponse) ProtoMessage() {}
 func (*RollbackPreparedResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{31}
 }
@@ -2746,19 +2583,15 @@ var xxx_messageInfo_RollbackPreparedResponse proto.InternalMessageInfo
 
 // CreateTransactionRequest is the payload to CreateTransaction
 type CreateTransactionRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
-	Dtid                 string          `protobuf:"bytes,4,opt,name=dtid,proto3" json:"dtid,omitempty"`
-	Participants         []*Target       `protobuf:"bytes,5,rep,name=participants,proto3" json:"participants,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
-	XXX_unrecognized     []byte          `json:"-"`
-	XXX_sizecache        int32           `json:"-"`
+	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Dtid              string          `protobuf:"bytes,4,opt,name=dtid,proto3" json:"dtid,omitempty"`
+	Participants      []*Target       `protobuf:"bytes,5,rep,name=participants,proto3" json:"participants,omitempty"`
 }
 
-func (m *CreateTransactionRequest) Reset()         { *m = CreateTransactionRequest{} }
-func (m *CreateTransactionRequest) String() string { return proto.CompactTextString(m) }
-func (*CreateTransactionRequest) ProtoMessage()    {}
+func (m *CreateTransactionRequest) Reset()      { *m = CreateTransactionRequest{} }
+func (*CreateTransactionRequest) ProtoMessage() {}
 func (*CreateTransactionRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{32}
 }
@@ -2826,14 +2659,10 @@ func (m *CreateTransactionRequest) GetParticipants() []*Target {
 
 // CreateTransactionResponse is the returned value from CreateTransaction
 type CreateTransactionResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *CreateTransactionResponse) Reset()         { *m = CreateTransactionResponse{} }
-func (m *CreateTransactionResponse) String() string { return proto.CompactTextString(m) }
-func (*CreateTransactionResponse) ProtoMessage()    {}
+func (m *CreateTransactionResponse) Reset()      { *m = CreateTransactionResponse{} }
+func (*CreateTransactionResponse) ProtoMessage() {}
 func (*CreateTransactionResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{33}
 }
@@ -2866,19 +2695,15 @@ var xxx_messageInfo_CreateTransactionResponse proto.InternalMessageInfo
 
 // StartCommitRequest is the payload to StartCommit
 type StartCommitRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
-	TransactionId        int64           `protobuf:"varint,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
-	Dtid                 string          `protobuf:"bytes,5,opt,name=dtid,proto3" json:"dtid,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
-	XXX_unrecognized     []byte          `json:"-"`
-	XXX_sizecache        int32           `json:"-"`
+	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	TransactionId     int64           `protobuf:"varint,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	Dtid              string          `protobuf:"bytes,5,opt,name=dtid,proto3" json:"dtid,omitempty"`
 }
 
-func (m *StartCommitRequest) Reset()         { *m = StartCommitRequest{} }
-func (m *StartCommitRequest) String() string { return proto.CompactTextString(m) }
-func (*StartCommitRequest) ProtoMessage()    {}
+func (m *StartCommitRequest) Reset()      { *m = StartCommitRequest{} }
+func (*StartCommitRequest) ProtoMessage() {}
 func (*StartCommitRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{34}
 }
@@ -2946,14 +2771,10 @@ func (m *StartCommitRequest) GetDtid() string {
 
 // StartCommitResponse is the returned value from StartCommit
 type StartCommitResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *StartCommitResponse) Reset()         { *m = StartCommitResponse{} }
-func (m *StartCommitResponse) String() string { return proto.CompactTextString(m) }
-func (*StartCommitResponse) ProtoMessage()    {}
+func (m *StartCommitResponse) Reset()      { *m = StartCommitResponse{} }
+func (*StartCommitResponse) ProtoMessage() {}
 func (*StartCommitResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{35}
 }
@@ -2986,19 +2807,15 @@ var xxx_messageInfo_StartCommitResponse proto.InternalMessageInfo
 
 // SetRollbackRequest is the payload to SetRollback
 type SetRollbackRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
-	TransactionId        int64           `protobuf:"varint,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
-	Dtid                 string          `protobuf:"bytes,5,opt,name=dtid,proto3" json:"dtid,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
-	XXX_unrecognized     []byte          `json:"-"`
-	XXX_sizecache        int32           `json:"-"`
+	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	TransactionId     int64           `protobuf:"varint,4,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
+	Dtid              string          `protobuf:"bytes,5,opt,name=dtid,proto3" json:"dtid,omitempty"`
 }
 
-func (m *SetRollbackRequest) Reset()         { *m = SetRollbackRequest{} }
-func (m *SetRollbackRequest) String() string { return proto.CompactTextString(m) }
-func (*SetRollbackRequest) ProtoMessage()    {}
+func (m *SetRollbackRequest) Reset()      { *m = SetRollbackRequest{} }
+func (*SetRollbackRequest) ProtoMessage() {}
 func (*SetRollbackRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{36}
 }
@@ -3066,14 +2883,10 @@ func (m *SetRollbackRequest) GetDtid() string {
 
 // SetRollbackResponse is the returned value from SetRollback
 type SetRollbackResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *SetRollbackResponse) Reset()         { *m = SetRollbackResponse{} }
-func (m *SetRollbackResponse) String() string { return proto.CompactTextString(m) }
-func (*SetRollbackResponse) ProtoMessage()    {}
+func (m *SetRollbackResponse) Reset()      { *m = SetRollbackResponse{} }
+func (*SetRollbackResponse) ProtoMessage() {}
 func (*SetRollbackResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{37}
 }
@@ -3106,18 +2919,14 @@ var xxx_messageInfo_SetRollbackResponse proto.InternalMessageInfo
 
 // ConcludeTransactionRequest is the payload to ConcludeTransaction
 type ConcludeTransactionRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
-	Dtid                 string          `protobuf:"bytes,4,opt,name=dtid,proto3" json:"dtid,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
-	XXX_unrecognized     []byte          `json:"-"`
-	XXX_sizecache        int32           `json:"-"`
+	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Dtid              string          `protobuf:"bytes,4,opt,name=dtid,proto3" json:"dtid,omitempty"`
 }
 
-func (m *ConcludeTransactionRequest) Reset()         { *m = ConcludeTransactionRequest{} }
-func (m *ConcludeTransactionRequest) String() string { return proto.CompactTextString(m) }
-func (*ConcludeTransactionRequest) ProtoMessage()    {}
+func (m *ConcludeTransactionRequest) Reset()      { *m = ConcludeTransactionRequest{} }
+func (*ConcludeTransactionRequest) ProtoMessage() {}
 func (*ConcludeTransactionRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{38}
 }
@@ -3178,14 +2987,10 @@ func (m *ConcludeTransactionRequest) GetDtid() string {
 
 // ConcludeTransactionResponse is the returned value from ConcludeTransaction
 type ConcludeTransactionResponse struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *ConcludeTransactionResponse) Reset()         { *m = ConcludeTransactionResponse{} }
-func (m *ConcludeTransactionResponse) String() string { return proto.CompactTextString(m) }
-func (*ConcludeTransactionResponse) ProtoMessage()    {}
+func (m *ConcludeTransactionResponse) Reset()      { *m = ConcludeTransactionResponse{} }
+func (*ConcludeTransactionResponse) ProtoMessage() {}
 func (*ConcludeTransactionResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{39}
 }
@@ -3218,18 +3023,14 @@ var xxx_messageInfo_ConcludeTransactionResponse proto.InternalMessageInfo
 
 // ReadTransactionRequest is the payload to ReadTransaction
 type ReadTransactionRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
-	Dtid                 string          `protobuf:"bytes,4,opt,name=dtid,proto3" json:"dtid,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
-	XXX_unrecognized     []byte          `json:"-"`
-	XXX_sizecache        int32           `json:"-"`
+	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Dtid              string          `protobuf:"bytes,4,opt,name=dtid,proto3" json:"dtid,omitempty"`
 }
 
-func (m *ReadTransactionRequest) Reset()         { *m = ReadTransactionRequest{} }
-func (m *ReadTransactionRequest) String() string { return proto.CompactTextString(m) }
-func (*ReadTransactionRequest) ProtoMessage()    {}
+func (m *ReadTransactionRequest) Reset()      { *m = ReadTransactionRequest{} }
+func (*ReadTransactionRequest) ProtoMessage() {}
 func (*ReadTransactionRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{40}
 }
@@ -3290,15 +3091,11 @@ func (m *ReadTransactionRequest) GetDtid() string {
 
 // ReadTransactionResponse is the returned value from ReadTransaction
 type ReadTransactionResponse struct {
-	Metadata             *TransactionMetadata `protobuf:"bytes,1,opt,name=metadata,proto3" json:"metadata,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}             `json:"-"`
-	XXX_unrecognized     []byte               `json:"-"`
-	XXX_sizecache        int32                `json:"-"`
+	Metadata *TransactionMetadata `protobuf:"bytes,1,opt,name=metadata,proto3" json:"metadata,omitempty"`
 }
 
-func (m *ReadTransactionResponse) Reset()         { *m = ReadTransactionResponse{} }
-func (m *ReadTransactionResponse) String() string { return proto.CompactTextString(m) }
-func (*ReadTransactionResponse) ProtoMessage()    {}
+func (m *ReadTransactionResponse) Reset()      { *m = ReadTransactionResponse{} }
+func (*ReadTransactionResponse) ProtoMessage() {}
 func (*ReadTransactionResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{41}
 }
@@ -3338,19 +3135,15 @@ func (m *ReadTransactionResponse) GetMetadata() *TransactionMetadata {
 
 // BeginExecuteRequest is the payload to BeginExecute
 type BeginExecuteRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
-	Query                *BoundQuery     `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
-	Options              *ExecuteOptions `protobuf:"bytes,5,opt,name=options,proto3" json:"options,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
-	XXX_unrecognized     []byte          `json:"-"`
-	XXX_sizecache        int32           `json:"-"`
+	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Query             *BoundQuery     `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
+	Options           *ExecuteOptions `protobuf:"bytes,5,opt,name=options,proto3" json:"options,omitempty"`
 }
 
-func (m *BeginExecuteRequest) Reset()         { *m = BeginExecuteRequest{} }
-func (m *BeginExecuteRequest) String() string { return proto.CompactTextString(m) }
-func (*BeginExecuteRequest) ProtoMessage()    {}
+func (m *BeginExecuteRequest) Reset()      { *m = BeginExecuteRequest{} }
+func (*BeginExecuteRequest) ProtoMessage() {}
 func (*BeginExecuteRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{42}
 }
@@ -3424,15 +3217,11 @@ type BeginExecuteResponse struct {
 	Error  *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
 	Result *QueryResult    `protobuf:"bytes,2,opt,name=result,proto3" json:"result,omitempty"`
 	// transaction_id might be non-zero even if an error is present.
-	TransactionId        int64    `protobuf:"varint,3,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	TransactionId int64 `protobuf:"varint,3,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
 }
 
-func (m *BeginExecuteResponse) Reset()         { *m = BeginExecuteResponse{} }
-func (m *BeginExecuteResponse) String() string { return proto.CompactTextString(m) }
-func (*BeginExecuteResponse) ProtoMessage()    {}
+func (m *BeginExecuteResponse) Reset()      { *m = BeginExecuteResponse{} }
+func (*BeginExecuteResponse) ProtoMessage() {}
 func (*BeginExecuteResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{43}
 }
@@ -3486,20 +3275,16 @@ func (m *BeginExecuteResponse) GetTransactionId() int64 {
 
 // BeginExecuteBatchRequest is the payload to BeginExecuteBatch
 type BeginExecuteBatchRequest struct {
-	EffectiveCallerId    *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
-	ImmediateCallerId    *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
-	Target               *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
-	Queries              []*BoundQuery   `protobuf:"bytes,4,rep,name=queries,proto3" json:"queries,omitempty"`
-	AsTransaction        bool            `protobuf:"varint,5,opt,name=as_transaction,json=asTransaction,proto3" json:"as_transaction,omitempty"`
-	Options              *ExecuteOptions `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
-	XXX_unrecognized     []byte          `json:"-"`
-	XXX_sizecache        int32           `json:"-"`
+	EffectiveCallerId *vtrpc.CallerID `protobuf:"bytes,1,opt,name=effective_caller_id,json=effectiveCallerId,proto3" json:"effective_caller_id,omitempty"`
+	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
+	Target            *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Queries           []*BoundQuery   `protobuf:"bytes,4,rep,name=queries,proto3" json:"queries,omitempty"`
+	AsTransaction     bool            `protobuf:"varint,5,opt,name=as_transaction,json=asTransaction,proto3" json:"as_transaction,omitempty"`
+	Options           *ExecuteOptions `protobuf:"bytes,6,opt,name=options,proto3" json:"options,omitempty"`
 }
 
-func (m *BeginExecuteBatchRequest) Reset()         { *m = BeginExecuteBatchRequest{} }
-func (m *BeginExecuteBatchRequest) String() string { return proto.CompactTextString(m) }
-func (*BeginExecuteBatchRequest) ProtoMessage()    {}
+func (m *BeginExecuteBatchRequest) Reset()      { *m = BeginExecuteBatchRequest{} }
+func (*BeginExecuteBatchRequest) ProtoMessage() {}
 func (*BeginExecuteBatchRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{44}
 }
@@ -3580,15 +3365,11 @@ type BeginExecuteBatchResponse struct {
 	Error   *vtrpc.RPCError `protobuf:"bytes,1,opt,name=error,proto3" json:"error,omitempty"`
 	Results []*QueryResult  `protobuf:"bytes,2,rep,name=results,proto3" json:"results,omitempty"`
 	// transaction_id might be non-zero even if an error is present.
-	TransactionId        int64    `protobuf:"varint,3,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	TransactionId int64 `protobuf:"varint,3,opt,name=transaction_id,json=transactionId,proto3" json:"transaction_id,omitempty"`
 }
 
-func (m *BeginExecuteBatchResponse) Reset()         { *m = BeginExecuteBatchResponse{} }
-func (m *BeginExecuteBatchResponse) String() string { return proto.CompactTextString(m) }
-func (*BeginExecuteBatchResponse) ProtoMessage()    {}
+func (m *BeginExecuteBatchResponse) Reset()      { *m = BeginExecuteBatchResponse{} }
+func (*BeginExecuteBatchResponse) ProtoMessage() {}
 func (*BeginExecuteBatchResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{45}
 }
@@ -3646,15 +3427,11 @@ type MessageStreamRequest struct {
 	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
 	Target            *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
 	// name is the message table name.
-	Name                 string   `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Name string `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
 }
 
-func (m *MessageStreamRequest) Reset()         { *m = MessageStreamRequest{} }
-func (m *MessageStreamRequest) String() string { return proto.CompactTextString(m) }
-func (*MessageStreamRequest) ProtoMessage()    {}
+func (m *MessageStreamRequest) Reset()      { *m = MessageStreamRequest{} }
+func (*MessageStreamRequest) ProtoMessage() {}
 func (*MessageStreamRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{46}
 }
@@ -3715,15 +3492,11 @@ func (m *MessageStreamRequest) GetName() string {
 
 // MessageStreamResponse is a response for MessageStream.
 type MessageStreamResponse struct {
-	Result               *QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
-	XXX_unrecognized     []byte       `json:"-"`
-	XXX_sizecache        int32        `json:"-"`
+	Result *QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 }
 
-func (m *MessageStreamResponse) Reset()         { *m = MessageStreamResponse{} }
-func (m *MessageStreamResponse) String() string { return proto.CompactTextString(m) }
-func (*MessageStreamResponse) ProtoMessage()    {}
+func (m *MessageStreamResponse) Reset()      { *m = MessageStreamResponse{} }
+func (*MessageStreamResponse) ProtoMessage() {}
 func (*MessageStreamResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{47}
 }
@@ -3767,16 +3540,12 @@ type MessageAckRequest struct {
 	ImmediateCallerId *VTGateCallerID `protobuf:"bytes,2,opt,name=immediate_caller_id,json=immediateCallerId,proto3" json:"immediate_caller_id,omitempty"`
 	Target            *Target         `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
 	// name is the message table name.
-	Name                 string   `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
-	Ids                  []*Value `protobuf:"bytes,5,rep,name=ids,proto3" json:"ids,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Name string   `protobuf:"bytes,4,opt,name=name,proto3" json:"name,omitempty"`
+	Ids  []*Value `protobuf:"bytes,5,rep,name=ids,proto3" json:"ids,omitempty"`
 }
 
-func (m *MessageAckRequest) Reset()         { *m = MessageAckRequest{} }
-func (m *MessageAckRequest) String() string { return proto.CompactTextString(m) }
-func (*MessageAckRequest) ProtoMessage()    {}
+func (m *MessageAckRequest) Reset()      { *m = MessageAckRequest{} }
+func (*MessageAckRequest) ProtoMessage() {}
 func (*MessageAckRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{48}
 }
@@ -3847,15 +3616,11 @@ type MessageAckResponse struct {
 	// result contains the result of the ack operation.
 	// Since this acts like a DML, only
 	// RowsAffected is returned in the result.
-	Result               *QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
-	XXX_unrecognized     []byte       `json:"-"`
-	XXX_sizecache        int32        `json:"-"`
+	Result *QueryResult `protobuf:"bytes,1,opt,name=result,proto3" json:"result,omitempty"`
 }
 
-func (m *MessageAckResponse) Reset()         { *m = MessageAckResponse{} }
-func (m *MessageAckResponse) String() string { return proto.CompactTextString(m) }
-func (*MessageAckResponse) ProtoMessage()    {}
+func (m *MessageAckResponse) Reset()      { *m = MessageAckResponse{} }
+func (*MessageAckResponse) ProtoMessage() {}
 func (*MessageAckResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{49}
 }
@@ -3902,17 +3667,13 @@ type SplitQueryRequest struct {
 	Query             *BoundQuery     `protobuf:"bytes,4,opt,name=query,proto3" json:"query,omitempty"`
 	SplitColumn       []string        `protobuf:"bytes,5,rep,name=split_column,json=splitColumn,proto3" json:"split_column,omitempty"`
 	// Exactly one of the following must be nonzero.
-	SplitCount           int64                       `protobuf:"varint,6,opt,name=split_count,json=splitCount,proto3" json:"split_count,omitempty"`
-	NumRowsPerQueryPart  int64                       `protobuf:"varint,8,opt,name=num_rows_per_query_part,json=numRowsPerQueryPart,proto3" json:"num_rows_per_query_part,omitempty"`
-	Algorithm            SplitQueryRequest_Algorithm `protobuf:"varint,9,opt,name=algorithm,proto3,enum=query.SplitQueryRequest_Algorithm" json:"algorithm,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}                    `json:"-"`
-	XXX_unrecognized     []byte                      `json:"-"`
-	XXX_sizecache        int32                       `json:"-"`
+	SplitCount          int64                       `protobuf:"varint,6,opt,name=split_count,json=splitCount,proto3" json:"split_count,omitempty"`
+	NumRowsPerQueryPart int64                       `protobuf:"varint,8,opt,name=num_rows_per_query_part,json=numRowsPerQueryPart,proto3" json:"num_rows_per_query_part,omitempty"`
+	Algorithm           SplitQueryRequest_Algorithm `protobuf:"varint,9,opt,name=algorithm,proto3,enum=query.SplitQueryRequest_Algorithm" json:"algorithm,omitempty"`
 }
 
-func (m *SplitQueryRequest) Reset()         { *m = SplitQueryRequest{} }
-func (m *SplitQueryRequest) String() string { return proto.CompactTextString(m) }
-func (*SplitQueryRequest) ProtoMessage()    {}
+func (m *SplitQueryRequest) Reset()      { *m = SplitQueryRequest{} }
+func (*SplitQueryRequest) ProtoMessage() {}
 func (*SplitQueryRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{50}
 }
@@ -3996,7 +3757,7 @@ func (m *SplitQueryRequest) GetAlgorithm() SplitQueryRequest_Algorithm {
 	if m != nil {
 		return m.Algorithm
 	}
-	return SplitQueryRequest_EQUAL_SPLITS
+	return EQUAL_SPLITS
 }
 
 // QuerySplit represents one query to execute on the tablet
@@ -4004,15 +3765,11 @@ type QuerySplit struct {
 	// query is the query to execute
 	Query *BoundQuery `protobuf:"bytes,1,opt,name=query,proto3" json:"query,omitempty"`
 	// row_count is the approximate row count the query will return
-	RowCount             int64    `protobuf:"varint,2,opt,name=row_count,json=rowCount,proto3" json:"row_count,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	RowCount int64 `protobuf:"varint,2,opt,name=row_count,json=rowCount,proto3" json:"row_count,omitempty"`
 }
 
-func (m *QuerySplit) Reset()         { *m = QuerySplit{} }
-func (m *QuerySplit) String() string { return proto.CompactTextString(m) }
-func (*QuerySplit) ProtoMessage()    {}
+func (m *QuerySplit) Reset()      { *m = QuerySplit{} }
+func (*QuerySplit) ProtoMessage() {}
 func (*QuerySplit) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{51}
 }
@@ -4060,15 +3817,11 @@ func (m *QuerySplit) GetRowCount() int64 {
 // SplitQueryResponse is returned by SplitQuery and represents all the queries
 // to execute in order to get the entire data set.
 type SplitQueryResponse struct {
-	Queries              []*QuerySplit `protobuf:"bytes,1,rep,name=queries,proto3" json:"queries,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}      `json:"-"`
-	XXX_unrecognized     []byte        `json:"-"`
-	XXX_sizecache        int32         `json:"-"`
+	Queries []*QuerySplit `protobuf:"bytes,1,rep,name=queries,proto3" json:"queries,omitempty"`
 }
 
-func (m *SplitQueryResponse) Reset()         { *m = SplitQueryResponse{} }
-func (m *SplitQueryResponse) String() string { return proto.CompactTextString(m) }
-func (*SplitQueryResponse) ProtoMessage()    {}
+func (m *SplitQueryResponse) Reset()      { *m = SplitQueryResponse{} }
+func (*SplitQueryResponse) ProtoMessage() {}
 func (*SplitQueryResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{52}
 }
@@ -4108,14 +3861,10 @@ func (m *SplitQueryResponse) GetQueries() []*QuerySplit {
 
 // StreamHealthRequest is the payload for StreamHealth
 type StreamHealthRequest struct {
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
 }
 
-func (m *StreamHealthRequest) Reset()         { *m = StreamHealthRequest{} }
-func (m *StreamHealthRequest) String() string { return proto.CompactTextString(m) }
-func (*StreamHealthRequest) ProtoMessage()    {}
+func (m *StreamHealthRequest) Reset()      { *m = StreamHealthRequest{} }
+func (*StreamHealthRequest) ProtoMessage() {}
 func (*StreamHealthRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{53}
 }
@@ -4175,15 +3924,11 @@ type RealtimeStats struct {
 	CpuUsage float64 `protobuf:"fixed64,5,opt,name=cpu_usage,json=cpuUsage,proto3" json:"cpu_usage,omitempty"`
 	// qps is the average QPS (queries per second) rate in the last XX seconds
 	// where XX is usually 60 (See query_service_stats.go).
-	Qps                  float64  `protobuf:"fixed64,6,opt,name=qps,proto3" json:"qps,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Qps float64 `protobuf:"fixed64,6,opt,name=qps,proto3" json:"qps,omitempty"`
 }
 
-func (m *RealtimeStats) Reset()         { *m = RealtimeStats{} }
-func (m *RealtimeStats) String() string { return proto.CompactTextString(m) }
-func (*RealtimeStats) ProtoMessage()    {}
+func (m *RealtimeStats) Reset()      { *m = RealtimeStats{} }
+func (*RealtimeStats) ProtoMessage() {}
 func (*RealtimeStats) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{54}
 }
@@ -4272,15 +4017,11 @@ type AggregateStats struct {
 	// seconds_behind_master_max is the maximum of the
 	// seconds_behind_master values of the healthy tablets. It is unset
 	// if the tablet type is master.
-	SecondsBehindMasterMax uint32   `protobuf:"varint,4,opt,name=seconds_behind_master_max,json=secondsBehindMasterMax,proto3" json:"seconds_behind_master_max,omitempty"`
-	XXX_NoUnkeyedLiteral   struct{} `json:"-"`
-	XXX_unrecognized       []byte   `json:"-"`
-	XXX_sizecache          int32    `json:"-"`
+	SecondsBehindMasterMax uint32 `protobuf:"varint,4,opt,name=seconds_behind_master_max,json=secondsBehindMasterMax,proto3" json:"seconds_behind_master_max,omitempty"`
 }
 
-func (m *AggregateStats) Reset()         { *m = AggregateStats{} }
-func (m *AggregateStats) String() string { return proto.CompactTextString(m) }
-func (*AggregateStats) ProtoMessage()    {}
+func (m *AggregateStats) Reset()      { *m = AggregateStats{} }
+func (*AggregateStats) ProtoMessage() {}
 func (*AggregateStats) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{55}
 }
@@ -4393,15 +4134,11 @@ type StreamHealthResponse struct {
 	// code uses it to verify that it's talking to the correct tablet and that it
 	// hasn't changed in the meantime e.g. due to tablet restarts where ports or
 	// ips have been reused but assigned differently.
-	TabletAlias          *topodata.TabletAlias `protobuf:"bytes,5,opt,name=tablet_alias,json=tabletAlias,proto3" json:"tablet_alias,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
-	XXX_unrecognized     []byte                `json:"-"`
-	XXX_sizecache        int32                 `json:"-"`
+	TabletAlias *topodata.TabletAlias `protobuf:"bytes,5,opt,name=tablet_alias,json=tabletAlias,proto3" json:"tablet_alias,omitempty"`
 }
 
-func (m *StreamHealthResponse) Reset()         { *m = StreamHealthResponse{} }
-func (m *StreamHealthResponse) String() string { return proto.CompactTextString(m) }
-func (*StreamHealthResponse) ProtoMessage()    {}
+func (m *StreamHealthResponse) Reset()      { *m = StreamHealthResponse{} }
+func (*StreamHealthResponse) ProtoMessage() {}
 func (*StreamHealthResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{56}
 }
@@ -4486,15 +4223,11 @@ type UpdateStreamRequest struct {
 	Position string `protobuf:"bytes,4,opt,name=position,proto3" json:"position,omitempty"`
 	// If timestamp is set, we will start the streaming from the first
 	// event in the binlogs that have that timestamp. Incompatible with position.
-	Timestamp            int64    `protobuf:"varint,5,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
-	XXX_NoUnkeyedLiteral struct{} `json:"-"`
-	XXX_unrecognized     []byte   `json:"-"`
-	XXX_sizecache        int32    `json:"-"`
+	Timestamp int64 `protobuf:"varint,5,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 }
 
-func (m *UpdateStreamRequest) Reset()         { *m = UpdateStreamRequest{} }
-func (m *UpdateStreamRequest) String() string { return proto.CompactTextString(m) }
-func (*UpdateStreamRequest) ProtoMessage()    {}
+func (m *UpdateStreamRequest) Reset()      { *m = UpdateStreamRequest{} }
+func (*UpdateStreamRequest) ProtoMessage() {}
 func (*UpdateStreamRequest) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{57}
 }
@@ -4562,15 +4295,11 @@ func (m *UpdateStreamRequest) GetTimestamp() int64 {
 
 // UpdateStreamResponse is returned by UpdateStream
 type UpdateStreamResponse struct {
-	Event                *StreamEvent `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
-	XXX_unrecognized     []byte       `json:"-"`
-	XXX_sizecache        int32        `json:"-"`
+	Event *StreamEvent `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
 }
 
-func (m *UpdateStreamResponse) Reset()         { *m = UpdateStreamResponse{} }
-func (m *UpdateStreamResponse) String() string { return proto.CompactTextString(m) }
-func (*UpdateStreamResponse) ProtoMessage()    {}
+func (m *UpdateStreamResponse) Reset()      { *m = UpdateStreamResponse{} }
+func (*UpdateStreamResponse) ProtoMessage() {}
 func (*UpdateStreamResponse) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{58}
 }
@@ -4610,18 +4339,14 @@ func (m *UpdateStreamResponse) GetEvent() *StreamEvent {
 
 // TransactionMetadata contains the metadata for a distributed transaction.
 type TransactionMetadata struct {
-	Dtid                 string           `protobuf:"bytes,1,opt,name=dtid,proto3" json:"dtid,omitempty"`
-	State                TransactionState `protobuf:"varint,2,opt,name=state,proto3,enum=query.TransactionState" json:"state,omitempty"`
-	TimeCreated          int64            `protobuf:"varint,3,opt,name=time_created,json=timeCreated,proto3" json:"time_created,omitempty"`
-	Participants         []*Target        `protobuf:"bytes,4,rep,name=participants,proto3" json:"participants,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}         `json:"-"`
-	XXX_unrecognized     []byte           `json:"-"`
-	XXX_sizecache        int32            `json:"-"`
+	Dtid         string           `protobuf:"bytes,1,opt,name=dtid,proto3" json:"dtid,omitempty"`
+	State        TransactionState `protobuf:"varint,2,opt,name=state,proto3,enum=query.TransactionState" json:"state,omitempty"`
+	TimeCreated  int64            `protobuf:"varint,3,opt,name=time_created,json=timeCreated,proto3" json:"time_created,omitempty"`
+	Participants []*Target        `protobuf:"bytes,4,rep,name=participants,proto3" json:"participants,omitempty"`
 }
 
-func (m *TransactionMetadata) Reset()         { *m = TransactionMetadata{} }
-func (m *TransactionMetadata) String() string { return proto.CompactTextString(m) }
-func (*TransactionMetadata) ProtoMessage()    {}
+func (m *TransactionMetadata) Reset()      { *m = TransactionMetadata{} }
+func (*TransactionMetadata) ProtoMessage() {}
 func (*TransactionMetadata) Descriptor() ([]byte, []int) {
 	return fileDescriptor_5c6ac9b241082464, []int{59}
 }
@@ -4663,7 +4388,7 @@ func (m *TransactionMetadata) GetState() TransactionState {
 	if m != nil {
 		return m.State
 	}
-	return TransactionState_UNKNOWN
+	return UNKNOWN
 }
 
 func (m *TransactionMetadata) GetTimeCreated() int64 {
@@ -4757,215 +4482,3197 @@ func init() {
 func init() { proto.RegisterFile("query.proto", fileDescriptor_5c6ac9b241082464) }
 
 var fileDescriptor_5c6ac9b241082464 = []byte{
-	// 3287 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xec, 0x5a, 0xcd, 0x73, 0x1b, 0xc9,
-	0x75, 0xd7, 0xe0, 0x8b, 0xc0, 0x03, 0x01, 0x36, 0x1b, 0xa4, 0x84, 0xe5, 0xee, 0x6a, 0xe5, 0xb1,
-	0xd7, 0x66, 0x68, 0x87, 0xd2, 0x72, 0x15, 0x45, 0x59, 0x3b, 0x8e, 0x86, 0xe0, 0x50, 0x0b, 0x0b,
-	0x18, 0x40, 0x8d, 0x81, 0x64, 0x6d, 0xb9, 0x6a, 0x6a, 0x08, 0xb4, 0xc0, 0x29, 0x0e, 0x66, 0xa0,
-	0x99, 0x01, 0x29, 0xde, 0x94, 0x38, 0xce, 0xf7, 0xc7, 0xe6, 0x73, 0xe3, 0xa4, 0xb2, 0x71, 0x55,
-	0x0e, 0xb9, 0xe5, 0x6f, 0x48, 0xe5, 0x90, 0xca, 0x29, 0x95, 0x4b, 0x0e, 0x49, 0x0e, 0xa9, 0xb2,
-	0x2b, 0x95, 0x9b, 0x2b, 0xa7, 0x1c, 0x72, 0x48, 0xa5, 0xfa, 0x63, 0x06, 0x03, 0x12, 0xbb, 0x92,
-	0x95, 0x5c, 0xa8, 0xdd, 0x5b, 0xf7, 0x7b, 0xaf, 0x3f, 0x7e, 0xbf, 0xf7, 0xe6, 0x75, 0x4f, 0x77,
-	0x43, 0xf9, 0xc9, 0x94, 0x06, 0xa7, 0xdb, 0x93, 0xc0, 0x8f, 0x7c, 0x9c, 0xe7, 0x95, 0x8d, 0x6a,
-	0xe4, 0x4f, 0xfc, 0xa1, 0x1d, 0xd9, 0x42, 0xbc, 0x51, 0x3e, 0x8e, 0x82, 0xc9, 0x40, 0x54, 0xd4,
-	0xef, 0x29, 0x50, 0x30, 0xed, 0x60, 0x44, 0x23, 0xbc, 0x01, 0xc5, 0x23, 0x7a, 0x1a, 0x4e, 0xec,
-	0x01, 0xad, 0x2b, 0xd7, 0x94, 0xcd, 0x12, 0x49, 0xea, 0x78, 0x0d, 0xf2, 0xe1, 0xa1, 0x1d, 0x0c,
-	0xeb, 0x19, 0xae, 0x10, 0x15, 0xfc, 0x33, 0x50, 0x8e, 0xec, 0x03, 0x97, 0x46, 0x56, 0x74, 0x3a,
-	0xa1, 0xf5, 0xec, 0x35, 0x65, 0xb3, 0xba, 0xb3, 0xb6, 0x9d, 0x8c, 0x67, 0x72, 0xa5, 0x79, 0x3a,
-	0xa1, 0x04, 0xa2, 0xa4, 0x8c, 0x31, 0xe4, 0x06, 0xd4, 0x75, 0xeb, 0x39, 0xde, 0x17, 0x2f, 0xab,
-	0x7b, 0x50, 0x7d, 0x60, 0xde, 0xb5, 0x23, 0xda, 0xb0, 0x5d, 0x97, 0x06, 0xcd, 0x3d, 0x36, 0x9d,
-	0x69, 0x48, 0x03, 0xcf, 0x1e, 0x27, 0xd3, 0x89, 0xeb, 0xf8, 0x32, 0x14, 0x46, 0x81, 0x3f, 0x9d,
-	0x84, 0xf5, 0xcc, 0xb5, 0xec, 0x66, 0x89, 0xc8, 0x9a, 0xfa, 0x1d, 0x00, 0xfd, 0x98, 0x7a, 0x91,
-	0xe9, 0x1f, 0x51, 0x0f, 0xbf, 0x01, 0xa5, 0xc8, 0x19, 0xd3, 0x30, 0xb2, 0xc7, 0x13, 0xde, 0x45,
-	0x96, 0xcc, 0x04, 0x9f, 0x00, 0x69, 0x03, 0x8a, 0x13, 0x3f, 0x74, 0x22, 0xc7, 0xf7, 0x38, 0x9e,
-	0x12, 0x49, 0xea, 0xea, 0x37, 0x21, 0xff, 0xc0, 0x76, 0xa7, 0x14, 0xbf, 0x05, 0x39, 0x0e, 0x58,
-	0xe1, 0x80, 0xcb, 0xdb, 0x82, 0x74, 0x8e, 0x93, 0x2b, 0x58, 0xdf, 0xc7, 0xcc, 0x92, 0xf7, 0xbd,
-	0x4c, 0x44, 0x45, 0x3d, 0x82, 0xe5, 0x5d, 0xc7, 0x1b, 0x3e, 0xb0, 0x03, 0x87, 0x91, 0xf1, 0x92,
-	0xdd, 0xe0, 0x2f, 0x41, 0x81, 0x17, 0xc2, 0x7a, 0xf6, 0x5a, 0x76, 0xb3, 0xbc, 0xb3, 0x2c, 0x1b,
-	0xf2, 0xb9, 0x11, 0xa9, 0x53, 0xff, 0x56, 0x01, 0xd8, 0xf5, 0xa7, 0xde, 0xf0, 0x3e, 0x53, 0x62,
-	0x04, 0xd9, 0xf0, 0x89, 0x2b, 0x89, 0x64, 0x45, 0x7c, 0x0f, 0xaa, 0x07, 0x8e, 0x37, 0xb4, 0x8e,
-	0xe5, 0x74, 0x04, 0x97, 0xe5, 0x9d, 0x2f, 0xc9, 0xee, 0x66, 0x8d, 0xb7, 0xd3, 0xb3, 0x0e, 0x75,
-	0x2f, 0x0a, 0x4e, 0x49, 0xe5, 0x20, 0x2d, 0xdb, 0xe8, 0x03, 0x3e, 0x6f, 0xc4, 0x06, 0x3d, 0xa2,
-	0xa7, 0xf1, 0xa0, 0x47, 0xf4, 0x14, 0xff, 0x54, 0x1a, 0x51, 0x79, 0xa7, 0x16, 0x8f, 0x95, 0x6a,
-	0x2b, 0x61, 0xbe, 0x97, 0xb9, 0xad, 0xa8, 0x7f, 0x51, 0x80, 0xaa, 0xfe, 0x94, 0x0e, 0xa6, 0x11,
-	0xed, 0x4c, 0x98, 0x0f, 0x42, 0xbc, 0x0d, 0x35, 0xc7, 0x1b, 0xb8, 0xd3, 0x21, 0xb5, 0x28, 0x73,
-	0xb5, 0x15, 0x31, 0x5f, 0xf3, 0xfe, 0x8a, 0x64, 0x55, 0xaa, 0x52, 0x41, 0xa0, 0x41, 0x6d, 0xe0,
-	0x8f, 0x27, 0x76, 0x30, 0x6f, 0x9f, 0xe5, 0xe3, 0xaf, 0xca, 0xf1, 0x67, 0xf6, 0x64, 0x55, 0x5a,
-	0xa7, 0xba, 0x68, 0xc3, 0x8a, 0xec, 0x77, 0x68, 0x3d, 0x76, 0xa8, 0x3b, 0x0c, 0x79, 0xe8, 0x56,
-	0x13, 0xaa, 0xe6, 0xa7, 0xb8, 0xdd, 0x94, 0xc6, 0xfb, 0xdc, 0x96, 0x54, 0x9d, 0xb9, 0x3a, 0xde,
-	0x82, 0xd5, 0x81, 0xeb, 0xb0, 0xa9, 0x3c, 0x66, 0x14, 0x5b, 0x81, 0x7f, 0x12, 0xd6, 0xf3, 0x7c,
-	0xfe, 0x2b, 0x42, 0xb1, 0xcf, 0xe4, 0xc4, 0x3f, 0x09, 0xf1, 0x7b, 0x50, 0x3c, 0xf1, 0x83, 0x23,
-	0xd7, 0xb7, 0x87, 0xf5, 0x02, 0x1f, 0xf3, 0xea, 0xe2, 0x31, 0x1f, 0x4a, 0x2b, 0x92, 0xd8, 0xe3,
-	0x4d, 0x40, 0xe1, 0x13, 0xd7, 0x0a, 0xa9, 0x4b, 0x07, 0x91, 0xe5, 0x3a, 0x63, 0x27, 0xaa, 0x17,
-	0xf9, 0x57, 0x50, 0x0d, 0x9f, 0xb8, 0x3d, 0x2e, 0x6e, 0x31, 0x29, 0xb6, 0x60, 0x3d, 0x0a, 0x6c,
-	0x2f, 0xb4, 0x07, 0xac, 0x33, 0xcb, 0x09, 0x7d, 0xd7, 0xe6, 0x5f, 0x40, 0x89, 0x0f, 0xb9, 0xb5,
-	0x78, 0x48, 0x73, 0xd6, 0xa4, 0x19, 0xb7, 0x20, 0x6b, 0xd1, 0x02, 0x29, 0x7e, 0x07, 0xd6, 0xc3,
-	0x23, 0x67, 0x62, 0xf1, 0x7e, 0xac, 0x89, 0x6b, 0x7b, 0xd6, 0xc0, 0x1e, 0x1c, 0xd2, 0x3a, 0x70,
-	0xd8, 0x98, 0x29, 0x79, 0xa8, 0x75, 0x5d, 0xdb, 0x6b, 0x30, 0x8d, 0xfa, 0x75, 0xa8, 0xce, 0xf3,
-	0x88, 0x57, 0xa1, 0x62, 0x3e, 0xea, 0xea, 0x96, 0x66, 0xec, 0x59, 0x86, 0xd6, 0xd6, 0xd1, 0x25,
-	0x5c, 0x81, 0x12, 0x17, 0x75, 0x8c, 0xd6, 0x23, 0xa4, 0xe0, 0x25, 0xc8, 0x6a, 0xad, 0x16, 0xca,
-	0xa8, 0xb7, 0xa1, 0x18, 0x13, 0x82, 0x57, 0xa0, 0xdc, 0x37, 0x7a, 0x5d, 0xbd, 0xd1, 0xdc, 0x6f,
-	0xea, 0x7b, 0xe8, 0x12, 0x2e, 0x42, 0xae, 0xd3, 0x32, 0xbb, 0x48, 0x11, 0x25, 0xad, 0x8b, 0x32,
-	0xac, 0xe5, 0xde, 0xae, 0x86, 0xb2, 0xea, 0x5f, 0x29, 0xb0, 0xb6, 0x08, 0x18, 0x2e, 0xc3, 0xd2,
-	0x9e, 0xbe, 0xaf, 0xf5, 0x5b, 0x26, 0xba, 0x84, 0x6b, 0xb0, 0x42, 0xf4, 0xae, 0xae, 0x99, 0xda,
-	0x6e, 0x4b, 0xb7, 0x88, 0xae, 0xed, 0x21, 0x05, 0x63, 0xa8, 0xb2, 0x92, 0xd5, 0xe8, 0xb4, 0xdb,
-	0x4d, 0xd3, 0xd4, 0xf7, 0x50, 0x06, 0xaf, 0x01, 0xe2, 0xb2, 0xbe, 0x31, 0x93, 0x66, 0x31, 0x82,
-	0xe5, 0x9e, 0x4e, 0x9a, 0x5a, 0xab, 0xf9, 0x01, 0xeb, 0x00, 0xe5, 0xf0, 0x17, 0xe0, 0xcd, 0x46,
-	0xc7, 0xe8, 0x35, 0x7b, 0xa6, 0x6e, 0x98, 0x56, 0xcf, 0xd0, 0xba, 0xbd, 0xf7, 0x3b, 0x26, 0xef,
-	0x59, 0x80, 0xcb, 0xe3, 0x2a, 0x80, 0xd6, 0x37, 0x3b, 0xa2, 0x1f, 0x54, 0xf8, 0x56, 0xae, 0xa8,
-	0xa0, 0x8c, 0xfa, 0x51, 0x06, 0xf2, 0x9c, 0x1f, 0x96, 0x55, 0x53, 0xb9, 0x92, 0x97, 0x93, 0x0c,
-	0x93, 0xf9, 0x94, 0x0c, 0xc3, 0x13, 0xb3, 0xcc, 0x75, 0xa2, 0x82, 0x5f, 0x87, 0x92, 0x1f, 0x8c,
-	0x2c, 0xa1, 0x11, 0x59, 0xba, 0xe8, 0x07, 0x23, 0x9e, 0xce, 0x59, 0x86, 0x64, 0xc9, 0xfd, 0xc0,
-	0x0e, 0x29, 0x8f, 0xda, 0x12, 0x49, 0xea, 0xf8, 0x35, 0x60, 0x76, 0x16, 0x9f, 0x47, 0x81, 0xeb,
-	0x96, 0xfc, 0x60, 0x64, 0xb0, 0xa9, 0x7c, 0x11, 0x2a, 0x03, 0xdf, 0x9d, 0x8e, 0x3d, 0xcb, 0xa5,
-	0xde, 0x28, 0x3a, 0xac, 0x2f, 0x5d, 0x53, 0x36, 0x2b, 0x64, 0x59, 0x08, 0x5b, 0x5c, 0x86, 0xeb,
-	0xb0, 0x34, 0x38, 0xb4, 0x83, 0x90, 0x8a, 0x48, 0xad, 0x90, 0xb8, 0xca, 0x47, 0xa5, 0x03, 0x67,
-	0x6c, 0xbb, 0x21, 0x8f, 0xca, 0x0a, 0x49, 0xea, 0x0c, 0xc4, 0x63, 0xd7, 0x1e, 0x85, 0x3c, 0x9a,
-	0x2a, 0x44, 0x54, 0xd4, 0x9f, 0x85, 0x2c, 0xf1, 0x4f, 0x58, 0x97, 0x62, 0xc0, 0xb0, 0xae, 0x5c,
-	0xcb, 0x6e, 0x62, 0x12, 0x57, 0xd9, 0x22, 0x22, 0xf3, 0xa8, 0x48, 0xaf, 0x71, 0xe6, 0xfc, 0x0e,
-	0x2c, 0x13, 0x1a, 0x4e, 0xdd, 0x48, 0x7f, 0x1a, 0x05, 0x76, 0x88, 0x77, 0xa0, 0x9c, 0xce, 0x1c,
-	0xca, 0x27, 0x65, 0x0e, 0xa0, 0xb3, 0x94, 0x51, 0x87, 0xa5, 0xc7, 0x01, 0x0d, 0x0f, 0x69, 0x20,
-	0x33, 0x53, 0x5c, 0x65, 0x79, 0xb9, 0xcc, 0x43, 0x5d, 0x8c, 0xc1, 0xb2, 0xb9, 0xcc, 0x29, 0xca,
-	0x5c, 0x36, 0xe7, 0x4e, 0x25, 0x52, 0xc7, 0xd8, 0x63, 0x69, 0xc2, 0xb2, 0x1f, 0x3f, 0xa6, 0x83,
-	0x88, 0x8a, 0x45, 0x2b, 0x47, 0x96, 0x99, 0x50, 0x93, 0x32, 0xe6, 0x36, 0xc7, 0x0b, 0x69, 0x10,
-	0x59, 0xce, 0x90, 0x3b, 0x34, 0x47, 0x8a, 0x42, 0xd0, 0x1c, 0xe2, 0xab, 0x90, 0xe3, 0x89, 0x26,
-	0xc7, 0x47, 0x01, 0x39, 0x0a, 0xf1, 0x4f, 0x08, 0x97, 0xe3, 0xaf, 0x42, 0x81, 0x72, 0xbc, 0xdc,
-	0xa9, 0xb3, 0xd4, 0x9c, 0xa6, 0x82, 0x48, 0x13, 0xf5, 0x1b, 0xb0, 0xcc, 0x31, 0x3c, 0xb4, 0x03,
-	0xcf, 0xf1, 0x46, 0x7c, 0x45, 0xf7, 0x87, 0x22, 0xf6, 0x2a, 0x84, 0x97, 0x19, 0x05, 0x63, 0x1a,
-	0x86, 0xf6, 0x88, 0xca, 0x15, 0x36, 0xae, 0xaa, 0x3f, 0xc8, 0x42, 0xb9, 0x17, 0x05, 0xd4, 0x1e,
-	0x73, 0xf6, 0xf0, 0x37, 0x00, 0xc2, 0xc8, 0x8e, 0xe8, 0x98, 0x7a, 0x51, 0x4c, 0xc3, 0x1b, 0x72,
-	0xf8, 0x94, 0xdd, 0x76, 0x2f, 0x36, 0x22, 0x29, 0xfb, 0xb3, 0xee, 0xc9, 0xbc, 0x80, 0x7b, 0x36,
-	0x3e, 0xce, 0x40, 0x29, 0xe9, 0x0d, 0x6b, 0x50, 0x1c, 0xd8, 0x11, 0x1d, 0xf9, 0xc1, 0xa9, 0x5c,
-	0x8b, 0xdf, 0xfe, 0xb4, 0xd1, 0xb7, 0x1b, 0xd2, 0x98, 0x24, 0xcd, 0xf0, 0x9b, 0x20, 0x36, 0x38,
-	0x22, 0xf4, 0x05, 0xde, 0x12, 0x97, 0xf0, 0xe0, 0x7f, 0x0f, 0xf0, 0x24, 0x70, 0xc6, 0x76, 0x70,
-	0x6a, 0x1d, 0xd1, 0xd3, 0x78, 0x11, 0xc9, 0x2e, 0x70, 0x38, 0x92, 0x76, 0xf7, 0xe8, 0xa9, 0x4c,
-	0x7b, 0xb7, 0xe7, 0xdb, 0xca, 0x90, 0x3d, 0xef, 0xc6, 0x54, 0x4b, 0xbe, 0x13, 0x08, 0xe3, 0x35,
-	0x3f, 0xcf, 0xa3, 0x9b, 0x15, 0xd5, 0xaf, 0x40, 0x31, 0x9e, 0x3c, 0x2e, 0x41, 0x5e, 0x0f, 0x02,
-	0x3f, 0x40, 0x97, 0x78, 0xf6, 0x6b, 0xb7, 0x44, 0x02, 0xdd, 0xdb, 0x63, 0x09, 0xf4, 0x6f, 0x32,
-	0xc9, 0xc2, 0x4b, 0xe8, 0x93, 0x29, 0x0d, 0x23, 0xfc, 0x0b, 0x50, 0xa3, 0x3c, 0xd2, 0x9c, 0x63,
-	0x6a, 0x0d, 0xf8, 0x2e, 0x8d, 0xc5, 0x99, 0xf8, 0x1c, 0x56, 0xb6, 0xc5, 0xa6, 0x32, 0xde, 0xbd,
-	0x91, 0xd5, 0xc4, 0x56, 0x8a, 0x86, 0x58, 0x87, 0x9a, 0x33, 0x1e, 0xd3, 0xa1, 0x63, 0x47, 0xe9,
-	0x0e, 0x84, 0xc3, 0xd6, 0xe3, 0x4d, 0xcc, 0xdc, 0x26, 0x90, 0xac, 0x26, 0x2d, 0x92, 0x6e, 0xde,
-	0x86, 0x42, 0xc4, 0x37, 0xac, 0x72, 0x0d, 0xaf, 0xc4, 0x59, 0x8d, 0x0b, 0x89, 0x54, 0xe2, 0xaf,
-	0x80, 0xd8, 0xfe, 0xf2, 0xfc, 0x35, 0x0b, 0x88, 0xd9, 0xae, 0x86, 0x08, 0x3d, 0x7e, 0x1b, 0xaa,
-	0x73, 0x8b, 0xdf, 0x90, 0x13, 0x96, 0x25, 0x95, 0xf4, 0x4a, 0x36, 0xc4, 0xd7, 0x61, 0xc9, 0x17,
-	0x0b, 0x1f, 0xcf, 0x6c, 0xb3, 0x19, 0xcf, 0xaf, 0x8a, 0x24, 0xb6, 0x52, 0x7f, 0x1e, 0x56, 0x12,
-	0x06, 0xc3, 0x89, 0xef, 0x85, 0x14, 0x6f, 0x41, 0x21, 0xe0, 0x9f, 0x93, 0x64, 0x0d, 0xcb, 0x2e,
-	0x52, 0xf9, 0x80, 0x48, 0x0b, 0x75, 0x08, 0x2b, 0x42, 0xf2, 0xd0, 0x89, 0x0e, 0xb9, 0xa3, 0xf0,
-	0xdb, 0x90, 0xa7, 0xac, 0x70, 0x86, 0x73, 0xd2, 0x6d, 0x70, 0x3d, 0x11, 0xda, 0xd4, 0x28, 0x99,
-	0xe7, 0x8e, 0xf2, 0x9f, 0x19, 0xa8, 0xc9, 0x59, 0xee, 0xda, 0xd1, 0xe0, 0xf0, 0x82, 0x3a, 0xfb,
-	0xab, 0xb0, 0xc4, 0xe4, 0x4e, 0xf2, 0x61, 0x2c, 0x70, 0x77, 0x6c, 0xc1, 0x1c, 0x6e, 0x87, 0x56,
-	0xca, 0xbb, 0x72, 0xf3, 0x55, 0xb1, 0xc3, 0xd4, 0xca, 0xbf, 0x20, 0x2e, 0x0a, 0xcf, 0x89, 0x8b,
-	0xa5, 0x17, 0x8a, 0x8b, 0x3d, 0x58, 0x9b, 0x67, 0x5c, 0x06, 0xc7, 0xd7, 0x60, 0x49, 0x38, 0x25,
-	0x4e, 0x81, 0x8b, 0xfc, 0x16, 0x9b, 0xa8, 0x7f, 0x97, 0x81, 0x35, 0x99, 0x9d, 0x3e, 0x1b, 0x9f,
-	0x69, 0x8a, 0xe7, 0xfc, 0x8b, 0xf0, 0xfc, 0x82, 0xfe, 0x53, 0x1b, 0xb0, 0x7e, 0x86, 0xc7, 0x97,
-	0xf8, 0x58, 0x7f, 0xac, 0xc0, 0xf2, 0x2e, 0x1d, 0x39, 0xde, 0x05, 0xf5, 0x42, 0x8a, 0xdc, 0xdc,
-	0x0b, 0x05, 0xf1, 0x2d, 0xa8, 0x48, 0xbc, 0x92, 0xad, 0xf3, 0x6c, 0x2b, 0x8b, 0xd8, 0xfe, 0x77,
-	0x05, 0x2a, 0x0d, 0x7f, 0x3c, 0x76, 0xa2, 0x0b, 0xca, 0xd4, 0x79, 0x9c, 0xb9, 0x45, 0x38, 0x11,
-	0x54, 0x63, 0x98, 0x82, 0x20, 0xf5, 0x3f, 0x14, 0x58, 0x21, 0xbe, 0xeb, 0x1e, 0xd8, 0x83, 0xa3,
-	0x57, 0x1b, 0x3b, 0x06, 0x34, 0x03, 0x2a, 0xd1, 0xff, 0xb7, 0x02, 0xd5, 0x6e, 0x40, 0xd9, 0x8f,
-	0xf5, 0x2b, 0x0d, 0x9e, 0xed, 0x84, 0x87, 0x91, 0xdc, 0x43, 0x94, 0x08, 0x2f, 0xab, 0xab, 0xb0,
-	0x92, 0x60, 0x97, 0x7c, 0xfc, 0x8b, 0x02, 0xeb, 0x22, 0x40, 0xa4, 0x66, 0x78, 0x41, 0x69, 0x89,
-	0xf1, 0xe6, 0x52, 0x78, 0xeb, 0x70, 0xf9, 0x2c, 0x36, 0x09, 0xfb, 0xbb, 0x19, 0xb8, 0x12, 0xc7,
-	0xc6, 0x05, 0x07, 0xfe, 0x7f, 0x88, 0x87, 0x0d, 0xa8, 0x9f, 0x27, 0x41, 0x32, 0xf4, 0x61, 0x06,
-	0xea, 0x8d, 0x80, 0xda, 0x11, 0x4d, 0xed, 0x45, 0x5e, 0x9d, 0xd8, 0xc0, 0xef, 0xc0, 0xf2, 0xc4,
-	0x0e, 0x22, 0x67, 0xe0, 0x4c, 0x6c, 0xf6, 0xb7, 0x97, 0xe7, 0x5b, 0x9d, 0x33, 0x1d, 0xcc, 0x99,
-	0xa8, 0xaf, 0xc3, 0x6b, 0x0b, 0x18, 0x91, 0x7c, 0xfd, 0x8f, 0x02, 0xb8, 0x17, 0xd9, 0x41, 0xf4,
-	0x19, 0x58, 0x55, 0x16, 0x06, 0xd3, 0x3a, 0xd4, 0xe6, 0xf0, 0xa7, 0x79, 0xa1, 0xd1, 0x67, 0x62,
-	0xc5, 0xf9, 0x44, 0x5e, 0xd2, 0xf8, 0x25, 0x2f, 0xff, 0xa6, 0xc0, 0x46, 0xc3, 0x17, 0x07, 0x8b,
-	0xaf, 0xe4, 0x17, 0xa6, 0xbe, 0x09, 0xaf, 0x2f, 0x04, 0x28, 0x09, 0xf8, 0x57, 0x05, 0x2e, 0x13,
-	0x6a, 0x0f, 0x5f, 0x4d, 0xf0, 0xf7, 0xe1, 0xca, 0x39, 0x70, 0x72, 0x87, 0x7a, 0x0b, 0x8a, 0x63,
-	0x1a, 0xd9, 0x43, 0x3b, 0xb2, 0x25, 0xa4, 0x8d, 0xb8, 0xdf, 0x99, 0x75, 0x5b, 0x5a, 0x90, 0xc4,
-	0x56, 0xfd, 0x38, 0x03, 0x35, 0xbe, 0xd7, 0xfd, 0xfc, 0x47, 0x6b, 0xf1, 0xbf, 0xc0, 0x87, 0x0a,
-	0xac, 0xcd, 0x13, 0x94, 0xfc, 0x13, 0xfc, 0x7f, 0x9f, 0x57, 0x2c, 0x48, 0x08, 0xd9, 0x45, 0x5b,
-	0xd0, 0x7f, 0xc8, 0x40, 0x3d, 0x3d, 0xa5, 0xcf, 0xcf, 0x36, 0xe6, 0xcf, 0x36, 0x7e, 0xe2, 0xc3,
-	0xac, 0x8f, 0x14, 0x78, 0x6d, 0x01, 0xa1, 0x3f, 0x99, 0xa3, 0x53, 0x27, 0x1c, 0x99, 0xe7, 0x9e,
-	0x70, 0xbc, 0xa8, 0xab, 0xff, 0x59, 0x81, 0xb5, 0xb6, 0x38, 0x58, 0x16, 0xff, 0xf1, 0x17, 0x37,
-	0x9b, 0xf1, 0xb3, 0xe3, 0xdc, 0xec, 0xfa, 0x46, 0x6d, 0xc0, 0xfa, 0x19, 0x68, 0x2f, 0x71, 0x36,
-	0xf1, 0x5f, 0x0a, 0xac, 0xca, 0x5e, 0xb4, 0x0b, 0xbb, 0x11, 0x58, 0xc0, 0x0e, 0xbe, 0x0a, 0x59,
-	0x67, 0x18, 0xef, 0x20, 0xe7, 0x2f, 0xc1, 0x99, 0x42, 0xbd, 0x03, 0x38, 0x8d, 0xfb, 0x25, 0xa8,
-	0xfb, 0xa7, 0x2c, 0xac, 0xf6, 0x26, 0xae, 0x13, 0x49, 0xe5, 0xab, 0x9d, 0xf8, 0xbf, 0x00, 0xcb,
-	0x21, 0x03, 0x6b, 0x89, 0x2b, 0x39, 0x4e, 0x6c, 0x89, 0x94, 0xb9, 0xac, 0xc1, 0x45, 0xf8, 0x2d,
-	0x28, 0xc7, 0x26, 0x53, 0x2f, 0x92, 0x07, 0x6a, 0x20, 0x2d, 0xa6, 0x5e, 0x84, 0x6f, 0xc2, 0x15,
-	0x6f, 0x3a, 0xe6, 0x57, 0xda, 0xd6, 0x84, 0x06, 0xf1, 0x85, 0xaf, 0x1d, 0xc4, 0x57, 0xcf, 0x35,
-	0x6f, 0x3a, 0x26, 0xfe, 0x49, 0xd8, 0xa5, 0x81, 0xb8, 0xf0, 0xb5, 0x83, 0x08, 0xdf, 0x81, 0x92,
-	0xed, 0x8e, 0xfc, 0xc0, 0x89, 0x0e, 0xc7, 0xf2, 0xce, 0x59, 0x8d, 0x6f, 0x60, 0xce, 0xd2, 0xbf,
-	0xad, 0xc5, 0x96, 0x64, 0xd6, 0x48, 0xfd, 0x1a, 0x94, 0x12, 0x39, 0x46, 0xb0, 0xac, 0xdf, 0xef,
-	0x6b, 0x2d, 0xab, 0xd7, 0x6d, 0x35, 0xcd, 0x9e, 0xb8, 0x27, 0xde, 0xef, 0xb7, 0x5a, 0x56, 0xaf,
-	0xa1, 0x19, 0x48, 0x51, 0x09, 0x00, 0xef, 0x92, 0x77, 0x3e, 0x23, 0x48, 0x79, 0x0e, 0x41, 0xaf,
-	0x43, 0x29, 0xf0, 0x4f, 0x24, 0xf6, 0x0c, 0x87, 0x53, 0x0c, 0xfc, 0x13, 0x8e, 0x5c, 0xd5, 0x00,
-	0xa7, 0xe7, 0x2a, 0xa3, 0x2d, 0x95, 0xbc, 0x95, 0xb9, 0xe4, 0x3d, 0x1b, 0x3f, 0x49, 0xde, 0x62,
-	0x2b, 0xcf, 0xbe, 0xf3, 0xf7, 0xa9, 0xed, 0x46, 0xf1, 0x7a, 0xa5, 0xfe, 0x65, 0x06, 0x2a, 0x84,
-	0x49, 0x9c, 0x31, 0xed, 0x45, 0x76, 0x14, 0x32, 0x4f, 0x1d, 0x72, 0x13, 0x6b, 0x96, 0x76, 0x4b,
-	0xa4, 0x2c, 0x64, 0xe2, 0xae, 0x60, 0x07, 0xd6, 0x43, 0x3a, 0xf0, 0xbd, 0x61, 0x68, 0x1d, 0xd0,
-	0x43, 0xc7, 0x1b, 0x5a, 0x63, 0x3b, 0x8c, 0xe4, 0x75, 0x64, 0x85, 0xd4, 0xa4, 0x72, 0x97, 0xeb,
-	0xda, 0x5c, 0x85, 0x6f, 0xc0, 0xda, 0x81, 0xe3, 0xb9, 0xfe, 0xc8, 0x9a, 0xb8, 0xf6, 0x29, 0x0d,
-	0x42, 0x09, 0x95, 0x85, 0x57, 0x9e, 0x60, 0xa1, 0xeb, 0x0a, 0x95, 0x70, 0xf7, 0x07, 0xb0, 0xb5,
-	0x70, 0x14, 0xeb, 0xb1, 0xe3, 0x46, 0x34, 0xa0, 0x43, 0x2b, 0xa0, 0x13, 0xd7, 0x19, 0x88, 0xd7,
-	0x04, 0x62, 0xef, 0xfe, 0xe5, 0x05, 0x43, 0xef, 0x4b, 0x73, 0x32, 0xb3, 0x66, 0x6c, 0x0f, 0x26,
-	0x53, 0x6b, 0xca, 0x6f, 0x10, 0xd9, 0x2a, 0xa6, 0x90, 0xe2, 0x60, 0x32, 0xed, 0xb3, 0x3a, 0x46,
-	0x90, 0x7d, 0x32, 0x11, 0x8b, 0x97, 0x42, 0x58, 0x51, 0xfd, 0xb1, 0x02, 0x55, 0x6d, 0x34, 0x0a,
-	0xe8, 0xc8, 0x8e, 0x24, 0x4d, 0x37, 0x60, 0x4d, 0x50, 0x72, 0x6a, 0xc9, 0x67, 0x4a, 0x02, 0x8f,
-	0x22, 0xf0, 0x48, 0x9d, 0x78, 0xa4, 0x14, 0x87, 0xef, 0xe5, 0xa9, 0xb7, 0xb0, 0x4d, 0x86, 0xb7,
-	0x59, 0x4b, 0xb4, 0xe9, 0x56, 0x3f, 0x07, 0xaf, 0x2d, 0x66, 0x61, 0xec, 0x88, 0x87, 0x26, 0x15,
-	0x72, 0x79, 0x01, 0xe8, 0xb6, 0xe3, 0x7d, 0x4a, 0x53, 0xfb, 0x29, 0xe7, 0xeb, 0x13, 0x9a, 0xda,
-	0x4f, 0xd5, 0x1f, 0x25, 0x37, 0x00, 0x71, 0xb8, 0x24, 0xab, 0x71, 0x9c, 0x17, 0x94, 0x4f, 0xcb,
-	0x0b, 0x75, 0x58, 0x0a, 0x69, 0x70, 0xec, 0x78, 0xa3, 0xf8, 0x8a, 0x5a, 0x56, 0x71, 0x0f, 0xbe,
-	0x2c, 0xb1, 0xd3, 0xa7, 0x11, 0x0d, 0x3c, 0xdb, 0x75, 0x4f, 0x2d, 0x71, 0x50, 0xe1, 0x45, 0x74,
-	0x68, 0xcd, 0x1e, 0x55, 0x89, 0x15, 0xf9, 0x8b, 0xc2, 0x5a, 0x4f, 0x8c, 0x49, 0x62, 0x6b, 0x26,
-	0xcf, 0xad, 0xbe, 0x0e, 0xd5, 0x40, 0x06, 0xb1, 0x15, 0x32, 0xf7, 0xc8, 0x7c, 0xb4, 0x96, 0xdc,
-	0x33, 0xa7, 0x22, 0x9c, 0x54, 0x82, 0xb9, 0x80, 0xff, 0x26, 0xac, 0xd8, 0xb1, 0x6f, 0x65, 0xeb,
-	0xf9, 0x7d, 0xcb, 0xbc, 0xe7, 0x49, 0xd5, 0x9e, 0x8f, 0x84, 0xdb, 0xb0, 0x2c, 0x11, 0xd9, 0xae,
-	0x63, 0xcf, 0x36, 0xb6, 0x67, 0x5e, 0xaa, 0x69, 0x4c, 0x49, 0xe4, 0x9b, 0x36, 0x5e, 0x61, 0xff,
-	0xd1, 0xb5, 0xfe, 0x64, 0xc8, 0x7b, 0xba, 0xc0, 0xbb, 0x8b, 0xf4, 0xb3, 0xb6, 0xdc, 0xfc, 0xb3,
-	0xb6, 0xf9, 0x67, 0x72, 0xf9, 0x33, 0xcf, 0xe4, 0xd4, 0x3b, 0xb0, 0x36, 0x8f, 0x5f, 0x46, 0xd9,
-	0x26, 0xe4, 0xf9, 0x85, 0xfa, 0x99, 0x65, 0x34, 0x75, 0x63, 0x4e, 0x84, 0x81, 0xfa, 0xd7, 0x0a,
-	0xd4, 0x16, 0xfc, 0x62, 0x25, 0xff, 0x6f, 0x4a, 0xea, 0x78, 0xe8, 0xa7, 0x21, 0xcf, 0xaf, 0xf6,
-	0xe5, 0x8b, 0x95, 0x2b, 0xe7, 0xff, 0xd0, 0xf8, 0x35, 0x3c, 0x11, 0x56, 0x2c, 0x11, 0xf2, 0x80,
-	0x1a, 0xf0, 0xf3, 0xa1, 0x78, 0x87, 0x58, 0x66, 0x32, 0x71, 0x64, 0x74, 0xfe, 0xc0, 0x29, 0xf7,
-	0xdc, 0x03, 0xa7, 0xad, 0xdf, 0xcf, 0x42, 0xa9, 0x7d, 0xda, 0x7b, 0xe2, 0xee, 0xbb, 0xf6, 0x88,
-	0xdf, 0x93, 0xb7, 0xbb, 0xe6, 0x23, 0x74, 0x09, 0xaf, 0x42, 0xc5, 0xe8, 0x98, 0x96, 0xc1, 0x96,
-	0x92, 0xfd, 0x96, 0x76, 0x17, 0x29, 0x6c, 0xad, 0xe9, 0x92, 0xa6, 0x75, 0x4f, 0x7f, 0x24, 0x24,
-	0x19, 0x5c, 0x83, 0x95, 0xbe, 0xd1, 0xbc, 0xdf, 0xd7, 0x67, 0xc2, 0x1c, 0x5e, 0x87, 0xd5, 0x76,
-	0xbf, 0x65, 0x36, 0xbb, 0xad, 0x94, 0xb8, 0xc8, 0xd6, 0xa5, 0xdd, 0x56, 0x67, 0x57, 0x54, 0x11,
-	0xeb, 0xbf, 0x6f, 0xf4, 0x9a, 0x77, 0x0d, 0x7d, 0x4f, 0x88, 0xae, 0x31, 0xd1, 0x07, 0x3a, 0xe9,
-	0xec, 0x37, 0xe3, 0x21, 0xef, 0x60, 0x04, 0xe5, 0xdd, 0xa6, 0xa1, 0x11, 0xd9, 0xcb, 0x33, 0x05,
-	0x57, 0xa1, 0xa4, 0x1b, 0xfd, 0xb6, 0xac, 0x67, 0x70, 0x1d, 0x6a, 0x5a, 0xdf, 0xec, 0x58, 0x4d,
-	0xa3, 0x41, 0xf4, 0xb6, 0x6e, 0x98, 0x52, 0x93, 0xc3, 0x35, 0xa8, 0x9a, 0xcd, 0xb6, 0xde, 0x33,
-	0xb5, 0x76, 0x57, 0x0a, 0xd9, 0x2c, 0x8a, 0x3d, 0x3d, 0xb6, 0x41, 0x78, 0x03, 0xd6, 0x8d, 0x8e,
-	0x25, 0x1f, 0x3b, 0x59, 0x0f, 0xb4, 0x56, 0x5f, 0x97, 0xba, 0x6b, 0xf8, 0x0a, 0xe0, 0x8e, 0x61,
-	0xf5, 0xbb, 0x7b, 0x9a, 0xa9, 0x5b, 0x46, 0xe7, 0xa1, 0x54, 0xdc, 0xc1, 0x55, 0x28, 0xce, 0x66,
-	0xf0, 0x8c, 0xb1, 0x50, 0xe9, 0x6a, 0xc4, 0x9c, 0x81, 0x7d, 0xf6, 0x8c, 0x91, 0x05, 0x77, 0x49,
-	0xa7, 0xdf, 0x9d, 0x99, 0xad, 0x42, 0x59, 0x92, 0x25, 0x45, 0x39, 0x26, 0xda, 0x6d, 0x1a, 0x8d,
-	0x64, 0x7e, 0xcf, 0x8a, 0x1b, 0x19, 0xa4, 0x6c, 0x1d, 0x41, 0x8e, 0xbb, 0xa3, 0x08, 0x39, 0xa3,
-	0x63, 0xe8, 0xe8, 0x12, 0x5e, 0x01, 0x68, 0xf6, 0x9a, 0x86, 0xa9, 0xdf, 0x25, 0x5a, 0x8b, 0xc1,
-	0xe6, 0x82, 0x98, 0x40, 0x86, 0x76, 0x19, 0x96, 0x9a, 0xbd, 0xfd, 0x56, 0x47, 0x33, 0x25, 0xcc,
-	0x66, 0xef, 0x7e, 0xbf, 0x63, 0x32, 0x25, 0xc2, 0x65, 0x28, 0x34, 0x7b, 0xa6, 0xfe, 0x6d, 0x93,
-	0xe1, 0xe2, 0x3a, 0xc1, 0x2a, 0x7a, 0x76, 0x67, 0xeb, 0xfb, 0x59, 0xc8, 0xf1, 0xa7, 0xaa, 0x15,
-	0x28, 0x71, 0x6f, 0x9b, 0x8f, 0xba, 0x6c, 0xc8, 0x12, 0xe4, 0x9a, 0x86, 0x79, 0x1b, 0xfd, 0x62,
-	0x06, 0x03, 0xe4, 0xfb, 0xbc, 0xfc, 0x4b, 0x05, 0x56, 0x6e, 0x1a, 0xe6, 0x3b, 0xb7, 0xd0, 0x77,
-	0x33, 0xac, 0xdb, 0xbe, 0xa8, 0xfc, 0x72, 0xac, 0xd8, 0xb9, 0x89, 0xbe, 0x97, 0x28, 0x76, 0x6e,
-	0xa2, 0x5f, 0x89, 0x15, 0xef, 0xee, 0xa0, 0x5f, 0x4d, 0x14, 0xef, 0xee, 0xa0, 0x5f, 0x8b, 0x15,
-	0xb7, 0x6e, 0xa2, 0x5f, 0x4f, 0x14, 0xb7, 0x6e, 0xa2, 0xdf, 0x28, 0x30, 0x2c, 0x1c, 0xc9, 0xbb,
-	0x3b, 0xe8, 0x37, 0x8b, 0x49, 0xed, 0xd6, 0x4d, 0xf4, 0x5b, 0x45, 0xe6, 0xff, 0xc4, 0xab, 0xe8,
-	0xb7, 0x11, 0x9b, 0x26, 0x73, 0x10, 0xfa, 0x1d, 0x5e, 0x64, 0x2a, 0xf4, 0xbb, 0x88, 0x61, 0x64,
-	0x52, 0x5e, 0xfd, 0x90, 0x6b, 0x1e, 0xe9, 0x1a, 0x41, 0xbf, 0x57, 0x10, 0x6f, 0xdb, 0x1a, 0xcd,
-	0xb6, 0xd6, 0x42, 0x98, 0xb7, 0x60, 0xac, 0xfc, 0xc1, 0x0d, 0x56, 0x64, 0xe1, 0x89, 0xfe, 0xb0,
-	0xcb, 0x06, 0x7c, 0xa0, 0x91, 0xc6, 0xfb, 0x1a, 0x41, 0x7f, 0x74, 0x83, 0x0d, 0xf8, 0x40, 0x23,
-	0x92, 0xaf, 0x3f, 0xee, 0x32, 0x43, 0xae, 0xfa, 0xe8, 0x06, 0x9b, 0xb4, 0x94, 0xff, 0x49, 0x17,
-	0x17, 0x21, 0xbb, 0xdb, 0x34, 0xd1, 0xf7, 0xf9, 0x68, 0x2c, 0x44, 0xd1, 0x9f, 0x22, 0x26, 0xec,
-	0xe9, 0x26, 0xfa, 0x33, 0x26, 0xcc, 0x9b, 0xfd, 0x6e, 0x4b, 0x47, 0x6f, 0xb0, 0xc9, 0xdd, 0xd5,
-	0x3b, 0x6d, 0xdd, 0x24, 0x8f, 0xd0, 0x9f, 0x73, 0xf3, 0x6f, 0xf5, 0x3a, 0x06, 0xfa, 0x18, 0xe1,
-	0x2a, 0x80, 0xfe, 0xed, 0x2e, 0xd1, 0x7b, 0xbd, 0x66, 0xc7, 0x40, 0x6f, 0x6d, 0xed, 0x03, 0x3a,
-	0x9b, 0x0e, 0x18, 0x80, 0xbe, 0x71, 0xcf, 0xe8, 0x3c, 0x34, 0xd0, 0x25, 0x56, 0xe9, 0x12, 0xbd,
-	0xab, 0x11, 0x1d, 0x29, 0x18, 0xa0, 0x20, 0x5f, 0xcc, 0x65, 0xf0, 0x32, 0x14, 0x49, 0xa7, 0xd5,
-	0xda, 0xd5, 0x1a, 0xf7, 0x50, 0x76, 0x57, 0xfb, 0xfb, 0x1f, 0x5e, 0x55, 0xfe, 0xf1, 0x87, 0x57,
-	0x95, 0x1f, 0xfc, 0xe8, 0xaa, 0x02, 0x2b, 0x8e, 0xbf, 0x7d, 0xec, 0x44, 0x34, 0x0c, 0xc5, 0xc3,
-	0xe8, 0x0f, 0x54, 0x59, 0x73, 0xfc, 0xeb, 0xa2, 0x74, 0x7d, 0xe4, 0x5f, 0x3f, 0x8e, 0xae, 0x73,
-	0xed, 0x75, 0x9e, 0x3d, 0x0e, 0x0a, 0xbc, 0xf2, 0xee, 0xff, 0x06, 0x00, 0x00, 0xff, 0xff, 0x3f,
-	0x40, 0xb5, 0x89, 0x76, 0x2d, 0x00, 0x00,
+	// 3334 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xec, 0x5a, 0xcd, 0x93, 0x1b, 0xc7,
+	0x75, 0xdf, 0xc1, 0xd7, 0x02, 0x0f, 0x0b, 0x6c, 0x6f, 0x63, 0x97, 0x84, 0x56, 0x12, 0x44, 0x8f,
+	0x2d, 0x9b, 0xa1, 0x9d, 0x25, 0xb5, 0x62, 0x18, 0x46, 0x76, 0x1c, 0xce, 0x62, 0x67, 0x29, 0x98,
+	0xc0, 0x00, 0x6c, 0x0c, 0x48, 0x53, 0xe5, 0xaa, 0xa9, 0x21, 0xd0, 0xc4, 0x4e, 0xed, 0x60, 0x06,
+	0x9c, 0x19, 0x90, 0xdc, 0x1b, 0x13, 0xc7, 0xf9, 0xfe, 0x50, 0x3e, 0x15, 0x27, 0x15, 0xc5, 0x55,
+	0x39, 0x24, 0xa7, 0xfc, 0x0d, 0xa9, 0x1c, 0x52, 0x39, 0xa5, 0x74, 0x49, 0x95, 0x93, 0x1c, 0x52,
+	0x22, 0x2b, 0x95, 0x9c, 0x5c, 0x3a, 0xe5, 0x90, 0x43, 0x2a, 0xd5, 0x1f, 0x33, 0x18, 0x2c, 0x21,
+	0x91, 0x66, 0x72, 0x21, 0xe5, 0x5b, 0xf7, 0x7b, 0xaf, 0x3f, 0x7e, 0xbf, 0xf7, 0xe6, 0x75, 0x4f,
+	0x77, 0x43, 0xf9, 0xee, 0x8c, 0x06, 0xc7, 0x3b, 0xd3, 0xc0, 0x8f, 0x7c, 0x9c, 0xe7, 0x95, 0xed,
+	0x6a, 0xe4, 0x4f, 0xfd, 0x91, 0x1d, 0xd9, 0x42, 0xbc, 0x5d, 0xbe, 0x17, 0x05, 0xd3, 0xa1, 0xa8,
+	0xa8, 0xdf, 0x53, 0xa0, 0x60, 0xda, 0xc1, 0x98, 0x46, 0x78, 0x1b, 0x8a, 0x47, 0xf4, 0x38, 0x9c,
+	0xda, 0x43, 0x5a, 0x57, 0xce, 0x28, 0x67, 0x4b, 0x24, 0xa9, 0xe3, 0x4d, 0xc8, 0x87, 0x87, 0x76,
+	0x30, 0xaa, 0x67, 0xb8, 0x42, 0x54, 0xf0, 0xcf, 0x40, 0x39, 0xb2, 0x6f, 0xbb, 0x34, 0xb2, 0xa2,
+	0xe3, 0x29, 0xad, 0x67, 0xcf, 0x28, 0x67, 0xab, 0xbb, 0x9b, 0x3b, 0xc9, 0x78, 0x26, 0x57, 0x9a,
+	0xc7, 0x53, 0x4a, 0x20, 0x4a, 0xca, 0x18, 0x43, 0x6e, 0x48, 0x5d, 0xb7, 0x9e, 0xe3, 0x7d, 0xf1,
+	0xb2, 0xba, 0x0f, 0xd5, 0x1b, 0xe6, 0x55, 0x3b, 0xa2, 0x4d, 0xdb, 0x75, 0x69, 0xd0, 0xda, 0x67,
+	0xd3, 0x99, 0x85, 0x34, 0xf0, 0xec, 0x49, 0x32, 0x9d, 0xb8, 0x8e, 0x4f, 0x41, 0x61, 0x1c, 0xf8,
+	0xb3, 0x69, 0x58, 0xcf, 0x9c, 0xc9, 0x9e, 0x2d, 0x11, 0x59, 0x53, 0xbf, 0x03, 0xa0, 0xdf, 0xa3,
+	0x5e, 0x64, 0xfa, 0x47, 0xd4, 0xc3, 0xaf, 0x41, 0x29, 0x72, 0x26, 0x34, 0x8c, 0xec, 0xc9, 0x94,
+	0x77, 0x91, 0x25, 0x73, 0xc1, 0xa7, 0x40, 0xda, 0x86, 0xe2, 0xd4, 0x0f, 0x9d, 0xc8, 0xf1, 0x3d,
+	0x8e, 0xa7, 0x44, 0x92, 0xba, 0xfa, 0x4d, 0xc8, 0xdf, 0xb0, 0xdd, 0x19, 0xc5, 0x6f, 0x40, 0x8e,
+	0x03, 0x56, 0x38, 0xe0, 0xf2, 0x8e, 0x20, 0x9d, 0xe3, 0xe4, 0x0a, 0xd6, 0xf7, 0x3d, 0x66, 0xc9,
+	0xfb, 0x5e, 0x23, 0xa2, 0xa2, 0x1e, 0xc1, 0xda, 0x9e, 0xe3, 0x8d, 0x6e, 0xd8, 0x81, 0xc3, 0xc8,
+	0x78, 0xce, 0x6e, 0xf0, 0x97, 0xa0, 0xc0, 0x0b, 0x61, 0x3d, 0x7b, 0x26, 0x7b, 0xb6, 0xbc, 0xbb,
+	0x26, 0x1b, 0xf2, 0xb9, 0x11, 0xa9, 0x53, 0xff, 0x4e, 0x01, 0xd8, 0xf3, 0x67, 0xde, 0xe8, 0x3a,
+	0x53, 0x62, 0x04, 0xd9, 0xf0, 0xae, 0x2b, 0x89, 0x64, 0x45, 0x7c, 0x0d, 0xaa, 0xb7, 0x1d, 0x6f,
+	0x64, 0xdd, 0x93, 0xd3, 0x11, 0x5c, 0x96, 0x77, 0xbf, 0x24, 0xbb, 0x9b, 0x37, 0xde, 0x49, 0xcf,
+	0x3a, 0xd4, 0xbd, 0x28, 0x38, 0x26, 0x95, 0xdb, 0x69, 0xd9, 0xf6, 0x00, 0xf0, 0x93, 0x46, 0x6c,
+	0xd0, 0x23, 0x7a, 0x1c, 0x0f, 0x7a, 0x44, 0x8f, 0xf1, 0x4f, 0xa5, 0x11, 0x95, 0x77, 0x6b, 0xf1,
+	0x58, 0xa9, 0xb6, 0x12, 0xe6, 0x3b, 0x99, 0xcb, 0x8a, 0xfa, 0x17, 0x05, 0xa8, 0xea, 0x0f, 0xe8,
+	0x70, 0x16, 0xd1, 0xee, 0x94, 0xf9, 0x20, 0xc4, 0x3b, 0x50, 0x73, 0xbc, 0xa1, 0x3b, 0x1b, 0x51,
+	0x8b, 0x32, 0x57, 0x5b, 0x11, 0xf3, 0x35, 0xef, 0xaf, 0x48, 0x36, 0xa4, 0x2a, 0x15, 0x04, 0x1a,
+	0xd4, 0x86, 0xfe, 0x64, 0x6a, 0x07, 0x8b, 0xf6, 0x59, 0x3e, 0xfe, 0x86, 0x1c, 0x7f, 0x6e, 0x4f,
+	0x36, 0xa4, 0x75, 0xaa, 0x8b, 0x0e, 0xac, 0xcb, 0x7e, 0x47, 0xd6, 0x1d, 0x87, 0xba, 0xa3, 0x90,
+	0x87, 0x6e, 0x35, 0xa1, 0x6a, 0x71, 0x8a, 0x3b, 0x2d, 0x69, 0x7c, 0xc0, 0x6d, 0x49, 0xd5, 0x59,
+	0xa8, 0xe3, 0x73, 0xb0, 0x31, 0x74, 0x1d, 0x36, 0x95, 0x3b, 0x8c, 0x62, 0x2b, 0xf0, 0xef, 0x87,
+	0xf5, 0x3c, 0x9f, 0xff, 0xba, 0x50, 0x1c, 0x30, 0x39, 0xf1, 0xef, 0x87, 0xf8, 0x1d, 0x28, 0xde,
+	0xf7, 0x83, 0x23, 0xd7, 0xb7, 0x47, 0xf5, 0x02, 0x1f, 0xb3, 0xb1, 0x7c, 0xcc, 0x9b, 0xd2, 0x8a,
+	0x24, 0xf6, 0xf8, 0x2c, 0xa0, 0xf0, 0xae, 0x6b, 0x85, 0xd4, 0xa5, 0xc3, 0xc8, 0x72, 0x9d, 0x89,
+	0x13, 0xd5, 0x8b, 0xfc, 0x2b, 0xa8, 0x86, 0x77, 0xdd, 0x3e, 0x17, 0xb7, 0x99, 0x14, 0x5b, 0xb0,
+	0x15, 0x05, 0xb6, 0x17, 0xda, 0x43, 0xd6, 0x99, 0xe5, 0x84, 0xbe, 0x6b, 0xf3, 0x2f, 0xa0, 0xc4,
+	0x87, 0x3c, 0xb7, 0x7c, 0x48, 0x73, 0xde, 0xa4, 0x15, 0xb7, 0x20, 0x9b, 0xd1, 0x12, 0x29, 0x7e,
+	0x0b, 0xb6, 0xc2, 0x23, 0x67, 0x6a, 0xf1, 0x7e, 0xac, 0xa9, 0x6b, 0x7b, 0xd6, 0xd0, 0x1e, 0x1e,
+	0xd2, 0x3a, 0x70, 0xd8, 0x98, 0x29, 0x79, 0xa8, 0xf5, 0x5c, 0xdb, 0x6b, 0x32, 0x8d, 0xfa, 0x75,
+	0xa8, 0x2e, 0xf2, 0x88, 0x37, 0xa0, 0x62, 0xde, 0xea, 0xe9, 0x96, 0x66, 0xec, 0x5b, 0x86, 0xd6,
+	0xd1, 0xd1, 0x0a, 0xae, 0x40, 0x89, 0x8b, 0xba, 0x46, 0xfb, 0x16, 0x52, 0xf0, 0x2a, 0x64, 0xb5,
+	0x76, 0x1b, 0x65, 0xd4, 0xcb, 0x50, 0x8c, 0x09, 0xc1, 0xeb, 0x50, 0x1e, 0x18, 0xfd, 0x9e, 0xde,
+	0x6c, 0x1d, 0xb4, 0xf4, 0x7d, 0xb4, 0x82, 0x8b, 0x90, 0xeb, 0xb6, 0xcd, 0x1e, 0x52, 0x44, 0x49,
+	0xeb, 0xa1, 0x0c, 0x6b, 0xb9, 0xbf, 0xa7, 0xa1, 0xac, 0xfa, 0x57, 0x0a, 0x6c, 0x2e, 0x03, 0x86,
+	0xcb, 0xb0, 0xba, 0xaf, 0x1f, 0x68, 0x83, 0xb6, 0x89, 0x56, 0x70, 0x0d, 0xd6, 0x89, 0xde, 0xd3,
+	0x35, 0x53, 0xdb, 0x6b, 0xeb, 0x16, 0xd1, 0xb5, 0x7d, 0xa4, 0x60, 0x0c, 0x55, 0x56, 0xb2, 0x9a,
+	0xdd, 0x4e, 0xa7, 0x65, 0x9a, 0xfa, 0x3e, 0xca, 0xe0, 0x4d, 0x40, 0x5c, 0x36, 0x30, 0xe6, 0xd2,
+	0x2c, 0x46, 0xb0, 0xd6, 0xd7, 0x49, 0x4b, 0x6b, 0xb7, 0xde, 0x63, 0x1d, 0xa0, 0x1c, 0xfe, 0x02,
+	0xbc, 0xde, 0xec, 0x1a, 0xfd, 0x56, 0xdf, 0xd4, 0x0d, 0xd3, 0xea, 0x1b, 0x5a, 0xaf, 0xff, 0x6e,
+	0xd7, 0xe4, 0x3d, 0x0b, 0x70, 0x79, 0x5c, 0x05, 0xd0, 0x06, 0x66, 0x57, 0xf4, 0x83, 0x0a, 0xdf,
+	0xca, 0x15, 0x15, 0x94, 0x51, 0x3f, 0xc8, 0x40, 0x9e, 0xf3, 0xc3, 0xb2, 0x6a, 0x2a, 0x57, 0xf2,
+	0x72, 0x92, 0x61, 0x32, 0x9f, 0x91, 0x61, 0x78, 0x62, 0x96, 0xb9, 0x4e, 0x54, 0xf0, 0xab, 0x50,
+	0xf2, 0x83, 0xb1, 0x25, 0x34, 0x22, 0x4b, 0x17, 0xfd, 0x60, 0xcc, 0xd3, 0x39, 0xcb, 0x90, 0x2c,
+	0xb9, 0xdf, 0xb6, 0x43, 0xca, 0xa3, 0xb6, 0x44, 0x92, 0x3a, 0x7e, 0x05, 0x98, 0x9d, 0xc5, 0xe7,
+	0x51, 0xe0, 0xba, 0x55, 0x3f, 0x18, 0x1b, 0x6c, 0x2a, 0x5f, 0x84, 0xca, 0xd0, 0x77, 0x67, 0x13,
+	0xcf, 0x72, 0xa9, 0x37, 0x8e, 0x0e, 0xeb, 0xab, 0x67, 0x94, 0xb3, 0x15, 0xb2, 0x26, 0x84, 0x6d,
+	0x2e, 0xc3, 0x75, 0x58, 0x1d, 0x1e, 0xda, 0x41, 0x48, 0x45, 0xa4, 0x56, 0x48, 0x5c, 0xe5, 0xa3,
+	0xd2, 0xa1, 0x33, 0xb1, 0xdd, 0x90, 0x47, 0x65, 0x85, 0x24, 0x75, 0x06, 0xe2, 0x8e, 0x6b, 0x8f,
+	0x43, 0x1e, 0x4d, 0x15, 0x22, 0x2a, 0xea, 0xcf, 0x42, 0x96, 0xf8, 0xf7, 0x59, 0x97, 0x62, 0xc0,
+	0xb0, 0xae, 0x9c, 0xc9, 0x9e, 0xc5, 0x24, 0xae, 0xb2, 0x45, 0x44, 0xe6, 0x51, 0x91, 0x5e, 0xe3,
+	0xcc, 0xf9, 0x1d, 0x58, 0x23, 0x34, 0x9c, 0xb9, 0x91, 0xfe, 0x20, 0x0a, 0xec, 0x10, 0xef, 0x42,
+	0x39, 0x9d, 0x39, 0x94, 0x4f, 0xcb, 0x1c, 0x40, 0xe7, 0x29, 0xa3, 0x0e, 0xab, 0x77, 0x02, 0x1a,
+	0x1e, 0xd2, 0x40, 0x66, 0xa6, 0xb8, 0xca, 0xf2, 0x72, 0x99, 0x87, 0xba, 0x18, 0x83, 0x65, 0x73,
+	0x99, 0x53, 0x94, 0x85, 0x6c, 0xce, 0x9d, 0x4a, 0xa4, 0x8e, 0xb1, 0xc7, 0xd2, 0x84, 0x65, 0xdf,
+	0xb9, 0x43, 0x87, 0x11, 0x15, 0x8b, 0x56, 0x8e, 0xac, 0x31, 0xa1, 0x26, 0x65, 0xcc, 0x6d, 0x8e,
+	0x17, 0xd2, 0x20, 0xb2, 0x9c, 0x11, 0x77, 0x68, 0x8e, 0x14, 0x85, 0xa0, 0x35, 0xc2, 0x0d, 0xc8,
+	0xf1, 0x44, 0x93, 0xe3, 0xa3, 0x80, 0x1c, 0x85, 0xf8, 0xf7, 0x09, 0x97, 0xe3, 0xaf, 0x42, 0x81,
+	0x72, 0xbc, 0xdc, 0xa9, 0xf3, 0xd4, 0x9c, 0xa6, 0x82, 0x48, 0x13, 0xf5, 0x1b, 0xb0, 0xc6, 0x31,
+	0xdc, 0xb4, 0x03, 0xcf, 0xf1, 0xc6, 0x7c, 0x45, 0xf7, 0x47, 0x22, 0xf6, 0x2a, 0x84, 0x97, 0x19,
+	0x05, 0x13, 0x1a, 0x86, 0xf6, 0x98, 0xca, 0x15, 0x36, 0xae, 0xaa, 0x3f, 0xc8, 0x42, 0xb9, 0x1f,
+	0x05, 0xd4, 0x9e, 0x70, 0xf6, 0xf0, 0x37, 0x00, 0xc2, 0xc8, 0x8e, 0xe8, 0x84, 0x7a, 0x51, 0x4c,
+	0xc3, 0x6b, 0x72, 0xf8, 0x94, 0xdd, 0x4e, 0x3f, 0x36, 0x22, 0x29, 0xfb, 0x93, 0xee, 0xc9, 0x3c,
+	0x83, 0x7b, 0xb6, 0x3f, 0xcc, 0x40, 0x29, 0xe9, 0x0d, 0x6b, 0x50, 0x1c, 0xda, 0x11, 0x1d, 0xfb,
+	0xc1, 0xb1, 0x5c, 0x8b, 0xdf, 0xfc, 0xac, 0xd1, 0x77, 0x9a, 0xd2, 0x98, 0x24, 0xcd, 0xf0, 0xeb,
+	0x20, 0x36, 0x38, 0x22, 0xf4, 0x05, 0xde, 0x12, 0x97, 0xf0, 0xe0, 0x7f, 0x07, 0xf0, 0x34, 0x70,
+	0x26, 0x76, 0x70, 0x6c, 0x1d, 0xd1, 0xe3, 0x78, 0x11, 0xc9, 0x2e, 0x71, 0x38, 0x92, 0x76, 0xd7,
+	0xe8, 0xb1, 0x4c, 0x7b, 0x97, 0x17, 0xdb, 0xca, 0x90, 0x7d, 0xd2, 0x8d, 0xa9, 0x96, 0x7c, 0x27,
+	0x10, 0xc6, 0x6b, 0x7e, 0x9e, 0x47, 0x37, 0x2b, 0xaa, 0x5f, 0x81, 0x62, 0x3c, 0x79, 0x5c, 0x82,
+	0xbc, 0x1e, 0x04, 0x7e, 0x80, 0x56, 0x78, 0xf6, 0xeb, 0xb4, 0x45, 0x02, 0xdd, 0xdf, 0x67, 0x09,
+	0xf4, 0x6f, 0x33, 0xc9, 0xc2, 0x4b, 0xe8, 0xdd, 0x19, 0x0d, 0x23, 0xfc, 0x0b, 0x50, 0xa3, 0x3c,
+	0xd2, 0x9c, 0x7b, 0xd4, 0x1a, 0xf2, 0x5d, 0x1a, 0x8b, 0x33, 0xf1, 0x39, 0xac, 0xef, 0x88, 0x4d,
+	0x65, 0xbc, 0x7b, 0x23, 0x1b, 0x89, 0xad, 0x14, 0x8d, 0xb0, 0x0e, 0x35, 0x67, 0x32, 0xa1, 0x23,
+	0xc7, 0x8e, 0xd2, 0x1d, 0x08, 0x87, 0x6d, 0xc5, 0x9b, 0x98, 0x85, 0x4d, 0x20, 0xd9, 0x48, 0x5a,
+	0x24, 0xdd, 0xbc, 0x09, 0x85, 0x88, 0x6f, 0x58, 0xe5, 0x1a, 0x5e, 0x89, 0xb3, 0x1a, 0x17, 0x12,
+	0xa9, 0xc4, 0x5f, 0x01, 0xb1, 0xfd, 0xe5, 0xf9, 0x6b, 0x1e, 0x10, 0xf3, 0x5d, 0x0d, 0x11, 0x7a,
+	0xfc, 0x26, 0x54, 0x17, 0x16, 0xbf, 0x11, 0x27, 0x2c, 0x4b, 0x2a, 0xe9, 0x95, 0x6c, 0x84, 0xcf,
+	0xc3, 0xaa, 0x2f, 0x16, 0x3e, 0x9e, 0xd9, 0xe6, 0x33, 0x5e, 0x5c, 0x15, 0x49, 0x6c, 0xa5, 0xfe,
+	0x3c, 0xac, 0x27, 0x0c, 0x86, 0x53, 0xdf, 0x0b, 0x29, 0x3e, 0x07, 0x85, 0x80, 0x7f, 0x4e, 0x92,
+	0x35, 0x2c, 0xbb, 0x48, 0xe5, 0x03, 0x22, 0x2d, 0xd4, 0x11, 0xac, 0x0b, 0xc9, 0x4d, 0x27, 0x3a,
+	0xe4, 0x8e, 0xc2, 0x6f, 0x42, 0x9e, 0xb2, 0xc2, 0x09, 0xce, 0x49, 0xaf, 0xc9, 0xf5, 0x44, 0x68,
+	0x53, 0xa3, 0x64, 0x9e, 0x3a, 0xca, 0x27, 0x19, 0xa8, 0xc9, 0x59, 0xee, 0xd9, 0xd1, 0xf0, 0xf0,
+	0x05, 0x75, 0xf6, 0x57, 0x61, 0x95, 0xc9, 0x9d, 0xe4, 0xc3, 0x58, 0xe2, 0xee, 0xd8, 0x82, 0x39,
+	0xdc, 0x0e, 0xad, 0x94, 0x77, 0xe5, 0xe6, 0xab, 0x62, 0x87, 0xa9, 0x95, 0x7f, 0x49, 0x5c, 0x14,
+	0x9e, 0x12, 0x17, 0xab, 0xcf, 0x14, 0x17, 0xfb, 0xb0, 0xb9, 0xc8, 0xb8, 0x0c, 0x8e, 0xaf, 0xc1,
+	0xaa, 0x70, 0x4a, 0x9c, 0x02, 0x97, 0xf9, 0x2d, 0x36, 0x51, 0xff, 0x3e, 0x03, 0x9b, 0x32, 0x3b,
+	0x7d, 0x3e, 0x3e, 0xd3, 0x14, 0xcf, 0xf9, 0x67, 0xe1, 0xf9, 0x19, 0xfd, 0xa7, 0x36, 0x61, 0xeb,
+	0x04, 0x8f, 0xcf, 0xf1, 0xb1, 0xfe, 0x48, 0x81, 0xb5, 0x3d, 0x3a, 0x76, 0xbc, 0x17, 0xd4, 0x0b,
+	0x29, 0x72, 0x73, 0xcf, 0x14, 0xc4, 0x97, 0xa0, 0x22, 0xf1, 0x4a, 0xb6, 0x9e, 0x64, 0x5b, 0x59,
+	0xc6, 0xf6, 0xbf, 0x2b, 0x50, 0x69, 0xfa, 0x93, 0x89, 0x13, 0xbd, 0xa0, 0x4c, 0x3d, 0x89, 0x33,
+	0xb7, 0x0c, 0x27, 0x82, 0x6a, 0x0c, 0x53, 0x10, 0xa4, 0xfe, 0x87, 0x02, 0xeb, 0xc4, 0x77, 0xdd,
+	0xdb, 0xf6, 0xf0, 0xe8, 0xe5, 0xc6, 0x8e, 0x01, 0xcd, 0x81, 0x4a, 0xf4, 0xff, 0xad, 0x40, 0xb5,
+	0x17, 0x50, 0xf6, 0x63, 0xfd, 0x52, 0x83, 0x67, 0x3b, 0xe1, 0x51, 0x24, 0xf7, 0x10, 0x25, 0xc2,
+	0xcb, 0xea, 0x06, 0xac, 0x27, 0xd8, 0x25, 0x1f, 0xff, 0xa2, 0xc0, 0x96, 0x08, 0x10, 0xa9, 0x19,
+	0xbd, 0xa0, 0xb4, 0xc4, 0x78, 0x73, 0x29, 0xbc, 0x75, 0x38, 0x75, 0x12, 0x9b, 0x84, 0xfd, 0xdd,
+	0x0c, 0x9c, 0x8e, 0x63, 0xe3, 0x05, 0x07, 0xfe, 0x7f, 0x88, 0x87, 0x6d, 0xa8, 0x3f, 0x49, 0x82,
+	0x64, 0xe8, 0xfd, 0x0c, 0xd4, 0x9b, 0x01, 0xb5, 0x23, 0x9a, 0xda, 0x8b, 0xbc, 0x3c, 0xb1, 0x81,
+	0xdf, 0x82, 0xb5, 0xa9, 0x1d, 0x44, 0xce, 0xd0, 0x99, 0xda, 0xec, 0x6f, 0x2f, 0xcf, 0xb7, 0x3a,
+	0x27, 0x3a, 0x58, 0x30, 0x51, 0x5f, 0x85, 0x57, 0x96, 0x30, 0x22, 0xf9, 0xfa, 0x1f, 0x05, 0x70,
+	0x3f, 0xb2, 0x83, 0xe8, 0x73, 0xb0, 0xaa, 0x2c, 0x0d, 0xa6, 0x2d, 0xa8, 0x2d, 0xe0, 0x4f, 0xf3,
+	0x42, 0xa3, 0xcf, 0xc5, 0x8a, 0xf3, 0xa9, 0xbc, 0xa4, 0xf1, 0x4b, 0x5e, 0xfe, 0x4d, 0x81, 0xed,
+	0xa6, 0x2f, 0x0e, 0x16, 0x5f, 0xca, 0x2f, 0x4c, 0x7d, 0x1d, 0x5e, 0x5d, 0x0a, 0x50, 0x12, 0xf0,
+	0xaf, 0x0a, 0x9c, 0x22, 0xd4, 0x1e, 0xbd, 0x9c, 0xe0, 0xaf, 0xc3, 0xe9, 0x27, 0xc0, 0xc9, 0x1d,
+	0xea, 0x25, 0x28, 0x4e, 0x68, 0x64, 0x8f, 0xec, 0xc8, 0x96, 0x90, 0xb6, 0xe3, 0x7e, 0xe7, 0xd6,
+	0x1d, 0x69, 0x41, 0x12, 0x5b, 0xf5, 0xc3, 0x0c, 0xd4, 0xf8, 0x5e, 0xf7, 0x27, 0x3f, 0x5a, 0xcb,
+	0xff, 0x05, 0xde, 0x57, 0x60, 0x73, 0x91, 0xa0, 0xe4, 0x9f, 0xe0, 0xff, 0xfb, 0xbc, 0x62, 0x49,
+	0x42, 0xc8, 0x2e, 0xdb, 0x82, 0xfe, 0x63, 0x06, 0xea, 0xe9, 0x29, 0xfd, 0xe4, 0x6c, 0x63, 0xf1,
+	0x6c, 0xe3, 0xc7, 0x3e, 0xcc, 0xfa, 0x40, 0x81, 0x57, 0x96, 0x10, 0xfa, 0xe3, 0x39, 0x3a, 0x75,
+	0xc2, 0x91, 0x79, 0xea, 0x09, 0xc7, 0xb3, 0xba, 0xfa, 0x9f, 0x15, 0xd8, 0xec, 0x88, 0x83, 0x65,
+	0xf1, 0x1f, 0xff, 0xe2, 0x66, 0x33, 0x7e, 0x76, 0x9c, 0x9b, 0x5f, 0xdf, 0xa8, 0x4d, 0xd8, 0x3a,
+	0x01, 0xed, 0x39, 0xce, 0x26, 0xfe, 0x4b, 0x81, 0x0d, 0xd9, 0x8b, 0xf6, 0xc2, 0x6e, 0x04, 0x96,
+	0xb0, 0x83, 0x1b, 0x90, 0x75, 0x46, 0xf1, 0x0e, 0x72, 0xf1, 0x12, 0x9c, 0x29, 0xd4, 0x2b, 0x80,
+	0xd3, 0xb8, 0x9f, 0x83, 0xba, 0x7f, 0xca, 0xc2, 0x46, 0x7f, 0xea, 0x3a, 0x91, 0x54, 0xbe, 0xdc,
+	0x89, 0xff, 0x0b, 0xb0, 0x16, 0x32, 0xb0, 0x96, 0xb8, 0x92, 0xe3, 0xc4, 0x96, 0x48, 0x99, 0xcb,
+	0x9a, 0x5c, 0x84, 0xdf, 0x80, 0x72, 0x6c, 0x32, 0xf3, 0x22, 0x79, 0xa0, 0x06, 0xd2, 0x62, 0xe6,
+	0x45, 0xf8, 0x22, 0x9c, 0xf6, 0x66, 0x13, 0x7e, 0xa5, 0x6d, 0x4d, 0x69, 0x10, 0x5f, 0xf8, 0xda,
+	0x41, 0x7c, 0xf5, 0x5c, 0xf3, 0x66, 0x13, 0xe2, 0xdf, 0x0f, 0x7b, 0x34, 0x10, 0x17, 0xbe, 0x76,
+	0x10, 0xe1, 0x2b, 0x50, 0xb2, 0xdd, 0xb1, 0x1f, 0x38, 0xd1, 0xe1, 0x44, 0xde, 0x39, 0xab, 0xf1,
+	0x0d, 0xcc, 0x49, 0xfa, 0x77, 0xb4, 0xd8, 0x92, 0xcc, 0x1b, 0xa9, 0x5f, 0x83, 0x52, 0x22, 0xc7,
+	0x08, 0xd6, 0xf4, 0xeb, 0x03, 0xad, 0x6d, 0xf5, 0x7b, 0xed, 0x96, 0xd9, 0x17, 0xf7, 0xc4, 0x07,
+	0x83, 0x76, 0xdb, 0xea, 0x37, 0x35, 0x03, 0x29, 0x2a, 0x01, 0xe0, 0x5d, 0xf2, 0xce, 0xe7, 0x04,
+	0x29, 0x4f, 0x21, 0xe8, 0x55, 0x28, 0x05, 0xfe, 0x7d, 0x89, 0x3d, 0xc3, 0xe1, 0x14, 0x03, 0xff,
+	0x3e, 0x47, 0xae, 0x6a, 0x80, 0xd3, 0x73, 0x95, 0xd1, 0x96, 0x4a, 0xde, 0xca, 0x42, 0xf2, 0x9e,
+	0x8f, 0x9f, 0x24, 0x6f, 0xb1, 0x95, 0x67, 0xdf, 0xf9, 0xbb, 0xd4, 0x76, 0xa3, 0x78, 0xbd, 0x52,
+	0xff, 0x32, 0x03, 0x15, 0xc2, 0x24, 0xce, 0x84, 0xf6, 0x23, 0x3b, 0x0a, 0x99, 0xa7, 0x0e, 0xb9,
+	0x89, 0x35, 0x4f, 0xbb, 0x25, 0x52, 0x16, 0x32, 0x71, 0x57, 0xb0, 0x0b, 0x5b, 0x21, 0x1d, 0xfa,
+	0xde, 0x28, 0xb4, 0x6e, 0xd3, 0x43, 0xc7, 0x1b, 0x59, 0x13, 0x3b, 0x8c, 0xe4, 0x75, 0x64, 0x85,
+	0xd4, 0xa4, 0x72, 0x8f, 0xeb, 0x3a, 0x5c, 0x85, 0x2f, 0xc0, 0xe6, 0x6d, 0xc7, 0x73, 0xfd, 0xb1,
+	0x35, 0x75, 0xed, 0x63, 0x1a, 0x84, 0x12, 0x2a, 0x0b, 0xaf, 0x3c, 0xc1, 0x42, 0xd7, 0x13, 0x2a,
+	0xe1, 0xee, 0xf7, 0xe0, 0xdc, 0xd2, 0x51, 0xac, 0x3b, 0x8e, 0x1b, 0xd1, 0x80, 0x8e, 0xac, 0x80,
+	0x4e, 0x5d, 0x67, 0x28, 0x5e, 0x13, 0x88, 0xbd, 0xfb, 0x97, 0x97, 0x0c, 0x7d, 0x20, 0xcd, 0xc9,
+	0xdc, 0x9a, 0xb1, 0x3d, 0x9c, 0xce, 0xac, 0x19, 0xbf, 0x41, 0x64, 0xab, 0x98, 0x42, 0x8a, 0xc3,
+	0xe9, 0x6c, 0xc0, 0xea, 0x18, 0x41, 0xf6, 0xee, 0x54, 0x2c, 0x5e, 0x0a, 0x61, 0x45, 0xf5, 0x47,
+	0x0a, 0x54, 0xb5, 0xf1, 0x38, 0xa0, 0x63, 0x3b, 0x92, 0x34, 0x5d, 0x80, 0x4d, 0x41, 0xc9, 0xb1,
+	0x25, 0x9f, 0x29, 0x09, 0x3c, 0x8a, 0xc0, 0x23, 0x75, 0xe2, 0x91, 0x52, 0x1c, 0xbe, 0xa7, 0x66,
+	0xde, 0xd2, 0x36, 0x19, 0xde, 0x66, 0x33, 0xd1, 0xa6, 0x5b, 0xfd, 0x1c, 0xbc, 0xb2, 0x9c, 0x85,
+	0x89, 0x23, 0x1e, 0x9a, 0x54, 0xc8, 0xa9, 0x25, 0xa0, 0x3b, 0x8e, 0xf7, 0x19, 0x4d, 0xed, 0x07,
+	0x9c, 0xaf, 0x4f, 0x69, 0x6a, 0x3f, 0x50, 0x1f, 0x27, 0x37, 0x00, 0x71, 0xb8, 0x24, 0xab, 0x71,
+	0x9c, 0x17, 0x94, 0xcf, 0xca, 0x0b, 0x75, 0x58, 0x0d, 0x69, 0x70, 0xcf, 0xf1, 0xc6, 0xf1, 0x15,
+	0xb5, 0xac, 0xe2, 0x3e, 0x7c, 0x59, 0x62, 0xa7, 0x0f, 0x22, 0x1a, 0x78, 0xb6, 0xeb, 0x1e, 0x5b,
+	0xe2, 0xa0, 0xc2, 0x8b, 0xe8, 0xc8, 0x9a, 0x3f, 0xaa, 0x12, 0x2b, 0xf2, 0x17, 0x85, 0xb5, 0x9e,
+	0x18, 0x93, 0xc4, 0xd6, 0x4c, 0x9e, 0x5b, 0x7d, 0x1d, 0xaa, 0x81, 0x0c, 0x62, 0x2b, 0x64, 0xee,
+	0x91, 0xf9, 0x68, 0x33, 0xb9, 0x67, 0x4e, 0x45, 0x38, 0xa9, 0x04, 0x0b, 0x01, 0xff, 0x4d, 0x58,
+	0xb7, 0x63, 0xdf, 0xca, 0xd6, 0x8b, 0xfb, 0x96, 0x45, 0xcf, 0x93, 0xaa, 0xbd, 0x18, 0x09, 0x97,
+	0x61, 0x4d, 0x22, 0xb2, 0x5d, 0xc7, 0x9e, 0x6f, 0x6c, 0x4f, 0xbc, 0x54, 0xd3, 0x98, 0x92, 0xc8,
+	0x37, 0x6d, 0xbc, 0xc2, 0xfe, 0xa3, 0x6b, 0x83, 0xe9, 0x88, 0xf7, 0xf4, 0x02, 0xef, 0x2e, 0xd2,
+	0xcf, 0xda, 0x72, 0x8b, 0xcf, 0xda, 0x16, 0x9f, 0xc9, 0xe5, 0x4f, 0x3c, 0x93, 0x53, 0xaf, 0xc0,
+	0xe6, 0x22, 0x7e, 0x19, 0x65, 0x67, 0x21, 0xcf, 0x2f, 0xd4, 0x4f, 0x2c, 0xa3, 0xa9, 0x1b, 0x73,
+	0x22, 0x0c, 0xd4, 0xbf, 0x51, 0xa0, 0xb6, 0xe4, 0x17, 0x2b, 0xf9, 0x7f, 0x53, 0x52, 0xc7, 0x43,
+	0x3f, 0x0d, 0x79, 0x7e, 0xb5, 0x2f, 0x5f, 0xac, 0x9c, 0x7e, 0xf2, 0x0f, 0x8d, 0x5f, 0xc3, 0x13,
+	0x61, 0xc5, 0x12, 0x21, 0x0f, 0xa8, 0x21, 0x3f, 0x1f, 0x8a, 0x77, 0x88, 0x65, 0x26, 0x13, 0x47,
+	0x46, 0x4f, 0x1e, 0x38, 0xe5, 0x9e, 0x7a, 0xe0, 0x74, 0xee, 0xf7, 0xb3, 0x50, 0xea, 0x1c, 0xf7,
+	0xef, 0xba, 0x07, 0xae, 0x3d, 0xe6, 0xf7, 0xe4, 0x9d, 0x9e, 0x79, 0x0b, 0xad, 0xe0, 0x0d, 0xa8,
+	0x18, 0x5d, 0xd3, 0x32, 0xd8, 0x52, 0x72, 0xd0, 0xd6, 0xae, 0x22, 0x85, 0xad, 0x35, 0x3d, 0xd2,
+	0xb2, 0xae, 0xe9, 0xb7, 0x84, 0x24, 0x83, 0x6b, 0xb0, 0x3e, 0x30, 0x5a, 0xd7, 0x07, 0xfa, 0x5c,
+	0x98, 0xc3, 0x5b, 0xb0, 0xd1, 0x19, 0xb4, 0xcd, 0x56, 0xaf, 0x9d, 0x12, 0x17, 0xd9, 0xba, 0xb4,
+	0xd7, 0xee, 0xee, 0x89, 0x2a, 0x62, 0xfd, 0x0f, 0x8c, 0x7e, 0xeb, 0xaa, 0xa1, 0xef, 0x0b, 0xd1,
+	0x19, 0x26, 0x7a, 0x4f, 0x27, 0xdd, 0x83, 0x56, 0x3c, 0xe4, 0x15, 0x8c, 0xa0, 0xbc, 0xd7, 0x32,
+	0x34, 0x22, 0x7b, 0x79, 0xa8, 0xe0, 0x2a, 0x94, 0x74, 0x63, 0xd0, 0x91, 0xf5, 0x0c, 0xae, 0x43,
+	0x4d, 0x1b, 0x98, 0x5d, 0xab, 0x65, 0x34, 0x89, 0xde, 0xd1, 0x0d, 0x53, 0x6a, 0x72, 0xb8, 0x06,
+	0x55, 0xb3, 0xd5, 0xd1, 0xfb, 0xa6, 0xd6, 0xe9, 0x49, 0x21, 0x9b, 0x45, 0xb1, 0xaf, 0xc7, 0x36,
+	0x08, 0x6f, 0xc3, 0x96, 0xd1, 0xb5, 0xe4, 0x63, 0x27, 0xeb, 0x86, 0xd6, 0x1e, 0xe8, 0x52, 0x77,
+	0x06, 0x9f, 0x06, 0xdc, 0x35, 0xac, 0x41, 0x6f, 0x5f, 0x33, 0x75, 0xcb, 0xe8, 0xde, 0x94, 0x8a,
+	0x2b, 0xb8, 0x0a, 0xc5, 0xf9, 0x0c, 0x1e, 0x32, 0x16, 0x2a, 0x3d, 0x8d, 0x98, 0x73, 0xb0, 0x0f,
+	0x1f, 0x32, 0xb2, 0xe0, 0x2a, 0xe9, 0x0e, 0x7a, 0x73, 0xb3, 0x0d, 0x28, 0x4b, 0xb2, 0xa4, 0x28,
+	0xc7, 0x44, 0x7b, 0x2d, 0xa3, 0x99, 0xcc, 0xef, 0x61, 0x71, 0x3b, 0x83, 0x94, 0x73, 0x47, 0x90,
+	0xe3, 0xee, 0x28, 0x42, 0xce, 0xe8, 0x1a, 0x3a, 0x5a, 0xc1, 0xeb, 0x00, 0xad, 0x7e, 0xcb, 0x30,
+	0xf5, 0xab, 0x44, 0x6b, 0x33, 0xd8, 0x5c, 0x10, 0x13, 0xc8, 0xd0, 0xae, 0xc1, 0x6a, 0xab, 0x7f,
+	0xd0, 0xee, 0x6a, 0xa6, 0x84, 0xd9, 0xea, 0x5f, 0x1f, 0x74, 0x4d, 0xa6, 0x44, 0xb8, 0x0c, 0x85,
+	0x56, 0xdf, 0xd4, 0xbf, 0x6d, 0x32, 0x5c, 0x5c, 0x27, 0x58, 0x45, 0x0f, 0xaf, 0x9c, 0xfb, 0x7e,
+	0x16, 0x72, 0xfc, 0xa9, 0x6a, 0x05, 0x4a, 0xdc, 0xdb, 0xe6, 0xad, 0x1e, 0x1b, 0xb2, 0x04, 0xb9,
+	0x96, 0x61, 0x5e, 0x46, 0xbf, 0x98, 0xc1, 0x00, 0xf9, 0x01, 0x2f, 0xff, 0x52, 0x81, 0x95, 0x5b,
+	0x86, 0xf9, 0xd6, 0x25, 0xf4, 0xdd, 0x0c, 0xeb, 0x76, 0x20, 0x2a, 0xbf, 0x1c, 0x2b, 0x76, 0x2f,
+	0xa2, 0xef, 0x25, 0x8a, 0xdd, 0x8b, 0xe8, 0x57, 0x62, 0xc5, 0xdb, 0xbb, 0xe8, 0x57, 0x13, 0xc5,
+	0xdb, 0xbb, 0xe8, 0xd7, 0x62, 0xc5, 0xa5, 0x8b, 0xe8, 0xd7, 0x13, 0xc5, 0xa5, 0x8b, 0xe8, 0x37,
+	0x0a, 0x0c, 0x0b, 0x47, 0xf2, 0xf6, 0x2e, 0xfa, 0xcd, 0x62, 0x52, 0xbb, 0x74, 0x11, 0xfd, 0x56,
+	0x91, 0xf9, 0x3f, 0xf1, 0x2a, 0xfa, 0x6d, 0xc4, 0xa6, 0xc9, 0x1c, 0x84, 0x7e, 0x87, 0x17, 0x99,
+	0x0a, 0xfd, 0x2e, 0x62, 0x18, 0x99, 0x94, 0x57, 0xdf, 0xe7, 0x9a, 0x5b, 0xba, 0x46, 0xd0, 0xef,
+	0x15, 0xc4, 0xdb, 0xb6, 0x66, 0xab, 0xa3, 0xb5, 0x11, 0xe6, 0x2d, 0x18, 0x2b, 0x7f, 0x70, 0x81,
+	0x15, 0x59, 0x78, 0xa2, 0x3f, 0xec, 0xb1, 0x01, 0x6f, 0x68, 0xa4, 0xf9, 0xae, 0x46, 0xd0, 0x1f,
+	0x5d, 0x60, 0x03, 0xde, 0xd0, 0x88, 0xe4, 0xeb, 0x8f, 0x7b, 0xcc, 0x90, 0xab, 0x3e, 0xb8, 0xc0,
+	0x26, 0x2d, 0xe5, 0x7f, 0xd2, 0xc3, 0x45, 0xc8, 0xee, 0xb5, 0x4c, 0xf4, 0x7d, 0x3e, 0x1a, 0x0b,
+	0x51, 0xf4, 0xa7, 0x88, 0x09, 0xfb, 0xba, 0x89, 0xfe, 0x8c, 0x09, 0xf3, 0xe6, 0xa0, 0xd7, 0xd6,
+	0xd1, 0x6b, 0x6c, 0x72, 0x57, 0xf5, 0x6e, 0x47, 0x37, 0xc9, 0x2d, 0xf4, 0xe7, 0xdc, 0xfc, 0x5b,
+	0xfd, 0xae, 0x81, 0x3e, 0x44, 0xb8, 0x0a, 0xa0, 0x7f, 0xbb, 0x47, 0xf4, 0x7e, 0xbf, 0xd5, 0x35,
+	0xd0, 0x1b, 0xe7, 0x0e, 0x00, 0x9d, 0x4c, 0x07, 0x0c, 0xc0, 0xc0, 0xb8, 0x66, 0x74, 0x6f, 0x1a,
+	0x68, 0x85, 0x55, 0x7a, 0x44, 0xef, 0x69, 0x44, 0x47, 0x0a, 0x06, 0x28, 0xc8, 0x17, 0x73, 0x19,
+	0xbc, 0x06, 0x45, 0xd2, 0x6d, 0xb7, 0xf7, 0xb4, 0xe6, 0x35, 0x94, 0xdd, 0x73, 0x3e, 0xfa, 0xb8,
+	0xb1, 0xf2, 0xc3, 0x8f, 0x1b, 0x2b, 0x9f, 0x7c, 0xdc, 0x50, 0x1e, 0x3e, 0x6a, 0x28, 0x7f, 0xfd,
+	0xa8, 0xa1, 0xfc, 0xc3, 0xa3, 0x86, 0xf2, 0xd1, 0xa3, 0x86, 0xf2, 0x9f, 0x8f, 0x1a, 0x2b, 0x9f,
+	0x3c, 0x6a, 0x28, 0xef, 0x3f, 0x6e, 0xac, 0xfc, 0xe0, 0x71, 0x43, 0xf9, 0xe8, 0x71, 0x63, 0xe5,
+	0x87, 0x8f, 0x1b, 0x2b, 0xb0, 0xee, 0xf8, 0x3b, 0xf7, 0x9c, 0x88, 0x86, 0xa1, 0x78, 0x40, 0xfd,
+	0x9e, 0x2a, 0x6b, 0x8e, 0x7f, 0x5e, 0x94, 0xce, 0x8f, 0xfd, 0xf3, 0xf7, 0xa2, 0xf3, 0x5c, 0x7b,
+	0x9e, 0x67, 0x99, 0xdb, 0x05, 0x5e, 0x79, 0xfb, 0x7f, 0x03, 0x00, 0x00, 0xff, 0xff, 0xcb, 0x7d,
+	0x18, 0xd6, 0x9e, 0x2d, 0x00, 0x00,
 }
 
+func (x MySqlFlag) String() string {
+	s, ok := MySqlFlag_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (x Flag) String() string {
+	s, ok := Flag_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (x Type) String() string {
+	s, ok := Type_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (x TransactionState) String() string {
+	s, ok := TransactionState_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (x ExecuteOptions_IncludedFields) String() string {
+	s, ok := ExecuteOptions_IncludedFields_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (x ExecuteOptions_Workload) String() string {
+	s, ok := ExecuteOptions_Workload_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (x ExecuteOptions_TransactionIsolation) String() string {
+	s, ok := ExecuteOptions_TransactionIsolation_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (x StreamEvent_Statement_Category) String() string {
+	s, ok := StreamEvent_Statement_Category_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (x SplitQueryRequest_Algorithm) String() string {
+	s, ok := SplitQueryRequest_Algorithm_name[int32(x)]
+	if ok {
+		return s
+	}
+	return strconv.Itoa(int(x))
+}
+func (this *Target) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Target)
+	if !ok {
+		that2, ok := that.(Target)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Keyspace != that1.Keyspace {
+		return false
+	}
+	if this.Shard != that1.Shard {
+		return false
+	}
+	if this.TabletType != that1.TabletType {
+		return false
+	}
+	if this.Cell != that1.Cell {
+		return false
+	}
+	return true
+}
+func (this *VTGateCallerID) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*VTGateCallerID)
+	if !ok {
+		that2, ok := that.(VTGateCallerID)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Username != that1.Username {
+		return false
+	}
+	if len(this.Groups) != len(that1.Groups) {
+		return false
+	}
+	for i := range this.Groups {
+		if this.Groups[i] != that1.Groups[i] {
+			return false
+		}
+	}
+	return true
+}
+func (this *EventToken) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*EventToken)
+	if !ok {
+		that2, ok := that.(EventToken)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Timestamp != that1.Timestamp {
+		return false
+	}
+	if this.Shard != that1.Shard {
+		return false
+	}
+	if this.Position != that1.Position {
+		return false
+	}
+	return true
+}
+func (this *Value) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Value)
+	if !ok {
+		that2, ok := that.(Value)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Type != that1.Type {
+		return false
+	}
+	if !bytes.Equal(this.Value, that1.Value) {
+		return false
+	}
+	return true
+}
+func (this *BindVariable) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*BindVariable)
+	if !ok {
+		that2, ok := that.(BindVariable)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Type != that1.Type {
+		return false
+	}
+	if !bytes.Equal(this.Value, that1.Value) {
+		return false
+	}
+	if len(this.Values) != len(that1.Values) {
+		return false
+	}
+	for i := range this.Values {
+		if !this.Values[i].Equal(that1.Values[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *BoundQuery) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*BoundQuery)
+	if !ok {
+		that2, ok := that.(BoundQuery)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Sql != that1.Sql {
+		return false
+	}
+	if len(this.BindVariables) != len(that1.BindVariables) {
+		return false
+	}
+	for i := range this.BindVariables {
+		if !this.BindVariables[i].Equal(that1.BindVariables[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *ExecuteOptions) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteOptions)
+	if !ok {
+		that2, ok := that.(ExecuteOptions)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.IncludeEventToken != that1.IncludeEventToken {
+		return false
+	}
+	if !this.CompareEventToken.Equal(that1.CompareEventToken) {
+		return false
+	}
+	if this.IncludedFields != that1.IncludedFields {
+		return false
+	}
+	if this.ClientFoundRows != that1.ClientFoundRows {
+		return false
+	}
+	if this.Workload != that1.Workload {
+		return false
+	}
+	if this.SqlSelectLimit != that1.SqlSelectLimit {
+		return false
+	}
+	if this.TransactionIsolation != that1.TransactionIsolation {
+		return false
+	}
+	if this.SkipQueryPlanCache != that1.SkipQueryPlanCache {
+		return false
+	}
+	return true
+}
+func (this *Field) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Field)
+	if !ok {
+		that2, ok := that.(Field)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	if this.Type != that1.Type {
+		return false
+	}
+	if this.Table != that1.Table {
+		return false
+	}
+	if this.OrgTable != that1.OrgTable {
+		return false
+	}
+	if this.Database != that1.Database {
+		return false
+	}
+	if this.OrgName != that1.OrgName {
+		return false
+	}
+	if this.ColumnLength != that1.ColumnLength {
+		return false
+	}
+	if this.Charset != that1.Charset {
+		return false
+	}
+	if this.Decimals != that1.Decimals {
+		return false
+	}
+	if this.Flags != that1.Flags {
+		return false
+	}
+	return true
+}
+func (this *Row) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*Row)
+	if !ok {
+		that2, ok := that.(Row)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Lengths) != len(that1.Lengths) {
+		return false
+	}
+	for i := range this.Lengths {
+		if this.Lengths[i] != that1.Lengths[i] {
+			return false
+		}
+	}
+	if !bytes.Equal(this.Values, that1.Values) {
+		return false
+	}
+	return true
+}
+func (this *ResultExtras) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ResultExtras)
+	if !ok {
+		that2, ok := that.(ResultExtras)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.EventToken.Equal(that1.EventToken) {
+		return false
+	}
+	if this.Fresher != that1.Fresher {
+		return false
+	}
+	return true
+}
+func (this *QueryResult) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*QueryResult)
+	if !ok {
+		that2, ok := that.(QueryResult)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Fields) != len(that1.Fields) {
+		return false
+	}
+	for i := range this.Fields {
+		if !this.Fields[i].Equal(that1.Fields[i]) {
+			return false
+		}
+	}
+	if this.RowsAffected != that1.RowsAffected {
+		return false
+	}
+	if this.InsertId != that1.InsertId {
+		return false
+	}
+	if len(this.Rows) != len(that1.Rows) {
+		return false
+	}
+	for i := range this.Rows {
+		if !this.Rows[i].Equal(that1.Rows[i]) {
+			return false
+		}
+	}
+	if !this.Extras.Equal(that1.Extras) {
+		return false
+	}
+	return true
+}
+func (this *QueryWarning) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*QueryWarning)
+	if !ok {
+		that2, ok := that.(QueryWarning)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Code != that1.Code {
+		return false
+	}
+	if this.Message != that1.Message {
+		return false
+	}
+	return true
+}
+func (this *StreamEvent) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StreamEvent)
+	if !ok {
+		that2, ok := that.(StreamEvent)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Statements) != len(that1.Statements) {
+		return false
+	}
+	for i := range this.Statements {
+		if !this.Statements[i].Equal(that1.Statements[i]) {
+			return false
+		}
+	}
+	if !this.EventToken.Equal(that1.EventToken) {
+		return false
+	}
+	return true
+}
+func (this *StreamEvent_Statement) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StreamEvent_Statement)
+	if !ok {
+		that2, ok := that.(StreamEvent_Statement)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Category != that1.Category {
+		return false
+	}
+	if this.TableName != that1.TableName {
+		return false
+	}
+	if len(this.PrimaryKeyFields) != len(that1.PrimaryKeyFields) {
+		return false
+	}
+	for i := range this.PrimaryKeyFields {
+		if !this.PrimaryKeyFields[i].Equal(that1.PrimaryKeyFields[i]) {
+			return false
+		}
+	}
+	if len(this.PrimaryKeyValues) != len(that1.PrimaryKeyValues) {
+		return false
+	}
+	for i := range this.PrimaryKeyValues {
+		if !this.PrimaryKeyValues[i].Equal(that1.PrimaryKeyValues[i]) {
+			return false
+		}
+	}
+	if !bytes.Equal(this.Sql, that1.Sql) {
+		return false
+	}
+	return true
+}
+func (this *ExecuteRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteRequest)
+	if !ok {
+		that2, ok := that.(ExecuteRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.EffectiveCallerId.Equal(that1.EffectiveCallerId) {
+		return false
+	}
+	if !this.ImmediateCallerId.Equal(that1.ImmediateCallerId) {
+		return false
+	}
+	if !this.Target.Equal(that1.Target) {
+		return false
+	}
+	if !this.Query.Equal(that1.Query) {
+		return false
+	}
+	if this.TransactionId != that1.TransactionId {
+		return false
+	}
+	if !this.Options.Equal(that1.Options) {
+		return false
+	}
+	return true
+}
+func (this *ExecuteResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteResponse)
+	if !ok {
+		that2, ok := that.(ExecuteResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Result.Equal(that1.Result) {
+		return false
+	}
+	return true
+}
+func (this *ResultWithError) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ResultWithError)
+	if !ok {
+		that2, ok := that.(ResultWithError)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Error.Equal(that1.Error) {
+		return false
+	}
+	if !this.Result.Equal(that1.Result) {
+		return false
+	}
+	return true
+}
+func (this *ExecuteBatchRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteBatchRequest)
+	if !ok {
+		that2, ok := that.(ExecuteBatchRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.EffectiveCallerId.Equal(that1.EffectiveCallerId) {
+		return false
+	}
+	if !this.ImmediateCallerId.Equal(that1.ImmediateCallerId) {
+		return false
+	}
+	if !this.Target.Equal(that1.Target) {
+		return false
+	}
+	if len(this.Queries) != len(that1.Queries) {
+		return false
+	}
+	for i := range this.Queries {
+		if !this.Queries[i].Equal(that1.Queries[i]) {
+			return false
+		}
+	}
+	if this.AsTransaction != that1.AsTransaction {
+		return false
+	}
+	if this.TransactionId != that1.TransactionId {
+		return false
+	}
+	if !this.Options.Equal(that1.Options) {
+		return false
+	}
+	return true
+}
+func (this *ExecuteBatchResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ExecuteBatchResponse)
+	if !ok {
+		that2, ok := that.(ExecuteBatchResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Results) != len(that1.Results) {
+		return false
+	}
+	for i := range this.Results {
+		if !this.Results[i].Equal(that1.Results[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *StreamExecuteRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StreamExecuteRequest)
+	if !ok {
+		that2, ok := that.(StreamExecuteRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.EffectiveCallerId.Equal(that1.EffectiveCallerId) {
+		return false
+	}
+	if !this.ImmediateCallerId.Equal(that1.ImmediateCallerId) {
+		return false
+	}
+	if !this.Target.Equal(that1.Target) {
+		return false
+	}
+	if !this.Query.Equal(that1.Query) {
+		return false
+	}
+	if !this.Options.Equal(that1.Options) {
+		return false
+	}
+	if this.TransactionId != that1.TransactionId {
+		return false
+	}
+	return true
+}
+func (this *StreamExecuteResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StreamExecuteResponse)
+	if !ok {
+		that2, ok := that.(StreamExecuteResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Result.Equal(that1.Result) {
+		return false
+	}
+	return true
+}
+func (this *BeginRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*BeginRequest)
+	if !ok {
+		that2, ok := that.(BeginRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.EffectiveCallerId.Equal(that1.EffectiveCallerId) {
+		return false
+	}
+	if !this.ImmediateCallerId.Equal(that1.ImmediateCallerId) {
+		return false
+	}
+	if !this.Target.Equal(that1.Target) {
+		return false
+	}
+	if !this.Options.Equal(that1.Options) {
+		return false
+	}
+	return true
+}
+func (this *BeginResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*BeginResponse)
+	if !ok {
+		that2, ok := that.(BeginResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.TransactionId != that1.TransactionId {
+		return false
+	}
+	return true
+}
+func (this *CommitRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*CommitRequest)
+	if !ok {
+		that2, ok := that.(CommitRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.EffectiveCallerId.Equal(that1.EffectiveCallerId) {
+		return false
+	}
+	if !this.ImmediateCallerId.Equal(that1.ImmediateCallerId) {
+		return false
+	}
+	if !this.Target.Equal(that1.Target) {
+		return false
+	}
+	if this.TransactionId != that1.TransactionId {
+		return false
+	}
+	return true
+}
+func (this *CommitResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*CommitResponse)
+	if !ok {
+		that2, ok := that.(CommitResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *RollbackRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*RollbackRequest)
+	if !ok {
+		that2, ok := that.(RollbackRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.EffectiveCallerId.Equal(that1.EffectiveCallerId) {
+		return false
+	}
+	if !this.ImmediateCallerId.Equal(that1.ImmediateCallerId) {
+		return false
+	}
+	if !this.Target.Equal(that1.Target) {
+		return false
+	}
+	if this.TransactionId != that1.TransactionId {
+		return false
+	}
+	return true
+}
+func (this *RollbackResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*RollbackResponse)
+	if !ok {
+		that2, ok := that.(RollbackResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *PrepareRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*PrepareRequest)
+	if !ok {
+		that2, ok := that.(PrepareRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.EffectiveCallerId.Equal(that1.EffectiveCallerId) {
+		return false
+	}
+	if !this.ImmediateCallerId.Equal(that1.ImmediateCallerId) {
+		return false
+	}
+	if !this.Target.Equal(that1.Target) {
+		return false
+	}
+	if this.TransactionId != that1.TransactionId {
+		return false
+	}
+	if this.Dtid != that1.Dtid {
+		return false
+	}
+	return true
+}
+func (this *PrepareResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*PrepareResponse)
+	if !ok {
+		that2, ok := that.(PrepareResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *CommitPreparedRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*CommitPreparedRequest)
+	if !ok {
+		that2, ok := that.(CommitPreparedRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.EffectiveCallerId.Equal(that1.EffectiveCallerId) {
+		return false
+	}
+	if !this.ImmediateCallerId.Equal(that1.ImmediateCallerId) {
+		return false
+	}
+	if !this.Target.Equal(that1.Target) {
+		return false
+	}
+	if this.Dtid != that1.Dtid {
+		return false
+	}
+	return true
+}
+func (this *CommitPreparedResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*CommitPreparedResponse)
+	if !ok {
+		that2, ok := that.(CommitPreparedResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *RollbackPreparedRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*RollbackPreparedRequest)
+	if !ok {
+		that2, ok := that.(RollbackPreparedRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.EffectiveCallerId.Equal(that1.EffectiveCallerId) {
+		return false
+	}
+	if !this.ImmediateCallerId.Equal(that1.ImmediateCallerId) {
+		return false
+	}
+	if !this.Target.Equal(that1.Target) {
+		return false
+	}
+	if this.TransactionId != that1.TransactionId {
+		return false
+	}
+	if this.Dtid != that1.Dtid {
+		return false
+	}
+	return true
+}
+func (this *RollbackPreparedResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*RollbackPreparedResponse)
+	if !ok {
+		that2, ok := that.(RollbackPreparedResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *CreateTransactionRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*CreateTransactionRequest)
+	if !ok {
+		that2, ok := that.(CreateTransactionRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.EffectiveCallerId.Equal(that1.EffectiveCallerId) {
+		return false
+	}
+	if !this.ImmediateCallerId.Equal(that1.ImmediateCallerId) {
+		return false
+	}
+	if !this.Target.Equal(that1.Target) {
+		return false
+	}
+	if this.Dtid != that1.Dtid {
+		return false
+	}
+	if len(this.Participants) != len(that1.Participants) {
+		return false
+	}
+	for i := range this.Participants {
+		if !this.Participants[i].Equal(that1.Participants[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *CreateTransactionResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*CreateTransactionResponse)
+	if !ok {
+		that2, ok := that.(CreateTransactionResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *StartCommitRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StartCommitRequest)
+	if !ok {
+		that2, ok := that.(StartCommitRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.EffectiveCallerId.Equal(that1.EffectiveCallerId) {
+		return false
+	}
+	if !this.ImmediateCallerId.Equal(that1.ImmediateCallerId) {
+		return false
+	}
+	if !this.Target.Equal(that1.Target) {
+		return false
+	}
+	if this.TransactionId != that1.TransactionId {
+		return false
+	}
+	if this.Dtid != that1.Dtid {
+		return false
+	}
+	return true
+}
+func (this *StartCommitResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StartCommitResponse)
+	if !ok {
+		that2, ok := that.(StartCommitResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *SetRollbackRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SetRollbackRequest)
+	if !ok {
+		that2, ok := that.(SetRollbackRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.EffectiveCallerId.Equal(that1.EffectiveCallerId) {
+		return false
+	}
+	if !this.ImmediateCallerId.Equal(that1.ImmediateCallerId) {
+		return false
+	}
+	if !this.Target.Equal(that1.Target) {
+		return false
+	}
+	if this.TransactionId != that1.TransactionId {
+		return false
+	}
+	if this.Dtid != that1.Dtid {
+		return false
+	}
+	return true
+}
+func (this *SetRollbackResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SetRollbackResponse)
+	if !ok {
+		that2, ok := that.(SetRollbackResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *ConcludeTransactionRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ConcludeTransactionRequest)
+	if !ok {
+		that2, ok := that.(ConcludeTransactionRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.EffectiveCallerId.Equal(that1.EffectiveCallerId) {
+		return false
+	}
+	if !this.ImmediateCallerId.Equal(that1.ImmediateCallerId) {
+		return false
+	}
+	if !this.Target.Equal(that1.Target) {
+		return false
+	}
+	if this.Dtid != that1.Dtid {
+		return false
+	}
+	return true
+}
+func (this *ConcludeTransactionResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ConcludeTransactionResponse)
+	if !ok {
+		that2, ok := that.(ConcludeTransactionResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *ReadTransactionRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ReadTransactionRequest)
+	if !ok {
+		that2, ok := that.(ReadTransactionRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.EffectiveCallerId.Equal(that1.EffectiveCallerId) {
+		return false
+	}
+	if !this.ImmediateCallerId.Equal(that1.ImmediateCallerId) {
+		return false
+	}
+	if !this.Target.Equal(that1.Target) {
+		return false
+	}
+	if this.Dtid != that1.Dtid {
+		return false
+	}
+	return true
+}
+func (this *ReadTransactionResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*ReadTransactionResponse)
+	if !ok {
+		that2, ok := that.(ReadTransactionResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Metadata.Equal(that1.Metadata) {
+		return false
+	}
+	return true
+}
+func (this *BeginExecuteRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*BeginExecuteRequest)
+	if !ok {
+		that2, ok := that.(BeginExecuteRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.EffectiveCallerId.Equal(that1.EffectiveCallerId) {
+		return false
+	}
+	if !this.ImmediateCallerId.Equal(that1.ImmediateCallerId) {
+		return false
+	}
+	if !this.Target.Equal(that1.Target) {
+		return false
+	}
+	if !this.Query.Equal(that1.Query) {
+		return false
+	}
+	if !this.Options.Equal(that1.Options) {
+		return false
+	}
+	return true
+}
+func (this *BeginExecuteResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*BeginExecuteResponse)
+	if !ok {
+		that2, ok := that.(BeginExecuteResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Error.Equal(that1.Error) {
+		return false
+	}
+	if !this.Result.Equal(that1.Result) {
+		return false
+	}
+	if this.TransactionId != that1.TransactionId {
+		return false
+	}
+	return true
+}
+func (this *BeginExecuteBatchRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*BeginExecuteBatchRequest)
+	if !ok {
+		that2, ok := that.(BeginExecuteBatchRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.EffectiveCallerId.Equal(that1.EffectiveCallerId) {
+		return false
+	}
+	if !this.ImmediateCallerId.Equal(that1.ImmediateCallerId) {
+		return false
+	}
+	if !this.Target.Equal(that1.Target) {
+		return false
+	}
+	if len(this.Queries) != len(that1.Queries) {
+		return false
+	}
+	for i := range this.Queries {
+		if !this.Queries[i].Equal(that1.Queries[i]) {
+			return false
+		}
+	}
+	if this.AsTransaction != that1.AsTransaction {
+		return false
+	}
+	if !this.Options.Equal(that1.Options) {
+		return false
+	}
+	return true
+}
+func (this *BeginExecuteBatchResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*BeginExecuteBatchResponse)
+	if !ok {
+		that2, ok := that.(BeginExecuteBatchResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Error.Equal(that1.Error) {
+		return false
+	}
+	if len(this.Results) != len(that1.Results) {
+		return false
+	}
+	for i := range this.Results {
+		if !this.Results[i].Equal(that1.Results[i]) {
+			return false
+		}
+	}
+	if this.TransactionId != that1.TransactionId {
+		return false
+	}
+	return true
+}
+func (this *MessageStreamRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*MessageStreamRequest)
+	if !ok {
+		that2, ok := that.(MessageStreamRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.EffectiveCallerId.Equal(that1.EffectiveCallerId) {
+		return false
+	}
+	if !this.ImmediateCallerId.Equal(that1.ImmediateCallerId) {
+		return false
+	}
+	if !this.Target.Equal(that1.Target) {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	return true
+}
+func (this *MessageStreamResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*MessageStreamResponse)
+	if !ok {
+		that2, ok := that.(MessageStreamResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Result.Equal(that1.Result) {
+		return false
+	}
+	return true
+}
+func (this *MessageAckRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*MessageAckRequest)
+	if !ok {
+		that2, ok := that.(MessageAckRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.EffectiveCallerId.Equal(that1.EffectiveCallerId) {
+		return false
+	}
+	if !this.ImmediateCallerId.Equal(that1.ImmediateCallerId) {
+		return false
+	}
+	if !this.Target.Equal(that1.Target) {
+		return false
+	}
+	if this.Name != that1.Name {
+		return false
+	}
+	if len(this.Ids) != len(that1.Ids) {
+		return false
+	}
+	for i := range this.Ids {
+		if !this.Ids[i].Equal(that1.Ids[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *MessageAckResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*MessageAckResponse)
+	if !ok {
+		that2, ok := that.(MessageAckResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Result.Equal(that1.Result) {
+		return false
+	}
+	return true
+}
+func (this *SplitQueryRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SplitQueryRequest)
+	if !ok {
+		that2, ok := that.(SplitQueryRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.EffectiveCallerId.Equal(that1.EffectiveCallerId) {
+		return false
+	}
+	if !this.ImmediateCallerId.Equal(that1.ImmediateCallerId) {
+		return false
+	}
+	if !this.Target.Equal(that1.Target) {
+		return false
+	}
+	if !this.Query.Equal(that1.Query) {
+		return false
+	}
+	if len(this.SplitColumn) != len(that1.SplitColumn) {
+		return false
+	}
+	for i := range this.SplitColumn {
+		if this.SplitColumn[i] != that1.SplitColumn[i] {
+			return false
+		}
+	}
+	if this.SplitCount != that1.SplitCount {
+		return false
+	}
+	if this.NumRowsPerQueryPart != that1.NumRowsPerQueryPart {
+		return false
+	}
+	if this.Algorithm != that1.Algorithm {
+		return false
+	}
+	return true
+}
+func (this *QuerySplit) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*QuerySplit)
+	if !ok {
+		that2, ok := that.(QuerySplit)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Query.Equal(that1.Query) {
+		return false
+	}
+	if this.RowCount != that1.RowCount {
+		return false
+	}
+	return true
+}
+func (this *SplitQueryResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*SplitQueryResponse)
+	if !ok {
+		that2, ok := that.(SplitQueryResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if len(this.Queries) != len(that1.Queries) {
+		return false
+	}
+	for i := range this.Queries {
+		if !this.Queries[i].Equal(that1.Queries[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *StreamHealthRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StreamHealthRequest)
+	if !ok {
+		that2, ok := that.(StreamHealthRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	return true
+}
+func (this *RealtimeStats) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*RealtimeStats)
+	if !ok {
+		that2, ok := that.(RealtimeStats)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.HealthError != that1.HealthError {
+		return false
+	}
+	if this.SecondsBehindMaster != that1.SecondsBehindMaster {
+		return false
+	}
+	if this.BinlogPlayersCount != that1.BinlogPlayersCount {
+		return false
+	}
+	if this.SecondsBehindMasterFilteredReplication != that1.SecondsBehindMasterFilteredReplication {
+		return false
+	}
+	if this.CpuUsage != that1.CpuUsage {
+		return false
+	}
+	if this.Qps != that1.Qps {
+		return false
+	}
+	return true
+}
+func (this *AggregateStats) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*AggregateStats)
+	if !ok {
+		that2, ok := that.(AggregateStats)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.HealthyTabletCount != that1.HealthyTabletCount {
+		return false
+	}
+	if this.UnhealthyTabletCount != that1.UnhealthyTabletCount {
+		return false
+	}
+	if this.SecondsBehindMasterMin != that1.SecondsBehindMasterMin {
+		return false
+	}
+	if this.SecondsBehindMasterMax != that1.SecondsBehindMasterMax {
+		return false
+	}
+	return true
+}
+func (this *StreamHealthResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*StreamHealthResponse)
+	if !ok {
+		that2, ok := that.(StreamHealthResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Target.Equal(that1.Target) {
+		return false
+	}
+	if this.Serving != that1.Serving {
+		return false
+	}
+	if this.TabletExternallyReparentedTimestamp != that1.TabletExternallyReparentedTimestamp {
+		return false
+	}
+	if !this.RealtimeStats.Equal(that1.RealtimeStats) {
+		return false
+	}
+	if !this.AggregateStats.Equal(that1.AggregateStats) {
+		return false
+	}
+	if !this.TabletAlias.Equal(that1.TabletAlias) {
+		return false
+	}
+	return true
+}
+func (this *UpdateStreamRequest) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*UpdateStreamRequest)
+	if !ok {
+		that2, ok := that.(UpdateStreamRequest)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.EffectiveCallerId.Equal(that1.EffectiveCallerId) {
+		return false
+	}
+	if !this.ImmediateCallerId.Equal(that1.ImmediateCallerId) {
+		return false
+	}
+	if !this.Target.Equal(that1.Target) {
+		return false
+	}
+	if this.Position != that1.Position {
+		return false
+	}
+	if this.Timestamp != that1.Timestamp {
+		return false
+	}
+	return true
+}
+func (this *UpdateStreamResponse) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*UpdateStreamResponse)
+	if !ok {
+		that2, ok := that.(UpdateStreamResponse)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if !this.Event.Equal(that1.Event) {
+		return false
+	}
+	return true
+}
+func (this *TransactionMetadata) Equal(that interface{}) bool {
+	if that == nil {
+		return this == nil
+	}
+
+	that1, ok := that.(*TransactionMetadata)
+	if !ok {
+		that2, ok := that.(TransactionMetadata)
+		if ok {
+			that1 = &that2
+		} else {
+			return false
+		}
+	}
+	if that1 == nil {
+		return this == nil
+	} else if this == nil {
+		return false
+	}
+	if this.Dtid != that1.Dtid {
+		return false
+	}
+	if this.State != that1.State {
+		return false
+	}
+	if this.TimeCreated != that1.TimeCreated {
+		return false
+	}
+	if len(this.Participants) != len(that1.Participants) {
+		return false
+	}
+	for i := range this.Participants {
+		if !this.Participants[i].Equal(that1.Participants[i]) {
+			return false
+		}
+	}
+	return true
+}
+func (this *Target) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&query.Target{")
+	s = append(s, "Keyspace: "+fmt.Sprintf("%#v", this.Keyspace)+",\n")
+	s = append(s, "Shard: "+fmt.Sprintf("%#v", this.Shard)+",\n")
+	s = append(s, "TabletType: "+fmt.Sprintf("%#v", this.TabletType)+",\n")
+	s = append(s, "Cell: "+fmt.Sprintf("%#v", this.Cell)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *VTGateCallerID) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&query.VTGateCallerID{")
+	s = append(s, "Username: "+fmt.Sprintf("%#v", this.Username)+",\n")
+	s = append(s, "Groups: "+fmt.Sprintf("%#v", this.Groups)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *EventToken) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&query.EventToken{")
+	s = append(s, "Timestamp: "+fmt.Sprintf("%#v", this.Timestamp)+",\n")
+	s = append(s, "Shard: "+fmt.Sprintf("%#v", this.Shard)+",\n")
+	s = append(s, "Position: "+fmt.Sprintf("%#v", this.Position)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Value) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&query.Value{")
+	s = append(s, "Type: "+fmt.Sprintf("%#v", this.Type)+",\n")
+	s = append(s, "Value: "+fmt.Sprintf("%#v", this.Value)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *BindVariable) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&query.BindVariable{")
+	s = append(s, "Type: "+fmt.Sprintf("%#v", this.Type)+",\n")
+	s = append(s, "Value: "+fmt.Sprintf("%#v", this.Value)+",\n")
+	if this.Values != nil {
+		s = append(s, "Values: "+fmt.Sprintf("%#v", this.Values)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *BoundQuery) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&query.BoundQuery{")
+	s = append(s, "Sql: "+fmt.Sprintf("%#v", this.Sql)+",\n")
+	keysForBindVariables := make([]string, 0, len(this.BindVariables))
+	for k := range this.BindVariables {
+		keysForBindVariables = append(keysForBindVariables, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForBindVariables)
+	mapStringForBindVariables := "map[string]*BindVariable{"
+	for _, k := range keysForBindVariables {
+		mapStringForBindVariables += fmt.Sprintf("%#v: %#v,", k, this.BindVariables[k])
+	}
+	mapStringForBindVariables += "}"
+	if this.BindVariables != nil {
+		s = append(s, "BindVariables: "+mapStringForBindVariables+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteOptions) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 12)
+	s = append(s, "&query.ExecuteOptions{")
+	s = append(s, "IncludeEventToken: "+fmt.Sprintf("%#v", this.IncludeEventToken)+",\n")
+	if this.CompareEventToken != nil {
+		s = append(s, "CompareEventToken: "+fmt.Sprintf("%#v", this.CompareEventToken)+",\n")
+	}
+	s = append(s, "IncludedFields: "+fmt.Sprintf("%#v", this.IncludedFields)+",\n")
+	s = append(s, "ClientFoundRows: "+fmt.Sprintf("%#v", this.ClientFoundRows)+",\n")
+	s = append(s, "Workload: "+fmt.Sprintf("%#v", this.Workload)+",\n")
+	s = append(s, "SqlSelectLimit: "+fmt.Sprintf("%#v", this.SqlSelectLimit)+",\n")
+	s = append(s, "TransactionIsolation: "+fmt.Sprintf("%#v", this.TransactionIsolation)+",\n")
+	s = append(s, "SkipQueryPlanCache: "+fmt.Sprintf("%#v", this.SkipQueryPlanCache)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Field) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 14)
+	s = append(s, "&query.Field{")
+	s = append(s, "Name: "+fmt.Sprintf("%#v", this.Name)+",\n")
+	s = append(s, "Type: "+fmt.Sprintf("%#v", this.Type)+",\n")
+	s = append(s, "Table: "+fmt.Sprintf("%#v", this.Table)+",\n")
+	s = append(s, "OrgTable: "+fmt.Sprintf("%#v", this.OrgTable)+",\n")
+	s = append(s, "Database: "+fmt.Sprintf("%#v", this.Database)+",\n")
+	s = append(s, "OrgName: "+fmt.Sprintf("%#v", this.OrgName)+",\n")
+	s = append(s, "ColumnLength: "+fmt.Sprintf("%#v", this.ColumnLength)+",\n")
+	s = append(s, "Charset: "+fmt.Sprintf("%#v", this.Charset)+",\n")
+	s = append(s, "Decimals: "+fmt.Sprintf("%#v", this.Decimals)+",\n")
+	s = append(s, "Flags: "+fmt.Sprintf("%#v", this.Flags)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *Row) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&query.Row{")
+	s = append(s, "Lengths: "+fmt.Sprintf("%#v", this.Lengths)+",\n")
+	s = append(s, "Values: "+fmt.Sprintf("%#v", this.Values)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ResultExtras) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&query.ResultExtras{")
+	if this.EventToken != nil {
+		s = append(s, "EventToken: "+fmt.Sprintf("%#v", this.EventToken)+",\n")
+	}
+	s = append(s, "Fresher: "+fmt.Sprintf("%#v", this.Fresher)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *QueryResult) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 9)
+	s = append(s, "&query.QueryResult{")
+	if this.Fields != nil {
+		s = append(s, "Fields: "+fmt.Sprintf("%#v", this.Fields)+",\n")
+	}
+	s = append(s, "RowsAffected: "+fmt.Sprintf("%#v", this.RowsAffected)+",\n")
+	s = append(s, "InsertId: "+fmt.Sprintf("%#v", this.InsertId)+",\n")
+	if this.Rows != nil {
+		s = append(s, "Rows: "+fmt.Sprintf("%#v", this.Rows)+",\n")
+	}
+	if this.Extras != nil {
+		s = append(s, "Extras: "+fmt.Sprintf("%#v", this.Extras)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *QueryWarning) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&query.QueryWarning{")
+	s = append(s, "Code: "+fmt.Sprintf("%#v", this.Code)+",\n")
+	s = append(s, "Message: "+fmt.Sprintf("%#v", this.Message)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StreamEvent) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&query.StreamEvent{")
+	if this.Statements != nil {
+		s = append(s, "Statements: "+fmt.Sprintf("%#v", this.Statements)+",\n")
+	}
+	if this.EventToken != nil {
+		s = append(s, "EventToken: "+fmt.Sprintf("%#v", this.EventToken)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StreamEvent_Statement) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 9)
+	s = append(s, "&query.StreamEvent_Statement{")
+	s = append(s, "Category: "+fmt.Sprintf("%#v", this.Category)+",\n")
+	s = append(s, "TableName: "+fmt.Sprintf("%#v", this.TableName)+",\n")
+	if this.PrimaryKeyFields != nil {
+		s = append(s, "PrimaryKeyFields: "+fmt.Sprintf("%#v", this.PrimaryKeyFields)+",\n")
+	}
+	if this.PrimaryKeyValues != nil {
+		s = append(s, "PrimaryKeyValues: "+fmt.Sprintf("%#v", this.PrimaryKeyValues)+",\n")
+	}
+	s = append(s, "Sql: "+fmt.Sprintf("%#v", this.Sql)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 10)
+	s = append(s, "&query.ExecuteRequest{")
+	if this.EffectiveCallerId != nil {
+		s = append(s, "EffectiveCallerId: "+fmt.Sprintf("%#v", this.EffectiveCallerId)+",\n")
+	}
+	if this.ImmediateCallerId != nil {
+		s = append(s, "ImmediateCallerId: "+fmt.Sprintf("%#v", this.ImmediateCallerId)+",\n")
+	}
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	if this.Query != nil {
+		s = append(s, "Query: "+fmt.Sprintf("%#v", this.Query)+",\n")
+	}
+	s = append(s, "TransactionId: "+fmt.Sprintf("%#v", this.TransactionId)+",\n")
+	if this.Options != nil {
+		s = append(s, "Options: "+fmt.Sprintf("%#v", this.Options)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&query.ExecuteResponse{")
+	if this.Result != nil {
+		s = append(s, "Result: "+fmt.Sprintf("%#v", this.Result)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ResultWithError) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&query.ResultWithError{")
+	if this.Error != nil {
+		s = append(s, "Error: "+fmt.Sprintf("%#v", this.Error)+",\n")
+	}
+	if this.Result != nil {
+		s = append(s, "Result: "+fmt.Sprintf("%#v", this.Result)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteBatchRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 11)
+	s = append(s, "&query.ExecuteBatchRequest{")
+	if this.EffectiveCallerId != nil {
+		s = append(s, "EffectiveCallerId: "+fmt.Sprintf("%#v", this.EffectiveCallerId)+",\n")
+	}
+	if this.ImmediateCallerId != nil {
+		s = append(s, "ImmediateCallerId: "+fmt.Sprintf("%#v", this.ImmediateCallerId)+",\n")
+	}
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	if this.Queries != nil {
+		s = append(s, "Queries: "+fmt.Sprintf("%#v", this.Queries)+",\n")
+	}
+	s = append(s, "AsTransaction: "+fmt.Sprintf("%#v", this.AsTransaction)+",\n")
+	s = append(s, "TransactionId: "+fmt.Sprintf("%#v", this.TransactionId)+",\n")
+	if this.Options != nil {
+		s = append(s, "Options: "+fmt.Sprintf("%#v", this.Options)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ExecuteBatchResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&query.ExecuteBatchResponse{")
+	if this.Results != nil {
+		s = append(s, "Results: "+fmt.Sprintf("%#v", this.Results)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StreamExecuteRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 10)
+	s = append(s, "&query.StreamExecuteRequest{")
+	if this.EffectiveCallerId != nil {
+		s = append(s, "EffectiveCallerId: "+fmt.Sprintf("%#v", this.EffectiveCallerId)+",\n")
+	}
+	if this.ImmediateCallerId != nil {
+		s = append(s, "ImmediateCallerId: "+fmt.Sprintf("%#v", this.ImmediateCallerId)+",\n")
+	}
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	if this.Query != nil {
+		s = append(s, "Query: "+fmt.Sprintf("%#v", this.Query)+",\n")
+	}
+	if this.Options != nil {
+		s = append(s, "Options: "+fmt.Sprintf("%#v", this.Options)+",\n")
+	}
+	s = append(s, "TransactionId: "+fmt.Sprintf("%#v", this.TransactionId)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StreamExecuteResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&query.StreamExecuteResponse{")
+	if this.Result != nil {
+		s = append(s, "Result: "+fmt.Sprintf("%#v", this.Result)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *BeginRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&query.BeginRequest{")
+	if this.EffectiveCallerId != nil {
+		s = append(s, "EffectiveCallerId: "+fmt.Sprintf("%#v", this.EffectiveCallerId)+",\n")
+	}
+	if this.ImmediateCallerId != nil {
+		s = append(s, "ImmediateCallerId: "+fmt.Sprintf("%#v", this.ImmediateCallerId)+",\n")
+	}
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	if this.Options != nil {
+		s = append(s, "Options: "+fmt.Sprintf("%#v", this.Options)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *BeginResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&query.BeginResponse{")
+	s = append(s, "TransactionId: "+fmt.Sprintf("%#v", this.TransactionId)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *CommitRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&query.CommitRequest{")
+	if this.EffectiveCallerId != nil {
+		s = append(s, "EffectiveCallerId: "+fmt.Sprintf("%#v", this.EffectiveCallerId)+",\n")
+	}
+	if this.ImmediateCallerId != nil {
+		s = append(s, "ImmediateCallerId: "+fmt.Sprintf("%#v", this.ImmediateCallerId)+",\n")
+	}
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	s = append(s, "TransactionId: "+fmt.Sprintf("%#v", this.TransactionId)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *CommitResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&query.CommitResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *RollbackRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&query.RollbackRequest{")
+	if this.EffectiveCallerId != nil {
+		s = append(s, "EffectiveCallerId: "+fmt.Sprintf("%#v", this.EffectiveCallerId)+",\n")
+	}
+	if this.ImmediateCallerId != nil {
+		s = append(s, "ImmediateCallerId: "+fmt.Sprintf("%#v", this.ImmediateCallerId)+",\n")
+	}
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	s = append(s, "TransactionId: "+fmt.Sprintf("%#v", this.TransactionId)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *RollbackResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&query.RollbackResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *PrepareRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 9)
+	s = append(s, "&query.PrepareRequest{")
+	if this.EffectiveCallerId != nil {
+		s = append(s, "EffectiveCallerId: "+fmt.Sprintf("%#v", this.EffectiveCallerId)+",\n")
+	}
+	if this.ImmediateCallerId != nil {
+		s = append(s, "ImmediateCallerId: "+fmt.Sprintf("%#v", this.ImmediateCallerId)+",\n")
+	}
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	s = append(s, "TransactionId: "+fmt.Sprintf("%#v", this.TransactionId)+",\n")
+	s = append(s, "Dtid: "+fmt.Sprintf("%#v", this.Dtid)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *PrepareResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&query.PrepareResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *CommitPreparedRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&query.CommitPreparedRequest{")
+	if this.EffectiveCallerId != nil {
+		s = append(s, "EffectiveCallerId: "+fmt.Sprintf("%#v", this.EffectiveCallerId)+",\n")
+	}
+	if this.ImmediateCallerId != nil {
+		s = append(s, "ImmediateCallerId: "+fmt.Sprintf("%#v", this.ImmediateCallerId)+",\n")
+	}
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	s = append(s, "Dtid: "+fmt.Sprintf("%#v", this.Dtid)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *CommitPreparedResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&query.CommitPreparedResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *RollbackPreparedRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 9)
+	s = append(s, "&query.RollbackPreparedRequest{")
+	if this.EffectiveCallerId != nil {
+		s = append(s, "EffectiveCallerId: "+fmt.Sprintf("%#v", this.EffectiveCallerId)+",\n")
+	}
+	if this.ImmediateCallerId != nil {
+		s = append(s, "ImmediateCallerId: "+fmt.Sprintf("%#v", this.ImmediateCallerId)+",\n")
+	}
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	s = append(s, "TransactionId: "+fmt.Sprintf("%#v", this.TransactionId)+",\n")
+	s = append(s, "Dtid: "+fmt.Sprintf("%#v", this.Dtid)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *RollbackPreparedResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&query.RollbackPreparedResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *CreateTransactionRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 9)
+	s = append(s, "&query.CreateTransactionRequest{")
+	if this.EffectiveCallerId != nil {
+		s = append(s, "EffectiveCallerId: "+fmt.Sprintf("%#v", this.EffectiveCallerId)+",\n")
+	}
+	if this.ImmediateCallerId != nil {
+		s = append(s, "ImmediateCallerId: "+fmt.Sprintf("%#v", this.ImmediateCallerId)+",\n")
+	}
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	s = append(s, "Dtid: "+fmt.Sprintf("%#v", this.Dtid)+",\n")
+	if this.Participants != nil {
+		s = append(s, "Participants: "+fmt.Sprintf("%#v", this.Participants)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *CreateTransactionResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&query.CreateTransactionResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StartCommitRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 9)
+	s = append(s, "&query.StartCommitRequest{")
+	if this.EffectiveCallerId != nil {
+		s = append(s, "EffectiveCallerId: "+fmt.Sprintf("%#v", this.EffectiveCallerId)+",\n")
+	}
+	if this.ImmediateCallerId != nil {
+		s = append(s, "ImmediateCallerId: "+fmt.Sprintf("%#v", this.ImmediateCallerId)+",\n")
+	}
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	s = append(s, "TransactionId: "+fmt.Sprintf("%#v", this.TransactionId)+",\n")
+	s = append(s, "Dtid: "+fmt.Sprintf("%#v", this.Dtid)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StartCommitResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&query.StartCommitResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SetRollbackRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 9)
+	s = append(s, "&query.SetRollbackRequest{")
+	if this.EffectiveCallerId != nil {
+		s = append(s, "EffectiveCallerId: "+fmt.Sprintf("%#v", this.EffectiveCallerId)+",\n")
+	}
+	if this.ImmediateCallerId != nil {
+		s = append(s, "ImmediateCallerId: "+fmt.Sprintf("%#v", this.ImmediateCallerId)+",\n")
+	}
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	s = append(s, "TransactionId: "+fmt.Sprintf("%#v", this.TransactionId)+",\n")
+	s = append(s, "Dtid: "+fmt.Sprintf("%#v", this.Dtid)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SetRollbackResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&query.SetRollbackResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ConcludeTransactionRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&query.ConcludeTransactionRequest{")
+	if this.EffectiveCallerId != nil {
+		s = append(s, "EffectiveCallerId: "+fmt.Sprintf("%#v", this.EffectiveCallerId)+",\n")
+	}
+	if this.ImmediateCallerId != nil {
+		s = append(s, "ImmediateCallerId: "+fmt.Sprintf("%#v", this.ImmediateCallerId)+",\n")
+	}
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	s = append(s, "Dtid: "+fmt.Sprintf("%#v", this.Dtid)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ConcludeTransactionResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&query.ConcludeTransactionResponse{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ReadTransactionRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&query.ReadTransactionRequest{")
+	if this.EffectiveCallerId != nil {
+		s = append(s, "EffectiveCallerId: "+fmt.Sprintf("%#v", this.EffectiveCallerId)+",\n")
+	}
+	if this.ImmediateCallerId != nil {
+		s = append(s, "ImmediateCallerId: "+fmt.Sprintf("%#v", this.ImmediateCallerId)+",\n")
+	}
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	s = append(s, "Dtid: "+fmt.Sprintf("%#v", this.Dtid)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *ReadTransactionResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&query.ReadTransactionResponse{")
+	if this.Metadata != nil {
+		s = append(s, "Metadata: "+fmt.Sprintf("%#v", this.Metadata)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *BeginExecuteRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 9)
+	s = append(s, "&query.BeginExecuteRequest{")
+	if this.EffectiveCallerId != nil {
+		s = append(s, "EffectiveCallerId: "+fmt.Sprintf("%#v", this.EffectiveCallerId)+",\n")
+	}
+	if this.ImmediateCallerId != nil {
+		s = append(s, "ImmediateCallerId: "+fmt.Sprintf("%#v", this.ImmediateCallerId)+",\n")
+	}
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	if this.Query != nil {
+		s = append(s, "Query: "+fmt.Sprintf("%#v", this.Query)+",\n")
+	}
+	if this.Options != nil {
+		s = append(s, "Options: "+fmt.Sprintf("%#v", this.Options)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *BeginExecuteResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&query.BeginExecuteResponse{")
+	if this.Error != nil {
+		s = append(s, "Error: "+fmt.Sprintf("%#v", this.Error)+",\n")
+	}
+	if this.Result != nil {
+		s = append(s, "Result: "+fmt.Sprintf("%#v", this.Result)+",\n")
+	}
+	s = append(s, "TransactionId: "+fmt.Sprintf("%#v", this.TransactionId)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *BeginExecuteBatchRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 10)
+	s = append(s, "&query.BeginExecuteBatchRequest{")
+	if this.EffectiveCallerId != nil {
+		s = append(s, "EffectiveCallerId: "+fmt.Sprintf("%#v", this.EffectiveCallerId)+",\n")
+	}
+	if this.ImmediateCallerId != nil {
+		s = append(s, "ImmediateCallerId: "+fmt.Sprintf("%#v", this.ImmediateCallerId)+",\n")
+	}
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	if this.Queries != nil {
+		s = append(s, "Queries: "+fmt.Sprintf("%#v", this.Queries)+",\n")
+	}
+	s = append(s, "AsTransaction: "+fmt.Sprintf("%#v", this.AsTransaction)+",\n")
+	if this.Options != nil {
+		s = append(s, "Options: "+fmt.Sprintf("%#v", this.Options)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *BeginExecuteBatchResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 7)
+	s = append(s, "&query.BeginExecuteBatchResponse{")
+	if this.Error != nil {
+		s = append(s, "Error: "+fmt.Sprintf("%#v", this.Error)+",\n")
+	}
+	if this.Results != nil {
+		s = append(s, "Results: "+fmt.Sprintf("%#v", this.Results)+",\n")
+	}
+	s = append(s, "TransactionId: "+fmt.Sprintf("%#v", this.TransactionId)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *MessageStreamRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&query.MessageStreamRequest{")
+	if this.EffectiveCallerId != nil {
+		s = append(s, "EffectiveCallerId: "+fmt.Sprintf("%#v", this.EffectiveCallerId)+",\n")
+	}
+	if this.ImmediateCallerId != nil {
+		s = append(s, "ImmediateCallerId: "+fmt.Sprintf("%#v", this.ImmediateCallerId)+",\n")
+	}
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	s = append(s, "Name: "+fmt.Sprintf("%#v", this.Name)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *MessageStreamResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&query.MessageStreamResponse{")
+	if this.Result != nil {
+		s = append(s, "Result: "+fmt.Sprintf("%#v", this.Result)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *MessageAckRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 9)
+	s = append(s, "&query.MessageAckRequest{")
+	if this.EffectiveCallerId != nil {
+		s = append(s, "EffectiveCallerId: "+fmt.Sprintf("%#v", this.EffectiveCallerId)+",\n")
+	}
+	if this.ImmediateCallerId != nil {
+		s = append(s, "ImmediateCallerId: "+fmt.Sprintf("%#v", this.ImmediateCallerId)+",\n")
+	}
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	s = append(s, "Name: "+fmt.Sprintf("%#v", this.Name)+",\n")
+	if this.Ids != nil {
+		s = append(s, "Ids: "+fmt.Sprintf("%#v", this.Ids)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *MessageAckResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&query.MessageAckResponse{")
+	if this.Result != nil {
+		s = append(s, "Result: "+fmt.Sprintf("%#v", this.Result)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SplitQueryRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 12)
+	s = append(s, "&query.SplitQueryRequest{")
+	if this.EffectiveCallerId != nil {
+		s = append(s, "EffectiveCallerId: "+fmt.Sprintf("%#v", this.EffectiveCallerId)+",\n")
+	}
+	if this.ImmediateCallerId != nil {
+		s = append(s, "ImmediateCallerId: "+fmt.Sprintf("%#v", this.ImmediateCallerId)+",\n")
+	}
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	if this.Query != nil {
+		s = append(s, "Query: "+fmt.Sprintf("%#v", this.Query)+",\n")
+	}
+	s = append(s, "SplitColumn: "+fmt.Sprintf("%#v", this.SplitColumn)+",\n")
+	s = append(s, "SplitCount: "+fmt.Sprintf("%#v", this.SplitCount)+",\n")
+	s = append(s, "NumRowsPerQueryPart: "+fmt.Sprintf("%#v", this.NumRowsPerQueryPart)+",\n")
+	s = append(s, "Algorithm: "+fmt.Sprintf("%#v", this.Algorithm)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *QuerySplit) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 6)
+	s = append(s, "&query.QuerySplit{")
+	if this.Query != nil {
+		s = append(s, "Query: "+fmt.Sprintf("%#v", this.Query)+",\n")
+	}
+	s = append(s, "RowCount: "+fmt.Sprintf("%#v", this.RowCount)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *SplitQueryResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&query.SplitQueryResponse{")
+	if this.Queries != nil {
+		s = append(s, "Queries: "+fmt.Sprintf("%#v", this.Queries)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StreamHealthRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 4)
+	s = append(s, "&query.StreamHealthRequest{")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *RealtimeStats) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 10)
+	s = append(s, "&query.RealtimeStats{")
+	s = append(s, "HealthError: "+fmt.Sprintf("%#v", this.HealthError)+",\n")
+	s = append(s, "SecondsBehindMaster: "+fmt.Sprintf("%#v", this.SecondsBehindMaster)+",\n")
+	s = append(s, "BinlogPlayersCount: "+fmt.Sprintf("%#v", this.BinlogPlayersCount)+",\n")
+	s = append(s, "SecondsBehindMasterFilteredReplication: "+fmt.Sprintf("%#v", this.SecondsBehindMasterFilteredReplication)+",\n")
+	s = append(s, "CpuUsage: "+fmt.Sprintf("%#v", this.CpuUsage)+",\n")
+	s = append(s, "Qps: "+fmt.Sprintf("%#v", this.Qps)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *AggregateStats) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&query.AggregateStats{")
+	s = append(s, "HealthyTabletCount: "+fmt.Sprintf("%#v", this.HealthyTabletCount)+",\n")
+	s = append(s, "UnhealthyTabletCount: "+fmt.Sprintf("%#v", this.UnhealthyTabletCount)+",\n")
+	s = append(s, "SecondsBehindMasterMin: "+fmt.Sprintf("%#v", this.SecondsBehindMasterMin)+",\n")
+	s = append(s, "SecondsBehindMasterMax: "+fmt.Sprintf("%#v", this.SecondsBehindMasterMax)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *StreamHealthResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 10)
+	s = append(s, "&query.StreamHealthResponse{")
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	s = append(s, "Serving: "+fmt.Sprintf("%#v", this.Serving)+",\n")
+	s = append(s, "TabletExternallyReparentedTimestamp: "+fmt.Sprintf("%#v", this.TabletExternallyReparentedTimestamp)+",\n")
+	if this.RealtimeStats != nil {
+		s = append(s, "RealtimeStats: "+fmt.Sprintf("%#v", this.RealtimeStats)+",\n")
+	}
+	if this.AggregateStats != nil {
+		s = append(s, "AggregateStats: "+fmt.Sprintf("%#v", this.AggregateStats)+",\n")
+	}
+	if this.TabletAlias != nil {
+		s = append(s, "TabletAlias: "+fmt.Sprintf("%#v", this.TabletAlias)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *UpdateStreamRequest) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 9)
+	s = append(s, "&query.UpdateStreamRequest{")
+	if this.EffectiveCallerId != nil {
+		s = append(s, "EffectiveCallerId: "+fmt.Sprintf("%#v", this.EffectiveCallerId)+",\n")
+	}
+	if this.ImmediateCallerId != nil {
+		s = append(s, "ImmediateCallerId: "+fmt.Sprintf("%#v", this.ImmediateCallerId)+",\n")
+	}
+	if this.Target != nil {
+		s = append(s, "Target: "+fmt.Sprintf("%#v", this.Target)+",\n")
+	}
+	s = append(s, "Position: "+fmt.Sprintf("%#v", this.Position)+",\n")
+	s = append(s, "Timestamp: "+fmt.Sprintf("%#v", this.Timestamp)+",\n")
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *UpdateStreamResponse) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 5)
+	s = append(s, "&query.UpdateStreamResponse{")
+	if this.Event != nil {
+		s = append(s, "Event: "+fmt.Sprintf("%#v", this.Event)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func (this *TransactionMetadata) GoString() string {
+	if this == nil {
+		return "nil"
+	}
+	s := make([]string, 0, 8)
+	s = append(s, "&query.TransactionMetadata{")
+	s = append(s, "Dtid: "+fmt.Sprintf("%#v", this.Dtid)+",\n")
+	s = append(s, "State: "+fmt.Sprintf("%#v", this.State)+",\n")
+	s = append(s, "TimeCreated: "+fmt.Sprintf("%#v", this.TimeCreated)+",\n")
+	if this.Participants != nil {
+		s = append(s, "Participants: "+fmt.Sprintf("%#v", this.Participants)+",\n")
+	}
+	s = append(s, "}")
+	return strings.Join(s, "")
+}
+func valueToGoStringQuery(v interface{}, typ string) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("func(v %v) *%v { return &v } ( %#v )", typ, typ, pv)
+}
 func (m *Target) Marshal() (dAtA []byte, err error) {
 	size := m.ProtoSize()
 	dAtA = make([]byte, size)
@@ -5003,9 +7710,6 @@ func (m *Target) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintQuery(dAtA, i, uint64(len(m.Cell)))
 		i += copy(dAtA[i:], m.Cell)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -5046,9 +7750,6 @@ func (m *VTGateCallerID) MarshalTo(dAtA []byte) (int, error) {
 			i += copy(dAtA[i:], s)
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5084,9 +7785,6 @@ func (m *EventToken) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintQuery(dAtA, i, uint64(len(m.Position)))
 		i += copy(dAtA[i:], m.Position)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5115,9 +7813,6 @@ func (m *Value) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintQuery(dAtA, i, uint64(len(m.Value)))
 		i += copy(dAtA[i:], m.Value)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -5159,9 +7854,6 @@ func (m *BindVariable) MarshalTo(dAtA []byte) (int, error) {
 			}
 			i += n
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -5214,9 +7906,6 @@ func (m *BoundQuery) MarshalTo(dAtA []byte) (int, error) {
 				i += n1
 			}
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -5296,9 +7985,6 @@ func (m *ExecuteOptions) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i++
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5372,9 +8058,6 @@ func (m *Field) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintQuery(dAtA, i, uint64(m.Flags))
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5417,9 +8100,6 @@ func (m *Row) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintQuery(dAtA, i, uint64(len(m.Values)))
 		i += copy(dAtA[i:], m.Values)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5457,9 +8137,6 @@ func (m *ResultExtras) MarshalTo(dAtA []byte) (int, error) {
 			dAtA[i] = 0
 		}
 		i++
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -5523,9 +8200,6 @@ func (m *QueryResult) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n7
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5554,9 +8228,6 @@ func (m *QueryWarning) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintQuery(dAtA, i, uint64(len(m.Message)))
 		i += copy(dAtA[i:], m.Message)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -5597,9 +8268,6 @@ func (m *StreamEvent) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err8
 		}
 		i += n8
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -5659,9 +8327,6 @@ func (m *StreamEvent_Statement) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintQuery(dAtA, i, uint64(len(m.Sql)))
 		i += copy(dAtA[i:], m.Sql)
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -5736,9 +8401,6 @@ func (m *ExecuteRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n13
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5766,9 +8428,6 @@ func (m *ExecuteResponse) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err14
 		}
 		i += n14
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -5807,9 +8466,6 @@ func (m *ResultWithError) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err16
 		}
 		i += n16
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -5896,9 +8552,6 @@ func (m *ExecuteBatchRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n20
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -5928,9 +8581,6 @@ func (m *ExecuteBatchResponse) MarshalTo(dAtA []byte) (int, error) {
 			}
 			i += n
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -6005,9 +8655,6 @@ func (m *StreamExecuteRequest) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintQuery(dAtA, i, uint64(m.TransactionId))
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6035,9 +8682,6 @@ func (m *StreamExecuteResponse) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err26
 		}
 		i += n26
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -6097,9 +8741,6 @@ func (m *BeginRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n30
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6122,9 +8763,6 @@ func (m *BeginResponse) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x8
 		i++
 		i = encodeVarintQuery(dAtA, i, uint64(m.TransactionId))
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -6179,9 +8817,6 @@ func (m *CommitRequest) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintQuery(dAtA, i, uint64(m.TransactionId))
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6200,9 +8835,6 @@ func (m *CommitResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6256,9 +8888,6 @@ func (m *RollbackRequest) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintQuery(dAtA, i, uint64(m.TransactionId))
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6277,9 +8906,6 @@ func (m *RollbackResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6339,9 +8965,6 @@ func (m *PrepareRequest) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintQuery(dAtA, i, uint64(len(m.Dtid)))
 		i += copy(dAtA[i:], m.Dtid)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6360,9 +8983,6 @@ func (m *PrepareResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6417,9 +9037,6 @@ func (m *CommitPreparedRequest) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintQuery(dAtA, i, uint64(len(m.Dtid)))
 		i += copy(dAtA[i:], m.Dtid)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6438,9 +9055,6 @@ func (m *CommitPreparedResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6500,9 +9114,6 @@ func (m *RollbackPreparedRequest) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintQuery(dAtA, i, uint64(len(m.Dtid)))
 		i += copy(dAtA[i:], m.Dtid)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6521,9 +9132,6 @@ func (m *RollbackPreparedResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6590,9 +9198,6 @@ func (m *CreateTransactionRequest) MarshalTo(dAtA []byte) (int, error) {
 			i += n
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6611,9 +9216,6 @@ func (m *CreateTransactionResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6673,9 +9275,6 @@ func (m *StartCommitRequest) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintQuery(dAtA, i, uint64(len(m.Dtid)))
 		i += copy(dAtA[i:], m.Dtid)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6694,9 +9293,6 @@ func (m *StartCommitResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6756,9 +9352,6 @@ func (m *SetRollbackRequest) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintQuery(dAtA, i, uint64(len(m.Dtid)))
 		i += copy(dAtA[i:], m.Dtid)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6777,9 +9370,6 @@ func (m *SetRollbackResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6834,9 +9424,6 @@ func (m *ConcludeTransactionRequest) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintQuery(dAtA, i, uint64(len(m.Dtid)))
 		i += copy(dAtA[i:], m.Dtid)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6855,9 +9442,6 @@ func (m *ConcludeTransactionResponse) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6912,9 +9496,6 @@ func (m *ReadTransactionRequest) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintQuery(dAtA, i, uint64(len(m.Dtid)))
 		i += copy(dAtA[i:], m.Dtid)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -6942,9 +9523,6 @@ func (m *ReadTransactionResponse) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err61
 		}
 		i += n61
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -7014,9 +9592,6 @@ func (m *BeginExecuteRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n66
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7059,9 +9634,6 @@ func (m *BeginExecuteResponse) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x18
 		i++
 		i = encodeVarintQuery(dAtA, i, uint64(m.TransactionId))
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -7143,9 +9715,6 @@ func (m *BeginExecuteBatchRequest) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n72
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7190,9 +9759,6 @@ func (m *BeginExecuteBatchResponse) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x18
 		i++
 		i = encodeVarintQuery(dAtA, i, uint64(m.TransactionId))
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -7248,9 +9814,6 @@ func (m *MessageStreamRequest) MarshalTo(dAtA []byte) (int, error) {
 		i = encodeVarintQuery(dAtA, i, uint64(len(m.Name)))
 		i += copy(dAtA[i:], m.Name)
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7278,9 +9841,6 @@ func (m *MessageStreamResponse) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err77
 		}
 		i += n77
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -7348,9 +9908,6 @@ func (m *MessageAckRequest) MarshalTo(dAtA []byte) (int, error) {
 			i += n
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7378,9 +9935,6 @@ func (m *MessageAckResponse) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err81
 		}
 		i += n81
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -7470,9 +10024,6 @@ func (m *SplitQueryRequest) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintQuery(dAtA, i, uint64(m.Algorithm))
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7506,9 +10057,6 @@ func (m *QuerySplit) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintQuery(dAtA, i, uint64(m.RowCount))
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7539,9 +10087,6 @@ func (m *SplitQueryResponse) MarshalTo(dAtA []byte) (int, error) {
 			i += n
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7560,9 +10105,6 @@ func (m *StreamHealthRequest) MarshalTo(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7614,9 +10156,6 @@ func (m *RealtimeStats) MarshalTo(dAtA []byte) (int, error) {
 		encoding_binary.LittleEndian.PutUint64(dAtA[i:], uint64(math.Float64bits(float64(m.Qps))))
 		i += 8
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7654,9 +10193,6 @@ func (m *AggregateStats) MarshalTo(dAtA []byte) (int, error) {
 		dAtA[i] = 0x20
 		i++
 		i = encodeVarintQuery(dAtA, i, uint64(m.SecondsBehindMasterMax))
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -7731,9 +10267,6 @@ func (m *StreamHealthResponse) MarshalTo(dAtA []byte) (int, error) {
 		}
 		i += n90
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7793,9 +10326,6 @@ func (m *UpdateStreamRequest) MarshalTo(dAtA []byte) (int, error) {
 		i++
 		i = encodeVarintQuery(dAtA, i, uint64(m.Timestamp))
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7823,9 +10353,6 @@ func (m *UpdateStreamResponse) MarshalTo(dAtA []byte) (int, error) {
 			return 0, err94
 		}
 		i += n94
-	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
 	}
 	return i, nil
 }
@@ -7873,9 +10400,6 @@ func (m *TransactionMetadata) MarshalTo(dAtA []byte) (int, error) {
 			i += n
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		i += copy(dAtA[i:], m.XXX_unrecognized)
-	}
 	return i, nil
 }
 
@@ -7909,9 +10433,6 @@ func (m *Target) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovQuery(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7930,9 +10451,6 @@ func (m *VTGateCallerID) ProtoSize() (n int) {
 			l = len(s)
 			n += 1 + l + sovQuery(uint64(l))
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -7954,9 +10472,6 @@ func (m *EventToken) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovQuery(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -7972,9 +10487,6 @@ func (m *Value) ProtoSize() (n int) {
 	l = len(m.Value)
 	if l > 0 {
 		n += 1 + l + sovQuery(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -7997,9 +10509,6 @@ func (m *BindVariable) ProtoSize() (n int) {
 			l = e.ProtoSize()
 			n += 1 + l + sovQuery(uint64(l))
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8026,9 +10535,6 @@ func (m *BoundQuery) ProtoSize() (n int) {
 			mapEntrySize := 1 + len(k) + sovQuery(uint64(len(k))) + l
 			n += mapEntrySize + 1 + sovQuery(uint64(mapEntrySize))
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8063,9 +10569,6 @@ func (m *ExecuteOptions) ProtoSize() (n int) {
 	}
 	if m.SkipQueryPlanCache {
 		n += 2
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8111,9 +10614,6 @@ func (m *Field) ProtoSize() (n int) {
 	if m.Flags != 0 {
 		n += 1 + sovQuery(uint64(m.Flags))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8134,9 +10634,6 @@ func (m *Row) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovQuery(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8152,9 +10649,6 @@ func (m *ResultExtras) ProtoSize() (n int) {
 	}
 	if m.Fresher {
 		n += 2
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8187,9 +10681,6 @@ func (m *QueryResult) ProtoSize() (n int) {
 		l = m.Extras.ProtoSize()
 		n += 1 + l + sovQuery(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8205,9 +10696,6 @@ func (m *QueryWarning) ProtoSize() (n int) {
 	l = len(m.Message)
 	if l > 0 {
 		n += 1 + l + sovQuery(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8227,9 +10715,6 @@ func (m *StreamEvent) ProtoSize() (n int) {
 	if m.EventToken != nil {
 		l = m.EventToken.ProtoSize()
 		n += 1 + l + sovQuery(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8263,9 +10748,6 @@ func (m *StreamEvent_Statement) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovQuery(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8298,9 +10780,6 @@ func (m *ExecuteRequest) ProtoSize() (n int) {
 		l = m.Options.ProtoSize()
 		n += 1 + l + sovQuery(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8313,9 +10792,6 @@ func (m *ExecuteResponse) ProtoSize() (n int) {
 	if m.Result != nil {
 		l = m.Result.ProtoSize()
 		n += 1 + l + sovQuery(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8333,9 +10809,6 @@ func (m *ResultWithError) ProtoSize() (n int) {
 	if m.Result != nil {
 		l = m.Result.ProtoSize()
 		n += 1 + l + sovQuery(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8374,9 +10847,6 @@ func (m *ExecuteBatchRequest) ProtoSize() (n int) {
 		l = m.Options.ProtoSize()
 		n += 1 + l + sovQuery(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8391,9 +10861,6 @@ func (m *ExecuteBatchResponse) ProtoSize() (n int) {
 			l = e.ProtoSize()
 			n += 1 + l + sovQuery(uint64(l))
 		}
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8427,9 +10894,6 @@ func (m *StreamExecuteRequest) ProtoSize() (n int) {
 	if m.TransactionId != 0 {
 		n += 1 + sovQuery(uint64(m.TransactionId))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8442,9 +10906,6 @@ func (m *StreamExecuteResponse) ProtoSize() (n int) {
 	if m.Result != nil {
 		l = m.Result.ProtoSize()
 		n += 1 + l + sovQuery(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8471,9 +10932,6 @@ func (m *BeginRequest) ProtoSize() (n int) {
 		l = m.Options.ProtoSize()
 		n += 1 + l + sovQuery(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8485,9 +10943,6 @@ func (m *BeginResponse) ProtoSize() (n int) {
 	_ = l
 	if m.TransactionId != 0 {
 		n += 1 + sovQuery(uint64(m.TransactionId))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8513,9 +10968,6 @@ func (m *CommitRequest) ProtoSize() (n int) {
 	if m.TransactionId != 0 {
 		n += 1 + sovQuery(uint64(m.TransactionId))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8525,9 +10977,6 @@ func (m *CommitResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8552,9 +11001,6 @@ func (m *RollbackRequest) ProtoSize() (n int) {
 	if m.TransactionId != 0 {
 		n += 1 + sovQuery(uint64(m.TransactionId))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8564,9 +11010,6 @@ func (m *RollbackResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8595,9 +11038,6 @@ func (m *PrepareRequest) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovQuery(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8607,9 +11047,6 @@ func (m *PrepareResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8635,9 +11072,6 @@ func (m *CommitPreparedRequest) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovQuery(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8647,9 +11081,6 @@ func (m *CommitPreparedResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8678,9 +11109,6 @@ func (m *RollbackPreparedRequest) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovQuery(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8690,9 +11118,6 @@ func (m *RollbackPreparedResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8724,9 +11149,6 @@ func (m *CreateTransactionRequest) ProtoSize() (n int) {
 			n += 1 + l + sovQuery(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8736,9 +11158,6 @@ func (m *CreateTransactionResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8767,9 +11186,6 @@ func (m *StartCommitRequest) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovQuery(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8779,9 +11195,6 @@ func (m *StartCommitResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8810,9 +11223,6 @@ func (m *SetRollbackRequest) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovQuery(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8822,9 +11232,6 @@ func (m *SetRollbackResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8850,9 +11257,6 @@ func (m *ConcludeTransactionRequest) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovQuery(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8862,9 +11266,6 @@ func (m *ConcludeTransactionResponse) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8890,9 +11291,6 @@ func (m *ReadTransactionRequest) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovQuery(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8905,9 +11303,6 @@ func (m *ReadTransactionResponse) ProtoSize() (n int) {
 	if m.Metadata != nil {
 		l = m.Metadata.ProtoSize()
 		n += 1 + l + sovQuery(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8938,9 +11333,6 @@ func (m *BeginExecuteRequest) ProtoSize() (n int) {
 		l = m.Options.ProtoSize()
 		n += 1 + l + sovQuery(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -8960,9 +11352,6 @@ func (m *BeginExecuteResponse) ProtoSize() (n int) {
 	}
 	if m.TransactionId != 0 {
 		n += 1 + sovQuery(uint64(m.TransactionId))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -8998,9 +11387,6 @@ func (m *BeginExecuteBatchRequest) ProtoSize() (n int) {
 		l = m.Options.ProtoSize()
 		n += 1 + l + sovQuery(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -9022,9 +11408,6 @@ func (m *BeginExecuteBatchResponse) ProtoSize() (n int) {
 	}
 	if m.TransactionId != 0 {
 		n += 1 + sovQuery(uint64(m.TransactionId))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -9051,9 +11434,6 @@ func (m *MessageStreamRequest) ProtoSize() (n int) {
 	if l > 0 {
 		n += 1 + l + sovQuery(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -9066,9 +11446,6 @@ func (m *MessageStreamResponse) ProtoSize() (n int) {
 	if m.Result != nil {
 		l = m.Result.ProtoSize()
 		n += 1 + l + sovQuery(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -9101,9 +11478,6 @@ func (m *MessageAckRequest) ProtoSize() (n int) {
 			n += 1 + l + sovQuery(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -9116,9 +11490,6 @@ func (m *MessageAckResponse) ProtoSize() (n int) {
 	if m.Result != nil {
 		l = m.Result.ProtoSize()
 		n += 1 + l + sovQuery(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -9160,9 +11531,6 @@ func (m *SplitQueryRequest) ProtoSize() (n int) {
 	if m.Algorithm != 0 {
 		n += 1 + sovQuery(uint64(m.Algorithm))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -9179,9 +11547,6 @@ func (m *QuerySplit) ProtoSize() (n int) {
 	if m.RowCount != 0 {
 		n += 1 + sovQuery(uint64(m.RowCount))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -9197,9 +11562,6 @@ func (m *SplitQueryResponse) ProtoSize() (n int) {
 			n += 1 + l + sovQuery(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -9209,9 +11571,6 @@ func (m *StreamHealthRequest) ProtoSize() (n int) {
 	}
 	var l int
 	_ = l
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -9240,9 +11599,6 @@ func (m *RealtimeStats) ProtoSize() (n int) {
 	if m.Qps != 0 {
 		n += 9
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -9263,9 +11619,6 @@ func (m *AggregateStats) ProtoSize() (n int) {
 	}
 	if m.SecondsBehindMasterMax != 0 {
 		n += 1 + sovQuery(uint64(m.SecondsBehindMasterMax))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -9298,9 +11651,6 @@ func (m *StreamHealthResponse) ProtoSize() (n int) {
 		l = m.AggregateStats.ProtoSize()
 		n += 1 + l + sovQuery(uint64(l))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -9329,9 +11679,6 @@ func (m *UpdateStreamRequest) ProtoSize() (n int) {
 	if m.Timestamp != 0 {
 		n += 1 + sovQuery(uint64(m.Timestamp))
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -9344,9 +11691,6 @@ func (m *UpdateStreamResponse) ProtoSize() (n int) {
 	if m.Event != nil {
 		l = m.Event.ProtoSize()
 		n += 1 + l + sovQuery(uint64(l))
-	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
 	}
 	return n
 }
@@ -9373,9 +11717,6 @@ func (m *TransactionMetadata) ProtoSize() (n int) {
 			n += 1 + l + sovQuery(uint64(l))
 		}
 	}
-	if m.XXX_unrecognized != nil {
-		n += len(m.XXX_unrecognized)
-	}
 	return n
 }
 
@@ -9391,6 +11732,835 @@ func sovQuery(x uint64) (n int) {
 }
 func sozQuery(x uint64) (n int) {
 	return sovQuery(uint64((x << 1) ^ uint64((int64(x) >> 63))))
+}
+func (this *Target) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&Target{`,
+		`Keyspace:` + fmt.Sprintf("%v", this.Keyspace) + `,`,
+		`Shard:` + fmt.Sprintf("%v", this.Shard) + `,`,
+		`TabletType:` + fmt.Sprintf("%v", this.TabletType) + `,`,
+		`Cell:` + fmt.Sprintf("%v", this.Cell) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *VTGateCallerID) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&VTGateCallerID{`,
+		`Username:` + fmt.Sprintf("%v", this.Username) + `,`,
+		`Groups:` + fmt.Sprintf("%v", this.Groups) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *EventToken) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&EventToken{`,
+		`Timestamp:` + fmt.Sprintf("%v", this.Timestamp) + `,`,
+		`Shard:` + fmt.Sprintf("%v", this.Shard) + `,`,
+		`Position:` + fmt.Sprintf("%v", this.Position) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Value) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&Value{`,
+		`Type:` + fmt.Sprintf("%v", this.Type) + `,`,
+		`Value:` + fmt.Sprintf("%v", this.Value) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *BindVariable) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForValues := "[]*Value{"
+	for _, f := range this.Values {
+		repeatedStringForValues += strings.Replace(f.String(), "Value", "Value", 1) + ","
+	}
+	repeatedStringForValues += "}"
+	s := strings.Join([]string{`&BindVariable{`,
+		`Type:` + fmt.Sprintf("%v", this.Type) + `,`,
+		`Value:` + fmt.Sprintf("%v", this.Value) + `,`,
+		`Values:` + repeatedStringForValues + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *BoundQuery) String() string {
+	if this == nil {
+		return "nil"
+	}
+	keysForBindVariables := make([]string, 0, len(this.BindVariables))
+	for k := range this.BindVariables {
+		keysForBindVariables = append(keysForBindVariables, k)
+	}
+	github_com_gogo_protobuf_sortkeys.Strings(keysForBindVariables)
+	mapStringForBindVariables := "map[string]*BindVariable{"
+	for _, k := range keysForBindVariables {
+		mapStringForBindVariables += fmt.Sprintf("%v: %v,", k, this.BindVariables[k])
+	}
+	mapStringForBindVariables += "}"
+	s := strings.Join([]string{`&BoundQuery{`,
+		`Sql:` + fmt.Sprintf("%v", this.Sql) + `,`,
+		`BindVariables:` + mapStringForBindVariables + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteOptions) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ExecuteOptions{`,
+		`IncludeEventToken:` + fmt.Sprintf("%v", this.IncludeEventToken) + `,`,
+		`CompareEventToken:` + strings.Replace(this.CompareEventToken.String(), "EventToken", "EventToken", 1) + `,`,
+		`IncludedFields:` + fmt.Sprintf("%v", this.IncludedFields) + `,`,
+		`ClientFoundRows:` + fmt.Sprintf("%v", this.ClientFoundRows) + `,`,
+		`Workload:` + fmt.Sprintf("%v", this.Workload) + `,`,
+		`SqlSelectLimit:` + fmt.Sprintf("%v", this.SqlSelectLimit) + `,`,
+		`TransactionIsolation:` + fmt.Sprintf("%v", this.TransactionIsolation) + `,`,
+		`SkipQueryPlanCache:` + fmt.Sprintf("%v", this.SkipQueryPlanCache) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Field) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&Field{`,
+		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
+		`Type:` + fmt.Sprintf("%v", this.Type) + `,`,
+		`Table:` + fmt.Sprintf("%v", this.Table) + `,`,
+		`OrgTable:` + fmt.Sprintf("%v", this.OrgTable) + `,`,
+		`Database:` + fmt.Sprintf("%v", this.Database) + `,`,
+		`OrgName:` + fmt.Sprintf("%v", this.OrgName) + `,`,
+		`ColumnLength:` + fmt.Sprintf("%v", this.ColumnLength) + `,`,
+		`Charset:` + fmt.Sprintf("%v", this.Charset) + `,`,
+		`Decimals:` + fmt.Sprintf("%v", this.Decimals) + `,`,
+		`Flags:` + fmt.Sprintf("%v", this.Flags) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *Row) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&Row{`,
+		`Lengths:` + fmt.Sprintf("%v", this.Lengths) + `,`,
+		`Values:` + fmt.Sprintf("%v", this.Values) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ResultExtras) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ResultExtras{`,
+		`EventToken:` + strings.Replace(this.EventToken.String(), "EventToken", "EventToken", 1) + `,`,
+		`Fresher:` + fmt.Sprintf("%v", this.Fresher) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *QueryResult) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForFields := "[]*Field{"
+	for _, f := range this.Fields {
+		repeatedStringForFields += strings.Replace(f.String(), "Field", "Field", 1) + ","
+	}
+	repeatedStringForFields += "}"
+	repeatedStringForRows := "[]*Row{"
+	for _, f := range this.Rows {
+		repeatedStringForRows += strings.Replace(f.String(), "Row", "Row", 1) + ","
+	}
+	repeatedStringForRows += "}"
+	s := strings.Join([]string{`&QueryResult{`,
+		`Fields:` + repeatedStringForFields + `,`,
+		`RowsAffected:` + fmt.Sprintf("%v", this.RowsAffected) + `,`,
+		`InsertId:` + fmt.Sprintf("%v", this.InsertId) + `,`,
+		`Rows:` + repeatedStringForRows + `,`,
+		`Extras:` + strings.Replace(this.Extras.String(), "ResultExtras", "ResultExtras", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *QueryWarning) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&QueryWarning{`,
+		`Code:` + fmt.Sprintf("%v", this.Code) + `,`,
+		`Message:` + fmt.Sprintf("%v", this.Message) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StreamEvent) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForStatements := "[]*StreamEvent_Statement{"
+	for _, f := range this.Statements {
+		repeatedStringForStatements += strings.Replace(fmt.Sprintf("%v", f), "StreamEvent_Statement", "StreamEvent_Statement", 1) + ","
+	}
+	repeatedStringForStatements += "}"
+	s := strings.Join([]string{`&StreamEvent{`,
+		`Statements:` + repeatedStringForStatements + `,`,
+		`EventToken:` + strings.Replace(this.EventToken.String(), "EventToken", "EventToken", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StreamEvent_Statement) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForPrimaryKeyFields := "[]*Field{"
+	for _, f := range this.PrimaryKeyFields {
+		repeatedStringForPrimaryKeyFields += strings.Replace(f.String(), "Field", "Field", 1) + ","
+	}
+	repeatedStringForPrimaryKeyFields += "}"
+	repeatedStringForPrimaryKeyValues := "[]*Row{"
+	for _, f := range this.PrimaryKeyValues {
+		repeatedStringForPrimaryKeyValues += strings.Replace(f.String(), "Row", "Row", 1) + ","
+	}
+	repeatedStringForPrimaryKeyValues += "}"
+	s := strings.Join([]string{`&StreamEvent_Statement{`,
+		`Category:` + fmt.Sprintf("%v", this.Category) + `,`,
+		`TableName:` + fmt.Sprintf("%v", this.TableName) + `,`,
+		`PrimaryKeyFields:` + repeatedStringForPrimaryKeyFields + `,`,
+		`PrimaryKeyValues:` + repeatedStringForPrimaryKeyValues + `,`,
+		`Sql:` + fmt.Sprintf("%v", this.Sql) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ExecuteRequest{`,
+		`EffectiveCallerId:` + strings.Replace(fmt.Sprintf("%v", this.EffectiveCallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`ImmediateCallerId:` + strings.Replace(this.ImmediateCallerId.String(), "VTGateCallerID", "VTGateCallerID", 1) + `,`,
+		`Target:` + strings.Replace(this.Target.String(), "Target", "Target", 1) + `,`,
+		`Query:` + strings.Replace(this.Query.String(), "BoundQuery", "BoundQuery", 1) + `,`,
+		`TransactionId:` + fmt.Sprintf("%v", this.TransactionId) + `,`,
+		`Options:` + strings.Replace(this.Options.String(), "ExecuteOptions", "ExecuteOptions", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ExecuteResponse{`,
+		`Result:` + strings.Replace(this.Result.String(), "QueryResult", "QueryResult", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ResultWithError) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ResultWithError{`,
+		`Error:` + strings.Replace(fmt.Sprintf("%v", this.Error), "RPCError", "vtrpc.RPCError", 1) + `,`,
+		`Result:` + strings.Replace(this.Result.String(), "QueryResult", "QueryResult", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteBatchRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForQueries := "[]*BoundQuery{"
+	for _, f := range this.Queries {
+		repeatedStringForQueries += strings.Replace(f.String(), "BoundQuery", "BoundQuery", 1) + ","
+	}
+	repeatedStringForQueries += "}"
+	s := strings.Join([]string{`&ExecuteBatchRequest{`,
+		`EffectiveCallerId:` + strings.Replace(fmt.Sprintf("%v", this.EffectiveCallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`ImmediateCallerId:` + strings.Replace(this.ImmediateCallerId.String(), "VTGateCallerID", "VTGateCallerID", 1) + `,`,
+		`Target:` + strings.Replace(this.Target.String(), "Target", "Target", 1) + `,`,
+		`Queries:` + repeatedStringForQueries + `,`,
+		`AsTransaction:` + fmt.Sprintf("%v", this.AsTransaction) + `,`,
+		`TransactionId:` + fmt.Sprintf("%v", this.TransactionId) + `,`,
+		`Options:` + strings.Replace(this.Options.String(), "ExecuteOptions", "ExecuteOptions", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ExecuteBatchResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForResults := "[]*QueryResult{"
+	for _, f := range this.Results {
+		repeatedStringForResults += strings.Replace(f.String(), "QueryResult", "QueryResult", 1) + ","
+	}
+	repeatedStringForResults += "}"
+	s := strings.Join([]string{`&ExecuteBatchResponse{`,
+		`Results:` + repeatedStringForResults + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StreamExecuteRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StreamExecuteRequest{`,
+		`EffectiveCallerId:` + strings.Replace(fmt.Sprintf("%v", this.EffectiveCallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`ImmediateCallerId:` + strings.Replace(this.ImmediateCallerId.String(), "VTGateCallerID", "VTGateCallerID", 1) + `,`,
+		`Target:` + strings.Replace(this.Target.String(), "Target", "Target", 1) + `,`,
+		`Query:` + strings.Replace(this.Query.String(), "BoundQuery", "BoundQuery", 1) + `,`,
+		`Options:` + strings.Replace(this.Options.String(), "ExecuteOptions", "ExecuteOptions", 1) + `,`,
+		`TransactionId:` + fmt.Sprintf("%v", this.TransactionId) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StreamExecuteResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StreamExecuteResponse{`,
+		`Result:` + strings.Replace(this.Result.String(), "QueryResult", "QueryResult", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *BeginRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&BeginRequest{`,
+		`EffectiveCallerId:` + strings.Replace(fmt.Sprintf("%v", this.EffectiveCallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`ImmediateCallerId:` + strings.Replace(this.ImmediateCallerId.String(), "VTGateCallerID", "VTGateCallerID", 1) + `,`,
+		`Target:` + strings.Replace(this.Target.String(), "Target", "Target", 1) + `,`,
+		`Options:` + strings.Replace(this.Options.String(), "ExecuteOptions", "ExecuteOptions", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *BeginResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&BeginResponse{`,
+		`TransactionId:` + fmt.Sprintf("%v", this.TransactionId) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *CommitRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&CommitRequest{`,
+		`EffectiveCallerId:` + strings.Replace(fmt.Sprintf("%v", this.EffectiveCallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`ImmediateCallerId:` + strings.Replace(this.ImmediateCallerId.String(), "VTGateCallerID", "VTGateCallerID", 1) + `,`,
+		`Target:` + strings.Replace(this.Target.String(), "Target", "Target", 1) + `,`,
+		`TransactionId:` + fmt.Sprintf("%v", this.TransactionId) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *CommitResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&CommitResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *RollbackRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&RollbackRequest{`,
+		`EffectiveCallerId:` + strings.Replace(fmt.Sprintf("%v", this.EffectiveCallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`ImmediateCallerId:` + strings.Replace(this.ImmediateCallerId.String(), "VTGateCallerID", "VTGateCallerID", 1) + `,`,
+		`Target:` + strings.Replace(this.Target.String(), "Target", "Target", 1) + `,`,
+		`TransactionId:` + fmt.Sprintf("%v", this.TransactionId) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *RollbackResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&RollbackResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *PrepareRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&PrepareRequest{`,
+		`EffectiveCallerId:` + strings.Replace(fmt.Sprintf("%v", this.EffectiveCallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`ImmediateCallerId:` + strings.Replace(this.ImmediateCallerId.String(), "VTGateCallerID", "VTGateCallerID", 1) + `,`,
+		`Target:` + strings.Replace(this.Target.String(), "Target", "Target", 1) + `,`,
+		`TransactionId:` + fmt.Sprintf("%v", this.TransactionId) + `,`,
+		`Dtid:` + fmt.Sprintf("%v", this.Dtid) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *PrepareResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&PrepareResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *CommitPreparedRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&CommitPreparedRequest{`,
+		`EffectiveCallerId:` + strings.Replace(fmt.Sprintf("%v", this.EffectiveCallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`ImmediateCallerId:` + strings.Replace(this.ImmediateCallerId.String(), "VTGateCallerID", "VTGateCallerID", 1) + `,`,
+		`Target:` + strings.Replace(this.Target.String(), "Target", "Target", 1) + `,`,
+		`Dtid:` + fmt.Sprintf("%v", this.Dtid) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *CommitPreparedResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&CommitPreparedResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *RollbackPreparedRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&RollbackPreparedRequest{`,
+		`EffectiveCallerId:` + strings.Replace(fmt.Sprintf("%v", this.EffectiveCallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`ImmediateCallerId:` + strings.Replace(this.ImmediateCallerId.String(), "VTGateCallerID", "VTGateCallerID", 1) + `,`,
+		`Target:` + strings.Replace(this.Target.String(), "Target", "Target", 1) + `,`,
+		`TransactionId:` + fmt.Sprintf("%v", this.TransactionId) + `,`,
+		`Dtid:` + fmt.Sprintf("%v", this.Dtid) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *RollbackPreparedResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&RollbackPreparedResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *CreateTransactionRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForParticipants := "[]*Target{"
+	for _, f := range this.Participants {
+		repeatedStringForParticipants += strings.Replace(f.String(), "Target", "Target", 1) + ","
+	}
+	repeatedStringForParticipants += "}"
+	s := strings.Join([]string{`&CreateTransactionRequest{`,
+		`EffectiveCallerId:` + strings.Replace(fmt.Sprintf("%v", this.EffectiveCallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`ImmediateCallerId:` + strings.Replace(this.ImmediateCallerId.String(), "VTGateCallerID", "VTGateCallerID", 1) + `,`,
+		`Target:` + strings.Replace(this.Target.String(), "Target", "Target", 1) + `,`,
+		`Dtid:` + fmt.Sprintf("%v", this.Dtid) + `,`,
+		`Participants:` + repeatedStringForParticipants + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *CreateTransactionResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&CreateTransactionResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StartCommitRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StartCommitRequest{`,
+		`EffectiveCallerId:` + strings.Replace(fmt.Sprintf("%v", this.EffectiveCallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`ImmediateCallerId:` + strings.Replace(this.ImmediateCallerId.String(), "VTGateCallerID", "VTGateCallerID", 1) + `,`,
+		`Target:` + strings.Replace(this.Target.String(), "Target", "Target", 1) + `,`,
+		`TransactionId:` + fmt.Sprintf("%v", this.TransactionId) + `,`,
+		`Dtid:` + fmt.Sprintf("%v", this.Dtid) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StartCommitResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StartCommitResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SetRollbackRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SetRollbackRequest{`,
+		`EffectiveCallerId:` + strings.Replace(fmt.Sprintf("%v", this.EffectiveCallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`ImmediateCallerId:` + strings.Replace(this.ImmediateCallerId.String(), "VTGateCallerID", "VTGateCallerID", 1) + `,`,
+		`Target:` + strings.Replace(this.Target.String(), "Target", "Target", 1) + `,`,
+		`TransactionId:` + fmt.Sprintf("%v", this.TransactionId) + `,`,
+		`Dtid:` + fmt.Sprintf("%v", this.Dtid) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SetRollbackResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SetRollbackResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ConcludeTransactionRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ConcludeTransactionRequest{`,
+		`EffectiveCallerId:` + strings.Replace(fmt.Sprintf("%v", this.EffectiveCallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`ImmediateCallerId:` + strings.Replace(this.ImmediateCallerId.String(), "VTGateCallerID", "VTGateCallerID", 1) + `,`,
+		`Target:` + strings.Replace(this.Target.String(), "Target", "Target", 1) + `,`,
+		`Dtid:` + fmt.Sprintf("%v", this.Dtid) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ConcludeTransactionResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ConcludeTransactionResponse{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ReadTransactionRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ReadTransactionRequest{`,
+		`EffectiveCallerId:` + strings.Replace(fmt.Sprintf("%v", this.EffectiveCallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`ImmediateCallerId:` + strings.Replace(this.ImmediateCallerId.String(), "VTGateCallerID", "VTGateCallerID", 1) + `,`,
+		`Target:` + strings.Replace(this.Target.String(), "Target", "Target", 1) + `,`,
+		`Dtid:` + fmt.Sprintf("%v", this.Dtid) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *ReadTransactionResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&ReadTransactionResponse{`,
+		`Metadata:` + strings.Replace(this.Metadata.String(), "TransactionMetadata", "TransactionMetadata", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *BeginExecuteRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&BeginExecuteRequest{`,
+		`EffectiveCallerId:` + strings.Replace(fmt.Sprintf("%v", this.EffectiveCallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`ImmediateCallerId:` + strings.Replace(this.ImmediateCallerId.String(), "VTGateCallerID", "VTGateCallerID", 1) + `,`,
+		`Target:` + strings.Replace(this.Target.String(), "Target", "Target", 1) + `,`,
+		`Query:` + strings.Replace(this.Query.String(), "BoundQuery", "BoundQuery", 1) + `,`,
+		`Options:` + strings.Replace(this.Options.String(), "ExecuteOptions", "ExecuteOptions", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *BeginExecuteResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&BeginExecuteResponse{`,
+		`Error:` + strings.Replace(fmt.Sprintf("%v", this.Error), "RPCError", "vtrpc.RPCError", 1) + `,`,
+		`Result:` + strings.Replace(this.Result.String(), "QueryResult", "QueryResult", 1) + `,`,
+		`TransactionId:` + fmt.Sprintf("%v", this.TransactionId) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *BeginExecuteBatchRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForQueries := "[]*BoundQuery{"
+	for _, f := range this.Queries {
+		repeatedStringForQueries += strings.Replace(f.String(), "BoundQuery", "BoundQuery", 1) + ","
+	}
+	repeatedStringForQueries += "}"
+	s := strings.Join([]string{`&BeginExecuteBatchRequest{`,
+		`EffectiveCallerId:` + strings.Replace(fmt.Sprintf("%v", this.EffectiveCallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`ImmediateCallerId:` + strings.Replace(this.ImmediateCallerId.String(), "VTGateCallerID", "VTGateCallerID", 1) + `,`,
+		`Target:` + strings.Replace(this.Target.String(), "Target", "Target", 1) + `,`,
+		`Queries:` + repeatedStringForQueries + `,`,
+		`AsTransaction:` + fmt.Sprintf("%v", this.AsTransaction) + `,`,
+		`Options:` + strings.Replace(this.Options.String(), "ExecuteOptions", "ExecuteOptions", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *BeginExecuteBatchResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForResults := "[]*QueryResult{"
+	for _, f := range this.Results {
+		repeatedStringForResults += strings.Replace(f.String(), "QueryResult", "QueryResult", 1) + ","
+	}
+	repeatedStringForResults += "}"
+	s := strings.Join([]string{`&BeginExecuteBatchResponse{`,
+		`Error:` + strings.Replace(fmt.Sprintf("%v", this.Error), "RPCError", "vtrpc.RPCError", 1) + `,`,
+		`Results:` + repeatedStringForResults + `,`,
+		`TransactionId:` + fmt.Sprintf("%v", this.TransactionId) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *MessageStreamRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&MessageStreamRequest{`,
+		`EffectiveCallerId:` + strings.Replace(fmt.Sprintf("%v", this.EffectiveCallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`ImmediateCallerId:` + strings.Replace(this.ImmediateCallerId.String(), "VTGateCallerID", "VTGateCallerID", 1) + `,`,
+		`Target:` + strings.Replace(this.Target.String(), "Target", "Target", 1) + `,`,
+		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *MessageStreamResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&MessageStreamResponse{`,
+		`Result:` + strings.Replace(this.Result.String(), "QueryResult", "QueryResult", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *MessageAckRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForIds := "[]*Value{"
+	for _, f := range this.Ids {
+		repeatedStringForIds += strings.Replace(f.String(), "Value", "Value", 1) + ","
+	}
+	repeatedStringForIds += "}"
+	s := strings.Join([]string{`&MessageAckRequest{`,
+		`EffectiveCallerId:` + strings.Replace(fmt.Sprintf("%v", this.EffectiveCallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`ImmediateCallerId:` + strings.Replace(this.ImmediateCallerId.String(), "VTGateCallerID", "VTGateCallerID", 1) + `,`,
+		`Target:` + strings.Replace(this.Target.String(), "Target", "Target", 1) + `,`,
+		`Name:` + fmt.Sprintf("%v", this.Name) + `,`,
+		`Ids:` + repeatedStringForIds + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *MessageAckResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&MessageAckResponse{`,
+		`Result:` + strings.Replace(this.Result.String(), "QueryResult", "QueryResult", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SplitQueryRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&SplitQueryRequest{`,
+		`EffectiveCallerId:` + strings.Replace(fmt.Sprintf("%v", this.EffectiveCallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`ImmediateCallerId:` + strings.Replace(this.ImmediateCallerId.String(), "VTGateCallerID", "VTGateCallerID", 1) + `,`,
+		`Target:` + strings.Replace(this.Target.String(), "Target", "Target", 1) + `,`,
+		`Query:` + strings.Replace(this.Query.String(), "BoundQuery", "BoundQuery", 1) + `,`,
+		`SplitColumn:` + fmt.Sprintf("%v", this.SplitColumn) + `,`,
+		`SplitCount:` + fmt.Sprintf("%v", this.SplitCount) + `,`,
+		`NumRowsPerQueryPart:` + fmt.Sprintf("%v", this.NumRowsPerQueryPart) + `,`,
+		`Algorithm:` + fmt.Sprintf("%v", this.Algorithm) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *QuerySplit) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&QuerySplit{`,
+		`Query:` + strings.Replace(this.Query.String(), "BoundQuery", "BoundQuery", 1) + `,`,
+		`RowCount:` + fmt.Sprintf("%v", this.RowCount) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *SplitQueryResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForQueries := "[]*QuerySplit{"
+	for _, f := range this.Queries {
+		repeatedStringForQueries += strings.Replace(f.String(), "QuerySplit", "QuerySplit", 1) + ","
+	}
+	repeatedStringForQueries += "}"
+	s := strings.Join([]string{`&SplitQueryResponse{`,
+		`Queries:` + repeatedStringForQueries + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StreamHealthRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StreamHealthRequest{`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *RealtimeStats) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&RealtimeStats{`,
+		`HealthError:` + fmt.Sprintf("%v", this.HealthError) + `,`,
+		`SecondsBehindMaster:` + fmt.Sprintf("%v", this.SecondsBehindMaster) + `,`,
+		`BinlogPlayersCount:` + fmt.Sprintf("%v", this.BinlogPlayersCount) + `,`,
+		`SecondsBehindMasterFilteredReplication:` + fmt.Sprintf("%v", this.SecondsBehindMasterFilteredReplication) + `,`,
+		`CpuUsage:` + fmt.Sprintf("%v", this.CpuUsage) + `,`,
+		`Qps:` + fmt.Sprintf("%v", this.Qps) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *AggregateStats) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&AggregateStats{`,
+		`HealthyTabletCount:` + fmt.Sprintf("%v", this.HealthyTabletCount) + `,`,
+		`UnhealthyTabletCount:` + fmt.Sprintf("%v", this.UnhealthyTabletCount) + `,`,
+		`SecondsBehindMasterMin:` + fmt.Sprintf("%v", this.SecondsBehindMasterMin) + `,`,
+		`SecondsBehindMasterMax:` + fmt.Sprintf("%v", this.SecondsBehindMasterMax) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *StreamHealthResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&StreamHealthResponse{`,
+		`Target:` + strings.Replace(this.Target.String(), "Target", "Target", 1) + `,`,
+		`Serving:` + fmt.Sprintf("%v", this.Serving) + `,`,
+		`TabletExternallyReparentedTimestamp:` + fmt.Sprintf("%v", this.TabletExternallyReparentedTimestamp) + `,`,
+		`RealtimeStats:` + strings.Replace(this.RealtimeStats.String(), "RealtimeStats", "RealtimeStats", 1) + `,`,
+		`TabletAlias:` + strings.Replace(fmt.Sprintf("%v", this.TabletAlias), "TabletAlias", "topodata.TabletAlias", 1) + `,`,
+		`AggregateStats:` + strings.Replace(this.AggregateStats.String(), "AggregateStats", "AggregateStats", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *UpdateStreamRequest) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&UpdateStreamRequest{`,
+		`EffectiveCallerId:` + strings.Replace(fmt.Sprintf("%v", this.EffectiveCallerId), "CallerID", "vtrpc.CallerID", 1) + `,`,
+		`ImmediateCallerId:` + strings.Replace(this.ImmediateCallerId.String(), "VTGateCallerID", "VTGateCallerID", 1) + `,`,
+		`Target:` + strings.Replace(this.Target.String(), "Target", "Target", 1) + `,`,
+		`Position:` + fmt.Sprintf("%v", this.Position) + `,`,
+		`Timestamp:` + fmt.Sprintf("%v", this.Timestamp) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *UpdateStreamResponse) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&UpdateStreamResponse{`,
+		`Event:` + strings.Replace(this.Event.String(), "StreamEvent", "StreamEvent", 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func (this *TransactionMetadata) String() string {
+	if this == nil {
+		return "nil"
+	}
+	repeatedStringForParticipants := "[]*Target{"
+	for _, f := range this.Participants {
+		repeatedStringForParticipants += strings.Replace(f.String(), "Target", "Target", 1) + ","
+	}
+	repeatedStringForParticipants += "}"
+	s := strings.Join([]string{`&TransactionMetadata{`,
+		`Dtid:` + fmt.Sprintf("%v", this.Dtid) + `,`,
+		`State:` + fmt.Sprintf("%v", this.State) + `,`,
+		`TimeCreated:` + fmt.Sprintf("%v", this.TimeCreated) + `,`,
+		`Participants:` + repeatedStringForParticipants + `,`,
+		`}`,
+	}, "")
+	return s
+}
+func valueToStringQuery(v interface{}) string {
+	rv := reflect.ValueOf(v)
+	if rv.IsNil() {
+		return "nil"
+	}
+	pv := reflect.Indirect(rv).Interface()
+	return fmt.Sprintf("*%v", pv)
 }
 func (m *Target) Unmarshal(dAtA []byte) error {
 	l := len(dAtA)
@@ -9551,7 +12721,6 @@ func (m *Target) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -9669,7 +12838,6 @@ func (m *VTGateCallerID) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -9806,7 +12974,6 @@ func (m *EventToken) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -9913,7 +13080,6 @@ func (m *Value) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -10054,7 +13220,6 @@ func (m *BindVariable) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -10269,7 +13434,6 @@ func (m *BoundQuery) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -10495,7 +13659,6 @@ func (m *ExecuteOptions) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -10804,7 +13967,6 @@ func (m *Field) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -10970,7 +14132,6 @@ func (m *Row) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11080,7 +14241,6 @@ func (m *ResultExtras) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11276,7 +14436,6 @@ func (m *QueryResult) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11381,7 +14540,6 @@ func (m *QueryWarning) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11505,7 +14663,6 @@ func (m *StreamEvent) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11712,7 +14869,6 @@ func (m *StreamEvent_Statement) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -11965,7 +15121,6 @@ func (m *ExecuteRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -12055,7 +15210,6 @@ func (m *ExecuteResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -12181,7 +15335,6 @@ func (m *ResultWithError) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -12452,7 +15605,6 @@ func (m *ExecuteBatchRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -12540,7 +15692,6 @@ func (m *ExecuteBatchResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -12793,7 +15944,6 @@ func (m *StreamExecuteRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -12883,7 +16033,6 @@ func (m *StreamExecuteResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13081,7 +16230,6 @@ func (m *BeginRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13154,7 +16302,6 @@ func (m *BeginResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13335,7 +16482,6 @@ func (m *CommitRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13389,7 +16535,6 @@ func (m *CommitResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13570,7 +16715,6 @@ func (m *RollbackRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13624,7 +16768,6 @@ func (m *RollbackResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13837,7 +16980,6 @@ func (m *PrepareRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -13891,7 +17033,6 @@ func (m *PrepareResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14085,7 +17226,6 @@ func (m *CommitPreparedRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14139,7 +17279,6 @@ func (m *CommitPreparedResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14352,7 +17491,6 @@ func (m *RollbackPreparedRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14406,7 +17544,6 @@ func (m *RollbackPreparedResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14634,7 +17771,6 @@ func (m *CreateTransactionRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14688,7 +17824,6 @@ func (m *CreateTransactionResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14901,7 +18036,6 @@ func (m *StartCommitRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -14955,7 +18089,6 @@ func (m *StartCommitResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15168,7 +18301,6 @@ func (m *SetRollbackRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15222,7 +18354,6 @@ func (m *SetRollbackResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15416,7 +18547,6 @@ func (m *ConcludeTransactionRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15470,7 +18600,6 @@ func (m *ConcludeTransactionResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15664,7 +18793,6 @@ func (m *ReadTransactionRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15754,7 +18882,6 @@ func (m *ReadTransactionResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -15988,7 +19115,6 @@ func (m *BeginExecuteRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16133,7 +19259,6 @@ func (m *BeginExecuteResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16385,7 +19510,6 @@ func (m *BeginExecuteBatchRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16528,7 +19652,6 @@ func (m *BeginExecuteBatchResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16722,7 +19845,6 @@ func (m *MessageStreamRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -16812,7 +19934,6 @@ func (m *MessageStreamResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -17040,7 +20161,6 @@ func (m *MessageAckRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -17130,7 +20250,6 @@ func (m *MessageAckResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -17417,7 +20536,6 @@ func (m *SplitQueryRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -17526,7 +20644,6 @@ func (m *QuerySplit) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -17614,7 +20731,6 @@ func (m *SplitQueryResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -17668,7 +20784,6 @@ func (m *StreamHealthRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -17833,7 +20948,6 @@ func (m *RealtimeStats) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -17963,7 +21077,6 @@ func (m *AggregateStats) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -18200,7 +21313,6 @@ func (m *StreamHealthResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -18413,7 +21525,6 @@ func (m *UpdateStreamRequest) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -18503,7 +21614,6 @@ func (m *UpdateStreamResponse) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
@@ -18661,7 +21771,6 @@ func (m *TransactionMetadata) Unmarshal(dAtA []byte) error {
 			if (iNdEx + skippy) > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
 			iNdEx += skippy
 		}
 	}
