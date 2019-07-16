@@ -34,6 +34,7 @@ import io.vitess.client.grpc.tls.TlsOptions;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.security.InvalidAlgorithmParameterException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
@@ -41,10 +42,14 @@ import java.security.PrivateKey;
 import java.security.UnrecoverableEntryException;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
+import java.security.cert.PKIXParameters;
+import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Enumeration;
 
+import java.util.List;
 import javax.net.ssl.SSLException;
 
 /**
@@ -255,8 +260,7 @@ public class GrpcClientFactory implements RpcClientFactory {
   }
 
   /**
-   * <p>Loads the first valid X509 certificate found in the keystore, and returns it as a
-   * one-element
+   * <p>Loads all trust anchor certificates from the keystore and return them in an
    * array so that it can be passed to {@link SslContextBuilder#trustManager(File)}.</p>
    *
    * <p>Returns <code>null</code> if there is any problem accessing the keystore, or if no X509
@@ -268,22 +272,18 @@ public class GrpcClientFactory implements RpcClientFactory {
       return null;
     }
 
-    final Enumeration<String> aliases;
     try {
-      aliases = keyStore.aliases();
-    } catch (KeyStoreException exc) {
+      PKIXParameters params = new PKIXParameters(keyStore);
+      X509Certificate[] certificates = params.getTrustAnchors().stream()
+          .map(TrustAnchor::getTrustedCert)
+          .toArray(X509Certificate[]::new);
+      if (certificates.length == 0) {
+        return null;
+      }
+      return certificates;
+    }  catch (InvalidAlgorithmParameterException | KeyStoreException exc) {
       return null;
     }
-
-    while (aliases.hasMoreElements()) {
-      final String alias = aliases.nextElement();
-      final X509Certificate[] certCollection = loadCertCollectionForAlias(keyStore, alias);
-      if (certCollection != null) {
-        return certCollection;
-      }
-    }
-
-    return null;
   }
 
   /**
