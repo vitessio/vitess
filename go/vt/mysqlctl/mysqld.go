@@ -35,6 +35,8 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -110,7 +112,8 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout, *poolDynamicHostnameResolution)
 	result.appPool.Open(dbcfgs.AppWithDB(), appMysqlStats)
 
-	result.flavor, result.version = result.DetectFlavorVersion("version string here")
+	version, _ := result.getVersionString()
+	result.flavor, result.version = result.DetectFlavorVersion(version)
 	result.c = NewCapabilitySet(result)
 
 	log.Infof("mysqld is flavor: %s, version: %v", result.flavor, result.version)
@@ -118,9 +121,47 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 
 }
 
-// This becomes part of MySQLd!
-func (mysqld *Mysqld) DetectFlavorVersion(verstring string) (mysqlFlavor, serverVersion) {
-	return flavorMySQL, serverVersion{Major: 8, Minor: 0, Patch: 16}
+func (mysqld *Mysqld) getVersionString() (string, error) {
+
+	mysqlRoot, err := vtenv.VtMysqlRoot()
+	if err != nil {
+		return "", err
+	}
+	mysqldPath, err := binaryPath(mysqlRoot, "mysqld")
+	if err != nil {
+		return "", err
+	}
+
+	_, version, err := execCmd(mysqldPath, []string{"--version"}, nil, mysqlRoot, nil)
+	if err != nil {
+		return "", err
+	}
+
+	return version, nil
+
+}
+
+// DetectFlavorVersion takes the output of mysqld --version
+// and parses it into a flavor and version
+func (mysqld *Mysqld) DetectFlavorVersion(version string) (flavor mysqlFlavor, ver serverVersion) {
+
+	if strings.Contains(version, "MySQL") {
+		flavor = flavorMySQL
+	} else if strings.Contains(version, "Percona") {
+		flavor = flavorPercona
+	} else if strings.Contains(version, "MariaDB") {
+		flavor = flavorMariaDB
+	}
+	re := regexp.MustCompile(`Ver ([0-9]+)\.([0-9]+)\.([0-9]+)`)
+	v := re.FindStringSubmatch(version)
+	if len(v) != 4 {
+		log.Errorf("Could not parse flavor and version from: %s", version)
+	}
+	ver.Major, _ = strconv.Atoi(string(v[1]))
+	ver.Minor, _ = strconv.Atoi(string(v[2]))
+	ver.Patch, _ = strconv.Atoi(string(v[3]))
+
+	return
 }
 
 // RunMysqlUpgrade will run the mysql_upgrade program on the current
@@ -572,8 +613,7 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 	if err != nil {
 		return err
 	}
-
-	if mysqld.c.HasMySQLUpgradeInServer() {
+	if mysqld.c.HasInitializeInServer() {
 		log.Infof("Installing data dir with mysqld --initialize-insecure")
 		args := []string{
 			"--defaults-file=" + cnf.path,
