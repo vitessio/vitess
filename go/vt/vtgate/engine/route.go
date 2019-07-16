@@ -201,6 +201,11 @@ func (route *Route) RouteType() string {
 	return routeName[route.Opcode]
 }
 
+// SetTruncateColumnCount sets the truncate column count.
+func (route *Route) SetTruncateColumnCount(count int) {
+	route.TruncateColumnCount = count
+}
+
 // Execute performs a non-streaming exec.
 func (route *Route) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if route.QueryTimeout != 0 {
