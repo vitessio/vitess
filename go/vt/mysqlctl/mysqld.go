@@ -87,7 +87,7 @@ type Mysqld struct {
 
 	version serverVersion
 	flavor  mysqlFlavor
-    c CapabilitySet
+	c       CapabilitySet
 
 	// mutex protects the fields below.
 	mutex         sync.Mutex
@@ -227,18 +227,13 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 		if err != nil {
 			return err
 		}
-
-		//mysqld.HasCapability(CapabilitySystemd) {
-		if true {
-		// The capabilities system did not detect mysqld_safe.
-			// It is assumed that this mysqld package is systemd enabled.
-			log.Info("launching mysqld instead of mysqld_safe")
+		name, err = binaryPath(dir, "mysqld_safe")
+		if err != nil {
+			// The movement to use systemd means that mysqld_safe is not always provided.
+			// This should not be considered an issue do not generate a warning.
+			log.Infof("%v: trying to launch mysqld instead", err)
 			name, err = binaryPath(dir, "mysqld")
-			if err != nil {
-				return err
-			}
-		} else {
-			name, err = binaryPath(dir, "mysqld_safe")
+			// If this also fails, return an error.
 			if err != nil {
 				return err
 			}
@@ -249,7 +244,7 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 		}
 		arg := []string{
 			"--defaults-file=" + cnf.path,
-			"--basedir=" + mysqlBaseDir,
+			"--basedir" + mysqlBaseDir,
 		}
 		arg = append(arg, mysqldArgs...)
 		env := []string{os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql")}
