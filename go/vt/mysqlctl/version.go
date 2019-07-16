@@ -24,7 +24,7 @@ type serverVersion struct {
 	Major, Minor, Patch int
 }
 
-func (v *serverVersion) greaterThan(compare serverVersion) bool {
+func (v *serverVersion) atLeast(compare serverVersion) bool {
 	if v.Major > compare.Major {
 		return true
 	}

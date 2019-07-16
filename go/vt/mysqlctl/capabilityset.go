@@ -40,28 +40,28 @@ func NewCapabilitySet(mysqld *Mysqld) (c CapabilitySet) {
 }
 
 func (c *CapabilitySet) HasMySQLUpgradeInServer() bool {
-	return c.IsMySQLLike() && c.mysqld.version.greaterThan(serverVersion{Major: 8, Minor: 0, Patch: 16})
+	return c.IsMySQLLike() && c.mysqld.version.atLeast(serverVersion{Major: 8, Minor: 0, Patch: 16})
 }
 func (c *CapabilitySet) HasInitializeInServer() bool {
-	return c.IsMySQLLike() && c.mysqld.version.greaterThan(serverVersion{Major: 5, Minor: 7, Patch: 0})
+	return c.IsMySQLLike() && c.mysqld.version.atLeast(serverVersion{Major: 5, Minor: 7, Patch: 0})
 }
 func (c *CapabilitySet) HasMySQLxEnabledByDefault() bool {
-	return c.IsMySQLLike() && c.mysqld.version.greaterThan(serverVersion{Major: 8, Minor: 0, Patch: 11})
+	return c.IsMySQLLike() && c.mysqld.version.atLeast(serverVersion{Major: 8, Minor: 0, Patch: 11})
 }
 func (c *CapabilitySet) HasPersistConfig() bool {
-	return c.IsMySQLLike() && c.mysqld.version.greaterThan(serverVersion{Major: 8, Minor: 0, Patch: 0})
+	return c.IsMySQLLike() && c.mysqld.version.atLeast(serverVersion{Major: 8, Minor: 0, Patch: 0})
 }
 func (c *CapabilitySet) HasShutdownCommand() bool {
-	return (c.IsMySQLLike() && c.mysqld.version.greaterThan(serverVersion{Major: 5, Minor: 7, Patch: 9})) || (c.IsMariaDB() && c.mysqld.version.greaterThan(serverVersion{Major: 10, Minor: 0, Patch: 4}))
+	return (c.IsMySQLLike() && c.mysqld.version.atLeast(serverVersion{Major: 5, Minor: 7, Patch: 9})) || (c.IsMariaDB() && c.mysqld.version.atLeast(serverVersion{Major: 10, Minor: 0, Patch: 4}))
 }
 func (c *CapabilitySet) HasBackupLocks() bool {
-	return c.IsMySQLLike() && c.mysqld.version.greaterThan(serverVersion{Major: 8, Minor: 0, Patch: 0})
+	return c.IsMySQLLike() && c.mysqld.version.atLeast(serverVersion{Major: 8, Minor: 0, Patch: 0})
 }
 func (c *CapabilitySet) HasDefaultUft8mb4() bool {
-	return c.IsMySQLLike() && c.mysqld.version.greaterThan(serverVersion{Major: 8, Minor: 0, Patch: 0})
+	return c.IsMySQLLike() && c.mysqld.version.atLeast(serverVersion{Major: 8, Minor: 0, Patch: 0})
 }
 func (c *CapabilitySet) HasSemiSyncEnabledByDefault() bool {
-	return c.IsMariaDB() && c.mysqld.version.greaterThan(serverVersion{Major: 10, Minor: 3, Patch: 3})
+	return c.IsMariaDB() && c.mysqld.version.atLeast(serverVersion{Major: 10, Minor: 3, Patch: 3})
 }
 
 // IsMySQLLike tests if the server is either MySQL

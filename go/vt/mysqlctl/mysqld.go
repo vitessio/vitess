@@ -120,11 +120,9 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 
 	log.Infof("mysqld is flavor: %s, version: %v", result.flavor, result.version)
 	return result
-
 }
 
 func (mysqld *Mysqld) getVersionString() (string, error) {
-
 	mysqlRoot, err := vtenv.VtMysqlRoot()
 	if err != nil {
 		return "", err
@@ -133,30 +131,28 @@ func (mysqld *Mysqld) getVersionString() (string, error) {
 	if err != nil {
 		return "", err
 	}
-
 	_, version, err := execCmd(mysqldPath, []string{"--version"}, nil, mysqlRoot, nil)
 	if err != nil {
 		return "", err
 	}
-
 	return version, nil
-
 }
 
 // DetectFlavorVersion takes the output of mysqld --version
 // and parses it into a flavor and version
 func (mysqld *Mysqld) DetectFlavorVersion(version string) (flavor mysqlFlavor, ver serverVersion) {
-
 	if strings.Contains(version, "MySQL") {
 		flavor = flavorMySQL
 	} else if strings.Contains(version, "Percona") {
 		flavor = flavorPercona
 	} else if strings.Contains(version, "MariaDB") {
 		flavor = flavorMariaDB
+	} else {
+		log.Fatalf("unrecognized server flavor from: %s", version)
 	}
 	v := versionRegex.FindStringSubmatch(version)
 	if len(v) != 4 {
-		log.Errorf("Could not parse flavor and version from: %s", version)
+		log.Fatalf("Could not parse server version from: %s", version)
 	}
 	ver.Major, _ = strconv.Atoi(string(v[1]))
 	ver.Minor, _ = strconv.Atoi(string(v[2]))
