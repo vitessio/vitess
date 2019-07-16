@@ -21,17 +21,18 @@ limitations under the License.
 package mysqlctl
 
 type serverVersion struct {
- Major, Minor, Patch int
+	Major, Minor, Patch int
 }
 
 func (v *serverVersion) greaterThan(compare serverVersion) bool {
-  if v.Major > compare.Major {
-    return true
-  } else if v.Major == compare.Major && v.Minor > compare.Minor {
-    return true
-  } else if v.Major == compare.Major && v.Minor == compare.Minor && v.Patch >= compare.Patch {
-    return true
-  } else {
-    return false
-  }
+	if v.Major > compare.Major {
+		return true
+	}
+	if v.Major == compare.Major && v.Minor > compare.Minor {
+		return true
+	}
+	if v.Major == compare.Major && v.Minor == compare.Minor && v.Patch >= compare.Patch {
+		return true
+	}
+	return false
 }
