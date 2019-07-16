@@ -39,22 +39,7 @@ if [ -z "$MYSQL_FLAVOR" ]; then
   export MYSQL_FLAVOR=MySQL56
 fi
 
-if [ "${TOPO}" = "etcd2" ]; then
-    echo "enter etcd2 env"
-
-    case $(uname) in
-      Linux)  etcd_platform=linux;;
-      Darwin) etcd_platform=darwin;;
-    esac
-
-    ETCD_SERVER="localhost:2379"
-    ETCD_VERSION=$(cat "${VTROOT}/dist/etcd/.installed_version")
-    ETCD_BINDIR="${VTROOT}/dist/etcd/etcd-${ETCD_VERSION}-${etcd_platform}-amd64/"
-    TOPOLOGY_FLAGS="-topo_implementation etcd2 -topo_global_server_address $ETCD_SERVER -topo_global_root /vitess/global"
-
-    mkdir -p "${VTDATAROOT}/tmp"
-    mkdir -p "${VTDATAROOT}/etcd"
-else
+if [ "${TOPO}" = "zk2" ]; then
     # Each ZooKeeper server needs a list of all servers in the quorum.
     # Since we're running them all locally, we need to give them unique ports.
     # In a real deployment, these should be on different machines, and their
@@ -76,6 +61,19 @@ else
     TOPOLOGY_FLAGS="-topo_implementation zk2 -topo_global_server_address ${ZK_SERVER} -topo_global_root /vitess/global"
 
     mkdir -p $VTDATAROOT/tmp
+else
+    echo "enter etcd2 env"
+
+    case $(uname) in
+      Linux)  etcd_platform=linux;;
+      Darwin) etcd_platform=darwin;;
+    esac
+
+    ETCD_SERVER="localhost:2379"
+    ETCD_VERSION=$(cat "${VTROOT}/dist/etcd/.installed_version")
+    ETCD_BINDIR="${VTROOT}/dist/etcd/etcd-${ETCD_VERSION}-${etcd_platform}-amd64/"
+    TOPOLOGY_FLAGS="-topo_implementation etcd2 -topo_global_server_address $ETCD_SERVER -topo_global_root /vitess/global"
+
+    mkdir -p "${VTDATAROOT}/tmp"
+    mkdir -p "${VTDATAROOT}/etcd"
 fi
-
-
