@@ -79,6 +79,8 @@ var (
 	dbaMysqlStats      = stats.NewTimings("MysqlDba", "MySQL DBA stats", "operation")
 	allprivsMysqlStats = stats.NewTimings("MysqlAllPrivs", "MySQl Stats for all privs", "operation")
 	appMysqlStats      = stats.NewTimings("MysqlApp", "MySQL app stats", "operation")
+
+	versionRegex = regexp.MustCompile(`Ver ([0-9]+)\.([0-9]+)\.([0-9]+)`)
 )
 
 // Mysqld is the object that represents a mysqld daemon running on this server.
@@ -152,8 +154,7 @@ func (mysqld *Mysqld) DetectFlavorVersion(version string) (flavor mysqlFlavor, v
 	} else if strings.Contains(version, "MariaDB") {
 		flavor = flavorMariaDB
 	}
-	re := regexp.MustCompile(`Ver ([0-9]+)\.([0-9]+)\.([0-9]+)`)
-	v := re.FindStringSubmatch(version)
+	v := versionRegex.FindStringSubmatch(version)
 	if len(v) != 4 {
 		log.Errorf("Could not parse flavor and version from: %s", version)
 	}
