@@ -22,7 +22,7 @@ func main() {
 	vanity.ForEachFile(files, vanity.TurnOffGoUnkeyedAll)
 	vanity.ForEachFile(files, vanity.TurnOffGoSizecacheAll)
 
-	vanity.ForEachFile(files, vanity.TurnOffGoEnumPrefixAll)
+//	vanity.ForEachFile(files, vanity.TurnOffGoEnumPrefixAll)
 	vanity.ForEachFile(files, vanity.TurnOffGoEnumStringerAll)
 	vanity.ForEachFile(files, vanity.TurnOnEnumStringerAll)
 
