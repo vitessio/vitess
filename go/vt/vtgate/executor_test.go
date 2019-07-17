@@ -437,7 +437,6 @@ func TestExecutorSet(t *testing.T) {
 		}
 	}
 }
-
 func TestExecutorAutocommit(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
