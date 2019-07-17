@@ -115,7 +115,7 @@ def add_options(parser):
       help='Leave the global processes running after the test is done.')
   parser.add_option('--mysql-flavor')
   parser.add_option('--protocols-flavor', default='grpc')
-  parser.add_option('--topo-server-flavor', default='zk2')
+  parser.add_option('--topo-server-flavor', default='etcd2')
   parser.add_option('--vtgate-gateway-flavor', default='discoverygateway')
 
 
@@ -1019,7 +1019,7 @@ def check_db_var(uid, name, value):
       user='vt_dba',
       unix_socket='%s/vt_%010d/mysql.sock' % (environment.vtdataroot, uid))
   cursor = conn.cursor()
-  cursor.execute("show variables like '%s'" % name)
+  cursor.execute("show variables like '%s'", name)
   row = cursor.fetchone()
   if row != (name, value):
     raise TestError('variable not set correctly', name, row)
