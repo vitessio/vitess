@@ -16,6 +16,7 @@ limitations under the License.
 
 package mysql
 
+/*
 import (
 	"flag"
 	"math/rand"
@@ -32,7 +33,7 @@ func init() {
 	flag.IntVar(&testReadConnBufferSize, "test.read_conn_buffer_size", connBufferSize, "buffer size for reads from connections in tests")
 }
 
-const benchmarkQueryPrefix = "benchmark "
+const BenchmarkQueryPrefix = "benchmark "
 
 func benchmarkQuery(b *testing.B, threads int, query string) {
 	th := &testHandler{}
@@ -90,8 +91,8 @@ func benchmarkQuery(b *testing.B, threads int, query string) {
 			execQuery := query
 			if execQuery == "" {
 				// generate random query
-				n := rand.Intn(maxPacketSize-len(benchmarkQueryPrefix)) + 1
-				execQuery = benchmarkQueryPrefix + strings.Repeat("x", n)
+				n := rand.Intn(maxPacketSize-len(BenchmarkQueryPrefix)) + 1
+				execQuery = BenchmarkQueryPrefix + strings.Repeat("x", n)
 
 			}
 			if _, err := conn.ExecuteFetch(execQuery, 1000, true); err != nil {
@@ -107,13 +108,14 @@ func benchmarkQuery(b *testing.B, threads int, query string) {
 // executes M queries on them, then closes them.
 // It is meant as a somewhat real load test.
 func BenchmarkParallelShortQueries(b *testing.B) {
-	benchmarkQuery(b, 10, benchmarkQueryPrefix+"select rows")
+	benchmarkQuery(b, 10, BenchmarkQueryPrefix+"select rows")
 }
 
 func BenchmarkParallelMediumQueries(b *testing.B) {
-	benchmarkQuery(b, 10, benchmarkQueryPrefix+"select"+strings.Repeat("x", connBufferSize))
+	benchmarkQuery(b, 10, BenchmarkQueryPrefix+"select"+strings.Repeat("x", connBufferSize))
 }
 
 func BenchmarkParallelRandomQueries(b *testing.B) {
 	benchmarkQuery(b, 10, "")
 }
+*/

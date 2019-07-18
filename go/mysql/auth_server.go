@@ -79,20 +79,20 @@ type AuthServer interface {
 	Negotiate(c *Conn, user string, remoteAddr net.Addr) (Getter, error)
 }
 
-// authServers is a registry of AuthServer implementations.
-var authServers = make(map[string]AuthServer)
+// AauthServers is a registry of AuthServer implementations.
+var AauthServers = make(map[string]AuthServer)
 
 // RegisterAuthServerImpl registers an implementations of AuthServer.
-func RegisterAuthServerImpl(name string, authServer AuthServer) {
-	if _, ok := authServers[name]; ok {
+func RegisterAuthServerImpl(name string, AauthServer AuthServer) {
+	if _, ok := AauthServers[name]; ok {
 		log.Fatalf("AuthServer named %v already exists", name)
 	}
-	authServers[name] = authServer
+	AauthServers[name] = AauthServer
 }
 
 // GetAuthServer returns an AuthServer by name, or log.Exitf.
 func GetAuthServer(name string) AuthServer {
-	authServer, ok := authServers[name]
+	authServer, ok := AauthServers[name]
 	if !ok {
 		log.Exitf("no AuthServer name %v registered", name)
 	}
@@ -146,7 +146,7 @@ func ScramblePassword(salt, password []byte) []byte {
 	return scramble
 }
 
-func isPassScrambleMysqlNativePassword(reply, salt []byte, mysqlNativePassword string) bool {
+func IsPassScrambleMysqlNativePassword(reply, salt []byte, mysqlNativePassword string) bool {
 	/*
 		SERVER:  recv(reply)
 				 hash_stage1=xor(reply, sha1(salt,hash))

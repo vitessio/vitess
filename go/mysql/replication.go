@@ -22,19 +22,19 @@ package mysql
 // See http://dev.mysql.com/doc/internals/en/com-binlog-dump.html for syntax.
 // Returns a SQLError.
 func (c *Conn) WriteComBinlogDump(serverID uint32, binlogFilename string, binlogPos uint32, flags uint16) error {
-	c.sequence = 0
+	c.Sequence = 0
 	length := 1 + // ComBinlogDump
 		4 + // binlog-pos
 		2 + // flags
 		4 + // server-id
 		len(binlogFilename) // binlog-filename
-	data := c.startEphemeralPacket(length)
+	data := c.StartEphemeralPacket(length)
 	pos := writeByte(data, 0, ComBinlogDump)
 	pos = writeUint32(data, pos, binlogPos)
 	pos = writeUint16(data, pos, flags)
 	pos = writeUint32(data, pos, serverID)
 	_ = writeEOFString(data, pos, binlogFilename)
-	if err := c.writeEphemeralPacket(); err != nil {
+	if err := c.WriteEphemeralPacket(); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
 	}
 	return nil
@@ -44,7 +44,7 @@ func (c *Conn) WriteComBinlogDump(serverID uint32, binlogFilename string, binlog
 // Only works with MySQL 5.6+ (and not MariaDB).
 // See http://dev.mysql.com/doc/internals/en/com-binlog-dump-gtid.html for syntax.
 func (c *Conn) WriteComBinlogDumpGTID(serverID uint32, binlogFilename string, binlogPos uint64, flags uint16, gtidSet []byte) error {
-	c.sequence = 0
+	c.Sequence = 0
 	length := 1 + // ComBinlogDumpGTID
 		2 + // flags
 		4 + // server-id
@@ -53,7 +53,7 @@ func (c *Conn) WriteComBinlogDumpGTID(serverID uint32, binlogFilename string, bi
 		8 + // binlog-pos
 		4 + // data-size
 		len(gtidSet) // data
-	data := c.startEphemeralPacket(length)
+	data := c.StartEphemeralPacket(length)
 	pos := writeByte(data, 0, ComBinlogDumpGTID)
 	pos = writeUint16(data, pos, flags)
 	pos = writeUint32(data, pos, serverID)
@@ -62,7 +62,7 @@ func (c *Conn) WriteComBinlogDumpGTID(serverID uint32, binlogFilename string, bi
 	pos = writeUint64(data, pos, binlogPos)
 	pos = writeUint32(data, pos, uint32(len(gtidSet)))
 	pos += copy(data[pos:], gtidSet)
-	if err := c.writeEphemeralPacket(); err != nil {
+	if err := c.WriteEphemeralPacket(); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
 	}
 	return nil

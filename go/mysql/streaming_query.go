@@ -73,12 +73,12 @@ func (c *Conn) ExecuteStreamFetch(query string) (err error) {
 	// Read the EOF after the fields if necessary.
 	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
 		// EOF is only present here if it's not deprecated.
-		data, err := c.readEphemeralPacket()
+		data, err := c.ReadEphemeralPacket()
 		if err != nil {
 			return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
-		defer c.recycleReadPacket()
-		if isEOFPacket(data) {
+		defer c.RecycleReadPacket()
+		if IsEOFPacket(data) {
 			// This is what we expect.
 			// Warnings and status flags are ignored.
 			// goto: end
@@ -123,7 +123,7 @@ func (c *Conn) FetchNext() ([]sqltypes.Value, error) {
 		return nil, err
 	}
 
-	if isEOFPacket(data) {
+	if IsEOFPacket(data) {
 		// Warnings and status flags are ignored.
 		c.fields = nil
 		return nil, nil

@@ -25,6 +25,7 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/staticauthserver"
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -50,9 +51,9 @@ func (th *testHandler) WarningCount(c *mysql.Conn) uint16 {
 func TestConnectionUnixSocket(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := mysql.NewAuthServerStatic()
+	authServer := staticauthserver.NewAuthServerStatic()
 
-	authServer.Entries["user1"] = []*mysql.AuthServerStaticEntry{
+	authServer.Entries["user1"] = []*staticauthserver.AuthServerStaticEntry{
 		{
 			Password:   "password1",
 			UserData:   "userData1",
@@ -91,9 +92,9 @@ func TestConnectionUnixSocket(t *testing.T) {
 func TestConnectionStaleUnixSocket(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := mysql.NewAuthServerStatic()
+	authServer := staticauthserver.NewAuthServerStatic()
 
-	authServer.Entries["user1"] = []*mysql.AuthServerStaticEntry{
+	authServer.Entries["user1"] = []*staticauthserver.AuthServerStaticEntry{
 		{
 			Password:   "password1",
 			UserData:   "userData1",
@@ -131,9 +132,9 @@ func TestConnectionStaleUnixSocket(t *testing.T) {
 func TestConnectionRespectsExistingUnixSocket(t *testing.T) {
 	th := &testHandler{}
 
-	authServer := mysql.NewAuthServerStatic()
+	authServer := staticauthserver.NewAuthServerStatic()
 
-	authServer.Entries["user1"] = []*mysql.AuthServerStaticEntry{
+	authServer.Entries["user1"] = []*staticauthserver.AuthServerStaticEntry{
 		{
 			Password:   "password1",
 			UserData:   "userData1",

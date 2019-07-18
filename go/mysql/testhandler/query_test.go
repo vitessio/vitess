@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package mysql
+package testhandler
 
 import (
 	"fmt"
@@ -23,14 +23,14 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
-
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestComInitDB(t *testing.T) {
-	listener, sConn, cConn := createSocketPair(t)
+	listener, sConn, cConn := CreateSocketPair(t)
 	defer func() {
 		listener.Close()
 		sConn.Close()
@@ -38,21 +38,21 @@ func TestComInitDB(t *testing.T) {
 	}()
 
 	// Write ComInitDB packet, read it, compare.
-	if err := cConn.writeComInitDB("my_db"); err != nil {
+	if err := cConn.WriteComInitDB("my_db"); err != nil {
 		t.Fatalf("writeComInitDB failed: %v", err)
 	}
 	data, err := sConn.ReadPacket()
-	if err != nil || len(data) == 0 || data[0] != ComInitDB {
+	if err != nil || len(data) == 0 || data[0] != mysql.ComInitDB {
 		t.Fatalf("sConn.ReadPacket - ComInitDB failed: %v %v", data, err)
 	}
-	db := sConn.parseComInitDB(data)
+	db := sConn.ParseComInitDB(data)
 	if db != "my_db" {
 		t.Errorf("parseComInitDB returned unexpected data: %v", db)
 	}
 }
 
 func TestComSetOption(t *testing.T) {
-	listener, sConn, cConn := createSocketPair(t)
+	listener, sConn, cConn := CreateSocketPair(t)
 	defer func() {
 		listener.Close()
 		sConn.Close()
@@ -60,14 +60,14 @@ func TestComSetOption(t *testing.T) {
 	}()
 
 	// Write ComSetOption packet, read it, compare.
-	if err := cConn.writeComSetOption(1); err != nil {
+	if err := cConn.WriteComSetOption(1); err != nil {
 		t.Fatalf("writeComSetOption failed: %v", err)
 	}
 	data, err := sConn.ReadPacket()
-	if err != nil || len(data) == 0 || data[0] != ComSetOption {
+	if err != nil || len(data) == 0 || data[0] != mysql.ComSetOption {
 		t.Fatalf("sConn.ReadPacket - ComSetOption failed: %v %v", data, err)
 	}
-	operation, ok := sConn.parseComSetOption(data)
+	operation, ok := sConn.ParseComSetOption(data)
 	if !ok {
 		t.Fatalf("parseComSetOption failed unexpectedly")
 	}
@@ -77,7 +77,7 @@ func TestComSetOption(t *testing.T) {
 }
 
 func TestQueries(t *testing.T) {
-	listener, sConn, cConn := createSocketPair(t)
+	listener, sConn, cConn := CreateSocketPair(t)
 	defer func() {
 		listener.Close()
 		sConn.Close()
@@ -294,7 +294,7 @@ func TestQueries(t *testing.T) {
 	})
 }
 
-func checkQuery(t *testing.T, query string, sConn, cConn *Conn, result *sqltypes.Result) {
+func checkQuery(t *testing.T, query string, sConn, cConn *mysql.Conn, result *sqltypes.Result) {
 	// The protocol depends on the CapabilityClientDeprecateEOF flag.
 	// So we want to test both cases.
 
@@ -307,8 +307,8 @@ func checkQuery(t *testing.T, query string, sConn, cConn *Conn, result *sqltypes
 
 	checkQueryInternal(t, query, sConn, cConn, result, true /* wantfields */, true /* allRows */, true /* warnings */)
 
-	sConn.Capabilities = CapabilityClientDeprecateEOF
-	cConn.Capabilities = CapabilityClientDeprecateEOF
+	sConn.Capabilities = mysql.CapabilityClientDeprecateEOF
+	cConn.Capabilities = mysql.CapabilityClientDeprecateEOF
 	checkQueryInternal(t, query, sConn, cConn, result, true /* wantfields */, true /* allRows */, false /* warnings */)
 	checkQueryInternal(t, query, sConn, cConn, result, false /* wantfields */, true /* allRows */, false /* warnings */)
 	checkQueryInternal(t, query, sConn, cConn, result, true /* wantfields */, false /* allRows */, false /* warnings */)
@@ -317,9 +317,9 @@ func checkQuery(t *testing.T, query string, sConn, cConn *Conn, result *sqltypes
 	checkQueryInternal(t, query, sConn, cConn, result, true /* wantfields */, true /* allRows */, true /* warnings */)
 }
 
-func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *sqltypes.Result, wantfields, allRows, warnings bool) {
+func checkQueryInternal(t *testing.T, query string, sConn, cConn *mysql.Conn, result *sqltypes.Result, wantfields, allRows, warnings bool) {
 
-	if sConn.Capabilities&CapabilityClientDeprecateEOF > 0 {
+	if sConn.Capabilities&mysql.CapabilityClientDeprecateEOF > 0 {
 		query += " NOEOF"
 	} else {
 		query += " EOF"
@@ -361,9 +361,9 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 			if err == nil {
 				t.Errorf("ExecuteFetch should have failed but got: %v", got)
 			}
-			sqlErr, ok := err.(*SQLError)
-			if !ok || sqlErr.Number() != ERVitessMaxRowsExceeded {
-				t.Errorf("Expected ERVitessMaxRowsExceeded %v, got %v", ERVitessMaxRowsExceeded, sqlErr.Number())
+			sqlErr, ok := err.(*mysql.SQLError)
+			if !ok || sqlErr.Number() != mysql.ERVitessMaxRowsExceeded {
+				t.Errorf("Expected ERVitessMaxRowsExceeded %v, got %v", mysql.ERVitessMaxRowsExceeded, sqlErr.Number())
 			}
 			return
 		}
@@ -447,13 +447,13 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 		count--
 	}
 
-	handler := testHandler{
+	handler := TestHandler{
 		result:   result,
 		warnings: warningCount,
 	}
 
 	for i := 0; i < count; i++ {
-		err := sConn.handleNextCommand(&handler)
+		err := sConn.HandleNextCommand(&handler)
 		if err != nil {
 			t.Fatalf("error handling command: %v", err)
 		}
@@ -467,17 +467,17 @@ func checkQueryInternal(t *testing.T, query string, sConn, cConn *Conn, result *
 }
 
 //lint:ignore U1000 for now, because deleting this function causes more errors
-func writeResult(conn *Conn, result *sqltypes.Result) error {
+func writeResult(conn *mysql.Conn, result *sqltypes.Result) error {
 	if len(result.Fields) == 0 {
-		return conn.writeOKPacket(result.RowsAffected, result.InsertID, conn.StatusFlags, 0)
+		return conn.WriteOKPacket(result.RowsAffected, result.InsertID, conn.StatusFlags, 0)
 	}
-	if err := conn.writeFields(result); err != nil {
+	if err := conn.WriteFields(result); err != nil {
 		return err
 	}
-	if err := conn.writeRows(result); err != nil {
+	if err := conn.WriteRows(result); err != nil {
 		return err
 	}
-	return conn.writeEndResult(false, 0, 0, 0)
+	return conn.WriteEndResult(false, 0, 0, 0)
 }
 
 func RowString(row []sqltypes.Value) string {

@@ -104,7 +104,7 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 		}
 
 		// Send the connection back, so the other side can close it.
-		c := newConn(conn)
+		c := NewConn(conn)
 		status <- connectResult{
 			c: c,
 		}
@@ -171,16 +171,16 @@ func Connect(ctx context.Context, params *ConnParams) (*Conn, error) {
 // Ping implements mysql ping command.
 func (c *Conn) Ping() error {
 	// This is a new command, need to reset the sequence.
-	c.sequence = 0
+	c.Sequence = 0
 
-	if err := c.writePacket([]byte{ComPing}); err != nil {
+	if err := c.WritePacket([]byte{ComPing}); err != nil {
 		return NewSQLError(CRServerGone, SSUnknownSQLState, "%v", err)
 	}
-	data, err := c.readEphemeralPacket()
+	data, err := c.ReadEphemeralPacket()
 	if err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 	}
-	defer c.recycleReadPacket()
+	defer c.RecycleReadPacket()
 	switch data[0] {
 	case OKPacket:
 		return nil
@@ -339,7 +339,7 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 	// it now. This is what the 'mysql' client does.
 	if capabilities&CapabilityClientConnectWithDB == 0 && params.DbName != "" {
 		// Write the packet.
-		if err := c.writeComInitDB(params.DbName); err != nil {
+		if err := c.WriteComInitDB(params.DbName); err != nil {
 			return err
 		}
 
@@ -521,7 +521,7 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 		flags |= CapabilityClientConnectWithDB
 	}
 
-	data := c.startEphemeralPacket(length)
+	data := c.StartEphemeralPacket(length)
 	pos := 0
 
 	// Client capability flags.
@@ -534,7 +534,7 @@ func (c *Conn) writeSSLRequest(capabilities uint32, characterSet uint8, params *
 	_ = writeByte(data, pos, characterSet)
 
 	// And send it as is.
-	if err := c.writeEphemeralPacket(); err != nil {
+	if err := c.WriteEphemeralPacket(); err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "cannot send SSLRequest: %v", err)
 	}
 	return nil
@@ -584,7 +584,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 		length++
 	}
 
-	data := c.startEphemeralPacket(length)
+	data := c.StartEphemeralPacket(length)
 	pos := 0
 
 	// Client capability flags.
@@ -626,7 +626,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "writeHandshakeResponse41: only packed %v bytes, out of %v allocated", pos, len(data))
 	}
 
-	if err := c.writeEphemeralPacket(); err != nil {
+	if err := c.WriteEphemeralPacket(); err != nil {
 		return NewSQLError(CRServerLost, SSUnknownSQLState, "cannot send HandshakeResponse41: %v", err)
 	}
 	return nil
@@ -646,12 +646,12 @@ func parseAuthSwitchRequest(data []byte) (string, []byte, error) {
 // Returns a SQLError.
 func (c *Conn) writeClearTextPassword(params *ConnParams) error {
 	length := len(params.Pass) + 1
-	data := c.startEphemeralPacket(length)
+	data := c.StartEphemeralPacket(length)
 	pos := 0
 	pos = writeNullString(data, pos, params.Pass)
 	// Sanity check.
 	if pos != len(data) {
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "error building ClearTextPassword packet: got %v bytes expected %v", pos, len(data))
 	}
-	return c.writeEphemeralPacket()
+	return c.WriteEphemeralPacket()
 }

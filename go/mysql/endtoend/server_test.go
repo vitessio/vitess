@@ -14,11 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package mysql
+package endtoend
 
 import (
+	"flag"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"net"
 	"os"
 	"os/exec"
@@ -29,6 +31,9 @@ import (
 
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/staticauthserver"
+	"vitess.io/vitess/go/mysql/testhandler"
 	"vitess.io/vitess/go/sqltypes"
 	vtenv "vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/tlstest"
@@ -39,7 +44,8 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-var selectRowsResult = &sqltypes.Result{
+/*
+var SelectRowsResult = &sqltypes.Result{
 	Fields: []*querypb.Field{
 		{
 			Name: "id",
@@ -62,22 +68,23 @@ var selectRowsResult = &sqltypes.Result{
 	},
 	RowsAffected: 2,
 }
+*/
 
-type testHandler struct {
-	lastConn *Conn
+type TestHandler struct {
+	lastConn *mysql.Conn
 	result   *sqltypes.Result
 	err      error
 	warnings uint16
 }
 
-func (th *testHandler) NewConnection(c *Conn) {
+func (th *TestHandler) NewConnection(c *mysql.Conn) {
 	th.lastConn = c
 }
 
-func (th *testHandler) ConnectionClosed(c *Conn) {
+func (th *TestHandler) ConnectionClosed(c *mysql.Conn) {
 }
 
-func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
+func (th *TestHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	if th.result != nil {
 		callback(th.result)
 		return nil
@@ -89,9 +96,9 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 	case "panic":
 		panic("test panic attack!")
 	case "select rows":
-		callback(selectRowsResult)
+		callback(testhandler.SelectRowsResult)
 	case "error after send":
-		callback(selectRowsResult)
+		callback(testhandler.SelectRowsResult)
 		return th.err
 	case "insert":
 		callback(&sqltypes.Result{
@@ -114,7 +121,7 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 		})
 	case "ssl echo":
 		value := "OFF"
-		if c.Capabilities&CapabilityClientSSL > 0 {
+		if c.Capabilities&mysql.CapabilityClientSSL > 0 {
 			value = "ON"
 		}
 		callback(&sqltypes.Result{
@@ -171,11 +178,12 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 	return nil
 }
 
-func (th *testHandler) WarningCount(c *Conn) uint16 {
+func (th *TestHandler) WarningCount(c *mysql.Conn) uint16 {
 	return th.warnings
 }
 
-func getHostPort(t *testing.T, a net.Addr) (string, int) {
+/*
+func GetHostPort(t *testing.T, a net.Addr) (string, int) {
 	// For the host name, we resolve 'localhost' into an address.
 	// This works around a few travis issues where IPv6 is not 100% enabled.
 	hosts, err := net.LookupHost("localhost")
@@ -187,12 +195,13 @@ func getHostPort(t *testing.T, a net.Addr) (string, int) {
 	t.Logf("listening on address '%v' port %v", host, port)
 	return host, port
 }
+*/
 
 func TestConnectionFromListener(t *testing.T) {
-	th := &testHandler{}
+	th := &TestHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := staticauthserver.NewAuthServerStatic()
+	authServer.Entries["user1"] = []*staticauthserver.AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
@@ -203,24 +212,24 @@ func TestConnectionFromListener(t *testing.T) {
 		t.Fatalf("net.Listener failed: %v", err)
 	}
 
-	l, err := NewFromListener(listener, authServer, th, 0, 0)
+	l, err := mysql.NewFromListener(listener, authServer, th, 0, 0)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
 	go l.Accept()
 
-	host, port := getHostPort(t, l.Addr())
+	host, port := mysql.GetHostPort(t, l.Addr())
 
 	// Setup the right parameters.
-	params := &ConnParams{
+	params := &mysql.ConnParams{
 		Host:  host,
 		Port:  port,
 		Uname: "user1",
 		Pass:  "password1",
 	}
 
-	c, err := Connect(context.Background(), params)
+	c, err := mysql.Connect(context.Background(), params)
 	if err != nil {
 		t.Errorf("Should be able to connect to server but found error: %v", err)
 	}
@@ -228,31 +237,31 @@ func TestConnectionFromListener(t *testing.T) {
 }
 
 func TestConnectionWithoutSourceHost(t *testing.T) {
-	th := &testHandler{}
+	th := &TestHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := staticauthserver.NewAuthServerStatic()
+	authServer.Entries["user1"] = []*staticauthserver.AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	l, err := mysql.NewListener("tcp", ":0", authServer, th, 0, 0)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
 	go l.Accept()
 
-	host, port := getHostPort(t, l.Addr())
+	host, port := mysql.GetHostPort(t, l.Addr())
 
 	// Setup the right parameters.
-	params := &ConnParams{
+	params := &mysql.ConnParams{
 		Host:  host,
 		Port:  port,
 		Uname: "user1",
 		Pass:  "password1",
 	}
 
-	c, err := Connect(context.Background(), params)
+	c, err := mysql.Connect(context.Background(), params)
 	if err != nil {
 		t.Errorf("Should be able to connect to server but found error: %v", err)
 	}
@@ -260,11 +269,11 @@ func TestConnectionWithoutSourceHost(t *testing.T) {
 }
 
 func TestConnectionWithSourceHost(t *testing.T) {
-	th := &testHandler{}
+	th := &TestHandler{}
 
-	authServer := NewAuthServerStatic()
+	authServer := staticauthserver.NewAuthServerStatic()
 
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{
+	authServer.Entries["user1"] = []*staticauthserver.AuthServerStaticEntry{
 		{
 			Password:   "password1",
 			UserData:   "userData1",
@@ -272,24 +281,24 @@ func TestConnectionWithSourceHost(t *testing.T) {
 		},
 	}
 
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	l, err := mysql.NewListener("tcp", ":0", authServer, th, 0, 0)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
 	go l.Accept()
 
-	host, port := getHostPort(t, l.Addr())
+	host, port := mysql.GetHostPort(t, l.Addr())
 
 	// Setup the right parameters.
-	params := &ConnParams{
+	params := &mysql.ConnParams{
 		Host:  host,
 		Port:  port,
 		Uname: "user1",
 		Pass:  "password1",
 	}
 
-	_, err = Connect(context.Background(), params)
+	_, err = mysql.Connect(context.Background(), params)
 	// target is localhost, should not work from tcp connection
 	if err == nil {
 		t.Errorf("Should be able to connect to server but found error: %v", err)
@@ -297,11 +306,11 @@ func TestConnectionWithSourceHost(t *testing.T) {
 }
 
 func TestConnectionUseMysqlNativePasswordWithSourceHost(t *testing.T) {
-	th := &testHandler{}
+	th := &TestHandler{}
 
-	authServer := NewAuthServerStatic()
+	authServer := staticauthserver.NewAuthServerStatic()
 
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{
+	authServer.Entries["user1"] = []*staticauthserver.AuthServerStaticEntry{
 		{
 			MysqlNativePassword: "*9E128DA0C64A6FCCCDCFBDD0FC0A2C967C6DB36F",
 			UserData:            "userData1",
@@ -309,24 +318,24 @@ func TestConnectionUseMysqlNativePasswordWithSourceHost(t *testing.T) {
 		},
 	}
 
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	l, err := mysql.NewListener("tcp", ":0", authServer, th, 0, 0)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
 	go l.Accept()
 
-	host, port := getHostPort(t, l.Addr())
+	host, port := mysql.GetHostPort(t, l.Addr())
 
 	// Setup the right parameters.
-	params := &ConnParams{
+	params := &mysql.ConnParams{
 		Host:  host,
 		Port:  port,
 		Uname: "user1",
 		Pass:  "mysql_password",
 	}
 
-	_, err = Connect(context.Background(), params)
+	_, err = mysql.Connect(context.Background(), params)
 	// target is localhost, should not work from tcp connection
 	if err == nil {
 		t.Errorf("Should be able to connect to server but found error: %v", err)
@@ -334,11 +343,11 @@ func TestConnectionUseMysqlNativePasswordWithSourceHost(t *testing.T) {
 }
 
 func TestConnectionUnixSocket(t *testing.T) {
-	th := &testHandler{}
+	th := &TestHandler{}
 
-	authServer := NewAuthServerStatic()
+	authServer := staticauthserver.NewAuthServerStatic()
 
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{
+	authServer.Entries["user1"] = []*staticauthserver.AuthServerStaticEntry{
 		{
 			Password:   "password1",
 			UserData:   "userData1",
@@ -352,7 +361,7 @@ func TestConnectionUnixSocket(t *testing.T) {
 	}
 	os.Remove(unixSocket.Name())
 
-	l, err := NewListener("unix", unixSocket.Name(), authServer, th, 0, 0)
+	l, err := mysql.NewListener("unix", unixSocket.Name(), authServer, th, 0, 0)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -360,13 +369,13 @@ func TestConnectionUnixSocket(t *testing.T) {
 	go l.Accept()
 
 	// Setup the right parameters.
-	params := &ConnParams{
+	params := &mysql.ConnParams{
 		UnixSocket: unixSocket.Name(),
 		Uname:      "user1",
 		Pass:       "password1",
 	}
 
-	c, err := Connect(context.Background(), params)
+	c, err := mysql.Connect(context.Background(), params)
 	if err != nil {
 		t.Errorf("Should be able to connect to server but found error: %v", err)
 	}
@@ -374,24 +383,24 @@ func TestConnectionUnixSocket(t *testing.T) {
 }
 
 func TestClientFoundRows(t *testing.T) {
-	th := &testHandler{}
+	th := &TestHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := staticauthserver.NewAuthServerStatic()
+	authServer.Entries["user1"] = []*staticauthserver.AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	l, err := mysql.NewListener("tcp", ":0", authServer, th, 0, 0)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
 	go l.Accept()
 
-	host, port := getHostPort(t, l.Addr())
+	host, port := mysql.GetHostPort(t, l.Addr())
 
 	// Setup the right parameters.
-	params := &ConnParams{
+	params := &mysql.ConnParams{
 		Host:  host,
 		Port:  port,
 		Uname: "user1",
@@ -399,11 +408,11 @@ func TestClientFoundRows(t *testing.T) {
 	}
 
 	// Test without flag.
-	c, err := Connect(context.Background(), params)
+	c, err := mysql.Connect(context.Background(), params)
 	if err != nil {
 		t.Fatal(err)
 	}
-	foundRows := th.lastConn.Capabilities & CapabilityClientFoundRows
+	foundRows := th.lastConn.Capabilities & mysql.CapabilityClientFoundRows
 	if foundRows != 0 {
 		t.Errorf("FoundRows flag: %x, second bit must be 0", th.lastConn.Capabilities)
 	}
@@ -413,12 +422,12 @@ func TestClientFoundRows(t *testing.T) {
 	}
 
 	// Test with flag.
-	params.Flags |= CapabilityClientFoundRows
-	c, err = Connect(context.Background(), params)
+	params.Flags |= mysql.CapabilityClientFoundRows
+	c, err = mysql.Connect(context.Background(), params)
 	if err != nil {
 		t.Fatal(err)
 	}
-	foundRows = th.lastConn.Capabilities & CapabilityClientFoundRows
+	foundRows = th.lastConn.Capabilities & mysql.CapabilityClientFoundRows
 	if foundRows == 0 {
 		t.Errorf("FoundRows flag: %x, second bit must be set", th.lastConn.Capabilities)
 	}
@@ -426,53 +435,53 @@ func TestClientFoundRows(t *testing.T) {
 }
 
 func TestConnCounts(t *testing.T) {
-	th := &testHandler{}
+	th := &TestHandler{}
 
-	initialNumUsers := len(connCountPerUser.Counts())
+	initialNumUsers := len(mysql.ConnCountPerUser.Counts())
 
 	user := "anotherNotYetConnectedUser1"
 	passwd := "password1"
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries[user] = []*AuthServerStaticEntry{{
+	authServer := staticauthserver.NewAuthServerStatic()
+	authServer.Entries[user] = []*staticauthserver.AuthServerStaticEntry{{
 		Password: passwd,
 		UserData: "userData1",
 	}}
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	l, err := mysql.NewListener("tcp", ":0", authServer, th, 0, 0)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
 	go l.Accept()
 
-	host, port := getHostPort(t, l.Addr())
+	host, port := mysql.GetHostPort(t, l.Addr())
 
 	// Test with one new connection.
-	params := &ConnParams{
+	params := &mysql.ConnParams{
 		Host:  host,
 		Port:  port,
 		Uname: user,
 		Pass:  passwd,
 	}
 
-	c, err := Connect(context.Background(), params)
+	c, err := mysql.Connect(context.Background(), params)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	connCounts := connCountPerUser.Counts()
+	connCounts := mysql.ConnCountPerUser.Counts()
 	if l := len(connCounts); l-initialNumUsers != 1 {
 		t.Errorf("Expected 1 new user, got %d", l)
 	}
 	checkCountsForUser(t, user, 1)
 
 	// Test with a second new connection.
-	c2, err := Connect(context.Background(), params)
+	c2, err := mysql.Connect(context.Background(), params)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	connCounts = connCountPerUser.Counts()
+	connCounts = mysql.ConnCountPerUser.Counts()
 	// There is still only one new user.
 	if l2 := len(connCounts); l2-initialNumUsers != 1 {
 		t.Errorf("Expected 1 new user, got %d", l2)
@@ -490,7 +499,7 @@ func TestConnCounts(t *testing.T) {
 }
 
 func checkCountsForUser(t *testing.T, user string, expected int64) {
-	connCounts := connCountPerUser.Counts()
+	connCounts := mysql.ConnCountPerUser.Counts()
 
 	userCount, ok := connCounts[user]
 	if ok {
@@ -503,38 +512,38 @@ func checkCountsForUser(t *testing.T, user string, expected int64) {
 }
 
 func TestServer(t *testing.T) {
-	th := &testHandler{}
+	th := &TestHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := staticauthserver.NewAuthServerStatic()
+	authServer.Entries["user1"] = []*staticauthserver.AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	l, err := mysql.NewListener("tcp", ":0", authServer, th, 0, 0)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
 	go l.Accept()
 
-	host, port := getHostPort(t, l.Addr())
+	host, port := mysql.GetHostPort(t, l.Addr())
 
 	// Setup the right parameters.
-	params := &ConnParams{
+	params := &mysql.ConnParams{
 		Host:  host,
 		Port:  port,
 		Uname: "user1",
 		Pass:  "password1",
 	}
 
-	initialTimingCounts := timings.Counts()
-	initialConnAccept := connAccept.Get()
-	initialConnSlow := connSlow.Get()
+	initialTimingCounts := mysql.Timings.Counts()
+	initialConnAccept := mysql.ConnAccept.Get()
+	initialConnSlow := mysql.ConnSlow.Get()
 
 	l.SlowConnectWarnThreshold = time.Duration(time.Nanosecond * 1)
 
 	// Run an 'error' command.
-	th.err = NewSQLError(ERUnknownComError, SSUnknownComError, "forced query error")
+	th.err = mysql.NewSQLError(mysql.ERUnknownComError, mysql.SSUnknownComError, "forced query error")
 	output, ok := runMysql(t, params, "error")
 	if ok {
 		t.Fatalf("mysql should have failed: %v", output)
@@ -543,22 +552,22 @@ func TestServer(t *testing.T) {
 		!strings.Contains(output, "forced query error") {
 		t.Errorf("Unexpected output for 'error': %v", output)
 	}
-	if connCount.Get() != 0 {
-		t.Errorf("Expected ConnCount=0, got %d", connCount.Get())
+	if mysql.ConnCount.Get() != 0 {
+		t.Errorf("Expected ConnCount=0, got %d", mysql.ConnCount.Get())
 	}
-	if connAccept.Get()-initialConnAccept != 1 {
-		t.Errorf("Expected ConnAccept delta=1, got %d", connAccept.Get()-initialConnAccept)
+	if mysql.ConnAccept.Get()-initialConnAccept != 1 {
+		t.Errorf("Expected ConnAccept delta=1, got %d", mysql.ConnAccept.Get()-initialConnAccept)
 	}
-	if connSlow.Get()-initialConnSlow != 1 {
-		t.Errorf("Expected ConnSlow delta=1, got %d", connSlow.Get()-initialConnSlow)
+	if mysql.ConnSlow.Get()-initialConnSlow != 1 {
+		t.Errorf("Expected ConnSlow delta=1, got %d", mysql.ConnSlow.Get()-initialConnSlow)
 	}
 
 	expectedTimingDeltas := map[string]int64{
-		"All":            2,
-		connectTimingKey: 1,
-		queryTimingKey:   1,
+		"All":                  2,
+		mysql.ConnectTimingKey: 1,
+		mysql.QueryTimingKey:   1,
 	}
-	gotTimingCounts := timings.Counts()
+	gotTimingCounts := mysql.Timings.Counts()
 	for key, got := range gotTimingCounts {
 		expected := expectedTimingDeltas[key]
 		delta := got - initialTimingCounts[key]
@@ -580,14 +589,14 @@ func TestServer(t *testing.T) {
 		!strings.Contains(output, "Lost connection to MySQL server during query") {
 		t.Errorf("Unexpected output for 'panic'")
 	}
-	if connCount.Get() != 0 {
-		t.Errorf("Expected ConnCount=0, got %d", connCount.Get())
+	if mysql.ConnCount.Get() != 0 {
+		t.Errorf("Expected ConnCount=0, got %d", mysql.ConnCount.Get())
 	}
-	if connAccept.Get()-initialConnAccept != 2 {
-		t.Errorf("Expected ConnAccept delta=2, got %d", connAccept.Get()-initialConnAccept)
+	if mysql.ConnAccept.Get()-initialConnAccept != 2 {
+		t.Errorf("Expected ConnAccept delta=2, got %d", mysql.ConnAccept.Get()-initialConnAccept)
 	}
-	if connSlow.Get()-initialConnSlow != 1 {
-		t.Errorf("Expected ConnSlow delta=1, got %d", connSlow.Get()-initialConnSlow)
+	if mysql.ConnSlow.Get()-initialConnSlow != 1 {
+		t.Errorf("Expected ConnSlow delta=1, got %d", mysql.ConnSlow.Get()-initialConnSlow)
 	}
 
 	// Run a 'select rows' command with results.
@@ -620,7 +629,7 @@ func TestServer(t *testing.T) {
 
 	// If there's an error after streaming has started,
 	// we should get a 2013
-	th.err = NewSQLError(ERUnknownComError, SSUnknownComError, "forced error after send")
+	th.err = mysql.NewSQLError(mysql.ERUnknownComError, mysql.SSUnknownComError, "forced error after send")
 	output, ok = runMysql(t, params, "error after send")
 	if ok {
 		t.Fatalf("mysql should have failed: %v", output)
@@ -709,25 +718,25 @@ func TestClearTextServer(t *testing.T) {
 	// clear text by default.
 	isMariaDB := os.Getenv("MYSQL_FLAVOR") == "MariaDB"
 
-	th := &testHandler{}
+	th := &TestHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := staticauthserver.NewAuthServerStatic()
+	authServer.Entries["user1"] = []*staticauthserver.AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
-	authServer.Method = MysqlClearPassword
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	authServer.Method = mysql.MysqlClearPassword
+	l, err := mysql.NewListener("tcp", ":0", authServer, th, 0, 0)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
 	go l.Accept()
 
-	host, port := getHostPort(t, l.Addr())
+	host, port := mysql.GetHostPort(t, l.Addr())
 
 	// Setup the right parameters.
-	params := &ConnParams{
+	params := &mysql.ConnParams{
 		Host:  host,
 		Port:  port,
 		Uname: "user1",
@@ -794,15 +803,15 @@ func TestClearTextServer(t *testing.T) {
 
 // TestDialogServer creates a Server that uses the dialog plugin on the client.
 func TestDialogServer(t *testing.T) {
-	th := &testHandler{}
+	th := &TestHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := staticauthserver.NewAuthServerStatic()
+	authServer.Entries["user1"] = []*staticauthserver.AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
-	authServer.Method = MysqlDialog
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	authServer.Method = mysql.MysqlDialog
+	l, err := mysql.NewListener("tcp", ":0", authServer, th, 0, 0)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -810,10 +819,10 @@ func TestDialogServer(t *testing.T) {
 	defer l.Close()
 	go l.Accept()
 
-	host, port := getHostPort(t, l.Addr())
+	host, port := mysql.GetHostPort(t, l.Addr())
 
 	// Setup the right parameters.
-	params := &ConnParams{
+	params := &mysql.ConnParams{
 		Host:  host,
 		Port:  port,
 		Uname: "user1",
@@ -838,10 +847,10 @@ func TestDialogServer(t *testing.T) {
 // TestTLSServer creates a Server with TLS support, then uses mysql
 // client to connect to it.
 func TestTLSServer(t *testing.T) {
-	th := &testHandler{}
+	th := &TestHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := staticauthserver.NewAuthServerStatic()
+	authServer.Entries["user1"] = []*staticauthserver.AuthServerStaticEntry{{
 		Password: "password1",
 	}}
 
@@ -849,7 +858,7 @@ func TestTLSServer(t *testing.T) {
 	// Below, we are enabling --ssl-verify-server-cert, which adds
 	// a check that the common name of the certificate matches the
 	// server host name we connect to.
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	l, err := mysql.NewListener("tcp", ":0", authServer, th, 0, 0)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -885,20 +894,20 @@ func TestTLSServer(t *testing.T) {
 	go l.Accept()
 
 	// Setup the right parameters.
-	params := &ConnParams{
+	params := &mysql.ConnParams{
 		Host:  host,
 		Port:  port,
 		Uname: "user1",
 		Pass:  "password1",
 		// SSL flags.
-		Flags:   CapabilityClientSSL,
+		Flags:   mysql.CapabilityClientSSL,
 		SslCa:   path.Join(root, "ca-cert.pem"),
 		SslCert: path.Join(root, "client-cert.pem"),
 		SslKey:  path.Join(root, "client-key.pem"),
 	}
 
 	// Run a 'select rows' command with results.
-	conn, err := Connect(context.Background(), params)
+	conn, err := mysql.Connect(context.Background(), params)
 	//output, ok := runMysql(t, params, "select rows")
 	if err != nil {
 		t.Fatalf("mysql failed: %v", err)
@@ -931,8 +940,8 @@ func TestTLSServer(t *testing.T) {
 		t.Errorf("Unexpected output for 'ssl echo': %v", results)
 	}
 
-	checkCountForTLSVer(t, versionTLS12, 1)
-	checkCountForTLSVer(t, versionNoTLS, 0)
+	checkCountForTLSVer(t, mysql.VersionTLS12, 1)
+	checkCountForTLSVer(t, mysql.VersionNoTLS, 0)
 	conn.Close()
 
 }
@@ -940,10 +949,10 @@ func TestTLSServer(t *testing.T) {
 // TestTLSRequired creates a Server with TLS required, then tests that an insecure mysql
 // client is rejected
 func TestTLSRequired(t *testing.T) {
-	th := &testHandler{}
+	th := &TestHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := staticauthserver.NewAuthServerStatic()
+	authServer.Entries["user1"] = []*staticauthserver.AuthServerStaticEntry{{
 		Password: "password1",
 	}}
 
@@ -951,7 +960,7 @@ func TestTLSRequired(t *testing.T) {
 	// Below, we are enabling --ssl-verify-server-cert, which adds
 	// a check that the common name of the certificate matches the
 	// server host name we connect to.
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	l, err := mysql.NewListener("tcp", ":0", authServer, th, 0, 0)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -987,13 +996,13 @@ func TestTLSRequired(t *testing.T) {
 	go l.Accept()
 
 	// Setup conn params without SSL.
-	params := &ConnParams{
+	params := &mysql.ConnParams{
 		Host:  host,
 		Port:  port,
 		Uname: "user1",
 		Pass:  "password1",
 	}
-	conn, err := Connect(context.Background(), params)
+	conn, err := mysql.Connect(context.Background(), params)
 	if err == nil {
 		t.Fatal("mysql should have failed")
 	}
@@ -1003,12 +1012,12 @@ func TestTLSRequired(t *testing.T) {
 
 	// setup conn params with TLS
 	tlstest.CreateSignedCert(root, tlstest.CA, "02", "client", "Client Cert")
-	params.Flags = CapabilityClientSSL
+	params.Flags = mysql.CapabilityClientSSL
 	params.SslCa = path.Join(root, "ca-cert.pem")
 	params.SslCert = path.Join(root, "client-cert.pem")
 	params.SslKey = path.Join(root, "client-key.pem")
 
-	conn, err = Connect(context.Background(), params)
+	conn, err = mysql.Connect(context.Background(), params)
 	if err != nil {
 		t.Fatalf("mysql failed: %v", err)
 	}
@@ -1018,7 +1027,7 @@ func TestTLSRequired(t *testing.T) {
 }
 
 func checkCountForTLSVer(t *testing.T, version string, expected int64) {
-	connCounts := connCountByTLSVer.Counts()
+	connCounts := mysql.ConnCountByTLSVer.Counts()
 	count, ok := connCounts[version]
 	if ok {
 		if count != expected {
@@ -1030,24 +1039,24 @@ func checkCountForTLSVer(t *testing.T, version string, expected int64) {
 }
 
 func TestErrorCodes(t *testing.T) {
-	th := &testHandler{}
+	th := &TestHandler{}
 
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	authServer := staticauthserver.NewAuthServerStatic()
+	authServer.Entries["user1"] = []*staticauthserver.AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	l, err := mysql.NewListener("tcp", ":0", authServer, th, 0, 0)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
 	go l.Accept()
 
-	host, port := getHostPort(t, l.Addr())
+	host, port := mysql.GetHostPort(t, l.Addr())
 
 	// Setup the right parameters.
-	params := &ConnParams{
+	params := &mysql.ConnParams{
 		Host:  host,
 		Port:  port,
 		Uname: "user1",
@@ -1055,7 +1064,7 @@ func TestErrorCodes(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client, err := Connect(ctx, params)
+	client, err := mysql.Connect(ctx, params)
 	if err != nil {
 		t.Fatalf("error in connect: %v", err)
 	}
@@ -1072,49 +1081,49 @@ func TestErrorCodes(t *testing.T) {
 			err: vterrors.Errorf(
 				vtrpcpb.Code_INVALID_ARGUMENT,
 				"invalid argument"),
-			code:     ERUnknownError,
-			sqlState: SSUnknownSQLState,
+			code:     mysql.ERUnknownError,
+			sqlState: mysql.SSUnknownSQLState,
 			text:     "invalid argument",
 		},
 		{
 			err: vterrors.Errorf(
 				vtrpcpb.Code_INVALID_ARGUMENT,
-				"(errno %v) (sqlstate %v) invalid argument with errno", ERDupEntry, SSDupKey),
-			code:     ERDupEntry,
-			sqlState: SSDupKey,
+				"(errno %v) (sqlstate %v) invalid argument with errno", mysql.ERDupEntry, mysql.SSDupKey),
+			code:     mysql.ERDupEntry,
+			sqlState: mysql.SSDupKey,
 			text:     "invalid argument with errno",
 		},
 		{
 			err: vterrors.Errorf(
 				vtrpcpb.Code_DEADLINE_EXCEEDED,
 				"connection deadline exceeded"),
-			code:     ERQueryInterrupted,
-			sqlState: SSUnknownSQLState,
+			code:     mysql.ERQueryInterrupted,
+			sqlState: mysql.SSUnknownSQLState,
 			text:     "deadline exceeded",
 		},
 		{
 			err: vterrors.Errorf(
 				vtrpcpb.Code_RESOURCE_EXHAUSTED,
 				"query pool timeout"),
-			code:     ERTooManyUserConnections,
-			sqlState: SSUnknownSQLState,
+			code:     mysql.ERTooManyUserConnections,
+			sqlState: mysql.SSUnknownSQLState,
 			text:     "resource exhausted",
 		},
 		{
-			err:      vterrors.Wrap(NewSQLError(ERVitessMaxRowsExceeded, SSUnknownSQLState, "Row count exceeded 10000"), "wrapped"),
-			code:     ERVitessMaxRowsExceeded,
-			sqlState: SSUnknownSQLState,
+			err:      vterrors.Wrap(mysql.NewSQLError(mysql.ERVitessMaxRowsExceeded, mysql.SSUnknownSQLState, "Row count exceeded 10000"), "wrapped"),
+			code:     mysql.ERVitessMaxRowsExceeded,
+			sqlState: mysql.SSUnknownSQLState,
 			text:     "resource exhausted",
 		},
 	}
 
 	for _, test := range tests {
-		th.err = NewSQLErrorFromError(test.err)
+		th.err = mysql.NewSQLErrorFromError(test.err)
 		result, err := client.ExecuteFetch("error", 100, false)
 		if err == nil {
 			t.Fatalf("mysql should have failed but returned: %v", result)
 		}
-		serr, ok := err.(*SQLError)
+		serr, ok := err.(*mysql.SQLError)
 		if !ok {
 			t.Fatalf("mysql should have returned a SQLError")
 		}
@@ -1136,7 +1145,7 @@ func TestErrorCodes(t *testing.T) {
 const enableCleartextPluginPrefix = "enable-cleartext-plugin: "
 
 // runMysql forks a mysql command line process connecting to the provided server.
-func runMysql(t *testing.T, params *ConnParams, command string) (string, bool) {
+func runMysql(t *testing.T, params *mysql.ConnParams, command string) (string, bool) {
 	dir, err := vtenv.VtMysqlRoot()
 	if err != nil {
 		t.Fatalf("vtenv.VtMysqlRoot failed: %v", err)
@@ -1172,7 +1181,7 @@ func runMysql(t *testing.T, params *ConnParams, command string) (string, bool) {
 	if params.DbName != "" {
 		args = append(args, "-D", params.DbName)
 	}
-	if params.Flags&CapabilityClientSSL > 0 {
+	if params.Flags&mysql.CapabilityClientSSL > 0 {
 		args = append(args,
 			"--ssl",
 			"--ssl-ca", params.SslCa,
@@ -1201,6 +1210,7 @@ func runMysql(t *testing.T, params *ConnParams, command string) (string, bool) {
 //
 // FIXME(alainjobart) move this to vt/env, and use it from
 // go/vt/mysqlctl too.
+/*
 func binaryPath(root, binary string) (string, error) {
 	subdirs := []string{"sbin", "bin"}
 	for _, subdir := range subdirs {
@@ -1212,25 +1222,25 @@ func binaryPath(root, binary string) (string, error) {
 	return "", fmt.Errorf("%s not found in any of %s/{%s}",
 		binary, root, strings.Join(subdirs, ","))
 }
-
+*/
 func TestListenerShutdown(t *testing.T) {
-	th := &testHandler{}
-	authServer := NewAuthServerStatic()
-	authServer.Entries["user1"] = []*AuthServerStaticEntry{{
+	th := &TestHandler{}
+	authServer := staticauthserver.NewAuthServerStatic()
+	authServer.Entries["user1"] = []*staticauthserver.AuthServerStaticEntry{{
 		Password: "password1",
 		UserData: "userData1",
 	}}
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	l, err := mysql.NewListener("tcp", ":0", authServer, th, 0, 0)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
 	defer l.Close()
 	go l.Accept()
 
-	host, port := getHostPort(t, l.Addr())
+	host, port := mysql.GetHostPort(t, l.Addr())
 
 	// Setup the right parameters.
-	params := &ConnParams{
+	params := &mysql.ConnParams{
 		Host:  host,
 		Port:  port,
 		Uname: "user1",
@@ -1240,7 +1250,7 @@ func TestListenerShutdown(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	conn, err := Connect(ctx, params)
+	conn, err := mysql.Connect(ctx, params)
 	if err != nil {
 		t.Fatalf("Can't connect to listener: %v", err)
 	}
@@ -1252,14 +1262,14 @@ func TestListenerShutdown(t *testing.T) {
 	l.Shutdown()
 
 	if err := conn.Ping(); err != nil {
-		sqlErr, ok := err.(*SQLError)
+		sqlErr, ok := err.(*mysql.SQLError)
 		if !ok {
 			t.Fatalf("Wrong error type: %T", err)
 		}
-		if sqlErr.Number() != ERServerShutdown {
+		if sqlErr.Number() != mysql.ERServerShutdown {
 			t.Fatalf("Unexpected sql error code: %d", sqlErr.Number())
 		}
-		if sqlErr.SQLState() != SSServerShutdown {
+		if sqlErr.SQLState() != mysql.SSServerShutdown {
 			t.Fatalf("Unexpected error sql state: %s", sqlErr.SQLState())
 		}
 		if sqlErr.Message != "Server shutdown in progress" {
@@ -1288,7 +1298,7 @@ func TestParseConnAttrs(t *testing.T) {
 		0x76, 0x65, 0x72, 0x73, 0x69, 0x6f, 0x6e, 0x06, 0x38, 0x2e, 0x30, 0x2e, 0x31, 0x31, 0x0c, 0x70,
 		0x72, 0x6f, 0x67, 0x72, 0x61, 0x6d, 0x5f, 0x6e, 0x61, 0x6d, 0x65, 0x05, 0x6d, 0x79, 0x73, 0x71, 0x6c}
 
-	attrs, pos, err := parseConnAttrs(data, 0)
+	attrs, pos, err := mysql.ParseConnAttrs(data, 0)
 	if err != nil {
 		t.Fatalf("Failed to read connection attributes: %v", err)
 	}
@@ -1304,4 +1314,96 @@ func TestParseConnAttrs(t *testing.T) {
 			t.Fatalf("Error reading key %s from connection attributes: attrs: %-v", k, attrs)
 		}
 	}
+}
+
+var testReadConnBufferSize = mysql.ConnBufferSize
+
+func init() {
+	flag.IntVar(&testReadConnBufferSize, "test.read_conn_buffer_size", mysql.ConnBufferSize, "buffer size for reads from connections in tests")
+}
+
+const benchmarkQueryPrefix = "benchmark "
+
+func benchmarkQuery(b *testing.B, threads int, query string) {
+	th := &TestHandler{}
+
+	authServer := &mysql.AuthServerNone{}
+
+	lCfg := mysql.ListenerConfig{
+		Protocol:           "tcp",
+		Address:            ":0",
+		AuthServer:         authServer,
+		Handler:            th,
+		ConnReadBufferSize: testReadConnBufferSize,
+	}
+	l, err := mysql.NewListenerWithConfig(lCfg)
+	if err != nil {
+		b.Fatalf("NewListener failed: %v", err)
+	}
+	defer l.Close()
+
+	go func() {
+		l.Accept()
+	}()
+
+	b.SetParallelism(threads)
+	if query != "" {
+		b.SetBytes(int64(len(query)))
+	}
+
+	host := l.Addr().(*net.TCPAddr).IP.String()
+	port := l.Addr().(*net.TCPAddr).Port
+	params := &mysql.ConnParams{
+		Host:  host,
+		Port:  port,
+		Uname: "user1",
+		Pass:  "password1",
+	}
+	ctx := context.Background()
+
+	b.ResetTimer()
+
+	// MaxPacketSize is too big for benchmarks, so choose something smaller
+	maxPacketSize := mysql.ConnBufferSize * 4
+
+	b.RunParallel(func(pb *testing.PB) {
+		conn, err := mysql.Connect(ctx, params)
+		if err != nil {
+			b.Fatal(err)
+		}
+		defer func() {
+			conn.WriteComQuit()
+			conn.Close()
+		}()
+
+		for pb.Next() {
+			execQuery := query
+			if execQuery == "" {
+				// generate random query
+				n := rand.Intn(maxPacketSize-len(benchmarkQueryPrefix)) + 1
+				execQuery = benchmarkQueryPrefix + strings.Repeat("x", n)
+
+			}
+			if _, err := conn.ExecuteFetch(execQuery, 1000, true); err != nil {
+				b.Fatalf("ExecuteFetch failed: %v", err)
+			}
+		}
+	})
+}
+
+// This file contains various long-running tests for mysql.
+
+// BenchmarkParallelShortQueries creates N simultaneous connections, then
+// executes M queries on them, then closes them.
+// It is meant as a somewhat real load test.
+func BenchmarkParallelShortQueries(b *testing.B) {
+	benchmarkQuery(b, 10, benchmarkQueryPrefix+"select rows")
+}
+
+func BenchmarkParallelMediumQueries(b *testing.B) {
+	benchmarkQuery(b, 10, benchmarkQueryPrefix+"select"+strings.Repeat("x", mysql.ConnBufferSize))
+}
+
+func BenchmarkParallelRandomQueries(b *testing.B) {
+	benchmarkQuery(b, 10, "")
 }

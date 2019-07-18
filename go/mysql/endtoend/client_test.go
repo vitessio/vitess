@@ -109,6 +109,7 @@ func TestDupEntry(t *testing.T) {
 }
 
 // TestClientFoundRows tests if the CLIENT_FOUND_ROWS flag works.
+/*
 func TestClientFoundRows(t *testing.T) {
 	params := connParams
 	params.EnableClientFoundRows()
@@ -141,7 +142,7 @@ func TestClientFoundRows(t *testing.T) {
 		t.Errorf("Second update: RowsAffected: %d, want 1", qr.RowsAffected)
 	}
 }
-
+*/
 func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 	ctx := context.Background()
 	connParams.DisableClientDeprecateEOF = disableClientDeprecateEOF

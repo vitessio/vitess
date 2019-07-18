@@ -63,7 +63,7 @@ func TestConnectTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cannot listen: %v", err)
 	}
-	host, port := getHostPort(t, listener.Addr())
+	host, port := GetHostPort(t, listener.Addr())
 	params := &ConnParams{
 		Host: host,
 		Port: port,

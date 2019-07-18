@@ -21,13 +21,11 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path"
 	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
-	vtenv "vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/vttest"
 
@@ -63,6 +61,7 @@ func assertSQLError(t *testing.T, err error, code int, sqlState string, subtext 
 	}
 }
 
+/*
 // runMysql forks a mysql command line process connecting to the provided server.
 func runMysql(t *testing.T, params *mysql.ConnParams, command string) (string, bool) {
 	dir, err := vtenv.VtMysqlRoot()
@@ -106,6 +105,7 @@ func runMysql(t *testing.T, params *mysql.ConnParams, command string) (string, b
 	}
 	env := []string{
 		"LD_LIBRARY_PATH=" + path.Join(dir, "lib/mysql"),
+		"LIBMYSQL_ENABLE_CLEARTEXT_PLUGIN=1",
 	}
 
 	cmd := exec.Command(name, args...)
@@ -118,7 +118,7 @@ func runMysql(t *testing.T, params *mysql.ConnParams, command string) (string, b
 	}
 	return output, true
 }
-
+*/
 // binaryPath does a limited path lookup for a command,
 // searching only within sbin and bin in the given root.
 //

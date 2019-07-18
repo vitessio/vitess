@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package mysql
+package testhandler
 
 import (
 	"bytes"
@@ -25,9 +25,11 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/mysql"
 )
 
-func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
+func CreateSocketPair(t *testing.T) (net.Listener, *mysql.Conn, *mysql.Conn) {
 	// Create a listener.
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {
@@ -65,55 +67,55 @@ func createSocketPair(t *testing.T) (net.Listener, *Conn, *Conn) {
 	}
 
 	// Create a Conn on both sides.
-	cConn := newConn(clientConn)
-	sConn := newConn(serverConn)
+	cConn := mysql.NewConn(clientConn)
+	sConn := mysql.NewConn(serverConn)
 
 	return listener, sConn, cConn
 }
 
-func useWritePacket(t *testing.T, cConn *Conn, data []byte) {
+func useWritePacket(t *testing.T, cConn *mysql.Conn, data []byte) {
 	defer func() {
 		if x := recover(); x != nil {
 			t.Fatalf("%v", x)
 		}
 	}()
-	if err := cConn.writePacket(data); err != nil {
+	if err := cConn.WritePacket(data); err != nil {
 		t.Fatalf("writePacket failed: %v", err)
 	}
 }
 
-func useWriteEphemeralPacketBuffered(t *testing.T, cConn *Conn, data []byte) {
+func useWriteEphemeralPacketBuffered(t *testing.T, cConn *mysql.Conn, data []byte) {
 	defer func() {
 		if x := recover(); x != nil {
 			t.Fatalf("%v", x)
 		}
 	}()
-	cConn.startWriterBuffering()
-	defer cConn.flush()
+	cConn.StartWriterBuffering()
+	defer cConn.Flush()
 
-	buf := cConn.startEphemeralPacket(len(data))
+	buf := cConn.StartEphemeralPacket(len(data))
 	copy(buf, data)
-	if err := cConn.writeEphemeralPacket(); err != nil {
+	if err := cConn.WriteEphemeralPacket(); err != nil {
 		t.Fatalf("writeEphemeralPacket(false) failed: %v", err)
 	}
 }
 
-func useWriteEphemeralPacketDirect(t *testing.T, cConn *Conn, data []byte) {
+func useWriteEphemeralPacketDirect(t *testing.T, cConn *mysql.Conn, data []byte) {
 	defer func() {
 		if x := recover(); x != nil {
 			t.Fatalf("%v", x)
 		}
 	}()
 
-	buf := cConn.startEphemeralPacket(len(data))
+	buf := cConn.StartEphemeralPacket(len(data))
 	copy(buf, data)
-	if err := cConn.writeEphemeralPacket(); err != nil {
+	if err := cConn.WriteEphemeralPacket(); err != nil {
 		t.Fatalf("writeEphemeralPacket(true) failed: %v", err)
 	}
 }
 
-func verifyPacketCommsSpecific(t *testing.T, cConn *Conn, data []byte,
-	write func(t *testing.T, cConn *Conn, data []byte),
+func verifyPacketCommsSpecific(t *testing.T, cConn *mysql.Conn, data []byte,
+	write func(t *testing.T, cConn *mysql.Conn, data []byte),
 	read func() ([]byte, error)) {
 	// Have to do it in the background if it cannot be buffered.
 	// Note we have to wait for it to finish at the end of the
@@ -135,33 +137,33 @@ func verifyPacketCommsSpecific(t *testing.T, cConn *Conn, data []byte,
 
 // Write a packet on one side, read it on the other, check it's
 // correct.  We use all possible read and write methods.
-func verifyPacketComms(t *testing.T, cConn, sConn *Conn, data []byte) {
+func verifyPacketComms(t *testing.T, cConn, sConn *mysql.Conn, data []byte) {
 	// All three writes, with ReadPacket.
 	verifyPacketCommsSpecific(t, cConn, data, useWritePacket, sConn.ReadPacket)
 	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketBuffered, sConn.ReadPacket)
 	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketDirect, sConn.ReadPacket)
 
 	// All three writes, with readEphemeralPacket.
-	verifyPacketCommsSpecific(t, cConn, data, useWritePacket, sConn.readEphemeralPacket)
-	sConn.recycleReadPacket()
-	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketBuffered, sConn.readEphemeralPacket)
-	sConn.recycleReadPacket()
-	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketDirect, sConn.readEphemeralPacket)
-	sConn.recycleReadPacket()
+	verifyPacketCommsSpecific(t, cConn, data, useWritePacket, sConn.ReadEphemeralPacket)
+	sConn.RecycleReadPacket()
+	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketBuffered, sConn.ReadEphemeralPacket)
+	sConn.RecycleReadPacket()
+	verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketDirect, sConn.ReadEphemeralPacket)
+	sConn.RecycleReadPacket()
 
 	// All three writes, with readEphemeralPacketDirect, if size allows it.
-	if len(data) < MaxPacketSize {
-		verifyPacketCommsSpecific(t, cConn, data, useWritePacket, sConn.readEphemeralPacketDirect)
-		sConn.recycleReadPacket()
-		verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketBuffered, sConn.readEphemeralPacketDirect)
-		sConn.recycleReadPacket()
-		verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketDirect, sConn.readEphemeralPacketDirect)
-		sConn.recycleReadPacket()
+	if len(data) < mysql.MaxPacketSize {
+		verifyPacketCommsSpecific(t, cConn, data, useWritePacket, sConn.ReadEphemeralPacketDirect)
+		sConn.RecycleReadPacket()
+		verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketBuffered, sConn.ReadEphemeralPacketDirect)
+		sConn.RecycleReadPacket()
+		verifyPacketCommsSpecific(t, cConn, data, useWriteEphemeralPacketDirect, sConn.ReadEphemeralPacketDirect)
+		sConn.RecycleReadPacket()
 	}
 }
 
 func TestPackets(t *testing.T) {
-	listener, sConn, cConn := createSocketPair(t)
+	listener, sConn, cConn := CreateSocketPair(t)
 	defer func() {
 		listener.Close()
 		sConn.Close()
@@ -178,26 +180,26 @@ func TestPackets(t *testing.T) {
 	verifyPacketComms(t, cConn, sConn, data)
 
 	// Under the limit, still one packet.
-	data = make([]byte, MaxPacketSize-1)
+	data = make([]byte, mysql.MaxPacketSize-1)
 	data[0] = 0xab
-	data[MaxPacketSize-2] = 0xef
+	data[mysql.MaxPacketSize-2] = 0xef
 	verifyPacketComms(t, cConn, sConn, data)
 
 	// Exactly the limit, two packets.
-	data = make([]byte, MaxPacketSize)
+	data = make([]byte, mysql.MaxPacketSize)
 	data[0] = 0xab
-	data[MaxPacketSize-1] = 0xef
+	data[mysql.MaxPacketSize-1] = 0xef
 	verifyPacketComms(t, cConn, sConn, data)
 
 	// Over the limit, two packets.
-	data = make([]byte, MaxPacketSize+1000)
+	data = make([]byte, mysql.MaxPacketSize+1000)
 	data[0] = 0xab
-	data[MaxPacketSize+999] = 0xef
+	data[mysql.MaxPacketSize+999] = 0xef
 	verifyPacketComms(t, cConn, sConn, data)
 }
 
 func TestBasicPackets(t *testing.T) {
-	listener, sConn, cConn := createSocketPair(t)
+	listener, sConn, cConn := CreateSocketPair(t)
 	defer func() {
 		listener.Close()
 		sConn.Close()
@@ -205,63 +207,63 @@ func TestBasicPackets(t *testing.T) {
 	}()
 
 	// Write OK packet, read it, compare.
-	if err := sConn.writeOKPacket(12, 34, 56, 78); err != nil {
+	if err := sConn.WriteOKPacket(12, 34, 56, 78); err != nil {
 		t.Fatalf("writeOKPacket failed: %v", err)
 	}
 	data, err := cConn.ReadPacket()
-	if err != nil || len(data) == 0 || data[0] != OKPacket {
+	if err != nil || len(data) == 0 || data[0] != mysql.OKPacket {
 		t.Fatalf("cConn.ReadPacket - OKPacket failed: %v %v", data, err)
 	}
-	affectedRows, lastInsertID, statusFlags, warnings, err := parseOKPacket(data)
+	affectedRows, lastInsertID, statusFlags, warnings, err := mysql.ParseOKPacket(data)
 	if err != nil || affectedRows != 12 || lastInsertID != 34 || statusFlags != 56 || warnings != 78 {
 		t.Errorf("parseOKPacket returned unexpected data: %v %v %v %v %v", affectedRows, lastInsertID, statusFlags, warnings, err)
 	}
 
 	// Write OK packet with EOF header, read it, compare.
-	if err := sConn.writeOKPacketWithEOFHeader(12, 34, 56, 78); err != nil {
+	if err := sConn.WriteOKPacketWithEOFHeader(12, 34, 56, 78); err != nil {
 		t.Fatalf("writeOKPacketWithEOFHeader failed: %v", err)
 	}
 	data, err = cConn.ReadPacket()
-	if err != nil || len(data) == 0 || !isEOFPacket(data) {
+	if err != nil || len(data) == 0 || !mysql.IsEOFPacket(data) {
 		t.Fatalf("cConn.ReadPacket - OKPacket with EOF header failed: %v %v", data, err)
 	}
-	affectedRows, lastInsertID, statusFlags, warnings, err = parseOKPacket(data)
+	affectedRows, lastInsertID, statusFlags, warnings, err = mysql.ParseOKPacket(data)
 	if err != nil || affectedRows != 12 || lastInsertID != 34 || statusFlags != 56 || warnings != 78 {
 		t.Errorf("parseOKPacket returned unexpected data: %v %v %v %v %v", affectedRows, lastInsertID, statusFlags, warnings, err)
 	}
 
 	// Write error packet, read it, compare.
-	if err := sConn.writeErrorPacket(ERAccessDeniedError, SSAccessDeniedError, "access denied: %v", "reason"); err != nil {
+	if err := sConn.WriteErrorPacket(mysql.ERAccessDeniedError, mysql.SSAccessDeniedError, "access denied: %v", "reason"); err != nil {
 		t.Fatalf("writeErrorPacket failed: %v", err)
 	}
 	data, err = cConn.ReadPacket()
-	if err != nil || len(data) == 0 || data[0] != ErrPacket {
+	if err != nil || len(data) == 0 || data[0] != mysql.ErrPacket {
 		t.Fatalf("cConn.ReadPacket - ErrorPacket failed: %v %v", data, err)
 	}
-	err = ParseErrorPacket(data)
-	if !reflect.DeepEqual(err, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied: reason")) {
+	err = mysql.ParseErrorPacket(data)
+	if !reflect.DeepEqual(err, mysql.NewSQLError(mysql.ERAccessDeniedError, mysql.SSAccessDeniedError, "access denied: reason")) {
 		t.Errorf("ParseErrorPacket returned unexpected data: %v", err)
 	}
 
 	// Write error packet from error, read it, compare.
-	if err := sConn.writeErrorPacketFromError(NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied")); err != nil {
+	if err := sConn.WriteErrorPacketFromError(mysql.NewSQLError(mysql.ERAccessDeniedError, mysql.SSAccessDeniedError, "access denied")); err != nil {
 		t.Fatalf("writeErrorPacketFromError failed: %v", err)
 	}
 	data, err = cConn.ReadPacket()
-	if err != nil || len(data) == 0 || data[0] != ErrPacket {
+	if err != nil || len(data) == 0 || data[0] != mysql.ErrPacket {
 		t.Fatalf("cConn.ReadPacket - ErrorPacket failed: %v %v", data, err)
 	}
-	err = ParseErrorPacket(data)
-	if !reflect.DeepEqual(err, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "access denied")) {
+	err = mysql.ParseErrorPacket(data)
+	if !reflect.DeepEqual(err, mysql.NewSQLError(mysql.ERAccessDeniedError, mysql.SSAccessDeniedError, "access denied")) {
 		t.Errorf("ParseErrorPacket returned unexpected data: %v", err)
 	}
 
 	// Write EOF packet, read it, compare first byte. Payload is always ignored.
-	if err := sConn.writeEOFPacket(0x8912, 0xabba); err != nil {
+	if err := sConn.WriteEOFPacket(0x8912, 0xabba); err != nil {
 		t.Fatalf("writeEOFPacket failed: %v", err)
 	}
 	data, err = cConn.ReadPacket()
-	if err != nil || len(data) == 0 || !isEOFPacket(data) {
+	if err != nil || len(data) == 0 || !mysql.IsEOFPacket(data) {
 		t.Fatalf("cConn.ReadPacket - EOFPacket failed: %v %v", data, err)
 	}
 }
@@ -276,8 +278,8 @@ func TestEOFOrLengthEncodedIntFuzz(t *testing.T) {
 		}
 		bytes[0] = 0xfe
 
-		_, _, isInt := readLenEncInt(bytes, 0)
-		isEOF := isEOFPacket(bytes)
+		_, _, isInt := mysql.ReadLenEncInt(bytes, 0)
+		isEOF := mysql.IsEOFPacket(bytes)
 		if (isInt && isEOF) || (!isInt && !isEOF) {
 			t.Fatalf("0xfe bytestring is EOF xor Int. Bytes %v", bytes)
 		}

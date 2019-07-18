@@ -66,7 +66,7 @@ func (ascc *AuthServerClientCert) Negotiate(c *Conn, user string, remoteAddr net
 	}
 
 	return &StaticUserData{
-		username: commonName,
-		groups:   certs[0].DNSNames,
+		Username: commonName,
+		Groups:   certs[0].DNSNames,
 	}, nil
 }

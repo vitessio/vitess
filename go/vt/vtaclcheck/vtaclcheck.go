@@ -22,7 +22,7 @@ package vtaclcheck
 import (
 	"fmt"
 
-	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/staticauthserver"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
 )
@@ -69,7 +69,7 @@ func Run() error {
 	}
 
 	if options.StaticAuthFile != "" {
-		mysql.RegisterAuthServerStaticFromParams(options.StaticAuthFile, "")
+		staticauthserver.RegisterAuthServerStaticFromParams(options.StaticAuthFile, "")
 
 		fmt.Printf("Static auth file %s looks good\n", options.StaticAuthFile)
 	}

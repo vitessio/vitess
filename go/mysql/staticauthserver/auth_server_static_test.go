@@ -14,7 +14,7 @@ see the license for the specific language governing permissions and
 limitations under the license.
 */
 
-package mysql
+package staticauthserver
 
 import (
 	"fmt"
@@ -24,6 +24,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/mysql"
 )
 
 func TestJsonConfigParser(t *testing.T) {
@@ -80,12 +82,12 @@ func TestValidateHashGetter(t *testing.T) {
 	ip := net.ParseIP("127.0.0.1")
 	addr := &net.IPAddr{IP: ip, Zone: ""}
 
-	salt, err := NewSalt()
+	salt, err := mysql.NewSalt()
 	if err != nil {
 		t.Fatalf("error generating salt: %v", err)
 	}
 
-	scrambled := ScramblePassword(salt, []byte("password"))
+	scrambled := mysql.ScramblePassword(salt, []byte("password"))
 	getter, err := auth.ValidateHash(salt, "mysql_user", scrambled, addr)
 	if err != nil {
 		t.Fatalf("error validating password: %v", err)
@@ -135,7 +137,7 @@ func TestStaticConfigHUP(t *testing.T) {
 	}
 
 	InitAuthServerStatic()
-	aStatic := GetAuthServer("static").(*AuthServerStatic)
+	aStatic := mysql.GetAuthServer("static").(*AuthServerStatic)
 
 	if aStatic.Entries[oldStr][0].Password != oldStr {
 		t.Fatalf("%s's Password should still be '%s'", oldStr, oldStr)
@@ -145,8 +147,8 @@ func TestStaticConfigHUP(t *testing.T) {
 	hupTest(t, tmpFile, "str2", "str3") // still handling the signal
 
 	// delete registered Auth server
-	for auth := range authServers {
-		delete(authServers, auth)
+	for auth := range mysql.AauthServers {
+		delete(mysql.AauthServers, auth)
 	}
 }
 
@@ -169,7 +171,7 @@ func TestStaticConfigHUPWithRotation(t *testing.T) {
 	}
 
 	InitAuthServerStatic()
-	aStatic := GetAuthServer("static").(*AuthServerStatic)
+	aStatic := mysql.GetAuthServer("static").(*AuthServerStatic)
 
 	if aStatic.Entries[oldStr][0].Password != oldStr {
 		t.Fatalf("%s's Password should still be '%s'", oldStr, oldStr)
@@ -180,7 +182,7 @@ func TestStaticConfigHUPWithRotation(t *testing.T) {
 }
 
 func hupTest(t *testing.T, tmpFile *os.File, oldStr, newStr string) {
-	aStatic := GetAuthServer("static").(*AuthServerStatic)
+	aStatic := mysql.GetAuthServer("static").(*AuthServerStatic)
 
 	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", newStr, newStr)
 	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
@@ -203,7 +205,7 @@ func hupTest(t *testing.T, tmpFile *os.File, oldStr, newStr string) {
 }
 
 func hupTestWithRotation(t *testing.T, tmpFile *os.File, oldStr, newStr string) {
-	aStatic := GetAuthServer("static").(*AuthServerStatic)
+	aStatic := mysql.GetAuthServer("static").(*AuthServerStatic)
 
 	jsonConfig := fmt.Sprintf("{\"%s\":[{\"Password\":\"%s\"}]}", newStr, newStr)
 	if err := ioutil.WriteFile(tmpFile.Name(), []byte(jsonConfig), 0600); err != nil {
@@ -272,12 +274,12 @@ func TestStaticPasswords(t *testing.T) {
 
 	for _, c := range tests {
 		t.Run(fmt.Sprintf("%s-%s", c.user, c.password), func(t *testing.T) {
-			salt, err := NewSalt()
+			salt, err := mysql.NewSalt()
 			if err != nil {
 				t.Fatalf("error generating salt: %v", err)
 			}
 
-			scrambled := ScramblePassword(salt, []byte(c.password))
+			scrambled := mysql.ScramblePassword(salt, []byte(c.password))
 			_, err = auth.ValidateHash(salt, c.user, scrambled, addr)
 
 			if c.success {

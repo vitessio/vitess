@@ -1,4 +1,4 @@
-package mysql
+package endtoend
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"testing"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/tlstest"
 	"vitess.io/vitess/go/vt/vttls"
 )
@@ -16,14 +17,14 @@ import (
 const clientCertUsername = "Client Cert"
 
 func TestValidCert(t *testing.T) {
-	th := &testHandler{}
+	th := &TestHandler{}
 
-	authServer := &AuthServerClientCert{
-		Method: MysqlClearPassword,
+	authServer := &mysql.AuthServerClientCert{
+		Method: mysql.MysqlClearPassword,
 	}
 
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	l, err := mysql.NewListener("tcp", ":0", authServer, th, 0, 0)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -55,13 +56,13 @@ func TestValidCert(t *testing.T) {
 	}()
 
 	// Setup the right parameters.
-	params := &ConnParams{
+	params := &mysql.ConnParams{
 		Host:  host,
 		Port:  port,
 		Uname: clientCertUsername,
 		Pass:  "",
 		// SSL flags.
-		Flags:      CapabilityClientSSL,
+		Flags:      mysql.CapabilityClientSSL,
 		SslCa:      path.Join(root, "ca-cert.pem"),
 		SslCert:    path.Join(root, "client-cert.pem"),
 		SslKey:     path.Join(root, "client-key.pem"),
@@ -69,7 +70,7 @@ func TestValidCert(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	conn, err := Connect(ctx, params)
+	conn, err := mysql.Connect(ctx, params)
 	if err != nil {
 		t.Fatalf("Connect failed: %v", err)
 	}
@@ -95,18 +96,18 @@ func TestValidCert(t *testing.T) {
 	}
 
 	// Send a ComQuit to avoid the error message on the server side.
-	conn.writeComQuit()
+	conn.WriteComQuit()
 }
 
 func TestNoCert(t *testing.T) {
-	th := &testHandler{}
+	th := &TestHandler{}
 
-	authServer := &AuthServerClientCert{
-		Method: MysqlClearPassword,
+	authServer := &mysql.AuthServerClientCert{
+		Method: mysql.MysqlClearPassword,
 	}
 
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	l, err := mysql.NewListener("tcp", ":0", authServer, th, 0, 0)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -137,18 +138,18 @@ func TestNoCert(t *testing.T) {
 	}()
 
 	// Setup the right parameters.
-	params := &ConnParams{
+	params := &mysql.ConnParams{
 		Host:       host,
 		Port:       port,
 		Uname:      "user1",
 		Pass:       "",
-		Flags:      CapabilityClientSSL,
+		Flags:      mysql.CapabilityClientSSL,
 		SslCa:      path.Join(root, "ca-cert.pem"),
 		ServerName: "server.example.com",
 	}
 
 	ctx := context.Background()
-	conn, err := Connect(ctx, params)
+	conn, err := mysql.Connect(ctx, params)
 	if err == nil {
 		t.Errorf("Connect() should have errored due to no client cert")
 	}

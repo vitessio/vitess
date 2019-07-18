@@ -201,7 +201,7 @@ func readUint64(data []byte, pos int) (uint64, int, bool) {
 	return binary.LittleEndian.Uint64(data[pos : pos+8]), pos + 8, true
 }
 
-func readLenEncInt(data []byte, pos int) (uint64, int, bool) {
+func ReadLenEncInt(data []byte, pos int) (uint64, int, bool) {
 	if pos >= len(data) {
 		return 0, 0, false
 	}
@@ -239,7 +239,7 @@ func readLenEncInt(data []byte, pos int) (uint64, int, bool) {
 }
 
 func readLenEncString(data []byte, pos int) (string, int, bool) {
-	size, pos, ok := readLenEncInt(data, pos)
+	size, pos, ok := ReadLenEncInt(data, pos)
 	if !ok {
 		return "", 0, false
 	}
@@ -251,7 +251,7 @@ func readLenEncString(data []byte, pos int) (string, int, bool) {
 }
 
 func skipLenEncString(data []byte, pos int) (int, bool) {
-	size, pos, ok := readLenEncInt(data, pos)
+	size, pos, ok := ReadLenEncInt(data, pos)
 	if !ok {
 		return 0, false
 	}
@@ -263,7 +263,7 @@ func skipLenEncString(data []byte, pos int) (int, bool) {
 }
 
 func readLenEncStringAsBytes(data []byte, pos int) ([]byte, int, bool) {
-	size, pos, ok := readLenEncInt(data, pos)
+	size, pos, ok := ReadLenEncInt(data, pos)
 	if !ok {
 		return nil, 0, false
 	}

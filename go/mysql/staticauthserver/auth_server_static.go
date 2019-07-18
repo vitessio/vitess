@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package mysql
+package staticauthserver
 
 import (
 	"bytes"
@@ -28,8 +28,8 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -98,7 +98,7 @@ func InitAuthServerStatic() {
 // NewAuthServerStatic returns a new empty AuthServerStatic.
 func NewAuthServerStatic() *AuthServerStatic {
 	return &AuthServerStatic{
-		Method:  MysqlNativePassword,
+		Method:  mysql.MysqlNativePassword,
 		Entries: make(map[string][]*AuthServerStaticEntry),
 	}
 }
@@ -118,7 +118,7 @@ func RegisterAuthServerStaticFromParams(file, str string) {
 	authServerStatic.installSignalHandlers()
 
 	// And register the server.
-	RegisterAuthServerImpl("static", authServerStatic)
+	mysql.RegisterAuthServerImpl("static", authServerStatic)
 }
 
 func (a *AuthServerStatic) loadConfigFromParams(file, str string) {
@@ -217,42 +217,42 @@ func (a *AuthServerStatic) AuthMethod(user string) (string, error) {
 
 // Salt is part of the AuthServer interface.
 func (a *AuthServerStatic) Salt() ([]byte, error) {
-	return NewSalt()
+	return mysql.NewSalt()
 }
 
 // ValidateHash is part of the AuthServer interface.
-func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, error) {
+func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (mysql.Getter, error) {
 	a.mu.Lock()
 	entries, ok := a.Entries[user]
 	a.mu.Unlock()
 
 	if !ok {
-		return &StaticUserData{}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+		return &mysql.StaticUserData{}, mysql.NewSQLError(mysql.ERAccessDeniedError, mysql.SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 
 	for _, entry := range entries {
 		if entry.MysqlNativePassword != "" {
-			isPass := isPassScrambleMysqlNativePassword(authResponse, salt, entry.MysqlNativePassword)
+			isPass := mysql.IsPassScrambleMysqlNativePassword(authResponse, salt, entry.MysqlNativePassword)
 			if matchSourceHost(remoteAddr, entry.SourceHost) && isPass {
-				return &StaticUserData{entry.UserData, entry.Groups}, nil
+				return &mysql.StaticUserData{entry.UserData, entry.Groups}, nil
 			}
 		} else {
-			computedAuthResponse := ScramblePassword(salt, []byte(entry.Password))
+			computedAuthResponse := mysql.ScramblePassword(salt, []byte(entry.Password))
 			// Validate the password.
 			if matchSourceHost(remoteAddr, entry.SourceHost) && bytes.Equal(authResponse, computedAuthResponse) {
-				return &StaticUserData{entry.UserData, entry.Groups}, nil
+				return &mysql.StaticUserData{entry.UserData, entry.Groups}, nil
 			}
 		}
 	}
-	return &StaticUserData{}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+	return &mysql.StaticUserData{}, mysql.NewSQLError(mysql.ERAccessDeniedError, mysql.SSAccessDeniedError, "Access denied for user '%v'", user)
 }
 
 // Negotiate is part of the AuthServer interface.
 // It will be called if Method is anything else than MysqlNativePassword.
 // We only recognize MysqlClearPassword and MysqlDialog here.
-func (a *AuthServerStatic) Negotiate(c *Conn, user string, remoteAddr net.Addr) (Getter, error) {
+func (a *AuthServerStatic) Negotiate(c *mysql.Conn, user string, remoteAddr net.Addr) (mysql.Getter, error) {
 	// Finish the negotiation.
-	password, err := AuthServerNegotiateClearOrDialog(c, a.Method)
+	password, err := mysql.AuthServerNegotiateClearOrDialog(c, a.Method)
 	if err != nil {
 		return nil, err
 	}
@@ -262,15 +262,15 @@ func (a *AuthServerStatic) Negotiate(c *Conn, user string, remoteAddr net.Addr) 
 	a.mu.Unlock()
 
 	if !ok {
-		return &StaticUserData{}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+		return &mysql.StaticUserData{}, mysql.NewSQLError(mysql.ERAccessDeniedError, mysql.SSAccessDeniedError, "Access denied for user '%v'", user)
 	}
 	for _, entry := range entries {
 		// Validate the password.
 		if matchSourceHost(remoteAddr, entry.SourceHost) && entry.Password == password {
-			return &StaticUserData{entry.UserData, entry.Groups}, nil
+			return &mysql.StaticUserData{entry.UserData, entry.Groups}, nil
 		}
 	}
-	return &StaticUserData{}, NewSQLError(ERAccessDeniedError, SSAccessDeniedError, "Access denied for user '%v'", user)
+	return &mysql.StaticUserData{}, mysql.NewSQLError(mysql.ERAccessDeniedError, mysql.SSAccessDeniedError, "Access denied for user '%v'", user)
 }
 
 func matchSourceHost(remoteAddr net.Addr, targetSourceHost string) bool {
@@ -285,15 +285,4 @@ func matchSourceHost(remoteAddr net.Addr, targetSourceHost string) bool {
 		}
 	}
 	return false
-}
-
-// StaticUserData holds the username and groups
-type StaticUserData struct {
-	username string
-	groups   []string
-}
-
-// Get returns the wrapped username and groups
-func (sud *StaticUserData) Get() *querypb.VTGateCallerID {
-	return &querypb.VTGateCallerID{Username: sud.username, Groups: sud.groups}
 }

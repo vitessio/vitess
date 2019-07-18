@@ -70,13 +70,13 @@ func TestEncLenInt(t *testing.T) {
 		}
 
 		// Check succesful decoding.
-		got, pos, ok := readLenEncInt(test.encoded, 0)
+		got, pos, ok := ReadLenEncInt(test.encoded, 0)
 		if !ok || got != test.value || pos != len(test.encoded) {
 			t.Errorf("readLenEncInt returned %x/%v/%v but expected %x/%v/%v", got, pos, ok, test.value, len(test.encoded), true)
 		}
 
 		// Check failed decoding.
-		_, _, ok = readLenEncInt(test.encoded[:len(test.encoded)-1], 0)
+		_, _, ok = ReadLenEncInt(test.encoded[:len(test.encoded)-1], 0)
 		if ok {
 			t.Errorf("readLenEncInt returned ok=true for shorter value %x", test.value)
 		}
