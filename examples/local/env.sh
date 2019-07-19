@@ -46,6 +46,7 @@ if [ "${TOPO}" = "zk2" ]; then
     mkdir -p ${VTDATAROOT}/tmp
    
 else
+
     # Each ZooKeeper server needs a list of all servers in the quorum.
     # Since we're running them all locally, we need to give them unique ports.
     # In a real deployment, these should be on different machines, and their
