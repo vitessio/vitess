@@ -115,7 +115,66 @@
           "Col": 3,
           "Desc": false
         }
-      ]
+      ],
+      "TruncateColumnCount": 5
+    }
+  }
+}
+
+# scatter group by a text column, reuse existing weight_string
+"select count(*) k, a, textcol1, b from user group by a, textcol1, b order by k, textcol1"
+{
+  "Original": "select count(*) k, a, textcol1, b from user group by a, textcol1, b order by k, textcol1",
+  "Instructions": {
+    "Opcode": "MemorySort",
+    "MaxRows": null,
+    "OrderBy": [
+      {
+        "Col": 0,
+        "Desc": false
+      },
+      {
+        "Col": 4,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Aggregates": [
+        {
+          "Opcode": "count",
+          "Col": 0
+        }
+      ],
+      "Keys": [
+        1,
+        4,
+        3
+      ],
+      "TruncateColumnCount": 5,
+      "Input": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select count(*) as k, a, textcol1, b, weight_string(textcol1) from user group by a, textcol1, b order by textcol1 asc, a asc, b asc",
+        "FieldQuery": "select count(*) as k, a, textcol1, b, weight_string(textcol1) from user where 1 != 1 group by a, textcol1, b",
+        "OrderBy": [
+          {
+            "Col": 4,
+            "Desc": false
+          },
+          {
+            "Col": 1,
+            "Desc": false
+          },
+          {
+            "Col": 3,
+            "Desc": false
+          }
+        ],
+        "TruncateColumnCount": 5
+      }
     }
   }
 }
@@ -783,6 +842,54 @@
           "Desc": false
         }
       ]
+    }
+  }
+}
+
+# order by count distinct
+"select col1, count(distinct col2) k from user group by col1 order by k"
+{
+  "Original": "select col1, count(distinct col2) k from user group by col1 order by k",
+  "Instructions": {
+    "Opcode": "MemorySort",
+    "MaxRows": null,
+    "OrderBy": [
+      {
+        "Col": 1,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "HasDistinct": true,
+      "Aggregates": [
+        {
+          "Opcode": "count_distinct",
+          "Col": 1,
+          "Alias": "k"
+        }
+      ],
+      "Keys": [
+        0
+      ],
+      "Input": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select col1, col2 from user group by col1, col2 order by col1 asc, col2 asc",
+        "FieldQuery": "select col1, col2 from user where 1 != 1 group by col1, col2",
+        "OrderBy": [
+          {
+            "Col": 0,
+            "Desc": false
+          },
+          {
+            "Col": 1,
+            "Desc": false
+          }
+        ]
+      }
     }
   }
 }

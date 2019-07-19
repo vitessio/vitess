@@ -130,7 +130,7 @@ func (vf *vindexFunc) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, wh
 }
 
 // PushSelect satisfies the builder interface.
-func (vf *vindexFunc) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colnum int, err error) {
+func (vf *vindexFunc) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colNumber int, err error) {
 	// Catch the case where no where clause was specified. If so, the opcode
 	// won't be set.
 	if vf.eVindexFunc.Opcode == engine.VindexNone {
@@ -146,7 +146,7 @@ func (vf *vindexFunc) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExp
 		Name: rc.alias.String(),
 		Type: querypb.Type_VARBINARY,
 	})
-	vf.eVindexFunc.Cols = append(vf.eVindexFunc.Cols, col.Metadata.(*column).colnum)
+	vf.eVindexFunc.Cols = append(vf.eVindexFunc.Cols, col.Metadata.(*column).colNumber)
 	return rc, len(vf.resultColumns) - 1, nil
 }
 
@@ -168,7 +168,7 @@ func (vf *vindexFunc) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	if len(orderBy) == 0 {
 		return vf, nil
 	}
-	return nil, errors.New("unsupported: order by on vindex function")
+	return newMemorySort(vf, orderBy)
 }
 
 // SetUpperLimit satisfies the builder interface.
@@ -192,7 +192,7 @@ func (vf *vindexFunc) SupplyVar(from, to int, col *sqlparser.ColName, varname st
 }
 
 // SupplyCol satisfies the builder interface.
-func (vf *vindexFunc) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int) {
+func (vf *vindexFunc) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
 	c := col.Metadata.(*column)
 	for i, rc := range vf.resultColumns {
 		if rc.column == c {
@@ -206,8 +206,13 @@ func (vf *vindexFunc) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnu
 		Type: querypb.Type_VARBINARY,
 	})
 
-	// columns that reference vindexFunc will have their colnum set.
+	// columns that reference vindexFunc will have their colNumber set.
 	// Let's use it here.
-	vf.eVindexFunc.Cols = append(vf.eVindexFunc.Cols, c.colnum)
+	vf.eVindexFunc.Cols = append(vf.eVindexFunc.Cols, c.colNumber)
 	return rc, len(vf.resultColumns) - 1
+}
+
+// SupplyWeightString satisfies the builder interface.
+func (vf *vindexFunc) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+	return 0, errors.New("cannot do collation on vindex function")
 }

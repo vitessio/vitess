@@ -226,3 +226,359 @@
     }
   }
 }
+
+# scatter aggregate with memory sort and order by number, reuse weight_string
+# we have to use a meaningless construct to test this.
+"select textcol1, count(*) k from user group by textcol1 order by textcol1, k, textcol1"
+{
+  "Original": "select textcol1, count(*) k from user group by textcol1 order by textcol1, k, textcol1",
+  "Instructions": {
+    "Opcode": "MemorySort",
+    "MaxRows": null,
+    "OrderBy": [
+      {
+        "Col": 2,
+        "Desc": false
+      },
+      {
+        "Col": 1,
+        "Desc": false
+      },
+      {
+        "Col": 2,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Aggregates": [
+        {
+          "Opcode": "count",
+          "Col": 1
+        }
+      ],
+      "Keys": [
+        2
+      ],
+      "TruncateColumnCount": 3,
+      "Input": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select textcol1, count(*) as k, weight_string(textcol1) from user group by textcol1 order by textcol1 asc, textcol1 asc",
+        "FieldQuery": "select textcol1, count(*) as k, weight_string(textcol1) from user where 1 != 1 group by textcol1",
+        "OrderBy": [
+          {
+            "Col": 2,
+            "Desc": false
+          },
+          {
+            "Col": 2,
+            "Desc": false
+          }
+        ],
+        "TruncateColumnCount": 3
+      }
+    }
+  }
+}
+
+# order by on a cross-shard subquery
+"select id from (select user.id, user.col from user join user_extra) as t order by id"
+{
+  "Original": "select id from (select user.id, user.col from user join user_extra) as t order by id",
+  "Instructions": {
+    "Opcode": "MemorySort",
+    "MaxRows": null,
+    "OrderBy": [
+      {
+        "Col": 0,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Cols": [
+        0
+      ],
+      "Subquery": {
+        "Opcode": "Join",
+        "Left": {
+          "Opcode": "SelectScatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          },
+          "Query": "select user.id, user.col from user",
+          "FieldQuery": "select user.id, user.col from user where 1 != 1"
+        },
+        "Right": {
+          "Opcode": "SelectScatter",
+          "Keyspace": {
+            "Name": "user",
+            "Sharded": true
+          },
+          "Query": "select 1 from user_extra",
+          "FieldQuery": "select 1 from user_extra where 1 != 1"
+        },
+        "Cols": [
+          -1,
+          -2
+        ]
+      }
+    }
+  }
+}
+
+# order by on a cross-shard query. Note: this happens only when an order by column is from the second table
+"select user.col1 as a, user.col2 b, music.col3 c from user, music where user.id = music.id and user.id = 1 order by c"
+{
+  "Original": "select user.col1 as a, user.col2 b, music.col3 c from user, music where user.id = music.id and user.id = 1 order by c",
+  "Instructions": {
+    "Opcode": "MemorySort",
+    "MaxRows": null,
+    "OrderBy": [
+      {
+        "Col": 2,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Opcode": "Join",
+      "Left": {
+        "Opcode": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select user.col1 as a, user.col2 as b, user.id from user where user.id = 1",
+        "FieldQuery": "select user.col1 as a, user.col2 as b, user.id from user where 1 != 1",
+        "Vindex": "user_index",
+        "Values": [
+          1
+        ]
+      },
+      "Right": {
+        "Opcode": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select music.col3 as c from music where music.id = :user_id",
+        "FieldQuery": "select music.col3 as c from music where 1 != 1",
+        "Vindex": "music_user_map",
+        "Values": [
+          ":user_id"
+        ]
+      },
+      "Cols": [
+        -1,
+        -2,
+        1
+      ],
+      "Vars": {
+        "user_id": 2
+      }
+    }
+  }
+}
+
+# Order by for join, with mixed cross-shard ordering
+"select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by 1 asc, 3 desc, 2 asc"
+{
+  "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by 1 asc, 3 desc, 2 asc",
+  "Instructions": {
+    "Opcode": "MemorySort",
+    "MaxRows": null,
+    "OrderBy": [
+      {
+        "Col": 0,
+        "Desc": false
+      },
+      {
+        "Col": 2,
+        "Desc": true
+      },
+      {
+        "Col": 1,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Opcode": "Join",
+      "Left": {
+        "Opcode": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select user.col1 as a, user.col2, user.id from user where user.id = 1",
+        "FieldQuery": "select user.col1 as a, user.col2, user.id from user where 1 != 1",
+        "Vindex": "user_index",
+        "Values": [
+          1
+        ]
+      },
+      "Right": {
+        "Opcode": "SelectEqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select music.col3 from music where music.id = :user_id",
+        "FieldQuery": "select music.col3 from music where 1 != 1",
+        "Vindex": "music_user_map",
+        "Values": [
+          ":user_id"
+        ]
+      },
+      "Cols": [
+        -1,
+        -2,
+        1
+      ],
+      "Vars": {
+        "user_id": 2
+      }
+    }
+  }
+}
+
+# Order by for join, on text column in LHS.
+"select u.a, u.textcol1, un.col2 from user u join unsharded un order by u.textcol1, un.col2"
+{
+  "Original": "select u.a, u.textcol1, un.col2 from user u join unsharded un order by u.textcol1, un.col2",
+  "Instructions": {
+    "Opcode": "MemorySort",
+    "MaxRows": null,
+    "OrderBy": [
+      {
+        "Col": 3,
+        "Desc": false
+      },
+      {
+        "Col": 2,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Opcode": "Join",
+      "Left": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select u.a, u.textcol1, weight_string(u.textcol1) from user as u",
+        "FieldQuery": "select u.a, u.textcol1, weight_string(u.textcol1) from user as u where 1 != 1"
+      },
+      "Right": {
+        "Opcode": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "select un.col2 from unsharded as un",
+        "FieldQuery": "select un.col2 from unsharded as un where 1 != 1"
+      },
+      "Cols": [
+        -1,
+        -2,
+        1,
+        -3
+      ]
+    }
+  }
+}
+
+# Order by for join, on text column in RHS.
+"select u.a, u.textcol1, un.col2 from unsharded un join user u order by u.textcol1, un.col2"
+{
+  "Original": "select u.a, u.textcol1, un.col2 from unsharded un join user u order by u.textcol1, un.col2",
+  "Instructions": {
+    "Opcode": "MemorySort",
+    "MaxRows": null,
+    "OrderBy": [
+      {
+        "Col": 3,
+        "Desc": false
+      },
+      {
+        "Col": 2,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Opcode": "Join",
+      "Left": {
+        "Opcode": "SelectUnsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "select un.col2 from unsharded as un",
+        "FieldQuery": "select un.col2 from unsharded as un where 1 != 1"
+      },
+      "Right": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select u.a, u.textcol1, weight_string(u.textcol1) from user as u",
+        "FieldQuery": "select u.a, u.textcol1, weight_string(u.textcol1) from user as u where 1 != 1"
+      },
+      "Cols": [
+        1,
+        2,
+        -1,
+        3
+      ]
+    }
+  }
+}
+
+# order by for vindex func
+"select id, keyspace_id, range_start, range_end from user_index where id = :id order by range_start"
+{
+  "Original": "select id, keyspace_id, range_start, range_end from user_index where id = :id order by range_start",
+  "Instructions": {
+    "Opcode": "MemorySort",
+    "MaxRows": null,
+    "OrderBy": [
+      {
+        "Col": 2,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Opcode": "VindexMap",
+      "Fields": [
+        {
+          "name": "id",
+          "type": 10262
+        },
+        {
+          "name": "keyspace_id",
+          "type": 10262
+        },
+        {
+          "name": "range_start",
+          "type": 10262
+        },
+        {
+          "name": "range_end",
+          "type": 10262
+        }
+      ],
+      "Cols": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "Vindex": "user_index",
+      "Value": ":id"
+    }
+  }
+}

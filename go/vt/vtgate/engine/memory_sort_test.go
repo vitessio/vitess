@@ -184,6 +184,94 @@ func TestMemorySortGetFields(t *testing.T) {
 	}
 }
 
+func TestMemorySortExecuteTruncate(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"c1|c2|c3",
+		"varbinary|decimal|int64",
+	)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			fields,
+			"a|1|1",
+			"b|2|1",
+			"a|1|1",
+			"c|4|1",
+			"c|3|1",
+		)},
+	}
+
+	ms := &MemorySort{
+		OrderBy: []OrderbyParams{{
+			Col: 1,
+		}},
+		Input:               fp,
+		TruncateColumnCount: 2,
+	}
+
+	result, err := ms.Execute(nil, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantResult := sqltypes.MakeTestResult(
+		fields[:2],
+		"a|1",
+		"a|1",
+		"b|2",
+		"c|3",
+		"c|4",
+	)
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("oa.Execute:\n%v, want\n%v", result, wantResult)
+	}
+}
+
+func TestMemorySortStreamExecuteTruncate(t *testing.T) {
+	fields := sqltypes.MakeTestFields(
+		"c1|c2|c3",
+		"varbinary|decimal|int64",
+	)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			fields,
+			"a|1|1",
+			"b|2|1",
+			"a|1|1",
+			"c|4|1",
+			"c|3|1",
+		)},
+	}
+
+	ms := &MemorySort{
+		OrderBy: []OrderbyParams{{
+			Col: 1,
+		}},
+		Input:               fp,
+		TruncateColumnCount: 2,
+	}
+
+	var results []*sqltypes.Result
+	err := ms.StreamExecute(noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+		results = append(results, qr)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantResults := sqltypes.MakeTestStreamingResults(
+		fields[:2],
+		"a|1",
+		"a|1",
+		"b|2",
+		"c|3",
+		"c|4",
+	)
+	if !reflect.DeepEqual(results, wantResults) {
+		t.Errorf("oa.Execute:\n%v, want\n%v", results, wantResults)
+	}
+}
+
 func TestMemorySortMultiColumn(t *testing.T) {
 	fields := sqltypes.MakeTestFields(
 		"c1|c2",
