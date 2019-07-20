@@ -146,7 +146,6 @@ func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 	if err != nil {
 		return NewSQLError(CRMalformedPacket, SSUnknownSQLState, "MySQLToType(%v,%v) failed for column %v: %v", t, flags, index, err)
 	}
-
 	// Decimals is a byte.
 	decimals, _, ok := readByte(colDef, pos)
 	if !ok {
@@ -1017,7 +1016,7 @@ func (c *Conn) writePrepare(result *sqltypes.Result, prepare *PrepareData) error
 	data := c.startEphemeralPacket(12)
 	pos := 0
 
-	pos = writeByte(data, pos, ComPrepare)
+	pos = writeByte(data, pos, 0x00)
 	pos = writeUint32(data, pos, uint32(prepare.StatementID))
 	pos = writeUint16(data, pos, uint16(columnCount))
 	pos = writeUint16(data, pos, uint16(paramsCount))

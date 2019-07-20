@@ -167,6 +167,7 @@ var mysqlToType = map[int64]querypb.Type{
 	11:  Time,
 	12:  Datetime,
 	13:  Year,
+	15:  VarChar,
 	16:  Bit,
 	245: TypeJSON,
 	246: Decimal,

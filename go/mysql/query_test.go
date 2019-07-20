@@ -126,7 +126,7 @@ func TestComStmtPrepare(t *testing.T) {
 		t.Fatalf("writePrepare failed: %v", err)
 	}
 	data, err := sConn.ReadPacket()
-	if err != nil || len(data) == 0 || data[0] != ComPrepare {
+	if err != nil || len(data) == 0 {
 		t.Fatalf("sConn.ReadPacket - ComPrepare failed: %v %v", data, err)
 	}
 	if uint32(data[1]) != prepare.StatementID {
