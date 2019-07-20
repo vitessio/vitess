@@ -1,6 +1,6 @@
 # Local Vitess cluster using docker-compose 
 
-This directory have a docker-compose sample application.
+This directory has a docker-compose sample application.
 To understand it better, you can run it.
 
 First you will need to [install docker-compose](https://docs.docker.com/compose/install/).
@@ -10,7 +10,13 @@ To start Consul(which saves the topology config), vtctld, vtgate and a few vttab
 ```
 vitess/examples/compose$ docker-compose up -d
 ```
-Note that the vtgate container will likely fail to start.
+
+### Check the status of the containers
+You can check the logs of the containers (vtgate, vttablet1, vttablet2, vttablet3) at any time.
+For example to check vtgate logs, run the following;
+```
+vitess/examples/compose$ docker-compose logs -f vtgate
+```
 
 ### Load the schema
 We need to create a few tables into our new cluster. To do that, we can run the `ApplySchema` command.
@@ -18,14 +24,15 @@ We need to create a few tables into our new cluster. To do that, we can run the 
 vitess/examples/compose$ ./lvtctl.sh ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace
 ```
 
-### Complete starting the cluster
-Now that schema has been loaded a second start will bring vtgate up as well.
+### Create Vschema
+Create Vschema
 ```
-vitess/examples/compose$ docker-compose up -d
+vitess/examples/compose$ ./lvtctl.sh ApplyVschema -vschema '{"tables": {"messages": {} } }' test_keyspace
 ```
 
 ### Run the client to insert and read some data
 This will build and run the `client.go` file. It will insert and read data from the master and from the replica.
+[See Possible Errors.](#common-errors "Go to common errors")
 ```
 vitess/examples/compose$ ./client.sh
 ```
@@ -33,7 +40,7 @@ vitess/examples/compose$ ./client.sh
 ### Connect to vgate and run queries
 vtgate responds to the MySQL protocol, so we can connect to it using the default MySQL client command line.
 ```
-$ mysql --port=15306 --host=127.0.0.1
+vitess/examples/compose$ ./lmysql.sh --port=15306 --host=127.0.0.1
 ```
 
 
@@ -62,4 +69,128 @@ If the cluster gets in a bad state, you most likely will have to stop and kill t
 ```
 vitess/examples/compose$ docker-compose kill
 vitess/examples/compose$ docker-compose rm
+```
+
+## Advanced Usage
+
+### External mysql instance
+The compose example has the capability to run against an external mysql instance. Kindly take care to secure your connection to the database.
+To start vitess against unsharded external mysql, change the following variables in your .env file to match your external database;
+```
+KEYSPACE=external_db_name
+DB=external_db_name
+EXTERNAL_DB=1
+DB_HOST=external_db_host
+DB_PORT=external_db_port
+DB_USER=external_db_user
+DB_PASS=external_db_password
+DB_CHARSET=CHARACTER SET utf8 COLLATE utf8_general_ci
+```
+
+Ensure you have log bin enabled on your external database.
+You may add the following configs to your conf.d directory and reload mysqld on your server
+```
+vitess/config/mycnf/master_mysql56.cnf
+vitess/config/mycnf/rbr.cnf
+```
+
+### Start the cluster
+```
+vitess/examples/compose$ docker-compose up -d
+```
+
+### Check replication status
+Once vitess starts, check if replication is working
+```
+vitess/examples/compose$ ./lfixrepl.sh status
+```
+
+### Fix replication
+To fix replication, place a mysqldump of the database in vitess/examples/compose/script with filename 'database.sql'
+You may then run the following command
+```
+vitess/examples/compose$ ./lfixrepl.sh
+```
+
+### Apply Vschema
+Apply Vschema for the unsharded keyspace
+```
+vitess/examples/compose$ ./lvtctl.sh ApplyVschema -vschema '{"sharded":false, "tables": {"*": {} } }' external_db_name
+```
+
+### Connect to vgate and run queries
+vtgate responds to the MySQL protocol, so we can connect to it using the default MySQL client command line.
+```sh
+vitess/examples/compose$ ./lmysql.sh --port=15306 --host=<host of machine containers are running in e.g. 127.0.0.1, docker-machine ip e.t.c>
+
+mysql> show databases;
++--------------------+
+| Databases          |
++--------------------+
+| external_db_name   |
++--------------------+
+1 row in set (0.00 sec)
+mysql> use external_db_name@master or use external_db_name@replica or use external_db_name@rdonly;
+Reading table information for completion of table and column names
+You can turn off this feature to get a quicker startup with -A
+
+Database changed
+mysql> use external_db_name@replica;
+Reading table information for completion of table and column names
+You can turn off this feature to get a quicker startup with -A
+
+Database changed
+mysql> show tables;
++--------------------------------------------+
+| Tables_in_external_db_name                 |
++--------------------------------------------+
+| DATABASECHANGELOG                          |
+| ......................                     |
+| table_name_1                               |
+| table_name_2                               |
+| ......................                     |
+|                                            |
++--------------------------------------------+
+29 rows in set (0.00 sec)
+```
+
+## Helper Scripts
+The following helper scripts are included to help you perform various actions easily
+* vitess/examples/compose/lvtctl.sh
+* vitess/examples/compose/lmysql.sh
+* vitess/examples/compose/lfixrepl.sh
+
+You may run them as below
+```
+vitess/examples/compose$ ./lvtctl.sh <args>
+```
+
+To run against a specific compose service/container, use the environment variable **$CS**
+
+```
+vitess/examples/compose$ (export CS=vttablet2; ./lvtctl.sh <args> )
+```
+
+## Common Errors
+
+1. Running ./client.sh may generate the following error
+```sh
+vitess/examples/compose$ ./client.sh
+Inserting into master...
+exec failed: Code: FAILED_PRECONDITION
+vtgate: ...vttablet: The MySQL server is running with the --read-only option so it cannot execute this statement (errno 1290) ...
+exit status 1
+```
+To resolve use the [SetReadWrite](../../doc/Troubleshooting.md#master-starts-up-read-only) command on master.
+```sh
+vitess/examples/compose$ ./lvtctl.sh SetReadWrite test-1
+
+```
+
+2. Running ./lvtctl.sh ApplyVschema -vschema '{"sharded":false }' may result in an error referenced by this [issue](https://github.com/vitessio/vitess/issues/4013 )
+
+
+A quick fix for unsharded db is;
+```
+vitess/examples/compose$ ./lvtctl.sh ApplyVschema -vschema '{"sharded":false, "tables": {"*": {} } }' external_db_name
 ```
