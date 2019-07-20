@@ -277,6 +277,89 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 	})
 }
 
+// TestPlayerCopyWildcardTableContinuation tests the copy workflow where tables have been partially copied.
+func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
+	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+
+	execStatements(t, []string{
+		// src is initialized as partially copied.
+		// lastpk will be initialized at (6,6) later below.
+		"create table src(id int, val varbinary(128), primary key(id))",
+		"insert into src values(2,'copied'), (3,'uncopied')",
+		fmt.Sprintf("create table %s.dst(id int, val varbinary(128), primary key(id))", vrepldb),
+		fmt.Sprintf("insert into %s.dst values(2,'copied')", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src",
+		fmt.Sprintf("drop table %s.dst", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst",
+			Filter: "select * from src",
+		}},
+	}
+	pos := masterPosition(t)
+	execStatements(t, []string{
+		"insert into src values(4,'new')",
+	})
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.BlpStopped, playerEngine.dbName)
+	qr, err := playerEngine.Exec(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// As mentioned above. lastpk cut-off is set at (6,6)
+	lastpk := sqltypes.ResultToProto3(sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"id",
+		"int32"),
+		"2",
+	))
+	lastpk.RowsAffected = 0
+	execStatements(t, []string{
+		fmt.Sprintf("insert into _vt.copy_state values(%d, '%s', %s)", qr.InsertID, "dst", encodeString(fmt.Sprintf("%v", lastpk))),
+	})
+	id := qr.InsertID
+	_, err = playerEngine.Exec(fmt.Sprintf("update _vt.vreplication set state='Copying', pos=%s where id=%d", encodeString(pos), id))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", id)
+		if _, err := playerEngine.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+		for q := range globalDBQueries {
+			if strings.HasPrefix(q, "delete from _vt.vreplication") {
+				break
+			}
+		}
+	}()
+
+	expectNontxQueries(t, []string{
+		// Catchup
+		"insert into dst(id,val) select 4, 'new' from dual where (4) <= (2)",
+		// Copy
+		"insert into dst(id,val) values (3,'uncopied'), (4,'new')",
+		`/update _vt.copy_state set lastpk.*`,
+		"/delete from _vt.copy_state.*dst",
+		"rollback",
+	})
+	expectData(t, "dst", [][]string{
+		{"2", "copied"},
+		{"3", "uncopied"},
+		{"4", "new"},
+	})
+}
+
 func TestPlayerCopyTablesNone(t *testing.T) {
 	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
 
