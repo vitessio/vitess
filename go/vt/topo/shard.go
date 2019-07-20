@@ -331,6 +331,11 @@ func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) 
 		return nil, vterrors.Wrapf(err, "CreateKeyspace(%v) failed", keyspace)
 	}
 
+	// make sure a valid vschema has been loaded
+	if err = ts.EnsureVSchema(ctx, keyspace); err != nil {
+		return nil, vterrors.Wrapf(err, "EnsureVSchema(%v) failed", keyspace)
+	}
+
 	// now try to create with the lock, may already exist
 	if err = ts.CreateShard(ctx, keyspace, shard); err != nil && !IsErrType(err, NodeExists) {
 		return nil, vterrors.Wrapf(err, "CreateShard(%v/%v) failed", keyspace, shard)
