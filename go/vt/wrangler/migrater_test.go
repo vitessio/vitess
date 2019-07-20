@@ -38,6 +38,13 @@ func TestTableMigrate(t *testing.T) {
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
 
+	checkCellRouting(t, tme.wr, "cell1", map[string][]string{
+		"t1":     {"ks1.t1"},
+		"ks2.t1": {"ks1.t1"},
+		"t2":     {"ks1.t2"},
+		"ks2.t2": {"ks1.t2"},
+	})
+
 	//-------------------------------------------------------------------------------------------------------------------
 	// Single cell RDONLY migration.
 	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, []string{"cell1"}, DirectionForward)
@@ -68,7 +75,8 @@ func TestTableMigrate(t *testing.T) {
 	// Other cell REPLICA migration.
 	// The global routing already contains redirections for rdonly.
 	// So, adding routes for replica and deploying to cell2 will also cause
-	// cell2 to migrat rdonly. This is a quirk that can be fixed later if necessary.
+	// cell2 to migrate rdonly. This is a quirk that can be fixed later if necessary.
+	// TODO(sougou): check if it's worth fixing, or clearly document the quirk.
 	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, []string{"cell2"}, DirectionForward)
 	if err != nil {
 		t.Fatal(err)
@@ -172,6 +180,20 @@ func TestTableMigrate(t *testing.T) {
 	verifyQueries(t, tme.allDBClients)
 
 	//-------------------------------------------------------------------------------------------------------------------
+	// All cells RDONLY backward migration.
+	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionBackward)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkRouting(t, tme.wr, map[string][]string{
+		"t1":     {"ks1.t1"},
+		"ks2.t1": {"ks1.t1"},
+		"t2":     {"ks1.t2"},
+		"ks2.t2": {"ks1.t2"},
+	})
+	verifyQueries(t, tme.allDBClients)
+
+	//-------------------------------------------------------------------------------------------------------------------
 	// Can't migrate master with MigrateReads.
 	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_MASTER, nil, DirectionForward)
 	want := "tablet type must be REPLICA or RDONLY: MASTER"
@@ -194,6 +216,10 @@ func TestTableMigrate(t *testing.T) {
 
 	// Migrate all the reads first.
 	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
 	if err != nil {
 		t.Fatal(err)
 	}

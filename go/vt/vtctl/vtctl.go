@@ -324,7 +324,7 @@ var commands = []commandGroup{
 				"[-cells=c1,c2,...] [-reverse] <target keyspace> <workflow> <tablet type>",
 				"Migrate read traffic for the specified workflow."},
 			{"MigrateWrites", commandMigrateWrites,
-				"<target keyspace> <workflow>",
+				"[-filtered_replication_wait_time=30s] <target keyspace> <workflow>",
 				"Migrate write traffic for the specified workflow."},
 			{"CancelResharding", commandCancelResharding,
 				"<keyspace/shard>",

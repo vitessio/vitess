@@ -97,11 +97,11 @@ func (wr *Wrangler) MigrateReads(ctx context.Context, targetKeyspace, workflow s
 	if err != nil {
 		return err
 	}
-	if err := mi.validate(ctx); err != nil {
+	if err := mi.validate(ctx, false); err != nil {
 		return err
 	}
 
-	// For reads, locking the source keysppace is sufficient.
+	// For reads, locking the source keyspace is sufficient.
 	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, mi.sourceKeyspace, "MigrateReads")
 	if lockErr != nil {
 		return lockErr
@@ -121,10 +121,7 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 		return 0, err
 	}
 	mi.wr.Logger().Infof("Built migration metadata: %+v", mi)
-	if err := mi.validate(ctx); err != nil {
-		return 0, err
-	}
-	if err := mi.validateForWrite(ctx); err != nil {
+	if err := mi.validate(ctx, true); err != nil {
 		return 0, err
 	}
 
@@ -253,6 +250,9 @@ func (wr *Wrangler) buildMigrationTargets(ctx context.Context, targetKeyspace, w
 	if err != nil {
 		return nil, err
 	}
+	// We check all target shards. All of them may not have a stream.
+	// For example, in a shard split, only the target shards will have
+	// a stream.
 	for _, targetShard := range targetShards {
 		targetsi, err := wr.ts.GetShard(ctx, targetKeyspace, targetShard)
 		if err != nil {
@@ -266,6 +266,7 @@ func (wr *Wrangler) buildMigrationTargets(ctx context.Context, targetKeyspace, w
 		if err != nil {
 			return nil, err
 		}
+		// If there's no stream, check next.
 		if len(p3qr.Rows) < 1 {
 			continue
 		}
@@ -294,7 +295,7 @@ func (wr *Wrangler) buildMigrationTargets(ctx context.Context, targetKeyspace, w
 	return targets, nil
 }
 
-// hashStreams produces a reproduceable hash based on the input parameters.
+// hashStreams produces a reproducible hash based on the input parameters.
 func hashStreams(targetKeyspace string, targets map[string]*miTarget) int64 {
 	var expanded []string
 	for shard, target := range targets {
@@ -312,7 +313,7 @@ func hashStreams(targetKeyspace string, targets map[string]*miTarget) int64 {
 	return int64(hasher.Sum64() & math.MaxInt64)
 }
 
-func (mi *migrater) validate(ctx context.Context) error {
+func (mi *migrater) validate(ctx context.Context, isWrite bool) error {
 	if mi.migrationType == binlogdatapb.MigrationType_TABLES {
 		// All shards must be present.
 		if err := mi.compareShards(ctx, mi.sourceKeyspace, mi.sourceShards()); err != nil {
@@ -327,6 +328,9 @@ func (mi *migrater) validate(ctx context.Context) error {
 				return fmt.Errorf("cannot migrate streams with wild card table names: %v", table)
 			}
 		}
+		if isWrite {
+			return mi.validateTableForWrite(ctx)
+		}
 	} else { // binlogdatapb.MigrationType_SHARDS
 		// Source and target shards must not match.
 		for sourceShard := range mi.sources {
@@ -334,15 +338,11 @@ func (mi *migrater) validate(ctx context.Context) error {
 				return fmt.Errorf("target shard matches a source shard: %v", sourceShard)
 			}
 		}
+		if isWrite {
+			return mi.validateShardForWrite(ctx)
+		}
 	}
 	return nil
-}
-
-func (mi *migrater) validateForWrite(ctx context.Context) error {
-	if mi.migrationType == binlogdatapb.MigrationType_TABLES {
-		return mi.validateTableForWrite(ctx)
-	}
-	return mi.validateShardForWrite(ctx)
 }
 
 func (mi *migrater) validateTableForWrite(ctx context.Context) error {
