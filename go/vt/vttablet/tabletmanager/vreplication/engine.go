@@ -35,7 +35,7 @@ import (
 const (
 	reshardingJournalTableName   = "_vt.resharding_journal"
 	vreplicationTableName        = "_vt.vreplication"
-	CreateReshardingJournalTable = `create table if not exists _vt.resharding_journal(
+	createReshardingJournalTable = `create table if not exists _vt.resharding_journal(
   id bigint,
   db_name varbinary(255),
   val blob,
@@ -122,7 +122,7 @@ func (vre *Engine) executeFetchMaybeCreateTable(dbClient binlogplayer.DBClient, 
 	}
 
 	// If it's a bad table or db, it could be because the vreplication tables weren't created.
-	// In that case we can try creating then again.
+	// In that case we can try creating them again.
 	merr, isSQLErr := err.(*mysql.SQLError)
 	if !isSQLErr || !(merr.Num == mysql.ERNoSuchTable || merr.Num == mysql.ERBadDb || merr.Num == mysql.ERBadFieldError) {
 		return qr, err
@@ -136,7 +136,7 @@ func (vre *Engine) executeFetchMaybeCreateTable(dbClient binlogplayer.DBClient, 
 				return nil, err
 			}
 		}
-		if _, merr := dbClient.ExecuteFetch(CreateReshardingJournalTable, 0); merr != nil {
+		if _, merr := dbClient.ExecuteFetch(createReshardingJournalTable, 0); merr != nil {
 			log.Warningf("Failed to ensure %s exists: %v", reshardingJournalTableName, merr)
 			return nil, err
 		}

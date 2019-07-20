@@ -46,7 +46,7 @@ import (
 // This file was copied from testlib. All tests from testlib should be moved
 // to the current directory. In order to move tests from there, we have to
 // remove the circular dependency it causes (through vtctl dependence).
-// The tests in this diectory call wrangler functions directory. So, there's
+// The tests in this directory call wrangler functions directly. So, there's
 // no circular dependency.
 
 // This file contains utility methods for unit tests.
