@@ -59,20 +59,7 @@ func TestMessage(t *testing.T) {
 	}
 
 	// Start goroutine to consume message stream.
-	go func() {
-		if err := client.MessageStream("vitess_message", func(qr *sqltypes.Result) error {
-			select {
-			case <-done:
-				return io.EOF
-			default:
-			}
-			ch <- qr
-			return nil
-		}); err != nil {
-			t.Error(err)
-		}
-		close(ch)
-	}()
+	go waitForMessage(t, client, "vitess_message", ch, done)
 	got := <-ch
 	want := &sqltypes.Result{
 		Fields: []*querypb.Field{{
@@ -248,20 +235,7 @@ func TestThreeColMessage(t *testing.T) {
 	}
 	defer client.Execute("drop table vitess_message3", nil)
 
-	go func() {
-		if err := client.MessageStream("vitess_message3", func(qr *sqltypes.Result) error {
-			select {
-			case <-done:
-				return io.EOF
-			default:
-			}
-			ch <- qr
-			return nil
-		}); err != nil {
-			t.Error(err)
-		}
-		close(ch)
-	}()
+	go waitForMessage(t, client, "vitess_message3", ch, done)
 
 	// Verify fields.
 	got := <-ch
@@ -358,20 +332,7 @@ func TestMessageAuto(t *testing.T) {
 	defer client.Execute("drop table vitess_message_auto", nil)
 
 	// Start goroutine to consume message stream.
-	go func() {
-		if err := client.MessageStream("vitess_message_auto", func(qr *sqltypes.Result) error {
-			select {
-			case <-done:
-				return io.EOF
-			default:
-			}
-			ch <- qr
-			return nil
-		}); err != nil {
-			t.Error(err)
-		}
-		close(ch)
-	}()
+	go waitForMessage(t, client, "vitess_message_auto", ch, done)
 	<-ch
 	defer func() { close(done) }()
 
@@ -460,4 +421,20 @@ func TestMessageAuto(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("message received:\n%v, want\n%v", got, want)
 	}
+}
+
+
+func waitForMessage(t *testing.T, client *framework.QueryClient, tableName string, ch chan *sqltypes.Result, done chan struct{}) {
+	if err := client.MessageStream(tableName, func(qr *sqltypes.Result) error {
+		select {
+		case <-done:
+			return io.EOF
+		default:
+		}
+		ch <- qr
+		return nil
+	}); err != nil {
+		t.Error(err)
+	}
+	close(ch)
 }
