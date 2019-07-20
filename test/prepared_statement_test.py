@@ -278,7 +278,7 @@ class TestMySQL(unittest.TestCase):
     cursor.execute('select count(*) from vt_prepare_stmt_test')
     res = cursor.fetchone()
     if res[0] != 1:
-      self.fail("Delete did no")
+      self.fail("Delete failed")
     cursor.close()
 
 if __name__ == '__main__':
