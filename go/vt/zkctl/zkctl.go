@@ -32,7 +32,7 @@ import (
 	"syscall"
 	"time"
 
-	zookeeper "github.com/samuel/go-zookeeper/zk"
+	zookeeper "github.com/z-division/go-zookeeper/zk"
 
 	"vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/log"
