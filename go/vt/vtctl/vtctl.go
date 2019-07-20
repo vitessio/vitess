@@ -1580,23 +1580,8 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		err = nil
 	}
 
-	vschema, err := wr.TopoServer().GetVSchema(ctx, keyspace)
-	if !*allowEmptyVSchema && (vschema == nil || topo.IsErrType(err, topo.NoNode)) {
-		err = wr.TopoServer().SaveVSchema(ctx, keyspace, &vschemapb.Keyspace{
-			Sharded:  false,
-			Vindexes: make(map[string]*vschemapb.Vindex),
-			Tables:   make(map[string]*vschemapb.Table),
-		})
-		if err != nil {
-			wr.Logger().Errorf("could not create blank vschema: %v", err)
-			return err
-		}
-	}
-
-	err = wr.TopoServer().RebuildSrvVSchema(ctx, []string{} /* cells */)
-	if err != nil {
-		wr.Logger().Errorf("could not rebuild SrvVschema after creating keyspace: %v", err)
-		return err
+	if !*allowEmptyVSchema {
+		err = wr.TopoServer().EnsureVSchema(ctx, keyspace)
 	}
 
 	return err
