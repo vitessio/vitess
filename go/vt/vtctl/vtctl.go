@@ -321,10 +321,10 @@ var commands = []commandGroup{
 				"[-cells=c1,c2,...] [-reverse] <destination keyspace/shard> <served tablet type>",
 				"Makes the <destination keyspace/shard> serve the given type. This command also rebuilds the serving graph."},
 			{"MigrateReads", commandMigrateReads,
-				"[-cells=c1,c2,...] [-reverse] <target keyspace> <workflow> <tablet type>",
+				"[-cells=c1,c2,...] [-reverse] -workflow=workflow <target keyspace> <tablet type>",
 				"Migrate read traffic for the specified workflow."},
 			{"MigrateWrites", commandMigrateWrites,
-				"[-filtered_replication_wait_time=30s] <target keyspace> <workflow>",
+				"[-filtered_replication_wait_time=30s] -workflow=workflow <target keyspace>",
 				"Migrate write traffic for the specified workflow."},
 			{"CancelResharding", commandCancelResharding,
 				"<keyspace/shard>",
@@ -1824,15 +1824,15 @@ func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFla
 func commandMigrateReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward.")
 	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
+	workflow := subFlags.String("workflow", "", "Specifies the workflow name")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-	if subFlags.NArg() != 3 {
-		return fmt.Errorf("the <target keyspace/shard>, <workflow> and <tablet type> arguments are required for the MigrateReads command")
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("the <target keyspace> and <tablet type> arguments are required for the MigrateReads command")
 	}
 
 	keyspace := subFlags.Arg(0)
-	workflow := subFlags.Arg(1)
 	servedType, err := parseTabletType(subFlags.Arg(2), []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY})
 	if err != nil {
 		return err
@@ -1845,21 +1845,27 @@ func commandMigrateReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 	if *reverse {
 		direction = wrangler.DirectionBackward
 	}
-	return wr.MigrateReads(ctx, keyspace, workflow, servedType, cells, direction)
+	if *workflow == "" {
+		return fmt.Errorf("a -workflow=workflow argument is required")
+	}
+	return wr.MigrateReads(ctx, keyspace, *workflow, servedType, cells, direction)
 }
 
 func commandMigrateWrites(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on master migrations. The migration will be aborted on timeout.")
+	workflow := subFlags.String("workflow", "", "Specifies the workflow name")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-	if subFlags.NArg() != 2 {
-		return fmt.Errorf("the <target keyspace/shard> and <workflow> arguments are required for the MigrateWrites command")
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("the <target keyspace> argument is required for the MigrateWrites command")
 	}
 
 	keyspace := subFlags.Arg(0)
-	workflow := subFlags.Arg(1)
-	journalID, err := wr.MigrateWrites(ctx, keyspace, workflow, *filteredReplicationWaitTime)
+	if *workflow == "" {
+		return fmt.Errorf("a -workflow=workflow argument is required")
+	}
+	journalID, err := wr.MigrateWrites(ctx, keyspace, *workflow, *filteredReplicationWaitTime)
 	if err != nil {
 		return err
 	}

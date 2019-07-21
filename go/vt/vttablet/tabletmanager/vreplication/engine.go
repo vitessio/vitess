@@ -33,14 +33,22 @@ import (
 )
 
 const (
-	reshardingJournalTableName   = "_vt.resharding_journal"
-	vreplicationTableName        = "_vt.vreplication"
+	reshardingJournalTableName = "_vt.resharding_journal"
+	vreplicationTableName      = "_vt.vreplication"
+	copySateTableName          = "_vt.copy_state"
+
 	createReshardingJournalTable = `create table if not exists _vt.resharding_journal(
   id bigint,
   db_name varbinary(255),
   val blob,
   primary key (id)
-) ENGINE=InnoDB`
+)`
+
+	createCopyState = `create table if not exists _vt.copy_state (
+  vrepl_id int,
+  table_name varbinary(128),
+  lastpk varbinary(2000),
+  primary key (vrepl_id, table_name))`
 )
 
 var tabletTypesStr = flag.String("vreplication_tablet_type", "REPLICA", "comma separated list of tablet types used as a source")
@@ -128,7 +136,7 @@ func (vre *Engine) executeFetchMaybeCreateTable(dbClient binlogplayer.DBClient, 
 		return qr, err
 	}
 
-	log.Info("Looks like the vreplcation tables may not exist. Trying to recreate... ")
+	log.Info("Looks like the vreplication tables may not exist. Trying to recreate... ")
 	if merr.Num == mysql.ERNoSuchTable || merr.Num == mysql.ERBadDb {
 		for _, query := range binlogplayer.CreateVReplicationTable() {
 			if _, merr := dbClient.ExecuteFetch(query, 0); merr != nil {
@@ -301,7 +309,20 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 			ct.Stop()
 			delete(vre.controllers, plan.id)
 		}
-		return vre.executeFetchMaybeCreateTable(dbClient, plan.query, 1)
+		if err := dbClient.Begin(); err != nil {
+			return nil, err
+		}
+		qr, err := dbClient.ExecuteFetch(plan.query, 10000)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := dbClient.ExecuteFetch(plan.delCopyState, 10000); err != nil {
+			return nil, err
+		}
+		if err := dbClient.Commit(); err != nil {
+			return nil, err
+		}
+		return qr, nil
 	case selectQuery, reshardingJournalQuery:
 		// select and resharding journal queries are passed through.
 		return vre.executeFetchMaybeCreateTable(dbClient, plan.query, 10000)
