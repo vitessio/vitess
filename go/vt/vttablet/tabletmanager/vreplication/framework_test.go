@@ -108,7 +108,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), CreateCopyState); err != nil {
+		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), createCopyState); err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
 		}
@@ -366,6 +366,16 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 		globalDBQueries <- query
 	}
 	return qr, err
+}
+
+func expectDeleteQueries(t *testing.T) {
+	t.Helper()
+	expectDBClientQueries(t, []string{
+		"begin",
+		"/delete from _vt.vreplication",
+		"/delete from _vt.copy_state",
+		"commit",
+	})
 }
 
 func expectDBClientQueries(t *testing.T, queries []string) {

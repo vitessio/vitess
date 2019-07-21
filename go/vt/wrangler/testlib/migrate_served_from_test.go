@@ -117,8 +117,7 @@ func TestMigrateServedFrom(t *testing.T) {
 		sqltypes.NewVarBinary("Running"),
 		sqltypes.NewVarBinary(""),
 	}}}, nil)
-	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequest("delete from _vt.vreplication where id = 1", &sqltypes.Result{RowsAffected: 1}, nil)
+	expectDeleteVRepl(dbClient)
 
 	// simulate the clone, by fixing the dest shard record
 	if err := vp.Run([]string{"SourceShardAdd", "--tables", "gone1,gone2", "dest/0", "1", "source/0"}); err != nil {
