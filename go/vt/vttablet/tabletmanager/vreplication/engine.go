@@ -322,6 +322,8 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 	}
 	defer dbClient.Close()
 
+	tkr := time.NewTicker(waitRetryTime)
+	defer tkr.Stop()
 	for {
 		qr, err := dbClient.ExecuteFetch(binlogplayer.ReadVReplicationStatus(uint32(id)), 10)
 		switch {
@@ -350,7 +352,7 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 			return ctx.Err()
 		case <-vre.ctx.Done():
 			return fmt.Errorf("vreplication is closing: %v", vre.ctx.Err())
-		case <-time.After(waitRetryTime):
+		case <-tkr.C:
 		}
 	}
 }
