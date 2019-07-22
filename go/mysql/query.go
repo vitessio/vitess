@@ -544,7 +544,6 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 	if !ok {
 		return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading iteration count failed")
 	}
-	fmt.Printf("IterationCount: %v", iterCount)
 	if iterCount != uint32(1) {
 		return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "iteration count is not equal to 1")
 	}
