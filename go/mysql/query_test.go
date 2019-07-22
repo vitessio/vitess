@@ -31,7 +31,7 @@ import (
 )
 
 func MockPrepareData(t *testing.T) (*PrepareData, *sqltypes.Result) {
-	sql := "SELECT id FROM table_1 WHERE id=?"
+	sql := "select * from test_table where id = ?"
 
 	statement, err := sqlparser.Parse(sql)
 	if err != nil {
@@ -47,7 +47,7 @@ func MockPrepareData(t *testing.T) (*PrepareData, *sqltypes.Result) {
 		},
 		Rows: [][]sqltypes.Value{
 			{
-				sqltypes.MakeTrusted(querypb.Type_INT32, []byte("10")),
+				sqltypes.MakeTrusted(querypb.Type_INT32, []byte("1")),
 			},
 		},
 		RowsAffected: 1,
@@ -58,6 +58,11 @@ func MockPrepareData(t *testing.T) (*PrepareData, *sqltypes.Result) {
 		PrepareStmt: sql,
 		ParsedStmt:  &statement,
 		ParamsCount: 1,
+		ParamsType:  []int32{263},
+		ColumnNames: []string{"id"},
+		BindVars: map[string]*querypb.BindVariable{
+			"v1": sqltypes.Int32BindVariable(10),
+		},
 	}
 
 	return prepare, result
@@ -151,7 +156,7 @@ func TestComStmtSendLongData(t *testing.T) {
 
 	// Since there's no writeComStmtSendLongData, we'll write a prepareStmt and check if we can read the StatementID
 	data, err := sConn.ReadPacket()
-	if err != nil || len(data) == 0 || data[0] != ComPrepare {
+	if err != nil || len(data) == 0 {
 		t.Fatalf("sConn.ReadPacket - ComStmtClose failed: %v %v", data, err)
 	}
 	stmtID, paramID, chunkData, ok := sConn.parseComStmtSendLongData(data)
@@ -168,6 +173,30 @@ func TestComStmtSendLongData(t *testing.T) {
 	// sizeof(uint32) + sizeof(uint16) + 1 = 7
 	if len(chunkData) != len(data)-7 {
 		t.Fatalf("Recieved bad chunkData")
+	}
+}
+
+func TestComStmtExecute(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	prepare, _ := MockPrepareData(t)
+	cConn.PrepareData = make(map[uint32]*PrepareData)
+	cConn.PrepareData[prepare.StatementID] = prepare
+
+	// This is simulated packets for `select * from test_table where id = ?`
+	data := []byte{23, 18, 0, 0, 0, 128, 1, 0, 0, 0, 0, 1, 1, 128, 1}
+
+	stmtID, _, err := sConn.parseComStmtExecute(cConn.PrepareData, data)
+	if err != nil {
+		t.Fatalf("parseComStmtExeute failed: %v", err)
+	}
+	if stmtID != 18 {
+		t.Fatalf("Parsed incorrect values")
 	}
 }
 
@@ -188,7 +217,7 @@ func TestComStmtClose(t *testing.T) {
 
 	// Since there's no writeComStmtClose, we'll write a prepareStmt and check if we can read the StatementID
 	data, err := sConn.ReadPacket()
-	if err != nil || len(data) == 0 || data[0] != ComPrepare {
+	if err != nil || len(data) == 0 {
 		t.Fatalf("sConn.ReadPacket - ComStmtClose failed: %v %v", data, err)
 	}
 	stmtID, ok := sConn.parseComStmtClose(data)
