@@ -2036,7 +2036,7 @@ func TestCrossShardSubqueryGetFields(t *testing.T) {
 }
 
 func TestSelectBindvarswithPrepare(t *testing.T) {
-	executor, sbc1, sbc2, lookup := createExecutorEnv()
+	executor, sbc1, sbc2, _ := createExecutorEnv()
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
@@ -2049,7 +2049,7 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 	}
 
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select id from user where id = :id",
+		Sql:           "select id from user where 1 != 1",
 		BindVariables: map[string]*querypb.BindVariable{"id": sqltypes.Int64BindVariable(1)},
 	}}
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
@@ -2058,101 +2058,4 @@ func TestSelectBindvarswithPrepare(t *testing.T) {
 	if sbc2.Queries != nil {
 		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
 	}
-	sbc1.Queries = nil
-	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
-
-	// Test with StringBindVariable
-	sql = "select id from user where name in (:name1, :name2)"
-	_, err = executorPrepare(executor, sql, map[string]*querypb.BindVariable{
-		"name1": sqltypes.StringBindVariable("foo1"),
-		"name2": sqltypes.StringBindVariable("foo2"),
-	})
-	if err != nil {
-		t.Error(err)
-	}
-	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select id from user where name in ::__vals",
-		BindVariables: map[string]*querypb.BindVariable{
-			"name1":  sqltypes.StringBindVariable("foo1"),
-			"name2":  sqltypes.StringBindVariable("foo2"),
-			"__vals": sqltypes.TestBindVariable([]interface{}{"foo1", "foo2"}),
-		},
-	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
-	sbc1.Queries = nil
-	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select user_id from name_user_map where name = :name", 1)
-	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select user_id from name_user_map where name = :name", 1)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
-
-	// Test with BytesBindVariable
-	sql = "select id from user where name in (:name1, :name2)"
-	_, err = executorPrepare(executor, sql, map[string]*querypb.BindVariable{
-		"name1": sqltypes.BytesBindVariable([]byte("foo1")),
-		"name2": sqltypes.BytesBindVariable([]byte("foo2")),
-	})
-	if err != nil {
-		t.Error(err)
-	}
-	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select id from user where name in ::__vals",
-		BindVariables: map[string]*querypb.BindVariable{
-			"name1":  sqltypes.BytesBindVariable([]byte("foo1")),
-			"name2":  sqltypes.BytesBindVariable([]byte("foo2")),
-			"__vals": sqltypes.TestBindVariable([]interface{}{[]byte("foo1"), []byte("foo2")}),
-		},
-	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
-
-	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select user_id from name_user_map where name = :name", 1)
-	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select user_id from name_user_map where name = :name", 1)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
-
-	// Test no match in the lookup vindex
-	sbc1.Queries = nil
-	lookup.Queries = nil
-	lookup.SetResults([]*sqltypes.Result{{
-		Fields: []*querypb.Field{
-			{Name: "user_id", Type: sqltypes.Int32},
-		},
-		RowsAffected: 0,
-		InsertID:     0,
-		Rows:         [][]sqltypes.Value{},
-	}})
-
-	sql = "select id from user where name = :name"
-	_, err = executorPrepare(executor, sql, map[string]*querypb.BindVariable{
-		"name": sqltypes.StringBindVariable("nonexistent"),
-	})
-	if err != nil {
-		t.Error(err)
-	}
-
-	// When there are no matching rows in the vindex, vtgate still needs the field info
-	wantQueries = []*querypb.BoundQuery{{
-		Sql: "select id from user where 1 != 1",
-		BindVariables: map[string]*querypb.BindVariable{
-			"name": sqltypes.StringBindVariable("nonexistent"),
-		},
-	}}
-	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
-		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
-	}
-
-	wantLookupQueries := []*querypb.BoundQuery{{
-		Sql: "select user_id from name_user_map where name = :name",
-		BindVariables: map[string]*querypb.BindVariable{
-			"name": sqltypes.StringBindVariable("nonexistent"),
-		},
-	}}
-	if !reflect.DeepEqual(lookup.Queries, wantLookupQueries) {
-		t.Errorf("lookup.Queries: %+v, want %+v\n", lookup.Queries, wantLookupQueries)
-	}
-
-	testQueryLog(t, logChan, "VindexLookup", "SELECT", "select user_id from name_user_map where name = :name", 1)
-	testQueryLog(t, logChan, "TestExecute", "SELECT", sql, 1)
-
 }
