@@ -18,6 +18,7 @@
 
 # timeout in seconds (for each step, not overall)
 timeout=30
+export TOPO=zk2
 
 cd $VTTOP/examples/local
 
