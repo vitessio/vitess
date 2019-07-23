@@ -231,7 +231,7 @@ class TestMySQL(unittest.TestCase):
 
     # Insert several rows using prepared statements
     text_value = "text" * 100 # Large text value
-    largeComment = 'L' * ((4 * 1024 * 1024) + 1) # Large blob
+    largeComment = 'L' * ((4 * 1024) + 1) # Large blob
     
     cursor = conn.cursor(cursor_class=MySQLCursorPrepared)
     for i in range(1, 100):
