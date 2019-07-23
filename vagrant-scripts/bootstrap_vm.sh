@@ -34,6 +34,7 @@ apt-get install -y make \
                    ant \
                    zip \
                    unzip
+pip install mysql-connector
 
 # Install golang
 GO_VER='1.11.1'

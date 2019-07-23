@@ -74,11 +74,8 @@ func (th *testHandler) NewConnection(c *Conn) {
 	th.lastConn = c
 }
 
-// Should we return boolean here?
 func (th *testHandler) ConnectionClosed(c *Conn) {
-	if c.closed.Get() != false {
-		c.Close()
-	}
+
 }
 
 func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
@@ -175,21 +172,12 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 	return nil
 }
 
-// TODO(saifalharthi) firgure out how to validate the prepare statements using callback
 func (th *testHandler) ComPrepare(c *Conn, query string, callback func(*sqltypes.Result) error) error {
-	if th.result != nil {
-		callback(th.result)
-		return nil
-	}
 	return nil
 }
 
 // TODO(saifalharthi) firgure out how to invoke prepared statement execution using callback
 func (th *testHandler) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
-	if th.result != nil {
-		callback(th.result)
-		return nil
-	}
 	return nil
 }
 
