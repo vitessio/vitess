@@ -144,6 +144,7 @@ function install_grpc() {
   PIP=$grpc_virtualenv/bin/pip
   $PIP install --upgrade pip
   $PIP install --upgrade --ignore-installed virtualenv
+  $PIP install mysql-connector-python
 
   grpcio_ver=$version
   $PIP install --upgrade grpcio=="$grpcio_ver" grpcio-tools=="$grpcio_ver"

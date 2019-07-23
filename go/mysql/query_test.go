@@ -127,12 +127,12 @@ func TestComStmtPrepare(t *testing.T) {
 
 	cConn.PrepareData = make(map[uint32]*PrepareData)
 	cConn.PrepareData[prepare.StatementID] = prepare
-	if err := cConn.writePrepare(result, prepare); err != nil {
+	if err := sConn.writePrepare(result, prepare); err != nil {
 		t.Fatalf("writePrepare failed: %v", err)
 	}
-	data, err := sConn.ReadPacket()
+	data, err := cConn.ReadPacket()
 	if err != nil || len(data) == 0 {
-		t.Fatalf("sConn.ReadPacket - ComPrepare failed: %v %v", data, err)
+		t.Fatalf("cConn.ReadPacket - ComPrepare failed: %v %v", data, err)
 	}
 	if uint32(data[1]) != prepare.StatementID {
 		t.Fatalf("Received incorrect value, want: %v, got: %v", uint32(data[1]), prepare.StatementID)
