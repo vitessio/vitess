@@ -83,11 +83,11 @@ type AuthServer interface {
 var AauthServers = make(map[string]AuthServer)
 
 // RegisterAuthServerImpl registers an implementations of AuthServer.
-func RegisterAuthServerImpl(name string, AauthServer AuthServer) {
+func RegisterAuthServerImpl(name string, authServer AuthServer) {
 	if _, ok := AauthServers[name]; ok {
 		log.Fatalf("AuthServer named %v already exists", name)
 	}
-	AauthServers[name] = AauthServer
+	AauthServers[name] = authServer
 }
 
 // GetAuthServer returns an AuthServer by name, or log.Exitf.

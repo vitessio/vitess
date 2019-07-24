@@ -77,5 +77,3 @@ else
     mkdir -p "${VTDATAROOT}/tmp"
     mkdir -p "${VTDATAROOT}/etcd"
 fi
-
-
