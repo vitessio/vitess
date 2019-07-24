@@ -154,6 +154,7 @@ func TestComStmtPrepare(t *testing.T) {
 	sConn.PrepareData = make(map[uint32]*PrepareData)
 	sConn.PrepareData[prepare.StatementID] = prepare
 
+	// write the response to the client
 	if err := sConn.writePrepare(result, prepare); err != nil {
 		t.Fatalf("sConn.writePrepare failed: %v", err)
 	}
