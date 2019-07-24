@@ -11,7 +11,11 @@ fi
 # builds the square vitess docker image from the pwd and pushes a runnable image to ECR
 # assumes GIT_COMMIT and GIT_BRANCH are set (which is true if run on kochiku)
 
-# First we build using the regular vitess Dockerfile
+# Rebuild the bootstrap images in case something has changed
+docker/bootstrap/build.sh common
+docker/bootstrap/build.sh mysql57
+
+# Now we build using the regular vitess Dockerfile
 BUILD_DOCKER_TAG=square-vitess-build-${GIT_COMMIT}
 docker build -t "$BUILD_DOCKER_TAG" --build-arg CGO_ENABLED=0 .
 
