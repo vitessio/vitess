@@ -30,6 +30,16 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+// Utility function to write sql query as packets to test parseComPrepare
+func MockQueryPackets(t *testing.T, query string) []byte {
+	data := make([]byte, len(query)+1)
+	// Not sure if it makes a difference
+	pos := 0
+	pos = writeByte(data, pos, ComPrepare)
+	copy(data[pos:], query)
+	return data
+}
+
 func MockPrepareData(t *testing.T) (*PrepareData, *sqltypes.Result) {
 	sql := "select * from test_table where id = ?"
 
@@ -123,19 +133,37 @@ func TestComStmtPrepare(t *testing.T) {
 		cConn.Close()
 	}()
 
-	prepare, result := MockPrepareData(t)
+	sql := "select * from test_table where id = ?"
+	mockData := MockQueryPackets(t, sql)
 
-	cConn.PrepareData = make(map[uint32]*PrepareData)
-	cConn.PrepareData[prepare.StatementID] = prepare
+	if err := cConn.writePacket(mockData); err != nil {
+		t.Fatalf("writePacket failed: %v", err)
+	}
+
+	data, err := sConn.ReadPacket()
+	if err != nil {
+		t.Fatalf("sConn.ReadPacket - ComPrepare failed: %v", err)
+	}
+
+	parsedQuery := sConn.parseComPrepare(data)
+	if parsedQuery != sql {
+		t.Fatalf("Received incorrect query, want: %v, got: %v", sql, parsedQuery)
+	}
+
+	prepare, result := MockPrepareData(t)
+	sConn.PrepareData = make(map[uint32]*PrepareData)
+	sConn.PrepareData[prepare.StatementID] = prepare
+
 	if err := sConn.writePrepare(result, prepare); err != nil {
-		t.Fatalf("writePrepare failed: %v", err)
+		t.Fatalf("sConn.writePrepare failed: %v", err)
 	}
-	data, err := cConn.ReadPacket()
-	if err != nil || len(data) == 0 {
-		t.Fatalf("cConn.ReadPacket - ComPrepare failed: %v %v", data, err)
+
+	resp, err := cConn.ReadPacket()
+	if err != nil {
+		t.Fatalf("cConn.ReadPacket failed: %v", err)
 	}
-	if uint32(data[1]) != prepare.StatementID {
-		t.Fatalf("Received incorrect value, want: %v, got: %v", uint32(data[1]), prepare.StatementID)
+	if uint32(resp[1]) != prepare.StatementID {
+		t.Fatalf("Received incorrect Statement ID, want: %v, got: %v", prepare.StatementID, resp[1])
 	}
 }
 

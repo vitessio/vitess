@@ -1770,6 +1770,7 @@ func TestUpdateEqualWithPrepare(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+
 	wantQueries := []*querypb.BoundQuery{}
 	wantQueries = nil
 
@@ -1797,8 +1798,10 @@ func TestInsertShardedWithPrepare(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+
 	wantQueries := []*querypb.BoundQuery{}
 	wantQueries = nil
+
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc1.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
 	}
