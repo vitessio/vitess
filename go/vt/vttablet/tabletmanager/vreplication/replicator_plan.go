@@ -56,7 +56,7 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 		return &tplanv, nil
 	}
 	// select * construct was used. We need to use the field names.
-	tplan, err := rp.buildFromFields(prelim.TargetName, fieldEvent.Fields)
+	tplan, err := rp.buildFromFields(prelim.TargetName, prelim.Lastpk, fieldEvent.Fields)
 	if err != nil {
 		return nil, err
 	}
@@ -67,9 +67,10 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 // buildFromFields builds a full TablePlan, but uses the field info as the
 // full column list. This happens when the query used was a 'select *', which
 // requires us to wait for the field info sent by the source.
-func (rp *ReplicatorPlan) buildFromFields(tableName string, fields []*querypb.Field) (*TablePlan, error) {
+func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Result, fields []*querypb.Field) (*TablePlan, error) {
 	tpb := &tablePlanBuilder{
-		name: sqlparser.NewTableIdent(tableName),
+		name:   sqlparser.NewTableIdent(tableName),
+		lastpk: lastpk,
 	}
 	for _, field := range fields {
 		colName := sqlparser.NewColIdent(field.Name)
@@ -118,6 +119,8 @@ type TablePlan struct {
 	TargetName   string
 	SendRule     *binlogdatapb.Rule
 	PKReferences []string
+	// Lastpk is used for delayed generation of replication queries.
+	Lastpk *sqltypes.Result
 	// BulkInsertFront, BulkInsertValues and BulkInsertOnDup are used
 	// by vcopier.
 	BulkInsertFront  *sqlparser.ParsedQuery

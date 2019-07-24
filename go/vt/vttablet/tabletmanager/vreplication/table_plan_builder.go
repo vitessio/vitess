@@ -171,6 +171,7 @@ func buildTablePlan(rule *binlogdatapb.Rule, tableKeys map[string][]string, last
 		tablePlan := &TablePlan{
 			TargetName: rule.Match,
 			SendRule:   sendRule,
+			Lastpk:     lastpk,
 		}
 		return tablePlan, nil
 	}
@@ -228,6 +229,7 @@ func (tpb *tablePlanBuilder) generate(tableKeys map[string][]string) *TablePlan 
 
 	return &TablePlan{
 		TargetName:       tpb.name.String(),
+		Lastpk:           tpb.lastpk,
 		PKReferences:     pkrefs,
 		BulkInsertFront:  tpb.generateInsertPart(sqlparser.NewTrackedBuffer(bvf.formatter)),
 		BulkInsertValues: tpb.generateValuesPart(sqlparser.NewTrackedBuffer(bvf.formatter), bvf),
