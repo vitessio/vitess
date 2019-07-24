@@ -1019,7 +1019,7 @@ def check_db_var(uid, name, value):
       user='vt_dba',
       unix_socket='%s/vt_%010d/mysql.sock' % (environment.vtdataroot, uid))
   cursor = conn.cursor()
-  cursor.execute("show variables like '%s'", name)
+  cursor.execute("show variables like '%s'" % name)
   row = cursor.fetchone()
   if row != (name, value):
     raise TestError('variable not set correctly', name, row)
