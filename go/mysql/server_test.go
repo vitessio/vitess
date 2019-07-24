@@ -176,7 +176,6 @@ func (th *testHandler) ComPrepare(c *Conn, query string, callback func(*sqltypes
 	return nil
 }
 
-// TODO(saifalharthi) firgure out how to invoke prepared statement execution using callback
 func (th *testHandler) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
 	return nil
 }
