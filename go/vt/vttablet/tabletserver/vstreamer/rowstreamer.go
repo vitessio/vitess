@@ -235,7 +235,7 @@ func (rs *rowStreamer) streamQuery(conn *mysql.Conn, send func(*binlogdatapb.VSt
 			}
 		}
 
-		if byteCount >= *packetSize {
+		if byteCount >= *PacketSize {
 			response.Lastpk = sqltypes.RowToProto3(lastpk)
 			err = send(response)
 			if err != nil {
