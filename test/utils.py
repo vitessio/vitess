@@ -115,7 +115,7 @@ def add_options(parser):
       help='Leave the global processes running after the test is done.')
   parser.add_option('--mysql-flavor')
   parser.add_option('--protocols-flavor', default='grpc')
-  parser.add_option('--topo-server-flavor', default='zk')
+  parser.add_option('--topo-server-flavor', default='zk2')
   parser.add_option('--vtgate-gateway-flavor', default='discoverygateway')
 
 
