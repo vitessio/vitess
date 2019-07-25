@@ -56,7 +56,7 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 		return &tplanv, nil
 	}
 	// select * construct was used. We need to use the field names.
-	tplan, err := rp.buildFromFields(prelim.TargetName, fieldEvent.Fields)
+	tplan, err := rp.buildFromFields(prelim.TargetName, prelim.Lastpk, fieldEvent.Fields)
 	if err != nil {
 		return nil, err
 	}
@@ -67,9 +67,10 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 // buildFromFields builds a full TablePlan, but uses the field info as the
 // full column list. This happens when the query used was a 'select *', which
 // requires us to wait for the field info sent by the source.
-func (rp *ReplicatorPlan) buildFromFields(tableName string, fields []*querypb.Field) (*TablePlan, error) {
+func (rp *ReplicatorPlan) buildFromFields(tableName string, lastpk *sqltypes.Result, fields []*querypb.Field) (*TablePlan, error) {
 	tpb := &tablePlanBuilder{
-		name: sqlparser.NewTableIdent(tableName),
+		name:   sqlparser.NewTableIdent(tableName),
+		lastpk: lastpk,
 	}
 	for _, field := range fields {
 		colName := sqlparser.NewColIdent(field.Name)
@@ -118,6 +119,8 @@ type TablePlan struct {
 	TargetName   string
 	SendRule     *binlogdatapb.Rule
 	PKReferences []string
+	// Lastpk is used for delayed generation of replication queries.
+	Lastpk *sqltypes.Result
 	// BulkInsertFront, BulkInsertValues and BulkInsertOnDup are used
 	// by vcopier.
 	BulkInsertFront  *sqlparser.ParsedQuery
@@ -159,11 +162,11 @@ func (tp *TablePlan) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&v)
 }
 
-func (tp *TablePlan) generateBulkInsert(rows *binlogdatapb.VStreamRowsResponse) (string, error) {
+func (tp *TablePlan) applyBulkInsert(rows *binlogdatapb.VStreamRowsResponse, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
 	var buf strings.Builder
 	if err := tp.BulkInsertFront.Append(&buf, nil, nil); err != nil {
-		return "", err
+		return nil, err
 	}
 	buf.WriteString(" values ")
 	separator := ""
@@ -179,10 +182,10 @@ func (tp *TablePlan) generateBulkInsert(rows *binlogdatapb.VStreamRowsResponse) 
 	if tp.BulkInsertOnDup != nil {
 		tp.BulkInsertOnDup.Append(&buf, nil, nil)
 	}
-	return buf.String(), nil
+	return executor(buf.String())
 }
 
-func (tp *TablePlan) generateStatements(rowChange *binlogdatapb.RowChange) ([]string, error) {
+func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
 	// MakeRowTrusted is needed here because Proto3ToResult is not convenient.
 	var before, after bool
 	bindvars := make(map[string]*querypb.BindVariable, len(tp.Fields))
@@ -202,45 +205,33 @@ func (tp *TablePlan) generateStatements(rowChange *binlogdatapb.RowChange) ([]st
 	}
 	switch {
 	case !before && after:
-		query, err := tp.Insert.GenerateQuery(bindvars, nil)
-		if err != nil {
-			return nil, err
-		}
-		return []string{query}, nil
+		return execParsedQuery(tp.Insert, bindvars, executor)
 	case before && !after:
 		if tp.Delete == nil {
 			return nil, nil
 		}
-		query, err := tp.Delete.GenerateQuery(bindvars, nil)
-		if err != nil {
-			return nil, err
-		}
-		return []string{query}, nil
+		return execParsedQuery(tp.Delete, bindvars, executor)
 	case before && after:
 		if !tp.pkChanged(bindvars) {
-			query, err := tp.Update.GenerateQuery(bindvars, nil)
-			if err != nil {
-				return nil, err
-			}
-			return []string{query}, nil
+			return execParsedQuery(tp.Update, bindvars, executor)
 		}
-
-		queries := make([]string, 0, 2)
 		if tp.Delete != nil {
-			query, err := tp.Delete.GenerateQuery(bindvars, nil)
-			if err != nil {
+			if _, err := execParsedQuery(tp.Delete, bindvars, executor); err != nil {
 				return nil, err
 			}
-			queries = append(queries, query)
 		}
-		query, err := tp.Insert.GenerateQuery(bindvars, nil)
-		if err != nil {
-			return nil, err
-		}
-		queries = append(queries, query)
-		return queries, nil
+		return execParsedQuery(tp.Insert, bindvars, executor)
 	}
+	// Unreachable.
 	return nil, nil
+}
+
+func execParsedQuery(pq *sqlparser.ParsedQuery, bindvars map[string]*querypb.BindVariable, executor func(string) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
+	sql, err := pq.GenerateQuery(bindvars, nil)
+	if err != nil {
+		return nil, err
+	}
+	return executor(sql)
 }
 
 func (tp *TablePlan) pkChanged(bindvars map[string]*querypb.BindVariable) bool {

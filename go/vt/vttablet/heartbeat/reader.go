@@ -80,7 +80,7 @@ func NewReader(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *Re
 		interval: config.HeartbeatInterval,
 		ticks:    timer.NewTimer(config.HeartbeatInterval),
 		errorLog: logutil.NewThrottledLogger("HeartbeatReporter", 60*time.Second),
-		pool:     connpool.New(config.PoolNamePrefix+"HeartbeatReadPool", 1, time.Duration(config.IdleTimeout*1e9), checker),
+		pool:     connpool.New(config.PoolNamePrefix+"HeartbeatReadPool", 1, 0, time.Duration(config.IdleTimeout*1e9), checker),
 	}
 }
 
@@ -227,6 +227,7 @@ func (r *Reader) recordError(err error) {
 	readErrors.Add(1)
 }
 
+// IsOpen returns true if Reader is open.
 func (r *Reader) IsOpen() bool {
 	return r.isOpen
 }

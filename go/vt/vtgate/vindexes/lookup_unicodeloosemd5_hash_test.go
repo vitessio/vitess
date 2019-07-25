@@ -349,12 +349,12 @@ func TestLookupUnicodeLooseMD5HashCreateAutocommit(t *testing.T) {
 	wantqueries := []*querypb.BoundQuery{{
 		Sql: "insert into t(from1, from2, toc) values(:from10, :from20, :toc0), (:from11, :from21, :toc1) on duplicate key update from1=values(from1), from2=values(from2), toc=values(toc)",
 		BindVariables: map[string]*querypb.BindVariable{
-			"from10": sqltypes.Uint64BindVariable(hashed10),
-			"from20": sqltypes.Uint64BindVariable(hashed20),
-			"toc0":   sqltypes.Uint64BindVariable(1),
-			"from11": sqltypes.Uint64BindVariable(hashed30),
-			"from21": sqltypes.Uint64BindVariable(hashed40),
-			"toc1":   sqltypes.Uint64BindVariable(2),
+			"from10": sqltypes.Uint64BindVariable(hashed30),
+			"from20": sqltypes.Uint64BindVariable(hashed40),
+			"toc0":   sqltypes.Uint64BindVariable(2),
+			"from11": sqltypes.Uint64BindVariable(hashed10),
+			"from21": sqltypes.Uint64BindVariable(hashed20),
+			"toc1":   sqltypes.Uint64BindVariable(1),
 		},
 	}}
 	if !reflect.DeepEqual(vc.queries, wantqueries) {

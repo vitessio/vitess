@@ -37,7 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -239,7 +238,7 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 	}
 
 	// Rebuild the SrvVSchema object
-	if err := topotools.RebuildVSchema(ctx, wr.Logger(), ts, tpb.Cells); err != nil {
+	if err := ts.RebuildSrvVSchema(ctx, tpb.Cells); err != nil {
 		return fmt.Errorf("RebuildVSchemaGraph failed: %v", err)
 	}
 

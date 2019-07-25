@@ -29,7 +29,9 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vtbench"
 
+	// Import and register the gRPC vtgateconn client
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
+	// Import and register the gRPC tabletconn client
 	_ "vitess.io/vitess/go/vt/vttablet/grpctabletconn"
 )
 

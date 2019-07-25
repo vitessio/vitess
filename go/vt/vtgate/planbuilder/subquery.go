@@ -36,17 +36,16 @@ var _ builder = (*subquery)(nil)
 // clause, because a route is more versatile than
 // a subquery.
 type subquery struct {
-	order         int
+	builderCommon
 	resultColumns []*resultColumn
-	input         builder
 	esubquery     *engine.Subquery
 }
 
 // newSubquery builds a new subquery.
 func newSubquery(alias sqlparser.TableIdent, bldr builder) (*subquery, *symtab, error) {
 	sq := &subquery{
-		input:     bldr,
-		esubquery: &engine.Subquery{},
+		builderCommon: newBuilderCommon(bldr),
+		esubquery:     &engine.Subquery{},
 	}
 
 	// Create a 'table' that represents the subquery.
@@ -67,17 +66,6 @@ func newSubquery(alias sqlparser.TableIdent, bldr builder) (*subquery, *symtab, 
 	// AddTable will not fail because symtab is empty.
 	_ = st.AddTable(t)
 	return sq, st, nil
-}
-
-// Order satisfies the builder interface.
-func (sq *subquery) Order() int {
-	return sq.order
-}
-
-// Reorder satisfies the builder interface.
-func (sq *subquery) Reorder(order int) {
-	sq.input.Reorder(order)
-	sq.order = sq.input.Order() + 1
 }
 
 // Primitive satisfies the builder interface.
@@ -102,14 +90,14 @@ func (sq *subquery) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, whereType 
 }
 
 // PushSelect satisfies the builder interface.
-func (sq *subquery) PushSelect(expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colnum int, err error) {
+func (sq *subquery) PushSelect(_ *primitiveBuilder, expr *sqlparser.AliasedExpr, _ builder) (rc *resultColumn, colNumber int, err error) {
 	col, ok := expr.Expr.(*sqlparser.ColName)
 	if !ok {
 		return nil, 0, errors.New("unsupported: expression on results of a cross-shard subquery")
 	}
 
-	// colnum should already be set for subquery columns.
-	inner := col.Metadata.(*column).colnum
+	// colNumber should already be set for subquery columns.
+	inner := col.Metadata.(*column).colNumber
 	sq.esubquery.Cols = append(sq.esubquery.Cols, inner)
 
 	// Build a new column reference to represent the result column.
@@ -125,7 +113,10 @@ func (sq *subquery) MakeDistinct() error {
 }
 
 // PushGroupBy satisfies the builder interface.
-func (sq *subquery) PushGroupBy(_ sqlparser.GroupBy) error {
+func (sq *subquery) PushGroupBy(groupBy sqlparser.GroupBy) error {
+	if (groupBy) == nil {
+		return nil
+	}
 	return errors.New("unsupported: group by on cross-shard subquery")
 }
 
@@ -134,34 +125,11 @@ func (sq *subquery) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	if len(orderBy) == 0 {
 		return sq, nil
 	}
-	return nil, errors.New("unsupported: order by on cross-shard subquery")
-}
-
-// SetUpperLimit satisfies the builder interface.
-// For now, the call is ignored because the
-// repercussions of pushing this limit down
-// into a subquery have not been studied yet.
-// We can consider doing it in the future.
-// TODO(sougou): this could be improved.
-func (sq *subquery) SetUpperLimit(_ *sqlparser.SQLVal) {
-}
-
-// PushMisc satisfies the builder interface.
-func (sq *subquery) PushMisc(sel *sqlparser.Select) {
-}
-
-// Wireup satisfies the builder interface.
-func (sq *subquery) Wireup(bldr builder, jt *jointab) error {
-	return sq.input.Wireup(bldr, jt)
-}
-
-// SupplyVar satisfies the builder interface.
-func (sq *subquery) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	sq.input.SupplyVar(from, to, col, varname)
+	return newMemorySort(sq, orderBy)
 }
 
 // SupplyCol satisfies the builder interface.
-func (sq *subquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int) {
+func (sq *subquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
 	c := col.Metadata.(*column)
 	for i, rc := range sq.resultColumns {
 		if rc.column == c {
@@ -169,9 +137,9 @@ func (sq *subquery) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum 
 		}
 	}
 
-	// columns that reference subqueries will have their colnum set.
+	// columns that reference subqueries will have their colNumber set.
 	// Let's use it here.
-	sq.esubquery.Cols = append(sq.esubquery.Cols, c.colnum)
+	sq.esubquery.Cols = append(sq.esubquery.Cols, c.colNumber)
 	sq.resultColumns = append(sq.resultColumns, &resultColumn{column: c})
 	return rc, len(sq.resultColumns) - 1
 }

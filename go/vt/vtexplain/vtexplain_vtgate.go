@@ -67,7 +67,7 @@ func initVtgateExecutor(vSchemaStr string, opts *Options) error {
 
 	streamSize := 10
 	queryPlanCacheSize := int64(10)
-	vtgateExecutor = vtgate.NewExecutor(context.Background(), explainTopo, vtexplainCell, "", resolver, opts.Normalize, streamSize, queryPlanCacheSize, false /* legacyAutocommit */)
+	vtgateExecutor = vtgate.NewExecutor(context.Background(), explainTopo, vtexplainCell, "", resolver, opts.Normalize, streamSize, queryPlanCacheSize)
 
 	return nil
 }

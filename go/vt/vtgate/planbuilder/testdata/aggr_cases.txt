@@ -121,7 +121,65 @@
           "Desc": false
         }
       ],
-      "Table": "user"
+      "TruncateColumnCount": 5
+    }
+  }
+}
+
+# scatter group by a text column, reuse existing weight_string
+"select count(*) k, a, textcol1, b from user group by a, textcol1, b order by k, textcol1"
+{
+  "Original": "select count(*) k, a, textcol1, b from user group by a, textcol1, b order by k, textcol1",
+  "Instructions": {
+    "Opcode": "MemorySort",
+    "MaxRows": null,
+    "OrderBy": [
+      {
+        "Col": 0,
+        "Desc": false
+      },
+      {
+        "Col": 4,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Aggregates": [
+        {
+          "Opcode": "count",
+          "Col": 0
+        }
+      ],
+      "Keys": [
+        1,
+        4,
+        3
+      ],
+      "TruncateColumnCount": 5,
+      "Input": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select count(*) as k, a, textcol1, b, weight_string(textcol1) from user group by a, textcol1, b order by textcol1 asc, a asc, b asc",
+        "FieldQuery": "select count(*) as k, a, textcol1, b, weight_string(textcol1) from user where 1 != 1 group by a, textcol1, b",
+        "OrderBy": [
+          {
+            "Col": 4,
+            "Desc": false
+          },
+          {
+            "Col": 1,
+            "Desc": false
+          },
+          {
+            "Col": 3,
+            "Desc": false
+          }
+        ],
+        "TruncateColumnCount": 5
+      }
     }
   }
 }
@@ -584,6 +642,279 @@
         }
       ],
       "Table": "user"
+    }
+  }
+}
+
+# count with distinct group by unique vindex
+"select id, count(distinct col) from user group by id"
+{
+  "Original": "select id, count(distinct col) from user group by id",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id, count(distinct col) from user group by id",
+    "FieldQuery": "select id, count(distinct col) from user where 1 != 1 group by id"
+  }
+}
+
+# count with distinct unique vindex
+"select col, count(distinct id) from user group by col"
+{
+  "Original": "select col, count(distinct id) from user group by col",
+  "Instructions": {
+    "Aggregates": [
+      {
+        "Opcode": "count",
+        "Col": 1
+      }
+    ],
+    "Keys": [
+      0
+    ],
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col, count(distinct id) from user group by col order by col asc",
+      "FieldQuery": "select col, count(distinct id) from user where 1 != 1 group by col",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        }
+      ]
+    }
+  }
+}
+
+# count with distinct no unique vindex
+"select col1, count(distinct col2) from user group by col1"
+{
+  "Original": "select col1, count(distinct col2) from user group by col1",
+  "Instructions": {
+    "HasDistinct": true,
+    "Aggregates": [
+      {
+        "Opcode": "count_distinct",
+        "Col": 1,
+        "Alias": "count(distinct col2)"
+      }
+    ],
+    "Keys": [
+      0
+    ],
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col1, col2 from user group by col1, col2 order by col1 asc, col2 asc",
+      "FieldQuery": "select col1, col2 from user where 1 != 1 group by col1, col2",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        },
+        {
+          "Col": 1,
+          "Desc": false
+        }
+      ]
+    }
+  }
+}
+
+# count with distinct no unique vindex and no group by
+"select count(distinct col2) from user"
+{
+  "Original": "select count(distinct col2) from user",
+  "Instructions": {
+    "HasDistinct": true,
+    "Aggregates": [
+      {
+        "Opcode": "count_distinct",
+        "Col": 0,
+        "Alias": "count(distinct col2)"
+      }
+    ],
+    "Keys": null,
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col2 from user group by col2 order by col2 asc",
+      "FieldQuery": "select col2 from user where 1 != 1 group by col2",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        }
+      ]
+    }
+  }
+}
+
+# count with distinct no unique vindex, count expression aliased
+"select col1, count(distinct col2) c2 from user group by col1"
+{
+  "Original": "select col1, count(distinct col2) c2 from user group by col1",
+  "Instructions": {
+    "HasDistinct": true,
+    "Aggregates": [
+      {
+        "Opcode": "count_distinct",
+        "Col": 1,
+        "Alias": "c2"
+      }
+    ],
+    "Keys": [
+      0
+    ],
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col1, col2 from user group by col1, col2 order by col1 asc, col2 asc",
+      "FieldQuery": "select col1, col2 from user where 1 != 1 group by col1, col2",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        },
+        {
+          "Col": 1,
+          "Desc": false
+        }
+      ]
+    }
+  }
+}
+
+# sum with distinct no unique vindex
+"select col1, sum(distinct col2) from user group by col1"
+{
+  "Original": "select col1, sum(distinct col2) from user group by col1",
+  "Instructions": {
+    "HasDistinct": true,
+    "Aggregates": [
+      {
+        "Opcode": "sum_distinct",
+        "Col": 1,
+        "Alias": "sum(distinct col2)"
+      }
+    ],
+    "Keys": [
+      0
+    ],
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col1, col2 from user group by col1, col2 order by col1 asc, col2 asc",
+      "FieldQuery": "select col1, col2 from user where 1 != 1 group by col1, col2",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        },
+        {
+          "Col": 1,
+          "Desc": false
+        }
+      ]
+    }
+  }
+}
+
+# min with distinct no unique vindex. distinct is ignored.
+"select col1, min(distinct col2) from user group by col1"
+{
+  "Original": "select col1, min(distinct col2) from user group by col1",
+  "Instructions": {
+    "Aggregates": [
+      {
+        "Opcode": "min",
+        "Col": 1
+      }
+    ],
+    "Keys": [
+      0
+    ],
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col1, min(distinct col2) from user group by col1 order by col1 asc",
+      "FieldQuery": "select col1, min(distinct col2) from user where 1 != 1 group by col1",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        }
+      ]
+    }
+  }
+}
+
+# order by count distinct
+"select col1, count(distinct col2) k from user group by col1 order by k"
+{
+  "Original": "select col1, count(distinct col2) k from user group by col1 order by k",
+  "Instructions": {
+    "Opcode": "MemorySort",
+    "MaxRows": null,
+    "OrderBy": [
+      {
+        "Col": 1,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "HasDistinct": true,
+      "Aggregates": [
+        {
+          "Opcode": "count_distinct",
+          "Col": 1,
+          "Alias": "k"
+        }
+      ],
+      "Keys": [
+        0
+      ],
+      "Input": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select col1, col2 from user group by col1, col2 order by col1 asc, col2 asc",
+        "FieldQuery": "select col1, col2 from user where 1 != 1 group by col1, col2",
+        "OrderBy": [
+          {
+            "Col": 0,
+            "Desc": false
+          },
+          {
+            "Col": 1,
+            "Desc": false
+          }
+        ]
+      }
     }
   }
 }
@@ -1070,3 +1401,7 @@
 # Group by out of range column number (code is duplicated from symab).
 "select id from user group by 2"
 "column number out of range: 2"
+
+# syntax error detected by planbuilder
+"select count(distinct *) from user"
+"syntax error: count(distinct *)"

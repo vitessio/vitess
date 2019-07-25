@@ -23,7 +23,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/samuel/go-zookeeper/zk"
+	"github.com/z-division/go-zookeeper/zk"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"

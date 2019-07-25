@@ -29,12 +29,8 @@ import (
 )
 
 func TestRegisterFlagsWithSomeFlags(t *testing.T) {
-	savedDBConfig := dbConfigs
-	savedBaseConfig := baseConfig
-	defer func() {
-		dbConfigs = savedDBConfig
-		baseConfig = savedBaseConfig
-	}()
+	f := saveDBConfigs()
+	defer f()
 
 	dbConfigs = DBConfigs{userConfigs: make(map[string]*userConfig)}
 	RegisterFlags(Dba, Repl)
@@ -46,12 +42,8 @@ func TestRegisterFlagsWithSomeFlags(t *testing.T) {
 }
 
 func TestInit(t *testing.T) {
-	savedDBConfig := dbConfigs
-	savedBaseConfig := baseConfig
-	defer func() {
-		dbConfigs = savedDBConfig
-		baseConfig = savedBaseConfig
-	}()
+	f := saveDBConfigs()
+	defer f()
 
 	dbConfigs = DBConfigs{
 		userConfigs: map[string]*userConfig{
@@ -169,6 +161,100 @@ func TestInit(t *testing.T) {
 	if !reflect.DeepEqual(dbc.userConfigs[Dba].param, want.userConfigs[Dba].param) {
 		t.Errorf("dbc: \n%#v, want \n%#v", dbc.userConfigs[Dba].param, want.userConfigs[Dba].param)
 	}
+
+	// Test that baseConfig does not override Charset and Flag if they're
+	// not specified.
+	baseConfig = mysql.ConnParams{
+		Host:       "a",
+		Port:       1,
+		Uname:      "b",
+		Pass:       "c",
+		DbName:     "d",
+		UnixSocket: "e",
+		SslCa:      "g",
+		SslCaPath:  "h",
+		SslCert:    "i",
+		SslKey:     "j",
+	}
+	dbConfigs = DBConfigs{
+		userConfigs: map[string]*userConfig{
+			App: {
+				param: mysql.ConnParams{
+					Uname:      "app",
+					Pass:       "apppass",
+					UnixSocket: "socket",
+					Charset:    "f",
+				},
+			},
+			AppDebug: {
+				useSSL: true,
+			},
+			Dba: {
+				useSSL: true,
+				param: mysql.ConnParams{
+					Uname: "dba",
+					Pass:  "dbapass",
+					Host:  "host",
+					Flags: 2,
+				},
+			},
+		},
+	}
+	dbc, err = Init("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = &DBConfigs{
+		userConfigs: map[string]*userConfig{
+			App: {
+				param: mysql.ConnParams{
+					Host:       "a",
+					Port:       1,
+					Uname:      "app",
+					Pass:       "apppass",
+					UnixSocket: "e",
+					Charset:    "f",
+				},
+			},
+			AppDebug: {
+				useSSL: true,
+				param: mysql.ConnParams{
+					Host:       "a",
+					Port:       1,
+					UnixSocket: "e",
+					SslCa:      "g",
+					SslCaPath:  "h",
+					SslCert:    "i",
+					SslKey:     "j",
+				},
+			},
+			Dba: {
+				useSSL: true,
+				param: mysql.ConnParams{
+					Host:       "a",
+					Port:       1,
+					Uname:      "dba",
+					Pass:       "dbapass",
+					UnixSocket: "e",
+					Flags:      2,
+					SslCa:      "g",
+					SslCaPath:  "h",
+					SslCert:    "i",
+					SslKey:     "j",
+				},
+			},
+		},
+	}
+	// Compare individually, otherwise the errors are not readable.
+	if !reflect.DeepEqual(dbc.userConfigs[App].param, want.userConfigs[App].param) {
+		t.Errorf("dbc: \n%#v, want \n%#v", dbc.userConfigs[App].param, want.userConfigs[App].param)
+	}
+	if !reflect.DeepEqual(dbc.userConfigs[AppDebug].param, want.userConfigs[AppDebug].param) {
+		t.Errorf("dbc: \n%#v, want \n%#v", dbc.userConfigs[AppDebug].param, want.userConfigs[AppDebug].param)
+	}
+	if !reflect.DeepEqual(dbc.userConfigs[Dba].param, want.userConfigs[Dba].param) {
+		t.Errorf("dbc: \n%#v, want \n%#v", dbc.userConfigs[Dba].param, want.userConfigs[Dba].param)
+	}
 }
 
 func TestAccessors(t *testing.T) {
@@ -264,5 +350,22 @@ func hupTest(t *testing.T, tmpFile *os.File, oldStr, newStr string) {
 	_, pass, _ = cs.GetUserAndPassword(newStr)
 	if pass != newStr {
 		t.Fatalf("%s's Password should be '%s'", newStr, newStr)
+	}
+}
+
+func saveDBConfigs() (restore func()) {
+	savedDBConfigs := DBConfigs{
+		userConfigs: dbConfigs.userConfigs,
+	}
+	savedDBConfigs.DBName.Set(dbConfigs.DBName.Get())
+	savedDBConfigs.SidecarDBName.Set(dbConfigs.SidecarDBName.Get())
+	savedBaseConfig := baseConfig
+	return func() {
+		dbConfigs := DBConfigs{
+			userConfigs: savedDBConfigs.userConfigs,
+		}
+		dbConfigs.DBName.Set(savedDBConfigs.DBName.Get())
+		dbConfigs.SidecarDBName.Set(savedDBConfigs.SidecarDBName.Get())
+		baseConfig = savedBaseConfig
 	}
 }

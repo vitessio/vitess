@@ -88,6 +88,9 @@ func (jn *Join) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariab
 		} else {
 			result.RowsAffected += uint64(len(rresult.Rows))
 		}
+		if len(result.Rows) > vcursor.MaxMemoryRows() {
+			return nil, fmt.Errorf("in-memory row count exceeded allowed limit of %d", vcursor.MaxMemoryRows())
+		}
 	}
 	return result, nil
 }

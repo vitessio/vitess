@@ -83,22 +83,6 @@ func TestTxConnBeginDisallowed(t *testing.T) {
 	}
 }
 
-func TestTxConnCommitRollbackIncorrectSession(t *testing.T) {
-	sc, _, _, _, _, _ := newTestTxConnEnv(t, "TestTxConn")
-	// nil session
-	err := sc.txConn.Rollback(context.Background(), nil)
-	if err != nil {
-		t.Error(err)
-	}
-
-	// not in transaction
-	session := NewSafeSession(&vtgatepb.Session{})
-	err = sc.txConn.Commit(context.Background(), session)
-	if err != nil {
-		t.Error(err)
-	}
-}
-
 func TestTxConnCommitSuccess(t *testing.T) {
 	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConn")
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
@@ -143,11 +127,8 @@ func TestTxConnCommitSuccess(t *testing.T) {
 		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
 	}
 
-	sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
-	err := sc.txConn.Commit(context.Background(), session)
-	want := "INVALID_ARGUMENT error"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Commit: %v, want %s", err, want)
+	if err := sc.txConn.Commit(context.Background(), session); err != nil {
+		t.Error(err)
 	}
 	wantSession = vtgatepb.Session{}
 	if !proto.Equal(session.Session, &wantSession) {
@@ -156,8 +137,233 @@ func TestTxConnCommitSuccess(t *testing.T) {
 	if commitCount := sbc0.CommitCount.Get(); commitCount != 1 {
 		t.Errorf("sbc0.CommitCount: %d, want 1", commitCount)
 	}
+	if commitCount := sbc1.CommitCount.Get(); commitCount != 1 {
+		t.Errorf("sbc1.commitCount: %d, want 1", commitCount)
+	}
+}
+
+func TestTxConnCommitOrderFailure1(t *testing.T) {
+	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConn")
+	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+
+	queries := []*querypb.BoundQuery{{
+		Sql: "query1",
+	}}
+
+	// Sequence the executes to ensure commit order
+	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	sc.ExecuteMultiShard(context.Background(), rss0, queries, topodatapb.TabletType_MASTER, session, false, false)
+
+	session.SetCommitOrder(vtgatepb.CommitOrder_PRE)
+	sc.ExecuteMultiShard(context.Background(), rss0, queries, topodatapb.TabletType_MASTER, session, false, false)
+
+	session.SetCommitOrder(vtgatepb.CommitOrder_POST)
+	sc.ExecuteMultiShard(context.Background(), rss1, queries, topodatapb.TabletType_MASTER, session, false, false)
+
+	sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
+	err := sc.txConn.Commit(context.Background(), session)
+	want := "INVALID_ARGUMENT error"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Commit: %v, want %s", err, want)
+	}
+
+	wantSession := vtgatepb.Session{}
+	if !proto.Equal(session.Session, &wantSession) {
+		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
+	}
+	if commitCount := sbc0.CommitCount.Get(); commitCount != 1 {
+		t.Errorf("sbc0.CommitCount: %d, want 1", commitCount)
+	}
+	if rollbackCount := sbc0.RollbackCount.Get(); rollbackCount != 1 {
+		t.Errorf("sbc0.rollbackCount: %d, want 1", rollbackCount)
+	}
 	if rollbackCount := sbc1.RollbackCount.Get(); rollbackCount != 1 {
-		t.Errorf("sbc1.RollbackCount: %d, want 1", rollbackCount)
+		t.Errorf("sbc1.rollbackCount: %d, want 1", rollbackCount)
+	}
+}
+
+func TestTxConnCommitOrderFailure2(t *testing.T) {
+	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConn")
+	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+
+	queries := []*querypb.BoundQuery{{
+		Sql: "query1",
+	}}
+
+	// Sequence the executes to ensure commit order
+	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	sc.ExecuteMultiShard(context.Background(), rss1, queries, topodatapb.TabletType_MASTER, session, false, false)
+
+	session.SetCommitOrder(vtgatepb.CommitOrder_PRE)
+	sc.ExecuteMultiShard(context.Background(), rss0, queries, topodatapb.TabletType_MASTER, session, false, false)
+
+	session.SetCommitOrder(vtgatepb.CommitOrder_POST)
+	sc.ExecuteMultiShard(context.Background(), rss1, queries, topodatapb.TabletType_MASTER, session, false, false)
+
+	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
+	err := sc.txConn.Commit(context.Background(), session)
+	want := "INVALID_ARGUMENT error"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Commit: %v, want %s", err, want)
+	}
+
+	wantSession := vtgatepb.Session{}
+	if !proto.Equal(session.Session, &wantSession) {
+		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
+	}
+	if commitCount := sbc0.CommitCount.Get(); commitCount != 1 {
+		t.Errorf("sbc0.CommitCount: %d, want 1", commitCount)
+	}
+	if commitCount := sbc1.CommitCount.Get(); commitCount != 1 {
+		t.Errorf("sbc1.commitCount: %d, want 1", commitCount)
+	}
+	if rollbackCount := sbc1.RollbackCount.Get(); rollbackCount != 1 {
+		t.Errorf("sbc1.rollbackCount: %d, want 1", rollbackCount)
+	}
+}
+
+func TestTxConnCommitOrderFailure3(t *testing.T) {
+	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConn")
+	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+
+	queries := []*querypb.BoundQuery{{
+		Sql: "query1",
+	}}
+
+	// Sequence the executes to ensure commit order
+	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	sc.ExecuteMultiShard(context.Background(), rss0, queries, topodatapb.TabletType_MASTER, session, false, false)
+
+	session.SetCommitOrder(vtgatepb.CommitOrder_PRE)
+	sc.ExecuteMultiShard(context.Background(), rss0, queries, topodatapb.TabletType_MASTER, session, false, false)
+
+	session.SetCommitOrder(vtgatepb.CommitOrder_POST)
+	sc.ExecuteMultiShard(context.Background(), rss1, queries, topodatapb.TabletType_MASTER, session, false, false)
+
+	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
+	if err := sc.txConn.Commit(context.Background(), session); err != nil {
+		t.Error(err)
+	}
+
+	// The last failed commit must generate a warning.
+	wantSession := vtgatepb.Session{
+		Warnings: []*querypb.QueryWarning{{
+			Message: "post-operation transaction had an error: Code: INVALID_ARGUMENT\nINVALID_ARGUMENT error\n\ntarget: TestTxConn.1.master, used tablet: aa-0 (1)",
+		}},
+	}
+	if !proto.Equal(session.Session, &wantSession) {
+		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
+	}
+	if commitCount := sbc0.CommitCount.Get(); commitCount != 2 {
+		t.Errorf("sbc0.CommitCount: %d, want 2", commitCount)
+	}
+	if commitCount := sbc1.CommitCount.Get(); commitCount != 1 {
+		t.Errorf("sbc1.commitCount: %d, want 1", commitCount)
+	}
+}
+
+func TestTxConnCommitOrderSuccess(t *testing.T) {
+	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConn")
+	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
+
+	queries := []*querypb.BoundQuery{{
+		Sql: "query1",
+	}}
+
+	// Sequence the executes to ensure commit order
+	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+	sc.ExecuteMultiShard(context.Background(), rss0, queries, topodatapb.TabletType_MASTER, session, false, false)
+	wantSession := vtgatepb.Session{
+		InTransaction: true,
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			TransactionId: 1,
+		}},
+	}
+	if !proto.Equal(session.Session, &wantSession) {
+		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
+	}
+
+	session.SetCommitOrder(vtgatepb.CommitOrder_PRE)
+	sc.ExecuteMultiShard(context.Background(), rss0, queries, topodatapb.TabletType_MASTER, session, false, false)
+	wantSession = vtgatepb.Session{
+		InTransaction: true,
+		PreSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			TransactionId: 2,
+		}},
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			TransactionId: 1,
+		}},
+	}
+	if !proto.Equal(session.Session, &wantSession) {
+		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
+	}
+
+	session.SetCommitOrder(vtgatepb.CommitOrder_POST)
+	sc.ExecuteMultiShard(context.Background(), rss1, queries, topodatapb.TabletType_MASTER, session, false, false)
+	wantSession = vtgatepb.Session{
+		InTransaction: true,
+		PreSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			TransactionId: 2,
+		}},
+		ShardSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "0",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			TransactionId: 1,
+		}},
+		PostSessions: []*vtgatepb.Session_ShardSession{{
+			Target: &querypb.Target{
+				Keyspace:   "TestTxConn",
+				Shard:      "1",
+				TabletType: topodatapb.TabletType_MASTER,
+			},
+			TransactionId: 1,
+		}},
+	}
+	if !proto.Equal(session.Session, &wantSession) {
+		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
+	}
+
+	// Ensure nothing changes if we reuse a transaction.
+	sc.ExecuteMultiShard(context.Background(), rss1, queries, topodatapb.TabletType_MASTER, session, false, false)
+	if !proto.Equal(session.Session, &wantSession) {
+		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
+	}
+
+	if err := sc.txConn.Commit(context.Background(), session); err != nil {
+		t.Error(err)
+	}
+	wantSession = vtgatepb.Session{}
+	if !proto.Equal(session.Session, &wantSession) {
+		t.Errorf("Session:\n%+v, want\n%+v", *session.Session, wantSession)
+	}
+	if commitCount := sbc0.CommitCount.Get(); commitCount != 2 {
+		t.Errorf("sbc0.CommitCount: %d, want 2", commitCount)
+	}
+	if commitCount := sbc1.CommitCount.Get(); commitCount != 1 {
+		t.Errorf("sbc1.commitCount: %d, want 1", commitCount)
 	}
 }
 

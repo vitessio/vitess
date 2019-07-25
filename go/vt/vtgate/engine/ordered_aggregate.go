@@ -32,6 +32,8 @@ var _ Primitive = (*OrderedAggregate)(nil)
 // is that the underlying primitive is a scatter select with pre-sorted
 // rows.
 type OrderedAggregate struct {
+	// HasDistinct is true if one of the aggregates is distinct.
+	HasDistinct bool `json:",omitempty"`
 	// Aggregates specifies the aggregation parameters for each
 	// aggregation function: function opcode and input column number.
 	Aggregates []AggregateParams
@@ -54,6 +56,12 @@ type OrderedAggregate struct {
 type AggregateParams struct {
 	Opcode AggregateOpcode
 	Col    int
+	// Alias is set only for distinct opcodes.
+	Alias string `json:",omitempty"`
+}
+
+func (ap AggregateParams) isDistinct() bool {
+	return ap.Opcode == AggregateCountDistinct || ap.Opcode == AggregateSumDistinct
 }
 
 // AggregateOpcode is the aggregation Opcode.
@@ -65,6 +73,19 @@ const (
 	AggregateSum
 	AggregateMin
 	AggregateMax
+	AggregateCountDistinct
+	AggregateSumDistinct
+)
+
+var (
+	opcodeType = map[AggregateOpcode]querypb.Type{
+		AggregateCountDistinct: sqltypes.Int64,
+		AggregateSumDistinct:   sqltypes.Decimal,
+	}
+	// Some predefined values
+	countZero = sqltypes.MakeTrusted(sqltypes.Int64, []byte("0"))
+	countOne  = sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))
+	sumZero   = sqltypes.MakeTrusted(sqltypes.Decimal, []byte("0"))
 )
 
 // SupportedAggregates maps the list of supported aggregate
@@ -74,6 +95,10 @@ var SupportedAggregates = map[string]AggregateOpcode{
 	"sum":   AggregateSum,
 	"min":   AggregateMin,
 	"max":   AggregateMax,
+	// These functions don't exist in mysql, but are used
+	// to display the plan.
+	"count_distinct": AggregateCountDistinct,
+	"sum_distinct":   AggregateSumDistinct,
 }
 
 func (code AggregateOpcode) String() string {
@@ -101,6 +126,11 @@ func (oa *OrderedAggregate) KeyspaceTableNames() []*KeyspaceTableName {
 	return oa.Input.KeyspaceTableNames()
 }
 
+// SetTruncateColumnCount sets the truncate column count.
+func (oa *OrderedAggregate) SetTruncateColumnCount(count int) {
+	oa.TruncateColumnCount = count
+}
+
 // Execute is a Primitive function.
 func (oa *OrderedAggregate) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	qr, err := oa.execute(vcursor, bindVars, wantfields)
@@ -116,15 +146,16 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 		return nil, err
 	}
 	out := &sqltypes.Result{
-		Fields: result.Fields,
+		Fields: oa.convertFields(result.Fields),
 		Rows:   make([][]sqltypes.Value, 0, len(result.Rows)),
 		Extras: result.Extras,
 	}
 	// This code is similar to the one in StreamExecute.
 	var current []sqltypes.Value
+	var curDistinct sqltypes.Value
 	for _, row := range result.Rows {
 		if current == nil {
-			current = row
+			current, curDistinct = oa.convertRow(row)
 			continue
 		}
 
@@ -134,14 +165,14 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 		}
 
 		if equal {
-			current, err = oa.merge(result.Fields, current, row)
+			current, curDistinct, err = oa.merge(result.Fields, current, row, curDistinct)
 			if err != nil {
 				return nil, err
 			}
 			continue
 		}
 		out.Rows = append(out.Rows, current)
-		current = row
+		current, curDistinct = oa.convertRow(row)
 	}
 	if current != nil {
 		out.Rows = append(out.Rows, current)
@@ -153,6 +184,7 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 // StreamExecute is a Primitive function.
 func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	var current []sqltypes.Value
+	var curDistinct sqltypes.Value
 	var fields []*querypb.Field
 
 	cb := func(qr *sqltypes.Result) error {
@@ -161,7 +193,7 @@ func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars map[string]*
 
 	err := oa.Input.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
-			fields = qr.Fields
+			fields = oa.convertFields(qr.Fields)
 			if err := cb(&sqltypes.Result{Fields: fields}); err != nil {
 				return err
 			}
@@ -169,7 +201,7 @@ func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars map[string]*
 		// This code is similar to the one in Execute.
 		for _, row := range qr.Rows {
 			if current == nil {
-				current = row
+				current, curDistinct = oa.convertRow(row)
 				continue
 			}
 
@@ -179,7 +211,7 @@ func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars map[string]*
 			}
 
 			if equal {
-				current, err = oa.merge(fields, current, row)
+				current, curDistinct, err = oa.merge(fields, current, row, curDistinct)
 				if err != nil {
 					return err
 				}
@@ -188,7 +220,7 @@ func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars map[string]*
 			if err := cb(&sqltypes.Result{Rows: [][]sqltypes.Value{current}}); err != nil {
 				return err
 			}
-			current = row
+			current, curDistinct = oa.convertRow(row)
 		}
 		return nil
 	})
@@ -204,12 +236,57 @@ func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars map[string]*
 	return nil
 }
 
+func (oa *OrderedAggregate) convertFields(fields []*querypb.Field) (newFields []*querypb.Field) {
+	if !oa.HasDistinct {
+		return fields
+	}
+	newFields = append(newFields, fields...)
+	for _, aggr := range oa.Aggregates {
+		if !aggr.isDistinct() {
+			continue
+		}
+		newFields[aggr.Col] = &querypb.Field{
+			Name: aggr.Alias,
+			Type: opcodeType[aggr.Opcode],
+		}
+	}
+	return newFields
+}
+
+func (oa *OrderedAggregate) convertRow(row []sqltypes.Value) (newRow []sqltypes.Value, curDistinct sqltypes.Value) {
+	if !oa.HasDistinct {
+		return row, sqltypes.NULL
+	}
+	newRow = append(newRow, row...)
+	for _, aggr := range oa.Aggregates {
+		switch aggr.Opcode {
+		case AggregateCountDistinct:
+			curDistinct = row[aggr.Col]
+			// Type is int64. Ok to call MakeTrusted.
+			if row[aggr.Col].IsNull() {
+				newRow[aggr.Col] = countZero
+			} else {
+				newRow[aggr.Col] = countOne
+			}
+		case AggregateSumDistinct:
+			curDistinct = row[aggr.Col]
+			var err error
+			newRow[aggr.Col], err = sqltypes.Cast(row[aggr.Col], opcodeType[aggr.Opcode])
+			if err != nil {
+				newRow[aggr.Col] = sumZero
+			}
+		}
+	}
+	return newRow, curDistinct
+}
+
 // GetFields is a Primitive function.
 func (oa *OrderedAggregate) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	qr, err := oa.Input.GetFields(vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
+	qr = &sqltypes.Result{Fields: oa.convertFields(qr.Fields)}
 	return qr.Truncate(oa.TruncateColumnCount), nil
 }
 
@@ -226,9 +303,22 @@ func (oa *OrderedAggregate) keysEqual(row1, row2 []sqltypes.Value) (bool, error)
 	return true, nil
 }
 
-func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes.Value) ([]sqltypes.Value, error) {
+func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes.Value, curDistinct sqltypes.Value) ([]sqltypes.Value, sqltypes.Value, error) {
 	result := sqltypes.CopyRow(row1)
 	for _, aggr := range oa.Aggregates {
+		if aggr.isDistinct() {
+			if row2[aggr.Col].IsNull() {
+				continue
+			}
+			cmp, err := sqltypes.NullsafeCompare(curDistinct, row2[aggr.Col])
+			if err != nil {
+				return nil, sqltypes.NULL, err
+			}
+			if cmp == 0 {
+				continue
+			}
+			curDistinct = row2[aggr.Col]
+		}
 		var err error
 		switch aggr.Opcode {
 		case AggregateCount, AggregateSum:
@@ -237,12 +327,16 @@ func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes
 			result[aggr.Col], err = sqltypes.Min(row1[aggr.Col], row2[aggr.Col])
 		case AggregateMax:
 			result[aggr.Col], err = sqltypes.Max(row1[aggr.Col], row2[aggr.Col])
+		case AggregateCountDistinct:
+			result[aggr.Col], err = sqltypes.NullsafeAdd(row1[aggr.Col], countOne, opcodeType[aggr.Opcode])
+		case AggregateSumDistinct:
+			result[aggr.Col], err = sqltypes.NullsafeAdd(row1[aggr.Col], row2[aggr.Col], opcodeType[aggr.Opcode])
 		default:
-			return nil, fmt.Errorf("BUG: Unexpected opcode: %v", aggr.Opcode)
+			return nil, sqltypes.NULL, fmt.Errorf("BUG: Unexpected opcode: %v", aggr.Opcode)
 		}
 		if err != nil {
-			return nil, err
+			return nil, sqltypes.NULL, err
 		}
 	}
-	return result, nil
+	return result, curDistinct, nil
 }

@@ -128,6 +128,9 @@ service Vitess {
   // API group: Topology
   rpc GetSrvKeyspace(vtgate.GetSrvKeyspaceRequest) returns (vtgate.GetSrvKeyspaceResponse) {};
 
+  // VStream streams binlog events from the requested sources.
+  rpc VStream(vtgate.VStreamRequest) returns (stream vtgate.VStreamResponse) {};
+
   // UpdateStream asks the server for a stream of StreamEvent objects.
   // API group: Update Stream
   rpc UpdateStream(vtgate.UpdateStreamRequest) returns (stream vtgate.UpdateStreamResponse) {};

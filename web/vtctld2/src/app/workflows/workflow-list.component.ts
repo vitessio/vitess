@@ -254,7 +254,7 @@ export class WorkflowListComponent implements OnDestroy, OnInit {
         for (let i=0; i<phaseEnableApprovalCheckBoxNames.length; i++) {
             let phaseName = phaseEnableApprovalCheckBoxNames[i];
             if(newFlags[factoryName + '_' + phaseName]['value']) {
-                phaseEnableApprovals.push(newFlags[factoryName + '_' + phaseName]["namedPositional"]);
+                phaseEnableApprovals.push(newFlags[factoryName + '_' + phaseName]['namedPositional']);
             }
             // We don't want this flag to show up in the getArgs
             delete newFlags[factoryName + '_' + phaseName];

@@ -135,7 +135,7 @@ func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keysp
 
 	// Write in the vschema if set.
 	if vschema != nil {
-		vschemaFilePath := path.Join(tempSchemaDir, "vschema.json")
+		vschemaFilePath := path.Join(tempSchemaDir, keyspace, "vschema.json")
 		vschemaJSON, err := json.Marshal(vschema)
 		if err != nil {
 			return err
@@ -150,11 +150,10 @@ func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keysp
 
 // DbName returns the default name for a database in this cluster.
 // If OnlyMySQL is set, this will be the name of the single database
-// created in MySQL. Otherwise, this will be the database that stores
-// the first keyspace in the topology.
+// created in MySQL. Otherwise, this will be blank.
 func (cfg *Config) DbName() string {
 	ns := cfg.Topology.GetKeyspaces()
-	if len(ns) > 0 {
+	if len(ns) > 0 && cfg.OnlyMySQL {
 		return ns[0].Name
 	}
 	return ""
