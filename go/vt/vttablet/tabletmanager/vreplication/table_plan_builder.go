@@ -440,7 +440,7 @@ func (tpb *tablePlanBuilder) generateInsertPart(buf *sqlparser.TrackedBuffer) *s
 	}
 	separator := ""
 	for _, cexpr := range tpb.colExprs {
-		buf.Myprintf("%s%s", separator, cexpr.colName.String())
+		buf.Myprintf("%s%v", separator, cexpr.colName)
 		separator = ","
 	}
 	buf.Myprintf(")", tpb.name)
@@ -497,16 +497,17 @@ func (tpb *tablePlanBuilder) generateOnDupPart(buf *sqlparser.TrackedBuffer) *sq
 		if cexpr.isGrouped || cexpr.isPK {
 			continue
 		}
-		buf.Myprintf("%s%s=", separator, cexpr.colName.String())
+		buf.Myprintf("%s%v=", separator, cexpr.colName)
 		separator = ", "
+		// TODO: What to do here?
 		switch cexpr.operation {
 		case opExpr:
-			buf.Myprintf("values(%s)", cexpr.colName.String())
+			buf.Myprintf("values(%v)", cexpr.colName)
 		case opCount:
-			buf.Myprintf("%s+1", cexpr.colName.String())
+			buf.Myprintf("%v+1", cexpr.colName)
 		case opSum:
-			buf.Myprintf("%s", cexpr.colName.String())
-			buf.Myprintf("+ifnull(values(%s), 0)", cexpr.colName.String())
+			buf.Myprintf("%v", cexpr.colName)
+			buf.Myprintf("+ifnull(values(%v), 0)", cexpr.colName)
 		}
 	}
 	return buf.ParsedQuery()
@@ -524,16 +525,16 @@ func (tpb *tablePlanBuilder) generateUpdateStatement() *sqlparser.ParsedQuery {
 		if cexpr.isGrouped || cexpr.isPK {
 			continue
 		}
-		buf.Myprintf("%s%s=", separator, cexpr.colName.String())
+		buf.Myprintf("%s%v=", separator, cexpr.colName)
 		separator = ", "
 		switch cexpr.operation {
 		case opExpr:
 			bvf.mode = bvAfter
 			buf.Myprintf("%v", cexpr.expr)
 		case opCount:
-			buf.Myprintf("%s", cexpr.colName.String())
+			buf.Myprintf("%v", cexpr.colName)
 		case opSum:
-			buf.Myprintf("%s", cexpr.colName.String())
+			buf.Myprintf("%v", cexpr.colName)
 			bvf.mode = bvBefore
 			buf.Myprintf("-ifnull(%v, 0)", cexpr.expr)
 			bvf.mode = bvAfter
@@ -559,15 +560,15 @@ func (tpb *tablePlanBuilder) generateDeleteStatement() *sqlparser.ParsedQuery {
 			if cexpr.isGrouped || cexpr.isPK {
 				continue
 			}
-			buf.Myprintf("%s%s=", separator, cexpr.colName.String())
+			buf.Myprintf("%s%v=", separator, cexpr.colName)
 			separator = ", "
 			switch cexpr.operation {
 			case opExpr:
 				buf.WriteString("null")
 			case opCount:
-				buf.Myprintf("%s-1", cexpr.colName.String())
+				buf.Myprintf("%v-1", cexpr.colName)
 			case opSum:
-				buf.Myprintf("%s-ifnull(%v, 0)", cexpr.colName.String(), cexpr.expr)
+				buf.Myprintf("%v-ifnull(%v, 0)", cexpr.colName, cexpr.expr)
 			}
 		}
 		tpb.generateWhere(buf, bvf)
@@ -583,10 +584,10 @@ func (tpb *tablePlanBuilder) generateWhere(buf *sqlparser.TrackedBuffer, bvf *bi
 	separator := ""
 	for _, cexpr := range tpb.pkCols {
 		if _, ok := cexpr.expr.(*sqlparser.ColName); ok {
-			buf.Myprintf("%s%s=%v", separator, cexpr.colName.String(), cexpr.expr)
+			buf.Myprintf("%s%v=%v", separator, cexpr.colName, cexpr.expr)
 		} else {
 			// Parenthesize non-trivial expressions.
-			buf.Myprintf("%s%s=(%v)", separator, cexpr.colName.String(), cexpr.expr)
+			buf.Myprintf("%s%v=(%v)", separator, cexpr.colName, cexpr.expr)
 		}
 		separator = " and "
 	}
