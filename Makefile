@@ -29,6 +29,10 @@ ifdef VT_GO_PARALLEL_VALUE
 export VT_GO_PARALLEL := -p $(VT_GO_PARALLEL_VALUE)
 endif
 
+ifdef VT_EXTRA_BUILD_FLAGS
+export EXTRA_BUILD_FLAGS := $(VT_EXTRA_BUILD_FLAGS)
+endif
+
 # Link against the MySQL library in $VT_MYSQL_ROOT if it's specified.
 ifdef VT_MYSQL_ROOT
 # Clutter the env var only if it's a non-standard path.
@@ -46,7 +50,7 @@ build:
 ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
-	go install $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
+	go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
 
 parser:
 	make -C go/vt/sqlparser
