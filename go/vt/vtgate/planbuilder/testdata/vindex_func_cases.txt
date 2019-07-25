@@ -331,3 +331,22 @@
 
 "select none from user_index where id = :id"
 "symbol none not found in table or subquery"
+
+"select * from samecolvin where col = :col"
+{
+  "Original": "select * from samecolvin where col = :col",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col from samecolvin where col = :col",
+    "FieldQuery": "select col from samecolvin where 1 != 1",
+    "Vindex": "vindex1",
+    "Values": [
+      ":col"
+    ],
+    "Table": "samecolvin"
+  }
+}
