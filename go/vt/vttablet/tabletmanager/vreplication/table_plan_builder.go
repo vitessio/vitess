@@ -284,7 +284,12 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 	}
 	as := aliased.As
 	if as.IsEmpty() {
-		as = sqlparser.NewColIdent(sqlparser.String(aliased.Expr))
+		// Require all non-trivial expressions to have an alias.
+		if colAs, ok := aliased.Expr.(*sqlparser.ColName); ok && colAs.Qualifier.IsEmpty() {
+			as = colAs.Name
+		} else {
+			return nil, fmt.Errorf("expression needs an alias: %v", sqlparser.String(aliased))
+		}
 	}
 	cexpr := &colExpr{
 		colName:    as,
@@ -293,9 +298,6 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 	if expr, ok := aliased.Expr.(*sqlparser.FuncExpr); ok {
 		if expr.Distinct {
 			return nil, fmt.Errorf("unexpected: %v", sqlparser.String(expr))
-		}
-		if aliased.As.IsEmpty() {
-			return nil, fmt.Errorf("expression needs an alias: %v", sqlparser.String(expr))
 		}
 		switch fname := expr.Name.Lowered(); fname {
 		case "count":
