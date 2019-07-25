@@ -121,7 +121,8 @@
           "Desc": false
         }
       ],
-      "TruncateColumnCount": 5
+      "TruncateColumnCount": 5,
+      "Table": "user"
     }
   }
 }
@@ -178,7 +179,8 @@
             "Desc": false
           }
         ],
-        "TruncateColumnCount": 5
+        "TruncateColumnCount": 5,
+        "Table": "user"
       }
     }
   }
@@ -657,7 +659,8 @@
       "Sharded": true
     },
     "Query": "select id, count(distinct col) from user group by id",
-    "FieldQuery": "select id, count(distinct col) from user where 1 != 1 group by id"
+    "FieldQuery": "select id, count(distinct col) from user where 1 != 1 group by id",
+    "Table": "user"
   }
 }
 
@@ -688,7 +691,8 @@
           "Col": 0,
           "Desc": false
         }
-      ]
+      ],
+      "Table": "user"
     }
   }
 }
@@ -726,7 +730,8 @@
           "Col": 1,
           "Desc": false
         }
-      ]
+      ],
+      "Table": "user"
     }
   }
 }
@@ -758,7 +763,8 @@
           "Col": 0,
           "Desc": false
         }
-      ]
+      ],
+      "Table": "user"
     }
   }
 }
@@ -796,7 +802,8 @@
           "Col": 1,
           "Desc": false
         }
-      ]
+      ],
+      "Table": "user"
     }
   }
 }
@@ -834,7 +841,8 @@
           "Col": 1,
           "Desc": false
         }
-      ]
+      ],
+      "Table": "user"
     }
   }
 }
@@ -866,7 +874,8 @@
           "Col": 0,
           "Desc": false
         }
-      ]
+      ],
+      "Table": "user"
     }
   }
 }
@@ -913,7 +922,8 @@
             "Col": 1,
             "Desc": false
           }
-        ]
+        ],
+        "Table": "user"
       }
     }
   }
