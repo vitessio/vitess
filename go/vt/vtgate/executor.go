@@ -76,13 +76,12 @@ type Executor struct {
 	scatterConn *ScatterConn
 	txConn      *TxConn
 
-	mu               sync.Mutex
-	vschema          *vindexes.VSchema
-	normalize        bool
-	streamSize       int
-	legacyAutocommit bool
-	plans            *cache.LRUCache
-	vschemaStats     *VSchemaStats
+	mu           sync.Mutex
+	vschema      *vindexes.VSchema
+	normalize    bool
+	streamSize   int
+	plans        *cache.LRUCache
+	vschemaStats *VSchemaStats
 
 	vm VSchemaManager
 }
@@ -90,17 +89,16 @@ type Executor struct {
 var executorOnce sync.Once
 
 // NewExecutor creates a new Executor.
-func NewExecutor(ctx context.Context, serv srvtopo.Server, cell, statsName string, resolver *Resolver, normalize bool, streamSize int, queryPlanCacheSize int64, legacyAutocommit bool) *Executor {
+func NewExecutor(ctx context.Context, serv srvtopo.Server, cell, statsName string, resolver *Resolver, normalize bool, streamSize int, queryPlanCacheSize int64) *Executor {
 	e := &Executor{
-		serv:             serv,
-		cell:             cell,
-		resolver:         resolver,
-		scatterConn:      resolver.scatterConn,
-		txConn:           resolver.scatterConn.txConn,
-		plans:            cache.NewLRUCache(queryPlanCacheSize),
-		normalize:        normalize,
-		streamSize:       streamSize,
-		legacyAutocommit: legacyAutocommit,
+		serv:        serv,
+		cell:        cell,
+		resolver:    resolver,
+		scatterConn: resolver.scatterConn,
+		txConn:      resolver.scatterConn.txConn,
+		plans:       cache.NewLRUCache(queryPlanCacheSize),
+		normalize:   normalize,
+		streamSize:  streamSize,
 	}
 
 	vschemaacl.Init()
@@ -143,8 +141,7 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 
 func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (*sqltypes.Result, error) {
 	// Start an implicit transaction if necessary.
-	// TODO(sougou): deprecate legacyMode after all users are migrated out.
-	if !e.legacyAutocommit && !safeSession.Autocommit && !safeSession.InTransaction() {
+	if !safeSession.Autocommit && !safeSession.InTransaction() {
 		if err := e.txConn.Begin(ctx, safeSession); err != nil {
 			return nil, err
 		}
@@ -182,11 +179,6 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 	case sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
 		safeSession := safeSession
 
-		// In legacy mode, we ignore autocommit settings.
-		if e.legacyAutocommit {
-			return e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats)
-		}
-
 		mustCommit := false
 		if safeSession.Autocommit && !safeSession.InTransaction() {
 			mustCommit = true
@@ -206,7 +198,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		// do is likely not final.
 		// The control flow is such that autocommitable can only be turned on
 		// at the beginning, but never after.
-		safeSession.SetAutocommitable(mustCommit)
+		safeSession.SetAutocommittable(mustCommit)
 
 		qr, err := e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats)
 		if err != nil {
@@ -1373,7 +1365,7 @@ func (e *Executor) ServeHTTP(response http.ResponseWriter, request *http.Request
 		}
 	} else if request.URL.Path == "/debug/vschema" {
 		response.Header().Set("Content-Type", "application/json; charset=utf-8")
-		b, err := json.MarshalIndent(e.VSchema().Keyspaces, "", " ")
+		b, err := json.MarshalIndent(e.VSchema(), "", " ")
 		if err != nil {
 			response.Write([]byte(err.Error()))
 			return

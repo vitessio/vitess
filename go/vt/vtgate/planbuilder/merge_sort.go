@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"errors"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
@@ -33,41 +34,29 @@ var _ builder = (*mergeSort)(nil)
 // Since ORDER BY happens near the end of the SQL processing,
 // most functions of this primitive are unreachable.
 type mergeSort struct {
-	order int
-	input *route
+	resultsBuilder
+	truncateColumnCount int
 }
 
 // newMergeSort builds a new mergeSort.
 func newMergeSort(rb *route) *mergeSort {
-	return &mergeSort{
-		input: rb,
+	ms := &mergeSort{
+		resultsBuilder: newResultsBuilder(rb, nil),
 	}
+	ms.truncater = ms
+	return ms
 }
 
-// Order satisfies the builder interface.
-func (ms *mergeSort) Order() int {
-	return ms.order
-}
-
-// Reorder satisfies the builder interface.
-func (ms *mergeSort) Reorder(order int) {
-	ms.input.Reorder(order)
-	ms.order = ms.input.Order() + 1
+// SetTruncateColumnCount satisfies the truncater interface.
+// This function records the truncate column count and sets
+// it later on the eroute during wire-up phase.
+func (ms *mergeSort) SetTruncateColumnCount(count int) {
+	ms.truncateColumnCount = count
 }
 
 // Primitive satisfies the builder interface.
 func (ms *mergeSort) Primitive() engine.Primitive {
 	return ms.input.Primitive()
-}
-
-// First satisfies the builder interface.
-func (ms *mergeSort) First() builder {
-	return ms.input.First()
-}
-
-// ResultColumns satisfies the builder interface.
-func (ms *mergeSort) ResultColumns() []*resultColumn {
-	return ms.input.ResultColumns()
 }
 
 // PushFilter satisfies the builder interface.
@@ -76,8 +65,8 @@ func (ms *mergeSort) PushFilter(pb *primitiveBuilder, expr sqlparser.Expr, where
 }
 
 // PushSelect satisfies the builder interface.
-func (ms *mergeSort) PushSelect(expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
-	return ms.input.PushSelect(expr, origin)
+func (ms *mergeSort) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
+	return ms.input.PushSelect(pb, expr, origin)
 }
 
 // MakeDistinct satisfies the builder interface.
@@ -97,27 +86,31 @@ func (ms *mergeSort) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	return nil, errors.New("mergeSort.PushOrderBy: unreachable")
 }
 
-// SetUpperLimit satisfies the builder interface.
-func (ms *mergeSort) SetUpperLimit(count *sqlparser.SQLVal) {
-	ms.input.SetUpperLimit(count)
-}
-
-// PushMisc satisfies the builder interface.
-func (ms *mergeSort) PushMisc(sel *sqlparser.Select) {
-	ms.input.PushMisc(sel)
-}
-
 // Wireup satisfies the builder interface.
 func (ms *mergeSort) Wireup(bldr builder, jt *jointab) error {
+	// If the route has to do the ordering, and if any columns are Text,
+	// we have to request the corresponding weight_string from mysql
+	// and use that value instead. This is because we cannot mimic
+	// mysql's collation behavior yet.
+	rb := ms.input.(*route)
+	rb.finalizeOptions()
+	ro := rb.routeOptions[0]
+	for i, orderby := range ro.eroute.OrderBy {
+		rc := ms.resultColumns[orderby.Col]
+		if sqltypes.IsText(rc.column.typ) {
+			// If a weight string was previously requested, reuse it.
+			if colNumber, ok := ms.weightStrings[rc]; ok {
+				ro.eroute.OrderBy[i].Col = colNumber
+				continue
+			}
+			var err error
+			ro.eroute.OrderBy[i].Col, err = rb.SupplyWeightString(orderby.Col)
+			if err != nil {
+				return err
+			}
+			ms.truncateColumnCount = len(ms.resultColumns)
+		}
+	}
+	ro.eroute.TruncateColumnCount = ms.truncateColumnCount
 	return ms.input.Wireup(bldr, jt)
-}
-
-// SupplyVar satisfies the builder interface.
-func (ms *mergeSort) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	ms.input.SupplyVar(from, to, col, varname)
-}
-
-// SupplyCol satisfies the builder interface.
-func (ms *mergeSort) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int) {
-	return ms.input.SupplyCol(col)
 }

@@ -303,10 +303,9 @@ func NewActionAgent(
 	// - restoreFromBackup is not set: we initHealthCheck right away
 	if *restoreFromBackup {
 		go func() {
-			// restoreFromBackup wil just be a regular action
+			// restoreFromBackup will just be a regular action
 			// (same as if it was triggered remotely)
-			if err := agent.RestoreData(batchCtx, logutil.NewConsoleLogger(), false /* deleteBeforeRestore */); err != nil {
-				println(fmt.Sprintf("RestoreFromBackup failed: %v", err))
+			if err := agent.RestoreData(batchCtx, logutil.NewConsoleLogger(), *waitForBackupInterval, false /* deleteBeforeRestore */); err != nil {
 				log.Exitf("RestoreFromBackup failed: %v", err)
 			}
 

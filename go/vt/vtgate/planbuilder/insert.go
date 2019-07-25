@@ -70,7 +70,7 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vsch
 	case sqlparser.Values:
 		rows = insertValues
 	default:
-		panic(fmt.Sprintf("BUG: unexpected construct in insert: %T", insertValues))
+		return nil, fmt.Errorf("BUG: unexpected construct in insert: %T", insertValues)
 	}
 	if eins.Table.AutoIncrement == nil {
 		eins.Query = generateQuery(ins)
@@ -79,7 +79,11 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vsch
 
 	// Table has auto-inc and has a VALUES clause.
 	if len(ins.Columns) == 0 {
-		return nil, errors.New("column list required for tables with auto-inc columns")
+		if table.ColumnListAuthoritative {
+			populateInsertColumnlist(ins, table)
+		} else {
+			return nil, errors.New("column list required for tables with auto-inc columns")
+		}
 	}
 	for _, row := range rows {
 		if len(ins.Columns) != len(row) {
@@ -109,7 +113,11 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 		eins.Opcode = engine.InsertShardedIgnore
 	}
 	if len(ins.Columns) == 0 {
-		return nil, errors.New("no column list")
+		if table.ColumnListAuthoritative {
+			populateInsertColumnlist(ins, table)
+		} else {
+			return nil, errors.New("no column list")
+		}
 	}
 
 	directives := sqlparser.ExtractCommentDirectives(ins.Comments)
@@ -129,7 +137,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 			return nil, errors.New("unsupported: subquery in insert values")
 		}
 	default:
-		panic(fmt.Sprintf("BUG: unexpected construct in insert: %T", insertValues))
+		return nil, fmt.Errorf("BUG: unexpected construct in insert: %T", insertValues)
 	}
 	for _, value := range rows {
 		if len(ins.Columns) != len(value) {
@@ -166,6 +174,14 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 	eins.Query = generateQuery(ins)
 	generateInsertShardedQuery(ins, eins, rows)
 	return eins, nil
+}
+
+func populateInsertColumnlist(ins *sqlparser.Insert, table *vindexes.Table) {
+	cols := make(sqlparser.Columns, 0, len(table.Columns))
+	for _, c := range table.Columns {
+		cols = append(cols, c.Name)
+	}
+	ins.Columns = cols
 }
 
 func generateInsertShardedQuery(node *sqlparser.Insert, eins *engine.Insert, valueTuples sqlparser.Values) {

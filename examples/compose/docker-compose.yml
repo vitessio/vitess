@@ -1,4 +1,4 @@
-version: "3"
+version: "2.3"
 services:
   consul1:
     image: consul:latest
@@ -60,7 +60,7 @@ services:
       - "15099:$WEB_PORT"
       - "$GRPC_PORT"
       - "15306:$MYSQL_PORT"
-    command: ["sh", "-c", "$$VTROOT/bin/vtgate \
+    command: ["sh", "-c", "vtctl $TOPOLOGY_FLAGS SetReadWrite ${CELL}-1 & $$VTROOT/bin/vtgate \
         $TOPOLOGY_FLAGS \
         -logtostderr=true \
         -port $WEB_PORT \
@@ -74,8 +74,16 @@ services:
         -service_map 'grpc-vtgateservice' \
         -pid_file $$VTDATAROOT/tmp/vtgate.pid \
         "]
+    volumes:
+      - ".:/script"
+    environment:
+      - KEYSPACE
+      - DB
     depends_on:
       - vtctld
+    depends_on:
+      vttablet1:
+        condition: service_healthy
 
   vttablet1:
     image: vitess/base
@@ -85,15 +93,28 @@ services:
       - "3306"
     volumes:
       - ".:/script"
+      - "./backups:/vt/vtdataroot/backups"
     environment:
       - TOPOLOGY_FLAGS
       - WEB_PORT
       - GRPC_PORT
       - CELL
       - KEYSPACE
+      - DB
+      - EXTERNAL_DB
+      - DB_PORT
+      - DB_HOST
+      - DB_USER
+      - DB_PASS
+      - DB_CHARSET
     command: ["sh", "-c", "/script/vttablet-up.sh 1"]
     depends_on:
       - vtctld
+    healthcheck:
+        test: ["CMD-SHELL","curl localhost:$$WEB_PORT/debug/health"]
+        interval: 30s
+        timeout: 10s
+        retries: 10
   vttablet2:
     image: vitess/base
     ports:
@@ -102,15 +123,22 @@ services:
       - "3306"
     volumes:
       - ".:/script"
+      - "./backups:/vt/vtdataroot/backups"
     environment:
       - TOPOLOGY_FLAGS
       - WEB_PORT
       - GRPC_PORT
       - CELL
       - KEYSPACE
+      - DB
+      - EXTERNAL_DB
+      - DB_USER
+      - DB_PASS
+      - DB_CHARSET
     command: ["sh", "-c", "/script/vttablet-up.sh 2"]
     depends_on:
       - vtctld
+      - vttablet1
   vttablet3:
     image: vitess/base
     ports:
@@ -119,12 +147,19 @@ services:
       - "3306"
     volumes:
       - ".:/script"
+      - "./backups:/vt/vtdataroot/backups"
     environment:
       - TOPOLOGY_FLAGS
       - WEB_PORT
       - GRPC_PORT
       - CELL
       - KEYSPACE
+      - DB
+      - EXTERNAL_DB
+      - DB_USER
+      - DB_PASS
+      - DB_CHARSET
     command: ["sh", "-c", "/script/vttablet-up.sh 3"]
     depends_on:
       - vtctld
+      - vttablet1

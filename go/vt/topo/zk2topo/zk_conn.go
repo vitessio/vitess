@@ -28,7 +28,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/samuel/go-zookeeper/zk"
+	"github.com/z-division/go-zookeeper/zk"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sync2"

@@ -45,7 +45,8 @@ import base_sharding
 import environment
 import tablet
 import utils
- 
+from mysql_flavor import mysql_flavor
+
 # initial shard, covers everything
 ks1_shard_master = tablet.Tablet(vt_dba_passwd='VtDbaPass')
 ks1_shard_replica = tablet.Tablet(vt_dba_passwd='VtDbaPass')
@@ -100,6 +101,17 @@ def setUpModule():
   global new_init_db, db_credentials_file
 
   try:
+    credentials = {
+        'vt_dba': ['VtDbaPass'],
+        'vt_app': ['VtAppPass'],
+        'vt_allprivs': ['VtAllprivsPass'],
+        'vt_repl': ['VtReplPass'],
+        'vt_filtered': ['VtFilteredPass'],
+    }
+    db_credentials_file = environment.tmproot+'/db_credentials.json'
+    with open(db_credentials_file, 'w') as fd:
+      fd.write(json.dumps(credentials))
+
     # Determine which column is used for user passwords in this MySQL version.
     proc = ks1_shard_master.init_mysql()
     utils.wait_procs([proc])
@@ -119,14 +131,8 @@ def setUpModule():
       init_db = fd.read()
     with open(new_init_db, 'w') as fd:
       fd.write(init_db)
+      fd.write(mysql_flavor().change_passwords(password_col))
       fd.write('''
-# Set real passwords for all users.
-ALTER USER 'root'@'localhost' IDENTIFIED BY 'RootPass';
-ALTER USER 'vt_dba'@'localhost' IDENTIFIED BY 'VtDbaPass';
-ALTER USER 'vt_app'@'localhost' IDENTIFIED BY 'VtAppPass';
-ALTER USER 'vt_allprivs'@'localhost' IDENTIFIED BY 'VtAllPrivsPass';
-ALTER USER 'vt_repl'@'%' IDENTIFIED BY 'VtReplPass';
-ALTER USER 'vt_filtered'@'localhost' IDENTIFIED BY 'VtFilteredPass';
 
 # connecting through a port requires 127.0.0.1
 # --host=localhost will connect through socket
@@ -162,17 +168,6 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
 
 FLUSH PRIVILEGES;
 ''')
-    credentials = {
-        'vt_dba': ['VtDbaPass'],
-        'vt_app': ['VtAppPass'],
-        'vt_allprivs': ['VtAllprivsPass'],
-        'vt_repl': ['VtReplPass'],
-        'vt_filtered': ['VtFilteredPass'],
-    }
-    db_credentials_file = environment.tmproot+'/db_credentials.json'
-    with open(db_credentials_file, 'w') as fd:
-      fd.write(json.dumps(credentials))
-
     setup_procs = [t.init_mysql(use_rbr=True, init_db=new_init_db,
                                  extra_args=['-db-credentials-file',
                                              db_credentials_file]) for t in all_mysql_tablets]

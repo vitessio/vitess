@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -169,6 +170,18 @@ func (conn *VTGateConn) SplitQuery(ctx context.Context, keyspace string, query s
 // GetSrvKeyspace returns a topo.SrvKeyspace object.
 func (conn *VTGateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	return conn.impl.GetSrvKeyspace(ctx, keyspace)
+}
+
+// VStreamReader is returned by VStream.
+type VStreamReader interface {
+	// Recv returns the next result on the stream.
+	// It will return io.EOF if the stream ended.
+	Recv() ([]*binlogdatapb.VEvent, error)
+}
+
+// VStream streams binlog events.
+func (conn *VTGateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter) (VStreamReader, error) {
+	return conn.impl.VStream(ctx, tabletType, vgtid, filter)
 }
 
 // UpdateStreamReader is returned by UpdateStream.
@@ -374,6 +387,9 @@ type Impl interface {
 
 	// GetSrvKeyspace returns a topo.SrvKeyspace.
 	GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error)
+
+	// VStream streams binlogevents
+	VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter) (VStreamReader, error)
 
 	// UpdateStream asks for a stream of StreamEvent.
 	UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken) (UpdateStreamReader, error)

@@ -86,13 +86,6 @@
         <configuration>
           <protocArtifact>com.google.protobuf:protoc:${protobuf.protoc.version}:exe:${os.detected.classifier}</protocArtifact>
           <protoSourceRoot>../../proto</protoSourceRoot>
-          <includes>
-            <include>query.proto</include>
-            <include>topodata.proto</include>
-            <include>vtgate.proto</include>
-            <include>vtrpc.proto</include>
-            <include>vttest.proto</include>
-          </includes>
         </configuration>
         <executions>
           <execution>

@@ -353,7 +353,9 @@ func (ts *Server) DeleteSrvKeyspacePartitions(ctx context.Context, keyspace stri
 					for _, si := range shards {
 						found := false
 						for _, shardReference := range partition.GetShardReferences() {
-							if key.KeyRangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
+							// Use shard name rather than key range so it works
+							// for both range-based and non-range-based shards.
+							if shardReference.GetName() == si.ShardName() {
 								found = true
 							}
 						}
@@ -361,7 +363,9 @@ func (ts *Server) DeleteSrvKeyspacePartitions(ctx context.Context, keyspace stri
 						if found {
 							shardReferences := make([]*topodatapb.ShardReference, 0)
 							for _, shardReference := range partition.GetShardReferences() {
-								if !key.KeyRangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
+								// Use shard name rather than key range so it works
+								// for both range-based and non-range-based shards.
+								if shardReference.GetName() != si.ShardName() {
 									shardReferences = append(shardReferences, shardReference)
 								}
 							}

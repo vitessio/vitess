@@ -127,7 +127,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 					return false, err
 				}
 			default:
-				panic(fmt.Sprintf("BUG: unexpected SELECT type: %T", node))
+				return false, fmt.Errorf("BUG: unexpected SELECT type: %T", node)
 			}
 			sqi := subqueryInfo{
 				ast:  node,

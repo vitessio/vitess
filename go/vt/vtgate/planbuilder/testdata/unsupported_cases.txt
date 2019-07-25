@@ -51,17 +51,13 @@
 "update `user[-]@replica`.user_metadata set id=2"
 "unsupported: UPDATE statement with a replica target"
 
-# order by on a cross-shard subquery
-"select id from (select user.id, user.col from user join user_extra) as t order by id"
-"unsupported: order by on cross-shard subquery"
-
-# order by on a cross-shard query. Note: this is only a problem when an order by column is from the second table
-"select user.col1 as a, user.col2 b, music.col3 c from user, music where user.id = music.id and user.id = 1 order by c"
-"unsupported: order by spans across shards"
-
 # scatter order by with * expression
 "select * from user order by id"
 "unsupported: in scatter query: order by must reference a column in the select list: id asc"
+
+# order by rand on a cross-shard subquery
+"select id from (select user.id, user.col from user join user_extra) as t order by rand()"
+"unsupported: memory sort: complex order by expression: rand()"
 
 # filtering on a cross-shard subquery
 "select id from (select user.id, user.col from user join user_extra) as t where id=5"
@@ -131,6 +127,14 @@
 "select 1+count(*) from user"
 "unsupported: in scatter query: complex aggregate expression"
 
+# Multi-value aggregates not supported
+"select count(a,b) from user"
+"unsupported: only one expression allowed inside aggregates: count(a, b)"
+
+# Cannot have more than one aggr(distinct...
+"select count(distinct a), count(distinct b) from user"
+"unsupported: only one distinct aggregation allowed in a select: count(distinct b)"
+
 # scatter aggregate group by doesn't reference select list
 "select id from user group by col"
 "unsupported: in scatter query: group by column must reference column in SELECT list"
@@ -151,9 +155,9 @@
 "select col, count(*) from user group by col order by col+1"
 "unsupported: in scatter query: complex order by expression: col + 1"
 
-# scatter aggregate order by does not reference group by
-"select a, b, count(*) from user group by a order by b"
-"unsupported: in scatter query: order by column must reference group by expression: b asc"
+# Scatter order by and aggregation: order by column must reference column from select list
+"select col, count(*) from user group by col order by c1"
+"unsupported: memory sort: order by must reference a column in the select list: c1 asc"
 
 # Aggregates and joins
 "select count(*) from user join user_extra"
@@ -187,21 +191,9 @@
 "select id from user order by id+1"
 "unsupported: in scatter query: complex order by expression: id + 1"
 
-# Order by for join, but sequence is too cross-shard
-"select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by 1 asc, 3 desc, 2 asc"
-"unsupported: order by spans across shards"
-
-# Order by and left join
-"select user.col1 as a, user_extra.col2 as b from user left join user_extra on user_extra.user_id = 5 where user.id = 5 order by 1, 2"
-"unsupported: order by spans across shards"
-
 # Order by column number with collate
 "select user.col1 as a from user order by 1 collate utf8_general_ci"
 "unsupported: in scatter query: complex order by expression: 1 collate utf8_general_ci"
-
-# Order by for join, but order by is cross-shard
-"select user.col1 as a, user_extra.col2 as b from user join user_extra on user_extra.user_id = 5 where user.id = 5 order by a+b"
-"unsupported: order by spans across shards"
 
 # Order by has subqueries
 "select id from unsharded order by (select id from unsharded)"

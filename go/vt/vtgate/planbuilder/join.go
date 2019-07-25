@@ -31,6 +31,7 @@ var _ builder = (*join)(nil)
 type join struct {
 	order         int
 	resultColumns []*resultColumn
+	weightStrings map[*resultColumn]int
 
 	// leftOrder stores the order number of the left node. This is
 	// used for a b-tree style traversal towards the target route.
@@ -98,8 +99,9 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
 		}
 	}
 	lpb.bldr = &join{
-		Left:  lpb.bldr,
-		Right: rpb.bldr,
+		weightStrings: make(map[*resultColumn]int),
+		Left:          lpb.bldr,
+		Right:         rpb.bldr,
 		ejoin: &engine.Join{
 			Opcode: opcode,
 			Vars:   make(map[string]int),
@@ -154,24 +156,24 @@ func (jb *join) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereTyp
 }
 
 // PushSelect satisfies the builder interface.
-func (jb *join) PushSelect(expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
+func (jb *join) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
 	if jb.isOnLeft(origin.Order()) {
-		rc, colnum, err = jb.Left.PushSelect(expr, origin)
+		rc, colNumber, err = jb.Left.PushSelect(pb, expr, origin)
 		if err != nil {
 			return nil, 0, err
 		}
-		jb.ejoin.Cols = append(jb.ejoin.Cols, -colnum-1)
+		jb.ejoin.Cols = append(jb.ejoin.Cols, -colNumber-1)
 	} else {
 		// Pushing of non-trivial expressions not allowed for RHS of left joins.
 		if _, ok := expr.Expr.(*sqlparser.ColName); !ok && jb.ejoin.Opcode == engine.LeftJoin {
 			return nil, 0, errors.New("unsupported: cross-shard left join and column expressions")
 		}
 
-		rc, colnum, err = jb.Right.PushSelect(expr, origin)
+		rc, colNumber, err = jb.Right.PushSelect(pb, expr, origin)
 		if err != nil {
 			return nil, 0, err
 		}
-		jb.ejoin.Cols = append(jb.ejoin.Cols, colnum+1)
+		jb.ejoin.Cols = append(jb.ejoin.Cols, colNumber+1)
 	}
 	jb.resultColumns = append(jb.resultColumns, rc)
 	return rc, len(jb.resultColumns) - 1, nil
@@ -183,7 +185,10 @@ func (jb *join) MakeDistinct() error {
 }
 
 // PushGroupBy satisfies the builder interface.
-func (jb *join) PushGroupBy(_ sqlparser.GroupBy) error {
+func (jb *join) PushGroupBy(groupBy sqlparser.GroupBy) error {
+	if (groupBy) == nil {
+		return nil
+	}
 	return errors.New("unupported: group by on cross-shard join")
 }
 
@@ -225,7 +230,7 @@ func (jb *join) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 				return nil, err
 			}
 			if jb.ResultColumns()[num].column.Origin().Order() > jb.Left.Order() {
-				return nil, errors.New("unsupported: order by spans across shards")
+				return newMemorySort(jb, orderBy)
 			}
 		} else {
 			// Analyze column references within the expression to make sure they all
@@ -243,7 +248,7 @@ func (jb *join) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 				return true, nil
 			}, order.Expr)
 			if err != nil {
-				return nil, err
+				return newMemorySort(jb, orderBy)
 			}
 		}
 	}
@@ -313,7 +318,7 @@ func (jb *join) SupplyVar(from, to int, col *sqlparser.ColName, varname string) 
 }
 
 // SupplyCol satisfies the builder interface.
-func (jb *join) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int) {
+func (jb *join) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber int) {
 	c := col.Metadata.(*column)
 	for i, rc := range jb.resultColumns {
 		if rc.column == c {
@@ -332,6 +337,31 @@ func (jb *join) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int)
 	}
 	jb.resultColumns = append(jb.resultColumns, rc)
 	return rc, len(jb.ejoin.Cols) - 1
+}
+
+// SupplyWeightString satisfies the builder interface.
+func (jb *join) SupplyWeightString(colNumber int) (weightcolNumber int, err error) {
+	rc := jb.resultColumns[colNumber]
+	if weightcolNumber, ok := jb.weightStrings[rc]; ok {
+		return weightcolNumber, nil
+	}
+	routeNumber := rc.column.Origin().Order()
+	if jb.isOnLeft(routeNumber) {
+		sourceCol, err := jb.Left.SupplyWeightString(-jb.ejoin.Cols[colNumber] - 1)
+		if err != nil {
+			return 0, err
+		}
+		jb.ejoin.Cols = append(jb.ejoin.Cols, -sourceCol-1)
+	} else {
+		sourceCol, err := jb.Right.SupplyWeightString(jb.ejoin.Cols[colNumber] - 1)
+		if err != nil {
+			return 0, err
+		}
+		jb.ejoin.Cols = append(jb.ejoin.Cols, sourceCol+1)
+	}
+	jb.resultColumns = append(jb.resultColumns, rc)
+	jb.weightStrings[rc] = len(jb.ejoin.Cols) - 1
+	return len(jb.ejoin.Cols) - 1, nil
 }
 
 // isOnLeft returns true if the specified route number

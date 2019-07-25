@@ -141,7 +141,7 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 		TruncateColumnCount:     route.TruncateColumnCount,
 		QueryTimeout:            route.QueryTimeout,
 		ScatterErrorsAsWarnings: route.ScatterErrorsAsWarnings,
-		Table: route.Table,
+		Table:                   route.Table,
 	}
 	return jsonutil.MarshalNoEscape(marshalRoute)
 }
@@ -214,6 +214,11 @@ func (route *Route) KeyspaceTableNames() []*KeyspaceTableName {
 			Table:    route.Table,
 		},
 	}
+}
+
+// SetTruncateColumnCount sets the truncate column count.
+func (route *Route) SetTruncateColumnCount(count int) {
+	route.TruncateColumnCount = count
 }
 
 // Execute performs a non-streaming exec.

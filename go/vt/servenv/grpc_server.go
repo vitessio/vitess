@@ -23,8 +23,8 @@ import (
 	"net"
 	"time"
 
-	"github.com/grpc-ecosystem/go-grpc-middleware"
-	"github.com/grpc-ecosystem/go-grpc-prometheus"
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
 	"vitess.io/vitess/go/trace"
 
 	"google.golang.org/grpc"
@@ -221,7 +221,12 @@ func serveGRPC() {
 	//       runs all OnRun() hooks after createGRPCServer() and before
 	//       serveGRPC(). If this was not the case, the binary would crash with
 	//       the error "grpc: Server.RegisterService after Server.Serve".
-	go GRPCServer.Serve(listener)
+	go func() {
+		err := GRPCServer.Serve(listener)
+		if err != nil {
+			log.Exitf("Failed to start grpc server: %v", err)
+		}
+	}()
 
 	OnTermSync(func() {
 		log.Info("Initiated graceful stop of gRPC server")

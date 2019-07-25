@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconnpool"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -57,13 +58,15 @@ type MySQLChecker interface {
 // Other than the connection type, ConnPool maintains an additional
 // pool of dba connections that are used to kill connections.
 type Pool struct {
-	mu             sync.Mutex
-	connections    *pools.ResourcePool
-	capacity       int
-	idleTimeout    time.Duration
-	dbaPool        *dbconnpool.ConnectionPool
-	checker        MySQLChecker
-	appDebugParams *mysql.ConnParams
+	name               string
+	mu                 sync.Mutex
+	connections        *pools.ResourcePool
+	capacity           int
+	prefillParallelism int
+	idleTimeout        time.Duration
+	dbaPool            *dbconnpool.ConnectionPool
+	checker            MySQLChecker
+	appDebugParams     *mysql.ConnParams
 }
 
 // New creates a new Pool. The name is used
@@ -71,13 +74,16 @@ type Pool struct {
 func New(
 	name string,
 	capacity int,
+	prefillParallelism int,
 	idleTimeout time.Duration,
 	checker MySQLChecker) *Pool {
 	cp := &Pool{
-		capacity:    capacity,
-		idleTimeout: idleTimeout,
-		dbaPool:     dbconnpool.NewConnectionPool("", 1, idleTimeout, 0),
-		checker:     checker,
+		name:               name,
+		capacity:           capacity,
+		prefillParallelism: prefillParallelism,
+		idleTimeout:        idleTimeout,
+		dbaPool:            dbconnpool.NewConnectionPool("", 1, idleTimeout, 0),
+		checker:            checker,
 	}
 	if name == "" || usedNames[name] {
 		return cp
@@ -107,10 +113,15 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams *mysql.ConnParams) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 
+	if cp.prefillParallelism != 0 {
+		log.Infof("Opening pool: '%s'", cp.name)
+		defer log.Infof("Done opening pool: '%s'", cp.name)
+	}
+
 	f := func() (pools.Resource, error) {
 		return NewDBConn(cp, appParams)
 	}
-	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout)
+	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.prefillParallelism)
 	cp.appDebugParams = appDebugParams
 
 	cp.dbaPool.Open(dbaParams, tabletenv.MySQLStats)
