@@ -63,6 +63,11 @@ func (ms *MemorySort) RouteType() string {
 	return ms.Input.RouteType()
 }
 
+// KeyspaceTableNames specifies the table that this primitive routes to.
+func (ms *MemorySort) KeyspaceTableNames() []*KeyspaceTableName {
+	return ms.Input.KeyspaceTableNames()
+}
+
 // SetTruncateColumnCount sets the truncate column count.
 func (ms *MemorySort) SetTruncateColumnCount(count int) {
 	ms.TruncateColumnCount = count
