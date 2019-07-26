@@ -356,6 +356,65 @@
     "Type": 2
   },
   {
+    "Name": "msg1_with_topic",
+    "Columns": [
+      {
+        "Name": "time_scheduled"
+      },
+      {
+        "Name": "id"
+      },
+      {
+        "Name": "time_next"
+      },
+      {
+        "Name": "epoch"
+      },
+      {
+        "Name": "time_created"
+      },
+      {
+        "Name": "time_acked"
+      },
+      {
+        "Name": "message"
+      }
+    ],
+    "Indexes": [
+      {
+        "Name": "PRIMARY",
+        "Unique": true,
+        "Columns": [
+          "time_scheduled",
+          "id"
+        ],
+        "Cardinality": [
+          1
+        ],
+        "DataColumns": [
+        ]
+      }
+    ],
+    "PKColumns": [
+      0,
+      1
+    ],
+    "Type": 2,
+    "MessageInfo": {
+      "Topic": "test_topic"
+    }
+  },
+  {
+    "Name": "test_topic",
+    "TopicInfo": {
+      "Subscribers": [
+        {
+          "Name": "msg1_with_topic"
+        }
+      ]
+    }
+  },
+  {
     "Name": "dual",
     "Type": 0
   }

@@ -251,6 +251,27 @@ var tableACLConfig = `{
       "admins": ["dev"]
     },
     {
+      "name": "test_topic",
+      "table_names_or_prefixes": ["test_topic"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vitess_topic_subscriber_1",
+      "table_names_or_prefixes": ["vitess_topic_subscriber_1"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
+      "name": "vitess_topic_subscriber_2",
+      "table_names_or_prefixes": ["vitess_topic_subscriber_2"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
+    },
+    {
       "name": "vitess_acl_unmatched",
       "table_names_or_prefixes": ["vitess_acl_unmatched"],
       "readers": ["dev"],

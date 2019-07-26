@@ -180,6 +180,11 @@ func (se *Engine) Open() error {
 	}
 	se.tables = tables
 	se.lastChange = curTime
+
+	// register message topics on the engine if necessary
+	// must run after se.tables is set
+	se.registerTopics()
+
 	se.ticks.Start(func() {
 		if err := se.Reload(ctx); err != nil {
 			log.Errorf("periodic schema reload failed: %v", err)
@@ -274,13 +279,24 @@ func (se *Engine) Reload(ctx context.Context) error {
 
 	// Handle table drops
 	var dropped []string
-	for tableName := range se.tables {
+	for tableName, table := range se.tables {
 		if curTables[tableName] {
 			continue
 		}
-		delete(se.tables, tableName)
-		dropped = append(dropped, tableName)
+
+		se.unregisterTopic(table)
+
+		// only keep track of non-topic table drops
+		if !se.tables[tableName].IsTopic() {
+			dropped = append(dropped, tableName)
+			delete(se.tables, tableName)
+		}
 	}
+
+	// register message topics on the engine if necessary
+	// must run after se.tables is set
+	se.registerTopics()
+
 	// We only need to broadcast dropped tables because
 	// tableWasCreatedOrAltered will broadcast the other changes.
 	if len(dropped) > 0 {
@@ -336,6 +352,7 @@ func (se *Engine) tableWasCreatedOrAltered(ctx context.Context, tableName string
 		tabletenv.InternalErrors.Add("Schema", 1)
 		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "tableWasCreatedOrAltered: failed to load table %s: %v", tableName, err)
 	}
+
 	// table_rows, data_length, index_length, max_data_length
 	table.SetMysqlStats(row[4], row[5], row[6], row[7], row[8])
 
@@ -353,6 +370,70 @@ func (se *Engine) tableWasCreatedOrAltered(ctx context.Context, tableName string
 	log.Infof("Initialized table: %s, type: %s", tableName, TypeNames[table.Type])
 	se.broadcast(created, altered, nil)
 	return nil
+}
+
+// registerTopics optionally connects the vt_topic metadata on a message table
+// to a map of topic strings. A table can belong to only one topic.
+func (se *Engine) registerTopics() {
+	for _, table := range se.tables {
+		se.registerTopic(table)
+	}
+}
+
+func (se *Engine) registerTopic(ta *Table) {
+	if ta.MessageInfo == nil || ta.MessageInfo.Topic == "" {
+		return
+	}
+
+	topicName := ta.MessageInfo.Topic
+	topicTable, ok := se.tables[topicName]
+	if !ok {
+		// initialize topic table if necessary
+		topicTable = NewTable(topicName)
+		topicTable.TopicInfo = &TopicInfo{
+			Subscribers: make([]*Table, 0, 1),
+		}
+		se.tables[topicName] = topicTable
+		log.Infof("creating topic table '%s'", topicName)
+	} else {
+		// check to see if this table is already registered to the topic
+		// so we don't double register
+		for _, t := range topicTable.TopicInfo.Subscribers {
+			if t.Name == ta.Name {
+				return
+			}
+		}
+	}
+
+	// append this table to the list of subscribed tables to the topic
+	log.Infof("subscribing message table '%s' to topic '%s'", ta.Name.String(), topicName)
+	topicTable.TopicInfo.Subscribers = append(topicTable.TopicInfo.Subscribers, ta)
+}
+
+func (se *Engine) unregisterTopic(ta *Table) {
+	if ta.MessageInfo == nil || ta.MessageInfo.Topic == "" {
+		return
+	}
+
+	topicName := ta.MessageInfo.Topic
+	topicTable, ok := se.tables[topicName]
+	if !ok {
+		panic("topic should have already been created")
+	}
+	// remove this table from the topic
+	for i, t := range topicTable.TopicInfo.Subscribers {
+		// remove the table from the topic
+		if t.Name == ta.Name {
+			log.Infof("unsubscribing message table '%s' from topic '%s'", ta.Name.String(), topicName)
+			topicTable.TopicInfo.Subscribers = append(topicTable.TopicInfo.Subscribers[:i], topicTable.TopicInfo.Subscribers[i+1:]...)
+		}
+	}
+
+	// delete the topic table if there are no more subscribers
+	if len(topicTable.TopicInfo.Subscribers) == 0 {
+		log.Infof("deleting topic table '%s'", topicName)
+		delete(se.tables, topicName)
+	}
 }
 
 // RegisterNotifier registers the function for schema change notification.
