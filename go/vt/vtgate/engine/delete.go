@@ -145,22 +145,17 @@ func (del *Delete) RouteType() string {
 	return delName[del.Opcode]
 }
 
-// KeyspaceTableNames specifies the table that this primitive routes to
-func (del *Delete) KeyspaceTableNames() []*KeyspaceTableName {
-	if del.Table != nil {
-		return []*KeyspaceTableName{
-			&KeyspaceTableName{
-				Keyspace: del.Keyspace.Name,
-				Table:    del.Table.Name.String(),
-			},
-		}
-	}
+// KeyspaceName specifies the Keyspace that this primitive routes to.
+func (del *Delete) KeyspaceName() string {
+	return del.Keyspace.Name
+}
 
-	return []*KeyspaceTableName{
-		&KeyspaceTableName{
-			Keyspace: del.Keyspace.Name,
-		},
+// TableName specifies the table that this primitive routes to.
+func (del *Delete) TableName() string {
+	if del.Table != nil {
+		return del.Table.Name.String()
 	}
+	return ""
 }
 
 // Execute performs a non-streaming exec.

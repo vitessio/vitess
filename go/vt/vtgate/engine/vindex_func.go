@@ -84,11 +84,14 @@ func (vf *VindexFunc) RouteType() string {
 	return vindexOpcodeName[vf.Opcode]
 }
 
-// KeyspaceTableNames specifies the table that this primitive routes to
-func (vf *VindexFunc) KeyspaceTableNames() []*KeyspaceTableName {
-	return []*KeyspaceTableName{
-		&KeyspaceTableName{},
-	}
+// KeyspaceName specifies the Keyspace that this primitive routes to.
+func (vf *VindexFunc) KeyspaceName() string {
+	return ""
+}
+
+// TableName specifies the table that this primitive routes to.
+func (vf *VindexFunc) TableName() string {
+	return ""
 }
 
 // Execute performs a non-streaming exec.

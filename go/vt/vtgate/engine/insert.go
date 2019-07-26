@@ -195,22 +195,17 @@ func (ins *Insert) RouteType() string {
 	return insName[ins.Opcode]
 }
 
-// KeyspaceTableNames specifies the table that this primitive routes to
-func (ins *Insert) KeyspaceTableNames() []*KeyspaceTableName {
-	if ins.Table != nil {
-		return []*KeyspaceTableName{
-			&KeyspaceTableName{
-				Keyspace: ins.Keyspace.Name,
-				Table:    ins.Table.Name.String(),
-			},
-		}
-	}
+// KeyspaceName specifies the Keyspace that this primitive routes to.
+func (ins *Insert) KeyspaceName() string {
+	return ins.Keyspace.Name
+}
 
-	return []*KeyspaceTableName{
-		&KeyspaceTableName{
-			Keyspace: ins.Keyspace.Name,
-		},
+// TableName specifies the table that this primitive routes to.
+func (ins *Insert) TableName() string {
+	if ins.Table != nil {
+		return ins.Table.Name.String()
 	}
+	return ""
 }
 
 // Execute performs a non-streaming exec.

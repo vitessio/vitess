@@ -121,9 +121,14 @@ func (oa *OrderedAggregate) RouteType() string {
 	return oa.Input.RouteType()
 }
 
-// KeyspaceTableNames specifies the table that this primitive routes to
-func (oa *OrderedAggregate) KeyspaceTableNames() []*KeyspaceTableName {
-	return oa.Input.KeyspaceTableNames()
+// KeyspaceName specifies the Keyspace that this primitive routes to.
+func (oa *OrderedAggregate) KeyspaceName() string {
+	return oa.Input.KeyspaceName()
+}
+
+// TableName specifies the table that this primitive routes to.
+func (oa *OrderedAggregate) TableName() string {
+	return oa.Input.TableName()
 }
 
 // SetTruncateColumnCount sets the truncate column count.
