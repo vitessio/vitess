@@ -1507,6 +1507,11 @@ var (
 	}, {
 		input:  "select distinctrow a.* from (select (1) from dual union all select 1 from dual) a",
 		output: "select distinct a.* from (select (1) from dual union all select 1 from dual) as a",
+	}, {
+		input: "select a.b as `a$b` from tbl_a where id = 19283",
+	}, {
+		input:  "select a.b as a$b from tbl_a where id = 19283",
+		output: "select a.b as `a$b` from tbl_a where id = 19283",
 	}}
 )
 
