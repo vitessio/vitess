@@ -11,7 +11,8 @@
         "Sharded": true
       },
       "Query": "select u.id as uid from user as u",
-      "FieldQuery": "select u.id as uid from user as u where 1 != 1"
+      "FieldQuery": "select u.id as uid from user as u where 1 != 1",
+      "Table": "user"
     },
     "Right": {
       "Opcode": "SelectScatter",
@@ -20,7 +21,8 @@
         "Sharded": true
       },
       "Query": "select e.col, e.id as eid from user_extra as e having eid = :uid",
-      "FieldQuery": "select e.col, e.id as eid from user_extra as e where 1 != 1"
+      "FieldQuery": "select e.col, e.id as eid from user_extra as e where 1 != 1",
+      "Table": "user_extra"
     },
     "Cols": [
       1,
@@ -46,7 +48,8 @@
         "Sharded": true
       },
       "Query": "select u.id as uid from user as u",
-      "FieldQuery": "select u.id as uid from user as u where 1 != 1"
+      "FieldQuery": "select u.id as uid from user as u where 1 != 1",
+      "Table": "user"
     },
     "Right": {
       "Opcode": "SelectScatter",
@@ -55,7 +58,8 @@
         "Sharded": true
       },
       "Query": "select e.col, e.id as eid from user_extra as e having eid = :uid1 and e.col = :uid",
-      "FieldQuery": "select e.col, e.id as eid from user_extra as e where 1 != 1"
+      "FieldQuery": "select e.col, e.id as eid from user_extra as e where 1 != 1",
+      "Table": "user_extra"
     },
     "Cols": [
       1,
@@ -83,7 +87,8 @@
           "Sharded": true
         },
         "Query": "select u1.id, u1.col from user as u1",
-        "FieldQuery": "select u1.id, u1.col from user as u1 where 1 != 1"
+        "FieldQuery": "select u1.id, u1.col from user as u1 where 1 != 1",
+        "Table": "user"
       },
       "Right": {
         "Opcode": "SelectScatter",
@@ -92,7 +97,8 @@
           "Sharded": true
         },
         "Query": "select 1 from user as u2",
-        "FieldQuery": "select 1 from user as u2 where 1 != 1"
+        "FieldQuery": "select 1 from user as u2 where 1 != 1",
+        "Table": "user"
       },
       "Cols": [
         -1,
@@ -106,7 +112,8 @@
         "Sharded": true
       },
       "Query": "select 1 from user as u3 where u3.col = :u1_col",
-      "FieldQuery": "select 1 from user as u3 where 1 != 1"
+      "FieldQuery": "select 1 from user as u3 where 1 != 1",
+      "Table": "user"
     },
     "Cols": [
       -1
@@ -132,7 +139,8 @@
           "Sharded": true
         },
         "Query": "select u1.id from user as u1",
-        "FieldQuery": "select u1.id from user as u1 where 1 != 1"
+        "FieldQuery": "select u1.id from user as u1 where 1 != 1",
+        "Table": "user"
       },
       "Right": {
         "Opcode": "SelectScatter",
@@ -141,7 +149,8 @@
           "Sharded": true
         },
         "Query": "select u2.col from user as u2",
-        "FieldQuery": "select u2.col from user as u2 where 1 != 1"
+        "FieldQuery": "select u2.col from user as u2 where 1 != 1",
+        "Table": "user"
       },
       "Cols": [
         -1,
@@ -155,7 +164,8 @@
         "Sharded": true
       },
       "Query": "select 1 from user as u3 where u3.col = :u2_col",
-      "FieldQuery": "select 1 from user as u3 where 1 != 1"
+      "FieldQuery": "select 1 from user as u3 where 1 != 1",
+      "Table": "user"
     },
     "Cols": [
       -1
@@ -181,7 +191,8 @@
           "Sharded": true
         },
         "Query": "select u1.id, u1.col from user as u1",
-        "FieldQuery": "select u1.id, u1.col from user as u1 where 1 != 1"
+        "FieldQuery": "select u1.id, u1.col from user as u1 where 1 != 1",
+        "Table": "user"
       },
       "Right": {
         "Opcode": "SelectScatter",
@@ -190,7 +201,8 @@
           "Sharded": true
         },
         "Query": "select 1 from user as u2 where u2.col = :u1_col",
-        "FieldQuery": "select 1 from user as u2 where 1 != 1"
+        "FieldQuery": "select 1 from user as u2 where 1 != 1",
+        "Table": "user"
       },
       "Cols": [
         -1,
@@ -207,7 +219,8 @@
         "Sharded": true
       },
       "Query": "select 1 from user as u3 where u3.col = :u1_col",
-      "FieldQuery": "select 1 from user as u3 where 1 != 1"
+      "FieldQuery": "select 1 from user as u3 where 1 != 1",
+      "Table": "user"
     },
     "Cols": [
       -1
@@ -238,7 +251,8 @@
             "Sharded": true
           },
           "Query": "select u1.id, u1.col from user as u1",
-          "FieldQuery": "select u1.id, u1.col from user as u1 where 1 != 1"
+          "FieldQuery": "select u1.id, u1.col from user as u1 where 1 != 1",
+          "Table": "user"
         },
         "Right": {
           "Opcode": "SelectScatter",
@@ -247,7 +261,8 @@
             "Sharded": true
           },
           "Query": "select 1 from user as u2",
-          "FieldQuery": "select 1 from user as u2 where 1 != 1"
+          "FieldQuery": "select 1 from user as u2 where 1 != 1",
+          "Table": "user"
         },
         "Cols": [
           -1,
@@ -263,7 +278,10 @@
         "Query": "select 1 from user as u3 where u3.id = :u1_col",
         "FieldQuery": "select 1 from user as u3 where 1 != 1",
         "Vindex": "user_index",
-        "Values": [":u1_col"]
+        "Values": [
+          ":u1_col"
+        ],
+        "Table": "user"
       },
       "Cols": [
         -1,
@@ -280,7 +298,8 @@
         "Sharded": true
       },
       "Query": "select 1 from user as u4 where u4.col = :u1_col",
-      "FieldQuery": "select 1 from user as u4 where 1 != 1"
+      "FieldQuery": "select 1 from user as u4 where 1 != 1",
+      "Table": "user"
     },
     "Cols": [
       -1
@@ -304,7 +323,8 @@
         "Sharded": true
       },
       "Query": "select u1.id, u1.col from user as u1",
-      "FieldQuery": "select u1.id, u1.col from user as u1 where 1 != 1"
+      "FieldQuery": "select u1.id, u1.col from user as u1 where 1 != 1",
+      "Table": "user"
     },
     "Right": {
       "Opcode": "Join",
@@ -317,7 +337,10 @@
         "Query": "select 1 from user as u2 where u2.id = :u1_col",
         "FieldQuery": "select 1 from user as u2 where 1 != 1",
         "Vindex": "user_index",
-        "Values": [":u1_col"]
+        "Values": [
+          ":u1_col"
+        ],
+        "Table": "user"
       },
       "Right": {
         "Opcode": "SelectEqualUnique",
@@ -328,7 +351,10 @@
         "Query": "select 1 from user as u3 where u3.id = :u1_col",
         "FieldQuery": "select 1 from user as u3 where 1 != 1",
         "Vindex": "user_index",
-        "Values": [":u1_col"]
+        "Values": [
+          ":u1_col"
+        ],
+        "Table": "user"
       }
     },
     "Cols": [
@@ -353,7 +379,8 @@
         "Sharded": true
       },
       "Query": "select `weird``name`.a, `weird``name`.`a``b*c` from `weird``name`",
-      "FieldQuery": "select `weird``name`.a, `weird``name`.`a``b*c` from `weird``name` where 1 != 1"
+      "FieldQuery": "select `weird``name`.a, `weird``name`.`a``b*c` from `weird``name` where 1 != 1",
+      "Table": "weird`name"
     },
     "Right": {
       "Opcode": "SelectUnsharded",
@@ -362,7 +389,8 @@
         "Sharded": false
       },
       "Query": "select unsharded.b from unsharded where unsharded.id = :weird_name_a_b_c",
-      "FieldQuery": "select unsharded.b from unsharded where 1 != 1"
+      "FieldQuery": "select unsharded.b from unsharded where 1 != 1",
+      "Table": "unsharded"
     },
     "Cols": [
       -1,
@@ -387,7 +415,8 @@
         "Sharded": true
       },
       "Query": "select `weird``name`.`a``b*c` from `weird``name`",
-      "FieldQuery": "select `weird``name`.`a``b*c` from `weird``name` where 1 != 1"
+      "FieldQuery": "select `weird``name`.`a``b*c` from `weird``name` where 1 != 1",
+      "Table": "weird`name"
     },
     "Right": {
       "Opcode": "SelectUnsharded",
@@ -396,7 +425,8 @@
         "Sharded": false
       },
       "Query": "select unsharded.b from unsharded where unsharded.id = :weird_name_a_b_c",
-      "FieldQuery": "select unsharded.b from unsharded where 1 != 1"
+      "FieldQuery": "select unsharded.b from unsharded where 1 != 1",
+      "Table": "unsharded"
     },
     "Cols": [
       1
@@ -424,7 +454,8 @@
           "Sharded": true
         },
         "Query": "select u.id, u.col from user as u",
-        "FieldQuery": "select u.id, u.col from user as u where 1 != 1"
+        "FieldQuery": "select u.id, u.col from user as u where 1 != 1",
+        "Table": "user"
       },
       "Right": {
         "Opcode": "SelectScatter",
@@ -433,7 +464,8 @@
           "Sharded": true
         },
         "Query": "select e.id from user_extra as e where e.id = :u_col",
-        "FieldQuery": "select e.id from user_extra as e where 1 != 1"
+        "FieldQuery": "select e.id from user_extra as e where 1 != 1",
+        "Table": "user_extra"
       },
       "Cols": [
         -1,
@@ -467,7 +499,8 @@
             "Sharded": true
           },
           "Query": "select u.id, u.col from user as u",
-          "FieldQuery": "select u.id, u.col from user as u where 1 != 1"
+          "FieldQuery": "select u.id, u.col from user as u where 1 != 1",
+          "Table": "user"
         },
         "Right": {
           "Opcode": "SelectScatter",
@@ -476,7 +509,8 @@
             "Sharded": true
           },
           "Query": "select e.id from user_extra as e where e.id = :u_col",
-          "FieldQuery": "select e.id from user_extra as e where 1 != 1"
+          "FieldQuery": "select e.id from user_extra as e where 1 != 1",
+          "Table": "user_extra"
         },
         "Cols": [
           -1,
@@ -498,7 +532,8 @@
       "Vindex": "user_index",
       "Values": [
         "::__sq1"
-      ]
+      ],
+      "Table": "user"
     }
   }
 }
@@ -522,7 +557,8 @@
           "Sharded": true
         },
         "Query": "select col from user",
-        "FieldQuery": "select col from user where 1 != 1"
+        "FieldQuery": "select col from user where 1 != 1",
+        "Table": "user"
       },
       "Underlying": {
         "Opcode": "Join",
@@ -533,7 +569,8 @@
             "Sharded": true
           },
           "Query": "select u.id, :__sq1, u.col from user as u",
-          "FieldQuery": "select u.id, :__sq1, u.col from user as u where 1 != 1"
+          "FieldQuery": "select u.id, :__sq1, u.col from user as u where 1 != 1",
+          "Table": "user"
         },
         "Right": {
           "Opcode": "SelectScatter",
@@ -542,7 +579,8 @@
             "Sharded": true
           },
           "Query": "select e.id from user_extra as e where e.id = :u_col",
-          "FieldQuery": "select e.id from user_extra as e where 1 != 1"
+          "FieldQuery": "select e.id from user_extra as e where 1 != 1",
+          "Table": "user_extra"
         },
         "Cols": [
           -1,

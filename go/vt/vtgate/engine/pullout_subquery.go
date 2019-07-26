@@ -43,6 +43,16 @@ func (ps *PulloutSubquery) RouteType() string {
 	return ps.Opcode.String()
 }
 
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (ps *PulloutSubquery) GetKeyspaceName() string {
+	return ps.Underlying.GetKeyspaceName()
+}
+
+// GetTableName specifies the table that this primitive routes to.
+func (ps *PulloutSubquery) GetTableName() string {
+	return ps.Underlying.GetTableName()
+}
+
 // Execute satisfies the Primitive interface.
 func (ps *PulloutSubquery) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	combinedVars, err := ps.execSubquery(vcursor, bindVars)
