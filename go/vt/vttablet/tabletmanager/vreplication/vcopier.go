@@ -173,7 +173,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 	initialPlan, ok := plan.TargetTables[tableName]
 	if !ok {
-		return fmt.Errorf("plan not found for table: %s, curret plans are: %#v", tableName, plan.TargetTables)
+		return fmt.Errorf("plan not found for table: %s, current plans are: %#v", tableName, plan.TargetTables)
 	}
 
 	vsClient, err := tabletconn.GetDialer()(vc.vr.sourceTablet, grpcclient.FailFast(false))
