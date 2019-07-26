@@ -149,21 +149,17 @@ func (upd *Update) RouteType() string {
 	return updName[upd.Opcode]
 }
 
-// KeyspaceTableNames specifies the table that this primitive routes to
-func (upd *Update) KeyspaceTableNames() []*KeyspaceTableName {
+// KeyspaceName specifies the Keyspace that this primitive routes to.
+func (upd *Update) KeyspaceName() string {
+	return upd.Keyspace.Name
+}
+
+// TableName specifies the table that this primitive routes to.
+func (upd *Update) TableName() string {
 	if upd.Table != nil {
-		return []*KeyspaceTableName{
-			&KeyspaceTableName{
-				Keyspace: upd.Keyspace.Name,
-				Table:    upd.Table.Name.String(),
-			},
-		}
+		return upd.Table.Name.String()
 	}
-	return []*KeyspaceTableName{
-		&KeyspaceTableName{
-			Keyspace: upd.Keyspace.Name,
-		},
-	}
+	return ""
 }
 
 // Execute performs a non-streaming exec.

@@ -126,17 +126,12 @@ func (p *Plan) Size() int {
 	return 1
 }
 
-// KeyspaceTableName
-type KeyspaceTableName struct {
-	Keyspace string
-	Table    string
-}
-
 // Primitive is the interface that needs to be satisfied by
 // all primitives of a plan.
 type Primitive interface {
 	RouteType() string
-	KeyspaceTableNames() []*KeyspaceTableName
+	KeyspaceName() string
+	TableName() string
 	Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
 	StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error
 	GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)

@@ -36,9 +36,14 @@ func (sq *Subquery) RouteType() string {
 	return sq.Subquery.RouteType()
 }
 
-// KeyspaceTableNames specifies the table that this primitive routes to
-func (ps *Subquery) KeyspaceTableNames() []*KeyspaceTableName {
-	return ps.Subquery.KeyspaceTableNames()
+// KeyspaceName specifies the Keyspace that this primitive routes to.
+func (sq *Subquery) KeyspaceName() string {
+	return sq.Subquery.KeyspaceName()
+}
+
+// TableName specifies the table that this primitive routes to.
+func (sq *Subquery) TableName() string {
+	return sq.Subquery.TableName()
 }
 
 // Execute performs a non-streaming exec.

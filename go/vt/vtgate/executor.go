@@ -60,7 +60,7 @@ var (
 	defaultTabletType topodatapb.TabletType
 
 	queriesProcessed = stats.NewCountersWithMultiLabels("QueriesProcessed", "Queries processed at vtgate by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
-	queriesRouted    = stats.NewCountersWithSingleLabel("QueriesRouted", "Queries routed from vtgate to vttablet by plan type", "Plan")
+	queriesRouted    = stats.NewCountersWithMultiLabels("QueriesRouted", "Queries routed from vtgate to vttablet by plan type", []string{"Plan", "Keyspace", "Table"})
 )
 
 func init() {
@@ -273,7 +273,7 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 		logStats.BindVariables = bindVars
 		result, err := e.destinationExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
 		logStats.ExecuteTime = time.Since(execStart)
-		queriesRouted.Add("ShardDirect", int64(logStats.ShardQueries))
+		queriesRouted.Add([]string{"ShardDirect", "", ""}, int64(logStats.ShardQueries))
 		return result, err
 	}
 
@@ -300,16 +300,8 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 
 	logStats.ExecuteTime = time.Since(execStart)
 
-	// TODO (@rafael): For now only report in the first ks/table in the primitive.
-	// Update this code to report all keyspaces/tables.
-	var tableName string
-	if len(plan.Instructions.KeyspaceTableNames()) > 0 {
-		destKeyspace = plan.Instructions.KeyspaceTableNames()[0].Keyspace
-		tableName = plan.Instructions.KeyspaceTableNames()[0].Table
-	}
-
-	queriesProcessed.Add([]string{plan.Instructions.RouteType(), destKeyspace, tableName}, 1)
-	queriesRouted.Add(plan.Instructions.RouteType(), int64(logStats.ShardQueries))
+	queriesProcessed.Add([]string{plan.Instructions.RouteType(), plan.Instructions.KeyspaceName(), plan.Instructions.TableName()}, 1)
+	queriesRouted.Add([]string{plan.Instructions.RouteType(), plan.Instructions.KeyspaceName(), plan.Instructions.TableName()}, int64(logStats.ShardQueries))
 
 	var errCount uint64
 	if err != nil {
@@ -372,7 +364,7 @@ func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql 
 	logStats.ExecuteTime = time.Since(execStart)
 
 	queriesProcessed.Add([]string{"DDL", "", ""}, 1)
-	queriesRouted.Add("DDL", int64(logStats.ShardQueries))
+	queriesRouted.Add([]string{"DDL", "", ""}, int64(logStats.ShardQueries))
 
 	return result, err
 }
@@ -431,7 +423,8 @@ func (e *Executor) handleCommit(ctx context.Context, safeSession *SafeSession, s
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
 	queriesProcessed.Add([]string{"Commit", "", ""}, 1)
-	queriesRouted.Add("Commit", int64(logStats.ShardQueries))
+	queriesRouted.Add([]string{"Commit", "", ""}, int64(logStats.ShardQueries))
+
 	err := e.txConn.Commit(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
 	return &sqltypes.Result{}, err
@@ -442,7 +435,7 @@ func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession,
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
 	queriesProcessed.Add([]string{"Rollback", "", ""}, 1)
-	queriesRouted.Add("Rollback", int64(logStats.ShardQueries))
+	queriesRouted.Add([]string{"Rollback", "", ""}, int64(logStats.ShardQueries))
 	err := e.txConn.Rollback(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
 	return &sqltypes.Result{}, err
@@ -1044,7 +1037,7 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 	result, err := e.destinationExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
 
 	queriesProcessed.Add([]string{"Other", "", ""}, 1)
-	queriesRouted.Add("Other", int64(logStats.ShardQueries))
+	queriesRouted.Add([]string{"Other", "", ""}, int64(logStats.ShardQueries))
 
 	logStats.ExecuteTime = time.Since(execStart)
 	return result, err

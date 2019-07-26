@@ -206,14 +206,14 @@ func (route *Route) RouteType() string {
 	return routeName[route.Opcode]
 }
 
-// KeyspaceTableNames specifies the table that this primitive routes to
-func (route *Route) KeyspaceTableNames() []*KeyspaceTableName {
-	return []*KeyspaceTableName{
-		&KeyspaceTableName{
-			Keyspace: route.Keyspace.Name,
-			Table:    route.Table,
-		},
-	}
+// KeyspaceName specifies the Keyspace that this primitive routes to.
+func (route *Route) KeyspaceName() string {
+	return route.Keyspace.Name
+}
+
+// TableName specifies the table that this primitive routes to.
+func (route *Route) TableName() string {
+	return route.Table
 }
 
 // SetTruncateColumnCount sets the truncate column count.
