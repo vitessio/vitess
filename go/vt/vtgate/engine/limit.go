@@ -57,14 +57,14 @@ func (l *Limit) RouteType() string {
 	return l.Input.RouteType()
 }
 
-// KeyspaceName specifies the Keyspace that this primitive routes to.
-func (l *Limit) KeyspaceName() string {
-	return l.Input.KeyspaceName()
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (l *Limit) GetKeyspaceName() string {
+	return l.Input.GetKeyspaceName()
 }
 
-// TableName specifies the table that this primitive routes to.
-func (l *Limit) TableName() string {
-	return l.Input.TableName()
+// GetTableName specifies the table that this primitive routes to.
+func (l *Limit) GetTableName() string {
+	return l.Input.GetTableName()
 }
 
 // Execute satisfies the Primtive interface.

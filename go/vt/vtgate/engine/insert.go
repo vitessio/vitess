@@ -195,13 +195,13 @@ func (ins *Insert) RouteType() string {
 	return insName[ins.Opcode]
 }
 
-// KeyspaceName specifies the Keyspace that this primitive routes to.
-func (ins *Insert) KeyspaceName() string {
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (ins *Insert) GetKeyspaceName() string {
 	return ins.Keyspace.Name
 }
 
-// TableName specifies the table that this primitive routes to.
-func (ins *Insert) TableName() string {
+// GetTableName specifies the table that this primitive routes to.
+func (ins *Insert) GetTableName() string {
 	if ins.Table != nil {
 		return ins.Table.Name.String()
 	}

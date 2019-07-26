@@ -43,14 +43,14 @@ func (ps *PulloutSubquery) RouteType() string {
 	return ps.Opcode.String()
 }
 
-// KeyspaceName specifies the Keyspace that this primitive routes to.
-func (ps *PulloutSubquery) KeyspaceName() string {
-	return ps.Underlying.KeyspaceName()
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (ps *PulloutSubquery) GetKeyspaceName() string {
+	return ps.Underlying.GetKeyspaceName()
 }
 
-// TableName specifies the table that this primitive routes to.
-func (ps *PulloutSubquery) TableName() string {
-	return ps.Underlying.TableName()
+// GetTableName specifies the table that this primitive routes to.
+func (ps *PulloutSubquery) GetTableName() string {
+	return ps.Underlying.GetTableName()
 }
 
 // Execute satisfies the Primitive interface.

@@ -84,13 +84,13 @@ func (vf *VindexFunc) RouteType() string {
 	return vindexOpcodeName[vf.Opcode]
 }
 
-// KeyspaceName specifies the Keyspace that this primitive routes to.
-func (vf *VindexFunc) KeyspaceName() string {
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (vf *VindexFunc) GetKeyspaceName() string {
 	return ""
 }
 
-// TableName specifies the table that this primitive routes to.
-func (vf *VindexFunc) TableName() string {
+// GetTableName specifies the table that this primitive routes to.
+func (vf *VindexFunc) GetTableName() string {
 	return ""
 }
 
