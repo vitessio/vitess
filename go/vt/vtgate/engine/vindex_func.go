@@ -84,6 +84,16 @@ func (vf *VindexFunc) RouteType() string {
 	return vindexOpcodeName[vf.Opcode]
 }
 
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (vf *VindexFunc) GetKeyspaceName() string {
+	return ""
+}
+
+// GetTableName specifies the table that this primitive routes to.
+func (vf *VindexFunc) GetTableName() string {
+	return ""
+}
+
 // Execute performs a non-streaming exec.
 func (vf *VindexFunc) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return vf.mapVindex(vcursor, bindVars)
