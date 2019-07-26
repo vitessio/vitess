@@ -59,8 +59,12 @@ var (
 	errNoKeyspace     = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "no keyspace in database name specified. Supported database name format (items in <> are optional): keyspace<:shard><@type> or keyspace<[range]><@type>")
 	defaultTabletType topodatapb.TabletType
 
-	queriesProcessed = stats.NewCountersWithMultiLabels("QueriesProcessed", "Queries processed at vtgate by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
-	queriesRouted    = stats.NewCountersWithMultiLabels("QueriesRouted", "Queries routed from vtgate to vttablet by plan type", []string{"Plan", "Keyspace", "Table"})
+	// TODO: @rafael - These two counters should be deprecated in favor of the ByTable ones. They are kept for now for backwards compatibility.
+	queriesProcessed = stats.NewCountersWithSingleLabel("QueriesProcessed", "Queries processed at vtgate by plan type", "Plan")
+	queriesRouted    = stats.NewCountersWithSingleLabel("QueriesRouted", "Queries routed from vtgate to vttablet by plan type", "Plan")
+
+	queriesProcessedByTable = stats.NewCountersWithMultiLabels("QueriesProcessedByTable", "Queries processed at vtgate by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
+	queriesRoutedByTable    = stats.NewCountersWithMultiLabels("QueriesRoutedByTable", "Queries routed from vtgate to vttablet by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
 )
 
 func init() {
@@ -241,8 +245,6 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 		// TODO(sougou): change this flow to go through V3 functions
 		// which will allow us to benefit from the autocommitable flag.
 
-		queriesProcessed.Add([]string{"ShardDirect", "", ""}, 1)
-
 		if destKeyspace == "" {
 			return nil, errNoKeyspace
 		}
@@ -273,7 +275,7 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 		logStats.BindVariables = bindVars
 		result, err := e.destinationExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
 		logStats.ExecuteTime = time.Since(execStart)
-		queriesRouted.Add([]string{"ShardDirect", "", ""}, int64(logStats.ShardQueries))
+		e.updateQueryCounts("ShardDirect", "", "", int64(logStats.ShardQueries))
 		return result, err
 	}
 
@@ -300,8 +302,7 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 
 	logStats.ExecuteTime = time.Since(execStart)
 
-	queriesProcessed.Add([]string{plan.Instructions.RouteType(), plan.Instructions.KeyspaceName(), plan.Instructions.TableName()}, 1)
-	queriesRouted.Add([]string{plan.Instructions.RouteType(), plan.Instructions.KeyspaceName(), plan.Instructions.TableName()}, int64(logStats.ShardQueries))
+	e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
 
 	var errCount uint64
 	if err != nil {
@@ -363,8 +364,7 @@ func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql 
 	result, err := e.destinationExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
 	logStats.ExecuteTime = time.Since(execStart)
 
-	queriesProcessed.Add([]string{"DDL", "", ""}, 1)
-	queriesRouted.Add([]string{"DDL", "", ""}, int64(logStats.ShardQueries))
+	e.updateQueryCounts("DDL", "", "", int64(logStats.ShardQueries))
 
 	return result, err
 }
@@ -414,7 +414,8 @@ func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, sq
 	err := e.txConn.Begin(ctx, safeSession)
 	logStats.ExecuteTime = time.Since(execStart)
 
-	queriesProcessed.Add([]string{"Begin", "", ""}, 1)
+	e.updateQueryCounts("Begin", "", "", 0)
+
 	return &sqltypes.Result{}, err
 }
 
@@ -422,8 +423,7 @@ func (e *Executor) handleCommit(ctx context.Context, safeSession *SafeSession, s
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
-	queriesProcessed.Add([]string{"Commit", "", ""}, 1)
-	queriesRouted.Add([]string{"Commit", "", ""}, int64(logStats.ShardQueries))
+	e.updateQueryCounts("Commit", "", "", int64(logStats.ShardQueries))
 
 	err := e.txConn.Commit(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
@@ -434,8 +434,7 @@ func (e *Executor) handleRollback(ctx context.Context, safeSession *SafeSession,
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 	logStats.ShardQueries = uint32(len(safeSession.ShardSessions))
-	queriesProcessed.Add([]string{"Rollback", "", ""}, 1)
-	queriesRouted.Add([]string{"Rollback", "", ""}, int64(logStats.ShardQueries))
+	e.updateQueryCounts("Rollback", "", "", int64(logStats.ShardQueries))
 	err := e.txConn.Rollback(ctx, safeSession)
 	logStats.CommitTime = time.Since(execStart)
 	return &sqltypes.Result{}, err
@@ -1036,8 +1035,7 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 	execStart := time.Now()
 	result, err := e.destinationExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
 
-	queriesProcessed.Add([]string{"Other", "", ""}, 1)
-	queriesRouted.Add([]string{"Other", "", ""}, int64(logStats.ShardQueries))
+	e.updateQueryCounts("Other", "", "", int64(logStats.ShardQueries))
 
 	logStats.ExecuteTime = time.Since(execStart)
 	return result, err
@@ -1374,6 +1372,14 @@ func (e *Executor) ServeHTTP(response http.ResponseWriter, request *http.Request
 // Plans returns the LRU plan cache
 func (e *Executor) Plans() *cache.LRUCache {
 	return e.plans
+}
+
+func (e *Executor) updateQueryCounts(planType, keyspace, tableName string, shardQueries int64) {
+	queriesProcessed.Add(planType, 1)
+	queriesRouted.Add(planType, shardQueries)
+	queriesProcessedByTable.Add([]string{planType, keyspace, tableName}, 1)
+	queriesRoutedByTable.Add([]string{planType, keyspace, tableName}, shardQueries)
+	return
 }
 
 // VSchemaStats returns the loaded vschema stats.

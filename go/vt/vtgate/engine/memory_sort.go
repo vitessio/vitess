@@ -63,14 +63,14 @@ func (ms *MemorySort) RouteType() string {
 	return ms.Input.RouteType()
 }
 
-// KeyspaceName specifies the Keyspace that this primitive routes to.
-func (ms *MemorySort) KeyspaceName() string {
-	return ms.Input.KeyspaceName()
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (ms *MemorySort) GetKeyspaceName() string {
+	return ms.Input.GetKeyspaceName()
 }
 
-// TableName specifies the table that this primitive routes to.
-func (ms *MemorySort) TableName() string {
-	return ms.Input.TableName()
+// GetTableName specifies the table that this primitive routes to.
+func (ms *MemorySort) GetTableName() string {
+	return ms.Input.GetTableName()
 }
 
 // SetTruncateColumnCount sets the truncate column count.

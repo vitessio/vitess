@@ -145,13 +145,13 @@ func (del *Delete) RouteType() string {
 	return delName[del.Opcode]
 }
 
-// KeyspaceName specifies the Keyspace that this primitive routes to.
-func (del *Delete) KeyspaceName() string {
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (del *Delete) GetKeyspaceName() string {
 	return del.Keyspace.Name
 }
 
-// TableName specifies the table that this primitive routes to.
-func (del *Delete) TableName() string {
+// GetTableName specifies the table that this primitive routes to.
+func (del *Delete) GetTableName() string {
 	if del.Table != nil {
 		return del.Table.Name.String()
 	}

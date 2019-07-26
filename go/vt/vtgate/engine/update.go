@@ -149,13 +149,13 @@ func (upd *Update) RouteType() string {
 	return updName[upd.Opcode]
 }
 
-// KeyspaceName specifies the Keyspace that this primitive routes to.
-func (upd *Update) KeyspaceName() string {
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (upd *Update) GetKeyspaceName() string {
 	return upd.Keyspace.Name
 }
 
-// TableName specifies the table that this primitive routes to.
-func (upd *Update) TableName() string {
+// GetTableName specifies the table that this primitive routes to.
+func (upd *Update) GetTableName() string {
 	if upd.Table != nil {
 		return upd.Table.Name.String()
 	}
