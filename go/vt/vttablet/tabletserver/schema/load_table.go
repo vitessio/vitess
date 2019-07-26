@@ -239,3 +239,11 @@ func getNum(in map[string]string, key string) (int, error) {
 	}
 	return v, nil
 }
+
+func getString(in map[string]string, key string) (string, error) {
+	sv := in[key]
+	if sv == "" {
+		return "", fmt.Errorf("attribute %s not specified for message table", key)
+	}
+	return sv, nil
+}
