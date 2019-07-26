@@ -157,6 +157,12 @@ func loadMessageInfo(ta *Table, comment string) error {
 		keyvals[kv[0]] = kv[1]
 	}
 	var err error
+	if ta.MessageInfo.Topic, err = getString(keyvals, "vt_topic"); err != nil {
+		// the topic is an optional value
+		if err.Error() != "attribute vt_topic not specified for message table" {
+			return err
+		}
+	}
 	if ta.MessageInfo.AckWaitDuration, err = getDuration(keyvals, "vt_ack_wait"); err != nil {
 		return err
 	}

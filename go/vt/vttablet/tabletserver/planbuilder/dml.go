@@ -50,6 +50,12 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 	}
 	table, tableErr := plan.setTable(tableName, tables)
 
+	// Updates aren't supported on topics
+	if tableErr == nil && table.IsTopic() {
+		plan.Reason = ReasonTopic
+		return plan, nil
+	}
+
 	// In passthrough dml mode, allow the operation even if the
 	// table is unknown in the schema.
 	if PassthroughDMLs {
@@ -117,6 +123,12 @@ func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan
 		return plan, nil
 	}
 	table, tableErr := plan.setTable(tableName, tables)
+
+	// Deletes aren't supported on topics
+	if tableErr == nil && table.IsTopic() {
+		plan.Reason = ReasonTopic
+		return plan, nil
+	}
 
 	// In passthrough dml mode, allow the operation even if the
 	// table is unknown in the schema.
@@ -200,6 +212,12 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 	table, err := plan.setTable(tableName, tables)
 	if err != nil {
 		return nil, err
+	}
+
+	// Selects aren't supported on topics
+	if table.IsTopic() {
+		plan.Reason = ReasonTopic
+		return plan, nil
 	}
 
 	if sel.Where != nil {
@@ -322,6 +340,12 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 		return plan, nil
 	}
 	table, tableErr := plan.setTable(tableName, tables)
+
+	if tableErr == nil && table.IsTopic() {
+		plan.PlanID = PlanInsertTopic
+		plan.Reason = ReasonTopic
+		return plan, nil
+	}
 
 	switch {
 	case tableErr == nil && table.Type == schema.Message:

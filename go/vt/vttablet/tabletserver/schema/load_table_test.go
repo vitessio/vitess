@@ -200,6 +200,83 @@ func TestLoadTableMessage(t *testing.T) {
 	}
 }
 
+func TestLoadTableMessageTopic(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	for query, result := range getMessageTableQueries() {
+		db.AddQuery(query, result)
+	}
+	table, err := newTestLoadTable("USER_TABLE", "vitess_message,vt_topic=test_topic,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := &Table{
+		Name: sqlparser.NewTableIdent("test_table"),
+		Type: Message,
+		MessageInfo: &MessageInfo{
+			IDPKIndex: 1,
+			Fields: []*querypb.Field{{
+				Name: "id",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "time_scheduled",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "message",
+				Type: sqltypes.VarBinary,
+			}},
+			AckWaitDuration:    30 * time.Second,
+			PurgeAfterDuration: 120 * time.Second,
+			BatchSize:          1,
+			CacheSize:          10,
+			PollInterval:       30 * time.Second,
+			Topic:              "test_topic",
+		},
+	}
+	table.Columns = nil
+	table.Indexes = nil
+	table.PKColumns = nil
+	if !reflect.DeepEqual(table, want) {
+		t.Errorf("Table:\n%+v, want\n%+v", table, want)
+		t.Errorf("Table:\n%+v, want\n%+v", table.MessageInfo, want.MessageInfo)
+	}
+
+	// Missing property
+	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_topic=test_topic,vt_ack_wait=30", db)
+	wanterr := "not specified for message table"
+	if err == nil || !strings.Contains(err.Error(), wanterr) {
+		t.Errorf("newTestLoadTable: %v, want %s", err, wanterr)
+	}
+
+	// id column must be part of primary key.
+	for query, result := range getMessageTableQueries() {
+		db.AddQuery(query, result)
+	}
+	db.AddQuery(
+		"show index from test_table",
+		&sqltypes.Result{
+			Fields:       mysql.ShowIndexFromTableFields,
+			RowsAffected: 1,
+			Rows: [][]sqltypes.Value{
+				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "time_scheduled", false),
+			},
+		})
+	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_topic=test_topic,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
+	wanterr = "id column is not part of the primary key for message table: test_table"
+	if err == nil || err.Error() != wanterr {
+		t.Errorf("newTestLoadTable: %v, want %s", err, wanterr)
+	}
+
+	for query, result := range getTestLoadTableQueries() {
+		db.AddQuery(query, result)
+	}
+	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_topic=test_topic,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
+	wanterr = "missing from message table: test_table"
+	if err == nil || !strings.Contains(err.Error(), wanterr) {
+		t.Errorf("newTestLoadTable: %v, must contain %s", err, wanterr)
+	}
+}
+
 func TestLoadTableWithBitColumn(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
