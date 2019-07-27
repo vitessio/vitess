@@ -52,7 +52,15 @@ func (rp *ReplicatorPlan) buildExecutionPlan(fieldEvent *binlogdatapb.FieldEvent
 	}
 	if prelim.Insert != nil {
 		tplanv := *prelim
-		tplanv.Fields = fieldEvent.Fields
+		// We know that we sent only column names, but they may be backticked.
+		// If so, we have to strip them out to allow them to match the expected
+		// bind var names.
+		tplanv.Fields = make([]*querypb.Field, 0, len(fieldEvent.Fields))
+		for _, fld := range fieldEvent.Fields {
+			trimmed := *fld
+			trimmed.Name = strings.Trim(trimmed.Name, "`")
+			tplanv.Fields = append(tplanv.Fields, &trimmed)
+		}
 		return &tplanv, nil
 	}
 	// select * construct was used. We need to use the field names.
