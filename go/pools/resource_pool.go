@@ -83,7 +83,7 @@ type resourceWrapper struct {
 // If a resource is unused beyond idleTimeout, it's replaced
 // with a new one.
 // An idleTimeout of 0 means that there is no timeout.
-// A non-zero value of prefillParallism causes the pool to be pre-filled.
+// A non-zero value of prefillParallelism causes the pool to be pre-filled.
 // The value specifies how many resources can be opened in parallel.
 func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Duration, prefillParallelism int) *ResourcePool {
 	if capacity <= 0 || maxCap <= 0 || capacity > maxCap {
