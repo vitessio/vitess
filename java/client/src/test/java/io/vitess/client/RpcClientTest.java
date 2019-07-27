@@ -21,6 +21,12 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.ByteString;
 
+import binlogdata.Binlogdata.FieldEvent;
+import binlogdata.Binlogdata.RowEvent;
+import binlogdata.Binlogdata.ShardGtid;
+import binlogdata.Binlogdata.VEvent;
+import binlogdata.Binlogdata.VEventType;
+import binlogdata.Binlogdata.VGtid;
 import io.vitess.client.cursor.Cursor;
 import io.vitess.client.cursor.Row;
 import io.vitess.proto.Query;
@@ -33,6 +39,8 @@ import io.vitess.proto.Topodata.SrvKeyspace;
 import io.vitess.proto.Topodata.SrvKeyspace.KeyspacePartition;
 import io.vitess.proto.Topodata.TabletType;
 import io.vitess.proto.Vtgate.SplitQueryResponse;
+import io.vitess.proto.Vtgate.VStreamRequest;
+import io.vitess.proto.Vtgate.VStreamResponse;
 import io.vitess.proto.Vtrpc.CallerID;
 
 import java.nio.charset.StandardCharsets;
@@ -730,4 +738,51 @@ public abstract class RpcClientTest {
       }
     });
   }
+
+  @Test
+  public void testVStream() throws Exception {
+    VGtid vgtid = VGtid.newBuilder()
+        .addShardGtids(ShardGtid.newBuilder()
+            .setGtid("gtid")
+            .setShard(ECHO_PREFIX + System.currentTimeMillis())
+            .setKeyspace("keyspace: " + System.currentTimeMillis())
+            .build())
+        .build();
+
+    VStreamRequest vstreamRequest = VStreamRequest.newBuilder()
+        .setCallerId(CALLER_ID)
+        .setVgtid(vgtid)
+        .setTabletType(TABLET_TYPE)
+        .build();
+
+    StreamIterator<VStreamResponse> vstream = client.getVStream(ctx, vstreamRequest);
+    VStreamResponse actual = vstream.next();
+    Assert.assertFalse(vstream.hasNext());
+
+    VStreamResponse expected = VStreamResponse.newBuilder()
+        .addEvents(VEvent.newBuilder()
+            .setType(VEventType.forNumber(1))
+            .setTimestamp(1234)
+            .setGtid("echo-gtid-1")
+            .setDdl("echo-ddl-1")
+            .setVgtid(vgtid)
+            .setRowEvent(RowEvent.newBuilder()
+                .setTableName("echo-table-1")
+                .build())
+            .build())
+        .addEvents(VEvent.newBuilder()
+            .setType(VEventType.forNumber(2))
+            .setTimestamp(4321)
+            .setGtid("echo-gtid-2")
+            .setDdl("echo-ddl-2")
+            .setVgtid(vgtid)
+            .setFieldEvent(FieldEvent.newBuilder()
+                .setTableName("echo-table-2")
+                .build())
+            .build())
+        .build();
+
+    Assert.assertEquals(expected, actual);
+  }
+
 }
