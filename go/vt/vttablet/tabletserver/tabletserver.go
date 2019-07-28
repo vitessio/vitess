@@ -1010,7 +1010,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 			if err != nil {
 				return err
 			}
-			if plan.Reason == planbuilder.ReasonTopic {
+			if plan.PlanID == planbuilder.PlanInsertTopic {
 				result, err = tsv.topicExecute(ctx, query, comments, bindVariables, transactionID, options, plan, logStats)
 			} else {
 				result, err = tsv.qreExecute(ctx, query, comments, bindVariables, transactionID, options, plan, logStats)
@@ -1023,12 +1023,6 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 }
 
 func (tsv *TabletServer) topicExecute(ctx context.Context, query string, comments sqlparser.MarginComments, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, plan *TabletPlan, logStats *tabletenv.LogStats) (result *sqltypes.Result, err error) {
-	if plan.PlanID != planbuilder.PlanInsertTopic {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Only inserts allowed on topics")
-	}
-
-	// choose InsertMessage as the new PlanID
-	plan.PlanID = planbuilder.PlanInsertMessage
 	for _, subscriber := range plan.Table.TopicInfo.Subscribers {
 		// replace the topic name with the subscribed message table name
 		newQuery := strings.Replace(query, plan.Table.Name.String(), subscriber.Name.String(), -1)
