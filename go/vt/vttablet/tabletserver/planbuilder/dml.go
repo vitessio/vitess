@@ -52,8 +52,7 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 
 	// Updates aren't supported on topics
 	if tableErr == nil && table.IsTopic() {
-		plan.Reason = ReasonTopic
-		return plan, nil
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "updates not allowed on topics")
 	}
 
 	// In passthrough dml mode, allow the operation even if the
@@ -126,8 +125,7 @@ func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan
 
 	// Deletes aren't supported on topics
 	if tableErr == nil && table.IsTopic() {
-		plan.Reason = ReasonTopic
-		return plan, nil
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "deletes not allowed on topics")
 	}
 
 	// In passthrough dml mode, allow the operation even if the
@@ -216,8 +214,7 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 
 	// Selects aren't supported on topics
 	if table.IsTopic() {
-		plan.Reason = ReasonTopic
-		return plan, nil
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "selects not allowed on topics")
 	}
 
 	if sel.Where != nil {
@@ -341,16 +338,15 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 	}
 	table, tableErr := plan.setTable(tableName, tables)
 
-	if tableErr == nil && table.IsTopic() {
-		plan.PlanID = PlanInsertTopic
-		plan.Reason = ReasonTopic
-		return plan, nil
-	}
-
 	switch {
 	case tableErr == nil && table.Type == schema.Message:
 		// message inserts need to continue being strict, even in passthrough dml mode,
 		// because field defaults are set here
+
+	case tableErr == nil && table.IsTopic():
+		plan.PlanID = PlanInsertTopic
+		plan.Reason = ReasonTopic
+		return plan, nil
 
 	case PassthroughDMLs:
 		// In passthrough dml mode, allow the operation even if the
