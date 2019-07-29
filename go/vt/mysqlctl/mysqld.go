@@ -89,9 +89,7 @@ type Mysqld struct {
 	dbaPool *dbconnpool.ConnectionPool
 	appPool *dbconnpool.ConnectionPool
 
-	version serverVersion
-	flavor  mysqlFlavor
-	c       CapabilitySet
+	capabilities CapabilitySet
 
 	// mutex protects the fields below.
 	mutex         sync.Mutex
@@ -101,7 +99,7 @@ type Mysqld struct {
 
 // NewMysqld creates a Mysqld object based on the provided configuration
 // and connection parameters.
-func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
+func NewMysqld(dbcfgs *dbconfigs.DBConfigs) (*Mysqld, error) {
 	result := &Mysqld{
 		dbcfgs: dbcfgs,
 	}
@@ -114,15 +112,17 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout, *poolDynamicHostnameResolution)
 	result.appPool.Open(dbcfgs.AppWithDB(), appMysqlStats)
 
-	version, _ := result.getVersionString()
-	result.flavor, result.version = result.DetectFlavorVersion(version)
-	result.c = NewCapabilitySet(result)
+	version, _ := getVersionString()
+	f, v, err := parseVersionString(version)
+	if err != nil {
+		return nil, err
+	}
 
-	log.Infof("mysqld is flavor: %s, version: %v", result.flavor, result.version)
-	return result
+	result.capabilities = NewCapabilitySet(f, v)
+	return result, nil
 }
 
-func (mysqld *Mysqld) getVersionString() (string, error) {
+func getVersionString() (string, error) {
 	mysqlRoot, err := vtenv.VtMysqlRoot()
 	if err != nil {
 		return "", err
@@ -138,9 +138,8 @@ func (mysqld *Mysqld) getVersionString() (string, error) {
 	return version, nil
 }
 
-// DetectFlavorVersion takes the output of mysqld --version
-// and parses it into a flavor and version
-func (mysqld *Mysqld) DetectFlavorVersion(version string) (flavor mysqlFlavor, ver serverVersion) {
+// parse the output of mysqld --version into a flavor and version
+func parseVersionString(version string) (flavor mysqlFlavor, ver serverVersion, err error) {
 	if strings.Contains(version, "MySQL") {
 		flavor = flavorMySQL
 	} else if strings.Contains(version, "Percona") {
@@ -148,11 +147,11 @@ func (mysqld *Mysqld) DetectFlavorVersion(version string) (flavor mysqlFlavor, v
 	} else if strings.Contains(version, "MariaDB") {
 		flavor = flavorMariaDB
 	} else {
-		log.Fatalf("unrecognized server flavor from: %s", version)
+		return flavor, ver, fmt.Errorf("unrecognized server flavor from: %s", version)
 	}
 	v := versionRegex.FindStringSubmatch(version)
 	if len(v) != 4 {
-		log.Fatalf("Could not parse server version from: %s", version)
+		return flavor, ver, fmt.Errorf("Could not parse server version from: %s", version)
 	}
 	ver.Major, _ = strconv.Atoi(string(v[1]))
 	ver.Minor, _ = strconv.Atoi(string(v[2]))
@@ -176,7 +175,7 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 		return client.RunMysqlUpgrade(context.TODO())
 	}
 
-	if mysqld.c.HasMySQLUpgradeInServer() {
+	if mysqld.capabilities.HasMySQLUpgradeInServer() {
 		log.Warningf("MySQL version has built-in upgrade, skipping RunMySQLUpgrade")
 		return nil
 	}
@@ -610,7 +609,7 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 	if err != nil {
 		return err
 	}
-	if mysqld.c.HasInitializeInServer() {
+	if mysqld.capabilities.HasInitializeInServer() {
 		log.Infof("Installing data dir with mysqld --initialize-insecure")
 		args := []string{
 			"--defaults-file=" + cnf.path,
@@ -696,7 +695,7 @@ func (mysqld *Mysqld) getMycnfTemplates(root string) []string {
 	// Percona Server == MySQL in this context
 
 	f := flavorMariaDB
-	if mysqld.c.IsMySQLLike() {
+	if mysqld.capabilities.IsMySQLLike() {
 		f = flavorMySQL
 	}
 
@@ -707,7 +706,7 @@ func (mysqld *Mysqld) getMycnfTemplates(root string) []string {
 	}
 
 	// master_{flavor}{major}{minor}.cnf
-	p = path.Join(root, fmt.Sprintf("config/mycnf/master_%s%d%d.cnf", f, mysqld.version.Major, mysqld.version.Minor))
+	p = path.Join(root, fmt.Sprintf("config/mycnf/master_%s%d%d.cnf", f, mysqld.capabilities.version.Major, mysqld.capabilities.version.Minor))
 	_, err = os.Stat(p)
 	if err == nil && !contains(cnfTemplatePaths, p) {
 		cnfTemplatePaths = append(cnfTemplatePaths, p)

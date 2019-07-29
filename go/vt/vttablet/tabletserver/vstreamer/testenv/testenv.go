@@ -104,7 +104,11 @@ func Init() (*Env, error) {
 	}
 
 	te.Dbcfgs = dbconfigs.NewTestDBConfigs(te.cluster.MySQLConnParams(), te.cluster.MySQLAppDebugConnParams(), te.cluster.DbName())
-	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
+	var err error
+	te.Mysqld, err = mysqlctl.NewMysqld(te.Dbcfgs)
+	if err != nil {
+		return nil, err
+	}
 	te.SchemaEngine = schema.NewEngine(checker{}, tabletenv.DefaultQsConfig)
 	te.SchemaEngine.InitDBConfig(te.Dbcfgs)
 
