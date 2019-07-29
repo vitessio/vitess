@@ -1,3 +1,5 @@
+# This file is auto-included when MariaDB 10.1 is detected.
+
 innodb_support_xa = 0
 
 # Semi-sync replication is required for automated unplanned failover
