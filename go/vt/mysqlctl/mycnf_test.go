@@ -112,7 +112,7 @@ func NoTestMycnfHook(t *testing.T) {
 	}
 	servenv.OnClose(mysqld.Close)
 
-	err := mysqld.InitConfig(cnf)
+	err = mysqld.InitConfig(cnf)
 	if err != nil {
 		t.Errorf("err: %v", err)
 	}
