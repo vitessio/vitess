@@ -51,7 +51,7 @@ var zeroBytes = []byte("0")
 // addition, if one of the input types was Decimal, then
 // a Decimal is built. Otherwise, the final type of the
 // result is preserved.
-func NullsafeAdd(v1, v2 Value, resultType querypb.Type) (Value, error) {
+func NullsafeAdd(v1, v2 Value, resultType querypb.Type) Value {
 	if v1.IsNull() {
 		v1 = MakeTrusted(resultType, zeroBytes)
 	}
@@ -61,17 +61,18 @@ func NullsafeAdd(v1, v2 Value, resultType querypb.Type) (Value, error) {
 
 	lv1, err := newNumeric(v1)
 	if err != nil {
-		return NULL, err
+		return NULL //, err
 	}
 	lv2, err := newNumeric(v2)
 	if err != nil {
-		return NULL, err
+		return NULL //, err
 	}
 	lresult, err := addNumeric(lv1, lv2)
 	if err != nil {
-		return NULL, err
+		return NULL //, err
 	}
-	return castFromNumeric(lresult, resultType)
+	//fmt.Printf("resultType = %v, lresult = %v\n", lresult.typ, lresult)
+	return castFromNumeric(lresult, lresult.typ)
 }
 
 // NullsafeCompare returns 0 if v1==v2, -1 if v1<v2, and 1 if v1>v2.
@@ -372,9 +373,9 @@ overflow:
 }
 
 func uintPlusInt(v1 uint64, v2 int64) (numeric, error) {
-	if v2 < 0 {
-		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot add a negative number to an unsigned integer: %d, %d", v1, v2)
-	}
+	//if v2 < 0 {
+	//		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot add a negative number to an unsigned integer: %d, %d", v1, v2)
+	//	}
 	return uintPlusUint(v1, uint64(v2)), nil
 }
 
@@ -382,6 +383,7 @@ func uintPlusUint(v1, v2 uint64) numeric {
 	result := v1 + v2
 	if result < v2 {
 		return numeric{typ: Float64, fval: float64(v1) + float64(v2)}
+
 	}
 	return numeric{typ: Uint64, uval: result}
 }
@@ -396,37 +398,43 @@ func floatPlusAny(v1 float64, v2 numeric) numeric {
 	return numeric{typ: Float64, fval: v1 + v2.fval}
 }
 
-func castFromNumeric(v numeric, resultType querypb.Type) (Value, error) {
+func castFromNumeric(v numeric, resultType querypb.Type) Value {
 	switch {
 	case IsSigned(resultType):
 		switch v.typ {
 		case Int64:
-			return MakeTrusted(resultType, strconv.AppendInt(nil, v.ival, 10)), nil
-		case Uint64, Float64:
-			return NULL, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion: %v to %v", v.typ, resultType)
+			return MakeTrusted(resultType, strconv.AppendInt(nil, v.ival, 10)) //, nil
+		case Uint64:
+			return MakeTrusted(resultType, strconv.AppendInt(nil, int64(v.uval), 10))
+		case Float64:
+			return MakeTrusted(resultType, strconv.AppendInt(nil, int64(v.fval), 10))
+			//, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion: %v to %v", v.typ, resultType)
 		}
 	case IsUnsigned(resultType):
 		switch v.typ {
 		case Uint64:
-			return MakeTrusted(resultType, strconv.AppendUint(nil, v.uval, 10)), nil
-		case Int64, Float64:
-			return NULL, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion: %v to %v", v.typ, resultType)
+			return MakeTrusted(resultType, strconv.AppendUint(nil, v.uval, 10)) //, nil
+		case Int64:
+			return MakeTrusted(resultType, strconv.AppendUint(nil, uint64(v.ival), 10))
+		case Float64:
+			return MakeTrusted(resultType, strconv.AppendUint(nil, uint64(v.fval), 10))
+			//return NULL //, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion: %v to %v", v.typ, resultType)
 		}
 	case IsFloat(resultType) || resultType == Decimal:
 		switch v.typ {
 		case Int64:
-			return MakeTrusted(resultType, strconv.AppendInt(nil, v.ival, 10)), nil
+			return MakeTrusted(resultType, strconv.AppendInt(nil, v.ival, 10)) //, nil
 		case Uint64:
-			return MakeTrusted(resultType, strconv.AppendUint(nil, v.uval, 10)), nil
+			return MakeTrusted(resultType, strconv.AppendUint(nil, v.uval, 10)) //, nil
 		case Float64:
 			format := byte('g')
 			if resultType == Decimal {
 				format = 'f'
 			}
-			return MakeTrusted(resultType, strconv.AppendFloat(nil, v.fval, format, -1, 64)), nil
+			return MakeTrusted(resultType, strconv.AppendFloat(nil, v.fval, format, -1, 64)) //, nil
 		}
 	}
-	return NULL, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion to non-numeric: %v", resultType)
+	return NULL //, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion to non-numeric: %v", resultType)
 }
 
 func compareNumeric(v1, v2 numeric) int {
