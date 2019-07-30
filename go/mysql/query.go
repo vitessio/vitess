@@ -1118,6 +1118,7 @@ func (c *Conn) writeBinaryRow(fields []*querypb.Field, row []sqltypes.Value) err
 func (c *Conn) writeBinaryRows(result *sqltypes.Result) error {
 	for _, row := range result.Rows {
 		if err := c.writeBinaryRow(result.Fields, row); err != nil {
+			c.recycleWritePacket()
 			return err
 		}
 	}

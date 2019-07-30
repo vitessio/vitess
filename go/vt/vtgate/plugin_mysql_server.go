@@ -233,7 +233,6 @@ func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string, callback func(*
 	}, statement)
 
 	prepare := c.PrepareData[c.StatementID]
-	prepare.ParsedStmt = &statement
 
 	if paramsCount > 0 {
 		prepare.ParamsCount = paramsCount
