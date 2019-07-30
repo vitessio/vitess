@@ -335,7 +335,7 @@ func printJSONDouble(data []byte, toplevel bool, result *bytes.Buffer) {
 }
 
 func printJSONString(data []byte, toplevel bool, result *bytes.Buffer) {
-	size, pos := readVariableInt(data, 0)
+	size, pos := readVariableLength(data, 0)
 
 	// A toplevel JSON string is printed as a JSON-escaped
 	// string inside a string, as the value is parsed as JSON.
@@ -356,7 +356,7 @@ func printJSONString(data []byte, toplevel bool, result *bytes.Buffer) {
 
 func printJSONOpaque(data []byte, toplevel bool, result *bytes.Buffer) error {
 	typ := data[0]
-	size, pos := readVariableInt(data, 1)
+	size, pos := readVariableLength(data, 1)
 
 	// A few types have special encoding.
 	switch typ {
@@ -483,7 +483,10 @@ func readOffsetOrSize(data []byte, pos int, large bool) (int, int) {
 		int(data[pos+1])<<8, pos + 2
 }
 
-func readVariableInt(data []byte, pos int) (int, int) {
+// readVariableLength implements the logic to decode the length
+// of an arbitrarily long string as implemented by the mysql server
+// https://github.com/mysql/mysql-server/blob/5.7/sql/json_binary.cc#L234
+func readVariableLength(data []byte, pos int) (int, int) {
 	var bb byte
 	var res int
 	var idx byte
@@ -491,6 +494,8 @@ func readVariableInt(data []byte, pos int) (int, int) {
 		bb = data[pos]
 		pos++
 		res |= int(bb&0x7f) << (7 * idx)
+		// if the high bit is 1, the integer value of the byte will be negative
+		// high bit of 1 signifies that the next byte is part of the length encoding
 		if int8(bb) >= 0 {
 			break
 		}
