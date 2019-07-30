@@ -486,6 +486,7 @@ func readOffsetOrSize(data []byte, pos int, large bool) (int, int) {
 // readVariableLength implements the logic to decode the length
 // of an arbitrarily long string as implemented by the mysql server
 // https://github.com/mysql/mysql-server/blob/5.7/sql/json_binary.cc#L234
+// https://github.com/mysql/mysql-server/blob/8.0/sql/json_binary.cc#L283
 func readVariableLength(data []byte, pos int) (int, int) {
 	var bb byte
 	var res int
