@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
@@ -181,8 +182,7 @@ func init() {
 func resetTxThrottlerFactories() {
 	healthCheckFactory = discovery.NewDefaultHealthCheck
 	topologyWatcherFactory = func(topoServer *topo.Server, tr discovery.TabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
-		return discovery.NewShardReplicationWatcher(
-			topoServer, tr, cell, keyspace, shard, refreshInterval, topoReadConcurrency)
+		return discovery.NewShardReplicationWatcher(context.Background(), topoServer, tr, cell, keyspace, shard, refreshInterval, topoReadConcurrency)
 	}
 	throttlerFactory = func(name, unit string, threadCount int, maxRate, maxReplicationLag int64) (ThrottlerInterface, error) {
 		return throttler.NewThrottler(name, unit, threadCount, maxRate, maxReplicationLag)
@@ -201,7 +201,7 @@ func newTxThrottler(config *txThrottlerConfig) (*TxThrottler, error) {
 			return nil, err
 		}
 		if len(config.healthCheckCells) == 0 {
-			return nil, fmt.Errorf("Empty healthCheckCells given. %+v", config)
+			return nil, fmt.Errorf("empty healthCheckCells given. %+v", config)
 		}
 	}
 	return &TxThrottler{
@@ -215,7 +215,7 @@ func (t *TxThrottler) Open(keyspace, shard string) error {
 		return nil
 	}
 	if t.state != nil {
-		return fmt.Errorf("Transaction throttler already opened")
+		return fmt.Errorf("transaction throttler already opened")
 	}
 	var err error
 	t.state, err = newTxThrottlerState(t.config, keyspace, shard)

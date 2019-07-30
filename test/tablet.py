@@ -98,7 +98,8 @@ class Tablet(object):
     self.shard = None
     self.index = None
     self.tablet_index = None
-
+    # default to false
+    self.external_mysql = False
     # utility variables
     self.tablet_alias = 'test_%s-%010d' % (self.cell, self.tablet_uid)
     self.zk_tablet_path = (
@@ -229,7 +230,6 @@ class Tablet(object):
 
   def mysql_connection_parameters(self, dbname, user='vt_dba'):
     result = dict(user=user,
-                  unix_socket=self.tablet_dir + '/mysql.sock',
                   db=dbname)
     if user == 'vt_dba' and self.vt_dba_passwd:
       result['passwd'] = self.vt_dba_passwd
@@ -237,6 +237,10 @@ class Tablet(object):
 
   def connect(self, dbname='', user='vt_dba', **params):
     params.update(self.mysql_connection_parameters(dbname, user))
+    if 'port' not in params.keys():
+      params['unix_socket']=self.tablet_dir + '/mysql.sock'
+    else:
+      params['host']='127.0.0.1'
     conn = MySQLdb.Connect(**params)
     return conn, conn.cursor()
 
@@ -257,6 +261,8 @@ class Tablet(object):
     """
     if conn_params is None:
       conn_params = {}
+    if self.external_mysql:
+      conn_params['port']=self.mysql_port
     conn, cursor = self.connect(dbname, user=user, **conn_params)
     if write:
       conn.begin()
@@ -381,13 +387,14 @@ class Tablet(object):
   def init_tablet(self, tablet_type, keyspace, shard,
                   tablet_index=None,
                   start=False, dbname=None, parent=True, wait_for_start=True,
-                  include_mysql_port=True, **kwargs):
+                  include_mysql_port=True, external_mysql=False, **kwargs):
     """Initialize a tablet's record in topology."""
 
     self.tablet_type = tablet_type
     self.keyspace = keyspace
     self.shard = shard
     self.tablet_index = tablet_index
+    self.external_mysql = external_mysql
 
     self.dbname = dbname or ('vt_' + self.keyspace)
 
@@ -487,6 +494,10 @@ class Tablet(object):
       args.extend(
           ['-mysqlctl_socket', os.path.join(self.tablet_dir, 'mysqlctl.sock')])
 
+    if self.external_mysql:
+      args.extend(['-db_host', '127.0.0.1'])
+      args.extend(['-db_port', str(self.mysql_port)])
+      args.append('-disable_active_reparents')
     if full_mycnf_args:
       # this flag is used to specify all the mycnf_ flags, to make
       # sure that code works.

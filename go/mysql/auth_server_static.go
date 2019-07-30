@@ -26,6 +26,7 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
+	"time"
 
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -34,8 +35,9 @@ import (
 )
 
 var (
-	mysqlAuthServerStaticFile   = flag.String("mysql_auth_server_static_file", "", "JSON File to read the users/passwords from.")
-	mysqlAuthServerStaticString = flag.String("mysql_auth_server_static_string", "", "JSON representation of the users/passwords config.")
+	mysqlAuthServerStaticFile           = flag.String("mysql_auth_server_static_file", "", "JSON File to read the users/passwords from.")
+	mysqlAuthServerStaticString         = flag.String("mysql_auth_server_static_string", "", "JSON representation of the users/passwords config.")
+	mysqlAuthServerStaticReloadInterval = flag.Duration("mysql_auth_static_reload_interval", 0, "Ticker to reload credentials")
 )
 
 const (
@@ -153,6 +155,23 @@ func (a *AuthServerStatic) installSignalHandlers() {
 			a.loadConfigFromParams(*mysqlAuthServerStaticFile, "")
 		}
 	}()
+
+	// If duration is set, it will reload configuration every interval
+	if *mysqlAuthServerStaticReloadInterval > 0 {
+		ticker := time.NewTicker(*mysqlAuthServerStaticReloadInterval)
+		go func() {
+			for {
+				select {
+				case <-ticker.C:
+					if *mysqlAuthServerStaticReloadInterval <= 0 {
+						ticker.Stop()
+						return
+					}
+					sigChan <- syscall.SIGHUP
+				}
+			}
+		}()
+	}
 }
 
 func parseConfig(jsonConfig []byte, config *map[string][]*AuthServerStaticEntry) error {

@@ -157,9 +157,17 @@ func (stc *ScatterConn) Execute(
 
 			mu.Lock()
 			defer mu.Unlock()
-			qr.AppendResult(innerqr)
+			// Don't append more rows if row count is exceeded.
+			if len(qr.Rows) <= *maxMemoryRows {
+				qr.AppendResult(innerqr)
+			}
 			return transactionID, nil
-		})
+		},
+	)
+
+	if len(qr.Rows) > *maxMemoryRows {
+		return nil, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "in-memory row count exceeded allowed limit of %d", *maxMemoryRows)
+	}
 
 	return qr, allErrors.AggrError(vterrors.Aggregate)
 }
@@ -215,9 +223,17 @@ func (stc *ScatterConn) ExecuteMultiShard(
 
 			mu.Lock()
 			defer mu.Unlock()
-			qr.AppendResult(innerqr)
+			// Don't append more rows if row count is exceeded.
+			if len(qr.Rows) <= *maxMemoryRows {
+				qr.AppendResult(innerqr)
+			}
 			return transactionID, nil
-		})
+		},
+	)
+
+	if len(qr.Rows) > *maxMemoryRows {
+		return nil, []error{vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "in-memory row count exceeded allowed limit of %d", *maxMemoryRows)}
+	}
 
 	return qr, allErrors.GetErrors()
 }
@@ -740,7 +756,9 @@ func (stc *ScatterConn) multiGo(
 	oneShard := func(rs *srvtopo.ResolvedShard, i int) {
 		var err error
 		startTime, statsKey := stc.startAction(name, rs.Target)
-		defer stc.endAction(startTime, allErrors, statsKey, &err, nil)
+		// Send a dummy session.
+		// TODO(sougou): plumb a real session through this call.
+		defer stc.endAction(startTime, allErrors, statsKey, &err, NewSafeSession(nil))
 		err = action(rs, i)
 	}
 

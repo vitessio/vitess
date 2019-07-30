@@ -32,24 +32,23 @@ import (
 // buildUpdatePlan builds the instructions for an UPDATE statement.
 func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Update, error) {
 	eupd := &engine.Update{
-		Query:               generateQuery(upd),
 		ChangedVindexValues: make(map[string][]sqltypes.PlanValue),
 	}
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(upd)))
-	if err := pb.processTableExprs(upd.TableExprs); err != nil {
+	ro, err := pb.processDMLTable(upd.TableExprs)
+	if err != nil {
 		return nil, err
 	}
-	rb, ok := pb.bldr.(*route)
-	if !ok {
-		return nil, errors.New("unsupported: multi-table/vindex update statement in sharded keyspace")
-	}
-	eupd.Keyspace = rb.ERoute.Keyspace
+	eupd.Keyspace = ro.eroute.Keyspace
 	if !eupd.Keyspace.Sharded {
 		// We only validate non-table subexpressions because the previous analysis has already validated them.
-		if !pb.validateSubquerySamePlan(upd.Exprs, upd.Where, upd.OrderBy, upd.Limit) {
+		if !pb.finalizeUnshardedDMLSubqueries(upd.Exprs, upd.Where, upd.OrderBy, upd.Limit) {
 			return nil, errors.New("unsupported: sharded subqueries in DML")
 		}
 		eupd.Opcode = engine.UpdateUnsharded
+		// Generate query after all the analysis. Otherwise table name substitutions for
+		// routed tables won't happen.
+		eupd.Query = generateQuery(upd)
 		return eupd, nil
 	}
 
@@ -60,27 +59,27 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 		return nil, errors.New("unsupported: multi-table update statement in sharded keyspace")
 	}
 
+	// Generate query after all the analysis. Otherwise table name substitutions for
+	// routed tables won't happen.
+	eupd.Query = generateQuery(upd)
+
 	directives := sqlparser.ExtractCommentDirectives(upd.Comments)
 	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
 		eupd.MultiShardAutocommit = true
 	}
 
-	var vindexTable *vindexes.Table
-	for _, tval := range pb.st.tables {
-		vindexTable = tval.vindexTable
-	}
-	eupd.Table = vindexTable
+	eupd.QueryTimeout = queryTimeout(directives)
+	eupd.Table = ro.vschemaTable
 	if eupd.Table == nil {
 		return nil, errors.New("internal error: table.vindexTable is mysteriously nil")
 	}
-	var err error
 
-	if rb.ERoute.TargetDestination != nil {
-		if rb.ERoute.TargetTabletType != topodatapb.TabletType_MASTER {
+	if ro.eroute.TargetDestination != nil {
+		if ro.eroute.TargetTabletType != topodatapb.TabletType_MASTER {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: UPDATE statement with a replica target")
 		}
 		eupd.Opcode = engine.UpdateByDestination
-		eupd.TargetDestination = rb.ERoute.TargetDestination
+		eupd.TargetDestination = ro.eroute.TargetDestination
 		return eupd, nil
 	}
 

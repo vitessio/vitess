@@ -15,13 +15,15 @@ COPY --from=builder /vt/bin/vtctlclient /vt/bin/
 COPY --from=builder /vt/bin/vtgate /vt/bin/
 COPY --from=builder /vt/bin/vttablet /vt/bin/
 COPY --from=builder /vt/bin/vtworker /vt/bin/
+COPY --from=builder /vt/bin/vtbackup /vt/bin/
 
 RUN chown -R vitess:vitess /vt
 
 FROM debian:stretch-slim
 
 # Install dependencies
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gnupg dirmngr ca-certificates && apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com 8C718D3B5072E1F5 \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gnupg dirmngr ca-certificates \
+ && for i in $(seq 1 10); do apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com 8C718D3B5072E1F5 && break; done \
  && echo 'deb http://repo.mysql.com/apt/debian/ stretch mysql-5.7' > /etc/apt/sources.list.d/mysql.list \
  && apt-get update \
  && DEBIAN_FRONTEND=noninteractive \

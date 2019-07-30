@@ -80,7 +80,7 @@ type Gateway interface {
 }
 
 // Creator is the factory method which can create the actual gateway object.
-type Creator func(hc discovery.HealthCheck, serv srvtopo.Server, cell string, retryCount int) Gateway
+type Creator func(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, cell string, retryCount int) Gateway
 
 var creators = make(map[string]Creator)
 

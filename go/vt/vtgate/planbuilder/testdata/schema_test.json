@@ -1,4 +1,25 @@
 {
+  "routing_rules": {
+    "rules": [{
+      "from_table": "route1",
+      "to_tables": ["user.user", "user.user_metadata"]
+    }, {
+      "from_table": "route2",
+      "to_tables": ["user.user", "main.unsharded"]
+    }, {
+      "from_table": "second_user.user",
+      "to_tables": ["user.user"]
+    }, {
+      "from_table": "master_redirect@master",
+      "to_tables": ["user.user"]
+    }, {
+      "from_table": "bad_table",
+      "to_tables": ["none.none"]
+    }, {
+      "from_table": "disabled",
+      "to_tables": []
+    }]
+  },
   "keyspaces": {
     "user": {
       "sharded": true,
@@ -45,6 +66,14 @@
         "hash_dup": {
           "type": "hash_test",
           "owner": "user"
+        },
+        "vindex1": {
+          "type": "hash_test",
+          "owner": "samecolvin"
+        },
+        "vindex2": {
+          "type": "lookup_test",
+          "owner": "samecolvin"
         }
       },
       "tables": {
@@ -149,6 +178,24 @@
           ],
           "column_list_authoritative": true
         },
+        "samecolvin": {
+          "column_vindexes": [
+            {
+              "column": "col",
+              "name": "vindex1"
+            },
+            {
+              "column": "col",
+              "name": "vindex2"
+            }
+          ],
+          "columns": [
+            {
+              "name": "col"
+            }
+          ],
+          "column_list_authoritative": true
+        },
         "multicolvin": {
           "column_vindexes": [
             {
@@ -176,6 +223,9 @@
               "name": "music_user_map"
             }
           ]
+        },
+        "ref": {
+          "type": "reference"
         },
         "pin_test": {
           "pinned": "80"
@@ -220,6 +270,21 @@
             "column": "id",
             "sequence": "seq"
           }
+        },
+        "unsharded_authoritative": {
+          "columns": [
+            {
+              "name": "col1"
+            },
+            {
+              "name": "col2"
+            }
+          ],
+          "auto_increment": {
+            "column": "col1",
+            "sequence": "seq"
+          },
+          "column_list_authoritative": true
         },
         "seq": {
           "type": "sequence"

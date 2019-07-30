@@ -9,7 +9,8 @@
       "Sharded": true
     },
     "Query": "select 1 from user",
-    "FieldQuery": "select 1 from user where 1 != 1"
+    "FieldQuery": "select 1 from user where 1 != 1",
+    "Table": "user"
   }
 }
 
@@ -24,7 +25,8 @@
       "Sharded": true
     },
     "Query": "select user.* from user",
-    "FieldQuery": "select user.* from user where 1 != 1"
+    "FieldQuery": "select user.* from user where 1 != 1",
+    "Table": "user"
   }
 }
 
@@ -39,7 +41,8 @@
       "Sharded": true
     },
     "Query": "select * from user",
-    "FieldQuery": "select * from user where 1 != 1"
+    "FieldQuery": "select * from user where 1 != 1",
+    "Table": "user"
   }
 }
 
@@ -55,7 +58,8 @@
     },
     "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user",
     "FieldQuery": "select * from user where 1 != 1",
-    "QueryTimeout": 1000
+    "QueryTimeout": 1000,
+    "Table": "user"
   }
 }
 
@@ -79,7 +83,8 @@
       },
       "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ count(*) from user",
       "FieldQuery": "select count(*) from user where 1 != 1",
-      "QueryTimeout": 1000
+      "QueryTimeout": 1000,
+      "Table": "user"
     }
   }
 }
@@ -100,7 +105,8 @@
       },
       "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from user limit :__upper_limit",
       "FieldQuery": "select * from user where 1 != 1",
-      "QueryTimeout": 1000
+      "QueryTimeout": 1000,
+      "Table": "user"
     }
   }
 }
@@ -117,7 +123,8 @@
     },
     "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user",
     "FieldQuery": "select * from user where 1 != 1",
-    "ScatterErrorsAsWarnings": true
+    "ScatterErrorsAsWarnings": true,
+    "Table": "user"
   }
 }
 
@@ -141,7 +148,8 @@
       },
       "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
       "FieldQuery": "select count(*) from user where 1 != 1",
-      "ScatterErrorsAsWarnings": true
+      "ScatterErrorsAsWarnings": true,
+      "Table": "user"
     }
   }
 }
@@ -162,7 +170,8 @@
       },
       "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user limit :__upper_limit",
       "FieldQuery": "select * from user where 1 != 1",
-      "ScatterErrorsAsWarnings": true
+      "ScatterErrorsAsWarnings": true,
+      "Table": "user"
     }
   }
 }
@@ -178,7 +187,8 @@
       "Sharded": true
     },
     "Query": "select user.* from user",
-    "FieldQuery": "select user.* from user where 1 != 1"
+    "FieldQuery": "select user.* from user where 1 != 1",
+    "Table": "user"
   }
 }
 
@@ -193,7 +203,8 @@
       "Sharded": true
     },
     "Query": "select user.* from user",
-    "FieldQuery": "select user.* from user where 1 != 1"
+    "FieldQuery": "select user.* from user where 1 != 1",
+    "Table": "user"
   }
 }
 
@@ -208,7 +219,8 @@
       "Sharded": true
     },
     "Query": "select user_id, col1, col2 from authoritative",
-    "FieldQuery": "select user_id, col1, col2 from authoritative where 1 != 1"
+    "FieldQuery": "select user_id, col1, col2 from authoritative where 1 != 1",
+    "Table": "authoritative"
   }
 }
 
@@ -223,7 +235,8 @@
       "Sharded": true
     },
     "Query": "select a.user_id as user_id, a.col1 as col1, a.col2 as col2, b.user_id as user_id, b.col1 as col1, b.col2 as col2 from authoritative as a join authoritative as b on a.user_id = b.user_id",
-    "FieldQuery": "select a.user_id as user_id, a.col1 as col1, a.col2 as col2, b.user_id as user_id, b.col1 as col1, b.col2 as col2 from authoritative as a join authoritative as b on a.user_id = b.user_id where 1 != 1"
+    "FieldQuery": "select a.user_id as user_id, a.col1 as col1, a.col2 as col2, b.user_id as user_id, b.col1 as col1, b.col2 as col2 from authoritative as a join authoritative as b on a.user_id = b.user_id where 1 != 1",
+    "Table": "authoritative"
   }
 }
 
@@ -242,7 +255,8 @@
       "Sharded": true
     },
     "Query": "select a.user_id, a.col1, a.col2 from authoritative as a",
-    "FieldQuery": "select a.user_id, a.col1, a.col2 from authoritative as a where 1 != 1"
+    "FieldQuery": "select a.user_id, a.col1, a.col2 from authoritative as a where 1 != 1",
+    "Table": "authoritative"
   }
 }
 
@@ -257,7 +271,8 @@
       "Sharded": true
     },
     "Query": "select * from authoritative join user on authoritative.user_id = user.id",
-    "FieldQuery": "select * from authoritative join user on authoritative.user_id = user.id where 1 != 1"
+    "FieldQuery": "select * from authoritative join user on authoritative.user_id = user.id where 1 != 1",
+    "Table": "authoritative"
   }
 }
 
@@ -272,7 +287,8 @@
       "Sharded": true
     },
     "Query": "select user.id, a.user_id, a.col1, a.col2, user.col1 from authoritative as a join user on a.user_id = user.id",
-    "FieldQuery": "select user.id, a.user_id, a.col1, a.col2, user.col1 from authoritative as a join user on a.user_id = user.id where 1 != 1"
+    "FieldQuery": "select user.id, a.user_id, a.col1, a.col2, user.col1 from authoritative as a join user on a.user_id = user.id where 1 != 1",
+    "Table": "authoritative"
   }
 }
 
@@ -287,7 +303,8 @@
       "Sharded": true
     },
     "Query": "select col from user join user_extra on user.id = user_extra.user_id",
-    "FieldQuery": "select col from user join user_extra on user.id = user_extra.user_id where 1 != 1"
+    "FieldQuery": "select col from user join user_extra on user.id = user_extra.user_id where 1 != 1",
+    "Table": "user"
   }
 }
 
@@ -308,7 +325,8 @@
         "Sharded": true
       },
       "Query": "select id from user",
-      "FieldQuery": "select id from user where 1 != 1"
+      "FieldQuery": "select id from user where 1 != 1",
+      "Table": "user"
     },
     "Right": {
       "Opcode": "SelectScatter",
@@ -317,7 +335,8 @@
         "Sharded": true
       },
       "Query": "select user_id from user_extra",
-      "FieldQuery": "select user_id from user_extra where 1 != 1"
+      "FieldQuery": "select user_id from user_extra where 1 != 1",
+      "Table": "user_extra"
     },
     "Cols": [
       -1,
@@ -337,29 +356,14 @@
       "Sharded": false
     },
     "Query": "select database() from dual",
-    "FieldQuery": "select database() from dual where 1 != 1"
+    "FieldQuery": "select database() from dual where 1 != 1",
+    "Table": "dual"
   }
 }
-
 
 # nextval for simple route
 "select next value from user"
-"NEXT used on a sharded table"
-
-# next n values for simple route
-"select next 2 values from seq"
-{
-  "Original": "select next 2 values from seq",
-  "Instructions": {
-    "Opcode": "SelectNext",
-    "Keyspace": {
-      "Name": "main",
-      "Sharded": false
-    },
-    "Query": "select next 2 values from seq",
-    "FieldQuery": "select next 2 values from seq where 1 != 1"
-  }
-}
+"NEXT used on a non-sequence table"
 
 # last_insert_id for unsharded route
 "select last_insert_id() from main.dual"
@@ -372,7 +376,8 @@
       "Sharded": false
     },
     "Query": "select last_insert_id() from dual",
-    "FieldQuery": "select last_insert_id() from dual where 1 != 1"
+    "FieldQuery": "select last_insert_id() from dual where 1 != 1",
+    "Table": "dual"
   }
 }
 
@@ -387,7 +392,8 @@
       "Sharded": false
     },
     "Query": "select @@session.auto_increment_increment from dual",
-    "FieldQuery": "select @@session.auto_increment_increment from dual where 1 != 1"
+    "FieldQuery": "select @@session.auto_increment_increment from dual where 1 != 1",
+    "Table": "dual"
   }
 }
 
@@ -406,7 +412,8 @@
     "Vindex": "binary",
     "Values": [
       "\ufffd"
-    ]
+    ],
+    "Table": "pin_test"
   }
 }
 
@@ -424,7 +431,8 @@
     "Query": "select @@session.auto_increment_increment from dual",
     "FieldQuery": "select @@session.auto_increment_increment from dual where 1 != 1",
     "Vindex": "binary",
-    "Values": ["\u0000"]
+    "Values": ["\u0000"],
+    "Table": "dual"
   }
 }
 
@@ -441,7 +449,8 @@
         "Sharded": true
       },
       "Query": "select 1 from user",
-      "FieldQuery": "select 1 from user where 1 != 1"
+      "FieldQuery": "select 1 from user where 1 != 1",
+      "Table": "user"
     },
     "Right": {
       "Opcode": "SelectScatter",
@@ -450,7 +459,8 @@
         "Sharded": true
       },
       "Query": "select user_extra.id from user_extra",
-      "FieldQuery": "select user_extra.id from user_extra where 1 != 1"
+      "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+      "Table": "user_extra"
     },
     "Cols": [
       1
@@ -471,7 +481,8 @@
         "Sharded": true
       },
       "Query": "select user.col from user",
-      "FieldQuery": "select user.col from user where 1 != 1"
+      "FieldQuery": "select user.col from user where 1 != 1",
+      "Table": "user"
     },
     "Right": {
       "Opcode": "SelectScatter",
@@ -480,7 +491,8 @@
         "Sharded": true
       },
       "Query": "select user_extra.id from user_extra",
-      "FieldQuery": "select user_extra.id from user_extra where 1 != 1"
+      "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+      "Table": "user_extra"
     },
     "Cols": [
       -1,
@@ -502,7 +514,8 @@
         "Sharded": true
       },
       "Query": "select user.col from user",
-      "FieldQuery": "select user.col from user where 1 != 1"
+      "FieldQuery": "select user.col from user where 1 != 1",
+      "Table": "user"
     },
     "Right": {
       "Opcode": "SelectScatter",
@@ -511,7 +524,8 @@
         "Sharded": true
       },
       "Query": "select user_extra.id + user_extra.col from user_extra",
-      "FieldQuery": "select user_extra.id + user_extra.col from user_extra where 1 != 1"
+      "FieldQuery": "select user_extra.id + user_extra.col from user_extra where 1 != 1",
+      "Table": "user_extra"
     },
     "Cols": [
       -1,
@@ -533,7 +547,8 @@
         "Sharded": true
       },
       "Query": "select user.col, user.col2 from user",
-      "FieldQuery": "select user.col, user.col2 from user where 1 != 1"
+      "FieldQuery": "select user.col, user.col2 from user where 1 != 1",
+      "Table": "user"
     },
     "Right": {
       "Opcode": "SelectScatter",
@@ -542,7 +557,8 @@
         "Sharded": true
       },
       "Query": "select user_extra.id from user_extra",
-      "FieldQuery": "select user_extra.id from user_extra where 1 != 1"
+      "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+      "Table": "user_extra"
     },
     "Cols": [
       -1,
@@ -565,7 +581,8 @@
         "Sharded": true
       },
       "Query": "select /* comment */ user.col from user",
-      "FieldQuery": "select user.col from user where 1 != 1"
+      "FieldQuery": "select user.col from user where 1 != 1",
+      "Table": "user"
     },
     "Right": {
       "Opcode": "SelectScatter",
@@ -574,7 +591,8 @@
         "Sharded": true
       },
       "Query": "select /* comment */ 1 from user_extra",
-      "FieldQuery": "select 1 from user_extra where 1 != 1"
+      "FieldQuery": "select 1 from user_extra where 1 != 1",
+      "Table": "user_extra"
     },
     "Cols": [
       -1
@@ -595,7 +613,8 @@
         "Sharded": true
       },
       "Query": "select user.col from user for update",
-      "FieldQuery": "select user.col from user where 1 != 1"
+      "FieldQuery": "select user.col from user where 1 != 1",
+      "Table": "user"
     },
     "Right": {
       "Opcode": "SelectScatter",
@@ -604,7 +623,8 @@
         "Sharded": true
       },
       "Query": "select 1 from user_extra for update",
-      "FieldQuery": "select 1 from user_extra where 1 != 1"
+      "FieldQuery": "select 1 from user_extra where 1 != 1",
+      "Table": "user_extra"
     },
     "Cols": [
       -1
@@ -625,7 +645,8 @@
         "Sharded": true
       },
       "Query": "select user.id from user",
-      "FieldQuery": "select user.id from user where 1 != 1"
+      "FieldQuery": "select user.id from user where 1 != 1",
+      "Table": "user"
     },
     "Right": {
       "Opcode": "SelectUnsharded",
@@ -634,7 +655,8 @@
         "Sharded": false
       },
       "Query": "select (select :user_id + outm.m + unsharded.m from unsharded) from unsharded as outm",
-      "FieldQuery": "select (select :user_id + outm.m + unsharded.m from unsharded where 1 != 1) from unsharded as outm where 1 != 1"
+      "FieldQuery": "select (select :user_id + outm.m + unsharded.m from unsharded where 1 != 1) from unsharded as outm where 1 != 1",
+      "Table": "unsharded"
     },
     "Cols": [
       -1,
@@ -659,7 +681,8 @@
         "Sharded": true
       },
       "Query": "select user.Col from user",
-      "FieldQuery": "select user.Col from user where 1 != 1"
+      "FieldQuery": "select user.Col from user where 1 != 1",
+      "Table": "user"
     },
     "Right": {
       "Opcode": "SelectScatter",
@@ -668,7 +691,8 @@
         "Sharded": true
       },
       "Query": "select user_extra.Id from user_extra",
-      "FieldQuery": "select user_extra.Id from user_extra where 1 != 1"
+      "FieldQuery": "select user_extra.Id from user_extra where 1 != 1",
+      "Table": "user_extra"
     },
     "Cols": [
       -1,
@@ -692,7 +716,8 @@
       "Sharded": true
     },
     "Query": "select * from user where id = 0x04",
-    "FieldQuery": "select * from user where 1 != 1"
+    "FieldQuery": "select * from user where 1 != 1",
+    "Table": "user"
   }
 }
 
@@ -717,7 +742,8 @@
           "Col": 0,
           "Desc": false
         }
-      ]
+      ],
+      "Table": "music"
     }
   }
 }
@@ -735,7 +761,8 @@
     "Query": "select * from user where name = 'abc' and (id = 4) limit 5",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": [4]
+    "Values": [4],
+    "Table": "user"
   }
 }
 
@@ -752,7 +779,8 @@
     "Query": "select * from user where (id = 4) and (name = 'abc') limit 5",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": [4]
+    "Values": [4],
+    "Table": "user"
   }
 }
 
@@ -771,7 +799,8 @@
     "Vindex": "user_index",
     "Values": [
       4
-    ]
+    ],
+    "Table": "user"
   }
 }
 
@@ -788,7 +817,8 @@
     "Query": "select user0_.col as col0_ from user as user0_ where id = 1 order by user0_.col desc limit 2",
     "FieldQuery": "select user0_.col as col0_ from user as user0_ where 1 != 1",
     "Vindex": "user_index",
-    "Values": [1]
+    "Values": [1],
+    "Table": "user"
   }
 }
 
@@ -805,7 +835,8 @@
     "Query": "select user0_.col as col0_ from user as user0_ where id = 1 order by col0_ desc limit 3",
     "FieldQuery": "select user0_.col as col0_ from user as user0_ where 1 != 1",
     "Vindex": "user_index",
-    "Values": [1]
+    "Values": [1],
+    "Table": "user"
   }
 }
 
@@ -822,7 +853,8 @@
     "Query": "select * from user where (id = 1) and name = true limit 5",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": [1]
+    "Values": [1],
+    "Table": "user"
   }
 }
 
@@ -839,7 +871,8 @@
     "Query": "select * from user where (id = 1) and name limit 5",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": [1]
+    "Values": [1],
+    "Table": "user"
   }
 }
 
@@ -856,7 +889,8 @@
     "Query": "select * from user where (id = 5) and name = true limit 5",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": [5]
+    "Values": [5],
+    "Table": "user"
   }
 }
 
@@ -875,7 +909,8 @@
         "Sharded": true
       },
       "Query": "select col from user",
-      "FieldQuery": "select col from user where 1 != 1"
+      "FieldQuery": "select col from user where 1 != 1",
+      "Table": "user"
     },
     "Underlying": {
       "Opcode": "SelectUnsharded",
@@ -884,7 +919,8 @@
         "Sharded": false
       },
       "Query": "select a, :__sq1 from unsharded",
-      "FieldQuery": "select a, :__sq1 from unsharded where 1 != 1"
+      "FieldQuery": "select a, :__sq1 from unsharded where 1 != 1",
+      "Table": "unsharded"
     }
   }
 }
@@ -904,7 +940,8 @@
         "Sharded": true
       },
       "Query": "select col from user",
-      "FieldQuery": "select col from user where 1 != 1"
+      "FieldQuery": "select col from user where 1 != 1",
+      "Table": "user"
     },
     "Underlying": {
       "Opcode": "SelectUnsharded",
@@ -913,7 +950,8 @@
         "Sharded": false
       },
       "Query": "select a, 1 + :__sq1 from unsharded",
-      "FieldQuery": "select a, 1 + :__sq1 from unsharded where 1 != 1"
+      "FieldQuery": "select a, 1 + :__sq1 from unsharded where 1 != 1",
+      "Table": "unsharded"
     }
   }
 }
@@ -936,7 +974,8 @@
           "Sharded": true
         },
         "Query": "select user.id as id1 from user",
-        "FieldQuery": "select user.id as id1 from user where 1 != 1"
+        "FieldQuery": "select user.id as id1 from user where 1 != 1",
+        "Table": "user"
       },
       "Right": {
         "Opcode": "SelectScatter",
@@ -945,7 +984,8 @@
           "Sharded": true
         },
         "Query": "select user_extra.id as id2 from user_extra",
-        "FieldQuery": "select user_extra.id as id2 from user_extra where 1 != 1"
+        "FieldQuery": "select user_extra.id as id2 from user_extra where 1 != 1",
+        "Table": "user_extra"
       },
       "Cols": [
         -1,
@@ -991,7 +1031,8 @@
     "Query": "select * from music where user_id = 1 union select * from user where id = 1",
     "FieldQuery": "select * from music where 1 != 1 union select * from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": [1]
+    "Values": [1],
+    "Table": "music"
   }
 }
 
@@ -1005,7 +1046,8 @@
       "Sharded": false
     },
     "Query": "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) as a",
-    "FieldQuery": "select * from (select col1, col2 from unsharded where 1 != 1 union select col1, col2 from unsharded where 1 != 1) as a where 1 != 1"
+    "FieldQuery": "select * from (select col1, col2 from unsharded where 1 != 1 union select col1, col2 from unsharded where 1 != 1) as a where 1 != 1",
+    "Table": "unsharded"
   }
 }
 
@@ -1019,7 +1061,8 @@
       "Sharded": false
     },
     "Query": "select id, name from unsharded where id in (select id from unsharded where id = 1 union select id from unsharded where id = 3)",
-    "FieldQuery": "select id, name from unsharded where 1 != 1"
+    "FieldQuery": "select id, name from unsharded where 1 != 1",
+    "Table": "unsharded"
   }
 }
 
@@ -1033,7 +1076,8 @@
       "Sharded": false
     },
     "Query": "(select id from unsharded) union (select id from unsharded_auto) order by id asc limit 5",
-    "FieldQuery": "(select id from unsharded where 1 != 1) union (select id from unsharded_auto where 1 != 1)"
+    "FieldQuery": "(select id from unsharded where 1 != 1) union (select id from unsharded_auto where 1 != 1)",
+    "Table": "unsharded"
   }
 }
 
@@ -1047,7 +1091,8 @@
       "Sharded": false
     },
     "Query": "select id from unsharded union select id from unsharded_auto union select id from unsharded_auto where id in (132)",
-    "FieldQuery": "select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1 union select id from unsharded_auto where 1 != 1"
+    "FieldQuery": "select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1 union select id from unsharded_auto where 1 != 1",
+    "Table": "unsharded"
   }
 }
 
@@ -1061,7 +1106,8 @@
       "Sharded": false
     },
     "Query": "(select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
-    "FieldQuery": "(select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1) union (select id from unsharded_auto where 1 != 1 union select name from unsharded where 1 != 1)"
+    "FieldQuery": "(select id from unsharded where 1 != 1 union select id from unsharded_auto where 1 != 1) union (select id from unsharded_auto where 1 != 1 union select name from unsharded where 1 != 1)",
+    "Table": "unsharded"
   }
 }
 
@@ -1075,6 +1121,44 @@
       "Sharded": false
     },
     "Query": "(select id from unsharded order by id asc limit 1) union (select id from unsharded order by id desc limit 1) order by id asc limit 1",
-    "FieldQuery": "(select id from unsharded where 1 != 1) union (select id from unsharded where 1 != 1)"
+    "FieldQuery": "(select id from unsharded where 1 != 1) union (select id from unsharded where 1 != 1)",
+    "Table": "unsharded"
+  }
+}
+
+# routing rules: union finds the correct option to merge, and renames the table
+"select a from route1 where email = 'aaa' union select b from route1 where email = 'aaa'"
+{
+  "Original": "select a from route1 where email = 'aaa' union select b from route1 where email = 'aaa'",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select a from user_metadata as route1 where email = 'aaa' union select b from user_metadata as route1 where email = 'aaa'",
+    "FieldQuery": "select a from user_metadata as route1 where 1 != 1 union select b from user_metadata as route1 where 1 != 1",
+    "Vindex": "email_user_map",
+    "Values": [
+      "aaa"
+    ],
+    "Table": "user_metadata"
+  }
+}
+
+# routing rules: ensure directives are not lost
+"select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from route2"
+{
+  "Original": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from route2",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select /*vt+ QUERY_TIMEOUT_MS=1000 */ * from unsharded as route2",
+    "FieldQuery": "select * from unsharded as route2 where 1 != 1",
+    "QueryTimeout": 1000,
+    "Table": "unsharded"
   }
 }

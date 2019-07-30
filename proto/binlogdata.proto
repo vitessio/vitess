@@ -186,6 +186,7 @@ enum VEventType {
   ROW = 12;
   FIELD = 13;
   HEARTBEAT = 14;
+  VGTID = 15;
 }
 
 // RowChange represents one row change
@@ -205,6 +206,16 @@ message FieldEvent {
   repeated query.Field fields = 2;
 }
 
+message ShardGtid {
+  string keyspace = 1;
+  string shard = 2;
+  string gtid = 3;
+}
+
+message VGtid {
+  repeated ShardGtid shard_gtids = 1;
+}
+
 // VEvent represents a vstream event
 message VEvent {
   VEventType type = 1;
@@ -213,6 +224,7 @@ message VEvent {
   string ddl = 4;
   RowEvent row_event = 5;
   FieldEvent field_event = 6;
+  VGtid vgtid = 7;
   // current_time specifies the current time to handle clock skew.
   int64 current_time = 20;
 }
@@ -230,4 +242,23 @@ message VStreamRequest {
 // VStreamResponse is the response from VStream
 message VStreamResponse {
   repeated VEvent events = 1;
+}
+
+// VStreamRowsRequest is the payload for VStreamRows
+message VStreamRowsRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  query.VTGateCallerID immediate_caller_id = 2;
+  query.Target target = 3;
+
+  string query = 4;
+  query.QueryResult lastpk = 5;
+}
+
+// VStreamRowsResponse is the response from VStreamRows
+message VStreamRowsResponse {
+  repeated query.Field fields = 1;
+  repeated query.Field pkfields = 2;
+  string gtid = 3;
+  repeated query.Row rows = 4;
+  query.Row lastpk = 5;
 }

@@ -96,6 +96,18 @@ func TestBuildBindVariable(t *testing.T) {
 			Value: []byte("aa"),
 		},
 	}, {
+		in: true,
+		out: &querypb.BindVariable{
+			Type:  querypb.Type_INT8,
+			Value: []byte("1"),
+		},
+	}, {
+		in: false,
+		out: &querypb.BindVariable{
+			Type:  querypb.Type_INT8,
+			Value: []byte("0"),
+		},
+	}, {
 		in: int(1),
 		out: &querypb.BindVariable{
 			Type:  querypb.Type_INT64,

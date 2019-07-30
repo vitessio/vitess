@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -58,16 +59,22 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	}
 	originalType := tablet.Type
 
-	// update our type to BACKUP
-	if _, err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topodatapb.TabletType_BACKUP); err != nil {
-		return err
+	engine, err := mysqlctl.GetBackupEngine()
+	if err != nil {
+		return vterrors.Wrap(err, "failed to find backup engine")
 	}
+	builtin, _ := engine.(*mysqlctl.BuiltinBackupEngine)
+	if builtin != nil {
+		// update our type to BACKUP
+		if _, err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topodatapb.TabletType_BACKUP); err != nil {
+			return err
+		}
 
-	// let's update our internal state (stop query service and other things)
-	if err := agent.refreshTablet(ctx, "before backup"); err != nil {
-		return err
+		// let's update our internal state (stop query service and other things)
+		if err := agent.refreshTablet(ctx, "before backup"); err != nil {
+			return err
+		}
 	}
-
 	// create the loggers: tee to console and source
 	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
@@ -76,22 +83,29 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	name := fmt.Sprintf("%v.%v", time.Now().UTC().Format("2006-01-02.150405"), topoproto.TabletAliasString(tablet.Alias))
 	returnErr := mysqlctl.Backup(ctx, agent.Cnf, agent.MysqlDaemon, l, dir, name, concurrency, agent.hookExtraEnv())
 
-	// change our type back to the original value
-	_, err = topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, originalType)
-	if err != nil {
-		// failure in changing the topology type is probably worse,
-		// so returning that (we logged the snapshot error anyway)
-		if returnErr != nil {
-			l.Errorf("mysql backup command returned error: %v", returnErr)
+	if builtin != nil {
+
+		bgCtx := context.Background()
+		// Starting from here we won't be able to recover if we get stopped by a cancelled
+		// context. It is also possible that the context already timed out during the
+		// above call to Backup. Thus we use the background context to get through to the finish.
+
+		// change our type back to the original value
+		_, err = topotools.ChangeType(bgCtx, agent.TopoServer, tablet.Alias, originalType)
+		if err != nil {
+			// failure in changing the topology type is probably worse,
+			// so returning that (we logged the snapshot error anyway)
+			if returnErr != nil {
+				l.Errorf("mysql backup command returned error: %v", returnErr)
+			}
+			returnErr = err
 		}
-		returnErr = err
-	}
 
-	// let's update our internal state (start query service and other things)
-	if err := agent.refreshTablet(ctx, "after backup"); err != nil {
-		return err
+		// let's update our internal state (start query service and other things)
+		if err := agent.refreshTablet(bgCtx, "after backup"); err != nil {
+			return err
+		}
 	}
-
 	// and re-run health check to be sure to capture any replication delay
 	agent.runHealthCheckLocked()
 
@@ -117,7 +131,7 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context, logger logutil.
 	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
 	// now we can run restore
-	err = agent.restoreDataLocked(ctx, l, true /* deleteBeforeRestore */)
+	err = agent.restoreDataLocked(ctx, l, 0 /* waitForBackupInterval */, true /* deleteBeforeRestore */)
 
 	// re-run health check to be sure to capture any replication delay
 	agent.runHealthCheckLocked()

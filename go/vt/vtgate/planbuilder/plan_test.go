@@ -157,6 +157,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "unsupported_cases.txt", vschema)
 	testFile(t, "vindex_func_cases.txt", vschema)
 	testFile(t, "wireup_cases.txt", vschema)
+	testFile(t, "memory_sort_cases.txt", vschema)
 }
 
 func TestOne(t *testing.T) {
@@ -172,6 +173,11 @@ func loadSchema(t *testing.T, filename string) *vindexes.VSchema {
 	vschema, err := vindexes.BuildVSchema(formal)
 	if err != nil {
 		t.Fatal(err)
+	}
+	for _, ks := range vschema.Keyspaces {
+		if ks.Error != nil {
+			t.Fatal(ks.Error)
+		}
 	}
 	return vschema
 }
@@ -192,16 +198,16 @@ func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, s
 	return table, destKeyspace, destTabletType, destTarget, nil
 }
 
-func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+func (vw *vschemaWrapper) FindTablesOrVindex(tab sqlparser.TableName) ([]*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
 	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_MASTER)
 	if err != nil {
 		return nil, nil, destKeyspace, destTabletType, destTarget, err
 	}
-	table, vindex, err := vw.v.FindTableOrVindex(destKeyspace, tab.Name.String())
+	tables, vindex, err := vw.v.FindTablesOrVindex(destKeyspace, tab.Name.String(), topodatapb.TabletType_MASTER)
 	if err != nil {
 		return nil, nil, destKeyspace, destTabletType, destTarget, err
 	}
-	return table, vindex, destKeyspace, destTabletType, destTarget, nil
+	return tables, vindex, destKeyspace, destTabletType, destTarget, nil
 }
 
 func (vw *vschemaWrapper) DefaultKeyspace() (*vindexes.Keyspace, error) {

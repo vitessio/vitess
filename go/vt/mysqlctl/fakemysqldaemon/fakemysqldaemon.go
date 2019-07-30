@@ -76,6 +76,9 @@ type FakeMysqlDaemon struct {
 	// ReadOnly is the current value of the flag
 	ReadOnly bool
 
+	// SuperReadOnly is the current value of the flag
+	SuperReadOnly bool
+
 	// SetSlavePositionPos is matched against the input of SetSlavePosition.
 	// If it doesn't match, SetSlavePosition will return an error.
 	SetSlavePositionPos mysql.Position
@@ -86,9 +89,6 @@ type FakeMysqlDaemon struct {
 	// SetMasterInput is matched against the input of SetMaster
 	// (as "%v:%v"). If it doesn't match, SetMaster will return an error.
 	SetMasterInput string
-
-	// DemoteMasterPosition is returned by DemoteMaster
-	DemoteMasterPosition mysql.Position
 
 	// WaitMasterPosition is checked by WaitMasterPos, if the
 	// same it returns nil, if different it returns an error
@@ -150,7 +150,7 @@ func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 		Running: true,
 	}
 	if db != nil {
-		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", 5, time.Minute)
+		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", 5, time.Minute, 0)
 		result.appPool.Open(db.ConnParams(), stats.NewTimings("", "", ""))
 	}
 	return result
@@ -240,6 +240,13 @@ func (fmd *FakeMysqlDaemon) SetReadOnly(on bool) error {
 	return nil
 }
 
+// SetSuperReadOnly is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) SetSuperReadOnly(on bool) error {
+	fmd.SuperReadOnly = on
+	fmd.ReadOnly = on
+	return nil
+}
+
 // StartSlave is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) StartSlave(hookExtraEnv map[string]string) error {
 	return fmd.ExecuteSuperQueryList(context.Background(), []string{
@@ -297,9 +304,9 @@ func (fmd *FakeMysqlDaemon) WaitForReparentJournal(ctx context.Context, timeCrea
 	return nil
 }
 
-// DemoteMaster is part of the MysqlDaemon interface
+// Deprecated: use mysqld.MasterPosition() instead
 func (fmd *FakeMysqlDaemon) DemoteMaster() (mysql.Position, error) {
-	return fmd.DemoteMasterPosition, nil
+	return fmd.CurrentMasterPosition, nil
 }
 
 // WaitMasterPos is part of the MysqlDaemon interface

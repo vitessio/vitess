@@ -263,13 +263,6 @@ func NewActionAgent(
 	agent.statsTabletType = stats.NewString("TabletType")
 	agent.statsTabletTypeCount = stats.NewCountersWithSingleLabel("TabletTypeCount", "Number of times the tablet changed to the labeled type", "type")
 
-	// The db name will get set by the Start function called below, before
-	// VREngine gets to invoke the FilteredWithDB call.
-	agent.VREngine = vreplication.NewEngine(ts, tabletAlias.Cell, mysqld, func() binlogplayer.DBClient {
-		return binlogplayer.NewDBClient(agent.DBConfigs.FilteredWithDB())
-	})
-	servenv.OnTerm(agent.VREngine.Close)
-
 	var mysqlHost string
 	var mysqlPort int32
 	if appConfig := dbcfgs.AppWithDB(); appConfig.Host != "" {
@@ -289,6 +282,12 @@ func NewActionAgent(
 		return nil, err
 	}
 
+	// The db name is set by the Start function called above
+	agent.VREngine = vreplication.NewEngine(ts, tabletAlias.Cell, mysqld, func() binlogplayer.DBClient {
+		return binlogplayer.NewDBClient(agent.DBConfigs.FilteredWithDB())
+	}, agent.DBConfigs.FilteredWithDB().DbName)
+	servenv.OnTerm(agent.VREngine.Close)
+
 	// Run a background task to rebuild the SrvKeyspace in our cell/keyspace
 	// if it doesn't exist yet.
 	go agent.maybeRebuildKeyspace(agent.initialTablet.Alias.Cell, agent.initialTablet.Keyspace)
@@ -304,10 +303,9 @@ func NewActionAgent(
 	// - restoreFromBackup is not set: we initHealthCheck right away
 	if *restoreFromBackup {
 		go func() {
-			// restoreFromBackup wil just be a regular action
+			// restoreFromBackup will just be a regular action
 			// (same as if it was triggered remotely)
-			if err := agent.RestoreData(batchCtx, logutil.NewConsoleLogger(), false /* deleteBeforeRestore */); err != nil {
-				println(fmt.Sprintf("RestoreFromBackup failed: %v", err))
+			if err := agent.RestoreData(batchCtx, logutil.NewConsoleLogger(), *waitForBackupInterval, false /* deleteBeforeRestore */); err != nil {
 				log.Exitf("RestoreFromBackup failed: %v", err)
 			}
 
@@ -340,6 +338,10 @@ func NewActionAgent(
 // NewTestActionAgent creates an agent for test purposes. Only a
 // subset of features are supported now, but we'll add more over time.
 func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, mysqlDaemon mysqlctl.MysqlDaemon, preStart func(*ActionAgent)) *ActionAgent {
+	ti, err := ts.GetTablet(batchCtx, tabletAlias)
+	if err != nil {
+		panic(vterrors.Wrap(err, "failed reading tablet"))
+	}
 	agent := &ActionAgent{
 		QueryServiceControl: tabletservermock.NewController(),
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
@@ -350,7 +352,7 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
 		DBConfigs:           &dbconfigs.DBConfigs{},
-		VREngine:            vreplication.NewEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient),
+		VREngine:            vreplication.NewEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient, ti.DbName()),
 		History:             history.New(historyLength),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
@@ -389,7 +391,7 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
 		DBConfigs:           dbcfgs,
-		VREngine:            vreplication.NewEngine(nil, "", nil, nil),
+		VREngine:            vreplication.NewEngine(nil, "", nil, nil, ""),
 		gotMysqlPort:        true,
 		History:             history.New(historyLength),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),

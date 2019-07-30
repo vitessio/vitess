@@ -165,11 +165,11 @@ func (rd *RowDiffer2) Diff() (DiffReport, error) {
 			}
 			advanceRight = false
 		}
-		dr.processedRows++
 		if left == nil && right == nil {
 			// No more rows from either side. We're done.
 			break
 		}
+		dr.processedRows++
 		if left == nil {
 			// No more rows on the left side.
 			// We know we have at least one row on the right side left.

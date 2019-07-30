@@ -30,10 +30,10 @@ CELL=zone1 UID_BASE=300 "$script_root/vttablet-down.sh"
 CELL=zone1 UID_BASE=400 "$script_root/vttablet-down.sh"
 ./vtctld-down.sh
 
-if [ "${TOPO}" = "etcd2" ]; then
-    CELL=zone1 "$script_root/etcd-down.sh"
-else
+if [ "${TOPO}" = "zk2" ]; then
     CELL=zone1 "$script_root/zk-down.sh"
+else
+    CELL=zone1 "$script_root/etcd-down.sh"
 fi
 
 rm -r $VTDATAROOT/*

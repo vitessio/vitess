@@ -53,13 +53,12 @@ type MysqlDaemon interface {
 	MasterPosition() (mysql.Position, error)
 	IsReadOnly() (bool, error)
 	SetReadOnly(on bool) error
+	SetSuperReadOnly(on bool) error
 	SetSlavePosition(ctx context.Context, pos mysql.Position) error
 	SetMaster(ctx context.Context, masterHost string, masterPort int, slaveStopBefore bool, slaveStartAfter bool) error
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
 
-	// DemoteMaster waits for all current transactions to finish,
-	// and returns the current replication position. It will not
-	// change the read_only state of the server.
+	// Deprecated: use MasterPosition() instead
 	DemoteMaster() (mysql.Position, error)
 
 	WaitMasterPos(context.Context, mysql.Position) error

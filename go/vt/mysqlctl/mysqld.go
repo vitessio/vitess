@@ -67,6 +67,8 @@ var (
 	appPoolSize    = flag.Int("app_pool_size", 40, "Size of the connection pool for app connections")
 	appIdleTimeout = flag.Duration("app_idle_timeout", time.Minute, "Idle timeout for app connections")
 
+	poolDynamicHostnameResolution = flag.Duration("pool_hostname_resolve_interval", 0, "if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)")
+
 	socketFile        = flag.String("mysqlctl_socket", "", "socket file to use for remote mysqlctl actions (empty for local actions)")
 	mycnfTemplateFile = flag.String("mysqlctl_mycnf_template", "", "template file to use for generating the my.cnf file during server init")
 
@@ -98,11 +100,11 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	}
 
 	// Create and open the connection pool for dba access.
-	result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", *dbaPoolSize, *dbaIdleTimeout)
+	result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", *dbaPoolSize, *dbaIdleTimeout, *poolDynamicHostnameResolution)
 	result.dbaPool.Open(dbcfgs.Dba(), dbaMysqlStats)
 
 	// Create and open the connection pool for app access.
-	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout)
+	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout, *poolDynamicHostnameResolution)
 	result.appPool.Open(dbcfgs.AppWithDB(), appMysqlStats)
 
 	return result
@@ -218,8 +220,14 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 				return err
 			}
 		}
+		mysqlBaseDir, err := vtenv.VtMysqlBaseDir()
+		if err != nil {
+			return err
+		}
 		arg := []string{
-			"--defaults-file=" + cnf.path}
+			"--defaults-file=" + cnf.path,
+			"--basedir=" + mysqlBaseDir,
+		}
 		arg = append(arg, mysqldArgs...)
 		env := []string{os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql")}
 
@@ -451,7 +459,7 @@ func execCmd(name string, args, env []string, dir string, input io.Reader) (cmd 
 // binaryPath does a limited path lookup for a command,
 // searching only within sbin and bin in the given root.
 func binaryPath(root, binary string) (string, error) {
-	subdirs := []string{"sbin", "bin", "libexec"}
+	subdirs := []string{"sbin", "bin", "libexec", "scripts"}
 	for _, subdir := range subdirs {
 		binPath := path.Join(root, subdir, binary)
 		if _, err := os.Stat(binPath); err == nil {
@@ -650,6 +658,11 @@ func getMycnfTemplates(root string) []string {
 		}
 	case "MariaDB103":
 		path := path.Join(root, "config/mycnf/master_mariadb103.cnf")
+		if !contains(cnfTemplatePaths, path) {
+			cnfTemplatePaths = append(cnfTemplatePaths, path)
+		}
+	case "MySQL80":
+		path := path.Join(root, "config/mycnf/master_mysql80.cnf")
 		if !contains(cnfTemplatePaths, path) {
 			cnfTemplatePaths = append(cnfTemplatePaths, path)
 		}

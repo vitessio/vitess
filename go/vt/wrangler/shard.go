@@ -62,22 +62,22 @@ func (wr *Wrangler) updateShardMaster(ctx context.Context, si *topo.ShardInfo, t
 	return err
 }
 
-// SetShardServedTypes changes the ServedTypes parameter of a shard.
+// SetShardIsMasterServing changes the IsMasterServing parameter of a shard.
 // It does not rebuild any serving graph or do any consistency check.
 // This is an emergency manual operation.
-func (wr *Wrangler) SetShardServedTypes(ctx context.Context, keyspace, shard string, cells []string, servedType topodatapb.TabletType, remove bool) (err error) {
+func (wr *Wrangler) SetShardIsMasterServing(ctx context.Context, keyspace, shard string, isMasterServing bool) (err error) {
 	// lock the keyspace to not conflict with resharding operations
-	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, fmt.Sprintf("SetShardServedTypes(%v,%v,%v)", cells, servedType, remove))
+	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, keyspace, fmt.Sprintf("SetShardIsMasterServing(%v,%v,%v)", keyspace, shard, isMasterServing))
 	if lockErr != nil {
 		return lockErr
 	}
 	defer unlock(&err)
 
 	// and update the shard
-	// TODO: What should we do with this method?
-	//_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
-	//return si.UpdateServedTypesMap(servedType, cells, remove)
-	//})
+	_, err = wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+		si.IsMasterServing = isMasterServing
+		return nil
+	})
 	return err
 }
 
@@ -330,14 +330,14 @@ func (wr *Wrangler) RemoveShardCell(ctx context.Context, keyspace, shard, cell s
 	}
 	defer unlock(&err)
 
-	if err = wr.ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_RDONLY, shardServingCells); err != nil {
+	if err = wr.ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_RDONLY, []string{cell}); err != nil {
 		return err
 	}
 
-	if err = wr.ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_REPLICA, shardServingCells); err != nil {
+	if err = wr.ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_REPLICA, []string{cell}); err != nil {
 		return err
 	}
-	return wr.ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_MASTER, shardServingCells)
+	return wr.ts.DeleteSrvKeyspacePartitions(ctx, keyspace, []*topo.ShardInfo{shardInfo}, topodatapb.TabletType_MASTER, []string{cell})
 }
 
 // SourceShardDelete will delete a SourceShard inside a shard, by index.

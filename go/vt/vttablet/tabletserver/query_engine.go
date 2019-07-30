@@ -190,6 +190,7 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 	qe.conns = connpool.New(
 		config.PoolNamePrefix+"ConnPool",
 		config.PoolSize,
+		config.PoolPrefillParallelism,
 		time.Duration(config.IdleTimeout*1e9),
 		checker,
 	)
@@ -198,6 +199,7 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 	qe.streamConns = connpool.New(
 		config.PoolNamePrefix+"StreamConnPool",
 		config.StreamPoolSize,
+		config.StreamPoolPrefillParallelism,
 		time.Duration(config.IdleTimeout*1e9),
 		checker,
 	)
@@ -317,8 +319,7 @@ func (qe *QueryEngine) Close() {
 
 // GetPlan returns the TabletPlan that for the query. Plans are cached in a cache.LRUCache.
 func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats, sql string, skipQueryPlanCache bool) (*TabletPlan, error) {
-	span := trace.NewSpanFromContext(ctx)
-	span.StartLocal("QueryEngine.GetPlan")
+	span, ctx := trace.NewSpan(ctx, "QueryEngine.GetPlan")
 	defer span.Finish()
 
 	if plan := qe.getQuery(sql); plan != nil {

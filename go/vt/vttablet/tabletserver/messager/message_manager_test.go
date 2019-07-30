@@ -614,7 +614,7 @@ func TestMessagesPending1(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		<-r1.ch
 	}
-	if d := time.Now().Sub(start); d > 15*time.Second {
+	if d := time.Since(start); d > 15*time.Second {
 		t.Errorf("pending work trigger did not happen. Duration: %v", d)
 	}
 }
@@ -663,7 +663,7 @@ func TestMessagesPending2(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		<-r1.ch
 	}
-	if d := time.Now().Sub(start); d > 15*time.Second {
+	if d := time.Since(start); d > 15*time.Second {
 		t.Errorf("pending work trigger did not happen. Duration: %v", d)
 	}
 }
@@ -784,7 +784,7 @@ func (fts *fakeTabletServer) PurgeMessages(ctx context.Context, target *querypb.
 }
 
 func newMMConnPool(db *fakesqldb.DB) *connpool.Pool {
-	pool := connpool.New("", 20, time.Duration(10*time.Minute), newFakeTabletServer())
+	pool := connpool.New("", 20, 0, time.Duration(10*time.Minute), newFakeTabletServer())
 	dbconfigs := dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "")
 	pool.Open(dbconfigs.AppWithDB(), dbconfigs.DbaWithDB(), dbconfigs.AppDebugWithDB())
 	return pool

@@ -1,11 +1,11 @@
 # Copyright 2017 Google Inc.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -29,6 +29,10 @@ ifdef VT_GO_PARALLEL_VALUE
 export VT_GO_PARALLEL := -p $(VT_GO_PARALLEL_VALUE)
 endif
 
+ifdef VT_EXTRA_BUILD_FLAGS
+export EXTRA_BUILD_FLAGS := $(VT_EXTRA_BUILD_FLAGS)
+endif
+
 # Link against the MySQL library in $VT_MYSQL_ROOT if it's specified.
 ifdef VT_MYSQL_ROOT
 # Clutter the env var only if it's a non-standard path.
@@ -46,7 +50,7 @@ build:
 ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
-	go install $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
+	go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
 
 parser:
 	make -C go/vt/sqlparser
@@ -186,7 +190,7 @@ docker_base_mysql56:
 
 docker_base_mysql80:
 	chmod -R o=g *
-	docker build -f docker/base/Dockerfile.mysql56 -t vitess/base:mysql80 .
+	docker build -f docker/base/Dockerfile.mysql80 -t vitess/base:mysql80 .
 
 docker_base_mariadb:
 	chmod -R o=g *
@@ -206,7 +210,7 @@ docker_base_percona57:
 
 docker_base_percona80:
 	chmod -R o=g *
-	docker build -f docker/base/Dockerfile.percona57 -t vitess/base:percona80 .
+	docker build -f docker/base/Dockerfile.percona80 -t vitess/base:percona80 .
 
 # Run "make docker_lite PROMPT_NOTICE=false" to avoid that the script
 # prompts you to press ENTER and confirm that the vitess/base image is not
@@ -276,3 +280,12 @@ release: docker_base
 	echo "A git tag was created, you can push it with:"
 	echo "git push origin v$(VERSION)"
 	echo "Also, don't forget the upload releases/v$(VERSION).tar.gz file to GitHub releases"
+
+packages: docker_base
+	@if [ -z "$VERSION" ]; then \
+	  echo "Set the env var VERSION with the release version"; exit 1;\
+	fi
+	mkdir -p releases
+	docker build -f docker/packaging/Dockerfile -t vitess/packaging .
+	docker run --rm -v ${PWD}/releases:/vt/releases --env VERSION=$(VERSION) vitess/packaging --package /vt/releases -t deb --deb-no-default-config-files
+	docker run --rm -v ${PWD}/releases:/vt/releases --env VERSION=$(VERSION) vitess/packaging --package /vt/releases -t rpm

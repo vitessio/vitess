@@ -782,11 +782,13 @@ func (f *FakeQueryService) StreamHealth(ctx context.Context, callback func(*quer
 	return nil
 }
 
-// UpdateStreamPosition is a test update stream position.
-const UpdateStreamPosition = "update stream position"
+const (
+	// UpdateStreamPosition is a test update stream position.
+	UpdateStreamPosition = "update stream position"
 
-// UpdateStreamTimestamp is a test update stream timestamp.
-const UpdateStreamTimestamp = 123654
+	// UpdateStreamTimestamp is a test update stream timestamp.
+	UpdateStreamTimestamp = 123654
+)
 
 // UpdateStreamStreamEvent1 is a test update stream event.
 var UpdateStreamStreamEvent1 = querypb.StreamEvent{
@@ -853,6 +855,11 @@ func (f *FakeQueryService) UpdateStream(ctx context.Context, target *querypb.Tar
 
 // VStream is part of the queryservice.QueryService interface
 func (f *FakeQueryService) VStream(ctx context.Context, target *querypb.Target, position string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	panic("not implemented")
+}
+
+// VStreamRows is part of the QueryService interface.
+func (f *FakeQueryService) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	panic("not implemented")
 }
 

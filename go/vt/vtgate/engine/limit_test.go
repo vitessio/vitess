@@ -90,12 +90,6 @@ func TestLimitExecute(t *testing.T) {
 	}
 
 	// Test with limit higher than input.
-	wantResult = sqltypes.MakeTestResult(
-		fields,
-		"a|1",
-		"b|2",
-		"c|3",
-	)
 	inputResult = sqltypes.MakeTestResult(
 		fields,
 		"a|1",
@@ -114,8 +108,8 @@ func TestLimitExecute(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if !reflect.DeepEqual(result, inputResult) {
-		t.Errorf("l.Execute:\n%v, want\n%v", result, inputResult)
+	if !reflect.DeepEqual(result, wantResult) {
+		t.Errorf("l.Execute:\n%v, want\n%v", result, wantResult)
 	}
 
 	// Test with bind vars.

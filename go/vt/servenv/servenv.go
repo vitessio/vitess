@@ -23,7 +23,7 @@ limitations under the License.
 // the environment. It also needs to call env.Close before exiting.
 //
 // Note: If you need to plug in any custom initialization/cleanup for
-// a vitess distribution, register them using onInit and onClose. A
+// a vitess distribution, register them using OnInit and onClose. A
 // clean way of achieving that is adding to this package a file with
 // an init() function that registers the hooks.
 package servenv
@@ -125,9 +125,9 @@ func populateListeningURL(port int32) {
 	}
 }
 
-// onInit registers f to be run at the beginning of the app
+// OnInit registers f to be run at the beginning of the app
 // lifecycle. It should be called in an init() function.
-func onInit(f func()) {
+func OnInit(f func()) {
 	onInitHooks.Add(f)
 }
 

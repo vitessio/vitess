@@ -32,6 +32,7 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -74,6 +75,11 @@ func (vc *vcursorImpl) Context() context.Context {
 	return vc.ctx
 }
 
+// MaxMemoryRows returns the maxMemoryRows flag value.
+func (vc *vcursorImpl) MaxMemoryRows() int {
+	return *maxMemoryRows
+}
+
 // SetContextTimeout updates context and sets a timeout.
 func (vc *vcursorImpl) SetContextTimeout(timeout time.Duration) context.CancelFunc {
 	ctx, cancel := context.WithTimeout(vc.ctx, timeout)
@@ -103,8 +109,8 @@ func (vc *vcursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, str
 	return table, destKeyspace, destTabletType, dest, err
 }
 
-// FindTableOrVindex finds the specified table or vindex.
-func (vc *vcursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+// FindTablesOrVindex finds the specified table or vindex.
+func (vc *vcursorImpl) FindTablesOrVindex(name sqlparser.TableName) ([]*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
 	destKeyspace, destTabletType, dest, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, nil, "", destTabletType, nil, err
@@ -112,11 +118,11 @@ func (vc *vcursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Ta
 	if destKeyspace == "" {
 		destKeyspace = vc.keyspace
 	}
-	table, vindex, err := vc.executor.VSchema().FindTableOrVindex(destKeyspace, name.Name.String())
+	tables, vindex, err := vc.executor.VSchema().FindTablesOrVindex(destKeyspace, name.Name.String(), vc.tabletType)
 	if err != nil {
 		return nil, nil, "", destTabletType, nil, err
 	}
-	return table, vindex, destKeyspace, destTabletType, dest, nil
+	return tables, vindex, destKeyspace, destTabletType, dest, nil
 }
 
 // DefaultKeyspace returns the default keyspace of the current request
@@ -138,19 +144,19 @@ func (vc *vcursorImpl) TargetString() string {
 	return vc.safeSession.TargetString
 }
 
-// Execute performs a V3 level execution of the query.
-func (vc *vcursorImpl) Execute(method string, query string, BindVars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	qr, err := vc.executor.Execute(vc.ctx, method, vc.safeSession, vc.marginComments.Leading+query+vc.marginComments.Trailing, BindVars)
-	if err == nil {
-		vc.hasPartialDML = true
+// Execute is part of the engine.VCursor interface.
+func (vc *vcursorImpl) Execute(method string, query string, bindVars map[string]*querypb.BindVariable, isDML bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
+	session := vc.safeSession
+	if co == vtgatepb.CommitOrder_AUTOCOMMIT {
+		// For autocommit, we have to create an independent session.
+		session = NewAutocommitSession(vc.safeSession.Session)
+	} else {
+		session.SetCommitOrder(co)
+		defer session.SetCommitOrder(vtgatepb.CommitOrder_NORMAL)
 	}
-	return qr, err
-}
 
-// ExecuteAutocommit performs a V3 level execution of the query in a separate autocommit session.
-func (vc *vcursorImpl) ExecuteAutocommit(method string, query string, BindVars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	qr, err := vc.executor.Execute(vc.ctx, method, NewAutocommitSession(vc.safeSession.Session), vc.marginComments.Leading+query+vc.marginComments.Trailing, BindVars)
-	if err == nil {
+	qr, err := vc.executor.Execute(vc.ctx, method, session, vc.marginComments.Leading+query+vc.marginComments.Trailing, bindVars)
+	if err == nil && isDML {
 		vc.hasPartialDML = true
 	}
 	return qr, err
@@ -161,7 +167,7 @@ func (vc *vcursorImpl) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries [
 	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(queries)))
 	qr, errs := vc.executor.scatterConn.ExecuteMultiShard(vc.ctx, rss, commentedShardQueries(queries, vc.marginComments), vc.tabletType, vc.safeSession, false, autocommit)
 
-	if errs == nil {
+	if errs == nil && isDML {
 		vc.hasPartialDML = true
 	}
 	return qr, errs
@@ -191,6 +197,28 @@ func (vc *vcursorImpl) ExecuteStandalone(query string, bindVars map[string]*quer
 func (vc *vcursorImpl) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
 	atomic.AddUint32(&vc.logStats.ShardQueries, uint32(len(rss)))
 	return vc.executor.scatterConn.StreamExecuteMulti(vc.ctx, vc.marginComments.Leading+query+vc.marginComments.Trailing, rss, bindVars, vc.tabletType, vc.safeSession.Options, callback)
+}
+
+// ExecuteKeyspaceID is part of the engine.VCursor interface.
+func (vc *vcursorImpl) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, isDML, autocommit bool) (*sqltypes.Result, error) {
+	atomic.AddUint32(&vc.logStats.ShardQueries, 1)
+	rss, _, err := vc.ResolveDestinations(keyspace, nil, []key.Destination{key.DestinationKeyspaceID(ksid)})
+	if err != nil {
+		return nil, err
+	}
+	queries := []*querypb.BoundQuery{{
+		Sql:           query,
+		BindVariables: bindVars,
+	}}
+	qr, errs := vc.ExecuteMultiShard(rss, queries, isDML, autocommit)
+
+	if len(errs) == 0 {
+		if isDML {
+			vc.hasPartialDML = true
+		}
+		return qr, nil
+	}
+	return nil, errs[0]
 }
 
 func (vc *vcursorImpl) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {

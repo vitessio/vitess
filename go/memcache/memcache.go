@@ -80,13 +80,13 @@ func (mc *Connection) Gets(keys ...string) (results []cacheservice.Result, err e
 	return
 }
 
-// Set set the value with specified cache key.
+// Set sets the value with specified cache key.
 func (mc *Connection) Set(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error) {
 	defer handleError(&err)
 	return mc.store("set", key, flags, timeout, value, 0), nil
 }
 
-// Add store the value only if it does not already exist.
+// Add stores the value only if it does not already exist.
 func (mc *Connection) Add(key string, flags uint16, timeout uint64, value []byte) (stored bool, err error) {
 	defer handleError(&err)
 	return mc.store("add", key, flags, timeout, value, 0), nil
@@ -117,7 +117,7 @@ func (mc *Connection) Cas(key string, flags uint16, timeout uint64, value []byte
 	return mc.store("cas", key, flags, timeout, value, cas), nil
 }
 
-// Delete delete the value for the specified cache key.
+// Delete deletes the value for the specified cache key.
 func (mc *Connection) Delete(key string) (deleted bool, err error) {
 	defer handleError(&err)
 	mc.setDeadline()

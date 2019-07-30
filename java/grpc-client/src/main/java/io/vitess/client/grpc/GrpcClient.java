@@ -63,6 +63,7 @@ import io.vitess.proto.Vtgate.StreamExecuteRequest;
 import io.vitess.proto.Vtgate.StreamExecuteResponse;
 import io.vitess.proto.Vtgate.StreamExecuteShardsRequest;
 import io.vitess.proto.Vtgate.StreamExecuteShardsResponse;
+import io.vitess.proto.Vtgate.VStreamResponse;
 import io.vitess.proto.grpc.VitessGrpc;
 import io.vitess.proto.grpc.VitessGrpc.VitessFutureStub;
 import io.vitess.proto.grpc.VitessGrpc.VitessStub;
@@ -281,6 +282,21 @@ public class GrpcClient implements RpcClient {
       GetSrvKeyspaceRequest request) throws SQLException {
     return Futures.catchingAsync(getFutureStub(ctx).getSrvKeyspace(request), Exception.class,
         new ExceptionConverter<GetSrvKeyspaceResponse>(), MoreExecutors.directExecutor());
+  }
+
+  @Override
+  public StreamIterator<Vtgate.VStreamResponse> getVStream(Context ctx,
+      Vtgate.VStreamRequest vstreamRequest) {
+    GrpcStreamAdapter<VStreamResponse, VStreamResponse> adapter =
+        new GrpcStreamAdapter<VStreamResponse, VStreamResponse>() {
+          @Override
+          VStreamResponse getResult(VStreamResponse response) {
+            return response;
+          }
+        };
+
+    getAsyncStub(ctx).vStream(vstreamRequest, adapter);
+    return adapter;
   }
 
   /**

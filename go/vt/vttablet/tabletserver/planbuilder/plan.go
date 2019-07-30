@@ -245,9 +245,8 @@ func (plan *Plan) setTable(tableName sqlparser.TableIdent, tables map[string]*sc
 // Build builds a plan based on the schema.
 func Build(statement sqlparser.Statement, tables map[string]*schema.Table) (*Plan, error) {
 	var plan *Plan
-	var err error
 
-	err = checkForPoolingUnsafeConstructs(statement)
+	err := checkForPoolingUnsafeConstructs(statement)
 	if err != nil {
 		return nil, err
 	}

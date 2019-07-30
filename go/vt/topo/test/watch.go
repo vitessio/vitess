@@ -39,7 +39,7 @@ func waitForInitialValue(t *testing.T, conn topo.Conn, srvKeyspace *topodatapb.S
 		current, changes, cancel = conn.Watch(ctx, "keyspaces/test_keyspace/SrvKeyspace")
 		if topo.IsErrType(current.Err, topo.NoNode) {
 			// hasn't appeared yet
-			if time.Now().Sub(start) > 10*time.Second {
+			if time.Since(start) > 10*time.Second {
 				t.Fatalf("time out waiting for file to appear")
 			}
 			time.Sleep(10 * time.Millisecond)
@@ -72,7 +72,7 @@ func checkWatch(t *testing.T, ts *topo.Server) {
 	}
 
 	// start watching something that doesn't exist -> error
-	current, changes, cancel := conn.Watch(ctx, "keyspaces/test_keyspace/SrvKeyspace")
+	current, changes, _ := conn.Watch(ctx, "keyspaces/test_keyspace/SrvKeyspace")
 	if !topo.IsErrType(current.Err, topo.NoNode) {
 		t.Errorf("watch on missing node didn't return ErrNoNode: %v %v", current, changes)
 	}
@@ -86,7 +86,7 @@ func checkWatch(t *testing.T, ts *topo.Server) {
 	}
 
 	// start watching again, it should work
-	changes, cancel = waitForInitialValue(t, conn, srvKeyspace)
+	changes, cancel := waitForInitialValue(t, conn, srvKeyspace)
 	defer cancel()
 
 	// change the data

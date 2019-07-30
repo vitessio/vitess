@@ -61,17 +61,19 @@ type Engine struct {
 	cell            string
 	mysqld          mysqlctl.MysqlDaemon
 	dbClientFactory func() binlogplayer.DBClient
+	dbName          string
 }
 
 // NewEngine creates a new Engine.
 // A nil ts means that the Engine is disabled.
-func NewEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactory func() binlogplayer.DBClient) *Engine {
+func NewEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactory func() binlogplayer.DBClient, dbName string) *Engine {
 	vre := &Engine{
 		controllers:     make(map[int]*controller),
 		ts:              ts,
 		cell:            cell,
 		mysqld:          mysqld,
 		dbClientFactory: dbClientFactory,
+		dbName:          dbName,
 	}
 	return vre
 }
@@ -111,18 +113,31 @@ func (vre *Engine) executeFetchMaybeCreateTable(dbClient binlogplayer.DBClient, 
 	// If it's a bad table or db, it could be because _vt.vreplication wasn't created.
 	// In that case we can try creating it again.
 	merr, isSQLErr := err.(*mysql.SQLError)
-	if !isSQLErr || !(merr.Num == mysql.ERNoSuchTable || merr.Num == mysql.ERBadDb) {
+	if !isSQLErr || !(merr.Num == mysql.ERNoSuchTable || merr.Num == mysql.ERBadDb || merr.Num == mysql.ERBadFieldError) {
 		return qr, err
 	}
 
 	log.Info("Looks like _vt.vreplication table may not exist. Trying to recreate... ")
-	for _, query := range binlogplayer.CreateVReplicationTable() {
-		if _, merr := dbClient.ExecuteFetch(query, 0); merr != nil {
-			log.Warningf("Failed to ensure _vt.vreplication table exists: %v", merr)
-			return nil, err
+	if merr.Num == mysql.ERNoSuchTable || merr.Num == mysql.ERBadDb {
+		for _, query := range binlogplayer.CreateVReplicationTable() {
+			if _, merr := dbClient.ExecuteFetch(query, 0); merr != nil {
+				log.Warningf("Failed to ensure _vt.vreplication table exists: %v", merr)
+				return nil, err
+			}
 		}
 	}
-
+	if merr.Num == mysql.ERBadFieldError {
+		log.Info("Adding column to table _vt.vreplication")
+		for _, query := range binlogplayer.AlterVReplicationTable() {
+			if _, merr := dbClient.ExecuteFetch(query, 0); merr != nil {
+				merr, isSQLErr := err.(*mysql.SQLError)
+				if !isSQLErr || !(merr.Num == mysql.ERDupFieldName) {
+					log.Warningf("Failed to alter _vt.vreplication table: %v", merr)
+					return nil, err
+				}
+			}
+		}
+	}
 	return dbClient.ExecuteFetch(query, maxrows)
 }
 
@@ -133,11 +148,16 @@ func (vre *Engine) initAll() error {
 	}
 	defer dbClient.Close()
 
-	rows, err := readAllRows(dbClient)
+	rows, err := readAllRows(dbClient, vre.dbName)
 	if err != nil {
 		// Handle Table not found.
 		if merr, ok := err.(*mysql.SQLError); ok && merr.Num == mysql.ERNoSuchTable {
 			log.Info("_vt.vreplication table not found. Will create it later if needed")
+			return nil
+		}
+		// Handle missing field
+		if merr, ok := err.(*mysql.SQLError); ok && merr.Num == mysql.ERBadFieldError {
+			log.Info("_vt.vreplication table found but is missing field db_name. Will add it later if needed")
 			return nil
 		}
 		return err
@@ -302,6 +322,8 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 	}
 	defer dbClient.Close()
 
+	tkr := time.NewTicker(waitRetryTime)
+	defer tkr.Stop()
 	for {
 		qr, err := dbClient.ExecuteFetch(binlogplayer.ReadVReplicationStatus(uint32(id)), 10)
 		switch {
@@ -330,7 +352,7 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 			return ctx.Err()
 		case <-vre.ctx.Done():
 			return fmt.Errorf("vreplication is closing: %v", vre.ctx.Err())
-		case <-time.After(waitRetryTime):
+		case <-tkr.C:
 		}
 	}
 }
@@ -347,8 +369,8 @@ func (vre *Engine) updateStats() {
 	}
 }
 
-func readAllRows(dbClient binlogplayer.DBClient) ([]map[string]string, error) {
-	qr, err := dbClient.ExecuteFetch("select * from _vt.vreplication", 10000)
+func readAllRows(dbClient binlogplayer.DBClient, dbName string) ([]map[string]string, error) {
+	qr, err := dbClient.ExecuteFetch(fmt.Sprintf("select * from _vt.vreplication where db_name=%v", encodeString(dbName)), 10000)
 	if err != nil {
 		return nil, err
 	}
