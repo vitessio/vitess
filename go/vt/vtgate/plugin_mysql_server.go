@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -35,7 +34,6 @@ import (
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttls"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -213,31 +211,6 @@ func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string, callback func(*
 
 	if c.SchemaName != "" {
 		session.TargetString = c.SchemaName
-	}
-
-	statement, err := sqlparser.ParseStrictDDL(query)
-	if err != nil {
-		err = mysql.NewSQLErrorFromError(err)
-		return err
-	}
-
-	paramsCount := uint16(0)
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
-		switch node := node.(type) {
-		case *sqlparser.SQLVal:
-			if strings.HasPrefix(string(node.Val), ":v") {
-				paramsCount++
-			}
-		}
-		return true, nil
-	}, statement)
-
-	prepare := c.PrepareData[c.StatementID]
-
-	if paramsCount > 0 {
-		prepare.ParamsCount = paramsCount
-		prepare.ParamsType = make([]int32, paramsCount)
-		prepare.BindVars = make(map[string]*querypb.BindVariable, paramsCount)
 	}
 
 	session, result, err := vh.vtg.Prepare(ctx, session, query, make(map[string]*querypb.BindVariable))

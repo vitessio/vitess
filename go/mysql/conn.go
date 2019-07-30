@@ -847,12 +847,35 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			PrepareStmt: queries[0],
 		}
 
+		statement, err := sqlparser.ParseStrictDDL(query)
+		if err != nil {
+			return err
+		}
+
+		paramsCount := uint16(0)
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+			switch node := node.(type) {
+			case *sqlparser.SQLVal:
+				if strings.HasPrefix(string(node.Val), ":v") {
+					paramsCount++
+				}
+			}
+			return true, nil
+		}, statement)
+
+		if paramsCount > 0 {
+			prepare.ParamsCount = paramsCount
+			prepare.ParamsType = make([]int32, paramsCount)
+			prepare.BindVars = make(map[string]*querypb.BindVariable, paramsCount)
+		}
+
 		c.PrepareData[c.StatementID] = prepare
 
 		fieldSent := false
 		// sendFinished is set if the response should just be an OK packet.
 		sendFinished := false
-		err := handler.ComPrepare(c, queries[0], func(qr *sqltypes.Result) error {
+		// TODO(saifalharthi) change the function to return a field.
+		err = handler.ComPrepare(c, queries[0], func(qr *sqltypes.Result) error {
 			if sendFinished {
 				// Failsafe: Unreachable if server is well-behaved.
 				return io.EOF

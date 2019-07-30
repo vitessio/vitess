@@ -1101,6 +1101,7 @@ func (c *Conn) writeBinaryRow(fields []*querypb.Field, row []sqltypes.Value) err
 		} else {
 			v, err := val2MySQL(val)
 			if err != nil {
+				c.recycleWritePacket()
 				return fmt.Errorf("internal value %v to MySQL value error: %v", val, err)
 			}
 			pos += copy(data[pos:], v)
@@ -1118,7 +1119,6 @@ func (c *Conn) writeBinaryRow(fields []*querypb.Field, row []sqltypes.Value) err
 func (c *Conn) writeBinaryRows(result *sqltypes.Result) error {
 	for _, row := range result.Rows {
 		if err := c.writeBinaryRow(result.Fields, row); err != nil {
-			c.recycleWritePacket()
 			return err
 		}
 	}
