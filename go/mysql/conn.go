@@ -169,7 +169,6 @@ type Conn struct {
 type PrepareData struct {
 	StatementID uint32
 	PrepareStmt string
-	ParsedStmt  *sqlparser.Statement
 	ParamsCount uint16
 	ParamsType  []int32
 	ColumnNames []string
@@ -882,15 +881,19 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		queryStart := time.Now()
 		stmtID, _, err := c.parseComStmtExecute(c.PrepareData, data)
 		c.recycleReadPacket()
-		if err != nil {
-			if stmtID != uint32(0) {
+
+		if stmtID != uint32(0) {
+			defer func() {
 				prepare := c.PrepareData[stmtID]
 				if prepare.BindVars != nil {
 					for k := range prepare.BindVars {
 						prepare.BindVars[k] = nil
 					}
 				}
-			}
+			}()
+		}
+
+		if err != nil {
 			if werr := c.writeErrorPacketFromError(err); werr != nil {
 				// If we can't even write the error, we're done.
 				log.Error("Error writing query error to client %v: %v", c.ConnectionID, werr)
@@ -924,12 +927,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 			return c.writeBinaryRows(qr)
 		})
-
-		if prepare.BindVars != nil {
-			for k := range prepare.BindVars {
-				prepare.BindVars[k] = nil
-			}
-		}
 
 		// If no field was sent, we expect an error.
 		if !fieldSent {
@@ -993,12 +990,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		if val, ok := prepare.BindVars[key]; ok {
 			val.Value = append(val.Value, chunk...)
 		} else {
-			v, err := sqltypes.InterfaceToValue(chunk)
-			if err != nil {
-				log.Error("build converted parameter value failed: %v", err)
-				return err
-			}
-			prepare.BindVars[key] = sqltypes.ValueBindVariable(v)
+			prepare.BindVars[key] = sqltypes.BytesBindVariable(chunk)
 		}
 	case ComStmtClose:
 		stmtID, ok := c.parseComStmtClose(data)
@@ -1222,8 +1214,9 @@ func ParseErrorPacket(data []byte) error {
 	return NewSQLError(int(code), string(sqlState), "%v", msg)
 }
 
-func (conn *Conn) GetTLSClientCerts() []*x509.Certificate {
-	if tlsConn, ok := conn.conn.(*tls.Conn); ok {
+// This method gets TLS certificates
+func (c *Conn) GetTLSClientCerts() []*x509.Certificate {
+	if tlsConn, ok := c.conn.(*tls.Conn); ok {
 		return tlsConn.ConnectionState().PeerCertificates
 	}
 	return nil

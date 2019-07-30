@@ -27,7 +27,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // Utility function to write sql query as packets to test parseComPrepare
@@ -42,11 +41,6 @@ func MockQueryPackets(t *testing.T, query string) []byte {
 
 func MockPrepareData(t *testing.T) (*PrepareData, *sqltypes.Result) {
 	sql := "select * from test_table where id = ?"
-
-	statement, err := sqlparser.Parse(sql)
-	if err != nil {
-		t.Fatalf("Sql parinsg failed: %v", err)
-	}
 
 	result := &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -66,7 +60,6 @@ func MockPrepareData(t *testing.T) (*PrepareData, *sqltypes.Result) {
 	prepare := &PrepareData{
 		StatementID: 18,
 		PrepareStmt: sql,
-		ParsedStmt:  &statement,
 		ParamsCount: 1,
 		ParamsType:  []int32{263},
 		ColumnNames: []string{"id"},

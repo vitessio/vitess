@@ -844,7 +844,7 @@ func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql s
 		goto handleError
 	}
 
-	qr, err = vtg.executor.Prepare(ctx, "Execute", NewSafeSession(session), sql, bindVariables)
+	qr, err = vtg.executor.Prepare(ctx, "Prepare", NewSafeSession(session), sql, bindVariables)
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 		return session, qr, nil

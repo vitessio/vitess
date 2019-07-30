@@ -1460,39 +1460,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 	switch stmtType {
 	case sqlparser.StmtSelect:
 		return e.handlePrepare(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, logStats)
-	case sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
-		safeSession := safeSession
-
-		mustCommit := false
-		if safeSession.Autocommit && !safeSession.InTransaction() {
-			mustCommit = true
-			if err := e.txConn.Begin(ctx, safeSession); err != nil {
-				return nil, err
-			}
-			// The defer acts as a failsafe. If commit was successful,
-			// the rollback will be a no-op.
-			defer e.txConn.Rollback(ctx, safeSession)
-		}
-
-		// The SetAutocommitable flag should be same as mustCommit.
-		// If we started a transaction because of autocommit, then mustCommit
-		// will be true, which means that we can autocommit. If we were already
-		// in a transaction, it means that the app started it, or we are being
-		// called recursively. If so, we cannot autocommit because whatever we
-		// do is likely not final.
-		// The control flow is such that autocommitable can only be turned on
-		// at the beginning, but never after.
-		safeSession.SetAutocommittable(mustCommit)
-
-		if mustCommit {
-			commitStart := time.Now()
-			if err = e.txConn.Commit(ctx, safeSession); err != nil {
-				return nil, err
-			}
-			logStats.CommitTime = time.Since(commitStart)
-		}
-		return &sqltypes.Result{}, nil
-	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSet,
+	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSet, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete,
 		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtComment:
 		return &sqltypes.Result{}, nil
 	case sqlparser.StmtShow:
@@ -1532,7 +1500,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 	}
 
 	// Check if there was partial DML execution. If so, rollback the transaction.
-	if err != nil && safeSession.InTransaction() && vcursor.hasPartialDML {
+	if err != nil {
 		_ = e.txConn.Rollback(ctx, safeSession)
 		err = vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction rolled back due to partial DML execution: %v", err)
 	}
