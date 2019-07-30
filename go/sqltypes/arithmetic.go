@@ -40,6 +40,37 @@ type numeric struct {
 
 var zeroBytes = []byte("0")
 
+//Addition adds two values together
+//if v1 or v2 is null, then it returns null
+/*
+func Addition(v1, v2 Value) Value {
+	if v1.IsNull() {
+		return NULL
+	}
+
+	if v2.IsNull() {
+		return NULL
+	}
+
+	lv1, err := newNumeric(v1)
+	if err != nil {
+		return NULL
+	}
+	lv2, err := newNumeric(v2)
+	if err != nil {
+		return NULL
+	}
+	lresult, err := addNumeric(lv1, lv2)
+	if err != nil {
+		return NULL
+	}
+
+	return castFromNumeric(lresult, lresult.typ)
+
+}
+function to make
+*/
+
 // NullsafeAdd adds two Values in a null-safe manner. A null value
 // is treated as 0. If both values are null, then a null is returned.
 // If both values are not null, a numeric value is built
@@ -72,7 +103,7 @@ func NullsafeAdd(v1, v2 Value, resultType querypb.Type) Value {
 		return NULL //, err
 	}
 	//fmt.Printf("resultType = %v, lresult = %v\n", lresult.typ, lresult)
-	return castFromNumeric(lresult, lresult.typ)
+	return castFromNumeric(lresult, resultType)
 }
 
 // NullsafeCompare returns 0 if v1==v2, -1 if v1<v2, and 1 if v1>v2.
@@ -371,6 +402,23 @@ func intPlusInt(v1, v2 int64) numeric {
 overflow:
 	return numeric{typ: Float64, fval: float64(v1) + float64(v2)}
 }
+
+/*
+function to make
+func intPlusIntWithError(v1, v2 int64) (numeric, error) {
+	result := v1 + v2
+	if v1 > 0 && v2 > 0 && result < 0 {
+		goto overflow
+	}
+	if v1 < 0 && v2 < 0 && result > 0 {
+		goto overflow
+	}
+	return numeric{typ: Int64, ival: result}, nil
+
+overflow:
+	return numeric{}, vterrors.Errorf(vtrpcpb.Code_)
+}
+*/
 
 func uintPlusInt(v1 uint64, v2 int64) (numeric, error) {
 	//if v2 < 0 {

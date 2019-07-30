@@ -67,14 +67,14 @@ func TestAdd(t *testing.T) {
 		// Make sure underlying error is returned while adding.
 		v1:  NewInt64(-1),
 		v2:  NewUint64(2),
-		out: NewFloat64(18446744073709551617),
-		//out: NewUint64(1),
+		out: NewInt64(-9223372036854775808),
+		//out: NewFloat64(18446744073709551617),
 		//err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot add a negative number to an unsigned integer: 2, -1"),
 	}, {
 		// Make sure underlying error is returned while converting.
 		v1:  NewFloat64(1),
 		v2:  NewFloat64(2),
-		out: NewFloat64(3),
+		out: NewInt64(3),
 		//err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion: FLOAT64 to INT64"),
 	}}
 	for _, tcase := range tcases {
