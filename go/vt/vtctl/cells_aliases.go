@@ -39,13 +39,13 @@ func init() {
 		"AddCellsAlias",
 		commandAddCellsAlias,
 		"[-cells <cell,cell2...>] <alias>",
-		"Registers a local topology service in a new cell by creating the CellInfo with the provided parameters. The address will be used to connect to the topology service, and we'll put Vitess data starting at the provided root."})
+		"Registers a local topology service in a new cell by creating the CellsAlias with the provided parameters. An alis provides a group cells that replica/rdonly can route. By default, vitess won't route traffic cross cells for replica/rdonly tablets. Aliases provide a way to create groups where this is allowed."})
 
 	addCommand(cellsAliasesGroupName, command{
 		"UpdateCellsAlias",
 		commandUpdateCellsAlias,
 		"[-cells <cell,cell2,...>] <alias>",
-		"Updates the content of a CellInfo with the provided parameters. If a value is empty, it is not updated. The CellInfo will be created if it doesn't exist."})
+		"Updates the content of a CellsAlias with the provided parameters. If a value is empty, it is not updated. The CellsAlias will be created if it doesn't exist."})
 
 	addCommand(cellsAliasesGroupName, command{
 		"DeleteCellsAlias",
@@ -57,7 +57,7 @@ func init() {
 		"GetCellsAliases",
 		commandGetCellsAliases,
 		"",
-		"Lists all the cells for which we have a CellInfo object, meaning we have a local topology service registered."})
+		"Lists all the cells for which we have a CellsAlias object."})
 }
 
 func commandAddCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

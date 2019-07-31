@@ -168,8 +168,16 @@ to restore a backup to that tablet.
 
 As noted in the [Prerequisites](#prerequisites) section, the flag is
 generally enabled all of the time for all of the tablets in a shard.
-If Vitess cannot find a backup in the Backup Storage system, it just
-starts the vttablet as a new tablet.
+By default, if Vitess cannot find a backup in the Backup Storage system,
+the tablet will start up empty. This behavior allows you to bootstrap a new
+shard before any backups exist.
+
+If the `-wait_for_backup_interval` flag is set to a value greater than zero,
+the tablet will instead keep checking for a backup to appear at that interval.
+This can be used to ensure tablets launched concurrently while an initial backup
+is being seeded for the shard (e.g. uploaded from cold storage or created by
+another tablet) will wait until the proper time and then pull the new backup
+when it's ready.
 
 ``` sh
 vttablet ... -backup_storage_implementation=file \

@@ -714,6 +714,47 @@ func (conn *gRPCQueryClient) VStream(ctx context.Context, target *querypb.Target
 	}
 }
 
+// VStreamRows streams rows of a query from the specified starting point.
+func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	stream, err := func() (queryservicepb.Query_VStreamRowsClient, error) {
+		conn.mu.RLock()
+		defer conn.mu.RUnlock()
+		if conn.cc == nil {
+			return nil, tabletconn.ConnClosed
+		}
+
+		req := &binlogdatapb.VStreamRowsRequest{
+			Target:            target,
+			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+			Query:             query,
+			Lastpk:            lastpk,
+		}
+		stream, err := conn.c.VStreamRows(ctx, req)
+		if err != nil {
+			return nil, tabletconn.ErrorFromGRPC(err)
+		}
+		return stream, nil
+	}()
+	if err != nil {
+		return err
+	}
+	for {
+		r, err := stream.Recv()
+		if err != nil {
+			return tabletconn.ErrorFromGRPC(err)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		if err := send(r); err != nil {
+			return err
+		}
+	}
+}
+
 // HandlePanic is a no-op.
 func (conn *gRPCQueryClient) HandlePanic(err *error) {
 }

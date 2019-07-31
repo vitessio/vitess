@@ -530,7 +530,7 @@ Validates that all nodes reachable from the specified keyspace are consistent.
 
 ### WaitForDrain
 
-Blocks until no new queries were observed on all tablets with the given tablet type in the specifed keyspace.  This can be used as sanity check to ensure that the tablets were drained after running vtctl MigrateServedTypes  and vtgate is no longer using them. If -timeout is set, it fails when the timeout is reached.
+Blocks until no new queries were observed on all tablets with the given tablet type in the specified keyspace.  This can be used as sanity check to ensure that the tablets were drained after running vtctl MigrateServedTypes  and vtgate is no longer using them. If -timeout is set, it fails when the timeout is reached.
 
 #### Example
 
@@ -1500,7 +1500,7 @@ Outputs a JSON structure that contains information about the SrvVSchema.
 * [PlannedReparentShard](#plannedreparentshard)
 * [RemoveBackup](#removebackup)
 * [RemoveShardCell](#removeshardcell)
-* [SetShardServedTypes](#setshardservedtypes)
+* [SetShardIsMasterServing](#setshardismasterserving)
 * [SetShardTabletControl](#setshardtabletcontrol)
 * [ShardReplicationFix](#shardreplicationfix)
 * [ShardReplicationPositions](#shardreplicationpositions)
@@ -1726,9 +1726,9 @@ Removes the cell from the shard's Cells list.
 * the <code>&lt;keyspace/shard&gt;</code> and <code>&lt;cell&gt;</code> arguments are required for the <code>&lt;RemoveShardCell&gt;</code> command This error occurs if the command is not called with exactly 2 arguments.
 
 
-### SetShardServedTypes
+### SetShardIsMasterServing
 
-Add or remove served type to/from a shard. This is meant as an emergency function. It does not rebuild any serving graph i.e. does not run 'RebuildKeyspaceGraph'.
+Add or remove a shard from serving. This is meant as an emergency function. It does not rebuild any serving graph i.e. does not run 'RebuildKeyspaceGraph'.
 
 #### Example
 

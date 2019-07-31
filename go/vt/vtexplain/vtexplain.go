@@ -44,6 +44,8 @@ var (
 type ExecutorMode string
 
 const (
+	vtexplainCell = "explainCell"
+
 	// ModeMulti is the default mode with autocommit implemented at vtgate
 	ModeMulti = "multi"
 
@@ -140,10 +142,6 @@ type Explain struct {
 	// list of queries / bind vars sent to each tablet
 	TabletActions map[string]*TabletActions
 }
-
-const (
-	vtexplainCell = "explainCell"
-)
 
 // Init sets up the fake execution environment
 func Init(vSchemaStr, sqlSchema string, opts *Options) error {
@@ -256,8 +254,11 @@ func Run(sql string) ([]*Explain, error) {
 		}
 
 		if sql != "" {
-			// Reset the global time simulator for each query
-			batchTime = sync2.NewBatcher(*batchInterval)
+			// Reset the global time simulator unless there's an open transaction
+			// in the session from the previous staement.
+			if vtgateSession == nil || !vtgateSession.GetInTransaction() {
+				batchTime = sync2.NewBatcher(*batchInterval)
+			}
 			log.V(100).Infof("explain %s", sql)
 			e, err := explain(sql)
 			if err != nil {

@@ -38,7 +38,7 @@ source $script_root/env.sh
 
 init_db_sql_file="$VTROOT/config/init_db.sql"
 
-export  EXTRA_MY_CNF=$VTROOT/config/mycnf/default-fast.cnf
+export EXTRA_MY_CNF=$VTROOT/config/mycnf/default-fast.cnf:$VTROOT/config/mycnf/rbr.cnf
 
 case "$MYSQL_FLAVOR" in
   "MySQL56")
@@ -46,6 +46,9 @@ case "$MYSQL_FLAVOR" in
     ;;
   "MariaDB")
     export EXTRA_MY_CNF=$EXTRA_MY_CNF:$VTROOT/config/mycnf/master_mariadb.cnf
+    ;;
+  "MariaDB103")
+    export EXTRA_MY_CNF=$EXTRA_MY_CNF:$VTROOT/config/mycnf/master_mariadb103.cnf
     ;;
   *)
     echo "Please set MYSQL_FLAVOR to MySQL56 or MariaDB."
@@ -100,7 +103,7 @@ optional_auth_args=''
 if [ "$1" = "--enable-grpc-static-auth" ];
 then
 	  echo "Enabling Auth with static authentication in grpc"
-    optional_auth_args='-grpc_auth_mode static -grpc_auth_static_password_file ./grpc_static_auth.json'
+    optional_auth_args='-grpc_auth_mode static -grpc_auth_static_password_file ./grpc_static_auth.json -grpc_auth_static_client_creds ./grpc_static_client_auth.json'
 fi
 
 # Start all vttablets in background.

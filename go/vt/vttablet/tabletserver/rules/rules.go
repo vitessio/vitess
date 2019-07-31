@@ -72,9 +72,7 @@ func (qrs *Rules) Copy() (newqrs *Rules) {
 
 // Append merges the rules from another Rules into the receiver
 func (qrs *Rules) Append(otherqrs *Rules) {
-	for _, qr := range otherqrs.rules {
-		qrs.rules = append(qrs.rules, qr)
-	}
+	qrs.rules = append(qrs.rules, otherqrs.rules...)
 }
 
 // Add adds a Rule to Rules. It does not check

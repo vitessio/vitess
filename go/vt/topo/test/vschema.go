@@ -38,8 +38,7 @@ func checkVSchema(t *testing.T, ts *topo.Server) {
 		t.Fatalf("CreateShard: %v", err)
 	}
 
-	got, err := ts.GetVSchema(ctx, "test_keyspace")
-	want := &vschemapb.Keyspace{}
+	_, err := ts.GetVSchema(ctx, "test_keyspace")
 	if !topo.IsErrType(err, topo.NoNode) {
 		t.Error(err)
 	}
@@ -53,11 +52,11 @@ func checkVSchema(t *testing.T, ts *topo.Server) {
 		t.Fatal(err)
 	}
 
-	got, err = ts.GetVSchema(ctx, "test_keyspace")
+	got, err := ts.GetVSchema(ctx, "test_keyspace")
 	if err != nil {
 		t.Error(err)
 	}
-	want = &vschemapb.Keyspace{
+	want := &vschemapb.Keyspace{
 		Tables: map[string]*vschemapb.Table{
 			"unsharded": {},
 		},
@@ -92,5 +91,32 @@ func checkVSchema(t *testing.T, ts *topo.Server) {
 	}
 	if len(shards) != 1 || shards[0] != "b0-c0" {
 		t.Errorf(`GetShardNames: want [ "b0-c0" ], got %v`, shards)
+	}
+}
+
+// checkRoutingRules runs the tests on the routing rules part of the API
+func checkRoutingRules(t *testing.T, ts *topo.Server) {
+	ctx := context.Background()
+
+	if _, err := ts.GetRoutingRules(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	want := &vschemapb.RoutingRules{
+		Rules: []*vschemapb.RoutingRule{{
+			FromTable: "t1",
+			ToTables:  []string{"t2", "t3"},
+		}},
+	}
+	if err := ts.SaveRoutingRules(ctx, want); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := ts.GetRoutingRules(ctx)
+	if err != nil {
+		t.Error(err)
+	}
+	if !proto.Equal(got, want) {
+		t.Errorf("GetRoutingRules: %v, want %v", got, want)
 	}
 }

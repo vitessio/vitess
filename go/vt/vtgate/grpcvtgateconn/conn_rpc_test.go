@@ -144,7 +144,7 @@ func TestGRPCVTGateConnAuth(t *testing.T) {
 		t.Fatalf("dial failed: %v", err)
 	}
 	vtgateconntest.RegisterTestDialProtocol(client)
-	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "")
+	conn, _ := vtgateconn.DialProtocol(context.Background(), "test", "")
 	// run the test suite
 	_, err = conn.Begin(context.Background())
 	want := "rpc error: code = Unauthenticated desc = username and password must be provided"

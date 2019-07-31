@@ -86,6 +86,11 @@ func TopoServerTestSuite(t *testing.T, factory func() *topo.Server) {
 	checkVSchema(t, ts)
 	ts.Close()
 
+	t.Log("=== checkRoutingRules")
+	ts = factory()
+	checkRoutingRules(t, ts)
+	ts.Close()
+
 	t.Log("=== checkElection")
 	ts = factory()
 	checkElection(t, ts)

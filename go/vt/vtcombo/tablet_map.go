@@ -37,7 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -239,7 +238,7 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 	}
 
 	// Rebuild the SrvVSchema object
-	if err := topotools.RebuildVSchema(ctx, wr.Logger(), ts, tpb.Cells); err != nil {
+	if err := ts.RebuildSrvVSchema(ctx, tpb.Cells); err != nil {
 		return fmt.Errorf("RebuildVSchemaGraph failed: %v", err)
 	}
 
@@ -480,6 +479,12 @@ func (itc *internalTabletConn) UpdateStream(ctx context.Context, target *querypb
 // VStream is part of queryservice.QueryService.
 func (itc *internalTabletConn) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	err := itc.tablet.qsc.QueryService().VStream(ctx, target, startPos, filter, send)
+	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+}
+
+// VStreamRows is part of the QueryService interface.
+func (itc *internalTabletConn) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	err := itc.tablet.qsc.QueryService().VStreamRows(ctx, target, query, lastpk, send)
 	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 

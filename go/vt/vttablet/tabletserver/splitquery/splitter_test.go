@@ -563,7 +563,7 @@ func TestWithRealEqualSplits(t *testing.T) {
 			},
 		},
 		nil)
-	equalSplits, err := NewEqualSplitsAlgorithm(splitParams, mockSQLExecuter)
+	equalSplits, _ := NewEqualSplitsAlgorithm(splitParams, mockSQLExecuter)
 	splitter := NewSplitter(splitParams, equalSplits)
 	queryParts, err := splitter.Split()
 	if err != nil {

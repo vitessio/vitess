@@ -76,9 +76,9 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 	counts := topologyWatcherOperations.Counts()
 	var tw *TopologyWatcher
 	if cellTablets {
-		tw = NewCellTabletsWatcher(ts, fhc, "aa", 10*time.Minute, refreshKnownTablets, 5)
+		tw = NewCellTabletsWatcher(context.Background(), ts, fhc, "aa", 10*time.Minute, refreshKnownTablets, 5)
 	} else {
-		tw = NewShardReplicationWatcher(ts, fhc, "aa", "keyspace", "shard", 10*time.Minute, 5)
+		tw = NewShardReplicationWatcher(context.Background(), ts, fhc, "aa", "keyspace", "shard", 10*time.Minute, 5)
 	}
 
 	// Wait for the initial topology load to finish. Otherwise we

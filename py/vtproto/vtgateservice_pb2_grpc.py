@@ -121,6 +121,11 @@ class VitessStub(object):
         request_serializer=vtgate__pb2.GetSrvKeyspaceRequest.SerializeToString,
         response_deserializer=vtgate__pb2.GetSrvKeyspaceResponse.FromString,
         )
+    self.VStream = channel.unary_stream(
+        '/vtgateservice.Vitess/VStream',
+        request_serializer=vtgate__pb2.VStreamRequest.SerializeToString,
+        response_deserializer=vtgate__pb2.VStreamResponse.FromString,
+        )
     self.UpdateStream = channel.unary_stream(
         '/vtgateservice.Vitess/UpdateStream',
         request_serializer=vtgate__pb2.UpdateStreamRequest.SerializeToString,
@@ -136,7 +141,7 @@ class VitessServicer(object):
   def Execute(self, request, context):
     """Execute tries to route the query to the right shard.
     It depends on the query and bind variables to provide enough
-    information in conjonction with the vindexes to route the query.
+    information in conjunction with the vindexes to route the query.
     API group: v3
     """
     context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -146,7 +151,7 @@ class VitessServicer(object):
   def ExecuteBatch(self, request, context):
     """ExecuteBatch tries to route the list of queries on the right shards.
     It depends on the query and bind variables to provide enough
-    information in conjonction with the vindexes to route the query.
+    information in conjunction with the vindexes to route the query.
     API group: v3
     """
     context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -156,7 +161,7 @@ class VitessServicer(object):
   def StreamExecute(self, request, context):
     """StreamExecute executes a streaming query based on shards.
     It depends on the query and bind variables to provide enough
-    information in conjonction with the vindexes to route the query.
+    information in conjunction with the vindexes to route the query.
     Use this method if the query returns a large number of rows.
     API group: v3
     """
@@ -315,6 +320,13 @@ class VitessServicer(object):
     context.set_details('Method not implemented!')
     raise NotImplementedError('Method not implemented!')
 
+  def VStream(self, request, context):
+    """VStream streams binlog events from the requested sources.
+    """
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
   def UpdateStream(self, request, context):
     """UpdateStream asks the server for a stream of StreamEvent objects.
     API group: Update Stream
@@ -430,6 +442,11 @@ def add_VitessServicer_to_server(servicer, server):
           servicer.GetSrvKeyspace,
           request_deserializer=vtgate__pb2.GetSrvKeyspaceRequest.FromString,
           response_serializer=vtgate__pb2.GetSrvKeyspaceResponse.SerializeToString,
+      ),
+      'VStream': grpc.unary_stream_rpc_method_handler(
+          servicer.VStream,
+          request_deserializer=vtgate__pb2.VStreamRequest.FromString,
+          response_serializer=vtgate__pb2.VStreamResponse.SerializeToString,
       ),
       'UpdateStream': grpc.unary_stream_rpc_method_handler(
           servicer.UpdateStream,

@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/log"
 
 	"golang.org/x/net/context"
 )
@@ -84,23 +85,15 @@ func (mysqld *Mysqld) WaitForReparentJournal(ctx context.Context, timeCreatedNS 
 		t := time.After(100 * time.Millisecond)
 		select {
 		case <-ctx.Done():
+			log.Warning("WaitForReparentJournal failed to see row before timeout.")
 			return ctx.Err()
 		case <-t:
 		}
 	}
 }
 
-// DemoteMaster will gracefully demote a master mysql instance to read only.
-// If the master is still alive, then we need to demote it gracefully
-// make it read-only, flush the writes and get the position
+// Deprecated: use mysqld.MasterPosition() instead
 func (mysqld *Mysqld) DemoteMaster() (rp mysql.Position, err error) {
-	cmds := []string{
-		"FLUSH TABLES WITH READ LOCK",
-		"UNLOCK TABLES",
-	}
-	if err = mysqld.ExecuteSuperQueryList(context.TODO(), cmds); err != nil {
-		return rp, err
-	}
 	return mysqld.MasterPosition()
 }
 

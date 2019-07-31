@@ -27,21 +27,26 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
-// SeqVarName is a reserved bind var name for sequence values.
-const SeqVarName = "__seq"
-
-// ListVarName is a reserved bind var name for list vars.
-// This is used for sending different IN clause values
-// to different shards.
-const ListVarName = "__vals"
+const (
+	// SeqVarName is a reserved bind var name for sequence values.
+	SeqVarName = "__seq"
+	// ListVarName is a reserved bind var name for list vars.
+	// This is used for sending different IN clause values
+	// to different shards.
+	ListVarName = "__vals"
+)
 
 // VCursor defines the interface the engine will use
 // to execute routes.
 type VCursor interface {
 	// Context returns the context of the current request.
 	Context() context.Context
+
+	// MaxMemoryRows returns the maxMemoryRows flag value.
+	MaxMemoryRows() int
 
 	// SetContextTimeout updates the context and sets a timeout.
 	SetContextTimeout(timeout time.Duration) context.CancelFunc
@@ -50,14 +55,16 @@ type VCursor interface {
 	RecordWarning(warning *querypb.QueryWarning)
 
 	// V3 functions.
-	Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)
-	ExecuteAutocommit(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error)
+	Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
 	AutocommitApproval() bool
 
 	// Shard-level functions.
 	ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, []error)
 	ExecuteStandalone(query string, bindvars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error)
 	StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error
+
+	// Keyspace ID level functions.
+	ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, isDML, autocommit bool) (*sqltypes.Result, error)
 
 	// Resolver methods, from key.Destination to srvtopo.ResolvedShard.
 	// Will replace all of the Topo functions.
@@ -78,15 +85,15 @@ type Plan struct {
 	// Mutex to protect the stats
 	mu sync.Mutex
 	// Count of times this plan was executed
-	ExecCount uint64
+	ExecCount uint64 `json:",omitempty"`
 	// Total execution time
-	ExecTime time.Duration
+	ExecTime time.Duration `json:",omitempty"`
 	// Total number of shard queries
-	ShardQueries uint64
+	ShardQueries uint64 `json:",omitempty"`
 	// Total number of rows
-	Rows uint64
+	Rows uint64 `json:",omitempty"`
 	// Total number of errors
-	Errors uint64
+	Errors uint64 `json:",omitempty"`
 }
 
 // AddStats updates the plan execution statistics
@@ -123,6 +130,8 @@ func (p *Plan) Size() int {
 // all primitives of a plan.
 type Primitive interface {
 	RouteType() string
+	GetKeyspaceName() string
+	GetTableName() string
 	Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
 	StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error
 	GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)

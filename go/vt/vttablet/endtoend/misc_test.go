@@ -29,17 +29,15 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func TestSimpleRead(t *testing.T) {
@@ -453,7 +451,7 @@ func TestHealth(t *testing.T) {
 
 func TestStreamHealth(t *testing.T) {
 	var health *querypb.StreamHealthResponse
-	framework.Server.BroadcastHealth(0, nil)
+	framework.Server.BroadcastHealth(0, nil, time.Minute)
 	if err := framework.Server.StreamHealth(context.Background(), func(shr *querypb.StreamHealthResponse) error {
 		health = shr
 		return io.EOF
@@ -462,6 +460,23 @@ func TestStreamHealth(t *testing.T) {
 	}
 	if !proto.Equal(health.Target, &framework.Target) {
 		t.Errorf("Health: %+v, want %+v", *health.Target, framework.Target)
+	}
+}
+
+func TestStreamHealth_Expired(t *testing.T) {
+	var health *querypb.StreamHealthResponse
+	framework.Server.BroadcastHealth(0, nil, time.Millisecond)
+	time.Sleep(5 * time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*100)
+	defer cancel()
+	if err := framework.Server.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
+		health = shr
+		return io.EOF
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if health != nil {
+		t.Errorf("Health: %v, want %v", health, nil)
 	}
 }
 

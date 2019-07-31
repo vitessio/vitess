@@ -45,7 +45,7 @@ var (
 	// Deprecated
 	// LockTimeout is the command line flag that introduces a shorter
 	// timeout for locking topology structures.
-	deprecatedLockTimeout = flag.Duration("lock_timeout", defaultLockTimeout, "deprecated: timeout for acquiring topology locks, use remote_operation_timeout")
+	_ = flag.Duration("lock_timeout", defaultLockTimeout, "deprecated: timeout for acquiring topology locks, use remote_operation_timeout")
 
 	// RemoteOperationTimeout is used for operations where we have to
 	// call out to another process.
@@ -130,7 +130,7 @@ var locksKey locksKeyType
 //     as well as the associated horizontal resharding operations.
 //   * vertical resharding: includes changing the keyspace 'ServedFrom'
 //     field, as well as the associated vertical resharding operations.
-//   * 'vtctl SetShardServedTypes' emergency operations
+//   * 'vtctl SetShardIsMasterServing' emergency operations
 //   * 'vtctl SetShardTabletControl' emergency operations
 //   * 'vtctl SourceShardAdd' and 'vtctl SourceShardDelete' emergency operations
 // * keyspace-wide schema changes
@@ -220,8 +220,7 @@ func (l *Lock) lockKeyspace(ctx context.Context, ts *Server, keyspace string) (L
 	ctx, cancel := context.WithTimeout(ctx, *RemoteOperationTimeout)
 	defer cancel()
 
-	span := trace.NewSpanFromContext(ctx)
-	span.StartClient("TopoServer.LockKeyspaceForAction")
+	span, ctx := trace.NewSpan(ctx, "TopoServer.LockKeyspaceForAction")
 	span.Annotate("action", l.Action)
 	span.Annotate("keyspace", keyspace)
 	defer span.Finish()
@@ -245,8 +244,7 @@ func (l *Lock) unlockKeyspace(ctx context.Context, ts *Server, keyspace string, 
 	ctx, cancel := context.WithTimeout(ctx, defaultLockTimeout)
 	defer cancel()
 
-	span := trace.NewSpanFromContext(ctx)
-	span.StartClient("TopoServer.UnlockKeyspaceForAction")
+	span, ctx := trace.NewSpan(ctx, "TopoServer.UnlockKeyspaceForAction")
 	span.Annotate("action", l.Action)
 	span.Annotate("keyspace", keyspace)
 	defer span.Finish()
@@ -363,8 +361,7 @@ func (l *Lock) lockShard(ctx context.Context, ts *Server, keyspace, shard string
 	ctx, cancel := context.WithTimeout(ctx, *RemoteOperationTimeout)
 	defer cancel()
 
-	span := trace.NewSpanFromContext(ctx)
-	span.StartClient("TopoServer.LockShardForAction")
+	span, ctx := trace.NewSpan(ctx, "TopoServer.LockShardForAction")
 	span.Annotate("action", l.Action)
 	span.Annotate("keyspace", keyspace)
 	span.Annotate("shard", shard)
@@ -388,8 +385,7 @@ func (l *Lock) unlockShard(ctx context.Context, ts *Server, keyspace, shard stri
 	ctx, cancel := context.WithTimeout(ctx, defaultLockTimeout)
 	defer cancel()
 
-	span := trace.NewSpanFromContext(ctx)
-	span.StartClient("TopoServer.UnlockShardForAction")
+	span, ctx := trace.NewSpan(ctx, "TopoServer.UnlockShardForAction")
 	span.Annotate("action", l.Action)
 	span.Annotate("keyspace", keyspace)
 	span.Annotate("shard", shard)

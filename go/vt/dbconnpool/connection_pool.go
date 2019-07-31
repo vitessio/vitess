@@ -23,6 +23,7 @@ package dbconnpool
 
 import (
 	"errors"
+	"net"
 	"sync"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/log"
 )
 
 var (
@@ -47,20 +49,28 @@ var (
 // ConnectionPool re-exposes ResourcePool as a pool of
 // PooledDBConnection objects.
 type ConnectionPool struct {
-	mu          sync.Mutex
-	connections *pools.ResourcePool
-	capacity    int
-	idleTimeout time.Duration
+	mu                  sync.Mutex
+	connections         *pools.ResourcePool
+	capacity            int
+	idleTimeout         time.Duration
+	resolutionFrequency time.Duration
 
 	// info and mysqlStats are set at Open() time
-	info       *mysql.ConnParams
+	info      *mysql.ConnParams
+	addresses []net.IP
+
+	ticker      *time.Ticker
+	stop        chan struct{}
+	wg          sync.WaitGroup
+	hostIsNotIP bool
+
 	mysqlStats *stats.Timings
 }
 
 // NewConnectionPool creates a new ConnectionPool. The name is used
 // to publish stats only.
-func NewConnectionPool(name string, capacity int, idleTimeout time.Duration) *ConnectionPool {
-	cp := &ConnectionPool{capacity: capacity, idleTimeout: idleTimeout}
+func NewConnectionPool(name string, capacity int, idleTimeout time.Duration, dnsResolutionFrequency time.Duration) *ConnectionPool {
+	cp := &ConnectionPool{capacity: capacity, idleTimeout: idleTimeout, resolutionFrequency: dnsResolutionFrequency}
 	if name == "" || usedNames[name] {
 		return cp
 	}
@@ -84,6 +94,43 @@ func (cp *ConnectionPool) pool() (p *pools.ResourcePool) {
 	return p
 }
 
+func (cp *ConnectionPool) refreshdns() {
+	cp.mu.Lock()
+	host := cp.info.Host
+	cp.mu.Unlock()
+
+	addrs, err := net.LookupHost(host)
+	if err != nil {
+		log.Errorf("Error refreshing connection dns name: (%v)", err)
+		return
+	}
+	naddr := make([]net.IP, len(addrs))
+	for i, a := range addrs {
+		naddr[i] = net.ParseIP(a)
+	}
+	cp.mu.Lock()
+	cp.addresses = naddr
+	cp.mu.Unlock()
+}
+
+func (cp *ConnectionPool) validAddress(addr net.IP) bool {
+	cp.mu.Lock()
+	defer cp.mu.Unlock()
+
+	// If we have no valid addresses we always return true
+	if len(cp.addresses) == 0 {
+		return true
+	}
+
+	// Check each address to see if the current RemoteAddr is in the set
+	for _, a := range cp.addresses {
+		if addr.Equal(a) {
+			return true
+		}
+	}
+	return false
+}
+
 // Open must be call before starting to use the pool.
 //
 // For instance:
@@ -98,7 +145,26 @@ func (cp *ConnectionPool) Open(info *mysql.ConnParams, mysqlStats *stats.Timings
 	defer cp.mu.Unlock()
 	cp.info = info
 	cp.mysqlStats = mysqlStats
-	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout)
+	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, 0)
+	// Check if we need to resolve a hostname (The Host is not just an IP  address).
+	if cp.resolutionFrequency > 0 && net.ParseIP(info.Host) == nil {
+		cp.hostIsNotIP = true
+		cp.ticker = time.NewTicker(cp.resolutionFrequency)
+		cp.stop = make(chan struct{})
+		cp.wg.Add(1)
+		go func() {
+			defer cp.wg.Done()
+			for {
+				select {
+				case <-cp.ticker.C:
+					cp.refreshdns()
+				case <-cp.stop:
+					return
+				}
+			}
+
+		}()
+	}
 }
 
 // connect is used by the resource pool to create a new Resource.
@@ -125,7 +191,14 @@ func (cp *ConnectionPool) Close() {
 	p.Close()
 	cp.mu.Lock()
 	cp.connections = nil
+	cp.addresses = nil
+	cp.hostIsNotIP = false
+	if cp.ticker != nil {
+		cp.ticker.Stop()
+		close(cp.stop)
+	}
 	cp.mu.Unlock()
+	cp.wg.Wait()
 }
 
 // Get returns a connection.
@@ -138,6 +211,17 @@ func (cp *ConnectionPool) Get(ctx context.Context) (*PooledDBConnection, error) 
 	r, err := p.Get(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	// Check that the RemoteAddr is still a valid Address
+	if cp.resolutionFrequency > 0 &&
+		cp.hostIsNotIP &&
+		!cp.validAddress(net.ParseIP(r.(*PooledDBConnection).RemoteAddr().String())) {
+		err := r.(*PooledDBConnection).Reconnect()
+		if err != nil {
+			p.Put(r)
+			return nil, err
+		}
 	}
 	return r.(*PooledDBConnection), nil
 }

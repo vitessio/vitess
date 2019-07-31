@@ -83,7 +83,7 @@ func (f *FakeLoggerEventStreamingClient) RegisterResultForAddr(addr string, args
 			result.count++
 			return nil
 		}
-		return fmt.Errorf("A different result (%v) is already registered for command: %v", result, args)
+		return fmt.Errorf("a different result (%v) is already registered for command: %v", result, args)
 	}
 	f.results[k] = &v
 	return nil

@@ -139,13 +139,13 @@ func (orc *orcClient) InActiveShardRecovery(tablet *topodatapb.Tablet) (bool, er
 	resp, err := orc.apiGet("audit-recovery", "alias", alias)
 
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("error calling Orchestrator API: %v", err)
 	}
 
 	var r []map[string]interface{}
 
 	if err := json.Unmarshal(resp, &r); err != nil {
-		return false, err
+		return false, fmt.Errorf("error parsing JSON response from Orchestrator: %v; response: %q", err, string(resp))
 	}
 
 	// Orchestrator returns a 0-length response when it has no history of recovery on this cluster.

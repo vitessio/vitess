@@ -5,3 +5,10 @@ metadata:
 spec:
   size: {{replicas}}
   version: "3.1.8"
+  repository: "quay.io/coreos/etcd"
+  pod:
+    labels:
+      component: etcd
+      cell: {{cell}}
+      application: vitess
+    busyboxImage: "busybox:1.28.0-glibc"

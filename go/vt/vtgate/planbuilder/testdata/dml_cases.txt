@@ -90,6 +90,39 @@
   }
 }
 
+# routing rules: updated of a routed table
+"update route1 set a=1 where id=1"
+{
+  "Original": "update route1 set a=1 where id=1",
+  "Instructions": {
+    "Opcode": "UpdateEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user as route1 set a = 1 where id = 1",
+    "Vindex": "user_index",
+    "Values": [
+      1
+    ],
+    "Table": "user"
+  }
+}
+
+# routing rules: subquery chooses unsharded route for update
+"update unsharded_a set a=(select a from route2)"
+{
+  "Original": "update unsharded_a set a=(select a from route2)",
+  "Instructions": {
+    "Opcode": "UpdateUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "update unsharded_a set a = (select a from unsharded as route2)"
+  }
+}
+
 # delete unsharded
 "delete from unsharded"
 {
@@ -339,6 +372,40 @@
   }
 }
 
+# routing rules: deleted from a routed table
+"delete from route1 where id = 1"
+{
+  "Original": "delete from route1 where id = 1",
+  "Instructions": {
+    "Opcode": "DeleteEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "delete from user as route1 where id = 1",
+    "Vindex": "user_index",
+    "Values": [
+      1
+    ],
+    "Table": "user",
+    "OwnedVindexQuery": "select Name, Costly from user where id = 1 for update"
+  }
+}
+
+# routing rules: subquery chooses unsharded route for delete
+"delete from  unsharded_a where a=(select a from route2)"
+{
+  "Original": "delete from  unsharded_a where a=(select a from route2)",
+  "Instructions": {
+    "Opcode": "DeleteUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "delete from unsharded_a where a = (select a from unsharded as route2)"
+  }
+}
+
 # update by lookup
 "update music set val = 1 where id = 1"
 {
@@ -461,6 +528,31 @@
     },
     "Query": "insert into unsharded values (1, 2) on duplicate key update x = 3",
     "Table": "unsharded"
+  }
+}
+
+# unsharded insert, no col list with auto-inc and authoritative column list
+"insert into unsharded_authoritative values(1,1)"
+{
+  "Original": "insert into unsharded_authoritative values(1,1)",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "insert into unsharded_authoritative(col1, col2) values (:__seq0, 1)",
+    "Table": "unsharded_authoritative",
+    "Generate": {
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from seq",
+      "Values": [
+        1
+      ]
+    }
   }
 }
 
@@ -682,13 +774,81 @@
   }
 }
 
-# insert no column list
-"insert into user values(1, 2, 3)"
-"no column list"
+# insert into a routed table
+"insert into route1(id) values (1)"
+{
+  "Original": "insert into route1(id) values (1)",
+  "Instructions": {
+    "Opcode": "InsertSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0)",
+    "Values": [
+      [
+        [
+          ":__seq0"
+        ]
+      ],
+      [
+        [
+          null
+        ]
+      ],
+      [
+        [
+          null
+        ]
+      ]
+    ],
+    "Table": "user",
+    "Generate": {
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from seq",
+      "Values": [
+        1
+      ]
+    },
+    "Prefix": "insert into user(id, Name, Costly) values ",
+    "Mid": [
+      "(:_Id0, :_Name0, :_Costly0)"
+    ]
+  }
+}
 
 # insert with mimatched column list
 "insert into user(id) values (1, 2)"
 "column list doesn't match values"
+
+# insert no column list for sharded authoritative table
+"insert into authoritative values(1, 2, 3)"
+{
+  "Original": "insert into authoritative values(1, 2, 3)",
+  "Instructions": {
+    "Opcode": "InsertSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert into authoritative(user_id, col1, col2) values (:_user_id0, 2, 3)",
+    "Values": [
+      [
+        [
+          1
+        ]
+      ]
+    ],
+    "Table": "authoritative",
+    "Prefix": "insert into authoritative(user_id, col1, col2) values ",
+    "Mid": [
+      "(:_user_id0, 2, 3)"
+    ]
+  }
+}
 
 # insert sharded, no values
 "insert into user values()"
@@ -988,6 +1148,33 @@
   }
 }
 
+# insert with query timeout
+"insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id) values (1), (2)"
+{
+  "Original": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id) values (1), (2)",
+  "Instructions": {
+    "Opcode": "InsertSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0), (:_Id1, :_Name1, :_Costly1)",
+    "Values": [[[":__seq0",":__seq1"]],[[null,null]],[[null,null]]],
+    "Table": "user",
+    "Generate": {
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from seq",
+      "Values": [1,2]
+    },
+    "Prefix": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id, Name, Costly) values ",
+    "Mid": ["(:_Id0, :_Name0, :_Costly0)","(:_Id1, :_Name1, :_Costly1)"],
+    "QueryTimeout": 1
+  }
+}
+
 # insert with multiple rows - multi-shard autocommit
 "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id) values (1), (2)"
 {
@@ -1017,7 +1204,7 @@
 
 # insert into a vindex not allowed
 "insert into user_index(id) values(1)"
-"inserting into a vindex not allowed: user_index"
+"unsupported: multi-shard or vindex write statement"
 
 # simple replace unsharded
 "replace into unsharded values(1, 2)"
@@ -1337,6 +1524,22 @@
   }
 }
 
+# update with no primary vindex on where clause (scatter update)   - query timeout
+"update /*vt+ QUERY_TIMEOUT_MS=1 */  user_extra set val = 1"
+{
+  "Original": "update /*vt+ QUERY_TIMEOUT_MS=1 */  user_extra set val = 1",
+  "Instructions": {
+    "Opcode": "UpdateScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update /*vt+ QUERY_TIMEOUT_MS=1 */ user_extra set val = 1",
+    "Table": "user_extra",
+    "QueryTimeout": 1
+  }
+}
+
 # update with non-comparison expr
 "update user_extra set val = 1 where id between 1 and 2"
 {
@@ -1486,6 +1689,22 @@
     "Query": "delete /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ from user_extra where name = 'jose'",
     "Table": "user_extra",
     "MultiShardAutocommit": true
+  }
+}
+
+# delete from with no index match - query timeout
+"delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where name = 'jose'"
+{
+  "Original": "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where name = 'jose'",
+  "Instructions": {
+    "Opcode": "DeleteScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "delete /*vt+ QUERY_TIMEOUT_MS=1 */ from user_extra where name = 'jose'",
+    "Table": "user_extra",
+    "QueryTimeout": 1
   }
 }
 

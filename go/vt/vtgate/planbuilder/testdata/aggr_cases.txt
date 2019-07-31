@@ -11,7 +11,8 @@
       "Sharded": false
     },
     "Query": "select count(*), col from unsharded",
-    "FieldQuery": "select count(*), col from unsharded where 1 != 1"
+    "FieldQuery": "select count(*), col from unsharded where 1 != 1",
+    "Table": "unsharded"
   }
 }
 
@@ -28,7 +29,8 @@
     "Query": "select count(*), col from user where id = 1",
     "FieldQuery": "select count(*), col from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": [1]
+    "Values": [1],
+    "Table": "user"
   }
 }
 
@@ -43,7 +45,8 @@
       "Sharded": true
     },
     "Query": "select fun(1), col from user",
-    "FieldQuery": "select fun(1), col from user where 1 != 1"
+    "FieldQuery": "select fun(1), col from user where 1 != 1",
+    "Table": "user"
   }
 }
 
@@ -58,7 +61,8 @@
       "Sharded": true
     },
     "Query": "select distinct col1, id from user",
-    "FieldQuery": "select col1, id from user where 1 != 1"
+    "FieldQuery": "select col1, id from user where 1 != 1",
+    "Table": "user"
   }
 }
 
@@ -73,7 +77,8 @@
       "Sharded": true
     },
     "Query": "select distinct col1, id from user group by col1",
-    "FieldQuery": "select col1, id from user where 1 != 1 group by col1"
+    "FieldQuery": "select col1, id from user where 1 != 1 group by col1",
+    "Table": "user"
   }
 }
 
@@ -115,7 +120,68 @@
           "Col": 3,
           "Desc": false
         }
-      ]
+      ],
+      "TruncateColumnCount": 5,
+      "Table": "user"
+    }
+  }
+}
+
+# scatter group by a text column, reuse existing weight_string
+"select count(*) k, a, textcol1, b from user group by a, textcol1, b order by k, textcol1"
+{
+  "Original": "select count(*) k, a, textcol1, b from user group by a, textcol1, b order by k, textcol1",
+  "Instructions": {
+    "Opcode": "MemorySort",
+    "MaxRows": null,
+    "OrderBy": [
+      {
+        "Col": 0,
+        "Desc": false
+      },
+      {
+        "Col": 4,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "Aggregates": [
+        {
+          "Opcode": "count",
+          "Col": 0
+        }
+      ],
+      "Keys": [
+        1,
+        4,
+        3
+      ],
+      "TruncateColumnCount": 5,
+      "Input": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select count(*) as k, a, textcol1, b, weight_string(textcol1) from user group by a, textcol1, b order by textcol1 asc, a asc, b asc",
+        "FieldQuery": "select count(*) as k, a, textcol1, b, weight_string(textcol1) from user where 1 != 1 group by a, textcol1, b",
+        "OrderBy": [
+          {
+            "Col": 4,
+            "Desc": false
+          },
+          {
+            "Col": 1,
+            "Desc": false
+          },
+          {
+            "Col": 3,
+            "Desc": false
+          }
+        ],
+        "TruncateColumnCount": 5,
+        "Table": "user"
+      }
     }
   }
 }
@@ -139,7 +205,8 @@
         "Sharded": true
       },
       "Query": "select count(*) from user",
-      "FieldQuery": "select count(*) from user where 1 != 1"
+      "FieldQuery": "select count(*) from user where 1 != 1",
+      "Table": "user"
     }
   }
 }
@@ -163,7 +230,8 @@
         "Sharded": true
       },
       "Query": "select sum(col) from user",
-      "FieldQuery": "select sum(col) from user where 1 != 1"
+      "FieldQuery": "select sum(col) from user where 1 != 1",
+      "Table": "user"
     }
   }
 }
@@ -187,7 +255,8 @@
         "Sharded": true
       },
       "Query": "select min(col) from user",
-      "FieldQuery": "select min(col) from user where 1 != 1"
+      "FieldQuery": "select min(col) from user where 1 != 1",
+      "Table": "user"
     }
   }
 }
@@ -211,7 +280,8 @@
         "Sharded": true
       },
       "Query": "select max(col) from user",
-      "FieldQuery": "select max(col) from user where 1 != 1"
+      "FieldQuery": "select max(col) from user where 1 != 1",
+      "Table": "user"
     }
   }
 }
@@ -248,7 +318,8 @@
           "Col": 0,
           "Desc": false
         }
-      ]
+      ],
+      "Table": "user"
     }
   }
 }
@@ -266,7 +337,8 @@
         "Sharded": true
       },
       "Query": "select user.a from user",
-      "FieldQuery": "select user.a from user where 1 != 1"
+      "FieldQuery": "select user.a from user where 1 != 1",
+      "Table": "user"
     },
     "Right": {
       "Opcode": "SelectUnsharded",
@@ -275,7 +347,8 @@
         "Sharded": false
       },
       "Query": "select t.b from (select count(*) as b from unsharded) as t",
-      "FieldQuery": "select t.b from (select count(*) as b from unsharded where 1 != 1) as t where 1 != 1"
+      "FieldQuery": "select t.b from (select count(*) as b from unsharded where 1 != 1) as t where 1 != 1",
+      "Table": "unsharded"
     },
     "Cols": [
       -1,
@@ -295,7 +368,8 @@
       "Sharded": true
     },
     "Query": "select id, count(*) from user group by id",
-    "FieldQuery": "select id, count(*) from user where 1 != 1 group by id"
+    "FieldQuery": "select id, count(*) from user where 1 != 1 group by id",
+    "Table": "user"
   }
 }
 
@@ -310,7 +384,8 @@
       "Sharded": true
     },
     "Query": "select id, col, count(*) from user group by id, col",
-    "FieldQuery": "select id, col, count(*) from user where 1 != 1 group by id, col"
+    "FieldQuery": "select id, col, count(*) from user where 1 != 1 group by id, col",
+    "Table": "user"
   }
 }
 
@@ -341,7 +416,8 @@
           "Col": 0,
           "Desc": false
         }
-      ]
+      ],
+      "Table": "user"
     }
   }
 }
@@ -373,7 +449,8 @@
           "Col": 0,
           "Desc": false
         }
-      ]
+      ],
+      "Table": "user"
     }
   }
 }
@@ -389,7 +466,8 @@
       "Sharded": true
     },
     "Query": "select id, 1 + count(*) from user group by id",
-    "FieldQuery": "select id, 1 + count(*) from user where 1 != 1 group by id"
+    "FieldQuery": "select id, 1 + count(*) from user where 1 != 1 group by id",
+    "Table": "user"
   }
 }
 
@@ -404,7 +482,8 @@
       "Sharded": true
     },
     "Query": "select id as val, 1 + count(*) from user group by val",
-    "FieldQuery": "select id as val, 1 + count(*) from user where 1 != 1 group by val"
+    "FieldQuery": "select id as val, 1 + count(*) from user where 1 != 1 group by val",
+    "Table": "user"
   }
 }
 
@@ -419,7 +498,8 @@
       "Sharded": true
     },
     "Query": "select val as id, 1 + count(*) from user group by user.id",
-    "FieldQuery": "select val as id, 1 + count(*) from user where 1 != 1 group by user.id"
+    "FieldQuery": "select val as id, 1 + count(*) from user where 1 != 1 group by user.id",
+    "Table": "user"
   }
 }
 
@@ -434,7 +514,8 @@
       "Sharded": true
     },
     "Query": "select *, id, 1 + count(*) from user group by id",
-    "FieldQuery": "select *, id, 1 + count(*) from user where 1 != 1 group by id"
+    "FieldQuery": "select *, id, 1 + count(*) from user where 1 != 1 group by id",
+    "Table": "user"
   }
 }
 
@@ -451,7 +532,8 @@
     "Query": "select id, count(*) as c from user group by id having id = 1 and c = 10",
     "FieldQuery": "select id, count(*) as c from user where 1 != 1 group by id",
     "Vindex": "user_index",
-    "Values": [1]
+    "Values": [1],
+    "Table": "user"
   }
 }
 
@@ -478,7 +560,8 @@
           "Sharded": true
         },
         "Query": "select count(*) as a from user",
-        "FieldQuery": "select count(*) as a from user where 1 != 1"
+        "FieldQuery": "select count(*) as a from user where 1 != 1",
+        "Table": "user"
       }
     }
   }
@@ -503,7 +586,8 @@
         "Sharded": true
       },
       "Query": "select id, count(*) from user",
-      "FieldQuery": "select id, count(*) from user where 1 != 1"
+      "FieldQuery": "select id, count(*) from user where 1 != 1",
+      "Table": "user"
     }
   }
 }
@@ -530,7 +614,8 @@
           "Col": 0,
           "Desc": false
         }
-      ]
+      ],
+      "Table": "user"
     }
   }
 }
@@ -557,7 +642,289 @@
           "Col": 0,
           "Desc": false
         }
-      ]
+      ],
+      "Table": "user"
+    }
+  }
+}
+
+# count with distinct group by unique vindex
+"select id, count(distinct col) from user group by id"
+{
+  "Original": "select id, count(distinct col) from user group by id",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select id, count(distinct col) from user group by id",
+    "FieldQuery": "select id, count(distinct col) from user where 1 != 1 group by id",
+    "Table": "user"
+  }
+}
+
+# count with distinct unique vindex
+"select col, count(distinct id) from user group by col"
+{
+  "Original": "select col, count(distinct id) from user group by col",
+  "Instructions": {
+    "Aggregates": [
+      {
+        "Opcode": "count",
+        "Col": 1
+      }
+    ],
+    "Keys": [
+      0
+    ],
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col, count(distinct id) from user group by col order by col asc",
+      "FieldQuery": "select col, count(distinct id) from user where 1 != 1 group by col",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        }
+      ],
+      "Table": "user"
+    }
+  }
+}
+
+# count with distinct no unique vindex
+"select col1, count(distinct col2) from user group by col1"
+{
+  "Original": "select col1, count(distinct col2) from user group by col1",
+  "Instructions": {
+    "HasDistinct": true,
+    "Aggregates": [
+      {
+        "Opcode": "count_distinct",
+        "Col": 1,
+        "Alias": "count(distinct col2)"
+      }
+    ],
+    "Keys": [
+      0
+    ],
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col1, col2 from user group by col1, col2 order by col1 asc, col2 asc",
+      "FieldQuery": "select col1, col2 from user where 1 != 1 group by col1, col2",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        },
+        {
+          "Col": 1,
+          "Desc": false
+        }
+      ],
+      "Table": "user"
+    }
+  }
+}
+
+# count with distinct no unique vindex and no group by
+"select count(distinct col2) from user"
+{
+  "Original": "select count(distinct col2) from user",
+  "Instructions": {
+    "HasDistinct": true,
+    "Aggregates": [
+      {
+        "Opcode": "count_distinct",
+        "Col": 0,
+        "Alias": "count(distinct col2)"
+      }
+    ],
+    "Keys": null,
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col2 from user group by col2 order by col2 asc",
+      "FieldQuery": "select col2 from user where 1 != 1 group by col2",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        }
+      ],
+      "Table": "user"
+    }
+  }
+}
+
+# count with distinct no unique vindex, count expression aliased
+"select col1, count(distinct col2) c2 from user group by col1"
+{
+  "Original": "select col1, count(distinct col2) c2 from user group by col1",
+  "Instructions": {
+    "HasDistinct": true,
+    "Aggregates": [
+      {
+        "Opcode": "count_distinct",
+        "Col": 1,
+        "Alias": "c2"
+      }
+    ],
+    "Keys": [
+      0
+    ],
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col1, col2 from user group by col1, col2 order by col1 asc, col2 asc",
+      "FieldQuery": "select col1, col2 from user where 1 != 1 group by col1, col2",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        },
+        {
+          "Col": 1,
+          "Desc": false
+        }
+      ],
+      "Table": "user"
+    }
+  }
+}
+
+# sum with distinct no unique vindex
+"select col1, sum(distinct col2) from user group by col1"
+{
+  "Original": "select col1, sum(distinct col2) from user group by col1",
+  "Instructions": {
+    "HasDistinct": true,
+    "Aggregates": [
+      {
+        "Opcode": "sum_distinct",
+        "Col": 1,
+        "Alias": "sum(distinct col2)"
+      }
+    ],
+    "Keys": [
+      0
+    ],
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col1, col2 from user group by col1, col2 order by col1 asc, col2 asc",
+      "FieldQuery": "select col1, col2 from user where 1 != 1 group by col1, col2",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        },
+        {
+          "Col": 1,
+          "Desc": false
+        }
+      ],
+      "Table": "user"
+    }
+  }
+}
+
+# min with distinct no unique vindex. distinct is ignored.
+"select col1, min(distinct col2) from user group by col1"
+{
+  "Original": "select col1, min(distinct col2) from user group by col1",
+  "Instructions": {
+    "Aggregates": [
+      {
+        "Opcode": "min",
+        "Col": 1
+      }
+    ],
+    "Keys": [
+      0
+    ],
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select col1, min(distinct col2) from user group by col1 order by col1 asc",
+      "FieldQuery": "select col1, min(distinct col2) from user where 1 != 1 group by col1",
+      "OrderBy": [
+        {
+          "Col": 0,
+          "Desc": false
+        }
+      ],
+      "Table": "user"
+    }
+  }
+}
+
+# order by count distinct
+"select col1, count(distinct col2) k from user group by col1 order by k"
+{
+  "Original": "select col1, count(distinct col2) k from user group by col1 order by k",
+  "Instructions": {
+    "Opcode": "MemorySort",
+    "MaxRows": null,
+    "OrderBy": [
+      {
+        "Col": 1,
+        "Desc": false
+      }
+    ],
+    "Input": {
+      "HasDistinct": true,
+      "Aggregates": [
+        {
+          "Opcode": "count_distinct",
+          "Col": 1,
+          "Alias": "k"
+        }
+      ],
+      "Keys": [
+        0
+      ],
+      "Input": {
+        "Opcode": "SelectScatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "select col1, col2 from user group by col1, col2 order by col1 asc, col2 asc",
+        "FieldQuery": "select col1, col2 from user where 1 != 1 group by col1, col2",
+        "OrderBy": [
+          {
+            "Col": 0,
+            "Desc": false
+          },
+          {
+            "Col": 1,
+            "Desc": false
+          }
+        ],
+        "Table": "user"
+      }
     }
   }
 }
@@ -598,7 +965,8 @@
           "Col": 0,
           "Desc": false
         }
-      ]
+      ],
+      "Table": "user"
     }
   }
 }
@@ -635,7 +1003,8 @@
           "Col": 0,
           "Desc": false
         }
-      ]
+      ],
+      "Table": "user"
     }
   }
 }
@@ -662,7 +1031,8 @@
           "Col": 0,
           "Desc": false
         }
-      ]
+      ],
+      "Table": "user"
     }
   }
 }
@@ -691,7 +1061,8 @@
         "Sharded": true
       },
       "Query": "select count(*) from user",
-      "FieldQuery": "select count(*) from user where 1 != 1"
+      "FieldQuery": "select count(*) from user where 1 != 1",
+      "Table": "user"
     }
   }
 }
@@ -737,7 +1108,8 @@
           "Col": 2,
           "Desc": false
         }
-      ]
+      ],
+      "Table": "user"
     }
   }
 }
@@ -779,7 +1151,8 @@
           "Col": 2,
           "Desc": false
         }
-      ]
+      ],
+      "Table": "user"
     }
   }
 }
@@ -826,7 +1199,8 @@
           "Col": 2,
           "Desc": false
         }
-      ]
+      ],
+      "Table": "user"
     }
   }
 }
@@ -873,7 +1247,8 @@
           "Col": 2,
           "Desc": false
         }
-      ]
+      ],
+      "Table": "user"
     }
   }
 }
@@ -915,14 +1290,15 @@
           "Col": 1,
           "Desc": false
         }
-      ]
+      ],
+      "Table": "user"
     }
   }
 }
 
 # invalid order by column numner for scatter
 "select col, count(*) from user group by col order by 5 limit 10"
-"invalid order by: column number out of range: 5"
+"column number out of range: 5"
 
 # aggregate with limit
 "select col, count(*) from user group by col limit 10"
@@ -955,7 +1331,8 @@
             "Col": 0,
             "Desc": false
           }
-        ]
+        ],
+        "Table": "user"
       }
     }
   }
@@ -974,8 +1351,57 @@
       "Query":"select user.col1 as a from user where user.id = 5 group by a collate utf8_general_ci",
       "FieldQuery":"select user.col1 as a from user where 1 != 1 group by a collate utf8_general_ci",
       "Vindex":"user_index",
-      "Values":[5]
+      "Values":[5],
+      "Table": "user"
    }
+}
+
+# routing rules for aggregates where sharded and unsharded match. Unsharded always wins.
+"select id, count(*) from route2 group by id"
+{
+  "Original": "select id, count(*) from route2 group by id",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select id, count(*) from unsharded as route2 group by id",
+    "FieldQuery": "select id, count(*) from unsharded as route2 where 1 != 1 group by id",
+    "Table": "unsharded"
+  }
+}
+
+# routing rules for select distinct where sharded and unsharded match. Unsharded always wins.
+"select distinct id, a from route2"
+{
+  "Original": "select distinct id, a from route2",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select distinct id, a from unsharded as route2",
+    "FieldQuery": "select id, a from unsharded as route2 where 1 != 1",
+    "Table": "unsharded"
+  }
+}
+
+# oreder by on a reference table
+"select col from ref order by col"
+{
+  "Original": "select col from ref order by col",
+  "Instructions": {
+    "Opcode": "SelectReference",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col from ref order by col asc",
+    "FieldQuery": "select col from ref where 1 != 1",
+    "Table": "ref"
+  }
 }
 
 # Group by invalid column number (code is duplicated from symab).
@@ -985,3 +1411,7 @@
 # Group by out of range column number (code is duplicated from symab).
 "select id from user group by 2"
 "column number out of range: 2"
+
+# syntax error detected by planbuilder
+"select count(distinct *) from user"
+"syntax error: count(distinct *)"

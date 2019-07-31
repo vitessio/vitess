@@ -195,13 +195,22 @@ function install_etcd() {
   local version="$1"
   local dist="$2"
 
-  download_url=https://github.com/coreos/etcd/releases/download
-  tar_file="etcd-${version}-linux-amd64.tar.gz"
+  case $(uname) in
+    Linux)  local platform=linux; local ext=tar.gz;;
+    Darwin) local platform=darwin; local ext=zip;;
+  esac
 
-  wget "$download_url/$version/$tar_file"
-  tar xzf "$tar_file"
-  rm "$tar_file"
-  ln -snf "$dist/etcd-${version}-linux-amd64/etcd" "$VTROOT/bin/etcd"
+  download_url=https://github.com/coreos/etcd/releases/download
+  file="etcd-${version}-${platform}-amd64.${ext}"
+
+  wget "$download_url/$version/$file"
+  if [ "$ext" = "tar.gz" ]; then
+    tar xzf "$file"
+  else
+    unzip "$file"
+  fi
+  rm "$file"
+  ln -snf "$dist/etcd-${version}-${platform}-amd64/etcd" "$VTROOT/bin/etcd"
 }
 install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
 
@@ -211,9 +220,14 @@ function install_consul() {
   local version="$1"
   local dist="$2"
 
+  case $(uname) in
+    Linux)  local platform=linux;;
+    Darwin) local platform=darwin;;
+  esac
+
   download_url=https://releases.hashicorp.com/consul
-  wget "${download_url}/${version}/consul_${version}_linux_amd64.zip"
-  unzip "consul_${version}_linux_amd64.zip"
+  wget "${download_url}/${version}/consul_${version}_${platform}_amd64.zip"
+  unzip "consul_${version}_${platform}_amd64.zip"
   ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
 install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul
@@ -290,7 +304,6 @@ gotools=" \
        golang.org/x/tools/cmd/cover \
        golang.org/x/tools/cmd/goimports \
        golang.org/x/tools/cmd/goyacc \
-       honnef.co/go/tools/cmd/unused \
 "
 echo "Installing dev tools with 'go get'..."
 # shellcheck disable=SC2086
@@ -325,13 +338,13 @@ if [ "$BUILD_TESTS" == 1 ] ; then
     echo "MYSQL_FLAVOR environment variable not set. Using default: $MYSQL_FLAVOR"
   fi
   case "$MYSQL_FLAVOR" in
-    "MySQL56")
+    "MySQL56" | "MySQL80")
       myversion="$("$VT_MYSQL_ROOT/bin/mysql" --version)"
       [[ "$myversion" =~ Distrib\ 5\.[67] || "$myversion" =~ Ver\ 8\. ]] || fail "Couldn't find MySQL 5.6+ in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
       echo "Found MySQL 5.6+ installation in $VT_MYSQL_ROOT."
       ;;
 
-    "MariaDB" | "MariaDB103" )
+    "MariaDB" | "MariaDB103")
       myversion="$("$VT_MYSQL_ROOT/bin/mysql" --version)"
       [[ "$myversion" =~ MariaDB ]] || fail "Couldn't find MariaDB in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
       echo "Found MariaDB installation in $VT_MYSQL_ROOT."

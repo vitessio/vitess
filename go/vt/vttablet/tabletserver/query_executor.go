@@ -296,12 +296,14 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error
 }
 
 func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
-	conn, err := qre.tsv.te.txPool.LocalBegin(qre.ctx, qre.options)
+	conn, beginSQL, err := qre.tsv.te.txPool.LocalBegin(qre.ctx, qre.options)
 	if err != nil {
 		return nil, err
 	}
 	defer qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
-	qre.logStats.AddRewrittenSQL("begin", time.Now())
+	if beginSQL != "" {
+		qre.logStats.AddRewrittenSQL(beginSQL, time.Now())
+	}
 
 	reply, err = f(conn)
 
@@ -311,8 +313,13 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltype
 		qre.logStats.AddRewrittenSQL("rollback", start)
 		return nil, err
 	}
-	err = qre.tsv.te.txPool.LocalCommit(qre.ctx, conn, qre.tsv.messager)
-	qre.logStats.AddRewrittenSQL("commit", start)
+	commitSQL, err := qre.tsv.te.txPool.LocalCommit(qre.ctx, conn, qre.tsv.messager)
+
+	// As above LocalCommit is a no-op for autocommmit so don't log anything.
+	if commitSQL != "" {
+		qre.logStats.AddRewrittenSQL(commitSQL, start)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -779,12 +786,11 @@ func (qre *QueryExecutor) execSet() (*sqltypes.Result, error) {
 }
 
 func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
-	span := trace.NewSpanFromContext(qre.ctx)
-	span.StartLocal("QueryExecutor.getConn")
+	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.getConn")
 	defer span.Finish()
 
 	start := time.Now()
-	conn, err := qre.tsv.qe.getQueryConn(qre.ctx)
+	conn, err := qre.tsv.qe.getQueryConn(ctx)
 	switch err {
 	case nil:
 		qre.logStats.WaitingForConnection += time.Since(start)
@@ -796,12 +802,11 @@ func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
 }
 
 func (qre *QueryExecutor) getStreamConn() (*connpool.DBConn, error) {
-	span := trace.NewSpanFromContext(qre.ctx)
-	span.StartLocal("QueryExecutor.getStreamConn")
+	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.getStreamConn")
 	defer span.Finish()
 
 	start := time.Now()
-	conn, err := qre.tsv.qe.streamConns.Get(qre.ctx)
+	conn, err := qre.tsv.qe.streamConns.Get(ctx)
 	switch err {
 	case nil:
 		qre.logStats.WaitingForConnection += time.Since(start)
@@ -922,8 +927,11 @@ type poolConn interface {
 }
 
 func (qre *QueryExecutor) execSQL(conn poolConn, sql string, wantfields bool) (*sqltypes.Result, error) {
+	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execSQL")
+	defer span.Finish()
+
 	defer qre.logStats.AddRewrittenSQL(sql, time.Now())
-	res, err := conn.Exec(qre.ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
+	res, err := conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
 	warnThreshold := qre.tsv.qe.warnResultSize.Get()
 	if res != nil && warnThreshold > 0 && int64(len(res.Rows)) > warnThreshold {
 		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
@@ -934,8 +942,15 @@ func (qre *QueryExecutor) execSQL(conn poolConn, sql string, wantfields bool) (*
 }
 
 func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, sql string, callback func(*sqltypes.Result) error) error {
+	span, ctx := trace.NewSpan(qre.ctx, "QueryExecutor.execStreamSQL")
+	trace.AnnotateSQL(span, sql)
+	callBackClosingSpan := func(result *sqltypes.Result) error {
+		defer span.Finish()
+		return callback(result)
+	}
+
 	start := time.Now()
-	err := conn.Stream(qre.ctx, sql, callback, int(qre.tsv.qe.streamBufferSize.Get()), sqltypes.IncludeFieldsOrDefault(qre.options))
+	err := conn.Stream(ctx, sql, callBackClosingSpan, int(qre.tsv.qe.streamBufferSize.Get()), sqltypes.IncludeFieldsOrDefault(qre.options))
 	qre.logStats.AddRewrittenSQL(sql, start)
 	if err != nil {
 		// MySQL error that isn't due to a connection issue

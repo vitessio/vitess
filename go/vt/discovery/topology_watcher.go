@@ -27,6 +27,7 @@ import (
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/trace"
 
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -68,17 +69,17 @@ type TabletRecorder interface {
 
 // NewCellTabletsWatcher returns a TopologyWatcher that monitors all
 // the tablets in a cell, and starts refreshing.
-func NewCellTabletsWatcher(topoServer *topo.Server, tr TabletRecorder, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int) *TopologyWatcher {
-	return NewTopologyWatcher(topoServer, tr, cell, refreshInterval, refreshKnownTablets, topoReadConcurrency, func(tw *TopologyWatcher) ([]*topodatapb.TabletAlias, error) {
-		return tw.topoServer.GetTabletsByCell(tw.ctx, tw.cell)
+func NewCellTabletsWatcher(ctx context.Context, topoServer *topo.Server, tr TabletRecorder, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int) *TopologyWatcher {
+	return NewTopologyWatcher(ctx, topoServer, tr, cell, refreshInterval, refreshKnownTablets, topoReadConcurrency, func(tw *TopologyWatcher) ([]*topodatapb.TabletAlias, error) {
+		return tw.topoServer.GetTabletsByCell(ctx, tw.cell)
 	})
 }
 
 // NewShardReplicationWatcher returns a TopologyWatcher that
 // monitors the tablets in a cell/keyspace/shard, and starts refreshing.
-func NewShardReplicationWatcher(topoServer *topo.Server, tr TabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) *TopologyWatcher {
-	return NewTopologyWatcher(topoServer, tr, cell, refreshInterval, true /* refreshKnownTablets */, topoReadConcurrency, func(tw *TopologyWatcher) ([]*topodatapb.TabletAlias, error) {
-		sri, err := tw.topoServer.GetShardReplication(tw.ctx, tw.cell, keyspace, shard)
+func NewShardReplicationWatcher(ctx context.Context, topoServer *topo.Server, tr TabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) *TopologyWatcher {
+	return NewTopologyWatcher(ctx, topoServer, tr, cell, refreshInterval, true /* refreshKnownTablets */, topoReadConcurrency, func(tw *TopologyWatcher) ([]*topodatapb.TabletAlias, error) {
+		sri, err := tw.topoServer.GetShardReplication(ctx, tw.cell, keyspace, shard)
 		switch {
 		case err == nil:
 			// we handle this case after this switch block
@@ -137,7 +138,7 @@ type TopologyWatcher struct {
 
 // NewTopologyWatcher returns a TopologyWatcher that monitors all
 // the tablets in a cell, and starts refreshing.
-func NewTopologyWatcher(topoServer *topo.Server, tr TabletRecorder, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int, getTablets func(tw *TopologyWatcher) ([]*topodatapb.TabletAlias, error)) *TopologyWatcher {
+func NewTopologyWatcher(ctx context.Context, topoServer *topo.Server, tr TabletRecorder, cell string, refreshInterval time.Duration, refreshKnownTablets bool, topoReadConcurrency int, getTablets func(tw *TopologyWatcher) ([]*topodatapb.TabletAlias, error)) *TopologyWatcher {
 	tw := &TopologyWatcher{
 		topoServer:          topoServer,
 		tr:                  tr,
@@ -149,7 +150,10 @@ func NewTopologyWatcher(topoServer *topo.Server, tr TabletRecorder, cell string,
 		tablets:             make(map[string]*tabletInfo),
 	}
 	tw.firstLoadChan = make(chan struct{})
-	tw.ctx, tw.cancelFunc = context.WithCancel(context.Background())
+
+	// We want the span from the context, but not the cancelation that comes with it
+	spanContext := trace.CopySpan(context.Background(), ctx)
+	tw.ctx, tw.cancelFunc = context.WithCancel(spanContext)
 	tw.wg.Add(1)
 	go tw.watch()
 	return tw

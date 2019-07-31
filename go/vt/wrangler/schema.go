@@ -379,17 +379,21 @@ func (wr *Wrangler) copyShardMetadata(ctx context.Context, srcTabletAlias *topod
 		return nil
 	}
 
-	sql = "SELECT name, value FROM _vt.shard_metadata"
+	// TODO: 100 may be too low here for row limit
+	sql = "SELECT db_name, name, value FROM _vt.shard_metadata"
 	dataProto, err := wr.ExecuteFetchAsDba(ctx, srcTabletAlias, sql, 100, false, false)
 	if err != nil {
 		return fmt.Errorf("ExecuteFetchAsDba(%v, %v, 100, false, false) failed: %v", srcTabletAlias, sql, err)
 	}
 	data := sqltypes.Proto3ToResult(dataProto)
 	for _, row := range data.Rows {
-		name := row[0]
-		value := row[1]
+		dbName := row[0]
+		name := row[1]
+		value := row[2]
 		queryBuf := bytes.Buffer{}
-		queryBuf.WriteString("INSERT INTO _vt.shard_metadata (name, value) VALUES (")
+		queryBuf.WriteString("INSERT INTO _vt.shard_metadata (db_name, name, value) VALUES (")
+		dbName.EncodeSQL(&queryBuf)
+		queryBuf.WriteByte(',')
 		name.EncodeSQL(&queryBuf)
 		queryBuf.WriteByte(',')
 		value.EncodeSQL(&queryBuf)

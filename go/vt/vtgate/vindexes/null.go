@@ -76,7 +76,7 @@ func (vind *Null) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, 
 func (vind *Null) Verify(cursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
 	for i := range ids {
-		out[i] = bytes.Compare(nullksid, ksids[i]) == 0
+		out[i] = bytes.Equal(nullksid, ksids[i])
 	}
 	return out, nil
 }

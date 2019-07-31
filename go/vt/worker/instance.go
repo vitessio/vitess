@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/trace"
 
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/log"
@@ -129,6 +130,9 @@ func (wi *Instance) setAndStartWorker(ctx context.Context, wrk Worker, wr *wrang
 	// one go function runs the worker, changes state when done
 	go func() {
 		log.Infof("Starting worker...")
+		span, ctx := trace.NewSpan(wi.currentContext, "work")
+		span.Annotate("extra", wrk.State().String())
+		defer span.Finish()
 		var err error
 
 		// Catch all panics and always save the execution state at the end.
@@ -149,11 +153,11 @@ func (wi *Instance) setAndStartWorker(ctx context.Context, wrk Worker, wr *wrang
 		}()
 
 		// run will take a long time
-		err = wrk.Run(wi.currentContext)
+		err = wrk.Run(ctx)
 
-		// If the context was canceled, include the respective error code.
+		// If the context was canceled, include the respective error c ode.
 		select {
-		case <-wi.currentContext.Done():
+		case <-ctx.Done():
 			// Context is done i.e. probably canceled.
 			if wi.currentContext.Err() == context.Canceled {
 				err = vterrors.Errorf(vtrpcpb.Code_CANCELED, "vtworker command was canceled: %v", err)

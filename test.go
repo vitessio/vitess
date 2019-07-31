@@ -73,9 +73,6 @@ For example:
   go run test.go test1 test2 -- --topo-server-flavor=etcd2
 `
 
-// List of flavors for which a bootstrap Docker image is available.
-const flavors = "mariadb,mysql56,mysql57,percona,percona57"
-
 // Flags
 var (
 	flavor         = flag.String("flavor", "mysql57", "comma-separated bootstrap flavor(s) to run against (when using Docker mode). Available flavors: all,"+flavors)
@@ -107,6 +104,9 @@ var (
 const (
 	statsFileName  = "test/stats.json"
 	configFileName = "test/config.json"
+
+	// List of flavors for which a bootstrap Docker image is available.
+	flavors = "mariadb,mysql56,mysql57,percona,percona57"
 )
 
 // Config is the overall object serialized in test/config.json.

@@ -353,7 +353,9 @@ func (ts *Server) DeleteSrvKeyspacePartitions(ctx context.Context, keyspace stri
 					for _, si := range shards {
 						found := false
 						for _, shardReference := range partition.GetShardReferences() {
-							if key.KeyRangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
+							// Use shard name rather than key range so it works
+							// for both range-based and non-range-based shards.
+							if shardReference.GetName() == si.ShardName() {
 								found = true
 							}
 						}
@@ -361,7 +363,9 @@ func (ts *Server) DeleteSrvKeyspacePartitions(ctx context.Context, keyspace stri
 						if found {
 							shardReferences := make([]*topodatapb.ShardReference, 0)
 							for _, shardReference := range partition.GetShardReferences() {
-								if !key.KeyRangeEqual(shardReference.GetKeyRange(), si.GetKeyRange()) {
+								// Use shard name rather than key range so it works
+								// for both range-based and non-range-based shards.
+								if shardReference.GetName() != si.ShardName() {
 									shardReferences = append(shardReferences, shardReference)
 								}
 							}
@@ -676,7 +680,7 @@ func OrderAndCheckPartitions(cell string, srvKeyspace *topodatapb.SrvKeyspace) e
 				// this is the custom sharding case, all KeyRanges must be nil
 				continue
 			}
-			if bytes.Compare(currShard.KeyRange.End, nextShard.KeyRange.Start) != 0 {
+			if !bytes.Equal(currShard.KeyRange.End, nextShard.KeyRange.Start) {
 				return fmt.Errorf("non-contiguous KeyRange values for %v in cell %v at shard %v to %v: %v != %v", tabletType, cell, i, i+1, hex.EncodeToString(currShard.KeyRange.End), hex.EncodeToString(nextShard.KeyRange.Start))
 			}
 		}

@@ -1,5 +1,5 @@
 /*
-Copyright 2018 Google Inc.
+Copyright 2018 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package engine
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"vitess.io/vitess/go/jsonutil"
 	"vitess.io/vitess/go/sqltypes"
@@ -66,6 +67,9 @@ type Update struct {
 	// Option to override the standard behavior and allow a multi-shard update
 	// to use single round trip autocommit.
 	MultiShardAutocommit bool
+
+	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
+	QueryTimeout int
 }
 
 // MarshalJSON serializes the Update into a JSON representation.
@@ -88,6 +92,7 @@ func (upd *Update) MarshalJSON() ([]byte, error) {
 		Table                string                          `json:",omitempty"`
 		OwnedVindexQuery     string                          `json:",omitempty"`
 		MultiShardAutocommit bool                            `json:",omitempty"`
+		QueryTimeout         int                             `json:",omitempty"`
 	}{
 		Opcode:               upd.Opcode,
 		Keyspace:             upd.Keyspace,
@@ -98,6 +103,7 @@ func (upd *Update) MarshalJSON() ([]byte, error) {
 		Table:                tname,
 		OwnedVindexQuery:     upd.OwnedVindexQuery,
 		MultiShardAutocommit: upd.MultiShardAutocommit,
+		QueryTimeout:         upd.QueryTimeout,
 	}
 	return jsonutil.MarshalNoEscape(marshalUpdate)
 }
@@ -143,8 +149,26 @@ func (upd *Update) RouteType() string {
 	return updName[upd.Opcode]
 }
 
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (upd *Update) GetKeyspaceName() string {
+	return upd.Keyspace.Name
+}
+
+// GetTableName specifies the table that this primitive routes to.
+func (upd *Update) GetTableName() string {
+	if upd.Table != nil {
+		return upd.Table.Name.String()
+	}
+	return ""
+}
+
 // Execute performs a non-streaming exec.
 func (upd *Update) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	if upd.QueryTimeout != 0 {
+		cancel := vcursor.SetContextTimeout(time.Duration(upd.QueryTimeout) * time.Millisecond)
+		defer cancel()
+	}
+
 	switch upd.Opcode {
 	case UpdateUnsharded:
 		return upd.execUpdateUnsharded(vcursor, bindVars)

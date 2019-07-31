@@ -42,12 +42,8 @@ import (
 )
 
 const (
-	codeVersion = 2
-
-	horizontalReshardingFactoryName = "horizontal_resharding"
-)
-
-const (
+	codeVersion                                        = 2
+	horizontalReshardingFactoryName                    = "horizontal_resharding"
 	phaseCopySchema                 workflow.PhaseType = "copy_schema"
 	phaseClone                      workflow.PhaseType = "clone"
 	phaseWaitForFilteredReplication workflow.PhaseType = "wait_for_filtered_replication"
@@ -79,12 +75,13 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 	splitDiffDestTabletType := subFlags.String("split_diff_dest_tablet_type", "RDONLY", "Specifies tablet type to use in destination shards while performing SplitDiff operation")
 	phaseEnaableApprovalsDesc := fmt.Sprintf("Comma separated phases that require explicit approval in the UI to execute. Phase names are: %v", strings.Join(WorkflowPhases(), ","))
 	phaseEnableApprovalsStr := subFlags.String("phase_enable_approvals", strings.Join(WorkflowPhases(), ","), phaseEnaableApprovalsDesc)
+	useConsistentSnapshot := subFlags.Bool("use_consistent_snapshot", false, "Instead of pausing replication on the source, uses transactions with consistent snapshot to have a stable view of the data.")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if *keyspace == "" || *vtworkersStr == "" || *minHealthyRdonlyTablets == "" || *splitCmd == "" {
-		return fmt.Errorf("Keyspace name, min healthy rdonly tablets, split command, and vtworkers information must be provided for horizontal resharding")
+		return fmt.Errorf("keyspace name, min healthy rdonly tablets, split command, and vtworkers information must be provided for horizontal resharding")
 	}
 
 	vtworkers := strings.Split(*vtworkersStr, ",")
@@ -99,8 +96,12 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 			}
 		}
 		if !validPhase {
-			return fmt.Errorf("Invalid phase in phase_enable_approvals: %v", phase)
+			return fmt.Errorf("invalid phase in phase_enable_approvals: %v", phase)
 		}
+	}
+	useConsistentSnapshotArg := ""
+	if *useConsistentSnapshot {
+		useConsistentSnapshotArg = "true"
 	}
 
 	err := validateWorkflow(m, *keyspace, vtworkers, sourceShards, destinationShards, *minHealthyRdonlyTablets)
@@ -109,7 +110,7 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 	}
 
 	w.Name = fmt.Sprintf("Reshard shards %v into shards %v of keyspace %v.", *keyspace, *sourceShardsStr, *destinationShardsStr)
-	checkpoint, err := initCheckpoint(*keyspace, vtworkers, sourceShards, destinationShards, *minHealthyRdonlyTablets, *splitCmd, *splitDiffDestTabletType)
+	checkpoint, err := initCheckpoint(*keyspace, vtworkers, sourceShards, destinationShards, *minHealthyRdonlyTablets, *splitCmd, *splitDiffDestTabletType, useConsistentSnapshotArg)
 	if err != nil {
 		return err
 	}
@@ -268,7 +269,7 @@ func validateWorkflow(m *workflow.Manager, keyspace string, vtworkers, sourceSha
 }
 
 // initCheckpoint initialize the checkpoint for the horizontal workflow.
-func initCheckpoint(keyspace string, vtworkers, sourceShards, destinationShards []string, minHealthyRdonlyTablets, splitCmd, splitDiffDestTabletType string) (*workflowpb.WorkflowCheckpoint, error) {
+func initCheckpoint(keyspace string, vtworkers, sourceShards, destinationShards []string, minHealthyRdonlyTablets, splitCmd, splitDiffDestTabletType string, useConsistentSnapshot string) (*workflowpb.WorkflowCheckpoint, error) {
 	tasks := make(map[string]*workflowpb.Task)
 	initTasks(tasks, phaseCopySchema, destinationShards, func(i int, shard string) map[string]string {
 		return map[string]string{
@@ -284,6 +285,7 @@ func initCheckpoint(keyspace string, vtworkers, sourceShards, destinationShards 
 			"min_healthy_rdonly_tablets": minHealthyRdonlyTablets,
 			"split_cmd":                  splitCmd,
 			"vtworker":                   vtworkers[i],
+			"use_consistent_snapshot":    useConsistentSnapshot,
 		}
 	})
 	initTasks(tasks, phaseWaitForFilteredReplication, destinationShards, func(i int, shard string) map[string]string {
@@ -294,10 +296,11 @@ func initCheckpoint(keyspace string, vtworkers, sourceShards, destinationShards 
 	})
 	initTasks(tasks, phaseDiff, destinationShards, func(i int, shard string) map[string]string {
 		return map[string]string{
-			"keyspace":          keyspace,
-			"destination_shard": shard,
-			"dest_tablet_type":  splitDiffDestTabletType,
-			"vtworker":          vtworkers[i],
+			"keyspace":                keyspace,
+			"destination_shard":       shard,
+			"dest_tablet_type":        splitDiffDestTabletType,
+			"vtworker":                vtworkers[i],
+			"use_consistent_snapshot": useConsistentSnapshot,
 		}
 	})
 	initTasks(tasks, phaseMigrateRdonly, sourceShards, func(i int, shard string) map[string]string {
@@ -427,18 +430,6 @@ func (hw *horizontalReshardingWorkflow) setUIMessage(message string) {
 	hw.rootUINode.Log = hw.logger.String()
 	hw.rootUINode.Message = message
 	hw.rootUINode.BroadcastChanges(false /* updateChildren */)
-}
-
-func defaultPhaseDisableApprovals() map[workflow.PhaseType]bool {
-	return map[workflow.PhaseType]bool{
-		phaseCopySchema:                 false,
-		phaseClone:                      false,
-		phaseWaitForFilteredReplication: false,
-		phaseDiff:                       false,
-		phaseMigrateRdonly:              false,
-		phaseMigrateReplica:             false,
-		phaseMigrateMaster:              false,
-	}
 }
 
 // WorkflowPhases returns phases for resharding workflow

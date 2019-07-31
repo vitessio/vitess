@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -125,7 +126,6 @@ func (vtg *VTGate) Execute(ctx context.Context, request *vtgatepb.ExecuteRequest
 func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBatchRequest) (response *vtgatepb.ExecuteBatchResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
 	ctx = withCallerIDContext(ctx, request.CallerId)
-	results := make([]sqltypes.QueryResponse, len(request.Queries))
 	sqlQueries := make([]string, len(request.Queries))
 	bindVars := make([]map[string]*querypb.BindVariable, len(request.Queries))
 	for queryNum, query := range request.Queries {
@@ -143,7 +143,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, request *vtgatepb.ExecuteBa
 	if session.Options == nil {
 		session.Options = request.Options
 	}
-	session, results, err = vtg.server.ExecuteBatch(ctx, session, sqlQueries, bindVars)
+	session, results, err := vtg.server.ExecuteBatch(ctx, session, sqlQueries, bindVars)
 	return &vtgatepb.ExecuteBatchResponse{
 		Results: sqltypes.QueryResponsesToProto3(results),
 		Session: session,
@@ -484,6 +484,22 @@ func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, request *vtgatepb.GetSrvK
 	return &vtgatepb.GetSrvKeyspaceResponse{
 		SrvKeyspace: sk,
 	}, nil
+}
+
+// VStream is the RPC version of vtgateservice.VTGateService method
+func (vtg *VTGate) VStream(request *vtgatepb.VStreamRequest, stream vtgateservicepb.Vitess_VStreamServer) (err error) {
+	defer vtg.server.HandlePanic(&err)
+	ctx := withCallerIDContext(stream.Context(), request.CallerId)
+	vtgErr := vtg.server.VStream(ctx,
+		request.TabletType,
+		request.Vgtid,
+		request.Filter,
+		func(events []*binlogdatapb.VEvent) error {
+			return stream.Send(&vtgatepb.VStreamResponse{
+				Events: events,
+			})
+		})
+	return vterrors.ToGRPC(vtgErr)
 }
 
 // UpdateStream is the RPC version of vtgateservice.VTGateService method

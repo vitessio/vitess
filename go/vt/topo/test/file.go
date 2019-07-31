@@ -60,13 +60,13 @@ func checkFileInCell(t *testing.T, conn topo.Conn, hasCells bool) {
 	checkListDir(ctx, t, conn, "/", expected)
 
 	// Get with no file -> ErrNoNode.
-	contents, version, err := conn.Get(ctx, "/myfile")
+	_, _, err := conn.Get(ctx, "/myfile")
 	if !topo.IsErrType(err, topo.NoNode) {
 		t.Errorf("Get(non-existent) didn't return ErrNoNode but: %v", err)
 	}
 
 	// Create a file.
-	version, err = conn.Create(ctx, "/myfile", []byte{'a'})
+	version, err := conn.Create(ctx, "/myfile", []byte{'a'})
 	if err != nil {
 		t.Fatalf("Create('/myfile') failed: %v", err)
 	}

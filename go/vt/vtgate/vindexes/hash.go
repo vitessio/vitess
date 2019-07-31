@@ -101,7 +101,7 @@ func (vind *Hash) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]boo
 		if err != nil {
 			return nil, vterrors.Wrap(err, "hash.Verify")
 		}
-		out[i] = bytes.Compare(vhash(num), ksids[i]) == 0
+		out[i] = bytes.Equal(vhash(num), ksids[i])
 	}
 	return out, nil
 }

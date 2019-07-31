@@ -1,5 +1,5 @@
 /*
-Copyright 2018 Google Inc.
+Copyright 2018 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ func TestSelectUnsharded(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`ExecuteMultiShard ks.0: dummy_select {} false false`,
 	})
 	expectResult(t, "sel.Execute", result, defaultSelectResult)
@@ -65,7 +65,7 @@ func TestSelectUnsharded(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`StreamExecuteMulti dummy_select ks.0: {} `,
 	})
 	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
@@ -446,13 +446,17 @@ func TestSelectNext(t *testing.T) {
 	}
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-		`ExecuteStandalone dummy_select  ks -20`,
+		`ExecuteMultiShard ks.-20: dummy_select {} false false`,
 	})
 	expectResult(t, "sel.Execute", result, defaultSelectResult)
 
 	vc.Rewind()
-	_, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "sel.StreamExecute", err, `query "dummy_select" cannot be used for streaming`)
+	result, _ = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+		`StreamExecuteMulti dummy_select ks.-20: {} `,
+	})
+	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
 }
 
 func TestSelectDBA(t *testing.T) {
@@ -476,13 +480,51 @@ func TestSelectDBA(t *testing.T) {
 	}
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
-		`ExecuteStandalone dummy_select  ks -20`,
+		`ExecuteMultiShard ks.-20: dummy_select {} false false`,
 	})
 	expectResult(t, "sel.Execute", result, defaultSelectResult)
 
 	vc.Rewind()
-	_, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "sel.StreamExecute", err, `query "dummy_select" cannot be used for streaming`)
+	result, _ = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+		`StreamExecuteMulti dummy_select ks.-20: {} `,
+	})
+	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
+}
+
+func TestSelectReference(t *testing.T) {
+	sel := NewRoute(
+		SelectReference,
+		&vindexes.Keyspace{
+			Name:    "ks",
+			Sharded: true,
+		},
+		"dummy_select",
+		"dummy_select_field",
+	)
+
+	vc := &loggingVCursor{
+		shards:  []string{"-20", "20-"},
+		results: []*sqltypes.Result{defaultSelectResult},
+	}
+	result, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+		`ExecuteMultiShard ks.-20: dummy_select {} false false`,
+	})
+	expectResult(t, "sel.Execute", result, defaultSelectResult)
+
+	vc.Rewind()
+	result, _ = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
+		`StreamExecuteMulti dummy_select ks.-20: {} `,
+	})
+	expectResult(t, "sel.StreamExecute", result, defaultSelectResult)
 }
 
 func TestRouteGetFields(t *testing.T) {
@@ -564,7 +606,7 @@ func TestRouteSort(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`ExecuteMultiShard ks.0: dummy_select {} false false`,
 	})
 	wantResult := sqltypes.MakeTestResult(
@@ -650,7 +692,7 @@ func TestRouteSortTruncate(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`ExecuteMultiShard ks.0: dummy_select {} false false`,
 	})
 	wantResult := sqltypes.MakeTestResult(
@@ -696,7 +738,7 @@ func TestRouteStreamTruncate(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`ExecuteMultiShard ks.0: dummy_select {} false false`,
 	})
 	wantResult := sqltypes.MakeTestResult(
@@ -743,7 +785,7 @@ func TestRouteStreamSortTruncate(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
+		`ResolveDestinations ks [] Destinations:DestinationAnyShard()`,
 		`StreamExecuteMulti dummy_select ks.0: {} `,
 	})
 
@@ -774,11 +816,11 @@ func TestParamsFail(t *testing.T) {
 
 	vc := &loggingVCursor{shardErr: errors.New("shard error")}
 	_, err := sel.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "sel.Execute err", err, "paramsAllShards: shard error")
+	expectError(t, "sel.Execute err", err, "paramsAnyShard: shard error")
 
 	vc.Rewind()
 	_, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "sel.StreamExecute err", err, "paramsAllShards: shard error")
+	expectError(t, "sel.StreamExecute err", err, "paramsAnyShard: shard error")
 }
 
 func TestExecFail(t *testing.T) {

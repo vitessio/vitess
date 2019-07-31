@@ -76,14 +76,12 @@ func (q *query) StreamExecute(request *querypb.StreamExecuteRequest, stream quer
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	if err := q.server.StreamExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, func(reply *sqltypes.Result) error {
+	err = q.server.StreamExecute(ctx, request.Target, request.Query.Sql, request.Query.BindVariables, request.TransactionId, request.Options, func(reply *sqltypes.Result) error {
 		return stream.Send(&querypb.StreamExecuteResponse{
 			Result: sqltypes.ResultToProto3(reply),
 		})
-	}); err != nil {
-		return vterrors.ToGRPC(err)
-	}
-	return nil
+	})
+	return vterrors.ToGRPC(err)
 }
 
 // Begin is part of the queryservice.QueryServer interface
@@ -300,14 +298,12 @@ func (q *query) MessageStream(request *querypb.MessageStreamRequest, stream quer
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	if err := q.server.MessageStream(ctx, request.Target, request.Name, func(qr *sqltypes.Result) error {
+	err = q.server.MessageStream(ctx, request.Target, request.Name, func(qr *sqltypes.Result) error {
 		return stream.Send(&querypb.MessageStreamResponse{
 			Result: sqltypes.ResultToProto3(qr),
 		})
-	}); err != nil {
-		return vterrors.ToGRPC(err)
-	}
-	return nil
+	})
+	return vterrors.ToGRPC(err)
 }
 
 // MessageAck is part of the queryservice.QueryServer interface
@@ -352,10 +348,8 @@ func (q *query) SplitQuery(ctx context.Context, request *querypb.SplitQueryReque
 // StreamHealth is part of the queryservice.QueryServer interface
 func (q *query) StreamHealth(request *querypb.StreamHealthRequest, stream queryservicepb.Query_StreamHealthServer) (err error) {
 	defer q.server.HandlePanic(&err)
-	if err = q.server.StreamHealth(stream.Context(), stream.Send); err != nil {
-		return vterrors.ToGRPC(err)
-	}
-	return nil
+	err = q.server.StreamHealth(stream.Context(), stream.Send)
+	return vterrors.ToGRPC(err)
 }
 
 // UpdateStream is part of the queryservice.QueryServer interface
@@ -365,14 +359,12 @@ func (q *query) UpdateStream(request *querypb.UpdateStreamRequest, stream querys
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	if err := q.server.UpdateStream(ctx, request.Target, request.Position, request.Timestamp, func(reply *querypb.StreamEvent) error {
+	err = q.server.UpdateStream(ctx, request.Target, request.Position, request.Timestamp, func(reply *querypb.StreamEvent) error {
 		return stream.Send(&querypb.UpdateStreamResponse{
 			Event: reply,
 		})
-	}); err != nil {
-		return vterrors.ToGRPC(err)
-	}
-	return nil
+	})
+	return vterrors.ToGRPC(err)
 }
 
 // VStream is part of the queryservice.QueryServer interface
@@ -382,14 +374,23 @@ func (q *query) VStream(request *binlogdatapb.VStreamRequest, stream queryservic
 		request.EffectiveCallerId,
 		request.ImmediateCallerId,
 	)
-	if err := q.server.VStream(ctx, request.Target, request.Position, request.Filter, func(events []*binlogdatapb.VEvent) error {
+	err = q.server.VStream(ctx, request.Target, request.Position, request.Filter, func(events []*binlogdatapb.VEvent) error {
 		return stream.Send(&binlogdatapb.VStreamResponse{
 			Events: events,
 		})
-	}); err != nil {
-		return vterrors.ToGRPC(err)
-	}
-	return nil
+	})
+	return vterrors.ToGRPC(err)
+}
+
+// VStreamRows is part of the queryservice.QueryServer interface
+func (q *query) VStreamRows(request *binlogdatapb.VStreamRowsRequest, stream queryservicepb.Query_VStreamRowsServer) (err error) {
+	defer q.server.HandlePanic(&err)
+	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	err = q.server.VStreamRows(ctx, request.Target, request.Query, request.Lastpk, stream.Send)
+	return vterrors.ToGRPC(err)
 }
 
 // Register registers the implementation on the provide gRPC Server.
