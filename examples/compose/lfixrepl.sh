@@ -18,7 +18,8 @@
 if [[ "$OSTYPE" == "msys" ]]; then
         # Lightweight shell and GNU utilities compiled for Windows (part of MinGW)
         tty=winpty
+        script=//script//fix_replication.sh
 fi
 
-# This is a convenience script to run vtctlclient against the local example.
-exec $tty docker-compose exec ${CS:-vttablet1} vtctlclient -server vtctld:15999 "$@"
+# This is a convenience script to fix replication on replicas.
+exec $tty docker-compose exec ${CS:-vttablet2} ${script:-/script/fix_replication.sh} "$@"

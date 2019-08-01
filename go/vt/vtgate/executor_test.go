@@ -46,6 +46,37 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+func TestExecutorResultsExceeded(t *testing.T) {
+	save := *warnMemoryRows
+	*warnMemoryRows = 3
+	defer func() { *warnMemoryRows = save }()
+
+	executor, _, _, sbclookup := createExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
+
+	initial := warnings.Counts()["ResultsExceeded"]
+
+	result1 := sqltypes.MakeTestResult(sqltypes.MakeTestFields("col", "int64"), "1")
+	result2 := sqltypes.MakeTestResult(sqltypes.MakeTestFields("col", "int64"), "1", "2", "3", "4")
+	sbclookup.SetResults([]*sqltypes.Result{result1, result2})
+
+	_, err := executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, "select * from main1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := warnings.Counts()["ResultsExceeded"], initial; got != want {
+		t.Errorf("warnings count: %v, want %v", got, want)
+	}
+
+	_, err = executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, "select * from main1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := warnings.Counts()["ResultsExceeded"], initial+1; got != want {
+		t.Errorf("warnings count: %v, want %v", got, want)
+	}
+}
+
 func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})

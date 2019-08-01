@@ -58,6 +58,9 @@ type Route struct {
 	// Query specifies the query to be executed.
 	Query string
 
+	// TableName specifies the table to send the query to.
+	TableName string
+
 	// FieldQuery specifies the query to be executed for a GetFieldInfo request.
 	FieldQuery string
 
@@ -126,6 +129,7 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 		TruncateColumnCount     int                  `json:",omitempty"`
 		QueryTimeout            int                  `json:",omitempty"`
 		ScatterErrorsAsWarnings bool                 `json:",omitempty"`
+		Table                   string               `json:",omitempty"`
 	}{
 		Opcode:                  route.Opcode,
 		Keyspace:                route.Keyspace,
@@ -137,6 +141,7 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 		TruncateColumnCount:     route.TruncateColumnCount,
 		QueryTimeout:            route.QueryTimeout,
 		ScatterErrorsAsWarnings: route.ScatterErrorsAsWarnings,
+		Table:                   route.TableName,
 	}
 	return jsonutil.MarshalNoEscape(marshalRoute)
 }
@@ -199,6 +204,16 @@ func (code RouteOpcode) MarshalJSON() ([]byte, error) {
 // RouteType returns a description of the query routing type used by the primitive
 func (route *Route) RouteType() string {
 	return routeName[route.Opcode]
+}
+
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (route *Route) GetKeyspaceName() string {
+	return route.Keyspace.Name
+}
+
+// GetTableName specifies the table that this primitive routes to.
+func (route *Route) GetTableName() string {
+	return route.TableName
 }
 
 // SetTruncateColumnCount sets the truncate column count.

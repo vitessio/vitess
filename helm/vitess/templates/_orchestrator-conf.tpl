@@ -14,7 +14,7 @@ metadata:
   name: orchestrator-cm
 data:
   orchestrator.conf.json: |-
-    {
+     {
     "ActiveNodeExpireSeconds": 5,
     "ApplyMySQLPromotionAfterMasterFailover": true,
     "AuditLogFile": "/tmp/orchestrator-audit.log",
@@ -25,8 +25,8 @@ data:
     "BackendDB": "sqlite",
     "BinlogEventsChunkSize": 10000,
     "CandidateInstanceExpireMinutes": 60,
-    "CoMasterRecoveryMustPromoteOtherCoMaster": true,
-    "DataCenterPattern": "[.]([^.]+)[.][^.]+[.]mydomain[.]com",
+    "CoMasterRecoveryMustPromoteOtherCoMaster": false,
+    "DataCenterPattern": "[.]([^.]+)[.][^.]+[.]vitess[.]io",
     "Debug": true,
     "DefaultInstancePort": 3306,
     "DefaultRaftPort": 10008,
@@ -35,13 +35,14 @@ data:
     "DetectClusterDomainQuery": "",
     "DetectInstanceAliasQuery": "SELECT value FROM _vt.local_metadata WHERE name='Alias'",
     "DetectPromotionRuleQuery": "SELECT value FROM _vt.local_metadata WHERE name='PromotionRule'",
+    "DetectDataCenterQuery": "SELECT value FROM _vt.local_metadata WHERE name='DataCenter'",
     "DetectPseudoGTIDQuery": "",
     "DetectSemiSyncEnforcedQuery": "SELECT @@global.rpl_semi_sync_master_wait_no_slave AND @@global.rpl_semi_sync_master_timeout > 1000000",
-    "DiscoverByShowSlaveHosts": true,
+    "DiscoverByShowSlaveHosts": false,
     "EnableSyslog": false,
     "ExpiryHostnameResolvesMinutes": 60,
-    "FailMasterPromotionIfSQLThreadNotUpToDate": true,
-    "FailureDetectionPeriodBlockMinutes": 60,
+    "DelayMasterPromotionIfSQLThreadNotUpToDate": true,
+    "FailureDetectionPeriodBlockMinutes": 10,
     "GraphiteAddr": "",
     "GraphiteConvertHostnameDotsToUnderscores": true,
     "GraphitePath": "",
@@ -70,7 +71,7 @@ data:
     ],
     "OSCIgnoreHostnameFilters": [
     ],
-    "PhysicalEnvironmentPattern": "[.]([^.]+[.][^.]+)[.]mydomain[.]com",
+    "PhysicalEnvironmentPattern": "[.]([^.]+[.][^.]+)[.]vitess[.]io",
     "PostFailoverProcesses": [
         "echo '(for all types) Recovered from {failureType} on {failureCluster}. Failed: {failedHost}:{failedPort}; Successor: {successorHost}:{successorPort}' >> /tmp/recovery.log"
     ],
@@ -79,7 +80,7 @@ data:
     ],
     "PostMasterFailoverProcesses": [
         "echo 'Recovered from {failureType} on {failureCluster}. Failed: {failedHost}:{failedPort}; Promoted: {successorHost}:{successorPort}' >> /tmp/recovery.log",
-        "vtctlclient {{ include "format-flags-inline" $defaultVtctlclient.extraFlags | toJson | trimAll "\"" }} -server vtctld.{{ $namespace }}:15999 TabletExternallyReparented {successorAlias}"
+        "n=0; until [ $n -ge 10 ]; do vtctlclient {{ include "format-flags-inline" $defaultVtctlclient.extraFlags | toJson | trimAll "\"" }} -server vtctld.{{ $namespace }}:15999 TabletExternallyReparented {successorAlias} && break; n=$[$n+1]; sleep 5; done"
     ],
     "PostponeSlaveRecoveryOnLagMinutes": 0,
     "PostUnsuccessfulFailoverProcesses": [
@@ -109,9 +110,6 @@ data:
     "ReadOnly": false,
     "ReasonableMaintenanceReplicationLagSeconds": 20,
     "ReasonableReplicationLagSeconds": 10,
-    "RecoverIntermediateMasterClusterFilters": [
-        "*"
-    ],
     "RecoverMasterClusterFilters": [
         ".*"
     ],
@@ -120,7 +118,7 @@ data:
     "RecoveryPeriodBlockSeconds": 60,
     "ReduceReplicationAnalysisCount": true,
     "RejectHostnameResolvePattern": "",
-    "RemoveTextFromHostnameDisplay": ".mydomain.com:3306",
+    "RemoveTextFromHostnameDisplay": ".vitess.io:3306",
 {{ if $enableHeartbeat }}
     "ReplicationLagQuery": "SELECT unix_timestamp() - floor(ts/1000000000) FROM `_vt`.heartbeat ORDER BY ts DESC LIMIT 1;",
 {{ else }}

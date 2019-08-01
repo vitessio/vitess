@@ -130,7 +130,9 @@ func (st *symtab) AddVSchemaTable(alias sqlparser.TableName, vschemaTables []*vi
 					if vindexMap == nil {
 						vindexMap = make(map[*column]vindexes.Vindex)
 					}
-					vindexMap[col] = cv.Vindex
+					if vindexMap[col] == nil || vindexMap[col].Cost() > cv.Vindex.Cost() {
+						vindexMap[col] = cv.Vindex
+					}
 				}
 			}
 		}

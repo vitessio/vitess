@@ -48,6 +48,8 @@ import io.vitess.proto.Vtgate.StreamExecuteKeyRangesRequest;
 import io.vitess.proto.Vtgate.StreamExecuteKeyspaceIdsRequest;
 import io.vitess.proto.Vtgate.StreamExecuteRequest;
 import io.vitess.proto.Vtgate.StreamExecuteShardsRequest;
+import io.vitess.proto.Vtgate.VStreamRequest;
+import io.vitess.proto.Vtgate.VStreamResponse;
 
 import java.io.Closeable;
 import java.sql.SQLException;
@@ -245,4 +247,16 @@ public interface RpcClient extends Closeable {
    */
   ListenableFuture<GetSrvKeyspaceResponse> getSrvKeyspace(
       Context ctx, GetSrvKeyspaceRequest request) throws SQLException;
+
+  /**
+   * Starts streaming the vstream binlog events.
+   *
+   * Stream begins at the specified VGTID.
+   *
+   * <p>See the
+   * <a href="https://github.com/vitessio/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * definition for canonical documentation on this VTGate API.
+   */
+  StreamIterator<VStreamResponse> getVStream(
+      Context ctx, VStreamRequest vstreamRequest) throws SQLException;
 }
