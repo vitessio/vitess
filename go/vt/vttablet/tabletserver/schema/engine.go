@@ -279,12 +279,10 @@ func (se *Engine) Reload(ctx context.Context) error {
 
 	// Handle table drops
 	var dropped []string
-	for tableName, table := range se.tables {
+	for tableName := range se.tables {
 		if curTables[tableName] {
 			continue
 		}
-
-		se.unregisterTopic(table)
 
 		// only keep track of non-topic table drops
 		if !se.tables[tableName].IsTopic() {
@@ -375,6 +373,14 @@ func (se *Engine) tableWasCreatedOrAltered(ctx context.Context, tableName string
 // registerTopics optionally connects the vt_topic metadata on a message table
 // to a map of topic strings. A table can belong to only one topic.
 func (se *Engine) registerTopics() {
+	// first drop all topics
+	for tableName, table := range se.tables {
+		if table.IsTopic() {
+			delete(se.tables, tableName)
+		}
+	}
+
+	// then register all the topics from scratch
 	for _, table := range se.tables {
 		se.registerTopic(table)
 	}
@@ -408,32 +414,6 @@ func (se *Engine) registerTopic(ta *Table) {
 	// append this table to the list of subscribed tables to the topic
 	log.Infof("subscribing message table '%s' to topic '%s'", ta.Name.String(), topicName)
 	topicTable.TopicInfo.Subscribers = append(topicTable.TopicInfo.Subscribers, ta)
-}
-
-func (se *Engine) unregisterTopic(ta *Table) {
-	if ta.MessageInfo == nil || ta.MessageInfo.Topic == "" {
-		return
-	}
-
-	topicName := ta.MessageInfo.Topic
-	topicTable, ok := se.tables[topicName]
-	if !ok {
-		panic("topic should have already been created")
-	}
-	// remove this table from the topic
-	for i, t := range topicTable.TopicInfo.Subscribers {
-		// remove the table from the topic
-		if t.Name == ta.Name {
-			log.Infof("unsubscribing message table '%s' from topic '%s'", ta.Name.String(), topicName)
-			topicTable.TopicInfo.Subscribers = append(topicTable.TopicInfo.Subscribers[:i], topicTable.TopicInfo.Subscribers[i+1:]...)
-		}
-	}
-
-	// delete the topic table if there are no more subscribers
-	if len(topicTable.TopicInfo.Subscribers) == 0 {
-		log.Infof("deleting topic table '%s'", topicName)
-		delete(se.tables, topicName)
-	}
 }
 
 // RegisterNotifier registers the function for schema change notification.
