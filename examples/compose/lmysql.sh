@@ -20,5 +20,5 @@ if [[ "$OSTYPE" == "msys" ]]; then
         tty=winpty
 fi
 
-# This is a convenience script to run vtctlclient against the local example.
-exec $tty docker-compose exec ${CS:-vttablet1} vtctlclient -server vtctld:15999 "$@"
+# This is a convenience script to run mysql client against the local example.
+exec $tty docker-compose exec ${CS:-vttablet1} mysql "$@"

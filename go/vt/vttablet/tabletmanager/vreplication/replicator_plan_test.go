@@ -372,6 +372,56 @@ func TestBuildPlayerPlan(t *testing.T) {
 			},
 		},
 	}, {
+		// Keywords as names.
+		input: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "t1",
+				Filter: "select c1, c2, `primary` from `primary`",
+			}},
+		},
+		plan: &TestReplicatorPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "primary",
+					Filter: "select c1, c2, `primary` from `primary`",
+				}},
+			},
+			TargetTables: []string{"t1"},
+			TablePlans: map[string]*TestTablePlan{
+				"primary": {
+					TargetName:   "t1",
+					SendRule:     "primary",
+					PKReferences: []string{"c1"},
+					InsertFront:  "insert into t1(c1,c2,`primary`)",
+					InsertValues: "(:a_c1,:a_c2,:a_primary)",
+					Insert:       "insert into t1(c1,c2,`primary`) values (:a_c1,:a_c2,:a_primary)",
+					Update:       "update t1 set c2=:a_c2, `primary`=:a_primary where c1=:b_c1",
+					Delete:       "delete from t1 where c1=:b_c1",
+				},
+			},
+		},
+		planpk: &TestReplicatorPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "primary",
+					Filter: "select c1, c2, `primary`, pk1, pk2 from `primary`",
+				}},
+			},
+			TargetTables: []string{"t1"},
+			TablePlans: map[string]*TestTablePlan{
+				"primary": {
+					TargetName:   "t1",
+					SendRule:     "primary",
+					PKReferences: []string{"c1", "pk1", "pk2"},
+					InsertFront:  "insert into t1(c1,c2,`primary`)",
+					InsertValues: "(:a_c1,:a_c2,:a_primary)",
+					Insert:       "insert into t1(c1,c2,`primary`) select :a_c1, :a_c2, :a_primary from dual where (:a_pk1,:a_pk2) <= (1,'aaa')",
+					Update:       "update t1 set c2=:a_c2, `primary`=:a_primary where c1=:b_c1 and (:b_pk1,:b_pk2) <= (1,'aaa')",
+					Delete:       "delete from t1 where c1=:b_c1 and (:b_pk1,:b_pk2) <= (1,'aaa')",
+				},
+			},
+		},
+	}, {
 		// syntax error
 		input: &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
@@ -448,7 +498,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 		input: &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
 				Match:  "t1",
-				Filter: "select hour(distinct c1) from t1",
+				Filter: "select hour(distinct c1) as a from t1",
 			}},
 		},
 		err: "unexpected: hour(distinct c1)",

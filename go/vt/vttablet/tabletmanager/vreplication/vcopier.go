@@ -135,9 +135,9 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 	}()
 
 	// Wait for catchup.
-	tmr := time.NewTimer(1 * time.Second)
+	tkr := time.NewTicker(waitRetryTime)
+	defer tkr.Stop()
 	seconds := int64(replicaLagTolerance / time.Second)
-	defer tmr.Stop()
 	for {
 		sbm := vc.vr.stats.SecondsBehindMaster.Get()
 		if sbm < seconds {
@@ -156,7 +156,7 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 			// Make sure vplayer returns before returning.
 			<-errch
 			return io.EOF
-		case <-tmr.C:
+		case <-tkr.C:
 		}
 	}
 }
@@ -173,7 +173,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 	initialPlan, ok := plan.TargetTables[tableName]
 	if !ok {
-		return fmt.Errorf("plan not found for table: %s, curret plans are: %#v", tableName, plan.TargetTables)
+		return fmt.Errorf("plan not found for table: %s, current plans are: %#v", tableName, plan.TargetTables)
 	}
 
 	vsClient, err := tabletconn.GetDialer()(vc.vr.sourceTablet, grpcclient.FailFast(false))
