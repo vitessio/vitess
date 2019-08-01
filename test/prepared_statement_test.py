@@ -163,11 +163,11 @@ primary key (id)
 ) Engine=InnoDB'''
 
 
-class TestMySQL(unittest.TestCase):
-  """This test makes sure the MySQL server connector is correct.
+class TestPreparedStatements(unittest.TestCase):
+  """This test makes sure that prepared statements is working correctly.
   """
 
-  def test_mysql_connector(self):
+  def test_prepared_statements(self):
     with open(table_acl_config, 'w') as fd:
       fd.write("""{
       "table_groups": [
@@ -233,6 +233,7 @@ class TestMySQL(unittest.TestCase):
     text_value = "text" * 100 # Large text value
     largeComment = 'L' * ((4 * 1024) + 1) # Large blob
     
+    # Set up the values for the prepared statement
     cursor = conn.cursor(cursor_class=MySQLCursorPrepared)
     for i in range(1, 100):
       insert_values = (i, str(i) + "21", i * 100, 127, 1, 32767, 8388607, 2147483647, 2.55, 64.9,55.5,
@@ -256,6 +257,7 @@ class TestMySQL(unittest.TestCase):
     
     cursor.close()
 
+    # Update a row using prepared statements
     updated_text_value = "text_col_msg"
     updated_data_value = "updated"
 
@@ -263,6 +265,7 @@ class TestMySQL(unittest.TestCase):
     cursor.execute('update vt_prepare_stmt_test set data = %s , text_col = %s where id = %s', (updated_data_value, updated_text_value, 1))
     cursor.close()
 
+    # Validate the update results
     cursor = conn.cursor(cursor_class=MySQLCursorPrepared)
     cursor.execute('select * from vt_prepare_stmt_test where id = %s', (1,))
     result = cursor.fetchone()
@@ -270,10 +273,12 @@ class TestMySQL(unittest.TestCase):
       self.fail("Received incorrect values")
     cursor.close()
 
+    # Delete from table using prepared statements
     cursor = conn.cursor(cursor_class=MySQLCursorPrepared)
     cursor.execute('delete from vt_prepare_stmt_test where text_col = %s', (text_value,))
     cursor.close()
 
+    # Validate Deletion
     cursor = conn.cursor(cursor_class=MySQLCursorPrepared)
     cursor.execute('select count(*) from vt_prepare_stmt_test')
     res = cursor.fetchone()
