@@ -101,6 +101,9 @@ type Config struct {
 	TransactionMode string
 
 	TransactionTimeout float64
+
+	// The host name to use for the table otherwise it will be resolved from the local hostname
+	TabletHostName string
 }
 
 // InitSchemas is a shortcut for tests that just want to setup a single
