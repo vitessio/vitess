@@ -97,7 +97,7 @@ func (wr *Wrangler) MigrateReads(ctx context.Context, targetKeyspace, workflow s
 	if err != nil {
 		return err
 	}
-	if err := mi.validate(ctx, false); err != nil {
+	if err := mi.validate(ctx, false /* isWrite */); err != nil {
 		return err
 	}
 
@@ -121,7 +121,7 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 		return 0, err
 	}
 	mi.wr.Logger().Infof("Built migration metadata: %+v", mi)
-	if err := mi.validate(ctx, true); err != nil {
+	if err := mi.validate(ctx, true /* isWrite */); err != nil {
 		return 0, err
 	}
 
@@ -251,8 +251,8 @@ func (wr *Wrangler) buildMigrationTargets(ctx context.Context, targetKeyspace, w
 		return nil, err
 	}
 	// We check all target shards. All of them may not have a stream.
-	// For example, in a shard split, only the target shards will have
-	// a stream.
+	// For example, if we're splitting -80 to -40,40-80, only those
+	// two target shards will have vreplication streams.
 	for _, targetShard := range targetShards {
 		targetsi, err := wr.ts.GetShard(ctx, targetKeyspace, targetShard)
 		if err != nil {
@@ -266,7 +266,7 @@ func (wr *Wrangler) buildMigrationTargets(ctx context.Context, targetKeyspace, w
 		if err != nil {
 			return nil, err
 		}
-		// If there's no stream, check next.
+		// If there's no vreplication stream, check the next target.
 		if len(p3qr.Rows) < 1 {
 			continue
 		}
