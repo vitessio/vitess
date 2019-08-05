@@ -74,6 +74,7 @@ const (
 	TabletFile           = "Tablet"
 	SrvVSchemaFile       = "SrvVSchema"
 	SrvKeyspaceFile      = "SrvKeyspace"
+	RoutingRulesFile     = "RoutingRules"
 )
 
 // Path for all object types.
@@ -144,7 +145,7 @@ type cellsToAliasesMap struct {
 
 var (
 	// topoImplementation is the flag for which implementation to use.
-	topoImplementation = flag.String("topo_implementation", "zookeeper", "the topology implementation to use")
+	topoImplementation = flag.String("topo_implementation", "", "the topology implementation to use")
 
 	// topoGlobalServerAddress is the address of the global topology
 	// server.

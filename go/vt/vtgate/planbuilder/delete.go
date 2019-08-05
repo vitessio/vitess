@@ -30,53 +30,48 @@ import (
 
 // buildDeletePlan builds the instructions for a DELETE statement.
 func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Delete, error) {
-	edel := &engine.Delete{
-		Query: generateQuery(del),
-	}
+	edel := &engine.Delete{}
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(del)))
-	if err := pb.processTableExprs(del.TableExprs); err != nil {
+	ro, err := pb.processDMLTable(del.TableExprs)
+	if err != nil {
 		return nil, err
 	}
-	rb, ok := pb.bldr.(*route)
-	if !ok {
-		return nil, errors.New("unsupported: multi-table/vindex delete statement in sharded keyspace")
-	}
-	edel.Keyspace = rb.ERoute.Keyspace
+	edel.Query = generateQuery(del)
+	edel.Keyspace = ro.eroute.Keyspace
 	if !edel.Keyspace.Sharded {
 		// We only validate non-table subexpressions because the previous analysis has already validated them.
-		if !pb.validateSubquerySamePlan(del.Targets, del.Where, del.OrderBy, del.Limit) {
+		if !pb.finalizeUnshardedDMLSubqueries(del.Targets, del.Where, del.OrderBy, del.Limit) {
 			return nil, errors.New("unsupported: sharded subqueries in DML")
 		}
 		edel.Opcode = engine.DeleteUnsharded
+		// Generate query after all the analysis. Otherwise table name substitutions for
+		// routed tables won't happen.
+		edel.Query = generateQuery(del)
 		return edel, nil
 	}
-	if del.Targets != nil || len(pb.st.tables) != 1 {
+	if del.Targets != nil || ro.vschemaTable == nil {
 		return nil, errors.New("unsupported: multi-table delete statement in sharded keyspace")
 	}
 	if hasSubquery(del) {
 		return nil, errors.New("unsupported: subqueries in sharded DML")
 	}
-	var vindexTable *vindexes.Table
-	for _, tval := range pb.st.tables {
-		vindexTable = tval.vindexTable
-	}
-	edel.Table = vindexTable
-	if edel.Table == nil {
-		return nil, errors.New("internal error: table.vindexTable is mysteriously nil")
-	}
-	var err error
+	edel.Table = ro.vschemaTable
+	// Generate query after all the analysis. Otherwise table name substitutions for
+	// routed tables won't happen.
+	edel.Query = generateQuery(del)
 
 	directives := sqlparser.ExtractCommentDirectives(del.Comments)
 	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
 		edel.MultiShardAutocommit = true
 	}
 
-	if rb.ERoute.TargetDestination != nil {
-		if rb.ERoute.TargetTabletType != topodatapb.TabletType_MASTER {
+	edel.QueryTimeout = queryTimeout(directives)
+	if ro.eroute.TargetDestination != nil {
+		if ro.eroute.TargetTabletType != topodatapb.TabletType_MASTER {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: DELETE statement with a replica target")
 		}
 		edel.Opcode = engine.DeleteByDestination
-		edel.TargetDestination = rb.ERoute.TargetDestination
+		edel.TargetDestination = ro.eroute.TargetDestination
 		return edel, nil
 	}
 	edel.Vindex, edel.Values, err = getDMLRouting(del.Where, edel.Table)

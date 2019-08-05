@@ -94,7 +94,7 @@ func registerBaseFlags() {
 	flag.StringVar(&baseConfig.UnixSocket, "db_socket", "", "The unix socket to connect on. If this is specifed, host and port will not be used.")
 	flag.StringVar(&baseConfig.Host, "db_host", "", "The host name for the tcp connection.")
 	flag.IntVar(&baseConfig.Port, "db_port", 0, "tcp port")
-	flag.StringVar(&baseConfig.Charset, "db_charset", "utf8", "Character set. Only utf8 or latin1 based character sets are supported.")
+	flag.StringVar(&baseConfig.Charset, "db_charset", "", "Character set. Only utf8 or latin1 based character sets are supported.")
 	flag.Uint64Var(&baseConfig.Flags, "db_flags", 0, "Flag values as defined by MySQL.")
 	flag.StringVar(&baseConfig.SslCa, "db_ssl_ca", "", "connection ssl ca")
 	flag.StringVar(&baseConfig.SslCaPath, "db_ssl_ca_path", "", "connection ssl ca path")
@@ -237,27 +237,27 @@ func HasConnectionParams() bool {
 // is used to initialize the per-user conn params.
 func Init(defaultSocketFile string) (*DBConfigs, error) {
 	// The new base configs, if set, supersede legacy settings.
-	if HasConnectionParams() {
-		for _, uc := range dbConfigs.userConfigs {
+	for _, uc := range dbConfigs.userConfigs {
+		if HasConnectionParams() {
 			uc.param.Host = baseConfig.Host
 			uc.param.Port = baseConfig.Port
 			uc.param.UnixSocket = baseConfig.UnixSocket
-			uc.param.Charset = baseConfig.Charset
-			uc.param.Flags = baseConfig.Flags
-			if uc.useSSL {
-				uc.param.SslCa = baseConfig.SslCa
-				uc.param.SslCaPath = baseConfig.SslCaPath
-				uc.param.SslCert = baseConfig.SslCert
-				uc.param.SslKey = baseConfig.SslKey
-				uc.param.ServerName = baseConfig.ServerName
-			}
+		} else if uc.param.UnixSocket == "" && uc.param.Host == "" {
+			uc.param.UnixSocket = defaultSocketFile
 		}
-	} else {
-		// Use supplied socket value if conn parameters are not specified.
-		for _, uc := range dbConfigs.userConfigs {
-			if uc.param.UnixSocket == "" && uc.param.Host == "" {
-				uc.param.UnixSocket = defaultSocketFile
-			}
+
+		if baseConfig.Charset != "" {
+			uc.param.Charset = baseConfig.Charset
+		}
+		if baseConfig.Flags != 0 {
+			uc.param.Flags = baseConfig.Flags
+		}
+		if uc.useSSL {
+			uc.param.SslCa = baseConfig.SslCa
+			uc.param.SslCaPath = baseConfig.SslCaPath
+			uc.param.SslCert = baseConfig.SslCert
+			uc.param.SslKey = baseConfig.SslKey
+			uc.param.ServerName = baseConfig.ServerName
 		}
 	}
 

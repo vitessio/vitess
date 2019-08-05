@@ -32,12 +32,15 @@ func KeyspaceShardString(keyspace, shard string) string {
 	return fmt.Sprintf("%v/%v", keyspace, shard)
 }
 
-// ParseKeyspaceShard parse a "keyspace/shard" string and extract
-// both keyspace and shard
+// ParseKeyspaceShard parse a "keyspace/shard" or "keyspace:shard"
+// string and extract both keyspace and shard
 func ParseKeyspaceShard(param string) (string, string, error) {
 	keySpaceShard := strings.Split(param, "/")
 	if len(keySpaceShard) != 2 {
-		return "", "", fmt.Errorf("Invalid shard path: %v", param)
+		keySpaceShard = strings.Split(param, ":")
+		if len(keySpaceShard) != 2 {
+			return "", "", fmt.Errorf("invalid shard path: %v", param)
+		}
 	}
 	return keySpaceShard[0], keySpaceShard[1], nil
 }

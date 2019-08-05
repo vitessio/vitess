@@ -100,6 +100,11 @@ func NewInt64(v int64) Value {
 	return MakeTrusted(Int64, strconv.AppendInt(nil, v, 10))
 }
 
+// NewInt8 builds an Int8 Value.
+func NewInt8(v int8) Value {
+	return MakeTrusted(Int8, strconv.AppendInt(nil, int64(v), 10))
+}
+
 // NewInt32 builds an Int64 Value.
 func NewInt32(v int32) Value {
 	return MakeTrusted(Int32, strconv.AppendInt(nil, int64(v), 10))

@@ -39,6 +39,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/workflow"
@@ -55,8 +56,8 @@ var (
 	reparentTimeout = flag.Duration("schema_swap_reparent_timeout", 30*time.Second,
 		"timeout to wait for slaves when doing reparent during schema swap")
 
-	errOnlyMasterLeft   = errors.New("Only master is left to swap schema")
-	errNoBackupWithSwap = errors.New("Restore from backup cannot pick up new schema")
+	errOnlyMasterLeft   = errors.New("only master is left to swap schema")
+	errNoBackupWithSwap = errors.New("restore from backup cannot pick up new schema")
 )
 
 const (
@@ -187,7 +188,7 @@ func (*SwapWorkflowFactory) Init(_ *workflow.Manager, workflowProto *workflowpb.
 		return err
 	}
 	if *keyspace == "" || *sql == "" {
-		return fmt.Errorf("Keyspace name and SQL query must be provided for schema swap")
+		return fmt.Errorf("keyspace name and SQL query must be provided for schema swap")
 	}
 
 	workflowProto.Name = fmt.Sprintf("Schema swap on keyspace %s", *keyspace)
@@ -283,7 +284,7 @@ func (schemaSwap *Swap) closeRetryChannel() {
 // from UI.
 func (schemaSwap *Swap) Action(ctx context.Context, path, name string) error {
 	if name != "Retry" {
-		return fmt.Errorf("Unknown action on schema swap: %v", name)
+		return fmt.Errorf("unknown action on schema swap: %v", name)
 	}
 	schemaSwap.closeRetryChannel()
 	schemaSwap.rootUINode.BroadcastChanges(false /* updateChildren */)
@@ -308,7 +309,7 @@ func (schemaSwap *Swap) executeSwap() error {
 	}
 	errHealthWatchers := schemaSwap.runOnAllShards(
 		func(shard *shardSchemaSwap) error {
-			return shard.startHealthWatchers()
+			return shard.startHealthWatchers(schemaSwap.ctx)
 		})
 	// Note: this defer statement is before the error is checked because some shards may
 	// succeed while others fail. We should try to stop health watching on all shards no
@@ -477,12 +478,12 @@ func (schemaSwap *Swap) initializeSwap() error {
 			recorder.RecordError(metadata.err)
 		} else if metadata.lastStartedSwap < metadata.lastFinishedSwap || metadata.lastStartedSwap > metadata.lastFinishedSwap+1 {
 			recorder.RecordError(fmt.Errorf(
-				"Bad swap metadata on shard %v: LastFinishedSchemaSwap=%v, LastStartedSchemaSwap=%v",
+				"bad swap metadata on shard %v: LastFinishedSchemaSwap=%v, LastStartedSchemaSwap=%v",
 				schemaSwap.allShards[i].shardName, metadata.lastFinishedSwap, metadata.lastStartedSwap))
 		} else if metadata.lastStartedSwap != metadata.lastFinishedSwap {
 			if metadata.currentSQL != schemaSwap.sql {
 				recorder.RecordError(fmt.Errorf(
-					"Shard %v has an already started schema swap with a different set of SQL statements",
+					"shard %v has an already started schema swap with a different set of SQL statements",
 					schemaSwap.allShards[i].shardName))
 			}
 		}
@@ -501,7 +502,7 @@ func (schemaSwap *Swap) initializeSwap() error {
 			// The shard doesn't have schema swap started yet or it's already finished.
 			if schemaSwap.swapID != metadata.lastFinishedSwap && schemaSwap.swapID != metadata.lastFinishedSwap+1 {
 				recorder.RecordError(fmt.Errorf(
-					"Shard %v has last finished swap id euqal to %v which doesn't align with swap id for the keyspace equal to %v",
+					"shard %v has last finished swap id euqal to %v which doesn't align with swap id for the keyspace equal to %v",
 					schemaSwap.allShards[i].shardName, metadata.lastFinishedSwap, schemaSwap.swapID))
 			} else if schemaSwap.swapID == metadata.lastFinishedSwap {
 				haveFinishedSwap = true
@@ -510,7 +511,7 @@ func (schemaSwap *Swap) initializeSwap() error {
 			}
 		} else if schemaSwap.swapID != metadata.lastStartedSwap {
 			recorder.RecordError(fmt.Errorf(
-				"Shard %v has an already started schema swap with an id %v, while for the keyspace it should be equal to %v",
+				"shard %v has an already started schema swap with an id %v, while for the keyspace it should be equal to %v",
 				schemaSwap.allShards[i].shardName, metadata.lastStartedSwap, schemaSwap.swapID))
 		}
 	}
@@ -603,8 +604,8 @@ func (shardSwap *shardSchemaSwap) readShardMetadata(metadata *shardSwapMetadata,
 		return
 	}
 	query := fmt.Sprintf(
-		"SELECT name, value FROM _vt.shard_metadata WHERE name in ('%s', '%s', '%s')",
-		lastStartedMetadataName, lastFinishedMetadataName, currentSQLMetadataName)
+		"SELECT name, value FROM _vt.shard_metadata WHERE db_name = '%s' and name in ('%s', '%s', '%s')",
+		topoproto.TabletDbName(tablet), lastStartedMetadataName, lastFinishedMetadataName, currentSQLMetadataName)
 	queryResult, err := shardSwap.executeAdminQuery(tablet, query, 3 /* maxRows */)
 	if err != nil {
 		metadata.err = err
@@ -640,7 +641,9 @@ func (shardSwap *shardSchemaSwap) writeStartedSwap() error {
 		return err
 	}
 	queryBuf := bytes.Buffer{}
-	queryBuf.WriteString("INSERT INTO _vt.shard_metadata (name, value) VALUES ('")
+	queryBuf.WriteString("INSERT INTO _vt.shard_metadata (db_name, name, value) VALUES ('")
+	queryBuf.WriteString(topoproto.TabletDbName(tablet))
+	queryBuf.WriteString("',")
 	queryBuf.WriteString(currentSQLMetadataName)
 	queryBuf.WriteString("',")
 	sqlValue := sqltypes.NewVarChar(shardSwap.parent.sql)
@@ -666,13 +669,13 @@ func (shardSwap *shardSchemaSwap) writeFinishedSwap() error {
 		return err
 	}
 	query := fmt.Sprintf(
-		"INSERT INTO _vt.shard_metadata (name, value) VALUES ('%s', '%d') ON DUPLICATE KEY UPDATE value = '%d'",
-		lastFinishedMetadataName, shardSwap.parent.swapID, shardSwap.parent.swapID)
+		"INSERT INTO _vt.shard_metadata (db_name, name, value) VALUES ('%s', '%s', '%d') ON DUPLICATE KEY UPDATE value = '%d'",
+		topoproto.TabletDbName(tablet), lastFinishedMetadataName, shardSwap.parent.swapID, shardSwap.parent.swapID)
 	_, err = shardSwap.executeAdminQuery(tablet, query, 0 /* maxRows */)
 	if err != nil {
 		return err
 	}
-	query = fmt.Sprintf("DELETE FROM _vt.shard_metadata WHERE name = '%s'", currentSQLMetadataName)
+	query = fmt.Sprintf("DELETE FROM _vt.shard_metadata WHERE db_name = '%s' AND name = '%s'", topoproto.TabletDbName(tablet), currentSQLMetadataName)
 	_, err = shardSwap.executeAdminQuery(tablet, query, 0 /* maxRows */)
 	return err
 }
@@ -680,7 +683,7 @@ func (shardSwap *shardSchemaSwap) writeFinishedSwap() error {
 // startHealthWatchers launches the topology watchers and health checking to monitor
 // all tablets on the shard. Function should be called before the start of the schema
 // swap process.
-func (shardSwap *shardSchemaSwap) startHealthWatchers() error {
+func (shardSwap *shardSchemaSwap) startHealthWatchers(ctx context.Context) error {
 	shardSwap.allTablets = make(map[string]*discovery.TabletStats)
 
 	shardSwap.tabletHealthCheck = discovery.NewHealthCheck(*vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout)
@@ -693,6 +696,7 @@ func (shardSwap *shardSchemaSwap) startHealthWatchers() error {
 	}
 	for _, cell := range cellList {
 		watcher := discovery.NewShardReplicationWatcher(
+			ctx,
 			topoServer,
 			shardSwap.tabletHealthCheck,
 			cell,
@@ -761,7 +765,7 @@ func (shardSwap *shardSchemaSwap) startWaitingOnUnhealthyTablet(tablet *topodata
 	tabletKey := discovery.TabletToMapKey(tablet)
 	tabletStats, tabletFound := shardSwap.allTablets[tabletKey]
 	if !tabletFound {
-		return nil, fmt.Errorf("Tablet %v has disappeared while doing schema swap", tablet.Alias)
+		return nil, fmt.Errorf("tablet %v has disappeared while doing schema swap", tablet.Alias)
 	}
 	if isTabletHealthy(tabletStats) {
 		return nil, nil
@@ -896,7 +900,7 @@ func (shardSwap *shardSchemaSwap) executeAdminQuery(tablet *topodatapb.Tablet, q
 func (shardSwap *shardSchemaSwap) isSwapApplied(tablet *topodatapb.Tablet) (bool, error) {
 	swapIDResult, err := shardSwap.executeAdminQuery(
 		tablet,
-		fmt.Sprintf("SELECT value FROM _vt.local_metadata WHERE name = '%s'", lastAppliedMetadataName),
+		fmt.Sprintf("SELECT value FROM _vt.local_metadata WHERE db_name = '%s' AND name = '%s'", topoproto.TabletDbName(tablet), lastAppliedMetadataName),
 		1 /* maxRows */)
 	if err != nil {
 		return false, err
@@ -1036,8 +1040,8 @@ func (shardSwap *shardSchemaSwap) applySeedSchemaChange() (err error) {
 		return err
 	}
 	updateAppliedSwapQuery := fmt.Sprintf(
-		"INSERT INTO _vt.local_metadata (name, value) VALUES ('%s', '%d') ON DUPLICATE KEY UPDATE value = '%d'",
-		lastAppliedMetadataName, shardSwap.parent.swapID, shardSwap.parent.swapID)
+		"INSERT INTO _vt.local_metadata (db_name, name, value) VALUES ('%s', '%s', '%d') ON DUPLICATE KEY UPDATE value = '%d'",
+		topoproto.TabletDbName(seedTablet), lastAppliedMetadataName, shardSwap.parent.swapID, shardSwap.parent.swapID)
 	_, err = shardSwap.parent.tabletClient.ExecuteFetchAsDba(
 		shardSwap.parent.ctx,
 		seedTablet,
@@ -1286,7 +1290,7 @@ func (shardSwap *shardSchemaSwap) reparentFromMaster(masterTablet *topodatapb.Ta
 			return err
 		}
 		if hookResult.ExitStatus != hook.HOOK_SUCCESS {
-			return fmt.Errorf("Error executing 'reparent_away' hook: %v", hookResult.String())
+			return fmt.Errorf("error executing 'reparent_away' hook: %v", hookResult.String())
 		}
 	} else {
 		wr := wrangler.New(logutil.NewConsoleLogger(), shardSwap.parent.topoServer, shardSwap.parent.tabletClient)

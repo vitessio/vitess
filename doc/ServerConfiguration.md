@@ -258,7 +258,7 @@ VTTablet requires multiple user credentials to perform its tasks. Since it's req
 
 **connection** parameters
 
-* **db\_socket**: The unix socket to connect on. If this is specifed, host and port will not be used.
+* **db\_socket**: The unix socket to connect on. If this is specified, host and port will not be used.
 * **db\_host**: The host name for the tcp connection.
 * **db\_port**: The tcp port to be used with the db\_host.
 * **db\_charset**: Character set. Only utf8 or latin1 based character sets are supported.

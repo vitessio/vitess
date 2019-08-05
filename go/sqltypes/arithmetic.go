@@ -26,6 +26,9 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+// TODO(sougou): change these functions to be more permissive.
+// Most string to number conversions should quietly convert to 0.
+
 // numeric represents a numeric value extracted from
 // a Value, used for arithmetic operations.
 type numeric struct {
@@ -34,6 +37,8 @@ type numeric struct {
 	uval uint64
 	fval float64
 }
+
+var zeroBytes = []byte("0")
 
 // NullsafeAdd adds two Values in a null-safe manner. A null value
 // is treated as 0. If both values are null, then a null is returned.
@@ -48,10 +53,10 @@ type numeric struct {
 // result is preserved.
 func NullsafeAdd(v1, v2 Value, resultType querypb.Type) (Value, error) {
 	if v1.IsNull() {
-		return v2, nil
+		v1 = MakeTrusted(resultType, zeroBytes)
 	}
 	if v2.IsNull() {
-		return v1, nil
+		v2 = MakeTrusted(resultType, zeroBytes)
 	}
 
 	lv1, err := newNumeric(v1)

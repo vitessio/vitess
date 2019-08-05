@@ -21,16 +21,16 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dtids"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -116,6 +116,7 @@ func NewTxEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *
 		config.PoolNamePrefix,
 		config.TransactionCap,
 		config.FoundRowsPoolSize,
+		config.TxPoolPrefillParallelism,
 		time.Duration(config.TransactionTimeout*1e9),
 		time.Duration(config.IdleTimeout*1e9),
 		config.TxPoolWaiterCap,
@@ -146,6 +147,7 @@ func NewTxEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *
 	readPool := connpool.New(
 		config.PoolNamePrefix+"TxReadPool",
 		3,
+		0,
 		time.Duration(config.IdleTimeout*1e9),
 		checker,
 	)
@@ -264,22 +266,26 @@ func (te *TxEngine) AcceptReadOnly() error {
 	}
 }
 
-// Begin begins a transaction, and returns the associated transaction id.
+// Begin begins a transaction, and returns the associated transaction id and the
+// statement(s) used to execute the begin (if any).
+//
 // Subsequent statements can access the connection through the transaction id.
-func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) (int64, error) {
+func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) (int64, string, error) {
+	span, ctx := trace.NewSpan(ctx, "TxEngine.Begin")
+	defer span.Finish()
 	te.stateLock.Lock()
 
 	canOpenTransactions := te.state == AcceptingReadOnly || te.state == AcceptingReadAndWrite
 	if !canOpenTransactions {
 		// We are not in a state where we can start new transactions. Abort.
 		te.stateLock.Unlock()
-		return 0, vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "tx engine can't accept new transactions in state %v", te.state)
+		return 0, "", vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "tx engine can't accept new transactions in state %v", te.state)
 	}
 
 	isWriteTransaction := options == nil || options.TransactionIsolation != querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY
 	if te.state == AcceptingReadOnly && isWriteTransaction {
 		te.stateLock.Unlock()
-		return 0, vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "tx engine can only accept read-only transactions in current state")
+		return 0, "", vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "tx engine can only accept read-only transactions in current state")
 	}
 
 	// By Add() to beginRequests, we block others from initiating state
@@ -292,12 +298,17 @@ func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) 
 }
 
 // Commit commits the specified transaction.
-func (te *TxEngine) Commit(ctx context.Context, transactionID int64, mc messageCommitter) error {
+func (te *TxEngine) Commit(ctx context.Context, transactionID int64, mc messageCommitter) (string, error) {
+	span, ctx := trace.NewSpan(ctx, "TxEngine.Commit")
+	defer span.Finish()
 	return te.txPool.Commit(ctx, transactionID, mc)
 }
 
 // Rollback rolls back the specified transaction.
 func (te *TxEngine) Rollback(ctx context.Context, transactionID int64) error {
+	span, ctx := trace.NewSpan(ctx, "TxEngine.Rollback")
+	defer span.Finish()
+
 	return te.txPool.Rollback(ctx, transactionID)
 }
 
@@ -466,7 +477,7 @@ outer:
 		if txid > maxid {
 			maxid = txid
 		}
-		conn, err := te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
+		conn, _, err := te.txPool.LocalBegin(ctx, &querypb.ExecuteOptions{})
 		if err != nil {
 			allErr.RecordError(err)
 			continue

@@ -48,7 +48,7 @@ func TestScatterConnExecute(t *testing.T) {
 			return nil, err
 		}
 
-		return sc.Execute(context.Background(), "query", nil, rss, topodatapb.TabletType_REPLICA, nil, false, nil)
+		return sc.Execute(context.Background(), "query", nil, rss, topodatapb.TabletType_REPLICA, NewSafeSession(nil), false, nil)
 	})
 }
 
@@ -68,7 +68,7 @@ func TestScatterConnExecuteMulti(t *testing.T) {
 			}
 		}
 
-		qr, errs := sc.ExecuteMultiShard(context.Background(), rss, queries, topodatapb.TabletType_REPLICA, nil, false, false)
+		qr, errs := sc.ExecuteMultiShard(context.Background(), rss, queries, topodatapb.TabletType_REPLICA, NewSafeSession(nil), false, false)
 		return qr, vterrors.Aggregate(errs)
 	})
 }
@@ -88,7 +88,7 @@ func TestScatterConnExecuteBatch(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		qrs, err := sc.ExecuteBatch(context.Background(), scatterRequest, topodatapb.TabletType_REPLICA, false, nil, nil)
+		qrs, err := sc.ExecuteBatch(context.Background(), scatterRequest, topodatapb.TabletType_REPLICA, false, NewSafeSession(nil), nil)
 		if err != nil {
 			return nil, err
 		}
@@ -133,6 +133,7 @@ func TestScatterConnStreamExecuteMulti(t *testing.T) {
 // verifyScatterConnError checks that a returned error has the expected message,
 // type, and error code.
 func verifyScatterConnError(t *testing.T, err error, wantErr string, wantCode vtrpcpb.Code) {
+	t.Helper()
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("wanted error: %s, got error: %v", wantErr, err)
 	}
@@ -247,6 +248,57 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	}
 }
 
+func TestMaxMemoryRows(t *testing.T) {
+	save := *maxMemoryRows
+	*maxMemoryRows = 3
+	defer func() { *maxMemoryRows = save }()
+
+	createSandbox("TestMaxMemoryRows")
+	hc := discovery.NewFakeHealthCheck()
+	sc := newTestScatterConn(hc, new(sandboxTopo), "aa")
+	sbc0 := hc.AddTestTablet("aa", "0", 1, "TestMaxMemoryRows", "0", topodatapb.TabletType_REPLICA, true, 1, nil)
+	sbc1 := hc.AddTestTablet("aa", "1", 1, "TestMaxMemoryRows", "1", topodatapb.TabletType_REPLICA, true, 1, nil)
+
+	tworows := &sqltypes.Result{
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(1),
+		}, {
+			sqltypes.NewInt64(1),
+		}},
+		RowsAffected: 1,
+		InsertID:     1,
+	}
+	sbc0.SetResults([]*sqltypes.Result{tworows, tworows})
+	sbc1.SetResults([]*sqltypes.Result{tworows, tworows})
+
+	res := srvtopo.NewResolver(&sandboxTopo{}, sc.gateway, "aa")
+	rss, _, err := res.ResolveDestinations(context.Background(), "TestMaxMemoryRows", topodatapb.TabletType_REPLICA, nil,
+		[]key.Destination{key.DestinationShard("0"), key.DestinationShard("1")})
+	if err != nil {
+		t.Fatalf("ResolveDestination(0) failed: %v", err)
+	}
+	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
+
+	_, err = sc.Execute(context.Background(), "query1", nil, rss, topodatapb.TabletType_REPLICA, session, true, nil)
+	want := "in-memory row count exceeded allowed limit of 3"
+	if err == nil || err.Error() != want {
+		t.Errorf("Execute(): %v, want %v", err, want)
+	}
+
+	queries := []*querypb.BoundQuery{{
+		Sql:           "query1",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}, {
+		Sql:           "query1",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	_, errs := sc.ExecuteMultiShard(context.Background(), rss, queries, topodatapb.TabletType_REPLICA, session, false, false)
+	err = errs[0]
+	if err == nil || err.Error() != want {
+		t.Errorf("Execute(): %v, want %v", err, want)
+	}
+}
+
 func TestMultiExecs(t *testing.T) {
 	createSandbox("TestMultiExecs")
 	hc := discovery.NewFakeHealthCheck()
@@ -285,7 +337,7 @@ func TestMultiExecs(t *testing.T) {
 		},
 	}
 
-	_, _ = sc.ExecuteMultiShard(context.Background(), rss, queries, topodatapb.TabletType_REPLICA, nil, false, false)
+	_, _ = sc.ExecuteMultiShard(context.Background(), rss, queries, topodatapb.TabletType_REPLICA, NewSafeSession(nil), false, false)
 	if len(sbc0.Queries) == 0 || len(sbc1.Queries) == 0 {
 		t.Fatalf("didn't get expected query")
 	}
@@ -677,7 +729,7 @@ func newTestScatterConn(hc discovery.HealthCheck, serv srvtopo.Server, cell stri
 	// The topo.Server is used to start watching the cells described
 	// in '-cells_to_watch' command line parameter, which is
 	// empty by default. So it's unused in this test, set to nil.
-	gw := gateway.GetCreator()(hc, serv, cell, 3)
+	gw := gateway.GetCreator()(context.Background(), hc, serv, cell, 3)
 	tc := NewTxConn(gw, vtgatepb.TransactionMode_TWOPC)
 	return NewScatterConn("", tc, gw, hc)
 }

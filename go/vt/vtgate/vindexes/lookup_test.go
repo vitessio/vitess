@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 // LookupNonUnique tests are more comprehensive than others.
@@ -39,15 +40,23 @@ type vcursor struct {
 	result      *sqltypes.Result
 	queries     []*querypb.BoundQuery
 	autocommits int
+	pre, post   int
 }
 
-func (vc *vcursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
+func (vc *vcursor) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
+	switch co {
+	case vtgatepb.CommitOrder_PRE:
+		vc.pre++
+	case vtgatepb.CommitOrder_POST:
+		vc.post++
+	case vtgatepb.CommitOrder_AUTOCOMMIT:
+		vc.autocommits++
+	}
 	return vc.execute(method, query, bindvars, isDML)
 }
 
-func (vc *vcursor) ExecuteAutocommit(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
-	vc.autocommits++
-	return vc.execute(method, query, bindvars, isDML)
+func (vc *vcursor) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, isDML, autocommit bool) (*sqltypes.Result, error) {
+	return vc.execute("ExecuteKeyspaceID", query, bindVars, isDML)
 }
 
 func (vc *vcursor) execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool) (*sqltypes.Result, error) {
@@ -92,7 +101,7 @@ func TestLookupNonUniqueNew(t *testing.T) {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
-	l, err := CreateVindex("lookup", "lookup", map[string]string{
+	_, err := CreateVindex("lookup", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
@@ -368,7 +377,7 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 
 	// With ignore.
 	vc.queries = nil
-	err = lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}, [][]byte{[]byte("test1"), []byte("test2")}, true /* ignoreMode */)
+	err = lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(2)}, {sqltypes.NewInt64(1)}}, [][]byte{[]byte("test2"), []byte("test1")}, true /* ignoreMode */)
 	if err != nil {
 		t.Error(err)
 	}
@@ -484,7 +493,7 @@ func TestLookupNonUniqueDelete(t *testing.T) {
 }
 
 func TestLookupNonUniqueDeleteAutocommit(t *testing.T) {
-	lookupNonUnique, err := CreateVindex("lookup", "lookup", map[string]string{
+	lookupNonUnique, _ := CreateVindex("lookup", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
@@ -492,7 +501,7 @@ func TestLookupNonUniqueDeleteAutocommit(t *testing.T) {
 	})
 	vc := &vcursor{}
 
-	err = lookupNonUnique.(Lookup).Delete(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}, []byte("test"))
+	err := lookupNonUnique.(Lookup).Delete(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}, []byte("test"))
 	if err != nil {
 		t.Error(err)
 	}

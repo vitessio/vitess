@@ -95,6 +95,24 @@ class MysqlFlavor(object):
     """Disables binlog_checksum if the flavor supports it."""
     tablet.mquery("", "SET @@global.binlog_checksum=0")
 
+  def change_passwords(self, password_col):
+    """set real passwords for all users"""
+    return '''
+# Set real passwords for all users.
+UPDATE mysql.user SET %s = PASSWORD('RootPass')
+  WHERE User = 'root' AND Host = 'localhost';
+UPDATE mysql.user SET %s = PASSWORD('VtDbaPass')
+  WHERE User = 'vt_dba' AND Host = 'localhost';
+UPDATE mysql.user SET %s = PASSWORD('VtAppPass')
+  WHERE User = 'vt_app' AND Host = 'localhost';
+UPDATE mysql.user SET %s = PASSWORD('VtAllprivsPass')
+  WHERE User = 'vt_allprivs' AND Host = 'localhost';
+UPDATE mysql.user SET %s = PASSWORD('VtReplPass')
+  WHERE User = 'vt_repl' AND Host = '%%';
+UPDATE mysql.user SET %s = PASSWORD('VtFilteredPass')
+  WHERE User = 'vt_filtered' AND Host = 'localhost';
+FLUSH PRIVILEGES;
+''' % tuple([password_col] * 6)
 
 class MariaDB(MysqlFlavor):
   """Overrides specific to MariaDB."""
@@ -137,7 +155,7 @@ class MariaDB103(MariaDB):
     return environment.vttop + "/config/mycnf/master_mariadb103.cnf"
 
 class MySQL56(MysqlFlavor):
-  """Overrides specific to MySQL 5.6."""
+  """Overrides specific to MySQL 5.6/5.7"""
 
   def master_position(self, tablet):
     gtid = tablet.mquery("", "SELECT @@GLOBAL.gtid_executed")[0][0]
@@ -164,6 +182,23 @@ class MySQL56(MysqlFlavor):
         "CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d, "
         "MASTER_USER='vt_repl', MASTER_AUTO_POSITION = 1" %
         (host, port)]
+
+class MySQL80(MySQL56):
+  """Overrides specific to MySQL 8.0."""
+  def extra_my_cnf(self):
+    return environment.vttop + "/config/mycnf/master_mysql80.cnf"
+  def change_passwords(self, password_col):
+    """set real passwords for all users"""
+    return '''
+# Set real passwords for all users.
+ALTER USER 'root'@'localhost' IDENTIFIED BY 'RootPass';
+ALTER USER 'vt_dba'@'localhost' IDENTIFIED BY 'VtDbaPass';
+ALTER USER 'vt_app'@'localhost' IDENTIFIED BY 'VtAppPass';
+ALTER USER 'vt_allprivs'@'localhost' IDENTIFIED BY 'VtAllPrivsPass';
+ALTER USER 'vt_repl'@'%' IDENTIFIED BY 'VtReplPass';
+ALTER USER 'vt_filtered'@'localhost' IDENTIFIED BY 'VtFilteredPass';
+FLUSH PRIVILEGES;
+'''
 
 
 # Map of registered MysqlFlavor classes (keyed by an identifier).
@@ -238,3 +273,4 @@ def register_flavor(flavor, cls, env):
 register_flavor("MariaDB", MariaDB, "MariaDB")
 register_flavor("MariaDB103", MariaDB103, "MariaDB103")
 register_flavor("MySQL56", MySQL56, "MySQL56")
+register_flavor("MySQL80", MySQL80, "MySQL80")

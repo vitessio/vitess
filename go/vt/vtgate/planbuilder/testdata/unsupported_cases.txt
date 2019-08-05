@@ -1,6 +1,6 @@
 # Unions
 "select * from user union select * from user_extra"
-"unsupported: UNION or subquery containing multi-shard queries"
+"unsupported: UNION cannot be executed as a single route"
 
 # SET
 "set a=1"
@@ -29,11 +29,11 @@
 
 # union operations in subqueries (FROM)
 "select * from (select * from user union all select * from user_extra) as t"
-"unsupported: UNION or subquery containing multi-shard queries"
+"unsupported: UNION cannot be executed as a single route"
 
 # union operations in subqueries (expressions)
 "select * from user where id in (select * from user union select * from user_extra)"
-"unsupported: UNION or subquery containing multi-shard queries"
+"unsupported: UNION cannot be executed as a single route"
 
 # TODO: Implement support for select with a target destination
 "select * from `user[-]`.user_metadata"
@@ -51,17 +51,13 @@
 "update `user[-]@replica`.user_metadata set id=2"
 "unsupported: UPDATE statement with a replica target"
 
-# order by on a cross-shard subquery
-"select id from (select user.id, user.col from user join user_extra) as t order by id"
-"unsupported: cannot order by on a cross-shard subquery"
-
-# order by on a cross-shard query. Note: this is only a problem when an order by column is from the second table
-"select user.col1 as a, user.col2 b, music.col3 c from user, music where user.id = music.id and user.id = 1 order by c"
-"unsupported: order by spans across shards"
-
 # scatter order by with * expression
 "select * from user order by id"
 "unsupported: in scatter query: order by must reference a column in the select list: id asc"
+
+# order by rand on a cross-shard subquery
+"select id from (select user.id, user.col from user join user_extra) as t order by rand()"
+"unsupported: memory sort: complex order by expression: rand()"
 
 # filtering on a cross-shard subquery
 "select id from (select user.id, user.col from user join user_extra) as t where id=5"
@@ -74,14 +70,6 @@
 # last_insert_id for sharded keyspace
 "select last_insert_id() from user"
 "unsupported: LAST_INSERT_ID is only allowed for unsharded keyspaces"
-
-# join of information_schema with normal table
-"select foo from information_schema.a join unsharded"
-"unsupported: intermixing of information_schema and regular tables"
-
-# join of normal table with information_schema
-"select foo from unsharded join information_schema.a"
-"unsupported: intermixing of information_schema and regular tables"
 
 # natural join
 "select * from user natural join user_extra"
@@ -139,13 +127,21 @@
 "select 1+count(*) from user"
 "unsupported: in scatter query: complex aggregate expression"
 
+# Multi-value aggregates not supported
+"select count(a,b) from user"
+"unsupported: only one expression allowed inside aggregates: count(a, b)"
+
+# Cannot have more than one aggr(distinct...
+"select count(distinct a), count(distinct b) from user"
+"unsupported: only one distinct aggregation allowed in a select: count(distinct b)"
+
 # scatter aggregate group by doesn't reference select list
 "select id from user group by col"
 "unsupported: in scatter query: group by column must reference column in SELECT list"
 
 # scatter aggregate symtab lookup error
 "select id, b as id, count(*) from user order by id"
-"invalid order by: ambiguous symbol reference: id"
+"ambiguous symbol reference: id"
 
 # scatter aggregate with ambiguous aliases
 "select distinct a, b as a from user"
@@ -159,9 +155,9 @@
 "select col, count(*) from user group by col order by col+1"
 "unsupported: in scatter query: complex order by expression: col + 1"
 
-# scatter aggregate order by does not reference group by
-"select a, b, count(*) from user group by a order by b"
-"unsupported: in scatter query: order by column must reference group by expression: b asc"
+# Scatter order by and aggregation: order by column must reference column from select list
+"select col, count(*) from user group by col order by c1"
+"unsupported: memory sort: order by must reference a column in the select list: c1 asc"
 
 # Aggregates and joins
 "select count(*) from user join user_extra"
@@ -183,33 +179,25 @@
 "select user.id from user, user_extra group by id"
 "unsupported: cross-shard query with aggregates"
 
+# if subquery scatter and ordering, then we don't allow outer constructs to be pushed down.
+"select count(*) from (select col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a"
+"unsupported: cross-shard query with aggregates"
+
 # subqueries not supported in group by
 "select id from user group by id, (select id from user_extra)"
-"unsupported: in group by: subqueries disallowed"
+"unsupported: subqueries disallowed in GROUP or ORDER BY"
 
 # Order by uses cross-shard expression
 "select id from user order by id+1"
 "unsupported: in scatter query: complex order by expression: id + 1"
 
-# Order by for join, but sequence is too cross-shard
-"select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by 1 asc, 3 desc, 2 asc"
-"unsupported: order by spans across shards"
-
-# Order by and left join
-"select user.col1 as a, user_extra.col2 as b from user left join user_extra on user_extra.user_id = 5 where user.id = 5 order by 1, 2"
-"unsupported: order by spans across shards"
-
 # Order by column number with collate
 "select user.col1 as a from user order by 1 collate utf8_general_ci"
 "unsupported: in scatter query: complex order by expression: 1 collate utf8_general_ci"
 
-# Order by for join, but order by is cross-shard
-"select user.col1 as a, user_extra.col2 as b from user join user_extra on user_extra.user_id = 5 where user.id = 5 order by a+b"
-"unsupported: order by spans across shards"
-
 # Order by has subqueries
 "select id from unsharded order by (select id from unsharded)"
-"unsupported: order by has subquery"
+"unsupported: subqueries disallowed in GROUP or ORDER BY"
 
 # subqueries in update
 "update user set col = (select id from unsharded)"
@@ -257,7 +245,7 @@
 
 # multi delete multi table
 "delete user from user join user_extra on user.id = user_extra.id where user.name = 'foo'"
-"unsupported: multi-table/vindex delete statement in sharded keyspace"
+"unsupported: multi-shard or vindex write statement"
 
 # scatter delete with owned lookup vindex
 "delete from user"
@@ -293,11 +281,11 @@
 
 # join in update tables
 "update user join user_extra on user.id = user_extra.id set user.name = 'foo'"
-"unsupported: multi-table/vindex update statement in sharded keyspace"
+"unsupported: multi-shard or vindex write statement"
 
 # multiple tables in update
 "update user as u, user_extra as ue set u.name = 'foo' where u.id = ue.id"
-"unsupported: multi-table/vindex update statement in sharded keyspace"
+"unsupported: multi-shard or vindex write statement"
 
 # unsharded insert with cross-shard join"
 "insert into unsharded select u.col from user u join user u1"
@@ -377,45 +365,45 @@
 
 # union of information_schema with normal table
 "select * from information_schema.a union select * from unsharded"
-"unsupported: intermixing of information_schema and regular tables"
+"unsupported: UNION cannot be executed as a single route"
 
 # union of information_schema with normal table
 "select * from unsharded union select * from information_schema.a"
-"unsupported: intermixing of information_schema and regular tables"
+"unsupported: UNION cannot be executed as a single route"
 
 # multi-shard union
 "(select id from user union select id from music) union select 1 from dual"
-"unsupported: UNION or subquery containing multi-shard queries"
+"unsupported: UNION cannot be executed as a single route"
 
 # multi-shard union
 "select 1 from music union (select id from user union all select name from unsharded)"
-"unsupported: UNION on different keyspaces"
+"unsupported: UNION cannot be executed as a single route"
 
 # multi-shard union
 "select 1 from music union (select id from user union select name from unsharded)"
-"unsupported: UNION on different keyspaces"
+"unsupported: UNION cannot be executed as a single route"
 
 # multi-shard union
 "select id from user union all select id from music"
-"unsupported: UNION or subquery containing multi-shard queries"
+"unsupported: UNION cannot be executed as a single route"
 
 # union with the same target shard because of vindex
 "select * from music where id = 1 union select * from user where id = 1"
-"unsupported: UNION or subquery on different shards: vindexes are different"
+"unsupported: UNION cannot be executed as a single route"
 
 # union with different target shards
 "select 1 from music where id = 1 union select 1 from music where id = 2"
-"unsupported: UNION or subquery on different shards: vindex values are different"
+"unsupported: UNION cannot be executed as a single route"
 
 # Union all
 "select col1, col2 from user union all select col1, col2 from user_extra"
-"unsupported: UNION or subquery containing multi-shard queries"
+"unsupported: UNION cannot be executed as a single route"
 
 "(select user.id, user.name from user join user_extra where user_extra.extra = 'asdf') union select 'b','c' from user"
-"unsupported construct: SELECT of UNION is non-trivial"
+"unsupported: SELECT of UNION is non-trivial"
 
 "select 'b','c' from user union (select user.id, user.name from user join user_extra where user_extra.extra = 'asdf')"
-"unsupported construct: SELECT of UNION is non-trivial"
+"unsupported: SELECT of UNION is non-trivial"
 
 "select keyspace_id from user_index where id = 1 and id = 2"
 "unsupported: where clause for vindex function must be of the form id = <val> (multiple filters)"
@@ -440,3 +428,8 @@
 
 "select func(keyspace_id) from user_index where id = :id"
 "unsupported: expression on results of a vindex function"
+
+# Multi-table unique vindex constraint on left table of left join, two levels of join, simple aggregation
+# This should work, but doesn't. See https://github.com/vitessio/vitess/issues/4772
+"select user.id, count(*) from user left join user_extra ue1 on user.id = ue1.user_id left join user_extra ue2 on ue1.user_id = ue2.user_id group by user.id"
+"unsupported: cross-shard query with aggregates"

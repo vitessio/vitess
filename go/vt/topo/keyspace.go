@@ -164,6 +164,7 @@ func (ts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *to
 	if _, err := ts.globalCell.Create(ctx, keyspacePath, data); err != nil {
 		return err
 	}
+
 	event.Dispatch(&events.KeyspaceChange{
 		KeyspaceName: keyspace,
 		Keyspace:     value,
@@ -255,6 +256,20 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string) 
 	return result, nil
 }
 
+// GetOnlyShard returns the single ShardInfo of an unsharded keyspace.
+func (ts *Server) GetOnlyShard(ctx context.Context, keyspace string) (*ShardInfo, error) {
+	allShards, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
+	if err != nil {
+		return nil, err
+	}
+	if len(allShards) == 1 {
+		for _, s := range allShards {
+			return s, nil
+		}
+	}
+	return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "keyspace %s must have one and only one shard: %v", keyspace, allShards)
+}
+
 // DeleteKeyspace wraps the underlying Conn.Delete
 // and dispatches the event.
 func (ts *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
@@ -262,6 +277,13 @@ func (ts *Server) DeleteKeyspace(ctx context.Context, keyspace string) error {
 	if err := ts.globalCell.Delete(ctx, keyspacePath, nil); err != nil {
 		return err
 	}
+
+	// Delete the cell-global VSchema path
+	// If not remove this, vtctld web page Dashboard will Display Error
+	if err := ts.DeleteVSchema(ctx, keyspace); err != nil && !IsErrType(err, NoNode) {
+		return err
+	}
+
 	event.Dispatch(&events.KeyspaceChange{
 		KeyspaceName: keyspace,
 		Keyspace:     nil,

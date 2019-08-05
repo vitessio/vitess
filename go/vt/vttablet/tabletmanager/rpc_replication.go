@@ -37,7 +37,8 @@ import (
 )
 
 var (
-	enableSemiSync = flag.Bool("enable_semi_sync", false, "Enable semi-sync when configuring replication, on master and replica tablets only (rdonly tablets will not ack).")
+	enableSemiSync   = flag.Bool("enable_semi_sync", false, "Enable semi-sync when configuring replication, on master and replica tablets only (rdonly tablets will not ack).")
+	setSuperReadOnly = flag.Bool("use_super_read_only", false, "Set super_read_only flag when performing planned failover.")
 )
 
 // SlaveStatus returns the replication status
@@ -331,17 +332,29 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 
 	// Now, set the server read-only. Note all active connections are not
 	// affected.
-	if err := agent.MysqlDaemon.SetReadOnly(true); err != nil {
-		// if this failed, revert the change to serving
-		if _ /* state changed */, err1 := agent.QueryServiceControl.SetServingType(tablet.Type, true, nil); err1 != nil {
-			log.Warningf("SetServingType(serving=true) failed after failed SetReadOnly %v", err1)
+	if *setSuperReadOnly {
+		// Setting super_read_only also sets read_only
+		if err := agent.MysqlDaemon.SetSuperReadOnly(true); err != nil {
+			// if this failed, revert the change to serving
+			if _ /* state changed */, err1 := agent.QueryServiceControl.SetServingType(tablet.Type, true, nil); err1 != nil {
+				log.Warningf("SetServingType(serving=true) failed after failed SetSuperReadOnly %v", err1)
+			}
+			return "", err
 		}
-		return "", err
+	} else {
+		if err := agent.MysqlDaemon.SetReadOnly(true); err != nil {
+			// if this failed, revert the change to serving
+			if _ /* state changed */, err1 := agent.QueryServiceControl.SetServingType(tablet.Type, true, nil); err1 != nil {
+				log.Warningf("SetServingType(serving=true) failed after failed SetReadOnly %v", err1)
+			}
+			return "", err
+		}
 	}
 
 	// If using semi-sync, we need to disable master-side.
 	if err := agent.fixSemiSync(topodatapb.TabletType_REPLICA); err != nil {
 		// if this failed, set server read-only back to false, set tablet back to serving
+		// setting read_only OFF will also set super_read_only OFF if it was set
 		if err1 := agent.MysqlDaemon.SetReadOnly(false); err1 != nil {
 			log.Warningf("SetReadOnly(false) failed after failed fixSemiSync %v", err1)
 		}
@@ -351,10 +364,11 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 		return "", err
 	}
 
-	pos, err := agent.MysqlDaemon.DemoteMaster()
+	pos, err := agent.MysqlDaemon.MasterPosition()
 	if err != nil {
-		// if DemoteMaster failed, undo all the steps before
+		// if MasterPosition failed, undo all the steps before
 		// 1. set server back to read-only false
+		// setting read_only OFF will also set super_read_only OFF if it was set
 		if err1 := agent.MysqlDaemon.SetReadOnly(false); err1 != nil {
 			log.Warningf("SetReadOnly(false) failed after failed DemoteMaster %v", err1)
 		}

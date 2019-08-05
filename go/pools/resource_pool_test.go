@@ -57,7 +57,7 @@ func TestOpen(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 6, 6, time.Second)
+	p := NewResourcePool(PoolFactory, 6, 6, time.Second, 0)
 	p.SetCapacity(5)
 	var resources [10]Resource
 
@@ -122,9 +122,10 @@ func TestOpen(t *testing.T) {
 		t.Errorf("Unexpected error %v", err)
 	}
 	r.Close()
+	// A nil Put should cause the resource to be reopened.
 	p.Put(nil)
-	if count.Get() != 4 {
-		t.Errorf("Expecting 4, received %d", count.Get())
+	if count.Get() != 5 {
+		t.Errorf("Expecting 5, received %d", count.Get())
 	}
 	for i := 0; i < 5; i++ {
 		r, err := p.Get(ctx)
@@ -194,11 +195,44 @@ func TestOpen(t *testing.T) {
 	}
 }
 
+func TestPrefill(t *testing.T) {
+	lastID.Set(0)
+	count.Set(0)
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 1)
+	defer p.Close()
+	if p.Active() != 5 {
+		t.Errorf("p.Active(): %d, want 5", p.Active())
+	}
+	p = NewResourcePool(FailFactory, 5, 5, time.Second, 1)
+	defer p.Close()
+	if p.Active() != 0 {
+		t.Errorf("p.Active(): %d, want 0", p.Active())
+	}
+}
+
+func TestPrefillTimeout(t *testing.T) {
+	lastID.Set(0)
+	count.Set(0)
+	saveTimeout := prefillTimeout
+	prefillTimeout = 1 * time.Millisecond
+	defer func() { prefillTimeout = saveTimeout }()
+
+	start := time.Now()
+	p := NewResourcePool(SlowFailFactory, 5, 5, time.Second, 1)
+	defer p.Close()
+	if elapsed := time.Since(start); elapsed > 20*time.Millisecond {
+		t.Errorf("elapsed: %v, should be around 10ms", elapsed)
+	}
+	if p.Active() != 0 {
+		t.Errorf("p.Active(): %d, want 0", p.Active())
+	}
+}
+
 func TestShrinking(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 5, 5, time.Second)
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0)
 	var resources [10]Resource
 	// Leave one empty slot in the pool
 	for i := 0; i < 4; i++ {
@@ -337,7 +371,7 @@ func TestClosing(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 5, 5, time.Second)
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0)
 	var resources [10]Resource
 	for i := 0; i < 5; i++ {
 		r, err := p.Get(ctx)
@@ -391,7 +425,7 @@ func TestIdleTimeout(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Millisecond)
+	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Millisecond, 0)
 	defer p.Close()
 
 	r, err := p.Get(ctx)
@@ -414,10 +448,10 @@ func TestIdleTimeout(t *testing.T) {
 	if p.IdleClosed() != 0 {
 		t.Errorf("Expecting 0, received %d", p.IdleClosed())
 	}
-	time.Sleep(20 * time.Millisecond)
+	time.Sleep(15 * time.Millisecond)
 
-	if count.Get() != 0 {
-		t.Errorf("Expecting 0, received %d", count.Get())
+	if count.Get() != 1 {
+		t.Errorf("Expecting 1, received %d", count.Get())
 	}
 	if p.IdleClosed() != 1 {
 		t.Errorf("Expecting 1, received %d", p.IdleClosed())
@@ -438,7 +472,7 @@ func TestIdleTimeout(t *testing.T) {
 
 	// sleep to let the idle closer run while all resources are in use
 	// then make sure things are still as we expect
-	time.Sleep(20 * time.Millisecond)
+	time.Sleep(15 * time.Millisecond)
 	if lastID.Get() != 2 {
 		t.Errorf("Expecting 2, received %d", count.Get())
 	}
@@ -468,7 +502,7 @@ func TestIdleTimeout(t *testing.T) {
 	p.SetIdleTimeout(1000 * time.Millisecond)
 	p.Put(r)
 
-	time.Sleep(20 * time.Millisecond)
+	time.Sleep(15 * time.Millisecond)
 	if lastID.Get() != 2 {
 		t.Errorf("Expecting 2, received %d", count.Get())
 	}
@@ -479,12 +513,18 @@ func TestIdleTimeout(t *testing.T) {
 		t.Errorf("Expecting 1, received %d", p.IdleClosed())
 	}
 
-	p.SetIdleTimeout(10 * time.Millisecond)
-	time.Sleep(20 * time.Millisecond)
-	if lastID.Get() != 2 {
-		t.Errorf("Expecting 2, received %d", count.Get())
+	// Get and Put to refresh timeUsed
+	r, err = p.Get(ctx)
+	if err != nil {
+		t.Errorf("Unexpected error %v", err)
 	}
-	if count.Get() != 0 {
+	p.Put(r)
+	p.SetIdleTimeout(10 * time.Millisecond)
+	time.Sleep(15 * time.Millisecond)
+	if lastID.Get() != 3 {
+		t.Errorf("Expecting 3, received %d", lastID.Get())
+	}
+	if count.Get() != 1 {
 		t.Errorf("Expecting 1, received %d", count.Get())
 	}
 	if p.IdleClosed() != 2 {
@@ -492,11 +532,32 @@ func TestIdleTimeout(t *testing.T) {
 	}
 }
 
+func TestIdleTimeoutCreateFail(t *testing.T) {
+	ctx := context.Background()
+	lastID.Set(0)
+	count.Set(0)
+	p := NewResourcePool(PoolFactory, 1, 1, 10*time.Millisecond, 0)
+	defer p.Close()
+	r, err := p.Get(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Change the factory before putting back
+	// to prevent race with the idle closer, who will
+	// try to use it.
+	p.factory = FailFactory
+	p.Put(r)
+	time.Sleep(15 * time.Millisecond)
+	if p.Active() != 0 {
+		t.Errorf("p.Active(): %d, want 0", p.Active())
+	}
+}
+
 func TestCreateFail(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(FailFactory, 5, 5, time.Second)
+	p := NewResourcePool(FailFactory, 5, 5, time.Second, 0)
 	defer p.Close()
 	if _, err := p.Get(ctx); err.Error() != "Failed" {
 		t.Errorf("Expecting Failed, received %v", err)
@@ -508,11 +569,28 @@ func TestCreateFail(t *testing.T) {
 	}
 }
 
+func TestCreateFailOnPut(t *testing.T) {
+	ctx := context.Background()
+	lastID.Set(0)
+	count.Set(0)
+	p := NewResourcePool(PoolFactory, 5, 5, time.Second, 0)
+	defer p.Close()
+	_, err := p.Get(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.factory = FailFactory
+	p.Put(nil)
+	if p.Active() != 0 {
+		t.Errorf("p.Active(): %d, want 0", p.Active())
+	}
+}
+
 func TestSlowCreateFail(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(SlowFailFactory, 2, 2, time.Second)
+	p := NewResourcePool(SlowFailFactory, 2, 2, time.Second, 0)
 	defer p.Close()
 	ch := make(chan bool)
 	// The third Get should not wait indefinitely
@@ -534,7 +612,7 @@ func TestTimeout(t *testing.T) {
 	ctx := context.Background()
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 1, 1, time.Second)
+	p := NewResourcePool(PoolFactory, 1, 1, time.Second, 0)
 	defer p.Close()
 	r, err := p.Get(ctx)
 	if err != nil {
@@ -553,7 +631,7 @@ func TestTimeout(t *testing.T) {
 func TestExpired(t *testing.T) {
 	lastID.Set(0)
 	count.Set(0)
-	p := NewResourcePool(PoolFactory, 1, 1, time.Second)
+	p := NewResourcePool(PoolFactory, 1, 1, time.Second, 0)
 	defer p.Close()
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-1*time.Second))
 	r, err := p.Get(ctx)

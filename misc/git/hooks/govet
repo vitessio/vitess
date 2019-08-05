@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Copyright 2017 Google Inc.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -24,25 +24,31 @@ if [ -z "$GOPATH" ]; then
 fi
 
 # This script does not handle file names that contain spaces.
-gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$')
+gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$' | grep -v '^go/vt/proto/' | grep -v 'go/vt/sqlparser/sql.go')
+if [ "$gofiles" = "" ]; then
+  exit 0
+fi
 
-# If any checks are found to be useless, they can be disabled here.
-# See the output of "go tool vet" for a list of flags.
-vetflags="-all=true"
+# xargs -n1 because dirname on MacOS does not support multiple arguments.
+gopackages=$(echo $gofiles | xargs -n1 dirname | sort -u)
 
 errors=
 
-# Run on one file at a time because a single invocation of "go tool vet"
-# with multiple files requires the files to all be in one package.
-for gofile in $gofiles
+# If any checks are found to be useless, they can be disabled here.
+# See the output of "go doc cmd/vet" for a list of flags.
+vetflags=""
+
+# Run on one package at a time
+for gopackage in $gopackages
 do
-    if ! go tool vet $vetflags $gofile 2>&1; then
+    if ! go vet $vetflags "vitess.io/vitess/$gopackage" 2>&1; then
         errors=YES
     fi
 done
 
-[ -z  "$errors" ] && exit 0
+[ -z "$errors" ] && exit 0
 
 echo
 echo "Please fix the go vet warnings above. To disable certain checks, change vetflags in misc/git/hooks/govet."
 exit 1
+

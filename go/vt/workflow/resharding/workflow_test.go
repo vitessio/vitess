@@ -55,7 +55,7 @@ func TestSourceDestShards(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Set up the fakeworkerclient. It is used at SplitClone and SplitDiff phase.
-	fakeVtworkerClient := setupFakeVtworker(testKeyspace, testVtworkers)
+	fakeVtworkerClient := setupFakeVtworker(testKeyspace, testVtworkers, false)
 	vtworkerclient.RegisterFactory("fake", fakeVtworkerClient.FakeVtworkerClientFactory)
 	defer vtworkerclient.UnregisterFactoryForTest("fake")
 
@@ -90,19 +90,25 @@ func TestSourceDestShards(t *testing.T) {
 
 // TestHorizontalResharding runs the happy path of HorizontalReshardingWorkflow.
 func TestHorizontalResharding(t *testing.T) {
-	ctx := context.Background()
+	testHorizontalReshardingWorkflow(t, false)
+}
 
+// TestHorizontalReshardingWithConsistentSnapshot runs the happy path of HorizontalReshardingWorkflow with consistent snapshot.
+func TestHorizontalReshardingWithConsistentSnapshot(t *testing.T) {
+	testHorizontalReshardingWorkflow(t, true)
+}
+
+func testHorizontalReshardingWorkflow(t *testing.T, useConsistentSnapshot bool) {
+	ctx := context.Background()
 	// Set up the mock wrangler. It is used for the CopySchema,
 	// WaitforFilteredReplication and Migrate phase.
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockWranglerInterface := setupMockWrangler(ctrl, testKeyspace)
-
 	// Set up the fakeworkerclient. It is used at SplitClone and SplitDiff phase.
-	fakeVtworkerClient := setupFakeVtworker(testKeyspace, testVtworkers)
+	fakeVtworkerClient := setupFakeVtworker(testKeyspace, testVtworkers, useConsistentSnapshot)
 	vtworkerclient.RegisterFactory("fake", fakeVtworkerClient.FakeVtworkerClientFactory)
 	defer vtworkerclient.UnregisterFactoryForTest("fake")
-
 	// Initialize the topology.
 	ts := setupTopology(ctx, t, testKeyspace)
 	m := workflow.NewManager(ts)
@@ -110,7 +116,11 @@ func TestHorizontalResharding(t *testing.T) {
 	wg, _, cancel := workflow.StartManager(m)
 	// Create the workflow.
 	vtworkersParameter := testVtworkers + "," + testVtworkers
-	uuid, err := m.Create(ctx, horizontalReshardingFactoryName, []string{"-keyspace=" + testKeyspace, "-vtworkers=" + vtworkersParameter, "-phase_enable_approvals=", "-min_healthy_rdonly_tablets=2", "-source_shards=0", "-destination_shards=-80,80-"})
+	args := []string{"-keyspace=" + testKeyspace, "-vtworkers=" + vtworkersParameter, "-phase_enable_approvals=", "-min_healthy_rdonly_tablets=2", "-source_shards=0", "-destination_shards=-80,80-"}
+	if useConsistentSnapshot {
+		args = append(args, "-use_consistent_snapshot")
+	}
+	uuid, err := m.Create(ctx, horizontalReshardingFactoryName, args)
 	if err != nil {
 		t.Fatalf("cannot create resharding workflow: %v", err)
 	}
@@ -121,18 +131,15 @@ func TestHorizontalResharding(t *testing.T) {
 	}
 	hw := w.(*horizontalReshardingWorkflow)
 	hw.wr = mockWranglerInterface
-
 	// Start the job.
 	if err := m.Start(ctx, uuid); err != nil {
 		t.Fatalf("cannot start resharding workflow: %v", err)
 	}
-
 	// Wait for the workflow to end.
 	m.Wait(ctx, uuid)
 	if err := workflow.VerifyAllTasksDone(ctx, ts, uuid); err != nil {
 		t.Fatal(err)
 	}
-
 	// Stop the manager.
 	if err := m.Stop(ctx, uuid); err != nil {
 		t.Fatalf("cannot stop resharding workflow: %v", err)
@@ -141,16 +148,36 @@ func TestHorizontalResharding(t *testing.T) {
 	wg.Wait()
 }
 
-func setupFakeVtworker(keyspace, vtworkers string) *fakevtworkerclient.FakeVtworkerClient {
+func setupFakeVtworker(keyspace, vtworkers string, useConsistentSnapshot bool) *fakevtworkerclient.FakeVtworkerClient {
 	flag.Set("vtworker_client_protocol", "fake")
 	fakeVtworkerClient := fakevtworkerclient.NewFakeVtworkerClient()
-	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"Reset"}, "", nil)
-	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"SplitClone", "--min_healthy_rdonly_tablets=2", keyspace + "/0"}, "", nil)
-	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"Reset"}, "", nil)
-	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", "--dest_tablet_type=RDONLY", keyspace + "/-80"}, "", nil)
-	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"Reset"}, "", nil)
-	fakeVtworkerClient.RegisterResultForAddr(vtworkers, []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", "--dest_tablet_type=RDONLY", keyspace + "/80-"}, "", nil)
+	fakeVtworkerClient.RegisterResultForAddr(vtworkers, resetCommand(), "", nil)
+	fakeVtworkerClient.RegisterResultForAddr(vtworkers, splitCloneCommand(keyspace, useConsistentSnapshot), "", nil)
+	fakeVtworkerClient.RegisterResultForAddr(vtworkers, resetCommand(), "", nil)
+	fakeVtworkerClient.RegisterResultForAddr(vtworkers, splitDiffCommand(keyspace, "-80", useConsistentSnapshot), "", nil)
+	fakeVtworkerClient.RegisterResultForAddr(vtworkers, resetCommand(), "", nil)
+	fakeVtworkerClient.RegisterResultForAddr(vtworkers, splitDiffCommand(keyspace, "80-", useConsistentSnapshot), "", nil)
 	return fakeVtworkerClient
+}
+
+func resetCommand() []string {
+	return []string{"Reset"}
+}
+
+func splitCloneCommand(keyspace string, useConsistentSnapshot bool) []string {
+	args := []string{"SplitClone", "--min_healthy_rdonly_tablets=2", keyspace + "/0"}
+	if useConsistentSnapshot {
+		args = append(args, "--use_consistent_snapshot")
+	}
+	return args
+}
+
+func splitDiffCommand(keyspace string, shardId string, useConsistentSnapshot bool) []string {
+	args := []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", "--dest_tablet_type=RDONLY", keyspace + "/" + shardId}
+	if useConsistentSnapshot {
+		args = append(args, "--use_consistent_snapshot")
+	}
+	return args
 }
 
 func setupMockWrangler(ctrl *gomock.Controller, keyspace string) *MockReshardingWrangler {

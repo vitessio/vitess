@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -53,8 +54,10 @@ type fakeVTGateService struct {
 	errorWait         chan struct{}
 }
 
-const expectedErrMatch string = "test vtgate error"
-const expectedCode vtrpcpb.Code = vtrpcpb.Code_INVALID_ARGUMENT
+const (
+	expectedErrMatch string       = "test vtgate error"
+	expectedCode     vtrpcpb.Code = vtrpcpb.Code_INVALID_ARGUMENT
+)
 
 var errTestVtGateError = vterrors.New(expectedCode, expectedErrMatch)
 
@@ -882,6 +885,10 @@ func (f *fakeVTGateService) GetSrvKeyspace(ctx context.Context, keyspace string)
 	return getSrvKeyspaceResult, nil
 }
 
+func (f *fakeVTGateService) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	panic("unimplemented")
+}
+
 // queryUpdateStream contains all the fields we use to test UpdateStream
 type queryUpdateStream struct {
 	Keyspace   string
@@ -1452,7 +1459,7 @@ func testStreamExecuteError(t *testing.T, session *vtgateconn.VTGateSession, fak
 	// signal to the server that the first result has been received
 	close(fake.errorWait)
 	// After 1 result, we expect to get an error (no more results).
-	qr, err = stream.Recv()
+	_, err = stream.Recv()
 	if err == nil {
 		t.Fatalf("StreamExecute channel wasn't closed")
 	}
@@ -1533,7 +1540,7 @@ func testStreamExecuteShardsError(t *testing.T, conn *vtgateconn.VTGateConn, fak
 	// signal to the server that the first result has been received
 	close(fake.errorWait)
 	// After 1 result, we expect to get an error (no more results).
-	qr, err = stream.Recv()
+	_, err = stream.Recv()
 	if err == nil {
 		t.Fatalf("StreamExecuteShards channel wasn't closed")
 	}
@@ -1614,7 +1621,7 @@ func testStreamExecuteKeyRangesError(t *testing.T, conn *vtgateconn.VTGateConn, 
 	// signal to the server that the first result has been received
 	close(fake.errorWait)
 	// After 1 result, we expect to get an error (no more results).
-	qr, err = stream.Recv()
+	_, err = stream.Recv()
 	if err == nil {
 		t.Fatalf("StreamExecuteKeyRanges channel wasn't closed")
 	}
@@ -1695,7 +1702,7 @@ func testStreamExecuteKeyspaceIdsError(t *testing.T, conn *vtgateconn.VTGateConn
 	// signal to the server that the first result has been received
 	close(fake.errorWait)
 	// After 1 result, we expect to get an error (no more results).
-	qr, err = stream.Recv()
+	_, err = stream.Recv()
 	if err == nil {
 		t.Fatalf("StreamExecuteKeyspaceIds channel wasn't closed")
 	}
@@ -2166,7 +2173,7 @@ func testUpdateStreamError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fake
 	// signal to the server that the first result has been received
 	close(fake.errorWait)
 	// After 1 result, we expect to get an error (no more results).
-	qr, _, err = stream.Recv()
+	_, _, err = stream.Recv()
 	if err == nil {
 		t.Fatalf("UpdateStream channel wasn't closed")
 	}

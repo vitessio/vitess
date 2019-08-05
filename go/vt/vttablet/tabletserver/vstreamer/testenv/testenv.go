@@ -25,12 +25,10 @@ import (
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
-	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -131,7 +129,6 @@ func (te *Env) Close() {
 // SetVSchema sets the vschema for the test keyspace.
 func (te *Env) SetVSchema(vs string) error {
 	ctx := context.Background()
-	logger := logutil.NewConsoleLogger()
 	var kspb vschemapb.Keyspace
 	if err := json2.Unmarshal([]byte(vs), &kspb); err != nil {
 		return err
@@ -139,5 +136,5 @@ func (te *Env) SetVSchema(vs string) error {
 	if err := te.TopoServ.SaveVSchema(ctx, te.KeyspaceName, &kspb); err != nil {
 		return err
 	}
-	return topotools.RebuildVSchema(ctx, logger, te.TopoServ, te.Cells)
+	return te.TopoServ.RebuildSrvVSchema(ctx, te.Cells)
 }

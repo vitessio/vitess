@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"path"
 
-	"github.com/samuel/go-zookeeper/zk"
+	"github.com/z-division/go-zookeeper/zk"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/topo"
@@ -44,7 +44,7 @@ func (zs *Server) Create(ctx context.Context, filePath string, contents []byte) 
 	if err != nil {
 		return nil, convertError(err, zkPath)
 	}
-	if bytes.Compare(data, contents) != 0 {
+	if !bytes.Equal(data, contents) {
 		return nil, fmt.Errorf("file contents changed between zk.Create and zk.Get")
 	}
 

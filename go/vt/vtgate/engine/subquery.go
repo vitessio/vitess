@@ -36,6 +36,16 @@ func (sq *Subquery) RouteType() string {
 	return sq.Subquery.RouteType()
 }
 
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (sq *Subquery) GetKeyspaceName() string {
+	return sq.Subquery.GetKeyspaceName()
+}
+
+// GetTableName specifies the table that this primitive routes to.
+func (sq *Subquery) GetTableName() string {
+	return sq.Subquery.GetTableName()
+}
+
 // Execute performs a non-streaming exec.
 func (sq *Subquery) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	inner, err := sq.Subquery.Execute(vcursor, bindVars, wantfields)

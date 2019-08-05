@@ -37,8 +37,7 @@ func buildUnionPlan(union *sqlparser.Union, vschema ContextVSchema) (primitive e
 }
 
 func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, outer *symtab) error {
-	lpb := newPrimitiveBuilder(pb.vschema, pb.jt)
-	if err := lpb.processPart(union.Left, outer); err != nil {
+	if err := pb.processPart(union.Left, outer); err != nil {
 		return err
 	}
 	rpb := newPrimitiveBuilder(pb.vschema, pb.jt)
@@ -46,9 +45,7 @@ func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, outer *symtab) 
 		return err
 	}
 
-	var err error
-	pb.bldr, pb.st, err = unionRouteMerge(union, lpb.bldr, rpb.bldr)
-	if err != nil {
+	if err := unionRouteMerge(union, pb.bldr, rpb.bldr); err != nil {
 		return err
 	}
 	pb.st.Outer = outer
@@ -68,27 +65,21 @@ func (pb *primitiveBuilder) processPart(part sqlparser.SelectStatement, outer *s
 	case *sqlparser.ParenSelect:
 		return pb.processPart(part.Select, outer)
 	}
-	panic(fmt.Sprintf("BUG: unexpected SELECT type: %T", part))
+	return fmt.Errorf("BUG: unexpected SELECT type: %T", part)
 }
 
-func unionRouteMerge(union *sqlparser.Union, left, right builder) (builder, *symtab, error) {
+func unionRouteMerge(union *sqlparser.Union, left, right builder) error {
 	lroute, ok := left.(*route)
 	if !ok {
-		return nil, nil, errors.New("unsupported construct: SELECT of UNION is non-trivial")
+		return errors.New("unsupported: SELECT of UNION is non-trivial")
 	}
 	rroute, ok := right.(*route)
 	if !ok {
-		return nil, nil, errors.New("unsupported construct: SELECT of UNION is non-trivial")
+		return errors.New("unsupported: SELECT of UNION is non-trivial")
 	}
-	if err := lroute.UnionCanMerge(rroute); err != nil {
-		return nil, nil, err
+	if !lroute.MergeUnion(rroute) {
+		return errors.New("unsupported: UNION cannot be executed as a single route")
 	}
-	rb, st := newRoute(
-		&sqlparser.Union{Type: union.Type, Left: union.Left, Right: union.Right, Lock: union.Lock},
-		lroute.ERoute,
-		lroute.condition,
-	)
-	lroute.Redirect = rb
-	rroute.Redirect = rb
-	return rb, st, nil
+	lroute.Select = &sqlparser.Union{Type: union.Type, Left: union.Left, Right: union.Right, Lock: union.Lock}
+	return nil
 }

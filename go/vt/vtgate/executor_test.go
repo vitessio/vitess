@@ -18,8 +18,11 @@ package vtgate
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"html/template"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"sort"
 	"strings"
@@ -42,6 +45,37 @@ import (
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
+
+func TestExecutorResultsExceeded(t *testing.T) {
+	save := *warnMemoryRows
+	*warnMemoryRows = 3
+	defer func() { *warnMemoryRows = save }()
+
+	executor, _, _, sbclookup := createExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
+
+	initial := warnings.Counts()["ResultsExceeded"]
+
+	result1 := sqltypes.MakeTestResult(sqltypes.MakeTestFields("col", "int64"), "1")
+	result2 := sqltypes.MakeTestResult(sqltypes.MakeTestFields("col", "int64"), "1", "2", "3", "4")
+	sbclookup.SetResults([]*sqltypes.Result{result1, result2})
+
+	_, err := executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, "select * from main1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := warnings.Counts()["ResultsExceeded"], initial; got != want {
+		t.Errorf("warnings count: %v, want %v", got, want)
+	}
+
+	_, err = executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, "select * from main1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := warnings.Counts()["ResultsExceeded"], initial+1; got != want {
+		t.Errorf("warnings count: %v, want %v", got, want)
+	}
+}
 
 func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
@@ -569,37 +603,11 @@ func TestExecutorAutocommit(t *testing.T) {
 	}
 }
 
-func TestExecutorLegacyAutocommit(t *testing.T) {
-	executor, _, _, sbclookup := createExecutorEnv()
-	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: false})
-
-	// If legacy is on, there should be no implicit transaction.
-	executor.legacyAutocommit = true
-	startCount := sbclookup.BeginCount.Get()
-	_, err := executor.Execute(context.Background(), "TestExecute", session, "update main1 set id=1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, want := sbclookup.BeginCount.Get(), startCount; got != want {
-		t.Errorf("Begin count: %d, want %d", got, want)
-	}
-
-	// If legacy is off, there should be an implicit begin.
-	executor.legacyAutocommit = false
-	_, err = executor.Execute(context.Background(), "TestExecute", session, "update main1 set id=1", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, want := sbclookup.BeginCount.Get(), startCount+1; got != want {
-		t.Errorf("Begin count: %d, want %d", got, want)
-	}
-}
-
 func TestExecutorShow(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
 
-	for _, query := range []string{"show databases", "show vitess_keyspaces"} {
+	for _, query := range []string{"show databases", "show schemas", "show vitess_keyspaces"} {
 		qr, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
 		if err != nil {
 			t.Error(err)
@@ -674,7 +682,7 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("%v:\n%+v, want\n%+v", query, qr, wantqr)
 	}
 
-	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show create table unknown_table", nil)
+	_, err = executor.Execute(context.Background(), "TestExecute", session, "show create table unknown_table", nil)
 	if err != errNoKeyspace {
 		t.Errorf("Got: %v. Want: %v", err, errNoKeyspace)
 	}
@@ -1996,7 +2004,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 		t.Errorf("getPlan(query1): plans must be equal: %p %p", plan1, plan2)
 	}
 	want := []string{
-		query1,
+		"@unknown:" + query1,
 	}
 	if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
 		t.Errorf("Plan keys: %s, want %s", keys, want)
@@ -2024,8 +2032,8 @@ func TestGetPlanUnnormalized(t *testing.T) {
 		t.Errorf("getPlan(query1, ks): plans must be equal: %p %p", plan3, plan4)
 	}
 	want = []string{
-		KsTestUnsharded + ":" + query1,
-		query1,
+		KsTestUnsharded + "@unknown:" + query1,
+		"@unknown:" + query1,
 	}
 	if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
 		t.Errorf("Plan keys: %s, want %s", keys, want)
@@ -2165,7 +2173,7 @@ func TestGetPlanNormalized(t *testing.T) {
 		t.Errorf("getPlan(query1): plans must be equal: %p %p", plan1, plan2)
 	}
 	want := []string{
-		normalized,
+		"@unknown:" + normalized,
 	}
 	if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
 		t.Errorf("Plan keys: %s, want %s", keys, want)
@@ -2228,8 +2236,8 @@ func TestGetPlanNormalized(t *testing.T) {
 		t.Errorf("getPlan(query1, ks): plans must be equal: %p %p", plan3, plan4)
 	}
 	want = []string{
-		KsTestUnsharded + ":" + normalized,
-		normalized,
+		KsTestUnsharded + "@unknown:" + normalized,
+		"@unknown:" + normalized,
 	}
 	if keys := r.plans.Keys(); !reflect.DeepEqual(keys, want) {
 		t.Errorf("Plan keys: %s, want %s", keys, want)
@@ -2373,6 +2381,24 @@ func TestParseTargetSingleKeyspace(t *testing.T) {
 			KsTestUnsharded,
 			topodatapb.TabletType_REPLICA,
 		)
+	}
+}
+
+func TestDebugVSchema(t *testing.T) {
+	resp := httptest.NewRecorder()
+	req, _ := http.NewRequest("GET", "/debug/vschema", nil)
+
+	executor, _, _, _ := createExecutorEnv()
+	executor.ServeHTTP(resp, req)
+	v := make(map[string]interface{})
+	if err := json.Unmarshal(resp.Body.Bytes(), &v); err != nil {
+		t.Fatalf("Unmarshal on %s failed: %v", resp.Body.String(), err)
+	}
+	if _, ok := v["routing_rules"]; !ok {
+		t.Errorf("routing rules missing: %v", resp.Body.String())
+	}
+	if _, ok := v["keyspaces"]; !ok {
+		t.Errorf("keyspaces missing: %v", resp.Body.String())
 	}
 }
 

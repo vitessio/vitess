@@ -71,7 +71,7 @@ func NewEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *En
 	reloadTime := time.Duration(config.SchemaReloadTime * 1e9)
 	idleTimeout := time.Duration(config.IdleTimeout * 1e9)
 	se := &Engine{
-		conns:      connpool.New("", 3, idleTimeout, checker),
+		conns:      connpool.New("", 3, 0, idleTimeout, checker),
 		ticks:      timer.NewTimer(reloadTime),
 		reloadTime: reloadTime,
 	}
@@ -113,7 +113,7 @@ func (se *Engine) Open() error {
 		return nil
 	}
 	start := time.Now()
-	defer log.Infof("Time taken to load the schema: %v", time.Now().Sub(start))
+	defer log.Infof("Time taken to load the schema: %v", time.Since(start))
 	ctx := tabletenv.LocalContext()
 	dbaParams := se.dbconfigs.DbaWithDB()
 	se.conns.Open(dbaParams, dbaParams, dbaParams)

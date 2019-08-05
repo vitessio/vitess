@@ -77,9 +77,7 @@ var (
 const (
 	DefaultHealthCheckRetryDelay = 5 * time.Second
 	DefaultHealthCheckTimeout    = 1 * time.Minute
-)
 
-const (
 	// DefaultTopoReadConcurrency can be used as default value for the topoReadConcurrency parameter of a TopologyWatcher.
 	DefaultTopoReadConcurrency int = 5
 	// DefaultTopologyWatcherRefreshInterval can be used as the default value for
@@ -576,6 +574,10 @@ func (hc *HealthCheckImpl) checkConn(hcc *healthCheckConn, name string) {
 		case <-time.After(retryDelay):
 			// Exponentially back-off to prevent tight-loop.
 			retryDelay *= 2
+			// Limit the retry delay backoff to the health check timeout
+			if retryDelay > hc.healthCheckTimeout {
+				retryDelay = hc.healthCheckTimeout
+			}
 		}
 	}
 }

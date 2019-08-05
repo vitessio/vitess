@@ -54,9 +54,8 @@ var _ builder = (*orderedAggregate)(nil)
 //      Input: (Scatter Route with the order by request),
 //    }
 type orderedAggregate struct {
-	resultColumns []*resultColumn
-	order         int
-	input         *route
+	resultsBuilder
+	extraDistinct *sqlparser.ColName
 	eaggr         *engine.OrderedAggregate
 }
 
@@ -64,10 +63,10 @@ type orderedAggregate struct {
 // that a primitive is needed to handle the aggregation, it builds an orderedAggregate
 // primitive and returns it. It returns a groupByHandler if there is aggregation it
 // can handle.
-func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) (groupByHandler, error) {
+func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	rb, isRoute := pb.bldr.(*route)
-	if isRoute && rb.IsSingle() {
-		return rb, nil
+	if isRoute && rb.removeMultishardOptions() {
+		return nil
 	}
 
 	// Check if we can allow aggregates.
@@ -81,7 +80,7 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) (groupByHandl
 		hasAggregates = true
 	}
 	if !hasAggregates {
-		return rb, nil
+		return nil
 	}
 
 	// The query has aggregates. We can proceed only
@@ -89,7 +88,7 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) (groupByHandl
 	// we need the ability to push down group by and
 	// order by clauses.
 	if !isRoute {
-		return nil, errors.New("unsupported: cross-shard query with aggregates")
+		return errors.New("unsupported: cross-shard query with aggregates")
 	}
 
 	// If there is a distinct clause, we can check the select list
@@ -102,14 +101,20 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) (groupByHandl
 	// shards, which will require us to perform the grouping
 	// at the vtgate level.
 	if sel.Distinct != "" {
-		for _, selectExpr := range sel.SelectExprs {
-			switch selectExpr := selectExpr.(type) {
-			case *sqlparser.AliasedExpr:
-				vindex := pb.st.Vindex(selectExpr.Expr, rb)
-				if vindex != nil && vindex.IsUnique() {
-					return rb, nil
+		success := rb.removeOptions(func(ro *routeOption) bool {
+			for _, selectExpr := range sel.SelectExprs {
+				switch selectExpr := selectExpr.(type) {
+				case *sqlparser.AliasedExpr:
+					vindex := ro.FindVindex(pb, selectExpr.Expr)
+					if vindex != nil && vindex.IsUnique() {
+						return true
+					}
 				}
 			}
+			return false
+		})
+		if success {
+			return nil
 		}
 	}
 
@@ -121,17 +126,17 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) (groupByHandl
 	// to be pushed down. In order to perform this analysis, we're going to look
 	// ahead at the group by clause to see if it references a unique vindex.
 	if pb.groupByHasUniqueVindex(sel, rb) {
-		return rb, nil
+		return nil
 	}
 
 	// We need an aggregator primitive.
-	oa := &orderedAggregate{
-		order: rb.Order() + 1,
-		input: rb,
-		eaggr: &engine.OrderedAggregate{},
+	eaggr := &engine.OrderedAggregate{}
+	pb.bldr = &orderedAggregate{
+		resultsBuilder: newResultsBuilder(rb, eaggr),
+		eaggr:          eaggr,
 	}
-	pb.bldr = oa
-	return oa, nil
+	pb.bldr.Reorder(0)
+	return nil
 }
 
 func nodeHasAggregates(node sqlparser.SQLNode) bool {
@@ -171,45 +176,47 @@ func nodeHasAggregates(node sqlparser.SQLNode) bool {
 // on push-down. But push-down decision depends on whether group by expressions
 // reference a vindex.
 // To overcome this, the look-ahead has to perform a search that matches
-// the group by analyzer. The flow is similar to oa.SetGroupBy, except that
+// the group by analyzer. The flow is similar to oa.PushGroupBy, except that
 // we don't search the ResultColumns because they're not created yet. Also,
 // error conditions are treated as no match for simplicity; They will be
 // subsequently caught downstream.
 func (pb *primitiveBuilder) groupByHasUniqueVindex(sel *sqlparser.Select, rb *route) bool {
-	for _, expr := range sel.GroupBy {
-		var matchedExpr sqlparser.Expr
-		switch node := expr.(type) {
-		case *sqlparser.ColName:
-			if expr := findAlias(node, sel.SelectExprs); expr != nil {
-				matchedExpr = expr
-			} else {
-				matchedExpr = node
-			}
-		case *sqlparser.SQLVal:
-			if node.Type != sqlparser.IntVal {
+	return rb.removeOptions(func(ro *routeOption) bool {
+		for _, expr := range sel.GroupBy {
+			var matchedExpr sqlparser.Expr
+			switch node := expr.(type) {
+			case *sqlparser.ColName:
+				if expr := findAlias(node, sel.SelectExprs); expr != nil {
+					matchedExpr = expr
+				} else {
+					matchedExpr = node
+				}
+			case *sqlparser.SQLVal:
+				if node.Type != sqlparser.IntVal {
+					continue
+				}
+				num, err := strconv.ParseInt(string(node.Val), 0, 64)
+				if err != nil {
+					continue
+				}
+				if num < 1 || num > int64(len(sel.SelectExprs)) {
+					continue
+				}
+				expr, ok := sel.SelectExprs[num-1].(*sqlparser.AliasedExpr)
+				if !ok {
+					continue
+				}
+				matchedExpr = expr.Expr
+			default:
 				continue
 			}
-			num, err := strconv.ParseInt(string(node.Val), 0, 64)
-			if err != nil {
-				continue
+			vindex := ro.FindVindex(pb, matchedExpr)
+			if vindex != nil && vindex.IsUnique() {
+				return true
 			}
-			if num < 1 || num > int64(len(sel.SelectExprs)) {
-				continue
-			}
-			expr, ok := sel.SelectExprs[num-1].(*sqlparser.AliasedExpr)
-			if !ok {
-				continue
-			}
-			matchedExpr = expr.Expr
-		default:
-			continue
 		}
-		vindex := pb.st.Vindex(matchedExpr, rb)
-		if vindex != nil && vindex.IsUnique() {
-			return true
-		}
-	}
-	return false
+		return false
+	})
 }
 
 func findAlias(colname *sqlparser.ColName, selects sqlparser.SelectExprs) sqlparser.Expr {
@@ -230,31 +237,10 @@ func findAlias(colname *sqlparser.ColName, selects sqlparser.SelectExprs) sqlpar
 	return nil
 }
 
-// Order satisfies the builder interface.
-func (oa *orderedAggregate) Order() int {
-	return oa.order
-}
-
-// Reorder satisfies the builder interface.
-func (oa *orderedAggregate) Reorder(order int) {
-	oa.input.Reorder(order)
-	oa.order = oa.input.Order() + 1
-}
-
 // Primitive satisfies the builder interface.
 func (oa *orderedAggregate) Primitive() engine.Primitive {
 	oa.eaggr.Input = oa.input.Primitive()
 	return oa.eaggr
-}
-
-// First satisfies the builder interface.
-func (oa *orderedAggregate) First() builder {
-	return oa.input.First()
-}
-
-// ResultColumns satisfies the builder interface.
-func (oa *orderedAggregate) ResultColumns() []*resultColumn {
-	return oa.resultColumns
 }
 
 // PushFilter satisfies the builder interface.
@@ -273,23 +259,11 @@ func (oa *orderedAggregate) PushFilter(_ *primitiveBuilder, _ sqlparser.Expr, wh
 // aggregate expressions like MAX, which will be added to symtab. The underlying
 // MAX sent to the route will not be added to symtab and will not be reachable by
 // others. This functionality depends on the PushOrderBy to request that
-// the rows be correctly ordered for a merge sort.
-func (oa *orderedAggregate) PushSelect(expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colnum int, err error) {
+// the rows be correctly ordered.
+func (oa *orderedAggregate) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
 	if inner, ok := expr.Expr.(*sqlparser.FuncExpr); ok {
-		if opcode, ok := engine.SupportedAggregates[inner.Name.Lowered()]; ok {
-			innerRC, innerCol, _ := oa.input.PushSelect(expr, origin)
-
-			// Add to Aggregates.
-			oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
-				Opcode: opcode,
-				Col:    innerCol,
-			})
-
-			// Build a new rc with oa as origin because it's semantically different
-			// from the expression we pushed down.
-			rc := &resultColumn{alias: innerRC.alias, column: &column{origin: oa}}
-			oa.resultColumns = append(oa.resultColumns, rc)
-			return rc, len(oa.resultColumns) - 1, nil
+		if _, ok := engine.SupportedAggregates[inner.Name.Lowered()]; ok {
+			return oa.pushAggr(pb, expr, origin)
 		}
 	}
 
@@ -298,9 +272,94 @@ func (oa *orderedAggregate) PushSelect(expr *sqlparser.AliasedExpr, origin build
 		return nil, 0, errors.New("unsupported: in scatter query: complex aggregate expression")
 	}
 
-	innerRC, _, _ := oa.input.PushSelect(expr, origin)
+	innerRC, _, _ := oa.input.PushSelect(pb, expr, origin)
 	oa.resultColumns = append(oa.resultColumns, innerRC)
 	return innerRC, len(oa.resultColumns) - 1, nil
+}
+
+func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, origin builder) (rc *resultColumn, colNumber int, err error) {
+	funcExpr := expr.Expr.(*sqlparser.FuncExpr)
+	opcode := engine.SupportedAggregates[funcExpr.Name.Lowered()]
+	if len(funcExpr.Exprs) != 1 {
+		return nil, 0, fmt.Errorf("unsupported: only one expression allowed inside aggregates: %s", sqlparser.String(funcExpr))
+	}
+	var innerCol int
+	handleDistinct, innerAliased, err := oa.needDistinctHandling(pb, funcExpr, opcode)
+	if err != nil {
+		return nil, 0, err
+	}
+	if handleDistinct {
+		if oa.extraDistinct != nil {
+			return nil, 0, fmt.Errorf("unsupported: only one distinct aggregation allowed in a select: %s", sqlparser.String(funcExpr))
+		}
+		// Push the expression that's inside the aggregate.
+		// The column will eventually get added to the group by and order by clauses.
+		_, innerCol, _ = oa.input.PushSelect(pb, innerAliased, origin)
+		col, err := BuildColName(oa.input.ResultColumns(), innerCol)
+		if err != nil {
+			return nil, 0, err
+		}
+		oa.extraDistinct = col
+		oa.eaggr.HasDistinct = true
+		var alias string
+		if expr.As.IsEmpty() {
+			alias = sqlparser.String(expr.Expr)
+		} else {
+			alias = expr.As.String()
+		}
+		switch opcode {
+		case engine.AggregateCount:
+			opcode = engine.AggregateCountDistinct
+		case engine.AggregateSum:
+			opcode = engine.AggregateSumDistinct
+		}
+		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
+			Opcode: opcode,
+			Col:    innerCol,
+			Alias:  alias,
+		})
+	} else {
+		_, innerCol, _ = oa.input.PushSelect(pb, expr, origin)
+		oa.eaggr.Aggregates = append(oa.eaggr.Aggregates, engine.AggregateParams{
+			Opcode: opcode,
+			Col:    innerCol,
+		})
+	}
+
+	// Build a new rc with oa as origin because it's semantically different
+	// from the expression we pushed down.
+	rc = newResultColumn(expr, oa)
+	oa.resultColumns = append(oa.resultColumns, rc)
+	return rc, len(oa.resultColumns) - 1, nil
+}
+
+// needDistinctHandling returns true if oa needs to handle the distinct clause.
+// If true, it will also return the aliased expression that needs to be pushed
+// down into the underlying route.
+func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, funcExpr *sqlparser.FuncExpr, opcode engine.AggregateOpcode) (bool, *sqlparser.AliasedExpr, error) {
+	if !funcExpr.Distinct {
+		return false, nil, nil
+	}
+	if opcode != engine.AggregateCount && opcode != engine.AggregateSum {
+		return false, nil, nil
+	}
+	innerAliased, ok := funcExpr.Exprs[0].(*sqlparser.AliasedExpr)
+	if !ok {
+		return false, nil, fmt.Errorf("syntax error: %s", sqlparser.String(funcExpr))
+	}
+	rb, ok := oa.input.(*route)
+	if !ok {
+		// Unreachable
+		return true, innerAliased, nil
+	}
+	success := rb.removeOptions(func(ro *routeOption) bool {
+		vindex := ro.FindVindex(pb, innerAliased.Expr)
+		if vindex != nil && vindex.IsUnique() {
+			return true
+		}
+		return false
+	})
+	return !success, innerAliased, nil
 }
 
 func (oa *orderedAggregate) MakeDistinct() error {
@@ -317,9 +376,9 @@ func (oa *orderedAggregate) MakeDistinct() error {
 	return oa.input.MakeDistinct()
 }
 
-// SetGroupBy satisfies the builder interface.
-func (oa *orderedAggregate) SetGroupBy(groupBy sqlparser.GroupBy) error {
-	colnum := -1
+// PushGroupBy satisfies the builder interface.
+func (oa *orderedAggregate) PushGroupBy(groupBy sqlparser.GroupBy) error {
+	colNumber := -1
 	for _, expr := range groupBy {
 		switch node := expr.(type) {
 		case *sqlparser.ColName:
@@ -329,11 +388,11 @@ func (oa *orderedAggregate) SetGroupBy(groupBy sqlparser.GroupBy) error {
 			}
 			for i, rc := range oa.resultColumns {
 				if rc.column == c {
-					colnum = i
+					colNumber = i
 					break
 				}
 			}
-			if colnum == -1 {
+			if colNumber == -1 {
 				return errors.New("unsupported: in scatter query: group by column must reference column in SELECT list")
 			}
 		case *sqlparser.SQLVal:
@@ -341,14 +400,19 @@ func (oa *orderedAggregate) SetGroupBy(groupBy sqlparser.GroupBy) error {
 			if err != nil {
 				return err
 			}
-			colnum = num
+			colNumber = num
 		default:
 			return errors.New("unsupported: in scatter query: only simple references allowed")
 		}
-		oa.eaggr.Keys = append(oa.eaggr.Keys, colnum)
+		oa.eaggr.Keys = append(oa.eaggr.Keys, colNumber)
+	}
+	// Append the distinct aggregate if any.
+	if oa.extraDistinct != nil {
+		groupBy = append(groupBy, oa.extraDistinct)
 	}
 
-	_ = oa.input.SetGroupBy(groupBy)
+	_ = oa.input.PushGroupBy(groupBy)
+
 	return nil
 }
 
@@ -364,7 +428,7 @@ func (oa *orderedAggregate) SetGroupBy(groupBy sqlparser.GroupBy) error {
 // 'select a, b, count(*) from t group by a, b order by b'
 // The following construct is not allowed:
 // 'select a, count(*) from t group by a order by count(*)'
-func (oa *orderedAggregate) PushOrderBy(pb *primitiveBuilder, orderBy sqlparser.OrderBy) error {
+func (oa *orderedAggregate) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 	// Treat order by null as nil order by.
 	if len(orderBy) == 1 {
 		if _, ok := orderBy[0].Expr.(*sqlparser.NullVal); ok {
@@ -374,6 +438,8 @@ func (oa *orderedAggregate) PushOrderBy(pb *primitiveBuilder, orderBy sqlparser.
 
 	// referenced tracks the keys referenced by the order by clause.
 	referenced := make([]bool, len(oa.eaggr.Keys))
+	postSort := false
+	selOrderBy := make(sqlparser.OrderBy, 0, len(orderBy))
 	for _, order := range orderBy {
 		// Identify the order by column.
 		var orderByCol *column
@@ -381,40 +447,30 @@ func (oa *orderedAggregate) PushOrderBy(pb *primitiveBuilder, orderBy sqlparser.
 		case *sqlparser.SQLVal:
 			num, err := ResultFromNumber(oa.resultColumns, expr)
 			if err != nil {
-				return fmt.Errorf("invalid order by: %v", err)
+				return nil, err
 			}
-			orderByCol = oa.input.ResultColumns()[num].column
+			orderByCol = oa.resultColumns[num].column
 		case *sqlparser.ColName:
-			_, _, err := pb.st.Find(expr)
-			if err != nil {
-				return fmt.Errorf("invalid order by: %v", err)
-			}
 			orderByCol = expr.Metadata.(*column)
 		default:
-			return fmt.Errorf("unsupported: in scatter query: complex order by expression: %v", sqlparser.String(expr))
+			return nil, fmt.Errorf("unsupported: in scatter query: complex order by expression: %v", sqlparser.String(expr))
 		}
 
 		// Match orderByCol against the group by columns.
 		found := false
 		for j, key := range oa.eaggr.Keys {
-			inputForKey := oa.input.ResultColumns()[key]
-			if inputForKey.column != orderByCol {
+			if oa.resultColumns[key].column != orderByCol {
 				continue
 			}
 
 			found = true
 			referenced[j] = true
+			selOrderBy = append(selOrderBy, order)
 			break
 		}
 		if !found {
-			return fmt.Errorf("unsupported: in scatter query: order by column must reference group by expression: %v", sqlparser.String(order))
+			postSort = true
 		}
-
-		// Push down the order by.
-		// It's ok to push the original AST down because all references
-		// should point to the route. Only aggregate functions are originated
-		// by oa, and we currently don't allow the ORDER BY to reference them.
-		oa.input.PushOrderBy(order)
 	}
 
 	// Append any unreferenced keys at the end of the order by.
@@ -423,24 +479,31 @@ func (oa *orderedAggregate) PushOrderBy(pb *primitiveBuilder, orderBy sqlparser.
 			continue
 		}
 		// Build a brand new reference for the key.
-		col, err := oa.input.BuildColName(key)
+		col, err := BuildColName(oa.input.ResultColumns(), key)
 		if err != nil {
-			return fmt.Errorf("generating order by clause: %v", err)
+			return nil, fmt.Errorf("generating order by clause: %v", err)
 		}
-		order := &sqlparser.Order{Expr: col, Direction: sqlparser.AscScr}
-		oa.input.PushOrderBy(order)
+		selOrderBy = append(selOrderBy, &sqlparser.Order{Expr: col, Direction: sqlparser.AscScr})
 	}
-	return nil
-}
 
-// PushOrderByNull satisfies the builder interface.
-func (oa *orderedAggregate) PushOrderByNull() {
-	panic("BUG: unreachable")
-}
+	// Append the distinct aggregate if any.
+	if oa.extraDistinct != nil {
+		selOrderBy = append(selOrderBy, &sqlparser.Order{Expr: oa.extraDistinct, Direction: sqlparser.AscScr})
+	}
 
-// PushOrderByRand satisfies the builder interface.
-func (oa *orderedAggregate) PushOrderByRand() {
-	panic("BUG: unreachable")
+	// Push down the order by.
+	// It's ok to push the original AST down because all references
+	// should point to the route. Only aggregate functions are originated
+	// by oa, and we currently don't allow the ORDER BY to reference them.
+	bldr, err := oa.input.PushOrderBy(selOrderBy)
+	if err != nil {
+		return nil, err
+	}
+	oa.input = bldr
+	if postSort {
+		return newMemorySort(oa, orderBy)
+	}
+	return oa, nil
 }
 
 // SetUpperLimit satisfies the builder interface.
@@ -459,22 +522,21 @@ func (oa *orderedAggregate) PushMisc(sel *sqlparser.Select) {
 // compare those instead. This is because we currently don't have the
 // ability to mimic mysql's collation behavior.
 func (oa *orderedAggregate) Wireup(bldr builder, jt *jointab) error {
-	for i, colnum := range oa.eaggr.Keys {
-		if sqltypes.IsText(oa.resultColumns[colnum].column.typ) {
-			// len(oa.resultColumns) does not change. No harm using the value multiple times.
+	for i, colNumber := range oa.eaggr.Keys {
+		rc := oa.resultColumns[colNumber]
+		if sqltypes.IsText(rc.column.typ) {
+			if weightcolNumber, ok := oa.weightStrings[rc]; ok {
+				oa.eaggr.Keys[i] = weightcolNumber
+				continue
+			}
+			weightcolNumber, err := oa.input.SupplyWeightString(colNumber)
+			if err != nil {
+				return err
+			}
+			oa.weightStrings[rc] = weightcolNumber
+			oa.eaggr.Keys[i] = weightcolNumber
 			oa.eaggr.TruncateColumnCount = len(oa.resultColumns)
-			oa.eaggr.Keys[i] = oa.input.SupplyWeightString(colnum)
 		}
 	}
 	return oa.input.Wireup(bldr, jt)
-}
-
-// SupplyVar satisfies the builder interface.
-func (oa *orderedAggregate) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
-	panic("BUG: orderedAggregate should only have atomic nodes under it")
-}
-
-// SupplyCol satisfies the builder interface.
-func (oa *orderedAggregate) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colnum int) {
-	panic("BUG: nothing should depend on orderedAggregate")
 }

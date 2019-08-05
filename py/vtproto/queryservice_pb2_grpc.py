@@ -125,6 +125,11 @@ class QueryStub(object):
         request_serializer=binlogdata__pb2.VStreamRequest.SerializeToString,
         response_deserializer=binlogdata__pb2.VStreamResponse.FromString,
         )
+    self.VStreamRows = channel.unary_stream(
+        '/queryservice.Query/VStreamRows',
+        request_serializer=binlogdata__pb2.VStreamRowsRequest.SerializeToString,
+        response_deserializer=binlogdata__pb2.VStreamRowsResponse.FromString,
+        )
 
 
 class QueryServicer(object):
@@ -292,6 +297,13 @@ class QueryServicer(object):
     context.set_details('Method not implemented!')
     raise NotImplementedError('Method not implemented!')
 
+  def VStreamRows(self, request, context):
+    """VStreamRows streams rows from the specified starting point.
+    """
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
 
 def add_QueryServicer_to_server(servicer, server):
   rpc_method_handlers = {
@@ -404,6 +416,11 @@ def add_QueryServicer_to_server(servicer, server):
           servicer.VStream,
           request_deserializer=binlogdata__pb2.VStreamRequest.FromString,
           response_serializer=binlogdata__pb2.VStreamResponse.SerializeToString,
+      ),
+      'VStreamRows': grpc.unary_stream_rpc_method_handler(
+          servicer.VStreamRows,
+          request_deserializer=binlogdata__pb2.VStreamRowsRequest.FromString,
+          response_serializer=binlogdata__pb2.VStreamRowsResponse.SerializeToString,
       ),
   }
   generic_handler = grpc.method_handlers_generic_handler(

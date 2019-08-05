@@ -49,8 +49,11 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 		Version:  EtcdVersion(initial.Kvs[0].ModRevision),
 	}
 
-	// Create a context, will be used to cancel the watch.
-	watchCtx, watchCancel := context.WithCancel(context.Background())
+	// Create an outer context that will be canceled on return and will cancel all inner watches.
+	outerCtx, outerCancel := context.WithCancel(context.Background())
+
+	// Create a context, will be used to cancel the watch on retry.
+	watchCtx, watchCancel := context.WithCancel(outerCtx)
 
 	// Create the Watcher.  We start watching from the response we
 	// got, not from the file original version, as the server may
@@ -82,6 +85,9 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 						time.Sleep(time.Duration(watchRetries) * time.Second)
 					}
 					watchRetries++
+					// Cancel inner context on retry and create new one.
+					watchCancel()
+					watchCtx, watchCancel = context.WithCancel(outerCtx)
 					newWatcher := s.cli.Watch(watchCtx, nodePath, clientv3.WithRev(currVersion))
 					if newWatcher == nil {
 						log.Warningf("watch %v failed and get a nil channel returned, currVersion: %v", nodePath, currVersion)
@@ -127,5 +133,5 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 		}
 	}()
 
-	return wd, notifications, topo.CancelFunc(watchCancel)
+	return wd, notifications, topo.CancelFunc(outerCancel)
 }

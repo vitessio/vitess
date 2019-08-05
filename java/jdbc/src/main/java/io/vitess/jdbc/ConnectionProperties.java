@@ -247,6 +247,13 @@ public class ConnectionProperties {
           + "setQueryTimeout",
       Constants.DEFAULT_TIMEOUT);
 
+
+  private StringConnectionProperty useTracing = new StringConnectionProperty(
+      "tracing",
+      "Pass on tracing span ids when communicating with Vitess",
+      "off",
+      new String[]{"off", "opentracing"});
+
   // Caching of some hot properties to avoid casting over and over
   private Topodata.TabletType tabletTypeCache;
   private Query.ExecuteOptions.IncludedFields includedFieldsCache;
@@ -582,6 +589,10 @@ public class ConnectionProperties {
 
   public void setTimeout(long timeout) {
     this.timeout.setValue(timeout);
+  }
+
+  public boolean getUseTracing() {
+    return useTracing.getValueAsString().equalsIgnoreCase("opentracing");
   }
 
   public String getTarget() {

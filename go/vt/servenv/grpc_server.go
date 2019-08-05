@@ -23,8 +23,9 @@ import (
 	"net"
 	"time"
 
-	"github.com/grpc-ecosystem/go-grpc-middleware"
-	"github.com/grpc-ecosystem/go-grpc-prometheus"
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
+	"vitess.io/vitess/go/trace"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -175,7 +176,7 @@ func createGRPCServer() {
 
 // We can only set a ServerInterceptor once, so we chain multiple interceptors into one
 func interceptors() []grpc.ServerOption {
-	interceptors := &InterceptorBuilder{}
+	interceptors := &serverInterceptorBuilder{}
 
 	if *GRPCAuth != "" {
 		log.Infof("enabling auth plugin %v", *GRPCAuth)
@@ -192,13 +193,9 @@ func interceptors() []grpc.ServerOption {
 		interceptors.Add(grpc_prometheus.StreamServerInterceptor, grpc_prometheus.UnaryServerInterceptor)
 	}
 
-	if interceptors.NonEmpty() {
-		return []grpc.ServerOption{
-			grpc.StreamInterceptor(interceptors.StreamServerInterceptor),
-			grpc.UnaryInterceptor(interceptors.UnaryStreamInterceptor)}
-	} else {
-		return []grpc.ServerOption{}
-	}
+	trace.AddGrpcServerOptions(interceptors.Add)
+
+	return interceptors.Build()
 }
 
 func serveGRPC() {
@@ -224,7 +221,12 @@ func serveGRPC() {
 	//       runs all OnRun() hooks after createGRPCServer() and before
 	//       serveGRPC(). If this was not the case, the binary would crash with
 	//       the error "grpc: Server.RegisterService after Server.Serve".
-	go GRPCServer.Serve(listener)
+	go func() {
+		err := GRPCServer.Serve(listener)
+		if err != nil {
+			log.Exitf("Failed to start grpc server: %v", err)
+		}
+	}()
 
 	OnTermSync(func() {
 		log.Info("Initiated graceful stop of gRPC server")
@@ -286,22 +288,33 @@ func WrapServerStream(stream grpc.ServerStream) *WrappedServerStream {
 	return &WrappedServerStream{ServerStream: stream, WrappedContext: stream.Context()}
 }
 
-// InterceptorBuilder chains together multiple ServerInterceptors
-type InterceptorBuilder struct {
-	StreamServerInterceptor grpc.StreamServerInterceptor
-	UnaryStreamInterceptor  grpc.UnaryServerInterceptor
+// serverInterceptorBuilder chains together multiple ServerInterceptors
+type serverInterceptorBuilder struct {
+	streamInterceptors []grpc.StreamServerInterceptor
+	unaryInterceptors  []grpc.UnaryServerInterceptor
 }
 
-func (collector *InterceptorBuilder) Add(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor) {
-	if collector.StreamServerInterceptor == nil {
-		collector.StreamServerInterceptor = s
-		collector.UnaryStreamInterceptor = u
-	} else {
-		collector.StreamServerInterceptor = grpc_middleware.ChainStreamServer(collector.StreamServerInterceptor, s)
-		collector.UnaryStreamInterceptor = grpc_middleware.ChainUnaryServer(collector.UnaryStreamInterceptor, u)
+// Add adds interceptors to the builder
+func (collector *serverInterceptorBuilder) Add(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor) {
+	collector.streamInterceptors = append(collector.streamInterceptors, s)
+	collector.unaryInterceptors = append(collector.unaryInterceptors, u)
+}
+
+// AddUnary adds a single unary interceptor to the builder
+func (collector *serverInterceptorBuilder) AddUnary(u grpc.UnaryServerInterceptor) {
+	collector.unaryInterceptors = append(collector.unaryInterceptors, u)
+}
+
+// Build returns DialOptions to add to the grpc.Dial call
+func (collector *serverInterceptorBuilder) Build() []grpc.ServerOption {
+	log.Infof("Building interceptors with %d unary interceptors and %d stream interceptors", len(collector.unaryInterceptors), len(collector.streamInterceptors))
+	switch len(collector.unaryInterceptors) + len(collector.streamInterceptors) {
+	case 0:
+		return []grpc.ServerOption{}
+	default:
+		return []grpc.ServerOption{
+			grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(collector.unaryInterceptors...)),
+			grpc.StreamInterceptor(grpc_middleware.ChainStreamServer(collector.streamInterceptors...)),
+		}
 	}
-}
-
-func (collector *InterceptorBuilder) NonEmpty() bool {
-	return collector.StreamServerInterceptor != nil
 }

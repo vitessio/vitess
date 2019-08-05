@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -106,14 +107,15 @@ func NewTxPool(
 	prefix string,
 	capacity int,
 	foundRowsCapacity int,
+	prefillParallelism int,
 	timeout time.Duration,
 	idleTimeout time.Duration,
 	waiterCap int,
 	checker connpool.MySQLChecker,
 	limiter txlimiter.TxLimiter) *TxPool {
 	axp := &TxPool{
-		conns:         connpool.New(prefix+"TransactionPool", capacity, idleTimeout, checker),
-		foundRowsPool: connpool.New(prefix+"FoundRowsPool", foundRowsCapacity, idleTimeout, checker),
+		conns:         connpool.New(prefix+"TransactionPool", capacity, prefillParallelism, idleTimeout, checker),
+		foundRowsPool: connpool.New(prefix+"FoundRowsPool", foundRowsCapacity, prefillParallelism, idleTimeout, checker),
 		activePool:    pools.NewNumbered(),
 		lastID:        sync2.NewAtomicInt64(time.Now().UnixNano()),
 		timeout:       sync2.NewAtomicDuration(timeout),
@@ -192,23 +194,28 @@ func (axp *TxPool) WaitForEmpty() {
 	axp.activePool.WaitForEmpty()
 }
 
-// Begin begins a transaction, and returns the associated transaction id.
+// Begin begins a transaction, and returns the associated transaction id and
+// the statements (if any) executed to initiate the transaction. In autocommit
+// mode the statement will be "".
+//
 // Subsequent statements can access the connection through the transaction id.
-func (axp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (int64, error) {
+func (axp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (int64, string, error) {
+	span, ctx := trace.NewSpan(ctx, "TxPool.Begin")
+	defer span.Finish()
 	var conn *connpool.DBConn
 	var err error
 	immediateCaller := callerid.ImmediateCallerIDFromContext(ctx)
 	effectiveCaller := callerid.EffectiveCallerIDFromContext(ctx)
 
 	if !axp.limiter.Get(immediateCaller, effectiveCaller) {
-		return 0, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
+		return 0, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "per-user transaction pool connection limit exceeded")
 	}
 
 	waiterCount := axp.waiters.Add(1)
 	defer axp.waiters.Add(-1)
 
 	if waiterCount > axp.waiterCap.Get() {
-		return 0, vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool waiter count exceeded")
+		return 0, "", vterrors.New(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool waiter count exceeded")
 	}
 
 	var beginSucceeded bool
@@ -231,30 +238,33 @@ func (axp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (
 	if err != nil {
 		switch err {
 		case connpool.ErrConnPoolClosed:
-			return 0, err
+			return 0, "", err
 		case pools.ErrTimeout:
 			axp.LogActive()
-			return 0, vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool connection limit exceeded")
+			return 0, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool connection limit exceeded")
 		}
-		return 0, err
+		return 0, "", err
 	}
 
 	autocommitTransaction := false
-
+	beginQueries := ""
 	if queries, ok := txIsolations[options.GetTransactionIsolation()]; ok {
 		if queries.setIsolationLevel != "" {
 			if _, err := conn.Exec(ctx, "set transaction isolation level "+queries.setIsolationLevel, 1, false); err != nil {
-				return 0, err
+				return 0, "", err
 			}
+
+			beginQueries = queries.setIsolationLevel + "; "
 		}
 
 		if _, err := conn.Exec(ctx, queries.openTransaction, 1, false); err != nil {
-			return 0, err
+			return 0, "", err
 		}
+		beginQueries = beginQueries + queries.openTransaction
 	} else if options.GetTransactionIsolation() == querypb.ExecuteOptions_AUTOCOMMIT {
 		autocommitTransaction = true
 	} else {
-		return 0, fmt.Errorf("don't know how to open a transaction of this type: %v", options.GetTransactionIsolation())
+		return 0, "", fmt.Errorf("don't know how to open a transaction of this type: %v", options.GetTransactionIsolation())
 	}
 
 	beginSucceeded = true
@@ -271,20 +281,25 @@ func (axp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (
 		),
 		options.GetWorkload() != querypb.ExecuteOptions_DBA,
 	)
-	return transactionID, nil
+	return transactionID, beginQueries, nil
 }
 
 // Commit commits the specified transaction.
-func (axp *TxPool) Commit(ctx context.Context, transactionID int64, mc messageCommitter) error {
+func (axp *TxPool) Commit(ctx context.Context, transactionID int64, mc messageCommitter) (string, error) {
+	span, ctx := trace.NewSpan(ctx, "TxPool.Commit")
+	defer span.Finish()
 	conn, err := axp.Get(transactionID, "for commit")
 	if err != nil {
-		return err
+		return "", err
 	}
 	return axp.LocalCommit(ctx, conn, mc)
 }
 
 // Rollback rolls back the specified transaction.
 func (axp *TxPool) Rollback(ctx context.Context, transactionID int64) error {
+	span, ctx := trace.NewSpan(ctx, "TxPool.Rollback")
+	defer span.Finish()
+
 	conn, err := axp.Get(transactionID, "for rollback")
 	if err != nil {
 		return err
@@ -305,35 +320,43 @@ func (axp *TxPool) Get(transactionID int64, reason string) (*TxConnection, error
 // LocalBegin is equivalent to Begin->Get.
 // It's used for executing transactions within a request. It's safe
 // to always call LocalConclude at the end.
-func (axp *TxPool) LocalBegin(ctx context.Context, options *querypb.ExecuteOptions) (*TxConnection, error) {
-	transactionID, err := axp.Begin(ctx, options)
+func (axp *TxPool) LocalBegin(ctx context.Context, options *querypb.ExecuteOptions) (*TxConnection, string, error) {
+	span, ctx := trace.NewSpan(ctx, "TxPool.LocalBegin")
+	defer span.Finish()
+
+	transactionID, beginSQL, err := axp.Begin(ctx, options)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return axp.Get(transactionID, "for local query")
+	conn, err := axp.Get(transactionID, "for local query")
+	return conn, beginSQL, err
 }
 
 // LocalCommit is the commit function for LocalBegin.
-func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection, mc messageCommitter) error {
+func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection, mc messageCommitter) (string, error) {
+	span, ctx := trace.NewSpan(ctx, "TxPool.LocalCommit")
+	defer span.Finish()
 	defer conn.conclude(TxCommit, "transaction committed")
 	defer mc.LockDB(conn.NewMessages, conn.ChangedMessages)()
 
 	if conn.Autocommit {
 		mc.UpdateCaches(conn.NewMessages, conn.ChangedMessages)
-		return nil
+		return "", nil
 	}
 
 	if _, err := conn.Exec(ctx, "commit", 1, false); err != nil {
 		conn.Close()
-		return err
+		return "", err
 	}
 	mc.UpdateCaches(conn.NewMessages, conn.ChangedMessages)
-	return nil
+	return "commit", nil
 }
 
 // LocalConclude concludes a transaction started by LocalBegin.
 // If the transaction was not previously concluded, it's rolled back.
 func (axp *TxPool) LocalConclude(ctx context.Context, conn *TxConnection) {
+	span, ctx := trace.NewSpan(ctx, "TxPool.LocalConclude")
+	defer span.Finish()
 	if conn.DBConn != nil {
 		_ = axp.localRollback(ctx, conn)
 	}

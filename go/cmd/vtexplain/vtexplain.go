@@ -55,6 +55,7 @@ var (
 		"vschema",
 		"vschema-file",
 		"dbname",
+		"queryserver-config-passthrough-dmls",
 	}
 )
 
@@ -63,7 +64,7 @@ func usage() {
 	for _, name := range vtexplainFlags {
 		f := flag.Lookup(name)
 		if f == nil {
-			panic("unkown flag " + name)
+			panic("unknown flag " + name)
 		}
 		flagUsage(f)
 	}
