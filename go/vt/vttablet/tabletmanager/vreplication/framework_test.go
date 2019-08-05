@@ -506,7 +506,7 @@ func customExpectData(t *testing.T, table string, values [][]string, exec func(c
 		}
 		for j, val := range row {
 			if got := qr.Rows[i][j].ToString(); got != val {
-				t.Errorf("Mismatch at (%d, %d): %v, want %s", i, j, qr.Rows[i][j], val)
+				t.Errorf("Mismatch at (%d, %d): %v, want %s", i, j, qr.Rows[i][j].ToString(), val)
 			}
 		}
 	}
