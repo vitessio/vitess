@@ -447,6 +447,82 @@ func TestPlayerKeywordNames(t *testing.T) {
 		}
 	}
 }
+
+var shardedVSchema = `{
+  "sharded": true,
+  "vindexes": {
+    "hash": {
+      "type": "hash"
+    }
+  },
+  "tables": {
+    "src1": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ]
+    }
+  }
+}`
+
+func TestPlayerKeyspaceID(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table src1(id int, val varbinary(128), primary key(id))",
+		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src1",
+		fmt.Sprintf("drop table %s.dst1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	if err := env.SetVSchema(shardedVSchema); err != nil {
+		t.Fatal(err)
+	}
+	defer env.SetVSchema("{}")
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst1",
+			Filter: "select id, keyspace_id() as val from src1",
+		}},
+	}
+	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	defer cancel()
+
+	testcases := []struct {
+		input  string
+		output []string
+		table  string
+		data   [][]string
+	}{{
+		// insert with insertNormal
+		input: "insert into src1 values(1, 'aaa')",
+		output: []string{
+			"begin",
+			"insert into dst1(id,val) values (1,'\x16k@\xb4J\xbaK\xd6')",
+			"/update _vt.vreplication set pos=",
+			"commit",
+		},
+		table: "dst1",
+		data: [][]string{
+			{"1", "\x16k@\xb4J\xbaK\xd6"},
+		},
+	}}
+
+	for _, tcases := range testcases {
+		execStatements(t, []string{tcases.input})
+		expectDBClientQueries(t, tcases.output)
+		if tcases.table != "" {
+			expectData(t, tcases.table, tcases.data)
+		}
+	}
+}
+
 func TestUnicode(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
