@@ -114,6 +114,7 @@ nextTable:
 				tablePlan := &TablePlan{
 					TargetName: tableName,
 					SendRule:   sendRule,
+					Lastpk:     lastpk,
 				}
 				plan.TargetTables[tableName] = tablePlan
 				plan.TablePlans[tableName] = tablePlan
