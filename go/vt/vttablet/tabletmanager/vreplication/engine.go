@@ -317,7 +317,11 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 			return nil, err
 		}
 		if _, err := dbClient.ExecuteFetch(plan.delCopyState, 10000); err != nil {
-			return nil, err
+			// Legacy vreplication won't create this table. So, ignore table not found error.
+			merr, isSQLErr := err.(*mysql.SQLError)
+			if !isSQLErr || !(merr.Num == mysql.ERNoSuchTable) {
+				return nil, err
+			}
 		}
 		if err := dbClient.Commit(); err != nil {
 			return nil, err
