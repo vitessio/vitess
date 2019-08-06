@@ -14,6 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+//-9,223,372,036,854,775,808
+//-18,446,744,073,709,551,615
+
 package sqltypes
 
 import (
@@ -27,6 +30,109 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
+
+func TestAddition(t *testing.T) {
+	tcases := []struct {
+		v1, v2 Value
+		out    Value
+		err    error
+	}{{
+
+		//All Nulls
+		v1:  NULL,
+		v2:  NULL,
+		out: NULL,
+	}, {
+		// First value null.
+		v1:  NewInt32(1),
+		v2:  NULL,
+		out: NULL,
+	}, {
+		// Second value null.
+		v1:  NULL,
+		v2:  NewInt32(1),
+		out: NULL,
+	}, {
+
+		// case with negatives
+		v1:  NewInt64(-1),
+		v2:  NewInt64(-2),
+		out: NewInt64(-3),
+	}, {
+
+		// testing for overflow int64
+		v1:  NewInt64(9223372036854775807),
+		v2:  NewUint64(2),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in 2 + 9223372036854775807"),
+	}, {
+
+		v1: NewInt64(-2),
+		v2: NewUint64(1),
+		//out: NewInt64(-1),
+		out: NewUint64(18446744073709551615),
+	}, {
+
+		v1:  NewInt64(9223372036854775807),
+		v2:  NewInt64(-2),
+		out: NewInt64(9223372036854775805),
+	}, {
+		//Normal case
+		v1:  NewUint64(1),
+		v2:  NewUint64(2),
+		out: NewUint64(3),
+	}, {
+		//testing for overflow uint64
+		v1:  NewUint64(18446744073709551615),
+		v2:  NewUint64(2),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 18446744073709551615 + 2"),
+	}, {
+
+		//int64 underflow
+		v1:  NewInt64(-9223372036854775807),
+		v2:  NewInt64(-2),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in -9223372036854775807 + -2"),
+	}, {
+
+		//checking int64 max value can be returned
+		v1:  NewInt64(9223372036854775807),
+		v2:  NewUint64(0),
+		out: NewUint64(9223372036854775807),
+	}, {
+
+		// testing whether uint64 max value can be returned
+		v1:  NewUint64(18446744073709551615),
+		v2:  NewInt64(0),
+		out: NewUint64(18446744073709551615),
+	}, {
+
+		v1:  NewInt64(-3),
+		v2:  NewUint64(1),
+		out: NewUint64(18446744073709551614),
+	}, {
+
+		//how is this okay? Because v1 is greater than max int64 value
+		v1:  NewUint64(9223372036854775808),
+		v2:  NewInt64(1),
+		out: NewUint64(9223372036854775809),
+	}}
+
+	for _, tcase := range tcases {
+
+		got, err := Addition(tcase.v1, tcase.v2)
+
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("Addition(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
+		}
+		if tcase.err != nil {
+			continue
+		}
+
+		if !reflect.DeepEqual(got, tcase.out) {
+			t.Errorf("Addition(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
+		}
+	}
+
+}
 
 func TestAdd(t *testing.T) {
 	tcases := []struct {
@@ -637,13 +743,15 @@ func TestAddNumeric(t *testing.T) {
 		out: numeric{typ: Float64, fval: 18446744073709551617},
 	}}
 	for _, tcase := range tcases {
-		got, err := addNumeric(tcase.v1, tcase.v2)
-		if !vterrors.Equals(err, tcase.err) {
-			t.Errorf("addNumeric(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
-		}
-		if tcase.err != nil {
-			continue
-		}
+		got := addNumeric(tcase.v1, tcase.v2)
+		/*
+			if !vterrors.Equals(err, tcase.err) {
+				t.Errorf("addNumeric(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
+			}
+			if tcase.err != nil {
+				continue
+			}
+		*/
 
 		if got != tcase.out {
 			t.Errorf("addNumeric(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
