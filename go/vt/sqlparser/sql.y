@@ -3187,7 +3187,6 @@ reserved_table_id:
 reserved_keyword:
   ADD
 | AND
-| ARRAY
 | AS
 | ASC
 | AUTO_INCREMENT
@@ -3199,7 +3198,6 @@ reserved_keyword:
 | CONVERT
 | CREATE
 | CROSS
-| CUME_DIST
 | CURRENT_DATE
 | CURRENT_TIME
 | CURRENT_TIMESTAMP
@@ -3207,27 +3205,21 @@ reserved_keyword:
 | DATABASES
 | DEFAULT
 | DELETE
-| DENSE_RANK
 | DESC
 | DESCRIBE
 | DISTINCT
 | DIV
 | DROP
 | ELSE
-| EMPTY
 | END
 | ESCAPE
-| EXCEPT
 | EXISTS
 | EXPLAIN
 | FALSE
-| FIRST_VALUE
 | FOR
 | FORCE
 | FROM
 | GROUP
-| GROUPING
-| GROUPS
 | HAVING
 | IF
 | IGNORE
@@ -3239,12 +3231,7 @@ reserved_keyword:
 | INTO
 | IS
 | JOIN
-| JSON_TABLE
 | KEY
-| LAG
-| LAST_VALUE
-| LATERAL
-| LEAD
 | LEFT
 | LIKE
 | LIMIT
@@ -3253,29 +3240,20 @@ reserved_keyword:
 | LOCK
 | MATCH
 | MAXVALUE
-| MEMBER
 | MOD
 | NATURAL
 | NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
 | NOT
-| NTH_VALUE
-| NTILE
 | NULL
-| OF
 | OFF
 | ON
 | OR
 | ORDER
 | OUTER
-| OVER
-| PERCENT_RANK
-| RANK
-| RECURSIVE
 | REGEXP
 | RENAME
 | REPLACE
 | RIGHT
-| ROW_NUMBER
 | SCHEMA
 | SELECT
 | SEPARATOR
@@ -3284,7 +3262,6 @@ reserved_keyword:
 | STRAIGHT_JOIN
 | SUBSTR
 | SUBSTRING
-| SYSTEM
 | TABLE
 | THEN
 | TIMESTAMPADD
@@ -3303,7 +3280,6 @@ reserved_keyword:
 | VALUES
 | WHEN
 | WHERE
-| WINDOW
 
 /*
   These are non-reserved Vitess, because they don't cause conflicts in the grammar.
@@ -3317,6 +3293,7 @@ non_reserved_keyword:
 | ACTIVE
 | ADMIN
 | AGAINST
+| ARRAY
 | BEGIN
 | BIGINT
 | BIT
@@ -3335,19 +3312,24 @@ non_reserved_keyword:
 | COMMIT
 | COMMITTED
 | COMPONENT
+| CUME_DIST
 | DATE
 | DATETIME
 | DECIMAL
 | DEFINITION
+| DENSE_RANK
 | DESCRIPTION
 | DOUBLE
 | DUPLICATE
+| EMPTY
 | ENFORCED
 | ENGINES
 | ENUM
+| EXCEPT
 | EXCLUDE
 | EXPANSION
 | FIELDS
+| FIRST_VALUE
 | FLOAT_TYPE
 | FLUSH
 | FOLLOWING
@@ -3358,6 +3340,8 @@ non_reserved_keyword:
 | GEOMETRYCOLLECTION
 | GET_MASTER_PUBLIC_KEY
 | GLOBAL
+| GROUPING
+| GROUPS
 | HISTOGRAM
 | HISTORY
 | INACTIVE
@@ -3366,10 +3350,15 @@ non_reserved_keyword:
 | INVISIBLE
 | ISOLATION
 | JSON
+| JSON_TABLE
 | KEY_BLOCK_SIZE
 | KEYS
+| LAG
 | LANGUAGE
 | LAST_INSERT_ID
+| LAST_VALUE
+| LATERAL
+| LEAD
 | LESS
 | LEVEL
 | LINESTRING
@@ -3382,6 +3371,7 @@ non_reserved_keyword:
 | MEDIUMBLOB
 | MEDIUMINT
 | MEDIUMTEXT
+| MEMBER
 | MODE
 | MULTILINESTRING
 | MULTIPOINT
@@ -3394,6 +3384,9 @@ non_reserved_keyword:
 | NOWAIT
 | NULLS
 | NUMERIC
+| NTH_VALUE
+| NTILE
+| OF
 | OFFSET
 | OJ
 | OLD
@@ -3403,8 +3396,10 @@ non_reserved_keyword:
 | ORDINALITY
 | ORGANIZATION
 | OTHERS
+| OVER
 | PARTITION
 | PATH
+| PERCENT_RANK
 | PERSIST
 | PERSIST_ONLY
 | PLUGINS
@@ -3417,8 +3412,10 @@ non_reserved_keyword:
 | PROCESS
 | QUERY
 | RANDOM
+| RANK
 | READ
 | REAL
+| RECURSIVE
 | REFERENCE
 | REFERENCES
 | REORGANIZE
@@ -3432,6 +3429,7 @@ non_reserved_keyword:
 | REUSE
 | ROLE
 | ROLLBACK
+| ROW_NUMBER
 | SCHEMAS
 | SECONDARY
 | SECONDARY_ENGINE
@@ -3447,6 +3445,7 @@ non_reserved_keyword:
 | SRID
 | START
 | STATUS
+| SYSTEM
 | TABLES
 | TEXT
 | THAN
@@ -3479,6 +3478,7 @@ non_reserved_keyword:
 | VSCHEMA
 | VSCHEMA_TABLES
 | WARNINGS
+| WINDOW
 | WITH
 | WRITE
 | YEAR
