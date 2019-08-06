@@ -37,6 +37,9 @@ func TestJSON(t *testing.T) {
 		data:     []byte{0, 1, 0, 12, 0, 11, 0, 1, 0, 5, 2, 0, 97},
 		expected: `JSON_OBJECT('a',2)`,
 	}, {
+		data:     []byte{0, 1, 0, 29, 0, 11, 0, 4, 0, 0, 15, 0, 97, 115, 100, 102, 1, 0, 14, 0, 11, 0, 3, 0, 5, 123, 0, 102, 111, 111},
+		expected: `JSON_OBJECT('asdf',JSON_OBJECT('foo',123))`,
+	}, {
 		data:     []byte{2, 2, 0, 10, 0, 5, 1, 0, 5, 2, 0},
 		expected: `JSON_ARRAY(1,2)`,
 	}, {
