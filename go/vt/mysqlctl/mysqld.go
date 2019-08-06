@@ -124,9 +124,6 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 
 	}
 
-	// Unset ENV to make sure there is no split brain between legacy
-	// MySQL flavor and capabilities
-	os.Unsetenv("MYSQL_FLAVOR")
 	log.Infof("Using flavor: %v, version: %v", f, v)
 	result.capabilities = NewCapabilitySet(f, v)
 	return result
