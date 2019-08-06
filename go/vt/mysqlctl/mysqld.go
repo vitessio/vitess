@@ -99,7 +99,7 @@ type Mysqld struct {
 
 // NewMysqld creates a Mysqld object based on the provided configuration
 // and connection parameters.
-func NewMysqld(dbcfgs *dbconfigs.DBConfigs) (*Mysqld, error) {
+func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	result := &Mysqld{
 		dbcfgs: dbcfgs,
 	}
@@ -114,12 +114,43 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) (*Mysqld, error) {
 
 	version, _ := getVersionString()
 	f, v, err := parseVersionString(version)
+
+	// Fallback if required
 	if err != nil {
-		return nil, err
+		f, v, err = getVersionFromEnv()
+		if err != nil {
+			panic("Could not detect version from mysqld --version or MYSQL_FLAVOR")
+		}
+
 	}
 
+	// Unset ENV to make sure there is no split brain between legacy
+	// MySQL flavor and capabilities
+	os.Unsetenv("MYSQL_FLAVOR")
+	log.Infof("Using flavor: %v, version: %v", f, v)
 	result.capabilities = NewCapabilitySet(f, v)
-	return result, nil
+	return result
+}
+
+func getVersionFromEnv() (flavor mysqlFlavor, ver serverVersion, err error) {
+
+	env := os.Getenv("MYSQL_FLAVOR")
+
+	if env == "MariaDB" {
+		return flavorMariaDB, serverVersion{10, 0, 10}, nil
+	}
+	if env == "MariaDB103" {
+		return flavorMariaDB, serverVersion{10, 3, 7}, nil
+	}
+	if env == "MySQL80" {
+		return flavorMySQL, serverVersion{8, 0, 11}, nil
+	}
+	if env == "MySQL56" {
+		return flavorMySQL, serverVersion{5, 7, 10}, nil
+	}
+
+	return flavor, ver, fmt.Errorf("Could not determine version from MYSQL_FLAVOR: %s", env)
+
 }
 
 func getVersionString() (string, error) {
@@ -140,22 +171,32 @@ func getVersionString() (string, error) {
 
 // parse the output of mysqld --version into a flavor and version
 func parseVersionString(version string) (flavor mysqlFlavor, ver serverVersion, err error) {
-	if strings.Contains(version, "MySQL") {
-		flavor = flavorMySQL
-	} else if strings.Contains(version, "Percona") {
+
+	if strings.Contains(version, "Percona") {
 		flavor = flavorPercona
 	} else if strings.Contains(version, "MariaDB") {
 		flavor = flavorMariaDB
 	} else {
-		return flavor, ver, fmt.Errorf("unrecognized server flavor from: %s", version)
+		// OS distributed MySQL releases have a version string like:
+		// mysqld  Ver 5.7.27-0ubuntu0.19.04.1 for Linux on x86_64 ((Ubuntu))
+		flavor = flavorMySQL
 	}
 	v := versionRegex.FindStringSubmatch(version)
 	if len(v) != 4 {
 		return flavor, ver, fmt.Errorf("Could not parse server version from: %s", version)
 	}
-	ver.Major, _ = strconv.Atoi(string(v[1]))
-	ver.Minor, _ = strconv.Atoi(string(v[2]))
-	ver.Patch, _ = strconv.Atoi(string(v[3]))
+	ver.Major, err = strconv.Atoi(string(v[1]))
+	if err != nil {
+		return flavor, ver, fmt.Errorf("Could not parse server version from: %s", version)
+	}
+	ver.Minor, err = strconv.Atoi(string(v[2]))
+	if err != nil {
+		return flavor, ver, fmt.Errorf("Could not parse server version from: %s", version)
+	}
+	ver.Patch, err = strconv.Atoi(string(v[3]))
+	if err != nil {
+		return flavor, ver, fmt.Errorf("Could not parse server version from: %s", version)
+	}
 
 	return
 }

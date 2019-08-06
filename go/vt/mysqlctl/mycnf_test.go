@@ -106,13 +106,10 @@ func NoTestMycnfHook(t *testing.T) {
 	os.Setenv("MY_VAR", "myvalue")
 
 	dbcfgs, _ := dbconfigs.Init(cnf.SocketFile)
-	mysqld, err := NewMysqld(dbcfgs)
-	if err != nil {
-		t.Errorf("err: %v", err)
-	}
+	mysqld := NewMysqld(dbcfgs)
 	servenv.OnClose(mysqld.Close)
 
-	err = mysqld.InitConfig(cnf)
+	err := mysqld.InitConfig(cnf)
 	if err != nil {
 		t.Errorf("err: %v", err)
 	}

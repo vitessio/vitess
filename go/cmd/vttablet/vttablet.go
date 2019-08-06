@@ -117,10 +117,7 @@ func main() {
 	// Create mysqld and register the health reporter (needs to be done
 	// before initializing the agent, so the initial health check
 	// done by the agent has the right reporter)
-	mysqld, err := mysqlctl.NewMysqld(dbcfgs)
-	if err != nil {
-		log.Exitf("NewActionAgent() failed: %v", err)
-	}
+	mysqld := mysqlctl.NewMysqld(dbcfgs)
 	servenv.OnClose(mysqld.Close)
 
 	// Depends on both query and updateStream.

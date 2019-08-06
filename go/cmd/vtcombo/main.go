@@ -99,11 +99,7 @@ func main() {
 	if err != nil {
 		log.Warning(err)
 	}
-	mysqld, err := mysqlctl.NewMysqld(dbcfgs)
-	if err != nil {
-		log.Errorf("Creating mysqld failed: %v", err)
-		exit.Return(1)
-	}
+	mysqld := mysqlctl.NewMysqld(dbcfgs)
 	servenv.OnClose(mysqld.Close)
 
 	// tablets configuration and init.
