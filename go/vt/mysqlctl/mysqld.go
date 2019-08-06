@@ -112,11 +112,11 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout, *poolDynamicHostnameResolution)
 	result.appPool.Open(dbcfgs.AppWithDB(), appMysqlStats)
 
-	version, _ := getVersionString()
+	version, getErr := getVersionString()
 	f, v, err := parseVersionString(version)
 
 	// Fallback if required
-	if err != nil {
+	if getErr != nil || err != nil {
 		f, v, err = getVersionFromEnv()
 		if err != nil {
 			panic("Could not detect version from mysqld --version or MYSQL_FLAVOR")
