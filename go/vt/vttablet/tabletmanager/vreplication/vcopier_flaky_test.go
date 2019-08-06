@@ -658,6 +658,73 @@ func TestPlayerCopyTablesNone(t *testing.T) {
 	})
 }
 
+func TestPlayerCopyTablesStopAfterCopy(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table src1(id int, val varbinary(128), primary key(id))",
+		"insert into src1 values(2, 'bbb'), (1, 'aaa')",
+		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src1",
+		fmt.Sprintf("drop table %s.dst1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst1",
+			Filter: "select * from src1",
+		}},
+	}
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace:      env.KeyspaceName,
+		Shard:         env.ShardName,
+		Filter:        filter,
+		OnDdl:         binlogdatapb.OnDDLAction_IGNORE,
+		StopAfterCopy: true,
+	}
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	qr, err := playerEngine.Exec(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
+		if _, err := playerEngine.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+		expectDeleteQueries(t)
+	}()
+
+	expectDBClientQueries(t, []string{
+		"/insert into _vt.vreplication",
+		// Create the list of tables to copy and transition to Copying state.
+		"begin",
+		"/insert into _vt.copy_state",
+		"/update _vt.vreplication set state='Copying'",
+		"commit",
+		"rollback",
+		// The first fast-forward has no starting point. So, it just saves the current position.
+		"/update _vt.vreplication set pos=",
+		"begin",
+		"insert into dst1(id,val) values (1,'aaa'), (2,'bbb')",
+		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
+		"commit",
+		// copy of dst1 is done: delete from copy_state.
+		"/delete from _vt.copy_state.*dst1",
+		"rollback",
+		// All tables copied. Stop vreplication because we requested it.
+		"/update _vt.vreplication set state='Stopped'",
+	})
+	expectData(t, "dst1", [][]string{
+		{"1", "aaa"},
+		{"2", "bbb"},
+	})
+}
+
 func TestPlayerCopyTableCancel(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
