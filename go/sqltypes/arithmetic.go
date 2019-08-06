@@ -19,6 +19,8 @@ package sqltypes
 import (
 	"bytes"
 	"fmt"
+	"math"
+
 	"strconv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -40,36 +42,37 @@ type numeric struct {
 
 var zeroBytes = []byte("0")
 
+//const maxUintVal = 18446744073709551615
+
+//const maxIntVal = 9223372036854775807
+
 //Addition adds two values together
 //if v1 or v2 is null, then it returns null
-/*
-func Addition(v1, v2 Value) Value {
+func Addition(v1, v2 Value) (Value, error) {
 	if v1.IsNull() {
-		return NULL
+		return NULL, nil
 	}
 
 	if v2.IsNull() {
-		return NULL
+		return NULL, nil
 	}
 
 	lv1, err := newNumeric(v1)
 	if err != nil {
-		return NULL
+		return NULL, err
 	}
 	lv2, err := newNumeric(v2)
 	if err != nil {
-		return NULL
+		return NULL, err
 	}
-	lresult, err := addNumeric(lv1, lv2)
+	lresult, err := addNumericWithError(lv1, lv2)
 	if err != nil {
-		return NULL
+		return NULL, err
 	}
 
-	return castFromNumeric(lresult, lresult.typ)
+	return castFromNumeric(lresult, lresult.typ), nil
 
 }
-function to make
-*/
 
 // NullsafeAdd adds two Values in a null-safe manner. A null value
 // is treated as 0. If both values are null, then a null is returned.
@@ -98,10 +101,7 @@ func NullsafeAdd(v1, v2 Value, resultType querypb.Type) Value {
 	if err != nil {
 		return NULL //, err
 	}
-	lresult, err := addNumeric(lv1, lv2)
-	if err != nil {
-		return NULL //, err
-	}
+	lresult := addNumeric(lv1, lv2)
 	//fmt.Printf("resultType = %v, lresult = %v\n", lresult.typ, lresult)
 	return castFromNumeric(lresult, resultType)
 }
@@ -355,22 +355,43 @@ func newIntegralNumeric(v Value) (numeric, error) {
 	return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: '%s'", str)
 }
 
-func addNumeric(v1, v2 numeric) (numeric, error) {
+func addNumeric(v1, v2 numeric) numeric {
 	v1, v2 = prioritize(v1, v2)
 	switch v1.typ {
 	case Int64:
-		return intPlusInt(v1.ival, v2.ival), nil
+		return intPlusInt(v1.ival, v2.ival)
 	case Uint64:
 		switch v2.typ {
 		case Int64:
 			return uintPlusInt(v1.uval, v2.ival)
 		case Uint64:
-			return uintPlusUint(v1.uval, v2.uval), nil
+			return uintPlusUint(v1.uval, v2.uval)
+		}
+	case Float64:
+		return floatPlusAny(v1.fval, v2)
+	}
+	panic("unreachable")
+}
+
+func addNumericWithError(v1, v2 numeric) (numeric, error) {
+	v1, v2 = prioritize(v1, v2)
+	//fmt.Printf("v1 = %v\n", v1.uval)
+	//fmt.Printf("v2 = %v\n", v2.uval)
+	switch v1.typ {
+	case Int64:
+		return intPlusIntWithError(v1.ival, v2.ival)
+	case Uint64:
+		switch v2.typ {
+		case Int64:
+			return uintPlusIntWithError(v1.uval, v2.ival)
+		case Uint64:
+			return uintPlusUintWithError(v1.uval, v2.uval)
 		}
 	case Float64:
 		return floatPlusAny(v1.fval, v2), nil
 	}
 	panic("unreachable")
+
 }
 
 // prioritize reorders the input parameters
@@ -385,6 +406,7 @@ func prioritize(v1, v2 numeric) (altv1, altv2 numeric) {
 		if v2.typ == Float64 {
 			return v2, v1
 		}
+
 	}
 	return v1, v2
 }
@@ -403,8 +425,6 @@ overflow:
 	return numeric{typ: Float64, fval: float64(v1) + float64(v2)}
 }
 
-/*
-function to make
 func intPlusIntWithError(v1, v2 int64) (numeric, error) {
 	result := v1 + v2
 	if v1 > 0 && v2 > 0 && result < 0 {
@@ -416,15 +436,35 @@ func intPlusIntWithError(v1, v2 int64) (numeric, error) {
 	return numeric{typ: Int64, ival: result}, nil
 
 overflow:
-	return numeric{}, vterrors.Errorf(vtrpcpb.Code_)
+	return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v + %v", v1, v2)
 }
-*/
 
-func uintPlusInt(v1 uint64, v2 int64) (numeric, error) {
+func uintPlusInt(v1 uint64, v2 int64) numeric {
 	//if v2 < 0 {
 	//		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot add a negative number to an unsigned integer: %d, %d", v1, v2)
 	//	}
-	return uintPlusUint(v1, uint64(v2)), nil
+	return uintPlusUint(v1, uint64(v2))
+}
+
+func uintPlusIntWithError(v1 uint64, v2 int64) (numeric, error) {
+
+	if v2 >= math.MaxInt64 && v1 > 0 {
+		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v + %v", v1, v2)
+	}
+
+	if v1 >= math.MaxUint64 && v2 > 0 {
+
+		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v + %v", v1, v2)
+	}
+
+	//result := int64(v1) + v2
+
+	//return numeric{typ: Int64, ival: result}, nil
+
+	// readon to convert to int -> uint is because for numeric operators (such as + or -)
+	//where one of the operands is an unsigned integer, the result is unsigned by default.
+	return uintPlusUintWithError(v1, uint64(v2))
+
 }
 
 func uintPlusUint(v1, v2 uint64) numeric {
@@ -434,6 +474,14 @@ func uintPlusUint(v1, v2 uint64) numeric {
 
 	}
 	return numeric{typ: Uint64, uval: result}
+}
+
+func uintPlusUintWithError(v1, v2 uint64) (numeric, error) {
+	result := v1 + v2
+	if result < v2 {
+		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v + %v", v1, v2)
+	}
+	return numeric{typ: Uint64, uval: result}, nil
 }
 
 func floatPlusAny(v1 float64, v2 numeric) numeric {
