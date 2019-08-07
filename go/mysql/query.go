@@ -1002,11 +1002,11 @@ func (c *Conn) writeEndResult(more bool, affectedRows, lastInsertID uint64, warn
 }
 
 // writePrepare writes a prepare query response to the wire.
-func (c *Conn) writePrepare(result *sqltypes.Result, prepare *PrepareData) error {
+func (c *Conn) writePrepare(fld []*querypb.Field, prepare *PrepareData) error {
 	paramsCount := prepare.ParamsCount
 	columnCount := 0
-	if result != nil {
-		columnCount = len(result.Fields)
+	if len(fld) != 0 {
+		columnCount = len(fld)
 	}
 	if columnCount > 0 {
 		prepare.ColumnNames = make([]string, columnCount)
@@ -1045,23 +1045,20 @@ func (c *Conn) writePrepare(result *sqltypes.Result, prepare *PrepareData) error
 		}
 	}
 
-	if result != nil {
-		// Now send each Field.
-		for i, field := range result.Fields {
-			field.Name = strings.Replace(field.Name, "'?'", "?", -1)
-			prepare.ColumnNames[i] = field.Name
-			if err := c.writeColumnDefinition(field); err != nil {
-				return err
-			}
+	for i, field := range fld {
+		field.Name = strings.Replace(field.Name, "'?'", "?", -1)
+		prepare.ColumnNames[i] = field.Name
+		if err := c.writeColumnDefinition(field); err != nil {
+			return err
 		}
+	}
 
-		if columnCount > 0 {
-			// Now send an EOF packet.
-			if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
-				// With CapabilityClientDeprecateEOF, we do not send this EOF.
-				if err := c.writeEOFPacket(c.StatusFlags, 0); err != nil {
-					return err
-				}
+	if columnCount > 0 {
+		// Now send an EOF packet.
+		if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
+			// With CapabilityClientDeprecateEOF, we do not send this EOF.
+			if err := c.writeEOFPacket(c.StatusFlags, 0); err != nil {
+				return err
 			}
 		}
 	}

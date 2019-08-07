@@ -163,7 +163,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 }
 
 // ComPrepare is the handler for command prepare.
-func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
+func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Field, error) {
 	var ctx context.Context
 	var cancel context.CancelFunc
 	if *mysqlQueryTimeout != 0 {
@@ -213,13 +213,13 @@ func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string, callback func(*
 		session.TargetString = c.SchemaName
 	}
 
-	session, result, err := vh.vtg.Prepare(ctx, session, query, make(map[string]*querypb.BindVariable))
+	session, fld, err := vh.vtg.Prepare(ctx, session, query, make(map[string]*querypb.BindVariable))
 	c.ClientData = session
 	err = mysql.NewSQLErrorFromError(err)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return callback(result)
+	return fld, nil
 }
 
 func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {

@@ -31,6 +31,8 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 const appendEntry = -1
@@ -433,8 +435,8 @@ func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 }
 
 // ComPrepare is part of the mysql.Handler interface.
-func (db *DB) ComPrepare(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
-	return nil
+func (db *DB) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Field, error) {
+	return nil, nil
 }
 
 // ComStmtExecute is part of the mysql.Handler interface.

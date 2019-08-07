@@ -841,6 +841,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return fmt.Errorf("can not prepare multiple statements")
 		}
 
+		// Popoulate PrepareData
 		c.StatementID++
 		prepare := &PrepareData{
 			StatementID: c.StatementID,
@@ -872,29 +873,22 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		c.PrepareData[c.StatementID] = prepare
 
 		fieldSent := false
-		// sendFinished is set if the response should just be an OK packet.
-		sendFinished := false
+
 		// TODO(saifalharthi) change the function to return a field.
-		err = handler.ComPrepare(c, queries[0], func(qr *sqltypes.Result) error {
-			if sendFinished {
-				// Failsafe: Unreachable if server is well-behaved.
-				return io.EOF
-			}
+		fld, err := handler.ComPrepare(c, queries[0])
 
-			if !fieldSent {
-				fieldSent = true
-				if err := c.writePrepare(qr, c.PrepareData[c.StatementID]); err != nil {
-					return err
-				}
-			}
-
-			return nil
-		})
 		if err != nil {
 			if werr := c.writeErrorPacketFromError(err); werr != nil {
 				// If we can't even write the error, we're done.
 				log.Error("Error writing query error to client %v: %v", c.ConnectionID, werr)
 				return werr
+			}
+
+			if !fieldSent {
+				fieldSent = true
+				if err := c.writePrepare(fld, c.PrepareData[c.StatementID]); err != nil {
+					return err
+				}
 			}
 
 			delete(c.PrepareData, c.StatementID)
@@ -1237,7 +1231,7 @@ func ParseErrorPacket(data []byte) error {
 	return NewSQLError(int(code), string(sqlState), "%v", msg)
 }
 
-// This method gets TLS certificates
+// GetTLSClientCerts gets TLS certificates.
 func (c *Conn) GetTLSClientCerts() []*x509.Certificate {
 	if tlsConn, ok := c.conn.(*tls.Conn); ok {
 		return tlsConn.ConnectionState().PeerCertificates
