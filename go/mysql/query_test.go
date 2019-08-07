@@ -148,7 +148,7 @@ func TestComStmtPrepare(t *testing.T) {
 	sConn.PrepareData[prepare.StatementID] = prepare
 
 	// write the response to the client
-	if err := sConn.writePrepare(result, prepare); err != nil {
+	if err := sConn.writePrepare(result.Fields, prepare); err != nil {
 		t.Fatalf("sConn.writePrepare failed: %v", err)
 	}
 
@@ -172,7 +172,7 @@ func TestComStmtSendLongData(t *testing.T) {
 	prepare, result := MockPrepareData(t)
 	cConn.PrepareData = make(map[uint32]*PrepareData)
 	cConn.PrepareData[prepare.StatementID] = prepare
-	if err := cConn.writePrepare(result, prepare); err != nil {
+	if err := cConn.writePrepare(result.Fields, prepare); err != nil {
 		t.Fatalf("writePrepare failed: %v", err)
 	}
 
@@ -233,7 +233,7 @@ func TestComStmtClose(t *testing.T) {
 	prepare, result := MockPrepareData(t)
 	cConn.PrepareData = make(map[uint32]*PrepareData)
 	cConn.PrepareData[prepare.StatementID] = prepare
-	if err := cConn.writePrepare(result, prepare); err != nil {
+	if err := cConn.writePrepare(result.Fields, prepare); err != nil {
 		t.Fatalf("writePrepare failed: %v", err)
 	}
 

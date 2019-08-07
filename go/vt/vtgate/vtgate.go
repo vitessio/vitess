@@ -834,7 +834,7 @@ func (vtg *VTGate) ResolveTransaction(ctx context.Context, dtid string) error {
 }
 
 // Prepare supports non-streaming prepare statement query with multi shards
-func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (newSession *vtgatepb.Session, qr *sqltypes.Result, err error) {
+func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (newSession *vtgatepb.Session, fld []*querypb.Field, err error) {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
 	statsKey := []string{"Execute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
@@ -845,10 +845,10 @@ func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql s
 		goto handleError
 	}
 
-	qr, err = vtg.executor.Prepare(ctx, "Prepare", NewSafeSession(session), sql, bindVariables)
+	fld, err = vtg.executor.Prepare(ctx, "Prepare", NewSafeSession(session), sql, bindVariables)
 	if err == nil {
-		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
-		return session, qr, nil
+		vtg.rowsReturned.Add(statsKey, int64(len(fld)))
+		return session, fld, nil
 	}
 
 handleError:
