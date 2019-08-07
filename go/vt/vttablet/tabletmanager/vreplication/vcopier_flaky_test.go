@@ -412,7 +412,7 @@ func TestPlayerCopyJsonData(t *testing.T) {
 		}
 		// Insert a statement to test that catchup gets new events.
 		execStatements(t, []string{
-			"insert into src values(1, '{\"aaa\": 1}')",
+			"insert into src values(1, JSON_OBJECT(\"aaa\", \"aaa\"))",
 		})
 		// Wait for context to expire and then send the row.
 		// This will cause the copier to abort and go back to catchup mode.
@@ -472,7 +472,7 @@ func TestPlayerCopyJsonData(t *testing.T) {
 		"rollback",
 		// The next catchup executes the new row insert and copies row 1.
 		"begin",
-		"insert into src(id,val) select 1, JSON_OBJECT('aaa',1) from dual where (1) <= (2)",
+		"insert into src(id,val) select 1, '{\\\"aaa\\\":\\\"aaa\\\"}' from dual where (1) <= (2)",
 		"/update _vt.vreplication set pos=",
 		"commit",
 		// fastForward has nothing to add. Just saves position.
@@ -492,7 +492,7 @@ func TestPlayerCopyJsonData(t *testing.T) {
 		// All tables copied. Final catch up followed by Running state.
 	})
 	expectData(t, "src", [][]string{
-		{"1", "{\"aaa\": 1}"},
+		{"1", "{\"aaa\": \"aaa\"}"},
 		{"2", "{\"bbb\": 2}"},
 		{"10", "{\"jjj\": 10}"},
 	})

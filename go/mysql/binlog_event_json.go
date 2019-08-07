@@ -23,7 +23,6 @@ import (
 	"math"
 	"strconv"
 
-	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -49,6 +48,11 @@ const (
 	jsonTrueLiteral  = '\x01'
 	jsonFalseLiteral = '\x02'
 )
+
+type keyData struct {
+	offset int
+	length int
+}
 
 // printJSONData parses the MySQL binary format for JSON data, and prints
 // the result as a string.
@@ -114,12 +118,12 @@ func printJSONObject(data []byte, large bool, result *bytes.Buffer) error {
 	}
 
 	// Build an array for each key.
-	keys := make([]sqltypes.Value, elementCount)
+	keys := make([]keyData, elementCount)
 	for i := 0; i < elementCount; i++ {
 		var keyOffset, keyLength int
 		keyOffset, pos = readOffsetOrSize(data, pos, large)
 		keyLength, pos = readOffsetOrSize(data, pos, false) // always 16
-		keys[i] = sqltypes.MakeTrusted(sqltypes.VarBinary, data[keyOffset:keyOffset+keyLength])
+		keys[i] = keyData{keyOffset, keyLength}
 	}
 
 	// Now read each value, and output them.  The value entry is
@@ -127,14 +131,19 @@ func printJSONObject(data []byte, large bool, result *bytes.Buffer) error {
 	// (depending on the large flag). If the value fits in the number of bytes,
 	// then it is inlined. This is always the case for Literal (one byte),
 	// and {,u}int16. For {u}int32, it depends if we're large or not.
-	result.WriteString("JSON_OBJECT(")
+	result.WriteString("{")
 	for i := 0; i < elementCount; i++ {
 		// First print the key value.
 		if i > 0 {
 			result.WriteByte(',')
 		}
-		keys[i].EncodeSQL(result)
-		result.WriteByte(',')
+		keydata := keys[i]
+		//(data[keyOffset:keyOffset+keyLength])
+		result.WriteString("\"")
+		// FIXME(alainjobart): escape reserved characters
+		result.Write(data[keydata.offset : keydata.offset+keydata.length])
+		result.WriteString("\"")
+		result.WriteByte(':')
 
 		if err := printJSONValueEntry(data, pos, large, result); err != nil {
 			return err
@@ -145,7 +154,7 @@ func printJSONObject(data []byte, large bool, result *bytes.Buffer) error {
 			pos += 3 // type byte + 2 bytes
 		}
 	}
-	result.WriteByte(')')
+	result.WriteByte('}')
 	return nil
 }
 
@@ -350,8 +359,10 @@ func printJSONString(data []byte, toplevel bool, result *bytes.Buffer) {
 
 	// Inside a JSON_ARRAY() or JSON_OBJECT method, we just print the string
 	// as SQL string.
-	valStr := sqltypes.MakeTrusted(sqltypes.VarBinary, data[pos:pos+size])
-	valStr.EncodeSQL(result)
+	result.WriteString("\"")
+	// FIXME(alainjobart): escape reserved characters
+	result.Write(data[pos : pos+size])
+	result.WriteString("\"")
 }
 
 func printJSONOpaque(data []byte, toplevel bool, result *bytes.Buffer) error {
