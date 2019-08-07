@@ -124,8 +124,8 @@ func TestControllerPlan(t *testing.T) {
 		in:  "delete from a where id = 1",
 		err: "invalid table name: a",
 	}, {
-		in:  "delete a, b from a where id = 1",
-		err: "unsupported construct: delete a, b from a where id = 1",
+		in:  "delete a, b from _vt.vreplication where id = 1",
+		err: "unsupported construct: delete a, b from _vt.vreplication where id = 1",
 	}, {
 		in:  "delete from _vt.vreplication where id = 1 order by id",
 		err: "unsupported construct: delete from _vt.vreplication where id = 1 order by id asc",

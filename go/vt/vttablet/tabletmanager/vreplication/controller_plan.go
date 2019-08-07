@@ -35,6 +35,7 @@ const (
 	updateQuery
 	deleteQuery
 	selectQuery
+	reshardingJournalQuery
 )
 
 // buildControllerPlan parses the input query and returns an appropriate plan.
@@ -58,14 +59,22 @@ func buildControllerPlan(query string) (*controllerPlan, error) {
 }
 
 func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
+	switch sqlparser.String(ins.Table) {
+	case reshardingJournalTableName:
+		return &controllerPlan{
+			opcode: reshardingJournalQuery,
+			query:  sqlparser.String(ins),
+		}, nil
+	case vreplicationTableName:
+		// no-op
+	default:
+		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(ins.Table))
+	}
 	if ins.Action != sqlparser.InsertStr {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))
 	}
 	if ins.Ignore != "" {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))
-	}
-	if sqlparser.String(ins.Table) != "_vt.vreplication" {
-		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(ins.Table))
 	}
 	if ins.Partitions != nil {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))
@@ -106,7 +115,15 @@ func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
 }
 
 func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
-	if sqlparser.String(upd.TableExprs) != "_vt.vreplication" {
+	switch sqlparser.String(upd.TableExprs) {
+	case reshardingJournalTableName:
+		return &controllerPlan{
+			opcode: reshardingJournalQuery,
+			query:  sqlparser.String(upd),
+		}, nil
+	case vreplicationTableName:
+		// no-op
+	default:
 		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(upd.TableExprs))
 	}
 	if upd.OrderBy != nil || upd.Limit != nil {
@@ -131,11 +148,19 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 }
 
 func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
+	switch sqlparser.String(del.TableExprs) {
+	case reshardingJournalTableName:
+		return &controllerPlan{
+			opcode: reshardingJournalQuery,
+			query:  sqlparser.String(del),
+		}, nil
+	case vreplicationTableName:
+		// no-op
+	default:
+		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(del.TableExprs))
+	}
 	if del.Targets != nil {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(del))
-	}
-	if sqlparser.String(del.TableExprs) != "_vt.vreplication" {
-		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(del.TableExprs))
 	}
 	if del.Partitions != nil {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(del))
@@ -157,13 +182,20 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 }
 
 func buildSelectPlan(sel *sqlparser.Select) (*controllerPlan, error) {
-	if sqlparser.String(sel.From) != "_vt.vreplication" {
+	switch sqlparser.String(sel.From) {
+	case reshardingJournalTableName:
+		return &controllerPlan{
+			opcode: reshardingJournalQuery,
+			query:  sqlparser.String(sel),
+		}, nil
+	case vreplicationTableName:
+		return &controllerPlan{
+			opcode: selectQuery,
+			query:  sqlparser.String(sel),
+		}, nil
+	default:
 		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(sel.From))
 	}
-	return &controllerPlan{
-		opcode: selectQuery,
-		query:  sqlparser.String(sel),
-	}, nil
 }
 
 func extractID(where *sqlparser.Where) (int, error) {

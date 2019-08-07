@@ -537,7 +537,7 @@ func (be *BuiltinBackupEngine) ExecuteRestore(
 
 	if err := be.restoreFiles(context.Background(), cnf, bh, bm.FileEntries, bm.TransformHook, !bm.SkipCompress, restoreConcurrency, hookExtraEnv, logger); err != nil {
 		// don't delete the file here because that is how we detect an interrupted restore
-		return zeroPosition, err
+		return zeroPosition, vterrors.Wrap(err, "failed to restore files")
 	}
 
 	logger.Infof("Restore: returning replication position %v", bm.Position)
@@ -566,7 +566,10 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, cnf *Mycnf, bh 
 			// And restore the file.
 			name := fmt.Sprintf("%v", i)
 			logger.Infof("Copying file %v: %v", name, fes[i].Name)
-			rec.RecordError(be.restoreFile(ctx, cnf, bh, &fes[i], transformHook, compress, name, hookExtraEnv))
+			err := be.restoreFile(ctx, cnf, bh, &fes[i], transformHook, compress, name, hookExtraEnv)
+			if err != nil {
+				rec.RecordError(vterrors.Wrapf(err, "can't restore file %v to %v", name, fes[i].Name))
+			}
 		}(i)
 	}
 	wg.Wait()
@@ -579,14 +582,14 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, cnf *Mycnf, bh b
 	var source io.ReadCloser
 	source, err = bh.ReadFile(ctx, name)
 	if err != nil {
-		return err
+		return vterrors.Wrap(err, "can't open source file for reading")
 	}
 	defer source.Close()
 
 	// Open the destination file for writing.
 	dstFile, err := fe.open(cnf, false)
 	if err != nil {
-		return err
+		return vterrors.Wrap(err, "can't open destination file for writing")
 	}
 	defer func() {
 		if cerr := dstFile.Close(); cerr != nil {
@@ -594,7 +597,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, cnf *Mycnf, bh b
 				// We already have an error, just log this one.
 				log.Errorf("failed to close file %v: %v", name, cerr)
 			} else {
-				err = cerr
+				err = vterrors.Wrap(err, "failed to close destination file")
 			}
 		}
 	}()
@@ -624,15 +627,15 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, cnf *Mycnf, bh b
 	if compress {
 		gz, err := pgzip.NewReader(reader)
 		if err != nil {
-			return err
+			return vterrors.Wrap(err, "can't open gzip decompressor")
 		}
 		defer func() {
 			if cerr := gz.Close(); cerr != nil {
 				if err != nil {
 					// We already have an error, just log this one.
-					log.Errorf("failed to close gunziper %v: %v", name, cerr)
+					log.Errorf("failed to close gzip decompressor %v: %v", name, cerr)
 				} else {
-					err = cerr
+					err = vterrors.Wrap(err, "failed to close gzip decompressor")
 				}
 			}
 		}()
@@ -641,7 +644,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, cnf *Mycnf, bh b
 
 	// Copy the data. Will also write to the hasher.
 	if _, err = io.Copy(dst, reader); err != nil {
-		return err
+		return vterrors.Wrap(err, "failed to copy file contents")
 	}
 
 	// Close the Pipe.
@@ -662,7 +665,11 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, cnf *Mycnf, bh b
 	}
 
 	// Flush the buffer.
-	return dst.Flush()
+	if err := dst.Flush(); err != nil {
+		return vterrors.Wrap(err, "failed to flush destination buffer")
+	}
+
+	return nil
 }
 
 func init() {
