@@ -129,7 +129,7 @@ chmod -R o=g .
 # "Failed to move to new namespace: PID namespaces supported, Network namespace supported, but failed: errno = Operation not permitted"
 args="$args --cap-add=SYS_ADMIN"
 
-args="$args -v /private/var/run:/dev/log"
+args="$args -v /dev/log:/dev/log"
 args="$args -v $PWD:/tmp/src"
 
 # Share maven dependency cache so they don't have to be redownloaded every time.
