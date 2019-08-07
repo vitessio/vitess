@@ -152,6 +152,8 @@ func parseFlags() (config vttest.Config, env vttest.Environment, err error) {
 	flag.StringVar(&config.TransactionMode, "transaction_mode", "MULTI", "Transaction mode MULTI (default), SINGLE or TWOPC ")
 	flag.Float64Var(&config.TransactionTimeout, "queryserver-config-transaction-timeout", 0, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
 
+	flag.StringVar(&config.TabletHostName, "tablet_hostname", "localhost", "The hostname to use for the tablet otherwise it will be derived from OS' hostname")
+
 	flag.Parse()
 
 	if basePort != 0 {

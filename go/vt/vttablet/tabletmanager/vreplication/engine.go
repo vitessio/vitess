@@ -32,6 +32,17 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 )
 
+const (
+	reshardingJournalTableName   = "_vt.resharding_journal"
+	vreplicationTableName        = "_vt.vreplication"
+	createReshardingJournalTable = `create table if not exists _vt.resharding_journal(
+  id bigint,
+  db_name varbinary(255),
+  val blob,
+  primary key (id)
+) ENGINE=InnoDB`
+)
+
 var tabletTypesStr = flag.String("vreplication_tablet_type", "REPLICA", "comma separated list of tablet types used as a source")
 
 // waitRetryTime can be changed to a smaller value for tests.
@@ -102,7 +113,7 @@ func (vre *Engine) Open(ctx context.Context) error {
 
 // executeFetchMaybeCreateTable calls DBClient.ExecuteFetch and does one retry if
 // there's a failure due to mysql.ERNoSuchTable or mysql.ERBadDb which can be fixed
-// by re-creating the _vt.vreplication table.
+// by re-creating the vreplication tables.
 func (vre *Engine) executeFetchMaybeCreateTable(dbClient binlogplayer.DBClient, query string, maxrows int) (qr *sqltypes.Result, err error) {
 	qr, err = dbClient.ExecuteFetch(query, maxrows)
 
@@ -110,29 +121,33 @@ func (vre *Engine) executeFetchMaybeCreateTable(dbClient binlogplayer.DBClient, 
 		return
 	}
 
-	// If it's a bad table or db, it could be because _vt.vreplication wasn't created.
-	// In that case we can try creating it again.
+	// If it's a bad table or db, it could be because the vreplication tables weren't created.
+	// In that case we can try creating them again.
 	merr, isSQLErr := err.(*mysql.SQLError)
 	if !isSQLErr || !(merr.Num == mysql.ERNoSuchTable || merr.Num == mysql.ERBadDb || merr.Num == mysql.ERBadFieldError) {
 		return qr, err
 	}
 
-	log.Info("Looks like _vt.vreplication table may not exist. Trying to recreate... ")
+	log.Info("Looks like the vreplcation tables may not exist. Trying to recreate... ")
 	if merr.Num == mysql.ERNoSuchTable || merr.Num == mysql.ERBadDb {
 		for _, query := range binlogplayer.CreateVReplicationTable() {
 			if _, merr := dbClient.ExecuteFetch(query, 0); merr != nil {
-				log.Warningf("Failed to ensure _vt.vreplication table exists: %v", merr)
+				log.Warningf("Failed to ensure %s exists: %v", vreplicationTableName, merr)
 				return nil, err
 			}
 		}
+		if _, merr := dbClient.ExecuteFetch(createReshardingJournalTable, 0); merr != nil {
+			log.Warningf("Failed to ensure %s exists: %v", reshardingJournalTableName, merr)
+			return nil, err
+		}
 	}
 	if merr.Num == mysql.ERBadFieldError {
-		log.Info("Adding column to table _vt.vreplication")
+		log.Infof("Adding column to table %s", vreplicationTableName)
 		for _, query := range binlogplayer.AlterVReplicationTable() {
 			if _, merr := dbClient.ExecuteFetch(query, 0); merr != nil {
 				merr, isSQLErr := err.(*mysql.SQLError)
 				if !isSQLErr || !(merr.Num == mysql.ERDupFieldName) {
-					log.Warningf("Failed to alter _vt.vreplication table: %v", merr)
+					log.Warningf("Failed to alter %s table: %v", vreplicationTableName, merr)
 					return nil, err
 				}
 			}
@@ -287,8 +302,8 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 			delete(vre.controllers, plan.id)
 		}
 		return vre.executeFetchMaybeCreateTable(dbClient, plan.query, 1)
-	case selectQuery:
-		// select queries are passed through.
+	case selectQuery, reshardingJournalQuery:
+		// select and resharding journal queries are passed through.
 		return vre.executeFetchMaybeCreateTable(dbClient, plan.query, 10000)
 	}
 	panic("unreachable")

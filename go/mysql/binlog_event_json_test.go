@@ -17,6 +17,8 @@ limitations under the License.
 package mysql
 
 import (
+	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -35,6 +37,9 @@ func TestJSON(t *testing.T) {
 		data:     []byte{0, 1, 0, 12, 0, 11, 0, 1, 0, 5, 2, 0, 97},
 		expected: `JSON_OBJECT('a',2)`,
 	}, {
+		data:     []byte{0, 1, 0, 29, 0, 11, 0, 4, 0, 0, 15, 0, 97, 115, 100, 102, 1, 0, 14, 0, 11, 0, 3, 0, 5, 123, 0, 102, 111, 111},
+		expected: `JSON_OBJECT('asdf',JSON_OBJECT('foo',123))`,
+	}, {
 		data:     []byte{2, 2, 0, 10, 0, 5, 1, 0, 5, 2, 0},
 		expected: `JSON_ARRAY(1,2)`,
 	}, {
@@ -50,7 +55,7 @@ func TestJSON(t *testing.T) {
 		data:     []byte{0, 1, 0, 149, 0, 11, 0, 6, 0, 12, 17, 0, 115, 99, 111, 112, 101, 115, 130, 1, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 66, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 66, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 65, 69, 65, 65, 65, 65, 65, 65, 69, 65, 65, 65, 65, 65, 65, 56, 65, 65, 65, 66, 103, 65, 65, 65, 65, 65, 65, 66, 65, 65, 65, 65, 67, 65, 65, 65, 65, 65, 65, 65, 65, 65, 84, 216, 142, 184},
 		expected: `JSON_OBJECT('scopes','AAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAEAAAAAAEAAAAAA8AAABgAAAAAABAAAACAAAAAAAAA')`,
 	}, {
-		// repeat the same string 10 times, to test readVariableInt when length of string
+		// repeat the same string 10 times, to test the case where length of string
 		// requires 2 bytes to store
 		data: []byte{12, 130, 1,
 			115, 99, 97, 108, 97, 114, 32, 115, 116, 114, 105, 110, 103,
@@ -149,7 +154,7 @@ func TestJSON(t *testing.T) {
 			r, err := printJSONData(tcase.data)
 			if err != nil {
 				if got := err.Error(); !strings.HasPrefix(got, tcase.expected) {
-					t.Errorf("unexpected output for %v: got [%v] expected [%v]", tcase.data, got, tcase.expected)
+					t.Errorf("unexpected output for %v: got \n[%v] \n expected \n[%v]", tcase.data, got, tcase.expected)
 				}
 			} else {
 				if got := string(r); got != tcase.expected {
@@ -159,4 +164,55 @@ func TestJSON(t *testing.T) {
 
 		})
 	}
+}
+
+func TestReadVariableLength(t *testing.T) {
+	testcases := []struct {
+		data     []byte
+		expected []int
+	}{{
+		// we are only providing a truncated form of data,
+		// when this is actually used data will have another
+		// 126 bytes
+		data:     []byte{12, 127, 1},
+		expected: []int{127, 2},
+	}, {
+		data:     []byte{12, 127, 2},
+		expected: []int{127, 2},
+	}, {
+		data:     []byte{12, 129, 1},
+		expected: []int{129, 3},
+	}, {
+		data:     []byte{12, 129, 2},
+		expected: []int{257, 3},
+	}, {
+		data:     []byte{12, 130, 1},
+		expected: []int{130, 3},
+	}, {
+		data:     []byte{12, 130, 2},
+		expected: []int{258, 3},
+	}, {
+		data:     []byte{12, 132, 1},
+		expected: []int{132, 3},
+	}, {
+		data:     []byte{12, 132, 2},
+		expected: []int{260, 3},
+	}, {
+		data:     []byte{12, 130, 130, 1},
+		expected: []int{16642, 4},
+	}, {
+		data:     []byte{12, 130, 130, 2},
+		expected: []int{33026, 4},
+	}}
+	for _, tcase := range testcases {
+		t.Run(fmt.Sprintf("%v", tcase.data[1:]), func(t *testing.T) {
+			// start from position 1 because position 0 has the JSON type
+			len, pos := readVariableLength(tcase.data, 1)
+			if got := []int{len, pos}; !reflect.DeepEqual(got, tcase.expected) {
+				t.Errorf("unexpected output for %v: got \n[%v] \n expected \n[%v]", tcase.data, got, tcase.expected)
+			}
+
+		})
+	}
+
 }

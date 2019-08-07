@@ -320,6 +320,12 @@ var commands = []commandGroup{
 			{"MigrateServedFrom", commandMigrateServedFrom,
 				"[-cells=c1,c2,...] [-reverse] <destination keyspace/shard> <served tablet type>",
 				"Makes the <destination keyspace/shard> serve the given type. This command also rebuilds the serving graph."},
+			{"MigrateReads", commandMigrateReads,
+				"[-cells=c1,c2,...] [-reverse] <target keyspace> <workflow> <tablet type>",
+				"Migrate read traffic for the specified workflow."},
+			{"MigrateWrites", commandMigrateWrites,
+				"[-filtered_replication_wait_time=30s] <target keyspace> <workflow>",
+				"Migrate write traffic for the specified workflow."},
 			{"CancelResharding", commandCancelResharding,
 				"<keyspace/shard>",
 				"Permanently cancels a resharding in progress. All resharding related metadata will be deleted."},
@@ -406,7 +412,7 @@ var commands = []commandGroup{
 				"",
 				"Displays the VSchema routing rules."},
 			{"ApplyRoutingRules", commandApplyRoutingRules,
-				"{-rules=<rules> || -rules_file=<rules_file=<sql file>} [-cells=c1,c2,...] [-skip_rebuild] [-dry-run]",
+				"{-rules=<rules> || -rules_file=<rules_file>} [-cells=c1,c2,...] [-skip_rebuild] [-dry-run]",
 				"Applies the VSchema routing rules."},
 			{"RebuildVSchemaGraph", commandRebuildVSchemaGraph,
 				"[-cells=c1,c2,...]",
@@ -1760,9 +1766,9 @@ func commandVerticalSplitClone(ctx context.Context, wr *wrangler.Wrangler, subFl
 
 func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
-	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward. Use in case of trouble")
+	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward.")
 	skipReFreshState := subFlags.Bool("skip-refresh-state", false, "Skips refreshing the state of the source tablets after the migration, meaning that the refresh will need to be done manually, replica and rdonly only)")
-	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on master migrations")
+	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on master migrations. The migration will be aborted on timeout.")
 	reverseReplication := subFlags.Bool("reverse_replication", false, "For master migration, enabling this flag reverses replication which allows you to rollback")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -1790,9 +1796,9 @@ func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFl
 }
 
 func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward. Use in case of trouble")
+	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward.")
 	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
-	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on master migrations")
+	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on master migrations. The migration will be aborted on timeout.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1813,6 +1819,52 @@ func commandMigrateServedFrom(ctx context.Context, wr *wrangler.Wrangler, subFla
 		cells = strings.Split(*cellsStr, ",")
 	}
 	return wr.MigrateServedFrom(ctx, keyspace, shard, servedType, cells, *reverse, *filteredReplicationWaitTime)
+}
+
+func commandMigrateReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward.")
+	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 3 {
+		return fmt.Errorf("the <target keyspace/shard>, <workflow> and <tablet type> arguments are required for the MigrateReads command")
+	}
+
+	keyspace := subFlags.Arg(0)
+	workflow := subFlags.Arg(1)
+	servedType, err := parseTabletType(subFlags.Arg(2), []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY})
+	if err != nil {
+		return err
+	}
+	var cells []string
+	if *cellsStr != "" {
+		cells = strings.Split(*cellsStr, ",")
+	}
+	direction := wrangler.DirectionForward
+	if *reverse {
+		direction = wrangler.DirectionBackward
+	}
+	return wr.MigrateReads(ctx, keyspace, workflow, servedType, cells, direction)
+}
+
+func commandMigrateWrites(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on master migrations. The migration will be aborted on timeout.")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 2 {
+		return fmt.Errorf("the <target keyspace/shard> and <workflow> arguments are required for the MigrateWrites command")
+	}
+
+	keyspace := subFlags.Arg(0)
+	workflow := subFlags.Arg(1)
+	journalID, err := wr.MigrateWrites(ctx, keyspace, workflow, *filteredReplicationWaitTime)
+	if err != nil {
+		return err
+	}
+	wr.Logger().Infof("Migration Journal ID: %v", journalID)
+	return nil
 }
 
 func commandCancelResharding(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -2333,7 +2385,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 
 func commandApplyRoutingRules(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	routingRules := subFlags.String("rules", "", "Specify rules as a string")
-	routingRulesFile := subFlags.String("vschema_file", "", "Specify rules in a file")
+	routingRulesFile := subFlags.String("rules_file", "", "Specify rules in a file")
 	skipRebuild := subFlags.Bool("skip_rebuild", false, "If set, do no rebuild the SrvSchema objects.")
 	var cells flagutil.StringListValue
 	subFlags.Var(&cells, "cells", "If specified, limits the rebuild to the cells, after upload. Ignored if skipRebuild is set.")
