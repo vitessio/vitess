@@ -23,10 +23,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
+	"regexp"
 	"strings"
 	"time"
 
@@ -151,8 +151,14 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	defer closeFile(wc, backupFileName)
 
 	backupCmd := exec.CommandContext(ctx, backupProgram, flagsToExec...)
-	backupOut, _ := backupCmd.StdoutPipe()
-	backupErr, _ := backupCmd.StderrPipe()
+	backupOut, err := backupCmd.StdoutPipe()
+	if err != nil {
+		return false, vterrors.Wrap(err, "cannot create stdout pipe")
+	}
+	backupErr, err := backupCmd.StderrPipe()
+	if err != nil {
+		return false, vterrors.Wrap(err, "cannot create stderr pipe")
+	}
 	dst := bufio.NewWriterSize(wc, writerBufferSize)
 	writer := io.MultiWriter(dst)
 
@@ -170,6 +176,37 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	if err = backupCmd.Start(); err != nil {
 		return false, vterrors.Wrap(err, "unable to start backup")
 	}
+
+	// Read stderr in the background, so we can log progress as xtrabackup runs.
+	// Also save important lines of the output so we can parse it later to find
+	// the replication position. Note that if we don't read stderr as we go, the
+	// xtrabackup process gets blocked when the write buffer fills up.
+	stderrBuilder := &strings.Builder{}
+	stderrDone := make(chan struct{})
+	go func() {
+		defer close(stderrDone)
+
+		scanner := bufio.NewScanner(backupErr)
+		capture := false
+		for scanner.Scan() {
+			line := scanner.Text()
+			logger.Infof("xtrabackup stderr: %s", line)
+
+			// Wait until we see the first line of the binlog position.
+			// Then capture all subsequent lines. We need multiple lines since
+			// the value we're looking for has newlines in it.
+			if !capture {
+				if !strings.Contains(line, "MySQL binlog position") {
+					continue
+				}
+				capture = true
+			}
+			fmt.Fprintln(stderrBuilder, line)
+		}
+		if err := scanner.Err(); err != nil {
+			logger.Errorf("error reading from xtrabackup stderr: %v", err)
+		}
+	}()
 
 	// Copy from the stream output to destination file (optional gzip)
 	_, err = io.Copy(writer, backupOut)
@@ -189,18 +226,16 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 		return false, vterrors.Wrapf(err, "cannot flush destination: %v", backupFileName)
 	}
 
-	stderrOutput, err := ioutil.ReadAll(backupErr)
-	if err != nil {
-		return false, vterrors.Wrap(err, "backup failed while reading command output")
-	}
-	err = backupCmd.Wait()
-	output := string(stderrOutput)
-	logger.Infof("Xtrabackup backup command output: %v", output)
-	if err != nil {
+	// Wait for stderr scanner to stop.
+	<-stderrDone
+	// Get the final (filtered) stderr output.
+	sterrOutput := stderrBuilder.String()
+
+	if err := backupCmd.Wait(); err != nil {
 		return false, vterrors.Wrap(err, "xtrabackup failed with error")
 	}
 
-	replicationPosition, rerr := findReplicationPosition(output, flavor, logger)
+	replicationPosition, rerr := findReplicationPosition(sterrOutput, flavor, logger)
 	if rerr != nil {
 		return false, vterrors.Wrap(rerr, "backup failed trying to find replication position")
 	}
@@ -287,7 +322,7 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 	}
 
 	// copy / extract files
-	logger.Infof("Restore: Preparing the files")
+	logger.Infof("Restore: Preparing the extracted files")
 	// prepare the backup
 	restoreProgram := path.Join(*xtrabackupEnginePath, xtrabackupBinaryName)
 	flagsToExec := []string{"--defaults-file=" + cnf.path,
@@ -295,56 +330,32 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 		"--target-dir=" + tempDir,
 	}
 	prepareCmd := exec.CommandContext(ctx, restoreProgram, flagsToExec...)
-	prepareOut, _ := prepareCmd.StdoutPipe()
-	prepareErr, _ := prepareCmd.StderrPipe()
-	if err := prepareCmd.Start(); err != nil {
-		return vterrors.Wrap(err, "unable to start prepare")
-	}
-
-	errOutput, _ := ioutil.ReadAll(prepareErr)
-	stdOutput, _ := ioutil.ReadAll(prepareOut)
-	err := prepareCmd.Wait()
-	if string(stdOutput) != "" {
-		logger.Infof("Prepare stdout %v", string(stdOutput))
-	}
-	output := string(errOutput)
-	if output != "" {
-		logger.Infof("Prepare stderr %v", output)
-	}
-
-	if err != nil {
+	// We don't look at the output except to log it, so just send all
+	// output directly to the logger.
+	logWriter := logutil.NewLoggerWriter(logger)
+	prepareCmd.Stdout = logWriter
+	prepareCmd.Stderr = logWriter
+	if err := prepareCmd.Run(); err != nil {
 		return vterrors.Wrap(err, "prepare step failed")
 	}
 
 	// then copy-back
-	logger.Infof("Restore: Copying the files")
+	logger.Infof("Restore: Copying extracted and prepared files to final locations")
 
 	flagsToExec = []string{"--defaults-file=" + cnf.path,
 		"--copy-back",
 		"--target-dir=" + tempDir,
 	}
 	copybackCmd := exec.CommandContext(ctx, restoreProgram, flagsToExec...)
-	copybackErr, _ := copybackCmd.StderrPipe()
-	copybackOut, _ := copybackCmd.StdoutPipe()
+	// We don't look at the output except to log it, so just send all
+	// output directly to the logger.
+	copybackCmd.Stdout = logWriter
+	copybackCmd.Stderr = logWriter
 
-	if err = copybackCmd.Start(); err != nil {
-		return vterrors.Wrap(err, "unable to start copy-back")
-	}
-
-	errOutput, _ = ioutil.ReadAll(copybackErr)
-	stdOutput, _ = ioutil.ReadAll(copybackOut)
-	err = copybackCmd.Wait()
-	output = string(errOutput)
-	if output != "" {
-		logger.Infof("Copy-back stderr %v", string(output))
-	}
-	if string(stdOutput) != "" {
-		logger.Infof("Copy-back stdout %v", string(stdOutput))
-	}
-
-	if err != nil {
+	if err := copybackCmd.Run(); err != nil {
 		return vterrors.Wrap(err, "copy-back step failed")
 	}
+
 	return nil
 }
 
@@ -395,20 +406,12 @@ func (be *XtrabackupEngine) extractFiles(
 		tarCmd := exec.CommandContext(ctx, "tar", flagsToExec...)
 		logger.Infof("Executing tar cmd with flags %v", flagsToExec)
 		tarCmd.Stdin = reader
-		tarOut, _ := tarCmd.StdoutPipe()
-		tarErr, _ := tarCmd.StderrPipe()
-		tarCmd.Start()
-		output, _ := ioutil.ReadAll(tarOut)
-		errOutput, _ := ioutil.ReadAll(tarErr)
-		err := tarCmd.Wait()
-
-		if string(output) != "" {
-			logger.Infof("output from tar: %v ", string(output))
-		}
-		if string(errOutput) != "" {
-			logger.Infof("error from tar: %v ", string(errOutput))
-		}
-		if err != nil {
+		// We don't look at the output except to log it, so just send all
+		// output directly to the logger.
+		logWriter := logutil.NewLoggerWriter(logger)
+		tarCmd.Stdout = logWriter
+		tarCmd.Stderr = logWriter
+		if err := tarCmd.Run(); err != nil {
 			return vterrors.Wrap(err, "error from tar")
 		}
 
@@ -423,20 +426,13 @@ func (be *XtrabackupEngine) extractFiles(
 		xbstreamCmd := exec.CommandContext(ctx, xbstreamProgram, flagsToExec...)
 		logger.Infof("Executing xbstream cmd: %v %v", xbstreamProgram, flagsToExec)
 		xbstreamCmd.Stdin = reader
-		xbstreamOut, _ := xbstreamCmd.StdoutPipe()
-		xbstreamErr, _ := xbstreamCmd.StderrPipe()
-		xbstreamCmd.Start()
-		output, _ := ioutil.ReadAll(xbstreamOut)
-		errOutput, _ := ioutil.ReadAll(xbstreamErr)
-		err := xbstreamCmd.Wait()
+		// We don't look at the output except to log it, so just send all
+		// output directly to the logger.
+		logWriter := logutil.NewLoggerWriter(logger)
+		xbstreamCmd.Stdout = logWriter
+		xbstreamCmd.Stderr = logWriter
 
-		if string(output) != "" {
-			logger.Infof("Output from xbstream: %v ", string(output))
-		}
-		if string(errOutput) != "" {
-			logger.Infof("error from xbstream: %v", string(errOutput))
-		}
-		if err != nil {
+		if err := xbstreamCmd.Run(); err != nil {
 			return vterrors.Wrap(err, "error from xbstream")
 		}
 	default:
@@ -445,28 +441,27 @@ func (be *XtrabackupEngine) extractFiles(
 	return nil
 }
 
+var xtrabackupReplicationPositionRegexp = regexp.MustCompile(`GTID of the last change '([^']*)'`)
+
 func findReplicationPosition(input, flavor string, logger logutil.Logger) (mysql.Position, error) {
-	substrs := strings.Split(input, "'")
-	index := -1
-	for i, str := range substrs {
-		if strings.Contains(str, "GTID of the last change") {
-			index = i + 1
-			break
-		}
+	match := xtrabackupReplicationPositionRegexp.FindStringSubmatch(input)
+	if match == nil || len(match) != 2 {
+		return mysql.Position{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "couldn't find replication position in xtrabackup stderr output")
 	}
-	position := ""
-	// asserts that xtrabackup output comes with GTIDs in the format we expect
-	if index != -1 && index < len(substrs) {
-		// since we are extracting this from the log, it contains newlines
-		// replace them with a single space to match the SET GLOBAL gtid_purged command in xtrabackup_slave_info
-		position = strings.Replace(substrs[index], "\n", " ", -1)
-	}
+	position := match[1]
+	// Remove all spaces, tabs, and newlines.
+	position = strings.Replace(position, " ", "", -1)
+	position = strings.Replace(position, "\t", "", -1)
+	position = strings.Replace(position, "\n", "", -1)
 	logger.Infof("Found position: %v", position)
+	if position == "" {
+		return mysql.Position{}, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "empty replication position from xtrabackup")
+	}
 
 	// flavor is required to parse a string into a mysql.Position
 	replicationPosition, err := mysql.ParsePosition(flavor, position)
 	if err != nil {
-		return mysql.Position{}, err
+		return mysql.Position{}, vterrors.Wrapf(err, "can't parse replication position from xtrabackup: %v", position)
 	}
 	return replicationPosition, nil
 }
