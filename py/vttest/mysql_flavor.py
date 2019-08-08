@@ -49,7 +49,6 @@ class MariaDB(MysqlFlavor):
   def my_cnf(self):
     files = [
         os.path.join(vttop, "config/mycnf/testsuite.cnf"),
-        os.path.join(vttop, "config/mycnf/mariadb.cnf"),
     ]
     return ":".join(files)
 
@@ -59,7 +58,6 @@ class MariaDB103(MysqlFlavor):
   def my_cnf(self):
     files = [
       os.path.join(vttop, "config/mycnf/testsuite.cnf"),
-      os.path.join(vttop, "config/mycnf/mariadb103.cnf"),
     ]
     return ":".join(files)
 
@@ -69,7 +67,6 @@ class MySQL56(MysqlFlavor):
   def my_cnf(self):
     files = [
         os.path.join(vttop, "config/mycnf/testsuite.cnf"),
-        os.path.join(vttop, "config/mycnf/mysql57.cnf"),  # intentional lie due to legacy
     ]
     return ":".join(files)
 
@@ -79,7 +76,6 @@ class MySQL80(MysqlFlavor):
   def my_cnf(self):
     files = [
         os.path.join(vttop, "config/mycnf/testsuite.cnf"),
-        os.path.join(vttop, "config/mycnf/mysql80.cnf"),
     ]
     return ":".join(files)
 
@@ -99,7 +95,7 @@ def set_mysql_flavor(flavor):
   global __mysql_flavor
 
   # Last default is there because the environment variable might be set to "".
-  flavor = flavor or os.environ.get("MYSQL_FLAVOR", "MariaDB") or "MariaDB"
+  flavor = flavor or os.environ.get("MYSQL_FLAVOR", "MySQL56") or "MySQL56"
 
   # Set the environment variable explicitly in case we're overriding it via
   # command-line flag.

@@ -97,8 +97,15 @@ type LocalTestEnv struct {
 	Env          []string
 }
 
+// DefaultMySQLFlavor is the MySQL flavor used by vttest when MYSQL_FLAVOR is not
+// set in the environment
+const DefaultMySQLFlavor = "MySQL56"
+
 // GetMySQLOptions adds an additional option file for the testsuite.
 func GetMySQLOptions(flavor string) (string, []string, error) {
+	if flavor == "" {
+		flavor = DefaultMySQLFlavor
+	}
 	cnf := path.Join(os.Getenv("VTTOP"), "config/mycnf/testsuite.cnf")
 	mycnf := []string{cnf}
 	return flavor, mycnf, nil
@@ -235,6 +242,7 @@ func NewLocalTestEnvWithDirectory(flavor string, basePort int, directory string)
 		DefaultMyCnf: mycnf,
 		Env: []string{
 			fmt.Sprintf("VTDATAROOT=%s", directory),
+			fmt.Sprintf("MYSQL_FLAVOR=%s", flavor),
 		},
 	}, nil
 }
