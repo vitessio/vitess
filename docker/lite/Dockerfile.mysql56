@@ -45,7 +45,6 @@ ENV GOPATH $VTROOT
 ENV PATH $VTROOT/bin:$PATH
 ENV VT_MYSQL_ROOT /usr
 ENV PKG_CONFIG_PATH $VTROOT/lib
-ENV MYSQL_FLAVOR MySQL56
 
 # Copy binaries (placed by build.sh)
 COPY --from=staging /vt/ /vt/

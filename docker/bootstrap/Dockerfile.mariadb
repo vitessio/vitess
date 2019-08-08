@@ -17,6 +17,5 @@ RUN apt-get update -y \
 # Bootstrap Vitess
 WORKDIR /vt/src/vitess.io/vitess
 
-ENV MYSQL_FLAVOR MariaDB
 USER vitess
 RUN ./bootstrap.sh

@@ -97,49 +97,10 @@ type LocalTestEnv struct {
 	Env          []string
 }
 
-// DefaultMySQLFlavor is the MySQL flavor used by vttest when MYSQL_FLAVOR is not
-// set in the environment
-const DefaultMySQLFlavor = "MySQL56"
-
-// GetMySQLOptions returns the default option set for the given MySQL
-// flavor. If flavor is not set, the value from the `MYSQL_FLAVOR` env
-// variable is used, and if this is not set, DefaultMySQLFlavor will
-// be used.
-// Returns the name of the MySQL flavor being used, the set of MySQL CNF
-// files specific to this flavor, and any errors.
+// GetMySQLOptions adds an additional option file for the testsuite.
 func GetMySQLOptions(flavor string) (string, []string, error) {
-	if flavor == "" {
-		flavor = os.Getenv("MYSQL_FLAVOR")
-	}
-
-	if flavor == "" {
-		flavor = DefaultMySQLFlavor
-	}
-
-	mycnf := []string{"config/mycnf/vtcombo.cnf"}
-	switch flavor {
-	case "MariaDB103":
-		mycnf = append(mycnf, "config/mycnf/default-fast.cnf")
-		mycnf = append(mycnf, "config/mycnf/master_mariadb103.cnf")
-	case "MariaDB":
-		mycnf = append(mycnf, "config/mycnf/default-fast.cnf")
-		mycnf = append(mycnf, "config/mycnf/master_mariadb.cnf")
-
-	case "MySQL80":
-		mycnf = append(mycnf, "config/mycnf/default-fast.cnf")
-		mycnf = append(mycnf, "config/mycnf/master_mysql80.cnf")
-	case "MySQL56":
-		mycnf = append(mycnf, "config/mycnf/default-fast.cnf")
-		mycnf = append(mycnf, "config/mycnf/master_mysql56.cnf")
-
-	default:
-		return "", nil, fmt.Errorf("unknown mysql flavor: %s", flavor)
-	}
-
-	for i, cnf := range mycnf {
-		mycnf[i] = path.Join(os.Getenv("VTTOP"), cnf)
-	}
-
+	cnf := path.Join(os.Getenv("VTTOP"), "config/mycnf/testsuite.cnf")
+	mycnf := []string{cnf}
 	return flavor, mycnf, nil
 }
 
@@ -235,9 +196,6 @@ func randomPort() int {
 // - Directory() is a random temporary directory in VTDATAROOT, which is cleaned
 // up when closing the Environment.
 // - LogDirectory() is the `logs` subdir inside Directory()
-// - The MySQL flavor is set to `flavor`. If the argument is not set, it will
-// default to the value of MYSQL_FLAVOR, and if this variable is not set, to
-// DefaultMySQLFlavor
 // - PortForProtocol() will return ports based off the given basePort. If basePort
 // is zero, a random port between 10000 and 20000 will be chosen.
 // - DefaultProtocol() is always "grpc"
@@ -277,7 +235,6 @@ func NewLocalTestEnvWithDirectory(flavor string, basePort int, directory string)
 		DefaultMyCnf: mycnf,
 		Env: []string{
 			fmt.Sprintf("VTDATAROOT=%s", directory),
-			fmt.Sprintf("MYSQL_FLAVOR=%s", flavor),
 		},
 	}, nil
 }

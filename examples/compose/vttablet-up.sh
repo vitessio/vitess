@@ -53,9 +53,6 @@ if [[ "$tablet_role" != "master" ]]; then
     fi
 fi
 
-export EXTRA_MY_CNF=$VTROOT/config/mycnf/default-fast.cnf:$VTROOT/config/mycnf/rbr.cnf
-export EXTRA_MY_CNF=$EXTRA_MY_CNF:$VTROOT/config/mycnf/master_mysql56.cnf
-
 mkdir -p $VTDATAROOT/backups
 
 echo "Starting MySQL for tablet..."

@@ -1,35 +1,24 @@
 # basic config parameters for all db instances in the grid
 
-sql_mode = STRICT_TRANS_TABLES
-binlog_format = statement
-character_set_server = utf8
-collation_server = utf8_general_ci
-connect_timeout = 30
 datadir = {{.DataDir}}
-expire_logs_days = 3
-innodb_buffer_pool_size = 32M
 innodb_data_home_dir = {{.InnodbDataHomeDir}}
-innodb_flush_log_at_trx_commit = 2
-innodb_lock_wait_timeout = 20
 innodb_log_group_home_dir = {{.InnodbLogGroupHomeDir}}
 log-error = {{.ErrorLogPath}}
-long_query_time = 2
-max_allowed_packet = 64M
-max_connections = 500
 pid-file = {{.PidFile}}
 port = {{.MysqlPort}}
+
 # all db instances should start in read-only mode - once the db is started and
 # fully functional, we'll push it into read-write mode
 read-only
 server-id = {{.ServerID}}
-skip-name-resolve
+
 # all db instances should skip the slave startup - that way we can do any
 # additional configuration (like enabling semi-sync) before we connect to
 # the master.
 skip_slave_start
-slave_net_timeout = 60
 slave_load_tmpdir = {{.SlaveLoadTmpDir}}
-slow-query-log
-slow-query-log-file = {{.SlowLogPath}}
 socket = {{.SocketFile}}
 tmpdir = {{.TmpDir}}
+
+slow-query-log-file = {{.SlowLogPath}}
+

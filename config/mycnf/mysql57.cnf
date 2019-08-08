@@ -1,0 +1,20 @@
+# This file is auto-included when MySQL 5.7 is detected.
+
+# MySQL 5.7 does not enable the binary log by default, and 
+# info repositories default to file
+
+gtid_mode = ON
+log_bin
+log_slave_updates
+enforce_gtid_consistency
+expire_logs_days = 3
+master_info_repository = TABLE
+relay_log_info_repository = TABLE
+relay_log_purge = 1
+relay_log_recovery = 1
+
+# In MySQL 5.7 the default charset is latin1
+
+character_set_server = utf8
+collation_server = utf8_general_ci
+

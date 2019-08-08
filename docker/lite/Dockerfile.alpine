@@ -31,7 +31,6 @@ ENV GOPATH $VTROOT
 ENV PATH $VTROOT/bin:$PATH
 ENV VT_MYSQL_ROOT /usr
 ENV PKG_CONFIG_PATH $VTROOT/lib
-ENV MYSQL_FLAVOR MariaDB103
 
 # Create vitess user
 RUN addgroup -S vitess && adduser -S -G vitess vitess && mkdir -p /vt

@@ -1,0 +1,13 @@
+# This sets some unsafe settings specifically for the test-suite
+# which is currently MySQL 5.7 based
+
+innodb_buffer_pool_size = 32M
+innodb_flush_log_at_trx_commit = 0
+innodb_log_buffer_size = 1M
+innodb_log_file_size = 5M
+# Native AIO tends to run into aio-max-nr limit during test startup.
+# innodb_use_native_aio = 0
+
+key_buffer_size = 2M
+sync_binlog=0
+innodb_doublewrite=0

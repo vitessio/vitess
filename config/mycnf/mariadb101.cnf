@@ -1,7 +1,5 @@
 # This file is auto-included when MariaDB 10.1 is detected.
 
-innodb_support_xa = 0
-
 # Semi-sync replication is required for automated unplanned failover
 # (when the master goes away). Here we just load the plugin so it's
 # available if desired, but it's disabled at startup.
@@ -10,3 +8,8 @@ innodb_support_xa = 0
 # at the proper time when replication is set up, or when masters are
 # promoted or demoted.
 plugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so
+
+slave_net_timeout = 60
+
+# MariaDB 10.1 default is only no-engine-substitution and no-auto-create-user
+sql_mode = STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION,NO_AUTO_CREATE_USER

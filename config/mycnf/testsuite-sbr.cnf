@@ -1,0 +1,3 @@
+# This sets the binary log format to SBR for legacy tests
+
+binlog-format=statement

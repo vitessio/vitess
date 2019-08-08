@@ -41,8 +41,6 @@ init_db_sql_file="$VTROOT/config/init_db.sql"
 # Previously this file set EXTRA_MY_CNF based on MYSQL_FLAVOR
 # It now relies on mysqlctl to autodetect
 
-export EXTRA_MY_CNF=$VTROOT/config/mycnf/default-fast.cnf:$VTROOT/config/mycnf/rbr.cnf
-
 mkdir -p $VTDATAROOT/backups
 
 # Start 3 vttablets by default.

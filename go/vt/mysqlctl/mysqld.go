@@ -722,8 +722,6 @@ func (mysqld *Mysqld) getMycnfTemplates(root string) []string {
 
 	cnfTemplatePaths := []string{
 		path.Join(root, "config/mycnf/default.cnf"),
-		path.Join(root, "config/mycnf/master.cnf"),
-		path.Join(root, "config/mycnf/replica.cnf"),
 	}
 
 	if extraCnf := os.Getenv("EXTRA_MY_CNF"); extraCnf != "" {
@@ -732,7 +730,7 @@ func (mysqld *Mysqld) getMycnfTemplates(root string) []string {
 	}
 
 	// Only include these files if they exist.
-	// master_{flavor}.cnf
+	// {flavor}.cnf
 	// Percona Server == MySQL in this context
 
 	f := flavorMariaDB
@@ -740,14 +738,14 @@ func (mysqld *Mysqld) getMycnfTemplates(root string) []string {
 		f = flavorMySQL
 	}
 
-	p := path.Join(root, fmt.Sprintf("config/mycnf/master_%s.cnf", f))
+	p := path.Join(root, fmt.Sprintf("config/mycnf/%s.cnf", f))
 	_, err := os.Stat(p)
 	if err == nil && !contains(cnfTemplatePaths, p) {
 		cnfTemplatePaths = append(cnfTemplatePaths, p)
 	}
 
-	// master_{flavor}{major}{minor}.cnf
-	p = path.Join(root, fmt.Sprintf("config/mycnf/master_%s%d%d.cnf", f, mysqld.capabilities.version.Major, mysqld.capabilities.version.Minor))
+	// {flavor}{major}{minor}.cnf
+	p = path.Join(root, fmt.Sprintf("config/mycnf/%s%d%d.cnf", f, mysqld.capabilities.version.Major, mysqld.capabilities.version.Minor))
 	_, err = os.Stat(p)
 	if err == nil && !contains(cnfTemplatePaths, p) {
 		cnfTemplatePaths = append(cnfTemplatePaths, p)

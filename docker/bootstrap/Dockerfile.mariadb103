@@ -11,6 +11,5 @@ RUN apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com 0xF1656F24
 # Bootstrap Vitess
 WORKDIR /vt/src/vitess.io/vitess
 
-ENV MYSQL_FLAVOR MariaDB103
 USER vitess
 RUN ./bootstrap.sh

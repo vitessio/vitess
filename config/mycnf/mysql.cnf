@@ -1,18 +1,4 @@
-# This file is auto-included when MySQL 5.7 is detected.
-
-# Options for enabling GTID
-# https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-howto.html
-gtid_mode = ON
-log_bin
-log_slave_updates
-enforce_gtid_consistency
-innodb_use_native_aio = 0
-
-# Crash-safe replication settings.
-master_info_repository = TABLE
-relay_log_info_repository = TABLE
-relay_log_purge = 1
-relay_log_recovery = 1
+# This file is auto-included when MySQL (any version) is detected.
 
 # Semi-sync replication is required for automated unplanned failover
 # (when the master goes away). Here we just load the plugin so it's
@@ -29,4 +15,12 @@ plugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisy
 # a master that becomes unresponsive.
 rpl_semi_sync_master_timeout = 1000000000000000000
 rpl_semi_sync_master_wait_no_slave = 1
+
+# These are sensible defaults that apply to all MySQL versions
+
+long_query_time = 2
+slow-query-log
+skip-name-resolve
+connect_timeout = 30
+innodb_lock_wait_timeout = 20
 

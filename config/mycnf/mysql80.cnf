@@ -1,0 +1,15 @@
+# This file is auto-included when MySQL 8.0 is detected.
+
+# MySQL 8.0 enables binlog by default with sync_binlog and TABLE info repositories
+# It does not enable GTIDs or enforced GTID consistency
+
+gtid_mode = ON
+enforce_gtid_consistency
+relay_log_recovery = 1
+binlog_expire_logs_seconds = 259200
+
+# disable mysqlx
+mysqlx = 0
+
+# 8.0 changes the default auth-plugin to caching_sha2_password
+default_authentication_plugin = mysql_native_password
