@@ -126,7 +126,7 @@ class MariaDB(MysqlFlavor):
     ]
 
   def extra_my_cnf(self):
-    return environment.vttop + "/config/mycnf/master_mariadb.cnf"
+    return environment.vttop + "/config/mycnf/mariadb.cnf"
 
   def master_position(self, tablet):
     gtid = tablet.mquery("", "SELECT @@GLOBAL.gtid_binlog_pos")[0][0]
@@ -152,7 +152,7 @@ class MariaDB103(MariaDB):
   """Overrides specific to MariaDB 10.3+."""
 
   def extra_my_cnf(self):
-    return environment.vttop + "/config/mycnf/master_mariadb103.cnf"
+    return environment.vttop + "/config/mycnf/mariadb103.cnf"
 
 class MySQL56(MysqlFlavor):
   """Overrides specific to MySQL 5.6/5.7"""
@@ -172,7 +172,7 @@ class MySQL56(MysqlFlavor):
     ]).strip() == "true"
 
   def extra_my_cnf(self):
-    return environment.vttop + "/config/mycnf/master_mysql56.cnf"
+    return environment.vttop + "/config/mycnf/mysql56.cnf"
 
   def change_master_commands(self, host, port, pos):
     gtid = pos.split("/")[1]
@@ -186,7 +186,7 @@ class MySQL56(MysqlFlavor):
 class MySQL80(MySQL56):
   """Overrides specific to MySQL 8.0."""
   def extra_my_cnf(self):
-    return environment.vttop + "/config/mycnf/master_mysql80.cnf"
+    return environment.vttop + "/config/mycnf/mysql80.cnf"
   def change_passwords(self, password_col):
     """set real passwords for all users"""
     return '''

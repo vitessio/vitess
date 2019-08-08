@@ -11,3 +11,6 @@ innodb_log_file_size = 5M
 key_buffer_size = 2M
 sync_binlog=0
 innodb_doublewrite=0
+
+# This sets the binary log format to SBR for legacy tests
+binlog-format=statement
