@@ -165,8 +165,7 @@ func TestMigrateServedTypes(t *testing.T) {
 		sqltypes.NewVarBinary("Running"),
 		sqltypes.NewVarBinary(""),
 	}}}, nil)
-	dbClient1.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
-	dbClient1.ExpectRequest("delete from _vt.vreplication where id = 1", &sqltypes.Result{RowsAffected: 1}, nil)
+	expectDeleteVRepl(dbClient1)
 
 	// dest2Rdonly will see the refresh
 	dest2Rdonly.StartActionLoop(t, wr)
@@ -194,8 +193,7 @@ func TestMigrateServedTypes(t *testing.T) {
 		sqltypes.NewVarBinary("Running"),
 		sqltypes.NewVarBinary(""),
 	}}}, nil)
-	dbClient2.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
-	dbClient2.ExpectRequest("delete from _vt.vreplication where id = 1", &sqltypes.Result{RowsAffected: 1}, nil)
+	expectDeleteVRepl(dbClient2)
 
 	// migrate will error if the overlapping shards have no "SourceShard" entry
 	// and we cannot decide which shard is the source or the destination.
@@ -431,8 +429,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 		sqltypes.NewVarBinary("Running"),
 		sqltypes.NewVarBinary(""),
 	}}}, nil)
-	dbClient1.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
-	dbClient1.ExpectRequest("delete from _vt.vreplication where id = 1", &sqltypes.Result{RowsAffected: 1}, nil)
+	expectDeleteVRepl(dbClient1)
 
 	// Override with a fake VREngine after Agent is initialized in action loop.
 	dbClient2 := binlogplayer.NewMockDBClient(t)
@@ -450,8 +447,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 		sqltypes.NewVarBinary("Running"),
 		sqltypes.NewVarBinary(""),
 	}}}, nil)
-	dbClient2.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
-	dbClient2.ExpectRequest("delete from _vt.vreplication where id = 1", &sqltypes.Result{RowsAffected: 1}, nil)
+	expectDeleteVRepl(dbClient2)
 
 	// migrate will error if the overlapping shards have no "SourceShard" entry
 	// and we cannot decide which shard is the source or the destination.
@@ -521,8 +517,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 		sqltypes.NewVarBinary("Running"),
 		sqltypes.NewVarBinary(""),
 	}}}, nil)
-	dbClient1.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
-	dbClient1.ExpectRequest("delete from _vt.vreplication where id = 1", &sqltypes.Result{RowsAffected: 1}, nil)
+	expectDeleteVRepl(dbClient1)
 
 	// Override with a fake VREngine after Agent is initialized in action loop.
 	dbClient2 = binlogplayer.NewMockDBClient(t)
@@ -540,8 +535,7 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 		sqltypes.NewVarBinary("Running"),
 		sqltypes.NewVarBinary(""),
 	}}}, nil)
-	dbClient2.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
-	dbClient2.ExpectRequest("delete from _vt.vreplication where id = 1", &sqltypes.Result{RowsAffected: 1}, nil)
+	expectDeleteVRepl(dbClient2)
 
 	// // simulate the clone, by fixing the dest shard record
 	checkShardSourceShards(t, ts, "80-c0", 0)
@@ -587,4 +581,12 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 	checkShardServedTypes(t, ts, "c0-", 3)
 	checkShardSourceShards(t, ts, "80-c0", 0)
 	checkShardSourceShards(t, ts, "c0-", 0)
+}
+
+func expectDeleteVRepl(dbClient *binlogplayer.MockDBClient) {
+	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest("begin", nil, nil)
+	dbClient.ExpectRequest("delete from _vt.vreplication where id = 1", &sqltypes.Result{RowsAffected: 1}, nil)
+	dbClient.ExpectRequest("delete from _vt.copy_state where vrepl_id = 1", nil, nil)
+	dbClient.ExpectRequest("commit", nil, nil)
 }
