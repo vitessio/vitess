@@ -13,3 +13,32 @@ slave_net_timeout = 60
 
 # MariaDB 10.0 is unstrict by default
 sql_mode = STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION
+
+# enable strict mode so it's safe to compare sequence numbers across different server IDs.
+gtid_strict_mode = 1
+innodb_stats_persistent = 0
+
+# When semi-sync is enabled, don't allow fallback to async
+# if you get no ack, or have no slaves. This is necessary to
+# prevent alternate futures when doing a failover in response to
+# a master that becomes unresponsive.
+rpl_semi_sync_master_timeout = 1000000000000000000
+rpl_semi_sync_master_wait_no_slave = 1
+
+
+character_set_server = utf8
+collation_server = utf8_general_ci
+
+expire_logs_days = 3
+
+log_bin
+sync_binlog = 1
+binlog_format = ROW
+log_slave_updates
+expire_logs_days = 3
+
+# In MariaDB the default charset is latin1
+
+character_set_server = utf8
+collation_server = utf8_general_ci
+

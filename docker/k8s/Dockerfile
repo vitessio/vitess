@@ -42,18 +42,16 @@ COPY --from=base $VTTOP/web /vt/web/
 COPY --from=base $VTTOP/config/init_db.sql /vt/config/
 
 # mysql flavor files for db specific .cnf settings
-COPY --from=base $VTTOP/config/mycnf/mysql.cnf /vt/config/mycnf/
+COPY --from=base $VTTOP/config/mycnf/global.cnf /vt/config/mycnf/
 COPY --from=base $VTTOP/config/mycnf/mysql56.cnf /vt/config/mycnf/
 COPY --from=base $VTTOP/config/mycnf/mysql57.cnf /vt/config/mycnf/
 COPY --from=base $VTTOP/config/mycnf/mysql80.cnf /vt/config/mycnf/
-COPY --from=base $VTTOP/config/mycnf/mariadb.cnf /vt/config/mycnf/
 COPY --from=base $VTTOP/config/mycnf/mariadb100.cnf /vt/config/mycnf/
 COPY --from=base $VTTOP/config/mycnf/mariadb101.cnf /vt/config/mycnf/
 COPY --from=base $VTTOP/config/mycnf/mariadb102.cnf /vt/config/mycnf/
 COPY --from=base $VTTOP/config/mycnf/mariadb103.cnf /vt/config/mycnf/
 
-# settings for different types of instances
-COPY --from=base $VTTOP/config/mycnf/default.cnf /vt/config/mycnf/
+# if running the testsuite
 COPY --from=base $VTTOP/config/mycnf/testsuite.cnf /vt/config/mycnf/
 
 # add vitess user and add permissions

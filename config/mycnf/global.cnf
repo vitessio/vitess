@@ -1,4 +1,4 @@
-# basic config parameters for all db instances in the grid
+# Global configuration that is auto-included for all MySQL/MariaDB versions
 
 datadir = {{.DataDir}}
 innodb_data_home_dir = {{.InnodbDataHomeDir}}
@@ -22,3 +22,11 @@ tmpdir = {{.TmpDir}}
 
 slow-query-log-file = {{.SlowLogPath}}
 
+# These are sensible defaults that apply to all MySQL/MariaDB versions
+
+long_query_time = 2
+slow-query-log
+skip-name-resolve
+connect_timeout = 30
+innodb_lock_wait_timeout = 20
+max_allowed_packet = 64M
