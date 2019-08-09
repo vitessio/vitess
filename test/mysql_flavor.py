@@ -228,10 +228,10 @@ def set_mysql_flavor(flavor):
   global MYSQL_FLAVOR
 
   if not flavor:
-    flavor = os.environ.get("MYSQL_FLAVOR", "MySQL56")
+    flavor = os.environ.get("MYSQL_FLAVOR", "MariaDB")
     # The environment variable might be set, but equal to "".
     if not flavor:
-      flavor = "MySQL56"
+      flavor = "MariaDB"
 
   v = flavor_map.get(flavor, None)
   if not v:
