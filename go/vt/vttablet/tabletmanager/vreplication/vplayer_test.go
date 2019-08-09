@@ -1471,9 +1471,7 @@ func startVReplication(t *testing.T, filter *binlogdatapb.Filter, onddl binlogda
 		if _, err := playerEngine.Exec(query); err != nil {
 			t.Fatal(err)
 		}
-		expectDBClientQueries(t, []string{
-			"/delete",
-		})
+		expectDeleteQueries(t)
 	}, int(qr.InsertID)
 }
 

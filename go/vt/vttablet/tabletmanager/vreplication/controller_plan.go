@@ -27,7 +27,9 @@ import (
 type controllerPlan struct {
 	opcode int
 	query  string
-	id     int
+	// delCopySate is set for deletes.
+	delCopyState string
+	id           int
 }
 
 const (
@@ -175,20 +177,16 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 	}
 
 	return &controllerPlan{
-		opcode: deleteQuery,
-		query:  sqlparser.String(del),
-		id:     id,
+		opcode:       deleteQuery,
+		query:        sqlparser.String(del),
+		delCopyState: fmt.Sprintf("delete from %s where vrepl_id = %d", copySateTableName, id),
+		id:           id,
 	}, nil
 }
 
 func buildSelectPlan(sel *sqlparser.Select) (*controllerPlan, error) {
 	switch sqlparser.String(sel.From) {
-	case reshardingJournalTableName:
-		return &controllerPlan{
-			opcode: reshardingJournalQuery,
-			query:  sqlparser.String(sel),
-		}, nil
-	case vreplicationTableName:
+	case vreplicationTableName, reshardingJournalTableName, copySateTableName:
 		return &controllerPlan{
 			opcode: selectQuery,
 			query:  sqlparser.String(sel),
