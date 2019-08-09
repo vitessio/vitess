@@ -311,7 +311,7 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 	// first download the file into a tmp dir
 	// and extract all the files
 
-	tempDir := fmt.Sprintf("%v/%v", cnf.TmpDir, time.Now().UTC().Format("2006-01-02.150405"))
+	tempDir := fmt.Sprintf("%v/%v", cnf.TmpDir, time.Now().UTC().Format("xtrabackup-2006-01-02.150405"))
 	// create tempDir
 	if err := os.MkdirAll(tempDir, os.ModePerm); err != nil {
 		return err
@@ -355,36 +355,36 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 		return vterrors.Wrap(err, "prepare step failed")
 	}
 
-	// then copy-back
-	logger.Infof("Restore: Copying extracted and prepared files to final locations")
+	// then move-back
+	logger.Infof("Restore: Move extracted and prepared files to final locations")
 
 	flagsToExec = []string{"--defaults-file=" + cnf.path,
-		"--copy-back",
+		"--move-back",
 		"--target-dir=" + tempDir,
 	}
-	copybackCmd := exec.CommandContext(ctx, restoreProgram, flagsToExec...)
-	copybackOut, err := copybackCmd.StdoutPipe()
+	movebackCmd := exec.CommandContext(ctx, restoreProgram, flagsToExec...)
+	movebackOut, err := movebackCmd.StdoutPipe()
 	if err != nil {
 		return vterrors.Wrap(err, "cannot create stdout pipe")
 	}
-	copybackErr, err := copybackCmd.StderrPipe()
+	movebackErr, err := movebackCmd.StderrPipe()
 	if err != nil {
 		return vterrors.Wrap(err, "cannot create stderr pipe")
 	}
-	if err := copybackCmd.Start(); err != nil {
-		return vterrors.Wrap(err, "can't start copy-back step")
+	if err := movebackCmd.Start(); err != nil {
+		return vterrors.Wrap(err, "can't start move-back step")
 	}
 
 	// Read stdout/stderr in the background and send each line to the logger.
-	copybackWg := &sync.WaitGroup{}
-	copybackWg.Add(2)
-	go scanLinesToLogger("copy-back stdout", copybackOut, logger, copybackWg.Done)
-	go scanLinesToLogger("copy-back stderr", copybackErr, logger, copybackWg.Done)
-	copybackWg.Wait()
+	movebackWg := &sync.WaitGroup{}
+	movebackWg.Add(2)
+	go scanLinesToLogger("move-back stdout", movebackOut, logger, movebackWg.Done)
+	go scanLinesToLogger("move-back stderr", movebackErr, logger, movebackWg.Done)
+	movebackWg.Wait()
 
 	// Get exit status.
-	if err := copybackCmd.Wait(); err != nil {
-		return vterrors.Wrap(err, "copy-back step failed")
+	if err := movebackCmd.Wait(); err != nil {
+		return vterrors.Wrap(err, "move-back step failed")
 	}
 
 	return nil
