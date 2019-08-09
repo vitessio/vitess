@@ -1,4 +1,4 @@
-# basic config parameters for all db instances in the grid
+# Global configuration that is auto-included for all MySQL/MariaDB versions
 
 sql_mode = STRICT_TRANS_TABLES
 binlog_format = statement

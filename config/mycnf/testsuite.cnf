@@ -1,4 +1,6 @@
-# basic config parameters for all db instances in the grid
+# This file is intended to be included by the testsuite
+# It sets some parameters which are non-ACID and not
+# intended for production usage.
 
 sql_mode = STRICT_TRANS_TABLES
 binlog_format = statement

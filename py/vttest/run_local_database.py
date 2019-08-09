@@ -210,7 +210,7 @@ if __name__ == '__main__':
     logging.getLogger().setLevel(logging.DEBUG)
 
   # This will set the flavor based on the MYSQL_FLAVOR env var,
-  # or default to MariaDB.
+  # or default to MySQL56.
   mysql_flavor.set_mysql_flavor(None)
 
   main(options)

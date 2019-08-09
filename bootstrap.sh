@@ -20,8 +20,7 @@
 # 0. Initialization and helper methods.
 # 1. Installation of dependencies.
 # 2. Installation of Go tools and vendored Go dependencies.
-# 3. Detection of installed MySQL and setting MYSQL_FLAVOR.
-# 4. Installation of development related steps e.g. creating Git hooks.
+# 3. Installation of development related steps e.g. creating Git hooks.
 
 BUILD_TESTS=${BUILD_TESTS:-1}
 
@@ -324,44 +323,8 @@ go get -u $gotools || fail "Failed to download some Go tools with 'go get'. Plea
 echo "Updating govendor dependencies..."
 govendor sync || fail "Failed to download/update dependencies with govendor. Please re-run bootstrap.sh in case of transient errors."
 
-
 #
-# 3. Detection of installed MySQL and setting MYSQL_FLAVOR.
-#
-
-
-# find mysql and prepare to use libmysqlclient
-
-if [ "$BUILD_TESTS" == 1 ] ; then
-  if [ -z "$MYSQL_FLAVOR" ]; then
-    export MYSQL_FLAVOR=MySQL56
-    echo "MYSQL_FLAVOR environment variable not set. Using default: $MYSQL_FLAVOR"
-  fi
-  case "$MYSQL_FLAVOR" in
-    "MySQL56" | "MySQL80")
-      myversion="$("$VT_MYSQL_ROOT/bin/mysql" --version)"
-      [[ "$myversion" =~ Distrib\ 5\.[67] || "$myversion" =~ Ver\ 8\. ]] || fail "Couldn't find MySQL 5.6+ in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
-      echo "Found MySQL 5.6+ installation in $VT_MYSQL_ROOT."
-      ;;
-
-    "MariaDB" | "MariaDB103")
-      myversion="$("$VT_MYSQL_ROOT/bin/mysql" --version)"
-      [[ "$myversion" =~ MariaDB ]] || fail "Couldn't find MariaDB in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
-      echo "Found MariaDB installation in $VT_MYSQL_ROOT."
-      ;;
-
-    *)
-      fail "Unsupported MYSQL_FLAVOR $MYSQL_FLAVOR"
-      ;;
-
-  esac
-  # save the flavor that was used in bootstrap, so it can be restored
-  # every time dev.env is sourced.
-  echo "$MYSQL_FLAVOR" > "$VTROOT/dist/MYSQL_FLAVOR"
-fi
-
-#
-# 4. Installation of development related steps e.g. creating Git hooks.
+# 3. Installation of development related steps e.g. creating Git hooks.
 #
 
 if [ "$BUILD_TESTS" == 1 ] ; then
@@ -378,5 +341,4 @@ else
  echo
  echo "bootstrap finished - run 'source build.env' in your shell before building."
 fi
-
 

@@ -510,7 +510,7 @@ spec:
       set -ex
 {{ include "mycnf-exec" (.extraMyCnf | default $defaultVttablet.extraMyCnf) | indent 6 }}
 {{- if eq (.mysqlSize | default $defaultVttablet.mysqlSize) "test" }}
-      export EXTRA_MY_CNF="$EXTRA_MY_CNF:/vt/config/mycnf/default-fast.cnf"
+      export EXTRA_MY_CNF="$EXTRA_MY_CNF:/vt/config/mycnf/testsuite.cnf"
 {{- end }}
 
       eval exec /vt/bin/mysqlctld $(cat <<END_OF_COMMAND
