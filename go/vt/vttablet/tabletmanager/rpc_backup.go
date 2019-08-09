@@ -54,7 +54,10 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	if err != nil {
 		return err
 	}
-	originalType := tablet.Type
+	if !allowMaster && tablet.Type == topodatapb.TabletType_MASTER {
+		return fmt.Errorf("type MASTER cannot take backup. if you really need to do this, rerun the backup command with -allow_master")
+	}
+	var originalType topodatapb.TabletType
 	if builtin != nil {
 		if err := agent.lock(ctx); err != nil {
 			return err
@@ -65,7 +68,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 		if err != nil {
 			return err
 		}
-
+		originalType = tablet.Type
 		// update our type to BACKUP
 		if _, err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topodatapb.TabletType_BACKUP); err != nil {
 			return err
