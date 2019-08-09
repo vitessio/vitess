@@ -144,6 +144,7 @@ function install_grpc() {
   PIP=$grpc_virtualenv/bin/pip
   $PIP install --upgrade pip
   $PIP install --upgrade --ignore-installed virtualenv
+  $PIP install mysql-connector-python
 
   grpcio_ver=$version
   $PIP install --upgrade grpcio=="$grpcio_ver" grpcio-tools=="$grpcio_ver"
@@ -359,6 +360,8 @@ if [ "$BUILD_TESTS" == 1 ] ; then
   # every time dev.env is sourced.
   echo "$MYSQL_FLAVOR" > "$VTROOT/dist/MYSQL_FLAVOR"
 fi
+
+PYTHONPATH='' $PIP install mysql-connector-python
 
 #
 # 4. Installation of development related steps e.g. creating Git hooks.

@@ -1417,3 +1417,100 @@ func buildVarCharRow(values ...string) []sqltypes.Value {
 	}
 	return row
 }
+
+// Prepare executes a prepare statements.
+func (e *Executor) Prepare(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable) (fld []*querypb.Field, err error) {
+	logStats := NewLogStats(ctx, method, sql, bindVars)
+	fld, err = e.prepare(ctx, safeSession, sql, bindVars, logStats)
+	logStats.Error = err
+
+	// The mysql plugin runs an implicit rollback whenever a connection closes.
+	// To avoid spamming the log with no-op rollback records, ignore it if
+	// it was a no-op record (i.e. didn't issue any queries)
+	if !(logStats.StmtType == "ROLLBACK" && logStats.ShardQueries == 0) {
+		logStats.Send()
+	}
+	return fld, err
+}
+
+func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) ([]*querypb.Field, error) {
+	// Start an implicit transaction if necessary.
+	if !safeSession.Autocommit && !safeSession.InTransaction() {
+		if err := e.txConn.Begin(ctx, safeSession); err != nil {
+			return nil, err
+		}
+	}
+
+	destKeyspace, destTabletType, dest, err := e.ParseDestinationTarget(safeSession.TargetString)
+	if err != nil {
+		return nil, err
+	}
+
+	if safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", destTabletType)
+	}
+	if bindVars == nil {
+		bindVars = make(map[string]*querypb.BindVariable)
+	}
+
+	stmtType := sqlparser.Preview(sql)
+	logStats.StmtType = sqlparser.StmtType(stmtType)
+
+	// Mysql warnings are scoped to the current session, but are
+	// cleared when a "non-diagnostic statement" is executed:
+	// https://dev.mysql.com/doc/refman/8.0/en/show-warnings.html
+	//
+	// To emulate this behavior, clear warnings from the session
+	// for all statements _except_ SHOW, so that SHOW WARNINGS
+	// can actually return them.
+	if stmtType != sqlparser.StmtShow {
+		safeSession.ClearWarnings()
+	}
+
+	switch stmtType {
+	case sqlparser.StmtSelect:
+		return e.handlePrepare(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, logStats)
+	case sqlparser.StmtDDL, sqlparser.StmtBegin, sqlparser.StmtCommit, sqlparser.StmtRollback, sqlparser.StmtSet, sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete,
+		sqlparser.StmtUse, sqlparser.StmtOther, sqlparser.StmtComment:
+		return nil, nil
+	case sqlparser.StmtShow:
+		res, err := e.handleShow(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
+		return res.Fields, err
+	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
+}
+
+func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) ([]*querypb.Field, error) {
+	// V3 mode.
+	query, comments := sqlparser.SplitMarginComments(sql)
+	vcursor := newVCursorImpl(ctx, safeSession, destKeyspace, destTabletType, comments, e, logStats)
+	plan, err := e.getPlan(
+		vcursor,
+		query,
+		comments,
+		bindVars,
+		skipQueryPlanCache(safeSession),
+		logStats,
+	)
+	execStart := time.Now()
+	logStats.PlanTime = execStart.Sub(logStats.StartTime)
+
+	if err != nil {
+		logStats.Error = err
+		return nil, err
+	}
+
+	qr, err := plan.Instructions.GetFields(vcursor, bindVars)
+	logStats.ExecuteTime = time.Since(execStart)
+	var errCount uint64
+	if err != nil {
+		logStats.Error = err
+		errCount = 1
+	} else {
+		logStats.RowsAffected = qr.RowsAffected
+	}
+
+	plan.AddStats(1, time.Since(logStats.StartTime), uint64(logStats.ShardQueries), logStats.RowsAffected, errCount)
+
+	return qr.Fields, err
+}
