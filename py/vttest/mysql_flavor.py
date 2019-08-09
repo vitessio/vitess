@@ -95,7 +95,7 @@ def set_mysql_flavor(flavor):
   global __mysql_flavor
 
   # Last default is there because the environment variable might be set to "".
-  flavor = flavor or os.environ.get("MYSQL_FLAVOR", "MySQL56") or "MySQL56"
+  flavor = flavor or os.environ.get("MYSQL_FLAVOR", "MariaDB") or "MariaDB"
 
   # Set the environment variable explicitly in case we're overriding it via
   # command-line flag.
