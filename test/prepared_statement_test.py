@@ -27,6 +27,7 @@ import unittest
 import mysql.connector
 from mysql.connector import FieldType
 from mysql.connector.cursor import MySQLCursorPrepared
+from mysql.connector.errors import Error
 
 import environment
 import utils
@@ -228,6 +229,16 @@ class TestPreparedStatements(unittest.TestCase):
     cursor.execute('select * from vt_prepare_stmt_test', {})
     cursor.fetchone()
     cursor.close()
+
+    cursor = conn.cursor()
+    try:
+      cursor.execute('selet * from vt_prepare_stmt_test', {})
+      cursor.close()
+    except mysql.connector.Error as err:
+      if err.errno == 1105:
+        print "Captured the error"
+      else:
+        raise
 
     # Insert several rows using prepared statements
     text_value = "text" * 100 # Large text value
