@@ -143,6 +143,7 @@ function install_grpc() {
   PIP=$grpc_virtualenv/bin/pip
   $PIP install --upgrade pip
   $PIP install --upgrade --ignore-installed virtualenv
+  $PIP install mysql-connector-python
 
   grpcio_ver=$version
   $PIP install --upgrade grpcio=="$grpcio_ver" grpcio-tools=="$grpcio_ver"
@@ -322,6 +323,9 @@ go get -u $gotools || fail "Failed to download some Go tools with 'go get'. Plea
 # See https://github.com/kardianos/govendor for more options.
 echo "Updating govendor dependencies..."
 govendor sync || fail "Failed to download/update dependencies with govendor. Please re-run bootstrap.sh in case of transient errors."
+
+
+PYTHONPATH='' $PIP install mysql-connector-python
 
 #
 # 3. Installation of development related steps e.g. creating Git hooks.
