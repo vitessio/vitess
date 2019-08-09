@@ -179,7 +179,10 @@ func TestEngineExec(t *testing.T) {
 
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 	delQuery := "delete from _vt.vreplication where id = 1"
+	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest(delQuery, testDMLResponse, nil)
+	dbClient.ExpectRequest("delete from _vt.copy_state where vrepl_id = 1", nil, nil)
+	dbClient.ExpectRequest("commit", nil, nil)
 
 	qr, err = vre.Exec(delQuery)
 	if err != nil {
