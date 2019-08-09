@@ -93,8 +93,12 @@ const (
 
 var (
 	// vtbackup-specific flags
-	timeout            = flag.Duration("timeout", 2*time.Hour, "Overall timeout for this whole vtbackup run, including restoring the previous backup, waiting for replication, and uploading files")
-	replicationTimeout = flag.Duration("replication_timeout", 1*time.Hour, "The timeout for the step of waiting for replication to catch up. If progress is made before this timeout is reached, the backup will be taken anyway to save partial progress, but vtbackup will return a non-zero exit code to indicate it should be retried since not all expected data was backed up")
+	// We used to have timeouts, but these did more harm than good. If a backup
+	// has been going for a while, giving up and starting over from scratch is
+	// pretty much never going to help. We should just keep trying and have a
+	// system that alerts a human if it's taking longer than expected.
+	_ = flag.Duration("timeout", 2*time.Hour, "DEPRECATED AND UNUSED")
+	_ = flag.Duration("replication_timeout", 1*time.Hour, "DEPRECATED AND UNUSED")
 
 	minBackupInterval = flag.Duration("min_backup_interval", 0, "Only take a new backup if it's been at least this long since the most recent backup.")
 	minRetentionTime  = flag.Duration("min_retention_time", 0, "Keep each old backup for at least this long before removing it. Set to 0 to disable pruning of old backups.")
@@ -130,8 +134,7 @@ func main() {
 		exit.Return(1)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
-	defer cancel()
+	ctx := context.Background()
 
 	// Open connection backup storage.
 	backupDir := fmt.Sprintf("%v/%v", *initKeyspace, *initShard)
@@ -289,13 +292,6 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	waitStartTime := time.Now()
 	for {
 		time.Sleep(time.Second)
-
-		// Check if the replication context is still good.
-		if time.Since(waitStartTime) > *replicationTimeout {
-			// If we time out on this step, we still might take the backup anyway.
-			log.Errorf("Timed out waiting for replication to catch up to %v.", masterPos)
-			break
-		}
 
 		status, statusErr := mysqld.SlaveStatus()
 		if statusErr != nil {
