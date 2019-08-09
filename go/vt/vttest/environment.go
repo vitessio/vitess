@@ -203,6 +203,9 @@ func randomPort() int {
 // - Directory() is a random temporary directory in VTDATAROOT, which is cleaned
 // up when closing the Environment.
 // - LogDirectory() is the `logs` subdir inside Directory()
+// - The MySQL flavor is set to `flavor`. If the argument is not set, it will
+// default to the value of MYSQL_FLAVOR, and if this variable is not set, to
+// DefaultMySQLFlavor
 // - PortForProtocol() will return ports based off the given basePort. If basePort
 // is zero, a random port between 10000 and 20000 will be chosen.
 // - DefaultProtocol() is always "grpc"

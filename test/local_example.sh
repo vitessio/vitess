@@ -117,10 +117,10 @@ echo "Run Go client script..."
 go run client.go -server=localhost:15991 || teardown
 
 # echo "Run Java client script..."
-# ./client_java.sh || teardown
+./client_java.sh || teardown
 
 # echo "Run JDBC client script..."
-# ./client_jdbc.sh || teardown
+./client_jdbc.sh || teardown
 
 exitcode=0
 teardown
