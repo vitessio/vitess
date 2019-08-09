@@ -14,9 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-//-9,223,372,036,854,775,808
-//-18,446,744,073,709,551,615
-
 package sqltypes
 
 import (
@@ -30,6 +27,85 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
+
+/*
+Test Created for Subtraction function
+func TestSubtraction(t *testing.T) {
+	tcases := []struct {
+		v1, v2 Value
+		out    Value
+		err    error
+	}{{
+
+		//All Nulls
+		v1:  NULL,
+		v2:  NULL,
+		out: NULL,
+	}, {
+
+		// First value null.
+		v1:  NewInt32(1),
+		v2:  NULL,
+		out: NULL,
+	}, {
+
+		// Second value null.
+		v1:  NULL,
+		v2:  NewInt32(1),
+		out: NULL,
+	}, {
+
+		// case with negative value
+		v1:  NewInt64(-1),
+		v2:  NewInt64(-2),
+		out: NewInt64(1),
+	}, {
+
+		// testing for int64 overflow with min negative value
+		v1:  NewInt64(-9223372036854775808),
+		v2:  NewInt64(1),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in -9223372036854775808 - 1"),
+	}, {
+
+		v1:  NewUint64(4),
+		v2:  NewInt64(5),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 4 - 5"),
+	}, {
+
+		v1:  NewUint64(7),
+		v2:  NewInt64(5),
+		out: NewUint64(2),
+	}, {
+
+		v1:  NewUint64(18446744073709551615),
+		v2:  NewInt64(0),
+		out: NewUint64(18446744073709551615),
+	}, {
+
+		// testing for int64 overflow
+		v1:  NewInt64(-9223372036854775808),
+		v2:  NewUint64(0),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 0 - -9223372036854775808"),
+	}}
+
+	for _, tcase := range tcases {
+
+		got, err := Subtraction(tcase.v1, tcase.v2)
+
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("Subtraction(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
+		}
+		if tcase.err != nil {
+			continue
+		}
+
+		if !reflect.DeepEqual(got, tcase.out) {
+			t.Errorf("Subtraction(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
+		}
+	}
+
+}
+*/
 
 func TestAddition(t *testing.T) {
 	tcases := []struct {
@@ -174,25 +250,14 @@ func TestAdd(t *testing.T) {
 		v1:  NewInt64(-1),
 		v2:  NewUint64(2),
 		out: NewInt64(-9223372036854775808),
-		//out: NewFloat64(18446744073709551617),
-		//err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot add a negative number to an unsigned integer: 2, -1"),
 	}, {
 		// Make sure underlying error is returned while converting.
 		v1:  NewFloat64(1),
 		v2:  NewFloat64(2),
 		out: NewInt64(3),
-		//err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion: FLOAT64 to INT64"),
 	}}
 	for _, tcase := range tcases {
 		got := NullsafeAdd(tcase.v1, tcase.v2, Int64)
-		/*
-			if !vterrors.Equals(err, tcase.err) {
-				t.Errorf("Add(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
-			}
-			if tcase.err != nil {
-				continue
-			}
-		*/
 
 		if !reflect.DeepEqual(got, tcase.out) {
 			t.Errorf("Add(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
