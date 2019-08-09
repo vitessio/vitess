@@ -872,9 +872,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 		c.PrepareData[c.StatementID] = prepare
 
-		fieldSent := false
-
-		// TODO(saifalharthi) change the function to return a field.
 		fld, err := handler.ComPrepare(c, queries[0])
 
 		if err != nil {
@@ -883,13 +880,11 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 				log.Error("Error writing query error to client %v: %v", c.ConnectionID, werr)
 				return werr
 			}
+			return nil
 		}
 
-		if !fieldSent {
-			fieldSent = true
-			if err := c.writePrepare(fld, c.PrepareData[c.StatementID]); err != nil {
-				return err
-			}
+		if err := c.writePrepare(fld, c.PrepareData[c.StatementID]); err != nil {
+			return err
 		}
 
 	case ComStmtExecute:
