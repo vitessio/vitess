@@ -19,6 +19,8 @@
 # timeout in seconds (for each step, not overall)
 timeout=30
 export TOPO=ectd2
+export EXTRA_MY_CNF=$VTROOT/config/mycnf/testsuite.cnf:$VTROOT/config/mycnf/testsuite-rbr.cnf
+
 cd $VTTOP/examples/local
 
 exitcode=1
