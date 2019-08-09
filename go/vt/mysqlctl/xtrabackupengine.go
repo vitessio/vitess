@@ -28,6 +28,7 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/klauspost/pgzip"
@@ -330,12 +331,27 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 		"--target-dir=" + tempDir,
 	}
 	prepareCmd := exec.CommandContext(ctx, restoreProgram, flagsToExec...)
-	// We don't look at the output except to log it, so just send all
-	// output directly to the logger.
-	logWriter := logutil.NewLoggerWriter(logger)
-	prepareCmd.Stdout = logWriter
-	prepareCmd.Stderr = logWriter
-	if err := prepareCmd.Run(); err != nil {
+	prepareOut, err := prepareCmd.StdoutPipe()
+	if err != nil {
+		return vterrors.Wrap(err, "cannot create stdout pipe")
+	}
+	prepareErr, err := prepareCmd.StderrPipe()
+	if err != nil {
+		return vterrors.Wrap(err, "cannot create stderr pipe")
+	}
+	if err := prepareCmd.Start(); err != nil {
+		return vterrors.Wrap(err, "can't start prepare step")
+	}
+
+	// Read stdout/stderr in the background and send each line to the logger.
+	prepareWg := &sync.WaitGroup{}
+	prepareWg.Add(2)
+	go scanLinesToLogger("prepare stdout", prepareOut, logger, prepareWg.Done)
+	go scanLinesToLogger("prepare stderr", prepareErr, logger, prepareWg.Done)
+	prepareWg.Wait()
+
+	// Get exit status.
+	if err := prepareCmd.Wait(); err != nil {
 		return vterrors.Wrap(err, "prepare step failed")
 	}
 
@@ -347,12 +363,27 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 		"--target-dir=" + tempDir,
 	}
 	copybackCmd := exec.CommandContext(ctx, restoreProgram, flagsToExec...)
-	// We don't look at the output except to log it, so just send all
-	// output directly to the logger.
-	copybackCmd.Stdout = logWriter
-	copybackCmd.Stderr = logWriter
+	copybackOut, err := copybackCmd.StdoutPipe()
+	if err != nil {
+		return vterrors.Wrap(err, "cannot create stdout pipe")
+	}
+	copybackErr, err := copybackCmd.StderrPipe()
+	if err != nil {
+		return vterrors.Wrap(err, "cannot create stderr pipe")
+	}
+	if err := copybackCmd.Start(); err != nil {
+		return vterrors.Wrap(err, "can't start copy-back step")
+	}
 
-	if err := copybackCmd.Run(); err != nil {
+	// Read stdout/stderr in the background and send each line to the logger.
+	copybackWg := &sync.WaitGroup{}
+	copybackWg.Add(2)
+	go scanLinesToLogger("copy-back stdout", copybackOut, logger, copybackWg.Done)
+	go scanLinesToLogger("copy-back stderr", copybackErr, logger, copybackWg.Done)
+	copybackWg.Wait()
+
+	// Get exit status.
+	if err := copybackCmd.Wait(); err != nil {
 		return vterrors.Wrap(err, "copy-back step failed")
 	}
 
@@ -406,13 +437,28 @@ func (be *XtrabackupEngine) extractFiles(
 		tarCmd := exec.CommandContext(ctx, "tar", flagsToExec...)
 		logger.Infof("Executing tar cmd with flags %v", flagsToExec)
 		tarCmd.Stdin = reader
-		// We don't look at the output except to log it, so just send all
-		// output directly to the logger.
-		logWriter := logutil.NewLoggerWriter(logger)
-		tarCmd.Stdout = logWriter
-		tarCmd.Stderr = logWriter
-		if err := tarCmd.Run(); err != nil {
-			return vterrors.Wrap(err, "error from tar")
+		tarOut, err := tarCmd.StdoutPipe()
+		if err != nil {
+			return vterrors.Wrap(err, "cannot create stdout pipe")
+		}
+		tarErr, err := tarCmd.StderrPipe()
+		if err != nil {
+			return vterrors.Wrap(err, "cannot create stderr pipe")
+		}
+		if err := tarCmd.Start(); err != nil {
+			return vterrors.Wrap(err, "can't start tar")
+		}
+
+		// Read stdout/stderr in the background and send each line to the logger.
+		tarWg := &sync.WaitGroup{}
+		tarWg.Add(2)
+		go scanLinesToLogger("tar stdout", tarOut, logger, tarWg.Done)
+		go scanLinesToLogger("tar stderr", tarErr, logger, tarWg.Done)
+		tarWg.Wait()
+
+		// Get exit status.
+		if err := tarCmd.Wait(); err != nil {
+			return vterrors.Wrap(err, "tar failed")
 		}
 
 	case xbstream:
@@ -426,14 +472,28 @@ func (be *XtrabackupEngine) extractFiles(
 		xbstreamCmd := exec.CommandContext(ctx, xbstreamProgram, flagsToExec...)
 		logger.Infof("Executing xbstream cmd: %v %v", xbstreamProgram, flagsToExec)
 		xbstreamCmd.Stdin = reader
-		// We don't look at the output except to log it, so just send all
-		// output directly to the logger.
-		logWriter := logutil.NewLoggerWriter(logger)
-		xbstreamCmd.Stdout = logWriter
-		xbstreamCmd.Stderr = logWriter
+		xbstreamOut, err := xbstreamCmd.StdoutPipe()
+		if err != nil {
+			return vterrors.Wrap(err, "cannot create stdout pipe")
+		}
+		xbstreamErr, err := xbstreamCmd.StderrPipe()
+		if err != nil {
+			return vterrors.Wrap(err, "cannot create stderr pipe")
+		}
+		if err := xbstreamCmd.Start(); err != nil {
+			return vterrors.Wrap(err, "can't start xbstream")
+		}
 
-		if err := xbstreamCmd.Run(); err != nil {
-			return vterrors.Wrap(err, "error from xbstream")
+		// Read stdout/stderr in the background and send each line to the logger.
+		xbstreamWg := &sync.WaitGroup{}
+		xbstreamWg.Add(2)
+		go scanLinesToLogger("xbstream stdout", xbstreamOut, logger, xbstreamWg.Done)
+		go scanLinesToLogger("xbstream stderr", xbstreamErr, logger, xbstreamWg.Done)
+		xbstreamWg.Wait()
+
+		// Get exit status.
+		if err := xbstreamCmd.Wait(); err != nil {
+			return vterrors.Wrap(err, "xbstream failed")
 		}
 	default:
 		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%v is not a valid value for xtrabackup_stream_mode, supported modes are tar and xbstream", streamMode)
@@ -464,6 +524,23 @@ func findReplicationPosition(input, flavor string, logger logutil.Logger) (mysql
 		return mysql.Position{}, vterrors.Wrapf(err, "can't parse replication position from xtrabackup: %v", position)
 	}
 	return replicationPosition, nil
+}
+
+// scanLinesToLogger scans full lines from the given Reader and sends them to
+// the given Logger until EOF.
+func scanLinesToLogger(prefix string, reader io.Reader, logger logutil.Logger, doneFunc func()) {
+	defer doneFunc()
+
+	scanner := bufio.NewScanner(reader)
+	for scanner.Scan() {
+		line := scanner.Text()
+		logger.Infof("%s: %s", prefix, line)
+	}
+	if err := scanner.Err(); err != nil {
+		// This is usually run in a background goroutine, so there's no point
+		// returning an error. Just log it.
+		logger.Warningf("error scanning lines from %s: %v", prefix, err)
+	}
 }
 
 func init() {
