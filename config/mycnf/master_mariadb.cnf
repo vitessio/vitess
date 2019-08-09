@@ -1,16 +1,8 @@
+# This file is auto-included when MariaDB (any version) is detected.
+
 # enable strict mode so it's safe to compare sequence numbers across different server IDs.
 gtid_strict_mode = 1
 innodb_stats_persistent = 0
-innodb_support_xa = 0
-
-# Semi-sync replication is required for automated unplanned failover
-# (when the master goes away). Here we just load the plugin so it's
-# available if desired, but it's disabled at startup.
-#
-# If the -enable_semi_sync flag is used, VTTablet will enable semi-sync
-# at the proper time when replication is set up, or when masters are
-# promoted or demoted.
-plugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so
 
 # When semi-sync is enabled, don't allow fallback to async
 # if you get no ack, or have no slaves. This is necessary to

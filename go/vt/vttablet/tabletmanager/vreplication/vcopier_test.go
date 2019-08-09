@@ -75,9 +75,7 @@ func TestPlayerCopyTables(t *testing.T) {
 		if _, err := playerEngine.Exec(query); err != nil {
 			t.Fatal(err)
 		}
-		expectDBClientQueries(t, []string{
-			"/delete",
-		})
+		expectDeleteQueries(t)
 	}()
 
 	expectDBClientQueries(t, []string{
@@ -193,9 +191,7 @@ func TestPlayerCopyBigTable(t *testing.T) {
 		if _, err := playerEngine.Exec(query); err != nil {
 			t.Fatal(err)
 		}
-		expectDBClientQueries(t, []string{
-			"/delete",
-		})
+		expectDeleteQueries(t)
 	}()
 
 	expectDBClientQueries(t, []string{
@@ -349,11 +345,7 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 		if _, err := playerEngine.Exec(query); err != nil {
 			t.Fatal(err)
 		}
-		for q := range globalDBQueries {
-			if strings.HasPrefix(q, "delete from _vt.vreplication") {
-				break
-			}
-		}
+		expectDeleteQueries(t)
 	}()
 
 	for q := range globalDBQueries {
@@ -389,6 +381,11 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 		`/update _vt.copy_state set lastpk='fields:<name:\\\"id\\\" type:INT32 > rows:<lengths:1 values:\\\"1\\\" > ' where vrepl_id=.*`,
 		"/delete from _vt.copy_state.*not_copied",
 		"rollback",
+	})
+	// Explicitly eat the Running state query. You cant' make expectNontxQueries
+	// wait for it because it ignores _vt.vreplication events.
+	expectDBClientQueries(t, []string{
+		"/update _vt.vreplication set state='Running'",
 	})
 	expectData(t, "dst1", [][]string{
 		{"1", "insert in"},
@@ -469,11 +466,7 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 		if _, err := playerEngine.Exec(query); err != nil {
 			t.Fatal(err)
 		}
-		for q := range globalDBQueries {
-			if strings.HasPrefix(q, "delete from _vt.vreplication") {
-				break
-			}
-		}
+		expectDeleteQueries(t)
 	}()
 
 	expectNontxQueries(t, []string{
@@ -484,6 +477,11 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 		`/update _vt.copy_state set lastpk.*`,
 		"/delete from _vt.copy_state.*dst",
 		"rollback",
+	})
+	// Explicitly eat the Running state query. You cant' make expectNontxQueries
+	// wait for it because it ignores _vt.vreplication events.
+	expectDBClientQueries(t, []string{
+		"/update _vt.vreplication set state='Running'",
 	})
 	expectData(t, "dst", [][]string{
 		{"2", "copied"},
@@ -518,9 +516,7 @@ func TestPlayerCopyTablesNone(t *testing.T) {
 		if _, err := playerEngine.Exec(query); err != nil {
 			t.Fatal(err)
 		}
-		expectDBClientQueries(t, []string{
-			"/delete",
-		})
+		expectDeleteQueries(t)
 	}()
 
 	expectDBClientQueries(t, []string{
@@ -580,9 +576,7 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 		if _, err := playerEngine.Exec(query); err != nil {
 			t.Fatal(err)
 		}
-		expectDBClientQueries(t, []string{
-			"/delete",
-		})
+		expectDeleteQueries(t)
 	}()
 
 	// Make sure rows get copied in spite of the early context cancel.
@@ -607,7 +601,7 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
 		"rollback",
-		// All tables copied. Final catch up followed by Running state.
+		// All tables copied. Go into running state.
 		"/update _vt.vreplication set state='Running'",
 	})
 	expectData(t, "dst1", [][]string{

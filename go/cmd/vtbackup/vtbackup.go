@@ -60,6 +60,7 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"math"
@@ -87,6 +88,7 @@ import (
 
 const (
 	backupTimestampFormat = "2006-01-02.150405"
+	manifestFileName      = "MANIFEST"
 )
 
 var (
@@ -521,13 +523,21 @@ func shouldBackup(ctx context.Context, topoServer *topo.Server, backupStorage ba
 	if len(backups) == 0 && !*allowFirstBackup {
 		return false, fmt.Errorf("no existing backups to restore from; backup is not possible since -initial_backup flag was not enabled")
 	}
+	// Look for the most recent, complete backup.
+	lastBackup := lastCompleteBackup(ctx, backups)
+	if lastBackup == nil {
+		if *allowFirstBackup {
+			// There's no complete backup, but we were told to take one from scratch anyway.
+			return true, nil
+		}
+		return false, fmt.Errorf("no complete backups to restore from; backup is not possible since -initial_backup flag was not enabled")
+	}
 
-	// Has it been long enough since the last backup to need a new one?
+	// Has it been long enough since the last complete backup to need a new one?
 	if *minBackupInterval == 0 {
 		// No minimum interval is set, so always backup.
 		return true, nil
 	}
-	lastBackup := backups[len(backups)-1]
 	lastBackupTime, err := parseBackupTime(lastBackup.Name())
 	if err != nil {
 		return false, fmt.Errorf("can't check last backup time: %v", err)
@@ -540,4 +550,48 @@ func shouldBackup(ctx context.Context, topoServer *topo.Server, backupStorage ba
 	// It has been long enough.
 	log.Infof("The last backup was taken at %v, which is older than the min_backup_interval of %v.", lastBackupTime, *minBackupInterval)
 	return true, nil
+}
+
+func lastCompleteBackup(ctx context.Context, backups []backupstorage.BackupHandle) backupstorage.BackupHandle {
+	if len(backups) == 0 {
+		return nil
+	}
+
+	// Backups are sorted in ascending order by start time. Start at the end.
+	for i := len(backups) - 1; i >= 0; i-- {
+		// Check if this backup is complete by looking for the MANIFEST file,
+		// which is written at the end after all files are uploaded.
+		backup := backups[i]
+		if err := checkBackupComplete(ctx, backup); err != nil {
+			log.Warningf("Ignoring backup %v because it's incomplete: %v", backup.Name(), err)
+			continue
+		}
+		return backup
+	}
+
+	return nil
+}
+
+// partialManifest is a struct into which we deserialize the MANIFEST file.
+// This only contains the fields that are common to all Vitess backup engines.
+// Other fields in the MANIFEST file will be ignored during deserialization.
+type partialManifest struct {
+	// Position is the position at which the backup was taken
+	Position mysql.Position
+}
+
+func checkBackupComplete(ctx context.Context, backup backupstorage.BackupHandle) error {
+	file, err := backup.ReadFile(ctx, manifestFileName)
+	if err != nil {
+		return fmt.Errorf("can't read MANIFEST: %v", err)
+	}
+	defer file.Close()
+
+	manifest := partialManifest{}
+	if err := json.NewDecoder(file).Decode(&manifest); err != nil {
+		return fmt.Errorf("can't decode MANIFEST: %v", err)
+	}
+
+	log.Infof("Found complete backup %v taken at position %v", backup.Name(), manifest.Position.String())
+	return nil
 }
