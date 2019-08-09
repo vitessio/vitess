@@ -883,17 +883,15 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 				log.Error("Error writing query error to client %v: %v", c.ConnectionID, werr)
 				return werr
 			}
-
-			if !fieldSent {
-				fieldSent = true
-				if err := c.writePrepare(fld, c.PrepareData[c.StatementID]); err != nil {
-					return err
-				}
-			}
-
-			delete(c.PrepareData, c.StatementID)
-			return nil
 		}
+
+		if !fieldSent {
+			fieldSent = true
+			if err := c.writePrepare(fld, c.PrepareData[c.StatementID]); err != nil {
+				return err
+			}
+		}
+
 	case ComStmtExecute:
 		queryStart := time.Now()
 		stmtID, _, err := c.parseComStmtExecute(c.PrepareData, data)
