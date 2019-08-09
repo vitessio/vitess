@@ -102,28 +102,7 @@ nodeAffinity:
 #############################
 {{- define "mycnf-exec" -}}
 
-if [ "$VT_DB_FLAVOR" = "percona" ]; then
-  MYSQL_FLAVOR=Percona
-
-elif [ "$VT_DB_FLAVOR" = "mysql" ]; then
-  MYSQL_FLAVOR=MySQL56
-
-elif [ "$VT_DB_FLAVOR" = "mysql56" ]; then
-  MYSQL_FLAVOR=MySQL56
-
-elif [ "$VT_DB_FLAVOR" = "maria" ]; then
-  MYSQL_FLAVOR=MariaDB
-
-elif [ "$VT_DB_FLAVOR" = "mariadb" ]; then
-  MYSQL_FLAVOR=MariaDB
-
-elif [ "$VT_DB_FLAVOR" = "mariadb103" ]; then
-  MYSQL_FLAVOR=MariaDB103
-
-fi
-
-export MYSQL_FLAVOR
-export EXTRA_MY_CNF="/vtdataroot/tabletdata/report-host.cnf:/vt/config/mycnf/rbr.cnf"
+export EXTRA_MY_CNF="/vtdataroot/tabletdata/report-host.cnf"
 
 {{ if . }}
 for filename in /vt/userconfig/*.cnf; do

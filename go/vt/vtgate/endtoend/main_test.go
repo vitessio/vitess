@@ -170,7 +170,7 @@ func TestMain(m *testing.M) {
 				}},
 			}},
 		}
-		cfg.ExtraMyCnf = []string{path.Join(os.Getenv("VTTOP"), "config/mycnf/rbr.cnf")}
+		cfg.ExtraMyCnf = []string{path.Join(os.Getenv("VTTOP"), "config/mycnf/testsuite-rbr.cnf")}
 		if err := cfg.InitSchemas("ks", schema, vschema); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.RemoveAll(cfg.SchemaDir)

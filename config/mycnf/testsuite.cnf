@@ -15,3 +15,6 @@ innodb_doublewrite=0
 
 # This sets the binary log format to SBR for legacy tests
 binlog-format=statement
+
+# Some tests don't work with full strict yet
+sql_mode='STRICT_TRANS_TABLES'

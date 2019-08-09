@@ -42,9 +42,7 @@ func TestMycnf(t *testing.T) {
 		t.Errorf("err: %v", err)
 	}
 	cnfTemplatePaths := []string{
-		path.Join(root, "src/vitess.io/vitess/config/mycnf/default.cnf"),
-		path.Join(root, "src/vitess.io/vitess/config/mycnf/replica.cnf"),
-		path.Join(root, "src/vitess.io/vitess/config/mycnf/master.cnf"),
+		path.Join(root, "src/vitess.io/vitess/config/mycnf/global.cnf"),
 	}
 	data, err := cnf.makeMycnf(cnfTemplatePaths)
 	if err != nil {

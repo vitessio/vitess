@@ -88,11 +88,6 @@ DB_CHARSET=CHARACTER SET utf8 COLLATE utf8_general_ci
 ```
 
 Ensure you have log bin enabled on your external database.
-You may add the following configs to your conf.d directory and reload mysqld on your server
-```
-vitess/config/mycnf/master_mysql56.cnf
-vitess/config/mycnf/rbr.cnf
-```
 
 ### Start the cluster
 ```

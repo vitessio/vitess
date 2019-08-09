@@ -98,9 +98,9 @@ def main(cmdline_options):
     init_data_opts.max_table_shard_size = cmdline_options.max_table_shard_size
     init_data_opts.null_probability = cmdline_options.null_probability
 
-  extra_my_cnf = os.path.join(os.environ['VTTOP'], 'config/mycnf/vtcombo.cnf')
+  extra_my_cnf = ""
   if cmdline_options.extra_my_cnf:
-    extra_my_cnf += ':' + cmdline_options.extra_my_cnf
+    extra_my_cnf = cmdline_options.extra_my_cnf
 
   with local_database.LocalDatabase(
       topology,

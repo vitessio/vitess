@@ -92,7 +92,7 @@ func Init() (*Env, error) {
 				},
 			},
 		},
-		ExtraMyCnf: []string{path.Join(os.Getenv("VTTOP"), "config/mycnf/rbr.cnf")},
+		ExtraMyCnf: []string{path.Join(os.Getenv("VTTOP"), "config/mycnf/testsuite-rbr.cnf")},
 		OnlyMySQL:  true,
 	}
 	te.cluster = &vttest.LocalCluster{

@@ -186,9 +186,9 @@ class Tablet(object):
     """
     if use_rbr:
       if extra_my_cnf:
-        extra_my_cnf += ':' + environment.vttop + '/config/mycnf/rbr.cnf'
+        extra_my_cnf += ':' + environment.vttop + '/config/mycnf/testsuite-rbr.cnf'
       else:
-        extra_my_cnf = environment.vttop + '/config/mycnf/rbr.cnf'
+        extra_my_cnf = environment.vttop + '/config/mycnf/testsuite-rbr.cnf'
 
     if not init_db:
       init_db = environment.vttop + '/config/init_db.sql'

@@ -1,0 +1,3 @@
+# This is included by tests that require RBR
+# The testsuite otherwise runs with SBR as default for now
+binlog-format=ROW

@@ -47,7 +47,7 @@ if [[ "$tablet_role" != "master" ]]; then
         echo "CREATE USER IF NOT EXISTS '$DB_USER'@'%' IDENTIFIED BY '$DB_PASS';" >> $init_db_sql_file
         echo "GRANT ALL ON *.* TO '$DB_USER'@'%';FLUSH PRIVILEGES;" >> $init_db_sql_file
         # Prevent replication failures in case external db server has multiple databases which have not been created here
-        echo "replicate-do-db=$keyspace" >> $VTROOT/config/mycnf/rbr.cnf
+        echo "replicate-do-db=$keyspace" >> $VTROOT/config/mycnf/global.cnf
     else
         echo "CREATE DATABASE IF NOT EXISTS $db_name;" >> $init_db_sql_file
     fi
