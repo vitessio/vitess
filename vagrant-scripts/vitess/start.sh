@@ -6,7 +6,6 @@ printf "\nStarting Vitess cluster\n"
 
 export VTROOT=/vagrant
 export VTDATAROOT=/tmp/vtdata-dev
-export MYSQL_FLAVOR=MySQL56
 cd "$VITESS_WORKSPACE"/examples/local
 export SHARD="-"
 export TOPO="zk2"

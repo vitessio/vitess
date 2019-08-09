@@ -5,7 +5,6 @@
 #
 
 ulimit -n 10000
-export MYSQL_FLAVOR=MySQL56
 export VT_MYSQL_ROOT=/usr
 
 printf "\nBuilding Vitess...\n"

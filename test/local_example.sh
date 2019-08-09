@@ -18,8 +18,7 @@
 
 # timeout in seconds (for each step, not overall)
 timeout=30
-export TOPO=zk2
-
+export TOPO=ectd2
 cd $VTTOP/examples/local
 
 exitcode=1
@@ -36,14 +35,14 @@ teardown() {
   ./vtgate-down.sh &
   ./vttablet-down.sh "$TABLETS_UIDS" &
   ./vtctld-down.sh &
-  ./zk-down.sh &
+  ./etcd-down.sh &
   wait
   exit $exitcode
 }
 trap teardown SIGTERM SIGINT EXIT
 
 # Set up servers.
-timeout $timeout ./zk-up.sh || teardown
+timeout $timeout ./etcd-up.sh || teardown
 timeout $timeout ./vtctld-up.sh || teardown
 timeout $timeout ./vttablet-up.sh || teardown
 
