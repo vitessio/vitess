@@ -18,7 +18,7 @@
 
 # timeout in seconds (for each step, not overall)
 timeout=30
-export TOPO=ectd2
+export TOPO=etcd2
 export EXTRA_MY_CNF=$VTROOT/config/mycnf/testsuite.cnf:$VTROOT/config/mycnf/testsuite-rbr.cnf
 
 cd $VTTOP/examples/local
@@ -116,11 +116,11 @@ done
 echo "Run Go client script..."
 go run client.go -server=localhost:15991 || teardown
 
-echo "Run Java client script..."
-./client_java.sh || teardown
+# echo "Run Java client script..."
+# ./client_java.sh || teardown
 
-echo "Run JDBC client script..."
-./client_jdbc.sh || teardown
+# echo "Run JDBC client script..."
+# ./client_jdbc.sh || teardown
 
 exitcode=0
 teardown
