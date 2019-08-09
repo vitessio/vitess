@@ -318,7 +318,7 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 	}
 
 	if err := be.extractFiles(ctx, logger, bh, !bm.SkipCompress, be.backupFileName(), tempDir); err != nil {
-		logger.Errorf("error restoring backup file %v:%v", be.backupFileName(), err)
+		logger.Errorf("error restoring backup file %v: %v", be.backupFileName(), err)
 		return err
 	}
 
@@ -433,7 +433,7 @@ func (be *XtrabackupEngine) extractFiles(
 	case streamModeTar:
 		// now extract the files by running tar
 		// error if we can't find tar
-		flagsToExec := []string{"-C", tempDir, "-xi"}
+		flagsToExec := []string{"-C", tempDir, "-xiv"}
 		tarCmd := exec.CommandContext(ctx, "tar", flagsToExec...)
 		logger.Infof("Executing tar cmd with flags %v", flagsToExec)
 		tarCmd.Stdin = reader
