@@ -32,11 +32,6 @@ import (
 
 // Backup takes a db backup and sends it to the BackupStorage
 func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowMaster bool) error {
-	if err := agent.lock(ctx); err != nil {
-		return err
-	}
-	defer agent.unlock()
-
 	if agent.Cnf == nil {
 		return fmt.Errorf("cannot perform backup without my.cnf, please restart vttablet with a my.cnf file specified")
 	}
@@ -49,22 +44,28 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	if !allowMaster && currentTablet.Type == topodatapb.TabletType_MASTER {
 		return fmt.Errorf("type MASTER cannot take backup. if you really need to do this, rerun the backup command with -allow_master")
 	}
-
-	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
-	if err != nil {
-		return err
-	}
-	if !allowMaster && tablet.Type == topodatapb.TabletType_MASTER {
-		return fmt.Errorf("type MASTER cannot take backup. if you really need to do this, rerun the backup command with -allow_master")
-	}
-	originalType := tablet.Type
-
 	engine, err := mysqlctl.GetBackupEngine()
 	if err != nil {
 		return vterrors.Wrap(err, "failed to find backup engine")
 	}
 	builtin, _ := engine.(*mysqlctl.BuiltinBackupEngine)
+	// get Tablet info from topo so that it is up to date
+	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+	if err != nil {
+		return err
+	}
+	originalType := tablet.Type
 	if builtin != nil {
+		if err := agent.lock(ctx); err != nil {
+			return err
+		}
+		defer agent.unlock()
+
+		tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+		if err != nil {
+			return err
+		}
+
 		// update our type to BACKUP
 		if _, err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topodatapb.TabletType_BACKUP); err != nil {
 			return err
@@ -84,7 +85,6 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	returnErr := mysqlctl.Backup(ctx, agent.Cnf, agent.MysqlDaemon, l, dir, name, concurrency, agent.hookExtraEnv())
 
 	if builtin != nil {
-
 		bgCtx := context.Background()
 		// Starting from here we won't be able to recover if we get stopped by a cancelled
 		// context. It is also possible that the context already timed out during the
