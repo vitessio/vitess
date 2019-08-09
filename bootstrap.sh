@@ -361,6 +361,8 @@ if [ "$BUILD_TESTS" == 1 ] ; then
   echo "$MYSQL_FLAVOR" > "$VTROOT/dist/MYSQL_FLAVOR"
 fi
 
+PYTHONPATH='' $PIP install mysql-connector-python
+
 #
 # 4. Installation of development related steps e.g. creating Git hooks.
 #
