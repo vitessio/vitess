@@ -56,6 +56,9 @@ var (
 	// streaming mode
 	xtrabackupStreamMode = flag.String("xtrabackup_stream_mode", "tar", "which mode to use if streaming, valid values are tar and xbstream")
 	xtrabackupUser       = flag.String("xtrabackup_user", "", "User that xtrabackup will use to connect to the database server. This user must have all necessary privileges. For details, please refer to xtrabackup documentation.")
+	// striping mode
+	xtrabackupStripes         = flag.Uint("xtrabackup_stripes", 0, "If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression")
+	xtrabackupStripeBlockSize = flag.Uint("xtrabackup_stripe_block_size", 102400, "Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe")
 )
 
 const (
@@ -81,6 +84,12 @@ type xtraBackupManifest struct {
 	SkipCompress bool
 	// Params are the parameters that backup was run with
 	Params string `json:"ExtraCommandLineParams"`
+	// StreamMode is the stream mode used to create this backup.
+	StreamMode string
+	// NumStripes is the number of stripes the file is split across, if any.
+	NumStripes int32
+	// StripeBlockSize is the size in bytes of each stripe block.
+	StripeBlockSize int32
 }
 
 func (be *XtrabackupEngine) backupFileName() string {
@@ -97,8 +106,7 @@ func (be *XtrabackupEngine) backupFileName() string {
 
 // ExecuteBackup returns a boolean that indicates if the backup is usable,
 // and an overall error.
-func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) (bool, error) {
-
+func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) (complete bool, finalErr error) {
 	if *xtrabackupUser == "" {
 		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "xtrabackupUser must be specified.")
 	}
@@ -136,20 +144,25 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	}
 
 	backupFileName := be.backupFileName()
+	numStripes := int(*xtrabackupStripes)
 
-	wc, err := bh.AddFile(ctx, backupFileName, 0)
+	destFiles, err := addStripeFiles(ctx, bh, backupFileName, numStripes, logger)
 	if err != nil {
 		return false, vterrors.Wrapf(err, "cannot create backup file %v", backupFileName)
 	}
 	closeFile := func(wc io.WriteCloser, fileName string) {
-		if closeErr := wc.Close(); err == nil {
-			err = closeErr
+		if closeErr := wc.Close(); finalErr == nil {
+			finalErr = closeErr
 		} else if closeErr != nil {
 			// since we already have an error just log this
-			logger.Errorf("error closing file %v: %v", fileName, err)
+			logger.Errorf("error closing file %v: %v", fileName, closeErr)
 		}
 	}
-	defer closeFile(wc, backupFileName)
+	defer func() {
+		for _, file := range destFiles {
+			closeFile(file, backupFileName)
+		}
+	}()
 
 	backupCmd := exec.CommandContext(ctx, backupProgram, flagsToExec...)
 	backupOut, err := backupCmd.StdoutPipe()
@@ -160,18 +173,27 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	if err != nil {
 		return false, vterrors.Wrap(err, "cannot create stderr pipe")
 	}
-	dst := bufio.NewWriterSize(wc, writerBufferSize)
-	writer := io.MultiWriter(dst)
 
-	// Create the gzip compression pipe, if necessary.
-	var gzip *pgzip.Writer
-	if *backupStorageCompress {
-		gzip, err = pgzip.NewWriterLevel(writer, pgzip.BestSpeed)
-		if err != nil {
-			return false, vterrors.Wrap(err, "cannot create gziper")
+	destWriters := []io.Writer{}
+	destBuffers := []*bufio.Writer{}
+	destCompressors := []*pgzip.Writer{}
+	for _, file := range destFiles {
+		buffer := bufio.NewWriterSize(file, writerBufferSize)
+		destBuffers = append(destBuffers, buffer)
+		writer := io.Writer(buffer)
+
+		// Create the gzip compression pipe, if necessary.
+		if *backupStorageCompress {
+			compressor, err := pgzip.NewWriterLevel(writer, pgzip.BestSpeed)
+			if err != nil {
+				return false, vterrors.Wrap(err, "cannot create gzip compressor")
+			}
+			compressor.SetConcurrency(*backupCompressBlockSize, *backupCompressBlocks)
+			writer = compressor
+			destCompressors = append(destCompressors, compressor)
 		}
-		gzip.SetConcurrency(*backupCompressBlockSize, *backupCompressBlocks)
-		writer = gzip
+
+		destWriters = append(destWriters, writer)
 	}
 
 	if err = backupCmd.Start(); err != nil {
@@ -210,21 +232,27 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	}()
 
 	// Copy from the stream output to destination file (optional gzip)
-	_, err = io.Copy(writer, backupOut)
-	if err != nil {
+	blockSize := int64(*xtrabackupStripeBlockSize)
+	if blockSize < 1024 {
+		// Enforce minimum block size.
+		blockSize = 1024
+	}
+	if _, err := copyToStripes(destWriters, backupOut, blockSize); err != nil {
 		return false, vterrors.Wrap(err, "cannot copy output from xtrabackup command")
 	}
 
-	// Close gzip to flush it, after that all data is sent to writer.
-	if gzip != nil {
-		if err = gzip.Close(); err != nil {
-			return false, vterrors.Wrap(err, "cannot close gzip")
+	// Close compressor to flush it. After that all data is sent to the buffer.
+	for _, compressor := range destCompressors {
+		if err := compressor.Close(); err != nil {
+			return false, vterrors.Wrap(err, "cannot close gzip compressor")
 		}
 	}
 
 	// Flush the buffer to finish writing on destination.
-	if err = dst.Flush(); err != nil {
-		return false, vterrors.Wrapf(err, "cannot flush destination: %v", backupFileName)
+	for _, buffer := range destBuffers {
+		if err = buffer.Flush(); err != nil {
+			return false, vterrors.Wrapf(err, "cannot flush destination: %v", backupFileName)
+		}
 	}
 
 	// Wait for stderr scanner to stop.
@@ -249,11 +277,13 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 
 	// JSON-encode and write the MANIFEST
 	bm := &xtraBackupManifest{
-		FileName:     backupFileName,
-		BackupMethod: xtrabackupBackupMethod,
-		Position:     replicationPosition,
-		SkipCompress: !*backupStorageCompress,
-		Params:       *xtrabackupBackupFlags,
+		FileName:        backupFileName,
+		BackupMethod:    xtrabackupBackupMethod,
+		Position:        replicationPosition,
+		SkipCompress:    !*backupStorageCompress,
+		Params:          *xtrabackupBackupFlags,
+		NumStripes:      int32(numStripes),
+		StripeBlockSize: int32(*xtrabackupStripeBlockSize),
 	}
 
 	data, err := json.MarshalIndent(bm, "", "  ")
@@ -317,8 +347,8 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 		return err
 	}
 
-	if err := be.extractFiles(ctx, logger, bh, !bm.SkipCompress, be.backupFileName(), tempDir); err != nil {
-		logger.Errorf("error restoring backup file %v: %v", be.backupFileName(), err)
+	if err := be.extractFiles(ctx, logger, bh, bm, tempDir); err != nil {
+		logger.Errorf("error extracting backup files: %v", err)
 		return err
 	}
 
@@ -391,43 +421,57 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 }
 
 // restoreFile extracts all the files from the backup archive
-func (be *XtrabackupEngine) extractFiles(
-	ctx context.Context,
-	logger logutil.Logger,
-	bh backupstorage.BackupHandle,
-	compress bool,
-	name string,
-	tempDir string) (err error) {
+func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Logger, bh backupstorage.BackupHandle, bm xtraBackupManifest, tempDir string) error {
+	// Pull details from the MANIFEST where available, so we can still restore
+	// backups taken with different flags. Some fields were not always present,
+	// so if necessary we default to the flag values.
+	compressed := !bm.SkipCompress
+	streamMode := bm.StreamMode
+	if streamMode == "" {
+		streamMode = *xtrabackupStreamMode
+	}
+	baseFileName := bm.FileName
+	if baseFileName == "" {
+		baseFileName = be.backupFileName()
+	}
 
-	streamMode := *xtrabackupStreamMode
-	// Open the source file for reading.
-	var source io.ReadCloser
-	source, err = bh.ReadFile(ctx, name)
+	// Open the source files for reading.
+	srcFiles, err := readStripeFiles(ctx, bh, baseFileName, int(bm.NumStripes), logger)
 	if err != nil {
-		return err
+		return vterrors.Wrapf(err, "cannot open backup file %v", baseFileName)
 	}
-	defer source.Close()
-
-	reader := io.MultiReader(source)
-
-	// Create the uncompresser if needed.
-	if compress {
-		gz, err := pgzip.NewReader(reader)
-		if err != nil {
-			return err
+	defer func() {
+		for _, file := range srcFiles {
+			file.Close()
 		}
-		defer func() {
-			if cerr := gz.Close(); cerr != nil {
-				if err != nil {
-					// We already have an error, just log this one.
-					logger.Errorf("failed to close gunziper %v: %v", name, cerr)
-				} else {
-					err = cerr
-				}
+	}()
+
+	srcReaders := []io.Reader{}
+	srcDecompressors := []*pgzip.Reader{}
+	for _, file := range srcFiles {
+		reader := io.Reader(file)
+
+		// Create the decompresser if needed.
+		if compressed {
+			decompressor, err := pgzip.NewReader(reader)
+			if err != nil {
+				return vterrors.Wrap(err, "can't create gzip decompressor")
 			}
-		}()
-		reader = gz
+			srcDecompressors = append(srcDecompressors, decompressor)
+			reader = decompressor
+		}
+
+		srcReaders = append(srcReaders, reader)
 	}
+	defer func() {
+		for _, decompressor := range srcDecompressors {
+			if cerr := decompressor.Close(); cerr != nil {
+				logger.Errorf("failed to close gzip decompressor: %v", cerr)
+			}
+		}
+	}()
+
+	reader := stripeReader(srcReaders, int64(bm.StripeBlockSize))
 
 	switch streamMode {
 	case streamModeTar:
@@ -541,6 +585,149 @@ func scanLinesToLogger(prefix string, reader io.Reader, logger logutil.Logger, d
 		// returning an error. Just log it.
 		logger.Warningf("error scanning lines from %s: %v", prefix, err)
 	}
+}
+
+func stripeFileName(baseFileName string, index int) string {
+	return fmt.Sprintf("%s-%03d", baseFileName, index)
+}
+
+func addStripeFiles(ctx context.Context, backupHandle backupstorage.BackupHandle, baseFileName string, numStripes int, logger logutil.Logger) ([]io.WriteCloser, error) {
+	if numStripes <= 1 {
+		// No striping.
+		file, err := backupHandle.AddFile(ctx, baseFileName, 0)
+		return []io.WriteCloser{file}, err
+	}
+
+	files := []io.WriteCloser{}
+	for i := 0; i < numStripes; i++ {
+		file, err := backupHandle.AddFile(ctx, stripeFileName(baseFileName, i), 0)
+		if err != nil {
+			// Close any files we already opened and clear them from the result.
+			for _, file := range files {
+				if err := file.Close(); err != nil {
+					logger.Warningf("error closing backup stripe file: %v", err)
+				}
+			}
+			return nil, err
+		}
+		files = append(files, file)
+	}
+
+	return files, nil
+}
+
+func readStripeFiles(ctx context.Context, backupHandle backupstorage.BackupHandle, baseFileName string, numStripes int, logger logutil.Logger) ([]io.ReadCloser, error) {
+	if numStripes <= 1 {
+		// No striping.
+		file, err := backupHandle.ReadFile(ctx, baseFileName)
+		return []io.ReadCloser{file}, err
+	}
+
+	files := []io.ReadCloser{}
+	for i := 0; i < numStripes; i++ {
+		file, err := backupHandle.ReadFile(ctx, stripeFileName(baseFileName, i))
+		if err != nil {
+			// Close any files we already opened and clear them from the result.
+			for _, file := range files {
+				if err := file.Close(); err != nil {
+					logger.Warningf("error closing backup stripe file: %v", err)
+				}
+			}
+			return nil, err
+		}
+		files = append(files, file)
+	}
+
+	return files, nil
+}
+
+func copyToStripes(writers []io.Writer, reader io.Reader, blockSize int64) (written int64, err error) {
+	if len(writers) == 1 {
+		// Not striped.
+		return io.Copy(writers[0], reader)
+	}
+
+	// Read blocks from source and round-robin them to destination writers.
+	// Since we put a buffer in front of the destination file, and pgzip has its
+	// own buffer as well, we are writing into a buffer either way (whether a
+	// compressor is in the chain or not). That means these writes should not
+	// block often, so we shouldn't need separate goroutines here.
+	destIndex := 0
+	for {
+		// Copy blockSize bytes to this writer before rotating to the next one.
+		// The only acceptable reason for copying less than blockSize bytes is EOF.
+		n, err := io.CopyN(writers[destIndex], reader, blockSize)
+		written += n
+		if err == io.EOF {
+			// We're done.
+			return written, nil
+		}
+		if err != nil {
+			// If we failed to copy exactly blockSize bytes for any reason other
+			// than EOF, we must abort.
+			return written, err
+		}
+
+		// Rotate to the next writer.
+		destIndex++
+		if destIndex == len(writers) {
+			destIndex = 0
+		}
+	}
+}
+
+func stripeReader(readers []io.Reader, blockSize int64) io.Reader {
+	if len(readers) == 1 {
+		// No striping.
+		return readers[0]
+	}
+
+	// Make a pipe to convert our overall Writer into a Reader.
+	// We will launch a goroutine to write to the write half of the pipe,
+	// and return the read half to the caller.
+	reader, writer := io.Pipe()
+
+	go func() {
+		// Read blocks from each source in round-robin and send them to the pipe.
+		// When using pgzip, there is already a read-ahead goroutine for every
+		// source, so we don't need to launch one for each source.
+		// TODO: See if we need to add read-ahead goroutines for the case when
+		//   compression is not enabled in order to get any benefit to restore
+		//   parallelism from data striping.
+		srcIndex := 0
+		for {
+			// Copy blockSize bytes from this reader before rotating to the next one.
+			// The only acceptable reason for copying less than blockSize bytes is EOF.
+			n, err := io.CopyN(writer, readers[srcIndex], blockSize)
+			if err != nil {
+				// If we failed to copy exactly blockSize bytes for any
+				// reason other than EOF, we must abort.
+				if err != io.EOF {
+					writer.CloseWithError(err)
+					return
+				}
+
+				// If we hit EOF after copying less than the blockSize from
+				// this reader, we must be done.
+				if n < blockSize {
+					// Close the write half so the read half gets EOF.
+					writer.Close()
+					return
+				}
+				// If we hit EOF after copying exactly blockSize bytes, then we
+				// need to keep checking the rest of the stripes until one of
+				// them returns EOF with n < blockSize.
+			}
+
+			// Rotate to the next writer.
+			srcIndex++
+			if srcIndex == len(readers) {
+				srcIndex = 0
+			}
+		}
+	}()
+
+	return reader
 }
 
 func init() {
