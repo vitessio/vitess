@@ -1,6 +1,9 @@
 package mysqlctl
 
 import (
+	"bytes"
+	"io"
+	"math/rand"
 	"testing"
 
 	"vitess.io/vitess/go/vt/logutil"
@@ -52,4 +55,47 @@ func TestFindReplicationPositionEmptyMatch(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error from findReplicationPosition but got nil")
 	}
+}
+
+func TestStripeRoundTrip(t *testing.T) {
+	// Generate some deterministic input data.
+	dataSize := int64(1000000)
+	input := make([]byte, dataSize)
+	rng := rand.New(rand.NewSource(1))
+	rng.Read(input)
+
+	test := func(blockSize int64, stripes int) {
+		// Write it out striped across some buffers.
+		buffers := make([]bytes.Buffer, stripes)
+		readers := []io.Reader{}
+		writers := []io.Writer{}
+		for i := range buffers {
+			readers = append(readers, &buffers[i])
+			writers = append(writers, &buffers[i])
+		}
+		copyToStripes(writers, bytes.NewReader(input), blockSize)
+
+		// Read it back and merge.
+		outBuf := &bytes.Buffer{}
+		written, err := io.Copy(outBuf, stripeReader(readers, blockSize))
+		if err != nil {
+			t.Errorf("dataSize=%d, blockSize=%d, stripes=%d; copy error: %v", dataSize, blockSize, stripes, err)
+		}
+		if written != dataSize {
+			t.Errorf("dataSize=%d, blockSize=%d, stripes=%d; copy error: wrote %d total bytes instead of dataSize", dataSize, blockSize, stripes, written)
+		}
+		output := outBuf.Bytes()
+		if !bytes.Equal(input, output) {
+			t.Errorf("output bytes are not the same as input")
+		}
+	}
+
+	// Test block size that evenly divides data size.
+	test(1000, 10)
+	// Test block size that doesn't evenly divide data size.
+	test(3000, 10)
+	// Test stripe count that doesn't evenly divide data size.
+	test(1000, 30)
+	// Test block size and stripe count that don't evenly divide data size.
+	test(6000, 7)
 }
