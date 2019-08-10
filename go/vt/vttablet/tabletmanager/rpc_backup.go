@@ -78,6 +78,9 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 			return err
 		}
 	} else {
+		if agent._isOnlineBackupRunning {
+			return fmt.Errorf("a backup is already running on tablet: %v", tablet.Alias)
+		}
 		// this means we continue to serve, but let's set _isOnlineBackupRunning to true
 		// have to take the mutex lock before writing to _ fields
 		agent.mutex.Lock()
