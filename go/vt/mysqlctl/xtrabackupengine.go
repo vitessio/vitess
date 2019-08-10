@@ -471,6 +471,12 @@ func findReplicationPosition(input, flavor string, logger logutil.Logger) (mysql
 	return replicationPosition, nil
 }
 
+// ShouldDrainForBackup satisfies the BackupEngine interface
+// xtrabackup can run while tablet is serving, hence false
+func (be *XtrabackupEngine) ShouldDrainForBackup() bool {
+	return false
+}
+
 func init() {
 	BackupEngineMap[xtrabackupBackupMethod] = &XtrabackupEngine{}
 }

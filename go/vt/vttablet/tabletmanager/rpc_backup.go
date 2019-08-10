@@ -18,6 +18,7 @@ package tabletmanager
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"golang.org/x/net/context"
@@ -48,7 +49,6 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	if err != nil {
 		return vterrors.Wrap(err, "failed to find backup engine")
 	}
-	builtin, _ := engine.(*mysqlctl.BuiltinBackupEngine)
 	// get Tablet info from topo so that it is up to date
 	tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 	if err != nil {
@@ -58,12 +58,11 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 		return fmt.Errorf("type MASTER cannot take backup. if you really need to do this, rerun the backup command with -allow_master")
 	}
 	var originalType topodatapb.TabletType
-	if builtin != nil {
+	if engine.ShouldDrainForBackup() {
 		if err := agent.lock(ctx); err != nil {
 			return err
 		}
 		defer agent.unlock()
-
 		tablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
 		if err != nil {
 			return err
@@ -78,7 +77,17 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 		if err := agent.refreshTablet(ctx, "before backup"); err != nil {
 			return err
 		}
+	} else {
+		// this means we continue to serve, but let's set _isOnlineBackupRunning to true
+		// have to take the mutex lock before writing to _ fields
+		agent.mutex.Lock()
+		agent._isOnlineBackupRunning = true
+		agent.mutex.Unlock()
+		if agent.exportStats {
+			agent.statsBackupIsRunning.Set(strconv.FormatBool(agent._isOnlineBackupRunning))
+		}
 	}
+
 	// create the loggers: tee to console and source
 	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
@@ -87,7 +96,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	name := fmt.Sprintf("%v.%v", time.Now().UTC().Format("2006-01-02.150405"), topoproto.TabletAliasString(tablet.Alias))
 	returnErr := mysqlctl.Backup(ctx, agent.Cnf, agent.MysqlDaemon, l, dir, name, concurrency, agent.hookExtraEnv())
 
-	if builtin != nil {
+	if engine.ShouldDrainForBackup() {
 		bgCtx := context.Background()
 		// Starting from here we won't be able to recover if we get stopped by a cancelled
 		// context. It is also possible that the context already timed out during the
@@ -107,6 +116,15 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 		// let's update our internal state (start query service and other things)
 		if err := agent.refreshTablet(bgCtx, "after backup"); err != nil {
 			return err
+		}
+	} else {
+		// now we set _isOnlineBackupRunning back to false
+		// have to take the mutex lock before writing to _ fields
+		agent.mutex.Lock()
+		agent._isOnlineBackupRunning = false
+		agent.mutex.Unlock()
+		if agent.exportStats {
+			agent.statsBackupIsRunning.Set(strconv.FormatBool(agent._isOnlineBackupRunning))
 		}
 	}
 	// and re-run health check to be sure to capture any replication delay

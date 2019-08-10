@@ -109,6 +109,8 @@ type ActionAgent struct {
 	// only used if exportStats is true.
 	statsTabletTypeCount *stats.CountersWithSingleLabel
 
+	statsBackupIsRunning *stats.String
+
 	// batchCtx is given to the agent by its creator, and should be used for
 	// any background tasks spawned by the agent.
 	batchCtx context.Context
@@ -211,6 +213,8 @@ type ActionAgent struct {
 	_lockTablesTimer      *time.Timer
 	// unused
 	//_lockTablesTimeout    *time.Duration
+	// _isOnlineBackupRunning tells us whether there is a non-blocking backup that is currently running
+	_isOnlineBackupRunning bool
 }
 
 // NewActionAgent creates a new ActionAgent and registers all the
@@ -262,6 +266,7 @@ func NewActionAgent(
 	agent.exportStats = true
 	agent.statsTabletType = stats.NewString("TabletType")
 	agent.statsTabletTypeCount = stats.NewCountersWithSingleLabel("TabletTypeCount", "Number of times the tablet changed to the labeled type", "type")
+	agent.statsBackupIsRunning = stats.NewString("BackupIsRunning")
 
 	var mysqlHost string
 	var mysqlPort int32
