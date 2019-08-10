@@ -468,7 +468,7 @@ func (be *XtrabackupEngine) extractFiles(
 		if *xbstreamRestoreFlags != "" {
 			flagsToExec = append(flagsToExec, strings.Fields(*xbstreamRestoreFlags)...)
 		}
-		flagsToExec = append(flagsToExec, "-C", tempDir, "-x")
+		flagsToExec = append(flagsToExec, "-C", tempDir, "-xv")
 		xbstreamCmd := exec.CommandContext(ctx, xbstreamProgram, flagsToExec...)
 		logger.Infof("Executing xbstream cmd: %v %v", xbstreamProgram, flagsToExec)
 		xbstreamCmd.Stdin = reader
