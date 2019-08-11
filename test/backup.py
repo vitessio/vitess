@@ -31,6 +31,7 @@ from mysql_flavor import mysql_flavor
 
 use_mysqlctld = False
 use_xtrabackup = False
+xtrabackup_stripes = 0
 stream_mode = 'tar'
 tablet_master = None
 tablet_replica1 = None
@@ -48,6 +49,7 @@ def setUpModule():
                    '-xtrabackup_stream_mode',
                    stream_mode,
                    '-xtrabackup_user=vt_dba',
+                   '-xtrabackup_stripes=%d' % (xtrabackup_stripes),
                    '-xtrabackup_backup_flags',
                    '--password=VtDbaPass']
 
@@ -539,7 +541,7 @@ class TestBackup(unittest.TestCase):
   def test_terminated_restore(self):
     stop_restore_msg = 'Copying file 10'
     if use_xtrabackup:
-      stop_restore_msg = 'Restore: Preparing the files'
+      stop_restore_msg = 'Restore: Preparing'
     def _terminated_restore(t):
       for e in utils.vtctld_connection.execute_vtctl_command(
           ['RestoreFromBackup', t.tablet_alias]):
