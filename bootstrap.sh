@@ -25,6 +25,7 @@
 
 BUILD_TESTS=${BUILD_TESTS:-1}
 BUILD_PYTHON=${BUILD_PYTHON:-1}
+BUILD_JAVA=${BUILD_JAVA:-1}
 
 #
 # 0. Initialization and helper methods.
@@ -188,9 +189,11 @@ function install_zookeeper() {
   zip -d "lib/$zk-fatjar.jar" 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*SF' || true # needed for >=3.4.10 <3.5
   rm -rf "$zk" "$zk.tar.gz"
 }
-zk_ver=${ZK_VERSION:-3.4.14}
-install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist/vt-zookeeper-$zk_ver" install_zookeeper
 
+zk_ver=${ZK_VERSION:-3.4.14}
+if [ "$BUILD_JAVA" == 1 ] ; then
+  install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist/vt-zookeeper-$zk_ver" install_zookeeper
+fi
 
 # Download and install etcd, link etcd binary into our root.
 function install_etcd() {
