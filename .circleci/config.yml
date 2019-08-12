@@ -1,0 +1,27 @@
+# Golang CircleCI 2.0 configuration file
+#
+# Check https://circleci.com/docs/2.0/language-go/ for more details
+
+version: 2
+jobs:
+  build:
+    docker:
+      - image: circleci/golang:1.12
+
+        environment:
+#          TEST_FLAGS: "-docker -use_docker_cache=false -timeout=8m -print-log"
+          VTROOT: "~/vitess"
+
+    #### TEMPLATE_NOTE: go expects specific checkout path representing url
+    #### expecting it in the form of
+    ####   /go/src/github.com/circleci/go-tool
+    ####   /go/src/bitbucket.org/circleci/go-tool
+#    parallelism: 4
+    working_directory: ~/vitess/src/vitess.io/vitess
+    steps:
+      - checkout
+
+      # specify any bash command here prefixed with `run: `
+      - run:
+				- source ./dev.env
+				- go run test.go -docker=false -timeout=10m -print-log unit
