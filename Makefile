@@ -67,6 +67,7 @@ clean:
 	go clean -i ./go/...
 	rm -rf third_party/acolyte
 	rm -rf go/vt/.proto.tmp
+	go mod tidy
 
 # This will remove object files for all Go projects in the same GOPATH.
 # This is necessary, for example, to make sure dependencies are rebuilt
@@ -86,6 +87,7 @@ cleanall:
 	# other stuff in the go hierarchy that is not under vendor/
 	rm -rf ../../../golang.org ../../../honnef.co
 	rm -rf ../../../github.com/golang ../../../github.com/kardianos ../../../github.com/kisielk
+	go mod tidy
 	# Remind people to run bootstrap.sh again
 	echo "Please run bootstrap.sh again to setup your environment"
 
