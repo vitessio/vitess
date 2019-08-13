@@ -29,6 +29,91 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+func TestSubtract(t *testing.T) {
+	tcases := []struct {
+		v1, v2 Value
+		out    Value
+		err    error
+	}{{
+
+		//All Nulls
+		v1:  NULL,
+		v2:  NULL,
+		out: NULL,
+	}, {
+
+		// First value null.
+		v1:  NewInt32(1),
+		v2:  NULL,
+		out: NULL,
+	}, {
+
+		// Second value null.
+		v1:  NULL,
+		v2:  NewInt32(1),
+		out: NULL,
+	}, {
+
+		// case with negative value
+		v1:  NewInt64(-1),
+		v2:  NewInt64(-2),
+		out: NewInt64(1),
+	}, {
+
+		// testing for int64 overflow with min negative value
+		v1:  NewInt64(math.MinInt64),
+		v2:  NewInt64(1),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in -9223372036854775808 - 1"),
+	}, {
+
+		v1:  NewUint64(4),
+		v2:  NewInt64(5),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 4 - 5"),
+	}, {
+
+		v1:  NewUint64(7),
+		v2:  NewInt64(5),
+		out: NewUint64(2),
+	}, {
+
+		v1:  NewUint64(math.MaxUint64),
+		v2:  NewInt64(0),
+		out: NewUint64(math.MaxUint64),
+	}, {
+
+		// testing for int64 overflow
+		v1:  NewInt64(math.MinInt64),
+		v2:  NewUint64(0),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 0 - -9223372036854775808"),
+	}, {
+
+		v1:  TestValue(VarChar, "c"),
+		v2:  NewInt64(1),
+		out: NewInt64(-1),
+	}, {
+		v1:  NewUint64(1),
+		v2:  TestValue(VarChar, "c"),
+		out: NewUint64(1),
+	}}
+
+	for _, tcase := range tcases {
+
+		got, err := Subtract(tcase.v1, tcase.v2)
+
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("Subtract(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
+		}
+		if tcase.err != nil {
+			continue
+		}
+
+		if !reflect.DeepEqual(got, tcase.out) {
+			t.Errorf("Subtraction(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
+		}
+	}
+
+}
+
 func TestAdd(t *testing.T) {
 	tcases := []struct {
 		v1, v2 Value
