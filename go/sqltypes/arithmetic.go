@@ -28,9 +28,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// TODO(sougou): change these functions to be more permissive.
-// Most string to number conversions should quietly convert to 0.
-
 // numeric represents a numeric value extracted from
 // a Value, used for arithmetic operations.
 type numeric struct {
@@ -54,6 +51,24 @@ func Add(v1, v2 Value) (Value, error) {
 	lv2, err := newNumeric(v2)
 
 	lresult, err := addNumericWithError(lv1, lv2)
+	if err != nil {
+		return NULL, err
+	}
+
+	return castFromNumeric(lresult, lresult.typ), nil
+}
+
+//Subtract takes two values and subtracts them
+func Subtract(v1, v2 Value) (Value, error) {
+	if v1.IsNull() || v2.IsNull() {
+		return NULL, nil
+	}
+
+	lv1, err := newNumeric(v1)
+
+	lv2, err := newNumeric(v2)
+
+	lresult, err := subtractNumericWithError(lv1, lv2)
 	if err != nil {
 		return NULL, err
 	}
@@ -376,6 +391,25 @@ func addNumericWithError(v1, v2 numeric) (numeric, error) {
 
 }
 
+func subtractNumericWithError(v1, v2 numeric) (numeric, error) {
+	v1, v2 = prioritize(v1, v2)
+	switch v1.typ {
+	case Int64:
+		return intMinusIntWithError(v1.ival, v2.ival)
+	case Uint64:
+		switch v2.typ {
+		case Int64:
+			return uintMinusIntWithError(v1.uval, v2.ival)
+		case Uint64:
+			return uintMinusUintWithError(v1.uval, v2.uval)
+		}
+	case Float64:
+		return floatPlusAny(v1.fval, v2), nil
+	}
+	panic("unreachable")
+
+}
+
 // prioritize reorders the input parameters
 // to be Float64, Uint64, Int64.
 func prioritize(v1, v2 numeric) (altv1, altv2 numeric) {
@@ -415,6 +449,15 @@ func intPlusIntWithError(v1, v2 int64) (numeric, error) {
 	return numeric{typ: Int64, ival: result}, nil
 }
 
+func intMinusIntWithError(v1, v2 int64) (numeric, error) {
+	result := v1 - v2
+	if v1 > 0 && v2 > math.MaxInt64 || v1 > math.MaxInt64 && v2 > 0 || v1 <= math.MinInt64 && v2 > 0 || v1 > 0 && v2 <= math.MinInt64 {
+		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v - %v", v1, v2)
+	}
+
+	return numeric{typ: Int64, ival: result}, nil
+}
+
 func uintPlusInt(v1 uint64, v2 int64) numeric {
 	return uintPlusUint(v1, uint64(v2))
 }
@@ -427,6 +470,14 @@ func uintPlusIntWithError(v1 uint64, v2 int64) (numeric, error) {
 	//convert to int -> uint is because for numeric operators (such as + or -)
 	//where one of the operands is an unsigned integer, the result is unsigned by default.
 	return uintPlusUintWithError(v1, uint64(v2))
+}
+
+func uintMinusIntWithError(v1 uint64, v2 int64) (numeric, error) {
+	if v1 < uint64(v2) {
+		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v - %v", v1, v2)
+	}
+
+	return uintMinusUintWithError(v1, uint64(v2))
 }
 
 func uintPlusUint(v1, v2 uint64) numeric {
@@ -444,6 +495,12 @@ func uintPlusUintWithError(v1, v2 uint64) (numeric, error) {
 	if result < v2 {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v + %v", v1, v2)
 	}
+
+	return numeric{typ: Uint64, uval: result}, nil
+}
+
+func uintMinusUintWithError(v1, v2 uint64) (numeric, error) {
+	result := v1 - v2
 
 	return numeric{typ: Uint64, uval: result}, nil
 }
