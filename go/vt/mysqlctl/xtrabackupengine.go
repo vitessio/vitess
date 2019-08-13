@@ -283,6 +283,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 		BackupManifest: BackupManifest{
 			BackupMethod: xtrabackupEngineName,
 			Position:     replicationPosition,
+			FinishedTime: time.Now().UTC().Format(time.RFC3339),
 		},
 
 		// XtraBackup-specific fields

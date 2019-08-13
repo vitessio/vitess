@@ -27,6 +27,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/klauspost/pgzip"
 	"vitess.io/vitess/go/mysql"
@@ -392,6 +393,7 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysq
 		BackupManifest: BackupManifest{
 			BackupMethod: builtinBackupEngineName,
 			Position:     replicationPosition,
+			FinishedTime: time.Now().UTC().Format(time.RFC3339),
 		},
 
 		// Builtin-specific fields
