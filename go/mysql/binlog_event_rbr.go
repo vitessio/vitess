@@ -808,11 +808,11 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 
 		// For JSON, we parse the data, and emit SQL.
 		if typ == TypeJSON {
-			d, err := printJSONData(data[pos : pos+l])
+			d, sqlType, err := printJSONData(data[pos : pos+l])
 			if err != nil {
 				return sqltypes.NULL, 0, vterrors.Wrapf(err, "error parsing JSON data %v", data[pos:pos+l])
 			}
-			return sqltypes.MakeTrusted(sqltypes.Expression,
+			return sqltypes.MakeTrusted(sqlType,
 				d), l + int(metadata), nil
 		}
 

@@ -23,6 +23,7 @@ import (
 	"math"
 	"strconv"
 
+	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -56,34 +57,37 @@ type keyData struct {
 
 // printJSONData parses the MySQL binary format for JSON data, and prints
 // the result as a string.
-func printJSONData(data []byte) ([]byte, error) {
+func printJSONData(data []byte) ([]byte, querypb.Type, error) {
 	// It's possible for data to be empty. If so, we have to
 	// treat it as 'null'.
 	// The mysql code also says why, but this wasn't reproduceable:
 	// https://github.com/mysql/mysql-server/blob/8.0/sql/json_binary.cc#L1070
+	jsonType := sqltypes.TypeJSON
 	if len(data) == 0 {
-		return []byte("'null'"), nil
+		return []byte("'null'"), jsonType, nil
 	}
 	result := &bytes.Buffer{}
 	typ := data[0]
-	if err := printJSONValue(typ, data[1:], true /* toplevel */, result); err != nil {
-		return nil, err
+	sqlType, err := printJSONValue(typ, data[1:], true /* toplevel */, result)
+	if err != nil {
+		return nil, jsonType, err
 	}
-	return result.Bytes(), nil
+	return result.Bytes(), sqlType, nil
 }
 
-func printJSONValue(typ byte, data []byte, toplevel bool, result *bytes.Buffer) error {
+func printJSONValue(typ byte, data []byte, toplevel bool, result *bytes.Buffer) (querypb.Type, error) {
+	sqlType := sqltypes.TypeJSON
 	switch typ {
 	case jsonTypeSmallObject:
-		return printJSONObject(data, false, result)
+		return sqlType, printJSONObject(data, false, result)
 	case jsonTypeLargeObject:
-		return printJSONObject(data, true, result)
+		return sqlType, printJSONObject(data, true, result)
 	case jsonTypeSmallArray:
-		return printJSONArray(data, false, result)
+		return sqlType, printJSONArray(data, false, result)
 	case jsonTypeLargeArray:
-		return printJSONArray(data, true, result)
+		return sqlType, printJSONArray(data, true, result)
 	case jsonTypeLiteral:
-		return printJSONLiteral(data[0], toplevel, result)
+		return sqlType, printJSONLiteral(data[0], toplevel, result)
 	case jsonTypeInt16:
 		printJSONInt16(data[0:2], toplevel, result)
 	case jsonTypeUint16:
@@ -101,12 +105,13 @@ func printJSONValue(typ byte, data []byte, toplevel bool, result *bytes.Buffer) 
 	case jsonTypeString:
 		printJSONString(data, toplevel, result)
 	case jsonTypeOpaque:
-		return printJSONOpaque(data, toplevel, result)
+		sqlType = sqltypes.Expression
+		return sqlType, printJSONOpaque(data, toplevel, result)
 	default:
-		return vterrors.Errorf(vtrpc.Code_INTERNAL, "unknown object type in JSON: %v", typ)
+		return sqlType, vterrors.Errorf(vtrpc.Code_INTERNAL, "unknown object type in JSON: %v", typ)
 	}
 
-	return nil
+	return sqlType, nil
 }
 
 func printJSONObject(data []byte, large bool, result *bytes.Buffer) error {
@@ -131,7 +136,7 @@ func printJSONObject(data []byte, large bool, result *bytes.Buffer) error {
 	// (depending on the large flag). If the value fits in the number of bytes,
 	// then it is inlined. This is always the case for Literal (one byte),
 	// and {,u}int16. For {u}int32, it depends if we're large or not.
-	result.WriteString("{")
+	result.WriteByte('{')
 	for i := 0; i < elementCount; i++ {
 		// First print the key value.
 		if i > 0 {
@@ -171,7 +176,7 @@ func printJSONArray(data []byte, large bool, result *bytes.Buffer) error {
 	// (depending on the large flag). If the value fits in the number of bytes,
 	// then it is inlined. This is always the case for Literal (one byte),
 	// and {,u}int16. For {u}int32, it depends if we're large or not.
-	result.WriteString("JSON_ARRAY(")
+	result.WriteByte('[')
 	for i := 0; i < elementCount; i++ {
 		// Print the key value.
 		if i > 0 {
@@ -186,7 +191,7 @@ func printJSONArray(data []byte, large bool, result *bytes.Buffer) error {
 			pos += 3 // type byte + 2 bytes
 		}
 	}
-	result.WriteByte(')')
+	result.WriteByte(']')
 	return nil
 }
 
@@ -221,7 +226,8 @@ func printJSONValueEntry(data []byte, pos int, large bool, result *bytes.Buffer)
 		// value is not inlined, we have its offset here.
 		// Note we don't have its length, so we just go to the end.
 		offset, _ := readOffsetOrSize(data, pos, large)
-		if err := printJSONValue(typ, data[offset:], false /* toplevel */, result); err != nil {
+		// should be ok to ignore computed type here?
+		if _, err := printJSONValue(typ, data[offset:], false /* toplevel */, result); err != nil {
 			return err
 		}
 	}
@@ -230,9 +236,6 @@ func printJSONValueEntry(data []byte, pos int, large bool, result *bytes.Buffer)
 }
 
 func printJSONLiteral(b byte, toplevel bool, result *bytes.Buffer) error {
-	if toplevel {
-		result.WriteByte('\'')
-	}
 	// Only three possible values.
 	switch b {
 	case jsonNullLiteral:
@@ -244,34 +247,19 @@ func printJSONLiteral(b byte, toplevel bool, result *bytes.Buffer) error {
 	default:
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "unknown literal value %v", b)
 	}
-	if toplevel {
-		result.WriteByte('\'')
-	}
 	return nil
 }
 
 func printJSONInt16(data []byte, toplevel bool, result *bytes.Buffer) {
 	val := uint16(data[0]) +
 		uint16(data[1])<<8
-	if toplevel {
-		result.WriteByte('\'')
-	}
 	result.Write(strconv.AppendInt(nil, int64(int16(val)), 10))
-	if toplevel {
-		result.WriteByte('\'')
-	}
 }
 
 func printJSONUint16(data []byte, toplevel bool, result *bytes.Buffer) {
 	val := uint16(data[0]) +
 		uint16(data[1])<<8
-	if toplevel {
-		result.WriteByte('\'')
-	}
 	result.Write(strconv.AppendUint(nil, uint64(val), 10))
-	if toplevel {
-		result.WriteByte('\'')
-	}
 }
 
 func printJSONInt32(data []byte, toplevel bool, result *bytes.Buffer) {
@@ -279,13 +267,7 @@ func printJSONInt32(data []byte, toplevel bool, result *bytes.Buffer) {
 		uint32(data[1])<<8 +
 		uint32(data[2])<<16 +
 		uint32(data[3])<<24
-	if toplevel {
-		result.WriteByte('\'')
-	}
 	result.Write(strconv.AppendInt(nil, int64(int32(val)), 10))
-	if toplevel {
-		result.WriteByte('\'')
-	}
 }
 
 func printJSONUint32(data []byte, toplevel bool, result *bytes.Buffer) {
@@ -293,13 +275,7 @@ func printJSONUint32(data []byte, toplevel bool, result *bytes.Buffer) {
 		uint32(data[1])<<8 +
 		uint32(data[2])<<16 +
 		uint32(data[3])<<24
-	if toplevel {
-		result.WriteByte('\'')
-	}
 	result.Write(strconv.AppendUint(nil, uint64(val), 10))
-	if toplevel {
-		result.WriteByte('\'')
-	}
 }
 
 func printJSONInt64(data []byte, toplevel bool, result *bytes.Buffer) {
@@ -311,54 +287,25 @@ func printJSONInt64(data []byte, toplevel bool, result *bytes.Buffer) {
 		uint64(data[5])<<40 +
 		uint64(data[6])<<48 +
 		uint64(data[7])<<56
-	if toplevel {
-		result.WriteByte('\'')
-	}
 	result.Write(strconv.AppendInt(nil, int64(val), 10))
-	if toplevel {
-		result.WriteByte('\'')
-	}
 }
 
 func printJSONUint64(data []byte, toplevel bool, result *bytes.Buffer) {
 	val := binary.LittleEndian.Uint64(data[:8])
-	if toplevel {
-		result.WriteByte('\'')
-	}
 	result.Write(strconv.AppendUint(nil, val, 10))
-	if toplevel {
-		result.WriteByte('\'')
-	}
 }
 
 func printJSONDouble(data []byte, toplevel bool, result *bytes.Buffer) {
 	val := binary.LittleEndian.Uint64(data[:8])
 	fval := math.Float64frombits(val)
-	if toplevel {
-		result.WriteByte('\'')
-	}
 	result.Write(strconv.AppendFloat(nil, fval, 'E', -1, 64))
-	if toplevel {
-		result.WriteByte('\'')
-	}
 }
 
 func printJSONString(data []byte, toplevel bool, result *bytes.Buffer) {
 	size, pos := readVariableLength(data, 0)
-
-	// A toplevel JSON string is printed as a JSON-escaped
-	// string inside a string, as the value is parsed as JSON.
-	// So the value should be: '"value"'.
-	if toplevel {
-		result.WriteString("'\"")
-		// FIXME(alainjobart): escape reserved characters
-		result.Write(data[pos : pos+size])
-		result.WriteString("\"'")
-		return
-	}
-
-	// Inside a JSON_ARRAY() or JSON_OBJECT method, we just print the string
-	// as SQL string.
+	// always print with double quotes
+	// if it is a top-level string, when it is encoded as SQL string,
+	// single-quotes will get added around it
 	result.WriteString("\"")
 	// FIXME(alainjobart): escape reserved characters
 	result.Write(data[pos : pos+size])
