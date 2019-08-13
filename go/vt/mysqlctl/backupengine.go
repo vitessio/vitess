@@ -61,7 +61,7 @@ func findBackupToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, lo
 
 	var bh backupstorage.BackupHandle
 	var index int
-	unixZeroTime := time.Unix(0, 0).UTC()
+	unixZeroTime := time.Time{}
 
 	for index = len(bhs) - 1; index >= 0; index-- {
 		bh = bhs[index]

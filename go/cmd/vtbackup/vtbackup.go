@@ -247,7 +247,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}
 
 	log.Infof("Restoring latest backup from directory %v", backupDir)
-	restorePos, _, err := mysqlctl.Restore(ctx, mycnf, mysqld, backupDir, *concurrency, extraEnv, map[string]string{}, logutil.NewConsoleLogger(), true, dbName, time.Unix(0, 0).UTC())
+	restorePos, _, err := mysqlctl.Restore(ctx, mycnf, mysqld, backupDir, *concurrency, extraEnv, map[string]string{}, logutil.NewConsoleLogger(), true, dbName, time.Time{})
 	switch err {
 	case nil:
 		log.Infof("Successfully restored from backup at replication position %v", restorePos)
