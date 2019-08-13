@@ -19,8 +19,6 @@
 # Outline of this file.
 # 0. Initialization and helper methods.
 # 1. Installation of dependencies.
-# 2. Detection of installed MySQL and setting MYSQL_FLAVOR.
-# 3. Installation of development related steps e.g. creating Git hooks.
 
 BUILD_TESTS=${BUILD_TESTS:-1}
 BUILD_PYTHON=${BUILD_PYTHON:-1}
@@ -42,12 +40,13 @@ mkdir -p "$VTROOT/bin"
 mkdir -p "$VTROOT/lib"
 mkdir -p "$VTROOT/vthook"
 
-# Set up the proper GOPATH for go get below.
-if [ "$BUILD_TESTS" == 1 ] ; then
-    source ./dev.env
-else
-    source ./build.env
-fi
+# Setup git hooks.
+echo "creating git hooks"
+mkdir -p "$VTTOP/.git/hooks"
+ln -sf "$VTTOP/misc/git/pre-commit" "$VTTOP/.git/hooks/pre-commit"
+ln -sf "$VTTOP/misc/git/commit-msg" "$VTTOP/.git/hooks/commit-msg"
+(cd "$VTTOP" && git config core.hooksPath "$VTTOP/.git/hooks")
+
 
 if [ "$BUILD_TESTS" == 1 ] ; then
     # Set up required soft links.
@@ -276,63 +275,12 @@ if [ "$BUILD_PYTHON" == 1 ] ; then
     install_dep "chromedriver" "73.0.3683.20" "$VTROOT/dist/chromedriver" install_chromedriver
 fi
 
-
-#
-# Detection of installed MySQL and setting MYSQL_FLAVOR.
-#
-
-
-# find mysql and prepare to use libmysqlclient
-
-if [ "$BUILD_TESTS" == 1 ] ; then
-  if [ -z "$MYSQL_FLAVOR" ]; then
-    export MYSQL_FLAVOR=MySQL56
-    echo "MYSQL_FLAVOR environment variable not set. Using default: $MYSQL_FLAVOR"
-  fi
-  case "$MYSQL_FLAVOR" in
-    "MySQL56" | "MySQL80")
-      myversion="$("$VT_MYSQL_ROOT/bin/mysql" --version)"
-      [[ "$myversion" =~ Distrib\ 5\.[67] || "$myversion" =~ Ver\ 8\. ]] || fail "Couldn't find MySQL 5.6+ in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
-      echo "Found MySQL 5.6+ installation in $VT_MYSQL_ROOT."
-      ;;
-
-    "MariaDB" | "MariaDB103")
-      myversion="$("$VT_MYSQL_ROOT/bin/mysql" --version)"
-      [[ "$myversion" =~ MariaDB ]] || fail "Couldn't find MariaDB in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
-      echo "Found MariaDB installation in $VT_MYSQL_ROOT."
-      ;;
-
-    *)
-      fail "Unsupported MYSQL_FLAVOR $MYSQL_FLAVOR"
-      ;;
-
-  esac
-  # save the flavor that was used in bootstrap, so it can be restored
-  # every time dev.env is sourced.
-  echo "$MYSQL_FLAVOR" > "$VTROOT/dist/MYSQL_FLAVOR"
-fi
-
 if [ "$BUILD_PYTHON" == 1 ] ; then
   PYTHONPATH='' $PIP install mysql-connector-python
 fi
 
-#
-# Installation of development related steps e.g. creating Git hooks.
-#
 
-if [ "$BUILD_TESTS" == 1 ] ; then
- # Create the Git hooks.
- echo "creating git hooks"
- mkdir -p "$VTTOP/.git/hooks"
- ln -sf "$VTTOP/misc/git/pre-commit" "$VTTOP/.git/hooks/pre-commit"
- ln -sf "$VTTOP/misc/git/prepare-commit-msg.bugnumber" "$VTTOP/.git/hooks/prepare-commit-msg"
- ln -sf "$VTTOP/misc/git/commit-msg" "$VTTOP/.git/hooks/commit-msg"
- (cd "$VTTOP" && git config core.hooksPath "$VTTOP/.git/hooks")
- echo
- echo "bootstrap finished - run 'source dev.env' in your shell before building."
-else
- echo
- echo "bootstrap finished - run 'source build.env' in your shell before building."
-fi
+echo
+echo "bootstrap finished - run 'source dev.env' or 'source build.env' in your shell before building."
 
 

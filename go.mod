@@ -46,7 +46,6 @@ require (
 	github.com/klauspost/cpuid v1.2.0
 	github.com/klauspost/crc32 v1.2.0
 	github.com/klauspost/pgzip v1.2.0
-	github.com/kr/pretty v0.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.2 // indirect
 	github.com/mattn/go-runewidth v0.0.1
 	github.com/matttproud/golang_protobuf_extensions v1.0.1
@@ -94,7 +93,7 @@ require (
 	google.golang.org/genproto v0.0.0-20190801165951-fa694d86fc64 // indirect
 	google.golang.org/grpc v1.21.1
 	gopkg.in/asn1-ber.v1 v1.0.0-20150924051756-4e86f4367175
-	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
 	gopkg.in/ldap.v2 v2.5.0
 	gopkg.in/yaml.v2 v2.2.1
+	honnef.co/go/tools v0.0.1-2019.2.2 // indirect
 )
