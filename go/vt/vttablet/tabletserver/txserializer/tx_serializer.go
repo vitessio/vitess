@@ -62,7 +62,7 @@ var (
 	// been rejected due to exceeding the max queue size per row (range).
 	queueExceededDryRun = stats.NewCountersWithSingleLabel(
 		"TxSerializerQueueExceededDryRun",
-		"Dry-run Number of transactions that were rejcted because the max queue size was exceeded",
+		"Dry-run Number of transactions that were rejected because the max queue size was exceeded",
 		"table_name")
 
 	// globalQueueExceeded is the same as queueExceeded but for the global queue.

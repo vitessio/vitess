@@ -38,23 +38,10 @@ source $script_root/env.sh
 
 init_db_sql_file="$VTROOT/config/init_db.sql"
 
-export EXTRA_MY_CNF=$VTROOT/config/mycnf/default-fast.cnf:$VTROOT/config/mycnf/rbr.cnf
+# Previously this file set EXTRA_MY_CNF based on MYSQL_FLAVOR
+# It now relies on mysqlctl to autodetect
 
-case "$MYSQL_FLAVOR" in
-  "MySQL56")
-    export EXTRA_MY_CNF=$EXTRA_MY_CNF:$VTROOT/config/mycnf/master_mysql56.cnf
-    ;;
-  "MariaDB")
-    export EXTRA_MY_CNF=$EXTRA_MY_CNF:$VTROOT/config/mycnf/master_mariadb.cnf
-    ;;
-  "MariaDB103")
-    export EXTRA_MY_CNF=$EXTRA_MY_CNF:$VTROOT/config/mycnf/master_mariadb103.cnf
-    ;;
-  *)
-    echo "Please set MYSQL_FLAVOR to MySQL56 or MariaDB."
-    exit 1
-    ;;
-esac
+export EXTRA_MY_CNF=$VTROOT/config/mycnf/default-fast.cnf:$VTROOT/config/mycnf/rbr.cnf
 
 mkdir -p $VTDATAROOT/backups
 
