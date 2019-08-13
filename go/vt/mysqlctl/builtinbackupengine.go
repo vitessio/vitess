@@ -352,7 +352,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, my
 }
 
 // backupFiles finds the list of files to backup, and creates the backup.
-func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, replicationPosition mysql.Position, backupConcurrency int, hookExtraEnv map[string]string, backupTime time.Time) (err error) {
+func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, replicationPosition mysql.Position, backupConcurrency int, hookExtraEnv map[string]string, backupTime time.Time) (finalErr error) {
 	// Get the files to backup.
 	fes, err := findFilesToBackup(cnf)
 	if err != nil {
@@ -394,8 +394,8 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysq
 		return vterrors.Wrapf(err, "cannot add %v to backup", backupManifestFile)
 	}
 	defer func() {
-		if closeErr := wc.Close(); err == nil {
-			err = closeErr
+		if closeErr := wc.Close(); finalErr == nil {
+			finalErr = closeErr
 		}
 	}()
 
@@ -419,10 +419,9 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysq
 }
 
 // backupFile backs up an individual file.
-func (be *BuiltinBackupEngine) backupFile(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, fe *FileEntry, name string, hookExtraEnv map[string]string) (err error) {
+func (be *BuiltinBackupEngine) backupFile(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, fe *FileEntry, name string, hookExtraEnv map[string]string) (finalErr error) {
 	// Open the source file for reading.
-	var source *os.File
-	source, err = fe.open(cnf, true)
+	source, err := fe.open(cnf, true)
 	if err != nil {
 		return err
 	}
@@ -441,11 +440,11 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, cnf *Mycnf, mysql
 	}
 	defer func(name, fileName string) {
 		if rerr := wc.Close(); rerr != nil {
-			if err != nil {
+			if finalErr != nil {
 				// We already have an error, just log this one.
 				logger.Errorf2(rerr, "failed to close file %v,%v", name, fe.Name)
 			} else {
-				err = rerr
+				finalErr = rerr
 			}
 		}
 	}(name, fe.Name)
@@ -553,7 +552,7 @@ func (be *BuiltinBackupEngine) ExecuteRestore(
 
 	if err := be.restoreFiles(context.Background(), cnf, bh, bm.FileEntries, bm.TransformHook, !bm.SkipCompress, restoreConcurrency, hookExtraEnv, logger); err != nil {
 		// don't delete the file here because that is how we detect an interrupted restore
-		return zeroPosition, s, err
+		return zeroPosition, s, vterrors.Wrap(err, "failed to restore files")
 	}
 
 	logger.Infof("Restore: returning replication position %v", bm.Position)
@@ -582,7 +581,10 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, cnf *Mycnf, bh 
 			// And restore the file.
 			name := fmt.Sprintf("%v", i)
 			logger.Infof("Copying file %v: %v", name, fes[i].Name)
-			rec.RecordError(be.restoreFile(ctx, cnf, bh, &fes[i], transformHook, compress, name, hookExtraEnv))
+			err := be.restoreFile(ctx, cnf, bh, &fes[i], transformHook, compress, name, hookExtraEnv)
+			if err != nil {
+				rec.RecordError(vterrors.Wrapf(err, "can't restore file %v to %v", name, fes[i].Name))
+			}
 		}(i)
 	}
 	wg.Wait()
@@ -590,27 +592,26 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, cnf *Mycnf, bh 
 }
 
 // restoreFile restores an individual file.
-func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, fe *FileEntry, transformHook string, compress bool, name string, hookExtraEnv map[string]string) (err error) {
+func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, fe *FileEntry, transformHook string, compress bool, name string, hookExtraEnv map[string]string) (finalErr error) {
 	// Open the source file for reading.
-	var source io.ReadCloser
-	source, err = bh.ReadFile(ctx, name)
+	source, err := bh.ReadFile(ctx, name)
 	if err != nil {
-		return err
+		return vterrors.Wrap(err, "can't open source file for reading")
 	}
 	defer source.Close()
 
 	// Open the destination file for writing.
 	dstFile, err := fe.open(cnf, false)
 	if err != nil {
-		return err
+		return vterrors.Wrap(err, "can't open destination file for writing")
 	}
 	defer func() {
 		if cerr := dstFile.Close(); cerr != nil {
-			if err != nil {
+			if finalErr != nil {
 				// We already have an error, just log this one.
 				log.Errorf("failed to close file %v: %v", name, cerr)
 			} else {
-				err = cerr
+				finalErr = vterrors.Wrap(cerr, "failed to close destination file")
 			}
 		}
 	}()
@@ -640,15 +641,15 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, cnf *Mycnf, bh b
 	if compress {
 		gz, err := pgzip.NewReader(reader)
 		if err != nil {
-			return err
+			return vterrors.Wrap(err, "can't open gzip decompressor")
 		}
 		defer func() {
 			if cerr := gz.Close(); cerr != nil {
-				if err != nil {
+				if finalErr != nil {
 					// We already have an error, just log this one.
-					log.Errorf("failed to close gunziper %v: %v", name, cerr)
+					log.Errorf("failed to close gzip decompressor %v: %v", name, cerr)
 				} else {
-					err = cerr
+					finalErr = vterrors.Wrap(err, "failed to close gzip decompressor")
 				}
 			}
 		}()
@@ -657,7 +658,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, cnf *Mycnf, bh b
 
 	// Copy the data. Will also write to the hasher.
 	if _, err = io.Copy(dst, reader); err != nil {
-		return err
+		return vterrors.Wrap(err, "failed to copy file contents")
 	}
 
 	// Close the Pipe.
@@ -678,7 +679,11 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, cnf *Mycnf, bh b
 	}
 
 	// Flush the buffer.
-	return dst.Flush()
+	if err := dst.Flush(); err != nil {
+		return vterrors.Wrap(err, "failed to flush destination buffer")
+	}
+
+	return nil
 }
 
 func init() {

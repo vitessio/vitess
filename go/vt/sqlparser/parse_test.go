@@ -1434,6 +1434,9 @@ var (
 	}, {
 		input:  "drop database if exists test_db",
 		output: "drop database test_db",
+	}, {
+		input:  "delete a.*, b.* from tbl_a a, tbl_b b where a.id = b.id and b.name = 'test'",
+		output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.name = 'test'",
 	}}
 )
 

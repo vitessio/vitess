@@ -108,7 +108,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), CreateCopyState); err != nil {
+		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), createCopyState); err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
 		}
@@ -206,13 +206,16 @@ func (ftc *fakeTabletConn) VStream(ctx context.Context, target *querypb.Target, 
 	return streamerEngine.Stream(ctx, startPos, filter, send)
 }
 
-// streamRowsHook allows you to do work just before VStreamRows is dispatched.
-var streamRowsHook func(ctx context.Context)
+// vstreamRowsHook allows you to do work just before calling VStreamRows.
+var vstreamRowsHook func(ctx context.Context)
+
+// vstreamRowsSendHook allows you to do work just before VStreamRows calls send.
+var vstreamRowsSendHook func(ctx context.Context)
 
 // VStreamRows directly calls into the pre-initialized engine.
 func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
-	if streamRowsHook != nil {
-		streamRowsHook(ctx)
+	if vstreamRowsHook != nil {
+		vstreamRowsHook(ctx)
 	}
 	var row []sqltypes.Value
 	if lastpk != nil {
@@ -222,7 +225,12 @@ func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, target *querypb.Targ
 		}
 		row = r.Rows[0]
 	}
-	return streamerEngine.StreamRows(ctx, query, row, send)
+	return streamerEngine.StreamRows(ctx, query, row, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		if vstreamRowsSendHook != nil {
+			vstreamRowsSendHook(ctx)
+		}
+		return send(rows)
+	})
 }
 
 //--------------------------------------
@@ -358,6 +366,16 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 		globalDBQueries <- query
 	}
 	return qr, err
+}
+
+func expectDeleteQueries(t *testing.T) {
+	t.Helper()
+	expectDBClientQueries(t, []string{
+		"begin",
+		"/delete from _vt.vreplication",
+		"/delete from _vt.copy_state",
+		"commit",
+	})
 }
 
 func expectDBClientQueries(t *testing.T, queries []string) {

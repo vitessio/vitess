@@ -69,7 +69,7 @@ func buildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (primitive e
 // route primitive.
 //
 // The LIMIT clause is the last construct of a query. If it cannot be
-// pushed into a route, then a primitve is created on top of any
+// pushed into a route, then a primitive is created on top of any
 // of the above trees to make it discard unwanted rows.
 func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) error {
 	if err := pb.processTableExprs(sel.From); err != nil {
@@ -182,7 +182,7 @@ func (pb *primitiveBuilder) pushSelectExprs(sel *sqlparser.Select) error {
 	return pb.pushGroupBy(sel)
 }
 
-// pusheSelectRoutes is a convenience function that pushes all the select
+// pushSelectRoutes is a convenience function that pushes all the select
 // expressions and returns the list of resultColumns generated for it.
 func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) ([]*resultColumn, error) {
 	resultColumns := make([]*resultColumn, 0, len(selectExprs))
@@ -236,7 +236,7 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 			}
 			resultColumns = append(resultColumns, rb.PushAnonymous(node))
 		default:
-			panic(fmt.Sprintf("BUG: unexpceted select expression type: %T", node))
+			return nil, fmt.Errorf("BUG: unexpected select expression type: %T", node)
 		}
 	}
 	return resultColumns, nil

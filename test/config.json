@@ -269,6 +269,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"prepared_statement": {
+			"File": "prepared_statement_test.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"mysqlctl": {
 			"File": "mysqlctl.py",
 			"Args": [],

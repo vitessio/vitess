@@ -34,12 +34,13 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
-var packetSize = flag.Int("vstream_packet_size", 30000, "Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount.")
+// PacketSize is the suggested packet size for VReplication streamer.
+var PacketSize = flag.Int("vstream_packet_size", 30000, "Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount.")
 
-// heartbeatTime is set to slightly below 1s, compared to idleTimeout
+// HeartbeatTime is set to slightly below 1s, compared to idleTimeout
 // set by VPlayer at slightly above 1s. This minimizes conflicts
 // between the two timeouts.
-var heartbeatTime = 900 * time.Millisecond
+var HeartbeatTime = 900 * time.Millisecond
 
 type vstreamer struct {
 	ctx    context.Context
@@ -163,7 +164,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 					newSize += len(rowChange.After.Values)
 				}
 			}
-			if curSize+newSize > *packetSize {
+			if curSize+newSize > *PacketSize {
 				vevents := bufferedEvents
 				bufferedEvents = []*binlogdatapb.VEvent{vevent}
 				curSize = newSize
@@ -178,10 +179,10 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	}
 
 	// Main loop: calls bufferAndTransmit as events arrive.
-	timer := time.NewTimer(heartbeatTime)
+	timer := time.NewTimer(HeartbeatTime)
 	defer timer.Stop()
 	for {
-		timer.Reset(heartbeatTime)
+		timer.Reset(HeartbeatTime)
 		// Drain event if timer fired before reset.
 		select {
 		case <-timer.C:

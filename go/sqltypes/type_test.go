@@ -406,8 +406,8 @@ func TestMySQLToType(t *testing.T) {
 }
 
 func TestTypeError(t *testing.T) {
-	_, err := MySQLToType(15, 0)
-	want := "unsupported type: 15"
+	_, err := MySQLToType(17, 0)
+	want := "unsupported type: 17"
 	if err == nil || err.Error() != want {
 		t.Errorf("MySQLToType: %v, want %s", err, want)
 	}

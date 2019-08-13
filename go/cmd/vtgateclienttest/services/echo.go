@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vtgate/vtgateservice"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -394,4 +395,34 @@ func (c *echoClient) UpdateStream(ctx context.Context, keyspace string, shard st
 		return nil
 	}
 	return c.fallbackClient.UpdateStream(ctx, keyspace, shard, keyRange, tabletType, timestamp, event, callback)
+}
+
+func (c *echoClient) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, callback func([]*binlogdatapb.VEvent) error) error {
+	if strings.HasPrefix(vgtid.ShardGtids[0].Shard, EchoPrefix) {
+		_ = callback([]*binlogdatapb.VEvent{
+			{
+				Type:      1,
+				Timestamp: 1234,
+				Gtid:      "echo-gtid-1",
+				Ddl:       "echo-ddl-1",
+				Vgtid:     vgtid,
+				RowEvent: &binlogdatapb.RowEvent{
+					TableName: "echo-table-1",
+				},
+			},
+			{
+				Type:      2,
+				Timestamp: 4321,
+				Gtid:      "echo-gtid-2",
+				Ddl:       "echo-ddl-2",
+				Vgtid:     vgtid,
+				FieldEvent: &binlogdatapb.FieldEvent{
+					TableName: "echo-table-2",
+				},
+			},
+		})
+		return nil
+	}
+
+	return c.fallbackClient.VStream(ctx, tabletType, vgtid, filter, callback)
 }

@@ -70,7 +70,7 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vsch
 	case sqlparser.Values:
 		rows = insertValues
 	default:
-		panic(fmt.Sprintf("BUG: unexpected construct in insert: %T", insertValues))
+		return nil, fmt.Errorf("BUG: unexpected construct in insert: %T", insertValues)
 	}
 	if eins.Table.AutoIncrement == nil {
 		eins.Query = generateQuery(ins)
@@ -137,7 +137,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 			return nil, errors.New("unsupported: subquery in insert values")
 		}
 	default:
-		panic(fmt.Sprintf("BUG: unexpected construct in insert: %T", insertValues))
+		return nil, fmt.Errorf("BUG: unexpected construct in insert: %T", insertValues)
 	}
 	for _, value := range rows {
 		if len(ins.Columns) != len(value) {

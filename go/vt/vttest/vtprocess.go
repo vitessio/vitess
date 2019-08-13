@@ -240,6 +240,9 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 	if args.TransactionTimeout != 0 {
 		vt.ExtraArgs = append(vt.ExtraArgs, "-queryserver-config-transaction-timeout", fmt.Sprintf("%f", args.TransactionTimeout))
 	}
+	if args.TabletHostName != "" {
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-tablet_hostname", args.TabletHostName}...)
+	}
 
 	if socket != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{

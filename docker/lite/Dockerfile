@@ -22,7 +22,8 @@ RUN chown -R vitess:vitess /vt
 FROM debian:stretch-slim
 
 # Install dependencies
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gnupg dirmngr ca-certificates \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    gnupg dirmngr ca-certificates wget libdbd-mysql-perl rsync libaio1 libatomic1 libcurl3 libev4 \
  && for i in $(seq 1 10); do apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com 8C718D3B5072E1F5 && break; done \
  && echo 'deb http://repo.mysql.com/apt/debian/ stretch mysql-5.7' > /etc/apt/sources.list.d/mysql.list \
  && apt-get update \
@@ -32,8 +33,11 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
       libmysqlclient20 \
       mysql-client \
       mysql-server \
-  && rm -rf /var/lib/apt/lists/* \
-  && groupadd -r vitess && useradd -r -g vitess vitess
+ && wget https://www.percona.com/downloads/XtraBackup/Percona-XtraBackup-2.4.13/binary/debian/stretch/x86_64/percona-xtrabackup-24_2.4.13-1.stretch_amd64.deb \
+ && dpkg -i percona-xtrabackup-24_2.4.13-1.stretch_amd64.deb \
+ && rm -f percona-xtrabackup-24_2.4.13-1.stretch_amd64.deb \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd -r vitess && useradd -r -g vitess vitess
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
 ENV VTTOP /vt/src/vitess.io/vitess

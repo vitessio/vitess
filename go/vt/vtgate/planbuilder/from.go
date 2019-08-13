@@ -79,7 +79,7 @@ func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr) erro
 	case *sqlparser.JoinTableExpr:
 		return pb.processJoin(tableExpr)
 	}
-	panic(fmt.Sprintf("BUG: unexpected table expression type: %T", tableExpr))
+	return fmt.Errorf("BUG: unexpected table expression type: %T", tableExpr)
 }
 
 // processAliasedTable produces a builder subtree for the given AliasedTableExpr.
@@ -105,7 +105,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 				return err
 			}
 		default:
-			panic(fmt.Sprintf("BUG: unexpected SELECT type: %T", stmt))
+			return fmt.Errorf("BUG: unexpected SELECT type: %T", stmt)
 		}
 
 		subroute, ok := spb.bldr.(*route)
@@ -168,7 +168,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		pb.bldr, pb.st = rb, st
 		return nil
 	}
-	panic(fmt.Sprintf("BUG: unexpected table expression type: %T", tableExpr.Expr))
+	return fmt.Errorf("BUG: unexpected table expression type: %T", tableExpr.Expr)
 }
 
 // buildTablePrimitive builds a primitive based on the table name.
@@ -247,6 +247,9 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 			eroute.Vindex, _ = vindexes.NewBinary("binary", nil)
 			eroute.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vst.Pinned)}}
 		}
+		// set table name into route
+		eroute.TableName = vst.Name.String()
+
 		rb.routeOptions = append(rb.routeOptions, newRouteOption(rb, vst, sub, vindexMaps[i], eroute))
 	}
 	return nil
