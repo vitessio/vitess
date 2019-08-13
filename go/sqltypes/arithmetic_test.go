@@ -28,8 +28,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-/*
-Test Created for Subtraction function
 func TestSubtraction(t *testing.T) {
 	tcases := []struct {
 		v1, v2 Value
@@ -105,7 +103,6 @@ func TestSubtraction(t *testing.T) {
 	}
 
 }
-*/
 
 func TestAddition(t *testing.T) {
 	tcases := []struct {

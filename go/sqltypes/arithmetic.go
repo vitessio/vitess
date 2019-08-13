@@ -45,11 +45,7 @@ var zeroBytes = []byte("0")
 //Addition adds two values together
 //if v1 or v2 is null, then it returns null
 func Addition(v1, v2 Value) (Value, error) {
-	if v1.IsNull() {
-		return NULL, nil
-	}
-
-	if v2.IsNull() {
+	if v1.IsNull() || v2.IsNull() {
 		return NULL, nil
 	}
 
@@ -67,18 +63,11 @@ func Addition(v1, v2 Value) (Value, error) {
 	}
 
 	return castFromNumeric(lresult, lresult.typ), nil
-
 }
 
-/*
-Functions in the process
 //Subtraction takes two values and subtracts them
 func Subtraction(v1, v2 Value) (Value, error) {
-	if v1.IsNull() {
-		return NULL, nil
-	}
-
-	if v2.IsNull() {
+	if v1.IsNull() || v2.IsNull() {
 		return NULL, nil
 	}
 
@@ -96,7 +85,6 @@ func Subtraction(v1, v2 Value) (Value, error) {
 	}
 
 	return castFromNumeric(lresult, lresult.typ), nil
-
 }
 
 // Multiplication takes two values and multiplies it together
@@ -125,7 +113,6 @@ func Multiplication(v1, v2 Value) (Value, error) {
 	return castFromNumeric(lresult, lresult.typ), nil
 
 }
-*/
 
 // NullsafeAdd adds two Values in a null-safe manner. A null value
 // is treated as 0. If both values are null, then a null is returned.
@@ -445,8 +432,6 @@ func addNumericWithError(v1, v2 numeric) (numeric, error) {
 
 }
 
-/*
-Functions in the process
 func subtractNumericWithError(v1, v2 numeric) (numeric, error) {
 	v1, v2 = prioritize(v1, v2)
 	switch v1.typ {
@@ -457,7 +442,7 @@ func subtractNumericWithError(v1, v2 numeric) (numeric, error) {
 		case Int64:
 			return uintMinusIntWithError(v1.uval, v2.ival)
 		case Uint64:
-			return uintPlusUintWithError(v1.uval, v2.uval)
+			return uintMinusUintWithError(v1.uval, v2.uval)
 		}
 	case Float64:
 		return floatPlusAny(v1.fval, v2), nil
@@ -484,7 +469,6 @@ func multiplyNumericWithError(v1, v2 numeric) (numeric, error) {
 	panic("unreachable")
 
 }
-*/
 
 // prioritize reorders the input parameters
 // to be Float64, Uint64, Int64.
@@ -531,21 +515,13 @@ overflow:
 	return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v + %v", v1, v2)
 }
 
-/*
-Functions in the process
 func intMinusIntWithError(v1, v2 int64) (numeric, error) {
 	result := v1 - v2
-	if v1 > 0 && v2 > math.MaxInt64 || v1 > math.MaxInt64 && v2 > 0 {
+	if v1 > 0 && v2 > math.MaxInt64 || v1 > math.MaxInt64 && v2 > 0 || v1 <= math.MinInt64 && v2 > 0 || v1 > 0 && v2 <= math.MinInt64 {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v - %v", v1, v2)
-	}
-
-	if v1 <= math.MinInt64 && v2 > 0 || v1 > 0 && v2 <= math.MinInt64 {
-		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v - %v", v1, v2)
-
 	}
 
 	return numeric{typ: Int64, ival: result}, nil
-
 }
 
 func intTimesIntWithError(v1, v2 int64) (numeric, error) {
@@ -556,17 +532,13 @@ func intTimesIntWithError(v1, v2 int64) (numeric, error) {
 	}
 
 	return numeric{typ: Int64, ival: result}, nil
-
 }
-*/
 
 func uintPlusInt(v1 uint64, v2 int64) numeric {
-
 	return uintPlusUint(v1, uint64(v2))
 }
 
 func uintPlusIntWithError(v1 uint64, v2 int64) (numeric, error) {
-
 	if v2 >= math.MaxInt64 && v1 > 0 {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v + %v", v1, v2)
 	}
@@ -581,16 +553,12 @@ func uintPlusIntWithError(v1 uint64, v2 int64) (numeric, error) {
 	return uintPlusUintWithError(v1, uint64(v2))
 }
 
-/*
-Functions in the process
 func uintMinusIntWithError(v1 uint64, v2 int64) (numeric, error) {
-
 	if v1 < uint64(v2) {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v - %v", v1, v2)
 	}
 
 	return uintMinusUintWithError(v1, uint64(v2))
-
 }
 
 func uintTimesIntWithError(v1 uint64, v2 int64) (numeric, error) {
@@ -598,7 +566,6 @@ func uintTimesIntWithError(v1 uint64, v2 int64) (numeric, error) {
 	return uintTimesUintWithError(v1, uint64(v2))
 
 }
-*/
 
 func uintPlusUint(v1, v2 uint64) numeric {
 	result := v1 + v2
@@ -619,15 +586,10 @@ func uintPlusUintWithError(v1, v2 uint64) (numeric, error) {
 	return numeric{typ: Uint64, uval: result}, nil
 }
 
-/*
-Functions in the process
 func uintMinusUintWithError(v1, v2 uint64) (numeric, error) {
 	result := v1 - v2
 
-	fmt.Printf("result = %v\n", result)
-
 	return numeric{typ: Uint64, uval: result}, nil
-
 }
 
 func uintTimesUintWithError(v1, v2 uint64) (numeric, error) {
@@ -635,7 +597,6 @@ func uintTimesUintWithError(v1, v2 uint64) (numeric, error) {
 
 	return numeric{typ: Uint64, uval: result}, nil
 }
-*/
 
 func floatPlusAny(v1 float64, v2 numeric) numeric {
 	switch v2.typ {
