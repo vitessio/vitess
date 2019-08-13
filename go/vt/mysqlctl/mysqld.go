@@ -151,7 +151,7 @@ func getVersionFromEnv() (flavor mysqlFlavor, ver serverVersion, err error) {
 	case "MySQL56":
 		return flavorMySQL, serverVersion{5, 7, 10}, nil
 	}
-	return flavor, ver, fmt.Errorf("Could not determine version from MYSQL_FLAVOR: %s", env)
+	return flavor, ver, fmt.Errorf("could not determine version from MYSQL_FLAVOR: %s", env)
 }
 
 func getVersionString() (string, error) {
@@ -183,19 +183,19 @@ func parseVersionString(version string) (flavor mysqlFlavor, ver serverVersion, 
 	}
 	v := versionRegex.FindStringSubmatch(version)
 	if len(v) != 4 {
-		return flavor, ver, fmt.Errorf("Could not parse server version from: %s", version)
+		return flavor, ver, fmt.Errorf("could not parse server version from: %s", version)
 	}
 	ver.Major, err = strconv.Atoi(string(v[1]))
 	if err != nil {
-		return flavor, ver, fmt.Errorf("Could not parse server version from: %s", version)
+		return flavor, ver, fmt.Errorf("could not parse server version from: %s", version)
 	}
 	ver.Minor, err = strconv.Atoi(string(v[2]))
 	if err != nil {
-		return flavor, ver, fmt.Errorf("Could not parse server version from: %s", version)
+		return flavor, ver, fmt.Errorf("could not parse server version from: %s", version)
 	}
 	ver.Patch, err = strconv.Atoi(string(v[3]))
 	if err != nil {
-		return flavor, ver, fmt.Errorf("Could not parse server version from: %s", version)
+		return flavor, ver, fmt.Errorf("could not parse server version from: %s", version)
 	}
 
 	return
