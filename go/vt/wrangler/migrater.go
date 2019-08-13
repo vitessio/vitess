@@ -570,6 +570,13 @@ func (mi *migrater) gatherPositions(ctx context.Context) error {
 }
 
 func (mi *migrater) createJournals(ctx context.Context) error {
+	var participants []*binlogdatapb.KeyspaceShard
+	for sourceShard := range mi.sources {
+		participants = append(participants, &binlogdatapb.KeyspaceShard{
+			Keyspace: mi.sourceKeyspace,
+			Shard:    sourceShard,
+		})
+	}
 	return mi.forAllSources(func(source *miSource) error {
 		if source.journaled {
 			return nil
@@ -579,8 +586,8 @@ func (mi *migrater) createJournals(ctx context.Context) error {
 			MigrationType: mi.migrationType,
 			Tables:        mi.tables,
 			LocalPosition: source.position,
+			Participants:  participants,
 		}
-		participantMap := make(map[string]bool)
 		for targetShard, target := range mi.targets {
 			found := false
 			for _, tsource := range target.sources {
@@ -596,15 +603,6 @@ func (mi *migrater) createJournals(ctx context.Context) error {
 				Keyspace: mi.targetKeyspace,
 				Shard:    targetShard,
 				Gtid:     target.position,
-			})
-			for _, tsource := range target.sources {
-				participantMap[tsource.Shard] = true
-			}
-		}
-		for shard := range participantMap {
-			journal.Participants = append(journal.Participants, &binlogdatapb.KeyspaceShard{
-				Keyspace: mi.sourceKeyspace,
-				Shard:    shard,
 			})
 		}
 		mi.wr.Logger().Infof("Creating journal: %v", journal)
