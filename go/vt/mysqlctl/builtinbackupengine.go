@@ -41,9 +41,9 @@ import (
 )
 
 const (
-	builtin            = "builtin"
-	writerBufferSize   = 2 * 1024 * 1024
-	dataDictionaryFile = "mysql.ibd"
+	builtinBackupEngineName = "builtin"
+	writerBufferSize        = 2 * 1024 * 1024
+	dataDictionaryFile      = "mysql.ibd"
 )
 
 // BuiltinBackupEngine encapsulates the logic of the builtin engine
@@ -57,19 +57,19 @@ type BuiltinBackupEngine struct {
 // Position that the backup was taken at, and the transform hook used,
 // if any.
 type builtinBackupManifest struct {
+	// BackupManifest is an anonymous embedding of the base manifest struct.
+	BackupManifest
+
 	// FileEntries contains all the files in the backup
 	FileEntries []FileEntry
-
-	// Position is the position at which the backup was taken
-	Position mysql.Position
 
 	// TransformHook that was used on the files, if any.
 	TransformHook string
 
-	// SkipCompress can be set if the backup files were not run
-	// through gzip. It is the negative of the flag, so old
-	// backups that don't have this flag are assumed to be
-	// compressed.
+	// SkipCompress is true if the backup files were NOT run through gzip.
+	// The field is expressed as a negative because it will come through as
+	// false for backups that were created before the field existed, and those
+	// backups all had compression enabled.
 	SkipCompress bool
 }
 
@@ -376,9 +376,9 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysq
 	}
 
 	// open the MANIFEST
-	wc, err := bh.AddFile(ctx, backupManifest, 0)
+	wc, err := bh.AddFile(ctx, backupManifestFileName, 0)
 	if err != nil {
-		return vterrors.Wrapf(err, "cannot add %v to backup", backupManifest)
+		return vterrors.Wrapf(err, "cannot add %v to backup", backupManifestFileName)
 	}
 	defer func() {
 		if closeErr := wc.Close(); finalErr == nil {
@@ -388,17 +388,23 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysq
 
 	// JSON-encode and write the MANIFEST
 	bm := &builtinBackupManifest{
+		// Common base fields
+		BackupManifest: BackupManifest{
+			BackupMethod: builtinBackupEngineName,
+			Position:     replicationPosition,
+		},
+
+		// Builtin-specific fields
 		FileEntries:   fes,
-		Position:      replicationPosition,
 		TransformHook: *backupStorageHook,
 		SkipCompress:  !*backupStorageCompress,
 	}
 	data, err := json.MarshalIndent(bm, "", "  ")
 	if err != nil {
-		return vterrors.Wrapf(err, "cannot JSON encode %v", backupManifest)
+		return vterrors.Wrapf(err, "cannot JSON encode %v", backupManifestFileName)
 	}
 	if _, err := wc.Write([]byte(data)); err != nil {
-		return vterrors.Wrapf(err, "cannot write %v", backupManifest)
+		return vterrors.Wrapf(err, "cannot write %v", backupManifestFileName)
 	}
 
 	return nil
@@ -511,24 +517,23 @@ func (be *BuiltinBackupEngine) ExecuteRestore(
 	mysqld MysqlDaemon,
 	logger logutil.Logger,
 	dir string,
-	bhs []backupstorage.BackupHandle,
+	bh backupstorage.BackupHandle,
 	restoreConcurrency int,
 	hookExtraEnv map[string]string) (mysql.Position, error) {
 
 	zeroPosition := mysql.Position{}
 	var bm builtinBackupManifest
 
-	bh, err := findBackupToRestore(ctx, cnf, mysqld, logger, dir, bhs, &bm)
-	if err != nil {
+	if err := getBackupManifestInto(ctx, bh, &bm); err != nil {
 		return zeroPosition, err
 	}
 
 	// mark restore as in progress
-	if err = createStateFile(cnf); err != nil {
+	if err := createStateFile(cnf); err != nil {
 		return zeroPosition, err
 	}
 
-	if err = prepareToRestore(ctx, cnf, mysqld, logger); err != nil {
+	if err := prepareToRestore(ctx, cnf, mysqld, logger); err != nil {
 		return zeroPosition, err
 	}
 
