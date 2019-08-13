@@ -89,8 +89,8 @@ func (ts *Server) CreateCellsAlias(ctx context.Context, alias string, cellsAlias
 		return err
 	}
 
-	if existingAlias := overlappingAlias(currentAliases, alias, cellsAlias); existingAlias != "" {
-		return fmt.Errorf("cells alias %v overlaps with existing alias %v", alias, existingAlias)
+	if err := validateAlias(currentAliases, alias, cellsAlias); err != nil {
+		return fmt.Errorf("cells alias %v is not valid: %v", alias, err)
 	}
 
 	ts.clearCellAliasesCache()
@@ -141,8 +141,8 @@ func (ts *Server) UpdateCellsAlias(ctx context.Context, alias string, update fun
 			return err
 		}
 
-		if existingAlias := overlappingAlias(currentAliases, alias, cellsAlias); existingAlias != "" {
-			return fmt.Errorf("cells alias %v overlaps with existing alias %v", alias, existingAlias)
+		if err := validateAlias(currentAliases, alias, cellsAlias); err != nil {
+			return fmt.Errorf("cells alias %v is not valid: %v", alias, err)
 		}
 
 		// Pack and save.
@@ -157,9 +157,10 @@ func (ts *Server) UpdateCellsAlias(ctx context.Context, alias string, update fun
 	}
 }
 
-// overlappingAlias returns the first overlapping alias, if any.
-// If no alias overlaps, it returns an empty string.
-func overlappingAlias(currentAliases map[string]*topodatapb.CellsAlias, newAliasName string, newAlias *topodatapb.CellsAlias) string {
+// validateAlias checks whether the given alias is allowed.
+// If the alias overlaps with any existing alias other than itself, this returns
+// a non-nil error.
+func validateAlias(currentAliases map[string]*topodatapb.CellsAlias, newAliasName string, newAlias *topodatapb.CellsAlias) error {
 	for name, alias := range currentAliases {
 		// Skip the alias we're checking against. It's allowed to overlap with itself.
 		if name == newAliasName {
@@ -168,9 +169,9 @@ func overlappingAlias(currentAliases map[string]*topodatapb.CellsAlias, newAlias
 
 		for _, cell := range alias.Cells {
 			if InCellList(cell, newAlias.Cells) {
-				return name
+				return fmt.Errorf("cell set overlaps with existing alias %v", name)
 			}
 		}
 	}
-	return ""
+	return nil
 }

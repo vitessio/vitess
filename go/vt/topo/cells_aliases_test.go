@@ -1,17 +1,18 @@
 package topo
 
 import (
+	"strings"
 	"testing"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func TestOverlappingAlias(t *testing.T) {
+func TestValidateAlias(t *testing.T) {
 	table := []struct {
 		currentAliases map[string][]string
 		newAliasName   string
 		newAlias       []string
-		want           string
+		wantErrMsg     string
 	}{
 		{
 			currentAliases: map[string][]string{
@@ -20,7 +21,7 @@ func TestOverlappingAlias(t *testing.T) {
 			},
 			newAliasName: "overlaps_alias1",
 			newAlias:     []string{"cell_x", "cell_b"},
-			want:         "alias1",
+			wantErrMsg:   "alias1",
 		},
 		{
 			currentAliases: map[string][]string{
@@ -29,7 +30,7 @@ func TestOverlappingAlias(t *testing.T) {
 			},
 			newAliasName: "overlaps_alias2",
 			newAlias:     []string{"cell_x", "cell_c"},
-			want:         "alias2",
+			wantErrMsg:   "alias2",
 		},
 		{
 			currentAliases: map[string][]string{
@@ -38,7 +39,7 @@ func TestOverlappingAlias(t *testing.T) {
 			},
 			newAliasName: "no_overlap",
 			newAlias:     []string{"cell_x", "cell_y"},
-			want:         "",
+			wantErrMsg:   "",
 		},
 		{
 			currentAliases: map[string][]string{
@@ -47,7 +48,7 @@ func TestOverlappingAlias(t *testing.T) {
 			},
 			newAliasName: "overlaps_self",
 			newAlias:     []string{"cell_a", "cell_b", "cell_x"},
-			want:         "",
+			wantErrMsg:   "",
 		},
 	}
 
@@ -58,9 +59,20 @@ func TestOverlappingAlias(t *testing.T) {
 		}
 		newAlias := &topodatapb.CellsAlias{Cells: test.newAlias}
 
-		got := overlappingAlias(currentAliases, test.newAliasName, newAlias)
-		if got != test.want {
-			t.Errorf("overlappingAlias(%v) = %q; want %q", test.newAliasName, got, test.want)
+		gotErr := validateAlias(currentAliases, test.newAliasName, newAlias)
+		if test.wantErrMsg == "" {
+			// Expect success.
+			if gotErr != nil {
+				t.Errorf("validateAlias(%v) error = %q; want nil", test.newAliasName, gotErr.Error())
+			}
+		} else {
+			// Expect failure.
+			if gotErr == nil {
+				t.Errorf("validateAlias(%v) error = nil; want non-nil", test.newAliasName)
+			}
+			if got, want := gotErr.Error(), test.wantErrMsg; !strings.Contains(got, want) {
+				t.Errorf("validateAlias(%v) error = %q; want *%q*", test.newAliasName, got, want)
+			}
 		}
 	}
 }
