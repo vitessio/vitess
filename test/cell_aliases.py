@@ -36,7 +36,7 @@ from vtproto import topodata_pb2
 from vtdb import keyrange_constants
 from vtdb import vtgate_client
 
-use_alias = False
+use_alias = True
 
 # initial shards
 # range '' - 80
@@ -226,9 +226,12 @@ index by_msg (msg)
     utils.apply_vschema(vschema)
 
     # Adds alias so vtgate can route to replica/rdonly tablets that are not in the same cell, but same alias
-
     if use_alias:
       utils.run_vtctl(['AddCellsAlias', '-cells', 'test_nj,test_ny','region_east_coast'], auto_log=True)
+
+      # Check that UpdateCellsAlias is idempotent.
+      utils.run_vtctl(['UpdateCellsAlias', '-cells', 'test_nj,test_ny','region_east_coast'], auto_log=True)
+
       tablet_types_to_wait='MASTER,REPLICA'
     else:
       tablet_types_to_wait='MASTER'
