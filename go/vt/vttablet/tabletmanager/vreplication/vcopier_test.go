@@ -322,9 +322,7 @@ func TestPlayerCopyWildcardRule(t *testing.T) {
 		if _, err := playerEngine.Exec(query); err != nil {
 			t.Fatal(err)
 		}
-		expectDBClientQueries(t, []string{
-			"/delete",
-		})
+		expectDeleteQueries(t)
 	}()
 
 	expectDBClientQueries(t, []string{
