@@ -19,24 +19,10 @@
 # Outline of this file.
 # 0. Initialization and helper methods.
 # 1. Installation of dependencies.
-# 2. Installation of Go tools and vendored Go dependencies.
-# 3. Detection of installed MySQL and setting MYSQL_FLAVOR.
-# 4. Installation of development related steps e.g. creating Git hooks.
+# 2. Detection of installed MySQL and setting MYSQL_FLAVOR.
+# 3. Installation of development related steps e.g. creating Git hooks.
 
 BUILD_TESTS=${BUILD_TESTS:-1}
-
-#
-# 0. Initialization and helper methods.
-#
-
-# Run parallel make, based on number of cores available.
-case $(uname) in
-  Linux)  NB_CORES=$(grep -c '^processor' /proc/cpuinfo);;
-  Darwin) NB_CORES=$(sysctl hw.ncpu | awk '{ print $2 }');;
-esac
-if [ -n "$NB_CORES" ]; then
-  export MAKEFLAGS="-j$((NB_CORES+1)) -l${NB_CORES}"
-fi
 
 function fail() {
   echo "ERROR: $1"
@@ -288,46 +274,7 @@ fi
 
 
 #
-# 2. Installation of Go tools and vendored Go dependencies.
-#
-
-
-# Install third-party Go tools used as part of the development workflow.
-#
-# DO NOT ADD LIBRARY DEPENDENCIES HERE. Instead use govendor as described below.
-#
-# Note: We explicitly do not vendor the tools below because a) we want to stay
-# on their latest version and b) it's easier to "go install" them this way.
-gotools=" \
-       github.com/golang/mock/mockgen \
-       github.com/kardianos/govendor \
-       golang.org/x/lint/golint \
-       golang.org/x/tools/cmd/cover \
-       golang.org/x/tools/cmd/goimports \
-       golang.org/x/tools/cmd/goyacc \
-"
-echo "Installing dev tools with 'go get'..."
-# shellcheck disable=SC2086
-go get -u $gotools || fail "Failed to download some Go tools with 'go get'. Please re-run bootstrap.sh in case of transient errors."
-
-# Download dependencies that are version-pinned via govendor.
-#
-# To add a new dependency, run:
-#   govendor fetch <package_path>
-#
-# Existing dependencies can be updated to the latest version with 'fetch' as well.
-#
-# Then:
-#   git add vendor/vendor.json
-#   git commit
-#
-# See https://github.com/kardianos/govendor for more options.
-echo "Updating govendor dependencies..."
-govendor sync || fail "Failed to download/update dependencies with govendor. Please re-run bootstrap.sh in case of transient errors."
-
-
-#
-# 3. Detection of installed MySQL and setting MYSQL_FLAVOR.
+# Detection of installed MySQL and setting MYSQL_FLAVOR.
 #
 
 
@@ -364,7 +311,7 @@ fi
 PYTHONPATH='' $PIP install mysql-connector-python
 
 #
-# 4. Installation of development related steps e.g. creating Git hooks.
+# Installation of development related steps e.g. creating Git hooks.
 #
 
 if [ "$BUILD_TESTS" == 1 ] ; then
