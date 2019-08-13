@@ -368,4 +368,4 @@ if [ "$BUILD_PYTHON" == 1 ] ; then
 fi
 
 echo
-echo "bootstrap finished - run 'source dev.build' or 'source build.env' in your shell before building."
+echo "bootstrap finished - run 'source dev.env' or 'source build.env' in your shell before building."
