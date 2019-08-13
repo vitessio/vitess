@@ -33,7 +33,7 @@ import (
 func ProtoToTime(ts *vttimepb.Time) time.Time {
 	if ts == nil {
 		// treat nil like the empty Timestamp
-		return time.Unix(0, 0).UTC()
+		return time.Time{}
 	}
 	return time.Unix(ts.Seconds, int64(ts.Nanoseconds)).UTC()
 }
