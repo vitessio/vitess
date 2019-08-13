@@ -2034,3 +2034,28 @@ func TestCrossShardSubqueryGetFields(t *testing.T) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
 	}
 }
+
+func TestSelectBindvarswithPrepare(t *testing.T) {
+	executor, sbc1, sbc2, _ := createExecutorEnv()
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	sql := "select id from user where id = :id"
+	_, err := executorPrepare(executor, sql, map[string]*querypb.BindVariable{
+		"id": sqltypes.Int64BindVariable(1),
+	})
+	if err != nil {
+		t.Error(err)
+	}
+
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "select id from user where 1 != 1",
+		BindVariables: map[string]*querypb.BindVariable{"id": sqltypes.Int64BindVariable(1)},
+	}}
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries: %+v, want %+v\n", sbc1.Queries, wantQueries)
+	}
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+	}
+}

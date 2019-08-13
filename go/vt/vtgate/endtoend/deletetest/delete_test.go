@@ -32,10 +32,11 @@ import (
 )
 
 var (
-	cluster     *vttest.LocalCluster
-	vtParams    mysql.ConnParams
-	mysqlParams mysql.ConnParams
-	grpcAddress string
+	cluster        *vttest.LocalCluster
+	vtParams       mysql.ConnParams
+	mysqlParams    mysql.ConnParams
+	grpcAddress    string
+	tabletHostName = flag.String("tablet_hostname", "", "the tablet hostname")
 
 	schema = `
 create table t1(
@@ -133,6 +134,8 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 		defer os.RemoveAll(cfg.SchemaDir)
+
+		cfg.TabletHostName = *tabletHostName
 
 		cluster = &vttest.LocalCluster{
 			Config: cfg,
