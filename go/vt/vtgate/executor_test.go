@@ -1424,7 +1424,7 @@ func TestExecutorAddDropVschemaTableDDL(t *testing.T) {
 	}
 	_ = waitForVschemaTables(t, ks, append(vschemaTables, []string{"test_table", "test_table2"}...), executor)
 
-	// Should fail on a sharded keyspace
+	// Should fail adding a table on a sharded keyspace
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	stmt = "alter vschema add table test_table"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
@@ -1442,6 +1442,52 @@ func TestExecutorAddDropVschemaTableDDL(t *testing.T) {
 	}
 	if !reflect.DeepEqual(gotCount, wantCount) {
 		t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
+	}
+}
+
+func TestExecutorAddSequenceDDL(t *testing.T) {
+	*vschemaacl.AuthorizedDDLUsers = "%"
+	defer func() {
+		*vschemaacl.AuthorizedDDLUsers = ""
+	}()
+	executor, _, _, _ := createExecutorEnv()
+	ks := KsTestUnsharded
+
+	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
+	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) {
+		vschemaUpdates <- vschema
+	})
+
+	vschema := <-vschemaUpdates
+
+	var vschemaTables []string
+	for t := range vschema.Keyspaces[ks].Tables {
+		vschemaTables = append(vschemaTables, t)
+	}
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
+	stmt := "alter vschema add sequence test_seq"
+	_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	_ = waitForVschemaTables(t, ks, append(vschemaTables, []string{"test_seq"}...), executor)
+	vschema = executor.vm.GetCurrentSrvVschema()
+	table := vschema.Keyspaces[ks].Tables["test_seq"]
+	wantType := "sequence"
+	if table.Type != wantType {
+		t.Errorf("want table type sequence got %v", table)
+	}
+
+	// Should fail adding a table on a sharded keyspace
+	session = NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+
+	stmt = "alter vschema add sequence sequence_table"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+
+	wantErr := "add sequence table: unsupported on sharded keyspace TestExecutor"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("want error %v got %v", wantErr, err)
 	}
 }
 

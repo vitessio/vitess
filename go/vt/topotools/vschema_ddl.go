@@ -180,6 +180,20 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 			}
 		}
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindex %s not defined in table %s.%s", name, ksName, tableName)
+
+	case sqlparser.AddSequenceStr:
+		if ks.Sharded {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "add sequence table: unsupported on sharded keyspace %s", ksName)
+		}
+
+		name := ddl.Table.Name.String()
+		if _, ok := ks.Tables[name]; ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema already contains sequence %s in keyspace %s", name, ksName)
+		}
+
+		ks.Tables[name] = &vschemapb.Table{Type: "sequence"}
+
+		return ks, nil
 	}
 
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected vindex ddl operation %s", ddl.Action)
