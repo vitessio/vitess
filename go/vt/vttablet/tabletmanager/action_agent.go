@@ -109,6 +109,10 @@ type ActionAgent struct {
 	// only used if exportStats is true.
 	statsTabletTypeCount *stats.CountersWithSingleLabel
 
+	// statsBackupIsRunning is set to true if an online backup is running
+	// not set if an offline backup is running because that is
+	// indicated by tablet_type = BACKUP
+	// only used if exportStats is true
 	statsBackupIsRunning *stats.String
 
 	// batchCtx is given to the agent by its creator, and should be used for
