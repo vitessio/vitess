@@ -18,7 +18,6 @@ package tabletmanager
 
 import (
 	"fmt"
-	"strconv"
 	"time"
 
 	"golang.org/x/net/context"
@@ -29,6 +28,11 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+)
+
+const (
+	backupModeOnline  = "online"
+	backupModeOffline = "offline"
 )
 
 // Backup takes a db backup and sends it to the BackupStorage
@@ -57,6 +61,17 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	if !allowMaster && tablet.Type == topodatapb.TabletType_MASTER {
 		return fmt.Errorf("type MASTER cannot take backup. if you really need to do this, rerun the backup command with -allow_master")
 	}
+
+	// prevent concurrent backups, and record stats
+	backupMode := backupModeOnline
+	if engine.ShouldDrainForBackup() {
+		backupMode = backupModeOffline
+	}
+	if err := agent.beginBackup(backupMode); err != nil {
+		return err
+	}
+	defer agent.endBackup(backupMode)
+
 	var originalType topodatapb.TabletType
 	if engine.ShouldDrainForBackup() {
 		if err := agent.lock(ctx); err != nil {
@@ -77,20 +92,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 		if err := agent.refreshTablet(ctx, "before backup"); err != nil {
 			return err
 		}
-	} else {
-		if agent._isOnlineBackupRunning {
-			return fmt.Errorf("a backup is already running on tablet: %v", tablet.Alias)
-		}
-		// this means we continue to serve, but let's set _isOnlineBackupRunning to true
-		// have to take the mutex lock before writing to _ fields
-		agent.mutex.Lock()
-		agent._isOnlineBackupRunning = true
-		agent.mutex.Unlock()
-		if agent.exportStats {
-			agent.statsBackupIsRunning.Set(strconv.FormatBool(agent._isOnlineBackupRunning))
-		}
 	}
-
 	// create the loggers: tee to console and source
 	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
@@ -119,15 +121,6 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 		// let's update our internal state (start query service and other things)
 		if err := agent.refreshTablet(bgCtx, "after backup"); err != nil {
 			return err
-		}
-	} else {
-		// now we set _isOnlineBackupRunning back to false
-		// have to take the mutex lock before writing to _ fields
-		agent.mutex.Lock()
-		agent._isOnlineBackupRunning = false
-		agent.mutex.Unlock()
-		if agent.exportStats {
-			agent.statsBackupIsRunning.Set(strconv.FormatBool(agent._isOnlineBackupRunning))
 		}
 	}
 	// and re-run health check to be sure to capture any replication delay
@@ -161,4 +154,33 @@ func (agent *ActionAgent) RestoreFromBackup(ctx context.Context, logger logutil.
 	agent.runHealthCheckLocked()
 
 	return err
+}
+
+func (agent *ActionAgent) beginBackup(backupMode string) error {
+	agent.mutex.Lock()
+	defer agent.mutex.Unlock()
+	if agent._isBackupRunning {
+		return fmt.Errorf("a backup is already running on tablet: %v", agent.TabletAlias)
+	}
+	// when mode is online we don't take the action lock, so we continue to serve,
+	// but let's set _isBackupRunning to true
+	// so that we only allow one online backup at a time
+	// offline backups also run only one at a time because we take the action lock
+	// so this is not really needed in that case, however we are using it to record the state
+	agent._isBackupRunning = true
+	if agent.exportStats {
+		agent.statsBackupIsRunning.Set([]string{backupMode}, 1)
+	}
+	return nil
+}
+
+func (agent *ActionAgent) endBackup(backupMode string) {
+	// now we set _isBackupRunning back to false
+	// have to take the mutex lock before writing to _ fields
+	agent.mutex.Lock()
+	defer agent.mutex.Unlock()
+	agent._isBackupRunning = false
+	if agent.exportStats {
+		agent.statsBackupIsRunning.Set([]string{backupMode}, 0)
+	}
 }
