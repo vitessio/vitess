@@ -638,3 +638,43 @@ func TestMerge(t *testing.T) {
 	assert.NoError(err)
 	assert.Equal(want, merged)
 }
+
+func TestNoInputAndNoGroupingKeys(t *testing.T) {
+	assert := assert.New(t)
+	fp := &fakePrimitive{
+		results: []*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields(
+				"col1|col2",
+				"int64|int64",
+			),
+			// Empty input table
+		)},
+	}
+
+	oa := &OrderedAggregate{
+		HasDistinct: true,
+		Aggregates: []AggregateParams{{
+			Opcode: AggregateCountDistinct,
+			Col:    0,
+			Alias:  "count(distinct col2)",
+		}, {
+			Opcode: AggregateSumDistinct,
+			Col:    1,
+			Alias:  "sum(distinct col2)",
+		}},
+		Keys:  []int{0},
+		Input: fp,
+	}
+
+	result, err := oa.Execute(nil, nil, false)
+	assert.NoError(err)
+
+	wantResult := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"count(distinct col2)|sum(distinct col2)",
+			"int64|decimal",
+		),
+		"0|null",
+	)
+	assert.Equal(wantResult, result)
+}
