@@ -1453,12 +1453,7 @@ func TestExecutorAddSequenceDDL(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
 	ks := KsTestUnsharded
 
-	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
-	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) {
-		vschemaUpdates <- vschema
-	})
-
-	vschema := <-vschemaUpdates
+	vschema := executor.vm.GetCurrentSrvVschema()
 
 	var vschemaTables []string
 	for t := range vschema.Keyspaces[ks].Tables {
@@ -1480,7 +1475,14 @@ func TestExecutorAddSequenceDDL(t *testing.T) {
 	}
 
 	// Should fail adding a table on a sharded keyspace
-	session = NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
+	ksSharded := "TestExecutor"
+	vschemaTables = []string{}
+	vschema = executor.vm.GetCurrentSrvVschema()
+	for t := range vschema.Keyspaces[ksSharded].Tables {
+		vschemaTables = append(vschemaTables, t)
+	}
+
+	session = NewSafeSession(&vtgatepb.Session{TargetString: ksSharded})
 
 	stmt = "alter vschema add sequence sequence_table"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
@@ -1488,6 +1490,26 @@ func TestExecutorAddSequenceDDL(t *testing.T) {
 	wantErr := "add sequence table: unsupported on sharded keyspace TestExecutor"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("want error %v got %v", wantErr, err)
+	}
+
+	// Should be able to add autoincrement to table in sharded keyspace
+	stmt = "alter vschema on test_table add vindex hash_index (id)"
+	if _, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil); err != nil {
+		t.Error(err)
+	}
+	time.Sleep(10 * time.Millisecond)
+
+	stmt = "alter vschema on test_table add auto_increment id using test_seq"
+	if _, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil); err != nil {
+		t.Error(err)
+	}
+	time.Sleep(10 * time.Millisecond)
+
+	wantAutoInc := &vschemapb.AutoIncrement{Column: "id", Sequence: "test_seq"}
+	gotAutoInc := executor.vm.GetCurrentSrvVschema().Keyspaces[ksSharded].Tables["test_table"].AutoIncrement
+
+	if !reflect.DeepEqual(wantAutoInc, gotAutoInc) {
+		t.Errorf("want autoinc %v, got autoinc %v", wantAutoInc, gotAutoInc)
 	}
 }
 

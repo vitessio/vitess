@@ -1357,6 +1357,17 @@ alter_statement:
   {
     $$ = &DDL{Action: AddSequenceStr, Table: $5}
   }
+| ALTER VSCHEMA ON table_name ADD AUTO_INCREMENT sql_id USING table_name
+  {
+    $$ = &DDL{
+        Action: AddAutoIncStr,
+        Table: $4,
+        AutoIncSpec: &AutoIncSpec{
+            Column: $7,
+            Sequence: $9,
+        },
+    }
+  }
 
 alter_object_type:
   COLUMN

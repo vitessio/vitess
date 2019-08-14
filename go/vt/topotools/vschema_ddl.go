@@ -17,6 +17,7 @@ limitations under the License.
 package topotools
 
 import (
+	"fmt"
 	"reflect"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -192,6 +193,30 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, ddl *sqlparser.DDL) 
 		}
 
 		ks.Tables[name] = &vschemapb.Table{Type: "sequence"}
+
+		return ks, nil
+
+	case sqlparser.AddAutoIncStr:
+		name := ddl.Table.Name.String()
+		table := ks.Tables[name]
+		if table == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema does not contain table %s in keyspace %s", name, ksName)
+		}
+
+		if table.AutoIncrement != nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vschema already contains auto inc %v on table %s in keyspace %s", table.AutoIncrement, name, ksName)
+		}
+
+		sequence := ddl.AutoIncSpec.Sequence
+		sequenceFqn := sequence.Name.String()
+		if sequence.Qualifier.String() != "" {
+			sequenceFqn = fmt.Sprintf("%s.%s", sequence.Qualifier.String(), sequenceFqn)
+		}
+
+		table.AutoIncrement = &vschemapb.AutoIncrement{
+			Column:   ddl.AutoIncSpec.Column.String(),
+			Sequence: sequenceFqn,
+		}
 
 		return ks, nil
 	}
