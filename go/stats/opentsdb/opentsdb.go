@@ -118,7 +118,7 @@ func (backend *openTSDBBackend) getDataPoints() []dataPoint {
 	return dataCollector.dataPoints
 }
 
-// combineMetricName joins parts of a hierachical name with a "."
+// combineMetricName joins parts of a hierarchical name with a "."
 func combineMetricName(parts ...string) string {
 	return strings.Join(parts, ".")
 }
