@@ -556,7 +556,7 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 	}
 
 	newParamsBoundFlag, pos, ok := readByte(payload, pos)
-	if newParamsBoundFlag == 0x01 && ok {
+	if ok && newParamsBoundFlag == 0x01 {
 		var mysqlType, flags byte
 		for i := uint16(0); i < prepare.ParamsCount; i++ {
 			mysqlType, pos, ok = readByte(payload, pos)
