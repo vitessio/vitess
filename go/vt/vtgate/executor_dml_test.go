@@ -1771,8 +1771,7 @@ func TestUpdateEqualWithPrepare(t *testing.T) {
 		t.Error(err)
 	}
 
-	wantQueries := []*querypb.BoundQuery{}
-	wantQueries = nil
+	var wantQueries []*querypb.BoundQuery
 
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
@@ -1799,8 +1798,7 @@ func TestInsertShardedWithPrepare(t *testing.T) {
 		t.Error(err)
 	}
 
-	wantQueries := []*querypb.BoundQuery{}
-	wantQueries = nil
+	var wantQueries []*querypb.BoundQuery
 
 	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
 		t.Errorf("sbc1.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
@@ -1822,8 +1820,8 @@ func TestDeleteEqualWithPrepare(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	wantQueries := []*querypb.BoundQuery{}
-	wantQueries = nil
+
+	var wantQueries []*querypb.BoundQuery
 
 	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
 		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc.Queries, wantQueries)
