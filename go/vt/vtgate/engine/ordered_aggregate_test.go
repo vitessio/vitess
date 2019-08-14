@@ -662,7 +662,7 @@ func TestNoInputAndNoGroupingKeys(t *testing.T) {
 			Col:    1,
 			Alias:  "sum(distinct col2)",
 		}},
-		Keys:  []int{0},
+		Keys:  []int{},
 		Input: fp,
 	}
 
@@ -674,7 +674,7 @@ func TestNoInputAndNoGroupingKeys(t *testing.T) {
 			"count(distinct col2)|sum(distinct col2)",
 			"int64|decimal",
 		),
-		"0|null",
+		"null|0",
 	)
 	assert.Equal(wantResult, result)
 }
