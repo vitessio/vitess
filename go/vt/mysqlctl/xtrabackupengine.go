@@ -288,6 +288,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 
 		// XtraBackup-specific fields
 		FileName:        backupFileName,
+		StreamMode:      *xtrabackupStreamMode,
 		SkipCompress:    !*backupStorageCompress,
 		Params:          *xtrabackupBackupFlags,
 		NumStripes:      int32(numStripes),
