@@ -262,6 +262,7 @@ func (se *Engine) Reload(ctx context.Context) error {
 	// The following section requires us to hold mu.
 	rec := concurrency.AllErrorRecorder{}
 	curTables := map[string]bool{"dual": true}
+	var created, altered []string
 	for _, row := range tableData.Rows {
 		tableName := row[0].ToString()
 		curTables[tableName] = true
@@ -269,7 +270,13 @@ func (se *Engine) Reload(ctx context.Context) error {
 		// Check if we know about the table or it has been recreated.
 		if _, ok := se.tables[tableName]; !ok || createTime >= se.lastChange {
 			log.Infof("Reloading schema for table: %s", tableName)
-			rec.RecordError(se.tableWasCreatedOrAltered(ctx, tableName))
+			wasCreated, err := se.tableWasCreatedOrAltered(ctx, tableName)
+			rec.RecordError(err)
+			if wasCreated {
+				created = append(created, tableName)
+			} else {
+				altered = append(altered, tableName)
+			}
 		} else {
 			// Only update table_rows, data_length, index_length, max_data_length
 			se.tables[tableName].SetMysqlStats(row[4], row[5], row[6], row[7], row[8])
@@ -295,11 +302,7 @@ func (se *Engine) Reload(ctx context.Context) error {
 	// must run after se.tables is set
 	se.registerTopics()
 
-	// We only need to broadcast dropped tables because
-	// tableWasCreatedOrAltered will broadcast the other changes.
-	if len(dropped) > 0 {
-		se.broadcast(nil, nil, dropped)
-	}
+	se.broadcast(created, altered, dropped)
 	return rec.Error()
 }
 
@@ -320,24 +323,24 @@ func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, 
 
 // tableWasCreatedOrAltered must be called if a DDL was applied to that table.
 // the se.mu mutex _must_ be locked before entering this method
-func (se *Engine) tableWasCreatedOrAltered(ctx context.Context, tableName string) error {
+func (se *Engine) tableWasCreatedOrAltered(ctx context.Context, tableName string) (bool, error) {
 	if !se.isOpen {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "DDL called on closed schema")
+		return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "DDL called on closed schema")
 	}
 
 	conn, err := se.conns.Get(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer conn.Recycle()
 	tableData, err := conn.Exec(ctx, mysql.BaseShowTablesForTable(tableName), 1, false)
 	if err != nil {
 		tabletenv.InternalErrors.Add("Schema", 1)
-		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "tableWasCreatedOrAltered: information_schema query failed for table %s: %v", tableName, err)
+		return false, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "tableWasCreatedOrAltered: information_schema query failed for table %s: %v", tableName, err)
 	}
 	if len(tableData.Rows) != 1 {
 		// This can happen if DDLs race with each other.
-		return nil
+		return false, nil
 	}
 	row := tableData.Rows[0]
 	table, err := LoadTable(
@@ -348,26 +351,23 @@ func (se *Engine) tableWasCreatedOrAltered(ctx context.Context, tableName string
 	)
 	if err != nil {
 		tabletenv.InternalErrors.Add("Schema", 1)
-		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "tableWasCreatedOrAltered: failed to load table %s: %v", tableName, err)
+		return false, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "tableWasCreatedOrAltered: failed to load table %s: %v", tableName, err)
 	}
 
 	// table_rows, data_length, index_length, max_data_length
 	table.SetMysqlStats(row[4], row[5], row[6], row[7], row[8])
 
-	var created, altered []string
+	wasCreated := true
 	if _, ok := se.tables[tableName]; ok {
 		// If the table already exists, we overwrite it with the latest info.
 		// This also means that the query cache needs to be cleared.
 		// Otherwise, the query plans may not be in sync with the schema.
 		log.Infof("Updating table %s", tableName)
-		altered = append(altered, tableName)
-	} else {
-		created = append(created, tableName)
+		wasCreated = false
 	}
 	se.tables[tableName] = table
 	log.Infof("Initialized table: %s, type: %s", tableName, TypeNames[table.Type])
-	se.broadcast(created, altered, nil)
-	return nil
+	return wasCreated, nil
 }
 
 // registerTopics optionally connects the vt_topic metadata on a message table
