@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -267,29 +266,13 @@ func TestCreateOrUpdateTable(t *testing.T) {
 			mysql.BaseShowTablesRow(existingTable, false, ""),
 		},
 	})
-	i := 0
-	se.RegisterNotifier("test", func(schema map[string]*Table, created, altered, dropped []string) {
-		switch i {
-		case 0:
-			if len(created) != 5 {
-				t.Errorf("callback 0: %v, want len of 5\n", created)
-			}
-		case 1:
-			want := []string{"test_table_01"}
-			if !reflect.DeepEqual(altered, want) {
-				t.Errorf("callback 0: %v, want %v\n", created, want)
-			}
-		default:
-			t.Fatal("unexpected")
-		}
-		i++
-	})
-	defer se.UnregisterNotifier("test")
-	if err := se.tableWasCreatedOrAltered(context.Background(), "test_table_01"); err != nil {
+
+	wasCreated, err := se.tableWasCreatedOrAltered(context.Background(), existingTable)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if i < 2 {
-		t.Error("Notifier did not get called")
+	if wasCreated {
+		t.Error("wanted wasCreated == false")
 	}
 }
 
