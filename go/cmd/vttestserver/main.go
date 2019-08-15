@@ -199,7 +199,10 @@ func parseFlags() (config vttest.Config, env vttest.Environment, err error) {
 }
 
 func main() {
-	cluster := runCluster()
+	cluster, err := runCluster()
+	if err != nil {
+		log.Fatal(err)
+	}
 	defer cluster.TearDown()
 
 	kvconf := cluster.JSONConfig()
@@ -210,7 +213,7 @@ func main() {
 	select {}
 }
 
-func runCluster() vttest.LocalCluster {
+func runCluster() (*vttest.LocalCluster, error) {
 	config, env, err := parseFlags()
 	if err != nil {
 		log.Fatal(err)
@@ -223,10 +226,10 @@ func runCluster() vttest.LocalCluster {
 	}
 	err = cluster.Setup()
 	if err != nil {
-		log.Fatal(err)
+		return &cluster, err
 	}
 
 	log.Info("Local cluster started.")
 
-	return cluster
+	return &cluster, nil
 }
