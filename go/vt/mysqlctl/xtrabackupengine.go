@@ -739,5 +739,5 @@ func stripeReader(readers []io.Reader, blockSize int64) io.Reader {
 }
 
 func init() {
-	BackupEngineMap[xtrabackupEngineName] = &XtrabackupEngine{}
+	BackupRestoreEngineMap[xtrabackupEngineName] = &XtrabackupEngine{}
 }

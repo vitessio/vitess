@@ -53,19 +53,20 @@ type BackupRestoreEngine interface {
 	RestoreEngine
 }
 
-// BackupEngineMap contains the registered implementations for BackupEngine
-var BackupEngineMap = make(map[string]BackupRestoreEngine)
+// BackupRestoreEngineMap contains the registered implementations for
+// BackupEngine and RestoreEngine.
+var BackupRestoreEngineMap = make(map[string]BackupRestoreEngine)
 
 // GetBackupEngine returns the BackupEngine implementation that should be used
 // to create new backups.
 //
-// To restore a backup, you should instead get the appropriate BackupEngine for
+// To restore a backup, you should instead get the appropriate RestoreEngine for
 // a particular backup by calling GetRestoreEngine().
 //
 // This must only be called after flags have been parsed.
 func GetBackupEngine() (BackupEngine, error) {
 	name := *backupEngineImplementation
-	be, ok := BackupEngineMap[name]
+	be, ok := BackupRestoreEngineMap[name]
 	if !ok {
 		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "unknown BackupEngine implementation %q", name)
 	}
@@ -84,7 +85,7 @@ func GetRestoreEngine(ctx context.Context, backup backupstorage.BackupHandle) (R
 		// The builtin engine is the only one that ever left BackupMethod unset.
 		engine = builtinBackupEngineName
 	}
-	re, ok := BackupEngineMap[engine]
+	re, ok := BackupRestoreEngineMap[engine]
 	if !ok {
 		return nil, vterrors.Errorf(vtrpc.Code_NOT_FOUND, "can't restore backup created with %q engine; no such BackupEngine implementation is registered", manifest.BackupMethod)
 	}

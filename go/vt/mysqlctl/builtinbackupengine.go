@@ -678,5 +678,5 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, cnf *Mycnf, bh b
 }
 
 func init() {
-	BackupEngineMap["builtin"] = &BuiltinBackupEngine{}
+	BackupRestoreEngineMap["builtin"] = &BuiltinBackupEngine{}
 }
