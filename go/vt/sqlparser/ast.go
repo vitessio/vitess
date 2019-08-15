@@ -755,6 +755,7 @@ const (
 	DropVschemaTableStr = "drop vschema table"
 	AddColVindexStr     = "on table add vindex"
 	DropColVindexStr    = "on table drop vindex"
+	AddSequenceStr      = "add sequence"
 
 	// Vindex DDL param to specify the owner of a vindex
 	VindexOwnerStr = "owner"
@@ -813,6 +814,8 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		}
 	case DropColVindexStr:
 		buf.Myprintf("alter vschema on %v drop vindex %v", node.Table, node.VindexSpec.Name)
+	case AddSequenceStr:
+		buf.Myprintf("alter vschema add sequence %v", node.Table)
 	default:
 		buf.Myprintf("%s table %v", node.Action, node.Table)
 	}

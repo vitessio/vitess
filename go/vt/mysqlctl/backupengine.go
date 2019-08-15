@@ -40,6 +40,7 @@ var (
 // BackupEngine is the interface to take a backup with a given engine.
 type BackupEngine interface {
 	ExecuteBackup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) (bool, error)
+	ShouldDrainForBackup() bool
 }
 
 // RestoreEngine is the interface to restore a backup with a given engine.

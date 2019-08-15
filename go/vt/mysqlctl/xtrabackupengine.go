@@ -738,6 +738,12 @@ func stripeReader(readers []io.Reader, blockSize int64) io.Reader {
 	return reader
 }
 
+// ShouldDrainForBackup satisfies the BackupEngine interface
+// xtrabackup can run while tablet is serving, hence false
+func (be *XtrabackupEngine) ShouldDrainForBackup() bool {
+	return false
+}
+
 func init() {
 	BackupRestoreEngineMap[xtrabackupEngineName] = &XtrabackupEngine{}
 }
