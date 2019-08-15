@@ -194,6 +194,11 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		if _, err := dbClient.ExecuteFetch("set @@session.time_zone = '+00:00'", 10000); err != nil {
 			return err
 		}
+		// Tables may have varying character sets. To ship the bits without interpreting them
+		// we set the character set to be binary.
+		if _, err := dbClient.ExecuteFetch("set names binary", 10000); err != nil {
+			return err
+		}
 		vreplicator := newVReplicator(ct.id, &ct.source, tablet, ct.blpStats, dbClient, ct.mysqld)
 		return vreplicator.Replicate(ctx)
 	}
