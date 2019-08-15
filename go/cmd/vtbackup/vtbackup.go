@@ -60,7 +60,6 @@ package main
 import (
 	"context"
 	"crypto/rand"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"math"
@@ -568,24 +567,10 @@ func lastCompleteBackup(ctx context.Context, backups []backupstorage.BackupHandl
 	return nil
 }
 
-// partialManifest is a struct into which we deserialize the MANIFEST file.
-// This only contains the fields that are common to all Vitess backup engines.
-// Other fields in the MANIFEST file will be ignored during deserialization.
-type partialManifest struct {
-	// Position is the position at which the backup was taken
-	Position mysql.Position
-}
-
 func checkBackupComplete(ctx context.Context, backup backupstorage.BackupHandle) error {
-	file, err := backup.ReadFile(ctx, manifestFileName)
+	manifest, err := mysqlctl.GetBackupManifest(ctx, backup)
 	if err != nil {
-		return fmt.Errorf("can't read MANIFEST: %v", err)
-	}
-	defer file.Close()
-
-	manifest := partialManifest{}
-	if err := json.NewDecoder(file).Decode(&manifest); err != nil {
-		return fmt.Errorf("can't decode MANIFEST: %v", err)
+		return fmt.Errorf("can't get backup MANIFEST: %v", err)
 	}
 
 	log.Infof("Found complete backup %v taken at position %v", backup.Name(), manifest.Position.String())
