@@ -670,6 +670,12 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, cnf *Mycnf, bh b
 	return nil
 }
 
+// ShouldDrainForBackup satisfies the BackupEngine interface
+// backup requires query service to be stopped, hence true
+func (be *BuiltinBackupEngine) ShouldDrainForBackup() bool {
+	return true
+}
+
 func init() {
 	BackupEngineMap["builtin"] = &BuiltinBackupEngine{}
 }
