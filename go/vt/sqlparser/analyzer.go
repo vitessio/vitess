@@ -285,6 +285,9 @@ func ExtractSetValues(sql string) (keyValues map[SetKey]interface{}, scope strin
 		case strings.HasPrefix(key, "@@session."):
 			scope = SessionStr
 			key = strings.TrimPrefix(key, "@@session.")
+		case strings.HasPrefix(key, "@@vitess_metadata."):
+			scope = VitessMetadataStr
+			key = strings.TrimPrefix(key, "@@vitess_metadata.")
 		case strings.HasPrefix(key, "@@"):
 			key = strings.TrimPrefix(key, "@@")
 		}

@@ -462,9 +462,13 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 	}
 
 	for k, v := range vals {
-		if k.Scope == sqlparser.GlobalStr {
+		switch k.Scope {
+		case sqlparser.GlobalStr:
 			return &sqltypes.Result{}, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported in set: global")
+		case sqlparser.VitessMetadataStr:
+			return e.handleSetVitessMetadata(ctx, safeSession, k, v)
 		}
+
 		switch k.Key {
 		case "autocommit":
 			val, err := validateSetOnOff(v, k.Key)
@@ -645,6 +649,63 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 	return &sqltypes.Result{}, nil
 }
 
+func (e *Executor) handleSetVitessMetadata(ctx context.Context, session *SafeSession, k sqlparser.SetKey, v interface{}) (*sqltypes.Result, error) {
+	//TODO(kalfonso): move to its own acl check and consolidate into an acl component that can handle multiple operations (vschema, metadata)
+	allowed := vschemaacl.Authorized(callerid.ImmediateCallerIDFromContext(ctx))
+	if !allowed {
+		return nil, vterrors.Errorf(vtrpcpb.Code_PERMISSION_DENIED, "not authorized to perform vitess metadata operations")
+
+	}
+
+	val, ok := v.(string)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for charset: %T", v)
+	}
+
+	ts, err := e.serv.GetTopoServer()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := ts.UpsertMetadata(ctx, k.Key, val); err != nil {
+		return nil, err
+	}
+
+	return &sqltypes.Result{}, nil
+}
+
+func (e *Executor) handleShowVitessMetadata(ctx context.Context, session *SafeSession, opt *sqlparser.ShowTablesOpt) (*sqltypes.Result, error) {
+	ts, err := e.serv.GetTopoServer()
+	if err != nil {
+		return nil, err
+	}
+
+	var metadata map[string]string
+	if opt.Filter == nil {
+		metadata, err = ts.GetMetadata(ctx, "")
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		metadata, err = ts.GetMetadata(ctx, opt.Filter.Like)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	rows := make([][]sqltypes.Value, 0, len(metadata))
+	for k, v := range metadata {
+		row := buildVarCharRow(k, v)
+		rows = append(rows, row)
+	}
+
+	return &sqltypes.Result{
+		Fields:       buildVarCharFields("Key", "Value"),
+		Rows:         rows,
+		RowsAffected: uint64(len(rows)),
+	}, nil
+}
+
 func validateSetOnOff(v interface{}, typ string) (int64, error) {
 	var val int64
 	switch v := v.(type) {
@@ -680,6 +741,10 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 
 	switch strings.ToLower(show.Type) {
 	case sqlparser.KeywordString(sqlparser.COLLATION), sqlparser.KeywordString(sqlparser.VARIABLES):
+		if show.Scope == sqlparser.VitessMetadataStr {
+			return e.handleShowVitessMetadata(ctx, safeSession, show.ShowTablesOpt)
+		}
+
 		if destKeyspace == "" {
 			keyspaces, err := e.resolver.resolver.GetAllKeyspaces(ctx)
 			if err != nil {

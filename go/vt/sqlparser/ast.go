@@ -662,9 +662,10 @@ type Set struct {
 
 // Set.Scope or Show.Scope
 const (
-	SessionStr  = "session"
-	GlobalStr   = "global"
-	ImplicitStr = ""
+	SessionStr        = "session"
+	GlobalStr         = "global"
+	VitessMetadataStr = "vitess_metadata"
+	ImplicitStr       = ""
 )
 
 // Format formats the node.
