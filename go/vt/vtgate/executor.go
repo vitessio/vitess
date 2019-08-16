@@ -345,7 +345,8 @@ func (e *Executor) handleDDL(ctx context.Context, safeSession *SafeSession, sql 
 			sqlparser.DropVschemaTableStr,
 			sqlparser.AddColVindexStr,
 			sqlparser.DropColVindexStr,
-			sqlparser.AddSequenceStr:
+			sqlparser.AddSequenceStr,
+			sqlparser.AddAutoIncStr:
 
 			err := e.handleVSchemaDDL(ctx, safeSession, dest, destKeyspace, destTabletType, ddl, logStats)
 			logStats.ExecuteTime = time.Since(execStart)
