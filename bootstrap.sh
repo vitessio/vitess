@@ -20,7 +20,6 @@
 # 0. Initialization and helper methods.
 # 1. Installation of dependencies.
 # 2. Installation of Go tools and vendored Go dependencies.
-# 3. Detection of installed MySQL and setting MYSQL_FLAVOR.
 
 BUILD_TESTS=${BUILD_TESTS:-1}
 BUILD_PYTHON=${BUILD_PYTHON:-1}
@@ -288,6 +287,9 @@ if [ "$BUILD_PYTHON" == 1 ] ; then
     install_dep "chromedriver" "73.0.3683.20" "$VTROOT/dist/chromedriver" install_chromedriver
 fi
 
+if [ "$BUILD_PYTHON" == 1 ] ; then
+  PYTHONPATH='' $PIP install mysql-connector-python
+fi
 
 #
 # 2. Installation of Go tools and vendored Go dependencies.
@@ -326,46 +328,6 @@ go get -u $gotools || fail "Failed to download some Go tools with 'go get'. Plea
 # See https://github.com/kardianos/govendor for more options.
 echo "Updating govendor dependencies..."
 govendor sync || fail "Failed to download/update dependencies with govendor. Please re-run bootstrap.sh in case of transient errors."
-
-
-#
-# 3. Detection of installed MySQL and setting MYSQL_FLAVOR.
-#
-
-
-# find mysql and prepare to use libmysqlclient
-
-if [ "$BUILD_TESTS" == 1 ] ; then
-  if [ -z "$MYSQL_FLAVOR" ]; then
-    export MYSQL_FLAVOR=MySQL56
-    echo "MYSQL_FLAVOR environment variable not set. Using default: $MYSQL_FLAVOR"
-  fi
-  case "$MYSQL_FLAVOR" in
-    "MySQL56" | "MySQL80")
-      myversion="$("$VT_MYSQL_ROOT/bin/mysql" --version)"
-      [[ "$myversion" =~ Distrib\ 5\.[67] || "$myversion" =~ Ver\ 8\. ]] || fail "Couldn't find MySQL 5.6+ in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
-      echo "Found MySQL 5.6+ installation in $VT_MYSQL_ROOT."
-      ;;
-
-    "MariaDB" | "MariaDB103")
-      myversion="$("$VT_MYSQL_ROOT/bin/mysql" --version)"
-      [[ "$myversion" =~ MariaDB ]] || fail "Couldn't find MariaDB in $VT_MYSQL_ROOT. Set VT_MYSQL_ROOT to override search location."
-      echo "Found MariaDB installation in $VT_MYSQL_ROOT."
-      ;;
-
-    *)
-      fail "Unsupported MYSQL_FLAVOR $MYSQL_FLAVOR"
-      ;;
-
-  esac
-  # save the flavor that was used in bootstrap, so it can be restored
-  # every time dev.env is sourced.
-  echo "$MYSQL_FLAVOR" > "$VTROOT/dist/MYSQL_FLAVOR"
-fi
-
-if [ "$BUILD_PYTHON" == 1 ] ; then
-  PYTHONPATH='' $PIP install mysql-connector-python
-fi
 
 echo
 echo "bootstrap finished - run 'source dev.env' or 'source build.env' in your shell before building."
