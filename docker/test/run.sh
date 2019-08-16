@@ -181,7 +181,7 @@ run_bootstrap_cmd="if [[ \$(diff -w vendor/vendor.json /tmp/src/vendor/vendor.js
 # Copy bootstrap.sh if it changed
 run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "if [[ \$(diff -w bootstrap.sh /tmp/src/bootstrap.sh) ]]; then cp -f /tmp/src/bootstrap.sh .; bootstrap=1; fi")
 # run bootstrap.sh if necessary
-run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "if [[ -n \$bootstrap ]]; then ./bootstrap.sh; else if [[ -n \$sync_vendor ]]; then govendor sync; fi; fi")
+run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "if [[ -n \$bootstrap ]]; then ./bootstrap.sh; fi")
 copy_src_cmd=$(append_cmd "$copy_src_cmd" "$run_bootstrap_cmd")
 
 # Construct the command we will actually run.
