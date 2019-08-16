@@ -27,6 +27,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/klauspost/pgzip"
 	"vitess.io/vitess/go/mysql"
@@ -41,9 +42,9 @@ import (
 )
 
 const (
-	builtin            = "builtin"
-	writerBufferSize   = 2 * 1024 * 1024
-	dataDictionaryFile = "mysql.ibd"
+	builtinBackupEngineName = "builtin"
+	writerBufferSize        = 2 * 1024 * 1024
+	dataDictionaryFile      = "mysql.ibd"
 )
 
 // BuiltinBackupEngine encapsulates the logic of the builtin engine
@@ -57,19 +58,19 @@ type BuiltinBackupEngine struct {
 // Position that the backup was taken at, and the transform hook used,
 // if any.
 type builtinBackupManifest struct {
+	// BackupManifest is an anonymous embedding of the base manifest struct.
+	BackupManifest
+
 	// FileEntries contains all the files in the backup
 	FileEntries []FileEntry
-
-	// Position is the position at which the backup was taken
-	Position mysql.Position
 
 	// TransformHook that was used on the files, if any.
 	TransformHook string
 
-	// SkipCompress can be set if the backup files were not run
-	// through gzip. It is the negative of the flag, so old
-	// backups that don't have this flag are assumed to be
-	// compressed.
+	// SkipCompress is true if the backup files were NOT run through gzip.
+	// The field is expressed as a negative because it will come through as
+	// false for backups that were created before the field existed, and those
+	// backups all had compression enabled.
 	SkipCompress bool
 }
 
@@ -339,7 +340,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, my
 }
 
 // backupFiles finds the list of files to backup, and creates the backup.
-func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, replicationPosition mysql.Position, backupConcurrency int, hookExtraEnv map[string]string) (err error) {
+func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, replicationPosition mysql.Position, backupConcurrency int, hookExtraEnv map[string]string) (finalErr error) {
 	// Get the files to backup.
 	fes, err := findFilesToBackup(cnf)
 	if err != nil {
@@ -376,39 +377,45 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysq
 	}
 
 	// open the MANIFEST
-	wc, err := bh.AddFile(ctx, backupManifest, 0)
+	wc, err := bh.AddFile(ctx, backupManifestFileName, 0)
 	if err != nil {
-		return vterrors.Wrapf(err, "cannot add %v to backup", backupManifest)
+		return vterrors.Wrapf(err, "cannot add %v to backup", backupManifestFileName)
 	}
 	defer func() {
-		if closeErr := wc.Close(); err == nil {
-			err = closeErr
+		if closeErr := wc.Close(); finalErr == nil {
+			finalErr = closeErr
 		}
 	}()
 
 	// JSON-encode and write the MANIFEST
 	bm := &builtinBackupManifest{
+		// Common base fields
+		BackupManifest: BackupManifest{
+			BackupMethod: builtinBackupEngineName,
+			Position:     replicationPosition,
+			FinishedTime: time.Now().UTC().Format(time.RFC3339),
+		},
+
+		// Builtin-specific fields
 		FileEntries:   fes,
-		Position:      replicationPosition,
 		TransformHook: *backupStorageHook,
 		SkipCompress:  !*backupStorageCompress,
 	}
 	data, err := json.MarshalIndent(bm, "", "  ")
 	if err != nil {
-		return vterrors.Wrapf(err, "cannot JSON encode %v", backupManifest)
+		return vterrors.Wrapf(err, "cannot JSON encode %v", backupManifestFileName)
 	}
 	if _, err := wc.Write([]byte(data)); err != nil {
-		return vterrors.Wrapf(err, "cannot write %v", backupManifest)
+		return vterrors.Wrapf(err, "cannot write %v", backupManifestFileName)
 	}
 
 	return nil
 }
 
 // backupFile backs up an individual file.
-func (be *BuiltinBackupEngine) backupFile(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, fe *FileEntry, name string, hookExtraEnv map[string]string) (err error) {
+func (be *BuiltinBackupEngine) backupFile(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, fe *FileEntry, name string, hookExtraEnv map[string]string) (finalErr error) {
 	// Open the source file for reading.
-	var source *os.File
-	source, err = fe.open(cnf, true)
+	source, err := fe.open(cnf, true)
 	if err != nil {
 		return err
 	}
@@ -427,11 +434,11 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, cnf *Mycnf, mysql
 	}
 	defer func(name, fileName string) {
 		if rerr := wc.Close(); rerr != nil {
-			if err != nil {
+			if finalErr != nil {
 				// We already have an error, just log this one.
 				logger.Errorf2(rerr, "failed to close file %v,%v", name, fe.Name)
 			} else {
-				err = rerr
+				finalErr = rerr
 			}
 		}
 	}(name, fe.Name)
@@ -512,24 +519,23 @@ func (be *BuiltinBackupEngine) ExecuteRestore(
 	mysqld MysqlDaemon,
 	logger logutil.Logger,
 	dir string,
-	bhs []backupstorage.BackupHandle,
+	bh backupstorage.BackupHandle,
 	restoreConcurrency int,
 	hookExtraEnv map[string]string) (mysql.Position, error) {
 
 	zeroPosition := mysql.Position{}
 	var bm builtinBackupManifest
 
-	bh, err := findBackupToRestore(ctx, cnf, mysqld, logger, dir, bhs, &bm)
-	if err != nil {
+	if err := getBackupManifestInto(ctx, bh, &bm); err != nil {
 		return zeroPosition, err
 	}
 
 	// mark restore as in progress
-	if err = createStateFile(cnf); err != nil {
+	if err := createStateFile(cnf); err != nil {
 		return zeroPosition, err
 	}
 
-	if err = prepareToRestore(ctx, cnf, mysqld, logger); err != nil {
+	if err := prepareToRestore(ctx, cnf, mysqld, logger); err != nil {
 		return zeroPosition, err
 	}
 
@@ -577,10 +583,9 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, cnf *Mycnf, bh 
 }
 
 // restoreFile restores an individual file.
-func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, fe *FileEntry, transformHook string, compress bool, name string, hookExtraEnv map[string]string) (err error) {
+func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, fe *FileEntry, transformHook string, compress bool, name string, hookExtraEnv map[string]string) (finalErr error) {
 	// Open the source file for reading.
-	var source io.ReadCloser
-	source, err = bh.ReadFile(ctx, name)
+	source, err := bh.ReadFile(ctx, name)
 	if err != nil {
 		return vterrors.Wrap(err, "can't open source file for reading")
 	}
@@ -593,11 +598,11 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, cnf *Mycnf, bh b
 	}
 	defer func() {
 		if cerr := dstFile.Close(); cerr != nil {
-			if err != nil {
+			if finalErr != nil {
 				// We already have an error, just log this one.
 				log.Errorf("failed to close file %v: %v", name, cerr)
 			} else {
-				err = vterrors.Wrap(err, "failed to close destination file")
+				finalErr = vterrors.Wrap(cerr, "failed to close destination file")
 			}
 		}
 	}()
@@ -631,11 +636,11 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, cnf *Mycnf, bh b
 		}
 		defer func() {
 			if cerr := gz.Close(); cerr != nil {
-				if err != nil {
+				if finalErr != nil {
 					// We already have an error, just log this one.
 					log.Errorf("failed to close gzip decompressor %v: %v", name, cerr)
 				} else {
-					err = vterrors.Wrap(err, "failed to close gzip decompressor")
+					finalErr = vterrors.Wrap(err, "failed to close gzip decompressor")
 				}
 			}
 		}()
@@ -672,6 +677,12 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, cnf *Mycnf, bh b
 	return nil
 }
 
+// ShouldDrainForBackup satisfies the BackupEngine interface
+// backup requires query service to be stopped, hence true
+func (be *BuiltinBackupEngine) ShouldDrainForBackup() bool {
+	return true
+}
+
 func init() {
-	BackupEngineMap["builtin"] = &BuiltinBackupEngine{}
+	BackupRestoreEngineMap["builtin"] = &BuiltinBackupEngine{}
 }

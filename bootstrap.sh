@@ -20,22 +20,14 @@
 # 0. Initialization and helper methods.
 # 1. Installation of dependencies.
 # 2. Installation of Go tools and vendored Go dependencies.
-# 3. Installation of development related steps e.g. creating Git hooks.
 
 BUILD_TESTS=${BUILD_TESTS:-1}
+BUILD_PYTHON=${BUILD_PYTHON:-1}
+BUILD_JAVA=${BUILD_JAVA:-1}
 
 #
 # 0. Initialization and helper methods.
 #
-
-# Run parallel make, based on number of cores available.
-case $(uname) in
-  Linux)  NB_CORES=$(grep -c '^processor' /proc/cpuinfo);;
-  Darwin) NB_CORES=$(sysctl hw.ncpu | awk '{ print $2 }');;
-esac
-if [ -n "$NB_CORES" ]; then
-  export MAKEFLAGS="-j$((NB_CORES+1)) -l${NB_CORES}"
-fi
 
 function fail() {
   echo "ERROR: $1"
@@ -47,18 +39,26 @@ function fail() {
 go version &>/dev/null  || fail "Go is not installed or is not on \$PATH"
 [[ "$(go version 2>&1)" =~ go1\.[1-9][1-9] ]] || fail "Go is not version 1.11+"
 
+# Create main directories.
+mkdir -p "$VTROOT/dist"
+mkdir -p "$VTROOT/bin"
+mkdir -p "$VTROOT/lib"
+mkdir -p "$VTROOT/vthook"
+
+# Install git hooks.
+echo "creating git hooks"
+mkdir -p "$VTTOP/.git/hooks"
+ln -sf "$VTTOP/misc/git/pre-commit" "$VTTOP/.git/hooks/pre-commit"
+ln -sf "$VTTOP/misc/git/commit-msg" "$VTTOP/.git/hooks/commit-msg"
+(cd "$VTTOP" && git config core.hooksPath "$VTTOP/.git/hooks")
+
+
 # Set up the proper GOPATH for go get below.
 if [ "$BUILD_TESTS" == 1 ] ; then
     source ./dev.env
 else
     source ./build.env
 fi
-
-# Create main directories.
-mkdir -p "$VTROOT/dist"
-mkdir -p "$VTROOT/bin"
-mkdir -p "$VTROOT/lib"
-mkdir -p "$VTROOT/vthook"
 
 if [ "$BUILD_TESTS" == 1 ] ; then
     # Set up required soft links.
@@ -149,7 +149,7 @@ function install_grpc() {
   $PIP install --upgrade grpcio=="$grpcio_ver" grpcio-tools=="$grpcio_ver"
 }
 
-if [ "$BUILD_TESTS" == 1 ] ; then
+if [ "$BUILD_PYTHON" == 1 ] ; then
     install_dep "gRPC" "1.16.0" "$VTROOT/dist/grpc" install_grpc
 fi
 
@@ -186,9 +186,11 @@ function install_zookeeper() {
   zip -d "lib/$zk-fatjar.jar" 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*SF' || true # needed for >=3.4.10 <3.5
   rm -rf "$zk" "$zk.tar.gz"
 }
-zk_ver=${ZK_VERSION:-3.4.14}
-install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist/vt-zookeeper-$zk_ver" install_zookeeper
 
+zk_ver=${ZK_VERSION:-3.4.14}
+if [ "$BUILD_JAVA" == 1 ] ; then
+  install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist/vt-zookeeper-$zk_ver" install_zookeeper
+fi
 
 # Download and install etcd, link etcd binary into our root.
 function install_etcd() {
@@ -252,7 +254,7 @@ function install_pymock() {
   popd >/dev/null
 }
 pymock_version=1.0.1
-if [ "$BUILD_TESTS" == 1 ] ; then
+if [ "$BUILD_PYTHON" == 1 ] ; then
     install_dep "py-mock" "$pymock_version" "$VTROOT/dist/py-mock-$pymock_version" install_pymock
 fi
 
@@ -267,7 +269,7 @@ function install_selenium() {
   # instead of go/dist/selenium/lib/python3.5/site-packages and then can't find module 'pip._vendor.requests'
   PYTHONPATH='' $PIP install selenium
 }
-if [ "$BUILD_TESTS" == 1 ] ; then
+if [ "$BUILD_PYTHON" == 1 ] ; then
     install_dep "Selenium" "latest" "$VTROOT/dist/selenium" install_selenium
 fi
 
@@ -281,7 +283,7 @@ function install_chromedriver() {
   unzip -o -q chromedriver_linux64.zip -d "$dist"
   rm chromedriver_linux64.zip
 }
-if [ "$BUILD_TESTS" == 1 ] ; then
+if [ "$BUILD_PYTHON" == 1 ] ; then
     install_dep "chromedriver" "73.0.3683.20" "$VTROOT/dist/chromedriver" install_chromedriver
 fi
 
@@ -324,24 +326,9 @@ go get -u $gotools || fail "Failed to download some Go tools with 'go get'. Plea
 echo "Updating govendor dependencies..."
 govendor sync || fail "Failed to download/update dependencies with govendor. Please re-run bootstrap.sh in case of transient errors."
 
-
-PYTHONPATH='' $PIP install mysql-connector-python
-
-#
-# 3. Installation of development related steps e.g. creating Git hooks.
-#
-
-if [ "$BUILD_TESTS" == 1 ] ; then
- # Create the Git hooks.
- echo "creating git hooks"
- mkdir -p "$VTTOP/.git/hooks"
- ln -sf "$VTTOP/misc/git/pre-commit" "$VTTOP/.git/hooks/pre-commit"
- ln -sf "$VTTOP/misc/git/prepare-commit-msg.bugnumber" "$VTTOP/.git/hooks/prepare-commit-msg"
- ln -sf "$VTTOP/misc/git/commit-msg" "$VTTOP/.git/hooks/commit-msg"
- (cd "$VTTOP" && git config core.hooksPath "$VTTOP/.git/hooks")
- echo
- echo "bootstrap finished - run 'source dev.env' in your shell before building."
-else
- echo
- echo "bootstrap finished - run 'source build.env' in your shell before building."
+if [ "$BUILD_PYTHON" == 1 ] ; then
+  PYTHONPATH='' $PIP install mysql-connector-python
 fi
+
+echo
+echo "bootstrap finished - run 'source dev.env' or 'source build.env' in your shell before building."

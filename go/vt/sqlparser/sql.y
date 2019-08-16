@@ -164,6 +164,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES
 %token <bytes> STATUS VARIABLES WARNINGS
+%token <bytes> SEQUENCE
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK
@@ -1351,6 +1352,10 @@ alter_statement:
             Name: $7,
         },
       }
+  }
+| ALTER VSCHEMA ADD SEQUENCE table_name
+  {
+    $$ = &DDL{Action: AddSequenceStr, Table: $5}
   }
 
 alter_object_type:
@@ -3365,6 +3370,7 @@ non_reserved_keyword:
 | RESTRICT
 | ROLLBACK
 | SCHEMAS
+| SEQUENCE
 | SESSION
 | SERIALIZABLE
 | SHARE
