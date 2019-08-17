@@ -89,7 +89,7 @@ type Mysqld struct {
 	dbaPool *dbconnpool.ConnectionPool
 	appPool *dbconnpool.ConnectionPool
 
-	capabilities CapabilitySet
+	capabilities capabilitySet
 
 	// mutex protects the fields below.
 	mutex         sync.Mutex
@@ -119,13 +119,13 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	if getErr != nil || err != nil {
 		f, v, err = getVersionFromEnv()
 		if err != nil {
-			panic("Could not detect version from mysqld --version or MYSQL_FLAVOR")
+			panic("could not detect version from mysqld --version or MYSQL_FLAVOR")
 		}
 
 	}
 
 	log.Infof("Using flavor: %v, version: %v", f, v)
-	result.capabilities = NewCapabilitySet(f, v)
+	result.capabilities = newCapabilitySet(f, v)
 	return result
 }
 
@@ -151,7 +151,7 @@ func getVersionFromEnv() (flavor mysqlFlavor, ver serverVersion, err error) {
 	case "MySQL56":
 		return flavorMySQL, serverVersion{5, 7, 10}, nil
 	}
-	return flavor, ver, fmt.Errorf("Could not determine version from MYSQL_FLAVOR: %s", env)
+	return flavor, ver, fmt.Errorf("could not determine version from MYSQL_FLAVOR: %s", env)
 }
 
 func getVersionString() (string, error) {
@@ -183,19 +183,19 @@ func parseVersionString(version string) (flavor mysqlFlavor, ver serverVersion, 
 	}
 	v := versionRegex.FindStringSubmatch(version)
 	if len(v) != 4 {
-		return flavor, ver, fmt.Errorf("Could not parse server version from: %s", version)
+		return flavor, ver, fmt.Errorf("could not parse server version from: %s", version)
 	}
 	ver.Major, err = strconv.Atoi(string(v[1]))
 	if err != nil {
-		return flavor, ver, fmt.Errorf("Could not parse server version from: %s", version)
+		return flavor, ver, fmt.Errorf("could not parse server version from: %s", version)
 	}
 	ver.Minor, err = strconv.Atoi(string(v[2]))
 	if err != nil {
-		return flavor, ver, fmt.Errorf("Could not parse server version from: %s", version)
+		return flavor, ver, fmt.Errorf("could not parse server version from: %s", version)
 	}
 	ver.Patch, err = strconv.Atoi(string(v[3]))
 	if err != nil {
-		return flavor, ver, fmt.Errorf("Could not parse server version from: %s", version)
+		return flavor, ver, fmt.Errorf("could not parse server version from: %s", version)
 	}
 
 	return
@@ -216,7 +216,7 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 		return client.RunMysqlUpgrade(context.TODO())
 	}
 
-	if mysqld.capabilities.HasMySQLUpgradeInServer() {
+	if mysqld.capabilities.hasMySQLUpgradeInServer() {
 		log.Warningf("MySQL version has built-in upgrade, skipping RunMySQLUpgrade")
 		return nil
 	}
@@ -650,7 +650,7 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 	if err != nil {
 		return err
 	}
-	if mysqld.capabilities.HasInitializeInServer() {
+	if mysqld.capabilities.hasInitializeInServer() {
 		log.Infof("Installing data dir with mysqld --initialize-insecure")
 		args := []string{
 			"--defaults-file=" + cnf.path,
@@ -736,7 +736,7 @@ func (mysqld *Mysqld) getMycnfTemplates(root string) []string {
 	// Percona Server == MySQL in this context
 
 	f := flavorMariaDB
-	if mysqld.capabilities.IsMySQLLike() {
+	if mysqld.capabilities.isMySQLLike() {
 		f = flavorMySQL
 	}
 
