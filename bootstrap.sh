@@ -44,14 +44,6 @@ mkdir -p "$VTROOT/bin"
 mkdir -p "$VTROOT/lib"
 mkdir -p "$VTROOT/vthook"
 
-# Install git hooks.
-echo "creating git hooks"
-mkdir -p "$VTTOP/.git/hooks"
-ln -sf "$VTTOP/misc/git/pre-commit" "$VTTOP/.git/hooks/pre-commit"
-ln -sf "$VTTOP/misc/git/commit-msg" "$VTTOP/.git/hooks/commit-msg"
-(cd "$VTTOP" && git config core.hooksPath "$VTTOP/.git/hooks")
-
-
 # This is required for VIRTUALENV
 # Used by Python below
 
@@ -76,6 +68,14 @@ else
     ln -snf "$VTTOP/data" "$VTROOT/data"
     ln -snf "$VTTOP/go/vt/zkctl/zksrv.sh" "$VTROOT/bin/zksrv.sh"
 fi
+
+# git hooks are only required if someone intends to contribute.
+
+echo "creating git hooks"
+mkdir -p "$VTTOP/.git/hooks"
+ln -sf "$VTTOP/misc/git/pre-commit" "$VTTOP/.git/hooks/pre-commit"
+ln -sf "$VTTOP/misc/git/commit-msg" "$VTTOP/.git/hooks/commit-msg"
+(cd "$VTTOP" && git config core.hooksPath "$VTTOP/.git/hooks")
 
 # install_dep is a helper function to generalize the download and installation of dependencies.
 #
