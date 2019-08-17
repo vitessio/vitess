@@ -29,51 +29,51 @@ const (
 )
 
 // Mysqld is the object that represents a mysqld daemon running on this server.
-type CapabilitySet struct {
+type capabilitySet struct {
 	flavor  mysqlFlavor
 	version serverVersion
 }
 
-func NewCapabilitySet(f mysqlFlavor, v serverVersion) (c CapabilitySet) {
+func newCapabilitySet(f mysqlFlavor, v serverVersion) (c capabilitySet) {
 	c.flavor = f
 	c.version = v
 	return
 }
 
-func (c *CapabilitySet) HasMySQLUpgradeInServer() bool {
-	return c.IsMySQLLike() && c.version.atLeast(serverVersion{Major: 8, Minor: 0, Patch: 16})
+func (c *capabilitySet) hasMySQLUpgradeInServer() bool {
+	return c.isMySQLLike() && c.version.atLeast(serverVersion{Major: 8, Minor: 0, Patch: 16})
 }
-func (c *CapabilitySet) HasInitializeInServer() bool {
-	return c.IsMySQLLike() && c.version.atLeast(serverVersion{Major: 5, Minor: 7, Patch: 0})
+func (c *capabilitySet) hasInitializeInServer() bool {
+	return c.isMySQLLike() && c.version.atLeast(serverVersion{Major: 5, Minor: 7, Patch: 0})
 }
-func (c *CapabilitySet) HasMySQLxEnabledByDefault() bool {
-	return c.IsMySQLLike() && c.version.atLeast(serverVersion{Major: 8, Minor: 0, Patch: 11})
+func (c *capabilitySet) hasMySQLxEnabledByDefault() bool {
+	return c.isMySQLLike() && c.version.atLeast(serverVersion{Major: 8, Minor: 0, Patch: 11})
 }
-func (c *CapabilitySet) HasPersistConfig() bool {
-	return c.IsMySQLLike() && c.version.atLeast(serverVersion{Major: 8, Minor: 0, Patch: 0})
+func (c *capabilitySet) hasPersistConfig() bool {
+	return c.isMySQLLike() && c.version.atLeast(serverVersion{Major: 8, Minor: 0, Patch: 0})
 }
-func (c *CapabilitySet) HasShutdownCommand() bool {
-	return (c.IsMySQLLike() && c.version.atLeast(serverVersion{Major: 5, Minor: 7, Patch: 9})) || (c.IsMariaDB() && c.version.atLeast(serverVersion{Major: 10, Minor: 0, Patch: 4}))
+func (c *capabilitySet) hasShutdownCommand() bool {
+	return (c.isMySQLLike() && c.version.atLeast(serverVersion{Major: 5, Minor: 7, Patch: 9})) || (c.isMariaDB() && c.version.atLeast(serverVersion{Major: 10, Minor: 0, Patch: 4}))
 }
-func (c *CapabilitySet) HasBackupLocks() bool {
-	return c.IsMySQLLike() && c.version.atLeast(serverVersion{Major: 8, Minor: 0, Patch: 0})
+func (c *capabilitySet) hasBackupLocks() bool {
+	return c.isMySQLLike() && c.version.atLeast(serverVersion{Major: 8, Minor: 0, Patch: 0})
 }
-func (c *CapabilitySet) HasDefaultUft8mb4() bool {
-	return c.IsMySQLLike() && c.version.atLeast(serverVersion{Major: 8, Minor: 0, Patch: 0})
+func (c *capabilitySet) hasDefaultUft8mb4() bool {
+	return c.isMySQLLike() && c.version.atLeast(serverVersion{Major: 8, Minor: 0, Patch: 0})
 }
-func (c *CapabilitySet) HasSemiSyncEnabledByDefault() bool {
-	return c.IsMariaDB() && c.version.atLeast(serverVersion{Major: 10, Minor: 3, Patch: 3})
+func (c *capabilitySet) hasSemiSyncEnabledByDefault() bool {
+	return c.isMariaDB() && c.version.atLeast(serverVersion{Major: 10, Minor: 3, Patch: 3})
 }
 
 // IsMySQLLike tests if the server is either MySQL
 // or Percona Server. At least currently, Vitess doesn't
 // make use of any specific Percona Server features.
-func (c *CapabilitySet) IsMySQLLike() bool {
+func (c *capabilitySet) isMySQLLike() bool {
 	return c.flavor == flavorMySQL || c.flavor == flavorPercona
 }
 
 // IsMariaDB tests if the server is MariaDB.
 // IsMySQLLike() and IsMariaDB() are mutually exclusive
-func (c *CapabilitySet) IsMariaDB() bool {
+func (c *capabilitySet) isMariaDB() bool {
 	return c.flavor == flavorMariaDB
 }
