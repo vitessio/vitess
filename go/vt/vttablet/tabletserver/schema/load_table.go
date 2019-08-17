@@ -157,6 +157,8 @@ func loadMessageInfo(ta *Table, comment string) error {
 		keyvals[kv[0]] = kv[1]
 	}
 	var err error
+	ta.MessageInfo.Topic = getTopic(keyvals)
+
 	if ta.MessageInfo.AckWaitDuration, err = getDuration(keyvals, "vt_ack_wait"); err != nil {
 		return err
 	}
@@ -238,4 +240,8 @@ func getNum(in map[string]string, key string) (int, error) {
 		return 0, err
 	}
 	return v, nil
+}
+
+func getTopic(in map[string]string) string {
+	return in["vt_topic"]
 }

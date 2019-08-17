@@ -274,7 +274,6 @@ if [ "$BUILD_PYTHON" == 1 ] ; then
     install_dep "Selenium" "latest" "$VTROOT/dist/selenium" install_selenium
 fi
 
-
 # Download chromedriver (necessary to run test/vtctld_web_test.py).
 function install_chromedriver() {
   local version="$1"
