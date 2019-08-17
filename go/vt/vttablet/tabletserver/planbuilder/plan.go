@@ -69,6 +69,8 @@ const (
 	PlanInsertSubquery
 	// PlanUpsertPK is for insert ... on duplicate key constructs.
 	PlanUpsertPK
+	// PlanInsertTopic is for inserting into message topics.
+	PlanInsertTopic
 	// PlanInsertMessage is for inserting into message tables.
 	PlanInsertMessage
 	// PlanSet is for SET statements.
@@ -100,6 +102,7 @@ var planName = [NumPlans]string{
 	"INSERT_PK",
 	"INSERT_SUBQUERY",
 	"UPSERT_PK",
+	"INSERT_TOPIC",
 	"INSERT_MESSAGE",
 	"SET",
 	"DDL",
@@ -153,6 +156,7 @@ const (
 	ReasonUpsertMultiRow
 	ReasonReplace
 	ReasonMultiTable
+	ReasonTopic
 	NumReasons
 )
 
@@ -167,6 +171,7 @@ var reasonName = [NumReasons]string{
 	"UPSERT_MULTI_ROW",
 	"REPLACE",
 	"MULTI_TABLE",
+	"TOPIC",
 }
 
 // String returns a string representation of a ReasonType.
