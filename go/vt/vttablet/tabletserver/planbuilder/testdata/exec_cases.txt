@@ -958,6 +958,29 @@ options:PassthroughDMLs
   "PKValues": [[1, 3], [2, 4]]
 }
 
+# topic insert with time_scheduled specified
+"insert into test_topic(time_scheduled, id, message) values(1, 2, 'aa')"
+{
+  "PlanID": "INSERT_TOPIC",
+  "Reason": "TOPIC",
+  "TableName": "test_topic",
+  "Permissions": [
+    {
+      "TableName": "test_topic",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "insert into test_topic(time_scheduled, id, message) values (1, 2, 'aa')"
+}
+
+# topic update
+"update test_topic set time_next = 1 where id = 1"
+"updates not allowed on topics"
+
+# topic delete
+"delete from test_topic where id = 1"
+"deletes not allowed on topics"
+
 # message insert with time_scheduled specified
 "insert into msg(time_scheduled, id, message) values(1, 2, 'aa')"
 {
