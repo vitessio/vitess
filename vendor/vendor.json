@@ -387,10 +387,10 @@
 			"versionExact": "v2.0.0"
 		},
 		{
-			"checksumSHA1": "5rPfda8jFccr3A6heL+JAmi9K9g=",
+			"checksumSHA1": "CSPbwbyzqA6sfORicn4HFtIhF/c=",
 			"path": "github.com/davecgh/go-spew/spew",
-			"revision": "5215b55f46b2b919f50a1df0eaa5886afe4e3b3d",
-			"revisionTime": "2015-11-05T21:09:06Z"
+			"revision": "d8f796af33cc11cb798c1aaeb27a4ebc5099927d",
+			"revisionTime": "2018-08-30T19:11:22Z"
 		},
 		{
 			"checksumSHA1": "a2yC46a1qsJomgY6rb+FkTFiqmE=",
@@ -991,10 +991,10 @@
 			"revisionTime": "2016-05-23T15:31:47Z"
 		},
 		{
-			"checksumSHA1": "Bn333k9lTndxU3D6n/G5c+GMcYY=",
+			"checksumSHA1": "/7bZ0f2fM9AAsLf3nMca6Gtlm6E=",
 			"path": "github.com/stretchr/testify/assert",
-			"revision": "8d64eb7173c7753d6419fd4a9caf057398611364",
-			"revisionTime": "2016-05-24T23:42:29Z"
+			"revision": "221dbe5ed46703ee255b1da0dec05086f5035f62",
+			"revisionTime": "2019-05-17T17:51:56Z"
 		},
 		{
 			"checksumSHA1": "P9FJpir2c4G5PA46qEkaWy3l60U=",
