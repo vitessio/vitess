@@ -52,13 +52,13 @@ type Insert struct {
 	Query string
 
 	// VindexValues specifies values for all the vindex columns.
-	// This is a three-dimensonal data structure:
+	// This is a three-dimensional data structure:
 	// Insert.Values[i] represents the values to be inserted for the i'th colvindex (i < len(Insert.Table.ColumnVindexes))
 	// Insert.Values[i].Values[j] represents values for the j'th column of the given colVindex (j < len(colVindex[i].Columns)
 	// Insert.Values[i].Values[j].Values[k] represents the value pulled from row k for that column: (k < len(ins.rows))
 	VindexValues []sqltypes.PlanValue
 
-	// Table sepcifies the table for the insert.
+	// Table specifies the table for the insert.
 	Table *vindexes.Table
 
 	// Generate is only set for inserts where a sequence must be generated.
@@ -161,7 +161,7 @@ type Generate struct {
 }
 
 // InsertOpcode is a number representing the opcode
-// for the Insert primitve.
+// for the Insert primitive.
 type InsertOpcode int
 
 const (
@@ -464,7 +464,7 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 	return rss, queries, nil
 }
 
-// processPrimary maps the primary vindex values to the kesypace ids.
+// processPrimary maps the primary vindex values to the keyspace ids.
 func (ins *Insert) processPrimary(vcursor VCursor, vindexKeys [][]sqltypes.Value, colVindex *vindexes.ColumnVindex, bv map[string]*querypb.BindVariable) ([][]byte, error) {
 	var flattenedVindexKeys []sqltypes.Value
 	// TODO: @rafael - this will change once vindex Primary keys also support multicolumns
