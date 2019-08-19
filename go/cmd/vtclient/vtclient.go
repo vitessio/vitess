@@ -67,7 +67,7 @@ Examples:
 	minSeqID      = flag.Int("min_sequence_id", 0, "min sequence ID to generate. When max_sequence_id > min_sequence_id, for each query, a number is generated in [min_sequence_id, max_sequence_id) and attached to the end of the bind variables.")
 	maxSeqID      = flag.Int("max_sequence_id", 0, "max sequence ID.")
 	useRandom     = flag.Bool("use_random_sequence", false, "use random sequence for generating [min_sequence_id, max_sequence_id)")
-	throttleQPS   = flag.Int("throttle_qps", 0, "queries per second to throttle each thread at.")
+	qps           = flag.Int("qps", 0, "queries per second to throttle each thread at.")
 )
 
 var (
@@ -189,7 +189,8 @@ func run() (*results, error) {
 }
 
 func prepareBindVariables() []interface{} {
-	bv := *bindVariables
+	bv := make([]interface{}, 0, len(*bindVariables)+1)
+	bv = append(bv, (*bindVariables)...)
 	if *maxSeqID > *minSeqID {
 		bv = append(bv, <-seqChan)
 	}
@@ -202,7 +203,7 @@ func execMulti(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 	wg := sync.WaitGroup{}
 	isDML := sqlparser.IsDML(sql)
 
-	isThrottled := *throttleQPS > 0
+	isThrottled := *qps > 0
 
 	start := time.Now()
 	for i := 0; i < *parallel; i++ {
@@ -211,10 +212,10 @@ func execMulti(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 		go func() {
 			defer wg.Done()
 
-			var throttler *time.Ticker
+			var ticker *time.Ticker
 			if isThrottled {
-				tickDuration := time.Second / time.Duration(*throttleQPS)
-				throttler = time.NewTicker(tickDuration)
+				tickDuration := time.Second / time.Duration(*qps)
+				ticker = time.NewTicker(tickDuration)
 			}
 
 			for j := 0; j < *count; j++ {
@@ -238,8 +239,8 @@ func execMulti(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 					// We keep going and do not return early purpose.
 				}
 
-				if throttler != nil {
-					<-throttler.C
+				if ticker != nil {
+					<-ticker.C
 				}
 			}
 		}()
