@@ -28,6 +28,7 @@ type fakeSpanFactory struct{}
 func (fakeSpanFactory) New(Span, string) Span                                     { return fakeSpan{} }
 func (fakeSpanFactory) NewClientSpan(parent Span, serviceName, label string) Span { return fakeSpan{} }
 func (fakeSpanFactory) FromContext(context.Context) (Span, bool)                  { return nil, false }
+func (fakeSpanFactory) NewFromString(parent, label string) (Span, error)          { return fakeSpan{}, nil }
 func (fakeSpanFactory) NewContext(parent context.Context, _ Span) context.Context { return parent }
 func (fakeSpanFactory) AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor)) {
 }

@@ -56,6 +56,9 @@ var (
 // JAEGER_AGENT_PORT
 func newJagerTracerFromEnv(serviceName string) (tracingService, io.Closer, error) {
 	cfg, err := config.FromEnv()
+	if err != nil {
+		return nil, nil, err
+	}
 	if cfg.ServiceName == "" {
 		cfg.ServiceName = serviceName
 	}
@@ -79,7 +82,18 @@ func newJagerTracerFromEnv(serviceName string) (tracingService, io.Closer, error
 
 	opentracing.SetGlobalTracer(tracer)
 
-	return openTracingService{tracer}, closer, nil
+	f1 := func(s string) (context opentracing.SpanContext, e error) {
+		// I don't understand why I have to do this and not just use `jaeger.ContextFromString` directly
+		return jaeger.ContextFromString(s)
+	}
+
+	f2 := func(in Span) string {
+		otSpan := in.(*openTracingSpan)
+		jaegerSpanContext := otSpan.otSpan.Context().(*jaeger.SpanContext)
+		return jaegerSpanContext.String()
+	}
+
+	return openTracingService{Tracer: tracer, fromString: f1, toString: f2}, closer, nil
 }
 
 func init() {
