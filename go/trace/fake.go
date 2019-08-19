@@ -23,16 +23,16 @@ import (
 	"google.golang.org/grpc"
 )
 
-type fakeSpanFactory struct{}
+type fakeTracingServer struct{}
 
-func (fakeSpanFactory) New(Span, string) Span                                     { return fakeSpan{} }
-func (fakeSpanFactory) NewClientSpan(parent Span, serviceName, label string) Span { return fakeSpan{} }
-func (fakeSpanFactory) FromContext(context.Context) (Span, bool)                  { return nil, false }
-func (fakeSpanFactory) NewFromString(parent, label string) (Span, error)          { return fakeSpan{}, nil }
-func (fakeSpanFactory) NewContext(parent context.Context, _ Span) context.Context { return parent }
-func (fakeSpanFactory) AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor)) {
+func (fakeTracingServer) New(Span, string) Span                                     { return fakeSpan{} }
+func (fakeTracingServer) NewClientSpan(parent Span, serviceName, label string) Span { return fakeSpan{} }
+func (fakeTracingServer) FromContext(context.Context) (Span, bool)                  { return nil, false }
+func (fakeTracingServer) NewFromString(parent, label string) (Span, error)          { return fakeSpan{}, nil }
+func (fakeTracingServer) NewContext(parent context.Context, _ Span) context.Context { return parent }
+func (fakeTracingServer) AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor)) {
 }
-func (fakeSpanFactory) AddGrpcClientOptions(addInterceptors func(s grpc.StreamClientInterceptor, u grpc.UnaryClientInterceptor)) {
+func (fakeTracingServer) AddGrpcClientOptions(addInterceptors func(s grpc.StreamClientInterceptor, u grpc.UnaryClientInterceptor)) {
 }
 
 // fakeSpan implements Span with no-op methods.
@@ -43,6 +43,6 @@ func (fakeSpan) Annotate(string, interface{}) {}
 
 func init() {
 	tracingBackendFactories["noop"] = func(_ string) (tracingService, io.Closer, error) {
-		return fakeSpanFactory{}, &nilCloser{}, nil
+		return fakeTracingServer{}, &nilCloser{}, nil
 	}
 }
