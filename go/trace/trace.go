@@ -91,7 +91,10 @@ type tracingService interface {
 	// New creates a new span from an existing one, if provided. The parent can also be nil
 	New(parent Span, label string) Span
 
-	// FromContext extracts a span from a context, making it possible to annotate the span with additional information.
+	// NewFromString creates a new span and uses the provided string to reconstitute the parent span
+	NewFromString(parent, label string) (Span, error)
+
+	// FromContext extracts a span from a context, making it possible to annotate the span with additional information
 	FromContext(ctx context.Context) (Span, bool)
 
 	// NewContext creates a new context containing the provided span

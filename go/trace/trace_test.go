@@ -93,7 +93,7 @@ type fakeTracer struct {
 	log  []string
 }
 
-func (f *fakeTracer) NewClientSpan(parent Span, serviceName, label string) Span {
+func (f *fakeTracer) NewFromString(parent, label string) (Span, error) {
 	panic("implement me")
 }
 
