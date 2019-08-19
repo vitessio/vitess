@@ -45,9 +45,9 @@ type Span interface {
 // NewSpan creates a new Span with the currently installed tracing plugin.
 // If no tracing plugin is installed, it returns a fake Span that does nothing.
 func NewSpan(inCtx context.Context, label string) (Span, context.Context) {
-	parent, _ := spanFactory.FromContext(inCtx)
-	span := spanFactory.New(parent, label)
-	outCtx := spanFactory.NewContext(inCtx, span)
+	parent, _ := currentTracer.FromContext(inCtx)
+	span := currentTracer.New(parent, label)
+	outCtx := currentTracer.NewContext(inCtx, span)
 
 	return span, outCtx
 }
@@ -61,12 +61,12 @@ func AnnotateSQL(span Span, sql string) {
 // FromContext returns the Span from a Context if present. The bool return
 // value indicates whether a Span was present in the Context.
 func FromContext(ctx context.Context) (Span, bool) {
-	return spanFactory.FromContext(ctx)
+	return currentTracer.FromContext(ctx)
 }
 
 // NewContext returns a context based on parent with a new Span value.
 func NewContext(parent context.Context, span Span) context.Context {
-	return spanFactory.NewContext(parent, span)
+	return currentTracer.NewContext(parent, span)
 }
 
 // CopySpan creates a new context from parentCtx, with only the trace span
@@ -78,12 +78,14 @@ func CopySpan(parentCtx, spanCtx context.Context) context.Context {
 	return parentCtx
 }
 
+// AddGrpcServerOptions adds GRPC interceptors that read the parent span from the grpc packets
 func AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor)) {
-	spanFactory.AddGrpcServerOptions(addInterceptors)
+	currentTracer.AddGrpcServerOptions(addInterceptors)
 }
 
+// AddGrpcClientOptions adds GRPC interceptors that add parent information to outgoing grpc packets
 func AddGrpcClientOptions(addInterceptors func(s grpc.StreamClientInterceptor, u grpc.UnaryClientInterceptor)) {
-	spanFactory.AddGrpcClientOptions(addInterceptors)
+	currentTracer.AddGrpcClientOptions(addInterceptors)
 }
 
 // tracingService is an interface for creating spans or extracting them from Contexts.
@@ -107,12 +109,14 @@ type tracingService interface {
 	AddGrpcClientOptions(addInterceptors func(s grpc.StreamClientInterceptor, u grpc.UnaryClientInterceptor))
 }
 
+// TracerFactory creates a tracing service for the service provided. It's important to close the provided io.Closer
+// object to make sure that all spans are sent to the backend before the process exits.
 type TracerFactory func(serviceName string) (tracingService, io.Closer, error)
 
 // tracingBackendFactories should be added to by a plugin during init() to install itself
 var tracingBackendFactories = make(map[string]TracerFactory)
 
-var spanFactory tracingService = fakeSpanFactory{}
+var currentTracer tracingService = fakeTracingServer{}
 
 var (
 	tracingServer = flag.String("tracer", "noop", "tracing service to use")
@@ -131,7 +135,7 @@ func StartTracing(serviceName string) io.Closer {
 		return &nilCloser{}
 	}
 
-	spanFactory = tracer
+	currentTracer = tracer
 
 	log.Infof("successfully started tracing with [%s]", *tracingServer)
 

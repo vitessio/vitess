@@ -90,11 +90,10 @@ func (jf openTracingService) NewFromString(parent, label string) (Span, error) {
 func (jf openTracingService) FromContext(ctx context.Context) (Span, bool) {
 	innerSpan := opentracing.SpanFromContext(ctx)
 
-	if innerSpan != nil {
-		return openTracingSpan{otSpan: innerSpan}, true
-	} else {
+	if innerSpan == nil {
 		return nil, false
 	}
+	return openTracingSpan{otSpan: innerSpan}, true
 }
 
 // NewContext is part of an interface implementation
