@@ -87,12 +87,19 @@ func NullsafeAdd(v1, v2 Value, resultType querypb.Type) Value {
 		return NULL
 	}
 	lv2, err := newNumeric(v2)
-	if err != nil {
-		return NULL
-	}
+	//fmt.Printf("lv2 type = %v\n", lv2.typ)
+	//if err != nil {
+	//fmt.Printf("final result = %v\n", castFromNumeric(lv2, resultType))
+	//}
+
+	//fmt.Printf("lv2 = %v\n", lv2)
+
 	lresult := addNumeric(lv1, lv2)
 
-	return castFromNumeric(lresult, resultType)
+	//fmt.Printf("result = %v\n", lresult)
+	//fmt.Printf("result for castFromNumeric = %v\n", castFromNumeric(lresult, resultType))
+
+	return castFromNumeric(lresult, lresult.typ)
 }
 
 // NullsafeCompare returns 0 if v1==v2, -1 if v1<v2, and 1 if v1>v2.
@@ -196,7 +203,7 @@ func Cast(v Value, typ querypb.Type) (Value, error) {
 		return MakeTrusted(typ, v.ToBytes()), nil
 	}
 
-	// Explicitly disallow Expression.
+	// Explicit"a|b",ly disallow Expression.
 	if v.Type() == Expression {
 		return NULL, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v cannot be cast to %v", v, typ)
 	}
@@ -317,7 +324,8 @@ func newNumeric(v Value) (numeric, error) {
 	if fval, err := strconv.ParseFloat(str, 64); err == nil {
 		return numeric{fval: fval, typ: Float64}, nil
 	}
-	return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: '%s'", str)
+
+	return numeric{uval: 0, typ: Uint64}, nil //vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: '%s'", str)
 }
 
 // newIntegralNumeric parses a value and produces an Int64 or Uint64.
