@@ -318,6 +318,7 @@ func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes
 		switch aggr.Opcode {
 		case AggregateCount, AggregateSum:
 			result[aggr.Col] = sqltypes.NullsafeAdd(row1[aggr.Col], row2[aggr.Col], fields[aggr.Col].Type)
+			fmt.Printf("final result = %v\n", result[aggr.Col])
 		case AggregateMin:
 			result[aggr.Col], err = sqltypes.Min(row1[aggr.Col], row2[aggr.Col])
 		case AggregateMax:
