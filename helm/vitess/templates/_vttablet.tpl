@@ -195,6 +195,7 @@ spec:
 
       # remove the old socket file if it is still around
       rm -f /vtdataroot/tabletdata/mysql.sock
+      rm -f /vtdataroot/tabletdata/mysql.sock.lock
 
 {{- end -}}
 
