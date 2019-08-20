@@ -71,10 +71,51 @@ func (mysqld *Mysqld) ExecuteSuperQueryList(ctx context.Context, queryList []str
 func (mysqld *Mysqld) executeSuperQueryListConn(ctx context.Context, conn *dbconnpool.PooledDBConnection, queryList []string) error {
 	for _, query := range queryList {
 		log.Infof("exec %v", redactMasterPassword(query))
-		if _, err := mysqld.executeFetchContext(ctx, conn, query, 10000, false); err != nil {
+		_, err := mysqld.executeFetchContext(ctx, conn, query, 10000, false)
+		switch {
+		case err == nil:
+			return nil
+
+		case strings.ToUpper(query) == "START SLAVE" && isReplicationErr1872(err):
+			if err = mysqld.fixReplication(ctx, conn); err == nil {
+				// keep running commands if this fixed replication
+				continue
+			}
+			fallthrough
+
+		default:
 			return fmt.Errorf("ExecuteFetch(%v) failed: %v", redactMasterPassword(query), err.Error())
 		}
 	}
+	return nil
+}
+
+func isReplicationErr1872(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "Slave failed to initialize relay log info structure from the repository")
+}
+
+// fixReplication attempts a fix for this error:
+// Slave failed to initialize relay log info structure from the repository (errno 1872) (sqlstate HY000) during query: START SLAVE
+// see https://bugs.mysql.com/bug.php?id=83713 or https://github.com/vitessio/vitess/issues/5067
+func (mysqld *Mysqld) fixReplication(ctx context.Context, conn *dbconnpool.PooledDBConnection) error {
+	queryList := []string{
+		"STOP SLAVE",
+		"RESET SLAVE",
+		"START SLAVE",
+	}
+
+	// copy from executeSuperQueryListConn to avoid infinite loop
+	for _, query := range queryList {
+		log.Infof("exec %v", redactMasterPassword(query))
+		if _, err := mysqld.executeFetchContext(ctx, conn, query, 10000, false); err != nil {
+			return err
+		}
+	}
+
+	log.Infof("replication fixed for errno 1872")
 	return nil
 }
 
