@@ -21,9 +21,13 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"regexp"
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/trace"
@@ -99,6 +103,26 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	}
 }
 
+// Regexp to extract parent span id over the sql query
+var r = regexp.MustCompile("/\\*VT_SPAN_CONTEXT=(.*)\\*/")
+
+func startSpan(query, label string) (trace.Span, context.Context, error) {
+	_, comments := sqlparser.SplitMarginComments(query)
+	match := r.FindStringSubmatch(comments.Leading)
+	background := context.Background()
+	if len(match) == 0 {
+		span, ctx := trace.NewSpan(background, label)
+		trace.AnnotateSQL(span, query)
+		return span, ctx, nil
+	}
+
+	span, ctx, err := trace.NewFromString(background, match[1], label)
+	if err != nil {
+		return nil, nil, err
+	}
+	return span, ctx, nil
+}
+
 func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	ctx := context.Background()
 	var cancel context.CancelFunc
@@ -106,8 +130,11 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 		ctx, cancel = context.WithTimeout(ctx, *mysqlQueryTimeout)
 		defer cancel()
 	}
-	span, ctx := trace.NewSpan(ctx, "vtgateHandler.ComQuery")
-	trace.AnnotateSQL(span, query)
+
+	span, ctx, err := startSpan(query, "vtgateHandler.ComQuery")
+	if err != nil {
+		return vterrors.Wrap(err, "failed to extract span")
+	}
 	defer span.Finish()
 
 	ctx = callinfo.MysqlCallInfo(ctx, c)
