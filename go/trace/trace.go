@@ -52,6 +52,17 @@ func NewSpan(inCtx context.Context, label string) (Span, context.Context) {
 	return span, outCtx
 }
 
+// NewFromString creates a new Span with the currently installed tracing plugin, extracting the span context from
+// the provided string.
+func NewFromString(inCtx context.Context, parent, label string) (Span, context.Context, error) {
+	span, err := currentTracer.NewFromString(parent, label)
+	if err != nil {
+		return nil, nil, err
+	}
+	outCtx := currentTracer.NewContext(inCtx, span)
+	return span, outCtx, nil
+}
+
 // AnnotateSQL annotates information about a sql query in the span. This is done in a way
 // so as to not leak personally identifying information (PII), or sensitive personal information (SPI)
 func AnnotateSQL(span Span, sql string) {
