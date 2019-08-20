@@ -345,7 +345,7 @@ func resetReplication(ctx context.Context, pos mysql.Position, mysqld mysqlctl.M
 		return vterrors.Wrap(err, "failed to reset slave")
 	}
 
-	// Check if we have a postion to resume from, if not reset to the beginning of time
+	// Check if we have a position to resume from, if not reset to the beginning of time
 	if !pos.IsZero() {
 		// Set the position at which to resume from the master.
 		if err := mysqld.SetSlavePosition(ctx, pos); err != nil {
