@@ -187,6 +187,13 @@ func newFromStringFail(t *testing.T) func(ctx context.Context, parentSpan string
 	}
 }
 
+func newFromStringExpect(t *testing.T, expected string) func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
+	return func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
+		assert.Equal(t, expected, parentSpan)
+		return trace.NoopSpan{}, context.Background(), nil
+	}
+}
+
 func newSpanFail(t *testing.T) func(ctx context.Context, label string) (trace.Span, context.Context) {
 	return func(ctx context.Context, label string) (trace.Span, context.Context) {
 		t.Fatalf("we provided a span context but newFromString was not used as expected")
@@ -206,5 +213,12 @@ func TestSpanContextNoPassedInButExistsInString(t *testing.T) {
 
 func TestSpanContextPassedIn(t *testing.T) {
 	_, _, err := startSpanTestable("/*VT_SPAN_CONTEXT=123*/SQL QUERY", "someLabel", newSpanFail(t), newFromStringOK)
+	assert.NoError(t, err)
+}
+
+func TestSpanContextPassedInEvenAroundOtherComments(t *testing.T) {
+	_, _, err := startSpanTestable("/*VT_SPAN_CONTEXT=123*/SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS */ col1, col2 FROM TABLE ", "someLabel",
+		newSpanFail(t),
+		newFromStringExpect(t, "123"))
 	assert.NoError(t, err)
 }
