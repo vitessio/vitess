@@ -22,6 +22,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"vitess.io/vitess/go/trace"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -167,4 +170,41 @@ func TestConnectionRespectsExistingUnixSocket(t *testing.T) {
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Error: %v, want prefix %s", err, want)
 	}
+}
+
+var newSpanOK = func(ctx context.Context, label string) (trace.Span, context.Context) {
+	return trace.NoopSpan{}, context.Background()
+}
+
+var newFromStringOK = func(ctx context.Context, spanContext, label string) (trace.Span, context.Context, error) {
+	return trace.NoopSpan{}, context.Background(), nil
+}
+
+func newFromStringFail(t *testing.T) func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
+	return func(ctx context.Context, parentSpan string, label string) (trace.Span, context.Context, error) {
+		t.Fatalf("we didn't provide a parent span in the sql query. this should not have been called. got: %v", parentSpan)
+		return trace.NoopSpan{}, context.Background(), nil
+	}
+}
+
+func newSpanFail(t *testing.T) func(ctx context.Context, label string) (trace.Span, context.Context) {
+	return func(ctx context.Context, label string) (trace.Span, context.Context) {
+		t.Fatalf("we provided a span context but newFromString was not used as expected")
+		return trace.NoopSpan{}, context.Background()
+	}
+}
+
+func TestNoSpanContextPassed(t *testing.T) {
+	_, _, err := startSpanTestable("sql without comments", "someLabel", newSpanOK, newFromStringFail(t))
+	assert.NoError(t, err)
+}
+
+func TestSpanContextNoPassedInButExistsInString(t *testing.T) {
+	_, _, err := startSpanTestable("SELECT * FROM SOMETABLE WHERE COL = \"/*VT_SPAN_CONTEXT=123*/", "someLabel", newSpanOK, newFromStringFail(t))
+	assert.NoError(t, err)
+}
+
+func TestSpanContextPassedIn(t *testing.T) {
+	_, _, err := startSpanTestable("/*VT_SPAN_CONTEXT=123*/SQL QUERY", "someLabel", newSpanFail(t), newFromStringOK)
+	assert.NoError(t, err)
 }

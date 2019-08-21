@@ -127,7 +127,7 @@ type TracerFactory func(serviceName string) (tracingService, io.Closer, error)
 // tracingBackendFactories should be added to by a plugin during init() to install itself
 var tracingBackendFactories = make(map[string]TracerFactory)
 
-var currentTracer tracingService = fakeTracingServer{}
+var currentTracer tracingService = noopTracingServer{}
 
 var (
 	tracingServer = flag.String("tracer", "noop", "tracing service to use")
