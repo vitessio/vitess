@@ -154,6 +154,32 @@
   }
 }
 
+# select aggregation with partial scatter directive - added comments to try to confuse the hint extraction
+"/*VT_SPAN_CONTEXT=123*/select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user"
+{
+  "Original": "/*VT_SPAN_CONTEXT=123*/select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
+  "Instructions": {
+    "Aggregates": [
+      {
+        "Opcode": "count",
+        "Col": 0
+      }
+    ],
+    "Keys": null,
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ count(*) from user",
+      "FieldQuery": "select count(*) from user where 1 != 1",
+      "ScatterErrorsAsWarnings": true,
+      "Table": "user"
+    }
+  }
+}
+
 # select limit with partial scatter directive
 "select /*vt+ SCATTER_ERRORS_AS_WARNINGS=1 */ * from user limit 10"
 {
