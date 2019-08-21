@@ -156,7 +156,7 @@ class TestVtctldWeb(unittest.TestCase):
     return self.driver.find_element_by_id('master-tablet').text
 
   def _check_tablet_types(self, tablet_types, expected_counts):
-    for expected_type, count in expected_counts.items():
+    for expected_type, count in list(expected_counts.items()):
       self.assertEqual(count,
                         len([x for x in tablet_types if x == expected_type]))
 

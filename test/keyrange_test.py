@@ -66,7 +66,7 @@ int_shard_kid_map = {
 # by generating bin-packed strings from the int keyspace_id values.
 str_shard_kid_map = dict(
     [(shard_name0, [pkid_pack(kid0) for kid0 in kid_list0])
-     for shard_name0, kid_list0 in int_shard_kid_map.items()])
+     for shard_name0, kid_list0 in list(int_shard_kid_map.items())])
 
 
 class TestKeyRange(unittest.TestCase):

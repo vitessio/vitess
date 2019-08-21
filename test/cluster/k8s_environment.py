@@ -52,7 +52,7 @@ class K8sEnvironment(base_environment.BaseEnvironment):
     self.cluster_name = instance_name
 
     keyspaces = self.vtctl_helper.execute_vtctl_command(['GetKeyspaces'])
-    self.mobs = filter(None, keyspaces.split('\n'))
+    self.mobs = [_f for _f in keyspaces.split('\n') if _f]
     self.keyspaces = self.mobs
 
     if not self.keyspaces:
@@ -70,7 +70,7 @@ class K8sEnvironment(base_environment.BaseEnvironment):
 
     # This assumes that all keyspaces use the same set of cells
     self.cells = json.loads(self.vtctl_helper.execute_vtctl_command(
-        ['GetShard', '%s/%s' % (self.keyspaces[0], self.shards[0].keys()[0])]
+        ['GetShard', '%s/%s' % (self.keyspaces[0], list(self.shards[0].keys())[0])]
         ))['cells']
 
     self.primary_cells = self.cells
@@ -81,7 +81,7 @@ class K8sEnvironment(base_environment.BaseEnvironment):
     all_tablets_in_a_cell = self.vtctl_helper.execute_vtctl_command(
         ['ListAllTablets', self.cells[0]])
     all_tablets_in_a_cell = [x.split(' ') for x in
-                             filter(None, all_tablets_in_a_cell.split('\n'))]
+                             [_f for _f in all_tablets_in_a_cell.split('\n') if _f]]
 
     for index, keyspace in enumerate(self.keyspaces):
       keyspace_tablets_in_cell = [
@@ -135,7 +135,7 @@ class K8sEnvironment(base_environment.BaseEnvironment):
         ['gcloud', 'config', 'list', 'project', '--format', 'json']))
     project_name = project_name_json['core']['project']
     logging.info('Current project name: %s', project_name)
-    for k, v in kwargs.iteritems():
+    for k, v in kwargs.items():
       os.environ[k] = v
     if self.create_gke_cluster:
       cluster_up_txt = subprocess.check_output(

@@ -15,7 +15,7 @@
 # limitations under the License.
 """Contain VTGate discovery gateway flavor."""
 
-import gateway
+from . import gateway
 
 
 class DiscoveryGateway(gateway.VTGateGateway):

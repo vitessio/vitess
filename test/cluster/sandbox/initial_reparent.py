@@ -23,7 +23,7 @@ import sys
 import time
 from vtproto import topodata_pb2
 from vttest import sharding_utils
-import vtctl_sandbox
+from . import vtctl_sandbox
 
 
 def is_master(tablet, namespace):

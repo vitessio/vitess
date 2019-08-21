@@ -16,7 +16,7 @@
 
 """zk2 specific configuration."""
 
-import server
+from . import server
 
 
 class Zk2TopoServer(server.TopoServer):

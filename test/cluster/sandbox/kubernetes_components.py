@@ -24,8 +24,8 @@ import subprocess
 import tempfile
 import time
 
-import sandbox
-import sandlet
+from . import sandbox
+from . import sandlet
 
 
 def set_gke_cluster_context(gke_cluster_name):
@@ -112,7 +112,7 @@ class KubernetesResource(sandlet.SandletComponent):
     super(KubernetesResource, self).start()
     with open(self.template_file, 'r') as template_file:
       template = template_file.read()
-    for name, value in self.template_params.items():
+    for name, value in list(self.template_params.items()):
       template = re.sub('{{%s}}' % name, str(value), template)
     with tempfile.NamedTemporaryFile() as f:
       f.write(template)
@@ -123,7 +123,7 @@ class KubernetesResource(sandlet.SandletComponent):
   def stop(self):
     with open(self.template_file, 'r') as template_file:
       template = template_file.read()
-    for name, value in self.template_params.items():
+    for name, value in list(self.template_params.items()):
       template = re.sub('{{%s}}' % name, str(value), template)
     with tempfile.NamedTemporaryFile() as f:
       f.write(template)

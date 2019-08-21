@@ -21,7 +21,7 @@ import optparse
 import re
 import sys
 import time
-import vtctl_sandbox
+from . import vtctl_sandbox
 
 
 def get_all_tablets(cells, namespace):
@@ -34,7 +34,7 @@ def get_all_tablets(cells, namespace):
     for t in cell_tablets:
       tablets.append(t.split(' ')[0])
   r = re.compile('.*-.*')
-  tablets = filter(r.match, tablets)
+  tablets = list(filter(r.match, tablets))
   logging.info('Tablets: %s.', ', '.join(tablets))
   return tablets
 

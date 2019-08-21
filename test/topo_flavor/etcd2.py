@@ -19,7 +19,7 @@
 import os
 import shutil
 
-import server
+from . import server
 
 
 class Etcd2Cluster(object):
@@ -91,7 +91,7 @@ class Etcd2TopoServer(server.TopoServer):
     self.wait_until_up_add_cells()
 
   def teardown(self):
-    for cluster in self.clusters.itervalues():
+    for cluster in self.clusters.values():
       cluster.stop()
 
   def flags(self):
@@ -102,7 +102,7 @@ class Etcd2TopoServer(server.TopoServer):
     ]
 
   def wipe(self):
-    for cluster in self.clusters.itervalues():
+    for cluster in self.clusters.values():
       cluster.restart()
 
     self.wait_until_up_add_cells()
@@ -113,11 +113,11 @@ class Etcd2TopoServer(server.TopoServer):
   def wait_until_up_add_cells(self):
     import utils  # pylint: disable=g-import-not-at-top
 
-    for cluster in self.clusters.itervalues():
+    for cluster in self.clusters.values():
       cluster.wait_until_up()
 
     # Add entries in global cell list.
-    for cell, cluster in self.clusters.iteritems():
+    for cell, cluster in self.clusters.items():
       if cell != 'global':
         utils.run_vtctl_vtctl(['AddCellInfo',
                                '-root', '/',

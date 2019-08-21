@@ -33,7 +33,7 @@ import optparse
 import sys
 from vtproto import topodata_pb2
 from vttest import sharding_utils
-import vtctl_sandbox
+from . import vtctl_sandbox
 
 TABLET_TYPES = [
     (topodata_pb2.REPLICA, 'replica'),
@@ -54,14 +54,14 @@ def get_vtctl_commands(keyspace, shards):
     List of vtctl commands.
   """
   lowest_sharding_count = min(
-      sharding_utils.get_shard_index(x)[1] for x in shards.keys())
+      sharding_utils.get_shard_index(x)[1] for x in list(shards.keys()))
   if lowest_sharding_count == len(shards):
     # Skip keyspaces with non-overlapping shards.
     return []
 
   logging.info('Keyspace %s has overlapping shards', keyspace)
   vtctl_commands = []
-  for shard_name, shard_info in shards.iteritems():
+  for shard_name, shard_info in shards.items():
     served_tablet_types = [
         x['tablet_type'] for x in shard_info.get('served_types', [])]
     _, num_shards = sharding_utils.get_shard_index(shard_name)

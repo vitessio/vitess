@@ -66,17 +66,17 @@ def set_topo_server_flavor(flavor):
     logging.debug("Using topo server flavor '%s'", flavor)
   elif not flavor:
     if len(flavor_map) == 1:
-      (flavor, _server) = flavor_map.iteritems().next()
+      (flavor, _server) = next(iter(flavor_map.items()))
       logging.debug("Using default topo server flavor '%s'", flavor)
     else:
       logging.error(
           "No --topo-server-flavor specified. Registered flavors: [%s]",
-          ",".join(flavor_map.keys()))
+          ",".join(list(flavor_map.keys())))
       return
   else:
     logging.error(
         "Unknown topo server flavor '%s'. Registered flavors: [%s]", flavor,
-        ",".join(flavor_map.keys()))
+        ",".join(list(flavor_map.keys())))
     return
 
   _server.flavor_name = flavor

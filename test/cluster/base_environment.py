@@ -418,7 +418,7 @@ class BaseEnvironment(object):
     tablet_info = []
     raw_tablets = self.vtctl_helper.execute_vtctl_command(
         ['ListShardTablets', '{0}/{1}'.format(keyspace, shard_name)])
-    raw_tablets = filter(None, raw_tablets.split('\n'))
+    raw_tablets = [_f for _f in raw_tablets.split('\n') if _f]
     for tablet in raw_tablets:
       tablet_words = tablet.split()
       tablet_name = tablet_words[0]

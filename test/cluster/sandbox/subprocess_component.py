@@ -17,9 +17,9 @@
 import logging
 import subprocess
 
-import sandbox
-import sandbox_utils
-import sandlet
+from . import sandbox
+from . import sandbox_utils
+from . import sandlet
 
 
 class Subprocess(sandlet.SandletComponent):
@@ -35,7 +35,7 @@ class Subprocess(sandlet.SandletComponent):
     super(Subprocess, self).start()
     try:
       script_args = []
-      for k, v in self.script_kwargs.items():
+      for k, v in list(self.script_kwargs.items()):
         script_args += ['--%s' % k, str(v)]
       logging.info('Executing subprocess script %s.', self.script)
       infofile = sandbox_utils.create_log_file(

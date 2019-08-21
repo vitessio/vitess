@@ -27,7 +27,7 @@ import datetime
 import json
 import logging
 import os
-import Queue
+import queue
 import shutil
 import subprocess
 import tempfile
@@ -85,7 +85,7 @@ def run_test_config(config):
     f.write(_TEMPLATE.format(
         directory=current_dir, config=yaml.dump(config), timestamp=timestamp,
         tempdir=tempdir, server=server))
-  os.chmod(tempscript, 0775)
+  os.chmod(tempscript, 0o775)
 
   try:
     subprocess.call([tempscript])
@@ -264,7 +264,7 @@ class TestWorker(object):
   """A simple test queue. HTTP requests append to this work queue."""
 
   def __init__(self):
-    self.test_queue = Queue.Queue()
+    self.test_queue = queue.Queue()
     self.worker_thread = threading.Thread(target=self.worker_loop)
     self.worker_thread.daemon = True
 

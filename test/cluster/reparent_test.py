@@ -53,7 +53,7 @@ class ReparentTest(base_cluster_test.BaseClusterTest):
         'reparent_timeout_threshold', '60'))
 
     for keyspace, num_shards in zip(cls.env.keyspaces, cls.env.num_shards):
-      for shard in xrange(num_shards):
+      for shard in range(num_shards):
         shard_name = sharding_utils.get_shard_name(shard, num_shards)
         backup_tablet_uid = cls.env.get_random_tablet(
             keyspace, shard_name, tablet_type='replica')
@@ -94,7 +94,7 @@ class ReparentTest(base_cluster_test.BaseClusterTest):
     next_masters = []
     durations = []
 
-    for shard in xrange(num_shards):
+    for shard in range(num_shards):
       shard_name = sharding_utils.get_shard_name(shard, num_shards)
       original_master = self.env.get_current_master_name(keyspace, shard_name)
 
@@ -164,7 +164,7 @@ class ReparentTest(base_cluster_test.BaseClusterTest):
                  keyspace, shard_name, original_master_name)
     ret_val = self.env.restart_mysql_task(original_master_name, 'mysql', True)
 
-    self.assertEquals(ret_val, 0,
+    self.assertEqual(ret_val, 0,
                       msg='restart failed (returned %d)' % ret_val)
 
     if perform_emergency_reparent:
@@ -180,7 +180,7 @@ class ReparentTest(base_cluster_test.BaseClusterTest):
       if new_master_name != original_master_name:
         break
       time.sleep(1)
-    self.assertNotEquals(
+    self.assertNotEqual(
         new_master_name, original_master_name,
         msg='Expected master tablet to change, but it remained as %s' % (
             new_master_name))
@@ -192,11 +192,11 @@ class ReparentTest(base_cluster_test.BaseClusterTest):
     if not self.env.automatic_reparent_available():
       logging.info('Automatic reparents are unavailable, skipping test!')
       return
-    for attempt in xrange(1, self.num_reparents + 1):
+    for attempt in range(1, self.num_reparents + 1):
       logging.info('Implicit reparent iteration number %d of %d', attempt,
                    self.num_reparents)
       for keyspace, num_shards in zip(self.env.keyspaces, self.env.num_shards):
-        for shard in xrange(num_shards):
+        for shard in range(num_shards):
           self.implicit_reparent(keyspace, shard, num_shards)
       self.env.wait_for_healthy_tablets()
 
@@ -215,11 +215,11 @@ class ReparentTest(base_cluster_test.BaseClusterTest):
     if not self.env.internal_reparent_available():
       logging.info('Internal reparent unavailable, skipping test!')
       return
-    for attempt in xrange(1, self.num_reparents + 1):
+    for attempt in range(1, self.num_reparents + 1):
       logging.info('Explicit emergency reparent iteration number %d of %d',
                    attempt, self.num_reparents)
       for keyspace, num_shards in zip(self.env.keyspaces, self.env.num_shards):
-        for shard in xrange(num_shards):
+        for shard in range(num_shards):
           self.implicit_reparent(keyspace, shard, num_shards, True)
       self.env.wait_for_healthy_tablets()
 
@@ -229,7 +229,7 @@ class ReparentTest(base_cluster_test.BaseClusterTest):
       logging.info('Internal reparent unavailable, skipping test!')
       return
     durations = []
-    for attempt in xrange(1, self.num_reparents + 1):
+    for attempt in range(1, self.num_reparents + 1):
       logging.info('Explicit reparent iteration number %d of %d', attempt,
                    self.num_reparents)
       for keyspace, num_shards in zip(self.env.keyspaces, self.env.num_shards):
@@ -249,7 +249,7 @@ class ReparentTest(base_cluster_test.BaseClusterTest):
       logging.info('Explicit external reparent unavailable, skipping test!')
       return
     durations = []
-    for attempt in xrange(1, self.num_reparents + 1):
+    for attempt in range(1, self.num_reparents + 1):
       logging.info('Explicit external reparent iteration number %d of %d',
                    attempt, self.num_reparents)
       for keyspace, num_shards in zip(self.env.keyspaces, self.env.num_shards):
@@ -272,7 +272,7 @@ class ReparentTest(base_cluster_test.BaseClusterTest):
       return
     logging.info('Performing %s cross-cell explicit reparents',
                  self.num_reparents)
-    for attempt in xrange(1, self.num_reparents + 1):
+    for attempt in range(1, self.num_reparents + 1):
       logging.info('Cross-cell explicit reparent iteration number %d of %d',
                    attempt, self.num_reparents)
       for keyspace, num_shards in zip(self.env.keyspaces, self.env.num_shards):
@@ -287,7 +287,7 @@ class ReparentTest(base_cluster_test.BaseClusterTest):
     if not self.env.explicit_external_reparent_available():
       logging.info('Explicit external reparent unavailable, skipping test!')
       return
-    for attempt in xrange(1, self.num_reparents + 1):
+    for attempt in range(1, self.num_reparents + 1):
       logging.info('Cross-cell explicit external reparent iteration number %d '
                    'of %d', attempt, self.num_reparents)
       for keyspace, num_shards in zip(self.env.keyspaces, self.env.num_shards):

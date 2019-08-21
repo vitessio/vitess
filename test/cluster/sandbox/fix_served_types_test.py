@@ -17,7 +17,7 @@
 import collections
 import unittest
 from vtproto import topodata_pb2
-import fix_served_types
+from . import fix_served_types
 
 _ALL_TYPES = dict(
     served_types=[
@@ -51,7 +51,7 @@ class FixServedTypesTest(unittest.TestCase):
         ['SetShardServedTypes', 'foo/0', 'replica'],
         ['SetShardServedTypes', 'foo/0', 'rdonly'],
         ['SetShardServedTypes', 'foo/0', 'master']]
-    self.assertEquals(
+    self.assertEqual(
         fix_served_types.get_vtctl_commands('foo', shards), expected_result)
 
   def test_destination_shards_serving(self):
@@ -68,7 +68,7 @@ class FixServedTypesTest(unittest.TestCase):
         ['SetShardServedTypes', 'foo/0', 'replica'],
         ['SetShardServedTypes', 'foo/0', 'rdonly'],
         ['SetShardServedTypes', 'foo/0', 'master']]
-    self.assertEquals(
+    self.assertEqual(
         fix_served_types.get_vtctl_commands('foo', shards), expected_result)
 
   def test_source_shards_serving(self):
@@ -79,7 +79,7 @@ class FixServedTypesTest(unittest.TestCase):
         ['SetShardServedTypes', 'foo/0', 'replica'],
         ['SetShardServedTypes', 'foo/0', 'rdonly'],
         ['SetShardServedTypes', 'foo/0', 'master']]
-    self.assertEquals(
+    self.assertEqual(
         fix_served_types.get_vtctl_commands('foo', shards), expected_result)
 
   def test_partial_serving_overlap_shard_2(self):
@@ -93,7 +93,7 @@ class FixServedTypesTest(unittest.TestCase):
         ['SetShardServedTypes', 'foo/0', 'replica'],
         ['SetShardServedTypes', 'foo/0', 'rdonly'],
         ['SetShardServedTypes', 'foo/0', 'master']]
-    self.assertEquals(
+    self.assertEqual(
         fix_served_types.get_vtctl_commands('foo', shards), expected_result)
 
   def test_mixed_serving_types(self):
@@ -108,7 +108,7 @@ class FixServedTypesTest(unittest.TestCase):
         ['SetShardServedTypes', 'foo/0', 'replica'],
         ['SetShardServedTypes', 'foo/0', 'rdonly'],
         ['SetShardServedTypes', 'foo/0', 'master']]
-    self.assertEquals(
+    self.assertEqual(
         fix_served_types.get_vtctl_commands('foo', shards), expected_result)
 
 

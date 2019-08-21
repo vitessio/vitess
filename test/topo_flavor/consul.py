@@ -19,7 +19,7 @@
 import json
 import os
 
-import server
+from . import server
 
 
 class ConsulTopoServer(server.TopoServer):

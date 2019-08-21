@@ -14,11 +14,11 @@
 
 """Sandlet tests."""
 
-import StringIO
+import io
 import sys
 import unittest
 
-import sandlet
+from . import sandlet
 
 
 class TestComponent(object):
@@ -28,10 +28,10 @@ class TestComponent(object):
     self.dependencies = dependencies
 
   def start(self):
-    print 'Start %s' % self.name
+    print('Start %s' % self.name)
 
   def stop(self):
-    print 'Stop %s' % self.name
+    print('Stop %s' % self.name)
 
   def is_up(self):
     return True
@@ -49,11 +49,11 @@ class SandletTest(unittest.TestCase):
     for c in components:
       group.add_component(c)
     try:
-      out = StringIO.StringIO()
+      out = io.StringIO()
       sys.stdout = out
       group.execute(action, subcomponents)
       output = out.getvalue().strip()
-      self.assertEquals(output, expected_output)
+      self.assertEqual(output, expected_output)
     finally:
       sys.stdout = saved_stdout
 

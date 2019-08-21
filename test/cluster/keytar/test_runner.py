@@ -25,7 +25,7 @@ import json
 import logging
 import os
 import subprocess
-import urllib2
+import urllib.request, urllib.error, urllib.parse
 import uuid
 import yaml
 
@@ -35,9 +35,9 @@ keytar_args = None
 def update_result(k, v):
   """Post a key/value pair test result update."""
   url = '%s/update_results' % keytar_args.server
-  req = urllib2.Request(url)
+  req = urllib.request.Request(url)
   req.add_header('Content-Type', 'application/json')
-  urllib2.urlopen(req, json.dumps({k: v, 'timestamp': keytar_args.timestamp}))
+  urllib.request.urlopen(req, json.dumps({k: v, 'timestamp': keytar_args.timestamp}))
 
 
 def run_sandbox_action(environment_config, name, action):
@@ -95,7 +95,7 @@ def run_test_config():
           '-e', environment_config['application_type'], '-n', name]
       if 'params' in test:
         test_args += ['-t', ':'.join(
-            '%s=%s' % (k, v) for (k, v) in test['params'].iteritems())]
+            '%s=%s' % (k, v) for (k, v) in test['params'].items())]
       testlog = '/tmp/testlogs/%s_%s.log' % (keytar_args.timestamp, test_name)
       logging.info('Saving log to %s', testlog)
       test_results[test_name] = 'RUNNING'

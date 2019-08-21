@@ -66,7 +66,7 @@ class BackupTest(base_cluster_test.BaseClusterTest):
         conn = self.env.get_vtgate_conn(master_cell)
         cursor = conn.cursor(tablet_type='master', keyspace=keyspace,
                              keyranges=[kr], writable=True)
-        for i in xrange(self.num_inserts):
+        for i in range(self.num_inserts):
           cursor.begin()
           cursor.execute(
               'insert into %s (msg, keyspace_id) values (:msg, :keyspace_id)' %
@@ -146,15 +146,15 @@ class BackupTest(base_cluster_test.BaseClusterTest):
           ['ExecuteFetchAsDba', '-json', tablet_name,
            'select * from %s' % self.table_name]))['rows_affected']
       logging.info('Select count: %d', count)
-      self.assertEquals(count, self.num_inserts)
+      self.assertEqual(count, self.num_inserts)
 
   def test_backup(self):
     logging.info('Performing %s backup cycles', self.num_backups)
-    for attempt in xrange(self.num_backups):
+    for attempt in range(self.num_backups):
       logging.info('Backup iteration %d of %d', attempt + 1, self.num_backups)
       for keyspace, num_shards in zip(self.env.keyspaces, self.env.num_shards):
         backup_tablets = []
-        for shard in xrange(num_shards):
+        for shard in range(num_shards):
           # Pick a random replica tablet in each shard
           tablets = self.env.get_tablet_types_for_shard(
               keyspace, sharding_utils.get_shard_name(shard, num_shards))

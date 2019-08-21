@@ -24,7 +24,7 @@ import time
 import os
 from selenium import webdriver
 import unittest
-import urllib2
+import urllib.request, urllib.error, urllib.parse
 
 import environment
 
@@ -59,9 +59,9 @@ class TestKeytarWeb(unittest.TestCase):
 
   def test_keytar_web(self):
     self.driver.get(self.flask_addr)
-    req = urllib2.Request('%s/test_request?password=foo' % self.flask_addr)
+    req = urllib.request.Request('%s/test_request?password=foo' % self.flask_addr)
     req.add_header('Content-Type', 'application/json')
-    urllib2.urlopen(
+    urllib.request.urlopen(
         req, json.dumps({'repository': {'repo_name': 'test/image'}}))
     self._wait_for_complete_status()
     logging.info('Dummy test complete.')

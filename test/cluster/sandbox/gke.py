@@ -20,8 +20,8 @@ import logging
 import os
 import subprocess
 
-import sandbox
-import sandlet
+from . import sandbox
+from . import sandlet
 
 
 class Cluster(object):

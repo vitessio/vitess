@@ -63,7 +63,7 @@ class DrainTest(base_cluster_test.BaseClusterTest):
     cursor = conn.cursor(tablet_type='master', keyspace=keyspace,
                          keyranges=[keyrange.KeyRange('')], writable=True)
 
-    for i in xrange(starting_index, starting_index + num_rows):
+    for i in range(starting_index, starting_index + num_rows):
       cursor.begin()
       cursor.execute(
           'insert into %s (msg, keyspace_id) values (:msg, :keyspace_id)' %
@@ -81,7 +81,7 @@ class DrainTest(base_cluster_test.BaseClusterTest):
         tablet_type=tablet_type, keyspace=keyspace,
         keyranges=[keyrange.KeyRange('')])
 
-    for i in [random.randint(0, num_rows - 1) for _ in xrange(num_reads)]:
+    for i in [random.randint(0, num_rows - 1) for _ in range(num_reads)]:
       cursor.execute(
           'select * from %s where msg = "test %d"' % (self.table_name, i), {})
     cursor.close()
@@ -149,7 +149,7 @@ class DrainTest(base_cluster_test.BaseClusterTest):
     the tablet returns to a healthy state.
     """
     logging.info('Performing %s drain cycles', self.num_drains)
-    for attempt in xrange(self.num_drains):
+    for attempt in range(self.num_drains):
       logging.info('Drain iteration %d of %d', attempt + 1, self.num_drains)
       for keyspace, num_shards in zip(self.env.keyspaces, self.env.num_shards):
         tablet_to_drain = self.get_tablet_to_drain(keyspace, num_shards)
@@ -159,7 +159,7 @@ class DrainTest(base_cluster_test.BaseClusterTest):
         self.insert_rows(keyspace, self.num_inserts,
                          starting_index=self.num_inserts * attempt)
         num_rows1 = self.get_row_count(tablet_to_drain)
-        self.assertEquals(num_rows0, num_rows1)
+        self.assertEqual(num_rows0, num_rows1)
         query_count0 = self.env.get_tablet_query_total_count(tablet_to_drain)
         self.read_rows(
             keyspace, self.num_inserts, self.num_inserts * (attempt + 1),
@@ -169,7 +169,7 @@ class DrainTest(base_cluster_test.BaseClusterTest):
         query_count1 = self.env.get_tablet_query_total_count(tablet_to_drain)
         logging.info('%s total query count before/after reads: %d/%d',
                      tablet_to_drain, query_count0, query_count1)
-        self.assertEquals(query_count0, query_count1)
+        self.assertEqual(query_count0, query_count1)
 
 
 if __name__ == '__main__':

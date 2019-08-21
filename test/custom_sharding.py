@@ -263,7 +263,7 @@ primary key (id)
     rows = {}
     for q in s:
       bindvars = {}
-      for name, value in q['query']['bind_variables'].items():
+      for name, value in list(q['query']['bind_variables'].items()):
         # vtctl encodes bytes as base64.
         bindvars[name] = int(base64.standard_b64decode(value['value']))
       qr = utils.vtgate.execute_shards(

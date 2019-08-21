@@ -46,20 +46,20 @@ class KeytarTest(unittest.TestCase):
 
     github_clone_args, repo_dir = (
         keytar._get_download_github_repo_args('/tmp', github_config))
-    self.assertEquals(
+    self.assertEqual(
         github_clone_args,
         ['git', 'clone', 'https://github.com/vitessio/vitess', '/tmp/foo'])
-    self.assertEquals('/tmp/foo', repo_dir)
+    self.assertEqual('/tmp/foo', repo_dir)
 
     github_config = {
         'repo': 'vitessio/vitess', 'repo_prefix': 'foo', 'branch': 'bar'}
     github_clone_args, repo_dir = (
         keytar._get_download_github_repo_args('/tmp', github_config))
-    self.assertEquals(
+    self.assertEqual(
         github_clone_args,
         ['git', 'clone', 'https://github.com/vitessio/vitess', '/tmp/foo', '-b',
          'bar'])
-    self.assertEquals('/tmp/foo', repo_dir)
+    self.assertEqual('/tmp/foo', repo_dir)
 
   def test_logs(self):
     # Check GET test_results with no results.

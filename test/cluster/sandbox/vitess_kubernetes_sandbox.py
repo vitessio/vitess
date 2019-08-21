@@ -18,16 +18,16 @@
 
 import collections
 import copy
-import kubernetes_components
+from . import kubernetes_components
 import logging
 import os
 import tempfile
 import yaml
 from vttest import sharding_utils
 
-import sandbox
-import sandlet
-import subprocess_component
+from . import sandbox
+from . import sandlet
+from . import subprocess_component
 
 
 class VitessKubernetesSandbox(sandbox.Sandbox):
@@ -255,8 +255,8 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
   def generate_from_config(self):
     """Creates a Vitess sandbox."""
     self.app_options = collections.namedtuple(
-        'Struct', self.sandbox_options['application'].keys())(
-            *self.sandbox_options['application'].values())
+        'Struct', list(self.sandbox_options['application'].keys()))(
+            *list(self.sandbox_options['application'].values()))
 
     self.generate_helm_sandlet()
     if self.app_options.enable_guestbook:

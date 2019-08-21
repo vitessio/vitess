@@ -224,7 +224,7 @@ class Cache(object):
 
   def stats_diff(self, before, **kwargs):
     """Returns true iff the before stats differ exactly with provided args."""
-    for name, value in kwargs.items():
+    for name, value in list(kwargs.items()):
       if self.stats[name] != before[name] + value:
         return False
     return True

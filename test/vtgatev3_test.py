@@ -682,7 +682,7 @@ class TestVTGateFunctions(unittest.TestCase):
 
     # test shard errors as warnings directive
     cursor.execute('SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS */ bad from vt_user', {})
-    print(vtgate_conn.get_warnings())
+    print((vtgate_conn.get_warnings()))
     warnings = vtgate_conn.get_warnings()
     self.assertEqual(len(warnings), 2)
     for warning in warnings:
@@ -696,7 +696,7 @@ class TestVTGateFunctions(unittest.TestCase):
 
     # test shard errors as warnings directive with timeout
     cursor.execute('SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS QUERY_TIMEOUT_MS=10 */ SLEEP(1)', {})
-    print(vtgate_conn.get_warnings())
+    print((vtgate_conn.get_warnings()))
     warnings = vtgate_conn.get_warnings()
     self.assertEqual(len(warnings), 1)
     for warning in warnings:

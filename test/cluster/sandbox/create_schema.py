@@ -19,7 +19,7 @@
 import logging
 import optparse
 import os
-import vtctl_sandbox
+from . import vtctl_sandbox
 
 
 def main():

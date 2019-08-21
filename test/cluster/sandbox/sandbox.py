@@ -30,9 +30,9 @@ import os
 import re
 import yaml
 
-import gke
-import sandbox_utils
-import sandlet
+from . import gke
+from . import sandbox_utils
+from . import sandlet
 
 
 def parse_config(
@@ -62,7 +62,7 @@ class Sandbox(object):
     self.sandbox_options = sandbox_options
     self.name = sandbox_options.get('name')
     self.cluster_type = sandbox_options.get('cluster_type')
-    if self.cluster_type not in self._cluster_envs.keys():
+    if self.cluster_type not in list(self._cluster_envs.keys()):
       raise SandboxError('Invalid cluster type %s.' % self.cluster_type)
     cluster_config = [c for c in sandbox_options.get('clusters')
                       if c['type'] == self.cluster_type]
