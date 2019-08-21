@@ -12,10 +12,10 @@ from google.protobuf import symbol_database as _symbol_database
 _sym_db = _symbol_database.Default()
 
 
-import query_pb2 as query__pb2
-import topodata_pb2 as topodata__pb2
-import replicationdata_pb2 as replicationdata__pb2
-import logutil_pb2 as logutil__pb2
+from . import query_pb2 as query__pb2
+from . import topodata_pb2 as topodata__pb2
+from . import replicationdata_pb2 as replicationdata__pb2
+from . import logutil_pb2 as logutil__pb2
 
 
 DESCRIPTOR = _descriptor.FileDescriptor(

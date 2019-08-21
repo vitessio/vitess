@@ -15,13 +15,13 @@
 """
 
 import datetime
-from urlparse import urlparse
+from urllib.parse import urlparse
 
 from vtdb import prefer_vtroot_imports  # pylint: disable=unused-import
 
 import grpc
 
-import vtctl_client
+from . import vtctl_client
 
 from vtproto import vtctldata_pb2
 from vtproto import vtctlservice_pb2_grpc
@@ -69,7 +69,7 @@ class GRPCVtctlClient(vtctl_client.VtctlClient):
   def execute_vtctl_command(self, args, action_timeout=30.0):
     req = vtctldata_pb2.ExecuteVtctlCommandRequest(
         args=args,
-        action_timeout=long(action_timeout * 1e9))
+        action_timeout=int(action_timeout * 1e9))
     it = self.stub.ExecuteVtctlCommand(req, action_timeout)
     for response in it:
       t = datetime.datetime.utcfromtimestamp(response.event.time.seconds)

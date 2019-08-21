@@ -72,11 +72,11 @@ conversions = {
     VT_DECIMAL: Decimal,
     VT_TINY: int,
     VT_SHORT: int,
-    VT_LONG: long,
+    VT_LONG: int,
     VT_FLOAT: float,
     VT_DOUBLE: float,
     VT_TIMESTAMP: times.DateTimeOrNone,
-    VT_LONGLONG: long,
+    VT_LONGLONG: int,
     VT_INT24: int,
     VT_DATE: times.DateOrNone,
     VT_TIME: times.TimeDeltaOrNone,
@@ -103,7 +103,7 @@ def convert_bind_vars(bind_variables):
   new_vars = {}
   if bind_variables is None:
     return new_vars
-  for key, val in bind_variables.iteritems():
+  for key, val in bind_variables.items():
     if hasattr(val, '__sql_literal__'):
       new_vars[key] = val.__sql_literal__()
     elif isinstance(val, datetime.datetime):
@@ -114,7 +114,7 @@ def convert_bind_vars(bind_variables):
       new_vars[key] = sorted(val)
     elif isinstance(val, tuple):
       new_vars[key] = list(val)
-    elif isinstance(val, (int, long, float, str, list, NoneType)):
+    elif isinstance(val, (int, float, str, list, NoneType)):
       new_vars[key] = val
     else:
       # NOTE(msolomon) begrudgingly I allow this - we just have too much code

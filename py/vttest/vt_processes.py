@@ -20,7 +20,7 @@ import os
 import socket
 import subprocess
 import time
-import urllib
+import urllib.request, urllib.parse, urllib.error
 
 from google.protobuf import text_format
 
@@ -43,7 +43,7 @@ class VtProcess(object):
   def wait_start(self):
     """Start the process and wait for it to respond on HTTP."""
 
-    for _ in xrange(0, self.START_RETRIES):
+    for _ in range(0, self.START_RETRIES):
       self.port = environment.get_port(self.port_name)
       if environment.get_protocol() == 'grpc':
         self.grpc_port = environment.get_port(self.port_name, protocol='grpc')
@@ -102,7 +102,7 @@ class VtProcess(object):
     data = None
     try:
       url = 'http://%s/debug/vars' % self.addr()
-      f = urllib.urlopen(url)
+      f = urllib.request.urlopen(url)
       data = f.read()
       f.close()
     except IOError:

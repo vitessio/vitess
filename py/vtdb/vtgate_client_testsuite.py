@@ -241,19 +241,19 @@ class TestErrors(TestPythonClientBase):
     error_caller_id = vtgate_client.CallerID(principal=error_request)
 
     # Begin test
-    with self.assertRaisesRegexp(dbexceptions.DatabaseError, 'forced error'):
+    with self.assertRaisesRegex(dbexceptions.DatabaseError, 'forced error'):
       self.conn.begin(error_caller_id)
 
     # Commit test
-    with self.assertRaisesRegexp(dbexceptions.DatabaseError, 'forced error'):
+    with self.assertRaisesRegex(dbexceptions.DatabaseError, 'forced error'):
       self.conn.begin(error_caller_id)
 
     # Rollback test
-    with self.assertRaisesRegexp(dbexceptions.DatabaseError, 'forced error'):
+    with self.assertRaisesRegex(dbexceptions.DatabaseError, 'forced error'):
       self.conn.begin(error_caller_id)
 
     # GetSrvKeyspace test
-    with self.assertRaisesRegexp(dbexceptions.DatabaseError, 'forced error'):
+    with self.assertRaisesRegex(dbexceptions.DatabaseError, 'forced error'):
       self.conn.get_srv_keyspace(error_request)
 
 
@@ -268,32 +268,32 @@ class TestSuccess(TestPythonClientBase):
 
     # big has one big shard
     big = self.conn.get_srv_keyspace('big')
-    self.assertEquals(big.name, 'big')
-    self.assertEquals(big.sharding_col_name, 'sharding_column_name')
-    self.assertEquals(big.sharding_col_type, keyrange_constants.KIT_UINT64)
-    self.assertEquals(big.served_from, {'master': 'other_keyspace'})
-    self.assertEquals(big.get_shards('replica'),
+    self.assertEqual(big.name, 'big')
+    self.assertEqual(big.sharding_col_name, 'sharding_column_name')
+    self.assertEqual(big.sharding_col_type, keyrange_constants.KIT_UINT64)
+    self.assertEqual(big.served_from, {'master': 'other_keyspace'})
+    self.assertEqual(big.get_shards('replica'),
                       [{'Name': 'shard0',
                         'KeyRange': {
                             'Start': '\x40\x00\x00\x00\x00\x00\x00\x00',
                             'End': '\x80\x00\x00\x00\x00\x00\x00\x00',
                             }}])
-    self.assertEquals(big.get_shard_count('replica'), 1)
-    self.assertEquals(big.get_shard_count('rdonly'), 0)
-    self.assertEquals(big.get_shard_names('replica'), ['shard0'])
-    self.assertEquals(big.keyspace_id_to_shard_name_for_db_type(
+    self.assertEqual(big.get_shard_count('replica'), 1)
+    self.assertEqual(big.get_shard_count('rdonly'), 0)
+    self.assertEqual(big.get_shard_names('replica'), ['shard0'])
+    self.assertEqual(big.keyspace_id_to_shard_name_for_db_type(
         0x6000000000000000, 'replica'), 'shard0')
     with self.assertRaises(ValueError):
       big.keyspace_id_to_shard_name_for_db_type(0x2000000000000000, 'replica')
 
     # small has no shards
     small = self.conn.get_srv_keyspace('small')
-    self.assertEquals(small.name, 'small')
-    self.assertEquals(small.sharding_col_name, '')
-    self.assertEquals(small.sharding_col_type, keyrange_constants.KIT_UNSET)
-    self.assertEquals(small.served_from, {})
-    self.assertEquals(small.get_shards('replica'), [])
-    self.assertEquals(small.get_shard_count('replica'), 0)
+    self.assertEqual(small.name, 'small')
+    self.assertEqual(small.sharding_col_name, '')
+    self.assertEqual(small.sharding_col_type, keyrange_constants.KIT_UNSET)
+    self.assertEqual(small.served_from, {})
+    self.assertEqual(small.get_shards('replica'), [])
+    self.assertEqual(small.get_shard_count('replica'), 0)
     with self.assertRaises(ValueError):
       small.keyspace_id_to_shard_name_for_db_type(0x6000000000000000, 'replica')
 
@@ -431,12 +431,12 @@ class TestEcho(TestPythonClientBase):
   echo_prefix = 'echo://'
 
   query = (
-      u'test query with bind variables: :int :float :bytes, unicode: '
-      u'\u6211\u80fd\u541e\u4e0b\u73bb\u7483\u800c\u4e0d\u50b7\u8eab\u9ad4'
+      'test query with bind variables: :int :float :bytes, unicode: '
+      '\u6211\u80fd\u541e\u4e0b\u73bb\u7483\u800c\u4e0d\u50b7\u8eab\u9ad4'
       ).encode('utf-8')
   query_echo = (
-      u'test query with bind variables: :int :float :bytes, unicode: '
-      u'\u6211\u80fd\u541e\u4e0b\u73bb\u7483\u800c\u4e0d\u50b7\u8eab\u9ad4'
+      'test query with bind variables: :int :float :bytes, unicode: '
+      '\u6211\u80fd\u541e\u4e0b\u73bb\u7483\u800c\u4e0d\u50b7\u8eab\u9ad4'
       ).encode('utf-8')
   keyspace = 'test_keyspace'
 
@@ -655,7 +655,7 @@ class TestEcho(TestPythonClientBase):
   def _check_echo(self, cursor, values):
     """_check_echo makes sure the echo result is correct."""
     got = self._get_echo(cursor)
-    for k, v in values.iteritems():
+    for k, v in values.items():
       if k == 'fresher':
         self.assertTrue(self.conn.fresher)
       elif k == 'eventToken':

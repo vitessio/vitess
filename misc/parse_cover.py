@@ -25,7 +25,7 @@ coverage_count = 0
 coverage_sum = 0.0
 
 for line in sys.stdin:
-  print line,
+  print(line, end=' ')
   sys.stdout.flush
 
   if line.find('[no test files]') != -1:
@@ -41,5 +41,5 @@ for line in sys.stdin:
 directories_covered = coverage_count * 100 / (no_test_file_count + coverage_count)
 average_coverage = coverage_sum / coverage_count
 
-print "Directory test coverage: %u%%" % directories_covered
-print "Average test coverage: %u%%" % int(average_coverage)
+print("Directory test coverage: %u%%" % directories_covered)
+print("Average test coverage: %u%%" % int(average_coverage))

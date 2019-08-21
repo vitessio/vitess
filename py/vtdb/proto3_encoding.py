@@ -46,7 +46,7 @@ conversions = {
     query_pb2.INT32: int,
     query_pb2.UINT32: int,
     query_pb2.INT64: int,
-    query_pb2.UINT64: long,
+    query_pb2.UINT64: int,
     query_pb2.FLOAT32: float,
     query_pb2.FLOAT64: float,
     query_pb2.TIMESTAMP: times.DateTimeOrNone,
@@ -134,7 +134,7 @@ def convert_value(value, proto_value, allow_lists=False):
   elif isinstance(value, int):
     proto_value.type = query_pb2.INT64
     proto_value.value = str(value)
-  elif isinstance(value, long):
+  elif isinstance(value, int):
     if value < INT_UPPERBOUND_PLUS_ONE:
       proto_value.type = query_pb2.INT64
     else:
@@ -177,7 +177,7 @@ def convert_bind_vars(bind_variables, request_bind_variables):
   """
   if not bind_variables:
     return
-  for key, val in bind_variables.iteritems():
+  for key, val in bind_variables.items():
     convert_value(val, request_bind_variables[key], allow_lists=True)
 
 
@@ -257,7 +257,7 @@ class Proto3Connection(object):
       entity_keyspace_ids: map of entity_keyspace_id.
       request_eki: destination proto3 list.
     """
-    for xid, kid in entity_keyspace_ids.iteritems():
+    for xid, kid in entity_keyspace_ids.items():
       eid = request_eki.add()
       eid.keyspace_id = kid
       convert_value(xid, eid, allow_lists=False)

@@ -264,7 +264,7 @@ class LocalDatabase(object):
     num_rows = self.rng.randint(self.init_data_options.min_table_shard_size,
                                 self.init_data_options.max_table_shard_size)
     rows = []
-    for _ in xrange(num_rows):
+    for _ in range(num_rows):
       row = []
       for field_info in field_infos:
         field_type = field_info[1]
@@ -277,7 +277,7 @@ class LocalDatabase(object):
     # Insert 'rows' into the database in batches of size
     # self.batch_insert_size
     field_names = [field_info[0] for field_info in field_infos]
-    for index in xrange(0, len(rows), self.batch_insert_size):
+    for index in range(0, len(rows), self.batch_insert_size):
       self.batch_insert(db_name,
                         table_name,
                         field_names,

@@ -17,7 +17,7 @@
 
 import logging
 import re
-from urlparse import urlparse
+from urllib.parse import urlparse
 
 from vtdb import prefer_vtroot_imports  # pylint: disable=unused-import
 
@@ -212,7 +212,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
               effective_caller_id))
       method = getattr(self.stub, method_name)
       it = method(request, self.timeout)
-      first_response = it.next()
+      first_response = next(it)
     except (grpc.RpcError, vtgate_utils.VitessError) as e:
       self.logger_object.log_private_data(bind_variables)
       raise _convert_exception(
@@ -285,7 +285,7 @@ class GRPCVTGateConnection(vtgate_client.VTGateClient,
           keyspace, shard, key_range,
           name, effective_caller_id)
       it = self.stub.MessageStream(request, self.timeout)
-      first_response = it.next()
+      first_response = next(it)
     except (grpc.RpcError, vtgate_utils.VitessError) as e:
       raise _convert_exception(
           e, 'MessageStream', name=name,

@@ -113,10 +113,10 @@ def main(cmdline_options):
       extra_my_cnf=extra_my_cnf,
       charset=cmdline_options.charset,
       snapshot_file=cmdline_options.snapshot_file) as local_db:
-    print json.dumps(local_db.config())
+    print(json.dumps(local_db.config()))
     sys.stdout.flush()
     try:
-      raw_input()
+      input()
     except EOFError:
       sys.stderr.write(
           'WARNING: %s: No empty line was received on stdin.'

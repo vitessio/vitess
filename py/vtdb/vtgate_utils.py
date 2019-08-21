@@ -187,7 +187,7 @@ def convert_exception_kwarg(key, value):
     return key, value
   elif key == 'entity_keyspace_id_map':
     return 'entity_keyspace_ids', keyspace_id_prefixes(
-        value.values())
+        list(value.values()))
   elif key in (
       'keyspace_ids',
       'merged_keyspace_ids'):
@@ -216,10 +216,10 @@ def convert_exception_kwargs(kwargs):
       All non-None kwargs are included in alphabetical order.
   """
   new_kwargs = {}
-  for key, value in kwargs.iteritems():
+  for key, value in kwargs.items():
     new_key, new_value = convert_exception_kwarg(key, value)
     new_kwargs[new_key] = new_value
   return ', '.join(
       ('%s=%s' % (k, v))[:256]
-      for (k, v) in sorted(new_kwargs.iteritems())
+      for (k, v) in sorted(new_kwargs.items())
       if v is not None)

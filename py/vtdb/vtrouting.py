@@ -69,11 +69,11 @@ class TaskKeyrangeMap(object):
     kr = min_key_hex
     span = (max_key_hex - min_key_hex)/self.num_tasks
     kr_chunks.append('')
-    for i in xrange(self.num_tasks):
+    for i in range(self.num_tasks):
       kr += span
       kr_chunks.append('%.2x' % kr)
     kr_chunks[-1] = ''
-    for i in xrange(len(kr_chunks) - 1):
+    for i in range(len(kr_chunks) - 1):
       start = kr_chunks[i]
       end = kr_chunks[i+1]
       kr = keyrange.KeyRange((start, end,))

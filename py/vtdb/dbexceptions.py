@@ -15,11 +15,11 @@
 import exceptions
 
 
-class Error(exceptions.StandardError):
+class Error(exceptions.Exception):
   pass
 
 
-class DatabaseError(exceptions.StandardError):
+class DatabaseError(exceptions.Exception):
   pass
 
 
@@ -27,7 +27,7 @@ class DataError(DatabaseError):
   pass
 
 
-class Warning(exceptions.StandardError):
+class Warning(exceptions.Exception):
   pass
 
 

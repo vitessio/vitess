@@ -56,7 +56,7 @@ class BasePEP0249Cursor(object):
     """For PEP 0249: To make cursors compatible to the iteration protocol."""
     return self
 
-  def next(self):
+  def __next__(self):
     """For PEP 0249."""
     val = self.fetchone()
     if val is None:
@@ -200,7 +200,7 @@ class BaseStreamCursor(BasePEP0249Cursor):
       raise dbexceptions.ProgrammingError('Fetch called before execute.')
     self.index += 1
     try:
-      return self.generator.next()
+      return next(self.generator)
     except StopIteration:
       return None
 
@@ -211,7 +211,7 @@ class BaseStreamCursor(BasePEP0249Cursor):
     if size is None:
       size = self.arraysize
     result = []
-    for _ in xrange(size):
+    for _ in range(size):
       row = self.fetchone()
       if row is None:
         break
