@@ -37,7 +37,7 @@ import os
 import struct
 import subprocess
 import time
-import urllib
+import urllib.request, urllib.parse, urllib.error
 
 import unittest
 
@@ -91,7 +91,7 @@ class TestMysqlctl(unittest.TestCase):
 
     # gather the vars for the vtgate process
     url = 'http://localhost:%d/debug/vars' % config['port']
-    f = urllib.urlopen(url)
+    f = urllib.request.urlopen(url)
     data = f.read()
     f.close()
     json_vars = json.loads(data)
@@ -112,7 +112,7 @@ class TestMysqlctl(unittest.TestCase):
     # Remember the current timestamp after we sleep for a bit, so we
     # can use it for UpdateStream later.
     time.sleep(2)
-    before_insert = long(time.time())
+    before_insert = int(time.time())
 
     # Connect to vtgate.
     conn = vtgate_client.connect(protocol, vtgate_addr, conn_timeout)
@@ -154,7 +154,7 @@ class TestMysqlctl(unittest.TestCase):
     id_start = 1000
     rowcount = 500
     cursor.begin()
-    for i in xrange(id_start, id_start+rowcount):
+    for i in range(id_start, id_start+rowcount):
       bind_variables['id'] = i
       bind_variables['keyspace_id'] = get_keyspace_id(i)
       cursor.execute(insert, bind_variables)

@@ -26,7 +26,7 @@ The test reproduces such a scenario as follows:
 """
 
 import logging
-import Queue
+import queue
 import random
 import threading
 import time
@@ -69,7 +69,7 @@ class AbstractVtgateThread(threading.Thread):
     # Queue used to notify the main thread that this thread executed
     # "self.notify_after_n_successful_rpcs" RPCs successfully.
     # Then "True" will be put exactly once on the queue.
-    self.wait_for_notification = Queue.Queue(maxsize=1)
+    self.wait_for_notification = queue.Queue(maxsize=1)
 
     # notify_lock guards the two fields below.
     self.notify_lock = threading.Lock()

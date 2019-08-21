@@ -156,21 +156,21 @@ class TestVtctldWeb(unittest.TestCase):
     return self.driver.find_element_by_id('master-tablet').text
 
   def _check_tablet_types(self, tablet_types, expected_counts):
-    for expected_type, count in expected_counts.iteritems():
-      self.assertEquals(count,
+    for expected_type, count in expected_counts.items():
+      self.assertEqual(count,
                         len([x for x in tablet_types if x == expected_type]))
 
   def _check_shard_overview(
       self, keyspace_name, shard_name, expected_tablet_types):
     logging.info('Checking %s/%s', keyspace_name, shard_name)
     self._get_shard_element(keyspace_name, shard_name).click()
-    self.assertEquals(self._get_shard_record_keyspace_shard(),
+    self.assertEqual(self._get_shard_record_keyspace_shard(),
                       '%s/%s' % (keyspace_name, shard_name))
     master = self._get_shard_record_master_tablet()
     logging.info('master tablet is %s', master)
     shard_tablets = self._get_tablet_names()
-    self.assertEquals(shard_tablets[master], 'master')
-    self._check_tablet_types(shard_tablets.values(), expected_tablet_types)
+    self.assertEqual(shard_tablets[master], 'master')
+    self._check_tablet_types(list(shard_tablets.values()), expected_tablet_types)
     self.driver.back()
 
   def _get_dropdown_options(self, group):
@@ -243,14 +243,14 @@ class TestVtctldWeb(unittest.TestCase):
           self.fail('Cannot get keyspace')
         self.assertIn(heading.text, available_keyspaces)
     else:
-      self.assertEquals(len(keyspaces), 1)
+      self.assertEqual(len(keyspaces), 1)
       heading = keyspaces[0].find_element_by_id('keyspaceName')
       logging.info('Keyspace name: %s', heading.text)
       try:
         keyspaces[0].find_element_by_id(heading.text)
       except NoSuchElementException:
         self.fail('Cannot get keyspace')
-      self.assertEquals(heading.text, selected_keyspace)
+      self.assertEqual(heading.text, selected_keyspace)
 
   def _check_new_view(
       self, keyspaces, selected_keyspace, cells, selected_cell, types,

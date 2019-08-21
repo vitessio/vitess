@@ -21,7 +21,7 @@ import re
 import shutil
 import sys
 import time
-import urllib2
+import urllib.request, urllib.error, urllib.parse
 import warnings
 
 import MySQLdb
@@ -30,7 +30,7 @@ import environment
 from mysql_flavor import mysql_flavor
 from protocols_flavor import protocols_flavor
 from topo_flavor.server import topo_server
-from urlparse import urlparse
+from urllib.parse import urlparse
 import utils
 
 import grpc
@@ -226,7 +226,7 @@ class Tablet(object):
       shutil.rmtree(self.tablet_dir)
     except OSError as e:
       if utils.options.verbose == 2:
-        print >> sys.stderr, e, self.tablet_dir
+        print(e, self.tablet_dir, file=sys.stderr)
 
   def mysql_connection_parameters(self, dbname, user='vt_dba'):
     result = dict(user=user,
@@ -237,7 +237,7 @@ class Tablet(object):
 
   def connect(self, dbname='', user='vt_dba', **params):
     params.update(self.mysql_connection_parameters(dbname, user))
-    if 'port' not in params.keys():
+    if 'port' not in list(params.keys()):
       params['unix_socket']=self.tablet_dir + '/mysql.sock'
     else:
       params['host']='127.0.0.1'
@@ -266,7 +266,7 @@ class Tablet(object):
     conn, cursor = self.connect(dbname, user=user, **conn_params)
     if write:
       conn.begin()
-    if isinstance(query, basestring):
+    if isinstance(query, str):
       query = [query]
 
     for q in query:
@@ -299,7 +299,7 @@ class Tablet(object):
 
   def populate(self, dbname, create_sql, insert_sqls=None):
     self.create_db(dbname)
-    if isinstance(create_sql, basestring):
+    if isinstance(create_sql, str):
       create_sql = [create_sql]
     for q in create_sql:
       self.mquery(dbname, q)
@@ -343,7 +343,7 @@ class Tablet(object):
       try:
         return self.check_db_var(name, value)
       except utils.TestError as e:
-        print >> sys.stderr, 'WARNING: ', e
+        print('WARNING: ', e, file=sys.stderr)
       time.sleep(1.0)
     raise e
 
@@ -676,7 +676,7 @@ class Tablet(object):
     return utils.get_status(self.port)
 
   def get_healthz(self):
-    return urllib2.urlopen('http://localhost:%d/healthz' % self.port).read()
+    return urllib.request.urlopen('http://localhost:%d/healthz' % self.port).read()
 
   def kill_vttablet(self, wait=True):
     """Sends a SIG_TERM to the tablet.

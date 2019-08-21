@@ -21,8 +21,8 @@ import logging
 import os
 import time
 import unittest
-import urllib
-import urllib2
+import urllib.request, urllib.parse, urllib.error
+import urllib.request, urllib.error, urllib.parse
 import re
 
 import MySQLdb
@@ -167,7 +167,7 @@ class TestTabletManager(unittest.TestCase):
 
   _populate_vt_select_test = [
       "insert into vt_select_test (msg) values ('test %s')" % x
-      for x in xrange(4)]
+      for x in range(4)]
 
   # Test if a vttablet can be pointed at an existing mysql
   # We point 62044 at 62344's mysql and try to read from it.
@@ -237,7 +237,7 @@ class TestTabletManager(unittest.TestCase):
     hr = utils.run_vtctl_json(['ExecuteHook', tablet_62344.tablet_alias] +
                               params)
     self.assertEqual(hr['ExitStatus'], expected_status)
-    if isinstance(expected_stdout, basestring):
+    if isinstance(expected_stdout, str):
       self.assertEqual(hr['Stdout'], expected_stdout)
     else:
       found = False
@@ -340,7 +340,7 @@ class TestTabletManager(unittest.TestCase):
     if expected:
       self.assertEqual('ok\n', t.get_healthz())
     else:
-      with self.assertRaises(urllib2.HTTPError):
+      with self.assertRaises(urllib.error.HTTPError):
         t.get_healthz()
 
   def test_health_check(self):
@@ -389,7 +389,7 @@ class TestTabletManager(unittest.TestCase):
         result = tablet_62044.mquery('vt_test_keyspace',
                                      'select * from repl_test_table')
         if result:
-          self.assertEqual(result[0][0], 123L)
+          self.assertEqual(result[0][0], 123)
           break
       except MySQLdb.ProgrammingError:
         # Maybe the create table hasn't gone trough yet, we wait more
@@ -404,7 +404,7 @@ class TestTabletManager(unittest.TestCase):
     self.check_healthz(tablet_62044, True)
 
     # make sure status web page is healthy
-    self.assertRegexpMatches(tablet_62044.get_status(), healthy_expr)
+    self.assertRegex(tablet_62044.get_status(), healthy_expr)
 
     # make sure the health stream is updated
     health = utils.run_vtctl_json(['VtTabletStreamHealth',
@@ -420,7 +420,7 @@ class TestTabletManager(unittest.TestCase):
     utils.run_vtctl(['RunHealthCheck', tablet_62044.tablet_alias])
 
     # make sure status web page is healthy
-    self.assertRegexpMatches(tablet_62044.get_status(), healthy_expr)
+    self.assertRegex(tablet_62044.get_status(), healthy_expr)
 
     # now test VtTabletStreamHealth returns the right thing
     stdout, _ = utils.run_vtctl(['VtTabletStreamHealth',
@@ -689,7 +689,7 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.create_db('vt_test_keyspace')
     tablet_62344.init_tablet('master', 'test_keyspace', '0')
     tablet_62344.start_vttablet(security_policy='bogus')
-    f = urllib.urlopen('http://localhost:%d/queryz' % int(tablet_62344.port))
+    f = urllib.request.urlopen('http://localhost:%d/queryz' % int(tablet_62344.port))
     response = f.read()
     f.close()
     self.assertIn('not allowed', response)
@@ -824,7 +824,7 @@ class TestTabletManager(unittest.TestCase):
         tablet_62344.execute('select id, msg from vt_select_test')
         timeout = utils.wait_step('query rule in place', timeout)
       except Exception as e:
-        print e
+        print(e)
         expected = ('disallowed due to rule: disallow select'
                     ' on table vt_select_test')
         self.assertIn(expected, str(e))

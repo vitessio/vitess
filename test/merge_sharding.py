@@ -151,7 +151,7 @@ index by_msg (msg)
   def _insert_lots(self, count, base=0):
     if count > 10000:
       self.assertFail('bad count passed in, only support up to 10000')
-    for i in xrange(count):
+    for i in range(count):
       self._insert_value(shard_0_master, 'resharding1', 1000000 + base + i,
                          'msg-range0-%d' % i, 0x2000000000000000 + base + i)
       self._insert_value(shard_1_master, 'resharding1', 1010000 + base + i,
@@ -160,7 +160,7 @@ index by_msg (msg)
   # _check_lots returns how many of the values we have, in percents.
   def _check_lots(self, count, base=0):
     found = 0
-    for i in xrange(count):
+    for i in range(count):
       if self._is_value_present_and_correct(shard_dest_replica, 'resharding1',
                                             1000000 + base + i,
                                             'msg-range0-%d' % i,

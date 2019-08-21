@@ -16,8 +16,8 @@
 """Tests the robustness and resiliency of vtworkers."""
 
 from collections import namedtuple
-import urllib
-import urllib2
+import urllib.request, urllib.parse, urllib.error
+import urllib.request, urllib.error, urllib.parse
 
 import logging
 import unittest
@@ -273,12 +273,12 @@ class TestBaseSplitClone(unittest.TestCase, base_sharding.BaseShardingTest):
     # vttablet will kill them. Therefore, we chunk it into multiple statements.
     def chunks(full_list, n):
       """Yield successive n-sized chunks from full_list."""
-      for i in xrange(0, len(full_list), n):
+      for i in range(0, len(full_list), n):
         yield full_list[i:i+n]
 
     max_chunk_size = 100*1000
     k = utils.uint64_to_hex(keyspace_id)
-    for chunk in chunks(range(1, num_values+1), max_chunk_size):
+    for chunk in chunks(list(range(1, num_values+1)), max_chunk_size):
       logging.debug('Inserting values for range [%d, %d].', chunk[0], chunk[-1])
       values_str = ''
       for i in chunk:
@@ -310,12 +310,12 @@ class TestBaseSplitClone(unittest.TestCase, base_sharding.BaseShardingTest):
         can have.
     """
     shard_width = keyspace_id_range / num_shards
-    shard_offsets = [i * shard_width for i in xrange(num_shards)]
+    shard_offsets = [i * shard_width for i in range(num_shards)]
     # TODO(mberlin): Change the "id" column values from the keyspace id to a
     #                counter starting at 1. The incrementing ids must
     #                alternate between the two shards. Without this, the
     #                vtworker chunking won't be well balanced across shards.
-    for shard_num in xrange(num_shards):
+    for shard_num in range(num_shards):
       self._insert_values(
           vttablet,
           shard_offsets[shard_num] + offset,
@@ -624,9 +624,9 @@ class TestVtworkerWebinterface(unittest.TestCase):
     while True:
       done = False
       try:
-        urllib2.urlopen(worker_base_url + '/status').read()
+        urllib.request.urlopen(worker_base_url + '/status').read()
         done = True
-      except urllib2.URLError:
+      except urllib.error.URLError:
         pass
       if done:
         break
@@ -637,11 +637,11 @@ class TestVtworkerWebinterface(unittest.TestCase):
     for _ in range(2):
       # Run Ping command.
       try:
-        urllib2.urlopen(
+        urllib.request.urlopen(
             worker_base_url + '/Debugging/Ping',
-            data=urllib.urlencode({'message': 'pong'})).read()
+            data=urllib.parse.urlencode({'message': 'pong'})).read()
         raise Exception('Should have thrown an HTTPError for the redirect.')
-      except urllib2.HTTPError as e:
+      except urllib.error.HTTPError as e:
         self.assertEqual(e.code, 307)
       # Wait for the Ping command to finish.
       utils.poll_for_vars(
@@ -649,14 +649,14 @@ class TestVtworkerWebinterface(unittest.TestCase):
           'WorkerState == done',
           condition_fn=lambda v: v.get('WorkerState') == 'done')
       # Verify that the command logged something and it's available at /status.
-      status = urllib2.urlopen(worker_base_url + '/status').read()
+      status = urllib.request.urlopen(worker_base_url + '/status').read()
       self.assertIn(
           "Ping command was called with message: 'pong'", status,
           'Command did not log output to /status: %s' % status)
 
       # Reset the job.
-      urllib2.urlopen(worker_base_url + '/reset').read()
-      status_after_reset = urllib2.urlopen(worker_base_url + '/status').read()
+      urllib.request.urlopen(worker_base_url + '/reset').read()
+      status_after_reset = urllib.request.urlopen(worker_base_url + '/status').read()
       self.assertIn(
           'This worker is idle.', status_after_reset,
           '/status does not indicate that the reset was successful')

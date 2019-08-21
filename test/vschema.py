@@ -99,7 +99,7 @@ class TestDDLVSchema(unittest.TestCase):
   varbinary_type = 10262
   
   def _test_queries(self,cursor,count=4):
-    for x in xrange(count):
+    for x in range(count):
       i = x+1
       cursor.begin()
       cursor.execute(
@@ -108,12 +108,12 @@ class TestDDLVSchema(unittest.TestCase):
       cursor.commit()
 
     # Test select equal
-    for x in xrange(count):
+    for x in range(count):
       i = x+1
       cursor.execute('select id, name from vt_user where id = :id', {'id': i})
       self.assertEqual(
           (cursor.fetchall(), cursor.rowcount, cursor.lastrowid,cursor.description),
-          ([(i, 'test %s' % i)], 1L, 0,[('id', self.int_type), ('name', self.string_type)]))
+          ([(i, 'test %s' % i)], 1, 0,[('id', self.int_type), ('name', self.string_type)]))
 
     cursor.begin()
     cursor.execute(

@@ -185,12 +185,12 @@ class BaseShardingTest(object):
     """
     v = utils.get_vars(tablet_obj.port)
     self.assertIn('VReplicationStreamCount', v)
-    self.assertEquals(v['VReplicationStreamCount'], len(source_shards))
+    self.assertEqual(v['VReplicationStreamCount'], len(source_shards))
     self.assertIn('VReplicationSecondsBehindMasterMax', v)
     self.assertIn('VReplicationSecondsBehindMaster', v)
     self.assertIn('VReplicationSource', v)
-    shards = v['VReplicationSource'].values()
-    self.assertEquals(sorted(shards), sorted(source_shards))
+    shards = list(v['VReplicationSource'].values())
+    self.assertEqual(sorted(shards), sorted(source_shards))
     self.assertIn('VReplicationSourceTablet', v)
     for uid in v['VReplicationSource']:
       self.assertIn(uid, v['VReplicationSourceTablet'])

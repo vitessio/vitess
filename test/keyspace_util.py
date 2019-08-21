@@ -49,9 +49,9 @@ class TestEnv(object):
     procs = []
     for shard in shards:
       procs.append(self._new_tablet(keyspace, shard, 'master', None))
-      for i in xrange(replica_count):
+      for i in range(replica_count):
         procs.append(self._new_tablet(keyspace, shard, 'replica', i))
-      for i in xrange(rdonly_count):
+      for i in range(rdonly_count):
         procs.append(self._new_tablet(keyspace, shard, 'rdonly', i))
     utils.wait_procs(procs)
 
@@ -60,10 +60,10 @@ class TestEnv(object):
       tablet_index = 0
       self._init_tablet(keyspace, shard, 'master', None, tablet_index)
       tablet_index += 1
-      for i in xrange(replica_count):
+      for i in range(replica_count):
         self._init_tablet(keyspace, shard, 'replica', i, tablet_index)
         tablet_index += 1
-      for i in xrange(rdonly_count):
+      for i in range(rdonly_count):
         self._init_tablet(keyspace, shard, 'rdonly', i, tablet_index)
         tablet_index += 1
 
@@ -71,10 +71,10 @@ class TestEnv(object):
     for shard in shards:
       self._start_tablet(
           keyspace, shard, 'master', None, twopc_coordinator_address)
-      for i in xrange(replica_count):
+      for i in range(replica_count):
         self._start_tablet(
             keyspace, shard, 'replica', i, twopc_coordinator_address)
-      for i in xrange(rdonly_count):
+      for i in range(rdonly_count):
         self._start_tablet(
             keyspace, shard, 'rdonly', i, twopc_coordinator_address)
 
@@ -96,7 +96,7 @@ class TestEnv(object):
       utils.run_vtctl(['ApplySchema', '-sql-file', fname, keyspace])
 
   def teardown(self):
-    all_tablets = self.tablet_map.values()
+    all_tablets = list(self.tablet_map.values())
     tablet.kill_tablets(all_tablets)
     teardown_procs = [t.teardown_mysql() for t in all_tablets]
     utils.wait_procs(teardown_procs, raise_on_error=False)

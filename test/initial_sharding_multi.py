@@ -265,28 +265,28 @@ index by_msg (msg)
 
   def _check_startup_values(self, keyspace, tablets):
     # check first value is in the left shard
-    for t in tablets['-80'].values():
+    for t in list(tablets['-80'].values()):
       self._check_value(t, 'resharding1', 1, 'msg1', 0x1000000000000000)
-    for t in tablets['80-'].values():
+    for t in list(tablets['80-'].values()):
       self._check_value(t, 'resharding1', 1, 'msg1',
                         0x1000000000000000, should_be_here=False)
 
     # check second value is in the right shard
-    for t in tablets['-80'].values():
+    for t in list(tablets['-80'].values()):
       self._check_value(t, 'resharding1', 2, 'msg2', 0x9000000000000000,
                         should_be_here=False)
-    for t in tablets['80-'].values():
+    for t in list(tablets['80-'].values()):
       self._check_value(t, 'resharding1', 2, 'msg2', 0x9000000000000000)
 
     # check third value is in the right shard too
-    for t in tablets['-80'].values():
+    for t in list(tablets['-80'].values()):
       self._check_value(t, 'resharding1', 3, 'msg3', 0xD000000000000000,
                         should_be_here=False)
-    for t in tablets['80-'].values():
+    for t in list(tablets['80-'].values()):
       self._check_value(t, 'resharding1', 3, 'msg3', 0xD000000000000000)
 
   def _insert_lots(self, keyspace, master_tablet, count, base=0):
-    for i in xrange(count):
+    for i in range(count):
       self._insert_value(master_tablet, 'resharding1', 10000 + base + i,
                          'msg-range1-%d' % i, 0xA000000000000000 + base + i)
       self._insert_value(master_tablet, 'resharding1', 20000 + base + i,
@@ -295,7 +295,7 @@ index by_msg (msg)
   # _check_lots returns how many of the values we have, in percents.
   def _check_lots(self, replica_tablet, count, base=0):
     found = 0
-    for i in xrange(count):
+    for i in range(count):
       if self._is_value_present_and_correct(replica_tablet, 'resharding1',
                                             10000 + base + i, 'msg-range1-%d' %
                                             i, 0xA000000000000000 + base + i):
@@ -317,7 +317,7 @@ index by_msg (msg)
 
   # _check_lots_not_present makes sure no data is in the wrong shard
   def _check_lots_not_present(self, replica_tablet, count, base=0):
-    for i in xrange(count):
+    for i in range(count):
       self._check_value(replica_tablet, 'resharding1', 10000 + base + i,
                         'msg-range1-%d' % i, 0xA000000000000000 + base + i,
                         should_be_here=False)

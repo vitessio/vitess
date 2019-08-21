@@ -201,8 +201,8 @@ class TestMessaging(unittest.TestCase):
 
     # We should get both messages.
     result = {}
-    for _ in xrange(2):
-      row = it.next()
+    for _ in range(2):
+      row = next(it)
       result[row[0]] = row[2]
     self.assertEqual(result, {1: 'hello world 1', 4: 'hello world 4'})
 
@@ -210,8 +210,8 @@ class TestMessaging(unittest.TestCase):
     count = vtgate_conn.message_ack(name, [4])
     self.assertEqual(count, 1)
     result = {}
-    for _ in xrange(2):
-      row = it.next()
+    for _ in range(2):
+      row = next(it)
       result[row[0]] = row[2]
     self.assertEqual(result, {1: 'hello world 1'})
     # Only one should be acked.
@@ -245,8 +245,8 @@ class TestMessaging(unittest.TestCase):
     cursor.commit()
 
     # Each connection should get one message.
-    it1.next()
-    it2.next()
+    next(it1)
+    next(it2)
 
     # Ack the messages.
     count = vtgate_conn1.message_ack(name, [2, 5])
@@ -294,7 +294,7 @@ class TestMessaging(unittest.TestCase):
     cursor.commit()
 
     # Receive the message.
-    it.next()
+    next(it)
 
     # Reparent back to old master.
     utils.run_vtctl(['PlannedReparentShard',

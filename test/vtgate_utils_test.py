@@ -64,7 +64,7 @@ class TestVtgateUtils(unittest.TestCase):
     fake_conn = FakeVtGateConnection()
     with self.assertRaises(SomeException):
       fake_conn.method(SomeException('an exception'))
-    self.assertEquals(
+    self.assertEqual(
         len(fake_conn.invoked_intervals), vtgate_utils.NUM_RETRIES + 1)
     previous = fake_conn.invoked_intervals[0]
     delay = vtgate_utils.INITIAL_DELAY_MS
@@ -77,7 +77,7 @@ class TestVtgateUtils(unittest.TestCase):
     fake_conn = FakeVtGateConnection()
     with self.assertRaises(AnotherException):
       fake_conn.method(AnotherException('an exception'))
-    self.assertEquals(
+    self.assertEqual(
         len(fake_conn.invoked_intervals), vtgate_utils.NUM_RETRIES + 1)
 
   def test_no_retries_inside_txn(self):
@@ -85,18 +85,18 @@ class TestVtgateUtils(unittest.TestCase):
     fake_conn.session = object()
     with self.assertRaises(SomeException):
       fake_conn.method(SomeException('an exception'))
-    self.assertEquals(len(fake_conn.invoked_intervals), 1)
+    self.assertEqual(len(fake_conn.invoked_intervals), 1)
 
   def test_no_retries_for_non_retryable_exception(self):
     fake_conn = FakeVtGateConnection()
     with self.assertRaises(exceptions.Exception):
       fake_conn.method(exceptions.Exception('an exception'))
-    self.assertEquals(len(fake_conn.invoked_intervals), 1)
+    self.assertEqual(len(fake_conn.invoked_intervals), 1)
 
   def test_no_retries_for_no_exception(self):
     fake_conn = FakeVtGateConnection()
     fake_conn.method(None)
-    self.assertEquals(len(fake_conn.invoked_intervals), 1)
+    self.assertEqual(len(fake_conn.invoked_intervals), 1)
 
 
 if __name__ == '__main__':

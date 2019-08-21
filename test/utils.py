@@ -31,7 +31,7 @@ import subprocess
 import sys
 import time
 import unittest
-import urllib2
+import urllib.request, urllib.error, urllib.parse
 
 from vtdb import prefer_vtroot_imports  # pylint: disable=unused-import
 from vtdb import vtgate_client
@@ -206,7 +206,7 @@ def remove_tmp_files():
 
 def pause(prompt):
   if options.debug:
-    raw_input(prompt)
+    input(prompt)
 
 
 # sub-process management
@@ -217,7 +217,7 @@ already_killed = []
 def _add_proc(proc):
   pid_map[proc.pid] = proc
   with open(environment.tmproot+'/test-pids', 'a') as f:
-    print >> f, proc.pid, os.path.basename(proc.args[0])
+    print(proc.pid, os.path.basename(proc.args[0]), file=f)
 
 
 def required_teardown():
@@ -232,7 +232,7 @@ def required_teardown():
 
 
 def kill_sub_processes():
-  for proc in pid_map.values():
+  for proc in list(pid_map.values()):
     if proc.pid and proc.returncode is None:
       proc.kill()
   if not os.path.exists(environment.tmproot+'/test-pids'):
@@ -274,7 +274,7 @@ def run(cmd, trap_output=False, raise_on_error=True, **kargs):
     kargs['stderr'] = subprocess.PIPE
   logging.debug(
       'run: %s %s', str(cmd),
-      ', '.join('%s=%s' % x for x in kargs.iteritems()))
+      ', '.join('%s=%s' % x for x in kargs.items()))
   proc = subprocess.Popen(args, **kargs)
   proc.args = args
   stdout, stderr = proc.communicate()
@@ -299,7 +299,7 @@ def run_fail(cmd, **kargs):
   if options.verbose == 2:
     logging.debug(
         'run: (expect fail) %s %s', cmd,
-        ', '.join('%s=%s' % x for x in kargs.iteritems()))
+        ', '.join('%s=%s' % x for x in kargs.items()))
   proc = subprocess.Popen(args, **kargs)
   proc.args = args
   stdout, stderr = proc.communicate()
@@ -314,7 +314,7 @@ def run_fail(cmd, **kargs):
 def run_bg(cmd, **kargs):
   if options.verbose == 2:
     logging.debug(
-        'run: %s %s', cmd, ', '.join('%s=%s' % x for x in kargs.iteritems()))
+        'run: %s %s', cmd, ', '.join('%s=%s' % x for x in kargs.items()))
   if 'extra_env' in kargs:
     kargs['env'] = os.environ.copy()
     if kargs['extra_env']:
@@ -376,15 +376,15 @@ def get_vars(port):
   """Returns the dict for vars from a vtxxx process. None if not available."""
   try:
     url = 'http://localhost:%d/debug/vars' % int(port)
-    f = urllib2.urlopen(url)
+    f = urllib.request.urlopen(url)
     data = f.read()
     f.close()
-  except urllib2.URLError:
+  except urllib.error.URLError:
     return None
   try:
     return json.loads(data)
   except ValueError:
-    print data
+    print(data)
     raise
 
 
@@ -478,7 +478,7 @@ def poll_for_vars(
 
 
 def apply_vschema(vschema):
-  for k, v in vschema.iteritems():
+  for k, v in vschema.items():
     fname = os.path.join(environment.tmproot, 'vschema.json')
     with open(fname, 'w') as f:
       f.write(v)
@@ -649,7 +649,7 @@ class VtGate(object):
 
   def get_vschema(self):
     """Returns the used vschema for this process."""
-    return urllib2.urlopen('http://localhost:%d/debug/vschema' %
+    return urllib.request.urlopen('http://localhost:%d/debug/vschema' %
                            self.port).read()
 
   @contextlib.contextmanager
@@ -1035,7 +1035,7 @@ def check_db_read_write(uid):
 
 
 def wait_db_read_only(uid):
-  for _ in xrange(3):
+  for _ in range(3):
     try:
       check_db_read_only(uid)
       return
@@ -1159,7 +1159,7 @@ def check_tablet_query_services(
 
 
 def get_status(port):
-  return urllib2.urlopen(
+  return urllib.request.urlopen(
       'http://localhost:%d%s' % (port, environment.status_url)).read()
 
 

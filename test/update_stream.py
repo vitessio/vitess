@@ -166,16 +166,16 @@ def tearDownModule():
 class TestUpdateStream(unittest.TestCase):
   _populate_vt_insert_test = [
       "insert into vt_insert_test (msg) values ('test %s')" % x
-      for x in xrange(4)]
+      for x in range(4)]
 
   def _populate_vt_a(self, count):
     return ['insert into vt_a (eid, id) values (%d, %d)' % (x, x)
-            for x in xrange(count + 1) if x > 0]
+            for x in range(count + 1) if x > 0]
 
   def _populate_vt_b(self, count):
     return [
         "insert into vt_b (eid, name, foo) values (%d, 'name %s', 'foo %s')" %
-        (x, x, x) for x in xrange(count)]
+        (x, x, x) for x in range(count)]
 
   def _get_vtgate_stream_conn(self):
     protocol, addr = utils.vtgate.rpc_endpoint(python=True)
@@ -372,7 +372,7 @@ class TestUpdateStream(unittest.TestCase):
       if value == replica_position:
         logging.debug('got expected EventTokenPosition vars: %s', value)
         ts = v['EventTokenTimestamp']
-        now = long(time.time())
+        now = int(time.time())
         self.assertTrue(ts >= now - 120,
                         'EventTokenTimestamp is too old: %d < %d' %
                         (ts, now-120))
@@ -415,7 +415,7 @@ class TestUpdateStream(unittest.TestCase):
     self.assertIn('fresher', qr['extras'])
     self.assertTrue(qr['extras']['fresher'])
 
-    future_timestamp = long(time.time()) + 100
+    future_timestamp = int(time.time()) + 100
     qr = replica_tablet.execute(
         'select * from vt_insert_test',
         execute_options='compare_event_token: <timestamp:%d > ' %
@@ -430,7 +430,7 @@ class TestUpdateStream(unittest.TestCase):
     self.assertIn('fresher', qr['extras'])
     self.assertTrue(qr['extras']['fresher'])
 
-    future_timestamp = long(time.time()) + 100
+    future_timestamp = int(time.time()) + 100
     qr = utils.vtgate.execute(
         'select * from vt_insert_test', tablet_type='replica',
         execute_options='compare_event_token: <timestamp:%d > ' %
@@ -450,7 +450,7 @@ class TestUpdateStream(unittest.TestCase):
     pos = qr['extras']['event_token']['position'].split(":")[0]
     self.assertEqual(pos, replica_position)
 
-    future_timestamp = long(time.time()) + 100
+    future_timestamp = int(time.time()) + 100
     qr = replica_tablet.execute('select * from vt_insert_test',
                                 execute_options='include_event_token:true '
                                 'compare_event_token: <timestamp:%d > ' %
@@ -472,7 +472,7 @@ class TestUpdateStream(unittest.TestCase):
     pos = qr['extras']['event_token']['position'].split(":")[0]
     self.assertEqual(pos, replica_position)
 
-    future_timestamp = long(time.time()) + 100
+    future_timestamp = int(time.time()) + 100
     qr = utils.vtgate.execute('select * from vt_insert_test',
                               tablet_type='replica',
                               execute_options='include_event_token:true '
@@ -617,7 +617,7 @@ class TestUpdateStream(unittest.TestCase):
       master_tablet.mquery('vt_test_keyspace', 'flush logs')
 
     # Get the current timestamp.
-    starting_timestamp = long(time.time())
+    starting_timestamp = int(time.time())
     logging.debug('test_timestamp_start_current_log: starting @ %d',
                   starting_timestamp)
 
@@ -655,7 +655,7 @@ class TestUpdateStream(unittest.TestCase):
 
   def test_timestamp_start_too_old(self):
     """Ask the server to start streaming from a timestamp 4h ago."""
-    starting_timestamp = long(time.time()) - 4*60*60
+    starting_timestamp = int(time.time()) - 4*60*60
     master_conn = self._get_vtgate_stream_conn()
     try:
       for (event, resume_timestamp) in master_conn.update_stream(

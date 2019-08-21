@@ -18,7 +18,7 @@ import json
 import logging
 import re
 import unittest
-import urllib2
+import urllib.request, urllib.error, urllib.parse
 
 from vtctl import vtctl_client
 
@@ -125,7 +125,7 @@ class TestVtctld(unittest.TestCase):
 
     # test root works
     url = 'http://localhost:%d/api/topodata/' % utils.vtctld.port
-    f = urllib2.urlopen(url)
+    f = urllib.request.urlopen(url)
     root = f.read()
     f.close()
     result = json.loads(root)
@@ -137,7 +137,7 @@ class TestVtctld(unittest.TestCase):
 
   def test_health_check(self):
     url = 'http://localhost:%d/debug/health' % utils.vtctld.port
-    f = urllib2.urlopen(url)
+    f = urllib.request.urlopen(url)
     body = f.read()
     f.close()
     # test body response for health check is ok

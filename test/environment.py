@@ -135,7 +135,7 @@ def run(args, raise_on_error=True, **kargs):
   try:
     logging.debug(
         'run: %s %s', str(args),
-        ', '.join('%s=%s' % x for x in kargs.iteritems()))
+        ', '.join('%s=%s' % x for x in kargs.items()))
     proc = subprocess.Popen(args,
                             stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE,

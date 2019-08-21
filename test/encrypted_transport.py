@@ -274,7 +274,7 @@ class TestSecure(unittest.TestCase):
                            shards=['0'])
       cursor.execute('select * from vt_insert_test', {})
       self.fail('Execute went through')
-    except dbexceptions.DatabaseError, e:
+    except dbexceptions.DatabaseError as e:
       s = str(e)
       self.assertIn('table acl error', s)
       self.assertIn('cannot run PASS_SELECT on table', s)
@@ -298,7 +298,7 @@ class TestSecure(unittest.TestCase):
     try:
       cursor.execute('select * from vt_insert_test', {})
       self.fail('Execute went through')
-    except dbexceptions.DatabaseError, e:
+    except dbexceptions.DatabaseError as e:
       s = str(e)
       self.assertIn('table acl error', s)
       self.assertIn('cannot run PASS_SELECT on table', s)
@@ -315,7 +315,7 @@ class TestSecure(unittest.TestCase):
     try:
       cursor.execute('select * from vt_insert_test', {})
       self.fail('Execute went through')
-    except dbexceptions.DatabaseError, e:
+    except dbexceptions.DatabaseError as e:
       s = str(e)
       self.assertIn('table acl error', s)
       self.assertIn('cannot run PASS_SELECT on table', s)

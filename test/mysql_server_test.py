@@ -168,10 +168,10 @@ class TestMySQL(unittest.TestCase):
     conn.set_server_option(self.MYSQL_OPTION_MULTI_STATEMENTS_ON)
     cursor = conn.cursor()
     cursor.execute("select 1; select 2")
-    self.assertEquals(((1L,),), cursor.fetchall())
-    self.assertEquals(1, cursor.nextset())
-    self.assertEquals(((2L,),), cursor.fetchall())
-    self.assertEquals(None, cursor.nextset())
+    self.assertEqual(((1,),), cursor.fetchall())
+    self.assertEqual(1, cursor.nextset())
+    self.assertEqual(((2,),), cursor.fetchall())
+    self.assertEqual(None, cursor.nextset())
     cursor.close()
     conn.set_server_option(self.MYSQL_OPTION_MULTI_STATEMENTS_OFF)
 
@@ -181,7 +181,7 @@ class TestMySQL(unittest.TestCase):
     try:
         cursor.execute("select 1; select 2")
         self.fail('Execute went through')
-    except MySQLdb.OperationalError, e:
+    except MySQLdb.OperationalError as e:
       s = str(e)
       self.assertIn('syntax error', s)
     cursor.close()
@@ -211,7 +211,7 @@ class TestMySQL(unittest.TestCase):
         cursor.execute('insert into vt_insert_test (id, msg, keyspace_id, data) values(%s, %s, %s, %s)',
             (2, 'huge blob', 123, hugeBlob))
         self.fail('Execute went through')
-    except MySQLdb.OperationalError, e:
+    except MySQLdb.OperationalError as e:
       s = str(e)
       self.assertIn('trying to send message larger than max', s)
 
@@ -223,7 +223,7 @@ class TestMySQL(unittest.TestCase):
       cursor = conn.cursor()
       cursor.execute('SELECT SLEEP(5)', {})
       self.fail('Execute went through')
-    except MySQLdb.OperationalError, e:
+    except MySQLdb.OperationalError as e:
       s = str(e)
       # 1317 is DeadlineExceeded error code
       self.assertIn('1317', s)
@@ -235,7 +235,7 @@ class TestMySQL(unittest.TestCase):
       cursor = conn.cursor()
       cursor.execute('SELECT invalid_field from vt_insert_test', {})
       self.fail('Execute went through')
-    except MySQLdb.OperationalError, e:
+    except MySQLdb.OperationalError as e:
       s = str(e)
       # 1054 is BadFieldError code
       self.assertIn('1054', s)
@@ -249,12 +249,12 @@ class TestMySQL(unittest.TestCase):
         self.fail('expected 0 rows got ' + str(cursor.rowcount))
 
       if len(w) != 1:
-        print 'unexpected warnings: ', w
+        print('unexpected warnings: ', w)
 
     # and the next query should get the warnings
     cursor.execute('SHOW WARNINGS', {})
     if cursor.rowcount != 1:
-      print 'expected 1 warning row, got ' + str(cursor.rowcount)
+      print('expected 1 warning row, got ' + str(cursor.rowcount))
 
     for (_, code, message) in cursor:
       self.assertEqual(code, 1054)
@@ -270,11 +270,11 @@ class TestMySQL(unittest.TestCase):
         self.fail('expected 0 rows got ' + str(cursor.rowcount))
 
       if len(w) != 1:
-        print 'unexpected warnings: ', w
+        print('unexpected warnings: ', w)
 
     cursor.execute('SHOW WARNINGS', {})
     if cursor.rowcount != 1:
-      print 'expected 1 warning row, got ' + str(cursor.rowcount)
+      print('expected 1 warning row, got ' + str(cursor.rowcount))
 
     for (_, code, message) in cursor:
       self.assertEqual(code, 1317)
@@ -284,7 +284,7 @@ class TestMySQL(unittest.TestCase):
     cursor.execute('SELECT 1 from vt_insert_test limit 1', {})
     cursor.execute('SHOW WARNINGS', {})
     if cursor.rowcount != 0:
-      print 'expected 0 warnings row, got ' + str(cursor.rowcount)
+      print('expected 0 warnings row, got ' + str(cursor.rowcount))
 
     # 'vtgate client 2' is not authorized to access vt_insert_test
     params['user'] = 'testuser2'
@@ -294,7 +294,7 @@ class TestMySQL(unittest.TestCase):
       cursor = conn.cursor()
       cursor.execute('select * from vt_insert_test', {})
       self.fail('Execute went through')
-    except MySQLdb.OperationalError, e:
+    except MySQLdb.OperationalError as e:
       s = str(e)
       self.assertIn('table acl error', s)
       self.assertIn('cannot run PASS_SELECT on table', s)

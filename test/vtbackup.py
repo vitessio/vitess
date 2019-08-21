@@ -220,4 +220,4 @@ class Vtbackup(object):
         shutil.rmtree(self.tablet_dir)
       except OSError as e:
         if utils.options.verbose == 2:
-          print >> sys.stderr, e, self.tablet_dir
+          print(e, self.tablet_dir, file=sys.stderr)

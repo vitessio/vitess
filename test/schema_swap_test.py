@@ -19,7 +19,7 @@ import logging
 import re
 import time
 import unittest
-import urllib2
+import urllib.request, urllib.error, urllib.parse
 
 from vtproto import topodata_pb2
 
@@ -208,7 +208,7 @@ class TestSchemaSwap(unittest.TestCase):
       deserialized json object returned from vtctld.
     """
     full_url = '%s/%s' % (self._vtctld_url, url_path)
-    f = urllib2.urlopen(full_url)
+    f = urllib.request.urlopen(full_url)
     res_json = f.read()
     f.close()
     return json.loads(res_json)
@@ -228,15 +228,15 @@ class TestSchemaSwap(unittest.TestCase):
           time.sleep(0.1)
           continue
         break
-      except urllib2.HTTPError:
+      except urllib.error.HTTPError:
         pass
 
   def _send_retry_vtctld_action(self, swap_uuid):
     """Emulate click of the Retry button on the schema swap."""
-    req = urllib2.Request('%s/api/workflow/action/%s' %
+    req = urllib.request.Request('%s/api/workflow/action/%s' %
                           (self._vtctld_url, self._poll_id))
     req.add_header('Content-Type', 'application/json; charset=utf-8')
-    resp = urllib2.urlopen(req, '{"path":"/%s","name":"Retry"}' % swap_uuid)
+    resp = urllib.request.urlopen(req, '{"path":"/%s","name":"Retry"}' % swap_uuid)
     logging.info('Retry response code: %r', resp.getcode())
 
   def _strip_logs_from_nodes(self, nodes):
@@ -260,7 +260,7 @@ class TestSchemaSwap(unittest.TestCase):
     try:
       poll_update = self._fetch_json_from_vtctld('api/workflow/poll/%s' %
                                                  self._poll_id)
-    except urllib2.HTTPError as e:
+    except urllib.error.HTTPError as e:
       logging.info('Error polling vtctld, will try to re-create the long poll: '
                    '%s', e)
       poll_update = self._start_vtctld_long_poll()

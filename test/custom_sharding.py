@@ -80,7 +80,7 @@ class TestCustomSharding(unittest.TestCase):
         tablet_type='master', keyspace='test_keyspace',
         shards=[shard],
         writable=True)
-    for x in xrange(count):
+    for x in range(count):
       bindvars = {
           'id': start+x,
           'name': 'row %d' % (start+x),
@@ -96,7 +96,7 @@ class TestCustomSharding(unittest.TestCase):
     cursor = conn.cursor(
         tablet_type='master', keyspace='test_keyspace',
         shards=[shard])
-    for x in xrange(count):
+    for x in range(count):
       bindvars = {
           'id': start+x,
       }
@@ -263,7 +263,7 @@ primary key (id)
     rows = {}
     for q in s:
       bindvars = {}
-      for name, value in q['query']['bind_variables'].iteritems():
+      for name, value in q['query']['bind_variables'].items():
         # vtctl encodes bytes as base64.
         bindvars[name] = int(base64.standard_b64decode(value['value']))
       qr = utils.vtgate.execute_shards(
@@ -274,7 +274,7 @@ primary key (id)
         rows[int(r[0])] = r[1]
     self.assertEqual(len(rows), 20)
     expected = {}
-    for i in xrange(10):
+    for i in range(10):
       expected[100 + i] = 'row %d' % (100 + i)
       expected[200 + i] = 'row %d' % (200 + i)
     self.assertEqual(rows, expected)

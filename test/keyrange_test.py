@@ -66,7 +66,7 @@ int_shard_kid_map = {
 # by generating bin-packed strings from the int keyspace_id values.
 str_shard_kid_map = dict(
     [(shard_name0, [pkid_pack(kid0) for kid0 in kid_list0])
-     for shard_name0, kid_list0 in int_shard_kid_map.iteritems()])
+     for shard_name0, kid_list0 in int_shard_kid_map.items()])
 
 
 class TestKeyRange(unittest.TestCase):
@@ -108,7 +108,7 @@ class TestKeyRange(unittest.TestCase):
     for kr in stm.keyrange_list:
       kr_parts = kr.split('-')
       where_clause, bind_vars = vtrouting._create_where_clause_for_keyrange(kr)
-      if len(bind_vars.keys()) == 1:
+      if len(list(bind_vars.keys())) == 1:
         if kr_parts[0]:
           self.assertNotEqual(where_clause.find('>='), -1)
         else:
@@ -119,7 +119,7 @@ class TestKeyRange(unittest.TestCase):
         self.assertNotEqual(where_clause.find('AND'), -1)
       kid_list = int_shard_kid_map[kr]
       for keyspace_id in kid_list:
-        if len(bind_vars.keys()) == 1:
+        if len(list(bind_vars.keys())) == 1:
           if kr_parts[0]:
             self.assertGreaterEqual(keyspace_id, bind_vars['keyspace_id0'])
           else:
@@ -139,7 +139,7 @@ class TestKeyRange(unittest.TestCase):
       kr_parts = kr.split('-')
       where_clause, bind_vars = vtrouting._create_where_clause_for_keyrange(
           kr, keyspace_col_type=keyrange_constants.KIT_BYTES)
-      if len(bind_vars.keys()) == 1:
+      if len(list(bind_vars.keys())) == 1:
         if kr_parts[0]:
           self.assertNotEqual(where_clause.find('>='), -1)
         else:
@@ -150,7 +150,7 @@ class TestKeyRange(unittest.TestCase):
         self.assertNotEqual(where_clause.find('AND'), -1)
       kid_list = str_shard_kid_map[kr]
       for keyspace_id in kid_list:
-        if len(bind_vars.keys()) == 1:
+        if len(list(bind_vars.keys())) == 1:
           if kr_parts[0]:
             self.assertGreaterEqual(
                 keyspace_id.encode('hex'), bind_vars['keyspace_id0'])

@@ -279,7 +279,7 @@ msg varchar(64)
         tablet_type='master', keyspace='source_keyspace',
         keyranges=[keyrange.KeyRange(keyrange_constants.NON_PARTIAL_KEYRANGE)],
         writable=True)
-    for _ in xrange(count):
+    for _ in range(count):
       conn.begin()
       cursor.execute("insert into %s (id, msg) values(%d, 'value %d')" % (
           table, self.insert_index, self.insert_index), {})
@@ -297,7 +297,7 @@ msg varchar(64)
         (table, first, count))
     self.assertEqual(count, len(rows), 'got wrong number of rows: %d != %d' %
                      (len(rows), count))
-    for i in xrange(count):
+    for i in range(count):
       self.assertEqual(first + i, rows[i][0], 'invalid id[%d]: %d != %d' %
                        (i, first + i, rows[i][0]))
       self.assertEqual('value %d' % (first + i), rows[i][1],
@@ -386,7 +386,7 @@ msg varchar(64)
                   keyrange_constants.NON_PARTIAL_KEYRANGE)])
           logging.debug(
               'Select on %s.%s returned %d rows', db_type, tbl, len(rows))
-        except Exception, e:  # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except
           self.fail('Execute failed w/ exception %s' % str(e))
 
   def _check_stats(self):

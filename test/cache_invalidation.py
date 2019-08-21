@@ -224,7 +224,7 @@ class Cache(object):
 
   def stats_diff(self, before, **kwargs):
     """Returns true iff the before stats differ exactly with provided args."""
-    for name, value in kwargs.iteritems():
+    for name, value in kwargs.items():
       if self.stats[name] != before[name] + value:
         return False
     return True
@@ -239,7 +239,7 @@ class InvalidatorThread(threading.Thread):
 
     protocol, addr = utils.vtgate.rpc_endpoint(python=True)
     self.conn = vtgate_client.connect(protocol, addr, 30.0)
-    self.timestamp = long(time.time())
+    self.timestamp = int(time.time())
 
     self.start()
 

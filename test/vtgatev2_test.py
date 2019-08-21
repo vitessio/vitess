@@ -109,7 +109,7 @@ pack_kid = struct.Struct('!Q').pack
 class DBRow(object):
 
   def __init__(self, column_names, row_tuple):
-    self.__dict__ = dict(zip(column_names, row_tuple))
+    self.__dict__ = dict(list(zip(column_names, row_tuple)))
 
   def __repr__(self):
     return pprint.pformat(self.__dict__, 4)
@@ -130,7 +130,7 @@ def setUpModule():
                   ]
     utils.wait_procs(setup_procs)
     setup_tablets()
-  except Exception, e:  # pylint: disable=broad-except
+  except Exception as e:  # pylint: disable=broad-except
     logging.exception('error during set up: %s', e)
     tearDownModule()
     raise
@@ -291,7 +291,7 @@ def write_rows_to_shard(count, shard_index):
   _delete_all(shard_index, 'vt_insert_test')
   vtgate_conn = get_connection()
 
-  for x in xrange(count):
+  for x in range(count):
     keyspace_id = kid_list[x % len(kid_list)]
     cursor = vtgate_conn.cursor(
         tablet_type='master', keyspace=KEYSPACE_NAME,
@@ -335,7 +335,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
     _delete_all(self.shard_index, 'vt_insert_test')
     count = 10
     kid_list = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]]
-    for x in xrange(count):
+    for x in range(count):
       keyspace_id = kid_list[count%len(kid_list)]
       cursor = vtgate_conn.cursor(
           tablet_type='master', keyspace=KEYSPACE_NAME,
@@ -399,7 +399,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
     count = 10
     _delete_all(self.shard_index, 'vt_insert_test')
     kid_list = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]]
-    for x in xrange(count):
+    for x in range(count):
       keyspace_id = kid_list[x%len(kid_list)]
       cursor = vtgate_conn.cursor(
           tablet_type='master', keyspace=KEYSPACE_NAME,
@@ -435,7 +435,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
     _delete_all(self.shard_index, 'vt_a')
     eid_map = {}
     kid_list = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]]
-    for x in xrange(count):
+    for x in range(count):
       keyspace_id = kid_list[x%len(kid_list)]
       eid_map[x] = pack_kid(keyspace_id)
       cursor = vtgate_conn.cursor(
@@ -462,7 +462,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
     _delete_all(self.shard_index, 'vt_insert_test')
     shard_name = SHARD_NAMES[self.shard_index]
     kid_list = SHARD_KID_MAP[shard_name]
-    for x in xrange(count):
+    for x in range(count):
       keyspace_id = kid_list[x%len(kid_list)]
       cursor = vtgate_conn.cursor(
           tablet_type='master', keyspace=KEYSPACE_NAME,
@@ -475,7 +475,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
           {'msg': 'test %s' % x, 'keyspace_id': keyspace_id})
       cursor.commit()
     _delete_all(self.shard_index, 'vt_a')
-    for x in xrange(count):
+    for x in range(count):
       keyspace_id = kid_list[x%len(kid_list)]
       cursor = vtgate_conn.cursor(
           tablet_type='master', keyspace=KEYSPACE_NAME,
@@ -553,7 +553,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
                  shards=None)])
 
     params_list = []
-    for x in xrange(count):
+    for x in range(count):
       keyspace_id = kid_list[x%len(kid_list)]
       params_list.append(
           dict(sql=None,
@@ -572,7 +572,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
             dict(sql='delete from vt_a', bind_variables=None,
                  keyspace=KEYSPACE_NAME, keyspace_ids=all_ids, shards=None)])
     params_list = []
-    for x in xrange(count):
+    for x in range(count):
       keyspace_id = kid_list[x%len(kid_list)]
       sql = (
           'insert into vt_a (eid, id, keyspace_id) '
@@ -611,11 +611,11 @@ class TestCoreVTGateFunctions(BaseTestCase):
     def fetch_first_10_rows(stream_cursor):
       stream_cursor.execute('select msg from vt_insert_test', {})
       rows = stream_cursor.fetchmany(size=10)
-      self.assertEqual(rows, [('test %d' % x,) for x in xrange(10)])
+      self.assertEqual(rows, [('test %d' % x,) for x in range(10)])
 
     def fetch_next_10_rows(stream_cursor):
       rows = stream_cursor.fetchmany(size=10)
-      self.assertEqual(rows, [('test %d' % x,) for x in xrange(10, 20)])
+      self.assertEqual(rows, [('test %d' % x,) for x in range(10, 20)])
 
     # Open two streaming queries at the same time, fetch some from each,
     # and make sure they don't interfere with each other.
@@ -706,7 +706,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
         keyranges=[self.keyrange])
     kid_list = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]]
     count = len(kid_list)
-    for x in xrange(count):
+    for x in range(count):
       keyspace_id = kid_list[x]
       vtgate_conn._execute(
           'insert into vt_insert_test (msg, keyspace_id) '
@@ -726,7 +726,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
         tablet_type,
         [pack_kid(kid_list[0])]))
     thd.start()
-    for i in xrange(count):
+    for i in range(count):
       (result, _, _, _) = vtgate_conn._execute(
           query,
           {'kid': kid_list[i]},
@@ -756,14 +756,14 @@ class TestCoreVTGateFunctions(BaseTestCase):
           keyspace_ids=[pack_kid(0)])
       vtgate_conn.commit()
       want = 1
-      for _ in xrange(10):
+      for _ in range(10):
         result, _, _, _ = vtgate_conn._execute(
             'select next :n values for vt_seq', {'n': 2},
             tablet_type=tablet_type, keyspace_name=KEYSPACE_NAME,
             keyspace_ids=[pack_kid(0)])
         self.assertEqual(result[0][0], want)
         want += 2
-    except Exception, e:  # pylint: disable=broad-except
+    except Exception as e:  # pylint: disable=broad-except
       self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
     vtgate_conn.close()
 
@@ -773,7 +773,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
     count = 10
     base_uint = int('8' + '0' * 15, base=16)
     kid_list = SHARD_KID_MAP[SHARD_NAMES[self.shard_index]]
-    for x in xrange(1, count):
+    for x in range(1, count):
       keyspace_id = kid_list[count % len(kid_list)]
       cursor = vtgate_conn.cursor(
           tablet_type='master', keyspace=KEYSPACE_NAME,
@@ -786,7 +786,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
           'values (:uint_val, :str_val, :unicode_val, '
           ':float_val, :keyspace_id)',
           {'uint_val': base_uint + x, 'str_val': 'str_%d' % x,
-           'unicode_val': unicode('str_%d' % x), 'float_val': x * 1.2,
+           'unicode_val': str('str_%d' % x), 'float_val': x * 1.2,
            'keyspace_id': keyspace_id})
       cursor.commit()
     cursor = vtgate_conn.cursor(
@@ -818,7 +818,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
     self.assertEqual(rowcount, len(id_list), "rowcount doesn't match")
     for r in cursor.results:
       row = DBRow(field_names, r)
-      self.assertIsInstance(row.id, (int, long))
+      self.assertIsInstance(row.id, (int, int))
 
     # received field types same as input.
     # uint
@@ -827,7 +827,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
     self.assertEqual(rowcount, len(uint_val_list), "rowcount doesn't match")
     for r in cursor.results:
       row = DBRow(field_names, r)
-      self.assertIsInstance(row.uint_val, long)
+      self.assertIsInstance(row.uint_val, int)
       self.assertGreaterEqual(
           row.uint_val, base_uint, 'uint value not in correct range')
 
@@ -847,7 +847,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
         rowcount, len(unicode_val_list), "rowcount doesn't match")
     for r in cursor.results:
       row = DBRow(field_names, r)
-      self.assertIsInstance(row.unicode_val, basestring)
+      self.assertIsInstance(row.unicode_val, str)
 
     # deliberately eliminating the float test since it is flaky due
     # to mysql float precision handling.
@@ -856,7 +856,7 @@ class TestCoreVTGateFunctions(BaseTestCase):
 
   def _query_lots(
       self, conn, query, bind_vars, keyspace_name, tablet_type, keyspace_ids):
-    for _ in xrange(500):
+    for _ in range(500):
       result, _, _, _ = conn._execute(
           query, bind_vars,
           tablet_type=tablet_type, keyspace_name=keyspace_name,
@@ -933,7 +933,7 @@ class TestFailures(BaseTestCase):
           'select 1 from vt_insert_test', {},
           tablet_type='replica', keyspace_name=KEYSPACE_NAME,
           keyranges=[self.keyrange])
-    except Exception, e:  # pylint: disable=broad-except
+    except Exception as e:  # pylint: disable=broad-except
       self.fail('Communication with shard %s replica failed with error %s' %
                 (SHARD_NAMES[self.shard_index], str(e)))
     vtgate_conn.close()
@@ -978,7 +978,7 @@ class TestFailures(BaseTestCase):
         2)
     try:
       stream_cursor.execute('select * from vt_insert_test', {})
-    except Exception, e:  # pylint: disable=broad-except
+    except Exception as e:  # pylint: disable=broad-except
       self.fail('Communication with shard0 replica failed with error %s' %
                 str(e))
     vtgate_conn.close()
@@ -1006,7 +1006,7 @@ class TestFailures(BaseTestCase):
         cursorclass=vtgate_cursor.StreamVTGateCursor)
     try:
       stream_cursor.execute('select * from vt_insert_test', {})
-    except Exception, e:  # pylint: disable=broad-except
+    except Exception as e:  # pylint: disable=broad-except
       self.fail('Communication with shard0 replica failed with error %s' %
                 str(e))
     vtgate_conn.close()
@@ -1097,7 +1097,7 @@ class TestFailures(BaseTestCase):
       logging.info('Shard session: %s', vtgate_conn.session)
       transaction_id = vtgate_conn.session.shard_sessions[0].transaction_id
       self.assertNotEqual(transaction_id, 0)
-    except Exception, e:  # pylint: disable=broad-except
+    except Exception as e:  # pylint: disable=broad-except
       self.fail('Expected DatabaseError as exception, got %s' % str(e))
     finally:
       vtgate_conn.rollback()
@@ -1195,7 +1195,7 @@ class TestFailures(BaseTestCase):
           tablet_type='replica', keyspace_name=KEYSPACE_NAME,
           keyranges=[self.keyrange])
       self.fail('DatabaseError should have been raised')
-    except Exception, e:  # pylint: disable=broad-except
+    except Exception as e:  # pylint: disable=broad-except
       self.assertIsInstance(e, dbexceptions.DatabaseError)
       self.assertNotIsInstance(e, dbexceptions.IntegrityError)
       self.assertNotIsInstance(e, dbexceptions.OperationalError)
@@ -1234,7 +1234,7 @@ class TestFailures(BaseTestCase):
           tablet_type='replica', keyspace_name=KEYSPACE_NAME,
           keyranges=[self.keyrange])
       self.fail('DatabaseError should have been raised')
-    except Exception, e:  # pylint: disable=broad-except
+    except Exception as e:  # pylint: disable=broad-except
       self.assertIsInstance(e, dbexceptions.DatabaseError)
       self.assertNotIsInstance(e, dbexceptions.IntegrityError)
       self.assertNotIsInstance(e, dbexceptions.OperationalError)
@@ -1257,7 +1257,7 @@ class TestFailures(BaseTestCase):
           tablet_type='replica', keyspace_name=KEYSPACE_NAME,
           keyranges=[self.keyrange])
       self.fail('DatabaseError should have been raised')
-    except Exception, e:  # pylint: disable=broad-except
+    except Exception as e:  # pylint: disable=broad-except
       self.assertIsInstance(e, dbexceptions.DatabaseError)
       self.assertNotIsInstance(e, dbexceptions.IntegrityError)
       self.assertNotIsInstance(e, dbexceptions.OperationalError)
@@ -1439,7 +1439,7 @@ class TestFailures(BaseTestCase):
 
     try:
       # perform write, this should fail
-      for x in xrange(count):
+      for x in range(count):
         keyspace_id = kid_list[x%len(kid_list)]
         eid_map[x] = str(keyspace_id)
         vtgate_conn._execute(
@@ -1449,7 +1449,7 @@ class TestFailures(BaseTestCase):
             tablet_type='master', keyspace_name=KEYSPACE_NAME,
             keyspace_ids=[pack_kid(keyspace_id)])
       vtgate_conn.commit()
-    except Exception, e:  # pylint: disable=broad-except
+    except Exception as e:  # pylint: disable=broad-except
       # check that bind var value is not present in exception message.
       if str(keyspace_id) in str(e):
         self.fail('bind_vars present in the exception message')
@@ -1554,7 +1554,7 @@ class TestFailures(BaseTestCase):
           'select 1 from vt_insert_test', {},
           tablet_type='replica', keyspace_name=KEYSPACE_NAME,
           keyranges=[self.keyrange])
-    except Exception, e:  # pylint: disable=broad-except
+    except Exception as e:  # pylint: disable=broad-except
       self.fail('Failed with error %s %s' % (str(e), traceback.format_exc()))
     tablet1_vars = utils.get_vars(self.replica_tablet.port)
     t1_query_count_after = int(tablet1_vars['Queries']['TotalCount'])
@@ -1582,7 +1582,7 @@ class TestFailures(BaseTestCase):
           tablet_type='replica', keyspace_name=KEYSPACE_NAME,
           keyranges=[self.keyrange])
       self.fail('DatabaseError should have been raised')
-    except Exception, e:  # pylint: disable=broad-except
+    except Exception as e:  # pylint: disable=broad-except
       self.assertIsInstance(e, dbexceptions.DatabaseError)
       self.assertNotIsInstance(e, dbexceptions.IntegrityError)
       self.assertNotIsInstance(e, dbexceptions.OperationalError)

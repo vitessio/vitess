@@ -275,7 +275,7 @@ class TestBackupTransform(unittest.TestCase):
     manifest = json.loads(contents)
     self.assertEqual(manifest['TransformHook'], 'test_backup_transform')
     self.assertEqual(manifest['SkipCompress'], True)
-    for i in xrange(len(manifest['FileEntries'])):
+    for i in range(len(manifest['FileEntries'])):
       name = os.path.join(location, '%d' % i)
       with open(name) as fd:
         line = fd.readline()

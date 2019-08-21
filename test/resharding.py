@@ -125,7 +125,7 @@ class InsertThread(threading.Thread):
          'insert into timestamps(id, time_milli, custom_ksid_col) '
          'values(%d, %d, 0x%x) '
          '/* vtgate:: keyspace_id:%s */ /* user_id:%d */' %
-         (self.thread_id, long(time.time() * 1000), self.keyspace_id,
+         (self.thread_id, int(time.time() * 1000), self.keyspace_id,
           self.str_keyspace_id, self.user_id),
          'commit'],
         write=True, user='vt_app')
@@ -139,7 +139,7 @@ class InsertThread(threading.Thread):
             ['begin',
              'update timestamps set time_milli=%d '
              'where id=%d /* vtgate:: keyspace_id:%s */ /* user_id:%d */' %
-             (long(time.time() * 1000), self.thread_id,
+             (int(time.time() * 1000), self.thread_id,
               self.str_keyspace_id, self.user_id),
              'commit'],
             write=True, user='vt_app')
@@ -172,7 +172,7 @@ class MonitorLagThread(threading.Thread):
             'select time_milli from timestamps where id=%d' %
             self.thread_id)
         if result:
-          lag_ms = long(time.time() * 1000) - long(result[0][0])
+          lag_ms = int(time.time() * 1000) - int(result[0][0])
           logging.debug('MonitorLagThread(%s) got %d ms',
                         self.thread_name, lag_ms)
           self.sample_count += 1
@@ -313,7 +313,7 @@ primary key (name)
                           should_be_here=False)
 
   def _insert_lots(self, count, base=0):
-    for i in xrange(count):
+    for i in range(count):
       self._insert_value(shard_1_master, 'resharding1', 10000 + base + i,
                          'msg-range1-%d' % i, 0xA000000000000000 + base + i)
       self._insert_value(shard_1_master, 'resharding1', 20000 + base + i,
@@ -533,7 +533,7 @@ primary key (name)
   # _check_lots returns how many of the values we have, in percents.
   def _check_lots(self, count, base=0):
     found = 0
-    for i in xrange(count):
+    for i in range(count):
       if self._is_value_present_and_correct(shard_2_replica2, 'resharding1',
                                             10000 + base + i, 'msg-range1-%d' %
                                             i, 0xA000000000000000 + base + i):
@@ -556,7 +556,7 @@ primary key (name)
 
   # _check_lots_not_present makes sure no data is in the wrong shard
   def _check_lots_not_present(self, count, base=0):
-    for i in xrange(count):
+    for i in range(count):
       self._check_value(shard_3_replica, 'resharding1', 10000 + base + i,
                         'msg-range1-%d' % i, 0xA000000000000000 + base + i,
                         should_be_here=False)

@@ -236,7 +236,7 @@ class TestPreparedStatements(unittest.TestCase):
       cursor.close()
     except mysql.connector.Error as err:
       if err.errno == 1105:
-        print "Captured the error"
+        print("Captured the error")
       else:
         raise
 
