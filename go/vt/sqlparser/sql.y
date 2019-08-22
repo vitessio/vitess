@@ -164,6 +164,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES
 %token <bytes> STATUS VARIABLES WARNINGS
+%token <bytes> SEQUENCE
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK
@@ -181,7 +182,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
-%token <bytes> COLLATION DATABASES SCHEMAS TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA VSCHEMA_TABLES VITESS_TARGET FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
+%token <bytes> COLLATION DATABASES TABLES VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -1352,6 +1353,21 @@ alter_statement:
         },
       }
   }
+| ALTER VSCHEMA ADD SEQUENCE table_name
+  {
+    $$ = &DDL{Action: AddSequenceStr, Table: $5}
+  }
+| ALTER VSCHEMA ON table_name ADD AUTO_INCREMENT sql_id USING table_name
+  {
+    $$ = &DDL{
+        Action: AddAutoIncStr,
+        Table: $4,
+        AutoIncSpec: &AutoIncSpec{
+            Column: $7,
+            Sequence: $9,
+        },
+    }
+  }
 
 alter_object_type:
   COLUMN
@@ -1499,10 +1515,6 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW SCHEMAS ddl_skip_to_end
-  {
-    $$ = &Show{Type: string($2)}
-  }
 | SHOW ENGINES
   {
     $$ = &Show{Type: string($2)}
@@ -1560,22 +1572,6 @@ show_statement:
     showCollationFilterOpt := $4
     $$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
   }
-| SHOW VITESS_KEYSPACES
-  {
-    $$ = &Show{Type: string($2)}
-  }
-| SHOW VITESS_SHARDS
-  {
-    $$ = &Show{Type: string($2)}
-  }
-| SHOW VITESS_TABLETS
-  {
-    $$ = &Show{Type: string($2)}
-  }
-| SHOW VITESS_TARGET
-  {
-    $$ = &Show{Type: string($2)}
-  }
 | SHOW VSCHEMA TABLES
   {
     $$ = &Show{Type: string($2) + " " + string($3)}
@@ -1597,6 +1593,10 @@ show_statement:
  *
  *  SHOW BINARY LOGS
  *  SHOW INVALID
+ *  SHOW VITESS_KEYSPACES
+ *  SHOW VITESS_TABLETS
+ *  SHOW VITESS_SHARDS
+ *  SHOW VITESS_TARGET
  */
 | SHOW ID ddl_skip_to_end
   {
@@ -3364,7 +3364,7 @@ non_reserved_keyword:
 | REPEATABLE
 | RESTRICT
 | ROLLBACK
-| SCHEMAS
+| SEQUENCE
 | SESSION
 | SERIALIZABLE
 | SHARE
@@ -3393,12 +3393,7 @@ non_reserved_keyword:
 | VIEW
 | VINDEX
 | VINDEXES
-| VITESS_KEYSPACES
-| VITESS_SHARDS
-| VITESS_TABLETS
 | VSCHEMA
-| VSCHEMA_TABLES
-| VITESS_TARGET
 | WARNINGS
 | WITH
 | WRITE

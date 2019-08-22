@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
 
 func TestPlayerCopyTables(t *testing.T) {
@@ -74,9 +75,7 @@ func TestPlayerCopyTables(t *testing.T) {
 		if _, err := playerEngine.Exec(query); err != nil {
 			t.Fatal(err)
 		}
-		expectDBClientQueries(t, []string{
-			"/delete",
-		})
+		expectDeleteQueries(t)
 	}()
 
 	expectDBClientQueries(t, []string{
@@ -111,6 +110,267 @@ func TestPlayerCopyTables(t *testing.T) {
 		{"2", "bbb"},
 	})
 	expectData(t, "yes", [][]string{})
+}
+
+// TestPlayerCopyBigTable ensures the copy-catchup back-and-forth loop works correctly.
+func TestPlayerCopyBigTable(t *testing.T) {
+	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+
+	savedPacketSize := *vstreamer.PacketSize
+	// PacketSize of 1 byte will send at most one row at a time.
+	*vstreamer.PacketSize = 1
+	defer func() { *vstreamer.PacketSize = savedPacketSize }()
+
+	savedCopyTimeout := copyTimeout
+	// copyTimeout should be low enough to have time to send one row.
+	copyTimeout = 500 * time.Millisecond
+	defer func() { copyTimeout = savedCopyTimeout }()
+
+	savedWaitRetryTime := waitRetryTime
+	// waitRetry time shoulw be very low to cause the wait loop to execute multipel times.
+	waitRetryTime = 10 * time.Millisecond
+	defer func() { waitRetryTime = savedWaitRetryTime }()
+
+	execStatements(t, []string{
+		"create table src(id int, val varbinary(128), primary key(id))",
+		"insert into src values(1, 'aaa'), (2, 'bbb')",
+		fmt.Sprintf("create table %s.dst(id int, val varbinary(128), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src",
+		fmt.Sprintf("drop table %s.dst", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	count := 0
+	vstreamRowsSendHook = func(ctx context.Context) {
+		defer func() { count++ }()
+		// Allow the first two calls to go through: field info and one row.
+		if count <= 1 {
+			return
+		}
+		// Insert a statement to test that catchup gets new events.
+		execStatements(t, []string{
+			"insert into src values(3, 'ccc')",
+		})
+		// Wait for context to expire and then send the row.
+		// This will cause the copier to abort and go back to catchup mode.
+		<-ctx.Done()
+		// Do this no more than once.
+		vstreamRowsSendHook = nil
+	}
+
+	vstreamRowsHook = func(context.Context) {
+		// Sleeping 50ms guarantees that the catchup wait loop executes multiple times.
+		// This is because waitRetryTime is set to 10ms.
+		time.Sleep(50 * time.Millisecond)
+		// Do this no more than once.
+		vstreamRowsHook = nil
+	}
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst",
+			Filter: "select * from src",
+		}},
+	}
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	qr, err := playerEngine.Exec(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
+		if _, err := playerEngine.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+		expectDeleteQueries(t)
+	}()
+
+	expectDBClientQueries(t, []string{
+		"/insert into _vt.vreplication",
+		// Create the list of tables to copy and transition to Copying state.
+		"begin",
+		"/insert into _vt.copy_state",
+		"/update _vt.vreplication set state='Copying'",
+		"commit",
+		"rollback",
+		// The first fast-forward has no starting point. So, it just saves the current position.
+		"/update _vt.vreplication set pos=",
+		"begin",
+		"insert into dst(id,val) values (1,'aaa')",
+		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"1\\" > ' where vrepl_id=.*`,
+		"commit",
+		"rollback",
+		// The next catchup executes the new row insert, but will be a no-op.
+		"begin",
+		"insert into dst(id,val) select 3, 'ccc' from dual where (3) <= (1)",
+		"/update _vt.vreplication set pos=",
+		"commit",
+		// fastForward has nothing to add. Just saves position.
+		"begin",
+		"/update _vt.vreplication set pos=",
+		"commit",
+		// Second row gets copied.
+		"begin",
+		"insert into dst(id,val) values (2,'bbb')",
+		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
+		"commit",
+		// Third row copied without going back to catchup state.
+		"begin",
+		"insert into dst(id,val) values (3,'ccc')",
+		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"3\\" > ' where vrepl_id=.*`,
+		"commit",
+		"/delete from _vt.copy_state.*dst",
+		// rollback is a no-op because the delete is autocommitted.
+		"rollback",
+		// Copy is done. Go into running state.
+		"/update _vt.vreplication set state='Running'",
+		// All tables copied. Final catch up followed by Running state.
+	})
+	expectData(t, "dst", [][]string{
+		{"1", "aaa"},
+		{"2", "bbb"},
+		{"3", "ccc"},
+	})
+}
+
+// TestPlayerCopyWildcardRule ensures the copy-catchup back-and-forth loop works correctly
+// when the filter uses a wildcard rule
+func TestPlayerCopyWildcardRule(t *testing.T) {
+	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+
+	savedPacketSize := *vstreamer.PacketSize
+	// PacketSize of 1 byte will send at most one row at a time.
+	*vstreamer.PacketSize = 1
+	defer func() { *vstreamer.PacketSize = savedPacketSize }()
+
+	savedCopyTimeout := copyTimeout
+	// copyTimeout should be low enough to have time to send one row.
+	copyTimeout = 500 * time.Millisecond
+	defer func() { copyTimeout = savedCopyTimeout }()
+
+	savedWaitRetryTime := waitRetryTime
+	// waitRetry time shoulw be very low to cause the wait loop to execute multipel times.
+	waitRetryTime = 10 * time.Millisecond
+	defer func() { waitRetryTime = savedWaitRetryTime }()
+
+	execStatements(t, []string{
+		"create table src(id int, val varbinary(128), primary key(id))",
+		"insert into src values(1, 'aaa'), (2, 'bbb')",
+		fmt.Sprintf("create table %s.src(id int, val varbinary(128), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src",
+		fmt.Sprintf("drop table %s.src", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	count := 0
+	vstreamRowsSendHook = func(ctx context.Context) {
+		defer func() { count++ }()
+		// Allow the first two calls to go through: field info and one row.
+		if count <= 1 {
+			return
+		}
+		// Insert a statement to test that catchup gets new events.
+		execStatements(t, []string{
+			"insert into src values(3, 'ccc')",
+		})
+		// Wait for context to expire and then send the row.
+		// This will cause the copier to abort and go back to catchup mode.
+		<-ctx.Done()
+		// Do this no more than once.
+		vstreamRowsSendHook = nil
+	}
+
+	vstreamRowsHook = func(context.Context) {
+		// Sleeping 50ms guarantees that the catchup wait loop executes multiple times.
+		// This is because waitRetryTime is set to 10ms.
+		time.Sleep(50 * time.Millisecond)
+		// Do this no more than once.
+		vstreamRowsHook = nil
+	}
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "/.*",
+			Filter: "",
+		}},
+	}
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.VReplicationInit, playerEngine.dbName)
+	qr, err := playerEngine.Exec(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
+		if _, err := playerEngine.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+		expectDeleteQueries(t)
+	}()
+
+	expectDBClientQueries(t, []string{
+		"/insert into _vt.vreplication",
+		// Create the list of tables to copy and transition to Copying state.
+		"begin",
+		"/insert into _vt.copy_state",
+		"/update _vt.vreplication set state='Copying'",
+		"commit",
+		"rollback",
+		// The first fast-forward has no starting point. So, it just saves the current position.
+		"/update _vt.vreplication set pos=",
+		"begin",
+		"insert into src(id,val) values (1,'aaa')",
+		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"1\\" > ' where vrepl_id=.*`,
+		"commit",
+		"rollback",
+		// The next catchup executes the new row insert, but will be a no-op.
+		"begin",
+		"insert into src(id,val) select 3, 'ccc' from dual where (3) <= (1)",
+		"/update _vt.vreplication set pos=",
+		"commit",
+		// fastForward has nothing to add. Just saves position.
+		"begin",
+		"/update _vt.vreplication set pos=",
+		"commit",
+		// Second row gets copied.
+		"begin",
+		"insert into src(id,val) values (2,'bbb')",
+		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
+		"commit",
+		// Third row copied without going back to catchup state.
+		"begin",
+		"insert into src(id,val) values (3,'ccc')",
+		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"3\\" > ' where vrepl_id=.*`,
+		"commit",
+		"/delete from _vt.copy_state.*src",
+		// rollback is a no-op because the delete is autocommitted.
+		"rollback",
+		// Copy is done. Go into running state.
+		"/update _vt.vreplication set state='Running'",
+		// All tables copied. Final catch up followed by Running state.
+	})
+	expectData(t, "src", [][]string{
+		{"1", "aaa"},
+		{"2", "bbb"},
+		{"3", "ccc"},
+	})
 }
 
 // TestPlayerCopyTableContinuation tests the copy workflow where tables have been partially copied.
@@ -174,14 +434,13 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 	})
 
 	// Set a hook to execute statements just before the copy begins from src1.
-	streamRowsHook = func(context.Context) {
+	vstreamRowsHook = func(context.Context) {
 		execStatements(t, []string{
 			"update src1 set val='updated again' where id1 = 3",
 		})
 		// Set it back to nil. Otherwise, this will get executed again when copying not_copied.
-		streamRowsHook = nil
+		vstreamRowsHook = nil
 	}
-	defer func() { streamRowsHook = nil }()
 
 	bls := &binlogdatapb.BinlogSource{
 		Keyspace: env.KeyspaceName,
@@ -217,11 +476,7 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 		if _, err := playerEngine.Exec(query); err != nil {
 			t.Fatal(err)
 		}
-		for q := range globalDBQueries {
-			if strings.HasPrefix(q, "delete from _vt.vreplication") {
-				break
-			}
-		}
+		expectDeleteQueries(t)
 	}()
 
 	for q := range globalDBQueries {
@@ -258,6 +513,11 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 		"/delete from _vt.copy_state.*not_copied",
 		"rollback",
 	})
+	// Explicitly eat the Running state query. You cant' make expectNontxQueries
+	// wait for it because it ignores _vt.vreplication events.
+	expectDBClientQueries(t, []string{
+		"/update _vt.vreplication set state='Running'",
+	})
 	expectData(t, "dst1", [][]string{
 		{"1", "insert in"},
 		{"2", "no change"},
@@ -274,6 +534,90 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 	})
 	expectData(t, "not_copied", [][]string{
 		{"1", "bbb"},
+	})
+}
+
+// TestPlayerCopyWildcardTableContinuation tests the copy workflow where tables have been partially copied.
+func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
+	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+
+	execStatements(t, []string{
+		// src is initialized as partially copied.
+		// lastpk will be initialized at (6,6) later below.
+		"create table src(id int, val varbinary(128), primary key(id))",
+		"insert into src values(2,'copied'), (3,'uncopied')",
+		fmt.Sprintf("create table %s.dst(id int, val varbinary(128), primary key(id))", vrepldb),
+		fmt.Sprintf("insert into %s.dst values(2,'copied')", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src",
+		fmt.Sprintf("drop table %s.dst", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst",
+			Filter: "select * from src",
+		}},
+	}
+	pos := masterPosition(t)
+	execStatements(t, []string{
+		"insert into src values(4,'new')",
+	})
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	query := binlogplayer.CreateVReplicationState("test", bls, "", binlogplayer.BlpStopped, playerEngine.dbName)
+	qr, err := playerEngine.Exec(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// As mentioned above. lastpk cut-off is set at (6,6)
+	lastpk := sqltypes.ResultToProto3(sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"id",
+		"int32"),
+		"2",
+	))
+	lastpk.RowsAffected = 0
+	execStatements(t, []string{
+		fmt.Sprintf("insert into _vt.copy_state values(%d, '%s', %s)", qr.InsertID, "dst", encodeString(fmt.Sprintf("%v", lastpk))),
+	})
+	id := qr.InsertID
+	_, err = playerEngine.Exec(fmt.Sprintf("update _vt.vreplication set state='Copying', pos=%s where id=%d", encodeString(pos), id))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", id)
+		if _, err := playerEngine.Exec(query); err != nil {
+			t.Fatal(err)
+		}
+		expectDeleteQueries(t)
+	}()
+
+	expectNontxQueries(t, []string{
+		// Catchup
+		"insert into dst(id,val) select 4, 'new' from dual where (4) <= (2)",
+		// Copy
+		"insert into dst(id,val) values (3,'uncopied'), (4,'new')",
+		`/update _vt.copy_state set lastpk.*`,
+		"/delete from _vt.copy_state.*dst",
+		"rollback",
+	})
+	// Explicitly eat the Running state query. You cant' make expectNontxQueries
+	// wait for it because it ignores _vt.vreplication events.
+	expectDBClientQueries(t, []string{
+		"/update _vt.vreplication set state='Running'",
+	})
+	expectData(t, "dst", [][]string{
+		{"2", "copied"},
+		{"3", "uncopied"},
+		{"4", "new"},
 	})
 }
 
@@ -303,9 +647,7 @@ func TestPlayerCopyTablesNone(t *testing.T) {
 		if _, err := playerEngine.Exec(query); err != nil {
 			t.Fatal(err)
 		}
-		expectDBClientQueries(t, []string{
-			"/delete",
-		})
+		expectDeleteQueries(t)
 	}()
 
 	expectDBClientQueries(t, []string{
@@ -336,12 +678,11 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 	defer func() { copyTimeout = saveTimeout }()
 
 	// Set a hook to reset the copy timeout after first call.
-	streamRowsHook = func(ctx context.Context) {
+	vstreamRowsHook = func(ctx context.Context) {
 		<-ctx.Done()
 		copyTimeout = saveTimeout
-		streamRowsHook = nil
+		vstreamRowsHook = nil
 	}
-	defer func() { streamRowsHook = nil }()
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -366,9 +707,7 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 		if _, err := playerEngine.Exec(query); err != nil {
 			t.Fatal(err)
 		}
-		expectDBClientQueries(t, []string{
-			"/delete",
-		})
+		expectDeleteQueries(t)
 	}()
 
 	// Make sure rows get copied in spite of the early context cancel.
@@ -393,7 +732,7 @@ func TestPlayerCopyTableCancel(t *testing.T) {
 		// copy of dst1 is done: delete from copy_state.
 		"/delete from _vt.copy_state.*dst1",
 		"rollback",
-		// All tables copied. Final catch up followed by Running state.
+		// All tables copied. Go into running state.
 		"/update _vt.vreplication set state='Running'",
 	})
 	expectData(t, "dst1", [][]string{

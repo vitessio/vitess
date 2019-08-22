@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/log"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -93,6 +94,14 @@ type Handler interface {
 	// the first call to callback. So the Handler should not
 	// hang on to the byte slice.
 	ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error
+
+	// ComPrepare is called when a connection receives a prepared
+	// statement query.
+	ComPrepare(c *Conn, query string) ([]*querypb.Field, error)
+
+	// ComStmtExecute is called when a connection receives a statement
+	// execute query.
+	ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error
 
 	// WarningCount is called at the end of each query to obtain
 	// the value to be returned to the client in the EOF packet.

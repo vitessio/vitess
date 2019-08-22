@@ -269,7 +269,7 @@ func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altere
 		}
 		if me.managers[name] != nil {
 			tabletenv.InternalErrors.Add("Messages", 1)
-			log.Errorf("Newly created table alread exists in messages: %s", name)
+			log.Errorf("Newly created table already exists in messages: %s", name)
 			continue
 		}
 		mm := newMessageManager(me.tsv, t, me.conns, me.postponeSema)

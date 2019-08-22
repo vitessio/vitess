@@ -46,6 +46,37 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+func TestExecutorResultsExceeded(t *testing.T) {
+	save := *warnMemoryRows
+	*warnMemoryRows = 3
+	defer func() { *warnMemoryRows = save }()
+
+	executor, _, _, sbclookup := createExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
+
+	initial := warnings.Counts()["ResultsExceeded"]
+
+	result1 := sqltypes.MakeTestResult(sqltypes.MakeTestFields("col", "int64"), "1")
+	result2 := sqltypes.MakeTestResult(sqltypes.MakeTestFields("col", "int64"), "1", "2", "3", "4")
+	sbclookup.SetResults([]*sqltypes.Result{result1, result2})
+
+	_, err := executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, "select * from main1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := warnings.Counts()["ResultsExceeded"], initial; got != want {
+		t.Errorf("warnings count: %v, want %v", got, want)
+	}
+
+	_, err = executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, "select * from main1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := warnings.Counts()["ResultsExceeded"], initial+1; got != want {
+		t.Errorf("warnings count: %v, want %v", got, want)
+	}
+}
+
 func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
@@ -437,7 +468,6 @@ func TestExecutorSet(t *testing.T) {
 		}
 	}
 }
-
 func TestExecutorAutocommit(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
@@ -576,7 +606,7 @@ func TestExecutorShow(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
 
-	for _, query := range []string{"show databases", "show schemas", "show vitess_keyspaces"} {
+	for _, query := range []string{"show databases", "show vitess_keyspaces", "show keyspaces", "show DATABASES"} {
 		qr, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
 		if err != nil {
 			t.Error(err)
@@ -1394,7 +1424,7 @@ func TestExecutorAddDropVschemaTableDDL(t *testing.T) {
 	}
 	_ = waitForVschemaTables(t, ks, append(vschemaTables, []string{"test_table", "test_table2"}...), executor)
 
-	// Should fail on a sharded keyspace
+	// Should fail adding a table on a sharded keyspace
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"})
 	stmt = "alter vschema add table test_table"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
@@ -1412,6 +1442,74 @@ func TestExecutorAddDropVschemaTableDDL(t *testing.T) {
 	}
 	if !reflect.DeepEqual(gotCount, wantCount) {
 		t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
+	}
+}
+
+func TestExecutorAddSequenceDDL(t *testing.T) {
+	*vschemaacl.AuthorizedDDLUsers = "%"
+	defer func() {
+		*vschemaacl.AuthorizedDDLUsers = ""
+	}()
+	executor, _, _, _ := createExecutorEnv()
+	ks := KsTestUnsharded
+
+	vschema := executor.vm.GetCurrentSrvVschema()
+
+	var vschemaTables []string
+	for t := range vschema.Keyspaces[ks].Tables {
+		vschemaTables = append(vschemaTables, t)
+	}
+
+	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
+	stmt := "alter vschema add sequence test_seq"
+	_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	_ = waitForVschemaTables(t, ks, append(vschemaTables, []string{"test_seq"}...), executor)
+	vschema = executor.vm.GetCurrentSrvVschema()
+	table := vschema.Keyspaces[ks].Tables["test_seq"]
+	wantType := "sequence"
+	if table.Type != wantType {
+		t.Errorf("want table type sequence got %v", table)
+	}
+
+	// Should fail adding a table on a sharded keyspace
+	ksSharded := "TestExecutor"
+	vschemaTables = []string{}
+	vschema = executor.vm.GetCurrentSrvVschema()
+	for t := range vschema.Keyspaces[ksSharded].Tables {
+		vschemaTables = append(vschemaTables, t)
+	}
+
+	session = NewSafeSession(&vtgatepb.Session{TargetString: ksSharded})
+
+	stmt = "alter vschema add sequence sequence_table"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+
+	wantErr := "add sequence table: unsupported on sharded keyspace TestExecutor"
+	if err == nil || err.Error() != wantErr {
+		t.Errorf("want error %v got %v", wantErr, err)
+	}
+
+	// Should be able to add autoincrement to table in sharded keyspace
+	stmt = "alter vschema on test_table add vindex hash_index (id)"
+	if _, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil); err != nil {
+		t.Error(err)
+	}
+	time.Sleep(10 * time.Millisecond)
+
+	stmt = "alter vschema on test_table add auto_increment id using test_seq"
+	if _, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil); err != nil {
+		t.Error(err)
+	}
+	time.Sleep(10 * time.Millisecond)
+
+	wantAutoInc := &vschemapb.AutoIncrement{Column: "id", Sequence: "test_seq"}
+	gotAutoInc := executor.vm.GetCurrentSrvVschema().Keyspaces[ksSharded].Tables["test_table"].AutoIncrement
+
+	if !reflect.DeepEqual(wantAutoInc, gotAutoInc) {
+		t.Errorf("want autoinc %v, got autoinc %v", wantAutoInc, gotAutoInc)
 	}
 }
 

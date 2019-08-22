@@ -36,7 +36,8 @@
             "Col": 0,
             "Desc": false
           }
-        ]
+        ],
+        "Table": "user"
       }
     }
   }
@@ -78,7 +79,8 @@
             "Col": 0,
             "Desc": false
           }
-        ]
+        ],
+        "Table": "user"
       }
     }
   }
@@ -128,7 +130,8 @@
             "Col": 0,
             "Desc": false
           }
-        ]
+        ],
+        "Table": "user"
       }
     }
   }
@@ -174,7 +177,8 @@
               "Col": 0,
               "Desc": false
             }
-          ]
+          ],
+          "Table": "user"
         }
       }
     }
@@ -221,7 +225,8 @@
             "Col": 0,
             "Desc": false
           }
-        ]
+        ],
+        "Table": "user"
       }
     }
   }
@@ -278,7 +283,8 @@
             "Desc": false
           }
         ],
-        "TruncateColumnCount": 3
+        "TruncateColumnCount": 3,
+        "Table": "user"
       }
     }
   }
@@ -310,7 +316,8 @@
             "Sharded": true
           },
           "Query": "select user.id, user.col from user",
-          "FieldQuery": "select user.id, user.col from user where 1 != 1"
+          "FieldQuery": "select user.id, user.col from user where 1 != 1",
+          "Table": "user"
         },
         "Right": {
           "Opcode": "SelectScatter",
@@ -319,7 +326,8 @@
             "Sharded": true
           },
           "Query": "select 1 from user_extra",
-          "FieldQuery": "select 1 from user_extra where 1 != 1"
+          "FieldQuery": "select 1 from user_extra where 1 != 1",
+          "Table": "user_extra"
         },
         "Cols": [
           -1,
@@ -356,7 +364,8 @@
         "Vindex": "user_index",
         "Values": [
           1
-        ]
+        ],
+        "Table": "user"
       },
       "Right": {
         "Opcode": "SelectEqualUnique",
@@ -369,7 +378,8 @@
         "Vindex": "music_user_map",
         "Values": [
           ":user_id"
-        ]
+        ],
+        "Table": "music"
       },
       "Cols": [
         -1,
@@ -417,7 +427,8 @@
         "Vindex": "user_index",
         "Values": [
           1
-        ]
+        ],
+        "Table": "user"
       },
       "Right": {
         "Opcode": "SelectEqualUnique",
@@ -430,7 +441,8 @@
         "Vindex": "music_user_map",
         "Values": [
           ":user_id"
-        ]
+        ],
+        "Table": "music"
       },
       "Cols": [
         -1,
@@ -470,7 +482,8 @@
           "Sharded": true
         },
         "Query": "select u.a, u.textcol1, weight_string(u.textcol1) from user as u",
-        "FieldQuery": "select u.a, u.textcol1, weight_string(u.textcol1) from user as u where 1 != 1"
+        "FieldQuery": "select u.a, u.textcol1, weight_string(u.textcol1) from user as u where 1 != 1",
+        "Table": "user"
       },
       "Right": {
         "Opcode": "SelectUnsharded",
@@ -479,7 +492,8 @@
           "Sharded": false
         },
         "Query": "select un.col2 from unsharded as un",
-        "FieldQuery": "select un.col2 from unsharded as un where 1 != 1"
+        "FieldQuery": "select un.col2 from unsharded as un where 1 != 1",
+        "Table": "unsharded"
       },
       "Cols": [
         -1,
@@ -517,7 +531,9 @@
           "Sharded": false
         },
         "Query": "select un.col2 from unsharded as un",
-        "FieldQuery": "select un.col2 from unsharded as un where 1 != 1"
+        "FieldQuery": "select un.col2 from unsharded as un where 1 != 1",
+        "Table": "unsharded"
+
       },
       "Right": {
         "Opcode": "SelectScatter",
@@ -526,7 +542,8 @@
           "Sharded": true
         },
         "Query": "select u.a, u.textcol1, weight_string(u.textcol1) from user as u",
-        "FieldQuery": "select u.a, u.textcol1, weight_string(u.textcol1) from user as u where 1 != 1"
+        "FieldQuery": "select u.a, u.textcol1, weight_string(u.textcol1) from user as u where 1 != 1",
+        "Table": "user"
       },
       "Cols": [
         1,

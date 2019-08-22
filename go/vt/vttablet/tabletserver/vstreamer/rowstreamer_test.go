@@ -107,6 +107,56 @@ func TestStreamRowsScan(t *testing.T) {
 	checkStream(t, "select * from t3", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarBinary("aaa")}, wantQuery, wantStream)
 }
 
+func TestStreamRowsUnicode(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table t1(id int, val varchar(128) COLLATE utf8_unicode_ci, primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+
+	// We need a latin1 connection.
+	conn, err := env.Mysqld.GetDbaConnection()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecuteFetch("set names latin1", 10000, false); err != nil {
+		t.Fatal(err)
+	}
+	// This will get "Mojibaked" into the utf8 column.
+	if _, err := conn.ExecuteFetch("insert into t1 values(1, '👍')", 10000, false); err != nil {
+		t.Fatal(err)
+	}
+
+	savecp := *engine.cp
+	// Rowstreamer must override this to "binary"
+	engine.cp.Charset = "latin1"
+	defer func() { engine.cp = &savecp }()
+	err = engine.StreamRows(context.Background(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		// Skip fields.
+		if len(rows.Rows) == 0 {
+			return nil
+		}
+		got := fmt.Sprintf("%q", rows.Rows[0].Values)
+		// We should expect a "Mojibaked" version of the string.
+		want := `"1ðŸ‘\u008d"`
+		if got != want {
+			t.Errorf("rows.Rows[0].Values: %s, want %s", got, want)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Error(err)
+	}
+}
+
 func TestStreamRowsKeyRange(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -142,9 +192,9 @@ func TestStreamRowsMultiPacket(t *testing.T) {
 		t.Skip()
 	}
 
-	savedSize := *packetSize
-	*packetSize = 10
-	defer func() { *packetSize = savedSize }()
+	savedSize := *PacketSize
+	*PacketSize = 10
+	defer func() { *PacketSize = savedSize }()
 
 	execStatements(t, []string{
 		"create table t1(id int, val varbinary(128), primary key(id))",
@@ -170,9 +220,9 @@ func TestStreamRowsCancel(t *testing.T) {
 		t.Skip()
 	}
 
-	savedSize := *packetSize
-	*packetSize = 10
-	defer func() { *packetSize = savedSize }()
+	savedSize := *PacketSize
+	*PacketSize = 10
+	defer func() { *PacketSize = savedSize }()
 
 	execStatements(t, []string{
 		"create table t1(id int, val varbinary(128), primary key(id))",

@@ -46,6 +46,12 @@ func TestControllerPlan(t *testing.T) {
 			query:  "insert into _vt.vreplication(workflow, id) values ('', null)",
 		},
 	}, {
+		in: "insert into _vt.resharding_journal values (1)",
+		plan: &controllerPlan{
+			opcode: reshardingJournalQuery,
+			query:  "insert into _vt.resharding_journal values (1)",
+		},
+	}, {
 		in:  "replace into _vt.vreplication values(null)",
 		err: "unsupported construct: replace into _vt.vreplication values (null)",
 	}, {
@@ -85,6 +91,12 @@ func TestControllerPlan(t *testing.T) {
 			id:     1,
 		},
 	}, {
+		in: "update _vt.resharding_journal set col = 1",
+		plan: &controllerPlan{
+			opcode: reshardingJournalQuery,
+			query:  "update _vt.resharding_journal set col = 1",
+		},
+	}, {
 		in:  "update a set state='Running' where id = 1",
 		err: "invalid table name: a",
 	}, {
@@ -116,16 +128,23 @@ func TestControllerPlan(t *testing.T) {
 	}, {
 		in: "delete from _vt.vreplication where id = 1",
 		plan: &controllerPlan{
-			opcode: deleteQuery,
-			query:  "delete from _vt.vreplication where id = 1",
-			id:     1,
+			opcode:       deleteQuery,
+			query:        "delete from _vt.vreplication where id = 1",
+			delCopyState: "delete from _vt.copy_state where vrepl_id = 1",
+			id:           1,
+		},
+	}, {
+		in: "delete from _vt.resharding_journal where id = 1",
+		plan: &controllerPlan{
+			opcode: reshardingJournalQuery,
+			query:  "delete from _vt.resharding_journal where id = 1",
 		},
 	}, {
 		in:  "delete from a where id = 1",
 		err: "invalid table name: a",
 	}, {
-		in:  "delete a, b from a where id = 1",
-		err: "unsupported construct: delete a, b from a where id = 1",
+		in:  "delete a, b from _vt.vreplication where id = 1",
+		err: "unsupported construct: delete a, b from _vt.vreplication where id = 1",
 	}, {
 		in:  "delete from _vt.vreplication where id = 1 order by id",
 		err: "unsupported construct: delete from _vt.vreplication where id = 1 order by id asc",
@@ -153,10 +172,22 @@ func TestControllerPlan(t *testing.T) {
 
 		// Select
 	}, {
-		in: "select * from _vt.vreplication where id = 1",
+		in: "select * from _vt.vreplication",
 		plan: &controllerPlan{
 			opcode: selectQuery,
-			query:  "select * from _vt.vreplication where id = 1",
+			query:  "select * from _vt.vreplication",
+		},
+	}, {
+		in: "select * from _vt.resharding_journal",
+		plan: &controllerPlan{
+			opcode: selectQuery,
+			query:  "select * from _vt.resharding_journal",
+		},
+	}, {
+		in: "select * from _vt.copy_state",
+		plan: &controllerPlan{
+			opcode: selectQuery,
+			query:  "select * from _vt.copy_state",
 		},
 	}, {
 		in:  "select * from a",
