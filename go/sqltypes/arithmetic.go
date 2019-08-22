@@ -42,9 +42,9 @@ type numeric struct {
 
 var zeroBytes = []byte("0")
 
-//Addition adds two values together
+//Add adds two values together
 //if v1 or v2 is null, then it returns null
-func Addition(v1, v2 Value) (Value, error) {
+func Add(v1, v2 Value) (Value, error) {
 	if v1.IsNull() || v2.IsNull() {
 		return NULL, nil
 	}
@@ -86,20 +86,15 @@ func NullsafeAdd(v1, v2 Value, resultType querypb.Type) Value {
 	if err != nil {
 		return NULL
 	}
-	lv2, err := newNumeric(v2)
-	//fmt.Printf("lv2 type = %v\n", lv2.typ)
-	//if err != nil {
-	//fmt.Printf("final result = %v\n", castFromNumeric(lv2, resultType))
-	//}
 
-	//fmt.Printf("lv2 = %v\n", lv2)
+	lv2, err := newNumeric(v2)
+	if err != nil {
+		return NULL
+	}
 
 	lresult := addNumeric(lv1, lv2)
 
-	//fmt.Printf("result = %v\n", lresult)
-	//fmt.Printf("result for castFromNumeric = %v\n", castFromNumeric(lresult, resultType))
-
-	return castFromNumeric(lresult, lresult.typ)
+	return castFromNumeric(lresult, resultType)
 }
 
 // NullsafeCompare returns 0 if v1==v2, -1 if v1<v2, and 1 if v1>v2.
@@ -325,7 +320,7 @@ func newNumeric(v Value) (numeric, error) {
 		return numeric{fval: fval, typ: Float64}, nil
 	}
 
-	return numeric{uval: 0, typ: Uint64}, nil //vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: '%s'", str)
+	return numeric{fval: 0, typ: Float64}, nil
 }
 
 // newIntegralNumeric parses a value and produces an Int64 or Uint64.
