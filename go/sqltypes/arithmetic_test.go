@@ -446,7 +446,7 @@ func TestToFloat64(t *testing.T) {
 		err error
 	}{{
 		v:   TestValue(VarChar, "abcd"),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: 'abcd'"),
+		out: 0,
 	}, {
 		v:   NewInt64(1),
 		out: 1,
@@ -615,7 +615,7 @@ func TestNewNumeric(t *testing.T) {
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseFloat: parsing \"abcd\": invalid syntax"),
 	}, {
 		v:   TestValue(VarChar, "abcd"),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: 'abcd'"),
+		out: numeric{typ: Float64, fval: 0},
 	}}
 	for _, tcase := range tcases {
 		got, err := newNumeric(tcase.v)
