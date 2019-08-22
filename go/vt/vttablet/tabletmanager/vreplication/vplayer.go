@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"time"
 
 	"golang.org/x/net/context"
@@ -207,6 +208,10 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 }
 
 func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
+	// If we're not running, set SecondsBehindMaster to be very high.
+	// TODO(sougou): if we also stored the time of the last event, we
+	// can estimate this value more accurately.
+	defer vp.vr.stats.SecondsBehindMaster.Set(math.MaxInt64)
 	for {
 		items, err := relay.Fetch()
 		if err != nil {

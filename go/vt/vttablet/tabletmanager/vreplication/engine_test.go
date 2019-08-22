@@ -179,7 +179,10 @@ func TestEngineExec(t *testing.T) {
 
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 	delQuery := "delete from _vt.vreplication where id = 1"
+	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest(delQuery, testDMLResponse, nil)
+	dbClient.ExpectRequest("delete from _vt.copy_state where vrepl_id = 1", nil, nil)
+	dbClient.ExpectRequest("commit", nil, nil)
 
 	qr, err = vre.Exec(delQuery)
 	if err != nil {
@@ -412,6 +415,7 @@ func TestCreateDBAndTable(t *testing.T) {
 	dbClient.ExpectRequest("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("DROP TABLE IF EXISTS _vt.blp_checkpoint", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequestRE("CREATE TABLE IF NOT EXISTS _vt.vreplication.*", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequestRE("create table if not exists _vt.resharding_journal.*", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 
 	// Non-recoverable error.
@@ -425,6 +429,7 @@ func TestCreateDBAndTable(t *testing.T) {
 	dbClient.ExpectRequest("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("DROP TABLE IF EXISTS _vt.blp_checkpoint", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequestRE("CREATE TABLE IF NOT EXISTS _vt.vreplication.*", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequestRE("create table if not exists _vt.resharding_journal.*", &sqltypes.Result{}, nil)
 
 	dbClient.ExpectRequest("insert into _vt.vreplication values (null)", &sqltypes.Result{InsertID: 1}, nil)
 

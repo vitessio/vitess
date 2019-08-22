@@ -43,15 +43,6 @@ var (
 	relayLogMaxItems    = 1000
 	copyTimeout         = 1 * time.Hour
 	replicaLagTolerance = 10 * time.Second
-
-	// CreateCopyState is the list of statements to execute for creating
-	// the _vt.copy_state table
-	CreateCopyState = []string{
-		`create table if not exists _vt.copy_state (
-  vrepl_id int,
-  table_name varbinary(128),
-  lastpk varbinary(2000),
-  primary key (vrepl_id, table_name))`}
 )
 
 type vreplicator struct {
@@ -142,11 +133,9 @@ func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.
 			return settings, numTablesToCopy, err
 		}
 		log.Info("Looks like _vt.copy_state table may not exist. Trying to create... ")
-		for _, query := range CreateCopyState {
-			if _, merr := vr.dbClient.Execute(query); merr != nil {
-				log.Errorf("Failed to ensure _vt.copy_state table exists: %v", merr)
-				return settings, numTablesToCopy, err
-			}
+		if _, merr := vr.dbClient.Execute(createCopyState); merr != nil {
+			log.Errorf("Failed to ensure _vt.copy_state table exists: %v", merr)
+			return settings, numTablesToCopy, err
 		}
 		// Redo the read.
 		qr, err = vr.dbClient.Execute(query)

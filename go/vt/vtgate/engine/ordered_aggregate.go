@@ -19,6 +19,9 @@ package engine
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -121,6 +124,16 @@ func (oa *OrderedAggregate) RouteType() string {
 	return oa.Input.RouteType()
 }
 
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (oa *OrderedAggregate) GetKeyspaceName() string {
+	return oa.Input.GetKeyspaceName()
+}
+
+// GetTableName specifies the table that this primitive routes to.
+func (oa *OrderedAggregate) GetTableName() string {
+	return oa.Input.GetTableName()
+}
+
 // SetTruncateColumnCount sets the truncate column count.
 func (oa *OrderedAggregate) SetTruncateColumnCount(count int) {
 	oa.TruncateColumnCount = count
@@ -169,6 +182,17 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 		out.Rows = append(out.Rows, current)
 		current, curDistinct = oa.convertRow(row)
 	}
+
+	if len(result.Rows) == 0 && len(oa.Keys) == 0 {
+		// When doing aggregation without grouping keys, we need to produce a single row containing zero-value for the
+		// different aggregation functions
+		row, err := oa.createEmptyRow()
+		if err != nil {
+			return nil, err
+		}
+		out.Rows = append(out.Rows, row)
+	}
+
 	if current != nil {
 		out.Rows = append(out.Rows, current)
 	}
@@ -334,4 +358,27 @@ func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes
 		}
 	}
 	return result, curDistinct, nil
+}
+
+// creates the empty row for the case when we are missing grouping keys and have empty input table
+func (oa *OrderedAggregate) createEmptyRow() ([]sqltypes.Value, error) {
+	out := make([]sqltypes.Value, len(oa.Aggregates))
+	for i, aggr := range oa.Aggregates {
+		value, err := createEmptyValueFor(aggr.Opcode)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = value
+	}
+	return out, nil
+}
+
+func createEmptyValueFor(opcode AggregateOpcode) (sqltypes.Value, error) {
+	switch opcode {
+	case AggregateCountDistinct:
+		return sqltypes.NULL, nil
+	case AggregateSumDistinct:
+		return sumZero, nil
+	}
+	return sqltypes.NULL, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown aggregation %v", opcode)
 }

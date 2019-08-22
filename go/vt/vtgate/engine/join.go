@@ -226,6 +226,19 @@ func (jn *Join) RouteType() string {
 	return "Join"
 }
 
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (jn *Join) GetKeyspaceName() string {
+	if jn.Left.GetKeyspaceName() == jn.Right.GetKeyspaceName() {
+		return jn.Left.GetKeyspaceName()
+	}
+	return jn.Left.GetKeyspaceName() + "_" + jn.Right.GetKeyspaceName()
+}
+
+// GetTableName specifies the table that this primitive routes to.
+func (jn *Join) GetTableName() string {
+	return jn.Left.GetTableName() + "_" + jn.Right.GetTableName()
+}
+
 func combineVars(bv1, bv2 map[string]*querypb.BindVariable) map[string]*querypb.BindVariable {
 	out := make(map[string]*querypb.BindVariable)
 	for k, v := range bv1 {

@@ -89,9 +89,8 @@ func (ts *Server) CreateCellsAlias(ctx context.Context, alias string, cellsAlias
 		return err
 	}
 
-	if overlappingAliases(currentAliases, cellsAlias) {
-		return fmt.Errorf("unsupported: you can't over overlapping aliases. Cells alias: %v, has an overlap with existent aliases", cellsAlias)
-
+	if err := validateAlias(currentAliases, alias, cellsAlias); err != nil {
+		return fmt.Errorf("cells alias %v is not valid: %v", alias, err)
 	}
 
 	ts.clearCellAliasesCache()
@@ -114,13 +113,13 @@ func (ts *Server) UpdateCellsAlias(ctx context.Context, alias string, update fun
 
 	filePath := pathForCellsAlias(alias)
 	for {
-		ca := &topodatapb.CellsAlias{}
+		cellsAlias := &topodatapb.CellsAlias{}
 
 		// Read the file, unpack the contents.
 		contents, version, err := ts.globalCell.Get(ctx, filePath)
 		switch {
 		case err == nil:
-			if err := proto.Unmarshal(contents, ca); err != nil {
+			if err := proto.Unmarshal(contents, cellsAlias); err != nil {
 				return err
 			}
 		case IsErrType(err, NoNode):
@@ -130,7 +129,7 @@ func (ts *Server) UpdateCellsAlias(ctx context.Context, alias string, update fun
 		}
 
 		// Call update method.
-		if err = update(ca); err != nil {
+		if err = update(cellsAlias); err != nil {
 			if IsErrType(err, NoUpdateNeeded) {
 				return nil
 			}
@@ -142,13 +141,12 @@ func (ts *Server) UpdateCellsAlias(ctx context.Context, alias string, update fun
 			return err
 		}
 
-		if overlappingAliases(currentAliases, ca) {
-			return fmt.Errorf("unsupported: you can't over overlapping aliases. Cells alias: %v, has an overlap with existent aliases", ca)
-
+		if err := validateAlias(currentAliases, alias, cellsAlias); err != nil {
+			return fmt.Errorf("cells alias %v is not valid: %v", alias, err)
 		}
 
 		// Pack and save.
-		contents, err = proto.Marshal(ca)
+		contents, err = proto.Marshal(cellsAlias)
 		if err != nil {
 			return err
 		}
@@ -159,16 +157,21 @@ func (ts *Server) UpdateCellsAlias(ctx context.Context, alias string, update fun
 	}
 }
 
-func overlappingAliases(currentAliases map[string]*topodatapb.CellsAlias, newAlias *topodatapb.CellsAlias) bool {
-	for _, cellsAlias := range currentAliases {
-		for _, cell := range cellsAlias.Cells {
-			for _, newCell := range newAlias.Cells {
-				if cell == newCell {
-					return true
-				}
-			}
+// validateAlias checks whether the given alias is allowed.
+// If the alias overlaps with any existing alias other than itself, this returns
+// a non-nil error.
+func validateAlias(currentAliases map[string]*topodatapb.CellsAlias, newAliasName string, newAlias *topodatapb.CellsAlias) error {
+	for name, alias := range currentAliases {
+		// Skip the alias we're checking against. It's allowed to overlap with itself.
+		if name == newAliasName {
+			continue
 		}
 
+		for _, cell := range alias.Cells {
+			if InCellList(cell, newAlias.Cells) {
+				return fmt.Errorf("cell set overlaps with existing alias %v", name)
+			}
+		}
 	}
-	return false
+	return nil
 }

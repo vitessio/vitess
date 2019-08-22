@@ -71,6 +71,7 @@ func (hw *horizontalReshardingWorkflow) runSplitClone(ctx context.Context, t *wo
 	worker := t.Attributes["vtworker"]
 	minHealthyRdonlyTablets := t.Attributes["min_healthy_rdonly_tablets"]
 	splitCmd := t.Attributes["split_cmd"]
+	useConsistentSnapshot := t.Attributes["use_consistent_snapshot"]
 
 	sourceKeyspaceShard := topoproto.KeyspaceShardString(keyspace, sourceShard)
 	// Reset the vtworker to avoid error if vtworker command has been called elsewhere.
@@ -80,6 +81,9 @@ func (hw *horizontalReshardingWorkflow) runSplitClone(ctx context.Context, t *wo
 	}
 
 	args := []string{splitCmd, "--min_healthy_rdonly_tablets=" + minHealthyRdonlyTablets, sourceKeyspaceShard}
+	if useConsistentSnapshot != "" {
+		args = append(args, "--use_consistent_snapshot")
+	}
 	_, err := automation.ExecuteVtworker(hw.ctx, worker, args)
 	return err
 }
@@ -95,11 +99,15 @@ func (hw *horizontalReshardingWorkflow) runSplitDiff(ctx context.Context, t *wor
 	destShard := t.Attributes["destination_shard"]
 	destinationTabletType := t.Attributes["dest_tablet_type"]
 	worker := t.Attributes["vtworker"]
+	useConsistentSnapshot := t.Attributes["use_consistent_snapshot"]
 
 	if _, err := automation.ExecuteVtworker(hw.ctx, worker, []string{"Reset"}); err != nil {
 		return err
 	}
 	args := []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", "--dest_tablet_type=" + destinationTabletType, topoproto.KeyspaceShardString(keyspace, destShard)}
+	if useConsistentSnapshot != "" {
+		args = append(args, "--use_consistent_snapshot")
+	}
 	_, err := automation.ExecuteVtworker(ctx, worker, args)
 	return err
 }

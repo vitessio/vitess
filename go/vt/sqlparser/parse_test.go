@@ -980,6 +980,10 @@ var (
 	}, {
 		input: "alter vschema add table a",
 	}, {
+		input: "alter vschema add sequence a_seq",
+	}, {
+		input: "alter vschema on a add auto_increment id using a_seq",
+	}, {
 		input: "alter vschema drop table a",
 	}, {
 		input: "alter vschema on a add vindex hash (id)",

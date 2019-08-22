@@ -60,7 +60,8 @@ var (
 	streamBufferSize    = flag.Int("stream_buffer_size", 32*1024, "the number of bytes sent from vtgate for each stream call. It's recommended to keep this value in sync with vttablet's query-server-config-stream-buffer-size.")
 	queryPlanCacheSize  = flag.Int64("gate_query_cache_size", 10000, "gate server query cache size, maximum number of queries to be cached. vtgate analyzes every incoming query and generate a query plan, these plans are being cached in a lru cache. This config controls the capacity of the lru cache.")
 	disableLocalGateway = flag.Bool("disable_local_gateway", false, "if specified, this process will not route any queries to local tablets in the local cell")
-	maxMemoryRows       = flag.Int("max_memory_rows", 30000, "Maximum number of rows that will be held in memory for intermediate results as well as the final result.")
+	maxMemoryRows       = flag.Int("max_memory_rows", 300000, "Maximum number of rows that will be held in memory for intermediate results as well as the final result.")
+	warnMemoryRows      = flag.Int("warn_memory_rows", 30000, "Warning threshold for in-memory results. A row count higher than this amount will cause the VtGateWarnings.ResultsExceeded counter to be incremented.")
 )
 
 func getTxMode() vtgatepb.TransactionMode {
@@ -229,7 +230,7 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 	errorsByDbType = stats.NewRates("ErrorsByDbType", stats.CounterForDimension(errorCounts, "DbType"), 15, 1*time.Minute)
 	errorsByCode = stats.NewRates("ErrorsByCode", stats.CounterForDimension(errorCounts, "Code"), 15, 1*time.Minute)
 
-	warnings = stats.NewCountersWithSingleLabel("VtGateWarnings", "Vtgate warnings", "type", "IgnoredSet")
+	warnings = stats.NewCountersWithSingleLabel("VtGateWarnings", "Vtgate warnings", "type", "IgnoredSet", "ResultsExceeded")
 
 	servenv.OnRun(func() {
 		for _, f := range RegisterVTGates {
@@ -830,6 +831,34 @@ func (vtg *VTGate) Rollback(ctx context.Context, session *vtgatepb.Session) erro
 // ResolveTransaction resolves the specified 2PC transaction.
 func (vtg *VTGate) ResolveTransaction(ctx context.Context, dtid string) error {
 	return formatError(vtg.txConn.Resolve(ctx, dtid))
+}
+
+// Prepare supports non-streaming prepare statement query with multi shards
+func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (newSession *vtgatepb.Session, fld []*querypb.Field, err error) {
+	// In this context, we don't care if we can't fully parse destination
+	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
+	statsKey := []string{"Execute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
+	defer vtg.timings.Record(statsKey, time.Now())
+
+	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
+		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
+		goto handleError
+	}
+
+	fld, err = vtg.executor.Prepare(ctx, "Prepare", NewSafeSession(session), sql, bindVariables)
+	if err == nil {
+		vtg.rowsReturned.Add(statsKey, int64(len(fld)))
+		return session, fld, nil
+	}
+
+handleError:
+	query := map[string]interface{}{
+		"Sql":           sql,
+		"BindVariables": bindVariables,
+		"Session":       session,
+	}
+	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecute)
+	return session, nil, err
 }
 
 // isKeyspaceRangeBasedSharded returns true if a keyspace is sharded

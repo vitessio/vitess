@@ -49,6 +49,14 @@ func (f *fakePrimitive) RouteType() string {
 	return "Fake"
 }
 
+func (f *fakePrimitive) GetKeyspaceName() string {
+	return "fakeKs"
+}
+
+func (f *fakePrimitive) GetTableName() string {
+	return "fakeTable"
+}
+
 func (f *fakePrimitive) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	f.log = append(f.log, fmt.Sprintf("Execute %v %v", printBindVars(bindVars), wantfields))
 	if f.results == nil {

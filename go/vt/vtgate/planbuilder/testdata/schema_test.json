@@ -66,6 +66,14 @@
         "hash_dup": {
           "type": "hash_test",
           "owner": "user"
+        },
+        "vindex1": {
+          "type": "hash_test",
+          "owner": "samecolvin"
+        },
+        "vindex2": {
+          "type": "lookup_test",
+          "owner": "samecolvin"
         }
       },
       "tables": {
@@ -166,6 +174,24 @@
             },
             {
               "name": "col2"
+            }
+          ],
+          "column_list_authoritative": true
+        },
+        "samecolvin": {
+          "column_vindexes": [
+            {
+              "column": "col",
+              "name": "vindex1"
+            },
+            {
+              "column": "col",
+              "name": "vindex2"
+            }
+          ],
+          "columns": [
+            {
+              "name": "col"
             }
           ],
           "column_list_authoritative": true
