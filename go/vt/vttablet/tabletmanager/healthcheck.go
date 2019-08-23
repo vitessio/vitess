@@ -180,6 +180,7 @@ func (agent *ActionAgent) runHealthCheck() {
 }
 
 func (agent *ActionAgent) runHealthCheckLocked() {
+	agent.checkLock()
 	// read the current tablet record and tablet control
 	agent.mutex.Lock()
 	tablet := proto.Clone(agent._tablet).(*topodatapb.Tablet)
