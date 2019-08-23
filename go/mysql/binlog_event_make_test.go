@@ -358,7 +358,7 @@ func TestRowsEvent(t *testing.T) {
 	// 1076895760 is 0x40302010.
 	identifies, _ := rows.StringIdentifiesForTests(tm, 0)
 	if expected := []string{"1076895760", "abc"}; !reflect.DeepEqual(identifies, expected) {
-		t.Fatalf("bad Rows idenfity, got %v expected %v", identifies, expected)
+		t.Fatalf("bad Rows identify, got %v expected %v", identifies, expected)
 	}
 	values, _ := rows.StringValuesForTests(tm, 0)
 	if expected := []string{"1076895760", "abcd"}; !reflect.DeepEqual(values, expected) {

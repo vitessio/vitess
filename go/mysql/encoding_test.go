@@ -69,7 +69,7 @@ func TestEncLenInt(t *testing.T) {
 			t.Errorf("unexpected encoded value for %x, got %v expected %v", test.value, data, test.encoded)
 		}
 
-		// Check succesful decoding.
+		// Check successful decoding.
 		got, pos, ok := readLenEncInt(test.encoded, 0)
 		if !ok || got != test.value || pos != len(test.encoded) {
 			t.Errorf("readLenEncInt returned %x/%v/%v but expected %x/%v/%v", got, pos, ok, test.value, len(test.encoded), true)
@@ -240,7 +240,7 @@ func TestEncString(t *testing.T) {
 			t.Errorf("unexpected lenEncoded value for %v, got %v expected %v", test.value, data[1:], test.lenEncoded)
 		}
 
-		// Check succesful decoding as string.
+		// Check successful decoding as string.
 		got, pos, ok := readLenEncString(test.lenEncoded, 0)
 		if !ok || got != test.value || pos != len(test.lenEncoded) {
 			t.Errorf("readLenEncString returned %v/%v/%v but expected %v/%v/%v", got, pos, ok, test.value, len(test.lenEncoded), true)
@@ -258,7 +258,7 @@ func TestEncString(t *testing.T) {
 			t.Errorf("readLenEncString returned ok=true for empty value %v", test.value)
 		}
 
-		// Check succesful skipping as string.
+		// Check successful skipping as string.
 		pos, ok = skipLenEncString(test.lenEncoded, 0)
 		if !ok || pos != len(test.lenEncoded) {
 			t.Errorf("skipLenEncString returned %v/%v but expected %v/%v", pos, ok, len(test.lenEncoded), true)
@@ -276,7 +276,7 @@ func TestEncString(t *testing.T) {
 			t.Errorf("skipLenEncString returned ok=true for empty value %v", test.value)
 		}
 
-		// Check succesful decoding as bytes.
+		// Check successful decoding as bytes.
 		gotb, pos, ok := readLenEncStringAsBytes(test.lenEncoded, 0)
 		if !ok || string(gotb) != test.value || pos != len(test.lenEncoded) {
 			t.Errorf("readLenEncString returned %v/%v/%v but expected %v/%v/%v", gotb, pos, ok, test.value, len(test.lenEncoded), true)
@@ -306,7 +306,7 @@ func TestEncString(t *testing.T) {
 			t.Errorf("unexpected nullEncoded value for %v, got %v expected %v", test.value, data, test.nullEncoded)
 		}
 
-		// Check succesful decoding.
+		// Check successful decoding.
 		got, pos, ok = readNullString(test.nullEncoded, 0)
 		if !ok || got != test.value || pos != len(test.nullEncoded) {
 			t.Errorf("readNullString returned %v/%v/%v but expected %v/%v/%v", got, pos, ok, test.value, len(test.nullEncoded), true)

@@ -829,7 +829,7 @@ func TestSplitCloneV2_Offline_Reconciliation(t *testing.T) {
 	tc.rightMasterQs.modifyFirstRows(2)
 
 	// The destination tablets should see inserts, updates and deletes.
-	// Clear the entries added by setUp() because the reconcilation will
+	// Clear the entries added by setUp() because the reconciliation will
 	// produce different statements in this test case.
 	tc.leftMasterFakeDb.DeleteAllEntries()
 	tc.rightMasterFakeDb.DeleteAllEntries()

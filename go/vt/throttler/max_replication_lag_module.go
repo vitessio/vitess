@@ -485,7 +485,7 @@ func (m *MaxReplicationLagModule) increaseRate(r *result, now time.Time, lagReco
 		return
 	}
 
-	// Calculate new rate based on the previous (preferrably highest good) rate.
+	// Calculate new rate based on the previous (preferably highest good) rate.
 	highestGood := m.memory.highestGood()
 	previousRateSource := "highest known good rate"
 	previousRate := float64(highestGood)

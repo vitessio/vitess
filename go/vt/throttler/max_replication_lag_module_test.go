@@ -127,7 +127,7 @@ func TestMaxReplicationLagModule_InitialStateAndWait(t *testing.T) {
 	}
 }
 
-// TestMaxReplicationLagModule_Increase tests only the continous increase of the
+// TestMaxReplicationLagModule_Increase tests only the continuous increase of the
 // rate and assumes that we are well below the replica capacity.
 func TestMaxReplicationLagModule_Increase(t *testing.T) {
 	tf, err := newTestFixtureWithMaxReplicationLag(5)

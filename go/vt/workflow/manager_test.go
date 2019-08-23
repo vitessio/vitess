@@ -97,7 +97,7 @@ func TestManagerRestart(t *testing.T) {
 	// Stop the manager.
 	cancel()
 	wg.Wait()
-	// Recreate the manager immitating restart.
+	// Recreate the manager imitating restart.
 	m = NewManager(ts)
 
 	// Make sure the workflow is still in the topo server.  This
