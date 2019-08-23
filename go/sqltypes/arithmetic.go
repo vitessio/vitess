@@ -198,7 +198,7 @@ func Cast(v Value, typ querypb.Type) (Value, error) {
 		return MakeTrusted(typ, v.ToBytes()), nil
 	}
 
-	// Explicit"a|b",ly disallow Expression.
+	// Explicitly disallow Expression.
 	if v.Type() == Expression {
 		return NULL, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v cannot be cast to %v", v, typ)
 	}
@@ -419,16 +419,10 @@ overflow:
 
 func intPlusIntWithError(v1, v2 int64) (numeric, error) {
 	result := v1 + v2
-	if v1 > 0 && v2 > 0 && result < 0 {
-		goto overflow
-	}
-	if v1 < 0 && v2 < 0 && result > 0 {
-		goto overflow
+	if (result > v1) != (v2 > 0) {
+		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v + %v", v1, v2)
 	}
 	return numeric{typ: Int64, ival: result}, nil
-
-overflow:
-	return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v + %v", v1, v2)
 }
 
 func uintPlusInt(v1 uint64, v2 int64) numeric {
