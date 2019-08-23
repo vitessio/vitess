@@ -42,9 +42,9 @@ type numeric struct {
 
 var zeroBytes = []byte("0")
 
-//Addition adds two values together
+//Add adds two values together
 //if v1 or v2 is null, then it returns null
-func Addition(v1, v2 Value) (Value, error) {
+func Add(v1, v2 Value) (Value, error) {
 	if v1.IsNull() || v2.IsNull() {
 		return NULL, nil
 	}
@@ -364,7 +364,7 @@ func newNumeric(v Value) (numeric, error) {
 	if fval, err := strconv.ParseFloat(str, 64); err == nil {
 		return numeric{fval: fval, typ: Float64}, nil
 	}
-	return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: '%s'", str)
+	return numeric{fval: 0, typ: Float64}, nil //, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: '%s'", str)
 }
 
 // newIntegralNumeric parses a value and produces an Int64 or Uint64.

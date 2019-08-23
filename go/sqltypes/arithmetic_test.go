@@ -191,7 +191,7 @@ func TestAddition(t *testing.T) {
 
 	for _, tcase := range tcases {
 
-		got, err := Addition(tcase.v1, tcase.v2)
+		got, err := Add(tcase.v1, tcase.v2)
 
 		if !vterrors.Equals(err, tcase.err) {
 			t.Errorf("Addition(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
