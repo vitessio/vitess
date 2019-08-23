@@ -52,7 +52,7 @@ func (agent *ActionAgent) lock(ctx context.Context) error {
 	}
 }
 
-// unlock is the symetrical action to lock.
+// unlock is the symmetrical action to lock.
 func (agent *ActionAgent) unlock() {
 	agent.actionMutexLocked = false
 	agent.actionMutex.Unlock()

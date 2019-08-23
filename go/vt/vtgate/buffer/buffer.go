@@ -77,7 +77,7 @@ type Buffer struct {
 	// shards is a set of keyspace/shard entries to which buffering is limited.
 	// If empty (and *enabled==true), buffering is enabled for all shards.
 	shards map[string]bool
-	// now returns the current time. Overriden in tests.
+	// now returns the current time. Overridden in tests.
 	now func() time.Time
 
 	// bufferSizeSema limits how many requests can be buffered
@@ -134,7 +134,7 @@ func newWithNow(now func() time.Time) *Buffer {
 			limited = header + limited
 			dryRunOverride := ""
 			if *enabledDryRun {
-				dryRunOverride = " Dry-run mode is overriden for these entries and actual buffering will take place."
+				dryRunOverride = " Dry-run mode is overridden for these entries and actual buffering will take place."
 			}
 			log.Infof("%v.%v", limited, dryRunOverride)
 		}

@@ -667,7 +667,7 @@ func TestExecutorShow(t *testing.T) {
 	}
 
 	if len(sbclookup.Queries) != 1 {
-		t.Errorf("Tablet should have recieved one 'show' query. Instead received: %v", sbclookup.Queries)
+		t.Errorf("Tablet should have received one 'show' query. Instead received: %v", sbclookup.Queries)
 	} else {
 		lastQuery := sbclookup.Queries[len(sbclookup.Queries)-1].Sql
 		want := "show tables"

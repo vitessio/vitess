@@ -48,7 +48,7 @@ func (tw *testWorkflow) Action(ctx context.Context, path, name string) error {
 }
 
 // TestNodeManagerWithRoot unit tests basic NodeManager functionality
-// wiht a single root node.
+// with a single root node.
 func TestNodeManagerWithRoot(t *testing.T) {
 	nodeManager := NewNodeManager()
 	tw := &testWorkflow{}

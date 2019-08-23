@@ -83,7 +83,7 @@ func TestMapSetRulesWithNil(t *testing.T) {
 		t.Errorf("GetRules failed to retrieve blacklistQueryRules that has been set: %s", err)
 	}
 	if !reflect.DeepEqual(qrs, blacklistRules) {
-		t.Errorf("blacklistQueryRules retrived is %v, but the expected value should be %v", qrs, blacklistQueryRules)
+		t.Errorf("blacklistQueryRules retrieved is %v, but the expected value should be %v", qrs, blacklistQueryRules)
 	}
 
 	qri.SetRules(blacklistQueryRules, nil)
@@ -93,7 +93,7 @@ func TestMapSetRulesWithNil(t *testing.T) {
 		t.Errorf("GetRules failed to retrieve blacklistQueryRules that has been set: %s", err)
 	}
 	if !reflect.DeepEqual(qrs, New()) {
-		t.Errorf("blacklistQueryRules retrived is %v, but the expected value should be %v", qrs, blacklistQueryRules)
+		t.Errorf("blacklistQueryRules retrieved is %v, but the expected value should be %v", qrs, blacklistQueryRules)
 	}
 }
 
@@ -142,7 +142,7 @@ func TestMapGetSetQueryRules(t *testing.T) {
 		t.Errorf("GetRules failed to retrieve blacklistQueryRules that has been set: %s", err)
 	}
 	if !reflect.DeepEqual(qrs, blacklistRules) {
-		t.Errorf("blacklistQueryRules retrived is %v, but the expected value should be %v", qrs, blacklistRules)
+		t.Errorf("blacklistQueryRules retrieved is %v, but the expected value should be %v", qrs, blacklistRules)
 	}
 
 	qrs, err = qri.Get(blacklistQueryRules)
@@ -150,7 +150,7 @@ func TestMapGetSetQueryRules(t *testing.T) {
 		t.Errorf("GetRules failed to retrieve blacklistQueryRules that has been set: %s", err)
 	}
 	if !reflect.DeepEqual(qrs, blacklistRules) {
-		t.Errorf("blacklistQueryRules retrived is %v, but the expected value should be %v", qrs, blacklistRules)
+		t.Errorf("blacklistQueryRules retrieved is %v, but the expected value should be %v", qrs, blacklistRules)
 	}
 
 	qrs, err = qri.Get(customQueryRules)
@@ -158,7 +158,7 @@ func TestMapGetSetQueryRules(t *testing.T) {
 		t.Errorf("GetRules failed to retrieve customQueryRules that has been set: %s", err)
 	}
 	if !reflect.DeepEqual(qrs, otherRules) {
-		t.Errorf("customQueryRules retrived is %v, but the expected value should be %v", qrs, customQueryRules)
+		t.Errorf("customQueryRules retrieved is %v, but the expected value should be %v", qrs, customQueryRules)
 	}
 }
 
