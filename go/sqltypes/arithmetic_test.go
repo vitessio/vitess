@@ -809,7 +809,6 @@ func TestAddNumeric(t *testing.T) {
 		v1:  numeric{typ: Int64, ival: -1},
 		v2:  numeric{typ: Uint64, uval: 2},
 		out: numeric{typ: Float64, fval: 18446744073709551617},
-		//err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot add a negative number to an unsigned integer: 2, -1"),
 	}, {
 		// Uint64 overflow.
 		v1:  numeric{typ: Uint64, uval: 18446744073709551615},
@@ -818,14 +817,6 @@ func TestAddNumeric(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		got := addNumeric(tcase.v1, tcase.v2)
-		/*
-			if !vterrors.Equals(err, tcase.err) {
-				t.Errorf("addNumeric(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
-			}
-			if tcase.err != nil {
-				continue
-			}
-		*/
 
 		if got != tcase.out {
 			t.Errorf("addNumeric(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
@@ -894,17 +885,14 @@ func TestCastFromNumeric(t *testing.T) {
 		typ: Int64,
 		v:   numeric{typ: Uint64, uval: 1},
 		out: NewInt64(1),
-		//err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion: UINT64 to INT64"),
 	}, {
 		typ: Int64,
 		v:   numeric{typ: Float64, fval: 1.2e-16},
 		out: NewInt64(0),
-		//err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion: FLOAT64 to INT64"),
 	}, {
 		typ: Uint64,
 		v:   numeric{typ: Int64, ival: 1},
 		out: NewUint64(1),
-		//err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion: INT64 to UINT64"),
 	}, {
 		typ: Uint64,
 		v:   numeric{typ: Uint64, uval: 1},
@@ -913,7 +901,6 @@ func TestCastFromNumeric(t *testing.T) {
 		typ: Uint64,
 		v:   numeric{typ: Float64, fval: 1.2e-16},
 		out: NewUint64(0),
-		//err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion: FLOAT64 to UINT64"),
 	}, {
 		typ: Float64,
 		v:   numeric{typ: Int64, ival: 1},
@@ -946,14 +933,6 @@ func TestCastFromNumeric(t *testing.T) {
 	}}
 	for _, tcase := range tcases {
 		got := castFromNumeric(tcase.v, tcase.typ)
-		/*
-			if !vterrors.Equals(err, tcase.err) {
-				t.Errorf("castFromNumeric(%v, %v) error: %v, want %v", tcase.v, tcase.typ, vterrors.Print(err), vterrors.Print(tcase.err))
-			}
-			if tcase.err != nil {
-				continue
-			}
-		*/
 
 		if !reflect.DeepEqual(got, tcase.out) {
 			t.Errorf("castFromNumeric(%v, %v): %v, want %v", tcase.v, tcase.typ, printValue(got), printValue(tcase.out))
