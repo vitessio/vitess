@@ -376,9 +376,9 @@ func (oa *OrderedAggregate) createEmptyRow() ([]sqltypes.Value, error) {
 func createEmptyValueFor(opcode AggregateOpcode) (sqltypes.Value, error) {
 	switch opcode {
 	case AggregateCountDistinct:
-		return sqltypes.NULL, nil
+		return countZero, nil
 	case AggregateSumDistinct:
-		return sumZero, nil
+		return sqltypes.NULL, nil
 	}
 	return sqltypes.NULL, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown aggregation %v", opcode)
 }
