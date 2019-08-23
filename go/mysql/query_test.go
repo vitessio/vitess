@@ -186,7 +186,7 @@ func TestComStmtSendLongData(t *testing.T) {
 		t.Fatalf("parseComStmtSendLongData failed")
 	}
 	if paramID != 1 {
-		t.Fatalf("Recieved incorrect ParamID, want %v, got %v:", paramID, 1)
+		t.Fatalf("Received incorrect ParamID, want %v, got %v:", paramID, 1)
 	}
 	if stmtID != prepare.StatementID {
 		t.Fatalf("Received incorrect value, want: %v, got: %v", uint32(data[1]), prepare.StatementID)
@@ -194,7 +194,7 @@ func TestComStmtSendLongData(t *testing.T) {
 	// Check length of chunkData, Since its a subset of `data` and compare with it after we subtract the number of bytes that was read from it.
 	// sizeof(uint32) + sizeof(uint16) + 1 = 7
 	if len(chunkData) != len(data)-7 {
-		t.Fatalf("Recieved bad chunkData")
+		t.Fatalf("Received bad chunkData")
 	}
 }
 

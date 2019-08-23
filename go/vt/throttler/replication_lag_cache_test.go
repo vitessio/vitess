@@ -32,7 +32,7 @@ func TestReplicationLagCache(t *testing.T) {
 	// If there is no entry yet, a zero struct is returned.
 	zeroEntry := c.atOrAfter(r1Key, sinceZero(0*time.Second))
 	if !zeroEntry.isZero() {
-		t.Fatalf("atOrAfter(<non existant key>) should have returned a zero entry but did not: %v", zeroEntry)
+		t.Fatalf("atOrAfter(<non existent key>) should have returned a zero entry but did not: %v", zeroEntry)
 	}
 
 	// First entry at 1s.

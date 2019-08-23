@@ -91,7 +91,7 @@ func RegisterFlags(userKeys ...string) {
 }
 
 func registerBaseFlags() {
-	flag.StringVar(&baseConfig.UnixSocket, "db_socket", "", "The unix socket to connect on. If this is specifed, host and port will not be used.")
+	flag.StringVar(&baseConfig.UnixSocket, "db_socket", "", "The unix socket to connect on. If this is specified, host and port will not be used.")
 	flag.StringVar(&baseConfig.Host, "db_host", "", "The host name for the tcp connection.")
 	flag.IntVar(&baseConfig.Port, "db_port", 0, "tcp port")
 	flag.StringVar(&baseConfig.Charset, "db_charset", "", "Character set. Only utf8 or latin1 based character sets are supported.")

@@ -176,7 +176,7 @@ func (ev binlogEvent) IsPseudo() bool {
 //   4         timestamp (same as timestamp header field)
 //   1         header length
 //   p         (one byte per packet type) event type header lengths
-//             Rest was infered from reading source code:
+//             Rest was inferred from reading source code:
 //   1         checksum algorithm
 //   4         checksum
 func (ev binlogEvent) Format() (f BinlogFormat, err error) {

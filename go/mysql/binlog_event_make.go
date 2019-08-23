@@ -151,7 +151,7 @@ func NewInvalidFormatDescriptionEvent(f BinlogFormat, s *FakeBinlogStream) Binlo
 }
 
 // NewRotateEvent returns a RotateEvent.
-// The timestmap of such an event should be zero, so we patch it in.
+// The timestamp of such an event should be zero, so we patch it in.
 func NewRotateEvent(f BinlogFormat, s *FakeBinlogStream, position uint64, filename string) BinlogEvent {
 	length := 8 + // position
 		len(filename)
