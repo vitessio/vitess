@@ -19,6 +19,7 @@ package sqltypes
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"reflect"
 	"strconv"
 	"testing"
@@ -28,7 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func TestSubtraction(t *testing.T) {
+func TestSubtract(t *testing.T) {
 	tcases := []struct {
 		v1, v2 Value
 		out    Value
@@ -60,7 +61,7 @@ func TestSubtraction(t *testing.T) {
 	}, {
 
 		// testing for int64 overflow with min negative value
-		v1:  NewInt64(-9223372036854775808),
+		v1:  NewInt64(math.MinInt64),
 		v2:  NewInt64(1),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in -9223372036854775808 - 1"),
 	}, {
@@ -75,23 +76,32 @@ func TestSubtraction(t *testing.T) {
 		out: NewUint64(2),
 	}, {
 
-		v1:  NewUint64(18446744073709551615),
+		v1:  NewUint64(math.MaxUint64),
 		v2:  NewInt64(0),
-		out: NewUint64(18446744073709551615),
+		out: NewUint64(math.MaxUint64),
 	}, {
 
 		// testing for int64 overflow
-		v1:  NewInt64(-9223372036854775808),
+		v1:  NewInt64(math.MinInt64),
 		v2:  NewUint64(0),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 0 - -9223372036854775808"),
+	}, {
+
+		v1:  TestValue(VarChar, "c"),
+		v2:  NewInt64(1),
+		out: NewInt64(-1),
+	}, {
+		v1:  NewUint64(1),
+		v2:  TestValue(VarChar, "c"),
+		out: NewUint64(1),
 	}}
 
 	for _, tcase := range tcases {
 
-		got, err := Subtraction(tcase.v1, tcase.v2)
+		got, err := Subtract(tcase.v1, tcase.v2)
 
 		if !vterrors.Equals(err, tcase.err) {
-			t.Errorf("Subtraction(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
+			t.Errorf("Subtract(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
 		}
 		if tcase.err != nil {
 			continue
@@ -104,7 +114,7 @@ func TestSubtraction(t *testing.T) {
 
 }
 
-func TestAddition(t *testing.T) {
+func TestAdd(t *testing.T) {
 	tcases := []struct {
 		v1, v2 Value
 		out    Value
@@ -134,59 +144,61 @@ func TestAddition(t *testing.T) {
 	}, {
 
 		// testing for overflow int64
-		v1:  NewInt64(9223372036854775807),
+		v1:  NewInt64(math.MaxInt64),
 		v2:  NewUint64(2),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in 2 + 9223372036854775807"),
 	}, {
 
-		v1: NewInt64(-2),
-		v2: NewUint64(1),
-		//out: NewInt64(-1),
-		out: NewUint64(18446744073709551615),
+		v1:  NewInt64(-2),
+		v2:  NewUint64(1),
+		out: NewUint64(math.MaxUint64),
 	}, {
 
-		v1:  NewInt64(9223372036854775807),
+		v1:  NewInt64(math.MaxInt64),
 		v2:  NewInt64(-2),
 		out: NewInt64(9223372036854775805),
 	}, {
-		//Normal case
+		// Normal case
 		v1:  NewUint64(1),
 		v2:  NewUint64(2),
 		out: NewUint64(3),
 	}, {
-		//testing for overflow uint64
-		v1:  NewUint64(18446744073709551615),
+		// testing for overflow uint64
+		v1:  NewUint64(math.MaxUint64),
 		v2:  NewUint64(2),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 18446744073709551615 + 2"),
 	}, {
 
-		//int64 underflow
-		v1:  NewInt64(-9223372036854775807),
+		// int64 underflow
+		v1:  NewInt64(math.MinInt64),
 		v2:  NewInt64(-2),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in -9223372036854775807 + -2"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in -9223372036854775808 + -2"),
 	}, {
 
-		//checking int64 max value can be returned
-		v1:  NewInt64(9223372036854775807),
+		// checking int64 max value can be returned
+		v1:  NewInt64(math.MaxInt64),
 		v2:  NewUint64(0),
 		out: NewUint64(9223372036854775807),
 	}, {
 
 		// testing whether uint64 max value can be returned
-		v1:  NewUint64(18446744073709551615),
+		v1:  NewUint64(math.MaxUint64),
 		v2:  NewInt64(0),
-		out: NewUint64(18446744073709551615),
+		out: NewUint64(math.MaxUint64),
 	}, {
 
-		v1:  NewInt64(-3),
-		v2:  NewUint64(1),
-		out: NewUint64(18446744073709551614),
-	}, {
-
-		//how is this okay? Because v1 is greater than max int64 value
-		v1:  NewUint64(9223372036854775808),
+		v1:  NewUint64(math.MaxInt64),
 		v2:  NewInt64(1),
-		out: NewUint64(9223372036854775809),
+		out: NewUint64(9223372036854775808),
+	}, {
+
+		v1:  NewUint64(1),
+		v2:  TestValue(VarChar, "c"),
+		out: NewUint64(1),
+	}, {
+		v1:  NewUint64(1),
+		v2:  TestValue(VarChar, "1.2"),
+		out: NewFloat64(2.2),
 	}}
 
 	for _, tcase := range tcases {
@@ -194,7 +206,7 @@ func TestAddition(t *testing.T) {
 		got, err := Add(tcase.v1, tcase.v2)
 
 		if !vterrors.Equals(err, tcase.err) {
-			t.Errorf("Addition(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
+			t.Errorf("Add(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
 		}
 		if tcase.err != nil {
 			continue
@@ -207,7 +219,7 @@ func TestAddition(t *testing.T) {
 
 }
 
-func TestAdd(t *testing.T) {
+func TestNullsafeAdd(t *testing.T) {
 	tcases := []struct {
 		v1, v2 Value
 		out    Value
@@ -519,7 +531,7 @@ func TestToFloat64(t *testing.T) {
 		err error
 	}{{
 		v:   TestValue(VarChar, "abcd"),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: 'abcd'"),
+		out: 0,
 	}, {
 		v:   NewInt64(1),
 		out: 1,
@@ -688,7 +700,7 @@ func TestNewNumeric(t *testing.T) {
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseFloat: parsing \"abcd\": invalid syntax"),
 	}, {
 		v:   TestValue(VarChar, "abcd"),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: 'abcd'"),
+		out: numeric{typ: Float64, fval: 0},
 	}}
 	for _, tcase := range tcases {
 		got, err := newNumeric(tcase.v)

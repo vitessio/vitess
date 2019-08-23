@@ -65,8 +65,8 @@ func Add(v1, v2 Value) (Value, error) {
 	return castFromNumeric(lresult, lresult.typ), nil
 }
 
-//Subtraction takes two values and subtracts them
-func Subtraction(v1, v2 Value) (Value, error) {
+//Subtract takes two values and subtracts them
+func Subtract(v1, v2 Value) (Value, error) {
 	if v1.IsNull() || v2.IsNull() {
 		return NULL, nil
 	}
@@ -364,7 +364,7 @@ func newNumeric(v Value) (numeric, error) {
 	if fval, err := strconv.ParseFloat(str, 64); err == nil {
 		return numeric{fval: fval, typ: Float64}, nil
 	}
-	return numeric{fval: 0, typ: Float64}, nil //, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: '%s'", str)
+	return numeric{ival: 0, typ: Int64}, nil
 }
 
 // newIntegralNumeric parses a value and produces an Int64 or Uint64.
@@ -503,16 +503,10 @@ overflow:
 
 func intPlusIntWithError(v1, v2 int64) (numeric, error) {
 	result := v1 + v2
-	if v1 > 0 && v2 > 0 && result < 0 {
-		goto overflow
-	}
-	if v1 < 0 && v2 < 0 && result > 0 {
-		goto overflow
+	if (result > v1) != (v2 > 0) {
+		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v + %v", v1, v2)
 	}
 	return numeric{typ: Int64, ival: result}, nil
-
-overflow:
-	return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v + %v", v1, v2)
 }
 
 func intMinusIntWithError(v1, v2 int64) (numeric, error) {
@@ -528,7 +522,6 @@ func intTimesIntWithError(v1, v2 int64) (numeric, error) {
 	result := v1 * v2
 	if v1 >= math.MaxInt64 && v2 > 1 || v2 >= math.MaxInt64 && v1 > 1 || v1 <= math.MinInt64 && v2 > 1 || v2 <= math.MinInt64 && v1 > 1 {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v * %v", v1, v2)
-
 	}
 
 	return numeric{typ: Int64, ival: result}, nil
