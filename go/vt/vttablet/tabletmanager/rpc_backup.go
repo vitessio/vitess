@@ -122,9 +122,10 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 		if err := agent.refreshTablet(bgCtx, "after backup"); err != nil {
 			return err
 		}
+		// and re-run health check to be sure to capture any replication delay
+		// not needed for online backups because it will continue to run per schedule
+		agent.runHealthCheckLocked()
 	}
-	// and re-run health check to be sure to capture any replication delay
-	agent.runHealthCheckLocked()
 
 	return returnErr
 }
