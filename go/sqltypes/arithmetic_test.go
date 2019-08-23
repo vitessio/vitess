@@ -109,7 +109,7 @@ func TestAdd(t *testing.T) {
 
 		v1:  NewUint64(1),
 		v2:  TestValue(VarChar, "c"),
-		out: NewFloat64(1),
+		out: NewUint64(1),
 	}, {
 		v1:  NewUint64(1),
 		v2:  TestValue(VarChar, "1.2"),
