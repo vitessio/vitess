@@ -458,7 +458,7 @@ func TestRowReplicationWithRealDatabase(t *testing.T) {
 
 }
 
-// TestRowReplicationTypes creates a table wih all
+// TestRowReplicationTypes creates a table with all
 // supported data types. Then we insert a row in it. then we re-build
 // the SQL for the values, re-insert these. Then we select from the
 // database and make sure both rows are identical.

@@ -34,7 +34,7 @@ var (
 // Clock returns the current time.
 type Clock interface {
 	// Now returns the current time as Interval.
-	// This method should be thread safe (i.e. multipe go routines can
+	// This method should be thread safe (i.e. multiple go routines can
 	// safely call this at the same time).
 	// The returned interval is guaranteed to have earliest <= latest,
 	// and all implementations enforce it.

@@ -38,7 +38,7 @@ import (
 //
 // The algorithm works by issuing a query to the database to find the minimum and maximum
 // elements of the split column in the table referenced by the given SQL query. Denote these
-// by min and max, respecitvely. The algorithm then "splits" the interval [min, max] into
+// by min and max, respectively. The algorithm then "splits" the interval [min, max] into
 // SplitParams.split_count sub-intervals of equal length:
 // [a_1, a_2], [a_2, a_3],..., [a_{split_count}, a_{split_count+1}],
 // where min=a_1 < a_2 < a_3 < ... < a_split_count < a_{split_count+1}=max.

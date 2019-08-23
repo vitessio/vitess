@@ -29,7 +29,7 @@ import (
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
 )
 
-// protocol specifices which RPC client implementation should be used.
+// protocol specifics which RPC client implementation should be used.
 var protocol = flag.String("throttler_client_protocol", "grpc", "the protocol to use to talk to the integrated throttler service")
 
 // Client defines the generic RPC interface for the throttler service.

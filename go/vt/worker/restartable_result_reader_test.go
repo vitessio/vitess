@@ -136,7 +136,7 @@ func TestGenerateQuery(t *testing.T) {
 			want:              "SELECT `a`,`b`,`msg1`,`msg2` FROM `t1` WHERE `a`>=11 AND `a`<26 ORDER BY `a`,`b`",
 		},
 		{
-			desc:              "start overriden by last row (multi-column primary key)",
+			desc:              "start overridden by last row (multi-column primary key)",
 			start:             sqltypes.NewInt64(11),
 			end:               sqltypes.NewInt64(26),
 			table:             "t1",

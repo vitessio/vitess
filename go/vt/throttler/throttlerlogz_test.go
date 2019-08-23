@@ -42,7 +42,7 @@ func TestThrottlerlogzHandler_NonExistantThrottler(t *testing.T) {
 	throttlerlogzHandler(response, request, newManager())
 
 	if got, want := response.Body.String(), `throttler: t1 does not exist`; !strings.Contains(got, want) {
-		t.Fatalf("/throttlerlogz page for non-existant t1 should not succeed. got = %v, want = %v", got, want)
+		t.Fatalf("/throttlerlogz page for non-existent t1 should not succeed. got = %v, want = %v", got, want)
 	}
 }
 

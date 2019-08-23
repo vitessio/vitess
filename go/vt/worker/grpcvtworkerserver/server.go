@@ -47,7 +47,7 @@ func NewVtworkerServer(wi *worker.Instance) *VtworkerServer {
 
 // ExecuteVtworkerCommand is part of the vtworkerdatapb.VtworkerServer interface
 func (s *VtworkerServer) ExecuteVtworkerCommand(args *vtworkerdatapb.ExecuteVtworkerCommandRequest, stream vtworkerservicepb.Vtworker_ExecuteVtworkerCommandServer) (err error) {
-	// Please note that this panic handler catches only panics occuring in the code below.
+	// Please note that this panic handler catches only panics occurring in the code below.
 	// The actual execution of the vtworker command takes place in a new go routine
 	// (started in Instance.setAndStartWorker()) which has its own panic handler.
 	defer servenv.HandlePanic("vtworker", &err)

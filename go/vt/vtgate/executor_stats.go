@@ -94,7 +94,7 @@ function drawQPSChart() {
           	var idx = qps[planTypes[j]].length - i - 1;
             datum.push(+qps[planTypes[j]][idx].toFixed(2));
           } else {
-            // Assume 0.0 QPS for older, non-existant data points.
+            // Assume 0.0 QPS for older, non-existent data points.
             datum.push(0);
           }
         }

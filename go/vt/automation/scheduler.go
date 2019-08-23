@@ -55,7 +55,7 @@ type Scheduler struct {
 	// Guarded by "mu".
 	state schedulerState
 
-	// Guarded by "taskCreatorMu". May be overriden by testing code.
+	// Guarded by "taskCreatorMu". May be overridden by testing code.
 	taskCreator   taskCreator
 	taskCreatorMu sync.Mutex
 

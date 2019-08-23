@@ -555,7 +555,7 @@ func (maxPosSearch *maxReplPosSearch) processTablet(tablet *topodatapb.Tablet) {
 	maxPosSearch.maxPosLock.Unlock()
 }
 
-// chooseNewMaster finds a tablet that is going to become master after reparent. The criterias
+// chooseNewMaster finds a tablet that is going to become master after reparent. The criteria
 // for the new master-elect are (preferably) to be in the same cell as the current master, and
 // to be different from avoidMasterTabletAlias. The tablet with the largest replication
 // position is chosen to minimize the time of catching up with the master. Note that the search
@@ -649,7 +649,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 	}
 
 	// Deal with the old master: try to remote-scrap it, if it's
-	// truely dead we force-scrap it. Remove it from our map in any case.
+	// truly dead we force-scrap it. Remove it from our map in any case.
 	if shardInfo.HasMaster() {
 		deleteOldMaster := true
 		shardInfoMasterAliasStr := topoproto.TabletAliasString(shardInfo.MasterAlias)
