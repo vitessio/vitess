@@ -63,7 +63,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id" type:INT32 > `,
 		`rows:<lengths:1 lengths:3 values:"2bbb" > lastpk:<lengths:1 values:"2" > `,
 	}
-	wantQuery = "select id, val from t1 where (id) > (1) order by id"
+	wantQuery = "select id, val from t1 where (id > 1) order by id"
 	checkStream(t, "select * from t1", []sqltypes.Value{sqltypes.NewInt64(1)}, wantQuery, wantStream)
 
 	// t1: different column ordering
@@ -87,7 +87,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id1" type:INT32 > pkfields:<name:"id2" type:INT32 > `,
 		`rows:<lengths:1 lengths:1 lengths:3 values:"13bbb" > lastpk:<lengths:1 lengths:1 values:"13" > `,
 	}
-	wantQuery = "select id1, id2, val from t2 where (id1,id2) > (1,2) order by id1, id2"
+	wantQuery = "select id1, id2, val from t2 where (id1 = 1 and id2 > 2) or (id1 > 1) order by id1, id2"
 	checkStream(t, "select * from t2", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, wantQuery, wantStream)
 
 	// t3: all rows
@@ -103,7 +103,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id" type:INT32 > pkfields:<name:"val" type:VARBINARY > `,
 		`rows:<lengths:1 lengths:3 values:"2bbb" > lastpk:<lengths:1 lengths:3 values:"2bbb" > `,
 	}
-	wantQuery = "select id, val from t3 where (id,val) > (1,'aaa') order by id, val"
+	wantQuery = "select id, val from t3 where (id = 1 and val > 'aaa') or (id > 1) order by id, val"
 	checkStream(t, "select * from t3", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarBinary("aaa")}, wantQuery, wantStream)
 }
 
