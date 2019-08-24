@@ -24,10 +24,10 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-var _ Primitive = (*Join)(nil)
+var _ Primitive = (*NestedLoopJoin)(nil)
 
-// Join specifies the parameters for a join primitive.
-type Join struct {
+// NestedLoopJoin specifies the parameters for a join primitive.
+type NestedLoopJoin struct {
 	Opcode JoinOpcode
 	// Left and Right are the LHS and RHS primitives
 	// of the Join. They can be any primitive.
@@ -49,7 +49,7 @@ type Join struct {
 }
 
 // Execute performs a non-streaming exec.
-func (jn *Join) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (jn *NestedLoopJoin) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	joinVars := make(map[string]*querypb.BindVariable)
 	lresult, err := jn.Left.Execute(vcursor, bindVars, wantfields)
 	if err != nil {
@@ -96,7 +96,7 @@ func (jn *Join) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariab
 }
 
 // StreamExecute performs a streaming exec.
-func (jn *Join) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (jn *NestedLoopJoin) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	joinVars := make(map[string]*querypb.BindVariable)
 	err := jn.Left.StreamExecute(vcursor, bindVars, wantfields, func(lresult *sqltypes.Result) error {
 		for _, lrow := range lresult.Rows {
@@ -153,7 +153,7 @@ func (jn *Join) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 }
 
 // GetFields fetches the field info.
-func (jn *Join) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (jn *NestedLoopJoin) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	joinVars := make(map[string]*querypb.BindVariable)
 	lresult, err := jn.Left.GetFields(vcursor, bindVars)
 	if err != nil {
@@ -210,7 +210,7 @@ const (
 
 func (code JoinOpcode) String() string {
 	if code == NormalJoin {
-		return "Join"
+		return "NestedLoopJoin"
 	}
 	return "LeftJoin"
 }
@@ -222,12 +222,12 @@ func (code JoinOpcode) MarshalJSON() ([]byte, error) {
 }
 
 // RouteType returns a description of the query routing type used by the primitive
-func (jn *Join) RouteType() string {
-	return "Join"
+func (jn *NestedLoopJoin) RouteType() string {
+	return "NestedLoopJoin"
 }
 
 // GetKeyspaceName specifies the Keyspace that this primitive routes to.
-func (jn *Join) GetKeyspaceName() string {
+func (jn *NestedLoopJoin) GetKeyspaceName() string {
 	if jn.Left.GetKeyspaceName() == jn.Right.GetKeyspaceName() {
 		return jn.Left.GetKeyspaceName()
 	}
@@ -235,7 +235,7 @@ func (jn *Join) GetKeyspaceName() string {
 }
 
 // GetTableName specifies the table that this primitive routes to.
-func (jn *Join) GetTableName() string {
+func (jn *NestedLoopJoin) GetTableName() string {
 	return jn.Left.GetTableName() + "_" + jn.Right.GetTableName()
 }
 

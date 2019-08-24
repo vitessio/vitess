@@ -63,7 +63,7 @@ type join struct {
 	// Left and Right are the nodes for the join.
 	Left, Right builder
 
-	ejoin *engine.Join
+	ejoin *engine.NestedLoopJoin
 }
 
 // newJoin makes a new join using the two planBuilder. ajoin can be nil
@@ -102,7 +102,7 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
 		weightStrings: make(map[*resultColumn]int),
 		Left:          lpb.bldr,
 		Right:         rpb.bldr,
-		ejoin: &engine.Join{
+		ejoin: &engine.NestedLoopJoin{
 			Opcode: opcode,
 			Vars:   make(map[string]int),
 		},
