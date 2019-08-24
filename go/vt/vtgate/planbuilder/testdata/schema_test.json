@@ -47,6 +47,10 @@
           "type": "lookup_test",
           "owner": "multicolvin"
         },
+        "cola_kid_map": {
+          "type": "lookup_test",
+          "owner": "overlap_vindex"
+        },
         "name_user_map": {
           "type": "multi",
           "owner": "user"
@@ -209,6 +213,18 @@
             {
               "columns": ["column_b", "column_c"],
               "name": "colb_colc_map"
+            }
+          ]
+        },
+        "overlap_vindex": {
+          "column_vindexes": [
+            {
+              "column": "kid",
+              "name": "kid_index"
+            },
+            {
+              "columns": ["column_a", "kid"],
+              "name": "cola_kid_map"
             }
           ]
         },
