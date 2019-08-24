@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/assert"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -381,7 +382,7 @@ func BenchmarkUint64KeyString(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		for _, key := range keys {
-			key.String()
+			_ = key.String()
 		}
 	}
 }
@@ -433,5 +434,46 @@ func BenchmarkKeyRangesOverlap(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		KeyRangesOverlap(kr1, kr2)
+	}
+}
+
+func TestIsKeyRange(t *testing.T) {
+	testcases := []struct {
+		in  string
+		out bool
+	}{{
+		in:  "-",
+		out: true,
+	}, {
+		in:  "-80",
+		out: true,
+	}, {
+		in:  "40-80",
+		out: true,
+	}, {
+		in:  "80-",
+		out: true,
+	}, {
+		in:  "a0-",
+		out: true,
+	}, {
+		in:  "-A0",
+		out: true,
+	}, {
+		in:  "",
+		out: false,
+	}, {
+		in:  "x-80",
+		out: false,
+	}, {
+		in:  "-80x",
+		out: false,
+	}, {
+		in:  "select",
+		out: false,
+	}}
+
+	for _, tcase := range testcases {
+		assert.Equal(t, IsKeyRange(tcase.in), tcase.out, tcase.in)
 	}
 }
