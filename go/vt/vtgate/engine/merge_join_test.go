@@ -19,7 +19,7 @@ package engine
 import (
 	"testing"
 
-	"git.sqcorp.co/go/square/statsdaemon/assert"
+	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -76,6 +76,115 @@ func TestMergeJoinExecute(t *testing.T) {
 		"2|two|dos",
 		"3|three|tres",
 	)
-	assert.Equal(t, expectes, r)
 	expectResult(t, "jn.Execute", r, expectes)
+}
+
+func TestMergeJoinWithOneRowOnLHSThatMatchesMultipleRowsOnTheRHS(t *testing.T) {
+	leftPrim := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"col1|col2",
+					"int64|varchar",
+				),
+				"1|one",
+				"1|oneB",
+				"2|two",
+				"3|three",
+			),
+		},
+	}
+	rightPrim := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"col4|col5",
+					"int64|varchar",
+				),
+				"1|uno",
+				"3|tres",
+				"3|tresB",
+				"4|cuatro",
+			),
+		},
+	}
+	bv := map[string]*querypb.BindVariable{}
+
+	// Inner merge join
+	jn := &MergeJoin{
+		Opcode:        NormalJoin,
+		Left:          leftPrim,
+		Right:         rightPrim,
+		Cols:          []int{-1, -2, 2},
+		LeftJoinCols:  []int{0},
+		RightJoinCols: []int{0},
+	}
+	r, err := jn.Execute(noopVCursor{}, bv, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"col1|col2|col5",
+			"int64|varchar|varchar",
+		),
+		"1|one|uno",
+		"1|oneB|uno",
+		"3|three|tres",
+		"3|three|tresB",
+	)
+	expectResult(t, "jn.Execute", r, expected)
+}
+
+func TestCursorA(t *testing.T) {
+	values := make([][]sqltypes.Value, 0)
+	c, err := newCursor(values, []int{0})
+	assert.NoError(t, err)
+	assert.False(t, c.hasData(), "empty cursor is empty")
+}
+
+func TestCursorWithMultipleChunks(t *testing.T) {
+	values := [][]sqltypes.Value{
+		{sqltypes.NewInt32(0), sqltypes.NewVarChar("zero")},
+		{sqltypes.NewInt32(0), sqltypes.NewVarChar("zeroB")},
+		{sqltypes.NewInt32(1), sqltypes.NewVarChar("uno")},
+		{sqltypes.NewInt32(2), sqltypes.NewVarChar("dos")},
+		{sqltypes.NewInt32(3), sqltypes.NewVarChar("tres")},
+		{sqltypes.NewInt32(3), sqltypes.NewVarChar("tresB")},
+		{sqltypes.NewInt32(3), sqltypes.NewVarChar("tresC")},
+	}
+	c, err := newCursor(values, []int{0})
+	assert.NoError(t, err)
+	assert.True(t, c.hasData())
+	assert.Equal(t, [][]sqltypes.Value{
+		{sqltypes.NewInt32(0), sqltypes.NewVarChar("zero")},
+		{sqltypes.NewInt32(0), sqltypes.NewVarChar("zeroB")},
+	}, c.current)
+
+	err = c.fetchNextChunk()
+	assert.NoError(t, err)
+	assert.True(t, c.hasData())
+	assert.Equal(t, [][]sqltypes.Value{
+		{sqltypes.NewInt32(1), sqltypes.NewVarChar("uno")},
+	}, c.current)
+
+	err = c.fetchNextChunk()
+	assert.NoError(t, err)
+	assert.True(t, c.hasData())
+	assert.Equal(t, [][]sqltypes.Value{
+		{sqltypes.NewInt32(2), sqltypes.NewVarChar("dos")},
+	}, c.current)
+
+	err = c.fetchNextChunk()
+	assert.NoError(t, err)
+	assert.True(t, c.hasData())
+	assert.Equal(t, [][]sqltypes.Value{
+		{sqltypes.NewInt32(3), sqltypes.NewVarChar("tres")},
+		{sqltypes.NewInt32(3), sqltypes.NewVarChar("tresB")},
+		{sqltypes.NewInt32(3), sqltypes.NewVarChar("tresC")},
+	}, c.current)
+
+	err = c.fetchNextChunk()
+	assert.NoError(t, err)
+	assert.False(t, c.hasData())
 }
