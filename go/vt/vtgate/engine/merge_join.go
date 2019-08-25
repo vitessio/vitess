@@ -17,17 +17,18 @@ limitations under the License.
 package engine
 
 import (
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 var _ Primitive = (*MergeJoin)(nil)
 
-// MergeJoin specifies the parameters for a join primitive.
+// MergeJoin specifies the parameters for a join primitive. It's an algorithm that
+// requires that both inputs are ordered. It will iterate over the inputs only once,
+// and uses minimal state to do it's work
 type MergeJoin struct {
 	Opcode JoinOpcode
 	// Left and Right are the LHS and RHS primitives
@@ -48,72 +49,6 @@ type MergeJoin struct {
 
 	// RightJoinCols defines which columns from the rhs are part of the ON comparison
 	RightJoinCols []int `json:",omitempty"`
-}
-
-// a struct that allows for iterating over the rows in chunks (array of Value), where all rows in a chunk share the same
-// join column value
-type prefetchingChunkCursor struct {
-	rows            [][]sqltypes.Value
-	idx             int
-	current         [][]sqltypes.Value
-	currentJoinVals []sqltypes.Value
-	keyCols         []int
-}
-
-func newCursor(rows [][]sqltypes.Value, keyCols []int) (*prefetchingChunkCursor, error) {
-	c := &prefetchingChunkCursor{
-		rows:    rows,
-		idx:     0,
-		keyCols: keyCols,
-	}
-	err := c.fetchNextChunk()
-	if err != nil {
-		return nil, err
-	}
-	return c, nil
-
-}
-
-// if the cursor has prefetched data, this will return true
-func (c *prefetchingChunkCursor) hasData() bool {
-	return c.current != nil
-}
-
-// fetchNextChunk fetches the next chunk of rows, with all rows having the same value for the key columns
-func (c *prefetchingChunkCursor) fetchNextChunk() error {
-	if c.idx >= len(c.rows) {
-		// if we are at the end of the input, we are done.
-		c.current = nil
-		return nil
-	}
-
-	c.currentJoinVals = *c.getCurrentJoinValues()
-	c.current = [][]sqltypes.Value{c.rows[c.idx]}
-	c.idx++
-
-	for c.idx < len(c.rows) {
-		curr := c.getCurrentJoinValues()
-		cmp, err := compareAll(&c.currentJoinVals, curr)
-		if err != nil {
-			return err
-		}
-		if cmp != 0 {
-			return nil
-		}
-		c.current = append(c.current, c.rows[c.idx])
-		c.idx++
-	}
-
-	return nil
-}
-
-// getCurrentJoinValues fetches the join values being evaluated
-func (c *prefetchingChunkCursor) getCurrentJoinValues() *[]sqltypes.Value {
-	curr := make([]sqltypes.Value, len(c.keyCols))
-	for i, column := range c.keyCols {
-		curr[i] = c.rows[c.idx][column]
-	}
-	return &curr
 }
 
 // Execute performs a non-streaming exec.
@@ -160,9 +95,9 @@ func (jn *MergeJoin) Execute(vcursor VCursor, bindVars map[string]*querypb.BindV
 				return nil, err
 			}
 		case 0: // we have a match!
-			intermediate := jn.multiply(lCursor.current, rCursor.current)
-			result.Rows = append(result.Rows, intermediate...)
-			result.RowsAffected += uint64(len(intermediate))
+			match := jn.multiply(lCursor.current, rCursor.current)
+			result.Rows = append(result.Rows, match...)
+			result.RowsAffected += uint64(len(match))
 
 			// since the cursor guarantees that each chunk is unique,
 			// we can move both sides forward
@@ -183,8 +118,7 @@ func (jn *MergeJoin) Execute(vcursor VCursor, bindVars map[string]*querypb.BindV
 // multiply takes two chunks and combines them to produce the result rows
 func (jn *MergeJoin) multiply(lhs, rhs [][]sqltypes.Value) [][]sqltypes.Value {
 	rhsSize := len(rhs)
-	totalSize := len(lhs) * rhsSize
-	result := make([][]sqltypes.Value, totalSize, totalSize)
+	result := make([][]sqltypes.Value, len(lhs)*rhsSize)
 
 	for i, aside := range lhs {
 		for j, bside := range rhs {
@@ -222,20 +156,85 @@ func (jn *MergeJoin) GetTableName() string {
 	return jn.Left.GetTableName() + "_" + jn.Right.GetTableName()
 }
 
-func (jn *MergeJoin) compareJoinCols(lhs, rhs []sqltypes.Value) (int, error) {
-	for i, ljoinCol := range jn.LeftJoinCols {
-		lval := lhs[ljoinCol]
-		rval := rhs[jn.RightJoinCols[i]]
-		cmp, err := sqltypes.NullsafeCompare(lval, rval)
-		if err != nil {
-			return 0, vterrors.Wrap(err, "tried to compare two values")
-		}
+func (jn *MergeJoin) resultRow(lhs, rhs []sqltypes.Value) []sqltypes.Value {
+	row := make([]sqltypes.Value, len(jn.Cols))
+	for i, index := range jn.Cols {
+		if index < 0 {
+			row[i] = lhs[-index-1]
 
-		if cmp != 0 {
-			return cmp, nil
+		} else
+		// rrow can be nil on left joins
+		if rhs != nil {
+			row[i] = rhs[index-1]
 		}
 	}
-	return 0, nil
+	return row
+}
+
+// a struct that allows for iterating over the rows in chunks (array of Value), where all rows in a chunk share the same
+// join column value
+type joinCursor struct {
+	rows            [][]sqltypes.Value
+	idx             int
+	current         [][]sqltypes.Value
+	currentJoinVals []sqltypes.Value
+	keyCols         []int
+}
+
+func newCursor(rows [][]sqltypes.Value, keyCols []int) (*joinCursor, error) {
+	c := &joinCursor{
+		rows:    rows,
+		idx:     0,
+		keyCols: keyCols,
+	}
+	err := c.fetchNextChunk()
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
+
+}
+
+// if the cursor has prefetched data, this will return true
+func (c *joinCursor) hasData() bool {
+	return c.current != nil
+}
+
+// fetchNextChunk fetches the next chunk of rows, with all rows having the same value for the key columns
+func (c *joinCursor) fetchNextChunk() error {
+	if c.idx >= len(c.rows) {
+		// if we are at the end of the input, we are done.
+		c.current = nil
+		return nil
+	}
+
+	c.currentJoinVals = *c.getCurrentJoinValues()
+	c.current = [][]sqltypes.Value{c.rows[c.idx]}
+	c.idx++
+
+	for c.idx < len(c.rows) {
+		curr := c.getCurrentJoinValues()
+		cmp, err := compareAll(&c.currentJoinVals, curr)
+		if err != nil {
+			return err
+		}
+		if cmp != 0 {
+			return nil
+		}
+		c.current = append(c.current, c.rows[c.idx])
+		c.idx++
+	}
+
+	return nil
+}
+
+// getCurrentJoinValues fetches the join values being evaluated
+func (c *joinCursor) getCurrentJoinValues() *[]sqltypes.Value {
+	curr := make([]sqltypes.Value, len(c.keyCols))
+	for i, column := range c.keyCols {
+		curr[i] = c.rows[c.idx][column]
+	}
+	return &curr
 }
 
 func compareAll(lhs, rhs *[]sqltypes.Value) (int, error) {
@@ -255,19 +254,4 @@ func compareAll(lhs, rhs *[]sqltypes.Value) (int, error) {
 		}
 	}
 	return 0, nil
-}
-
-func (jn *MergeJoin) resultRow(lhs, rhs []sqltypes.Value) []sqltypes.Value {
-	row := make([]sqltypes.Value, len(jn.Cols))
-	for i, index := range jn.Cols {
-		if index < 0 {
-			row[i] = lhs[-index-1]
-
-		} else
-		// rrow can be nil on left joins
-		if rhs != nil {
-			row[i] = rhs[index-1]
-		}
-	}
-	return row
 }
