@@ -239,7 +239,16 @@ func (wr *Wrangler) buildMigrater(ctx context.Context, targetKeyspace, workflow 
 	if mi.sourceKeyspace != mi.targetKeyspace {
 		mi.migrationType = binlogdatapb.MigrationType_TABLES
 	} else {
+		// TODO(sougou): for shard migration, validate that source and target combined
+		// keyranges match.
 		mi.migrationType = binlogdatapb.MigrationType_SHARDS
+		for sourceShard := range mi.sources {
+			if _, ok := mi.targets[sourceShard]; ok {
+				// If shards are overlapping, then this is a table migration.
+				mi.migrationType = binlogdatapb.MigrationType_TABLES
+				break
+			}
+		}
 	}
 	return mi, nil
 }
@@ -332,12 +341,6 @@ func (mi *migrater) validate(ctx context.Context, isWrite bool) error {
 			return mi.validateTableForWrite(ctx)
 		}
 	} else { // binlogdatapb.MigrationType_SHARDS
-		// Source and target shards must not match.
-		for sourceShard := range mi.sources {
-			if _, ok := mi.targets[sourceShard]; ok {
-				return fmt.Errorf("target shard matches a source shard: %v", sourceShard)
-			}
-		}
 		if isWrite {
 			return mi.validateShardForWrite(ctx)
 		}
