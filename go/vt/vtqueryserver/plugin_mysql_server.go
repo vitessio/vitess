@@ -119,7 +119,7 @@ func (mh *proxyHandler) ComQuery(c *mysql.Conn, query string, callback func(*sql
 			session.Options.ClientFoundRows = true
 		}
 	}
-	if c.SchemaName != "" {
+	if session.TargetString == "" && c.SchemaName != "" {
 		session.TargetString = c.SchemaName
 	}
 	session, result, err := mh.mp.Execute(ctx, session, query, make(map[string]*querypb.BindVariable))
