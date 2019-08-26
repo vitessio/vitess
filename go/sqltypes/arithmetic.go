@@ -39,8 +39,8 @@ type numeric struct {
 
 var zeroBytes = []byte("0")
 
-//Add adds two values together
-//if v1 or v2 is null, then it returns null
+// Add adds two values together
+// if v1 or v2 is null, then it returns null
 func Add(v1, v2 Value) (Value, error) {
 	if v1.IsNull() || v2.IsNull() {
 		return NULL, nil
@@ -58,7 +58,7 @@ func Add(v1, v2 Value) (Value, error) {
 	return castFromNumeric(lresult, lresult.typ), nil
 }
 
-//Subtract takes two values and subtracts them
+// Subtract takes two values and subtracts them
 func Subtract(v1, v2 Value) (Value, error) {
 	if v1.IsNull() || v2.IsNull() {
 		return NULL, nil
