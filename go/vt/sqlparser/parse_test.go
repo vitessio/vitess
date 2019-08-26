@@ -1286,6 +1286,9 @@ var (
 		input:  "use db",
 		output: "use db",
 	}, {
+		input:  "use ``",
+		output: "use ``",
+	}, {
 		input:  "use duplicate",
 		output: "use `duplicate`",
 	}, {

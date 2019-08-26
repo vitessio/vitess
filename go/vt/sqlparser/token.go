@@ -711,7 +711,7 @@ func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
 		tkn.next()
 	}
 	if buffer.Len() == 0 {
-		return LEX_ERROR, buffer.Bytes()
+		return EMPTY_ID, buffer.Bytes()
 	}
 	return ID, buffer.Bytes()
 }
