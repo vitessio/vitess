@@ -22,6 +22,8 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
@@ -90,6 +92,35 @@ func TestMySQLProtocolStreamExecute(t *testing.T) {
 	if !proto.Equal(sbc.Options[0], options) {
 		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], options)
 	}
+}
+
+func TestMySQLProtocolExecuteUseStatement(t *testing.T) {
+	createSandbox(KsTestUnsharded)
+	hcVTGateTest.Reset()
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+
+	c, err := mysqlConnect(&mysql.ConnParams{DbName: "@master"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+
+	qr, err := c.ExecuteFetch("show vitess_target", 1, false)
+	if err != nil {
+		t.Error(err)
+	}
+	assert.Equal(t, "VARCHAR(\"@master\")", qr.Rows[0][0].String())
+
+	_, err = c.ExecuteFetch("use TestUnsharded", 0, false)
+	if err != nil {
+		t.Error(err)
+	}
+
+	qr, err = c.ExecuteFetch("show vitess_target", 1, false)
+	if err != nil {
+		t.Error(err)
+	}
+	assert.Equal(t, "VARCHAR(\"TestUnsharded\")", qr.Rows[0][0].String())
 }
 
 func TestMysqlProtocolInvalidDB(t *testing.T) {
