@@ -1436,7 +1436,7 @@ public class VitessDatabaseMetadataTest extends BaseTest {
       Assert.assertEquals("username", vitessDatabaseMetaData.getUserName());
 
     } catch (SQLException e) {
-      Assert.fail("Exception Occured: " + e.getMessage());
+      Assert.fail("Exception occurred: " + e.getMessage());
     }
   }
 
