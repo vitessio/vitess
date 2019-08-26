@@ -308,7 +308,7 @@
         0
       ],
       "Subquery": {
-        "Opcode": "Join",
+        "Opcode": "NestedLoopJoin",
         "Left": {
           "Opcode": "SelectScatter",
           "Keyspace": {
@@ -352,7 +352,7 @@
       }
     ],
     "Input": {
-      "Opcode": "Join",
+      "Opcode": "NestedLoopJoin",
       "Left": {
         "Opcode": "SelectEqualUnique",
         "Keyspace": {
@@ -415,7 +415,7 @@
       }
     ],
     "Input": {
-      "Opcode": "Join",
+      "Opcode": "NestedLoopJoin",
       "Left": {
         "Opcode": "SelectEqualUnique",
         "Keyspace": {
@@ -474,7 +474,7 @@
       }
     ],
     "Input": {
-      "Opcode": "Join",
+      "Opcode": "NestedLoopJoin",
       "Left": {
         "Opcode": "SelectScatter",
         "Keyspace": {
@@ -523,7 +523,7 @@
       }
     ],
     "Input": {
-      "Opcode": "Join",
+      "Opcode": "NestedLoopJoin",
       "Left": {
         "Opcode": "SelectUnsharded",
         "Keyspace": {

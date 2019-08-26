@@ -5,7 +5,7 @@
 {
   "Original": "select predef2, predef3 from user join unsharded on predef2 = predef3",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {

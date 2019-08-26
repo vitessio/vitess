@@ -98,7 +98,7 @@
 {
   "Original": "select music.col from user join music",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -218,7 +218,7 @@
 {
   "Original": "select music.col from user, music",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -502,9 +502,9 @@
 {
   "Original": "select user.col from user join unsharded as m1 join unsharded as m2",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
-      "Opcode": "Join",
+      "Opcode": "NestedLoopJoin",
       "Left": {
         "Opcode": "SelectScatter",
         "Keyspace": {
@@ -550,7 +550,7 @@
 {
   "Original": "select user.col from user join (unsharded as m1 join unsharded as m2)",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -582,7 +582,7 @@
 {
   "Original": "select user.col from user join (user as u1 join unsharded)",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -594,7 +594,7 @@
       "Table": "user"
     },
     "Right": {
-      "Opcode": "Join",
+      "Opcode": "NestedLoopJoin",
       "Left": {
         "Opcode": "SelectScatter",
         "Keyspace": {
@@ -725,7 +725,7 @@
 {
   "Original": "select user.col from user join user_extra on user.id \u003c user_extra.user_id",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -760,7 +760,7 @@
 {
   "Original": "select user.col from user join user_extra on user.id = 5",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectEqualUnique",
       "Keyspace": {
@@ -794,7 +794,7 @@
 {
   "Original": "select user.col from user join user_extra on 5 = user.id",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectEqualUnique",
       "Keyspace": {
@@ -828,7 +828,7 @@
 {
   "Original": "select user.col from user join user_extra on user.id = user_extra.col",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -863,7 +863,7 @@
 {
   "Original": "select user.col from user_extra join user on user_extra.user_id = user.name",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -932,7 +932,7 @@
 {
   "Original": "select ref.col from ref join user",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectReference",
       "Keyspace": {
@@ -980,7 +980,7 @@
 {
   "Original": "select route2.col from route2 join user_extra",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectUnsharded",
       "Keyspace": {
@@ -1086,7 +1086,7 @@
 {
   "Original": "select t.id from (select id from user where id = 5) as t join user_extra on t.id = user_extra.col",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectEqualUnique",
       "Keyspace": {
@@ -1199,7 +1199,7 @@
 {
   "Original": "select foo from information_schema.a join unsharded",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectDBA",
       "Keyspace": {
@@ -1230,7 +1230,7 @@
 {
   "Original": "select foo from unsharded join information_schema.a",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectUnsharded",
       "Keyspace": {
@@ -1261,14 +1261,14 @@
 {
   "Original": "select t.col1 from (select user.id, user.col1 from user join user_extra) as t join unsharded on unsharded.col1 = t.col1 and unsharded.id = t.id",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Cols": [
         1,
         0
       ],
       "Subquery": {
-        "Opcode": "Join",
+        "Opcode": "NestedLoopJoin",
         "Left": {
           "Opcode": "SelectScatter",
           "Keyspace": {
@@ -1324,7 +1324,7 @@
       0
     ],
     "Subquery": {
-      "Opcode": "Join",
+      "Opcode": "NestedLoopJoin",
       "Left": {
         "Opcode": "SelectScatter",
         "Keyspace": {
@@ -1362,7 +1362,7 @@
 {
   "Original": "select t.col1 from unsharded_a ua join (select user.id, user.col1 from user join user_extra) as t",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectUnsharded",
       "Keyspace": {
@@ -1378,7 +1378,7 @@
         1
       ],
       "Subquery": {
-        "Opcode": "Join",
+        "Opcode": "NestedLoopJoin",
         "Left": {
           "Opcode": "SelectScatter",
           "Keyspace": {
@@ -1523,7 +1523,7 @@
       "Table": "user"
     },
     "Underlying": {
-      "Opcode": "Join",
+      "Opcode": "NestedLoopJoin",
       "Left": {
         "Opcode": "SelectUnsharded",
         "Keyspace": {
@@ -1605,7 +1605,7 @@
 {
   "Original": "select unsharded.col from unsharded join user on user.col in (select col from user) join unsharded_a",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "PulloutIn",
       "SubqueryResult": "__sq1",
@@ -1621,7 +1621,7 @@
         "Table": "user"
       },
       "Underlying": {
-        "Opcode": "Join",
+        "Opcode": "NestedLoopJoin",
         "Left": {
           "Opcode": "SelectUnsharded",
           "Keyspace": {
@@ -1668,7 +1668,7 @@
 {
   "Original": "select user.user.col1, main.unsharded.col1 from user.user join main.unsharded where main.unsharded.col2 = user.user.col2",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -1741,7 +1741,7 @@
       0
     ],
     "Subquery": {
-      "Opcode": "Join",
+      "Opcode": "NestedLoopJoin",
       "Left": {
         "Opcode": "SelectScatter",
         "Keyspace": {

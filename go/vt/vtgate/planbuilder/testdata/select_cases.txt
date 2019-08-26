@@ -343,7 +343,7 @@
 {
   "Original": "select id, user_id from user join user_extra",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -467,7 +467,7 @@
 {
   "Original": "select user_extra.id from user join user_extra",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -499,7 +499,7 @@
 {
   "Original": "select user.col, user_extra.id from user join user_extra",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -532,7 +532,7 @@
 {
   "Original": "select user.col, user_extra.id + user_extra.col from user join user_extra",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -565,7 +565,7 @@
 {
   "Original": "select user.col, user_extra.id, user.col2 from user join user_extra",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -599,7 +599,7 @@
 {
   "Original": "select /* comment */ user.col from user join user_extra",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -631,7 +631,7 @@
 {
   "Original": "select user.col from user join user_extra for update",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -663,7 +663,7 @@
 {
   "Original": "select user.id, (select user.id+outm.m+unsharded.m from unsharded) from user join unsharded outm",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -699,7 +699,7 @@
 {
   "Original": "select user.Col, user_extra.Id from user join user_extra",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -992,7 +992,7 @@
       1
     ],
     "Subquery": {
-      "Opcode": "Join",
+      "Opcode": "NestedLoopJoin",
       "Left": {
         "Opcode": "SelectScatter",
         "Keyspace": {

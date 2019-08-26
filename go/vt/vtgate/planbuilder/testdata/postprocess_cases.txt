@@ -23,7 +23,7 @@
 {
   "Original": "select user.col1, user_extra.col1 from user join user_extra having user_extra.col1 = 2",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -56,7 +56,7 @@
 {
   "Original": "select user.col1 as a, user.col2, user_extra.col3 from user join user_extra having 1 = 1 and a = 1 and a = user.col2 and user_extra.col3 = 1",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -382,7 +382,7 @@
 {
   "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by null",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectEqualUnique",
       "Keyspace": {
@@ -425,7 +425,7 @@
 {
   "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by a",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectEqualUnique",
       "Keyspace": {
@@ -470,7 +470,7 @@
 {
   "Original": "select user.col1 as a, user.col2, music.col3 from user, music where user.id = music.id and user.id = 1 order by a",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectEqualUnique",
       "Keyspace": {
@@ -562,7 +562,7 @@
 {
   "Original": "select user.col1 as a, user.col2, music.col3 from user join music on user.id = music.id where user.id = 1 order by RAND()",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectEqualUnique",
       "Keyspace": {
@@ -692,7 +692,7 @@
 {
   "Original": "select u.id, e.id from user u join user_extra e where u.col = e.col and u.col in (select * from user where user.id = u.id order by col)",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {
@@ -897,7 +897,7 @@
     "Count": 1,
     "Offset": null,
     "Input": {
-      "Opcode": "Join",
+      "Opcode": "NestedLoopJoin",
       "Left": {
         "Opcode": "SelectScatter",
         "Keyspace": {

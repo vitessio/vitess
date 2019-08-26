@@ -329,7 +329,7 @@
 {
   "Original": "select user.a, t.b from user join (select count(*) b from unsharded) as t",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectScatter",
       "Keyspace": {

@@ -134,7 +134,7 @@
 {
   "Original": "select user_index.keyspace_id, unsharded.id from user_index join unsharded where user_index.id = :id",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "VindexMap",
       "Fields": [
@@ -166,7 +166,7 @@
 {
   "Original": "select user_index.keyspace_id, unsharded.id from unsharded join user_index where user_index.id = :id",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "SelectUnsharded",
       "Keyspace": {
@@ -203,7 +203,7 @@
 {
   "Original": "select user_index.id, user_index.keyspace_id, unsharded.id from user_index join unsharded where user_index.id = :id and unsharded.id = user_index.id",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "VindexMap",
       "Fields": [
@@ -249,7 +249,7 @@
 {
   "Original": "select user_index.keyspace_id, unsharded.id from user_index join unsharded where user_index.id = :id and unsharded.id = user_index.id",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "VindexMap",
       "Fields": [
@@ -294,7 +294,7 @@
 {
   "Original": "select ui.keyspace_id, unsharded.id from user_index ui join unsharded where ui.id = :id and unsharded.id = ui.id",
   "Instructions": {
-    "Opcode": "Join",
+    "Opcode": "NestedLoopJoin",
     "Left": {
       "Opcode": "VindexMap",
       "Fields": [
