@@ -19,6 +19,7 @@ package sqltypes
 import (
 	"encoding/binary"
 	"fmt"
+	"math"
 	"reflect"
 	"strconv"
 	"testing"
@@ -29,6 +30,111 @@ import (
 )
 
 func TestAdd(t *testing.T) {
+	tcases := []struct {
+		v1, v2 Value
+		out    Value
+		err    error
+	}{{
+
+		//All Nulls
+		v1:  NULL,
+		v2:  NULL,
+		out: NULL,
+	}, {
+		// First value null.
+		v1:  NewInt32(1),
+		v2:  NULL,
+		out: NULL,
+	}, {
+		// Second value null.
+		v1:  NULL,
+		v2:  NewInt32(1),
+		out: NULL,
+	}, {
+
+		// case with negatives
+		v1:  NewInt64(-1),
+		v2:  NewInt64(-2),
+		out: NewInt64(-3),
+	}, {
+
+		// testing for overflow int64
+		v1:  NewInt64(math.MaxInt64),
+		v2:  NewUint64(2),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in 2 + 9223372036854775807"),
+	}, {
+
+		v1:  NewInt64(-2),
+		v2:  NewUint64(1),
+		out: NewUint64(math.MaxUint64),
+	}, {
+
+		v1:  NewInt64(math.MaxInt64),
+		v2:  NewInt64(-2),
+		out: NewInt64(9223372036854775805),
+	}, {
+		// Normal case
+		v1:  NewUint64(1),
+		v2:  NewUint64(2),
+		out: NewUint64(3),
+	}, {
+		// testing for overflow uint64
+		v1:  NewUint64(math.MaxUint64),
+		v2:  NewUint64(2),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 18446744073709551615 + 2"),
+	}, {
+
+		// int64 underflow
+		v1:  NewInt64(math.MinInt64),
+		v2:  NewInt64(-2),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in -9223372036854775808 + -2"),
+	}, {
+
+		// checking int64 max value can be returned
+		v1:  NewInt64(math.MaxInt64),
+		v2:  NewUint64(0),
+		out: NewUint64(9223372036854775807),
+	}, {
+
+		// testing whether uint64 max value can be returned
+		v1:  NewUint64(math.MaxUint64),
+		v2:  NewInt64(0),
+		out: NewUint64(math.MaxUint64),
+	}, {
+
+		v1:  NewUint64(math.MaxInt64),
+		v2:  NewInt64(1),
+		out: NewUint64(9223372036854775808),
+	}, {
+
+		v1:  NewUint64(1),
+		v2:  TestValue(VarChar, "c"),
+		out: NewUint64(1),
+	}, {
+		v1:  NewUint64(1),
+		v2:  TestValue(VarChar, "1.2"),
+		out: NewFloat64(2.2),
+	}}
+
+	for _, tcase := range tcases {
+
+		got, err := Add(tcase.v1, tcase.v2)
+
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("Add(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
+		}
+		if tcase.err != nil {
+			continue
+		}
+
+		if !reflect.DeepEqual(got, tcase.out) {
+			t.Errorf("Addition(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
+		}
+	}
+
+}
+
+func TestNullsafeAdd(t *testing.T) {
 	tcases := []struct {
 		v1, v2 Value
 		out    Value
@@ -67,21 +173,15 @@ func TestAdd(t *testing.T) {
 		// Make sure underlying error is returned while adding.
 		v1:  NewInt64(-1),
 		v2:  NewUint64(2),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot add a negative number to an unsigned integer: 2, -1"),
+		out: NewInt64(-9223372036854775808),
 	}, {
 		// Make sure underlying error is returned while converting.
 		v1:  NewFloat64(1),
 		v2:  NewFloat64(2),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion: FLOAT64 to INT64"),
+		out: NewInt64(3),
 	}}
 	for _, tcase := range tcases {
-		got, err := NullsafeAdd(tcase.v1, tcase.v2, Int64)
-		if !vterrors.Equals(err, tcase.err) {
-			t.Errorf("Add(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
-		}
-		if tcase.err != nil {
-			continue
-		}
+		got := NullsafeAdd(tcase.v1, tcase.v2, Int64)
 
 		if !reflect.DeepEqual(got, tcase.out) {
 			t.Errorf("Add(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
@@ -346,7 +446,7 @@ func TestToFloat64(t *testing.T) {
 		err error
 	}{{
 		v:   TestValue(VarChar, "abcd"),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: 'abcd'"),
+		out: 0,
 	}, {
 		v:   NewInt64(1),
 		out: 1,
@@ -515,7 +615,7 @@ func TestNewNumeric(t *testing.T) {
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseFloat: parsing \"abcd\": invalid syntax"),
 	}, {
 		v:   TestValue(VarChar, "abcd"),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "could not parse value: 'abcd'"),
+		out: numeric{typ: Float64, fval: 0},
 	}}
 	for _, tcase := range tcases {
 		got, err := newNumeric(tcase.v)
@@ -623,7 +723,7 @@ func TestAddNumeric(t *testing.T) {
 	}, {
 		v1:  numeric{typ: Int64, ival: -1},
 		v2:  numeric{typ: Uint64, uval: 2},
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "cannot add a negative number to an unsigned integer: 2, -1"),
+		out: numeric{typ: Float64, fval: 18446744073709551617},
 	}, {
 		// Uint64 overflow.
 		v1:  numeric{typ: Uint64, uval: 18446744073709551615},
@@ -631,13 +731,7 @@ func TestAddNumeric(t *testing.T) {
 		out: numeric{typ: Float64, fval: 18446744073709551617},
 	}}
 	for _, tcase := range tcases {
-		got, err := addNumeric(tcase.v1, tcase.v2)
-		if !vterrors.Equals(err, tcase.err) {
-			t.Errorf("addNumeric(%v, %v) error: %v, want %v", tcase.v1, tcase.v2, vterrors.Print(err), vterrors.Print(tcase.err))
-		}
-		if tcase.err != nil {
-			continue
-		}
+		got := addNumeric(tcase.v1, tcase.v2)
 
 		if got != tcase.out {
 			t.Errorf("addNumeric(%v, %v): %v, want %v", tcase.v1, tcase.v2, got, tcase.out)
@@ -705,15 +799,15 @@ func TestCastFromNumeric(t *testing.T) {
 	}, {
 		typ: Int64,
 		v:   numeric{typ: Uint64, uval: 1},
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion: UINT64 to INT64"),
+		out: NewInt64(1),
 	}, {
 		typ: Int64,
 		v:   numeric{typ: Float64, fval: 1.2e-16},
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion: FLOAT64 to INT64"),
+		out: NewInt64(0),
 	}, {
 		typ: Uint64,
 		v:   numeric{typ: Int64, ival: 1},
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion: INT64 to UINT64"),
+		out: NewUint64(1),
 	}, {
 		typ: Uint64,
 		v:   numeric{typ: Uint64, uval: 1},
@@ -721,7 +815,7 @@ func TestCastFromNumeric(t *testing.T) {
 	}, {
 		typ: Uint64,
 		v:   numeric{typ: Float64, fval: 1.2e-16},
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion: FLOAT64 to UINT64"),
+		out: NewUint64(0),
 	}, {
 		typ: Float64,
 		v:   numeric{typ: Int64, ival: 1},
@@ -753,13 +847,7 @@ func TestCastFromNumeric(t *testing.T) {
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected type conversion to non-numeric: VARBINARY"),
 	}}
 	for _, tcase := range tcases {
-		got, err := castFromNumeric(tcase.v, tcase.typ)
-		if !vterrors.Equals(err, tcase.err) {
-			t.Errorf("castFromNumeric(%v, %v) error: %v, want %v", tcase.v, tcase.typ, vterrors.Print(err), vterrors.Print(tcase.err))
-		}
-		if tcase.err != nil {
-			continue
-		}
+		got := castFromNumeric(tcase.v, tcase.typ)
 
 		if !reflect.DeepEqual(got, tcase.out) {
 			t.Errorf("castFromNumeric(%v, %v): %v, want %v", tcase.v, tcase.typ, printValue(got), printValue(tcase.out))
@@ -1021,7 +1109,7 @@ func BenchmarkAddActual(b *testing.B) {
 	v1 := MakeTrusted(Int64, []byte("1"))
 	v2 := MakeTrusted(Int64, []byte("12"))
 	for i := 0; i < b.N; i++ {
-		v1, _ = NullsafeAdd(v1, v2, Int64)
+		v1 = NullsafeAdd(v1, v2, Int64)
 	}
 }
 
