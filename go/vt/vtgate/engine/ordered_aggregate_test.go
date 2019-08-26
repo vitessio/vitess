@@ -615,7 +615,7 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 
 	res, err := oa.Execute(nil, nil, false)
 	if err != nil {
-		t.Errorf("oa.Execute(): %v, want %v", err, res)
+		t.Errorf("oa.Execute(): %v", err)
 	}
 
 	if !reflect.DeepEqual(res, result) {
