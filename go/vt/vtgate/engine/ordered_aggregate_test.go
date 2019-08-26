@@ -18,6 +18,7 @@ package engine
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -612,7 +613,6 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 		RowsAffected: 1,
 	}
 
-	//want := "could not parse value: 'b'"
 	res, err := oa.Execute(nil, nil, false)
 	if err != nil {
 		t.Errorf("oa.Execute(): %v, want %v", err, res)
