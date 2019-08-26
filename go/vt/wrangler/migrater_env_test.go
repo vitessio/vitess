@@ -35,8 +35,8 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
-const vreplQueryks = "select id, source from _vt.vreplication where workflow = 'test' and db_name = 'vt_ks'"
-const vreplQueryks2 = "select id, source from _vt.vreplication where workflow = 'test' and db_name = 'vt_ks2'"
+const vreplQueryks = "select id, source from _vt.vreplication where workflow='test' and db_name='vt_ks'"
+const vreplQueryks2 = "select id, source from _vt.vreplication where workflow='test' and db_name='vt_ks2'"
 
 type testMigraterEnv struct {
 	ts                                           *topo.Server
