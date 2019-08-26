@@ -48,8 +48,10 @@ var (
 			},
 		},
 	}
-	testDMLResponse = &sqltypes.Result{RowsAffected: 1}
-	testPos         = "MariaDB/0-1-1083"
+	testSelectorResponse1 = &sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(1)}}}
+	testSelectorResponse2 = &sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}}
+	testDMLResponse       = &sqltypes.Result{RowsAffected: 1}
+	testPos               = "MariaDB/0-1-1083"
 )
 
 func TestControllerKeyRange(t *testing.T) {
