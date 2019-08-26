@@ -185,13 +185,14 @@ func ResultsEqual(r1, r2 []Result) bool {
 // Every place this function is called, a comment is needed that explains
 // why it's justified.
 func MakeRowTrusted(fields []*querypb.Field, row *querypb.Row) []Value {
-	sqlRow := make([]Value, len(row.Lengths))
+	sqlRow := make([]Value, len(fields))
 	var offset int64
-	for i, length := range row.Lengths {
+	for i, fld := range fields {
+		length := row.Lengths[i]
 		if length < 0 {
 			continue
 		}
-		sqlRow[i] = MakeTrusted(fields[i].Type, row.Values[offset:offset+length])
+		sqlRow[i] = MakeTrusted(fld.Type, row.Values[offset:offset+length])
 		offset += length
 	}
 	return sqlRow
