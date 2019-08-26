@@ -18,10 +18,12 @@ package engine
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestOrderedAggregateExecute(t *testing.T) {
@@ -591,15 +593,40 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 		Input: fp,
 	}
 
-	want := "could not parse value: 'b'"
-	if _, err := oa.Execute(nil, nil, false); err == nil || err.Error() != want {
-		t.Errorf("oa.Execute(): %v, want %s", err, want)
+	result := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Name: "col",
+				Type: querypb.Type_VARBINARY,
+			},
+			{
+				Name: "count(*)",
+				Type: querypb.Type_DECIMAL,
+			},
+		},
+		Rows: [][]sqltypes.Value{
+			{
+				sqltypes.MakeTrusted(querypb.Type_VARBINARY, []byte("a")),
+				sqltypes.MakeTrusted(querypb.Type_DECIMAL, []byte("1")),
+			},
+		},
+		RowsAffected: 1,
+	}
+
+	res, err := oa.Execute(nil, nil, false)
+	if err != nil {
+		t.Errorf("oa.Execute() failed: %v", err)
+	}
+
+	if !reflect.DeepEqual(res, result) {
+		t.Fatalf("Found mismatched values: want %v, got %v", result, res)
 	}
 
 	fp.rewind()
-	if err := oa.StreamExecute(nil, nil, false, func(_ *sqltypes.Result) error { return nil }); err == nil || err.Error() != want {
-		t.Errorf("oa.StreamExecute(): %v, want %s", err, want)
+	if err := oa.StreamExecute(nil, nil, false, func(_ *sqltypes.Result) error { return nil }); err != nil {
+		t.Errorf("oa.StreamExecute(): %v", err)
 	}
+
 }
 
 func TestMerge(t *testing.T) {
