@@ -259,7 +259,6 @@ func ToInt64(v Value) (int64, error) {
 // ToFloat64 converts Value to float64.
 func ToFloat64(v Value) (float64, error) {
 	num, _ := newNumeric(v)
-
 	switch num.typ {
 	case Int64:
 		return float64(num.ival), nil
@@ -389,7 +388,6 @@ func addNumericWithError(v1, v2 numeric) (numeric, error) {
 		return floatPlusAny(v1.fval, v2), nil
 	}
 	panic("unreachable")
-
 }
 
 func subtractNumericWithError(v1, v2 numeric) (numeric, error) {
@@ -408,7 +406,6 @@ func subtractNumericWithError(v1, v2 numeric) (numeric, error) {
 		return floatPlusAny(v1.fval, v2), nil
 	}
 	panic("unreachable")
-
 }
 
 // prioritize reorders the input parameters
@@ -423,7 +420,6 @@ func prioritize(v1, v2 numeric) (altv1, altv2 numeric) {
 		if v2.typ == Float64 {
 			return v2, v1
 		}
-
 	}
 	return v1, v2
 }
@@ -455,7 +451,6 @@ func intMinusIntWithError(v1, v2 int64) (numeric, error) {
 	if v1 > 0 && v2 > math.MaxInt64 || v1 > math.MaxInt64 && v2 > 0 || v1 <= math.MinInt64 && v2 > 0 || v1 > 0 && v2 <= math.MinInt64 {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v - %v", v1, v2)
 	}
-
 	return numeric{typ: Int64, ival: result}, nil
 }
 
@@ -477,7 +472,6 @@ func uintMinusIntWithError(v1 uint64, v2 int64) (numeric, error) {
 	if v1 < uint64(v2) {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v - %v", v1, v2)
 	}
-
 	return uintMinusUintWithError(v1, uint64(v2))
 }
 
@@ -485,7 +479,6 @@ func uintPlusUint(v1, v2 uint64) numeric {
 	result := v1 + v2
 	if result < v2 {
 		return numeric{typ: Float64, fval: float64(v1) + float64(v2)}
-
 	}
 	return numeric{typ: Uint64, uval: result}
 }
