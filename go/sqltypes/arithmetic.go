@@ -28,9 +28,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// TODO(sougou): change these functions to be more permissive.
-// Most string to number conversions should quietly convert to 0.
-
 // numeric represents a numeric value extracted from
 // a Value, used for arithmetic operations.
 type numeric struct {
@@ -50,13 +47,9 @@ func Add(v1, v2 Value) (Value, error) {
 	}
 
 	lv1, err := newNumeric(v1)
-	if err != nil {
-		return NULL, err
-	}
+
 	lv2, err := newNumeric(v2)
-	if err != nil {
-		return NULL, err
-	}
+
 	lresult, err := addNumericWithError(lv1, lv2)
 	if err != nil {
 		return NULL, err
@@ -72,13 +65,9 @@ func Subtract(v1, v2 Value) (Value, error) {
 	}
 
 	lv1, err := newNumeric(v1)
-	if err != nil {
-		return NULL, err
-	}
+
 	lv2, err := newNumeric(v2)
-	if err != nil {
-		return NULL, err
-	}
+
 	lresult, err := subtractNumericWithError(lv1, lv2)
 	if err != nil {
 		return NULL, err
@@ -87,6 +76,7 @@ func Subtract(v1, v2 Value) (Value, error) {
 	return castFromNumeric(lresult, lresult.typ), nil
 }
 
+/*
 // Multiplication takes two values and multiplies it together
 func Multiplication(v1, v2 Value) (Value, error) {
 	if v1.IsNull() {
@@ -113,6 +103,7 @@ func Multiplication(v1, v2 Value) (Value, error) {
 	return castFromNumeric(lresult, lresult.typ), nil
 
 }
+*/
 
 // NullsafeAdd adds two Values in a null-safe manner. A null value
 // is treated as 0. If both values are null, then a null is returned.
@@ -296,10 +287,8 @@ func ToInt64(v Value) (int64, error) {
 
 // ToFloat64 converts Value to float64.
 func ToFloat64(v Value) (float64, error) {
-	num, err := newNumeric(v)
-	if err != nil {
-		return 0, err
-	}
+	num, _ := newNumeric(v)
+
 	switch num.typ {
 	case Int64:
 		return float64(num.ival), nil
@@ -451,6 +440,7 @@ func subtractNumericWithError(v1, v2 numeric) (numeric, error) {
 
 }
 
+/*
 func multiplyNumericWithError(v1, v2 numeric) (numeric, error) {
 	v1, v2 = prioritize(v1, v2)
 	switch v1.typ {
@@ -469,6 +459,7 @@ func multiplyNumericWithError(v1, v2 numeric) (numeric, error) {
 	panic("unreachable")
 
 }
+*/
 
 // prioritize reorders the input parameters
 // to be Float64, Uint64, Int64.
@@ -518,6 +509,7 @@ func intMinusIntWithError(v1, v2 int64) (numeric, error) {
 	return numeric{typ: Int64, ival: result}, nil
 }
 
+/*
 func intTimesIntWithError(v1, v2 int64) (numeric, error) {
 	result := v1 * v2
 	if v1 >= math.MaxInt64 && v2 > 1 || v2 >= math.MaxInt64 && v1 > 1 || v1 <= math.MinInt64 && v2 > 1 || v2 <= math.MinInt64 && v1 > 1 {
@@ -526,6 +518,7 @@ func intTimesIntWithError(v1, v2 int64) (numeric, error) {
 
 	return numeric{typ: Int64, ival: result}, nil
 }
+*/
 
 func uintPlusInt(v1 uint64, v2 int64) numeric {
 	return uintPlusUint(v1, uint64(v2))
@@ -534,11 +527,6 @@ func uintPlusInt(v1 uint64, v2 int64) numeric {
 func uintPlusIntWithError(v1 uint64, v2 int64) (numeric, error) {
 	if v2 >= math.MaxInt64 && v1 > 0 {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v + %v", v1, v2)
-	}
-
-	if v1 >= math.MaxUint64 && v2 > 0 {
-
-		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v + %v", v1, v2)
 	}
 
 	//convert to int -> uint is because for numeric operators (such as + or -)
@@ -554,11 +542,11 @@ func uintMinusIntWithError(v1 uint64, v2 int64) (numeric, error) {
 	return uintMinusUintWithError(v1, uint64(v2))
 }
 
+/*
 func uintTimesIntWithError(v1 uint64, v2 int64) (numeric, error) {
-
 	return uintTimesUintWithError(v1, uint64(v2))
-
 }
+*/
 
 func uintPlusUint(v1, v2 uint64) numeric {
 	result := v1 + v2
@@ -585,11 +573,13 @@ func uintMinusUintWithError(v1, v2 uint64) (numeric, error) {
 	return numeric{typ: Uint64, uval: result}, nil
 }
 
+/*
 func uintTimesUintWithError(v1, v2 uint64) (numeric, error) {
 	result := v1 * v2
 
 	return numeric{typ: Uint64, uval: result}, nil
 }
+*/
 
 func floatPlusAny(v1 float64, v2 numeric) numeric {
 	switch v2.typ {
