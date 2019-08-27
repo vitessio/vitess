@@ -29,6 +29,96 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
+func TestMultiply(t *testing.T) {
+	tcases := []struct {
+		v1, v2 Value
+		out    Value
+		err    error
+	}{{
+
+		//All Nulls
+		v1:  NULL,
+		v2:  NULL,
+		out: NULL,
+	}, {
+
+		// First value null.
+		v1:  NewInt32(1),
+		v2:  NULL,
+		out: NULL,
+	}, {
+
+		// Second value null.
+		v1:  NULL,
+		v2:  NewInt32(1),
+		out: NULL,
+	}, {
+
+		// case with negative value
+		v1:  NewInt64(-1),
+		v2:  NewInt64(-2),
+		out: NewInt64(2),
+	}, {
+
+		// testing for int64 overflow with min negative value
+		v1:  NewInt64(math.MinInt64),
+		v2:  NewInt64(1),
+		out: NewInt64(math.MinInt64),
+	}, {
+		// testing for error in types
+		v1:  TestValue(Int64, "1.2"),
+		v2:  NewInt64(2),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
+	}, {
+		// testing for error in types
+		v1:  NewInt64(2),
+		v2:  TestValue(Int64, "1.2"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
+	}, {
+		// testing for uint*int
+		v1:  NewUint64(4),
+		v2:  NewInt64(5),
+		out: NewUint64(20),
+	}, {
+		// testing for uint*uint
+		v1:  NewUint64(1),
+		v2:  NewUint64(2),
+		out: NewUint64(2),
+	}, {
+		// testing for float64*int64
+		v1:  TestValue(Float64, "1.2"),
+		v2:  NewInt64(-2),
+		out: NewFloat64(-2.4),
+	}, {
+		// testing for float64*uint64
+		v1:  TestValue(Float64, "1.2"),
+		v2:  NewUint64(2),
+		out: NewFloat64(2.4),
+	}, {
+		// testing for overflow of int64
+		v1:  NewInt64(math.MaxInt64),
+		v2:  NewInt64(2),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in 9223372036854775807 * 2"),
+	}}
+
+	for _, tcase := range tcases {
+
+		got, err := Multiply(tcase.v1, tcase.v2)
+
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("Multiply(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
+		}
+		if tcase.err != nil {
+			continue
+		}
+
+		if !reflect.DeepEqual(got, tcase.out) {
+			t.Errorf("Multiply(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
+		}
+	}
+
+}
+
 func TestSubtract(t *testing.T) {
 	tcases := []struct {
 		v1, v2 Value
