@@ -94,6 +94,31 @@ func TestSubtract(t *testing.T) {
 		v1:  NewUint64(1),
 		v2:  TestValue(VarChar, "c"),
 		out: NewUint64(1),
+	}, {
+
+		v1:  TestValue(Uint64, "1.2"),
+		v2:  NewInt64(2),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseUint: parsing \"1.2\": invalid syntax"),
+	}, {
+
+		v1:  NewUint64(2),
+		v2:  TestValue(Uint64, "1.2"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseUint: parsing \"1.2\": invalid syntax"),
+	}, {
+		// uint64 - uint64
+		v1:  NewUint64(8),
+		v2:  NewUint64(4),
+		out: NewUint64(4),
+	}, {
+		// testing for float subtraction: float - int
+		v1:  NewFloat64(1.2),
+		v2:  NewInt64(2),
+		out: NewFloat64(-0.8),
+	}, {
+		// testin for float subtraction: float - uint
+		v1:  NewFloat64(1.2),
+		v2:  NewUint64(2),
+		out: NewFloat64(-0.8),
 	}}
 
 	for _, tcase := range tcases {
@@ -199,6 +224,20 @@ func TestAdd(t *testing.T) {
 		v1:  NewUint64(1),
 		v2:  TestValue(VarChar, "1.2"),
 		out: NewFloat64(2.2),
+	}, {
+
+		v1:  TestValue(Int64, "1.2"),
+		v2:  NewInt64(2),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
+	}, {
+		v1:  NewInt64(2),
+		v2:  TestValue(Int64, "1.2"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
+	}, {
+		// testing for uint64 overflow with max uint64 + int value
+		v1:  NewUint64(math.MaxUint64),
+		v2:  NewInt64(2),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 18446744073709551615 + 2"),
 	}}
 
 	for _, tcase := range tcases {
@@ -541,6 +580,9 @@ func TestToFloat64(t *testing.T) {
 	}, {
 		v:   NewFloat64(1.2),
 		out: 1.2,
+	}, {
+		v:   TestValue(Int64, "1.2"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
 	}}
 	for _, tcase := range tcases {
 		got, err := ToFloat64(tcase.v)

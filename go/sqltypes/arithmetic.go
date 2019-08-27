@@ -47,8 +47,14 @@ func Add(v1, v2 Value) (Value, error) {
 	}
 
 	lv1, err := newNumeric(v1)
+	if err != nil {
+		return NULL, err
+	}
 
 	lv2, err := newNumeric(v2)
+	if err != nil {
+		return NULL, err
+	}
 
 	lresult, err := addNumericWithError(lv1, lv2)
 	if err != nil {
@@ -65,8 +71,14 @@ func Subtract(v1, v2 Value) (Value, error) {
 	}
 
 	lv1, err := newNumeric(v1)
+	if err != nil {
+		return NULL, err
+	}
 
 	lv2, err := newNumeric(v2)
+	if err != nil {
+		return NULL, err
+	}
 
 	lresult, err := subtractNumericWithError(lv1, lv2)
 	if err != nil {
@@ -258,7 +270,10 @@ func ToInt64(v Value) (int64, error) {
 
 // ToFloat64 converts Value to float64.
 func ToFloat64(v Value) (float64, error) {
-	num, _ := newNumeric(v)
+	num, err := newNumeric(v)
+	if err != nil {
+		return 0, err
+	}
 	switch num.typ {
 	case Int64:
 		return float64(num.ival), nil
@@ -404,7 +419,7 @@ func subtractNumericWithError(v1, v2 numeric) (numeric, error) {
 			return uintMinusUintWithError(v1.uval, v2.uval)
 		}
 	case Float64:
-		return floatPlusAny(v1.fval, v2), nil
+		return floatMinusAny(v1.fval, v2), nil
 	}
 	panic("unreachable")
 
@@ -467,6 +482,10 @@ func uintPlusIntWithError(v1 uint64, v2 int64) (numeric, error) {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v + %v", v1, v2)
 	}
 
+	if v1 >= math.MaxUint64 && v2 > 0 {
+		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v + %v", v1, v2)
+	}
+
 	//convert to int -> uint is because for numeric operators (such as + or -)
 	//where one of the operands is an unsigned integer, the result is unsigned by default.
 	return uintPlusUintWithError(v1, uint64(v2))
@@ -513,6 +532,17 @@ func floatPlusAny(v1 float64, v2 numeric) numeric {
 		v2.fval = float64(v2.uval)
 	}
 	return numeric{typ: Float64, fval: v1 + v2.fval}
+}
+
+func floatMinusAny(v1 float64, v2 numeric) numeric {
+	switch v2.typ {
+	case Int64:
+		v2.fval = float64(v2.ival)
+	case Uint64:
+		v2.fval = float64(v2.uval)
+	}
+	return numeric{typ: Float64, fval: v1 - v2.fval}
+
 }
 
 func castFromNumeric(v numeric, resultType querypb.Type) Value {
