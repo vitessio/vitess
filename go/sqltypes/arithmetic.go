@@ -64,7 +64,7 @@ func Add(v1, v2 Value) (Value, error) {
 	return castFromNumeric(lresult, lresult.typ), nil
 }
 
-//Subtract takes two values and subtracts them
+// Subtract takes two values and subtracts them
 func Subtract(v1, v2 Value) (Value, error) {
 	if v1.IsNull() || v2.IsNull() {
 		return NULL, nil
@@ -486,8 +486,8 @@ func uintPlusIntWithError(v1 uint64, v2 int64) (numeric, error) {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v + %v", v1, v2)
 	}
 
-	//convert to int -> uint is because for numeric operators (such as + or -)
-	//where one of the operands is an unsigned integer, the result is unsigned by default.
+	// convert to int -> uint is because for numeric operators (such as + or -)
+	// where one of the operands is an unsigned integer, the result is unsigned by default.
 	return uintPlusUintWithError(v1, uint64(v2))
 }
 
@@ -495,7 +495,6 @@ func uintMinusIntWithError(v1 uint64, v2 int64) (numeric, error) {
 	if v1 < uint64(v2) {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v - %v", v1, v2)
 	}
-
 	return uintMinusUintWithError(v1, uint64(v2))
 }
 
@@ -503,7 +502,6 @@ func uintPlusUint(v1, v2 uint64) numeric {
 	result := v1 + v2
 	if result < v2 {
 		return numeric{typ: Float64, fval: float64(v1) + float64(v2)}
-
 	}
 	return numeric{typ: Uint64, uval: result}
 }
@@ -514,7 +512,6 @@ func uintPlusUintWithError(v1, v2 uint64) (numeric, error) {
 	if result < v2 {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v + %v", v1, v2)
 	}
-
 	return numeric{typ: Uint64, uval: result}, nil
 }
 
@@ -542,7 +539,6 @@ func floatMinusAny(v1 float64, v2 numeric) numeric {
 		v2.fval = float64(v2.uval)
 	}
 	return numeric{typ: Float64, fval: v1 - v2.fval}
-
 }
 
 func castFromNumeric(v numeric, resultType querypb.Type) Value {
