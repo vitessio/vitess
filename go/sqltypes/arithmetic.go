@@ -437,7 +437,6 @@ func prioritize(v1, v2 numeric) (altv1, altv2 numeric) {
 		if v2.typ == Float64 {
 			return v2, v1
 		}
-
 	}
 	return v1, v2
 }
