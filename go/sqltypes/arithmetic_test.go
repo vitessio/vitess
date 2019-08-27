@@ -123,7 +123,7 @@ func TestSubtract(t *testing.T) {
 		}
 
 		if !reflect.DeepEqual(got, tcase.out) {
-			t.Errorf("Subtraction(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
+			t.Errorf("Subtract(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
 		}
 	}
 
@@ -231,7 +231,7 @@ func TestAdd(t *testing.T) {
 		}
 
 		if !reflect.DeepEqual(got, tcase.out) {
-			t.Errorf("Addition(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
+			t.Errorf("Add(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
 		}
 	}
 
@@ -287,7 +287,7 @@ func TestNullsafeAdd(t *testing.T) {
 		got := NullsafeAdd(tcase.v1, tcase.v2, Int64)
 
 		if !reflect.DeepEqual(got, tcase.out) {
-			t.Errorf("Add(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
+			t.Errorf("NullsafeAdd(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
 		}
 	}
 }
