@@ -161,3 +161,8 @@ select id, case when substr(name, 1, 5) = 'alice' then 'ALICE' when name = 'bob'
 1 ks_sharded/-40: select id, case when substr(name, 1, 5) = 'alice' then 'ALICE' when name = 'bob' then 'BOB' else 'OTHER' end as name from user where id = 1 limit 10001 /* select case */
 
 ----------------------------------------------------------------------
+select id, 'abc' as test from user where id = 1 union all select id, 'def' as test from user where id = 1 /* union all */
+
+1 ks_sharded/-40: select id, 'abc' as test from user where id = 1 union all select id, 'def' as test from user where id = 1 limit 10001 /* union all */
+
+----------------------------------------------------------------------

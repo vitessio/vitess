@@ -502,7 +502,15 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 			return err
 		}
 
-		selStmt := stmt.(*sqlparser.Select)
+		var selStmt *sqlparser.Select
+		switch stmt.(type) {
+		case *sqlparser.Select:
+			selStmt = stmt.(*sqlparser.Select)
+		case *sqlparser.Union:
+			selStmt = stmt.(*sqlparser.Union).Left.(*sqlparser.Select)
+		default:
+			return fmt.Errorf("vtexplain: unsupported statement type +%v", reflect.TypeOf(stmt))
+		}
 
 		if len(selStmt.From) != 1 {
 			return fmt.Errorf("unsupported select with multiple from clauses")
