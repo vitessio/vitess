@@ -36,7 +36,7 @@ func TestSubtract(t *testing.T) {
 		err    error
 	}{{
 
-		//All Nulls
+		// All Nulls
 		v1:  NULL,
 		v2:  NULL,
 		out: NULL,
