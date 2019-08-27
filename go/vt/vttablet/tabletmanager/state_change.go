@@ -218,17 +218,25 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 					disallowQueryReason = "master tablet with filtered replication on"
 				}
 			} else {
-				replicationDelay, healthErr := agent.HealthReporter.Report(true, true)
-				if healthErr != nil {
+				if oldTablet.Type == topodatapb.TabletType_RESTORE {
+					// always start as NON-SERVING after a restore because
+					// healthcheck has not been initialized yet
 					allowQuery = false
-					disallowQueryReason = "Unable to get health"
+					disallowQueryReason = "After restore from backup"
 				} else {
-					agent.mutex.Lock()
-					agent._replicationDelay = replicationDelay
-					agent.mutex.Unlock()
-					if agent._replicationDelay > *unhealthyThreshold {
+					replicationDelay, healthErr := agent.HealthReporter.Report(true, true)
+					log.Infof("4426: replication delay during changeCallback: %v", replicationDelay)
+					if healthErr != nil {
 						allowQuery = false
-						disallowQueryReason = "replica tablet with unhealthy replication lag"
+						disallowQueryReason = "Unable to get health"
+					} else {
+						agent.mutex.Lock()
+						agent._replicationDelay = replicationDelay
+						agent.mutex.Unlock()
+						if agent._replicationDelay > *unhealthyThreshold {
+							allowQuery = false
+							disallowQueryReason = "replica tablet with unhealthy replication lag"
+						}
 					}
 				}
 			}
