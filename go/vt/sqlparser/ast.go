@@ -739,6 +739,9 @@ type DDL struct {
 
 	// VindexCols is set for AddColVindexStr.
 	VindexCols []ColIdent
+
+	// AutoIncSpec is set for AddAutoIncStr.
+	AutoIncSpec *AutoIncSpec
 }
 
 // DDL strings.
@@ -755,6 +758,8 @@ const (
 	DropVschemaTableStr = "drop vschema table"
 	AddColVindexStr     = "on table add vindex"
 	DropColVindexStr    = "on table drop vindex"
+	AddSequenceStr      = "add sequence"
+	AddAutoIncStr       = "add auto_increment"
 
 	// Vindex DDL param to specify the owner of a vindex
 	VindexOwnerStr = "owner"
@@ -813,6 +818,10 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		}
 	case DropColVindexStr:
 		buf.Myprintf("alter vschema on %v drop vindex %v", node.Table, node.VindexSpec.Name)
+	case AddSequenceStr:
+		buf.Myprintf("alter vschema add sequence %v", node.Table)
+	case AddAutoIncStr:
+		buf.Myprintf("alter vschema on %v add auto_increment %v", node.Table, node.AutoIncSpec)
 	default:
 		buf.Myprintf("%s table %v", node.Action, node.Table)
 	}
@@ -1350,6 +1359,23 @@ type VindexSpec struct {
 	Name   ColIdent
 	Type   ColIdent
 	Params []VindexParam
+}
+
+// AutoIncSpec defines and autoincrement value for a ADD AUTO_INCREMENT statement
+type AutoIncSpec struct {
+	Column   ColIdent
+	Sequence TableName
+}
+
+// Format formats the node.
+func (node *AutoIncSpec) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%v ", node.Column)
+	buf.Myprintf("using %v", node.Sequence)
+}
+
+func (node *AutoIncSpec) walkSubtree(visit Visit) error {
+	err := Walk(visit, node.Sequence, node.Column)
+	return err
 }
 
 // ParseParams parses the vindex parameter list, pulling out the special-case

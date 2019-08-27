@@ -337,7 +337,7 @@ var commands = []commandGroup{
 				"Displays all of the shards in the specified keyspace."},
 			{"WaitForDrain", commandWaitForDrain,
 				"[-timeout <duration>] [-retry_delay <duration>] [-initial_wait <duration>] <keyspace/shard> <served tablet type>",
-				"Blocks until no new queries were observed on all tablets with the given tablet type in the specifed keyspace. " +
+				"Blocks until no new queries were observed on all tablets with the given tablet type in the specified keyspace. " +
 					" This can be used as sanity check to ensure that the tablets were drained after running vtctl MigrateServedTypes " +
 					" and vtgate is no longer using them. If -timeout is set, it fails when the timeout is reached."},
 		},

@@ -1010,28 +1010,56 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 			if err != nil {
 				return err
 			}
-			qre := &QueryExecutor{
-				query:          query,
-				marginComments: comments,
-				bindVars:       bindVariables,
-				transactionID:  transactionID,
-				options:        options,
-				plan:           plan,
-				ctx:            ctx,
-				logStats:       logStats,
-				tsv:            tsv,
+			if plan.PlanID == planbuilder.PlanInsertTopic {
+				result, err = tsv.topicExecute(ctx, query, comments, bindVariables, transactionID, options, plan, logStats)
+			} else {
+				result, err = tsv.qreExecute(ctx, query, comments, bindVariables, transactionID, options, plan, logStats)
 			}
-			extras := tsv.watcher.ComputeExtras(options)
-			result, err = qre.Execute()
-			if err != nil {
-				return err
-			}
-			result.Extras = extras
-			result = result.StripMetadata(sqltypes.IncludeFieldsOrDefault(options))
-			return nil
+
+			return err
 		},
 	)
 	return result, err
+}
+
+func (tsv *TabletServer) topicExecute(ctx context.Context, query string, comments sqlparser.MarginComments, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, plan *TabletPlan, logStats *tabletenv.LogStats) (result *sqltypes.Result, err error) {
+	for _, subscriber := range plan.Table.TopicInfo.Subscribers {
+		// replace the topic name with the subscribed message table name
+		newQuery := strings.Replace(query, plan.Table.Name.String(), subscriber.Name.String(), -1)
+		var newPlan *TabletPlan
+		newPlan, err = tsv.qe.GetPlan(ctx, logStats, newQuery, skipQueryPlanCache(options))
+		if err != nil {
+			return nil, err
+		}
+
+		// because there isn't an option to return multiple results, only the last
+		// message table result is returned
+		result, err = tsv.qreExecute(ctx, newQuery, comments, bindVariables, transactionID, options, newPlan, logStats)
+	}
+	return result, err
+}
+
+func (tsv *TabletServer) qreExecute(ctx context.Context, query string, comments sqlparser.MarginComments, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, plan *TabletPlan, logStats *tabletenv.LogStats) (result *sqltypes.Result, err error) {
+	qre := &QueryExecutor{
+		query:          query,
+		marginComments: comments,
+		bindVars:       bindVariables,
+		transactionID:  transactionID,
+		options:        options,
+		plan:           plan,
+		ctx:            ctx,
+		logStats:       logStats,
+		tsv:            tsv,
+	}
+	extras := tsv.watcher.ComputeExtras(options)
+	result, err = qre.Execute()
+	if err != nil {
+		return nil, err
+	}
+	result.Extras = extras
+	result = result.StripMetadata(sqltypes.IncludeFieldsOrDefault(options))
+
+	return result, nil
 }
 
 // StreamExecute executes the query and streams the result.
@@ -1383,7 +1411,7 @@ func (tsv *TabletServer) VStreamRows(ctx context.Context, target *querypb.Target
 
 // SplitQuery splits a query + bind variables into smaller queries that return a
 // subset of rows from the original query. This is the new version that supports multiple
-// split columns and multiple split algortihms.
+// split columns and multiple split algorithms.
 // See the documentation of SplitQueryRequest in proto/vtgate.proto for more details.
 func (tsv *TabletServer) SplitQuery(
 	ctx context.Context,

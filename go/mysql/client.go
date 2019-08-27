@@ -387,7 +387,7 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 	// Read the connection id.
 	c.ConnectionID, pos, ok = readUint32(data, pos)
 	if !ok {
-		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: packet has no conneciton id")
+		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: packet has no connection id")
 	}
 
 	// Read the first part of the auth-plugin-data
@@ -567,7 +567,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 			1 + // Character set.
 			23 + // Reserved.
 			lenNullString(params.Uname) +
-			// length of scrambled passsword is handled below.
+			// length of scrambled password is handled below.
 			len(scrambledPassword) +
 			21 + // "mysql_native_password" string.
 			1 // terminating zero.

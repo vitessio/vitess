@@ -1359,6 +1359,41 @@
   }
 }
 
+# insert for overlapped vindex columns
+"insert overlap_vindex (kid, column_a, column_b) VALUES (1,2,3)"
+{
+  "Original": "insert overlap_vindex (kid, column_a, column_b) VALUES (1,2,3)",
+  "Instructions": {
+    "Opcode": "InsertSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert into overlap_vindex(kid, column_a, column_b) values (:_kid0, :_column_a0, 3)",
+    "Values": [
+      [
+        [
+          1
+        ]
+      ],
+      [
+        [
+          2
+        ],
+        [
+          1
+        ]
+      ]
+    ],
+    "Table": "overlap_vindex",
+    "Prefix": "insert into overlap_vindex(kid, column_a, column_b) values ",
+    "Mid": [
+      "(:_kid0, :_column_a0, 3)"
+    ]
+  }
+}
+
+
 # insert multiple rows in a multi column vindex table
 "insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4), (5,6,7,8)"
 {

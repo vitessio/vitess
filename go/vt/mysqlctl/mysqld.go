@@ -89,7 +89,7 @@ type Mysqld struct {
 	dbaPool *dbconnpool.ConnectionPool
 	appPool *dbconnpool.ConnectionPool
 
-	capabilities CapabilitySet
+	capabilities capabilitySet
 
 	// mutex protects the fields below.
 	mutex         sync.Mutex
@@ -119,13 +119,13 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	if getErr != nil || err != nil {
 		f, v, err = getVersionFromEnv()
 		if err != nil {
-			panic("Could not detect version from mysqld --version or MYSQL_FLAVOR")
+			panic("could not detect version from mysqld --version or MYSQL_FLAVOR")
 		}
 
 	}
 
 	log.Infof("Using flavor: %v, version: %v", f, v)
-	result.capabilities = NewCapabilitySet(f, v)
+	result.capabilities = newCapabilitySet(f, v)
 	return result
 }
 
@@ -216,7 +216,7 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 		return client.RunMysqlUpgrade(context.TODO())
 	}
 
-	if mysqld.capabilities.HasMySQLUpgradeInServer() {
+	if mysqld.capabilities.hasMySQLUpgradeInServer() {
 		log.Warningf("MySQL version has built-in upgrade, skipping RunMySQLUpgrade")
 		return nil
 	}
@@ -650,7 +650,7 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 	if err != nil {
 		return err
 	}
-	if mysqld.capabilities.HasInitializeInServer() {
+	if mysqld.capabilities.hasInitializeInServer() {
 		log.Infof("Installing data dir with mysqld --initialize-insecure")
 		args := []string{
 			"--defaults-file=" + cnf.path,
@@ -730,7 +730,7 @@ func (mysqld *Mysqld) getMycnfTemplates(root string) []string {
 	}
 
 	f := flavorMariaDB
-	if mysqld.capabilities.IsMySQLLike() {
+	if mysqld.capabilities.isMySQLLike() {
 		f = flavorMySQL
 	}
 

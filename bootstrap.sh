@@ -20,7 +20,6 @@
 # 0. Initialization and helper methods.
 # 1. Installation of dependencies.
 # 2. Installation of Go tools and vendored Go dependencies.
-# 3. Installation of development related steps e.g. creating Git hooks.
 
 BUILD_TESTS=${BUILD_TESTS:-1}
 BUILD_PYTHON=${BUILD_PYTHON:-1}
@@ -29,15 +28,6 @@ BUILD_JAVA=${BUILD_JAVA:-1}
 #
 # 0. Initialization and helper methods.
 #
-
-# Run parallel make, based on number of cores available.
-case $(uname) in
-  Linux)  NB_CORES=$(grep -c '^processor' /proc/cpuinfo);;
-  Darwin) NB_CORES=$(sysctl hw.ncpu | awk '{ print $2 }');;
-esac
-if [ -n "$NB_CORES" ]; then
-  export MAKEFLAGS="-j$((NB_CORES+1)) -l${NB_CORES}"
-fi
 
 function fail() {
   echo "ERROR: $1"
@@ -54,6 +44,14 @@ mkdir -p "$VTROOT/dist"
 mkdir -p "$VTROOT/bin"
 mkdir -p "$VTROOT/lib"
 mkdir -p "$VTROOT/vthook"
+
+# Install git hooks.
+echo "creating git hooks"
+mkdir -p "$VTTOP/.git/hooks"
+ln -sf "$VTTOP/misc/git/pre-commit" "$VTTOP/.git/hooks/pre-commit"
+ln -sf "$VTTOP/misc/git/commit-msg" "$VTTOP/.git/hooks/commit-msg"
+(cd "$VTTOP" && git config core.hooksPath "$VTTOP/.git/hooks")
+
 
 # Set up the proper GOPATH for go get below.
 if [ "$BUILD_TESTS" == 1 ] ; then
@@ -289,6 +287,9 @@ if [ "$BUILD_PYTHON" == 1 ] ; then
     install_dep "chromedriver" "73.0.3683.20" "$VTROOT/dist/chromedriver" install_chromedriver
 fi
 
+if [ "$BUILD_PYTHON" == 1 ] ; then
+  PYTHONPATH='' $PIP install mysql-connector-python
+fi
 
 #
 # 2. Installation of Go tools and vendored Go dependencies.
@@ -328,25 +329,5 @@ go get -u $gotools || fail "Failed to download some Go tools with 'go get'. Plea
 echo "Updating govendor dependencies..."
 govendor sync || fail "Failed to download/update dependencies with govendor. Please re-run bootstrap.sh in case of transient errors."
 
-if [ "$BUILD_PYTHON" == 1 ] ; then
-  PYTHONPATH='' $PIP install mysql-connector-python
-fi
-
-#
-# 3. Installation of development related steps e.g. creating Git hooks.
-#
-
-if [ "$BUILD_TESTS" == 1 ] ; then
- # Create the Git hooks.
- echo "creating git hooks"
- mkdir -p "$VTTOP/.git/hooks"
- ln -sf "$VTTOP/misc/git/pre-commit" "$VTTOP/.git/hooks/pre-commit"
- ln -sf "$VTTOP/misc/git/prepare-commit-msg.bugnumber" "$VTTOP/.git/hooks/prepare-commit-msg"
- ln -sf "$VTTOP/misc/git/commit-msg" "$VTTOP/.git/hooks/commit-msg"
- (cd "$VTTOP" && git config core.hooksPath "$VTTOP/.git/hooks")
- echo
- echo "bootstrap finished - run 'source dev.env' in your shell before building."
-else
- echo
- echo "bootstrap finished - run 'source build.env' in your shell before building."
-fi
+echo
+echo "bootstrap finished - run 'source dev.env' or 'source build.env' in your shell before building."

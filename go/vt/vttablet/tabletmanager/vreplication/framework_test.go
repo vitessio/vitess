@@ -464,8 +464,12 @@ func expectNontxQueries(t *testing.T, queries []string) {
 		}
 	}
 }
-
 func expectData(t *testing.T, table string, values [][]string) {
+	t.Helper()
+	customExpectData(t, table, values, env.Mysqld.FetchSuperQuery)
+}
+
+func customExpectData(t *testing.T, table string, values [][]string, exec func(ctx context.Context, query string) (*sqltypes.Result, error)) {
 	t.Helper()
 
 	var query string
@@ -474,7 +478,7 @@ func expectData(t *testing.T, table string, values [][]string) {
 	} else {
 		query = fmt.Sprintf("select * from %s", table)
 	}
-	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), query)
+	qr, err := exec(context.Background(), query)
 	if err != nil {
 		t.Error(err)
 		return

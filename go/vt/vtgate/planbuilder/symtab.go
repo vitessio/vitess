@@ -40,7 +40,7 @@ var errNoTable = errors.New("no table info")
 // vindex column names. These names can be resolved without the
 // need to qualify them by their table names. If there are
 // duplicates during a merge, those columns are removed from
-// the unique list, thereby disallowing unqualifed references
+// the unique list, thereby disallowing unqualified references
 // to such columns.
 //
 // After a select expression is analyzed, the

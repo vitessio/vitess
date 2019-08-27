@@ -556,7 +556,7 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 	}
 
 	newParamsBoundFlag, pos, ok := readByte(payload, pos)
-	if newParamsBoundFlag == 0x01 {
+	if ok && newParamsBoundFlag == 0x01 {
 		var mysqlType, flags byte
 		for i := uint16(0); i < prepare.ParamsCount; i++ {
 			mysqlType, pos, ok = readByte(payload, pos)
@@ -1020,7 +1020,7 @@ func (c *Conn) writePrepare(fld []*querypb.Field, prepare *PrepareData) error {
 	pos = writeUint16(data, pos, uint16(columnCount))
 	pos = writeUint16(data, pos, uint16(paramsCount))
 	pos = writeByte(data, pos, 0x00)
-	pos = writeUint16(data, pos, 0x0000)
+	writeUint16(data, pos, 0x0000)
 
 	if err := c.writeEphemeralPacket(); err != nil {
 		return err
@@ -1244,7 +1244,7 @@ func val2MySQL(v sqltypes.Value) ([]byte, error) {
 			pos = writeByte(out, pos, byte(hour))
 			pos = writeByte(out, pos, byte(minute))
 			pos = writeByte(out, pos, byte(second))
-			pos = writeUint32(out, pos, uint32(microSecond))
+			writeUint32(out, pos, uint32(microSecond))
 		} else if len(v.Raw()) > 10 {
 			out = make([]byte, 1+7)
 			out[pos] = 0x07
@@ -1278,7 +1278,7 @@ func val2MySQL(v sqltypes.Value) ([]byte, error) {
 			pos = writeByte(out, pos, byte(day))
 			pos = writeByte(out, pos, byte(hour))
 			pos = writeByte(out, pos, byte(minute))
-			pos = writeByte(out, pos, byte(second))
+			writeByte(out, pos, byte(second))
 		} else if len(v.Raw()) > 0 {
 			out = make([]byte, 1+4)
 			out[pos] = 0x04
@@ -1297,7 +1297,7 @@ func val2MySQL(v sqltypes.Value) ([]byte, error) {
 			}
 			pos = writeUint16(out, pos, uint16(year))
 			pos = writeByte(out, pos, byte(month))
-			pos = writeByte(out, pos, byte(day))
+			writeByte(out, pos, byte(day))
 		} else {
 			out = make([]byte, 1)
 			out[pos] = 0x00
@@ -1367,7 +1367,7 @@ func val2MySQL(v sqltypes.Value) ([]byte, error) {
 			if err != nil {
 				return []byte{}, err
 			}
-			pos = writeUint32(out, pos, uint32(microSeconds))
+			writeUint32(out, pos, uint32(microSeconds))
 		} else if len(v.Raw()) > 0 {
 			out = make([]byte, 1+8)
 			out[pos] = 0x08
@@ -1412,7 +1412,7 @@ func val2MySQL(v sqltypes.Value) ([]byte, error) {
 			pos = writeUint32(out, pos, uint32(days))
 			pos = writeByte(out, pos, byte(hours))
 			pos = writeByte(out, pos, byte(minutes))
-			pos = writeByte(out, pos, byte(seconds))
+			writeByte(out, pos, byte(seconds))
 		} else {
 			err := fmt.Errorf("incorrect time value")
 			return []byte{}, err

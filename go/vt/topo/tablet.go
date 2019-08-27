@@ -83,7 +83,7 @@ func IsRunningQueryService(tt topodatapb.TabletType) bool {
 // them as fast as possible.
 //
 // Replica and rdonly will use lameduck when going from healthy to
-// unhealhty (either because health check fails, or they're shutting down).
+// unhealthy (either because health check fails, or they're shutting down).
 //
 // Other types are probably not serving user visible traffic, so they
 // need to transition as fast as possible too.
