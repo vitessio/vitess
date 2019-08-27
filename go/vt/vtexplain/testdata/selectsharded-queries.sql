@@ -31,4 +31,4 @@ select id, case when name = 'alice' then 'ALICE' when name = 'bob' then 'BOB' en
 select id, case when name = 'alice' then 'ALICE' when name = 'bob' then 'BOB' else 'OTHER' end as name from user where id = 1 /* select case */;
 select id, case when substr(name, 1, 5) = 'alice' then 'ALICE' when name = 'bob' then 'BOB' else 'OTHER' end as name from user where id = 1 /* select case */;
 
-select id, 'abc' as test from user where id = 1 union all select id, 'def' as test from user where id = 1 /* union all */;
+select id, 'abc' as test from user where id = 1 union all select id, 'def' as test from user where id = 1 union all select id, 'ghi' as test from user where id = 1 /* union all */;
