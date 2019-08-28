@@ -99,6 +99,15 @@ func TestMultiply(t *testing.T) {
 		v1:  NewInt64(math.MaxInt64),
 		v2:  NewInt64(2),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in 9223372036854775807 * 2"),
+	}, {
+		// testing for underflow of uint64*max.uint64
+		v1:  NewUint64(2),
+		v2:  NewUint64(math.MaxUint64),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 2 * 18446744073709551615"),
+	}, {
+		v1:  NewUint64(math.MaxUint64),
+		v2:  NewUint64(1),
+		out: NewUint64(math.MaxUint64),
 	}}
 
 	for _, tcase := range tcases {
