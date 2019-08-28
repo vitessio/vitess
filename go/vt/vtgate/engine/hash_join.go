@@ -108,31 +108,43 @@ func extractJoinValues(row []sqltypes.Value, joinCols []int) []sqltypes.Value {
 
 // StreamExecute performs a streaming exec.
 func (jn *HashJoin) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	table := newProbeTable()
+	var leftFields []*querypb.Field
+	var resultFields []*querypb.Field
+
 	err := jn.Left.StreamExecute(vcursor, bindVars, wantfields, func(lresult *sqltypes.Result) error {
-		table := newProbeTable()
 		for _, row := range lresult.Rows {
 			joinVals := extractJoinValues(row, jn.LeftJoinCols)
 			table.Add(joinVals, row)
 		}
-
-		err := jn.Right.StreamExecute(vcursor, bindVars, wantfields, func(rresult *sqltypes.Result) error {
-			result := &sqltypes.Result{}
-			if wantfields {
-				result.Fields = joinFields(lresult.Fields, rresult.Fields, jn.Cols)
-			}
-
-			for _, rrow := range rresult.Rows {
-				joinVals := extractJoinValues(rrow, jn.RightJoinCols)
-				matches := table.Get(joinVals)
-				for _, lrow := range matches {
-					result.Rows = append(result.Rows, joinRows(lrow, rrow, jn.Cols))
-					result.RowsAffected++
-				}
-			}
-			return callback(result)
-		})
-		return err
+		leftFields = lresult.Fields
+		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	err = jn.Right.StreamExecute(vcursor, bindVars, wantfields, func(rresult *sqltypes.Result) error {
+		result := &sqltypes.Result{}
+
+		if wantfields {
+			// here we are setting the fields for every result object we return, but only calculating them once.
+			if resultFields == nil {
+				resultFields = joinFields(leftFields, rresult.Fields, jn.Cols)
+			}
+			result.Fields = resultFields
+		}
+
+		for _, rrow := range rresult.Rows {
+			joinVals := extractJoinValues(rrow, jn.RightJoinCols)
+			matches := table.Get(joinVals)
+			for _, lrow := range matches {
+				result.Rows = append(result.Rows, joinRows(lrow, rrow, jn.Cols))
+			}
+		}
+		return callback(result)
+	})
+
 	return err
 }
 
@@ -203,4 +215,8 @@ func (p *probeTable) Get(key []sqltypes.Value) [][]sqltypes.Value {
 	hash := p.calculateHashFor(key)
 
 	return p.table[hash]
+}
+
+func (p *probeTable) IsEmpty() bool {
+	return len(p.table) == 0
 }
