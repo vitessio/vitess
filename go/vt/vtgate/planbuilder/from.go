@@ -30,7 +30,7 @@ import (
 
 // processDMLTable analyzes the FROM clause for DMLs and returns a routeOption.
 func (pb *primitiveBuilder) processDMLTable(tableExprs sqlparser.TableExprs) (*routeOption, error) {
-	if err := pb.processTableExprs(tableExprs, false /*useHashJoin*/); err != nil {
+	if err := pb.processTableExprs(tableExprs, false /*UseHashJoin*/); err != nil {
 		return nil, err
 	}
 	rb, ok := pb.bldr.(*route)

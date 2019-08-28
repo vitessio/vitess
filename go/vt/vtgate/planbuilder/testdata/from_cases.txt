@@ -1821,3 +1821,41 @@
 # non-existent table on right of join
 "select c from user join t"
 "table t not found"
+
+# hash join
+"select /*vt+ USE_HASH_JOIN */ music.col from user join music on music.col = user.col"
+{
+  "Original": "select /*vt+ USE_HASH_JOIN */ music.col from user join music on music.col = user.col",
+  "Instructions": {
+    "Opcode": "HashJoin",
+    "Left": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select /*vt+ USE_HASH_JOIN */ 1 from user",
+      "FieldQuery": "select 1 from user where 1 != 1",
+      "Table": "user"
+    },
+    "Right": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select /*vt+ USE_HASH_JOIN */ music.col from music",
+      "FieldQuery": "select music.col from music where 1 != 1",
+      "Table": "music"
+    },
+    "Cols": [
+      1
+    ],
+    "LeftJoinCols": [
+      0
+    ],
+    "RightJoinCols": [
+      1
+    ]
+  }
+}

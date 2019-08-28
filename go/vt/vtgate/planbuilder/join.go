@@ -19,6 +19,9 @@ package planbuilder
 import (
 	"errors"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
@@ -66,7 +69,16 @@ type join struct {
 	Cols        []int          `json:",omitempty"`
 	Vars        map[string]int `json:",omitempty"`
 	Opcode      engine.JoinOpcode
-	useHashJoin bool
+	UseHashJoin bool
+
+	// Why this complicated pattern of functions for the wireUp and createPrimitive phases?
+	// I wanted to minimize the number of times we needed to check if we are working on a hash join or not, anticipating
+	// the need for more checks once we add merge joins as well.
+	// The other reason was to not add any data to the join struct that was needed by all the physical join implementations.
+	// To create the hash join, we need to know the columns that the join will be performed on on either input.
+	// This information is not needed in the nested loop join case.
+	wireUp          func() error
+	createPrimitive func(l, r engine.Primitive) engine.Primitive
 }
 
 // newJoin makes a new join using the two planBuilder. ajoin can be nil
@@ -101,19 +113,86 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, useHash
 			return errors.New("unsupported: join with USING(column_list) clause")
 		}
 	}
-	lpb.bldr = &join{
+
+	joinStruct, err := createJoinStruct(lpb, rpb, opcode, useHashJoin, ajoin)
+	if err != nil {
+		return err
+	}
+	lpb.bldr = joinStruct
+	lpb.bldr.Reorder(0)
+
+	if ajoin == nil || opcode == engine.LeftJoin || useHashJoin {
+		return nil
+	}
+	return lpb.pushFilter(ajoin.Condition.On, sqlparser.WhereStr)
+}
+
+func createJoinStruct(lpb, rpb *primitiveBuilder, opcode engine.JoinOpcode, useHashJoin bool, ajoin *sqlparser.JoinTableExpr) (*join, error) {
+	j := join{
 		weightStrings: make(map[*resultColumn]int),
 		Left:          lpb.bldr,
 		Right:         rpb.bldr,
 		Vars:          make(map[string]int),
 		Opcode:        opcode,
-		useHashJoin:   useHashJoin,
+		UseHashJoin:   useHashJoin,
 	}
-	lpb.bldr.Reorder(0)
-	if ajoin == nil || opcode == engine.LeftJoin {
+
+	if useHashJoin {
+		if ajoin == nil {
+			return nil, vterrors.New(vtrpc.Code_INTERNAL, "need an ajoin to create a hash join")
+		}
+		cmp, ok := ajoin.Condition.On.(*sqlparser.ComparisonExpr)
+		if !ok || cmp.Operator != "=" {
+			return nil, vterrors.New(vtrpc.Code_INTERNAL, "can only handle simple equality between columns using hash joins")
+		}
+
+		j.wireUp = j.hashJoinWireUp(cmp)
+	} else {
+		j.wireUp = noOp
+		j.createPrimitive = j.nestedLoopPrimitive
+	}
+	return &j, nil
+}
+
+func noOp() error { return nil }
+
+func (jb *join) hashJoinWireUp(cmp *sqlparser.ComparisonExpr) func() error {
+	return func() error {
+		leftCol, leftOk := cmp.Left.(*sqlparser.ColName)
+		rightCol, rightOk := cmp.Right.(*sqlparser.ColName)
+		if !leftOk || !rightOk {
+			return vterrors.New(vtrpc.Code_INTERNAL, "can only handle simple equality between columns using hash joins")
+		}
+		_, lftColOffset := jb.Left.SupplyCol(leftCol)
+		_, rgtColOffset := jb.Right.SupplyCol(rightCol)
+
+		jb.createPrimitive = jb.hashCreatePrimitive([]int{lftColOffset}, []int{rgtColOffset})
 		return nil
 	}
-	return lpb.pushFilter(ajoin.Condition.On, sqlparser.WhereStr)
+}
+
+// here we are currying in the columns from when they are know,
+// to produce the final Primitive without having to store the state in the join struct
+func (jb *join) hashCreatePrimitive(leftJoinCols, rightJoinCols []int) func(_, _ engine.Primitive) engine.Primitive {
+	return func(leftInput, rightInput engine.Primitive) engine.Primitive {
+		return &engine.HashJoin{
+			Left:          leftInput,
+			Right:         rightInput,
+			Cols:          jb.Cols,
+			LeftJoinCols:  leftJoinCols,
+			RightJoinCols: rightJoinCols,
+		}
+	}
+}
+
+func (jb *join) nestedLoopPrimitive(l, r engine.Primitive) engine.Primitive {
+	return &engine.NestedLoopJoin{
+		Opcode: jb.Opcode,
+		Vars:   jb.Vars,
+		Cols:   jb.Cols,
+		Left:   l,
+		Right:  r,
+	}
 }
 
 // Order satisfies the builder interface.
@@ -131,13 +210,7 @@ func (jb *join) Reorder(order int) {
 
 // Primitive satisfies the builder interface.
 func (jb *join) Primitive() engine.Primitive {
-	return &engine.NestedLoopJoin{
-		Opcode: jb.Opcode,
-		Vars:   jb.Vars,
-		Cols:   jb.Cols,
-		Left:   jb.Left.Primitive(),
-		Right:  jb.Right.Primitive(),
-	}
+	return jb.createPrimitive(jb.Left.Primitive(), jb.Right.Primitive())
 }
 
 // First satisfies the builder interface.
@@ -293,7 +366,11 @@ func (jb *join) Wireup(bldr builder, jt *jointab) error {
 	if err != nil {
 		return err
 	}
-	return jb.Left.Wireup(bldr, jt)
+	err = jb.Left.Wireup(bldr, jt)
+	if err != nil {
+		return err
+	}
+	return jb.wireUp()
 }
 
 // SupplyVar satisfies the builder interface.

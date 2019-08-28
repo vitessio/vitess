@@ -17,6 +17,8 @@ limitations under the License.
 package engine
 
 import (
+	"encoding/json"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -28,7 +30,6 @@ var _ Primitive = (*HashJoin)(nil)
 // for the lhs input, and then uses this probe table to "probe" the rhs, finding matches by hashing
 // the join column values
 type HashJoin struct {
-	Opcode JoinOpcode
 	// Left and Right are the LHS and RHS primitives
 	// of the Join. They can be any primitive.
 	Left, Right Primitive `json:",omitempty"`
@@ -43,10 +44,22 @@ type HashJoin struct {
 	Cols []int `json:",omitempty"`
 
 	// LeftJoinCols defines which columns from the lhs are part of the ON comparison
-	LeftJoinCols []int `json:",omitempty"`
+	LeftJoinCols []int
 
 	// RightJoinCols defines which columns from the rhs are part of the ON comparison
-	RightJoinCols []int `json:",omitempty"`
+	RightJoinCols []int
+}
+
+// MarshalJSON allows us to add the opcode in, so we can see the join type used
+func (jn *HashJoin) MarshalJSON() ([]byte, error) {
+	type Alias HashJoin
+	return json.Marshal(&struct {
+		OpCode string `json:"Opcode"`
+		*Alias
+	}{
+		OpCode: "HashJoin",
+		Alias:  (*Alias)(jn),
+	})
 }
 
 // Execute performs a non-streaming exec.
