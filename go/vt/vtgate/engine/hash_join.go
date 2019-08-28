@@ -108,12 +108,48 @@ func extractJoinValues(row []sqltypes.Value, joinCols []int) []sqltypes.Value {
 
 // StreamExecute performs a streaming exec.
 func (jn *HashJoin) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	panic("implement me")
+	err := jn.Left.StreamExecute(vcursor, bindVars, wantfields, func(lresult *sqltypes.Result) error {
+		table := newProbeTable()
+		for _, row := range lresult.Rows {
+			joinVals := extractJoinValues(row, jn.LeftJoinCols)
+			table.Add(joinVals, row)
+		}
+
+		err := jn.Right.StreamExecute(vcursor, bindVars, wantfields, func(rresult *sqltypes.Result) error {
+			result := &sqltypes.Result{}
+			if wantfields {
+				result.Fields = joinFields(lresult.Fields, rresult.Fields, jn.Cols)
+			}
+
+			for _, rrow := range rresult.Rows {
+				joinVals := extractJoinValues(rrow, jn.RightJoinCols)
+				matches := table.Get(joinVals)
+				for _, lrow := range matches {
+					result.Rows = append(result.Rows, joinRows(lrow, rrow, jn.Cols))
+					result.RowsAffected++
+				}
+			}
+			return callback(result)
+		})
+		return err
+	})
+	return err
 }
 
 // GetFields fetches the field info.
 func (jn *HashJoin) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	panic("implement me")
+	joinVars := make(map[string]*querypb.BindVariable)
+	lresult, err := jn.Left.GetFields(vcursor, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	result := &sqltypes.Result{}
+	rresult, err := jn.Right.GetFields(vcursor, combineVars(bindVars, joinVars))
+	if err != nil {
+		return nil, err
+	}
+	result.Fields = joinFields(lresult.Fields, rresult.Fields, jn.Cols)
+	return result, nil
 }
 
 // RouteType returns a description of the query routing type used by the primitive
