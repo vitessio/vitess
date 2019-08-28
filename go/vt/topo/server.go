@@ -84,6 +84,7 @@ const (
 	KeyspacesPath    = "keyspaces"
 	ShardsPath       = "shards"
 	TabletsPath      = "tablets"
+	MetadataPath     = "vitess_metadata"
 )
 
 // Factory is a factory interface to create Conn objects.

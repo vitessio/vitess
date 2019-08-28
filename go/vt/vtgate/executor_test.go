@@ -28,6 +28,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"context"
 
@@ -44,6 +45,8 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestExecutorResultsExceeded(t *testing.T) {
@@ -468,6 +471,66 @@ func TestExecutorSet(t *testing.T) {
 		}
 	}
 }
+
+func TestExecutorSetMetadata(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
+
+	set := "set @@vitess_metadata.app_keyspace_v1= '1'"
+	_, err := executor.Execute(context.Background(), "TestExecute", session, set, nil)
+	assert.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "expected error %v, got error: %v", vtrpcpb.Code_PERMISSION_DENIED, err)
+
+	*vschemaacl.AuthorizedDDLUsers = "%"
+	defer func() {
+		*vschemaacl.AuthorizedDDLUsers = ""
+	}()
+
+	executor, _, _, _ = createExecutorEnv()
+	session = NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
+
+	set = "set @@vitess_metadata.app_keyspace_v1= '1'"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, set, nil)
+	assert.NoError(t, err, "%s error: %v", set, err)
+
+	show := `show vitess_metadata variables like 'app\\_keyspace\\_v_'`
+	result, err := executor.Execute(context.Background(), "TestExecute", session, show, nil)
+	assert.NoError(t, err)
+
+	want := "1"
+	got := string(result.Rows[0][1].ToString())
+	assert.Equalf(t, want, got, "want migrations %s, result %s", want, got)
+
+	// Update metadata
+	set = "set @@vitess_metadata.app_keyspace_v2='2'"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, set, nil)
+	assert.NoError(t, err, "%s error: %v", set, err)
+
+	show = `show vitess_metadata variables like 'app\\_keyspace\\_v%'`
+	gotqr, err := executor.Execute(context.Background(), "TestExecute", session, show, nil)
+	assert.NoError(t, err)
+
+	wantqr := &sqltypes.Result{
+		Fields: buildVarCharFields("Key", "Value"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow("app_keyspace_v1", "1"),
+			buildVarCharRow("app_keyspace_v2", "2"),
+		},
+		RowsAffected: 2,
+	}
+
+	assert.Equal(t, wantqr.Fields, gotqr.Fields)
+	assert.ElementsMatch(t, wantqr.Rows, gotqr.Rows)
+
+	show = "show vitess_metadata variables"
+	gotqr, err = executor.Execute(context.Background(), "TestExecute", session, show, nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	assert.Equal(t, wantqr.Fields, gotqr.Fields)
+	assert.ElementsMatch(t, wantqr.Rows, gotqr.Rows)
+}
+
 func TestExecutorAutocommit(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
