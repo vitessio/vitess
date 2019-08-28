@@ -1308,19 +1308,27 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
   }
-| ALTER VSCHEMA CREATE VINDEX sql_id vindex_type_opt vindex_params_opt
+| ALTER VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
   {
-    $$ = &DDL{Action: CreateVindexStr, VindexSpec: &VindexSpec{
-        Name: $5,
-        Type: $6,
-        Params: $7,
-    }}
+    $$ = &DDL{
+        Action: CreateVindexStr,
+        Table: $5,
+        VindexSpec: &VindexSpec{
+          Name: NewColIdent($5.Name.String()),
+          Type: $6,
+          Params: $7,
+        },
+      }
   }
-| ALTER VSCHEMA DROP VINDEX sql_id
+| ALTER VSCHEMA DROP VINDEX table_name
   {
-    $$ = &DDL{Action: DropVindexStr, VindexSpec: &VindexSpec{
-        Name: $5,
-    }}
+    $$ = &DDL{
+        Action: DropVindexStr,
+        Table: $5,
+        VindexSpec: &VindexSpec{
+          Name: NewColIdent($5.Name.String()),
+        },
+      }
   }
 | ALTER VSCHEMA ADD TABLE table_name
   {
