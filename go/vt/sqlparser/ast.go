@@ -797,9 +797,9 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 	case FlushStr:
 		buf.Myprintf("%s", node.Action)
 	case CreateVindexStr:
-		buf.Myprintf("alter vschema create vindex %v %v", node.VindexSpec.Name, node.VindexSpec)
+		buf.Myprintf("alter vschema create vindex %v %v", node.Table, node.VindexSpec)
 	case DropVindexStr:
-		buf.Myprintf("alter vschema drop vindex %v", node.VindexSpec.Name)
+		buf.Myprintf("alter vschema drop vindex %v", node.Table)
 	case AddVschemaTableStr:
 		buf.Myprintf("alter vschema add table %v", node.Table)
 	case DropVschemaTableStr:

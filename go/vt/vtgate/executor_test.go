@@ -1409,6 +1409,35 @@ func waitForColVindexes(t *testing.T, ks, table string, names []string, executor
 	return nil
 }
 
+func TestExecutorAlterVSchemaKeyspace(t *testing.T) {
+	*vschemaacl.AuthorizedDDLUsers = "%"
+	defer func() {
+		*vschemaacl.AuthorizedDDLUsers = ""
+	}()
+	executor, _, _, _ := createExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
+
+	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 2)
+	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) {
+		vschemaUpdates <- vschema
+	})
+
+	vschema := <-vschemaUpdates
+	_, ok := vschema.Keyspaces["TestExecutor"].Vindexes["test_vindex"]
+	if ok {
+		t.Fatalf("test_vindex should not exist in original vschema")
+	}
+
+	stmt := "alter vschema create vindex TestExecutor.test_vindex using hash"
+	_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	_, vindex := waitForVindex(t, "TestExecutor", "test_vindex", vschemaUpdates, executor)
+	assert.Equal(t, vindex.Type, "hash")
+}
+
 func TestExecutorCreateVindexDDL(t *testing.T) {
 	*vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
