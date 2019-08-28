@@ -66,7 +66,7 @@ func TestJoinExecute(t *testing.T) {
 
 	// Normal join
 	jn := &NestedLoopJoin{
-		Opcode: NormalJoin,
+		Opcode: InnerJoin,
 		Left:   leftPrim,
 		Right:  rightPrim,
 		Cols:   []int{-1, -2, 1, 2},
@@ -171,7 +171,7 @@ func TestJoinExecuteMaxMemoryRows(t *testing.T) {
 
 	// Normal join
 	jn := &NestedLoopJoin{
-		Opcode: NormalJoin,
+		Opcode: InnerJoin,
 		Left:   leftPrim,
 		Right:  rightPrim,
 		Cols:   []int{-1, -2, 1, 2},
@@ -210,7 +210,7 @@ func TestJoinExecuteNoResult(t *testing.T) {
 	}
 
 	jn := &NestedLoopJoin{
-		Opcode: NormalJoin,
+		Opcode: InnerJoin,
 		Left:   leftPrim,
 		Right:  rightPrim,
 		Cols:   []int{-1, -2, 1, 2},
@@ -245,7 +245,7 @@ func TestJoinExecuteErrors(t *testing.T) {
 	}
 
 	jn := &NestedLoopJoin{
-		Opcode: NormalJoin,
+		Opcode: InnerJoin,
 		Left:   leftPrim,
 	}
 	_, err := jn.Execute(noopVCursor{}, map[string]*querypb.BindVariable{}, true)
@@ -270,7 +270,7 @@ func TestJoinExecuteErrors(t *testing.T) {
 	}
 
 	jn = &NestedLoopJoin{
-		Opcode: NormalJoin,
+		Opcode: InnerJoin,
 		Left:   leftPrim,
 		Right:  rightPrim,
 		Cols:   []int{-1, -2, 1, 2},
@@ -297,7 +297,7 @@ func TestJoinExecuteErrors(t *testing.T) {
 	}
 
 	jn = &NestedLoopJoin{
-		Opcode: NormalJoin,
+		Opcode: InnerJoin,
 		Left:   leftPrim,
 		Right:  rightPrim,
 		Cols:   []int{-1, -2, 1, 2},
@@ -351,7 +351,7 @@ func TestJoinStreamExecute(t *testing.T) {
 
 	// Normal join
 	jn := &NestedLoopJoin{
-		Opcode: NormalJoin,
+		Opcode: InnerJoin,
 		Left:   leftPrim,
 		Right:  rightPrim,
 		Cols:   []int{-1, -2, 1, 2},
@@ -439,7 +439,7 @@ func TestGetFields(t *testing.T) {
 	}
 
 	jn := &NestedLoopJoin{
-		Opcode: NormalJoin,
+		Opcode: InnerJoin,
 		Left:   leftPrim,
 		Right:  rightPrim,
 		Cols:   []int{-1, -2, 1, 2},
@@ -476,7 +476,7 @@ func TestGetFieldsErrors(t *testing.T) {
 	}
 
 	jn := &NestedLoopJoin{
-		Opcode: NormalJoin,
+		Opcode: InnerJoin,
 		Left:   leftPrim,
 		Right:  rightPrim,
 		Cols:   []int{-1, -2, 1, 2},

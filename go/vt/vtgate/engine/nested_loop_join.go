@@ -204,12 +204,12 @@ type JoinOpcode int
 
 // This is the list of JoinOpcode values.
 const (
-	NormalJoin = JoinOpcode(iota)
+	InnerJoin = JoinOpcode(iota)
 	LeftJoin
 )
 
 func (code JoinOpcode) String() string {
-	if code == NormalJoin {
+	if code == InnerJoin {
 		return "NestedLoopJoin"
 	}
 	return "LeftJoin"

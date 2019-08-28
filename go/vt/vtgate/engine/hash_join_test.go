@@ -55,7 +55,7 @@ func TestHashJoinExecute(t *testing.T) {
 
 	// Inner merge join
 	jn := &HashJoin{
-		Opcode:        NormalJoin,
+		Opcode:        InnerJoin,
 		Left:          leftPrim,
 		Right:         rightPrim,
 		Cols:          []int{-1, -2, 2},
@@ -110,7 +110,7 @@ func TestHashJoinWithOneRowOnLHSThatMatchesMultipleRowsOnTheRHS(t *testing.T) {
 
 	// Inner merge join
 	jn := &HashJoin{
-		Opcode:        NormalJoin,
+		Opcode:        InnerJoin,
 		Left:          leftPrim,
 		Right:         rightPrim,
 		Cols:          []int{-1, -2, 2},

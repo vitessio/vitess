@@ -63,9 +63,10 @@ type join struct {
 	// Left and Right are the nodes for the join.
 	Left, Right builder
 
-	Cols   []int          `json:",omitempty"`
-	Vars   map[string]int `json:",omitempty"`
-	Opcode engine.JoinOpcode
+	Cols        []int          `json:",omitempty"`
+	Vars        map[string]int `json:",omitempty"`
+	Opcode      engine.JoinOpcode
+	useHashJoin bool
 }
 
 // newJoin makes a new join using the two planBuilder. ajoin can be nil
@@ -78,7 +79,7 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, useHash
 	// external references, and the FROM clause doesn't allow duplicates,
 	// it's safe to perform this conversion and still expect the same behavior.
 
-	opcode := engine.NormalJoin
+	opcode := engine.InnerJoin
 	if ajoin != nil {
 		switch {
 		case ajoin.Join == sqlparser.LeftJoinStr:
@@ -106,6 +107,7 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, useHash
 		Right:         rpb.bldr,
 		Vars:          make(map[string]int),
 		Opcode:        opcode,
+		useHashJoin:   useHashJoin,
 	}
 	lpb.bldr.Reorder(0)
 	if ajoin == nil || opcode == engine.LeftJoin {
