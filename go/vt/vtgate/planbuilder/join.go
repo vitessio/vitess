@@ -63,7 +63,9 @@ type join struct {
 	// Left and Right are the nodes for the join.
 	Left, Right builder
 
-	ejoin *engine.NestedLoopJoin
+	Cols   []int          `json:",omitempty"`
+	Vars   map[string]int `json:",omitempty"`
+	Opcode engine.JoinOpcode
 }
 
 // newJoin makes a new join using the two planBuilder. ajoin can be nil
@@ -102,10 +104,8 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, useHash
 		weightStrings: make(map[*resultColumn]int),
 		Left:          lpb.bldr,
 		Right:         rpb.bldr,
-		ejoin: &engine.NestedLoopJoin{
-			Opcode: opcode,
-			Vars:   make(map[string]int),
-		},
+		Vars:          make(map[string]int),
+		Opcode:        opcode,
 	}
 	lpb.bldr.Reorder(0)
 	if ajoin == nil || opcode == engine.LeftJoin {
@@ -129,9 +129,13 @@ func (jb *join) Reorder(order int) {
 
 // Primitive satisfies the builder interface.
 func (jb *join) Primitive() engine.Primitive {
-	jb.ejoin.Left = jb.Left.Primitive()
-	jb.ejoin.Right = jb.Right.Primitive()
-	return jb.ejoin
+	return &engine.NestedLoopJoin{
+		Opcode: jb.Opcode,
+		Vars:   jb.Vars,
+		Cols:   jb.Cols,
+		Left:   jb.Left.Primitive(),
+		Right:  jb.Right.Primitive(),
+	}
 }
 
 // First satisfies the builder interface.
@@ -149,7 +153,7 @@ func (jb *join) PushFilter(pb *primitiveBuilder, filter sqlparser.Expr, whereTyp
 	if jb.isOnLeft(origin.Order()) {
 		return jb.Left.PushFilter(pb, filter, whereType, origin)
 	}
-	if jb.ejoin.Opcode == engine.LeftJoin {
+	if jb.Opcode == engine.LeftJoin {
 		return errors.New("unsupported: cross-shard left join and where clause")
 	}
 	return jb.Right.PushFilter(pb, filter, whereType, origin)
@@ -162,10 +166,10 @@ func (jb *join) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, or
 		if err != nil {
 			return nil, 0, err
 		}
-		jb.ejoin.Cols = append(jb.ejoin.Cols, -colNumber-1)
+		jb.Cols = append(jb.Cols, -colNumber-1)
 	} else {
 		// Pushing of non-trivial expressions not allowed for RHS of left joins.
-		if _, ok := expr.Expr.(*sqlparser.ColName); !ok && jb.ejoin.Opcode == engine.LeftJoin {
+		if _, ok := expr.Expr.(*sqlparser.ColName); !ok && jb.Opcode == engine.LeftJoin {
 			return nil, 0, errors.New("unsupported: cross-shard left join and column expressions")
 		}
 
@@ -173,7 +177,7 @@ func (jb *join) PushSelect(pb *primitiveBuilder, expr *sqlparser.AliasedExpr, or
 		if err != nil {
 			return nil, 0, err
 		}
-		jb.ejoin.Cols = append(jb.ejoin.Cols, colNumber+1)
+		jb.Cols = append(jb.Cols, colNumber+1)
 	}
 	jb.resultColumns = append(jb.resultColumns, rc)
 	return rc, len(jb.resultColumns) - 1, nil
@@ -300,21 +304,21 @@ func (jb *join) SupplyVar(from, to int, col *sqlparser.ColName, varname string) 
 		jb.Left.SupplyVar(from, to, col, varname)
 		return
 	}
-	if _, ok := jb.ejoin.Vars[varname]; ok {
+	if _, ok := jb.Vars[varname]; ok {
 		// Looks like somebody else already requested this.
 		return
 	}
 	c := col.Metadata.(*column)
 	for i, rc := range jb.resultColumns {
-		if jb.ejoin.Cols[i] > 0 {
+		if jb.Cols[i] > 0 {
 			continue
 		}
 		if rc.column == c {
-			jb.ejoin.Vars[varname] = -jb.ejoin.Cols[i] - 1
+			jb.Vars[varname] = -jb.Cols[i] - 1
 			return
 		}
 	}
-	_, jb.ejoin.Vars[varname] = jb.Left.SupplyCol(col)
+	_, jb.Vars[varname] = jb.Left.SupplyCol(col)
 }
 
 // SupplyCol satisfies the builder interface.
@@ -330,13 +334,13 @@ func (jb *join) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNumber i
 	var sourceCol int
 	if jb.isOnLeft(routeNumber) {
 		rc, sourceCol = jb.Left.SupplyCol(col)
-		jb.ejoin.Cols = append(jb.ejoin.Cols, -sourceCol-1)
+		jb.Cols = append(jb.Cols, -sourceCol-1)
 	} else {
 		rc, sourceCol = jb.Right.SupplyCol(col)
-		jb.ejoin.Cols = append(jb.ejoin.Cols, sourceCol+1)
+		jb.Cols = append(jb.Cols, sourceCol+1)
 	}
 	jb.resultColumns = append(jb.resultColumns, rc)
-	return rc, len(jb.ejoin.Cols) - 1
+	return rc, len(jb.Cols) - 1
 }
 
 // SupplyWeightString satisfies the builder interface.
@@ -347,21 +351,21 @@ func (jb *join) SupplyWeightString(colNumber int) (weightcolNumber int, err erro
 	}
 	routeNumber := rc.column.Origin().Order()
 	if jb.isOnLeft(routeNumber) {
-		sourceCol, err := jb.Left.SupplyWeightString(-jb.ejoin.Cols[colNumber] - 1)
+		sourceCol, err := jb.Left.SupplyWeightString(-jb.Cols[colNumber] - 1)
 		if err != nil {
 			return 0, err
 		}
-		jb.ejoin.Cols = append(jb.ejoin.Cols, -sourceCol-1)
+		jb.Cols = append(jb.Cols, -sourceCol-1)
 	} else {
-		sourceCol, err := jb.Right.SupplyWeightString(jb.ejoin.Cols[colNumber] - 1)
+		sourceCol, err := jb.Right.SupplyWeightString(jb.Cols[colNumber] - 1)
 		if err != nil {
 			return 0, err
 		}
-		jb.ejoin.Cols = append(jb.ejoin.Cols, sourceCol+1)
+		jb.Cols = append(jb.Cols, sourceCol+1)
 	}
 	jb.resultColumns = append(jb.resultColumns, rc)
-	jb.weightStrings[rc] = len(jb.ejoin.Cols) - 1
-	return len(jb.ejoin.Cols) - 1, nil
+	jb.weightStrings[rc] = len(jb.Cols) - 1
+	return len(jb.Cols) - 1, nil
 }
 
 // isOnLeft returns true if the specified route number
