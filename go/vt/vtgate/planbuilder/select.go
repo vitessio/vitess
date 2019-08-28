@@ -72,7 +72,9 @@ func buildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (primitive e
 // pushed into a route, then a primitive is created on top of any
 // of the above trees to make it discard unwanted rows.
 func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) error {
-	if err := pb.processTableExprs(sel.From); err != nil {
+	directives := sqlparser.ExtractCommentDirectives(sel.Comments)
+
+	if err := pb.processTableExprs(sel.From, directives.IsSet(sqlparser.DirectiveUseHashJoin)); err != nil {
 		return err
 	}
 

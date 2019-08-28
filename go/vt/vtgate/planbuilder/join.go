@@ -69,7 +69,7 @@ type join struct {
 // newJoin makes a new join using the two planBuilder. ajoin can be nil
 // if the join is on a ',' operator. lpb will contain the resulting join.
 // rpb will be discarded.
-func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr) error {
+func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, useHashJoin bool) error {
 	// This function converts ON clauses to WHERE clauses. The WHERE clause
 	// scope can see all tables, whereas the ON clause can only see the
 	// participants of the JOIN. However, since the ON clause doesn't allow
