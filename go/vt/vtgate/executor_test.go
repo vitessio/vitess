@@ -28,6 +28,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"context"
@@ -529,6 +531,38 @@ func TestExecutorSetMetadata(t *testing.T) {
 
 	assert.Equal(t, wantqr.Fields, gotqr.Fields)
 	assert.ElementsMatch(t, wantqr.Rows, gotqr.Rows)
+}
+
+func TestExecutorDeleteMetadata(t *testing.T) {
+	*vschemaacl.AuthorizedDDLUsers = "%"
+	defer func() {
+		*vschemaacl.AuthorizedDDLUsers = ""
+	}()
+
+	executor, _, _, _ := createExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
+
+	set := "set @@vitess_metadata.app_v1= '1'"
+	_, err := executor.Execute(context.Background(), "TestExecute", session, set, nil)
+	assert.NoError(t, err, "%s error: %v", set, err)
+
+	show := `show vitess_metadata variables like 'app\\_%'`
+	result, _ := executor.Execute(context.Background(), "TestExecute", session, show, nil)
+	assert.Len(t, result.Rows, 1)
+
+	// Fails if deleting key that doesn't exist
+	delete := "set @@vitess_metadata.doesnt_exist=''"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, delete, nil)
+	assert.True(t, topo.IsErrType(err, topo.NoNode))
+
+	// Delete existing key, show should fail given the node doesn't exist
+	delete = "set @@vitess_metadata.app_v1=''"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, delete, nil)
+	assert.NoError(t, err)
+
+	show = `show vitess_metadata variables like 'app\\_%'`
+	result, err = executor.Execute(context.Background(), "TestExecute", session, show, nil)
+	assert.True(t, topo.IsErrType(err, topo.NoNode))
 }
 
 func TestExecutorAutocommit(t *testing.T) {
