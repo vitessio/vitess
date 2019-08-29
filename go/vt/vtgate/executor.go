@@ -1416,20 +1416,15 @@ func (e *Executor) ServeHTTP(response http.ResponseWriter, request *http.Request
 		return
 	}
 	if request.URL.Path == "/debug/query_plans" {
-		keys := e.plans.Keys()
-		response.Header().Set("Content-Type", "text/plain")
-		response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys))))
-		for _, v := range keys {
-			response.Write([]byte(fmt.Sprintf("%#v\n", sqlparser.TruncateForUI(v))))
-			if plan, ok := e.plans.Peek(v); ok {
-				if b, err := json.MarshalIndent(plan, "", "  "); err != nil {
-					response.Write([]byte(err.Error()))
-				} else {
-					response.Write(b)
-				}
-				response.Write(([]byte)("\n\n"))
-			}
+		response.Header().Set("Content-Type", "application/json; charset=utf-8")
+		buf, err := json.MarshalIndent(e.plans.Items(), "", " ")
+		if err != nil {
+			response.Write([]byte(err.Error()))
+			return
 		}
+		ebuf := bytes.NewBuffer(nil)
+		json.HTMLEscape(ebuf, buf)
+		response.Write(ebuf.Bytes())
 	} else if request.URL.Path == "/debug/vschema" {
 		response.Header().Set("Content-Type", "application/json; charset=utf-8")
 		b, err := json.MarshalIndent(e.VSchema(), "", " ")
@@ -1455,7 +1450,6 @@ func (e *Executor) updateQueryCounts(planType, keyspace, tableName string, shard
 	queriesRouted.Add(planType, shardQueries)
 	queriesProcessedByTable.Add([]string{planType, keyspace, tableName}, 1)
 	queriesRoutedByTable.Add([]string{planType, keyspace, tableName}, shardQueries)
-	return
 }
 
 // VSchemaStats returns the loaded vschema stats.
