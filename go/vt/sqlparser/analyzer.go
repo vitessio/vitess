@@ -56,6 +56,10 @@ const (
 func Preview(sql string) int {
 	trimmed := StripLeadingComments(sql)
 
+	if strings.Index(trimmed, "/*!") == 0 {
+		return StmtComment
+	}
+
 	isNotLetter := func(r rune) bool { return !unicode.IsLetter(r) }
 	firstWord := strings.TrimLeftFunc(trimmed, isNotLetter)
 
@@ -103,9 +107,6 @@ func Preview(sql string) int {
 		return StmtUse
 	case "analyze", "describe", "desc", "explain", "repair", "optimize":
 		return StmtOther
-	}
-	if strings.Index(trimmed, "/*!") == 0 {
-		return StmtComment
 	}
 	return StmtUnknown
 }
