@@ -222,7 +222,7 @@ func (lru *LRUCache) Oldest() (oldest time.Time) {
 }
 
 // Keys returns all the keys for the cache, ordered from most recently
-// used to last recently used.
+// used to least recently used.
 func (lru *LRUCache) Keys() []string {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
@@ -235,7 +235,7 @@ func (lru *LRUCache) Keys() []string {
 }
 
 // Items returns all the values for the cache, ordered from most recently
-// used to last recently used.
+// used to least recently used.
 func (lru *LRUCache) Items() []Item {
 	lru.mu.Lock()
 	defer lru.mu.Unlock()
