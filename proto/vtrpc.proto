@@ -174,7 +174,7 @@ enum Code {
 // LegacyErrorCode is the enum values for Errors. This type is deprecated.
 // Use Code instead. Background: In the initial design, we thought
 // that we may end up with a different list of canonical error codes
-// than the ones defined by grpc. In hindisght, we realize that
+// than the ones defined by grpc. In hindsight, we realize that
 // the grpc error codes are fairly generic and mostly sufficient.
 // In order to avoid confusion, this type will be deprecated in
 // favor of the new Code that matches exactly what grpc defines.
