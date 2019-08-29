@@ -667,11 +667,17 @@ func (e *Executor) handleSetVitessMetadata(ctx context.Context, session *SafeSes
 		return nil, err
 	}
 
-	if err := ts.UpsertMetadata(ctx, k.Key, val); err != nil {
+	if val == "" {
+		err = ts.DeleteMetadata(ctx, k.Key)
+	} else {
+		err = ts.UpsertMetadata(ctx, k.Key, val)
+	}
+
+	if err != nil {
 		return nil, err
 	}
 
-	return &sqltypes.Result{}, nil
+	return &sqltypes.Result{RowsAffected: 1}, nil
 }
 
 func (e *Executor) handleShowVitessMetadata(ctx context.Context, session *SafeSession, opt *sqlparser.ShowTablesOpt) (*sqltypes.Result, error) {

@@ -19,6 +19,7 @@ package topo
 import (
 	"context"
 	"path"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/event"
@@ -72,6 +73,19 @@ func (ts *Server) GetMetadata(ctx context.Context, keyFilter string) (map[string
 	}
 
 	return result, nil
+}
+
+// DeleteMetadata deletes the key in the metadata
+func (ts *Server) DeleteMetadata(ctx context.Context, key string) error {
+	keyPath := path.Join(MetadataPath, key)
+
+	// nil version means that it will insert if keyPath does not exist
+	if err := ts.globalCell.Delete(ctx, keyPath, nil); err != nil {
+		return err
+	}
+
+	dispatchEvent(keyPath, "deleted")
+	return nil
 }
 
 func (ts *Server) getMetadata(ctx context.Context, key string) (string, error) {
