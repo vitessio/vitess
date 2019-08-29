@@ -24,7 +24,7 @@ These keyranges can then be used to derived the routing
 information. The routing information object is supposed to
 be opaque to the client but VTGate uses it to route queries.
 It is also used to compute the associated where clause to be added
-to the query, wich is needed to prevent returning duplicate result
+to the query, which is needed to prevent returning duplicate result
 from two parallelized queries running over the same shard.
 
 API usage -

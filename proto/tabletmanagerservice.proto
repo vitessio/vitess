@@ -151,7 +151,7 @@ service TabletManager {
   // reparent journal
   rpc PopulateReparentJournal(tabletmanagerdata.PopulateReparentJournalRequest) returns (tabletmanagerdata.PopulateReparentJournalResponse) {};
 
-  // InitSlave tells the tablet to reparent to the master unconditionnally
+  // InitSlave tells the tablet to reparent to the master unconditionally
   rpc InitSlave(tabletmanagerdata.InitSlaveRequest) returns (tabletmanagerdata.InitSlaveResponse) {};
 
   // DemoteMaster tells the soon-to-be-former master it's gonna change
