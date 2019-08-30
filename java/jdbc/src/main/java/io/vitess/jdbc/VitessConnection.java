@@ -339,7 +339,7 @@ public class VitessConnection extends ConnectionProperties implements Connection
   /**
    * Return Warnings
    * <p/>
-   * TODO: Not implementing as Error is Thrown when occured
+   * TODO: Not implementing as Error is Thrown when occurred
    *
    * @return SQLWarning or null
    */

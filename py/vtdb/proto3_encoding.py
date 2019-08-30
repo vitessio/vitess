@@ -68,7 +68,7 @@ conversions = {
 }
 
 # legacy_code_to_code_map maps legacy error codes
-# to the new code that matches grpc's cannonical error codes.
+# to the new code that matches grpc's canonical error codes.
 legacy_code_to_code_map = {
     vtrpc_pb2.SUCCESS_LEGACY: vtrpc_pb2.OK,
     vtrpc_pb2.CANCELLED_LEGACY: vtrpc_pb2.CANCELED,

@@ -19,6 +19,7 @@ package vtexplain
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 
@@ -501,7 +502,15 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 			return err
 		}
 
-		selStmt := stmt.(*sqlparser.Select)
+		var selStmt *sqlparser.Select
+		switch stmt.(type) {
+		case *sqlparser.Select:
+			selStmt = stmt.(*sqlparser.Select)
+		case *sqlparser.Union:
+			selStmt = stmt.(*sqlparser.Union).Right.(*sqlparser.Select)
+		default:
+			return fmt.Errorf("vtexplain: unsupported statement type +%v", reflect.TypeOf(stmt))
+		}
 
 		if len(selStmt.From) != 1 {
 			return fmt.Errorf("unsupported select with multiple from clauses")
@@ -531,40 +540,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		for _, node := range selStmt.SelectExprs {
 			switch node := node.(type) {
 			case *sqlparser.AliasedExpr:
-				switch node := node.Expr.(type) {
-				case *sqlparser.ColName:
-					col := strings.ToLower(node.Name.String())
-					colType := colTypeMap[col]
-					if colType == querypb.Type_NULL_TYPE {
-						return fmt.Errorf("invalid column %s", col)
-					}
-					colNames = append(colNames, col)
-					colTypes = append(colTypes, colType)
-				case *sqlparser.FuncExpr:
-					// As a shortcut, functions are integral types
-					colNames = append(colNames, sqlparser.String(node))
-					colTypes = append(colTypes, querypb.Type_INT32)
-				case *sqlparser.SQLVal:
-					colNames = append(colNames, sqlparser.String(node))
-					switch node.Type {
-					case sqlparser.IntVal:
-						fallthrough
-					case sqlparser.HexNum:
-						fallthrough
-					case sqlparser.HexVal:
-						fallthrough
-					case sqlparser.BitVal:
-						colTypes = append(colTypes, querypb.Type_INT32)
-					case sqlparser.StrVal:
-						colTypes = append(colTypes, querypb.Type_VARCHAR)
-					case sqlparser.FloatVal:
-						colTypes = append(colTypes, querypb.Type_FLOAT64)
-					default:
-						return fmt.Errorf("unsupported sql value %s", sqlparser.String(node))
-					}
-				default:
-					return fmt.Errorf("unsupported select expression %s", sqlparser.String(node))
-				}
+				colNames, colTypes = inferColTypeFromExpr(node.Expr, colTypeMap, colNames, colTypes)
 			case *sqlparser.StarExpr:
 				for col, colType := range colTypeMap {
 					colNames = append(colNames, col)
@@ -614,4 +590,47 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 	}
 
 	return callback(result)
+}
+
+func inferColTypeFromExpr(node sqlparser.Expr, colTypeMap map[string]querypb.Type, colNames []string, colTypes []querypb.Type) ([]string, []querypb.Type) {
+	switch node := node.(type) {
+	case *sqlparser.ColName:
+		col := strings.ToLower(node.Name.String())
+		colType := colTypeMap[col]
+		if colType == querypb.Type_NULL_TYPE {
+			log.Errorf("vtexplain: invalid column %s, typeMap +%v", col, colTypeMap)
+		}
+		colNames = append(colNames, col)
+		colTypes = append(colTypes, colType)
+	case *sqlparser.FuncExpr:
+		// As a shortcut, functions are integral types
+		colNames = append(colNames, sqlparser.String(node))
+		colTypes = append(colTypes, querypb.Type_INT32)
+	case *sqlparser.SQLVal:
+		colNames = append(colNames, sqlparser.String(node))
+		switch node.Type {
+		case sqlparser.IntVal:
+			fallthrough
+		case sqlparser.HexNum:
+			fallthrough
+		case sqlparser.HexVal:
+			fallthrough
+		case sqlparser.BitVal:
+			colTypes = append(colTypes, querypb.Type_INT32)
+		case sqlparser.StrVal:
+			colTypes = append(colTypes, querypb.Type_VARCHAR)
+		case sqlparser.FloatVal:
+			colTypes = append(colTypes, querypb.Type_FLOAT64)
+		default:
+			log.Errorf("vtexplain: unsupported sql value %s", sqlparser.String(node))
+		}
+	case *sqlparser.ParenExpr:
+		colNames, colTypes = inferColTypeFromExpr(node.Expr, colTypeMap, colNames, colTypes)
+	case *sqlparser.CaseExpr:
+		colNames, colTypes = inferColTypeFromExpr(node.Whens[0].Val, colTypeMap, colNames, colTypes)
+	default:
+		log.Errorf("vtexplain: unsupported select expression type +%v node %s", reflect.TypeOf(node), sqlparser.String(node))
+	}
+
+	return colNames, colTypes
 }
