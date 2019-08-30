@@ -75,7 +75,7 @@ func TestSubtract(t *testing.T) {
 		// testing for int64 overflow
 		v1:  NewInt64(math.MinInt64),
 		v2:  NewUint64(0),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 0 - -9223372036854775808"),
+		out: NewInt64(math.MinInt64),
 	}, {
 		v1:  TestValue(VarChar, "c"),
 		v2:  NewInt64(1),
@@ -109,6 +109,18 @@ func TestSubtract(t *testing.T) {
 		v1:  NewFloat64(1.2),
 		v2:  NewUint64(2),
 		out: NewFloat64(-0.8),
+	}, {
+		v1:  NewInt64(-1),
+		v2:  NewUint64(2),
+		out: NewInt64(-3),
+	}, {
+		v1:  NewInt64(5),
+		v2:  NewUint64(7),
+		out: NewInt64(-2),
+	}, {
+		v1:  NewInt64(-2),
+		v2:  NewInt64(1),
+		out: NewInt64(-3),
 	}}
 
 	for _, tcase := range tcases {
