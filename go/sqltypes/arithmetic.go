@@ -512,10 +512,9 @@ func intMinusIntWithError(v1, v2 int64) (numeric, error) {
 
 func intTimesIntWithError(v1, v2 int64) (numeric, error) {
 	result := v1 * v2
-	if v1 >= math.MaxInt64 && v2 > 1 || v2 >= math.MaxInt64 && v1 > 1 || v1 <= math.MinInt64 && v2 > 1 || v2 <= math.MinInt64 && v1 > 1 {
+	if v1 != 0 && result/v1 != v2 {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v * %v", v1, v2)
 	}
-
 	return numeric{typ: Int64, ival: result}, nil
 }
 
