@@ -51,7 +51,7 @@ public class VitessRecordReader extends RecordReader<NullWritable, RowWritable> 
   private Query.ExecuteOptions.IncludedFields includedFields;
 
   /**
-   * Fetch connection parameters from Configuraiton and open VtGate connection.
+   * Fetch connection parameters from Configuration and open VtGate connection.
    */
   @Override
   public void initialize(InputSplit split, TaskAttemptContext context)

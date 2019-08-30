@@ -36,7 +36,7 @@ func compareIntDiff(end map[string]interface{}, tag string, start map[string]int
 	return verifyIntValue(end, tag, framework.FetchInt(start, tag)+diff)
 }
 
-// verifyIntValue retuns an error if values[tag] != want.
+// verifyIntValue returns an error if values[tag] != want.
 func verifyIntValue(values map[string]interface{}, tag string, want int) error {
 	got := framework.FetchInt(values, tag)
 	if got != want {

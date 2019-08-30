@@ -52,7 +52,7 @@ type SafeSession struct {
 // be issued if the state is autocommitable,
 // implying that no intermediate transactions were started.
 // If so, the state transitions to autocommited, which is terminal.
-// If the token is succesfully issued, the caller has to perform
+// If the token is successfully issued, the caller has to perform
 // the commit. If a token cannot be issued, then a traditional
 // commit has to be performed at the outermost level where
 // the autocommitable transition happened.

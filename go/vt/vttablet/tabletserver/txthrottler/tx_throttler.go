@@ -240,7 +240,7 @@ func (t *TxThrottler) Close() {
 // Throttle should be called before a new transaction is started.
 // It returns true if the transaction should not proceed (the caller
 // should back off). Throttle requires that Open() was previously called
-// successfuly.
+// successfully.
 func (t *TxThrottler) Throttle() (result bool) {
 	if !t.config.enabled {
 		return false

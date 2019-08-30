@@ -28,7 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 )
 
-// vtctlClientProtocol specifices which RPC client implementation should be used.
+// vtctlClientProtocol specifics which RPC client implementation should be used.
 var vtctlClientProtocol = flag.String("vtctl_client_protocol", "grpc", "the protocol to use to talk to the vtctl server")
 
 // VtctlClient defines the interface used to send remote vtctl commands

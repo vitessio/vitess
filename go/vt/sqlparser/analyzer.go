@@ -56,11 +56,16 @@ const (
 func Preview(sql string) int {
 	trimmed := StripLeadingComments(sql)
 
-	firstWord := trimmed
-	if end := strings.IndexFunc(trimmed, unicode.IsSpace); end != -1 {
-		firstWord = trimmed[:end]
+	if strings.Index(trimmed, "/*!") == 0 {
+		return StmtComment
 	}
-	firstWord = strings.TrimLeftFunc(firstWord, func(r rune) bool { return !unicode.IsLetter(r) })
+
+	isNotLetter := func(r rune) bool { return !unicode.IsLetter(r) }
+	firstWord := strings.TrimLeftFunc(trimmed, isNotLetter)
+
+	if end := strings.IndexFunc(firstWord, unicode.IsSpace); end != -1 {
+		firstWord = firstWord[:end]
+	}
 	// Comparison is done in order of priority.
 	loweredFirstWord := strings.ToLower(firstWord)
 	switch loweredFirstWord {
@@ -102,9 +107,6 @@ func Preview(sql string) int {
 		return StmtUse
 	case "analyze", "describe", "desc", "explain", "repair", "optimize":
 		return StmtOther
-	}
-	if strings.Index(trimmed, "/*!") == 0 {
-		return StmtComment
 	}
 	return StmtUnknown
 }
@@ -285,6 +287,9 @@ func ExtractSetValues(sql string) (keyValues map[SetKey]interface{}, scope strin
 		case strings.HasPrefix(key, "@@session."):
 			scope = SessionStr
 			key = strings.TrimPrefix(key, "@@session.")
+		case strings.HasPrefix(key, "@@vitess_metadata."):
+			scope = VitessMetadataStr
+			key = strings.TrimPrefix(key, "@@vitess_metadata.")
 		case strings.HasPrefix(key, "@@"):
 			key = strings.TrimPrefix(key, "@@")
 		}

@@ -146,7 +146,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 		}
 	}()
 
-	if c.SchemaName != "" {
+	if session.TargetString == "" && c.SchemaName != "" {
 		session.TargetString = c.SchemaName
 	}
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
@@ -209,7 +209,7 @@ func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Fie
 		}
 	}()
 
-	if c.SchemaName != "" {
+	if session.TargetString == "" && c.SchemaName != "" {
 		session.TargetString = c.SchemaName
 	}
 
@@ -268,7 +268,7 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 		}
 	}()
 
-	if c.SchemaName != "" {
+	if session.TargetString == "" && c.SchemaName != "" {
 		session.TargetString = c.SchemaName
 	}
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {

@@ -19,7 +19,7 @@ limitations under the License.
 // comments and parsing them. These annotations
 // are used during filtered-replication to route
 // the DML statement to the correct shard.
-// TOOD(erez): Move the code for the "_stream" annotations
+// TODO(erez): Move the code for the "_stream" annotations
 // from vttablet to here.
 package sqlannotation
 
@@ -77,7 +77,7 @@ func AddKeyspaceIDs(sql string, keyspaceIDs [][]byte, marginComments string) str
 // to extract the keyspace id.
 // If a keyspace-id comment exists 'keyspaceID' is set to the parsed keyspace id
 // and err is set to nil; otherwise, if a filtered-replication-unfriendly comment exists
-// or some other parsing error occured, keyspaceID is set to nil and err is set to a non-nil
+// or some other parsing error occurred, keyspaceID is set to nil and err is set to a non-nil
 // error value.
 func ExtractKeyspaceIDS(sql string) (keyspaceIDs [][]byte, err error) {
 	_, comments := sqlparser.SplitMarginComments(sql)

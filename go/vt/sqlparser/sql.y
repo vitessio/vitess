@@ -182,7 +182,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
-%token <bytes> COLLATION DATABASES SCHEMAS TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA VSCHEMA_TABLES VITESS_TARGET FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
+%token <bytes> COLLATION DATABASES TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -262,7 +262,7 @@ func skipToEnd(yylex interface{}) {
 %type <bytes> for_from
 %type <str> ignore_opt default_opt
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields
-%type <showFilter> like_or_where_opt
+%type <showFilter> like_or_where_opt like_opt
 %type <byt> exists_opt
 %type <empty> not_exists_opt non_add_drop_or_rename_operation to_opt index_opt constraint_opt
 %type <bytes> reserved_keyword non_reserved_keyword
@@ -1308,19 +1308,27 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
   }
-| ALTER VSCHEMA CREATE VINDEX sql_id vindex_type_opt vindex_params_opt
+| ALTER VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
   {
-    $$ = &DDL{Action: CreateVindexStr, VindexSpec: &VindexSpec{
-        Name: $5,
-        Type: $6,
-        Params: $7,
-    }}
+    $$ = &DDL{
+        Action: CreateVindexStr,
+        Table: $5,
+        VindexSpec: &VindexSpec{
+          Name: NewColIdent($5.Name.String()),
+          Type: $6,
+          Params: $7,
+        },
+      }
   }
-| ALTER VSCHEMA DROP VINDEX sql_id
+| ALTER VSCHEMA DROP VINDEX table_name
   {
-    $$ = &DDL{Action: DropVindexStr, VindexSpec: &VindexSpec{
-        Name: $5,
-    }}
+    $$ = &DDL{
+        Action: DropVindexStr,
+        Table: $5,
+        VindexSpec: &VindexSpec{
+          Name: NewColIdent($5.Name.String()),
+        },
+      }
   }
 | ALTER VSCHEMA ADD TABLE table_name
   {
@@ -1515,10 +1523,6 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW SCHEMAS ddl_skip_to_end
-  {
-    $$ = &Show{Type: string($2)}
-  }
 | SHOW ENGINES
   {
     $$ = &Show{Type: string($2)}
@@ -1576,21 +1580,10 @@ show_statement:
     showCollationFilterOpt := $4
     $$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
   }
-| SHOW VITESS_KEYSPACES
+| SHOW VITESS_METADATA VARIABLES like_opt
   {
-    $$ = &Show{Type: string($2)}
-  }
-| SHOW VITESS_SHARDS
-  {
-    $$ = &Show{Type: string($2)}
-  }
-| SHOW VITESS_TABLETS
-  {
-    $$ = &Show{Type: string($2)}
-  }
-| SHOW VITESS_TARGET
-  {
-    $$ = &Show{Type: string($2)}
+    showTablesOpt := &ShowTablesOpt{Filter: $4}
+    $$ = &Show{Scope: string($2), Type: string($3), ShowTablesOpt: showTablesOpt}
   }
 | SHOW VSCHEMA TABLES
   {
@@ -1613,6 +1606,10 @@ show_statement:
  *
  *  SHOW BINARY LOGS
  *  SHOW INVALID
+ *  SHOW VITESS_KEYSPACES
+ *  SHOW VITESS_TABLETS
+ *  SHOW VITESS_SHARDS
+ *  SHOW VITESS_TARGET
  */
 | SHOW ID ddl_skip_to_end
   {
@@ -1676,6 +1673,16 @@ like_or_where_opt:
   {
     $$ = &ShowFilter{Filter:$2}
   }
+
+like_opt:
+  /* empty */
+    {
+      $$ = nil
+    }
+  | LIKE STRING
+    {
+      $$ = &ShowFilter{Like:string($2)}
+    }
 
 show_session_or_global:
   /* empty */
@@ -3380,7 +3387,6 @@ non_reserved_keyword:
 | REPEATABLE
 | RESTRICT
 | ROLLBACK
-| SCHEMAS
 | SEQUENCE
 | SESSION
 | SERIALIZABLE
@@ -3410,12 +3416,8 @@ non_reserved_keyword:
 | VIEW
 | VINDEX
 | VINDEXES
-| VITESS_KEYSPACES
-| VITESS_SHARDS
-| VITESS_TABLETS
+| VITESS_METADATA
 | VSCHEMA
-| VSCHEMA_TABLES
-| VITESS_TARGET
 | WARNINGS
 | WITH
 | WRITE

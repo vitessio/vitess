@@ -1,4 +1,4 @@
-FROM golang:1.11-stretch
+FROM golang:1.12-stretch
 
 # Install Vitess build dependencies
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \

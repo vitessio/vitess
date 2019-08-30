@@ -269,7 +269,7 @@ func (pb *primitiveBuilder) expandStar(inrcs []*resultColumn, expr *sqlparser.St
 			for _, col := range t.columnNames {
 				var expr *sqlparser.AliasedExpr
 				if singleTable {
-					// If there's only one table, we use unqualifed column names.
+					// If there's only one table, we use unqualified column names.
 					expr = &sqlparser.AliasedExpr{
 						Expr: &sqlparser.ColName{
 							Metadata: t.columns[col.Lowered()],

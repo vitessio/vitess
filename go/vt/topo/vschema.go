@@ -67,7 +67,7 @@ func (ts *Server) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.K
 	return &vs, nil
 }
 
-// EnsureVschema makes sure that a vschema is present for this keyspace are creates a blank one if it is missing
+// EnsureVSchema makes sure that a vschema is present for this keyspace or creates a blank one if it is missing
 func (ts *Server) EnsureVSchema(ctx context.Context, keyspace string) error {
 	vschema, err := ts.GetVSchema(ctx, keyspace)
 	if vschema == nil || IsErrType(err, NoNode) {
@@ -99,7 +99,10 @@ func (ts *Server) SaveRoutingRules(ctx context.Context, routingRules *vschemapb.
 
 	if len(data) == 0 {
 		// No vschema, remove it. So we can remove the keyspace.
-		return ts.globalCell.Delete(ctx, RoutingRulesFile, nil)
+		if err := ts.globalCell.Delete(ctx, RoutingRulesFile, nil); err != nil && !IsErrType(err, NoNode) {
+			return err
+		}
+		return nil
 	}
 
 	_, err = ts.globalCell.Update(ctx, RoutingRulesFile, data, nil)

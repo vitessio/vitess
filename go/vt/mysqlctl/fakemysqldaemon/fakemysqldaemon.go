@@ -54,7 +54,7 @@ type FakeMysqlDaemon struct {
 
 	// Replicating is updated when calling StartSlave / StopSlave
 	// (it is not used at all when calling SlaveStatus, it is the
-	// test owner responsability to have these two match)
+	// test owner responsibility to have these two match)
 	Replicating bool
 
 	// CurrentMasterPosition is returned by MasterPosition
@@ -117,7 +117,7 @@ type FakeMysqlDaemon struct {
 	// ExecuteSuperQueryList to be called with. If it doesn't
 	// match, ExecuteSuperQueryList will return an error.
 	// Note each string is just a substring if it begins with SUB,
-	// so we support partial queries (usefull when queries contain
+	// so we support partial queries (useful when queries contain
 	// data fields like timestamps)
 	ExpectedExecuteSuperQueryList []string
 
