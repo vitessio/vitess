@@ -514,7 +514,7 @@ class TabletManagerServicer(object):
     raise NotImplementedError('Method not implemented!')
 
   def InitSlave(self, request, context):
-    """InitSlave tells the tablet to reparent to the master unconditionnally
+    """InitSlave tells the tablet to reparent to the master unconditionally
     """
     context.set_code(grpc.StatusCode.UNIMPLEMENTED)
     context.set_details('Method not implemented!')

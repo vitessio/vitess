@@ -80,6 +80,10 @@ func lenNullString(value string) int {
 	return len(value) + 1
 }
 
+func lenEOFString(value string) int {
+	return len(value)
+}
+
 func writeNullString(data []byte, pos int, value string) int {
 	pos += copy(data[pos:], value)
 	data[pos] = 0
@@ -178,6 +182,10 @@ func readNullString(data []byte, pos int) (string, int, bool) {
 		return "", 0, false
 	}
 	return string(data[pos : pos+end]), pos + end + 1, true
+}
+
+func readEOFString(data []byte, pos int) (string, int, bool) {
+	return string(data[pos:]), len(data) - pos, true
 }
 
 func readUint16(data []byte, pos int) (uint16, int, bool) {

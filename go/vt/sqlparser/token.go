@@ -391,6 +391,7 @@ var keywords = map[string]int{
 	"vindex":              VINDEX,
 	"vindexes":            VINDEXES,
 	"view":                VIEW,
+	"vitess_metadata":     VITESS_METADATA,
 	"vschema":             VSCHEMA,
 	"warnings":            WARNINGS,
 	"when":                WHEN,

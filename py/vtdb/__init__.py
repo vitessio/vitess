@@ -21,7 +21,7 @@ See https://www.python.org/dev/peps/pep-0249 for more information on these.
 apilevel = '2.0'
 
 # Threads may share the module, but not connections.
-# (we store session information in the conection now, that should be in the
+# (we store session information in the connection now, that should be in the
 # cursor but are not for historical reasons).
 threadsafety = 2
 
