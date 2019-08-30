@@ -407,10 +407,15 @@ func addNumericWithError(v1, v2 numeric) (numeric, error) {
 }
 
 func subtractNumericWithError(v1, v2 numeric) (numeric, error) {
-	v1, v2 = prioritize(v1, v2)
+	//v1, v2 = prioritize(v1, v2)
 	switch v1.typ {
 	case Int64:
-		return intMinusIntWithError(v1.ival, v2.ival)
+		switch v2.typ {
+		case Int64:
+			return intMinusIntWithError(v1.ival, v2.ival)
+		case Uint64:
+			return intMinusUintWithError(v1.ival, v2.uval)
+		}
 	case Uint64:
 		switch v2.typ {
 		case Int64:
@@ -465,11 +470,16 @@ func intPlusIntWithError(v1, v2 int64) (numeric, error) {
 
 func intMinusIntWithError(v1, v2 int64) (numeric, error) {
 	result := v1 - v2
-	if v1 > 0 && v2 > math.MaxInt64 || v1 > math.MaxInt64 && v2 > 0 || v1 <= math.MinInt64 && v2 > 0 || v1 > 0 && v2 <= math.MinInt64 {
+
+	if (result < v1) != (v2 > 0) {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v - %v", v1, v2)
 	}
 
 	return numeric{typ: Int64, ival: result}, nil
+}
+
+func intMinusUintWithError(v1 int64, v2 uint64) (numeric, error) {
+	return intMinusIntWithError(v1, int64(v2))
 }
 
 func uintPlusInt(v1 uint64, v2 int64) numeric {
