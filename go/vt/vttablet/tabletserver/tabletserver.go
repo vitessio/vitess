@@ -1411,7 +1411,7 @@ func (tsv *TabletServer) VStreamRows(ctx context.Context, target *querypb.Target
 
 // SplitQuery splits a query + bind variables into smaller queries that return a
 // subset of rows from the original query. This is the new version that supports multiple
-// split columns and multiple split algortihms.
+// split columns and multiple split algorithms.
 // See the documentation of SplitQueryRequest in proto/vtgate.proto for more details.
 func (tsv *TabletServer) SplitQuery(
 	ctx context.Context,

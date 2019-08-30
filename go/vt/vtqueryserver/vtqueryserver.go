@@ -51,7 +51,7 @@ var (
 
 func initProxy(dbcfgs *dbconfigs.DBConfigs) (*tabletserver.TabletServer, error) {
 	target.Keyspace = *targetKeyspace
-	log.Infof("initalizing vtqueryserver.Proxy for target %s", target.Keyspace)
+	log.Infof("initializing vtqueryserver.Proxy for target %s", target.Keyspace)
 
 	// creates and registers the query service
 	qs := tabletserver.NewTabletServerWithNilTopoServer(tabletenv.Config)

@@ -105,7 +105,7 @@ func TestHostMatcher(t *testing.T) {
 	addr := &net.TCPAddr{IP: ip, Port: 9999}
 	match := matchSourceHost(net.Addr(addr), "")
 	if !match {
-		t.Fatalf("Should match any addres when target is empty")
+		t.Fatalf("Should match any address when target is empty")
 	}
 
 	match = matchSourceHost(net.Addr(addr), "localhost")

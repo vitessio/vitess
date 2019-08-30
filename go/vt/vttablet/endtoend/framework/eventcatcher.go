@@ -58,7 +58,7 @@ type QueryCatcher struct {
 	catcher *eventCatcher
 }
 
-// NewQueryCatcher sets up the capture and retuns a QueryCatcher.
+// NewQueryCatcher sets up the capture and returns a QueryCatcher.
 // You must call Close when done.
 func NewQueryCatcher() QueryCatcher {
 	return QueryCatcher{catcher: newEventCatcher(tabletenv.StatsLogger)}

@@ -177,7 +177,7 @@ func logExtractKeySpaceIDError(err error) {
 	case sqlannotation.ExtractKeySpaceIDReplicationUnfriendlyError:
 		log.Errorf(
 			"Found replication unfriendly statement. (%s). "+
-				"Filtered replication should abort, but we're currenty just skipping the statement.",
+				"Filtered replication should abort, but we're currently just skipping the statement.",
 			extractErr.Message)
 		updateStreamErrors.Add("ExtractKeySpaceIDReplicationUnfriendlyError", 1)
 	default:

@@ -29,6 +29,9 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"context"
 
 	"github.com/golang/protobuf/proto"
@@ -44,6 +47,8 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestExecutorResultsExceeded(t *testing.T) {
@@ -468,6 +473,98 @@ func TestExecutorSet(t *testing.T) {
 		}
 	}
 }
+
+func TestExecutorSetMetadata(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
+
+	set := "set @@vitess_metadata.app_keyspace_v1= '1'"
+	_, err := executor.Execute(context.Background(), "TestExecute", session, set, nil)
+	assert.Equalf(t, vtrpcpb.Code_PERMISSION_DENIED, vterrors.Code(err), "expected error %v, got error: %v", vtrpcpb.Code_PERMISSION_DENIED, err)
+
+	*vschemaacl.AuthorizedDDLUsers = "%"
+	defer func() {
+		*vschemaacl.AuthorizedDDLUsers = ""
+	}()
+
+	executor, _, _, _ = createExecutorEnv()
+	session = NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
+
+	set = "set @@vitess_metadata.app_keyspace_v1= '1'"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, set, nil)
+	assert.NoError(t, err, "%s error: %v", set, err)
+
+	show := `show vitess_metadata variables like 'app\\_keyspace\\_v_'`
+	result, err := executor.Execute(context.Background(), "TestExecute", session, show, nil)
+	assert.NoError(t, err)
+
+	want := "1"
+	got := string(result.Rows[0][1].ToString())
+	assert.Equalf(t, want, got, "want migrations %s, result %s", want, got)
+
+	// Update metadata
+	set = "set @@vitess_metadata.app_keyspace_v2='2'"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, set, nil)
+	assert.NoError(t, err, "%s error: %v", set, err)
+
+	show = `show vitess_metadata variables like 'app\\_keyspace\\_v%'`
+	gotqr, err := executor.Execute(context.Background(), "TestExecute", session, show, nil)
+	assert.NoError(t, err)
+
+	wantqr := &sqltypes.Result{
+		Fields: buildVarCharFields("Key", "Value"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow("app_keyspace_v1", "1"),
+			buildVarCharRow("app_keyspace_v2", "2"),
+		},
+		RowsAffected: 2,
+	}
+
+	assert.Equal(t, wantqr.Fields, gotqr.Fields)
+	assert.ElementsMatch(t, wantqr.Rows, gotqr.Rows)
+
+	show = "show vitess_metadata variables"
+	gotqr, err = executor.Execute(context.Background(), "TestExecute", session, show, nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	assert.Equal(t, wantqr.Fields, gotqr.Fields)
+	assert.ElementsMatch(t, wantqr.Rows, gotqr.Rows)
+}
+
+func TestExecutorDeleteMetadata(t *testing.T) {
+	*vschemaacl.AuthorizedDDLUsers = "%"
+	defer func() {
+		*vschemaacl.AuthorizedDDLUsers = ""
+	}()
+
+	executor, _, _, _ := createExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
+
+	set := "set @@vitess_metadata.app_v1= '1'"
+	_, err := executor.Execute(context.Background(), "TestExecute", session, set, nil)
+	assert.NoError(t, err, "%s error: %v", set, err)
+
+	show := `show vitess_metadata variables like 'app\\_%'`
+	result, _ := executor.Execute(context.Background(), "TestExecute", session, show, nil)
+	assert.Len(t, result.Rows, 1)
+
+	// Fails if deleting key that doesn't exist
+	delete := "set @@vitess_metadata.doesnt_exist=''"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, delete, nil)
+	assert.True(t, topo.IsErrType(err, topo.NoNode))
+
+	// Delete existing key, show should fail given the node doesn't exist
+	delete = "set @@vitess_metadata.app_v1=''"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, delete, nil)
+	assert.NoError(t, err)
+
+	show = `show vitess_metadata variables like 'app\\_%'`
+	result, err = executor.Execute(context.Background(), "TestExecute", session, show, nil)
+	assert.True(t, topo.IsErrType(err, topo.NoNode))
+}
+
 func TestExecutorAutocommit(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
@@ -606,7 +703,7 @@ func TestExecutorShow(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
 
-	for _, query := range []string{"show databases", "show schemas", "show vitess_keyspaces"} {
+	for _, query := range []string{"show databases", "show vitess_keyspaces", "show keyspaces", "show DATABASES"} {
 		qr, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
 		if err != nil {
 			t.Error(err)
@@ -667,7 +764,7 @@ func TestExecutorShow(t *testing.T) {
 	}
 
 	if len(sbclookup.Queries) != 1 {
-		t.Errorf("Tablet should have recieved one 'show' query. Instead received: %v", sbclookup.Queries)
+		t.Errorf("Tablet should have received one 'show' query. Instead received: %v", sbclookup.Queries)
 	} else {
 		lastQuery := sbclookup.Queries[len(sbclookup.Queries)-1].Sql
 		want := "show tables"
@@ -1310,6 +1407,35 @@ func waitForColVindexes(t *testing.T, ks, table string, names []string, executor
 
 	t.Fatalf("updated vschema did not contain vindexes %v on table %s", names, table)
 	return nil
+}
+
+func TestExecutorAlterVSchemaKeyspace(t *testing.T) {
+	*vschemaacl.AuthorizedDDLUsers = "%"
+	defer func() {
+		*vschemaacl.AuthorizedDDLUsers = ""
+	}()
+	executor, _, _, _ := createExecutorEnv()
+	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
+
+	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 2)
+	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) {
+		vschemaUpdates <- vschema
+	})
+
+	vschema := <-vschemaUpdates
+	_, ok := vschema.Keyspaces["TestExecutor"].Vindexes["test_vindex"]
+	if ok {
+		t.Fatalf("test_vindex should not exist in original vschema")
+	}
+
+	stmt := "alter vschema create vindex TestExecutor.test_vindex using hash"
+	_, err := executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
+	if err != nil {
+		t.Error(err)
+	}
+
+	_, vindex := waitForVindex(t, "TestExecutor", "test_vindex", vschemaUpdates, executor)
+	assert.Equal(t, vindex.Type, "hash")
 }
 
 func TestExecutorCreateVindexDDL(t *testing.T) {

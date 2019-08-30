@@ -33,7 +33,7 @@ import (
 
 // This file defines the interface and implementations of sharding key resolvers.
 
-// keyspaceIDResolver defines the interface that needs to be satisifed to get a
+// keyspaceIDResolver defines the interface that needs to be satisfied to get a
 // keyspace ID from a database row.
 type keyspaceIDResolver interface {
 	// keyspaceID takes a table row, and returns the keyspace id as bytes.

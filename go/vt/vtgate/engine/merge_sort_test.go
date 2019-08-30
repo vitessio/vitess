@@ -266,7 +266,7 @@ func TestMergeSortResultFailures(t *testing.T) {
 }
 
 func TestMergeSortDataFailures(t *testing.T) {
-	// The first row being bad fails in a differnt code path than
+	// The first row being bad fails in a different code path than
 	// the case of subsequent rows. So, test the two cases separately.
 	idColFields := sqltypes.MakeTestFields("id|col", "int32|varchar")
 	vc := &streamVCursor{
@@ -329,7 +329,7 @@ type streamVCursor struct {
 }
 
 // StreamExecuteMulti streams a result from the specified shard.
-// The shard is specifed by the only entry in shardVars. At the
+// The shard is specified by the only entry in shardVars. At the
 // end of a stream, if sendErr is set, that error is returned.
 func (t *streamVCursor) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
 	shard := rss[0].Target.Shard

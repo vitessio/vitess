@@ -69,7 +69,7 @@ func TestEngineOpen(t *testing.T) {
 
 	// Verify stats
 	if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
-		t.Errorf("stats are mismatched: %v, wnat %v", globalStats.controllers, vre.controllers)
+		t.Errorf("stats are mismatched: %v, want %v", globalStats.controllers, vre.controllers)
 	}
 
 	ct := vre.controllers[1]
@@ -130,7 +130,7 @@ func TestEngineExec(t *testing.T) {
 
 	// Verify stats
 	if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
-		t.Errorf("stats are mismatched: %v, wnat %v", globalStats.controllers, vre.controllers)
+		t.Errorf("stats are mismatched: %v, want %v", globalStats.controllers, vre.controllers)
 	}
 
 	// Test Update
@@ -172,7 +172,7 @@ func TestEngineExec(t *testing.T) {
 
 	// Verify stats
 	if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
-		t.Errorf("stats are mismatched: %v, wnat %v", globalStats.controllers, vre.controllers)
+		t.Errorf("stats are mismatched: %v, want %v", globalStats.controllers, vre.controllers)
 	}
 
 	// Test Delete
@@ -233,7 +233,7 @@ func TestEngineBadInsert(t *testing.T) {
 
 	// Verify stats
 	if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
-		t.Errorf("stats are mismatched: %v, wnat %v", globalStats.controllers, vre.controllers)
+		t.Errorf("stats are mismatched: %v, want %v", globalStats.controllers, vre.controllers)
 	}
 }
 

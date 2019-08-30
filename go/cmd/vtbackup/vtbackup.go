@@ -345,7 +345,7 @@ func resetReplication(ctx context.Context, pos mysql.Position, mysqld mysqlctl.M
 		return vterrors.Wrap(err, "failed to reset slave")
 	}
 
-	// Check if we have a postion to resume from, if not reset to the beginning of time
+	// Check if we have a position to resume from, if not reset to the beginning of time
 	if !pos.IsZero() {
 		// Set the position at which to resume from the master.
 		if err := mysqld.SetSlavePosition(ctx, pos); err != nil {
@@ -468,13 +468,21 @@ func parseBackupTime(name string) (time.Time, error) {
 }
 
 func shouldBackup(ctx context.Context, topoServer *topo.Server, backupStorage backupstorage.BackupStorage, backupDir string) (bool, error) {
+	// Look for the most recent, complete backup.
 	backups, err := backupStorage.ListBackups(ctx, backupDir)
 	if err != nil {
 		return false, fmt.Errorf("can't list backups: %v", err)
 	}
+	lastBackup := lastCompleteBackup(ctx, backups)
 
 	// Check preconditions for initial_backup mode.
 	if *initialBackup {
+		// Check if any backups for the shard already exist in this backup storage location.
+		if lastBackup != nil {
+			log.Infof("At least one complete backup already exists, so there's no need to seed an empty backup. Doing nothing.")
+			return false, nil
+		}
+
 		// Check whether the shard exists.
 		_, shardErr := topoServer.GetShard(ctx, *initKeyspace, *initShard)
 		switch {
@@ -505,11 +513,6 @@ func shouldBackup(ctx context.Context, topoServer *topo.Server, backupStorage ba
 			return false, fmt.Errorf("failed to check whether shard %v/%v exists before doing initial backup: %v", *initKeyspace, *initShard, err)
 		}
 
-		// Check if any backups for the shard exist in this backup storage location.
-		if len(backups) > 0 {
-			log.Infof("At least one backup already exists, so there's no need to seed an empty backup. Doing nothing.")
-			return false, nil
-		}
 		log.Infof("Shard %v/%v has no existing backups. Creating initial backup.", *initKeyspace, *initShard)
 		return true, nil
 	}
@@ -518,8 +521,6 @@ func shouldBackup(ctx context.Context, topoServer *topo.Server, backupStorage ba
 	if len(backups) == 0 && !*allowFirstBackup {
 		return false, fmt.Errorf("no existing backups to restore from; backup is not possible since -initial_backup flag was not enabled")
 	}
-	// Look for the most recent, complete backup.
-	lastBackup := lastCompleteBackup(ctx, backups)
 	if lastBackup == nil {
 		if *allowFirstBackup {
 			// There's no complete backup, but we were told to take one from scratch anyway.

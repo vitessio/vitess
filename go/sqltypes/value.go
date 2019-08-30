@@ -89,9 +89,11 @@ func NewValue(typ querypb.Type, val []byte) (v Value, err error) {
 // comments. Other packages can also use the function to create
 // VarBinary or VarChar values.
 func MakeTrusted(typ querypb.Type, val []byte) Value {
+
 	if typ == Null {
 		return NULL
 	}
+
 	return Value{typ: typ, val: val}
 }
 

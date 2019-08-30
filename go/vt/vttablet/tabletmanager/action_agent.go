@@ -104,7 +104,7 @@ type ActionAgent struct {
 	statsTabletType *stats.String
 
 	// statsTabletTypeCount exposes the current tablet type as a label,
-	// with the value counting the occurances of the respective tablet type.
+	// with the value counting the occurrences of the respective tablet type.
 	// Useful for Prometheus which doesn't support exporting strings as stat values
 	// only used if exportStats is true.
 	statsTabletTypeCount *stats.CountersWithSingleLabel

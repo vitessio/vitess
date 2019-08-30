@@ -113,7 +113,7 @@ type TabletManagerClient interface {
 	// PopulateReparentJournal tells the tablet to add an entry to its
 	// reparent journal
 	PopulateReparentJournal(ctx context.Context, in *tabletmanagerdata.PopulateReparentJournalRequest, opts ...grpc.CallOption) (*tabletmanagerdata.PopulateReparentJournalResponse, error)
-	// InitSlave tells the tablet to reparent to the master unconditionnally
+	// InitSlave tells the tablet to reparent to the master unconditionally
 	InitSlave(ctx context.Context, in *tabletmanagerdata.InitSlaveRequest, opts ...grpc.CallOption) (*tabletmanagerdata.InitSlaveResponse, error)
 	// DemoteMaster tells the soon-to-be-former master it's gonna change
 	DemoteMaster(ctx context.Context, in *tabletmanagerdata.DemoteMasterRequest, opts ...grpc.CallOption) (*tabletmanagerdata.DemoteMasterResponse, error)
@@ -667,7 +667,7 @@ type TabletManagerServer interface {
 	// PopulateReparentJournal tells the tablet to add an entry to its
 	// reparent journal
 	PopulateReparentJournal(context.Context, *tabletmanagerdata.PopulateReparentJournalRequest) (*tabletmanagerdata.PopulateReparentJournalResponse, error)
-	// InitSlave tells the tablet to reparent to the master unconditionnally
+	// InitSlave tells the tablet to reparent to the master unconditionally
 	InitSlave(context.Context, *tabletmanagerdata.InitSlaveRequest) (*tabletmanagerdata.InitSlaveResponse, error)
 	// DemoteMaster tells the soon-to-be-former master it's gonna change
 	DemoteMaster(context.Context, *tabletmanagerdata.DemoteMasterRequest) (*tabletmanagerdata.DemoteMasterResponse, error)

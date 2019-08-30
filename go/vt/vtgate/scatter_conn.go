@@ -718,7 +718,7 @@ func injectShuffleQueryPartsRandomGenerator(
 }
 
 // shuffleQueryParts performs an in-place shuffle of the given array.
-// The result is a psuedo-random permutation of the array chosen uniformally
+// The result is a pseudo-random permutation of the array chosen uniformally
 // from the space of all permutations.
 func shuffleQueryParts(splits []*vtgatepb.SplitQueryResponse_Part) {
 	for i := len(splits) - 1; i >= 1; i-- {

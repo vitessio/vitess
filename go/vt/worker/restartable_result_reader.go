@@ -168,7 +168,7 @@ func (r *RestartableResultReader) getTablet() (bool, error) {
 	return false /* retryable */, nil
 }
 
-// startStream assumes that getTablet() was succesfully called before and now
+// startStream assumes that getTablet() was successfully called before and now
 // tries to connect to the set tablet and start the streaming query.
 // If the method returns an error, the first return value specifies if it is
 // okay to retry.

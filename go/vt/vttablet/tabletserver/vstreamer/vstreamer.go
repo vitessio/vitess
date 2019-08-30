@@ -135,7 +135,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		bufferedEvents []*binlogdatapb.VEvent
 		curSize        int
 	)
-	// Buffering only takes row lenghts into consideration.
+	// Buffering only takes row lengths into consideration.
 	// Length of other events is considered negligible.
 	// If a new row event causes the packet size to be exceeded,
 	// all existing rows are sent without the new row.
