@@ -113,14 +113,6 @@ func TestSubtract(t *testing.T) {
 		v1:  NewInt64(-1),
 		v2:  NewUint64(2),
 		out: NewInt64(-3),
-	}, {
-		v1:  NewInt64(5),
-		v2:  NewUint64(7),
-		out: NewInt64(-2),
-	}, {
-		v1:  NewInt64(-2),
-		v2:  NewInt64(1),
-		out: NewInt64(-3),
 	}}
 
 	for _, tcase := range tcases {

@@ -407,7 +407,6 @@ func addNumericWithError(v1, v2 numeric) (numeric, error) {
 }
 
 func subtractNumericWithError(v1, v2 numeric) (numeric, error) {
-	//v1, v2 = prioritize(v1, v2)
 	switch v1.typ {
 	case Int64:
 		switch v2.typ {
