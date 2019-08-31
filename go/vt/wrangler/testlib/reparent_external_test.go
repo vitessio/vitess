@@ -300,7 +300,7 @@ func TestTabletExternallyReparentedFailedOldMaster(t *testing.T) {
 		t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
 	}
 	if tablet.Type != topodatapb.TabletType_REPLICA {
-		t.Fatalf("old master should be spare but is: %v", tablet.Type)
+		t.Fatalf("old master should be replica but is: %v", tablet.Type)
 	}
 }
 
