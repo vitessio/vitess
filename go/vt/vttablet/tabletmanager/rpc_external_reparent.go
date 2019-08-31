@@ -143,11 +143,12 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 	var oldMasterTablet *topodatapb.Tablet
 	oldMasterAlias := si.MasterAlias
 
-	// Update the tablet records concurrently.
+	// Update the new and old master tablet records concurrently.
 	event.DispatchUpdate(ev, "updating old and new master tablet records")
 	log.Infof("finalizeTabletExternallyReparented: updating tablet records")
 	wg.Add(1)
 	go func() {
+		log.Infof("finalizeTabletExternallyReparented: updating tablet record for new master: %v", agent.TabletAlias)
 		defer wg.Done()
 		// Update our own record to master.
 		_, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias,
@@ -160,9 +161,14 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 		}
 	}()
 
+	tablet := agent.Tablet()
+	tabletMap, err := agent.TopoServer.GetTabletMapForShard(ctx, tablet.Keyspace, tablet.Shard)
+	// make the channel buffer big enough that it doesn't block senders
+	tablets := make(chan topodatapb.Tablet, len(tabletMap))
 	if !topoproto.TabletAliasIsZero(oldMasterAlias) {
 		wg.Add(1)
 		go func() {
+			log.Infof("finalizeTabletExternallyReparented: updating tablet record for old master: %v", oldMasterAlias)
 			defer wg.Done()
 
 			// Forcibly demote the old master in topology, since we can't rely on the
@@ -180,15 +186,38 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 
 			// We now know more about the old master, so add it to event data.
 			ev.OldMaster = *oldMasterTablet
+			tablets <- *oldMasterTablet
 		}()
 	}
 
-	tablet := agent.Tablet()
+	// update any other tablets claiming to be MASTER also to REPLICA
+	for alias, tabletInfo := range tabletMap {
+		if alias != topoproto.TabletAliasString(agent.TabletAlias) && alias != topoproto.TabletAliasString(oldMasterAlias) && tabletInfo.Tablet.Type == topodatapb.TabletType_MASTER {
+			log.Infof("finalizeTabletExternallyReparented: updating tablet record for another old master: %v", alias)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				var err error
+				tab, err := agent.TopoServer.UpdateTabletFields(ctx, tabletInfo.Tablet.Alias,
+					func(tablet *topodatapb.Tablet) error {
+						tablet.Type = topodatapb.TabletType_REPLICA
+						return nil
+					})
+				if err != nil {
+					errs.RecordError(err)
+					return
+				}
+				tablets <- *tab
+			}()
+		}
+	}
 
 	// Wait for the tablet records to be updated. At that point, any rebuild will
 	// see the new master, so we're ready to mark the reparent as done in the
 	// global shard record.
 	wg.Wait()
+	// we waited for all goroutines to complete, so now close the channel
+	close(tablets)
 	if errs.HasErrors() {
 		return errs.Error()
 	}
@@ -221,22 +250,24 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 			errs.RecordError(err)
 		}
 	}()
-	if !topoproto.TabletAliasIsZero(oldMasterAlias) {
+	wg.Wait()
+
+	for tab := range tablets {
+		log.Infof("finalizeTabletExternallyReparented: Refresh state for tablet: %v", topoproto.TabletAliasString(tab.Alias))
 		wg.Add(1)
-		go func() {
+		go func(tablet *topodatapb.Tablet) {
 			defer wg.Done()
 
-			// Tell the old master to re-read its tablet record and change its state.
+			// Tell the old master(s) to re-read its tablet record and change its state.
 			// We don't need to put error into errs if this fails, but we need to wait
-			// for it to make sure that old master tablet is not stuck in the MASTER
+			// for it to make sure that an old master tablet is not stuck in the MASTER
 			// state.
 			tmc := tmclient.NewTabletManagerClient()
-			if err := tmc.RefreshState(ctx, oldMasterTablet); err != nil {
-				log.Warningf("Error calling RefreshState on old master %v: %v", topoproto.TabletAliasString(oldMasterTablet.Alias), err)
+			if err := tmc.RefreshState(ctx, tablet); err != nil {
+				log.Warningf("Error calling RefreshState on old master %v: %v", topoproto.TabletAliasString(tablet.Alias), err)
 			}
-		}()
+		}(&tab)
 	}
-
 	wg.Wait()
 	if errs.HasErrors() {
 		return errs.Error()
