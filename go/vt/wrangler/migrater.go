@@ -64,6 +64,7 @@ const (
 type migrater struct {
 	migrationType  binlogdatapb.MigrationType
 	wr             *Wrangler
+	workflow       string
 	id             int64
 	sources        map[string]*miSource
 	targets        map[string]*miTarget
@@ -187,6 +188,7 @@ func (wr *Wrangler) buildMigrater(ctx context.Context, targetKeyspace, workflow 
 
 	mi := &migrater{
 		wr:             wr,
+		workflow:       workflow,
 		id:             hashStreams(targetKeyspace, targets),
 		targets:        targets,
 		sources:        make(map[string]*miSource),
