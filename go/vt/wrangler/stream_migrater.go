@@ -104,7 +104,7 @@ func (sm *streamMigrater) readSourceStreams(ctx context.Context) (map[string][]*
 		}
 		streams2[k] = v
 	}
-	for ks, tabletStreams := range streams2 {
+	for shard, tabletStreams := range streams2 {
 	nextStream:
 		for _, refStream := range reference {
 			for i := 0; i < len(tabletStreams); i++ {
@@ -117,10 +117,10 @@ func (sm *streamMigrater) readSourceStreams(ctx context.Context) (map[string][]*
 					continue nextStream
 				}
 			}
-			return nil, fmt.Errorf("streans are mismatched across source shards: %s vs %s", refshard, ks)
+			return nil, fmt.Errorf("streams are mismatched across source shards: %s vs %s", refshard, shard)
 		}
 		if len(tabletStreams) != 0 {
-			return nil, fmt.Errorf("streans are mismatched across source shards: %s vs %s", refshard, ks)
+			return nil, fmt.Errorf("streams are mismatched across source shards: %s vs %s", refshard, shard)
 		}
 	}
 	return streams, nil
@@ -430,7 +430,7 @@ func (sm *streamMigrater) cancelMigration(ctx context.Context, streams map[strin
 
 func (sm *streamMigrater) restartStreams(ctx context.Context, streams map[string][]*vrStream) error {
 	return sm.mi.forAllSources(func(source *miSource) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Running', pos='', message='' where id in %s", tabletStreamValues(streams[source.si.ShardName()]))
+		query := fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos=null, message='' where id in %s", tabletStreamValues(streams[source.si.ShardName()]))
 		_, err := sm.mi.wr.tmc.VReplicationExec(ctx, source.master.Tablet, query)
 		return err
 	})
@@ -449,7 +449,7 @@ func tabletStreamValues(tabletStreams []*vrStream) string {
 	prefix := "("
 	for _, vrs := range tabletStreams {
 		fmt.Fprintf(buf, "%s%d", prefix, vrs.id)
-		prefix = ","
+		prefix = ", "
 	}
 	buf.WriteString(")")
 	return buf.String()

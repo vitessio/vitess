@@ -273,7 +273,7 @@ func (wr *Wrangler) buildMigrationTargets(ctx context.Context, targetKeyspace, w
 		if err != nil {
 			return nil, err
 		}
-		p3qr, err := wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, fmt.Sprintf("select id, source from _vt.vreplication where workflow='%s' and db_name='%s'", workflow, targetMaster.DbName()))
+		p3qr, err := wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, fmt.Sprintf("select id, source from _vt.vreplication where workflow=%s and db_name=%s", encodeString(workflow), encodeString(targetMaster.DbName())))
 		if err != nil {
 			return nil, err
 		}
@@ -545,11 +545,10 @@ func (mi *migrater) cancelMigration(ctx context.Context) {
 		mi.wr.Logger().Errorf("Cancel migration failed:", err)
 	}
 
-	err = mi.forAllUids(func(target *miTarget, uid uint32) error {
-		if _, err := mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, binlogplayer.StartVReplication(uid)); err != nil {
-			return err
-		}
-		return nil
+	err = mi.forAllTargets(func(target *miTarget) error {
+		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(mi.workflow))
+		_, err := mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
+		return err
 	})
 	if err != nil {
 		mi.wr.Logger().Errorf("Cancel migration failed: could not restart vreplication: %v", err)
@@ -754,8 +753,9 @@ func (mi *migrater) changeShardRouting(ctx context.Context) error {
 }
 
 func (mi *migrater) deleteTargetVReplication(ctx context.Context) {
-	_ = mi.forAllUids(func(target *miTarget, uid uint32) error {
-		if _, err := mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, binlogplayer.DeleteVReplication(uid)); err != nil {
+	_ = mi.forAllTargets(func(target *miTarget) error {
+		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(mi.workflow))
+		if _, err := mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query); err != nil {
 			mi.wr.Logger().Errorf("Final cleanup: could not delete vreplication, please delete stopped streams manually: %v", err)
 		}
 		return nil
