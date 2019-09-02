@@ -32,8 +32,9 @@ import (
 )
 
 var (
-	resultid1 = &sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(1)}}}
-	resultid2 = &sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(2)}}}
+	resultid1  = &sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(1)}}}
+	resultid2  = &sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(2)}}}
+	resultid12 = &sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}}
 )
 
 // TestTableMigrate tests table mode migrations.
@@ -276,11 +277,10 @@ func TestTableMigrate(t *testing.T) {
 	tme.dbDest1Client.addQuery("select * from _vt.vreplication where id = 2", stopped, nil)
 
 	// Cancel Migration
-	cancel1 := "update _vt.vreplication set state = 'Running', stop_pos = null where id in (1)"
-	cancel2 := "update _vt.vreplication set state = 'Running', stop_pos = null where id in (2)"
-	tme.dbDest1Client.addQuery(cancel1, &sqltypes.Result{}, nil)
-	tme.dbDest2Client.addQuery(cancel1, &sqltypes.Result{}, nil)
-	tme.dbDest1Client.addQuery(cancel2, &sqltypes.Result{}, nil)
+	tme.dbDest1Client.addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
+	tme.dbDest2Client.addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid1, nil)
+	tme.dbDest1Client.addQuery("update _vt.vreplication set state = 'Running', message = '' where id in (1, 2)", &sqltypes.Result{}, nil)
+	tme.dbDest2Client.addQuery("update _vt.vreplication set state = 'Running', message = '' where id in (1)", &sqltypes.Result{}, nil)
 
 	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 0*time.Second)
 	want = "DeadlineExceeded"
@@ -328,12 +328,10 @@ func TestTableMigrate(t *testing.T) {
 	tme.dbSource2Client.addQuery("select * from _vt.vreplication where id = 2", stopped, nil)
 
 	// Delete the target replications.
-	tme.dbDest1Client.addQuery("delete from _vt.vreplication where id in (1)", &sqltypes.Result{}, nil)
-	tme.dbDest1Client.addQuery("delete from _vt.copy_state where vrepl_id in (1)", &sqltypes.Result{}, nil)
+	tme.dbDest1Client.addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
+	tme.dbDest1Client.addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
 	tme.dbDest2Client.addQuery("delete from _vt.vreplication where id in (1)", &sqltypes.Result{}, nil)
 	tme.dbDest2Client.addQuery("delete from _vt.copy_state where vrepl_id in (1)", &sqltypes.Result{}, nil)
-	tme.dbDest1Client.addQuery("delete from _vt.vreplication where id in (2)", &sqltypes.Result{}, nil)
-	tme.dbDest1Client.addQuery("delete from _vt.copy_state where vrepl_id in (2)", &sqltypes.Result{}, nil)
 
 	journalID, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second)
 	if err != nil {
@@ -521,11 +519,10 @@ func TestShardMigrate(t *testing.T) {
 	tme.dbDest1Client.addQuery("select * from _vt.vreplication where id = 2", stopped, nil)
 
 	// Cancel Migration
-	cancel1 := "update _vt.vreplication set state = 'Running', stop_pos = null where id in (1)"
-	cancel2 := "update _vt.vreplication set state = 'Running', stop_pos = null where id in (2)"
-	tme.dbDest1Client.addQuery(cancel1, &sqltypes.Result{}, nil)
-	tme.dbDest2Client.addQuery(cancel1, &sqltypes.Result{}, nil)
-	tme.dbDest1Client.addQuery(cancel2, &sqltypes.Result{}, nil)
+	tme.dbDest1Client.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
+	tme.dbDest2Client.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid1, nil)
+	tme.dbDest1Client.addQuery("update _vt.vreplication set state = 'Running', message = '' where id in (1, 2)", &sqltypes.Result{}, nil)
+	tme.dbDest2Client.addQuery("update _vt.vreplication set state = 'Running', message = '' where id in (1)", &sqltypes.Result{}, nil)
 
 	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 0*time.Second)
 	want = "DeadlineExceeded"
@@ -559,12 +556,10 @@ func TestShardMigrate(t *testing.T) {
 	tme.dbSource2Client.addQuery("select * from _vt.vreplication where id = 2", stopped, nil)
 
 	// Delete the target replications.
-	tme.dbDest1Client.addQuery("delete from _vt.vreplication where id in (1)", &sqltypes.Result{}, nil)
-	tme.dbDest1Client.addQuery("delete from _vt.copy_state where vrepl_id in (1)", &sqltypes.Result{}, nil)
+	tme.dbDest1Client.addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
+	tme.dbDest1Client.addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
 	tme.dbDest2Client.addQuery("delete from _vt.vreplication where id in (1)", &sqltypes.Result{}, nil)
 	tme.dbDest2Client.addQuery("delete from _vt.copy_state where vrepl_id in (1)", &sqltypes.Result{}, nil)
-	tme.dbDest1Client.addQuery("delete from _vt.vreplication where id in (2)", &sqltypes.Result{}, nil)
-	tme.dbDest1Client.addQuery("delete from _vt.copy_state where vrepl_id in (2)", &sqltypes.Result{}, nil)
 
 	journalID, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second)
 	if err != nil {
@@ -696,13 +691,10 @@ func TestTableMigrateJournalExists(t *testing.T) {
 	tme.dbSource2Client.addQuery("select * from _vt.vreplication where id = 2", stopped, nil)
 
 	// Delete the target replications.
-	tme.dbDest1Client.addQuery("select id from _vt.vreplication where id = 1", resultid1, nil)
-	tme.dbDest1Client.addQuery("delete from _vt.vreplication where id in (1)", &sqltypes.Result{}, nil)
-	tme.dbDest1Client.addQuery("delete from _vt.copy_state where vrepl_id in (1)", &sqltypes.Result{}, nil)
-	tme.dbDest1Client.addQuery("select id from _vt.vreplication where id = 2", resultid2, nil)
-	tme.dbDest1Client.addQuery("delete from _vt.vreplication where id in (2)", &sqltypes.Result{}, nil)
-	tme.dbDest1Client.addQuery("delete from _vt.copy_state where vrepl_id in (2)", &sqltypes.Result{}, nil)
-	tme.dbDest2Client.addQuery("select id from _vt.vreplication where id = 1", resultid1, nil)
+	tme.dbDest1Client.addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
+	tme.dbDest2Client.addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid1, nil)
+	tme.dbDest1Client.addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
+	tme.dbDest1Client.addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
 	tme.dbDest2Client.addQuery("delete from _vt.vreplication where id in (1)", &sqltypes.Result{}, nil)
 	tme.dbDest2Client.addQuery("delete from _vt.copy_state where vrepl_id in (1)", &sqltypes.Result{}, nil)
 
@@ -764,13 +756,10 @@ func TestShardMigrateJournalExists(t *testing.T) {
 	tme.dbSource2Client.addQuery("select * from _vt.vreplication where id = 2", stopped, nil)
 
 	// Delete the target replications.
-	tme.dbDest1Client.addQuery("select id from _vt.vreplication where id = 1", resultid1, nil)
-	tme.dbDest1Client.addQuery("delete from _vt.vreplication where id in (1)", &sqltypes.Result{}, nil)
-	tme.dbDest1Client.addQuery("delete from _vt.copy_state where vrepl_id in (1)", &sqltypes.Result{}, nil)
-	tme.dbDest1Client.addQuery("select id from _vt.vreplication where id = 2", resultid2, nil)
-	tme.dbDest1Client.addQuery("delete from _vt.vreplication where id in (2)", &sqltypes.Result{}, nil)
-	tme.dbDest1Client.addQuery("delete from _vt.copy_state where vrepl_id in (2)", &sqltypes.Result{}, nil)
-	tme.dbDest2Client.addQuery("select id from _vt.vreplication where id = 1", resultid1, nil)
+	tme.dbDest1Client.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
+	tme.dbDest2Client.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid1, nil)
+	tme.dbDest1Client.addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
+	tme.dbDest1Client.addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
 	tme.dbDest2Client.addQuery("delete from _vt.vreplication where id in (1)", &sqltypes.Result{}, nil)
 	tme.dbDest2Client.addQuery("delete from _vt.copy_state where vrepl_id in (1)", &sqltypes.Result{}, nil)
 

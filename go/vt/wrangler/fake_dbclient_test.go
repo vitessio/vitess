@@ -25,6 +25,7 @@ import (
 )
 
 func verifyQueries(t *testing.T, dcs []*fakeDBClient) {
+	t.Helper()
 	for _, dc := range dcs {
 		dc.verifyQueries(t)
 	}
