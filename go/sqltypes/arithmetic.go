@@ -571,7 +571,7 @@ func uintMinusUintWithError(v1, v2 uint64) (numeric, error) {
 
 func uintTimesUintWithError(v1, v2 uint64) (numeric, error) {
 	result := v1 * v2
-	if v1 >= math.MaxUint64 && v2 > 1 || v2 >= math.MaxUint64 && v1 > 1 {
+	if result < v2 {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v * %v", v1, v2)
 	}
 	return numeric{typ: Uint64, uval: result}, nil
