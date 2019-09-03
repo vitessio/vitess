@@ -207,7 +207,7 @@ func (sm *streamMigrater) stopSourceStreams(ctx context.Context, streams map[str
 }
 
 func (sm *streamMigrater) syncSourceStreams(ctx context.Context, streams map[string][]*vrStream) (map[string]mysql.Position, error) {
-	var stopPositions map[string]mysql.Position
+	stopPositions := make(map[string]mysql.Position)
 	for _, tabletStreams := range streams {
 		for _, vrs := range tabletStreams {
 			key := fmt.Sprintf("%s:%s", vrs.bls.Keyspace, vrs.bls.Shard)
@@ -441,13 +441,14 @@ func (sm *streamMigrater) createTargetStreams(ctx context.Context, tmpl []*vrStr
 	})
 }
 
-func (sm *streamMigrater) cancelMigration(ctx context.Context) error {
+func (sm *streamMigrater) cancelMigration(ctx context.Context) {
 	if sm.mi.migrationType == binlogdatapb.MigrationType_TABLES {
-		return nil
+		return
 	}
 	tabletStreams, err := sm.readSourceStreamsForCancel(ctx)
 	if err != nil {
-		return err
+		sm.mi.wr.Logger().Errorf("Cancel migration failed: could not read streams metadata: %v", err)
+		return
 	}
 	workflowList := stringListify(tabletStreamWorkflows(tabletStreams))
 	err = sm.mi.forAllTargets(func(target *miTarget) error {
@@ -456,13 +457,16 @@ func (sm *streamMigrater) cancelMigration(ctx context.Context) error {
 		return err
 	})
 	if err != nil {
-		return err
+		sm.mi.wr.Logger().Errorf("Cancel migration failed: could not delete migrated streams: %v", err)
 	}
-	return sm.mi.forAllSources(func(source *miSource) error {
+	err = sm.mi.forAllSources(func(source *miSource) error {
 		query := fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos=null, message='' where id in %s", workflowList)
 		_, err := sm.mi.wr.VReplicationExec(ctx, source.master.Alias, query)
 		return err
 	})
+	if err != nil {
+		sm.mi.wr.Logger().Errorf("Cancel migration failed: could not restart source streams: %v", err)
+	}
 }
 
 func (sm *streamMigrater) readSourceStreamsForCancel(ctx context.Context) ([]*vrStream, error) {
