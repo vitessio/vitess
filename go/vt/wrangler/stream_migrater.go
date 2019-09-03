@@ -141,9 +141,9 @@ func (sm *streamMigrater) readSourceStreams(ctx context.Context) (map[string][]*
 func (sm *streamMigrater) readTabletStreams(ctx context.Context, ti *topo.TabletInfo, constraint string) ([]*vrStream, error) {
 	var query string
 	if constraint == "" {
-		query = fmt.Sprintf("select id, workflow, source, pos from _vt.vreplication where db_name='%s'", ti.DbName())
+		query = fmt.Sprintf("select id, workflow, source, pos from _vt.vreplication where db_name=%s", encodeString(ti.DbName()))
 	} else {
-		query = fmt.Sprintf("select id, workflow, source, pos from _vt.vreplication where db_name='%s' and %s", ti.DbName(), constraint)
+		query = fmt.Sprintf("select id, workflow, source, pos from _vt.vreplication where db_name=%s and %s", encodeString(ti.DbName()), constraint)
 	}
 	p3qr, err := sm.mi.wr.tmc.VReplicationExec(ctx, ti.Tablet, query)
 	if err != nil {
@@ -186,12 +186,16 @@ func (sm *streamMigrater) stopSourceStreams(ctx context.Context, streams map[str
 	stoppedStreams := make(map[string][]*vrStream)
 	var mu sync.Mutex
 	err := sm.mi.forAllSources(func(source *miSource) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for cutover' where id in %s", tabletStreamValues(streams[source.si.ShardName()]))
+		tabletStreams := streams[source.si.ShardName()]
+		if len(tabletStreams) == 0 {
+			return nil
+		}
+		query := fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for cutover' where id in %s", tabletStreamValues(tabletStreams))
 		_, err := sm.mi.wr.tmc.VReplicationExec(ctx, source.master.Tablet, query)
 		if err != nil {
 			return err
 		}
-		tabletStreams, err := sm.readTabletStreams(ctx, source.master, fmt.Sprintf("id in %s", tabletStreamValues(streams[source.si.ShardName()])))
+		tabletStreams, err = sm.readTabletStreams(ctx, source.master, fmt.Sprintf("id in %s", tabletStreamValues(tabletStreams)))
 		if err != nil {
 			return err
 		}
@@ -259,7 +263,11 @@ func (sm *streamMigrater) verifyStreamPositions(ctx context.Context, streams map
 	stoppedStreams := make(map[string][]*vrStream)
 	var mu sync.Mutex
 	err := sm.mi.forAllSources(func(source *miSource) error {
-		tabletStreams, err := sm.readTabletStreams(ctx, source.master, fmt.Sprintf("id in %s", tabletStreamValues(streams[source.si.ShardName()])))
+		tabletStreams := streams[source.si.ShardName()]
+		if len(tabletStreams) == 0 {
+			return nil
+		}
+		tabletStreams, err := sm.readTabletStreams(ctx, source.master, fmt.Sprintf("id in %s", tabletStreamValues(tabletStreams)))
 		if err != nil {
 			return err
 		}
@@ -400,13 +408,16 @@ func (sm *streamMigrater) checkShardedQuery(ctx context.Context, query string) (
 		if strings.Contains(query, "{{") {
 			return "", fmt.Errorf("cannot migrate queries that contain '{{' in their string: %s", query)
 		}
-		val.Val = []byte("{{.}}.")
+		val.Val = []byte("{{.}}")
 		return sqlparser.String(statement), nil
 	}
 	return "", nil
 }
 
 func (sm *streamMigrater) createTargetStreams(ctx context.Context, tmpl []*vrStream) error {
+	if len(tmpl) == 0 {
+		return nil
+	}
 	return sm.mi.forAllTargets(func(target *miTarget) error {
 		tabletStreams := copyTabletStreams(tmpl)
 		for _, vrs := range tabletStreams {
@@ -450,9 +461,13 @@ func (sm *streamMigrater) cancelMigration(ctx context.Context) {
 		sm.mi.wr.Logger().Errorf("Cancel migration failed: could not read streams metadata: %v", err)
 		return
 	}
-	workflowList := stringListify(tabletStreamWorkflows(tabletStreams))
+	workflows := tabletStreamWorkflows(tabletStreams)
+	if len(workflows) == 0 {
+		return
+	}
+	workflowList := stringListify(workflows)
 	err = sm.mi.forAllTargets(func(target *miTarget) error {
-		query := fmt.Sprintf("delete from _vt.vreplication where db_name='%s' and workflow in (%s)", target.master.DbName(), workflowList)
+		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow in (%s)", encodeString(target.master.DbName()), workflowList)
 		_, err := sm.mi.wr.VReplicationExec(ctx, target.master.Alias, query)
 		return err
 	})
@@ -460,7 +475,7 @@ func (sm *streamMigrater) cancelMigration(ctx context.Context) {
 		sm.mi.wr.Logger().Errorf("Cancel migration failed: could not delete migrated streams: %v", err)
 	}
 	err = sm.mi.forAllSources(func(source *miSource) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos=null, message='' where id in %s", workflowList)
+		query := fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos=null, message='' where db_name=%s and workflow in (%s)", encodeString(source.master.DbName()), workflowList)
 		_, err := sm.mi.wr.VReplicationExec(ctx, source.master.Alias, query)
 		return err
 	})
@@ -501,9 +516,12 @@ func (sm *streamMigrater) finalize(ctx context.Context, workflows []string) erro
 	if sm.mi.migrationType == binlogdatapb.MigrationType_TABLES {
 		return nil
 	}
+	if len(workflows) == 0 {
+		return nil
+	}
 	workflowList := stringListify(workflows)
 	err := sm.mi.forAllTargets(func(target *miTarget) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Running' where db_name='%s' and workflow in (%s)", target.master.DbName(), workflowList)
+		query := fmt.Sprintf("update _vt.vreplication set state='Running' where db_name=%s and workflow in (%s)", encodeString(target.master.DbName()), workflowList)
 		_, err := sm.mi.wr.VReplicationExec(ctx, target.master.Alias, query)
 		return err
 	})
@@ -511,7 +529,7 @@ func (sm *streamMigrater) finalize(ctx context.Context, workflows []string) erro
 		return err
 	}
 	return sm.mi.forAllSources(func(source *miSource) error {
-		query := fmt.Sprintf("delete from _vt.vreplication where db_name='%s' and workflow in (%s)", source.master.DbName(), workflowList)
+		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow in (%s)", encodeString(source.master.DbName()), workflowList)
 		_, err := sm.mi.wr.VReplicationExec(ctx, source.master.Alias, query)
 		return err
 	})

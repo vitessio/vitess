@@ -249,8 +249,8 @@ func TestTableMigrate(t *testing.T) {
 	})
 
 	// Check for journals.
-	tme.dbSource1Client.addQuery("select 1 from _vt.resharding_journal where id=9113431017721636330", &sqltypes.Result{}, nil)
-	tme.dbSource2Client.addQuery("select 1 from _vt.resharding_journal where id=9113431017721636330", &sqltypes.Result{}, nil)
+	tme.dbSource1Client.addQuery("select val from _vt.resharding_journal where id=9113431017721636330", &sqltypes.Result{}, nil)
+	tme.dbSource2Client.addQuery("select val from _vt.resharding_journal where id=9113431017721636330", &sqltypes.Result{}, nil)
 
 	// Wait for position: Reads current state, updates to Stopped, and re-reads.
 	state := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
@@ -491,8 +491,14 @@ func TestShardMigrate(t *testing.T) {
 	checkIsMasterServing(t, tme.ts, "ks:80-", false)
 
 	// Check for journals.
-	tme.dbSource1Client.addQuery("select 1 from _vt.resharding_journal where id=6432976123657117098", &sqltypes.Result{}, nil)
-	tme.dbSource2Client.addQuery("select 1 from _vt.resharding_journal where id=6432976123657117098", &sqltypes.Result{}, nil)
+	tme.dbSource1Client.addQuery("select val from _vt.resharding_journal where id=6432976123657117098", &sqltypes.Result{}, nil)
+	tme.dbSource2Client.addQuery("select val from _vt.resharding_journal where id=6432976123657117098", &sqltypes.Result{}, nil)
+
+	// Load source streams.
+	tme.dbSource1Client.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and state = 'Stopped'", &sqltypes.Result{}, nil)
+	tme.dbSource2Client.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and state = 'Stopped'", &sqltypes.Result{}, nil)
+	tme.dbSource1Client.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks'", &sqltypes.Result{}, nil)
+	tme.dbSource2Client.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks'", &sqltypes.Result{}, nil)
 
 	// Wait for position: Reads current state, updates to Stopped, and re-reads.
 	state := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
@@ -599,8 +605,8 @@ func TestMigrateFailJournal(t *testing.T) {
 	}
 
 	// Check for journals.
-	tme.dbSource1Client.addQuery("select 1 from _vt.resharding_journal where id=9113431017721636330", &sqltypes.Result{}, nil)
-	tme.dbSource2Client.addQuery("select 1 from _vt.resharding_journal where id=9113431017721636330", &sqltypes.Result{}, nil)
+	tme.dbSource1Client.addQuery("select val from _vt.resharding_journal where id=9113431017721636330", &sqltypes.Result{}, nil)
+	tme.dbSource2Client.addQuery("select val from _vt.resharding_journal where id=9113431017721636330", &sqltypes.Result{}, nil)
 
 	// Wait for position: Reads current state, updates to Stopped, and re-reads.
 	state := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
@@ -670,8 +676,8 @@ func TestTableMigrateJournalExists(t *testing.T) {
 	}
 
 	// Show one journal as created.
-	tme.dbSource1Client.addQuery("select 1 from _vt.resharding_journal where id=9113431017721636330", sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1"), nil)
-	tme.dbSource2Client.addQuery("select 1 from _vt.resharding_journal where id=9113431017721636330", &sqltypes.Result{}, nil)
+	tme.dbSource1Client.addQuery("select val from _vt.resharding_journal where id=9113431017721636330", sqltypes.MakeTestResult(sqltypes.MakeTestFields("val", "varbinary"), ""), nil)
+	tme.dbSource2Client.addQuery("select val from _vt.resharding_journal where id=9113431017721636330", &sqltypes.Result{}, nil)
 
 	// Create the missing journal.
 	journal2 := "insert into _vt.resharding_journal.*9113431017721636330.*tables.*t1.*t2.*local_position.*MariaDB/5-456-892.*shard_gtids.*80.*MariaDB/5-456-893.*80.*participants.*40.*40"
@@ -735,8 +741,8 @@ func TestShardMigrateJournalExists(t *testing.T) {
 	}
 
 	// Show one journal as created.
-	tme.dbSource1Client.addQuery("select 1 from _vt.resharding_journal where id=6432976123657117098", sqltypes.MakeTestResult(sqltypes.MakeTestFields("1", "int64"), "1"), nil)
-	tme.dbSource2Client.addQuery("select 1 from _vt.resharding_journal where id=6432976123657117098", &sqltypes.Result{}, nil)
+	tme.dbSource1Client.addQuery("select val from _vt.resharding_journal where id=6432976123657117098", sqltypes.MakeTestResult(sqltypes.MakeTestFields("val", "varbinary"), ""), nil)
+	tme.dbSource2Client.addQuery("select val from _vt.resharding_journal where id=6432976123657117098", &sqltypes.Result{}, nil)
 
 	// Create the missing journal.
 	journal2 := "insert into _vt.resharding_journal.*6432976123657117098.*migration_type:SHARDS.*local_position.*MariaDB/5-456-892.*shard_gtids.*80.*MariaDB/5-456-893.*shard_gtids.*80.*MariaDB/5-456-893.*participants.*40.*40"
