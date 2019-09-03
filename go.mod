@@ -50,12 +50,12 @@ require (
 	github.com/pborman/uuid v0.0.0-20160824210600-b984ec7fa9ff
 	github.com/prometheus/client_golang v0.9.2
 	github.com/satori/go.uuid v0.0.0-20160713180306-0aa62d5ddceb // indirect
-	github.com/stretchr/testify v1.3.0
+	github.com/stretchr/testify v1.4.0
 	github.com/tchap/go-patricia v0.0.0-20160729071656-dd168db6051b
 	github.com/uber-go/atomic v1.4.0 // indirect
 	github.com/uber/jaeger-client-go v2.16.0+incompatible
 	github.com/uber/jaeger-lib v2.0.0+incompatible // indirect
-	github.com/ugorji/go/codec v1.1.7 // indirect
+	github.com/ugorji/go v1.1.7 // indirect
 	github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2 // indirect
 	github.com/z-division/go-zookeeper v0.0.0-20190128072838-6d7457066b9b
 	go.uber.org/atomic v1.4.0 // indirect
@@ -71,8 +71,7 @@ require (
 	google.golang.org/genproto v0.0.0-20190801165951-fa694d86fc64 // indirect
 	google.golang.org/grpc v1.21.1
 	gopkg.in/asn1-ber.v1 v1.0.0-20150924051756-4e86f4367175 // indirect
-	gopkg.in/check.v1 v1.0.0-20180628173108-788fd7840127 // indirect
+	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/ldap.v2 v2.5.0
-	gopkg.in/yaml.v2 v2.0.0-20160928153709-a5b47d31c556 // indirect
 	honnef.co/go/tools v0.0.0-20190418001031-e561f6794a2a
 )
