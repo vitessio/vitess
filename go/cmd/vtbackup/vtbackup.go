@@ -376,8 +376,8 @@ func startReplication(ctx context.Context, mysqld mysqlctl.MysqlDaemon, topoServ
 		return vterrors.Wrapf(err, "Cannot read master tablet %v", si.MasterAlias)
 	}
 
-	// Set master and start slave.
-	if err := mysqld.SetMaster(ctx, topoproto.MysqlHostname(ti.Tablet), int(topoproto.MysqlPort(ti.Tablet)), false /* slaveStopBefore */, true /* slaveStartAfter */); err != nil {
+	// Stop slave (in case we're restarting), set master, and start slave.
+	if err := mysqld.SetMaster(ctx, topoproto.MysqlHostname(ti.Tablet), int(topoproto.MysqlPort(ti.Tablet)), true /* slaveStopBefore */, true /* slaveStartAfter */); err != nil {
 		return vterrors.Wrap(err, "MysqlDaemon.SetMaster failed")
 	}
 	return nil
