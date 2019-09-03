@@ -29,7 +29,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
@@ -62,15 +61,16 @@ const (
 // migrater contains the metadata for migrating read and write traffic
 // for vreplication streams.
 type migrater struct {
-	migrationType  binlogdatapb.MigrationType
-	wr             *Wrangler
-	workflow       string
-	id             int64
-	sources        map[string]*miSource
-	targets        map[string]*miTarget
-	sourceKeyspace string
-	targetKeyspace string
-	tables         []string
+	migrationType   binlogdatapb.MigrationType
+	wr              *Wrangler
+	workflow        string
+	id              int64
+	sources         map[string]*miSource
+	targets         map[string]*miTarget
+	sourceKeyspace  string
+	targetKeyspace  string
+	tables          []string
+	sourceWorkflows []string
 }
 
 // miTarget contains the metadata for each migration target.
@@ -147,12 +147,21 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 	}
 	if !journalsExist {
 		mi.wr.Logger().Infof("No previous journals were found. Proceeding normally.")
+		sm := &streamMigrater{mi: mi}
+		tabletStreams, err := sm.stopStreams(ctx)
+		if err != nil {
+			return 0, err
+		}
 		if err := mi.stopSourceWrites(ctx); err != nil {
 			mi.cancelMigration(ctx)
 			return 0, err
 		}
 		if err := mi.waitForCatchup(ctx, filteredReplicationWaitTime); err != nil {
 			mi.cancelMigration(ctx)
+			return 0, err
+		}
+		mi.sourceWorkflows, err = sm.migrateStreams(ctx, tabletStreams)
+		if err != nil {
 			return 0, err
 		}
 	} else {
@@ -174,6 +183,10 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 		return 0, err
 	}
 	if err := mi.changeRouting(ctx); err != nil {
+		return 0, err
+	}
+	sm := &streamMigrater{mi: mi}
+	if err := sm.finalize(ctx, mi.sourceWorkflows); err != nil {
 		return 0, err
 	}
 	mi.deleteTargetVReplication(ctx)
@@ -461,20 +474,32 @@ func (mi *migrater) migrateShardReads(ctx context.Context, cells []string, serve
 }
 
 func (mi *migrater) checkJournals(ctx context.Context) (journalsExist bool, err error) {
-	var exist sync2.AtomicBool
+	var mu sync.Mutex
+	journal := &binlogdatapb.Journal{}
+	var exists bool
 	err = mi.forAllSources(func(source *miSource) error {
-		statement := fmt.Sprintf("select 1 from _vt.resharding_journal where id=%v", mi.id)
+		statement := fmt.Sprintf("select val from _vt.resharding_journal where id=%v", mi.id)
 		p3qr, err := mi.wr.tmc.VReplicationExec(ctx, source.master.Tablet, statement)
 		if err != nil {
 			return err
 		}
-		if len(p3qr.Rows) >= 1 {
-			exist.Set(true)
+		if len(p3qr.Rows) != 0 {
+			qr := sqltypes.Proto3ToResult(p3qr)
+			mu.Lock()
+			defer mu.Unlock()
+
+			if !exists {
+				if err := proto.UnmarshalText(qr.Rows[0][0].ToString(), journal); err != nil {
+					return err
+				}
+				exists = true
+			}
 			source.journaled = true
 		}
 		return nil
 	})
-	return exist.Get(), err
+	mi.sourceWorkflows = journal.SourceWorkflows
+	return exists, err
 }
 
 func (mi *migrater) stopSourceWrites(ctx context.Context) error {
@@ -544,6 +569,9 @@ func (mi *migrater) cancelMigration(ctx context.Context) {
 	if err != nil {
 		mi.wr.Logger().Errorf("Cancel migration failed:", err)
 	}
+
+	sm := &streamMigrater{mi: mi}
+	sm.cancelMigration(ctx)
 
 	err = mi.forAllTargets(func(target *miTarget) error {
 		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(mi.workflow))
