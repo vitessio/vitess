@@ -98,7 +98,8 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 
 	// now we can run the backup
 	dir := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
-	name := fmt.Sprintf("%v.%v", time.Now().UTC().Format("2006-01-02.150405"), topoproto.TabletAliasString(tablet.Alias))
+	backupTime := time.Now().UTC()
+	name := fmt.Sprintf("%v.%v", backupTime.Format("2006-01-02.150405"), topoproto.TabletAliasString(tablet.Alias))
 	backupParams := mysqlctl.BackupParams{
 		Cnf:          agent.Cnf,
 		Mysqld:       agent.MysqlDaemon,
@@ -110,7 +111,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 		Shard:        tablet.Shard,
 	}
 
-	returnErr := mysqlctl.Backup(ctx, dir, name, backupParams)
+	returnErr := mysqlctl.Backup(ctx, dir, name, backupParams, backupTime)
 
 	if engine.ShouldDrainForBackup() {
 		bgCtx := context.Background()

@@ -239,7 +239,7 @@ func findFilesToBackup(cnf *Mycnf) ([]FileEntry, error) {
 
 // ExecuteBackup returns a boolean that indicates if the backup is usable,
 // and an overall error.
-func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
+func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, backupTime time.Time) (bool, error) {
 
 	// extract all params from BackupParams
 	cnf := params.Cnf
@@ -311,7 +311,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	}
 
 	// Backup everything, capture the error.
-	backupErr := be.backupFiles(ctx, cnf, mysqld, logger, bh, replicationPosition, backupConcurrency, hookExtraEnv)
+	backupErr := be.backupFiles(ctx, cnf, mysqld, logger, bh, replicationPosition, backupConcurrency, hookExtraEnv, backupTime)
 	usable := backupErr == nil
 
 	// Try to restart mysqld, use background context in case we timed out the original context
@@ -387,7 +387,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 }
 
 // backupFiles finds the list of files to backup, and creates the backup.
-func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, replicationPosition mysql.Position, backupConcurrency int, hookExtraEnv map[string]string) (finalErr error) {
+func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, replicationPosition mysql.Position, backupConcurrency int, hookExtraEnv map[string]string, backupTime time.Time) (finalErr error) {
 	// Get the files to backup.
 	fes, err := findFilesToBackup(cnf)
 	if err != nil {
@@ -440,6 +440,7 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysq
 		BackupManifest: BackupManifest{
 			BackupMethod: builtinBackupEngineName,
 			Position:     replicationPosition,
+			BackupTime:   backupTime,
 			FinishedTime: time.Now().UTC().Format(time.RFC3339),
 		},
 

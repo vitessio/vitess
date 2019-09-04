@@ -121,7 +121,7 @@ func closeFile(wc io.WriteCloser, fileName string, logger logutil.Logger, finalE
 
 // ExecuteBackup returns a boolean that indicates if the backup is usable,
 // and an overall error.
-func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (complete bool, finalErr error) {
+func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, backupTime time.Time) (complete bool, finalErr error) {
 	// extract all params from BackupParams
 	cnf := params.Cnf
 	mysqld := params.Mysqld

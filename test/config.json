@@ -285,6 +285,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"recovery": {
+			"File": "recovery.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"reparent": {
 			"File": "reparent.py",
 			"Args": [],
@@ -547,6 +556,15 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"xtrabackup_xtra": {
+			"File": "xtrabackup_xtra.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 3,
 			"RetryMax": 0,
 			"Tags": []
 		}

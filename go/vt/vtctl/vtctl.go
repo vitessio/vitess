@@ -125,6 +125,7 @@ import (
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 var (
@@ -223,7 +224,7 @@ var commands = []commandGroup{
 	{
 		"Shards", []command{
 			{"CreateShard", commandCreateShard,
-				"[-force] [-parent] <keyspace/shard>",
+				"[-force] [-parent] [-keyspace_type=keyspace_type] <keyspace/shard>",
 				"Creates the specified shard."},
 			{"GetShard", commandGetShard,
 				"<keyspace/shard>",
@@ -282,7 +283,7 @@ var commands = []commandGroup{
 	{
 		"Keyspaces", []command{
 			{"CreateKeyspace", commandCreateKeyspace,
-				"[-sharding_column_name=name] [-sharding_column_type=type] [-served_from=tablettype1:ks1,tablettype2:ks2,...] [-force] <keyspace name>",
+				"[-sharding_column_name=name] [-sharding_column_type=type] [-served_from=tablettype1:ks1,tablettype2:ks2,...] [-force] [-keyspace_type=type] [-snapshot_time=time] <keyspace name>",
 				"Creates the specified keyspace."},
 			{"DeleteKeyspace", commandDeleteKeyspace,
 				"[-recursive] <keyspace>",
@@ -1158,6 +1159,7 @@ func commandExecuteHook(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 func commandCreateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	force := subFlags.Bool("force", false, "Proceeds with the command even if the keyspace already exists")
 	parent := subFlags.Bool("parent", false, "Creates the parent keyspace if it doesn't already exist")
+	keyspaceType := subFlags.String("keyspace_type", "", "Specifies the type of the keyspace")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1170,7 +1172,12 @@ func commandCreateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *fl
 		return err
 	}
 	if *parent {
-		if err := wr.TopoServer().CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{}); err != nil && !topo.IsErrType(err, topo.NodeExists) {
+		ktype, err := topoproto.ParseKeyspaceType(*keyspaceType)
+		if err != nil {
+			wr.Logger().Infof("error parsing keyspace type %v, defaulting to NORMAL", *keyspaceType)
+			err = nil
+		}
+		if err := wr.TopoServer().CreateKeyspace(ctx, keyspace, &topodatapb.Keyspace{KeyspaceType: ktype}); err != nil && !topo.IsErrType(err, topo.NodeExists) {
 			return err
 		}
 	}
@@ -1552,6 +1559,8 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 
 	var servedFrom flagutil.StringMapValue
 	subFlags.Var(&servedFrom, "served_from", "Specifies a comma-separated list of dbtype:keyspace pairs used to serve traffic")
+	keyspaceType := subFlags.String("keyspace_type", "", "Specifies the type of the keyspace")
+	timestampStr := subFlags.String("snapshot_time", "", "Specifies the snapshot time for this keyspace")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1564,9 +1573,26 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
+	ktype, err := topoproto.ParseKeyspaceType(*keyspaceType)
+	if *keyspaceType != "" && err != nil {
+		wr.Logger().Infof("error parsing keyspace type %v, defaulting to NORMAL", *keyspaceType)
+		err = nil
+	}
+
+	var snapshotTime *vttime.Time
+	// if snapshot keyspace, process snapshot_time
+	if ktype == topodatapb.KeyspaceType_SNAPSHOT && *timestampStr != "" {
+		timeTime, err := time.Parse(time.RFC3339, *timestampStr)
+		if err != nil {
+			return err
+		}
+		snapshotTime = logutil.TimeToProto(timeTime)
+	}
 	ki := &topodatapb.Keyspace{
 		ShardingColumnName: *shardingColumnName,
 		ShardingColumnType: kit,
+		KeyspaceType:       ktype,
+		SnapshotTime:       snapshotTime,
 	}
 	if len(servedFrom) > 0 {
 		for name, value := range servedFrom {

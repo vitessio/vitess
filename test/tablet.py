@@ -482,7 +482,7 @@ class Tablet(object):
     args.extend(['-pid_file', os.path.join(self.tablet_dir, 'vttablet.pid')])
     # always enable_replication_reporter with somewhat short values for tests
     args.extend(['-health_check_interval', '2s'])
-    args.extend(['-enable_replication_reporter'])
+    #args.extend(['-enable_replication_reporter'])
     args.extend(['-degraded_threshold', '5s'])
     args.extend(['-lock_tables_timeout', '5s'])
     args.extend(['-watch_replication_stream'])

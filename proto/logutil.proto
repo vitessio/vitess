@@ -21,12 +21,7 @@ option go_package = "vitess.io/vitess/go/vt/proto/logutil";
 
 package logutil;
 
-// Time represents a time stamp in nanoseconds. In go, use logutil library
-// to convert times.
-message Time {
-  int64 seconds = 1;
-  int32 nanoseconds = 2;
-}
+import "time.proto";
 
 // Level is the level of the log messages.
 enum Level {
@@ -43,7 +38,7 @@ enum Level {
 
 // Event is a single logging event
 message Event {
-  Time time = 1;
+  vttime.Time time = 1;
   Level level = 2;
   string file = 3;
   int64 line = 4;
