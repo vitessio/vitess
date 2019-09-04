@@ -107,19 +107,17 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 var r = regexp.MustCompile("/\\*VT_SPAN_CONTEXT=(.*)\\*/")
 
 // this function is here to make this logic easy to test by decoupling the logic from the `trace.NewSpan` and `trace.NewFromString` functions
-func startSpanTestable(query, label string,
+func startSpanTestable(ctx context.Context, query, label string,
 	newSpan func(context.Context, string) (trace.Span, context.Context),
 	newSpanFromString func(context.Context, string, string) (trace.Span, context.Context, error)) (trace.Span, context.Context, error) {
 	_, comments := sqlparser.SplitMarginComments(query)
 	match := r.FindStringSubmatch(comments.Leading)
-	background := context.Background()
 	var span trace.Span
-	var ctx context.Context
 	if len(match) == 0 {
-		span, ctx = newSpan(background, label)
+		span, ctx = newSpan(ctx, label)
 	} else {
 		var err error
-		span, ctx, err = newSpanFromString(background, match[1], label)
+		span, ctx, err = newSpanFromString(ctx, match[1], label)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -130,8 +128,8 @@ func startSpanTestable(query, label string,
 	return span, ctx, nil
 }
 
-func startSpan(query, label string) (trace.Span, context.Context, error) {
-	return startSpanTestable(query, label, trace.NewSpan, trace.NewFromString)
+func startSpan(ctx context.Context, query, label string) (trace.Span, context.Context, error) {
+	return startSpanTestable(ctx, query, label, trace.NewSpan, trace.NewFromString)
 }
 
 func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
@@ -142,7 +140,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 		defer cancel()
 	}
 
-	span, ctx, err := startSpan(query, "vtgateHandler.ComQuery")
+	span, ctx, err := startSpan(ctx, query, "vtgateHandler.ComQuery")
 	if err != nil {
 		return vterrors.Wrap(err, "failed to extract span")
 	}
