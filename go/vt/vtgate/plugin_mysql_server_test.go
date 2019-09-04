@@ -202,22 +202,22 @@ func newSpanFail(t *testing.T) func(ctx context.Context, label string) (trace.Sp
 }
 
 func TestNoSpanContextPassed(t *testing.T) {
-	_, _, err := startSpanTestable("sql without comments", "someLabel", newSpanOK, newFromStringFail(t))
+	_, _, err := startSpanTestable(context.Background(), "sql without comments", "someLabel", newSpanOK, newFromStringFail(t))
 	assert.NoError(t, err)
 }
 
 func TestSpanContextNoPassedInButExistsInString(t *testing.T) {
-	_, _, err := startSpanTestable("SELECT * FROM SOMETABLE WHERE COL = \"/*VT_SPAN_CONTEXT=123*/", "someLabel", newSpanOK, newFromStringFail(t))
+	_, _, err := startSpanTestable(context.Background(), "SELECT * FROM SOMETABLE WHERE COL = \"/*VT_SPAN_CONTEXT=123*/", "someLabel", newSpanOK, newFromStringFail(t))
 	assert.NoError(t, err)
 }
 
 func TestSpanContextPassedIn(t *testing.T) {
-	_, _, err := startSpanTestable("/*VT_SPAN_CONTEXT=123*/SQL QUERY", "someLabel", newSpanFail(t), newFromStringOK)
+	_, _, err := startSpanTestable(context.Background(), "/*VT_SPAN_CONTEXT=123*/SQL QUERY", "someLabel", newSpanFail(t), newFromStringOK)
 	assert.NoError(t, err)
 }
 
 func TestSpanContextPassedInEvenAroundOtherComments(t *testing.T) {
-	_, _, err := startSpanTestable("/*VT_SPAN_CONTEXT=123*/SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS */ col1, col2 FROM TABLE ", "someLabel",
+	_, _, err := startSpanTestable(context.Background(), "/*VT_SPAN_CONTEXT=123*/SELECT /*vt+ SCATTER_ERRORS_AS_WARNINGS */ col1, col2 FROM TABLE ", "someLabel",
 		newSpanFail(t),
 		newFromStringExpect(t, "123"))
 	assert.NoError(t, err)
