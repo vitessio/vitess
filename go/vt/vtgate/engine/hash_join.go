@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 Google Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,6 +19,8 @@ package engine
 import (
 	"encoding/json"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -26,7 +28,7 @@ import (
 
 var _ Primitive = (*HashJoin)(nil)
 
-// HashJoin specifies the parameters for a join primitive. It does it work by building a hash map (a.k.a probe table)
+// HashJoin specifies the parameters for a join primitive. It does its work by building a hash map (a.k.a probe table)
 // for the lhs input, and then uses this probe table to "probe" the rhs, finding matches by hashing
 // the join column values
 type HashJoin struct {
@@ -72,7 +74,10 @@ func (jn *HashJoin) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 	table := newProbeTable()
 	for _, row := range lresult.Rows {
 		joinVals := extractJoinValues(row, jn.LeftJoinCols)
-		table.Add(joinVals, row)
+		err := table.Add(joinVals, row)
+		if err != nil {
+			return nil, vterrors.Wrap(err, "failed to add data to probe table")
+		}
 	}
 
 	rresult, err := jn.Right.Execute(vcursor, bindVars, wantfields)
@@ -86,9 +91,11 @@ func (jn *HashJoin) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 	}
 
 	for _, rrow := range rresult.Rows {
-
 		joinVals := extractJoinValues(rrow, jn.RightJoinCols)
-		matches := table.Get(joinVals)
+		matches, err := table.Get(joinVals)
+		if err != nil {
+			return nil, vterrors.Wrap(err, "failed to execute hash join")
+		}
 		for _, lrow := range matches {
 			result.Rows = append(result.Rows, joinRows(lrow, rrow, jn.Cols))
 			result.RowsAffected++
@@ -137,7 +144,10 @@ func (jn *HashJoin) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 
 		for _, rrow := range rresult.Rows {
 			joinVals := extractJoinValues(rrow, jn.RightJoinCols)
-			matches := table.Get(joinVals)
+			matches, err := table.Get(joinVals)
+			if err != nil {
+				return err
+			}
 			for _, lrow := range matches {
 				result.Rows = append(result.Rows, joinRows(lrow, rrow, jn.Cols))
 			}
@@ -148,7 +158,7 @@ func (jn *HashJoin) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 	return err
 }
 
-// GetFields fetches the field info.
+// GetFields fetches the field info. This is a copy of the implementation in join.GetFields
 func (jn *HashJoin) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	joinVars := make(map[string]*querypb.BindVariable)
 	lresult, err := jn.Left.GetFields(vcursor, bindVars)
@@ -182,22 +192,41 @@ func (jn *HashJoin) GetTableName() string {
 	return jn.Left.GetTableName() + "_" + jn.Right.GetTableName()
 }
 
+type probeTableEntry struct {
+	key    []sqltypes.Value
+	values [][]sqltypes.Value
+}
+
 type probeTable struct {
-	table map[int][][]sqltypes.Value
+	table map[int][]*probeTableEntry
 }
 
 func newProbeTable() probeTable {
-	return probeTable{table: make(map[int][][]sqltypes.Value)}
+	return probeTable{table: make(map[int][]*probeTableEntry)}
 }
 
-func (p *probeTable) Add(key []sqltypes.Value, value []sqltypes.Value) {
+func (p *probeTable) Add(key []sqltypes.Value, value []sqltypes.Value) error {
 	hash := p.calculateHashFor(key)
-	chunk, ok := p.table[hash]
+	entries, ok := p.table[hash]
 	if !ok {
-		p.table[hash] = [][]sqltypes.Value{value}
-	} else {
-		p.table[hash] = append(chunk, value)
+		// first hit for this hash code
+		p.table[hash] = []*probeTableEntry{{key: key, values: [][]sqltypes.Value{value}}}
+		return nil
 	}
+
+	entry, err := findEntry(entries, key)
+	if err != nil {
+		return err
+	}
+	if entry == nil {
+		// no entry found with this keyvalue. we have a false map collision
+		p.table[hash] = append(p.table[hash], &probeTableEntry{key: key, values: [][]sqltypes.Value{value}})
+	} else {
+		// found other matches with the same key - let's add this one as well
+		entry.values = append(entry.values, value)
+	}
+
+	return nil
 }
 
 func (p *probeTable) calculateHashFor(key []sqltypes.Value) int {
@@ -211,10 +240,43 @@ func (p *probeTable) calculateHashFor(key []sqltypes.Value) int {
 	return hash
 }
 
-func (p *probeTable) Get(key []sqltypes.Value) [][]sqltypes.Value {
+func (p *probeTable) Get(key []sqltypes.Value) ([][]sqltypes.Value, error) {
 	hash := p.calculateHashFor(key)
+	entry, err := findEntry(p.table[hash], key)
+	if err != nil {
+		return nil, err
+	}
+	if entry == nil {
+		return nil, nil
+	}
+	return entry.values, nil
+}
 
-	return p.table[hash]
+func findEntry(entries []*probeTableEntry, key []sqltypes.Value) (*probeTableEntry, error) {
+	for _, entry := range entries {
+		cmp, err := areEqual(key, entry.key)
+		if err != nil {
+			return nil, err
+		}
+		if cmp {
+			return entry, nil
+		}
+	}
+	return nil, nil
+}
+
+func areEqual(key1, key2 []sqltypes.Value) (bool, error) {
+	for i, v1 := range key1 {
+		v2 := key2[i]
+		result, err := sqltypes.AreEqualNullable(v1, v2)
+		if err != nil {
+			return false, vterrors.Wrap(err, "failed to compare keys")
+		}
+		if !result {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func (p *probeTable) IsEmpty() bool {

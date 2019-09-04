@@ -355,7 +355,7 @@ func TestNullsafeCompare(t *testing.T) {
 		// LHS Text
 		v1:  TestValue(VarChar, "abcd"),
 		v2:  TestValue(VarChar, "abcd"),
-		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "types are not comparable: VARCHAR vs VARCHAR"),
 	}, {
 		// Make sure underlying error is returned for LHS.
 		v1:  TestValue(Int64, "1.2"),
@@ -413,6 +413,92 @@ func TestNullsafeCompare(t *testing.T) {
 
 		if got != tcase.out {
 			t.Errorf("NullsafeCompare(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), got, tcase.out)
+		}
+	}
+}
+
+func TestAreEqualNullable(t *testing.T) {
+	tcases := []struct {
+		v1, v2 Value
+		out    bool
+		err    error
+	}{{
+		// All nulls.
+		v1:  NULL,
+		v2:  NULL,
+		out: false,
+	}, {
+		// LHS null.
+		v1:  NULL,
+		v2:  NewInt64(1),
+		out: false,
+	}, {
+		// RHS null.
+		v1:  NewInt64(1),
+		v2:  NULL,
+		out: false,
+	}, {
+		// LHS Text
+		v1:  TestValue(VarChar, "abcd"),
+		v2:  TestValue(VarChar, "abcd"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "types are not comparable: VARCHAR vs VARCHAR"),
+	}, {
+		// Make sure underlying error is returned for LHS.
+		v1:  TestValue(Int64, "1.2"),
+		v2:  NewInt64(2),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
+	}, {
+		// Make sure underlying error is returned for RHS.
+		v1:  NewInt64(2),
+		v2:  TestValue(Int64, "1.2"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
+	}, {
+		// Numeric equal.
+		v1:  NewInt64(1),
+		v2:  NewUint64(1),
+		out: true,
+	}, {
+		// Numeric unequal.
+		v1:  NewInt64(1),
+		v2:  NewUint64(2),
+		out: false,
+	}, {
+		// Non-numeric equal
+		v1:  TestValue(VarBinary, "abcd"),
+		v2:  TestValue(Binary, "abcd"),
+		out: true,
+	}, {
+		// Non-numeric unequal
+		v1:  TestValue(VarBinary, "abcd"),
+		v2:  TestValue(Binary, "bcde"),
+		out: false,
+	}, {
+		// Date/Time types
+		v1:  TestValue(Datetime, "1000-01-01 00:00:00"),
+		v2:  TestValue(Binary, "1000-01-01 00:00:00"),
+		out: true,
+	}, {
+		// Date/Time types
+		v1:  TestValue(Datetime, "2000-01-01 00:00:00"),
+		v2:  TestValue(Binary, "1000-01-01 00:00:00"),
+		out: false,
+	}, {
+		// Date/Time types
+		v1:  TestValue(Datetime, "1000-01-01 00:00:00"),
+		v2:  TestValue(Binary, "2000-01-01 00:00:00"),
+		out: false,
+	}}
+	for _, tcase := range tcases {
+		got, err := AreEqualNullable(tcase.v1, tcase.v2)
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("AreEqualNullable(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
+		}
+		if tcase.err != nil {
+			continue
+		}
+
+		if got != tcase.out {
+			t.Errorf("AreEqualNullable(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), got, tcase.out)
 		}
 	}
 }
@@ -1163,7 +1249,7 @@ func TestMin(t *testing.T) {
 	}, {
 		v1:  TestValue(VarChar, "aa"),
 		v2:  TestValue(VarChar, "aa"),
-		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "types are not comparable: VARCHAR vs VARCHAR"),
 	}}
 	for _, tcase := range tcases {
 		v, err := Min(tcase.v1, tcase.v2)
@@ -1212,7 +1298,7 @@ func TestMax(t *testing.T) {
 	}, {
 		v1:  TestValue(VarChar, "aa"),
 		v2:  TestValue(VarChar, "aa"),
-		err: vterrors.New(vtrpcpb.Code_UNKNOWN, "types are not comparable: VARCHAR vs VARCHAR"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "types are not comparable: VARCHAR vs VARCHAR"),
 	}}
 	for _, tcase := range tcases {
 		v, err := Max(tcase.v1, tcase.v2)

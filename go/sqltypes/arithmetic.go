@@ -18,8 +18,6 @@ package sqltypes
 
 import (
 	"bytes"
-	"fmt"
-
 	"strconv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -119,6 +117,18 @@ func NullsafeAdd(v1, v2 Value, resultType querypb.Type) Value {
 	return castFromNumeric(lresult, resultType)
 }
 
+// AreEqualNullable returns false if either v1 or v2 is NULL, and otherwise returns true if v1 == v2.
+func AreEqualNullable(v1, v2 Value) (bool, error) {
+	if v1.IsNull() || v2.IsNull() {
+		return false, nil
+	}
+	cmp, err := NullsafeCompare(v1, v2)
+	if err != nil {
+		return false, err
+	}
+	return cmp == 0, nil
+}
+
 // NullsafeCompare returns 0 if v1==v2, -1 if v1<v2, and 1 if v1>v2.
 // NULL is the lowest value. If any value is
 // numeric, then a numeric comparison is performed after
@@ -152,7 +162,7 @@ func NullsafeCompare(v1, v2 Value) (int, error) {
 	if isByteComparable(v1) && isByteComparable(v2) {
 		return bytes.Compare(v1.ToBytes(), v2.ToBytes()), nil
 	}
-	return 0, fmt.Errorf("types are not comparable: %v vs %v", v1.Type(), v2.Type())
+	return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "types are not comparable: %v vs %v", v1.Type(), v2.Type())
 }
 
 // isByteComparable returns true if the type is binary or date/time.
