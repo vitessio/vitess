@@ -176,8 +176,8 @@ copy_src_cmd="cp -R /tmp/src/!(vendor|bootstrap.sh) ."
 # Git repository.
 copy_src_cmd=$(append_cmd "$copy_src_cmd" "cp -R /tmp/src/.git .")
 
-# Copy vendor/vendor.json file if it changed
-run_bootstrap_cmd="if [[ \$(diff -w vendor/vendor.json /tmp/src/vendor/vendor.json) ]]; then cp -f /tmp/src/vendor/vendor.json vendor/; sync_vendor=1; fi"
+# Enable gomodules
+run_bootstrap_cmd="export GO111MODULE=on"
 # Copy bootstrap.sh if it changed
 run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "if [[ \$(diff -w bootstrap.sh /tmp/src/bootstrap.sh) ]]; then cp -f /tmp/src/bootstrap.sh .; bootstrap=1; fi")
 # run bootstrap.sh if necessary
