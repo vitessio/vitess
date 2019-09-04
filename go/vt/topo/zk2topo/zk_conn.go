@@ -377,9 +377,6 @@ func dialZk(ctx context.Context, addr string) (*zk.Conn, <-chan zk.Event, error)
 			return tls.DialWithDialer(&d, network, address, tlsConfig)
 		})
 	}
-	// Make sure we re-resolve the DNS name every time we reconnect to a server
-	// In environments where DNS changes such as Kubernetes we can't cache the IP address
-	options = zk.WithHostProvider(&zk.SimpleDNSHostProvider{})
 
 	// zk.Connect automatically shuffles the servers
 	zconn, session, err := zk.Connect(servers, *baseTimeout, options)
