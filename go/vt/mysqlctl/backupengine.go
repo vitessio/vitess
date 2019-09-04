@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
@@ -40,7 +41,7 @@ var (
 
 // BackupEngine is the interface to take a backup with a given engine.
 type BackupEngine interface {
-	ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error)
+	ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, backupTime time.Time) (bool, error)
 	ShouldDrainForBackup() bool
 }
 
@@ -169,6 +170,9 @@ type BackupManifest struct {
 	// Position is the replication position at which the backup was taken.
 	Position mysql.Position
 
+	// BackupTime is when the backup was taken in UTC time
+	// format: "2006-01-02.150405"
+	BackupTime time.Time
 	// FinishedTime is the time (in RFC 3339 format, UTC) at which the backup finished, if known.
 	// Some backups may not set this field if they were created before the field was added.
 	FinishedTime string
@@ -177,23 +181,29 @@ type BackupManifest struct {
 // FindBackupToRestore returns a selected candidate backup to be restored.
 // It returns the most recent backup that is complete, meaning it has a valid
 // MANIFEST file.
-func FindBackupToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, dir string, bhs []backupstorage.BackupHandle) (backupstorage.BackupHandle, error) {
+func FindBackupToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, dir string, bhs []backupstorage.BackupHandle, snapshotTime time.Time) (backupstorage.BackupHandle, error) {
 	var bh backupstorage.BackupHandle
 	var index int
+	unixZeroTime := time.Unix(0, 0).UTC()
 
 	for index = len(bhs) - 1; index >= 0; index-- {
 		bh = bhs[index]
 		// Check that the backup MANIFEST exists and can be successfully decoded.
-		_, err := GetBackupManifest(ctx, bh)
+		bm, err := GetBackupManifest(ctx, bh)
 		if err != nil {
 			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), dir, err)
 			continue
 		}
 
-		logger.Infof("Restore: found backup %v %v to restore", bh.Directory(), bh.Name())
-		break
+		if snapshotTime.Equal(unixZeroTime) /* uninitialized or not snapshot */ || bm.BackupTime.Before(snapshotTime) {
+			logger.Infof("Restore: found backup %v %v to restore", bh.Directory(), bh.Name())
+			break
+		}
 	}
 	if index < 0 {
+		if snapshotTime.After(unixZeroTime) {
+			log.Errorf("No valid backup found before time %v", snapshotTime.Format("2006-01-02.150405"))
+		}
 		// There is at least one attempted backup, but none could be read.
 		// This implies there is data we ought to have, so it's not safe to start
 		// up empty.

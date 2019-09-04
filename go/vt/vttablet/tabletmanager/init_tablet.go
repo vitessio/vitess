@@ -64,6 +64,10 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 	if *initKeyspace == "" || *initShard == "" || *initTabletType == "" {
 		return fmt.Errorf("either need all of init_keyspace, init_shard and init_tablet_type, or none")
 	}
+	// if we are recovering from a snapshot we need to set initDbNameOverride
+	if *recoveryKeyspace != "" && *initDbNameOverride == "" {
+		*initDbNameOverride = topoproto.VtDbPrefix + *recoveryKeyspace
+	}
 
 	// parse init_tablet_type
 	tabletType, err := topoproto.ParseTabletType(*initTabletType)

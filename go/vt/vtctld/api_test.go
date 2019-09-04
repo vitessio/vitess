@@ -117,7 +117,9 @@ func TestAPI(t *testing.T) {
 		{"GET", "keyspaces/ks1", "", `{
 				"sharding_column_name": "shardcol",
 				"sharding_column_type": 0,
-				"served_froms": []
+				"served_froms": [],
+                                "keyspace_type":0,
+                                "snapshot_time":null
 			}`},
 		{"GET", "keyspaces/nonexistent", "", "404 page not found"},
 		{"POST", "keyspaces/ks1?action=TestKeyspaceAction", "", `{
@@ -254,7 +256,7 @@ func TestAPI(t *testing.T) {
 		// vtctl RunCommand
 		{"POST", "vtctl/", `["GetKeyspace","ks1"]`, `{
 		   "Error": "",
-		   "Output": "{\n  \"sharding_column_name\": \"shardcol\",\n  \"sharding_column_type\": 0,\n  \"served_froms\": [\n  ]\n}\n\n"
+		   "Output": "{\n  \"sharding_column_name\": \"shardcol\",\n  \"sharding_column_type\": 0,\n  \"served_froms\": [\n  ],\n  \"keyspace_type\": 0,\n  \"snapshot_time\": null\n}\n\n"
 		}`},
 		{"POST", "vtctl/", `["GetKeyspace","does_not_exist"]`, `{
 			"Error": "node doesn't exist: keyspaces/does_not_exist/Keyspace",

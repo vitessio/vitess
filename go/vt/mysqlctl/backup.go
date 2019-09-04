@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -89,7 +90,7 @@ var (
 // - uses the BackupStorage service to store a new backup
 // - shuts down Mysqld during the backup
 // - remember if we were replicating, restore the exact same state
-func Backup(ctx context.Context, dir, name string, params BackupParams) error {
+func Backup(ctx context.Context, dir, name string, params BackupParams, backupTime time.Time) error {
 	// Start the backup with the BackupStorage.
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
@@ -107,7 +108,7 @@ func Backup(ctx context.Context, dir, name string, params BackupParams) error {
 	}
 
 	// Take the backup, and either AbortBackup or EndBackup.
-	usable, err := be.ExecuteBackup(ctx, params, bh)
+	usable, err := be.ExecuteBackup(ctx, params, bh, backupTime)
 	logger := params.Logger
 	var finishErr error
 	if usable {
@@ -215,7 +216,7 @@ func removeExistingFiles(cnf *Mycnf) error {
 // Restore is the main entry point for backup restore.  If there is no
 // appropriate backup on the BackupStorage, Restore logs an error
 // and returns ErrNoBackup. Any other error is returned.
-func Restore(ctx context.Context, params RestoreParams) (mysql.Position, error) {
+func Restore(ctx context.Context, params RestoreParams, snapshotTime time.Time) (mysql.Position, error) {
 
 	// extract params
 	cnf := params.Cnf
@@ -285,7 +286,7 @@ func Restore(ctx context.Context, params RestoreParams) (mysql.Position, error) 
 		return mysql.Position{}, ErrNoBackup
 	}
 
-	bh, err := FindBackupToRestore(ctx, cnf, mysqld, logger, dir, bhs)
+	bh, err := FindBackupToRestore(ctx, cnf, mysqld, logger, dir, bhs, snapshotTime)
 	if err != nil {
 		return rval, err
 	}
