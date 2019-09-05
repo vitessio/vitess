@@ -234,7 +234,7 @@ class TestRecovery(unittest.TestCase):
     vs = utils.run_vtctl_json(['GetVSchema', 'recovery_keyspace'])
     logging.debug('recovery_keyspace vschema: %s', str(vs))
 
-    # check the new replica does not have the data
+    # check the new replica has only 1 row
     self._check_data(tablet_replica2, 1, 'replica2 tablet should not have new data')
 
     # check that the restored replica has the right local_metadata
@@ -245,6 +245,19 @@ class TestRecovery(unittest.TestCase):
     self.assertEqual(metadata['Alias'], 'test_nj-0000062346')
     self.assertEqual(metadata['ClusterAlias'], 'recovery_keyspace.0')
     self.assertEqual(metadata['DataCenter'], 'test_nj')
+
+    # update original 1st row in master
+    tablet_master.mquery(
+        'vt_test_keyspace',
+        "update vt_insert_test set msg='new msg' where id=1", write=True)
+
+    # verify that master has new value
+    result = tablet_master.mquery('vt_test_keyspace', 'select msg from vt_insert_test where id=1')
+    self.assertEqual(result[0][0], 'new msg')
+
+    # verify that restored replica has old value
+    result = tablet_replica2.mquery('vt_test_keyspace', 'select msg from vt_insert_test where id=1')
+    self.assertEqual(result[0][0], 'test 1')
 
     # start vtgate
     vtgate = utils.VtGate()
@@ -267,7 +280,14 @@ class TestRecovery(unittest.TestCase):
     else:
       self.assertEqual(result[0][0], 2)
 
-    # check that new tablet is accessible by using ks.table
+    cursor.execute('select msg from vt_insert_test where id=1', {})
+    result = cursor.fetchall()
+    if not result:
+      self.fail('Result cannot be null')
+    else:
+      self.assertEqual(result[0][0], 'new msg')
+
+    # check that new keyspace is accessible by using ks.table
     cursor.execute('select count(*) from recovery_keyspace.vt_insert_test', {})
     result = cursor.fetchall()
     if not result:
@@ -275,7 +295,14 @@ class TestRecovery(unittest.TestCase):
     else:
       self.assertEqual(result[0][0], 1)
 
-    # check that new tablet is accessible with 'use ks'
+    cursor.execute('select msg from recovery_keyspace.vt_insert_test where id=1', {})
+    result = cursor.fetchall()
+    if not result:
+      self.fail('Result cannot be null')
+    else:
+      self.assertEqual(result[0][0], 'test 1')
+
+    # check that new keyspace is accessible with 'use ks'
     cursor.execute('use recovery_keyspace@replica', {})
     cursor.execute('select count(*) from vt_insert_test', {})
     result = cursor.fetchall()
@@ -283,6 +310,13 @@ class TestRecovery(unittest.TestCase):
       self.fail('Result cannot be null')
     else:
       self.assertEqual(result[0][0], 1)
+
+    cursor.execute('select msg from recovery_keyspace.vt_insert_test where id=1', {})
+    result = cursor.fetchall()
+    if not result:
+      self.fail('Result cannot be null')
+    else:
+      self.assertEqual(result[0][0], 'test 1')
 
     # TODO check that new tablet is accessible with 'use ks:shard'
     # this currently does not work through the python client, though it works from mysql client
@@ -360,6 +394,19 @@ class TestRecovery(unittest.TestCase):
     # check the new replica does not have the data
     self._check_data(tablet_replica2, 1, 'replica2 tablet should not have new data')
 
+    # update original 1st row in master
+    tablet_master.mquery(
+        'vt_test_keyspace',
+        "update vt_insert_test set msg='new msg 1' where id=1", write=True)
+
+    # verify that master has new value
+    result = tablet_master.mquery('vt_test_keyspace', 'select msg from vt_insert_test where id=1')
+    self.assertEqual(result[0][0], 'new msg 1')
+
+    # verify that restored replica has old value
+    result = tablet_replica2.mquery('vt_test_keyspace', 'select msg from vt_insert_test where id=1')
+    self.assertEqual(result[0][0], 'test 1')
+
     # take another backup on the replica
     utils.run_vtctl(['Backup', tablet_replica1.tablet_alias], auto_log=True)
 
@@ -369,6 +416,7 @@ class TestRecovery(unittest.TestCase):
     self._check_data(tablet_replica1, 3, 'replica1 tablet getting data')
 
     # now bring up the other replica, letting it restore from backup2.
+    # this also validates that if there are multiple backups, the most recent one is used
     self._restore(tablet_replica3, 'recovery_ks2')
 
     vs = utils.run_vtctl(['GetVSchema', 'recovery_ks2'])
@@ -376,6 +424,19 @@ class TestRecovery(unittest.TestCase):
 
     # check the new replica does not have the latest data
     self._check_data(tablet_replica3, 2, 'replica3 tablet should not have new data')
+
+    # update original 1st row in master again
+    tablet_master.mquery(
+        'vt_test_keyspace',
+        "update vt_insert_test set msg='new msg 2' where id=1", write=True)
+
+    # verify that master has new value
+    result = tablet_master.mquery('vt_test_keyspace', 'select msg from vt_insert_test where id=1')
+    self.assertEqual(result[0][0], 'new msg 2')
+
+    # verify that restored replica has correct value
+    result = tablet_replica3.mquery('vt_test_keyspace', 'select msg from vt_insert_test where id=1')
+    self.assertEqual(result[0][0], 'new msg 1')
 
     # start vtgate
     vtgate = utils.VtGate()
@@ -397,7 +458,14 @@ class TestRecovery(unittest.TestCase):
     else:
       self.assertEqual(result[0][0], 3)
 
-    # check that new tablet is accessible by using ks.table
+    cursor.execute('select msg from vt_insert_test where id=1', {})
+    result = cursor.fetchall()
+    if not result:
+      self.fail('Result cannot be null')
+    else:
+      self.assertEqual(result[0][0], 'new msg 2')
+
+    # check that new keyspace is accessible by using ks.table
     cursor.execute('select count(*) from recovery_ks1.vt_insert_test', {})
     result = cursor.fetchall()
     if not result:
@@ -405,13 +473,27 @@ class TestRecovery(unittest.TestCase):
     else:
       self.assertEqual(result[0][0], 1)
 
-    # check that new tablet is accessible by using ks.table
+    cursor.execute('select msg from recovery_ks1.vt_insert_test where id=1', {})
+    result = cursor.fetchall()
+    if not result:
+      self.fail('Result cannot be null')
+    else:
+      self.assertEqual(result[0][0], 'test 1')
+
+    # check that new keyspace is accessible by using ks.table
     cursor.execute('select count(*) from recovery_ks2.vt_insert_test', {})
     result = cursor.fetchall()
     if not result:
       self.fail('Result cannot be null')
     else:
       self.assertEqual(result[0][0], 2)
+
+    cursor.execute('select msg from recovery_ks2.vt_insert_test where id=1', {})
+    result = cursor.fetchall()
+    if not result:
+      self.fail('Result cannot be null')
+    else:
+      self.assertEqual(result[0][0], 'new msg 1')
 
     # TODO check that new tablet is accessible with 'use ks:shard'
     # this currently does not work through the python client, though it works from mysql client
