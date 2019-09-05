@@ -10,6 +10,8 @@ FROM vitess/bootstrap:mysql57
 
 # Allows some docker builds to disable CGO
 ARG CGO_ENABLED=0
+ENV GOPATH="/vt/go"
+ENV GO111MODULE="on"
 
 # Re-copy sources from working tree
 USER root

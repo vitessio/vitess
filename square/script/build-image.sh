@@ -21,7 +21,9 @@ docker build -t "$BUILD_DOCKER_TAG" --build-arg CGO_ENABLED=0 .
 
 # TODO: antaylor - running a single test to exercise the binary production
 # tests are failing at the moment
-docker run "$BUILD_DOCKER_TAG" go test vitess.io/vitess/go/vt/vttablet/heartbeat
+docker run "$BUILD_DOCKER_TAG" go mod download -json
+docker run "$BUILD_DOCKER_TAG" go test -mod=readonly vitess.io/vitess/go/vt/vttablet/heartbeat
+
 
 REPO=square-vitess
 
