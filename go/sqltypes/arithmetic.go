@@ -478,7 +478,10 @@ func intMinusIntWithError(v1, v2 int64) (numeric, error) {
 }
 
 func intMinusUintWithError(v1 int64, v2 uint64) (numeric, error) {
-	return intMinusIntWithError(v1, int64(v2))
+	if v1 < 0 {
+		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v - %v", v1, v2)
+	}
+	return uintMinusUintWithError(uint64(v1), v2)
 }
 
 func uintPlusInt(v1 uint64, v2 int64) numeric {
