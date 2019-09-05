@@ -151,14 +151,17 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		log.Infof("Using detected machine hostname: %v To change this, fix your machine network configuration or override it with -tablet_hostname.", hostname)
 	}
 
-	// if we are recovering from a snapshot we need to set initDbNameOverride
-	keyspaceInfo, err := agent.TopoServer.GetKeyspace(ctx, *initKeyspace)
-	if err != nil {
-		return vterrors.Wrapf(err, "Error getting keyspace: %v", *initKeyspace)
-	}
-	baseKeyspace := keyspaceInfo.Keyspace.BaseKeyspace
-	if baseKeyspace != "" {
-		*initDbNameOverride = topoproto.VtDbPrefix + baseKeyspace
+	// if we are recovering from a snapshot we set initDbNameOverride
+	// but only if it not already set
+	if *initDbNameOverride == "" {
+		keyspaceInfo, err := agent.TopoServer.GetKeyspace(ctx, *initKeyspace)
+		if err != nil {
+			return vterrors.Wrapf(err, "Error getting keyspace: %v", *initKeyspace)
+		}
+		baseKeyspace := keyspaceInfo.Keyspace.BaseKeyspace
+		if baseKeyspace != "" {
+			*initDbNameOverride = topoproto.VtDbPrefix + baseKeyspace
+		}
 	}
 
 	// create and populate tablet record
