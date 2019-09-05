@@ -16,10 +16,11 @@ limitations under the License.
 package trace
 
 import (
-	"github.com/opentracing-contrib/go-grpc"
+	otgrpc "github.com/opentracing-contrib/go-grpc"
 	"github.com/opentracing/opentracing-go"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var _ Span = (*openTracingSpan)(nil)
@@ -41,7 +42,9 @@ func (js openTracingSpan) Annotate(key string, value interface{}) {
 var _ tracingService = (*openTracingService)(nil)
 
 type openTracingService struct {
-	Tracer opentracing.Tracer
+	Tracer     opentracing.Tracer
+	fromString func(string) (opentracing.SpanContext, error)
+	toString   func(Span) string
 }
 
 // AddGrpcServerOptions is part of an interface implementation
@@ -74,15 +77,23 @@ func (jf openTracingService) New(parent Span, label string) Span {
 	return openTracingSpan{otSpan: innerSpan}
 }
 
+func (jf openTracingService) NewFromString(parent, label string) (Span, error) {
+	spanContext, err := jf.fromString(parent)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "failed to deserialize span context")
+	}
+	innerSpan := jf.Tracer.StartSpan(label, opentracing.ChildOf(spanContext))
+	return openTracingSpan{otSpan: innerSpan}, nil
+}
+
 // FromContext is part of an interface implementation
 func (jf openTracingService) FromContext(ctx context.Context) (Span, bool) {
 	innerSpan := opentracing.SpanFromContext(ctx)
 
-	if innerSpan != nil {
-		return openTracingSpan{otSpan: innerSpan}, true
-	} else {
+	if innerSpan == nil {
 		return nil, false
 	}
+	return openTracingSpan{otSpan: innerSpan}, true
 }
 
 // NewContext is part of an interface implementation
