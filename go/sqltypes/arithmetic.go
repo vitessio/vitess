@@ -19,7 +19,6 @@ package sqltypes
 import (
 	"bytes"
 	"fmt"
-	"math"
 
 	"strconv"
 
@@ -489,14 +488,9 @@ func uintPlusInt(v1 uint64, v2 int64) numeric {
 }
 
 func uintPlusIntWithError(v1 uint64, v2 int64) (numeric, error) {
-	if v2 >= math.MaxInt64 && v1 > 0 {
-		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v + %v", v1, v2)
-	}
-
-	if v1 >= math.MaxUint64 && v2 > 0 {
+	if v2 < 0 && v1 < uint64(v2) {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v + %v", v1, v2)
 	}
-
 	// convert to int -> uint is because for numeric operators (such as + or -)
 	// where one of the operands is an unsigned integer, the result is unsigned by default.
 	return uintPlusUintWithError(v1, uint64(v2))
