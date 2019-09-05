@@ -81,11 +81,6 @@ cleanall:
 	# directories created by bootstrap.sh
 	# - exclude vtdataroot and vthook as they may have data we want
 	rm -rf ../../../../bin ../../../../dist ../../../../lib ../../../../pkg
-	# keep the vendor.json file but nothing else under the vendor directory as it's not actually part of the Vitess repo
-	rm -rf vendor/cloud.google.com vendor/github.com vendor/golang.org vendor/google.golang.org vendor/gopkg.in
-	# other stuff in the go hierarchy that is not under vendor/
-	rm -rf ../../../golang.org ../../../honnef.co
-	rm -rf ../../../github.com/golang ../../../github.com/kardianos ../../../github.com/kisielk
 	# Remind people to run bootstrap.sh again
 	echo "Please run bootstrap.sh again to setup your environment"
 
@@ -116,13 +111,6 @@ site_integration_test:
 java_test:
 	go install ./go/cmd/vtgateclienttest ./go/cmd/vtcombo
 	mvn -f java/pom.xml clean verify
-
-# TODO(mberlin): Remove the manual copy once govendor supports a way to
-# install vendor'd programs: https://github.com/kardianos/govendor/issues/117
-install_protoc-gen-go:
-	mkdir -p $${GOPATH}/src/github.com/golang/
-	cp -a vendor/github.com/golang/protobuf $${GOPATH}/src/github.com/golang/
-	go install github.com/golang/protobuf/protoc-gen-go
 
 # Find protoc compiler.
 # NOTE: We are *not* using the "protoc" binary (as suggested by the grpc Go
@@ -268,7 +256,6 @@ rebalance_tests:
 
 # Release a version.
 # This will generate a tar.gz file into the releases folder with the current source
-# as well as the vendored libs.
 release: docker_base
 	@if [ -z "$VERSION" ]; then \
 	  echo "Set the env var VERSION with the release version"; exit 1;\

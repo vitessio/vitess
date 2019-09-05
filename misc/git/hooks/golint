@@ -23,11 +23,6 @@ if [ -z "$GOPATH" ]; then
   exit 1
 fi
 
-if [ -z "$(which golint)" ]; then
-  echo "golint not found, please run: go get github.com/golang/lint/golint"
-  exit 1
-fi
-
 # This script does not handle file names that contain spaces.
 gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '^go/.*\.go$' | grep -v '^go/vt/proto/' | grep -v 'go/vt/sqlparser/sql.go')
 
@@ -38,11 +33,11 @@ errors=
 gofiles_with_warnings=()
 for gofile in $gofiles
 do
-  errcount=$(golint $gofile | wc -l)
+  errcount=$(go run golang.org/x/lint/golint $gofile | wc -l)
   if [ "$errcount" -gt "0" ]; then
     errors=YES
     echo "$errcount suggestions for:"
-    echo "golint $gofile"
+    echo "go run golang.org/x/lint/golint $gofile"
     gofiles_with_warnings+=($gofile)
   fi
 done
@@ -70,7 +65,7 @@ if [[ $? -eq 0 ]]; then
 	echo "Press enter to show the warnings for the next file."
 	read
       fi
-      golint $gofile
+      go run golang.org/x/lint/golint $gofile
       first_file="false"
     done
   fi
@@ -78,7 +73,7 @@ else
   # non-interactive shell (e.g. called from Eclipse). Just display the errors.
   for gofile in "${gofiles_with_warnings[@]}"
   do
-    golint $gofile
+    go run golang.org/x/lint/golint $gofile
   done
 fi
 exit 1
