@@ -118,11 +118,7 @@ func newTestTableMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 	tme.createDBClients(ctx, t)
 	tme.setMasterPositions()
 
-	// Emulate the following replication streams (many-to-many table migration):
-	// -40 -> -80
-	// 40- -> -80
-	// 40- -> 80-
-	// -40 will only have one target, and 80- will have only one source.
+	// Table materialization is assumed to be m*n replications.
 	bls1 := &binlogdatapb.BinlogSource{
 		Keyspace: "ks1",
 		Shard:    "-40",
@@ -157,6 +153,19 @@ func newTestTableMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 	), nil)
 	bls3 := &binlogdatapb.BinlogSource{
 		Keyspace: "ks1",
+		Shard:    "-40",
+		Filter: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "t1",
+				Filter: "select * from t1 where in_keyrange('80-')",
+			}, {
+				Match:  "t2",
+				Filter: "select * from t2 where in_keyrange('80-')",
+			}},
+		},
+	}
+	bls4 := &binlogdatapb.BinlogSource{
+		Keyspace: "ks1",
 		Shard:    "40-",
 		Filter: &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
@@ -172,6 +181,7 @@ func newTestTableMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 		"id|source",
 		"int64|varchar"),
 		fmt.Sprintf("1|%v", bls3),
+		fmt.Sprintf("2|%v", bls4),
 	), nil)
 
 	if err := tme.wr.saveRoutingRules(ctx, map[string][]string{
