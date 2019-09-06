@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/key"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -88,69 +89,64 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, tableKeys map[string][]str
 		TablePlans:    make(map[string]*TablePlan),
 		tableKeys:     tableKeys,
 	}
-nextTable:
 	for tableName := range tableKeys {
 		lastpk, ok := copyState[tableName]
 		if ok && lastpk == nil {
 			// Don't replicate uncopied tables.
 			continue
 		}
-		for _, rule := range filter.Rules {
-			switch {
-			case strings.HasPrefix(rule.Match, "/"):
-				expr := strings.Trim(rule.Match, "/")
-				result, err := regexp.MatchString(expr, tableName)
-				if err != nil {
-					return nil, err
-				}
-				if !result {
-					continue
-				}
-				sendRule := &binlogdatapb.Rule{
-					Match:  tableName,
-					Filter: buildQuery(tableName, rule.Filter),
-				}
-				plan.VStreamFilter.Rules = append(plan.VStreamFilter.Rules, sendRule)
-				tablePlan := &TablePlan{
-					TargetName: tableName,
-					SendRule:   sendRule,
-					Lastpk:     lastpk,
-				}
-				plan.TargetTables[tableName] = tablePlan
-				plan.TablePlans[tableName] = tablePlan
-				continue nextTable
-			case rule.Match == tableName:
-				tablePlan, err := buildTablePlan(rule, tableKeys, lastpk)
-				if err != nil {
-					return nil, err
-				}
-				if _, ok := plan.TablePlans[tablePlan.SendRule.Match]; ok {
-					continue
-				}
-				plan.VStreamFilter.Rules = append(plan.VStreamFilter.Rules, tablePlan.SendRule)
-				plan.TargetTables[tableName] = tablePlan
-				plan.TablePlans[tablePlan.SendRule.Match] = tablePlan
-				continue nextTable
-			}
+		rule, err := tableMatches(tableName, filter)
+		if err != nil {
+			return nil, err
 		}
+		if rule == nil {
+			continue
+		}
+		tablePlan, err := buildTablePlan(tableName, rule.Filter, tableKeys, lastpk)
+		if err != nil {
+			return nil, err
+		}
+		if _, ok := plan.TablePlans[tablePlan.SendRule.Match]; ok {
+			continue
+		}
+		plan.VStreamFilter.Rules = append(plan.VStreamFilter.Rules, tablePlan.SendRule)
+		plan.TargetTables[tableName] = tablePlan
+		plan.TablePlans[tablePlan.SendRule.Match] = tablePlan
 	}
 	return plan, nil
 }
 
-func buildQuery(tableName, filter string) string {
-	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("select * from %v", sqlparser.NewTableIdent(tableName))
-	if filter != "" {
-		buf.Myprintf(" where in_keyrange(%v)", sqlparser.NewStrVal([]byte(filter)))
+// tableMatches is similar to the one defined in vstreamer.
+func tableMatches(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Rule, error) {
+	for _, rule := range filter.Rules {
+		switch {
+		case strings.HasPrefix(rule.Match, "/"):
+			expr := strings.Trim(rule.Match, "/")
+			result, err := regexp.MatchString(expr, tableName)
+			if err != nil {
+				return nil, err
+			}
+			if !result {
+				continue
+			}
+			return rule, nil
+		case tableName == rule.Match:
+			return rule, nil
+		}
 	}
-	return buf.String()
+	return nil, nil
 }
 
-func buildTablePlan(rule *binlogdatapb.Rule, tableKeys map[string][]string, lastpk *sqltypes.Result) (*TablePlan, error) {
-	query := rule.Filter
-	if query == "" {
+func buildTablePlan(tableName, filter string, tableKeys map[string][]string, lastpk *sqltypes.Result) (*TablePlan, error) {
+	query := filter
+	switch {
+	case filter == "":
 		buf := sqlparser.NewTrackedBuffer(nil)
-		buf.Myprintf("select * from %v", sqlparser.NewTableIdent(rule.Match))
+		buf.Myprintf("select * from %v", sqlparser.NewTableIdent(tableName))
+		query = buf.String()
+	case key.IsKeyRange(filter):
+		buf := sqlparser.NewTrackedBuffer(nil)
+		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(tableName), sqlparser.NewStrVal([]byte(filter)))
 		query = buf.String()
 	}
 	sel, fromTable, err := analyzeSelectFrom(query)
@@ -170,7 +166,7 @@ func buildTablePlan(rule *binlogdatapb.Rule, tableKeys map[string][]string, last
 		}
 		sendRule.Filter = query
 		tablePlan := &TablePlan{
-			TargetName: rule.Match,
+			TargetName: tableName,
 			SendRule:   sendRule,
 			Lastpk:     lastpk,
 		}
@@ -178,7 +174,7 @@ func buildTablePlan(rule *binlogdatapb.Rule, tableKeys map[string][]string, last
 	}
 
 	tpb := &tablePlanBuilder{
-		name: sqlparser.NewTableIdent(rule.Match),
+		name: sqlparser.NewTableIdent(tableName),
 		sendSelect: &sqlparser.Select{
 			From:  sel.From,
 			Where: sel.Where,
