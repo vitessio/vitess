@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/health"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 var (
@@ -124,6 +125,14 @@ func repairReplication(ctx context.Context, agent *ActionAgent) error {
 	}
 	if !si.HasMaster() {
 		return fmt.Errorf("no master tablet for shard %v/%v", tablet.Keyspace, tablet.Shard)
+	}
+
+	if topoproto.TabletAliasEqual(si.MasterAlias, tablet.Alias) {
+		// The shard record says we are master, but we disagree; we wouldn't
+		// reach this point unless we were told to check replication as a slave
+		// type. Hopefully someone is working on fixing that, but in any case,
+		// we should not try to reparent to ourselves.
+		return fmt.Errorf("shard %v/%v record claims tablet %v is master, but its type is %v", tablet.Keyspace, tablet.Shard, topoproto.TabletAliasString(tablet.Alias), tablet.Type)
 	}
 
 	// If Orchestrator is configured and if Orchestrator is actively reparenting, we should not repairReplication
