@@ -35,31 +35,26 @@ func TestMultiply(t *testing.T) {
 		out    Value
 		err    error
 	}{{
-
 		//All Nulls
 		v1:  NULL,
 		v2:  NULL,
 		out: NULL,
 	}, {
-
 		// First value null.
 		v1:  NewInt32(1),
 		v2:  NULL,
 		out: NULL,
 	}, {
-
 		// Second value null.
 		v1:  NULL,
 		v2:  NewInt32(1),
 		out: NULL,
 	}, {
-
 		// case with negative value
 		v1:  NewInt64(-1),
 		v2:  NewInt64(-2),
 		out: NewInt64(2),
 	}, {
-
 		// testing for int64 overflow with min negative value
 		v1:  NewInt64(math.MinInt64),
 		v2:  NewInt64(1),
@@ -112,6 +107,11 @@ func TestMultiply(t *testing.T) {
 		v1:  NewUint64(2),
 		v2:  NewUint64(math.MaxUint64),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 2 * 18446744073709551615"),
+	}, {
+		//Checking whether maxInt value can be passed as uint value
+		v1:  NewUint64(math.MaxInt64),
+		v2:  NewInt64(3),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 9223372036854775807 * 3"),
 	}}
 
 	for _, tcase := range tcases {
