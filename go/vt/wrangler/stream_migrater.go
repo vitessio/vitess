@@ -114,7 +114,7 @@ func (sm *streamMigrater) readSourceStreams(ctx context.Context) (map[string][]*
 			reference = v
 			continue
 		}
-		streams2[k] = v
+		streams2[k] = append([]*vrStream(nil), v...)
 	}
 	for shard, tabletStreams := range streams2 {
 	nextStream:
