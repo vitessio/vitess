@@ -321,12 +321,6 @@ class TestShardedRecovery(unittest.TestCase):
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/0', 'master'],
                     auto_log=True)
 
-    # now bring up the recovery keyspace and a tablet, letting it restore from backup.
-    self._restore(tablet_replica2, 'recovery_keyspace', '0')
-
-    # check the new replica does not have the data
-    self._check_data(tablet_replica2, 2, 'replica2 tablet should not have new data')
-
     # remove the original tablets in the original shard
     tablet.kill_tablets([tablet_master, tablet_replica1, tablet_rdonly])
     for t in [tablet_replica1, tablet_rdonly]:
@@ -339,6 +333,12 @@ class TestShardedRecovery(unittest.TestCase):
 
     # delete the original shard
     utils.run_vtctl(['DeleteShard', 'test_keyspace/0'], auto_log=True)
+
+    # now bring up the recovery keyspace and a tablet, letting it restore from backup.
+    self._restore(tablet_replica2, 'recovery_keyspace', '0')
+
+    # check the new replica does not have the data
+    self._check_data(tablet_replica2, 2, 'replica2 tablet should not have new data')
 
     # start vtgate
     vtgate = utils.VtGate()
@@ -419,7 +419,7 @@ class TestShardedRecovery(unittest.TestCase):
     self._insert_data(tablet_master, 1)
     self._check_data(tablet_replica1, 1, 'replica1 tablet getting data')
     # insert more data on the master
-    self._insert_data(tablet_master, 2)
+    self._insert_data(tablet_master, 4)
 
     utils.run_vtctl(['ApplyVSchema',
                      '-vschema', self._vschema_json,
@@ -486,7 +486,7 @@ class TestShardedRecovery(unittest.TestCase):
                        'test_keyspace/0',
                        keyspace_shard],
                        auto_log=True)
-    
+
     utils.run_vtctl(
         ['SplitClone', 'test_keyspace', '0', '-80,80-'], auto_log=True)
 
@@ -498,11 +498,34 @@ class TestShardedRecovery(unittest.TestCase):
     utils.run_vtctl(['MigrateServedTypes', 'test_keyspace/0', 'master'],
                     auto_log=True)
 
+    # remove the original tablets in the original shard
+    tablet.kill_tablets([tablet_master, tablet_replica1, tablet_rdonly])
+    for t in [tablet_replica1, tablet_rdonly]:
+      utils.run_vtctl(['DeleteTablet', t.tablet_alias], auto_log=True)
+    utils.run_vtctl(['DeleteTablet', '-allow_master',
+                     tablet_master.tablet_alias], auto_log=True)
+
+    # rebuild the serving graph, all mentions of the old shards should be gone
+    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
+
+    # delete the original shard
+    utils.run_vtctl(['DeleteShard', 'test_keyspace/0'], auto_log=True)
+
     result = shard_0_master.mquery('vt_test_keyspace', "select count(*) from vt_insert_test")
     shard_0_count = result[0][0]
-    
+    logging.debug("Shard -80 has %d rows", shard_0_count)
+    shard_0_test_id = 0
+    if shard_0_count > 0:
+      result = shard_0_master.mquery('vt_test_keyspace', "select id from vt_insert_test")
+      shard_0_test_id = result[0][0]
+
     result = shard_1_master.mquery('vt_test_keyspace', "select count(*) from vt_insert_test")
     shard_1_count = result[0][0]
+    logging.debug("Shard 80- has %d rows", shard_1_count)
+    shard_1_test_id = 0
+    if shard_1_count > 0:
+      result = shard_1_master.mquery('vt_test_keyspace', "select id from vt_insert_test")
+      shard_1_test_id = result[0][0]
 
     # backup the new shards
     utils.run_vtctl(['Backup', shard_0_replica.tablet_alias], auto_log=True)
@@ -531,7 +554,7 @@ class TestShardedRecovery(unittest.TestCase):
     cursor = vtgate_conn.cursor(
         tablet_type='master', keyspace=None, writable=True)
     # insert more data on the masters
-    for i in [3, 4]:
+    for i in [2, 3]:
       cursor.execute('insert into vt_insert_test (id, msg) values (:id, :msg)', {'id': i, 'msg': 'test %s' % i})
 
     vtgate_conn.close()
@@ -544,19 +567,6 @@ class TestShardedRecovery(unittest.TestCase):
     # check the new replicas have the correct number of rows
     self._check_data(tablet_replica2, shard_0_count, 'replica2 tablet should not have new data')
     self._check_data(tablet_replica3, shard_1_count, 'replica3 tablet should not have new data')
-
-    # remove the original tablets in the original shard
-    tablet.kill_tablets([tablet_master, tablet_replica1, tablet_rdonly])
-    for t in [tablet_replica1, tablet_rdonly]:
-      utils.run_vtctl(['DeleteTablet', t.tablet_alias], auto_log=True)
-    utils.run_vtctl(['DeleteTablet', '-allow_master',
-                     tablet_master.tablet_alias], auto_log=True)
-
-    # rebuild the serving graph, all mentions of the old shards should be gone
-    utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
-
-    # delete the original shard
-    utils.run_vtctl(['DeleteShard', 'test_keyspace/0'], auto_log=True)
 
     # start vtgate
     vtgate = utils.VtGate()
@@ -601,13 +611,34 @@ class TestShardedRecovery(unittest.TestCase):
 
     # TODO check that new tablet is accessible with 'use ks:shard'
     # this currently does not work through the python client, though it works from mysql client
-    #cursor.execute('use recovery_keyspace:0@replica', {})
+    #cursor.execute('use recovery_keyspace:-80@replica', {})
     #cursor.execute('select count(*) from vt_insert_test', {})
     #result = cursor.fetchall()
     #if not result:
-      #self.fail('Result cannot be null')
+    #  self.fail('Result cannot be null')
     #else:
-      #self.assertEqual(result[0][0], 1)
+    #  self.assertEqual(result[0][0], shard_0_count)
+    #cursor.execute('select id from vt_insert_test', {})
+    #result = cursor.fetchall()
+    #if not result:
+    #  self.fail('Result cannot be null')
+    #else:
+    #  self.assertEqual(result[0][0], shard_0_test_id)
+
+    #cursor.execute('use recovery_keyspace:80-@replica', {})
+    #cursor.execute('select count(*) from vt_insert_test', {})
+    #result = cursor.fetchall()
+    #if not result:
+    #  self.fail('Result cannot be null')
+    #else:
+    #  self.assertEqual(result[0][0], shard_1_count)
+    #cursor.execute('use recovery_keyspace:80-@replica', {})
+    #cursor.execute('select id from vt_insert_test', {})
+    #result = cursor.fetchall()
+    #if not result:
+    #  self.fail('Result cannot be null')
+    #else:
+    #  self.assertEqual(result[0][0], shard_1_test_id)
 
     vtgate_conn.close()
     tablet_replica2.kill_vttablet()
