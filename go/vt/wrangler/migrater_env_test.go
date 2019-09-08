@@ -153,13 +153,10 @@ func newTestTableMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 	return tme
 }
 
-func newTestShardMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
+func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targetShards []string) *testMigraterEnv {
 	tme := &testMigraterEnv{}
 	tme.ts = memorytopo.NewServer("cell1", "cell2")
 	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient())
-
-	sourceShards := []string{"-40", "40-"}
-	targetShards := []string{"-80", "80-"}
 
 	tabletID := 10
 	for _, shard := range sourceShards {
@@ -193,8 +190,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 			t.Fatal(err)
 		}
 		var rows []string
-		j := 1
-		for _, sourceShard := range sourceShards {
+		for j, sourceShard := range sourceShards {
 			_, sourceKeyRange, err := topo.ValidateShardName(sourceShard)
 			if err != nil {
 				t.Fatal(err)
@@ -212,8 +208,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 					}},
 				},
 			}
-			rows = append(rows, fmt.Sprintf("%d|%v", j, bls))
-			j++
+			rows = append(rows, fmt.Sprintf("%d|%v", j+1, bls))
 		}
 		tme.dbTargetClients[i].addInvariant(vreplQueryks, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source",
