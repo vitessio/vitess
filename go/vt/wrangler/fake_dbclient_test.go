@@ -31,35 +31,69 @@ func verifyQueries(t *testing.T, dcs []*fakeDBClient) {
 	}
 }
 
+type dbResults struct {
+	index   int
+	results []*dbResult
+	err     error
+}
+
 type dbResult struct {
 	result *sqltypes.Result
 	err    error
-	called bool
+}
+
+func (dbrs *dbResults) next(query string) (*sqltypes.Result, error) {
+	if dbrs.called() {
+		return nil, fmt.Errorf("query results exhausted: %s", query)
+	}
+	i := dbrs.index
+	dbrs.index++
+	return dbrs.results[i].result, dbrs.results[i].err
+}
+
+func (dbrs *dbResults) called() bool {
+	return dbrs.index == len(dbrs.results)
 }
 
 // fakeDBClient fakes a binlog_player.DBClient.
 type fakeDBClient struct {
-	queries   map[string]*dbResult
-	queriesRE map[string]*dbResult
+	queries    map[string]*dbResults
+	queriesRE  map[string]*dbResults
+	invariants map[string]*sqltypes.Result
 }
 
 // NewfakeDBClient returns a new DBClientMock.
 func newFakeDBClient() *fakeDBClient {
 	return &fakeDBClient{
-		queries: map[string]*dbResult{
-			"use _vt": {result: &sqltypes.Result{}, called: true},
-			"select * from _vt.vreplication where db_name='db'": {result: &sqltypes.Result{}},
+		queries:   make(map[string]*dbResults),
+		queriesRE: make(map[string]*dbResults),
+		invariants: map[string]*sqltypes.Result{
+			"use _vt": {},
+			"select * from _vt.vreplication where db_name='db'": {},
 		},
-		queriesRE: make(map[string]*dbResult),
 	}
 }
 
 func (dc *fakeDBClient) addQuery(query string, result *sqltypes.Result, err error) {
-	dc.queries[query] = &dbResult{result: result, err: err}
+	dbr := &dbResult{result: result, err: err}
+	if dbrs, ok := dc.queries[query]; ok {
+		dbrs.results = append(dbrs.results, dbr)
+		return
+	}
+	dc.queries[query] = &dbResults{results: []*dbResult{dbr}, err: err}
 }
 
 func (dc *fakeDBClient) addQueryRE(query string, result *sqltypes.Result, err error) {
-	dc.queriesRE[query] = &dbResult{result: result, err: err}
+	dbr := &dbResult{result: result, err: err}
+	if dbrs, ok := dc.queriesRE[query]; ok {
+		dbrs.results = append(dbrs.results, dbr)
+		return
+	}
+	dc.queriesRE[query] = &dbResults{results: []*dbResult{dbr}, err: err}
+}
+
+func (dc *fakeDBClient) addInvariant(query string, result *sqltypes.Result) {
+	dc.invariants[query] = result
 }
 
 // DBName is part of the DBClient interface
@@ -93,29 +127,30 @@ func (dc *fakeDBClient) Close() {
 
 // ExecuteFetch is part of the DBClient interface
 func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Result, err error) {
-	if dbr := dc.queries[query]; dbr != nil {
-		dbr.called = true
-		return dbr.result, dbr.err
+	if dbrs := dc.queries[query]; dbrs != nil {
+		return dbrs.next(query)
 	}
-	for re, dbr := range dc.queriesRE {
+	for re, dbrs := range dc.queriesRE {
 		if regexp.MustCompile(re).MatchString(query) {
-			dbr.called = true
-			return dbr.result, dbr.err
+			return dbrs.next(query)
 		}
+	}
+	if result := dc.invariants[query]; result != nil {
+		return result, nil
 	}
 	return nil, fmt.Errorf("unexpected query: %s", query)
 }
 
 func (dc *fakeDBClient) verifyQueries(t *testing.T) {
 	t.Helper()
-	for query, dbr := range dc.queries {
-		if !dbr.called {
-			t.Errorf("query: %v was not called", query)
+	for query, dbrs := range dc.queries {
+		if !dbrs.called() {
+			t.Errorf("query: %v has unreturned results", query)
 		}
 	}
-	for query, dbr := range dc.queriesRE {
-		if !dbr.called {
-			t.Errorf("query: %v was not called", query)
+	for query, dbrs := range dc.queriesRE {
+		if !dbrs.called() {
+			t.Errorf("query: %v has unreturned results", query)
 		}
 	}
 }
