@@ -19,6 +19,7 @@ package vreplication
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -401,8 +402,9 @@ func TestWaitForPosCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	err := vre.WaitForPos(ctx, 1, "MariaDB/0-1-1084")
-	if err == nil || err != context.Canceled {
-		t.Errorf("WaitForPos: %v, want %v", err, context.Canceled)
+	want := "error waiting for pos: MariaDB/0-1-1084, last pos: MariaDB/0-1-1083: context canceled"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("WaitForPos: %v, must contain %v", err, want)
 	}
 	dbClient.Wait()
 
@@ -416,7 +418,7 @@ func TestWaitForPosCancel(t *testing.T) {
 		sqltypes.NewVarBinary(""),
 	}}}, nil)
 	err = vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
-	want := "vreplication is closing: context canceled"
+	want = "vreplication is closing: context canceled"
 	if err == nil || err.Error() != want {
 		t.Errorf("WaitForPos: %v, want %v", err, want)
 	}

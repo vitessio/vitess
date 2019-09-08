@@ -96,45 +96,59 @@ func (wr *Wrangler) MigrateReads(ctx context.Context, targetKeyspace, workflow s
 	}
 	mi, err := wr.buildMigrater(ctx, targetKeyspace, workflow)
 	if err != nil {
+		wr.Logger().Errorf("buildMigrater failed: %v", err)
 		return err
 	}
 	if err := mi.validate(ctx, false /* isWrite */); err != nil {
+		mi.wr.Logger().Errorf("validate failed: %v", err)
 		return err
 	}
 
 	// For reads, locking the source keyspace is sufficient.
 	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, mi.sourceKeyspace, "MigrateReads")
 	if lockErr != nil {
+		mi.wr.Logger().Errorf("LockKeyspace failed: %v", lockErr)
 		return lockErr
 	}
 	defer unlock(&err)
 
 	if mi.migrationType == binlogdatapb.MigrationType_TABLES {
-		return mi.migrateTableReads(ctx, cells, servedType, direction)
+		if err := mi.migrateTableReads(ctx, cells, servedType, direction); err != nil {
+			mi.wr.Logger().Errorf("migrateTableReads failed: %v", err)
+			return err
+		}
 	}
-	return mi.migrateShardReads(ctx, cells, servedType, direction)
+	if err := mi.migrateShardReads(ctx, cells, servedType, direction); err != nil {
+		mi.wr.Logger().Errorf("migrateShardReads failed: %v", err)
+		return err
+	}
+	return nil
 }
 
 // MigrateWrites is a generic way of migrating write traffic for a resharding workflow.
 func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow string, filteredReplicationWaitTime time.Duration) (journalID int64, err error) {
 	mi, err := wr.buildMigrater(ctx, targetKeyspace, workflow)
 	if err != nil {
+		wr.Logger().Errorf("buildMigrater failed: %v", err)
 		return 0, err
 	}
 	mi.wr.Logger().Infof("Built migration metadata: %+v", mi)
 	if err := mi.validate(ctx, true /* isWrite */); err != nil {
+		mi.wr.Logger().Errorf("validate failed: %v", err)
 		return 0, err
 	}
 
 	// Need to lock both source and target keyspaces.
 	ctx, sourceUnlock, lockErr := wr.ts.LockKeyspace(ctx, mi.sourceKeyspace, "MigrateWrites")
 	if lockErr != nil {
+		mi.wr.Logger().Errorf("LockKeyspace failed: %v", lockErr)
 		return 0, lockErr
 	}
 	defer sourceUnlock(&err)
 	if mi.targetKeyspace != mi.sourceKeyspace {
 		tctx, targetUnlock, lockErr := wr.ts.LockKeyspace(ctx, mi.targetKeyspace, "MigrateWrites")
 		if lockErr != nil {
+			mi.wr.Logger().Errorf("LockKeyspace failed: %v", lockErr)
 			return 0, lockErr
 		}
 		ctx = tctx
@@ -143,6 +157,7 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 
 	journalsExist, err := mi.checkJournals(ctx)
 	if err != nil {
+		mi.wr.Logger().Errorf("checkJournals failed: %v", err)
 		return 0, err
 	}
 	if !journalsExist {
@@ -150,43 +165,54 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 		sm := &streamMigrater{mi: mi}
 		tabletStreams, err := sm.stopStreams(ctx)
 		if err != nil {
+			mi.wr.Logger().Errorf("stopStreams failed: %v", err)
 			return 0, err
 		}
 		if err := mi.stopSourceWrites(ctx); err != nil {
+			mi.wr.Logger().Errorf("stopSourceWrites failed: %v", err)
 			mi.cancelMigration(ctx)
 			return 0, err
 		}
 		if err := mi.waitForCatchup(ctx, filteredReplicationWaitTime); err != nil {
+			mi.wr.Logger().Errorf("waitForCatchup failed: %v", err)
 			mi.cancelMigration(ctx)
 			return 0, err
 		}
 		mi.sourceWorkflows, err = sm.migrateStreams(ctx, tabletStreams)
 		if err != nil {
+			mi.wr.Logger().Errorf("migrateStreams failed: %v", err)
+			mi.cancelMigration(ctx)
 			return 0, err
 		}
 	} else {
 		mi.wr.Logger().Infof("Journals were found. Completing the left over steps.")
 		// Need to gather positions in case all journals were not created.
 		if err := mi.gatherPositions(ctx); err != nil {
+			mi.wr.Logger().Errorf("gatherPositions failed: %v", err)
 			return 0, err
 		}
 	}
 	// This is the point of no return. Once a journal is created,
 	// traffic can be redirected to target shards.
 	if err := mi.createJournals(ctx); err != nil {
+		mi.wr.Logger().Errorf("createJournals failed: %v", err)
 		return 0, err
 	}
 	if err := mi.createReverseReplication(ctx); err != nil {
+		mi.wr.Logger().Errorf("createReverseReplication failed: %v", err)
 		return 0, err
 	}
 	if err := mi.allowTargetWrites(ctx); err != nil {
+		mi.wr.Logger().Errorf("allowTargetWrites failed: %v", err)
 		return 0, err
 	}
 	if err := mi.changeRouting(ctx); err != nil {
+		mi.wr.Logger().Errorf("changeRouting failed: %v", err)
 		return 0, err
 	}
 	sm := &streamMigrater{mi: mi}
 	if err := sm.finalize(ctx, mi.sourceWorkflows); err != nil {
+		mi.wr.Logger().Errorf("finalize failed: %v", err)
 		return 0, err
 	}
 	mi.deleteTargetVReplication(ctx)

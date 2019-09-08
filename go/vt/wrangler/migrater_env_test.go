@@ -130,11 +130,11 @@ func newTestTableMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 			}
 			rows = append(rows, fmt.Sprintf("%d|%v", j+1, bls))
 		}
-		tme.dbTargetClients[i].addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		tme.dbTargetClients[i].addInvariant(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source",
 			"int64|varchar"),
 			rows...),
-			nil)
+		)
 	}
 
 	if err := tme.wr.saveRoutingRules(ctx, map[string][]string{
@@ -215,16 +215,16 @@ func newTestShardMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 			rows = append(rows, fmt.Sprintf("%d|%v", j, bls))
 			j++
 		}
-		tme.dbTargetClients[i].addQuery(vreplQueryks, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		tme.dbTargetClients[i].addInvariant(vreplQueryks, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"id|source",
 			"int64|varchar"),
 			rows...),
-			nil)
+		)
 	}
 
 	tme.targetKeyspace = "ks"
 	for _, dbclient := range tme.dbSourceClients {
-		dbclient.addQuery(vreplQueryks, &sqltypes.Result{}, nil)
+		dbclient.addInvariant(vreplQueryks, &sqltypes.Result{})
 	}
 	return tme
 }
