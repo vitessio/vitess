@@ -162,7 +162,7 @@ func (sm *streamMigrater) readTabletStreams(ctx context.Context, ti *topo.Tablet
 			return nil, fmt.Errorf("VReplication streams must have named workflows for migration: shard: %s:%s, stream: %d", ti.Keyspace, ti.Shard, id)
 		}
 		if workflow == sm.mi.workflow {
-			return nil, fmt.Errorf("VReplication stream has the same woworkflow name as the resharding workflow: shard: %s:%s, stream: %d", ti.Keyspace, ti.Shard, id)
+			return nil, fmt.Errorf("VReplication stream has the same workflow name as the resharding workflow: shard: %s:%s, stream: %d", ti.Keyspace, ti.Shard, id)
 		}
 		var bls binlogdatapb.BinlogSource
 		if err := proto.UnmarshalText(row[2].ToString(), &bls); err != nil {
@@ -300,6 +300,13 @@ func (sm *streamMigrater) migrateStreams(ctx context.Context, tabletStreams []*v
 	if sm.mi.migrationType == binlogdatapb.MigrationType_TABLES {
 		return nil, nil
 	}
+
+	// Delete any previous stray workflows that might have been left-over
+	// due to a failed migration.
+	if err := sm.deleteTargetStreams(ctx, tabletStreams); err != nil {
+		return nil, err
+	}
+
 	tmpl, err := sm.templatize(ctx, tabletStreams)
 	if err != nil {
 		return nil, err
@@ -431,6 +438,7 @@ func (sm *streamMigrater) createTargetStreams(ctx context.Context, tmpl []*vrStr
 				rule.Filter = buf.String()
 			}
 		}
+
 		buf := &strings.Builder{}
 		buf.WriteString("insert into _vt.vreplication(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name) values ")
 		prefix := ""
@@ -461,19 +469,15 @@ func (sm *streamMigrater) cancelMigration(ctx context.Context) {
 		sm.mi.wr.Logger().Errorf("Cancel migration failed: could not read streams metadata: %v", err)
 		return
 	}
+
+	// Ignore error. We still want to restart the source streams if deleteTargetStreans fails.
+	_ = sm.deleteTargetStreams(ctx, tabletStreams)
+
 	workflows := tabletStreamWorkflows(tabletStreams)
 	if len(workflows) == 0 {
 		return
 	}
 	workflowList := stringListify(workflows)
-	err = sm.mi.forAllTargets(func(target *miTarget) error {
-		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow in (%s)", encodeString(target.master.DbName()), workflowList)
-		_, err := sm.mi.wr.VReplicationExec(ctx, target.master.Alias, query)
-		return err
-	})
-	if err != nil {
-		sm.mi.wr.Logger().Errorf("Cancel migration failed: could not delete migrated streams: %v", err)
-	}
 	err = sm.mi.forAllSources(func(source *miSource) error {
 		query := fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos=null, message='' where db_name=%s and workflow in (%s)", encodeString(source.master.DbName()), workflowList)
 		_, err := sm.mi.wr.VReplicationExec(ctx, source.master.Alias, query)
@@ -482,6 +486,23 @@ func (sm *streamMigrater) cancelMigration(ctx context.Context) {
 	if err != nil {
 		sm.mi.wr.Logger().Errorf("Cancel migration failed: could not restart source streams: %v", err)
 	}
+}
+
+func (sm *streamMigrater) deleteTargetStreams(ctx context.Context, tabletStreams []*vrStream) error {
+	workflows := tabletStreamWorkflows(tabletStreams)
+	if len(workflows) == 0 {
+		return nil
+	}
+	workflowList := stringListify(workflows)
+	err := sm.mi.forAllTargets(func(target *miTarget) error {
+		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow in (%s)", encodeString(target.master.DbName()), workflowList)
+		_, err := sm.mi.wr.VReplicationExec(ctx, target.master.Alias, query)
+		return err
+	})
+	if err != nil {
+		sm.mi.wr.Logger().Warningf("Could not delete migrated streams: %v", err)
+	}
+	return err
 }
 
 func (sm *streamMigrater) readSourceStreamsForCancel(ctx context.Context) ([]*vrStream, error) {

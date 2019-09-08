@@ -243,22 +243,6 @@ func (wr *Wrangler) buildMigrater(ctx context.Context, targetKeyspace, workflow 
 			} else if mi.sourceKeyspace != bls.Keyspace {
 				return nil, fmt.Errorf("source keyspaces are mismatched across streams: %v vs %v", mi.sourceKeyspace, bls.Keyspace)
 			}
-			if _, ok := mi.sources[bls.Shard]; ok {
-				continue
-			}
-
-			sourcesi, err := mi.wr.ts.GetShard(ctx, bls.Keyspace, bls.Shard)
-			if err != nil {
-				return nil, err
-			}
-			sourceMaster, err := mi.wr.ts.GetTablet(ctx, sourcesi.MasterAlias)
-			if err != nil {
-				return nil, err
-			}
-			mi.sources[bls.Shard] = &miSource{
-				si:     sourcesi,
-				master: sourceMaster,
-			}
 
 			if mi.tables == nil {
 				for _, rule := range bls.Filter.Rules {
@@ -274,6 +258,22 @@ func (wr *Wrangler) buildMigrater(ctx context.Context, targetKeyspace, workflow 
 				if !reflect.DeepEqual(mi.tables, tables) {
 					return nil, fmt.Errorf("table lists are mismatched across streams: %v vs %v", mi.tables, tables)
 				}
+			}
+
+			if _, ok := mi.sources[bls.Shard]; ok {
+				continue
+			}
+			sourcesi, err := mi.wr.ts.GetShard(ctx, bls.Keyspace, bls.Shard)
+			if err != nil {
+				return nil, err
+			}
+			sourceMaster, err := mi.wr.ts.GetTablet(ctx, sourcesi.MasterAlias)
+			if err != nil {
+				return nil, err
+			}
+			mi.sources[bls.Shard] = &miSource{
+				si:     sourcesi,
+				master: sourceMaster,
 			}
 		}
 	}

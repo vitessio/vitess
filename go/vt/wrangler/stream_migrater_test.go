@@ -30,9 +30,9 @@ import (
 
 // TestShardMigrate tests table mode migrations.
 // This has to be kept in sync with TestTableMigrate.
-func TestStreamMigrateSimple(t *testing.T) {
+func TestStreamMigrateMainflow(t *testing.T) {
 	ctx := context.Background()
-	tme := newTestShardMigrater(ctx, t)
+	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
 	defer tme.stopTablets(t)
 
 	sourceShards := []string{"-40", "40-"}
@@ -49,8 +49,8 @@ func TestStreamMigrateSimple(t *testing.T) {
 	}
 
 	checkJournals := func() {
-		tme.dbSourceClients[0].addQuery("select val from _vt.resharding_journal where id=6432976123657117098", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("select val from _vt.resharding_journal where id=6432976123657117098", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select val from _vt.resharding_journal where id=6432976123657117097", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select val from _vt.resharding_journal where id=6432976123657117097", &sqltypes.Result{}, nil)
 	}
 	checkJournals()
 
@@ -59,6 +59,7 @@ func TestStreamMigrateSimple(t *testing.T) {
 		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and state = 'Stopped'", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and state = 'Stopped'", &sqltypes.Result{}, nil)
 
+		// pre-compute sourceRows because they're re-read multiple times.
 		var sourceRows [][]string
 		for _, sourceTargetShard := range sourceShards {
 			var rows []string
@@ -120,7 +121,7 @@ func TestStreamMigrateSimple(t *testing.T) {
 			"MariaDB/5-456-892|Running",
 		)
 		tme.dbTargetClients[0].addQuery("select pos, state, message from _vt.vreplication where id=1", state, nil)
-		tme.dbTargetClients[1].addQuery("select pos, state, message from _vt.vreplication where id=1", state, nil)
+		tme.dbTargetClients[1].addQuery("select pos, state, message from _vt.vreplication where id=2", state, nil)
 		tme.dbTargetClients[0].addQuery("select pos, state, message from _vt.vreplication where id=2", state, nil)
 
 		// mi.waitForCatchup-> mi.wr.tmc.VReplicationExec('stopped for cutover')
@@ -128,16 +129,20 @@ func TestStreamMigrateSimple(t *testing.T) {
 		tme.dbTargetClients[0].addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (1)", &sqltypes.Result{}, nil)
 		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where id = 2", resultid2, nil)
 		tme.dbTargetClients[0].addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (2)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where id = 1", resultid1, nil)
-		tme.dbTargetClients[1].addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (1)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where id = 2", resultid2, nil)
+		tme.dbTargetClients[1].addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (2)", &sqltypes.Result{}, nil)
 		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
-		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
 		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
 	}
 	waitForCatchup()
 
-	// sm.migrateStreams->sm.createTargetStreams
 	migrateStreams := func() {
+		// sm.migrateStreams->->sm.deleteTargetStreams (no previously migrated streams)
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1t2')", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1t2')", &sqltypes.Result{}, nil)
+
+		// sm.migrateStreams->sm.createTargetStreams
 		for i, targetShard := range targetShards {
 			buf := &strings.Builder{}
 			buf.WriteString("insert into.*vreplication")
@@ -153,9 +158,9 @@ func TestStreamMigrateSimple(t *testing.T) {
 	migrateStreams()
 
 	createJournals := func() {
-		journal1 := "insert into _vt.resharding_journal.*6432976123657117098.*migration_type:SHARDS.*local_position.*MariaDB/5-456-892.*shard_gtids.*-80.*MariaDB/5-456-893.*participants.*40.*40"
+		journal1 := "insert into _vt.resharding_journal.*6432976123657117097.*migration_type:SHARDS.*local_position.*MariaDB/5-456-892.*shard_gtids.*-80.*MariaDB/5-456-893.*participants.*40.*40"
 		tme.dbSourceClients[0].addQueryRE(journal1, &sqltypes.Result{}, nil)
-		journal2 := "insert into _vt.resharding_journal.*6432976123657117098.*migration_type:SHARDS.*local_position.*MariaDB/5-456-892.*shard_gtids.*80.*MariaDB/5-456-893.*shard_gtids.*80.*MariaDB/5-456-893.*participants.*40.*40"
+		journal2 := "insert into _vt.resharding_journal.*6432976123657117097.*migration_type:SHARDS.*local_position.*MariaDB/5-456-892.*shard_gtids.*80.*MariaDB/5-456-893.*shard_gtids.*80.*MariaDB/5-456-893.*participants.*40.*40"
 		tme.dbSourceClients[1].addQueryRE(journal2, &sqltypes.Result{}, nil)
 	}
 	createJournals()
@@ -173,12 +178,12 @@ func TestStreamMigrateSimple(t *testing.T) {
 	finalize := func() {
 		// sm.finalize->Target
 		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1t2')", resultid34, nil)
-		tme.dbTargetClients[0].addQuery("update _vt.vreplication set state = 'Running' where id in (3, 4)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 3", stoppedResult(3), nil)
-		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 4", stoppedResult(4), nil)
 		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1t2')", resultid34, nil)
+		tme.dbTargetClients[0].addQuery("update _vt.vreplication set state = 'Running' where id in (3, 4)", &sqltypes.Result{}, nil)
 		tme.dbTargetClients[1].addQuery("update _vt.vreplication set state = 'Running' where id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 3", stoppedResult(3), nil)
 		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 3", stoppedResult(3), nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 4", stoppedResult(4), nil)
 		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 4", stoppedResult(4), nil)
 
 		// sm.finalize->Source
@@ -193,11 +198,11 @@ func TestStreamMigrateSimple(t *testing.T) {
 
 	deleteTargetVReplication := func() {
 		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
-		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid1, nil)
+		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid2, nil)
 		tme.dbTargetClients[0].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
 		tme.dbTargetClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[1].addQuery("delete from _vt.vreplication where id in (1)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (1)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("delete from _vt.vreplication where id in (2)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (2)", &sqltypes.Result{}, nil)
 	}
 	deleteTargetVReplication()
 
@@ -205,8 +210,8 @@ func TestStreamMigrateSimple(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if journalID != 6432976123657117098 {
-		t.Errorf("journal id: %d, want 6432976123657117098", journalID)
+	if journalID != 6432976123657117097 {
+		t.Errorf("journal id: %d, want 6432976123657117097", journalID)
 	}
 
 	checkServedTypes(t, tme.ts, "ks:-40", 0)
