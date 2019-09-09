@@ -46,34 +46,10 @@ func (c *capabilitySet) hasMySQLUpgradeInServer() bool {
 func (c *capabilitySet) hasInitializeInServer() bool {
 	return c.isMySQLLike() && c.version.atLeast(serverVersion{Major: 5, Minor: 7, Patch: 0})
 }
-func (c *capabilitySet) hasMySQLxEnabledByDefault() bool {
-	return c.isMySQLLike() && c.version.atLeast(serverVersion{Major: 8, Minor: 0, Patch: 11})
-}
-func (c *capabilitySet) hasPersistConfig() bool {
-	return c.isMySQLLike() && c.version.atLeast(serverVersion{Major: 8, Minor: 0, Patch: 0})
-}
-func (c *capabilitySet) hasShutdownCommand() bool {
-	return (c.isMySQLLike() && c.version.atLeast(serverVersion{Major: 5, Minor: 7, Patch: 9})) || (c.isMariaDB() && c.version.atLeast(serverVersion{Major: 10, Minor: 0, Patch: 4}))
-}
-func (c *capabilitySet) hasBackupLocks() bool {
-	return c.isMySQLLike() && c.version.atLeast(serverVersion{Major: 8, Minor: 0, Patch: 0})
-}
-func (c *capabilitySet) hasDefaultUft8mb4() bool {
-	return c.isMySQLLike() && c.version.atLeast(serverVersion{Major: 8, Minor: 0, Patch: 0})
-}
-func (c *capabilitySet) hasSemiSyncEnabledByDefault() bool {
-	return c.isMariaDB() && c.version.atLeast(serverVersion{Major: 10, Minor: 3, Patch: 3})
-}
 
 // IsMySQLLike tests if the server is either MySQL
 // or Percona Server. At least currently, Vitess doesn't
 // make use of any specific Percona Server features.
 func (c *capabilitySet) isMySQLLike() bool {
 	return c.flavor == flavorMySQL || c.flavor == flavorPercona
-}
-
-// IsMariaDB tests if the server is MariaDB.
-// IsMySQLLike() and IsMariaDB() are mutually exclusive
-func (c *capabilitySet) isMariaDB() bool {
-	return c.flavor == flavorMariaDB
 }
