@@ -32,10 +32,33 @@ import (
 )
 
 var (
-	resultid1  = &sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(1)}}}
-	resultid2  = &sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(2)}}}
-	resultid12 = &sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}}
-	resultid34 = &sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(3)}, {sqltypes.NewInt64(4)}}}
+	resultid1    = &sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(1)}}}
+	resultid2    = &sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(2)}}}
+	resultid3    = &sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(3)}}}
+	resultid12   = &sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}}
+	resultid1234 = &sqltypes.Result{
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(1),
+		}, {
+			sqltypes.NewInt64(2),
+		}, {
+			sqltypes.NewInt64(3),
+		}, {
+			sqltypes.NewInt64(4),
+		}},
+	}
+	resultid34   = &sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(3)}, {sqltypes.NewInt64(4)}}}
+	resultid3456 = &sqltypes.Result{
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(3),
+		}, {
+			sqltypes.NewInt64(4),
+		}, {
+			sqltypes.NewInt64(5),
+		}, {
+			sqltypes.NewInt64(6),
+		}},
+	}
 )
 
 // TestTableMigrate tests table mode migrations.

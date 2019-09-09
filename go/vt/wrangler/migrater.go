@@ -166,6 +166,7 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 		tabletStreams, err := sm.stopStreams(ctx)
 		if err != nil {
 			mi.wr.Logger().Errorf("stopStreams failed: %v", err)
+			mi.cancelMigration(ctx)
 			return 0, err
 		}
 		if err := mi.stopSourceWrites(ctx); err != nil {

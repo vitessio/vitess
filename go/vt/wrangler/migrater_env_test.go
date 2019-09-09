@@ -50,6 +50,15 @@ type testMigraterEnv struct {
 	targetKeyspace  string
 }
 
+// testShardMigraterEnv has some convenience functions for adding expected queries.
+// They are approximate and should be only used to test other features like stream migration.
+// Use explicit queries for testing the actual shard migration.
+type testShardMigraterEnv struct {
+	testMigraterEnv
+	sourceShards, targetShards       []string
+	sourceKeyRanges, targetKeyRanges []*topodatapb.KeyRange
+}
+
 func newTestTableMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 	tme := &testMigraterEnv{}
 	tme.ts = memorytopo.NewServer("cell1", "cell2")
@@ -153,19 +162,39 @@ func newTestTableMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 	return tme
 }
 
-func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targetShards []string) *testMigraterEnv {
-	tme := &testMigraterEnv{}
+func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targetShards []string) *testShardMigraterEnv {
+	tme := &testShardMigraterEnv{}
 	tme.ts = memorytopo.NewServer("cell1", "cell2")
 	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient())
+	tme.sourceShards = sourceShards
+	tme.targetShards = targetShards
 
 	tabletID := 10
 	for _, shard := range sourceShards {
 		tme.sourceMasters = append(tme.sourceMasters, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_MASTER, nil, TabletKeyspaceShard(t, "ks", shard)))
 		tabletID += 10
+
+		_, sourceKeyRange, err := topo.ValidateShardName(shard)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if sourceKeyRange == nil {
+			sourceKeyRange = &topodatapb.KeyRange{}
+		}
+		tme.sourceKeyRanges = append(tme.sourceKeyRanges, sourceKeyRange)
 	}
 	for _, shard := range targetShards {
 		tme.targetMasters = append(tme.targetMasters, newFakeTablet(t, tme.wr, "cell1", uint32(tabletID), topodatapb.TabletType_MASTER, nil, TabletKeyspaceShard(t, "ks", shard)))
 		tabletID += 10
+
+		_, targetKeyRange, err := topo.ValidateShardName(shard)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if targetKeyRange == nil {
+			targetKeyRange = &topodatapb.KeyRange{}
+		}
+		tme.targetKeyRanges = append(tme.targetKeyRanges, targetKeyRange)
 	}
 
 	vs := &vschemapb.Keyspace{Sharded: true}
@@ -185,17 +214,9 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 	tme.setMasterPositions()
 
 	for i, targetShard := range targetShards {
-		_, targetKeyRange, err := topo.ValidateShardName(targetShard)
-		if err != nil {
-			t.Fatal(err)
-		}
 		var rows []string
 		for j, sourceShard := range sourceShards {
-			_, sourceKeyRange, err := topo.ValidateShardName(sourceShard)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !key.KeyRangesIntersect(targetKeyRange, sourceKeyRange) {
+			if !key.KeyRangesIntersect(tme.targetKeyRanges[i], tme.sourceKeyRanges[j]) {
 				continue
 			}
 			bls := &binlogdatapb.BinlogSource{
@@ -286,5 +307,67 @@ func (tme *testMigraterEnv) setMasterPositions() {
 				},
 			},
 		}
+	}
+}
+
+func (tme *testShardMigraterEnv) forAllStreams(f func(i, j int)) {
+	for i := range tme.targetShards {
+		for j := range tme.sourceShards {
+			if !key.KeyRangesIntersect(tme.targetKeyRanges[i], tme.sourceKeyRanges[j]) {
+				continue
+			}
+			f(i, j)
+		}
+	}
+}
+
+func (tme *testShardMigraterEnv) expectCheckJournals() {
+	for _, dbclient := range tme.dbSourceClients {
+		dbclient.addQueryRE("select val from _vt.resharding_journal where id=.*", &sqltypes.Result{}, nil)
+	}
+}
+
+func (tme *testShardMigraterEnv) expectWaitForCatchup() {
+	state := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"pos|state|message",
+		"varchar|varchar|varchar"),
+		"MariaDB/5-456-892|Running",
+	)
+	tme.forAllStreams(func(i, j int) {
+		tme.dbTargetClients[i].addQuery(fmt.Sprintf("select pos, state, message from _vt.vreplication where id=%d", j+1), state, nil)
+
+		// mi.waitForCatchup-> mi.wr.tmc.VReplicationExec('stopped for cutover')
+		tme.dbTargetClients[i].addQuery(fmt.Sprintf("select id from _vt.vreplication where id = %d", j+1), &sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(int64(j + 1))}}}, nil)
+		tme.dbTargetClients[i].addQuery(fmt.Sprintf("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (%d)", j+1), &sqltypes.Result{}, nil)
+		tme.dbTargetClients[i].addQuery(fmt.Sprintf("select * from _vt.vreplication where id = %d", j+1), stoppedResult(j+1), nil)
+	})
+}
+
+func (tme *testShardMigraterEnv) expectCreateJournals() {
+	for _, dbclient := range tme.dbSourceClients {
+		dbclient.addQueryRE("insert into _vt.resharding_journal.*", &sqltypes.Result{}, nil)
+	}
+}
+
+func (tme *testShardMigraterEnv) expectCreateReverseReplication() {
+	tme.forAllStreams(func(i, j int) {
+		tme.dbSourceClients[j].addQueryRE(fmt.Sprintf("insert into _vt.vreplication.*%s.*%s.*MariaDB/5-456-893.*Stopped", tme.targetShards[i], tme.sourceShards[j]), &sqltypes.Result{InsertID: uint64(j + 1)}, nil)
+		tme.dbSourceClients[j].addQuery(fmt.Sprintf("select * from _vt.vreplication where id = %d", j+1), stoppedResult(j+1), nil)
+	})
+}
+
+func (tme *testShardMigraterEnv) expectDeleteTargetVReplication() {
+	// NOTE: this is not a faithful reproduction of what should happen.
+	// The ids returned are not accurate.
+	for _, dbclient := range tme.dbTargetClients {
+		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
+		dbclient.addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
+		dbclient.addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+	}
+}
+
+func (tme *testShardMigraterEnv) expectCancelMigration() {
+	for _, dbclient := range tme.dbTargetClients {
+		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", &sqltypes.Result{}, nil)
 	}
 }
