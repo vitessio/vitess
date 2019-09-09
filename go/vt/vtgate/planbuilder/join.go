@@ -72,6 +72,8 @@ type join struct {
 	joinImpl joinStyle
 }
 
+// Instead of storing a boolean saying if we are dealing with a hash join or a nested loop join, we use
+// this joinStyle interface, and call on it in the two phases where we need different behaviour per join
 type joinStyle interface {
 	wireUp(jb *join) error
 	createPrimitive(jb *join, l, r engine.Primitive) engine.Primitive
@@ -136,12 +138,12 @@ func createJoinStruct(lpb, rpb *primitiveBuilder, opcode engine.JoinOpcode, useH
 		if ajoin == nil {
 			return nil, vterrors.New(vtrpc.Code_INTERNAL, "need an ajoin to create a hash join")
 		}
-		cmp, ok := ajoin.Condition.On.(*sqlparser.ComparisonExpr)
-		if !ok || cmp.Operator != "=" {
-			return nil, vterrors.New(vtrpc.Code_INTERNAL, "can only handle simple equality between columns using hash joins")
+		comparisons, err := extractJoinComparisons(ajoin.Condition.On)
+		if err != nil {
+			return nil, err
 		}
 
-		j.joinImpl = &hashJoin{cmp: cmp}
+		j.joinImpl = &hashJoin{comparisonExprs: comparisons}
 	} else {
 		j.joinImpl = &nestedLoopJoin{}
 	}
@@ -150,22 +152,54 @@ func createJoinStruct(lpb, rpb *primitiveBuilder, opcode engine.JoinOpcode, useH
 
 var _ joinStyle = (*hashJoin)(nil)
 
+// extractJoinComparisons recursively walks down an AND tree to produce an array with all the equals comparisons
+func extractJoinComparisons(expr sqlparser.Expr) ([]*sqlparser.ComparisonExpr, error) {
+	cmp, isComparison := expr.(*sqlparser.ComparisonExpr)
+	if isComparison {
+		if cmp.Operator != "=" {
+			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "can only handle simple equality between columns using hash joins - got %s", cmp.Operator)
+		}
+
+		return []*sqlparser.ComparisonExpr{cmp}, nil
+	}
+
+	and, isAnd := expr.(*sqlparser.AndExpr)
+	if isAnd {
+		lft, err := extractJoinComparisons(and.Left)
+		if err != nil {
+			return nil, err
+		}
+		rgt, err := extractJoinComparisons(and.Right)
+		if err != nil {
+			return nil, err
+		}
+		return append(lft, rgt...), nil
+	}
+	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "can only handle one or more equality comparisons between columns using hash joins - got %s", expr)
+}
+
 type hashJoin struct {
-	cmp         *sqlparser.ComparisonExpr // the ON predicate
-	left, right []int                     // the column offsets for the key comparisons
+	comparisonExprs []*sqlparser.ComparisonExpr // the ON predicate
+	left, right     []int                       // the column offsets for the key comparisons
 }
 
 func (hj *hashJoin) wireUp(jb *join) error {
-	leftCol, leftOk := hj.cmp.Left.(*sqlparser.ColName)
-	rightCol, rightOk := hj.cmp.Right.(*sqlparser.ColName)
-	if !leftOk || !rightOk {
-		return vterrors.New(vtrpc.Code_INTERNAL, "can only handle simple equality between columns using hash joins")
+	var lftResult []int
+	var rgtResult []int
+	for _, cmp := range hj.comparisonExprs {
+		leftCol, leftOk := cmp.Left.(*sqlparser.ColName)
+		rightCol, rightOk := cmp.Right.(*sqlparser.ColName)
+		if !leftOk || !rightOk {
+			return vterrors.New(vtrpc.Code_INTERNAL, "can only handle simple equality between columns using hash joins")
+		}
+		_, lftColOffset := jb.Left.SupplyCol(leftCol)
+		_, rgtColOffset := jb.Right.SupplyCol(rightCol)
+		lftResult = append(lftResult, lftColOffset)
+		rgtResult = append(rgtResult, rgtColOffset)
 	}
-	_, lftColOffset := jb.Left.SupplyCol(leftCol)
-	_, rgtColOffset := jb.Right.SupplyCol(rightCol)
 
-	hj.left = []int{lftColOffset}
-	hj.right = []int{rgtColOffset}
+	hj.left = lftResult
+	hj.right = rgtResult
 	return nil
 }
 
