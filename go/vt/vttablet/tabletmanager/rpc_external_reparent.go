@@ -148,8 +148,8 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 	log.Infof("finalizeTabletExternallyReparented: updating tablet records")
 	wg.Add(1)
 	go func() {
-		log.Infof("finalizeTabletExternallyReparented: updating tablet record for new master: %v", agent.TabletAlias)
 		defer wg.Done()
+		log.Infof("finalizeTabletExternallyReparented: updating tablet record for new master: %v", agent.TabletAlias)
 		// Update our own record to master.
 		_, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias,
 			func(tablet *topodatapb.Tablet) error {
@@ -163,13 +163,17 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 
 	tablet := agent.Tablet()
 	tabletMap, err := agent.TopoServer.GetTabletMapForShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		log.Errorf("ignoring error %v from GetTabletMapForShard so that we can process any partial results", err)
+	}
+
 	// make the channel buffer big enough that it doesn't block senders
-	tablets := make(chan topodatapb.Tablet, len(tabletMap))
+	tabletsToRefresh := make(chan topodatapb.Tablet, len(tabletMap)+1)
 	if !topoproto.TabletAliasIsZero(oldMasterAlias) {
 		wg.Add(1)
 		go func() {
-			log.Infof("finalizeTabletExternallyReparented: updating tablet record for old master: %v", oldMasterAlias)
 			defer wg.Done()
+			log.Infof("finalizeTabletExternallyReparented: updating tablet record for old master: %v", oldMasterAlias)
 
 			// Forcibly demote the old master in topology, since we can't rely on the
 			// old master to be up to change its own record.
@@ -186,19 +190,20 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 
 			// We now know more about the old master, so add it to event data.
 			ev.OldMaster = *oldMasterTablet
-			tablets <- *oldMasterTablet
+			tabletsToRefresh <- *oldMasterTablet
 		}()
 	}
 
 	// update any other tablets claiming to be MASTER also to REPLICA
-	for alias, tabletInfo := range tabletMap {
-		if alias != topoproto.TabletAliasString(agent.TabletAlias) && alias != topoproto.TabletAliasString(oldMasterAlias) && tabletInfo.Tablet.Type == topodatapb.TabletType_MASTER {
+	for _, tabletInfo := range tabletMap {
+		alias := tabletInfo.Tablet.Alias
+		if !topoproto.TabletAliasEqual(alias, agent.TabletAlias) && !topoproto.TabletAliasEqual(alias, oldMasterAlias) && tabletInfo.Tablet.Type == topodatapb.TabletType_MASTER {
 			log.Infof("finalizeTabletExternallyReparented: updating tablet record for another old master: %v", alias)
 			wg.Add(1)
-			go func() {
+			go func(alias *topodatapb.TabletAlias) {
 				defer wg.Done()
 				var err error
-				tab, err := agent.TopoServer.UpdateTabletFields(ctx, tabletInfo.Tablet.Alias,
+				tab, err := agent.TopoServer.UpdateTabletFields(ctx, alias,
 					func(tablet *topodatapb.Tablet) error {
 						tablet.Type = topodatapb.TabletType_REPLICA
 						return nil
@@ -207,8 +212,8 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 					errs.RecordError(err)
 					return
 				}
-				tablets <- *tab
-			}()
+				tabletsToRefresh <- *tab
+			}(alias)
 		}
 	}
 
@@ -217,7 +222,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 	// global shard record.
 	wg.Wait()
 	// we waited for all goroutines to complete, so now close the channel
-	close(tablets)
+	close(tabletsToRefresh)
 	if errs.HasErrors() {
 		return errs.Error()
 	}
@@ -250,9 +255,8 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 			errs.RecordError(err)
 		}
 	}()
-	wg.Wait()
 
-	for tab := range tablets {
+	for tab := range tabletsToRefresh {
 		log.Infof("finalizeTabletExternallyReparented: Refresh state for tablet: %v", topoproto.TabletAliasString(tab.Alias))
 		wg.Add(1)
 		go func(tablet *topodatapb.Tablet) {
