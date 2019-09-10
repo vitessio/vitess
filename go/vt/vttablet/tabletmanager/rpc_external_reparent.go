@@ -269,7 +269,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 	for tab := range tabletsToRefresh {
 		log.Infof("finalizeTabletExternallyReparented: Refresh state for tablet: %v", topoproto.TabletAliasString(tab.Alias))
 		wg.Add(1)
-		go func(tablet *topodatapb.Tablet) {
+		go func(tablet topodatapb.Tablet) {
 			defer wg.Done()
 
 			// Tell the old master(s) to re-read its tablet record and change its state.
@@ -277,10 +277,10 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 			// for it to make sure that an old master tablet is not stuck in the MASTER
 			// state.
 			tmc := tmclient.NewTabletManagerClient()
-			if err := tmc.RefreshState(ctx, tablet); err != nil {
+			if err := tmc.RefreshState(ctx, &tablet); err != nil {
 				log.Warningf("Error calling RefreshState on old master %v: %v", topoproto.TabletAliasString(tablet.Alias), err)
 			}
-		}(&tab)
+		}(tab)
 	}
 	wg.Wait()
 	if errs.HasErrors() {

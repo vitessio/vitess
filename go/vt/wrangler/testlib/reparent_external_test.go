@@ -326,6 +326,15 @@ func TestTabletExternallyReparentedImpostorMaster(t *testing.T) {
 		t.Fatalf("old master should be MASTER but is: %v", tablet.Type)
 	}
 
+	// check the impostor also claims to be master
+	tablet, err = ts.GetTablet(ctx, badSlave.Tablet.Alias)
+	if err != nil {
+		t.Fatalf("GetTablet(%v) failed: %v", badSlave.Tablet.Alias, err)
+	}
+	if tablet.Type != topodatapb.TabletType_MASTER {
+		t.Fatalf("old master should be MASTER but is: %v", tablet.Type)
+	}
+
 	// On the elected master, we will respond to
 	// TabletActionSlaveWasPromoted.
 	newMaster.StartActionLoop(t, wr)
@@ -352,6 +361,98 @@ func TestTabletExternallyReparentedImpostorMaster(t *testing.T) {
 		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
 	}
 	waitForExternalReparent(t, "TestTabletExternallyReparentedImpostorMaster: good case", waitID)
+
+	// check the new master is really master
+	tablet, err = ts.GetTablet(ctx, newMaster.Tablet.Alias)
+	if err != nil {
+		t.Fatalf("GetTablet(%v) failed: %v", newMaster.Tablet.Alias, err)
+	}
+	if tablet.Type != topodatapb.TabletType_MASTER {
+		t.Fatalf("new master should be MASTER but is: %v", tablet.Type)
+	}
+
+	// check the old master was converted to replica
+	tablet, err = ts.GetTablet(ctx, oldMaster.Tablet.Alias)
+	if err != nil {
+		t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
+	}
+	if tablet.Type != topodatapb.TabletType_REPLICA {
+		t.Fatalf("old master should be replica but is: %v", tablet.Type)
+	}
+
+	// check the impostor master was converted to replica
+	tablet, err = ts.GetTablet(ctx, badSlave.Tablet.Alias)
+	if err != nil {
+		t.Fatalf("GetTablet(%v) failed: %v", badSlave.Tablet.Alias, err)
+	}
+	if tablet.Type != topodatapb.TabletType_REPLICA {
+		t.Fatalf("bad slave should be replica but is: %v", tablet.Type)
+	}
+}
+
+func TestTabletExternallyReparentedFailedImpostorMaster(t *testing.T) {
+	tabletmanager.SetReparentFlags(2 * time.Second /* finalizeTimeout */)
+
+	ctx := context.Background()
+	ts := memorytopo.NewServer("cell1", "cell2")
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+
+	// Create an old master, a new master, and a bad slave.
+	badSlave := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_MASTER, nil)
+	// do this after badSlave so that the shard record has the expected master
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil, ForceInitTablet())
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
+
+	// check the old master is really master
+	tablet, err := ts.GetTablet(ctx, oldMaster.Tablet.Alias)
+	if err != nil {
+		t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
+	}
+	if tablet.Type != topodatapb.TabletType_MASTER {
+		t.Fatalf("old master should be MASTER but is: %v", tablet.Type)
+	}
+
+	// check the impostor also claims to be master
+	tablet, err = ts.GetTablet(ctx, badSlave.Tablet.Alias)
+	if err != nil {
+		t.Fatalf("GetTablet(%v) failed: %v", badSlave.Tablet.Alias, err)
+	}
+	if tablet.Type != topodatapb.TabletType_MASTER {
+		t.Fatalf("old master should be MASTER but is: %v", tablet.Type)
+	}
+
+	// On the elected master, we will respond to
+	// TabletActionSlaveWasPromoted.
+	newMaster.StartActionLoop(t, wr)
+	defer newMaster.StopActionLoop(t)
+
+	// On the old master, we will only respond to
+	// TabletActionSlaveWasRestarted.
+	oldMaster.StartActionLoop(t, wr)
+	defer oldMaster.StopActionLoop(t)
+
+	// Reparent to a replica, and pretend the impostor master is not responding.
+
+	// The reparent should work as expected here
+	tmc := tmclient.NewTabletManagerClient()
+	ti, err := ts.GetTablet(ctx, newMaster.Tablet.Alias)
+	if err != nil {
+		t.Fatalf("GetTablet failed: %v", err)
+	}
+	waitID := makeWaitID()
+	if err := tmc.TabletExternallyReparented(context.Background(), ti.Tablet, waitID); err != nil {
+		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
+	}
+	waitForExternalReparent(t, "TestTabletExternallyReparentedImpostorMaster: good case", waitID)
+
+	// check the new master is really master
+	tablet, err = ts.GetTablet(ctx, newMaster.Tablet.Alias)
+	if err != nil {
+		t.Fatalf("GetTablet(%v) failed: %v", newMaster.Tablet.Alias, err)
+	}
+	if tablet.Type != topodatapb.TabletType_MASTER {
+		t.Fatalf("new master should be MASTER but is: %v", tablet.Type)
+	}
 
 	// check the old master was converted to replica
 	tablet, err = ts.GetTablet(ctx, oldMaster.Tablet.Alias)
