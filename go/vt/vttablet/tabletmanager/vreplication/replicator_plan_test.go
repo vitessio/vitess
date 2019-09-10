@@ -86,6 +86,44 @@ func TestBuildPlayerPlan(t *testing.T) {
 			},
 		},
 	}, {
+		// Regular with keyrange
+		input: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "/.*",
+				Filter: "-80",
+			}},
+		},
+		plan: &TestReplicatorPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select * from t1 where in_keyrange('-80')",
+				}},
+			},
+			TargetTables: []string{"t1"},
+			TablePlans: map[string]*TestTablePlan{
+				"t1": {
+					TargetName: "t1",
+					SendRule:   "t1",
+				},
+			},
+		},
+		planpk: &TestReplicatorPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select * from t1 where in_keyrange('-80')",
+				}},
+			},
+			TargetTables: []string{"t1"},
+			TablePlans: map[string]*TestTablePlan{
+				"t1": {
+					TargetName: "t1",
+					SendRule:   "t1",
+				},
+			},
+		},
+	}, {
 		// '*' expression
 		input: &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{

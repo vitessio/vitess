@@ -17,6 +17,9 @@
 temp_log_file="$(mktemp --suffix .unit_test_race.log)"
 trap '[ -f "$temp_log_file" ] && rm $temp_log_file' EXIT
 
+# This can be removed once the docker images are rebuilt
+export GO111MODULE=on
+
 # Wrapper around go test -race.
 
 # This script exists because the -race test doesn't allow to distinguish
