@@ -131,3 +131,57 @@ func TestHashJoinWithOneRowOnLHSThatMatchesMultipleRowsOnTheRHS(t *testing.T) {
 	)
 	expectResult(t, "jn.Execute", r, expected)
 }
+
+func TestHashJoinExecuteMultipleOnPredicates(t *testing.T) {
+	leftPrim := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"col1|col2|col3",
+					"int64|varchar|int64",
+				),
+				"1|one|1",
+				"2|two|2",
+				"3|three|3",
+				"3|three|4",
+			),
+		},
+	}
+	rightPrim := &fakePrimitive{
+		results: []*sqltypes.Result{
+			sqltypes.MakeTestResult(
+				sqltypes.MakeTestFields(
+					"col4|col5|col6",
+					"int64|varchar|int64",
+				),
+				"2|dos|2",
+				"3|tres|3",
+				"3|tres|5",
+				"4|cuatro|4",
+			),
+		},
+	}
+	bv := map[string]*querypb.BindVariable{}
+
+	// Inner merge join
+	jn := &HashJoin{
+		Left:          leftPrim,
+		Right:         rightPrim,
+		Cols:          []int{-1, -2, 2},
+		LeftJoinCols:  []int{0, 2},
+		RightJoinCols: []int{0, 2},
+	}
+	r, err := jn.Execute(noopVCursor{}, bv, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectes := sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"col1|col2|col5",
+			"int64|varchar|varchar",
+		),
+		"2|two|dos",
+		"3|three|tres",
+	)
+	expectResult(t, "jn.Execute", r, expectes)
+}

@@ -45,11 +45,9 @@ type HashJoin struct {
 	// the returned result will be {Left0, Left1, Right0, Right1}.
 	Cols []int `json:",omitempty"`
 
-	// LeftJoinCols defines which columns from the lhs are part of the ON comparison
-	LeftJoinCols []int
-
-	// RightJoinCols defines which columns from the rhs are part of the ON comparison
-	RightJoinCols []int
+	// LeftJoinCols and RightJoinCols defines which columns from the lhs are part of the ON comparison
+	// this is encoded using the normal offsets into the rows
+	LeftJoinCols, RightJoinCols []int
 }
 
 // MarshalJSON allows us to add the opcode in, so we can see the join type used
@@ -122,7 +120,10 @@ func (jn *HashJoin) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 	err := jn.Left.StreamExecute(vcursor, bindVars, wantfields, func(lresult *sqltypes.Result) error {
 		for _, row := range lresult.Rows {
 			joinVals := extractJoinValues(row, jn.LeftJoinCols)
-			table.Add(joinVals, row)
+			err := table.Add(joinVals, row)
+			if err != nil {
+				return err
+			}
 		}
 		leftFields = lresult.Fields
 		return nil
