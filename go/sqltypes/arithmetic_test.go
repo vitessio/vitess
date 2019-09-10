@@ -143,6 +143,11 @@ func TestSubtract(t *testing.T) {
 		v1:  NewUint64(2),
 		v2:  NewUint64(4),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 2 - 4"),
+	}, {
+		// testing uint - (- int)
+		v1:  NewUint64(1),
+		v2:  NewInt64(-2),
+		out: NewUint64(3),
 	}}
 
 	for _, tcase := range tcases {
