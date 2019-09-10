@@ -255,21 +255,21 @@ func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars map[string]*
 	return nil
 }
 
-func (oa *OrderedAggregate) convertFields(fields []*querypb.Field) (newFields []*querypb.Field) {
+func (oa *OrderedAggregate) convertFields(fields []*querypb.Field) []*querypb.Field {
 	if !oa.HasDistinct {
 		return fields
 	}
-	newFields = append(newFields, fields...)
+
 	for _, aggr := range oa.Aggregates {
 		if !aggr.isDistinct() {
 			continue
 		}
-		newFields[aggr.Col] = &querypb.Field{
+		fields[aggr.Col] = &querypb.Field{
 			Name: aggr.Alias,
 			Type: opcodeType[aggr.Opcode],
 		}
 	}
-	return newFields
+	return fields
 }
 
 func (oa *OrderedAggregate) convertRow(row []sqltypes.Value) (newRow []sqltypes.Value, curDistinct sqltypes.Value) {
@@ -375,10 +375,17 @@ func (oa *OrderedAggregate) createEmptyRow() ([]sqltypes.Value, error) {
 
 func createEmptyValueFor(opcode AggregateOpcode) (sqltypes.Value, error) {
 	switch opcode {
-	case AggregateCountDistinct:
+	case
+		AggregateCountDistinct,
+		AggregateCount:
 		return countZero, nil
-	case AggregateSumDistinct:
+	case
+		AggregateSumDistinct,
+		AggregateSum,
+		AggregateMin,
+		AggregateMax:
 		return sqltypes.NULL, nil
+
 	}
 	return sqltypes.NULL, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown aggregation %v", opcode)
 }

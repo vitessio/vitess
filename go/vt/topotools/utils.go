@@ -119,7 +119,7 @@ func SortedTabletMap(tabletMap map[string]*topo.TabletInfo) (map[string]*topo.Ta
 	return slaveMap, masterMap
 }
 
-// CopyMapKeys copies keys from from map m into a new slice with the
+// CopyMapKeys copies keys from map m into a new slice with the
 // type specified by typeHint.  Reflection can't make a new slice type
 // just based on the key type AFAICT.
 func CopyMapKeys(m interface{}, typeHint interface{}) interface{} {
@@ -131,7 +131,7 @@ func CopyMapKeys(m interface{}, typeHint interface{}) interface{} {
 	return keys.Interface()
 }
 
-// CopyMapValues copies values from from map m into a new slice with the
+// CopyMapValues copies values from map m into a new slice with the
 // type specified by typeHint.  Reflection can't make a new slice type
 // just based on the key type AFAICT.
 func CopyMapValues(m interface{}, typeHint interface{}) interface{} {

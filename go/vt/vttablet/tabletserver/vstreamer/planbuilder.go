@@ -128,6 +128,7 @@ func mustSendDDL(query mysql.Query, dbname string, filter *binlogdatapb.Filter) 
 	return true
 }
 
+// tableMatches is similar to the one defined in vreplication.
 func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb.Filter) bool {
 	if !table.Qualifier.IsEmpty() && table.Qualifier.String() != dbname {
 		return false

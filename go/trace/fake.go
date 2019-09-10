@@ -23,25 +23,26 @@ import (
 	"google.golang.org/grpc"
 )
 
-type fakeSpanFactory struct{}
+type noopTracingServer struct{}
 
-func (fakeSpanFactory) New(Span, string) Span                                     { return fakeSpan{} }
-func (fakeSpanFactory) NewClientSpan(parent Span, serviceName, label string) Span { return fakeSpan{} }
-func (fakeSpanFactory) FromContext(context.Context) (Span, bool)                  { return nil, false }
-func (fakeSpanFactory) NewContext(parent context.Context, _ Span) context.Context { return parent }
-func (fakeSpanFactory) AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor)) {
+func (noopTracingServer) New(Span, string) Span                                     { return NoopSpan{} }
+func (noopTracingServer) NewClientSpan(parent Span, serviceName, label string) Span { return NoopSpan{} }
+func (noopTracingServer) FromContext(context.Context) (Span, bool)                  { return nil, false }
+func (noopTracingServer) NewFromString(parent, label string) (Span, error)          { return NoopSpan{}, nil }
+func (noopTracingServer) NewContext(parent context.Context, _ Span) context.Context { return parent }
+func (noopTracingServer) AddGrpcServerOptions(addInterceptors func(s grpc.StreamServerInterceptor, u grpc.UnaryServerInterceptor)) {
 }
-func (fakeSpanFactory) AddGrpcClientOptions(addInterceptors func(s grpc.StreamClientInterceptor, u grpc.UnaryClientInterceptor)) {
+func (noopTracingServer) AddGrpcClientOptions(addInterceptors func(s grpc.StreamClientInterceptor, u grpc.UnaryClientInterceptor)) {
 }
 
-// fakeSpan implements Span with no-op methods.
-type fakeSpan struct{}
+// NoopSpan implements Span with no-op methods.
+type NoopSpan struct{}
 
-func (fakeSpan) Finish()                      {}
-func (fakeSpan) Annotate(string, interface{}) {}
+func (NoopSpan) Finish()                      {}
+func (NoopSpan) Annotate(string, interface{}) {}
 
 func init() {
 	tracingBackendFactories["noop"] = func(_ string) (tracingService, io.Closer, error) {
-		return fakeSpanFactory{}, &nilCloser{}, nil
+		return noopTracingServer{}, &nilCloser{}, nil
 	}
 }

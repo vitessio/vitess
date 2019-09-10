@@ -340,7 +340,7 @@ func (c *ZkConn) handleSessionEvents(conn *zk.Conn, session <-chan zk.Event) {
 // dialZk dials the server, and waits until connection.
 func dialZk(ctx context.Context, addr string) (*zk.Conn, <-chan zk.Event, error) {
 	servers := strings.Split(addr, ",")
-	options := zk.WithDialer(net.DialTimeout)
+	dialer := zk.WithDialer(net.DialTimeout)
 	// If TLS is enabled use a TLS enabled dialer option
 	if *certPath != "" && *keyPath != "" {
 		if strings.Contains(addr, ",") {
@@ -371,15 +371,18 @@ func dialZk(ctx context.Context, addr string) (*zk.Conn, <-chan zk.Event, error)
 
 		tlsConfig.BuildNameToCertificate()
 
-		options = zk.WithDialer(func(network, address string, timeout time.Duration) (net.Conn, error) {
+		dialer = zk.WithDialer(func(network, address string, timeout time.Duration) (net.Conn, error) {
 			d := net.Dialer{Timeout: timeout}
 
 			return tls.DialWithDialer(&d, network, address, tlsConfig)
 		})
 	}
+	// Make sure we re-resolve the DNS name every time we reconnect to a server
+	// In environments where DNS changes such as Kubernetes we can't cache the IP address
+	hostProvider := zk.WithHostProvider(&zk.SimpleDNSHostProvider{})
 
 	// zk.Connect automatically shuffles the servers
-	zconn, session, err := zk.Connect(servers, *baseTimeout, options)
+	zconn, session, err := zk.Connect(servers, *baseTimeout, dialer, hostProvider)
 	if err != nil {
 		return nil, nil, err
 	}
