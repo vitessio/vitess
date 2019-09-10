@@ -180,7 +180,9 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 			var err error
 			oldMasterTablet, err = agent.TopoServer.UpdateTabletFields(ctx, oldMasterAlias,
 				func(tablet *topodatapb.Tablet) error {
-					tablet.Type = topodatapb.TabletType_REPLICA
+					if tablet.Type == topodatapb.TabletType_MASTER {
+						tablet.Type = topodatapb.TabletType_REPLICA
+					}
 					return nil
 				})
 			if err != nil {
@@ -189,8 +191,11 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 			}
 
 			// We now know more about the old master, so add it to event data.
-			ev.OldMaster = *oldMasterTablet
-			tabletsToRefresh <- *oldMasterTablet
+			// oldMasterTablet will be nil if no update was needed
+			if oldMasterTablet != nil {
+				ev.OldMaster = *oldMasterTablet
+				tabletsToRefresh <- *oldMasterTablet
+			}
 		}()
 	}
 
@@ -205,14 +210,19 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 				var err error
 				tab, err := agent.TopoServer.UpdateTabletFields(ctx, alias,
 					func(tablet *topodatapb.Tablet) error {
-						tablet.Type = topodatapb.TabletType_REPLICA
+						if tablet.Type == topodatapb.TabletType_MASTER {
+							tablet.Type = topodatapb.TabletType_REPLICA
+						}
 						return nil
 					})
 				if err != nil {
 					errs.RecordError(err)
 					return
 				}
-				tabletsToRefresh <- *tab
+				// tab will be nil if no update was needed
+				if tab != nil {
+					tabletsToRefresh <- *tab
+				}
 			}(alias)
 		}
 	}
