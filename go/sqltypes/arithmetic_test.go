@@ -118,6 +118,31 @@ func TestSubtract(t *testing.T) {
 		v1:  NewInt64(2),
 		v2:  NewUint64(1),
 		out: NewUint64(1),
+	}, {
+		// testing int64 - float64 method
+		v1:  NewInt64(-2),
+		v2:  NewFloat64(1.0),
+		out: NewFloat64(-3.0),
+	}, {
+		// testing uint64 - float64 method
+		v1:  NewUint64(1),
+		v2:  NewFloat64(-2.0),
+		out: NewFloat64(3.0),
+	}, {
+		// testing uint - int to return uintplusint
+		v1:  NewUint64(1),
+		v2:  NewInt64(-2),
+		out: NewUint64(3),
+	}, {
+		// testing for float - float
+		v1:  NewFloat64(1.2),
+		v2:  NewFloat64(3.2),
+		out: NewFloat64(-2),
+	}, {
+		// testing uint - uint if v2 > v1
+		v1:  NewUint64(2),
+		v2:  NewUint64(4),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 2 - 4"),
 	}}
 
 	for _, tcase := range tcases {
