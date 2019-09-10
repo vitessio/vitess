@@ -204,13 +204,7 @@ func (hj *hashJoin) wireUp(jb *join) error {
 }
 
 func (hj *hashJoin) createPrimitive(jb *join, l, r engine.Primitive) engine.Primitive {
-	return &engine.HashJoin{
-		Left:          l,
-		Right:         r,
-		Cols:          jb.Cols,
-		LeftJoinCols:  hj.left,
-		RightJoinCols: hj.right,
-	}
+	return engine.NewHashJoin(l, r, jb.Cols, hj.left, hj.right)
 }
 
 var _ joinStyle = (*nestedLoopJoin)(nil)

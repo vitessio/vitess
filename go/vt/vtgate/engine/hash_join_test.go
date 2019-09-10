@@ -54,13 +54,7 @@ func TestHashJoinExecute(t *testing.T) {
 	bv := map[string]*querypb.BindVariable{}
 
 	// Inner merge join
-	jn := &HashJoin{
-		Left:          leftPrim,
-		Right:         rightPrim,
-		Cols:          []int{-1, -2, 2},
-		LeftJoinCols:  []int{0},
-		RightJoinCols: []int{0},
-	}
+	jn := NewHashJoin(leftPrim, rightPrim, []int{-1, -2, 2}, []int{0}, []int{0})
 	r, err := jn.Execute(noopVCursor{}, bv, true)
 	if err != nil {
 		t.Fatal(err)
@@ -108,13 +102,7 @@ func TestHashJoinWithOneRowOnLHSThatMatchesMultipleRowsOnTheRHS(t *testing.T) {
 	bv := map[string]*querypb.BindVariable{}
 
 	// Inner merge join
-	jn := &HashJoin{
-		Left:          leftPrim,
-		Right:         rightPrim,
-		Cols:          []int{-1, -2, 2},
-		LeftJoinCols:  []int{0},
-		RightJoinCols: []int{0},
-	}
+	jn := NewHashJoin(leftPrim, rightPrim, []int{-1, -2, 2}, []int{0}, []int{0})
 	r, err := jn.Execute(noopVCursor{}, bv, true)
 	if err != nil {
 		t.Fatal(err)
@@ -164,18 +152,12 @@ func TestHashJoinExecuteMultipleOnPredicates(t *testing.T) {
 	bv := map[string]*querypb.BindVariable{}
 
 	// Inner merge join
-	jn := &HashJoin{
-		Left:          leftPrim,
-		Right:         rightPrim,
-		Cols:          []int{-1, -2, 2},
-		LeftJoinCols:  []int{0, 2},
-		RightJoinCols: []int{0, 2},
-	}
+	jn := NewHashJoin(leftPrim, rightPrim, []int{-1, -2, 2}, []int{0, 2}, []int{0, 2})
 	r, err := jn.Execute(noopVCursor{}, bv, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	expectes := sqltypes.MakeTestResult(
+	expects := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"col1|col2|col5",
 			"int64|varchar|varchar",
@@ -183,5 +165,5 @@ func TestHashJoinExecuteMultipleOnPredicates(t *testing.T) {
 		"2|two|dos",
 		"3|three|tres",
 	)
-	expectResult(t, "jn.Execute", r, expectes)
+	expectResult(t, "jn.Execute", r, expects)
 }

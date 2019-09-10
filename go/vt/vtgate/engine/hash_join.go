@@ -50,6 +50,11 @@ type HashJoin struct {
 	LeftJoinCols, RightJoinCols []int
 }
 
+// NewHashJoin creates a new hash join primitive
+func NewHashJoin(left, right Primitive, cols []int, leftJoinCols, rightJoinCols []int) *HashJoin {
+	return &HashJoin{Left: left, Right: right, Cols: cols, LeftJoinCols: leftJoinCols, RightJoinCols: rightJoinCols}
+}
+
 // MarshalJSON allows us to add the opcode in, so we can see the join type used
 func (jn *HashJoin) MarshalJSON() ([]byte, error) {
 	type Alias HashJoin
