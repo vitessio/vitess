@@ -173,7 +173,7 @@ func TestHealthCheckControlsQueryService(t *testing.T) {
 	ctx := context.Background()
 	agent := createTestAgent(ctx, t, nil)
 
-	/// Consume the first health broadcast triggered by ActionAgent.Start():
+	// Consume the first health broadcast triggered by ActionAgent.Start():
 	//  (REPLICA, NOT_SERVING) goes to (REPLICA, SERVING). And we
 	//  should be serving.
 	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "healthcheck not run yet", 0); err != nil {
@@ -281,7 +281,7 @@ func TestErrSlaveNotRunningIsHealthy(t *testing.T) {
 	ctx := context.Background()
 	agent := createTestAgent(ctx, t, nil)
 
-	/// Consume the first health broadcast triggered by ActionAgent.Start():
+	// Consume the first health broadcast triggered by ActionAgent.Start():
 	//  (REPLICA, NOT_SERVING) goes to (REPLICA, SERVING). And we
 	//  should be serving.
 	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "healthcheck not run yet", 0); err != nil {
@@ -390,7 +390,7 @@ func TestQueryServiceStopped(t *testing.T) {
 	ctx := context.Background()
 	agent := createTestAgent(ctx, t, nil)
 
-	/// Consume the first health broadcast triggered by ActionAgent.Start():
+	// Consume the first health broadcast triggered by ActionAgent.Start():
 	//  (REPLICA, NOT_SERVING) goes to (REPLICA, SERVING). And we
 	//  should be serving.
 	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "healthcheck not run yet", 0); err != nil {
@@ -488,7 +488,7 @@ func TestTabletControl(t *testing.T) {
 	ctx := context.Background()
 	agent := createTestAgent(ctx, t, nil)
 
-	/// Consume the first health broadcast triggered by ActionAgent.Start():
+	// Consume the first health broadcast triggered by ActionAgent.Start():
 	//  (REPLICA, NOT_SERVING) goes to (REPLICA, SERVING). And we
 	//  should be serving.
 	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "healthcheck not run yet", 0); err != nil {
@@ -691,7 +691,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 	ctx := context.Background()
 	agent := createTestAgent(ctx, t, nil)
 
-	/// Consume the first health broadcast triggered by ActionAgent.Start():
+	// Consume the first health broadcast triggered by ActionAgent.Start():
 	//  (REPLICA, NOT_SERVING) goes to (REPLICA, SERVING). And we
 	//  should be serving.
 	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "healthcheck not run yet", 0); err != nil {
