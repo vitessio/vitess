@@ -106,8 +106,12 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, tableKeys map[string][]str
 		if err != nil {
 			return nil, err
 		}
-		if _, ok := plan.TablePlans[tablePlan.SendRule.Match]; ok {
+		if tablePlan == nil {
+			// Table was excluded.
 			continue
+		}
+		if dup, ok := plan.TablePlans[tablePlan.SendRule.Match]; ok {
+			return nil, fmt.Errorf("more than one target for source table %s: %s and %s", tablePlan.SendRule.Match, dup.TargetName, tableName)
 		}
 		plan.VStreamFilter.Rules = append(plan.VStreamFilter.Rules, tablePlan.SendRule)
 		plan.TargetTables[tableName] = tablePlan
@@ -148,6 +152,8 @@ func buildTablePlan(tableName, filter string, tableKeys map[string][]string, las
 		buf := sqlparser.NewTrackedBuffer(nil)
 		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(tableName), sqlparser.NewStrVal([]byte(filter)))
 		query = buf.String()
+	case filter == "exclude":
+		return nil, nil
 	}
 	sel, fromTable, err := analyzeSelectFrom(query)
 	if err != nil {

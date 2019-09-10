@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -653,4 +654,60 @@ func TestBuildPlayerPlan(t *testing.T) {
 			t.Errorf("Filter(%v,copyState):\n%s, want\n%s", tcase.input, gotPlan, wantPlan)
 		}
 	}
+}
+
+func TestBuildPlayerPlanNoDup(t *testing.T) {
+	tableKeys := map[string][]string{
+		"t1": {"c1"},
+		"t2": {"c2"},
+	}
+	input := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t",
+		}, {
+			Match:  "t2",
+			Filter: "select * from t",
+		}},
+	}
+	_, err := buildReplicatorPlan(input, tableKeys, nil)
+	assert.EqualError(t, err, "more than one target for source table t: t1 and t2")
+}
+
+func TestBuildPlayerPlanExclude(t *testing.T) {
+	tableKeys := map[string][]string{
+		"t1": {"c1"},
+		"t2": {"c2"},
+	}
+	input := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t2",
+			Filter: "exclude",
+		}, {
+			Match:  "/.*",
+			Filter: "",
+		}},
+	}
+	plan, err := buildReplicatorPlan(input, tableKeys, nil)
+	assert.NoError(t, err)
+
+	want := &TestReplicatorPlan{
+		VStreamFilter: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "t1",
+				Filter: "select * from t1",
+			}},
+		},
+		TargetTables: []string{"t1"},
+		TablePlans: map[string]*TestTablePlan{
+			"t1": {
+				TargetName: "t1",
+				SendRule:   "t1",
+			},
+		},
+	}
+
+	gotPlan, _ := json.Marshal(plan)
+	wantPlan, _ := json.Marshal(want)
+	assert.Equal(t, string(gotPlan), string(wantPlan))
 }
