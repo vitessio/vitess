@@ -115,13 +115,40 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	version, getErr := getVersionString()
 	f, v, err := parseVersionString(version)
 
-	// Fallback if required
+	/*
+	 By default Vitess searches in vtenv.VtMysqlRoot() for a mysqld binary.
+	 This is usually the VT_MYSQL_ROOT env, but if it is unset or empty, it
+	 will substitute VtRoot(). See go/vt/env/env.go.
+
+	 A number of subdirs inside vtenv.VtMysqlRoot() will be searched, see
+	 func binaryPath() for context. If no mysqld binary is found (possibly
+	 because it is in a container or both VT_MYSQL_ROOT and VTROOT are set
+	 incorrectly), there will be a fallback to using the MYSQL_FLAVOR env
+	 variable.
+
+	 If MYSQL_FLAVOR is not defined, there will be a panic.
+
+	 Note: relying on MySQL_FLAVOR is not recommended, since for historical
+	 purposes "MySQL56" actually means MySQL 5.7, which is a very strange
+	 behavior.
+	*/
+
 	if getErr != nil || err != nil {
 		f, v, err = getVersionFromEnv()
 		if err != nil {
-			panic("could not detect version from mysqld --version or MYSQL_FLAVOR")
+			vtenvMysqlRoot, _ := vtenv.VtMysqlRoot()
+			message := fmt.Sprintf(`could not auto-detect MySQL version. You may need to set VT_MYSQL_ROOT so a mysqld binary can be found, or set the environment variable MYSQL_FLAVOR if mysqld is not available locally:
+	VT_MYSQL_ROOT: %s
+	VTROOT: %s
+	vtenv.VtMysqlRoot(): %s
+	MYSQL_FLAVOR: %s
+	`,
+				os.Getenv("VT_MYSQL_ROOT"),
+				os.Getenv("VTROOT"),
+				vtenvMysqlRoot,
+				os.Getenv("MYSQL_FLAVOR"))
+			panic(message)
 		}
-
 	}
 
 	log.Infof("Using flavor: %v, version: %v", f, v)
