@@ -64,8 +64,8 @@ message Vindex {
 
 // Table is the table info for a Keyspace.
 message Table {
-  // If the table is a sequence, type must be
-  // "sequence". Otherwise, it should be empty.
+  // If the table is a sequence, type must be "sequence".
+  // If the table is a topic, type must be "topic".
   string type = 1;
   // column_vindexes associates columns to vindexes.
   repeated ColumnVindex column_vindexes = 2;
@@ -83,6 +83,8 @@ message Table {
   // an authoritative list for the table. This allows
   // us to expand 'select *' expressions.
   bool column_list_authoritative = 6;
+  // subscription defines a relationship to a topic table.
+  Subscription subscription = 7;
 }
 
 // ColumnVindex is used to associate a column to a vindex.
@@ -113,4 +115,31 @@ message SrvVSchema {
   // keyspaces is a map of keyspace name -> Keyspace object.
   map<string, Keyspace> keyspaces = 1;
   RoutingRules routing_rules = 2;
+}
+
+// A Subscription defines a table relationship to a topic
+message Subscription {
+  // The topic must match a table of type TOPIC.
+  string topic = 1;
+  // TODO: filters are for a future PR. I am including a rough
+  // design here to help flesh out the reasoning behind including
+  // topic/subscription data in the vschema.
+  //
+  // filters allow messages published to a topic to conditionally
+  // be inserted into the message table. Repeated filters
+  // are ANDed together.
+  repeated SubscriptionFilter filters = 2;
+}
+
+// SubscriptionFilters describe matching rules for subscriptions.
+// https://docs.aws.amazon.com/sns/latest/dg/sns-subscription-filter-policies.html
+message SubscriptionFilter {
+  // valid values are "whitelist" or "blacklist"
+  string type = 1;
+  // column references a json column of type map<string, string>
+  Column column = 2;
+  // key references a value in the specified json column
+  string key = 3;
+  // vals specifies valid match values
+  repeated string vals = 4;
 }
