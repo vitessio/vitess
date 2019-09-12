@@ -240,6 +240,16 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		dbName = fmt.Sprintf("vt_%s", *initKeyspace)
 	}
 
+	backupParams := mysqlctl.BackupParams{
+		Cnf:          mycnf,
+		Mysqld:       mysqld,
+		Logger:       logutil.NewConsoleLogger(),
+		Concurrency:  *concurrency,
+		HookExtraEnv: extraEnv,
+		TopoServer:   topoServer,
+		Keyspace:     *initKeyspace,
+		Shard:        *initShard,
+	}
 	// In initial_backup mode, just take a backup of this empty database.
 	if *initialBackup {
 		// Take a backup of this empty DB without restoring anything.
@@ -257,7 +267,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		}
 		// Now we're ready to take the backup.
 		name := backupName(time.Now(), tabletAlias)
-		if err := mysqlctl.Backup(ctx, mycnf, mysqld, logutil.NewConsoleLogger(), backupDir, name, *concurrency, extraEnv); err != nil {
+		if err := mysqlctl.Backup(ctx, backupDir, name, backupParams); err != nil {
 			return fmt.Errorf("backup failed: %v", err)
 		}
 		log.Info("Initial backup successful.")
@@ -265,7 +275,18 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}
 
 	log.Infof("Restoring latest backup from directory %v", backupDir)
-	restorePos, err := mysqlctl.Restore(ctx, mycnf, mysqld, backupDir, *concurrency, extraEnv, map[string]string{}, logutil.NewConsoleLogger(), true, dbName)
+	params := mysqlctl.RestoreParams{
+		Cnf:                 mycnf,
+		Mysqld:              mysqld,
+		Logger:              logutil.NewConsoleLogger(),
+		Concurrency:         *concurrency,
+		HookExtraEnv:        extraEnv,
+		LocalMetadata:       map[string]string{},
+		DeleteBeforeRestore: true,
+		DbName:              dbName,
+		Dir:                 backupDir,
+	}
+	restorePos, err := mysqlctl.Restore(ctx, params)
 	switch err {
 	case nil:
 		log.Infof("Successfully restored from backup at replication position %v", restorePos)
@@ -360,7 +381,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 
 	// Now we can take a new backup.
 	name := backupName(backupTime, tabletAlias)
-	if err := mysqlctl.Backup(ctx, mycnf, mysqld, logutil.NewConsoleLogger(), backupDir, name, *concurrency, extraEnv); err != nil {
+	if err := mysqlctl.Backup(ctx, backupDir, name, backupParams); err != nil {
 		return fmt.Errorf("error taking backup: %v", err)
 	}
 

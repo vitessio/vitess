@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -90,7 +89,7 @@ var (
 // - uses the BackupStorage service to store a new backup
 // - shuts down Mysqld during the backup
 // - remember if we were replicating, restore the exact same state
-func Backup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, dir, name string, backupConcurrency int, hookExtraEnv map[string]string) error {
+func Backup(ctx context.Context, dir, name string, params BackupParams) error {
 	// Start the backup with the BackupStorage.
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
@@ -101,6 +100,8 @@ func Backup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.
 	if err != nil {
 		return vterrors.Wrap(err, "StartBackup failed")
 	}
+	// Set params.BackupHandle to the selected backup
+	params.BackupHandle = bh
 
 	be, err := GetBackupEngine()
 	if err != nil {
@@ -108,7 +109,8 @@ func Backup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.
 	}
 
 	// Take the backup, and either AbortBackup or EndBackup.
-	usable, err := be.ExecuteBackup(ctx, cnf, mysqld, logger, bh, backupConcurrency, hookExtraEnv)
+	usable, err := be.ExecuteBackup(ctx, params)
+	logger := params.Logger
 	var finishErr error
 	if usable {
 		finishErr = bh.EndBackup(ctx)
@@ -215,17 +217,16 @@ func removeExistingFiles(cnf *Mycnf) error {
 // Restore is the main entry point for backup restore.  If there is no
 // appropriate backup on the BackupStorage, Restore logs an error
 // and returns ErrNoBackup. Any other error is returned.
-func Restore(
-	ctx context.Context,
-	cnf *Mycnf,
-	mysqld MysqlDaemon,
-	dir string,
-	restoreConcurrency int,
-	hookExtraEnv map[string]string,
-	localMetadata map[string]string,
-	logger logutil.Logger,
-	deleteBeforeRestore bool,
-	dbName string) (mysql.Position, error) {
+func Restore(ctx context.Context, params RestoreParams) (mysql.Position, error) {
+
+	// extract params
+	cnf := params.Cnf
+	mysqld := params.Mysqld
+	logger := params.Logger
+	localMetadata := params.LocalMetadata
+	deleteBeforeRestore := params.DeleteBeforeRestore
+	dbName := params.DbName
+	dir := params.Dir
 
 	rval := mysql.Position{}
 
@@ -290,12 +291,15 @@ func Restore(
 	if err != nil {
 		return rval, err
 	}
+	// Set params.BackupHandle to the selected backup
+	params.BackupHandle = bh
 
 	re, err := GetRestoreEngine(ctx, bh)
 	if err != nil {
 		return mysql.Position{}, vterrors.Wrap(err, "Failed to find restore engine")
 	}
-	if rval, err = re.ExecuteRestore(ctx, cnf, mysqld, logger, dir, bh, restoreConcurrency, hookExtraEnv); err != nil {
+
+	if rval, err = re.ExecuteRestore(ctx, params); err != nil {
 		return rval, err
 	}
 

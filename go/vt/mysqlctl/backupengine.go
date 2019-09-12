@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -39,13 +40,40 @@ var (
 
 // BackupEngine is the interface to take a backup with a given engine.
 type BackupEngine interface {
-	ExecuteBackup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) (bool, error)
+	ExecuteBackup(ctx context.Context, params BackupParams) (bool, error)
 	ShouldDrainForBackup() bool
+}
+
+// BackupParams is the struct that holds all params passed to ExecuteBackup
+type BackupParams struct {
+	Cnf          *Mycnf
+	Mysqld       MysqlDaemon
+	Logger       logutil.Logger
+	BackupHandle backupstorage.BackupHandle
+	Concurrency  int
+	HookExtraEnv map[string]string
+	TopoServer   *topo.Server
+	Keyspace     string
+	Shard        string
+}
+
+// RestoreParams is the struct that holds all params passed to ExecuteRestore
+type RestoreParams struct {
+	Cnf                 *Mycnf
+	Mysqld              MysqlDaemon
+	Logger              logutil.Logger
+	BackupHandle        backupstorage.BackupHandle
+	Concurrency         int
+	HookExtraEnv        map[string]string
+	LocalMetadata       map[string]string
+	DeleteBeforeRestore bool
+	DbName              string
+	Dir                 string
 }
 
 // RestoreEngine is the interface to restore a backup with a given engine.
 type RestoreEngine interface {
-	ExecuteRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, dir string, bh backupstorage.BackupHandle, restoreConcurrency int, hookExtraEnv map[string]string) (mysql.Position, error)
+	ExecuteRestore(ctx context.Context, params RestoreParams) (mysql.Position, error)
 }
 
 // BackupRestoreEngine is a combination of BackupEngine and RestoreEngine.
