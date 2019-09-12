@@ -3,7 +3,7 @@ module vitess.io/vitess
 go 1.12
 
 require (
-	cloud.google.com/go v0.43.0
+	cloud.google.com/go v0.45.1
 	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878 // indirect
 	github.com/aws/aws-sdk-go v0.0.0-20180223184012-ebef4262e06a
 	github.com/boltdb/bolt v1.3.1 // indirect
@@ -22,6 +22,7 @@ require (
 	github.com/golang/mock v1.3.1
 	github.com/golang/protobuf v1.3.2
 	github.com/golang/snappy v0.0.0-20170215233205-553a64147049
+	github.com/google/btree v1.0.0 // indirect
 	github.com/gorilla/websocket v0.0.0-20160912153041-2d1e4548da23
 	github.com/grpc-ecosystem/go-grpc-middleware v0.0.0-20190118093823-f849b5445de4
 	github.com/grpc-ecosystem/go-grpc-prometheus v0.0.0-20180418170936-39de4380c2e0
@@ -67,8 +68,7 @@ require (
 	golang.org/x/text v0.3.2
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 	golang.org/x/tools v0.0.0-20190830154057-c17b040389b9
-	google.golang.org/api v0.7.0
-	google.golang.org/genproto v0.0.0-20190801165951-fa694d86fc64 // indirect
+	google.golang.org/api v0.9.0
 	google.golang.org/grpc v1.21.1
 	gopkg.in/asn1-ber.v1 v1.0.0-20150924051756-4e86f4367175 // indirect
 	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect

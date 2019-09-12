@@ -19,7 +19,6 @@ package sqltypes
 import (
 	"bytes"
 	"fmt"
-	"math"
 
 	"strconv"
 
@@ -428,16 +427,24 @@ func addNumericWithError(v1, v2 numeric) (numeric, error) {
 }
 
 func subtractNumericWithError(v1, v2 numeric) (numeric, error) {
-	v1, v2 = prioritize(v1, v2)
 	switch v1.typ {
 	case Int64:
-		return intMinusIntWithError(v1.ival, v2.ival)
+		switch v2.typ {
+		case Int64:
+			return intMinusIntWithError(v1.ival, v2.ival)
+		case Uint64:
+			return intMinusUintWithError(v1.ival, v2.uval)
+		case Float64:
+			return anyMinusFloat(v1, v2.fval), nil
+		}
 	case Uint64:
 		switch v2.typ {
 		case Int64:
 			return uintMinusIntWithError(v1.uval, v2.ival)
 		case Uint64:
 			return uintMinusUintWithError(v1.uval, v2.uval)
+		case Float64:
+			return anyMinusFloat(v1, v2.fval), nil
 		}
 	case Float64:
 		return floatMinusAny(v1.fval, v2), nil
@@ -503,10 +510,10 @@ func intPlusIntWithError(v1, v2 int64) (numeric, error) {
 
 func intMinusIntWithError(v1, v2 int64) (numeric, error) {
 	result := v1 - v2
-	if v1 > 0 && v2 > math.MaxInt64 || v1 > math.MaxInt64 && v2 > 0 || v1 <= math.MinInt64 && v2 > 0 || v1 > 0 && v2 <= math.MinInt64 {
+
+	if (result < v1) != (v2 > 0) {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v - %v", v1, v2)
 	}
-
 	return numeric{typ: Int64, ival: result}, nil
 }
 
@@ -518,27 +525,33 @@ func intTimesIntWithError(v1, v2 int64) (numeric, error) {
 	return numeric{typ: Int64, ival: result}, nil
 }
 
+func intMinusUintWithError(v1 int64, v2 uint64) (numeric, error) {
+	if v1 < 0 || v1 < int64(v2) {
+		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v - %v", v1, v2)
+	}
+	return uintMinusUintWithError(uint64(v1), v2)
+}
+
 func uintPlusInt(v1 uint64, v2 int64) numeric {
 	return uintPlusUint(v1, uint64(v2))
 }
 
 func uintPlusIntWithError(v1 uint64, v2 int64) (numeric, error) {
-	if v2 >= math.MaxInt64 && v1 > 0 {
-		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v + %v", v1, v2)
-	}
-
-	if v1 >= math.MaxUint64 && v2 > 0 {
+	if v2 < 0 && v1 < uint64(v2) {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v + %v", v1, v2)
 	}
-
 	// convert to int -> uint is because for numeric operators (such as + or -)
 	// where one of the operands is an unsigned integer, the result is unsigned by default.
 	return uintPlusUintWithError(v1, uint64(v2))
 }
 
 func uintMinusIntWithError(v1 uint64, v2 int64) (numeric, error) {
-	if v1 < uint64(v2) {
+	if int64(v1) < v2 && v2 > 0 {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v - %v", v1, v2)
+	}
+	// uint - (- int) = uint + int
+	if v2 < 0 {
+		return uintPlusIntWithError(v1, -v2)
 	}
 	return uintMinusUintWithError(v1, uint64(v2))
 }
@@ -560,7 +573,6 @@ func uintPlusUint(v1, v2 uint64) numeric {
 
 func uintPlusUintWithError(v1, v2 uint64) (numeric, error) {
 	result := v1 + v2
-
 	if result < v2 {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v + %v", v1, v2)
 	}
@@ -569,6 +581,10 @@ func uintPlusUintWithError(v1, v2 uint64) (numeric, error) {
 
 func uintMinusUintWithError(v1, v2 uint64) (numeric, error) {
 	result := v1 - v2
+	if v2 > v1 {
+		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v - %v", v1, v2)
+	}
+
 	return numeric{typ: Uint64, uval: result}, nil
 }
 
@@ -608,6 +624,16 @@ func floatTimesAny(v1 float64, v2 numeric) numeric {
 		v2.fval = float64(v2.uval)
 	}
 	return numeric{typ: Float64, fval: v1 * v2.fval}
+}
+
+func anyMinusFloat(v1 numeric, v2 float64) numeric {
+	switch v1.typ {
+	case Int64:
+		v1.fval = float64(v1.ival)
+	case Uint64:
+		v1.fval = float64(v1.uval)
+	}
+	return numeric{typ: Float64, fval: v1.fval - v2}
 }
 
 func castFromNumeric(v numeric, resultType querypb.Type) Value {

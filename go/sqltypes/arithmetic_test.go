@@ -163,6 +163,7 @@ func TestSubtract(t *testing.T) {
 		v2:  NewInt64(5),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 4 - 5"),
 	}, {
+		// testing uint - int
 		v1:  NewUint64(7),
 		v2:  NewInt64(5),
 		out: NewUint64(2),
@@ -174,7 +175,7 @@ func TestSubtract(t *testing.T) {
 		// testing for int64 overflow
 		v1:  NewInt64(math.MinInt64),
 		v2:  NewUint64(0),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 0 - -9223372036854775808"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in -9223372036854775808 - 0"),
 	}, {
 		v1:  TestValue(VarChar, "c"),
 		v2:  NewInt64(1),
@@ -208,6 +209,44 @@ func TestSubtract(t *testing.T) {
 		v1:  NewFloat64(1.2),
 		v2:  NewUint64(2),
 		out: NewFloat64(-0.8),
+	}, {
+		v1:  NewInt64(-1),
+		v2:  NewUint64(2),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in -1 - 2"),
+	}, {
+		v1:  NewInt64(2),
+		v2:  NewUint64(1),
+		out: NewUint64(1),
+	}, {
+		// testing int64 - float64 method
+		v1:  NewInt64(-2),
+		v2:  NewFloat64(1.0),
+		out: NewFloat64(-3.0),
+	}, {
+		// testing uint64 - float64 method
+		v1:  NewUint64(1),
+		v2:  NewFloat64(-2.0),
+		out: NewFloat64(3.0),
+	}, {
+		// testing uint - int to return uintplusint
+		v1:  NewUint64(1),
+		v2:  NewInt64(-2),
+		out: NewUint64(3),
+	}, {
+		// testing for float - float
+		v1:  NewFloat64(1.2),
+		v2:  NewFloat64(3.2),
+		out: NewFloat64(-2),
+	}, {
+		// testing uint - uint if v2 > v1
+		v1:  NewUint64(2),
+		v2:  NewUint64(4),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 2 - 4"),
+	}, {
+		// testing uint - (- int)
+		v1:  NewUint64(1),
+		v2:  NewInt64(-2),
+		out: NewUint64(3),
 	}}
 
 	for _, tcase := range tcases {
@@ -254,14 +293,14 @@ func TestAdd(t *testing.T) {
 		v2:  NewInt64(-2),
 		out: NewInt64(-3),
 	}, {
-		// testing for overflow int64
+		// testing for overflow int64, result will be unsigned int
 		v1:  NewInt64(math.MaxInt64),
 		v2:  NewUint64(2),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in 2 + 9223372036854775807"),
+		out: NewUint64(9223372036854775809),
 	}, {
 		v1:  NewInt64(-2),
 		v2:  NewUint64(1),
-		out: NewUint64(math.MaxUint64),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 1 + -2"),
 	}, {
 		v1:  NewInt64(math.MaxInt64),
 		v2:  NewInt64(-2),

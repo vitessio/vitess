@@ -96,8 +96,9 @@ func PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string,
 			}
 		}
 	}
-	if _, err := conn.ExecuteFetch(fmt.Sprintf(sqlUpdateLocalMetadataTable, dbName), 0, false); err != nil {
-		return err
+	sql := fmt.Sprintf(sqlUpdateLocalMetadataTable, dbName)
+	if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
+		log.Errorf("unexpected error executing %v: %v, continuing. Please check the data in _vt.local_metadata and take corrective action", sql, err)
 	}
 	if _, err := conn.ExecuteFetch(sqlCreateShardMetadataTable, 0, false); err != nil {
 		return err
@@ -112,8 +113,9 @@ func PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string,
 			}
 		}
 	}
-	if _, err := conn.ExecuteFetch(fmt.Sprintf(sqlUpdateShardMetadataTable, dbName), 0, false); err != nil {
-		return err
+	sql = fmt.Sprintf(sqlUpdateShardMetadataTable, dbName)
+	if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
+		log.Errorf("unexpected error executing %v: %v, continuing. Please check the data in _vt.shard_metadata and take corrective action", sql, err)
 	}
 
 	// Populate local_metadata from the passed list of values.
