@@ -206,6 +206,11 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 	// here anymore. The lock was only to ensure that the global shard record
 	// didn't get modified between the time when we read it and the time when we
 	// write it back. Now we use an update loop pattern to do that instead.
+
+	// We also used to do this in parallel with RefreshState on the old master
+	// we don't do that any more. we want to update the shard record first
+	// and only then attempt to refresh the old master because it is possible
+	// that the old master is unreachable
 	event.DispatchUpdate(ev, "updating global shard record")
 	log.Infof("finalizeTabletExternallyReparented: updating global shard record if needed")
 	_, err = agent.TopoServer.UpdateShardFields(ctx, masterTablet.Keyspace, masterTablet.Shard, func(currentSi *topo.ShardInfo) error {
