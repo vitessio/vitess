@@ -41,7 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-// Scanners encapsulates a source and a destination. We create one of these per paralell runner.
+// Scanners encapsulates a source and a destination. We create one of these per parallel runner.
 type Scanners struct {
 	// this is how we get data from the source shard
 	sourceScanner TableScanner

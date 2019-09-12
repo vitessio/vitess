@@ -42,8 +42,8 @@ const (
 	backupInnodbLogGroupHomeDir = "InnoDBLog"
 	backupData                  = "Data"
 
-	// the manifest file name
-	backupManifest = "MANIFEST"
+	// backupManifestFileName is the MANIFEST file name within a backup.
+	backupManifestFileName = "MANIFEST"
 	// RestoreState is the name of the sentinel file used to detect whether a previous restore
 	// terminated abnormally
 	RestoreState = "restore_in_progress"
@@ -286,11 +286,16 @@ func Restore(
 		return mysql.Position{}, ErrNoBackup
 	}
 
-	be, err := GetBackupEngine()
+	bh, err := FindBackupToRestore(ctx, cnf, mysqld, logger, dir, bhs)
 	if err != nil {
-		return mysql.Position{}, vterrors.Wrap(err, "Failed to find backup engine")
+		return rval, err
 	}
-	if rval, err = be.ExecuteRestore(ctx, cnf, mysqld, logger, dir, bhs, restoreConcurrency, hookExtraEnv); err != nil {
+
+	re, err := GetRestoreEngine(ctx, bh)
+	if err != nil {
+		return mysql.Position{}, vterrors.Wrap(err, "Failed to find restore engine")
+	}
+	if rval, err = re.ExecuteRestore(ctx, cnf, mysqld, logger, dir, bh, restoreConcurrency, hookExtraEnv); err != nil {
 		return rval, err
 	}
 

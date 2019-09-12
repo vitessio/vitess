@@ -964,7 +964,7 @@ type Field struct {
 	ColumnLength uint32 `protobuf:"varint,7,opt,name=column_length,json=columnLength,proto3" json:"column_length,omitempty"`
 	// charset is actually a uint16. Only the lower 16 bits are used.
 	Charset uint32 `protobuf:"varint,8,opt,name=charset,proto3" json:"charset,omitempty"`
-	// decimals is actualy a uint8. Only the lower 8 bits are used.
+	// decimals is actually a uint8. Only the lower 8 bits are used.
 	Decimals uint32 `protobuf:"varint,9,opt,name=decimals,proto3" json:"decimals,omitempty"`
 	// flags is actually a uint16. Only the lower 16 bits are used.
 	Flags                uint32   `protobuf:"varint,10,opt,name=flags,proto3" json:"flags,omitempty"`

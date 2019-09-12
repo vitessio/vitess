@@ -45,7 +45,7 @@ func (c ConnWithTimeouts) Read(b []byte) (int, error) {
 	return c.Conn.Read(b)
 }
 
-// Write sets a write deadline and delagates to conn.Write
+// Write sets a write deadline and delegates to conn.Write
 func (c ConnWithTimeouts) Write(b []byte) (int, error) {
 	if c.writeTimeout == 0 {
 		return c.Conn.Write(b)

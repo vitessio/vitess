@@ -19,6 +19,9 @@ package engine
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -179,6 +182,17 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 		out.Rows = append(out.Rows, current)
 		current, curDistinct = oa.convertRow(row)
 	}
+
+	if len(result.Rows) == 0 && len(oa.Keys) == 0 {
+		// When doing aggregation without grouping keys, we need to produce a single row containing zero-value for the
+		// different aggregation functions
+		row, err := oa.createEmptyRow()
+		if err != nil {
+			return nil, err
+		}
+		out.Rows = append(out.Rows, row)
+	}
+
 	if current != nil {
 		out.Rows = append(out.Rows, current)
 	}
@@ -327,15 +341,15 @@ func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes
 		var err error
 		switch aggr.Opcode {
 		case AggregateCount, AggregateSum:
-			result[aggr.Col], err = sqltypes.NullsafeAdd(row1[aggr.Col], row2[aggr.Col], fields[aggr.Col].Type)
+			result[aggr.Col] = sqltypes.NullsafeAdd(row1[aggr.Col], row2[aggr.Col], fields[aggr.Col].Type)
 		case AggregateMin:
 			result[aggr.Col], err = sqltypes.Min(row1[aggr.Col], row2[aggr.Col])
 		case AggregateMax:
 			result[aggr.Col], err = sqltypes.Max(row1[aggr.Col], row2[aggr.Col])
 		case AggregateCountDistinct:
-			result[aggr.Col], err = sqltypes.NullsafeAdd(row1[aggr.Col], countOne, opcodeType[aggr.Opcode])
+			result[aggr.Col] = sqltypes.NullsafeAdd(row1[aggr.Col], countOne, opcodeType[aggr.Opcode])
 		case AggregateSumDistinct:
-			result[aggr.Col], err = sqltypes.NullsafeAdd(row1[aggr.Col], row2[aggr.Col], opcodeType[aggr.Opcode])
+			result[aggr.Col] = sqltypes.NullsafeAdd(row1[aggr.Col], row2[aggr.Col], opcodeType[aggr.Opcode])
 		default:
 			return nil, sqltypes.NULL, fmt.Errorf("BUG: Unexpected opcode: %v", aggr.Opcode)
 		}
@@ -344,4 +358,27 @@ func (oa *OrderedAggregate) merge(fields []*querypb.Field, row1, row2 []sqltypes
 		}
 	}
 	return result, curDistinct, nil
+}
+
+// creates the empty row for the case when we are missing grouping keys and have empty input table
+func (oa *OrderedAggregate) createEmptyRow() ([]sqltypes.Value, error) {
+	out := make([]sqltypes.Value, len(oa.Aggregates))
+	for i, aggr := range oa.Aggregates {
+		value, err := createEmptyValueFor(aggr.Opcode)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = value
+	}
+	return out, nil
+}
+
+func createEmptyValueFor(opcode AggregateOpcode) (sqltypes.Value, error) {
+	switch opcode {
+	case AggregateCountDistinct:
+		return countZero, nil
+	case AggregateSumDistinct:
+		return sqltypes.NULL, nil
+	}
+	return sqltypes.NULL, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unknown aggregation %v", opcode)
 }

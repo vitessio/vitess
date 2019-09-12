@@ -108,7 +108,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), CreateCopyState); err != nil {
+		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), createCopyState); err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
 		}
@@ -368,6 +368,16 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 	return qr, err
 }
 
+func expectDeleteQueries(t *testing.T) {
+	t.Helper()
+	expectDBClientQueries(t, []string{
+		"begin",
+		"/delete from _vt.vreplication",
+		"/delete from _vt.copy_state",
+		"commit",
+	})
+}
+
 func expectDBClientQueries(t *testing.T, queries []string) {
 	t.Helper()
 	failed := false
@@ -454,8 +464,12 @@ func expectNontxQueries(t *testing.T, queries []string) {
 		}
 	}
 }
-
 func expectData(t *testing.T, table string, values [][]string) {
+	t.Helper()
+	customExpectData(t, table, values, env.Mysqld.FetchSuperQuery)
+}
+
+func customExpectData(t *testing.T, table string, values [][]string, exec func(ctx context.Context, query string) (*sqltypes.Result, error)) {
 	t.Helper()
 
 	var query string
@@ -464,7 +478,7 @@ func expectData(t *testing.T, table string, values [][]string) {
 	} else {
 		query = fmt.Sprintf("select * from %s", table)
 	}
-	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), query)
+	qr, err := exec(context.Background(), query)
 	if err != nil {
 		t.Error(err)
 		return

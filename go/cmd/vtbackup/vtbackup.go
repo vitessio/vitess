@@ -87,12 +87,17 @@ import (
 
 const (
 	backupTimestampFormat = "2006-01-02.150405"
+	manifestFileName      = "MANIFEST"
 )
 
 var (
 	// vtbackup-specific flags
-	timeout            = flag.Duration("timeout", 2*time.Hour, "Overall timeout for this whole vtbackup run, including restoring the previous backup, waiting for replication, and uploading files")
-	replicationTimeout = flag.Duration("replication_timeout", 1*time.Hour, "The timeout for the step of waiting for replication to catch up. If progress is made before this timeout is reached, the backup will be taken anyway to save partial progress, but vtbackup will return a non-zero exit code to indicate it should be retried since not all expected data was backed up")
+	// We used to have timeouts, but these did more harm than good. If a backup
+	// has been going for a while, giving up and starting over from scratch is
+	// pretty much never going to help. We should just keep trying and have a
+	// system that alerts a human if it's taking longer than expected.
+	_ = flag.Duration("timeout", 2*time.Hour, "DEPRECATED AND UNUSED")
+	_ = flag.Duration("replication_timeout", 1*time.Hour, "DEPRECATED AND UNUSED")
 
 	minBackupInterval = flag.Duration("min_backup_interval", 0, "Only take a new backup if it's been at least this long since the most recent backup.")
 	minRetentionTime  = flag.Duration("min_retention_time", 0, "Keep each old backup for at least this long before removing it. Set to 0 to disable pruning of old backups.")
@@ -128,8 +133,7 @@ func main() {
 		exit.Return(1)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
-	defer cancel()
+	ctx := context.Background()
 
 	// Open connection backup storage.
 	backupDir := fmt.Sprintf("%v/%v", *initKeyspace, *initShard)
@@ -288,13 +292,6 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	for {
 		time.Sleep(time.Second)
 
-		// Check if the replication context is still good.
-		if time.Since(waitStartTime) > *replicationTimeout {
-			// If we time out on this step, we still might take the backup anyway.
-			log.Errorf("Timed out waiting for replication to catch up to %v.", masterPos)
-			break
-		}
-
 		status, statusErr := mysqld.SlaveStatus()
 		if statusErr != nil {
 			log.Warningf("Error getting replication status: %v", statusErr)
@@ -348,7 +345,7 @@ func resetReplication(ctx context.Context, pos mysql.Position, mysqld mysqlctl.M
 		return vterrors.Wrap(err, "failed to reset slave")
 	}
 
-	// Check if we have a postion to resume from, if not reset to the beginning of time
+	// Check if we have a position to resume from, if not reset to the beginning of time
 	if !pos.IsZero() {
 		// Set the position at which to resume from the master.
 		if err := mysqld.SetSlavePosition(ctx, pos); err != nil {
@@ -521,13 +518,21 @@ func shouldBackup(ctx context.Context, topoServer *topo.Server, backupStorage ba
 	if len(backups) == 0 && !*allowFirstBackup {
 		return false, fmt.Errorf("no existing backups to restore from; backup is not possible since -initial_backup flag was not enabled")
 	}
+	// Look for the most recent, complete backup.
+	lastBackup := lastCompleteBackup(ctx, backups)
+	if lastBackup == nil {
+		if *allowFirstBackup {
+			// There's no complete backup, but we were told to take one from scratch anyway.
+			return true, nil
+		}
+		return false, fmt.Errorf("no complete backups to restore from; backup is not possible since -initial_backup flag was not enabled")
+	}
 
-	// Has it been long enough since the last backup to need a new one?
+	// Has it been long enough since the last complete backup to need a new one?
 	if *minBackupInterval == 0 {
 		// No minimum interval is set, so always backup.
 		return true, nil
 	}
-	lastBackup := backups[len(backups)-1]
 	lastBackupTime, err := parseBackupTime(lastBackup.Name())
 	if err != nil {
 		return false, fmt.Errorf("can't check last backup time: %v", err)
@@ -540,4 +545,34 @@ func shouldBackup(ctx context.Context, topoServer *topo.Server, backupStorage ba
 	// It has been long enough.
 	log.Infof("The last backup was taken at %v, which is older than the min_backup_interval of %v.", lastBackupTime, *minBackupInterval)
 	return true, nil
+}
+
+func lastCompleteBackup(ctx context.Context, backups []backupstorage.BackupHandle) backupstorage.BackupHandle {
+	if len(backups) == 0 {
+		return nil
+	}
+
+	// Backups are sorted in ascending order by start time. Start at the end.
+	for i := len(backups) - 1; i >= 0; i-- {
+		// Check if this backup is complete by looking for the MANIFEST file,
+		// which is written at the end after all files are uploaded.
+		backup := backups[i]
+		if err := checkBackupComplete(ctx, backup); err != nil {
+			log.Warningf("Ignoring backup %v because it's incomplete: %v", backup.Name(), err)
+			continue
+		}
+		return backup
+	}
+
+	return nil
+}
+
+func checkBackupComplete(ctx context.Context, backup backupstorage.BackupHandle) error {
+	manifest, err := mysqlctl.GetBackupManifest(ctx, backup)
+	if err != nil {
+		return fmt.Errorf("can't get backup MANIFEST: %v", err)
+	}
+
+	log.Infof("Found complete backup %v taken at position %v", backup.Name(), manifest.Position.String())
+	return nil
 }
