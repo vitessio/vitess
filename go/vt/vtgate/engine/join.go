@@ -19,6 +19,8 @@ package engine
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/trace"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -52,6 +54,9 @@ type Join struct {
 
 // Execute performs a non-streaming exec.
 func (jn *Join) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	span, ctx := trace.NewSpan(ctx, "Join.Execute")
+	defer span.Finish()
+
 	joinVars := make(map[string]*querypb.BindVariable)
 	lresult, err := jn.Left.Execute(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
@@ -99,6 +104,9 @@ func (jn *Join) Execute(ctx context.Context, vcursor VCursor, bindVars map[strin
 
 // StreamExecute performs a streaming exec.
 func (jn *Join) StreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	span, ctx := trace.NewSpan(ctx, "Join.StreamExecute")
+	defer span.Finish()
+
 	joinVars := make(map[string]*querypb.BindVariable)
 	err := jn.Left.StreamExecute(ctx, vcursor, bindVars, wantfields, func(lresult *sqltypes.Result) error {
 		for _, lrow := range lresult.Rows {

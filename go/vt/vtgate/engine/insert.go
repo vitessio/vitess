@@ -23,6 +23,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/trace"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/jsonutil"
@@ -212,6 +214,9 @@ func (ins *Insert) GetTableName() string {
 
 // Execute performs a non-streaming exec.
 func (ins *Insert) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	span, _ := trace.NewSpan(ctx, "Insert.Execute")
+	defer span.Finish()
+
 	if ins.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(ins.QueryTimeout) * time.Millisecond)
 		defer cancel()

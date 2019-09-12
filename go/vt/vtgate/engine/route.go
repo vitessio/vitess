@@ -22,6 +22,8 @@ import (
 	"sort"
 	"time"
 
+	"vitess.io/vitess/go/trace"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/jsonutil"
@@ -225,6 +227,9 @@ func (route *Route) SetTruncateColumnCount(count int) {
 
 // Execute performs a non-streaming exec.
 func (route *Route) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	span, ctx := trace.NewSpan(ctx, "Route.Execute")
+	defer span.Finish()
+
 	if route.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(route.QueryTimeout) * time.Millisecond)
 		defer cancel()
@@ -292,6 +297,9 @@ func (route *Route) execute(ctx context.Context, vcursor VCursor, bindVars map[s
 
 // StreamExecute performs a streaming exec.
 func (route *Route) StreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	span, ctx := trace.NewSpan(ctx, "Route.StreamExecute")
+	defer span.Finish()
+
 	var rss []*srvtopo.ResolvedShard
 	var bvs []map[string]*querypb.BindVariable
 	var err error

@@ -19,6 +19,8 @@ package engine
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/trace"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -143,6 +145,9 @@ func (oa *OrderedAggregate) SetTruncateColumnCount(count int) {
 
 // Execute is a Primitive function.
 func (oa *OrderedAggregate) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	span, ctx := trace.NewSpan(ctx, "OrderedAggregate.Execute")
+	defer span.Finish()
+
 	qr, err := oa.execute(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err
@@ -204,6 +209,9 @@ func (oa *OrderedAggregate) execute(ctx context.Context, vcursor VCursor, bindVa
 
 // StreamExecute is a Primitive function.
 func (oa *OrderedAggregate) StreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	span, ctx := trace.NewSpan(ctx, "OrderedAggregate.StreamExecute")
+	defer span.Finish()
+
 	var current []sqltypes.Value
 	var curDistinct sqltypes.Value
 	var fields []*querypb.Field

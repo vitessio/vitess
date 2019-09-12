@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"io"
 
+	"vitess.io/vitess/go/trace"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -69,8 +71,11 @@ func (l *Limit) GetTableName() string {
 	return l.Input.GetTableName()
 }
 
-// Execute satisfies the Primtive interface.
+// Execute satisfies the Primitive interface.
 func (l *Limit) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	span, ctx := trace.NewSpan(ctx, "Limit.Execute")
+	defer span.Finish()
+
 	count, err := l.fetchCount(bindVars)
 	if err != nil {
 		return nil, err
@@ -108,6 +113,9 @@ func (l *Limit) Execute(ctx context.Context, vcursor VCursor, bindVars map[strin
 
 // StreamExecute satisfies the Primtive interface.
 func (l *Limit) StreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	span, ctx := trace.NewSpan(ctx, "Limit.StreamExecute")
+	defer span.Finish()
+
 	count, err := l.fetchCount(bindVars)
 	if err != nil {
 		return err

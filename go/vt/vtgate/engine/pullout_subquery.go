@@ -19,6 +19,8 @@ package engine
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/trace"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -57,6 +59,9 @@ func (ps *PulloutSubquery) GetTableName() string {
 
 // Execute satisfies the Primitive interface.
 func (ps *PulloutSubquery) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	span, ctx := trace.NewSpan(ctx, "PulloutSubquery.Execute")
+	defer span.Finish()
+
 	combinedVars, err := ps.execSubquery(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
@@ -66,6 +71,9 @@ func (ps *PulloutSubquery) Execute(ctx context.Context, vcursor VCursor, bindVar
 
 // StreamExecute performs a streaming exec.
 func (ps *PulloutSubquery) StreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	span, ctx := trace.NewSpan(ctx, "PulloutSubquery.StreamExecute")
+	defer span.Finish()
+
 	combinedVars, err := ps.execSubquery(ctx, vcursor, bindVars)
 	if err != nil {
 		return err

@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/trace"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/jsonutil"
@@ -162,6 +164,8 @@ func (del *Delete) GetTableName() string {
 
 // Execute performs a non-streaming exec.
 func (del *Delete) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	span, _ := trace.NewSpan(ctx, "Delete.Execute")
+	defer span.Finish()
 	if del.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(del.QueryTimeout) * time.Millisecond)
 		defer cancel()

@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/trace"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/jsonutil"
@@ -166,6 +168,9 @@ func (upd *Update) GetTableName() string {
 
 // Execute performs a non-streaming exec.
 func (upd *Update) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	span, _ := trace.NewSpan(ctx, "Update.Execute")
+	defer span.Finish()
+
 	if upd.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(upd.QueryTimeout) * time.Millisecond)
 		defer cancel()
