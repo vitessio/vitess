@@ -134,7 +134,7 @@ class Vtbackup(object):
           "-init_db_sql_file",init_db
       ])
 
-      # Pass through inital_backup flag to vtbackup                  
+      # Pass through initial_backup flag to vtbackup                  
       if initial_backup:
         args.extend(["-initial_backup"])
       

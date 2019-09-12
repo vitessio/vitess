@@ -32,6 +32,7 @@ func TestPreview(t *testing.T) {
 		{"select ...", StmtSelect},
 		{"    select ...", StmtSelect},
 		{"(select ...", StmtSelect},
+		{"( select ...", StmtSelect},
 		{"insert ...", StmtInsert},
 		{"replace ....", StmtReplace},
 		{"   update ...", StmtUpdate},

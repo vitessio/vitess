@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -295,4 +296,11 @@ func ParseShardingSpec(spec string) ([]*topodatapb.KeyRange, error) {
 		old = p
 	}
 	return ranges, nil
+}
+
+var krRegexp = regexp.MustCompile(`^[0-9a-fA-F]*-[0-9a-fA-F]*$`)
+
+// IsKeyRange returns true if the string represents a keyrange.
+func IsKeyRange(kr string) bool {
+	return krRegexp.MatchString(kr)
 }

@@ -46,30 +46,26 @@ ENV VTDATAROOT $VTROOT/vtdataroot
 ENV VTPORTSTART 15000
 ENV PYTHONPATH $VTROOT/dist/grpc/usr/local/lib/python2.7/site-packages:$VTROOT/dist/py-mock-1.0.1/lib/python2.7/site-packages:$VTROOT/py-vtdb:$VTROOT/dist/selenium/lib/python2.7/site-packages
 ENV GOBIN $VTROOT/bin
-ENV GOPATH $VTROOT
 ENV PATH $VTROOT/bin:$VTROOT/dist/maven/bin:$VTROOT/dist/chromedriver:$PATH
-ENV VT_MYSQL_ROOT /usr
 ENV PKG_CONFIG_PATH $VTROOT/lib
 ENV USER vitess
+ENV GO111MODULE on
 
 # Copy files needed for bootstrap
-COPY bootstrap.sh dev.env build.env /vt/src/vitess.io/vitess/
+COPY bootstrap.sh dev.env build.env go.mod go.sum /vt/src/vitess.io/vitess/
 COPY config /vt/src/vitess.io/vitess/config
 COPY third_party /vt/src/vitess.io/vitess/third_party
 COPY tools /vt/src/vitess.io/vitess/tools
 COPY travis /vt/src/vitess.io/vitess/travis
-COPY vendor/vendor.json /vt/src/vitess.io/vitess/vendor/
-
-# Download vendored Go dependencies
-RUN cd /vt/src/vitess.io/vitess && \
-    go get -u github.com/kardianos/govendor && \
-    govendor sync && \
-    rm -rf /vt/.cache
 
 # Create vitess user
 RUN groupadd -r vitess && useradd -r -g vitess vitess && \
     mkdir -p /vt/vtdataroot /home/vitess && \
     chown -R vitess:vitess /vt /home/vitess
+
+# Download vendored Go dependencies
+RUN cd /vt/src/vitess.io/vitess && \
+ su vitess -c "/usr/local/go/bin/go mod download"
 
 # Create mount point for actual data (e.g. MySQL data dir)
 VOLUME /vt/vtdataroot

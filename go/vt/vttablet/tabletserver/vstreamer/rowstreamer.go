@@ -147,20 +147,20 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 		if len(rs.lastpk) != len(rs.pkColumns) {
 			return "", fmt.Errorf("primary key values don't match length: %v vs %v", rs.lastpk, rs.pkColumns)
 		}
-		buf.WriteString(" where (")
+		buf.WriteString(" where ")
 		prefix := ""
-		for _, pk := range rs.pkColumns {
-			buf.Myprintf("%s%v", prefix, rs.plan.Table.Columns[pk].Name)
-			prefix = ","
+		for lastcol := len(rs.pkColumns) - 1; lastcol >= 0; lastcol-- {
+			buf.Myprintf("%s(", prefix)
+			prefix = " or "
+			for i, pk := range rs.pkColumns[:lastcol] {
+				buf.Myprintf("%v = ", rs.plan.Table.Columns[pk].Name)
+				rs.lastpk[i].EncodeSQL(buf)
+				buf.Myprintf(" and ")
+			}
+			buf.Myprintf("%v > ", rs.plan.Table.Columns[rs.pkColumns[lastcol]].Name)
+			rs.lastpk[lastcol].EncodeSQL(buf)
+			buf.Myprintf(")")
 		}
-		buf.WriteString(") > (")
-		prefix = ""
-		for _, val := range rs.lastpk {
-			buf.WriteString(prefix)
-			prefix = ","
-			val.EncodeSQL(buf)
-		}
-		buf.WriteString(")")
 	}
 	buf.Myprintf(" order by ", sqlparser.NewTableIdent(rs.plan.Table.Name))
 	prefix = ""
@@ -271,10 +271,6 @@ func (rs *rowStreamer) startStreaming(conn *mysql.Conn) (string, error) {
 	}()
 
 	log.Infof("Locking table %s for copying", rs.plan.Table.Name)
-	// mysql recommends this before locking tables.
-	if _, err := lockConn.ExecuteFetch("set autocommit=0", 0, false); err != nil {
-		return "", err
-	}
 	if _, err := lockConn.ExecuteFetch(fmt.Sprintf("lock tables %s read", sqlparser.String(sqlparser.NewTableIdent(rs.plan.Table.Name))), 0, false); err != nil {
 		return "", err
 	}

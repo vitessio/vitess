@@ -22,6 +22,9 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
@@ -90,6 +93,51 @@ func TestMySQLProtocolStreamExecute(t *testing.T) {
 	if !proto.Equal(sbc.Options[0], options) {
 		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], options)
 	}
+}
+
+func TestMySQLProtocolExecuteUseStatement(t *testing.T) {
+	createSandbox(KsTestUnsharded)
+	hcVTGateTest.Reset()
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_MASTER, true, 1, nil)
+
+	c, err := mysqlConnect(&mysql.ConnParams{DbName: "@master"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+
+	qr, err := c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
+	require.NoError(t, err)
+	require.Equal(t, sandboxconn.SingleRowResult, qr)
+
+	qr, err = c.ExecuteFetch("show vitess_target", 1, false)
+	require.NoError(t, err)
+	assert.Equal(t, "VARCHAR(\"@master\")", qr.Rows[0][0].String())
+
+	_, err = c.ExecuteFetch("use TestUnsharded", 0, false)
+	require.NoError(t, err)
+
+	qr, err = c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
+	require.NoError(t, err)
+	assert.Equal(t, sandboxconn.SingleRowResult, qr)
+
+	// No such keyspace this will fail
+	_, err = c.ExecuteFetch("use InvalidKeyspace", 0, false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid keyspace provided: InvalidKeyspace")
+
+	// That doesn't reset the vitess_target
+	qr, err = c.ExecuteFetch("show vitess_target", 1, false)
+	require.NoError(t, err)
+	assert.Equal(t, "VARCHAR(\"TestUnsharded\")", qr.Rows[0][0].String())
+
+	_, err = c.ExecuteFetch("use @replica", 0, false)
+	require.NoError(t, err)
+
+	// No replica tablets, this should also fail
+	qr, err = c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no valid tablet")
 }
 
 func TestMysqlProtocolInvalidDB(t *testing.T) {
