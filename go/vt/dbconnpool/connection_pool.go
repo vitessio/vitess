@@ -84,6 +84,7 @@ func NewConnectionPool(name string, capacity int, idleTimeout time.Duration, dns
 	stats.NewCounterDurationFunc(name+"WaitTime", "Connection pool wait time", cp.WaitTime)
 	stats.NewGaugeDurationFunc(name+"IdleTimeout", "Connection pool idle timeout", cp.IdleTimeout)
 	stats.NewGaugeFunc(name+"IdleClosed", "Connection pool idle closed", cp.IdleClosed)
+	stats.NewCounterFunc(name+"Exhausted", "Number of times pool had zero available slots", cp.Exhausted)
 	return cp
 }
 
@@ -354,4 +355,13 @@ func (cp *ConnectionPool) IdleClosed() int64 {
 		return 0
 	}
 	return p.IdleClosed()
+}
+
+// Exhausted returns the number of times available went to zero for the pool.
+func (cp *ConnectionPool) Exhausted() int64 {
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.Exhausted()
 }
