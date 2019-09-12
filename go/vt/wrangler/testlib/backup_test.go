@@ -94,10 +94,26 @@ func TestBackupRestore(t *testing.T) {
 		t.Fatalf("failed to write file db.opt: %v", err)
 	}
 
-	// create a master tablet, not started, just for shard health
+	// create a master tablet, set its master position
 	master := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, db)
+	master.FakeMysqlDaemon.ReadOnly = false
+	master.FakeMysqlDaemon.Replicating = false
+	master.FakeMysqlDaemon.CurrentMasterPosition = mysql.Position{
+		GTIDSet: mysql.MariadbGTIDSet{
+			mysql.MariadbGTID{
+				Domain:   2,
+				Server:   123,
+				Sequence: 457,
+			},
+		},
+	}
+
+	// start master so that slave can fetch master position from it
+	master.StartActionLoop(t, wr)
+	defer master.StopActionLoop(t)
 
 	// create a single tablet, set it up so we can do backups
+	// set its position same as that of master so that backup doesn't wait for catchup
 	sourceTablet := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, db)
 	sourceTablet.FakeMysqlDaemon.ReadOnly = true
 	sourceTablet.FakeMysqlDaemon.Replicating = true

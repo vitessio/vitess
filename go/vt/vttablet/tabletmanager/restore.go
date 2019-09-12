@@ -21,7 +21,9 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/log"
@@ -83,11 +85,23 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	tablet := agent.Tablet()
 	dir := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
 
+	params := mysqlctl.RestoreParams{
+		Cnf:                 agent.Cnf,
+		Mysqld:              agent.MysqlDaemon,
+		Logger:              logger,
+		Concurrency:         *restoreConcurrency,
+		HookExtraEnv:        agent.hookExtraEnv(),
+		LocalMetadata:       localMetadata,
+		DeleteBeforeRestore: deleteBeforeRestore,
+		DbName:              topoproto.TabletDbName(tablet),
+		Dir:                 dir,
+	}
+
 	// Loop until a backup exists, unless we were told to give up immediately.
 	var pos mysql.Position
 	var err error
 	for {
-		pos, err = mysqlctl.Restore(ctx, agent.Cnf, agent.MysqlDaemon, dir, *restoreConcurrency, agent.hookExtraEnv(), localMetadata, logger, deleteBeforeRestore, topoproto.TabletDbName(tablet))
+		pos, err = mysqlctl.Restore(ctx, params)
 		if waitForBackupInterval == 0 {
 			break
 		}
@@ -205,6 +219,39 @@ func (agent *ActionAgent) startReplication(ctx context.Context, pos mysql.Positi
 	if err := agent.MysqlDaemon.SetMaster(ctx, topoproto.MysqlHostname(ti.Tablet), int(topoproto.MysqlPort(ti.Tablet)), false /* slaveStopBefore */, true /* slaveStartAfter */); err != nil {
 		return vterrors.Wrap(err, "MysqlDaemon.SetMaster failed")
 	}
+
+	// wait for reliable seconds behind master
+	// we have pos where we want to resume from
+	// if MasterPosition is the same, that means no writes
+	// have happened to master, so we are up-to-date
+	// otherwise, wait for replica's Position to change from
+	// the initial pos before proceeding
+	tmc := tmclient.NewTabletManagerClient()
+	defer tmc.Close()
+	remoteCtx, remoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer remoteCancel()
+	posStr, err := tmc.MasterPosition(remoteCtx, ti.Tablet)
+	if err != nil {
+		return vterrors.Wrap(err, "can't get master replication position")
+	}
+	masterPos, err := mysql.DecodePosition(posStr)
+	if err != nil {
+		return vterrors.Wrapf(err, "can't decode master replication position: %q", posStr)
+	}
+
+	if !pos.Equal(masterPos) {
+		for {
+			status, err := agent.MysqlDaemon.SlaveStatus()
+			if err != nil {
+				return vterrors.Wrap(err, "can't get slave status")
+			}
+			newPos := status.Position
+			if !newPos.Equal(pos) {
+				break
+			}
+		}
+	}
+
 	return nil
 }
 
