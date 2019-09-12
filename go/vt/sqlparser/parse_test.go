@@ -972,24 +972,41 @@ var (
 	}, {
 		input: "alter vschema create vindex hash_vdx using hash",
 	}, {
+		input: "alter vschema create vindex keyspace.hash_vdx using hash",
+	}, {
 		input: "alter vschema create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
 	}, {
 		input: "alter vschema create vindex xyz_vdx using xyz with param1=hello, param2='world', param3=123",
 	}, {
 		input: "alter vschema drop vindex hash_vdx",
 	}, {
+		input: "alter vschema drop vindex ks.hash_vdx",
+	}, {
 		input: "alter vschema add table a",
+	}, {
+		input: "alter vschema add table ks.a",
 	}, {
 		input: "alter vschema add sequence a_seq",
 	}, {
+		input: "alter vschema add sequence ks.a_seq",
+	}, {
 		input: "alter vschema on a add auto_increment id using a_seq",
+	}, {
+		input: "alter vschema on ks.a add auto_increment id using a_seq",
 	}, {
 		input: "alter vschema drop table a",
 	}, {
+		input: "alter vschema drop table ks.a",
+	}, {
 		input: "alter vschema on a add vindex hash (id)",
+	}, {
+		input: "alter vschema on ks.a add vindex hash (id)",
 	}, {
 		input:  "alter vschema on a add vindex `hash` (`id`)",
 		output: "alter vschema on a add vindex hash (id)",
+	}, {
+		input:  "alter vschema on `ks`.a add vindex `hash` (`id`)",
+		output: "alter vschema on ks.a add vindex hash (id)",
 	}, {
 		input:  "alter vschema on a add vindex hash (id) using `hash`",
 		output: "alter vschema on a add vindex hash (id) using hash",
@@ -1007,6 +1024,8 @@ var (
 		output: "alter vschema on user2 add vindex name_lastname_lookup_vdx (name, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
 	}, {
 		input: "alter vschema on a drop vindex hash",
+	}, {
+		input: "alter vschema on ks.a drop vindex hash",
 	}, {
 		input:  "alter vschema on a drop vindex `hash`",
 		output: "alter vschema on a drop vindex hash",

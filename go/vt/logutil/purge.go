@@ -70,7 +70,13 @@ func purgeLogsOnce(now time.Time, dir, program string, ctimeDelta time.Duration,
 		return
 	}
 	for _, file := range files {
-		if current[file] {
+		statInfo, err := os.Lstat(file)
+		if err != nil {
+			// Failed to stat file
+			continue
+		}
+		if current[file] || !statInfo.Mode().IsRegular() {
+			// Do not purge current file or any non-regular files (symlinks etc)
 			continue
 		}
 		purgeFile := false

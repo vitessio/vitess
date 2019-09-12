@@ -286,7 +286,7 @@ class TestBackup(unittest.TestCase):
   def test_tablet_initial_backup(self):
     self._test_initial_backup()
 
-    # Restore the Shard from the inital backup
+    # Restore the Shard from the initial backup
     self._init_tablets(init=False,start=False)
 
     # Restore the Tablets

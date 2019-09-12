@@ -327,7 +327,7 @@ message Field {
   // charset is actually a uint16. Only the lower 16 bits are used.
   uint32 charset = 8;
 
-  // decimals is actualy a uint8. Only the lower 8 bits are used.
+  // decimals is actually a uint8. Only the lower 8 bits are used.
   uint32 decimals = 9;
 
   // flags is actually a uint16. Only the lower 16 bits are used.
