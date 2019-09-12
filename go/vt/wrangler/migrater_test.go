@@ -902,34 +902,6 @@ func TestMigrateNoTableWildcards(t *testing.T) {
 	}
 }
 
-func TestShardMigrateTargetMatchesSource(t *testing.T) {
-	ctx := context.Background()
-	tme := newTestShardMigrater(ctx, t)
-	defer tme.stopTablets(t)
-
-	bls := &binlogdatapb.BinlogSource{
-		Keyspace: "ks",
-		Shard:    "-80",
-		Filter: &binlogdatapb.Filter{
-			Rules: []*binlogdatapb.Rule{{
-				Match:  "/.*",
-				Filter: "-80",
-			}},
-		},
-	}
-	tme.dbDest1Client.addQuery(vreplQueryks, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|source",
-		"int64|varchar"),
-		fmt.Sprintf("1|%v", bls),
-	), nil)
-
-	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
-	want := "target shard matches a source shard"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("MigrateReads: %v, must contain %v", err, want)
-	}
-}
-
 func checkRouting(t *testing.T, wr *Wrangler, want map[string][]string) {
 	t.Helper()
 	ctx := context.Background()

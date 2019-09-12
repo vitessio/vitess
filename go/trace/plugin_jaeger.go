@@ -82,20 +82,23 @@ func newJagerTracerFromEnv(serviceName string) (tracingService, io.Closer, error
 
 	opentracing.SetGlobalTracer(tracer)
 
-	f1 := func(s string) (context opentracing.SpanContext, e error) {
-		// I don't understand why I have to do this and not just use `jaeger.ContextFromString` directly
-		return jaeger.ContextFromString(s)
-	}
-
-	f2 := func(in Span) string {
-		otSpan := in.(*openTracingSpan)
-		jaegerSpanContext := otSpan.otSpan.Context().(*jaeger.SpanContext)
-		return jaegerSpanContext.String()
-	}
-
-	return openTracingService{Tracer: tracer, fromString: f1, toString: f2}, closer, nil
+	return openTracingService{Tracer: &jaegerTracer{actual: tracer}}, closer, nil
 }
 
 func init() {
 	tracingBackendFactories["opentracing-jaeger"] = newJagerTracerFromEnv
+}
+
+var _ tracer = (*jaegerTracer)(nil)
+
+type jaegerTracer struct {
+	actual opentracing.Tracer
+}
+
+func (*jaegerTracer) FromString(s string) (opentracing.SpanContext, error) {
+	return jaeger.ContextFromString(s)
+}
+
+func (jt *jaegerTracer) GetOpenTracingTracer() opentracing.Tracer {
+	return jt.actual
 }
