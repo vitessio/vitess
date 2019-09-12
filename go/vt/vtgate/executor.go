@@ -301,7 +301,7 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 		return nil, err
 	}
 
-	qr, err := plan.Instructions.Execute(vcursor, bindVars, true)
+	qr, err := plan.Instructions.Execute(ctx, vcursor, bindVars, true)
 
 	logStats.ExecuteTime = time.Since(execStart)
 
@@ -1163,7 +1163,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	// dictated by stream_buffer_size.
 	result := &sqltypes.Result{}
 	byteCount := 0
-	err = plan.Instructions.StreamExecute(vcursor, bindVars, true, func(qr *sqltypes.Result) error {
+	err = plan.Instructions.StreamExecute(ctx, vcursor, bindVars, true, func(qr *sqltypes.Result) error {
 		// If the row has field info, send it separately.
 		// TODO(sougou): this behavior is for handling tests because
 		// the framework currently sends all results as one packet.
@@ -1567,7 +1567,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 		return nil, err
 	}
 
-	qr, err := plan.Instructions.GetFields(vcursor, bindVars)
+	qr, err := plan.Instructions.GetFields(ctx, vcursor, bindVars)
 	logStats.ExecuteTime = time.Since(execStart)
 	var errCount uint64
 	if err != nil {

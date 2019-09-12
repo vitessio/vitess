@@ -20,6 +20,8 @@ import (
 	"errors"
 	"testing"
 
+	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -38,7 +40,7 @@ func TestUpdateUnsharded(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"0"}}
-	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,11 +51,11 @@ func TestUpdateUnsharded(t *testing.T) {
 
 	// Failure cases
 	vc = &loggingVCursor{shardErr: errors.New("shard_error")}
-	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "execUpdateUnsharded: shard_error")
 
 	vc = &loggingVCursor{}
-	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "Keyspace does not have exactly one shard: []")
 }
 
@@ -71,7 +73,7 @@ func TestUpdateEqual(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
-	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +84,7 @@ func TestUpdateEqual(t *testing.T) {
 
 	// Failure case
 	upd.Values = []sqltypes.PlanValue{{Key: "aa"}}
-	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "execUpdateEqual: missing bind var aa")
 }
 
@@ -100,7 +102,7 @@ func TestUpdateScatter(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
-	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +126,7 @@ func TestUpdateScatter(t *testing.T) {
 	}
 
 	vc = &loggingVCursor{shards: []string{"-20", "20-"}}
-	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +155,7 @@ func TestUpdateEqualNoRoute(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"0"}}
-	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +184,7 @@ func TestUpdateEqualNoScatter(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"0"}}
-	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "execUpdateEqual: cannot map vindex to unique keyspace id: DestinationKeyRange(-)")
 }
 
@@ -220,7 +222,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		results: results,
 	}
 
-	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := upd.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +246,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 	vc = &loggingVCursor{
 		shards: []string{"-20", "20-"},
 	}
-	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,13 +272,13 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		shards:  []string{"-20", "20-"},
 		results: results,
 	}
-	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = upd.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "execUpdateEqual: unsupported: update changes multiple rows in the vindex")
 }
 
 func TestUpdateNoStream(t *testing.T) {
 	upd := &Update{}
-	err := upd.StreamExecute(nil, nil, false, nil)
+	err := upd.StreamExecute(context.Background(), nil, nil, false, nil)
 	expectError(t, "StreamExecute", err, `query "" cannot be used for streaming`)
 }
 

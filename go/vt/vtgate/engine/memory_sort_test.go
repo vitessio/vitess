@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"encoding/json"
 	"reflect"
 	"testing"
@@ -49,7 +50,7 @@ func TestMemorySortExecute(t *testing.T) {
 		Input: fp,
 	}
 
-	result, err := ms.Execute(nil, nil, false)
+	result, err := ms.Execute(context.Background(), nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +75,7 @@ func TestMemorySortExecute(t *testing.T) {
 	ms.UpperLimit = upperlimit
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
-	result, err = ms.Execute(nil, bv, false)
+	result, err = ms.Execute(context.Background(), nil, bv, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +115,7 @@ func TestMemorySortStreamExecute(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := ms.StreamExecute(noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+	err := ms.StreamExecute(context.Background(), noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -143,7 +144,7 @@ func TestMemorySortStreamExecute(t *testing.T) {
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
 	results = nil
-	err = ms.StreamExecute(noopVCursor{}, bv, false, func(qr *sqltypes.Result) error {
+	err = ms.StreamExecute(context.Background(), noopVCursor{}, bv, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -175,7 +176,7 @@ func TestMemorySortGetFields(t *testing.T) {
 
 	ms := &MemorySort{Input: fp}
 
-	got, err := ms.GetFields(nil, nil)
+	got, err := ms.GetFields(context.Background(), nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +209,7 @@ func TestMemorySortExecuteTruncate(t *testing.T) {
 		TruncateColumnCount: 2,
 	}
 
-	result, err := ms.Execute(nil, nil, false)
+	result, err := ms.Execute(context.Background(), nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -251,7 +252,7 @@ func TestMemorySortStreamExecuteTruncate(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := ms.StreamExecute(noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+	err := ms.StreamExecute(context.Background(), noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -298,7 +299,7 @@ func TestMemorySortMultiColumn(t *testing.T) {
 		Input: fp,
 	}
 
-	result, err := ms.Execute(nil, nil, false)
+	result, err := ms.Execute(context.Background(), nil, nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +324,7 @@ func TestMemorySortMultiColumn(t *testing.T) {
 	ms.UpperLimit = upperlimit
 	bv := map[string]*querypb.BindVariable{"__upper_limit": sqltypes.Int64BindVariable(3)}
 
-	result, err = ms.Execute(nil, bv, false)
+	result, err = ms.Execute(context.Background(), nil, bv, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -366,7 +367,7 @@ func TestMemorySortMaxMemoryRows(t *testing.T) {
 		Input: fp,
 	}
 
-	err := ms.StreamExecute(noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+	err := ms.StreamExecute(context.Background(), noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 		return nil
 	})
 	want := "in-memory row count exceeded allowed limit of 3"
@@ -398,14 +399,14 @@ func TestMemorySortExecuteNoVarChar(t *testing.T) {
 		Input: fp,
 	}
 
-	_, err := ms.Execute(nil, nil, false)
+	_, err := ms.Execute(context.Background(), nil, nil, false)
 	want := "types are not comparable: VARCHAR vs VARCHAR"
 	if err == nil || err.Error() != want {
 		t.Errorf("Execute err: %v, want %v", err, want)
 	}
 
 	fp.rewind()
-	err = ms.StreamExecute(noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
+	err = ms.StreamExecute(context.Background(), noopVCursor{}, nil, false, func(qr *sqltypes.Result) error {
 		return nil
 	})
 	if err == nil || err.Error() != want {

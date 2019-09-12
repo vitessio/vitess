@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/jsonutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -163,7 +165,7 @@ func (upd *Update) GetTableName() string {
 }
 
 // Execute performs a non-streaming exec.
-func (upd *Update) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (upd *Update) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	if upd.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(upd.QueryTimeout) * time.Millisecond)
 		defer cancel()
@@ -185,12 +187,12 @@ func (upd *Update) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 }
 
 // StreamExecute performs a streaming exec.
-func (upd *Update) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (upd *Update) StreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	return fmt.Errorf("query %q cannot be used for streaming", upd.Query)
 }
 
 // GetFields fetches the field info.
-func (upd *Update) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (upd *Update) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, fmt.Errorf("BUG: unreachable code for %q", upd.Query)
 }
 

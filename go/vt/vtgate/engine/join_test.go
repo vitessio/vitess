@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -74,7 +75,7 @@ func TestJoinExecute(t *testing.T) {
 			"bv": 1,
 		},
 	}
-	r, err := jn.Execute(noopVCursor{}, bv, true)
+	r, err := jn.Execute(context.Background(), noopVCursor{}, bv, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +102,7 @@ func TestJoinExecute(t *testing.T) {
 	leftPrim.rewind()
 	rightPrim.rewind()
 	jn.Opcode = LeftJoin
-	r, err = jn.Execute(noopVCursor{}, bv, true)
+	r, err = jn.Execute(context.Background(), noopVCursor{}, bv, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +180,7 @@ func TestJoinExecuteMaxMemoryRows(t *testing.T) {
 			"bv": 1,
 		},
 	}
-	_, err := jn.Execute(noopVCursor{}, bv, true)
+	_, err := jn.Execute(context.Background(), noopVCursor{}, bv, true)
 	want := "in-memory row count exceeded allowed limit of 3"
 	if err == nil || err.Error() != want {
 		t.Errorf("Execute(): %v, want %v", err, want)
@@ -218,7 +219,7 @@ func TestJoinExecuteNoResult(t *testing.T) {
 			"bv": 1,
 		},
 	}
-	r, err := jn.Execute(noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+	r, err := jn.Execute(context.Background(), noopVCursor{}, map[string]*querypb.BindVariable{}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,7 +249,7 @@ func TestJoinExecuteErrors(t *testing.T) {
 		Opcode: NormalJoin,
 		Left:   leftPrim,
 	}
-	_, err := jn.Execute(noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+	_, err := jn.Execute(context.Background(), noopVCursor{}, map[string]*querypb.BindVariable{}, true)
 	expectError(t, "jn.Execute", err, "left err")
 
 	// Error on right query
@@ -278,7 +279,7 @@ func TestJoinExecuteErrors(t *testing.T) {
 			"bv": 1,
 		},
 	}
-	_, err = jn.Execute(noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+	_, err = jn.Execute(context.Background(), noopVCursor{}, map[string]*querypb.BindVariable{}, true)
 	expectError(t, "jn.Execute", err, "right err")
 
 	// Error on right getfields
@@ -305,7 +306,7 @@ func TestJoinExecuteErrors(t *testing.T) {
 			"bv": 1,
 		},
 	}
-	_, err = jn.Execute(noopVCursor{}, map[string]*querypb.BindVariable{}, true)
+	_, err = jn.Execute(context.Background(), noopVCursor{}, map[string]*querypb.BindVariable{}, true)
 	expectError(t, "jn.Execute", err, "right err")
 }
 
@@ -447,7 +448,7 @@ func TestGetFields(t *testing.T) {
 			"bv": 1,
 		},
 	}
-	r, err := jn.GetFields(nil, map[string]*querypb.BindVariable{})
+	r, err := jn.GetFields(context.Background(), nil, map[string]*querypb.BindVariable{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -484,7 +485,7 @@ func TestGetFieldsErrors(t *testing.T) {
 			"bv": 1,
 		},
 	}
-	_, err := jn.GetFields(nil, map[string]*querypb.BindVariable{})
+	_, err := jn.GetFields(context.Background(), nil, map[string]*querypb.BindVariable{})
 	expectError(t, "jn.GetFields", err, "left err")
 
 	jn.Left = &fakePrimitive{
@@ -497,6 +498,6 @@ func TestGetFieldsErrors(t *testing.T) {
 			),
 		},
 	}
-	_, err = jn.GetFields(nil, map[string]*querypb.BindVariable{})
+	_, err = jn.GetFields(context.Background(), nil, map[string]*querypb.BindVariable{})
 	expectError(t, "jn.GetFields", err, "right err")
 }

@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -37,7 +38,7 @@ func TestDeleteUnsharded(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"0"}}
-	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := del.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,11 +49,11 @@ func TestDeleteUnsharded(t *testing.T) {
 
 	// Failure cases
 	vc = &loggingVCursor{shardErr: errors.New("shard_error")}
-	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = del.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "execDeleteUnsharded: shard_error")
 
 	vc = &loggingVCursor{}
-	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = del.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "Keyspace does not have exactly one shard: []")
 }
 
@@ -70,7 +71,7 @@ func TestDeleteEqual(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
-	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := del.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +82,7 @@ func TestDeleteEqual(t *testing.T) {
 
 	// Failure case
 	del.Values = []sqltypes.PlanValue{{Key: "aa"}}
-	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = del.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "execDeleteEqual: missing bind var aa")
 }
 
@@ -103,7 +104,7 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"0"}}
-	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := del.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +133,7 @@ func TestDeleteEqualNoScatter(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"0"}}
-	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := del.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "execDeleteEqual: cannot map vindex to unique keyspace id: DestinationKeyRange(-)")
 }
 
@@ -160,7 +161,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 		results: results,
 	}
 
-	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := del.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +181,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 	vc = &loggingVCursor{
 		shards: []string{"-20", "20-"},
 	}
-	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = del.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +207,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 		shards:  []string{"-20", "20-"},
 		results: results,
 	}
-	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = del.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +238,7 @@ func TestDeleteSharded(t *testing.T) {
 	}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
-	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err := del.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,12 +249,12 @@ func TestDeleteSharded(t *testing.T) {
 
 	// Failure case
 	vc = &loggingVCursor{shardErr: errors.New("shard_error")}
-	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = del.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "execDeleteScatter: shard_error")
 }
 
 func TestDeleteNoStream(t *testing.T) {
 	del := &Delete{}
-	err := del.StreamExecute(nil, nil, false, nil)
+	err := del.StreamExecute(context.Background(), nil, nil, false, nil)
 	expectError(t, "StreamExecute", err, `query "" cannot be used for streaming`)
 }
