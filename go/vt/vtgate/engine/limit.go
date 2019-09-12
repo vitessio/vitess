@@ -21,6 +21,10 @@ import (
 	"fmt"
 	"io"
 
+	"vitess.io/vitess/go/trace"
+
+	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -67,8 +71,11 @@ func (l *Limit) GetTableName() string {
 	return l.Input.GetTableName()
 }
 
-// Execute satisfies the Primtive interface.
-func (l *Limit) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+// Execute satisfies the Primitive interface.
+func (l *Limit) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	span, ctx := trace.NewSpan(ctx, "Limit.Execute")
+	defer span.Finish()
+
 	count, err := l.fetchCount(bindVars)
 	if err != nil {
 		return nil, err
@@ -81,7 +88,7 @@ func (l *Limit) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariab
 	// the offset in memory from the result of the scatter query with count + offset.
 	bindVars["__upper_limit"] = sqltypes.Int64BindVariable(int64(count + offset))
 
-	result, err := l.Input.Execute(vcursor, bindVars, wantfields)
+	result, err := l.Input.Execute(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +112,10 @@ func (l *Limit) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariab
 }
 
 // StreamExecute satisfies the Primtive interface.
-func (l *Limit) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (l *Limit) StreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	span, ctx := trace.NewSpan(ctx, "Limit.StreamExecute")
+	defer span.Finish()
+
 	count, err := l.fetchCount(bindVars)
 	if err != nil {
 		return err
@@ -116,7 +126,7 @@ func (l *Limit) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 
 	bindVars["__upper_limit"] = sqltypes.Int64BindVariable(int64(count))
 
-	err = l.Input.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	err = l.Input.StreamExecute(ctx, vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
 			if err := callback(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 				return err
@@ -157,8 +167,8 @@ func (l *Limit) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 }
 
 // GetFields satisfies the Primtive interface.
-func (l *Limit) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return l.Input.GetFields(vcursor, bindVars)
+func (l *Limit) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return l.Input.GetFields(ctx, vcursor, bindVars)
 }
 
 func (l *Limit) fetchCount(bindVars map[string]*querypb.BindVariable) (int, error) {

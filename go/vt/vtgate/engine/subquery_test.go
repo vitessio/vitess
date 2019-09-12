@@ -20,6 +20,8 @@ import (
 	"errors"
 	"testing"
 
+	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -49,7 +51,7 @@ func TestSubqueryExecute(t *testing.T) {
 		"a": sqltypes.Int64BindVariable(1),
 	}
 
-	r, err := sq.Execute(nil, bv, true)
+	r, err := sq.Execute(context.Background(), nil, bv, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +72,7 @@ func TestSubqueryExecute(t *testing.T) {
 	sq.Subquery = &fakePrimitive{
 		sendErr: errors.New("err"),
 	}
-	_, err = sq.Execute(nil, bv, true)
+	_, err = sq.Execute(context.Background(), nil, bv, true)
 	expectError(t, "sq.Execute", err, "err")
 }
 
@@ -147,7 +149,7 @@ func TestSubqueryGetFields(t *testing.T) {
 		"a": sqltypes.Int64BindVariable(1),
 	}
 
-	r, err := sq.GetFields(nil, bv)
+	r, err := sq.GetFields(context.Background(), nil, bv)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,6 +168,6 @@ func TestSubqueryGetFields(t *testing.T) {
 	sq.Subquery = &fakePrimitive{
 		sendErr: errors.New("err"),
 	}
-	_, err = sq.GetFields(nil, bv)
+	_, err = sq.GetFields(context.Background(), nil, bv)
 	expectError(t, "sq.Execute", err, "err")
 }

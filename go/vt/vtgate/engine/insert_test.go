@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -43,7 +44,7 @@ func TestInsertUnsharded(t *testing.T) {
 			InsertID: 4,
 		}},
 	}
-	result, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	result, err := ins.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,11 +56,11 @@ func TestInsertUnsharded(t *testing.T) {
 
 	// Failure cases
 	vc = &loggingVCursor{shardErr: errors.New("shard_error")}
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "execInsertUnsharded: shard_error")
 
 	vc = &loggingVCursor{}
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "Keyspace does not have exactly one shard: []")
 }
 
@@ -102,7 +103,7 @@ func TestInsertUnshardedGenerate(t *testing.T) {
 			{InsertID: 1},
 		},
 	}
-	result, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	result, err := ins.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +169,7 @@ func TestInsertShardedSimple(t *testing.T) {
 		shards:       []string{"-20", "20-"},
 		shardForKsid: []string{"20-", "-20", "20-"},
 	}
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +208,7 @@ func TestInsertShardedSimple(t *testing.T) {
 		shards:       []string{"-20", "20-"},
 		shardForKsid: []string{"20-", "-20", "20-"},
 	}
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +250,7 @@ func TestInsertShardedSimple(t *testing.T) {
 		shards:       []string{"-20", "20-"},
 		shardForKsid: []string{"20-", "-20", "20-"},
 	}
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,7 +318,7 @@ func TestInsertShardedFail(t *testing.T) {
 	vc := &loggingVCursor{}
 
 	// The lookup will fail to map to a keyspace id.
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "execInsertSharded: getInsertShardedRoute: could not map INT64(1) to a keyspace id")
 }
 
@@ -399,7 +400,7 @@ func TestInsertShardedGenerate(t *testing.T) {
 			{InsertID: 1},
 		},
 	}
-	result, err := ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	result, err := ins.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -533,7 +534,7 @@ func TestInsertShardedOwned(t *testing.T) {
 		shards:       []string{"-20", "20-"},
 		shardForKsid: []string{"20-", "-20", "20-"},
 	}
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -631,7 +632,7 @@ func TestInsertShardedOwnedWithNull(t *testing.T) {
 		shards:       []string{"-20", "20-"},
 		shardForKsid: []string{"20-", "-20", "20-"},
 	}
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -793,7 +794,7 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 			ksid0,
 		},
 	}
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -917,7 +918,7 @@ func TestInsertShardedIgnoreOwnedWithNull(t *testing.T) {
 			ksid0,
 		},
 	}
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1056,7 +1057,7 @@ func TestInsertShardedUnownedVerify(t *testing.T) {
 			nonemptyResult,
 		},
 	}
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1177,7 +1178,7 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 			nonemptyResult,
 		},
 	}
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1267,7 +1268,7 @@ func TestInsertShardedIgnoreUnownedVerifyFail(t *testing.T) {
 	vc := &loggingVCursor{
 		shards: []string{"-20", "20-"},
 	}
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "execInsertSharded: getInsertShardedRoute: values [[INT64(2)]] for column [c3] does not map to keyspace ids")
 }
 
@@ -1391,7 +1392,7 @@ func TestInsertShardedUnownedReverseMap(t *testing.T) {
 			nonemptyResult,
 		},
 	}
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1479,6 +1480,6 @@ func TestInsertShardedUnownedReverseMapFail(t *testing.T) {
 	vc := &loggingVCursor{
 		shards: []string{"-20", "20-"},
 	}
-	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	_, err = ins.Execute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "execInsertSharded: getInsertShardedRoute: value must be supplied for column [c3]")
 }

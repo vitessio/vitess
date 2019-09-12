@@ -19,6 +19,10 @@ package engine
 import (
 	"encoding/json"
 
+	"vitess.io/vitess/go/trace"
+
+	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -95,12 +99,18 @@ func (vf *VindexFunc) GetTableName() string {
 }
 
 // Execute performs a non-streaming exec.
-func (vf *VindexFunc) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (vf *VindexFunc) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	span, _ := trace.NewSpan(ctx, "VindexFunc.Execute")
+	defer span.Finish()
+
 	return vf.mapVindex(vcursor, bindVars)
 }
 
 // StreamExecute performs a streaming exec.
-func (vf *VindexFunc) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (vf *VindexFunc) StreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	span, _ := trace.NewSpan(ctx, "VindexFunc.StreamExecute")
+	defer span.Finish()
+
 	r, err := vf.mapVindex(vcursor, bindVars)
 	if err != nil {
 		return err
@@ -112,7 +122,7 @@ func (vf *VindexFunc) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 }
 
 // GetFields fetches the field info.
-func (vf *VindexFunc) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (vf *VindexFunc) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return &sqltypes.Result{Fields: vf.Fields}, nil
 }
 

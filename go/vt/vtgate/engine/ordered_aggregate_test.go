@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -52,7 +53,7 @@ func TestOrderedAggregateExecute(t *testing.T) {
 		Input: fp,
 	}
 
-	result, err := oa.Execute(nil, nil, false)
+	result, err := oa.Execute(context.Background(), nil, nil, false)
 	assert.NoError(err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -90,7 +91,7 @@ func TestOrderedAggregateExecuteTruncate(t *testing.T) {
 		Input:               fp,
 	}
 
-	result, err := oa.Execute(nil, nil, false)
+	result, err := oa.Execute(context.Background(), nil, nil, false)
 	assert.NoError(err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -132,7 +133,7 @@ func TestOrderedAggregateStreamExecute(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := oa.StreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
+	err := oa.StreamExecute(context.Background(), nil, nil, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -176,7 +177,7 @@ func TestOrderedAggregateStreamExecuteTruncate(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := oa.StreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
+	err := oa.StreamExecute(context.Background(), nil, nil, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -208,7 +209,7 @@ func TestOrderedAggregateGetFields(t *testing.T) {
 
 	oa := &OrderedAggregate{Input: fp}
 
-	got, err := oa.GetFields(nil, nil)
+	got, err := oa.GetFields(context.Background(), nil, nil)
 	assert.NoError(err)
 	assert.Equal(got, input)
 }
@@ -228,7 +229,7 @@ func TestOrderedAggregateGetFieldsTruncate(t *testing.T) {
 		Input:               fp,
 	}
 
-	got, err := oa.GetFields(nil, nil)
+	got, err := oa.GetFields(context.Background(), nil, nil)
 	assert.NoError(err)
 	wantResult := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
@@ -245,17 +246,17 @@ func TestOrderedAggregateInputFail(t *testing.T) {
 	oa := &OrderedAggregate{Input: fp}
 
 	want := "input fail"
-	if _, err := oa.Execute(nil, nil, false); err == nil || err.Error() != want {
+	if _, err := oa.Execute(context.Background(), nil, nil, false); err == nil || err.Error() != want {
 		t.Errorf("oa.Execute(): %v, want %s", err, want)
 	}
 
 	fp.rewind()
-	if err := oa.StreamExecute(nil, nil, false, func(_ *sqltypes.Result) error { return nil }); err == nil || err.Error() != want {
+	if err := oa.StreamExecute(context.Background(), nil, nil, false, func(_ *sqltypes.Result) error { return nil }); err == nil || err.Error() != want {
 		t.Errorf("oa.StreamExecute(): %v, want %s", err, want)
 	}
 
 	fp.rewind()
-	if _, err := oa.GetFields(nil, nil); err == nil || err.Error() != want {
+	if _, err := oa.GetFields(context.Background(), nil, nil); err == nil || err.Error() != want {
 		t.Errorf("oa.GetFields(): %v, want %s", err, want)
 	}
 }
@@ -315,7 +316,7 @@ func TestOrderedAggregateExecuteCountDistinct(t *testing.T) {
 		Input: fp,
 	}
 
-	result, err := oa.Execute(nil, nil, false)
+	result, err := oa.Execute(context.Background(), nil, nil, false)
 	assert.NoError(err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -392,7 +393,7 @@ func TestOrderedAggregateStreamCountDistinct(t *testing.T) {
 	}
 
 	var results []*sqltypes.Result
-	err := oa.StreamExecute(nil, nil, false, func(qr *sqltypes.Result) error {
+	err := oa.StreamExecute(context.Background(), nil, nil, false, func(qr *sqltypes.Result) error {
 		results = append(results, qr)
 		return nil
 	})
@@ -479,7 +480,7 @@ func TestOrderedAggregateSumDistinctGood(t *testing.T) {
 		Input: fp,
 	}
 
-	result, err := oa.Execute(nil, nil, false)
+	result, err := oa.Execute(context.Background(), nil, nil, false)
 	assert.NoError(err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -525,7 +526,7 @@ func TestOrderedAggregateSumDistinctTolerateError(t *testing.T) {
 		Input: fp,
 	}
 
-	result, err := oa.Execute(nil, nil, false)
+	result, err := oa.Execute(context.Background(), nil, nil, false)
 	assert.NoError(err)
 
 	wantResult := sqltypes.MakeTestResult(
@@ -561,12 +562,12 @@ func TestOrderedAggregateKeysFail(t *testing.T) {
 	}
 
 	want := "types are not comparable: VARCHAR vs VARCHAR"
-	if _, err := oa.Execute(nil, nil, false); err == nil || err.Error() != want {
+	if _, err := oa.Execute(context.Background(), nil, nil, false); err == nil || err.Error() != want {
 		t.Errorf("oa.Execute(): %v, want %s", err, want)
 	}
 
 	fp.rewind()
-	if err := oa.StreamExecute(nil, nil, false, func(_ *sqltypes.Result) error { return nil }); err == nil || err.Error() != want {
+	if err := oa.StreamExecute(context.Background(), nil, nil, false, func(_ *sqltypes.Result) error { return nil }); err == nil || err.Error() != want {
 		t.Errorf("oa.StreamExecute(): %v, want %s", err, want)
 	}
 }
@@ -613,7 +614,7 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 		RowsAffected: 1,
 	}
 
-	res, err := oa.Execute(nil, nil, false)
+	res, err := oa.Execute(context.Background(), nil, nil, false)
 	if err != nil {
 		t.Errorf("oa.Execute() failed: %v", err)
 	}
@@ -623,7 +624,7 @@ func TestOrderedAggregateMergeFail(t *testing.T) {
 	}
 
 	fp.rewind()
-	if err := oa.StreamExecute(nil, nil, false, func(_ *sqltypes.Result) error { return nil }); err != nil {
+	if err := oa.StreamExecute(context.Background(), nil, nil, false, func(_ *sqltypes.Result) error { return nil }); err != nil {
 		t.Errorf("oa.StreamExecute(): %v", err)
 	}
 
@@ -728,7 +729,7 @@ func TestNoInputAndNoGroupingKeys(outer *testing.T) {
 				Input: fp,
 			}
 
-			result, err := oa.Execute(nil, nil, false)
+			result, err := oa.Execute(context.Background(), nil, nil, false)
 			assert.NoError(err)
 
 			wantResult := sqltypes.MakeTestResult(

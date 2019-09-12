@@ -19,6 +19,10 @@ package engine
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/trace"
+
+	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -140,16 +144,19 @@ func (oa *OrderedAggregate) SetTruncateColumnCount(count int) {
 }
 
 // Execute is a Primitive function.
-func (oa *OrderedAggregate) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	qr, err := oa.execute(vcursor, bindVars, wantfields)
+func (oa *OrderedAggregate) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	span, ctx := trace.NewSpan(ctx, "OrderedAggregate.Execute")
+	defer span.Finish()
+
+	qr, err := oa.execute(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
 	return qr.Truncate(oa.TruncateColumnCount), nil
 }
 
-func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	result, err := oa.Input.Execute(vcursor, bindVars, wantfields)
+func (oa *OrderedAggregate) execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	result, err := oa.Input.Execute(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +208,10 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 }
 
 // StreamExecute is a Primitive function.
-func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (oa *OrderedAggregate) StreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	span, ctx := trace.NewSpan(ctx, "OrderedAggregate.StreamExecute")
+	defer span.Finish()
+
 	var current []sqltypes.Value
 	var curDistinct sqltypes.Value
 	var fields []*querypb.Field
@@ -210,7 +220,7 @@ func (oa *OrderedAggregate) StreamExecute(vcursor VCursor, bindVars map[string]*
 		return callback(qr.Truncate(oa.TruncateColumnCount))
 	}
 
-	err := oa.Input.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	err := oa.Input.StreamExecute(ctx, vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
 			fields = oa.convertFields(qr.Fields)
 			if err := cb(&sqltypes.Result{Fields: fields}); err != nil {
@@ -300,8 +310,8 @@ func (oa *OrderedAggregate) convertRow(row []sqltypes.Value) (newRow []sqltypes.
 }
 
 // GetFields is a Primitive function.
-func (oa *OrderedAggregate) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	qr, err := oa.Input.GetFields(vcursor, bindVars)
+func (oa *OrderedAggregate) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	qr, err := oa.Input.GetFields(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}

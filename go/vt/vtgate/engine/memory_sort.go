@@ -23,6 +23,10 @@ import (
 	"math"
 	"sort"
 
+	"vitess.io/vitess/go/trace"
+
+	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -79,13 +83,16 @@ func (ms *MemorySort) SetTruncateColumnCount(count int) {
 }
 
 // Execute satisfies the Primtive interface.
-func (ms *MemorySort) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (ms *MemorySort) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	span, ctx := trace.NewSpan(ctx, "MemorySort.Execute")
+	defer span.Finish()
+
 	count, err := ms.fetchCount(bindVars)
 	if err != nil {
 		return nil, err
 	}
 
-	result, err := ms.Input.Execute(vcursor, bindVars, wantfields)
+	result, err := ms.Input.Execute(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +113,10 @@ func (ms *MemorySort) Execute(vcursor VCursor, bindVars map[string]*querypb.Bind
 }
 
 // StreamExecute satisfies the Primtive interface.
-func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (ms *MemorySort) StreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	span, ctx := trace.NewSpan(ctx, "MemorySort.StreamExecute")
+	defer span.Finish()
+
 	count, err := ms.fetchCount(bindVars)
 	if err != nil {
 		return err
@@ -122,7 +132,7 @@ func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 		orderBy: ms.OrderBy,
 		reverse: true,
 	}
-	err = ms.Input.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
+	err = ms.Input.StreamExecute(ctx, vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		if len(qr.Fields) != 0 {
 			if err := cb(&sqltypes.Result{Fields: qr.Fields}); err != nil {
 				return err
@@ -156,8 +166,8 @@ func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 }
 
 // GetFields satisfies the Primtive interface.
-func (ms *MemorySort) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return ms.Input.GetFields(vcursor, bindVars)
+func (ms *MemorySort) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return ms.Input.GetFields(ctx, vcursor, bindVars)
 }
 
 func (ms *MemorySort) fetchCount(bindVars map[string]*querypb.BindVariable) (int, error) {

@@ -19,6 +19,10 @@ package engine
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/trace"
+
+	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -54,25 +58,31 @@ func (ps *PulloutSubquery) GetTableName() string {
 }
 
 // Execute satisfies the Primitive interface.
-func (ps *PulloutSubquery) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	combinedVars, err := ps.execSubquery(vcursor, bindVars)
+func (ps *PulloutSubquery) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	span, ctx := trace.NewSpan(ctx, "PulloutSubquery.Execute")
+	defer span.Finish()
+
+	combinedVars, err := ps.execSubquery(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
-	return ps.Underlying.Execute(vcursor, combinedVars, wantfields)
+	return ps.Underlying.Execute(ctx, vcursor, combinedVars, wantfields)
 }
 
 // StreamExecute performs a streaming exec.
-func (ps *PulloutSubquery) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	combinedVars, err := ps.execSubquery(vcursor, bindVars)
+func (ps *PulloutSubquery) StreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	span, ctx := trace.NewSpan(ctx, "PulloutSubquery.StreamExecute")
+	defer span.Finish()
+
+	combinedVars, err := ps.execSubquery(ctx, vcursor, bindVars)
 	if err != nil {
 		return err
 	}
-	return ps.Underlying.StreamExecute(vcursor, combinedVars, wantfields, callback)
+	return ps.Underlying.StreamExecute(ctx, vcursor, combinedVars, wantfields, callback)
 }
 
 // GetFields fetches the field info.
-func (ps *PulloutSubquery) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (ps *PulloutSubquery) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	combinedVars := make(map[string]*querypb.BindVariable, len(bindVars)+1)
 	for k, v := range bindVars {
 		combinedVars[k] = v
@@ -89,11 +99,11 @@ func (ps *PulloutSubquery) GetFields(vcursor VCursor, bindVars map[string]*query
 	case PulloutExists:
 		combinedVars[ps.HasValues] = sqltypes.Int64BindVariable(0)
 	}
-	return ps.Underlying.GetFields(vcursor, combinedVars)
+	return ps.Underlying.GetFields(ctx, vcursor, combinedVars)
 }
 
-func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (map[string]*querypb.BindVariable, error) {
-	result, err := ps.Subquery.Execute(vcursor, bindVars, false)
+func (ps *PulloutSubquery) execSubquery(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (map[string]*querypb.BindVariable, error) {
+	result, err := ps.Subquery.Execute(ctx, vcursor, bindVars, false)
 	if err != nil {
 		return nil, err
 	}

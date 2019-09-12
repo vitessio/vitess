@@ -22,6 +22,10 @@ import (
 	"sort"
 	"time"
 
+	"vitess.io/vitess/go/trace"
+
+	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/jsonutil"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -222,19 +226,22 @@ func (route *Route) SetTruncateColumnCount(count int) {
 }
 
 // Execute performs a non-streaming exec.
-func (route *Route) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (route *Route) Execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	span, ctx := trace.NewSpan(ctx, "Route.Execute")
+	defer span.Finish()
+
 	if route.QueryTimeout != 0 {
 		cancel := vcursor.SetContextTimeout(time.Duration(route.QueryTimeout) * time.Millisecond)
 		defer cancel()
 	}
-	qr, err := route.execute(vcursor, bindVars, wantfields)
+	qr, err := route.execute(ctx, vcursor, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
 	return qr.Truncate(route.TruncateColumnCount), nil
 }
 
-func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+func (route *Route) execute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	var rss []*srvtopo.ResolvedShard
 	var bvs []map[string]*querypb.BindVariable
 	var err error
@@ -258,7 +265,7 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 	// No route.
 	if len(rss) == 0 {
 		if wantfields {
-			return route.GetFields(vcursor, bindVars)
+			return route.GetFields(ctx, vcursor, bindVars)
 		}
 		return &sqltypes.Result{}, nil
 	}
@@ -289,7 +296,10 @@ func (route *Route) execute(vcursor VCursor, bindVars map[string]*querypb.BindVa
 }
 
 // StreamExecute performs a streaming exec.
-func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+func (route *Route) StreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	span, ctx := trace.NewSpan(ctx, "Route.StreamExecute")
+	defer span.Finish()
+
 	var rss []*srvtopo.ResolvedShard
 	var bvs []map[string]*querypb.BindVariable
 	var err error
@@ -316,7 +326,7 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 	// No route.
 	if len(rss) == 0 {
 		if wantfields {
-			r, err := route.GetFields(vcursor, bindVars)
+			r, err := route.GetFields(ctx, vcursor, bindVars)
 			if err != nil {
 				return err
 			}
@@ -337,7 +347,7 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 }
 
 // GetFields fetches the field info.
-func (route *Route) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (route *Route) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAnyShard{}})
 	if err != nil {
 		return nil, err
