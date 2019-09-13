@@ -307,12 +307,8 @@ func (db *DB) ConnectionClosed(c *mysql.Conn) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	if db.t != nil {
-		db.t.Logf("ConnectionClosed(%v): client %v", db.name, c.ConnectionID)
-	}
-
 	if _, ok := db.connections[c.ConnectionID]; !ok {
-		db.t.Fatalf("BUG: Cannot delete connection from list of open connections because it is not registered. ID: %v Conn: %v", c.ConnectionID, c)
+		panic(fmt.Errorf("BUG: Cannot delete connection from list of open connections because it is not registered. ID: %v Conn: %v", c.ConnectionID, c))
 	}
 	delete(db.connections, c.ConnectionID)
 }

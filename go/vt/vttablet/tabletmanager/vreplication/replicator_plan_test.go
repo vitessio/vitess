@@ -671,7 +671,7 @@ func TestBuildPlayerPlanNoDup(t *testing.T) {
 		}},
 	}
 	_, err := buildReplicatorPlan(input, tableKeys, nil)
-	assert.EqualError(t, err, "more than one target for source table t: t1 and t2")
+	assert.Contains(t, err.Error(), "more than one target for source table t:")
 }
 
 func TestBuildPlayerPlanExclude(t *testing.T) {
