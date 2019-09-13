@@ -91,16 +91,20 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 		},
 		ExternalID: externalID,
 	}
+	defer func() {
+		if err != nil {
+			event.DispatchUpdate(ev, "failed: "+err.Error())
+		}
+	}()
 	event.DispatchUpdate(ev, "starting external from tablet (fast)")
-
-	// Execute state change to master by force-updating only the local copy of the
-	// tablet record. The actual record in topo will be updated later.
-	newTablet := proto.Clone(tablet).(*topodatapb.Tablet)
 
 	// We may get called on the current master multiple times in order to fix incomplete external reparents.
 	// We update the tablet here only if it is not currently master
-	if newTablet.Type != topodatapb.TabletType_MASTER {
+	if tablet.Type != topodatapb.TabletType_MASTER {
 		log.Infof("fastTabletExternallyReparented: executing change callback for state change to MASTER")
+		// Execute state change to master by force-updating only the local copy of the
+		// tablet record. The actual record in topo will be updated later.
+		newTablet := proto.Clone(tablet).(*topodatapb.Tablet)
 		newTablet.Type = topodatapb.TabletType_MASTER
 
 		// This is where updateState will block for gracePeriod, while it gives
@@ -231,6 +235,8 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 		}
 	}()
 
+	tmc := tmclient.NewTabletManagerClient()
+	defer tmc.Close()
 	if !topoproto.TabletAliasIsZero(oldMasterAlias) && oldMasterTablet != nil {
 		wg.Add(1)
 		go func() {
@@ -239,7 +245,6 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 			// We don't need to put error into errs if this fails, but we need to wait
 			// for it to make sure that old master tablet is not stuck in the MASTER
 			// state.
-			tmc := tmclient.NewTabletManagerClient()
 			if err := tmc.RefreshState(ctx, oldMasterTablet); err != nil {
 				log.Warningf("Error calling RefreshState on old master %v: %v", topoproto.TabletAliasString(oldMasterTablet.Alias), err)
 			}
@@ -280,7 +285,6 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 				// tab will be nil if no update was needed
 				if tab != nil {
 					log.Infof("finalizeTabletExternallyReparented: Refresh state for tablet: %v", topoproto.TabletAliasString(tab.Alias))
-					tmc := tmclient.NewTabletManagerClient()
 					if err := tmc.RefreshState(ctx, tab); err != nil {
 						log.Warningf("Error calling RefreshState on old master %v: %v", topoproto.TabletAliasString(tab.Alias), err)
 					}

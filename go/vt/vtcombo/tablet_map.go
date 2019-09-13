@@ -111,6 +111,14 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 
 	ctx := context.Background()
 
+	// Register the tablet manager client factory for tablet manager
+	// Do this before any tablets are created so that they respect the protocol,
+	// otherwise it defaults to grpc
+	tmclient.RegisterTabletManagerClientFactory("internal", func() tmclient.TabletManagerClient {
+		return &internalTabletManagerClient{}
+	})
+	*tmclient.TabletManagerProtocol = "internal"
+
 	// iterate through the keyspaces
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, nil)
 	var uid uint32 = 1
@@ -245,12 +253,6 @@ func InitTabletMap(ts *topo.Server, tpb *vttestpb.VTTestTopology, mysqld mysqlct
 	// Register the tablet dialer for tablet server
 	tabletconn.RegisterDialer("internal", dialer)
 	*tabletconn.TabletProtocol = "internal"
-
-	// Register the tablet manager client factory for tablet manager
-	tmclient.RegisterTabletManagerClientFactory("internal", func() tmclient.TabletManagerClient {
-		return &internalTabletManagerClient{}
-	})
-	*tmclient.TabletManagerProtocol = "internal"
 
 	// run healthcheck on all vttablets
 	tmc := tmclient.NewTabletManagerClient()

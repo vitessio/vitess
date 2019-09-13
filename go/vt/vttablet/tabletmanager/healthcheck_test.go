@@ -38,6 +38,9 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+
+	// needed so that grpc client is registered
+	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
 func TestHealthRecordDeduplication(t *testing.T) {
@@ -717,7 +720,7 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 	// Run TER to turn us into a proper master, wait for it to finish.
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 19 * time.Second
 	if err := agent.TabletExternallyReparented(ctx, "unused_id"); err != nil {
-		t.Fatal(err)
+		t.Fatalf("TabletExternallyReparented failed: %v", err)
 	}
 	<-agent.finalizeReparentCtx.Done()
 	ti, err := agent.TopoServer.GetTablet(ctx, tabletAlias)
