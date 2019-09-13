@@ -88,34 +88,32 @@ func PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string,
 	}
 	for _, sql := range sqlAlterLocalMetadataTable {
 		if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
-			if merr, ok := err.(*mysql.SQLError); ok && merr.Num == mysql.ERDupFieldName {
-				log.Errorf("Expected error executing %v: %v", sql, err)
-			} else {
-				log.Errorf("Unexpected error executing %v: %v", sql, err)
+			// Ignore "Duplicate column name 'db_name'" errors which can happen on every restart.
+			if merr, ok := err.(*mysql.SQLError); !ok || merr.Num != mysql.ERDupFieldName {
+				log.Errorf("Error executing %v: %v", sql, err)
 				return err
 			}
 		}
 	}
 	sql := fmt.Sprintf(sqlUpdateLocalMetadataTable, dbName)
 	if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
-		log.Errorf("unexpected error executing %v: %v, continuing. Please check the data in _vt.local_metadata and take corrective action", sql, err)
+		log.Errorf("Error executing %v: %v, continuing. Please check the data in _vt.local_metadata and take corrective action.", sql, err)
 	}
 	if _, err := conn.ExecuteFetch(sqlCreateShardMetadataTable, 0, false); err != nil {
 		return err
 	}
 	for _, sql := range sqlAlterShardMetadataTable {
 		if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
-			if merr, ok := err.(*mysql.SQLError); ok && merr.Num == mysql.ERDupFieldName {
-				log.Errorf("Expected error executing %v: %v", sql, err)
-			} else {
-				log.Errorf("Unexpected error executing %v: %v", sql, err)
+			// Ignore "Duplicate column name 'db_name'" errors which can happen on every restart.
+			if merr, ok := err.(*mysql.SQLError); !ok || merr.Num != mysql.ERDupFieldName {
+				log.Errorf("Error executing %v: %v", sql, err)
 				return err
 			}
 		}
 	}
 	sql = fmt.Sprintf(sqlUpdateShardMetadataTable, dbName)
 	if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
-		log.Errorf("unexpected error executing %v: %v, continuing. Please check the data in _vt.shard_metadata and take corrective action", sql, err)
+		log.Errorf("Error executing %v: %v, continuing. Please check the data in _vt.shard_metadata and take corrective action.", sql, err)
 	}
 
 	// Populate local_metadata from the passed list of values.
