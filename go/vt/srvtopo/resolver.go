@@ -149,7 +149,7 @@ func (r *Resolver) GetAllShards(ctx context.Context, keyspace string, tabletType
 
 // GetAllKeyspaces returns all the known keyspaces in the local cell.
 func (r *Resolver) GetAllKeyspaces(ctx context.Context) ([]string, error) {
-	keyspaces, err := r.topoServ.GetSrvKeyspaceNames(ctx, r.localCell)
+	keyspaces, err := r.topoServ.GetSrvKeyspaceNames(ctx, r.localCell, true)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "keyspace names fetch error: %v", err)
 	}
