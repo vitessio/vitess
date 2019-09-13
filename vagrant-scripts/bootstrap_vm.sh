@@ -37,7 +37,7 @@ apt-get install -y make \
 pip install mysql-connector-python
 
 # Install golang
-GO_VER='1.12.7'
+GO_VER='1.13'
 GO_DOWNLOAD_URL='https://dl.google.com/go/'
 GO_FILENAME="go${GO_VER}.linux-amd64.tar.gz"
 wget "${GO_DOWNLOAD_URL}/${GO_FILENAME}" -O "${TMP_DIR}/${GO_FILENAME}"

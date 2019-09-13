@@ -3,8 +3,8 @@ install:
     - python-mysqldb
   extra:
     - apt-get update
-    - wget https://dl.google.com/go/go1.12.7.linux-amd64.tar.gz
-    - tar -C /usr/local -xzf go1.12.7.linux-amd64.tar.gz
+    - wget https://dl.google.com/go/go1.13.linux-amd64.tar.gz
+    - tar -C /usr/local -xzf go1.13.linux-amd64.tar.gz
     - wget https://storage.googleapis.com/kubernetes-helm/helm-v2.1.3-linux-amd64.tar.gz
     - tar -zxvf helm-v2.1.3-linux-amd64.tar.gz
     - pip install numpy
