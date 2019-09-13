@@ -33,7 +33,7 @@ import (
 // for the provided tablet types. It returns one Target object per
 // keyspace / shard / matching TabletType.
 func FindAllTargets(ctx context.Context, ts Server, cell string, tabletTypes []topodatapb.TabletType) ([]*querypb.Target, error) {
-	ksNames, err := ts.GetSrvKeyspaceNames(ctx, cell)
+	ksNames, err := ts.GetSrvKeyspaceNames(ctx, cell, true)
 	if err != nil {
 		return nil, err
 	}
