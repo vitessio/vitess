@@ -47,6 +47,7 @@ ENV VTPORTSTART 15000
 ENV PYTHONPATH $VTROOT/dist/grpc/usr/local/lib/python2.7/site-packages:$VTROOT/dist/py-mock-1.0.1/lib/python2.7/site-packages:$VTROOT/py-vtdb:$VTROOT/dist/selenium/lib/python2.7/site-packages
 ENV GOBIN $VTROOT/bin
 ENV PATH $VTROOT/bin:$VTROOT/dist/maven/bin:$VTROOT/dist/chromedriver:$PATH
+ENV VT_MYSQL_ROOT /usr
 ENV PKG_CONFIG_PATH $VTROOT/lib
 ENV USER vitess
 ENV GO111MODULE on
