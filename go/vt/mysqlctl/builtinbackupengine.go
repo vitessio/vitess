@@ -239,22 +239,17 @@ func findFilesToBackup(cnf *Mycnf) ([]FileEntry, error) {
 
 // ExecuteBackup returns a boolean that indicates if the backup is usable,
 // and an overall error.
-func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams) (bool, error) {
+func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
 
 	// extract all params from BackupParams
 	cnf := params.Cnf
 	mysqld := params.Mysqld
 	logger := params.Logger
-	bh := params.BackupHandle
 	backupConcurrency := params.Concurrency
 	hookExtraEnv := params.HookExtraEnv
 	topoServer := params.TopoServer
 	keyspace := params.Keyspace
 	shard := params.Shard
-
-	if bh == nil {
-		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "ExecuteBackup must be called with a valid BackupHandle")
-	}
 
 	logger.Infof("Hook: %v, Compress: %v", *backupStorageHook, *backupStorageCompress)
 
@@ -353,11 +348,12 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 			return usable, vterrors.Wrap(err, "slave is not restarting")
 		}
 
-		// wait for reliable seconds behind master
-		// we have replicationPosition where we stopped
-		// if MasterPosition is the same, that means no writes
-		// have happened to master, so we are up-to-date
-		// otherwise, wait for replica's Position to change from
+		// Wait for a reliable value for SecondsBehindMaster from SlaveStatus()
+
+		// We know that we stopped at replicationPosition.
+		// If MasterPosition is the same, that means no writes
+		// have happened to master, so we are up-to-date.
+		// Otherwise, we wait for replica's Position to change from
 		// the saved replicationPosition before proceeding
 		tmc := tmclient.NewTabletManagerClient()
 		defer tmc.Close()
@@ -365,7 +361,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 		defer remoteCancel()
 
 		masterPos, err := getMasterPosition(remoteCtx, tmc, topoServer, keyspace, shard)
-		// if we are unable to get master position, return error
+		// If we are unable to get master position, return error.
 		if err != nil {
 			return usable, err
 		}
@@ -560,22 +556,15 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, cnf *Mycnf, mysql
 // ExecuteRestore restores from a backup. If the restore is successful
 // we return the position from which replication should start
 // otherwise an error is returned
-func (be *BuiltinBackupEngine) ExecuteRestore(
-	ctx context.Context,
-	params RestoreParams) (mysql.Position, error) {
+func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (mysql.Position, error) {
 
 	cnf := params.Cnf
 	mysqld := params.Mysqld
 	logger := params.Logger
-	bh := params.BackupHandle
 	restoreConcurrency := params.Concurrency
 	hookExtraEnv := params.HookExtraEnv
 
 	zeroPosition := mysql.Position{}
-	if bh == nil {
-		return zeroPosition, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "ExecuteRestore must be called with a valid BackupHandle")
-	}
-
 	var bm builtinBackupManifest
 
 	if err := getBackupManifestInto(ctx, bh, &bm); err != nil {

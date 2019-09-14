@@ -121,16 +121,11 @@ func closeFile(wc io.WriteCloser, fileName string, logger logutil.Logger, finalE
 
 // ExecuteBackup returns a boolean that indicates if the backup is usable,
 // and an overall error.
-func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupParams) (complete bool, finalErr error) {
+func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (complete bool, finalErr error) {
 	// extract all params from BackupParams
 	cnf := params.Cnf
 	mysqld := params.Mysqld
 	logger := params.Logger
-	bh := params.BackupHandle
-
-	if bh == nil {
-		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "ExecuteBackup must be called with a valid BackupHandle")
-	}
 
 	if *xtrabackupUser == "" {
 		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "xtrabackupUser must be specified.")
@@ -372,20 +367,13 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, logger 
 }
 
 // ExecuteRestore restores from a backup. Any error is returned.
-func (be *XtrabackupEngine) ExecuteRestore(
-	ctx context.Context,
-	params RestoreParams) (mysql.Position, error) {
+func (be *XtrabackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (mysql.Position, error) {
 
 	cnf := params.Cnf
 	mysqld := params.Mysqld
 	logger := params.Logger
-	bh := params.BackupHandle
 
 	zeroPosition := mysql.Position{}
-	if bh == nil {
-		return zeroPosition, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "ExecuteRestore must be called with a valid BackupHandle")
-	}
-
 	var bm xtraBackupManifest
 
 	if err := getBackupManifestInto(ctx, bh, &bm); err != nil {

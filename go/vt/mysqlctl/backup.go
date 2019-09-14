@@ -100,8 +100,6 @@ func Backup(ctx context.Context, dir, name string, params BackupParams) error {
 	if err != nil {
 		return vterrors.Wrap(err, "StartBackup failed")
 	}
-	// Set params.BackupHandle to the selected backup
-	params.BackupHandle = bh
 
 	be, err := GetBackupEngine()
 	if err != nil {
@@ -109,7 +107,7 @@ func Backup(ctx context.Context, dir, name string, params BackupParams) error {
 	}
 
 	// Take the backup, and either AbortBackup or EndBackup.
-	usable, err := be.ExecuteBackup(ctx, params)
+	usable, err := be.ExecuteBackup(ctx, params, bh)
 	logger := params.Logger
 	var finishErr error
 	if usable {
@@ -291,15 +289,13 @@ func Restore(ctx context.Context, params RestoreParams) (mysql.Position, error) 
 	if err != nil {
 		return rval, err
 	}
-	// Set params.BackupHandle to the selected backup
-	params.BackupHandle = bh
 
 	re, err := GetRestoreEngine(ctx, bh)
 	if err != nil {
 		return mysql.Position{}, vterrors.Wrap(err, "Failed to find restore engine")
 	}
 
-	if rval, err = re.ExecuteRestore(ctx, params); err != nil {
+	if rval, err = re.ExecuteRestore(ctx, params, bh); err != nil {
 		return rval, err
 	}
 
