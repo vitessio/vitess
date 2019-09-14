@@ -210,7 +210,7 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 		},
 	}
 	buf3 := sqlparser.NewTrackedBuffer(nil)
-	buf3.Myprintf("delete from %s%v", copySateTableName, copyStateWhere)
+	buf3.Myprintf("delete from %s%v", copyStateTableName, copyStateWhere)
 
 	return &controllerPlan{
 		opcode:       deleteQuery,
@@ -222,7 +222,7 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 
 func buildSelectPlan(sel *sqlparser.Select) (*controllerPlan, error) {
 	switch sqlparser.String(sel.From) {
-	case vreplicationTableName, reshardingJournalTableName, copySateTableName:
+	case vreplicationTableName, reshardingJournalTableName, copyStateTableName:
 		return &controllerPlan{
 			opcode: selectQuery,
 		}, nil

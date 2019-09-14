@@ -36,7 +36,7 @@ import (
 const (
 	reshardingJournalTableName = "_vt.resharding_journal"
 	vreplicationTableName      = "_vt.vreplication"
-	copySateTableName          = "_vt.copy_state"
+	copyStateTableName         = "_vt.copy_state"
 
 	createReshardingJournalTable = `create table if not exists _vt.resharding_journal(
   id bigint,
