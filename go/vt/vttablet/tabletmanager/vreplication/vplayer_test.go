@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1532,13 +1533,17 @@ func startVReplication(t *testing.T, filter *binlogdatapb.Filter, onddl binlogda
 		"/insert into _vt.vreplication",
 		"/update _vt.vreplication set state='Running'",
 	})
+
+	var once sync.Once
 	return func() {
 		t.Helper()
-		query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-		if _, err := playerEngine.Exec(query); err != nil {
-			t.Fatal(err)
-		}
-		expectDeleteQueries(t)
+		once.Do(func() {
+			query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
+			if _, err := playerEngine.Exec(query); err != nil {
+				t.Fatal(err)
+			}
+			expectDeleteQueries(t)
+		})
 	}, int(qr.InsertID)
 }
 
