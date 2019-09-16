@@ -21,35 +21,54 @@ import (
 	"testing"
 )
 
+type testControllerPlan struct {
+	query        string
+	opcode       int
+	numInserts   int
+	selector     string
+	applier      string
+	delCopyState string
+}
+
 func TestControllerPlan(t *testing.T) {
 	tcases := []struct {
 		in   string
-		plan *controllerPlan
+		plan *testControllerPlan
 		err  string
 	}{{
 		// Insert
 		in: "insert into _vt.vreplication values(null)",
-		plan: &controllerPlan{
-			opcode: insertQuery,
-			query:  "insert into _vt.vreplication values (null)",
+		plan: &testControllerPlan{
+			query:      "insert into _vt.vreplication values(null)",
+			opcode:     insertQuery,
+			numInserts: 1,
 		},
 	}, {
 		in: "insert into _vt.vreplication(id) values(null)",
-		plan: &controllerPlan{
-			opcode: insertQuery,
-			query:  "insert into _vt.vreplication(id) values (null)",
+		plan: &testControllerPlan{
+			query:      "insert into _vt.vreplication(id) values(null)",
+			opcode:     insertQuery,
+			numInserts: 1,
 		},
 	}, {
 		in: "insert into _vt.vreplication(workflow, id) values('', null)",
-		plan: &controllerPlan{
-			opcode: insertQuery,
-			query:  "insert into _vt.vreplication(workflow, id) values ('', null)",
+		plan: &testControllerPlan{
+			query:      "insert into _vt.vreplication(workflow, id) values('', null)",
+			opcode:     insertQuery,
+			numInserts: 1,
+		},
+	}, {
+		in: "insert into _vt.vreplication values(null), (null)",
+		plan: &testControllerPlan{
+			query:      "insert into _vt.vreplication values(null), (null)",
+			opcode:     insertQuery,
+			numInserts: 2,
 		},
 	}, {
 		in: "insert into _vt.resharding_journal values (1)",
-		plan: &controllerPlan{
-			opcode: reshardingJournalQuery,
+		plan: &testControllerPlan{
 			query:  "insert into _vt.resharding_journal values (1)",
+			opcode: reshardingJournalQuery,
 		},
 	}, {
 		in:  "replace into _vt.vreplication values(null)",
@@ -70,11 +89,8 @@ func TestControllerPlan(t *testing.T) {
 		in:  "insert into _vt.vreplication select * from a",
 		err: "unsupported construct: insert into _vt.vreplication select * from a",
 	}, {
-		in:  "insert into _vt.vreplication values(null), (null)",
-		err: "unsupported construct: insert into _vt.vreplication values (null), (null)",
-	}, {
-		in:  "insert into _vt.vreplication(a, b, c) values(null)",
-		err: "malformed statement: insert into _vt.vreplication(a, b, c) values (null)",
+		in:  "insert into _vt.vreplication(a, b, id) values(null)",
+		err: "malformed statement: insert into _vt.vreplication(a, b, id) values (null)",
 	}, {
 		in:  "insert into _vt.vreplication(workflow, id) values('aa', 1)",
 		err: "id should not have a value: insert into _vt.vreplication(workflow, id) values ('aa', 1)",
@@ -85,16 +101,33 @@ func TestControllerPlan(t *testing.T) {
 		// Update
 	}, {
 		in: "update _vt.vreplication set state='Running' where id = 1",
-		plan: &controllerPlan{
-			opcode: updateQuery,
-			query:  "update _vt.vreplication set state = 'Running' where id = 1",
-			id:     1,
+		plan: &testControllerPlan{
+			query:    "update _vt.vreplication set state='Running' where id = 1",
+			opcode:   updateQuery,
+			selector: "select id from _vt.vreplication where id = 1",
+			applier:  "update _vt.vreplication set state = 'Running' where id in ::ids",
+		},
+	}, {
+		in: "update _vt.vreplication set state='Running'",
+		plan: &testControllerPlan{
+			query:    "update _vt.vreplication set state='Running'",
+			opcode:   updateQuery,
+			selector: "select id from _vt.vreplication",
+			applier:  "update _vt.vreplication set state = 'Running' where id in ::ids",
+		},
+	}, {
+		in: "update _vt.vreplication set state='Running' where a = 1",
+		plan: &testControllerPlan{
+			query:    "update _vt.vreplication set state='Running' where a = 1",
+			opcode:   updateQuery,
+			selector: "select id from _vt.vreplication where a = 1",
+			applier:  "update _vt.vreplication set state = 'Running' where id in ::ids",
 		},
 	}, {
 		in: "update _vt.resharding_journal set col = 1",
-		plan: &controllerPlan{
-			opcode: reshardingJournalQuery,
+		plan: &testControllerPlan{
 			query:  "update _vt.resharding_journal set col = 1",
+			opcode: reshardingJournalQuery,
 		},
 	}, {
 		in:  "update a set state='Running' where id = 1",
@@ -108,36 +141,40 @@ func TestControllerPlan(t *testing.T) {
 	}, {
 		in:  "update _vt.vreplication set state='Running', id = 2 where id = 1",
 		err: "id cannot be changed: id = 2",
-	}, {
-		in:  "update _vt.vreplication set state='Running'",
-		err: "invalid where clause:",
-	}, {
-		in:  "update _vt.vreplication set state='Running' where a = 1 and id = 2",
-		err: "invalid where clause: where a = 1 and id = 2",
-	}, {
-		in:  "update _vt.vreplication set state='Running' where a = 1",
-		err: "invalid where clause: where a = 1",
-	}, {
-		in:  "update _vt.vreplication set state='Running' where id > 1",
-		err: "invalid where clause: where id > 1",
-	}, {
-		in:  "update _vt.vreplication set state='Running' where id = 1.1",
-		err: "invalid where clause: where id = 1.1",
 
 		// Delete
 	}, {
 		in: "delete from _vt.vreplication where id = 1",
-		plan: &controllerPlan{
-			opcode:       deleteQuery,
+		plan: &testControllerPlan{
 			query:        "delete from _vt.vreplication where id = 1",
-			delCopyState: "delete from _vt.copy_state where vrepl_id = 1",
-			id:           1,
+			opcode:       deleteQuery,
+			selector:     "select id from _vt.vreplication where id = 1",
+			applier:      "delete from _vt.vreplication where id in ::ids",
+			delCopyState: "delete from _vt.copy_state where vrepl_id in ::ids",
+		},
+	}, {
+		in: "delete from _vt.vreplication",
+		plan: &testControllerPlan{
+			query:        "delete from _vt.vreplication",
+			opcode:       deleteQuery,
+			selector:     "select id from _vt.vreplication",
+			applier:      "delete from _vt.vreplication where id in ::ids",
+			delCopyState: "delete from _vt.copy_state where vrepl_id in ::ids",
+		},
+	}, {
+		in: "delete from _vt.vreplication where a = 1",
+		plan: &testControllerPlan{
+			query:        "delete from _vt.vreplication where a = 1",
+			opcode:       deleteQuery,
+			selector:     "select id from _vt.vreplication where a = 1",
+			applier:      "delete from _vt.vreplication where id in ::ids",
+			delCopyState: "delete from _vt.copy_state where vrepl_id in ::ids",
 		},
 	}, {
 		in: "delete from _vt.resharding_journal where id = 1",
-		plan: &controllerPlan{
-			opcode: reshardingJournalQuery,
+		plan: &testControllerPlan{
 			query:  "delete from _vt.resharding_journal where id = 1",
+			opcode: reshardingJournalQuery,
 		},
 	}, {
 		in:  "delete from a where id = 1",
@@ -154,38 +191,23 @@ func TestControllerPlan(t *testing.T) {
 	}, {
 		in:  "delete from _vt.vreplication partition (a) where id = 1 limit 1",
 		err: "unsupported construct: delete from _vt.vreplication partition (a) where id = 1 limit 1",
-	}, {
-		in:  "delete from _vt.vreplication",
-		err: "invalid where clause:",
-	}, {
-		in:  "delete from _vt.vreplication where a = 1 and id = 2",
-		err: "invalid where clause: where a = 1 and id = 2",
-	}, {
-		in:  "delete from _vt.vreplication where a = 1",
-		err: "invalid where clause: where a = 1",
-	}, {
-		in:  "delete from _vt.vreplication where id > 1",
-		err: "invalid where clause: where id > 1",
-	}, {
-		in:  "delete from _vt.vreplication where id = 1.1",
-		err: "invalid where clause: where id = 1.1",
 
 		// Select
 	}, {
 		in: "select * from _vt.vreplication",
-		plan: &controllerPlan{
+		plan: &testControllerPlan{
 			opcode: selectQuery,
 			query:  "select * from _vt.vreplication",
 		},
 	}, {
 		in: "select * from _vt.resharding_journal",
-		plan: &controllerPlan{
+		plan: &testControllerPlan{
 			opcode: selectQuery,
 			query:  "select * from _vt.resharding_journal",
 		},
 	}, {
 		in: "select * from _vt.copy_state",
-		plan: &controllerPlan{
+		plan: &testControllerPlan{
 			opcode: selectQuery,
 			query:  "select * from _vt.copy_state",
 		},
@@ -213,8 +235,20 @@ func TestControllerPlan(t *testing.T) {
 			t.Errorf("getPlan(%v) error:\n%v, want\n%v", tcase.in, err, tcase.err)
 			continue
 		}
-		if !reflect.DeepEqual(pl, tcase.plan) {
-			t.Errorf("getPlan(%v):\n%+v, want\n%+v", tcase.in, pl, tcase.plan)
+		gotPlan := &testControllerPlan{
+			query:      pl.query,
+			opcode:     pl.opcode,
+			numInserts: pl.numInserts,
+			selector:   pl.selector,
+		}
+		if pl.applier != nil {
+			gotPlan.applier = pl.applier.Query
+		}
+		if pl.delCopyState != nil {
+			gotPlan.delCopyState = pl.delCopyState.Query
+		}
+		if !reflect.DeepEqual(gotPlan, tcase.plan) {
+			t.Errorf("getPlan(%v):\n%+v, want\n%+v", tcase.in, gotPlan, tcase.plan)
 		}
 	}
 }

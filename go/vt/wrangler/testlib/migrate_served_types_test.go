@@ -585,8 +585,9 @@ func TestMultiShardMigrateServedTypes(t *testing.T) {
 
 func expectDeleteVRepl(dbClient *binlogplayer.MockDBClient) {
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest("select id from _vt.vreplication where id = 1", &sqltypes.Result{Rows: [][]sqltypes.Value{{sqltypes.NewInt64(1)}}}, nil)
 	dbClient.ExpectRequest("begin", nil, nil)
-	dbClient.ExpectRequest("delete from _vt.vreplication where id = 1", &sqltypes.Result{RowsAffected: 1}, nil)
-	dbClient.ExpectRequest("delete from _vt.copy_state where vrepl_id = 1", nil, nil)
+	dbClient.ExpectRequest("delete from _vt.vreplication where id in (1)", &sqltypes.Result{RowsAffected: 1}, nil)
+	dbClient.ExpectRequest("delete from _vt.copy_state where vrepl_id in (1)", nil, nil)
 	dbClient.ExpectRequest("commit", nil, nil)
 }
