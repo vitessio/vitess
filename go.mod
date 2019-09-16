@@ -4,6 +4,7 @@ go 1.12
 
 require (
 	cloud.google.com/go v0.45.1
+	github.com/Bowery/prompt v0.0.0-20190419144237-972d0ceb96f5 // indirect
 	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878 // indirect
 	github.com/aws/aws-sdk-go v0.0.0-20180223184012-ebef4262e06a
 	github.com/boltdb/bolt v1.3.1 // indirect
@@ -13,7 +14,9 @@ require (
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/coreos/go-systemd v0.0.0-20190719114852-fd7a80b32e1f // indirect
 	github.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f // indirect
+	github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
+	github.com/evanphx/json-patch v4.5.0+incompatible // indirect
 	github.com/ghodss/yaml v0.0.0-20161207003320-04f313413ffd // indirect
 	github.com/go-ini/ini v1.12.0 // indirect
 	github.com/gogo/protobuf v1.2.1 // indirect
@@ -23,6 +26,7 @@ require (
 	github.com/golang/protobuf v1.3.2
 	github.com/golang/snappy v0.0.0-20170215233205-553a64147049
 	github.com/google/btree v1.0.0 // indirect
+	github.com/google/shlex v0.0.0-20181106134648-c34317bd91bf // indirect
 	github.com/gorilla/websocket v0.0.0-20160912153041-2d1e4548da23
 	github.com/grpc-ecosystem/go-grpc-middleware v0.0.0-20190118093823-f849b5445de4
 	github.com/grpc-ecosystem/go-grpc-prometheus v0.0.0-20180418170936-39de4380c2e0
@@ -41,6 +45,7 @@ require (
 	github.com/klauspost/crc32 v1.2.0 // indirect
 	github.com/klauspost/pgzip v1.2.0
 	github.com/kr/pretty v0.1.0 // indirect
+	github.com/krishicks/yaml-patch v0.0.10 // indirect
 	github.com/mattn/go-runewidth v0.0.1 // indirect
 	github.com/minio/minio-go v0.0.0-20190131015406-c8a261de75c1
 	github.com/mitchellh/go-testing-interface v1.0.0 // indirect
