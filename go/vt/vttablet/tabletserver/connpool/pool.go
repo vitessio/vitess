@@ -98,6 +98,7 @@ func New(
 	stats.NewCounterDurationFunc(name+"WaitTime", "Tablet server wait time", cp.WaitTime)
 	stats.NewGaugeDurationFunc(name+"IdleTimeout", "Tablet server idle timeout", cp.IdleTimeout)
 	stats.NewCounterFunc(name+"IdleClosed", "Tablet server conn pool idle closed", cp.IdleClosed)
+	stats.NewCounterFunc(name+"Exhausted", "Number of times pool had zero available slots", cp.Exhausted)
 	return cp
 }
 
@@ -294,6 +295,15 @@ func (cp *Pool) IdleClosed() int64 {
 		return 0
 	}
 	return p.IdleClosed()
+}
+
+// Exhausted returns the number of times available went to zero for the pool.
+func (cp *Pool) Exhausted() int64 {
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.Exhausted()
 }
 
 func (cp *Pool) isCallerIDAppDebug(ctx context.Context) bool {
