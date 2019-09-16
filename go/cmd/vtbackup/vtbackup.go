@@ -65,7 +65,9 @@ import (
 	"math"
 	"math/big"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"vitess.io/vitess/go/exit"
@@ -88,11 +90,19 @@ import (
 const (
 	backupTimestampFormat = "2006-01-02.150405"
 	manifestFileName      = "MANIFEST"
+
+	// operationTimeout is the timeout for individual operations like fetching
+	// the master position. This does not impose an overall timeout on
+	// long-running processes like taking the backup. It only applies to
+	// steps along the way that should complete quickly. This ensures we don't
+	// place a hard cap on the overall time for a backup, while also not waiting
+	// forever for things that should be quick.
+	operationTimeout = 1 * time.Minute
 )
 
 var (
 	// vtbackup-specific flags
-	// We used to have timeouts, but these did more harm than good. If a backup
+	// We used to have overall timeouts, but these did more harm than good. If a backup
 	// has been going for a while, giving up and starting over from scratch is
 	// pretty much never going to help. We should just keep trying and have a
 	// system that alerts a human if it's taking longer than expected.
@@ -133,7 +143,15 @@ func main() {
 		exit.Return(1)
 	}
 
-	ctx := context.Background()
+	// Catch SIGTERM and SIGINT so we get a chance to clean up.
+	ctx, cancel := context.WithCancel(context.Background())
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-sigChan
+		log.Infof("Cancelling due to signal: %v", sig)
+		cancel()
+	}()
 
 	// Open connection backup storage.
 	backupDir := fmt.Sprintf("%v/%v", *initKeyspace, *initShard)
@@ -229,7 +247,9 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		// produces a result that can be used to skip InitShardMaster entirely.
 		// This involves resetting replication (to erase any history) and then
 		// creating the main database and some Vitess system tables.
-		mysqld.ResetReplication(ctx)
+		if err := mysqld.ResetReplication(ctx); err != nil {
+			return fmt.Errorf("can't reset replication: %v", err)
+		}
 		cmds := mysqlctl.CreateReparentJournal()
 		cmds = append(cmds, fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", sqlescape.EscapeID(dbName)))
 		if err := mysqld.ExecuteSuperQueryList(ctx, cmds); err != nil {
@@ -277,9 +297,22 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	// catch up to live changes, we'd rather take a backup of something rather
 	// than timing out.
 	tmc := tmclient.NewTabletManagerClient()
-	masterPos, err := getMasterPosition(ctx, tmc, topoServer)
+	// Keep retrying if we can't contact the master. The master might be
+	// changing, moving, or down temporarily.
+	var masterPos mysql.Position
+	err = retryOnError(ctx, func() error {
+		// Add a per-operation timeout so we re-read topo if the master is unreachable.
+		opCtx, cancel := context.WithTimeout(ctx, operationTimeout)
+		defer cancel()
+		pos, err := getMasterPosition(opCtx, tmc, topoServer)
+		if err != nil {
+			return fmt.Errorf("can't get the master replication position: %v", err)
+		}
+		masterPos = pos
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("can't get the master replication position: %v", err)
+		return err
 	}
 
 	// Remember the time when we fetched the master position, not when we caught
@@ -290,7 +323,11 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	// Wait for replication to catch up.
 	waitStartTime := time.Now()
 	for {
-		time.Sleep(time.Second)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Second):
+		}
 
 		status, statusErr := mysqld.SlaveStatus()
 		if statusErr != nil {
@@ -406,6 +443,30 @@ func getMasterPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts
 		return mysql.Position{}, fmt.Errorf("can't decode master replication position %q: %v", posStr, err)
 	}
 	return pos, nil
+}
+
+// retryOnError keeps calling the given function until it succeeds, or the given
+// Context is done. It waits an exponentially increasing amount of time between
+// retries to avoid hot-looping. The only time this returns an error is if the
+// Context is cancelled.
+func retryOnError(ctx context.Context, fn func() error) error {
+	waitTime := 1 * time.Second
+
+	for {
+		err := fn()
+		if err == nil {
+			return nil
+		}
+		log.Errorf("Waiting %v to retry after error: %v", waitTime, err)
+
+		select {
+		case <-ctx.Done():
+			log.Errorf("Not retrying after error: %v", ctx.Err())
+			return ctx.Err()
+		case <-time.After(waitTime):
+			waitTime *= 2
+		}
+	}
 }
 
 func backupName(backupTime time.Time, tabletAlias *topodatapb.TabletAlias) string {
