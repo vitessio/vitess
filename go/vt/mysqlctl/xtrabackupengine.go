@@ -66,6 +66,9 @@ const (
 	xtrabackupBinaryName = "xtrabackup"
 	xtrabackupEngineName = "xtrabackup"
 	xbstream             = "xbstream"
+
+	// closeTimeout is the timeout for closing backup files after writing.
+	closeTimeout = 10 * time.Minute
 )
 
 // xtraBackupManifest represents a backup.
@@ -107,6 +110,7 @@ func (be *XtrabackupEngine) backupFileName() string {
 }
 
 func closeFile(wc io.WriteCloser, fileName string, logger logutil.Logger, finalErr *error) {
+	logger.Infof("Closing backup file %v", fileName)
 	if closeErr := wc.Close(); *finalErr == nil {
 		*finalErr = closeErr
 	} else if closeErr != nil {
@@ -145,12 +149,14 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 	// do not write the MANIFEST unless all files were closed successfully,
 	// maintaining the contract that a MANIFEST file should only exist if the
 	// backup was created successfully.
+	logger.Infof("Starting backup with %v stripe(s)", numStripes)
 	replicationPosition, err := be.backupFiles(ctx, cnf, logger, bh, backupFileName, numStripes, flavor)
 	if err != nil {
 		return false, err
 	}
 
 	// open the MANIFEST
+	logger.Infof("Writing backup MANIFEST")
 	mwc, err := bh.AddFile(ctx, backupManifestFileName, 0)
 	if err != nil {
 		return false, vterrors.Wrapf(err, "cannot add %v to backup", backupManifestFileName)
@@ -183,6 +189,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysql
 		return false, vterrors.Wrapf(err, "cannot write %v", backupManifestFileName)
 	}
 
+	logger.Infof("Backup completed")
 	return true, nil
 }
 
@@ -203,11 +210,40 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, logger 
 		flagsToExec = append(flagsToExec, strings.Fields(*xtrabackupBackupFlags)...)
 	}
 
-	destFiles, err := addStripeFiles(ctx, bh, backupFileName, numStripes, logger)
+	// Create a cancellable Context for calls to bh.AddFile().
+	// This allows us to decide later if we need to cancel an attempt to Close()
+	// the file returned from AddFile(), since Close() itself does not accept a
+	// Context value. We can't use a context.WithTimeout() here because that
+	// would impose a timeout that starts counting right now, so it would
+	// include the time spent uploading the file content. We only want to impose
+	// a timeout on the final Close() step.
+	addFilesCtx, cancelAddFiles := context.WithCancel(ctx)
+	defer cancelAddFiles()
+	destFiles, err := addStripeFiles(addFilesCtx, bh, backupFileName, numStripes, logger)
 	if err != nil {
 		return replicationPosition, vterrors.Wrapf(err, "cannot create backup file %v", backupFileName)
 	}
 	defer func() {
+		// Impose a timeout on the process of closing files.
+		go func() {
+			timer := time.NewTimer(closeTimeout)
+
+			select {
+			case <-addFilesCtx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+				logger.Errorf("Timed out waiting for Close() on backup file to complete")
+				// Cancelling the Context that was originally passed to bh.AddFile()
+				// should hopefully cause Close() calls on the file that AddFile()
+				// returned to abort. If the underlying implementation doesn't
+				// respect cancellation of the AddFile() Context while inside
+				// Close(), then we just hang because it's unsafe to return and
+				// leave Close() running indefinitely in the background.
+				cancelAddFiles()
+			}
+		}()
+
 		filename := backupFileName
 		for i, file := range destFiles {
 			if numStripes > 1 {
@@ -627,7 +663,9 @@ func addStripeFiles(ctx context.Context, backupHandle backupstorage.BackupHandle
 
 	files := []io.WriteCloser{}
 	for i := 0; i < numStripes; i++ {
-		file, err := backupHandle.AddFile(ctx, stripeFileName(baseFileName, i), 0)
+		filename := stripeFileName(baseFileName, i)
+		logger.Infof("Opening backup stripe file %v", filename)
+		file, err := backupHandle.AddFile(ctx, filename, 0)
 		if err != nil {
 			// Close any files we already opened and clear them from the result.
 			for _, file := range files {
