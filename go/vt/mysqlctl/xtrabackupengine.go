@@ -236,7 +236,10 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, logger 
 				logger.Errorf("Timed out waiting for Close() on backup file to complete")
 				// Cancelling the Context that was originally passed to bh.AddFile()
 				// should hopefully cause Close() calls on the file that AddFile()
-				// returned to abort.
+				// returned to abort. If the underlying implementation doesn't
+				// respect cancellation of the AddFile() Context while inside
+				// Close(), then we just hang because it's unsafe to return and
+				// leave Close() running indefinitely in the background.
 				cancelAddFiles()
 			}
 		}()
