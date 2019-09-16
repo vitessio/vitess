@@ -641,11 +641,12 @@ func (mi *migrater) createJournals(ctx context.Context) error {
 			return nil
 		}
 		journal := &binlogdatapb.Journal{
-			Id:            mi.id,
-			MigrationType: mi.migrationType,
-			Tables:        mi.tables,
-			LocalPosition: source.position,
-			Participants:  participants,
+			Id:              mi.id,
+			MigrationType:   mi.migrationType,
+			Tables:          mi.tables,
+			LocalPosition:   source.position,
+			Participants:    participants,
+			SourceWorkflows: mi.sourceWorkflows,
 		}
 		for targetShard, target := range mi.targets {
 			found := false
