@@ -32,8 +32,10 @@ const (
 	DirectiveQueryTimeout = "QUERY_TIMEOUT_MS"
 	// DirectiveScatterErrorsAsWarnings enables partial success scatter select queries
 	DirectiveScatterErrorsAsWarnings = "SCATTER_ERRORS_AS_WARNINGS"
-	//DirectiveUseHashJoin enables hash joins instead of nested loop joins
+	//DirectiveUseHashJoin tells the planner to use a hash join or fail
 	DirectiveUseHashJoin = "USE_HASH_JOIN"
+	//DirectiveUseNestedHashJoin tells the planner to use a batch nested hash hash join or fail
+	DirectiveUseNestedHashJoin = "USE_NESTED_HASH_JOIN"
 )
 
 func isNonSpace(r rune) bool {

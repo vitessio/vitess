@@ -164,20 +164,9 @@ func (jn *HashJoin) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 	return err
 }
 
-// GetFields fetches the field info. This is a copy of the implementation in join.GetFields
+// GetFields fetches the field info.
 func (jn *HashJoin) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	joinVars := make(map[string]*querypb.BindVariable)
-	lresult, err := jn.Left.GetFields(vcursor, bindVars)
-	if err != nil {
-		return nil, err
-	}
-	result := &sqltypes.Result{}
-	rresult, err := jn.Right.GetFields(vcursor, combineVars(bindVars, joinVars))
-	if err != nil {
-		return nil, err
-	}
-	result.Fields = joinFields(lresult.Fields, rresult.Fields, jn.Cols)
-	return result, nil
+	return joinGetFields(jn.Left, jn.Right, jn.Cols, vcursor, bindVars)
 }
 
 // RouteType returns a description of the query routing type used by the primitive
@@ -187,10 +176,7 @@ func (jn *HashJoin) RouteType() string {
 
 // GetKeyspaceName specifies the Keyspace that this primitive routes to.
 func (jn *HashJoin) GetKeyspaceName() string {
-	if jn.Left.GetKeyspaceName() == jn.Right.GetKeyspaceName() {
-		return jn.Left.GetKeyspaceName()
-	}
-	return jn.Left.GetKeyspaceName() + "_" + jn.Right.GetKeyspaceName()
+	return joinGetKeyspaceName(jn.Left, jn.Right)
 }
 
 // GetTableName specifies the table that this primitive routes to.
@@ -287,4 +273,30 @@ func areEqual(key1, key2 []sqltypes.Value) (bool, error) {
 
 func (p *probeTable) IsEmpty() bool {
 	return len(p.table) == 0
+}
+
+func joinGetKeyspaceName(l, r Primitive) string {
+	if l.GetKeyspaceName() == r.GetKeyspaceName() {
+		return l.GetKeyspaceName()
+	}
+	return l.GetKeyspaceName() + "_" + r.GetKeyspaceName()
+}
+
+func joinGetTableName(l, r Primitive) string {
+	return l.GetTableName() + "_" + r.GetTableName()
+}
+
+func joinGetFields(l, r Primitive, cols []int, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	joinVars := make(map[string]*querypb.BindVariable)
+	lresult, err := l.GetFields(vcursor, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	result := &sqltypes.Result{}
+	rresult, err := r.GetFields(vcursor, combineVars(bindVars, joinVars))
+	if err != nil {
+		return nil, err
+	}
+	result.Fields = joinFields(lresult.Fields, rresult.Fields, cols)
+	return result, nil
 }

@@ -74,7 +74,9 @@ func buildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (primitive e
 func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) error {
 	directives := sqlparser.ExtractCommentDirectives(sel.Comments)
 
-	if err := pb.processTableExprs(sel.From, directives.IsSet(sqlparser.DirectiveUseHashJoin)); err != nil {
+	useHashJoin := directives.IsSet(sqlparser.DirectiveUseHashJoin)
+	useNestedHashJoin := directives.IsSet(sqlparser.DirectiveUseNestedHashJoin)
+	if err := pb.processTableExprs(sel.From, useHashJoin, useNestedHashJoin); err != nil {
 		return err
 	}
 

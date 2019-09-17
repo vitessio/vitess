@@ -82,7 +82,7 @@ type joinStyle interface {
 // newJoin makes a new join using the two planBuilder. ajoin can be nil
 // if the join is on a ',' operator. lpb will contain the resulting join.
 // rpb will be discarded.
-func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, useHashJoin bool) error {
+func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, useHashJoin, useNestedHashJoin bool) error {
 	// This function converts ON clauses to WHERE clauses. The WHERE clause
 	// scope can see all tables, whereas the ON clause can only see the
 	// participants of the JOIN. However, since the ON clause doesn't allow
@@ -112,7 +112,7 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, useHash
 		}
 	}
 
-	joinStruct, err := createJoinStruct(lpb, rpb, opcode, useHashJoin, ajoin)
+	joinStruct, err := createJoinStruct(lpb, rpb, opcode, useHashJoin, useNestedHashJoin, ajoin)
 	if err != nil {
 		return err
 	}
@@ -122,10 +122,21 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, useHash
 	if ajoin == nil || opcode == engine.LeftJoin || useHashJoin {
 		return nil
 	}
+
+	if useNestedHashJoin {
+		cmp, isComparison := ajoin.Condition.On.(*sqlparser.ComparisonExpr)
+		if !isComparison || cmp.Operator != "=" {
+			return vterrors.Errorf(vtrpc.Code_INTERNAL, "can only handle simple equality between columns using hash joins - got %s", cmp.Operator)
+		}
+
+		cmp.Operator = "in"
+
+		return lpb.pushFilter(cmp, sqlparser.WhereStr)
+	}
 	return lpb.pushFilter(ajoin.Condition.On, sqlparser.WhereStr)
 }
 
-func createJoinStruct(lpb, rpb *primitiveBuilder, opcode engine.JoinOpcode, useHashJoin bool, ajoin *sqlparser.JoinTableExpr) (*join, error) {
+func createJoinStruct(lpb, rpb *primitiveBuilder, opcode engine.JoinOpcode, useHashJoin, useNestedHashJoin bool, ajoin *sqlparser.JoinTableExpr) (*join, error) {
 	j := join{
 		weightStrings: make(map[*resultColumn]int),
 		Left:          lpb.bldr,
@@ -134,7 +145,11 @@ func createJoinStruct(lpb, rpb *primitiveBuilder, opcode engine.JoinOpcode, useH
 		Opcode:        opcode,
 	}
 
-	if useHashJoin {
+	if useNestedHashJoin && useHashJoin {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "can't use both batch nested hash join and regular hash join")
+	}
+
+	if useHashJoin || useNestedHashJoin {
 		if ajoin == nil {
 			return nil, vterrors.New(vtrpc.Code_INTERNAL, "need an ajoin to create a hash join")
 		}
@@ -143,7 +158,21 @@ func createJoinStruct(lpb, rpb *primitiveBuilder, opcode engine.JoinOpcode, useH
 			return nil, err
 		}
 
-		j.joinImpl = &hashJoin{comparisonExprs: comparisons}
+		if useHashJoin {
+			j.joinImpl = &hashJoin{comparisonExprs: comparisons}
+		} else {
+			left, ok := comparisons[0].Left.(*sqlparser.ColName)
+			if !ok {
+				return nil, errorOnlySimpleColumns(comparisons[0].Left)
+			}
+			right, ok := comparisons[0].Right.(*sqlparser.ColName)
+			if !ok {
+				return nil, errorOnlySimpleColumns(comparisons[0].Right)
+			}
+
+			j.joinImpl = &batchNestedHashJoin{leftExpr: left, rightExpr: right}
+		}
+
 	} else {
 		j.joinImpl = &nestedLoopJoin{}
 	}
@@ -157,7 +186,7 @@ func extractJoinComparisons(expr sqlparser.Expr) ([]*sqlparser.ComparisonExpr, e
 	cmp, isComparison := expr.(*sqlparser.ComparisonExpr)
 	if isComparison {
 		if cmp.Operator != "=" {
-			return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "can only handle simple equality between columns using hash joins - got %s", cmp.Operator)
+			return nil, errorEqualityComparisons(cmp.Operator)
 		}
 
 		return []*sqlparser.ComparisonExpr{cmp}, nil
@@ -175,7 +204,15 @@ func extractJoinComparisons(expr sqlparser.Expr) ([]*sqlparser.ComparisonExpr, e
 		}
 		return append(lft, rgt...), nil
 	}
-	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "can only handle one or more equality comparisons between columns using hash joins - got %s", expr)
+	return nil, errorOnlySimpleColumns(expr)
+}
+
+func errorOnlySimpleColumns(expr sqlparser.Expr) error {
+	return vterrors.Errorf(vtrpc.Code_INTERNAL, "can only handle equality comparisons between columns using hash joins, no complex expressions allowed - got %s", expr)
+}
+
+func errorEqualityComparisons(operator string) error {
+	return vterrors.Errorf(vtrpc.Code_INTERNAL, "can only handle equality comparisons using hash joins - got %s", operator)
 }
 
 type hashJoin struct {
@@ -187,11 +224,15 @@ func (hj *hashJoin) wireUp(jb *join) error {
 	var lftResult []int
 	var rgtResult []int
 	for _, cmp := range hj.comparisonExprs {
-		leftCol, leftOk := cmp.Left.(*sqlparser.ColName)
-		rightCol, rightOk := cmp.Right.(*sqlparser.ColName)
-		if !leftOk || !rightOk {
-			return vterrors.New(vtrpc.Code_INTERNAL, "can only handle simple equality between columns using hash joins")
+		leftCol, ok := cmp.Left.(*sqlparser.ColName)
+		if !ok {
+			return errorOnlySimpleColumns(cmp.Left)
 		}
+		rightCol, ok := cmp.Right.(*sqlparser.ColName)
+		if !ok {
+			return errorOnlySimpleColumns(cmp.Right)
+		}
+
 		_, lftColOffset := jb.Left.SupplyCol(leftCol)
 		_, rgtColOffset := jb.Right.SupplyCol(rightCol)
 		lftResult = append(lftResult, lftColOffset)
@@ -222,6 +263,31 @@ func (nestedLoopJoin) createPrimitive(jb *join, l, r engine.Primitive) engine.Pr
 		Cols:   jb.Cols,
 		Left:   l,
 		Right:  r,
+	}
+}
+
+var _ joinStyle = (*batchNestedHashJoin)(nil)
+
+type batchNestedHashJoin struct {
+	leftExpr, rightExpr *sqlparser.ColName // the expression on either side of the equality sign
+	left, right         int                // the column offsets for the key comparisons
+}
+
+func (jn *batchNestedHashJoin) wireUp(jb *join) error {
+	_, lidx := jb.Left.SupplyCol(jn.leftExpr)
+	_, ridx := jb.Right.SupplyCol(jn.rightExpr)
+	jn.left = lidx
+	jn.right = ridx
+	return nil
+}
+
+func (jn *batchNestedHashJoin) createPrimitive(jb *join, l, r engine.Primitive) engine.Primitive {
+	return &engine.BatchNestedHashJoin{
+		Left:         jb.Left.Primitive(),
+		Right:        jb.Right.Primitive(),
+		Cols:         jb.Cols,
+		LeftJoinCol:  jn.left,
+		RightJoinCol: jn.right,
 	}
 }
 
