@@ -64,6 +64,7 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 	skipStartWorkflows := subFlags.Bool("skip_start_workflows", true, "If true, newly created workflows will have skip_start set")
 	phaseEnableApprovalsDesc := fmt.Sprintf("Comma separated phases that require explicit approval in the UI to execute. Phase names are: %v", strings.Join(resharding.WorkflowPhases(), ","))
 	phaseEnableApprovalsStr := subFlags.String("phase_enable_approvals", strings.Join(resharding.WorkflowPhases(), ","), phaseEnableApprovalsDesc)
+	useConsistentSnapshot := subFlags.Bool("use_consistent_snapshot", false, "Instead of pausing replication on the source, uses transactions with consistent snapshot to have a stable view of the data.")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -89,6 +90,7 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 		*splitDiffDestTabletType,
 		*phaseEnableApprovalsStr,
 		*skipStartWorkflows,
+		*useConsistentSnapshot,
 	)
 	if err != nil {
 		return err
@@ -127,6 +129,7 @@ func (*Factory) Instantiate(m *workflow.Manager, w *workflowpb.Workflow, rootNod
 		keyspaceParam:                checkpoint.Settings["keyspace"],
 		splitDiffDestTabletTypeParam: checkpoint.Settings["split_diff_dest_tablet_type"],
 		splitCmdParam:                checkpoint.Settings["split_cmd"],
+		useConsistentSnapshot:        checkpoint.Settings["use_consistent_snapshot"],
 		workflowsCount:               workflowsCount,
 	}
 	createWorkflowsUINode := &workflow.Node{
@@ -188,7 +191,7 @@ func findSourceAndDestinationShards(ts *topo.Server, keyspace string) ([][][]str
 }
 
 // initCheckpoint initialize the checkpoint for keyspace reshard
-func initCheckpoint(keyspace string, vtworkers []string, shardsToSplit [][][]string, minHealthyRdonlyTablets, splitCmd, splitDiffDestTabletType, phaseEnableApprovals string, skipStartWorkflows bool) (*workflowpb.WorkflowCheckpoint, error) {
+func initCheckpoint(keyspace string, vtworkers []string, shardsToSplit [][][]string, minHealthyRdonlyTablets, splitCmd, splitDiffDestTabletType, phaseEnableApprovals string, skipStartWorkflows bool, useConsistentSnapshot bool) (*workflowpb.WorkflowCheckpoint, error) {
 	sourceShards := 0
 	destShards := 0
 	for _, shardToSplit := range shardsToSplit {
@@ -234,6 +237,7 @@ func initCheckpoint(keyspace string, vtworkers []string, shardsToSplit [][][]str
 			"skip_start_workflows":        fmt.Sprintf("%v", skipStartWorkflows),
 			"workflows_count":             fmt.Sprintf("%v", len(shardsToSplit)),
 			"keyspace":                    keyspace,
+			"use_consistent_snapshot":     fmt.Sprintf("%v", useConsistentSnapshot),
 		},
 	}, nil
 }
@@ -263,6 +267,7 @@ type reshardingWorkflowGen struct {
 	splitDiffDestTabletTypeParam string
 	splitCmdParam                string
 	skipStartWorkflowParam       string
+	useConsistentSnapshot        string
 }
 
 // Run implements workflow.Workflow interface. It creates one horizontal resharding workflow per shard to split
@@ -302,6 +307,7 @@ func (hw *reshardingWorkflowGen) workflowCreator(ctx context.Context, task *work
 		"-source_shards=" + task.Attributes["source_shards"],
 		"-destination_shards=" + task.Attributes["destination_shards"],
 		"-phase_enable_approvals=" + hw.phaseEnableApprovalsParam,
+		"-use_consistent_snapshot=" + hw.useConsistentSnapshot,
 	}
 
 	skipStart, err := strconv.ParseBool(hw.skipStartWorkflowParam)
