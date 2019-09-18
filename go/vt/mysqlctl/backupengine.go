@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -39,13 +40,51 @@ var (
 
 // BackupEngine is the interface to take a backup with a given engine.
 type BackupEngine interface {
-	ExecuteBackup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) (bool, error)
+	ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error)
 	ShouldDrainForBackup() bool
+}
+
+// BackupParams is the struct that holds all params passed to ExecuteBackup
+type BackupParams struct {
+	Cnf    *Mycnf
+	Mysqld MysqlDaemon
+	Logger logutil.Logger
+	// Concurrency is the value of -concurrency flag given to Backup command
+	// It determines how many files are processed in parallel
+	Concurrency int
+	// Extra env variables for pre-backup and post-backup transform hooks
+	HookExtraEnv map[string]string
+	// TopoServer, Keyspace and Shard are used to discover master tablet
+	TopoServer *topo.Server
+	Keyspace   string
+	Shard      string
+}
+
+// RestoreParams is the struct that holds all params passed to ExecuteRestore
+type RestoreParams struct {
+	Cnf    *Mycnf
+	Mysqld MysqlDaemon
+	Logger logutil.Logger
+	// Concurrency is the value of -restore_concurrency flag (init restore parameter)
+	// It determines how many files are processed in parallel
+	Concurrency int
+	// Extra env variables for pre-restore and post-restore transform hooks
+	HookExtraEnv map[string]string
+	// Metadata to write into database after restore. See PopulateMetadataTables
+	LocalMetadata map[string]string
+	// DeleteBeforeRestore tells us whether existing data should be deleted before
+	// restoring. This is always set to false when starting a tablet with -restore_from_backup,
+	// but is set to true when executing a RestoreFromBackup command on an already running vttablet
+	DeleteBeforeRestore bool
+	// Name of the managed database / schema
+	DbName string
+	// Directory location to search for a usable backup
+	Dir string
 }
 
 // RestoreEngine is the interface to restore a backup with a given engine.
 type RestoreEngine interface {
-	ExecuteRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, dir string, bh backupstorage.BackupHandle, restoreConcurrency int, hookExtraEnv map[string]string) (mysql.Position, error)
+	ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (mysql.Position, error)
 }
 
 // BackupRestoreEngine is a combination of BackupEngine and RestoreEngine.

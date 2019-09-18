@@ -38,7 +38,10 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
 const (
@@ -236,7 +239,17 @@ func findFilesToBackup(cnf *Mycnf) ([]FileEntry, error) {
 
 // ExecuteBackup returns a boolean that indicates if the backup is usable,
 // and an overall error.
-func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, backupConcurrency int, hookExtraEnv map[string]string) (bool, error) {
+func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
+
+	// extract all params from BackupParams
+	cnf := params.Cnf
+	mysqld := params.Mysqld
+	logger := params.Logger
+	backupConcurrency := params.Concurrency
+	hookExtraEnv := params.HookExtraEnv
+	topoServer := params.TopoServer
+	keyspace := params.Keyspace
+	shard := params.Shard
 
 	logger.Infof("Hook: %v, Compress: %v", *backupStorageHook, *backupStorageCompress)
 
@@ -307,6 +320,12 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, my
 		return usable, vterrors.Wrap(err, "can't restart mysqld")
 	}
 
+	// And set read-only mode
+	logger.Infof("resetting mysqld read-only to %v", readOnly)
+	if err := mysqld.SetReadOnly(readOnly); err != nil {
+		return usable, err
+	}
+
 	// Restore original mysqld state that we saved above.
 	if semiSyncMaster || semiSyncSlave {
 		// Only do this if one of them was on, since both being off could mean
@@ -328,12 +347,36 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, cnf *Mycnf, my
 		if err := WaitForSlaveStart(mysqld, slaveStartDeadline); err != nil {
 			return usable, vterrors.Wrap(err, "slave is not restarting")
 		}
-	}
 
-	// And set read-only mode
-	logger.Infof("resetting mysqld read-only to %v", readOnly)
-	if err := mysqld.SetReadOnly(readOnly); err != nil {
-		return usable, err
+		// Wait for a reliable value for SecondsBehindMaster from SlaveStatus()
+
+		// We know that we stopped at replicationPosition.
+		// If MasterPosition is the same, that means no writes
+		// have happened to master, so we are up-to-date.
+		// Otherwise, we wait for replica's Position to change from
+		// the saved replicationPosition before proceeding
+		tmc := tmclient.NewTabletManagerClient()
+		defer tmc.Close()
+		remoteCtx, remoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+		defer remoteCancel()
+
+		masterPos, err := getMasterPosition(remoteCtx, tmc, topoServer, keyspace, shard)
+		// If we are unable to get master position, return error.
+		if err != nil {
+			return usable, err
+		}
+		if !replicationPosition.Equal(masterPos) {
+			for {
+				status, err := mysqld.SlaveStatus()
+				if err != nil {
+					return usable, err
+				}
+				newPos := status.Position
+				if !newPos.Equal(replicationPosition) {
+					break
+				}
+			}
+		}
 	}
 
 	return usable, backupErr
@@ -513,15 +556,13 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, cnf *Mycnf, mysql
 // ExecuteRestore restores from a backup. If the restore is successful
 // we return the position from which replication should start
 // otherwise an error is returned
-func (be *BuiltinBackupEngine) ExecuteRestore(
-	ctx context.Context,
-	cnf *Mycnf,
-	mysqld MysqlDaemon,
-	logger logutil.Logger,
-	dir string,
-	bh backupstorage.BackupHandle,
-	restoreConcurrency int,
-	hookExtraEnv map[string]string) (mysql.Position, error) {
+func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (mysql.Position, error) {
+
+	cnf := params.Cnf
+	mysqld := params.Mysqld
+	logger := params.Logger
+	restoreConcurrency := params.Concurrency
+	hookExtraEnv := params.HookExtraEnv
 
 	zeroPosition := mysql.Position{}
 	var bm builtinBackupManifest
@@ -681,6 +722,29 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, cnf *Mycnf, bh b
 // backup requires query service to be stopped, hence true
 func (be *BuiltinBackupEngine) ShouldDrainForBackup() bool {
 	return true
+}
+
+func getMasterPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts *topo.Server, keyspace, shard string) (mysql.Position, error) {
+	si, err := ts.GetShard(ctx, keyspace, shard)
+	if err != nil {
+		return mysql.Position{}, vterrors.Wrap(err, "can't read shard")
+	}
+	if topoproto.TabletAliasIsZero(si.MasterAlias) {
+		return mysql.Position{}, fmt.Errorf("shard %v/%v has no master", keyspace, shard)
+	}
+	ti, err := ts.GetTablet(ctx, si.MasterAlias)
+	if err != nil {
+		return mysql.Position{}, fmt.Errorf("can't get master tablet record %v: %v", topoproto.TabletAliasString(si.MasterAlias), err)
+	}
+	posStr, err := tmc.MasterPosition(ctx, ti.Tablet)
+	if err != nil {
+		return mysql.Position{}, fmt.Errorf("can't get master replication position: %v", err)
+	}
+	pos, err := mysql.DecodePosition(posStr)
+	if err != nil {
+		return mysql.Position{}, fmt.Errorf("can't decode master replication position %q: %v", posStr, err)
+	}
+	return pos, nil
 }
 
 func init() {
