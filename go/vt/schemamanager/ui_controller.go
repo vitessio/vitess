@@ -56,7 +56,7 @@ func (controller *UIController) Open(ctx context.Context) error {
 	return nil
 }
 
-// Read reads schema changes
+// Read schema changes
 func (controller *UIController) Read(ctx context.Context) ([]string, error) {
 	return controller.sqls, nil
 }

@@ -113,7 +113,7 @@ func (controller *LocalController) Open(ctx context.Context) error {
 	return nil
 }
 
-// Read reads schema changes.
+// Read schema changes.
 func (controller *LocalController) Read(ctx context.Context) ([]string, error) {
 	if controller.keyspace == "" || controller.sqlPath == "" {
 		return []string{}, nil

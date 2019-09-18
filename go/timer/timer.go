@@ -75,7 +75,7 @@ func NewTimer(interval time.Duration) *Timer {
 	return tm
 }
 
-// Start starts the timer.
+// Start the timer.
 func (tm *Timer) Start(keephouse func()) {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
