@@ -117,6 +117,7 @@ func (wr *Wrangler) MigrateReads(ctx context.Context, targetKeyspace, workflow s
 			mi.wr.Logger().Errorf("migrateTableReads failed: %v", err)
 			return err
 		}
+		return nil
 	}
 	if err := mi.migrateShardReads(ctx, cells, servedType, direction); err != nil {
 		mi.wr.Logger().Errorf("migrateShardReads failed: %v", err)
