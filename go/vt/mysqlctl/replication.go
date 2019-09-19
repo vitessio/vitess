@@ -285,12 +285,9 @@ func (mysqld *Mysqld) ResetReplication(ctx context.Context) error {
 //
 // Array indices for the results of SHOW PROCESSLIST.
 const (
-	//lint:ignore U1000 needed for correct indexing of result columns
 	colConnectionID = iota
-	//lint:ignore U1000 needed for correct indexing of result columns
 	colUsername
 	colClientAddr
-	//lint:ignore U1000 needed for correct indexing of result columns
 	colDbName
 	colCommand
 )

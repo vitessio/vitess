@@ -84,15 +84,16 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	localMetadata := agent.getLocalMetadataValues(originalType)
 	tablet := agent.Tablet()
 
+	// Backups are stored in a directory structure that starts with
+	// <keyspace>/<shard>
 	keyspaceDir := tablet.Keyspace
-	keyspaceName := tablet.Keyspace
-	keyspaceInfo, err := agent.TopoServer.GetKeyspace(ctx, keyspaceName)
+	keyspaceInfo, err := agent.TopoServer.GetKeyspace(ctx, tablet.Keyspace)
 	if err != nil {
 		return err
 	}
-	keyspace := keyspaceInfo.Keyspace
-	if keyspace.BaseKeyspace != "" {
-		keyspaceDir = keyspace.BaseKeyspace
+	// For a recovery keyspace, we have to look for backups of BaseKeyspace
+	if keyspaceInfo.BaseKeyspace != "" {
+		keyspaceDir = keyspaceInfo.BaseKeyspace
 	}
 	dir := fmt.Sprintf("%v/%v", keyspaceDir, tablet.Shard)
 
@@ -112,7 +113,7 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	var pos mysql.Position
 	var backupTime string
 	for {
-		pos, backupTime, err = mysqlctl.Restore(ctx, params, logutil.ProtoToTime(keyspace.SnapshotTime))
+		pos, backupTime, err = mysqlctl.Restore(ctx, params, logutil.ProtoToTime(keyspaceInfo.SnapshotTime))
 		if waitForBackupInterval == 0 {
 			break
 		}
@@ -133,7 +134,7 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	case nil:
 		// Starting from here we won't be able to recover if we get stopped by a cancelled
 		// context. Thus we use the background context to get through to the finish.
-		if keyspace.KeyspaceType == topodatapb.KeyspaceType_NORMAL {
+		if keyspaceInfo.KeyspaceType == topodatapb.KeyspaceType_NORMAL {
 			// Reconnect to master only for "NORMAL" keyspaces
 			if err := agent.startReplication(context.Background(), pos, originalType); err != nil {
 				return err
