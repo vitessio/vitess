@@ -1570,18 +1570,23 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
-	ktype, err := topoproto.ParseKeyspaceType(*keyspaceType)
-	if *keyspaceType != "" && err != nil {
-		wr.Logger().Infof("error parsing keyspace type %v, defaulting to NORMAL", *keyspaceType)
+	ktype := topodatapb.KeyspaceType_NORMAL
+	if *keyspaceType != "" {
+		kt, err := topoproto.ParseKeyspaceType(*keyspaceType)
+		if err != nil {
+			wr.Logger().Infof("error parsing keyspace type %v, defaulting to NORMAL", *keyspaceType)
+		} else {
+			ktype = kt
+		}
 	}
 
 	var snapshotTime *vttime.Time
 	if ktype == topodatapb.KeyspaceType_SNAPSHOT {
 		if *baseKeyspace == "" {
-			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "baseKeyspace must be specified while creating a snapshot keyspace")
+			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "base_keyspace must be specified while creating a snapshot keyspace")
 		}
 		if _, err := wr.TopoServer().GetKeyspace(ctx, *baseKeyspace); err != nil {
-			return vterrors.Wrapf(err, "Cannot find base keyspace: %v", *baseKeyspace)
+			return vterrors.Wrapf(err, "Cannot find base_keyspace: %v", *baseKeyspace)
 		}
 		// process snapshot_time
 		if *timestampStr != "" {
@@ -1629,7 +1634,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		// copy vschema from base keyspace
 		vs, err := wr.TopoServer().GetVSchema(ctx, *baseKeyspace)
 		if err != nil {
-			wr.Logger().Infof("error from GetVSchema for keyspace: %v, %v", *baseKeyspace, err)
+			wr.Logger().Infof("error from GetVSchema for base_keyspace: %v, %v", *baseKeyspace, err)
 			if topo.IsErrType(err, topo.NoNode) {
 				vs = &vschemapb.Keyspace{
 					Sharded:      false,
@@ -1637,6 +1642,8 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 					Vindexes:     make(map[string]*vschemapb.Vindex),
 					KeyspaceType: ktype,
 				}
+			} else {
+				return err
 			}
 		} else {
 			vs.KeyspaceType = ktype

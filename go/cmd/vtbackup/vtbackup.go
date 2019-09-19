@@ -265,7 +265,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		if err := mysqld.ExecuteSuperQueryList(ctx, cmds); err != nil {
 			return fmt.Errorf("can't initialize database: %v", err)
 		}
-		backupTime := time.Now()
+		backupTime := time.Now().UTC()
 		// Now we're ready to take the backup.
 		name := backupName(backupTime, tabletAlias)
 		if err := mysqlctl.Backup(ctx, backupDir, name, backupParams, backupTime); err != nil {
@@ -340,7 +340,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	// Remember the time when we fetched the master position, not when we caught
 	// up to it, so the timestamp on our backup is honest (assuming we make it
 	// to the goal position).
-	backupTime := time.Now()
+	backupTime := time.Now().UTC()
 
 	// Wait for replication to catch up.
 	waitStartTime := time.Now()

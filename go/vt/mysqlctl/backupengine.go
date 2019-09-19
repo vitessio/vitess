@@ -170,8 +170,7 @@ type BackupManifest struct {
 	// Position is the replication position at which the backup was taken.
 	Position mysql.Position
 
-	// BackupTime is when the backup was taken in UTC time
-	// format: "2006-01-02T15:04:05Z00:00"
+	// BackupTime is when the backup was taken in UTC time (RFC 3339 format)
 	BackupTime string
 	// FinishedTime is the time (in RFC 3339 format, UTC) at which the backup finished, if known.
 	// Some backups may not set this field if they were created before the field was added.
@@ -184,7 +183,6 @@ type BackupManifest struct {
 func FindBackupToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, dir string, bhs []backupstorage.BackupHandle, snapshotTime time.Time) (backupstorage.BackupHandle, error) {
 	var bh backupstorage.BackupHandle
 	var index int
-	unixZeroTime := time.Time{}
 
 	for index = len(bhs) - 1; index >= 0; index-- {
 		bh = bhs[index]
@@ -195,14 +193,20 @@ func FindBackupToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, lo
 			continue
 		}
 
-		backupTime, _ := time.Parse(time.RFC3339, bm.BackupTime)
-		if snapshotTime.Equal(unixZeroTime) /* uninitialized or not snapshot */ || bm.BackupTime == "" /* restoring an older backup where MANIFEST does not have backupTime */ || backupTime.Before(snapshotTime) {
+		var backupTime time.Time
+		if bm.BackupTime != "" {
+			backupTime, err = time.Parse(time.RFC3339, bm.BackupTime)
+			if err != nil {
+				log.Warningf("Restore: skipping backup %v/%v with invalid time %v: %v", dir, bh.Name(), bm.BackupTime, err)
+			}
+		}
+		if snapshotTime.IsZero() /* uninitialized or not snapshot */ || bm.BackupTime == "" /* restoring an older backup where MANIFEST does not have backupTime */ || backupTime.Before(snapshotTime) {
 			logger.Infof("Restore: found backup %v %v to restore", bh.Directory(), bh.Name())
 			break
 		}
 	}
 	if index < 0 {
-		if snapshotTime.After(unixZeroTime) {
+		if !snapshotTime.IsZero() {
 			log.Errorf("No valid backup found before time %v", snapshotTime.Format("2006-01-02.150405"))
 		}
 		// There is at least one attempted backup, but none could be read.
