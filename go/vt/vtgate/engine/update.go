@@ -194,6 +194,11 @@ func (upd *Update) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindV
 	return nil, fmt.Errorf("BUG: unreachable code for %q", upd.Query)
 }
 
+// Inputs is always empty for update - it has no inputs.
+func (upd *Update) Inputs() []Primitive {
+	return []Primitive{}
+}
+
 func (upd *Update) execUpdateUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(upd.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
 	if err != nil {
