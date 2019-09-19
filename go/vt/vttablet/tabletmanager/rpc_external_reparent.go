@@ -44,13 +44,13 @@ var (
 
 	externalReparentStats = stats.NewTimings("ExternalReparents", "External reparenting time", "stage", "NewMasterVisible", "FullRebuild")
 
-	neverParent = flag.Bool("never_reparent", false, "if set to true, Vitess will never reparent. When running on a system that handles master/follower and replication, such as Amazon Aurora, Vitess should not try to reparent")
+	neverReparent = flag.Bool("never_reparent", false, "if set to true, this tablet will not become MASTER")
 )
 
 // IsItSafeToReparent returns nil if we can reparent, and an error if we shouldn't
 func IsItSafeToReparent() error {
-	if *neverParent {
-		return vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "never_parent set to true, so will not reparent")
+	if *neverReparent {
+		return vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "never_reparent set to true, so will not reparent")
 	}
 	return nil
 }

@@ -50,7 +50,7 @@ func TestShouldNotReparent(t *testing.T) {
 	ctx := context.Background()
 	agent := createTestAgent(ctx, t, nil)
 	soTrue := true
-	neverParent = &soTrue
+	neverReparent = &soTrue
 
 	err := agent.TabletExternallyReparented(ctx, "unused_id")
 	assert.Error(t, err)
