@@ -353,6 +353,11 @@ func (route *Route) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bind
 	return qr.Truncate(route.TruncateColumnCount), nil
 }
 
+// Inputs is always empty for route - it has no inputs.
+func (route *Route) Inputs() []Primitive {
+	return []Primitive{}
+}
+
 func (route *Route) paramsAllShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	rss, _, err := vcursor.ResolveDestinations(route.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
 	if err != nil {
