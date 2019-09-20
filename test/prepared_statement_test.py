@@ -255,6 +255,16 @@ class TestPreparedStatements(unittest.TestCase):
     cursor.fetchone()
     cursor.close()
 
+    # Send an invalid table name to ensure that python's mysql client will not fail before entering vtgate
+    cursor = conn.cursor(cursor_class=MySQLCursorPrepared)
+    try:
+      cursor.execute('select * from prepare_stmt_test where id = %s', (1,))
+    except mysql.connector.Error as err:
+      if err.errno == 1105:
+        print "Could not find the table"
+      else:
+        raise
+
     cursor = conn.cursor(cursor_class=MySQLCursorPrepared)
     cursor.execute('select * from vt_prepare_stmt_test where id = %s', (1,))
     result = cursor.fetchall()
