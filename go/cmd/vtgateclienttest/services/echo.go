@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -401,23 +401,23 @@ func (c *echoClient) VStream(ctx context.Context, tabletType topodatapb.TabletTy
 	if strings.HasPrefix(vgtid.ShardGtids[0].Shard, EchoPrefix) {
 		_ = callback([]*binlogdatapb.VEvent{
 			{
-				Type: 1,
+				Type:      1,
 				Timestamp: 1234,
-				Gtid: "echo-gtid-1",
-				Ddl: "echo-ddl-1",
-				Vgtid: vgtid,
+				Gtid:      "echo-gtid-1",
+				Ddl:       "echo-ddl-1",
+				Vgtid:     vgtid,
 				RowEvent: &binlogdatapb.RowEvent{
-					TableName:"echo-table-1",
+					TableName: "echo-table-1",
 				},
 			},
 			{
-				Type: 2,
+				Type:      2,
 				Timestamp: 4321,
-				Gtid: "echo-gtid-2",
-				Ddl: "echo-ddl-2",
-				Vgtid: vgtid,
+				Gtid:      "echo-gtid-2",
+				Ddl:       "echo-ddl-2",
+				Vgtid:     vgtid,
 				FieldEvent: &binlogdatapb.FieldEvent{
-					TableName:"echo-table-2",
+					TableName: "echo-table-2",
 				},
 			},
 		})
