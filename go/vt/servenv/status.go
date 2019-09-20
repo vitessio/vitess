@@ -104,6 +104,7 @@ Started: {{.StartTime}}<br>
 Running on {{.Hostname}}<br>
 View <a href=/debug/vars>variables</a>,
      <a href=/debug/pprof>debugging profiles</a>,
+     <a href=/debug/scatter_stats>scatter query statistics</a>,
 </div>
 </div>`
 
