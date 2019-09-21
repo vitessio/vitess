@@ -39,8 +39,7 @@ func main() {
 
 	buf, err := ioutil.ReadFile(*licenseFilePtr)
 	panicOnError(err)
-	license = string(buf)
-	licenseLines = strings.Split(license, "\n")
+	setLicense(string(buf))
 	var wg sync.WaitGroup
 
 	badFileHandle := pickBadFileHandler()
@@ -71,6 +70,11 @@ func main() {
 	}
 
 	os.Exit(0)
+}
+
+func setLicense(s string) {
+	license = strings.Trim(s, "\n")
+	licenseLines = strings.Split(license, "\n")
 }
 
 func pickBadFileHandler() func(string, []string) {
@@ -112,6 +116,10 @@ func checkFile(fullPath string, badFileHandle func(fullPath string, lines []stri
 }
 
 func doesFileHaveCorrectHeader(fileLines []string) bool {
+	if len(licenseLines) == 0 {
+		panic("no license configured")
+	}
+
 	_, idx := spoolPastBuildDirectives(fileLines)
 
 	for i, licenseLine := range licenseLines {
@@ -124,6 +132,8 @@ func doesFileHaveCorrectHeader(fileLines []string) bool {
 }
 
 func replaceLicense(lines []string, licenseHeader string) string {
+	// If the source file starts with empty lines, give up. We can probably do better,
+	// but it was not necessary given this code base
 	if len(lines) > 0 && lines[0] == "" {
 		panic(strings.Join(lines, "\n"))
 	}
@@ -144,6 +154,9 @@ func replaceLicense(lines []string, licenseHeader string) string {
 	return prefix + licenseHeader + "\n" + strings.Join(lines[idx:], "\n")
 }
 
+// go build allows for build directives to be added to the very top of a source file. The rules are that
+// nothing can come before it, except other line comments. So we spool past all line comments, and insert
+// our license header after. One alternative could be to use a line commented version of the license.
 func spoolPastBuildDirectives(lines []string) (prefix string, idx int) {
 	if len(lines) > 0 && strings.HasPrefix(lines[0], "//") {
 		// continue until we find the eof or a non-comment line
