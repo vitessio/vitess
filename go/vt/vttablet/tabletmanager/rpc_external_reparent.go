@@ -165,7 +165,8 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 		}
 	}()
 
-	if !topoproto.TabletAliasIsZero(oldMasterAlias) {
+	// If TER is called twice, then oldMasterAlias is the same as agent.TabletAlias
+	if !topoproto.TabletAliasIsZero(oldMasterAlias) && !topoproto.TabletAliasEqual(oldMasterAlias, agent.TabletAlias) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -237,7 +238,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 
 	tmc := tmclient.NewTabletManagerClient()
 	defer tmc.Close()
-	if !topoproto.TabletAliasIsZero(oldMasterAlias) && oldMasterTablet != nil {
+	if !topoproto.TabletAliasIsZero(oldMasterAlias) && !topoproto.TabletAliasEqual(oldMasterAlias, agent.TabletAlias) && oldMasterTablet != nil {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
