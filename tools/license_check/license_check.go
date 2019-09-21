@@ -28,6 +28,7 @@ import (
 var licenseFilePtr = flag.String("license-file", "", "what should the correct license header look like")
 var dirPtr = flag.String("dir", "", "where to recursively look for source files")
 var testOnly = flag.Bool("test-only", true, "when set to true, will not change anything and just return a non-zero result if not all files are correct")
+var exclude = flag.String("exclude", "", "comma separated list of patterns of file to exclude from checking")
 
 var licenseLines []string
 var license string
@@ -46,9 +47,10 @@ func main() {
 	root, err := filepath.Abs(*dirPtr)
 	panicOnError(err)
 	err = filepath.Walk(root, func(path string, file os.FileInfo, err error) error {
-		matched, err := filepath.Match("*.go", file.Name())
+		fileName := file.Name()
+		isGoFile, err := filepath.Match("*.go", fileName)
 		panicOnError(err)
-		if !file.IsDir() && matched {
+		if !file.IsDir() && isGoFile && !shouldExclude(fileName) {
 			wg.Add(1)
 			go func() {
 				checkFile(path, badFileHandle)
@@ -70,6 +72,18 @@ func main() {
 	}
 
 	os.Exit(0)
+}
+
+func shouldExclude(file string) bool {
+	paths := strings.Split(*exclude, ",")
+	for _, pattern := range paths {
+		excluded, err := filepath.Match(pattern, file)
+		panicOnError(err)
+		if excluded {
+			return true
+		}
+	}
+	return false
 }
 
 func setLicense(s string) {

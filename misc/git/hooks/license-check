@@ -14,4 +14,4 @@
 # limitations under the License.
 
 # git license-check pre-commit hook
-go run tools/license_check/license_check.go -license-file license-header -dir . -test-only=true
+go run tools/license_check/license_check.go -license-file license-header -dir . -test-only=true -exclude=sql.go
