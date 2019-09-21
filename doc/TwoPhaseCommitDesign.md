@@ -197,7 +197,7 @@ If VTTablet is asked to shut down or change state from master, the code that wai
 
 Eventually, a different VTTablet will be transitioned to become the master. At that point, it will recreate the unresolved transactions from redo logs. If the replays fail, we’ll raise an alert and start the query service anyway.
 
-Typically, a replay is not expected to fail because vttablet does not allow writes to the database until the replays are done. Also, no external agent should be allowed to perform writes to MySQL, which is a loosely enforced Vitess requirement. Other vitess processes do write to MySQL directly, but they’re not the kind that interfere with the normal flow of transactions.
+Typically, a replay is not expected to fail because vttablet does not allow writing to the database until the replays are done. Also, no external agent should be allowed to perform writes to MySQL, which is a loosely enforced Vitess requirement. Other vitess processes do write to MySQL directly, but they’re not the kind that interfere with the normal flow of transactions.
 
 *Unresolved issue: If a resharding happens in the middle of a prepare, such a transaction potentially becomes multiple different transactions in a target shard. For now, this means that a resharding failover has to wait for all prepared transactions to be resolved. Special code has to be written in vttablet to handle this specific workflow.*
 
