@@ -473,6 +473,74 @@ func TestTabletExternallyReparentedFailedImpostorMaster(t *testing.T) {
 	}
 }
 
+func TestTabletExternallyReparentedRerun(t *testing.T) {
+	tabletmanager.SetReparentFlags(time.Minute /* finalizeTimeout */)
+
+	ctx := context.Background()
+	ts := memorytopo.NewServer("cell1", "cell2")
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+
+	// Create an old master, a new master, and a good slave.
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil)
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_REPLICA, nil)
+	goodSlave := NewFakeTablet(t, wr, "cell1", 2, topodatapb.TabletType_REPLICA, nil)
+
+	// Reparent to a replica, and pretend the old master is not responding.
+
+	// On the elected master, we will respond to
+	// TabletActionSlaveWasPromoted.
+	newMaster.StartActionLoop(t, wr)
+	defer newMaster.StopActionLoop(t)
+
+	// On the old master, we will only respond to
+	// TabletActionSlaveWasRestarted.
+	oldMaster.StartActionLoop(t, wr)
+	defer oldMaster.StopActionLoop(t)
+
+	// On the good slave, we will respond to
+	// TabletActionSlaveWasRestarted.
+	goodSlave.StartActionLoop(t, wr)
+	defer goodSlave.StopActionLoop(t)
+
+	// The reparent should work as expected here
+	tmc := tmclient.NewTabletManagerClient()
+	ti, err := ts.GetTablet(ctx, newMaster.Tablet.Alias)
+	if err != nil {
+		t.Fatalf("GetTablet failed: %v", err)
+	}
+	waitID := makeWaitID()
+	if err := tmc.TabletExternallyReparented(context.Background(), ti.Tablet, waitID); err != nil {
+		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
+	}
+	waitForExternalReparent(t, "TestTabletExternallyReparentedFailedOldMaster: good case", waitID)
+
+	// check the old master was converted to replica
+	tablet, err := ts.GetTablet(ctx, oldMaster.Tablet.Alias)
+	if err != nil {
+		t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
+	}
+	if tablet.Type != topodatapb.TabletType_REPLICA {
+		t.Fatalf("old master should be replica but is: %v", tablet.Type)
+	}
+
+	// run TER again and make sure the master is still correct
+	waitID = makeWaitID()
+	if err := tmc.TabletExternallyReparented(context.Background(), ti.Tablet, waitID); err != nil {
+		t.Fatalf("TabletExternallyReparented(replica) failed: %v", err)
+	}
+	waitForExternalReparent(t, "TestTabletExternallyReparentedFailedOldMaster: good case", waitID)
+
+	// check the new master is still master
+	tablet, err = ts.GetTablet(ctx, newMaster.Tablet.Alias)
+	if err != nil {
+		t.Fatalf("GetTablet(%v) failed: %v", newMaster.Tablet.Alias, err)
+	}
+	if tablet.Type != topodatapb.TabletType_MASTER {
+		t.Fatalf("new master should be MASTER but is: %v", tablet.Type)
+	}
+
+}
+
 var (
 	externalReparents      = make(map[string]chan struct{})
 	externalReparentsMutex sync.Mutex
