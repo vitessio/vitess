@@ -1573,9 +1573,9 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 	if err != nil {
 		logStats.Error = err
 		errCount = 1
-	} else {
-		logStats.RowsAffected = qr.RowsAffected
+		return nil, err
 	}
+	logStats.RowsAffected = qr.RowsAffected
 
 	plan.AddStats(1, time.Since(logStats.StartTime), uint64(logStats.ShardQueries), logStats.RowsAffected, errCount)
 
