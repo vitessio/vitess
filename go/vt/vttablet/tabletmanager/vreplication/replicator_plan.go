@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -181,7 +182,7 @@ func (tp *TablePlan) applyBulkInsert(rows *binlogdatapb.VStreamRowsResponse, exe
 	for _, row := range rows.Rows {
 		vals := sqltypes.MakeRowTrusted(tp.Fields, row)
 		for i, field := range tp.Fields {
-			bindvars["a_"+field.Name] = sqltypes.ValueBindVariable(vals[i])
+			bindvars["a_"+field.Name] = valueBindVariable(vals[i])
 		}
 		buf.WriteString(separator)
 		separator = ", "
@@ -201,14 +202,14 @@ func (tp *TablePlan) applyChange(rowChange *binlogdatapb.RowChange, executor fun
 		before = true
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.Before)
 		for i, field := range tp.Fields {
-			bindvars["b_"+field.Name] = sqltypes.ValueBindVariable(vals[i])
+			bindvars["b_"+field.Name] = valueBindVariable(vals[i])
 		}
 	}
 	if rowChange.After != nil {
 		after = true
 		vals := sqltypes.MakeRowTrusted(tp.Fields, rowChange.After)
 		for i, field := range tp.Fields {
-			bindvars["a_"+field.Name] = sqltypes.ValueBindVariable(vals[i])
+			bindvars["a_"+field.Name] = valueBindVariable(vals[i])
 		}
 	}
 	switch {
@@ -263,4 +264,16 @@ func valsEqual(v1, v2 sqltypes.Value) bool {
 	}
 	// Compare content only if none are null.
 	return v1.ToString() == v2.ToString()
+}
+
+func valueBindVariable(val sqltypes.Value) *querypb.BindVariable {
+	if val.Type() == querypb.Type_JSON {
+		// We are using charset binary because we don't know the original
+		// charset used to write the data.
+		b := &bytes.Buffer{}
+		b.Write([]byte("_utf8mb4 "))
+		val.EncodeSQL(b)
+		return &querypb.BindVariable{Type: querypb.Type_EXPRESSION, Value: b.Bytes()}
+	}
+	return sqltypes.ValueBindVariable(val)
 }

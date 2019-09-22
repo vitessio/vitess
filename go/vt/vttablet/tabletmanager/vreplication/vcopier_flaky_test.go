@@ -466,13 +466,13 @@ func TestPlayerCopyJsonData(t *testing.T) {
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
 		"begin",
-		"insert into src(id,val) values (2,'{\\\"bbb\\\": 2}')",
+		"insert into src(id,val) values (2,_utf8mb4 '{\\\"bbb\\\": 2}')",
 		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
 		"commit",
 		"rollback",
 		// The next catchup executes the new row insert and copies row 1.
 		"begin",
-		"insert into src(id,val) select 1, '{\\\"aaa\\\":\\\"aaa\\\"}' from dual where (1) <= (2)",
+		"insert into src(id,val) select 1, _utf8mb4 '{\\\"aaa\\\":\\\"aaa\\\"}' from dual where (1) <= (2)",
 		"/update _vt.vreplication set pos=",
 		"commit",
 		// fastForward has nothing to add. Just saves position.
@@ -481,7 +481,7 @@ func TestPlayerCopyJsonData(t *testing.T) {
 		"commit",
 		// Second row gets copied.
 		"begin",
-		"insert into src(id,val) values (10,'{\\\"jjj\\\": 10}')",
+		"insert into src(id,val) values (10,_utf8mb4 '{\\\"jjj\\\": 10}')",
 		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:2 values:\\"10\\" > ' where vrepl_id=.*`,
 		"commit",
 		"/delete from _vt.copy_state.*src",
