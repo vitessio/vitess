@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vschema"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -197,7 +198,34 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 		tme.targetKeyRanges = append(tme.targetKeyRanges, targetKeyRange)
 	}
 
-	vs := &vschemapb.Keyspace{Sharded: true}
+	vs := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschema.Vindex{
+			"thash": {
+				Type: "hash",
+			},
+		},
+		Tables: map[string]*vschema.Table{
+			"t1": {
+				ColumnVindexes: []*vschema.ColumnVindex{{
+					Columns: []string{"c1"},
+					Name:    "thash",
+				}},
+			},
+			"t2": {
+				ColumnVindexes: []*vschema.ColumnVindex{{
+					Columns: []string{"c1"},
+					Name:    "thash",
+				}},
+			},
+			"t3": {
+				ColumnVindexes: []*vschema.ColumnVindex{{
+					Columns: []string{"c1"},
+					Name:    "thash",
+				}},
+			},
+		},
+	}
 	if err := tme.ts.SaveVSchema(ctx, "ks", vs); err != nil {
 		t.Fatal(err)
 	}
