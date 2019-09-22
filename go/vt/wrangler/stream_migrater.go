@@ -574,19 +574,20 @@ func (sm *streamMigrater) finalize(ctx context.Context, workflows []string) erro
 		return nil
 	}
 	workflowList := stringListify(workflows)
-	err := sm.mi.forAllTargets(func(target *miTarget) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Running' where db_name=%s and workflow in (%s)", encodeString(target.master.DbName()), workflowList)
-		_, err := sm.mi.wr.VReplicationExec(ctx, target.master.Alias, query)
+	err := sm.mi.forAllSources(func(source *miSource) error {
+		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow in (%s)", encodeString(source.master.DbName()), workflowList)
+		_, err := sm.mi.wr.VReplicationExec(ctx, source.master.Alias, query)
 		return err
 	})
 	if err != nil {
 		return err
 	}
-	return sm.mi.forAllSources(func(source *miSource) error {
-		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow in (%s)", encodeString(source.master.DbName()), workflowList)
-		_, err := sm.mi.wr.VReplicationExec(ctx, source.master.Alias, query)
+	err = sm.mi.forAllTargets(func(target *miTarget) error {
+		query := fmt.Sprintf("update _vt.vreplication set state='Running' where db_name=%s and workflow in (%s)", encodeString(target.master.DbName()), workflowList)
+		_, err := sm.mi.wr.VReplicationExec(ctx, target.master.Alias, query)
 		return err
 	})
+	return err
 }
 
 func tabletStreamValues(tabletStreams []*vrStream) string {

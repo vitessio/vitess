@@ -61,17 +61,16 @@ const (
 // migrater contains the metadata for migrating read and write traffic
 // for vreplication streams.
 type migrater struct {
-	migrationType   binlogdatapb.MigrationType
-	wr              *Wrangler
-	workflow        string
-	id              int64
-	sources         map[string]*miSource
-	targets         map[string]*miTarget
-	sourceKeyspace  string
-	targetKeyspace  string
-	tables          []string
-	sourceKSSchema  *vindexes.KeyspaceSchema
-	sourceWorkflows []string
+	migrationType  binlogdatapb.MigrationType
+	wr             *Wrangler
+	workflow       string
+	id             int64
+	sources        map[string]*miSource
+	targets        map[string]*miTarget
+	sourceKeyspace string
+	targetKeyspace string
+	tables         []string
+	sourceKSSchema *vindexes.KeyspaceSchema
 }
 
 // miTarget contains the metadata for each migration target.
@@ -128,7 +127,7 @@ func (wr *Wrangler) MigrateReads(ctx context.Context, targetKeyspace, workflow s
 }
 
 // MigrateWrites is a generic way of migrating write traffic for a resharding workflow.
-func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow string, filteredReplicationWaitTime time.Duration) (journalID int64, err error) {
+func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow string, filteredReplicationWaitTime time.Duration, reverseReplication bool) (journalID int64, err error) {
 	mi, err := wr.buildMigrater(ctx, targetKeyspace, workflow)
 	if err != nil {
 		wr.Logger().Errorf("buildMigrater failed: %v", err)
@@ -157,7 +156,8 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 		defer targetUnlock(&err)
 	}
 
-	journalsExist, err := mi.checkJournals(ctx)
+	// If not journals exist, sourceWorkflows will be initialized by sm.MigrateStreams.
+	journalsExist, sourceWorkflows, err := mi.checkJournals(ctx)
 	if err != nil {
 		mi.wr.Logger().Errorf("checkJournals failed: %v", err)
 		return 0, err
@@ -181,7 +181,7 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 			mi.cancelMigration(ctx)
 			return 0, err
 		}
-		mi.sourceWorkflows, err = sm.migrateStreams(ctx, tabletStreams)
+		sourceWorkflows, err = sm.migrateStreams(ctx, tabletStreams)
 		if err != nil {
 			mi.wr.Logger().Errorf("migrateStreams failed: %v", err)
 			mi.cancelMigration(ctx)
@@ -197,12 +197,8 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 	}
 	// This is the point of no return. Once a journal is created,
 	// traffic can be redirected to target shards.
-	if err := mi.createJournals(ctx); err != nil {
+	if err := mi.createJournals(ctx, sourceWorkflows); err != nil {
 		mi.wr.Logger().Errorf("createJournals failed: %v", err)
-		return 0, err
-	}
-	if err := mi.createReverseReplication(ctx); err != nil {
-		mi.wr.Logger().Errorf("createReverseReplication failed: %v", err)
 		return 0, err
 	}
 	if err := mi.allowTargetWrites(ctx); err != nil {
@@ -214,8 +210,12 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 		return 0, err
 	}
 	sm := &streamMigrater{mi: mi}
-	if err := sm.finalize(ctx, mi.sourceWorkflows); err != nil {
+	if err := sm.finalize(ctx, sourceWorkflows); err != nil {
 		mi.wr.Logger().Errorf("finalize failed: %v", err)
+		return 0, err
+	}
+	if err := mi.createReverseReplication(ctx); err != nil {
+		mi.wr.Logger().Errorf("createReverseReplication failed: %v", err)
 		return 0, err
 	}
 	mi.deleteTargetVReplication(ctx)
@@ -510,7 +510,9 @@ func (mi *migrater) migrateShardReads(ctx context.Context, cells []string, serve
 	return mi.wr.ts.MigrateServedType(ctx, mi.sourceKeyspace, toShards, fromShards, servedType, cells)
 }
 
-func (mi *migrater) checkJournals(ctx context.Context) (journalsExist bool, err error) {
+// checkJournals returns true if at least one journal has been created.
+// If so, it also returns the list of sourceWorkflows that need to be migrated.
+func (mi *migrater) checkJournals(ctx context.Context) (journalsExist bool, sourceWorkflows []string, err error) {
 	var mu sync.Mutex
 	journal := &binlogdatapb.Journal{}
 	var exists bool
@@ -535,8 +537,7 @@ func (mi *migrater) checkJournals(ctx context.Context) (journalsExist bool, err 
 		}
 		return nil
 	})
-	mi.sourceWorkflows = journal.SourceWorkflows
-	return exists, err
+	return exists, journal.SourceWorkflows, err
 }
 
 func (mi *migrater) stopSourceWrites(ctx context.Context) error {
@@ -638,7 +639,7 @@ func (mi *migrater) gatherPositions(ctx context.Context) error {
 	})
 }
 
-func (mi *migrater) createJournals(ctx context.Context) error {
+func (mi *migrater) createJournals(ctx context.Context, sourceWorkflows []string) error {
 	var participants []*binlogdatapb.KeyspaceShard
 	for sourceShard := range mi.sources {
 		participants = append(participants, &binlogdatapb.KeyspaceShard{
@@ -656,7 +657,7 @@ func (mi *migrater) createJournals(ctx context.Context) error {
 			Tables:          mi.tables,
 			LocalPosition:   source.position,
 			Participants:    participants,
-			SourceWorkflows: mi.sourceWorkflows,
+			SourceWorkflows: sourceWorkflows,
 		}
 		for targetShard, target := range mi.targets {
 			found := false
