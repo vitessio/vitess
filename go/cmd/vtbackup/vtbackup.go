@@ -249,6 +249,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		TopoServer:   topoServer,
 		Keyspace:     *initKeyspace,
 		Shard:        *initShard,
+		TabletAlias:  topoproto.TabletAliasString(tabletAlias),
 	}
 	// In initial_backup mode, just take a backup of this empty database.
 	if *initialBackup {
@@ -265,10 +266,9 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		if err := mysqld.ExecuteSuperQueryList(ctx, cmds); err != nil {
 			return fmt.Errorf("can't initialize database: %v", err)
 		}
-		backupTime := time.Now().UTC()
+		backupTime := time.Now()
 		// Now we're ready to take the backup.
-		name := backupName(backupTime, tabletAlias)
-		if err := mysqlctl.Backup(ctx, backupDir, name, backupParams, backupTime); err != nil {
+		if err := mysqlctl.Backup(ctx, backupParams, backupTime); err != nil {
 			return fmt.Errorf("backup failed: %v", err)
 		}
 		log.Info("Initial backup successful.")
@@ -340,7 +340,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	// Remember the time when we fetched the master position, not when we caught
 	// up to it, so the timestamp on our backup is honest (assuming we make it
 	// to the goal position).
-	backupTime := time.Now().UTC()
+	backupTime := time.Now()
 
 	// Wait for replication to catch up.
 	waitStartTime := time.Now()
@@ -381,8 +381,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}
 
 	// Now we can take a new backup.
-	name := backupName(backupTime, tabletAlias)
-	if err := mysqlctl.Backup(ctx, backupDir, name, backupParams, backupTime); err != nil {
+	if err := mysqlctl.Backup(ctx, backupParams, backupTime); err != nil {
 		return fmt.Errorf("error taking backup: %v", err)
 	}
 
@@ -489,10 +488,6 @@ func retryOnError(ctx context.Context, fn func() error) error {
 			waitTime *= 2
 		}
 	}
-}
-
-func backupName(backupTime time.Time, tabletAlias *topodatapb.TabletAlias) string {
-	return fmt.Sprintf("%v.%v", backupTime.UTC().Format(backupTimestampFormat), topoproto.TabletAliasString(tabletAlias))
 }
 
 func pruneBackups(ctx context.Context, backupStorage backupstorage.BackupStorage, backupDir string) error {

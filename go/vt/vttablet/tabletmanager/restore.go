@@ -91,7 +91,7 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	if err != nil {
 		return err
 	}
-	// For a recovery keyspace, we have to look for backups of BaseKeyspace
+	// For a SNAPSHOT keyspace, we have to look for backups of BaseKeyspace
 	if keyspaceInfo.BaseKeyspace != "" {
 		keyspaceDir = keyspaceInfo.BaseKeyspace
 	}

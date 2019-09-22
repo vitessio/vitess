@@ -19,6 +19,7 @@ package mysqlctl
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -90,7 +91,10 @@ var (
 // - uses the BackupStorage service to store a new backup
 // - shuts down Mysqld during the backup
 // - remember if we were replicating, restore the exact same state
-func Backup(ctx context.Context, dir, name string, params BackupParams, backupTime time.Time) error {
+func Backup(ctx context.Context, params BackupParams, backupTime time.Time) error {
+
+	dir := fmt.Sprintf("%v/%v", params.Keyspace, params.Shard)
+	name := fmt.Sprintf("%v.%v", backupTime.UTC().Format("2006-01-02.150405"), params.TabletAlias)
 	// Start the backup with the BackupStorage.
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
@@ -229,7 +233,7 @@ func Restore(ctx context.Context, params RestoreParams, snapshotTime time.Time) 
 
 	var rval mysql.Position
 	zeroPosition := mysql.Position{}
-	var t, backupTime string
+	var backupTime string
 
 	if !deleteBeforeRestore {
 		logger.Infof("Restore: Checking if a restore is in progress")
@@ -237,19 +241,19 @@ func Restore(ctx context.Context, params RestoreParams, snapshotTime time.Time) 
 			logger.Infof("Restore: No %v file found, checking no existing data is present", RestoreState)
 			// Wait for mysqld to be ready, in case it was launched in parallel with us.
 			if err := mysqld.Wait(ctx, cnf); err != nil {
-				return zeroPosition, t, err
+				return zeroPosition, backupTime, err
 			}
 
 			ok, err := checkNoDB(ctx, mysqld, dbName)
 			if err != nil {
-				return zeroPosition, t, err
+				return zeroPosition, backupTime, err
 			}
 			if !ok {
 				logger.Infof("Auto-restore is enabled, but mysqld already contains data. Assuming vttablet was just restarted.")
 				if err = PopulateMetadataTables(mysqld, localMetadata, dbName); err == nil {
 					err = ErrExistingDB
 				}
-				return zeroPosition, t, err
+				return zeroPosition, backupTime, err
 			}
 		}
 	}
@@ -258,13 +262,13 @@ func Restore(ctx context.Context, params RestoreParams, snapshotTime time.Time) 
 	logger.Infof("Restore: looking for a suitable backup to restore")
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
-		return zeroPosition, t, err
+		return zeroPosition, backupTime, err
 	}
 	defer bs.Close()
 
 	bhs, err := bs.ListBackups(ctx, dir)
 	if err != nil {
-		return zeroPosition, t, vterrors.Wrap(err, "ListBackups failed")
+		return zeroPosition, backupTime, vterrors.Wrap(err, "ListBackups failed")
 	}
 
 	if len(bhs) == 0 {
@@ -273,7 +277,7 @@ func Restore(ctx context.Context, params RestoreParams, snapshotTime time.Time) 
 		// Wait for mysqld to be ready, in case it was launched in parallel with us.
 		if err = mysqld.Wait(ctx, cnf); err != nil {
 			logger.Errorf("mysqld is not running: %v", err)
-			return zeroPosition, t, err
+			return zeroPosition, backupTime, err
 		}
 		// Since this is an empty database make sure we start replication at the beginning
 		if err := mysqld.ResetReplication(ctx); err != nil {
@@ -285,21 +289,21 @@ func Restore(ctx context.Context, params RestoreParams, snapshotTime time.Time) 
 
 		}
 		// Always return ErrNoBackup
-		return zeroPosition, t, ErrNoBackup
+		return zeroPosition, backupTime, ErrNoBackup
 	}
 
 	bh, err := FindBackupToRestore(ctx, cnf, mysqld, logger, dir, bhs, snapshotTime)
 	if err != nil {
-		return zeroPosition, t, err
+		return zeroPosition, backupTime, err
 	}
 
 	re, err := GetRestoreEngine(ctx, bh)
 	if err != nil {
-		return zeroPosition, t, vterrors.Wrap(err, "Failed to find restore engine")
+		return zeroPosition, backupTime, vterrors.Wrap(err, "Failed to find restore engine")
 	}
 
 	if rval, backupTime, err = re.ExecuteRestore(ctx, params, bh); err != nil {
-		return zeroPosition, t, err
+		return zeroPosition, "", err
 	}
 
 	// mysqld needs to be running in order for mysql_upgrade to work.
@@ -313,12 +317,12 @@ func Restore(ctx context.Context, params RestoreParams, snapshotTime time.Time) 
 	// Note Start will use dba user for waiting, this is fine, it will be allowed.
 	err = mysqld.Start(context.Background(), cnf, "--skip-grant-tables", "--skip-networking")
 	if err != nil {
-		return zeroPosition, t, err
+		return zeroPosition, "", err
 	}
 
 	logger.Infof("Restore: running mysql_upgrade")
 	if err := mysqld.RunMysqlUpgrade(); err != nil {
-		return zeroPosition, t, vterrors.Wrap(err, "mysql_upgrade failed")
+		return zeroPosition, "", vterrors.Wrap(err, "mysql_upgrade failed")
 	}
 
 	// Populate local_metadata before starting without --skip-networking,
@@ -326,7 +330,7 @@ func Restore(ctx context.Context, params RestoreParams, snapshotTime time.Time) 
 	logger.Infof("Restore: populating local_metadata")
 	err = PopulateMetadataTables(mysqld, localMetadata, dbName)
 	if err != nil {
-		return zeroPosition, t, err
+		return zeroPosition, "", err
 	}
 
 	// The MySQL manual recommends restarting mysqld after running mysql_upgrade,
@@ -334,15 +338,15 @@ func Restore(ctx context.Context, params RestoreParams, snapshotTime time.Time) 
 	logger.Infof("Restore: restarting mysqld after mysql_upgrade")
 	err = mysqld.Shutdown(context.Background(), cnf, true)
 	if err != nil {
-		return zeroPosition, t, err
+		return zeroPosition, "", err
 	}
 	err = mysqld.Start(context.Background(), cnf)
 	if err != nil {
-		return zeroPosition, t, err
+		return zeroPosition, "", err
 	}
 
 	if err = removeStateFile(cnf); err != nil {
-		return zeroPosition, t, err
+		return zeroPosition, "", err
 	}
 
 	return rval, backupTime, nil

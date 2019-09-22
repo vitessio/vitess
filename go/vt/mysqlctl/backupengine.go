@@ -59,6 +59,8 @@ type BackupParams struct {
 	TopoServer *topo.Server
 	Keyspace   string
 	Shard      string
+	// TabletAlias is used along with backupTime to construct the backup name
+	TabletAlias string
 }
 
 // RestoreParams is the struct that holds all params passed to ExecuteRestore
@@ -180,6 +182,8 @@ type BackupManifest struct {
 // FindBackupToRestore returns a selected candidate backup to be restored.
 // It returns the most recent backup that is complete, meaning it has a valid
 // MANIFEST file.
+// When restoring a SNAPSHOT keyspace, we want this to return a backup that
+// was taken at or before snapshotTime.
 func FindBackupToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, dir string, bhs []backupstorage.BackupHandle, snapshotTime time.Time) (backupstorage.BackupHandle, error) {
 	var bh backupstorage.BackupHandle
 	var index int
@@ -198,9 +202,12 @@ func FindBackupToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, lo
 			backupTime, err = time.Parse(time.RFC3339, bm.BackupTime)
 			if err != nil {
 				log.Warningf("Restore: skipping backup %v/%v with invalid time %v: %v", dir, bh.Name(), bm.BackupTime, err)
+				continue
 			}
 		}
-		if snapshotTime.IsZero() /* uninitialized or not snapshot */ || bm.BackupTime == "" /* restoring an older backup where MANIFEST does not have backupTime */ || backupTime.Before(snapshotTime) {
+		// TODO (deepthi) If snapshotTime is non-zero but we have no backups with BackupTime set should we
+		// try to get backupTime from backup name?
+		if snapshotTime.IsZero() /* uninitialized or not snapshot */ || !snapshotTime.IsZero() && bm.BackupTime != "" && backupTime.Before(snapshotTime) {
 			logger.Infof("Restore: found backup %v %v to restore", bh.Directory(), bh.Name())
 			break
 		}
