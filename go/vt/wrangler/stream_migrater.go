@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 )
 
@@ -367,37 +368,38 @@ func (sm *streamMigrater) templatize(ctx context.Context, tabletStreams []*vrStr
 }
 
 func (sm *streamMigrater) templatizeRule(ctx context.Context, rule *binlogdatapb.Rule) (int, error) {
+	vtable, ok := sm.mi.sourceKSSchema.Tables[rule.Match]
+	if !ok {
+		return 0, fmt.Errorf("table %v not found in vschema", rule.Match)
+	}
+	if vtable.Type == vindexes.TypeReference {
+		return reference, nil
+	}
 	switch {
 	case rule.Filter == "":
-		return reference, nil
+		return unknown, fmt.Errorf("rule %v does not have a select expression in vreplication", rule)
 	case key.IsKeyRange(rule.Filter):
 		rule.Filter = "{{.}}"
 		return sharded, nil
 	case rule.Filter == vreplication.ExcludeStr:
-		return unknown, nil
+		return unknown, fmt.Errorf("unexpected rule in vreplication: %v", rule)
 	default:
-		templatized, err := sm.templatizeQuery(ctx, rule.Filter)
+		err := sm.templatizeKeyRange(ctx, rule)
 		if err != nil {
 			return unknown, err
 		}
-		if templatized != "" {
-			rule.Filter = templatized
-			return sharded, nil
-		}
-		return reference, nil
+		return sharded, nil
 	}
 }
 
-// templatizeQuery converts the underlying in_keyrange subexpression to
-// a template to allow for new keyrange values to be substituted.
-func (sm *streamMigrater) templatizeQuery(ctx context.Context, query string) (string, error) {
-	statement, err := sqlparser.Parse(query)
+func (sm *streamMigrater) templatizeKeyRange(ctx context.Context, rule *binlogdatapb.Rule) error {
+	statement, err := sqlparser.Parse(rule.Filter)
 	if err != nil {
-		return "", err
+		return err
 	}
 	sel, ok := statement.(*sqlparser.Select)
 	if !ok {
-		return "", fmt.Errorf("unexpected query: %v", query)
+		return fmt.Errorf("unexpected query: %v", rule.Filter)
 	}
 	var expr sqlparser.Expr
 	if sel.Where != nil {
@@ -416,23 +418,36 @@ func (sm *streamMigrater) templatizeQuery(ctx context.Context, query string) (st
 		case 3:
 			krExpr = funcExpr.Exprs[2]
 		default:
-			return "", fmt.Errorf("unexpected in_keyrange parameters: %v", sqlparser.String(funcExpr))
+			return fmt.Errorf("unexpected in_keyrange parameters: %v", sqlparser.String(funcExpr))
 		}
 		aliased, ok := krExpr.(*sqlparser.AliasedExpr)
 		if !ok {
-			return "", fmt.Errorf("unexpected in_keyrange parameters: %v", sqlparser.String(funcExpr))
+			return fmt.Errorf("unexpected in_keyrange parameters: %v", sqlparser.String(funcExpr))
 		}
 		val, ok := aliased.Expr.(*sqlparser.SQLVal)
 		if !ok {
-			return "", fmt.Errorf("unexpected in_keyrange parameters: %v", sqlparser.String(funcExpr))
+			return fmt.Errorf("unexpected in_keyrange parameters: %v", sqlparser.String(funcExpr))
 		}
-		if strings.Contains(query, "{{") {
-			return "", fmt.Errorf("cannot migrate queries that contain '{{' in their string: %s", query)
+		if strings.Contains(rule.Filter, "{{") {
+			return fmt.Errorf("cannot migrate queries that contain '{{' in their string: %s", rule.Filter)
 		}
 		val.Val = []byte("{{.}}")
-		return sqlparser.String(statement), nil
+		rule.Filter = sqlparser.String(statement)
+		return nil
 	}
-	return "", nil
+	// There was no in_keyrange expression. Create a new one.
+	vtable := sm.mi.sourceKSSchema.Tables[rule.Match]
+	inkr := &sqlparser.FuncExpr{
+		Name: sqlparser.NewColIdent("in_keyrange"),
+		Exprs: sqlparser.SelectExprs{
+			&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: vtable.ColumnVindexes[0].Columns[0]}},
+			&sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte(vtable.ColumnVindexes[0].Type))},
+			&sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte("{{.}}"))},
+		},
+	}
+	sel.AddWhere(inkr)
+	rule.Filter = sqlparser.String(statement)
+	return nil
 }
 
 func (sm *streamMigrater) createTargetStreams(ctx context.Context, tmpl []*vrStream) error {

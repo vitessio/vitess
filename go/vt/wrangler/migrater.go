@@ -70,6 +70,7 @@ type migrater struct {
 	sourceKeyspace  string
 	targetKeyspace  string
 	tables          []string
+	sourceKSSchema  *vindexes.KeyspaceSchema
 	sourceWorkflows []string
 }
 
@@ -292,6 +293,14 @@ func (wr *Wrangler) buildMigrater(ctx context.Context, targetKeyspace, workflow 
 				break
 			}
 		}
+	}
+	vs, err := mi.wr.ts.GetVSchema(ctx, mi.sourceKeyspace)
+	if err != nil {
+		return nil, err
+	}
+	mi.sourceKSSchema, err = vindexes.BuildKeyspaceSchema(vs, mi.sourceKeyspace)
+	if err != nil {
+		return nil, err
 	}
 	return mi, nil
 }
@@ -679,14 +688,6 @@ func (mi *migrater) createJournals(ctx context.Context) error {
 }
 
 func (mi *migrater) createReverseReplication(ctx context.Context) error {
-	vs, err := mi.wr.ts.GetVSchema(ctx, mi.sourceKeyspace)
-	if err != nil {
-		return err
-	}
-	ksschema, err := vindexes.BuildKeyspaceSchema(vs, mi.sourceKeyspace)
-	if err != nil {
-		return err
-	}
 	return mi.forAllUids(func(target *miTarget, uid uint32) error {
 		bls := target.sources[uid]
 		source := mi.sources[bls.Shard]
@@ -699,19 +700,19 @@ func (mi *migrater) createReverseReplication(ctx context.Context) error {
 		for _, rule := range bls.Filter.Rules {
 			var filter string
 			if strings.HasPrefix(rule.Match, "/") {
-				if ksschema.Keyspace.Sharded {
+				if mi.sourceKSSchema.Keyspace.Sharded {
 					filter = bls.Shard
 				}
 			} else {
 				var inKeyrange string
-				if ksschema.Keyspace.Sharded {
-					vtable, ok := ksschema.Tables[rule.Match]
+				if mi.sourceKSSchema.Keyspace.Sharded {
+					vtable, ok := mi.sourceKSSchema.Tables[rule.Match]
 					if !ok {
 						return fmt.Errorf("table %s not found in vschema", rule.Match)
 					}
 					// TODO(sougou): handle degenerate cases like sequence, etc.
 					// We currently assume the primary vindex is the best way to filter, which may not be true.
-					inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s', '%s')", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]), vs.Vindexes[vtable.ColumnVindexes[0].Name].Type, bls.Shard)
+					inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s', '%s')", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]), vtable.ColumnVindexes[0].Type, bls.Shard)
 				}
 				filter = fmt.Sprintf("select * from %s%s", rule.Match, inKeyrange)
 			}
