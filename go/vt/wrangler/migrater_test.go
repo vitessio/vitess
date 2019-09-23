@@ -234,7 +234,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Can't migrate writes if REPLICA and RDONLY have not fully migrated yet.
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
 	want = "missing tablet type specific routing, read-only traffic must be migrated before migrating writes"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("MigrateWrites err: %v, want %v", err, want)
@@ -300,7 +300,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 	}
 	cancelMigration()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, true)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, true)
 	want = "DeadlineExceeded"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("MigrateWrites(0 timeout) err: %v, must contain %v", err, want)
@@ -415,7 +415,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 	}
 	deleteTargetVReplication()
 
-	journalID, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true)
+	journalID, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -548,7 +548,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 
 	//-------------------------------------------------------------------------------------------------------------------
 	// Can't migrate writes if REPLICA and RDONLY have not fully migrated yet.
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
 	want = "cannot migrate MASTER away"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("MigrateWrites err: %v, want %v", err, want)
@@ -610,7 +610,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 	}
 	cancelMigration()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, true)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, true)
 	want = "DeadlineExceeded"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("MigrateWrites(0 timeout) err: %v, must contain %v", err, want)
@@ -707,7 +707,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 	}
 	deleteTargetVReplication()
 
-	journalID, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true)
+	journalID, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -808,7 +808,7 @@ func TestMigrateFailJournal(t *testing.T) {
 	tme.dbSourceClients[0].addQueryRE("insert into _vt.resharding_journal", nil, errors.New("journaling intentionally failed"))
 	tme.dbSourceClients[1].addQueryRE("insert into _vt.resharding_journal", nil, errors.New("journaling intentionally failed"))
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
 	want := "journaling intentionally failed"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("MigrateWrites(0 timeout) err: %v, must contain %v", err, want)
@@ -875,7 +875,7 @@ func TestTableMigrateJournalExists(t *testing.T) {
 	tme.dbTargetClients[1].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
 	tme.dbTargetClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -945,7 +945,7 @@ func TestShardMigrateJournalExists(t *testing.T) {
 	tme.dbTargetClients[1].addQuery("delete from _vt.vreplication where id in (2)", &sqltypes.Result{}, nil)
 	tme.dbTargetClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (2)", &sqltypes.Result{}, nil)
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -960,6 +960,55 @@ func TestShardMigrateJournalExists(t *testing.T) {
 	checkIsMasterServing(t, tme.ts, "ks:-80", true)
 	checkIsMasterServing(t, tme.ts, "ks:80-", true)
 
+	verifyQueries(t, tme.allDBClients)
+}
+
+func TestTableMigrateCancel(t *testing.T) {
+	ctx := context.Background()
+	tme := newTestTableMigrater(ctx, t)
+	defer tme.stopTablets(t)
+
+	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	checkJournals := func() {
+		tme.dbSourceClients[0].addQuery("select val from _vt.resharding_journal where id=7672494164556733923", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select val from _vt.resharding_journal where id=7672494164556733923", &sqltypes.Result{}, nil)
+	}
+	checkJournals()
+
+	deleteReverseReplicaion := func() {
+		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks1' and workflow = 'test_reverse'", resultid34, nil)
+		tme.dbSourceClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks1' and workflow = 'test_reverse'", resultid34, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
+	}
+	cancelMigration := func() {
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
+		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
+		tme.dbTargetClients[0].addQuery("update _vt.vreplication set state = 'Running', message = '' where id in (1, 2)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("update _vt.vreplication set state = 'Running', message = '' where id in (1, 2)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", runningResult(1), nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 2", runningResult(2), nil)
+		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 1", runningResult(1), nil)
+		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", runningResult(2), nil)
+
+		deleteReverseReplicaion()
+	}
+	cancelMigration()
+
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	verifyQueries(t, tme.allDBClients)
 }
 
@@ -1061,7 +1110,7 @@ func TestTableMigrateNoReverse(t *testing.T) {
 	}
 	deleteTargetVReplication()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1124,7 +1173,7 @@ func TestMigrateFrozen(t *testing.T) {
 	}
 	deleteTargetVReplication()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, true)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}

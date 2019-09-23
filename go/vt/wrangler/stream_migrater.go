@@ -551,24 +551,24 @@ func (sm *streamMigrater) deleteTargetStreams(ctx context.Context) error {
 	return err
 }
 
-// finalize performs the final cleanup: start all the newly migrated target streams
-// and delete them from the source.
-func (sm *streamMigrater) finalize(ctx context.Context, workflows []string) error {
+// streamMigraterFinalize finalizes the stream migration.
+// It's a standalone function because it does not use the streamMigrater state.
+func streamMigraterfinalize(ctx context.Context, mi *migrater, workflows []string) error {
 	if len(workflows) == 0 {
 		return nil
 	}
 	workflowList := stringListify(workflows)
-	err := sm.mi.forAllSources(func(source *miSource) error {
+	err := mi.forAllSources(func(source *miSource) error {
 		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow in (%s)", encodeString(source.master.DbName()), workflowList)
-		_, err := sm.mi.wr.VReplicationExec(ctx, source.master.Alias, query)
+		_, err := mi.wr.VReplicationExec(ctx, source.master.Alias, query)
 		return err
 	})
 	if err != nil {
 		return err
 	}
-	err = sm.mi.forAllTargets(func(target *miTarget) error {
+	err = mi.forAllTargets(func(target *miTarget) error {
 		query := fmt.Sprintf("update _vt.vreplication set state='Running' where db_name=%s and workflow in (%s)", encodeString(target.master.DbName()), workflowList)
-		_, err := sm.mi.wr.VReplicationExec(ctx, target.master.Alias, query)
+		_, err := mi.wr.VReplicationExec(ctx, target.master.Alias, query)
 		return err
 	})
 	return err
