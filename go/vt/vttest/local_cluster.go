@@ -110,6 +110,9 @@ type Config struct {
 
 	// The host name to use for the table otherwise it will be resolved from the local hostname
 	TabletHostName string
+
+	// Whether to enable/disable workflow manager
+	InitWorkflowManager bool
 }
 
 // InitSchemas is a shortcut for tests that just want to setup a single
