@@ -489,8 +489,7 @@ func (sm *streamMigrater) createTargetStreams(ctx context.Context, tmpl []*vrStr
 			for _, rule := range vrs.bls.Filter.Rules {
 				buf := &strings.Builder{}
 				t := template.Must(template.New("").Parse(rule.Filter))
-				err := t.Execute(buf, target.si.ShardName())
-				if err != nil {
+				if err := t.Execute(buf, key.KeyRangeString(target.si.KeyRange)); err != nil {
 					return err
 				}
 				rule.Filter = buf.String()

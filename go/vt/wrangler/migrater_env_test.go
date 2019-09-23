@@ -384,7 +384,7 @@ func (tme *testShardMigraterEnv) expectDeleteReverseReplication() {
 func (tme *testShardMigraterEnv) expectCreateReverseReplication() {
 	tme.expectDeleteReverseReplication()
 	tme.forAllStreams(func(i, j int) {
-		tme.dbSourceClients[j].addQueryRE(fmt.Sprintf("insert into _vt.vreplication.*%s.*%s.*MariaDB/5-456-893.*Stopped", tme.targetShards[i], tme.sourceShards[j]), &sqltypes.Result{InsertID: uint64(j + 1)}, nil)
+		tme.dbSourceClients[j].addQueryRE(fmt.Sprintf("insert into _vt.vreplication.*%s.*%s.*MariaDB/5-456-893.*Stopped", tme.targetShards[i], key.KeyRangeString(tme.sourceKeyRanges[j])), &sqltypes.Result{InsertID: uint64(j + 1)}, nil)
 		tme.dbSourceClients[j].addQuery(fmt.Sprintf("select * from _vt.vreplication where id = %d", j+1), stoppedResult(j+1), nil)
 	})
 }
