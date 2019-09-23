@@ -72,7 +72,7 @@ func Preview(sql string) StatementType {
 	// Comparison is done in order of priority.
 	loweredFirstWord := strings.ToLower(firstWord)
 	switch loweredFirstWord {
-	case "select":
+	case "select", "explain":
 		return StmtSelect
 	case "stream":
 		return StmtStream

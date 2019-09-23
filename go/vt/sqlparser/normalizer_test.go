@@ -188,22 +188,29 @@ func TestNormalize(t *testing.T) {
 		outbv: map[string]*querypb.BindVariable{
 			"bv1": sqltypes.TestBindVariable([]interface{}{1, []byte("2")}),
 		},
+	}, {
+		// EXPLAIN is not stripped out
+		in:      "explain select * from t",
+		outstmt: "explain select * from t",
+		outbv:   map[string]*querypb.BindVariable{},
 	}}
 	for _, tc := range testcases {
-		stmt, err := Parse(tc.in)
-		if err != nil {
-			t.Error(err)
-			continue
-		}
-		bv := make(map[string]*querypb.BindVariable)
-		Normalize(stmt, bv, prefix)
-		outstmt := String(stmt)
-		if outstmt != tc.outstmt {
-			t.Errorf("Query:\n%s:\n%s, want\n%s", tc.in, outstmt, tc.outstmt)
-		}
-		if !reflect.DeepEqual(tc.outbv, bv) {
-			t.Errorf("Query:\n%s:\n%v, want\n%v", tc.in, bv, tc.outbv)
-		}
+		t.Run(tc.in, func(t *testing.T) {
+			stmt, err := Parse(tc.in)
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			bv := make(map[string]*querypb.BindVariable)
+			Normalize(stmt, bv, prefix)
+			outstmt := String(stmt)
+			if outstmt != tc.outstmt {
+				t.Errorf("Query:\n%s:\n%s, want\n%s", tc.in, outstmt, tc.outstmt)
+			}
+			if !reflect.DeepEqual(tc.outbv, bv) {
+				t.Errorf("Query:\n%s:\n%v, want\n%v", tc.in, bv, tc.outbv)
+			}
+		})
 	}
 }
 

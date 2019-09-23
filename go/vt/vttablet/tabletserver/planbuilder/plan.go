@@ -277,7 +277,7 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table) (*Pla
 		plan, err = analyzeDDL(stmt, tables), nil
 	case *sqlparser.Show:
 		plan, err = &Plan{PlanID: PlanOtherRead}, nil
-	case *sqlparser.OtherRead:
+	case *sqlparser.OtherRead, *sqlparser.Explain:
 		plan, err = &Plan{PlanID: PlanOtherRead}, nil
 	case *sqlparser.OtherAdmin:
 		plan, err = &Plan{PlanID: PlanOtherAdmin}, nil

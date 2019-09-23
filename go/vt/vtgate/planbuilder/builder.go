@@ -281,6 +281,12 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 		plan.Instructions, err = buildDeletePlan(stmt, vschema)
 	case *sqlparser.Union:
 		plan.Instructions, err = buildUnionPlan(stmt, vschema)
+	case *sqlparser.Explain:
+		innerPlan, err2 := buildSelectPlan(stmt.InnerSelect, vschema)
+		if err2 != nil {
+			return nil, err
+		}
+		plan.Instructions = &engine.Explain{Input: innerPlan}
 	case *sqlparser.Set:
 		return nil, errors.New("unsupported construct: set")
 	case *sqlparser.Show:

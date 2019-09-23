@@ -1821,3 +1821,7 @@
 # non-existent table on right of join
 "select c from user join t"
 "table t not found"
+
+# explain it!
+"explain select c from user"
+"table t not found"

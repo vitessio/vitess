@@ -3827,3 +3827,35 @@ func compliantName(in string) string {
 	}
 	return buf.String()
 }
+
+var _ SelectStatement = (*Explain)(nil)
+
+type Explain struct {
+	// TODO: this inner structure could be something else, but let's start here
+	InnerSelect *Select
+}
+
+func (Explain) iSelectStatement() {}
+
+func (Explain) iStatement() {}
+
+func (Explain) iInsertRows() {}
+
+func (e *Explain) AddOrder(order *Order) {
+	e.InnerSelect.AddOrder(order)
+}
+
+func (e *Explain) SetLimit(l *Limit) {
+	e.InnerSelect.SetLimit(l)
+}
+
+func (e *Explain) Format(buf *TrackedBuffer) {
+	buf.Myprintf("explain %v", e.InnerSelect)
+}
+
+func (e *Explain) walkSubtree(visit Visit) error {
+	return Walk(
+		visit,
+		e.InnerSelect,
+	)
+}

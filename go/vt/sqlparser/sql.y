@@ -119,7 +119,7 @@ func skipToEnd(yylex interface{}) {
 
 %token LEX_ERROR
 %left <bytes> UNION
-%token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
+%token <bytes> EXPLAIN SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS
 %token <bytes> VALUES LAST_INSERT_ID
 %token <bytes> NEXT VALUE SHARE MODE
@@ -160,7 +160,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH
 %token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
-%token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
+%token <bytes> SHOW DESCRIBE DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES
 %token <bytes> STATUS VARIABLES WARNINGS
@@ -211,7 +211,7 @@ func skipToEnd(yylex interface{}) {
 
 %type <statement> command
 %type <selStmt> select_statement base_select union_lhs union_rhs
-%type <statement> stream_statement insert_statement update_statement delete_statement set_statement
+%type <statement> stream_statement insert_statement update_statement delete_statement set_statement explain_select_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
@@ -351,10 +351,17 @@ command:
 | rollback_statement
 | other_statement
 | flush_statement
+| explain_select_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
 }
+
+explain_select_statement:
+  EXPLAIN select_statement
+  {
+    $$ = &Explain{InnerSelect: $2.(*Select)}
+  }
 
 select_statement:
   base_select order_by_opt limit_opt lock_opt
@@ -1743,10 +1750,6 @@ other_statement:
     $$ = &OtherRead{}
   }
 | DESCRIBE skip_to_end
-  {
-    $$ = &OtherRead{}
-  }
-| EXPLAIN skip_to_end
   {
     $$ = &OtherRead{}
   }
