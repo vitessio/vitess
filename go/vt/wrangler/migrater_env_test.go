@@ -371,17 +371,28 @@ func (tme *testShardMigraterEnv) expectWaitForCatchup() {
 	})
 }
 
-func (tme *testShardMigraterEnv) expectCreateJournals() {
+func (tme *testShardMigraterEnv) expectDeleteReverseReplication() {
+	// NOTE: this is not a faithful reproduction of what should happen.
+	// The ids returned are not accurate.
 	for _, dbclient := range tme.dbSourceClients {
-		dbclient.addQueryRE("insert into _vt.resharding_journal.*", &sqltypes.Result{}, nil)
+		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test_reverse'", resultid12, nil)
+		dbclient.addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
+		dbclient.addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
 	}
 }
 
 func (tme *testShardMigraterEnv) expectCreateReverseReplication() {
+	tme.expectDeleteReverseReplication()
 	tme.forAllStreams(func(i, j int) {
 		tme.dbSourceClients[j].addQueryRE(fmt.Sprintf("insert into _vt.vreplication.*%s.*%s.*MariaDB/5-456-893.*Stopped", tme.targetShards[i], tme.sourceShards[j]), &sqltypes.Result{InsertID: uint64(j + 1)}, nil)
 		tme.dbSourceClients[j].addQuery(fmt.Sprintf("select * from _vt.vreplication where id = %d", j+1), stoppedResult(j+1), nil)
 	})
+}
+
+func (tme *testShardMigraterEnv) expectCreateJournals() {
+	for _, dbclient := range tme.dbSourceClients {
+		dbclient.addQueryRE("insert into _vt.resharding_journal.*", &sqltypes.Result{}, nil)
+	}
 }
 
 func (tme *testShardMigraterEnv) expectDeleteTargetVReplication() {
@@ -398,4 +409,8 @@ func (tme *testShardMigraterEnv) expectCancelMigration() {
 	for _, dbclient := range tme.dbTargetClients {
 		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", &sqltypes.Result{}, nil)
 	}
+	for _, dbclient := range tme.dbSourceClients {
+		dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks'", &sqltypes.Result{}, nil)
+	}
+	tme.expectDeleteReverseReplication()
 }

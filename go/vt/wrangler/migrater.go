@@ -61,16 +61,17 @@ const (
 // migrater contains the metadata for migrating read and write traffic
 // for vreplication streams.
 type migrater struct {
-	migrationType  binlogdatapb.MigrationType
-	wr             *Wrangler
-	workflow       string
-	id             int64
-	sources        map[string]*miSource
-	targets        map[string]*miTarget
-	sourceKeyspace string
-	targetKeyspace string
-	tables         []string
-	sourceKSSchema *vindexes.KeyspaceSchema
+	migrationType   binlogdatapb.MigrationType
+	wr              *Wrangler
+	workflow        string
+	reverseWorkflow string
+	id              int64
+	sources         map[string]*miSource
+	targets         map[string]*miTarget
+	sourceKeyspace  string
+	targetKeyspace  string
+	tables          []string
+	sourceKSSchema  *vindexes.KeyspaceSchema
 }
 
 // miTarget contains the metadata for each migration target.
@@ -187,6 +188,11 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 			mi.cancelMigration(ctx)
 			return 0, err
 		}
+		if err := mi.createReverseReplication(ctx); err != nil {
+			mi.wr.Logger().Errorf("createReverseReplication failed: %v", err)
+			mi.cancelMigration(ctx)
+			return 0, err
+		}
 	} else {
 		mi.wr.Logger().Infof("Journals were found. Completing the left over steps.")
 		// Need to gather positions in case all journals were not created.
@@ -214,11 +220,10 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 		mi.wr.Logger().Errorf("finalize failed: %v", err)
 		return 0, err
 	}
-	if err := mi.createReverseReplication(ctx); err != nil {
-		mi.wr.Logger().Errorf("createReverseReplication failed: %v", err)
+	if err := mi.deleteTargetVReplication(ctx); err != nil {
+		mi.wr.Logger().Errorf("deleteTargetVReplication failed: %v", err)
 		return 0, err
 	}
-	mi.deleteTargetVReplication(ctx)
 	return mi.id, nil
 }
 
@@ -227,14 +232,22 @@ func (wr *Wrangler) buildMigrater(ctx context.Context, targetKeyspace, workflow 
 	if err != nil {
 		return nil, err
 	}
+	var reverseWorkflow string
+	const reverse = "_reverse"
+	if strings.HasSuffix(workflow, reverse) {
+		reverseWorkflow = workflow[:len(workflow)-len(reverse)]
+	} else {
+		reverseWorkflow = workflow + reverse
+	}
 
 	mi := &migrater{
-		wr:             wr,
-		workflow:       workflow,
-		id:             hashStreams(targetKeyspace, targets),
-		targets:        targets,
-		sources:        make(map[string]*miSource),
-		targetKeyspace: targetKeyspace,
+		wr:              wr,
+		workflow:        workflow,
+		reverseWorkflow: reverseWorkflow,
+		id:              hashStreams(targetKeyspace, targets),
+		targets:         targets,
+		sources:         make(map[string]*miSource),
+		targetKeyspace:  targetKeyspace,
 	}
 	mi.wr.Logger().Infof("Migration ID for workflow %s: %d", workflow, mi.id)
 
@@ -619,6 +632,11 @@ func (mi *migrater) cancelMigration(ctx context.Context) {
 	if err != nil {
 		mi.wr.Logger().Errorf("Cancel migration failed: could not restart vreplication: %v", err)
 	}
+
+	err = mi.deleteReverseReplication(ctx)
+	if err != nil {
+		mi.wr.Logger().Errorf("Cancel migration failed: could not restart vreplication: %v", err)
+	}
 }
 
 func (mi *migrater) gatherPositions(ctx context.Context) error {
@@ -689,7 +707,10 @@ func (mi *migrater) createJournals(ctx context.Context, sourceWorkflows []string
 }
 
 func (mi *migrater) createReverseReplication(ctx context.Context) error {
-	return mi.forAllUids(func(target *miTarget, uid uint32) error {
+	if err := mi.deleteReverseReplication(ctx); err != nil {
+		return err
+	}
+	err := mi.forAllUids(func(target *miTarget, uid uint32) error {
 		bls := target.sources[uid]
 		source := mi.sources[bls.Shard]
 		reverseBls := &binlogdatapb.BinlogSource{
@@ -697,6 +718,7 @@ func (mi *migrater) createReverseReplication(ctx context.Context) error {
 			Shard:      target.si.ShardName(),
 			TabletType: bls.TabletType,
 			Filter:     &binlogdatapb.Filter{},
+			OnDdl:      bls.OnDdl,
 		}
 		for _, rule := range bls.Filter.Rules {
 			var filter string
@@ -723,7 +745,16 @@ func (mi *migrater) createReverseReplication(ctx context.Context) error {
 			})
 		}
 
-		_, err := mi.wr.VReplicationExec(ctx, source.master.Alias, binlogplayer.CreateVReplicationState("ReversedResharding", reverseBls, target.position, binlogplayer.BlpStopped, source.master.DbName()))
+		_, err := mi.wr.VReplicationExec(ctx, source.master.Alias, binlogplayer.CreateVReplicationState(mi.reverseWorkflow, reverseBls, target.position, binlogplayer.BlpStopped, source.master.DbName()))
+		return err
+	})
+	return err
+}
+
+func (mi *migrater) deleteReverseReplication(ctx context.Context) error {
+	return mi.forAllSources(func(source *miSource) error {
+		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s", encodeString(source.master.DbName()), encodeString(mi.reverseWorkflow))
+		_, err := mi.wr.tmc.VReplicationExec(ctx, source.master.Tablet, query)
 		return err
 	})
 }
@@ -811,13 +842,11 @@ func (mi *migrater) changeShardRouting(ctx context.Context) error {
 	return mi.wr.ts.MigrateServedType(ctx, mi.targetKeyspace, mi.targetShards(), mi.sourceShards(), topodatapb.TabletType_MASTER, nil)
 }
 
-func (mi *migrater) deleteTargetVReplication(ctx context.Context) {
-	_ = mi.forAllTargets(func(target *miTarget) error {
+func (mi *migrater) deleteTargetVReplication(ctx context.Context) error {
+	return mi.forAllTargets(func(target *miTarget) error {
 		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(mi.workflow))
-		if _, err := mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query); err != nil {
-			mi.wr.Logger().Errorf("Final cleanup: could not delete vreplication, please delete stopped streams manually: %v", err)
-		}
-		return nil
+		_, err := mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
+		return err
 	})
 }
 
