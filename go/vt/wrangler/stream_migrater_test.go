@@ -163,7 +163,7 @@ func TestStreamMigrateMainflow(t *testing.T) {
 	tme.expectStartReverseVReplication()
 	tme.expectDeleteTargetVReplication()
 
-	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true); err != nil {
+	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -330,7 +330,7 @@ func TestStreamMigrateTwoStreams(t *testing.T) {
 	tme.expectStartReverseVReplication()
 	tme.expectDeleteTargetVReplication()
 
-	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true); err != nil {
+	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -462,7 +462,7 @@ func TestStreamMigrateOneToMany(t *testing.T) {
 	tme.expectStartReverseVReplication()
 	tme.expectDeleteTargetVReplication()
 
-	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true); err != nil {
+	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -596,7 +596,7 @@ func TestStreamMigrateManyToOne(t *testing.T) {
 	tme.expectStartReverseVReplication()
 	tme.expectDeleteTargetVReplication()
 
-	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true); err != nil {
+	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -784,7 +784,7 @@ func TestStreamMigrateSyncSuccess(t *testing.T) {
 	tme.expectStartReverseVReplication()
 	tme.expectDeleteTargetVReplication()
 
-	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true); err != nil {
+	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -939,7 +939,7 @@ func TestStreamMigrateSyncFail(t *testing.T) {
 
 	tme.expectCancelMigration()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
 	want := "does not match"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("MigrateWrites err: %v, want %s", err, want)
@@ -1030,7 +1030,7 @@ func TestStreamMigrateCancel(t *testing.T) {
 	}
 	cancelMigration()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
 	want := "intentionally failed"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("MigrateWrites err: %v, want %s", err, want)
@@ -1100,7 +1100,7 @@ func TestStreamMigrateStoppedStreams(t *testing.T) {
 	stopStreams()
 	tme.expectCancelMigration()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
 	want := "cannot migrate until all strems are running: 0"
 	if err == nil || err.Error() != want {
 		t.Errorf("MigrateWrites err: %v, want %v", err, want)
@@ -1161,7 +1161,7 @@ func TestStreamMigrateStillCopying(t *testing.T) {
 	stopStreams()
 	tme.expectCancelMigration()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
 	want := "cannot migrate while vreplication streams in source shards are still copying: 0"
 	if err == nil || err.Error() != want {
 		t.Errorf("MigrateWrites err: %v, want %v", err, want)
@@ -1221,7 +1221,7 @@ func TestStreamMigrateEmptyWorflow(t *testing.T) {
 	stopStreams()
 	tme.expectCancelMigration()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
 	want := "VReplication streams must have named workflows for migration: shard: ks:0, stream: 1"
 	if err == nil || err.Error() != want {
 		t.Errorf("MigrateWrites err: %v, want %v", err, want)
@@ -1281,7 +1281,7 @@ func TestStreamMigrateDupWorflow(t *testing.T) {
 	stopStreams()
 	tme.expectCancelMigration()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
 	want := "VReplication stream has the same workflow name as the resharding workflow: shard: ks:0, stream: 1"
 	if err == nil || err.Error() != want {
 		t.Errorf("MigrateWrites err: %v, want %v", err, want)
@@ -1352,7 +1352,7 @@ func TestStreamMigrateStreamsMismatch(t *testing.T) {
 	stopStreams()
 	tme.expectCancelMigration()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
 	want := "streams are mismatched across source shards"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("MigrateWrites err: %v, must contain %v", err, want)

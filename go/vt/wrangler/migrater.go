@@ -138,7 +138,7 @@ func (wr *Wrangler) MigrateReads(ctx context.Context, targetKeyspace, workflow s
 }
 
 // MigrateWrites is a generic way of migrating write traffic for a resharding workflow.
-func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow string, filteredReplicationWaitTime time.Duration, reverseReplication bool) (journalID int64, err error) {
+func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow string, filteredReplicationWaitTime time.Duration, cancelMigrate, reverseReplication bool) (journalID int64, err error) {
 	mi, err := wr.buildMigrater(ctx, targetKeyspace, workflow)
 	if err != nil {
 		wr.Logger().Errorf("buildMigrater failed: %v", err)
@@ -189,6 +189,11 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 			mi.wr.Logger().Errorf("buildStreamMigrater failed: %v", err)
 			return 0, err
 		}
+		if cancelMigrate {
+			mi.wr.Logger().Infof("Cancel was requested.")
+			mi.cancelMigration(ctx, sm)
+			return 0, nil
+		}
 		sourceWorkflows, err = sm.stopStreams(ctx)
 		if err != nil {
 			mi.wr.Logger().Errorf("stopStreams failed: %v", err)
@@ -216,6 +221,11 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 			return 0, err
 		}
 	} else {
+		if cancelMigrate {
+			err := fmt.Errorf("migration has reached the point of no return, cannot cancel")
+			mi.wr.Logger().Errorf("%v", err)
+			return 0, err
+		}
 		mi.wr.Logger().Infof("Journals were found. Completing the left over steps.")
 		// Need to gather positions in case all journals were not created.
 		if err := mi.gatherPositions(ctx); err != nil {
@@ -237,8 +247,7 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 		mi.wr.Logger().Errorf("changeRouting failed: %v", err)
 		return 0, err
 	}
-	sm := &streamMigrater{mi: mi}
-	if err := sm.finalize(ctx, sourceWorkflows); err != nil {
+	if err := streamMigraterfinalize(ctx, mi, sourceWorkflows); err != nil {
 		mi.wr.Logger().Errorf("finalize failed: %v", err)
 		return 0, err
 	}
