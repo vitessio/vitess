@@ -165,32 +165,35 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 	}
 	if !journalsExist {
 		mi.wr.Logger().Infof("No previous journals were found. Proceeding normally.")
-		sm := &streamMigrater{mi: mi}
-		tabletStreams, err := sm.stopStreams(ctx)
+		sm, err := buildStreamMigrater(ctx, mi)
+		if err != nil {
+			mi.wr.Logger().Errorf("buildStreamMigrater failed: %v", err)
+			return 0, err
+		}
+		sourceWorkflows, err = sm.stopStreams(ctx)
 		if err != nil {
 			mi.wr.Logger().Errorf("stopStreams failed: %v", err)
-			mi.cancelMigration(ctx)
+			mi.cancelMigration(ctx, sm)
 			return 0, err
 		}
 		if err := mi.stopSourceWrites(ctx); err != nil {
 			mi.wr.Logger().Errorf("stopSourceWrites failed: %v", err)
-			mi.cancelMigration(ctx)
+			mi.cancelMigration(ctx, sm)
 			return 0, err
 		}
 		if err := mi.waitForCatchup(ctx, filteredReplicationWaitTime); err != nil {
 			mi.wr.Logger().Errorf("waitForCatchup failed: %v", err)
-			mi.cancelMigration(ctx)
+			mi.cancelMigration(ctx, sm)
 			return 0, err
 		}
-		sourceWorkflows, err = sm.migrateStreams(ctx, tabletStreams)
-		if err != nil {
+		if err := sm.migrateStreams(ctx); err != nil {
 			mi.wr.Logger().Errorf("migrateStreams failed: %v", err)
-			mi.cancelMigration(ctx)
+			mi.cancelMigration(ctx, sm)
 			return 0, err
 		}
 		if err := mi.createReverseReplication(ctx); err != nil {
 			mi.wr.Logger().Errorf("createReverseReplication failed: %v", err)
-			mi.cancelMigration(ctx)
+			mi.cancelMigration(ctx, sm)
 			return 0, err
 		}
 	} else {
@@ -610,7 +613,7 @@ func (mi *migrater) waitForCatchup(ctx context.Context, filteredReplicationWaitT
 	})
 }
 
-func (mi *migrater) cancelMigration(ctx context.Context) {
+func (mi *migrater) cancelMigration(ctx context.Context, sm *streamMigrater) {
 	var err error
 	if mi.migrationType == binlogdatapb.MigrationType_TABLES {
 		err = mi.changeTableSourceWrites(ctx, allowWrites)
@@ -621,7 +624,6 @@ func (mi *migrater) cancelMigration(ctx context.Context) {
 		mi.wr.Logger().Errorf("Cancel migration failed:", err)
 	}
 
-	sm := &streamMigrater{mi: mi}
 	sm.cancelMigration(ctx)
 
 	err = mi.forAllTargets(func(target *miTarget) error {
