@@ -371,7 +371,7 @@ func (tme *testShardMigraterEnv) expectWaitForCatchup() {
 	})
 }
 
-func (tme *testShardMigraterEnv) expectDeleteReverseReplication() {
+func (tme *testShardMigraterEnv) expectDeleteReverseVReplication() {
 	// NOTE: this is not a faithful reproduction of what should happen.
 	// The ids returned are not accurate.
 	for _, dbclient := range tme.dbSourceClients {
@@ -381,8 +381,8 @@ func (tme *testShardMigraterEnv) expectDeleteReverseReplication() {
 	}
 }
 
-func (tme *testShardMigraterEnv) expectCreateReverseReplication() {
-	tme.expectDeleteReverseReplication()
+func (tme *testShardMigraterEnv) expectCreateReverseVReplication() {
+	tme.expectDeleteReverseVReplication()
 	tme.forAllStreams(func(i, j int) {
 		tme.dbSourceClients[j].addQueryRE(fmt.Sprintf("insert into _vt.vreplication.*%s.*%s.*MariaDB/5-456-893.*Stopped", tme.targetShards[i], key.KeyRangeString(tme.sourceKeyRanges[j])), &sqltypes.Result{InsertID: uint64(j + 1)}, nil)
 		tme.dbSourceClients[j].addQuery(fmt.Sprintf("select * from _vt.vreplication where id = %d", j+1), stoppedResult(j+1), nil)
@@ -392,6 +392,15 @@ func (tme *testShardMigraterEnv) expectCreateReverseReplication() {
 func (tme *testShardMigraterEnv) expectCreateJournals() {
 	for _, dbclient := range tme.dbSourceClients {
 		dbclient.addQueryRE("insert into _vt.resharding_journal.*", &sqltypes.Result{}, nil)
+	}
+}
+
+func (tme *testShardMigraterEnv) expectStartReverseVReplication() {
+	for _, dbclient := range tme.dbSourceClients {
+		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks'", resultid34, nil)
+		dbclient.addQuery("update _vt.vreplication set state = 'Running', message = '' where id in (3, 4)", &sqltypes.Result{}, nil)
+		dbclient.addQuery("select * from _vt.vreplication where id = 3", runningResult(3), nil)
+		dbclient.addQuery("select * from _vt.vreplication where id = 4", runningResult(4), nil)
 	}
 }
 
@@ -418,5 +427,5 @@ func (tme *testShardMigraterEnv) expectCancelMigration() {
 		dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
 		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
 	}
-	tme.expectDeleteReverseReplication()
+	tme.expectDeleteReverseVReplication()
 }
