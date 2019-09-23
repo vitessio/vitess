@@ -210,8 +210,8 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 			mi.cancelMigration(ctx, sm)
 			return 0, err
 		}
-		if err := mi.createReverseReplication(ctx); err != nil {
-			mi.wr.Logger().Errorf("createReverseReplication failed: %v", err)
+		if err := mi.createReverseVReplication(ctx); err != nil {
+			mi.wr.Logger().Errorf("createReverseVReplication failed: %v", err)
 			mi.cancelMigration(ctx, sm)
 			return 0, err
 		}
@@ -241,6 +241,12 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 	if err := sm.finalize(ctx, sourceWorkflows); err != nil {
 		mi.wr.Logger().Errorf("finalize failed: %v", err)
 		return 0, err
+	}
+	if reverseReplication {
+		if err := mi.startReverseVReplication(ctx); err != nil {
+			mi.wr.Logger().Errorf("startReverseVReplication failed: %v", err)
+			return 0, err
+		}
 	}
 	if err := mi.deleteTargetVReplication(ctx); err != nil {
 		mi.wr.Logger().Errorf("deleteTargetVReplication failed: %v", err)
@@ -660,7 +666,7 @@ func (mi *migrater) cancelMigration(ctx context.Context, sm *streamMigrater) {
 		mi.wr.Logger().Errorf("Cancel migration failed: could not restart vreplication: %v", err)
 	}
 
-	err = mi.deleteReverseReplication(ctx)
+	err = mi.deleteReverseVReplication(ctx)
 	if err != nil {
 		mi.wr.Logger().Errorf("Cancel migration failed: could not restart vreplication: %v", err)
 	}
@@ -684,8 +690,8 @@ func (mi *migrater) gatherPositions(ctx context.Context) error {
 	})
 }
 
-func (mi *migrater) createReverseReplication(ctx context.Context) error {
-	if err := mi.deleteReverseReplication(ctx); err != nil {
+func (mi *migrater) createReverseVReplication(ctx context.Context) error {
+	if err := mi.deleteReverseVReplication(ctx); err != nil {
 		return err
 	}
 	err := mi.forAllUids(func(target *miTarget, uid uint32) error {
@@ -729,7 +735,7 @@ func (mi *migrater) createReverseReplication(ctx context.Context) error {
 	return err
 }
 
-func (mi *migrater) deleteReverseReplication(ctx context.Context) error {
+func (mi *migrater) deleteReverseVReplication(ctx context.Context) error {
 	return mi.forAllSources(func(source *miSource) error {
 		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s", encodeString(source.master.DbName()), encodeString(mi.reverseWorkflow))
 		_, err := mi.wr.tmc.VReplicationExec(ctx, source.master.Tablet, query)
@@ -867,6 +873,14 @@ func (mi *migrater) changeShardRouting(ctx context.Context) error {
 		return err
 	}
 	return mi.wr.ts.MigrateServedType(ctx, mi.targetKeyspace, mi.targetShards(), mi.sourceShards(), topodatapb.TabletType_MASTER, nil)
+}
+
+func (mi *migrater) startReverseVReplication(ctx context.Context) error {
+	return mi.forAllSources(func(source *miSource) error {
+		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s", encodeString(source.master.DbName()))
+		_, err := mi.wr.VReplicationExec(ctx, source.master.Alias, query)
+		return err
+	})
 }
 
 func (mi *migrater) deleteTargetVReplication(ctx context.Context) error {

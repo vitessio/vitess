@@ -159,7 +159,8 @@ func TestStreamMigrateMainflow(t *testing.T) {
 	}
 	finalize()
 
-	tme.expectCreateReverseReplication()
+	tme.expectCreateReverseVReplication()
+	tme.expectStartReverseVReplication()
 	tme.expectDeleteTargetVReplication()
 
 	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true); err != nil {
@@ -325,7 +326,8 @@ func TestStreamMigrateTwoStreams(t *testing.T) {
 	}
 	finalize()
 
-	tme.expectCreateReverseReplication()
+	tme.expectCreateReverseVReplication()
+	tme.expectStartReverseVReplication()
 	tme.expectDeleteTargetVReplication()
 
 	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true); err != nil {
@@ -456,7 +458,8 @@ func TestStreamMigrateOneToMany(t *testing.T) {
 	}
 	finalize()
 
-	tme.expectCreateReverseReplication()
+	tme.expectCreateReverseVReplication()
+	tme.expectStartReverseVReplication()
 	tme.expectDeleteTargetVReplication()
 
 	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true); err != nil {
@@ -569,7 +572,7 @@ func TestStreamMigrateManyToOne(t *testing.T) {
 		}
 	}
 	migrateStreams()
-	tme.expectCreateReverseReplication()
+	tme.expectCreateReverseVReplication()
 
 	tme.expectCreateJournals()
 
@@ -590,6 +593,7 @@ func TestStreamMigrateManyToOne(t *testing.T) {
 	}
 	finalize()
 
+	tme.expectStartReverseVReplication()
 	tme.expectDeleteTargetVReplication()
 
 	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true); err != nil {
@@ -776,7 +780,8 @@ func TestStreamMigrateSyncSuccess(t *testing.T) {
 	}
 	finalize()
 
-	tme.expectCreateReverseReplication()
+	tme.expectCreateReverseVReplication()
+	tme.expectStartReverseVReplication()
 	tme.expectDeleteTargetVReplication()
 
 	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true); err != nil {
@@ -1021,7 +1026,7 @@ func TestStreamMigrateCancel(t *testing.T) {
 		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", &sqltypes.Result{}, nil)
 		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", &sqltypes.Result{}, nil)
 
-		tme.expectDeleteReverseReplication()
+		tme.expectDeleteReverseVReplication()
 	}
 	cancelMigration()
 
