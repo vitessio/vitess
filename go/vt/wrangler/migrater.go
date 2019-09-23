@@ -726,7 +726,7 @@ func (mi *migrater) createReverseReplication(ctx context.Context) error {
 			var filter string
 			if strings.HasPrefix(rule.Match, "/") {
 				if mi.sourceKSSchema.Keyspace.Sharded {
-					filter = bls.Shard
+					filter = key.KeyRangeString(source.si.KeyRange)
 				}
 			} else {
 				var inKeyrange string
@@ -737,7 +737,7 @@ func (mi *migrater) createReverseReplication(ctx context.Context) error {
 					}
 					// TODO(sougou): handle degenerate cases like sequence, etc.
 					// We currently assume the primary vindex is the best way to filter, which may not be true.
-					inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s', '%s')", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]), vtable.ColumnVindexes[0].Type, bls.Shard)
+					inKeyrange = fmt.Sprintf(" where in_keyrange(%s, '%s', '%s')", sqlparser.String(vtable.ColumnVindexes[0].Columns[0]), vtable.ColumnVindexes[0].Type, key.KeyRangeString(source.si.KeyRange))
 				}
 				filter = fmt.Sprintf("select * from %s%s", rule.Match, inKeyrange)
 			}

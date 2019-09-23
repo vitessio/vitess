@@ -569,6 +569,7 @@ func TestStreamMigrateManyToOne(t *testing.T) {
 		}
 	}
 	migrateStreams()
+	tme.expectCreateReverseReplication()
 
 	tme.expectCreateJournals()
 
@@ -589,7 +590,6 @@ func TestStreamMigrateManyToOne(t *testing.T) {
 	}
 	finalize()
 
-	tme.expectCreateReverseReplication()
 	tme.expectDeleteTargetVReplication()
 
 	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true); err != nil {
