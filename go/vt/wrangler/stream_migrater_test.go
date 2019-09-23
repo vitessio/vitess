@@ -1005,7 +1005,7 @@ func TestStreamMigrateCancel(t *testing.T) {
 	}
 	stopStreamsFail()
 
-	smCancelMigration := func() {
+	cancelMigration := func() {
 		// sm.migrateStreams->sm.deleteTargetStreams
 		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", resultid34, nil)
 		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", resultid34, nil)
@@ -1023,10 +1023,14 @@ func TestStreamMigrateCancel(t *testing.T) {
 		tme.dbSourceClients[1].addQuery("select * from _vt.vreplication where id = 1", runningResult(1), nil)
 		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 2", runningResult(2), nil)
 		tme.dbSourceClients[1].addQuery("select * from _vt.vreplication where id = 2", runningResult(2), nil)
-	}
-	smCancelMigration()
 
-	tme.expectCancelMigration()
+		// mi.cancelMigration->restart target streams
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", &sqltypes.Result{}, nil)
+
+		tme.expectDeleteReverseReplication()
+	}
+	cancelMigration()
 
 	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true)
 	want := "intentionally failed"
@@ -1096,6 +1100,7 @@ func TestStreamMigrateStoppedStreams(t *testing.T) {
 		}
 	}
 	stopStreams()
+	tme.expectCancelMigration()
 
 	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true)
 	want := "cannot migrate until all strems are running: 0"
@@ -1156,6 +1161,7 @@ func TestStreamMigrateStillCopying(t *testing.T) {
 		}
 	}
 	stopStreams()
+	tme.expectCancelMigration()
 
 	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true)
 	want := "cannot migrate while vreplication streams in source shards are still copying: 0"
@@ -1215,6 +1221,7 @@ func TestStreamMigrateEmptyWorflow(t *testing.T) {
 		}
 	}
 	stopStreams()
+	tme.expectCancelMigration()
 
 	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true)
 	want := "VReplication streams must have named workflows for migration: shard: ks:0, stream: 1"
@@ -1274,6 +1281,7 @@ func TestStreamMigrateDupWorflow(t *testing.T) {
 		}
 	}
 	stopStreams()
+	tme.expectCancelMigration()
 
 	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true)
 	want := "VReplication stream has the same workflow name as the resharding workflow: shard: ks:0, stream: 1"
@@ -1344,6 +1352,7 @@ func TestStreamMigrateStreamsMismatch(t *testing.T) {
 		}
 	}
 	stopStreams()
+	tme.expectCancelMigration()
 
 	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true)
 	want := "streams are mismatched across source shards"
