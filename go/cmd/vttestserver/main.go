@@ -154,6 +154,8 @@ func parseFlags() (config vttest.Config, env vttest.Environment, err error) {
 
 	flag.StringVar(&config.TabletHostName, "tablet_hostname", "localhost", "The hostname to use for the tablet otherwise it will be derived from OS' hostname")
 
+	flag.BoolVar(&config.InitWorkflowManager, "workflow_manager_init", false, "Enable workflow manager")
+
 	flag.Parse()
 
 	if basePort != 0 {

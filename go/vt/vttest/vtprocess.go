@@ -243,6 +243,9 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 	if args.TabletHostName != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-tablet_hostname", args.TabletHostName}...)
 	}
+	if args.InitWorkflowManager {
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-workflow_manager_init"}...)
+	}
 
 	if socket != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{
