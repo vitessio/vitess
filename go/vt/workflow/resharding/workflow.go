@@ -68,6 +68,7 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 	subFlags := flag.NewFlagSet(horizontalReshardingFactoryName, flag.ContinueOnError)
 	keyspace := subFlags.String("keyspace", "", "Name of keyspace to perform horizontal resharding")
 	vtworkersStr := subFlags.String("vtworkers", "", "A comma-separated list of vtworker addresses")
+	excludeTablesStr := subFlags.String("exclude_tables", "", "A comma-separated list of tables to exclude")
 	sourceShardsStr := subFlags.String("source_shards", "", "A comma-separated list of source shards")
 	destinationShardsStr := subFlags.String("destination_shards", "", "A comma-separated list of destination shards")
 	minHealthyRdonlyTablets := subFlags.String("min_healthy_rdonly_tablets", "1", "Minimum number of healthy RDONLY tablets required in source shards")
@@ -85,6 +86,7 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 	}
 
 	vtworkers := strings.Split(*vtworkersStr, ",")
+	excludeTables := strings.Split(*excludeTablesStr, ",")
 	sourceShards := strings.Split(*sourceShardsStr, ",")
 	destinationShards := strings.Split(*destinationShardsStr, ",")
 	phaseEnableApprovals := parsePhaseEnableApprovals(*phaseEnableApprovalsStr)
@@ -110,7 +112,7 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 	}
 
 	w.Name = fmt.Sprintf("Reshard shards %v into shards %v of keyspace %v.", *keyspace, *sourceShardsStr, *destinationShardsStr)
-	checkpoint, err := initCheckpoint(*keyspace, vtworkers, sourceShards, destinationShards, *minHealthyRdonlyTablets, *splitCmd, *splitDiffDestTabletType, useConsistentSnapshotArg)
+	checkpoint, err := initCheckpoint(*keyspace, vtworkers, excludeTables, sourceShards, destinationShards, *minHealthyRdonlyTablets, *splitCmd, *splitDiffDestTabletType, useConsistentSnapshotArg)
 	if err != nil {
 		return err
 	}
@@ -269,13 +271,14 @@ func validateWorkflow(m *workflow.Manager, keyspace string, vtworkers, sourceSha
 }
 
 // initCheckpoint initialize the checkpoint for the horizontal workflow.
-func initCheckpoint(keyspace string, vtworkers, sourceShards, destinationShards []string, minHealthyRdonlyTablets, splitCmd, splitDiffDestTabletType string, useConsistentSnapshot string) (*workflowpb.WorkflowCheckpoint, error) {
+func initCheckpoint(keyspace string, vtworkers, excludeTables, sourceShards, destinationShards []string, minHealthyRdonlyTablets, splitCmd, splitDiffDestTabletType string, useConsistentSnapshot string) (*workflowpb.WorkflowCheckpoint, error) {
 	tasks := make(map[string]*workflowpb.Task)
 	initTasks(tasks, phaseCopySchema, destinationShards, func(i int, shard string) map[string]string {
 		return map[string]string{
 			"keyspace":          keyspace,
 			"source_shard":      sourceShards[0],
 			"destination_shard": shard,
+			"exclude_tables":    strings.Join(excludeTables, ","),
 		}
 	})
 	initTasks(tasks, phaseClone, sourceShards, func(i int, shard string) map[string]string {
@@ -286,6 +289,7 @@ func initCheckpoint(keyspace string, vtworkers, sourceShards, destinationShards 
 			"split_cmd":                  splitCmd,
 			"vtworker":                   vtworkers[i],
 			"use_consistent_snapshot":    useConsistentSnapshot,
+			"exclude_tables":             strings.Join(excludeTables, ","),
 		}
 	})
 	initTasks(tasks, phaseWaitForFilteredReplication, destinationShards, func(i int, shard string) map[string]string {
@@ -301,6 +305,7 @@ func initCheckpoint(keyspace string, vtworkers, sourceShards, destinationShards 
 			"dest_tablet_type":        splitDiffDestTabletType,
 			"vtworker":                vtworkers[i],
 			"use_consistent_snapshot": useConsistentSnapshot,
+			"exclude_tables":          strings.Join(excludeTables, ","),
 		}
 	})
 	initTasks(tasks, phaseMigrateRdonly, sourceShards, func(i int, shard string) map[string]string {

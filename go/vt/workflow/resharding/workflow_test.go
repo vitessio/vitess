@@ -55,7 +55,7 @@ func TestSourceDestShards(t *testing.T) {
 	defer ctrl.Finish()
 
 	// Set up the fakeworkerclient. It is used at SplitClone and SplitDiff phase.
-	fakeVtworkerClient := setupFakeVtworker(testKeyspace, testVtworkers, false)
+	fakeVtworkerClient := setupFakeVtworker(testKeyspace, testVtworkers, false, "")
 	vtworkerclient.RegisterFactory("fake", fakeVtworkerClient.FakeVtworkerClientFactory)
 	defer vtworkerclient.UnregisterFactoryForTest("fake")
 
@@ -90,15 +90,20 @@ func TestSourceDestShards(t *testing.T) {
 
 // TestHorizontalResharding runs the happy path of HorizontalReshardingWorkflow.
 func TestHorizontalResharding(t *testing.T) {
-	testHorizontalReshardingWorkflow(t, false)
+	testHorizontalReshardingWorkflow(t, false, "")
 }
 
 // TestHorizontalReshardingWithConsistentSnapshot runs the happy path of HorizontalReshardingWorkflow with consistent snapshot.
 func TestHorizontalReshardingWithConsistentSnapshot(t *testing.T) {
-	testHorizontalReshardingWorkflow(t, true)
+	testHorizontalReshardingWorkflow(t, true, "")
 }
 
-func testHorizontalReshardingWorkflow(t *testing.T, useConsistentSnapshot bool) {
+// TestHorizontalReshardingWithExcludedTables runs the happy path of HorizontalReshardingWorkflow with excluded tables.
+func TestHorizontalReshardingWithExcludedTables(t *testing.T) {
+	testHorizontalReshardingWorkflow(t, true, "table_a,table_b")
+}
+
+func testHorizontalReshardingWorkflow(t *testing.T, useConsistentSnapshot bool, excludeTables string) {
 	ctx := context.Background()
 	// Set up the mock wrangler. It is used for the CopySchema,
 	// WaitforFilteredReplication and Migrate phase.
@@ -106,7 +111,7 @@ func testHorizontalReshardingWorkflow(t *testing.T, useConsistentSnapshot bool) 
 	defer ctrl.Finish()
 	mockWranglerInterface := setupMockWrangler(ctrl, testKeyspace)
 	// Set up the fakeworkerclient. It is used at SplitClone and SplitDiff phase.
-	fakeVtworkerClient := setupFakeVtworker(testKeyspace, testVtworkers, useConsistentSnapshot)
+	fakeVtworkerClient := setupFakeVtworker(testKeyspace, testVtworkers, useConsistentSnapshot, excludeTables)
 	vtworkerclient.RegisterFactory("fake", fakeVtworkerClient.FakeVtworkerClientFactory)
 	defer vtworkerclient.UnregisterFactoryForTest("fake")
 	// Initialize the topology.
@@ -119,6 +124,9 @@ func testHorizontalReshardingWorkflow(t *testing.T, useConsistentSnapshot bool) 
 	args := []string{"-keyspace=" + testKeyspace, "-vtworkers=" + vtworkersParameter, "-phase_enable_approvals=", "-min_healthy_rdonly_tablets=2", "-source_shards=0", "-destination_shards=-80,80-"}
 	if useConsistentSnapshot {
 		args = append(args, "-use_consistent_snapshot")
+	}
+	if excludeTables != "" {
+		args = append(args, "-exclude_tables="+excludeTables)
 	}
 	uuid, err := m.Create(ctx, horizontalReshardingFactoryName, args)
 	if err != nil {
@@ -148,15 +156,15 @@ func testHorizontalReshardingWorkflow(t *testing.T, useConsistentSnapshot bool) 
 	wg.Wait()
 }
 
-func setupFakeVtworker(keyspace, vtworkers string, useConsistentSnapshot bool) *fakevtworkerclient.FakeVtworkerClient {
+func setupFakeVtworker(keyspace, vtworkers string, useConsistentSnapshot bool, excludeTables string) *fakevtworkerclient.FakeVtworkerClient {
 	flag.Set("vtworker_client_protocol", "fake")
 	fakeVtworkerClient := fakevtworkerclient.NewFakeVtworkerClient()
 	fakeVtworkerClient.RegisterResultForAddr(vtworkers, resetCommand(), "", nil)
-	fakeVtworkerClient.RegisterResultForAddr(vtworkers, splitCloneCommand(keyspace, useConsistentSnapshot), "", nil)
+	fakeVtworkerClient.RegisterResultForAddr(vtworkers, splitCloneCommand(keyspace, useConsistentSnapshot, excludeTables), "", nil)
 	fakeVtworkerClient.RegisterResultForAddr(vtworkers, resetCommand(), "", nil)
-	fakeVtworkerClient.RegisterResultForAddr(vtworkers, splitDiffCommand(keyspace, "-80", useConsistentSnapshot), "", nil)
+	fakeVtworkerClient.RegisterResultForAddr(vtworkers, splitDiffCommand(keyspace, "-80", useConsistentSnapshot, excludeTables), "", nil)
 	fakeVtworkerClient.RegisterResultForAddr(vtworkers, resetCommand(), "", nil)
-	fakeVtworkerClient.RegisterResultForAddr(vtworkers, splitDiffCommand(keyspace, "80-", useConsistentSnapshot), "", nil)
+	fakeVtworkerClient.RegisterResultForAddr(vtworkers, splitDiffCommand(keyspace, "80-", useConsistentSnapshot, excludeTables), "", nil)
 	return fakeVtworkerClient
 }
 
@@ -164,18 +172,24 @@ func resetCommand() []string {
 	return []string{"Reset"}
 }
 
-func splitCloneCommand(keyspace string, useConsistentSnapshot bool) []string {
+func splitCloneCommand(keyspace string, useConsistentSnapshot bool, excludeTables string) []string {
 	args := []string{"SplitClone", "--min_healthy_rdonly_tablets=2", keyspace + "/0"}
 	if useConsistentSnapshot {
 		args = append(args, "--use_consistent_snapshot")
 	}
+	if excludeTables != "" {
+		args = append(args, "--exclude_tables="+excludeTables)
+	}
 	return args
 }
 
-func splitDiffCommand(keyspace string, shardId string, useConsistentSnapshot bool) []string {
+func splitDiffCommand(keyspace string, shardId string, useConsistentSnapshot bool, excludeTables string) []string {
 	args := []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", "--dest_tablet_type=RDONLY", keyspace + "/" + shardId}
 	if useConsistentSnapshot {
 		args = append(args, "--use_consistent_snapshot")
+	}
+	if excludeTables != "" {
+		args = append(args, "--exclude_tables="+excludeTables)
 	}
 	return args
 }
@@ -183,8 +197,8 @@ func splitDiffCommand(keyspace string, shardId string, useConsistentSnapshot boo
 func setupMockWrangler(ctrl *gomock.Controller, keyspace string) *MockReshardingWrangler {
 	mockWranglerInterface := NewMockReshardingWrangler(ctrl)
 	// Set the expected behaviors for mock wrangler.
-	mockWranglerInterface.EXPECT().CopySchemaShardFromShard(gomock.Any(), nil /* tableArray*/, nil /* excludeTableArray */, true /*includeViews*/, keyspace, "0", keyspace, "-80", wrangler.DefaultWaitSlaveTimeout).Return(nil)
-	mockWranglerInterface.EXPECT().CopySchemaShardFromShard(gomock.Any(), nil /* tableArray*/, nil /* excludeTableArray */, true /*includeViews*/, keyspace, "0", keyspace, "80-", wrangler.DefaultWaitSlaveTimeout).Return(nil)
+	mockWranglerInterface.EXPECT().CopySchemaShardFromShard(gomock.Any(), nil /* tableArray*/, gomock.Any() /* excludeTableArray */, true /*includeViews*/, keyspace, "0", keyspace, "-80", wrangler.DefaultWaitSlaveTimeout).Return(nil)
+	mockWranglerInterface.EXPECT().CopySchemaShardFromShard(gomock.Any(), nil /* tableArray*/, gomock.Any() /* excludeTableArray */, true /*includeViews*/, keyspace, "0", keyspace, "80-", wrangler.DefaultWaitSlaveTimeout).Return(nil)
 
 	mockWranglerInterface.EXPECT().WaitForFilteredReplication(gomock.Any(), keyspace, "-80", wrangler.DefaultWaitForFilteredReplicationMaxDelay).Return(nil)
 	mockWranglerInterface.EXPECT().WaitForFilteredReplication(gomock.Any(), keyspace, "80-", wrangler.DefaultWaitForFilteredReplicationMaxDelay).Return(nil)
