@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -50,7 +51,7 @@ func main() {
 		fileName := file.Name()
 		isGoFile, err := filepath.Match("*.go", fileName)
 		panicOnError(err)
-		if !file.IsDir() && isGoFile && !shouldExclude(fileName) {
+		if !file.IsDir() && isGoFile && !shouldExclude(path) {
 			wg.Add(1)
 			go func() {
 				checkFile(path, badFileHandle)
@@ -74,10 +75,14 @@ func main() {
 	os.Exit(0)
 }
 
-func shouldExclude(file string) bool {
+func shouldExclude(fullPath string) bool {
 	paths := strings.Split(*exclude, ",")
+	dir, file := filepath.Split(fullPath)
 	for _, pattern := range paths {
-		excluded, err := filepath.Match(pattern, file)
+		if dir == pattern || file == pattern {
+			return true
+		}
+		excluded, err := path.Match(pattern, fullPath)
 		panicOnError(err)
 		if excluded {
 			return true

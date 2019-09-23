@@ -71,11 +71,23 @@ func TestFileWithWrongLicenseHeader(t *testing.T) {
 	assert.Equal(t, rightFileWithBuildDirectives, replaceLicense(s(wrongFileWithBuildDirective), license))
 }
 
-func TestFileMatching(t *testing.T) {
-	p := "sql.go"
+func TestExcludePattern(t *testing.T) {
+	p := "sql.go,/exclude/*"
 	exclude = &p
 
-	assert.True(t, shouldExclude("sql.go"))
+	assertIsExcluded(t, "sql.go")
+	assertIsExcluded(t, "go/vt/sqlparser/sql.go")
+	assertIsExcluded(t, "/exclude/data.go")
+	assertIsNotExcluded(t, "/sql/data.go")
+	assertIsNotExcluded(t, "exclude.go")
+}
+
+func assertIsExcluded(t *testing.T, s string) bool {
+	return assert.True(t, shouldExclude(s), *exclude + " should match " + s)
+}
+
+func assertIsNotExcluded(t *testing.T, s string) bool {
+	return assert.False(t, shouldExclude(s), *exclude + " should not match " + s)
 }
 
 func s(in string) []string {
