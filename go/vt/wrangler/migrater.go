@@ -41,6 +41,10 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
+const (
+	frozenStr = "FROZEN"
+)
+
 // MigrateDirection specifies the migration direction.
 type MigrateDirection int
 
@@ -61,9 +65,12 @@ const (
 // migrater contains the metadata for migrating read and write traffic
 // for vreplication streams.
 type migrater struct {
-	migrationType   binlogdatapb.MigrationType
-	wr              *Wrangler
-	workflow        string
+	migrationType binlogdatapb.MigrationType
+	wr            *Wrangler
+	workflow      string
+
+	// if frozen is true, the rest of the fields are not set.
+	frozen          bool
 	reverseWorkflow string
 	id              int64
 	sources         map[string]*miSource
@@ -100,6 +107,9 @@ func (wr *Wrangler) MigrateReads(ctx context.Context, targetKeyspace, workflow s
 		wr.Logger().Errorf("buildMigrater failed: %v", err)
 		return err
 	}
+	if mi.frozen {
+		return fmt.Errorf("cannot migrate reads while MigrateWrites is in progress")
+	}
 	if err := mi.validate(ctx, false /* isWrite */); err != nil {
 		mi.wr.Logger().Errorf("validate failed: %v", err)
 		return err
@@ -134,6 +144,15 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 		wr.Logger().Errorf("buildMigrater failed: %v", err)
 		return 0, err
 	}
+	if mi.frozen {
+		mi.wr.Logger().Infof("Replication has been frozen already. Deleting left-over streams")
+		if err := mi.deleteTargetVReplication(ctx); err != nil {
+			mi.wr.Logger().Errorf("deleteTargetVReplication failed: %v", err)
+			return 0, err
+		}
+		return 0, nil
+	}
+
 	mi.wr.Logger().Infof("Built migration metadata: %+v", mi)
 	if err := mi.validate(ctx, true /* isWrite */); err != nil {
 		mi.wr.Logger().Errorf("validate failed: %v", err)
@@ -231,22 +250,23 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 }
 
 func (wr *Wrangler) buildMigrater(ctx context.Context, targetKeyspace, workflow string) (*migrater, error) {
-	targets, err := wr.buildMigrationTargets(ctx, targetKeyspace, workflow)
+	targets, frozen, err := wr.buildMigrationTargets(ctx, targetKeyspace, workflow)
 	if err != nil {
 		return nil, err
 	}
-	var reverseWorkflow string
-	const reverse = "_reverse"
-	if strings.HasSuffix(workflow, reverse) {
-		reverseWorkflow = workflow[:len(workflow)-len(reverse)]
-	} else {
-		reverseWorkflow = workflow + reverse
+	if frozen {
+		return &migrater{
+			wr:       wr,
+			workflow: workflow,
+			targets:  targets,
+			frozen:   true,
+		}, nil
 	}
 
 	mi := &migrater{
 		wr:              wr,
 		workflow:        workflow,
-		reverseWorkflow: reverseWorkflow,
+		reverseWorkflow: reverseName(workflow),
 		id:              hashStreams(targetKeyspace, targets),
 		targets:         targets,
 		sources:         make(map[string]*miSource),
@@ -321,11 +341,11 @@ func (wr *Wrangler) buildMigrater(ctx context.Context, targetKeyspace, workflow 
 	return mi, nil
 }
 
-func (wr *Wrangler) buildMigrationTargets(ctx context.Context, targetKeyspace, workflow string) (targets map[string]*miTarget, err error) {
+func (wr *Wrangler) buildMigrationTargets(ctx context.Context, targetKeyspace, workflow string) (targets map[string]*miTarget, frozen bool, err error) {
 	targets = make(map[string]*miTarget)
 	targetShards, err := wr.ts.GetShardNames(ctx, targetKeyspace)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	// We check all target shards. All of them may not have a stream.
 	// For example, if we're splitting -80 to -40,40-80, only those
@@ -333,15 +353,15 @@ func (wr *Wrangler) buildMigrationTargets(ctx context.Context, targetKeyspace, w
 	for _, targetShard := range targetShards {
 		targetsi, err := wr.ts.GetShard(ctx, targetKeyspace, targetShard)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		targetMaster, err := wr.ts.GetTablet(ctx, targetsi.MasterAlias)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		p3qr, err := wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, fmt.Sprintf("select id, source from _vt.vreplication where workflow=%s and db_name=%s", encodeString(workflow), encodeString(targetMaster.DbName())))
+		p3qr, err := wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, fmt.Sprintf("select id, source, message from _vt.vreplication where workflow=%s and db_name=%s", encodeString(workflow), encodeString(targetMaster.DbName())))
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		// If there's no vreplication stream, check the next target.
 		if len(p3qr.Rows) < 1 {
@@ -357,19 +377,24 @@ func (wr *Wrangler) buildMigrationTargets(ctx context.Context, targetKeyspace, w
 		for _, row := range qr.Rows {
 			id, err := sqltypes.ToInt64(row[0])
 			if err != nil {
-				return nil, err
+				return nil, false, err
 			}
+
 			var bls binlogdatapb.BinlogSource
 			if err := proto.UnmarshalText(row[1].ToString(), &bls); err != nil {
-				return nil, err
+				return nil, false, err
 			}
 			targets[targetShard].sources[uint32(id)] = &bls
+
+			if row[2].ToString() == frozenStr {
+				frozen = true
+			}
 		}
 	}
 	if len(targets) == 0 {
-		return nil, fmt.Errorf("no streams found in keyspace %s for: %s", targetKeyspace, workflow)
+		return nil, false, fmt.Errorf("no streams found in keyspace %s for: %s", targetKeyspace, workflow)
 	}
-	return targets, nil
+	return targets, frozen, nil
 }
 
 // hashStreams produces a reproducible hash based on the input parameters.
@@ -659,55 +684,6 @@ func (mi *migrater) gatherPositions(ctx context.Context) error {
 	})
 }
 
-func (mi *migrater) createJournals(ctx context.Context, sourceWorkflows []string) error {
-	var participants []*binlogdatapb.KeyspaceShard
-	for sourceShard := range mi.sources {
-		participants = append(participants, &binlogdatapb.KeyspaceShard{
-			Keyspace: mi.sourceKeyspace,
-			Shard:    sourceShard,
-		})
-	}
-	return mi.forAllSources(func(source *miSource) error {
-		if source.journaled {
-			return nil
-		}
-		journal := &binlogdatapb.Journal{
-			Id:              mi.id,
-			MigrationType:   mi.migrationType,
-			Tables:          mi.tables,
-			LocalPosition:   source.position,
-			Participants:    participants,
-			SourceWorkflows: sourceWorkflows,
-		}
-		for targetShard, target := range mi.targets {
-			found := false
-			for _, tsource := range target.sources {
-				if source.si.ShardName() == tsource.Shard {
-					found = true
-					break
-				}
-			}
-			if !found {
-				continue
-			}
-			journal.ShardGtids = append(journal.ShardGtids, &binlogdatapb.ShardGtid{
-				Keyspace: mi.targetKeyspace,
-				Shard:    targetShard,
-				Gtid:     target.position,
-			})
-		}
-		mi.wr.Logger().Infof("Creating journal: %v", journal)
-		statement := fmt.Sprintf("insert into _vt.resharding_journal "+
-			"(id, db_name, val) "+
-			"values (%v, %v, %v)",
-			mi.id, encodeString(source.master.DbName()), encodeString(journal.String()))
-		if _, err := mi.wr.tmc.VReplicationExec(ctx, source.master.Tablet, statement); err != nil {
-			return err
-		}
-		return nil
-	})
-}
-
 func (mi *migrater) createReverseReplication(ctx context.Context) error {
 	if err := mi.deleteReverseReplication(ctx); err != nil {
 		return err
@@ -758,6 +734,55 @@ func (mi *migrater) deleteReverseReplication(ctx context.Context) error {
 		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s", encodeString(source.master.DbName()), encodeString(mi.reverseWorkflow))
 		_, err := mi.wr.tmc.VReplicationExec(ctx, source.master.Tablet, query)
 		return err
+	})
+}
+
+func (mi *migrater) createJournals(ctx context.Context, sourceWorkflows []string) error {
+	var participants []*binlogdatapb.KeyspaceShard
+	for sourceShard := range mi.sources {
+		participants = append(participants, &binlogdatapb.KeyspaceShard{
+			Keyspace: mi.sourceKeyspace,
+			Shard:    sourceShard,
+		})
+	}
+	return mi.forAllSources(func(source *miSource) error {
+		if source.journaled {
+			return nil
+		}
+		journal := &binlogdatapb.Journal{
+			Id:              mi.id,
+			MigrationType:   mi.migrationType,
+			Tables:          mi.tables,
+			LocalPosition:   source.position,
+			Participants:    participants,
+			SourceWorkflows: sourceWorkflows,
+		}
+		for targetShard, target := range mi.targets {
+			found := false
+			for _, tsource := range target.sources {
+				if source.si.ShardName() == tsource.Shard {
+					found = true
+					break
+				}
+			}
+			if !found {
+				continue
+			}
+			journal.ShardGtids = append(journal.ShardGtids, &binlogdatapb.ShardGtid{
+				Keyspace: mi.targetKeyspace,
+				Shard:    targetShard,
+				Gtid:     target.position,
+			})
+		}
+		mi.wr.Logger().Infof("Creating journal: %v", journal)
+		statement := fmt.Sprintf("insert into _vt.resharding_journal "+
+			"(id, db_name, val) "+
+			"values (%v, %v, %v)",
+			mi.id, encodeString(source.master.DbName()), encodeString(journal.String()))
+		if _, err := mi.wr.tmc.VReplicationExec(ctx, source.master.Tablet, statement); err != nil {
+			return err
+		}
+		return nil
 	})
 }
 
@@ -845,6 +870,17 @@ func (mi *migrater) changeShardRouting(ctx context.Context) error {
 }
 
 func (mi *migrater) deleteTargetVReplication(ctx context.Context) error {
+	// Mark target streams as frozen before deleting. If MigrateWrites gets
+	// re-invoked after a freeze, it will skip all the previous steps and
+	// jump directly here for the final cleanup.
+	err := mi.forAllTargets(func(target *miTarget) error {
+		query := fmt.Sprintf("update _vt.vreplication set message = '%s' where db_name=%s and workflow=%s", frozenStr, encodeString(target.master.DbName()), encodeString(mi.workflow))
+		_, err := mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
+		return err
+	})
+	if err != nil {
+		return err
+	}
 	return mi.forAllTargets(func(target *miTarget) error {
 		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(mi.workflow))
 		_, err := mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
@@ -949,4 +985,12 @@ func (wr *Wrangler) saveRoutingRules(ctx context.Context, rules map[string][]str
 		})
 	}
 	return wr.ts.SaveRoutingRules(ctx, rrs)
+}
+
+func reverseName(workflow string) string {
+	const reverse = "_reverse"
+	if strings.HasSuffix(workflow, reverse) {
+		return workflow[:len(workflow)-len(reverse)]
+	}
+	return workflow + reverse
 }

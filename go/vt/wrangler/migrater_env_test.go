@@ -37,8 +37,8 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
-const vreplQueryks = "select id, source from _vt.vreplication where workflow='test' and db_name='vt_ks'"
-const vreplQueryks2 = "select id, source from _vt.vreplication where workflow='test' and db_name='vt_ks2'"
+const vreplQueryks = "select id, source, message from _vt.vreplication where workflow='test' and db_name='vt_ks'"
+const vreplQueryks2 = "select id, source, message from _vt.vreplication where workflow='test' and db_name='vt_ks2'"
 
 type testMigraterEnv struct {
 	ts              *topo.Server
@@ -138,11 +138,11 @@ func newTestTableMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 					}},
 				},
 			}
-			rows = append(rows, fmt.Sprintf("%d|%v", j+1, bls))
+			rows = append(rows, fmt.Sprintf("%d|%v|", j+1, bls))
 		}
 		tme.dbTargetClients[i].addInvariant(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"id|source",
-			"int64|varchar"),
+			"id|source|message",
+			"int64|varchar|varchar"),
 			rows...),
 		)
 	}
@@ -257,11 +257,11 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 					}},
 				},
 			}
-			rows = append(rows, fmt.Sprintf("%d|%v", j+1, bls))
+			rows = append(rows, fmt.Sprintf("%d|%v|", j+1, bls))
 		}
 		tme.dbTargetClients[i].addInvariant(vreplQueryks, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"id|source",
-			"int64|varchar"),
+			"id|source|message",
+			"int64|varchar|varchar"),
 			rows...),
 		)
 	}
@@ -399,6 +399,11 @@ func (tme *testShardMigraterEnv) expectDeleteTargetVReplication() {
 	// NOTE: this is not a faithful reproduction of what should happen.
 	// The ids returned are not accurate.
 	for _, dbclient := range tme.dbTargetClients {
+		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
+		dbclient.addQuery("update _vt.vreplication set message = 'FROZEN' where id in (1, 2)", &sqltypes.Result{}, nil)
+		dbclient.addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+		dbclient.addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+
 		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
 		dbclient.addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
 		dbclient.addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)

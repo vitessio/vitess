@@ -387,6 +387,15 @@ func TestTableMigrateMainflow(t *testing.T) {
 	deleteTargetVReplication := func() {
 		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
 		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
+		tme.dbTargetClients[0].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (1, 2)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+		tme.dbTargetClients[1].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (1, 2)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
+		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
 		tme.dbTargetClients[0].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
 		tme.dbTargetClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
 		tme.dbTargetClients[1].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
@@ -658,6 +667,14 @@ func TestShardMigrateMainflow(t *testing.T) {
 
 	deleteTargetVReplication := func() {
 		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
+		tme.dbTargetClients[0].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (1, 2)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid2, nil)
+		tme.dbTargetClients[1].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (2)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
 		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid2, nil)
 		tme.dbTargetClients[0].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
 		tme.dbTargetClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
@@ -810,6 +827,15 @@ func TestTableMigrateJournalExists(t *testing.T) {
 	// mi.deleteTargetVReplication
 	tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
 	tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
+	tme.dbTargetClients[0].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (1, 2)", &sqltypes.Result{}, nil)
+	tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+	tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+	tme.dbTargetClients[1].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (1, 2)", &sqltypes.Result{}, nil)
+	tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+	tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+
+	tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
+	tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
 	tme.dbTargetClients[0].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
 	tme.dbTargetClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
 	tme.dbTargetClients[1].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
@@ -861,6 +887,14 @@ func TestShardMigrateJournalExists(t *testing.T) {
 
 	// mi.deleteTargetVReplication
 	tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
+	tme.dbTargetClients[0].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (1, 2)", &sqltypes.Result{}, nil)
+	tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+	tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+	tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid2, nil)
+	tme.dbTargetClients[1].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (2)", &sqltypes.Result{}, nil)
+	tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+
+	tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
 	tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid2, nil)
 	tme.dbTargetClients[0].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
 	tme.dbTargetClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
@@ -882,6 +916,69 @@ func TestShardMigrateJournalExists(t *testing.T) {
 	checkIsMasterServing(t, tme.ts, "ks:-80", true)
 	checkIsMasterServing(t, tme.ts, "ks:80-", true)
 
+	verifyQueries(t, tme.allDBClients)
+}
+
+func TestMigrateFrozen(t *testing.T) {
+	ctx := context.Background()
+	tme := newTestTableMigrater(ctx, t)
+	defer tme.stopTablets(t)
+
+	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bls1 := &binlogdatapb.BinlogSource{
+		Keyspace: "ks1",
+		Shard:    "-40",
+		Filter: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "/.*",
+				Filter: "",
+			}},
+		},
+	}
+	tme.dbTargetClients[0].addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"id|source|message",
+		"int64|varchar|varchar"),
+		fmt.Sprintf("1|%v|FROZEN", bls1),
+	), nil)
+	tme.dbTargetClients[1].addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
+
+	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	want := "cannot migrate reads while MigrateWrites is in progress"
+	if err == nil || err.Error() != want {
+		t.Errorf("MigrateReads(frozen) err: %v, want %v", err, want)
+	}
+
+	tme.dbTargetClients[0].addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"id|source|message",
+		"int64|varchar|varchar"),
+		fmt.Sprintf("1|%v|FROZEN", bls1),
+	), nil)
+	tme.dbTargetClients[1].addQuery(vreplQueryks2, &sqltypes.Result{}, nil)
+
+	deleteTargetVReplication := func() {
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid1, nil)
+		tme.dbTargetClients[0].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (1)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid1, nil)
+		tme.dbTargetClients[0].addQuery("delete from _vt.vreplication where id in (1)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1)", &sqltypes.Result{}, nil)
+	}
+	deleteTargetVReplication()
+
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 0*time.Second, true)
+	if err != nil {
+		t.Fatal(err)
+	}
 	verifyQueries(t, tme.allDBClients)
 }
 
@@ -919,9 +1016,9 @@ func TestMigrateDistinctSources(t *testing.T) {
 		},
 	}
 	tme.dbTargetClients[0].addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|source",
-		"int64|varchar"),
-		fmt.Sprintf("1|%v", bls),
+		"id|source|message",
+		"int64|varchar|varchar"),
+		fmt.Sprintf("1|%v|", bls),
 	), nil)
 
 	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
@@ -947,9 +1044,9 @@ func TestMigrateMismatchedTables(t *testing.T) {
 		},
 	}
 	tme.dbTargetClients[0].addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|source",
-		"int64|varchar"),
-		fmt.Sprintf("1|%v", bls)),
+		"id|source|message",
+		"int64|varchar|varchar"),
+		fmt.Sprintf("1|%v|", bls)),
 		nil,
 	)
 
@@ -1000,10 +1097,10 @@ func TestMigrateNoTableWildcards(t *testing.T) {
 		},
 	}
 	tme.dbTargetClients[0].addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|source",
-		"int64|varchar"),
-		fmt.Sprintf("1|%v", bls1),
-		fmt.Sprintf("2|%v", bls2),
+		"id|source|message",
+		"int64|varchar|varchar"),
+		fmt.Sprintf("1|%v|", bls1),
+		fmt.Sprintf("2|%v|", bls2),
 	), nil)
 	bls3 := &binlogdatapb.BinlogSource{
 		Keyspace: "ks1",
@@ -1016,15 +1113,32 @@ func TestMigrateNoTableWildcards(t *testing.T) {
 		},
 	}
 	tme.dbTargetClients[1].addQuery(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|source",
-		"int64|varchar"),
-		fmt.Sprintf("1|%v", bls3),
+		"id|source|message",
+		"int64|varchar|varchar"),
+		fmt.Sprintf("1|%v|", bls3),
 	), nil)
 
 	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
 	want := "cannot migrate streams with wild card table names"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("MigrateReads: %v, must contain %v", err, want)
+	}
+}
+
+func TestReverseName(t *testing.T) {
+	tests := []struct {
+		in, out string
+	}{{
+		in:  "aa",
+		out: "aa_reverse",
+	}, {
+		in:  "aa_reverse",
+		out: "aa",
+	}}
+	for _, test := range tests {
+		if got, want := reverseName(test.in), test.out; got != want {
+			t.Errorf("reverseName(%s): %s, want %s", test.in, got, test.out)
+		}
 	}
 }
 
