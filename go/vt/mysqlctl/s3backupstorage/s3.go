@@ -72,6 +72,9 @@ var (
 
 	// path component delimiter
 	delimiter = "/"
+
+	// default partSize to use when file size is unknown in order to handle large files up to the maximum of 5 Tb
+	defaultPartSizeBytes = int64(math.Ceil(5 * 1024 * 1024 * 1024 * 1024 /*maxFileSize */ / s3manager.MaxUploadParts))
 )
 
 type logNameToLogLevel map[string]aws.LogLevelType
@@ -114,6 +117,11 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 		if calculatedPartSizeBytes > partSizeBytes {
 			partSizeBytes = calculatedPartSizeBytes
 		}
+	} else {
+		// This means the file size is unknown
+		// Use a partSize that ensures that the largest file
+		// that can be written to s3 (5 Tb) fits into MaxUploadParts
+		partSizeBytes = defaultPartSizeBytes
 	}
 
 	reader, writer := io.Pipe()
