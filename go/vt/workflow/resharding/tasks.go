@@ -61,7 +61,8 @@ func (hw *horizontalReshardingWorkflow) runCopySchema(ctx context.Context, t *wo
 	keyspace := t.Attributes["keyspace"]
 	sourceShard := t.Attributes["source_shard"]
 	destShard := t.Attributes["destination_shard"]
-	return hw.wr.CopySchemaShardFromShard(ctx, nil /* tableArray*/, nil /* excludeTableArray */, true, /*includeViews*/
+	excludeTables := strings.Split(t.Attributes["exclude_tables"], ",")
+	return hw.wr.CopySchemaShardFromShard(ctx, nil /* tableArray*/, excludeTables /* excludeTableArray */, true, /*includeViews*/
 		keyspace, sourceShard, keyspace, destShard, wrangler.DefaultWaitSlaveTimeout)
 }
 
@@ -74,6 +75,7 @@ func (hw *horizontalReshardingWorkflow) runSplitClone(ctx context.Context, t *wo
 	useConsistentSnapshot := t.Attributes["use_consistent_snapshot"]
 
 	sourceKeyspaceShard := topoproto.KeyspaceShardString(keyspace, sourceShard)
+	excludeTables := t.Attributes["exclude_tables"]
 	// Reset the vtworker to avoid error if vtworker command has been called elsewhere.
 	// This is because vtworker class doesn't cleanup the environment after execution.
 	if _, err := automation.ExecuteVtworker(ctx, worker, []string{"Reset"}); err != nil {
@@ -84,6 +86,11 @@ func (hw *horizontalReshardingWorkflow) runSplitClone(ctx context.Context, t *wo
 	if useConsistentSnapshot != "" {
 		args = append(args, "--use_consistent_snapshot")
 	}
+
+	if excludeTables != "" {
+		args = append(args, "--exclude_tables="+excludeTables)
+	}
+
 	_, err := automation.ExecuteVtworker(hw.ctx, worker, args)
 	return err
 }
@@ -100,6 +107,7 @@ func (hw *horizontalReshardingWorkflow) runSplitDiff(ctx context.Context, t *wor
 	destinationTabletType := t.Attributes["dest_tablet_type"]
 	worker := t.Attributes["vtworker"]
 	useConsistentSnapshot := t.Attributes["use_consistent_snapshot"]
+	excludeTables := t.Attributes["exclude_tables"]
 
 	if _, err := automation.ExecuteVtworker(hw.ctx, worker, []string{"Reset"}); err != nil {
 		return err
@@ -108,6 +116,11 @@ func (hw *horizontalReshardingWorkflow) runSplitDiff(ctx context.Context, t *wor
 	if useConsistentSnapshot != "" {
 		args = append(args, "--use_consistent_snapshot")
 	}
+
+	if excludeTables != "" {
+		args = append(args, "--exclude_tables="+excludeTables)
+	}
+
 	_, err := automation.ExecuteVtworker(ctx, worker, args)
 	return err
 }

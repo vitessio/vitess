@@ -53,7 +53,7 @@ func TestWorfklowGenerator(t *testing.T) {
 	workflow.StartManager(m)
 	// Create the workflow.
 	vtworkersParameter := testVtworkers + "," + testVtworkers
-	uuid, err := m.Create(ctx, keyspaceReshardingFactoryName, []string{"-keyspace=" + testKeyspace, "-vtworkers=" + vtworkersParameter, "-min_healthy_rdonly_tablets=2", "-use_consistent_snapshot=true"})
+	uuid, err := m.Create(ctx, keyspaceReshardingFactoryName, []string{"-keyspace=" + testKeyspace, "-vtworkers=" + vtworkersParameter, "-min_healthy_rdonly_tablets=2", "-use_consistent_snapshot=true", "-exclude_tables=table_a,table_b"})
 	if err != nil {
 		t.Fatalf("cannot create resharding workflow: %v", err)
 	}
