@@ -62,7 +62,7 @@ func TestStreamMigrateMainflow(t *testing.T) {
 			var rows []string
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -208,7 +208,7 @@ func TestStreamMigrateTwoStreams(t *testing.T) {
 			var rows []string
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -224,7 +224,7 @@ func TestStreamMigrateTwoStreams(t *testing.T) {
 			}
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -374,7 +374,7 @@ func TestStreamMigrateOneToMany(t *testing.T) {
 			var rows []string
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -506,7 +506,7 @@ func TestStreamMigrateManyToOne(t *testing.T) {
 			var rows []string
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -638,7 +638,7 @@ func TestStreamMigrateSyncSuccess(t *testing.T) {
 			var rows []string
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -671,7 +671,7 @@ func TestStreamMigrateSyncSuccess(t *testing.T) {
 			var rows []string
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -828,7 +828,7 @@ func TestStreamMigrateSyncFail(t *testing.T) {
 			var rows []string
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -974,7 +974,7 @@ func TestStreamMigrateCancel(t *testing.T) {
 			var rows []string
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -1073,7 +1073,7 @@ func TestStreamMigrateStoppedStreams(t *testing.T) {
 			var rows []string
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -1134,7 +1134,7 @@ func TestStreamMigrateStillCopying(t *testing.T) {
 			var rows []string
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -1195,7 +1195,7 @@ func TestStreamMigrateEmptyWorflow(t *testing.T) {
 			var rows []string
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -1255,7 +1255,7 @@ func TestStreamMigrateDupWorflow(t *testing.T) {
 			var rows []string
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -1321,7 +1321,7 @@ func TestStreamMigrateStreamsMismatch(t *testing.T) {
 					continue
 				}
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{

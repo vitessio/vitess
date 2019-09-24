@@ -633,9 +633,11 @@ func (mi *migrater) waitForCatchup(ctx context.Context, filteredReplicationWaitT
 	return mi.forAllUids(func(target *miTarget, uid uint32) error {
 		bls := target.sources[uid]
 		source := mi.sources[bls.Shard]
+		mi.wr.Logger().Infof("waiting for keyspace:shard: %v:%v, position %v", mi.targetKeyspace, target.si.ShardName(), source.position)
 		if err := mi.wr.tmc.VReplicationWaitForPos(ctx, target.master.Tablet, int(uid), source.position); err != nil {
 			return err
 		}
+		mi.wr.Logger().Infof("position for keyspace:shard: %v:%v reached", mi.targetKeyspace, target.si.ShardName())
 		if _, err := mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, binlogplayer.StopVReplication(uid, "stopped for cutover")); err != nil {
 			return err
 		}

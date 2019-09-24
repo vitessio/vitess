@@ -728,6 +728,174 @@ func TestShardMigrateMainflow(t *testing.T) {
 	checkIsMasterServing(t, tme.ts, "ks:80-", true)
 }
 
+func TestTableMigrateOneToMany(t *testing.T) {
+	ctx := context.Background()
+	tme := newTestTableMigraterCustom(ctx, t, []string{"0"}, []string{"-80", "80-"})
+	defer tme.stopTablets(t)
+
+	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// checkJournals
+	tme.dbSourceClients[0].addQueryRE("select val from _vt.resharding_journal.*", &sqltypes.Result{}, nil)
+
+	waitForCatchup := func() {
+		// mi.waitForCatchup-> mi.wr.tmc.VReplicationWaitForPos
+		state := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"pos|state|message",
+			"varchar|varchar|varchar"),
+			"MariaDB/5-456-892|Running",
+		)
+		tme.dbTargetClients[0].addQuery("select pos, state, message from _vt.vreplication where id=1", state, nil)
+		tme.dbTargetClients[1].addQuery("select pos, state, message from _vt.vreplication where id=1", state, nil)
+
+		// mi.waitForCatchup-> mi.wr.tmc.VReplicationExec('Stopped')
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where id = 1", resultid1, nil)
+		tme.dbTargetClients[0].addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (1)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where id = 1", resultid1, nil)
+		tme.dbTargetClients[1].addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (1)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+	}
+	waitForCatchup()
+
+	deleteReverseReplicaion := func() {
+		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks1' and workflow = 'test_reverse'", resultid34, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
+	}
+
+	createReverseVReplication := func() {
+		deleteReverseReplicaion()
+
+		tme.dbSourceClients[0].addQueryRE(`insert into _vt.vreplication.*test_reverse.*ks2.*-80.*t1.*from t1\\".*t2.*from t2\\"`, &sqltypes.Result{InsertID: 1}, nil)
+		tme.dbSourceClients[0].addQueryRE(`insert into _vt.vreplication.*test_reverse.*ks2.*80-.*t1.*from t1\\".*t2.*from t2\\"`, &sqltypes.Result{InsertID: 2}, nil)
+		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+	}
+	createReverseVReplication()
+
+	createJournals := func() {
+		journal1 := "insert into _vt.resharding_journal.*tables.*t1.*t2.*local_position.*MariaDB/5-456-892.*shard_gtids.*-80.*MariaDB/5-456-893.*80.*MariaDB/5-456-893.*participants.*0"
+		tme.dbSourceClients[0].addQueryRE(journal1, &sqltypes.Result{}, nil)
+	}
+	createJournals()
+
+	deleteTargetVReplication := func() {
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid1, nil)
+		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid1, nil)
+		tme.dbTargetClients[0].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (1)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+		tme.dbTargetClients[1].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (1)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid1, nil)
+		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid1, nil)
+		tme.dbTargetClients[0].addQuery("delete from _vt.vreplication where id in (1)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("delete from _vt.vreplication where id in (1)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (1)", &sqltypes.Result{}, nil)
+	}
+	deleteTargetVReplication()
+
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifyQueries(t, tme.allDBClients)
+}
+
+func TestTableMigrateManyToOne(t *testing.T) {
+	ctx := context.Background()
+	tme := newTestTableMigraterCustom(ctx, t, []string{"-80", "80-"}, []string{"0"})
+	defer tme.stopTablets(t)
+
+	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	checkJournals := func() {
+		tme.dbSourceClients[0].addQueryRE("select val from _vt.resharding_journal.*", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQueryRE("select val from _vt.resharding_journal.*", &sqltypes.Result{}, nil)
+	}
+	checkJournals()
+
+	waitForCatchup := func() {
+		// mi.waitForCatchup-> mi.wr.tmc.VReplicationWaitForPos
+		state := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"pos|state|message",
+			"varchar|varchar|varchar"),
+			"MariaDB/5-456-892|Running",
+		)
+		tme.dbTargetClients[0].addQuery("select pos, state, message from _vt.vreplication where id=1", state, nil)
+		tme.dbTargetClients[0].addQuery("select pos, state, message from _vt.vreplication where id=2", state, nil)
+
+		// mi.waitForCatchup-> mi.wr.tmc.VReplicationExec('Stopped')
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where id = 1", resultid1, nil)
+		tme.dbTargetClients[0].addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (1)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where id = 2", resultid2, nil)
+		tme.dbTargetClients[0].addQuery("update _vt.vreplication set state = 'Stopped', message = 'stopped for cutover' where id in (2)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+	}
+	waitForCatchup()
+
+	deleteReverseReplicaion := func() {
+		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks1' and workflow = 'test_reverse'", resultid3, nil)
+		tme.dbSourceClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks1' and workflow = 'test_reverse'", resultid3, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (3)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("delete from _vt.vreplication where id in (3)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (3)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (3)", &sqltypes.Result{}, nil)
+	}
+
+	createReverseVReplication := func() {
+		deleteReverseReplicaion()
+
+		tme.dbSourceClients[0].addQueryRE(`insert into _vt.vreplication.*test_reverse.*ks2.*0.*t1.*in_keyrange.*c1.*hash.*-80.*t2.*in_keyrange.*c1.*-80`, &sqltypes.Result{InsertID: 1}, nil)
+		tme.dbSourceClients[1].addQueryRE(`insert into _vt.vreplication.*test_reverse.*ks2.*0.*t1.*in_keyrange.*c1.*hash.*80-.*t2.*in_keyrange.*c1.*80-`, &sqltypes.Result{InsertID: 1}, nil)
+		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+		tme.dbSourceClients[1].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+	}
+	createReverseVReplication()
+
+	createJournals := func() {
+		journal := "insert into _vt.resharding_journal.*shard_gtids.*ks2.*0.*participants.*ks1.*80.*participants.*80"
+		tme.dbSourceClients[0].addQueryRE(journal, &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQueryRE(journal, &sqltypes.Result{}, nil)
+	}
+	createJournals()
+
+	deleteTargetVReplication := func() {
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
+		tme.dbTargetClients[0].addQuery("update _vt.vreplication set message = 'FROZEN' where id in (1, 2)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
+		tme.dbTargetClients[0].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+	}
+	deleteTargetVReplication()
+
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifyQueries(t, tme.allDBClients)
+}
+
 // TestMigrateFailJournal tests that cancel doesn't get called after point of no return.
 // No need to test this for shard migrate because code paths are the same.
 func TestMigrateFailJournal(t *testing.T) {

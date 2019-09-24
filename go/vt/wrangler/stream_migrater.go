@@ -258,7 +258,7 @@ func (sm *streamMigrater) syncSourceStreams(ctx context.Context) (map[string]mys
 	}
 	var wg sync.WaitGroup
 	allErrors := &concurrency.AllErrorRecorder{}
-	for _, tabletStreams := range sm.streams {
+	for shard, tabletStreams := range sm.streams {
 		for _, vrs := range tabletStreams {
 			key := fmt.Sprintf("%s:%s", vrs.bls.Keyspace, vrs.bls.Shard)
 			pos := stopPositions[key]
@@ -266,9 +266,9 @@ func (sm *streamMigrater) syncSourceStreams(ctx context.Context) (map[string]mys
 				continue
 			}
 			wg.Add(1)
-			go func(vrs *vrStream) {
+			go func(vrs *vrStream, shard string) {
 				defer wg.Done()
-				si, err := sm.mi.wr.ts.GetShard(ctx, vrs.bls.Keyspace, vrs.bls.Shard)
+				si, err := sm.mi.wr.ts.GetShard(ctx, sm.mi.sourceKeyspace, vrs.bls.Shard)
 				if err != nil {
 					allErrors.RecordError(err)
 					return
@@ -283,11 +283,13 @@ func (sm *streamMigrater) syncSourceStreams(ctx context.Context) (map[string]mys
 					allErrors.RecordError(err)
 					return
 				}
+				sm.mi.wr.Logger().Infof("waiting for keyspace:shard: %v:%v, position %v", sm.mi.sourceKeyspace, shard, pos)
 				if err := sm.mi.wr.tmc.VReplicationWaitForPos(ctx, master.Tablet, int(vrs.id), mysql.EncodePosition(pos)); err != nil {
 					allErrors.RecordError(err)
 					return
 				}
-			}(vrs)
+				sm.mi.wr.Logger().Infof("position for keyspace:shard: %v:%v reached", sm.mi.sourceKeyspace, shard)
+			}(vrs, shard)
 		}
 	}
 	wg.Wait()
