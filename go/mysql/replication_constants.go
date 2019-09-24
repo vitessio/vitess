@@ -16,6 +16,10 @@ limitations under the License.
 
 package mysql
 
+import (
+	querypb "vitess.io/vitess/go/vt/proto/query"
+)
+
 // This file contains the constant definitions for this package.
 
 // This is the data type for a field.
@@ -114,6 +118,40 @@ const (
 	// TypeGeometry is MYSQL_TYPE_GEOMETRY
 	TypeGeometry = 255
 )
+
+var MySqlTypeToVitessType = map[int32]querypb.Type{
+	TypeDecimal:    querypb.Type_DECIMAL,
+	TypeTiny:       querypb.Type_INT8,
+	TypeShort:      querypb.Type_INT16,
+	TypeLong:       querypb.Type_INT32,
+	TypeFloat:      querypb.Type_FLOAT32,
+	TypeDouble:     querypb.Type_FLOAT64,
+	TypeNull:       querypb.Type_NULL_TYPE,
+	TypeTimestamp:  querypb.Type_TIMESTAMP,
+	TypeLongLong:   querypb.Type_INT64,
+	TypeInt24:      querypb.Type_INT24,
+	TypeDate:       querypb.Type_DATE,
+	TypeTime:       querypb.Type_TIME,
+	TypeDateTime:   querypb.Type_DATETIME,
+	TypeYear:       querypb.Type_YEAR,
+	TypeNewDate:    querypb.Type_DATETIME,
+	TypeVarchar:    querypb.Type_VARCHAR,
+	TypeBit:        querypb.Type_BIT,
+	TypeTimestamp2: querypb.Type_TIMESTAMP,
+	TypeDateTime2:  querypb.Type_DATETIME,
+	TypeTime2:      querypb.Type_TIME,
+	TypeJSON:       querypb.Type_JSON,
+	TypeNewDecimal: querypb.Type_DECIMAL,
+	TypeEnum:       querypb.Type_ENUM,
+	TypeSet:        querypb.Type_SET,
+	TypeTinyBlob:   querypb.Type_BLOB,
+	TypeMediumBlob: querypb.Type_BLOB,
+	TypeLongBlob:   querypb.Type_BLOB,
+	TypeBlob:       querypb.Type_BLOB,
+	TypeVarString:  querypb.Type_BINARY,
+	TypeString:     querypb.Type_BINARY,
+	TypeGeometry:   querypb.Type_GEOMETRY,
+}
 
 // Constants for the type of an INTVAR_EVENT.
 const (
