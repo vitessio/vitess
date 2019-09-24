@@ -184,7 +184,7 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 	}
 	if !journalsExist {
 		mi.wr.Logger().Infof("No previous journals were found. Proceeding normally.")
-		sm, err := buildStreamMigrater(ctx, mi)
+		sm, err := buildStreamMigrater(ctx, mi, cancelMigrate)
 		if err != nil {
 			mi.wr.Logger().Errorf("buildStreamMigrater failed: %v", err)
 			return 0, err

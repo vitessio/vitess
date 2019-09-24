@@ -782,7 +782,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 	createReverseVReplication()
 
 	createJournals := func() {
-		journal1 := "insert into _vt.resharding_journal.*tables.*t1.*t2.*local_position.*MariaDB/5-456-892.*shard_gtids.*-80.*MariaDB/5-456-893.*80.*MariaDB/5-456-893.*participants.*0"
+		journal1 := "insert into _vt.resharding_journal.*tables.*t1.*t2.*local_position.*MariaDB/5-456-892.*shard_gtids.*80.*MariaDB/5-456-893.*80.*MariaDB/5-456-893.*participants.*0"
 		tme.dbSourceClients[0].addQueryRE(journal1, &sqltypes.Result{}, nil)
 	}
 	createJournals()
