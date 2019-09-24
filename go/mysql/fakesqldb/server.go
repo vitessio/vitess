@@ -440,6 +440,11 @@ func (db *DB) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback
 	return nil
 }
 
+// ComResetConnection is part of the mysql.Handler interface.
+func (db *DB) ComResetConnection(c *mysql.Conn) {
+
+}
+
 //
 // Methods to add expected queries and results.
 //

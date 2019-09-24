@@ -1038,6 +1038,18 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			log.Error("Error writing ComStmtReset OK packet to client %v: %v", c.ConnectionID, err)
 			return err
 		}
+
+	case ComResetConnection:
+		// Clean up and reset the connection
+		c.recycleReadPacket()
+		handler.ComResetConnection(c)
+		// Reset prepared statements
+		c.PrepareData = make(map[uint32]*PrepareData)
+		err = c.writeOKPacket(0, 0, 0, 0)
+		if err != nil {
+			c.writeErrorPacketFromError(err)
+		}
+
 	default:
 		log.Errorf("Got unhandled packet (default) from %s, returning error: %v", c, data)
 		c.recycleReadPacket()
