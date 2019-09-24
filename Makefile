@@ -112,6 +112,9 @@ java_test:
 	go install ./go/cmd/vtgateclienttest ./go/cmd/vtcombo
 	mvn -f java/pom.xml clean verify
 
+install_protoc-gen-go:
+	go install github.com/golang/protobuf/protoc-gen-go
+
 # Find protoc compiler.
 # NOTE: We are *not* using the "protoc" binary (as suggested by the grpc Go
 #       quickstart for example). Instead, we run "protoc" via the Python
