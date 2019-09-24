@@ -342,17 +342,42 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			vs.plans[id] = nil
 			return nil, nil
 		}
+
+		tableName := tm.Name
+		var cols []schema.TableColumn
+		hasFilter := false
+		for _, rule := range vs.filter.Rules {
+			if rule.Filter != "" {
+				// throw error. Column name might be need in filter.
+				hasFilter = true
+				break
+			}
+		}
 		st := vs.se.GetTable(sqlparser.NewTableIdent(tm.Name))
+		vs.filter.BestEffortNameInFieldEvent = true
 		if st == nil {
-			return nil, fmt.Errorf("unknown table %v in schema", tm.Name)
+			if hasFilter || vs.filter.BestEffortNameInFieldEvent == false {
+				// throw error. Column name might be need in filter.
+				return nil, fmt.Errorf("unknown table %v in schema", tm.Name)
+			}
+			for _, typ := range tm.Types {
+				cols = append(cols, schema.TableColumn{
+					Name: sqlparser.NewColIdent(""),
+					Type: mysql.MySqlTypeToVitessType[int32(typ)],
+				})
+			}
+		} else {
+			tableName = st.Name.String()
+			if len(st.Columns) < len(tm.Types) && vs.filter.BestEffortNameInFieldEvent == false {
+				return nil, fmt.Errorf("cannot determine table columns for %s: event has %d columns, current schema has %d: %#v", tm.Name, len(tm.Types), len(st.Columns), ev)
+			}
+			cols = st.Columns[:len(tm.Types)]
 		}
-		if len(st.Columns) < len(tm.Types) {
-			return nil, fmt.Errorf("cannot determine table columns for %s: event has %d columns, current schema has %d: %#v", tm.Name, len(tm.Types), len(st.Columns), ev)
-		}
+
 		table := &Table{
-			Name: st.Name.String(),
+			Name: tableName,
 			// Columns should be truncated to match those in tm.
-			Columns: st.Columns[:len(tm.Types)],
+			Columns: cols,
 		}
 		plan, err := buildPlan(table, vs.kschema, vs.filter)
 		if err != nil {
