@@ -130,6 +130,7 @@ message Rule {
 // wins.
 message Filter {
   repeated Rule rules = 1;
+  bool bestEffortNameInFieldEvent = 2;
 }
 
 // OnDDLAction lists the possible actions for DDLs.
