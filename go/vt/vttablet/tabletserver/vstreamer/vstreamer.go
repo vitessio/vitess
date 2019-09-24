@@ -345,18 +345,9 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 
 		tableName := tm.Name
 		var cols []schema.TableColumn
-		hasFilter := false
-		for _, rule := range vs.filter.Rules {
-			if rule.Filter != "" {
-				// throw error. Column name might be need in filter.
-				hasFilter = true
-				break
-			}
-		}
 		st := vs.se.GetTable(sqlparser.NewTableIdent(tm.Name))
-		vs.filter.BestEffortNameInFieldEvent = true
 		if st == nil {
-			if hasFilter || vs.filter.BestEffortNameInFieldEvent == false {
+			if vs.filter.BestEffortNameInFieldEvent == false {
 				// throw error. Column name might be need in filter.
 				return nil, fmt.Errorf("unknown table %v in schema", tm.Name)
 			}
