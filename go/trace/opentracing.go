@@ -16,10 +16,13 @@ limitations under the License.
 package trace
 
 import (
+	"strings"
+
 	otgrpc "github.com/opentracing-contrib/go-grpc"
 	"github.com/opentracing/opentracing-go"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -43,7 +46,6 @@ var _ tracingService = (*openTracingService)(nil)
 
 type tracer interface {
 	GetOpenTracingTracer() opentracing.Tracer
-	FromString(string) (opentracing.SpanContext, error)
 }
 
 type openTracingService struct {
@@ -82,8 +84,28 @@ func (jf openTracingService) New(parent Span, label string) Span {
 	return openTracingSpan{otSpan: innerSpan}
 }
 
+func extractMapFromString(in string) (opentracing.TextMapCarrier, error) {
+	m := make(opentracing.TextMapCarrier)
+	items := strings.Split(in, ":")
+	if len(items) < 2 {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "expected transmitted context to contain at least span id and trace id")
+	}
+	for _, v := range items {
+		idx := strings.Index(v, "=")
+		if idx < 1 {
+			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "every element in the context string has to be in the form key=value")
+		}
+		m[v[0:idx]] = v[idx+1:]
+	}
+	return m, nil
+}
+
 func (jf openTracingService) NewFromString(parent, label string) (Span, error) {
-	spanContext, err := jf.Tracer.FromString(parent)
+	carrier, err := extractMapFromString(parent)
+	if err != nil {
+		return nil, err
+	}
+	spanContext, err := jf.Tracer.GetOpenTracingTracer().Extract(opentracing.TextMap, carrier)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "failed to deserialize span context")
 	}

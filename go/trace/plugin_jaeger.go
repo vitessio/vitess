@@ -95,10 +95,6 @@ type jaegerTracer struct {
 	actual opentracing.Tracer
 }
 
-func (*jaegerTracer) FromString(s string) (opentracing.SpanContext, error) {
-	return jaeger.ContextFromString(s)
-}
-
 func (jt *jaegerTracer) GetOpenTracingTracer() opentracing.Tracer {
 	return jt.actual
 }
