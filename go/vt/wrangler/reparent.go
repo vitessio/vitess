@@ -41,9 +41,10 @@ import (
 )
 
 const (
-	initShardMasterOperation        = "InitShardMaster"
-	plannedReparentShardOperation   = "PlannedReparentShard"
-	emergencyReparentShardOperation = "EmergencyReparentShard"
+	initShardMasterOperation            = "InitShardMaster"
+	plannedReparentShardOperation       = "PlannedReparentShard"
+	emergencyReparentShardOperation     = "EmergencyReparentShard"
+	tabletExternallyReparentedOperation = "TabletExternallyReparented"
 )
 
 // ShardReplicationStatuses returns the ReplicationStatus for each tablet in a shard.
@@ -810,5 +811,53 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		return err
 	}
 
+	return nil
+}
+
+// TabletExternallyReparented changes the type of new master for this shard to MASTER
+// and updates it's tablet record in the topo. Updating the shard record is handled
+// by the new master tablet
+func (wr *Wrangler) TabletExternallyReparented(ctx context.Context, newMasterAlias *topodatapb.TabletAlias) error {
+
+	tabletInfo, err := wr.ts.GetTablet(ctx, newMasterAlias)
+	if err != nil {
+		log.Warningf("TabletExternallyReparented: failed to read tablet record for %v: %v", newMasterAlias, err)
+		return err
+	}
+
+	// Check the global shard record.
+	tablet := tabletInfo.Tablet
+	si, err := wr.ts.GetShard(ctx, tablet.Keyspace, tablet.Shard)
+	if err != nil {
+		log.Warningf("TabletExternallyReparented: failed to read global shard record for %v/%v: %v", tablet.Keyspace, tablet.Shard, err)
+		return err
+	}
+
+	// We update the tablet only if it is not currently master
+	if tablet.Type != topodatapb.TabletType_MASTER {
+		log.Infof("TabletExternallyReparented: executing tablet type change to MASTER")
+
+		// Create a reusable Reparent event with available info.
+		ev := &events.Reparent{
+			ShardInfo: *si,
+			NewMaster: *tablet,
+			OldMaster: topodatapb.Tablet{
+				Alias: si.MasterAlias,
+				Type:  topodatapb.TabletType_MASTER,
+			},
+		}
+		defer func() {
+			if err != nil {
+				event.DispatchUpdate(ev, "failed: "+err.Error())
+			}
+		}()
+		event.DispatchUpdate(ev, "starting external reparent")
+
+		if err := wr.tmc.ChangeType(ctx, tablet, topodatapb.TabletType_MASTER); err != nil {
+			log.Warningf("Error calling ChangeType on new master %v: %v", topoproto.TabletAliasString(newMasterAlias), err)
+			return err
+		}
+		event.DispatchUpdate(ev, "finished")
+	}
 	return nil
 }

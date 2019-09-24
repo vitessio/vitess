@@ -52,6 +52,12 @@ func init() {
 		commandEmergencyReparentShard,
 		"-keyspace_shard=<keyspace/shard> -new_master=<tablet alias>",
 		"Reparents the shard to the new master. Assumes the old master is dead and not responsding."})
+	addCommand("Shards", command{
+		"TabletExternallyReparented",
+		commandTabletExternallyReparented,
+		"<tablet alias>",
+		"Changes metadata in the topology server to acknowledge a shard master change performed by an external tool. See the Reparenting guide for more information:" +
+			"https://github.com/vitessio/vitess/blob/master/doc/Reparenting.md#external-reparents."})
 }
 
 func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -170,4 +176,19 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 		return err
 	}
 	return wr.EmergencyReparentShard(ctx, keyspace, shard, tabletAlias, *waitSlaveTimeout)
+}
+
+func commandTabletExternallyReparented(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("action TabletExternallyReparented requires <tablet alias>")
+	}
+
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	return wr.TabletExternallyReparented(ctx, tabletAlias)
 }
