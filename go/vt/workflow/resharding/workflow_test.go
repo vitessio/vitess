@@ -121,13 +121,14 @@ func testHorizontalReshardingWorkflow(t *testing.T, useConsistentSnapshot bool, 
 	wg, _, cancel := workflow.StartManager(m)
 	// Create the workflow.
 	vtworkersParameter := testVtworkers + "," + testVtworkers
-	args := []string{"-keyspace=" + testKeyspace, "-vtworkers=" + vtworkersParameter, "-phase_enable_approvals=", "-min_healthy_rdonly_tablets=2", "-source_shards=0", "-destination_shards=-80,80-"}
+	args := []string{"-keyspace=" + testKeyspace, "-vtworkers=" + vtworkersParameter, "-phase_enable_approvals=", "-min_healthy_rdonly_tablets=2"}
 	if useConsistentSnapshot {
 		args = append(args, "-use_consistent_snapshot")
 	}
 	if excludeTables != "" {
 		args = append(args, "-exclude_tables="+excludeTables)
 	}
+	args = append(args, "-source_shards=0", "-destination_shards=-80,80-")
 	uuid, err := m.Create(ctx, horizontalReshardingFactoryName, args)
 	if err != nil {
 		t.Fatalf("cannot create resharding workflow: %v", err)
@@ -173,24 +174,28 @@ func resetCommand() []string {
 }
 
 func splitCloneCommand(keyspace string, useConsistentSnapshot bool, excludeTables string) []string {
-	args := []string{"SplitClone", "--min_healthy_rdonly_tablets=2", keyspace + "/0"}
+	args := []string{"SplitClone", "--min_healthy_rdonly_tablets=2"}
 	if useConsistentSnapshot {
 		args = append(args, "--use_consistent_snapshot")
 	}
 	if excludeTables != "" {
 		args = append(args, "--exclude_tables="+excludeTables)
 	}
+
+	args = append(args, keyspace+"/0")
 	return args
 }
 
 func splitDiffCommand(keyspace string, shardId string, useConsistentSnapshot bool, excludeTables string) []string {
-	args := []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", "--dest_tablet_type=RDONLY", keyspace + "/" + shardId}
+	args := []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", "--dest_tablet_type=RDONLY"}
 	if useConsistentSnapshot {
 		args = append(args, "--use_consistent_snapshot")
 	}
 	if excludeTables != "" {
 		args = append(args, "--exclude_tables="+excludeTables)
 	}
+
+	args = append(args, keyspace+"/"+shardId)
 	return args
 }
 
