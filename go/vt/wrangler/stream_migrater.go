@@ -54,13 +54,13 @@ type vrStream struct {
 	pos      mysql.Position
 }
 
-func buildStreamMigrater(ctx context.Context, mi *migrater) (*streamMigrater, error) {
+func buildStreamMigrater(ctx context.Context, mi *migrater, cancelMigrate bool) (*streamMigrater, error) {
 	sm := &streamMigrater{mi: mi}
 	if sm.mi.migrationType == binlogdatapb.MigrationType_TABLES {
 		// Source streams should be stopped only for shard migrations.
 		return sm, nil
 	}
-	streams, err := sm.readSourceStreams(ctx)
+	streams, err := sm.readSourceStreams(ctx, cancelMigrate)
 	if err != nil {
 		return nil, err
 	}
@@ -78,27 +78,29 @@ func buildStreamMigrater(ctx context.Context, mi *migrater) (*streamMigrater, er
 	return sm, nil
 }
 
-func (sm *streamMigrater) readSourceStreams(ctx context.Context) (map[string][]*vrStream, error) {
+func (sm *streamMigrater) readSourceStreams(ctx context.Context, cancelMigrate bool) (map[string][]*vrStream, error) {
 	streams := make(map[string][]*vrStream)
 	var mu sync.Mutex
 	err := sm.mi.forAllSources(func(source *miSource) error {
-		// This flow protects us from the following scenario: When we create streams,
-		// we always do it in two phases. We start them off as Stopped, and then
-		// update them to Running. If such an operation fails, we may be left with
-		// lingering Stopped streams. They should actually be cleaned up by the user.
-		// In the current workflow, we stop streams and restart them.
-		// Once existing streams are stopped, there will be confusion about which of
-		// them can be restarted because they will be no different from the lingering streams.
-		// To prevent this confusion, we first check if there are any stopped streams.
-		// If so, we request the operator to clean them up, or restart them before going ahead.
-		// This allows us to assume that all stopped streams can be safely restarted
-		// if we cancel the operation.
-		stoppedStreams, err := sm.readTabletStreams(ctx, source.master, "state = 'Stopped'")
-		if err != nil {
-			return err
-		}
-		if len(stoppedStreams) != 0 {
-			return fmt.Errorf("cannot migrate until all strems are running: %s", source.si.ShardName())
+		if !cancelMigrate {
+			// This flow protects us from the following scenario: When we create streams,
+			// we always do it in two phases. We start them off as Stopped, and then
+			// update them to Running. If such an operation fails, we may be left with
+			// lingering Stopped streams. They should actually be cleaned up by the user.
+			// In the current workflow, we stop streams and restart them.
+			// Once existing streams are stopped, there will be confusion about which of
+			// them can be restarted because they will be no different from the lingering streams.
+			// To prevent this confusion, we first check if there are any stopped streams.
+			// If so, we request the operator to clean them up, or restart them before going ahead.
+			// This allows us to assume that all stopped streams can be safely restarted
+			// if we cancel the operation.
+			stoppedStreams, err := sm.readTabletStreams(ctx, source.master, "state = 'Stopped'")
+			if err != nil {
+				return err
+			}
+			if len(stoppedStreams) != 0 {
+				return fmt.Errorf("cannot migrate until all streams are running: %s", source.si.ShardName())
+			}
 		}
 		tabletStreams, err := sm.readTabletStreams(ctx, source.master, "")
 		if err != nil {
