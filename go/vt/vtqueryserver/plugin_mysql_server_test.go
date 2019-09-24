@@ -52,6 +52,10 @@ func (th *testHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData,
 	return nil
 }
 
+func (th *testHandler) ComResetConnection(c *mysql.Conn) {
+
+}
+
 func (th *testHandler) WarningCount(c *mysql.Conn) uint16 {
 	return 0
 }

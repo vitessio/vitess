@@ -51,6 +51,10 @@ func (th *testHandler) ComPrepare(c *mysql.Conn, q string) ([]*querypb.Field, er
 	return nil, nil
 }
 
+func (th *testHandler) ComResetConnection(c *mysql.Conn) {
+
+}
+
 func (th *testHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
 	return nil
 }

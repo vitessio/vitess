@@ -213,7 +213,8 @@ class TestPreparedStatements(unittest.TestCase):
     utils.VtGate(mysql_server=True).start(
         extra_args=['-mysql_auth_server_impl', 'static',
                     '-mysql_server_query_timeout', '1s',
-                    '-mysql_auth_server_static_file', mysql_auth_server_static])
+                    '-mysql_auth_server_static_file', mysql_auth_server_static,
+                    "-mysql_server_version", '8.0.16-7'])
     # We use gethostbyname('localhost') so we don't presume
     # of the IP format (travis is only IP v4, really).
     params = dict(host=socket.gethostbyname('localhost'),
@@ -306,6 +307,18 @@ class TestPreparedStatements(unittest.TestCase):
     if res[0] != 1:
       self.fail("Delete failed")
     cursor.close()
-
+    
+    conn.cmd_reset_connection()
+    # Should fail since we cleared PreparedData inside the connection
+    try:
+      cursor = conn.cursor(cursor_class=MySQLCursorPrepared)
+      cursor.execute('select * from vt_prepare_stmt_test where id = %s', (1,))
+      result = cursor.fetchone()
+      if result[-1] != updated_data_value or result[-2] != updated_text_value:
+        self.fail("Received incorrect values")
+      cursor.close()
+    except TypeError:
+      print "Could not find item"
+        
 if __name__ == '__main__':
   utils.main()

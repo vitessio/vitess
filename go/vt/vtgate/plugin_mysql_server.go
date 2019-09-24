@@ -84,6 +84,20 @@ func newVtgateHandler(vtg *VTGate) *vtgateHandler {
 func (vh *vtgateHandler) NewConnection(c *mysql.Conn) {
 }
 
+func (vh *vtgateHandler) ComResetConnection(c *mysql.Conn) {
+	ctx := context.Background()
+	session, _ := c.ClientData.(*vtgatepb.Session)
+	if session != nil {
+		if session.InTransaction {
+			defer atomic.AddInt32(&busyConnections, -1)
+		}
+		_, _, err := vh.vtg.Execute(ctx, session, "rollback", make(map[string]*querypb.BindVariable))
+		if err != nil {
+			log.Errorf("Error happened in transaction rollback: %v", err)
+		}
+	}
+}
+
 func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	// Rollback if there is an ongoing transaction. Ignore error.
 	var ctx context.Context
