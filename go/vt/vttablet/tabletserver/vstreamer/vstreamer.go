@@ -345,24 +345,40 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 
 		tableName := tm.Name
 		var cols []schema.TableColumn
+		for i, typ := range tm.Types {
+			t, err := sqltypes.MySQLToType(int64(typ), int64(tm.Flags))
+			if err != nil {
+				return nil, fmt.Errorf("unsupported type: %d", typ)
+			}
+			cols = append(cols, schema.TableColumn{
+				Name: sqlparser.NewColIdent(fmt.Sprintf("@%d", i+1)),
+				Type: t,
+			})
+		}
 		st := vs.se.GetTable(sqlparser.NewTableIdent(tm.Name))
-		if st == nil {
-			if vs.filter.BestEffortNameInFieldEvent == false {
-				// throw error. Column name might be need in filter.
-				return nil, fmt.Errorf("unknown table %v in schema", tm.Name)
-			}
-			for _, typ := range tm.Types {
-				cols = append(cols, schema.TableColumn{
-					Name: sqlparser.NewColIdent(""),
-					Type: mysql.MySqlTypeToVitessType[int32(typ)],
-				})
-			}
+		if st == nil && !vs.filter.BestEffortNameInFieldEvent {
+			return nil, fmt.Errorf("unknown table %v in schema", tm.Name)
 		} else {
-			tableName = st.Name.String()
-			if len(st.Columns) < len(tm.Types) && vs.filter.BestEffortNameInFieldEvent == false {
+			if len(st.Columns) < len(tm.Types) && !vs.filter.BestEffortNameInFieldEvent {
 				return nil, fmt.Errorf("cannot determine table columns for %s: event has %d columns, current schema has %d: %#v", tm.Name, len(tm.Types), len(st.Columns), ev)
 			}
-			cols = st.Columns[:len(tm.Types)]
+			tableName = st.Name.String()
+			// check if the schema returned by schema.Engine matches with row.
+			schemaMatch := true
+			if len(tm.Types) == len(st.Columns) {
+				for i := range tm.Types {
+					t, _ := sqltypes.MySQLToType(int64(tm.Types[i]), int64(tm.Flags))
+					if t != st.Columns[i].Type {
+						schemaMatch = false
+						break
+					}
+				}
+			} else {
+				schemaMatch = false
+			}
+			if schemaMatch || !vs.filter.BestEffortNameInFieldEvent {
+				cols = st.Columns[:len(tm.Types)]
+			}
 		}
 
 		table := &Table{
