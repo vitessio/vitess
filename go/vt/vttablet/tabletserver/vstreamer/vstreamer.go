@@ -361,15 +361,15 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				return nil, fmt.Errorf("unknown table %v in schema", tm.Name)
 			}
 		} else {
-			// preserving old behavior.
 			if len(st.Columns) < len(tm.Types) && !vs.filter.BestEffortNameInFieldEvent {
 				return nil, fmt.Errorf("cannot determine table columns for %s: event has %d columns, current schema has %d: %#v", tm.Name, len(tm.Types), len(st.Columns), ev)
 			}
 			tableName = st.Name.String()
-			if len(tm.Types) == len(st.Columns) || !vs.filter.BestEffortNameInFieldEvent {
-				cols = st.Columns
+			if len(st.Columns) >= len(tm.Types) {
+				cols = st.Columns[:len(tm.Types)]
 			}
 		}
+
 		table := &Table{
 			Name: tableName,
 			// Columns should be truncated to match those in tm.
