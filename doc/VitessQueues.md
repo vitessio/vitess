@@ -107,7 +107,7 @@ ever it is). The Receiver will then either:
 
 The easiest implementation is to not guarantee an execution order for the
 events. Providing ordering would not be too difficult, but has an impact on
-performance (when a Receiver does't respond in time, it delays eveybody else, so
+performance (when a Receiver doesn't respond in time, it delays eveybody else, so
 we'd need to timeout quickly and keep going).
 
 For ‘old’ events (that have been fired but not acked), we propose to use an old

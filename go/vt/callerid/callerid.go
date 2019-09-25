@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package callerid stores/retrives CallerIDs (immediate CallerID
+// Package callerid stores/retrieves CallerIDs (immediate CallerID
 // and effective CallerID) to/from the Context
 package callerid
 
