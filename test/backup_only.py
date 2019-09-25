@@ -101,7 +101,7 @@ def setUpModule():
       fd.write(init_db)
       fd.write(mysql_flavor().change_passwords(password_col))
 
-    logging.debug("initilizing mysql %s",str(datetime.datetime.now()))
+    logging.debug("initializing mysql %s",str(datetime.datetime.now()))
     # start mysql instance external to the test
     setup_procs = [
         tablet_master.init_mysql(init_db=new_init_db,
@@ -120,7 +120,7 @@ def setUpModule():
       tablet_replica2.wait_for_mysqlctl_socket()
     else:
       utils.wait_procs(setup_procs)
-    logging.debug("done initilizing mysql %s",str(datetime.datetime.now()))      
+    logging.debug("done initializing mysql %s",str(datetime.datetime.now()))      
   except:
     tearDownModule()
     raise

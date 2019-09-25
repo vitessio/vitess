@@ -136,7 +136,7 @@ func TestMapGetSetQueryRules(t *testing.T) {
 		t.Errorf("Failed to set custom Rules: %s", err)
 	}
 
-	// Test if we can successfully retrive rules that've been set
+	// Test if we can successfully retrieve rules that've been set
 	qrs, err = qri.Get(blacklistQueryRules)
 	if err != nil {
 		t.Errorf("GetRules failed to retrieve blacklistQueryRules that has been set: %s", err)
