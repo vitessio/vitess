@@ -154,6 +154,7 @@ const (
 // If you add to this map, make sure you add a test case
 // in tabletserver/endtoend.
 var mysqlToType = map[int64]querypb.Type{
+	0:   Decimal,
 	1:   Int8,
 	2:   Int16,
 	3:   Int32,
@@ -169,8 +170,13 @@ var mysqlToType = map[int64]querypb.Type{
 	13:  Year,
 	15:  VarChar,
 	16:  Bit,
+	17:  Timestamp,
+	18:  Datetime,
+	19:  Time,
 	245: TypeJSON,
 	246: Decimal,
+	247: Enum,
+	248: Set,
 	249: Text,
 	250: Text,
 	251: Text,
