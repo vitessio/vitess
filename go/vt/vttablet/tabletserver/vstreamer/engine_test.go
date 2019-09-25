@@ -62,7 +62,7 @@ func TestUpdateVSchema(t *testing.T) {
 		}},
 	}
 
-	_ = startStream(ctx, t, filter)
+	_ = startStream(ctx, t, filter, "")
 	cancel()
 
 	startCount := expectUpdateCount(t, 1)

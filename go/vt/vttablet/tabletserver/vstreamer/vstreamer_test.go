@@ -130,7 +130,7 @@ func TestStatements(t *testing.T) {
 	}, {
 		input: "describe stream1",
 	}}
-	runCases(t, nil, testcases)
+	runCases(t, nil, testcases, "")
 }
 
 func TestRegexp(t *testing.T) {
@@ -172,7 +172,7 @@ func TestRegexp(t *testing.T) {
 			`commit`,
 		}},
 	}}
-	runCases(t, filter, testcases)
+	runCases(t, filter, testcases, "")
 }
 
 func TestREKeyRange(t *testing.T) {
@@ -202,7 +202,7 @@ func TestREKeyRange(t *testing.T) {
 			Filter: "-80",
 		}},
 	}
-	ch := startStream(ctx, t, filter)
+	ch := startStream(ctx, t, filter, "")
 
 	// 1, 2, 3 and 5 are in shard -80.
 	// 4 and 6 are in shard 80-.
@@ -306,7 +306,7 @@ func TestSelectFilter(t *testing.T) {
 			`commit`,
 		}},
 	}}
-	runCases(t, filter, testcases)
+	runCases(t, filter, testcases, "")
 }
 
 func TestDDLAddColumn(t *testing.T) {
@@ -446,7 +446,7 @@ func TestUnsentDDL(t *testing.T) {
 			Match: "/none/",
 		}},
 	}
-	runCases(t, filter, testcases)
+	runCases(t, filter, testcases, "")
 }
 
 func TestBuffering(t *testing.T) {
@@ -546,7 +546,55 @@ func TestBuffering(t *testing.T) {
 			`type:DDL ddl:"alter table packet_test change val val varchar(128)" `,
 		}},
 	}}
-	runCases(t, nil, testcases)
+	runCases(t, nil, testcases, "")
+}
+
+func TestBestEffortNameInFieldEvent(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	filter := &binlogdatapb.Filter{
+		BestEffortNameInFieldEvent: true,
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*/",
+		}},
+	}
+	// Modeled after vttablet endtoend compatibility tests.
+	execStatements(t, []string{
+		"create table vitess_null(id int, val varbinary(128), primary key(id))",
+	})
+	position := masterPosition(t)
+	execStatements(t, []string{
+		"insert into vitess_null values(1, 'abc')",
+		"rename table vitess_null to vitess_null_new",
+	})
+
+	defer execStatements(t, []string{
+		"drop table vitess_null_new",
+	})
+	engine.se.Reload(context.Background())
+	testcases := []testcase{{
+		input: []string{
+			"insert into vitess_null_new values(2, 'abc')",
+		},
+		output: [][]string{{
+			`gtid|begin`,
+			`gtid|begin`,
+			`type:FIELD field_event:<table_name:"vitess_null" fields:<name:"@1" type:INT32 > fields:<name:"@2" type:VARCHAR > > `,
+			`type:ROW row_event:<table_name:"vitess_null" row_changes:<after:<lengths:1 lengths:3 values:"1abc" > > > `,
+			`commit`,
+		}, {
+			`gtid|begin`,
+			`type:DDL ddl:"rename table vitess_null to vitess_null_new" `,
+		}, {
+			`gtid|begin`,
+			`gtid|begin`,
+			`type:FIELD field_event:<table_name:"vitess_null_new" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
+			`type:ROW row_event:<table_name:"vitess_null_new" row_changes:<after:<lengths:1 lengths:3 values:"2abc" > > > `,
+			`commit`,
+		}},
+	}}
+	runCases(t, filter, testcases, position)
 }
 
 func TestTypes(t *testing.T) {
@@ -687,7 +735,7 @@ func TestTypes(t *testing.T) {
 			`commit`,
 		}},
 	}}
-	runCases(t, nil, testcases)
+	runCases(t, nil, testcases, "")
 }
 
 func TestJSON(t *testing.T) {
@@ -716,7 +764,7 @@ func TestJSON(t *testing.T) {
 			`commit`,
 		}},
 	}}
-	runCases(t, nil, testcases)
+	runCases(t, nil, testcases, "")
 }
 
 func TestExternalTable(t *testing.T) {
@@ -746,7 +794,7 @@ func TestExternalTable(t *testing.T) {
 			`commit`,
 		}},
 	}}
-	runCases(t, nil, testcases)
+	runCases(t, nil, testcases, "")
 }
 
 func TestMinimalMode(t *testing.T) {
@@ -827,12 +875,11 @@ func TestStatementMode(t *testing.T) {
 	}
 }
 
-func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase) {
+func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, postion string) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	ch := startStream(ctx, t, filter)
+	ch := startStream(ctx, t, filter, postion)
 
 	for _, tcase := range testcases {
 		switch input := tcase.input.(type) {
@@ -853,7 +900,6 @@ func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase) {
 
 func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan []*binlogdatapb.VEvent, output [][]string) {
 	t.Helper()
-
 	for _, wantset := range output {
 		var evs []*binlogdatapb.VEvent
 		var ok bool
@@ -897,13 +943,15 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 	}
 }
 
-func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter) <-chan []*binlogdatapb.VEvent {
-	pos := masterPosition(t)
+func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string) <-chan []*binlogdatapb.VEvent {
+	if position == "" {
+		position = masterPosition(t)
+	}
 
 	ch := make(chan []*binlogdatapb.VEvent)
 	go func() {
 		defer close(ch)
-		if err := vstream(ctx, t, pos, filter, ch); err != nil {
+		if err := vstream(ctx, t, position, filter, ch); err != nil {
 			t.Error(err)
 		}
 	}()
