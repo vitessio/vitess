@@ -68,7 +68,7 @@ to eventually validate such references.
 
 Every 'builder' primitive must satisfy the builder
 interface. This allows the planbuilder to outsource
-primitive-specific handling into those implementaions.
+primitive-specific handling into those implementations.
 
 Variable naming: The AST, planbuilder and engine
 are three different worlds that use overloaded
