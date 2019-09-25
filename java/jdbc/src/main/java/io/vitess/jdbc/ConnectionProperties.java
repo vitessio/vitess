@@ -231,7 +231,7 @@ public class ConnectionProperties {
       "The password protecting the truststore file (if a password is set)", null, null);
   private StringConnectionProperty trustAlias = new StringConnectionProperty(
       Constants.Property.TRUST_ALIAS,
-      "Alias under which the certficate chain is stored in the truststore file (if not specified,"
+      "Alias under which the certificate chain is stored in the truststore file (if not specified,"
           + " then "
           + "the first valid `X509Certificate` will be used)", null, null);
 

@@ -65,7 +65,7 @@ public class FieldWithMetadataTest extends BaseTest {
     conn.setBlobsAreStrings(true);
 
     Query.Field raw = Query.Field.newBuilder().setTable("#sql_my_temptable")
-        .setCharset(/* latin1, doesn't matter just dont want utf8 for now */ 5)
+        .setCharset(/* latin1, doesn't matter just don't want utf8 for now */ 5)
         .setFlags(Query.MySqlFlag.BINARY_FLAG_VALUE).setType(Query.Type.BLOB).setName("foo")
         .setOrgName("foo").build();
 
