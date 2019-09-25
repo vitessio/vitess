@@ -42,7 +42,7 @@ public class Constants {
   public static final int DRIVER_MAJOR_VERSION = 2;
   public static final int DRIVER_MINOR_VERSION = 2;
   public static final int MAX_BUFFER_SIZE = 65535;
-  //Default Timeout in miliseconds
+  //Default Timeout in milliseconds
   public static final int DEFAULT_TIMEOUT = 30000;
   public static final String VITESS_KEYSPACE = "Keyspace name in Vitess Server";
   public static final Constants.QueryExecuteType DEFAULT_EXECUTE_TYPE = QueryExecuteType.SIMPLE;

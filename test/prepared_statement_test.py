@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Ensures the vtgate MySQL server protocol plugin works as expected with prepared statments.
+"""Ensures the vtgate MySQL server protocol plugin works as expected with prepared statements.
 
 We use table ACLs to verify the user name authenticated by the connector is
 set properly.
