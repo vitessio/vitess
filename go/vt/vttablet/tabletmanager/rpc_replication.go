@@ -534,6 +534,11 @@ func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topo
 	if err == nil && (rs.SlaveIORunning || rs.SlaveSQLRunning) {
 		wasReplicating = true
 		shouldbeReplicating = true
+	} else if err == mysql.ErrNotSlave {
+		// If we used to be a master, or if we started as a replica but never
+		// found out who the master is, we always try to start replicating once
+		// we are told who the new master is via SetMaster.
+		shouldbeReplicating = true
 	}
 	if forceStartSlave {
 		shouldbeReplicating = true
