@@ -7,6 +7,7 @@ This is an alphabetical list of known adopters of Vitess. Some have already gone
 * [GitHub](http://github.com/)
 * [HubSpot](https://product.hubspot.com/)
 * [JD](https://jd.com/)
+* [New Relic](https://newrelic.com)
 * [Nozzle](https://nozzle.io)
 * [opensooq.com](https://www.opensooq.com/)
 * [Peak Games](https://peak.com/)
