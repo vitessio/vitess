@@ -37,6 +37,6 @@ the non-RDONLY replicas found in these cells for replication lag.
 the replication lag under the desired limit; as such the desired replication 
 lag limit may occasionally be slightly violated.
 
-* Transactions are considered homogenous. There is currently no support
+* Transactions are considered homogeneous. There is currently no support
 for specifying how `expensive` a transaction is.
 
