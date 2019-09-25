@@ -112,6 +112,19 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout, *poolDynamicHostnameResolution)
 	result.appPool.Open(dbcfgs.AppWithDB(), appMysqlStats)
 
+	/*
+	 Unmanaged tablets are special because the MYSQL_FLAVOR detection
+	 will not be accurate because the mysqld might not be the same
+	 one as the server started.
+
+	 This skips the panic that checks that we can detect a server,
+	 but also relies on none of the flavor detection features being
+	 used at runtime. Currently this assumption is guaranteed true.
+	*/
+	if dbconfigs.HasConnectionParams() {
+		log.Info("mysqld is unmanaged or remote. Skipping flavor detection")
+		return result
+	}
 	version, getErr := getVersionString()
 	f, v, err := parseVersionString(version)
 
