@@ -144,6 +144,10 @@ func (mh *proxyHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData
 	return nil
 }
 
+func (mh *proxyHandler) ComResetConnection(c *mysql.Conn) {
+
+}
+
 var mysqlListener *mysql.Listener
 var mysqlUnixListener *mysql.Listener
 

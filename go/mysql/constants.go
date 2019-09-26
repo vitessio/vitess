@@ -174,6 +174,9 @@ const (
 	// ComSetOption is COM_SET_OPTION
 	ComSetOption = 0x1b
 
+	// ComResetConnection is COM_RESET_CONNECTION
+	ComResetConnection = 0x1f
+
 	// ComBinlogDumpGTID is COM_BINLOG_DUMP_GTID.
 	ComBinlogDumpGTID = 0x1e
 
