@@ -27,7 +27,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// ParseDestination parses the string representation of a Destionation
+// ParseDestination parses the string representation of a Destination
 // of the form keyspace:shard@tablet_type. You can use a / instead of a :.
 func ParseDestination(targetString string, defaultTabletType topodatapb.TabletType) (string, topodatapb.TabletType, key.Destination, error) {
 	var dest key.Destination

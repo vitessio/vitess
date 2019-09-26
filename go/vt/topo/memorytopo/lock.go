@@ -70,7 +70,7 @@ func (c *Conn) Lock(ctx context.Context, dirPath, contents string) (topo.LockDes
 			}
 		}
 
-		// Noone has the lock, grab it.
+		// No one has the lock, grab it.
 		n.lock = make(chan struct{})
 		n.lockContents = contents
 		c.factory.mu.Unlock()
