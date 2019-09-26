@@ -1302,7 +1302,7 @@ func TestParseConnAttrs(t *testing.T) {
 		t.Fatalf("Failed to read connection attributes: %v", err)
 	}
 	if pos != 113 {
-		t.Fatalf("Unexpeded pos after reading connection attributes: %d intead of 113", pos)
+		t.Fatalf("Unexpeded pos after reading connection attributes: %d instead of 113", pos)
 	}
 	for k, v := range expected {
 		if val, ok := attrs[k]; ok {

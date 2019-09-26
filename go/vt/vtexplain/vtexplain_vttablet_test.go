@@ -109,7 +109,7 @@ func TestErrParseSchema(t *testing.T) {
 	testSchema := `
 create table t1 like t2;
 `
-	expected := "check your schema, table[t2] doesnt exist"
+	expected := "check your schema, table[t2] doesn't exist"
 	ddl, err := parseSchema(testSchema, &Options{StrictDDL: true})
 	if err != nil {
 		t.Fatalf("parseSchema: %v", err)
