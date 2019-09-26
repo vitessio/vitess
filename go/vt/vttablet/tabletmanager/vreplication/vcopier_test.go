@@ -513,7 +513,7 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 		"/delete from _vt.copy_state.*not_copied",
 		"rollback",
 	})
-	// Explicitly eat the Running state query. You cant' make expectNontxQueries
+	// Explicitly eat the Running state query. You can't make expectNontxQueries
 	// wait for it because it ignores _vt.vreplication events.
 	expectDBClientQueries(t, []string{
 		"/update _vt.vreplication set state='Running'",
@@ -609,7 +609,7 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 		"/delete from _vt.copy_state.*dst",
 		"rollback",
 	})
-	// Explicitly eat the Running state query. You cant' make expectNontxQueries
+	// Explicitly eat the Running state query. You can't make expectNontxQueries
 	// wait for it because it ignores _vt.vreplication events.
 	expectDBClientQueries(t, []string{
 		"/update _vt.vreplication set state='Running'",

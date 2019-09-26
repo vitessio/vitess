@@ -970,7 +970,7 @@ func (tsv *TabletServer) ConcludeTransaction(ctx context.Context, target *queryp
 	)
 }
 
-// ReadTransaction returns the metadata for the sepcified dtid.
+// ReadTransaction returns the metadata for the specified dtid.
 func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
