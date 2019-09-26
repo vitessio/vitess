@@ -180,6 +180,10 @@ func (th *testHandler) ComStmtExecute(c *Conn, prepare *PrepareData, callback fu
 	return nil
 }
 
+func (th *testHandler) ComResetConnection(c *Conn) {
+
+}
+
 func (th *testHandler) WarningCount(c *Conn) uint16 {
 	return th.warnings
 }

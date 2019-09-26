@@ -109,6 +109,8 @@ type Handler interface {
 	// ComQuery callback if the result does not contain any fields,
 	// or after the last ComQuery call completes.
 	WarningCount(c *Conn) uint16
+
+	ComResetConnection(c *Conn)
 }
 
 // Listener is the MySQL server protocol listener.
