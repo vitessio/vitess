@@ -75,6 +75,7 @@ func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
 	// old master
 	oldMaster.FakeMysqlDaemon.ReadOnly = false
 	oldMaster.FakeMysqlDaemon.Replicating = false
+	oldMaster.FakeMysqlDaemon.SlaveStatusError = mysql.ErrNotSlave
 	oldMaster.FakeMysqlDaemon.CurrentMasterPosition = newMaster.FakeMysqlDaemon.WaitMasterPosition
 	oldMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
@@ -181,6 +182,7 @@ func TestPlannedReparentShard(t *testing.T) {
 	// old master
 	oldMaster.FakeMysqlDaemon.ReadOnly = false
 	oldMaster.FakeMysqlDaemon.Replicating = false
+	oldMaster.FakeMysqlDaemon.SlaveStatusError = mysql.ErrNotSlave
 	oldMaster.FakeMysqlDaemon.CurrentMasterPosition = newMaster.FakeMysqlDaemon.WaitMasterPosition
 	oldMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
