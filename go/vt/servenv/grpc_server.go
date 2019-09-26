@@ -103,7 +103,10 @@ var (
 	// there are no active streams, server will send GOAWAY and close the connection.
 	GRPCKeepAliveEnforcementPolicyPermitWithoutStream = flag.Bool("grpc_server_keepalive_enforcement_policy_permit_without_stream", false, "gRPC server permit client keepalive pings even when there are no active streams (RPCs)")
 
-	authPlugin Authenticator
+	authPlugin          Authenticator
+
+	GRPCWriteBufferSize = flag.Int("grpc_server_write_buffer_size", 0, "grpc server write buffer size")
+	GRPCReadBufferSize  = flag.Int("grpc_server_read_buffer_size", 0, "grpc server read buffer size")
 )
 
 // isGRPCEnabled returns true if gRPC server is set
@@ -181,6 +184,15 @@ func createGRPCServer() {
 			ka.MaxConnectionAgeGrace = *GRPCMaxConnectionAgeGrace
 		}
 		opts = append(opts, grpc.KeepaliveParams(ka))
+	}
+
+	if *GRPCWriteBufferSize != 0 {
+		log.Infof("Setting grpc server write buffer size to %d", int32(*GRPCWriteBufferSize))
+		opts = append(opts, grpc.WriteBufferSize(*GRPCWriteBufferSize))
+	}
+	if *GRPCReadBufferSize != 0 {
+		log.Infof("Setting grpc server read buffer size to %d", int32(*GRPCReadBufferSize))
+		opts = append(opts, grpc.ReadBufferSize(*GRPCReadBufferSize))
 	}
 
 	opts = append(opts, interceptors()...)
