@@ -94,7 +94,7 @@ func (ev binlogEvent) TableMap(f BinlogFormat) (*TableMap, error) {
 		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected metadata end: got %v was expecting %v (data=%v)", pos, expectedEnd, data)
 	}
 
-	// A bit array that says if each colum can be NULL.
+	// A bit array that says if each column can be NULL.
 	result.CanBeNull, _ = newBitmap(data, pos, columnCount)
 
 	return result, nil

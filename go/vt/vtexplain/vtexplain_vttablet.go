@@ -409,7 +409,7 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 		if ddl.OptLike != nil {
 			likeTable := ddl.OptLike.LikeTable.Name.String()
 			if _, ok := schemaQueries["describe "+likeTable]; !ok {
-				return fmt.Errorf("check your schema, table[%s] doesnt exist", likeTable)
+				return fmt.Errorf("check your schema, table[%s] doesn't exist", likeTable)
 			}
 			schemaQueries["show index from "+table] = schemaQueries["show index from "+likeTable]
 			schemaQueries["describe "+table] = schemaQueries["describe "+likeTable]
