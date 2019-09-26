@@ -296,7 +296,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	if err != nil {
 		// Don't log EOF errors. They cause too much spam, same as main read loop.
 		if err != io.EOF {
-			log.Errorf("Cannot read client handshake response from %s: %v", c, err)
+                        log.Infof("Cannot read client handshake response from %s: %v, it may not be a valid MySQL client", c, err)
 		}
 		return
 	}
