@@ -73,7 +73,7 @@ type QueryService interface {
 	// essentially resolving it.
 	ConcludeTransaction(ctx context.Context, target *querypb.Target, dtid string) (err error)
 
-	// ReadTransaction returns the metadata for the sepcified dtid.
+	// ReadTransaction returns the metadata for the specified dtid.
 	ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error)
 
 	// Query execution
