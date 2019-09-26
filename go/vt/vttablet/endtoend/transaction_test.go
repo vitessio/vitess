@@ -329,17 +329,11 @@ func TestTxPoolSize(t *testing.T) {
 
 	defer framework.Server.SetTxPoolSize(framework.Server.TxPoolSize())
 	framework.Server.SetTxPoolSize(1)
-	defer framework.Server.BeginTimeout.Set(framework.Server.BeginTimeout.Get())
-	timeout := 1 * time.Millisecond
-	framework.Server.BeginTimeout.Set(timeout)
 	vend := framework.DebugVars()
 	if err := verifyIntValue(vend, "TransactionPoolAvailable", 0); err != nil {
 		t.Error(err)
 	}
 	if err := verifyIntValue(vend, "TransactionPoolCapacity", 1); err != nil {
-		t.Error(err)
-	}
-	if err := verifyIntValue(vend, "BeginTimeout", int(timeout)); err != nil {
 		t.Error(err)
 	}
 
@@ -358,8 +352,16 @@ func TestTxTimeout(t *testing.T) {
 	vstart := framework.DebugVars()
 
 	defer framework.Server.SetTxTimeout(framework.Server.TxTimeout())
-	framework.Server.SetTxTimeout(1 * time.Millisecond)
-	if err := verifyIntValue(framework.DebugVars(), "TransactionPoolTimeout", int(1*time.Millisecond)); err != nil {
+	txTimeout := 1 * time.Millisecond
+	framework.Server.SetTxTimeout(txTimeout)
+	if err := verifyIntValue(framework.DebugVars(), "TransactionTimeout", int(txTimeout)); err != nil {
+		t.Error(err)
+	}
+
+	defer framework.Server.SetTxPoolTimeout(framework.Server.TxPoolTimeout())
+	txPoolTimeout := 2 * time.Millisecond
+	framework.Server.SetTxPoolTimeout(txPoolTimeout)
+	if err := verifyIntValue(framework.DebugVars(), "TransactionPoolTimeout", int(txPoolTimeout)); err != nil {
 		t.Error(err)
 	}
 
