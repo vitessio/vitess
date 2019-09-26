@@ -137,7 +137,6 @@ func stateInfo(state int64) string {
 // a subcomponent. These should also be idempotent.
 type TabletServer struct {
 	QueryTimeout           sync2.AtomicDuration
-	BeginTimeout           sync2.AtomicDuration
 	TerseErrors            bool
 	enableHotRowProtection bool
 
@@ -265,7 +264,6 @@ func NewTabletServerWithNilTopoServer(config tabletenv.TabletConfig) *TabletServ
 func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
 	tsv := &TabletServer{
 		QueryTimeout:           sync2.NewAtomicDuration(time.Duration(config.QueryTimeout * 1e9)),
-		BeginTimeout:           sync2.NewAtomicDuration(time.Duration(config.TxPoolTimeout * 1e9)),
 		TerseErrors:            config.TerseErrors,
 		enableHotRowProtection: config.EnableHotRowProtection || config.EnableHotRowProtectionDryRun,
 		checkMySQLThrottler:    sync2.NewSemaphore(1, 0),
@@ -304,7 +302,6 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 		})
 		stats.NewGaugeDurationFunc("QueryTimeout", "Tablet server query timeout", tsv.QueryTimeout.Get)
 		stats.NewGaugeDurationFunc("QueryPoolTimeout", "Tablet server timeout to get a connection from the query pool", tsv.qe.connTimeout.Get)
-		stats.NewGaugeDurationFunc("BeginTimeout", "Tablet server begin timeout", tsv.BeginTimeout.Get)
 	})
 	// TODO(sougou): move this up once the stats naming problem is fixed.
 	tsv.vstreamer = vstreamer.NewEngine(srvTopoServer, tsv.se)
@@ -772,7 +769,7 @@ func (tsv *TabletServer) SchemaEngine() *schema.Engine {
 // Begin starts a new transaction. This is allowed only if the state is StateServing.
 func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (transactionID int64, err error) {
 	err = tsv.execRequest(
-		ctx, tsv.BeginTimeout.Get(),
+		ctx, tsv.QueryTimeout.Get(),
 		"Begin", "begin", nil,
 		target, options, true /* isBegin */, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
@@ -2178,6 +2175,17 @@ func (tsv *TabletServer) SetTxTimeout(val time.Duration) {
 // TxTimeout returns the transaction timeout.
 func (tsv *TabletServer) TxTimeout() time.Duration {
 	return tsv.te.txPool.Timeout()
+}
+
+// SetTxPoolTimeout changes the transaction pool timeout to the specified value.
+// This function should only be used for testing.
+func (tsv *TabletServer) SetTxPoolTimeout(val time.Duration) {
+	tsv.te.txPool.SetPoolTimeout(val)
+}
+
+// TxPoolTimeout returns the transaction pool timeout.
+func (tsv *TabletServer) TxPoolTimeout() time.Duration {
+	return tsv.te.txPool.PoolTimeout()
 }
 
 // SetQueryPlanCacheCap changes the pool size to the specified value.
