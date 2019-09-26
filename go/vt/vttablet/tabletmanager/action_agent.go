@@ -213,8 +213,13 @@ type ActionAgent struct {
 	// _lockTablesConnection is used to get and release the table read locks to pause replication
 	_lockTablesConnection *dbconnpool.DBConnection
 	_lockTablesTimer      *time.Timer
+
 	// _isBackupRunning tells us whether there is a backup that is currently running
 	_isBackupRunning bool
+
+	// stopDemoteRetry is used to stop any pending changes to REPLICA type
+	// when this tablet is promoted to MASTER
+	stopDemoteRetry chan struct{}
 }
 
 // NewActionAgent creates a new ActionAgent and registers all the
@@ -672,6 +677,9 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 	startingTablet.Type = topodatapb.TabletType_UNKNOWN
 	agent.setTablet(startingTablet)
 
+	// Create the channel that is used to co-ordinate type changes from MASTER to REPLICA
+	agent.stopDemoteRetry = make(chan struct{})
+
 	return nil
 }
 
@@ -706,6 +714,7 @@ func (agent *ActionAgent) Stop() {
 	if agent.MysqlDaemon != nil {
 		agent.MysqlDaemon.Close()
 	}
+	close(agent.stopDemoteRetry)
 }
 
 // hookExtraEnv returns the map to pass to local hooks

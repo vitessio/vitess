@@ -233,6 +233,9 @@ message Shard {
   // The keyspace lock is always taken when changing this.
   bool is_master_serving = 7;
 
+  // master_timestamp is the time at which master_alias was set
+  int64 master_timestamp = 8;
+
   // OBSOLETE cells (5)
   reserved 5;
 }

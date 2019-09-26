@@ -19,6 +19,7 @@ package tabletmanager
 // This file handles the agent state changes.
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"strings"
@@ -34,6 +35,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/events"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
@@ -51,10 +53,16 @@ var (
 	// vtgate to gracefully redirect traffic elsewhere, before we begin actually
 	// rejecting queries for that target type.
 	gracePeriod = flag.Duration("serving_state_grace_period", 0, "how long to pause after broadcasting health to vtgate, before enforcing a new serving state")
+	// updateRetryInterval is the amount of time to wait on failure before
+	// retrying either of:
+	// 1. An update of the shard record with a new master
+	// 2. Demoting the tablet type to REPLICA if we find a newer master
+	updateRetryInterval = 30 * time.Second
 )
 
 // Query rules from blacklist
 const blacklistQueryRules string = "BlacklistQueryRules"
+const newerMaster string = "there is a newer master for this shard"
 
 // loadBlacklistRules loads and builds the blacklist query rules
 func (agent *ActionAgent) loadBlacklistRules(tablet *topodatapb.Tablet, blacklistedTables []string) (err error) {
@@ -189,6 +197,8 @@ func (agent *ActionAgent) updateState(ctx context.Context, newTablet *topodatapb
 // It owns starting and stopping the update stream service.
 //
 // It owns reading the TabletControl for the current tablet, and storing it.
+//
+// It owns updating the shard record with masterAlias and masterTimestamp
 func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTablet *topodatapb.Tablet) {
 	agent.checkLock()
 
@@ -366,8 +376,136 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 		agent.VREngine.Close()
 	}
 
+	// If we are the new master, update the shard
+	// Exclude transitions from BACKUP/RESTORE types because the shard master does not change
+	// when the current master changes to either of those types
+	if newTablet.Type == topodatapb.TabletType_MASTER &&
+		oldTablet.Type != topodatapb.TabletType_MASTER &&
+		oldTablet.Type != topodatapb.TabletType_BACKUP &&
+		oldTablet.Type != topodatapb.TabletType_RESTORE {
+		agent.updateShardMaster(agent.batchCtx, newTablet)
+	}
 	// Broadcast health changes to vtgate immediately.
 	if broadcastHealth {
 		agent.broadcastHealth()
 	}
+}
+
+func (agent *ActionAgent) updateShardMaster(ctx context.Context, tablet *topodatapb.Tablet) {
+	timestamp := time.Now().UTC().UnixNano()
+	// Make channels for communicating between the two goroutines
+	// we are creating.
+	stop := make(chan struct{})
+	watch := make(chan bool)
+	// update shard record in a separate thread
+	// this will retry on error unless it is told to stop
+	go func(stopDemote chan struct{}) {
+		// immediately stop any pending attempts to change this tablet to REPLICA
+		stopDemote <- struct{}{}
+	loop:
+		for {
+			select {
+			case <-stop:
+				break loop
+			default:
+				for {
+					_, err := agent.TopoServer.UpdateShardFields(ctx, tablet.Keyspace, tablet.Shard, func(si *topo.ShardInfo) error {
+						// check timestamp and update
+						if timestamp > si.MasterTimestamp {
+							si.MasterAlias = tablet.Alias
+							si.MasterTimestamp = timestamp
+							return nil
+						}
+						return errors.New(newerMaster)
+					})
+					if err == nil {
+						// If the update succeeded we start watching the shard record
+						watch <- true
+						break loop
+					} else if err.Error() == newerMaster {
+						// If there is a newer master, we will not become the master
+						watch <- false
+						break loop
+					}
+					// retry on any other error
+					time.Sleep(updateRetryInterval)
+				}
+			}
+		}
+	}(agent.stopDemoteRetry)
+	go func(stopDemote chan struct{}) {
+		start := <-watch
+		if !start {
+			// Exit without setting a watch. This happens if we were unable to
+			// make ourselves the MasterAlias because there is a newer master.
+			// We need to issue another type change to REPLICA.
+			// This will not lead to infinite recursion because updateShardMaster
+			// is only called when new tablet type is MASTER.
+		outer:
+			for {
+				select {
+				case <-stopDemote:
+					break outer
+				default:
+					for {
+						err := agent.demoteMaster(agent.batchCtx, tablet)
+						if err == nil {
+							break outer
+						}
+						time.Sleep(updateRetryInterval)
+					}
+				}
+			}
+			return
+		}
+		defer close(stop)
+		current, changes, cancel := agent.TopoServer.WatchShard(agent.batchCtx, tablet.Keyspace, tablet.Shard)
+		defer cancel()
+		if current.Err != nil {
+			// Shard should exist, so if we get an error here, we have to bail
+			return
+		}
+		for c := range changes {
+			if c.Err != nil {
+				log.Warningf("Error while watching shard %v from tablet %v: %v", tablet.Shard, tablet.Alias, c.Err)
+				return
+			}
+			s := c.Value
+			if s.MasterAlias != tablet.Alias {
+				close(stop)
+				// Demote to REPLICA, keep trying until it succeeds
+			outer2:
+				for {
+					select {
+					case <-stopDemote:
+						break outer2
+					default:
+						for {
+							err := agent.demoteMaster(agent.batchCtx, tablet)
+							if err == nil {
+								break outer2
+							}
+							time.Sleep(updateRetryInterval)
+						}
+					}
+				}
+				return
+			}
+		}
+	}(agent.stopDemoteRetry)
+}
+
+func (agent *ActionAgent) demoteMaster(ctx context.Context, tablet *topodatapb.Tablet) error {
+	_, err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topodatapb.TabletType_REPLICA)
+	if err != nil {
+		log.Errorf("unable to change tablet %v to REPLICA: %v", tablet.Alias, err)
+		return err
+	}
+
+	// let's update our internal state (start query service and other things)
+	if err := agent.refreshTablet(ctx, "demote to replica"); err != nil {
+		log.Errorf("unable to refresh state on tablet %v: %v", tablet.Alias, err)
+		return err
+	}
+	return nil
 }
