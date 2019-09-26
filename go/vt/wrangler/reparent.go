@@ -532,7 +532,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		return fmt.Errorf("failed to update shard master record: %v", err)
 	}
 
-	// Wait for the slaves to complete.
+	// Wait for the replicas to complete.
 	wgReplicas.Wait()
 	if err := rec.Error(); err != nil {
 		wr.Logger().Errorf2(err, "some replicas failed to reparent; retry PlannedReparentShard with the same new master alias to retry failed replicas")
