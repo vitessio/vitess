@@ -318,7 +318,7 @@ class TestPreparedStatements(unittest.TestCase):
         self.fail("Received incorrect values")
       cursor.close()
     except TypeError:
-      print "Could not find item"
+      print "Cannot find the item due to the resetting of prepared statement."
         
 if __name__ == '__main__':
   utils.main()
