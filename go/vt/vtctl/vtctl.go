@@ -228,10 +228,6 @@ var commands = []commandGroup{
 			{"GetShard", commandGetShard,
 				"<keyspace/shard>",
 				"Outputs a JSON structure that contains information about the Shard."},
-			{"TabletExternallyReparented", commandTabletExternallyReparented,
-				"<tablet alias>",
-				"Changes metadata in the topology server to acknowledge a shard master change performed by an external tool. See the Reparenting guide for more information:" +
-					"https://github.com/vitessio/vitess/blob/master/doc/Reparenting.md#external-reparents."},
 			{"ValidateShard", commandValidateShard,
 				"[-ping-tablets] <keyspace/shard>",
 				"Validates that all nodes that are reachable from this shard are consistent."},
@@ -1201,25 +1197,6 @@ func commandGetShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 	}
 	// Pass the embedded proto directly or jsonpb will panic.
 	return printJSON(wr.Logger(), shardInfo.Shard)
-}
-
-func commandTabletExternallyReparented(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("the <tablet alias> argument is required for the TabletExternallyReparented command")
-	}
-
-	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return err
-	}
-	return wr.TabletManagerClient().TabletExternallyReparented(ctx, ti.Tablet, "")
 }
 
 func commandValidateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
