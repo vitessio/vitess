@@ -308,17 +308,14 @@ class TestPreparedStatements(unittest.TestCase):
       self.fail("Delete failed")
     cursor.close()
     
+    # Reseting the connection
     conn.cmd_reset_connection()
+    cursor = conn.cursor(cursor_class=MySQLCursorPrepared)
+    cursor.execute('select * from vt_prepare_stmt_test where id = %s', (1,))
+    result = cursor.fetchone()
     # Should fail since we cleared PreparedData inside the connection
-    try:
-      cursor = conn.cursor(cursor_class=MySQLCursorPrepared)
-      cursor.execute('select * from vt_prepare_stmt_test where id = %s', (1,))
-      result = cursor.fetchone()
-      if result[-1] != updated_data_value or result[-2] != updated_text_value:
-        self.fail("Received incorrect values")
-      cursor.close()
-    except TypeError:
-      print "Cannot find the item due to the resetting of prepared statement."
+    with self.assertRaises(TypeError):
+      empty_val = result[-2]
         
 if __name__ == '__main__':
   utils.main()
