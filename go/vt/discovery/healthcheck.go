@@ -735,7 +735,8 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodatapb.Tablet, name string) {
 	}
 	if _, ok := hc.addrToHealth[key]; ok {
 		hc.mu.Unlock()
-		log.Warningf("adding duplicate tablet %v for %v: %+v", name, tablet.Alias.Cell, tablet)
+		// TODO Crash until the following bug has been fixed: https://github.com/vitessio/vitess/issues/5229
+		log.Fatalf("vtgate health check state corrupt, adding duplicate tablet %v for %v: %+v", name, tablet.Alias.Cell, tablet)
 		return
 	}
 	hc.addrToHealth[key] = &tabletHealth{
