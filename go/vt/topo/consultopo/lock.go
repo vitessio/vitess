@@ -136,7 +136,7 @@ func (s *Server) unlock(ctx context.Context, lockPath string) error {
 	close(li.done)
 
 	// Then try to remove the lock entirely. This will only work if
-	// noone else has the lock.
+	// no one else has the lock.
 	if err := li.lock.Destroy(); err != nil {
 		// If someone else has the lock, we can't remove it,
 		// but we don't need to.

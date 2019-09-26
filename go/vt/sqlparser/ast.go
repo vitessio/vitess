@@ -2007,7 +2007,7 @@ func (node TableName) walkSubtree(visit Visit) error {
 
 // IsEmpty returns true if TableName is nil or empty.
 func (node TableName) IsEmpty() bool {
-	// If Name is empty, Qualifer is also empty.
+	// If Name is empty, Qualifier is also empty.
 	return node.Name.IsEmpty()
 }
 
