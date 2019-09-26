@@ -300,6 +300,13 @@ class TestReparent(unittest.TestCase):
                      '-new_master', tablet_62044.tablet_alias], auto_log=True)
     utils.validate_topology()
 
+    # Perform a repeat of the same graceful reparent operation.
+    # It should be idempotent.
+    utils.run_vtctl(['PlannedReparentShard',
+                     '-keyspace_shard', 'test_keyspace/' + shard_id,
+                     '-new_master', tablet_62044.tablet_alias], auto_log=True)
+    utils.validate_topology()
+
     self._check_master_tablet(tablet_62044)
 
     # insert data into the new master, check the connected slaves work
@@ -621,10 +628,10 @@ class TestReparent(unittest.TestCase):
 
     utils.pause('check orphan')
 
-    # reparent the tablet (will not start replication, so we have to
-    # do it ourselves), then it should catch up on replication really quickly
-    utils.run_vtctl(['ReparentTablet', tablet_41983.tablet_alias])
-    utils.run_vtctl(['StartSlave', tablet_41983.tablet_alias])
+    # Use the same PlannedReparentShard command to fix up the tablet.
+    utils.run_vtctl(['PlannedReparentShard',
+                    '-keyspace_shard', 'test_keyspace/' + shard_id,
+                    '-new_master', tablet_62044.tablet_alias])
 
     # wait until it gets the data
     self._check_vt_insert_test(tablet_41983, 3)
@@ -754,7 +761,7 @@ class TestReparent(unittest.TestCase):
                                  '-keyspace_shard', 'test_keyspace/0',
                                  '-new_master', tablet_62044.tablet_alias],
                                 expect_fail=True)
-    self.assertIn('master failed to PopulateReparentJournal, canceling slaves',
+    self.assertIn('master failed to PopulateReparentJournal',
                   stderr)
 
     # Clean up the tablets.
