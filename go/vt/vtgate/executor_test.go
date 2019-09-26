@@ -551,7 +551,7 @@ func TestExecutorDeleteMetadata(t *testing.T) {
 	assert.Len(t, result.Rows, 1)
 
 	// Fails if deleting key that doesn't exist
-	delete := "set @@vitess_metadata.doesnt_exist=''"
+	delete := "set @@vitess_metadata.doesn't_exist=''"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, delete, nil)
 	assert.True(t, topo.IsErrType(err, topo.NoNode))
 

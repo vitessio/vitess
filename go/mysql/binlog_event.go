@@ -120,7 +120,7 @@ type BinlogEvent interface {
 	// the same event and a nil checksum.
 	StripChecksum(BinlogFormat) (ev BinlogEvent, checksum []byte, err error)
 
-	// IsPseudo is for custom implemetations of GTID.
+	// IsPseudo is for custom implementations of GTID.
 	IsPseudo() bool
 }
 
