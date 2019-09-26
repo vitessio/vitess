@@ -74,7 +74,7 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 			select {
 
 			case <-watchCtx.Done():
-				// This includes context cancelation errors.
+				// This includes context cancellation errors.
 				notifications <- &topo.WatchData{
 					Err: convertError(watchCtx.Err(), nodePath),
 				}
