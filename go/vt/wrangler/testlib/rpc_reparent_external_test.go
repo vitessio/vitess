@@ -44,8 +44,6 @@ func TestTabletExternallyReparented(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1", "cell2")
 	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
-	vp := NewVtctlPipe(t, ts)
-	defer vp.Close()
 
 	// Create an old master, a new master, two good slaves, one bad slave
 	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil)
@@ -127,7 +125,8 @@ func TestTabletExternallyReparented(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	if err := vp.Run([]string{"TabletExternallyReparented", topoproto.TabletAliasString(oldMaster.Tablet.Alias)}); err != nil {
+	waitID := makeWaitID()
+	if err := tmc.TabletExternallyReparented(context.Background(), oldMaster.Tablet, waitID); err != nil {
 		t.Fatalf("TabletExternallyReparented(same master) should have worked: %v", err)
 	}
 
@@ -140,7 +139,7 @@ func TestTabletExternallyReparented(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
-	waitID := makeWaitID()
+	waitID = makeWaitID()
 	if err := tmc.TabletExternallyReparented(context.Background(), ti.Tablet, waitID); err != nil {
 		t.Fatalf("TabletExternallyReparented(slave) error: %v", err)
 	}
