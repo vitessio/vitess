@@ -47,7 +47,7 @@ func (i *AtomicInt32) Get() int32 {
 	return atomic.LoadInt32(&i.int32)
 }
 
-// CompareAndSwap atomatically swaps the old with the new value.
+// CompareAndSwap automatically swaps the old with the new value.
 func (i *AtomicInt32) CompareAndSwap(oldval, newval int32) (swapped bool) {
 	return atomic.CompareAndSwapInt32(&i.int32, oldval, newval)
 }
@@ -77,7 +77,7 @@ func (i *AtomicInt64) Get() int64 {
 	return atomic.LoadInt64(&i.int64)
 }
 
-// CompareAndSwap atomatically swaps the old with the new value.
+// CompareAndSwap automatically swaps the old with the new value.
 func (i *AtomicInt64) CompareAndSwap(oldval, newval int64) (swapped bool) {
 	return atomic.CompareAndSwapInt64(&i.int64, oldval, newval)
 }
@@ -107,7 +107,7 @@ func (d *AtomicDuration) Get() time.Duration {
 	return time.Duration(atomic.LoadInt64(&d.int64))
 }
 
-// CompareAndSwap atomatically swaps the old with the new value.
+// CompareAndSwap automatically swaps the old with the new value.
 func (d *AtomicDuration) CompareAndSwap(oldval, newval time.Duration) (swapped bool) {
 	return atomic.CompareAndSwapInt64(&d.int64, int64(oldval), int64(newval))
 }
@@ -139,7 +139,7 @@ func (i *AtomicBool) Get() bool {
 	return atomic.LoadInt32(&i.int32) != 0
 }
 
-// CompareAndSwap atomatically swaps the old with the new value.
+// CompareAndSwap automatically swaps the old with the new value.
 func (i *AtomicBool) CompareAndSwap(o, n bool) bool {
 	var old, new int32
 	if o {
@@ -174,7 +174,7 @@ func (s *AtomicString) Get() string {
 	return str
 }
 
-// CompareAndSwap atomatically swaps the old with the new value.
+// CompareAndSwap automatically swaps the old with the new value.
 func (s *AtomicString) CompareAndSwap(oldval, newval string) (swqpped bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -154,7 +154,7 @@ func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 	field.Decimals = uint32(decimals)
 
 	// If we didn't get column length or character set,
-	// we assume the orignal row on the other side was encoded from
+	// we assume the original row on the other side was encoded from
 	// a Field without that data, so we don't return the flags.
 	if field.ColumnLength != 0 || field.Charset != 0 {
 		field.Flags = uint32(flags)
