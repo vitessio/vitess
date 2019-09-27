@@ -236,7 +236,7 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 	// also change the master alias in the Shard object, to make sure it
 	// is set back.
 	_, err := ts.UpdateShardFields(ctx, master.Tablet.Keyspace, master.Tablet.Shard, func(si *topo.ShardInfo) error {
-		// note it's OK to retry this and increment mutiple times,
+		// note it's OK to retry this and increment multiple times,
 		// we just want it to be different
 		si.MasterAlias.Uid++
 		return nil
