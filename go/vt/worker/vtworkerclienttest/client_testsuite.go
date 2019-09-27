@@ -138,6 +138,8 @@ func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client, server
 			errChan <- err
 			close(blockCommandStarted)
 			return
+		} else {
+			errChan <- nil
 		}
 
 		firstLineReceived := false
