@@ -80,7 +80,7 @@ func TestInterfaceListener(t *testing.T) {
 
 	triggered := false
 	AddListener(func(testInterface1) { triggered = true })
-	AddListener(func(testInterface2) { t.Errorf("interface listener triggerd on non-matching type") })
+	AddListener(func(testInterface2) { t.Errorf("interface listener triggered on non-matching type") })
 	Dispatch(testEvent1{})
 
 	if !triggered {
