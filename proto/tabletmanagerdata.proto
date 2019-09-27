@@ -52,6 +52,10 @@ message TableDefinition {
 
   // approximate number of rows
   uint64 row_count = 7;
+
+  // column names along with their types.
+  // NOTE: this is a superset of columns.
+  repeated query.Field fields = 8;
 }
 
 message SchemaDefinition {
