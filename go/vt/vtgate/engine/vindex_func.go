@@ -116,6 +116,11 @@ func (vf *VindexFunc) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bi
 	return &sqltypes.Result{Fields: vf.Fields}, nil
 }
 
+// Inputs is always empty for VindexFunc - it has no inputs.
+func (vf *VindexFunc) Inputs() []Primitive {
+	return []Primitive{}
+}
+
 func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	k, err := vf.Value.ResolveValue(bindVars)
 	if err != nil {

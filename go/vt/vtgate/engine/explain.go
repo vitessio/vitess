@@ -93,3 +93,8 @@ func (e *Explain) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.Bi
 func (e *Explain) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return e.Input.GetFields(vcursor, bindVars)
 }
+
+// Inputs returns the single input of Explain
+func (e *Explain) Inputs() []Primitive {
+	return []Primitive{e.Input}
+}

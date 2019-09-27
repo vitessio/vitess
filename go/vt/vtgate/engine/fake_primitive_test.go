@@ -38,7 +38,7 @@ type fakePrimitive struct {
 	// sendErr is sent at the end of the stream if it's set.
 	sendErr error
 
-	log []string
+	log     []string
 	jsonObj interface{}
 }
 
@@ -46,6 +46,12 @@ type fakePrimitive struct {
 func (e *fakePrimitive) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&e.jsonObj)
 }
+
+func (f *fakePrimitive) Inputs() []Primitive {
+	return []Primitive{}
+}
+
+var _ Primitive = (*fakePrimitive)(nil)
 
 func (f *fakePrimitive) rewind() {
 	f.curResult = 0

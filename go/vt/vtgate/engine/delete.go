@@ -190,6 +190,11 @@ func (del *Delete) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindV
 	return nil, fmt.Errorf("BUG: unreachable code for %q", del.Query)
 }
 
+// Inputs is always empty for delete - it has no inputs.
+func (del *Delete) Inputs() []Primitive {
+	return []Primitive{}
+}
+
 func (del *Delete) execDeleteUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{key.DestinationAllShards{}})
 	if err != nil {
