@@ -106,7 +106,7 @@ type locksInfo struct {
 	// lock different things.
 	mu sync.Mutex
 
-	// info contans all the locks we took. It is indexed by
+	// info contains all the locks we took. It is indexed by
 	// keyspace (for keyspaces) or keyspace/shard (for shards).
 	info map[string]*lockInfo
 }

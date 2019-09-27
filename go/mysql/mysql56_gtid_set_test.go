@@ -69,7 +69,7 @@ func TestParseMysql56GTIDSet(t *testing.T) {
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20": {
 			sid1: []interval{{1, 5}, {10, 20}},
 		},
-		// Multiple intervals, out of oder
+		// Multiple intervals, out of order
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:10-20:1-5": {
 			sid1: []interval{{1, 5}, {10, 20}},
 		},

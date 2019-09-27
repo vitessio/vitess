@@ -274,7 +274,7 @@ func Restore(ctx context.Context, params RestoreParams) (mysql.Position, error) 
 		}
 		// Since this is an empty database make sure we start replication at the beginning
 		if err := mysqld.ResetReplication(ctx); err != nil {
-			logger.Errorf("error reseting slave replication: %v. Continuing", err)
+			logger.Errorf("error resetting slave replication: %v. Continuing", err)
 		}
 
 		if err := PopulateMetadataTables(mysqld, localMetadata, dbName); err != nil {
