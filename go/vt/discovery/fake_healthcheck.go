@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 
@@ -104,6 +105,17 @@ func (fhc *FakeHealthCheck) RemoveTablet(tablet *topodatapb.Tablet) {
 	fhc.mu.Lock()
 	defer fhc.mu.Unlock()
 	key := TabletToMapKey(tablet)
+	item, ok := fhc.items[key]
+	if !ok {
+		return
+	}
+	// Make sure the key still corresponds to the tablet we want to delete.
+	// If it doesn't match, we should do nothing. The tablet we were asked to
+	// delete is already gone, and some other tablet is using the key
+	// (host:port) that the original tablet used to use, which is fine.
+	if !topoproto.TabletAliasEqual(tablet.Alias, item.ts.Tablet.Alias) {
+		return
+	}
 	delete(fhc.items, key)
 }
 
