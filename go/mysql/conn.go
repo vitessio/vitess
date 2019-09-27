@@ -255,7 +255,7 @@ func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
 	// Note io.ReadFull will return two different types of errors:
 	// 1. if the socket is already closed, and the go runtime knows it,
 	//   then ReadFull will return an error (different than EOF),
-	//   someting like 'read: connection reset by peer'.
+	//   something like 'read: connection reset by peer'.
 	// 2. if the socket is not closed while we start the read,
 	//   but gets closed after the read is started, we'll get io.EOF.
 	if _, err := io.ReadFull(r, header[:]); err != nil {

@@ -826,7 +826,7 @@ message StreamHealthResponse {
   // It is only filled in if the information is about a tablet.
   RealtimeStats realtime_stats = 4;
 
-  // AggregateStats constains information about the group of tablet status.
+  // AggregateStats constrains information about the group of tablet status.
   // It is only filled in if the information is about a group of tablets.
   AggregateStats aggregate_stats = 6;
 
