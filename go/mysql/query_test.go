@@ -268,7 +268,7 @@ func TestQueries(t *testing.T) {
 		InsertID:     0x0102030405060708,
 	})
 
-	// Typicall Select with TYPE_AND_NAME.
+	// Typical Select with TYPE_AND_NAME.
 	// One value is also NULL.
 	checkQuery(t, "type and name", sConn, cConn, &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -294,7 +294,7 @@ func TestQueries(t *testing.T) {
 		RowsAffected: 2,
 	})
 
-	// Typicall Select with TYPE_AND_NAME.
+	// Typical Select with TYPE_AND_NAME.
 	// All types are represented.
 	// One row has all NULL values.
 	checkQuery(t, "all types", sConn, cConn, &sqltypes.Result{
@@ -397,7 +397,7 @@ func TestQueries(t *testing.T) {
 		RowsAffected: 2,
 	})
 
-	// Typicall Select with TYPE_AND_NAME.
+	// Typical Select with TYPE_AND_NAME.
 	// First value first column is an empty string, so it's encoded as 0.
 	checkQuery(t, "first empty string", sConn, cConn, &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -417,7 +417,7 @@ func TestQueries(t *testing.T) {
 		RowsAffected: 2,
 	})
 
-	// Typicall Select with TYPE_ONLY.
+	// Typical Select with TYPE_ONLY.
 	checkQuery(t, "type only", sConn, cConn, &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -435,7 +435,7 @@ func TestQueries(t *testing.T) {
 		RowsAffected: 2,
 	})
 
-	// Typicall Select with ALL.
+	// Typical Select with ALL.
 	checkQuery(t, "complete", sConn, cConn, &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
