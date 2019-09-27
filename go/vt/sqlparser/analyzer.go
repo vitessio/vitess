@@ -108,7 +108,7 @@ func Preview(sql string) StatementType {
 		return StmtShow
 	case "use":
 		return StmtUse
-	case "analyze", "describe", "desc", "explain", "repair", "optimize":
+	case "analyze", "describe", "desc", "repair", "optimize":
 		return StmtOther
 	}
 	return StmtUnknown

@@ -19,7 +19,7 @@ package planbuilder
 import (
 	"errors"
 	"fmt"
-
+	"strings"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -282,11 +282,14 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 	case *sqlparser.Union:
 		plan.Instructions, err = buildUnionPlan(stmt, vschema)
 	case *sqlparser.Explain:
-		innerPlan, err2 := buildSelectPlan(stmt.InnerSelect, vschema)
+		// TODO: this is almost certainly not the way to do it, but I know no better
+		firstSpace := strings.Index(query, " ")
+		queryWithoutExplain := query[firstSpace:]
+		innerPlan, err2 := BuildFromStmt(queryWithoutExplain, stmt.InnerStatement, vschema)
 		if err2 != nil {
 			return nil, err
 		}
-		plan.Instructions = &engine.Explain{Input: innerPlan}
+		plan.Instructions = &engine.Explain{Input: innerPlan.Instructions}
 	case *sqlparser.Set:
 		return nil, errors.New("unsupported construct: set")
 	case *sqlparser.Show:

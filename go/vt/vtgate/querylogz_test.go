@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"golang.org/x/net/context"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -24,8 +25,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"golang.org/x/net/context"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"
 )

@@ -211,7 +211,7 @@ func skipToEnd(yylex interface{}) {
 
 %type <statement> command
 %type <selStmt> select_statement base_select union_lhs union_rhs
-%type <statement> stream_statement insert_statement update_statement delete_statement set_statement explain_select_statement
+%type <statement> stream_statement insert_statement update_statement delete_statement set_statement explain_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
@@ -351,16 +351,16 @@ command:
 | rollback_statement
 | other_statement
 | flush_statement
-| explain_select_statement
+| explain_statement
 | /*empty*/
 {
   setParseTree(yylex, nil)
 }
 
-explain_select_statement:
-  EXPLAIN select_statement
+explain_statement:
+  EXPLAIN command
   {
-    $$ = &Explain{InnerSelect: $2.(*Select)}
+    $$ = NewExplain($2)
   }
 
 select_statement:

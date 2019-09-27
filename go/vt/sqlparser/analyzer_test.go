@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"github.com/stretchr/testify/assert"
 	"reflect"
 	"strings"
 	"testing"
@@ -65,7 +66,7 @@ func TestPreview(t *testing.T) {
 		{"analyze", StmtOther},
 		{"describe", StmtOther},
 		{"desc", StmtOther},
-		{"explain", StmtOther},
+		{"explain select", StmtSelect},
 		{"repair", StmtOther},
 		{"optimize", StmtOther},
 		{"truncate", StmtDDL},
@@ -83,9 +84,9 @@ func TestPreview(t *testing.T) {
 		{"-- leading single line comment no end select ...", StmtUnknown},
 	}
 	for _, tcase := range testcases {
-		if got := Preview(tcase.sql); got != tcase.want {
-			t.Errorf("Preview(%s): %v, want %v", tcase.sql, got, tcase.want)
-		}
+		t.Run(tcase.sql, func(t *testing.T) {
+			assert.Equal(t, tcase.want, Preview(tcase.sql))
+		})
 	}
 }
 

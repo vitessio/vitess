@@ -17,6 +17,7 @@ limitations under the License.
 package engine
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -38,6 +39,12 @@ type fakePrimitive struct {
 	sendErr error
 
 	log []string
+	jsonObj interface{}
+}
+
+// MarshalJSON allows for returning arbitrary json representation
+func (e *fakePrimitive) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&e.jsonObj)
 }
 
 func (f *fakePrimitive) rewind() {

@@ -19,55 +19,24 @@ package engine
 import (
 	"github.com/stretchr/testify/assert"
 	"testing"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestExplainExecute(t *testing.T) {
-	leftPrim := NewRoute(
-		SelectUnsharded,
-		&vindexes.Keyspace{
-			Name:    "ks",
-			Sharded: false,
-		},
-		"dummy_select",
-		"dummy_select_field",
-	)
-	rightPrim := NewRoute(
-		SelectScatter,
-		&vindexes.Keyspace{
-			Name:    "ks",
-			Sharded: false,
-		},
-		"some other query",
-		"dummy_select_field",
-	)
-
-	jn := &Join{
-		Opcode: NormalJoin,
-		Left:   leftPrim,
-		Right:  rightPrim,
-		Cols:   []int{-1, -2, 1, 2},
-		Vars: map[string]int{
-			"bv": 1,
-		},
-	}
+	source := &fakePrimitive{jsonObj: "the cake is a lie"}
 
 	explain := &Explain{
-		Input: jn,
+		Input: source,
 	}
 	r, err := explain.Execute(noopVCursor{}, make(map[string]*querypb.BindVariable), true)
 	assert.NoError(t, err)
 	expectResult(t, "jn.Execute", r, sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"col1|col2|col4|col5",
-			"int64|varchar|int64|varchar",
+			"column",
+			"varchar",
 		),
-		"1|a|4|d",
-		"3|c|5|e",
-		"3|c|6|f",
-		"3|c|7|g",
+		"\"the cake is a lie\"",
 	))
+
 }

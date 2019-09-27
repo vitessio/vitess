@@ -34,21 +34,23 @@ func TestParseNextValid(t *testing.T) {
 
 	tokens := NewTokenizer(&sql)
 	for i, tcase := range validSQL {
-		input := tcase.input + ";"
-		want := tcase.output
-		if want == "" {
-			want = tcase.input
-		}
+		t.Run(tcase.input, func(t *testing.T) {
+			input := tcase.input + ";"
+			want := tcase.output
+			if want == "" {
+				want = tcase.input
+			}
 
-		tree, err := ParseNext(tokens)
-		if err != nil {
-			t.Fatalf("[%d] ParseNext(%q) err: %q, want nil", i, input, err)
-			continue
-		}
+			tree, err := ParseNext(tokens)
+			if err != nil {
+				t.Fatalf("[%d] ParseNext(%q) err: %q, want nil", i, input, err)
+				return
+			}
 
-		if got := String(tree); got != want {
-			t.Fatalf("[%d] ParseNext(%q) = %q, want %q", i, input, got, want)
-		}
+			if got := String(tree); got != want {
+				t.Fatalf("[%d] ParseNext(%q) = %q, want %q", i, input, got, want)
+			}
+		})
 	}
 
 	// Read once more and it should be EOF.

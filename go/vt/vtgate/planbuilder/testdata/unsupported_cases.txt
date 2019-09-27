@@ -23,10 +23,6 @@
 "alter table a.b ADD id int"
 "unsupported construct: ddl"
 
-# DBA statements
-"explain select * from user"
-"unsupported construct: other read"
-
 # union operations in subqueries (FROM)
 "select * from (select * from user union all select * from user_extra) as t"
 "unsupported: UNION cannot be executed as a single route"

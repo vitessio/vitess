@@ -2315,7 +2315,7 @@ options:PassthroughDMLs
 }
 
 # explain
-"explain a"
+"explain select * from user"
 {
   "PlanID": "OTHER_READ",
   "TableName": ""

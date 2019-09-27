@@ -1325,8 +1325,8 @@ var (
 		input:  "desc foobar",
 		output: "otherread",
 	}, {
-		input:  "explain foobar",
-		output: "otherread",
+		input:  "explain select * from t",
+		output: "explain select * from t",
 	}, {
 		input:  "truncate table foo",
 		output: "truncate table foo",

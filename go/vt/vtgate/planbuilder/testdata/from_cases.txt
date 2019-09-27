@@ -1824,4 +1824,19 @@
 
 # explain it!
 "explain select c from user"
-"table t not found"
+{
+  "Original": "explain select c from user",
+  "Instructions": {
+    "Opcode": "Explain",
+    "Input": {
+      "Opcode": "SelectScatter",
+      "Keyspace": {
+        "Name": "user",
+        "Sharded": true
+      },
+      "Query": "select c from user",
+      "FieldQuery": "select c from user where 1 != 1",
+      "Table": "user"
+    }
+  }
+}
