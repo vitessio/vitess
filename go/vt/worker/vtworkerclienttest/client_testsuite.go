@@ -136,6 +136,7 @@ func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client, server
 		stream, err := client.ExecuteVtworkerCommand(ctx, []string{"Block"})
 		if err != nil {
 			errChan <- err
+			close(blockCommandStarted)
 			return
 		}
 
