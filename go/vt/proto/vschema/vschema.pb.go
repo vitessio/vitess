@@ -331,7 +331,7 @@ func (m *Table) GetColumnListAuthoritative() bool {
 
 // ColumnVindex is used to associate a column to a vindex.
 type ColumnVindex struct {
-	// Legacy implemenation, moving forward all vindexes should define a list of columns.
+	// Legacy implementation, moving forward all vindexes should define a list of columns.
 	Column string `protobuf:"bytes,1,opt,name=column,proto3" json:"column,omitempty"`
 	// The name must match a vindex defined in Keyspace.
 	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`

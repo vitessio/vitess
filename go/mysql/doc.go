@@ -51,7 +51,7 @@ server should ignore it anyway), and then should send a COM_INIT_DB
 message to set the database.
 
 --
-PLUGABLE AUTHENTICATION:
+PLUGGABLE AUTHENTICATION:
 
 See https://dev.mysql.com/doc/internals/en/authentication-method-mismatch.html
 for more information on this.
