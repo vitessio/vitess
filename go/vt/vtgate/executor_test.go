@@ -1203,16 +1203,13 @@ func TestExecutorOther(t *testing.T) {
 		"show other",
 		"analyze",
 		"describe",
-		"explain",
 		"repair",
 		"optimize",
 	}
 	wantCount := []int64{0, 0, 0}
 	for _, stmt := range stmts {
 		_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: KsTestUnsharded}), stmt, nil)
-		if err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, err)
 		gotCount := []int64{
 			sbc1.ExecCount.Get(),
 			sbc2.ExecCount.Get(),
@@ -1224,18 +1221,14 @@ func TestExecutorOther(t *testing.T) {
 		}
 
 		_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}), stmt, nil)
-		if err != nil {
-			t.Error(err)
-		}
+		assert.NoError(t, err)
 		gotCount = []int64{
 			sbc1.ExecCount.Get(),
 			sbc2.ExecCount.Get(),
 			sbclookup.ExecCount.Get(),
 		}
 		wantCount[0]++
-		if !reflect.DeepEqual(gotCount, wantCount) {
-			t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
-		}
+		assert.Equal(t, wantCount, gotCount)
 	}
 
 	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{}), "analyze", nil)

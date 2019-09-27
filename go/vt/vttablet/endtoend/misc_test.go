@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
@@ -579,14 +581,8 @@ func TestDBAStatements(t *testing.T) {
 		t.Errorf("RowsAffected: %d, want 4", qr.RowsAffected)
 	}
 
-	qr, err = client.Execute("explain vitess_a", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	if qr.RowsAffected != 4 {
-		t.Errorf("RowsAffected: %d, want 4", qr.RowsAffected)
-	}
+	_, err = client.Execute("explain select * from vitess_test", nil)
+	assert.NoError(t, err)
 }
 
 var testLogs []string

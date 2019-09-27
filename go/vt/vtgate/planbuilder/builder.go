@@ -20,8 +20,11 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -284,6 +287,9 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 	case *sqlparser.Explain:
 		// TODO: this is almost certainly not the way to do it, but I know no better
 		firstSpace := strings.Index(query, " ")
+		if firstSpace < 0 {
+			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid explain: %v", query)
+		}
 		queryWithoutExplain := query[firstSpace:]
 		innerPlan, err2 := BuildFromStmt(queryWithoutExplain, stmt.InnerStatement, vschema)
 		if err2 != nil {

@@ -40,15 +40,16 @@ type fakePrimitive struct {
 
 	log     []string
 	jsonObj interface{}
+	inputs  []Primitive
 }
 
 // MarshalJSON allows for returning arbitrary json representation
-func (e *fakePrimitive) MarshalJSON() ([]byte, error) {
-	return json.Marshal(&e.jsonObj)
+func (f *fakePrimitive) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&f.jsonObj)
 }
 
 func (f *fakePrimitive) Inputs() []Primitive {
-	return []Primitive{}
+	return f.inputs
 }
 
 var _ Primitive = (*fakePrimitive)(nil)
@@ -58,15 +59,15 @@ func (f *fakePrimitive) rewind() {
 	f.log = nil
 }
 
-func (f *fakePrimitive) RouteType() string {
+func (fakePrimitive) RouteType() string {
 	return "Fake"
 }
 
-func (f *fakePrimitive) GetKeyspaceName() string {
+func (fakePrimitive) GetKeyspaceName() string {
 	return "fakeKs"
 }
 
-func (f *fakePrimitive) GetTableName() string {
+func (fakePrimitive) GetTableName() string {
 	return "fakeTable"
 }
 
