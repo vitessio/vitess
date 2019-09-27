@@ -234,6 +234,56 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 		t.Errorf("fhc.GetAllTablets() = %+v; want %v => %+v", allTablets, key, tablet2)
 	}
 
+	// Both tablets restart on different hosts.
+	// tablet2 happens to land on the host:port that tablet 1 used to be on.
+	// This can only be tested when we refresh known tablets.
+	if refreshKnownTablets {
+		origTablet := *tablet
+		origTablet2 := *tablet2
+
+		if _, err := ts.UpdateTabletFields(context.Background(), tablet2.Alias, func(t *topodatapb.Tablet) error {
+			t.Hostname = tablet.Hostname
+			t.PortMap = tablet.PortMap
+			tablet2 = t
+			return nil
+		}); err != nil {
+			t.Fatalf("UpdateTabletFields failed: %v", err)
+		}
+		if _, err := ts.UpdateTabletFields(context.Background(), tablet.Alias, func(t *topodatapb.Tablet) error {
+			t.Hostname = "host3"
+			tablet = t
+			return nil
+		}); err != nil {
+			t.Fatalf("UpdateTabletFields failed: %v", err)
+		}
+		tw.loadTablets()
+		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "ReplaceTablet": 2})
+		allTablets = fhc.GetAllTablets()
+		key2 := TabletToMapKey(tablet2)
+		if _, ok := allTablets[key2]; !ok {
+			t.Fatalf("tablet was lost because it's reusing an address recently used by another tablet: %v", key2)
+		}
+
+		// Change tablets back to avoid altering later tests.
+		if _, err := ts.UpdateTabletFields(context.Background(), tablet2.Alias, func(t *topodatapb.Tablet) error {
+			t.Hostname = origTablet2.Hostname
+			t.PortMap = origTablet2.PortMap
+			tablet2 = t
+			return nil
+		}); err != nil {
+			t.Fatalf("UpdateTabletFields failed: %v", err)
+		}
+		if _, err := ts.UpdateTabletFields(context.Background(), tablet.Alias, func(t *topodatapb.Tablet) error {
+			t.Hostname = origTablet.Hostname
+			tablet = t
+			return nil
+		}); err != nil {
+			t.Fatalf("UpdateTabletFields failed: %v", err)
+		}
+		tw.loadTablets()
+		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "ReplaceTablet": 2})
+	}
+
 	// Remove the tablet and check that it is detected as being gone.
 	if err := ts.DeleteTablet(context.Background(), tablet.Alias); err != nil {
 		t.Fatalf("DeleteTablet failed: %v", err)
