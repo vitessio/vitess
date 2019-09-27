@@ -58,7 +58,7 @@ type Update struct {
 	// ChangedVindexValues contains values for updated Vindexes during an update statement.
 	ChangedVindexValues map[string][]sqltypes.PlanValue
 
-	// Table sepcifies the table for the update.
+	// Table specifies the table for the update.
 	Table *vindexes.Table
 
 	// OwnedVindexQuery is used for updating changes in lookup vindexes.
