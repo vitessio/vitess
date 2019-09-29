@@ -65,11 +65,16 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow string, 
 	if err != nil {
 		return err
 	}
+	_, err = buildVDiffPlan(ctx, oneFilter, schm)
+	return err
+}
+
+func buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter, schm *tabletmanagerdatapb.SchemaDefinition) (map[string]*tableDiffer, error) {
 	tableDiffers := make(map[string]*tableDiffer)
 	for _, table := range schm.TableDefinitions {
-		rule, err := vreplication.MatchTable(table.Name, oneFilter)
+		rule, err := vreplication.MatchTable(table.Name, filter)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if rule == nil {
 			continue
@@ -82,10 +87,10 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow string, 
 		}
 		tableDiffers[table.Name], err = buildDifferPlan(table, query)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	return nil
+	return tableDiffers, nil
 }
 
 func buildDifferPlan(table *tabletmanagerdatapb.TableDefinition, query string) (*tableDiffer, error) {
@@ -105,8 +110,8 @@ func buildDifferPlan(table *tabletmanagerdatapb.TableDefinition, query string) (
 	for _, selExpr := range sel.SelectExprs {
 		switch selExpr := selExpr.(type) {
 		case *sqlparser.StarExpr:
-			for _, col := range table.Columns {
-				aliased := &sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewColIdent(col)}}
+			for _, fld := range table.Fields {
+				aliased := &sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewColIdent(fld.Name)}}
 				sourceSelect.SelectExprs = append(sourceSelect.SelectExprs, aliased)
 				targetSelect.SelectExprs = append(targetSelect.SelectExprs, aliased)
 			}
@@ -175,7 +180,7 @@ func buildDifferPlan(table *tabletmanagerdatapb.TableDefinition, query string) (
 
 	sourceSelect.Where = removeKeyrange(sel.Where)
 	sourceSelect.GroupBy = sel.GroupBy
-	sel.OrderBy = orderby
+	sourceSelect.OrderBy = orderby
 
 	td.sourceExpression = sqlparser.String(sourceSelect)
 	td.targetExpression = sqlparser.String(targetSelect)
