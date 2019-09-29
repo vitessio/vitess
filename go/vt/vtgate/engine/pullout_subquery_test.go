@@ -162,7 +162,7 @@ func TestPulloutSubqueryInNotinGood(t *testing.T) {
 	sfp.ExpectLog(t, []string{`Execute  false`})
 	ufp.ExpectLog(t, []string{`Execute has_values: type:INT64 value:"1" sq: type:TUPLE values:<type:INT64 value:"1" > values:<type:INT64 value:"2" >  false`})
 
-	// Test the NOT IN case just once eventhough it's common code.
+	// Test the NOT IN case just once even though it's common code.
 	sfp.rewind()
 	ufp.rewind()
 	ps.Opcode = PulloutNotIn
