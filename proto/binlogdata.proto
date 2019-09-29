@@ -290,3 +290,21 @@ message VStreamRowsResponse {
   repeated query.Row rows = 4;
   query.Row lastpk = 5;
 }
+
+// VStreamResultsRequest is the payload for VStreamResults
+// The ids match VStreamRows, in case we decide to merge the two.
+message VStreamResultsRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  query.VTGateCallerID immediate_caller_id = 2;
+  query.Target target = 3;
+
+  string query = 4;
+}
+
+// VStreamResultsResponse is the response from VStreamResults
+// The ids match VStreamRows, in case we decide to merge the two.
+message VStreamResultsResponse {
+  repeated query.Field fields = 1;
+  string gtid = 3;
+  repeated query.Row rows = 4;
+}
