@@ -730,7 +730,7 @@ func TestShardMigrateMainflow(t *testing.T) {
 
 func TestTableMigrateOneToMany(t *testing.T) {
 	ctx := context.Background()
-	tme := newTestTableMigraterCustom(ctx, t, []string{"0"}, []string{"-80", "80-"})
+	tme := newTestTableMigraterCustom(ctx, t, []string{"0"}, []string{"-80", "80-"}, "select * %s")
 	defer tme.stopTablets(t)
 
 	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
@@ -813,7 +813,7 @@ func TestTableMigrateOneToMany(t *testing.T) {
 
 func TestTableMigrateManyToOne(t *testing.T) {
 	ctx := context.Background()
-	tme := newTestTableMigraterCustom(ctx, t, []string{"-80", "80-"}, []string{"0"})
+	tme := newTestTableMigraterCustom(ctx, t, []string{"-80", "80-"}, []string{"0"}, "select * %s")
 	defer tme.stopTablets(t)
 
 	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
