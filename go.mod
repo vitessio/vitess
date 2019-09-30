@@ -21,6 +21,7 @@ require (
 	github.com/golang/mock v1.3.1
 	github.com/golang/protobuf v1.3.2
 	github.com/golang/snappy v0.0.0-20170215233205-553a64147049
+	github.com/google/btree v1.0.0 // indirect
 	github.com/gorilla/websocket v0.0.0-20160912153041-2d1e4548da23
 	github.com/grpc-ecosystem/go-grpc-middleware v1.1.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
