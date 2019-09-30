@@ -232,7 +232,12 @@ func (agent *ActionAgent) startReplication(ctx context.Context, pos mysql.Positi
 	defer remoteCancel()
 	posStr, err := tmc.MasterPosition(remoteCtx, ti.Tablet)
 	if err != nil {
-		return vterrors.Wrap(err, "can't get master replication position")
+		// It is possible that though MasterAlias is set, the master tablet is unreachable
+		// Log a warning and let tablet restore in that case
+		// If we had instead considered this fatal, all tablets would crash-loop
+		// until a master appears, which would make it impossible to elect a master.
+		log.Warningf("Can't get master replication position after restore: %v", err)
+		return nil
 	}
 	masterPos, err := mysql.DecodePosition(posStr)
 	if err != nil {
