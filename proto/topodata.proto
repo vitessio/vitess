@@ -26,6 +26,8 @@ option java_package="io.vitess.proto";
 
 package topodata;
 
+import "logutil.proto";
+
 // KeyRange describes a range of sharding keys, when range-based
 // sharding is used.
 message KeyRange {
@@ -157,13 +159,26 @@ message Tablet {
 message Shard {
   // master_alias is the tablet alias of the master for the shard.
   // If it is unset, then there is no master in this shard yet.
-
   // No lock is necessary to update this field, when for instance
   // TabletExternallyReparented updates this. However, we lock the
   // shard for reparenting operations (InitShardMaster,
   // PlannedReparentShard,EmergencyReparentShard), to guarantee
   // exclusive operation.
   TabletAlias master_alias = 1;
+
+  // master_term_start_time is the time (in UTC) at which the current term of
+  // the master specified in master_alias began.
+  //
+  // A new master term begins any time an authoritative decision is communicated
+  // about which tablet should be the master, such as via Vitess
+  // replication-management commands like PlannedReparentShard,
+  // EmergencyReparentShard, and TabletExternallyReparented.
+  //
+  // The master_alias should only ever be changed if the new master's term began
+  // at a later time than this. Note that a new term can start for the tablet
+  // that is already the master. In that case, the master_term_start_time would
+  // be increased without changing the master_alias.
+  logutil.Time master_term_start_time = 8;
 
   // key_range is the KeyRange for this shard. It can be unset if:
   // - we are not using range-based sharding in this shard.
