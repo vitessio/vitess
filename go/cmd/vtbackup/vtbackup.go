@@ -89,7 +89,6 @@ import (
 
 const (
 	backupTimestampFormat = "2006-01-02.150405"
-	manifestFileName      = "MANIFEST"
 
 	// operationTimeout is the timeout for individual operations like fetching
 	// the master position. This does not impose an overall timeout on

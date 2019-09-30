@@ -288,10 +288,8 @@ const (
 	//lint:ignore U1000 needed for correct indexing of result columns
 	colConnectionID = iota
 	//lint:ignore U1000 needed for correct indexing of result columns
-	colUsername
 	colClientAddr
 	//lint:ignore U1000 needed for correct indexing of result columns
-	colDbName
 	colCommand
 )
 
