@@ -24,15 +24,14 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 func compactJSON(in []byte) string {
@@ -52,8 +51,28 @@ func TestAPI(t *testing.T) {
 	// Populate topo. Remove ServedTypes from shards to avoid ordering issues.
 	ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{ShardingColumnName: "shardcol"})
 	ts.CreateShard(ctx, "ks1", "-80")
-
 	ts.CreateShard(ctx, "ks1", "80-")
+
+	// SaveVSchema to test that creating a snapshot keyspace copies VSchema
+	vs := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"name1": {
+				Type: "hash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"table1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{
+					{
+						Column: "column1",
+						Name:   "name1",
+					},
+				},
+			},
+		},
+	}
+	ts.SaveVSchema(ctx, "ks1", vs)
 
 	tablet1 := topodatapb.Tablet{
 		Alias:    &topodatapb.TabletAlias{Cell: "cell1", Uid: 100},
@@ -107,19 +126,16 @@ func TestAPI(t *testing.T) {
 	realtimeStats.StatsUpdate(ts5)
 	realtimeStats.StatsUpdate(ts6)
 
-	sTime := logutil.TimeToProto(time.Unix(0, 0).UTC())
-
-	ts.CreateKeyspace(ctx, "ks3", &topodatapb.Keyspace{
-		ShardingColumnName: "shardcol",
-		KeyspaceType:       topodatapb.KeyspaceType_SNAPSHOT,
-		BaseKeyspace:       "ks1",
-		SnapshotTime:       sTime,
-	})
-
 	// Test cases.
 	table := []struct {
 		method, path, body, want string
 	}{
+		// Create snapshot keyspace using API
+		{"POST", "vtctl/", `["CreateKeyspace", "-keyspace_type=SNAPSHOT", "-base_keyspace=ks1", "-snapshot_time=2006-01-02T15:04:05+00:00", "ks3"]`, `{
+		   "Error": "",
+		   "Output": ""
+		}`},
+
 		// Cells
 		{"GET", "cells", "", `["cell1","cell2"]`},
 
@@ -274,7 +290,11 @@ func TestAPI(t *testing.T) {
 		}`},
 		{"POST", "vtctl/", `["GetKeyspace","ks3"]`, `{
 		   "Error": "",
-		   "Output": "{\n  \"sharding_column_name\": \"shardcol\",\n  \"sharding_column_type\": 0,\n  \"served_froms\": [\n  ],\n  \"keyspace_type\": 1,\n  \"base_keyspace\": \"ks1\",\n  \"snapshot_time\": {\n    \"seconds\": \"0\",\n    \"nanoseconds\": 0\n  }\n}\n\n"
+		   "Output": "{\n  \"sharding_column_name\": \"shardcol\",\n  \"sharding_column_type\": 0,\n  \"served_froms\": [\n  ],\n  \"keyspace_type\": 1,\n  \"base_keyspace\": \"ks1\",\n  \"snapshot_time\": {\n    \"seconds\": \"1136214245\",\n    \"nanoseconds\": 0\n  }\n}\n\n"
+		}`},
+		{"POST", "vtctl/", `["GetVSchema","ks3"]`, `{
+		   "Error": "",
+		   "Output": "{\n  \"sharded\": true,\n  \"vindexes\": {\n    \"name1\": {\n      \"type\": \"hash\"\n    }\n  },\n  \"tables\": {\n    \"table1\": {\n      \"columnVindexes\": [\n        {\n          \"column\": \"column1\",\n          \"name\": \"name1\"\n        }\n      ]\n    }\n  },\n  \"keyspaceType\": \"SNAPSHOT\"\n}\n\n"
 		}`},
 		{"POST", "vtctl/", `["GetKeyspace","does_not_exist"]`, `{
 			"Error": "node doesn't exist: keyspaces/does_not_exist/Keyspace",
