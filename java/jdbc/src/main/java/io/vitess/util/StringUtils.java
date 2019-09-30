@@ -550,7 +550,7 @@ public class StringUtils {
    *
    * @param startingPosition the position to start the search from
    * @param searchIn the string to search in
-   * @param searchFor the array of strings to search for
+   * @param searchForSequence the array of strings to search for
    * @param openingMarkers characters which delimit the beginning of a text block to skip
    * @param closingMarkers characters which delimit the end of a text block to skip
    * @param searchMode a <code>Set</code>, ideally an <code>EnumSet</code>, containing the flags
