@@ -97,7 +97,6 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
 	// now we can run the backup
-	backupTime := time.Now()
 	backupParams := mysqlctl.BackupParams{
 		Cnf:          agent.Cnf,
 		Mysqld:       agent.MysqlDaemon,
@@ -108,9 +107,10 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 		Keyspace:     tablet.Keyspace,
 		Shard:        tablet.Shard,
 		TabletAlias:  topoproto.TabletAliasString(tablet.Alias),
+		BackupTime:   time.Now(),
 	}
 
-	returnErr := mysqlctl.Backup(ctx, backupParams, backupTime)
+	returnErr := mysqlctl.Backup(ctx, backupParams)
 
 	if engine.ShouldDrainForBackup() {
 		bgCtx := context.Background()

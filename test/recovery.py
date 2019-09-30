@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import datetime
+from datetime import datetime
 import json
 import logging
 import os
@@ -26,6 +26,7 @@ import environment
 import tablet
 import utils
 
+from mysql_flavor import mysql_flavor
 from vtdb import vtgate_client
 
 # tablets
@@ -137,21 +138,15 @@ class TestRecovery(unittest.TestCase):
                      '-keyspace_type=SNAPSHOT',
                      '-base_keyspace=test_keyspace',
                      '-snapshot_time',
-                     datetime.datetime.utcnow().isoformat("T")+"Z",
+                     datetime.utcnow().isoformat("T")+"Z",
                      keyspace])
     
-    # set disable_active_reparents to true, otherwise replication_reporter will
-    # try to restart replication
-    xtra_args = ['-disable_active_reparents',
-                 '-enable_replication_reporter=false']
-    xtra_args.extend(tablet.get_backup_storage_flags())
-
     t.start_vttablet(wait_for_state='SERVING',
                      init_tablet_type='replica',
                      init_keyspace=keyspace,
                      init_shard='0',
                      supports_backups=True,
-                     extra_args=xtra_args)
+                     extra_args=tablet.get_backup_storage_flags())
 
   def _reset_tablet_dir(self, t):
     """Stop mysql, delete everything including tablet dir, restart mysql."""
@@ -200,6 +195,7 @@ class TestRecovery(unittest.TestCase):
     self._insert_data(tablet_master, 1)
     self._check_data(tablet_replica1, 1, 'replica1 tablet getting data')
 
+    master_pos = mysql_flavor().master_position(tablet_master)
     # backup the replica
     utils.run_vtctl(['Backup', tablet_replica1.tablet_alias], auto_log=True)
 
@@ -208,6 +204,9 @@ class TestRecovery(unittest.TestCase):
     logging.debug('list of backups: %s', backups)
     self.assertEqual(len(backups), 1)
     self.assertTrue(backups[0].endswith(tablet_replica1.tablet_alias))
+    # backup name is of format date.time.tablet_alias
+    strs = backups[0].split('.')
+    expectedTime = datetime.strptime(strs[0] + '.' + strs[1], '%Y-%m-%d.%H%M%S')
 
     # insert more data on the master
     self._insert_data(tablet_master, 2)
@@ -245,6 +244,10 @@ class TestRecovery(unittest.TestCase):
     self.assertEqual(metadata['Alias'], 'test_nj-0000062346')
     self.assertEqual(metadata['ClusterAlias'], 'recovery_keyspace.0')
     self.assertEqual(metadata['DataCenter'], 'test_nj')
+    self.assertEqual(metadata['RestorePosition'], master_pos)
+    logging.debug('RestoredBackupTime: %s', str(metadata['RestoredBackupTime']))
+    gotTime = datetime.strptime(metadata['RestoredBackupTime'], '%Y-%m-%dT%H:%M:%SZ')
+    self.assertEqual(gotTime, expectedTime)
 
     # update original 1st row in master
     tablet_master.mquery(

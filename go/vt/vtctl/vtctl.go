@@ -1589,13 +1589,14 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 			return vterrors.Wrapf(err, "Cannot find base_keyspace: %v", *baseKeyspace)
 		}
 		// process snapshot_time
-		if *timestampStr != "" {
-			timeTime, err := time.Parse(time.RFC3339, *timestampStr)
-			if err != nil {
-				return err
-			}
-			snapshotTime = logutil.TimeToProto(timeTime)
+		if *timestampStr == "" {
+			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "snapshot_time must be specified when creating a snapshot keyspace")
 		}
+		timeTime, err := time.Parse(time.RFC3339, *timestampStr)
+		if err != nil {
+			return err
+		}
+		snapshotTime = logutil.TimeToProto(timeTime)
 	}
 	ki := &topodatapb.Keyspace{
 		ShardingColumnName: *shardingColumnName,
