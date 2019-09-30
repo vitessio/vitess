@@ -251,6 +251,22 @@ func MySQLToType(mysqlType, flags int64) (typ querypb.Type, err error) {
 	return modifyType(result, flags), nil
 }
 
+//TypeEquivalenceCheck returns whether two types are equivalent.
+func TypeEquivalenceCheck(mysqlTypeFromBinlog, mysqlTypeFromSchema querypb.Type) (isEquivalent bool) {
+	return (mysqlTypeFromBinlog == mysqlTypeFromSchema) ||
+		(mysqlTypeFromBinlog == VarChar && mysqlTypeFromSchema == VarBinary) ||
+		(mysqlTypeFromBinlog == Char && mysqlTypeFromSchema == Binary) ||
+		(mysqlTypeFromBinlog == Char && mysqlTypeFromSchema == Enum) ||
+		(mysqlTypeFromBinlog == Char && mysqlTypeFromSchema == Set) ||
+		(mysqlTypeFromBinlog == Text && mysqlTypeFromSchema == Blob) ||
+		(mysqlTypeFromBinlog == Int8 && mysqlTypeFromSchema == Uint8) ||
+		(mysqlTypeFromBinlog == Int16 && mysqlTypeFromSchema == Uint16) ||
+		(mysqlTypeFromBinlog == Int24 && mysqlTypeFromSchema == Uint24) ||
+		(mysqlTypeFromBinlog == Int32 && mysqlTypeFromSchema == Uint32) ||
+		(mysqlTypeFromBinlog == Int64 && mysqlTypeFromSchema == Uint64)
+
+}
+
 // typeToMySQL is the reverse of mysqlToType.
 var typeToMySQL = map[querypb.Type]struct {
 	typ   int64

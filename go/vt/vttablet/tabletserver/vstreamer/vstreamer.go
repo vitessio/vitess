@@ -342,11 +342,11 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			vs.plans[id] = nil
 			return nil, nil
 		}
-
 		tableName := tm.Name
 		var cols []schema.TableColumn
 		for i, typ := range tm.Types {
-			t, err := sqltypes.MySQLToType(int64(typ), int64(tm.Flags))
+			t, err := sqltypes.MySQLToType(int64(typ), 0)
+			fmt.Printf("type conversion table tableName:%s typ:%d  tm.Metadata[i]:%d t:%d\n", tableName, int64(typ), int64(tm.Metadata[i]), t)
 			if err != nil {
 				return nil, fmt.Errorf("unsupported type: %d, position: %d", typ, i)
 			}
@@ -365,7 +365,20 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				return nil, fmt.Errorf("cannot determine table columns for %s: event has %d columns, current schema has %d: %#v", tm.Name, len(tm.Types), len(st.Columns), ev)
 			}
 			tableName = st.Name.String()
-			if len(st.Columns) >= len(tm.Types) {
+			// check if the schema returned by schema.Engine matches with row.
+			schemaMatch := true
+			if len(tm.Types) <= len(st.Columns) {
+				for i, typ := range tm.Types {
+					t, _ := sqltypes.MySQLToType(int64(typ), 0)
+					if !sqltypes.TypeEquivalenceCheck(t, st.Columns[i].Type) {
+						schemaMatch = false
+						break
+					}
+				}
+			} else {
+				schemaMatch = false
+			}
+			if schemaMatch {
 				cols = st.Columns[:len(tm.Types)]
 			}
 		}
