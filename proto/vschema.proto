@@ -87,7 +87,7 @@ message Table {
 
 // ColumnVindex is used to associate a column to a vindex.
 message ColumnVindex {
-  // Legacy implemenation, moving forward all vindexes should define a list of columns.
+  // Legacy implementation, moving forward all vindexes should define a list of columns.
   string column = 1;
   // The name must match a vindex defined in Keyspace.
   string name = 2;

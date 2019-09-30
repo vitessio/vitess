@@ -47,7 +47,7 @@ func NewTxConn(gw gateway.Gateway, txMode vtgatepb.TransactionMode) *TxConn {
 	}
 }
 
-// Begin begins a new transaction. If one is already in progress, it commmits it
+// Begin begins a new transaction. If one is already in progress, it commits it
 // and starts a new one.
 func (txc *TxConn) Begin(ctx context.Context, session *SafeSession) error {
 	if session.InTransaction() {

@@ -308,7 +308,7 @@ class TestPreparedStatements(unittest.TestCase):
       self.fail("Delete failed")
     cursor.close()
     
-    # Reseting the connection
+    # resetting the connection
     conn.cmd_reset_connection()
     cursor = conn.cursor(cursor_class=MySQLCursorPrepared)
     cursor.execute('select * from vt_prepare_stmt_test where id = %s', (1,))

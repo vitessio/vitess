@@ -515,7 +515,7 @@ func (be *XtrabackupEngine) extractFiles(ctx context.Context, logger logutil.Log
 	for _, file := range srcFiles {
 		reader := io.Reader(file)
 
-		// Create the decompresser if needed.
+		// Create the decompressor if needed.
 		if compressed {
 			decompressor, err := pgzip.NewReader(reader)
 			if err != nil {
