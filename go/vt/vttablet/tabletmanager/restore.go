@@ -94,6 +94,10 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	// For a SNAPSHOT keyspace, we have to look for backups of BaseKeyspace
 	if keyspaceInfo.BaseKeyspace != "" {
 		keyspaceDir = keyspaceInfo.BaseKeyspace
+		// If we belong to a SNAPSHOT keyspace, let us disable_active_reparents
+		// and disable replication_reporter
+		*mysqlctl.DisableActiveReparents = false
+		*enableReplicationReporter = false
 	}
 	dir := fmt.Sprintf("%v/%v", keyspaceDir, tablet.Shard)
 
@@ -107,13 +111,13 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 		DeleteBeforeRestore: deleteBeforeRestore,
 		DbName:              topoproto.TabletDbName(tablet),
 		Dir:                 dir,
+		StartTime:           logutil.ProtoToTime(keyspaceInfo.SnapshotTime),
 	}
 
 	// Loop until a backup exists, unless we were told to give up immediately.
-	var pos mysql.Position
-	var backupTime string
+	var backupManifest *mysqlctl.BackupManifest
 	for {
-		pos, backupTime, err = mysqlctl.Restore(ctx, params, logutil.ProtoToTime(keyspaceInfo.SnapshotTime))
+		backupManifest, err = mysqlctl.Restore(ctx, params)
 		if waitForBackupInterval == 0 {
 			break
 		}
@@ -130,6 +134,10 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 		}
 	}
 
+	var pos mysql.Position
+	if backupManifest != nil {
+		pos = backupManifest.Position
+	}
 	switch err {
 	case nil:
 		// Starting from here we won't be able to recover if we get stopped by a cancelled
@@ -169,8 +177,6 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	// Change type back to original type if we're ok to serve.
 	if _, err := agent.TopoServer.UpdateTabletFields(context.Background(), tablet.Alias, func(tablet *topodatapb.Tablet) error {
 		tablet.Type = originalType
-		tablet.BackupTime = backupTime
-		tablet.RestorePosition = pos.String()
 		return nil
 	}); err != nil {
 		return vterrors.Wrapf(err, "Cannot change type back to %v", originalType)

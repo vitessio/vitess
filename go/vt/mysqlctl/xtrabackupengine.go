@@ -121,7 +121,7 @@ func closeFile(wc io.WriteCloser, fileName string, logger logutil.Logger, finalE
 
 // ExecuteBackup returns a boolean that indicates if the backup is usable,
 // and an overall error.
-func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, backupTime time.Time) (complete bool, finalErr error) {
+func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (complete bool, finalErr error) {
 
 	if *xtrabackupUser == "" {
 		return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "xtrabackupUser must be specified.")
@@ -170,6 +170,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 		BackupManifest: BackupManifest{
 			BackupMethod: xtrabackupEngineName,
 			Position:     replicationPosition,
+			BackupTime:   params.BackupTime.UTC().Format(time.RFC3339),
 			FinishedTime: time.Now().UTC().Format(time.RFC3339),
 		},
 
@@ -363,23 +364,21 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 }
 
 // ExecuteRestore restores from a backup. Any error is returned.
-func (be *XtrabackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (mysql.Position, string, error) {
+func (be *XtrabackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error) {
 
-	zeroPosition := mysql.Position{}
-	var s string
 	var bm xtraBackupManifest
 
 	if err := getBackupManifestInto(ctx, bh, &bm); err != nil {
-		return zeroPosition, s, err
+		return nil, err
 	}
 
 	// mark restore as in progress
 	if err := createStateFile(params.Cnf); err != nil {
-		return zeroPosition, s, err
+		return nil, err
 	}
 
 	if err := prepareToRestore(ctx, params.Cnf, params.Mysqld, params.Logger); err != nil {
-		return zeroPosition, s, err
+		return nil, err
 	}
 
 	// copy / extract files
@@ -387,11 +386,11 @@ func (be *XtrabackupEngine) ExecuteRestore(ctx context.Context, params RestorePa
 
 	if err := be.restoreFromBackup(ctx, params.Cnf, bh, bm, params.Logger); err != nil {
 		// don't delete the file here because that is how we detect an interrupted restore
-		return zeroPosition, s, err
+		return nil, err
 	}
 	// now find the slave position and return that
 	params.Logger.Infof("Restore: returning replication position %v", bm.Position)
-	return bm.Position, bm.BackupTime, nil
+	return &bm.BackupManifest, nil
 }
 
 func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, bm xtraBackupManifest, logger logutil.Logger) error {

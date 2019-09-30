@@ -224,6 +224,7 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 		if err != nil {
 			return err
 		}
+
 		// SNAPSHOT keyspaces are excluded from global routing.
 		// We only have 2 keyspace types as of now, NORMAL and SNAPSHOT.
 		// We check for NORMAL here so that if a new keyspace type is

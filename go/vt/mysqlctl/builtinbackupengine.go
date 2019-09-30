@@ -238,7 +238,7 @@ func findFilesToBackup(cnf *Mycnf) ([]FileEntry, error) {
 
 // ExecuteBackup returns a boolean that indicates if the backup is usable,
 // and an overall error.
-func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, backupTime time.Time) (bool, error) {
+func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
 
 	params.Logger.Infof("Hook: %v, Compress: %v", *backupStorageHook, *backupStorageCompress)
 
@@ -300,7 +300,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	}
 
 	// Backup everything, capture the error.
-	backupErr := be.backupFiles(ctx, params, bh, replicationPosition, backupTime)
+	backupErr := be.backupFiles(ctx, params, bh, replicationPosition)
 	usable := backupErr == nil
 
 	// Try to restart mysqld, use background context in case we timed out the original context
@@ -376,7 +376,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 }
 
 // backupFiles finds the list of files to backup, and creates the backup.
-func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, replicationPosition mysql.Position, backupTime time.Time) (finalErr error) {
+func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, replicationPosition mysql.Position) (finalErr error) {
 
 	// Get the files to backup.
 	fes, err := findFilesToBackup(params.Cnf)
@@ -430,7 +430,7 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupPar
 		BackupManifest: BackupManifest{
 			BackupMethod: builtinBackupEngineName,
 			Position:     replicationPosition,
-			BackupTime:   backupTime.UTC().Format(time.RFC3339),
+			BackupTime:   params.BackupTime.UTC().Format(time.RFC3339),
 			FinishedTime: time.Now().UTC().Format(time.RFC3339),
 		},
 
@@ -551,34 +551,32 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 // ExecuteRestore restores from a backup. If the restore is successful
 // we return the position from which replication should start
 // otherwise an error is returned
-func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (mysql.Position, string, error) {
+func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error) {
 
-	zeroPosition := mysql.Position{}
-	var s string
 	var bm builtinBackupManifest
 
 	if err := getBackupManifestInto(ctx, bh, &bm); err != nil {
-		return zeroPosition, s, err
+		return nil, err
 	}
 
 	// mark restore as in progress
 	if err := createStateFile(params.Cnf); err != nil {
-		return zeroPosition, s, err
+		return nil, err
 	}
 
 	if err := prepareToRestore(ctx, params.Cnf, params.Mysqld, params.Logger); err != nil {
-		return zeroPosition, s, err
+		return nil, err
 	}
 
 	params.Logger.Infof("Restore: copying %v files", len(bm.FileEntries))
 
 	if err := be.restoreFiles(context.Background(), params, bh, bm); err != nil {
 		// don't delete the file here because that is how we detect an interrupted restore
-		return zeroPosition, s, vterrors.Wrap(err, "failed to restore files")
+		return nil, vterrors.Wrap(err, "failed to restore files")
 	}
 
 	params.Logger.Infof("Restore: returning replication position %v", bm.Position)
-	return bm.Position, bm.BackupTime, nil
+	return &bm.BackupManifest, nil
 }
 
 // restoreFiles will copy all the files from the BackupStorage to the

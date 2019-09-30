@@ -158,12 +158,6 @@ message Tablet {
   // for legacy behavior.
   int32 mysql_port = 13;
 
-  // Timestamp of backup that this tablet was restored from
-  string backup_time = 14;
-
-  // GTID that this tablet was restored up to
-  string restore_position = 15;
-  
   // OBSOLETE: ip and tablet health information
   // string ip = 3;
   // map<string, string> health_map = 11;
