@@ -559,6 +559,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"xb_recovery": {
+			"File": "xb_recovery.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"xtrabackup_xbstream": {
 			"File": "xtrabackup_xbstream.py",
 			"Args": [],

@@ -29,6 +29,10 @@ import utils
 from mysql_flavor import mysql_flavor
 from vtdb import vtgate_client
 
+use_xtrabackup = False
+xtrabackup_args = []
+stream_mode = 'xbstream'
+
 # tablets
 tablet_master = tablet.Tablet()
 tablet_replica1 = tablet.Tablet()
@@ -38,6 +42,12 @@ tablet_replica3 = tablet.Tablet()
 all_tablets = [tablet_master, tablet_replica1, tablet_replica2, tablet_replica3]
 
 def setUpModule():
+  global xtrabackup_args
+  xtrabackup_args = ['-backup_engine_implementation',
+                   'xtrabackup',
+                   '-xtrabackup_stream_mode',
+                   stream_mode,
+                   '-xtrabackup_user=vt_dba']
   try:
     environment.topo_server().setup()
     setup_procs = [t.init_mysql() for t in all_tablets]
@@ -70,6 +80,8 @@ class TestRecovery(unittest.TestCase):
 
   def setUp(self):
     xtra_args = ['-enable_replication_reporter']
+    if use_xtrabackup:
+      xtra_args.extend(xtrabackup_args)
     tablet_master.init_tablet('replica', 'test_keyspace', '0', start=True,
                               supports_backups=True,
                               extra_args=xtra_args)
@@ -140,13 +152,16 @@ class TestRecovery(unittest.TestCase):
                      '-snapshot_time',
                      datetime.utcnow().isoformat("T")+"Z",
                      keyspace])
-    
+    xtra_args = tablet.get_backup_storage_flags()
+    if use_xtrabackup:
+      xtra_args.extend(xtrabackup_args)
+
     t.start_vttablet(wait_for_state='SERVING',
                      init_tablet_type='replica',
                      init_keyspace=keyspace,
                      init_shard='0',
                      supports_backups=True,
-                     extra_args=tablet.get_backup_storage_flags())
+                     extra_args=xtra_args)
 
   def _reset_tablet_dir(self, t):
     """Stop mysql, delete everything including tablet dir, restart mysql."""
