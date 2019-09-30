@@ -3928,7 +3928,7 @@ type StreamHealthResponse struct {
 	// realtime_stats contains information about the tablet status.
 	// It is only filled in if the information is about a tablet.
 	RealtimeStats *RealtimeStats `protobuf:"bytes,4,opt,name=realtime_stats,json=realtimeStats,proto3" json:"realtime_stats,omitempty"`
-	// AggregateStats constains information about the group of tablet status.
+	// AggregateStats constrains information about the group of tablet status.
 	// It is only filled in if the information is about a group of tablets.
 	AggregateStats *AggregateStats `protobuf:"bytes,6,opt,name=aggregate_stats,json=aggregateStats,proto3" json:"aggregate_stats,omitempty"`
 	// tablet_alias is the alias of the sending tablet. The discovery/healthcheck.go

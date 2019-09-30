@@ -382,7 +382,7 @@ type DestinationAnyShardPicker interface {
 // DestinationAnyShardPickerRandomShard picks a random shard.
 type DestinationAnyShardPickerRandomShard struct{}
 
-// PickShard is DestinationAnyShardPickerRandomShard's implmentation.
+// PickShard is DestinationAnyShardPickerRandomShard's implementation.
 func (dp DestinationAnyShardPickerRandomShard) PickShard(shardCount int) int {
 	return rand.Intn(shardCount)
 }

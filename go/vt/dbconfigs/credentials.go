@@ -16,7 +16,7 @@ limitations under the License.
 
 package dbconfigs
 
-// This file contains logic for a plugable credentials system.
+// This file contains logic for a pluggable credentials system.
 // The default implementation is file based.
 // The flags are global, but only programs that need to access the database
 // link with this library, so we should be safe.

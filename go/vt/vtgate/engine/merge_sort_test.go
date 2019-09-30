@@ -73,7 +73,7 @@ func TestMergeSortNormal(t *testing.T) {
 		t.Error(err)
 	}
 
-	// Results are retuned one row at a time.
+	// Results are returned one row at a time.
 	wantResults := sqltypes.MakeTestStreamingResults(idColFields,
 		"1|a",
 		"---",
@@ -143,7 +143,7 @@ func TestMergeSortDescending(t *testing.T) {
 		t.Error(err)
 	}
 
-	// Results are retuned one row at a time.
+	// Results are returned one row at a time.
 	wantResults := sqltypes.MakeTestStreamingResults(idColFields,
 		"8|h",
 		"---",
@@ -202,7 +202,7 @@ func TestMergeSortEmptyResults(t *testing.T) {
 		t.Error(err)
 	}
 
-	// Results are retuned one row at a time.
+	// Results are returned one row at a time.
 	wantResults := sqltypes.MakeTestStreamingResults(idColFields,
 		"1|a",
 		"---",

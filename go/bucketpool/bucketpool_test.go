@@ -36,7 +36,7 @@ func TestPool(t *testing.T) {
 		t.Fatalf("unexpected buf length: %d", len(*buf))
 	}
 	if cap(*buf) != 1024 {
-		t.Fatalf("unexepected buf cap: %d", cap(*buf))
+		t.Fatalf("unexpected buf cap: %d", cap(*buf))
 	}
 
 	// get from same pool, check that length is right
@@ -45,7 +45,7 @@ func TestPool(t *testing.T) {
 		t.Fatalf("unexpected buf length: %d", len(*buf))
 	}
 	if cap(*buf) != 1024 {
-		t.Fatalf("unexepected buf cap: %d", cap(*buf))
+		t.Fatalf("unexpected buf cap: %d", cap(*buf))
 	}
 	pool.Put(buf)
 
@@ -55,7 +55,7 @@ func TestPool(t *testing.T) {
 		t.Fatalf("unexpected buf length: %d", len(*buf))
 	}
 	if cap(*buf) != 1024 {
-		t.Fatalf("unexepected buf cap: %d", cap(*buf))
+		t.Fatalf("unexpected buf cap: %d", cap(*buf))
 	}
 	pool.Put(buf)
 
@@ -65,7 +65,7 @@ func TestPool(t *testing.T) {
 		t.Fatalf("unexpected buf length: %d", len(*buf))
 	}
 	if cap(*buf) != 8192 {
-		t.Fatalf("unexepected buf cap: %d", cap(*buf))
+		t.Fatalf("unexpected buf cap: %d", cap(*buf))
 	}
 	pool.Put(buf)
 
@@ -75,7 +75,7 @@ func TestPool(t *testing.T) {
 		t.Fatalf("unexpected buf length: %d", len(*buf))
 	}
 	if cap(*buf) != 16384 {
-		t.Fatalf("unexepected buf cap: %d", cap(*buf))
+		t.Fatalf("unexpected buf cap: %d", cap(*buf))
 	}
 	pool.Put(buf)
 
@@ -85,7 +85,7 @@ func TestPool(t *testing.T) {
 		t.Fatalf("unexpected buf length: %d", len(*buf))
 	}
 	if cap(*buf) != 16385 {
-		t.Fatalf("unexepected buf cap: %d", cap(*buf))
+		t.Fatalf("unexpected buf cap: %d", cap(*buf))
 	}
 	pool.Put(buf)
 }
@@ -101,7 +101,7 @@ func TestPoolOneSize(t *testing.T) {
 		t.Fatalf("unexpected buf length: %d", len(*buf))
 	}
 	if cap(*buf) != 1024 {
-		t.Fatalf("unexepected buf cap: %d", cap(*buf))
+		t.Fatalf("unexpected buf cap: %d", cap(*buf))
 	}
 	pool.Put(buf)
 
@@ -110,7 +110,7 @@ func TestPoolOneSize(t *testing.T) {
 		t.Fatalf("unexpected buf length: %d", len(*buf))
 	}
 	if cap(*buf) != 1025 {
-		t.Fatalf("unexepected buf cap: %d", cap(*buf))
+		t.Fatalf("unexpected buf cap: %d", cap(*buf))
 	}
 	pool.Put(buf)
 }
@@ -126,7 +126,7 @@ func TestPoolTwoSizeNotMultiplier(t *testing.T) {
 		t.Fatalf("unexpected buf length: %d", len(*buf))
 	}
 	if cap(*buf) != 1024 {
-		t.Fatalf("unexepected buf cap: %d", cap(*buf))
+		t.Fatalf("unexpected buf cap: %d", cap(*buf))
 	}
 	pool.Put(buf)
 
@@ -135,7 +135,7 @@ func TestPoolTwoSizeNotMultiplier(t *testing.T) {
 		t.Fatalf("unexpected buf length: %d", len(*buf))
 	}
 	if cap(*buf) != 2001 {
-		t.Fatalf("unexepected buf cap: %d", cap(*buf))
+		t.Fatalf("unexpected buf cap: %d", cap(*buf))
 	}
 	pool.Put(buf)
 }
@@ -152,7 +152,7 @@ func TestPoolWeirdMaxSize(t *testing.T) {
 		t.Fatalf("unexpected buf length: %d", len(*buf))
 	}
 	if cap(*buf) != 15000 {
-		t.Fatalf("unexepected buf cap: %d", cap(*buf))
+		t.Fatalf("unexpected buf cap: %d", cap(*buf))
 	}
 	pool.Put(buf)
 
@@ -161,7 +161,7 @@ func TestPoolWeirdMaxSize(t *testing.T) {
 		t.Fatalf("unexpected buf length: %d", len(*buf))
 	}
 	if cap(*buf) != 16383 {
-		t.Fatalf("unexepected buf cap: %d", cap(*buf))
+		t.Fatalf("unexpected buf cap: %d", cap(*buf))
 	}
 	pool.Put(buf)
 }
