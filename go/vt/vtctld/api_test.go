@@ -204,9 +204,7 @@ func TestAPI(t *testing.T) {
 				"db_name_override": "",
 				"tags": {},
 				"mysql_hostname":"",
-				"mysql_port":0,
-                                "backup_time":"",
-                                "restore_position":""
+				"mysql_port":0
 			}`},
 		{"GET", "tablets/nonexistent-999", "", "404 page not found"},
 		{"POST", "tablets/cell1-100?action=TestTabletAction", "", `{
@@ -290,7 +288,7 @@ func TestAPI(t *testing.T) {
 		}`},
 		{"POST", "vtctl/", `["GetKeyspace","ks3"]`, `{
 		   "Error": "",
-		   "Output": "{\n  \"sharding_column_name\": \"shardcol\",\n  \"sharding_column_type\": 0,\n  \"served_froms\": [\n  ],\n  \"keyspace_type\": 1,\n  \"base_keyspace\": \"ks1\",\n  \"snapshot_time\": {\n    \"seconds\": \"1136214245\",\n    \"nanoseconds\": 0\n  }\n}\n\n"
+		   "Output": "{\n  \"sharding_column_name\": \"\",\n  \"sharding_column_type\": 0,\n  \"served_froms\": [\n  ],\n  \"keyspace_type\": 1,\n  \"base_keyspace\": \"ks1\",\n  \"snapshot_time\": {\n    \"seconds\": \"1136214245\",\n    \"nanoseconds\": 0\n  }\n}\n\n"
 		}`},
 		{"POST", "vtctl/", `["GetVSchema","ks3"]`, `{
 		   "Error": "",
