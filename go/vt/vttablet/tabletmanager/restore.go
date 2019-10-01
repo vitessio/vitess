@@ -246,20 +246,18 @@ func (agent *ActionAgent) startReplication(ctx context.Context, pos mysql.Positi
 
 	if !pos.Equal(masterPos) {
 		for {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-				status, err := agent.MysqlDaemon.SlaveStatus()
-				if err != nil {
-					return vterrors.Wrap(err, "can't get slave status")
-				}
-				newPos := status.Position
-				if !newPos.Equal(pos) {
-					break
-				}
-				time.Sleep(1 * time.Second)
+			if err := ctx.Err(); err != nil {
+				return err
 			}
+			status, err := agent.MysqlDaemon.SlaveStatus()
+			if err != nil {
+				return vterrors.Wrap(err, "can't get slave status")
+			}
+			newPos := status.Position
+			if !newPos.Equal(pos) {
+				break
+			}
+			time.Sleep(1 * time.Second)
 		}
 	}
 
