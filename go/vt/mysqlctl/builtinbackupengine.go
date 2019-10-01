@@ -367,6 +367,9 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 		}
 		if !replicationPosition.Equal(masterPos) {
 			for {
+				if err := ctx.Err(); err != nil {
+					return usable, err
+				}
 				status, err := mysqld.SlaveStatus()
 				if err != nil {
 					return usable, err
@@ -375,6 +378,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 				if !newPos.Equal(replicationPosition) {
 					break
 				}
+				time.Sleep(1 * time.Second)
 			}
 		}
 	}
