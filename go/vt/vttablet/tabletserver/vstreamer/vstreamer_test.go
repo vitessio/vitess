@@ -577,6 +577,8 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 		input: []string{
 			"insert into vitess_null_new values(2, 'abc')",
 		},
+		// In this case, we don't have information about vitess_null since it was renamed to vitess_null_test.
+		// information returned by binlog for val column == varchar (rather than varbinary).
 		output: [][]string{{
 			`gtid|begin`,
 			`gtid|begin`,
