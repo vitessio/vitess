@@ -17,9 +17,11 @@ limitations under the License.
 package sqlparser
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"math/rand"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -2532,6 +2534,23 @@ func TestSkipToEnd(t *testing.T) {
 		_, err := Parse(tcase.input)
 		if err == nil || err.Error() != tcase.output {
 			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
+		}
+	}
+}
+
+func ParseDjangoQueries(t *testing.T) {
+
+	file, err := os.Open("some/hardcoded/path")
+	defer file.Close()
+	if err != nil {
+		t.Errorf(" Error: %v", err)
+	}
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		_, err := Parse(scanner.Text())
+		if err != nil {
+			t.Errorf(" Error: %v", err)
 		}
 	}
 }
