@@ -2538,9 +2538,9 @@ func TestSkipToEnd(t *testing.T) {
 	}
 }
 
-func ParseDjangoQueries(t *testing.T) {
+func TestParseDjangoQueries(t *testing.T) {
 
-	file, err := os.Open("some/hardcoded/path")
+	file, err := os.Open("django_queries.txt")
 	defer file.Close()
 	if err != nil {
 		t.Errorf(" Error: %v", err)
