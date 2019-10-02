@@ -101,7 +101,7 @@ func (agent *ActionAgent) broadcastHealth() {
 	agent.mutex.Lock()
 	replicationDelay := agent._replicationDelay
 	healthError := agent._healthy
-	terTime := agent._tabletExternallyReparentedTime
+	terTime := agent._masterTermStartTime
 	healthyTime := agent._healthyTime
 	agent.mutex.Unlock()
 

@@ -262,8 +262,8 @@ func TestInitTablet(t *testing.T) {
 	if string(ti.KeyRange.Start) != "" || string(ti.KeyRange.End) != "\xc0" {
 		t.Errorf("wrong KeyRange for tablet: %v", ti.KeyRange)
 	}
-	if got := agent._tabletExternallyReparentedTime; !got.IsZero() {
-		t.Fatalf("REPLICA tablet should not have an ExternallyReparentedTimestamp set: %v", got)
+	if got := agent._masterTermStartTime; !got.IsZero() {
+		t.Fatalf("REPLICA tablet should not have a MasterTermStartTime set: %v", got)
 	}
 
 	// 2. Update shard's master to our alias, then try to init again.
@@ -288,7 +288,7 @@ func TestInitTablet(t *testing.T) {
 	if ti.Type != topodatapb.TabletType_REPLICA {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
-	if got := agent._tabletExternallyReparentedTime; !got.IsZero() {
+	if got := agent._masterTermStartTime; !got.IsZero() {
 		t.Fatalf("REPLICA tablet should not have an ExternallyReparentedTimestamp set: %v", got)
 	}
 
@@ -308,7 +308,7 @@ func TestInitTablet(t *testing.T) {
 	if ti.Type != topodatapb.TabletType_MASTER {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
-	ter1 := agent._tabletExternallyReparentedTime
+	ter1 := agent._masterTermStartTime
 	if ter1.IsZero() {
 		t.Fatalf("MASTER tablet should have an ExternallyReparentedTimestamp set")
 	}
@@ -330,7 +330,7 @@ func TestInitTablet(t *testing.T) {
 	if ti.Type != topodatapb.TabletType_MASTER {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
-	ter2 := agent._tabletExternallyReparentedTime
+	ter2 := agent._masterTermStartTime
 	if ter2.IsZero() || !ter2.After(ter1) {
 		t.Fatalf("After a restart, ExternallyReparentedTimestamp must be set to the current time. Previous timestamp: %v current timestamp: %v", ter1, ter2)
 	}
@@ -355,7 +355,7 @@ func TestInitTablet(t *testing.T) {
 	if len(ti.Tags) != 1 || ti.Tags["aaa"] != "bbb" {
 		t.Errorf("wrong tablet tags: %v", ti.Tags)
 	}
-	ter3 := agent._tabletExternallyReparentedTime
+	ter3 := agent._masterTermStartTime
 	if ter3.IsZero() || !ter3.After(ter2) {
 		t.Fatalf("After a restart, ExternallyReparentedTimestamp must be set to the current time. Previous timestamp: %v current timestamp: %v", ter2, ter3)
 	}
