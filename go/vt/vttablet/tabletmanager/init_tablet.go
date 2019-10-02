@@ -108,17 +108,17 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 			// There's no existing tablet record, so we can assume
 			// no one has left us a message to step down.
 			tabletType = topodatapb.TabletType_MASTER
-			// Update the TER timestamp (current value is 0) because we
+			// Update the master term start time (current value is 0) because we
 			// assume that we are actually the MASTER and in case of a tiebreak,
 			// vtgate should prefer us.
-			agent.setExternallyReparentedTime(time.Now())
+			agent.setMasterTermStartTime(time.Now())
 		case err == nil:
 			if oldTablet.Type == topodatapb.TabletType_MASTER {
 				// We're marked as master in the shard record,
 				// and our existing tablet record agrees.
 				tabletType = topodatapb.TabletType_MASTER
 				// Same comment as above. Update tiebreaking timestamp to now.
-				agent.setExternallyReparentedTime(time.Now())
+				agent.setMasterTermStartTime(time.Now())
 			}
 		default:
 			return vterrors.Wrap(err, "InitTablet failed to read existing tablet record")
