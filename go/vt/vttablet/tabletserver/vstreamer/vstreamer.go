@@ -369,7 +369,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			if len(tm.Types) <= len(st.Columns) {
 				for i := range tm.Types {
 					t := cols[i].Type
-					if !sqltypes.TypeEquivalenceCheck(t, st.Columns[i].Type) {
+					if !sqltypes.AreTypesEquivalent(t, st.Columns[i].Type) {
 						schemaMatch = false
 						break
 					}
@@ -378,13 +378,13 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				schemaMatch = false
 			}
 			if schemaMatch {
+				// Columns should be truncated to match those in tm.
 				cols = st.Columns[:len(tm.Types)]
 			}
 		}
 
 		table := &Table{
-			Name: tableName,
-			// Columns should be truncated to match those in tm.
+			Name:    tableName,
 			Columns: cols,
 		}
 		plan, err := buildPlan(table, vs.kschema, vs.filter)
