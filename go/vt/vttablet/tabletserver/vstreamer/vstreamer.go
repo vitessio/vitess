@@ -346,7 +346,6 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		var cols []schema.TableColumn
 		for i, typ := range tm.Types {
 			t, err := sqltypes.MySQLToType(int64(typ), 0)
-			fmt.Printf("type conversion table tableName:%s typ:%d  tm.Metadata[i]:%d t:%d\n", tableName, int64(typ), int64(tm.Metadata[i]), t)
 			if err != nil {
 				return nil, fmt.Errorf("unsupported type: %d, position: %d", typ, i)
 			}
@@ -368,8 +367,8 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			// check if the schema returned by schema.Engine matches with row.
 			schemaMatch := true
 			if len(tm.Types) <= len(st.Columns) {
-				for i, typ := range tm.Types {
-					t, _ := sqltypes.MySQLToType(int64(typ), 0)
+				for i := range tm.Types {
+					t := cols[i].Type
 					if !sqltypes.TypeEquivalenceCheck(t, st.Columns[i].Type) {
 						schemaMatch = false
 						break
