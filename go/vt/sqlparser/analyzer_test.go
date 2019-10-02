@@ -27,7 +27,7 @@ import (
 func TestPreview(t *testing.T) {
 	testcases := []struct {
 		sql  string
-		want int
+		want StatementType
 	}{
 		{"select ...", StmtSelect},
 		{"    select ...", StmtSelect},
