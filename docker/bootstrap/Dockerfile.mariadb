@@ -1,7 +1,14 @@
 FROM vitess/bootstrap:common
 
 # Install MariaDB 10
-RUN apt-get update -y \
+RUN for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keys.gnupg.net --recv-keys 9334A25F8507EFA5 && break; done && \
+    add-apt-repository 'deb http://repo.percona.com/apt stretch main' && \
+    { \
+        echo debconf debconf/frontend select Noninteractive; \
+        echo percona-server-server-5.7 percona-server-server/root_password password 'unused'; \
+        echo percona-server-server-5.7 percona-server-server/root_password_again password 'unused'; \
+    } | debconf-set-selections && \
+    apt-get update -y \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
       bzip2 \
       mariadb-server \
@@ -9,10 +16,8 @@ RUN apt-get update -y \
       libdbd-mysql-perl \
       rsync \
       libev4 \
- && rm -rf /var/lib/apt/lists/* \
- && wget https://www.percona.com/downloads/XtraBackup/Percona-XtraBackup-2.4.13/binary/debian/stretch/x86_64/percona-xtrabackup-24_2.4.13-1.stretch_amd64.deb \
- && dpkg -i percona-xtrabackup-24_2.4.13-1.stretch_amd64.deb \
- && rm -f percona-xtrabackup-24_2.4.13-1.stretch_amd64.deb
+      percona-xtrabackup-24 \
+ && rm -rf /var/lib/apt/lists/*
 
 # Bootstrap Vitess
 WORKDIR /vt/src/vitess.io/vitess
