@@ -18,16 +18,9 @@ import (
 )
 
 var (
+	tabletsUsed = 0
 	baseYamlFile    = flag.String("base_yaml", "docker-compose.base.yml", "Starting docker-compose yaml")
-	baseVschemaFile = "base_vschema.json"
-	finalVschemaFile = "vschema.json"
-
-	schemaFiles = flag.String("schemaFiles", "create_messages.sql,create_tokens.sql", "Tables to create")
-	replicaTablets = flag.Int("replicaTablets", 1, "Number of replica tablets")
-	readOnlyTablets = flag.Int("readOnlyTablets", 0, "Number of read only tablets")
-	shards = flag.Int("shards", 0, "How many shards to configure (0 is unsharded)")
-	lookupSchemaFiles = flag.String("lookupSchemaFiles", "create_messages_message_lookup.sql,create_tokens_token_lookup.sql", "Lookup Tables to create")
-	useLookups = flag.Bool("useLookups", false, "Whether to use lookup tables or not")
+	baseVschemaFile    = flag.String("base_vschema", "base_vschema.json", "Starting vschema json")
 
 	topologyFlags = flag.String("topologyFlags",
 		"-topo_implementation consul -topo_global_server_address consul1:8500 -topo_global_root vitess/global",
@@ -36,39 +29,75 @@ var (
 	gRpcPort  = flag.String("gRpcPort", "15999", "gRPC port to be used")
 	mySqlPort = flag.String("mySqlPort", "15306", "mySql port to be used")
 	cell      = flag.String("cell", "test", "Vitess Cell name")
-	primaryKeyspace  = flag.String("keyspace", "test_keyspace", "Name of primary keyspace to use")
+	keyspaceData = flag.String("keyspaces", "test_keyspace:2:1:create_messages.sql,create_tokens.sql:lookup_keyspace unsharded_keyspace:0:0:create_dinosaurs.sql,create_eggs.sql", "List of keyspace_name:num_of_shards:num_of_replica_tablets:schema_files:<optional>lookup_keyspace_name")
 )
 
-func main() {
-	primaryTableColumns := make(map[string]string)
-	flag.Parse()
-	schemaFileNames := strings.Split(*schemaFiles, ",")
-	lookupSchemaFileNames := strings.Split(*lookupSchemaFiles, ",")
+type keyspaceInfo struct {
+	keyspace string
+	shards  int
+	replicaTablets int
+	lookupKeyspace string
+	useLookups bool
+	schemaFile *os.File
+	schemaFileNames []string
+}
 
-	f := createFile("tables/schema_file.sql")
-	appendtoSqlFile(schemaFileNames, f)
-	if *useLookups {
-		appendtoSqlFile(lookupSchemaFileNames, f)
+func newKeyspaceInfo(keyspace string, shards int, replicaTablets int, schemaFiles []string, lookupKeyspace string) keyspaceInfo {
+	k := keyspaceInfo{keyspace: keyspace, shards: shards, replicaTablets: replicaTablets, schemaFileNames: schemaFiles, lookupKeyspace: lookupKeyspace}
+	if len(strings.TrimSpace(lookupKeyspace)) == 0 {
+		k.useLookups = false
+	} else {
+		k.useLookups = true
 	}
-	closeFile(f)
+
+	k.schemaFile = nil
+	return k
+}
+
+func main() {
+	flag.Parse()
+	keyspaceInfoMap := make(map[string]keyspaceInfo)
+
+	for _,v:= range strings.Split(*keyspaceData, " ") {
+		tokens := strings.Split(v, ":")
+		shards, _ := strconv.Atoi(tokens[1])
+		replicaTablets, _ := strconv.Atoi(tokens[2])
+		schemaFileNames := strings.Split(tokens[3], ",")
+		print(shards)
+
+		if len(tokens) > 4 {
+			keyspaceInfoMap[tokens[0]] = newKeyspaceInfo(tokens[0], shards, replicaTablets, schemaFileNames, tokens[4])
+		} else {
+			keyspaceInfoMap[tokens[0]] = newKeyspaceInfo(tokens[0], shards, replicaTablets, schemaFileNames, "")
+		}
+	}
+
+	for _, v := range keyspaceInfoMap {
+		v.schemaFile = createFile(fmt.Sprintf("tables/%s_schema_file.sql", v.keyspace))
+		appendtoSqlFile(v.schemaFileNames, v.schemaFile)
+		closeFile(v.schemaFile)
+	}
 
 	// Vschema Patching
-	vSchemaFile := readFile(baseVschemaFile)
+	for _, keyspaceData := range keyspaceInfoMap {
+		vSchemaFile := readFile(*baseVschemaFile)
+		if keyspaceData.shards == 0 {
+			vSchemaFile = applyJsonInMemoryPatch(vSchemaFile,`[{"op": "replace","path": "/sharded", "value": false}]`)
+		}
 
-	if *shards == 0 {
-		vSchemaFile = applyJsonInMemoryPatch(vSchemaFile,`[{"op": "replace","path": "/sharded", "value": false}]`)
+		vSchemaFile, primaryTableColumns :=  addTablesVschemaPatch(vSchemaFile, keyspaceData.schemaFileNames)
+
+		if keyspaceData.useLookups {
+			lookupKeyspace := keyspaceInfoMap[keyspaceData.lookupKeyspace]
+			vSchemaFile = addLookupDataToVschema(vSchemaFile, lookupKeyspace.schemaFileNames, primaryTableColumns, lookupKeyspace.keyspace)
+		}
+
+		writeVschemaFile(vSchemaFile, fmt.Sprintf("%s_vschema.json", keyspaceData.keyspace))
 	}
-
-	vSchemaFile, primaryTableColumns =  addTablesVschemaPatch(vSchemaFile, schemaFileNames)
-	if *useLookups {
-		vSchemaFile = addLookupDataToVschema(vSchemaFile, lookupSchemaFileNames, primaryTableColumns, "test_keyspace")
-	}
-
-	writeVschemaFile(vSchemaFile, "vschema.json")
 
 	// Docker Compose File Patches
 	dockerFile := readFile(*baseYamlFile)
-  dockerFile = applyDockerComposePatches(dockerFile)
+	dockerFile = applyDockerComposePatches(dockerFile, keyspaceInfoMap)
 	writeFile(dockerFile, "docker-compose.yml")
 }
 
@@ -231,7 +260,6 @@ func addLookupDataToVschema(vSchemaFile []byte, schemaFileNames []string, primar
 		firstColumnName := strings.Split(indexedColumns, ", ")[0]
 
 		// Lookup patch under "tables"
-		vSchemaFile = applyJsonInMemoryPatch(vSchemaFile, generatePrimaryVIndex(tableName, firstColumnName, "hash"))
 		vSchemaFile = applyJsonInMemoryPatch(vSchemaFile, addToColumnVIndexes(lookupTableOwner, firstColumnName, tableName))
 
 		// Generate Vschema lookup hash types
@@ -259,37 +287,43 @@ func writeFile (file []byte, fileName string) {
 	}
 }
 
-func applyKeyspaceDependentPatches(dockerFile []byte, keyspace string) []byte {
-	tabAlias := 0
+func applyKeyspaceDependentPatches(dockerFile []byte, keyspaceData keyspaceInfo) []byte {
+	tabAlias := 0 + tabletsUsed*100
 	shard := "-"
-	masterTablets := []string{"101"}
-	numShards := *shards
-	interval := int(math.Floor(256 / float64(numShards)))
+	var masterTablets []string
+	if tabletsUsed == 0 {
+		masterTablets = append(masterTablets, "101")
+	} else {
+		masterTablets = append(masterTablets, strconv.Itoa((tabletsUsed+1)*100+1))
+	}
+	interval := int(math.Floor(256 / float64(keyspaceData.shards)))
 
-	for i:=1; i < numShards; i++ {
+	for i:=1; i < keyspaceData.shards; i++ {
 		masterTablets = append(masterTablets, strconv.Itoa((i+1)*100+1))
 	}
 
-	dockerFile = applyInMemoryPatch(dockerFile, generateSchemaload(masterTablets, finalVschemaFile, "", keyspace))
+	dockerFile = applyInMemoryPatch(dockerFile, generateSchemaload(masterTablets, "", keyspaceData.keyspace))
 
 	// Append Master and Replica Tablets
-	if numShards < 2 {
+	if keyspaceData.shards < 2 {
 		tabAlias = tabAlias + 100
-		dockerFile = applyTabletPatches(dockerFile, tabAlias, shard, keyspace)
+		dockerFile = applyTabletPatches(dockerFile, tabAlias, shard, keyspaceData)
 	} else {
-		for i:=0; i < numShards; i++ {
+		// Determine shard range
+		for i:=0; i < keyspaceData.shards; i++ {
 			if i == 0 {
 				shard = fmt.Sprintf("-%x", interval)
-			} else if i == (numShards - 1) {
+			} else if i == (keyspaceData.shards - 1) {
 				shard = fmt.Sprintf("%x-", interval*i)
 			} else {
 				shard = fmt.Sprintf("%x-%x", interval*(i) ,interval*(i+1))
 			}
 			tabAlias = tabAlias + 100
-			dockerFile = applyTabletPatches(dockerFile, tabAlias, shard, keyspace)
+			dockerFile = applyTabletPatches(dockerFile, tabAlias, shard, keyspaceData)
 		}
 	}
 
+	tabletsUsed += len(masterTablets)
 	return dockerFile
 }
 
@@ -300,20 +334,20 @@ func applyDefaultDockerPatches(dockerFile []byte) []byte {
 	return dockerFile
 }
 
-func applyDockerComposePatches(dockerFile []byte) []byte {
-	keyspace := *primaryKeyspace
-
+func applyDockerComposePatches(dockerFile []byte, keyspaceInfoMap map[string]keyspaceInfo) []byte {
 	//Vtctld, vtgate, vtwork, schemaload patches
 	dockerFile = applyDefaultDockerPatches(dockerFile)
-	dockerFile = applyKeyspaceDependentPatches(dockerFile, keyspace)
+	for _, keyspaceData := range keyspaceInfoMap {
+		dockerFile = applyKeyspaceDependentPatches(dockerFile, keyspaceData)
+	}
 
 	return dockerFile
 }
 
-func applyTabletPatches(dockerFile []byte, tabAlias int, shard string, keyspace string) []byte {
-	dockerFile = applyInMemoryPatch(dockerFile, generateDefaultTablet(strconv.Itoa(tabAlias+1), shard, "master", keyspace))
-	for i:=0; i < *replicaTablets; i++ {
-		dockerFile = applyInMemoryPatch(dockerFile, generateDefaultTablet(strconv.Itoa(tabAlias+ 2 + i), shard, "replica", keyspace))
+func applyTabletPatches(dockerFile []byte, tabAlias int, shard string, keyspaceData keyspaceInfo) []byte {
+	dockerFile = applyInMemoryPatch(dockerFile, generateDefaultTablet(strconv.Itoa(tabAlias+1), shard, "master", keyspaceData.keyspace))
+	for i:=0; i < keyspaceData.replicaTablets; i++ {
+		dockerFile = applyInMemoryPatch(dockerFile, generateDefaultTablet(strconv.Itoa(tabAlias+ 2 + i), shard, "replica", keyspaceData.keyspace))
 	}
 	return dockerFile
 }
@@ -445,7 +479,7 @@ func generateVtwork() string {
 	return data
 }
 
-func generateSchemaload(tabletAliases []string, vschemaFile string, postLoadFile string, keyspace string) string {
+func generateSchemaload(tabletAliases []string, postLoadFile string, keyspace string) string {
 	targetTab := tabletAliases[0]
 
 	// Formatting for list in yaml
@@ -456,25 +490,25 @@ func generateSchemaload(tabletAliases []string, vschemaFile string, postLoadFile
 
 	data := fmt.Sprintf(`
 - op: add
-  path: /services/schemaload
+  path: /services/schemaload_%[7]s
   value:
     image: vitess/base
     volumes:
       - ".:/script"
     environment:
-      - TOPOLOGY_FLAGS=%[4]s
-      - WEB_PORT=%[5]s
-      - GRPC_PORT=%[6]s
-      - CELL=%[7]s
-      - KEYSPACE=%[8]s
+      - TOPOLOGY_FLAGS=%[3]s
+      - WEB_PORT=%[4]s
+      - GRPC_PORT=%[5]s
+      - CELL=%[6]s
+      - KEYSPACE=%[7]s
       - TARGETTAB=test-0000000%[2]s
       - SLEEPTIME=15
-      - VSCHEMA_FILE=%[3]s
-      - SCHEMA_FILES=schema_file.sql
-      - POST_LOAD_FILE=%[9]s
+      - VSCHEMA_FILE=%[7]s_vschema.json
+      - SCHEMA_FILES=%[7]s_schema_file.sql
+      - POST_LOAD_FILE=%[8]s
     command: ["sh", "-c", "/script/schemaload.sh"]
     depends_on: %[1]s
-`, dependsOn, targetTab, vschemaFile, *topologyFlags, *webPort, *gRpcPort, *cell, keyspace, postLoadFile)
+`, dependsOn, targetTab, *topologyFlags, *webPort, *gRpcPort, *cell, keyspace, postLoadFile)
 
 	return data
 }
