@@ -19,7 +19,7 @@ import (
 
 var (
 	tabletsUsed = 0
-	baseYamlFile    = flag.String("base_yaml", "docker-compose.base.yml", "Starting docker-compose yaml")
+	baseDockerComposeFile    = flag.String("base_yaml", "docker-compose.base.yml", "Starting docker-compose yaml")
 	baseVschemaFile    = flag.String("base_vschema", "base_vschema.json", "Starting vschema json")
 
 	topologyFlags = flag.String("topologyFlags",
@@ -29,7 +29,7 @@ var (
 	gRpcPort  = flag.String("gRpcPort", "15999", "gRPC port to be used")
 	mySqlPort = flag.String("mySqlPort", "15306", "mySql port to be used")
 	cell      = flag.String("cell", "test", "Vitess Cell name")
-	keyspaceData = flag.String("keyspaces", "test_keyspace:2:1:create_messages.sql,create_tokens.sql:lookup_keyspace unsharded_keyspace:0:0:create_dinosaurs.sql,create_eggs.sql", "List of keyspace_name:num_of_shards:num_of_replica_tablets:schema_files:<optional>lookup_keyspace_name")
+	keyspaceData = flag.String("keyspaces", "test_keyspace:2:1:create_messages.sql,create_tokens.sql unsharded_keyspace:0:0:create_dinosaurs.sql,create_eggs.sql", "List of keyspace_name:num_of_shards:num_of_replica_tablets:schema_files:<optional>lookup_keyspace_name seperated by ' '")
 )
 
 type keyspaceInfo struct {
@@ -96,9 +96,9 @@ func main() {
 	}
 
 	// Docker Compose File Patches
-	dockerFile := readFile(*baseYamlFile)
-	dockerFile = applyDockerComposePatches(dockerFile, keyspaceInfoMap)
-	writeFile(dockerFile, "docker-compose.yml")
+	dockerComposeFile := readFile(*baseDockerComposeFile)
+	dockerComposeFile = applyDockerComposePatches(dockerComposeFile, keyspaceInfoMap)
+	writeFile(dockerComposeFile, "docker-compose.yml")
 }
 
 func applyFilePatch(dockerYaml []byte, patchFile string) []byte {
@@ -287,7 +287,7 @@ func writeFile (file []byte, fileName string) {
 	}
 }
 
-func applyKeyspaceDependentPatches(dockerFile []byte, keyspaceData keyspaceInfo) []byte {
+func applyKeyspaceDependentPatches(dockerComposeFile []byte, keyspaceData keyspaceInfo) []byte {
 	tabAlias := 0 + tabletsUsed*100
 	shard := "-"
 	var masterTablets []string
@@ -302,12 +302,12 @@ func applyKeyspaceDependentPatches(dockerFile []byte, keyspaceData keyspaceInfo)
 		masterTablets = append(masterTablets, strconv.Itoa((i+1)*100+1))
 	}
 
-	dockerFile = applyInMemoryPatch(dockerFile, generateSchemaload(masterTablets, "", keyspaceData.keyspace))
+	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateSchemaload(masterTablets, "", keyspaceData.keyspace))
 
 	// Append Master and Replica Tablets
 	if keyspaceData.shards < 2 {
 		tabAlias = tabAlias + 100
-		dockerFile = applyTabletPatches(dockerFile, tabAlias, shard, keyspaceData)
+		dockerComposeFile = applyTabletPatches(dockerComposeFile, tabAlias, shard, keyspaceData)
 	} else {
 		// Determine shard range
 		for i:=0; i < keyspaceData.shards; i++ {
@@ -319,37 +319,37 @@ func applyKeyspaceDependentPatches(dockerFile []byte, keyspaceData keyspaceInfo)
 				shard = fmt.Sprintf("%x-%x", interval*(i) ,interval*(i+1))
 			}
 			tabAlias = tabAlias + 100
-			dockerFile = applyTabletPatches(dockerFile, tabAlias, shard, keyspaceData)
+			dockerComposeFile = applyTabletPatches(dockerComposeFile, tabAlias, shard, keyspaceData)
 		}
 	}
 
 	tabletsUsed += len(masterTablets)
-	return dockerFile
+	return dockerComposeFile
 }
 
-func applyDefaultDockerPatches(dockerFile []byte) []byte {
-	dockerFile = applyInMemoryPatch(dockerFile, generateVtctld())
-	dockerFile = applyInMemoryPatch(dockerFile, generateVtgate())
-	dockerFile = applyInMemoryPatch(dockerFile, generateVtwork())
-	return dockerFile
+func applyDefaultDockerPatches(dockerComposeFile []byte) []byte {
+	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtctld())
+	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtgate())
+	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtwork())
+	return dockerComposeFile
 }
 
-func applyDockerComposePatches(dockerFile []byte, keyspaceInfoMap map[string]keyspaceInfo) []byte {
+func applyDockerComposePatches(dockerComposeFile []byte, keyspaceInfoMap map[string]keyspaceInfo) []byte {
 	//Vtctld, vtgate, vtwork, schemaload patches
-	dockerFile = applyDefaultDockerPatches(dockerFile)
+	dockerComposeFile = applyDefaultDockerPatches(dockerComposeFile)
 	for _, keyspaceData := range keyspaceInfoMap {
-		dockerFile = applyKeyspaceDependentPatches(dockerFile, keyspaceData)
+		dockerComposeFile = applyKeyspaceDependentPatches(dockerComposeFile, keyspaceData)
 	}
 
-	return dockerFile
+	return dockerComposeFile
 }
 
-func applyTabletPatches(dockerFile []byte, tabAlias int, shard string, keyspaceData keyspaceInfo) []byte {
-	dockerFile = applyInMemoryPatch(dockerFile, generateDefaultTablet(strconv.Itoa(tabAlias+1), shard, "master", keyspaceData.keyspace))
+func applyTabletPatches(dockerComposeFile []byte, tabAlias int, shard string, keyspaceData keyspaceInfo) []byte {
+	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateDefaultTablet(strconv.Itoa(tabAlias+1), shard, "master", keyspaceData.keyspace))
 	for i:=0; i < keyspaceData.replicaTablets; i++ {
-		dockerFile = applyInMemoryPatch(dockerFile, generateDefaultTablet(strconv.Itoa(tabAlias+ 2 + i), shard, "replica", keyspaceData.keyspace))
+		dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateDefaultTablet(strconv.Itoa(tabAlias+ 2 + i), shard, "replica", keyspaceData.keyspace))
 	}
-	return dockerFile
+	return dockerComposeFile
 }
 
 // Default Tablet
