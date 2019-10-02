@@ -118,7 +118,7 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 }
 
 // Regexp to extract parent span id over the sql query
-var r = regexp.MustCompile("/\\*VT_SPAN_CONTEXT=(.*)\\*/")
+var r = regexp.MustCompile(`/\*VT_SPAN_CONTEXT=(.*)\*/`)
 
 // this function is here to make this logic easy to test by decoupling the logic from the `trace.NewSpan` and `trace.NewFromString` functions
 func startSpanTestable(ctx context.Context, query, label string,
