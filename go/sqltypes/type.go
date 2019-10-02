@@ -252,9 +252,12 @@ func MySQLToType(mysqlType, flags int64) (typ querypb.Type, err error) {
 }
 
 //TypeEquivalenceCheck returns whether two types are equivalent.
-func TypeEquivalenceCheck(mysqlTypeFromBinlog, mysqlTypeFromSchema querypb.Type) (isEquivalent bool) {
+func AreTypesEquivalent(mysqlTypeFromBinlog, mysqlTypeFromSchema querypb.Type) bool {
 	return (mysqlTypeFromBinlog == mysqlTypeFromSchema) ||
 		(mysqlTypeFromBinlog == VarChar && mysqlTypeFromSchema == VarBinary) ||
+		// Binlog only has base type. But doesn't have per-column-flags to differentiate
+		// various logical types. For Binary, Enum, Set types, binlog only returns Char
+		// as data type.
 		(mysqlTypeFromBinlog == Char && mysqlTypeFromSchema == Binary) ||
 		(mysqlTypeFromBinlog == Char && mysqlTypeFromSchema == Enum) ||
 		(mysqlTypeFromBinlog == Char && mysqlTypeFromSchema == Set) ||
@@ -264,7 +267,6 @@ func TypeEquivalenceCheck(mysqlTypeFromBinlog, mysqlTypeFromSchema querypb.Type)
 		(mysqlTypeFromBinlog == Int24 && mysqlTypeFromSchema == Uint24) ||
 		(mysqlTypeFromBinlog == Int32 && mysqlTypeFromSchema == Uint32) ||
 		(mysqlTypeFromBinlog == Int64 && mysqlTypeFromSchema == Uint64)
-
 }
 
 // typeToMySQL is the reverse of mysqlToType.

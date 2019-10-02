@@ -414,22 +414,22 @@ func TestTypeError(t *testing.T) {
 }
 
 func TestTypeEquivalenceCheck(t *testing.T) {
-	if !TypeEquivalenceCheck(Int16, Int16) {
-		t.Errorf("Int16 and Int16 are same type.")
+	if !AreTypesEquivalent(Int16, Int16) {
+		t.Errorf("Int16 and Int16 are same types.")
 	}
-	if TypeEquivalenceCheck(Int16, Int24) {
-		t.Errorf("Int16 and Int24 are not same type.")
+	if AreTypesEquivalent(Int16, Int24) {
+		t.Errorf("Int16 and Int24 are not same types.")
 	}
-	if !TypeEquivalenceCheck(VarChar, VarBinary) {
-		t.Errorf("VarChar in binlog and VarBinary in schema are equivalent type.")
+	if !AreTypesEquivalent(VarChar, VarBinary) {
+		t.Errorf("VarChar in binlog and VarBinary in schema are equivalent types.")
 	}
-	if TypeEquivalenceCheck(VarBinary, VarChar) {
-		t.Errorf("VarBinary in binlog and VarChar in schema are not equivalent type.")
+	if AreTypesEquivalent(VarBinary, VarChar) {
+		t.Errorf("VarBinary in binlog and VarChar in schema are not equivalent types.")
 	}
-	if !TypeEquivalenceCheck(Uint16, Uint16) {
-		t.Errorf("Int16 in binlog and Uint16 in schema are equivalent type.")
+	if !AreTypesEquivalent(Int16, Uint16) {
+		t.Errorf("Int16 in binlog and Uint16 in schema are equivalent types.")
 	}
-	if TypeEquivalenceCheck(Uint16, Int16) {
-		t.Errorf("UInt16 in binlog and int16 in schema are not equivalent type.")
+	if AreTypesEquivalent(Uint16, Int16) {
+		t.Errorf("Uint16 in binlog and Int16 in schema are not equivalent types.")
 	}
 }
