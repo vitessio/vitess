@@ -8,7 +8,6 @@ from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
 from google.protobuf import reflection as _reflection
 from google.protobuf import symbol_database as _symbol_database
-from google.protobuf import descriptor_pb2
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
@@ -20,6 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='vtrpc.proto',
   package='vtrpc',
   syntax='proto3',
+  serialized_options=_b('\n\017io.vitess.protoZ\"vitess.io/vitess/go/vt/proto/vtrpc'),
   serialized_pb=_b('\n\x0bvtrpc.proto\x12\x05vtrpc\"F\n\x08\x43\x61llerID\x12\x11\n\tprincipal\x18\x01 \x01(\t\x12\x11\n\tcomponent\x18\x02 \x01(\t\x12\x14\n\x0csubcomponent\x18\x03 \x01(\t\"c\n\x08RPCError\x12+\n\x0blegacy_code\x18\x01 \x01(\x0e\x32\x16.vtrpc.LegacyErrorCode\x12\x0f\n\x07message\x18\x02 \x01(\t\x12\x19\n\x04\x63ode\x18\x03 \x01(\x0e\x32\x0b.vtrpc.Code*\xb6\x02\n\x04\x43ode\x12\x06\n\x02OK\x10\x00\x12\x0c\n\x08\x43\x41NCELED\x10\x01\x12\x0b\n\x07UNKNOWN\x10\x02\x12\x14\n\x10INVALID_ARGUMENT\x10\x03\x12\x15\n\x11\x44\x45\x41\x44LINE_EXCEEDED\x10\x04\x12\r\n\tNOT_FOUND\x10\x05\x12\x12\n\x0e\x41LREADY_EXISTS\x10\x06\x12\x15\n\x11PERMISSION_DENIED\x10\x07\x12\x13\n\x0fUNAUTHENTICATED\x10\x10\x12\x16\n\x12RESOURCE_EXHAUSTED\x10\x08\x12\x17\n\x13\x46\x41ILED_PRECONDITION\x10\t\x12\x0b\n\x07\x41\x42ORTED\x10\n\x12\x10\n\x0cOUT_OF_RANGE\x10\x0b\x12\x11\n\rUNIMPLEMENTED\x10\x0c\x12\x0c\n\x08INTERNAL\x10\r\x12\x0f\n\x0bUNAVAILABLE\x10\x0e\x12\r\n\tDATA_LOSS\x10\x0f*\xe8\x02\n\x0fLegacyErrorCode\x12\x12\n\x0eSUCCESS_LEGACY\x10\x00\x12\x14\n\x10\x43\x41NCELLED_LEGACY\x10\x01\x12\x18\n\x14UNKNOWN_ERROR_LEGACY\x10\x02\x12\x14\n\x10\x42\x41\x44_INPUT_LEGACY\x10\x03\x12\x1c\n\x18\x44\x45\x41\x44LINE_EXCEEDED_LEGACY\x10\x04\x12\x1a\n\x16INTEGRITY_ERROR_LEGACY\x10\x05\x12\x1c\n\x18PERMISSION_DENIED_LEGACY\x10\x06\x12\x1d\n\x19RESOURCE_EXHAUSTED_LEGACY\x10\x07\x12\x1b\n\x17QUERY_NOT_SERVED_LEGACY\x10\x08\x12\x14\n\x10NOT_IN_TX_LEGACY\x10\t\x12\x19\n\x15INTERNAL_ERROR_LEGACY\x10\n\x12\x1a\n\x16TRANSIENT_ERROR_LEGACY\x10\x0b\x12\x1a\n\x16UNAUTHENTICATED_LEGACY\x10\x0c\x42\x35\n\x0fio.vitess.protoZ\"vitess.io/vitess/go/vt/proto/vtrpcb\x06proto3')
 )
 
@@ -31,75 +31,75 @@ _CODE = _descriptor.EnumDescriptor(
   values=[
     _descriptor.EnumValueDescriptor(
       name='OK', index=0, number=0,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='CANCELED', index=1, number=1,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='UNKNOWN', index=2, number=2,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='INVALID_ARGUMENT', index=3, number=3,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='DEADLINE_EXCEEDED', index=4, number=4,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='NOT_FOUND', index=5, number=5,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='ALREADY_EXISTS', index=6, number=6,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='PERMISSION_DENIED', index=7, number=7,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='UNAUTHENTICATED', index=8, number=16,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='RESOURCE_EXHAUSTED', index=9, number=8,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='FAILED_PRECONDITION', index=10, number=9,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='ABORTED', index=11, number=10,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='OUT_OF_RANGE', index=12, number=11,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='UNIMPLEMENTED', index=13, number=12,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='INTERNAL', index=14, number=13,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='UNAVAILABLE', index=15, number=14,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='DATA_LOSS', index=16, number=15,
-      options=None,
+      serialized_options=None,
       type=None),
   ],
   containing_type=None,
-  options=None,
+  serialized_options=None,
   serialized_start=196,
   serialized_end=506,
 )
@@ -114,59 +114,59 @@ _LEGACYERRORCODE = _descriptor.EnumDescriptor(
   values=[
     _descriptor.EnumValueDescriptor(
       name='SUCCESS_LEGACY', index=0, number=0,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='CANCELLED_LEGACY', index=1, number=1,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='UNKNOWN_ERROR_LEGACY', index=2, number=2,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='BAD_INPUT_LEGACY', index=3, number=3,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='DEADLINE_EXCEEDED_LEGACY', index=4, number=4,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='INTEGRITY_ERROR_LEGACY', index=5, number=5,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='PERMISSION_DENIED_LEGACY', index=6, number=6,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='RESOURCE_EXHAUSTED_LEGACY', index=7, number=7,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='QUERY_NOT_SERVED_LEGACY', index=8, number=8,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='NOT_IN_TX_LEGACY', index=9, number=9,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='INTERNAL_ERROR_LEGACY', index=10, number=10,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='TRANSIENT_ERROR_LEGACY', index=11, number=11,
-      options=None,
+      serialized_options=None,
       type=None),
     _descriptor.EnumValueDescriptor(
       name='UNAUTHENTICATED_LEGACY', index=12, number=12,
-      options=None,
+      serialized_options=None,
       type=None),
   ],
   containing_type=None,
-  options=None,
+  serialized_options=None,
   serialized_start=509,
   serialized_end=869,
 )
@@ -219,28 +219,28 @@ _CALLERID = _descriptor.Descriptor(
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='component', full_name='vtrpc.CallerID.component', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='subcomponent', full_name='vtrpc.CallerID.subcomponent', index=2,
       number=3, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
   nested_types=[],
   enum_types=[
   ],
-  options=None,
+  serialized_options=None,
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
@@ -264,28 +264,28 @@ _RPCERROR = _descriptor.Descriptor(
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='message', full_name='vtrpc.RPCError.message', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='code', full_name='vtrpc.RPCError.code', index=2,
       number=3, type=14, cpp_type=8, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
   nested_types=[],
   enum_types=[
   ],
-  options=None,
+  serialized_options=None,
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
@@ -318,6 +318,5 @@ RPCError = _reflection.GeneratedProtocolMessageType('RPCError', (_message.Messag
 _sym_db.RegisterMessage(RPCError)
 
 
-DESCRIPTOR.has_options = True
-DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), _b('\n\017io.vitess.protoZ\"vitess.io/vitess/go/vt/proto/vtrpc'))
+DESCRIPTOR._options = None
 # @@protoc_insertion_point(module_scope)

@@ -248,6 +248,7 @@ message VEvent {
   FieldEvent field_event = 6;
   VGtid vgtid = 7;
   Journal journal = 8;
+  string dml = 9;
   // current_time specifies the current time to handle clock skew.
   int64 current_time = 20;
 }
