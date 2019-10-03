@@ -561,38 +561,38 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 	}
 	// Modeled after vttablet endtoend compatibility tests.
 	execStatements(t, []string{
-		"create table vitess_null(id int, val varbinary(128), primary key(id))",
+		"create table vitess_test(id int, val varbinary(128), primary key(id))",
 	})
 	position := masterPosition(t)
 	execStatements(t, []string{
-		"insert into vitess_null values(1, 'abc')",
-		"rename table vitess_null to vitess_null_new",
+		"insert into vitess_test values(1, 'abc')",
+		"rename table vitess_test to vitess_test_new",
 	})
 
 	defer execStatements(t, []string{
-		"drop table vitess_null_new",
+		"drop table vitess_test_new",
 	})
 	engine.se.Reload(context.Background())
 	testcases := []testcase{{
 		input: []string{
-			"insert into vitess_null_new values(2, 'abc')",
+			"insert into vitess_test_new values(2, 'abc')",
 		},
-		// In this case, we don't have information about vitess_null since it was renamed to vitess_null_test.
+		// In this case, we don't have information about vitess_test since it was renamed to vitess_test_test.
 		// information returned by binlog for val column == varchar (rather than varbinary).
 		output: [][]string{{
 			`gtid|begin`,
 			`gtid|begin`,
-			`type:FIELD field_event:<table_name:"vitess_null" fields:<name:"@1" type:INT32 > fields:<name:"@2" type:VARCHAR > > `,
-			`type:ROW row_event:<table_name:"vitess_null" row_changes:<after:<lengths:1 lengths:3 values:"1abc" > > > `,
+			`type:FIELD field_event:<table_name:"vitess_test" fields:<name:"@1" type:INT32 > fields:<name:"@2" type:VARCHAR > > `,
+			`type:ROW row_event:<table_name:"vitess_test" row_changes:<after:<lengths:1 lengths:3 values:"1abc" > > > `,
 			`commit`,
 		}, {
 			`gtid|begin`,
-			`type:DDL ddl:"rename table vitess_null to vitess_null_new" `,
+			`type:DDL ddl:"rename table vitess_test to vitess_test_new" `,
 		}, {
 			`gtid|begin`,
 			`gtid|begin`,
-			`type:FIELD field_event:<table_name:"vitess_null_new" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
-			`type:ROW row_event:<table_name:"vitess_null_new" row_changes:<after:<lengths:1 lengths:3 values:"2abc" > > > `,
+			`type:FIELD field_event:<table_name:"vitess_test_new" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
+			`type:ROW row_event:<table_name:"vitess_test_new" row_changes:<after:<lengths:1 lengths:3 values:"2abc" > > > `,
 			`commit`,
 		}},
 	}}
