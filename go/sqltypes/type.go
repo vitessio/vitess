@@ -154,6 +154,7 @@ const (
 // If you add to this map, make sure you add a test case
 // in tabletserver/endtoend.
 var mysqlToType = map[int64]querypb.Type{
+	0:   Decimal,
 	1:   Int8,
 	2:   Int16,
 	3:   Int32,
@@ -169,8 +170,13 @@ var mysqlToType = map[int64]querypb.Type{
 	13:  Year,
 	15:  VarChar,
 	16:  Bit,
+	17:  Timestamp,
+	18:  Datetime,
+	19:  Time,
 	245: TypeJSON,
 	246: Decimal,
+	247: Enum,
+	248: Set,
 	249: Text,
 	250: Text,
 	251: Text,
@@ -243,6 +249,24 @@ func MySQLToType(mysqlType, flags int64) (typ querypb.Type, err error) {
 		return 0, fmt.Errorf("unsupported type: %d", mysqlType)
 	}
 	return modifyType(result, flags), nil
+}
+
+//TypeEquivalenceCheck returns whether two types are equivalent.
+func AreTypesEquivalent(mysqlTypeFromBinlog, mysqlTypeFromSchema querypb.Type) bool {
+	return (mysqlTypeFromBinlog == mysqlTypeFromSchema) ||
+		(mysqlTypeFromBinlog == VarChar && mysqlTypeFromSchema == VarBinary) ||
+		// Binlog only has base type. But doesn't have per-column-flags to differentiate
+		// various logical types. For Binary, Enum, Set types, binlog only returns Char
+		// as data type.
+		(mysqlTypeFromBinlog == Char && mysqlTypeFromSchema == Binary) ||
+		(mysqlTypeFromBinlog == Char && mysqlTypeFromSchema == Enum) ||
+		(mysqlTypeFromBinlog == Char && mysqlTypeFromSchema == Set) ||
+		(mysqlTypeFromBinlog == Text && mysqlTypeFromSchema == Blob) ||
+		(mysqlTypeFromBinlog == Int8 && mysqlTypeFromSchema == Uint8) ||
+		(mysqlTypeFromBinlog == Int16 && mysqlTypeFromSchema == Uint16) ||
+		(mysqlTypeFromBinlog == Int24 && mysqlTypeFromSchema == Uint24) ||
+		(mysqlTypeFromBinlog == Int32 && mysqlTypeFromSchema == Uint32) ||
+		(mysqlTypeFromBinlog == Int64 && mysqlTypeFromSchema == Uint64)
 }
 
 // typeToMySQL is the reverse of mysqlToType.
