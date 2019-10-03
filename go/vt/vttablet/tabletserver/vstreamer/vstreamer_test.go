@@ -554,7 +554,7 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 		t.Skip()
 	}
 	filter := &binlogdatapb.Filter{
-		BestEffortNameInFieldEvent: true,
+		FieldEventMode: binlogdatapb.Filter_BEST_EFFORT,
 		Rules: []*binlogdatapb.Rule{{
 			Match: "/.*/",
 		}},
