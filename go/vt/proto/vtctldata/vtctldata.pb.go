@@ -5,9 +5,8 @@ package vtctldata
 
 import (
 	fmt "fmt"
-	math "math"
-
 	proto "github.com/golang/protobuf/proto"
+	math "math"
 	logutil "vitess.io/vitess/go/vt/proto/logutil"
 )
 

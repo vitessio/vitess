@@ -130,7 +130,11 @@ message Rule {
 // wins.
 message Filter {
   repeated Rule rules = 1;
-  bool bestEffortNameInFieldEvent = 2;
+  enum FieldEventMode {
+    ERR_ON_MISMATCH = 0;
+    BEST_EFFORT = 1;
+  }
+  FieldEventMode fieldEventMode = 2;
 }
 
 // OnDDLAction lists the possible actions for DDLs.

@@ -6,12 +6,11 @@ package throttlerservice
 import (
 	context "context"
 	fmt "fmt"
-	math "math"
-
 	proto "github.com/golang/protobuf/proto"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	math "math"
 	throttlerdata "vitess.io/vitess/go/vt/proto/throttlerdata"
 )
 
