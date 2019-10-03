@@ -406,9 +406,30 @@ func TestMySQLToType(t *testing.T) {
 }
 
 func TestTypeError(t *testing.T) {
-	_, err := MySQLToType(17, 0)
-	want := "unsupported type: 17"
+	_, err := MySQLToType(50, 0)
+	want := "unsupported type: 50"
 	if err == nil || err.Error() != want {
 		t.Errorf("MySQLToType: %v, want %s", err, want)
+	}
+}
+
+func TestTypeEquivalenceCheck(t *testing.T) {
+	if !AreTypesEquivalent(Int16, Int16) {
+		t.Errorf("Int16 and Int16 are same types.")
+	}
+	if AreTypesEquivalent(Int16, Int24) {
+		t.Errorf("Int16 and Int24 are not same types.")
+	}
+	if !AreTypesEquivalent(VarChar, VarBinary) {
+		t.Errorf("VarChar in binlog and VarBinary in schema are equivalent types.")
+	}
+	if AreTypesEquivalent(VarBinary, VarChar) {
+		t.Errorf("VarBinary in binlog and VarChar in schema are not equivalent types.")
+	}
+	if !AreTypesEquivalent(Int16, Uint16) {
+		t.Errorf("Int16 in binlog and Uint16 in schema are equivalent types.")
+	}
+	if AreTypesEquivalent(Uint16, Int16) {
+		t.Errorf("Uint16 in binlog and Int16 in schema are not equivalent types.")
 	}
 }
