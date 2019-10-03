@@ -356,11 +356,11 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		}
 		st := vs.se.GetTable(sqlparser.NewTableIdent(tm.Name))
 		if st == nil {
-			if !vs.filter.BestEffortNameInFieldEvent {
+			if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
 				return nil, fmt.Errorf("unknown table %v in schema", tm.Name)
 			}
 		} else {
-			if len(st.Columns) < len(tm.Types) && !vs.filter.BestEffortNameInFieldEvent {
+			if len(st.Columns) < len(tm.Types) && vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
 				return nil, fmt.Errorf("cannot determine table columns for %s: event has %d columns, current schema has %d: %#v", tm.Name, len(tm.Types), len(st.Columns), ev)
 			}
 			tableName = st.Name.String()
