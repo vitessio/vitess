@@ -92,12 +92,15 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 		return err
 	}
 	// For a SNAPSHOT keyspace, we have to look for backups of BaseKeyspace
-	if keyspaceInfo.BaseKeyspace != "" {
+	// Keyspace creation checks that BaseKeyspace is set for a SNAPSHOT keyspace,
+	// so we don't need to check again here
+	if keyspaceInfo.KeyspaceType == topodatapb.KeyspaceType_SNAPSHOT {
 		keyspaceDir = keyspaceInfo.BaseKeyspace
 		// If we belong to a SNAPSHOT keyspace, let us disable_active_reparents
 		// and disable replication_reporter
 		*mysqlctl.DisableActiveReparents = false
 		*enableReplicationReporter = false
+		log.Infof("Disabling active reparents and replication_reporter because tablet %v belongs to SNAPSHOT keyspace: %v", tablet.Alias, tablet.Keyspace)
 	}
 	dir := fmt.Sprintf("%v/%v", keyspaceDir, tablet.Shard)
 

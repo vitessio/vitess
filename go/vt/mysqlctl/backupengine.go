@@ -190,7 +190,7 @@ type BackupManifest struct {
 func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backupstorage.BackupHandle) (backupstorage.BackupHandle, error) {
 	var bh backupstorage.BackupHandle
 	var index int
-	// if a StartTime is provided in params, then find a backup that was taken before that time
+	// if a StartTime is provided in params, then find a backup that was taken at or before that time
 	checkBackupTime := !params.StartTime.IsZero()
 
 	for index = len(bhs) - 1; index >= 0; index-- {
@@ -210,7 +210,7 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 				continue
 			}
 		}
-		if !checkBackupTime /* not snapshot */ || backupTime.Before(params.StartTime) {
+		if !checkBackupTime /* not snapshot */ || backupTime.Equal(params.StartTime) || backupTime.Before(params.StartTime) {
 			params.Logger.Infof("Restore: found backup %v %v to restore", bh.Directory(), bh.Name())
 			break
 		}
