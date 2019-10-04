@@ -77,9 +77,9 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 		return err
 	}
 
-	// The external failover tool told us that we are still the MASTER. Update the
-	// timestamp to the current time.
-	agent.setExternallyReparentedTime(startTime)
+	// The external failover tool told us that we are still the MASTER.
+	// Update the timestamp to the current time (start a new term).
+	agent.setMasterTermStartTime(startTime)
 
 	// Create a reusable Reparent event with available info.
 	ev := &events.Reparent{
@@ -300,16 +300,4 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 
 	event.DispatchUpdate(ev, "finished")
 	return nil
-}
-
-// setExternallyReparentedTime remembers the last time when we were told we're
-// the master.
-// If another tablet claims to be master and offers a more recent time,
-// that tablet will be trusted over us.
-func (agent *ActionAgent) setExternallyReparentedTime(t time.Time) {
-	agent.mutex.Lock()
-	defer agent.mutex.Unlock()
-
-	agent._tabletExternallyReparentedTime = t
-	agent._replicationDelay = 0
 }

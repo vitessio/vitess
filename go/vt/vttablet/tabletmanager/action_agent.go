@@ -165,6 +165,16 @@ type ActionAgent struct {
 	// It's only set once in NewActionAgent() and never modified after that.
 	orc *orcClient
 
+	// shardSyncChan is a channel for informing the shard sync goroutine that
+	// it should wake up and recheck the tablet state, to make sure it and the
+	// shard record are in sync.
+	//
+	// Call agent.notifyShardSync() instead of sending directly to this channel.
+	shardSyncChan chan struct{}
+
+	// shardSyncCancel is the function to stop the background shard sync goroutine.
+	shardSyncCancel context.CancelFunc
+
 	// mutex protects all the following fields (that start with '_'),
 	// only hold the mutex to update the fields, nothing else.
 	mutex sync.Mutex
@@ -199,8 +209,8 @@ type ActionAgent struct {
 	// replication delay the last time we got it
 	_replicationDelay time.Duration
 
-	// last time we ran TabletExternallyReparented
-	_tabletExternallyReparentedTime time.Time
+	// _masterTermStartTime is the time at which our term as master began.
+	_masterTermStartTime time.Time
 
 	// _ignoreHealthErrorExpr can be set by RPC to selectively disable certain
 	// healthcheck errors. It should only be accessed while holding actionMutex.
@@ -438,6 +448,9 @@ func (agent *ActionAgent) setTablet(tablet *topodatapb.Tablet) {
 	agent.mutex.Lock()
 	agent._tablet = proto.Clone(tablet).(*topodatapb.Tablet)
 	agent.mutex.Unlock()
+
+	// Notify the shard sync loop that the tablet state changed.
+	agent.notifyShardSync()
 }
 
 // Tablet reads the stored Tablet from the agent, protected by mutex.
@@ -672,6 +685,10 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 	startingTablet.Type = topodatapb.TabletType_UNKNOWN
 	agent.setTablet(startingTablet)
 
+	// Start a background goroutine to watch and update the shard record,
+	// to make sure it and our tablet record are in sync.
+	agent.startShardSync()
+
 	return nil
 }
 
@@ -699,6 +716,7 @@ func (agent *ActionAgent) Close() {
 // while taking lameduck into account. However, this may be useful for tests,
 // when you want to clean up an agent immediately.
 func (agent *ActionAgent) Stop() {
+	agent.stopShardSync()
 	if agent.UpdateStream != nil {
 		agent.UpdateStream.Disable()
 	}
