@@ -5,6 +5,30 @@ To understand it better, you can run it.
 
 First you will need to [install docker-compose](https://docs.docker.com/compose/install/).
 
+### Programatically create Vitess configuration for Docker
+To create a configuration to your specifications, run vtcompose. Creates corresponding docker-compose file, vschema files per keyspace, and loads schemas.
+```
+vitess/examples/compose$ go run vtcompose.go
+```
+
+Use `-h` or `--help` to get list of flags with descriptions.
+
+Flags available:
+* **baseDockerComposeFile** - Specifies starting docker-compose yaml file.
+* **baseVschemaFile** - Specifies starting vschema json file.
+* **topologyFlags** - Specifies Vitess topology flags config
+* **webPort** - Specifies web port to be used.
+* **gRpcPort** - Specifies gRPC port to be used.
+* **mySqlPort** - Specifies mySql port to be used.
+* **cell** - `Specifies Vitess cell name to be used.
+* **keyspaceData** - List of `keyspace_name:num_of_shards:num_of_replica_tablets:schema_file_names:<optional>lookup_keyspace_name` separated by ' '. 
+    * This is where you specify most of the data for the program to build your vSchema and docker-compose files.
+    * Use `0` for `num_of_shards` to specify an unsharded keyspace
+    ```
+    e.g "test_keyspace:2:1:create_messages.sql,create_tokens.sql:lookup_keyspace lookup_keyspace:1:1:create_tokens_token_lookup.sql,create_messages_message_lookup.sql"
+    ```
+
+
 ### Start the cluster
 To start Consul(which saves the topology config), vtctld, vtgate and a few vttablets with MySQL running on them.
 ```
@@ -19,15 +43,17 @@ vitess/examples/compose$ docker-compose logs -f vtgate
 ```
 
 ### Load the schema
-We need to create a few tables into our new cluster. To do that, we can run the `ApplySchema` command.
-```
-vitess/examples/compose$ ./lvtctl.sh ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace
+***Note: Should not be needed if VtCompose was used.***
+
+We need to create a few tables into our new cluster. To do that, we can run the `ApplySchema` command.	
+```	
+vitess/examples/compose$ ./lvtctl.sh ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace	
 ```
 
-### Create Vschema
-Create Vschema
-```
-vitess/examples/compose$ ./lvtctl.sh ApplyVschema -vschema '{"tables": {"messages": {} } }' test_keyspace
+### Create Vschema	
+Create Vschema (should not be needed if VtCompose was used)
+```	
+vitess/examples/compose$ ./lvtctl.sh ApplyVschema -vschema '{"tables": {"messages": {} } }' test_keyspace	
 ```
 
 ### Run the client to insert and read some data
@@ -40,7 +66,7 @@ vitess/examples/compose$ ./client.sh
 ### Connect to vgate and run queries
 vtgate responds to the MySQL protocol, so we can connect to it using the default MySQL client command line.
 ```
-vitess/examples/compose$ ./lmysql.sh --port=15306 --host=127.0.0.1
+vitess/examples/compose$ mysql --port=15306 --host=127.0.0.1
 ```
 
 
@@ -113,15 +139,15 @@ vitess/examples/compose$ ./lfixrepl.sh
 ```
 
 ### Apply Vschema
-Apply Vschema for the unsharded keyspace
-```
-vitess/examples/compose$ ./lvtctl.sh ApplyVschema -vschema '{"sharded":false, "tables": {"*": {} } }' external_db_name
+Apply Vschema for the unsharded keyspace	
+```	
+vitess/examples/compose$ ./lvtctl.sh ApplyVschema -vschema '{"sharded":false, "tables": {"*": {} } }' external_db_name	
 ```
 
 ### Connect to vgate and run queries
 vtgate responds to the MySQL protocol, so we can connect to it using the default MySQL client command line.
 ```sh
-vitess/examples/compose$ ./lmysql.sh --port=15306 --host=<host of machine containers are running in e.g. 127.0.0.1, docker-machine ip e.t.c>
+vitess/examples/compose$ mysql --port=15306 --host=<host of machine containers are running in e.g. 127.0.0.1, docker-machine ip e.t.c>
 
 mysql> show databases;
 +--------------------+
@@ -157,7 +183,6 @@ mysql> show tables;
 ## Helper Scripts
 The following helper scripts are included to help you perform various actions easily
 * vitess/examples/compose/lvtctl.sh
-* vitess/examples/compose/lmysql.sh
 * vitess/examples/compose/lfixrepl.sh
 
 You may run them as below
