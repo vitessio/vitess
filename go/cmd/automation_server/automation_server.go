@@ -56,5 +56,7 @@ func main() {
 	}
 	scheduler.Run()
 	automationservicepb.RegisterAutomationServer(grpcServer, scheduler)
-	grpcServer.Serve(listener)
+	if err := grpcServer.Serve(listener); err != nil {
+		fmt.Println(err)
+	}
 }
