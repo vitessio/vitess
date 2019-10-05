@@ -21,4 +21,4 @@ if [[ "$OSTYPE" == "msys" ]]; then
 fi
 
 # This is a convenience script to run vtctlclient against the local example.
-exec $tty docker-compose exec ${CS:-vttablet1} vtctlclient -server vtctld:15999 "$@"
+exec docker-compose run vtctld vtctlclient -server vtctld:15999 "$@"
