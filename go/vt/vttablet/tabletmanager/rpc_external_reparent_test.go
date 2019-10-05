@@ -19,6 +19,8 @@ package tabletmanager
 import (
 	"context"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestTabletExternallyReparentedAlwaysUpdatesTimestamp(t *testing.T) {
@@ -42,4 +44,14 @@ func TestTabletExternallyReparentedAlwaysUpdatesTimestamp(t *testing.T) {
 	if ter1 == ter2 {
 		t.Fatalf("subsequent TER call did not update the timestamp: %v = %v", ter1, ter2)
 	}
+}
+
+func TestShouldNotReparent(t *testing.T) {
+	ctx := context.Background()
+	agent := createTestAgent(ctx, t, nil)
+	soTrue := true
+	neverReparent = &soTrue
+
+	err := agent.TabletExternallyReparented(ctx, "unused_id")
+	assert.Error(t, err)
 }
