@@ -119,7 +119,9 @@ func (b *Bench) Run(ctx context.Context) error {
 	}
 
 	b.createThreads(ctx)
-	b.runTest(ctx)
+	if err := b.runTest(ctx); err != nil {
+		return err
+	}
 	return nil
 }
 
