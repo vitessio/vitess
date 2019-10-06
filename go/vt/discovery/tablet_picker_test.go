@@ -17,8 +17,9 @@ limitations under the License.
 package discovery
 
 import (
-	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
@@ -121,10 +122,12 @@ func TestPickError(t *testing.T) {
 	}
 	defer tp.Close()
 
-	_, err = tp.PickForStreaming(context.Background())
-	want = fmt.Sprintf("can't find any healthy source tablet for %s 0 [REPLICA RDONLY]", te.keyspace)
-	if err == nil || err.Error() != want {
-		t.Errorf("Pick err: %v, want %v", err, want)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_, err = tp.PickForStreaming(ctx)
+	want = "error waiting for tablets"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Pick err: %v, must contain %v", err, want)
 	}
 }
 
