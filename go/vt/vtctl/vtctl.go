@@ -1638,16 +1638,17 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 			wr.Logger().Infof("error from GetVSchema for base_keyspace: %v, %v", *baseKeyspace, err)
 			if topo.IsErrType(err, topo.NoNode) {
 				vs = &vschemapb.Keyspace{
-					Sharded:      false,
-					Tables:       make(map[string]*vschemapb.Table),
-					Vindexes:     make(map[string]*vschemapb.Vindex),
-					KeyspaceType: ktype,
+					Sharded:                false,
+					Tables:                 make(map[string]*vschemapb.Table),
+					Vindexes:               make(map[string]*vschemapb.Vindex),
+					RequireExplicitRouting: true,
 				}
 			} else {
 				return err
 			}
 		} else {
-			vs.KeyspaceType = ktype
+			// SNAPSHOT keyspaces are excluded from global routing.
+			vs.RequireExplicitRouting = true
 		}
 		if err := wr.TopoServer().SaveVSchema(ctx, keyspace, vs); err != nil {
 			wr.Logger().Infof("error from SaveVSchema %v:%v", vs, err)

@@ -225,12 +225,8 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 			return err
 		}
 
-		// SNAPSHOT keyspaces are excluded from global routing.
-		// We only have 2 keyspace types as of now, NORMAL and SNAPSHOT.
-		// We check for NORMAL here so that if a new keyspace type is
-		// introduced we will need to explicitly decide to include it
-		// in the global routing rather than have it happen by default.
-		if ks.KeyspaceType == topodatapb.KeyspaceType_NORMAL {
+		// If the keyspace requires explicit routing, don't include it in global routing
+		if !ks.RequireExplicitRouting {
 			if _, ok := vschema.uniqueVindexes[vname]; ok {
 				vschema.uniqueVindexes[vname] = nil
 			} else {
@@ -334,8 +330,8 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 		t.Ordered = colVindexSorted(t.ColumnVindexes)
 
 		// Add the table to the map entries.
-		// SNAPSHOT keyspaces are excluded from global routing.
-		if ks.KeyspaceType == topodatapb.KeyspaceType_NORMAL {
+		// If the keyspace requires explicit routing, don't include it in global routing
+		if !ks.RequireExplicitRouting {
 			if _, ok := vschema.uniqueTables[tname]; ok {
 				vschema.uniqueTables[tname] = nil
 			} else {
