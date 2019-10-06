@@ -156,6 +156,8 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 			case node.Name.EqualString("last_insert_id"):
 				if rb, isRoute := pb.bldr.(*route); !isRoute || !rb.removeShardedOptions() {
 					return false, errors.New("unsupported: LAST_INSERT_ID is only allowed for unsharded keyspaces")
+				} else if rb.containsDualTable() {
+					return false, errors.New("unsupported: LAST_INSERT_ID is not allowed for dual table")
 				}
 			}
 			return true, nil
