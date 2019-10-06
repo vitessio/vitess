@@ -503,6 +503,15 @@ func (rb *route) removeShardedOptions() bool {
 	})
 }
 
+func (rb *route) containsDualTable() bool {
+	for _, ro := range rb.routeOptions {
+		if ro.vschemaTable.Name.String() == "dual" {
+			return true
+		}
+	}
+	return false
+}
+
 // removeOptionsWithUnmatchedKeyspace removes all options that don't match
 // the specified keyspace. It returns false if no such options exist.
 func (rb *route) removeOptionsWithUnmatchedKeyspace(keyspace string) bool {

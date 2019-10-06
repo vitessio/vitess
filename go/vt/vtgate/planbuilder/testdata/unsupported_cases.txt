@@ -71,6 +71,10 @@
 "select last_insert_id() from user"
 "unsupported: LAST_INSERT_ID is only allowed for unsharded keyspaces"
 
+# last_insert_id for dual table
+"select last_insert_id() from dual"
+"unsupported: LAST_INSERT_ID is not allowed for dual table"
+
 # natural join
 "select * from user natural join user_extra"
 "unsupported: natural join"

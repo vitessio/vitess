@@ -392,18 +392,18 @@
 "NEXT used on a non-sequence table"
 
 # last_insert_id for unsharded route
-"select last_insert_id() from main.dual"
+"select last_insert_id() from unsharded"
 {
-  "Original": "select last_insert_id() from main.dual",
+  "Original": "select last_insert_id() from unsharded",
   "Instructions": {
     "Opcode": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "select last_insert_id() from dual",
-    "FieldQuery": "select last_insert_id() from dual where 1 != 1",
-    "Table": "dual"
+    "Query": "select last_insert_id() from unsharded",
+    "FieldQuery": "select last_insert_id() from unsharded where 1 != 1",
+    "Table": "unsharded"
   }
 }
 

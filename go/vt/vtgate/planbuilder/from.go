@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -240,12 +241,19 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 			eroute.TargetDestination = destTarget
 			eroute.TargetTabletType = destTableType
 		default:
-			// Pinned tables have their keyspace ids already assigned.
-			// Use the Binary vindex, which is the identity function
-			// for keyspace id. Currently only dual tables are pinned.
-			eroute = engine.NewSimpleRoute(engine.SelectEqualUnique, vst.Keyspace)
-			eroute.Vindex, _ = vindexes.NewBinary("binary", nil)
-			eroute.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vst.Pinned)}}
+			// In some cases, JDBC Driver may produce tons of pointless queries like 'select 1 from dual',
+			// 'select @@session.tx_read_only from dual',etc. To avoid causing significant burden on one
+			// specific vttablet, we treat those 'dual' table queries as SelectReference.
+			if strings.EqualFold(tableName.Name.String(), "dual") && tableName.Qualifier.String() == "" {
+				eroute = engine.NewSimpleRoute(engine.SelectReference, vst.Keyspace)
+			} else {
+				// Pinned tables have their keyspace ids already assigned.
+				// Use the Binary vindex, which is the identity function
+				// for keyspace id. Currently only dual tables are pinned.
+				eroute = engine.NewSimpleRoute(engine.SelectEqualUnique, vst.Keyspace)
+				eroute.Vindex, _ = vindexes.NewBinary("binary", nil)
+				eroute.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vst.Pinned)}}
+			}
 		}
 		// set table name into route
 		eroute.TableName = vst.Name.String()
