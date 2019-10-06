@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"time"
 
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/golang/protobuf/proto"
@@ -50,7 +51,7 @@ type controller struct {
 	id           uint32
 	source       binlogdatapb.BinlogSource
 	stopPos      string
-	tabletPicker *tabletPicker
+	tabletPicker *discovery.TabletPicker
 
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -99,7 +100,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	if v, ok := params["tablet_types"]; ok {
 		tabletTypesStr = v
 	}
-	tp, err := newTabletPicker(ctx, ts, cell, ct.source.Keyspace, ct.source.Shard, tabletTypesStr)
+	tp, err := discovery.NewTabletPicker(ctx, ts, cell, ct.source.Keyspace, ct.source.Shard, tabletTypesStr)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +170,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	}
 	defer dbClient.Close()
 
-	tablet, err := ct.tabletPicker.Pick(ctx)
+	tablet, err := ct.tabletPicker.PickForStreaming(ctx)
 	if err != nil {
 		return err
 	}
