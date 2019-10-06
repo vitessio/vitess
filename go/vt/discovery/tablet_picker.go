@@ -75,21 +75,18 @@ func NewTabletPicker(ctx context.Context, ts *topo.Server, cell, keyspace, shard
 // PickForStreaming picks all healthy tablets including the non-serving ones.
 func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Tablet, error) {
 	// wait for any of required the tablets (useful for the first run at least, fast for next runs)
-	if err := tp.statsCache.WaitForAnyTablet(ctx, tp.cell, tp.keyspace, tp.shard, tp.tabletTypes); err != nil {
+	if err := tp.statsCache.WaitByFilter(ctx, tp.keyspace, tp.shard, tp.tabletTypes, RemoveUnhealthyTablets); err != nil {
 		return nil, vterrors.Wrapf(err, "error waiting for tablets for %v %v %v", tp.cell, tp.keyspace, tp.shard)
 	}
 
-	// Find the server list from the health check.
-	// Note: We cannot use statsCache.GetHealthyTabletStats() here because it does
-	// not return non-serving tablets. We must include non-serving tablets because
-	// some tablets may not be serving if their traffic was already migrated to the
-	// destination shards.
+	// Refilter the tablets list based on the same criteria.
 	for _, tabletType := range tp.tabletTypes {
 		addrs := RemoveUnhealthyTablets(tp.statsCache.GetTabletStats(tp.keyspace, tp.shard, tabletType))
 		if len(addrs) > 0 {
 			return addrs[rand.Intn(len(addrs))].Tablet, nil
 		}
 	}
+	// Unreachable.
 	return nil, fmt.Errorf("can't find any healthy source tablet for %v %v %v", tp.keyspace, tp.shard, tp.tabletTypes)
 }
 
