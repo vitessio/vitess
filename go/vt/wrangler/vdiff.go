@@ -26,18 +26,24 @@ import (
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 )
 
 type vdiff struct {
-	mi      *migrater
-	differs map[string]*tableDiffer
+	wr       *Wrangler
+	workflow string
+	differs  map[string]*tableDiffer
+	sources  map[string]*dfParams
+	targets  map[string]*dfParams
 }
 
 type tableDiffer struct {
@@ -46,6 +52,12 @@ type tableDiffer struct {
 	sourceExpression string
 	compareCols      []int
 	orderBy          []engine.OrderbyParams
+}
+
+type dfParams struct {
+	master   *topo.TabletInfo
+	tablet   *topo.TabletInfo
+	position mysql.Position
 }
 
 // VDiff reports differences between the sources and targets of a vreplication workflow.
@@ -59,10 +71,23 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow string, 
 		mi.wr.Logger().Errorf("validate failed: %v", err)
 		return err
 	}
+	df := &vdiff{
+		wr:       wr,
+		workflow: workflow,
+		sources:  make(map[string]*dfParams),
+		targets:  make(map[string]*dfParams),
+	}
+	for shard, source := range mi.sources {
+		df.sources[shard] = &dfParams{
+			master: source.master,
+		}
+	}
 	var oneTarget *miTarget
-	for _, target := range mi.targets {
+	for shard, target := range mi.targets {
+		df.targets[shard] = &dfParams{
+			master: target.master,
+		}
 		oneTarget = target
-		break
 	}
 	var oneFilter *binlogdatapb.Filter
 	for _, bls := range oneTarget.sources {
@@ -73,12 +98,12 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow string, 
 	if err != nil {
 		return err
 	}
-	_, err = buildVDiffPlan(ctx, oneFilter, schm)
+	df.differs, err = buildVDiffPlan(ctx, oneFilter, schm)
 	return err
 }
 
 func buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter, schm *tabletmanagerdatapb.SchemaDefinition) (map[string]*tableDiffer, error) {
-	tableDiffers := make(map[string]*tableDiffer)
+	differs := make(map[string]*tableDiffer)
 	for _, table := range schm.TableDefinitions {
 		rule, err := vreplication.MatchTable(table.Name, filter)
 		if err != nil {
@@ -93,12 +118,12 @@ func buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter, schm *tabl
 			buf.Myprintf("select * from %v", sqlparser.NewTableIdent(table.Name))
 			query = buf.String()
 		}
-		tableDiffers[table.Name], err = buildDifferPlan(table, query)
+		differs[table.Name], err = buildDifferPlan(table, query)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return tableDiffers, nil
+	return differs, nil
 }
 
 func buildDifferPlan(table *tabletmanagerdatapb.TableDefinition, query string) (*tableDiffer, error) {
@@ -195,18 +220,17 @@ func buildDifferPlan(table *tabletmanagerdatapb.TableDefinition, query string) (
 	return td, nil
 }
 
-func (df *vdiff) stopTargetStreams(ctx context.Context) (map[string]mysql.Position, error) {
+func (df *vdiff) stopTargetStreams(ctx context.Context) error {
 	var mu sync.Mutex
-	stoppedPositions := make(map[string]mysql.Position)
 
-	err := df.mi.forAllTargets(func(target *miTarget) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for vdiff' where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(df.mi.workflow))
-		_, err := df.mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
+	err := df.forAll(df.targets, func(target *dfParams) error {
+		query := fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for vdiff' where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(df.workflow))
+		_, err := df.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
 		if err != nil {
 			return err
 		}
-		query = fmt.Sprintf("select source, pos from _vt.vreplication where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(df.mi.workflow))
-		p3qr, err := df.mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
+		query = fmt.Sprintf("select source, pos from _vt.vreplication where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(df.workflow))
+		p3qr, err := df.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
 		if err != nil {
 			return err
 		}
@@ -225,64 +249,40 @@ func (df *vdiff) stopTargetStreams(ctx context.Context) (map[string]mysql.Positi
 				mu.Lock()
 				defer mu.Unlock()
 
-				prev, ok := stoppedPositions[bls.Shard]
-				if ok && prev.AtLeast(pos) {
+				source, ok := df.sources[bls.Shard]
+				if !ok {
+					// Unreachable.
 					return
 				}
-				stoppedPositions[bls.Shard] = pos
+				if !source.position.IsZero() && source.position.AtLeast(pos) {
+					return
+				}
+				source.position = pos
 			}()
 		}
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return stoppedPositions, nil
+	return nil
 }
 
-func (df *vdiff) waitForSourceStreams(ctx context.Context) (map[string]mysql.Position, error) {
-	var mu sync.Mutex
-	stoppedPositions := make(map[string]mysql.Position)
+func (df *vdiff) forAll(participants map[string]*dfParams, f func(*dfParams) error) error {
+	var wg sync.WaitGroup
+	allErrors := &concurrency.AllErrorRecorder{}
+	for _, participant := range participants {
+		wg.Add(1)
+		go func(participant *dfParams) {
+			defer wg.Done()
 
-	err := df.mi.forAllTargets(func(target *miTarget) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for vdiff' where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(df.mi.workflow))
-		_, err := df.mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
-		if err != nil {
-			return err
-		}
-		query = fmt.Sprintf("select source, pos from _vt.vreplication where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(df.mi.workflow))
-		p3qr, err := df.mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
-		if err != nil {
-			return err
-		}
-		qr := sqltypes.Proto3ToResult(p3qr)
-
-		for _, row := range qr.Rows {
-			var bls binlogdatapb.BinlogSource
-			if err := proto.UnmarshalText(row[0].ToString(), &bls); err != nil {
-				return err
+			if err := f(participant); err != nil {
+				allErrors.RecordError(err)
 			}
-			pos, err := mysql.DecodePosition(row[1].ToString())
-			if err != nil {
-				return err
-			}
-			func() {
-				mu.Lock()
-				defer mu.Unlock()
-
-				prev, ok := stoppedPositions[bls.Shard]
-				if ok && prev.AtLeast(pos) {
-					return
-				}
-				stoppedPositions[bls.Shard] = pos
-			}()
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
+		}(participant)
 	}
-	return stoppedPositions, nil
+	wg.Wait()
+	return allErrors.AggrError(vterrors.Aggregate)
 }
 
 func removeKeyrange(where *sqlparser.Where) *sqlparser.Where {
