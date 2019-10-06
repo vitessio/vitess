@@ -21,9 +21,6 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/event"
@@ -43,17 +40,7 @@ var (
 	finalizeReparentTimeout = flag.Duration("finalize_external_reparent_timeout", 30*time.Second, "Timeout for the finalize stage of a fast external reparent reconciliation.")
 
 	externalReparentStats = stats.NewTimings("ExternalReparents", "External reparenting time", "stage", "NewMasterVisible", "FullRebuild")
-
-	neverReparent = flag.Bool("never_reparent", false, "if set to true, this tablet will not become MASTER")
 )
-
-// IsItSafeToReparent returns nil if we can reparent, and an error if we shouldn't
-func IsItSafeToReparent() error {
-	if *neverReparent {
-		return vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "never_reparent set to true, so will not reparent")
-	}
-	return nil
-}
 
 // SetReparentFlags changes flag values. It should only be used in tests.
 func SetReparentFlags(timeout time.Duration) {
@@ -63,10 +50,6 @@ func SetReparentFlags(timeout time.Duration) {
 // TabletExternallyReparented updates all topo records so the current
 // tablet is the new master for this shard.
 func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, externalID string) error {
-	err := IsItSafeToReparent()
-	if err != nil {
-		return err
-	}
 	if err := agent.lock(ctx); err != nil {
 		return err
 	}
