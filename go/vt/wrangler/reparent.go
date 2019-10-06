@@ -26,8 +26,6 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
-
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
@@ -331,10 +329,6 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 // PlannedReparentShard will make the provided tablet the master for the shard,
 // when both the current and new master are reachable and in good shape.
 func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias, avoidMasterAlias *topodatapb.TabletAlias, waitSlaveTimeout time.Duration) (err error) {
-	err = tabletmanager.IsItSafeToReparent()
-	if err != nil {
-		return err
-	}
 	// lock the shard
 	lockAction := fmt.Sprintf(
 		"PlannedReparentShard(%v, avoid_master=%v)",
@@ -610,11 +604,6 @@ func (wr *Wrangler) chooseNewMaster(
 // EmergencyReparentShard will make the provided tablet the master for
 // the shard, when the old master is completely unreachable.
 func (wr *Wrangler) EmergencyReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias *topodatapb.TabletAlias, waitSlaveTimeout time.Duration) (err error) {
-	err = tabletmanager.IsItSafeToReparent()
-	if err != nil {
-		return err
-	}
-
 	// lock the shard
 	ctx, unlock, lockErr := wr.ts.LockShard(ctx, keyspace, shard, fmt.Sprintf("EmergencyReparentShard(%v)", topoproto.TabletAliasString(masterElectTabletAlias)))
 	if lockErr != nil {
