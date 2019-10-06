@@ -21,7 +21,6 @@ option go_package = "vitess.io/vitess/go/vt/proto/vschema";
 
 package vschema;
 
-import "topodata.proto";
 import "query.proto";
 
 // RoutingRules specify the high level routing rules for the VSchema.
@@ -44,7 +43,8 @@ message Keyspace {
   bool sharded = 1;
   map<string, Vindex> vindexes = 2;
   map<string, Table> tables = 3;
-  topodata.KeyspaceType keyspace_type = 4;
+  // If require_explicit_routing is true, vindexes and tables are not added to global routing
+  bool require_explicit_routing = 4;
 }
 
 // Vindex is the vindex info for a Keyspace.
