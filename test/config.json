@@ -285,6 +285,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"recovery": {
+			"File": "recovery.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"reparent": {
 			"File": "reparent.py",
 			"Args": [],
@@ -338,6 +347,15 @@
 		},
 		"sharded": {
 			"File": "sharded.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"sharded_recovery": {
+			"File": "sharded_recovery.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
@@ -538,6 +556,15 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"xb_recovery": {
+			"File": "xb_recovery.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": []
 		},

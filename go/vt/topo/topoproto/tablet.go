@@ -34,8 +34,8 @@ import (
 // This file contains the topodata.Tablet utility functions.
 
 const (
-	// Default name for databases is the prefix plus keyspace
-	vtDbPrefix = "vt_"
+	// VtDbPrefix + keyspace is the default name for databases.
+	VtDbPrefix = "vt_"
 )
 
 // cache the conversion from tablet type enum to lower case string.
@@ -258,7 +258,7 @@ func TabletDbName(tablet *topodatapb.Tablet) string {
 	if tablet.Keyspace == "" {
 		return ""
 	}
-	return vtDbPrefix + tablet.Keyspace
+	return VtDbPrefix + tablet.Keyspace
 }
 
 // TabletIsAssigned returns if this tablet is assigned to a keyspace and shard.

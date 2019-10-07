@@ -26,11 +26,22 @@ option java_package="io.vitess.proto";
 
 package topodata;
 
+import "time.proto";
+
 // KeyRange describes a range of sharding keys, when range-based
 // sharding is used.
 message KeyRange {
   bytes start = 1;
   bytes end = 2;
+}
+
+// KeyspaceType describes the type of the keyspace
+enum KeyspaceType {
+  // NORMAL is the default value
+  NORMAL = 0;
+
+  // SNAPSHOT is when we are creating a snapshot keyspace
+  SNAPSHOT = 1;
 }
 
 // KeyspaceIdType describes the type of the sharding key for a
@@ -266,6 +277,21 @@ message Keyspace {
   // ServedFrom will redirect the appropriate traffic to
   // another keyspace.
   repeated ServedFrom served_froms = 4;
+
+  // keyspace_type will determine how this keyspace is treated by
+  // vtgate / vschema. Normal keyspaces are routable by
+  // any query. Snapshot keyspaces are only accessible
+  // by explicit addresssing or by calling "use keyspace" first
+  KeyspaceType keyspace_type = 5;
+
+  // base_keyspace is the base keyspace from which a snapshot
+  // keyspace is created. empty for normal keyspaces
+  string base_keyspace = 6;
+  
+  // snapshot_time (in UTC) is a property of snapshot
+  // keyspaces which tells us what point in time
+  // the snapshot is of
+  vttime.Time snapshot_time = 7;  
 }
 
 // ShardReplication describes the MySQL replication relationships
