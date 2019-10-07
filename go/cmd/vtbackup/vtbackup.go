@@ -151,7 +151,6 @@ func main() {
 	}()
 
 	// Open connection backup storage.
-	backupDir := fmt.Sprintf("%v/%v", *initKeyspace, *initShard)
 	backupStorage, err := backupstorage.GetBackupStorage()
 	if err != nil {
 		log.Errorf("Can't get backup storage: %v", err)
@@ -165,13 +164,14 @@ func main() {
 	// Try to take a backup, if it's been long enough since the last one.
 	// Skip pruning if backup wasn't fully successful. We don't want to be
 	// deleting things if the backup process is not healthy.
+	backupDir := mysqlctl.GetBackupDir(*initKeyspace, *initShard)
 	doBackup, err := shouldBackup(ctx, topoServer, backupStorage, backupDir)
 	if err != nil {
 		log.Errorf("Can't take backup: %v", err)
 		exit.Return(1)
 	}
 	if doBackup {
-		if err := takeBackup(ctx, topoServer, backupStorage, backupDir); err != nil {
+		if err := takeBackup(ctx, topoServer, backupStorage); err != nil {
 			log.Errorf("Failed to take backup: %v", err)
 			exit.Return(1)
 		}
@@ -184,7 +184,7 @@ func main() {
 	}
 }
 
-func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage backupstorage.BackupStorage, backupDir string) error {
+func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage backupstorage.BackupStorage) error {
 	// This is an imaginary tablet alias. The value doesn't matter for anything,
 	// except that we generate a random UID to ensure the target backup
 	// directory is unique if multiple vtbackup instances are launched for the
@@ -272,6 +272,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		return nil
 	}
 
+	backupDir := mysqlctl.GetBackupDir(*initKeyspace, *initShard)
 	log.Infof("Restoring latest backup from directory %v", backupDir)
 	params := mysqlctl.RestoreParams{
 		Cnf:                 mycnf,
@@ -282,7 +283,8 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		LocalMetadata:       map[string]string{},
 		DeleteBeforeRestore: true,
 		DbName:              dbName,
-		Dir:                 backupDir,
+		Keyspace:            *initKeyspace,
+		Shard:               *initShard,
 	}
 	backupManifest, err := mysqlctl.Restore(ctx, params)
 	var restorePos mysql.Position
