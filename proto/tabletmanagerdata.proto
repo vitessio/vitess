@@ -275,6 +275,13 @@ message MasterPositionResponse {
   string position = 1;
 }
 
+message WaitForPositionRequest {
+  string position = 1;
+}
+
+message WaitForPositionResponse {
+}
+
 message StopSlaveRequest {
 }
 

@@ -116,6 +116,9 @@ type TabletManagerClient interface {
 	// MasterPosition returns the tablet's master position
 	MasterPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error)
 
+	// WaitForPosition waits for the position to be reached
+	WaitForPosition(ctx context.Context, tablet *topodatapb.Tablet, pos string) error
+
 	// StopSlave stops the mysql replication
 	StopSlave(ctx context.Context, tablet *topodatapb.Tablet) error
 
