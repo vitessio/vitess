@@ -325,7 +325,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		case sqlparser.StmtOther:
 			// These are DBA statements like REPAIR that can be ignored.
 		default:
-			return nil, fmt.Errorf("unexpected statement type %s in row-based replication: %q", sqlparser.StmtType(cat), q.SQL)
+			return nil, fmt.Errorf("unexpected statement type %s in row-based replication: %q", cat, q.SQL)
 		}
 	case ev.IsTableMap():
 		// This is very frequent. It precedes every row event.
@@ -342,17 +342,50 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			vs.plans[id] = nil
 			return nil, nil
 		}
+		tableName := tm.Name
+		var cols []schema.TableColumn
+		for i, typ := range tm.Types {
+			t, err := sqltypes.MySQLToType(int64(typ), 0)
+			if err != nil {
+				return nil, fmt.Errorf("unsupported type: %d, position: %d", typ, i)
+			}
+			cols = append(cols, schema.TableColumn{
+				Name: sqlparser.NewColIdent(fmt.Sprintf("@%d", i+1)),
+				Type: t,
+			})
+		}
 		st := vs.se.GetTable(sqlparser.NewTableIdent(tm.Name))
 		if st == nil {
-			return nil, fmt.Errorf("unknown table %v in schema", tm.Name)
+			if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
+				return nil, fmt.Errorf("unknown table %v in schema", tm.Name)
+			}
+		} else {
+			if len(st.Columns) < len(tm.Types) && vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
+				return nil, fmt.Errorf("cannot determine table columns for %s: event has %d columns, current schema has %d: %#v", tm.Name, len(tm.Types), len(st.Columns), ev)
+			}
+			tableName = st.Name.String()
+			// check if the schema returned by schema.Engine matches with row.
+			schemaMatch := true
+			if len(tm.Types) <= len(st.Columns) {
+				for i := range tm.Types {
+					t := cols[i].Type
+					if !sqltypes.AreTypesEquivalent(t, st.Columns[i].Type) {
+						schemaMatch = false
+						break
+					}
+				}
+			} else {
+				schemaMatch = false
+			}
+			if schemaMatch {
+				// Columns should be truncated to match those in tm.
+				cols = st.Columns[:len(tm.Types)]
+			}
 		}
-		if len(st.Columns) < len(tm.Types) {
-			return nil, fmt.Errorf("cannot determine table columns for %s: event has %d columns, current schema has %d: %#v", tm.Name, len(tm.Types), len(st.Columns), ev)
-		}
+
 		table := &Table{
-			Name: st.Name.String(),
-			// Columns should be truncated to match those in tm.
-			Columns: st.Columns[:len(tm.Types)],
+			Name:    tableName,
+			Columns: cols,
 		}
 		plan, err := buildPlan(table, vs.kschema, vs.filter)
 		if err != nil {
