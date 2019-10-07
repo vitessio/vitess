@@ -636,6 +636,10 @@ func (itmc *internalTabletManagerClient) MasterPosition(ctx context.Context, tab
 	return "", fmt.Errorf("not implemented in vtcombo")
 }
 
+func (itmc *internalTabletManagerClient) WaitForPosition(ctx context.Context, tablet *topodatapb.Tablet, pos string) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) StopSlave(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }
