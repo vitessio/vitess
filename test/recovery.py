@@ -152,7 +152,11 @@ class TestRecovery(unittest.TestCase):
                      '-snapshot_time',
                      datetime.utcnow().isoformat("T")+"Z",
                      keyspace])
-    xtra_args = tablet.get_backup_storage_flags()
+    # set disable_active_reparents to true and enable_replication_reporter to false
+    # otherwise replication_reporter will try to restart replication
+    xtra_args = ['-disable_active_reparents',
+                 '-enable_replication_reporter=false']
+    xtra_args.extend(tablet.get_backup_storage_flags())
     if use_xtrabackup:
       xtra_args.extend(xtrabackup_args)
 

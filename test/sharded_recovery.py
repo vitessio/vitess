@@ -169,12 +169,17 @@ class TestShardedRecovery(unittest.TestCase):
                      datetime.datetime.utcnow().isoformat("T")+"Z",
                      keyspace])
     
+    # set disable_active_reparents to true and enable_replication_reporter to false
+    # otherwise replication_reporter will try to restart replication
+    xtra_args = ['-disable_active_reparents',
+                 '-enable_replication_reporter=false']
+    xtra_args.extend(tablet.get_backup_storage_flags())
     t.start_vttablet(wait_for_state='SERVING',
                      init_tablet_type='replica',
                      init_keyspace=keyspace,
                      init_shard=shard,
                      supports_backups=True,
-                     extra_args=tablet.get_backup_storage_flags())
+                     extra_args=xtra_args)
 
   def _reset_tablet_dir(self, t):
     """Stop mysql, delete everything including tablet dir, restart mysql."""
