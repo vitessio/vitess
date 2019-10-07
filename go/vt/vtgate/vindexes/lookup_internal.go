@@ -84,19 +84,21 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sql
 
 // Verify returns true if ids map to values.
 func (lkp *lookupInternal) Verify(vcursor VCursor, ids, values []sqltypes.Value) ([]bool, error) {
+	co := vtgatepb.CommitOrder_NORMAL
+	if lkp.Autocommit {
+		co = vtgatepb.CommitOrder_AUTOCOMMIT
+	}
+	return lkp.VerifyCustom(vcursor, ids, values, co)
+}
+
+func (lkp *lookupInternal) VerifyCustom(vcursor VCursor, ids, values []sqltypes.Value, co vtgatepb.CommitOrder) ([]bool, error) {
 	out := make([]bool, len(ids))
 	for i, id := range ids {
 		bindVars := map[string]*querypb.BindVariable{
 			lkp.FromColumns[0]: sqltypes.ValueBindVariable(id),
 			lkp.To:             sqltypes.ValueBindVariable(values[i]),
 		}
-		var err error
-		var result *sqltypes.Result
-		co := vtgatepb.CommitOrder_NORMAL
-		if lkp.Autocommit {
-			co = vtgatepb.CommitOrder_AUTOCOMMIT
-		}
-		result, err = vcursor.Execute("VindexVerify", lkp.ver, bindVars, false /* isDML */, co)
+		result, err := vcursor.Execute("VindexVerify", lkp.ver, bindVars, false /* isDML */, co)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Verify: %v", err)
 		}
