@@ -193,7 +193,7 @@ func (agent *ActionAgent) abortMasterTerm(ctx context.Context, masterAlias *topo
 	if *mysqlctl.DisableActiveReparents {
 		// Don't touch anything at the MySQL level. Just update tablet state.
 		log.Infof("Active reparents are disabled; updating tablet state only.")
-		return agent.SlaveWasRestarted(ctx, masterAlias)
+		return agent.ChangeType(ctx, topodatapb.TabletType_REPLICA)
 	}
 
 	// Do a full demotion to convert MySQL into a replica.

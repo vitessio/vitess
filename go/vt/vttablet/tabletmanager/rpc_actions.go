@@ -76,6 +76,11 @@ func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topodatapb.
 		return err
 	}
 
+	// If we have been told we're master, update master term start time.
+	if tabletType == topodatapb.TabletType_MASTER {
+		agent.setMasterTermStartTime(time.Now())
+	}
+
 	// let's update our internal state (stop query service and other things)
 	if err := agent.refreshTablet(ctx, "ChangeType"); err != nil {
 		return err
