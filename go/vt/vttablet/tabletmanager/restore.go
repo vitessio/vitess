@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // This file handles the initial backup restore upon startup.
@@ -91,15 +92,12 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	}
 	// For a SNAPSHOT keyspace, we have to look for backups of BaseKeyspace
 	// so we will pass the BaseKeyspace in RestoreParams instead of tablet.Keyspace
-	// Keyspace creation checks that BaseKeyspace is set for a SNAPSHOT keyspace,
-	// so we don't need to check again here
 	if keyspaceInfo.KeyspaceType == topodatapb.KeyspaceType_SNAPSHOT {
+		if keyspaceInfo.BaseKeyspace == "" {
+			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Sprintf("snapshot keyspace %v has no base_keyspace set", tablet.Keyspace))
+		}
 		keyspace = keyspaceInfo.BaseKeyspace
-		// If we belong to a SNAPSHOT keyspace, let us disable_active_reparents
-		// and disable replication_reporter
-		*mysqlctl.DisableActiveReparents = false
-		*enableReplicationReporter = false
-		log.Infof("Disabling active reparents and replication_reporter because tablet %v belongs to SNAPSHOT keyspace: %v", tablet.Alias, tablet.Keyspace)
+		log.Infof("Using base_keyspace %v to restore keyspace %v", keyspace, tablet.Keyspace)
 	}
 
 	params := mysqlctl.RestoreParams{
