@@ -94,7 +94,7 @@ var (
 // - remember if we were replicating, restore the exact same state
 func Backup(ctx context.Context, params BackupParams) error {
 
-	dir := fmt.Sprintf("%v/%v", params.Keyspace, params.Shard)
+	backupDir := GetBackupDir(params.Keyspace, params.Shard)
 	name := fmt.Sprintf("%v.%v", params.BackupTime.UTC().Format(BackupTimestampFormat), params.TabletAlias)
 	// Start the backup with the BackupStorage.
 	bs, err := backupstorage.GetBackupStorage()
@@ -102,7 +102,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 		return vterrors.Wrap(err, "unable to get backup storage")
 	}
 	defer bs.Close()
-	bh, err := bs.StartBackup(ctx, dir, name)
+	bh, err := bs.StartBackup(ctx, backupDir, name)
 	if err != nil {
 		return vterrors.Wrap(err, "StartBackup failed")
 	}
@@ -254,14 +254,17 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	}
 	defer bs.Close()
 
-	bhs, err := bs.ListBackups(ctx, params.Dir)
+	// Backups are stored in a directory structure that starts with
+	// <keyspace>/<shard>
+	backupDir := GetBackupDir(params.Keyspace, params.Shard)
+	bhs, err := bs.ListBackups(ctx, backupDir)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "ListBackups failed")
 	}
 
 	if len(bhs) == 0 {
 		// There are no backups (not even broken/incomplete ones).
-		params.Logger.Errorf("no backup to restore on BackupStorage for directory %v. Starting up empty.", params.Dir)
+		params.Logger.Errorf("no backup to restore on BackupStorage for directory %v. Starting up empty.", backupDir)
 		// Wait for mysqld to be ready, in case it was launched in parallel with us.
 		if err = params.Mysqld.Wait(ctx, params.Cnf); err != nil {
 			params.Logger.Errorf("mysqld is not running: %v", err)

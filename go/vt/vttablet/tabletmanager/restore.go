@@ -84,25 +84,23 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	localMetadata := agent.getLocalMetadataValues(originalType)
 	tablet := agent.Tablet()
 
-	// Backups are stored in a directory structure that starts with
-	// <keyspace>/<shard>
-	keyspaceDir := tablet.Keyspace
-	keyspaceInfo, err := agent.TopoServer.GetKeyspace(ctx, tablet.Keyspace)
+	keyspace := tablet.Keyspace
+	keyspaceInfo, err := agent.TopoServer.GetKeyspace(ctx, keyspace)
 	if err != nil {
 		return err
 	}
 	// For a SNAPSHOT keyspace, we have to look for backups of BaseKeyspace
+	// so we will pass the BaseKeyspace in RestoreParams instead of tablet.Keyspace
 	// Keyspace creation checks that BaseKeyspace is set for a SNAPSHOT keyspace,
 	// so we don't need to check again here
 	if keyspaceInfo.KeyspaceType == topodatapb.KeyspaceType_SNAPSHOT {
-		keyspaceDir = keyspaceInfo.BaseKeyspace
+		keyspace = keyspaceInfo.BaseKeyspace
 		// If we belong to a SNAPSHOT keyspace, let us disable_active_reparents
 		// and disable replication_reporter
 		*mysqlctl.DisableActiveReparents = false
 		*enableReplicationReporter = false
 		log.Infof("Disabling active reparents and replication_reporter because tablet %v belongs to SNAPSHOT keyspace: %v", tablet.Alias, tablet.Keyspace)
 	}
-	dir := fmt.Sprintf("%v/%v", keyspaceDir, tablet.Shard)
 
 	params := mysqlctl.RestoreParams{
 		Cnf:                 agent.Cnf,
@@ -113,7 +111,8 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 		LocalMetadata:       localMetadata,
 		DeleteBeforeRestore: deleteBeforeRestore,
 		DbName:              topoproto.TabletDbName(tablet),
-		Dir:                 dir,
+		Keyspace:            keyspace,
+		Shard:               tablet.Shard,
 		StartTime:           logutil.ProtoToTime(keyspaceInfo.SnapshotTime),
 	}
 
