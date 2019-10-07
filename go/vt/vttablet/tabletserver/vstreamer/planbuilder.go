@@ -72,6 +72,9 @@ func (plan *Plan) fields() []*querypb.Field {
 func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error) {
 	result := make([]sqltypes.Value, len(plan.ColExprs))
 	for i, colExpr := range plan.ColExprs {
+		if colExpr.ColNum >= len(values) {
+			return false, nil, fmt.Errorf("index out of range. colExpr.ColNum: %d   len(values):%d!!", colExpr.ColNum, len(values))
+		}
 		result[i] = values[colExpr.ColNum]
 	}
 	if plan.Vindex == nil {
