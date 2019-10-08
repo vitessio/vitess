@@ -43,7 +43,7 @@ type dbResult struct {
 }
 
 func (dbrs *dbResults) next(query string) (*sqltypes.Result, error) {
-	if dbrs.called() {
+	if dbrs.exhausted() {
 		return nil, fmt.Errorf("query results exhausted: %s", query)
 	}
 	i := dbrs.index
@@ -51,7 +51,7 @@ func (dbrs *dbResults) next(query string) (*sqltypes.Result, error) {
 	return dbrs.results[i].result, dbrs.results[i].err
 }
 
-func (dbrs *dbResults) called() bool {
+func (dbrs *dbResults) exhausted() bool {
 	return dbrs.index == len(dbrs.results)
 }
 
@@ -144,12 +144,12 @@ func (dc *fakeDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 func (dc *fakeDBClient) verifyQueries(t *testing.T) {
 	t.Helper()
 	for query, dbrs := range dc.queries {
-		if !dbrs.called() {
+		if !dbrs.exhausted() {
 			t.Errorf("query: %v has unreturned results", query)
 		}
 	}
 	for query, dbrs := range dc.queriesRE {
-		if !dbrs.called() {
+		if !dbrs.exhausted() {
 			t.Errorf("query: %v has unreturned results", query)
 		}
 	}

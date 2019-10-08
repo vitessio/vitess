@@ -721,14 +721,14 @@ func TestMigrateFailJournal(t *testing.T) {
 	}
 
 	// Verify that cancel didn't happen.
-	if tme.dbTargetClients[0].queries[cancel1].called() {
-		t.Errorf("tme.dbTargetClients[0].queries[cancel1].called: %v, want false", tme.dbTargetClients[0].queries[cancel1])
+	if tme.dbTargetClients[0].queries[cancel1].exhausted() {
+		t.Errorf("tme.dbTargetClients[0].queries[cancel1].exhausted: %v, want false", tme.dbTargetClients[0].queries[cancel1])
 	}
-	if tme.dbTargetClients[1].queries[cancel1].called() {
-		t.Errorf("tme.dbTargetClients[0].queries[cancel1].called: %v, want false", tme.dbTargetClients[0].queries[cancel1])
+	if tme.dbTargetClients[1].queries[cancel1].exhausted() {
+		t.Errorf("tme.dbTargetClients[0].queries[cancel1].exhausted: %v, want false", tme.dbTargetClients[0].queries[cancel1])
 	}
-	if tme.dbTargetClients[0].queries[cancel2].called() {
-		t.Errorf("tme.dbTargetClients[0].queries[cancel1].called: %v, want false", tme.dbTargetClients[0].queries[cancel1])
+	if tme.dbTargetClients[0].queries[cancel2].exhausted() {
+		t.Errorf("tme.dbTargetClients[0].queries[cancel1].exhausted: %v, want false", tme.dbTargetClients[0].queries[cancel1])
 	}
 }
 
