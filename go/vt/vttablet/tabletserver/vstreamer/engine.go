@@ -100,16 +100,16 @@ func (vse *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
 }
 
 // Open starts the Engine service.
-func (vse *Engine) Open(keyspace, cell string) error {
+func (vse *Engine) Open(keyspace, cell string) {
 	vse.mu.Lock()
 	defer vse.mu.Unlock()
 	if vse.isOpen {
-		return nil
+		return
 	}
 	vse.isOpen = true
 	vse.keyspace = keyspace
 	vse.cell = cell
-	return nil
+	return
 }
 
 // Close closes the Engine service.

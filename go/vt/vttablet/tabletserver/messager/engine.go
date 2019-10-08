@@ -82,14 +82,14 @@ func (me *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
 }
 
 // Open starts the Engine service.
-func (me *Engine) Open() error {
+func (me *Engine) Open() {
 	if me.isOpen {
-		return nil
+		return
 	}
 	me.conns.Open(me.dbconfigs.AppWithDB(), me.dbconfigs.DbaWithDB(), me.dbconfigs.AppDebugWithDB())
 	me.se.RegisterNotifier("messages", me.schemaChanged)
 	me.isOpen = true
-	return nil
+	return
 }
 
 // Close closes the Engine service.

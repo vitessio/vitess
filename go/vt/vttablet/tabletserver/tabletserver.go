@@ -571,7 +571,9 @@ func (tsv *TabletServer) serveNewType() (err error) {
 	// transactional requests are not allowed. So, we can
 	// be sure that the tx pool won't change after the wait.
 	if tsv.target.TabletType == topodatapb.TabletType_MASTER {
-		tsv.teCtrl.AcceptReadWrite()
+		if err := tsv.teCtrl.AcceptReadWrite(); err != nil {
+			return err
+		}
 		if err := tsv.txThrottler.Open(tsv.target.Keyspace, tsv.target.Shard); err != nil {
 			return err
 		}
@@ -580,7 +582,9 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		tsv.hr.Close()
 		tsv.hw.Open()
 	} else {
-		tsv.teCtrl.AcceptReadOnly()
+		if err := tsv.teCtrl.AcceptReadOnly(); err != nil {
+			return err
+		}
 		tsv.messager.Close()
 		tsv.hr.Open()
 		tsv.hw.Close()
@@ -1163,7 +1167,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 		// that there was an error, roll it back.
 		defer func() {
 			if transactionID != 0 {
-				tsv.Rollback(ctx, target, transactionID)
+				err = tsv.Rollback(ctx, target, transactionID)
 			}
 		}()
 	}
@@ -1370,7 +1374,7 @@ func (tsv *TabletServer) execDML(ctx context.Context, target *querypb.Target, qu
 	// that there was an error, roll it back.
 	defer func() {
 		if transactionID != 0 {
-			tsv.Rollback(ctx, target, transactionID)
+			err = tsv.Rollback(ctx, target, transactionID)
 		}
 	}()
 	qr, err := tsv.Execute(ctx, target, query, bv, transactionID, nil)
@@ -1652,7 +1656,7 @@ func (tsv *TabletServer) convertAndLogError(ctx context.Context, sql string, bin
 func truncateSQLAndBindVars(sql string, bindVariables map[string]*querypb.BindVariable) string {
 	truncatedQuery := sqlparser.TruncateForLog(sql)
 	buf := &bytes.Buffer{}
-	fmt.Fprintf(buf, "BindVars: {")
+	_, _ = fmt.Fprintf(buf, "BindVars: {")
 	var keys []string
 	for key := range bindVariables {
 		keys = append(keys, key)
@@ -1661,9 +1665,9 @@ func truncateSQLAndBindVars(sql string, bindVariables map[string]*querypb.BindVa
 	var valString string
 	for _, key := range keys {
 		valString = fmt.Sprintf("%v", bindVariables[key])
-		fmt.Fprintf(buf, "%s: %q", key, valString)
+		_, _ = fmt.Fprintf(buf, "%s: %q", key, valString)
 	}
-	fmt.Fprintf(buf, "}")
+	_, _ = fmt.Fprintf(buf, "}")
 	bv := buf.String()
 	maxLen := *sqlparser.TruncateErrLen
 	if maxLen != 0 && len(bv) > maxLen {
@@ -2104,7 +2108,8 @@ func (tsv *TabletServer) registerDebugHealthHandler() {
 			http.Error(w, fmt.Sprintf("not ok: %v", err), http.StatusInternalServerError)
 			return
 		}
-		w.Write([]byte("ok"))
+		_, err := w.Write([]byte("ok"))
+		vterrors.LogIfError(err)
 	})
 }
 
@@ -2139,7 +2144,10 @@ func (tsv *TabletServer) registerTwopczHandler() {
 // SetPoolSize changes the pool size to the specified value.
 // This function should only be used for testing.
 func (tsv *TabletServer) SetPoolSize(val int) {
-	tsv.qe.conns.SetCapacity(val)
+	err := tsv.qe.conns.SetCapacity(val)
+	if err != nil {
+		log.Fatalf("SetPoolSize should only be used in testing %v", err)
+	}
 }
 
 // PoolSize returns the pool size.
@@ -2150,7 +2158,10 @@ func (tsv *TabletServer) PoolSize() int {
 // SetStreamPoolSize changes the pool size to the specified value.
 // This function should only be used for testing.
 func (tsv *TabletServer) SetStreamPoolSize(val int) {
-	tsv.qe.streamConns.SetCapacity(val)
+	err := tsv.qe.streamConns.SetCapacity(val)
+	if err != nil {
+		log.Fatalf("SetStreamPoolSize should only be used in testing %v", err)
+	}
 }
 
 // StreamPoolSize returns the pool size.
@@ -2161,7 +2172,10 @@ func (tsv *TabletServer) StreamPoolSize() int {
 // SetTxPoolSize changes the tx pool size to the specified value.
 // This function should only be used for testing.
 func (tsv *TabletServer) SetTxPoolSize(val int) {
-	tsv.te.txPool.conns.SetCapacity(val)
+	err := tsv.te.txPool.conns.SetCapacity(val)
+	if err != nil {
+		log.Fatalf("SetTxPoolSize should only be used in testing %v", err)
+	}
 }
 
 // TxPoolSize returns the tx pool size.
@@ -2295,8 +2309,8 @@ func (tsv *TabletServer) SetConsolidatorEnabled(enabled bool) {
 // queryAsString returns a readable version of query+bind variables.
 func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable) string {
 	buf := &bytes.Buffer{}
-	fmt.Fprintf(buf, "Sql: %q", sql)
-	fmt.Fprintf(buf, ", BindVars: {")
+	_, _ = fmt.Fprintf(buf, "Sql: %q", sql)
+	_, _ = fmt.Fprintf(buf, ", BindVars: {")
 	var keys []string
 	for key := range bindVariables {
 		keys = append(keys, key)
@@ -2305,9 +2319,9 @@ func queryAsString(sql string, bindVariables map[string]*querypb.BindVariable) s
 	var valString string
 	for _, key := range keys {
 		valString = fmt.Sprintf("%v", bindVariables[key])
-		fmt.Fprintf(buf, "%s: %q", key, valString)
+		_, _ = fmt.Fprintf(buf, "%s: %q", key, valString)
 	}
-	fmt.Fprintf(buf, "}")
+	_, _ = fmt.Fprintf(buf, "}")
 	return buf.String()
 }
 
