@@ -74,6 +74,17 @@ func (sm *streamMigrater) readSourceStreams(ctx context.Context) (map[string][]*
 	streams := make(map[string][]*vrStream)
 	var mu sync.Mutex
 	err := sm.mi.forAllSources(func(source *miSource) error {
+		// This flow protects us from the following scenario: When we create streams,
+		// we always do it in two phases. We start them off as Stopped, and then
+		// update them to Running. If such an operation fails, we may be left with
+		// lingering Stopped streams. They should actually be cleaned up by the user.
+		// In the current workflow, we stop streams and restart them.
+		// Once existing streams are stopped, there will be confusion about which of
+		// them can be restarted because they will be no different from the lingering streams.
+		// To prevent this confusion, we first check if there are any stopped streams.
+		// If so, we request the operator to clean them up, or restart them before going ahead.
+		// This allows us to assume that all stopped streams can be safely restarted
+		// if we cancel the operation.
 		stoppedStreams, err := sm.readTabletStreams(ctx, source.master, "state = 'Stopped'")
 		if err != nil {
 			return err
@@ -86,6 +97,7 @@ func (sm *streamMigrater) readSourceStreams(ctx context.Context) (map[string][]*
 			return err
 		}
 		if len(tabletStreams) == 0 {
+			// No VReplication is running. So, we have no work to do.
 			return nil
 		}
 		p3qr, err := sm.mi.wr.tmc.VReplicationExec(ctx, source.master.Tablet, fmt.Sprintf("select vrepl_id from _vt.copy_state where vrepl_id in %s", tabletStreamValues(tabletStreams)))
@@ -364,7 +376,7 @@ func (sm *streamMigrater) templatizeRule(ctx context.Context, rule *binlogdatapb
 	case rule.Filter == vreplication.ExcludeStr:
 		return unknown, nil
 	default:
-		templatized, err := sm.checkShardedQuery(ctx, rule.Filter)
+		templatized, err := sm.templatizeQuery(ctx, rule.Filter)
 		if err != nil {
 			return unknown, err
 		}
@@ -376,7 +388,9 @@ func (sm *streamMigrater) templatizeRule(ctx context.Context, rule *binlogdatapb
 	}
 }
 
-func (sm *streamMigrater) checkShardedQuery(ctx context.Context, query string) (string, error) {
+// templatizeQuery converts the underlying in_keyrange subexpression to
+// a template to allow for new keyrange values to be substituted.
+func (sm *streamMigrater) templatizeQuery(ctx context.Context, query string) (string, error) {
 	statement, err := sqlparser.Parse(query)
 	if err != nil {
 		return "", err
@@ -470,7 +484,7 @@ func (sm *streamMigrater) cancelMigration(ctx context.Context) {
 		return
 	}
 
-	// Ignore error. We still want to restart the source streams if deleteTargetStreans fails.
+	// Ignore error. We still want to restart the source streams if deleteTargetStreams fails.
 	_ = sm.deleteTargetStreams(ctx, tabletStreams)
 
 	workflows := tabletStreamWorkflows(tabletStreams)
@@ -533,6 +547,8 @@ func (sm *streamMigrater) readSourceStreamsForCancel(ctx context.Context) ([]*vr
 	return oneSet, nil
 }
 
+// finalize performs the final cleanup: start all the newly migrated target streams
+// and delete them from the source.
 func (sm *streamMigrater) finalize(ctx context.Context, workflows []string) error {
 	if sm.mi.migrationType == binlogdatapb.MigrationType_TABLES {
 		return nil
