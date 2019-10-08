@@ -438,11 +438,13 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 			return fmt.Errorf("old master tablet %v DemoteMaster failed: %v", topoproto.TabletAliasString(shardInfo.MasterAlias), err)
 		}
 
+		promoteCtx, promoteCancel := context.WithTimeout(ctx, waitSlaveTimeout)
+		defer promoteCancel()
 		// Wait on the master-elect tablet until it reaches that position,
 		// then promote it.
 		wr.logger.Infof("promote replica %v", masterElectTabletAliasStr)
 		event.DispatchUpdate(ev, "promoting replica")
-		rp, err = wr.tmc.PromoteSlaveWhenCaughtUp(remoteCtx, masterElectTabletInfo.Tablet, rp)
+		rp, err = wr.tmc.PromoteSlaveWhenCaughtUp(promoteCtx, masterElectTabletInfo.Tablet, rp)
 		if err != nil || (ctx.Err() != nil && ctx.Err() == context.DeadlineExceeded) {
 			remoteCancel()
 			// If we fail to promote the new master, try to roll back to the
@@ -456,9 +458,6 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		}
 		reparentJournalPos = rp
 	}
-
-	remoteCtx, remoteCancel = context.WithTimeout(ctx, waitSlaveTimeout)
-	defer remoteCancel()
 
 	// Check we still have the topology lock.
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
@@ -518,18 +517,6 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		replCancel()
 		wgReplicas.Wait()
 		return fmt.Errorf("failed to PopulateReparentJournal on master: %v", err)
-	}
-
-	// After the master is done, we can update the shard record.
-	// TODO(deepthi): Remove this when we make the master tablet responsible for
-	//                updating the shard record.
-	wr.logger.Infof("updating shard record with new master %v", masterElectTabletAlias)
-	if _, err := wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
-		si.MasterAlias = masterElectTabletAlias
-		return nil
-	}); err != nil {
-		wgReplicas.Wait()
-		return fmt.Errorf("failed to update shard master record: %v", err)
 	}
 
 	// Wait for the replicas to complete.

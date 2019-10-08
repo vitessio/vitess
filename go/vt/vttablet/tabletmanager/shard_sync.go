@@ -67,12 +67,15 @@ func (agent *ActionAgent) shardSyncLoop(ctx context.Context) {
 		select {
 		case <-notifyChan:
 			// Something may have changed in the tablet state.
+			log.Info("Change to tablet state")
 		case <-retryChan:
 			// It's time to retry a previous failed sync attempt.
+			log.Info("Retry sync")
 		case event := <-shardWatch.watchChan:
 			// Something may have changed in the shard record.
 			// We don't use the watch event except to know that we should
 			// re-read the shard record, and to know if the watch dies.
+			log.Info("Change in shard record")
 			if event.Err != nil {
 				// The watch failed. Stop it so we start a new one if needed.
 				log.Errorf("Shard watch failed: %v", event.Err)
