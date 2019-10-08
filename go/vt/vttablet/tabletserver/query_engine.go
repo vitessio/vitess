@@ -598,19 +598,39 @@ func (qe *QueryEngine) ServeHTTP(response http.ResponseWriter, request *http.Req
 	}
 }
 
+func checkError(err error, w http.ResponseWriter) bool {
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return true
+	}
+	return false
+}
+
 func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, request *http.Request) {
 	keys := qe.plans.Keys()
 	response.Header().Set("Content-Type", "text/plain")
-	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys))))
+	_, err := response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys))))
+	if checkError(err, response) {
+		return
+	}
 	for _, v := range keys {
-		response.Write([]byte(fmt.Sprintf("%#v\n", sqlparser.TruncateForUI(v))))
+		_, err := response.Write([]byte(fmt.Sprintf("%#v\n", sqlparser.TruncateForUI(v))))
+		if checkError(err, response) {
+			return
+		}
 		if plan := qe.peekQuery(v); plan != nil {
-			if b, err := json.MarshalIndent(plan.Plan, "", "  "); err != nil {
-				response.Write([]byte(err.Error()))
-			} else {
-				response.Write(b)
+			b, err := json.MarshalIndent(plan.Plan, "", "  ")
+			if checkError(err, response) {
+				return
 			}
-			response.Write(([]byte)("\n\n"))
+			_, err = response.Write(b)
+			if checkError(err, response) {
+				return
+			}
+		}
+		_, err = response.Write(([]byte)("\n\n"))
+		if checkError(err, response) {
+			return
 		}
 	}
 }
@@ -630,23 +650,24 @@ func (qe *QueryEngine) handleHTTPQueryStats(response http.ResponseWriter, reques
 			qstats = append(qstats, pqstats)
 		}
 	}
-	if b, err := json.MarshalIndent(qstats, "", "  "); err != nil {
-		response.Write([]byte(err.Error()))
-	} else {
-		response.Write(b)
+	b, err := json.MarshalIndent(qstats, "", "  ")
+	if checkError(err, response) {
+		return
 	}
+	_, err = response.Write(b)
+	checkError(err, response)
 }
 
 func (qe *QueryEngine) handleHTTPQueryRules(response http.ResponseWriter, request *http.Request) {
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
 	b, err := json.MarshalIndent(qe.queryRuleSources, "", " ")
-	if err != nil {
-		response.Write([]byte(err.Error()))
+	if checkError(err, response) {
 		return
 	}
 	buf := bytes.NewBuffer(nil)
 	json.HTMLEscape(buf, b)
-	response.Write(buf.Bytes())
+	_, err = response.Write(buf.Bytes())
+	checkError(err, response)
 }
 
 func (qe *QueryEngine) handleHTTPAclJSON(response http.ResponseWriter, request *http.Request) {
@@ -657,13 +678,13 @@ func (qe *QueryEngine) handleHTTPAclJSON(response http.ResponseWriter, request *
 	}
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
 	b, err := json.MarshalIndent(aclConfig, "", " ")
-	if err != nil {
-		response.Write([]byte(err.Error()))
+	if checkError(err, response) {
 		return
 	}
 	buf := bytes.NewBuffer(nil)
 	json.HTMLEscape(buf, b)
-	response.Write(buf.Bytes())
+	_, err = response.Write(buf.Bytes())
+	checkError(err, response)
 }
 
 // ServeHTTP lists the most recent, cached queries and their count.
@@ -675,10 +696,15 @@ func (qe *QueryEngine) handleHTTPConsolidations(response http.ResponseWriter, re
 	items := qe.consolidator.Items()
 	response.Header().Set("Content-Type", "text/plain")
 	if items == nil {
-		response.Write([]byte("empty\n"))
+		_, err := response.Write([]byte("empty\n"))
+		checkError(err, response)
 		return
 	}
-	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(items))))
+	_, err := response.Write([]byte(fmt.Sprintf("Length: %d\n", len(items))))
+	if checkError(err, response) {
+		return
+	}
+
 	for _, v := range items {
 		var query string
 		if *streamlog.RedactDebugUIQueries {
@@ -686,6 +712,9 @@ func (qe *QueryEngine) handleHTTPConsolidations(response http.ResponseWriter, re
 		} else {
 			query = v.Query
 		}
-		response.Write([]byte(fmt.Sprintf("%v: %s\n", v.Count, query)))
+		_, err = response.Write([]byte(fmt.Sprintf("%v: %s\n", v.Count, query)))
+		if checkError(err, response) {
+			return
+		}
 	}
 }

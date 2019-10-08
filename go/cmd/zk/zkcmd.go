@@ -32,6 +32,8 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"github.com/z-division/go-zookeeper/zk"
 	"golang.org/x/crypto/ssh/terminal"
 	"golang.org/x/net/context"
@@ -137,9 +139,9 @@ func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage of %v:\n", os.Args[0])
+		_, _ = fmt.Fprintf(os.Stderr, "Usage of %v:\n", os.Args[0])
 		flag.PrintDefaults()
-		fmt.Fprint(os.Stderr, doc)
+		_, _ = fmt.Fprint(os.Stderr, doc)
 	}
 	flag.Parse()
 	args := flag.Args()
@@ -191,7 +193,7 @@ func cmdWait(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 		exitIfExists = subFlags.Bool("e", false, "exit if the path already exists")
 	)
 
-	subFlags.Parse(args)
+	_ = subFlags.Parse(args)
 
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("wait: can only wait for one path")
@@ -225,7 +227,7 @@ func cmdWait(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 
 // Watch for changes to the node.
 func cmdWatch(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
-	subFlags.Parse(args)
+	_ = subFlags.Parse(args)
 
 	eventChan := make(chan zk.Event, 16)
 	for _, arg := range subFlags.Args() {
@@ -280,7 +282,7 @@ func cmdLs(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 		force            = subFlags.Bool("f", false, "no warning on nonexistent node")
 		recursiveListing = subFlags.Bool("R", false, "recursive listing")
 	)
-	subFlags.Parse(args)
+	_ = subFlags.Parse(args)
 	if subFlags.NArg() == 0 {
 		return fmt.Errorf("ls: no path specified")
 	}
@@ -410,7 +412,7 @@ func cmdTouch(ctx context.Context, subFlags *flag.FlagSet, args []string) error 
 		touchOnly     = subFlags.Bool("c", false, "touch only - don't create")
 	)
 
-	subFlags.Parse(args)
+	_ = subFlags.Parse(args)
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("touch: need to specify exactly one path")
 	}
@@ -455,7 +457,7 @@ func cmdRm(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 		recursiveDelete   = subFlags.Bool("r", false, "recursive delete")
 		forceAndRecursive = subFlags.Bool("rf", false, "shorthand for -r -f")
 	)
-	subFlags.Parse(args)
+	_ = subFlags.Parse(args)
 	*force = *force || *forceAndRecursive
 	*recursiveDelete = *recursiveDelete || *forceAndRecursive
 
@@ -504,7 +506,7 @@ func cmdRm(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 }
 
 func cmdAddAuth(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
-	subFlags.Parse(args)
+	_ = subFlags.Parse(args)
 	if subFlags.NArg() < 2 {
 		return fmt.Errorf("addAuth: expected args <scheme> <auth>")
 	}
@@ -518,7 +520,7 @@ func cmdCat(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 		force       = subFlags.Bool("f", false, "no warning on nonexistent node")
 		decodeProto = subFlags.Bool("p", false, "decode proto files and display them as text")
 	)
-	subFlags.Parse(args)
+	_ = subFlags.Parse(args)
 	if subFlags.NArg() == 0 {
 		return fmt.Errorf("cat: no path specified")
 	}
@@ -571,7 +573,7 @@ func cmdEdit(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 	var (
 		force = subFlags.Bool("f", false, "no warning on nonexistent node")
 	)
-	subFlags.Parse(args)
+	_ = subFlags.Parse(args)
 	if subFlags.NArg() == 0 {
 		return fmt.Errorf("edit: no path specified")
 	}
@@ -588,12 +590,16 @@ func cmdEdit(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 	name := path.Base(zkPath)
 	tmpPath := fmt.Sprintf("/tmp/zk-edit-%v-%v", name, time.Now().UnixNano())
 	f, err := os.Create(tmpPath)
-	if err == nil {
-		_, err = f.Write(data)
-		f.Close()
-	}
 	if err != nil {
-		return fmt.Errorf("edit: cannot write file %v", err)
+		return fmt.Errorf("edit: cannot create file %v", err)
+	}
+	_, err = f.Write(data)
+	if err != nil {
+		return fmt.Errorf("edit: cannot write to file %v", err)
+	}
+	err = f.Close()
+	if err != nil {
+		return fmt.Errorf("edit: cannot close file %v", err)
 	}
 
 	cmd := exec.Command(os.Getenv("EDITOR"), tmpPath)
@@ -602,13 +608,13 @@ func cmdEdit(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 	cmd.Stderr = os.Stderr
 	err = cmd.Run()
 	if err != nil {
-		os.Remove(tmpPath)
+		vterrors.LogIfError(os.Remove(tmpPath))
 		return fmt.Errorf("edit: cannot start $EDITOR: %v", err)
 	}
 
 	fileData, err := ioutil.ReadFile(tmpPath)
 	if err != nil {
-		os.Remove(tmpPath)
+		vterrors.LogIfError(os.Remove(tmpPath))
 		return fmt.Errorf("edit: cannot read file %v", err)
 	}
 
@@ -616,11 +622,11 @@ func cmdEdit(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 		// data changed - update if we can
 		_, err = zconn.Set(ctx, zkPath, fileData, stat.Version)
 		if err != nil {
-			os.Remove(tmpPath)
+			vterrors.LogIfError(os.Remove(tmpPath))
 			return fmt.Errorf("edit: cannot write zk file %v", err)
 		}
 	}
-	os.Remove(tmpPath)
+	vterrors.LogIfError(os.Remove(tmpPath))
 	return nil
 }
 
@@ -628,7 +634,7 @@ func cmdStat(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 	var (
 		force = subFlags.Bool("f", false, "no warning on nonexistent node")
 	)
-	subFlags.Parse(args)
+	_ = subFlags.Parse(args)
 
 	if subFlags.NArg() == 0 {
 		return fmt.Errorf("stat: no path specified")
@@ -706,7 +712,7 @@ func fmtACL(acl zk.ACL) string {
 }
 
 func cmdChmod(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
-	subFlags.Parse(args)
+	_ = subFlags.Parse(args)
 	if subFlags.NArg() < 2 {
 		return fmt.Errorf("chmod: no permission specified")
 	}
@@ -764,7 +770,7 @@ func cmdChmod(ctx context.Context, subFlags *flag.FlagSet, args []string) error 
 }
 
 func cmdCp(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
-	subFlags.Parse(args)
+	_ = subFlags.Parse(args)
 	switch {
 	case subFlags.NArg() < 2:
 		return fmt.Errorf("cp: need to specify source and destination paths")
@@ -863,7 +869,7 @@ type zkItem struct {
 // Store a zk tree in a zip archive. This won't be immediately useful to
 // zip tools since even "directories" can contain data.
 func cmdZip(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
-	subFlags.Parse(args)
+	_ = subFlags.Parse(args)
 	if subFlags.NArg() < 2 {
 		return fmt.Errorf("zip: need to specify source and destination paths")
 	}
@@ -926,12 +932,12 @@ func cmdZip(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 	if err != nil {
 		return fmt.Errorf("zip: close failed: %v", err)
 	}
-	zipFile.Close()
+	vterrors.LogIfError(zipFile.Close())
 	return nil
 }
 
 func cmdUnzip(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
-	subFlags.Parse(args)
+	_ = subFlags.Parse(args)
 	if subFlags.NArg() != 2 {
 		return fmt.Errorf("zip: need to specify source and destination paths")
 	}
@@ -946,7 +952,7 @@ func cmdUnzip(ctx context.Context, subFlags *flag.FlagSet, args []string) error 
 	if err != nil {
 		return fmt.Errorf("zip: error %v", err)
 	}
-	defer zipReader.Close()
+	defer vterrors.LogIfError(zipReader.Close())
 
 	for _, zf := range zipReader.File {
 		rc, err := zf.Open()
@@ -969,7 +975,7 @@ func cmdUnzip(ctx context.Context, subFlags *flag.FlagSet, args []string) error 
 		if err != nil {
 			return fmt.Errorf("unzip: zk set failed: %v", err)
 		}
-		rc.Close()
+		vterrors.LogIfError(rc.Close())
 	}
 	return nil
 }

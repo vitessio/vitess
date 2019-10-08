@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
@@ -187,7 +189,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 		ft.HTTPServer = &http.Server{
 			Handler: handler,
 		}
-		go ft.HTTPServer.Serve(ft.HTTPListener)
+		go vterrors.IgnoreError(ft.HTTPServer.Serve(ft.HTTPListener))
 		vtPort = int32(ft.HTTPListener.Addr().(*net.TCPAddr).Port)
 	}
 
@@ -198,7 +200,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 
 	// Register the gRPC server, and starts listening.
 	grpctmserver.RegisterForTest(ft.RPCServer, ft.Agent)
-	go ft.RPCServer.Serve(ft.Listener)
+	go vterrors.IgnoreError(ft.RPCServer.Serve(ft.Listener))
 
 	// And wait for it to serve, so we don't start using it before it's
 	// ready.
@@ -226,9 +228,9 @@ func (ft *FakeTablet) StopActionLoop(t *testing.T) {
 		t.Fatalf("Agent for %v is not running", ft.Tablet.Alias)
 	}
 	if ft.StartHTTPServer {
-		ft.HTTPListener.Close()
+		vterrors.IgnoreError(ft.HTTPListener.Close())
 	}
-	ft.Listener.Close()
+	vterrors.IgnoreError(ft.Listener.Close())
 	ft.Agent.Stop()
 	ft.Agent = nil
 	ft.Listener = nil

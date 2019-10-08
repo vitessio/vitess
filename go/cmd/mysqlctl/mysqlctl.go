@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -45,7 +44,7 @@ var (
 )
 
 func initConfigCmd(subFlags *flag.FlagSet, args []string) error {
-	subFlags.Parse(args)
+	_ = subFlags.Parse(args)
 
 	// Generate my.cnf from scratch and use it to find mysqld.
 	mysqld, cnf, err := mysqlctl.CreateMysqldAndMycnf(uint32(*tabletUID), *mysqlSocket, int32(*mysqlPort))
@@ -62,7 +61,7 @@ func initConfigCmd(subFlags *flag.FlagSet, args []string) error {
 func initCmd(subFlags *flag.FlagSet, args []string) error {
 	waitTime := subFlags.Duration("wait_time", 5*time.Minute, "how long to wait for startup")
 	initDBSQLFile := subFlags.String("init_db_sql_file", "", "path to .sql file to run after mysql_install_db")
-	subFlags.Parse(args)
+	_ = subFlags.Parse(args)
 
 	// Generate my.cnf from scratch and use it to find mysqld.
 	mysqld, cnf, err := mysqlctl.CreateMysqldAndMycnf(uint32(*tabletUID), *mysqlSocket, int32(*mysqlPort))
@@ -95,7 +94,7 @@ func reinitConfigCmd(subFlags *flag.FlagSet, args []string) error {
 
 func shutdownCmd(subFlags *flag.FlagSet, args []string) error {
 	waitTime := subFlags.Duration("wait_time", 5*time.Minute, "how long to wait for shutdown")
-	subFlags.Parse(args)
+	_ = subFlags.Parse(args)
 
 	// There ought to be an existing my.cnf, so use it to find mysqld.
 	mysqld, cnf, err := mysqlctl.OpenMysqldAndMycnf(uint32(*tabletUID))
@@ -116,7 +115,7 @@ func startCmd(subFlags *flag.FlagSet, args []string) error {
 	waitTime := subFlags.Duration("wait_time", 5*time.Minute, "how long to wait for startup")
 	var mysqldArgs flagutil.StringListValue
 	subFlags.Var(&mysqldArgs, "mysqld_args", "List of comma-separated flags to pass additionally to mysqld")
-	subFlags.Parse(args)
+	_ = subFlags.Parse(args)
 
 	// There ought to be an existing my.cnf, so use it to find mysqld.
 	mysqld, cnf, err := mysqlctl.OpenMysqldAndMycnf(uint32(*tabletUID))
@@ -136,7 +135,7 @@ func startCmd(subFlags *flag.FlagSet, args []string) error {
 func teardownCmd(subFlags *flag.FlagSet, args []string) error {
 	waitTime := subFlags.Duration("wait_time", 5*time.Minute, "how long to wait for shutdown")
 	force := subFlags.Bool("force", false, "will remove the root directory even if mysqld shutdown fails")
-	subFlags.Parse(args)
+	_ = subFlags.Parse(args)
 
 	// There ought to be an existing my.cnf, so use it to find mysqld.
 	mysqld, cnf, err := mysqlctl.OpenMysqldAndMycnf(uint32(*tabletUID))
@@ -154,7 +153,7 @@ func teardownCmd(subFlags *flag.FlagSet, args []string) error {
 }
 
 func positionCmd(subFlags *flag.FlagSet, args []string) error {
-	subFlags.Parse(args)
+	_ = subFlags.Parse(args)
 	if len(args) < 3 {
 		return fmt.Errorf("not enough arguments for position operation")
 	}
@@ -219,34 +218,32 @@ func main() {
 	defer logutil.Flush()
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [global parameters] command [command parameters]\n", os.Args[0])
+		_, _ = fmt.Fprintf(os.Stderr, "Usage: %s [global parameters] command [command parameters]\n", os.Args[0])
 
-		fmt.Fprintf(os.Stderr, "\nThe global optional parameters are:\n")
+		_, _ = fmt.Fprintf(os.Stderr, "\nThe global optional parameters are:\n")
 		flag.PrintDefaults()
 
-		fmt.Fprintf(os.Stderr, "\nThe commands are listed below. Use '%s <command> -h' for more help.\n\n", os.Args[0])
+		_, _ = fmt.Fprintf(os.Stderr, "\nThe commands are listed below. Use '%s <command> -h' for more help.\n\n", os.Args[0])
 		for _, cmd := range commands {
-			fmt.Fprintf(os.Stderr, "  %s", cmd.name)
+			_, _ = fmt.Fprintf(os.Stderr, "  %s", cmd.name)
 			if cmd.params != "" {
-				fmt.Fprintf(os.Stderr, " %s", cmd.params)
+				_, _ = fmt.Fprintf(os.Stderr, " %s", cmd.params)
 			}
-			fmt.Fprintf(os.Stderr, "\n")
+			_, _ = fmt.Fprintf(os.Stderr, "\n")
 		}
-		fmt.Fprintf(os.Stderr, "\n")
+		_, _ = fmt.Fprintf(os.Stderr, "\n")
 	}
 
 	dbconfigs.RegisterFlags(dbconfigs.Dba)
 	flag.Parse()
-
-	tabletAddr = netutil.JoinHostPort("localhost", int32(*port))
 
 	action := flag.Arg(0)
 	for _, cmd := range commands {
 		if cmd.name == action {
 			subFlags := flag.NewFlagSet(action, flag.ExitOnError)
 			subFlags.Usage = func() {
-				fmt.Fprintf(os.Stderr, "Usage: %s %s %s\n\n", os.Args[0], cmd.name, cmd.params)
-				fmt.Fprintf(os.Stderr, "%s\n\n", cmd.help)
+				_, _ = fmt.Fprintf(os.Stderr, "Usage: %s %s %s\n\n", os.Args[0], cmd.name, cmd.params)
+				_, _ = fmt.Fprintf(os.Stderr, "%s\n\n", cmd.help)
 				subFlags.PrintDefaults()
 			}
 

@@ -315,7 +315,10 @@ func BuildStreaming(sql string, tables map[string]*schema.Table) (*Plan, error) 
 			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "select with lock not allowed for streaming")
 		}
 		if tableName := analyzeFrom(stmt.From); !tableName.IsEmpty() {
-			plan.setTable(tableName, tables)
+			_, err = plan.setTable(tableName, tables)
+			if err != nil {
+				return nil, err
+			}
 		}
 	case *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Union:
 		// pass

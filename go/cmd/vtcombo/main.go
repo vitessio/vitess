@@ -81,13 +81,13 @@ func main() {
 	}
 
 	// set discoverygateway flag to default value
-	flag.Set("cells_to_watch", strings.Join(tpb.Cells, ","))
+	logAndExitIfErr(flag.Set("cells_to_watch", strings.Join(tpb.Cells, ",")))
 
 	// vtctld UI requires the cell flag
-	flag.Set("cell", tpb.Cells[0])
-	flag.Set("enable_realtime_stats", "true")
+	logAndExitIfErr(flag.Set("cell", tpb.Cells[0]))
+	logAndExitIfErr(flag.Set("enable_realtime_stats", "true"))
 	if flag.Lookup("log_dir") == nil {
-		flag.Set("log_dir", "$VTDATAROOT/tmp")
+		logAndExitIfErr(flag.Set("log_dir", "$VTDATAROOT/tmp"))
 	}
 
 	// Create topo server. We use a 'memorytopo' implementation.
@@ -104,10 +104,7 @@ func main() {
 
 	// tablets configuration and init.
 	// Send mycnf as nil because vtcombo won't do backups and restores.
-	if err := vtcombo.InitTabletMap(ts, tpb, mysqld, dbcfgs, *schemaDir, nil); err != nil {
-		log.Errorf("initTabletMapProto failed: %v", err)
-		exit.Return(1)
-	}
+	logAndExitIfErr(vtcombo.InitTabletMap(ts, tpb, mysqld, dbcfgs, *schemaDir, nil))
 
 	// Now that we have fully initialized the tablets, rebuild the keyspace graph. This is what would normally happen in InitTablet.
 	for _, ks := range tpb.Keyspaces {
@@ -143,4 +140,11 @@ func main() {
 		ts.Close()
 	})
 	servenv.RunDefault()
+}
+
+func logAndExitIfErr(err error) {
+	if err != nil {
+		log.Errorf("initTabletMapProto failed: %v", err)
+		exit.Return(1)
+	}
 }

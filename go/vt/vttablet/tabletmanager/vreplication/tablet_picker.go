@@ -96,7 +96,7 @@ func (tp *tabletPicker) Pick(ctx context.Context) (*topodatapb.Tablet, error) {
 
 func (tp *tabletPicker) Close() {
 	tp.watcher.Stop()
-	tp.healthCheck.Close()
+	vterrors.LogIfError(tp.healthCheck.Close())
 }
 
 func init() {

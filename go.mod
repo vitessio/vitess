@@ -16,7 +16,7 @@ require (
 	github.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f // indirect
 	github.com/dchest/safefile v0.0.0-20151022103144-855e8d98f185 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible // indirect
-	github.com/evanphx/json-patch v4.5.0+incompatible // indirect
+	github.com/evanphx/json-patch v4.5.0+incompatible
 	github.com/ghodss/yaml v0.0.0-20161207003320-04f313413ffd // indirect
 	github.com/go-ini/ini v1.12.0 // indirect
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
@@ -44,7 +44,7 @@ require (
 	github.com/klauspost/crc32 v1.2.0 // indirect
 	github.com/klauspost/pgzip v1.2.0
 	github.com/kr/pretty v0.1.0 // indirect
-	github.com/krishicks/yaml-patch v0.0.10 // indirect
+	github.com/krishicks/yaml-patch v0.0.10
 	github.com/mattn/go-runewidth v0.0.1 // indirect
 	github.com/minio/minio-go v0.0.0-20190131015406-c8a261de75c1
 	github.com/mitchellh/go-testing-interface v1.0.0 // indirect

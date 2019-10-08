@@ -311,7 +311,9 @@ func TestGetSrvKeyspace(t *testing.T) {
 	timeoutCtx, _ := context.WithTimeout(context.Background(), *srvTopoCacheRefresh*2)
 	_, err = rs.GetSrvKeyspace(timeoutCtx, "test_cell", "test_ks")
 	wantErr := "timed out waiting for keyspace"
-	if err == nil || err.Error() != wantErr {
+	if err == nil {
+		t.Errorf("expected error '%v', got nil", wantErr)
+	} else if err.Error() != wantErr {
 		t.Errorf("expected error '%v', got '%v'", wantErr, err.Error())
 	}
 	factory.Unlock()

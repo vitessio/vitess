@@ -185,10 +185,16 @@ func (tp *TablePlan) applyBulkInsert(rows *binlogdatapb.VStreamRowsResponse, exe
 		}
 		buf.WriteString(separator)
 		separator = ", "
-		tp.BulkInsertValues.Append(&buf, bindvars, nil)
+		err := tp.BulkInsertValues.Append(&buf, bindvars, nil)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if tp.BulkInsertOnDup != nil {
-		tp.BulkInsertOnDup.Append(&buf, nil, nil)
+		err := tp.BulkInsertOnDup.Append(&buf, nil, nil)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return executor(buf.String())
 }

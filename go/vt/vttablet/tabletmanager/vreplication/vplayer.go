@@ -23,6 +23,8 @@ import (
 	"math"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -112,7 +114,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("error dialing tablet: %v", err)
 	}
-	defer vsClient.Close(ctx)
+	defer vterrors.LogIfError(vsClient.Close(ctx))
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -190,7 +192,7 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts)
 	if _, err := vp.vr.dbClient.Execute(update); err != nil {
-		vp.vr.dbClient.Rollback()
+		vterrors.LogIfError(vp.vr.dbClient.Rollback())
 		return false, fmt.Errorf("error %v updating position", err)
 	}
 	vp.unsavedEvent = nil

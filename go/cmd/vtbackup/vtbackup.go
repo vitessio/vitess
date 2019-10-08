@@ -156,7 +156,7 @@ func main() {
 		log.Errorf("Can't get backup storage: %v", err)
 		exit.Return(1)
 	}
-	defer backupStorage.Close()
+	defer vterrors.LogIfError(backupStorage.Close())
 	// Open connection to topology server.
 	topoServer := topo.Open()
 	defer topoServer.Close()
@@ -226,7 +226,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		// skip shutdown just because we timed out waiting for other things.
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		mysqld.Shutdown(ctx, mycnf, false)
+		vterrors.LogIfError(mysqld.Shutdown(ctx, mycnf, false))
 	}()
 
 	extraEnv := map[string]string{

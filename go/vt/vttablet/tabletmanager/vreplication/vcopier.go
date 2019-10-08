@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
@@ -51,7 +53,7 @@ func newVCopier(vr *vreplicator) *vcopier {
 }
 
 func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
-	defer vc.vr.dbClient.Rollback()
+	defer vterrors.LogIfError(vc.vr.dbClient.Rollback())
 
 	plan, err := buildReplicatorPlan(vc.vr.source.Filter, vc.vr.tableKeys, nil)
 	if err != nil {
@@ -66,7 +68,7 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 		buf.WriteString("insert into _vt.copy_state(vrepl_id, table_name) values ")
 		prefix := ""
 		for name := range plan.TargetTables {
-			fmt.Fprintf(&buf, "%s(%d, %s)", prefix, vc.vr.id, encodeString(name))
+			_, _ = fmt.Fprintf(&buf, "%s(%d, %s)", prefix, vc.vr.id, encodeString(name))
 			prefix = ", "
 		}
 		if _, err := vc.vr.dbClient.Execute(buf.String()); err != nil {
@@ -162,7 +164,7 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 }
 
 func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState map[string]*sqltypes.Result) error {
-	defer vc.vr.dbClient.Rollback()
+	defer vterrors.LogIfError(vc.vr.dbClient.Rollback())
 
 	log.Infof("Copying table %s, lastpk: %v", tableName, copyState[tableName])
 
@@ -180,7 +182,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	if err != nil {
 		return fmt.Errorf("error dialing tablet: %v", err)
 	}
-	defer vsClient.Close(ctx)
+	defer vterrors.LogIfError(vsClient.Close(ctx))
 
 	ctx, cancel := context.WithTimeout(ctx, copyTimeout)
 	defer cancel()

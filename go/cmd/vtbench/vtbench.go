@@ -100,7 +100,10 @@ func main() {
 
 	defer exit.Recover()
 
-	flag.Lookup("logtostderr").Value.Set("true")
+	err := flag.Set("logtostderr", "true")
+	if err != nil {
+		log.Exitf("something went wrong trying to set an argument %v", err)
+	}
 	flag.Parse()
 
 	clientProto := vtbench.MySQL
@@ -161,7 +164,7 @@ func main() {
 
 	fmt.Printf("Initializing test with %s protocol / %d threads / %d iterations\n",
 		b.ConnParams.Protocol.String(), b.Threads, b.Count)
-	err := b.Run(ctx)
+	err = b.Run(ctx)
 	if err != nil {
 		log.Exitf("error in test: %v", err)
 	}

@@ -366,7 +366,7 @@ func (dbc *DBConn) setDeadline(ctx context.Context) (chan bool, *sync.WaitGroup)
 		startTime := time.Now()
 		select {
 		case <-ctx.Done():
-			dbc.Kill(ctx.Err().Error(), time.Since(startTime))
+			vterrors.LogIfError(dbc.Kill(ctx.Err().Error(), time.Since(startTime)))
 		case <-done:
 			return
 		}

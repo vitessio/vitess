@@ -76,9 +76,9 @@ var (
 
 func init() {
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
+		_, _ = fmt.Fprintf(os.Stderr, "Usage of %s:\n", os.Args[0])
 		flag.PrintDefaults()
-		fmt.Fprint(os.Stderr, usage)
+		_, _ = fmt.Fprint(os.Stderr, usage)
 	}
 }
 
@@ -127,6 +127,9 @@ func main() {
 	defer logutil.Flush()
 
 	qr, err := run()
+	if err != nil {
+		log.Exit(err)
+	}
 	if *jsonOutput && qr != nil {
 		data, err := json.MarshalIndent(qr, "", "  ")
 		if err != nil {
@@ -137,10 +140,6 @@ func main() {
 	}
 
 	qr.print()
-
-	if err != nil {
-		log.Exit(err)
-	}
 }
 
 func run() (*results, error) {
@@ -285,7 +284,7 @@ func execNonDml(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 	if err != nil {
 		return nil, vterrors.Wrap(err, "client error")
 	}
-	defer rows.Close()
+	defer vterrors.LogIfError(rows.Close())
 
 	// get the headers
 	var qr results

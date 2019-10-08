@@ -103,5 +103,5 @@ func CheckAccessHTTP(req *http.Request, role string) error {
 // error as an HTTP response.
 func SendError(w http.ResponseWriter, err error) {
 	w.WriteHeader(http.StatusForbidden)
-	fmt.Fprintf(w, "Access denied: %v\n", err)
+	_, _ = fmt.Fprintf(w, "Access denied: %v\n", err)
 }

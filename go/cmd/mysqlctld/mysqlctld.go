@@ -24,6 +24,8 @@ import (
 	"os"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -123,7 +125,7 @@ func main() {
 	servenv.OnTermSync(func() {
 		log.Infof("mysqlctl received SIGTERM, shutting down mysqld first")
 		ctx := context.Background()
-		mysqld.Shutdown(ctx, cnf, true)
+		vterrors.LogIfError(mysqld.Shutdown(ctx, cnf, true))
 	})
 
 	// Start RPC server and wait for SIGTERM.
