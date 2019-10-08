@@ -576,11 +576,10 @@ func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topo
 
 	// if needed, wait until we get the replicated row, or our
 	// context times out
-	if !shouldbeReplicating || timeCreatedNS == 0 {
-		return nil
-	}
-	if err := agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS); err != nil {
-		return err
+	if shouldbeReplicating && timeCreatedNS != 0 {
+		if err := agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS); err != nil {
+			return err
+		}
 	}
 	if typeChanged {
 		if err := agent.refreshTablet(ctx, "SetMaster"); err != nil {

@@ -131,6 +131,7 @@ func TestAPI(t *testing.T) {
 		{"GET", "shards/ks1/", "", `["-80","80-"]`},
 		{"GET", "shards/ks1/-80", "", `{
 				"master_alias": null,
+				"master_term_start_time":null,
 				"key_range": {
 					"start": null,
 					"end":"gA=="
