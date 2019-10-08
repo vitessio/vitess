@@ -5,6 +5,7 @@
 # set tuple values to more recognizable variables
 {{- $pmm := index . 0 -}}
 {{- $namespace := index . 1 }}
+{{- $repo := index . 2 }}
 
 ###################################
 # pmm Service
@@ -50,7 +51,7 @@ spec:
     spec:
       containers:
         - name: pmm
-          image: "percona/pmm-server:{{ $pmm.pmmTag }}"
+          image: "{{.Values.pmm.repo}}:{{ $pmm.pmmTag }}"
 
           ports:
             - name: web
@@ -135,9 +136,11 @@ spec:
 {{- $pmm := index . 0 -}}
 {{- $namespace := index . 1 -}}
 {{- $keyspace := index . 2 }}
+{{- $repo := index . 3 }}
+{{- $logtail := index . 4 }}
 
 - name: "pmm-client"
-  image: "vitess/pmm-client:{{ $pmm.pmmTag }}"
+  image: "{{$repo}}/pmm-client:{{ $pmm.pmmTag }}"
   imagePullPolicy: IfNotPresent
   volumeMounts:
     - name: vtdataroot
@@ -219,7 +222,7 @@ spec:
       trap : TERM INT; sleep infinity & wait
 
 - name: pmm-client-metrics-log
-  image: vitess/logtail:helm-1.0.6
+  image: {{ $logtail.image }}
   imagePullPolicy: IfNotPresent
   env:
   - name: TAIL_FILEPATH

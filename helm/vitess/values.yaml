@@ -224,6 +224,7 @@ vtworker:
     #   memory: 512Mi
   secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
 
+repo: vitess
 
 # Default values for vttablet resources defined in 'topology'
 vttablet:
@@ -325,6 +326,7 @@ vttablet:
 pmm:
   enabled: false
   pmmTag: 1.17.0
+  repo: percona/pmm-server
   client:
     resources:
       requests:
@@ -385,3 +387,10 @@ orchestrator:
     requests:
       cpu: 50m
       memory: 350Mi
+
+logtail:
+  image: vitess/logtail:helm-1.0.6
+
+logrotate:
+  image: vitess/logrotate:helm-1.0.6
+

@@ -8,6 +8,7 @@
 {{- $defaultVtctld := index . 2 -}}
 {{- $namespace := index . 3 -}}
 {{- $config := index . 4 -}}
+{{- $repo := index . 5 -}}
 
 {{- with $cell.vtctld -}}
 
@@ -59,7 +60,7 @@ spec:
 {{ include "vtctld-affinity" (tuple $cellClean $cell.region) | indent 6 }}
       containers:
         - name: vtctld
-          image: vitess/vtctld:{{$vitessTag}}
+          image: {{$repo}}/vtctld:{{$vitessTag}}
           imagePullPolicy: IfNotPresent
           readinessProbe:
             httpGet:
