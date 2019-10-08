@@ -44,10 +44,7 @@ import (
 )
 
 type vdiff struct {
-	wr             *Wrangler
-	workflow       string
-	sourceKeyspace string
-	targetKeyspace string
+	mi             *migrater
 	sourceCell     string
 	targetCell     string
 	tabletTypesStr string
@@ -85,10 +82,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 		return err
 	}
 	df := &vdiff{
-		wr:             wr,
-		workflow:       workflow,
-		sourceKeyspace: mi.sourceKeyspace,
-		targetKeyspace: mi.targetKeyspace,
+		mi:             mi,
 		sourceCell:     sourceCell,
 		targetCell:     targetCell,
 		tabletTypesStr: tabletTypesStr,
@@ -242,13 +236,13 @@ func (df *vdiff) stopTargetStreams(ctx context.Context) error {
 	var mu sync.Mutex
 
 	err := df.forAll(df.targets, func(shard string, target *dfParams) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for vdiff' where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(df.workflow))
-		_, err := df.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
+		query := fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for vdiff' where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(df.mi.workflow))
+		_, err := df.mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
 		if err != nil {
 			return err
 		}
-		query = fmt.Sprintf("select source, pos from _vt.vreplication where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(df.workflow))
-		p3qr, err := df.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
+		query = fmt.Sprintf("select source, pos from _vt.vreplication where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(df.mi.workflow))
+		p3qr, err := df.mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
 		if err != nil {
 			return err
 		}
@@ -295,7 +289,7 @@ func (df *vdiff) selectTablets(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		err1 = df.forAll(df.sources, func(shard string, source *dfParams) error {
-			tp, err := discovery.NewTabletPicker(ctx, df.wr.ts, df.targetCell, df.targetKeyspace, shard, df.tabletTypesStr)
+			tp, err := discovery.NewTabletPicker(ctx, df.mi.wr.ts, df.targetCell, df.mi.targetKeyspace, shard, df.tabletTypesStr)
 			if err != nil {
 				return err
 			}
@@ -314,7 +308,7 @@ func (df *vdiff) selectTablets(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		err2 = df.forAll(df.targets, func(shard string, target *dfParams) error {
-			tp, err := discovery.NewTabletPicker(ctx, df.wr.ts, df.targetCell, df.targetKeyspace, shard, df.tabletTypesStr)
+			tp, err := discovery.NewTabletPicker(ctx, df.mi.wr.ts, df.targetCell, df.mi.targetKeyspace, shard, df.tabletTypesStr)
 			if err != nil {
 				return err
 			}
@@ -336,56 +330,56 @@ func (df *vdiff) selectTablets(ctx context.Context) error {
 	return err2
 }
 
-func (df *vdiff) streamFromSources(ctx context.Context, td *tableDiffer) error {
-	err := df.forAll(df.sources, func(shard string, source *dfParams) error {
-		// Iteration for each source.
-		if err := df.wr.tmc.WaitForPosition(ctx, source.tablet, mysql.EncodePosition(source.position)); err != nil {
+func (df *vdiff) startStreams(ctx context.Context, participans map[string]*dfParams, query string) error {
+	err := df.forAll(participans, func(shard string, participant *dfParams) error {
+		// Iteration for each participant.
+		if err := df.mi.wr.tmc.WaitForPosition(ctx, participant.tablet, mysql.EncodePosition(participant.position)); err != nil {
 			return err
 		}
-		source.result = make(chan *sqltypes.Result, 1)
+		participant.result = make(chan *sqltypes.Result, 1)
 		gtidch := make(chan string, 1)
 
 		// Start the stream in a separate goroutine.
-		go df.streamOneSource(ctx, shard, source, td, gtidch)
+		go df.streamOne(ctx, shard, participant, query, gtidch)
 
 		// Wait for the gtid to be sent. If it's not received, there was an error
-		// which would be stored in source.err.
+		// which would be stored in participant.err.
 		gtid, ok := <-gtidch
 		if !ok {
-			return source.err
+			return participant.err
 		}
 		// Save the new position, as of when the query executed.
-		source.snapshotPosition = gtid
+		participant.snapshotPosition = gtid
 		return nil
 	})
 	return err
 }
 
-// streamOneSource is called as a goroutine, and communicates its results through channels.
+// streamOne is called as a goroutine, and communicates its results through channels.
 // It first sends the snapshot gtid to gtidch.
-// Then it streams results to source.result.
-// Before returning, it sets source.err, and closes all channels.
-// If any channel is closed, then source.err can be checked if there was an error.
-func (df *vdiff) streamOneSource(ctx context.Context, shard string, source *dfParams, td *tableDiffer, gtidch chan string) {
-	defer close(source.result)
+// Then it streams results to participant.result.
+// Before returning, it sets participant.err, and closes all channels.
+// If any channel is closed, then participant.err can be checked if there was an error.
+func (df *vdiff) streamOne(ctx context.Context, shard string, participant *dfParams, query string, gtidch chan string) {
+	defer close(participant.result)
 	defer close(gtidch)
 
 	// Wrap the streaming in a separate function so we can capture the error.
 	// This shows that the error will be set before the channels are closed.
-	source.err = func() error {
-		conn, err := tabletconn.GetDialer()(source.tablet, grpcclient.FailFast(false))
+	participant.err = func() error {
+		conn, err := tabletconn.GetDialer()(participant.tablet, grpcclient.FailFast(false))
 		if err != nil {
 			return err
 		}
 		defer conn.Close(ctx)
 
 		target := &querypb.Target{
-			Keyspace:   df.sourceKeyspace,
+			Keyspace:   df.mi.sourceKeyspace,
 			Shard:      shard,
-			TabletType: source.tablet.Type,
+			TabletType: participant.tablet.Type,
 		}
 		var fields []*querypb.Field
-		err = conn.VStreamResults(ctx, target, td.sourceExpression, func(vrs *binlogdatapb.VStreamResultsResponse) error {
+		err = conn.VStreamResults(ctx, target, query, func(vrs *binlogdatapb.VStreamResultsResponse) error {
 			if vrs.Fields != nil {
 				fields = vrs.Fields
 				gtidch <- vrs.Gtid
@@ -396,7 +390,7 @@ func (df *vdiff) streamOneSource(ctx context.Context, shard string, source *dfPa
 			}
 			result := sqltypes.Proto3ToResult(p3qr)
 			select {
-			case source.result <- result:
+			case participant.result <- result:
 			case <-ctx.Done():
 				return io.EOF
 			}
@@ -404,6 +398,43 @@ func (df *vdiff) streamOneSource(ctx context.Context, shard string, source *dfPa
 		})
 		return err
 	}()
+}
+
+func (df *vdiff) syncTargets(ctx context.Context) error {
+	err := df.mi.forAllUids(func(target *miTarget, uid uint32) error {
+		bls := target.sources[uid]
+		pos := df.sources[bls.Shard].snapshotPosition
+		query := fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos='%s', message='synchronizing for vdiff' where id=%d", pos, uid)
+		if _, err := df.mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query); err != nil {
+			return err
+		}
+		return df.mi.wr.tmc.VReplicationWaitForPos(ctx, target.master.Tablet, int(uid), pos)
+	})
+	if err != nil {
+		return err
+	}
+
+	err = df.forAll(df.targets, func(shard string, target *dfParams) error {
+		pos, err := df.mi.wr.tmc.MasterPosition(ctx, target.master.Tablet)
+		if err != nil {
+			return err
+		}
+		mpos, err := mysql.DecodePosition(pos)
+		if err != nil {
+			return err
+		}
+		target.position = mpos
+		return nil
+	})
+	return err
+}
+
+func (df *vdiff) restartTargets(ctx context.Context) error {
+	return df.forAll(df.targets, func(shard string, target *dfParams) error {
+		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(df.mi.workflow))
+		_, err := df.mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
+		return err
+	})
 }
 
 func (df *vdiff) forAll(participants map[string]*dfParams, f func(string, *dfParams) error) error {
