@@ -438,11 +438,13 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 			return fmt.Errorf("old master tablet %v DemoteMaster failed: %v", topoproto.TabletAliasString(shardInfo.MasterAlias), err)
 		}
 
+		promoteCtx, promoteCancel := context.WithTimeout(ctx, waitSlaveTimeout)
+		defer promoteCancel()
 		// Wait on the master-elect tablet until it reaches that position,
 		// then promote it.
 		wr.logger.Infof("promote replica %v", masterElectTabletAliasStr)
 		event.DispatchUpdate(ev, "promoting replica")
-		rp, err = wr.tmc.PromoteSlaveWhenCaughtUp(remoteCtx, masterElectTabletInfo.Tablet, rp)
+		rp, err = wr.tmc.PromoteSlaveWhenCaughtUp(promoteCtx, masterElectTabletInfo.Tablet, rp)
 		if err != nil || (ctx.Err() != nil && ctx.Err() == context.DeadlineExceeded) {
 			remoteCancel()
 			// If we fail to promote the new master, try to roll back to the
