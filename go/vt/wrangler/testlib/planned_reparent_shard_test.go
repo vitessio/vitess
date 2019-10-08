@@ -81,6 +81,9 @@ func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE SET MASTER",
 		"START SLAVE",
+		// we end up calling SetMaster twice on the old master
+		"FAKE SET MASTER",
+		"START SLAVE",
 	}
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
@@ -103,7 +106,7 @@ func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
 		t.Fatalf("PlannedReparentShard failed: %v", err)
 	}
 
-	// // check what was run
+	// check what was run
 	if err := newMaster.FakeMysqlDaemon.CheckSuperQueryList(); err != nil {
 		t.Errorf("newMaster.FakeMysqlDaemon.CheckSuperQueryList failed: %v", err)
 	}
@@ -126,8 +129,8 @@ func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
 		t.Errorf("oldMaster...QueryServiceControl not serving")
 	}
 
-	// // verify the old master was told to start replicating (and not
-	// // the slave that wasn't replicating in the first place)
+	// verify the old master was told to start replicating (and not
+	// the slave that wasn't replicating in the first place)
 	if !oldMaster.FakeMysqlDaemon.Replicating {
 		t.Errorf("oldMaster.FakeMysqlDaemon.Replicating not set")
 	}
@@ -186,6 +189,9 @@ func TestPlannedReparentShard(t *testing.T) {
 	oldMaster.FakeMysqlDaemon.CurrentMasterPosition = newMaster.FakeMysqlDaemon.WaitMasterPosition
 	oldMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(newMaster.Tablet)
 	oldMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"FAKE SET MASTER",
+		"START SLAVE",
+		// we end up calling SetMaster twice on the old master
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}

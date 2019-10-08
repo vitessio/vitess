@@ -457,9 +457,6 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		reparentJournalPos = rp
 	}
 
-	remoteCtx, remoteCancel = context.WithTimeout(ctx, waitSlaveTimeout)
-	defer remoteCancel()
-
 	// Check we still have the topology lock.
 	if err := topo.CheckShardLocked(ctx, keyspace, shard); err != nil {
 		return fmt.Errorf("lost topology lock, aborting: %v", err)
@@ -518,18 +515,6 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		replCancel()
 		wgReplicas.Wait()
 		return fmt.Errorf("failed to PopulateReparentJournal on master: %v", err)
-	}
-
-	// After the master is done, we can update the shard record.
-	// TODO(deepthi): Remove this when we make the master tablet responsible for
-	//                updating the shard record.
-	wr.logger.Infof("updating shard record with new master %v", masterElectTabletAlias)
-	if _, err := wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
-		si.MasterAlias = masterElectTabletAlias
-		return nil
-	}); err != nil {
-		wgReplicas.Wait()
-		return fmt.Errorf("failed to update shard master record: %v", err)
 	}
 
 	// Wait for the replicas to complete.
