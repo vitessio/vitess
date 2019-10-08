@@ -21,7 +21,7 @@ Users who continue to engage with the project and its community will often becom
 
 ## Contributors
 
-Contributors will be added to the [Collaborators list](https://github.com/vitessio/vitess/settings/collaboration).
+Contributors will be added to the [Contributors list](https://github.com/vitessio/vitess/graphs/contributors).
 
 Contributors are community members who contribute in concrete ways to the project. Anyone can become a contributor. There is no expectation of commitment to the project, no specific skill requirements and no selection process.
 
@@ -42,7 +42,6 @@ Contributors engage with the project through the issue tracker, mailing list, th
 As contributors gain experience and familiarity with the project, their profile within, and commitment to, the community will increase. At some stage, they may find themselves being nominated for committership.
 
 ## Committers
-Committers will be added to the [committers list](https://github.com/orgs/youtube/teams/vitess-committers) and the [pullapprove list](https://github.com/vitessio/vitess/blob/master/.pullapprove.yml). 
 
 Committers are community members who have shown that they are committed to the continued development of the project through ongoing engagement with the community. Committership allows contributors to more easily carry on with their project related activities by giving them direct access to the project’s resources. That is, they can make changes directly to project outputs, without having to submit changes via patches.
 
@@ -65,8 +64,6 @@ It is important to recognise that commitership is a privilege, not a right. That
 A committer who shows an above-average level of contribution to the project, particularly with respect to its strategic direction and long-term health, may be nominated to become a member of the PMC. This role is described below.
 
 ## Project management committee
-
-PMC members will be added to the [list of administrators](https://github.com/orgs/youtube/teams/vitess-admin).
 
 The current list of PMC members and their github handles are:
 
