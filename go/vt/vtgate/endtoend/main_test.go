@@ -77,18 +77,6 @@ create table t2_id4_idx(
 	primary key(id),
 	key idx_id4(id4)
 ) Engine=InnoDB;
-
-create table user(
-	id bigint,
-	name varchar(20),
-	primary key(id)
-) Engine=InnoDB;
-
-create table user_details(
-	user_id bigint,
-	email varchar(45),
-	primary key(user_id)
-) Engine=InnoDB;
 `
 
 	vschema = &vschemapb.Keyspace{
@@ -161,26 +149,6 @@ create table user_details(
 				}},
 				Columns: []*vschemapb.Column{{
 					Name: "val1",
-					Type: sqltypes.VarChar,
-				}},
-			},
-			"user": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Column: "id",
-					Name:   "hash",
-				}},
-				Columns: []*vschemapb.Column{{
-					Name: "name",
-					Type: sqltypes.VarChar,
-				}},
-			},
-			"user_details": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Column: "user_id",
-					Name:   "hash",
-				}},
-				Columns: []*vschemapb.Column{{
-					Name: "email",
 					Type: sqltypes.VarChar,
 				}},
 			},
