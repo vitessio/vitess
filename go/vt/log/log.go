@@ -7,6 +7,7 @@ package log
 
 import (
 	"flag"
+
 	"github.com/golang/glog"
 )
 
