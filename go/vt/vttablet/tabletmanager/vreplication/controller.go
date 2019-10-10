@@ -199,7 +199,8 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		if _, err := dbClient.ExecuteFetch("set names binary", 10000); err != nil {
 			return err
 		}
-		vreplicator := newVReplicator(ct.id, &ct.source, tablet, ct.blpStats, dbClient, ct.mysqld)
+		vsClient := NewTabletVStreamerClient(tablet)
+		vreplicator := newVReplicator(ct.id, &ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld)
 		return vreplicator.Replicate(ctx)
 	}
 	return fmt.Errorf("missing source")

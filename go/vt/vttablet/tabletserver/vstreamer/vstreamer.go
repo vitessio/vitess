@@ -103,30 +103,41 @@ func (vs *vstreamer) Cancel() {
 func (vs *vstreamer) Stream() error {
 	defer vs.cancel()
 
-	pos, err := mysql.DecodePosition(vs.startPos)
-	if err != nil {
-		return err
-	}
-	vs.pos = pos
-
 	// Ensure se is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized.
 	if err := vs.se.Open(); err != nil {
-		return wrapError(err, vs.pos)
+		return wrapError(err, vs.startPos)
 	}
 
 	conn, err := binlog.NewSlaveConnection(vs.cp)
 	if err != nil {
-		return wrapError(err, vs.pos)
+		return wrapError(err, vs.startPos)
 	}
 	defer conn.Close()
 
-	events, err := conn.StartBinlogDumpFromPosition(vs.ctx, vs.pos)
+	pos, err := mysql.DecodePosition(vs.startPos)
+	if err == nil {
+		vs.pos = pos
+		events, err := conn.StartBinlogDumpFromPosition(vs.ctx, vs.pos)
+		if err != nil {
+			return wrapError(err, vs.startPos)
+		}
+		err = vs.parseEvents(vs.ctx, events)
+		return wrapError(err, vs.startPos)
+	}
+	// Let's try to decode as binlog:file position
+	filePos, err := mysql.ParseFilePosition(vs.startPos)
 	if err != nil {
-		return wrapError(err, vs.pos)
+		return wrapError(err, vs.startPos)
+	}
+
+	events, err := conn.StartBinlogDumpFromFilePosition(vs.ctx, filePos.Name, filePos.Pos)
+	if err != nil {
+		return wrapError(err, vs.startPos)
 	}
 	err = vs.parseEvents(vs.ctx, events)
-	return wrapError(err, vs.pos)
+	return wrapError(err, vs.startPos)
+
 }
 
 func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.BinlogEvent) error {
@@ -152,6 +163,16 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			bufferedEvents = nil
 			curSize = 0
 			return vs.send(vevents)
+		case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE:
+			newSize := len(vevent.GetDml())
+			if curSize+newSize > *PacketSize {
+				vevents := bufferedEvents
+				bufferedEvents = []*binlogdatapb.VEvent{vevent}
+				curSize = newSize
+				return vs.send(vevents)
+			}
+			curSize += newSize
+			bufferedEvents = append(bufferedEvents, vevent)
 		case binlogdatapb.VEventType_ROW:
 			// ROW events happen inside transactions. So, we can chunk them.
 			// Buffer everything until packet size is reached, and then send.
@@ -295,6 +316,21 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			return nil, fmt.Errorf("can't get query from binlog event: %v, event data: %#v", err, ev)
 		}
 		switch cat := sqlparser.Preview(q.SQL); cat {
+		// case sqlparser.StmtInsert:
+		// 	vevents = append(vevents, &binlogdatapb.VEvent{
+		// 		Type: binlogdatapb.VEventType_INSERT,
+		// 		Dml:  q.SQL,
+		// 	})
+		// case sqlparser.StmtUpdate:
+		// 	vevents = append(vevents, &binlogdatapb.VEvent{
+		// 		Type: binlogdatapb.VEventType_UPDATE,
+		// 		Dml:  q.SQL,
+		// 	})
+		// case sqlparser.StmtDelete:
+		// 	vevents = append(vevents, &binlogdatapb.VEvent{
+		// 		Type: binlogdatapb.VEventType_DELETE,
+		// 		Dml:  q.SQL,
+		// 	})
 		case sqlparser.StmtBegin:
 			vevents = append(vevents, &binlogdatapb.VEvent{
 				Type: binlogdatapb.VEventType_BEGIN,
@@ -472,7 +508,7 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 	return plan.filter(values)
 }
 
-func wrapError(err error, stopPos mysql.Position) error {
+func wrapError(err error, stopPos string) error {
 	if err != nil {
 		err = fmt.Errorf("stream error @ %v: %v", stopPos, err)
 		log.Error(err)
