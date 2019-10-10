@@ -55,6 +55,11 @@ func (mariadbFlavor) stopSlaveCommand() string {
 	return "STOP SLAVE"
 }
 
+// sendBinlogFileDumpCommand is part of the Flavor interface.
+func (mariadbFlavor) sendBinlogFileDumpCommand(c *Conn, slaveID uint32, binlogFilename string, pos uint32) error {
+	panic("filename binglog not supported for mariadb")
+}
+
 // sendBinlogDumpCommand is part of the Flavor interface.
 func (mariadbFlavor) sendBinlogDumpCommand(c *Conn, slaveID uint32, startPos Position) error {
 	// Tell the server that we understand GTIDs by setting our slave
