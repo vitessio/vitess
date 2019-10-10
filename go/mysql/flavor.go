@@ -62,6 +62,9 @@ type flavor interface {
 	// stopSlave returns the command to stop the slave.
 	stopSlaveCommand() string
 
+	// sendBinlogFileDumpCommand sends the packet required to start streaming from file:post
+	sendBinlogFileDumpCommand(c *Conn, slaveID uint32, binlogFilename string, pos uint32) error
+
 	// sendBinlogDumpCommand sends the packet required to start
 	// dumping binlogs from the specified location.
 	sendBinlogDumpCommand(c *Conn, slaveID uint32, startPos Position) error
@@ -161,6 +164,13 @@ func (c *Conn) StartSlaveUntilAfterCommand(pos Position) string {
 // StopSlaveCommand returns the command to stop the slave.
 func (c *Conn) StopSlaveCommand() string {
 	return c.flavor.stopSlaveCommand()
+}
+
+// SendBinlogFileDumpCommand sends the flavor-specific version of
+// the COM_BINLOG_DUMP command to start dumping raw binlog
+// events over a slave connection, starting at a given file position.
+func (c *Conn) SendBinlogFileDumpCommand(slaveID uint32, binlogFilename string, pos uint32) error {
+	return c.flavor.sendBinlogFileDumpCommand(c, slaveID, binlogFilename, pos)
 }
 
 // SendBinlogDumpCommand sends the flavor-specific version of

@@ -54,6 +54,11 @@ func (mysqlFlavor) stopSlaveCommand() string {
 }
 
 // sendBinlogDumpCommand is part of the Flavor interface.
+func (mysqlFlavor) sendBinlogFileDumpCommand(c *Conn, slaveID uint32, binlogFilename string, pos uint32) error {
+	return c.WriteComBinlogDump(slaveID, binlogFilename, pos, 0)
+}
+
+// sendBinlogDumpCommand is part of the Flavor interface.
 func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, slaveID uint32, startPos Position) error {
 	gtidSet, ok := startPos.GTIDSet.(Mysql56GTIDSet)
 	if !ok {
