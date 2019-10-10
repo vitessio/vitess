@@ -127,6 +127,26 @@ func (sc *SlaveConnection) StartBinlogDumpFromPosition(ctx context.Context, star
 	return sc.streamEvents(ctx), nil
 }
 
+// StartBinlogDumpFromFilePosition requests a replication binlog dump from
+// the master mysqld at the given binlog filename:pos and then sends binlog
+// events to the provided channel.
+// The stream will continue in the background, waiting for new events if
+// necessary, until the connection is closed, either by the master or
+// by canceling the context.
+//
+// Note the context is valid and used until eventChan is closed.
+func (sc *SlaveConnection) StartBinlogDumpFromFilePosition(ctx context.Context, binlogFilename string, pos uint32) (<-chan mysql.BinlogEvent, error) {
+	ctx, sc.cancel = context.WithCancel(ctx)
+
+	log.Infof("sending binlog file dump command: binlogfilename=%v, pos=%v, slaveID=%v", binlogFilename, pos, sc.slaveID)
+	if err := sc.SendBinlogFileDumpCommand(sc.slaveID, binlogFilename, pos); err != nil {
+		log.Errorf("couldn't send binlog dump command: %v", err)
+		return nil, err
+	}
+
+	return sc.streamEvents(ctx), nil
+}
+
 // streamEvents returns a channel on which events are streamed.
 func (sc *SlaveConnection) streamEvents(ctx context.Context) chan mysql.BinlogEvent {
 	// FIXME(alainjobart) I think we can use a buffered channel for better performance.
