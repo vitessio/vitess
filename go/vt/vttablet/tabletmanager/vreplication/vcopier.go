@@ -122,7 +122,7 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 	}
 	// If there's no start position, it means we're copying the
 	// first table. So, there's nothing to catch up to.
-	if settings.StartPos.IsZero() {
+	if settings.GtidStartPos.IsZero() {
 		return nil
 	}
 
@@ -288,7 +288,7 @@ func (vc *vcopier) fastForward(ctx context.Context, copyState map[string]*sqltyp
 	if err != nil {
 		return err
 	}
-	if settings.StartPos.IsZero() {
+	if settings.GtidStartPos.IsZero() {
 		update := binlogplayer.GenerateUpdatePos(vc.vr.id, pos, time.Now().Unix(), 0)
 		_, err := vc.vr.dbClient.Execute(update)
 		return err
