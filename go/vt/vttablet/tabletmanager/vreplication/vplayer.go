@@ -28,20 +28,20 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+
+	//	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type vplayer struct {
-	vr        *vreplicator
-	startPos  mysql.Position
-	stopPos   mysql.Position
-	saveStop  bool
-	copyState map[string]*sqltypes.Result
+	vr                 *vreplicator
+	startPos           mysql.Position
+	stopPos            mysql.Position
+	startBinlogFilePos *mysql.BinlogFilePos
+	saveStop           bool
+	copyState          map[string]*sqltypes.Result
 
 	replicatorPlan *ReplicatorPlan
 	tablePlans     map[string]*TablePlan
@@ -66,8 +66,8 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	}
 	return &vplayer{
 		vr:            vr,
-		startPos:      settings.StartPos,
-		pos:           settings.StartPos,
+		startPos:      *settings.GtidStartPos,
+		pos:           *settings.GtidStartPos,
 		stopPos:       settings.StopPos,
 		saveStop:      saveStop,
 		copyState:     copyState,
@@ -105,28 +105,23 @@ func (vp *vplayer) play(ctx context.Context) error {
 	return nil
 }
 
-func (vp *vplayer) fetchAndApply(ctx context.Context) error {
-	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, source: %v, filter: %v", vp.vr.id, vp.startPos, vp.stopPos, vp.vr.sourceTablet, vp.vr.source)
+func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
+	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, filter: %v", vp.vr.id, vp.startPos, vp.stopPos, vp.vr.source)
 
-	vsClient, err := tabletconn.GetDialer()(vp.vr.sourceTablet, grpcclient.FailFast(false))
+	err = vp.vr.sourceVStreamer.Open(ctx)
 	if err != nil {
-		return fmt.Errorf("error dialing tablet: %v", err)
+		return fmt.Errorf("error creating vstreamer client: %v", err)
 	}
-	defer vsClient.Close(ctx)
+	defer vp.vr.sourceVStreamer.Close(ctx)
+
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	relay := newRelayLog(ctx, relayLogMaxItems, relayLogMaxSize)
 
-	target := &querypb.Target{
-		Keyspace:   vp.vr.sourceTablet.Keyspace,
-		Shard:      vp.vr.sourceTablet.Shard,
-		TabletType: vp.vr.sourceTablet.Type,
-	}
-	log.Infof("Sending vstream command: %v", vp.replicatorPlan.VStreamFilter)
 	streamErr := make(chan error, 1)
 	go func() {
-		streamErr <- vsClient.VStream(ctx, target, mysql.EncodePosition(vp.startPos), vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
+		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, mysql.EncodePosition(vp.startPos), vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
 			return relay.Send(events)
 		})
 	}()
@@ -345,7 +340,17 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			return err
 		}
 		vp.tablePlans[event.FieldEvent.TableName] = tplan
+	case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE:
+		// This is a player using stament based replication
+		if err := vp.vr.dbClient.Begin(); err != nil {
+			return err
+		}
+
+		if _, err := vp.vr.dbClient.ExecuteWithRetry(ctx, event.Dml); err != nil {
+			log.Warningf("Fail to run: %v. Got error: %v", event.Dml, err)
+		}
 	case binlogdatapb.VEventType_ROW:
+		// This player is configured for row based replicaiton
 		if err := vp.vr.dbClient.Begin(); err != nil {
 			return err
 		}

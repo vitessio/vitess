@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -46,25 +45,28 @@ var (
 )
 
 type vreplicator struct {
-	id           uint32
-	source       *binlogdatapb.BinlogSource
-	sourceTablet *topodatapb.Tablet
-	stats        *binlogplayer.Stats
-	dbClient     *vdbClient
+	id       uint32
+	dbClient *vdbClient
+	// source
+	source          *binlogdatapb.BinlogSource
+	sourceVStreamer VStreamerClient
+
+	// target
+	stats *binlogplayer.Stats
 	// mysqld is used to fetch the local schema.
 	mysqld mysqlctl.MysqlDaemon
 
 	tableKeys map[string][]string
 }
 
-func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceTablet *topodatapb.Tablet, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon) *vreplicator {
+func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon) *vreplicator {
 	return &vreplicator{
-		id:           id,
-		source:       source,
-		sourceTablet: sourceTablet,
-		stats:        stats,
-		dbClient:     newVDBClient(dbClient, stats),
-		mysqld:       mysqld,
+		id:              id,
+		source:          source,
+		sourceVStreamer: sourceVStreamer,
+		stats:           stats,
+		dbClient:        newVDBClient(dbClient, stats),
+		mysqld:          mysqld,
 	}
 }
 
@@ -89,7 +91,7 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 			if err := newVCopier(vr).copyNext(ctx, settings); err != nil {
 				return err
 			}
-		case settings.StartPos.IsZero():
+		case settings.GtidStartPos.IsZero():
 			if err := newVCopier(vr).initTablesForCopy(ctx); err != nil {
 				return err
 			}

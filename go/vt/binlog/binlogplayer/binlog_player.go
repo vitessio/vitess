@@ -202,7 +202,10 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 		log.Error(err)
 		return err
 	}
-	blp.position = settings.StartPos
+
+	if settings.GtidStartPos != nil {
+		blp.position = *settings.GtidStartPos
+	}
 	blp.stopPosition = settings.StopPos
 	t, err := throttler.NewThrottler(
 		fmt.Sprintf("BinlogPlayer/%d", blp.uid),
@@ -517,11 +520,12 @@ func SetVReplicationState(dbClient DBClient, uid uint32, state, message string) 
 
 // VRSettings contains the settings of a vreplication table.
 type VRSettings struct {
-	StartPos          mysql.Position
+	StartPos          string
 	StopPos           mysql.Position
 	MaxTPS            int64
 	MaxReplicationLag int64
 	State             string
+	GtidStartPos      *mysql.Position
 }
 
 // ReadVRSettings retrieves the throttler settings for
@@ -546,7 +550,8 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse max_replication_lag column: %v", err)
 	}
-	startPos, err := mysql.DecodePosition(vrRow[0].ToString())
+	startPos := vrRow[0].ToString()
+	gtidStartPos, err := mysql.DecodePosition(startPos)
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse pos column: %v", err)
 	}
@@ -557,6 +562,7 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 
 	return VRSettings{
 		StartPos:          startPos,
+		GtidStartPos:      &gtidStartPos,
 		StopPos:           stopPos,
 		MaxTPS:            maxTPS,
 		MaxReplicationLag: maxReplicationLag,
