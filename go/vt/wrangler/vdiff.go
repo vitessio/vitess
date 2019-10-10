@@ -35,7 +35,9 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -330,7 +332,7 @@ func (df *vdiff) selectTablets(ctx context.Context) error {
 	return err2
 }
 
-func (df *vdiff) startStreams(ctx context.Context, participans map[string]*dfParams, query string) error {
+func (df *vdiff) startQueryStreams(ctx context.Context, participans map[string]*dfParams, query string) error {
 	err := df.forAll(participans, func(shard string, participant *dfParams) error {
 		// Iteration for each participant.
 		if err := df.mi.wr.tmc.WaitForPosition(ctx, participant.tablet, mysql.EncodePosition(participant.position)); err != nil {
@@ -452,6 +454,106 @@ func (df *vdiff) forAll(participants map[string]*dfParams, f func(string, *dfPar
 	}
 	wg.Wait()
 	return allErrors.AggrError(vterrors.Aggregate)
+}
+
+var _ engine.VCursor = (*resultReader)(nil)
+
+// resultReader performs a merge-sorted read from the participants.
+type resultReader struct {
+	ctx          context.Context
+	cancel       func()
+	participants map[string]*dfParams
+	orderBy      []engine.OrderbyParams
+	result       chan *sqltypes.Result
+}
+
+func newResultReader(ctx context.Context, participants map[string]*dfParams, orderBy []engine.OrderbyParams) *resultReader {
+	ctx, cancel := context.WithCancel(ctx)
+	rr := &resultReader{
+		ctx:          ctx,
+		cancel:       cancel,
+		participants: participants,
+		orderBy:      orderBy,
+		result:       make(chan *sqltypes.Result, 1),
+	}
+	rss := make([]*srvtopo.ResolvedShard, 0, len(participants))
+	for shard := range participants {
+		rss = append(rss, &srvtopo.ResolvedShard{
+			Target: &querypb.Target{
+				Shard: shard,
+			},
+		})
+	}
+	go engine.MergeSort(rr, "", rr.orderBy, rss, nil, func(qr *sqltypes.Result) error {
+		select {
+		case rr.result <- qr:
+		case <-rr.ctx.Done():
+			return io.EOF
+		}
+		return nil
+	})
+	return rr
+}
+
+func (rr *resultReader) Next() (*sqltypes.Result, error) {
+	select {
+	case qr := <-rr.result:
+		return qr, nil
+	case <-rr.ctx.Done():
+		return nil, io.EOF
+	}
+}
+
+func (rr *resultReader) Close() {
+	rr.cancel()
+}
+
+func (rr *resultReader) Context() context.Context {
+	return nil
+}
+
+func (rr *resultReader) MaxMemoryRows() int {
+	return 0
+}
+
+func (rr *resultReader) SetContextTimeout(timeout time.Duration) context.CancelFunc {
+	return nil
+}
+
+func (rr *resultReader) RecordWarning(warning *querypb.QueryWarning) {
+}
+
+func (rr *resultReader) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
+	return nil, nil
+}
+
+func (rr *resultReader) AutocommitApproval() bool {
+	return false
+}
+
+func (rr *resultReader) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, []error) {
+	return nil, nil
+}
+
+func (rr *resultReader) ExecuteStandalone(query string, bindvars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error) {
+	return nil, nil
+}
+
+func (rr *resultReader) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
+	for result := range rr.participants[rss[0].Target.Shard].result {
+		if err := callback(result); err != nil {
+			return err
+		}
+	}
+	return rr.participants[rss[0].Target.Shard].err
+}
+
+func (rr *resultReader) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, isDML, autocommit bool) (*sqltypes.Result, error) {
+	return nil, nil
+}
+
+func (rr *resultReader) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+	return nil, nil, nil
 }
 
 func removeKeyrange(where *sqlparser.Where) *sqlparser.Where {
