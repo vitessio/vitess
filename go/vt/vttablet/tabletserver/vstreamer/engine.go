@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
@@ -95,8 +94,8 @@ func NewEngine(ts srvtopo.Server, se *schema.Engine) *Engine {
 }
 
 // InitDBConfig performs saves the required info from dbconfigs for future use.
-func (vse *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
-	vse.cp = dbcfgs.DbaWithDB()
+func (vse *Engine) InitDBConfig(cp *mysql.ConnParams) {
+	vse.cp = cp
 }
 
 // Open starts the Engine service.

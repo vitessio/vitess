@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -48,7 +47,7 @@ type notifier func(full map[string]*Table, created, altered, dropped []string)
 // Engine stores the schema info and performs operations that
 // keep itself up-to-date.
 type Engine struct {
-	dbconfigs *dbconfigs.DBConfigs
+	cp *mysql.ConnParams
 
 	// mu protects the following fields.
 	mu         sync.Mutex
@@ -100,8 +99,8 @@ func NewEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *En
 }
 
 // InitDBConfig must be called before Open.
-func (se *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
-	se.dbconfigs = dbcfgs
+func (se *Engine) InitDBConfig(cp *mysql.ConnParams) {
+	se.cp = cp
 }
 
 // Open initializes the Engine. Calling Open on an already
@@ -115,8 +114,7 @@ func (se *Engine) Open() error {
 	start := time.Now()
 	defer log.Infof("Time taken to load the schema: %v", time.Since(start))
 	ctx := tabletenv.LocalContext()
-	dbaParams := se.dbconfigs.DbaWithDB()
-	se.conns.Open(dbaParams, dbaParams, dbaParams)
+	se.conns.Open(se.cp, se.cp, se.cp)
 
 	conn, err := se.conns.Get(ctx)
 	if err != nil {

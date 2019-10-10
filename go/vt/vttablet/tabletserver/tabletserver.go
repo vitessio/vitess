@@ -389,14 +389,14 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.target = target
 	tsv.dbconfigs = dbcfgs
 
-	tsv.se.InitDBConfig(tsv.dbconfigs)
+	tsv.se.InitDBConfig(tsv.dbconfigs.DbaWithDB())
 	tsv.qe.InitDBConfig(tsv.dbconfigs)
 	tsv.teCtrl.InitDBConfig(tsv.dbconfigs)
 	tsv.hw.InitDBConfig(tsv.dbconfigs)
 	tsv.hr.InitDBConfig(tsv.dbconfigs)
 	tsv.messager.InitDBConfig(tsv.dbconfigs)
 	tsv.watcher.InitDBConfig(tsv.dbconfigs)
-	tsv.vstreamer.InitDBConfig(tsv.dbconfigs)
+	tsv.vstreamer.InitDBConfig(tsv.dbconfigs.DbaWithDB())
 	return nil
 }
 
