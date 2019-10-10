@@ -21,8 +21,9 @@ import (
 	"net/http"
 	"sort"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logz"
 )
 
@@ -79,7 +80,8 @@ func schemazHandler(tables map[string]*Table, w http.ResponseWriter, r *http.Req
 	}
 	logz.StartHTMLTable(w)
 	defer logz.EndHTMLTable(w)
-	w.Write(schemazHeader)
+	_, err := w.Write(schemazHeader)
+	vterrors.LogIfError(err)
 
 	tableList := make([]*Table, 0, len(tables))
 	for _, t := range tables {
@@ -101,8 +103,6 @@ func schemazHandler(tables map[string]*Table, w http.ResponseWriter, r *http.Req
 	}
 	for _, Value := range sorter.rows {
 		envelope.Table = Value
-		if err := schemazTmpl.Execute(w, envelope); err != nil {
-			log.Errorf("schemaz: couldn't execute template: %v", err)
-		}
+		vterrors.LogIfError(schemazTmpl.Execute(w, envelope))
 	}
 }

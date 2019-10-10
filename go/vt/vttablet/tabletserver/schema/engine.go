@@ -89,7 +89,8 @@ func NewEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *En
 			// the schema engine may not have been initialized.
 			err := se.Open()
 			if err != nil {
-				w.Write([]byte(err.Error()))
+				_, err := w.Write([]byte(err.Error()))
+				vterrors.LogIfError(err)
 				return
 			}
 
@@ -556,19 +557,22 @@ func (se *Engine) handleHTTPSchema(response http.ResponseWriter, request *http.R
 	// the schema engine may not have been initialized.
 	err := se.Open()
 	if err != nil {
-		response.Write([]byte(err.Error()))
+		_, err := response.Write([]byte(err.Error()))
+		vterrors.LogIfError(err)
 		return
 	}
 
 	response.Header().Set("Content-Type", "application/json; charset=utf-8")
 	b, err := json.MarshalIndent(se.GetSchema(), "", " ")
 	if err != nil {
-		response.Write([]byte(err.Error()))
+		_, err := response.Write([]byte(err.Error()))
+		vterrors.LogIfError(err)
 		return
 	}
 	buf := bytes.NewBuffer(nil)
 	json.HTMLEscape(buf, b)
-	response.Write(buf.Bytes())
+	_, err = response.Write(buf.Bytes())
+	vterrors.LogIfError(err)
 }
 
 // Test methods. Do not use in non-test code.

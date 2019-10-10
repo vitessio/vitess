@@ -23,6 +23,8 @@ import (
 	"net/http"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callerid"
@@ -87,7 +89,7 @@ func txlogzHandler(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if *streamlog.RedactDebugUIQueries {
-		io.WriteString(w, `
+		_, err := io.WriteString(w, `
 <!DOCTYPE html>
 <html>
 <body>
@@ -96,6 +98,7 @@ func txlogzHandler(w http.ResponseWriter, req *http.Request) {
 </body>
 </html>
 `)
+		vterrors.LogIfError(err)
 		return
 	}
 
@@ -104,7 +107,13 @@ func txlogzHandler(w http.ResponseWriter, req *http.Request) {
 	defer tabletenv.TxLogger.Unsubscribe(ch)
 	logz.StartHTMLTable(w)
 	defer logz.EndHTMLTable(w)
-	w.Write(txlogzHeader)
+	_, err := w.Write(txlogzHeader)
+	vterrors.LogIfError(err)
+
+	writeString := func(s string) {
+		_, err := io.WriteString(w, s)
+		vterrors.LogIfError(err)
+	}
 
 	tmr := time.NewTimer(timeout)
 	defer tmr.Stop()
@@ -114,9 +123,9 @@ func txlogzHandler(w http.ResponseWriter, req *http.Request) {
 			txc, ok := out.(*TxConnection)
 			if !ok {
 				err := fmt.Errorf("unexpected value in %s: %#v (expecting value of type %T)", tabletenv.TxLogger.Name(), out, &TxConnection{})
-				io.WriteString(w, `<tr class="error">`)
-				io.WriteString(w, err.Error())
-				io.WriteString(w, "</tr>")
+				writeString(`<tr class="error">`)
+				writeString(err.Error())
+				writeString("</tr>")
 				log.Error(err)
 				continue
 			}

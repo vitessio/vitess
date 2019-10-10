@@ -316,9 +316,8 @@ func (te *TxEngine) unknownStateError() error {
 	return vterrors.Errorf(vtrpc.Code_INTERNAL, "unknown state %v", te.state)
 }
 
-func (te *TxEngine) blockUntilEndOfTransition() error {
+func (te *TxEngine) blockUntilEndOfTransition() {
 	<-te.transitionSignal
-	return nil
 }
 
 func (te *TxEngine) transitionTo(nextState txEngineState) error {
