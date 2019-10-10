@@ -208,6 +208,48 @@ func TestPositionAppendToZero(t *testing.T) {
 	}
 }
 
+func TestParseFilePositionInvalidInput(t *testing.T) {
+	input := "filenameinvalidpos"
+	rp, err := ParseFilePosition(input)
+	if err == nil {
+		t.Errorf("ParseFilePosition(%#v) expected error, got : %#v", input, rp)
+	}
+
+	want := `parse error: unknown file:pos format`
+	got, ok := err.(error)
+	if !ok || !strings.HasPrefix(got.Error(), want) {
+		t.Errorf("wrong error, got %#v, want %#v", got, want)
+	}
+}
+
+func TestParseFilePositionInvalidPos(t *testing.T) {
+	input := "filename:invalidpos"
+	rp, err := ParseFilePosition(input)
+	if err == nil {
+		t.Errorf("ParseFilePosition(%#v) expected error, got : %#v", input, rp)
+	}
+
+	want := `parse error: pos is not a valid`
+	got, ok := err.(error)
+	if !ok || !strings.HasPrefix(got.Error(), want) {
+		t.Errorf("wrong error, got %#v, want %#v", got, want)
+	}
+}
+
+func TestParseFilePosition(t *testing.T) {
+	input := "filename:2343"
+	want := BinlogFilePos{Name: "filename", Pos: 2343}
+	got, err := ParseFilePosition(input)
+	if err != nil {
+		t.Errorf("ParseFilePosition(%#v) unexpected error: %#v", input, err)
+	}
+
+	if got.Name != want.Name || got.Pos != want.Pos {
+		t.Errorf("ParseFilePosition(%#v) = %#v, want %#v", input, got, want)
+	}
+
+}
+
 func TestMustParsePosition(t *testing.T) {
 	flavor := "fake flavor"
 	gtidSetParsers[flavor] = func(s string) (GTIDSet, error) {
