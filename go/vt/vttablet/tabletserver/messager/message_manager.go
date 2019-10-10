@@ -297,7 +297,7 @@ func (mm *messageManager) Close() {
 
 // Subscribe registers the send function as a receiver of messages
 // and returns a 'done' channel that will be closed when the subscription
-// ends. There are many reaons for a subscription to end: a grpc context
+// ends. There are many reasons for a subscription to end: a grpc context
 // cancel or timeout, or tabletserver shutdown, etc.
 func (mm *messageManager) Subscribe(ctx context.Context, send func(*sqltypes.Result) error) <-chan struct{} {
 	receiver, done := newMessageReceiver(ctx, send)

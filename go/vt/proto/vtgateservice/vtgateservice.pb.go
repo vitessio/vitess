@@ -6,12 +6,11 @@ package vtgateservice
 import (
 	context "context"
 	fmt "fmt"
-	math "math"
-
 	proto "github.com/golang/protobuf/proto"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	math "math"
 	query "vitess.io/vitess/go/vt/proto/query"
 	vtgate "vitess.io/vitess/go/vt/proto/vtgate"
 )

@@ -167,7 +167,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 	}
 
 	stmtType := sqlparser.Preview(sql)
-	logStats.StmtType = sqlparser.StmtType(stmtType)
+	logStats.StmtType = stmtType.String()
 
 	// Mysql warnings are scoped to the current session, but are
 	// cleared when a "non-diagnostic statement" is executed:
@@ -1126,7 +1126,7 @@ func (e *Executor) handleComment(sql string) (*sqltypes.Result, error) {
 // StreamExecute executes a streaming query.
 func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, target querypb.Target, callback func(*sqltypes.Result) error) (err error) {
 	logStats := NewLogStats(ctx, method, sql, bindVars)
-	logStats.StmtType = sqlparser.StmtType(sqlparser.Preview(sql))
+	logStats.StmtType = sqlparser.Preview(sql).String()
 	defer logStats.Send()
 
 	if bindVars == nil {
@@ -1137,7 +1137,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 
 	// check if this is a stream statement for messaging
 	// TODO: support keyRange syntax
-	if logStats.StmtType == sqlparser.StmtType(sqlparser.StmtStream) {
+	if logStats.StmtType == sqlparser.StmtStream.String() {
 		return e.handleMessageStream(ctx, safeSession, sql, target, callback, vcursor, logStats)
 	}
 
@@ -1521,7 +1521,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 	}
 
 	stmtType := sqlparser.Preview(sql)
-	logStats.StmtType = sqlparser.StmtType(stmtType)
+	logStats.StmtType = stmtType.String()
 
 	// Mysql warnings are scoped to the current session, but are
 	// cleared when a "non-diagnostic statement" is executed:

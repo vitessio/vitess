@@ -23,9 +23,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -56,8 +56,13 @@ type BackupParams struct {
 	HookExtraEnv map[string]string
 	// TopoServer, Keyspace and Shard are used to discover master tablet
 	TopoServer *topo.Server
-	Keyspace   string
-	Shard      string
+	// Keyspace and Shard are used to infer the directory where backups should be stored
+	Keyspace string
+	Shard    string
+	// TabletAlias is used along with backupTime to construct the backup name
+	TabletAlias string
+	// BackupTime is the time at which the backup is being started
+	BackupTime time.Time
 }
 
 // RestoreParams is the struct that holds all params passed to ExecuteRestore
@@ -76,15 +81,20 @@ type RestoreParams struct {
 	// restoring. This is always set to false when starting a tablet with -restore_from_backup,
 	// but is set to true when executing a RestoreFromBackup command on an already running vttablet
 	DeleteBeforeRestore bool
-	// Name of the managed database / schema
+	// DbName is the name of the managed database / schema
 	DbName string
-	// Directory location to search for a usable backup
-	Dir string
+	// Keyspace and Shard are used to infer the directory where backups are stored
+	Keyspace string
+	Shard    string
+	// StartTime: if non-zero, look for a backup that was taken at or before this time
+	// Otherwise, find the most recent backup
+	StartTime time.Time
 }
 
 // RestoreEngine is the interface to restore a backup with a given engine.
+// Returns the manifest of a backup if successful, otherwise returns an error
 type RestoreEngine interface {
-	ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (mysql.Position, error)
+	ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error)
 }
 
 // BackupRestoreEngine is a combination of BackupEngine and RestoreEngine.
@@ -169,6 +179,9 @@ type BackupManifest struct {
 	// Position is the replication position at which the backup was taken.
 	Position mysql.Position
 
+	// BackupTime is when the backup was taken in UTC time (RFC 3339 format)
+	BackupTime string
+
 	// FinishedTime is the time (in RFC 3339 format, UTC) at which the backup finished, if known.
 	// Some backups may not set this field if they were created before the field was added.
 	FinishedTime string
@@ -177,23 +190,39 @@ type BackupManifest struct {
 // FindBackupToRestore returns a selected candidate backup to be restored.
 // It returns the most recent backup that is complete, meaning it has a valid
 // MANIFEST file.
-func FindBackupToRestore(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, dir string, bhs []backupstorage.BackupHandle) (backupstorage.BackupHandle, error) {
+func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backupstorage.BackupHandle) (backupstorage.BackupHandle, error) {
 	var bh backupstorage.BackupHandle
 	var index int
+	// if a StartTime is provided in params, then find a backup that was taken at or before that time
+	checkBackupTime := !params.StartTime.IsZero()
+	backupDir := GetBackupDir(params.Keyspace, params.Shard)
 
 	for index = len(bhs) - 1; index >= 0; index-- {
 		bh = bhs[index]
 		// Check that the backup MANIFEST exists and can be successfully decoded.
-		_, err := GetBackupManifest(ctx, bh)
+		bm, err := GetBackupManifest(ctx, bh)
 		if err != nil {
-			log.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), dir, err)
+			params.Logger.Warningf("Possibly incomplete backup %v in directory %v on BackupStorage: can't read MANIFEST: %v)", bh.Name(), backupDir, err)
 			continue
 		}
 
-		logger.Infof("Restore: found backup %v %v to restore", bh.Directory(), bh.Name())
-		break
+		var backupTime time.Time
+		if checkBackupTime {
+			backupTime, err = time.Parse(time.RFC3339, bm.BackupTime)
+			if err != nil {
+				params.Logger.Warningf("Restore: skipping backup %v/%v with invalid time %v: %v", backupDir, bh.Name(), bm.BackupTime, err)
+				continue
+			}
+		}
+		if !checkBackupTime /* not snapshot */ || backupTime.Equal(params.StartTime) || backupTime.Before(params.StartTime) {
+			params.Logger.Infof("Restore: found backup %v %v to restore", bh.Directory(), bh.Name())
+			break
+		}
 	}
 	if index < 0 {
+		if checkBackupTime {
+			params.Logger.Errorf("No valid backup found before time %v", params.StartTime.Format(BackupTimestampFormat))
+		}
 		// There is at least one attempted backup, but none could be read.
 		// This implies there is data we ought to have, so it's not safe to start
 		// up empty.
@@ -255,4 +284,10 @@ func RestoreWasInterrupted(cnf *Mycnf) bool {
 	name := filepath.Join(cnf.TabletDir(), RestoreState)
 	_, err := os.Stat(name)
 	return err == nil
+}
+
+// GetBackupDir returns the directory where backups for the
+// given keyspace/shard are (or will be) stored
+func GetBackupDir(keyspace, shard string) string {
+	return fmt.Sprintf("%v/%v", keyspace, shard)
 }

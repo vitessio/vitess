@@ -129,10 +129,17 @@ func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client, server
 	blockCommandStarted := make(chan struct{})
 	var errorCodeCheck error
 	wg.Add(1)
+	errChan := make(chan error, 1)
+	defer close(errChan)
 	go func() {
+		defer wg.Done()
 		stream, err := client.ExecuteVtworkerCommand(ctx, []string{"Block"})
 		if err != nil {
-			t.Fatalf("Block command should not have failed: %v", err)
+			errChan <- err
+			close(blockCommandStarted)
+			return
+		} else {
+			errChan <- nil
 		}
 
 		firstLineReceived := false
@@ -154,7 +161,6 @@ func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client, server
 				close(blockCommandStarted)
 			}
 		}
-		wg.Done()
 	}()
 
 	// Try to run a second, concurrent vtworker command.
@@ -177,6 +183,9 @@ func commandErrorsBecauseBusy(t *testing.T, client vtworkerclient.Client, server
 	cancel()
 
 	wg.Wait()
+	if err := <-errChan; err != nil {
+		t.Fatalf("Block command should not have failed: %v", err)
+	}
 	if errorCodeCheck != nil {
 		t.Fatalf("Block command did not return the CANCELED error code: %v", errorCodeCheck)
 	}

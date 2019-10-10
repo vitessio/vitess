@@ -5,9 +5,8 @@ package tabletmanagerdata
 
 import (
 	fmt "fmt"
-	math "math"
-
 	proto "github.com/golang/protobuf/proto"
+	math "math"
 	logutil "vitess.io/vitess/go/vt/proto/logutil"
 	query "vitess.io/vitess/go/vt/proto/query"
 	replicationdata "vitess.io/vitess/go/vt/proto/replicationdata"
