@@ -217,10 +217,7 @@ func (ta *Table) HasPrimary() bool {
 
 // IsTopic returns true if TopicInfo is not nil.
 func (ta *Table) IsTopic() bool {
-	if ta.TopicInfo == nil {
-		return false
-	}
-	return true
+	return ta.TopicInfo != nil
 }
 
 // UniqueIndexes returns the number of unique indexes on the table

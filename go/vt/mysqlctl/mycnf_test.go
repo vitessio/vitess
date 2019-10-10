@@ -86,7 +86,6 @@ func TestMycnf(t *testing.T) {
 // 3. go test
 // 4. \rm $VTROOT/vthook/make_mycnf
 // 5. Add No Prefix back
-//lint:ignore U1000 Test for Mycnf hook changes
 func NoTestMycnfHook(t *testing.T) {
 	os.Setenv("MYSQL_FLAVOR", "MariaDB")
 	uid := uint32(11111)

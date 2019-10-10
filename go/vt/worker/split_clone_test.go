@@ -252,7 +252,7 @@ func (tc *splitCloneTestCase) setUpWithConcurrency(v3 bool, concurrency, writeQu
 		tc.rightMasterFakeDb.AddExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", nil)
 	}
 
-	// Fake stream health reponses because vtworker needs them to find the master.
+	// Fake stream health responses because vtworker needs them to find the master.
 	shqs := fakes.NewStreamHealthQueryService(leftMaster.Target())
 	shqs.AddDefaultHealthResponse()
 	tc.leftMasterQs = newTestQueryService(tc.t, leftMaster.Target(), shqs, 0, 2, topoproto.TabletAliasString(leftMaster.Tablet.Alias), false /* omitKeyspaceID */)
