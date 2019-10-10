@@ -19,6 +19,7 @@ import (
 
 var (
 	tabletsUsed = 0
+	tablesPath = "../tables/"
 	baseDockerComposeFile    = flag.String("base_yaml", "docker-compose.base.yml", "Starting docker-compose yaml")
 	baseVschemaFile    = flag.String("base_vschema", "base_vschema.json", "Starting vschema json")
 
@@ -73,7 +74,7 @@ func main() {
 	}
 
 	for _, v := range keyspaceInfoMap {
-		v.schemaFile = createFile(fmt.Sprintf("tables/%s_schema_file.sql", v.keyspace))
+		v.schemaFile = createFile(fmt.Sprintf("%s%s_schema_file.sql", tablesPath, v.keyspace))
 		appendtoSqlFile(v.schemaFileNames, v.schemaFile)
 		closeFile(v.schemaFile)
 	}
@@ -92,13 +93,13 @@ func main() {
 			vSchemaFile = addLookupDataToVschema(vSchemaFile, lookupKeyspace.schemaFileNames, primaryTableColumns, lookupKeyspace.keyspace)
 		}
 
-		writeVschemaFile(vSchemaFile, fmt.Sprintf("%s_vschema.json", keyspaceData.keyspace))
+		writeVschemaFile(vSchemaFile, fmt.Sprintf("../%s_vschema.json", keyspaceData.keyspace))
 	}
 
 	// Docker Compose File Patches
 	dockerComposeFile := readFile(*baseDockerComposeFile)
 	dockerComposeFile = applyDockerComposePatches(dockerComposeFile, keyspaceInfoMap)
-	writeFile(dockerComposeFile, "docker-compose.yml")
+	writeFile(dockerComposeFile, "../docker-compose.yml")
 }
 
 func applyFilePatch(dockerYaml []byte, patchFile string) []byte {
@@ -181,7 +182,7 @@ func handleError(err error) {
 
 func appendtoSqlFile(schemaFileNames []string, f *os.File) {
 	for _, file := range schemaFileNames {
-		data, err := ioutil.ReadFile("tables/" + file)
+		data, err := ioutil.ReadFile(tablesPath + file)
 		_, err = f.Write(data)
 		handleError(err)
 
@@ -234,8 +235,8 @@ func addTablesVschemaPatch(vSchemaFile []byte, schemaFileNames []string) ([]byte
 	indexedColumns := ""
 	primaryTableColumns := make(map[string]string)
 	for _, fileName := range schemaFileNames {
-		tableName := getTableName("tables/" + fileName)
-		indexedColumns = getPrimaryKey("tables/" + fileName)
+		tableName := getTableName(tablesPath + fileName)
+		indexedColumns = getPrimaryKey(tablesPath + fileName)
 		firstColumnName := strings.Split(indexedColumns, ", ")[0]
 		vSchemaFile = applyJsonInMemoryPatch(vSchemaFile, generatePrimaryVIndex(tableName, firstColumnName, "hash"))
 		primaryTableColumns[tableName] = firstColumnName
@@ -256,7 +257,7 @@ func addLookupDataToVschema(vSchemaFile []byte, schemaFileNames []string, primar
 			}
 		}
 
-		indexedColumns := getKeyColumns("tables/" + fileName)
+		indexedColumns := getKeyColumns(tablesPath + fileName)
 		firstColumnName := strings.Split(indexedColumns, ", ")[0]
 
 		// Lookup patch under "tables"
