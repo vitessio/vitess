@@ -203,8 +203,14 @@ function install_etcd() {
     Darwin) local platform=darwin; local ext=zip;;
   esac
 
+  case $(arch) in
+      aarch64)  local target=arm64;;
+      x86_64)  local target=amd64;;
+      *)   echo "ERROR: unsupported architecture"; exit 1;;
+  esac
+
   download_url=https://github.com/coreos/etcd/releases/download
-  file="etcd-${version}-${platform}-amd64.${ext}"
+  file="etcd-${version}-${platform}-${target}.${ext}"
 
   wget "$download_url/$version/$file"
   if [ "$ext" = "tar.gz" ]; then
@@ -213,7 +219,7 @@ function install_etcd() {
     unzip "$file"
   fi
   rm "$file"
-  ln -snf "$dist/etcd-${version}-${platform}-amd64/etcd" "$VTROOT/bin/etcd"
+  ln -snf "$dist/etcd-${version}-${platform}-${target}/etcd" "$VTROOT/bin/etcd"
 }
 install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
 
