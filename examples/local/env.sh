@@ -64,7 +64,11 @@ else
 
     ETCD_SERVER="localhost:2379"
     ETCD_VERSION=$(cat "${VTROOT}/dist/etcd/.installed_version")
-    ETCD_BINDIR="${VTROOT}/dist/etcd/etcd-${ETCD_VERSION}-${etcd_platform}-amd64/"
+    if [ "$(arch)" == aarch64 ];then
+            ETCD_BINDIR="${VTROOT}/dist/etcd/etcd-${ETCD_VERSION}-${etcd_platform}-arm64/"
+    else
+            ETCD_BINDIR="${VTROOT}/dist/etcd/etcd-${ETCD_VERSION}-${etcd_platform}-amd64/"
+    fi
     TOPOLOGY_FLAGS="-topo_implementation etcd2 -topo_global_server_address $ETCD_SERVER -topo_global_root /vitess/global"
 
     mkdir -p "${VTDATAROOT}/tmp"
