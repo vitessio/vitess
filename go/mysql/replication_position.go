@@ -131,7 +131,7 @@ func EncodePosition(rp Position) string {
 // to BinlogFilePos
 func ParseFilePosition(s string) (rp BinlogFilePos, err error) {
 	if s == "" {
-		return rp, nil
+		return rp, vterrors.Errorf(vtrpc.Code_INTERNAL, "parse error: unknown file:pos format %#v", s)
 	}
 
 	parts := strings.SplitN(s, ":", 2)
