@@ -28,6 +28,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
@@ -106,6 +107,7 @@ func (agent *ActionAgent) shardSyncLoop(ctx context.Context) {
 			if !topoproto.TabletAliasEqual(masterAlias, tablet.Alias) {
 				// Another master has taken over while we still think we're master.
 				if err := agent.abortMasterTerm(ctx, masterAlias); err != nil {
+					log.Errorf("Failed to abort master term: %v", err)
 					// Start retry timer and go back to sleep.
 					retryChan = time.After(*shardSyncRetryDelay)
 					continue
@@ -187,25 +189,34 @@ func syncShardMaster(ctx context.Context, ts *topo.Server, tablet *topodatapb.Ta
 // If active reparents are disabled, we don't touch our MySQL.
 // We just directly update our tablet type to REPLICA.
 func (agent *ActionAgent) abortMasterTerm(ctx context.Context, masterAlias *topodatapb.TabletAlias) error {
-	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
-	defer cancel()
-
 	masterAliasStr := topoproto.TabletAliasString(masterAlias)
 	log.Warningf("Another tablet (%v) has won master election. Stepping down to REPLICA.", masterAliasStr)
 
 	if *mysqlctl.DisableActiveReparents {
 		// Don't touch anything at the MySQL level. Just update tablet state.
 		log.Infof("Active reparents are disabled; updating tablet state only.")
-		return agent.ChangeType(ctx, topodatapb.TabletType_REPLICA)
+		changeTypeCtx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+		defer cancel()
+		if err := agent.ChangeType(changeTypeCtx, topodatapb.TabletType_REPLICA); err != nil {
+			return vterrors.Wrap(err, "failed to change type to REPLICA")
+		}
+		return nil
 	}
 
 	// Do a full demotion to convert MySQL into a replica.
 	log.Infof("Active reparents are enabled; converting MySQL to replica.")
-	if _, err := agent.DemoteMaster(ctx); err != nil {
-		return err
+	demoteMasterCtx, cancelDemoteMaster := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancelDemoteMaster()
+	if _, err := agent.DemoteMaster(demoteMasterCtx); err != nil {
+		return vterrors.Wrap(err, "failed to demote master")
 	}
+	setMasterCtx, cancelSetMaster := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer cancelSetMaster()
 	log.Infof("Attempting to reparent self to new master %v.", masterAliasStr)
-	return agent.SetMaster(ctx, masterAlias, 0, true)
+	if err := agent.SetMaster(setMasterCtx, masterAlias, 0, true); err != nil {
+		return vterrors.Wrap(err, "failed to reparent self to new master")
+	}
+	return nil
 }
 
 func (agent *ActionAgent) startShardSync() {
