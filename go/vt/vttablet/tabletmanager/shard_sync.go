@@ -50,7 +50,9 @@ var (
 // a notification signal from setTablet().
 func (agent *ActionAgent) shardSyncLoop(ctx context.Context) {
 	// Make a copy of the channel so we don't race when stopShardSync() clears it.
-	notifyChan := agent.shardSyncChan
+	agent.mutex.Lock()
+	notifyChan := agent._shardSyncChan
+	agent.mutex.Unlock()
 
 	// retryChan is how we wake up after going to sleep between retries.
 	// If no retry is pending, this channel will be nil, which means it's fine
@@ -224,9 +226,11 @@ func (agent *ActionAgent) startShardSync() {
 	// even if the receiver is busy. We can drop any additional send attempts
 	// if the buffer is full because all we care about is that the receiver will
 	// be told it needs to recheck the state.
-	agent.shardSyncChan = make(chan struct{}, 1)
+	agent.mutex.Lock()
+	agent._shardSyncChan = make(chan struct{}, 1)
 	ctx, cancel := context.WithCancel(context.Background())
-	agent.shardSyncCancel = cancel
+	agent._shardSyncCancel = cancel
+	agent.mutex.Unlock()
 
 	// Queue up a pending notification to force the loop to run once at startup.
 	agent.notifyShardSync()
@@ -236,23 +240,30 @@ func (agent *ActionAgent) startShardSync() {
 }
 
 func (agent *ActionAgent) stopShardSync() {
-	if agent.shardSyncCancel != nil {
-		agent.shardSyncCancel()
-		agent.shardSyncCancel = nil
-		agent.shardSyncChan = nil
+	agent.mutex.Lock()
+	if agent._shardSyncCancel != nil {
+		agent.mutex.Unlock()
+		agent._shardSyncCancel()
+		agent.mutex.Lock()
+		agent._shardSyncCancel = nil
+		agent._shardSyncChan = nil
 	}
+	agent.mutex.Unlock()
 }
 
 func (agent *ActionAgent) notifyShardSync() {
 	// If this is called before the shard sync is started, do nothing.
-	if agent.shardSyncChan == nil {
+	agent.mutex.Lock()
+	if agent._shardSyncChan == nil {
+		agent.mutex.Unlock()
 		return
 	}
+	agent.mutex.Unlock()
 
 	// Try to send. If the channel buffer is full, it means a notification is
 	// already pending, so we don't need to do anything.
 	select {
-	case agent.shardSyncChan <- struct{}{}:
+	case agent._shardSyncChan <- struct{}{}:
 	default:
 	}
 }
