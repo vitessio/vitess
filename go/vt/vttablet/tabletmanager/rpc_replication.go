@@ -323,8 +323,6 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 	// First, disallow queries, to make sure nobody is writing to the
 	// database.
 	tablet := agent.Tablet()
-	// We don't care if the QueryService state actually changed because we'll
-	// let vtgate keep serving read traffic from this master (see comment below).
 	log.Infof("DemoteMaster disabling query service")
 	if _ /* state changed */, err := agent.QueryServiceControl.SetServingType(tablet.Type, false, nil); err != nil {
 		return "", vterrors.Wrap(err, "SetServingType(serving=false) failed")
@@ -383,10 +381,6 @@ func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return mysql.EncodePosition(pos), nil
-	// There is no serving graph update - the master tablet will
-	// be replaced. Even though writes may fail, reads will
-	// succeed. It will be less noisy to simply leave the entry
-	// until we'll promote the master.
 }
 
 // UndoDemoteMaster reverts a previous call to DemoteMaster
