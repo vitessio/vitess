@@ -72,7 +72,9 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 	sourceShardsStr := subFlags.String("source_shards", "", "A comma-separated list of source shards")
 	destinationShardsStr := subFlags.String("destination_shards", "", "A comma-separated list of destination shards")
 	minHealthyRdonlyTablets := subFlags.String("min_healthy_rdonly_tablets", "1", "Minimum number of healthy RDONLY tablets required in source shards")
+	skipSplitRatioCheck := subFlags.Bool("skip_split_ratio_check", false, "Skip validation on minimum number of healthy RDONLY tablets")
 	splitCmd := subFlags.String("split_cmd", "SplitClone", "Split command to use to perform horizontal resharding (either SplitClone or LegacySplitClone)")
+	splitDiffCmd := subFlags.String("split_diff_cmd", "SplitDiff", "Split diff command to use to perform horizontal resharding (either SplitDiff or MultiSplitDiff)")
 	splitDiffDestTabletType := subFlags.String("split_diff_dest_tablet_type", "RDONLY", "Specifies tablet type to use in destination shards while performing SplitDiff operation")
 	phaseEnaableApprovalsDesc := fmt.Sprintf("Comma separated phases that require explicit approval in the UI to execute. Phase names are: %v", strings.Join(WorkflowPhases(), ","))
 	phaseEnableApprovalsStr := subFlags.String("phase_enable_approvals", strings.Join(WorkflowPhases(), ","), phaseEnaableApprovalsDesc)
@@ -81,7 +83,7 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-	if *keyspace == "" || *vtworkersStr == "" || *minHealthyRdonlyTablets == "" || *splitCmd == "" {
+	if *keyspace == "" || *vtworkersStr == "" || *minHealthyRdonlyTablets == "" || *splitCmd == "" || *splitDiffCmd == "" {
 		return fmt.Errorf("keyspace name, min healthy rdonly tablets, split command, and vtworkers information must be provided for horizontal resharding")
 	}
 
@@ -106,13 +108,13 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 		useConsistentSnapshotArg = "true"
 	}
 
-	err := validateWorkflow(m, *keyspace, vtworkers, sourceShards, destinationShards, *minHealthyRdonlyTablets)
+	err := validateWorkflow(m, *keyspace, vtworkers, sourceShards, destinationShards, *minHealthyRdonlyTablets, *skipSplitRatioCheck)
 	if err != nil {
 		return err
 	}
 
 	w.Name = fmt.Sprintf("Reshard shards %v into shards %v of keyspace %v.", *keyspace, *sourceShardsStr, *destinationShardsStr)
-	checkpoint, err := initCheckpoint(*keyspace, vtworkers, excludeTables, sourceShards, destinationShards, *minHealthyRdonlyTablets, *splitCmd, *splitDiffDestTabletType, useConsistentSnapshotArg)
+	checkpoint, err := initCheckpoint(*keyspace, vtworkers, excludeTables, sourceShards, destinationShards, *minHealthyRdonlyTablets, *splitCmd, *splitDiffCmd, *splitDiffDestTabletType, useConsistentSnapshotArg)
 	if err != nil {
 		return err
 	}
@@ -161,10 +163,12 @@ func (*Factory) Instantiate(m *workflow.Manager, w *workflowpb.Workflow, rootNod
 		Name:     "WaitForFilteredReplication",
 		PathName: string(phaseWaitForFilteredReplication),
 	}
+
 	diffUINode := &workflow.Node{
-		Name:     "SplitDiff",
+		Name:     checkpoint.Settings["split_diff_cmd"],
 		PathName: string(phaseDiff),
 	}
+
 	migrateRdonlyUINode := &workflow.Node{
 		Name:     "MigrateServedTypeRDONLY",
 		PathName: string(phaseMigrateRdonly),
@@ -200,9 +204,19 @@ func (*Factory) Instantiate(m *workflow.Manager, w *workflowpb.Workflow, rootNod
 	if err := createUINodes(hw.rootUINode, phaseWaitForFilteredReplication, destinationShards); err != nil {
 		return hw, err
 	}
-	if err := createUINodes(hw.rootUINode, phaseDiff, destinationShards); err != nil {
+	var shardsToUseForDiff []string
+
+	switch hw.checkpoint.Settings["split_diff_cmd"] {
+	case "SplitDiff":
+		shardsToUseForDiff = destinationShards
+	case "MultiSplitDiff":
+		shardsToUseForDiff = sourceShards
+	}
+
+	if err := createUINodes(hw.rootUINode, phaseDiff, shardsToUseForDiff); err != nil {
 		return hw, err
 	}
+
 	if err := createUINodes(hw.rootUINode, phaseMigrateRdonly, sourceShards); err != nil {
 		return hw, err
 	}
@@ -233,7 +247,7 @@ func createUINodes(rootNode *workflow.Node, phaseName workflow.PhaseType, shards
 }
 
 // validateWorkflow validates that workflow has valid input parameters.
-func validateWorkflow(m *workflow.Manager, keyspace string, vtworkers, sourceShards, destinationShards []string, minHealthyRdonlyTablets string) error {
+func validateWorkflow(m *workflow.Manager, keyspace string, vtworkers, sourceShards, destinationShards []string, minHealthyRdonlyTablets string, skipSplitRatioCheck bool) error {
 	if len(sourceShards) == 0 || len(destinationShards) == 0 {
 		return fmt.Errorf("invalid source or destination shards")
 	}
@@ -242,7 +256,7 @@ func validateWorkflow(m *workflow.Manager, keyspace string, vtworkers, sourceSha
 	}
 
 	splitRatio := len(destinationShards) / len(sourceShards)
-	if minHealthyRdonlyTabletsVal, err := strconv.Atoi(minHealthyRdonlyTablets); err != nil || minHealthyRdonlyTabletsVal < splitRatio {
+	if minHealthyRdonlyTabletsVal, err := strconv.Atoi(minHealthyRdonlyTablets); err != nil || (!skipSplitRatioCheck && minHealthyRdonlyTabletsVal < splitRatio) {
 		return fmt.Errorf("there are not enough rdonly tablets in source shards. You need at least %v, it got: %v", splitRatio, minHealthyRdonlyTablets)
 	}
 
@@ -271,7 +285,7 @@ func validateWorkflow(m *workflow.Manager, keyspace string, vtworkers, sourceSha
 }
 
 // initCheckpoint initialize the checkpoint for the horizontal workflow.
-func initCheckpoint(keyspace string, vtworkers, excludeTables, sourceShards, destinationShards []string, minHealthyRdonlyTablets, splitCmd, splitDiffDestTabletType string, useConsistentSnapshot string) (*workflowpb.WorkflowCheckpoint, error) {
+func initCheckpoint(keyspace string, vtworkers, excludeTables, sourceShards, destinationShards []string, minHealthyRdonlyTablets, splitCmd, splitDiffCmd, splitDiffDestTabletType string, useConsistentSnapshot string) (*workflowpb.WorkflowCheckpoint, error) {
 	tasks := make(map[string]*workflowpb.Task)
 	initTasks(tasks, phaseCopySchema, destinationShards, func(i int, shard string) map[string]string {
 		return map[string]string{
@@ -298,16 +312,34 @@ func initCheckpoint(keyspace string, vtworkers, excludeTables, sourceShards, des
 			"destination_shard": shard,
 		}
 	})
-	initTasks(tasks, phaseDiff, destinationShards, func(i int, shard string) map[string]string {
-		return map[string]string{
-			"keyspace":                keyspace,
-			"destination_shard":       shard,
-			"dest_tablet_type":        splitDiffDestTabletType,
-			"vtworker":                vtworkers[i],
-			"use_consistent_snapshot": useConsistentSnapshot,
-			"exclude_tables":          strings.Join(excludeTables, ","),
-		}
-	})
+
+	switch splitDiffCmd {
+	case "SplitDiff":
+		initTasks(tasks, phaseDiff, destinationShards, func(i int, shard string) map[string]string {
+			return map[string]string{
+				"keyspace":                keyspace,
+				"destination_shard":       shard,
+				"dest_tablet_type":        splitDiffDestTabletType,
+				"split_diff_cmd":          splitDiffCmd,
+				"vtworker":                vtworkers[i],
+				"use_consistent_snapshot": useConsistentSnapshot,
+				"exclude_tables":          strings.Join(excludeTables, ","),
+			}
+		})
+	case "MultiSplitDiff":
+		initTasks(tasks, phaseDiff, sourceShards, func(i int, shard string) map[string]string {
+			return map[string]string{
+				"keyspace":                keyspace,
+				"source_shard":            shard,
+				"dest_tablet_type":        splitDiffDestTabletType,
+				"split_diff_cmd":          splitDiffCmd,
+				"vtworker":                vtworkers[i],
+				"use_consistent_snapshot": useConsistentSnapshot,
+				"exclude_tables":          strings.Join(excludeTables, ","),
+			}
+		})
+	}
+
 	initTasks(tasks, phaseMigrateRdonly, sourceShards, func(i int, shard string) map[string]string {
 		return map[string]string{
 			"keyspace":     keyspace,
@@ -336,6 +368,7 @@ func initCheckpoint(keyspace string, vtworkers, excludeTables, sourceShards, des
 		Settings: map[string]string{
 			"source_shards":      strings.Join(sourceShards, ","),
 			"destination_shards": strings.Join(destinationShards, ","),
+			"split_diff_cmd":     splitDiffCmd,
 		},
 	}, nil
 }
