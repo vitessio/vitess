@@ -163,7 +163,9 @@ func (vsClient *MySQLVStreamerClient) Open(ctx context.Context) (err error) {
 	srvTopo := srvtopo.NewResilientServer(topo, "TestTopo")
 
 	vsClient.vsEngine = vstreamer.NewEngine(srvTopo, sourceSe)
-	err = vsClient.Open(ctx)
+	vsClient.vsEngine.InitDBConfig(vsClient.sourceConnParams)
+
+	err = vsClient.vsEngine.Open("mysqlstreamer", "cell1")
 	if err != nil {
 		return err
 	}

@@ -115,29 +115,29 @@ func (vs *vstreamer) Stream() error {
 	}
 	defer conn.Close()
 
-	pos, err := mysql.DecodePosition(vs.startPos)
+	// TODO: This case logic depending on startPos will disappear when filename:pos flavor is introduced
+	filePos, err := mysql.ParseFilePosition(vs.startPos)
 	if err == nil {
-		vs.pos = pos
-		events, err := conn.StartBinlogDumpFromPosition(vs.ctx, vs.pos)
+		events, err := conn.StartBinlogDumpFromFilePosition(vs.ctx, filePos.Name, filePos.Pos)
 		if err != nil {
 			return wrapError(err, vs.startPos)
 		}
 		err = vs.parseEvents(vs.ctx, events)
 		return wrapError(err, vs.startPos)
 	}
-	// Let's try to decode as binlog:file position
-	filePos, err := mysql.ParseFilePosition(vs.startPos)
+	// Let's try to decode as gtidset
+	pos, err := mysql.DecodePosition(vs.startPos)
 	if err != nil {
 		return wrapError(err, vs.startPos)
 	}
 
-	events, err := conn.StartBinlogDumpFromFilePosition(vs.ctx, filePos.Name, filePos.Pos)
+	vs.pos = pos
+	events, err := conn.StartBinlogDumpFromPosition(vs.ctx, vs.pos)
 	if err != nil {
 		return wrapError(err, vs.startPos)
 	}
 	err = vs.parseEvents(vs.ctx, events)
 	return wrapError(err, vs.startPos)
-
 }
 
 func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.BinlogEvent) error {
@@ -316,21 +316,21 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			return nil, fmt.Errorf("can't get query from binlog event: %v, event data: %#v", err, ev)
 		}
 		switch cat := sqlparser.Preview(q.SQL); cat {
-		// case sqlparser.StmtInsert:
-		// 	vevents = append(vevents, &binlogdatapb.VEvent{
-		// 		Type: binlogdatapb.VEventType_INSERT,
-		// 		Dml:  q.SQL,
-		// 	})
-		// case sqlparser.StmtUpdate:
-		// 	vevents = append(vevents, &binlogdatapb.VEvent{
-		// 		Type: binlogdatapb.VEventType_UPDATE,
-		// 		Dml:  q.SQL,
-		// 	})
-		// case sqlparser.StmtDelete:
-		// 	vevents = append(vevents, &binlogdatapb.VEvent{
-		// 		Type: binlogdatapb.VEventType_DELETE,
-		// 		Dml:  q.SQL,
-		// 	})
+		case sqlparser.StmtInsert:
+			vevents = append(vevents, &binlogdatapb.VEvent{
+				Type: binlogdatapb.VEventType_INSERT,
+				Dml:  q.SQL,
+			})
+		case sqlparser.StmtUpdate:
+			vevents = append(vevents, &binlogdatapb.VEvent{
+				Type: binlogdatapb.VEventType_UPDATE,
+				Dml:  q.SQL,
+			})
+		case sqlparser.StmtDelete:
+			vevents = append(vevents, &binlogdatapb.VEvent{
+				Type: binlogdatapb.VEventType_DELETE,
+				Dml:  q.SQL,
+			})
 		case sqlparser.StmtBegin:
 			vevents = append(vevents, &binlogdatapb.VEvent{
 				Type: binlogdatapb.VEventType_BEGIN,

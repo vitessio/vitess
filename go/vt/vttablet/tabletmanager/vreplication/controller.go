@@ -200,7 +200,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 			return err
 		}
 		vsClient := NewTabletVStreamerClient(tablet)
-		vreplicator := newVReplicator(ct.id, &ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld)
+		vreplicator := NewVReplicator(ct.id, &ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld)
 		return vreplicator.Replicate(ctx)
 	}
 	return fmt.Errorf("missing source")
