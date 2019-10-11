@@ -29,13 +29,13 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		cluster := vttest.EtcdProcessInstance()
-		if err := cluster.Setup(); err != nil {
+		etcdProcess := vttest.EtcdProcessInstance()
+		if err := etcdProcess.Setup(); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
-			cluster.TearDown()
+			etcdProcess.TearDown()
 			return 1
 		}
-		defer cluster.TearDown()
+		defer etcdProcess.TearDown()
 		return m.Run()
 	}()
 	os.Exit(exitCode)

@@ -22,8 +22,20 @@ import (
 )
 
 func TestEtcdServer(t *testing.T) {
-	resp, _ := http.Get("http://localhost:2379/v2/keys")
-	if got, want := resp.StatusCode, 200; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+	testURL(t, "http://localhost:2379/v2/keys", "generic etcd url")
+	testURL(t, "http://localhost:2379/v2/keys/vitess/global", "vitess global key")
+	testURL(t, "http://localhost:2379/v2/keys/vitess/zone1", "vitess zone1 key")
+}
+
+func testURL(t *testing.T, url string, testCaseName string) {
+	statusCode := getStatusForURL(url)
+	if got, want := statusCode, 200; got != want {
+		t.Errorf("select:\n%v want\n%v for %s", got, want, testCaseName)
 	}
+}
+
+// getStatusForUrl returns the status code for the URL
+func getStatusForURL(url string) int {
+	resp, _ := http.Get(url)
+	return resp.StatusCode
 }

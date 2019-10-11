@@ -12,6 +12,8 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+Runs etcd process and makes entry for global and zone
 */
 
 package vttest
@@ -74,7 +76,11 @@ func (etcd *EtcdProcess) Setup() (err error) {
 	timeout := time.Now().Add(60 * time.Second)
 	for time.Now().Before(timeout) {
 		if etcd.IsHealthy() {
-			return nil
+			err = etcd.makeTopoDirectories()
+			if err == nil {
+				return fmt.Errorf("process '%s' unable to create topo directories (err: %s)", etcd.Name, err)
+			}
+			return
 		}
 		select {
 		case err := <-etcd.exit:
@@ -92,6 +98,8 @@ func (etcd *EtcdProcess) TearDown() error {
 	if etcd.proc == nil || etcd.exit == nil {
 		return nil
 	}
+
+	etcd.removeTopoDirectories()
 
 	// Attempt graceful shutdown with SIGTERM first
 	etcd.proc.Process.Signal(syscall.SIGTERM)
@@ -118,6 +126,29 @@ func (etcd *EtcdProcess) IsHealthy() bool {
 		return true
 	}
 	return false
+}
+
+func (etcd *EtcdProcess) makeTopoDirectories() (err error) {
+	err = etcd.manageTopoDir("mkdir", "/vitess/global")
+	if err != nil {
+		err = etcd.manageTopoDir("mkdir", "/vitess/zone1")
+	}
+	return err
+}
+
+func (etcd *EtcdProcess) removeTopoDirectories() {
+	etcd.manageTopoDir("rmdir", "/vitess/global")
+	etcd.manageTopoDir("rmdir", "/vitess/zone1")
+}
+
+// manageTopoDir creates global and zone in etcd2
+func (etcd *EtcdProcess) manageTopoDir(command string, directory string) error {
+	tmpProcess := exec.Command(
+		"etcdctl",
+		"--endpoints", etcd.ListenClientURL,
+		"mkdir", directory,
+	)
+	return tmpProcess.Run()
 }
 
 // EtcdProcessInstance returns a EtcdProcess handle for a etcd sevice,
