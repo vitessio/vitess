@@ -37,6 +37,7 @@ import environment
 import tablet
 import utils
 from mysql_flavor import mysql_flavor
+from vtproto import topodata_pb2
 
 KEYSPACE = 'ks1'
 SHARD = '0'
@@ -380,6 +381,23 @@ class TestBufferBase(unittest.TestCase):
     utils.run_vtctl(['TabletExternallyReparented', new_master.tablet_alias],
                     auto_log=True)
 
+    # Wait until the old master becomes a replica before returning.
+    # Otherwise, that time counts against the timeout of the next test.
+    # Set the timeout well above 30, because it takes 30 seconds just to cancel
+    # stuck transactions when demoting the master.
+    timeout = 60.0
+    while True:
+      try:
+        health = utils.run_vtctl_json(['VtTabletStreamHealth',
+                                    '-count', '1',
+                                    old_master.tablet_alias])
+        if health['target']['tablet_type'] == topodata_pb2.REPLICA:
+          break
+      except:
+        pass
+      timeout = utils.wait_step('old master becomes replica', timeout,
+                                sleep_time=1.0)
+
 
 class TestBuffer(TestBufferBase):
 
@@ -394,7 +412,7 @@ class TestBuffer(TestBufferBase):
     def planned_reparent():
       utils.run_vtctl(['PlannedReparentShard', '-keyspace_shard',
                        '%s/%s' % (KEYSPACE, SHARD),
-                       '-new_master', replica.tablet_alias])
+                       '-new_master', replica.tablet_alias], auto_log=True)
     self._test_buffer(planned_reparent)
 
   def test_buffer_external_reparent(self):
