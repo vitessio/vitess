@@ -242,9 +242,7 @@ func (agent *ActionAgent) startShardSync() {
 func (agent *ActionAgent) stopShardSync() {
 	agent.mutex.Lock()
 	if agent._shardSyncCancel != nil {
-		agent.mutex.Unlock()
 		agent._shardSyncCancel()
-		agent.mutex.Lock()
 		agent._shardSyncCancel = nil
 		agent._shardSyncChan = nil
 	}
@@ -254,11 +252,11 @@ func (agent *ActionAgent) stopShardSync() {
 func (agent *ActionAgent) notifyShardSync() {
 	// If this is called before the shard sync is started, do nothing.
 	agent.mutex.Lock()
+	defer agent.mutex.Unlock()
+
 	if agent._shardSyncChan == nil {
-		agent.mutex.Unlock()
 		return
 	}
-	agent.mutex.Unlock()
 
 	// Try to send. If the channel buffer is full, it means a notification is
 	// already pending, so we don't need to do anything.
