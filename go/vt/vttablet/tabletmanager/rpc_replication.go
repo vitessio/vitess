@@ -301,92 +301,120 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.Tabl
 	return agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
 }
 
-// DemoteMaster marks the server read-only, wait until it is done with
-// its current transactions, and returns its master position.
+// DemoteMaster prepares a MASTER tablet to give up mastership to another tablet.
+//
+// It attemps to idempotently ensure the following guarantees upon returning
+// successfully:
+//   * No future writes will be accepted.
+//   * No writes are in-flight.
+//   * MySQL is in read-only mode.
+//   * Semi-sync settings are consistent with a REPLICA tablet.
+//
+// If necessary, it waits for all in-flight writes to complete or time out.
+//
+// It should be safe to call this on a MASTER tablet that was already demoted,
+// or on a tablet that already transitioned to REPLICA.
+//
+// If a step fails in the middle, it will try to undo any changes it made.
 func (agent *ActionAgent) DemoteMaster(ctx context.Context) (string, error) {
+	// The public version always reverts on partial failure.
+	return agent.demoteMaster(ctx, true /* revertPartialFailure */)
+}
+
+// demoteMaster implements DemoteMaster with an additional, private option.
+//
+// If revertPartialFailure is true, and a step fails in the middle, it will try
+// to undo any changes it made.
+func (agent *ActionAgent) demoteMaster(ctx context.Context, revertPartialFailure bool) (replicationPosition string, finalErr error) {
 	if err := agent.lock(ctx); err != nil {
 		return "", err
 	}
 	defer agent.unlock()
 
-	// Tell Orchestrator we're stopped on purpose the demotion.
-	// This is a best effort task, so run it in a goroutine.
-	go func() {
-		if agent.orc == nil {
-			return
-		}
-		if err := agent.orc.BeginMaintenance(agent.Tablet(), "vttablet has been told to DemoteMaster"); err != nil {
-			log.Warningf("Orchestrator BeginMaintenance failed: %v", err)
-		}
-	}()
-
-	// First, disallow queries, to make sure nobody is writing to the
-	// database.
 	tablet := agent.Tablet()
-	// We don't care if the QueryService state actually changed because we'll
-	// let vtgate keep serving read traffic from this master (see comment below).
-	log.Infof("DemoteMaster disabling query service")
-	if _ /* state changed */, err := agent.QueryServiceControl.SetServingType(tablet.Type, false, nil); err != nil {
-		return "", vterrors.Wrap(err, "SetServingType(serving=false) failed")
+	wasMaster := tablet.Type == topodatapb.TabletType_MASTER
+	wasServing := agent.QueryServiceControl.IsServing()
+
+	// If we are a master tablet, stop accepting new queries and wait for
+	// in-flight queries to complete. If we are not master, there's no need
+	// to stop the queryservice in order to ensure the guarantee we are being
+	// asked to provide, which is that no writes are occurring.
+	if wasMaster {
+		// Tell Orchestrator we're stopped on purpose for demotion.
+		// This is a best effort task, so run it in a goroutine.
+		go func() {
+			if agent.orc == nil {
+				return
+			}
+			if err := agent.orc.BeginMaintenance(agent.Tablet(), "vttablet has been told to DemoteMaster"); err != nil {
+				log.Warningf("Orchestrator BeginMaintenance failed: %v", err)
+			}
+		}()
+
+		// Note that this may block until the transaction timeout if clients
+		// don't finish their transactions in time. Even if some transactions
+		// have to be killed at the end of their timeout, this will be
+		// considered successful. If we are already not serving, this will be
+		// idempotent.
+		log.Infof("DemoteMaster disabling query service")
+		if _ /* state changed */, err := agent.QueryServiceControl.SetServingType(tablet.Type, false, nil); err != nil {
+			return "", vterrors.Wrap(err, "SetServingType(serving=false) failed")
+		}
+		defer func() {
+			if finalErr != nil && revertPartialFailure && wasServing {
+				if _ /* state changed */, err := agent.QueryServiceControl.SetServingType(tablet.Type, true, nil); err != nil {
+					log.Warningf("SetServingType(serving=true) failed during revert: %v", err)
+				}
+			}
+		}()
 	}
 
-	// Now, set the server read-only. Note all active connections are not
-	// affected.
+	// Now that we know no writes are in-flight and no new writes can occur,
+	// set MySQL to read-only mode. If we are already read-only because of a
+	// previous demotion, or because we are not master anyway, this should be
+	// idempotent.
+	wasReadOnly, err := agent.MysqlDaemon.IsReadOnly()
+	if err != nil {
+		return "", err
+	}
 	if *setSuperReadOnly {
 		// Setting super_read_only also sets read_only
 		if err := agent.MysqlDaemon.SetSuperReadOnly(true); err != nil {
-			// if this failed, revert the change to serving
-			if _ /* state changed */, err1 := agent.QueryServiceControl.SetServingType(tablet.Type, true, nil); err1 != nil {
-				log.Warningf("SetServingType(serving=true) failed after failed SetSuperReadOnly %v", err1)
-			}
 			return "", err
 		}
 	} else {
 		if err := agent.MysqlDaemon.SetReadOnly(true); err != nil {
-			// if this failed, revert the change to serving
-			if _ /* state changed */, err1 := agent.QueryServiceControl.SetServingType(tablet.Type, true, nil); err1 != nil {
-				log.Warningf("SetServingType(serving=true) failed after failed SetReadOnly %v", err1)
-			}
 			return "", err
 		}
 	}
+	defer func() {
+		if finalErr != nil && revertPartialFailure && !wasReadOnly {
+			// setting read_only OFF will also set super_read_only OFF if it was set
+			if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
+				log.Warningf("SetReadOnly(false) failed during revert: %v", err)
+			}
+		}
+	}()
 
 	// If using semi-sync, we need to disable master-side.
 	if err := agent.fixSemiSync(topodatapb.TabletType_REPLICA); err != nil {
-		// if this failed, set server read-only back to false, set tablet back to serving
-		// setting read_only OFF will also set super_read_only OFF if it was set
-		if err1 := agent.MysqlDaemon.SetReadOnly(false); err1 != nil {
-			log.Warningf("SetReadOnly(false) failed after failed fixSemiSync %v", err1)
-		}
-		if _ /* state changed */, err1 := agent.QueryServiceControl.SetServingType(tablet.Type, true, nil); err1 != nil {
-			log.Warningf("SetServingType(serving=true) failed after failed fixSemiSync %v", err1)
-		}
 		return "", err
 	}
+	defer func() {
+		if finalErr != nil && revertPartialFailure && wasMaster {
+			// enable master-side semi-sync again
+			if err := agent.fixSemiSync(topodatapb.TabletType_MASTER); err != nil {
+				log.Warningf("fixSemiSync(MASTER) failed during revert: %v", err)
+			}
+		}
+	}()
 
+	// Return the current replication position.
 	pos, err := agent.MysqlDaemon.MasterPosition()
 	if err != nil {
-		// if MasterPosition failed, undo all the steps before
-		// 1. set server back to read-only false
-		// setting read_only OFF will also set super_read_only OFF if it was set
-		if err1 := agent.MysqlDaemon.SetReadOnly(false); err1 != nil {
-			log.Warningf("SetReadOnly(false) failed after failed DemoteMaster %v", err1)
-		}
-		// 2. set tablet back to serving
-		if _ /* state changed */, err1 := agent.QueryServiceControl.SetServingType(tablet.Type, true, nil); err1 != nil {
-			log.Warningf("SetServingType(serving=true) failed after failed DemoteMaster %v", err1)
-		}
-		// 3. enable master side again
-		if err1 := agent.fixSemiSync(topodatapb.TabletType_MASTER); err1 != nil {
-			log.Warningf("fixSemiSync(MASTER) failed after failed DemoteMaster %v", err1)
-		}
 		return "", err
 	}
 	return mysql.EncodePosition(pos), nil
-	// There is no serving graph update - the master tablet will
-	// be replaced. Even though writes may fail, reads will
-	// succeed. It will be less noisy to simply leave the entry
-	// until we'll promote the master.
 }
 
 // UndoDemoteMaster reverts a previous call to DemoteMaster
