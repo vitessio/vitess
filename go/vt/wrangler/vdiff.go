@@ -18,7 +18,6 @@ package wrangler
 
 import (
 	"fmt"
-	"io"
 	"strings"
 	"sync"
 	"time"
@@ -60,7 +59,14 @@ type tableDiffer struct {
 	targetExpression string
 	sourceExpression string
 	compareCols      []int
+	comparePKs       []int
 	orderBy          []engine.OrderbyParams
+
+	processedRows   int
+	matchingRows    int
+	mismatchedRows  int
+	extraRowsSource int
+	extraRowsTarget int
 }
 
 type dfParams struct {
@@ -213,6 +219,9 @@ func buildDifferPlan(table *tabletmanagerdatapb.TableDefinition, query string) (
 			colname := selExpr.(*sqlparser.AliasedExpr).Expr.(*sqlparser.ColName).Name.Lowered()
 			if pk == colname {
 				td.orderBy = append(td.orderBy, engine.OrderbyParams{Col: td.compareCols[i]})
+				td.comparePKs = append(td.comparePKs, td.compareCols[i])
+				// We'll be comparing pks seperately. So, remove them from compareCols.
+				td.compareCols[i] = -1
 				found = true
 				break
 			}
@@ -394,7 +403,7 @@ func (df *vdiff) streamOne(ctx context.Context, shard string, participant *dfPar
 			select {
 			case participant.result <- result:
 			case <-ctx.Done():
-				return io.EOF
+				return fmt.Errorf("VStreamResults: %v", ctx.Err())
 			}
 			return nil
 		})
@@ -460,18 +469,15 @@ var _ engine.VCursor = (*resultReader)(nil)
 
 // resultReader performs a merge-sorted read from the participants.
 type resultReader struct {
-	ctx          context.Context
-	cancel       func()
 	participants map[string]*dfParams
 	orderBy      []engine.OrderbyParams
+	rows         [][]sqltypes.Value
 	result       chan *sqltypes.Result
+	err          error
 }
 
 func newResultReader(ctx context.Context, participants map[string]*dfParams, orderBy []engine.OrderbyParams) *resultReader {
-	ctx, cancel := context.WithCancel(ctx)
 	rr := &resultReader{
-		ctx:          ctx,
-		cancel:       cancel,
 		participants: participants,
 		orderBy:      orderBy,
 		result:       make(chan *sqltypes.Result, 1),
@@ -484,52 +490,66 @@ func newResultReader(ctx context.Context, participants map[string]*dfParams, ord
 			},
 		})
 	}
-	go engine.MergeSort(rr, "", rr.orderBy, rss, nil, func(qr *sqltypes.Result) error {
-		select {
-		case rr.result <- qr:
-		case <-rr.ctx.Done():
-			return io.EOF
-		}
-		return nil
-	})
+	go func() {
+		defer close(rr.result)
+
+		rr.err = engine.MergeSort(rr, "", rr.orderBy, rss, nil, func(qr *sqltypes.Result) error {
+			select {
+			case rr.result <- qr:
+			case <-ctx.Done():
+				return fmt.Errorf("MergeSort: %v", ctx.Err())
+			}
+			return nil
+		})
+	}()
 	return rr
 }
 
-func (rr *resultReader) Next() (*sqltypes.Result, error) {
-	select {
-	case qr := <-rr.result:
-		return qr, nil
-	case <-rr.ctx.Done():
-		return nil, io.EOF
+func (rr *resultReader) next(ctx context.Context) ([]sqltypes.Value, error) {
+	for len(rr.rows) == 0 {
+		select {
+		case qr, ok := <-rr.result:
+			if !ok {
+				return nil, rr.err
+			}
+			rr.rows = qr.Rows
+		case <-ctx.Done():
+			return nil, fmt.Errorf("next: %v", ctx.Err())
+		}
+	}
+
+	row := rr.rows[0]
+	rr.rows = rr.rows[1:]
+	return row, nil
+}
+
+func (rr *resultReader) drain(ctx context.Context) (int, error) {
+	count := 0
+	for {
+		row, err := rr.next(ctx)
+		if err != nil {
+			return 0, err
+		}
+		if row == nil {
+			return count, nil
+		}
+		count++
 	}
 }
 
-func (rr *resultReader) Close() {
-	rr.cancel()
-}
+func (rr *resultReader) Context() context.Context { return nil }
 
-func (rr *resultReader) Context() context.Context {
-	return nil
-}
+func (rr *resultReader) MaxMemoryRows() int { return 0 }
 
-func (rr *resultReader) MaxMemoryRows() int {
-	return 0
-}
+func (rr *resultReader) SetContextTimeout(timeout time.Duration) context.CancelFunc { return nil }
 
-func (rr *resultReader) SetContextTimeout(timeout time.Duration) context.CancelFunc {
-	return nil
-}
-
-func (rr *resultReader) RecordWarning(warning *querypb.QueryWarning) {
-}
+func (rr *resultReader) RecordWarning(warning *querypb.QueryWarning) {}
 
 func (rr *resultReader) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
 	return nil, nil
 }
 
-func (rr *resultReader) AutocommitApproval() bool {
-	return false
-}
+func (rr *resultReader) AutocommitApproval() bool { return false }
 
 func (rr *resultReader) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, []error) {
 	return nil, nil
@@ -554,6 +574,110 @@ func (rr *resultReader) ExecuteKeyspaceID(keyspace string, ksid []byte, query st
 
 func (rr *resultReader) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
 	return nil, nil, nil
+}
+
+func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, source, target *resultReader) error {
+	var sourceRow, targetRow []sqltypes.Value
+	var err error
+	advanceSource := true
+	advanceTarget := true
+	for {
+		if advanceSource {
+			sourceRow, err = source.next(ctx)
+			if err != nil {
+				return err
+			}
+			advanceSource = false
+		}
+		if advanceTarget {
+			targetRow, err = target.next(ctx)
+			if err != nil {
+				return err
+			}
+			advanceTarget = false
+		}
+		td.processedRows++
+		if sourceRow == nil {
+			// no more rows from the source
+			if targetRow == nil {
+				// no more rows from target either, we're done
+				return nil
+			}
+
+			// drain target, update count
+			wr.Logger().Errorf("Draining extra row(s) found on the target starting with: %v", targetRow)
+			count, err := target.drain(ctx)
+			if err != nil {
+				return err
+			}
+			td.extraRowsTarget += 1 + count
+			return nil
+		}
+		if targetRow == nil {
+			// no more rows from the target
+			// we know we have rows from source, drain, update count
+			wr.Logger().Errorf("Draining extra row(s) found on the source starting with: %v", sourceRow)
+			count, err := source.drain(ctx)
+			if err != nil {
+				return err
+			}
+			td.extraRowsSource += 1 + count
+			return nil
+		}
+
+		// Compare pk values.
+		c, err := td.compare(sourceRow, targetRow, td.comparePKs)
+		switch {
+		case err != nil:
+			return err
+		case c < 0:
+			if td.extraRowsSource < 10 {
+				wr.Logger().Errorf("[table=%v] Extra row %v on source: %v", td.targetTable, td.extraRowsSource, sourceRow)
+			}
+			td.extraRowsSource++
+			advanceSource = true
+			continue
+		case c > 0:
+			if td.extraRowsTarget < 10 {
+				wr.Logger().Errorf("[table=%v] Extra row %v on target: %v", td.targetTable, td.extraRowsTarget, targetRow)
+			}
+			td.extraRowsTarget++
+			advanceTarget = true
+			continue
+		}
+
+		// c == 0
+		advanceSource = true
+		advanceTarget = true
+
+		// Compare non-pk values.
+		c, err = td.compare(sourceRow, targetRow, td.compareCols)
+		switch {
+		case err != nil:
+			return err
+		case c != 0:
+			if td.mismatchedRows < 10 {
+				wr.Logger().Errorf("[table=%v] Different content %v in same PK: %v != %v", td.targetTable, td.mismatchedRows, sourceRow, targetRow)
+			}
+			td.mismatchedRows++
+		}
+	}
+}
+
+func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []int) (int, error) {
+	for _, col := range cols {
+		if col == -1 {
+			continue
+		}
+		c, err := sqltypes.NullsafeCompare(sourceRow[col], targetRow[col])
+		if err != nil {
+			return 0, err
+		}
+		if c != 0 {
+			return c, nil
+		}
+	}
+	return 0, nil
 }
 
 func removeKeyrange(where *sqlparser.Where) *sqlparser.Where {
