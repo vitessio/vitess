@@ -204,10 +204,14 @@ func (agent *ActionAgent) abortMasterTerm(ctx context.Context, masterAlias *topo
 	}
 
 	// Do a full demotion to convert MySQL into a replica.
+	// We do not revert on partial failure here because this code path only
+	// triggers after a new master has taken over, so we are past the point of
+	// no return. Instead, we should leave partial results and retry the rest
+	// later.
 	log.Infof("Active reparents are enabled; converting MySQL to replica.")
 	demoteMasterCtx, cancelDemoteMaster := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancelDemoteMaster()
-	if _, err := agent.DemoteMaster(demoteMasterCtx); err != nil {
+	if _, err := agent.demoteMaster(demoteMasterCtx, false /* revertPartialFailure */); err != nil {
 		return vterrors.Wrap(err, "failed to demote master")
 	}
 	setMasterCtx, cancelSetMaster := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
