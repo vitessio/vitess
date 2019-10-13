@@ -131,7 +131,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 	defer cancel()
 	// TODO(sougou): parallelize
 	for _, td := range df.differs {
-		if err := df.stopTargetStreams(ctx); err != nil {
+		if err := df.stopTargets(ctx); err != nil {
 			return err
 		}
 		sourceReader, err := df.startQueryStreams(ctx, df.sources, td.sourceExpression, td.orderbyParams())
@@ -216,6 +216,8 @@ func buildDifferPlan(table *tabletmanagerdatapb.TableDefinition, query string) (
 			}
 			sourceSelect.SelectExprs = append(sourceSelect.SelectExprs, selExpr)
 			targetSelect.SelectExprs = append(targetSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: targetCol})
+		default:
+			return nil, fmt.Errorf("unexpected: %v", sqlparser.String(statement))
 		}
 	}
 	fields := make(map[string]querypb.Type)
@@ -269,11 +271,11 @@ func buildDifferPlan(table *tabletmanagerdatapb.TableDefinition, query string) (
 			Direction: sqlparser.AscScr,
 		})
 	}
-	targetSelect.OrderBy = orderby
-
 	sourceSelect.Where = removeKeyrange(sel.Where)
 	sourceSelect.GroupBy = sel.GroupBy
 	sourceSelect.OrderBy = orderby
+
+	targetSelect.OrderBy = orderby
 
 	td.sourceExpression = sqlparser.String(sourceSelect)
 	td.targetExpression = sqlparser.String(targetSelect)
@@ -330,7 +332,7 @@ func (df *vdiff) selectTablets(ctx context.Context) error {
 	return err2
 }
 
-func (df *vdiff) stopTargetStreams(ctx context.Context) error {
+func (df *vdiff) stopTargets(ctx context.Context) error {
 	var mu sync.Mutex
 
 	err := df.forAll(df.targets, func(shard string, target *dfParams) error {
