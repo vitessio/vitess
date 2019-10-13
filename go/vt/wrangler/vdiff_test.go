@@ -17,23 +17,17 @@ limitations under the License.
 package wrangler
 
 import (
-	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
-func TestVDiffPlan(t *testing.T) {
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match:  "t1",
-			Filter: fmt.Sprintf("select * from t1 where in_keyrange('-80')"),
-		}},
-	}
-
+func TestVDiffPlanSuccess(t *testing.T) {
 	schm := &tabletmanagerdatapb.SchemaDefinition{
 		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
 			Name:              "t1",
@@ -42,9 +36,81 @@ func TestVDiffPlan(t *testing.T) {
 			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
 		}},
 	}
-	differs, err := buildVDiffPlan(context.Background(), filter, schm)
-	if err != nil {
-		t.Fatal(err)
+
+	testcases := []struct {
+		input *binlogdatapb.Rule
+		table string
+		td    *tableDiffer
+	}{{
+		input: &binlogdatapb.Rule{
+			Match: "t1",
+		},
+		table: "t1",
+		td: &tableDiffer{
+			targetTable:      "t1",
+			sourceExpression: "select c1, c2 from t1 order by c1 asc",
+			targetExpression: "select c1, c2 from t1 order by c1 asc",
+			compareCols:      []int{-1, 1},
+			comparePKs:       []int{0},
+		},
+	}, {
+		input: &binlogdatapb.Rule{
+			Match:  "t1",
+			Filter: "-80",
+		},
+		table: "t1",
+		td: &tableDiffer{
+			targetTable:      "t1",
+			sourceExpression: "select c1, c2 from t1 order by c1 asc",
+			targetExpression: "select c1, c2 from t1 order by c1 asc",
+			compareCols:      []int{-1, 1},
+			comparePKs:       []int{0},
+		},
+	}, {
+		input: &binlogdatapb.Rule{
+			Match:  "t1",
+			Filter: "select * from t1",
+		},
+		table: "t1",
+		td: &tableDiffer{
+			targetTable:      "t1",
+			sourceExpression: "select c1, c2 from t1 order by c1 asc",
+			targetExpression: "select c1, c2 from t1 order by c1 asc",
+			compareCols:      []int{-1, 1},
+			comparePKs:       []int{0},
+		},
+	}, {
+		input: &binlogdatapb.Rule{
+			Match:  "t1",
+			Filter: "select c2, c1 from t1",
+		},
+		table: "t1",
+		td: &tableDiffer{
+			targetTable:      "t1",
+			sourceExpression: "select c2, c1 from t1 order by c1 asc",
+			targetExpression: "select c2, c1 from t1 order by c1 asc",
+			compareCols:      []int{0, -1},
+			comparePKs:       []int{1},
+		},
+	}, {
+		input: &binlogdatapb.Rule{
+			Match:  "t1",
+			Filter: "select c0 as c1, c2 from t2",
+		},
+		table: "t1",
+		td: &tableDiffer{
+			targetTable:      "t1",
+			sourceExpression: "select c0 as c1, c2 from t2 order by c1 asc",
+			targetExpression: "select c1, c2 from t1 order by c1 asc",
+			compareCols:      []int{-1, 1},
+			comparePKs:       []int{0},
+		},
+	}}
+	for _, tcase := range testcases {
+		filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{tcase.input}}
+		differs, err := buildVDiffPlan(context.Background(), filter, schm)
+		require.NoError(t, err, tcase.input)
+		require.Equal(t, 1, len(differs), tcase.input)
+		assert.Equal(t, tcase.td, differs[tcase.table], tcase.input)
 	}
-	fmt.Printf("%+v\n", differs["t1"])
 }

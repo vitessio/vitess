@@ -44,6 +44,15 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 )
 
+// DiffSummary is the summary of differences for one table.
+type DiffSummary struct {
+	ProcessedRows   int
+	MatchingRows    int
+	MismatchedRows  int
+	ExtraRowsSource int
+	ExtraRowsTarget int
+}
+
 type vdiff struct {
 	mi             *migrater
 	sourceCell     string
@@ -56,17 +65,10 @@ type vdiff struct {
 
 type tableDiffer struct {
 	targetTable      string
-	targetExpression string
 	sourceExpression string
+	targetExpression string
 	compareCols      []int
 	comparePKs       []int
-	orderBy          []engine.OrderbyParams
-
-	processedRows   int
-	matchingRows    int
-	mismatchedRows  int
-	extraRowsSource int
-	extraRowsTarget int
 }
 
 type dfParams struct {
@@ -119,7 +121,40 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 		return err
 	}
 	df.differs, err = buildVDiffPlan(ctx, oneFilter, schm)
-	return err
+	if err != nil {
+		return err
+	}
+	if err := df.selectTablets(ctx); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	// TODO(sougou): parallelize
+	for _, td := range df.differs {
+		if err := df.stopTargetStreams(ctx); err != nil {
+			return err
+		}
+		sourceReader, err := df.startQueryStreams(ctx, df.sources, td.sourceExpression, td.orderbyParams())
+		if err != nil {
+			return err
+		}
+		if err := df.syncTargets(ctx); err != nil {
+			return err
+		}
+		targetReader, err := df.startQueryStreams(ctx, df.targets, td.targetExpression, td.orderbyParams())
+		if err != nil {
+			return err
+		}
+		if err := df.restartTargets(ctx); err != nil {
+			return err
+		}
+		dr, err := td.diff(ctx, df.mi.wr, sourceReader, targetReader)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Summary for %v: %+v\n", td.targetTable, dr)
+	}
+	return nil
 }
 
 func buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter, schm *tabletmanagerdatapb.SchemaDefinition) (map[string]*tableDiffer, error) {
@@ -190,7 +225,7 @@ func buildDifferPlan(table *tabletmanagerdatapb.TableDefinition, query string) (
 
 	td.compareCols = make([]int, len(sourceSelect.SelectExprs))
 	for i := range td.compareCols {
-		colname := sourceSelect.SelectExprs[i].(*sqlparser.AliasedExpr).Expr.(*sqlparser.ColName).Name.Lowered()
+		colname := targetSelect.SelectExprs[i].(*sqlparser.AliasedExpr).Expr.(*sqlparser.ColName).Name.Lowered()
 		typ, ok := fields[colname]
 		if !ok {
 			return nil, fmt.Errorf("column %v not found in table %v", colname, table.Name)
@@ -218,7 +253,6 @@ func buildDifferPlan(table *tabletmanagerdatapb.TableDefinition, query string) (
 		for i, selExpr := range targetSelect.SelectExprs {
 			colname := selExpr.(*sqlparser.AliasedExpr).Expr.(*sqlparser.ColName).Name.Lowered()
 			if pk == colname {
-				td.orderBy = append(td.orderBy, engine.OrderbyParams{Col: td.compareCols[i]})
 				td.comparePKs = append(td.comparePKs, td.compareCols[i])
 				// We'll be comparing pks seperately. So, remove them from compareCols.
 				td.compareCols[i] = -1
@@ -230,7 +264,10 @@ func buildDifferPlan(table *tabletmanagerdatapb.TableDefinition, query string) (
 			// Unreachable.
 			return nil, fmt.Errorf("column %v not found in table %v", pk, table.Name)
 		}
-		orderby = append(orderby, &sqlparser.Order{Expr: &sqlparser.ColName{Name: sqlparser.NewColIdent(pk)}})
+		orderby = append(orderby, &sqlparser.Order{
+			Expr:      &sqlparser.ColName{Name: sqlparser.NewColIdent(pk)},
+			Direction: sqlparser.AscScr,
+		})
 	}
 	targetSelect.OrderBy = orderby
 
@@ -241,54 +278,6 @@ func buildDifferPlan(table *tabletmanagerdatapb.TableDefinition, query string) (
 	td.sourceExpression = sqlparser.String(sourceSelect)
 	td.targetExpression = sqlparser.String(targetSelect)
 	return td, nil
-}
-
-func (df *vdiff) stopTargetStreams(ctx context.Context) error {
-	var mu sync.Mutex
-
-	err := df.forAll(df.targets, func(shard string, target *dfParams) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for vdiff' where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(df.mi.workflow))
-		_, err := df.mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
-		if err != nil {
-			return err
-		}
-		query = fmt.Sprintf("select source, pos from _vt.vreplication where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(df.mi.workflow))
-		p3qr, err := df.mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
-		if err != nil {
-			return err
-		}
-		qr := sqltypes.Proto3ToResult(p3qr)
-
-		for _, row := range qr.Rows {
-			var bls binlogdatapb.BinlogSource
-			if err := proto.UnmarshalText(row[0].ToString(), &bls); err != nil {
-				return err
-			}
-			pos, err := mysql.DecodePosition(row[1].ToString())
-			if err != nil {
-				return err
-			}
-			func() {
-				mu.Lock()
-				defer mu.Unlock()
-
-				source, ok := df.sources[bls.Shard]
-				if !ok {
-					// Unreachable.
-					return
-				}
-				if !source.position.IsZero() && source.position.AtLeast(pos) {
-					return
-				}
-				source.position = pos
-			}()
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func (df *vdiff) selectTablets(ctx context.Context) error {
@@ -341,8 +330,56 @@ func (df *vdiff) selectTablets(ctx context.Context) error {
 	return err2
 }
 
-func (df *vdiff) startQueryStreams(ctx context.Context, participans map[string]*dfParams, query string) error {
-	err := df.forAll(participans, func(shard string, participant *dfParams) error {
+func (df *vdiff) stopTargetStreams(ctx context.Context) error {
+	var mu sync.Mutex
+
+	err := df.forAll(df.targets, func(shard string, target *dfParams) error {
+		query := fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for vdiff' where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(df.mi.workflow))
+		_, err := df.mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
+		if err != nil {
+			return err
+		}
+		query = fmt.Sprintf("select source, pos from _vt.vreplication where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(df.mi.workflow))
+		p3qr, err := df.mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
+		if err != nil {
+			return err
+		}
+		qr := sqltypes.Proto3ToResult(p3qr)
+
+		for _, row := range qr.Rows {
+			var bls binlogdatapb.BinlogSource
+			if err := proto.UnmarshalText(row[0].ToString(), &bls); err != nil {
+				return err
+			}
+			pos, err := mysql.DecodePosition(row[1].ToString())
+			if err != nil {
+				return err
+			}
+			func() {
+				mu.Lock()
+				defer mu.Unlock()
+
+				source, ok := df.sources[bls.Shard]
+				if !ok {
+					// Unreachable.
+					return
+				}
+				if !source.position.IsZero() && source.position.AtLeast(pos) {
+					return
+				}
+				source.position = pos
+			}()
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (df *vdiff) startQueryStreams(ctx context.Context, participants map[string]*dfParams, query string, orderBy []engine.OrderbyParams) (*resultReader, error) {
+	err := df.forAll(participants, func(shard string, participant *dfParams) error {
 		// Iteration for each participant.
 		if err := df.mi.wr.tmc.WaitForPosition(ctx, participant.tablet, mysql.EncodePosition(participant.position)); err != nil {
 			return err
@@ -363,7 +400,10 @@ func (df *vdiff) startQueryStreams(ctx context.Context, participans map[string]*
 		participant.snapshotPosition = gtid
 		return nil
 	})
-	return err
+	if err != nil {
+		return nil, err
+	}
+	return newResultReader(ctx, participants, orderBy), nil
 }
 
 // streamOne is called as a goroutine, and communicates its results through channels.
@@ -470,7 +510,6 @@ var _ engine.VCursor = (*resultReader)(nil)
 // resultReader performs a merge-sorted read from the participants.
 type resultReader struct {
 	participants map[string]*dfParams
-	orderBy      []engine.OrderbyParams
 	rows         [][]sqltypes.Value
 	result       chan *sqltypes.Result
 	err          error
@@ -479,7 +518,6 @@ type resultReader struct {
 func newResultReader(ctx context.Context, participants map[string]*dfParams, orderBy []engine.OrderbyParams) *resultReader {
 	rr := &resultReader{
 		participants: participants,
-		orderBy:      orderBy,
 		result:       make(chan *sqltypes.Result, 1),
 	}
 	rss := make([]*srvtopo.ResolvedShard, 0, len(participants))
@@ -493,7 +531,7 @@ func newResultReader(ctx context.Context, participants map[string]*dfParams, ord
 	go func() {
 		defer close(rr.result)
 
-		rr.err = engine.MergeSort(rr, "", rr.orderBy, rss, nil, func(qr *sqltypes.Result) error {
+		rr.err = engine.MergeSort(rr, "", orderBy, rss, nil, func(qr *sqltypes.Result) error {
 			select {
 			case rr.result <- qr:
 			case <-ctx.Done():
@@ -576,90 +614,90 @@ func (rr *resultReader) ResolveDestinations(keyspace string, ids []*querypb.Valu
 	return nil, nil, nil
 }
 
-func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, source, target *resultReader) error {
+func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, sourceReader, targetReader *resultReader) (*DiffSummary, error) {
+	dr := &DiffSummary{}
 	var sourceRow, targetRow []sqltypes.Value
 	var err error
 	advanceSource := true
 	advanceTarget := true
 	for {
 		if advanceSource {
-			sourceRow, err = source.next(ctx)
+			sourceRow, err = sourceReader.next(ctx)
 			if err != nil {
-				return err
+				return nil, err
 			}
-			advanceSource = false
 		}
 		if advanceTarget {
-			targetRow, err = target.next(ctx)
+			targetRow, err = targetReader.next(ctx)
 			if err != nil {
-				return err
+				return nil, err
 			}
-			advanceTarget = false
 		}
-		td.processedRows++
+
+		advanceSource = true
+		advanceTarget = true
+
+		dr.ProcessedRows++
 		if sourceRow == nil {
 			// no more rows from the source
 			if targetRow == nil {
 				// no more rows from target either, we're done
-				return nil
+				return dr, nil
 			}
 
 			// drain target, update count
 			wr.Logger().Errorf("Draining extra row(s) found on the target starting with: %v", targetRow)
-			count, err := target.drain(ctx)
+			count, err := targetReader.drain(ctx)
 			if err != nil {
-				return err
+				return nil, err
 			}
-			td.extraRowsTarget += 1 + count
-			return nil
+			dr.ExtraRowsTarget += 1 + count
+			return dr, nil
 		}
 		if targetRow == nil {
 			// no more rows from the target
 			// we know we have rows from source, drain, update count
 			wr.Logger().Errorf("Draining extra row(s) found on the source starting with: %v", sourceRow)
-			count, err := source.drain(ctx)
+			count, err := sourceReader.drain(ctx)
 			if err != nil {
-				return err
+				return nil, err
 			}
-			td.extraRowsSource += 1 + count
-			return nil
+			dr.ExtraRowsSource += 1 + count
+			return dr, nil
 		}
 
 		// Compare pk values.
 		c, err := td.compare(sourceRow, targetRow, td.comparePKs)
 		switch {
 		case err != nil:
-			return err
+			return nil, err
 		case c < 0:
-			if td.extraRowsSource < 10 {
-				wr.Logger().Errorf("[table=%v] Extra row %v on source: %v", td.targetTable, td.extraRowsSource, sourceRow)
+			if dr.ExtraRowsSource < 10 {
+				wr.Logger().Errorf("[table=%v] Extra row %v on source: %v", td.targetTable, dr.ExtraRowsSource, sourceRow)
 			}
-			td.extraRowsSource++
-			advanceSource = true
+			dr.ExtraRowsSource++
+			advanceTarget = false
 			continue
 		case c > 0:
-			if td.extraRowsTarget < 10 {
-				wr.Logger().Errorf("[table=%v] Extra row %v on target: %v", td.targetTable, td.extraRowsTarget, targetRow)
+			if dr.ExtraRowsTarget < 10 {
+				wr.Logger().Errorf("[table=%v] Extra row %v on target: %v", td.targetTable, dr.ExtraRowsTarget, targetRow)
 			}
-			td.extraRowsTarget++
-			advanceTarget = true
+			dr.ExtraRowsTarget++
+			advanceSource = false
 			continue
 		}
 
 		// c == 0
-		advanceSource = true
-		advanceTarget = true
-
 		// Compare non-pk values.
 		c, err = td.compare(sourceRow, targetRow, td.compareCols)
 		switch {
 		case err != nil:
-			return err
+			return nil, err
 		case c != 0:
-			if td.mismatchedRows < 10 {
-				wr.Logger().Errorf("[table=%v] Different content %v in same PK: %v != %v", td.targetTable, td.mismatchedRows, sourceRow, targetRow)
+			if dr.MismatchedRows < 10 {
+				wr.Logger().Errorf("[table=%v] Different content %v in same PK: %v != %v", td.targetTable, dr.MismatchedRows, sourceRow, targetRow)
 			}
-			td.mismatchedRows++
+			dr.MismatchedRows++
 		}
 	}
 }
@@ -678,6 +716,14 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []int
 		}
 	}
 	return 0, nil
+}
+
+func (td *tableDiffer) orderbyParams() []engine.OrderbyParams {
+	ob := make([]engine.OrderbyParams, 0, len(td.comparePKs))
+	for _, col := range td.comparePKs {
+		ob = append(ob, engine.OrderbyParams{Col: col})
+	}
+	return ob
 }
 
 func removeKeyrange(where *sqlparser.Where) *sqlparser.Where {
