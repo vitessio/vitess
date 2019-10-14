@@ -284,7 +284,7 @@ func execNonDml(ctx context.Context, db *sql.DB, sql string) (*results, error) {
 	if err != nil {
 		return nil, vterrors.Wrap(err, "client error")
 	}
-	defer vterrors.LogIfError(rows.Close())
+	defer func() { vterrors.LogIfError(rows.Close()) }()
 
 	// get the headers
 	var qr results

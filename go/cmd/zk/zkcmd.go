@@ -952,7 +952,7 @@ func cmdUnzip(ctx context.Context, subFlags *flag.FlagSet, args []string) error 
 	if err != nil {
 		return fmt.Errorf("zip: error %v", err)
 	}
-	defer vterrors.LogIfError(zipReader.Close())
+	defer func() { vterrors.LogIfError(zipReader.Close()) }()
 
 	for _, zf := range zipReader.File {
 		rc, err := zf.Open()

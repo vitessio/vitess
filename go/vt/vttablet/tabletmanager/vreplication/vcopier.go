@@ -53,7 +53,7 @@ func newVCopier(vr *vreplicator) *vcopier {
 }
 
 func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
-	defer vterrors.LogIfError(vc.vr.dbClient.Rollback())
+	defer func() { vterrors.LogIfError(vc.vr.dbClient.Rollback()) }()
 
 	plan, err := buildReplicatorPlan(vc.vr.source.Filter, vc.vr.tableKeys, nil)
 	if err != nil {
@@ -164,7 +164,7 @@ func (vc *vcopier) catchup(ctx context.Context, copyState map[string]*sqltypes.R
 }
 
 func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState map[string]*sqltypes.Result) error {
-	defer vterrors.LogIfError(vc.vr.dbClient.Rollback())
+	defer func() { vterrors.LogIfError(vc.vr.dbClient.Rollback()) }()
 
 	log.Infof("Copying table %s, lastpk: %v", tableName, copyState[tableName])
 
@@ -182,7 +182,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	if err != nil {
 		return fmt.Errorf("error dialing tablet: %v", err)
 	}
-	defer vterrors.LogIfError(vsClient.Close(ctx))
+	defer func() { vterrors.LogIfError(vsClient.Close(ctx)) }()
 
 	ctx, cancel := context.WithTimeout(ctx, copyTimeout)
 	defer cancel()

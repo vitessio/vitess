@@ -156,7 +156,7 @@ func main() {
 		log.Errorf("Can't get backup storage: %v", err)
 		exit.Return(1)
 	}
-	defer vterrors.LogIfError(backupStorage.Close())
+	defer func() { vterrors.LogIfError(backupStorage.Close()) }()
 	// Open connection to topology server.
 	topoServer := topo.Open()
 	defer topoServer.Close()

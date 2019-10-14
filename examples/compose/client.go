@@ -31,8 +31,6 @@ import (
 	"math/rand"
 	"os"
 	"time"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/vt/vitessdriver"
 )
 
@@ -50,7 +48,9 @@ func main() {
 		fmt.Printf("client error: %v\n", err)
 		os.Exit(1)
 	}
-	defer vterrors.IgnoreError(db.Close())
+	defer func() {
+		_ = db.Close()
+	}()
 
 	// Insert some messages on random pages.
 	fmt.Println("Inserting into master...")
@@ -103,7 +103,9 @@ func main() {
 		fmt.Printf("client error: %v\n", err)
 		os.Exit(1)
 	}
-	defer vterrors.IgnoreError(dbr.Close())
+	defer func() {
+		_ = dbr.Close()
+	}()
 
 	rows, err = dbr.Query("SELECT page, time_created_ns, message FROM messages")
 	if err != nil {

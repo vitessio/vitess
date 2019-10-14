@@ -23,11 +23,11 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/vt/grpcclient"
 	automationpb "vitess.io/vitess/go/vt/proto/automation"
 	automationservicepb "vitess.io/vitess/go/vt/proto/automationservice"
@@ -85,7 +85,7 @@ func main() {
 		fmt.Println("Cannot create connection:", err)
 		os.Exit(3)
 	}
-	defer vterrors.LogIfError(conn.Close())
+	defer func() { vterrors.LogIfError(conn.Close()) }()
 	client := automationservicepb.NewAutomationClient(conn)
 
 	enqueueRequest := &automationpb.EnqueueClusterOperationRequest{

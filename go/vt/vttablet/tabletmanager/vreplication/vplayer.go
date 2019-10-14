@@ -114,7 +114,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("error dialing tablet: %v", err)
 	}
-	defer vterrors.LogIfError(vsClient.Close(ctx))
+	defer func() { vterrors.LogIfError(vsClient.Close(ctx)) }()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 

@@ -310,11 +310,6 @@ func Print(err error) string {
 	return fmt.Sprintf("%v: %v\n", Code(err), err.Error())
 }
 
-// IgnoreError allows us to be explicit about ignoring errors
-func IgnoreError(_ error) {
-	// empty by design
-}
-
 // LogIfError will log an error if it's not nil
 func LogIfError(err error) {
 	if err != nil {
