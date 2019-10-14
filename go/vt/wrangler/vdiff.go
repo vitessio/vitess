@@ -44,8 +44,8 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 )
 
-// DiffSummary is the summary of differences for one table.
-type DiffSummary struct {
+// DiffReport is the summary of differences for one table.
+type DiffReport struct {
 	ProcessedRows   int
 	MatchingRows    int
 	MismatchedRows  int
@@ -81,15 +81,15 @@ type dfParams struct {
 }
 
 // VDiff reports differences between the sources and targets of a vreplication workflow.
-func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceCell, targetCell, tabletTypesStr string, filteredReplicationWaitTime time.Duration) error {
+func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceCell, targetCell, tabletTypesStr string, filteredReplicationWaitTime time.Duration) (map[string]*DiffReport, error) {
 	mi, err := wr.buildMigrater(ctx, targetKeyspace, workflow)
 	if err != nil {
 		wr.Logger().Errorf("buildMigrater failed: %v", err)
-		return err
+		return nil, err
 	}
 	if err := mi.validate(ctx, false /* isWrite */); err != nil {
 		mi.wr.Logger().Errorf("validate failed: %v", err)
-		return err
+		return nil, err
 	}
 	df := &vdiff{
 		mi:             mi,
@@ -118,14 +118,14 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 	}
 	schm, err := wr.GetSchema(ctx, oneTarget.master.Alias, nil, nil, false)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	df.differs, err = buildVDiffPlan(ctx, oneFilter, schm)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := df.selectTablets(ctx); err != nil {
-		return err
+		return nil, err
 	}
 	defer func() {
 		if err := df.restartTargets(ctx); err != nil {
@@ -135,31 +135,33 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	// TODO(sougou): parallelize
-	for _, td := range df.differs {
+	diffReports := make(map[string]*DiffReport)
+	for table, td := range df.differs {
 		if err := df.stopTargets(ctx); err != nil {
-			return err
+			return nil, err
 		}
 		sourceReader, err := df.startQueryStreams(ctx, df.sources, td.sourceExpression, td.orderbyParams())
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if err := df.syncTargets(ctx); err != nil {
-			return err
+			return nil, err
 		}
 		targetReader, err := df.startQueryStreams(ctx, df.targets, td.targetExpression, td.orderbyParams())
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if err := df.restartTargets(ctx); err != nil {
-			return err
+			return nil, err
 		}
 		dr, err := td.diff(ctx, df.mi.wr, sourceReader, targetReader)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		fmt.Printf("Summary for %v: %+v\n", td.targetTable, dr)
+		wr.Logger().Printf("Summary for %v: %+v\n", td.targetTable, *dr)
+		diffReports[table] = dr
 	}
-	return nil
+	return diffReports, nil
 }
 
 func buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter, schm *tabletmanagerdatapb.SchemaDefinition) (map[string]*tableDiffer, error) {
@@ -447,6 +449,7 @@ func (df *vdiff) streamOne(ctx context.Context, shard string, participant *dfPar
 				Rows:   vrs.Rows,
 			}
 			result := sqltypes.Proto3ToResult(p3qr)
+			// Fields should be received only once, and sent only once.
 			if vrs.Fields == nil {
 				result.Fields = nil
 			}
@@ -630,8 +633,8 @@ func (rr *resultReader) ResolveDestinations(keyspace string, ids []*querypb.Valu
 	return nil, nil, nil
 }
 
-func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, sourceReader, targetReader *resultReader) (*DiffSummary, error) {
-	dr := &DiffSummary{}
+func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, sourceReader, targetReader *resultReader) (*DiffReport, error) {
+	dr := &DiffReport{}
 	var sourceRow, targetRow []sqltypes.Value
 	var err error
 	advanceSource := true
@@ -650,16 +653,14 @@ func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, sourceReader, tar
 			}
 		}
 
+		if sourceRow == nil && targetRow == nil {
+			return dr, nil
+		}
+
 		advanceSource = true
 		advanceTarget = true
 
 		if sourceRow == nil {
-			// no more rows from the source
-			if targetRow == nil {
-				// no more rows from target either, we're done
-				return dr, nil
-			}
-
 			// drain target, update count
 			wr.Logger().Errorf("Draining extra row(s) found on the target starting with: %v", targetRow)
 			count, err := targetReader.drain(ctx)
@@ -667,6 +668,7 @@ func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, sourceReader, tar
 				return nil, err
 			}
 			dr.ExtraRowsTarget += 1 + count
+			dr.ProcessedRows += 1 + count
 			return dr, nil
 		}
 		if targetRow == nil {
@@ -678,10 +680,10 @@ func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, sourceReader, tar
 				return nil, err
 			}
 			dr.ExtraRowsSource += 1 + count
+			dr.ProcessedRows += 1 + count
 			return dr, nil
 		}
 
-		// We have rows to process on both sides.
 		dr.ProcessedRows++
 
 		// Compare pk values.
