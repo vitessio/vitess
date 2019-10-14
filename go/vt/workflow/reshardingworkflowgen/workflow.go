@@ -60,7 +60,9 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 	vtworkersStr := subFlags.String("vtworkers", "", "A comma-separated list of vtworker addresses")
 	excludeTablesStr := subFlags.String("exclude_tables", "", "A comma-separated list of tables to exclude")
 	minHealthyRdonlyTablets := subFlags.String("min_healthy_rdonly_tablets", "1", "Minimum number of healthy RDONLY tablets required in source shards")
+	skipSplitRatioCheck := subFlags.Bool("skip_split_ratio_check", false, "Skip validation on minimum number of healthy RDONLY tablets")
 	splitCmd := subFlags.String("split_cmd", "SplitClone", "Split command to use to perform horizontal resharding (either SplitClone or LegacySplitClone)")
+	splitDiffCmd := subFlags.String("split_diff_cmd", "SplitDiff", "Split diff command to use to perform horizontal resharding (either SplitDiff or MultiSplitDiff)")
 	splitDiffDestTabletType := subFlags.String("split_diff_dest_tablet_type", "RDONLY", "Specifies tablet type to use in destination shards while performing SplitDiff operation")
 	skipStartWorkflows := subFlags.Bool("skip_start_workflows", true, "If true, newly created workflows will have skip_start set")
 	phaseEnableApprovalsDesc := fmt.Sprintf("Comma separated phases that require explicit approval in the UI to execute. Phase names are: %v", strings.Join(resharding.WorkflowPhases(), ","))
@@ -70,7 +72,7 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-	if *keyspace == "" || *vtworkersStr == "" || *minHealthyRdonlyTablets == "" || *splitCmd == "" {
+	if *keyspace == "" || *vtworkersStr == "" || *minHealthyRdonlyTablets == "" || *splitCmd == "" || *splitDiffCmd == "" {
 		return fmt.Errorf("keyspace name, min healthy rdonly tablets, split command, and vtworkers information must be provided for horizontal resharding")
 	}
 
@@ -90,10 +92,12 @@ func (*Factory) Init(m *workflow.Manager, w *workflowpb.Workflow, args []string)
 		shardsToSplit,
 		*minHealthyRdonlyTablets,
 		*splitCmd,
+		*splitDiffCmd,
 		*splitDiffDestTabletType,
 		*phaseEnableApprovalsStr,
 		*skipStartWorkflows,
 		*useConsistentSnapshot,
+		*skipSplitRatioCheck,
 	)
 	if err != nil {
 		return err
@@ -132,7 +136,10 @@ func (*Factory) Instantiate(m *workflow.Manager, w *workflowpb.Workflow, rootNod
 		keyspaceParam:                checkpoint.Settings["keyspace"],
 		splitDiffDestTabletTypeParam: checkpoint.Settings["split_diff_dest_tablet_type"],
 		splitCmdParam:                checkpoint.Settings["split_cmd"],
+		splitDiffCmdParam:            checkpoint.Settings["split_diff_cmd"],
 		useConsistentSnapshot:        checkpoint.Settings["use_consistent_snapshot"],
+		excludeTablesParam:           checkpoint.Settings["exclude_tables"],
+		skipSplitRatioCheckParam:     checkpoint.Settings["skip_split_ratio_check"],
 		workflowsCount:               workflowsCount,
 	}
 	createWorkflowsUINode := &workflow.Node{
@@ -194,7 +201,7 @@ func findSourceAndDestinationShards(ts *topo.Server, keyspace string) ([][][]str
 }
 
 // initCheckpoint initialize the checkpoint for keyspace reshard
-func initCheckpoint(keyspace string, vtworkers, excludeTables []string, shardsToSplit [][][]string, minHealthyRdonlyTablets, splitCmd, splitDiffDestTabletType, phaseEnableApprovals string, skipStartWorkflows bool, useConsistentSnapshot bool) (*workflowpb.WorkflowCheckpoint, error) {
+func initCheckpoint(keyspace string, vtworkers, excludeTables []string, shardsToSplit [][][]string, minHealthyRdonlyTablets, splitCmd, splitDiffCmd, splitDiffDestTabletType, phaseEnableApprovals string, skipStartWorkflows, useConsistentSnapshot, skipSplitRatioCheck bool) (*workflowpb.WorkflowCheckpoint, error) {
 	sourceShards := 0
 	destShards := 0
 	for _, shardToSplit := range shardsToSplit {
@@ -209,7 +216,7 @@ func initCheckpoint(keyspace string, vtworkers, excludeTables []string, shardsTo
 	}
 
 	splitRatio := destShards / sourceShards
-	if minHealthyRdonlyTabletsVal, err := strconv.Atoi(minHealthyRdonlyTablets); err != nil || minHealthyRdonlyTabletsVal < splitRatio {
+	if minHealthyRdonlyTabletsVal, err := strconv.Atoi(minHealthyRdonlyTablets); err != nil || (!skipSplitRatioCheck && minHealthyRdonlyTabletsVal < splitRatio) {
 		return nil, fmt.Errorf("there are not enough rdonly tablets in source shards. You need at least %v, it got: %v", splitRatio, minHealthyRdonlyTablets)
 	}
 
@@ -235,13 +242,15 @@ func initCheckpoint(keyspace string, vtworkers, excludeTables []string, shardsTo
 			"vtworkers":                   strings.Join(vtworkers, ","),
 			"min_healthy_rdonly_tablets":  minHealthyRdonlyTablets,
 			"split_cmd":                   splitCmd,
+			"split_diff_cmd":              splitDiffCmd,
 			"split_diff_dest_tablet_type": splitDiffDestTabletType,
 			"phase_enable_approvals":      phaseEnableApprovals,
 			"skip_start_workflows":        fmt.Sprintf("%v", skipStartWorkflows),
 			"workflows_count":             fmt.Sprintf("%v", len(shardsToSplit)),
 			"keyspace":                    keyspace,
 			"use_consistent_snapshot":     fmt.Sprintf("%v", useConsistentSnapshot),
-			"exclude_tables":              fmt.Sprintf("%v", strings.Join(excludeTables, ",")),
+			"exclude_tables":              strings.Join(excludeTables, ","),
+			"skip_split_ratio_check":      fmt.Sprintf("%v", skipSplitRatioCheck),
 		},
 	}, nil
 }
@@ -270,8 +279,11 @@ type reshardingWorkflowGen struct {
 	keyspaceParam                string
 	splitDiffDestTabletTypeParam string
 	splitCmdParam                string
+	splitDiffCmdParam            string
 	skipStartWorkflowParam       string
 	useConsistentSnapshot        string
+	excludeTablesParam           string
+	skipSplitRatioCheckParam     string
 }
 
 // Run implements workflow.Workflow interface. It creates one horizontal resharding workflow per shard to split
@@ -305,8 +317,10 @@ func (hw *reshardingWorkflowGen) workflowCreator(ctx context.Context, task *work
 	horizontalReshardingParams := []string{
 		"-keyspace=" + hw.keyspaceParam,
 		"-vtworkers=" + task.Attributes["vtworkers"],
-		"-exclude_tables=" + task.Attributes["exclude_tables"],
+		"-exclude_tables=" + hw.excludeTablesParam,
+		"-skip_split_ratio_check=" + hw.skipSplitRatioCheckParam,
 		"-split_cmd=" + hw.splitCmdParam,
+		"-split_diff_cmd=" + hw.splitDiffCmdParam,
 		"-split_diff_dest_tablet_type=" + hw.splitDiffDestTabletTypeParam,
 		"-min_healthy_rdonly_tablets=" + hw.minHealthyRdonlyTabletsParam,
 		"-source_shards=" + task.Attributes["source_shards"],

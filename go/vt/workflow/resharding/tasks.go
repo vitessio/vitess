@@ -41,10 +41,17 @@ func createTaskID(phase workflow.PhaseType, shardName string) string {
 func (hw *horizontalReshardingWorkflow) GetTasks(phase workflow.PhaseType) []*workflowpb.Task {
 	var shards []string
 	switch phase {
-	case phaseCopySchema, phaseWaitForFilteredReplication, phaseDiff:
+	case phaseCopySchema, phaseWaitForFilteredReplication:
 		shards = strings.Split(hw.checkpoint.Settings["destination_shards"], ",")
 	case phaseClone, phaseMigrateRdonly, phaseMigrateReplica, phaseMigrateMaster:
 		shards = strings.Split(hw.checkpoint.Settings["source_shards"], ",")
+	case phaseDiff:
+		switch hw.checkpoint.Settings["split_diff_cmd"] {
+		case "SplitDiff":
+			shards = strings.Split(hw.checkpoint.Settings["destination_shards"], ",")
+		case "MultiSplitDiff":
+			shards = strings.Split(hw.checkpoint.Settings["source_shards"], ",")
+		}
 	default:
 		log.Fatalf("BUG: unknown phase type: %v", phase)
 	}
@@ -82,14 +89,16 @@ func (hw *horizontalReshardingWorkflow) runSplitClone(ctx context.Context, t *wo
 		return err
 	}
 
-	args := []string{splitCmd, "--min_healthy_rdonly_tablets=" + minHealthyRdonlyTablets, sourceKeyspaceShard}
+	args := []string{splitCmd, "--min_healthy_rdonly_tablets=" + minHealthyRdonlyTablets}
 	if useConsistentSnapshot != "" {
 		args = append(args, "--use_consistent_snapshot")
 	}
 
 	if excludeTables != "" {
-		args = append(args, "--exclude_tables="+excludeTables)
+		args = append(args, fmt.Sprintf("--exclude_tables=%s", excludeTables))
 	}
+
+	args = append(args, sourceKeyspaceShard)
 
 	_, err := automation.ExecuteVtworker(hw.ctx, worker, args)
 	return err
@@ -103,7 +112,9 @@ func (hw *horizontalReshardingWorkflow) runWaitForFilteredReplication(ctx contex
 
 func (hw *horizontalReshardingWorkflow) runSplitDiff(ctx context.Context, t *workflowpb.Task) error {
 	keyspace := t.Attributes["keyspace"]
+	splitDiffCmd := t.Attributes["split_diff_cmd"]
 	destShard := t.Attributes["destination_shard"]
+	sourceShard := t.Attributes["source_shard"]
 	destinationTabletType := t.Attributes["dest_tablet_type"]
 	worker := t.Attributes["vtworker"]
 	useConsistentSnapshot := t.Attributes["use_consistent_snapshot"]
@@ -112,13 +123,21 @@ func (hw *horizontalReshardingWorkflow) runSplitDiff(ctx context.Context, t *wor
 	if _, err := automation.ExecuteVtworker(hw.ctx, worker, []string{"Reset"}); err != nil {
 		return err
 	}
-	args := []string{"SplitDiff", "--min_healthy_rdonly_tablets=1", "--dest_tablet_type=" + destinationTabletType, topoproto.KeyspaceShardString(keyspace, destShard)}
+	args := []string{splitDiffCmd}
+
 	if useConsistentSnapshot != "" {
 		args = append(args, "--use_consistent_snapshot")
 	}
 
 	if excludeTables != "" {
-		args = append(args, "--exclude_tables="+excludeTables)
+		args = append(args, fmt.Sprintf("--exclude_tables=%s", excludeTables))
+	}
+
+	switch splitDiffCmd {
+	case "SplitDiff":
+		args = append(args, "--min_healthy_rdonly_tablets=1", "--dest_tablet_type="+destinationTabletType, topoproto.KeyspaceShardString(keyspace, destShard))
+	case "MultiSplitDiff":
+		args = append(args, "--min_healthy_tablets=1", "--tablet_type="+destinationTabletType, topoproto.KeyspaceShardString(keyspace, sourceShard))
 	}
 
 	_, err := automation.ExecuteVtworker(ctx, worker, args)

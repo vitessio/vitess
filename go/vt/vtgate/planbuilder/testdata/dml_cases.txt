@@ -993,6 +993,32 @@
   }
 }
 
+# insert with default seq
+"insert into user(id, nonid) values (default, 2)"
+{
+  "Original": "insert into user(id, nonid) values (default, 2)",
+  "Instructions": {
+    "Opcode": "InsertSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert into user(id, nonid, Name, Costly) values (:_Id0, 2, :_Name0, :_Costly0)",
+    "Values": [[[":__seq0"]],[[null]],[[null]]],
+    "Table": "user",
+    "Generate": {
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from seq",
+      "Values": [null]
+    },
+    "Prefix": "insert into user(id, nonid, Name, Costly) values ",
+    "Mid": ["(:_Id0, 2, :_Name0, :_Costly0)"]
+  }
+}
+
 # insert with non vindex bool value
 "insert into user(nonid) values (true)"
 {

@@ -106,7 +106,7 @@ func GetCreator() Creator {
 // Note it has the same name as the Gateway's interface method, as it
 // just calls it.
 func WaitForTablets(gw Gateway, tabletTypesToWait []topodatapb.TabletType) error {
-	log.Infof("Gateway waiting for serving tablets...")
+	log.Infof("Gateway waiting for serving tablets of types %v ...", tabletTypesToWait)
 	ctx, cancel := context.WithTimeout(context.Background(), *initialTabletTimeout)
 	defer cancel()
 
@@ -119,7 +119,7 @@ func WaitForTablets(gw Gateway, tabletTypesToWait []topodatapb.TabletType) error
 		// In this scenario, we were able to reach the
 		// topology service, but some tablets may not be
 		// ready. We just warn and keep going.
-		log.Warningf("Timeout waiting for all keyspaces / shards to have healthy tablets, may be in degraded mode")
+		log.Warningf("Timeout waiting for all keyspaces / shards to have healthy tablets of types %v, may be in degraded mode", tabletTypesToWait)
 		err = nil
 	default:
 		// Nothing to do here, the caller will log.Fatalf.

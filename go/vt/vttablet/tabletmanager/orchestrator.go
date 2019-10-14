@@ -186,6 +186,9 @@ func (orc *orcClient) apiGet(pathParts ...string) ([]byte, error) {
 
 	// Note that url.String() will URL-escape the path we gave it above.
 	req, err := http.NewRequest("GET", url.String(), nil)
+	if err != nil {
+		return nil, err
+	}
 	if *orcUser != "" {
 		req.SetBasicAuth(*orcUser, *orcPassword)
 	}
