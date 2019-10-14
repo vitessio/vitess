@@ -30,7 +30,7 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		etcdProcess := vttest.EtcdProcessInstance()
+		etcdProcess := vttest.EtcdProcessInstance(2379)
 		if err := etcdProcess.Setup(); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			etcdProcess.TearDown()
@@ -40,7 +40,7 @@ func TestMain(m *testing.M) {
 		vtcltlProcess := vttest.VtctlProcessInstance()
 		vtcltlProcess.AddCellInfo()
 
-		vtctldProcess := vttest.VtctldProcessInstance()
+		vtctldProcess := vttest.VtctldProcessInstance(15000, 15999)
 		if err := vtctldProcess.Setup(); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			etcdProcess.TearDown()
@@ -48,8 +48,21 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
+		mysqlCtlProcess := vttest.MysqlCtlProcessInstance(100, 14000)
+		mysqlCtlProcess.InitDb()
+
+		vttabletProcess := vttest.VttabletProcessInstance(16000, 17000, 100, "zone1", "0", "localhost", "commerce-ks", 15000, "replica")
+		if err := vttabletProcess.Setup(); err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			etcdProcess.TearDown()
+			vtctldProcess.TearDown()
+			vttabletProcess.TearDown()
+			return 1
+		}
+
 		defer etcdProcess.TearDown()
 		defer vtctldProcess.TearDown()
+		defer vttabletProcess.TearDown()
 		return m.Run()
 	}()
 	os.Exit(exitCode)
