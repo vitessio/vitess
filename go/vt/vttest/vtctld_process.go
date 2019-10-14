@@ -87,6 +87,9 @@ func (vtctld *VtctldProcess) Setup() (err error) {
 	vtctld.proc.Env = append(vtctld.proc.Env, os.Environ()...)
 
 	log.Infof("%v %v", strings.Join(vtctld.proc.Args, " "))
+	print("starting vtctld")
+	time.Sleep(3 * time.Second)
+
 	err = vtctld.proc.Start()
 	if err != nil {
 		return

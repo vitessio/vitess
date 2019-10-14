@@ -19,6 +19,7 @@ package clustertest
 import (
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"testing"
 
@@ -35,8 +36,37 @@ func TestMain(m *testing.M) {
 			etcdProcess.TearDown()
 			return 1
 		}
+
+		vtcltlProcess := vttest.VtctlProcessInstance()
+		vtcltlProcess.AddCellInfo()
+
+		vtctldProcess := vttest.VtctldProcessInstance()
+		if err := vtctldProcess.Setup(); err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			etcdProcess.TearDown()
+			vtctldProcess.TearDown()
+			return 1
+		}
+
 		defer etcdProcess.TearDown()
+		defer vtctldProcess.TearDown()
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+func testURL(t *testing.T, url string, testCaseName string) {
+	statusCode := getStatusForURL(url)
+	if got, want := statusCode, 200; got != want {
+		t.Errorf("select:\n%v want\n%v for %s", got, want, testCaseName)
+	}
+}
+
+// getStatusForUrl returns the status code for the URL
+func getStatusForURL(url string) int {
+	resp, _ := http.Get(url)
+	if resp != nil {
+		return resp.StatusCode
+	}
+	return 0
 }

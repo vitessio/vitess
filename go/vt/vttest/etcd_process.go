@@ -77,7 +77,7 @@ func (etcd *EtcdProcess) Setup() (err error) {
 	for time.Now().Before(timeout) {
 		if etcd.IsHealthy() {
 			err = etcd.makeTopoDirectories()
-			if err == nil {
+			if err != nil {
 				return fmt.Errorf("process '%s' unable to create topo directories (err: %s)", etcd.Name, err)
 			}
 			return
@@ -103,7 +103,7 @@ func (etcd *EtcdProcess) TearDown() error {
 
 	// Attempt graceful shutdown with SIGTERM first
 	etcd.proc.Process.Signal(syscall.SIGTERM)
-
+	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), "etcd"))
 	select {
 	case err := <-etcd.exit:
 		etcd.proc = nil
@@ -114,6 +114,7 @@ func (etcd *EtcdProcess) TearDown() error {
 		etcd.proc = nil
 		return <-etcd.exit
 	}
+
 }
 
 // IsHealthy function checks if etcd server is up and running
@@ -130,7 +131,7 @@ func (etcd *EtcdProcess) IsHealthy() bool {
 
 func (etcd *EtcdProcess) makeTopoDirectories() (err error) {
 	err = etcd.manageTopoDir("mkdir", "/vitess/global")
-	if err != nil {
+	if err == nil {
 		err = etcd.manageTopoDir("mkdir", "/vitess/zone1")
 	}
 	return err
