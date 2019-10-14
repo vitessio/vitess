@@ -28,8 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
 
-// waitForInitialShard waits for the initial Shard to
-// appear, and match the provided srvKeyspace.
+// waitForInitialShard waits for the initial Shard to appear.
 func waitForInitialShard(t *testing.T, ts *topo.Server, keyspace, shard string) (current *topo.WatchShardData, changes <-chan *topo.WatchShardData, cancel topo.CancelFunc) {
 	ctx := context.Background()
 	start := time.Now()
