@@ -939,6 +939,12 @@ var (
 		input:  "alter table a drop spatial index idx (id)",
 		output: "alter table a",
 	}, {
+		input:  "alter table a add check ch_1",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop check ch_1",
+		output: "alter table a",
+	}, {
 		input:  "alter table a drop foreign key",
 		output: "alter table a",
 	}, {
