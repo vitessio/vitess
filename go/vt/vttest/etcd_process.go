@@ -155,11 +155,11 @@ func (etcd *EtcdProcess) manageTopoDir(command string, directory string) error {
 // EtcdProcessInstance returns a EtcdProcess handle for a etcd sevice,
 // configured with the given Config.
 // The process must be manually started by calling setup()
-func EtcdProcessInstance() *EtcdProcess {
+func EtcdProcessInstance(Port int) *EtcdProcess {
 	etcd := &EtcdProcess{
 		Name:   "etcd",
 		Binary: "etcd",
-		Port:   2379,
+		Port:   Port,
 		Host:   "localhost",
 	}
 

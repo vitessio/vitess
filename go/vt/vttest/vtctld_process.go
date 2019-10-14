@@ -87,8 +87,6 @@ func (vtctld *VtctldProcess) Setup() (err error) {
 	vtctld.proc.Env = append(vtctld.proc.Env, os.Environ()...)
 
 	log.Infof("%v %v", strings.Join(vtctld.proc.Args, " "))
-	print("starting vtctld")
-	time.Sleep(3 * time.Second)
 
 	err = vtctld.proc.Start()
 	if err != nil {
@@ -155,7 +153,7 @@ func (vtctld *VtctldProcess) TearDown() error {
 // VtctldProcessInstance returns a VtctlProcess handle for vtctl process
 // configured with the given Config.
 // The process must be manually started by calling setup()
-func VtctldProcessInstance() *VtctldProcess {
+func VtctldProcessInstance(Port int, GrpcPort int) *VtctldProcess {
 	vtctl := VtctlProcessInstance()
 	vtctld := &VtctldProcess{
 		Name:                        "vtctld",
@@ -167,8 +165,8 @@ func VtctldProcessInstance() *VtctldProcess {
 		BackupStorageImplementation: "file",
 		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),
 		LogDir:                      path.Join(os.Getenv("VTDATAROOT"), "/tmp"),
-		Port:                        15000,
-		GrpcPort:                    15999,
+		Port:                        Port,
+		GrpcPort:                    GrpcPort,
 		PidFile:                     path.Join(os.Getenv("VTDATAROOT"), "/tmp", "vtctld.pid"),
 		Directory:                   os.Getenv("VTDATAROOT"),
 	}
