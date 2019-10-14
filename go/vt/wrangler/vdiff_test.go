@@ -18,6 +18,7 @@ package wrangler
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -304,4 +305,47 @@ func TestVDiffPlanFailure(t *testing.T) {
 		_, err := buildVDiffPlan(context.Background(), filter, schm)
 		assert.EqualError(t, err, tcase.err, tcase.input)
 	}
+}
+
+func TestVDiffSimple(t *testing.T) {
+	env := newTestVDiffEnv([]string{"0"}, []string{"0"}, "", nil)
+	defer env.close()
+
+	schm := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+			Name:              "t1",
+			Columns:           []string{"c1", "c2"},
+			PrimaryKeyColumns: []string{"c1"},
+			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+		}},
+	}
+	env.tmc.schema = schm
+
+	env.tablets[101].setResults(
+		"select c1, c2 from t1 order by c1 asc",
+		vdiffSourceGtid,
+		sqltypes.MakeTestStreamingResults(sqltypes.MakeTestFields(
+			"c1|c2",
+			"int64|int64"),
+			"1|3",
+			"2|4",
+			"---",
+			"3|1",
+		),
+	)
+	env.tablets[201].setResults(
+		"select c1, c2 from t1 order by c1 asc",
+		vdiffSourceGtid,
+		sqltypes.MakeTestStreamingResults(sqltypes.MakeTestFields(
+			"c1|c2",
+			"int64|int64"),
+			"1|3",
+			"---",
+			"2|4",
+			"3|1",
+		),
+	)
+
+	err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second)
+	assert.NoError(t, err)
 }

@@ -127,6 +127,11 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 	if err := df.selectTablets(ctx); err != nil {
 		return err
 	}
+	defer func() {
+		if err := df.restartTargets(ctx); err != nil {
+			wr.Logger().Errorf("Could not restart workflow %s: %v, please restart it manually", workflow, err)
+		}
+	}()
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	// TODO(sougou): parallelize
@@ -291,7 +296,7 @@ func (df *vdiff) selectTablets(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		err1 = df.forAll(df.sources, func(shard string, source *dfParams) error {
-			tp, err := discovery.NewTabletPicker(ctx, df.mi.wr.ts, df.targetCell, df.mi.targetKeyspace, shard, df.tabletTypesStr)
+			tp, err := discovery.NewTabletPicker(ctx, df.mi.wr.ts, df.sourceCell, df.mi.sourceKeyspace, shard, df.tabletTypesStr)
 			if err != nil {
 				return err
 			}
@@ -442,6 +447,9 @@ func (df *vdiff) streamOne(ctx context.Context, shard string, participant *dfPar
 				Rows:   vrs.Rows,
 			}
 			result := sqltypes.Proto3ToResult(p3qr)
+			if vrs.Fields == nil {
+				result.Fields = nil
+			}
 			select {
 			case participant.result <- result:
 			case <-ctx.Done():
@@ -511,6 +519,7 @@ var _ engine.VCursor = (*resultReader)(nil)
 
 // resultReader performs a merge-sorted read from the participants.
 type resultReader struct {
+	ctx          context.Context
 	participants map[string]*dfParams
 	rows         [][]sqltypes.Value
 	result       chan *sqltypes.Result
@@ -519,21 +528,24 @@ type resultReader struct {
 
 func newResultReader(ctx context.Context, participants map[string]*dfParams, orderBy []engine.OrderbyParams) *resultReader {
 	rr := &resultReader{
+		ctx:          ctx,
 		participants: participants,
 		result:       make(chan *sqltypes.Result, 1),
 	}
 	rss := make([]*srvtopo.ResolvedShard, 0, len(participants))
+	bvs := make([]map[string]*querypb.BindVariable, 0, len(participants))
 	for shard := range participants {
 		rss = append(rss, &srvtopo.ResolvedShard{
 			Target: &querypb.Target{
 				Shard: shard,
 			},
 		})
+		bvs = append(bvs, make(map[string]*querypb.BindVariable))
 	}
 	go func() {
 		defer close(rr.result)
 
-		rr.err = engine.MergeSort(rr, "", orderBy, rss, nil, func(qr *sqltypes.Result) error {
+		rr.err = engine.MergeSort(rr, "", orderBy, rss, bvs, func(qr *sqltypes.Result) error {
 			select {
 			case rr.result <- qr:
 			case <-ctx.Done():
@@ -577,7 +589,9 @@ func (rr *resultReader) drain(ctx context.Context) (int, error) {
 	}
 }
 
-func (rr *resultReader) Context() context.Context { return nil }
+func (rr *resultReader) Context() context.Context {
+	return rr.ctx
+}
 
 func (rr *resultReader) MaxMemoryRows() int { return 0 }
 
@@ -639,7 +653,6 @@ func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, sourceReader, tar
 		advanceSource = true
 		advanceTarget = true
 
-		dr.ProcessedRows++
 		if sourceRow == nil {
 			// no more rows from the source
 			if targetRow == nil {
@@ -667,6 +680,9 @@ func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, sourceReader, tar
 			dr.ExtraRowsSource += 1 + count
 			return dr, nil
 		}
+
+		// We have rows to process on both sides.
+		dr.ProcessedRows++
 
 		// Compare pk values.
 		c, err := td.compare(sourceRow, targetRow, td.comparePKs)
@@ -700,6 +716,8 @@ func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, sourceReader, tar
 				wr.Logger().Errorf("[table=%v] Different content %v in same PK: %v != %v", td.targetTable, dr.MismatchedRows, sourceRow, targetRow)
 			}
 			dr.MismatchedRows++
+		default:
+			dr.MatchingRows++
 		}
 	}
 }
