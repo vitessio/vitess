@@ -61,7 +61,7 @@ func main() {
 	servenv.Init()
 
 	if *tabletPath == "" {
-		log.Exit("tabletPath required")
+		log.Exit("-tablet-path required")
 	}
 	tabletAlias, err := topoproto.ParseTabletAlias(*tabletPath)
 	if err != nil {
