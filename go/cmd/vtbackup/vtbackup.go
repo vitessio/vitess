@@ -88,9 +88,6 @@ import (
 )
 
 const (
-	backupTimestampFormat = "2006-01-02.150405"
-	manifestFileName      = "MANIFEST"
-
 	// operationTimeout is the timeout for individual operations like fetching
 	// the master position. This does not impose an overall timeout on
 	// long-running processes like taking the backup. It only applies to
@@ -154,7 +151,6 @@ func main() {
 	}()
 
 	// Open connection backup storage.
-	backupDir := fmt.Sprintf("%v/%v", *initKeyspace, *initShard)
 	backupStorage, err := backupstorage.GetBackupStorage()
 	if err != nil {
 		log.Errorf("Can't get backup storage: %v", err)
@@ -168,13 +164,14 @@ func main() {
 	// Try to take a backup, if it's been long enough since the last one.
 	// Skip pruning if backup wasn't fully successful. We don't want to be
 	// deleting things if the backup process is not healthy.
+	backupDir := mysqlctl.GetBackupDir(*initKeyspace, *initShard)
 	doBackup, err := shouldBackup(ctx, topoServer, backupStorage, backupDir)
 	if err != nil {
 		log.Errorf("Can't take backup: %v", err)
 		exit.Return(1)
 	}
 	if doBackup {
-		if err := takeBackup(ctx, topoServer, backupStorage, backupDir); err != nil {
+		if err := takeBackup(ctx, topoServer, backupStorage); err != nil {
 			log.Errorf("Failed to take backup: %v", err)
 			exit.Return(1)
 		}
@@ -187,7 +184,7 @@ func main() {
 	}
 }
 
-func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage backupstorage.BackupStorage, backupDir string) error {
+func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage backupstorage.BackupStorage) error {
 	// This is an imaginary tablet alias. The value doesn't matter for anything,
 	// except that we generate a random UID to ensure the target backup
 	// directory is unique if multiple vtbackup instances are launched for the
@@ -249,6 +246,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		TopoServer:   topoServer,
 		Keyspace:     *initKeyspace,
 		Shard:        *initShard,
+		TabletAlias:  topoproto.TabletAliasString(tabletAlias),
 	}
 	// In initial_backup mode, just take a backup of this empty database.
 	if *initialBackup {
@@ -265,15 +263,16 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		if err := mysqld.ExecuteSuperQueryList(ctx, cmds); err != nil {
 			return fmt.Errorf("can't initialize database: %v", err)
 		}
+		backupParams.BackupTime = time.Now()
 		// Now we're ready to take the backup.
-		name := backupName(time.Now(), tabletAlias)
-		if err := mysqlctl.Backup(ctx, backupDir, name, backupParams); err != nil {
+		if err := mysqlctl.Backup(ctx, backupParams); err != nil {
 			return fmt.Errorf("backup failed: %v", err)
 		}
 		log.Info("Initial backup successful.")
 		return nil
 	}
 
+	backupDir := mysqlctl.GetBackupDir(*initKeyspace, *initShard)
 	log.Infof("Restoring latest backup from directory %v", backupDir)
 	params := mysqlctl.RestoreParams{
 		Cnf:                 mycnf,
@@ -284,12 +283,16 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		LocalMetadata:       map[string]string{},
 		DeleteBeforeRestore: true,
 		DbName:              dbName,
-		Dir:                 backupDir,
+		Keyspace:            *initKeyspace,
+		Shard:               *initShard,
 	}
-	restorePos, err := mysqlctl.Restore(ctx, params)
+	backupManifest, err := mysqlctl.Restore(ctx, params)
+	var restorePos mysql.Position
 	switch err {
 	case nil:
 		log.Infof("Successfully restored from backup at replication position %v", restorePos)
+		// if err is nil, we expect backupManifest to be non-nil
+		restorePos = backupManifest.Position
 	case mysqlctl.ErrNoBackup:
 		// There is no backup found, but we may be taking the initial backup of a shard
 		if !*allowFirstBackup {
@@ -339,7 +342,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	// Remember the time when we fetched the master position, not when we caught
 	// up to it, so the timestamp on our backup is honest (assuming we make it
 	// to the goal position).
-	backupTime := time.Now()
+	backupParams.BackupTime = time.Now()
 
 	// Wait for replication to catch up.
 	waitStartTime := time.Now()
@@ -380,8 +383,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}
 
 	// Now we can take a new backup.
-	name := backupName(backupTime, tabletAlias)
-	if err := mysqlctl.Backup(ctx, backupDir, name, backupParams); err != nil {
+	if err := mysqlctl.Backup(ctx, backupParams); err != nil {
 		return fmt.Errorf("error taking backup: %v", err)
 	}
 
@@ -490,10 +492,6 @@ func retryOnError(ctx context.Context, fn func() error) error {
 	}
 }
 
-func backupName(backupTime time.Time, tabletAlias *topodatapb.TabletAlias) string {
-	return fmt.Sprintf("%v.%v", backupTime.UTC().Format(backupTimestampFormat), topoproto.TabletAliasString(tabletAlias))
-}
-
 func pruneBackups(ctx context.Context, backupStorage backupstorage.BackupStorage, backupDir string) error {
 	if *minRetentionTime == 0 {
 		log.Info("Pruning of old backups is disabled.")
@@ -542,7 +540,7 @@ func parseBackupTime(name string) (time.Time, error) {
 	if len(parts) != 3 {
 		return time.Time{}, fmt.Errorf("backup name not in expected format (date.time.tablet-alias): %v", name)
 	}
-	backupTime, err := time.Parse(backupTimestampFormat, fmt.Sprintf("%s.%s", parts[0], parts[1]))
+	backupTime, err := time.Parse(mysqlctl.BackupTimestampFormat, fmt.Sprintf("%s.%s", parts[0], parts[1]))
 	if err != nil {
 		return time.Time{}, fmt.Errorf("can't parse timestamp from backup %q: %v", name, err)
 	}

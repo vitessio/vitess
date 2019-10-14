@@ -24,7 +24,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 )
 
-
 func init() {
 	tabletserver.RegisterFunctions = append(tabletserver.RegisterFunctions, func(qsc tabletserver.Controller) {
 		if servenv.GRPCCheckServiceMap("queryservice") {

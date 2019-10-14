@@ -43,6 +43,8 @@ message Keyspace {
   bool sharded = 1;
   map<string, Vindex> vindexes = 2;
   map<string, Table> tables = 3;
+  // If require_explicit_routing is true, vindexes and tables are not added to global routing
+  bool require_explicit_routing = 4;
 }
 
 // Vindex is the vindex info for a Keyspace.

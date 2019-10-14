@@ -34,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // This file handles the initial backup restore upon startup.
@@ -83,7 +84,21 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	// Record local metadata values based on the original type.
 	localMetadata := agent.getLocalMetadataValues(originalType)
 	tablet := agent.Tablet()
-	dir := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
+
+	keyspace := tablet.Keyspace
+	keyspaceInfo, err := agent.TopoServer.GetKeyspace(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+	// For a SNAPSHOT keyspace, we have to look for backups of BaseKeyspace
+	// so we will pass the BaseKeyspace in RestoreParams instead of tablet.Keyspace
+	if keyspaceInfo.KeyspaceType == topodatapb.KeyspaceType_SNAPSHOT {
+		if keyspaceInfo.BaseKeyspace == "" {
+			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Sprintf("snapshot keyspace %v has no base_keyspace set", tablet.Keyspace))
+		}
+		keyspace = keyspaceInfo.BaseKeyspace
+		log.Infof("Using base_keyspace %v to restore keyspace %v", keyspace, tablet.Keyspace)
+	}
 
 	params := mysqlctl.RestoreParams{
 		Cnf:                 agent.Cnf,
@@ -94,14 +109,15 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 		LocalMetadata:       localMetadata,
 		DeleteBeforeRestore: deleteBeforeRestore,
 		DbName:              topoproto.TabletDbName(tablet),
-		Dir:                 dir,
+		Keyspace:            keyspace,
+		Shard:               tablet.Shard,
+		StartTime:           logutil.ProtoToTime(keyspaceInfo.SnapshotTime),
 	}
 
 	// Loop until a backup exists, unless we were told to give up immediately.
-	var pos mysql.Position
-	var err error
+	var backupManifest *mysqlctl.BackupManifest
 	for {
-		pos, err = mysqlctl.Restore(ctx, params)
+		backupManifest, err = mysqlctl.Restore(ctx, params)
 		if waitForBackupInterval == 0 {
 			break
 		}
@@ -118,14 +134,19 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 		}
 	}
 
+	var pos mysql.Position
+	if backupManifest != nil {
+		pos = backupManifest.Position
+	}
 	switch err {
 	case nil:
 		// Starting from here we won't be able to recover if we get stopped by a cancelled
 		// context. Thus we use the background context to get through to the finish.
-
-		// Reconnect to master.
-		if err := agent.startReplication(context.Background(), pos, originalType); err != nil {
-			return err
+		if keyspaceInfo.KeyspaceType == topodatapb.KeyspaceType_NORMAL {
+			// Reconnect to master only for "NORMAL" keyspaces
+			if err := agent.startReplication(context.Background(), pos, originalType); err != nil {
+				return err
+			}
 		}
 	case mysqlctl.ErrNoBackup:
 		// No-op, starting with empty database.

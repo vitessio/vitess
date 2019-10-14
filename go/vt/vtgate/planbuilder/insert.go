@@ -211,35 +211,29 @@ func generateInsertShardedQuery(node *sqlparser.Insert, eins *engine.Insert, val
 
 // modifyForAutoinc modfies the AST and the plan to generate
 // necessary autoinc values. It must be called only if eins.Table.AutoIncrement
-// is set.
+// is set. Bind variable names are generated using baseName.
 func modifyForAutoinc(ins *sqlparser.Insert, eins *engine.Insert) error {
-	pos := findOrAddColumn(ins, eins.Table.AutoIncrement.Column)
-	autoIncValues, err := swapBindVariables(ins.Rows.(sqlparser.Values), pos, ":"+engine.SeqVarName)
-	if err != nil {
-		return err
+	colNum := findOrAddColumn(ins, eins.Table.AutoIncrement.Column)
+	autoIncValues := sqltypes.PlanValue{}
+	for rowNum, row := range ins.Rows.(sqlparser.Values) {
+		// Support the DEFAULT keyword by treating it as null
+		if _, ok := row[colNum].(*sqlparser.Default); ok {
+			row[colNum] = &sqlparser.NullVal{}
+		}
+		pv, err := sqlparser.NewPlanValue(row[colNum])
+		if err != nil {
+			return fmt.Errorf("could not compute value for vindex or auto-inc column: %v", err)
+		}
+		autoIncValues.Values = append(autoIncValues.Values, pv)
+		row[colNum] = sqlparser.NewValArg([]byte(":" + engine.SeqVarName + strconv.Itoa(rowNum)))
 	}
+
 	eins.Generate = &engine.Generate{
 		Keyspace: eins.Table.AutoIncrement.Sequence.Keyspace,
 		Query:    fmt.Sprintf("select next :n values from %s", sqlparser.String(eins.Table.AutoIncrement.Sequence.Name)),
 		Values:   autoIncValues,
 	}
 	return nil
-}
-
-// swapBindVariables swaps in bind variable names at the specified
-// column position in the AST values and returns the converted values back.
-// Bind variable names are generated using baseName.
-func swapBindVariables(rows sqlparser.Values, colNum int, baseName string) (sqltypes.PlanValue, error) {
-	pv := sqltypes.PlanValue{}
-	for rowNum, row := range rows {
-		innerpv, err := sqlparser.NewPlanValue(row[colNum])
-		if err != nil {
-			return pv, fmt.Errorf("could not compute value for vindex or auto-inc column: %v", err)
-		}
-		pv.Values = append(pv.Values, innerpv)
-		row[colNum] = sqlparser.NewValArg([]byte(baseName + strconv.Itoa(rowNum)))
-	}
-	return pv, nil
 }
 
 // findOrAddColumn finds the position of a column in the insert. If it's

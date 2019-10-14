@@ -113,7 +113,7 @@ func (se *Engine) Open() error {
 		return nil
 	}
 	start := time.Now()
-	defer log.Infof("Time taken to load the schema: %v", time.Since(start))
+	defer func() { log.Infof("Time taken to load the schema: %v", time.Since(start)) }()
 	ctx := tabletenv.LocalContext()
 	dbaParams := se.dbconfigs.DbaWithDB()
 	se.conns.Open(dbaParams, dbaParams, dbaParams)

@@ -14,10 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package events
+package topoproto
 
-// MetadataChange is an event that describes changes to topology metadata
-type MetadataChange struct {
-	Key    string
-	Status string
+import (
+	"fmt"
+	"strings"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+)
+
+// ParseKeyspaceType parses a string into a KeyspaceType
+func ParseKeyspaceType(param string) (topodatapb.KeyspaceType, error) {
+	value, ok := topodatapb.KeyspaceType_value[strings.ToUpper(param)]
+	if !ok {
+		// default
+		return topodatapb.KeyspaceType_NORMAL, fmt.Errorf("unknown keyspace type: %v", value)
+	}
+	return topodatapb.KeyspaceType(value), nil
 }
