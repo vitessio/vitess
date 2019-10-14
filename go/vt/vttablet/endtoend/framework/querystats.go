@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+
+	"vitess.io/vitess/go/vt/log"
 )
 
 // QueryStat contains the stats for one query.
@@ -35,9 +37,10 @@ func QueryStats() map[string]QueryStat {
 	var list []QueryStat
 	response, err := http.Get(fmt.Sprintf("%s/debug/query_stats", ServerAddress))
 	if err != nil {
+		log.Warning("failed to read query stats")
 		return out
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	_ = json.NewDecoder(response.Body).Decode(&list)
 	for _, stat := range list {
 		out[stat.Query] = stat

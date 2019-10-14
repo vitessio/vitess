@@ -20,6 +20,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // Table is a subset of schema.Table.
@@ -48,7 +50,7 @@ func DebugSchema() map[string]Table {
 	if err != nil {
 		return out
 	}
-	defer response.Body.Close()
+	defer func() { vterrors.LogIfError(response.Body.Close()) }()
 	_ = json.NewDecoder(response.Body).Decode(&list)
 	for _, table := range list {
 		out[table.Name] = table

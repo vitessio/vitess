@@ -22,6 +22,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // FetchJSON fetches JSON content from the specified URL path and returns it
@@ -32,7 +34,9 @@ func FetchJSON(urlPath string) map[string]interface{} {
 	if err != nil {
 		return out
 	}
-	defer response.Body.Close()
+	defer func() {
+		_ = response.Body.Close()
+	}()
 	_ = json.NewDecoder(response.Body).Decode(&out)
 	return out
 }
@@ -78,7 +82,7 @@ func FetchURL(urlPath string) string {
 	if err != nil {
 		return ""
 	}
-	defer response.Body.Close()
+	defer func() { vterrors.LogIfError(response.Body.Close()) }()
 	b, err := ioutil.ReadAll(response.Body)
 	if err != nil {
 		return ""

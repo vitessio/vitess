@@ -202,7 +202,7 @@ func (mc *MultiCase) Test(name string, client *QueryClient) error {
 	}
 	for _, tcase := range mc.Cases {
 		if err := tcase.Test(name, client); err != nil {
-			client.Rollback()
+			_ = client.Rollback()
 			return err
 		}
 	}

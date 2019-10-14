@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // StreamQuery contains the streaming query info.
@@ -42,8 +44,8 @@ func StreamQueryz() []StreamQuery {
 	if err != nil {
 		return out
 	}
-	defer response.Body.Close()
-	_ = json.NewDecoder(response.Body).Decode(&out)
+	defer func() { vterrors.LogIfError(response.Body.Close()) }()
+	vterrors.LogIfError(json.NewDecoder(response.Body).Decode(&out))
 	return out
 }
 
@@ -53,6 +55,5 @@ func StreamTerminate(connID int) error {
 	if err != nil {
 		return err
 	}
-	response.Body.Close()
-	return nil
+	return response.Body.Close()
 }

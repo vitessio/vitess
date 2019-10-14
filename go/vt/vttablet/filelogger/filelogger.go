@@ -20,6 +20,8 @@ package filelogger
 import (
 	"flag"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
@@ -32,7 +34,8 @@ var logQueriesToFile = flag.String("log_queries_to_file", "", "Enable query logg
 func init() {
 	servenv.OnRun(func() {
 		if *logQueriesToFile != "" {
-			Init(*logQueriesToFile)
+			_, err := Init(*logQueriesToFile)
+			vterrors.LogIfError(err)
 		}
 	})
 }

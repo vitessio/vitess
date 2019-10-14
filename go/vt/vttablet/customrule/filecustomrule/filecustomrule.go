@@ -22,6 +22,8 @@ import (
 	"io/ioutil"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -75,7 +77,11 @@ func (fcr *FileCustomRule) Open(qsc tabletserver.Controller, rulePath string) er
 	fcr.currentRuleSetTimestamp = time.Now().Unix()
 	fcr.currentRuleSet = qrs.Copy()
 	// Push query rules to vttablet
-	qsc.SetQueryRules(FileCustomRuleSource, qrs.Copy())
+	err = qsc.SetQueryRules(FileCustomRuleSource, qrs.Copy())
+	if err != nil {
+		log.Warningf("Custom rule failed to load from file %v", err)
+		return err
+	}
 	log.Infof("Custom rule loaded from file: %s", fcr.path)
 	return nil
 }
@@ -89,7 +95,7 @@ func (fcr *FileCustomRule) GetRules() (qrs *rules.Rules, version int64, err erro
 func ActivateFileCustomRules(qsc tabletserver.Controller) {
 	if *fileRulePath != "" {
 		qsc.RegisterQueryRuleSource(FileCustomRuleSource)
-		fileCustomRule.Open(qsc, *fileRulePath)
+		vterrors.LogIfError(fileCustomRule.Open(qsc, *fileRulePath))
 	}
 }
 

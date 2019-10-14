@@ -90,12 +90,17 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 		return vterrors.Wrap(err, "could not start listener")
 	}
 	ServerAddress = fmt.Sprintf("http://%s", ln.Addr().String())
-	go http.Serve(ln, nil)
+	go func() {
+		vterrors.LogIfError(http.Serve(ln, nil))
+	}()
 	for {
 		time.Sleep(10 * time.Millisecond)
 		response, err := http.Get(fmt.Sprintf("%s/debug/vars", ServerAddress))
 		if err == nil {
-			response.Body.Close()
+			err = response.Body.Close()
+			if err != nil {
+				return vterrors.Wrap(err, "failed to close response")
+			}
 			break
 		}
 	}

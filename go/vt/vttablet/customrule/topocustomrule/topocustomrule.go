@@ -28,6 +28,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
@@ -123,7 +125,10 @@ func (cr *topoCustomRule) apply(wd *topo.WatchData) error {
 
 	if !reflect.DeepEqual(cr.qrs, qrs) {
 		cr.qrs = qrs.Copy()
-		cr.qsc.SetQueryRules(topoCustomRuleSource, qrs)
+		err := cr.qsc.SetQueryRules(topoCustomRuleSource, qrs)
+		if err != nil {
+			return vterrors.Wrap(err, "Custom rule version %v failed to applied to vttablet")
+		}
 		log.Infof("Custom rule version %v fetched from topo and applied to vttablet", wd.Version)
 	}
 
