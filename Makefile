@@ -117,7 +117,7 @@ site_integration_test:
 
 java_test:
 	go install ./go/cmd/vtgateclienttest ./go/cmd/vtcombo
-	mvn -f java/pom.xml clean verify
+	mvn -f java/pom.xml -B clean verify
 
 install_protoc-gen-go:
 	go install github.com/golang/protobuf/protoc-gen-go
