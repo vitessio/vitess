@@ -31,15 +31,15 @@ export GO111MODULE=on
 #                go/cgzip is moved into a separate repository. We currently
 #                skip the cgzip package because -race takes >30 sec for it.
 
-# All Go packages with test files.
+# All endtoend Go packages with test files.
 # Output per line: <full Go package name> <all _test.go files in the package>*
-packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}' ./go/vt/... | sort)
+packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}' ./go/.../endtoend/... | sort)
 
 # endtoend tests should be in a directory called endtoend
-all_except_e2e_tests=$(echo "$packages_with_tests" | cut -d" " -f1 | grep -v "endtoend")
+all_e2e_tests=$(echo "$packages_with_tests" | cut -d" " -f1)
 
-# Run non endtoend tests.
-echo "$all_except_e2e_tests" | xargs go test $VT_GO_PARALLEL -race 2>&1 | tee $temp_log_file
+# Run all endtoend tests.
+echo "$all_e2e_tests" | xargs go test $VT_GO_PARALLEL -race 2>&1 | tee $temp_log_file
 if [ ${PIPESTATUS[0]} -ne 0 ]; then
   if grep "WARNING: DATA RACE" -q $temp_log_file; then
     echo
