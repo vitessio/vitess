@@ -21,6 +21,7 @@ import (
 	"os"
 	"path"
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -31,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/mysqlctl/filebackupstorage"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -357,6 +359,8 @@ func TestRestoreUnreachableMaster(t *testing.T) {
 	// stop master so that it is unreachable
 	master.StopActionLoop(t)
 
+	// set a short timeout so that we don't have to wait 30 seconds
+	*topo.RemoteOperationTimeout = 2 * time.Second
 	// Restore should still succeed
 	if err := destTablet.Agent.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */); err != nil {
 		t.Fatalf("RestoreData failed: %v", err)
