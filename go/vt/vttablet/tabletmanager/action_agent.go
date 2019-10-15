@@ -165,19 +165,19 @@ type ActionAgent struct {
 	// It's only set once in NewActionAgent() and never modified after that.
 	orc *orcClient
 
-	// shardSyncChan is a channel for informing the shard sync goroutine that
+	// mutex protects all the following fields (that start with '_'),
+	// only hold the mutex to update the fields, nothing else.
+	mutex sync.Mutex
+
+	// _shardSyncChan is a channel for informing the shard sync goroutine that
 	// it should wake up and recheck the tablet state, to make sure it and the
 	// shard record are in sync.
 	//
 	// Call agent.notifyShardSync() instead of sending directly to this channel.
-	shardSyncChan chan struct{}
+	_shardSyncChan chan struct{}
 
-	// shardSyncCancel is the function to stop the background shard sync goroutine.
-	shardSyncCancel context.CancelFunc
-
-	// mutex protects all the following fields (that start with '_'),
-	// only hold the mutex to update the fields, nothing else.
-	mutex sync.Mutex
+	// _shardSyncCancel is the function to stop the background shard sync goroutine.
+	_shardSyncCancel context.CancelFunc
 
 	// _tablet has the Tablet record we last read from the topology server.
 	_tablet *topodatapb.Tablet
