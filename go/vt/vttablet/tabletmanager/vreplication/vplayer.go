@@ -36,7 +36,7 @@ import (
 )
 
 type vplayer struct {
-	vr                 *vreplicator
+	vr                 *VReplicator
 	startPos           string
 	gtidStartPos       mysql.Position
 	stopPos            mysql.Position
@@ -59,7 +59,7 @@ type vplayer struct {
 	timeOffsetNs int64
 }
 
-func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result, pausePos mysql.Position) *vplayer {
+func newVPlayer(vr *VReplicator, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result, pausePos mysql.Position) *vplayer {
 	saveStop := true
 	if !pausePos.IsZero() {
 		settings.StopPos = pausePos
@@ -140,6 +140,9 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 			cancel()
 			<-streamErr
 		}()
+
+		log.Infof("error applying events: %v", err)
+
 		// If the apply thread ends with io.EOF, it means either the Engine
 		// is shutting down and canceled the context, or stop position was reached.
 		// If so, we return nil which will cause the controller to not retry.
@@ -166,6 +169,19 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 		}
 		return err
 	}
+}
+
+func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEvent) error {
+	for _, rule := range vp.vr.source.Filter.Rules {
+		if rule.Filter != "" || rule.Match != "/.*" {
+			return fmt.Errorf("Filter rules are not supported for SBR replication: %v", rule)
+		}
+
+	}
+	if _, err := vp.vr.dbClient.ExecuteWithRetry(ctx, event.Dml); err != nil {
+		log.Warningf("Fail to run: %v. Got error: %v", event.Dml, err)
+	}
+	return nil
 }
 
 func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.RowEvent) error {
@@ -342,14 +358,14 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			return err
 		}
 		vp.tablePlans[event.FieldEvent.TableName] = tplan
-	case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE:
+	case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE, binlogdatapb.VEventType_REPLACE:
 		// This is a player using stament based replication
 		if err := vp.vr.dbClient.Begin(); err != nil {
 			return err
 		}
 
-		if _, err := vp.vr.dbClient.ExecuteWithRetry(ctx, event.Dml); err != nil {
-			log.Warningf("Fail to run: %v. Got error: %v", event.Dml, err)
+		if err := vp.applyStmtEvent(ctx, event); err != nil {
+			return err
 		}
 	case binlogdatapb.VEventType_ROW:
 		// This player is configured for row based replicaiton

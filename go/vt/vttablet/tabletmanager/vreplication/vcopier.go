@@ -38,11 +38,11 @@ import (
 )
 
 type vcopier struct {
-	vr        *vreplicator
+	vr        *VReplicator
 	tablePlan *TablePlan
 }
 
-func newVCopier(vr *vreplicator) *vcopier {
+func newVCopier(vr *VReplicator) *vcopier {
 	return &vcopier{
 		vr: vr,
 	}
