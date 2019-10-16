@@ -419,7 +419,7 @@
 				"e2e_test_race"
 			],
 			"Manual": false,
-			"Shard": 0,
+			"Shard": 1,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -442,7 +442,7 @@
 				"unit_test_race"
 			],
 			"Manual": false,
-			"Shard": 0,
+			"Shard": 3,
 			"RetryMax": 0,
 			"Tags": []
 		},
