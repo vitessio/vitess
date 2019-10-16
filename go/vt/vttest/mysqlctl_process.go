@@ -48,6 +48,29 @@ func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 	return tmpProcess.Run()
 }
 
+// InitDb executes mysqlctl command to add cell info
+func (mysqlctl *MysqlctlProcess) Start() (err error) {
+	tmpProcess := exec.Command(
+		mysqlctl.Binary,
+		"-log_dir", mysqlctl.LogDirectory,
+		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
+		"-mysql_port", fmt.Sprintf("%d", mysqlctl.MySqlPort),
+		"init",
+		"-init_db_sql_file", mysqlctl.InitDBFile,
+	)
+	return tmpProcess.Run()
+}
+
+// InitDb executes mysqlctl command to add cell info
+func (mysqlctl *MysqlctlProcess) Stop() (err error) {
+	tmpProcess := exec.Command(
+		mysqlctl.Binary,
+		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
+		"shutdown",
+	)
+	return tmpProcess.Run()
+}
+
 // MysqlCtlProcessInstance returns a Mysqlctl handle for mysqlctl process
 // configured with the given Config.
 func MysqlCtlProcessInstance(TabletUID int, MySqlPort int) *MysqlctlProcess {
