@@ -21,6 +21,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -108,6 +109,51 @@ func TestIsDML(t *testing.T) {
 		if got := IsDML(tcase.sql); got != tcase.want {
 			t.Errorf("IsDML(%s): %v, want %v", tcase.sql, got, tcase.want)
 		}
+	}
+}
+
+func TestSplitAndExpression(t *testing.T) {
+	testcases := []struct {
+		sql string
+		out []string
+	}{{
+		sql: "select * from t",
+		out: nil,
+	}, {
+		sql: "select * from t where a = 1",
+		out: []string{"a = 1"},
+	}, {
+		sql: "select * from t where a = 1 and b = 1",
+		out: []string{"a = 1", "b = 1"},
+	}, {
+		sql: "select * from t where a = 1 and (b = 1 and c = 1)",
+		out: []string{"a = 1", "b = 1", "c = 1"},
+	}, {
+		sql: "select * from t where a = 1 and (b = 1 or c = 1)",
+		out: []string{"a = 1", "b = 1 or c = 1"},
+	}, {
+		sql: "select * from t where a = 1 and b = 1 or c = 1",
+		out: []string{"a = 1 and b = 1 or c = 1"},
+	}, {
+		sql: "select * from t where a = 1 and b = 1 + (c = 1)",
+		out: []string{"a = 1", "b = 1 + (c = 1)"},
+	}, {
+		sql: "select * from t where (a = 1 and ((b = 1 and c = 1)))",
+		out: []string{"a = 1", "b = 1", "c = 1"},
+	}}
+	for _, tcase := range testcases {
+		stmt, err := Parse(tcase.sql)
+		assert.NoError(t, err)
+		var expr Expr
+		if where := stmt.(*Select).Where; where != nil {
+			expr = where.Expr
+		}
+		splits := SplitAndExpression(nil, expr)
+		var got []string
+		for _, split := range splits {
+			got = append(got, String(split))
+		}
+		assert.Equal(t, tcase.out, got)
 	}
 }
 

@@ -29,7 +29,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
@@ -62,14 +61,16 @@ const (
 // migrater contains the metadata for migrating read and write traffic
 // for vreplication streams.
 type migrater struct {
-	migrationType  binlogdatapb.MigrationType
-	wr             *Wrangler
-	id             int64
-	sources        map[string]*miSource
-	targets        map[string]*miTarget
-	sourceKeyspace string
-	targetKeyspace string
-	tables         []string
+	migrationType   binlogdatapb.MigrationType
+	wr              *Wrangler
+	workflow        string
+	id              int64
+	sources         map[string]*miSource
+	targets         map[string]*miTarget
+	sourceKeyspace  string
+	targetKeyspace  string
+	tables          []string
+	sourceWorkflows []string
 }
 
 // miTarget contains the metadata for each migration target.
@@ -95,45 +96,59 @@ func (wr *Wrangler) MigrateReads(ctx context.Context, targetKeyspace, workflow s
 	}
 	mi, err := wr.buildMigrater(ctx, targetKeyspace, workflow)
 	if err != nil {
+		wr.Logger().Errorf("buildMigrater failed: %v", err)
 		return err
 	}
 	if err := mi.validate(ctx, false /* isWrite */); err != nil {
+		mi.wr.Logger().Errorf("validate failed: %v", err)
 		return err
 	}
 
 	// For reads, locking the source keyspace is sufficient.
 	ctx, unlock, lockErr := wr.ts.LockKeyspace(ctx, mi.sourceKeyspace, "MigrateReads")
 	if lockErr != nil {
+		mi.wr.Logger().Errorf("LockKeyspace failed: %v", lockErr)
 		return lockErr
 	}
 	defer unlock(&err)
 
 	if mi.migrationType == binlogdatapb.MigrationType_TABLES {
-		return mi.migrateTableReads(ctx, cells, servedType, direction)
+		if err := mi.migrateTableReads(ctx, cells, servedType, direction); err != nil {
+			mi.wr.Logger().Errorf("migrateTableReads failed: %v", err)
+			return err
+		}
 	}
-	return mi.migrateShardReads(ctx, cells, servedType, direction)
+	if err := mi.migrateShardReads(ctx, cells, servedType, direction); err != nil {
+		mi.wr.Logger().Errorf("migrateShardReads failed: %v", err)
+		return err
+	}
+	return nil
 }
 
 // MigrateWrites is a generic way of migrating write traffic for a resharding workflow.
 func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow string, filteredReplicationWaitTime time.Duration) (journalID int64, err error) {
 	mi, err := wr.buildMigrater(ctx, targetKeyspace, workflow)
 	if err != nil {
+		wr.Logger().Errorf("buildMigrater failed: %v", err)
 		return 0, err
 	}
 	mi.wr.Logger().Infof("Built migration metadata: %+v", mi)
 	if err := mi.validate(ctx, true /* isWrite */); err != nil {
+		mi.wr.Logger().Errorf("validate failed: %v", err)
 		return 0, err
 	}
 
 	// Need to lock both source and target keyspaces.
 	ctx, sourceUnlock, lockErr := wr.ts.LockKeyspace(ctx, mi.sourceKeyspace, "MigrateWrites")
 	if lockErr != nil {
+		mi.wr.Logger().Errorf("LockKeyspace failed: %v", lockErr)
 		return 0, lockErr
 	}
 	defer sourceUnlock(&err)
 	if mi.targetKeyspace != mi.sourceKeyspace {
 		tctx, targetUnlock, lockErr := wr.ts.LockKeyspace(ctx, mi.targetKeyspace, "MigrateWrites")
 		if lockErr != nil {
+			mi.wr.Logger().Errorf("LockKeyspace failed: %v", lockErr)
 			return 0, lockErr
 		}
 		ctx = tctx
@@ -142,15 +157,31 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 
 	journalsExist, err := mi.checkJournals(ctx)
 	if err != nil {
+		mi.wr.Logger().Errorf("checkJournals failed: %v", err)
 		return 0, err
 	}
 	if !journalsExist {
 		mi.wr.Logger().Infof("No previous journals were found. Proceeding normally.")
+		sm := &streamMigrater{mi: mi}
+		tabletStreams, err := sm.stopStreams(ctx)
+		if err != nil {
+			mi.wr.Logger().Errorf("stopStreams failed: %v", err)
+			mi.cancelMigration(ctx)
+			return 0, err
+		}
 		if err := mi.stopSourceWrites(ctx); err != nil {
+			mi.wr.Logger().Errorf("stopSourceWrites failed: %v", err)
 			mi.cancelMigration(ctx)
 			return 0, err
 		}
 		if err := mi.waitForCatchup(ctx, filteredReplicationWaitTime); err != nil {
+			mi.wr.Logger().Errorf("waitForCatchup failed: %v", err)
+			mi.cancelMigration(ctx)
+			return 0, err
+		}
+		mi.sourceWorkflows, err = sm.migrateStreams(ctx, tabletStreams)
+		if err != nil {
+			mi.wr.Logger().Errorf("migrateStreams failed: %v", err)
 			mi.cancelMigration(ctx)
 			return 0, err
 		}
@@ -158,21 +189,31 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 		mi.wr.Logger().Infof("Journals were found. Completing the left over steps.")
 		// Need to gather positions in case all journals were not created.
 		if err := mi.gatherPositions(ctx); err != nil {
+			mi.wr.Logger().Errorf("gatherPositions failed: %v", err)
 			return 0, err
 		}
 	}
 	// This is the point of no return. Once a journal is created,
 	// traffic can be redirected to target shards.
 	if err := mi.createJournals(ctx); err != nil {
+		mi.wr.Logger().Errorf("createJournals failed: %v", err)
 		return 0, err
 	}
 	if err := mi.createReverseReplication(ctx); err != nil {
+		mi.wr.Logger().Errorf("createReverseReplication failed: %v", err)
 		return 0, err
 	}
 	if err := mi.allowTargetWrites(ctx); err != nil {
+		mi.wr.Logger().Errorf("allowTargetWrites failed: %v", err)
 		return 0, err
 	}
 	if err := mi.changeRouting(ctx); err != nil {
+		mi.wr.Logger().Errorf("changeRouting failed: %v", err)
+		return 0, err
+	}
+	sm := &streamMigrater{mi: mi}
+	if err := sm.finalize(ctx, mi.sourceWorkflows); err != nil {
+		mi.wr.Logger().Errorf("finalize failed: %v", err)
 		return 0, err
 	}
 	mi.deleteTargetVReplication(ctx)
@@ -187,6 +228,7 @@ func (wr *Wrangler) buildMigrater(ctx context.Context, targetKeyspace, workflow 
 
 	mi := &migrater{
 		wr:             wr,
+		workflow:       workflow,
 		id:             hashStreams(targetKeyspace, targets),
 		targets:        targets,
 		sources:        make(map[string]*miSource),
@@ -201,22 +243,6 @@ func (wr *Wrangler) buildMigrater(ctx context.Context, targetKeyspace, workflow 
 				mi.sourceKeyspace = bls.Keyspace
 			} else if mi.sourceKeyspace != bls.Keyspace {
 				return nil, fmt.Errorf("source keyspaces are mismatched across streams: %v vs %v", mi.sourceKeyspace, bls.Keyspace)
-			}
-			if _, ok := mi.sources[bls.Shard]; ok {
-				continue
-			}
-
-			sourcesi, err := mi.wr.ts.GetShard(ctx, bls.Keyspace, bls.Shard)
-			if err != nil {
-				return nil, err
-			}
-			sourceMaster, err := mi.wr.ts.GetTablet(ctx, sourcesi.MasterAlias)
-			if err != nil {
-				return nil, err
-			}
-			mi.sources[bls.Shard] = &miSource{
-				si:     sourcesi,
-				master: sourceMaster,
 			}
 
 			if mi.tables == nil {
@@ -233,6 +259,22 @@ func (wr *Wrangler) buildMigrater(ctx context.Context, targetKeyspace, workflow 
 				if !reflect.DeepEqual(mi.tables, tables) {
 					return nil, fmt.Errorf("table lists are mismatched across streams: %v vs %v", mi.tables, tables)
 				}
+			}
+
+			if _, ok := mi.sources[bls.Shard]; ok {
+				continue
+			}
+			sourcesi, err := mi.wr.ts.GetShard(ctx, bls.Keyspace, bls.Shard)
+			if err != nil {
+				return nil, err
+			}
+			sourceMaster, err := mi.wr.ts.GetTablet(ctx, sourcesi.MasterAlias)
+			if err != nil {
+				return nil, err
+			}
+			mi.sources[bls.Shard] = &miSource{
+				si:     sourcesi,
+				master: sourceMaster,
 			}
 		}
 	}
@@ -271,7 +313,7 @@ func (wr *Wrangler) buildMigrationTargets(ctx context.Context, targetKeyspace, w
 		if err != nil {
 			return nil, err
 		}
-		p3qr, err := wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, fmt.Sprintf("select id, source from _vt.vreplication where workflow='%s' and db_name='%s'", workflow, targetMaster.DbName()))
+		p3qr, err := wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, fmt.Sprintf("select id, source from _vt.vreplication where workflow=%s and db_name=%s", encodeString(workflow), encodeString(targetMaster.DbName())))
 		if err != nil {
 			return nil, err
 		}
@@ -459,20 +501,32 @@ func (mi *migrater) migrateShardReads(ctx context.Context, cells []string, serve
 }
 
 func (mi *migrater) checkJournals(ctx context.Context) (journalsExist bool, err error) {
-	var exist sync2.AtomicBool
+	var mu sync.Mutex
+	journal := &binlogdatapb.Journal{}
+	var exists bool
 	err = mi.forAllSources(func(source *miSource) error {
-		statement := fmt.Sprintf("select 1 from _vt.resharding_journal where id=%v", mi.id)
+		statement := fmt.Sprintf("select val from _vt.resharding_journal where id=%v", mi.id)
 		p3qr, err := mi.wr.tmc.VReplicationExec(ctx, source.master.Tablet, statement)
 		if err != nil {
 			return err
 		}
-		if len(p3qr.Rows) >= 1 {
-			exist.Set(true)
+		if len(p3qr.Rows) != 0 {
+			qr := sqltypes.Proto3ToResult(p3qr)
+			mu.Lock()
+			defer mu.Unlock()
+
+			if !exists {
+				if err := proto.UnmarshalText(qr.Rows[0][0].ToString(), journal); err != nil {
+					return err
+				}
+				exists = true
+			}
 			source.journaled = true
 		}
 		return nil
 	})
-	return exist.Get(), err
+	mi.sourceWorkflows = journal.SourceWorkflows
+	return exists, err
 }
 
 func (mi *migrater) stopSourceWrites(ctx context.Context) error {
@@ -543,11 +597,13 @@ func (mi *migrater) cancelMigration(ctx context.Context) {
 		mi.wr.Logger().Errorf("Cancel migration failed:", err)
 	}
 
-	err = mi.forAllUids(func(target *miTarget, uid uint32) error {
-		if _, err := mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, binlogplayer.StartVReplication(uid)); err != nil {
-			return err
-		}
-		return nil
+	sm := &streamMigrater{mi: mi}
+	sm.cancelMigration(ctx)
+
+	err = mi.forAllTargets(func(target *miTarget) error {
+		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(mi.workflow))
+		_, err := mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
+		return err
 	})
 	if err != nil {
 		mi.wr.Logger().Errorf("Cancel migration failed: could not restart vreplication: %v", err)
@@ -585,11 +641,12 @@ func (mi *migrater) createJournals(ctx context.Context) error {
 			return nil
 		}
 		journal := &binlogdatapb.Journal{
-			Id:            mi.id,
-			MigrationType: mi.migrationType,
-			Tables:        mi.tables,
-			LocalPosition: source.position,
-			Participants:  participants,
+			Id:              mi.id,
+			MigrationType:   mi.migrationType,
+			Tables:          mi.tables,
+			LocalPosition:   source.position,
+			Participants:    participants,
+			SourceWorkflows: mi.sourceWorkflows,
 		}
 		for targetShard, target := range mi.targets {
 			found := false
@@ -752,8 +809,9 @@ func (mi *migrater) changeShardRouting(ctx context.Context) error {
 }
 
 func (mi *migrater) deleteTargetVReplication(ctx context.Context) {
-	_ = mi.forAllUids(func(target *miTarget, uid uint32) error {
-		if _, err := mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, binlogplayer.DeleteVReplication(uid)); err != nil {
+	_ = mi.forAllTargets(func(target *miTarget) error {
+		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(mi.workflow))
+		if _, err := mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query); err != nil {
 			mi.wr.Logger().Errorf("Final cleanup: could not delete vreplication, please delete stopped streams manually: %v", err)
 		}
 		return nil
