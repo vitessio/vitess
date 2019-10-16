@@ -83,6 +83,24 @@ type dfParams struct {
 
 // VDiff reports differences between the sources and targets of a vreplication workflow.
 func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceCell, targetCell, tabletTypesStr string, filteredReplicationWaitTime time.Duration) (map[string]*DiffReport, error) {
+	if sourceCell == "" && targetCell == "" {
+		cells, err := wr.ts.GetCellInfoNames(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(cells) == 0 {
+			// Unreachable
+			return nil, fmt.Errorf("there are no cells in the topo")
+		}
+		sourceCell = cells[0]
+		targetCell = sourceCell
+	}
+	if sourceCell == "" {
+		sourceCell = targetCell
+	}
+	if targetCell == "" {
+		targetCell = sourceCell
+	}
 	mi, err := wr.buildMigrater(ctx, targetKeyspace, workflow)
 	if err != nil {
 		wr.Logger().Errorf("buildMigrater failed: %v", err)
