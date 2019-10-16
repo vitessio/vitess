@@ -396,6 +396,7 @@ func (vre *Engine) fetchIDs(dbClient binlogplayer.DBClient, selector string) (id
 
 // WaitForPos waits for the replication to reach the specified position.
 func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
+	start := time.Now()
 	mPos, err := mysql.DecodePosition(pos)
 	if err != nil {
 		return err
@@ -440,6 +441,7 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 		}
 
 		if current.AtLeast(mPos) {
+			log.Infof("position: %s reached, wait time: %v", pos, time.Since(start))
 			return nil
 		}
 
@@ -449,7 +451,8 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			log.Errorf("Error waiting for pos: %s, last pos: %s: %v, wait time: %v", pos, qr.Rows[0][0].ToString(), ctx.Err(), time.Since(start))
+			return fmt.Errorf("error waiting for pos: %s, last pos: %s: %v, wait time: %v", pos, qr.Rows[0][0].ToString(), ctx.Err(), time.Since(start))
 		case <-vre.ctx.Done():
 			return fmt.Errorf("vreplication is closing: %v", vre.ctx.Err())
 		case <-tkr.C:
