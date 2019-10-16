@@ -65,6 +65,7 @@ import (
 	"math"
 	"math/big"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
@@ -124,16 +125,22 @@ var (
 	mysqlSocket   = flag.String("mysql_socket", "", "path to the mysql socket")
 	mysqlTimeout  = flag.Duration("mysql_timeout", 5*time.Minute, "how long to wait for mysqld startup")
 	initDBSQLFile = flag.String("init_db_sql_file", "", "path to .sql file to run after mysql_install_db")
+	detachedMode  = flag.Bool("detach", false, "detached mode - run backups detached from the terminal")
 )
 
 func main() {
 	defer exit.Recover()
-	defer logutil.Flush()
-
 	dbconfigs.RegisterFlags(dbconfigs.All...)
 	mysqlctl.RegisterFlags()
 
 	servenv.ParseFlags("vtbackup")
+
+	if *detachedMode {
+		// this method will call os.Exit and kill this process
+		terminateStayResident()
+	}
+
+	defer logutil.Flush()
 
 	if *minRetentionCount < 1 {
 		log.Errorf("min_retention_count must be at least 1 to allow restores to succeed")
@@ -182,6 +189,24 @@ func main() {
 		log.Errorf("Couldn't prune old backups: %v", err)
 		exit.Return(1)
 	}
+}
+
+func terminateStayResident() {
+	args := os.Args[1:]
+	i := 0
+	for ; i < len(args); i++ {
+		if strings.HasPrefix(args[i], "-detach") {
+			args[i] = "-detach=false"
+			break
+		}
+	}
+	cmd := exec.Command(os.Args[0], args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	_ = cmd.Start()
+	fmt.Println("[PID]", cmd.Process.Pid)
+	os.Exit(0)
 }
 
 func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage backupstorage.BackupStorage) error {
