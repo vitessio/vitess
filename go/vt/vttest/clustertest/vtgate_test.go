@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 )

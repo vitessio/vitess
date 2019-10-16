@@ -69,6 +69,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-backup_storage_implementation", vttablet.BackupStorageImplementation,
 		"-file_backup_storage_root", vttablet.FileBackupStorageRoot,
 		"-restore_from_backup",
+		"-service_map", vttablet.ServiceMap,
 		"-vtctld_addr", vttablet.VtctldAddress,
 	)
 
@@ -154,7 +155,7 @@ func VttabletProcessInstance(Port int, GrpcPort int, TabletUID int, Cell string,
 		Name:                        "vttablet",
 		Binary:                      "vttablet",
 		FileToLogQueries:            path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/tmp/vt_%010d/vttable.pid", TabletUID)),
-		Directory:                   path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/vttable.pid", TabletUID)),
+		Directory:                   path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", TabletUID)),
 		TabletPath:                  fmt.Sprintf("%s-000%d", Cell, TabletUID),
 		ServiceMap:                  "grpc-queryservice,grpc-tabletmanager,grpc-updatestream",
 		LogDir:                      path.Join(os.Getenv("VTDATAROOT"), "/tmp"),
