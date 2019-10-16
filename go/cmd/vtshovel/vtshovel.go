@@ -22,29 +22,24 @@ import (
 	"flag"
 	"io/ioutil"
 	"math/rand"
-	"regexp"
-	"strings"
 	"time"
 
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 var (
 	vtShovelConfigFile = flag.String("vtshovel-config-file", "/etc/slack.d/vtshovel.json", "VTShovel Config file")
 	dryRun             = flag.Bool("dry-run", false, "When present, only log DML that are going to be performed in target database")
-
-	autoIncr = regexp.MustCompile(` AUTO_INCREMENT=\d+`)
 )
 
 func init() {
@@ -55,7 +50,6 @@ func init() {
 // VtShovelConfig fields to configure vtshovel client
 type VtShovelConfig struct {
 	// Source MySQL client information
-
 	// MySQLSourceHost ...
 	MySQLSourceHost string `json:"mysql_source_host"`
 	// MySQLSourcePort ...
@@ -68,23 +62,13 @@ type VtShovelConfig struct {
 	MySQLSourceBinlogStartPos string `json:"mysql_source_binlog_start_pos"`
 	// MySQLSourceDatabase ...
 	MySQLSourceDBName string `json:"mysql_source_dbname"`
-
-	// Target MySQL client information
-
-	// MySQLTargetHost ...
-	MySQLTargetHost string `json:"mysql_target_host"`
-	// MySQLTargetPort ...
-	MySQLTargetPort int `json:"mysql_target_port"`
-	// MySQLTargetUser ...
-	MySQLTargetUser string `json:"mysql_target_user"`
-	// MySQLTargetPassword ...
-	MySQLTargetPassword string `json:"mysql_target_password"`
-	// MySQLTargetDBName ...
-	MySQLTargetDBName string `json:"mysql_target_dbname"`
 }
 
 func main() {
 	defer exit.Recover()
+
+	dbconfigs.RegisterFlags(dbconfigs.Dba)
+	mysqlctl.RegisterFlags()
 
 	servenv.ParseFlags("vtshovel")
 	servenv.Init()
@@ -100,54 +84,92 @@ func main() {
 		log.Fatal(err)
 	}
 
-	targetConnParams := mysql.ConnParams{
-		Host:   vtShovelConfig.MySQLTargetHost,
-		Port:   vtShovelConfig.MySQLTargetPort,
-		Pass:   vtShovelConfig.MySQLTargetPassword,
-		Uname:  vtShovelConfig.MySQLTargetUser,
-		DbName: vtShovelConfig.MySQLTargetDBName,
-	}
-	dbTargetClient := newVtShovelDbClient(
-		binlogplayer.NewDBClient(&targetConnParams),
-		vtShovelConfig.MySQLSourceBinlogStartPos,
-	)
-
-	if err := dbTargetClient.Connect(); err != nil {
-		log.Fatal(vterrors.Wrap(err, "can't connect to database"))
-	}
-
 	sourceConnParams := mysql.ConnParams{
-		Host:  vtShovelConfig.MySQLSourceHost,
-		Port:  vtShovelConfig.MySQLSourcePort,
-		Pass:  vtShovelConfig.MySQLSourcePassword,
-		Uname: vtShovelConfig.MySQLSourceUser,
+		Host:   vtShovelConfig.MySQLSourceHost,
+		Port:   vtShovelConfig.MySQLSourcePort,
+		Pass:   vtShovelConfig.MySQLSourcePassword,
+		Uname:  vtShovelConfig.MySQLSourceUser,
+		DbName: vtShovelConfig.MySQLSourceDBName,
 	}
-
-	servenv.OnClose(dbTargetClient.Close)
 
 	source := binlogdatapb.BinlogSource{
 		Filter: &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{
 				&binlogdatapb.Rule{
-					Match: "/" + vtShovelConfig.MySQLSourceDBName + ".*/",
+					Match: "/.*",
 				},
 			},
 		},
 	}
-	ctx := context.Background()
+
+	var mycnf *mysqlctl.Mycnf
+	var socketFile string
+	// If no connection parameters were specified, load the mycnf file
+	// and use the socket from it. If connection parameters were specified,
+	// we assume that the mysql is not local, and we skip loading mycnf.
+	// This also means that backup and restore will not be allowed.
+	if !dbconfigs.HasConnectionParams() {
+		var err error
+		if mycnf, err = mysqlctl.NewMycnfFromFlags(123213123); err != nil {
+			log.Exitf("mycnf read failed: %v", err)
+		}
+		socketFile = mycnf.SocketFile
+	} else {
+		log.Info("connection parameters were specified. Not loading my.cnf.")
+	}
+
+	// If connection parameters were specified, socketFile will be empty.
+	// Otherwise, the socketFile (read from mycnf) will be used to initialize
+	// dbconfigs.
+	dbcfgs, err := dbconfigs.Init(socketFile)
+	if err != nil {
+		log.Warning(err)
+	}
+
+	mysqld := mysqlctl.NewMysqld(dbcfgs)
+	servenv.OnClose(mysqld.Close)
+
+	destConnParams := dbcfgs.Dba()
+	// Hack to make sure dbname is set correctly given that this is not a tablet
+	// and SetDBName is not called.
+	destConnParams.DbName = destConnParams.DeprecatedDBName
+
+	log.Infof("This are the destConnParams:%v", destConnParams)
+	destDbClient := binlogplayer.NewDBClient(destConnParams)
+
+	if err := destDbClient.Connect(); err != nil {
+		log.Fatal(vterrors.Wrap(err, "can't connect to database"))
+	}
+	servenv.OnClose(destDbClient.Close)
+
+	for _, query := range binlogplayer.CreateVReplicationTable() {
+		if _, err := destDbClient.ExecuteFetch(query, 0); err != nil {
+			log.Fatalf("Failed to ensure vreplication table exists: %v", err)
+		}
+	}
+
+	newVReplicatorStmt := binlogplayer.CreateVReplication("VTshovel", &source, vtShovelConfig.MySQLSourceBinlogStartPos, int64(1000), int64(100000), time.Now().Unix(), destDbClient.DBName())
+
+	res, err := destDbClient.ExecuteFetch(newVReplicatorStmt, 0)
+	if err != nil {
+		log.Fatalf("Failed to create vreplication stream: %v", err)
+	}
+
 	sourceVstreamClient := vreplication.NewMySQLVStreamerClient(&sourceConnParams)
+
 	go func() {
+		ctx := context.Background()
 		replicator := vreplication.NewVReplicator(
-			1,
+			uint32(res.InsertID),
 			&source,
 			sourceVstreamClient,
 			binlogplayer.NewStats(),
-			dbTargetClient,
-			newVtShovelSchemaLoader(),
+			destDbClient,
+			mysqld,
 		)
 		replicator.Replicate(ctx)
 		if err != nil {
-			log.Infof("Error starting stream: %v", err)
+			log.Infof("Error with stream: %v", err)
 
 		}
 		return
@@ -171,81 +193,4 @@ func loadConfigFromFile(file string) (*VtShovelConfig, error) {
 type vtShovelDbClient struct {
 	dbClient binlogplayer.DBClient
 	startPos string
-}
-
-type vtShovelSchemaLoader struct{}
-
-func newVtShovelDbClient(dbClient binlogplayer.DBClient, startPos string) binlogplayer.DBClient {
-	return &vtShovelDbClient{
-		dbClient: dbClient,
-		startPos: startPos,
-	}
-}
-
-func newVtShovelSchemaLoader() vreplication.SchemasLoader {
-	return &vtShovelSchemaLoader{}
-}
-
-func (vdc *vtShovelDbClient) DBName() string {
-	return vdc.dbClient.DBName()
-}
-
-func (vdc *vtShovelDbClient) Connect() error {
-	return vdc.dbClient.Connect()
-}
-
-func (vdc *vtShovelDbClient) Begin() error {
-	return vdc.dbClient.Begin()
-}
-
-func (vdc *vtShovelDbClient) Commit() error {
-	return vdc.dbClient.Commit()
-}
-
-func (vdc *vtShovelDbClient) Rollback() error {
-	return vdc.dbClient.Rollback()
-}
-
-func (vdc *vtShovelDbClient) Close() {
-	vdc.dbClient.Close()
-}
-
-func (vdc *vtShovelDbClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
-	if strings.Contains(query, "from _vt.copy_state") {
-		dummyResult := &sqltypes.Result{
-			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
-					sqltypes.NewInt64(0),
-				},
-			},
-		}
-		return dummyResult, nil
-	}
-
-	if strings.Contains(query, "from _vt.vreplication") {
-		dummyResult := &sqltypes.Result{
-			Rows: [][]sqltypes.Value{
-				[]sqltypes.Value{
-					sqltypes.NewVarBinary(vdc.startPos),
-					sqltypes.NewVarBinary(""),        // StopPos
-					sqltypes.NewInt64(10000),         // maxTPS
-					sqltypes.NewInt64(10000),         // maxReplicationLag
-					sqltypes.NewVarBinary("Running"), // state
-				},
-			},
-		}
-		return dummyResult, nil
-	}
-
-	if strings.Contains(query, "update _vt.vreplication") {
-		return &sqltypes.Result{}, nil
-	}
-	return vdc.dbClient.ExecuteFetch(query, maxrows)
-}
-
-func (vsl *vtShovelSchemaLoader) GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error) {
-	// TODO: This will only work for stament based replication.
-	return &tabletmanagerdatapb.SchemaDefinition{
-		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{},
-	}, nil
 }

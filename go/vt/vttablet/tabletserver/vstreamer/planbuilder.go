@@ -138,6 +138,13 @@ func mustSendStmt(query mysql.Query, dbname string) bool {
 	return true
 }
 
+func mustSendStmt(query mysql.Query, dbname string) bool {
+	if query.Database != "" && query.Database != dbname {
+		return false
+	}
+	return true
+}
+
 func mustSendDDL(query mysql.Query, dbname string, filter *binlogdatapb.Filter) bool {
 	if query.Database != "" && query.Database != dbname {
 		return false
