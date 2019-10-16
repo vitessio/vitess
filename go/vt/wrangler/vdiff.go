@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -140,14 +141,14 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 		if err := df.stopTargets(ctx); err != nil {
 			return nil, err
 		}
-		sourceReader, err := df.startQueryStreams(ctx, df.sources, td.sourceExpression, td.orderbyParams())
+		sourceReader, err := df.startQueryStreams(ctx, df.sources, td.sourceExpression, td.orderbyParams(), filteredReplicationWaitTime)
 		if err != nil {
 			return nil, err
 		}
-		if err := df.syncTargets(ctx); err != nil {
+		if err := df.syncTargets(ctx, filteredReplicationWaitTime); err != nil {
 			return nil, err
 		}
-		targetReader, err := df.startQueryStreams(ctx, df.targets, td.targetExpression, td.orderbyParams())
+		targetReader, err := df.startQueryStreams(ctx, df.targets, td.targetExpression, td.orderbyParams(), filteredReplicationWaitTime)
 		if err != nil {
 			return nil, err
 		}
@@ -387,11 +388,13 @@ func (df *vdiff) stopTargets(ctx context.Context) error {
 	return nil
 }
 
-func (df *vdiff) startQueryStreams(ctx context.Context, participants map[string]*dfParams, query string, orderBy []engine.OrderbyParams) (*resultReader, error) {
+func (df *vdiff) startQueryStreams(ctx context.Context, participants map[string]*dfParams, query string, orderBy []engine.OrderbyParams, filteredReplicationWaitTime time.Duration) (*resultReader, error) {
+	waitCtx, cancel := context.WithTimeout(ctx, filteredReplicationWaitTime)
+	defer cancel()
 	err := df.forAll(participants, func(shard string, participant *dfParams) error {
 		// Iteration for each participant.
-		if err := df.mi.wr.tmc.WaitForPosition(ctx, participant.tablet, mysql.EncodePosition(participant.position)); err != nil {
-			return err
+		if err := df.mi.wr.tmc.WaitForPosition(waitCtx, participant.tablet, mysql.EncodePosition(participant.position)); err != nil {
+			return fmt.Errorf("WaitForPosition for tablet %v failed: %v", topoproto.TabletAliasString(participant.tablet.Alias), err)
 		}
 		participant.result = make(chan *sqltypes.Result, 1)
 		gtidch := make(chan string, 1)
@@ -464,7 +467,9 @@ func (df *vdiff) streamOne(ctx context.Context, shard string, participant *dfPar
 	}()
 }
 
-func (df *vdiff) syncTargets(ctx context.Context) error {
+func (df *vdiff) syncTargets(ctx context.Context, filteredReplicationWaitTime time.Duration) error {
+	waitCtx, cancel := context.WithTimeout(ctx, filteredReplicationWaitTime)
+	defer cancel()
 	err := df.mi.forAllUids(func(target *miTarget, uid uint32) error {
 		bls := target.sources[uid]
 		pos := df.sources[bls.Shard].snapshotPosition
@@ -472,7 +477,10 @@ func (df *vdiff) syncTargets(ctx context.Context) error {
 		if _, err := df.mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query); err != nil {
 			return err
 		}
-		return df.mi.wr.tmc.VReplicationWaitForPos(ctx, target.master.Tablet, int(uid), pos)
+		if err := df.mi.wr.tmc.VReplicationWaitForPos(waitCtx, target.master.Tablet, int(uid), pos); err != nil {
+			return fmt.Errorf("VReplicationWaitForPos for tablet %v failed: %v", topoproto.TabletAliasString(target.master.Tablet.Alias), err)
+		}
+		return nil
 	})
 	if err != nil {
 		return err

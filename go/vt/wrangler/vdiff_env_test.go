@@ -294,6 +294,11 @@ func (tmc *testVDiffTMClient) VReplicationExec(ctx context.Context, tablet *topo
 }
 
 func (tmc *testVDiffTMClient) WaitForPosition(ctx context.Context, tablet *topodatapb.Tablet, pos string) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
 	if pos != tmc.waitpos[int(tablet.Alias.Uid)] {
 		return fmt.Errorf("waitpos %s not reached for tablet %d", pos, tablet.Alias.Uid)
 	}
@@ -301,6 +306,11 @@ func (tmc *testVDiffTMClient) WaitForPosition(ctx context.Context, tablet *topod
 }
 
 func (tmc *testVDiffTMClient) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int, pos string) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
 	if pos != tmc.vrpos[int(tablet.Alias.Uid)] {
 		return fmt.Errorf("vrpos %s not reached for tablet %d", pos, tablet.Alias.Uid)
 	}
