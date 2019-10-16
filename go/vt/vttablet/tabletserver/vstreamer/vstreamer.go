@@ -137,7 +137,7 @@ func (vs *vstreamer) Stream() error {
 		return wrapError(err, vs.startPos)
 	}
 	err = vs.parseEvents(vs.ctx, events)
-	return wrapError(err, vs.startPos)
+	return wrapError(err, vs.pos.String())
 }
 
 func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.BinlogEvent) error {
@@ -163,7 +163,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			bufferedEvents = nil
 			curSize = 0
 			return vs.send(vevents)
-		case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE:
+		case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE, binlogdatapb.VEventType_REPLACE:
 			newSize := len(vevent.GetDml())
 			if curSize+newSize > *PacketSize {
 				vevents := bufferedEvents
@@ -315,22 +315,41 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		if err != nil {
 			return nil, fmt.Errorf("can't get query from binlog event: %v, event data: %#v", err, ev)
 		}
+		// Insert/Delete/Update are supported are in here only to have support for vtshovel with
+		// SBR streams. Vitess itself should never run into cases where it needs to consume non rbr statements.
 		switch cat := sqlparser.Preview(q.SQL); cat {
 		case sqlparser.StmtInsert:
-			vevents = append(vevents, &binlogdatapb.VEvent{
-				Type: binlogdatapb.VEventType_INSERT,
-				Dml:  q.SQL,
-			})
+			mustSend := mustSendStmt(q, vs.cp.DbName)
+			if mustSend {
+				vevents = append(vevents, &binlogdatapb.VEvent{
+					Type: binlogdatapb.VEventType_INSERT,
+					Dml:  q.SQL,
+				})
+			}
 		case sqlparser.StmtUpdate:
-			vevents = append(vevents, &binlogdatapb.VEvent{
-				Type: binlogdatapb.VEventType_UPDATE,
-				Dml:  q.SQL,
-			})
+			mustSend := mustSendStmt(q, vs.cp.DbName)
+			if mustSend {
+				vevents = append(vevents, &binlogdatapb.VEvent{
+					Type: binlogdatapb.VEventType_UPDATE,
+					Dml:  q.SQL,
+				})
+			}
 		case sqlparser.StmtDelete:
-			vevents = append(vevents, &binlogdatapb.VEvent{
-				Type: binlogdatapb.VEventType_DELETE,
-				Dml:  q.SQL,
-			})
+			mustSend := mustSendStmt(q, vs.cp.DbName)
+			if mustSend {
+				vevents = append(vevents, &binlogdatapb.VEvent{
+					Type: binlogdatapb.VEventType_DELETE,
+					Dml:  q.SQL,
+				})
+			}
+		case sqlparser.StmtReplace:
+			mustSend := mustSendStmt(q, vs.cp.DbName)
+			if mustSend {
+				vevents = append(vevents, &binlogdatapb.VEvent{
+					Type: binlogdatapb.VEventType_REPLACE,
+					Dml:  q.SQL,
+				})
+			}
 		case sqlparser.StmtBegin:
 			vevents = append(vevents, &binlogdatapb.VEvent{
 				Type: binlogdatapb.VEventType_BEGIN,
