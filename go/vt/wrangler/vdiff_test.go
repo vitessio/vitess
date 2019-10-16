@@ -685,3 +685,36 @@ func TestVDiffNoPKWeightString(t *testing.T) {
 	}
 	assert.Equal(t, wantdr, dr["t1"])
 }
+
+func TestVDiffReplicationWait(t *testing.T) {
+	env := newTestVDiffEnv([]string{"0"}, []string{"0"}, "", nil)
+	defer env.close()
+
+	schm := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+			Name:              "t1",
+			Columns:           []string{"c1", "c2"},
+			PrimaryKeyColumns: []string{"c1"},
+			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+		}},
+	}
+	env.tmc.schema = schm
+
+	fields := sqltypes.MakeTestFields(
+		"c1|c2",
+		"int64|int64",
+	)
+
+	source := sqltypes.MakeTestStreamingResults(fields,
+		"1|3",
+		"2|4",
+		"---",
+		"3|1",
+	)
+	target := source
+	env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, source)
+	env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, target)
+
+	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 0*time.Second)
+	require.EqualError(t, err, "WaitForPosition for tablet cell-0000000101 failed: context deadline exceeded")
+}
