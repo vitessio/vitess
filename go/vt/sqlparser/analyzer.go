@@ -158,6 +158,23 @@ func IsDML(sql string) bool {
 	return false
 }
 
+// SplitAndExpression breaks up the Expr into AND-separated conditions
+// and appends them to filters. Outer parenthesis are removed. Precedence
+// should be taken into account if expressions are recombined.
+func SplitAndExpression(filters []Expr, node Expr) []Expr {
+	if node == nil {
+		return filters
+	}
+	switch node := node.(type) {
+	case *AndExpr:
+		filters = SplitAndExpression(filters, node.Left)
+		return SplitAndExpression(filters, node.Right)
+	case *ParenExpr:
+		return SplitAndExpression(filters, node.Expr)
+	}
+	return append(filters, node)
+}
+
 // GetTableName returns the table name from the SimpleTableExpr
 // only if it's a simple expression. Otherwise, it returns "".
 func GetTableName(node SimpleTableExpr) TableIdent {

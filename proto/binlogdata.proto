@@ -240,7 +240,7 @@ message Journal {
   string local_position = 4;
   repeated ShardGtid shard_gtids = 5;
   repeated KeyspaceShard participants = 6;
-  repeated int64 reversed_ids = 7;
+  repeated string source_workflows = 7;
 }
 
 // VEvent represents a vstream event

@@ -28,6 +28,9 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+// ExcludeStr is the filter value for excluding tables that match a rule.
+const ExcludeStr = "exclude"
+
 type tablePlanBuilder struct {
 	name       sqlparser.TableIdent
 	sendSelect *sqlparser.Select
@@ -152,7 +155,7 @@ func buildTablePlan(tableName, filter string, tableKeys map[string][]string, las
 		buf := sqlparser.NewTrackedBuffer(nil)
 		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(tableName), sqlparser.NewStrVal([]byte(filter)))
 		query = buf.String()
-	case filter == "exclude":
+	case filter == ExcludeStr:
 		return nil, nil
 	}
 	sel, fromTable, err := analyzeSelectFrom(query)
