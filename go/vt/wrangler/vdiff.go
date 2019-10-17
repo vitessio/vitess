@@ -103,11 +103,11 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 	}
 	mi, err := wr.buildMigrater(ctx, targetKeyspace, workflow)
 	if err != nil {
-		wr.Logger().Errorf("buildMigrater failed: %v", err)
+		wr.Logger().Errorf("buildMigrater: %v", err)
 		return nil, err
 	}
 	if err := mi.validate(ctx, false /* isWrite */); err != nil {
-		mi.wr.Logger().Errorf("validate failed: %v", err)
+		mi.wr.Logger().Errorf("validate: %v", err)
 		return nil, err
 	}
 	df := &vdiff{
@@ -137,45 +137,45 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 	}
 	schm, err := wr.GetSchema(ctx, oneTarget.master.Alias, nil, nil, false)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.Wrap(err, "GetSchema")
 	}
 	df.differs, err = buildVDiffPlan(ctx, oneFilter, schm)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.Wrap(err, "buildVDiffPlan")
 	}
 	if err := df.selectTablets(ctx); err != nil {
-		return nil, err
+		return nil, vterrors.Wrap(err, "selectTablets")
 	}
-	defer func() {
+	defer func(ctx context.Context) {
 		if err := df.restartTargets(ctx); err != nil {
 			wr.Logger().Errorf("Could not restart workflow %s: %v, please restart it manually", workflow, err)
 		}
-	}()
+	}(ctx)
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	// TODO(sougou): parallelize
 	diffReports := make(map[string]*DiffReport)
 	for table, td := range df.differs {
 		if err := df.stopTargets(ctx); err != nil {
-			return nil, err
+			return nil, vterrors.Wrap(err, "stopTargets")
 		}
-		sourceReader, err := df.startQueryStreams(ctx, df.sources, td.sourceExpression, td.orderbyParams(), filteredReplicationWaitTime)
+		sourceReader, err := df.startQueryStreams(ctx, df.mi.sourceKeyspace, df.sources, td.sourceExpression, td.orderbyParams(), filteredReplicationWaitTime)
 		if err != nil {
-			return nil, err
+			return nil, vterrors.Wrap(err, "startQueryStreams(sources)")
 		}
 		if err := df.syncTargets(ctx, filteredReplicationWaitTime); err != nil {
-			return nil, err
+			return nil, vterrors.Wrap(err, "syncTargets")
 		}
-		targetReader, err := df.startQueryStreams(ctx, df.targets, td.targetExpression, td.orderbyParams(), filteredReplicationWaitTime)
+		targetReader, err := df.startQueryStreams(ctx, df.mi.targetKeyspace, df.targets, td.targetExpression, td.orderbyParams(), filteredReplicationWaitTime)
 		if err != nil {
-			return nil, err
+			return nil, vterrors.Wrap(err, "startQueryStreams(targets)")
 		}
 		if err := df.restartTargets(ctx); err != nil {
-			return nil, err
+			return nil, vterrors.Wrap(err, "restartTargets")
 		}
 		dr, err := td.diff(ctx, df.mi.wr, sourceReader, targetReader)
 		if err != nil {
-			return nil, err
+			return nil, vterrors.Wrap(err, "diff")
 		}
 		wr.Logger().Printf("Summary for %v: %+v\n", td.targetTable, *dr)
 		diffReports[table] = dr
@@ -406,19 +406,19 @@ func (df *vdiff) stopTargets(ctx context.Context) error {
 	return nil
 }
 
-func (df *vdiff) startQueryStreams(ctx context.Context, participants map[string]*dfParams, query string, orderBy []engine.OrderbyParams, filteredReplicationWaitTime time.Duration) (*resultReader, error) {
+func (df *vdiff) startQueryStreams(ctx context.Context, keyspace string, participants map[string]*dfParams, query string, orderBy []engine.OrderbyParams, filteredReplicationWaitTime time.Duration) (*resultReader, error) {
 	waitCtx, cancel := context.WithTimeout(ctx, filteredReplicationWaitTime)
 	defer cancel()
 	err := df.forAll(participants, func(shard string, participant *dfParams) error {
 		// Iteration for each participant.
 		if err := df.mi.wr.tmc.WaitForPosition(waitCtx, participant.tablet, mysql.EncodePosition(participant.position)); err != nil {
-			return fmt.Errorf("WaitForPosition for tablet %v failed: %v", topoproto.TabletAliasString(participant.tablet.Alias), err)
+			return vterrors.Wrapf(err, "WaitForPosition for tablet %v", topoproto.TabletAliasString(participant.tablet.Alias))
 		}
 		participant.result = make(chan *sqltypes.Result, 1)
 		gtidch := make(chan string, 1)
 
 		// Start the stream in a separate goroutine.
-		go df.streamOne(ctx, shard, participant, query, gtidch)
+		go df.streamOne(ctx, keyspace, shard, participant, query, gtidch)
 
 		// Wait for the gtid to be sent. If it's not received, there was an error
 		// which would be stored in participant.err.
@@ -441,7 +441,7 @@ func (df *vdiff) startQueryStreams(ctx context.Context, participants map[string]
 // Then it streams results to participant.result.
 // Before returning, it sets participant.err, and closes all channels.
 // If any channel is closed, then participant.err can be checked if there was an error.
-func (df *vdiff) streamOne(ctx context.Context, shard string, participant *dfParams, query string, gtidch chan string) {
+func (df *vdiff) streamOne(ctx context.Context, keyspace, shard string, participant *dfParams, query string, gtidch chan string) {
 	defer close(participant.result)
 	defer close(gtidch)
 
@@ -455,7 +455,7 @@ func (df *vdiff) streamOne(ctx context.Context, shard string, participant *dfPar
 		defer conn.Close(ctx)
 
 		target := &querypb.Target{
-			Keyspace:   df.mi.sourceKeyspace,
+			Keyspace:   keyspace,
 			Shard:      shard,
 			TabletType: participant.tablet.Type,
 		}
@@ -477,7 +477,7 @@ func (df *vdiff) streamOne(ctx context.Context, shard string, participant *dfPar
 			select {
 			case participant.result <- result:
 			case <-ctx.Done():
-				return fmt.Errorf("VStreamResults: %v", ctx.Err())
+				return vterrors.Wrap(ctx.Err(), "VStreamResults")
 			}
 			return nil
 		})
@@ -496,7 +496,7 @@ func (df *vdiff) syncTargets(ctx context.Context, filteredReplicationWaitTime ti
 			return err
 		}
 		if err := df.mi.wr.tmc.VReplicationWaitForPos(waitCtx, target.master.Tablet, int(uid), pos); err != nil {
-			return fmt.Errorf("VReplicationWaitForPos for tablet %v failed: %v", topoproto.TabletAliasString(target.master.Tablet.Alias), err)
+			return vterrors.Wrapf(err, "VReplicationWaitForPos for tablet %v", topoproto.TabletAliasString(target.master.Tablet.Alias))
 		}
 		return nil
 	})
@@ -521,7 +521,7 @@ func (df *vdiff) syncTargets(ctx context.Context, filteredReplicationWaitTime ti
 
 func (df *vdiff) restartTargets(ctx context.Context) error {
 	return df.forAll(df.targets, func(shard string, target *dfParams) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='' where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(df.mi.workflow))
+		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(df.mi.workflow))
 		_, err := df.mi.wr.tmc.VReplicationExec(ctx, target.master.Tablet, query)
 		return err
 	})
@@ -578,7 +578,7 @@ func newResultReader(ctx context.Context, participants map[string]*dfParams, ord
 			select {
 			case rr.result <- qr:
 			case <-ctx.Done():
-				return fmt.Errorf("MergeSort: %v", ctx.Err())
+				return vterrors.Wrap(ctx.Err(), "MergeSort")
 			}
 			return nil
 		})
@@ -595,7 +595,7 @@ func (rr *resultReader) next(ctx context.Context) ([]sqltypes.Value, error) {
 			}
 			rr.rows = qr.Rows
 		case <-ctx.Done():
-			return nil, fmt.Errorf("next: %v", ctx.Err())
+			return nil, vterrors.Wrap(ctx.Err(), "next")
 		}
 	}
 

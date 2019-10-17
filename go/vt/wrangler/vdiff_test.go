@@ -753,5 +753,5 @@ func TestVDiffReplicationWait(t *testing.T) {
 	env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, target)
 
 	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 0*time.Second)
-	require.EqualError(t, err, "WaitForPosition for tablet cell-0000000101 failed: context deadline exceeded")
+	require.EqualError(t, err, "startQueryStreams(sources): WaitForPosition for tablet cell-0000000101: context deadline exceeded")
 }

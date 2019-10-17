@@ -154,7 +154,7 @@ func newTestVDiffEnv(sourceShards, targetShards []string, query string, position
 		env.tmc.waitpos[tabletID+1] = vdiffTargetMasterPosition
 
 		// vdiff.restartTargets
-		env.tmc.setVRResults(master.tablet, "update _vt.vreplication set state='Running', message='' where db_name='vt_target' and workflow='vdiffTest'", &sqltypes.Result{})
+		env.tmc.setVRResults(master.tablet, "update _vt.vreplication set state='Running', message='', stop_pos='' where db_name='vt_target' and workflow='vdiffTest'", &sqltypes.Result{})
 
 		tabletID += 10
 	}
