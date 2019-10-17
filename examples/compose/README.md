@@ -7,8 +7,11 @@ First you will need to [install docker-compose](https://docs.docker.com/compose/
 
 ### Before you begin
 You will need to create a docker-compose.yml file. There are 2 ways to do this.
-1. Run `vtcompose.go --args`. Instructions are under the `Programatically create Vitess configuration for Docker` heading.
-2. Rename the `docker-compose.beginners.yml` file. Do this with the following command: `cp docker-compose.beginners.yml docker-compose.yml`
+1. Run `go run vtcompose/vtcompose.go --args`. [Instructions can be found here](#programatically-create-vitess-configuration-for-docker "Generate docker-compose")
+2. Rename the `docker-compose.beginners.yml` file. Do this with the following command:  
+```
+cp docker-compose.beginners.yml docker-compose.yml
+```
 
 You can then proceed to the instructions under `Start the Cluster` heading.
 
@@ -28,16 +31,17 @@ Flags available:
 * **gRpcPort** - Specifies gRPC port to be used.
 * **mySqlPort** - Specifies mySql port to be used.
 * **cell** - `Specifies Vitess cell name to be used.
-* **keyspaceData** - List of `keyspace_name:num_of_shards:num_of_replica_tablets:schema_file_names:<optional>lookup_keyspace_name` separated by ';'. 
+* **keyspaces** - List of `keyspace_name:num_of_shards:num_of_replica_tablets:schema_file_names:<optional>lookup_keyspace_name` separated by ';'. 
     * This is where you specify most of the data for the program to build your vSchema and docker-compose files.
     * Use `0` for `num_of_shards` to specify an unsharded keyspace
     ```
-    e.g "test_keyspace:2:1:create_messages.sql,create_tokens.sql:lookup_keyspace;lookup_keyspace:1:1:create_tokens_token_lookup.sql,create_messages_message_lookup.sql"
+    go run vtcompose/vtcompose.go -keyspaces="test_keyspace:2:1:create_messages.sql,create_tokens.sql:lookup_keyspace;lookup_keyspace:1:1:create_tokens_token_lookup.sql,create_messages_message_lookup.sql"
     ```
- * **externalDbData** - Specifies which databases/keyspaces are external and provides data along with it to connect to the external db.
-    List of `<external_db_name>,<DB_HOST>,<DB_PORT>,<DB_USER>,<DB_PASS>,<DB_CHARSET>` seperated by ';'. When using this, make sure to have the external_db_name/keyspace in the `keyspaceData` flag with no schema_file_names specified.
+* **externalDbData** - Specifies which databases/keyspaces are external and provides data along with it to connect to the external db.
+    List of `<external_db_name>,<DB_HOST>,<DB_PORT>,<DB_USER>,<DB_PASS>,<DB_CHARSET>` seperated by ';'.  
+    When using this, make sure to have the external_db_name/keyspace in the `keyspaceData` flag with no schema_file_names specified.  
     ```
-    e.g "-keyspaceData:"test:2:1::" -externalDbData=test:"localhost:15306:admin:pass:CHARACTER SET utf8 COLLATE utf8_general_ci"
+    go run vtcompose/vtcompose.go -keyspaces="test:2:1::" -externalDbData="test:192.68.99.101:3306:admin:pass:CHARACTER SET utf8 COLLATE utf8_general_ci"
     ```
 
 
