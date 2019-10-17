@@ -103,8 +103,6 @@ var (
 	// has been going for a while, giving up and starting over from scratch is
 	// pretty much never going to help. We should just keep trying and have a
 	// system that alerts a human if it's taking longer than expected.
-	_ = flag.Duration("timeout", 2*time.Hour, "DEPRECATED AND UNUSED")
-	_ = flag.Duration("replication_timeout", 1*time.Hour, "DEPRECATED AND UNUSED")
 
 	minBackupInterval = flag.Duration("min_backup_interval", 0, "Only take a new backup if it's been at least this long since the most recent backup.")
 	minRetentionTime  = flag.Duration("min_retention_time", 0, "Keep each old backup for at least this long before removing it. Set to 0 to disable pruning of old backups.")
