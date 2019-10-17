@@ -65,12 +65,12 @@ import (
 	"math"
 	"math/big"
 	"os"
-	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
@@ -137,7 +137,7 @@ func main() {
 
 	if *detachedMode {
 		// this method will call os.Exit and kill this process
-		terminateStayResident()
+		cmd.DetachFromTerminalAndExit()
 	}
 
 	defer logutil.Flush()
@@ -189,24 +189,6 @@ func main() {
 		log.Errorf("Couldn't prune old backups: %v", err)
 		exit.Return(1)
 	}
-}
-
-func terminateStayResident() {
-	args := os.Args[1:]
-	i := 0
-	for ; i < len(args); i++ {
-		if strings.HasPrefix(args[i], "-detach") {
-			args[i] = "-detach=false"
-			break
-		}
-	}
-	cmd := exec.Command(os.Args[0], args...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	_ = cmd.Start()
-	fmt.Println("[PID]", cmd.Process.Pid)
-	os.Exit(0)
 }
 
 func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage backupstorage.BackupStorage) error {

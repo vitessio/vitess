@@ -26,6 +26,8 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/cmd"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/trace"
@@ -40,7 +42,8 @@ import (
 )
 
 var (
-	waitTime = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
+	waitTime     = flag.Duration("wait-time", 24*time.Hour, "time to wait on an action")
+	detachedMode = flag.Bool("detach", false, "detached mode - run vtcl detached from the terminal")
 )
 
 func init() {
@@ -69,6 +72,11 @@ func installSignalHandlers(cancel func()) {
 func main() {
 	defer exit.RecoverAll()
 	defer logutil.Flush()
+
+	if *detachedMode {
+		// this method will call os.Exit and kill this process
+		cmd.DetachFromTerminalAndExit()
+	}
 
 	args := servenv.ParseFlagsWithArgs("vtctl")
 	action := args[0]
