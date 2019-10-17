@@ -94,17 +94,17 @@ fi
 
 sleep $sleeptime
 
-if [ $role != "master" ]; then
+# if [ $role != "master" ]; then
 
-    master_uid=${uid:0:1}01
-    master_vttablet=vttablet${master_uid}
-    until mysql -h ${master_vttablet} -u root -e "select 0;"; do echo "Polling master mysql at ${master_vttablet}..." && sleep 1; done
+    # master_uid=${uid:0:1}01
+    # master_vttablet=vttablet${master_uid}
+    # until mysql -h ${master_vttablet} -u root -e "select 0;"; do echo "Polling master mysql at ${master_vttablet}..." && sleep 1; done
 
-    echo "Restoring mysql dump from ${master_vttablet}..."
-    mysql -S $VTDATAROOT/$tablet_dir/mysql.sock -u root -e "FLUSH LOGS; RESET SLAVE;RESET MASTER;"
-    mysqldump -h ${master_vttablet} -u root --all-databases --triggers --routines --events --single-transaction --set-gtid-purged=AUTO --default-character-set=utf8mb4 | mysql -S $VTDATAROOT/$tablet_dir/mysql.sock -u root
+    # echo "Restoring mysql dump from ${master_vttablet}..."
+    # mysql -S $VTDATAROOT/$tablet_dir/mysql.sock -u root -e "FLUSH LOGS; RESET SLAVE;RESET MASTER;"
+    # mysqldump -h ${master_vttablet} -u root --all-databases --triggers --routines --events --single-transaction --set-gtid-purged=AUTO --default-character-set=utf8mb4 | mysql -S $VTDATAROOT/$tablet_dir/mysql.sock -u root
 
-fi
+# fi
 
 $VTROOT/bin/vtctl $TOPOLOGY_FLAGS AddCellInfo -root vitess/$CELL -server_address consul1:8500 $CELL || true
 
