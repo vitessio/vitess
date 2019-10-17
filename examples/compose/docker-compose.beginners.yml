@@ -85,7 +85,7 @@ services:
       vttablet1:
         condition: service_healthy
 
-  vttablet1:
+  vttablet101:
     image: vitess/base
     ports:
       - "15001:$WEB_PORT"
@@ -107,7 +107,8 @@ services:
       - DB_USER
       - DB_PASS
       - DB_CHARSET
-    command: ["sh", "-c", "/script/vttablet-up.sh 1"]
+      - ROLE=master
+    command: ["sh", "-c", "/script/vttablet-up.sh 101"]
     depends_on:
       - vtctld
     healthcheck:
@@ -115,7 +116,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 10
-  vttablet2:
+  vttablet102:
     image: vitess/base
     ports:
       - "15002:$WEB_PORT"
@@ -135,11 +136,11 @@ services:
       - DB_USER
       - DB_PASS
       - DB_CHARSET
-    command: ["sh", "-c", "/script/vttablet-up.sh 2"]
+    command: ["sh", "-c", "/script/vttablet-up.sh 102"]
     depends_on:
       - vtctld
       - vttablet1
-  vttablet3:
+  vttablet103:
     image: vitess/base
     ports:
       - "15003:$WEB_PORT"
@@ -159,7 +160,7 @@ services:
       - DB_USER
       - DB_PASS
       - DB_CHARSET
-    command: ["sh", "-c", "/script/vttablet-up.sh 3"]
+    command: ["sh", "-c", "/script/vttablet-up.sh 103"]
     depends_on:
       - vtctld
       - vttablet1
