@@ -201,6 +201,7 @@ mysql> show tables;
 The following helper scripts are included to help you perform various actions easily
 * vitess/examples/compose/lvtctl.sh
 * vitess/examples/compose/lfixrepl.sh
+* vitess/examples/compose/lmysql.sh
 
 You may run them as below
 ```
