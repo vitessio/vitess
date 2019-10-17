@@ -67,7 +67,8 @@ vitess/examples/compose$ ./lvtctl.sh ApplySchema -sql "$(cat create_test_table.s
 ```
 
 ### Create Vschema	
-Create Vschema (should not be needed if VtCompose was used)
+***Note: Should not be needed if VtCompose was used.***  
+Create Vschema
 ```	
 vitess/examples/compose$ ./lvtctl.sh ApplyVschema -vschema '{"tables": {"messages": {} } }' test_keyspace	
 ```
