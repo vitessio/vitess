@@ -519,6 +519,21 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		return fmt.Errorf("failed to PopulateReparentJournal on master: %v", err)
 	}
 
+	// After the master is done, we can update the shard record.
+	// This is still necessary because we might have version skew during
+	// upgrades. Some vttablets might be running a newer version of the code
+	// and some might still be running the previous version where tablets
+	// are not responsible for updating the shard record.
+	// We can remove this block of code in 5.0
+	wr.logger.Infof("updating shard record with new master %v", masterElectTabletAlias)
+	if _, err := wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
+		si.MasterAlias = masterElectTabletAlias
+		return nil
+	}); err != nil {
+		wgReplicas.Wait()
+		return fmt.Errorf("failed to update shard master record: %v", err)
+	}
+
 	// Wait for the replicas to complete.
 	wgReplicas.Wait()
 	if err := rec.Error(); err != nil {
