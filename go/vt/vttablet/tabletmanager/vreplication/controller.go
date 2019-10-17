@@ -27,6 +27,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -43,9 +44,10 @@ var retryDelay = flag.Duration("vreplication_retry_delay", 5*time.Second, "delay
 // There is no mutex within a controller becaust its members are
 // either read-only or self-synchronized.
 type controller struct {
-	dbClientFactory func() binlogplayer.DBClient
-	mysqld          mysqlctl.MysqlDaemon
-	blpStats        *binlogplayer.Stats
+	dbClientFactory    func() binlogplayer.DBClient
+	sourceDbConnParams *mysql.ConnParams
+	mysqld             mysqlctl.MysqlDaemon
+	blpStats           *binlogplayer.Stats
 
 	id           uint32
 	source       binlogdatapb.BinlogSource
@@ -61,15 +63,16 @@ type controller struct {
 
 // newController creates a new controller. Unless a stream is explicitly 'Stopped',
 // this function launches a goroutine to perform continuous vreplication.
-func newController(ctx context.Context, params map[string]string, dbClientFactory func() binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, ts *topo.Server, cell, tabletTypesStr string, blpStats *binlogplayer.Stats) (*controller, error) {
+func newController(ctx context.Context, params map[string]string, dbClientFactory func() binlogplayer.DBClient, sourceDbConnParams *mysql.ConnParams, mysqld mysqlctl.MysqlDaemon, ts *topo.Server, cell, tabletTypesStr string, blpStats *binlogplayer.Stats) (*controller, error) {
 	if blpStats == nil {
 		blpStats = binlogplayer.NewStats()
 	}
 	ct := &controller{
-		dbClientFactory: dbClientFactory,
-		mysqld:          mysqld,
-		blpStats:        blpStats,
-		done:            make(chan struct{}),
+		dbClientFactory:    dbClientFactory,
+		sourceDbConnParams: sourceDbConnParams,
+		mysqld:             mysqld,
+		blpStats:           blpStats,
+		done:               make(chan struct{}),
 	}
 
 	// id
@@ -92,18 +95,20 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	}
 	ct.stopPos = params["stop_pos"]
 
-	// tabletPicker
-	if v, ok := params["cell"]; ok {
-		cell = v
+	if ct.source.GetExternalMysql() == "" {
+		// tabletPicker
+		if v, ok := params["cell"]; ok {
+			cell = v
+		}
+		if v, ok := params["tablet_types"]; ok {
+			tabletTypesStr = v
+		}
+		tp, err := newTabletPicker(ctx, ts, cell, ct.source.Keyspace, ct.source.Shard, tabletTypesStr)
+		if err != nil {
+			return nil, err
+		}
+		ct.tabletPicker = tp
 	}
-	if v, ok := params["tablet_types"]; ok {
-		tabletTypesStr = v
-	}
-	tp, err := newTabletPicker(ctx, ts, cell, ct.source.Keyspace, ct.source.Shard, tabletTypesStr)
-	if err != nil {
-		return nil, err
-	}
-	ct.tabletPicker = tp
 
 	// cancel
 	ctx, ct.cancel = context.WithCancel(ctx)
@@ -199,7 +204,14 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		if _, err := dbClient.ExecuteFetch("set names binary", 10000); err != nil {
 			return err
 		}
-		vsClient := NewTabletVStreamerClient(tablet)
+
+		var vsClient VStreamerClient
+		if ct.source.GetExternalMysql() == "" {
+			vsClient = NewTabletVStreamerClient(tablet)
+		} else {
+			vsClient = NewMySQLVStreamerClient(ct.sourceDbConnParams)
+		}
+
 		vreplicator := NewVReplicator(ct.id, &ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld)
 		return vreplicator.Replicate(ctx)
 	}

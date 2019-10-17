@@ -290,7 +290,10 @@ func NewActionAgent(
 	// The db name is set by the Start function called above
 	agent.VREngine = vreplication.NewEngine(ts, tabletAlias.Cell, mysqld, func() binlogplayer.DBClient {
 		return binlogplayer.NewDBClient(agent.DBConfigs.FilteredWithDB())
-	}, agent.DBConfigs.FilteredWithDB().DbName)
+	},
+		agent.DBConfigs.ExternalRepl(),
+		agent.DBConfigs.FilteredWithDB().DbName,
+	)
 	servenv.OnTerm(agent.VREngine.Close)
 
 	// Run a background task to rebuild the SrvKeyspace in our cell/keyspace
@@ -357,7 +360,7 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
 		DBConfigs:           &dbconfigs.DBConfigs{},
-		VREngine:            vreplication.NewEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient, ti.DbName()),
+		VREngine:            vreplication.NewEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient, nil, ti.DbName()),
 		History:             history.New(historyLength),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
@@ -396,7 +399,7 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
 		DBConfigs:           dbcfgs,
-		VREngine:            vreplication.NewEngine(nil, "", nil, nil, ""),
+		VREngine:            vreplication.NewEngine(nil, "", nil, nil, nil, ""),
 		gotMysqlPort:        true,
 		History:             history.New(historyLength),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),

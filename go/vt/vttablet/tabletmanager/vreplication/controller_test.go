@@ -76,7 +76,7 @@ func TestControllerKeyRange(t *testing.T) {
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "replica", nil)
+	ct, err := newController(context.Background(), params, dbClientFactory, nil, mysqld, env.TopoServ, env.Cells[0], "replica", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +136,7 @@ func TestControllerTables(t *testing.T) {
 		},
 	}
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "replica", nil)
+	ct, err := newController(context.Background(), params, dbClientFactory, nil, mysqld, env.TopoServ, env.Cells[0], "replica", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestControllerBadID(t *testing.T) {
 	params := map[string]string{
 		"id": "bad",
 	}
-	_, err := newController(context.Background(), params, nil, nil, nil, "", "", nil)
+	_, err := newController(context.Background(), params, nil, nil, nil, nil, "", "", nil)
 	want := `strconv.Atoi: parsing "bad": invalid syntax`
 	if err == nil || err.Error() != want {
 		t.Errorf("newController err: %v, want %v", err, want)
@@ -166,7 +166,7 @@ func TestControllerStopped(t *testing.T) {
 		"state": binlogplayer.BlpStopped,
 	}
 
-	ct, err := newController(context.Background(), params, nil, nil, nil, "", "", nil)
+	ct, err := newController(context.Background(), params, nil, nil, nil, nil, "", "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +203,7 @@ func TestControllerOverrides(t *testing.T) {
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "rdonly", nil)
+	ct, err := newController(context.Background(), params, dbClientFactory, nil, mysqld, env.TopoServ, env.Cells[0], "rdonly", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +227,7 @@ func TestControllerCanceledContext(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	ct, err := newController(ctx, params, nil, nil, env.TopoServ, env.Cells[0], "rdonly", nil)
+	ct, err := newController(ctx, params, nil, nil, nil, env.TopoServ, env.Cells[0], "rdonly", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +269,7 @@ func TestControllerRetry(t *testing.T) {
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "rdonly", nil)
+	ct, err := newController(context.Background(), params, dbClientFactory, nil, mysqld, env.TopoServ, env.Cells[0], "rdonly", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,7 +315,7 @@ func TestControllerStopPosition(t *testing.T) {
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: 3306}
 
-	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "replica", nil)
+	ct, err := newController(context.Background(), params, dbClientFactory, nil, mysqld, env.TopoServ, env.Cells[0], "replica", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

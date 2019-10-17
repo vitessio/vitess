@@ -315,8 +315,8 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		if err != nil {
 			return nil, fmt.Errorf("can't get query from binlog event: %v, event data: %#v", err, ev)
 		}
-		// Insert/Delete/Update are supported are in here only to have support for vtshovel with
-		// SBR streams. Vitess itself should never run into cases where it needs to consume non rbr statements.
+		// Insert/Delete/Update are supported only to be used in the context of vtshovel where source databases
+		// could be using SBR. Vitess itself should never run into cases where it needs to consume non rbr statements.
 		switch cat := sqlparser.Preview(q.SQL); cat {
 		case sqlparser.StmtInsert:
 			mustSend := mustSendStmt(q, vs.cp.DbName)

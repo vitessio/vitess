@@ -69,14 +69,15 @@ const (
 	// AllPrivs user should have more privileges than App (should include possibility to do
 	// schema changes and write to internal Vitess tables), but it shouldn't have SUPER
 	// privilege like Dba has.
-	AllPrivs = "allprivs"
-	Dba      = "dba"
-	Filtered = "filtered"
-	Repl     = "repl"
+	AllPrivs     = "allprivs"
+	Dba          = "dba"
+	Filtered     = "filtered"
+	Repl         = "repl"
+	ExternalRepl = "erepl"
 )
 
 // All can be used to register all flags: RegisterFlags(All...)
-var All = []string{App, AppDebug, AllPrivs, Dba, Filtered, Repl}
+var All = []string{App, AppDebug, AllPrivs, Dba, Filtered, Repl, ExternalRepl}
 
 // RegisterFlags registers the flags for the given DBConfigFlag.
 // For instance, vttablet will register client, dba and repl.
@@ -157,14 +158,24 @@ func (dbcfgs *DBConfigs) DbaWithDB() *mysql.ConnParams {
 	return dbcfgs.makeParams(Dba, true)
 }
 
-// FilteredWithDB returns connection parameters for appdebug with dbname set.
+// FilteredWithDB returns connection parameters for filtered with dbname set.
 func (dbcfgs *DBConfigs) FilteredWithDB() *mysql.ConnParams {
 	return dbcfgs.makeParams(Filtered, true)
 }
 
-// Repl returns connection parameters for appdebug with no dbname set.
+// Repl returns connection parameters for repl with no dbname set.
 func (dbcfgs *DBConfigs) Repl() *mysql.ConnParams {
 	return dbcfgs.makeParams(Repl, false)
+}
+
+// ExternalRepl returns connection parameters for repl with no dbname set.
+func (dbcfgs *DBConfigs) ExternalRepl() *mysql.ConnParams {
+	return dbcfgs.makeParams(Repl, false)
+}
+
+// ExternalReplWithDb returns connection parameters for repl with dbname set.
+func (dbcfgs *DBConfigs) ExternalReplWithDb() *mysql.ConnParams {
+	return dbcfgs.makeParams(Repl, true)
 }
 
 // AppWithDB returns connection parameters for app with dbname set.
