@@ -2540,7 +2540,8 @@ func TestSkipToEnd(t *testing.T) {
 
 func TestParseDjangoQueries(t *testing.T) {
 
-	file, err := os.Open("django_queries.txt")
+
+	file, err := os.Open("./test_queries/django_queries.txt")
 	defer file.Close()
 	if err != nil {
 		t.Errorf(" Error: %v", err)
@@ -2548,8 +2549,10 @@ func TestParseDjangoQueries(t *testing.T) {
 	scanner := bufio.NewScanner(file)
 
 	for scanner.Scan() {
-		_, err := Parse(scanner.Text())
+
+		_, err := Parse(string(scanner.Text()))
 		if err != nil {
+			t.Error(scanner.Text())
 			t.Errorf(" Error: %v", err)
 		}
 	}
