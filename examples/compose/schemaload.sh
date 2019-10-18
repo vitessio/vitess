@@ -22,8 +22,14 @@ if [ ! -f schema_run ]; then
   fi
   echo "Applying VSchema ${vschema_file} to ${KEYSPACE}"
   vtctlclient -server vtctld:$GRPC_PORT ApplyVSchema -vschema_file /script/${vschema_file} $KEYSPACE
-  echo "Setting SetReadWrite on master tablet ${targettab}"
-  vtctlclient -server vtctld:$GRPC_PORT SetReadWrite $targettab
+  
+  echo "Get Master Tablets"
+  master_tablets=$(vtctlclient -server vtctld:$GRPC_PORT ListAllTablets | awk '$4 == "master" { print $1 }')
+  for master_tablet in $master_tablets; do
+    echo "Setting ReadWrite on master tablet ${master_tablet}"
+    vtctlclient -server vtctld:$GRPC_PORT SetReadWrite ${master_tablet}
+  done
+    
   if [ -n "$load_file" ]; then
     # vtgate can take a REALLY long time to come up fully
     sleep 60
