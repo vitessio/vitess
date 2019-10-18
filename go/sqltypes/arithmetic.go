@@ -109,6 +109,28 @@ func Multiply(v1, v2 Value) (Value, error) {
 	return castFromNumeric(lresult, lresult.typ), nil
 }
 
+func Divide(v1, v2 Value) (Value, error) {
+	if v1.IsNull() || v2.IsNull() {
+		return NULL, nil
+	}
+
+	lv1, err := newNumeric(v1)
+	if err != nil {
+		return NULL, err
+	}
+	lv2, err := newNumeric(v2)
+	if lv2.ival == 0 || err != nil {
+		return NULL, err
+	}
+
+	lresult, err := divideNumericWithError(lv1, lv2)
+	if err != nil {
+		return NULL, err
+	}
+
+	return castFromNumeric(lresult, lresult.typ), nil
+}
+
 // NullsafeAdd adds two Values in a null-safe manner. A null value
 // is treated as 0. If both values are null, then a null is returned.
 // If both values are not null, a numeric value is built
@@ -470,6 +492,28 @@ func multiplyNumericWithError(v1, v2 numeric) (numeric, error) {
 	panic("unreachable")
 }
 
+func divideNumericWithError(v1, v2 numeric) (numeric, error) {
+	switch v1.typ {
+	case Int64:
+		switch v2.typ {
+		case Int64:
+			return intDivideIntWithError(v1.ival, v2.ival)
+		case Uint64:
+			return intDivideUintWithError(v1.ival, v2.uval)
+		}
+	case Uint64:
+		switch v2.typ {
+		case Int64:
+			return uintDivideIntWithError(v1.uval, v2.ival)
+		case Uint64:
+			return uintDivideUintWithError(v1.uval, v2.uval)
+		}
+	case Float64:
+		return floatDivideAny(v1.fval, v2), nil
+	}
+	panic("unreachable")
+}
+
 // prioritize reorders the input parameters
 // to be Float64, Uint64, Int64.
 func prioritize(v1, v2 numeric) (altv1, altv2 numeric) {
@@ -523,6 +567,16 @@ func intTimesIntWithError(v1, v2 int64) (numeric, error) {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v * %v", v1, v2)
 	}
 	return numeric{typ: Int64, ival: result}, nil
+
+}
+
+func intDivideIntWithError(v1, v2 int64) (numeric, error) {
+
+	result := v1 / v2
+	if v1 != 0 && v1*v2 != result {
+		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v * %v", v1, v2)
+	}
+	return numeric{typ: Int64, ival: result}, nil
 }
 
 func intMinusUintWithError(v1 int64, v2 uint64) (numeric, error) {
@@ -563,6 +617,21 @@ func uintTimesIntWithError(v1 uint64, v2 int64) (numeric, error) {
 	return uintTimesUintWithError(v1, uint64(v2))
 }
 
+func intDivideUintWithError(v1 int64, v2 uint64) (numeric, error) {
+
+	if int64(v2) < 0 || v1 < 0 {
+		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v * %v", v1, v2)
+	}
+	return uintDivideUintWithError(uint64(v1), v2)
+}
+
+func uintDivideIntWithError(v1 uint64, v2 int64) (numeric, error) {
+	if v2 < 0 || int64(v1) < 0 {
+		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v * %v", v1, v2)
+	}
+	return uintDivideUintWithError(v1, uint64(v2))
+}
+
 func uintPlusUint(v1, v2 uint64) numeric {
 	result := v1 + v2
 	if result < v2 {
@@ -582,6 +651,15 @@ func uintPlusUintWithError(v1, v2 uint64) (numeric, error) {
 func uintMinusUintWithError(v1, v2 uint64) (numeric, error) {
 	result := v1 - v2
 	if v2 > v1 {
+		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v - %v", v1, v2)
+	}
+
+	return numeric{typ: Uint64, uval: result}, nil
+}
+
+func uintDivideUintWithError(v1, v2 uint64) (numeric, error) {
+	result := v1 / v2
+	if result < v2 || result < v1 {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v - %v", v1, v2)
 	}
 
@@ -624,6 +702,16 @@ func floatTimesAny(v1 float64, v2 numeric) numeric {
 		v2.fval = float64(v2.uval)
 	}
 	return numeric{typ: Float64, fval: v1 * v2.fval}
+}
+
+func floatDivideAny(v1 float64, v2 numeric) numeric {
+	switch v2.typ {
+	case Int64:
+		v2.fval = float64(v2.ival)
+	case Uint64:
+		v2.fval = float64(v2.uval)
+	}
+	return numeric{typ: Float64, fval: v1 / v2.fval}
 }
 
 func anyMinusFloat(v1 numeric, v2 float64) numeric {
