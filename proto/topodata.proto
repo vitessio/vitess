@@ -158,6 +158,17 @@ message Tablet {
   // for legacy behavior.
   int32 mysql_port = 13;
 
+  // master_term_start_time is the time (in UTC) at which the current term of
+  // the current tablet began as master. If this tablet is not currently the
+  // master, this will be 0.
+  //
+  // A new master term begins any time an authoritative decision is communicated
+  // about which tablet should be the master, such as via Vitess
+  // replication-management commands like PlannedReparentShard,
+  // EmergencyReparentShard, and TabletExternallyReparented.
+  //
+  vttime.Time master_term_start_time = 14;
+
   // OBSOLETE: ip and tablet health information
   // string ip = 3;
   // map<string, string> health_map = 11;

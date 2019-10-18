@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -221,6 +222,7 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
 	// Change our type to master if not already
 	if _, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
 		tablet.Type = topodatapb.TabletType_MASTER
+		tablet.MasterTermStartTime = logutil.TimeToProto(agent.masterTermStartTime())
 		return nil
 	}); err != nil {
 		return "", err
@@ -481,7 +483,11 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position
 	}
 	agent.setMasterTermStartTime(startTime)
 
-	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER); err != nil {
+	if _, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
+		tablet.Type = topodatapb.TabletType_MASTER
+		tablet.MasterTermStartTime = logutil.TimeToProto(agent.masterTermStartTime())
+		return nil
+	}); err != nil {
 		return "", err
 	}
 
@@ -728,7 +734,11 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
 	}
 	agent.setMasterTermStartTime(startTime)
 
-	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER); err != nil {
+	if _, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
+		tablet.Type = topodatapb.TabletType_MASTER
+		tablet.MasterTermStartTime = logutil.TimeToProto(agent.masterTermStartTime())
+		return nil
+	}); err != nil {
 		return "", err
 	}
 

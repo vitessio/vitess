@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
@@ -106,7 +107,7 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 		// tablet record. The actual record in topo will be updated later.
 		newTablet := proto.Clone(tablet).(*topodatapb.Tablet)
 		newTablet.Type = topodatapb.TabletType_MASTER
-
+		newTablet.MasterTermStartTime = logutil.TimeToProto(agent.masterTermStartTime())
 		// This is where updateState will block for gracePeriod, while it gives
 		// vtgate a chance to stop sending replica queries.
 		agent.updateState(ctx, newTablet, "fastTabletExternallyReparented")

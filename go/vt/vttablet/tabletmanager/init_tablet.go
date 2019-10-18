@@ -117,8 +117,8 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 				// We're marked as master in the shard record,
 				// and our existing tablet record agrees.
 				tabletType = topodatapb.TabletType_MASTER
-				// Same comment as above. Update tiebreaking timestamp to now.
-				agent.setMasterTermStartTime(time.Now())
+				// read the master term start time from tablet
+				agent.setMasterTermStartTime(logutil.ProtoToTime(oldTablet.MasterTermStartTime))
 			}
 		default:
 			return vterrors.Wrap(err, "InitTablet failed to read existing tablet record")
@@ -166,15 +166,16 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 
 	// create and populate tablet record
 	tablet := &topodatapb.Tablet{
-		Alias:          agent.TabletAlias,
-		Hostname:       hostname,
-		PortMap:        make(map[string]int32),
-		Keyspace:       *initKeyspace,
-		Shard:          shard,
-		KeyRange:       keyRange,
-		Type:           tabletType,
-		DbNameOverride: *initDbNameOverride,
-		Tags:           initTags,
+		Alias:               agent.TabletAlias,
+		Hostname:            hostname,
+		PortMap:             make(map[string]int32),
+		Keyspace:            *initKeyspace,
+		Shard:               shard,
+		KeyRange:            keyRange,
+		Type:                tabletType,
+		DbNameOverride:      *initDbNameOverride,
+		Tags:                initTags,
+		MasterTermStartTime: logutil.TimeToProto(agent.masterTermStartTime()),
 	}
 	if port != 0 {
 		tablet.PortMap["vt"] = port

@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"time"
 
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -79,6 +80,13 @@ func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topodatapb.
 	// If we have been told we're master, update master term start time.
 	if tabletType == topodatapb.TabletType_MASTER {
 		agent.setMasterTermStartTime(time.Now())
+		_, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
+			tablet.MasterTermStartTime = logutil.TimeToProto(agent.masterTermStartTime())
+			return nil
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	// let's update our internal state (stop query service and other things)
