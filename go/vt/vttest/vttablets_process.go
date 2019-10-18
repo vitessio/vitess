@@ -15,7 +15,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
-// VtctldProcess is a generic handle for a running vtctld .
+// VttabletProcess is a generic handle for a running vtctld .
 // It can be spawned manually
 type VttabletProcess struct {
 	Name                        string
@@ -126,6 +126,9 @@ func (vttablet *VttabletProcess) IsHealthy() bool {
 
 // TearDown shutdowns the running vttablet service
 func (vttablet *VttabletProcess) TearDown() error {
+	if vttablet.proc == nil {
+		fmt.Printf("No process found for vttablet %d", vttablet.TabletUID)
+	}
 	if vttablet.proc == nil || vttablet.exit == nil {
 		return nil
 	}
@@ -149,8 +152,8 @@ func (vttablet *VttabletProcess) TearDown() error {
 // VttabletProcessInstance returns a VtctlProcess handle for vtctl process
 // configured with the given Config.
 // The process must be manually started by calling setup()
-func VttabletProcessInstance(Port int, GrpcPort int, TabletUID int, Cell string, Shard string, Hostname string, Keyspace string, VtctldPort int, TabletType string) *VttabletProcess {
-	vtctl := VtctlProcessInstance()
+func VttabletProcessInstance(Port int, GrpcPort int, TabletUID int, Cell string, Shard string, Hostname string, Keyspace string, VtctldPort int, TabletType string, topoPort int, hostname string) *VttabletProcess {
+	vtctl := VtctlProcessInstance(topoPort, hostname)
 	vttablet := &VttabletProcess{
 		Name:                        "vttablet",
 		Binary:                      "vttablet",
@@ -173,7 +176,7 @@ func VttabletProcessInstance(Port int, GrpcPort int, TabletUID int, Cell string,
 		VtctldAddress:               fmt.Sprintf("http://%s:%d", Hostname, VtctldPort),
 	}
 
-	if TabletType != "" {
+	if TabletType == "rdonly" {
 		vttablet.TabletType = TabletType
 	}
 	vttablet.VerifyURL = fmt.Sprintf("http://%s:%d/debug/vars", Hostname, Port)

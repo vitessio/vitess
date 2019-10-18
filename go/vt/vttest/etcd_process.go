@@ -76,10 +76,10 @@ func (etcd *EtcdProcess) Setup() (err error) {
 	timeout := time.Now().Add(60 * time.Second)
 	for time.Now().Before(timeout) {
 		if etcd.IsHealthy() {
-			err = etcd.makeTopoDirectories()
-			if err != nil {
-				return fmt.Errorf("process '%s' unable to create topo directories (err: %s)", etcd.Name, err)
-			}
+			//err = etcd.makeTopoDirectories()
+			//if err != nil {
+			//	return fmt.Errorf("process '%s' unable to create topo directories (err: %s)", etcd.Name, err)
+			//}
 			return
 		}
 		select {
@@ -94,12 +94,12 @@ func (etcd *EtcdProcess) Setup() (err error) {
 }
 
 // TearDown shutdowns the running mysqld service
-func (etcd *EtcdProcess) TearDown() error {
+func (etcd *EtcdProcess) TearDown(Cell string) error {
 	if etcd.proc == nil || etcd.exit == nil {
 		return nil
 	}
 
-	etcd.removeTopoDirectories()
+	etcd.removeTopoDirectories(Cell)
 
 	// Attempt graceful shutdown with SIGTERM first
 	etcd.proc.Process.Signal(syscall.SIGTERM)
@@ -130,20 +130,20 @@ func (etcd *EtcdProcess) IsHealthy() bool {
 }
 
 func (etcd *EtcdProcess) makeTopoDirectories() (err error) {
-	err = etcd.manageTopoDir("mkdir", "/vitess/global")
+	err = etcd.ManageTopoDir("mkdir", "/vitess/global")
 	if err == nil {
-		err = etcd.manageTopoDir("mkdir", "/vitess/zone1")
+		err = etcd.ManageTopoDir("mkdir", "/vitess/zone1")
 	}
 	return err
 }
 
-func (etcd *EtcdProcess) removeTopoDirectories() {
-	etcd.manageTopoDir("rmdir", "/vitess/global")
-	etcd.manageTopoDir("rmdir", "/vitess/zone1")
+func (etcd *EtcdProcess) removeTopoDirectories(Cell string) {
+	etcd.ManageTopoDir("rmdir", "/vitess/global")
+	etcd.ManageTopoDir("rmdir", "/vitess/"+Cell)
 }
 
-// manageTopoDir creates global and zone in etcd2
-func (etcd *EtcdProcess) manageTopoDir(command string, directory string) error {
+// ManageTopoDir creates global and zone in etcd2
+func (etcd *EtcdProcess) ManageTopoDir(command string, directory string) error {
 	tmpProcess := exec.Command(
 		"etcdctl",
 		"--endpoints", etcd.ListenClientURL,

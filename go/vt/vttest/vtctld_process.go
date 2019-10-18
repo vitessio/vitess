@@ -53,7 +53,7 @@ type VtctldProcess struct {
 }
 
 // Setup starts vtctld process with required arguements
-func (vtctld *VtctldProcess) Setup() (err error) {
+func (vtctld *VtctldProcess) Setup(Cell string) (err error) {
 	err = os.Mkdir(path.Join(vtctld.Directory, "tmp"), 0700)
 	if err != nil {
 		return
@@ -67,7 +67,7 @@ func (vtctld *VtctldProcess) Setup() (err error) {
 		"-topo_implementation", vtctld.CommonArg.TopoImplementation,
 		"-topo_global_server_address", vtctld.CommonArg.TopoGlobalAddress,
 		"-topo_global_root", vtctld.CommonArg.TopoGlobalRoot,
-		"-cell", vtctld.CommonArg.ZoneName,
+		"-cell", Cell,
 		"-web_dir", vtctld.WebDir,
 		"-web_dir2", vtctld.WebDir2,
 		"-workflow_manager_init",
@@ -153,8 +153,8 @@ func (vtctld *VtctldProcess) TearDown() error {
 // VtctldProcessInstance returns a VtctlProcess handle for vtctl process
 // configured with the given Config.
 // The process must be manually started by calling setup()
-func VtctldProcessInstance(Port int, GrpcPort int) *VtctldProcess {
-	vtctl := VtctlProcessInstance()
+func VtctldProcessInstance(httpPort int, grpcPort int, topoPort int, hostname string) *VtctldProcess {
+	vtctl := VtctlProcessInstance(topoPort, hostname)
 	vtctld := &VtctldProcess{
 		Name:                        "vtctld",
 		Binary:                      "vtctld",
@@ -165,8 +165,8 @@ func VtctldProcessInstance(Port int, GrpcPort int) *VtctldProcess {
 		BackupStorageImplementation: "file",
 		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),
 		LogDir:                      path.Join(os.Getenv("VTDATAROOT"), "/tmp"),
-		Port:                        Port,
-		GrpcPort:                    GrpcPort,
+		Port:                        httpPort,
+		GrpcPort:                    grpcPort,
 		PidFile:                     path.Join(os.Getenv("VTDATAROOT"), "/tmp", "vtctld.pid"),
 		Directory:                   os.Getenv("VTDATAROOT"),
 	}

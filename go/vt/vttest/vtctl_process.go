@@ -18,6 +18,7 @@ limitations under the License.
 package vttest
 
 import (
+	"fmt"
 	"os/exec"
 )
 
@@ -30,20 +31,19 @@ type VtctlProcess struct {
 	TopoGlobalAddress  string
 	TopoGlobalRoot     string
 	TopoServerAddress  string
-	ZoneName           string
 }
 
 // AddCellInfo executes vtctl command to add cell info
-func (vtctl *VtctlProcess) AddCellInfo() (err error) {
+func (vtctl *VtctlProcess) AddCellInfo(Cell string) (err error) {
 	tmpProcess := exec.Command(
 		vtctl.Binary,
 		"-topo_implementation", vtctl.TopoImplementation,
 		"-topo_global_server_address", vtctl.TopoGlobalAddress,
 		"-topo_global_root", vtctl.TopoGlobalRoot,
 		"AddCellInfo",
-		"-root", "/vitess/"+vtctl.ZoneName,
+		"-root", "/vitess/"+Cell,
 		"-server_address", vtctl.TopoServerAddress,
-		vtctl.ZoneName,
+		Cell,
 	)
 	return tmpProcess.Run()
 }
@@ -51,15 +51,14 @@ func (vtctl *VtctlProcess) AddCellInfo() (err error) {
 // VtctlProcessInstance returns a VtctlProcess handle for vtctl process
 // configured with the given Config.
 // The process must be manually started by calling setup()
-func VtctlProcessInstance() *VtctlProcess {
+func VtctlProcessInstance(topoPort int, hostname string) *VtctlProcess {
 	vtctl := &VtctlProcess{
 		Name:               "vtctl",
 		Binary:             "vtctl",
 		TopoImplementation: "etcd2",
-		TopoGlobalAddress:  "localhost:2379",
+		TopoGlobalAddress:  fmt.Sprintf("%s:%d", hostname, topoPort),
 		TopoGlobalRoot:     "/vitess/global",
-		TopoServerAddress:  "localhost:2379",
-		ZoneName:           "zone1",
+		TopoServerAddress:  fmt.Sprintf("%s:%d", hostname, topoPort),
 	}
 	return vtctl
 }

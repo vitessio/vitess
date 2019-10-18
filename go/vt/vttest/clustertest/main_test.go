@@ -18,10 +18,11 @@ package clustertest
 
 import (
 	"flag"
-	"fmt"
 	"net/http"
 	"os"
 	"testing"
+	"time"
+
 	"vitess.io/vitess/go/vt/vttest"
 )
 
@@ -29,26 +30,10 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	var (
-		EtcdPort             = 2379
-		VtctldHttpPort       = 15000
-		VtctldGrpcPort       = 15999
-		BaseMysqlPort        = 14000
-		BaseVttabletPort     = 15100
-		BaseVttabletGrpcPort = 16100
-		VtgatePort           = 15001
-		VtgateGrpcPort       = 15991
-		MySQLServerPort      = 15306
-		KeyspaceName         = "commerce"
-		Shard                = "0"
-		Cell                 = "zone1"
-		BaseTabletUID        = 100
-		Tablets              = []int{0, 1, 2}
-		MysqlCtlProcesses    = make([]vttest.MysqlctlProcess, 0)
-		VttabletProcesses    = make([]vttest.VttabletProcess, 0)
-		VtgateProcess        = vttest.VtgateProcess{}
-		//
-		HostName  = "localhost"
-		SQLSchema = `create table product( 
+		cluster      vttest.LocalProcessCluster
+		KeyspaceName = "commerce"
+		Cell         = "zone1"
+		SQLSchema    = `create table product( 
 		sku varbinary(128),
 			description varbinary(128),
 			price bigint,
@@ -74,91 +59,137 @@ func TestMain(m *testing.M) {
 							"corder": {}
 						}
 					}`
+		//EtcdPort             = 2379
+		//VtctldHttpPort       = 15000
+		//VtctldGrpcPort       = 15999
+		//BaseMysqlPort        = 14000
+		//BaseVttabletPort     = 15100
+		//BaseVttabletGrpcPort = 16100
+		//VtgatePort           = 15001
+		//VtgateGrpcPort       = 15991
+		//MySQLServerPort      = 15306
+
+		//Shard                = "0"
+
+		//BaseTabletUID        = 100
+		//Tablets              = []int{0, 1, 2}
+		//MysqlCtlProcesses    = make([]vttest.MysqlctlProcess, 0)
+		//VttabletProcesses    = make([]vttest.VttabletProcess, 0)
+		//VtgateProcess        = vttest.VtgateProcess{}
+		////
+		//HostName  = "localhost"
 	)
 
 	exitCode := func() int {
+		cluster = vttest.LocalProcessCluster{Cell: Cell}
+		defer cluster.Teardown()
 
-		etcdProcess := vttest.EtcdProcessInstance(EtcdPort)
-		if err := etcdProcess.Setup(); err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			etcdProcess.TearDown()
+		// Start topo server
+		err := cluster.StartTopo()
+		if err != nil {
 			return 1
 		}
-		defer etcdProcess.TearDown()
 
-		vtcltlProcess := vttest.VtctlProcessInstance()
-		vtcltlProcess.AddCellInfo()
-
-		vtctldProcess := vttest.VtctldProcessInstance(VtctldHttpPort, VtctldGrpcPort)
-		if err := vtctldProcess.Setup(); err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			vtctldProcess.TearDown()
-			etcdProcess.TearDown()
+		// Start keyspace
+		keyspace := &vttest.Keyspace{
+			Name:      KeyspaceName,
+			SQLSchema: SQLSchema,
+			VSchema:   VSchema,
+		}
+		err = cluster.StartUnshardedKeyspace(*keyspace, 1, true)
+		if err != nil {
 			return 1
 		}
-		var i = 0
-		for ; i < len(Tablets); i++ {
-			CurrentTabletUID := BaseTabletUID + Tablets[i]
-			mysqlCtlProcess := vttest.MysqlCtlProcessInstance(CurrentTabletUID, BaseMysqlPort+Tablets[i])
-			MysqlCtlProcesses = append(MysqlCtlProcesses, *mysqlCtlProcess)
-			_ = mysqlCtlProcess.Start()
 
-			vttabletProcess := vttest.VttabletProcessInstance(BaseVttabletPort+Tablets[i], BaseVttabletGrpcPort+Tablets[i], CurrentTabletUID, Cell, Shard, "localhost", KeyspaceName, VtctldHttpPort, "replica")
-			if i == 2 {
-				vttabletProcess.TabletType = "rdonly"
-			}
-			VttabletProcesses = append(VttabletProcesses, *vttabletProcess)
-			if err := vttabletProcess.Setup(); err != nil {
-				fmt.Fprintf(os.Stderr, "%v\n", err)
-				VttabletProcessTeardown(VttabletProcesses)
-				MysqlCtlProcessTeardown(MysqlCtlProcesses)
-				vtctldProcess.TearDown()
-				etcdProcess.TearDown()
-				return 1
-			}
-			defer vttabletProcess.TearDown()
-		}
-		println("Waiting for vtctlclient commands to make master")
-		vtctlClient := vttest.VtctlClientProcessInstance("localhost", VtctldGrpcPort)
-		//Make one of replica as master
-		vtctlClient.InitShardMaster(KeyspaceName, Shard, Cell, BaseTabletUID)
-		// Apply SQL Schema
-		vtctlClient.ApplySchema(KeyspaceName, SQLSchema)
-		// Apply VSchema
-		vtctlClient.ApplyVSchema(KeyspaceName, VSchema)
-		println("Waiting for vtgate")
-
-		VtgateProcess = *vttest.VtgateProcessInstance(VtgatePort, VtgateGrpcPort, MySQLServerPort, Cell, Cell, HostName, "MASTER,REPLICA")
-		if err := VtgateProcess.Setup(); err != nil {
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			VtgateProcess.TearDown()
-			VttabletProcessTeardown(VttabletProcesses)
-			MysqlCtlProcessTeardown(MysqlCtlProcesses)
-			vtctldProcess.TearDown()
-			etcdProcess.TearDown()
+		// Start vtgate
+		err = cluster.StartVtgate()
+		if err != nil {
 			return 1
 		}
-		println("Done with single shard cluster setup, Now executing testcases.")
+		print("waiting till you check db ")
+		time.Sleep(5 * time.Minute)
 
-		defer vtctldProcess.TearDown()
-		defer MysqlCtlProcessTeardown(MysqlCtlProcesses)
-		defer VtgateProcess.TearDown()
+		//etcdProcess := vttest.EtcdProcessInstance(EtcdPort)
+		//if err := etcdProcess.Setup(); err != nil {
+		//	fmt.Fprintf(os.Stderr, "%v\n", err)
+		//	etcdProcess.TearDown()
+		//	return 1
+		//}
+		//defer etcdProcess.TearDown()
+		//
+		//vtcltlProcess := vttest.VtctlProcessInstance()
+		//vtcltlProcess.AddCellInfo("zone1")
+		//
+		//vtctldProcess := vttest.VtctldProcessInstance(VtctldHttpPort, VtctldGrpcPort)
+		//if err := vtctldProcess.Setup("zone1"); err != nil {
+		//	fmt.Fprintf(os.Stderr, "%v\n", err)
+		//	vtctldProcess.TearDown()
+		//	etcdProcess.TearDown()
+		//	return 1
+		//}
+		//var i = 0
+		//for ; i < len(Tablets); i++ {
+		//	CurrentTabletUID := BaseTabletUID + Tablets[i]
+		//	mysqlCtlProcess := vttest.MysqlCtlProcessInstance(CurrentTabletUID, BaseMysqlPort+Tablets[i])
+		//	MysqlCtlProcesses = append(MysqlCtlProcesses, *mysqlCtlProcess)
+		//	_ = mysqlCtlProcess.Start()
+		//
+		//	vttabletProcess := vttest.VttabletProcessInstance(BaseVttabletPort+Tablets[i], BaseVttabletGrpcPort+Tablets[i], CurrentTabletUID, Cell, Shard, "localhost", KeyspaceName, VtctldHttpPort, "replica")
+		//	if i == 2 {
+		//		vttabletProcess.TabletType = "rdonly"
+		//	}
+		//	VttabletProcesses = append(VttabletProcesses, *vttabletProcess)
+		//	if err := vttabletProcess.Setup(); err != nil {
+		//		fmt.Fprintf(os.Stderr, "%v\n", err)
+		//		VttabletProcessTeardown(VttabletProcesses)
+		//		MysqlCtlProcessTeardown(MysqlCtlProcesses)
+		//		vtctldProcess.TearDown()
+		//		etcdProcess.TearDown()
+		//		return 1
+		//	}
+		//	defer vttabletProcess.TearDown()
+		//}
+		//println("Waiting for vtctlclient commands to make master")
+		//vtctlClient := vttest.VtctlClientProcessInstance("localhost", VtctldGrpcPort)
+		////Make one of replica as master
+		//vtctlClient.InitShardMaster(KeyspaceName, Shard, Cell, BaseTabletUID)
+		//// Apply SQL Schema
+		//vtctlClient.ApplySchema(KeyspaceName, SQLSchema)
+		//// Apply VSchema
+		//vtctlClient.ApplyVSchema(KeyspaceName, VSchema)
+		//println("Waiting for vtgate")
+		//
+		//VtgateProcess = *vttest.VtgateProcessInstance(VtgatePort, VtgateGrpcPort, MySQLServerPort, Cell, Cell, HostName, "MASTER,REPLICA")
+		//if err := VtgateProcess.Setup(); err != nil {
+		//	fmt.Fprintf(os.Stderr, "%v\n", err)
+		//	VtgateProcess.TearDown()
+		//	VttabletProcessTeardown(VttabletProcesses)
+		//	MysqlCtlProcessTeardown(MysqlCtlProcesses)
+		//	vtctldProcess.TearDown()
+		//	etcdProcess.TearDown()
+		//	return 1
+		//}
+		//println("Done with single shard cluster setup, Now executing testcases.")
+		//
+		//defer vtctldProcess.TearDown()
+		//defer MysqlCtlProcessTeardown(MysqlCtlProcesses)
+		//defer VtgateProcess.TearDown()
 		return m.Run()
 	}()
 	os.Exit(exitCode)
 }
 
-func MysqlCtlProcessTeardown(MySqlCtlProcesses []vttest.MysqlctlProcess) {
-	for _, mysqlctlProcess := range MySqlCtlProcesses {
-		_ = mysqlctlProcess.Stop()
-	}
-}
-
-func VttabletProcessTeardown(VttableProcesses []vttest.VttabletProcess) {
-	for _, vttabletProcess := range VttableProcesses {
-		_ = vttabletProcess.TearDown()
-	}
-}
+//func MysqlCtlProcessTeardown(MySqlCtlProcesses []vttest.MysqlctlProcess) {
+//	for _, mysqlctlProcess := range MySqlCtlProcesses {
+//		_ = mysqlctlProcess.Stop()
+//	}
+//}
+//
+//func VttabletProcessTeardown(VttableProcesses []vttest.VttabletProcess) {
+//	for _, vttabletProcess := range VttableProcesses {
+//		_ = vttabletProcess.TearDown()
+//	}
+//}
 
 func testURL(t *testing.T, url string, testCaseName string) {
 	statusCode := getStatusForURL(url)

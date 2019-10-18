@@ -25,15 +25,15 @@ type VtgateProcess struct {
 	FileToLogQueries      string
 	Port                  int
 	GrpcPort              int
-	MySqlServerPort       int
-	MySqlServerSocketPath string
+	MySQLServerPort       int
+	MySQLServerSocketPath string
 	Cell                  string
 	CellsToWatch          string
 	TabletTypesToWait     string
 	GatewayImplementation string
 	ServiceMap            string
 	PidFile               string
-	MySqlAuthServerImpl   string
+	MySQLAuthServerImpl   string
 	Directory             string
 	VerifyURL             string
 
@@ -53,14 +53,14 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"-log_queries_to_file", vtgate.FileToLogQueries,
 		"-port", fmt.Sprintf("%d", vtgate.Port),
 		"-grpc_port", fmt.Sprintf("%d", vtgate.GrpcPort),
-		"-mysql_server_port", fmt.Sprintf("%d", vtgate.MySqlServerPort),
-		"-mysql_server_socket_path", vtgate.MySqlServerSocketPath,
+		"-mysql_server_port", fmt.Sprintf("%d", vtgate.MySQLServerPort),
+		"-mysql_server_socket_path", vtgate.MySQLServerSocketPath,
 		"-cell", vtgate.Cell,
 		"-cells_to_watch", vtgate.CellsToWatch,
 		"-tablet_types_to_wait", vtgate.TabletTypesToWait,
 		"-gateway_implementation", vtgate.GatewayImplementation,
 		"-service_map", vtgate.ServiceMap,
-		"-mysql_auth_server_impl", vtgate.MySqlAuthServerImpl,
+		"-mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
 		"-pid_file", vtgate.PidFile,
 	)
 
@@ -143,8 +143,8 @@ func (vtgate *VtgateProcess) TearDown() error {
 // VtgateProcessInstance returns a Vtgate handle for vtgate process
 // configured with the given Config.
 // The process must be manually started by calling setup()
-func VtgateProcessInstance(Port int, GrpcPort int, MySqlServerPort int, Cell string, CellsToWatch string, Hostname string, TabletTypesToWait string) *VtgateProcess {
-	vtctl := VtctlProcessInstance()
+func VtgateProcessInstance(Port int, GrpcPort int, MySQLServerPort int, Cell string, CellsToWatch string, Hostname string, TabletTypesToWait string, topoPort int, hostname string) *VtgateProcess {
+	vtctl := VtctlProcessInstance(topoPort, hostname)
 	vtgate := &VtgateProcess{
 		Name:                  "vtgate",
 		Binary:                "vtgate",
@@ -154,15 +154,15 @@ func VtgateProcessInstance(Port int, GrpcPort int, MySqlServerPort int, Cell str
 		LogDir:                path.Join(os.Getenv("VTDATAROOT"), "/tmp"),
 		Port:                  Port,
 		GrpcPort:              GrpcPort,
-		MySqlServerPort:       MySqlServerPort,
-		MySqlServerSocketPath: "/tmp/mysql.sock",
+		MySQLServerPort:       MySQLServerPort,
+		MySQLServerSocketPath: "/tmp/mysql.sock",
 		Cell:                  Cell,
 		CellsToWatch:          CellsToWatch,
 		TabletTypesToWait:     TabletTypesToWait,
 		GatewayImplementation: "discoverygateway",
 		CommonArg:             *vtctl,
 		PidFile:               path.Join(os.Getenv("VTDATAROOT"), "/tmp/vtgate.pid"),
-		MySqlAuthServerImpl:   "none",
+		MySQLAuthServerImpl:   "none",
 	}
 
 	vtgate.VerifyURL = fmt.Sprintf("http://%s:%d/debug/vars", Hostname, Port)
