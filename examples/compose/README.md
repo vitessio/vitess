@@ -31,11 +31,20 @@ Flags available:
 * **gRpcPort** - Specifies gRPC port to be used.
 * **mySqlPort** - Specifies mySql port to be used.
 * **cell** - `Specifies Vitess cell name to be used.
-* **keyspaces** - List of `keyspace_name:num_of_shards:num_of_replica_tablets:schema_file_names:<optional>lookup_keyspace_name` separated by ';'. 
+* **keyspaceData** - List of `keyspace_name:num_of_shards:num_of_replica_tablets:schema_file_names:<optional>lookup_keyspace_name` separated by ';'. 
     * This is where you specify most of the data for the program to build your vSchema and docker-compose files.
+    * Examples you can run;
+    * Default
+    ```
+    go run vtcompose/vtcompose.go
+    ```
     * Use `0` for `num_of_shards` to specify an unsharded keyspace
     ```
-    go run vtcompose/vtcompose.go -keyspaces="test_keyspace:2:1:create_messages.sql,create_tokens.sql:lookup_keyspace;lookup_keyspace:1:1:create_tokens_token_lookup.sql,create_messages_message_lookup.sql"
+    go run vtcompose/vtcompose.go -keyspaceData="test_keyspace:0:2:create_messages.sql"
+    ```
+    * Multiple keyspaces with sharded test_keyspace
+    ```
+    go run vtcompose/vtcompose.go -keyspaceData="test_keyspace:2:1:create_messages.sql,create_tokens.sql:lookup_keyspace;lookup_keyspace:1:1:create_tokens_token_lookup.sql,create_messages_message_lookup.sql"
     ```
 * **externalDbData** - Specifies which databases/keyspaces are external and provides data along with it to connect to the external db.
     List of `<external_db_name>,<DB_HOST>,<DB_PORT>,<DB_USER>,<DB_PASS>,<DB_CHARSET>` seperated by ';'.  
@@ -52,7 +61,7 @@ vitess/examples/compose$ docker-compose up -d
 ```
 
 ### Check the status of the containers
-You can check the logs of the containers (vtgate, vttablet1, vttablet2, vttablet3) at any time.
+You can check the logs of the containers (vtgate, vttablet101, vttablet102, vttablet103) at any time.
 For example to check vtgate logs, run the following;
 ```
 vitess/examples/compose$ docker-compose logs -f vtgate
