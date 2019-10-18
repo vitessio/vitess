@@ -50,7 +50,7 @@ Flags available:
     List of `<external_db_name>,<DB_HOST>,<DB_PORT>,<DB_USER>,<DB_PASS>,<DB_CHARSET>` seperated by ';'.  
     When using this, make sure to have the external_db_name/keyspace in the `keyspaceData` flag with no schema_file_names specified.  
     ```
-    go run vtcompose/vtcompose.go -keyspaces="test:2:1::" -externalDbData="test:192.68.99.101:3306:admin:pass:CHARACTER SET utf8 COLLATE utf8_general_ci"
+    go run vtcompose/vtcompose.go -keyspaces="test:0:2::" -externalDbData="test:192.68.99.101:3306:admin:pass:CHARACTER SET utf8 COLLATE utf8_general_ci"
     ```
 
 
