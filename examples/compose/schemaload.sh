@@ -16,11 +16,14 @@ if [ ! -f schema_run ]; then
   done
   if [ "$external_db" = "0" ]; then
     for schema_file in $schema_files; do
-      vtctlclient -server vtctld:$GRPC_PORT ApplySchema -sql-file /script/tables/${schema_file} $KEYSPACE
+      echo "Applying Schema ${schema_file} to ${KEYSPACE}"
+      vtctlclient -server vtctld:$GRPC_PORT ApplySchema -sql-file /script/tables/${schema_file} $KEYSPACE || true
     done
   fi
+  echo "Applying VSchema ${vschema_file} to ${KEYSPACE}"
   vtctlclient -server vtctld:$GRPC_PORT ApplyVSchema -vschema_file /script/${vschema_file} $KEYSPACE
-
+  echo "Setting SetReadWrite on master tablet ${targettab}"
+  vtctlclient -server vtctld:$GRPC_PORT SetReadWrite $targettab
   if [ -n "$load_file" ]; then
     # vtgate can take a REALLY long time to come up fully
     sleep 60
@@ -28,4 +31,6 @@ if [ ! -f schema_run ]; then
   fi
 
   touch schema_run
+  echo "Time: $(date). SchemaLoad completed at $(date "+%FT%T") " >> schema_run
+  echo "Done Loading Schema"
 fi
