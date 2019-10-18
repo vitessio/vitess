@@ -170,12 +170,14 @@ func (dbcfgs *DBConfigs) Repl() *mysql.ConnParams {
 
 // ExternalRepl returns connection parameters for repl with no dbname set.
 func (dbcfgs *DBConfigs) ExternalRepl() *mysql.ConnParams {
-	return dbcfgs.makeParams(Repl, false)
+	return dbcfgs.makeParams(ExternalRepl, false)
 }
 
-// ExternalReplWithDb returns connection parameters for repl with dbname set.
-func (dbcfgs *DBConfigs) ExternalReplWithDb() *mysql.ConnParams {
-	return dbcfgs.makeParams(Repl, true)
+// ExternalReplWithDB returns connection parameters for repl with dbname set.
+func (dbcfgs *DBConfigs) ExternalReplWithDB() *mysql.ConnParams {
+	params := dbcfgs.makeParams(Repl, false)
+	params.DbName = params.DeprecatedDBName
+	return params
 }
 
 // AppWithDB returns connection parameters for app with dbname set.
@@ -248,8 +250,13 @@ func HasConnectionParams() bool {
 // is used to initialize the per-user conn params.
 func Init(defaultSocketFile string) (*DBConfigs, error) {
 	// The new base configs, if set, supersede legacy settings.
-	for _, uc := range dbConfigs.userConfigs {
-		if HasConnectionParams() {
+	for user, uc := range dbConfigs.userConfigs {
+		// TODO @rafael: For ExternalRepl we need to respect the provided host / port
+		// At the moment this is an snowflake user connection type that it used by
+		// vreplication to connect to external mysql hosts that are not part of a vitess
+		// cluster. In the future we need to refactor all dbconfig to support custom users
+		// in a more flexible way.
+		if HasConnectionParams() && user != ExternalRepl {
 			uc.param.Host = baseConfig.Host
 			uc.param.Port = baseConfig.Port
 			uc.param.UnixSocket = baseConfig.UnixSocket
