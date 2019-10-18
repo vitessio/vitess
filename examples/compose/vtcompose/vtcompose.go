@@ -425,6 +425,11 @@ func generateDefaultTablet(tabAlias, shard, role, keyspace string, dbInfo extern
     command: ["sh", "-c", "/script/vttablet-up.sh %[1]s"]
     depends_on:
       - vtctld
+    healthcheck:
+        test: ["CMD-SHELL","curl localhost:%[4]s/debug/health"]
+        interval: 30s
+        timeout: 10s
+        retries: 15
 `, tabAlias, shard, role, *webPort, *gRpcPort, keyspace, *topologyFlags, *cell, externalDb, dbInfo.dbPort, dbInfo.dbHost, dbInfo.dbUser, dbInfo.dbPass, dbInfo.dbCharset)
 
 	return data
@@ -539,9 +544,11 @@ func generateSchemaload(tabletAliases []string, postLoadFile string, keyspace st
 
 	// Formatting for list in yaml
 	for i, tabletId := range tabletAliases {
-		tabletAliases[i] = "\"vttablet" + tabletId + "\""
+		//tabletAliases[i] = "\"vttablet" + tabletId + "\""
+    tabletAliases[i] = "vttablet" + tabletId + ": " + "{condition : service_healthy}"
 	}
-	dependsOn := "[" + strings.Join(tabletAliases, ", ") + "]"
+	//dependsOn := "[" + strings.Join(tabletAliases, ", ") + "]"
+  dependsOn := "depends_on: {" + strings.Join(tabletAliases, ", ") + "}"
 
 	data := fmt.Sprintf(`
 - op: add
@@ -563,7 +570,7 @@ func generateSchemaload(tabletAliases []string, postLoadFile string, keyspace st
       - POST_LOAD_FILE=%[8]s
       - EXTERNAL_DB=%[10]s
     command: ["sh", "-c", "/script/schemaload.sh"]
-    depends_on: %[1]s
+    %[1]s
 `, dependsOn, targetTab, *topologyFlags, *webPort, *gRpcPort, *cell, keyspace, postLoadFile, schemaFileName, externalDb)
 
 	return data
