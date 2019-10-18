@@ -563,7 +563,7 @@ func generateSchemaload(tabletAliases []string, postLoadFile string, keyspace st
       - GRPC_PORT=%[5]s
       - CELL=%[6]s
       - KEYSPACE=%[7]s
-      - TARGETTAB=test-0000000%[2]s
+      - TARGETTAB=%[6]s-0000000%[2]s
       - SLEEPTIME=15
       - VSCHEMA_FILE=%[7]s_vschema.json
       - SCHEMA_FILES=%[9]s
