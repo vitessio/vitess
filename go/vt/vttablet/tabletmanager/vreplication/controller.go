@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var retryDelay = flag.Duration("vreplication_retry_delay", 5*time.Second, "delay before retrying a failed binlog connection")
@@ -121,7 +122,9 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 func (ct *controller) run(ctx context.Context) {
 	defer func() {
 		log.Infof("stream %v: stopped", ct.id)
-		ct.tabletPicker.Close()
+		if ct.tabletPicker != nil {
+			ct.tabletPicker.Close()
+		}
 		close(ct.done)
 	}()
 
@@ -174,11 +177,14 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	}
 	defer dbClient.Close()
 
-	tablet, err := ct.tabletPicker.Pick(ctx)
-	if err != nil {
-		return err
+	var tablet *topodatapb.Tablet
+	if ct.source.GetExternalMysql() == "" {
+		tablet, err = ct.tabletPicker.Pick(ctx)
+		if err != nil {
+			return err
+		}
+		ct.sourceTablet.Set(tablet.Alias.String())
 	}
-	ct.sourceTablet.Set(tablet.Alias.String())
 
 	switch {
 	case len(ct.source.Tables) > 0:

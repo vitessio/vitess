@@ -160,7 +160,7 @@ func (vsClient *MySQLVStreamerClient) Open(ctx context.Context) (err error) {
 	}
 
 	topo := memorytopo.NewServer("mysqlstreamer")
-	srvTopo := srvtopo.NewResilientServer(topo, "TestTopo")
+	srvTopo := srvtopo.NewResilientServer(topo, "streamertopo", false)
 
 	vsClient.vsEngine = vstreamer.NewEngine(srvTopo, sourceSe)
 	vsClient.vsEngine.InitDBConfig(vsClient.sourceConnParams)
