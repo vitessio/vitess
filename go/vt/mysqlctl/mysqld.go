@@ -647,7 +647,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	// Start mysqld. We do not use Start, as we have to wait using
 	// the root user.
 	if err = mysqld.startNoWait(ctx, cnf); err != nil {
-		log.Errorf("failed starting mysqld (check mysql error log %v for more info): %v", cnf.ErrorLogPath, err)
+		log.Errorf("failed starting mysqld: %v %s", err, readMysqldErrorLog(cnf.ErrorLogPath))
 		return err
 	}
 
@@ -659,7 +659,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 		UnixSocket: cnf.SocketFile,
 	}
 	if err = mysqld.wait(ctx, cnf, params); err != nil {
-		log.Errorf("failed starting mysqld in time (check mysyql error log %v for more info): %v", cnf.ErrorLogPath, err)
+		log.Errorf("failed starting mysqld in time: %v %s", err, readMysqldErrorLog(cnf.ErrorLogPath))
 		return err
 	}
 
@@ -674,6 +674,14 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	}
 
 	return nil
+}
+
+func readMysqldErrorLog(fileName string) string {
+	b, err := ioutil.ReadFile(fileName)
+	if err != nil { // its already an error, return empty if we can't open
+		return ""
+	}
+	return string(b)
 }
 
 func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
@@ -697,8 +705,9 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 			"--basedir=" + mysqlBaseDir,
 			"--initialize-insecure", // Use empty 'root'@'localhost' password.
 		}
+
 		if _, _, err = execCmd(mysqldPath, args, nil, mysqlRoot, nil); err != nil {
-			log.Errorf("mysqld --initialize-insecure failed: %v", err)
+			log.Errorf("mysqld --initialize-insecure failed: %v %s", err, readMysqldErrorLog(cnf.ErrorLogPath))
 			return err
 		}
 		return nil
