@@ -500,6 +500,8 @@ func divideNumericWithError(v1, v2 numeric) (numeric, error) {
 			return intDivideIntWithError(v1.ival, v2.ival)
 		case Uint64:
 			return intDivideUintWithError(v1.ival, v2.uval)
+		case Float64:
+			return anyDivideFloat(v1, v2.fval), nil
 		}
 	case Uint64:
 		switch v2.typ {
@@ -507,6 +509,8 @@ func divideNumericWithError(v1, v2 numeric) (numeric, error) {
 			return uintDivideIntWithError(v1.uval, v2.ival)
 		case Uint64:
 			return uintDivideUintWithError(v1.uval, v2.uval)
+		case Float64:
+			return anyDivideFloat(v1, v2.fval), nil
 		}
 	case Float64:
 		return floatDivideAny(v1.fval, v2), nil
@@ -712,6 +716,16 @@ func floatDivideAny(v1 float64, v2 numeric) numeric {
 		v2.fval = float64(v2.uval)
 	}
 	return numeric{typ: Float64, fval: v1 / v2.fval}
+}
+
+func anyDivideFloat(v1 numeric, v2 float64) numeric {
+	switch v1.typ {
+	case Int64:
+		v1.fval = float64(v1.ival)
+	case Uint64:
+		v1.fval = float64(v1.uval)
+	}
+	return numeric{typ: Float64, fval: v1.fval / v2}
 }
 
 func anyMinusFloat(v1 numeric, v2 float64) numeric {
