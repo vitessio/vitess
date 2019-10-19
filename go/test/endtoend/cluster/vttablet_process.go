@@ -92,7 +92,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	timeout := time.Now().Add(60 * time.Second)
 	for time.Now().Before(timeout) {
-		if vttablet.IsHealthy() {
+		if vttablet.WaitForStatus("NOT_SERVING") {
 			return nil
 		}
 		select {
@@ -106,8 +106,8 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vttablet.Name, <-vttablet.exit)
 }
 
-// IsHealthy function checks if vtctld process is up and running
-func (vttablet *VttabletProcess) IsHealthy() bool {
+// WaitForStatus function checks if vtctld process is up and running
+func (vttablet *VttabletProcess) WaitForStatus(status string) bool {
 	resp, err := http.Get(vttablet.VerifyURL)
 	if err != nil {
 		return false
@@ -119,7 +119,7 @@ func (vttablet *VttabletProcess) IsHealthy() bool {
 		if err != nil {
 			panic(err)
 		}
-		return resultMap["TabletStateName"] == "NOT_SERVING"
+		return resultMap["TabletStateName"] == status
 	}
 	return false
 }

@@ -63,6 +63,7 @@ func (etcd *EtcdProcess) Setup() (err error) {
 	etcd.proc.Env = append(etcd.proc.Env, os.Environ()...)
 
 	log.Infof("%v %v", strings.Join(etcd.proc.Args, " "))
+	println("Starting etcd with args " + strings.Join(etcd.proc.Args, " "))
 	err = etcd.proc.Start()
 	if err != nil {
 		return
@@ -76,10 +77,6 @@ func (etcd *EtcdProcess) Setup() (err error) {
 	timeout := time.Now().Add(60 * time.Second)
 	for time.Now().Before(timeout) {
 		if etcd.IsHealthy() {
-			//err = etcd.makeTopoDirectories()
-			//if err != nil {
-			//	return fmt.Errorf("process '%s' unable to create topo directories (err: %s)", etcd.Name, err)
-			//}
 			return
 		}
 		select {
@@ -129,14 +126,6 @@ func (etcd *EtcdProcess) IsHealthy() bool {
 	return false
 }
 
-func (etcd *EtcdProcess) makeTopoDirectories() (err error) {
-	err = etcd.ManageTopoDir("mkdir", "/vitess/global")
-	if err == nil {
-		err = etcd.ManageTopoDir("mkdir", "/vitess/zone1")
-	}
-	return err
-}
-
 func (etcd *EtcdProcess) removeTopoDirectories(Cell string) {
 	etcd.ManageTopoDir("rmdir", "/vitess/global")
 	etcd.ManageTopoDir("rmdir", "/vitess/"+Cell)
@@ -155,12 +144,12 @@ func (etcd *EtcdProcess) ManageTopoDir(command string, directory string) error {
 // EtcdProcessInstance returns a EtcdProcess handle for a etcd sevice,
 // configured with the given Config.
 // The process must be manually started by calling setup()
-func EtcdProcessInstance(Port int) *EtcdProcess {
+func EtcdProcessInstance(port int, hostname string) *EtcdProcess {
 	etcd := &EtcdProcess{
 		Name:   "etcd",
 		Binary: "etcd",
-		Port:   Port,
-		Host:   "localhost",
+		Port:   port,
+		Host:   hostname,
 	}
 
 	etcd.AdvertiseClientURL = fmt.Sprintf("http://%s:%d", etcd.Host, etcd.Port)

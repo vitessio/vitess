@@ -83,7 +83,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 
 	timeout := time.Now().Add(60 * time.Second)
 	for time.Now().Before(timeout) {
-		if vtgate.IsHealthy() {
+		if vtgate.WaitForStatus() {
 			return nil
 		}
 		select {
@@ -97,8 +97,8 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vtgate.Name, <-vtgate.exit)
 }
 
-// IsHealthy function checks if vtgate process is up and running
-func (vtgate *VtgateProcess) IsHealthy() bool {
+// WaitForStatus function checks if vtgate process is up and running
+func (vtgate *VtgateProcess) WaitForStatus() bool {
 	resp, err := http.Get(vtgate.VerifyURL)
 	if err != nil {
 		return false

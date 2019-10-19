@@ -1,9 +1,11 @@
 package clustertest
 
 import (
+	"fmt"
 	"testing"
 )
 
 func TestVtctldProcess(t *testing.T) {
-	//testURL(t, "http://localhost:15000/api/keyspaces/", "keyspace url")
+	url := fmt.Sprintf("http://localhost:%d/api/keyspaces/", ClusterInstance.VtctldHttpPort)
+	testURL(t, url, "keyspace url")
 }
