@@ -113,7 +113,10 @@ func main() {
 
 		// Check if it is an external_db
 		if  _, ok := externalDbInfoMap[k]; ok {
-			vSchemaFile = applyJsonInMemoryPatch(vSchemaFile,`[{"op": "add","path": "/tables/*", "value": {}}]`)
+      //This is no longer necessary, but we'll keep it for reference
+      //https://github.com/vitessio/vitess/pull/4868, https://github.com/vitessio/vitess/pull/5010
+      //vSchemaFile = applyJsonInMemoryPatch(vSchemaFile,`[{"op": "add","path": "/tables/*", "value": {}}]`)
+      vSchemaFile = applyJsonInMemoryPatch(vSchemaFile,`[{"op": "replace","path": "/sharded", "value": false}]`)
 		} else {
 			var primaryTableColumns map[string]string
 			vSchemaFile, primaryTableColumns = addTablesVschemaPatch(vSchemaFile, keyspaceData.schemaFileNames)
