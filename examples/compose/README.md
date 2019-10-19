@@ -8,9 +8,13 @@ First you will need to [install docker-compose](https://docs.docker.com/compose/
 ### Before you begin
 You will need to create a docker-compose.yml file. There are 2 ways to do this.
 1. Run `go run vtcompose/vtcompose.go --args`. [Instructions can be found here](#programatically-create-vitess-configuration-for-docker "Generate docker-compose")
-2. Rename the `docker-compose.beginners.yml` file. Do this with the following command:  
+2. Use the `docker-compose.beginners.yml` to generate your `docker-compose.yml` file. Run:  
 ```
-cp docker-compose.beginners.yml docker-compose.yml
+vitess/examples/compose$ cp docker-compose.beginners.yml docker-compose.yml
+```
+Create your .env file  
+```
+vitess/examples/compose$ cp template.env .env
 ```
 
 You can then proceed to the instructions under `Start the Cluster` heading.

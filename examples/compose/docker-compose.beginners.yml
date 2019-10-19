@@ -98,7 +98,7 @@ services:
     - CELL
     - KEYSPACE
     - TARGETTAB
-    - SLEEPTIME=15
+    - SLEEPTIME
     - VSCHEMA_FILE
     - SCHEMA_FILES
     - POST_LOAD_FILE
