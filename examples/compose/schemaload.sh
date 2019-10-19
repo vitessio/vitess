@@ -1,9 +1,9 @@
 #!/bin/bash -e
 
 sleeptime=${SLEEPTIME:-0}
-targettab=${TARGETTAB:-'test-0000000101'}
+targettab=${TARGETTAB:-"${CELL}-0000000101"}
 schema_files=${SCHEMA_FILES:-'create_messages.sql create_tokens.sql'}
-vschema_file=${VSCHEMA_FILE:-'base_vschema.json'}
+vschema_file=${VSCHEMA_FILE:-'vtcompose/base_vschema.json'}
 load_file=${POST_LOAD_FILE:-''}
 external_db=${EXTERNAL_DB:-'0'}
 
