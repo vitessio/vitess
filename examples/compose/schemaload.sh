@@ -21,7 +21,9 @@ if [ ! -f schema_run ]; then
     done
   fi
   echo "Applying VSchema ${vschema_file} to ${KEYSPACE}"
-  vtctlclient -server vtctld:$GRPC_PORT ApplyVSchema -vschema_file /script/${vschema_file} $KEYSPACE
+  
+  vtctlclient -server vtctld:$GRPC_PORT ApplyVSchema -vschema_file /script/${vschema_file} $KEYSPACE || \
+  vtctlclient -server vtctld:$GRPC_PORT ApplyVSchema -vschema "$(cat /script/${vschema_file})" $KEYSPACE
   
   echo "Get Master Tablets"
   master_tablets=$(vtctlclient -server vtctld:$GRPC_PORT ListAllTablets | awk '$4 == "master" { print $1 }')
