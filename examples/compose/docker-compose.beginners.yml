@@ -60,7 +60,7 @@ services:
       - "15099:$WEB_PORT"
       - "$GRPC_PORT"
       - "15306:$MYSQL_PORT"
-    command: ["sh", "-c", "vtctl $TOPOLOGY_FLAGS SetReadWrite ${CELL}-101 & $$VTROOT/bin/vtgate \
+    command: ["sh", "-c", "$$VTROOT/bin/vtgate \
         $TOPOLOGY_FLAGS \
         -logtostderr=true \
         -port $WEB_PORT \
@@ -81,6 +81,30 @@ services:
       - DB
     depends_on:
       - vtctld
+    depends_on:
+      vttablet101:
+        condition: service_healthy
+
+  schemaload:
+    image: vitess/base
+    command:
+    - sh
+    - -c
+    - /script/schemaload.sh
+    environment:
+    - TOPOLOGY_FLAGS
+    - WEB_PORT
+    - GRPC_PORT
+    - CELL
+    - KEYSPACE
+    - TARGETTAB
+    - SLEEPTIME=15
+    - VSCHEMA_FILE
+    - SCHEMA_FILES
+    - POST_LOAD_FILE
+    - EXTERNAL_DB
+    volumes:
+    - .:/script
     depends_on:
       vttablet101:
         condition: service_healthy
