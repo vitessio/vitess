@@ -17,7 +17,8 @@ if [ ! -f schema_run ]; then
   if [ "$external_db" = "0" ]; then
     for schema_file in $schema_files; do
       echo "Applying Schema ${schema_file} to ${KEYSPACE}"
-      vtctlclient -server vtctld:$GRPC_PORT ApplySchema -sql-file /script/tables/${schema_file} $KEYSPACE || true
+      vtctlclient -server vtctld:$GRPC_PORT ApplySchema -sql-file /script/tables/${schema_file} $KEYSPACE || \
+      vtctlclient -server vtctld:$GRPC_PORT ApplySchema -sql "$(cat /script/tables/${schema_file})" $KEYSPACE || true
     done
   fi
   echo "Applying VSchema ${vschema_file} to ${KEYSPACE}"
