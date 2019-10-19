@@ -34,7 +34,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
@@ -70,6 +69,8 @@ type tableDiffer struct {
 	targetExpression string
 	compareCols      []int
 	comparePKs       []int
+	sourcePrimitive  engine.Primitive
+	targetPrimitive  engine.Primitive
 }
 
 type dfParams struct {
@@ -159,14 +160,14 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 		if err := df.stopTargets(ctx); err != nil {
 			return nil, vterrors.Wrap(err, "stopTargets")
 		}
-		sourceReader, err := df.startQueryStreams(ctx, df.mi.sourceKeyspace, df.sources, td.sourceExpression, td.orderbyParams(), filteredReplicationWaitTime)
+		sourceReader, err := df.startQueryStreams(ctx, df.mi.sourceKeyspace, df.sources, td.sourceExpression, filteredReplicationWaitTime)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "startQueryStreams(sources)")
 		}
 		if err := df.syncTargets(ctx, filteredReplicationWaitTime); err != nil {
 			return nil, vterrors.Wrap(err, "syncTargets")
 		}
-		targetReader, err := df.startQueryStreams(ctx, df.mi.targetKeyspace, df.targets, td.targetExpression, td.orderbyParams(), filteredReplicationWaitTime)
+		targetReader, err := df.startQueryStreams(ctx, df.mi.targetKeyspace, df.targets, td.targetExpression, filteredReplicationWaitTime)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "startQueryStreams(targets)")
 		}
@@ -221,6 +222,7 @@ func buildDifferPlan(table *tabletmanagerdatapb.TableDefinition, query string) (
 	}
 	sourceSelect := &sqlparser.Select{}
 	targetSelect := &sqlparser.Select{}
+	var aggregates []engine.AggregateParams
 	for _, selExpr := range sel.SelectExprs {
 		switch selExpr := selExpr.(type) {
 		case *sqlparser.StarExpr:
@@ -242,6 +244,17 @@ func buildDifferPlan(table *tabletmanagerdatapb.TableDefinition, query string) (
 			}
 			sourceSelect.SelectExprs = append(sourceSelect.SelectExprs, selExpr)
 			targetSelect.SelectExprs = append(targetSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: targetCol})
+
+			// Check if it's an aggregate expression
+			if expr, ok := selExpr.Expr.(*sqlparser.FuncExpr); ok {
+				switch fname := expr.Name.Lowered(); fname {
+				case "count", "sum":
+					aggregates = append(aggregates, engine.AggregateParams{
+						Opcode: engine.SupportedAggregates[fname],
+						Col:    len(sourceSelect.SelectExprs) - 1,
+					})
+				}
+			}
 		default:
 			return nil, fmt.Errorf("unexpected: %v", sqlparser.String(statement))
 		}
@@ -305,6 +318,17 @@ func buildDifferPlan(table *tabletmanagerdatapb.TableDefinition, query string) (
 
 	td.sourceExpression = sqlparser.String(sourceSelect)
 	td.targetExpression = sqlparser.String(targetSelect)
+
+	td.sourcePrimitive = newMergeSorter(td.comparePKs)
+	td.targetPrimitive = newMergeSorter(td.comparePKs)
+	if len(aggregates) != 0 {
+		td.sourcePrimitive = &engine.OrderedAggregate{
+			Aggregates: aggregates,
+			Keys:       td.comparePKs,
+			Input:      td.sourcePrimitive,
+		}
+	}
+
 	return td, nil
 }
 
@@ -406,7 +430,7 @@ func (df *vdiff) stopTargets(ctx context.Context) error {
 	return nil
 }
 
-func (df *vdiff) startQueryStreams(ctx context.Context, keyspace string, participants map[string]*dfParams, query string, orderBy []engine.OrderbyParams, filteredReplicationWaitTime time.Duration) (*resultReader, error) {
+func (df *vdiff) startQueryStreams(ctx context.Context, keyspace string, participants map[string]*dfParams, query string, filteredReplicationWaitTime time.Duration) (*resultReader, error) {
 	waitCtx, cancel := context.WithTimeout(ctx, filteredReplicationWaitTime)
 	defer cancel()
 	err := df.forAll(participants, func(shard string, participant *dfParams) error {
@@ -433,7 +457,7 @@ func (df *vdiff) startQueryStreams(ctx context.Context, keyspace string, partici
 	if err != nil {
 		return nil, err
 	}
-	return newResultReader(ctx, participants, orderBy), nil
+	return newResultReader(ctx, participants), nil
 }
 
 // streamOne is called as a goroutine, and communicates its results through channels.
@@ -544,70 +568,53 @@ func (df *vdiff) forAll(participants map[string]*dfParams, f func(string, *dfPar
 	return allErrors.AggrError(vterrors.Aggregate)
 }
 
-var _ engine.VCursor = (*resultReader)(nil)
+//-----------------------------------------------------------------
+// primitiveExecutor
 
-// resultReader performs a merge-sorted read from the participants.
-type resultReader struct {
-	ctx          context.Context
-	participants map[string]*dfParams
-	rows         [][]sqltypes.Value
-	result       chan *sqltypes.Result
-	err          error
+type primitiveExecutor struct {
+	prim     engine.Primitive
+	rows     [][]sqltypes.Value
+	resultch chan *sqltypes.Result
+	err      error
 }
 
-func newResultReader(ctx context.Context, participants map[string]*dfParams, orderBy []engine.OrderbyParams) *resultReader {
-	rr := &resultReader{
-		ctx:          ctx,
-		participants: participants,
-		result:       make(chan *sqltypes.Result, 1),
-	}
-	rss := make([]*srvtopo.ResolvedShard, 0, len(participants))
-	bvs := make([]map[string]*querypb.BindVariable, 0, len(participants))
-	for shard := range participants {
-		rss = append(rss, &srvtopo.ResolvedShard{
-			Target: &querypb.Target{
-				Shard: shard,
-			},
-		})
-		bvs = append(bvs, make(map[string]*querypb.BindVariable))
+func newPrimitiveExecutor(ctx context.Context, vcursor engine.VCursor, prim engine.Primitive) *primitiveExecutor {
+	pe := &primitiveExecutor{
+		prim:     prim,
+		resultch: make(chan *sqltypes.Result, 1),
 	}
 	go func() {
-		defer close(rr.result)
-
-		rr.err = engine.MergeSort(rr, "", orderBy, rss, bvs, func(qr *sqltypes.Result) error {
+		defer close(pe.resultch)
+		pe.err = pe.prim.StreamExecute(vcursor, make(map[string]*querypb.BindVariable), false, func(qr *sqltypes.Result) error {
 			select {
-			case rr.result <- qr:
+			case pe.resultch <- qr:
 			case <-ctx.Done():
-				return vterrors.Wrap(ctx.Err(), "MergeSort")
+				return vterrors.Wrap(ctx.Err(), "Outer Stream")
 			}
 			return nil
 		})
 	}()
-	return rr
+	return pe
 }
 
-func (rr *resultReader) next(ctx context.Context) ([]sqltypes.Value, error) {
-	for len(rr.rows) == 0 {
-		select {
-		case qr, ok := <-rr.result:
-			if !ok {
-				return nil, rr.err
-			}
-			rr.rows = qr.Rows
-		case <-ctx.Done():
-			return nil, vterrors.Wrap(ctx.Err(), "next")
+func (pe *primitiveExecutor) next() ([]sqltypes.Value, error) {
+	for len(pe.rows) == 0 {
+		qr, ok := <-pe.resultch
+		if !ok {
+			return nil, pe.err
 		}
+		pe.rows = qr.Rows
 	}
 
-	row := rr.rows[0]
-	rr.rows = rr.rows[1:]
+	row := pe.rows[0]
+	pe.rows = pe.rows[1:]
 	return row, nil
 }
 
-func (rr *resultReader) drain(ctx context.Context) (int, error) {
+func (pe *primitiveExecutor) drain(ctx context.Context) (int, error) {
 	count := 0
 	for {
-		row, err := rr.next(ctx)
+		row, err := pe.next()
 		if err != nil {
 			return 0, err
 		}
@@ -618,28 +625,64 @@ func (rr *resultReader) drain(ctx context.Context) (int, error) {
 	}
 }
 
+//-----------------------------------------------------------------
+// mergeSorter
+
+var _ engine.Primitive = (*mergeSorter)(nil)
+
+// mergeSorter performs a merge-sorted read from the participants.
+type mergeSorter struct {
+	engine.Primitive
+	orderBy []engine.OrderbyParams
+}
+
+func newMergeSorter(comparePKs []int) *mergeSorter {
+	ob := make([]engine.OrderbyParams, 0, len(comparePKs))
+	for _, col := range comparePKs {
+		ob = append(ob, engine.OrderbyParams{Col: col})
+	}
+	return &mergeSorter{
+		orderBy: ob,
+	}
+}
+
+func (ms *mergeSorter) StreamExecute(vcursor engine.VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error {
+	rr, ok := vcursor.(*resultReader)
+	if !ok {
+		return fmt.Errorf("internal error: vcursor is not a resultReader: %T", vcursor)
+	}
+	rss := make([]*srvtopo.ResolvedShard, 0, len(rr.participants))
+	bvs := make([]map[string]*querypb.BindVariable, 0, len(rr.participants))
+	for shard := range rr.participants {
+		rss = append(rss, &srvtopo.ResolvedShard{
+			Target: &querypb.Target{
+				Shard: shard,
+			},
+		})
+		bvs = append(bvs, bindVars)
+	}
+	return engine.MergeSort(vcursor, "", ms.orderBy, rss, bvs, callback)
+}
+
+//-----------------------------------------------------------------
+// resultReader
+
+// resultReader acts as a VCursor for the wrapping primitives.
+type resultReader struct {
+	engine.VCursor
+	ctx          context.Context
+	participants map[string]*dfParams
+}
+
+func newResultReader(ctx context.Context, participants map[string]*dfParams) *resultReader {
+	return &resultReader{
+		ctx:          ctx,
+		participants: participants,
+	}
+}
+
 func (rr *resultReader) Context() context.Context {
 	return rr.ctx
-}
-
-func (rr *resultReader) MaxMemoryRows() int { return 0 }
-
-func (rr *resultReader) SetContextTimeout(timeout time.Duration) context.CancelFunc { return nil }
-
-func (rr *resultReader) RecordWarning(warning *querypb.QueryWarning) {}
-
-func (rr *resultReader) Execute(method string, query string, bindvars map[string]*querypb.BindVariable, isDML bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error) {
-	return nil, nil
-}
-
-func (rr *resultReader) AutocommitApproval() bool { return false }
-
-func (rr *resultReader) ExecuteMultiShard(rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, isDML, canAutocommit bool) (*sqltypes.Result, []error) {
-	return nil, nil
-}
-
-func (rr *resultReader) ExecuteStandalone(query string, bindvars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error) {
-	return nil, nil
 }
 
 func (rr *resultReader) StreamExecuteMulti(query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, callback func(reply *sqltypes.Result) error) error {
@@ -651,15 +694,12 @@ func (rr *resultReader) StreamExecuteMulti(query string, rss []*srvtopo.Resolved
 	return rr.participants[rss[0].Target.Shard].err
 }
 
-func (rr *resultReader) ExecuteKeyspaceID(keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, isDML, autocommit bool) (*sqltypes.Result, error) {
-	return nil, nil
-}
-
-func (rr *resultReader) ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
-	return nil, nil, nil
-}
+//-----------------------------------------------------------------
+// tableDiffer
 
 func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, sourceReader, targetReader *resultReader) (*DiffReport, error) {
+	sourceExecutor := newPrimitiveExecutor(ctx, sourceReader, td.sourcePrimitive)
+	targetExecutor := newPrimitiveExecutor(ctx, targetReader, td.targetPrimitive)
 	dr := &DiffReport{}
 	var sourceRow, targetRow []sqltypes.Value
 	var err error
@@ -667,13 +707,13 @@ func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, sourceReader, tar
 	advanceTarget := true
 	for {
 		if advanceSource {
-			sourceRow, err = sourceReader.next(ctx)
+			sourceRow, err = sourceExecutor.next()
 			if err != nil {
 				return nil, err
 			}
 		}
 		if advanceTarget {
-			targetRow, err = targetReader.next(ctx)
+			targetRow, err = targetExecutor.next()
 			if err != nil {
 				return nil, err
 			}
@@ -689,7 +729,7 @@ func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, sourceReader, tar
 		if sourceRow == nil {
 			// drain target, update count
 			wr.Logger().Errorf("Draining extra row(s) found on the target starting with: %v", targetRow)
-			count, err := targetReader.drain(ctx)
+			count, err := targetExecutor.drain(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -701,7 +741,7 @@ func (td *tableDiffer) diff(ctx context.Context, wr *Wrangler, sourceReader, tar
 			// no more rows from the target
 			// we know we have rows from source, drain, update count
 			wr.Logger().Errorf("Draining extra row(s) found on the source starting with: %v", sourceRow)
-			count, err := sourceReader.drain(ctx)
+			count, err := sourceExecutor.drain(ctx)
 			if err != nil {
 				return nil, err
 			}
@@ -764,14 +804,6 @@ func (td *tableDiffer) compare(sourceRow, targetRow []sqltypes.Value, cols []int
 		}
 	}
 	return 0, nil
-}
-
-func (td *tableDiffer) orderbyParams() []engine.OrderbyParams {
-	ob := make([]engine.OrderbyParams, 0, len(td.comparePKs))
-	for _, col := range td.comparePKs {
-		ob = append(ob, engine.OrderbyParams{Col: col})
-	}
-	return ob
 }
 
 func removeKeyrange(where *sqlparser.Where) *sqlparser.Where {
