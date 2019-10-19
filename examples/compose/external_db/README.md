@@ -37,9 +37,10 @@ This will do the following;
 4. Starts a lightweight adminer container to interact with the database accessible at `<docker-machine-ip>:8081`  
 5. Default credentials  
    ```
-   DB-USER: dbuser  
-   DB-PASS: dbuser  
-   ROOT-PASSWORD:  pass
+   MYSQL_DB: commerce
+   MYSQL_USER: dbuser  
+   MYSQL_PASSWORD: dbpass  
+   MYSQL_ROOT_PASSWORD:  pass
    ```
 
 ### Confirm containers are up
@@ -72,7 +73,7 @@ EXTERNAL_DB=1
 DB_HOST=<docker-machine-ip>
 DB_PORT=3306
 DB_USER=dbuser
-DB_PASS=db_pass
+DB_PASS=dbpass
 DB_CHARSET=CHARACTER SET latin1 COLLATE latin1_swedish_ci
 ```
 
