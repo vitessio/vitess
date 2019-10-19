@@ -1,4 +1,4 @@
-package vttest
+package cluster
 
 import (
 	"encoding/json"

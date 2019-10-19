@@ -15,7 +15,7 @@ limitations under the License.
 
 */
 
-package vttest
+package cluster
 
 import (
 	"fmt"

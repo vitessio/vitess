@@ -17,12 +17,13 @@ limitations under the License.
 package clustertest
 
 import (
+	"fmt"
 	"testing"
 )
 
 func TestEtcdServer(t *testing.T) {
-	//etcdUrl := fmt.Sprintf("http://%s:%d/v2/keys", "", 2)
-	//testURL(t, etcdUrl, "generic etcd url")
-	//testURL(t, etcdUrl+"/vitess/global", "vitess global key")
-	//testURL(t, etcdUrl+"/vitess/zone1", "vitess zone1 key")
+	etcdUrl := fmt.Sprintf("http://%s:%d/v2/keys", ClusterInstance.Hostname, ClusterInstance.TopoPort)
+	testURL(t, etcdUrl, "generic etcd url")
+	testURL(t, etcdUrl+"/vitess/global", "vitess global key")
+	testURL(t, etcdUrl+"/vitess/zone1", "vitess zone1 key")
 }

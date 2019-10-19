@@ -1,4 +1,4 @@
-package vttest
+package cluster
 
 import (
 	"encoding/json"
@@ -159,7 +159,7 @@ func VttabletProcessInstance(Port int, GrpcPort int, TabletUID int, Cell string,
 		Binary:                      "vttablet",
 		FileToLogQueries:            path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/tmp/vt_%010d/vttable.pid", TabletUID)),
 		Directory:                   path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", TabletUID)),
-		TabletPath:                  fmt.Sprintf("%s-000%d", Cell, TabletUID),
+		TabletPath:                  fmt.Sprintf("%s-%010d", Cell, TabletUID),
 		ServiceMap:                  "grpc-queryservice,grpc-tabletmanager,grpc-updatestream",
 		LogDir:                      path.Join(os.Getenv("VTDATAROOT"), "/tmp"),
 		Shard:                       Shard,

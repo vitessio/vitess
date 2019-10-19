@@ -16,7 +16,7 @@ limitations under the License.
 Runs etcd process and makes entry for global and zone
 */
 
-package vttest
+package cluster
 
 import (
 	"fmt"
