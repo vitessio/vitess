@@ -11,7 +11,6 @@ vthost=${VTHOST:-''}
 sleeptime=${SLEEPTIME:-'0'}
 uid=$1
 external=${EXTERNAL_DB:-0}
-# db_name=${DB:-"vt_$keyspace"}
 [ $external = 0 ] && db_name=${DB:-"vt_$keyspace"} ||  db_name=${DB:-"$keyspace"}
 db_charset=${DB_CHARSET:-''}
 tablet_hostname=''
