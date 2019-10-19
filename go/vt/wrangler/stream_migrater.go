@@ -337,6 +337,8 @@ const (
 	reference
 )
 
+// templatizeRule replaces keyrange values with {{.}}.
+// This can then be used by go's template package to substitute other keyrange values.
 func (sm *streamMigrater) templatize(ctx context.Context, tabletStreams []*vrStream) ([]*vrStream, error) {
 	tabletStreams = copyTabletStreams(tabletStreams)
 	var shardedStreams []*vrStream
