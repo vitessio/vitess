@@ -85,6 +85,30 @@ services:
       vttablet101:
         condition: service_healthy
 
+  schemaload:
+    image: vitess/base
+    command:
+    - sh
+    - -c
+    - /script/schemaload.sh
+    environment:
+    - TOPOLOGY_FLAGS
+    - WEB_PORT
+    - GRPC_PORT
+    - CELL=test
+    - KEYSPACE
+    - TARGETTAB
+    - SLEEPTIME=15
+    - VSCHEMA_FILE
+    - SCHEMA_FILES
+    - POST_LOAD_FILE
+    - EXTERNAL_DB
+    volumes:
+    - .:/script
+    depends_on:
+      vttablet101:
+        condition: service_healthy
+
   vttablet101:
     image: vitess/base
     ports:
