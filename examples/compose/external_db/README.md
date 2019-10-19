@@ -95,10 +95,9 @@ vitess/examples/compose$ docker-compose up -d
 ```
 
 You should now have Vitess running against your external database instance.
-
-
-[Follow this guide for advanced usage] (../README.md#advanced-usage "Advanced Usage")
-[See this for common issues] (../README.md#common-errors "Common Issues")
+ 
+[Follow this guide for advanced usage](../README.md#advanced-usage "Advanced Usage" )
+[See this for common issues](../README.md#common-errors "Common Issues" )
 
 ### Migrating to Vitess
 Migrating to Vitess entirely can be done from;  
