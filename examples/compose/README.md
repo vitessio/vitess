@@ -17,7 +17,7 @@ Create your .env file
 vitess/examples/compose$ cp template.env .env
 ```
 
-You can then proceed to the instructions under `Start the Cluster` heading.
+You can then proceed to the instructions under [`Start the Cluster`](#start-the-cluster "Start the cluster") section.
 
 ### Programatically create Vitess configuration for Docker
 To create a configuration to your specifications, run vtcompose. Creates corresponding docker-compose file, vschema files per keyspace, and loads schemas.
