@@ -115,7 +115,7 @@ services:
       test: ["CMD-SHELL","curl localhost:$$WEB_PORT/debug/health"]
       interval: 30s
       timeout: 10s
-      retries: 10
+      retries: 15
   vttablet102:
     image: vitess/base
     ports:
@@ -140,6 +140,11 @@ services:
     depends_on:
       - vtctld
       - vttablet101
+    healthcheck:
+      test: ["CMD-SHELL","curl localhost:$$WEB_PORT/debug/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 15
   vttablet103:
     image: vitess/base
     ports:
@@ -164,3 +169,8 @@ services:
     depends_on:
       - vtctld
       - vttablet101
+    healthcheck:
+      test: ["CMD-SHELL","curl localhost:$$WEB_PORT/debug/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 15
