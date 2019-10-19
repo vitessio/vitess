@@ -76,14 +76,14 @@ vitess/examples/compose$ docker-compose logs -f vtgate
 
 We need to create a few tables into our new cluster. To do that, we can run the `ApplySchema` command.	
 ```	
-vitess/examples/compose$ ./lvtctl.sh ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace	
+vitess/examples/compose$ ./lvtctl.sh ApplySchema -sql "$(cat tables/create_messages.sql)" test_keyspace	
 ```
 
 ### Create Vschema	
 ***Note: Should not be needed if VtCompose was used.***  
 Create Vschema
 ```	
-vitess/examples/compose$ ./lvtctl.sh ApplyVschema -vschema '{"tables": {"messages": {} } }' test_keyspace	
+vitess/examples/compose$ ./lvtctl.sh ApplyVschema -vschema '{"sharded": false }' test_keyspace	
 ```
 
 ### Run the client to insert and read some data
@@ -95,10 +95,12 @@ vitess/examples/compose$ ./client.sh
 
 ### Connect to vgate and run queries
 vtgate responds to the MySQL protocol, so we can connect to it using the default MySQL client command line.
+You can also use the `./lmysql.sh` helper script.  
 ```
 vitess/examples/compose$ mysql --port=15306 --host=127.0.0.1
+vitess/examples/compose$ ./lmysql.sh --port=15306 --host=127.0.0.1
 ```
-
+**Note that you may need to replace `127.0.0.1` with `docker ip` or `docker-machine ip`** 
 
 ### Play around with vtctl commands
 
