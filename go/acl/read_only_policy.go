@@ -21,19 +21,32 @@ import (
 	"net/http"
 )
 
-var errFallback = errors.New("not allowed: fallback policy")
+var errReadOnly = errors.New("not allowed: read-only security_policy enforced")
 
-// FallbackPolicy is the policy that's used if the
-// requested policy cannot be found. It rejects all
-// access.
-type FallbackPolicy struct{}
+// readOnlyPolicy allows DEBUGGING and MONITORING roles for everyone,
+// while denying any other roles (e.g. ADMIN) for everyone.
+type readOnlyPolicy struct{}
 
 // CheckAccessActor disallows all actor access.
-func (fp FallbackPolicy) CheckAccessActor(actor, role string) error {
-	return errFallback
+func (readOnlyPolicy) CheckAccessActor(actor, role string) error {
+	switch role {
+	case DEBUGGING, MONITORING:
+		return nil
+	default:
+		return errReadOnly
+	}
 }
 
 // CheckAccessHTTP disallows all HTTP access.
-func (fp FallbackPolicy) CheckAccessHTTP(req *http.Request, role string) error {
-	return errFallback
+func (readOnlyPolicy) CheckAccessHTTP(req *http.Request, role string) error {
+	switch role {
+	case DEBUGGING, MONITORING:
+		return nil
+	default:
+		return errReadOnly
+	}
+}
+
+func init() {
+	RegisterPolicy("read-only", readOnlyPolicy{})
 }
