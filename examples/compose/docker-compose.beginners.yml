@@ -82,7 +82,7 @@ services:
     depends_on:
       - vtctld
     depends_on:
-      vttablet1:
+      vttablet101:
         condition: service_healthy
 
   vttablet101:
@@ -139,7 +139,7 @@ services:
     command: ["sh", "-c", "/script/vttablet-up.sh 102"]
     depends_on:
       - vtctld
-      - vttablet1
+      - vttablet101
   vttablet103:
     image: vitess/base
     ports:
@@ -163,4 +163,4 @@ services:
     command: ["sh", "-c", "/script/vttablet-up.sh 103"]
     depends_on:
       - vtctld
-      - vttablet1
+      - vttablet101
