@@ -115,7 +115,11 @@ vitess/examples/compose$ ./lvtctl.sh Help
 - vtgate web ui:
   http://localhost:15099/debug/status
   
-
+- Stream querylog
+  `curl -S localhost:15099/debug/querylog`
+  
+**Note that you may need to replace `localhost` with `docker ip` or `docker-machine ip`**  
+ 
 ## Troubleshooting
 If the cluster gets in a bad state, you most likely will have to stop and kill the containers. Note: you will lose all the data.
 ```
@@ -220,7 +224,7 @@ vitess/examples/compose$ ./lvtctl.sh <args>
 To run against a specific compose service/container, use the environment variable **$CS**
 
 ```
-vitess/examples/compose$ (export CS=vttablet2; ./lvtctl.sh <args> )
+vitess/examples/compose$ (export CS=vttablet101; ./lvtctl.sh <args> )
 ```
 
 ## Common Errors
@@ -235,7 +239,7 @@ exit status 1
 ```
 To resolve use the [SetReadWrite](../../doc/Troubleshooting.md#master-starts-up-read-only) command on master.
 ```sh
-vitess/examples/compose$ ./lvtctl.sh SetReadWrite test-1
+vitess/examples/compose$ ./lvtctl.sh SetReadWrite test-101
 
 ```
 
