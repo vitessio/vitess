@@ -112,7 +112,7 @@ services:
   vttablet101:
     image: vitess/base
     ports:
-      - "15001:$WEB_PORT"
+      - "15101:$WEB_PORT"
       - "$GRPC_PORT"
       - "3306"
     volumes:
@@ -144,7 +144,7 @@ services:
   vttablet102:
     image: vitess/base
     ports:
-      - "15002:$WEB_PORT"
+      - "15102:$WEB_PORT"
       - "$GRPC_PORT"
       - "3306"
     volumes:
@@ -174,7 +174,7 @@ services:
   vttablet103:
     image: vitess/base
     ports:
-      - "15003:$WEB_PORT"
+      - "15103:$WEB_PORT"
       - "$GRPC_PORT"
       - "3306"
     volumes:

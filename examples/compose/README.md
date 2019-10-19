@@ -114,9 +114,9 @@ vitess/examples/compose$ ./lvtctl.sh Help
   http://localhost:15000
 
 - vttablets web ui:
-  http://localhost:15001/debug/status
-  http://localhost:15002/debug/status
-  http://localhost:15003/debug/status
+  http://localhost:15101/debug/status
+  http://localhost:15102/debug/status
+  http://localhost:15103/debug/status
 
 - vtgate web ui:
   http://localhost:15099/debug/status
