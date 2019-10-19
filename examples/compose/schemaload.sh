@@ -38,5 +38,5 @@ if [ ! -f schema_run ]; then
 
   touch schema_run
   echo "Time: $(date). SchemaLoad completed at $(date "+%FT%T") " >> schema_run
-  echo "Done Loading Schema"
+  echo "Done Loading Schema at $(date "+%FT%T")"
 fi
