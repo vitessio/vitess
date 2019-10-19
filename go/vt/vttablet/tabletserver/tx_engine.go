@@ -118,6 +118,7 @@ func NewTxEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *
 		config.FoundRowsPoolSize,
 		config.TxPoolPrefillParallelism,
 		time.Duration(config.TransactionTimeout*1e9),
+		time.Duration(config.TxPoolTimeout*1e9),
 		time.Duration(config.IdleTimeout*1e9),
 		config.TxPoolWaiterCap,
 		checker,
