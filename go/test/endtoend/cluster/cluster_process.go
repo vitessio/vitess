@@ -7,7 +7,6 @@ import (
 
 // LocalProcessCluster Testcases need to use this to iniate a cluster
 type LocalProcessCluster struct {
-	Port          int
 	Keyspaces     []Keyspace
 	Cell          string
 	BaseTabletUID int
@@ -24,6 +23,8 @@ type LocalProcessCluster struct {
 	topoProcess   EtcdProcess
 	vtctldProcess VtctldProcess
 	vtgateProcess VtgateProcess
+
+	nextPortForProcess int
 }
 
 // Keyspace Cluster accepts keyspace to launch it
@@ -243,11 +244,11 @@ func (cluster *LocalProcessCluster) Teardown() (err error) {
 
 // GetAndReservePort gives port for required process
 func (cluster *LocalProcessCluster) GetAndReservePort() int {
-	if cluster.Port == 0 {
-		cluster.Port = getRandomNumber(20000, 15000)
+	if cluster.nextPortForProcess == 0 {
+		cluster.nextPortForProcess = getRandomNumber(20000, 15000)
 	}
-	cluster.Port = cluster.Port + 1
-	return cluster.Port
+	cluster.nextPortForProcess = cluster.nextPortForProcess + 1
+	return cluster.nextPortForProcess
 }
 
 // GetAndReserveTabletUID gives tablet uid

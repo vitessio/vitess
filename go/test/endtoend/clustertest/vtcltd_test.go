@@ -6,6 +6,6 @@ import (
 )
 
 func TestVtctldProcess(t *testing.T) {
-	url := fmt.Sprintf("http://localhost:%d/api/keyspaces/", ClusterInstance.VtctldHttpPort)
+	url := fmt.Sprintf("http://localhost:%d/api/keyspaces/", ClusterInstance.VtctldHTTPPort)
 	testURL(t, url, "keyspace url")
 }
