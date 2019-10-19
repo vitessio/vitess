@@ -17,11 +17,12 @@ limitations under the License.
 package discovery
 
 import (
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -35,15 +36,11 @@ func TestPickSimple(t *testing.T) {
 	defer deleteTablet(te, want)
 
 	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cell, te.keyspace, te.shard, "replica")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer tp.Close()
 
 	tablet, err := tp.PickForStreaming(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	if !proto.Equal(want, tablet) {
 		t.Errorf("Pick: %v, want %v", tablet, want)
 	}
@@ -57,32 +54,23 @@ func TestPickFromTwoHealthy(t *testing.T) {
 	defer deleteTablet(te, want2)
 
 	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cell, te.keyspace, te.shard, "replica,rdonly")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer tp.Close()
 
-	tablet, err := tp.PickForStreaming(context.Background())
-	if err != nil {
-		t.Fatal(err)
+	// In 20 attempts, both tablet types must be picked at least once.
+	var picked1, picked2 bool
+	for i := 0; i < 20; i++ {
+		tablet, err := tp.PickForStreaming(context.Background())
+		require.NoError(t, err)
+		if proto.Equal(tablet, want1) {
+			picked1 = true
+		}
+		if proto.Equal(tablet, want2) {
+			picked2 = true
+		}
 	}
-	if !proto.Equal(tablet, want1) {
-		t.Errorf("Pick:\n%v, want\n%v", tablet, want1)
-	}
-
-	tp, err = NewTabletPicker(context.Background(), te.topoServ, te.cell, te.keyspace, te.shard, "rdonly,replica")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tp.Close()
-
-	tablet, err = tp.PickForStreaming(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !proto.Equal(tablet, want2) {
-		t.Errorf("Pick:\n%v, want\n%v", tablet, want2)
-	}
+	assert.True(t, picked1)
+	assert.True(t, picked2)
 }
 
 func TestPickFromSomeUnhealthy(t *testing.T) {
@@ -92,15 +80,11 @@ func TestPickFromSomeUnhealthy(t *testing.T) {
 	defer deleteTablet(te, want)
 
 	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cell, te.keyspace, te.shard, "replica,rdonly")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer tp.Close()
 
 	tablet, err := tp.PickForStreaming(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	if !proto.Equal(tablet, want) {
 		t.Errorf("Pick:\n%v, want\n%v", tablet, want)
 	}
@@ -111,24 +95,17 @@ func TestPickError(t *testing.T) {
 	defer deleteTablet(te, addTablet(te, 100, topodatapb.TabletType_REPLICA, false, false))
 
 	_, err := NewTabletPicker(context.Background(), te.topoServ, te.cell, te.keyspace, te.shard, "badtype")
-	want := "failed to parse list of tablet types: badtype"
-	if err == nil || err.Error() != want {
-		t.Errorf("NewTabletPicker err: %v, want %v", err, want)
-	}
+	assert.EqualError(t, err, "failed to parse list of tablet types: badtype")
 
 	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cell, te.keyspace, te.shard, "replica,rdonly")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer tp.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 	_, err = tp.PickForStreaming(ctx)
-	want = "error waiting for tablets"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("Pick err: %v, must contain %v", err, want)
-	}
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "error waiting for tablets")
 }
 
 type pickerTestEnv struct {
@@ -150,12 +127,10 @@ func newPickerTestEnv(t *testing.T) *pickerTestEnv {
 		cell:     "cell",
 		topoServ: memorytopo.NewServer("cell"),
 	}
-	if err := te.topoServ.CreateKeyspace(ctx, te.keyspace, &topodatapb.Keyspace{}); err != nil {
-		t.Fatal(err)
-	}
-	if err := te.topoServ.CreateShard(ctx, te.keyspace, te.shard); err != nil {
-		t.Fatal(err)
-	}
+	err := te.topoServ.CreateKeyspace(ctx, te.keyspace, &topodatapb.Keyspace{})
+	require.NoError(t, err)
+	err = te.topoServ.CreateShard(ctx, te.keyspace, te.shard)
+	require.NoError(t, err)
 	return te
 }
 
@@ -173,9 +148,8 @@ func addTablet(te *pickerTestEnv, id int, tabletType topodatapb.TabletType, serv
 			"test": int32(id),
 		},
 	}
-	if err := te.topoServ.CreateTablet(context.Background(), tablet); err != nil {
-		te.t.Fatal(err)
-	}
+	err := te.topoServ.CreateTablet(context.Background(), tablet)
+	require.NoError(te.t, err)
 
 	var herr string
 	if !healthy {

@@ -80,11 +80,13 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 	}
 
 	// Refilter the tablets list based on the same criteria.
+	var addrs []TabletStats
 	for _, tabletType := range tp.tabletTypes {
-		addrs := RemoveUnhealthyTablets(tp.statsCache.GetTabletStats(tp.keyspace, tp.shard, tabletType))
-		if len(addrs) > 0 {
-			return addrs[rand.Intn(len(addrs))].Tablet, nil
-		}
+		list := RemoveUnhealthyTablets(tp.statsCache.GetTabletStats(tp.keyspace, tp.shard, tabletType))
+		addrs = append(addrs, list...)
+	}
+	if len(addrs) > 0 {
+		return addrs[rand.Intn(len(addrs))].Tablet, nil
 	}
 	// Unreachable.
 	return nil, fmt.Errorf("can't find any healthy source tablet for %v %v %v", tp.keyspace, tp.shard, tp.tabletTypes)
