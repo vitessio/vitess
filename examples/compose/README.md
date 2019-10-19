@@ -242,7 +242,7 @@ To resolve use the [SetReadWrite](../../doc/Troubleshooting.md#master-starts-up-
 vitess/examples/compose$ ./lvtctl.sh SetReadWrite test-101
 
 ```
-
+<strike>
 2. Running ./lvtctl.sh ApplyVschema -vschema '{"sharded":false }' may result in an error referenced by this [issue](https://github.com/vitessio/vitess/issues/4013 )
 
 
@@ -250,3 +250,6 @@ A quick fix for unsharded db is;
 ```
 vitess/examples/compose$ ./lvtctl.sh ApplyVschema -vschema '{"sharded":false, "tables": {"*": {} } }' external_db_name
 ```
+</strike>
+This has since been fixed by  
+https://github.com/vitessio/vitess/pull/4868 & https://github.com/vitessio/vitess/pull/5010
