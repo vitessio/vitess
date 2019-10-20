@@ -126,7 +126,7 @@ class MariaDB(MysqlFlavor):
     ]
 
   def extra_my_cnf(self):
-    return environment.vttop + "/config/mycnf/master_mariadb.cnf"
+    return environment.vttop + "/config/mycnf/master_mariadb100.cnf"
 
   def master_position(self, tablet):
     gtid = tablet.mquery("", "SELECT @@GLOBAL.gtid_binlog_pos")[0][0]
