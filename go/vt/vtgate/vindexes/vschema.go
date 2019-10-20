@@ -363,9 +363,7 @@ func addDual(vschema *VSchema) {
 		t := &Table{
 			Name:     sqlparser.NewTableIdent("dual"),
 			Keyspace: ks.Keyspace,
-		}
-		if ks.Keyspace.Sharded {
-			t.Pinned = []byte{0}
+			Type:     TypeReference,
 		}
 		ks.Tables["dual"] = t
 		if first == "" || first > ksname {

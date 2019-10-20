@@ -376,7 +376,7 @@
 {
   "Original": "select database() from dual",
   "Instructions": {
-    "Opcode": "SelectUnsharded",
+    "Opcode": "SelectReference",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -392,9 +392,9 @@
 "NEXT used on a non-sequence table"
 
 # last_insert_id for unsharded route
-"select last_insert_id() from unsharded"
+"select last_insert_id() from main.unsharded"
 {
-  "Original": "select last_insert_id() from unsharded",
+  "Original": "select last_insert_id() from main.unsharded",
   "Instructions": {
     "Opcode": "SelectUnsharded",
     "Keyspace": {
@@ -412,7 +412,7 @@
 {
   "Original": "select @@session.auto_increment_increment from dual",
   "Instructions": {
-    "Opcode": "SelectUnsharded",
+    "Opcode": "SelectReference",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
@@ -449,15 +449,13 @@
 {
   "Original": "select @@session.auto_increment_increment from user.dual",
   "Instructions": {
-    "Opcode": "SelectEqualUnique",
+    "Opcode": "SelectReference",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
     "Query": "select @@session.auto_increment_increment from dual",
     "FieldQuery": "select @@session.auto_increment_increment from dual where 1 != 1",
-    "Vindex": "binary",
-    "Values": ["\u0000"],
     "Table": "dual"
   }
 }
