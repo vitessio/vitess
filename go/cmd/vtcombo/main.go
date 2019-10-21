@@ -118,7 +118,7 @@ func main() {
 	}
 
 	// vtgate configuration and init
-	resilientServer := srvtopo.NewResilientServer(ts, "ResilientSrvTopoServer")
+	resilientServer := srvtopo.NewResilientServer(ts, "ResilientSrvTopoServer", true)
 	healthCheck := discovery.NewHealthCheck(1*time.Millisecond /*retryDelay*/, 1*time.Hour /*healthCheckTimeout*/)
 	tabletTypesToWait := []topodatapb.TabletType{
 		topodatapb.TabletType_MASTER,

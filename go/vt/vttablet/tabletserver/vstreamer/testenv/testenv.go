@@ -76,7 +76,7 @@ func Init() (*Env, error) {
 	if err := te.TopoServ.CreateShard(ctx, te.KeyspaceName, te.ShardName); err != nil {
 		panic(err)
 	}
-	te.SrvTopo = srvtopo.NewResilientServer(te.TopoServ, "TestTopo")
+	te.SrvTopo = srvtopo.NewResilientServer(te.TopoServ, "TestTopo", true)
 
 	cfg := vttest.Config{
 		Topology: &vttestpb.VTTestTopology{
