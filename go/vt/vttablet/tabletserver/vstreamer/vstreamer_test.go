@@ -849,7 +849,7 @@ func TestJournal(t *testing.T) {
 			`commit`,
 		}},
 	}}
-	runCases(t, nil, testcases)
+	runCases(t, nil, testcases, "")
 }
 
 func TestMinimalMode(t *testing.T) {
