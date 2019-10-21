@@ -144,7 +144,8 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) error {
 			<-streamErr
 		}()
 		// If the apply thread ends with io.EOF, it means either the Engine
-		// is shutting down and canceled the context, or stop position was reached.
+		// is shutting down and canceled the context, or stop position was reached,
+		// or a journal event was encountered.
 		// If so, we return nil which will cause the controller to not retry.
 		if err == io.EOF {
 			return nil
@@ -412,15 +413,29 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			for _, table := range event.Journal.Tables {
 				jtables[table] = true
 			}
+			found := false
+			notFound := false
 			for tableName := range vp.replicatorPlan.TablePlans {
-				if _, ok := jtables[tableName]; !ok {
-					if err := vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("unable to continue stream: %v is absent in the journal", tableName)); err != nil {
-						return err
-					}
-					return io.EOF
+				if _, ok := jtables[tableName]; ok {
+					found = true
+				} else {
+					notFound = true
 				}
 			}
+			switch {
+			case found && notFound:
+				// Some were found and some were not found. We can't handle this.
+				if err := vp.vr.setState(binlogplayer.BlpStopped, "unable to handle journal event: tables were partially matched"); err != nil {
+					return err
+				}
+				return io.EOF
+			case notFound:
+				// None were found. Ignore journal.
+				return nil
+			}
+			// All were found. We must register journal.
 		}
+
 		if err := vp.vr.vre.journalRegister(event.Journal, int(vp.vr.id)); err != nil {
 			if err := vp.vr.setState(binlogplayer.BlpStopped, err.Error()); err != nil {
 				return err

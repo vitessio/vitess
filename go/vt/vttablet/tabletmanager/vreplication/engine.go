@@ -411,12 +411,17 @@ func (vre *Engine) journalRegister(journal *binlogdatapb.Journal, id int) error 
 		return nil
 	}
 
-	key := fmt.Sprintf("%s:%d", vre.controllers[id].workflow, journal.Id)
+	workflow := vre.controllers[id].workflow
+	key := fmt.Sprintf("%s:%d", workflow, journal.Id)
 	je, ok := vre.journaler[key]
 	if !ok {
 		log.Infof("Journal encountered: %v", journal)
 		controllerSources := make(map[string]bool)
 		for _, ct := range vre.controllers {
+			if ct.workflow != workflow {
+				// Only compare with streams that belong to the current workflow.
+				continue
+			}
 			ks := fmt.Sprintf("%s:%s", ct.source.Keyspace, ct.source.Shard)
 			controllerSources[ks] = true
 		}
