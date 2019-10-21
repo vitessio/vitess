@@ -49,17 +49,17 @@ func TestDivide(t *testing.T) {
 		v1:  NewInt32(1),
 		v2:  NULL,
 		out: NULL,
-	},{
+	}, {
 		// Second arg 0
-		v1: NewInt32(5),
-		v2: NewInt32(0),
+		v1:  NewInt32(5),
+		v2:  NewInt32(0),
 		out: NULL,
 	}, {
 		// Both arguments zero
-		v1: NewInt32(0),
-		v2: NewInt32(0),
+		v1:  NewInt32(0),
+		v2:  NewInt32(0),
 		out: NULL,
-	},{
+	}, {
 		// case with negative value
 		v1:  NewInt64(-1),
 		v2:  NewInt64(-2),
