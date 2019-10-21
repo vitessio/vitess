@@ -175,7 +175,7 @@ func (dbcfgs *DBConfigs) ExternalRepl() *mysql.ConnParams {
 
 // ExternalReplWithDB returns connection parameters for repl with dbname set.
 func (dbcfgs *DBConfigs) ExternalReplWithDB() *mysql.ConnParams {
-	params := dbcfgs.makeParams(Repl, false)
+	params := dbcfgs.makeParams(ExternalRepl, false)
 	params.DbName = params.DeprecatedDBName
 	return params
 }
