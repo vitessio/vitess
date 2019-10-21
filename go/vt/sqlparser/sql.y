@@ -173,7 +173,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
 %token <bytes> REAL DOUBLE FLOAT_TYPE DECIMAL NUMERIC
 %token <bytes> TIME TIMESTAMP DATETIME YEAR
-%token <bytes> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR
+%token <bytes> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR 
 %token <bytes> TEXT TINYTEXT MEDIUMTEXT LONGTEXT
 %token <bytes> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON ENUM
 %token <bytes> GEOMETRY POINT LINESTRING POLYGON GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON
@@ -201,7 +201,8 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION
 
 // MySQL reserved words that are unused by this grammar will map to this token.
-%token <bytes> UNUSED
+%token <bytes> UNUSED ARRAY CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD MEMBER
+%token <bytes> NTH_VALUE NTILE OF OVER PERCENT_RANK RANK RECURSIVE ROW_NUMBER SYSTEM WINDOW
 
 %type <statement> command
 %type <selStmt> select_statement base_select union_lhs union_rhs
@@ -3210,6 +3211,7 @@ reserved_table_id:
 */
 reserved_keyword:
   ADD
+| ARRAY 
 | AND
 | AS
 | ASC
@@ -3222,6 +3224,7 @@ reserved_keyword:
 | CONVERT
 | CREATE
 | CROSS
+| CUME_DIST
 | CURRENT_DATE
 | CURRENT_TIME
 | CURRENT_TIMESTAMP
@@ -3231,8 +3234,10 @@ reserved_keyword:
 | DATABASES
 | DEFAULT
 | DELETE
+| DENSE_RANK
 | DESC
 | DESCRIBE
+| DESCRIPTION
 | DISTINCT
 | DIV
 | DROP
@@ -3242,10 +3247,13 @@ reserved_keyword:
 | EXISTS
 | EXPLAIN
 | FALSE
+| FIRST_VALUE
 | FOR
 | FORCE
 | FROM
 | GROUP
+| GROUPING
+| GROUPS
 | HAVING
 | IF
 | IGNORE
@@ -3257,35 +3265,50 @@ reserved_keyword:
 | INTO
 | IS
 | JOIN
+| JSON_TABLE
 | KEY
+| LAG
+| LAST_VALUE
+| LATERAL
+| LEAD
 | LEFT
 | LIKE
 | LIMIT
 | LOCALTIME
 | LOCALTIMESTAMP
 | LOCK
+| MEMBER
 | MATCH
 | MAXVALUE
 | MOD
 | NATURAL
 | NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
 | NOT
+| NTH_VALUE
+| NTILE
 | NULL
+| OF
 | OFF
 | ON
 | OR
 | ORDER
 | OUTER
+| OVER
+| PERCENT_RANK
+| RANK
+| RECURSIVE
 | REGEXP
 | RENAME
 | REPLACE
 | RIGHT
+| ROW_NUMBER
 | SCHEMA
 | SELECT
 | SEPARATOR
 | SET
 | SHOW
 | STRAIGHT_JOIN
+| SYSTEM
 | TABLE
 | THEN
 | TIMESTAMPADD
@@ -3304,6 +3327,7 @@ reserved_keyword:
 | VALUES
 | WHEN
 | WHERE
+| WINDOW
 
 /*
   These are non-reserved Vitess, because they don't cause conflicts in the grammar.
