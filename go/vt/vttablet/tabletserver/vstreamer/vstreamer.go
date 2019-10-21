@@ -340,106 +340,27 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 	case ev.IsTableMap():
 		// This is very frequent. It precedes every row event.
 		id := ev.TableID(vs.format)
+		if _, ok := vs.plans[id]; ok {
+			return nil, nil
+		}
 		tm, err := ev.TableMap(vs.format)
 		if err != nil {
 			return nil, err
 		}
-		// We have to build a plan only for new ids.
-		if _, ok := vs.plans[id]; ok || id == vs.journalTableID {
-			return nil, nil
-		}
 		if tm.Database == "_vt" && tm.Name == "resharding_journal" {
-			st, err := vs.se.LoadTableBasic(vs.ctx, "_vt.resharding_journal")
-			if err != nil {
-				return nil, err
-			}
-			// Partially duplicated code from below.
-			if len(st.Columns) < len(tm.Types) {
-				return nil, fmt.Errorf("cannot determine table columns for %s: event has %d columns, current schema has %d: %#v", tm.Name, len(tm.Types), len(st.Columns), ev)
-			}
-			table := &Table{
-				Name:    "_vt.resharding_journal",
-				Columns: st.Columns[:len(tm.Types)],
-			}
-			plan, err := buildREPlan(table, nil, "")
-			if err != nil {
-				return nil, err
-			}
-			vs.plans[id] = &streamerPlan{
-				Plan:     plan,
-				TableMap: tm,
-			}
-			vs.journalTableID = id
-			return nil, nil
+			return nil, vs.buildJournalPlan(id, tm)
 		}
 		if tm.Database != "" && tm.Database != vs.cp.DbName {
 			vs.plans[id] = nil
 			return nil, nil
 		}
-		tableName := tm.Name
-		var cols []schema.TableColumn
-		for i, typ := range tm.Types {
-			t, err := sqltypes.MySQLToType(int64(typ), 0)
-			if err != nil {
-				return nil, fmt.Errorf("unsupported type: %d, position: %d", typ, i)
-			}
-			cols = append(cols, schema.TableColumn{
-				Name: sqlparser.NewColIdent(fmt.Sprintf("@%d", i+1)),
-				Type: t,
-			})
-		}
-		st := vs.se.GetTable(sqlparser.NewTableIdent(tm.Name))
-		if st == nil {
-			if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
-				return nil, fmt.Errorf("unknown table %v in schema", tm.Name)
-			}
-		} else {
-			if len(st.Columns) < len(tm.Types) && vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
-				return nil, fmt.Errorf("cannot determine table columns for %s: event has %d columns, current schema has %d: %#v", tm.Name, len(tm.Types), len(st.Columns), ev)
-			}
-			tableName = st.Name.String()
-			// check if the schema returned by schema.Engine matches with row.
-			schemaMatch := true
-			if len(tm.Types) <= len(st.Columns) {
-				for i := range tm.Types {
-					t := cols[i].Type
-					if !sqltypes.AreTypesEquivalent(t, st.Columns[i].Type) {
-						schemaMatch = false
-						break
-					}
-				}
-			} else {
-				schemaMatch = false
-			}
-			if schemaMatch {
-				// Columns should be truncated to match those in tm.
-				cols = st.Columns[:len(tm.Types)]
-			}
-		}
-
-		table := &Table{
-			Name:    tableName,
-			Columns: cols,
-		}
-		plan, err := buildPlan(table, vs.kschema, vs.filter)
+		vevent, err := vs.buildTablePlan(id, tm)
 		if err != nil {
 			return nil, err
 		}
-		if plan == nil {
-			vs.plans[id] = nil
-			return nil, nil
+		if vevent != nil {
+			vevents = append(vevents, vevent)
 		}
-		vs.plans[id] = &streamerPlan{
-			Plan:     plan,
-			TableMap: tm,
-		}
-		vevents = append(vevents, &binlogdatapb.VEvent{
-			Type: binlogdatapb.VEventType_FIELD,
-			FieldEvent: &binlogdatapb.FieldEvent{
-				TableName: plan.Table.Name,
-				Fields:    plan.fields(),
-			},
-		})
 	case ev.IsWriteRows() || ev.IsDeleteRows() || ev.IsUpdateRows():
 		// The existence of before and after images can be used to
 		// identify statememt types. It's also possible that the
@@ -456,87 +377,178 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			return nil, err
 		}
 		if id == vs.journalTableID {
-		nextrow:
-			for _, row := range rows.Rows {
-				afterOK, afterValues, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns)
-				if err != nil {
-					return nil, err
-				}
-				if !afterOK {
-					continue
-				}
-				for i, fld := range plan.fields() {
-					switch fld.Name {
-					case "db_name":
-						if afterValues[i].ToString() != vs.cp.DbName {
-							continue nextrow
-						}
-					case "val":
-						journal := &binlogdatapb.Journal{}
-						if err := proto.UnmarshalText(afterValues[i].ToString(), journal); err != nil {
-							return nil, err
-						}
-						switch journal.MigrationType {
-						case binlogdatapb.MigrationType_SHARDS:
-							vevents = append(vevents, &binlogdatapb.VEvent{
-								Type:    binlogdatapb.VEventType_JOURNAL,
-								Journal: journal,
-							})
-						case binlogdatapb.MigrationType_TABLES:
-							matched := false
-							for _, table := range journal.Tables {
-								tname := sqlparser.TableName{Name: sqlparser.NewTableIdent(table)}
-								if tableMatches(tname, "", vs.filter) {
-									matched = true
-								}
-							}
-							if matched {
-								vevents = append(vevents, &binlogdatapb.VEvent{
-									Type:    binlogdatapb.VEventType_JOURNAL,
-									Journal: journal,
-								})
-							}
-						}
-					}
-				}
-			}
+			vevents, err = vs.processJounalEvent(vevents, plan, rows)
 		} else {
-			rowChanges := make([]*binlogdatapb.RowChange, 0, len(rows.Rows))
-			for _, row := range rows.Rows {
-				beforeOK, beforeValues, err := vs.extractRowAndFilter(plan, row.Identify, rows.IdentifyColumns, row.NullIdentifyColumns)
-				if err != nil {
-					return nil, err
-				}
-				afterOK, afterValues, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns)
-				if err != nil {
-					return nil, err
-				}
-				if !beforeOK && !afterOK {
-					continue
-				}
-				rowChange := &binlogdatapb.RowChange{}
-				if beforeOK {
-					rowChange.Before = sqltypes.RowToProto3(beforeValues)
-				}
-				if afterOK {
-					rowChange.After = sqltypes.RowToProto3(afterValues)
-				}
-				rowChanges = append(rowChanges, rowChange)
-			}
-			if len(rowChanges) != 0 {
-				vevents = append(vevents, &binlogdatapb.VEvent{
-					Type: binlogdatapb.VEventType_ROW,
-					RowEvent: &binlogdatapb.RowEvent{
-						TableName:  plan.Table.Name,
-						RowChanges: rowChanges,
-					},
-				})
-			}
+			vevents, err = vs.processRowEvent(vevents, plan, rows)
+		}
+		if err != nil {
+			return nil, err
 		}
 	}
 	for _, vevent := range vevents {
 		vevent.Timestamp = int64(ev.Timestamp())
 		vevent.CurrentTime = time.Now().UnixNano()
+	}
+	return vevents, nil
+}
+
+func (vs *vstreamer) buildJournalPlan(id uint64, tm *mysql.TableMap) error {
+	st, err := vs.se.LoadTableBasic(vs.ctx, "_vt.resharding_journal")
+	if err != nil {
+		return err
+	}
+	if len(st.Columns) < len(tm.Types) {
+		return fmt.Errorf("cannot determine table columns for %s: event has %v, schema as %v", tm.Name, tm.Types, st.Columns)
+	}
+	table := &Table{
+		Name:    "_vt.resharding_journal",
+		Columns: st.Columns[:len(tm.Types)],
+	}
+	plan, err := buildREPlan(table, nil, "")
+	if err != nil {
+		return err
+	}
+	vs.plans[id] = &streamerPlan{
+		Plan:     plan,
+		TableMap: tm,
+	}
+	vs.journalTableID = id
+	return nil
+}
+
+func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatapb.VEvent, error) {
+	cols, err := vs.buildTableColumns(id, tm)
+	if err != nil {
+		return nil, err
+	}
+
+	table := &Table{
+		Name:    tm.Name,
+		Columns: cols,
+	}
+	plan, err := buildPlan(table, vs.kschema, vs.filter)
+	if err != nil {
+		return nil, err
+	}
+	if plan == nil {
+		vs.plans[id] = nil
+		return nil, nil
+	}
+	vs.plans[id] = &streamerPlan{
+		Plan:     plan,
+		TableMap: tm,
+	}
+	return &binlogdatapb.VEvent{
+		Type: binlogdatapb.VEventType_FIELD,
+		FieldEvent: &binlogdatapb.FieldEvent{
+			TableName: plan.Table.Name,
+			Fields:    plan.fields(),
+		},
+	}, nil
+}
+
+func (vs *vstreamer) buildTableColumns(id uint64, tm *mysql.TableMap) ([]schema.TableColumn, error) {
+	var cols []schema.TableColumn
+	for i, typ := range tm.Types {
+		t, err := sqltypes.MySQLToType(int64(typ), 0)
+		if err != nil {
+			return nil, fmt.Errorf("unsupported type: %d, position: %d", typ, i)
+		}
+		cols = append(cols, schema.TableColumn{
+			Name: sqlparser.NewColIdent(fmt.Sprintf("@%d", i+1)),
+			Type: t,
+		})
+	}
+
+	st := vs.se.GetTable(sqlparser.NewTableIdent(tm.Name))
+	if st == nil {
+		if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
+			return nil, fmt.Errorf("unknown table %v in schema", tm.Name)
+		}
+		return cols, nil
+	}
+
+	if len(st.Columns) < len(tm.Types) {
+		if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
+			return nil, fmt.Errorf("cannot determine table columns for %s: event has %v, schema as %v", tm.Name, tm.Types, st.Columns)
+		}
+		return cols, nil
+	}
+
+	// check if the schema returned by schema.Engine matches with row.
+	for i := range tm.Types {
+		if !sqltypes.AreTypesEquivalent(cols[i].Type, st.Columns[i].Type) {
+			return cols, nil
+		}
+	}
+
+	// Columns should be truncated to match those in tm.
+	cols = st.Columns[:len(tm.Types)]
+	return cols, nil
+}
+
+func (vs *vstreamer) processJounalEvent(vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {
+nextrow:
+	for _, row := range rows.Rows {
+		afterOK, afterValues, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns)
+		if err != nil {
+			return nil, err
+		}
+		if !afterOK {
+			continue
+		}
+		for i, fld := range plan.fields() {
+			switch fld.Name {
+			case "db_name":
+				if afterValues[i].ToString() != vs.cp.DbName {
+					continue nextrow
+				}
+			case "val":
+				journal := &binlogdatapb.Journal{}
+				if err := proto.UnmarshalText(afterValues[i].ToString(), journal); err != nil {
+					return nil, err
+				}
+				vevents = append(vevents, &binlogdatapb.VEvent{
+					Type:    binlogdatapb.VEventType_JOURNAL,
+					Journal: journal,
+				})
+			}
+		}
+	}
+	return vevents, nil
+}
+
+func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {
+	rowChanges := make([]*binlogdatapb.RowChange, 0, len(rows.Rows))
+	for _, row := range rows.Rows {
+		beforeOK, beforeValues, err := vs.extractRowAndFilter(plan, row.Identify, rows.IdentifyColumns, row.NullIdentifyColumns)
+		if err != nil {
+			return nil, err
+		}
+		afterOK, afterValues, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns)
+		if err != nil {
+			return nil, err
+		}
+		if !beforeOK && !afterOK {
+			continue
+		}
+		rowChange := &binlogdatapb.RowChange{}
+		if beforeOK {
+			rowChange.Before = sqltypes.RowToProto3(beforeValues)
+		}
+		if afterOK {
+			rowChange.After = sqltypes.RowToProto3(afterValues)
+		}
+		rowChanges = append(rowChanges, rowChange)
+	}
+	if len(rowChanges) != 0 {
+		vevents = append(vevents, &binlogdatapb.VEvent{
+			Type: binlogdatapb.VEventType_ROW,
+			RowEvent: &binlogdatapb.RowEvent{
+				TableName:  plan.Table.Name,
+				RowChanges: rowChanges,
+			},
+		})
 	}
 	return vevents, nil
 }
