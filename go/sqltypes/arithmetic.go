@@ -116,7 +116,7 @@ func Divide(v1, v2 Value) (Value, error) {
 	lv2AsInt, err := ToFloat64(v2)
 	divisorIsZero := lv2AsInt == 0
 
-	if(divisorIsZero ||err != nil) {
+	if divisorIsZero || err != nil {
 		return NULL, err
 	}
 
@@ -569,7 +569,6 @@ func intTimesIntWithError(v1, v2 int64) (numeric, error) {
 
 }
 
-
 func intMinusUintWithError(v1 int64, v2 uint64) (numeric, error) {
 	if v1 < 0 || v1 < int64(v2) {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in %v - %v", v1, v2)
@@ -608,8 +607,6 @@ func uintTimesIntWithError(v1 uint64, v2 int64) (numeric, error) {
 	return uintTimesUintWithError(v1, uint64(v2))
 }
 
-
-
 func uintPlusUint(v1, v2 uint64) numeric {
 	result := v1 + v2
 	if result < v2 {
@@ -634,7 +631,6 @@ func uintMinusUintWithError(v1, v2 uint64) (numeric, error) {
 
 	return numeric{typ: Uint64, uval: result}, nil
 }
-
 
 func uintTimesUintWithError(v1, v2 uint64) (numeric, error) {
 	result := v1 * v2
@@ -691,18 +687,16 @@ func floatDivideAnyWithError(v1 float64, v2 numeric) (numeric, error) {
 	case Uint64:
 		v2.fval = float64(v2.uval)
 	}
-	result := v1/v2.fval
+	result := v1 / v2.fval
 	divisorLessThanOne := v2.fval < 1
-	resultMismatch := (v2.fval * result != v1)
+	resultMismatch := (v2.fval*result != v1)
 
-	if(divisorLessThanOne && resultMismatch) {
+	if divisorLessThanOne && resultMismatch {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT is out of range in %v / %v", v1, v2.fval)
 	}
 
 	return numeric{typ: Float64, fval: v1 / v2.fval}, nil
 }
-
-
 
 func anyMinusFloat(v1 numeric, v2 float64) numeric {
 	switch v1.typ {
