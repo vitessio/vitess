@@ -186,16 +186,18 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 
 	// create and populate tablet record
 	tablet := &topodatapb.Tablet{
-		Alias:               agent.TabletAlias,
-		Hostname:            hostname,
-		PortMap:             make(map[string]int32),
-		Keyspace:            *initKeyspace,
-		Shard:               shard,
-		KeyRange:            keyRange,
-		Type:                tabletType,
-		DbNameOverride:      *initDbNameOverride,
-		Tags:                initTags,
-		MasterTermStartTime: logutil.TimeToProto(agent.masterTermStartTime()),
+		Alias:          agent.TabletAlias,
+		Hostname:       hostname,
+		PortMap:        make(map[string]int32),
+		Keyspace:       *initKeyspace,
+		Shard:          shard,
+		KeyRange:       keyRange,
+		Type:           tabletType,
+		DbNameOverride: *initDbNameOverride,
+		Tags:           initTags,
+	}
+	if !agent.masterTermStartTime().IsZero() {
+		tablet.MasterTermStartTime = logutil.TimeToProto(agent.masterTermStartTime())
 	}
 	if port != 0 {
 		tablet.PortMap["vt"] = port
