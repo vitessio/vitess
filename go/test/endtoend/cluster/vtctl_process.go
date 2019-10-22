@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"vitess.io/vitess/go/vt/log"
 )
 
 // VtctlProcess is a generic handle for a running vtctl command .
@@ -58,7 +60,7 @@ func (vtctl *VtctlProcess) CreateKeyspace(keyspace string) (err error) {
 		"-topo_global_root", vtctl.TopoGlobalRoot,
 		"CreateKeyspace", keyspace,
 	)
-	print(fmt.Sprintf("Starting CreateKeyspace with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	log.Info(fmt.Sprintf("Starting CreateKeyspace with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	return tmpProcess.Run()
 }
 

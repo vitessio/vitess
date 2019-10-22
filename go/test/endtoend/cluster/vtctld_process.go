@@ -64,6 +64,7 @@ func (vtctld *VtctldProcess) Setup(Cell string) (err error) {
 	}
 	vtctld.proc = exec.Command(
 		vtctld.Binary,
+		"-enable_queries",
 		"-topo_implementation", vtctld.CommonArg.TopoImplementation,
 		"-topo_global_server_address", vtctld.CommonArg.TopoGlobalAddress,
 		"-topo_global_root", vtctld.CommonArg.TopoGlobalRoot,

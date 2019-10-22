@@ -28,10 +28,6 @@ import (
 
 func TestVtgateProcess(t *testing.T) {
 	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host: ClusterInstance.Hostname,
-		Port: ClusterInstance.VtgateMySQLPort,
-	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
 		t.Fatal(err)

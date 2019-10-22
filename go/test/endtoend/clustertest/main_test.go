@@ -22,11 +22,13 @@ import (
 	"os"
 	"testing"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 var (
 	ClusterInstance *cluster.LocalProcessCluster
+	vtParams        mysql.ConnParams
 	KeyspaceName    = "commerce"
 	Cell            = "zone1"
 	SQLSchema       = `create table product( 
@@ -85,6 +87,10 @@ func TestMain(m *testing.M) {
 		err = ClusterInstance.StartVtgate()
 		if err != nil {
 			return 1
+		}
+		vtParams = mysql.ConnParams{
+			Host: ClusterInstance.Hostname,
+			Port: ClusterInstance.VtgateMySQLPort,
 		}
 		return m.Run()
 	}()

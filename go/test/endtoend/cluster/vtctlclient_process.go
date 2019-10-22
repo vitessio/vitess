@@ -23,6 +23,8 @@ import (
 	"os/exec"
 	"path"
 	"strings"
+
+	"vitess.io/vitess/go/vt/log"
 )
 
 // VtctlClientProcess is a generic handle for a running vtctlclient command .
@@ -37,7 +39,7 @@ type VtctlClientProcess struct {
 
 // InitShardMaster executes vtctlclient command to make one of tablet as master
 func (vtctlclient *VtctlClientProcess) InitShardMaster(Keyspace string, Shard string, Cell string, TabletUID int) (err error) {
-	return vtctlclient.ExecuteCommand("-server", vtctlclient.Server,
+	return vtctlclient.ExecuteCommand(
 		"InitShardMaster",
 		"-force",
 		fmt.Sprintf("%s/%s", Keyspace, Shard),
@@ -46,7 +48,7 @@ func (vtctlclient *VtctlClientProcess) InitShardMaster(Keyspace string, Shard st
 
 // ApplySchema applies SQL schema to the keyspace
 func (vtctlclient *VtctlClientProcess) ApplySchema(Keyspace string, SQL string) (err error) {
-	return vtctlclient.ExecuteCommand("-server", vtctlclient.Server,
+	return vtctlclient.ExecuteCommand(
 		"ApplySchema",
 		"-sql", SQL,
 		Keyspace)
@@ -55,7 +57,6 @@ func (vtctlclient *VtctlClientProcess) ApplySchema(Keyspace string, SQL string) 
 // ApplyVSchema applies vitess schema (JSON format) to the keyspace
 func (vtctlclient *VtctlClientProcess) ApplyVSchema(Keyspace string, JSON string) (err error) {
 	return vtctlclient.ExecuteCommand(
-		"-server", vtctlclient.Server,
 		"ApplyVSchema",
 		"-vschema", JSON,
 		Keyspace,
@@ -64,12 +65,27 @@ func (vtctlclient *VtctlClientProcess) ApplyVSchema(Keyspace string, JSON string
 
 // ExecuteCommand executes any vtctlclient command
 func (vtctlclient *VtctlClientProcess) ExecuteCommand(args ...string) (err error) {
+	args = append([]string{"-server", vtctlclient.Server}, args...)
 	tmpProcess := exec.Command(
 		vtctlclient.Binary,
 		args...,
 	)
 	println(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	log.Info(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	return tmpProcess.Run()
+}
+
+// ExecuteCommandWithOutput executes any vtctlclient command and returns output
+func (vtctlclient *VtctlClientProcess) ExecuteCommandWithOutput(args ...string) (result string, err error) {
+	args = append([]string{"-server", vtctlclient.Server}, args...)
+	tmpProcess := exec.Command(
+		vtctlclient.Binary,
+		args...,
+	)
+	println(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	log.Info(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	resultByte, err := tmpProcess.CombinedOutput()
+	return string(resultByte), err
 }
 
 // VtctlClientProcessInstance returns a VtctlProcess handle for vtctlclient process
