@@ -21,6 +21,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
@@ -153,4 +154,21 @@ func TestSeq(t *testing.T) {
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(11)]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
+
+	// Test insert with no auto-inc
+	exec(t, conn, "insert into sequence_test(id, val) values(6, 'f')")
+	qr = exec(t, conn, "select * from sequence_test")
+	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("a")] [INT64(2) VARCHAR("b")] [INT64(3) VARCHAR("c")] [INT64(4) VARCHAR("d")] [INT64(6) VARCHAR("f")]]`; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	//Next INsert will fail as we have corrupted the sequence
+	exec(t, conn, "begin")
+	_, err = conn.ExecuteFetch("insert into sequence_test(val) values('g')", 1000, false)
+	exec(t, conn, "rollback")
+	want := "Duplicate entry"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("wrong insert: %v, must contain %s", err, want)
+	}
+
 }
