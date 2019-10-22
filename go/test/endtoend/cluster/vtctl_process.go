@@ -20,6 +20,7 @@ package cluster
 import (
 	"fmt"
 	"os/exec"
+	"strings"
 )
 
 // VtctlProcess is a generic handle for a running vtctl command .
@@ -45,6 +46,19 @@ func (vtctl *VtctlProcess) AddCellInfo(Cell string) (err error) {
 		"-server_address", vtctl.TopoServerAddress,
 		Cell,
 	)
+	return tmpProcess.Run()
+}
+
+// CreateKeyspace executes vtctl command to create keyspace
+func (vtctl *VtctlProcess) CreateKeyspace(keyspace string) (err error) {
+	tmpProcess := exec.Command(
+		vtctl.Binary,
+		"-topo_implementation", vtctl.TopoImplementation,
+		"-topo_global_server_address", vtctl.TopoGlobalAddress,
+		"-topo_global_root", vtctl.TopoGlobalRoot,
+		"CreateKeyspace", keyspace,
+	)
+	print(fmt.Sprintf("Starting CreateKeyspace with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	return tmpProcess.Run()
 }
 

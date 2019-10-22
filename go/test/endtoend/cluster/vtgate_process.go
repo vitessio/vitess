@@ -120,7 +120,7 @@ func (vtgate *VtgateProcess) WaitForStatus() bool {
 	return false
 }
 
-// TearDown shutdowns the running vttablet service
+// TearDown shuts down the running vtgate service
 func (vtgate *VtgateProcess) TearDown() error {
 	if vtgate.proc == nil || vtgate.exit == nil {
 		return nil

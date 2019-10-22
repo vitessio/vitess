@@ -19,14 +19,13 @@ package cluster
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
 	"strings"
 )
 
-// VtctlProcess is a generic handle for a running vtctl command .
+// VtctlClientProcess is a generic handle for a running vtctlclient command .
 // It can be spawned manually
 type VtctlClientProcess struct {
 	Name          string
@@ -52,19 +51,11 @@ func (vtctlclient *VtctlClientProcess) InitShardMaster(Keyspace string, Shard st
 
 // ApplySchema applies SQL schema to the keyspace
 func (vtctlclient *VtctlClientProcess) ApplySchema(Keyspace string, SQL string) (err error) {
-	file, err := ioutil.TempFile(vtctlclient.TempDirectory, "schema.sql")
-	if err != nil {
-		return
-	}
-	defer os.Remove(file.Name())
-
-	_, _ = file.WriteString(SQL)
-	_ = file.Close()
 	tmpProcess := exec.Command(
 		vtctlclient.Binary,
 		"-server", vtctlclient.Server,
 		"ApplySchema",
-		"-sql-file", file.Name(),
+		"-sql", SQL,
 		Keyspace,
 	)
 	print(fmt.Sprintf("ApplySchema with arguments %v", strings.Join(tmpProcess.Args, " ")))
@@ -73,20 +64,22 @@ func (vtctlclient *VtctlClientProcess) ApplySchema(Keyspace string, SQL string) 
 
 // ApplyVSchema applies vitess schema (JSON format) to the keyspace
 func (vtctlclient *VtctlClientProcess) ApplyVSchema(Keyspace string, JSON string) (err error) {
-	file, err := ioutil.TempFile(vtctlclient.TempDirectory, "vschema.json")
-	if err != nil {
-		return
-	}
-	defer os.Remove(file.Name())
-
-	_, _ = file.WriteString(JSON)
-	_ = file.Close()
 	tmpProcess := exec.Command(
 		vtctlclient.Binary,
 		"-server", vtctlclient.Server,
 		"ApplyVSchema",
-		"-vschema_file", file.Name(),
+		"-vschema", JSON,
 		Keyspace,
+	)
+	print(fmt.Sprintf("ApplyVSchema with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	return tmpProcess.Run()
+}
+
+// ExecuteCommand executes any vtctlclient command
+func (vtctlclient *VtctlClientProcess) ExecuteCommand(args ...string) (err error) {
+	tmpProcess := exec.Command(
+		vtctlclient.Binary,
+		args...,
 	)
 	print(fmt.Sprintf("ApplyVSchema with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	return tmpProcess.Run()

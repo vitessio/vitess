@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"os"
 	"testing"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -72,7 +73,7 @@ func TestMain(m *testing.M) {
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
 			Name:      KeyspaceName,
-			SQLSchema: SQLSchema,
+			SchemaSQL: SQLSchema,
 			VSchema:   VSchema,
 		}
 		err = ClusterInstance.StartUnshardedKeyspace(*keyspace, 1, true)

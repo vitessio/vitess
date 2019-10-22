@@ -5,6 +5,9 @@ import (
 	"math/rand"
 )
 
+// DefaultCell : If no cell name is passed, then use following
+const DefaultCell = "zone1"
+
 // LocalProcessCluster Testcases need to use this to iniate a cluster
 type LocalProcessCluster struct {
 	Keyspaces     []Keyspace
@@ -18,6 +21,7 @@ type LocalProcessCluster struct {
 
 	// standalone executable
 	VtctlclientProcess VtctlClientProcess
+	VtctlProcess       VtctlProcess
 
 	// background executable processes
 	topoProcess   EtcdProcess
@@ -27,21 +31,21 @@ type LocalProcessCluster struct {
 	nextPortForProcess int
 }
 
-// Keyspace Cluster accepts keyspace to launch it
+// Keyspace : Cluster accepts keyspace to launch it
 type Keyspace struct {
 	Name      string
-	SQLSchema string
+	SchemaSQL string
 	VSchema   string
 	Shards    []Shard
 }
 
-// Shard Keyspace need Shard to manage its lifecycle
+// Shard with associated vttablets
 type Shard struct {
 	Name      string
 	Vttablets []Vttablet
 }
 
-// Vttablet Shard need vttablet to manage the setup and teardown
+// Vttablet stores the properties needed to start a vttablet process
 type Vttablet struct {
 	Type      string
 	TabletUID int
@@ -57,7 +61,7 @@ type Vttablet struct {
 // StartTopo starts topology server
 func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	if cluster.Cell == "" {
-		cluster.Cell = "zone1"
+		cluster.Cell = DefaultCell
 	}
 	cluster.TopoPort = cluster.GetAndReservePort()
 	cluster.topoProcess = *EtcdProcessInstance(cluster.TopoPort, cluster.Hostname)
@@ -67,7 +71,7 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 		return
 	}
 
-	println("Creating topop dirs")
+	println("Creating topo dirs")
 	if err = cluster.topoProcess.ManageTopoDir("mkdir", "/vitess/global"); err != nil {
 		println(err.Error())
 		return
@@ -79,8 +83,8 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	}
 
 	println("Adding cell info")
-	vtcltlProcess := VtctlProcessInstance(cluster.topoProcess.Port, cluster.Hostname)
-	if err = vtcltlProcess.AddCellInfo(cluster.Cell); err != nil {
+	cluster.VtctlProcess = *VtctlProcessInstance(cluster.topoProcess.Port, cluster.Hostname)
+	if err = cluster.VtctlProcess.AddCellInfo(cluster.Cell); err != nil {
 		println(err)
 		return
 	}
@@ -162,14 +166,14 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			shard.Vttablets = append(shard.Vttablets, *tablet)
 		}
 
-		// Make 1st tablet as master shard
+		// Make first tablet as master
 		if err = cluster.VtctlclientProcess.InitShardMaster(keyspace.Name, shardName, cluster.Cell, shard.Vttablets[0].TabletUID); err != nil {
 			println(err.Error())
 			return
 		}
 
-		// Apply SQLSchema
-		if err = cluster.VtctlclientProcess.ApplySchema(keyspace.Name, keyspace.SQLSchema); err != nil {
+		// Apply Schema SQL
+		if err = cluster.VtctlclientProcess.ApplySchema(keyspace.Name, keyspace.SchemaSQL); err != nil {
 			println(err.Error())
 			return
 		}
