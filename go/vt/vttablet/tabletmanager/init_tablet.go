@@ -123,6 +123,26 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		default:
 			return vterrors.Wrap(err, "InitTablet failed to read existing tablet record")
 		}
+	} else {
+		oldTablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+		switch {
+		case topo.IsErrType(err, topo.NoNode):
+			// There's no existing tablet record, so there is nothing to do
+		case err == nil:
+			if oldTablet.Type == topodatapb.TabletType_MASTER {
+				// our existing tablet type is master, but the shard record does not agree
+				// only take over if our master_term_start_time is after what is in the shard record
+				oldMasterTermStartTime := logutil.ProtoToTime(oldTablet.MasterTermStartTime)
+				currentShardTime := logutil.ProtoToTime(si.MasterTermStartTime)
+				if oldMasterTermStartTime.After(currentShardTime) {
+					tabletType = topodatapb.TabletType_MASTER
+					// read the master term start time from tablet
+					agent.setMasterTermStartTime(oldMasterTermStartTime)
+				}
+			}
+		default:
+			return vterrors.Wrap(err, "InitTablet failed to read existing tablet record")
+		}
 	}
 
 	// Rebuild keyspace graph if this the first tablet in this keyspace/cell
