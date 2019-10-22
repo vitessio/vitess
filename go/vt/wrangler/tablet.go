@@ -72,8 +72,12 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, a
 		return fmt.Errorf("creating this tablet would override old master %v in shard %v/%v, use allow_master_override flag", topoproto.TabletAliasString(si.MasterAlias), tablet.Keyspace, tablet.Shard)
 	}
 
-	if tablet.Type == topodatapb.TabletType_MASTER && si.HasMaster() && !topoproto.TabletAliasEqual(si.MasterAlias, tablet.Alias) && allowMasterOverride {
-		tablet.MasterTermStartTime = logutil.TimeToProto(time.Now())
+	if tablet.Type == topodatapb.TabletType_MASTER {
+		if !si.HasMaster() /* no master */ || (si.HasMaster() && topoproto.TabletAliasEqual(si.MasterAlias, tablet.Alias)) /* same master*/ || (si.HasMaster() && !topoproto.TabletAliasEqual(si.MasterAlias, tablet.Alias) && allowMasterOverride) /* override current master */ {
+			// we update master_term_start_time even if the master hasn't changed
+			// because that means a new master term with the same master
+			tablet.MasterTermStartTime = logutil.TimeToProto(time.Now())
+		}
 	}
 
 	err = wr.ts.CreateTablet(ctx, tablet)

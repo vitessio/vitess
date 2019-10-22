@@ -358,18 +358,19 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		panic(vterrors.Wrap(err, "failed reading tablet"))
 	}
 	agent := &ActionAgent{
-		QueryServiceControl: tabletservermock.NewController(),
-		UpdateStream:        binlog.NewUpdateStreamControlMock(),
-		HealthReporter:      health.DefaultAggregator,
-		batchCtx:            batchCtx,
-		TopoServer:          ts,
-		TabletAlias:         tabletAlias,
-		Cnf:                 nil,
-		MysqlDaemon:         mysqlDaemon,
-		DBConfigs:           &dbconfigs.DBConfigs{},
-		VREngine:            vreplication.NewEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient, ti.DbName()),
-		History:             history.New(historyLength),
-		_healthy:            fmt.Errorf("healthcheck not run yet"),
+		QueryServiceControl:  tabletservermock.NewController(),
+		UpdateStream:         binlog.NewUpdateStreamControlMock(),
+		HealthReporter:       health.DefaultAggregator,
+		batchCtx:             batchCtx,
+		TopoServer:           ts,
+		TabletAlias:          tabletAlias,
+		Cnf:                  nil,
+		MysqlDaemon:          mysqlDaemon,
+		DBConfigs:            &dbconfigs.DBConfigs{},
+		VREngine:             vreplication.NewEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient, ti.DbName()),
+		History:              history.New(historyLength),
+		_healthy:             fmt.Errorf("healthcheck not run yet"),
+		_masterTermStartTime: logutil.ProtoToTime(ti.MasterTermStartTime),
 	}
 	if preStart != nil {
 		preStart(agent)
