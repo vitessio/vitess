@@ -37,42 +37,29 @@ type VtctlClientProcess struct {
 
 // InitShardMaster executes vtctlclient command to make one of tablet as master
 func (vtctlclient *VtctlClientProcess) InitShardMaster(Keyspace string, Shard string, Cell string, TabletUID int) (err error) {
-	tmpProcess := exec.Command(
-		vtctlclient.Binary,
-		"-server", vtctlclient.Server,
+	return vtctlclient.ExecuteCommand("-server", vtctlclient.Server,
 		"InitShardMaster",
 		"-force",
 		fmt.Sprintf("%s/%s", Keyspace, Shard),
-		fmt.Sprintf("%s-%d", Cell, TabletUID),
-	)
-	print(fmt.Sprintf("Starting InitShardMaster with arguments %v", strings.Join(tmpProcess.Args, " ")))
-	return tmpProcess.Run()
+		fmt.Sprintf("%s-%d", Cell, TabletUID))
 }
 
 // ApplySchema applies SQL schema to the keyspace
 func (vtctlclient *VtctlClientProcess) ApplySchema(Keyspace string, SQL string) (err error) {
-	tmpProcess := exec.Command(
-		vtctlclient.Binary,
-		"-server", vtctlclient.Server,
+	return vtctlclient.ExecuteCommand("-server", vtctlclient.Server,
 		"ApplySchema",
 		"-sql", SQL,
-		Keyspace,
-	)
-	print(fmt.Sprintf("ApplySchema with arguments %v", strings.Join(tmpProcess.Args, " ")))
-	return tmpProcess.Run()
+		Keyspace)
 }
 
 // ApplyVSchema applies vitess schema (JSON format) to the keyspace
 func (vtctlclient *VtctlClientProcess) ApplyVSchema(Keyspace string, JSON string) (err error) {
-	tmpProcess := exec.Command(
-		vtctlclient.Binary,
+	return vtctlclient.ExecuteCommand(
 		"-server", vtctlclient.Server,
 		"ApplyVSchema",
 		"-vschema", JSON,
 		Keyspace,
 	)
-	print(fmt.Sprintf("ApplyVSchema with arguments %v", strings.Join(tmpProcess.Args, " ")))
-	return tmpProcess.Run()
 }
 
 // ExecuteCommand executes any vtctlclient command
