@@ -26,7 +26,7 @@ type LocalProcessCluster struct {
 	// background executable processes
 	topoProcess   EtcdProcess
 	vtctldProcess VtctldProcess
-	vtgateProcess VtgateProcess
+	VtgateProcess VtgateProcess
 
 	nextPortForProcess int
 }
@@ -118,6 +118,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 	}
 	shards := make([]Shard, 0)
 	println("Starting keyspace : " + keyspace.Name)
+	_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
 	for _, shardName := range shardNames {
 		shard := &Shard{
 			Name: shardName,
@@ -172,21 +173,23 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			return
 		}
 
-		// Apply Schema SQL
-		if err = cluster.VtctlclientProcess.ApplySchema(keyspace.Name, keyspace.SchemaSQL); err != nil {
-			println(err.Error())
-			return
-		}
-
-		//Apply VSchema
-		if err = cluster.VtctlclientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema); err != nil {
-			println(err.Error())
-			return
-		}
 		shards = append(shards, *shard)
 	}
 	keyspace.Shards = shards
 	cluster.Keyspaces = append(cluster.Keyspaces, keyspace)
+
+	// Apply Schema SQL
+	if err = cluster.VtctlclientProcess.ApplySchema(keyspace.Name, keyspace.SchemaSQL); err != nil {
+		println(err.Error())
+		return
+	}
+
+	//Apply VSchema
+	if err = cluster.VtctlclientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema); err != nil {
+		println(err.Error())
+		return
+	}
+
 	println("Done creating keyspace : " + keyspace.Name)
 	return
 }
@@ -197,7 +200,7 @@ func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 	vtgateGrpcPort := cluster.GetAndReservePort()
 	cluster.VtgateMySQLPort = cluster.GetAndReservePort()
 	println(fmt.Sprintf("Starting vtgate on port %d", vtgateHTTPPort))
-	cluster.vtgateProcess = *VtgateProcessInstance(
+	cluster.VtgateProcess = *VtgateProcessInstance(
 		vtgateHTTPPort,
 		vtgateGrpcPort,
 		cluster.VtgateMySQLPort,
@@ -208,12 +211,12 @@ func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 		cluster.Hostname)
 
 	println(fmt.Sprintf("Vtgate started, connect to mysql using : mysql -h 127.0.0.1 -P %d", cluster.VtgateMySQLPort))
-	return cluster.vtgateProcess.Setup()
+	return cluster.VtgateProcess.Setup()
 }
 
 // Teardown brings down the cluster by invoking teardown for individual processes
 func (cluster *LocalProcessCluster) Teardown() (err error) {
-	if err = cluster.vtgateProcess.TearDown(); err != nil {
+	if err = cluster.VtgateProcess.TearDown(); err != nil {
 		println(err.Error())
 		return
 	}

@@ -68,7 +68,7 @@ func (vtctlclient *VtctlClientProcess) ExecuteCommand(args ...string) (err error
 		vtctlclient.Binary,
 		args...,
 	)
-	print(fmt.Sprintf("ApplyVSchema with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	println(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	return tmpProcess.Run()
 }
 
