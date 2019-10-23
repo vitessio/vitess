@@ -70,6 +70,7 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
@@ -124,16 +125,22 @@ var (
 	mysqlSocket   = flag.String("mysql_socket", "", "path to the mysql socket")
 	mysqlTimeout  = flag.Duration("mysql_timeout", 5*time.Minute, "how long to wait for mysqld startup")
 	initDBSQLFile = flag.String("init_db_sql_file", "", "path to .sql file to run after mysql_install_db")
+	detachedMode  = flag.Bool("detach", false, "detached mode - run backups detached from the terminal")
 )
 
 func main() {
 	defer exit.Recover()
-	defer logutil.Flush()
-
 	dbconfigs.RegisterFlags(dbconfigs.All...)
 	mysqlctl.RegisterFlags()
 
 	servenv.ParseFlags("vtbackup")
+
+	if *detachedMode {
+		// this method will call os.Exit and kill this process
+		cmd.DetachFromTerminalAndExit()
+	}
+
+	defer logutil.Flush()
 
 	if *minRetentionCount < 1 {
 		log.Errorf("min_retention_count must be at least 1 to allow restores to succeed")
