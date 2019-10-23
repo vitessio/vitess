@@ -109,10 +109,12 @@ func Multiply(v1, v2 Value) (Value, error) {
 	return castFromNumeric(lresult, lresult.typ), nil
 }
 
+// Float Division for MySQL. Replicates behavior of "/" operator
 func Divide(v1, v2 Value) (Value, error) {
 	if v1.IsNull() || v2.IsNull() {
 		return NULL, nil
 	}
+
 	lv2AsFloat, err := ToFloat64(v2)
 	divisorIsZero := lv2AsFloat == 0
 
@@ -668,16 +670,6 @@ func floatTimesAny(v1 float64, v2 numeric) numeric {
 		v2.fval = float64(v2.uval)
 	}
 	return numeric{typ: Float64, fval: v1 * v2.fval}
-}
-
-func floatDivideAny(v1 float64, v2 numeric) numeric {
-	switch v2.typ {
-	case Int64:
-		v2.fval = float64(v2.ival)
-	case Uint64:
-		v2.fval = float64(v2.uval)
-	}
-	return numeric{typ: Float64, fval: v1 / v2.fval}
 }
 
 func floatDivideAnyWithError(v1 float64, v2 numeric) (numeric, error) {
