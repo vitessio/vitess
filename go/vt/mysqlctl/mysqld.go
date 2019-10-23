@@ -81,6 +81,9 @@ var (
 	appMysqlStats      = stats.NewTimings("MysqlApp", "MySQL app stats", "operation")
 
 	versionRegex = regexp.MustCompile(`Ver ([0-9]+)\.([0-9]+)\.([0-9]+)`)
+
+	// How many bytes from MySQL error log to sample for error messages
+	maxLogFileSampleSize = int64(4096)
 )
 
 // Mysqld is the object that represents a mysqld daemon running on this server.
@@ -647,7 +650,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	// Start mysqld. We do not use Start, as we have to wait using
 	// the root user.
 	if err = mysqld.startNoWait(ctx, cnf); err != nil {
-		log.Errorf("failed starting mysqld: %v %s", err, readMysqldErrorLog(cnf.ErrorLogPath))
+		log.Errorf("failed starting mysqld: %v %s", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
 		return err
 	}
 
@@ -659,7 +662,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 		UnixSocket: cnf.SocketFile,
 	}
 	if err = mysqld.wait(ctx, cnf, params); err != nil {
-		log.Errorf("failed starting mysqld in time: %v %s", err, readMysqldErrorLog(cnf.ErrorLogPath))
+		log.Errorf("failed starting mysqld in time: %v %s", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
 		return err
 	}
 
@@ -676,12 +679,30 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	return nil
 }
 
-func readMysqldErrorLog(fileName string) string {
-	b, err := ioutil.ReadFile(fileName)
-	if err != nil { // its already an error, return empty if we can't open
-		return ""
+// For debugging purposes show the last few lines of the MySQL error log.
+// Return a suggestion (string) if the file is non regular or can not be opened.
+// This helps prevent cases where the error log is symlinked to /dev/stderr etc,
+// In which case the user can manually open the file.
+func readTailOfMysqldErrorLog(fileName string) string {
+	file, err := os.Open(fileName)
+	buf := make([]byte, maxLogFileSampleSize)
+	if err != nil {
+		return fmt.Sprintf("could not open mysql error log: %s", fileName)
 	}
-	return string(b)
+	fileInfo, err := file.Stat()
+	if err != nil || !fileInfo.Mode().IsRegular() {
+		return fmt.Sprintf("mysql error log file is not a regular file: %s", fileName)
+	}
+	startPos := int64(0)
+	if fileInfo.Size() > maxLogFileSampleSize {
+		startPos = fileInfo.Size() - maxLogFileSampleSize
+	}
+	// Show the last few KB of the MySQL error log.
+	flen, _ := file.ReadAt(buf, startPos)
+	if err != nil && err != io.EOF {
+		return fmt.Sprintf("could not read mysql error log: %s", fileName)
+	}
+	return fmt.Sprintf("tail of mysql error log '%s':\n%s", fileName, buf[:flen])
 }
 
 func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
@@ -707,7 +728,7 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 		}
 
 		if _, _, err = execCmd(mysqldPath, args, nil, mysqlRoot, nil); err != nil {
-			log.Errorf("mysqld --initialize-insecure failed: %v %s", err, readMysqldErrorLog(cnf.ErrorLogPath))
+			log.Errorf("mysqld --initialize-insecure failed: %v %s", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
 			return err
 		}
 		return nil
