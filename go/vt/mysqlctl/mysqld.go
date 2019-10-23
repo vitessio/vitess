@@ -726,7 +726,6 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 			"--basedir=" + mysqlBaseDir,
 			"--initialize-insecure", // Use empty 'root'@'localhost' password.
 		}
-
 		if _, _, err = execCmd(mysqldPath, args, nil, mysqlRoot, nil); err != nil {
 			log.Errorf("mysqld --initialize-insecure failed: %v %s", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
 			return err
