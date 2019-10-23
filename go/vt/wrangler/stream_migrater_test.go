@@ -28,6 +28,9 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vschema"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 )
 
@@ -1372,12 +1375,12 @@ func TestTemplatize(t *testing.T) {
 		}},
 		out: `[{"ID":1,"Workflow":"test","Bls":{"keyspace":"ks","shard":"80-","filter":{"rules":[{"match":"t1","filter":"select * from t1 where in_keyrange('{{.}}')"}]}}}]`,
 	}, {
-		// Empty filter: reference table
+		// Reference table.
 		in: []*vrStream{{
 			bls: &binlogdatapb.BinlogSource{
 				Filter: &binlogdatapb.Filter{
 					Rules: []*binlogdatapb.Rule{{
-						Match:  "t1",
+						Match:  "ref",
 						Filter: "",
 					}},
 				},
@@ -1385,7 +1388,7 @@ func TestTemplatize(t *testing.T) {
 		}},
 		out: "",
 	}, {
-		// KeyRange filter
+		// Sharded table.
 		in: []*vrStream{{
 			bls: &binlogdatapb.BinlogSource{
 				Filter: &binlogdatapb.Filter{
@@ -1398,71 +1401,89 @@ func TestTemplatize(t *testing.T) {
 		}},
 		out: `[{"ID":0,"Workflow":"","Bls":{"filter":{"rules":[{"match":"t1","filter":"{{.}}"}]}}}]`,
 	}, {
-		// Excluded table and empty filter
+		// table not found
+		in: []*vrStream{{
+			bls: &binlogdatapb.BinlogSource{
+				Filter: &binlogdatapb.Filter{
+					Rules: []*binlogdatapb.Rule{{
+						Match: "t3",
+					}},
+				},
+			},
+		}},
+		err: `table t3 not found in vschema`,
+	}, {
+		// sharded table with no filter
+		in: []*vrStream{{
+			bls: &binlogdatapb.BinlogSource{
+				Filter: &binlogdatapb.Filter{
+					Rules: []*binlogdatapb.Rule{{
+						Match: "t1",
+					}},
+				},
+			},
+		}},
+		err: `rule match:"t1"  does not have a select expression in vreplication`,
+	}, {
+		// Excluded table.
 		in: []*vrStream{{
 			bls: &binlogdatapb.BinlogSource{
 				Filter: &binlogdatapb.Filter{
 					Rules: []*binlogdatapb.Rule{{
 						Match:  "t1",
 						Filter: vreplication.ExcludeStr,
+					}},
+				},
+			},
+		}},
+		err: `unexpected rule in vreplication: match:"t1" filter:"exclude" `,
+	}, {
+		// Sharded table and ref table
+		in: []*vrStream{{
+			bls: &binlogdatapb.BinlogSource{
+				Filter: &binlogdatapb.Filter{
+					Rules: []*binlogdatapb.Rule{{
+						Match:  "t1",
+						Filter: "-80",
+					}, {
+						Match:  "ref",
+						Filter: "",
+					}},
+				},
+			},
+		}},
+		err: `cannot migrate streams with a mix of reference and sharded tables: filter:<rules:<match:"t1" filter:"{{.}}" > rules:<match:"ref" > > `,
+	}, {
+		// Ref table and sharded table (different code path)
+		in: []*vrStream{{
+			bls: &binlogdatapb.BinlogSource{
+				Filter: &binlogdatapb.Filter{
+					Rules: []*binlogdatapb.Rule{{
+						Match:  "ref",
+						Filter: "",
 					}, {
 						Match:  "t2",
-						Filter: "",
+						Filter: "-80",
+					}},
+				},
+			},
+		}},
+		err: `cannot migrate streams with a mix of reference and sharded tables: filter:<rules:<match:"ref" > rules:<match:"t2" filter:"{{.}}" > > `,
+	}, {
+		// Ref table with select expression
+		in: []*vrStream{{
+			bls: &binlogdatapb.BinlogSource{
+				Filter: &binlogdatapb.Filter{
+					Rules: []*binlogdatapb.Rule{{
+						Match:  "ref",
+						Filter: "select * from t1",
 					}},
 				},
 			},
 		}},
 		out: "",
 	}, {
-		// KeyRange filter and excluded table
-		in: []*vrStream{{
-			bls: &binlogdatapb.BinlogSource{
-				Filter: &binlogdatapb.Filter{
-					Rules: []*binlogdatapb.Rule{{
-						Match:  "t1",
-						Filter: "-80",
-					}, {
-						Match:  "t2",
-						Filter: vreplication.ExcludeStr,
-					}},
-				},
-			},
-		}},
-		out: `[{"ID":0,"Workflow":"","Bls":{"filter":{"rules":[{"match":"t1","filter":"{{.}}"},{"match":"t2","filter":"exclude"}]}}}]`,
-	}, {
-		// KeyRange filter and ref table
-		in: []*vrStream{{
-			bls: &binlogdatapb.BinlogSource{
-				Filter: &binlogdatapb.Filter{
-					Rules: []*binlogdatapb.Rule{{
-						Match:  "t1",
-						Filter: "-80",
-					}, {
-						Match:  "t2",
-						Filter: "",
-					}},
-				},
-			},
-		}},
-		err: `cannot migrate streams with a mix of reference and sharded tables: filter:<rules:<match:"t1" filter:"{{.}}" > rules:<match:"t2" > > `,
-	}, {
-		// Ref table and keyRange filter (different code path)
-		in: []*vrStream{{
-			bls: &binlogdatapb.BinlogSource{
-				Filter: &binlogdatapb.Filter{
-					Rules: []*binlogdatapb.Rule{{
-						Match:  "t1",
-						Filter: "",
-					}, {
-						Match:  "t2",
-						Filter: "-80",
-					}},
-				},
-			},
-		}},
-		err: `cannot migrate streams with a mix of reference and sharded tables: filter:<rules:<match:"t1" > rules:<match:"t2" filter:"{{.}}" > > `,
-	}, {
-		// Ref table with select expression
+		// Select expresstion with no keyrange value
 		in: []*vrStream{{
 			bls: &binlogdatapb.BinlogSource{
 				Filter: &binlogdatapb.Filter{
@@ -1473,7 +1494,7 @@ func TestTemplatize(t *testing.T) {
 				},
 			},
 		}},
-		out: "",
+		out: `[{"ID":0,"Workflow":"","Bls":{"filter":{"rules":[{"match":"t1","filter":"select * from t1 where in_keyrange(c1, 'hash', '{{.}}')"}]}}}]`,
 	}, {
 		// Select expresstion with one keyrange value
 		in: []*vrStream{{
@@ -1579,15 +1600,47 @@ func TestTemplatize(t *testing.T) {
 		}},
 		err: "cannot migrate queries that contain '{{' in their string: select '{{' from t1 where in_keyrange('-80')",
 	}}
+	vs := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschema.Vindex{
+			"thash": {
+				Type: "hash",
+			},
+		},
+		Tables: map[string]*vschema.Table{
+			"t1": {
+				ColumnVindexes: []*vschema.ColumnVindex{{
+					Columns: []string{"c1"},
+					Name:    "thash",
+				}},
+			},
+			"t2": {
+				ColumnVindexes: []*vschema.ColumnVindex{{
+					Columns: []string{"c1"},
+					Name:    "thash",
+				}},
+			},
+			"ref": {
+				Type: vindexes.TypeReference,
+			},
+		},
+	}
+	ksschema, err := vindexes.BuildKeyspaceSchema(vs, "ks")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mi := &migrater{
+		sourceKSSchema: ksschema,
+	}
 	for _, tt := range tests {
-		sm := &streamMigrater{mi: nil}
+		sm := &streamMigrater{mi: mi}
 		out, err := sm.templatize(context.Background(), tt.in)
 		var gotErr string
 		if err != nil {
 			gotErr = err.Error()
 		}
 		if gotErr != tt.err {
-			t.Errorf("templatize(%v) err: %v, want %v", tt.in, err, tt.err)
+			t.Errorf("templatize(%v) err: %v, want %v", stringifyVRS(tt.in), err, tt.err)
 		}
 		got := stringifyVRS(out)
 		if !reflect.DeepEqual(tt.out, got) {
