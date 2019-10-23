@@ -688,7 +688,6 @@ func floatDivideAnyWithError(v1 float64, v2 numeric) (numeric, error) {
 		v2.fval = float64(v2.uval)
 	}
 	result := v1 / v2.fval
-	// TODO: Get the maximum prescision of both values and add four to it
 	divisorLessThanOne := v2.fval < 1
 	resultMismatch := (v2.fval*result != v1)
 
