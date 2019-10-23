@@ -70,10 +70,15 @@ func TestDivide(t *testing.T) {
 		v2:  NewFloat64(0),
 		out: NULL,
 	}, {
-		// testing for int64 overflow with min negative value
+		// Lower bound for int64
 		v1:  NewInt64(math.MinInt64),
 		v2:  NewInt64(1),
 		out: NewFloat64(math.MinInt64),
+	}, {
+		// upper bound for uint64
+		v1:  NewUint64(math.MaxUint64),
+		v2:  NewUint64(1),
+		out: NewFloat64(math.MaxUint64),
 	}, {
 		// testing for error in types
 		v1:  TestValue(Int64, "1.2"),
@@ -105,14 +110,10 @@ func TestDivide(t *testing.T) {
 		v2:  NewUint64(2),
 		out: NewFloat64(0.6),
 	}, {
-		// testing for overflow of uint64/max.uint64
+		// testing for overflow of float64
 		v1:  NewFloat64(math.MaxFloat64),
 		v2:  NewFloat64(0.5),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT is out of range in 1.7976931348623157e+308 / 0.5"),
-	}, {
-		v1:  NewUint64(math.MaxUint64),
-		v2:  NewUint64(1),
-		out: NewFloat64(math.MaxUint64),
 	}}
 
 	for _, tcase := range tcases {
