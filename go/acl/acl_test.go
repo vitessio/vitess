@@ -40,6 +40,10 @@ func (tp TestPolicy) CheckAccessHTTP(req *http.Request, role string) error {
 
 func init() {
 	RegisterPolicy("test", TestPolicy{})
+
+	// Run the `once` so it doesn't run during testing,
+	// since we need to override the currentPolicy.
+	once.Do(savePolicy)
 }
 
 func TestSimplePolicy(t *testing.T) {
