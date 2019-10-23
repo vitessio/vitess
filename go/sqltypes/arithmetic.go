@@ -113,8 +113,8 @@ func Divide(v1, v2 Value) (Value, error) {
 	if v1.IsNull() || v2.IsNull() {
 		return NULL, nil
 	}
-	lv2AsInt, err := ToFloat64(v2)
-	divisorIsZero := lv2AsInt == 0
+	lv2AsFloat, err := ToFloat64(v2)
+	divisorIsZero := lv2AsFloat == 0
 
 	if divisorIsZero || err != nil {
 		return NULL, err
@@ -124,8 +124,8 @@ func Divide(v1, v2 Value) (Value, error) {
 	if err != nil {
 		return NULL, err
 	}
-	lv2, err := newNumeric(v2)
 
+	lv2, err := newNumeric(v2)
 	if err != nil {
 		return NULL, err
 	}
@@ -688,6 +688,7 @@ func floatDivideAnyWithError(v1 float64, v2 numeric) (numeric, error) {
 		v2.fval = float64(v2.uval)
 	}
 	result := v1 / v2.fval
+	// TODO: Get the maximum prescision of both values and add four to it
 	divisorLessThanOne := v2.fval < 1
 	resultMismatch := (v2.fval*result != v1)
 
