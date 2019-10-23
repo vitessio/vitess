@@ -51,9 +51,6 @@ func TestConfigVars(t *testing.T) {
 		tag string
 		val int
 	}{{
-		tag: "BeginTimeout",
-		val: int(tabletenv.Config.TxPoolTimeout * 1e9),
-	}, {
 		tag: "ConnPoolAvailable",
 		val: tabletenv.Config.PoolSize,
 	}, {
@@ -115,6 +112,9 @@ func TestConfigVars(t *testing.T) {
 		val: tabletenv.Config.TransactionCap,
 	}, {
 		tag: "TransactionPoolTimeout",
+		val: int(tabletenv.Config.TxPoolTimeout * 1e9),
+	}, {
+		tag: "TransactionTimeout",
 		val: int(tabletenv.Config.TransactionTimeout * 1e9),
 	}}
 	for _, tcase := range cases {
