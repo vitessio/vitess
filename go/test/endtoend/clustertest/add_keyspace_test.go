@@ -57,18 +57,18 @@ primary key (id)
 )
 
 func TestAddKeyspace(t *testing.T) {
-	if err := ClusterInstance.StartKeyspace(*testKeyspace, []string{"-80", "80-"}, 1, true); err != nil {
+	if err := clusterInstance.StartKeyspace(*testKeyspace, []string{"-80", "80-"}, 1, true); err != nil {
 		println(err.Error())
 		t.Fatal(err)
 	}
 	// Restart vtgate process
-	_ = ClusterInstance.VtgateProcess.TearDown()
-	_ = ClusterInstance.VtgateProcess.Setup()
+	_ = clusterInstance.VtgateProcess.TearDown()
+	_ = clusterInstance.VtgateProcess.Setup()
 
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
-		Host: ClusterInstance.Hostname,
-		Port: ClusterInstance.VtgateMySQLPort,
+		Host: clusterInstance.Hostname,
+		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {

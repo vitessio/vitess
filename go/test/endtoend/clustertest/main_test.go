@@ -27,11 +27,11 @@ import (
 )
 
 var (
-	ClusterInstance *cluster.LocalProcessCluster
+	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
-	KeyspaceName    = "commerce"
-	Cell            = "zone1"
-	SQLSchema       = `create table product( 
+	keyspaceName    = "commerce"
+	cell            = "zone1"
+	sqlSchema       = `create table product( 
 		sku varbinary(128),
 			description varbinary(128),
 			price bigint,
@@ -50,7 +50,7 @@ var (
 			primary key(order_id)
 		) ENGINE=InnoDB;`
 
-	VSchema = `{
+	vSchema = `{
 						"tables": {
 							"product": {},
 							"customer": {},
@@ -63,34 +63,34 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		ClusterInstance = &cluster.LocalProcessCluster{Cell: Cell, Hostname: "localhost"}
-		defer ClusterInstance.Teardown()
+		clusterInstance = &cluster.LocalProcessCluster{Cell: cell, Hostname: "localhost"}
+		defer clusterInstance.Teardown()
 
 		// Start topo server
-		err := ClusterInstance.StartTopo()
+		err := clusterInstance.StartTopo()
 		if err != nil {
 			return 1
 		}
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SQLSchema,
-			VSchema:   VSchema,
+			Name:      keyspaceName,
+			SchemaSQL: sqlSchema,
+			VSchema:   vSchema,
 		}
-		err = ClusterInstance.StartUnshardedKeyspace(*keyspace, 1, true)
+		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, true)
 		if err != nil {
 			return 1
 		}
 
 		// Start vtgate
-		err = ClusterInstance.StartVtgate()
+		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1
 		}
 		vtParams = mysql.ConnParams{
-			Host: ClusterInstance.Hostname,
-			Port: ClusterInstance.VtgateMySQLPort,
+			Host: clusterInstance.Hostname,
+			Port: clusterInstance.VtgateMySQLPort,
 		}
 		return m.Run()
 	}()

@@ -127,8 +127,8 @@ func (etcd *EtcdProcess) IsHealthy() bool {
 }
 
 func (etcd *EtcdProcess) removeTopoDirectories(Cell string) {
-	etcd.ManageTopoDir("rmdir", "/vitess/global")
-	etcd.ManageTopoDir("rmdir", "/vitess/"+Cell)
+	_ = etcd.ManageTopoDir("rmdir", "/vitess/global")
+	_ = etcd.ManageTopoDir("rmdir", "/vitess/"+Cell)
 }
 
 // ManageTopoDir creates global and zone in etcd2
@@ -136,7 +136,7 @@ func (etcd *EtcdProcess) ManageTopoDir(command string, directory string) error {
 	tmpProcess := exec.Command(
 		"etcdctl",
 		"--endpoints", etcd.ListenClientURL,
-		"mkdir", directory,
+		command, directory,
 	)
 	return tmpProcess.Run()
 }

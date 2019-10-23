@@ -26,7 +26,7 @@ import (
 )
 
 func TestVttabletProcess(t *testing.T) {
-	firstTabletPort := ClusterInstance.Keyspaces[0].Shards[0].Vttablets[0].HTTPPort
+	firstTabletPort := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].HTTPPort
 	testURL(t, fmt.Sprintf("http://localhost:%d/debug/vars/", firstTabletPort), "tablet debug var url")
 	resp, _ := http.Get(fmt.Sprintf("http://localhost:%d/debug/vars", firstTabletPort))
 	resultMap := make(map[string]interface{})

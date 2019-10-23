@@ -26,7 +26,7 @@ import (
 )
 
 var (
-	ClusterInstance *cluster.LocalProcessCluster
+	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
 	KeyspaceName    = "ks"
 	Cell            = "test"
@@ -168,11 +168,11 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		ClusterInstance = &cluster.LocalProcessCluster{Cell: Cell, Hostname: "localhost"}
-		defer ClusterInstance.Teardown()
+		clusterInstance = &cluster.LocalProcessCluster{Cell: Cell, Hostname: "localhost"}
+		defer clusterInstance.Teardown()
 
 		// Start topo server
-		err := ClusterInstance.StartTopo()
+		err := clusterInstance.StartTopo()
 		if err != nil {
 			return 1
 		}
@@ -183,19 +183,19 @@ func TestMain(m *testing.M) {
 			SchemaSQL: SchemaSQL,
 			VSchema:   VSchema,
 		}
-		err = ClusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true)
+		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true)
 		if err != nil {
 			return 1
 		}
 
 		// Start vtgate
-		err = ClusterInstance.StartVtgate()
+		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1
 		}
 		vtParams = mysql.ConnParams{
-			Host: ClusterInstance.Hostname,
-			Port: ClusterInstance.VtgateMySQLPort,
+			Host: clusterInstance.Hostname,
+			Port: clusterInstance.VtgateMySQLPort,
 		}
 		return m.Run()
 	}()
