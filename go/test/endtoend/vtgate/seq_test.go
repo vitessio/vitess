@@ -30,11 +30,11 @@ import (
 )
 
 var (
-	ClusterInstance *cluster.LocalProcessCluster
-	KeyspaceName    = "ks"
-	Cell            = "zone1"
-	Hostname        = "localhost"
-	SQLSchema       = `
+	clusterInstance *cluster.LocalProcessCluster
+	keyspaceName    = "ks"
+	cell            = "zone1"
+	hostname        = "localhost"
+	sqlSchema       = `
 	create table sequence_test(
 		id bigint,
 		val varchar(16),
@@ -49,7 +49,7 @@ var (
 	) comment 'vitess_sequence' Engine=InnoDB;
 	`
 
-	VSchema = `
+	vSchema = `
 		{	
 			"sharded":false,
 			"vindexes": {
@@ -82,26 +82,26 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		ClusterInstance = &cluster.LocalProcessCluster{Cell: Cell, Hostname: Hostname}
-		defer ClusterInstance.Teardown()
+		clusterInstance = &cluster.LocalProcessCluster{Cell: cell, Hostname: hostname}
+		defer clusterInstance.Teardown()
 
 		// Start topo server
-		if err := ClusterInstance.StartTopo(); err != nil {
+		if err := clusterInstance.StartTopo(); err != nil {
 			return 1
 		}
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SQLSchema,
-			VSchema:   VSchema,
+			Name:      keyspaceName,
+			SchemaSQL: sqlSchema,
+			VSchema:   vSchema,
 		}
-		if err := ClusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
+		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
 			return 1
 		}
 
 		// Start vtgate
-		if err := ClusterInstance.StartVtgate(); err != nil {
+		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1
 		}
 
@@ -123,7 +123,7 @@ func TestSeq(t *testing.T) {
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{
 		Host: "localhost",
-		Port: ClusterInstance.VtgateMySQLPort,
+		Port: clusterInstance.VtgateMySQLPort,
 	}
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
@@ -149,7 +149,7 @@ func TestSeq(t *testing.T) {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
 
-	//Test next_id from seq table. This will be alloted in case cache is blew up.
+	//Test next_id from seq table which should be the increased by cache value(id+cache)
 	qr = exec(t, conn, "select next_id from sequence_test_seq")
 	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(11)]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
@@ -162,7 +162,7 @@ func TestSeq(t *testing.T) {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
 
-	//Next INsert will fail as we have corrupted the sequence
+	//Next insert will fail as we have corrupted the sequence
 	exec(t, conn, "begin")
 	_, err = conn.ExecuteFetch("insert into sequence_test(val) values('g')", 1000, false)
 	exec(t, conn, "rollback")
