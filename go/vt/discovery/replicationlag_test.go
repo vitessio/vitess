@@ -29,6 +29,11 @@ func testSetMinNumTablets(newMin int) {
 	*minNumTablets = newMin
 }
 
+// testSetLegacyReplicationLagAlgorithm is a test helper function, if this is used by a production code path, something is wrong.
+func testSetLegacyReplicationLagAlgorithm(newLegacy bool) {
+	*legacyReplicationLagAlgorithm = newLegacy
+}
+
 func TestFilterByReplicationLagUnhealthy(t *testing.T) {
 	// 1 healthy serving tablet, 1 not healhty
 	ts1 := &TabletStats{
@@ -51,6 +56,84 @@ func TestFilterByReplicationLagUnhealthy(t *testing.T) {
 }
 
 func TestFilterByReplicationLag(t *testing.T) {
+	// Use simplified logic
+	testSetLegacyReplicationLagAlgorithm(false)
+
+	cases := []struct {
+		description string
+		input       []uint32
+		output      []uint32
+	}{
+		{
+			"0 tablet",
+			[]uint32{},
+			[]uint32{},
+		},
+		{
+			"lags of (1s) - return all items with low lag.",
+			[]uint32{1},
+			[]uint32{1},
+		},
+		{
+			"lags of (1s, 1s, 1s, 30s) - return all items with low lag.",
+			[]uint32{1, 1, 1, 30},
+			[]uint32{1, 1, 1, 30},
+		},
+		{
+			"lags of (1s, 1s, 1s, 40m, 40m, 40m) - return all items with low lag.",
+			[]uint32{1, 1, 1, 40 * 60, 40 * 60, 40 * 60},
+			[]uint32{1, 1, 1},
+		},
+		{
+			"lags of (1s, 40m, 40m, 40m) - return at least 2 items if they don't have very high lag.",
+			[]uint32{1, 40 * 60, 40 * 60, 40 * 60},
+			[]uint32{1, 40 * 60},
+		},
+		{
+			"lags of (30m, 35m, 40m, 45m) - return at least 2 items if they don't have very high lag.",
+			[]uint32{30 * 60, 35 * 60, 40 * 60, 45 * 60},
+			[]uint32{30 * 60, 35 * 60},
+		},
+		{
+			"lags of (2h, 3h, 4h, 5h) - return <2 items if the others have very high lag.",
+			[]uint32{2 * 60 * 60, 3 * 60 * 60, 4 * 60 * 60, 5 * 60 * 60},
+			[]uint32{2 * 60 * 60},
+		},
+		{
+			"lags of (3h, 30h) - return nothing if all have very high lag.",
+			[]uint32{3 * 60 * 60, 30 * 60 * 60},
+			[]uint32{},
+		},
+	}
+
+	for _, tc := range cases {
+		lts := make([]*TabletStats, len(tc.input))
+		for i, lag := range tc.input {
+			lts[i] = &TabletStats{
+				Tablet:  topo.NewTablet(uint32(i+1), "cell", fmt.Sprintf("host-%vs-behind", lag)),
+				Serving: true,
+				Stats:   &querypb.RealtimeStats{SecondsBehindMaster: lag},
+			}
+		}
+		got := FilterByReplicationLag(lts)
+		if len(got) != len(tc.output) {
+			t.Errorf("FilterByReplicationLag(%v) failed: got output:\n%v\nExpected: %v", tc.description, got, tc.output)
+			continue
+		}
+		for i, elag := range tc.output {
+			if got[i].Stats.SecondsBehindMaster != elag {
+				t.Errorf("FilterByReplicationLag(%v) failed: got output:\n%v\nExpected value index %v to be %v", tc.description, got, i, elag)
+			}
+		}
+	}
+
+	// Reset to the default
+	testSetLegacyReplicationLagAlgorithm(true)
+}
+
+func TestFilterByReplicationLagWithLegacyAlgorithm(t *testing.T) {
+	// Use legacy algorithm by default for now
+
 	cases := []struct {
 		description string
 		input       []uint32
@@ -105,6 +188,23 @@ func TestFilterByReplicationLag(t *testing.T) {
 			"lags of (3h, 4h) - return 2 as they're all delayed too much, but still in a good group.",
 			[]uint32{3 * 60 * 60, 4 * 60 * 60},
 			[]uint32{3 * 60 * 60, 4 * 60 * 60},
+		},
+		{
+			"lags of (3h, 3h, 4h) - return 3 as they're all delayed too much, but still in a good group.",
+			[]uint32{3 * 60 * 60, 3 * 60 * 60, 4 * 60 * 60},
+			[]uint32{3 * 60 * 60, 3 * 60 * 60, 4 * 60 * 60},
+		},
+		{
+			"lags of (3h, 15h, 18h) - return 3 as they're all delayed too much, but still in a good group." +
+				"(different test case than above to show how absurb the good group logic is)",
+			[]uint32{3 * 60 * 60, 15 * 60 * 60, 18 * 60 * 60},
+			[]uint32{3 * 60 * 60, 15 * 60 * 60, 18 * 60 * 60},
+		},
+		{
+			"lags of (3h, 12h, 18h) - return 2 as they're all delayed too much, but 18h is now considered an outlier." +
+				"(different test case than above to show how absurb the good group logic is)",
+			[]uint32{3 * 60 * 60, 12 * 60 * 60, 18 * 60 * 60},
+			[]uint32{3 * 60 * 60, 12 * 60 * 60},
 		},
 		{
 			"lags of (3h, 30h) - return 2 as they're all delayed too much." +
