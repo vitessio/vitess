@@ -576,9 +576,11 @@ func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topo
 	// Being sent SetMaster means another MASTER has been successfully promoted,
 	// so we convert to REPLICA first, since we want to do it even if other
 	// steps fail below.
-	_, err = topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_REPLICA, nil)
-	if err != nil {
-		return err
+	if agent.Tablet().Type == topodatapb.TabletType_MASTER {
+		_, err = topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_REPLICA, nil)
+		if err != nil {
+			return err
+		}
 	}
 
 	// See if we were replicating at all, and should be replicating.
@@ -656,16 +658,17 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, parent *topodat
 	}
 	defer agent.unlock()
 
-	newTablet, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_REPLICA, nil)
-	if err != nil {
-		return err
-	}
-
-	if newTablet != nil {
-		if err := agent.refreshTablet(ctx, "SlaveWasRestarted"); err != nil {
+	if agent.Tablet().Type == topodatapb.TabletType_MASTER {
+		newTablet, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_REPLICA, nil)
+		if err != nil {
 			return err
 		}
-		agent.runHealthCheckLocked()
+		if newTablet != nil {
+			if err := agent.refreshTablet(ctx, "SlaveWasRestarted"); err != nil {
+				return err
+			}
+			agent.runHealthCheckLocked()
+		}
 	}
 	return nil
 }

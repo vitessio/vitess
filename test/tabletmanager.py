@@ -205,7 +205,14 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.create_db('vt_test_keyspace')
     tablet_62344.start_vttablet()
     # validate topology after starting tablet so that tablet has a chance
-    # to update shard masterAlias
+    # to update shard master_alias
+    timeout = 10
+    while True:
+      shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/0'])
+      if shard['master_alias']['uid'] == 62344:
+        break
+      wait_step('master_alias has been set', timeout)
+
     utils.validate_topology()
 
     utils.run_vtctl(['Ping', tablet_62344.tablet_alias])

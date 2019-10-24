@@ -152,12 +152,17 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 		defer wg.Done()
 		log.Infof("finalizeTabletExternallyReparented: updating tablet record for new master: %v", agent.TabletAlias)
 		// Update our own record to master if needed
+		// We are calling UpdateTabletFields and not ChangeType here because
+		// we need to check the type saved in topo before changing it.
+		// Only if the type is changing do we want to set masterTermStartTime, otherwise
+		// we want to continue with the current masterTermStartTime.
+		// The local value in agent's Tablet() has already been changed to MASTER, so
+		// we cannot use that for the check
 		_, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias,
 			func(tablet *topodatapb.Tablet) error {
 				if tablet.Type != topodatapb.TabletType_MASTER {
 					tablet.Type = topodatapb.TabletType_MASTER
-					// TODO (deepthi): this line causes TestStateChangeImmediateHealthBroadcast to fail
-					//tablet.MasterTermStartTime = logutil.TimeToProto(agent.masterTermStartTime())
+					tablet.MasterTermStartTime = logutil.TimeToProto(agent.masterTermStartTime())
 					return nil
 				}
 				// returning NoUpdateNeeded avoids unnecessary calls to UpdateTablet
@@ -177,6 +182,8 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 
 			// Forcibly demote the old master in topology, since we can't rely on the
 			// old master to be up to change its own record.
+			// Call UpdateTabletFields instead of ChangeType so that we can check the type
+			// before changing it and avoid unnecessary topo updates
 			var err error
 			oldMasterTablet, err = agent.TopoServer.UpdateTabletFields(ctx, oldMasterAlias,
 				func(tablet *topodatapb.Tablet) error {
@@ -275,6 +282,8 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 			go func(alias *topodatapb.TabletAlias) {
 				defer wg.Done()
 				var err error
+				// Call UpdateTabletFields instead of ChangeType so that we can check the type
+				// before changing it and avoid unnecessary topo updates
 				tab, err := agent.TopoServer.UpdateTabletFields(ctx, alias,
 					func(tablet *topodatapb.Tablet) error {
 						if tablet.Type == topodatapb.TabletType_MASTER {
