@@ -130,13 +130,21 @@ func (etcd *EtcdProcess) removeTopoDirectories(Cell string) {
 }
 
 // ManageTopoDir creates global and zone in etcd2
-func (etcd *EtcdProcess) ManageTopoDir(command string, directory string) error {
-	tmpProcess := exec.Command(
-		"etcdctl",
-		"--endpoints", etcd.ListenClientURL,
-		command, directory,
-	)
-	return tmpProcess.Run()
+func (etcd *EtcdProcess) ManageTopoDir(command string, directory string) (err error) {
+	url := etcd.VerifyURL + directory
+	payload := strings.NewReader(`{"dir":"true"}`)
+	if command == "mkdir" {
+		req, _ := http.NewRequest("PUT", url, payload)
+		req.Header.Add("content-type", "application/json")
+		_, err = http.DefaultClient.Do(req)
+		return err
+	} else if command == "rmdir" {
+		req, _ := http.NewRequest("DELETE", url+"?dir=true", payload)
+		_, err = http.DefaultClient.Do(req)
+		return err
+	} else {
+		return nil
+	}
 }
 
 // EtcdProcessInstance returns a EtcdProcess handle for a etcd sevice,
