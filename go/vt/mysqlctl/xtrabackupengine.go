@@ -402,6 +402,8 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 	if err := os.MkdirAll(tempDir, os.ModePerm); err != nil {
 		return err
 	}
+	// delete tempDir once we are done
+	defer os.RemoveAll(tempDir)
 
 	if err := be.extractFiles(ctx, logger, bh, bm, tempDir); err != nil {
 		logger.Errorf("error extracting backup files: %v", err)
