@@ -106,9 +106,7 @@ func (agent *ActionAgent) shardSyncLoop(ctx context.Context) {
 				retryChan = time.After(*shardSyncRetryDelay)
 				continue
 			}
-			// If the shard was initialized via InitTablet, there is no masterAlias set
-			// so we are the true master
-			if masterAlias != nil && !topoproto.TabletAliasEqual(masterAlias, tablet.Alias) {
+			if !topoproto.TabletAliasEqual(masterAlias, tablet.Alias) {
 				// Another master has taken over while we still think we're master.
 				if err := agent.abortMasterTerm(ctx, masterAlias); err != nil {
 					log.Errorf("Failed to abort master term: %v", err)

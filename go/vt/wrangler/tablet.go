@@ -73,11 +73,9 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, a
 	}
 
 	if tablet.Type == topodatapb.TabletType_MASTER {
-		if !si.HasMaster() /* no master */ || (si.HasMaster() && topoproto.TabletAliasEqual(si.MasterAlias, tablet.Alias)) /* same master*/ || (si.HasMaster() && !topoproto.TabletAliasEqual(si.MasterAlias, tablet.Alias) && allowMasterOverride) /* override current master */ {
-			// we update master_term_start_time even if the master hasn't changed
-			// because that means a new master term with the same master
-			tablet.MasterTermStartTime = logutil.TimeToProto(time.Now())
-		}
+		// we update master_term_start_time even if the master hasn't changed
+		// because that means a new master term with the same master
+		tablet.MasterTermStartTime = logutil.TimeToProto(time.Now())
 	}
 
 	err = wr.ts.CreateTablet(ctx, tablet)
@@ -92,9 +90,6 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, a
 		// require the allowDifferentShard flag.
 		if oldTablet.Keyspace != tablet.Keyspace || oldTablet.Shard != tablet.Shard {
 			return fmt.Errorf("old tablet has shard %v/%v. Cannot override with shard %v/%v. Delete and re-add tablet if you want to change the tablet's keyspace/shard", oldTablet.Keyspace, oldTablet.Shard, tablet.Keyspace, tablet.Shard)
-		}
-		if oldTablet.MasterTermStartTime != nil {
-			tablet.MasterTermStartTime = oldTablet.MasterTermStartTime
 		}
 		*(oldTablet.Tablet) = *tablet
 		if err := wr.ts.UpdateTablet(ctx, oldTablet); err != nil {

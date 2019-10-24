@@ -160,7 +160,7 @@ message Tablet {
 
   // master_term_start_time is the time (in UTC) at which the current term of
   // the current tablet began as master. If this tablet is not currently the
-  // master, this will be 0.
+  // master, this value is ignored.
   //
   // A new master term begins any time an authoritative decision is communicated
   // about which tablet should be the master, such as via Vitess

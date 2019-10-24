@@ -907,7 +907,7 @@ func TestBackupStateChange(t *testing.T) {
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 16 * time.Second
 
 	// change to BACKUP, query service will turn off
-	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_BACKUP); err != nil {
+	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_BACKUP, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := agent.RefreshState(ctx); err != nil {
@@ -921,7 +921,7 @@ func TestBackupStateChange(t *testing.T) {
 	}
 	// change back to REPLICA, query service should not start
 	// because replication delay > unhealthyThreshold
-	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_REPLICA); err != nil {
+	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_REPLICA, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := agent.RefreshState(ctx); err != nil {
@@ -961,7 +961,7 @@ func TestRestoreStateChange(t *testing.T) {
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 16 * time.Second
 
 	// change to RESTORE, query service will turn off
-	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_RESTORE); err != nil {
+	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_RESTORE, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := agent.RefreshState(ctx); err != nil {
@@ -975,7 +975,7 @@ func TestRestoreStateChange(t *testing.T) {
 	}
 	// change back to REPLICA, query service should not start
 	// because replication delay > unhealthyThreshold
-	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_REPLICA); err != nil {
+	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_REPLICA, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := agent.RefreshState(ctx); err != nil {

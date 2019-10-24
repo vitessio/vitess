@@ -46,6 +46,7 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 // ConfigureTabletHook configures the right parameters for a hook
@@ -61,9 +62,14 @@ func ConfigureTabletHook(hk *hook.Hook, tabletAlias *topodatapb.TabletAlias) {
 // transitions need to be forced from time to time.
 //
 // If successful, the updated tablet record is returned.
-func ChangeType(ctx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, newType topodatapb.TabletType) (*topodatapb.Tablet, error) {
+func ChangeType(ctx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, newType topodatapb.TabletType, masterTermStartTime *vttime.Time) (*topodatapb.Tablet, error) {
 	return ts.UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
 		tablet.Type = newType
+		if newType == topodatapb.TabletType_MASTER {
+			tablet.MasterTermStartTime = masterTermStartTime
+		} else {
+			tablet.MasterTermStartTime = nil
+		}
 		return nil
 	})
 }

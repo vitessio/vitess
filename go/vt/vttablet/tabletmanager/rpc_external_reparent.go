@@ -156,6 +156,8 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 			func(tablet *topodatapb.Tablet) error {
 				if tablet.Type != topodatapb.TabletType_MASTER {
 					tablet.Type = topodatapb.TabletType_MASTER
+					// TODO (deepthi): this line causes TestStateChangeImmediateHealthBroadcast to fail
+					//tablet.MasterTermStartTime = logutil.TimeToProto(agent.masterTermStartTime())
 					return nil
 				}
 				// returning NoUpdateNeeded avoids unnecessary calls to UpdateTablet
@@ -180,6 +182,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 				func(tablet *topodatapb.Tablet) error {
 					if tablet.Type == topodatapb.TabletType_MASTER {
 						tablet.Type = topodatapb.TabletType_REPLICA
+						tablet.MasterTermStartTime = nil
 						return nil
 					}
 					// returning NoUpdateNeeded avoids unnecessary calls to UpdateTablet
@@ -276,6 +279,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 					func(tablet *topodatapb.Tablet) error {
 						if tablet.Type == topodatapb.TabletType_MASTER {
 							tablet.Type = topodatapb.TabletType_REPLICA
+							tablet.MasterTermStartTime = nil
 							return nil
 						}
 						return topo.NewError(topo.NoUpdateNeeded, alias.String())

@@ -100,8 +100,6 @@ class TestTabletManager(unittest.TestCase):
     utils.run_vtctl(['createshard', '-force', 'test_keyspace/0'])
     tablet_62344.init_tablet('master', 'test_keyspace', '0', parent=False)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'])
-    utils.validate_topology()
-
     # if these statements don't run before the tablet it will wedge
     # waiting for the db to become accessible. this is more a bug than
     # a feature.
@@ -109,6 +107,8 @@ class TestTabletManager(unittest.TestCase):
                           self._populate_vt_select_test)
 
     tablet_62344.start_vttablet()
+    utils.validate_topology()
+
 
     # make sure the query service is started right away.
     qr = tablet_62344.execute('select id, msg from vt_select_test')
@@ -202,9 +202,11 @@ class TestTabletManager(unittest.TestCase):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
 
     tablet_62344.init_tablet('master', 'test_keyspace', '0')
-    utils.validate_topology()
     tablet_62344.create_db('vt_test_keyspace')
     tablet_62344.start_vttablet()
+    # validate topology after starting tablet so that tablet has a chance
+    # to update shard masterAlias
+    utils.validate_topology()
 
     utils.run_vtctl(['Ping', tablet_62344.tablet_alias])
 
@@ -759,7 +761,7 @@ class TestTabletManager(unittest.TestCase):
                           init_keyspace='test_keyspace',
                           init_shard='0')
 
-    # Make sure that the TER increased i.e. it was set to the current time.
+    # Make sure that the TER did not change
     health_after_restart = utils.run_vtctl_json(['VtTabletStreamHealth',
                                                  '-count', '1',
                                                  master.tablet_alias])
@@ -767,11 +769,11 @@ class TestTabletManager(unittest.TestCase):
                      health_after_restart['target']['tablet_type'])
     self.assertIn('tablet_externally_reparented_timestamp',
                   health_after_restart)
-    self.assertGreater(
+    self.assertEqual(
         health_after_restart['tablet_externally_reparented_timestamp'],
         health['tablet_externally_reparented_timestamp'],
         'When the MASTER vttablet was restarted, the TER timestamp must be set'
-        ' to the current time.')
+        ' by reading the old value from the tablet record. Old: %s, New: %s' % (str(health['tablet_externally_reparented_timestamp']), str(health_after_restart['tablet_externally_reparented_timestamp'])))
 
     # Shutdown.
     for t in tablets:
@@ -788,8 +790,6 @@ class TestTabletManager(unittest.TestCase):
     utils.run_vtctl(['createshard', '-force', 'test_keyspace/0'])
     tablet_62344.init_tablet('master', 'test_keyspace', '0', parent=False)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'])
-    utils.validate_topology()
-
     # Copy config file into topo.
     topocustomrule_path = '/keyspaces/test_keyspace/configs/CustomRules'
     utils.run_vtctl(['TopoCp', '-to_topo', topocustomrule_file,
@@ -799,6 +799,8 @@ class TestTabletManager(unittest.TestCase):
     tablet_62344.populate('vt_test_keyspace', self._create_vt_select_test,
                           self._populate_vt_select_test)
     tablet_62344.start_vttablet(topocustomrule_path=topocustomrule_path)
+
+    utils.validate_topology()
 
     # make sure the query service is working
     qr = tablet_62344.execute('select id, msg from vt_select_test')
