@@ -228,9 +228,15 @@ function install_consul() {
     Darwin) local platform=darwin;;
   esac
 
+  case $(arch) in
+      aarch64)  local target=arm64;;
+      x86_64)  local target=amd64;;
+      *)   echo "ERROR: unsupported architecture"; exit 1;;
+  esac
+
   download_url=https://releases.hashicorp.com/consul
-  wget "${download_url}/${version}/consul_${version}_${platform}_amd64.zip"
-  unzip "consul_${version}_${platform}_amd64.zip"
+  wget "${download_url}/${version}/consul_${version}_${platform}_${target}.zip"
+  unzip "consul_${version}_${platform}_${target}.zip"
   ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
 install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul
