@@ -63,7 +63,7 @@ func ConfigureTabletHook(hk *hook.Hook, tabletAlias *topodatapb.TabletAlias) {
 //
 // If successful, the updated tablet record is returned.
 func ChangeType(ctx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, newType topodatapb.TabletType, masterTermStartTime *vttime.Time) (*topodatapb.Tablet, error) {
-	return ts.UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
+	result, err := ts.UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
 		if tablet.Type == newType && tablet.MasterTermStartTime == masterTermStartTime {
 			return topo.NewError(topo.NoUpdateNeeded, topoproto.TabletAliasString(tabletAlias))
 		}
@@ -75,6 +75,16 @@ func ChangeType(ctx context.Context, ts *topo.Server, tabletAlias *topodatapb.Ta
 		}
 		return nil
 	})
+	// If topo.NoUpdateNeeded then result will be nil and err will be nil.
+	// In order to maintain the previous contract of ChangeType (that it
+	// returns the updated tablet if the update was successful),
+	// we need to set result here.
+	var ti *topo.TabletInfo
+	if result == nil && err == nil {
+		ti, err = ts.GetTablet(ctx, tabletAlias)
+		result = ti.Tablet
+	}
+	return result, err
 }
 
 // CheckOwnership returns nil iff the Hostname and port match on oldTablet and

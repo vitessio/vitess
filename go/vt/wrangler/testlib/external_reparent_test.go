@@ -108,17 +108,16 @@ func TestTabletExternallyReparentedBasic(t *testing.T) {
 				t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
 			}
 			t.Fatalf("old master (%v) should be replica but is: %v", topoproto.TabletAliasString(oldMaster.Tablet.Alias), tablet.Type)
+		}
+		// check the old master was converted to replica
+		tablet, err = ts.GetTablet(ctx, oldMaster.Tablet.Alias)
+		if err != nil {
+			t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
+		}
+		if tablet.Type == topodatapb.TabletType_REPLICA {
+			break
 		} else {
-			// check the old master was converted to replica
-			tablet, err = ts.GetTablet(ctx, oldMaster.Tablet.Alias)
-			if err != nil {
-				t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
-			}
-			if tablet.Type == topodatapb.TabletType_REPLICA {
-				break
-			} else {
-				time.Sleep(100 * time.Millisecond /* interval at which to check again */)
-			}
+			time.Sleep(100 * time.Millisecond /* interval at which to check again */)
 		}
 	}
 }
@@ -182,17 +181,16 @@ func TestTabletExternallyReparentedToSlave(t *testing.T) {
 				t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
 			}
 			t.Fatalf("old master (%v) should be replica but is: %v", topoproto.TabletAliasString(oldMaster.Tablet.Alias), tablet.Type)
+		}
+		// check the old master was converted to replica
+		tablet, err = ts.GetTablet(ctx, oldMaster.Tablet.Alias)
+		if err != nil {
+			t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
+		}
+		if tablet.Type == topodatapb.TabletType_REPLICA {
+			break
 		} else {
-			// check the old master was converted to replica
-			tablet, err = ts.GetTablet(ctx, oldMaster.Tablet.Alias)
-			if err != nil {
-				t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
-			}
-			if tablet.Type == topodatapb.TabletType_REPLICA {
-				break
-			} else {
-				time.Sleep(100 * time.Millisecond /* interval at which to check again */)
-			}
+			time.Sleep(100 * time.Millisecond /* interval at which to check again */)
 		}
 	}
 }
@@ -263,17 +261,16 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 				t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
 			}
 			t.Fatalf("old master (%v) should be replica but is: %v", topoproto.TabletAliasString(oldMaster.Tablet.Alias), tablet.Type)
+		}
+		// check the old master was converted to replica
+		tablet, err = ts.GetTablet(ctx, oldMaster.Tablet.Alias)
+		if err != nil {
+			t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
+		}
+		if tablet.Type == topodatapb.TabletType_REPLICA {
+			break
 		} else {
-			// check the old master was converted to replica
-			tablet, err = ts.GetTablet(ctx, oldMaster.Tablet.Alias)
-			if err != nil {
-				t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
-			}
-			if tablet.Type == topodatapb.TabletType_REPLICA {
-				break
-			} else {
-				time.Sleep(100 * time.Millisecond /* interval at which to check again */)
-			}
+			time.Sleep(100 * time.Millisecond /* interval at which to check again */)
 		}
 	}
 }
@@ -338,17 +335,16 @@ func TestTabletExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
 				t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
 			}
 			t.Fatalf("old master (%v) should be replica but is: %v", topoproto.TabletAliasString(oldMaster.Tablet.Alias), tablet.Type)
+		}
+		// check the old master was converted to replica
+		tablet, err = ts.GetTablet(ctx, oldMaster.Tablet.Alias)
+		if err != nil {
+			t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
+		}
+		if tablet.Type == topodatapb.TabletType_REPLICA {
+			break
 		} else {
-			// check the old master was converted to replica
-			tablet, err = ts.GetTablet(ctx, oldMaster.Tablet.Alias)
-			if err != nil {
-				t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
-			}
-			if tablet.Type == topodatapb.TabletType_REPLICA {
-				break
-			} else {
-				time.Sleep(100 * time.Millisecond /* interval at which to check again */)
-			}
+			time.Sleep(100 * time.Millisecond /* interval at which to check again */)
 		}
 	}
 }
@@ -412,17 +408,16 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 				t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
 			}
 			t.Fatalf("old master (%v) should be replica but is: %v", topoproto.TabletAliasString(oldMaster.Tablet.Alias), tablet.Type)
+		}
+		// check the old master was converted to replica
+		tablet, err = ts.GetTablet(ctx, oldMaster.Tablet.Alias)
+		if err != nil {
+			t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
+		}
+		if tablet.Type == topodatapb.TabletType_REPLICA {
+			break
 		} else {
-			// check the old master was converted to replica
-			tablet, err = ts.GetTablet(ctx, oldMaster.Tablet.Alias)
-			if err != nil {
-				t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
-			}
-			if tablet.Type == topodatapb.TabletType_REPLICA {
-				break
-			} else {
-				time.Sleep(100 * time.Millisecond /* interval at which to check again */)
-			}
+			time.Sleep(100 * time.Millisecond /* interval at which to check again */)
 		}
 	}
 

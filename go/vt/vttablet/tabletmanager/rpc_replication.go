@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -578,11 +579,16 @@ func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topo
 	// steps fail below.
 	// Note it is important to check for MASTER here so that we don't
 	// unintentionally change the type of RDONLY tablets
-	if agent.Tablet().Type == topodatapb.TabletType_MASTER {
-		_, err = topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_REPLICA, nil)
-		if err != nil {
-			return err
+	_, err = agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
+		if tablet.Type == topodatapb.TabletType_MASTER {
+			tablet.Type = topodatapb.TabletType_REPLICA
+			tablet.MasterTermStartTime = nil
+			return nil
 		}
+		return topo.NewError(topo.NoUpdateNeeded, agent.TabletAlias.String())
+	})
+	if err != nil {
+		return err
 	}
 
 	// See if we were replicating at all, and should be replicating.
@@ -662,17 +668,24 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, parent *topodat
 
 	// Only change type of former MASTER tablets.
 	// Don't change type of RDONLY
-	if agent.Tablet().Type == topodatapb.TabletType_MASTER {
-		newTablet, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_REPLICA, nil)
-		if err != nil {
+	typeChanged := false
+	if _, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
+		if tablet.Type == topodatapb.TabletType_MASTER {
+			tablet.Type = topodatapb.TabletType_REPLICA
+			tablet.MasterTermStartTime = nil
+			typeChanged = true
+			return nil
+		}
+		return topo.NewError(topo.NoUpdateNeeded, agent.TabletAlias.String())
+	}); err != nil {
+		return err
+	}
+
+	if typeChanged {
+		if err := agent.refreshTablet(ctx, "SlaveWasRestarted"); err != nil {
 			return err
 		}
-		if newTablet != nil {
-			if err := agent.refreshTablet(ctx, "SlaveWasRestarted"); err != nil {
-				return err
-			}
-			agent.runHealthCheckLocked()
-		}
+		agent.runHealthCheckLocked()
 	}
 	return nil
 }
