@@ -109,6 +109,37 @@ func Multiply(v1, v2 Value) (Value, error) {
 	return castFromNumeric(lresult, lresult.typ), nil
 }
 
+// Float Division for MySQL. Replicates behavior of "/" operator
+func Divide(v1, v2 Value) (Value, error) {
+	if v1.IsNull() || v2.IsNull() {
+		return NULL, nil
+	}
+
+	lv2AsFloat, err := ToFloat64(v2)
+	divisorIsZero := lv2AsFloat == 0
+
+	if divisorIsZero || err != nil {
+		return NULL, err
+	}
+
+	lv1, err := newNumeric(v1)
+	if err != nil {
+		return NULL, err
+	}
+
+	lv2, err := newNumeric(v2)
+	if err != nil {
+		return NULL, err
+	}
+
+	lresult, err := divideNumericWithError(lv1, lv2)
+	if err != nil {
+		return NULL, err
+	}
+
+	return castFromNumeric(lresult, lresult.typ), nil
+}
+
 // NullsafeAdd adds two Values in a null-safe manner. A null value
 // is treated as 0. If both values are null, then a null is returned.
 // If both values are not null, a numeric value is built
@@ -470,6 +501,20 @@ func multiplyNumericWithError(v1, v2 numeric) (numeric, error) {
 	panic("unreachable")
 }
 
+func divideNumericWithError(v1, v2 numeric) (numeric, error) {
+	switch v1.typ {
+	case Int64:
+		return floatDivideAnyWithError(float64(v1.ival), v2)
+
+	case Uint64:
+		return floatDivideAnyWithError(float64(v1.uval), v2)
+
+	case Float64:
+		return floatDivideAnyWithError(v1.fval, v2)
+	}
+	panic("unreachable")
+}
+
 // prioritize reorders the input parameters
 // to be Float64, Uint64, Int64.
 func prioritize(v1, v2 numeric) (altv1, altv2 numeric) {
@@ -523,6 +568,7 @@ func intTimesIntWithError(v1, v2 int64) (numeric, error) {
 		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in %v * %v", v1, v2)
 	}
 	return numeric{typ: Int64, ival: result}, nil
+
 }
 
 func intMinusUintWithError(v1 int64, v2 uint64) (numeric, error) {
@@ -624,6 +670,24 @@ func floatTimesAny(v1 float64, v2 numeric) numeric {
 		v2.fval = float64(v2.uval)
 	}
 	return numeric{typ: Float64, fval: v1 * v2.fval}
+}
+
+func floatDivideAnyWithError(v1 float64, v2 numeric) (numeric, error) {
+	switch v2.typ {
+	case Int64:
+		v2.fval = float64(v2.ival)
+	case Uint64:
+		v2.fval = float64(v2.uval)
+	}
+	result := v1 / v2.fval
+	divisorLessThanOne := v2.fval < 1
+	resultMismatch := (v2.fval*result != v1)
+
+	if divisorLessThanOne && resultMismatch {
+		return numeric{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT is out of range in %v / %v", v1, v2.fval)
+	}
+
+	return numeric{typ: Float64, fval: v1 / v2.fval}, nil
 }
 
 func anyMinusFloat(v1 numeric, v2 float64) numeric {
