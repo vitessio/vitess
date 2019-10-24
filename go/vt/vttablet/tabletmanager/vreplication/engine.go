@@ -461,6 +461,7 @@ func (vre *Engine) transitionJournal(key string) {
 
 	log.Infof("Transitioning for journal:workload %v", key)
 	je := vre.journaler[key]
+	defer delete(vre.journaler, key)
 	// Wait for participating controllers to stop.
 	// Also collect one id reference.
 	refid := 0
