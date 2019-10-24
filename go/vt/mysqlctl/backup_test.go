@@ -77,7 +77,7 @@ func TestFindFilesToBackup(t *testing.T) {
 		DataDir:               dataDir,
 	}
 
-	result, err := findFilesToBackup(cnf)
+	result, totalSize, err := findFilesToBackup(cnf)
 	if err != nil {
 		t.Fatalf("findFilesToBackup failed: %v", err)
 	}
@@ -111,6 +111,9 @@ func TestFindFilesToBackup(t *testing.T) {
 	}
 	if !reflect.DeepEqual(result, expected) {
 		t.Fatalf("got wrong list of FileEntry %v, expected %v", result, expected)
+	}
+	if totalSize <= 0 {
+		t.Fatalf("backup size should be > 0, got %v", totalSize)
 	}
 }
 
