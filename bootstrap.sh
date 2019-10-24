@@ -214,6 +214,7 @@ function install_etcd() {
   fi
   rm "$file"
   ln -snf "$dist/etcd-${version}-${platform}-amd64/etcd" "$VTROOT/bin/etcd"
+  ln -snf "$dist/etcd-${version}-${platform}-amd64/etcdctl" "$VTROOT/bin/etcdctl"
 }
 install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
 
