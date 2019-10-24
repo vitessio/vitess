@@ -154,7 +154,7 @@ func syncShardMaster(ctx context.Context, ts *topo.Server, tablet *topodatapb.Ta
 
 	var shardInfo *topo.ShardInfo
 	_, err = ts.UpdateShardFields(ctx, tablet.Keyspace, tablet.Shard, func(si *topo.ShardInfo) error {
-		lastTerm := logutil.ProtoToTime(si.MasterTermStartTime)
+		lastTerm := si.GetMasterTermStartTime()
 
 		// Save the ShardInfo so we can check it afterward.
 		// We can't use the return value of UpdateShardFields because it might be nil.

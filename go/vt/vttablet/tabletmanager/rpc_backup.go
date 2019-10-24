@@ -120,7 +120,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 
 		// Change our type back to the original value.
 		// Original type could be master so pass in a real value for masterTermStartTime
-		_, err = topotools.ChangeType(bgCtx, agent.TopoServer, tablet.Alias, originalType, tablet.MasterTermStartTime)
+		_, err = topotools.ChangeType(bgCtx, agent.TopoServer, tablet.Alias, originalType, tablet.Tablet.MasterTermStartTime)
 		if err != nil {
 			// failure in changing the topology type is probably worse,
 			// so returning that (we logged the snapshot error anyway)
