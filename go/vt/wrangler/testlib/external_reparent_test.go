@@ -100,29 +100,24 @@ func TestTabletExternallyReparentedBasic(t *testing.T) {
 	}
 
 	// We have to wait for shard sync to do its magic in the background
-	timer := time.NewTimer(10 * time.Second)
-	defer timer.Stop()
-
-loop:
+	startTime := time.Now()
 	for {
-		select {
-		case <-timer.C:
-			// we timed out
+		if time.Since(startTime) > 10*time.Second /* timeout */ {
 			tablet, err = ts.GetTablet(ctx, oldMaster.Tablet.Alias)
 			if err != nil {
 				t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
 			}
 			t.Fatalf("old master (%v) should be replica but is: %v", topoproto.TabletAliasString(oldMaster.Tablet.Alias), tablet.Type)
-		default:
+		} else {
 			// check the old master was converted to replica
 			tablet, err = ts.GetTablet(ctx, oldMaster.Tablet.Alias)
 			if err != nil {
 				t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
 			}
-			if tablet.Type != topodatapb.TabletType_REPLICA {
-				time.Sleep(100 * time.Millisecond)
+			if tablet.Type == topodatapb.TabletType_REPLICA {
+				break
 			} else {
-				break loop
+				time.Sleep(100 * time.Millisecond /* interval at which to check again */)
 			}
 		}
 	}
@@ -179,29 +174,24 @@ func TestTabletExternallyReparentedToSlave(t *testing.T) {
 	}
 
 	// We have to wait for shard sync to do its magic in the background
-	timer := time.NewTimer(10 * time.Second)
-	defer timer.Stop()
-
-loop:
+	startTime := time.Now()
 	for {
-		select {
-		case <-timer.C:
-			// we timed out
+		if time.Since(startTime) > 10*time.Second /* timeout */ {
 			tablet, err = ts.GetTablet(ctx, oldMaster.Tablet.Alias)
 			if err != nil {
 				t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
 			}
 			t.Fatalf("old master (%v) should be replica but is: %v", topoproto.TabletAliasString(oldMaster.Tablet.Alias), tablet.Type)
-		default:
+		} else {
 			// check the old master was converted to replica
 			tablet, err = ts.GetTablet(ctx, oldMaster.Tablet.Alias)
 			if err != nil {
 				t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
 			}
-			if tablet.Type != topodatapb.TabletType_REPLICA {
-				time.Sleep(100 * time.Millisecond)
+			if tablet.Type == topodatapb.TabletType_REPLICA {
+				break
 			} else {
-				break loop
+				time.Sleep(100 * time.Millisecond /* interval at which to check again */)
 			}
 		}
 	}
@@ -265,29 +255,24 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	}
 
 	// We have to wait for shard sync to do its magic in the background
-	timer := time.NewTimer(10 * time.Second)
-	defer timer.Stop()
-
-loop:
+	startTime := time.Now()
 	for {
-		select {
-		case <-timer.C:
-			// we timed out
+		if time.Since(startTime) > 10*time.Second /* timeout */ {
 			tablet, err = ts.GetTablet(ctx, oldMaster.Tablet.Alias)
 			if err != nil {
 				t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
 			}
 			t.Fatalf("old master (%v) should be replica but is: %v", topoproto.TabletAliasString(oldMaster.Tablet.Alias), tablet.Type)
-		default:
+		} else {
 			// check the old master was converted to replica
 			tablet, err = ts.GetTablet(ctx, oldMaster.Tablet.Alias)
 			if err != nil {
 				t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
 			}
-			if tablet.Type != topodatapb.TabletType_REPLICA {
-				time.Sleep(100 * time.Millisecond)
+			if tablet.Type == topodatapb.TabletType_REPLICA {
+				break
 			} else {
-				break loop
+				time.Sleep(100 * time.Millisecond /* interval at which to check again */)
 			}
 		}
 	}
@@ -345,29 +330,24 @@ func TestTabletExternallyReparentedContinueOnUnexpectedMaster(t *testing.T) {
 		t.Fatalf("new master should be MASTER but is: %v", tablet.Type)
 	}
 	// We have to wait for shard sync to do its magic in the background
-	timer := time.NewTimer(10 * time.Second)
-	defer timer.Stop()
-
-loop:
+	startTime := time.Now()
 	for {
-		select {
-		case <-timer.C:
-			// we timed out
+		if time.Since(startTime) > 10*time.Second /* timeout */ {
 			tablet, err = ts.GetTablet(ctx, oldMaster.Tablet.Alias)
 			if err != nil {
 				t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
 			}
 			t.Fatalf("old master (%v) should be replica but is: %v", topoproto.TabletAliasString(oldMaster.Tablet.Alias), tablet.Type)
-		default:
+		} else {
 			// check the old master was converted to replica
 			tablet, err = ts.GetTablet(ctx, oldMaster.Tablet.Alias)
 			if err != nil {
 				t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
 			}
-			if tablet.Type != topodatapb.TabletType_REPLICA {
-				time.Sleep(100 * time.Millisecond)
+			if tablet.Type == topodatapb.TabletType_REPLICA {
+				break
 			} else {
-				break loop
+				time.Sleep(100 * time.Millisecond /* interval at which to check again */)
 			}
 		}
 	}
@@ -424,29 +404,24 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 	}
 
 	// We have to wait for shard sync to do its magic in the background
-	timer := time.NewTimer(10 * time.Second)
-	defer timer.Stop()
-
-loop:
+	startTime := time.Now()
 	for {
-		select {
-		case <-timer.C:
-			// we timed out
+		if time.Since(startTime) > 10*time.Second /* timeout */ {
 			tablet, err = ts.GetTablet(ctx, oldMaster.Tablet.Alias)
 			if err != nil {
 				t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
 			}
 			t.Fatalf("old master (%v) should be replica but is: %v", topoproto.TabletAliasString(oldMaster.Tablet.Alias), tablet.Type)
-		default:
+		} else {
 			// check the old master was converted to replica
 			tablet, err = ts.GetTablet(ctx, oldMaster.Tablet.Alias)
 			if err != nil {
 				t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
 			}
-			if tablet.Type != topodatapb.TabletType_REPLICA {
-				time.Sleep(100 * time.Millisecond)
+			if tablet.Type == topodatapb.TabletType_REPLICA {
+				break
 			} else {
-				break loop
+				time.Sleep(100 * time.Millisecond /* interval at which to check again */)
 			}
 		}
 	}

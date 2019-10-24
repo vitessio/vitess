@@ -71,22 +71,22 @@ func (agent *ActionAgent) ChangeType(ctx context.Context, tabletType topodatapb.
 	if tabletType == topodatapb.TabletType_DRAINED && agent.Tablet().Type == topodatapb.TabletType_DRAINED {
 		return fmt.Errorf("Tablet: %v, is already drained", agent.TabletAlias)
 	}
-	// change our type in the topology
-	_, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType)
+
+	agentMasterTermStartTime := time.Time{}
+	// If we have been told we're master, set master term start time to Now
+	if tabletType == topodatapb.TabletType_MASTER {
+		agentMasterTermStartTime = time.Now()
+	}
+	// change our type in the topology, and set masterTermStartTime on tablet record if applicable
+	_, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, tabletType, logutil.TimeToProto(agentMasterTermStartTime))
 	if err != nil {
 		return err
 	}
-
-	// If we have been told we're master, update master term start time.
+	// We only update agent's masterTermStartTime if we were able to update the topo.
+	// This ensures that in case of a failure, we are never in a situation where the
+	// tablet's timestamp is ahead of the topo's timestamp.
 	if tabletType == topodatapb.TabletType_MASTER {
-		agent.setMasterTermStartTime(time.Now())
-		_, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
-			tablet.MasterTermStartTime = logutil.TimeToProto(agent.masterTermStartTime())
-			return nil
-		})
-		if err != nil {
-			return err
-		}
+		agent.setMasterTermStartTime(agentMasterTermStartTime)
 	}
 
 	// let's update our internal state (stop query service and other things)

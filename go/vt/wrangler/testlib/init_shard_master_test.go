@@ -79,13 +79,9 @@ func TestInitMasterShard(t *testing.T) {
 	defer master.StopActionLoop(t)
 
 	// wait for shard record to be updated with master
-	timer := time.NewTimer(10 * time.Second)
-	defer timer.Stop()
-loop:
+	startTime := time.Now()
 	for {
-		select {
-		case <-timer.C:
-			// we timed out
+		if time.Since(startTime) > 10*time.Second /* timeout */ {
 			si, err := ts.GetShard(ctx, master.Tablet.Keyspace, master.Tablet.Shard)
 			if err != nil {
 				t.Fatalf("GetShard(%v, %v) failed: %v", master.Tablet.Keyspace, master.Tablet.Shard, err)
@@ -93,17 +89,15 @@ loop:
 			if !topoproto.TabletAliasEqual(si.MasterAlias, master.Tablet.Alias) {
 				t.Fatalf("ShardInfo should have MasterAlias %v but has %v", topoproto.TabletAliasString(master.Tablet.Alias), topoproto.TabletAliasString(si.MasterAlias))
 			}
-		default:
-			// check the shard info was updated correctly
-			si, err := ts.GetShard(ctx, master.Tablet.Keyspace, master.Tablet.Shard)
-			if err != nil {
-				t.Fatalf("GetShard(%v, %v) failed: %v", master.Tablet.Keyspace, master.Tablet.Shard, err)
-			}
-			if !topoproto.TabletAliasEqual(si.MasterAlias, master.Tablet.Alias) {
-				time.Sleep(100 * time.Millisecond)
-			} else {
-				break loop
-			}
+		}
+		si, err := ts.GetShard(ctx, master.Tablet.Keyspace, master.Tablet.Shard)
+		if err != nil {
+			t.Fatalf("GetShard(%v, %v) failed: %v", master.Tablet.Keyspace, master.Tablet.Shard, err)
+		}
+		if topoproto.TabletAliasEqual(si.MasterAlias, master.Tablet.Alias) {
+			break
+		} else {
+			time.Sleep(100 * time.Millisecond /* interval at which to re-check the shard record */)
 		}
 	}
 
@@ -239,13 +233,9 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 	defer master.StopActionLoop(t)
 
 	// wait for shard record to be updated with master
-	timer := time.NewTimer(10 * time.Second)
-	defer timer.Stop()
-loop:
+	startTime := time.Now()
 	for {
-		select {
-		case <-timer.C:
-			// we timed out
+		if time.Since(startTime) > 10*time.Second /* timeout */ {
 			si, err := ts.GetShard(ctx, master.Tablet.Keyspace, master.Tablet.Shard)
 			if err != nil {
 				t.Fatalf("GetShard(%v, %v) failed: %v", master.Tablet.Keyspace, master.Tablet.Shard, err)
@@ -253,17 +243,15 @@ loop:
 			if !topoproto.TabletAliasEqual(si.MasterAlias, master.Tablet.Alias) {
 				t.Fatalf("ShardInfo should have MasterAlias %v but has %v", topoproto.TabletAliasString(master.Tablet.Alias), topoproto.TabletAliasString(si.MasterAlias))
 			}
-		default:
-			// check the shard info was updated correctly
-			si, err := ts.GetShard(ctx, master.Tablet.Keyspace, master.Tablet.Shard)
-			if err != nil {
-				t.Fatalf("GetShard(%v, %v) failed: %v", master.Tablet.Keyspace, master.Tablet.Shard, err)
-			}
-			if !topoproto.TabletAliasEqual(si.MasterAlias, master.Tablet.Alias) {
-				time.Sleep(100 * time.Millisecond)
-			} else {
-				break loop
-			}
+		}
+		si, err := ts.GetShard(ctx, master.Tablet.Keyspace, master.Tablet.Shard)
+		if err != nil {
+			t.Fatalf("GetShard(%v, %v) failed: %v", master.Tablet.Keyspace, master.Tablet.Shard, err)
+		}
+		if topoproto.TabletAliasEqual(si.MasterAlias, master.Tablet.Alias) {
+			break
+		} else {
+			time.Sleep(100 * time.Millisecond /* interval at which to re-check the shard record */)
 		}
 	}
 
@@ -297,9 +285,7 @@ loop:
 	_, err := ts.UpdateShardFields(ctx, master.Tablet.Keyspace, master.Tablet.Shard, func(si *topo.ShardInfo) error {
 		// note it's OK to retry this and increment multiple times,
 		// we just want it to be different
-		if si.MasterAlias != nil {
-			si.MasterAlias.Uid++
-		}
+		si.MasterAlias.Uid++
 		return nil
 	})
 	if err != nil {
