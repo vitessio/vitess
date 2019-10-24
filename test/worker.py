@@ -217,6 +217,12 @@ class TestBaseSplitClone(unittest.TestCase, base_sharding.BaseShardingTest):
     utils.run_vtctl(
         ['InitShardMaster', '-force', 'test_keyspace/%s' % shard_name,
          shard_tablets.master.tablet_alias], auto_log=True)
+    timeout = 10
+    while True:
+      shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/%s' % shard_name])
+      if shard['master_alias']['uid'] == shard_tablets.master.tablet_uid:
+        break
+      wait_step('master_alias has been set', timeout)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     # Enforce a health check instead of waiting for the next periodic one.
