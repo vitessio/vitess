@@ -64,6 +64,9 @@ func ConfigureTabletHook(hk *hook.Hook, tabletAlias *topodatapb.TabletAlias) {
 // If successful, the updated tablet record is returned.
 func ChangeType(ctx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, newType topodatapb.TabletType, masterTermStartTime *vttime.Time) (*topodatapb.Tablet, error) {
 	return ts.UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
+		if tablet.Type == newType && tablet.MasterTermStartTime == masterTermStartTime {
+			return topo.NewError(topo.NoUpdateNeeded, topoproto.TabletAliasString(tabletAlias))
+		}
 		tablet.Type = newType
 		if newType == topodatapb.TabletType_MASTER {
 			tablet.MasterTermStartTime = masterTermStartTime

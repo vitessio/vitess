@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -152,22 +153,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 		defer wg.Done()
 		log.Infof("finalizeTabletExternallyReparented: updating tablet record for new master: %v", agent.TabletAlias)
 		// Update our own record to master if needed
-		// We are calling UpdateTabletFields and not ChangeType here because
-		// we need to check the type saved in topo before changing it.
-		// Only if the type is changing do we want to set masterTermStartTime, otherwise
-		// we want to continue with the current masterTermStartTime.
-		// The local value in agent's Tablet() has already been changed to MASTER, so
-		// we cannot use that for the check
-		_, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias,
-			func(tablet *topodatapb.Tablet) error {
-				if tablet.Type != topodatapb.TabletType_MASTER {
-					tablet.Type = topodatapb.TabletType_MASTER
-					tablet.MasterTermStartTime = logutil.TimeToProto(agent.masterTermStartTime())
-					return nil
-				}
-				// returning NoUpdateNeeded avoids unnecessary calls to UpdateTablet
-				return topo.NewError(topo.NoUpdateNeeded, agent.TabletAlias.String())
-			})
+		_, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER, logutil.TimeToProto(agent.masterTermStartTime()))
 		if err != nil {
 			errs.RecordError(err)
 		}
@@ -185,16 +171,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 			// Call UpdateTabletFields instead of ChangeType so that we can check the type
 			// before changing it and avoid unnecessary topo updates
 			var err error
-			oldMasterTablet, err = agent.TopoServer.UpdateTabletFields(ctx, oldMasterAlias,
-				func(tablet *topodatapb.Tablet) error {
-					if tablet.Type == topodatapb.TabletType_MASTER {
-						tablet.Type = topodatapb.TabletType_REPLICA
-						tablet.MasterTermStartTime = nil
-						return nil
-					}
-					// returning NoUpdateNeeded avoids unnecessary calls to UpdateTablet
-					return topo.NewError(topo.NoUpdateNeeded, oldMasterAlias.String())
-				})
+			oldMasterTablet, err = topotools.ChangeType(ctx, agent.TopoServer, oldMasterAlias, topodatapb.TabletType_REPLICA, nil)
 			if err != nil {
 				errs.RecordError(err)
 				return
@@ -282,17 +259,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 			go func(alias *topodatapb.TabletAlias) {
 				defer wg.Done()
 				var err error
-				// Call UpdateTabletFields instead of ChangeType so that we can check the type
-				// before changing it and avoid unnecessary topo updates
-				tab, err := agent.TopoServer.UpdateTabletFields(ctx, alias,
-					func(tablet *topodatapb.Tablet) error {
-						if tablet.Type == topodatapb.TabletType_MASTER {
-							tablet.Type = topodatapb.TabletType_REPLICA
-							tablet.MasterTermStartTime = nil
-							return nil
-						}
-						return topo.NewError(topo.NoUpdateNeeded, alias.String())
-					})
+				tab, err := topotools.ChangeType(ctx, agent.TopoServer, alias, topodatapb.TabletType_REPLICA, nil)
 				if err != nil {
 					errs.RecordError(err)
 					return

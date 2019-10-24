@@ -576,6 +576,8 @@ func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topo
 	// Being sent SetMaster means another MASTER has been successfully promoted,
 	// so we convert to REPLICA first, since we want to do it even if other
 	// steps fail below.
+	// Note it is important to check for MASTER here so that we don't
+	// unintentionally change the type of RDONLY tablets
 	if agent.Tablet().Type == topodatapb.TabletType_MASTER {
 		_, err = topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_REPLICA, nil)
 		if err != nil {
@@ -658,6 +660,8 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, parent *topodat
 	}
 	defer agent.unlock()
 
+	// Only change type of former MASTER tablets.
+	// Don't change type of RDONLY
 	if agent.Tablet().Type == topodatapb.TabletType_MASTER {
 		newTablet, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_REPLICA, nil)
 		if err != nil {
