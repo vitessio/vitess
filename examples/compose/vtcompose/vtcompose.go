@@ -1,3 +1,19 @@
+/*
+ * Copyright 2019 The Vitess Authors.
+
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+
+ *     http://www.apache.org/licenses/LICENSE-2.0
+
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package main
 
 import (
@@ -5,7 +21,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	jsonpatch "github.com/evanphx/json-patch"
 	"io/ioutil"
 	"math"
 	"os"
@@ -13,43 +28,45 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/krishicks/yaml-patch"
+	jsonpatch "github.com/evanphx/json-patch"
+
+	yamlpatch "github.com/krishicks/yaml-patch"
 	"vitess.io/vitess/go/vt/log"
 )
 
 var (
-	tabletsUsed = 0
-	tablesPath = "tables/"
-	baseDockerComposeFile    = flag.String("base_yaml", "vtcompose/docker-compose.base.yml", "Starting docker-compose yaml")
-	baseVschemaFile    = flag.String("base_vschema", "vtcompose/base_vschema.json", "Starting vschema json")
+	tabletsUsed           = 0
+	tablesPath            = "tables/"
+	baseDockerComposeFile = flag.String("base_yaml", "vtcompose/docker-compose.base.yml", "Starting docker-compose yaml")
+	baseVschemaFile       = flag.String("base_vschema", "vtcompose/base_vschema.json", "Starting vschema json")
 
 	topologyFlags = flag.String("topologyFlags",
 		"-topo_implementation consul -topo_global_server_address consul1:8500 -topo_global_root vitess/global",
 		"Vitess Topology Flags config")
-	webPort   = flag.String("webPort", "8080", "Web port to be used")
-	gRpcPort  = flag.String("gRpcPort", "15999", "gRPC port to be used")
-	mySqlPort = flag.String("mySqlPort", "15306", "mySql port to be used")
-	cell      = flag.String("cell", "test", "Vitess Cell name")
-	keyspaceData = flag.String("keyspaceData", "test_keyspace:2:1:create_messages.sql,create_tokens.sql;unsharded_keyspace:0:0:create_dinosaurs.sql,create_eggs.sql", "List of keyspace_name/external_db_name:num_of_shards:num_of_replica_tablets:schema_files:<optional>lookup_keyspace_name separated by ';'")
+	webPort        = flag.String("webPort", "8080", "Web port to be used")
+	gRpcPort       = flag.String("gRpcPort", "15999", "gRPC port to be used")
+	mySqlPort      = flag.String("mySqlPort", "15306", "mySql port to be used")
+	cell           = flag.String("cell", "test", "Vitess Cell name")
+	keyspaceData   = flag.String("keyspaceData", "test_keyspace:2:1:create_messages.sql,create_tokens.sql;unsharded_keyspace:0:0:create_dinosaurs.sql,create_eggs.sql", "List of keyspace_name/external_db_name:num_of_shards:num_of_replica_tablets:schema_files:<optional>lookup_keyspace_name separated by ';'")
 	externalDbData = flag.String("externalDbData", "", "List of Data corresponding to external DBs. List of <external_db_name>,<DB_HOST>,<DB_PORT>,<DB_USER>,<DB_PASS>,<DB_CHARSET> seperated by ';'")
 )
 
 type keyspaceInfo struct {
-	keyspace string
-	shards  int
-	replicaTablets int
-	lookupKeyspace string
-	useLookups bool
-	schemaFile *os.File
+	keyspace        string
+	shards          int
+	replicaTablets  int
+	lookupKeyspace  string
+	useLookups      bool
+	schemaFile      *os.File
 	schemaFileNames []string
 }
 
 type externalDbInfo struct {
-	dbName string
-	dbHost string
-	dbPort string
-	dbUser string
-	dbPass string
+	dbName    string
+	dbHost    string
+	dbPort    string
+	dbUser    string
+	dbPass    string
 	dbCharset string
 }
 
@@ -65,7 +82,7 @@ func newKeyspaceInfo(keyspace string, shards int, replicaTablets int, schemaFile
 	return k
 }
 
-func newExternalDbInfo(dbName, dbHost , dbPort, dbUser, dbPass, dbCharset string) externalDbInfo {
+func newExternalDbInfo(dbName, dbHost, dbPort, dbUser, dbPass, dbCharset string) externalDbInfo {
 	d := externalDbInfo{dbName: dbName, dbHost: dbHost, dbPort: dbPort, dbUser: dbUser, dbPass: dbPass, dbCharset: dbCharset}
 	return d
 }
@@ -75,7 +92,7 @@ func main() {
 	keyspaceInfoMap := make(map[string]keyspaceInfo)
 	externalDbInfoMap := make(map[string]externalDbInfo)
 
-	for _,v:= range strings.Split(*keyspaceData, ";") {
+	for _, v := range strings.Split(*keyspaceData, ";") {
 		tokens := strings.Split(v, ":")
 		shards, _ := strconv.Atoi(tokens[1])
 		replicaTablets, _ := strconv.Atoi(tokens[2])
@@ -89,7 +106,7 @@ func main() {
 		}
 	}
 
-	for _,v:= range strings.Split(*externalDbData, ";") {
+	for _, v := range strings.Split(*externalDbData, ";") {
 		tokens := strings.Split(v, ":")
 		if len(tokens) > 1 {
 			externalDbInfoMap[tokens[0]] = newExternalDbInfo(tokens[0], tokens[1], tokens[2], tokens[3], tokens[4], tokens[5])
@@ -97,7 +114,7 @@ func main() {
 	}
 
 	for k, v := range keyspaceInfoMap {
-		if  _, ok := externalDbInfoMap[k]; !ok {
+		if _, ok := externalDbInfoMap[k]; !ok {
 			v.schemaFile = createFile(fmt.Sprintf("%s%s_schema_file.sql", tablesPath, v.keyspace))
 			appendtoSqlFile(v.schemaFileNames, v.schemaFile)
 			closeFile(v.schemaFile)
@@ -108,14 +125,14 @@ func main() {
 	for k, keyspaceData := range keyspaceInfoMap {
 		vSchemaFile := readFile(*baseVschemaFile)
 		if keyspaceData.shards == 0 {
-			vSchemaFile = applyJsonInMemoryPatch(vSchemaFile,`[{"op": "replace","path": "/sharded", "value": false}]`)
+			vSchemaFile = applyJsonInMemoryPatch(vSchemaFile, `[{"op": "replace","path": "/sharded", "value": false}]`)
 		}
 
 		// Check if it is an external_db
-		if  _, ok := externalDbInfoMap[k]; ok {
-      //This is no longer necessary, but we'll keep it for reference
-      //https://github.com/vitessio/vitess/pull/4868, https://github.com/vitessio/vitess/pull/5010
-      //vSchemaFile = applyJsonInMemoryPatch(vSchemaFile,`[{"op": "add","path": "/tables/*", "value": {}}]`)
+		if _, ok := externalDbInfoMap[k]; ok {
+			//This is no longer necessary, but we'll keep it for reference
+			//https://github.com/vitessio/vitess/pull/4868, https://github.com/vitessio/vitess/pull/5010
+			//vSchemaFile = applyJsonInMemoryPatch(vSchemaFile,`[{"op": "add","path": "/tables/*", "value": {}}]`)
 		} else {
 			var primaryTableColumns map[string]string
 			vSchemaFile, primaryTableColumns = addTablesVschemaPatch(vSchemaFile, keyspaceData.schemaFileNames)
@@ -210,7 +227,6 @@ func handleError(err error) {
 	}
 }
 
-
 func appendtoSqlFile(schemaFileNames []string, f *os.File) {
 	for _, file := range schemaFileNames {
 		data, err := ioutil.ReadFile(tablesPath + file)
@@ -278,7 +294,7 @@ func addTablesVschemaPatch(vSchemaFile []byte, schemaFileNames []string) ([]byte
 
 func addLookupDataToVschema(vSchemaFile []byte, schemaFileNames []string, primaryTableColumns map[string]string, keyspace string) []byte {
 	for _, fileName := range schemaFileNames {
-		tableName := fileName[7:len(fileName)-4]
+		tableName := fileName[7 : len(fileName)-4]
 		lookupTableOwner := ""
 
 		// Find owner of lookup table
@@ -312,7 +328,7 @@ func writeVschemaFile(file []byte, fileName string) {
 	writeFile(file, fileName)
 }
 
-func writeFile (file []byte, fileName string) {
+func writeFile(file []byte, fileName string) {
 	err := ioutil.WriteFile(fileName, file, 0644)
 	if err != nil {
 		log.Fatalf("writing %s %s", fileName, err)
@@ -321,7 +337,7 @@ func writeFile (file []byte, fileName string) {
 
 func applyKeyspaceDependentPatches(dockerComposeFile []byte, keyspaceData keyspaceInfo, externalDbInfoMap map[string]externalDbInfo) []byte {
 	var externalDbInfo externalDbInfo
-	if  val, ok := externalDbInfoMap[keyspaceData.keyspace]; ok {
+	if val, ok := externalDbInfoMap[keyspaceData.keyspace]; ok {
 		externalDbInfo = val
 	}
 	tabAlias := 0 + tabletsUsed*100
@@ -334,7 +350,7 @@ func applyKeyspaceDependentPatches(dockerComposeFile []byte, keyspaceData keyspa
 	}
 	interval := int(math.Floor(256 / float64(keyspaceData.shards)))
 
-	for i:=1; i < keyspaceData.shards; i++ {
+	for i := 1; i < keyspaceData.shards; i++ {
 		masterTablets = append(masterTablets, strconv.Itoa((i+1)*100+1))
 	}
 
@@ -346,13 +362,13 @@ func applyKeyspaceDependentPatches(dockerComposeFile []byte, keyspaceData keyspa
 		dockerComposeFile = applyTabletPatches(dockerComposeFile, tabAlias, shard, keyspaceData, externalDbInfoMap)
 	} else {
 		// Determine shard range
-		for i:=0; i < keyspaceData.shards; i++ {
+		for i := 0; i < keyspaceData.shards; i++ {
 			if i == 0 {
 				shard = fmt.Sprintf("-%x", interval)
 			} else if i == (keyspaceData.shards - 1) {
 				shard = fmt.Sprintf("%x-", interval*i)
 			} else {
-				shard = fmt.Sprintf("%x-%x", interval*(i) ,interval*(i+1))
+				shard = fmt.Sprintf("%x-%x", interval*(i), interval*(i+1))
 			}
 			tabAlias = tabAlias + 100
 			dockerComposeFile = applyTabletPatches(dockerComposeFile, tabAlias, shard, keyspaceData, externalDbInfoMap)
@@ -382,12 +398,12 @@ func applyDockerComposePatches(dockerComposeFile []byte, keyspaceInfoMap map[str
 
 func applyTabletPatches(dockerComposeFile []byte, tabAlias int, shard string, keyspaceData keyspaceInfo, externalDbInfoMap map[string]externalDbInfo) []byte {
 	var dbInfo externalDbInfo
-	if  val, ok := externalDbInfoMap[keyspaceData.keyspace]; ok {
+	if val, ok := externalDbInfoMap[keyspaceData.keyspace]; ok {
 		dbInfo = val
 	}
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateDefaultTablet(strconv.Itoa(tabAlias+1), shard, "master", keyspaceData.keyspace, dbInfo))
-	for i:=0; i < keyspaceData.replicaTablets; i++ {
-		dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateDefaultTablet(strconv.Itoa(tabAlias+ 2 + i), shard, "replica", keyspaceData.keyspace, dbInfo))
+	for i := 0; i < keyspaceData.replicaTablets; i++ {
+		dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateDefaultTablet(strconv.Itoa(tabAlias+2+i), shard, "replica", keyspaceData.keyspace, dbInfo))
 	}
 	return dockerComposeFile
 }
@@ -547,10 +563,10 @@ func generateSchemaload(tabletAliases []string, postLoadFile string, keyspace st
 	// Formatting for list in yaml
 	for i, tabletId := range tabletAliases {
 		//tabletAliases[i] = "\"vttablet" + tabletId + "\""
-    tabletAliases[i] = "vttablet" + tabletId + ": " + "{condition : service_healthy}"
+		tabletAliases[i] = "vttablet" + tabletId + ": " + "{condition : service_healthy}"
 	}
 	//dependsOn := "[" + strings.Join(tabletAliases, ", ") + "]"
-  dependsOn := "depends_on: {" + strings.Join(tabletAliases, ", ") + "}"
+	dependsOn := "depends_on: {" + strings.Join(tabletAliases, ", ") + "}"
 
 	data := fmt.Sprintf(`
 - op: add
@@ -627,5 +643,5 @@ func addToColumnVIndexes(tableName, column, referenceName string) string {
 }]
 `, tableName, column, referenceName)
 
-return data
+	return data
 }

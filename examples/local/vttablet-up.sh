@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -37,11 +37,6 @@ script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
 init_db_sql_file="$VTROOT/config/init_db.sql"
-
-# Previously this file set EXTRA_MY_CNF based on MYSQL_FLAVOR
-# It now relies on mysqlctl to autodetect
-
-export EXTRA_MY_CNF=$VTROOT/config/mycnf/default-fast.cnf:$VTROOT/config/mycnf/rbr.cnf
 
 mkdir -p $VTDATAROOT/backups
 
