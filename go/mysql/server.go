@@ -42,7 +42,6 @@ const (
 	// timing metric keys
 	connectTimingKey  = "Connect"
 	queryTimingKey    = "Query"
-	versionSSL30      = "SSL30"
 	versionTLS10      = "TLS10"
 	versionTLS11      = "TLS11"
 	versionTLS12      = "TLS12"
@@ -776,8 +775,6 @@ func (c *Conn) writeAuthSwitchRequest(pluginName string, pluginData []byte) erro
 // Whenever we move to a new version of go, we will need add any new supported TLS versions here
 func tlsVersionToString(version uint16) string {
 	switch version {
-	case tls.VersionSSL30:
-		return versionSSL30
 	case tls.VersionTLS10:
 		return versionTLS10
 	case tls.VersionTLS11:
