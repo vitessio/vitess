@@ -80,7 +80,7 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 	for {
 		settings, numTablesToCopy, err := vr.readSettings(ctx)
 		if err != nil {
-			return fmt.Errorf("error reading VReplication settings: %v", err)
+			return err
 		}
 		// If any of the operations below changed state to Stopped, we should return.
 		if settings.State == binlogplayer.BlpStopped {
