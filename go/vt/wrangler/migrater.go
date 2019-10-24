@@ -176,7 +176,7 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 		defer targetUnlock(&err)
 	}
 
-	// If not journals exist, sourceWorkflows will be initialized by sm.MigrateStreams.
+	// If no journals exist, sourceWorkflows will be initialized by sm.MigrateStreams.
 	journalsExist, sourceWorkflows, err := mi.checkJournals(ctx)
 	if err != nil {
 		mi.wr.Logger().Errorf("checkJournals failed: %v", err)
