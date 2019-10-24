@@ -684,18 +684,18 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 // This helps prevent cases where the error log is symlinked to /dev/stderr etc,
 // In which case the user can manually open the file.
 func readTailOfMysqldErrorLog(fileName string) string {
-	file, err := os.Open(fileName)
-	defer file.Close()
-	if err != nil {
-		return fmt.Sprintf("could not open mysql error log (%v): %v", fileName, err)
-	}
-	fileInfo, err := file.Stat()
+	fileInfo, err := os.Stat(fileName)
 	if err != nil {
 		return fmt.Sprintf("could not stat mysql error log (%v): %v", fileName, err)
 	}
 	if !fileInfo.Mode().IsRegular() {
 		return fmt.Sprintf("mysql error log file is not a regular file: %v", fileName)
 	}
+	file, err := os.Open(fileName)
+	if err != nil {
+		return fmt.Sprintf("could not open mysql error log (%v): %v", fileName, err)
+	}
+	defer file.Close()
 	startPos := int64(0)
 	if fileInfo.Size() > maxLogFileSampleSize {
 		startPos = fileInfo.Size() - maxLogFileSampleSize
