@@ -648,6 +648,13 @@ func stripeFileName(baseFileName string, index int) string {
 }
 
 func addStripeFiles(ctx context.Context, params BackupParams, backupHandle backupstorage.BackupHandle, baseFileName string, numStripes int) ([]io.WriteCloser, error) {
+	// Compute total size of all files we will backup.
+	// We delegate the actual backing up to xtrabackup which streams
+	// the files as a single archive (tar / xbstream), which might
+	// further be compressed using gzip.
+	// This approximate total size is passed in to AddFile so that
+	// storage plugins can make appropriate choices for parameters
+	// like partSize in multi-part uploads
 	_, totalSize, err := findFilesToBackup(params.Cnf)
 	if err != nil {
 		return nil, err
