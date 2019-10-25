@@ -37,6 +37,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/hook"
@@ -46,6 +47,7 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 // ConfigureTabletHook configures the right parameters for a hook
@@ -61,11 +63,27 @@ func ConfigureTabletHook(hk *hook.Hook, tabletAlias *topodatapb.TabletAlias) {
 // transitions need to be forced from time to time.
 //
 // If successful, the updated tablet record is returned.
-func ChangeType(ctx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, newType topodatapb.TabletType) (*topodatapb.Tablet, error) {
-	return ts.UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
+func ChangeType(ctx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, newType topodatapb.TabletType, masterTermStartTime *vttime.Time) (*topodatapb.Tablet, error) {
+	var result *topodatapb.Tablet
+	// Always clear out the master timestamp if not master.
+	if newType != topodatapb.TabletType_MASTER {
+		masterTermStartTime = nil
+	}
+	_, err := ts.UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
+		// Save the most recent tablet value so we can return it
+		// either if the update succeeds or if no update is needed.
+		result = tablet
+		if tablet.Type == newType && proto.Equal(tablet.MasterTermStartTime, masterTermStartTime) {
+			return topo.NewError(topo.NoUpdateNeeded, topoproto.TabletAliasString(tabletAlias))
+		}
 		tablet.Type = newType
+		tablet.MasterTermStartTime = masterTermStartTime
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 // CheckOwnership returns nil iff the Hostname and port match on oldTablet and

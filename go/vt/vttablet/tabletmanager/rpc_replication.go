@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -28,7 +30,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
 
@@ -216,16 +217,16 @@ func (agent *ActionAgent) InitMaster(ctx context.Context) (string, error) {
 	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
 		return "", err
 	}
-	agent.setMasterTermStartTime(startTime)
 
 	// Change our type to master if not already
-	if _, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
-		tablet.Type = topodatapb.TabletType_MASTER
-		return nil
-	}); err != nil {
+	_, err = topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER, logutil.TimeToProto(startTime))
+	if err != nil {
 		return "", err
 	}
-
+	// We only update agent's masterTermStartTime if we were able to update the topo.
+	// This ensures that in case of a failure, we are never in a situation where the
+	// tablet's timestamp is ahead of the topo's timestamp.
+	agent.setMasterTermStartTime(startTime)
 	// and refresh our state
 	agent.initReplication = true
 	if err := agent.refreshTablet(ctx, "InitMaster"); err != nil {
@@ -288,7 +289,7 @@ func (agent *ActionAgent) InitSlave(ctx context.Context, parent *topodatapb.Tabl
 	// is used on the old master when using InitShardMaster with
 	// -force, and the new master is different from the old master.
 	if agent.Tablet().Type == topodatapb.TabletType_MASTER {
-		if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_REPLICA); err != nil {
+		if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_REPLICA, nil); err != nil {
 			return err
 		}
 
@@ -479,11 +480,15 @@ func (agent *ActionAgent) PromoteSlaveWhenCaughtUp(ctx context.Context, position
 	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
 		return "", err
 	}
-	agent.setMasterTermStartTime(startTime)
 
-	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER); err != nil {
+	_, err = topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER, logutil.TimeToProto(startTime))
+	if err != nil {
 		return "", err
 	}
+	// We only update agent's masterTermStartTime if we were able to update the topo.
+	// This ensures that in case of a failure, we are never in a situation where the
+	// tablet's timestamp is ahead of the topo's timestamp.
+	agent.setMasterTermStartTime(startTime)
 
 	if err := agent.refreshTablet(ctx, "PromoteSlaveWhenCaughtUp"); err != nil {
 		return "", err
@@ -498,10 +503,15 @@ func (agent *ActionAgent) SlaveWasPromoted(ctx context.Context) error {
 		return err
 	}
 	defer agent.unlock()
+	startTime := time.Now()
 
-	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER); err != nil {
+	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER, logutil.TimeToProto(startTime)); err != nil {
 		return err
 	}
+	// We only update agent's masterTermStartTime if we were able to update the topo.
+	// This ensures that in case of a failure, we are never in a situation where the
+	// tablet's timestamp is ahead of the topo's timestamp.
+	agent.setMasterTermStartTime(startTime)
 
 	if err := agent.refreshTablet(ctx, "SlaveWasPromoted"); err != nil {
 		return err
@@ -567,9 +577,12 @@ func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topo
 	// Being sent SetMaster means another MASTER has been successfully promoted,
 	// so we convert to REPLICA first, since we want to do it even if other
 	// steps fail below.
+	// Note it is important to check for MASTER here so that we don't
+	// unintentionally change the type of RDONLY tablets
 	_, err = agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
 		if tablet.Type == topodatapb.TabletType_MASTER {
 			tablet.Type = topodatapb.TabletType_REPLICA
+			tablet.MasterTermStartTime = nil
 			return nil
 		}
 		return topo.NewError(topo.NoUpdateNeeded, agent.TabletAlias.String())
@@ -653,12 +666,13 @@ func (agent *ActionAgent) SlaveWasRestarted(ctx context.Context, parent *topodat
 	}
 	defer agent.unlock()
 
+	// Only change type of former MASTER tablets.
+	// Don't change type of RDONLY
 	typeChanged := false
-
-	// Once this action completes, update authoritative tablet node first.
 	if _, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias, func(tablet *topodatapb.Tablet) error {
 		if tablet.Type == topodatapb.TabletType_MASTER {
 			tablet.Type = topodatapb.TabletType_REPLICA
+			tablet.MasterTermStartTime = nil
 			typeChanged = true
 			return nil
 		}
@@ -726,11 +740,14 @@ func (agent *ActionAgent) PromoteSlave(ctx context.Context) (string, error) {
 	if err := agent.MysqlDaemon.SetReadOnly(false); err != nil {
 		return "", err
 	}
-	agent.setMasterTermStartTime(startTime)
 
-	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER); err != nil {
+	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER, logutil.TimeToProto(startTime)); err != nil {
 		return "", err
 	}
+	// We only update agent's masterTermStartTime if we were able to update the topo.
+	// This ensures that in case of a failure, we are never in a situation where the
+	// tablet's timestamp is ahead of the topo's timestamp.
+	agent.setMasterTermStartTime(startTime)
 
 	if err := agent.refreshTablet(ctx, "PromoteSlave"); err != nil {
 		return "", err

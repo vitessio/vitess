@@ -28,40 +28,6 @@ import (
 
 // shard related methods for Wrangler
 
-// updateShardCellsAndMaster will update the 'Cells' and possibly
-// MasterAlias records for the shard, if needed.
-func (wr *Wrangler) updateShardMaster(ctx context.Context, si *topo.ShardInfo, tabletAlias *topodatapb.TabletAlias, tabletType topodatapb.TabletType, allowMasterOverride bool) error {
-	// See if we need to update the Shard:
-	// - add the tablet's cell to the shard's Cells if needed
-	// - change the master if needed
-	shardUpdateRequired := false
-	if tabletType == topodatapb.TabletType_MASTER && !topoproto.TabletAliasEqual(si.MasterAlias, tabletAlias) {
-		shardUpdateRequired = true
-	}
-	if !shardUpdateRequired {
-		return nil
-	}
-
-	// run the update
-	_, err := wr.ts.UpdateShardFields(ctx, si.Keyspace(), si.ShardName(), func(s *topo.ShardInfo) error {
-		wasUpdated := false
-
-		if tabletType == topodatapb.TabletType_MASTER && !topoproto.TabletAliasEqual(s.MasterAlias, tabletAlias) {
-			if !topoproto.TabletAliasIsZero(s.MasterAlias) && !allowMasterOverride {
-				return fmt.Errorf("creating this tablet would override old master %v in shard %v/%v", topoproto.TabletAliasString(s.MasterAlias), si.Keyspace(), si.ShardName())
-			}
-			s.MasterAlias = tabletAlias
-			wasUpdated = true
-		}
-
-		if !wasUpdated {
-			return topo.NewError(topo.NoUpdateNeeded, si.Keyspace()+"/"+si.ShardName())
-		}
-		return nil
-	})
-	return err
-}
-
 // SetShardIsMasterServing changes the IsMasterServing parameter of a shard.
 // It does not rebuild any serving graph or do any consistency check.
 // This is an emergency manual operation.

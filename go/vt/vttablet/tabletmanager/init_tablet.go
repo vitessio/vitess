@@ -117,8 +117,33 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 				// We're marked as master in the shard record,
 				// and our existing tablet record agrees.
 				tabletType = topodatapb.TabletType_MASTER
-				// Same comment as above. Update tiebreaking timestamp to now.
-				agent.setMasterTermStartTime(time.Now())
+				// Read the master term start time from tablet.
+				// If it is nil, it might mean that we are upgrading, so use current time instead
+				if oldTablet.MasterTermStartTime != nil {
+					agent.setMasterTermStartTime(logutil.ProtoToTime(oldTablet.MasterTermStartTime))
+				} else {
+					agent.setMasterTermStartTime(time.Now())
+				}
+			}
+		default:
+			return vterrors.Wrap(err, "InitTablet failed to read existing tablet record")
+		}
+	} else {
+		oldTablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+		switch {
+		case topo.IsErrType(err, topo.NoNode):
+			// There's no existing tablet record, so there is nothing to do
+		case err == nil:
+			if oldTablet.Type == topodatapb.TabletType_MASTER {
+				// Our existing tablet type is master, but the shard record does not agree.
+				// Only take over if our master_term_start_time is after what is in the shard record
+				oldMasterTermStartTime := logutil.ProtoToTime(oldTablet.MasterTermStartTime)
+				currentShardTime := logutil.ProtoToTime(si.MasterTermStartTime)
+				if oldMasterTermStartTime.After(currentShardTime) {
+					tabletType = topodatapb.TabletType_MASTER
+					// read the master term start time from tablet
+					agent.setMasterTermStartTime(oldMasterTermStartTime)
+				}
 			}
 		default:
 			return vterrors.Wrap(err, "InitTablet failed to read existing tablet record")
@@ -176,6 +201,9 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		DbNameOverride: *initDbNameOverride,
 		Tags:           initTags,
 	}
+	if !agent.masterTermStartTime().IsZero() {
+		tablet.MasterTermStartTime = logutil.TimeToProto(agent.masterTermStartTime())
+	}
 	if port != 0 {
 		tablet.PortMap["vt"] = port
 	}
@@ -219,9 +247,9 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		return vterrors.Wrap(err, "CreateTablet failed")
 	}
 
+	agent.setTablet(tablet)
 	// optionally populate metadata records
 	if *initPopulateMetadata {
-		agent.setTablet(tablet)
 		localMetadata := agent.getLocalMetadataValues(tablet.Type)
 		err := mysqlctl.PopulateMetadataTables(agent.MysqlDaemon, localMetadata, topoproto.TabletDbName(tablet))
 		if err != nil {

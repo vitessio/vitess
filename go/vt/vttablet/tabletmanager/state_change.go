@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -153,7 +154,10 @@ func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) erro
 	if updatedTablet := agent.checkTabletMysqlPort(ctx, tablet); updatedTablet != nil {
 		tablet = updatedTablet
 	}
-
+	// Also refresh masterTermStartTime
+	if tablet.MasterTermStartTime != nil {
+		agent.setMasterTermStartTime(logutil.ProtoToTime(tablet.MasterTermStartTime))
+	}
 	agent.updateState(ctx, tablet, reason)
 	log.Infof("Done with post-action state refresh")
 	return nil
