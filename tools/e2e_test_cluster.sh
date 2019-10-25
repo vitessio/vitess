@@ -24,6 +24,7 @@ packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join 
 cluster_tests=$(echo "$packages_with_tests" | grep -E "go/test/endtoend" | cut -d" " -f1)
 
 # Run cluster test sequentially
+echo "running cluster tests $cluster_tests"
 echo "$cluster_tests" | xargs go test -v -p=1
 if [ $? -ne 0 ]; then
   echo "ERROR: Go cluster tests failed. See above for errors."
