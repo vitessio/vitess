@@ -72,14 +72,14 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 
 // MysqlCtlProcessInstance returns a Mysqlctl handle for mysqlctl process
 // configured with the given Config.
-func MysqlCtlProcessInstance(TabletUID int, MySQLPort int) *MysqlctlProcess {
+func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) *MysqlctlProcess {
 	mysqlctl := &MysqlctlProcess{
 		Name:         "mysqlctl",
 		Binary:       "mysqlctl",
-		LogDirectory: path.Join(os.Getenv("VTDATAROOT"), "/tmp"),
+		LogDirectory: tmpDirectory,
 		InitDBFile:   path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"),
 	}
-	mysqlctl.MySQLPort = MySQLPort
-	mysqlctl.TabletUID = TabletUID
+	mysqlctl.MySQLPort = mySQLPort
+	mysqlctl.TabletUID = tabletUID
 	return mysqlctl
 }

@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Copyright 2019 The Vitess Authors.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -38,13 +38,24 @@ fi
 packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}' ./go/.../endtoend/... | sort)
 
 # Flaky tests have the suffix "_flaky_test.go".
-all_except_flaky_tests=$(echo "$packages_with_tests" | grep -vE ".+ .+_flaky_test\.go" | cut -d" " -f1)
-flaky_tests=$(echo "$packages_with_tests" | grep -E ".+ .+_flaky_test\.go" | cut -d" " -f1)
+all_except_flaky_and_cluster_tests=$(echo "$packages_with_tests" | grep -vE ".+ .+_flaky_test\.go" |  grep -vE "go/test/endtoend" | cut -d" " -f1)
+flaky_tests=$(echo "$packages_with_tests" | grep -E ".+ .+_flaky_test\.go" | grep -vE "go/test/endtoend" | cut -d" " -f1)
+cluster_tests=$(echo "$packages_with_tests" | grep -E "go/test/endtoend" | cut -d" " -f1)
 
 # Run non-flaky tests.
-echo "$all_except_flaky_tests" | xargs go test $VT_GO_PARALLEL
+echo "$all_except_flaky_and_cluster_tests" | xargs go test $VT_GO_PARALLEL
 if [ $? -ne 0 ]; then
   echo "ERROR: Go unit tests failed. See above for errors."
+  echo
+  echo "This should NOT happen. Did you introduce a flaky unit test?"
+  echo "If so, please rename it to the suffix _flaky_test.go."
+  exit 1
+fi
+
+# Run cluster test sequentially
+echo "$cluster_tests" | xargs go test -v -p=1
+if [ $? -ne 0 ]; then
+  echo "ERROR: Go cluster tests failed. See above for errors."
   echo
   echo "This should NOT happen. Did you introduce a flaky unit test?"
   echo "If so, please rename it to the suffix _flaky_test.go."

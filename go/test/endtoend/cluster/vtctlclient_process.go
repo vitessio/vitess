@@ -18,9 +18,7 @@ package cluster
 
 import (
 	"fmt"
-	"os"
 	"os/exec"
-	"path"
 	"strings"
 
 	"vitess.io/vitess/go/vt/log"
@@ -89,12 +87,12 @@ func (vtctlclient *VtctlClientProcess) ExecuteCommandWithOutput(args ...string) 
 
 // VtctlClientProcessInstance returns a VtctlProcess handle for vtctlclient process
 // configured with the given Config.
-func VtctlClientProcessInstance(Hostname string, GrpcPort int) *VtctlClientProcess {
+func VtctlClientProcessInstance(hostname string, grpcPort int, tmpDirectory string) *VtctlClientProcess {
 	vtctlclient := &VtctlClientProcess{
 		Name:          "vtctlclient",
 		Binary:        "vtctlclient",
-		Server:        fmt.Sprintf("%s:%d", Hostname, GrpcPort),
-		TempDirectory: path.Join(os.Getenv("VTDATAROOT"), "/tmp"),
+		Server:        fmt.Sprintf("%s:%d", hostname, grpcPort),
+		TempDirectory: tmpDirectory,
 	}
 	return vtctlclient
 }
