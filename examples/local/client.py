@@ -21,8 +21,7 @@ This is a sample for using the Python Vitess client.
 It's a script that inserts some random messages on random pages of the
 guestbook sample app.
 
-Before running this, start up a local example cluster as described in the
-README.md file.
+Before running this, start up a local example cluster.
 
 Then run client.sh, which sets up PYTHONPATH before running client.py:
 vitess/examples/local$ ./client.sh
