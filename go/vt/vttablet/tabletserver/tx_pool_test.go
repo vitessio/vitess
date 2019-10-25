@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -693,6 +693,7 @@ func newTxPool() *TxPool {
 	poolName := fmt.Sprintf("TestTransactionPool-%d", randID)
 	transactionCap := 300
 	transactionTimeout := time.Duration(30 * time.Second)
+	transactionPoolTimeout := time.Duration(40 * time.Second)
 	waiterCap := 500000
 	idleTimeout := time.Duration(30 * time.Second)
 	limiter := &txlimiter.TxAllowAll{}
@@ -702,6 +703,7 @@ func newTxPool() *TxPool {
 		transactionCap,
 		0,
 		transactionTimeout,
+		transactionPoolTimeout,
 		idleTimeout,
 		waiterCap,
 		DummyChecker,

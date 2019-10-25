@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -42,7 +42,6 @@ const (
 	// timing metric keys
 	connectTimingKey  = "Connect"
 	queryTimingKey    = "Query"
-	versionSSL30      = "SSL30"
 	versionTLS10      = "TLS10"
 	versionTLS11      = "TLS11"
 	versionTLS12      = "TLS12"
@@ -776,8 +775,6 @@ func (c *Conn) writeAuthSwitchRequest(pluginName string, pluginData []byte) erro
 // Whenever we move to a new version of go, we will need add any new supported TLS versions here
 func tlsVersionToString(version uint16) string {
 	switch version {
-	case tls.VersionSSL30:
-		return versionSSL30
 	case tls.VersionTLS10:
 		return versionTLS10
 	case tls.VersionTLS11:

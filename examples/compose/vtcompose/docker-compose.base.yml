@@ -1,4 +1,4 @@
-version: "3"
+version: "2.1"
 services:
   consul1:
     image: consul:latest

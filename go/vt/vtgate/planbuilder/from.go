@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -242,7 +242,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		default:
 			// Pinned tables have their keyspace ids already assigned.
 			// Use the Binary vindex, which is the identity function
-			// for keyspace id. Currently only dual tables are pinned.
+			// for keyspace id.
 			eroute = engine.NewSimpleRoute(engine.SelectEqualUnique, vst.Keyspace)
 			eroute.Vindex, _ = vindexes.NewBinary("binary", nil)
 			eroute.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vst.Pinned)}}
