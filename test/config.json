@@ -416,7 +416,7 @@
 			"Args": [],
 			"Command": [
 				"make",
-				"tools/e2e_test_cluster.sh"
+				"e2e_test_cluster"
 			],
 			"Manual": false,
 			"Shard": 2,
