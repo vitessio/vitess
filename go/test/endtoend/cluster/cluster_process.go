@@ -19,6 +19,8 @@ package cluster
 import (
 	"fmt"
 	"math/rand"
+	"os"
+	"path"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -33,6 +35,7 @@ type LocalProcessCluster struct {
 	BaseTabletUID int
 	Hostname      string
 	TopoPort      int
+	TmpDirectory  string
 
 	VtgateMySQLPort int
 	VtctldHTTPPort  int
@@ -82,7 +85,8 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 		cluster.Cell = DefaultCell
 	}
 	cluster.TopoPort = cluster.GetAndReservePort()
-	cluster.topoProcess = *EtcdProcessInstance(cluster.TopoPort, cluster.Hostname)
+	cluster.TmpDirectory = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/tmp_%d", cluster.GetAndReservePort()))
+	cluster.topoProcess = *EtcdProcessInstance(cluster.TopoPort, cluster.GetAndReservePort(), cluster.Hostname, "global")
 	log.Info(fmt.Sprintf("Starting etcd server on port : %d", cluster.TopoPort))
 	if err = cluster.topoProcess.Setup(); err != nil {
 		log.Error(err.Error())
@@ -107,7 +111,7 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 		return
 	}
 
-	cluster.vtctldProcess = *VtctldProcessInstance(cluster.GetAndReservePort(), cluster.GetAndReservePort(), cluster.topoProcess.Port, cluster.Hostname)
+	cluster.vtctldProcess = *VtctldProcessInstance(cluster.GetAndReservePort(), cluster.GetAndReservePort(), cluster.topoProcess.Port, cluster.Hostname, cluster.TmpDirectory)
 	log.Info(fmt.Sprintf("Starting vtctld server on port : %d", cluster.vtctldProcess.Port))
 	cluster.VtctldHTTPPort = cluster.vtctldProcess.Port
 	if err = cluster.vtctldProcess.Setup(cluster.Cell); err != nil {
@@ -115,7 +119,7 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 		return
 	}
 
-	cluster.VtctlclientProcess = *VtctlClientProcessInstance("localhost", cluster.vtctldProcess.GrpcPort)
+	cluster.VtctlclientProcess = *VtctlClientProcessInstance("localhost", cluster.vtctldProcess.GrpcPort, cluster.TmpDirectory)
 	return
 }
 
@@ -157,7 +161,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			}
 			// Start Mysqlctl process
 			log.Info(fmt.Sprintf("Starting mysqlctl for table uid %d, mysql port %d", tablet.TabletUID, tablet.MySQLPort))
-			tablet.mysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort)
+			tablet.mysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory)
 			if err = tablet.mysqlctlProcess.Start(); err != nil {
 				log.Error(err.Error())
 				return
@@ -169,12 +173,12 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				tablet.TabletUID,
 				cluster.Cell,
 				shardName,
-				cluster.Hostname,
 				keyspace.Name,
 				cluster.vtctldProcess.Port,
 				tablet.Type,
 				cluster.topoProcess.Port,
-				cluster.Hostname)
+				cluster.Hostname,
+				cluster.TmpDirectory)
 			log.Info(fmt.Sprintf("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort))
 
 			if err = tablet.vttabletProcess.Setup(); err != nil {
@@ -224,9 +228,10 @@ func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 		cluster.VtgateMySQLPort,
 		cluster.Cell,
 		cluster.Cell,
-		cluster.Hostname, "MASTER,REPLICA",
+		"MASTER,REPLICA",
 		cluster.topoProcess.Port,
-		cluster.Hostname)
+		cluster.Hostname,
+		cluster.TmpDirectory)
 
 	log.Info(fmt.Sprintf("Vtgate started, connect to mysql using : mysql -h 127.0.0.1 -P %d", cluster.VtgateMySQLPort))
 	return cluster.VtgateProcess.Setup()
@@ -279,7 +284,7 @@ func (cluster *LocalProcessCluster) GetAndReservePort() int {
 // GetAndReserveTabletUID gives tablet uid
 func (cluster *LocalProcessCluster) GetAndReserveTabletUID() int {
 	if cluster.BaseTabletUID == 0 {
-		cluster.BaseTabletUID = getRandomNumber(100, 0)
+		cluster.BaseTabletUID = getRandomNumber(10000, 0)
 	}
 	cluster.BaseTabletUID = cluster.BaseTabletUID + 1
 	return cluster.BaseTabletUID

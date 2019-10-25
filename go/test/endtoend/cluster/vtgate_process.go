@@ -159,29 +159,29 @@ func (vtgate *VtgateProcess) TearDown() error {
 // VtgateProcessInstance returns a Vtgate handle for vtgate process
 // configured with the given Config.
 // The process must be manually started by calling setup()
-func VtgateProcessInstance(Port int, GrpcPort int, MySQLServerPort int, Cell string, CellsToWatch string, Hostname string, TabletTypesToWait string, topoPort int, hostname string) *VtgateProcess {
+func VtgateProcessInstance(port int, grpcPort int, mySQLServerPort int, cell string, cellsToWatch string, tabletTypesToWait string, topoPort int, hostname string, tmpDirectory string) *VtgateProcess {
 	vtctl := VtctlProcessInstance(topoPort, hostname)
 	vtgate := &VtgateProcess{
 		Name:                  "vtgate",
 		Binary:                "vtgate",
-		FileToLogQueries:      path.Join(os.Getenv("VTDATAROOT"), "/tmp/vtgate_querylog.txt"),
+		FileToLogQueries:      path.Join(tmpDirectory, "/vtgate_querylog.txt"),
 		Directory:             os.Getenv("VTDATAROOT"),
 		ServiceMap:            "grpc-vtgateservice",
-		LogDir:                path.Join(os.Getenv("VTDATAROOT"), "/tmp"),
-		Port:                  Port,
-		GrpcPort:              GrpcPort,
-		MySQLServerPort:       MySQLServerPort,
+		LogDir:                tmpDirectory,
+		Port:                  port,
+		GrpcPort:              grpcPort,
+		MySQLServerPort:       mySQLServerPort,
 		MySQLServerSocketPath: "/tmp/mysql.sock",
-		Cell:                  Cell,
-		CellsToWatch:          CellsToWatch,
-		TabletTypesToWait:     TabletTypesToWait,
+		Cell:                  cell,
+		CellsToWatch:          cellsToWatch,
+		TabletTypesToWait:     tabletTypesToWait,
 		GatewayImplementation: "discoverygateway",
 		CommonArg:             *vtctl,
-		PidFile:               path.Join(os.Getenv("VTDATAROOT"), "/tmp/vtgate.pid"),
+		PidFile:               path.Join(tmpDirectory, "/vtgate.pid"),
 		MySQLAuthServerImpl:   "none",
 	}
 
-	vtgate.VerifyURL = fmt.Sprintf("http://%s:%d/debug/vars", Hostname, Port)
+	vtgate.VerifyURL = fmt.Sprintf("http://%s:%d/debug/vars", hostname, port)
 
 	return vtgate
 }
