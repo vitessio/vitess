@@ -895,6 +895,8 @@ func TestPlayerTypes(t *testing.T) {
 		fmt.Sprintf("create table %s.src1(id int, val varbinary(128), primary key(id))", vrepldb),
 		"create table binary_pk(b binary(4), val varbinary(4), primary key(b))",
 		fmt.Sprintf("create table %s.binary_pk(b binary(4), val varbinary(4), primary key(b))", vrepldb),
+		"create table vitess_json(id int, intval json, strval json, primary key(id))",
+		fmt.Sprintf("create table %s.vitess_json(id int, intval json, strval json, primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
 		"drop table vitess_ints",
@@ -909,6 +911,8 @@ func TestPlayerTypes(t *testing.T) {
 		fmt.Sprintf("drop table %s.vitess_null", vrepldb),
 		"drop table binary_pk",
 		fmt.Sprintf("drop table %s.binary_pk", vrepldb),
+		"drop table vitess_json",
+		fmt.Sprintf("drop table %s.vitess_json", vrepldb),
 	})
 	env.SchemaEngine.Reload(context.Background())
 
@@ -979,6 +983,13 @@ func TestPlayerTypes(t *testing.T) {
 		table:  "binary_pk",
 		data: [][]string{
 			{"a\x00\x00\x00", "bbb"},
+		},
+	}, {
+		input:  "insert into vitess_json values(1, '{\"a\": 1}', '{\"a\": \"b\"}')",
+		output: "insert into vitess_json(id,intval,strval) values (1,_utf8mb4 '{\\\"a\\\":1}',_utf8mb4 '{\\\"a\\\":\\\"b\\\"}')",
+		table:  "vitess_json",
+		data: [][]string{
+			{"1", "{\"a\": 1}", "{\"a\": \"b\"}"},
 		},
 	}}
 

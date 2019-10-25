@@ -372,29 +372,14 @@ func TestPlayerCopyWildcardRule(t *testing.T) {
 	})
 }
 
-// TestPlayerCopyJsonData ensures the copy-catchup back-and-forth loop works correctly
+// TestPlayerCopyJsonData ensures the copy works correctly
 // when the filter uses a wildcard rule & the tables have json data
 func TestPlayerCopyJsonData(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
-
-	savedPacketSize := *vstreamer.PacketSize
-	// PacketSize of 1 byte will send at most one row at a time.
-	*vstreamer.PacketSize = 1
-	defer func() { *vstreamer.PacketSize = savedPacketSize }()
-
-	savedCopyTimeout := copyTimeout
-	// copyTimeout should be low enough to have time to send one row.
-	copyTimeout = 500 * time.Millisecond
-	defer func() { copyTimeout = savedCopyTimeout }()
-
-	savedWaitRetryTime := waitRetryTime
-	// waitRetry time shoulw be very low to cause the wait loop to execute multipel times.
-	waitRetryTime = 10 * time.Millisecond
-	defer func() { waitRetryTime = savedWaitRetryTime }()
+	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
 		"create table src(id int, val json, primary key(id))",
-		"insert into src values(10, '{\"jjj\": 10}'), (2, '{\"bbb\": 2}')",
+		"insert into src values(1, '{\"aaa\": \"aaa\"}'), (2, '{\"bbb\": 2}')",
 		fmt.Sprintf("create table %s.src(id int, val json, primary key(id))", vrepldb),
 	})
 	defer execStatements(t, []string{
@@ -402,32 +387,6 @@ func TestPlayerCopyJsonData(t *testing.T) {
 		fmt.Sprintf("drop table %s.src", vrepldb),
 	})
 	env.SchemaEngine.Reload(context.Background())
-
-	count := 0
-	vstreamRowsSendHook = func(ctx context.Context) {
-		defer func() { count++ }()
-		// Allow the first two calls to go through: field info and one row.
-		if count <= 1 {
-			return
-		}
-		// Insert a statement to test that catchup gets new events.
-		execStatements(t, []string{
-			"insert into src values(1, JSON_OBJECT(\"aaa\", \"aaa\"))",
-		})
-		// Wait for context to expire and then send the row.
-		// This will cause the copier to abort and go back to catchup mode.
-		<-ctx.Done()
-		// Do this no more than once.
-		vstreamRowsSendHook = nil
-	}
-
-	vstreamRowsHook = func(context.Context) {
-		// Sleeping 50ms guarantees that the catchup wait loop executes multiple times.
-		// This is because waitRetryTime is set to 10ms.
-		time.Sleep(50 * time.Millisecond)
-		// Do this no more than once.
-		vstreamRowsHook = nil
-	}
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -466,23 +425,8 @@ func TestPlayerCopyJsonData(t *testing.T) {
 		// The first fast-forward has no starting point. So, it just saves the current position.
 		"/update _vt.vreplication set pos=",
 		"begin",
-		"insert into src(id,val) values (2,_utf8mb4 '{\\\"bbb\\\": 2}')",
+		"insert into src(id,val) values (1,_utf8mb4 '{\\\"aaa\\\": \\\"aaa\\\"}'), (2,_utf8mb4 '{\\\"bbb\\\": 2}')",
 		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > ' where vrepl_id=.*`,
-		"commit",
-		"rollback",
-		// The next catchup executes the new row insert and copies row 1.
-		"begin",
-		"insert into src(id,val) select 1, _utf8mb4 '{\\\"aaa\\\":\\\"aaa\\\"}' from dual where (1) <= (2)",
-		"/update _vt.vreplication set pos=",
-		"commit",
-		// fastForward has nothing to add. Just saves position.
-		"begin",
-		"/update _vt.vreplication set pos=",
-		"commit",
-		// Second row gets copied.
-		"begin",
-		"insert into src(id,val) values (10,_utf8mb4 '{\\\"jjj\\\": 10}')",
-		`/update _vt.copy_state set lastpk='fields:<name:\\"id\\" type:INT32 > rows:<lengths:2 values:\\"10\\" > ' where vrepl_id=.*`,
 		"commit",
 		"/delete from _vt.copy_state.*src",
 		// rollback is a no-op because the delete is autocommitted.
@@ -494,7 +438,6 @@ func TestPlayerCopyJsonData(t *testing.T) {
 	expectData(t, "src", [][]string{
 		{"1", "{\"aaa\": \"aaa\"}"},
 		{"2", "{\"bbb\": 2}"},
-		{"10", "{\"jjj\": 10}"},
 	})
 }
 
