@@ -37,6 +37,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/hook"
@@ -63,28 +64,26 @@ func ConfigureTabletHook(hk *hook.Hook, tabletAlias *topodatapb.TabletAlias) {
 //
 // If successful, the updated tablet record is returned.
 func ChangeType(ctx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, newType topodatapb.TabletType, masterTermStartTime *vttime.Time) (*topodatapb.Tablet, error) {
-	result, err := ts.UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
-		if tablet.Type == newType && tablet.MasterTermStartTime == masterTermStartTime {
+	var result *topodatapb.Tablet
+	// Always clear out the master timestamp if not master.
+	if newType != topodatapb.TabletType_MASTER {
+		masterTermStartTime = nil
+	}
+	_, err := ts.UpdateTabletFields(ctx, tabletAlias, func(tablet *topodatapb.Tablet) error {
+		// Save the most recent tablet value so we can return it
+		// either if the update succeeds or if no update is needed.
+		result = tablet
+		if tablet.Type == newType && proto.Equal(tablet.MasterTermStartTime, masterTermStartTime) {
 			return topo.NewError(topo.NoUpdateNeeded, topoproto.TabletAliasString(tabletAlias))
 		}
 		tablet.Type = newType
-		if newType == topodatapb.TabletType_MASTER {
-			tablet.MasterTermStartTime = masterTermStartTime
-		} else {
-			tablet.MasterTermStartTime = nil
-		}
+		tablet.MasterTermStartTime = masterTermStartTime
 		return nil
 	})
-	// If topo.NoUpdateNeeded then result will be nil and err will be nil.
-	// In order to maintain the previous contract of ChangeType (that it
-	// returns the updated tablet if the update was successful),
-	// we need to set result here.
-	var ti *topo.TabletInfo
-	if result == nil && err == nil {
-		ti, err = ts.GetTablet(ctx, tabletAlias)
-		result = ti.Tablet
+	if err != nil {
+		return nil, err
 	}
-	return result, err
+	return result, nil
 }
 
 // CheckOwnership returns nil iff the Hostname and port match on oldTablet and
