@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vschema"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -36,8 +37,8 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 )
 
-const vreplQueryks = "select id, source from _vt.vreplication where workflow='test' and db_name='vt_ks'"
-const vreplQueryks2 = "select id, source from _vt.vreplication where workflow='test' and db_name='vt_ks2'"
+const vreplQueryks = "select id, source, message from _vt.vreplication where workflow='test' and db_name='vt_ks'"
+const vreplQueryks2 = "select id, source, message from _vt.vreplication where workflow='test' and db_name='vt_ks2'"
 
 type testMigraterEnv struct {
 	ts              *topo.Server
@@ -137,11 +138,11 @@ func newTestTableMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
 					}},
 				},
 			}
-			rows = append(rows, fmt.Sprintf("%d|%v", j+1, bls))
+			rows = append(rows, fmt.Sprintf("%d|%v|", j+1, bls))
 		}
 		tme.dbTargetClients[i].addInvariant(vreplQueryks2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"id|source",
-			"int64|varchar"),
+			"id|source|message",
+			"int64|varchar|varchar"),
 			rows...),
 		)
 	}
@@ -197,7 +198,34 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 		tme.targetKeyRanges = append(tme.targetKeyRanges, targetKeyRange)
 	}
 
-	vs := &vschemapb.Keyspace{Sharded: true}
+	vs := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschema.Vindex{
+			"thash": {
+				Type: "hash",
+			},
+		},
+		Tables: map[string]*vschema.Table{
+			"t1": {
+				ColumnVindexes: []*vschema.ColumnVindex{{
+					Columns: []string{"c1"},
+					Name:    "thash",
+				}},
+			},
+			"t2": {
+				ColumnVindexes: []*vschema.ColumnVindex{{
+					Columns: []string{"c1"},
+					Name:    "thash",
+				}},
+			},
+			"t3": {
+				ColumnVindexes: []*vschema.ColumnVindex{{
+					Columns: []string{"c1"},
+					Name:    "thash",
+				}},
+			},
+		},
+	}
 	if err := tme.ts.SaveVSchema(ctx, "ks", vs); err != nil {
 		t.Fatal(err)
 	}
@@ -229,11 +257,11 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 					}},
 				},
 			}
-			rows = append(rows, fmt.Sprintf("%d|%v", j+1, bls))
+			rows = append(rows, fmt.Sprintf("%d|%v|", j+1, bls))
 		}
 		tme.dbTargetClients[i].addInvariant(vreplQueryks, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"id|source",
-			"int64|varchar"),
+			"id|source|message",
+			"int64|varchar|varchar"),
 			rows...),
 		)
 	}
@@ -343,23 +371,48 @@ func (tme *testShardMigraterEnv) expectWaitForCatchup() {
 	})
 }
 
+func (tme *testShardMigraterEnv) expectDeleteReverseVReplication() {
+	// NOTE: this is not a faithful reproduction of what should happen.
+	// The ids returned are not accurate.
+	for _, dbclient := range tme.dbSourceClients {
+		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test_reverse'", resultid12, nil)
+		dbclient.addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
+		dbclient.addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+	}
+}
+
+func (tme *testShardMigraterEnv) expectCreateReverseVReplication() {
+	tme.expectDeleteReverseVReplication()
+	tme.forAllStreams(func(i, j int) {
+		tme.dbSourceClients[j].addQueryRE(fmt.Sprintf("insert into _vt.vreplication.*%s.*%s.*MariaDB/5-456-893.*Stopped", tme.targetShards[i], key.KeyRangeString(tme.sourceKeyRanges[j])), &sqltypes.Result{InsertID: uint64(j + 1)}, nil)
+		tme.dbSourceClients[j].addQuery(fmt.Sprintf("select * from _vt.vreplication where id = %d", j+1), stoppedResult(j+1), nil)
+	})
+}
+
 func (tme *testShardMigraterEnv) expectCreateJournals() {
 	for _, dbclient := range tme.dbSourceClients {
 		dbclient.addQueryRE("insert into _vt.resharding_journal.*", &sqltypes.Result{}, nil)
 	}
 }
 
-func (tme *testShardMigraterEnv) expectCreateReverseReplication() {
-	tme.forAllStreams(func(i, j int) {
-		tme.dbSourceClients[j].addQueryRE(fmt.Sprintf("insert into _vt.vreplication.*%s.*%s.*MariaDB/5-456-893.*Stopped", tme.targetShards[i], tme.sourceShards[j]), &sqltypes.Result{InsertID: uint64(j + 1)}, nil)
-		tme.dbSourceClients[j].addQuery(fmt.Sprintf("select * from _vt.vreplication where id = %d", j+1), stoppedResult(j+1), nil)
-	})
+func (tme *testShardMigraterEnv) expectStartReverseVReplication() {
+	for _, dbclient := range tme.dbSourceClients {
+		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks'", resultid34, nil)
+		dbclient.addQuery("update _vt.vreplication set state = 'Running', message = '' where id in (3, 4)", &sqltypes.Result{}, nil)
+		dbclient.addQuery("select * from _vt.vreplication where id = 3", runningResult(3), nil)
+		dbclient.addQuery("select * from _vt.vreplication where id = 4", runningResult(4), nil)
+	}
 }
 
 func (tme *testShardMigraterEnv) expectDeleteTargetVReplication() {
 	// NOTE: this is not a faithful reproduction of what should happen.
 	// The ids returned are not accurate.
 	for _, dbclient := range tme.dbTargetClients {
+		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
+		dbclient.addQuery("update _vt.vreplication set message = 'FROZEN' where id in (1, 2)", &sqltypes.Result{}, nil)
+		dbclient.addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
+		dbclient.addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
+
 		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
 		dbclient.addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
 		dbclient.addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
@@ -370,4 +423,9 @@ func (tme *testShardMigraterEnv) expectCancelMigration() {
 	for _, dbclient := range tme.dbTargetClients {
 		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", &sqltypes.Result{}, nil)
 	}
+	for _, dbclient := range tme.dbSourceClients {
+		dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
+		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
+	}
+	tme.expectDeleteReverseVReplication()
 }

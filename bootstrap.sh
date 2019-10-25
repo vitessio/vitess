@@ -164,8 +164,14 @@ function install_protoc() {
     Darwin) local platform=osx;;
   esac
 
-  wget "https://github.com/google/protobuf/releases/download/v$version/protoc-$version-$platform-x86_64.zip"
-  unzip "protoc-$version-$platform-x86_64.zip"
+  case $(arch) in
+      aarch64)  local target=aarch_64;;
+      x86_64)  local target=x86_64;;
+      *)   echo "ERROR: unsupported architecture"; exit 1;;
+  esac
+
+  wget https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
+  unzip "protoc-$version-$platform-${target}.zip"
   ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
 }
 protoc_ver=3.6.1
@@ -203,8 +209,14 @@ function install_etcd() {
     Darwin) local platform=darwin; local ext=zip;;
   esac
 
+  case $(arch) in
+      aarch64)  local target=arm64;;
+      x86_64)  local target=amd64;;
+      *)   echo "ERROR: unsupported architecture"; exit 1;;
+  esac
+
   download_url=https://github.com/coreos/etcd/releases/download
-  file="etcd-${version}-${platform}-amd64.${ext}"
+  file="etcd-${version}-${platform}-${target}.${ext}"
 
   wget "$download_url/$version/$file"
   if [ "$ext" = "tar.gz" ]; then
@@ -213,7 +225,7 @@ function install_etcd() {
     unzip "$file"
   fi
   rm "$file"
-  ln -snf "$dist/etcd-${version}-${platform}-amd64/etcd" "$VTROOT/bin/etcd"
+  ln -snf "$dist/etcd-${version}-${platform}-${target}/etcd" "$VTROOT/bin/etcd"
 }
 install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
 
@@ -228,9 +240,15 @@ function install_consul() {
     Darwin) local platform=darwin;;
   esac
 
+  case $(arch) in
+      aarch64)  local target=arm64;;
+      x86_64)  local target=amd64;;
+      *)   echo "ERROR: unsupported architecture"; exit 1;;
+  esac
+
   download_url=https://releases.hashicorp.com/consul
-  wget "${download_url}/${version}/consul_${version}_${platform}_amd64.zip"
-  unzip "consul_${version}_${platform}_amd64.zip"
+  wget "${download_url}/${version}/consul_${version}_${platform}_${target}.zip"
+  unzip "consul_${version}_${platform}_${target}.zip"
   ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
 install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul

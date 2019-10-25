@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,19 +21,21 @@ import (
 	"net/http"
 )
 
-var errFallback = errors.New("not allowed: fallback policy")
+var errDenyAll = errors.New("not allowed: deny-all security_policy enforced")
 
-// FallbackPolicy is the policy that's used if the
-// requested policy cannot be found. It rejects all
-// access.
-type FallbackPolicy struct{}
+// denyAllPolicy rejects all access.
+type denyAllPolicy struct{}
 
 // CheckAccessActor disallows all actor access.
-func (fp FallbackPolicy) CheckAccessActor(actor, role string) error {
-	return errFallback
+func (denyAllPolicy) CheckAccessActor(actor, role string) error {
+	return errDenyAll
 }
 
 // CheckAccessHTTP disallows all HTTP access.
-func (fp FallbackPolicy) CheckAccessHTTP(req *http.Request, role string) error {
-	return errFallback
+func (denyAllPolicy) CheckAccessHTTP(req *http.Request, role string) error {
+	return errDenyAll
+}
+
+func init() {
+	RegisterPolicy("deny-all", denyAllPolicy{})
 }
