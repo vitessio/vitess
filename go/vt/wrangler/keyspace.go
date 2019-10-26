@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 const (
@@ -88,6 +89,72 @@ func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shard
 	ki.ShardingColumnName = shardingColumnName
 	ki.ShardingColumnType = shardingColumnType
 	return wr.ts.UpdateKeyspace(ctx, ki)
+}
+
+// Reshard initiates a resharding workflow.
+func (wr *Wrangler) Reshard(ctx context.Context, workflow, keyspace string, sources, targets []string) error {
+	var sourceShards, targetShards []*topo.ShardInfo
+	for _, shard := range sources {
+		si, err := wr.ts.GetShard(ctx, keyspace, shard)
+		if err != nil {
+			return vterrors.Wrapf(err, "GetShard(%s) failed", shard)
+		}
+		sourceShards = append(sourceShards, si)
+	}
+	for _, shard := range targets {
+		si, err := wr.ts.GetShard(ctx, keyspace, shard)
+		if err != nil {
+			return vterrors.Wrapf(err, "GetShard(%s) failed", shard)
+		}
+		targetShards = append(targetShards, si)
+	}
+	if err := topotools.ValidateForReshard(sourceShards, targetShards); err != nil {
+		return err
+	}
+
+	// Exclude all reference tables.
+	vschema, err := wr.ts.GetVSchema(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+	var excludeRules []*binlogdatapb.Rule
+	for tableName, ti := range vschema.Tables {
+		if ti.Type == vindexes.TypeReference {
+			excludeRules = append(excludeRules, &binlogdatapb.Rule{
+				Match:  tableName,
+				Filter: "exclude",
+			})
+		}
+	}
+
+	for _, dest := range targetShards {
+		master, err := wr.ts.GetTablet(ctx, dest.MasterAlias)
+		if err != nil {
+			return vterrors.Wrapf(err, "GetTablet(%v) failed", dest.MasterAlias)
+		}
+		for _, source := range sourceShards {
+			if !key.KeyRangesIntersect(dest.KeyRange, source.KeyRange) {
+				continue
+			}
+			filter := &binlogdatapb.Filter{
+				Rules: append(excludeRules, &binlogdatapb.Rule{
+					Match:  "/.*",
+					Filter: key.KeyRangeString(dest.KeyRange),
+				}),
+			}
+			bls := &binlogdatapb.BinlogSource{
+				Keyspace: keyspace,
+				Shard:    source.ShardName(),
+				Filter:   filter,
+			}
+			// TODO(sougou): do this in two phases.
+			cmd := binlogplayer.CreateVReplicationState(workflow, bls, "", binlogplayer.BlpRunning, master.DbName())
+			if _, err := wr.TabletManagerClient().VReplicationExec(ctx, master.Tablet, cmd); err != nil {
+				return vterrors.Wrapf(err, "VReplicationExec(%v, %s) failed", dest.MasterAlias, cmd)
+			}
+		}
+	}
+	return wr.refreshMasters(ctx, targetShards)
 }
 
 // SplitClone initiates a SplitClone workflow.
