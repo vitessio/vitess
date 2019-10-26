@@ -38,7 +38,6 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 const (
@@ -91,70 +90,40 @@ func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shard
 	return wr.ts.UpdateKeyspace(ctx, ki)
 }
 
-// Reshard initiates a resharding workflow.
-func (wr *Wrangler) Reshard(ctx context.Context, workflow, keyspace string, sources, targets []string) error {
-	var sourceShards, targetShards []*topo.ShardInfo
-	for _, shard := range sources {
-		si, err := wr.ts.GetShard(ctx, keyspace, shard)
-		if err != nil {
-			return vterrors.Wrapf(err, "GetShard(%s) failed", shard)
-		}
-		sourceShards = append(sourceShards, si)
-	}
-	for _, shard := range targets {
-		si, err := wr.ts.GetShard(ctx, keyspace, shard)
-		if err != nil {
-			return vterrors.Wrapf(err, "GetShard(%s) failed", shard)
-		}
-		targetShards = append(targetShards, si)
-	}
-	if err := topotools.ValidateForReshard(sourceShards, targetShards); err != nil {
-		return err
-	}
-
-	// Exclude all reference tables.
-	vschema, err := wr.ts.GetVSchema(ctx, keyspace)
+// validateNewWorkflow ensures that the specified workflow doesn't already exist
+// in the keyspace.
+func (wr *Wrangler) validateNewWorkflow(ctx context.Context, keyspace, workflow string) error {
+	allshards, err := wr.ts.FindAllShardsInKeyspace(ctx, keyspace)
 	if err != nil {
 		return err
 	}
-	var excludeRules []*binlogdatapb.Rule
-	for tableName, ti := range vschema.Tables {
-		if ti.Type == vindexes.TypeReference {
-			excludeRules = append(excludeRules, &binlogdatapb.Rule{
-				Match:  tableName,
-				Filter: "exclude",
-			})
-		}
-	}
+	var wg sync.WaitGroup
+	allErrors := &concurrency.AllErrorRecorder{}
+	for _, si := range allshards {
+		wg.Add(1)
+		go func(si *topo.ShardInfo) {
+			defer wg.Done()
 
-	for _, dest := range targetShards {
-		master, err := wr.ts.GetTablet(ctx, dest.MasterAlias)
-		if err != nil {
-			return vterrors.Wrapf(err, "GetTablet(%v) failed", dest.MasterAlias)
-		}
-		for _, source := range sourceShards {
-			if !key.KeyRangesIntersect(dest.KeyRange, source.KeyRange) {
-				continue
+			master, err := wr.ts.GetTablet(ctx, si.MasterAlias)
+			if err != nil {
+				allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.GetTablet"))
+				return
 			}
-			filter := &binlogdatapb.Filter{
-				Rules: append(excludeRules, &binlogdatapb.Rule{
-					Match:  "/.*",
-					Filter: key.KeyRangeString(dest.KeyRange),
-				}),
+
+			query := fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and workflow=%s", encodeString(master.DbName()), encodeString(workflow))
+			p3qr, err := wr.tmc.VReplicationExec(ctx, master.Tablet, query)
+			if err != nil {
+				allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.VReplicationExec"))
+				return
 			}
-			bls := &binlogdatapb.BinlogSource{
-				Keyspace: keyspace,
-				Shard:    source.ShardName(),
-				Filter:   filter,
+			if len(p3qr.Rows) != 0 {
+				allErrors.RecordError(fmt.Errorf("workflow %s already exists in keyspace %s", workflow, keyspace))
+				return
 			}
-			// TODO(sougou): do this in two phases.
-			cmd := binlogplayer.CreateVReplicationState(workflow, bls, "", binlogplayer.BlpRunning, master.DbName())
-			if _, err := wr.TabletManagerClient().VReplicationExec(ctx, master.Tablet, cmd); err != nil {
-				return vterrors.Wrapf(err, "VReplicationExec(%v, %s) failed", dest.MasterAlias, cmd)
-			}
-		}
+		}(si)
 	}
-	return wr.refreshMasters(ctx, targetShards)
+	wg.Wait()
+	return allErrors.AggrError(vterrors.Aggregate)
 }
 
 // SplitClone initiates a SplitClone workflow.
