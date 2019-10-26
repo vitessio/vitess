@@ -1800,7 +1800,7 @@ func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 	}
 	source := strings.Split(subFlags.Arg(1), ",")
 	target := strings.Split(subFlags.Arg(2), ",")
-	return wr.Reshard(ctx, workflow, keyspace, source, target)
+	return wr.Reshard(ctx, keyspace, workflow, source, target)
 }
 
 func commandSplitClone(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
