@@ -59,7 +59,7 @@ type refStream struct {
 }
 
 // Reshard initiates a resharding workflow.
-func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sources, targets []string) error {
+func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sources, targets []string, skipSchemaCopy bool) error {
 	if err := wr.validateNewWorkflow(ctx, keyspace, workflow); err != nil {
 		return err
 	}
@@ -68,14 +68,16 @@ func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sour
 	if err != nil {
 		return vterrors.Wrap(err, "buildResharder")
 	}
+	if !skipSchemaCopy {
+		if err := rs.copySchema(ctx); err != nil {
+			return vterrors.Wrap(err, "copySchema")
+		}
+	}
 	if err := rs.createStreams(ctx); err != nil {
 		return vterrors.Wrap(err, "createStreams")
 	}
 	if err := rs.startStreams(ctx); err != nil {
 		return vterrors.Wrap(err, "startStream")
-	}
-	if err := wr.refreshMasters(ctx, rs.targetShards); err != nil {
-		return errors.Wrap(err, "refreshMasters")
 	}
 	return nil
 }
@@ -93,6 +95,9 @@ func (wr *Wrangler) buildResharder(ctx context.Context, keyspace, workflow strin
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "GetShard(%s) failed", shard)
 		}
+		if !si.IsMasterServing {
+			return nil, fmt.Errorf("source shard %v is not in serving state", shard)
+		}
 		rs.sourceShards = append(rs.sourceShards, si)
 		master, err := wr.ts.GetTablet(ctx, si.MasterAlias)
 		if err != nil {
@@ -104,6 +109,9 @@ func (wr *Wrangler) buildResharder(ctx context.Context, keyspace, workflow strin
 		si, err := wr.ts.GetShard(ctx, keyspace, shard)
 		if err != nil {
 			return nil, vterrors.Wrapf(err, "GetShard(%s) failed", shard)
+		}
+		if si.IsMasterServing {
+			return nil, fmt.Errorf("target shard %v is in serving state", shard)
 		}
 		rs.targetShards = append(rs.targetShards, si)
 		master, err := wr.ts.GetTablet(ctx, si.MasterAlias)
@@ -256,6 +264,14 @@ func (rs *resharder) identifyRuleType(rule *binlogdatapb.Rule) (int, error) {
 	default:
 		return sharded, nil
 	}
+}
+
+func (rs *resharder) copySchema(ctx context.Context) error {
+	oneSource := rs.sourceShards[0].MasterAlias
+	err := rs.forAll(rs.targetShards, func(target *topo.ShardInfo) error {
+		return rs.wr.CopySchemaShard(ctx, oneSource, []string{"/.*"}, nil, false, rs.keyspace, target.ShardName(), 1*time.Second)
+	})
+	return err
 }
 
 func (rs *resharder) createStreams(ctx context.Context) error {
