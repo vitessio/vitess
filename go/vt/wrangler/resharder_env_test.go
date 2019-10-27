@@ -19,6 +19,8 @@ package wrangler
 import (
 	"fmt"
 	"regexp"
+	"sync"
+	"testing"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
@@ -61,23 +63,23 @@ func newTestResharderEnv(sources, targets []string) *testResharderEnv {
 
 	tabletID := 100
 	for _, shard := range sources {
-		master := env.addTablet(tabletID, env.keyspace, shard, topodatapb.TabletType_MASTER)
+		_ = env.addTablet(tabletID, env.keyspace, shard, topodatapb.TabletType_MASTER)
 
 		// wr.validateNewWorkflow
-		env.tmc.setVRResults(master, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.keyspace, env.workflow), &sqltypes.Result{})
+		env.tmc.expectVRQuery(tabletID, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.keyspace, env.workflow), &sqltypes.Result{})
 		// readRefStreams
-		env.tmc.setVRResults(master, fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name='vt_%s'", env.keyspace), &sqltypes.Result{})
+		env.tmc.expectVRQuery(tabletID, fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name='vt_%s'", env.keyspace), &sqltypes.Result{})
 
 		tabletID += 10
 	}
 	tabletID = 200
 	for _, shard := range targets {
-		master := env.addTablet(tabletID, env.keyspace, shard, topodatapb.TabletType_MASTER)
+		_ = env.addTablet(tabletID, env.keyspace, shard, topodatapb.TabletType_MASTER)
 
 		// wr.validateNewWorkflow
-		env.tmc.setVRResults(master, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.keyspace, env.workflow), &sqltypes.Result{})
+		env.tmc.expectVRQuery(tabletID, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.keyspace, env.workflow), &sqltypes.Result{})
 		// validateTargets
-		env.tmc.setVRResults(master, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s'", env.keyspace), &sqltypes.Result{})
+		env.tmc.expectVRQuery(tabletID, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s'", env.keyspace), &sqltypes.Result{})
 
 		tabletID += 10
 	}
@@ -121,15 +123,20 @@ func (env *testResharderEnv) deleteTablet(tablet *topodatapb.Tablet) {
 
 type testResharderTMClient struct {
 	tmclient.TabletManagerClient
-	schema      *tabletmanagerdatapb.SchemaDefinition
-	vrQueries   map[int]map[string]*querypb.QueryResult
-	vrQueriesRE map[int]map[string]*querypb.QueryResult
+	schema *tabletmanagerdatapb.SchemaDefinition
+
+	mu        sync.Mutex
+	vrQueries map[int][]*queryResult
+}
+
+type queryResult struct {
+	query  string
+	result *querypb.QueryResult
 }
 
 func newTestResharderTMClient() *testResharderTMClient {
 	return &testResharderTMClient{
-		vrQueries:   make(map[int]map[string]*querypb.QueryResult),
-		vrQueriesRE: make(map[int]map[string]*querypb.QueryResult),
+		vrQueries: make(map[int][]*queryResult),
 	}
 }
 
@@ -137,36 +144,46 @@ func (tmc *testResharderTMClient) GetSchema(ctx context.Context, tablet *topodat
 	return tmc.schema, nil
 }
 
-func (tmc *testResharderTMClient) setVRResults(tablet *topodatapb.Tablet, query string, result *sqltypes.Result) {
-	queries, ok := tmc.vrQueries[int(tablet.Alias.Uid)]
-	if !ok {
-		queries = make(map[string]*querypb.QueryResult)
-		tmc.vrQueries[int(tablet.Alias.Uid)] = queries
-	}
-	queries[query] = sqltypes.ResultToProto3(result)
-}
+func (tmc *testResharderTMClient) expectVRQuery(tabletID int, query string, result *sqltypes.Result) {
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
 
-func (tmc *testResharderTMClient) setVRResultsRE(tablet *topodatapb.Tablet, query string, result *sqltypes.Result) {
-	queriesRE, ok := tmc.vrQueriesRE[int(tablet.Alias.Uid)]
-	if !ok {
-		queriesRE = make(map[string]*querypb.QueryResult)
-		tmc.vrQueriesRE[int(tablet.Alias.Uid)] = queriesRE
-	}
-	queriesRE[query] = sqltypes.ResultToProto3(result)
+	tmc.vrQueries[tabletID] = append(tmc.vrQueries[tabletID], &queryResult{
+		query:  query,
+		result: sqltypes.ResultToProto3(result),
+	})
 }
 
 func (tmc *testResharderTMClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
-	result, ok := tmc.vrQueries[int(tablet.Alias.Uid)][query]
-	if ok {
-		return result, nil
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	qrs := tmc.vrQueries[int(tablet.Alias.Uid)]
+	if len(qrs) == 0 {
+		return nil, fmt.Errorf("tablet %v does not expect any more queries: %s", tablet, query)
 	}
-	queriesRE, ok := tmc.vrQueriesRE[int(tablet.Alias.Uid)]
-	if ok {
-		for re, result := range queriesRE {
-			if regexp.MustCompile(re).MatchString(query) {
-				return result, nil
-			}
+	matched := false
+	if qrs[0].query[0] == '/' {
+		matched = regexp.MustCompile(qrs[0].query[1:]).MatchString(query)
+	} else {
+		matched = query == qrs[0].query
+	}
+	if !matched {
+		return nil, fmt.Errorf("tablet %v: unexpected query %s, want: %s", tablet, query, qrs[0].query)
+	}
+	tmc.vrQueries[int(tablet.Alias.Uid)] = qrs[1:]
+	return qrs[0].result, nil
+}
+
+func (tmc *testResharderTMClient) verifyQueries(t *testing.T) {
+	t.Helper()
+
+	tmc.mu.Lock()
+	defer tmc.mu.Unlock()
+
+	for tabletID, qrs := range tmc.vrQueries {
+		if len(qrs) != 0 {
+			t.Errorf("tablet %v: has unreturned results: %v", tabletID, qrs)
 		}
 	}
-	return nil, fmt.Errorf("query %q not found for tablet %d", query, tablet.Alias.Uid)
 }

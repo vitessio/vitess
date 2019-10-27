@@ -25,10 +25,10 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
-func TestResharderSimple(t *testing.T) {
-	sources := []string{"0"}
-	targets := []string{"-80", "80-"}
-	env := newTestResharderEnv(sources, targets)
+const insertPrefix = `/insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name\) values `
+
+func TestResharderOneToMany(t *testing.T) {
+	env := newTestResharderEnv([]string{"0"}, []string{"-80", "80-"})
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -41,22 +41,23 @@ func TestResharderSimple(t *testing.T) {
 	}
 	env.tmc.schema = schm
 
-	env.tmc.setVRResultsRE(
-		env.tablets[200],
-		`insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name\) values `+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:<rules:<match:\\"/.*\\" filter:\\"-80\\" > > ', '', 9223372036854775807, 9223372036854775807, '', '', [0-9]*, 0, 'Stopped', 'vt_ks'\)`,
+	env.tmc.expectVRQuery(
+		200,
+		insertPrefix+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:<rules:<match:\\"/.*\\" filter:\\"-80\\" > > ', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks'\)`,
 		&sqltypes.Result{},
 	)
-	env.tmc.setVRResultsRE(
-		env.tablets[210],
-		`insert into _vt.vreplication\(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name\) values `+
-			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:<rules:<match:\\"/.*\\" filter:\\"80-\\" > > ', '', 9223372036854775807, 9223372036854775807, '', '', [0-9]*, 0, 'Stopped', 'vt_ks'\)`,
+	env.tmc.expectVRQuery(
+		210,
+		insertPrefix+
+			`\('resharderTest', 'keyspace:\\"ks\\" shard:\\"0\\" filter:<rules:<match:\\"/.*\\" filter:\\"80-\\" > > ', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_ks'\)`,
 		&sqltypes.Result{},
 	)
 
-	env.tmc.setVRResults(env.tablets[200], "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
-	env.tmc.setVRResults(env.tablets[210], "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
+	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
 	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true)
 	assert.NoError(t, err)
+	env.tmc.verifyQueries(t)
 }
