@@ -36,7 +36,6 @@ import (
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
-	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 )
 
 type resharder struct {
@@ -254,16 +253,9 @@ func (rs *resharder) identifyRuleType(rule *binlogdatapb.Rule) (int, error) {
 	if vtable.Type == vindexes.TypeReference {
 		return reference, nil
 	}
-	switch {
-	case rule.Filter == "":
-		return unknown, fmt.Errorf("rule %v does not have a select expression in vreplication", rule)
-	case key.IsKeyRange(rule.Filter):
-		return sharded, nil
-	case rule.Filter == vreplication.ExcludeStr:
-		return unknown, fmt.Errorf("unexpected rule in vreplication: %v", rule)
-	default:
-		return sharded, nil
-	}
+	// In this case, 'sharded' means that it's not a reference
+	// table. We don't care about any other subtleties.
+	return sharded, nil
 }
 
 func (rs *resharder) copySchema(ctx context.Context) error {
