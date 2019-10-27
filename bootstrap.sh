@@ -199,37 +199,6 @@ if [ "$BUILD_JAVA" == 1 ] ; then
   install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist/vt-zookeeper-$zk_ver" install_zookeeper
 fi
 
-# Download and install etcd, link etcd binary into our root.
-function install_etcd() {
-  local version="$1"
-  local dist="$2"
-
-  case $(uname) in
-    Linux)  local platform=linux; local ext=tar.gz;;
-    Darwin) local platform=darwin; local ext=zip;;
-  esac
-
-  case $(arch) in
-      aarch64)  local target=arm64;;
-      x86_64)  local target=amd64;;
-      *)   echo "ERROR: unsupported architecture"; exit 1;;
-  esac
-
-  download_url=https://github.com/coreos/etcd/releases/download
-  file="etcd-${version}-${platform}-${target}.${ext}"
-
-  wget "$download_url/$version/$file"
-  if [ "$ext" = "tar.gz" ]; then
-    tar xzf "$file"
-  else
-    unzip "$file"
-  fi
-  rm "$file"
-  ln -snf "$dist/etcd-${version}-${platform}-${target}/etcd" "$VTROOT/bin/etcd"
-}
-install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
-
-
 # Download and install consul, link consul binary into our root.
 function install_consul() {
   local version="$1"
