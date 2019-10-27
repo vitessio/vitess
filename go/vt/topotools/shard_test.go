@@ -55,9 +55,11 @@ func TestCreateShard(t *testing.T) {
 	}
 }
 
-// TestCreateShardCustomSharding checks ServedTypes is set correctly
-// when creating multiple custom sharding shards
-func TestCreateShardCustomSharding(t *testing.T) {
+// TestCreateShardMultiUnsharded checks ServedTypes is set
+// only for the first created shard.
+// TODO(sougou): we should eventually disallow multiple shards
+// for unsharded keyspaces.
+func TestCreateShardMultiUnsharded(t *testing.T) {
 	ctx := context.Background()
 
 	// Set up topology.
@@ -90,7 +92,7 @@ func TestCreateShardCustomSharding(t *testing.T) {
 	if si, err := ts.GetShard(ctx, keyspace, shard1); err != nil {
 		t.Fatalf("GetShard(shard1) failed: %v", err)
 	} else {
-		if !si.IsMasterServing {
+		if si.IsMasterServing {
 			t.Fatalf("shard1 should have all 3 served types")
 		}
 	}
