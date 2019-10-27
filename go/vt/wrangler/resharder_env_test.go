@@ -64,26 +64,37 @@ func newTestResharderEnv(sources, targets []string) *testResharderEnv {
 	tabletID := 100
 	for _, shard := range sources {
 		_ = env.addTablet(tabletID, env.keyspace, shard, topodatapb.TabletType_MASTER)
-
-		// wr.validateNewWorkflow
-		env.tmc.expectVRQuery(tabletID, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.keyspace, env.workflow), &sqltypes.Result{})
-		// readRefStreams
-		env.tmc.expectVRQuery(tabletID, fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name='vt_%s'", env.keyspace), &sqltypes.Result{})
-
 		tabletID += 10
 	}
 	tabletID = 200
 	for _, shard := range targets {
 		_ = env.addTablet(tabletID, env.keyspace, shard, topodatapb.TabletType_MASTER)
-
-		// wr.validateNewWorkflow
-		env.tmc.expectVRQuery(tabletID, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.keyspace, env.workflow), &sqltypes.Result{})
-		// validateTargets
-		env.tmc.expectVRQuery(tabletID, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s'", env.keyspace), &sqltypes.Result{})
-
 		tabletID += 10
 	}
 	return env
+}
+
+func (env *testResharderEnv) expectValidation() {
+	for _, tablet := range env.tablets {
+		tabletID := int(tablet.Alias.Uid)
+		// wr.validateNewWorkflow
+		env.tmc.expectVRQuery(tabletID, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.keyspace, env.workflow), &sqltypes.Result{})
+
+		if tabletID >= 200 {
+			// validateTargets
+			env.tmc.expectVRQuery(tabletID, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s'", env.keyspace), &sqltypes.Result{})
+		}
+	}
+}
+
+func (env *testResharderEnv) expectNoRefStream() {
+	for _, tablet := range env.tablets {
+		tabletID := int(tablet.Alias.Uid)
+		if tabletID < 200 {
+			// readRefStreams
+			env.tmc.expectVRQuery(tabletID, fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name='vt_%s'", env.keyspace), &sqltypes.Result{})
+		}
+	}
 }
 
 func (env *testResharderEnv) close() {
@@ -175,6 +186,11 @@ func (tmc *testResharderTMClient) VReplicationExec(ctx context.Context, tablet *
 	return qrs[0].result, nil
 }
 
+func (tmc *testResharderTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, query []byte, maxRows int, disableBinlogs, reloadSchema bool) (*querypb.QueryResult, error) {
+	// Reuse VReplicationExec
+	return tmc.VReplicationExec(ctx, tablet, string(query))
+}
+
 func (tmc *testResharderTMClient) verifyQueries(t *testing.T) {
 	t.Helper()
 
@@ -183,7 +199,11 @@ func (tmc *testResharderTMClient) verifyQueries(t *testing.T) {
 
 	for tabletID, qrs := range tmc.vrQueries {
 		if len(qrs) != 0 {
-			t.Errorf("tablet %v: has unreturned results: %v", tabletID, qrs)
+			var list []string
+			for _, qr := range qrs {
+				list = append(list, qr.query)
+			}
+			t.Errorf("tablet %v: has unreturned results: %v", tabletID, list)
 		}
 	}
 }
