@@ -49,7 +49,7 @@ class MariaDB(MysqlFlavor):
   def my_cnf(self):
     files = [
         os.path.join(vttop, "config/mycnf/default-fast.cnf"),
-        os.path.join(vttop, "config/mycnf/master_mariadb.cnf"),
+        os.path.join(vttop, "config/mycnf/master_mariadb100.cnf"),
     ]
     return ":".join(files)
 
