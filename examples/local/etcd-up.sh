@@ -20,6 +20,7 @@ set -e
 cell=${CELL:-'test'}
 
 script_root=$(dirname "${BASH_SOURCE[0]}")
+export ETCDCTL_API=2
 
 # shellcheck source=./env.sh
 # shellcheck disable=SC1091
