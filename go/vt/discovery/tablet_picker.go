@@ -28,13 +28,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// These are vars because they need to be overridden for testing.
-var (
-	healthCheckTopologyRefresh = 30 * time.Second
-	healthcheckRetryDelay      = 5 * time.Second
-	healthCheckTimeout         = 1 * time.Minute
-)
-
 // TabletPicker gives a simplified API for picking tablets.
 type TabletPicker struct {
 	ts          *topo.Server
@@ -49,16 +42,16 @@ type TabletPicker struct {
 }
 
 // NewTabletPicker returns a TabletPicker.
-func NewTabletPicker(ctx context.Context, ts *topo.Server, cell, keyspace, shard, tabletTypesStr string) (*TabletPicker, error) {
+func NewTabletPicker(ctx context.Context, ts *topo.Server, cell, keyspace, shard, tabletTypesStr string, healthcheckTopologyRefresh, healthcheckRetryDelay, healthcheckTimeout time.Duration) (*TabletPicker, error) {
 	tabletTypes, err := topoproto.ParseTabletTypes(tabletTypesStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse list of tablet types: %v", tabletTypesStr)
 	}
 
 	// These have to be initialized in the following sequence (watcher must be last).
-	healthCheck := NewHealthCheck(healthcheckRetryDelay, healthCheckTimeout)
+	healthCheck := NewHealthCheck(healthcheckRetryDelay, healthcheckTimeout)
 	statsCache := NewTabletStatsCache(healthCheck, ts, cell)
-	watcher := NewShardReplicationWatcher(ctx, ts, healthCheck, cell, keyspace, shard, healthCheckTopologyRefresh, DefaultTopoReadConcurrency)
+	watcher := NewShardReplicationWatcher(ctx, ts, healthCheck, cell, keyspace, shard, healthcheckTopologyRefresh, DefaultTopoReadConcurrency)
 
 	return &TabletPicker{
 		ts:          ts,
