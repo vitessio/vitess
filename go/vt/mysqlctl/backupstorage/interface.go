@@ -49,6 +49,8 @@ type BackupHandle interface {
 	// multiple go routines once a backup has been started.
 	// The context is valid for the duration of the writes, until the
 	// WriteCloser is closed.
+	// filesize should not be treated as an exact value but rather
+	// as an approximate value
 	AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error)
 
 	// EndBackup stops and closes a backup. The contents should be kept.
