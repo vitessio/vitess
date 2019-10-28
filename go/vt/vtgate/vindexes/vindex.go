@@ -57,12 +57,6 @@ type Vindex interface {
 	// Which means Map() maps to either a KeyRange or a single KeyspaceID.
 	IsUnique() bool
 
-	// IsFunctional returns true if the Vindex can compute
-	// the keyspace id from the id without a lookup.
-	// A Functional vindex is also required to be Unique.
-	// Which means Map() maps to either a KeyRange or a single KeyspaceID.
-	IsFunctional() bool
-
 	// Verify must be implented by all vindexes. It should return
 	// true if the ids can be mapped to the keyspace ids.
 	Verify(cursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error)

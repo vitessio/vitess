@@ -55,9 +55,6 @@ func TestConsistentLookupInfo(t *testing.T) {
 	if lookup.IsUnique() {
 		t.Errorf("IsUnique(): %v, want false", lookup.IsUnique())
 	}
-	if lookup.IsFunctional() {
-		t.Errorf("IsFunctional(): %v, want false", lookup.IsFunctional())
-	}
 }
 
 func TestConsistentLookupUniqueInfo(t *testing.T) {
@@ -70,9 +67,6 @@ func TestConsistentLookupUniqueInfo(t *testing.T) {
 	}
 	if !lookup.IsUnique() {
 		t.Errorf("IsUnique(): %v, want true", lookup.IsUnique())
-	}
-	if lookup.IsFunctional() {
-		t.Errorf("IsFunctional(): %v, want false", lookup.IsFunctional())
 	}
 }
 
