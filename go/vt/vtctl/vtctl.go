@@ -327,7 +327,7 @@ var commands = []commandGroup{
 				"[-cells=c1,c2,...] [-reverse] -workflow=workflow <target keyspace> <tablet type>",
 				"Migrate read traffic for the specified workflow."},
 			{"MigrateWrites", commandMigrateWrites,
-				"[-filtered_replication_wait_time=30s] [-reverse_replication=<true/false>] -workflow=workflow <target keyspace>",
+				"[-filtered_replication_wait_time=30s] [-cancel] [-reverse_replication=false] -workflow=workflow <target keyspace>",
 				"Migrate write traffic for the specified workflow."},
 			{"CancelResharding", commandCancelResharding,
 				"<keyspace/shard>",
@@ -1920,6 +1920,7 @@ func commandMigrateReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 func commandMigrateWrites(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on master migrations. The migration will be aborted on timeout.")
 	reverseReplication := subFlags.Bool("reverse_replication", true, "Also reverse the replication")
+	cancelMigrate := subFlags.Bool("cancel", false, "Cancel the failed migration and serve from source")
 	workflow := subFlags.String("workflow", "", "Specifies the workflow name")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -1932,7 +1933,7 @@ func commandMigrateWrites(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	if *workflow == "" {
 		return fmt.Errorf("a -workflow=workflow argument is required")
 	}
-	journalID, err := wr.MigrateWrites(ctx, keyspace, *workflow, *filteredReplicationWaitTime, *reverseReplication)
+	journalID, err := wr.MigrateWrites(ctx, keyspace, *workflow, *filteredReplicationWaitTime, *cancelMigrate, *reverseReplication)
 	if err != nil {
 		return err
 	}
