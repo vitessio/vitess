@@ -679,7 +679,7 @@ func (mi *migrater) cancelMigration(ctx context.Context, sm *streamMigrater) {
 
 	err = mi.deleteReverseVReplication(ctx)
 	if err != nil {
-		mi.wr.Logger().Errorf("Cancel migration failed: could not restart vreplication: %v", err)
+		mi.wr.Logger().Errorf("Cancel migration failed: could not delete revers vreplication entries: %v", err)
 	}
 }
 
