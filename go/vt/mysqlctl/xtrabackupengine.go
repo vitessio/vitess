@@ -221,7 +221,7 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 	// a timeout on the final Close() step.
 	addFilesCtx, cancelAddFiles := context.WithCancel(ctx)
 	defer cancelAddFiles()
-	destFiles, err := addStripeFiles(addFilesCtx, bh, backupFileName, numStripes, params.Logger)
+	destFiles, err := addStripeFiles(addFilesCtx, params, bh, backupFileName, numStripes)
 	if err != nil {
 		return replicationPosition, vterrors.Wrapf(err, "cannot create backup file %v", backupFileName)
 	}
@@ -402,6 +402,13 @@ func (be *XtrabackupEngine) restoreFromBackup(ctx context.Context, cnf *Mycnf, b
 	if err := os.MkdirAll(tempDir, os.ModePerm); err != nil {
 		return err
 	}
+	// delete tempDir once we are done
+	defer func(dir string, l logutil.Logger) {
+		err := os.RemoveAll(dir)
+		if err != nil {
+			l.Errorf("error deleting tempDir(%v): %v", dir, err)
+		}
+	}(tempDir, logger)
 
 	if err := be.extractFiles(ctx, logger, bh, bm, tempDir); err != nil {
 		logger.Errorf("error extracting backup files: %v", err)
@@ -647,23 +654,35 @@ func stripeFileName(baseFileName string, index int) string {
 	return fmt.Sprintf("%s-%03d", baseFileName, index)
 }
 
-func addStripeFiles(ctx context.Context, backupHandle backupstorage.BackupHandle, baseFileName string, numStripes int, logger logutil.Logger) ([]io.WriteCloser, error) {
+func addStripeFiles(ctx context.Context, params BackupParams, backupHandle backupstorage.BackupHandle, baseFileName string, numStripes int) ([]io.WriteCloser, error) {
+	// Compute total size of all files we will backup.
+	// We delegate the actual backing up to xtrabackup which streams
+	// the files as a single archive (tar / xbstream), which might
+	// further be compressed using gzip.
+	// This approximate total size is passed in to AddFile so that
+	// storage plugins can make appropriate choices for parameters
+	// like partSize in multi-part uploads
+	_, totalSize, err := findFilesToBackup(params.Cnf)
+	if err != nil {
+		return nil, err
+	}
+
 	if numStripes <= 1 {
 		// No striping.
-		file, err := backupHandle.AddFile(ctx, baseFileName, 0)
+		file, err := backupHandle.AddFile(ctx, baseFileName, totalSize)
 		return []io.WriteCloser{file}, err
 	}
 
 	files := []io.WriteCloser{}
 	for i := 0; i < numStripes; i++ {
 		filename := stripeFileName(baseFileName, i)
-		logger.Infof("Opening backup stripe file %v", filename)
-		file, err := backupHandle.AddFile(ctx, filename, 0)
+		params.Logger.Infof("Opening backup stripe file %v", filename)
+		file, err := backupHandle.AddFile(ctx, filename, totalSize/int64(numStripes))
 		if err != nil {
 			// Close any files we already opened and clear them from the result.
 			for _, file := range files {
 				if err := file.Close(); err != nil {
-					logger.Warningf("error closing backup stripe file: %v", err)
+					params.Logger.Warningf("error closing backup stripe file: %v", err)
 				}
 			}
 			return nil, err

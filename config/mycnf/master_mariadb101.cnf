@@ -41,5 +41,3 @@ expire_logs_days = 3
 
 character_set_server = utf8
 collation_server = utf8_general_ci
-
-

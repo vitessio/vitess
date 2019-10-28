@@ -34,7 +34,6 @@ CELL=zone1 "$script_root/vtctld-up.sh"
 
 # start vttablets for keyspace commerce
 CELL=zone1 KEYSPACE=commerce UID_BASE=100 "$script_root/vttablet-up.sh"
-sleep 15
 
 # set one of the replicas to master
 ./lvtctl.sh InitShardMaster -force commerce/0 zone1-100

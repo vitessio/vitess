@@ -802,6 +802,9 @@ func (mysqld *Mysqld) getMycnfTemplates(root string) []string {
 		cnfTemplatePaths = append(cnfTemplatePaths, parts...)
 	}
 
+	// Only include files if they exist.
+	// Percona Server == MySQL in this context
+
 	f := flavorMariaDB
 	if mysqld.capabilities.isMySQLLike() {
 		f = flavorMySQL
