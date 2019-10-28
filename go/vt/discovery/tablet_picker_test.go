@@ -35,7 +35,7 @@ func TestPickSimple(t *testing.T) {
 	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, true, true)
 	defer deleteTablet(te, want)
 
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cell, te.keyspace, te.shard, "replica")
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cell, te.keyspace, te.shard, "replica", 1*time.Second, 1*time.Second, 1*time.Minute)
 	require.NoError(t, err)
 	defer tp.Close()
 
@@ -53,7 +53,7 @@ func TestPickFromTwoHealthy(t *testing.T) {
 	want2 := addTablet(te, 101, topodatapb.TabletType_RDONLY, true, true)
 	defer deleteTablet(te, want2)
 
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cell, te.keyspace, te.shard, "replica,rdonly")
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cell, te.keyspace, te.shard, "replica,rdonly", 1*time.Second, 1*time.Second, 1*time.Minute)
 	require.NoError(t, err)
 	defer tp.Close()
 
@@ -79,7 +79,7 @@ func TestPickFromSomeUnhealthy(t *testing.T) {
 	want := addTablet(te, 101, topodatapb.TabletType_RDONLY, false, true)
 	defer deleteTablet(te, want)
 
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cell, te.keyspace, te.shard, "replica,rdonly")
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cell, te.keyspace, te.shard, "replica,rdonly", 1*time.Second, 1*time.Second, 1*time.Minute)
 	require.NoError(t, err)
 	defer tp.Close()
 
@@ -94,10 +94,10 @@ func TestPickError(t *testing.T) {
 	te := newPickerTestEnv(t)
 	defer deleteTablet(te, addTablet(te, 100, topodatapb.TabletType_REPLICA, false, false))
 
-	_, err := NewTabletPicker(context.Background(), te.topoServ, te.cell, te.keyspace, te.shard, "badtype")
+	_, err := NewTabletPicker(context.Background(), te.topoServ, te.cell, te.keyspace, te.shard, "badtype", 1*time.Second, 1*time.Second, 1*time.Minute)
 	assert.EqualError(t, err, "failed to parse list of tablet types: badtype")
 
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cell, te.keyspace, te.shard, "replica,rdonly")
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cell, te.keyspace, te.shard, "replica,rdonly", 1*time.Second, 1*time.Second, 1*time.Minute)
 	require.NoError(t, err)
 	defer tp.Close()
 

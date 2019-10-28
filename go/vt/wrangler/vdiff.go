@@ -83,7 +83,8 @@ type dfParams struct {
 }
 
 // VDiff reports differences between the sources and targets of a vreplication workflow.
-func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceCell, targetCell, tabletTypesStr string, filteredReplicationWaitTime time.Duration) (map[string]*DiffReport, error) {
+func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceCell, targetCell, tabletTypesStr string,
+	filteredReplicationWaitTime, healthcheckTopologyRefresh, healthcheckRetryDelay, healthcheckTimeout time.Duration) (map[string]*DiffReport, error) {
 	if sourceCell == "" && targetCell == "" {
 		cells, err := wr.ts.GetCellInfoNames(ctx)
 		if err != nil {
@@ -144,7 +145,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 	if err != nil {
 		return nil, vterrors.Wrap(err, "buildVDiffPlan")
 	}
-	if err := df.selectTablets(ctx); err != nil {
+	if err := df.selectTablets(ctx, healthcheckTopologyRefresh, healthcheckRetryDelay, healthcheckTimeout); err != nil {
 		return nil, vterrors.Wrap(err, "selectTablets")
 	}
 	defer func(ctx context.Context) {
@@ -332,7 +333,7 @@ func buildDifferPlan(table *tabletmanagerdatapb.TableDefinition, query string) (
 	return td, nil
 }
 
-func (df *vdiff) selectTablets(ctx context.Context) error {
+func (df *vdiff) selectTablets(ctx context.Context, healthcheckTopologyRefresh, healthcheckRetryDelay, healthcheckTimeout time.Duration) error {
 	var wg sync.WaitGroup
 	var err1, err2 error
 
@@ -341,7 +342,7 @@ func (df *vdiff) selectTablets(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		err1 = df.forAll(df.sources, func(shard string, source *dfParams) error {
-			tp, err := discovery.NewTabletPicker(ctx, df.mi.wr.ts, df.sourceCell, df.mi.sourceKeyspace, shard, df.tabletTypesStr)
+			tp, err := discovery.NewTabletPicker(ctx, df.mi.wr.ts, df.sourceCell, df.mi.sourceKeyspace, shard, df.tabletTypesStr, healthcheckTopologyRefresh, healthcheckRetryDelay, healthcheckTimeout)
 			if err != nil {
 				return err
 			}
@@ -360,7 +361,7 @@ func (df *vdiff) selectTablets(ctx context.Context) error {
 	go func() {
 		defer wg.Done()
 		err2 = df.forAll(df.targets, func(shard string, target *dfParams) error {
-			tp, err := discovery.NewTabletPicker(ctx, df.mi.wr.ts, df.targetCell, df.mi.targetKeyspace, shard, df.tabletTypesStr)
+			tp, err := discovery.NewTabletPicker(ctx, df.mi.wr.ts, df.targetCell, df.mi.targetKeyspace, shard, df.tabletTypesStr, healthcheckTopologyRefresh, healthcheckRetryDelay, healthcheckTimeout)
 			if err != nil {
 				return err
 			}
