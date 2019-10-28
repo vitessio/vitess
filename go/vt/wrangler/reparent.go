@@ -649,7 +649,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		return err
 	}
 
-	// Check corner cases we're going to depend on
+	// Check invariants we're going to depend on.
 	masterElectTabletAliasStr := topoproto.TabletAliasString(masterElectTabletAlias)
 	masterElectTabletInfo, ok := tabletMap[masterElectTabletAliasStr]
 	if !ok {
@@ -794,8 +794,6 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		}
 	}
 
-	// After the master is done, we can update the shard record
-	// (note with semi-sync, it also means at least one slave is done)
 	wgMaster.Wait()
 	if masterErr != nil {
 		// The master failed, there is no way the
@@ -804,14 +802,6 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 		replCancel()
 		wgSlaves.Wait()
 		return fmt.Errorf("failed to PopulateReparentJournal on master: %v", masterErr)
-	}
-	wr.logger.Infof("updating shard record with new master %v", topoproto.TabletAliasString(masterElectTabletAlias))
-	if _, err := wr.ts.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
-		si.MasterAlias = masterElectTabletAlias
-		return nil
-	}); err != nil {
-		wgSlaves.Wait()
-		return fmt.Errorf("failed to update shard master record: %v", err)
 	}
 
 	// Wait for the slaves to complete. If some of them fail, we
