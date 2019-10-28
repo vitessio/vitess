@@ -54,13 +54,13 @@ type vrStream struct {
 	pos      mysql.Position
 }
 
-func buildStreamMigrater(ctx context.Context, mi *migrater) (*streamMigrater, error) {
+func buildStreamMigrater(ctx context.Context, mi *migrater, cancelMigrate bool) (*streamMigrater, error) {
 	sm := &streamMigrater{mi: mi}
 	if sm.mi.migrationType == binlogdatapb.MigrationType_TABLES {
 		// Source streams should be stopped only for shard migrations.
 		return sm, nil
 	}
-	streams, err := sm.readSourceStreams(ctx)
+	streams, err := sm.readSourceStreams(ctx, cancelMigrate)
 	if err != nil {
 		return nil, err
 	}
@@ -78,27 +78,29 @@ func buildStreamMigrater(ctx context.Context, mi *migrater) (*streamMigrater, er
 	return sm, nil
 }
 
-func (sm *streamMigrater) readSourceStreams(ctx context.Context) (map[string][]*vrStream, error) {
+func (sm *streamMigrater) readSourceStreams(ctx context.Context, cancelMigrate bool) (map[string][]*vrStream, error) {
 	streams := make(map[string][]*vrStream)
 	var mu sync.Mutex
 	err := sm.mi.forAllSources(func(source *miSource) error {
-		// This flow protects us from the following scenario: When we create streams,
-		// we always do it in two phases. We start them off as Stopped, and then
-		// update them to Running. If such an operation fails, we may be left with
-		// lingering Stopped streams. They should actually be cleaned up by the user.
-		// In the current workflow, we stop streams and restart them.
-		// Once existing streams are stopped, there will be confusion about which of
-		// them can be restarted because they will be no different from the lingering streams.
-		// To prevent this confusion, we first check if there are any stopped streams.
-		// If so, we request the operator to clean them up, or restart them before going ahead.
-		// This allows us to assume that all stopped streams can be safely restarted
-		// if we cancel the operation.
-		stoppedStreams, err := sm.readTabletStreams(ctx, source.master, "state = 'Stopped'")
-		if err != nil {
-			return err
-		}
-		if len(stoppedStreams) != 0 {
-			return fmt.Errorf("cannot migrate until all strems are running: %s", source.si.ShardName())
+		if !cancelMigrate {
+			// This flow protects us from the following scenario: When we create streams,
+			// we always do it in two phases. We start them off as Stopped, and then
+			// update them to Running. If such an operation fails, we may be left with
+			// lingering Stopped streams. They should actually be cleaned up by the user.
+			// In the current workflow, we stop streams and restart them.
+			// Once existing streams are stopped, there will be confusion about which of
+			// them can be restarted because they will be no different from the lingering streams.
+			// To prevent this confusion, we first check if there are any stopped streams.
+			// If so, we request the operator to clean them up, or restart them before going ahead.
+			// This allows us to assume that all stopped streams can be safely restarted
+			// if we cancel the operation.
+			stoppedStreams, err := sm.readTabletStreams(ctx, source.master, "state = 'Stopped'")
+			if err != nil {
+				return err
+			}
+			if len(stoppedStreams) != 0 {
+				return fmt.Errorf("cannot migrate until all streams are running: %s", source.si.ShardName())
+			}
 		}
 		tabletStreams, err := sm.readTabletStreams(ctx, source.master, "")
 		if err != nil {
@@ -258,7 +260,7 @@ func (sm *streamMigrater) syncSourceStreams(ctx context.Context) (map[string]mys
 	}
 	var wg sync.WaitGroup
 	allErrors := &concurrency.AllErrorRecorder{}
-	for _, tabletStreams := range sm.streams {
+	for shard, tabletStreams := range sm.streams {
 		for _, vrs := range tabletStreams {
 			key := fmt.Sprintf("%s:%s", vrs.bls.Keyspace, vrs.bls.Shard)
 			pos := stopPositions[key]
@@ -266,9 +268,9 @@ func (sm *streamMigrater) syncSourceStreams(ctx context.Context) (map[string]mys
 				continue
 			}
 			wg.Add(1)
-			go func(vrs *vrStream) {
+			go func(vrs *vrStream, shard string) {
 				defer wg.Done()
-				si, err := sm.mi.wr.ts.GetShard(ctx, vrs.bls.Keyspace, vrs.bls.Shard)
+				si, err := sm.mi.wr.ts.GetShard(ctx, sm.mi.sourceKeyspace, vrs.bls.Shard)
 				if err != nil {
 					allErrors.RecordError(err)
 					return
@@ -283,11 +285,13 @@ func (sm *streamMigrater) syncSourceStreams(ctx context.Context) (map[string]mys
 					allErrors.RecordError(err)
 					return
 				}
+				sm.mi.wr.Logger().Infof("waiting for keyspace:shard: %v:%v, position %v", sm.mi.sourceKeyspace, shard, pos)
 				if err := sm.mi.wr.tmc.VReplicationWaitForPos(ctx, master.Tablet, int(vrs.id), mysql.EncodePosition(pos)); err != nil {
 					allErrors.RecordError(err)
 					return
 				}
-			}(vrs)
+				sm.mi.wr.Logger().Infof("position for keyspace:shard: %v:%v reached", sm.mi.sourceKeyspace, shard)
+			}(vrs, shard)
 		}
 	}
 	wg.Wait()
@@ -551,24 +555,24 @@ func (sm *streamMigrater) deleteTargetStreams(ctx context.Context) error {
 	return err
 }
 
-// finalize performs the final cleanup: start all the newly migrated target streams
-// and delete them from the source.
-func (sm *streamMigrater) finalize(ctx context.Context, workflows []string) error {
+// streamMigraterFinalize finalizes the stream migration.
+// It's a standalone function because it does not use the streamMigrater state.
+func streamMigraterfinalize(ctx context.Context, mi *migrater, workflows []string) error {
 	if len(workflows) == 0 {
 		return nil
 	}
 	workflowList := stringListify(workflows)
-	err := sm.mi.forAllSources(func(source *miSource) error {
+	err := mi.forAllSources(func(source *miSource) error {
 		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow in (%s)", encodeString(source.master.DbName()), workflowList)
-		_, err := sm.mi.wr.VReplicationExec(ctx, source.master.Alias, query)
+		_, err := mi.wr.VReplicationExec(ctx, source.master.Alias, query)
 		return err
 	})
 	if err != nil {
 		return err
 	}
-	err = sm.mi.forAllTargets(func(target *miTarget) error {
+	err = mi.forAllTargets(func(target *miTarget) error {
 		query := fmt.Sprintf("update _vt.vreplication set state='Running' where db_name=%s and workflow in (%s)", encodeString(target.master.DbName()), workflowList)
-		_, err := sm.mi.wr.VReplicationExec(ctx, target.master.Alias, query)
+		_, err := mi.wr.VReplicationExec(ctx, target.master.Alias, query)
 		return err
 	})
 	return err
