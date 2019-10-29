@@ -1,0 +1,40 @@
+FROM vitess/bootstrap:common
+
+# Install MySQL 5.7
+RUN add-apt-repository 'deb http://ftp.debian.org/debian sid main' && \
+apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libmysqlclient-dev mysql-client-5.7 mysql-server-5.7 \
+cmake \
+apt-utils \
+libaio-dev \
+libncurses5-dev \
+libssl-dev \
+zlib1g-dev \
+libgcrypt11-dev \
+libev-dev \
+libcurl4-gnutls-dev \
+vim-common \
+bison \
+flex \
+wget \
+libdbd-mysql-perl \
+rsync \
+libev4 \
+python3-distutils-extra  && \
+rm -rf /var/lib/apt/lists/* && \
+wget https://github.com/percona/percona-xtrabackup/archive/percona-xtrabackup-2.4.13.tar.gz -P /opt && \
+tar zxf /opt/percona-xtrabackup-2.4.13.tar.gz -C /opt && \
+rm /opt/percona-xtrabackup-2.4.13.tar.gz && \
+cd /opt/percona-xtrabackup-percona-xtrabackup-2.4.13 && \
+mkdir bld && \
+cd bld && \
+cmake .. -DBUILD_CONFIG=xtrabackup_release -DWITH_MAN_PAGES=OFF -DDOWNLOAD_BOOST=1 -DWITH_BOOST=/usr/local && \
+make -j4 && \
+make install
+
+# Bootstrap Vitess
+WORKDIR /vt/src/vitess.io/vitess
+
+ENV PATH="/usr/local/xtrabackup/bin:${PATH}"
+ENV MYSQL_FLAVOR MySQL56
+USER vitess
+RUN ./bootstrap.sh

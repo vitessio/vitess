@@ -29,4 +29,12 @@ fi
 # To avoid AUFS permission issues, files must allow access by "other"
 chmod -R o=g *
 
-docker build --no-cache -f docker/bootstrap/Dockerfile.$flavor -t vitess/bootstrap:$flavor .
+case $flavor in
+	mysql57)
+		arch=$(uname -m)
+		[ "$arch" == "aarch64" ] && arch_ext='-arm64v8'
+		;;
+	*)
+		;;
+esac
+docker build --no-cache -f docker/bootstrap/Dockerfile.$flavor$arch_ext -t vitess/bootstrap:$flavor .
