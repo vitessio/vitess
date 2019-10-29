@@ -170,7 +170,7 @@ func (dbcfgs *DBConfigs) Repl() *mysql.ConnParams {
 
 // ExternalRepl returns connection parameters for repl with no dbname set.
 func (dbcfgs *DBConfigs) ExternalRepl() *mysql.ConnParams {
-	return dbcfgs.makeParams(ExternalRepl, false)
+	return dbcfgs.makeParams(ExternalRepl, true)
 }
 
 // ExternalReplWithDB returns connection parameters for repl with dbname set.
@@ -298,12 +298,13 @@ func Init(defaultSocketFile string) (*DBConfigs, error) {
 func NewTestDBConfigs(genParams, appDebugParams mysql.ConnParams, dbName string) *DBConfigs {
 	dbcfgs := &DBConfigs{
 		userConfigs: map[string]*userConfig{
-			App:      {param: genParams},
-			AppDebug: {param: appDebugParams},
-			AllPrivs: {param: genParams},
-			Dba:      {param: genParams},
-			Filtered: {param: genParams},
-			Repl:     {param: genParams},
+			App:          {param: genParams},
+			AppDebug:     {param: appDebugParams},
+			AllPrivs:     {param: genParams},
+			Dba:          {param: genParams},
+			Filtered:     {param: genParams},
+			Repl:         {param: genParams},
+			ExternalRepl: {param: genParams},
 		},
 	}
 	dbcfgs.DBName.Set(dbName)
