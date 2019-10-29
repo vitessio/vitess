@@ -41,8 +41,10 @@ import (
 )
 
 var (
-	_ VStreamerClient = (*TabletVStreamerClient)(nil)
-	_ VStreamerClient = (*MySQLVStreamerClient)(nil)
+	_                       VStreamerClient = (*TabletVStreamerClient)(nil)
+	_                       VStreamerClient = (*MySQLVStreamerClient)(nil)
+	mysqlStreamerClientOnce sync.Once
+	mysqlSrvTopo            *srvtopo.ResilientServer
 )
 
 // VStreamerClient exposes the core interface of a vstreamer
@@ -80,6 +82,7 @@ type MySQLVStreamerClient struct {
 
 	sourceConnParams *mysql.ConnParams
 	vsEngine         *vstreamer.Engine
+	sourceSe         *schema.Engine
 }
 
 // NewTabletVStreamerClient creates a new TabletVStreamerClient
@@ -109,9 +112,12 @@ func (vsClient *TabletVStreamerClient) Open(ctx context.Context) (err error) {
 
 // Close part of the VStreamerClient interface
 func (vsClient *TabletVStreamerClient) Close(ctx context.Context) (err error) {
+	vsClient.mu.Lock()
+	defer vsClient.mu.Unlock()
 	if !vsClient.isOpen {
 		return nil
 	}
+	vsClient.isOpen = false
 	return vsClient.tsQueryService.Close(ctx)
 }
 
@@ -150,19 +156,21 @@ func (vsClient *MySQLVStreamerClient) Open(ctx context.Context) (err error) {
 	}
 	vsClient.isOpen = true
 
+	mysqlStreamerClientOnce.Do(func() {
+		memorytopo := memorytopo.NewServer("mysqlstreamer")
+		mysqlSrvTopo = srvtopo.NewResilientServer(memorytopo, "")
+	})
+
 	// Let's create all the required components by vstreamer.Engine
 
-	sourceSe := schema.NewEngine(checker{}, tabletenv.DefaultQsConfig)
-	sourceSe.InitDBConfig(vsClient.sourceConnParams)
-	err = sourceSe.Open()
+	vsClient.sourceSe = schema.NewEngine(checker{}, tabletenv.DefaultQsConfig)
+	vsClient.sourceSe.InitDBConfig(vsClient.sourceConnParams)
+	err = vsClient.sourceSe.Open()
 	if err != nil {
 		return err
 	}
 
-	topo := memorytopo.NewServer("mysqlstreamer")
-	srvTopo := srvtopo.NewResilientServer(topo, "streamertopo", false)
-
-	vsClient.vsEngine = vstreamer.NewEngine(srvTopo, sourceSe)
+	vsClient.vsEngine = vstreamer.NewEngine(mysqlSrvTopo, vsClient.sourceSe)
 	vsClient.vsEngine.InitDBConfig(vsClient.sourceConnParams)
 
 	err = vsClient.vsEngine.Open("mysqlstreamer", "cell1")
@@ -175,10 +183,15 @@ func (vsClient *MySQLVStreamerClient) Open(ctx context.Context) (err error) {
 
 // Close part of the VStreamerClient interface
 func (vsClient *MySQLVStreamerClient) Close(ctx context.Context) (err error) {
+	vsClient.mu.Lock()
+	defer vsClient.mu.Unlock()
 	if !vsClient.isOpen {
 		return nil
 	}
+
+	vsClient.isOpen = false
 	vsClient.vsEngine.Close()
+	vsClient.sourceSe.Close()
 	return nil
 }
 
