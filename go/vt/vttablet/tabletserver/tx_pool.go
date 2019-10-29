@@ -245,6 +245,9 @@ func (axp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (
 		switch err {
 		case connpool.ErrConnPoolClosed:
 			return 0, "", err
+		case pools.ErrCtxTimeout:
+			axp.LogActive()
+			return 0, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool aborting request due to already expired context")
 		case pools.ErrTimeout:
 			axp.LogActive()
 			return 0, "", vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "transaction pool connection limit exceeded")
