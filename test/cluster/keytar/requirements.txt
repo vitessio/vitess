@@ -1,2 +1,2 @@
-Flask==0.12.3
+Flask==1.0
 pyyaml==4.2b1
