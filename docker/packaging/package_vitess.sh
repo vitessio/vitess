@@ -33,10 +33,10 @@ cat <<EOF >> "${inputs_file}"
 /vt/bin/vtgate=${PREFIX}/bin/vtgate
 /vt/bin/vttablet=${PREFIX}/bin/vttablet
 /vt/bin/vtworker=${PREFIX}/bin/vtworker
-/vt/config/=/etc/vitess
-/vt/web/vtctld2/app=${PREFIX}/lib/vitess/web/vtcld2
-/vt/web/vtctld=${PREFIX}/lib/vitess/web
-/vt/examples/local/=${PREFIX}/share/vitess/examples
+/vt/src/vitess.io/vitess/config/=/etc/vitess
+/vt/src/vitess.io/vitess/web/vtctld2/app=${PREFIX}/lib/vitess/web/vtcld2
+/vt/src/vitess.io/vitess/web/vtctld=${PREFIX}/lib/vitess/web
+/vt/src/vitess.io/vitess/examples/local/=${PREFIX}/share/vitess/examples
 EOF
 
 description='A database clustering system for horizontal scaling of MySQL

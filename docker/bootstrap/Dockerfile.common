@@ -38,7 +38,7 @@ RUN mkdir -p /vt/dist && \
     mv apache-maven-3.3.9 maven
 
 # Set up Vitess environment (equivalent to '. dev.env')
-ENV VTROOT /vt
+ENV VTROOT /vt/src/vitess.io/vitess
 ENV GOTOP $VTROOT/go
 ENV PYTOP $VTROOT/py
 ENV VTDATAROOT $VTROOT/vtdataroot
@@ -52,11 +52,11 @@ ENV USER vitess
 ENV GO111MODULE on
 
 # Copy files needed for bootstrap
-COPY bootstrap.sh dev.env build.env go.mod go.sum /vt/
-COPY config /vt/config
-COPY third_party /vt/third_party
-COPY tools /vt/tools
-COPY travis /vt/travis
+COPY bootstrap.sh dev.env build.env go.mod go.sum /vt/src/vitess.io/vitess/
+COPY config /vt/src/vitess.io/vitess/config
+COPY third_party /vt/src/vitess.io/vitess/third_party
+COPY tools /vt/src/vitess.io/vitess/tools
+COPY travis /vt/src/vitess.io/vitess/travis
 
 # Create vitess user
 RUN groupadd -r vitess && useradd -r -g vitess vitess && \
@@ -64,7 +64,7 @@ RUN groupadd -r vitess && useradd -r -g vitess vitess && \
     chown -R vitess:vitess /vt /home/vitess
 
 # Download vendored Go dependencies
-RUN cd /vt && \
+RUN cd /vt/src/vitess.io/vitess && \
  su vitess -c "/usr/local/go/bin/go mod download"
 
 # Create mount point for actual data (e.g. MySQL data dir)

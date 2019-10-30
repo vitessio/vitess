@@ -44,8 +44,8 @@ Vagrant.configure("2") do |config|
   # Additional details in https://github.com/vitessio/vitess/issues/4396
   #
   # To enable, use:
-  #   config.vm.synced_folder ".", "/vagrant/vt", type: "nfs"
-  config.vm.synced_folder ".", "/vagrant/vt"
+  #   config.vm.synced_folder ".", "/vagrant/src/vitess.io/vitess", type: "nfs"
+  config.vm.synced_folder ".", "/vagrant/src/vitess.io/vitess"
 
   config.vm.provider :virtualbox do |vb|
     vb.name = "vitess"
