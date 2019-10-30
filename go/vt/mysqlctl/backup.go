@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -319,7 +318,8 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 
 	// Add backupTime and restorePosition to LocalMetadata
 	params.LocalMetadata["RestoredBackupTime"] = manifest.BackupTime
-	params.LocalMetadata["RestorePosition"] = mysql.EncodePosition(manifest.Position)
+	// TODO(deepthi): Uncomment this when the table is fixed to fit replication positions.
+	//params.LocalMetadata["RestorePosition"] = mysql.EncodePosition(manifest.Position)
 
 	// Populate local_metadata before starting without --skip-networking,
 	// so it's there before we start announcing ourselves.

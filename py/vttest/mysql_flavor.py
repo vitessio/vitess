@@ -49,7 +49,7 @@ class MariaDB(MysqlFlavor):
   def my_cnf(self):
     files = [
         os.path.join(vttop, "config/mycnf/default-fast.cnf"),
-        os.path.join(vttop, "config/mycnf/master_mariadb.cnf"),
+        os.path.join(vttop, "config/mycnf/master_mariadb100.cnf"),
     ]
     return ":".join(files)
 
@@ -99,7 +99,7 @@ def set_mysql_flavor(flavor):
   global __mysql_flavor
 
   # Last default is there because the environment variable might be set to "".
-  flavor = flavor or os.environ.get("MYSQL_FLAVOR", "MariaDB") or "MariaDB"
+  flavor = flavor or os.environ.get("MYSQL_FLAVOR", "MySQL56") or "MySQL56"
 
   # Set the environment variable explicitly in case we're overriding it via
   # command-line flag.

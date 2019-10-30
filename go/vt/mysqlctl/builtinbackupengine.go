@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,10 +22,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
-	"strings"
 	"sync"
 	"time"
 
@@ -124,116 +122,6 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 		}
 	}
 	return fd, nil
-}
-
-// isDbDir returns true if the given directory contains a DB
-func isDbDir(p string) bool {
-	// db.opt is there
-	if _, err := os.Stat(path.Join(p, "db.opt")); err == nil {
-		return true
-	}
-
-	// Look for at least one database file
-	fis, err := ioutil.ReadDir(p)
-	if err != nil {
-		return false
-	}
-	for _, fi := range fis {
-		if strings.HasSuffix(fi.Name(), ".frm") {
-			return true
-		}
-
-		// the MyRocks engine stores data in RocksDB .sst files
-		// https://github.com/facebook/rocksdb/wiki/Rocksdb-BlockBasedTable-Format
-		if strings.HasSuffix(fi.Name(), ".sst") {
-			return true
-		}
-
-		// .frm files were removed in MySQL 8, so we need to check for two other file types
-		// https://dev.mysql.com/doc/refman/8.0/en/data-dictionary-file-removal.html
-		if strings.HasSuffix(fi.Name(), ".ibd") {
-			return true
-		}
-		// https://dev.mysql.com/doc/refman/8.0/en/serialized-dictionary-information.html
-		if strings.HasSuffix(fi.Name(), ".sdi") {
-			return true
-		}
-	}
-
-	return false
-}
-
-func addDirectory(fes []FileEntry, base string, baseDir string, subDir string) ([]FileEntry, error) {
-	p := path.Join(baseDir, subDir)
-
-	fis, err := ioutil.ReadDir(p)
-	if err != nil {
-		return nil, err
-	}
-	for _, fi := range fis {
-		fes = append(fes, FileEntry{
-			Base: base,
-			Name: path.Join(subDir, fi.Name()),
-		})
-	}
-	return fes, nil
-}
-
-// addMySQL8DataDictionary checks to see if the new data dictionary introduced in MySQL 8 exists
-// and adds it to the backup manifest if it does
-// https://dev.mysql.com/doc/refman/8.0/en/data-dictionary-transactional-storage.html
-func addMySQL8DataDictionary(fes []FileEntry, base string, baseDir string) ([]FileEntry, error) {
-	filePath := path.Join(baseDir, dataDictionaryFile)
-
-	// no-op if this file doesn't exist
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return fes, nil
-	}
-
-	fes = append(fes, FileEntry{
-		Base: base,
-		Name: dataDictionaryFile,
-	})
-
-	return fes, nil
-}
-
-func findFilesToBackup(cnf *Mycnf) ([]FileEntry, error) {
-	var err error
-	var result []FileEntry
-
-	// first add inno db files
-	result, err = addDirectory(result, backupInnodbDataHomeDir, cnf.InnodbDataHomeDir, "")
-	if err != nil {
-		return nil, err
-	}
-	result, err = addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, "")
-	if err != nil {
-		return nil, err
-	}
-
-	// then add the transactional data dictionary if it exists
-	result, err = addMySQL8DataDictionary(result, backupData, cnf.DataDir)
-	if err != nil {
-		return nil, err
-	}
-
-	// then add DB directories
-	fis, err := ioutil.ReadDir(cnf.DataDir)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, fi := range fis {
-		p := path.Join(cnf.DataDir, fi.Name())
-		if isDbDir(p) {
-			result, err = addDirectory(result, backupData, cnf.DataDir, fi.Name())
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-	return result, nil
 }
 
 // ExecuteBackup returns a boolean that indicates if the backup is usable,
@@ -379,7 +267,8 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, replicationPosition mysql.Position) (finalErr error) {
 
 	// Get the files to backup.
-	fes, err := findFilesToBackup(params.Cnf)
+	// We don't care about totalSize because we add each file separately.
+	fes, _, err := findFilesToBackup(params.Cnf)
 	if err != nil {
 		return vterrors.Wrap(err, "can't find files to backup")
 	}
