@@ -53,8 +53,8 @@ func TestStreamMigrateMainflow(t *testing.T) {
 
 	stopStreams := func() {
 		// sm.stopStreams->sm.readSourceStreams->readTabletStreams('Stopped')
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and state = 'Stopped'", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
 
 		// pre-compute sourceRows because they're re-read multiple times.
 		var sourceRows [][]string
@@ -62,7 +62,7 @@ func TestStreamMigrateMainflow(t *testing.T) {
 			var rows []string
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -81,7 +81,7 @@ func TestStreamMigrateMainflow(t *testing.T) {
 
 		for i, dbclient := range tme.dbSourceClients {
 			// sm.stopStreams->sm.readSourceStreams->readTabletStreams('') and VReplicationExec(_vt.copy_state)
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				sourceRows[i]...),
@@ -95,14 +95,14 @@ func TestStreamMigrateMainflow(t *testing.T) {
 			dbclient.addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
 
 			// sm.stopStreams->sm.stopSourceStreams->sm.readTabletStreams('id in...')
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and id in (1, 2)", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and id in (1, 2)", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				sourceRows[i]...),
 				nil)
 
 			// sm.stopStreams->sm.verifyStreamPositions->sm.readTabletStreams('id in...')
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and id in (1, 2)", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and id in (1, 2)", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				sourceRows[i]...),
@@ -137,9 +137,16 @@ func TestStreamMigrateMainflow(t *testing.T) {
 	journal := "insert into _vt.resharding_journal.*source_workflows.*t1t2"
 	tme.dbSourceClients[0].addQueryRE(journal, &sqltypes.Result{}, nil)
 	tme.dbSourceClients[1].addQueryRE(journal, &sqltypes.Result{}, nil)
-	tme.expectCreateReverseReplication()
 
 	finalize := func() {
+		// sm.finalize->Source
+		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1t2')", resultid12, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1t2')", resultid12, nil)
+		tme.dbSourceClients[1].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+
 		// sm.finalize->Target
 		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1t2')", resultid34, nil)
 		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1t2')", resultid34, nil)
@@ -149,20 +156,14 @@ func TestStreamMigrateMainflow(t *testing.T) {
 		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 3", stoppedResult(3), nil)
 		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 4", stoppedResult(4), nil)
 		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 4", stoppedResult(4), nil)
-
-		// sm.finalize->Source
-		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1t2')", resultid12, nil)
-		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1t2')", resultid12, nil)
-		tme.dbSourceClients[1].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
 	}
 	finalize()
 
+	tme.expectCreateReverseVReplication()
+	tme.expectStartReverseVReplication()
 	tme.expectDeleteTargetVReplication()
 
-	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second); err != nil {
+	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -198,8 +199,8 @@ func TestStreamMigrateTwoStreams(t *testing.T) {
 
 	stopStreams := func() {
 		// sm.stopStreams->sm.readSourceStreams->readTabletStreams('Stopped')
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and state = 'Stopped'", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
 
 		// pre-compute sourceRows because they're re-read multiple times.
 		var sourceRows [][]string
@@ -207,7 +208,7 @@ func TestStreamMigrateTwoStreams(t *testing.T) {
 			var rows []string
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -223,7 +224,7 @@ func TestStreamMigrateTwoStreams(t *testing.T) {
 			}
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -239,7 +240,7 @@ func TestStreamMigrateTwoStreams(t *testing.T) {
 
 		for i, dbclient := range tme.dbSourceClients {
 			// sm.stopStreams->sm.readSourceStreams->readTabletStreams('') and VReplicationExec(_vt.copy_state)
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				sourceRows[i]...),
@@ -255,14 +256,14 @@ func TestStreamMigrateTwoStreams(t *testing.T) {
 			dbclient.addQuery("select * from _vt.vreplication where id = 4", stoppedResult(3), nil)
 
 			// sm.stopStreams->sm.stopSourceStreams->sm.readTabletStreams('id in...')
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and id in (1, 2, 3, 4)", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and id in (1, 2, 3, 4)", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				sourceRows[i]...),
 				nil)
 
 			// sm.stopStreams->sm.verifyStreamPositions->sm.readTabletStreams('id in...')
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and id in (1, 2, 3, 4)", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and id in (1, 2, 3, 4)", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				sourceRows[i]...),
@@ -299,9 +300,16 @@ func TestStreamMigrateTwoStreams(t *testing.T) {
 	migrateStreams()
 
 	tme.expectCreateJournals()
-	tme.expectCreateReverseReplication()
 
 	finalize := func() {
+		// sm.finalize->Source
+		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1t2', 't3')", resultid1234, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (1, 2, 3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2, 3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1t2', 't3')", resultid1234, nil)
+		tme.dbSourceClients[1].addQuery("delete from _vt.vreplication where id in (1, 2, 3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2, 3, 4)", &sqltypes.Result{}, nil)
+
 		// sm.finalize->Target
 		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1t2', 't3')", resultid3456, nil)
 		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1t2', 't3')", resultid3456, nil)
@@ -315,20 +323,14 @@ func TestStreamMigrateTwoStreams(t *testing.T) {
 		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 5", stoppedResult(5), nil)
 		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 6", stoppedResult(6), nil)
 		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 6", stoppedResult(6), nil)
-
-		// sm.finalize->Source
-		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1t2', 't3')", resultid1234, nil)
-		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (1, 2, 3, 4)", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2, 3, 4)", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1t2', 't3')", resultid1234, nil)
-		tme.dbSourceClients[1].addQuery("delete from _vt.vreplication where id in (1, 2, 3, 4)", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2, 3, 4)", &sqltypes.Result{}, nil)
 	}
 	finalize()
 
+	tme.expectCreateReverseVReplication()
+	tme.expectStartReverseVReplication()
 	tme.expectDeleteTargetVReplication()
 
-	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second); err != nil {
+	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -364,7 +366,7 @@ func TestStreamMigrateOneToMany(t *testing.T) {
 
 	stopStreams := func() {
 		// sm.stopStreams->sm.readSourceStreams->readTabletStreams('Stopped')
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
 
 		// pre-compute sourceRows because they're re-read multiple times.
 		var sourceRows [][]string
@@ -372,7 +374,7 @@ func TestStreamMigrateOneToMany(t *testing.T) {
 			var rows []string
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -388,7 +390,7 @@ func TestStreamMigrateOneToMany(t *testing.T) {
 
 		for i, dbclient := range tme.dbSourceClients {
 			// sm.stopStreams->sm.readSourceStreams->readTabletStreams('') and VReplicationExec(_vt.copy_state)
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				sourceRows[i]...),
@@ -401,14 +403,14 @@ func TestStreamMigrateOneToMany(t *testing.T) {
 			dbclient.addQuery("select * from _vt.vreplication where id = 1", stoppedResult(1), nil)
 
 			// sm.stopStreams->sm.stopSourceStreams->sm.readTabletStreams('id in...')
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and id in (1)", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and id in (1)", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				sourceRows[i]...),
 				nil)
 
 			// sm.stopStreams->sm.verifyStreamPositions->sm.readTabletStreams('id in...')
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and id in (1)", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and id in (1)", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				sourceRows[i]...),
@@ -439,9 +441,13 @@ func TestStreamMigrateOneToMany(t *testing.T) {
 	migrateStreams()
 
 	tme.expectCreateJournals()
-	tme.expectCreateReverseReplication()
 
 	finalize := func() {
+		// sm.finalize->Source
+		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", resultid1, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (1)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1)", &sqltypes.Result{}, nil)
+
 		// sm.finalize->Target
 		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", resultid3, nil)
 		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", resultid3, nil)
@@ -449,17 +455,14 @@ func TestStreamMigrateOneToMany(t *testing.T) {
 		tme.dbTargetClients[1].addQuery("update _vt.vreplication set state = 'Running' where id in (3)", &sqltypes.Result{}, nil)
 		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 3", stoppedResult(3), nil)
 		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 3", stoppedResult(3), nil)
-
-		// sm.finalize->Source
-		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", resultid1, nil)
-		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (1)", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1)", &sqltypes.Result{}, nil)
 	}
 	finalize()
 
+	tme.expectCreateReverseVReplication()
+	tme.expectStartReverseVReplication()
 	tme.expectDeleteTargetVReplication()
 
-	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second); err != nil {
+	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -494,8 +497,8 @@ func TestStreamMigrateManyToOne(t *testing.T) {
 
 	stopStreams := func() {
 		// sm.stopStreams->sm.readSourceStreams->readTabletStreams('Stopped')
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and state = 'Stopped'", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
 
 		// pre-compute sourceRows because they're re-read multiple times.
 		var sourceRows [][]string
@@ -503,7 +506,7 @@ func TestStreamMigrateManyToOne(t *testing.T) {
 			var rows []string
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -519,7 +522,7 @@ func TestStreamMigrateManyToOne(t *testing.T) {
 
 		for i, dbclient := range tme.dbSourceClients {
 			// sm.stopStreams->sm.readSourceStreams->readTabletStreams('') and VReplicationExec(_vt.copy_state)
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				sourceRows[i]...),
@@ -533,14 +536,14 @@ func TestStreamMigrateManyToOne(t *testing.T) {
 			dbclient.addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
 
 			// sm.stopStreams->sm.stopSourceStreams->sm.readTabletStreams('id in...')
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and id in (1, 2)", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and id in (1, 2)", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				sourceRows[i]...),
 				nil)
 
 			// sm.stopStreams->sm.verifyStreamPositions->sm.readTabletStreams('id in...')
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and id in (1, 2)", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and id in (1, 2)", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				sourceRows[i]...),
@@ -569,17 +572,11 @@ func TestStreamMigrateManyToOne(t *testing.T) {
 		}
 	}
 	migrateStreams()
+	tme.expectCreateReverseVReplication()
 
 	tme.expectCreateJournals()
-	tme.expectCreateReverseReplication()
 
 	finalize := func() {
-		// sm.finalize->Target
-		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", resultid34, nil)
-		tme.dbTargetClients[0].addQuery("update _vt.vreplication set state = 'Running' where id in (3, 4)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 3", stoppedResult(3), nil)
-		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 4", stoppedResult(4), nil)
-
 		// sm.finalize->Source
 		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", resultid12, nil)
 		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
@@ -587,12 +584,19 @@ func TestStreamMigrateManyToOne(t *testing.T) {
 		tme.dbSourceClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", resultid12, nil)
 		tme.dbSourceClients[1].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+
+		// sm.finalize->Target
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", resultid34, nil)
+		tme.dbTargetClients[0].addQuery("update _vt.vreplication set state = 'Running' where id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 3", stoppedResult(3), nil)
+		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 4", stoppedResult(4), nil)
 	}
 	finalize()
 
+	tme.expectStartReverseVReplication()
 	tme.expectDeleteTargetVReplication()
 
-	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second); err != nil {
+	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -626,15 +630,15 @@ func TestStreamMigrateSyncSuccess(t *testing.T) {
 
 	stopStreams := func() {
 		// sm.stopStreams->sm.readSourceStreams->readTabletStreams('Stopped')
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and state = 'Stopped'", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
 
 		var sourceRows [][]string
 		for i, sourceTargetShard := range tme.sourceShards {
 			var rows []string
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -667,7 +671,7 @@ func TestStreamMigrateSyncSuccess(t *testing.T) {
 			var rows []string
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -683,7 +687,7 @@ func TestStreamMigrateSyncSuccess(t *testing.T) {
 
 		for i, dbclient := range tme.dbSourceClients {
 			// sm.stopStreams->sm.readSourceStreams->readTabletStreams('') and VReplicationExec(_vt.copy_state)
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				sourceRows[i]...),
@@ -697,14 +701,14 @@ func TestStreamMigrateSyncSuccess(t *testing.T) {
 			dbclient.addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
 
 			// sm.stopStreams->sm.stopSourceStreams->sm.readTabletStreams('id in...')
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and id in (1, 2)", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and id in (1, 2)", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				sourceRows[i]...),
 				nil)
 
 			// sm.stopStreams->sm.verifyStreamPositions->sm.readTabletStreams('id in...')
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and id in (1, 2)", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and id in (1, 2)", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				finalSources[i]...),
@@ -754,9 +758,16 @@ func TestStreamMigrateSyncSuccess(t *testing.T) {
 	migrateStreams()
 
 	tme.expectCreateJournals()
-	tme.expectCreateReverseReplication()
 
 	finalize := func() {
+		// sm.finalize->Source
+		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", resultid12, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", resultid12, nil)
+		tme.dbSourceClients[1].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+
 		// sm.finalize->Target
 		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", resultid34, nil)
 		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", resultid34, nil)
@@ -766,20 +777,14 @@ func TestStreamMigrateSyncSuccess(t *testing.T) {
 		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 3", stoppedResult(3), nil)
 		tme.dbTargetClients[0].addQuery("select * from _vt.vreplication where id = 4", stoppedResult(4), nil)
 		tme.dbTargetClients[1].addQuery("select * from _vt.vreplication where id = 4", stoppedResult(4), nil)
-
-		// sm.finalize->Source
-		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", resultid12, nil)
-		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", resultid12, nil)
-		tme.dbSourceClients[1].addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
 	}
 	finalize()
 
+	tme.expectCreateReverseVReplication()
+	tme.expectStartReverseVReplication()
 	tme.expectDeleteTargetVReplication()
 
-	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second); err != nil {
+	if _, err := tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -815,15 +820,15 @@ func TestStreamMigrateSyncFail(t *testing.T) {
 
 	stopStreams := func() {
 		// sm.stopStreams->sm.readSourceStreams->readTabletStreams('Stopped')
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and state = 'Stopped'", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
 
 		var sourceRows [][]string
 		for i, sourceTargetShard := range tme.sourceShards {
 			var rows []string
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -854,7 +859,7 @@ func TestStreamMigrateSyncFail(t *testing.T) {
 
 		for i, dbclient := range tme.dbSourceClients {
 			// sm.stopStreams->sm.readSourceStreams->readTabletStreams('') and VReplicationExec(_vt.copy_state)
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				sourceRows[i]...),
@@ -868,21 +873,14 @@ func TestStreamMigrateSyncFail(t *testing.T) {
 			dbclient.addQuery("select * from _vt.vreplication where id = 2", stoppedResult(2), nil)
 
 			// sm.stopStreams->sm.stopSourceStreams->sm.readTabletStreams('id in...')
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and id in (1, 2)", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and id in (1, 2)", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				sourceRows[i]...),
 				nil)
 
 			// sm.stopStreams->sm.verifyStreamPositions->sm.readTabletStreams('id in...')
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and id in (1, 2)", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-				"id|workflow|source|pos",
-				"int64|varbinary|varchar|varbinary"),
-				sourceRows[i]...),
-				nil)
-
-			// sm.cancelMigration->sm.readSourceStreamsForCancel: this is not actually stopStream, but we're reusing the bls here.
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and id in (1, 2)", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				sourceRows[i]...),
@@ -909,36 +907,18 @@ func TestStreamMigrateSyncFail(t *testing.T) {
 	}
 	syncSourceStreams()
 
-	tme.expectWaitForCatchup()
-
-	smCancelMigration := func() {
-		// sm.migrateStreams->sm.deleteTargetStreams
-		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", resultid34, nil)
-		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", resultid34, nil)
-		tme.dbTargetClients[0].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[1].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
-		tme.dbTargetClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
-
-		// sm.migrateStreams->->restart source streams
-		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", resultid12, nil)
-		tme.dbSourceClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", resultid12, nil)
-		tme.dbSourceClients[0].addQuery("update _vt.vreplication set state = 'Running', stop_pos = null, message = '' where id in (1, 2)", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("update _vt.vreplication set state = 'Running', stop_pos = null, message = '' where id in (1, 2)", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 1", runningResult(1), nil)
-		tme.dbSourceClients[1].addQuery("select * from _vt.vreplication where id = 1", runningResult(1), nil)
-		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 2", runningResult(2), nil)
-		tme.dbSourceClients[1].addQuery("select * from _vt.vreplication where id = 2", runningResult(2), nil)
-	}
-	smCancelMigration()
+	// sm.deleteTargetStreams (simplified to delete nothing)
+	tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", &sqltypes.Result{}, nil)
+	tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", &sqltypes.Result{}, nil)
 
 	tme.expectCancelMigration()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
 	want := "does not match"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("MigrateWrites err: %v, want %s", err, want)
 	}
+	verifyQueries(t, tme.allDBClients)
 }
 
 func TestStreamMigrateCancel(t *testing.T) {
@@ -960,8 +940,8 @@ func TestStreamMigrateCancel(t *testing.T) {
 
 	stopStreamsFail := func() {
 		// sm.stopStreams->sm.readSourceStreams->readTabletStreams('Stopped')
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and state = 'Stopped'", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
 
 		// pre-compute sourceRows because they're re-read multiple times.
 		var sourceRows [][]string
@@ -969,7 +949,7 @@ func TestStreamMigrateCancel(t *testing.T) {
 			var rows []string
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -985,7 +965,7 @@ func TestStreamMigrateCancel(t *testing.T) {
 
 		for i, dbclient := range tme.dbSourceClients {
 			// sm.stopStreams->sm.readSourceStreams->readTabletStreams('') and VReplicationExec(_vt.copy_state)
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				sourceRows[i]...),
@@ -994,18 +974,11 @@ func TestStreamMigrateCancel(t *testing.T) {
 
 			// sm.stopStreams->sm.stopSourceStreams->VReplicationExec('Stopped'): fail this
 			dbclient.addQuery("select id from _vt.vreplication where id in (1, 2)", nil, fmt.Errorf("intentionally failed"))
-
-			// sm.cancelMigration->sm.readSourceStreamsForCancel: this is not actually stopStream, but we're reusing the bls here.
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-				"id|workflow|source|pos",
-				"int64|varbinary|varchar|varbinary"),
-				sourceRows[i]...),
-				nil)
 		}
 	}
 	stopStreamsFail()
 
-	smCancelMigration := func() {
+	cancelMigration := func() {
 		// sm.migrateStreams->sm.deleteTargetStreams
 		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", resultid34, nil)
 		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", resultid34, nil)
@@ -1015,20 +988,24 @@ func TestStreamMigrateCancel(t *testing.T) {
 		tme.dbTargetClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
 
 		// sm.migrateStreams->->restart source streams
-		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", resultid12, nil)
-		tme.dbSourceClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1')", resultid12, nil)
+		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow != 'test_reverse'", resultid12, nil)
+		tme.dbSourceClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow != 'test_reverse'", resultid12, nil)
 		tme.dbSourceClients[0].addQuery("update _vt.vreplication set state = 'Running', stop_pos = null, message = '' where id in (1, 2)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[1].addQuery("update _vt.vreplication set state = 'Running', stop_pos = null, message = '' where id in (1, 2)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 1", runningResult(1), nil)
 		tme.dbSourceClients[1].addQuery("select * from _vt.vreplication where id = 1", runningResult(1), nil)
 		tme.dbSourceClients[0].addQuery("select * from _vt.vreplication where id = 2", runningResult(2), nil)
 		tme.dbSourceClients[1].addQuery("select * from _vt.vreplication where id = 2", runningResult(2), nil)
+
+		// mi.cancelMigration->restart target streams
+		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", &sqltypes.Result{}, nil)
+
+		tme.expectDeleteReverseVReplication()
 	}
-	smCancelMigration()
+	cancelMigration()
 
-	tme.expectCancelMigration()
-
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
 	want := "intentionally failed"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("MigrateWrites err: %v, want %s", err, want)
@@ -1071,7 +1048,7 @@ func TestStreamMigrateStoppedStreams(t *testing.T) {
 			var rows []string
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -1087,21 +1064,86 @@ func TestStreamMigrateStoppedStreams(t *testing.T) {
 
 		for i, dbclient := range tme.dbSourceClients {
 			// sm.stopStreams->sm.readSourceStreams->readTabletStreams('') and VReplicationExec(_vt.copy_state)
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and state = 'Stopped'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				sourceRows[i]...),
 				nil)
-			dbclient.addQuery("select vrepl_id from _vt.copy_state where vrepl_id in (1)", &sqltypes.Result{}, nil)
 		}
 	}
 	stopStreams()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second)
-	want := "cannot migrate until all strems are running: 0"
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
+	want := "cannot migrate until all streams are running: 0"
 	if err == nil || err.Error() != want {
 		t.Errorf("MigrateWrites err: %v, want %v", err, want)
 	}
+	verifyQueries(t, tme.allDBClients)
+}
+
+func TestStreamMigrateCancelWithStoppedStreams(t *testing.T) {
+	ctx := context.Background()
+	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
+	defer tme.stopTablets(t)
+
+	// Migrate reads
+	err := tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_RDONLY, nil, DirectionForward)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = tme.wr.MigrateReads(ctx, tme.targetKeyspace, "test", topodatapb.TabletType_REPLICA, nil, DirectionForward)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tme.expectCheckJournals()
+
+	stopStreams := func() {
+		var sourceRows [][]string
+		for _, sourceTargetShard := range tme.sourceShards {
+			var rows []string
+			for j, sourceShard := range tme.sourceShards {
+				bls := &binlogdatapb.BinlogSource{
+					Keyspace: "ks1",
+					Shard:    sourceShard,
+					Filter: &binlogdatapb.Filter{
+						Rules: []*binlogdatapb.Rule{{
+							Match:  "t1",
+							Filter: fmt.Sprintf("select * from t1 where in_keyrange('%s')", sourceTargetShard),
+						}, {
+							Match:  "t2",
+							Filter: fmt.Sprintf("select * from t2 where in_keyrange('%s')", sourceTargetShard),
+						}},
+					},
+				}
+				rows = append(rows, fmt.Sprintf("%d|t1t2|%v|MariaDB/5-456-888", j+1, bls))
+			}
+			sourceRows = append(sourceRows, rows)
+		}
+
+		for i, dbclient := range tme.dbSourceClients {
+			// sm.stopStreams->sm.readSourceStreams->readTabletStreams('') and VReplicationExec(_vt.copy_state)
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+				"id|workflow|source|pos",
+				"int64|varbinary|varchar|varbinary"),
+				sourceRows[i]...),
+				nil)
+			dbclient.addQuery("select vrepl_id from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+		}
+	}
+	stopStreams()
+
+	// sm.migrateStreams->->sm.deleteTargetStreams (no previously migrated streams)
+	tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1t2')", &sqltypes.Result{}, nil)
+	tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow in ('t1t2')", &sqltypes.Result{}, nil)
+
+	tme.expectCancelMigration()
+
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, true, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifyQueries(t, tme.allDBClients)
 }
 
 func TestStreamMigrateStillCopying(t *testing.T) {
@@ -1123,7 +1165,7 @@ func TestStreamMigrateStillCopying(t *testing.T) {
 
 	stopStreams := func() {
 		// sm.stopStreams->sm.readSourceStreams->readTabletStreams('Stopped')
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
 
 		// pre-compute sourceRows because they're re-read multiple times.
 		var sourceRows [][]string
@@ -1131,7 +1173,7 @@ func TestStreamMigrateStillCopying(t *testing.T) {
 			var rows []string
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -1147,7 +1189,7 @@ func TestStreamMigrateStillCopying(t *testing.T) {
 
 		for i, dbclient := range tme.dbSourceClients {
 			// sm.stopStreams->sm.readSourceStreams->readTabletStreams('') and VReplicationExec(_vt.copy_state)
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				sourceRows[i]...),
@@ -1157,11 +1199,12 @@ func TestStreamMigrateStillCopying(t *testing.T) {
 	}
 	stopStreams()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
 	want := "cannot migrate while vreplication streams in source shards are still copying: 0"
 	if err == nil || err.Error() != want {
 		t.Errorf("MigrateWrites err: %v, want %v", err, want)
 	}
+	verifyQueries(t, tme.allDBClients)
 }
 
 func TestStreamMigrateEmptyWorflow(t *testing.T) {
@@ -1183,7 +1226,7 @@ func TestStreamMigrateEmptyWorflow(t *testing.T) {
 
 	stopStreams := func() {
 		// sm.stopStreams->sm.readSourceStreams->readTabletStreams('Stopped')
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
 
 		// pre-compute sourceRows because they're re-read multiple times.
 		var sourceRows [][]string
@@ -1191,7 +1234,7 @@ func TestStreamMigrateEmptyWorflow(t *testing.T) {
 			var rows []string
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -1207,7 +1250,7 @@ func TestStreamMigrateEmptyWorflow(t *testing.T) {
 
 		for i, dbclient := range tme.dbSourceClients {
 			// sm.stopStreams->sm.readSourceStreams->readTabletStreams('') and VReplicationExec(_vt.copy_state)
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				sourceRows[i]...),
@@ -1216,11 +1259,12 @@ func TestStreamMigrateEmptyWorflow(t *testing.T) {
 	}
 	stopStreams()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
 	want := "VReplication streams must have named workflows for migration: shard: ks:0, stream: 1"
 	if err == nil || err.Error() != want {
 		t.Errorf("MigrateWrites err: %v, want %v", err, want)
 	}
+	verifyQueries(t, tme.allDBClients)
 }
 
 func TestStreamMigrateDupWorflow(t *testing.T) {
@@ -1242,7 +1286,7 @@ func TestStreamMigrateDupWorflow(t *testing.T) {
 
 	stopStreams := func() {
 		// sm.stopStreams->sm.readSourceStreams->readTabletStreams('Stopped')
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
 
 		// pre-compute sourceRows because they're re-read multiple times.
 		var sourceRows [][]string
@@ -1250,7 +1294,7 @@ func TestStreamMigrateDupWorflow(t *testing.T) {
 			var rows []string
 			for j, sourceShard := range tme.sourceShards {
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -1266,7 +1310,7 @@ func TestStreamMigrateDupWorflow(t *testing.T) {
 
 		for i, dbclient := range tme.dbSourceClients {
 			// sm.stopStreams->sm.readSourceStreams->readTabletStreams('') and VReplicationExec(_vt.copy_state)
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				sourceRows[i]...),
@@ -1275,11 +1319,12 @@ func TestStreamMigrateDupWorflow(t *testing.T) {
 	}
 	stopStreams()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
 	want := "VReplication stream has the same workflow name as the resharding workflow: shard: ks:0, stream: 1"
 	if err == nil || err.Error() != want {
 		t.Errorf("MigrateWrites err: %v, want %v", err, want)
 	}
+	verifyQueries(t, tme.allDBClients)
 }
 
 func TestStreamMigrateStreamsMismatch(t *testing.T) {
@@ -1302,8 +1347,8 @@ func TestStreamMigrateStreamsMismatch(t *testing.T) {
 
 	stopStreams := func() {
 		// sm.stopStreams->sm.readSourceStreams->readTabletStreams('Stopped')
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and state = 'Stopped'", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped'", &sqltypes.Result{}, nil)
 
 		// pre-compute sourceRows because they're re-read multiple times.
 		var sourceRows [][]string
@@ -1315,7 +1360,7 @@ func TestStreamMigrateStreamsMismatch(t *testing.T) {
 					continue
 				}
 				bls := &binlogdatapb.BinlogSource{
-					Keyspace: "ks",
+					Keyspace: "ks1",
 					Shard:    sourceShard,
 					Filter: &binlogdatapb.Filter{
 						Rules: []*binlogdatapb.Rule{{
@@ -1331,7 +1376,7 @@ func TestStreamMigrateStreamsMismatch(t *testing.T) {
 
 		for i, dbclient := range tme.dbSourceClients {
 			// sm.stopStreams->sm.readSourceStreams->readTabletStreams('') and VReplicationExec(_vt.copy_state)
-			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			dbclient.addQuery("select id, workflow, source, pos from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos",
 				"int64|varbinary|varchar|varbinary"),
 				sourceRows[i]...),
@@ -1345,11 +1390,12 @@ func TestStreamMigrateStreamsMismatch(t *testing.T) {
 	}
 	stopStreams()
 
-	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second)
+	_, err = tme.wr.MigrateWrites(ctx, tme.targetKeyspace, "test", 1*time.Second, false, true)
 	want := "streams are mismatched across source shards"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("MigrateWrites err: %v, must contain %v", err, want)
 	}
+	verifyQueries(t, tme.allDBClients)
 }
 
 func TestTemplatize(t *testing.T) {

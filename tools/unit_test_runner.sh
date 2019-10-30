@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,9 +32,6 @@
 if [[ -z $VT_GO_PARALLEL && -n $VT_GO_PARALLEL_VALUE ]]; then
   VT_GO_PARALLEL="-p $VT_GO_PARALLEL_VALUE"
 fi
-
-# This can be removed once the docker images are rebuilt
-export GO111MODULE=on
 
 # All Go packages with test files.
 # Output per line: <full Go package name> <all _test.go files in the package>*

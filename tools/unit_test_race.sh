@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,9 +16,6 @@
 
 temp_log_file="$(mktemp --suffix .unit_test_race.log)"
 trap '[ -f "$temp_log_file" ] && rm $temp_log_file' EXIT
-
-# This can be removed once the docker images are rebuilt
-export GO111MODULE=on
 
 # Wrapper around go test -race.
 

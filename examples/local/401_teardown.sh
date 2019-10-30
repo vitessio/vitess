@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2018 The Vitess Authors.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,10 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this script brings down zookeeper and all the vitess components
-# we brought up in the example
-# optionally, you may want to delete everything that was created
-# by the example from $VTDATAROOT
+# We should not assume that any of the steps have been executed.
+# This makes it possible for a user to cleanup at any point.
 
 set -e
 
@@ -25,9 +23,11 @@ set -e
 script_root=$(dirname "${BASH_SOURCE}")
 
 ./vtgate-down.sh
-CELL=zone1 UID_BASE=100 "$script_root/vttablet-down.sh"
-CELL=zone1 UID_BASE=300 "$script_root/vttablet-down.sh"
-CELL=zone1 UID_BASE=400 "$script_root/vttablet-down.sh"
+
+for TABLET in 100 200 300 400; do
+ ./lvtctl.sh GetTablet zone1-$TABLET >/dev/null 2>&1 && CELL=zone1 UID_BASE=$TABLET "$script_root/vttablet-down.sh"
+done;
+
 ./vtctld-down.sh
 
 if [ "${TOPO}" = "zk2" ]; then
@@ -36,6 +36,20 @@ else
     CELL=zone1 "$script_root/etcd-down.sh"
 fi
 
-rm -r $VTDATAROOT/*
+# pedantic check: grep for any remaining processes
+
+if [ ! -z "$VTDATAROOT" ]; then
+
+ if pgrep -f -l "$VTDATAROOT" > /dev/null; then
+  echo "ERROR: Stale processes detected! It is recommended to manuallly kill them:"
+  pgrep -f -l "$VTDATAROOT"
+ else
+  echo "All good! It looks like every process has shut down"
+ fi
+
+ # shellcheck disable=SC2086
+ rm -r ${VTDATAROOT:?}/*
+
+fi
 
 disown -a

@@ -1,6 +1,5 @@
 /*
-Copyright 2017 Google Inc.
-Copyright 2017 GitHub Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -123,15 +122,13 @@ func GetMySQLOptions(flavor string) (string, []string, error) {
 		mycnf = append(mycnf, "config/mycnf/master_mariadb103.cnf")
 	case "MariaDB":
 		mycnf = append(mycnf, "config/mycnf/default-fast.cnf")
-		mycnf = append(mycnf, "config/mycnf/master_mariadb.cnf")
-
+		mycnf = append(mycnf, "config/mycnf/master_mariadb100.cnf")
 	case "MySQL80":
 		mycnf = append(mycnf, "config/mycnf/default-fast.cnf")
 		mycnf = append(mycnf, "config/mycnf/master_mysql80.cnf")
 	case "MySQL56":
 		mycnf = append(mycnf, "config/mycnf/default-fast.cnf")
 		mycnf = append(mycnf, "config/mycnf/master_mysql56.cnf")
-
 	default:
 		return "", nil, fmt.Errorf("unknown mysql flavor: %s", flavor)
 	}

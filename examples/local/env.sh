@@ -1,12 +1,13 @@
 #!/bin/bash
-# Copyright 2017 Google Inc.
-#
+
+# Copyright 2019 The Vitess Authors.
+# 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-#
+# 
 #     http://www.apache.org/licenses/LICENSE-2.0
-#
+# 
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -19,11 +20,11 @@ vtctld_web_port=15000
 # Set up environment.
 export VTTOP=${VTTOP-$VTROOT/src/vitess.io/vitess}
 
-# Try to find mysqld_safe on PATH.
+# Try to find mysqld on PATH.
 if [ -z "$VT_MYSQL_ROOT" ]; then
-  mysql_path=`which mysqld_safe`
+  mysql_path=`which mysqld`
   if [ -z "$mysql_path" ]; then
-    echo "Can't guess location of mysqld_safe. Please set VT_MYSQL_ROOT so it can be found at \$VT_MYSQL_ROOT/bin/mysqld_safe."
+    echo "Can't guess location of mysqld. Please set VT_MYSQL_ROOT manually."
     exit 1
   fi
   export VT_MYSQL_ROOT=$(dirname `dirname $mysql_path`)

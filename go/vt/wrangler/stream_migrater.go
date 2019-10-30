@@ -41,7 +41,10 @@ import (
 )
 
 type streamMigrater struct {
-	mi *migrater
+	streams   map[string][]*vrStream
+	workflows []string
+	templates []*vrStream
+	mi        *migrater
 }
 
 type vrStream struct {
@@ -51,47 +54,53 @@ type vrStream struct {
 	pos      mysql.Position
 }
 
-func (sm *streamMigrater) stopStreams(ctx context.Context) ([]*vrStream, error) {
+func buildStreamMigrater(ctx context.Context, mi *migrater, cancelMigrate bool) (*streamMigrater, error) {
+	sm := &streamMigrater{mi: mi}
 	if sm.mi.migrationType == binlogdatapb.MigrationType_TABLES {
 		// Source streams should be stopped only for shard migrations.
-		return nil, nil
+		return sm, nil
 	}
-	streams, err := sm.readSourceStreams(ctx)
+	streams, err := sm.readSourceStreams(ctx, cancelMigrate)
 	if err != nil {
 		return nil, err
 	}
-	streams, err = sm.stopSourceStreams(ctx, streams)
-	if err != nil {
-		return nil, err
+	sm.streams = streams
+
+	// Loop executes only once.
+	for _, tabletStreams := range sm.streams {
+		tmpl, err := sm.templatize(ctx, tabletStreams)
+		if err != nil {
+			return nil, err
+		}
+		sm.workflows = tabletStreamWorkflows(tmpl)
+		return sm, nil
 	}
-	positions, err := sm.syncSourceStreams(ctx, streams)
-	if err != nil {
-		return nil, err
-	}
-	return sm.verifyStreamPositions(ctx, streams, positions)
+	return sm, nil
 }
 
-func (sm *streamMigrater) readSourceStreams(ctx context.Context) (map[string][]*vrStream, error) {
+func (sm *streamMigrater) readSourceStreams(ctx context.Context, cancelMigrate bool) (map[string][]*vrStream, error) {
 	streams := make(map[string][]*vrStream)
 	var mu sync.Mutex
 	err := sm.mi.forAllSources(func(source *miSource) error {
-		// This flow protects us from the following scenario: When we create streams,
-		// we always do it in two phases. We start them off as Stopped, and then
-		// update them to Running. If such an operation fails, we may be left with
-		// lingering Stopped streams. They should actually be cleaned up by the user.
-		// In the current workflow, we stop streams and restart them.
-		// Once existing streams are stopped, there will be confusion about which of
-		// them can be restarted because they will be no different from the lingering streams.
-		// To prevent this confusion, we first check if there are any stopped streams.
-		// If so, we request the operator to clean them up, or restart them before going ahead.
-		// This allows us to assume that all stopped streams can be safely restarted
-		// if we cancel the operation.
-		stoppedStreams, err := sm.readTabletStreams(ctx, source.master, "state = 'Stopped'")
-		if err != nil {
-			return err
-		}
-		if len(stoppedStreams) != 0 {
-			return fmt.Errorf("cannot migrate until all strems are running: %s", source.si.ShardName())
+		if !cancelMigrate {
+			// This flow protects us from the following scenario: When we create streams,
+			// we always do it in two phases. We start them off as Stopped, and then
+			// update them to Running. If such an operation fails, we may be left with
+			// lingering Stopped streams. They should actually be cleaned up by the user.
+			// In the current workflow, we stop streams and restart them.
+			// Once existing streams are stopped, there will be confusion about which of
+			// them can be restarted because they will be no different from the lingering streams.
+			// To prevent this confusion, we first check if there are any stopped streams.
+			// If so, we request the operator to clean them up, or restart them before going ahead.
+			// This allows us to assume that all stopped streams can be safely restarted
+			// if we cancel the operation.
+			stoppedStreams, err := sm.readTabletStreams(ctx, source.master, "state = 'Stopped'")
+			if err != nil {
+				return err
+			}
+			if len(stoppedStreams) != 0 {
+				return fmt.Errorf("cannot migrate until all streams are running: %s", source.si.ShardName())
+			}
 		}
 		tabletStreams, err := sm.readTabletStreams(ctx, source.master, "")
 		if err != nil {
@@ -151,12 +160,26 @@ func (sm *streamMigrater) readSourceStreams(ctx context.Context) (map[string][]*
 	return streams, nil
 }
 
+func (sm *streamMigrater) stopStreams(ctx context.Context) ([]string, error) {
+	if sm.streams == nil {
+		return nil, nil
+	}
+	if err := sm.stopSourceStreams(ctx); err != nil {
+		return nil, err
+	}
+	positions, err := sm.syncSourceStreams(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return sm.verifyStreamPositions(ctx, positions)
+}
+
 func (sm *streamMigrater) readTabletStreams(ctx context.Context, ti *topo.TabletInfo, constraint string) ([]*vrStream, error) {
 	var query string
 	if constraint == "" {
-		query = fmt.Sprintf("select id, workflow, source, pos from _vt.vreplication where db_name=%s", encodeString(ti.DbName()))
+		query = fmt.Sprintf("select id, workflow, source, pos from _vt.vreplication where db_name=%s and workflow != %s", encodeString(ti.DbName()), encodeString(sm.mi.reverseWorkflow))
 	} else {
-		query = fmt.Sprintf("select id, workflow, source, pos from _vt.vreplication where db_name=%s and %s", encodeString(ti.DbName()), constraint)
+		query = fmt.Sprintf("select id, workflow, source, pos from _vt.vreplication where db_name=%s and workflow != %s and %s", encodeString(ti.DbName()), encodeString(sm.mi.reverseWorkflow), constraint)
 	}
 	p3qr, err := sm.mi.wr.tmc.VReplicationExec(ctx, ti.Tablet, query)
 	if err != nil {
@@ -195,11 +218,11 @@ func (sm *streamMigrater) readTabletStreams(ctx context.Context, ti *topo.Tablet
 	return tabletStreams, nil
 }
 
-func (sm *streamMigrater) stopSourceStreams(ctx context.Context, streams map[string][]*vrStream) (map[string][]*vrStream, error) {
+func (sm *streamMigrater) stopSourceStreams(ctx context.Context) error {
 	stoppedStreams := make(map[string][]*vrStream)
 	var mu sync.Mutex
 	err := sm.mi.forAllSources(func(source *miSource) error {
-		tabletStreams := streams[source.si.ShardName()]
+		tabletStreams := sm.streams[source.si.ShardName()]
 		if len(tabletStreams) == 0 {
 			return nil
 		}
@@ -218,14 +241,15 @@ func (sm *streamMigrater) stopSourceStreams(ctx context.Context, streams map[str
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return stoppedStreams, nil
+	sm.streams = stoppedStreams
+	return nil
 }
 
-func (sm *streamMigrater) syncSourceStreams(ctx context.Context, streams map[string][]*vrStream) (map[string]mysql.Position, error) {
+func (sm *streamMigrater) syncSourceStreams(ctx context.Context) (map[string]mysql.Position, error) {
 	stopPositions := make(map[string]mysql.Position)
-	for _, tabletStreams := range streams {
+	for _, tabletStreams := range sm.streams {
 		for _, vrs := range tabletStreams {
 			key := fmt.Sprintf("%s:%s", vrs.bls.Keyspace, vrs.bls.Shard)
 			pos, ok := stopPositions[key]
@@ -236,7 +260,7 @@ func (sm *streamMigrater) syncSourceStreams(ctx context.Context, streams map[str
 	}
 	var wg sync.WaitGroup
 	allErrors := &concurrency.AllErrorRecorder{}
-	for _, tabletStreams := range streams {
+	for shard, tabletStreams := range sm.streams {
 		for _, vrs := range tabletStreams {
 			key := fmt.Sprintf("%s:%s", vrs.bls.Keyspace, vrs.bls.Shard)
 			pos := stopPositions[key]
@@ -244,9 +268,9 @@ func (sm *streamMigrater) syncSourceStreams(ctx context.Context, streams map[str
 				continue
 			}
 			wg.Add(1)
-			go func(vrs *vrStream) {
+			go func(vrs *vrStream, shard string) {
 				defer wg.Done()
-				si, err := sm.mi.wr.ts.GetShard(ctx, vrs.bls.Keyspace, vrs.bls.Shard)
+				si, err := sm.mi.wr.ts.GetShard(ctx, sm.mi.sourceKeyspace, vrs.bls.Shard)
 				if err != nil {
 					allErrors.RecordError(err)
 					return
@@ -261,22 +285,24 @@ func (sm *streamMigrater) syncSourceStreams(ctx context.Context, streams map[str
 					allErrors.RecordError(err)
 					return
 				}
+				sm.mi.wr.Logger().Infof("waiting for keyspace:shard: %v:%v, position %v", sm.mi.sourceKeyspace, shard, pos)
 				if err := sm.mi.wr.tmc.VReplicationWaitForPos(ctx, master.Tablet, int(vrs.id), mysql.EncodePosition(pos)); err != nil {
 					allErrors.RecordError(err)
 					return
 				}
-			}(vrs)
+				sm.mi.wr.Logger().Infof("position for keyspace:shard: %v:%v reached", sm.mi.sourceKeyspace, shard)
+			}(vrs, shard)
 		}
 	}
 	wg.Wait()
 	return stopPositions, allErrors.AggrError(vterrors.Aggregate)
 }
 
-func (sm *streamMigrater) verifyStreamPositions(ctx context.Context, streams map[string][]*vrStream, stopPositions map[string]mysql.Position) ([]*vrStream, error) {
+func (sm *streamMigrater) verifyStreamPositions(ctx context.Context, stopPositions map[string]mysql.Position) ([]string, error) {
 	stoppedStreams := make(map[string][]*vrStream)
 	var mu sync.Mutex
 	err := sm.mi.forAllSources(func(source *miSource) error {
-		tabletStreams := streams[source.si.ShardName()]
+		tabletStreams := sm.streams[source.si.ShardName()]
 		if len(tabletStreams) == 0 {
 			return nil
 		}
@@ -292,6 +318,11 @@ func (sm *streamMigrater) verifyStreamPositions(ctx context.Context, streams map
 	if err != nil {
 		return nil, err
 	}
+
+	// This is not really required because it's not used later.
+	// But we keep it up-to-date for good measure.
+	sm.streams = stoppedStreams
+
 	var oneSet []*vrStream
 	allErrors := &concurrency.AllErrorRecorder{}
 	for _, tabletStreams := range stoppedStreams {
@@ -306,29 +337,29 @@ func (sm *streamMigrater) verifyStreamPositions(ctx context.Context, streams map
 			}
 		}
 	}
-	return oneSet, allErrors.AggrError(vterrors.Aggregate)
+	if allErrors.HasErrors() {
+		return nil, allErrors.AggrError(vterrors.Aggregate)
+	}
+	sm.templates, err = sm.templatize(ctx, oneSet)
+	if err != nil {
+		// Unreachable: we've already templatized this before.
+		return nil, err
+	}
+	return tabletStreamWorkflows(sm.templates), allErrors.AggrError(vterrors.Aggregate)
 }
 
-func (sm *streamMigrater) migrateStreams(ctx context.Context, tabletStreams []*vrStream) ([]string, error) {
-	if sm.mi.migrationType == binlogdatapb.MigrationType_TABLES {
-		return nil, nil
+func (sm *streamMigrater) migrateStreams(ctx context.Context) error {
+	if sm.streams == nil {
+		return nil
 	}
 
 	// Delete any previous stray workflows that might have been left-over
 	// due to a failed migration.
-	if err := sm.deleteTargetStreams(ctx, tabletStreams); err != nil {
-		return nil, err
+	if err := sm.deleteTargetStreams(ctx); err != nil {
+		return err
 	}
 
-	tmpl, err := sm.templatize(ctx, tabletStreams)
-	if err != nil {
-		return nil, err
-	}
-	workflows := tabletStreamWorkflows(tmpl)
-	if err := sm.createTargetStreams(ctx, tmpl); err != nil {
-		return nil, err
-	}
-	return workflows, nil
+	return sm.createTargetStreams(ctx, sm.templates)
 }
 
 const (
@@ -462,8 +493,7 @@ func (sm *streamMigrater) createTargetStreams(ctx context.Context, tmpl []*vrStr
 			for _, rule := range vrs.bls.Filter.Rules {
 				buf := &strings.Builder{}
 				t := template.Must(template.New("").Parse(rule.Filter))
-				err := t.Execute(buf, target.si.ShardName())
-				if err != nil {
+				if err := t.Execute(buf, key.KeyRangeString(target.si.KeyRange)); err != nil {
 					return err
 				}
 				rule.Filter = buf.String()
@@ -492,25 +522,15 @@ func (sm *streamMigrater) createTargetStreams(ctx context.Context, tmpl []*vrStr
 }
 
 func (sm *streamMigrater) cancelMigration(ctx context.Context) {
-	if sm.mi.migrationType == binlogdatapb.MigrationType_TABLES {
-		return
-	}
-	tabletStreams, err := sm.readSourceStreamsForCancel(ctx)
-	if err != nil {
-		sm.mi.wr.Logger().Errorf("Cancel migration failed: could not read streams metadata: %v", err)
+	if sm.streams == nil {
 		return
 	}
 
 	// Ignore error. We still want to restart the source streams if deleteTargetStreams fails.
-	_ = sm.deleteTargetStreams(ctx, tabletStreams)
+	_ = sm.deleteTargetStreams(ctx)
 
-	workflows := tabletStreamWorkflows(tabletStreams)
-	if len(workflows) == 0 {
-		return
-	}
-	workflowList := stringListify(workflows)
-	err = sm.mi.forAllSources(func(source *miSource) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos=null, message='' where db_name=%s and workflow in (%s)", encodeString(source.master.DbName()), workflowList)
+	err := sm.mi.forAllSources(func(source *miSource) error {
+		query := fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos=null, message='' where db_name=%s and workflow != %s", encodeString(source.master.DbName()), encodeString(sm.mi.reverseWorkflow))
 		_, err := sm.mi.wr.VReplicationExec(ctx, source.master.Alias, query)
 		return err
 	})
@@ -519,12 +539,11 @@ func (sm *streamMigrater) cancelMigration(ctx context.Context) {
 	}
 }
 
-func (sm *streamMigrater) deleteTargetStreams(ctx context.Context, tabletStreams []*vrStream) error {
-	workflows := tabletStreamWorkflows(tabletStreams)
-	if len(workflows) == 0 {
+func (sm *streamMigrater) deleteTargetStreams(ctx context.Context) error {
+	if len(sm.workflows) == 0 {
 		return nil
 	}
-	workflowList := stringListify(workflows)
+	workflowList := stringListify(sm.workflows)
 	err := sm.mi.forAllTargets(func(target *miTarget) error {
 		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow in (%s)", encodeString(target.master.DbName()), workflowList)
 		_, err := sm.mi.wr.VReplicationExec(ctx, target.master.Alias, query)
@@ -536,57 +555,27 @@ func (sm *streamMigrater) deleteTargetStreams(ctx context.Context, tabletStreams
 	return err
 }
 
-func (sm *streamMigrater) readSourceStreamsForCancel(ctx context.Context) ([]*vrStream, error) {
-	streams := make(map[string][]*vrStream)
-	var mu sync.Mutex
-	err := sm.mi.forAllSources(func(source *miSource) error {
-		tabletStreams, err := sm.readTabletStreams(ctx, source.master, "")
-		if err != nil {
-			return err
-		}
-		if len(tabletStreams) == 0 {
-			return nil
-		}
-
-		mu.Lock()
-		defer mu.Unlock()
-		streams[source.si.ShardName()] = tabletStreams
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	var oneSet []*vrStream
-	for _, tabletStream := range streams {
-		oneSet = tabletStream
-		break
-	}
-	return oneSet, nil
-}
-
-// finalize performs the final cleanup: start all the newly migrated target streams
-// and delete them from the source.
-func (sm *streamMigrater) finalize(ctx context.Context, workflows []string) error {
-	if sm.mi.migrationType == binlogdatapb.MigrationType_TABLES {
-		return nil
-	}
+// streamMigraterFinalize finalizes the stream migration.
+// It's a standalone function because it does not use the streamMigrater state.
+func streamMigraterfinalize(ctx context.Context, mi *migrater, workflows []string) error {
 	if len(workflows) == 0 {
 		return nil
 	}
 	workflowList := stringListify(workflows)
-	err := sm.mi.forAllTargets(func(target *miTarget) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Running' where db_name=%s and workflow in (%s)", encodeString(target.master.DbName()), workflowList)
-		_, err := sm.mi.wr.VReplicationExec(ctx, target.master.Alias, query)
+	err := mi.forAllSources(func(source *miSource) error {
+		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow in (%s)", encodeString(source.master.DbName()), workflowList)
+		_, err := mi.wr.VReplicationExec(ctx, source.master.Alias, query)
 		return err
 	})
 	if err != nil {
 		return err
 	}
-	return sm.mi.forAllSources(func(source *miSource) error {
-		query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow in (%s)", encodeString(source.master.DbName()), workflowList)
-		_, err := sm.mi.wr.VReplicationExec(ctx, source.master.Alias, query)
+	err = mi.forAllTargets(func(target *miTarget) error {
+		query := fmt.Sprintf("update _vt.vreplication set state='Running' where db_name=%s and workflow in (%s)", encodeString(target.master.DbName()), workflowList)
+		_, err := mi.wr.VReplicationExec(ctx, target.master.Alias, query)
 		return err
 	})
+	return err
 }
 
 func tabletStreamValues(tabletStreams []*vrStream) string {

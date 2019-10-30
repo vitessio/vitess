@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -88,6 +88,16 @@ $VTROOT/bin/vtgate \
   $optional_grpc_auth_args \
   $optional_tls_args \
   > $VTDATAROOT/tmp/vtgate.out 2>&1 &
+
+# Block waiting for vtgate to be listening
+# Not the same as healthy
+
+echo "Waiting for vtgate to be up..."
+while true; do
+ curl -I "http://$hostname:$web_port/debug/status" >/dev/null 2>&1 && break
+ sleep 0.1
+done;
+echo "vtgate is up!"
 
 echo "Access vtgate at http://$hostname:$web_port/debug/status"
 
