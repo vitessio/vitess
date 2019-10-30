@@ -1300,6 +1300,7 @@ func (shardSwap *shardSchemaSwap) reparentFromMaster(masterTablet *topodatapb.Ta
 			shardSwap.shardName,
 			nil,                /* masterElectTabletAlias */
 			masterTablet.Alias, /* avoidMasterAlias */
+			*reparentTimeout,
 			*reparentTimeout)
 		if err != nil {
 			return err

@@ -45,7 +45,7 @@ func init() {
 	addCommand("Shards", command{
 		"PlannedReparentShard",
 		commandPlannedReparentShard,
-		"-keyspace_shard=<keyspace/shard> [-new_master=<tablet alias>] [-avoid_master=<tablet alias>]",
+		"-keyspace_shard=<keyspace/shard> [-new_master=<tablet alias>] [-avoid_master=<tablet alias>] [-wait_slave_timeout=<duration>] [-lag_threshold=<duration>]",
 		"Reparents the shard to the new master, or away from old master. Both old and new master need to be up and running."})
 	addCommand("Shards", command{
 		"EmergencyReparentShard",
@@ -107,7 +107,8 @@ func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, sub
 		return fmt.Errorf("active reparent commands disabled (unset the -disable_active_reparents flag to enable)")
 	}
 
-	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", *topo.RemoteOperationTimeout, "time to wait for slaves to catch up in reparenting")
+	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", *topo.RemoteOperationTimeout, "time to wait for replicas to catch up after reparenting")
+	lagThreshold := subFlags.Duration("lag_threshold", *topo.RemoteOperationTimeout, "require the new master's replication lag to be within this threshold before attempting a reparent; this avoids disrupting the current master if the new master is not likely to catch up in time. (0 means always attempt, regardless of lag)")
 	keyspaceShard := subFlags.String("keyspace_shard", "", "keyspace/shard of the shard that needs to be reparented")
 	newMaster := subFlags.String("new_master", "", "alias of a tablet that should be the new master")
 	avoidMaster := subFlags.String("avoid_master", "", "alias of a tablet that should not be the master, i.e. reparent to any other tablet if this one is the master")
@@ -142,7 +143,7 @@ func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, sub
 			return err
 		}
 	}
-	return wr.PlannedReparentShard(ctx, keyspace, shard, newMasterAlias, avoidMasterAlias, *waitSlaveTimeout)
+	return wr.PlannedReparentShard(ctx, keyspace, shard, newMasterAlias, avoidMasterAlias, *waitSlaveTimeout, *lagThreshold)
 }
 
 func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

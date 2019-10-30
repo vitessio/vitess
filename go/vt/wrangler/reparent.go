@@ -331,7 +331,7 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 
 // PlannedReparentShard will make the provided tablet the master for the shard,
 // when both the current and new master are reachable and in good shape.
-func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias, avoidMasterAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration) (err error) {
+func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias, avoidMasterAlias *topodatapb.TabletAlias, waitReplicasTimeout, masterElectLagThreshold time.Duration) (err error) {
 	// lock the shard
 	lockAction := fmt.Sprintf(
 		"PlannedReparentShard(%v, avoid_master=%v)",
@@ -356,7 +356,7 @@ func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard st
 	}
 
 	// do the work
-	err = wr.plannedReparentShardLocked(ctx, ev, keyspace, shard, masterElectTabletAlias, avoidMasterAlias, waitReplicasTimeout)
+	err = wr.plannedReparentShardLocked(ctx, ev, keyspace, shard, masterElectTabletAlias, avoidMasterAlias, waitReplicasTimeout, masterElectLagThreshold)
 	if err != nil {
 		event.DispatchUpdate(ev, "failed PlannedReparentShard: "+err.Error())
 	} else {
@@ -365,7 +365,7 @@ func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard st
 	return err
 }
 
-func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, masterElectTabletAlias, avoidMasterTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration) error {
+func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, masterElectTabletAlias, avoidMasterTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout, masterElectLagThreshold time.Duration) error {
 	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
@@ -563,12 +563,9 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		if !status.SlaveIoRunning || !status.SlaveSqlRunning {
 			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "replication not running on master-elect %v; replication must be healthy to perform planned reparent", masterElectTabletAliasStr)
 		}
-		// Check if it's behind by a small enough amount that it's likely to
-		// catch up before we time out. This assumes a replica can work through
-		// its backlog at approximately the same rate that the transactions
-		// happened on the master.
-		if float64(status.SecondsBehindMaster) >= waitReplicasTimeout.Seconds() {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "replication on master-elect %v is too far behind master (%v seconds); replication must be healthy to perform planned reparent", masterElectTabletAliasStr, status.SecondsBehindMaster)
+		// Check if it's behind by a small enough amount.
+		if float64(status.SecondsBehindMaster) > masterElectLagThreshold.Seconds() {
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "replication lag on master-elect %v (%v seconds) is greater than the specified lag threshold (%v); let replication catch up first or try again with a higher threshold", masterElectTabletAliasStr, status.SecondsBehindMaster, masterElectLagThreshold)
 		}
 
 		// Check we still have the topology lock.
