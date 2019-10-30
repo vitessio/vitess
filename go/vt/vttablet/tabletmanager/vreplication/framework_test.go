@@ -96,7 +96,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		playerEngine = NewEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, nil, vrepldb)
+		playerEngine = NewEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, env.Dbcfgs.ExternalReplWithDB(), vrepldb)
 		if err := playerEngine.Open(context.Background()); err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
