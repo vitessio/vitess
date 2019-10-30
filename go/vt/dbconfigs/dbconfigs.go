@@ -175,8 +175,13 @@ func (dbcfgs *DBConfigs) ExternalRepl() *mysql.ConnParams {
 
 // ExternalReplWithDB returns connection parameters for repl with dbname set.
 func (dbcfgs *DBConfigs) ExternalReplWithDB() *mysql.ConnParams {
-	params := dbcfgs.makeParams(ExternalRepl, false)
-	params.DbName = params.DeprecatedDBName
+	params := dbcfgs.makeParams(ExternalRepl, true)
+	// TODO @rafael: This is a hack to allows to configure external databases by providing
+	// db-config-erepl-dbname.
+	if params.DeprecatedDBName != "" {
+		params.DbName = params.DeprecatedDBName
+		return params
+	}
 	return params
 }
 
