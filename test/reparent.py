@@ -177,7 +177,7 @@ class TestReparent(unittest.TestCase):
                                  '-keyspace_shard', 'test_keyspace/0',
                                  '-new_master', tablet_62044.tablet_alias],
                                 expect_fail=True)
-    self.assertIn('DemoteMaster failed', stderr)
+    self.assertIn('replication must be healthy to perform planned reparent', stderr)
 
     # Run forced reparent operation, this should now proceed unimpeded.
     utils.run_vtctl(['EmergencyReparentShard',
