@@ -1,2 +1,0 @@
-# This file is used to allow legacy tests to pass
-binlog_format=statement
