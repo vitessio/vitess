@@ -822,15 +822,15 @@ func TestInsertShardedIgnoreOwned(t *testing.T) {
 		// Bind vars for rows 2 & 3 may be missing because they were not sent.
 		`ExecuteMultiShard ` +
 			`sharded.20-: prefix mid1 suffix /* vtgate:: keyspace_id:00 */ ` +
-			`{_c10: type:INT64 value:"5" _c12: type:INT64 value:"7" _c13: type:INT64 value:"8" ` +
-			`_c20: type:INT64 value:"9" _c22: type:INT64 value:"11" _c23: type:INT64 value:"12" ` +
+			`{_c10: type:INT64 value:"5" _c13: type:INT64 value:"8" ` +
+			`_c20: type:INT64 value:"9" _c23: type:INT64 value:"12" ` +
 			`_c30: type:INT64 value:"13" _c33: type:INT64 value:"16" ` +
-			`_id0: type:INT64 value:"1" _id2: type:INT64 value:"3" _id3: type:INT64 value:"4" } ` +
+			`_id0: type:INT64 value:"1" _id3: type:INT64 value:"4" } ` +
 			`sharded.-20: prefix mid4 suffix /* vtgate:: keyspace_id:00 */ ` +
-			`{_c10: type:INT64 value:"5" _c12: type:INT64 value:"7" _c13: type:INT64 value:"8" ` +
-			`_c20: type:INT64 value:"9" _c22: type:INT64 value:"11" _c23: type:INT64 value:"12" ` +
+			`{_c10: type:INT64 value:"5" _c13: type:INT64 value:"8" ` +
+			`_c20: type:INT64 value:"9" _c23: type:INT64 value:"12" ` +
 			`_c30: type:INT64 value:"13" _c33: type:INT64 value:"16" ` +
-			`_id0: type:INT64 value:"1" _id2: type:INT64 value:"3" _id3: type:INT64 value:"4" } ` +
+			`_id0: type:INT64 value:"1" _id3: type:INT64 value:"4" } ` +
 			`true false`,
 	})
 }
@@ -1192,10 +1192,10 @@ func TestInsertShardedIgnoreUnownedVerify(t *testing.T) {
 		`ExecuteMultiShard ` +
 			`sharded.20-: prefix mid1 suffix /* vtgate:: keyspace_id:166b40b44aba4bd6 */ ` +
 			`{_c30: type:INT64 value:"10" _c32: type:INT64 value:"12" ` +
-			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
+			`_id0: type:INT64 value:"1" _id2: type:INT64 value:"3" } ` +
 			`sharded.-20: prefix mid3 suffix /* vtgate:: keyspace_id:4eb190c9a2fa169c */ ` +
 			`{_c30: type:INT64 value:"10" _c32: type:INT64 value:"12" ` +
-			`_id0: type:INT64 value:"1" _id1: type:INT64 value:"2" _id2: type:INT64 value:"3" } ` +
+			`_id0: type:INT64 value:"1" _id2: type:INT64 value:"3" } ` +
 			`true false`,
 	})
 }
