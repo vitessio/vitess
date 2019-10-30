@@ -263,8 +263,7 @@ class TestRecovery(unittest.TestCase):
     self.assertEqual(metadata['Alias'], 'test_nj-0000062346')
     self.assertEqual(metadata['ClusterAlias'], 'recovery_keyspace.0')
     self.assertEqual(metadata['DataCenter'], 'test_nj')
-    # TODO(deepthi): Uncomment this when RestorePosition is fixed.
-    #self.assertEqual(metadata['RestorePosition'], master_pos)
+    self.assertEqual(metadata['RestorePosition'], master_pos)
     logging.debug('RestoredBackupTime: %s', str(metadata['RestoredBackupTime']))
     gotTime = datetime.strptime(metadata['RestoredBackupTime'], '%Y-%m-%dT%H:%M:%SZ')
     self.assertEqual(gotTime, expectedTime)
