@@ -40,7 +40,7 @@ class MySqlDBMysqlctl(mysql_db.MySqlDB):
         '-mysql_port', str(self._port),
         'init',
         '-init_db_sql_file',
-        os.path.join(os.environ['VTTOP'], 'config/init_db.sql'),
+        os.path.join(os.environ['VTROOT'], 'config/init_db.sql'),
     ]
     env = os.environ
     env['VTDATAROOT'] = self._directory

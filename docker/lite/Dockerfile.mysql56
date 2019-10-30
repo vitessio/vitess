@@ -3,12 +3,12 @@ FROM debian:stretch-slim AS staging
 
 RUN mkdir -p /vt/vtdataroot/ \
     && mkdir -p /vt/bin \
-    && mkdir -p /vt/src/vitess.io/vitess/web/vtctld2 \
+    && mkdir -p /vt/web/vtctld2 \
     && groupadd -r vitess && useradd -r -g vitess vitess
 
-COPY --from=builder /vt/src/vitess.io/vitess/web/vtctld /vt/src/vitess.io/vitess/web/vtctld
-COPY --from=builder /vt/src/vitess.io/vitess/web/vtctld2/app /vt/src/vitess.io/vitess/web/vtctld2/app
-COPY --from=builder /vt/src/vitess.io/vitess/config /vt/config
+COPY --from=builder /vt/web/vtctld /vt/web/vtctld
+COPY --from=builder /vt/web/vtctld2/app /vt/web/vtctld2/app
+COPY --from=builder /vt/config /vt/config
 COPY --from=builder /vt/bin/mysqlctld /vt/bin/
 COPY --from=builder /vt/bin/vtctld /vt/bin/
 COPY --from=builder /vt/bin/vtctlclient /vt/bin/
@@ -36,9 +36,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
   && groupadd -r vitess && useradd -r -g vitess vitess
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
-ENV VTTOP /vt/src/vitess.io/vitess
 ENV VTROOT /vt
-ENV GOTOP $VTTOP/go
+ENV GOTOP $VTROOT/go
 ENV VTDATAROOT $VTROOT/vtdataroot
 ENV GOBIN $VTROOT/bin
 ENV GOPATH $VTROOT

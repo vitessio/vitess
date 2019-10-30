@@ -61,7 +61,7 @@ printf "\nSetting /etc/environment\n"
   echo "GOROOT=${GOROOT}"
   echo "GOPATH=${GOPATH}"
   echo "PATH=${PATH}:${GOROOT}/bin:${GOPATH}/bin"
-  echo "VITESS_WORKSPACE=/vagrant/src/vitess.io/vitess"
+  echo "VITESS_WORKSPACE=/vagrant/vt"
 } >> /etc/environment
 # shellcheck disable=SC2013
 # shellcheck disable=SC2163
@@ -72,7 +72,7 @@ echo "fs.file-max = 10000" >> /etc/sysctl.conf
 sysctl -p
 
 # Set vitess env in .bashrc
-cat /vagrant/src/vitess.io/vitess/vagrant-scripts/vagrant-bashrc  >> /home/vagrant/.bashrc
+cat /vagrant/vt/vagrant-scripts/vagrant-bashrc  >> /home/vagrant/.bashrc
 
 # Provisioning completed
 touch $SEED_FILE

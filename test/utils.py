@@ -1214,8 +1214,8 @@ class Vtctld(object):
     args = environment.binary_args('vtctld') + [
         '-enable_queries',
         '-cell', 'test_nj',
-        '-web_dir', environment.vttop + '/web/vtctld',
-        '-web_dir2', environment.vttop + '/web/vtctld2',
+        '-web_dir', environment.vtroot + '/web/vtctld',
+        '-web_dir2', environment.vtroot + '/web/vtctld2',
         '--log_dir', environment.vtlogroot,
         '--port', str(self.port),
         '-tablet_manager_protocol',

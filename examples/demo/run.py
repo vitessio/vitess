@@ -51,13 +51,13 @@ def start_vitess():
   keyspace = topology.keyspaces.add(name='lookup')
   keyspace.shards.add(name='0')
 
-  vttop = os.environ['VTTOP']
-  args = [os.path.join(vttop, 'py/vttest/run_local_database.py'),
+  vtroot = os.environ['VTROOT']
+  args = [os.path.join(vtroot, 'py/vttest/run_local_database.py'),
           '--port', '12345',
           '--proto_topo', text_format.MessageToString(topology,
                                                       as_one_line=True),
-          '--web_dir', os.path.join(vttop, 'web/vtctld'),
-          '--schema_dir', os.path.join(vttop, 'examples/demo/schema')]
+          '--web_dir', os.path.join(vtroot, 'web/vtctld'),
+          '--schema_dir', os.path.join(vtroot, 'examples/demo/schema')]
   sp = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
   # This load will make us wait for vitess to come up.

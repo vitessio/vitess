@@ -42,9 +42,9 @@ func TestMycnf(t *testing.T) {
 		t.Errorf("err: %v", err)
 	}
 	cnfTemplatePaths := []string{
-		path.Join(root, "src/vitess.io/vitess/config/mycnf/default.cnf"),
-		path.Join(root, "src/vitess.io/vitess/config/mycnf/replica.cnf"),
-		path.Join(root, "src/vitess.io/vitess/config/mycnf/master.cnf"),
+		path.Join(root, "config/mycnf/default.cnf"),
+		path.Join(root, "config/mycnf/replica.cnf"),
+		path.Join(root, "config/mycnf/master.cnf"),
 	}
 	data, err := cnf.makeMycnf(cnfTemplatePaths)
 	if err != nil {
@@ -81,7 +81,7 @@ func TestMycnf(t *testing.T) {
 
 // Run this test if any changes are made to hook handling / make_mycnf hook
 // other tests fail if we keep the hook around
-// 1. ln -snf $VTTOP/test/vthook-make_mycnf $VTROOT/vthook/make_mycnf
+// 1. ln -snf $VTROOT/test/vthook-make_mycnf $VTROOT/vthook/make_mycnf
 // 2. Remove "No" prefix from func name
 // 3. go test
 // 4. \rm $VTROOT/vthook/make_mycnf

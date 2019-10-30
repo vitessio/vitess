@@ -16,9 +16,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     rm -rf /var/lib/apt/lists/*
 
 # Bootstrap Vitess
-WORKDIR /vt/src/vitess.io/vitess
+WORKDIR /vt
 
-
-ENV MYSQL_FLAVOR MySQL56
 USER vitess
 RUN ./bootstrap.sh

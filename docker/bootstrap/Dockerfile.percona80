@@ -30,8 +30,7 @@ RUN for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keys.gnupg.net --r
     && rm -rf /var/lib/apt/lists/*
 
 # Bootstrap Vitess
-WORKDIR /vt/src/vitess.io/vitess
+WORKDIR /vt
 
-ENV MYSQL_FLAVOR MySQL80
 USER vitess
 RUN ./bootstrap.sh

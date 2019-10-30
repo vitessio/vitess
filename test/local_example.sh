@@ -20,7 +20,7 @@
 
 set -xe
 
-cd "$VTTOP/examples/local"
+cd "$VTROOT/examples/local"
 
 ./101_initial_cluster.sh
 

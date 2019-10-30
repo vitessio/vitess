@@ -17,9 +17,6 @@
 hostname=`hostname -f`
 vtctld_web_port=15000
 
-# Set up environment.
-export VTTOP=${VTTOP-$VTROOT/src/vitess.io/vitess}
-
 # Try to find mysqld on PATH.
 if [ -z "$VT_MYSQL_ROOT" ]; then
   mysql_path=`which mysqld`

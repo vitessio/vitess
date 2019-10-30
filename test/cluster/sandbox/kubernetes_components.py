@@ -81,7 +81,7 @@ class HelmComponent(sandlet.SandletComponent):
     logging.info('Installing helm.')
     try:
       subprocess.check_output(
-          ['helm', 'install', os.path.join(os.environ['VTTOP'], 'helm/vitess'),
+          ['helm', 'install', os.path.join(os.environ['VTROOT'], 'helm/vitess'),
            '-n', self.sandbox_name, '--namespace', self.sandbox_name,
            '--replace', '--values', self.helm_config],
           stderr=subprocess.STDOUT)

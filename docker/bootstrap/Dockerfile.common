@@ -38,10 +38,9 @@ RUN mkdir -p /vt/dist && \
     mv apache-maven-3.3.9 maven
 
 # Set up Vitess environment (equivalent to '. dev.env')
-ENV VTTOP /vt/src/vitess.io/vitess
 ENV VTROOT /vt
-ENV GOTOP $VTTOP/go
-ENV PYTOP $VTTOP/py
+ENV GOTOP $VTROOT/go
+ENV PYTOP $VTROOT/py
 ENV VTDATAROOT $VTROOT/vtdataroot
 ENV VTPORTSTART 15000
 ENV PYTHONPATH $VTROOT/dist/grpc/usr/local/lib/python2.7/site-packages:$VTROOT/dist/py-mock-1.0.1/lib/python2.7/site-packages:$VTROOT/py-vtdb:$VTROOT/dist/selenium/lib/python2.7/site-packages
@@ -53,11 +52,11 @@ ENV USER vitess
 ENV GO111MODULE on
 
 # Copy files needed for bootstrap
-COPY bootstrap.sh dev.env build.env go.mod go.sum /vt/src/vitess.io/vitess/
-COPY config /vt/src/vitess.io/vitess/config
-COPY third_party /vt/src/vitess.io/vitess/third_party
-COPY tools /vt/src/vitess.io/vitess/tools
-COPY travis /vt/src/vitess.io/vitess/travis
+COPY bootstrap.sh dev.env build.env go.mod go.sum /vt/
+COPY config /vt/config
+COPY third_party /vt/third_party
+COPY tools /vt/tools
+COPY travis /vt/travis
 
 # Create vitess user
 RUN groupadd -r vitess && useradd -r -g vitess vitess && \
@@ -65,7 +64,7 @@ RUN groupadd -r vitess && useradd -r -g vitess vitess && \
     chown -R vitess:vitess /vt /home/vitess
 
 # Download vendored Go dependencies
-RUN cd /vt/src/vitess.io/vitess && \
+RUN cd /vt && \
  su vitess -c "/usr/local/go/bin/go mod download"
 
 # Create mount point for actual data (e.g. MySQL data dir)

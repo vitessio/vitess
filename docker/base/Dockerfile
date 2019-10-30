@@ -27,7 +27,7 @@ ARG CGO_ENABLED=0
 
 # Re-copy sources from working tree
 USER root
-COPY . /vt/src/vitess.io/vitess
+COPY . /vt/
 
 # Build Vitess
 RUN make build

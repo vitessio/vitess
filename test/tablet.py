@@ -55,7 +55,7 @@ def get_backup_storage_flags():
 
 
 def get_all_extra_my_cnf(extra_my_cnf):
-  all_extra_my_cnf = [environment.vttop + '/config/mycnf/default-fast.cnf']
+  all_extra_my_cnf = [environment.vtroot + '/config/mycnf/default-fast.cnf']
   flavor_my_cnf = mysql_flavor().extra_my_cnf()
   if flavor_my_cnf:
     all_extra_my_cnf.append(flavor_my_cnf)
@@ -186,12 +186,12 @@ class Tablet(object):
     """
     if use_rbr:
       if extra_my_cnf:
-        extra_my_cnf += ':' + environment.vttop + '/config/mycnf/rbr.cnf'
+        extra_my_cnf += ':' + environment.vtroot + '/config/mycnf/rbr.cnf'
       else:
-        extra_my_cnf = environment.vttop + '/config/mycnf/rbr.cnf'
+        extra_my_cnf = environment.vtroot + '/config/mycnf/rbr.cnf'
 
     if not init_db:
-      init_db = environment.vttop + '/config/init_db.sql'
+      init_db = environment.vtroot + '/config/init_db.sql'
 
     if self.use_mysqlctld:
       self.mysqlctld_process = self.mysqlctld(['-init_db_sql_file', init_db],

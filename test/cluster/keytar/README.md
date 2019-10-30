@@ -7,8 +7,8 @@ Keytar is an internally used Vitess system for continuous execution of cluster t
 How to set up Keytar for Vitess:
 
 * Create service account keys with GKE credentials on the account to run the tests on. Follow [step 1 from the GKE developers page](https://developers.google.com/identity/protocols/application-default-credentials?hl=en_US#howtheywork).
-* Move the generated keyfile to `$VTTOP/test/cluster/keytar/config`.
-* Create or modify the test configuration file (`$VTTOP/test/cluster/keytar/config/vitess_config.yaml`).
+* Move the generated keyfile to `$VTROOT/test/cluster/keytar/config`.
+* Create or modify the test configuration file (`$VTROOT/test/cluster/keytar/config/vitess_config.yaml`).
 * Ensure the configuration has the correct values for GKE project name and keyfile:
   ```
   cluster_setup:
@@ -18,7 +18,7 @@ How to set up Keytar for Vitess:
   ```
 * Then run the following commands:
   ```
-  > cd $VTTOP/test/cluster/keytar
+  > cd $VTROOT/test/cluster/keytar
   > KEYTAR_PASSWORD=<desired password> KEYTAR_PORT=<desired port, default 8080> KEYTAR_CONFIG=<desired configuration, default vitess_config.yaml> ./keytar-up.sh
   ```
 * Add a Docker Hub webhook pointing to the Keytar service. The webhook URL should be in the form:

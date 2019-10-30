@@ -35,47 +35,40 @@ function fail() {
 
 [[ "$(dirname "$0")" = "." ]] || fail "bootstrap.sh must be run from its current directory"
 
-go version &>/dev/null  || fail "Go is not installed or is not on \$PATH"
-[[ "$(go version 2>&1)" =~ go1\.[1-9][1-9] ]] || fail "Go is not version 1.11+"
-
 # Create main directories.
-mkdir -p "$VTROOT/dist"
-mkdir -p "$VTROOT/bin"
-mkdir -p "$VTROOT/lib"
-mkdir -p "$VTROOT/vthook"
+
+mkdir -p "dist"
+mkdir -p "bin"
+mkdir -p "lib"
+mkdir -p "vthook"
+
+# temporary
+rm -rf lib/*
+rm -rf vthook/*
 
 # This is required for VIRTUALENV
 # Used by Python below
 
-if [ "$BUILD_TESTS" == 1 ] ; then
-    source ./dev.env
-else
-    source ./build.env
-fi
+source ./dev.env
 
-if [ "$BUILD_TESTS" == 1 ] ; then
-    # Set up required soft links.
-    # TODO(mberlin): Which of these can be deleted?
-    ln -snf "$VTTOP/config" "$VTROOT/config"
-    ln -snf "$VTTOP/data" "$VTROOT/data"
-    ln -snf "$VTTOP/py" "$VTROOT/py-vtdb"
-    ln -snf "$VTTOP/go/vt/zkctl/zksrv.sh" "$VTROOT/bin/zksrv.sh"
-    ln -snf "$VTTOP/test/vthook-test.sh" "$VTROOT/vthook/test.sh"
-    ln -snf "$VTTOP/test/vthook-test_backup_error" "$VTROOT/vthook/test_backup_error"
-    ln -snf "$VTTOP/test/vthook-test_backup_transform" "$VTROOT/vthook/test_backup_transform"
-else
-    ln -snf "$VTTOP/config" "$VTROOT/config"
-    ln -snf "$VTTOP/data" "$VTROOT/data"
-    ln -snf "$VTTOP/go/vt/zkctl/zksrv.sh" "$VTROOT/bin/zksrv.sh"
-fi
+go version &>/dev/null  || fail "Go is not installed or is not on \$PATH"
+goversion_min 1.12 || fail "Go is not version 1.12+"
+
+# Set up required soft links.
+# TODO(mberlin): Which of these can be deleted?
+ln -snf "$VTROOT/py" "$VTROOT/py-vtdb"
+ln -snf "$VTROOT/go/vt/zkctl/zksrv.sh" "$VTROOT/bin/zksrv.sh"
+ln -snf "$VTROOT/test/vthook-test.sh" "$VTROOT/vthook/test.sh"
+ln -snf "$VTROOT/test/vthook-test_backup_error" "$VTROOT/vthook/test_backup_error"
+ln -snf "$VTROOT/test/vthook-test_backup_transform" "$VTROOT/vthook/test_backup_transform"
 
 # git hooks are only required if someone intends to contribute.
 
 echo "creating git hooks"
-mkdir -p "$VTTOP/.git/hooks"
-ln -sf "$VTTOP/misc/git/pre-commit" "$VTTOP/.git/hooks/pre-commit"
-ln -sf "$VTTOP/misc/git/commit-msg" "$VTTOP/.git/hooks/commit-msg"
-(cd "$VTTOP" && git config core.hooksPath "$VTTOP/.git/hooks")
+mkdir -p "$VTROOT/.git/hooks"
+ln -sf "$VTROOT/misc/git/pre-commit" "$VTROOT/.git/hooks/pre-commit"
+ln -sf "$VTROOT/misc/git/commit-msg" "$VTROOT/.git/hooks/commit-msg"
+(cd "$VTROOT" && git config core.hooksPath "$VTROOT/.git/hooks")
 
 # install_dep is a helper function to generalize the download and installation of dependencies.
 #
@@ -264,7 +257,7 @@ function install_pymock() {
   PYTHONPATH=$(prepend_path "$PYTHONPATH" "$dist/lib/python2.7/site-packages")
   export PYTHONPATH
 
-  pushd "$VTTOP/third_party/py" >/dev/null
+  pushd "$VTROOT/third_party/py" >/dev/null
   tar -xzf "mock-$version.tar.gz"
   cd "mock-$version"
   $PYTHON ./setup.py install --prefix="$dist"

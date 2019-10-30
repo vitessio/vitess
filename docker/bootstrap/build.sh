@@ -22,7 +22,7 @@ if [[ -z "$flavor" ]]; then
 fi
 
 if [[ ! -f bootstrap.sh ]]; then
-  echo "This script should be run from the root of the Vitess source tree - e.g. ~/src/vitess.io/vitess"
+  echo "This script should be run from the root of the Vitess source tree"
   exit 1
 fi
 
