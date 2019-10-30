@@ -171,6 +171,6 @@ func VtctldProcessInstance(httpPort int, grpcPort int, topoPort int, hostname st
 		PidFile:                     path.Join(tmpDirectory, "vtctld.pid"),
 		Directory:                   os.Getenv("VTDATAROOT"),
 	}
-	vtctld.VerifyURL = fmt.Sprintf("http://localhost:%d", vtctld.Port)
+	vtctld.VerifyURL = fmt.Sprintf("http://%s:%d/debug/vars", hostname, vtctld.Port)
 	return vtctld
 }

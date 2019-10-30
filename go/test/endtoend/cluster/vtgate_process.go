@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"reflect"
 	"strings"
 	"syscall"
 	"time"
@@ -126,12 +127,17 @@ func (vtgate *VtgateProcess) WaitForStatus() bool {
 		if err != nil {
 			panic(err)
 		}
-		//for key, value := range resultMap {
-		//	println("VTGate API Response: Key = " + key + ", value = " + fmt.Sprintf("%v", value))
-		//}
-		//println(string(respByte))
-		//return resultMap["TabletStateName"] == "NOT_SERVING"
-		return true
+		object := reflect.ValueOf(resultMap["HealthcheckConnections"])
+		masterConnectionExist := false
+		if object.Kind() == reflect.Map {
+			for _, key := range object.MapKeys() {
+
+				if strings.Contains(key.String(),"master") {
+					masterConnectionExist = true
+				}
+			}
+		}
+		return masterConnectionExist
 	}
 	return false
 }
