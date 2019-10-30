@@ -255,7 +255,13 @@ class TestReparent(unittest.TestCase):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
     self._test_reparent_graceful('0')
 
-  def _test_reparent_graceful(self, shard_id):
+  def test_reparent_graceful_recovery(self):
+    # Test that PRS can perform a graceful recovery
+    # as long as all tablets are responding.
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
+    self._test_reparent_graceful('0', confused_master=True)
+
+  def _test_reparent_graceful(self, shard_id, confused_master=False):
     # create the database so vttablets start, as they are serving
     tablet_62344.create_db('vt_test_keyspace')
     tablet_62044.create_db('vt_test_keyspace')
@@ -300,8 +306,15 @@ class TestReparent(unittest.TestCase):
                      '-new_master', tablet_62044.tablet_alias], auto_log=True)
     utils.validate_topology()
 
-    # Perform a repeat of the same graceful reparent operation.
-    # It should be idempotent.
+    if confused_master:
+      # Simulate a master that forgets it's master and becomes replica.
+      # PRS should be able to recover by reparenting to the same master again,
+      # as long as all tablets are available to check that it's safe.
+      tablet_62044.init_tablet('replica', 'test_keyspace', shard_id, start=False)
+      utils.run_vtctl(['RefreshState', tablet_62044.tablet_alias])
+
+    # Perform a graceful reparent to the same master.
+    # It should be idempotent, and should fix any inconsistencies if necessary.
     utils.run_vtctl(['PlannedReparentShard',
                      '-keyspace_shard', 'test_keyspace/' + shard_id,
                      '-new_master', tablet_62044.tablet_alias], auto_log=True)

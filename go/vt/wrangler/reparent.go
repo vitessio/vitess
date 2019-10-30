@@ -419,6 +419,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		// master at all (no tablet claims to be MASTER), or there is no clear
 		// winner (multiple MASTER tablets with the same timestamp).
 		// Check if it's safe to promote the selected master candidate.
+		wr.logger.Infof("No clear winner found for current master term; checking if it's safe to recover by electing %v", masterElectTabletAliasStr)
 
 		// As we contact each tablet, we'll send its replication position here.
 		type tabletPos struct {
@@ -428,10 +429,9 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		}
 		positions := make(chan tabletPos, len(tabletMap))
 
-		// First stop the world, to ensure no writes are happening anywhere:
-		//
-		// * Demote (set read-only) any tablets that claim to be masters.
-		// * Stop replication on all other tablets.
+		// First stop the world, to ensure no writes are happening anywhere.
+		// Since we don't trust that we know which tablets might be acting as
+		// masters, we simply demote everyone.
 		//
 		// Unlike the normal, single-master case, we don't try to undo this if
 		// we bail out. If we're here, it means there is no clear master, so we
@@ -453,33 +453,21 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 			go func(tabletAliasStr string, tablet *topodatapb.Tablet) {
 				defer wgStopAll.Done()
 
-				var posStr string
-
-				switch tablet.Type {
-				case topodatapb.TabletType_MASTER:
-					// If this tablet thinks it's master, demote it so it goes
-					// read-only and we know no writes are happening.
-					wr.logger.Infof("demote contested master %v", tabletAliasStr)
-					var err error
-					posStr, err = wr.tmc.DemoteMaster(stopAllCtx, tablet)
-					if err != nil {
-						rec.RecordError(vterrors.Wrapf(err, "DemoteMaster failed on contested master %v", tabletAliasStr))
-						return
-					}
-				default:
-					// On all other tablet types, stop replication.
-					wr.logger.Infof("stop replication on %v", tabletAliasStr)
-					status, err := wr.tmc.StopReplicationAndGetStatus(stopAllCtx, tablet)
-					if err != nil {
-						rec.RecordError(vterrors.Wrapf(err, "StopReplicationAndGetStatus failed on tablet %v", tabletAliasStr))
-						return
-					}
-					posStr = status.Position
+				// Regardless of what type this tablet thinks it is, we always
+				// call DemoteMaster to ensure the underlying MySQL is read-only
+				// and to check its replication position. DemoteMaster is
+				// idempotent so it's fine to call it on a replica that's
+				// already read-only.
+				wr.logger.Infof("demote tablet %v", tabletAliasStr)
+				posStr, err := wr.tmc.DemoteMaster(stopAllCtx, tablet)
+				if err != nil {
+					rec.RecordError(vterrors.Wrapf(err, "DemoteMaster failed on contested master %v", tabletAliasStr))
+					return
 				}
-
 				pos, err := mysql.DecodePosition(posStr)
 				if err != nil {
 					rec.RecordError(vterrors.Wrapf(err, "can't decode replication position for tablet %v", tabletAliasStr))
+					return
 				}
 				positions <- tabletPos{
 					tabletAliasStr: tabletAliasStr,
@@ -491,7 +479,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		wgStopAll.Wait()
 		close(positions)
 		if rec.HasErrors() {
-			return vterrors.Wrap(rec.Error(), "failed to demote contested masters and stop replication on all tablets")
+			return vterrors.Wrap(rec.Error(), "failed to demote all tablets")
 		}
 
 		// Make a map of tablet positions.
@@ -503,6 +491,10 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		// Make sure no tablet has a replication position farther ahead than the
 		// candidate master. It's up to our caller to choose a suitable
 		// candidate, and to choose another one if this check fails.
+		//
+		// Note that we still allow replication to run during this time, but we
+		// assume that no new high water mark can appear because we demoted all
+		// tablets to read-only.
 		//
 		// TODO: Consider temporarily replicating from another tablet to catch up.
 		tp, ok := tabletPosMap[masterElectTabletAliasStr]
