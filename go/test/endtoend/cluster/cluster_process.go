@@ -35,6 +35,7 @@ type LocalProcessCluster struct {
 	TopoPort      int
 
 	VtgateMySQLPort int
+	VtgateGrpcPort  int
 	VtctldHTTPPort  int
 
 	// standalone executable
@@ -47,6 +48,12 @@ type LocalProcessCluster struct {
 	VtgateProcess VtgateProcess
 
 	nextPortForProcess int
+
+	//Extra arguments for vtTablet
+	VtTabletExtraArgs []string
+
+	//Extra arguments for vtGate
+	VtGateExtraArgs []string
 }
 
 // Keyspace : Cluster accepts keyspace to launch it
@@ -174,7 +181,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				cluster.vtctldProcess.Port,
 				tablet.Type,
 				cluster.topoProcess.Port,
-				cluster.Hostname)
+				cluster.VtTabletExtraArgs)
 			log.Info(fmt.Sprintf("Starting vttablet for tablet uid %d, grpc port %d", tablet.TabletUID, tablet.GrpcPort))
 
 			if err = tablet.vttabletProcess.Setup(); err != nil {
@@ -203,9 +210,11 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 	}
 
 	//Apply VSchema
-	if err = cluster.VtctlclientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema); err != nil {
-		log.Error(err.Error())
-		return
+	if keyspace.VSchema != "" {
+		if err = cluster.VtctlclientProcess.ApplyVSchema(keyspace.Name, keyspace.VSchema); err != nil {
+			log.Error(err.Error())
+			return
+		}
 	}
 
 	log.Info("Done creating keyspace : " + keyspace.Name)
@@ -226,10 +235,25 @@ func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 		cluster.Cell,
 		cluster.Hostname, "MASTER,REPLICA",
 		cluster.topoProcess.Port,
-		cluster.Hostname)
+		cluster.VtGateExtraArgs)
 
 	log.Info(fmt.Sprintf("Vtgate started, connect to mysql using : mysql -h 127.0.0.1 -P %d", cluster.VtgateMySQLPort))
 	return cluster.VtgateProcess.Setup()
+}
+
+// ReStartVtgate starts vtgate with updated configs
+func (cluster *LocalProcessCluster) ReStartVtgate() (err error) {
+	err = cluster.VtgateProcess.TearDown()
+	if err != nil {
+		log.Error(err.Error())
+		return
+	}
+	err = cluster.StartVtgate()
+	if err != nil {
+		log.Error(err.Error())
+		return
+	}
+	return err
 }
 
 // Teardown brings down the cluster by invoking teardown for individual processes
