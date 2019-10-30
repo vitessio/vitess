@@ -15,8 +15,8 @@ sync_binlog=0
 innodb_doublewrite=0
 
 # These two settings are required for the testsuite to pass, 
-# # but enabling them does not spark joy. They should be removed
-# # in the future.
+# but enabling them does not spark joy. They should be removed
+# in the future.
 
 binlog-format=statement
 sql_mode = STRICT_TRANS_TABLES
