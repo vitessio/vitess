@@ -166,7 +166,7 @@ function install_protoc() {
 
   case $(arch) in
       aarch64)  local target=aarch_64;;
-      x86_64)  local target=x86_64;;
+      i386)  local target=x86_64;;
       *)   echo "ERROR: unsupported architecture"; exit 1;;
   esac
 
@@ -211,7 +211,7 @@ function install_etcd() {
 
   case $(arch) in
       aarch64)  local target=arm64;;
-      x86_64)  local target=amd64;;
+      i386)  local target=amd64;;
       *)   echo "ERROR: unsupported architecture"; exit 1;;
   esac
 
@@ -242,7 +242,7 @@ function install_consul() {
 
   case $(arch) in
       aarch64)  local target=arm64;;
-      x86_64)  local target=amd64;;
+      i386)  local target=amd64;;
       *)   echo "ERROR: unsupported architecture"; exit 1;;
   esac
 
