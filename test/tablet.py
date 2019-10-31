@@ -401,6 +401,7 @@ class Tablet(object):
     args = ['InitTablet',
             '-hostname', 'localhost',
             '-port', str(self.port),
+            '-grpc_port', str(self.grpc_port),
             '-allow_update']
     if include_mysql_port:
       args.extend(['-mysql_port', str(self.mysql_port)])

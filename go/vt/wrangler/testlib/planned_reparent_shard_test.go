@@ -65,6 +65,9 @@ func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
 		},
 	}
 	newMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP SLAVE",
+		"FAKE SET MASTER",
+		"START SLAVE",
 		"CREATE DATABASE IF NOT EXISTS _vt",
 		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, master_alias, replication_position) VALUES",
@@ -88,6 +91,9 @@ func TestPlannedReparentShardNoMasterProvided(t *testing.T) {
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
 	oldMaster.Agent.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
+
+	// SetMaster is called on new master to make sure it's replicating before reparenting.
+	newMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(oldMaster.Tablet)
 
 	// good slave 1 is replicating
 	goodSlave1.FakeMysqlDaemon.ReadOnly = true
@@ -175,6 +181,9 @@ func TestPlannedReparentShard(t *testing.T) {
 		},
 	}
 	newMaster.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"STOP SLAVE",
+		"FAKE SET MASTER",
+		"START SLAVE",
 		"CREATE DATABASE IF NOT EXISTS _vt",
 		"SUBCREATE TABLE IF NOT EXISTS _vt.reparent_journal",
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, master_alias, replication_position) VALUES",
@@ -198,6 +207,9 @@ func TestPlannedReparentShard(t *testing.T) {
 	oldMaster.StartActionLoop(t, wr)
 	defer oldMaster.StopActionLoop(t)
 	oldMaster.Agent.QueryServiceControl.(*tabletservermock.Controller).SetQueryServiceEnabledForTests(true)
+
+	// SetMaster is called on new master to make sure it's replicating before reparenting.
+	newMaster.FakeMysqlDaemon.SetMasterInput = topoproto.MysqlAddr(oldMaster.Tablet)
 
 	// good slave 1 is replicating
 	goodSlave1.FakeMysqlDaemon.ReadOnly = true
@@ -374,7 +386,7 @@ func TestPlannedReparentShardPromoteSlaveFail(t *testing.T) {
 	if err == nil {
 		t.Fatalf("PlannedReparentShard succeeded: %v", err)
 	}
-	if !strings.Contains(err.Error(), "master-elect tablet cell1-0000000001 failed to catch up with replication or be upgraded to master") {
+	if !strings.Contains(err.Error(), "replication on master-elect cell1-0000000001 did not catch up in time") {
 		t.Fatalf("PlannedReparentShard failed with the wrong error: %v", err)
 	}
 
@@ -470,7 +482,7 @@ func TestPlannedReparentShardPromoteSlaveTimeout(t *testing.T) {
 	if err == nil {
 		t.Fatalf("PlannedReparentShard succeeded: %v", err)
 	}
-	if !strings.Contains(err.Error(), "master-elect tablet cell1-0000000001 failed to catch up with replication or be upgraded to master") {
+	if !strings.Contains(err.Error(), "replication on master-elect cell1-0000000001 did not catch up in time") {
 		t.Fatalf("PlannedReparentShard failed with the wrong error: %v", err)
 	}
 

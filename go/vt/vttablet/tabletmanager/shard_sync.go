@@ -154,7 +154,7 @@ func syncShardMaster(ctx context.Context, ts *topo.Server, tablet *topodatapb.Ta
 
 	var shardInfo *topo.ShardInfo
 	_, err = ts.UpdateShardFields(ctx, tablet.Keyspace, tablet.Shard, func(si *topo.ShardInfo) error {
-		lastTerm := logutil.ProtoToTime(si.MasterTermStartTime)
+		lastTerm := si.GetMasterTermStartTime()
 
 		// Save the ShardInfo so we can check it afterward.
 		// We can't use the return value of UpdateShardFields because it might be nil.
@@ -219,7 +219,7 @@ func (agent *ActionAgent) abortMasterTerm(ctx context.Context, masterAlias *topo
 	setMasterCtx, cancelSetMaster := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancelSetMaster()
 	log.Infof("Attempting to reparent self to new master %v.", masterAliasStr)
-	if err := agent.SetMaster(setMasterCtx, masterAlias, 0, true); err != nil {
+	if err := agent.SetMaster(setMasterCtx, masterAlias, 0, "", true); err != nil {
 		return vterrors.Wrap(err, "failed to reparent self to new master")
 	}
 	return nil

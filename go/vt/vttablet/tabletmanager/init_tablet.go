@@ -120,7 +120,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 				// Read the master term start time from tablet.
 				// If it is nil, it might mean that we are upgrading, so use current time instead
 				if oldTablet.MasterTermStartTime != nil {
-					agent.setMasterTermStartTime(logutil.ProtoToTime(oldTablet.MasterTermStartTime))
+					agent.setMasterTermStartTime(oldTablet.GetMasterTermStartTime())
 				} else {
 					agent.setMasterTermStartTime(time.Now())
 				}
@@ -137,8 +137,8 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 			if oldTablet.Type == topodatapb.TabletType_MASTER {
 				// Our existing tablet type is master, but the shard record does not agree.
 				// Only take over if our master_term_start_time is after what is in the shard record
-				oldMasterTermStartTime := logutil.ProtoToTime(oldTablet.MasterTermStartTime)
-				currentShardTime := logutil.ProtoToTime(si.MasterTermStartTime)
+				oldMasterTermStartTime := oldTablet.GetMasterTermStartTime()
+				currentShardTime := si.GetMasterTermStartTime()
 				if oldMasterTermStartTime.After(currentShardTime) {
 					tabletType = topodatapb.TabletType_MASTER
 					// read the master term start time from tablet

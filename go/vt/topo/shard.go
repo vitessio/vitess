@@ -24,8 +24,10 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -172,6 +174,16 @@ func (si *ShardInfo) Version() Version {
 // HasMaster returns true if the Shard has an assigned Master.
 func (si *ShardInfo) HasMaster() bool {
 	return !topoproto.TabletAliasIsZero(si.Shard.MasterAlias)
+}
+
+// GetMasterTermStartTime returns the shard's master term start time as a Time value.
+func (si *ShardInfo) GetMasterTermStartTime() time.Time {
+	return logutil.ProtoToTime(si.Shard.MasterTermStartTime)
+}
+
+// SetMasterTermStartTime sets the shard's master term start time as a Time value.
+func (si *ShardInfo) SetMasterTermStartTime(t time.Time) {
+	si.Shard.MasterTermStartTime = logutil.TimeToProto(t)
 }
 
 // GetShard is a high level function to read shard data.

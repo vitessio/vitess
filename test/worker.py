@@ -513,8 +513,9 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
 
       # Bring back masters. Since we test with semi-sync now, we need at least
       # one replica for the new master. This test is already quite expensive,
-      # so we bring back the old master as a replica rather than having a third
-      # replica up the whole time.
+      # so we bring back the old master and then let it be converted to a
+      # replica by PRS, rather than leaving the old master down and having a
+      # third replica up the whole time.
       logging.debug('Restarting mysqld on destination masters')
       utils.wait_procs(
           [shard_0_master.start_mysql(),
