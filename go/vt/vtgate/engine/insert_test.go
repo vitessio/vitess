@@ -318,7 +318,7 @@ func TestInsertShardedFail(t *testing.T) {
 
 	// The lookup will fail to map to a keyspace id.
 	_, err = ins.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	expectError(t, "Execute", err, "execInsertSharded: getInsertShardedRoute: could not map INT64(1) to a keyspace id")
+	expectError(t, "Execute", err, "execInsertSharded: getInsertShardedRoute: could not map [INT64(1)] to a keyspace id")
 }
 
 func TestInsertShardedGenerate(t *testing.T) {
