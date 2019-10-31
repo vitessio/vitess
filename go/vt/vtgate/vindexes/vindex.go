@@ -71,6 +71,13 @@ type Vindex interface {
 	Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error)
 }
 
+// MultiColumn defines the interface for vindexes that can
+// support multi-column vindexes.
+type MultiColumn interface {
+	VerifyMulti(cursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error)
+	MapMulti(cursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error)
+}
+
 // A Reversible vindex is one that can perform a
 // reverse lookup from a keyspace id to an id. This
 // is optional. If present, VTGate can use it to
@@ -131,4 +138,28 @@ func CreateVindex(vindexType, name string, params map[string]string) (Vindex, er
 		return nil, fmt.Errorf("vindexType %q not found", vindexType)
 	}
 	return f(name, params)
+}
+
+// Map invokes MapMulti or Map depending on which is available.
+func Map(vindex Vindex, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
+	if multi, ok := vindex.(MultiColumn); ok {
+		return multi.MapMulti(vcursor, rowsColValues)
+	}
+	return vindex.Map(vcursor, firstColsOnly(rowsColValues))
+}
+
+// Verify invokes VerifyMulti or Verify depending on which is available.
+func Verify(vindex Vindex, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	if multi, ok := vindex.(MultiColumn); ok {
+		return multi.VerifyMulti(vcursor, rowsColValues, ksids)
+	}
+	return vindex.Verify(vcursor, firstColsOnly(rowsColValues), ksids)
+}
+
+func firstColsOnly(rowsColValues [][]sqltypes.Value) []sqltypes.Value {
+	firstCols := make([]sqltypes.Value, 0, len(rowsColValues))
+	for _, val := range rowsColValues {
+		firstCols = append(firstCols, val[0])
+	}
+	return firstCols
 }

@@ -654,7 +654,7 @@ func TestInsertShardedKeyrange(t *testing.T) {
 
 	// If a unique vindex returns a keyrange, we fail the insert
 	_, err := executorExec(executor, "insert into keyrange_table(krcol_unique, krcol) values(1, 1)", nil)
-	want := "execInsertSharded: getInsertShardedRoute: could not map INT64(1) to a unique keyspace id: DestinationKeyRange(-10)"
+	want := "execInsertSharded: getInsertShardedRoute: could not map [INT64(1)] to a unique keyspace id: DestinationKeyRange(-10)"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec error: %v, want %s", err, want)
 	}

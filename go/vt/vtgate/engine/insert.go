@@ -390,10 +390,19 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 	// The output from the following 'process' functions is a list of
 	// keyspace ids. For regular inserts, a failure to find a route
 	// results in an error. For 'ignore' type inserts, the keyspace
-	// id is returned as nil, which is used later to drop such rows.
-	keyspaceIDs, err := ins.processPrimary(vcursor, vindexRowsValues[0], ins.Table.ColumnVindexes[0])
+	// id is returned as nil, which is used later to drop the corresponding rows.
+	colVindex := ins.Table.ColumnVindexes[0]
+	keyspaceIDs, err := ins.processPrimary(vcursor, vindexRowsValues[0], colVindex)
 	if err != nil {
 		return nil, nil, vterrors.Wrap(err, "getInsertShardedRoute")
+	}
+	// Primary vindex can be owned. If so, go through the processOwned flow.
+	// If not owned, we don't do processUnowned because there's no need to verify
+	// the keyspace ids we just generated.
+	if colVindex.Owned {
+		if err := ins.processOwned(vcursor, vindexRowsValues[0], colVindex, keyspaceIDs); err != nil {
+			return nil, nil, vterrors.Wrap(err, "getInsertShardedRoute")
+		}
 	}
 
 	for vIdx := 1; vIdx < len(ins.Table.ColumnVindexes); vIdx++ {
@@ -472,11 +481,7 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 
 // processPrimary maps the primary vindex values to the keyspace ids.
 func (ins *Insert) processPrimary(vcursor VCursor, vindexColumnsKeys [][]sqltypes.Value, colVindex *vindexes.ColumnVindex) ([][]byte, error) {
-	var vindexKeys []sqltypes.Value
-	for _, val := range vindexColumnsKeys {
-		vindexKeys = append(vindexKeys, val[0])
-	}
-	destinations, err := colVindex.Vindex.Map(vcursor, vindexKeys)
+	destinations, err := vindexes.Map(colVindex.Vindex, vcursor, vindexColumnsKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -490,10 +495,10 @@ func (ins *Insert) processPrimary(vcursor VCursor, vindexColumnsKeys [][]sqltype
 		case key.DestinationNone:
 			// No valid keyspace id, we may return an error.
 			if ins.Opcode != InsertShardedIgnore {
-				return nil, fmt.Errorf("could not map %v to a keyspace id", vindexKeys[i])
+				return nil, fmt.Errorf("could not map %v to a keyspace id", vindexColumnsKeys[i])
 			}
 		default:
-			return nil, fmt.Errorf("could not map %v to a unique keyspace id: %v", vindexKeys[i], destination)
+			return nil, fmt.Errorf("could not map %v to a unique keyspace id: %v", vindexColumnsKeys[i], destination)
 		}
 	}
 
@@ -529,11 +534,7 @@ func (ins *Insert) processOwned(vcursor VCursor, vindexColumnsKeys [][]sqltypes.
 	}
 	// After creation, verify that the keys map to the keyspace ids. If not, remove
 	// those that don't map.
-	var ids []sqltypes.Value
-	for _, vindexValues := range createKeys {
-		ids = append(ids, vindexValues[0])
-	}
-	verified, err := colVindex.Vindex.Verify(vcursor, ids, createKsids)
+	verified, err := vindexes.Verify(colVindex.Vindex, vcursor, createKeys, createKsids)
 	if err != nil {
 		return err
 	}
@@ -550,22 +551,22 @@ func (ins *Insert) processUnowned(vcursor VCursor, vindexColumnsKeys [][]sqltype
 	var reverseIndexes []int
 	var reverseKsids [][]byte
 	var verifyIndexes []int
-	var verifyKeys []sqltypes.Value
+	var verifyKeys [][]sqltypes.Value
 	var verifyKsids [][]byte
 
 	for rowNum, rowColumnKeys := range vindexColumnsKeys {
 		// Right now, we only validate against the first column of a colvindex.
-		// TODO(sougou): address this when we add multicolumn Map support.
-		vindexKey := rowColumnKeys[0]
 		if ksids[rowNum] == nil {
 			continue
 		}
-		if vindexKey.IsNull() {
+		// Perform reverse map only for non-multi-column vindexes.
+		_, isMulti := colVindex.Vindex.(vindexes.MultiColumn)
+		if rowColumnKeys[0].IsNull() && !isMulti {
 			reverseIndexes = append(reverseIndexes, rowNum)
 			reverseKsids = append(reverseKsids, ksids[rowNum])
 		} else {
 			verifyIndexes = append(verifyIndexes, rowNum)
-			verifyKeys = append(verifyKeys, vindexKey)
+			verifyKeys = append(verifyKeys, rowColumnKeys)
 			verifyKsids = append(verifyKsids, ksids[rowNum])
 		}
 	}
@@ -589,7 +590,7 @@ func (ins *Insert) processUnowned(vcursor VCursor, vindexColumnsKeys [][]sqltype
 
 	if verifyKsids != nil {
 		// If values were supplied, we validate against keyspace id.
-		verified, err := colVindex.Vindex.Verify(vcursor, verifyKeys, verifyKsids)
+		verified, err := vindexes.Verify(colVindex.Vindex, vcursor, verifyKeys, verifyKsids)
 		if err != nil {
 			return err
 		}
