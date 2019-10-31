@@ -24,7 +24,7 @@ script_root=$(dirname "${BASH_SOURCE}")
 
 SHARD=-80 CELL=zone1 KEYSPACE=customer UID_BASE=300 "$script_root/vttablet-up.sh"
 SHARD=80- CELL=zone1 KEYSPACE=customer UID_BASE=400 "$script_root/vttablet-up.sh"
-sleep 15
+
 ./lvtctl.sh InitShardMaster -force customer/-80 zone1-300
 ./lvtctl.sh InitShardMaster -force customer/80- zone1-400
 ./lvtctl.sh CopySchemaShard customer/0 customer/-80
