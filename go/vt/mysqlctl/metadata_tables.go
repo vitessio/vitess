@@ -30,7 +30,7 @@ import (
 const (
 	sqlCreateLocalMetadataTable = `CREATE TABLE IF NOT EXISTS _vt.local_metadata (
   name VARCHAR(255) NOT NULL,
-  value VARCHAR(255) NOT NULL,
+  value MEDIUMBLOB NOT NULL,
   PRIMARY KEY (name)
   ) ENGINE=InnoDB`
 	sqlCreateShardMetadataTable = `CREATE TABLE IF NOT EXISTS _vt.shard_metadata (
@@ -46,6 +46,9 @@ var (
 	sqlAlterLocalMetadataTable = []string{
 		`ALTER TABLE _vt.local_metadata ADD COLUMN db_name VARBINARY(255) NOT NULL DEFAULT ''`,
 		`ALTER TABLE _vt.local_metadata DROP PRIMARY KEY, ADD PRIMARY KEY(name, db_name)`,
+		// VARCHAR(255) is not long enough to hold replication positions, hence changing to
+		// MEDIUMBLOB.
+		`ALTER TABLE _vt.local_metadata CHANGE value value MEDIUMBLOB NOT NULL`,
 	}
 	sqlAlterShardMetadataTable = []string{
 		`ALTER TABLE _vt.shard_metadata ADD COLUMN db_name VARBINARY(255) NOT NULL DEFAULT ''`,
