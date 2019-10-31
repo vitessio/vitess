@@ -171,16 +171,16 @@ func (vttablet *VttabletProcess) TearDown() error {
 // VttabletProcessInstance returns a VttabletProcess handle for vttablet process
 // configured with the given Config.
 // The process must be manually started by calling setup()
-func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string, shard string, hostname string, keyspace string, vtctldPort int, tabletType string, topoPort int, extraArgs []string) *VttabletProcess {
+func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string, shard string, keyspace string, vtctldPort int, tabletType string, topoPort int, hostname string, tmpDirectory string, extraArgs []string) *VttabletProcess {
 	vtctl := VtctlProcessInstance(topoPort, hostname)
 	vttablet := &VttabletProcess{
 		Name:                        "vttablet",
 		Binary:                      "vttablet",
-		FileToLogQueries:            path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/tmp/vt_%010d/vttable.pid", tabletUID)),
+		FileToLogQueries:            path.Join(tmpDirectory, fmt.Sprintf("/vt_%010d/vttable.pid", tabletUID)),
 		Directory:                   path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID)),
 		TabletPath:                  fmt.Sprintf("%s-%010d", cell, tabletUID),
 		ServiceMap:                  "grpc-queryservice,grpc-tabletmanager,grpc-updatestream",
-		LogDir:                      path.Join(os.Getenv("VTDATAROOT"), "/tmp"),
+		LogDir:                      tmpDirectory,
 		Shard:                       shard,
 		TabletHostname:              hostname,
 		Keyspace:                    keyspace,

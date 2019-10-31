@@ -411,6 +411,18 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"cluster_endtoend": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"make",
+				"e2e_test_cluster"
+			],
+			"Manual": false,
+			"Shard": 2,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"e2e_race": {
 			"File": "",
 			"Args": [],

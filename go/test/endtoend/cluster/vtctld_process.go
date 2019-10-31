@@ -53,14 +53,8 @@ type VtctldProcess struct {
 
 // Setup starts vtctld process with required arguements
 func (vtctld *VtctldProcess) Setup(Cell string) (err error) {
-	err = os.Mkdir(path.Join(vtctld.Directory, "tmp"), 0700)
-	if err != nil {
-		return
-	}
-	err = os.Mkdir(path.Join(vtctld.Directory, "backups"), 0700)
-	if err != nil {
-		return
-	}
+	_ = createDirectory(vtctld.LogDir, 0700)
+	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0700)
 	vtctld.proc = exec.Command(
 		vtctld.Binary,
 		"-enable_queries",
@@ -114,6 +108,13 @@ func (vtctld *VtctldProcess) Setup(Cell string) (err error) {
 	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vtctld.Name, <-vtctld.exit)
 }
 
+func createDirectory(dirName string, mode os.FileMode) error {
+	if _, err := os.Stat(dirName); os.IsNotExist(err) {
+		return os.Mkdir(dirName, mode)
+	}
+	return nil
+}
+
 // IsHealthy function checks if vtctld process is up and running
 func (vtctld *VtctldProcess) IsHealthy() bool {
 	resp, err := http.Get(vtctld.VerifyURL)
@@ -132,8 +133,8 @@ func (vtctld *VtctldProcess) TearDown() error {
 		return nil
 	}
 
-	os.RemoveAll(path.Join(vtctld.Directory, "tmp"))
-	os.RemoveAll(path.Join(vtctld.Directory, "backups"))
+	os.RemoveAll(vtctld.LogDir)
+	//os.RemoveAll(path.Join(vtctld.Directory, "backups"))
 
 	// Attempt graceful shutdown with SIGTERM first
 	vtctld.proc.Process.Signal(syscall.SIGTERM)
@@ -153,7 +154,7 @@ func (vtctld *VtctldProcess) TearDown() error {
 // VtctldProcessInstance returns a VtctlProcess handle for vtctl process
 // configured with the given Config.
 // The process must be manually started by calling setup()
-func VtctldProcessInstance(httpPort int, grpcPort int, topoPort int, hostname string) *VtctldProcess {
+func VtctldProcessInstance(httpPort int, grpcPort int, topoPort int, hostname string, tmpDirectory string) *VtctldProcess {
 	vtctl := VtctlProcessInstance(topoPort, hostname)
 	vtctld := &VtctldProcess{
 		Name:                        "vtctld",
@@ -164,12 +165,12 @@ func VtctldProcessInstance(httpPort int, grpcPort int, topoPort int, hostname st
 		ServiceMap:                  "grpc-vtctl",
 		BackupStorageImplementation: "file",
 		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),
-		LogDir:                      path.Join(os.Getenv("VTDATAROOT"), "/tmp"),
+		LogDir:                      tmpDirectory,
 		Port:                        httpPort,
 		GrpcPort:                    grpcPort,
-		PidFile:                     path.Join(os.Getenv("VTDATAROOT"), "/tmp", "vtctld.pid"),
+		PidFile:                     path.Join(tmpDirectory, "vtctld.pid"),
 		Directory:                   os.Getenv("VTDATAROOT"),
 	}
-	vtctld.VerifyURL = fmt.Sprintf("http://localhost:%d", vtctld.Port)
+	vtctld.VerifyURL = fmt.Sprintf("http://%s:%d/debug/vars", hostname, vtctld.Port)
 	return vtctld
 }

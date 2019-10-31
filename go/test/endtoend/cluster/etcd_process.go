@@ -38,8 +38,10 @@ type EtcdProcess struct {
 	ListenClientURL    string
 	AdvertiseClientURL string
 	Port               int
+	PeerPort           int
 	Host               string
 	VerifyURL          string
+	PeerURL            string
 
 	proc *exec.Cmd
 	exit chan error
@@ -50,9 +52,13 @@ type EtcdProcess struct {
 func (etcd *EtcdProcess) Setup() (err error) {
 	etcd.proc = exec.Command(
 		etcd.Binary,
+		"--name", etcd.Name,
 		"--data-dir", etcd.DataDirectory,
 		"--listen-client-urls", etcd.ListenClientURL,
 		"--advertise-client-urls", etcd.AdvertiseClientURL,
+		"--initial-advertise-peer-urls", etcd.PeerURL,
+		"--listen-peer-urls", etcd.PeerURL,
+		"--initial-cluster", fmt.Sprintf("%s=%s", etcd.Name, etcd.PeerURL),
 	)
 
 	etcd.proc.Stderr = os.Stderr
@@ -79,13 +85,13 @@ func (etcd *EtcdProcess) Setup() (err error) {
 		}
 		select {
 		case err := <-etcd.exit:
-			return fmt.Errorf("process '%s' exited prematurely (err: %s)", etcd.Name, err)
+			return fmt.Errorf("process '%s' exited prematurely (err: %s)", etcd.Binary, err)
 		default:
 			time.Sleep(300 * time.Millisecond)
 		}
 	}
 
-	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", etcd.Name, <-etcd.exit)
+	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", etcd.Binary, <-etcd.exit)
 }
 
 // TearDown shutdowns the running mysqld service
@@ -97,8 +103,8 @@ func (etcd *EtcdProcess) TearDown(Cell string) error {
 	etcd.removeTopoDirectories(Cell)
 
 	// Attempt graceful shutdown with SIGTERM first
-	etcd.proc.Process.Signal(syscall.SIGTERM)
-	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), "etcd"))
+	_ = etcd.proc.Process.Signal(syscall.SIGTERM)
+	_ = os.RemoveAll(etcd.DataDirectory)
 	select {
 	case err := <-etcd.exit:
 		etcd.proc = nil
@@ -150,17 +156,19 @@ func (etcd *EtcdProcess) ManageTopoDir(command string, directory string) (err er
 // EtcdProcessInstance returns a EtcdProcess handle for a etcd sevice,
 // configured with the given Config.
 // The process must be manually started by calling setup()
-func EtcdProcessInstance(port int, hostname string) *EtcdProcess {
+func EtcdProcessInstance(port int, peerPort int, hostname string, name string) *EtcdProcess {
 	etcd := &EtcdProcess{
-		Name:   "etcd",
-		Binary: "etcd",
-		Port:   port,
-		Host:   hostname,
+		Name:     name,
+		Binary:   "etcd",
+		Port:     port,
+		Host:     hostname,
+		PeerPort: peerPort,
 	}
 
 	etcd.AdvertiseClientURL = fmt.Sprintf("http://%s:%d", etcd.Host, etcd.Port)
 	etcd.ListenClientURL = fmt.Sprintf("http://%s:%d", etcd.Host, etcd.Port)
-	etcd.DataDirectory = path.Join(os.Getenv("VTDATAROOT"), "etcd")
+	etcd.DataDirectory = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("%s_%d", "etcd", port))
 	etcd.VerifyURL = fmt.Sprintf("http://%s:%d/v2/keys", etcd.Host, etcd.Port)
+	etcd.PeerURL = fmt.Sprintf("http://%s:%d", hostname, peerPort)
 	return etcd
 }

@@ -24,6 +24,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"reflect"
 	"strings"
 	"syscall"
 	"time"
@@ -129,12 +130,17 @@ func (vtgate *VtgateProcess) WaitForStatus() bool {
 		if err != nil {
 			panic(err)
 		}
-		//for key, value := range resultMap {
-		//	println("VTGate API Response: Key = " + key + ", value = " + fmt.Sprintf("%v", value))
-		//}
-		//println(string(respByte))
-		//return resultMap["TabletStateName"] == "NOT_SERVING"
-		return true
+		object := reflect.ValueOf(resultMap["HealthcheckConnections"])
+		masterConnectionExist := false
+		if object.Kind() == reflect.Map {
+			for _, key := range object.MapKeys() {
+
+				if strings.Contains(key.String(),"master") {
+					masterConnectionExist = true
+				}
+			}
+		}
+		return masterConnectionExist
 	}
 	return false
 }
@@ -162,15 +168,15 @@ func (vtgate *VtgateProcess) TearDown() error {
 // VtgateProcessInstance returns a Vtgate handle for vtgate process
 // configured with the given Config.
 // The process must be manually started by calling setup()
-func VtgateProcessInstance(port int, grpcPort int, mySQLServerPort int, cell string, cellsToWatch string, hostname string, tabletTypesToWait string, topoPort int, extraArgs []string) *VtgateProcess {
+func VtgateProcessInstance(port int, grpcPort int, mySQLServerPort int, cell string, cellsToWatch string, hostname string, tabletTypesToWait string, topoPort int, tmpDirectory string, extraArgs []string) *VtgateProcess {
 	vtctl := VtctlProcessInstance(topoPort, hostname)
 	vtgate := &VtgateProcess{
 		Name:                  "vtgate",
 		Binary:                "vtgate",
-		FileToLogQueries:      path.Join(os.Getenv("VTDATAROOT"), "/tmp/vtgate_querylog.txt"),
+		FileToLogQueries:      path.Join(tmpDirectory, "/vtgate_querylog.txt"),
 		Directory:             os.Getenv("VTDATAROOT"),
 		ServiceMap:            "grpc-vtgateservice",
-		LogDir:                path.Join(os.Getenv("VTDATAROOT"), "/tmp"),
+		LogDir:                tmpDirectory,
 		Port:                  port,
 		GrpcPort:              grpcPort,
 		MySQLServerPort:       mySQLServerPort,
@@ -180,7 +186,7 @@ func VtgateProcessInstance(port int, grpcPort int, mySQLServerPort int, cell str
 		TabletTypesToWait:     tabletTypesToWait,
 		GatewayImplementation: "discoverygateway",
 		CommonArg:             *vtctl,
-		PidFile:               path.Join(os.Getenv("VTDATAROOT"), "/tmp/vtgate.pid"),
+		PidFile:               path.Join(tmpDirectory, "/vtgate.pid"),
 		MySQLAuthServerImpl:   "none",
 		ExtraArgs:             extraArgs,
 	}
