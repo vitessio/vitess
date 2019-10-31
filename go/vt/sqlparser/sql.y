@@ -1286,6 +1286,13 @@ alter_statement:
     ddl.Column = $8.Name
     $$ = ddl
   }
+| ALTER ignore_opt TABLE table_name ADD column_opt column_definition skip_to_end
+  {
+    ddl := &DDL{Action: AlterStr, ColumnAction: AddStr, Table: $4, TableSpec: &TableSpec{}}
+    ddl.TableSpec.AddColumn($7)
+    ddl.Column = $7.Name
+    $$ = ddl
+  }
 | ALTER ignore_opt TABLE table_name ADD ignored_alter_object_type skip_to_end
   {
     $$ = &DDL{Action: AlterStr, Table: $4}
@@ -1298,7 +1305,7 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4}
   }
-| ALTER ignore_opt TABLE table_name RENAME column_opt ID to_opt ID
+| ALTER ignore_opt TABLE table_name RENAME COLUMN ID TO ID
   {
     $$ = &DDL{Action: AlterStr, ColumnAction: RenameStr, Table: $4, Column: NewColIdent(string($7)), ToColumn: NewColIdent(string($9))}
   }

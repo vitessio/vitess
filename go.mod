@@ -3,7 +3,7 @@ module vitess.io/vitess
 go 1.12
 
 require (
-	cloud.google.com/go v0.0.0-20161216213822-686f0e89858e
+	cloud.google.com/go v0.26.0
 	github.com/aws/aws-sdk-go v0.0.0-20180223184012-ebef4262e06a
 	github.com/beorn7/perks v0.0.0-20160229213445-3ac7bf7a47d1
 	github.com/coreos/etcd v0.0.0-20170626015032-703663d1f6ed
@@ -12,11 +12,11 @@ require (
 	github.com/ghodss/yaml v0.0.0-20161207003320-04f313413ffd
 	github.com/go-ini/ini v1.12.0
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
-	github.com/golang/mock v1.0.0
+	github.com/golang/mock v1.1.1
 	github.com/golang/protobuf v1.2.0
 	github.com/golang/snappy v0.0.0-20170215233205-553a64147049
 	github.com/googleapis/gax-go v0.0.0-20161107002406-da06d194a00e
-	github.com/gopherjs/gopherjs v0.0.0-20160612211759-a727a4a1dd2f
+	github.com/gopherjs/gopherjs v0.0.0-20181103185306-d547d1d9531e
 	github.com/gorilla/websocket v0.0.0-20160912153041-2d1e4548da23
 	github.com/grpc-ecosystem/go-grpc-middleware v0.0.0-20190118093823-f849b5445de4
 	github.com/grpc-ecosystem/go-grpc-prometheus v0.0.0-20180418170936-39de4380c2e0
@@ -26,7 +26,7 @@ require (
 	github.com/hashicorp/go-rootcerts v0.0.0-20160503143440-6bb64b370b90
 	github.com/hashicorp/serf v0.0.0-20161207011743-d3a67ab21bc8
 	github.com/jmespath/go-jmespath v0.0.0-20160202185014-0b12d6b521d8
-	github.com/jtolds/gls v4.2.0+incompatible
+	github.com/jtolds/gls v4.2.1+incompatible
 	github.com/klauspost/compress v0.0.0-20180801095237-b50017755d44
 	github.com/klauspost/cpuid v1.2.0
 	github.com/klauspost/crc32 v1.2.0
@@ -34,7 +34,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.1
 	github.com/matttproud/golang_protobuf_extensions v1.0.1
 	github.com/minio/minio-go v0.0.0-20190131015406-c8a261de75c1
-	github.com/mitchellh/go-homedir v0.0.0-20161203194507-b8bc1bf76747
+	github.com/mitchellh/go-homedir v1.1.0
 	github.com/mitchellh/mapstructure v1.1.2
 	github.com/olekukonko/tablewriter v0.0.0-20160115111002-cca8bbc07984
 	github.com/opentracing-contrib/go-grpc v0.0.0-20180928155321-4b5a12d3ff02
@@ -49,8 +49,8 @@ require (
 	github.com/samuel/go-zookeeper v0.0.0-20160616024954-e64db453f351
 	github.com/satori/go.uuid v0.0.0-20160713180306-0aa62d5ddceb
 	github.com/sergi/go-diff v0.0.0-20170409071739-feef008d51ad
-	github.com/smartystreets/assertions v0.0.0-20160422195351-40711f774818
-	github.com/smartystreets/goconvey v0.0.0-20160523153147-c53abc99456f
+	github.com/smartystreets/assertions v0.0.0-20190116191733-b6c0e53d7304
+	github.com/smartystreets/goconvey v0.0.0-20181108003508-044398e4856c
 	github.com/stretchr/testify v0.0.0-20160524234229-8d64eb7173c7
 	github.com/tchap/go-patricia v0.0.0-20160729071656-dd168db6051b
 	github.com/uber/jaeger-client-go v2.16.0+incompatible
@@ -59,10 +59,11 @@ require (
 	github.com/yudai/golcs v0.0.0-20170316035057-ecda9a501e82
 	golang.org/x/crypto v0.0.0-20190131182504-b8fe1690c613
 	golang.org/x/net v0.0.0-20190206173232-65e2d4e15006
-	golang.org/x/oauth2 v0.0.0-20160803220926-04e1573abc89
+	golang.org/x/oauth2 v0.0.0-20180821212333-d2e6202438be
 	golang.org/x/sys v0.0.0-20190204203706-41f3e6584952
-	golang.org/x/text v0.0.0-20181030141323-6f44c5a2ea40
+	golang.org/x/text v0.3.0
 	golang.org/x/time v0.0.0-20161028155119-f51c12702a4d
+	golang.org/x/tools v0.0.0-20180917221912-90fa682c2a6e // indirect
 	google.golang.org/api v0.0.0-20161214193051-55146ba61254
 	google.golang.org/appengine v1.5.0
 	google.golang.org/genproto v0.0.0-20181109154231-b5d43981345b
@@ -72,7 +73,3 @@ require (
 	gopkg.in/ldap.v2 v2.5.0
 	gopkg.in/yaml.v2 v2.0.0-20160928153709-a5b47d31c556
 )
-
-// This go.mod file was added to support local development. For this to work corectly, you must clone the repo into the correct path.
-// Note that this packge doesn't use the standard github.com/... paths like most go packages hosted on github. To clone the repo::
-// cd $GOPATH/src; git clone git@github.com:liquidata-inc/vitess.git vitess.io/vitess 
