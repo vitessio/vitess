@@ -116,7 +116,7 @@ type RPCAgent interface {
 
 	SlaveWasPromoted(ctx context.Context) error
 
-	SetMaster(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error
+	SetMaster(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) error
 
 	SlaveWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error
 
