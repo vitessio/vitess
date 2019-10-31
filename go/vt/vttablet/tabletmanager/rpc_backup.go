@@ -83,6 +83,11 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 			return err
 		}
 		originalType = tablet.Type
+		if originalType == topodatapb.TabletType_MASTER {
+			// stop vreplication engine
+			agent.VREngine.Close()
+		}
+
 		// update our type to BACKUP
 		if _, err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topodatapb.TabletType_BACKUP); err != nil {
 			return err
@@ -132,6 +137,10 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 		// let's update our internal state (start query service and other things)
 		if err := agent.refreshTablet(bgCtx, "after backup"); err != nil {
 			return err
+		}
+		if originalType == topodatapb.TabletType_MASTER {
+			// start vreplication engine
+			agent.VREngine.Open(bgCtx)
 		}
 		// and re-run health check to be sure to capture any replication delay
 		// not needed for online backups because it will continue to run per schedule
