@@ -2286,7 +2286,7 @@ var yyR2 = [...]int{
 	2, 3, 3, 2, 2, 1, 1, 0, 1, 1,
 	3, 2, 3, 1, 10, 11, 11, 12, 3, 3,
 	1, 1, 2, 2, 2, 0, 1, 3, 1, 2,
-	3, 1, 1, 1, 6, 10, 7, 8, 7, 7,
+	3, 1, 1, 1, 6, 10, 8, 7, 7, 7,
 	9, 7, 7, 4, 5, 7, 5, 5, 5, 12,
 	7, 0, 1, 1, 1, 1, 1, 1, 1, 1,
 	1, 1, 7, 1, 3, 8, 8, 3, 3, 5,
@@ -2624,7 +2624,7 @@ var yyDef = [...]int{
 	365, 385, 387, 0, 0, 0, 0, 570, 399, 39,
 	56, 57, 58, 207, 210, 0, 189, 138, 192, 181,
 	182, 0, 156, 0, 153, 139, 113, 114, 159, 160,
-	158, 0, 158, 0, 143, 0, 861, 0, 860, 216,
+	158, 0, 158, 0, 143, 0, 861, 0, 860, 217,
 	218, 219, 0, 221, 222, 0, 225, 0, 70, 71,
 	0, 230, 249, 276, 558, 348, 476, 419, 479, 522,
 	158, 526, 527, 529, 531, 532, 534, 481, 480, 0,
@@ -2632,7 +2632,7 @@ var yyDef = [...]int{
 	34, 0, 592, -2, 0, 0, 0, 46, 0, 570,
 	596, 597, 367, 0, 372, 0, 0, 0, 375, 38,
 	172, 0, 191, 0, 359, 164, 157, 0, 161, 137,
-	161, 0, 0, 64, 0, 217, 0, 0, 73, 74,
+	161, 0, 0, 64, 0, 216, 0, 0, 73, 74,
 	0, 0, 560, 0, 523, 524, 0, 0, 0, 0,
 	515, 487, 538, 0, 0, 0, 590, 0, -2, 0,
 	585, 584, 362, 37, 0, 0, 0, 0, 394, 171,
@@ -4253,19 +4253,19 @@ yydefault:
 			yyVAL.statement = ddl
 		}
 	case 216:
-		yyDollar = yyS[yypt-7 : yypt+1]
-		//line sql.y:1290
-		{
-			yyVAL.statement = &DDL{Action: AlterStr, Table: yyDollar[4].tableName}
-		}
-	case 217:
 		yyDollar = yyS[yypt-8 : yypt+1]
-		//line sql.y:1294
+		//line sql.y:1290
 		{
 			ddl := &DDL{Action: AlterStr, ColumnAction: AddStr, Table: yyDollar[4].tableName, TableSpec: &TableSpec{}}
 			ddl.TableSpec.AddColumn(yyDollar[7].columnDefinition)
 			ddl.Column = yyDollar[7].columnDefinition.Name
 			yyVAL.statement = ddl
+		}
+	case 217:
+		yyDollar = yyS[yypt-7 : yypt+1]
+		//line sql.y:1297
+		{
+			yyVAL.statement = &DDL{Action: AlterStr, Table: yyDollar[4].tableName}
 		}
 	case 218:
 		yyDollar = yyS[yypt-7 : yypt+1]
