@@ -56,6 +56,8 @@ type VttabletProcess struct {
 	VtctldAddress               string
 	Directory                   string
 	VerifyURL                   string
+	//Extra Args to be set before starting the vttablet process
+	ExtraArgs []string
 
 	proc *exec.Cmd
 	exit chan error
@@ -88,6 +90,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-service_map", vttablet.ServiceMap,
 		"-vtctld_addr", vttablet.VtctldAddress,
 	)
+	vttablet.proc.Args = append(vttablet.proc.Args, vttablet.ExtraArgs...)
 
 	vttablet.proc.Stderr = os.Stderr
 	vttablet.proc.Stdout = os.Stdout
@@ -168,7 +171,7 @@ func (vttablet *VttabletProcess) TearDown() error {
 // VttabletProcessInstance returns a VttabletProcess handle for vttablet process
 // configured with the given Config.
 // The process must be manually started by calling setup()
-func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string, shard string, keyspace string, vtctldPort int, tabletType string, topoPort int, hostname string, tmpDirectory string) *VttabletProcess {
+func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string, shard string, keyspace string, vtctldPort int, tabletType string, topoPort int, hostname string, tmpDirectory string, extraArgs []string) *VttabletProcess {
 	vtctl := VtctlProcessInstance(topoPort, hostname)
 	vttablet := &VttabletProcess{
 		Name:                        "vttablet",
@@ -190,6 +193,7 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 		GrpcPort:                    grpcPort,
 		PidFile:                     path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/vttable.pid", tabletUID)),
 		VtctldAddress:               fmt.Sprintf("http://%s:%d", hostname, vtctldPort),
+		ExtraArgs:                   extraArgs,
 	}
 
 	if tabletType == "rdonly" {
