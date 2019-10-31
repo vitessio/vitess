@@ -219,7 +219,7 @@ func (agent *ActionAgent) abortMasterTerm(ctx context.Context, masterAlias *topo
 	setMasterCtx, cancelSetMaster := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 	defer cancelSetMaster()
 	log.Infof("Attempting to reparent self to new master %v.", masterAliasStr)
-	if err := agent.SetMaster(setMasterCtx, masterAlias, 0, true); err != nil {
+	if err := agent.SetMaster(setMasterCtx, masterAlias, 0, "", true); err != nil {
 		return vterrors.Wrap(err, "failed to reparent self to new master")
 	}
 	return nil

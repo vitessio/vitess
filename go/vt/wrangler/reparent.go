@@ -130,7 +130,7 @@ func (wr *Wrangler) ReparentTablet(ctx context.Context, tabletAlias *topodatapb.
 	}
 
 	// and do the remote command
-	return wr.tmc.SetMaster(ctx, ti.Tablet, shardInfo.MasterAlias, 0, false)
+	return wr.tmc.SetMaster(ctx, ti.Tablet, shardInfo.MasterAlias, 0, "", false)
 }
 
 // InitShardMaster will make the provided tablet the master for the shard.
@@ -331,7 +331,7 @@ func (wr *Wrangler) initShardMasterLocked(ctx context.Context, ev *events.Repare
 
 // PlannedReparentShard will make the provided tablet the master for the shard,
 // when both the current and new master are reachable and in good shape.
-func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias, avoidMasterAlias *topodatapb.TabletAlias, waitReplicasTimeout, masterElectLagThreshold time.Duration) (err error) {
+func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard string, masterElectTabletAlias, avoidMasterAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration) (err error) {
 	// lock the shard
 	lockAction := fmt.Sprintf(
 		"PlannedReparentShard(%v, avoid_master=%v)",
@@ -356,7 +356,7 @@ func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard st
 	}
 
 	// do the work
-	err = wr.plannedReparentShardLocked(ctx, ev, keyspace, shard, masterElectTabletAlias, avoidMasterAlias, waitReplicasTimeout, masterElectLagThreshold)
+	err = wr.plannedReparentShardLocked(ctx, ev, keyspace, shard, masterElectTabletAlias, avoidMasterAlias, waitReplicasTimeout)
 	if err != nil {
 		event.DispatchUpdate(ev, "failed PlannedReparentShard: "+err.Error())
 	} else {
@@ -365,7 +365,7 @@ func (wr *Wrangler) PlannedReparentShard(ctx context.Context, keyspace, shard st
 	return err
 }
 
-func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, masterElectTabletAlias, avoidMasterTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout, masterElectLagThreshold time.Duration) error {
+func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.Reparent, keyspace, shard string, masterElectTabletAlias, avoidMasterTabletAlias *topodatapb.TabletAlias, waitReplicasTimeout time.Duration) error {
 	shardInfo, err := wr.ts.GetShard(ctx, keyspace, shard)
 	if err != nil {
 		return err
@@ -544,20 +544,36 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		oldMasterTabletInfo := currentMaster
 		ev.OldMaster = *oldMasterTabletInfo.Tablet
 
-		// Before demoting the old master, check replication on the candidate
-		// master to make sure it has a chance of catching up.
-		statusCtx, statusCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
-		defer statusCancel()
-		status, err := wr.tmc.SlaveStatus(statusCtx, masterElectTabletInfo.Tablet)
+		// Before demoting the old master, first make sure replication is
+		// working from the old master to the candidate master. If it's not
+		// working, we can't do a planned reparent because the candidate won't
+		// catch up.
+		wr.logger.Infof("Checking replication on master-elect %v", masterElectTabletAliasStr)
+
+		// First we find the position of the current master. Note that this is
+		// just a snapshot of the position since we let it keep accepting new
+		// writes until we're sure we're going to proceed.
+		snapshotCtx, snapshotCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+		defer snapshotCancel()
+
+		snapshotPos, err := wr.tmc.MasterPosition(snapshotCtx, currentMaster.Tablet)
 		if err != nil {
-			return vterrors.Wrapf(err, "can't get replication status on master-elect %v", masterElectTabletAliasStr)
+			return vterrors.Wrapf(err, "can't get replication position on current master %v; current master must be healthy to perform planned reparent", currentMaster.AliasString())
 		}
-		if !status.SlaveIoRunning || !status.SlaveSqlRunning {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "replication not running on master-elect %v; replication must be healthy to perform planned reparent", masterElectTabletAliasStr)
-		}
-		// Check if it's behind by a small enough amount.
-		if float64(status.SecondsBehindMaster) > masterElectLagThreshold.Seconds() {
-			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "replication lag on master-elect %v (%v seconds) is greater than the specified lag threshold (%v); let replication catch up first or try again with a higher threshold", masterElectTabletAliasStr, status.SecondsBehindMaster, masterElectLagThreshold)
+
+		// Now wait for the master-elect to catch up to that snapshot point.
+		// If it catches up to that point within the waitReplicasTimeout,
+		// we can be fairly confident it will catch up on everything that's
+		// happened in the meantime once we demote the master to stop writes.
+		//
+		// We do this as an idempotent SetMaster to make sure the replica knows
+		// who the current master is.
+		setMasterCtx, setMasterCancel := context.WithTimeout(ctx, waitReplicasTimeout)
+		defer setMasterCancel()
+
+		err = wr.tmc.SetMaster(setMasterCtx, masterElectTabletInfo.Tablet, currentMaster.Alias, 0, snapshotPos, true)
+		if err != nil {
+			return vterrors.Wrapf(err, "replication on master-elect %v did not catch up in time; replication must be healthy to perform planned reparent", masterElectTabletAliasStr)
 		}
 
 		// Check we still have the topology lock.
@@ -642,7 +658,7 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 			// to start replication after being converted to a replica.
 			forceStartReplication := false
 
-			if err := wr.tmc.SetMaster(replCtx, tabletInfo.Tablet, masterElectTabletAlias, reparentJournalTimestamp, forceStartReplication); err != nil {
+			if err := wr.tmc.SetMaster(replCtx, tabletInfo.Tablet, masterElectTabletAlias, reparentJournalTimestamp, "", forceStartReplication); err != nil {
 				rec.RecordError(fmt.Errorf("tablet %v SetMaster failed: %v", alias, err))
 				return
 			}
@@ -976,7 +992,7 @@ func (wr *Wrangler) emergencyReparentShardLocked(ctx context.Context, ev *events
 				if status, ok := statusMap[alias]; ok {
 					forceStartSlave = status.SlaveIoRunning || status.SlaveSqlRunning
 				}
-				if err := wr.tmc.SetMaster(replCtx, tabletInfo.Tablet, masterElectTabletAlias, now, forceStartSlave); err != nil {
+				if err := wr.tmc.SetMaster(replCtx, tabletInfo.Tablet, masterElectTabletAlias, now, "", forceStartSlave); err != nil {
 					rec.RecordError(fmt.Errorf("tablet %v SetMaster failed: %v", alias, err))
 				}
 			}(alias, tabletInfo)

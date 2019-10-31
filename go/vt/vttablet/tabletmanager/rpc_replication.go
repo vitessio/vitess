@@ -522,13 +522,13 @@ func (agent *ActionAgent) SlaveWasPromoted(ctx context.Context) error {
 
 // SetMaster sets replication master, and waits for the
 // reparent_journal table entry up to context timeout
-func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
+func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) error {
 	if err := agent.lock(ctx); err != nil {
 		return err
 	}
 	defer agent.unlock()
 
-	if err := agent.setMasterLocked(ctx, parentAlias, timeCreatedNS, forceStartSlave); err != nil {
+	if err := agent.setMasterLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartSlave); err != nil {
 		return err
 	}
 
@@ -543,7 +543,7 @@ func (agent *ActionAgent) SetMaster(ctx context.Context, parentAlias *topodatapb
 	return nil
 }
 
-func (agent *ActionAgent) setMasterRepairReplication(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) (err error) {
+func (agent *ActionAgent) setMasterRepairReplication(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) (err error) {
 	parent, err := agent.TopoServer.GetTablet(ctx, parentAlias)
 	if err != nil {
 		return err
@@ -556,10 +556,10 @@ func (agent *ActionAgent) setMasterRepairReplication(ctx context.Context, parent
 
 	defer unlock(&err)
 
-	return agent.setMasterLocked(ctx, parentAlias, timeCreatedNS, forceStartSlave)
+	return agent.setMasterLocked(ctx, parentAlias, timeCreatedNS, waitPosition, forceStartSlave)
 }
 
-func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) (err error) {
+func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) (err error) {
 	// End orchestrator maintenance at the end of fixing replication.
 	// This is a best effort operation, so it should happen in a goroutine
 	defer func() {
@@ -648,11 +648,24 @@ func (agent *ActionAgent) setMasterLocked(ctx context.Context, parentAlias *topo
 		}
 	}
 
-	// If needed, wait until we replicate the specified row,
-	// or our context times out.
-	if shouldbeReplicating && timeCreatedNS != 0 {
-		if err := agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS); err != nil {
-			return err
+	// If needed, wait until we replicate to the specified point, or our context
+	// times out. Callers can specify the point to wait for as either a
+	// GTID-based replication position or a Vitess reparent journal entry,
+	// or both.
+	if shouldbeReplicating {
+		if waitPosition != "" {
+			pos, err := mysql.DecodePosition(waitPosition)
+			if err != nil {
+				return err
+			}
+			if err := agent.MysqlDaemon.WaitMasterPos(ctx, pos); err != nil {
+				return err
+			}
+		}
+		if timeCreatedNS != 0 {
+			if err := agent.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS); err != nil {
+				return err
+			}
 		}
 	}
 
