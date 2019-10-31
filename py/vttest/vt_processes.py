@@ -167,7 +167,8 @@ class VtcomboProcess(VtProcess):
     self.extraparams.extend(
         ['-mysql_auth_server_impl', 'none',
          '-mysql_server_port', str(self.vtcombo_mysql_port),
-         '-mysql_server_bind_address', 'localhost'])
+         # Binding to 0.0.0.0 instead of localhost makes it possible to connect to vtgate from outside a docker container
+         '-mysql_server_bind_address', '0.0.0.0'])
 
 
 vtcombo_process = None
