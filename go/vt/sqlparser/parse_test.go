@@ -819,11 +819,11 @@ var (
 	}, {
 		input: "set sql_safe_updates = 1",
 	}, {
-		input:  "alter ignore table a add foo",
-		output: "alter table a",
+		input:  "alter ignore table a add foo int",
+		output: "alter table a add column (\n\tfoo int\n)",
 	}, {
-		input:  "alter table a add foo",
-		output: "alter table a",
+		input:  "alter table a add foo int",
+		output: "alter table a add column (\n\tfoo int\n)",
 	}, {
 		input:  "alter table a add spatial key foo (column1)",
 		output: "alter table a",
@@ -831,8 +831,8 @@ var (
 		input:  "alter table a add unique key foo (column1)",
 		output: "alter table a",
 	}, {
-		input:  "alter table `By` add foo",
-		output: "alter table `By`",
+		input:  "alter table `By` add foo int",
+		output: "alter table `By` add column (\n\tfoo int\n)",
 	}, {
 		input:  "alter table a alter foo",
 		output: "alter table a",
@@ -844,7 +844,7 @@ var (
 		output: "alter table a",
 	}, {
 		input:  "alter table a drop foo",
-		output: "alter table a",
+		output: "alter table a drop column foo",
 	}, {
 		input:  "alter table a disable foo",
 		output: "alter table a",
@@ -901,7 +901,7 @@ var (
 		output: "alter table a",
 	}, {
 		input:  "alter table a add column id int",
-		output: "alter table a",
+		output: "alter table a add column (\n\tid int\n)",
 	}, {
 		input:  "alter table a add index idx (id)",
 		output: "alter table a",
@@ -921,11 +921,7 @@ var (
 		input:  "alter table a add constraint",
 		output: "alter table a",
 	}, {
-		input:  "alter table a add id",
-		output: "alter table a",
-	}, {
-		input:  "alter table a drop column id int",
-		output: "alter table a",
+		input:  "alter table a drop column id",
 	}, {
 		input:  "alter table a drop partition p2712",
 		output: "alter table a",
@@ -949,7 +945,7 @@ var (
 		output: "alter table a",
 	}, {
 		input:  "alter table a drop id",
-		output: "alter table a",
+		output: "alter table a drop column id",
 	}, {
 		input: "create table a",
 	}, {
@@ -959,7 +955,7 @@ var (
 		input: "create table `by` (\n\t`by` char\n)",
 	}, {
 		input:  "create table if not exists a (\n\t`a` int\n)",
-		output: "create table a (\n\ta int\n)",
+		output: "create table if not exists a (\n\ta int\n)",
 	}, {
 		input:  "create table a ignore me this is garbage",
 		output: "create table a",
@@ -1289,7 +1285,7 @@ var (
 		output: "use `ks:-80@master`",
 	}, {
 		input:  "describe foobar",
-		output: "otherread",
+		output: "show columns on foobar",
 	}, {
 		input:  "desc foobar",
 		output: "otherread",

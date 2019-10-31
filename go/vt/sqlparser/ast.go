@@ -803,6 +803,10 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 	case AlterStr:
 		if node.PartitionSpec != nil {
 			buf.Myprintf("%s table %v %v", node.Action, node.Table, node.PartitionSpec)
+		} else if node.ColumnAction == AddStr {
+			buf.Myprintf("%s table %v %s column %v", node.Action, node.Table, node.ColumnAction, node.TableSpec)
+		} else if node.ColumnAction == DropStr {
+			buf.Myprintf("%s table %v %s column %v", node.Action, node.Table, node.ColumnAction, node.Column)
 		} else {
 			buf.Myprintf("%s table %v", node.Action, node.Table)
 		}
