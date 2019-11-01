@@ -25,7 +25,7 @@ import (
 )
 
 func TestVindexMap(t *testing.T) {
-	ge, err := createGeo(t, "geo_experimental", "f1,f2", 1)
+	ge, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
 	assert.NoError(t, err)
 
 	got, err := Map(ge, nil, [][]sqltypes.Value{{
@@ -53,7 +53,7 @@ func TestVindexMap(t *testing.T) {
 func TestVindexVerify(t *testing.T) {
 	vc := &loggingVCursor{}
 	vc.AddResult(makeTestResult(1), nil)
-	ge, err := createGeo(t, "geo_experimental", "f1,f2", 1)
+	ge, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
 	assert.NoError(t, err)
 
 	got, err := Verify(ge, vc, [][]sqltypes.Value{{

@@ -25,8 +25,8 @@ import (
 	"vitess.io/vitess/go/vt/key"
 )
 
-func TestGeoExperimentalMapMulti1(t *testing.T) {
-	ge, err := createGeo(t, "geo_experimental", "f1,f2", 1)
+func TestRegionExperimentalMapMulti1(t *testing.T) {
+	ge, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
 	assert.NoError(t, err)
 	got, err := ge.(MultiColumn).MapMulti(nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1), sqltypes.NewInt64(1),
@@ -57,8 +57,8 @@ func TestGeoExperimentalMapMulti1(t *testing.T) {
 	assert.Equal(t, want, got)
 }
 
-func TestGeoExperimentalMapMulti2(t *testing.T) {
-	ge, err := createGeo(t, "geo_experimental", "f1,f2", 2)
+func TestRegionExperimentalMapMulti2(t *testing.T) {
+	ge, err := createRegionVindex(t, "region_experimental", "f1,f2", 2)
 	assert.NoError(t, err)
 	got, err := ge.(MultiColumn).MapMulti(nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1), sqltypes.NewInt64(1),
@@ -80,9 +80,9 @@ func TestGeoExperimentalMapMulti2(t *testing.T) {
 	assert.Equal(t, want, got)
 }
 
-func TestGeoExperimentalVerifyMulti(t *testing.T) {
+func TestRegionExperimentalVerifyMulti(t *testing.T) {
 
-	ge, err := createGeo(t, "geo_experimental", "f1,f2", 1)
+	ge, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
 	assert.NoError(t, err)
 	vals := [][]sqltypes.Value{{
 		// One for match
@@ -122,16 +122,16 @@ func TestGeoExperimentalVerifyMulti(t *testing.T) {
 	assert.Equal(t, want, got)
 }
 
-func TestGeoExperimentalCreateErrors(t *testing.T) {
-	_, err := createGeo(t, "geo_experimental", "f1,f2", 3)
+func TestRegionExperimentalCreateErrors(t *testing.T) {
+	_, err := createRegionVindex(t, "region_experimental", "f1,f2", 3)
 	assert.EqualError(t, err, "region_bits must be 1 or 2: 3")
-	_, err = CreateVindex("geo_experimental", "geo_experimental", nil)
-	assert.EqualError(t, err, "geo_experimental missing region_bytes param")
-	_, err = createGeo(t, "geo_experimental", "f1", 2)
-	assert.EqualError(t, err, "two columns are required for geo_experimental: [f1]")
+	_, err = CreateVindex("region_experimental", "region_experimental", nil)
+	assert.EqualError(t, err, "region_experimental missing region_bytes param")
+	_, err = createRegionVindex(t, "region_experimental", "f1", 2)
+	assert.EqualError(t, err, "two columns are required for region_experimental: [f1]")
 }
 
-func createGeo(t *testing.T, name, from string, rb int) (Vindex, error) {
+func createRegionVindex(t *testing.T, name, from string, rb int) (Vindex, error) {
 	return CreateVindex(name, name, map[string]string{
 		"region_bytes": strconv.Itoa(rb),
 		"table":        "t",

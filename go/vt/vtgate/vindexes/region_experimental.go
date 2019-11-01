@@ -26,31 +26,31 @@ import (
 )
 
 var (
-	_ Vindex        = (*GeoExperimental)(nil)
-	_ Lookup        = (*GeoExperimental)(nil)
-	_ WantOwnerInfo = (*GeoExperimental)(nil)
-	_ MultiColumn   = (*GeoExperimental)(nil)
+	_ Vindex        = (*RegionExperimental)(nil)
+	_ Lookup        = (*RegionExperimental)(nil)
+	_ WantOwnerInfo = (*RegionExperimental)(nil)
+	_ MultiColumn   = (*RegionExperimental)(nil)
 )
 
 func init() {
-	Register("geo_experimental", NewGeoExperimental)
+	Register("region_experimental", NewRegionExperimental)
 }
 
-// GeoExperimental defines a vindex that uses a lookup table.
+// RegionExperimental defines a vindex that uses a lookup table.
 // The table is expected to define the id column as unique. It's
 // Unique and a Lookup.
-type GeoExperimental struct {
+type RegionExperimental struct {
 	regionBytes int
 	*ConsistentLookupUnique
 }
 
-// NewGeoExperimental creates a GeoExperimental vindex.
+// NewRegionExperimental creates a RegionExperimental vindex.
 // The supplied map requires all the fields of "consistent_lookup_unique".
 // Additionally, it requires a region_bytes argument whose value can be "1", or "2".
-func NewGeoExperimental(name string, m map[string]string) (Vindex, error) {
+func NewRegionExperimental(name string, m map[string]string) (Vindex, error) {
 	rbs, ok := m["region_bytes"]
 	if !ok {
-		return nil, fmt.Errorf("geo_experimental missing region_bytes param")
+		return nil, fmt.Errorf("region_experimental missing region_bytes param")
 	}
 	var rb int
 	switch rbs {
@@ -68,16 +68,16 @@ func NewGeoExperimental(name string, m map[string]string) (Vindex, error) {
 	}
 	cl := vindex.(*ConsistentLookupUnique)
 	if len(cl.lkp.FromColumns) != 2 {
-		return nil, fmt.Errorf("two columns are required for geo_experimental: %v", cl.lkp.FromColumns)
+		return nil, fmt.Errorf("two columns are required for region_experimental: %v", cl.lkp.FromColumns)
 	}
-	return &GeoExperimental{
+	return &RegionExperimental{
 		regionBytes:            rb,
 		ConsistentLookupUnique: cl,
 	}, nil
 }
 
 // MapMulti satisfies MultiColumn.
-func (ge *GeoExperimental) MapMulti(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
+func (ge *RegionExperimental) MapMulti(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
 	destinations := make([]key.Destination, 0, len(rowsColValues))
 	for _, row := range rowsColValues {
 		if len(row) != 2 {
@@ -112,7 +112,7 @@ func (ge *GeoExperimental) MapMulti(vcursor VCursor, rowsColValues [][]sqltypes.
 }
 
 // VerifyMulti satisfies MultiColumn.
-func (ge *GeoExperimental) VerifyMulti(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (ge *RegionExperimental) VerifyMulti(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	result := make([]bool, len(rowsColValues))
 	destinations, _ := ge.MapMulti(vcursor, rowsColValues)
 	for i, dest := range destinations {
