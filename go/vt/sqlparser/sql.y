@@ -263,7 +263,7 @@ func skipToEnd(yylex interface{}) {
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields
 %type <showFilter> like_or_where_opt
 %type <byt> exists_opt not_exists_opt
-%type <empty> non_add_drop_or_rename_operation to_opt index_opt constraint_opt
+%type <empty> non_add_drop_or_rename_operation to_opt to_or_as index_opt constraint_opt
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
 %type <expr> charset_value
@@ -1305,7 +1305,7 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4}
   }
-| ALTER ignore_opt TABLE table_name RENAME COLUMN ID TO ID
+| ALTER ignore_opt TABLE table_name RENAME COLUMN ID to_or_as ID
   {
     $$ = &DDL{Action: AlterStr, ColumnAction: RenameStr, Table: $4, Column: NewColIdent(string($7)), ToColumn: NewColIdent(string($9))}
   }
@@ -3136,6 +3136,12 @@ non_add_drop_or_rename_operation:
 | UNUSED
   { $$ = struct{}{} }
 | ID
+  { $$ = struct{}{} }
+
+to_or_as:
+  TO
+  { $$ = struct{}{} }
+| AS
   { $$ = struct{}{} }
 
 to_opt:
