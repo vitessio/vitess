@@ -493,7 +493,7 @@ func (vc *loggingVCursor) verifyLog(t *testing.T, want []string) {
 			t.Fatalf("index exceeded: %v", vc.log[i:])
 		}
 		if got != want[i] {
-			t.Errorf("log(%d):\n%s, want\n%s", i, got, want[i])
+			t.Errorf("log(%d):\n%q, want\n%q", i, got, want[i])
 		}
 	}
 	if len(want) > len(vc.log) {

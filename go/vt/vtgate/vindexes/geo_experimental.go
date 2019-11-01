@@ -122,5 +122,14 @@ func (ge *GeoExperimental) VerifyMulti(vcursor VCursor, rowsColValues [][]sqltyp
 		}
 		result[i] = bytes.Equal([]byte(destksid), ksids[i])
 	}
+	// We also need to verify from the lookup.
+	// TODO(sougou): we should only verify true values from previous result.
+	lresult, err := Verify(ge.ConsistentLookupUnique, vcursor, rowsColValues, ksids)
+	if err != nil {
+		return nil, err
+	}
+	for i := range result {
+		result[i] = result[i] && lresult[i]
+	}
 	return result, nil
 }
