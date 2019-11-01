@@ -652,7 +652,7 @@ func TestInsertShardedGeo(t *testing.T) {
 				Sharded: true,
 				Vindexes: map[string]*vschemapb.Vindex{
 					"geo": {
-						Type: "geo_experimental",
+						Type: "region_experimental",
 						Params: map[string]string{
 							"region_bytes": "1",
 							"table":        "lkp",
@@ -929,7 +929,7 @@ func TestInsertIgnoreGeo(t *testing.T) {
 				Sharded: true,
 				Vindexes: map[string]*vschemapb.Vindex{
 					"geo": {
-						Type: "geo_experimental",
+						Type: "region_experimental",
 						Params: map[string]string{
 							"region_bytes": "1",
 							"table":        "lkp",
@@ -1280,7 +1280,7 @@ func TestInsertUnownedGeo(t *testing.T) {
 						Type: "hash",
 					},
 					"geo": {
-						Type: "geo_experimental",
+						Type: "region_experimental",
 						Params: map[string]string{
 							"region_bytes": "1",
 							"table":        "lkp",
