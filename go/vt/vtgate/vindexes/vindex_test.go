@@ -51,10 +51,12 @@ func TestVindexMap(t *testing.T) {
 }
 
 func TestVindexVerify(t *testing.T) {
+	vc := &loggingVCursor{}
+	vc.AddResult(makeTestResult(1), nil)
 	ge, err := createGeo(t, "geo_experimental", "f1,f2", 1)
 	assert.NoError(t, err)
 
-	got, err := Verify(ge, nil, [][]sqltypes.Value{{
+	got, err := Verify(ge, vc, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1), sqltypes.NewInt64(1),
 	}},
 		[][]byte{
@@ -62,6 +64,9 @@ func TestVindexVerify(t *testing.T) {
 		},
 	)
 	assert.NoError(t, err)
+	vc.verifyLog(t, []string{
+		"ExecutePre select f1 from t where f1 = :f1 and toc = :toc [{f1 1} {toc \x01\x16k@\xb4J\xbaK\xd6}] false",
+	})
 
 	want := []bool{true}
 	assert.Equal(t, want, got)

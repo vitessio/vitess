@@ -81,10 +81,14 @@ func TestGeoExperimentalMapMulti2(t *testing.T) {
 }
 
 func TestGeoExperimentalVerifyMulti(t *testing.T) {
+
 	ge, err := createGeo(t, "geo_experimental", "f1,f2", 1)
 	assert.NoError(t, err)
 	vals := [][]sqltypes.Value{{
 		// One for match
+		sqltypes.NewInt64(1), sqltypes.NewInt64(1),
+	}, {
+		// One for mismatch by lookup
 		sqltypes.NewInt64(1), sqltypes.NewInt64(1),
 	}, {
 		// One for mismatch
@@ -95,12 +99,26 @@ func TestGeoExperimentalVerifyMulti(t *testing.T) {
 	}}
 	ksids := [][]byte{
 		[]byte("\x01\x16k@\xb4J\xbaK\xd6"),
+		[]byte("\x01\x16k@\xb4J\xbaK\xd6"),
 		[]byte("no match"),
 		[]byte(""),
 	}
-	want := []bool{true, false, false}
-	got, err := ge.(MultiColumn).VerifyMulti(nil, vals, ksids)
+	vc := &loggingVCursor{}
+	vc.AddResult(makeTestResult(1), nil)
+	// The second value should return a mismatch.
+	vc.AddResult(&sqltypes.Result{}, nil)
+	vc.AddResult(makeTestResult(1), nil)
+	vc.AddResult(makeTestResult(1), nil)
+
+	want := []bool{true, false, false, false}
+	got, err := ge.(MultiColumn).VerifyMulti(vc, vals, ksids)
 	assert.NoError(t, err)
+	vc.verifyLog(t, []string{
+		"ExecutePre select f1 from t where f1 = :f1 and toc = :toc [{f1 1} {toc \x01\x16k@\xb4J\xbaK\xd6}] false",
+		"ExecutePre select f1 from t where f1 = :f1 and toc = :toc [{f1 1} {toc \x01\x16k@\xb4J\xbaK\xd6}] false",
+		"ExecutePre select f1 from t where f1 = :f1 and toc = :toc [{f1 1} {toc no match}] false",
+		"ExecutePre select f1 from t where f1 = :f1 and toc = :toc [{f1 1} {toc }] false",
+	})
 	assert.Equal(t, want, got)
 }
 
