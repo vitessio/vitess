@@ -273,7 +273,7 @@ func skipToEnd(yylex interface{}) {
 %type <str> charset
 %type <str> set_session_or_global show_session_or_global
 %type <convertType> convert_type
-%type <columnType> column_type
+%type <columnType> column_type column_type_with_options
 %type <columnType> int_type decimal_type numeric_type uuid_type time_type char_type spatial_type
 %type <sqlVal> length_opt column_comment_opt
 %type <optVal> column_default_opt on_update_opt
@@ -672,15 +672,72 @@ table_column_list:
   }
 
 column_definition:
-  ID column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt
+  ID column_type_with_options
   {
-    $2.NotNull = $3
-    $2.Default = $4
-    $2.OnUpdate = $5
-    $2.Autoincrement = $6
-    $2.KeyOpt = $7
-    $2.Comment = $8
     $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
+  }
+
+column_type_with_options:
+  column_type
+  {
+    $1.KeyOpt = colKeyNone
+    $$ = $1
+  }
+| column_type_with_options null_opt
+  {
+    if $1.sawnull {
+      yylex.Error("cannot include NULL / NOT NULL more than once")
+      return 1
+    }
+    $1.NotNull = $2
+    $1.sawnull = true
+    $$ = $1
+  }
+| column_type_with_options column_default_opt
+  {
+    if $1.Default != nil {
+      yylex.Error("cannot include DEFAULT more than once")
+      return 1
+    }
+    $1.Default = $2
+    $$ = $1
+  }
+| column_type_with_options on_update_opt
+  {
+    if $1.OnUpdate != nil {
+      yylex.Error("cannot include ON UPDATE more than once")
+      return 1
+    }
+    $1.OnUpdate = $2
+    $$ = $1
+  }
+| column_type_with_options auto_increment_opt
+  {
+    if $1.sawai {
+      yylex.Error("cannot include AUTO_INCREMENT more than once")
+      return 1
+    }
+    $1.Autoincrement = $2
+    $1.sawai = true
+    $$ = $1
+  }
+| column_type_with_options column_key_opt
+  {
+    if $1.KeyOpt != colKeyNone {
+      yylex.Error("cannot include more than one key option for a column definition")
+      return 1
+    }
+    $1.KeyOpt = $2
+    $$ = $1
+  }
+| column_type_with_options column_comment_opt
+  {
+    if $1.Comment != nil {
+      yylex.Error("cannot include more than one comment for a column definition")
+      return 1
+    }
+    $1.Comment = $2
+    $$ = $1
   }
 
 column_type:
@@ -971,10 +1028,7 @@ zero_fill_opt:
 
 // Null opt returns false to mean NULL (i.e. the default) and true for NOT NULL
 null_opt:
-  {
-    $$ = BoolVal(false)
-  }
-| NULL
+  NULL
   {
     $$ = BoolVal(false)
   }
@@ -984,28 +1038,19 @@ null_opt:
   }
 
 column_default_opt:
-  {
-    $$ = nil
-  }
-| DEFAULT value_expression
+  DEFAULT value_expression
   {
     $$ = $2
   }
 
 on_update_opt:
+  ON UPDATE function_call_nonkeyword
   {
-    $$ = nil
+    $$ = $3
   }
-| ON UPDATE function_call_nonkeyword
-{
-  $$ = $3
-}
 
 auto_increment_opt:
-  {
-    $$ = BoolVal(false)
-  }
-| AUTO_INCREMENT
+  AUTO_INCREMENT
   {
     $$ = BoolVal(true)
   }
@@ -1037,10 +1082,7 @@ collate_opt:
   }
 
 column_key_opt:
-  {
-    $$ = colKeyNone
-  }
-| PRIMARY KEY
+  PRIMARY KEY
   {
     $$ = colKeyPrimary
   }
@@ -1058,10 +1100,7 @@ column_key_opt:
   }
 
 column_comment_opt:
-  {
-    $$ = nil
-  }
-| COMMENT_KEYWORD STRING
+  COMMENT_KEYWORD STRING
   {
     $$ = NewStrVal($2)
   }

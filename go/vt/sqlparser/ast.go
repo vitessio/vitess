@@ -1055,6 +1055,8 @@ type ColumnType struct {
 	Default       Expr
 	OnUpdate      Expr
 	Comment       *SQLVal
+        sawnull       bool
+        sawai         bool
 
 	// Numeric field options
 	Length   *SQLVal

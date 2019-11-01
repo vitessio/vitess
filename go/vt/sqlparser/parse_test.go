@@ -1436,7 +1436,48 @@ var (
 	}, {
 		input:  "drop database if exists test_db",
 		output: "drop database test_db",
-	}}
+	}, {
+		input:  "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
+		output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+        }, {
+		// Same input with options backwards.
+		input:  "create table t (c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null)",
+		output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+        }, {
+		// Transpose pairs in original
+		input:  "create table t (c int default 0 not null auto_increment on update current_timestamp() unique comment 'a comment here')",
+		output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+        }, {
+		// Transpose pairs in reversed
+		input:  "create table t (c int comment 'a comment here' unique on update current_timestamp() auto_increment not null default 0)",
+		output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+        }, {
+		// Those tests for ALTER TABLE ADD (...
+		input:  "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
+		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+        }, {
+		input:  "alter table t add (c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null)",
+		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+        }, {
+		input:  "alter table t add (c int default 0 not null auto_increment on update current_timestamp() unique comment 'a comment here')",
+		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+        }, {
+		input:  "alter table t add (c int comment 'a comment here' unique on update current_timestamp() auto_increment not null default 0)",
+		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+        }, {
+		// Those tests for ALTER TABLE ADD COLUMN name ...
+		input:  "alter table t add column c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique",
+		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+        }, {
+		input:  "alter table t add column c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null",
+		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+        }, {
+		input:  "alter table t add column c int default 0 not null auto_increment on update current_timestamp() unique comment 'a comment here'",
+		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+        }, {
+		input:  "alter table t add column c int comment 'a comment here' unique on update current_timestamp() auto_increment not null default 0",
+		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+        }}
 )
 
 func TestValid(t *testing.T) {
@@ -1512,6 +1553,56 @@ func TestInvalid(t *testing.T) {
 		}
 		if err != nil && !strings.Contains(err.Error(), tcase.err) {
 			t.Errorf("Parse invalid query(%q), got: %v, want: %s...", tcase.input, err, tcase.err)
+		}
+	}
+
+	invalidDDL := []struct {
+		input string
+		err   string
+	}{{
+		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique null)",
+		err:   "cannot include NULL / NOT NULL more than once at position 123 near 'null'",
+	}, {
+		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique primary key)",
+		err:   "cannot include more than one key option for a column definition at position 130 near 'key'",
+	}, {
+		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique comment 'another')",
+		err:   "cannot include more than one comment for a column definition at position 136 near 'another'",
+	}, {
+		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique auto_increment)",
+		err:   "cannot include AUTO_INCREMENT more than once at position 133 near 'auto_increment'",
+	}, {
+		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique on update utc_timestamp())",
+		err:   "cannot include ON UPDATE more than once at position 144",
+	}, {
+		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique default 1)",
+		err:   "cannot include DEFAULT more than once at position 129",
+	}, {
+		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique null)",
+		err:   "cannot include NULL / NOT NULL more than once at position 126 near 'null'",
+	}, {
+		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique primary key)",
+		err:   "cannot include more than one key option for a column definition at position 133 near 'key'",
+	}, {
+		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique comment 'another')",
+		err:   "cannot include more than one comment for a column definition at position 139 near 'another'",
+	}, {
+		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique auto_increment)",
+		err:   "cannot include AUTO_INCREMENT more than once at position 136 near 'auto_increment'",
+	}, {
+		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique on update utc_timestamp())",
+		err:   "cannot include ON UPDATE more than once at position 147",
+	}, {
+		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique default 1)",
+		err:   "cannot include DEFAULT more than once at position 132",
+	}}
+	for _, tcase := range invalidDDL {
+		_, err := ParseStrictDDL(tcase.input)
+		if err == nil {
+			t.Errorf("Parse invalid DDL(%q), got: nil, want: %s...", tcase.input, tcase.err)
+		}
+		if err != nil && !strings.Contains(err.Error(), tcase.err) {
+			t.Errorf("Parse invalid DDL(%q), got: %v, want: %s...", tcase.input, err, tcase.err)
 		}
 	}
 }
