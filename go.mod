@@ -3,7 +3,7 @@ module vitess.io/vitess
 go 1.12
 
 require (
-	cloud.google.com/go v0.26.0
+	cloud.google.com/go v0.38.0
 	github.com/aws/aws-sdk-go v0.0.0-20180223184012-ebef4262e06a
 	github.com/beorn7/perks v0.0.0-20160229213445-3ac7bf7a47d1
 	github.com/coreos/etcd v0.0.0-20170626015032-703663d1f6ed
@@ -12,8 +12,9 @@ require (
 	github.com/ghodss/yaml v0.0.0-20161207003320-04f313413ffd
 	github.com/go-ini/ini v1.12.0
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
-	github.com/golang/mock v1.1.1
-	github.com/golang/protobuf v1.2.0
+	github.com/golang/lint v0.0.0-20180702182130-06c8688daad7 // indirect
+	github.com/golang/mock v1.2.0
+	github.com/golang/protobuf v1.3.1
 	github.com/golang/snappy v0.0.0-20170215233205-553a64147049
 	github.com/googleapis/gax-go v0.0.0-20161107002406-da06d194a00e
 	github.com/gopherjs/gopherjs v0.0.0-20181103185306-d547d1d9531e
@@ -27,6 +28,7 @@ require (
 	github.com/hashicorp/serf v0.0.0-20161207011743-d3a67ab21bc8
 	github.com/jmespath/go-jmespath v0.0.0-20160202185014-0b12d6b521d8
 	github.com/jtolds/gls v4.2.1+incompatible
+	github.com/kisielk/gotool v1.0.0 // indirect
 	github.com/klauspost/compress v0.0.0-20180801095237-b50017755d44
 	github.com/klauspost/cpuid v1.2.0
 	github.com/klauspost/crc32 v1.2.0
@@ -57,17 +59,17 @@ require (
 	github.com/uber/jaeger-lib v2.0.0+incompatible
 	github.com/yudai/gojsondiff v0.0.0-20170626131258-081cda2ee950
 	github.com/yudai/golcs v0.0.0-20170316035057-ecda9a501e82
-	golang.org/x/crypto v0.0.0-20190131182504-b8fe1690c613
-	golang.org/x/net v0.0.0-20190206173232-65e2d4e15006
-	golang.org/x/oauth2 v0.0.0-20180821212333-d2e6202438be
-	golang.org/x/sys v0.0.0-20190204203706-41f3e6584952
-	golang.org/x/text v0.3.0
-	golang.org/x/time v0.0.0-20161028155119-f51c12702a4d
-	golang.org/x/tools v0.0.0-20180917221912-90fa682c2a6e // indirect
-	google.golang.org/api v0.0.0-20161214193051-55146ba61254
+	go.opencensus.io v0.22.1 // indirect
+	golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2
+	golang.org/x/net v0.0.0-20190620200207-3b0461eec859
+	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
+	golang.org/x/sys v0.0.0-20190507160741-ecd444e8653b
+	golang.org/x/text v0.3.2
+	golang.org/x/time v0.0.0-20181108054448-85acf8d2951c
+	google.golang.org/api v0.13.0
 	google.golang.org/appengine v1.5.0
-	google.golang.org/genproto v0.0.0-20181109154231-b5d43981345b
-	google.golang.org/grpc v1.16.0
+	google.golang.org/genproto v0.0.0-20190502173448-54afdca5d873
+	google.golang.org/grpc v1.20.1
 	gopkg.in/asn1-ber.v1 v1.0.0-20150924051756-4e86f4367175
 	gopkg.in/ini.v1 v1.41.0
 	gopkg.in/ldap.v2 v2.5.0
