@@ -963,6 +963,12 @@ var (
 		input:  "create table a (a int, b char, c garbage)",
 		output: "create table a",
 	}, {
+		input:  "alter table a rename column a to b",
+		output: "alter table a rename column a to b",
+	}, {
+		input:  "alter table a rename column a as b",
+		output: "alter table a rename column a to b",
+	}, {
 		input:  "create table a (b1 bool not null primary key, b2 boolean not null)",
 		output: "create table a (\n\tb1 bool not null primary key,\n\tb2 boolean not null\n)",
 	}, {

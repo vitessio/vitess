@@ -807,6 +807,8 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			buf.Myprintf("%s table %v %s column %v", node.Action, node.Table, node.ColumnAction, node.TableSpec)
 		} else if node.ColumnAction == DropStr {
 			buf.Myprintf("%s table %v %s column %v", node.Action, node.Table, node.ColumnAction, node.Column)
+		} else if node.ColumnAction == RenameStr {
+			buf.Myprintf("%s table %v %s column %v to %v", node.Action, node.Table, node.ColumnAction, node.Column, node.ToColumn)
 		} else {
 			buf.Myprintf("%s table %v", node.Action, node.Table)
 		}
