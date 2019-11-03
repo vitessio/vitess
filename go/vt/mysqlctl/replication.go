@@ -181,6 +181,17 @@ func (mysqld *Mysqld) WaitMasterPos(ctx context.Context, targetPos mysql.Positio
 	}
 	defer conn.Recycle()
 
+	// If we are the master, WaitUntilPositionCommand will fail.
+	// But position is most likely reached. So, check the position
+	// first.
+	mpos, err := conn.MasterPosition()
+	if err != nil {
+		return fmt.Errorf("WaitMasterPos: MasterPosition failed: %v", err)
+	}
+	if mpos.AtLeast(targetPos) {
+		return nil
+	}
+
 	// Find the query to run, run it.
 	query, err := conn.WaitUntilPositionCommand(ctx, targetPos)
 	if err != nil {

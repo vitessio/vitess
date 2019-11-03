@@ -181,6 +181,11 @@ func (client *FakeTabletManagerClient) MasterPosition(ctx context.Context, table
 	return "", nil
 }
 
+// WaitForPosition is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) WaitForPosition(ctx context.Context, tablet *topodatapb.Tablet, pos string) error {
+	return nil
+}
+
 // StopSlave is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) StopSlave(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return nil

@@ -490,6 +490,12 @@ func (itc *internalTabletConn) VStreamRows(ctx context.Context, target *querypb.
 	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
+// VStreamResults is part of the QueryService interface.
+func (itc *internalTabletConn) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
+	err := itc.tablet.qsc.QueryService().VStreamResults(ctx, target, query, send)
+	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+}
+
 //
 // TabletManagerClient implementation
 //
@@ -628,6 +634,10 @@ func (itmc *internalTabletManagerClient) SlaveStatus(ctx context.Context, tablet
 
 func (itmc *internalTabletManagerClient) MasterPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error) {
 	return "", fmt.Errorf("not implemented in vtcombo")
+}
+
+func (itmc *internalTabletManagerClient) WaitForPosition(ctx context.Context, tablet *topodatapb.Tablet, pos string) error {
+	return fmt.Errorf("not implemented in vtcombo")
 }
 
 func (itmc *internalTabletManagerClient) StopSlave(ctx context.Context, tablet *topodatapb.Tablet) error {

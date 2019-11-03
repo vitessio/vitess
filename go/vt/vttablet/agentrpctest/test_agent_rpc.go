@@ -728,6 +728,10 @@ func (fra *fakeRPCAgent) MasterPosition(ctx context.Context) (string, error) {
 	return testReplicationPosition, nil
 }
 
+func (fra *fakeRPCAgent) WaitForPosition(ctx context.Context, pos string) error {
+	panic("unimplemented")
+}
+
 func agentRPCTestMasterPosition(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	rs, err := client.MasterPosition(ctx, tablet)
 	compareError(t, "MasterPosition", err, rs, testReplicationPosition)

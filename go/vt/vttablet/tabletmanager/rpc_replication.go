@@ -60,6 +60,15 @@ func (agent *ActionAgent) MasterPosition(ctx context.Context) (string, error) {
 	return mysql.EncodePosition(pos), nil
 }
 
+// WaitForPosition returns the master position
+func (agent *ActionAgent) WaitForPosition(ctx context.Context, pos string) error {
+	mpos, err := mysql.DecodePosition(pos)
+	if err != nil {
+		return err
+	}
+	return agent.MysqlDaemon.WaitMasterPos(ctx, mpos)
+}
+
 // StopSlave will stop the mysql. Works both when Vitess manages
 // replication or not (using hook if not).
 func (agent *ActionAgent) StopSlave(ctx context.Context) error {
