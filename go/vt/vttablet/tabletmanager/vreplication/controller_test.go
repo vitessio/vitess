@@ -56,7 +56,7 @@ var (
 
 func TestControllerKeyRange(t *testing.T) {
 	resetBinlogClient()
-	wantTablet := addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true)
+	wantTablet := addTablet(100)
 	defer deleteTablet(wantTablet)
 
 	params := map[string]string{
@@ -90,7 +90,7 @@ func TestControllerKeyRange(t *testing.T) {
 }
 
 func TestControllerTables(t *testing.T) {
-	wantTablet := addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true)
+	wantTablet := addTablet(100)
 	defer deleteTablet(wantTablet)
 	resetBinlogClient()
 
@@ -181,7 +181,7 @@ func TestControllerStopped(t *testing.T) {
 
 func TestControllerOverrides(t *testing.T) {
 	resetBinlogClient()
-	wantTablet := addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true)
+	wantTablet := addTablet(100)
 	defer deleteTablet(wantTablet)
 
 	params := map[string]string{
@@ -217,7 +217,7 @@ func TestControllerOverrides(t *testing.T) {
 }
 
 func TestControllerCanceledContext(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 
 	params := map[string]string{
 		"id":     "1",
@@ -246,7 +246,7 @@ func TestControllerRetry(t *testing.T) {
 	*retryDelay = 10 * time.Millisecond
 
 	resetBinlogClient()
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 
 	params := map[string]string{
 		"id":           "1",
@@ -280,7 +280,7 @@ func TestControllerRetry(t *testing.T) {
 
 func TestControllerStopPosition(t *testing.T) {
 	resetBinlogClient()
-	wantTablet := addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true)
+	wantTablet := addTablet(100)
 	defer deleteTablet(wantTablet)
 
 	params := map[string]string{

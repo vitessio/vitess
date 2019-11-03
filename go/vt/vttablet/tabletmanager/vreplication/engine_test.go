@@ -28,13 +28,12 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestEngineOpen(t *testing.T) {
 	defer func() { globalStats = &vrStats{} }()
 
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 	resetBinlogClient()
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
@@ -82,7 +81,7 @@ func TestEngineOpen(t *testing.T) {
 func TestEngineExec(t *testing.T) {
 	defer func() { globalStats = &vrStats{} }()
 
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 	resetBinlogClient()
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
@@ -243,7 +242,7 @@ func TestEngineExec(t *testing.T) {
 func TestEngineBadInsert(t *testing.T) {
 	defer func() { globalStats = &vrStats{} }()
 
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 	resetBinlogClient()
 
 	dbClient := binlogplayer.NewMockDBClient(t)
@@ -273,7 +272,7 @@ func TestEngineBadInsert(t *testing.T) {
 }
 
 func TestEngineSelect(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 	resetBinlogClient()
 	dbClient := binlogplayer.NewMockDBClient(t)
 
@@ -427,7 +426,7 @@ func TestWaitForPosCancel(t *testing.T) {
 func TestCreateDBAndTable(t *testing.T) {
 	defer func() { globalStats = &vrStats{} }()
 
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 	resetBinlogClient()
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }

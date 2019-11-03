@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
@@ -304,7 +305,7 @@ func (fmd *FakeMysqlDaemon) WaitForReparentJournal(ctx context.Context, timeCrea
 	return nil
 }
 
-// Deprecated: use mysqld.MasterPosition() instead
+// DemoteMaster is deprecated: use mysqld.MasterPosition() instead
 func (fmd *FakeMysqlDaemon) DemoteMaster() (mysql.Position, error) {
 	return fmd.CurrentMasterPosition, nil
 }
@@ -412,8 +413,8 @@ func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []str
 }
 
 // GetColumns is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) GetColumns(dbName, table string) ([]string, error) {
-	return []string{}, nil
+func (fmd *FakeMysqlDaemon) GetColumns(dbName, table string) ([]*querypb.Field, []string, error) {
+	return []*querypb.Field{}, []string{}, nil
 }
 
 // GetPrimaryKeyColumns is part of the MysqlDaemon interface

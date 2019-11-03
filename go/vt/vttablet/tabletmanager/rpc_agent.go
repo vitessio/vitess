@@ -82,6 +82,8 @@ type RPCAgent interface {
 
 	MasterPosition(ctx context.Context) (string, error)
 
+	WaitForPosition(ctx context.Context, pos string) error
+
 	StopSlave(ctx context.Context) error
 
 	StopSlaveMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error)
