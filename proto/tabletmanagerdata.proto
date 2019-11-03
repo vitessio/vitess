@@ -401,6 +401,7 @@ message SlaveWasPromotedResponse {
 message SetMasterRequest {
   topodata.TabletAlias parent = 1;
   int64 time_created_ns = 2;
+  string wait_position = 4;
   bool force_start_slave = 3;
 }
 
