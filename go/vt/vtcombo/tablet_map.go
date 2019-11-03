@@ -694,7 +694,7 @@ func (itmc *internalTabletManagerClient) SlaveWasPromoted(ctx context.Context, t
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
+func (itmc *internalTabletManagerClient) SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }
 

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"path"
 	"sync"
+	"time"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -30,6 +31,7 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/events"
@@ -205,6 +207,16 @@ func (ti *TabletInfo) IsInServingGraph() bool {
 // IsSlaveType returns if this tablet's type is a slave
 func (ti *TabletInfo) IsSlaveType() bool {
 	return IsSlaveType(ti.Type)
+}
+
+// GetMasterTermStartTime returns the tablet's master term start time as a Time value.
+func (ti *TabletInfo) GetMasterTermStartTime() time.Time {
+	return logutil.ProtoToTime(ti.Tablet.MasterTermStartTime)
+}
+
+// SetMasterTermStartTime sets the tablet's master term start time as a Time value.
+func (ti *TabletInfo) SetMasterTermStartTime(t time.Time) {
+	ti.Tablet.MasterTermStartTime = logutil.TimeToProto(t)
 }
 
 // NewTabletInfo returns a TabletInfo basing on tablet with the
