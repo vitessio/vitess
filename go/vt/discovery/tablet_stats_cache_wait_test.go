@@ -43,14 +43,14 @@ func TestWaitForTablets(t *testing.T) {
 	hc.AddTablet(tablet, "")
 
 	// this should time out
-	if err := tsc.WaitForTablets(shortCtx, "cell", "keyspace", "shard", topodatapb.TabletType_REPLICA); err != context.DeadlineExceeded {
+	if err := tsc.WaitForTablets(shortCtx, "keyspace", "shard", topodatapb.TabletType_REPLICA); err != context.DeadlineExceeded {
 		t.Errorf("got wrong error: %v", err)
 	}
 
 	// this should fail, but return a non-timeout error
 	cancelledCtx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := tsc.WaitForTablets(cancelledCtx, "cell", "keyspace", "shard", topodatapb.TabletType_REPLICA); err == nil || err == context.DeadlineExceeded {
+	if err := tsc.WaitForTablets(cancelledCtx, "keyspace", "shard", topodatapb.TabletType_REPLICA); err == nil || err == context.DeadlineExceeded {
 		t.Errorf("want: non-timeout error, got: %v", err)
 	}
 
@@ -70,7 +70,7 @@ func TestWaitForTablets(t *testing.T) {
 	longCtx, longCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer longCancel()
 	waitAvailableTabletInterval = 10 * time.Millisecond
-	if err := tsc.WaitForTablets(longCtx, "cell", "keyspace", "shard", topodatapb.TabletType_REPLICA); err != nil {
+	if err := tsc.WaitForTablets(longCtx, "keyspace", "shard", topodatapb.TabletType_REPLICA); err != nil {
 		t.Errorf("got error: %v", err)
 	}
 }

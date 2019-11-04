@@ -161,6 +161,7 @@ func TestAPI(t *testing.T) {
 		{"GET", "shards/ks1/", "", `["-80","80-"]`},
 		{"GET", "shards/ks1/-80", "", `{
 				"master_alias": null,
+				"master_term_start_time":null,
 				"key_range": {
 					"start": null,
 					"end":"gA=="
@@ -204,7 +205,8 @@ func TestAPI(t *testing.T) {
 				"db_name_override": "",
 				"tags": {},
 				"mysql_hostname":"",
-				"mysql_port":0
+				"mysql_port":0,
+				"master_term_start_time":null
 			}`},
 		{"GET", "tablets/nonexistent-999", "", "404 page not found"},
 		{"POST", "tablets/cell1-100?action=TestTabletAction", "", `{

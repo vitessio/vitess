@@ -63,10 +63,13 @@ type testShardMigraterEnv struct {
 }
 
 func newTestTableMigrater(ctx context.Context, t *testing.T) *testMigraterEnv {
-	return newTestTableMigraterCustom(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
+	return newTestTableMigraterCustom(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"}, "select * %s")
 }
 
-func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards, targetShards []string) *testMigraterEnv {
+// newTestTableMigraterCustom creates a customized test tablet migrater.
+// fmtQuery should be of the form: 'select a, b %s group by a'.
+// The test will Sprintf a from clause and where clause as needed.
+func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards, targetShards []string, fmtQuery string) *testMigraterEnv {
 	tme := &testMigraterEnv{}
 	tme.ts = memorytopo.NewServer("cell1", "cell2")
 	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient())
@@ -158,10 +161,10 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 				Filter: &binlogdatapb.Filter{
 					Rules: []*binlogdatapb.Rule{{
 						Match:  "t1",
-						Filter: fmt.Sprintf("select * from t1 where in_keyrange('%s')", targetShard),
+						Filter: fmt.Sprintf(fmtQuery, fmt.Sprintf("from t1 where in_keyrange('%s')", targetShard)),
 					}, {
 						Match:  "t2",
-						Filter: fmt.Sprintf("select * from t2 where in_keyrange('%s')", targetShard),
+						Filter: fmt.Sprintf(fmtQuery, fmt.Sprintf("from t2 where in_keyrange('%s')", targetShard)),
 					}},
 				},
 			}

@@ -98,7 +98,7 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, tableKeys map[string][]str
 			// Don't replicate uncopied tables.
 			continue
 		}
-		rule, err := tableMatches(tableName, filter)
+		rule, err := MatchTable(tableName, filter)
 		if err != nil {
 			return nil, err
 		}
@@ -123,8 +123,8 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, tableKeys map[string][]str
 	return plan, nil
 }
 
-// tableMatches is similar to the one defined in vstreamer.
-func tableMatches(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Rule, error) {
+// MatchTable is similar to tableMatches defined in vstreamer.
+func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Rule, error) {
 	for _, rule := range filter.Rules {
 		switch {
 		case strings.HasPrefix(rule.Match, "/"):

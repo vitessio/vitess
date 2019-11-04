@@ -482,6 +482,17 @@ func (client *Client) MasterPosition(ctx context.Context, tablet *topodatapb.Tab
 	return response.Position, nil
 }
 
+// WaitForPosition is part of the tmclient.TabletManagerClient interface.
+func (client *Client) WaitForPosition(ctx context.Context, tablet *topodatapb.Tablet, pos string) error {
+	cc, c, err := client.dial(tablet)
+	if err != nil {
+		return err
+	}
+	defer cc.Close()
+	_, err = c.WaitForPosition(ctx, &tabletmanagerdatapb.WaitForPositionRequest{Position: pos})
+	return err
+}
+
 // StopSlave is part of the tmclient.TabletManagerClient interface.
 func (client *Client) StopSlave(ctx context.Context, tablet *topodatapb.Tablet) error {
 	cc, c, err := client.dial(tablet)
@@ -702,7 +713,7 @@ func (client *Client) SlaveWasPromoted(ctx context.Context, tablet *topodatapb.T
 }
 
 // SetMaster is part of the tmclient.TabletManagerClient interface.
-func (client *Client) SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
+func (client *Client) SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) error {
 	cc, c, err := client.dial(tablet)
 	if err != nil {
 		return err
@@ -711,6 +722,7 @@ func (client *Client) SetMaster(ctx context.Context, tablet *topodatapb.Tablet, 
 	_, err = c.SetMaster(ctx, &tabletmanagerdatapb.SetMasterRequest{
 		Parent:          parent,
 		TimeCreatedNs:   timeCreatedNS,
+		WaitPosition:    waitPosition,
 		ForceStartSlave: forceStartSlave,
 	})
 	return err
