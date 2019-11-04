@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
@@ -122,7 +123,7 @@ func (mysqld *Mysqld) GetSchema(dbName string, tables, excludeTables []string, i
 		td.Name = tableName
 		td.Schema = norm
 
-		td.Columns, err = mysqld.GetColumns(dbName, tableName)
+		td.Fields, td.Columns, err = mysqld.GetColumns(dbName, tableName)
 		if err != nil {
 			return nil, err
 		}
@@ -159,21 +160,21 @@ func ResolveTables(mysqld MysqlDaemon, dbName string, tables []string) ([]string
 }
 
 // GetColumns returns the columns of table.
-func (mysqld *Mysqld) GetColumns(dbName, table string) ([]string, error) {
+func (mysqld *Mysqld) GetColumns(dbName, table string) ([]*querypb.Field, []string, error) {
 	conn, err := getPoolReconnect(context.TODO(), mysqld.dbaPool)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer conn.Recycle()
 	qr, err := conn.ExecuteFetch(fmt.Sprintf("SELECT * FROM %s.%s WHERE 1=0", sqlescape.EscapeID(dbName), sqlescape.EscapeID(table)), 0, true)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	columns := make([]string, len(qr.Fields))
 	for i, field := range qr.Fields {
 		columns[i] = field.Name
 	}
-	return columns, nil
+	return qr.Fields, columns, nil
 
 }
 

@@ -728,6 +728,10 @@ func (fra *fakeRPCAgent) MasterPosition(ctx context.Context) (string, error) {
 	return testReplicationPosition, nil
 }
 
+func (fra *fakeRPCAgent) WaitForPosition(ctx context.Context, pos string) error {
+	panic("unimplemented")
+}
+
 func agentRPCTestMasterPosition(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	rs, err := client.MasterPosition(ctx, tablet)
 	compareError(t, "MasterPosition", err, rs, testReplicationPosition)
@@ -940,6 +944,7 @@ func agentRPCTestInitMasterPanic(ctx context.Context, t *testing.T, client tmcli
 
 var testPopulateReparentJournalCalled = false
 var testTimeCreatedNS int64 = 4569900
+var testWaitPosition string = "test wait position"
 var testActionName = "TestActionName"
 var testMasterAlias = &topodatapb.TabletAlias{
 	Cell: "ce",
@@ -1071,24 +1076,25 @@ func agentRPCTestSlaveWasPromotedPanic(ctx context.Context, t *testing.T, client
 var testSetMasterCalled = false
 var testForceStartSlave = true
 
-func (fra *fakeRPCAgent) SetMaster(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
+func (fra *fakeRPCAgent) SetMaster(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}
 	compare(fra.t, "SetMaster parent", parent, testMasterAlias)
 	compare(fra.t, "SetMaster timeCreatedNS", timeCreatedNS, testTimeCreatedNS)
+	compare(fra.t, "SetMaster waitPosition", waitPosition, testWaitPosition)
 	compare(fra.t, "SetMaster forceStartSlave", forceStartSlave, testForceStartSlave)
 	testSetMasterCalled = true
 	return nil
 }
 
 func agentRPCTestSetMaster(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.SetMaster(ctx, tablet, testMasterAlias, testTimeCreatedNS, testForceStartSlave)
+	err := client.SetMaster(ctx, tablet, testMasterAlias, testTimeCreatedNS, testWaitPosition, testForceStartSlave)
 	compareError(t, "SetMaster", err, true, testSetMasterCalled)
 }
 
 func agentRPCTestSetMasterPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
-	err := client.SetMaster(ctx, tablet, testMasterAlias, testTimeCreatedNS, testForceStartSlave)
+	err := client.SetMaster(ctx, tablet, testMasterAlias, testTimeCreatedNS, testWaitPosition, testForceStartSlave)
 	expectHandleRPCPanic(t, "SetMaster", true /*verbose*/, err)
 }
 

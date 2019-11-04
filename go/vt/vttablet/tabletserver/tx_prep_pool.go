@@ -24,7 +24,7 @@ import (
 
 var (
 	errPrepCommitting = errors.New("committing")
-	errPrepFailed    = errors.New("failed")
+	errPrepFailed     = errors.New("failed")
 )
 
 // TxPreparedPool manages connections for prepared transactions.
