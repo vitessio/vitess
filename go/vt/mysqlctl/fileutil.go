@@ -20,18 +20,9 @@ import (
 	"encoding/hex"
 	"hash"
 	"hash/crc32"
-	"os"
 )
 
-// Use this to simulate failures in tests
-var (
-	simulateFailures = false
-)
-
-func init() {
-	_, statErr := os.Stat("/tmp/vtSimulateFetchFailures")
-	simulateFailures = statErr == nil
-}
+// TODO(sougou): this file should be renamed.
 
 // our hasher, implemented using crc32
 type hasher struct {

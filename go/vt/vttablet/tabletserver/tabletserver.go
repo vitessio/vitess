@@ -1406,6 +1406,14 @@ func (tsv *TabletServer) VStreamRows(ctx context.Context, target *querypb.Target
 	return tsv.vstreamer.StreamRows(ctx, query, row, send)
 }
 
+// VStreamResults streams rows from the specified starting point.
+func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
+	if err := tsv.verifyTarget(ctx, target); err != nil {
+		return err
+	}
+	return tsv.vstreamer.StreamResults(ctx, query, send)
+}
+
 // SplitQuery splits a query + bind variables into smaller queries that return a
 // subset of rows from the original query. This is the new version that supports multiple
 // split columns and multiple split algorithms.

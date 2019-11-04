@@ -88,14 +88,14 @@ type TxPool struct {
 	// connections with CLIENT_FOUND_ROWS flag set. A separate
 	// pool is needed because this option can only be set at
 	// connection time.
-	foundRowsPool           *connpool.Pool
-	activePool              *pools.Numbered
-	lastID                  sync2.AtomicInt64
-	transactionTimeout      sync2.AtomicDuration
-	transactionPoolTimeout  sync2.AtomicDuration
-	ticks                   *timer.Timer
-	checker                 connpool.MySQLChecker
-	limiter                 txlimiter.TxLimiter
+	foundRowsPool          *connpool.Pool
+	activePool             *pools.Numbered
+	lastID                 sync2.AtomicInt64
+	transactionTimeout     sync2.AtomicDuration
+	transactionPoolTimeout sync2.AtomicDuration
+	ticks                  *timer.Timer
+	checker                connpool.MySQLChecker
+	limiter                txlimiter.TxLimiter
 	// Tracking culprits that cause tx pool full errors.
 	logMu     sync.Mutex
 	lastLog   time.Time

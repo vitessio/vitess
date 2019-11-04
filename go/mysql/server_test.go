@@ -75,7 +75,9 @@ func (th *testHandler) NewConnection(c *Conn) {
 }
 
 func (th *testHandler) ConnectionClosed(c *Conn) {
+}
 
+func (th *testHandler) ComInitDB(c *Conn, schemaName string) {
 }
 
 func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.Result) error) error {
@@ -109,7 +111,7 @@ func (th *testHandler) ComQuery(c *Conn, query string, callback func(*sqltypes.R
 			},
 			Rows: [][]sqltypes.Value{
 				{
-					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(c.SchemaName)),
+					sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte(c.schemaName)),
 				},
 			},
 		})

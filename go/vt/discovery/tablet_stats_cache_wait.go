@@ -30,10 +30,10 @@ var (
 	waitAvailableTabletInterval = 100 * time.Millisecond
 )
 
-// WaitForTablets waits for at least one tablet in the given cell /
+// WaitForTablets waits for at least one tablet in the given
 // keyspace / shard / tablet type before returning. The tablets do not
 // have to be healthy.  It will return ctx.Err() if the context is canceled.
-func (tc *TabletStatsCache) WaitForTablets(ctx context.Context, cell, keyspace, shard string, tabletType topodatapb.TabletType) error {
+func (tc *TabletStatsCache) WaitForTablets(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType) error {
 	targets := []*querypb.Target{
 		{
 			Keyspace:   keyspace,
@@ -42,12 +42,6 @@ func (tc *TabletStatsCache) WaitForTablets(ctx context.Context, cell, keyspace, 
 		},
 	}
 	return tc.waitForTablets(ctx, targets, false)
-}
-
-// WaitForAnyTablet waits for a single tablet of any of the types.
-// It doesn't have to be serving.
-func (tc *TabletStatsCache) WaitForAnyTablet(ctx context.Context, cell, keyspace, shard string, tabletTypes []topodatapb.TabletType) error {
-	return tc.waitForAnyTablet(ctx, keyspace, shard, tabletTypes)
 }
 
 // WaitForAllServingTablets waits for at least one healthy serving tablet in
@@ -97,11 +91,12 @@ func (tc *TabletStatsCache) waitForTablets(ctx context.Context, targets []*query
 	}
 }
 
-// waitForAnyTablet is the internal method that polls for any tablet of required type
-func (tc *TabletStatsCache) waitForAnyTablet(ctx context.Context, keyspace, shard string, types []topodatapb.TabletType) error {
+// WaitByFilter waits for at least one tablet based on the filter function.
+func (tc *TabletStatsCache) WaitByFilter(ctx context.Context, keyspace, shard string, tabletTypes []topodatapb.TabletType, filter func([]TabletStats) []TabletStats) error {
 	for {
-		for _, tt := range types {
+		for _, tt := range tabletTypes {
 			stats := tc.GetTabletStats(keyspace, shard, tt)
+			stats = filter(stats)
 			if len(stats) > 0 {
 				return nil
 			}

@@ -40,6 +40,9 @@ func (th *testHandler) NewConnection(c *mysql.Conn) {
 func (th *testHandler) ConnectionClosed(c *mysql.Conn) {
 }
 
+func (th *testHandler) ComInitDB(c *mysql.Conn, schemaName string) {
+}
+
 func (th *testHandler) ComQuery(c *mysql.Conn, q string, callback func(*sqltypes.Result) error) error {
 	return nil
 }
