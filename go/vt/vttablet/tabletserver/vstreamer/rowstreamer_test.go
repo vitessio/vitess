@@ -42,11 +42,15 @@ func TestStreamRowsScan(t *testing.T) {
 		// No PK
 		"create table t3(id int, val varbinary(128))",
 		"insert into t3 values (1, 'aaa'), (2, 'bbb')",
+		// Three-column PK
+		"create table t4(id1 int, id2 int, id3 int, val varbinary(128), primary key(id1, id2, id3))",
+		"insert into t4 values (1, 2, 3, 'aaa'), (2, 3, 4, 'bbb')",
 	})
 	defer execStatements(t, []string{
 		"drop table t1",
 		"drop table t2",
 		"drop table t3",
+		"drop table t4",
 	})
 	engine.se.Reload(context.Background())
 
@@ -63,7 +67,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id" type:INT32 > `,
 		`rows:<lengths:1 lengths:3 values:"2bbb" > lastpk:<lengths:1 values:"2" > `,
 	}
-	wantQuery = "select id, val from t1 where (id) > (1) order by id"
+	wantQuery = "select id, val from t1 where (id > 1) order by id"
 	checkStream(t, "select * from t1", []sqltypes.Value{sqltypes.NewInt64(1)}, wantQuery, wantStream)
 
 	// t1: different column ordering
@@ -87,7 +91,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id1" type:INT32 > pkfields:<name:"id2" type:INT32 > `,
 		`rows:<lengths:1 lengths:1 lengths:3 values:"13bbb" > lastpk:<lengths:1 lengths:1 values:"13" > `,
 	}
-	wantQuery = "select id1, id2, val from t2 where (id1,id2) > (1,2) order by id1, id2"
+	wantQuery = "select id1, id2, val from t2 where (id1 = 1 and id2 > 2) or (id1 > 1) order by id1, id2"
 	checkStream(t, "select * from t2", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, wantQuery, wantStream)
 
 	// t3: all rows
@@ -103,8 +107,24 @@ func TestStreamRowsScan(t *testing.T) {
 		`fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id" type:INT32 > pkfields:<name:"val" type:VARBINARY > `,
 		`rows:<lengths:1 lengths:3 values:"2bbb" > lastpk:<lengths:1 lengths:3 values:"2bbb" > `,
 	}
-	wantQuery = "select id, val from t3 where (id,val) > (1,'aaa') order by id, val"
+	wantQuery = "select id, val from t3 where (id = 1 and val > 'aaa') or (id > 1) order by id, val"
 	checkStream(t, "select * from t3", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarBinary("aaa")}, wantQuery, wantStream)
+
+	// t4: all rows
+	wantStream = []string{
+		`fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > fields:<name:"id3" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id1" type:INT32 > pkfields:<name:"id2" type:INT32 > pkfields:<name:"id3" type:INT32 > `,
+		`rows:<lengths:1 lengths:1 lengths:1 lengths:3 values:"123aaa" > rows:<lengths:1 lengths:1 lengths:1 lengths:3 values:"234bbb" > lastpk:<lengths:1 lengths:1 lengths:1 values:"234" > `,
+	}
+	wantQuery = "select id1, id2, id3, val from t4 order by id1, id2, id3"
+	checkStream(t, "select * from t4", nil, wantQuery, wantStream)
+
+	// t4: lastpk: 1,2,3
+	wantStream = []string{
+		`fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > fields:<name:"id3" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id1" type:INT32 > pkfields:<name:"id2" type:INT32 > pkfields:<name:"id3" type:INT32 > `,
+		`rows:<lengths:1 lengths:1 lengths:1 lengths:3 values:"234bbb" > lastpk:<lengths:1 lengths:1 lengths:1 values:"234" > `,
+	}
+	wantQuery = "select id1, id2, id3, val from t4 where (id1 = 1 and id2 = 2 and id3 > 3) or (id1 = 1 and id2 > 2) or (id1 > 1) order by id1, id2, id3"
+	checkStream(t, "select * from t4", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2), sqltypes.NewInt64(3)}, wantQuery, wantStream)
 }
 
 func TestStreamRowsUnicode(t *testing.T) {

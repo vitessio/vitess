@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -295,4 +296,11 @@ func ParseShardingSpec(spec string) ([]*topodatapb.KeyRange, error) {
 		old = p
 	}
 	return ranges, nil
+}
+
+var krRegexp = regexp.MustCompile(`^[0-9a-fA-F]*-[0-9a-fA-F]*$`)
+
+// IsKeyRange returns true if the string represents a keyrange.
+func IsKeyRange(kr string) bool {
+	return krRegexp.MatchString(kr)
 }

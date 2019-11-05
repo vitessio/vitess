@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,9 +17,11 @@ limitations under the License.
 package sqlparser
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"math/rand"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -939,6 +941,12 @@ var (
 		input:  "alter table a drop spatial index idx (id)",
 		output: "alter table a",
 	}, {
+		input:  "alter table a add check ch_1",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop check ch_1",
+		output: "alter table a",
+	}, {
 		input:  "alter table a drop foreign key",
 		output: "alter table a",
 	}, {
@@ -972,24 +980,41 @@ var (
 	}, {
 		input: "alter vschema create vindex hash_vdx using hash",
 	}, {
+		input: "alter vschema create vindex keyspace.hash_vdx using hash",
+	}, {
 		input: "alter vschema create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
 	}, {
 		input: "alter vschema create vindex xyz_vdx using xyz with param1=hello, param2='world', param3=123",
 	}, {
 		input: "alter vschema drop vindex hash_vdx",
 	}, {
+		input: "alter vschema drop vindex ks.hash_vdx",
+	}, {
 		input: "alter vschema add table a",
+	}, {
+		input: "alter vschema add table ks.a",
 	}, {
 		input: "alter vschema add sequence a_seq",
 	}, {
+		input: "alter vschema add sequence ks.a_seq",
+	}, {
 		input: "alter vschema on a add auto_increment id using a_seq",
+	}, {
+		input: "alter vschema on ks.a add auto_increment id using a_seq",
 	}, {
 		input: "alter vschema drop table a",
 	}, {
+		input: "alter vschema drop table ks.a",
+	}, {
 		input: "alter vschema on a add vindex hash (id)",
+	}, {
+		input: "alter vschema on ks.a add vindex hash (id)",
 	}, {
 		input:  "alter vschema on a add vindex `hash` (`id`)",
 		output: "alter vschema on a add vindex hash (id)",
+	}, {
+		input:  "alter vschema on `ks`.a add vindex `hash` (`id`)",
+		output: "alter vschema on ks.a add vindex hash (id)",
 	}, {
 		input:  "alter vschema on a add vindex hash (id) using `hash`",
 		output: "alter vschema on a add vindex hash (id) using hash",
@@ -1007,6 +1032,8 @@ var (
 		output: "alter vschema on user2 add vindex name_lastname_lookup_vdx (name, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
 	}, {
 		input: "alter vschema on a drop vindex hash",
+	}, {
+		input: "alter vschema on ks.a drop vindex hash",
 	}, {
 		input:  "alter vschema on a drop vindex `hash`",
 		output: "alter vschema on a drop vindex hash",
@@ -2513,6 +2540,25 @@ func TestSkipToEnd(t *testing.T) {
 		_, err := Parse(tcase.input)
 		if err == nil || err.Error() != tcase.output {
 			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
+		}
+	}
+}
+
+func TestParseDjangoQueries(t *testing.T) {
+
+	file, err := os.Open("./test_queries/django_queries.txt")
+	defer file.Close()
+	if err != nil {
+		t.Errorf(" Error: %v", err)
+	}
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+
+		_, err := Parse(string(scanner.Text()))
+		if err != nil {
+			t.Error(scanner.Text())
+			t.Errorf(" Error: %v", err)
 		}
 	}
 }

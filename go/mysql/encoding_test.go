@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -190,21 +190,25 @@ func TestEncString(t *testing.T) {
 		value       string
 		lenEncoded  []byte
 		nullEncoded []byte
+		eofEncoded  []byte
 	}{
 		{
 			"",
 			[]byte{0x00},
 			[]byte{0x00},
+			[]byte{},
 		},
 		{
 			"a",
 			[]byte{0x01, 'a'},
 			[]byte{'a', 0x00},
+			[]byte{'a'},
 		},
 		{
 			"0123456789",
 			[]byte{0x0a, '0', '1', '2', '3', '4', '5', '6', '7', '8', '9'},
 			[]byte{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 0x00},
+			[]byte{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'},
 		},
 	}
 	for _, test := range tests {
@@ -218,6 +222,11 @@ func TestEncString(t *testing.T) {
 		// Check lenNullString
 		if got := lenNullString(test.value); got != len(test.nullEncoded) {
 			t.Errorf("lenNullString returned %v but expected %v for %v", got, len(test.nullEncoded), test.value)
+		}
+
+		// Check lenEOFString
+		if got := lenEOFString(test.value); got != len(test.eofEncoded) {
+			t.Errorf("lenNullString returned %v but expected %v for %v", got, len(test.eofEncoded), test.value)
 		}
 
 		// Check successful encoding.
@@ -319,16 +328,21 @@ func TestEncString(t *testing.T) {
 		}
 
 		// EOF encoded tests.
-		// We use the nullEncoded value, removing the 0 at the end.
 
 		// Check successful encoding.
-		data = make([]byte, len(test.nullEncoded)-1)
+		data = make([]byte, len(test.eofEncoded))
 		pos = writeEOFString(data, 0, test.value)
-		if pos != len(test.nullEncoded)-1 {
-			t.Errorf("unexpected pos %v after writeEOFString(%v), expected %v", pos, test.value, len(test.nullEncoded)-1)
+		if pos != len(test.eofEncoded) {
+			t.Errorf("unexpected pos %v after writeEOFString(%v), expected %v", pos, test.value, len(test.eofEncoded))
 		}
-		if !bytes.Equal(data, test.nullEncoded[:len(test.nullEncoded)-1]) {
-			t.Errorf("unexpected nullEncoded value for %v, got %v expected %v", test.value, data, test.nullEncoded)
+		if !bytes.Equal(data, test.eofEncoded[:len(test.eofEncoded)]) {
+			t.Errorf("unexpected eofEncoded value for %v, got %v expected %v", test.value, data, test.eofEncoded)
+		}
+
+		// Check successful decoding.
+		got, pos, ok = readEOFString(test.eofEncoded, 0)
+		if !ok || got != test.value || pos != len(test.eofEncoded) {
+			t.Errorf("readEOFString returned %v/%v/%v but expected %v/%v/%v", got, pos, ok, test.value, len(test.eofEncoded), true)
 		}
 	}
 }

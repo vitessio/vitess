@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -232,6 +232,56 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 	key = TabletToMapKey(tablet2)
 	if _, ok := allTablets[key]; !ok || len(allTablets) != 2 || !proto.Equal(allTablets[key], tablet2) {
 		t.Errorf("fhc.GetAllTablets() = %+v; want %v => %+v", allTablets, key, tablet2)
+	}
+
+	// Both tablets restart on different hosts.
+	// tablet2 happens to land on the host:port that tablet 1 used to be on.
+	// This can only be tested when we refresh known tablets.
+	if refreshKnownTablets {
+		origTablet := *tablet
+		origTablet2 := *tablet2
+
+		if _, err := ts.UpdateTabletFields(context.Background(), tablet2.Alias, func(t *topodatapb.Tablet) error {
+			t.Hostname = tablet.Hostname
+			t.PortMap = tablet.PortMap
+			tablet2 = t
+			return nil
+		}); err != nil {
+			t.Fatalf("UpdateTabletFields failed: %v", err)
+		}
+		if _, err := ts.UpdateTabletFields(context.Background(), tablet.Alias, func(t *topodatapb.Tablet) error {
+			t.Hostname = "host3"
+			tablet = t
+			return nil
+		}); err != nil {
+			t.Fatalf("UpdateTabletFields failed: %v", err)
+		}
+		tw.loadTablets()
+		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "ReplaceTablet": 2})
+		allTablets = fhc.GetAllTablets()
+		key2 := TabletToMapKey(tablet2)
+		if _, ok := allTablets[key2]; !ok {
+			t.Fatalf("tablet was lost because it's reusing an address recently used by another tablet: %v", key2)
+		}
+
+		// Change tablets back to avoid altering later tests.
+		if _, err := ts.UpdateTabletFields(context.Background(), tablet2.Alias, func(t *topodatapb.Tablet) error {
+			t.Hostname = origTablet2.Hostname
+			t.PortMap = origTablet2.PortMap
+			tablet2 = t
+			return nil
+		}); err != nil {
+			t.Fatalf("UpdateTabletFields failed: %v", err)
+		}
+		if _, err := ts.UpdateTabletFields(context.Background(), tablet.Alias, func(t *topodatapb.Tablet) error {
+			t.Hostname = origTablet.Hostname
+			tablet = t
+			return nil
+		}); err != nil {
+			t.Fatalf("UpdateTabletFields failed: %v", err)
+		}
+		tw.loadTablets()
+		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "ReplaceTablet": 2})
 	}
 
 	// Remove the tablet and check that it is detected as being gone.

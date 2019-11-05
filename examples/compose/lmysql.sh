@@ -21,4 +21,4 @@ if [[ "$OSTYPE" == "msys" ]]; then
 fi
 
 # This is a convenience script to run mysql client against the local example.
-exec $tty docker-compose exec ${CS:-vttablet1} mysql "$@"
+exec $tty docker-compose exec ${CS:-vttablet101} mysql "$@"

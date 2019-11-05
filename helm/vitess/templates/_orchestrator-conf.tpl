@@ -14,7 +14,7 @@ metadata:
   name: orchestrator-cm
 data:
   orchestrator.conf.json: |-
-     {
+    {
     "ActiveNodeExpireSeconds": 5,
     "ApplyMySQLPromotionAfterMasterFailover": true,
     "AuditLogFile": "/tmp/orchestrator-audit.log",

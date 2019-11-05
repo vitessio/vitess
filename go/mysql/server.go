@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -42,7 +42,6 @@ const (
 	// timing metric keys
 	connectTimingKey  = "Connect"
 	queryTimingKey    = "Query"
-	versionSSL30      = "SSL30"
 	versionTLS10      = "TLS10"
 	versionTLS11      = "TLS11"
 	versionTLS12      = "TLS12"
@@ -89,6 +88,10 @@ type Handler interface {
 	// ConnectionClosed is called when a connection is closed.
 	ConnectionClosed(c *Conn)
 
+	// InitDB is called once at the beginning to set db name,
+	// and subsequently for every ComInitDB event.
+	ComInitDB(c *Conn, schemaName string)
+
 	// ComQuery is called when a connection receives a query.
 	// Note the contents of the query slice may change after
 	// the first call to callback. So the Handler should not
@@ -109,6 +112,8 @@ type Handler interface {
 	// ComQuery callback if the result does not contain any fields,
 	// or after the last ComQuery call completes.
 	WarningCount(c *Conn) uint16
+
+	ComResetConnection(c *Conn)
 }
 
 // Listener is the MySQL server protocol listener.
@@ -296,7 +301,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	if err != nil {
 		// Don't log EOF errors. They cause too much spam, same as main read loop.
 		if err != io.EOF {
-			log.Errorf("Cannot read client handshake response from %s: %v", c, err)
+			log.Infof("Cannot read client handshake response from %s: %v, it may not be a valid MySQL client", c, err)
 		}
 		return
 	}
@@ -445,6 +450,9 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		connSlow.Add(1)
 		log.Warningf("Slow connection from %s: %v", c, connectTime)
 	}
+
+	// Set initial db name.
+	l.handler.ComInitDB(c, c.schemaName)
 
 	for {
 		err := c.handleNextCommand(l.handler)
@@ -673,7 +681,7 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 		if !ok {
 			return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read dbname")
 		}
-		c.SchemaName = dbname
+		c.schemaName = dbname
 	}
 
 	// authMethod (with default)
@@ -774,8 +782,6 @@ func (c *Conn) writeAuthSwitchRequest(pluginName string, pluginData []byte) erro
 // Whenever we move to a new version of go, we will need add any new supported TLS versions here
 func tlsVersionToString(version uint16) string {
 	switch version {
-	case tls.VersionSSL30:
-		return versionSSL30
 	case tls.VersionTLS10:
 		return versionTLS10
 	case tls.VersionTLS11:

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -37,6 +37,8 @@ import (
 
 var (
 	orcAddr     = flag.String("orc_api_url", "", "Address of Orchestrator's HTTP API (e.g. http://host:port/api/). Leave empty to disable Orchestrator integration.")
+	orcUser     = flag.String("orc_api_user", "", "(Optional) Basic auth username to authenticate with Orchestrator's HTTP API. Leave empty to disable basic auth.")
+	orcPassword = flag.String("orc_api_password", "", "(Optional) Basic auth password to authenticate with Orchestrator's HTTP API.")
 	orcTimeout  = flag.Duration("orc_timeout", 30*time.Second, "Timeout for calls to Orchestrator's HTTP API")
 	orcInterval = flag.Duration("orc_discover_interval", 0, "How often to ping Orchestrator's HTTP API endpoint to tell it we exist. 0 means never.")
 )
@@ -183,7 +185,14 @@ func (orc *orcClient) apiGet(pathParts ...string) ([]byte, error) {
 	url.Path = path.Join(fullPath...)
 
 	// Note that url.String() will URL-escape the path we gave it above.
-	resp, err := orc.httpClient.Get(url.String())
+	req, err := http.NewRequest("GET", url.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	if *orcUser != "" {
+		req.SetBasicAuth(*orcUser, *orcPassword)
+	}
+	resp, err := orc.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

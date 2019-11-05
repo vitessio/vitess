@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -29,13 +29,118 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func TestAdd(t *testing.T) {
+func TestDivide(t *testing.T) {
 	tcases := []struct {
 		v1, v2 Value
 		out    Value
 		err    error
 	}{{
+		//All Nulls
+		v1:  NULL,
+		v2:  NULL,
+		out: NULL,
+	}, {
+		// First value null.
+		v1:  NULL,
+		v2:  NewInt32(1),
+		out: NULL,
+	}, {
+		// Second value null.
+		v1:  NewInt32(1),
+		v2:  NULL,
+		out: NULL,
+	}, {
+		// Second arg 0
+		v1:  NewInt32(5),
+		v2:  NewInt32(0),
+		out: NULL,
+	}, {
+		// Both arguments zero
+		v1:  NewInt32(0),
+		v2:  NewInt32(0),
+		out: NULL,
+	}, {
+		// case with negative value
+		v1:  NewInt64(-1),
+		v2:  NewInt64(-2),
+		out: NewFloat64(0.5000),
+	}, {
+		// float64 division by zero
+		v1:  NewFloat64(2),
+		v2:  NewFloat64(0),
+		out: NULL,
+	}, {
+		// Lower bound for int64
+		v1:  NewInt64(math.MinInt64),
+		v2:  NewInt64(1),
+		out: NewFloat64(math.MinInt64),
+	}, {
+		// upper bound for uint64
+		v1:  NewUint64(math.MaxUint64),
+		v2:  NewUint64(1),
+		out: NewFloat64(math.MaxUint64),
+	}, {
+		// testing for error in types
+		v1:  TestValue(Int64, "1.2"),
+		v2:  NewInt64(2),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
+	}, {
+		// testing for error in types
+		v1:  NewInt64(2),
+		v2:  TestValue(Int64, "1.2"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
+	}, {
+		// testing for uint/int
+		v1:  NewUint64(4),
+		v2:  NewInt64(5),
+		out: NewFloat64(0.8),
+	}, {
+		// testing for uint/uint
+		v1:  NewUint64(1),
+		v2:  NewUint64(2),
+		out: NewFloat64(0.5),
+	}, {
+		// testing for float64/int64
+		v1:  TestValue(Float64, "1.2"),
+		v2:  NewInt64(-2),
+		out: NewFloat64(-0.6),
+	}, {
+		// testing for float64/uint64
+		v1:  TestValue(Float64, "1.2"),
+		v2:  NewUint64(2),
+		out: NewFloat64(0.6),
+	}, {
+		// testing for overflow of float64
+		v1:  NewFloat64(math.MaxFloat64),
+		v2:  NewFloat64(0.5),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT is out of range in 1.7976931348623157e+308 / 0.5"),
+	}}
 
+	for _, tcase := range tcases {
+		got, err := Divide(tcase.v1, tcase.v2)
+
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("%v %v %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err))
+			t.Errorf("Divide(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
+		}
+
+		if tcase.err != nil {
+			continue
+		}
+
+		if !reflect.DeepEqual(got, tcase.out) {
+			t.Errorf("Divide(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
+		}
+	}
+
+}
+
+func TestMultiply(t *testing.T) {
+	tcases := []struct {
+		v1, v2 Value
+		out    Value
+		err    error
+	}{{
 		//All Nulls
 		v1:  NULL,
 		v2:  NULL,
@@ -51,24 +156,258 @@ func TestAdd(t *testing.T) {
 		v2:  NewInt32(1),
 		out: NULL,
 	}, {
+		// case with negative value
+		v1:  NewInt64(-1),
+		v2:  NewInt64(-2),
+		out: NewInt64(2),
+	}, {
+		// testing for int64 overflow with min negative value
+		v1:  NewInt64(math.MinInt64),
+		v2:  NewInt64(1),
+		out: NewInt64(math.MinInt64),
+	}, {
+		// testing for error in types
+		v1:  TestValue(Int64, "1.2"),
+		v2:  NewInt64(2),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
+	}, {
+		// testing for error in types
+		v1:  NewInt64(2),
+		v2:  TestValue(Int64, "1.2"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
+	}, {
+		// testing for uint*int
+		v1:  NewUint64(4),
+		v2:  NewInt64(5),
+		out: NewUint64(20),
+	}, {
+		// testing for uint*uint
+		v1:  NewUint64(1),
+		v2:  NewUint64(2),
+		out: NewUint64(2),
+	}, {
+		// testing for float64*int64
+		v1:  TestValue(Float64, "1.2"),
+		v2:  NewInt64(-2),
+		out: NewFloat64(-2.4),
+	}, {
+		// testing for float64*uint64
+		v1:  TestValue(Float64, "1.2"),
+		v2:  NewUint64(2),
+		out: NewFloat64(2.4),
+	}, {
+		// testing for overflow of int64
+		v1:  NewInt64(math.MaxInt64),
+		v2:  NewInt64(2),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in 9223372036854775807 * 2"),
+	}, {
+		// testing for underflow of uint64*max.uint64
+		v1:  NewInt64(2),
+		v2:  NewUint64(math.MaxUint64),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 18446744073709551615 * 2"),
+	}, {
+		v1:  NewUint64(math.MaxUint64),
+		v2:  NewUint64(1),
+		out: NewUint64(math.MaxUint64),
+	}, {
+		//Checking whether maxInt value can be passed as uint value
+		v1:  NewUint64(math.MaxInt64),
+		v2:  NewInt64(3),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 9223372036854775807 * 3"),
+	}}
 
+	for _, tcase := range tcases {
+
+		got, err := Multiply(tcase.v1, tcase.v2)
+
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("Multiply(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
+		}
+		if tcase.err != nil {
+			continue
+		}
+
+		if !reflect.DeepEqual(got, tcase.out) {
+			t.Errorf("Multiply(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
+		}
+	}
+
+}
+
+func TestSubtract(t *testing.T) {
+	tcases := []struct {
+		v1, v2 Value
+		out    Value
+		err    error
+	}{{
+		// All Nulls
+		v1:  NULL,
+		v2:  NULL,
+		out: NULL,
+	}, {
+		// First value null.
+		v1:  NewInt32(1),
+		v2:  NULL,
+		out: NULL,
+	}, {
+		// Second value null.
+		v1:  NULL,
+		v2:  NewInt32(1),
+		out: NULL,
+	}, {
+		// case with negative value
+		v1:  NewInt64(-1),
+		v2:  NewInt64(-2),
+		out: NewInt64(1),
+	}, {
+		// testing for int64 overflow with min negative value
+		v1:  NewInt64(math.MinInt64),
+		v2:  NewInt64(1),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in -9223372036854775808 - 1"),
+	}, {
+		v1:  NewUint64(4),
+		v2:  NewInt64(5),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 4 - 5"),
+	}, {
+		// testing uint - int
+		v1:  NewUint64(7),
+		v2:  NewInt64(5),
+		out: NewUint64(2),
+	}, {
+		v1:  NewUint64(math.MaxUint64),
+		v2:  NewInt64(0),
+		out: NewUint64(math.MaxUint64),
+	}, {
+		// testing for int64 overflow
+		v1:  NewInt64(math.MinInt64),
+		v2:  NewUint64(0),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in -9223372036854775808 - 0"),
+	}, {
+		v1:  TestValue(VarChar, "c"),
+		v2:  NewInt64(1),
+		out: NewInt64(-1),
+	}, {
+		v1:  NewUint64(1),
+		v2:  TestValue(VarChar, "c"),
+		out: NewUint64(1),
+	}, {
+		// testing for error for parsing float value to uint64
+		v1:  TestValue(Uint64, "1.2"),
+		v2:  NewInt64(2),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseUint: parsing \"1.2\": invalid syntax"),
+	}, {
+		// testing for error for parsing float value to uint64
+		v1:  NewUint64(2),
+		v2:  TestValue(Uint64, "1.2"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseUint: parsing \"1.2\": invalid syntax"),
+	}, {
+		// uint64 - uint64
+		v1:  NewUint64(8),
+		v2:  NewUint64(4),
+		out: NewUint64(4),
+	}, {
+		// testing for float subtraction: float - int
+		v1:  NewFloat64(1.2),
+		v2:  NewInt64(2),
+		out: NewFloat64(-0.8),
+	}, {
+		// testing for float subtraction: float - uint
+		v1:  NewFloat64(1.2),
+		v2:  NewUint64(2),
+		out: NewFloat64(-0.8),
+	}, {
+		v1:  NewInt64(-1),
+		v2:  NewUint64(2),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in -1 - 2"),
+	}, {
+		v1:  NewInt64(2),
+		v2:  NewUint64(1),
+		out: NewUint64(1),
+	}, {
+		// testing int64 - float64 method
+		v1:  NewInt64(-2),
+		v2:  NewFloat64(1.0),
+		out: NewFloat64(-3.0),
+	}, {
+		// testing uint64 - float64 method
+		v1:  NewUint64(1),
+		v2:  NewFloat64(-2.0),
+		out: NewFloat64(3.0),
+	}, {
+		// testing uint - int to return uintplusint
+		v1:  NewUint64(1),
+		v2:  NewInt64(-2),
+		out: NewUint64(3),
+	}, {
+		// testing for float - float
+		v1:  NewFloat64(1.2),
+		v2:  NewFloat64(3.2),
+		out: NewFloat64(-2),
+	}, {
+		// testing uint - uint if v2 > v1
+		v1:  NewUint64(2),
+		v2:  NewUint64(4),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 2 - 4"),
+	}, {
+		// testing uint - (- int)
+		v1:  NewUint64(1),
+		v2:  NewInt64(-2),
+		out: NewUint64(3),
+	}}
+
+	for _, tcase := range tcases {
+
+		got, err := Subtract(tcase.v1, tcase.v2)
+
+		if !vterrors.Equals(err, tcase.err) {
+			t.Errorf("Subtract(%v, %v) error: %v, want %v", printValue(tcase.v1), printValue(tcase.v2), vterrors.Print(err), vterrors.Print(tcase.err))
+		}
+		if tcase.err != nil {
+			continue
+		}
+
+		if !reflect.DeepEqual(got, tcase.out) {
+			t.Errorf("Subtract(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
+		}
+	}
+
+}
+
+func TestAdd(t *testing.T) {
+	tcases := []struct {
+		v1, v2 Value
+		out    Value
+		err    error
+	}{{
+		// All Nulls
+		v1:  NULL,
+		v2:  NULL,
+		out: NULL,
+	}, {
+		// First value null.
+		v1:  NewInt32(1),
+		v2:  NULL,
+		out: NULL,
+	}, {
+		// Second value null.
+		v1:  NULL,
+		v2:  NewInt32(1),
+		out: NULL,
+	}, {
 		// case with negatives
 		v1:  NewInt64(-1),
 		v2:  NewInt64(-2),
 		out: NewInt64(-3),
 	}, {
-
-		// testing for overflow int64
+		// testing for overflow int64, result will be unsigned int
 		v1:  NewInt64(math.MaxInt64),
 		v2:  NewUint64(2),
-		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in 2 + 9223372036854775807"),
+		out: NewUint64(9223372036854775809),
 	}, {
-
 		v1:  NewInt64(-2),
 		v2:  NewUint64(1),
-		out: NewUint64(math.MaxUint64),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 1 + -2"),
 	}, {
-
 		v1:  NewInt64(math.MaxInt64),
 		v2:  NewInt64(-2),
 		out: NewInt64(9223372036854775805),
@@ -83,30 +422,25 @@ func TestAdd(t *testing.T) {
 		v2:  NewUint64(2),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 18446744073709551615 + 2"),
 	}, {
-
 		// int64 underflow
 		v1:  NewInt64(math.MinInt64),
 		v2:  NewInt64(-2),
 		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT value is out of range in -9223372036854775808 + -2"),
 	}, {
-
 		// checking int64 max value can be returned
 		v1:  NewInt64(math.MaxInt64),
 		v2:  NewUint64(0),
 		out: NewUint64(9223372036854775807),
 	}, {
-
 		// testing whether uint64 max value can be returned
 		v1:  NewUint64(math.MaxUint64),
 		v2:  NewInt64(0),
 		out: NewUint64(math.MaxUint64),
 	}, {
-
 		v1:  NewUint64(math.MaxInt64),
 		v2:  NewInt64(1),
 		out: NewUint64(9223372036854775808),
 	}, {
-
 		v1:  NewUint64(1),
 		v2:  TestValue(VarChar, "c"),
 		out: NewUint64(1),
@@ -114,6 +448,19 @@ func TestAdd(t *testing.T) {
 		v1:  NewUint64(1),
 		v2:  TestValue(VarChar, "1.2"),
 		out: NewFloat64(2.2),
+	}, {
+		v1:  TestValue(Int64, "1.2"),
+		v2:  NewInt64(2),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
+	}, {
+		v1:  NewInt64(2),
+		v2:  TestValue(Int64, "1.2"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
+	}, {
+		// testing for uint64 overflow with max uint64 + int value
+		v1:  NewUint64(math.MaxUint64),
+		v2:  NewInt64(2),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "BIGINT UNSIGNED value is out of range in 18446744073709551615 + 2"),
 	}}
 
 	for _, tcase := range tcases {
@@ -128,7 +475,7 @@ func TestAdd(t *testing.T) {
 		}
 
 		if !reflect.DeepEqual(got, tcase.out) {
-			t.Errorf("Addition(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
+			t.Errorf("Add(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
 		}
 	}
 
@@ -184,7 +531,7 @@ func TestNullsafeAdd(t *testing.T) {
 		got := NullsafeAdd(tcase.v1, tcase.v2, Int64)
 
 		if !reflect.DeepEqual(got, tcase.out) {
-			t.Errorf("Add(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
+			t.Errorf("NullsafeAdd(%v, %v): %v, want %v", printValue(tcase.v1), printValue(tcase.v2), printValue(got), printValue(tcase.out))
 		}
 	}
 }
@@ -456,6 +803,9 @@ func TestToFloat64(t *testing.T) {
 	}, {
 		v:   NewFloat64(1.2),
 		out: 1.2,
+	}, {
+		v:   TestValue(Int64, "1.2"),
+		err: vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "strconv.ParseInt: parsing \"1.2\": invalid syntax"),
 	}}
 	for _, tcase := range tcases {
 		got, err := ToFloat64(tcase.v)

@@ -178,8 +178,8 @@ func TestConsistentLookupVerify(t *testing.T) {
 		t.Error(err)
 	}
 	vc.verifyLog(t, []string{
-		"Execute select fromc1 from t where fromc1 = :fromc1 and toc = :toc [{fromc1 1} {toc test1}] false",
-		"Execute select fromc1 from t where fromc1 = :fromc1 and toc = :toc [{fromc1 2} {toc test2}] false",
+		"ExecutePre select fromc1 from t where fromc1 = :fromc1 and toc = :toc [{fromc1 1} {toc test1}] false",
+		"ExecutePre select fromc1 from t where fromc1 = :fromc1 and toc = :toc [{fromc1 2} {toc test2}] false",
 	})
 
 	// Test query fail.

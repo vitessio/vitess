@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -29,13 +29,14 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/topo"
 )
 
 const (
 	reshardingJournalTableName = "_vt.resharding_journal"
 	vreplicationTableName      = "_vt.vreplication"
-	copySateTableName          = "_vt.copy_state"
+	copyStateTableName         = "_vt.copy_state"
 
 	createReshardingJournalTable = `create table if not exists _vt.resharding_journal(
   id bigint,
@@ -269,54 +270,92 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 		if qr.InsertID == 0 {
 			return nil, fmt.Errorf("insert failed to generate an id")
 		}
-		params, err := readRow(dbClient, int(qr.InsertID))
-		if err != nil {
-			return nil, err
+		for id := int(qr.InsertID); id < int(qr.InsertID)+plan.numInserts; id++ {
+			if ct := vre.controllers[id]; ct != nil {
+				// Unreachable. Just a failsafe.
+				ct.Stop()
+				delete(vre.controllers, id)
+			}
+			params, err := readRow(dbClient, id)
+			if err != nil {
+				return nil, err
+			}
+			ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil)
+			if err != nil {
+				return nil, err
+			}
+			vre.controllers[id] = ct
 		}
-		// Create a controller for the newly created row.
-		ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil)
-		if err != nil {
-			return nil, err
-		}
-		vre.controllers[int(qr.InsertID)] = ct
 		return qr, nil
 	case updateQuery:
-		var blpStats *binlogplayer.Stats
-		if ct := vre.controllers[plan.id]; ct != nil {
-			// Stop the current controller.
-			ct.Stop()
-			blpStats = ct.blpStats
-		}
-		qr, err := vre.executeFetchMaybeCreateTable(dbClient, plan.query, 1)
+		ids, bv, err := vre.fetchIDs(dbClient, plan.selector)
 		if err != nil {
 			return nil, err
 		}
-		params, err := readRow(dbClient, plan.id)
+		if len(ids) == 0 {
+			return &sqltypes.Result{}, nil
+		}
+		blpStats := make(map[int]*binlogplayer.Stats)
+		for _, id := range ids {
+			if ct := vre.controllers[id]; ct != nil {
+				// Stop the current controller.
+				ct.Stop()
+				blpStats[id] = ct.blpStats
+			}
+		}
+		query, err := plan.applier.GenerateQuery(bv, nil)
 		if err != nil {
 			return nil, err
 		}
-		// Create a new controller in place of the old one.
-		// For continuity, the new controller inherits the previous stats.
-		ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, blpStats)
+		qr, err := vre.executeFetchMaybeCreateTable(dbClient, query, 1)
 		if err != nil {
 			return nil, err
 		}
-		vre.controllers[plan.id] = ct
+		for _, id := range ids {
+			params, err := readRow(dbClient, id)
+			if err != nil {
+				return nil, err
+			}
+			// Create a new controller in place of the old one.
+			// For continuity, the new controller inherits the previous stats.
+			ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, blpStats[id])
+			if err != nil {
+				return nil, err
+			}
+			vre.controllers[id] = ct
+		}
 		return qr, nil
 	case deleteQuery:
-		// Stop and delete the current controller.
-		if ct := vre.controllers[plan.id]; ct != nil {
-			ct.Stop()
-			delete(vre.controllers, plan.id)
+		ids, bv, err := vre.fetchIDs(dbClient, plan.selector)
+		if err != nil {
+			return nil, err
+		}
+		if len(ids) == 0 {
+			return &sqltypes.Result{}, nil
+		}
+		// Stop and delete the current controllers.
+		for _, id := range ids {
+			if ct := vre.controllers[id]; ct != nil {
+				ct.Stop()
+				delete(vre.controllers, id)
+			}
 		}
 		if err := dbClient.Begin(); err != nil {
 			return nil, err
 		}
-		qr, err := dbClient.ExecuteFetch(plan.query, 10000)
+		query, err := plan.applier.GenerateQuery(bv, nil)
 		if err != nil {
 			return nil, err
 		}
-		if _, err := dbClient.ExecuteFetch(plan.delCopyState, 10000); err != nil {
+		qr, err := vre.executeFetchMaybeCreateTable(dbClient, query, 1)
+		if err != nil {
+			return nil, err
+		}
+		delQuery, err := plan.delCopyState.GenerateQuery(bv, nil)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := dbClient.ExecuteFetch(delQuery, 10000); err != nil {
 			// Legacy vreplication won't create this table. So, ignore table not found error.
 			merr, isSQLErr := err.(*mysql.SQLError)
 			if !isSQLErr || !(merr.Num == mysql.ERNoSuchTable) {
@@ -334,8 +373,30 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 	panic("unreachable")
 }
 
+func (vre *Engine) fetchIDs(dbClient binlogplayer.DBClient, selector string) (ids []int, bv map[string]*querypb.BindVariable, err error) {
+	qr, err := dbClient.ExecuteFetch(selector, 10000)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, row := range qr.Rows {
+		id, err := sqltypes.ToInt64(row[0])
+		if err != nil {
+			return nil, nil, err
+		}
+		ids = append(ids, int(id))
+	}
+	bvval, err := sqltypes.BuildBindVariable(ids)
+	if err != nil {
+		// Unreachable.
+		return nil, nil, err
+	}
+	bv = map[string]*querypb.BindVariable{"ids": bvval}
+	return ids, bv, nil
+}
+
 // WaitForPos waits for the replication to reach the specified position.
 func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
+	start := time.Now()
 	mPos, err := mysql.DecodePosition(pos)
 	if err != nil {
 		return err
@@ -380,6 +441,7 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 		}
 
 		if current.AtLeast(mPos) {
+			log.Infof("position: %s reached, wait time: %v", pos, time.Since(start))
 			return nil
 		}
 
@@ -389,7 +451,8 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			log.Errorf("Error waiting for pos: %s, last pos: %s: %v, wait time: %v", pos, qr.Rows[0][0].ToString(), ctx.Err(), time.Since(start))
+			return fmt.Errorf("error waiting for pos: %s, last pos: %s: %v, wait time: %v", pos, qr.Rows[0][0].ToString(), ctx.Err(), time.Since(start))
 		case <-vre.ctx.Done():
 			return fmt.Errorf("vreplication is closing: %v", vre.ctx.Err())
 		case <-tkr.C:

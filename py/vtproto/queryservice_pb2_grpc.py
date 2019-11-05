@@ -130,6 +130,11 @@ class QueryStub(object):
         request_serializer=binlogdata__pb2.VStreamRowsRequest.SerializeToString,
         response_deserializer=binlogdata__pb2.VStreamRowsResponse.FromString,
         )
+    self.VStreamResults = channel.unary_stream(
+        '/queryservice.Query/VStreamResults',
+        request_serializer=binlogdata__pb2.VStreamResultsRequest.SerializeToString,
+        response_deserializer=binlogdata__pb2.VStreamResultsResponse.FromString,
+        )
 
 
 class QueryServicer(object):
@@ -304,6 +309,13 @@ class QueryServicer(object):
     context.set_details('Method not implemented!')
     raise NotImplementedError('Method not implemented!')
 
+  def VStreamResults(self, request, context):
+    """VStreamResults streams results along with the gtid of the snapshot.
+    """
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
 
 def add_QueryServicer_to_server(servicer, server):
   rpc_method_handlers = {
@@ -421,6 +433,11 @@ def add_QueryServicer_to_server(servicer, server):
           servicer.VStreamRows,
           request_deserializer=binlogdata__pb2.VStreamRowsRequest.FromString,
           response_serializer=binlogdata__pb2.VStreamRowsResponse.SerializeToString,
+      ),
+      'VStreamResults': grpc.unary_stream_rpc_method_handler(
+          servicer.VStreamResults,
+          request_deserializer=binlogdata__pb2.VStreamResultsRequest.FromString,
+          response_serializer=binlogdata__pb2.VStreamResultsResponse.SerializeToString,
       ),
   }
   generic_handler = grpc.method_handlers_generic_handler(

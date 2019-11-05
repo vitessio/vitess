@@ -216,6 +216,17 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"client_test": {
+                        "File": "",
+                        "Args": [],
+                        "Command": [
+                                "test/client_test.sh"
+                        ],
+                        "Manual": false,
+                        "Shard": 3,
+                        "RetryMax": 0,
+                        "Tags": []
+		},
 		"merge_sharding": {
 			"File": "merge_sharding.py",
 			"Args": [],
@@ -307,6 +318,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"recovery": {
+			"File": "recovery.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"reparent": {
 			"File": "reparent.py",
 			"Args": [],
@@ -367,6 +387,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"sharded_recovery": {
+			"File": "sharded_recovery.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"tabletmanager": {
 			"File": "tabletmanager.py",
 			"Args": [],
@@ -404,6 +433,29 @@
 				"site_test"
 			]
 		},
+		"endtoend": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"tools/e2e_test_runner.sh"
+			],
+			"Manual": false,
+			"Shard": 3,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"e2e_race": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"make",
+				"e2e_test_race"
+			],
+			"Manual": false,
+			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"unit": {
 			"File": "",
 			"Args": [],
@@ -411,7 +463,7 @@
 				"tools/unit_test_runner.sh"
 			],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 0,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -560,6 +612,15 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"xb_recovery": {
+			"File": "xb_recovery.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": []
 		},

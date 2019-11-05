@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -268,7 +268,7 @@ func TestQueries(t *testing.T) {
 		InsertID:     0x0102030405060708,
 	})
 
-	// Typicall Select with TYPE_AND_NAME.
+	// Typical Select with TYPE_AND_NAME.
 	// One value is also NULL.
 	checkQuery(t, "type and name", sConn, cConn, &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -294,7 +294,7 @@ func TestQueries(t *testing.T) {
 		RowsAffected: 2,
 	})
 
-	// Typicall Select with TYPE_AND_NAME.
+	// Typical Select with TYPE_AND_NAME.
 	// All types are represented.
 	// One row has all NULL values.
 	checkQuery(t, "all types", sConn, cConn, &sqltypes.Result{
@@ -397,7 +397,7 @@ func TestQueries(t *testing.T) {
 		RowsAffected: 2,
 	})
 
-	// Typicall Select with TYPE_AND_NAME.
+	// Typical Select with TYPE_AND_NAME.
 	// First value first column is an empty string, so it's encoded as 0.
 	checkQuery(t, "first empty string", sConn, cConn, &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -417,7 +417,7 @@ func TestQueries(t *testing.T) {
 		RowsAffected: 2,
 	})
 
-	// Typicall Select with TYPE_ONLY.
+	// Typical Select with TYPE_ONLY.
 	checkQuery(t, "type only", sConn, cConn, &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -435,7 +435,7 @@ func TestQueries(t *testing.T) {
 		RowsAffected: 2,
 	})
 
-	// Typicall Select with ALL.
+	// Typical Select with ALL.
 	checkQuery(t, "complete", sConn, cConn, &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{

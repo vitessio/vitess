@@ -1,5 +1,5 @@
 /*
-Copyright 2017 GitHub Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -242,6 +242,9 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 	}
 	if args.TabletHostName != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-tablet_hostname", args.TabletHostName}...)
+	}
+	if args.InitWorkflowManager {
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-workflow_manager_init"}...)
 	}
 
 	if socket != "" {

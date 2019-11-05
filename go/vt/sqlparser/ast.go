@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -662,9 +662,10 @@ type Set struct {
 
 // Set.Scope or Show.Scope
 const (
-	SessionStr  = "session"
-	GlobalStr   = "global"
-	ImplicitStr = ""
+	SessionStr        = "session"
+	GlobalStr         = "global"
+	VitessMetadataStr = "vitess_metadata"
+	ImplicitStr       = ""
 )
 
 // Format formats the node.
@@ -796,9 +797,9 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 	case FlushStr:
 		buf.Myprintf("%s", node.Action)
 	case CreateVindexStr:
-		buf.Myprintf("alter vschema create vindex %v %v", node.VindexSpec.Name, node.VindexSpec)
+		buf.Myprintf("alter vschema create vindex %v %v", node.Table, node.VindexSpec)
 	case DropVindexStr:
-		buf.Myprintf("alter vschema drop vindex %v", node.VindexSpec.Name)
+		buf.Myprintf("alter vschema drop vindex %v", node.Table)
 	case AddVschemaTableStr:
 		buf.Myprintf("alter vschema add table %v", node.Table)
 	case DropVschemaTableStr:
@@ -2006,7 +2007,7 @@ func (node TableName) walkSubtree(visit Visit) error {
 
 // IsEmpty returns true if TableName is nil or empty.
 func (node TableName) IsEmpty() bool {
-	// If Name is empty, Qualifer is also empty.
+	// If Name is empty, Qualifier is also empty.
 	return node.Name.IsEmpty()
 }
 

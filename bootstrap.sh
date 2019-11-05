@@ -1,7 +1,7 @@
 #!/bin/bash
 # shellcheck disable=SC2164
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@
 # Outline of this file.
 # 0. Initialization and helper methods.
 # 1. Installation of dependencies.
-# 2. Installation of Go tools and vendored Go dependencies.
 
 BUILD_TESTS=${BUILD_TESTS:-1}
 BUILD_PYTHON=${BUILD_PYTHON:-1}
@@ -36,29 +35,24 @@ function fail() {
 
 [[ "$(dirname "$0")" = "." ]] || fail "bootstrap.sh must be run from its current directory"
 
-go version &>/dev/null  || fail "Go is not installed or is not on \$PATH"
-[[ "$(go version 2>&1)" =~ go1\.[1-9][1-9] ]] || fail "Go is not version 1.11+"
-
 # Create main directories.
+VTROOT="${VTROOT:-${PWD/\/src\/vitess.io\/vitess/}}"
 mkdir -p "$VTROOT/dist"
 mkdir -p "$VTROOT/bin"
 mkdir -p "$VTROOT/lib"
 mkdir -p "$VTROOT/vthook"
 
-# Install git hooks.
-echo "creating git hooks"
-mkdir -p "$VTTOP/.git/hooks"
-ln -sf "$VTTOP/misc/git/pre-commit" "$VTTOP/.git/hooks/pre-commit"
-ln -sf "$VTTOP/misc/git/commit-msg" "$VTTOP/.git/hooks/commit-msg"
-(cd "$VTTOP" && git config core.hooksPath "$VTTOP/.git/hooks")
+# This is required for VIRTUALENV
+# Used by Python below
 
-
-# Set up the proper GOPATH for go get below.
 if [ "$BUILD_TESTS" == 1 ] ; then
     source ./dev.env
 else
     source ./build.env
 fi
+
+go version &>/dev/null  || fail "Go is not installed or is not on \$PATH"
+goversion_min 1.12 || fail "Go is not version 1.12+"
 
 if [ "$BUILD_TESTS" == 1 ] ; then
     # Set up required soft links.
@@ -75,6 +69,14 @@ else
     ln -snf "$VTTOP/data" "$VTROOT/data"
     ln -snf "$VTTOP/go/vt/zkctl/zksrv.sh" "$VTROOT/bin/zksrv.sh"
 fi
+
+# git hooks are only required if someone intends to contribute.
+
+echo "creating git hooks"
+mkdir -p "$VTTOP/.git/hooks"
+ln -sf "$VTTOP/misc/git/pre-commit" "$VTTOP/.git/hooks/pre-commit"
+ln -sf "$VTTOP/misc/git/commit-msg" "$VTTOP/.git/hooks/commit-msg"
+(cd "$VTTOP" && git config core.hooksPath "$VTTOP/.git/hooks")
 
 # install_dep is a helper function to generalize the download and installation of dependencies.
 #
@@ -125,6 +127,14 @@ function install_dep() {
 # 1. Installation of dependencies.
 #
 
+# Wrapper around the `arch` command which plays nice with OS X
+function get_arch() {
+  case $(uname) in
+    Linux) arch;;
+    Darwin) uname -m;;
+  esac
+}
+
 
 # Install the gRPC Python library (grpcio) and the protobuf gRPC Python plugin (grpcio-tools) from PyPI.
 # Dependencies like the Python protobuf package will be installed automatically.
@@ -163,8 +173,14 @@ function install_protoc() {
     Darwin) local platform=osx;;
   esac
 
-  wget "https://github.com/google/protobuf/releases/download/v$version/protoc-$version-$platform-x86_64.zip"
-  unzip "protoc-$version-$platform-x86_64.zip"
+  case $(get_arch) in
+      aarch64)  local target=aarch_64;;
+      x86_64)  local target=x86_64;;
+      *)   echo "ERROR: unsupported architecture"; exit 1;;
+  esac
+
+  wget https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
+  unzip "protoc-$version-$platform-${target}.zip"
   ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
 }
 protoc_ver=3.6.1
@@ -202,8 +218,14 @@ function install_etcd() {
     Darwin) local platform=darwin; local ext=zip;;
   esac
 
+  case $(get_arch) in
+      aarch64)  local target=arm64;;
+      x86_64)  local target=amd64;;
+      *)   echo "ERROR: unsupported architecture"; exit 1;;
+  esac
+
   download_url=https://github.com/coreos/etcd/releases/download
-  file="etcd-${version}-${platform}-amd64.${ext}"
+  file="etcd-${version}-${platform}-${target}.${ext}"
 
   wget "$download_url/$version/$file"
   if [ "$ext" = "tar.gz" ]; then
@@ -212,7 +234,7 @@ function install_etcd() {
     unzip "$file"
   fi
   rm "$file"
-  ln -snf "$dist/etcd-${version}-${platform}-amd64/etcd" "$VTROOT/bin/etcd"
+  ln -snf "$dist/etcd-${version}-${platform}-${target}/etcd" "$VTROOT/bin/etcd"
 }
 install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
 
@@ -227,9 +249,15 @@ function install_consul() {
     Darwin) local platform=darwin;;
   esac
 
+  case $(get_arch) in
+      aarch64)  local target=arm64;;
+      x86_64)  local target=amd64;;
+      *)   echo "ERROR: unsupported architecture"; exit 1;;
+  esac
+
   download_url=https://releases.hashicorp.com/consul
-  wget "${download_url}/${version}/consul_${version}_${platform}_amd64.zip"
-  unzip "consul_${version}_${platform}_amd64.zip"
+  wget "${download_url}/${version}/consul_${version}_${platform}_${target}.zip"
+  unzip "consul_${version}_${platform}_${target}.zip"
   ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
 install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul
@@ -273,7 +301,6 @@ if [ "$BUILD_PYTHON" == 1 ] ; then
     install_dep "Selenium" "latest" "$VTROOT/dist/selenium" install_selenium
 fi
 
-
 # Download chromedriver (necessary to run test/vtctld_web_test.py).
 function install_chromedriver() {
   local version="$1"
@@ -290,44 +317,6 @@ fi
 if [ "$BUILD_PYTHON" == 1 ] ; then
   PYTHONPATH='' $PIP install mysql-connector-python
 fi
-
-#
-# 2. Installation of Go tools and vendored Go dependencies.
-#
-
-
-# Install third-party Go tools used as part of the development workflow.
-#
-# DO NOT ADD LIBRARY DEPENDENCIES HERE. Instead use govendor as described below.
-#
-# Note: We explicitly do not vendor the tools below because a) we want to stay
-# on their latest version and b) it's easier to "go install" them this way.
-gotools=" \
-       github.com/golang/mock/mockgen \
-       github.com/kardianos/govendor \
-       golang.org/x/lint/golint \
-       golang.org/x/tools/cmd/cover \
-       golang.org/x/tools/cmd/goimports \
-       golang.org/x/tools/cmd/goyacc \
-"
-echo "Installing dev tools with 'go get'..."
-# shellcheck disable=SC2086
-go get -u $gotools || fail "Failed to download some Go tools with 'go get'. Please re-run bootstrap.sh in case of transient errors."
-
-# Download dependencies that are version-pinned via govendor.
-#
-# To add a new dependency, run:
-#   govendor fetch <package_path>
-#
-# Existing dependencies can be updated to the latest version with 'fetch' as well.
-#
-# Then:
-#   git add vendor/vendor.json
-#   git commit
-#
-# See https://github.com/kardianos/govendor for more options.
-echo "Updating govendor dependencies..."
-govendor sync || fail "Failed to download/update dependencies with govendor. Please re-run bootstrap.sh in case of transient errors."
 
 echo
 echo "bootstrap finished - run 'source dev.env' or 'source build.env' in your shell before building."

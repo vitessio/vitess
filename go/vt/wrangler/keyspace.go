@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -641,11 +641,22 @@ func (wr *Wrangler) masterMigrateServedType(ctx context.Context, keyspace string
 	}()
 
 	// Phase 1
+	// - check topology service can successfully refresh both source and target master
 	// - switch the source shards to read-only by disabling query service
 	// - gather all replication points
 	// - wait for filtered replication to catch up
 	// - mark source shards as frozen
 	event.DispatchUpdate(ev, "disabling query service on all source masters")
+	// making sure the refreshMaster on both source and target are working before turning off query service on source
+	if err := wr.refreshMasters(ctx, sourceShards); err != nil {
+		wr.cancelMasterMigrateServedTypes(ctx, keyspace, sourceShards)
+		return err
+	}
+	if err := wr.refreshMasters(ctx, destinationShards); err != nil {
+		wr.cancelMasterMigrateServedTypes(ctx, keyspace, sourceShards)
+		return err
+	}
+
 	if err := wr.updateShardRecords(ctx, keyspace, sourceShards, nil, topodatapb.TabletType_MASTER, true, false); err != nil {
 		wr.cancelMasterMigrateServedTypes(ctx, keyspace, sourceShards)
 		return err
@@ -947,7 +958,7 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	defer watcher.Stop()
 
 	// Wait for at least one tablet.
-	if err := tsc.WaitForTablets(ctx, cell, keyspace, shard, servedType); err != nil {
+	if err := tsc.WaitForTablets(ctx, keyspace, shard, servedType); err != nil {
 		return fmt.Errorf("%v: error waiting for initial %v tablets for %v/%v: %v", cell, servedType, keyspace, shard, err)
 	}
 

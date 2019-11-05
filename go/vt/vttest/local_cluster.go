@@ -1,5 +1,5 @@
 /*
-Copyright 2017 GitHub Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -110,6 +110,9 @@ type Config struct {
 
 	// The host name to use for the table otherwise it will be resolved from the local hostname
 	TabletHostName string
+
+	// Whether to enable/disable workflow manager
+	InitWorkflowManager bool
 }
 
 // InitSchemas is a shortcut for tests that just want to setup a single

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -45,13 +45,19 @@ func init() {
 	addCommand("Shards", command{
 		"PlannedReparentShard",
 		commandPlannedReparentShard,
-		"-keyspace_shard=<keyspace/shard> [-new_master=<tablet alias>] [-avoid_master=<tablet alias>]",
+		"-keyspace_shard=<keyspace/shard> [-new_master=<tablet alias>] [-avoid_master=<tablet alias>] [-wait_slave_timeout=<duration>]",
 		"Reparents the shard to the new master, or away from old master. Both old and new master need to be up and running."})
 	addCommand("Shards", command{
 		"EmergencyReparentShard",
 		commandEmergencyReparentShard,
 		"-keyspace_shard=<keyspace/shard> -new_master=<tablet alias>",
 		"Reparents the shard to the new master. Assumes the old master is dead and not responsding."})
+	addCommand("Shards", command{
+		"TabletExternallyReparented",
+		commandTabletExternallyReparented,
+		"<tablet alias>",
+		"Changes metadata in the topology server to acknowledge a shard master change performed by an external tool. See the Reparenting guide for more information:" +
+			"https://vitess.io/docs/user-guides/reparenting/#external-reparenting"})
 }
 
 func commandReparentTablet(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
@@ -101,7 +107,7 @@ func commandPlannedReparentShard(ctx context.Context, wr *wrangler.Wrangler, sub
 		return fmt.Errorf("active reparent commands disabled (unset the -disable_active_reparents flag to enable)")
 	}
 
-	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", *topo.RemoteOperationTimeout, "time to wait for slaves to catch up in reparenting")
+	waitSlaveTimeout := subFlags.Duration("wait_slave_timeout", *topo.RemoteOperationTimeout, "time to wait for replicas to catch up on replication before and after reparenting")
 	keyspaceShard := subFlags.String("keyspace_shard", "", "keyspace/shard of the shard that needs to be reparented")
 	newMaster := subFlags.String("new_master", "", "alias of a tablet that should be the new master")
 	avoidMaster := subFlags.String("avoid_master", "", "alias of a tablet that should not be the master, i.e. reparent to any other tablet if this one is the master")
@@ -170,4 +176,19 @@ func commandEmergencyReparentShard(ctx context.Context, wr *wrangler.Wrangler, s
 		return err
 	}
 	return wr.EmergencyReparentShard(ctx, keyspace, shard, tabletAlias, *waitSlaveTimeout)
+}
+
+func commandTabletExternallyReparented(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("action TabletExternallyReparented requires <tablet alias>")
+	}
+
+	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	return wr.TabletExternallyReparented(ctx, tabletAlias)
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2017 The Vitess Authors.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -101,7 +101,7 @@ def setUpModule():
       fd.write(init_db)
       fd.write(mysql_flavor().change_passwords(password_col))
 
-    logging.debug("initilizing mysql %s",str(datetime.datetime.now()))
+    logging.debug("initializing mysql %s",str(datetime.datetime.now()))
     # start mysql instance external to the test
     setup_procs = [
         tablet_master.init_mysql(init_db=new_init_db,
@@ -120,7 +120,7 @@ def setUpModule():
       tablet_replica2.wait_for_mysqlctl_socket()
     else:
       utils.wait_procs(setup_procs)
-    logging.debug("done initilizing mysql %s",str(datetime.datetime.now()))      
+    logging.debug("done initializing mysql %s",str(datetime.datetime.now()))      
   except:
     tearDownModule()
     raise
@@ -286,7 +286,7 @@ class TestBackup(unittest.TestCase):
   def test_tablet_initial_backup(self):
     self._test_initial_backup()
 
-    # Restore the Shard from the inital backup
+    # Restore the Shard from the initial backup
     self._init_tablets(init=False,start=False)
 
     # Restore the Tablets

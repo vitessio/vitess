@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -688,6 +688,17 @@ func (hc *HealthCheckImpl) deleteConn(tablet *topodatapb.Tablet) {
 	if !ok {
 		return
 	}
+	// Make sure the key still corresponds to the tablet we want to delete.
+	// If it doesn't match, we should do nothing. The tablet we were asked to
+	// delete is already gone, and some other tablet is using the key
+	// (host:port) that the original tablet used to use, which is fine.
+	if !topoproto.TabletAliasEqual(tablet.Alias, th.latestTabletStats.Tablet.Alias) {
+		return
+	}
+	hc.deleteConnLocked(key, th)
+}
+
+func (hc *HealthCheckImpl) deleteConnLocked(key string, th *tabletHealth) {
 	th.latestTabletStats.Up = false
 	th.cancelFunc()
 	delete(hc.addrToHealth, key)
@@ -733,10 +744,18 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodatapb.Tablet, name string) {
 		hc.mu.Unlock()
 		return
 	}
-	if _, ok := hc.addrToHealth[key]; ok {
-		hc.mu.Unlock()
-		log.Warningf("adding duplicate tablet %v for %v: %+v", name, tablet.Alias.Cell, tablet)
-		return
+	if th, ok := hc.addrToHealth[key]; ok {
+		// Something already exists at this key.
+		// If it's the same tablet, something is wrong.
+		if topoproto.TabletAliasEqual(th.latestTabletStats.Tablet.Alias, tablet.Alias) {
+			hc.mu.Unlock()
+			log.Warningf("refusing to add duplicate tablet %v for %v: %+v", name, tablet.Alias.Cell, tablet)
+			return
+		}
+		// If it's a different tablet, then we trust this new tablet that claims
+		// it has taken over the host:port that the old tablet used to be on.
+		// Remove the old tablet to clear the way.
+		hc.deleteConnLocked(key, th)
 	}
 	hc.addrToHealth[key] = &tabletHealth{
 		cancelFunc:        cancelFunc,
@@ -752,15 +771,13 @@ func (hc *HealthCheckImpl) AddTablet(tablet *topodatapb.Tablet, name string) {
 // RemoveTablet removes the tablet, and stops the health check.
 // It does not block.
 func (hc *HealthCheckImpl) RemoveTablet(tablet *topodatapb.Tablet) {
-	go hc.deleteConn(tablet)
+	hc.deleteConn(tablet)
 }
 
 // ReplaceTablet removes the old tablet and adds the new tablet.
 func (hc *HealthCheckImpl) ReplaceTablet(old, new *topodatapb.Tablet, name string) {
-	go func() {
-		hc.deleteConn(old)
-		hc.AddTablet(new, name)
-	}()
+	hc.deleteConn(old)
+	hc.AddTablet(new, name)
 }
 
 // WaitForInitialStatsUpdates waits until all tablets added via AddTablet() call

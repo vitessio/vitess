@@ -220,7 +220,7 @@ func TestConsistentLookupMultiInsert(t *testing.T) {
 	exec(t, conn, "delete from t1_id2_idx where id2=4")
 }
 
-func TestHashLookupMultiInsertIgnore(t *testing.T) {
+func TestLookupMultiInsertIgnore(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
@@ -256,6 +256,46 @@ func TestHashLookupMultiInsertIgnore(t *testing.T) {
 	}
 	qr = exec(t, conn, "select id3, id4 from t2_id4_idx order by id3")
 	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(10) INT64(20)] [INT64(30) INT64(40)] [INT64(50) INT64(60)]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+}
+
+func TestConsistentLookupMultiInsertIgnore(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	// conn2 is for queries that target shards.
+	conn2, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn2.Close()
+
+	// DB should start out clean
+	qr := exec(t, conn, "select count(*) from t1_id2_idx")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(0)]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+	qr = exec(t, conn, "select count(*) from t1")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(0)]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	// Try inserting a bunch of ids at once
+	exec(t, conn, "begin")
+	exec(t, conn, "insert ignore into t1(id1, id2) values(50,60), (30,40), (10,20)")
+	exec(t, conn, "commit")
+
+	// Verify
+	qr = exec(t, conn, "select id1, id2 from t1 order by id1")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(10) INT64(20)] [INT64(30) INT64(40)] [INT64(50) INT64(60)]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+	qr = exec(t, conn, "select id2 from t1_id2_idx order by id2")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(20)] [INT64(40)] [INT64(60)]]"; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
 }

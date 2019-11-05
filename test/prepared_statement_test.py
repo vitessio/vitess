@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Ensures the vtgate MySQL server protocol plugin works as expected with prepared statments.
+"""Ensures the vtgate MySQL server protocol plugin works as expected with prepared statements.
 
 We use table ACLs to verify the user name authenticated by the connector is
 set properly.
@@ -51,7 +51,7 @@ json_example = '''{
                 "options": [
                     "New York Bulls",
                     "Los Angeles Kings",
-                    "Golden State Warriros",
+                    "Golden State Warriors",
                     "Huston Rocket"
                 ],
                 "answer": "Huston Rocket"
@@ -213,7 +213,8 @@ class TestPreparedStatements(unittest.TestCase):
     utils.VtGate(mysql_server=True).start(
         extra_args=['-mysql_auth_server_impl', 'static',
                     '-mysql_server_query_timeout', '1s',
-                    '-mysql_auth_server_static_file', mysql_auth_server_static])
+                    '-mysql_auth_server_static_file', mysql_auth_server_static,
+                    "-mysql_server_version", '8.0.16-7'])
     # We use gethostbyname('localhost') so we don't presume
     # of the IP format (travis is only IP v4, really).
     params = dict(host=socket.gethostbyname('localhost'),
@@ -254,6 +255,16 @@ class TestPreparedStatements(unittest.TestCase):
 
     cursor.fetchone()
     cursor.close()
+
+    # Send an invalid table name to ensure that python's mysql client will not fail before entering vtgate
+    cursor = conn.cursor(cursor_class=MySQLCursorPrepared)
+    try:
+      cursor.execute('select * from prepare_stmt_test where id = %s', (1,))
+    except mysql.connector.Error as err:
+      if err.errno == 1105:
+        print "Could not find the table"
+      else:
+        raise
 
     cursor = conn.cursor(cursor_class=MySQLCursorPrepared)
     cursor.execute('select * from vt_prepare_stmt_test where id = %s', (1,))
@@ -296,6 +307,15 @@ class TestPreparedStatements(unittest.TestCase):
     if res[0] != 1:
       self.fail("Delete failed")
     cursor.close()
-
+    
+    # resetting the connection
+    conn.cmd_reset_connection()
+    cursor = conn.cursor(cursor_class=MySQLCursorPrepared)
+    cursor.execute('select * from vt_prepare_stmt_test where id = %s', (1,))
+    result = cursor.fetchone()
+    # Should fail since we cleared PreparedData inside the connection
+    with self.assertRaises(TypeError):
+      empty_val = result[-2]
+        
 if __name__ == '__main__':
   utils.main()

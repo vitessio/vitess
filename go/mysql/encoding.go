@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -78,6 +78,10 @@ func writeLenEncInt(data []byte, pos int, i uint64) int {
 
 func lenNullString(value string) int {
 	return len(value) + 1
+}
+
+func lenEOFString(value string) int {
+	return len(value)
 }
 
 func writeNullString(data []byte, pos int, value string) int {
@@ -178,6 +182,10 @@ func readNullString(data []byte, pos int) (string, int, bool) {
 		return "", 0, false
 	}
 	return string(data[pos : pos+end]), pos + end + 1, true
+}
+
+func readEOFString(data []byte, pos int) (string, int, bool) {
+	return string(data[pos:]), len(data) - pos, true
 }
 
 func readUint16(data []byte, pos int) (uint16, int, bool) {

@@ -11,7 +11,7 @@ RUN for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keys.gnupg.net --r
     apt-get update && \
     apt-get install -y --no-install-recommends \
         percona-server-server-5.7 \
-	libperconaserverclient18.1-dev && \
+	libperconaserverclient18.1-dev percona-xtrabackup-24 && \
     rm -rf /var/lib/apt/lists/*
 
 # Bootstrap Vitess

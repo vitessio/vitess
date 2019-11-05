@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -72,6 +72,9 @@ func (plan *Plan) fields() []*querypb.Field {
 func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error) {
 	result := make([]sqltypes.Value, len(plan.ColExprs))
 	for i, colExpr := range plan.ColExprs {
+		if colExpr.ColNum >= len(values) {
+			return false, nil, fmt.Errorf("index out of range, colExpr.ColNum: %d, len(values):%d", colExpr.ColNum, len(values))
+		}
 		result[i] = values[colExpr.ColNum]
 	}
 	if plan.Vindex == nil {
@@ -128,6 +131,7 @@ func mustSendDDL(query mysql.Query, dbname string, filter *binlogdatapb.Filter) 
 	return true
 }
 
+// tableMatches is similar to the one defined in vreplication.
 func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb.Filter) bool {
 	if !table.Qualifier.IsEmpty() && table.Qualifier.String() != dbname {
 		return false

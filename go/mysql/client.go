@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -373,6 +373,16 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 	if !ok {
 		return 0, nil, NewSQLError(CRVersionError, SSUnknownSQLState, "parseInitialHandshakePacket: packet has no protocol version")
 	}
+
+	// Server is allowed to immediately send ERR packet
+	if pver == ErrPacket {
+		errorCode, pos, _ := readUint16(data, pos)
+		// Normally there would be a 1-byte sql_state_marker field and a 5-byte
+		// sql_state field here, but docs say these will not be present in this case.
+		errorMsg, pos, _ := readEOFString(data, pos)
+		return 0, nil, NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "immediate error from server errorCode=%v errorMsg=%v", errorCode, errorMsg)
+	}
+
 	if pver != protocolVersion {
 		return 0, nil, NewSQLError(CRVersionError, SSUnknownSQLState, "bad protocol version: %v", pver)
 	}
@@ -615,7 +625,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 	// DbName, only if server supports it.
 	if params.DbName != "" && (capabilities&CapabilityClientConnectWithDB != 0) {
 		pos = writeNullString(data, pos, params.DbName)
-		c.SchemaName = params.DbName
+		c.schemaName = params.DbName
 	}
 
 	// Assume native client during response

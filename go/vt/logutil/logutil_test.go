@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -103,9 +103,8 @@ func TestPurgeByMtime(t *testing.T) {
 			t.Fatalf("os.Chtimes: %v", err)
 		}
 	}
-	now := time.Date(2020, 1, 1, 12, 15, 0, 0, time.UTC)
+	now := time.Date(2020, 1, 1, 12, 0, 0, 0, time.UTC)
 	filenameMtimeMap := map[string]string{
-		"vtadam.localhost.vitess.log.INFO.20200101-120000.00000": "2020-01-01T12:00:00.000Z",
 		"vtadam.localhost.vitess.log.INFO.20200101-113000.00000": "2020-01-01T11:30:00.000Z",
 		"vtadam.localhost.vitess.log.INFO.20200101-100000.00000": "2020-01-01T10:00:00.000Z",
 		"vtadam.localhost.vitess.log.INFO.20200101-090000.00000": "2020-01-01T09:00:00.000Z",
@@ -114,7 +113,11 @@ func TestPurgeByMtime(t *testing.T) {
 	for filename, mtimeStr := range filenameMtimeMap {
 		createFileWithMtime(filename, mtimeStr)
 	}
-	if err := os.Symlink("vtadam.localhost.vitess.log.INFO.20200101-120000.00000", path.Join(logDir, "vtadam.INFO")); err != nil {
+
+	// Create vtadam.INFO symlink to 100000. This is a contrived example in that
+	// current log (100000) is not the latest log (113000). This will not happen
+	// IRL but it helps us test edge cases of purging by mtime.
+	if err := os.Symlink("vtadam.localhost.vitess.log.INFO.20200101-100000.00000", path.Join(logDir, "vtadam.INFO")); err != nil {
 		t.Fatalf("os.Symlink: %v", err)
 	}
 
@@ -126,9 +129,9 @@ func TestPurgeByMtime(t *testing.T) {
 	}
 
 	if len(left) != 3 {
-		// 20200101-120000 is current
-		// 20200101-113000 is within 1 hour
-		// symlink remains
+		// 1. 113000 is within 1 hour
+		// 2. 100000 is current (vtadam.INFO)
+		// 3. vtadam.INFO symlink remains
 		// rest are removed
 		t.Errorf("wrong number of files remain: want %v, got %v", 3, len(left))
 	}
