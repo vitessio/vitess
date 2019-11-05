@@ -656,6 +656,22 @@ func (l *listener) StatsUpdate(ts *TabletStats) {
 	l.output <- ts
 }
 
+type fakeConn struct {
+	queryservice.QueryService
+	tablet *topodatapb.Tablet
+	// If fixedResult is set, the channels are not used.
+	fixedResult *querypb.StreamHealthResponse
+	// hcChan should be an unbuffered channel which holds the tablet's next health response.
+	hcChan chan *querypb.StreamHealthResponse
+	// errCh is either an unbuffered channel which holds the stream error to return, or nil.
+	errCh chan error
+	// cbErrCh is a channel which receives errors returned from the supplied callback.
+	cbErrCh chan error
+
+	mu       sync.Mutex
+	canceled bool
+}
+
 func createFakeConn(tablet *topodatapb.Tablet, c chan *querypb.StreamHealthResponse) *fakeConn {
 	key := TabletToMapKey(tablet)
 	conn := &fakeConn{
@@ -668,27 +684,27 @@ func createFakeConn(tablet *topodatapb.Tablet, c chan *querypb.StreamHealthRespo
 	return conn
 }
 
+func createFixedHealthConn(tablet *topodatapb.Tablet, fixedResult *querypb.StreamHealthResponse) *fakeConn {
+	key := TabletToMapKey(tablet)
+	conn := &fakeConn{
+		QueryService: fakes.ErrorQueryService,
+		tablet:       tablet,
+		fixedResult:  fixedResult,
+	}
+	connMap[key] = conn
+	return conn
+}
+
 func discoveryDialer(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 	key := TabletToMapKey(tablet)
 	return connMap[key], nil
 }
 
-type fakeConn struct {
-	queryservice.QueryService
-	tablet *topodatapb.Tablet
-	// hcChan should be an unbuffered channel which holds the tablet's next health response.
-	hcChan chan *querypb.StreamHealthResponse
-	// errCh is either an unbuffered channel which holds the stream error to return, or nil.
-	errCh chan error
-	// cbErrCh is a channel which receives errors returned from the supplied callback.
-	cbErrCh chan error
-
-	mu       sync.Mutex
-	canceled bool
-}
-
 // StreamHealth implements queryservice.QueryService.
 func (fc *fakeConn) StreamHealth(ctx context.Context, callback func(shr *querypb.StreamHealthResponse) error) error {
+	if fc.fixedResult != nil {
+		return callback(fc.fixedResult)
+	}
 	for {
 		select {
 		case shr := <-fc.hcChan:
@@ -696,7 +712,10 @@ func (fc *fakeConn) StreamHealth(ctx context.Context, callback func(shr *querypb
 				if err == io.EOF {
 					return nil
 				}
-				fc.cbErrCh <- err
+				select {
+				case fc.cbErrCh <- err:
+				case <-ctx.Done():
+				}
 				return err
 			}
 		case err := <-fc.errCh:

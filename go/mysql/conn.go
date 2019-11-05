@@ -110,10 +110,12 @@ type Conn struct {
 	// It is set during the initial handshake.
 	UserData Getter
 
-	// SchemaName is the default database name to use. It is set
+	// schemaName is the default database name to use. It is set
 	// during handshake, and by ComInitDb packets. Both client and
-	// servers maintain it.
-	SchemaName string
+	// servers maintain it. This member is private because it's
+	// non-authoritative: the client can change the schema name
+	// through the 'USE' statement, which will bypass this variable.
+	schemaName string
 
 	// ServerVersion is set during Connect with the server
 	// version.  It is not changed afterwards. It is unused for
@@ -731,7 +733,8 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 	case ComInitDB:
 		db := c.parseComInitDB(data)
 		c.recycleReadPacket()
-		c.SchemaName = db
+		c.schemaName = db
+		handler.ComInitDB(c, db)
 		if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
 			log.Errorf("Error writing ComInitDB result to %s: %v", c, err)
 			return err

@@ -5,8 +5,9 @@ package query
 
 import (
 	fmt "fmt"
-	proto "github.com/golang/protobuf/proto"
 	math "math"
+
+	proto "github.com/golang/protobuf/proto"
 	topodata "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpc "vitess.io/vitess/go/vt/proto/vtrpc"
 )
