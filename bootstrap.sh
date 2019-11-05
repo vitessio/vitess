@@ -126,6 +126,14 @@ function install_dep() {
 # 1. Installation of dependencies.
 #
 
+# Wrapper around the `arch` command which plays nice with OS X
+function get_arch() {
+  case $(uname) in
+    Linux) arch;;
+    Darwin) uname -m;;
+  esac
+}
+
 
 # Install the gRPC Python library (grpcio) and the protobuf gRPC Python plugin (grpcio-tools) from PyPI.
 # Dependencies like the Python protobuf package will be installed automatically.
@@ -164,7 +172,7 @@ function install_protoc() {
     Darwin) local platform=osx;;
   esac
 
-  case $(arch) in
+  case $(get_arch) in
       aarch64)  local target=aarch_64;;
       x86_64)  local target=x86_64;;
       *)   echo "ERROR: unsupported architecture"; exit 1;;
@@ -209,7 +217,7 @@ function install_etcd() {
     Darwin) local platform=darwin; local ext=zip;;
   esac
 
-  case $(arch) in
+  case $(get_arch) in
       aarch64)  local target=arm64;;
       x86_64)  local target=amd64;;
       *)   echo "ERROR: unsupported architecture"; exit 1;;
@@ -240,7 +248,7 @@ function install_consul() {
     Darwin) local platform=darwin;;
   esac
 
-  case $(arch) in
+  case $(get_arch) in
       aarch64)  local target=arm64;;
       x86_64)  local target=amd64;;
       *)   echo "ERROR: unsupported architecture"; exit 1;;
