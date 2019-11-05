@@ -29,8 +29,8 @@ import (
 	"strings"
 
 	jsonpatch "github.com/evanphx/json-patch"
-
 	yamlpatch "github.com/krishicks/yaml-patch"
+
 	"vitess.io/vitess/go/vt/log"
 )
 

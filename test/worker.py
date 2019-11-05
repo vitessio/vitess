@@ -217,6 +217,12 @@ class TestBaseSplitClone(unittest.TestCase, base_sharding.BaseShardingTest):
     utils.run_vtctl(
         ['InitShardMaster', '-force', 'test_keyspace/%s' % shard_name,
          shard_tablets.master.tablet_alias], auto_log=True)
+    timeout = 10
+    while True:
+      shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/%s' % shard_name])
+      if shard['master_alias']['uid'] == shard_tablets.master.tablet_uid:
+        break
+      wait_step('master_alias has been set', timeout)
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_keyspace'], auto_log=True)
 
     # Enforce a health check instead of waiting for the next periodic one.
@@ -507,8 +513,9 @@ class TestBaseSplitCloneResiliency(TestBaseSplitClone):
 
       # Bring back masters. Since we test with semi-sync now, we need at least
       # one replica for the new master. This test is already quite expensive,
-      # so we bring back the old master as a replica rather than having a third
-      # replica up the whole time.
+      # so we bring back the old master and then let it be converted to a
+      # replica by PRS, rather than leaving the old master down and having a
+      # third replica up the whole time.
       logging.debug('Restarting mysqld on destination masters')
       utils.wait_procs(
           [shard_0_master.start_mysql(),

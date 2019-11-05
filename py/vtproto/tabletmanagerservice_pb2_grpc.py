@@ -122,6 +122,11 @@ class TabletManagerStub(object):
         request_serializer=tabletmanagerdata__pb2.MasterPositionRequest.SerializeToString,
         response_deserializer=tabletmanagerdata__pb2.MasterPositionResponse.FromString,
         )
+    self.WaitForPosition = channel.unary_unary(
+        '/tabletmanagerservice.TabletManager/WaitForPosition',
+        request_serializer=tabletmanagerdata__pb2.WaitForPositionRequest.SerializeToString,
+        response_deserializer=tabletmanagerdata__pb2.WaitForPositionResponse.FromString,
+        )
     self.StopSlave = channel.unary_unary(
         '/tabletmanagerservice.TabletManager/StopSlave',
         request_serializer=tabletmanagerdata__pb2.StopSlaveRequest.SerializeToString,
@@ -395,6 +400,13 @@ class TabletManagerServicer(object):
 
   def MasterPosition(self, request, context):
     """MasterPosition returns the current master position
+    """
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
+  def WaitForPosition(self, request, context):
+    """WaitForPosition waits for the position to be reached
     """
     context.set_code(grpc.StatusCode.UNIMPLEMENTED)
     context.set_details('Method not implemented!')
@@ -702,6 +714,11 @@ def add_TabletManagerServicer_to_server(servicer, server):
           servicer.MasterPosition,
           request_deserializer=tabletmanagerdata__pb2.MasterPositionRequest.FromString,
           response_serializer=tabletmanagerdata__pb2.MasterPositionResponse.SerializeToString,
+      ),
+      'WaitForPosition': grpc.unary_unary_rpc_method_handler(
+          servicer.WaitForPosition,
+          request_deserializer=tabletmanagerdata__pb2.WaitForPositionRequest.FromString,
+          response_serializer=tabletmanagerdata__pb2.WaitForPositionResponse.SerializeToString,
       ),
       'StopSlave': grpc.unary_unary_rpc_method_handler(
           servicer.StopSlave,

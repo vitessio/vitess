@@ -43,6 +43,9 @@ func (th *testHandler) NewConnection(c *mysql.Conn) {
 func (th *testHandler) ConnectionClosed(c *mysql.Conn) {
 }
 
+func (th *testHandler) ComInitDB(c *mysql.Conn, schemaName string) {
+}
+
 func (th *testHandler) ComQuery(c *mysql.Conn, q string, callback func(*sqltypes.Result) error) error {
 	return nil
 }
@@ -52,7 +55,6 @@ func (th *testHandler) ComPrepare(c *mysql.Conn, q string) ([]*querypb.Field, er
 }
 
 func (th *testHandler) ComResetConnection(c *mysql.Conn) {
-
 }
 
 func (th *testHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
