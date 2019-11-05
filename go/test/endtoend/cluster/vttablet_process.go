@@ -57,6 +57,7 @@ type VttabletProcess struct {
 	VtctldAddress               string
 	Directory                   string
 	VerifyURL                   string
+	EnableSemiSync              bool
 	//Extra Args to be set before starting the vttablet process
 	ExtraArgs []string
 
@@ -83,7 +84,6 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-init_keyspace", vttablet.Keyspace,
 		"-init_tablet_type", vttablet.TabletType,
 		"-health_check_interval", fmt.Sprintf("%ds", vttablet.HealthCheckInterval),
-		"-enable_semi_sync",
 		"-enable_replication_reporter",
 		"-backup_storage_implementation", vttablet.BackupStorageImplementation,
 		"-file_backup_storage_root", vttablet.FileBackupStorageRoot,
@@ -91,6 +91,9 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-service_map", vttablet.ServiceMap,
 		"-vtctld_addr", vttablet.VtctldAddress,
 	)
+	if vttablet.EnableSemiSync {
+		vttablet.proc.Args = append(vttablet.proc.Args, "-enable_semi_sync")
+	}
 	vttablet.proc.Args = append(vttablet.proc.Args, vttablet.ExtraArgs...)
 
 	vttablet.proc.Stderr = os.Stderr
@@ -170,7 +173,7 @@ func (vttablet *VttabletProcess) TearDown() error {
 // VttabletProcessInstance returns a VttabletProcess handle for vttablet process
 // configured with the given Config.
 // The process must be manually started by calling setup()
-func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string, shard string, keyspace string, vtctldPort int, tabletType string, topoPort int, hostname string, tmpDirectory string, extraArgs []string) *VttabletProcess {
+func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string, shard string, keyspace string, vtctldPort int, tabletType string, topoPort int, hostname string, tmpDirectory string, extraArgs []string, enableSemiSync bool) *VttabletProcess {
 	vtctl := VtctlProcessInstance(topoPort, hostname)
 	vttablet := &VttabletProcess{
 		Name:                        "vttablet",
@@ -193,6 +196,7 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 		PidFile:                     path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/vttablet.pid", tabletUID)),
 		VtctldAddress:               fmt.Sprintf("http://%s:%d", hostname, vtctldPort),
 		ExtraArgs:                   extraArgs,
+		EnableSemiSync:              enableSemiSync,
 	}
 
 	if tabletType == "rdonly" {
