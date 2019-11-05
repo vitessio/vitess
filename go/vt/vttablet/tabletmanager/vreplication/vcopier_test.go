@@ -26,12 +26,11 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 )
 
 func TestPlayerCopyTables(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
 		"create table src1(id int, val varbinary(128), primary key(id))",
@@ -114,7 +113,7 @@ func TestPlayerCopyTables(t *testing.T) {
 
 // TestPlayerCopyBigTable ensures the copy-catchup back-and-forth loop works correctly.
 func TestPlayerCopyBigTable(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 
 	savedPacketSize := *vstreamer.PacketSize
 	// PacketSize of 1 byte will send at most one row at a time.
@@ -245,7 +244,7 @@ func TestPlayerCopyBigTable(t *testing.T) {
 // TestPlayerCopyWildcardRule ensures the copy-catchup back-and-forth loop works correctly
 // when the filter uses a wildcard rule
 func TestPlayerCopyWildcardRule(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 
 	savedPacketSize := *vstreamer.PacketSize
 	// PacketSize of 1 byte will send at most one row at a time.
@@ -375,7 +374,7 @@ func TestPlayerCopyWildcardRule(t *testing.T) {
 
 // TestPlayerCopyTableContinuation tests the copy workflow where tables have been partially copied.
 func TestPlayerCopyTableContinuation(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
 		// src1 is initialized as partially copied.
@@ -539,7 +538,7 @@ func TestPlayerCopyTableContinuation(t *testing.T) {
 
 // TestPlayerCopyWildcardTableContinuation tests the copy workflow where tables have been partially copied.
 func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
 		// src is initialized as partially copied.
@@ -622,7 +621,7 @@ func TestPlayerCopyWildcardTableContinuation(t *testing.T) {
 }
 
 func TestPlayerCopyTablesNone(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
@@ -660,7 +659,7 @@ func TestPlayerCopyTablesNone(t *testing.T) {
 }
 
 func TestPlayerCopyTableCancel(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
 		"create table src1(id int, val varbinary(128), primary key(id))",

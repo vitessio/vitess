@@ -78,8 +78,8 @@ func FilterTables(sd *tabletmanagerdatapb.SchemaDefinition, tables, excludeTable
 	if len(tables) > 0 {
 		tableRegexps = make([]*regexp.Regexp, len(tables))
 		for i, table := range tables {
-			if len(table) > 2 && strings.HasPrefix(table, "/") && strings.HasSuffix(table, "/") {
-				table = table[1 : len(table)-1]
+			if strings.HasPrefix(table, "/") {
+				table = strings.Trim(table, "/")
 				var err error
 				tableRegexps[i], err = regexp.Compile(table)
 				if err != nil {
@@ -92,8 +92,8 @@ func FilterTables(sd *tabletmanagerdatapb.SchemaDefinition, tables, excludeTable
 	if len(excludeTables) > 0 {
 		excludeTableRegexps = make([]*regexp.Regexp, len(excludeTables))
 		for i, table := range excludeTables {
-			if len(table) > 2 && strings.HasPrefix(table, "/") && strings.HasSuffix(table, "/") {
-				table = table[1 : len(table)-1]
+			if strings.HasPrefix(table, "/") {
+				table = strings.Trim(table, "/")
 				var err error
 				excludeTableRegexps[i], err = regexp.Compile(table)
 				if err != nil {
