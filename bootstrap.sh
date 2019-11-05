@@ -35,10 +35,8 @@ function fail() {
 
 [[ "$(dirname "$0")" = "." ]] || fail "bootstrap.sh must be run from its current directory"
 
-go version &>/dev/null  || fail "Go is not installed or is not on \$PATH"
-[[ "$(go version 2>&1)" =~ go1\.[1-9][1-9] ]] || fail "Go is not version 1.11+"
-
 # Create main directories.
+VTROOT="${VTROOT:-${PWD/\/src\/vitess.io\/vitess/}}"
 mkdir -p "$VTROOT/dist"
 mkdir -p "$VTROOT/bin"
 mkdir -p "$VTROOT/lib"
@@ -52,6 +50,9 @@ if [ "$BUILD_TESTS" == 1 ] ; then
 else
     source ./build.env
 fi
+
+go version &>/dev/null  || fail "Go is not installed or is not on \$PATH"
+goversion_min 1.12 || fail "Go is not version 1.12+"
 
 if [ "$BUILD_TESTS" == 1 ] ; then
     # Set up required soft links.
