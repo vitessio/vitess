@@ -80,11 +80,6 @@ func (vind *NumericStaticMap) IsUnique() bool {
 	return true
 }
 
-// IsFunctional returns true since the Vindex is functional.
-func (vind *NumericStaticMap) IsFunctional() bool {
-	return true
-}
-
 // Verify returns true if ids and ksids match.
 func (vind *NumericStaticMap) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))

@@ -654,7 +654,7 @@ func TestInsertShardedKeyrange(t *testing.T) {
 
 	// If a unique vindex returns a keyrange, we fail the insert
 	_, err := executorExec(executor, "insert into keyrange_table(krcol_unique, krcol) values(1, 1)", nil)
-	want := "execInsertSharded: getInsertShardedRoute: could not map INT64(1) to a unique keyspace id: DestinationKeyRange(-10)"
+	want := "execInsertSharded: getInsertShardedRoute: could not map [INT64(1)] to a unique keyspace id: DestinationKeyRange(-10)"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec error: %v, want %s", err, want)
 	}
@@ -786,13 +786,9 @@ func TestInsertShardedIgnore(t *testing.T) {
 		Sql: "insert ignore into insert_ignore_test(pv, owned, verify) values (:_pv0, :_owned0, :_verify0),(:_pv4, :_owned4, :_verify4) /* vtgate:: keyspace_id:166b40b44aba4bd6,166b40b44aba4bd6 */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_pv0":     sqltypes.Int64BindVariable(1),
-			"_pv2":     sqltypes.Int64BindVariable(3),
-			"_pv3":     sqltypes.Int64BindVariable(4),
 			"_pv4":     sqltypes.Int64BindVariable(5),
 			"_pv5":     sqltypes.Int64BindVariable(6),
 			"_owned0":  sqltypes.Int64BindVariable(1),
-			"_owned2":  sqltypes.Int64BindVariable(3),
-			"_owned3":  sqltypes.Int64BindVariable(4),
 			"_owned4":  sqltypes.Int64BindVariable(5),
 			"_owned5":  sqltypes.Int64BindVariable(6),
 			"_verify0": sqltypes.Int64BindVariable(1),
@@ -807,13 +803,9 @@ func TestInsertShardedIgnore(t *testing.T) {
 		Sql: "insert ignore into insert_ignore_test(pv, owned, verify) values (:_pv5, :_owned5, :_verify5) /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_pv0":     sqltypes.Int64BindVariable(1),
-			"_pv2":     sqltypes.Int64BindVariable(3),
-			"_pv3":     sqltypes.Int64BindVariable(4),
 			"_pv4":     sqltypes.Int64BindVariable(5),
 			"_pv5":     sqltypes.Int64BindVariable(6),
 			"_owned0":  sqltypes.Int64BindVariable(1),
-			"_owned2":  sqltypes.Int64BindVariable(3),
-			"_owned3":  sqltypes.Int64BindVariable(4),
 			"_owned4":  sqltypes.Int64BindVariable(5),
 			"_owned5":  sqltypes.Int64BindVariable(6),
 			"_verify0": sqltypes.Int64BindVariable(1),
