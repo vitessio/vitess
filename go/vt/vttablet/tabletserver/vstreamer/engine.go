@@ -111,6 +111,13 @@ func (vse *Engine) Open(keyspace, cell string) error {
 	return nil
 }
 
+// IsOpen checks if the engine is opened
+func (vse *Engine) IsOpen() bool {
+	vse.mu.Lock()
+	defer vse.mu.Unlock()
+	return vse.isOpen
+}
+
 // Close closes the Engine service.
 func (vse *Engine) Close() {
 	func() {

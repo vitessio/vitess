@@ -86,7 +86,7 @@ func TestMySQLVstreamerClient(t *testing.T) {
 		ExternalMysql: "erepl",
 	}
 
-	cancel, _ := startVReplicationV2(t, filter, bls, "")
+	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
 	testcases := []struct {
@@ -179,7 +179,13 @@ func TestPlayerFilters(t *testing.T) {
 			Match: "/nopk",
 		}},
 	}
-	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
 	testcases := []struct {
@@ -413,7 +419,15 @@ func TestPlayerKeywordNames(t *testing.T) {
 			Filter: "select `primary`+1 as `primary`, concat(`column`, 'a') as `column` from `commit`",
 		}},
 	}
-	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+
+	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
 	testcases := []struct {
@@ -565,7 +579,13 @@ func TestUnicode(t *testing.T) {
 			Filter: "select * from src1",
 		}},
 	}
-	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
 	testcases := []struct {
@@ -632,7 +652,13 @@ func TestPlayerUpdates(t *testing.T) {
 			Filter: "select id, grouped, ungrouped, sum(summed) as summed, count(*) as rcount from t1 group by id, grouped",
 		}},
 	}
-	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
 	testcases := []struct {
@@ -741,7 +767,13 @@ func TestPlayerRowMove(t *testing.T) {
 			Filter: "select val1, sum(val2) as sval2, count(*) as rcount from src group by val1",
 		}},
 	}
-	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
 	execStatements(t, []string{
@@ -816,7 +848,13 @@ func TestPlayerTypes(t *testing.T) {
 			Match: "/.*",
 		}},
 	}
-	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 	testcases := []struct {
 		input  string
@@ -907,8 +945,13 @@ func TestPlayerDDL(t *testing.T) {
 			Match: "/.*",
 		}},
 	}
-
-	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
 	// Issue a dummy change to ensure vreplication is initialized. Otherwise there
 	// is a race between the DDLs and the schema loader of vstreamer.
 	// Root cause seems to be with MySQL where t1 shows up in information_schema before
@@ -928,8 +971,13 @@ func TestPlayerDDL(t *testing.T) {
 		"/update _vt.vreplication set pos=",
 	})
 	cancel()
-
-	cancel, id := startVReplication(t, filter, binlogdatapb.OnDDLAction_STOP, "")
+	bls = &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_STOP,
+	}
+	cancel, id := startVReplication(t, bls, "")
 	execStatements(t, []string{"alter table t1 add column val varchar(128)"})
 	pos1 := masterPosition(t)
 	execStatements(t, []string{"alter table t1 drop column val"})
@@ -956,9 +1004,14 @@ func TestPlayerDDL(t *testing.T) {
 		"commit",
 	})
 	cancel()
-
+	bls = &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_EXEC,
+	}
 	execStatements(t, []string{fmt.Sprintf("alter table %s.t1 add column val2 varchar(128)", vrepldb)})
-	cancel, _ = startVReplication(t, filter, binlogdatapb.OnDDLAction_EXEC, "")
+	cancel, _ = startVReplication(t, bls, "")
 	execStatements(t, []string{"alter table t1 add column val1 varchar(128)"})
 	expectDBClientQueries(t, []string{
 		"alter table t1 add column val1 varchar(128)",
@@ -977,8 +1030,14 @@ func TestPlayerDDL(t *testing.T) {
 		fmt.Sprintf("alter table %s.t1 drop column val1", vrepldb),
 	})
 
+	bls = &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_EXEC_IGNORE,
+	}
 	execStatements(t, []string{fmt.Sprintf("create table %s.t2(id int, primary key(id))", vrepldb)})
-	cancel, _ = startVReplication(t, filter, binlogdatapb.OnDDLAction_EXEC_IGNORE, "")
+	cancel, _ = startVReplication(t, bls, "")
 	execStatements(t, []string{"alter table t1 add column val1 varchar(128)"})
 	expectDBClientQueries(t, []string{
 		"alter table t1 add column val1 varchar(128)",
@@ -1111,7 +1170,13 @@ func TestPlayerIdleUpdate(t *testing.T) {
 			Match: "/.*",
 		}},
 	}
-	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
 	execStatements(t, []string{
@@ -1157,7 +1222,13 @@ func TestPlayerSplitTransaction(t *testing.T) {
 			Match: "/.*",
 		}},
 	}
-	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
 	execStatements(t, []string{
@@ -1195,7 +1266,13 @@ func TestPlayerLockErrors(t *testing.T) {
 			Match: "/.*",
 		}},
 	}
-	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
 	execStatements(t, []string{
@@ -1269,7 +1346,13 @@ func TestPlayerCancelOnLock(t *testing.T) {
 			Match: "/.*",
 		}},
 	}
-	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
 	execStatements(t, []string{
@@ -1341,7 +1424,13 @@ func TestPlayerBatching(t *testing.T) {
 			Match: "/.*",
 		}},
 	}
-	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_EXEC, "")
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_EXEC,
+	}
+	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
 	execStatements(t, []string{
@@ -1438,7 +1527,13 @@ func TestPlayerRelayLogMaxSize(t *testing.T) {
 					Match: "/.*",
 				}},
 			}
-			cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+			bls := &binlogdatapb.BinlogSource{
+				Keyspace: env.KeyspaceName,
+				Shard:    env.ShardName,
+				Filter:   filter,
+				OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+			}
+			cancel, _ := startVReplication(t, bls, "")
 			defer cancel()
 
 			execStatements(t, []string{
@@ -1527,7 +1622,13 @@ func TestRestartOnVStreamEnd(t *testing.T) {
 			Match: "/.*",
 		}},
 	}
-	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
 	execStatements(t, []string{
@@ -1578,7 +1679,14 @@ func TestTimestamp(t *testing.T) {
 			Match: "/.*",
 		}},
 	}
-	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
 	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), "select now()")
@@ -1610,44 +1718,9 @@ func execStatements(t *testing.T, queries []string) {
 	}
 }
 
-func startVReplicationV2(t *testing.T, filter *binlogdatapb.Filter, bls *binlogdatapb.BinlogSource, pos string) (cancelFunc func(), id int) {
+func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string) (cancelFunc func(), id int) {
 	t.Helper()
 
-	if pos == "" {
-		pos = masterPosition(t)
-	}
-	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb)
-	qr, err := playerEngine.Exec(query)
-	if err != nil {
-		t.Fatal(err)
-	}
-	expectDBClientQueries(t, []string{
-		"/insert into _vt.vreplication",
-		"/update _vt.vreplication set state='Running'",
-	})
-
-	var once sync.Once
-	return func() {
-		t.Helper()
-		once.Do(func() {
-			query := fmt.Sprintf("delete from _vt.vreplication where id = %d", qr.InsertID)
-			if _, err := playerEngine.Exec(query); err != nil {
-				t.Fatal(err)
-			}
-			expectDeleteQueries(t)
-		})
-	}, int(qr.InsertID)
-}
-
-func startVReplication(t *testing.T, filter *binlogdatapb.Filter, onddl binlogdatapb.OnDDLAction, pos string) (cancelFunc func(), id int) {
-	t.Helper()
-
-	bls := &binlogdatapb.BinlogSource{
-		Keyspace: env.KeyspaceName,
-		Shard:    env.ShardName,
-		Filter:   filter,
-		OnDdl:    onddl,
-	}
 	if pos == "" {
 		pos = masterPosition(t)
 	}
