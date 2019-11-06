@@ -67,7 +67,7 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 		"shutdown",
 	)
-	return tmpProcess.Run()
+	return tmpProcess.Start()
 }
 
 // MysqlCtlProcessInstance returns a Mysqlctl handle for mysqlctl process

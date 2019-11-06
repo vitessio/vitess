@@ -17,6 +17,7 @@ limitations under the License.
 package cluster
 
 import (
+	"flag"
 	"fmt"
 	"math/rand"
 	"os"
@@ -28,14 +29,20 @@ import (
 // DefaultCell : If no cell name is passed, then use following
 const DefaultCell = "zone1"
 
+var (
+	keepData = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
+)
+
 // LocalProcessCluster Testcases need to use this to iniate a cluster
 type LocalProcessCluster struct {
-	Keyspaces     []Keyspace
-	Cell          string
-	BaseTabletUID int
-	Hostname      string
-	TopoPort      int
-	TmpDirectory  string
+	Keyspaces          []Keyspace
+	Cell               string
+	BaseTabletUID      int
+	Hostname           string
+	TopoPort           int
+	TmpDirectory       string
+	OriginalVTDATAROOT string
+	CurrentVTDATAROOT  string
 
 	VtgateMySQLPort int
 	VtgateGrpcPort  int
@@ -238,7 +245,7 @@ func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 		cluster.VtgateMySQLPort,
 		cluster.Cell,
 		cluster.Cell,
-    cluster.Hostname,
+		cluster.Hostname,
 		"MASTER,REPLICA",
 		cluster.topoProcess.Port,
 		cluster.TmpDirectory,
@@ -246,6 +253,16 @@ func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 
 	log.Info(fmt.Sprintf("Vtgate started, connect to mysql using : mysql -h 127.0.0.1 -P %d", cluster.VtgateMySQLPort))
 	return cluster.VtgateProcess.Setup()
+}
+
+// NewCluster instantiates a new cluster
+func NewCluster(cell string, hostname string) *LocalProcessCluster {
+	cluster := &LocalProcessCluster{Cell: cell, Hostname: hostname}
+	cluster.OriginalVTDATAROOT = os.Getenv("VTDATAROOT")
+	cluster.CurrentVTDATAROOT = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vtroot_%d", cluster.GetAndReservePort()))
+	_ = createDirectory(cluster.CurrentVTDATAROOT, 0700)
+	_ = os.Setenv("VTDATAROOT", cluster.CurrentVTDATAROOT)
+	return cluster
 }
 
 // ReStartVtgate starts vtgate with updated configs
@@ -291,7 +308,7 @@ func (cluster *LocalProcessCluster) Teardown() (err error) {
 		return
 	}
 
-	if err = cluster.topoProcess.TearDown(cluster.Cell); err != nil {
+	if err = cluster.topoProcess.TearDown(cluster.Cell, cluster.OriginalVTDATAROOT, cluster.CurrentVTDATAROOT, *keepData); err != nil {
 		log.Error(err.Error())
 		return
 	}
