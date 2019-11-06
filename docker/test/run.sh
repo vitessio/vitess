@@ -160,35 +160,44 @@ case "$mode" in
   "create_cache") echo "Creating cache image $cache_image ..." ;;
 esac
 
-# "cp" command to copy the source code.
-copy_src_cmd="cp -R /tmp/src/* ."
+# Construct "cp" command to copy the source code.
+#
+# Copy the full source tree except:
+# - vendor
+# That's because these directories are already part of the image.
+#
+# Note that we're using the Bash extended Glob support "!(vendor)" on
+# purpose here to minimize the size of the cache image: With this trick,
+# we do not move or overwrite the existing files while copying the other
+# directories. Therefore, the existing files do not count as changed and will
+# not be part of the new Docker layer of the cache image.
+copy_src_cmd="cp -R /tmp/src/!(vendor|bootstrap.sh) ."
 # Copy the .git directory because travis/check_make_proto.sh needs a working
 # Git repository.
 copy_src_cmd=$(append_cmd "$copy_src_cmd" "cp -R /tmp/src/.git .")
 
 # Enable gomodules
 run_bootstrap_cmd="export GO111MODULE=on"
-# Copy bootstrap.sh if it changed
-# run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "if [[ \$(diff -w bootstrap.sh /tmp/src/bootstrap.sh) ]]; then cp -f /tmp/src/bootstrap.sh .; bootstrap=1; fi")
-# run bootstrap.sh if necessary
-# run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "if [[ -n \$bootstrap ]]; then ./bootstrap.sh; fi")
-
-# If an original location dir exists, move everything from it to here.
 
 run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "[ -d /vt/dist ] && rm -rf dist && ln -s /vt/dist /vt/src/vitess.io/vitess/dist")
 run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "[ -d /vt/bin ] && rm -rf bin && ln -s /vt/bin /vt/src/vitess.io/vitess/bin")
 run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "[ -d /vt/lib ] && rm -rf lib && ln -s /vt/lib /vt/src/vitess.io/vitess/lib")
 run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "[ -d /vt/vthook ] && rm -rf vthook && ln -s /vt/vthook /vt/src/vitess.io/vitess/vthook")
 
-run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "./bootstrap.sh")
-run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "source ./dev.env")
+run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "env")
+run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "export VTROOT=/vt/src/vitess.io/vitess && unset VTTOP")
+run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "env")
 
+# Copy bootstrap.sh if it changed
+run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "if [[ \$(diff -w bootstrap.sh /tmp/src/bootstrap.sh) ]]; then cp -f /tmp/src/bootstrap.sh .; bootstrap=1; fi")
+# run bootstrap.sh if necessary
+run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "if [[ -n \$bootstrap ]]; then ./bootstrap.sh; fi")
 copy_src_cmd=$(append_cmd "$copy_src_cmd" "$run_bootstrap_cmd")
 
 # Construct the command we will actually run.
 #
 # Uncomment the next line if you need to debug "bashcmd".
-bashcmd="set -x"
+#bashcmd="set -x"
 if [[ -z "$existing_cache_image" ]]; then
   bashcmd=$(append_cmd "$bashcmd" "$copy_src_cmd")
 fi

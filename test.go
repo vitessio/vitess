@@ -195,6 +195,7 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 	// Also try to make them use different port ranges
 	// to mitigate failures due to zombie processes.
 	cmd.Env = updateEnv(os.Environ(), map[string]string{
+		"VTROOT":      "/vt/src/vitess.io/vitess",
 		"VTDATAROOT":  dataDir,
 		"VTPORTSTART": strconv.FormatInt(int64(getPortStart(100)), 10),
 	})

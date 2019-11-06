@@ -1,0 +1,34 @@
+name: Go
+on: [push]
+jobs:
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Set up Go 1.13
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.13
+      id: local-example
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v1
+
+    - name: Get dependencies
+      run: |
+        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget
+        sudo service mysql stop
+        sudo service etcd stop
+        sudo systemctl disable mysql
+        sudo systemctl disable etcd
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+    - name: Build
+      run: make build
+
+    - name: Run Local Example
+      run: |
+        VTROOT=$PWD test/local_example.sh
+
