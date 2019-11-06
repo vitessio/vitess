@@ -215,8 +215,8 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 			vsClient = NewMySQLVStreamerClient()
 		}
 
-		vreplicator := NewVReplicator(ct.id, &ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld)
-		return vreplicator.Replicate(ctx)
+		vr := newVReplicator(ct.id, &ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld)
+		return vr.Replicate(ctx)
 	}
 	return fmt.Errorf("missing source")
 }

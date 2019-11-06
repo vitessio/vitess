@@ -36,7 +36,7 @@ import (
 )
 
 type vplayer struct {
-	vr                 *VReplicator
+	vr                 *vreplicator
 	startPos           string
 	gtidStartPos       mysql.Position
 	stopPos            mysql.Position
@@ -59,7 +59,7 @@ type vplayer struct {
 	timeOffsetNs int64
 }
 
-func newVPlayer(vr *VReplicator, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result, pausePos mysql.Position) *vplayer {
+func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result, pausePos mysql.Position) *vplayer {
 	saveStop := true
 	if !pausePos.IsZero() {
 		settings.StopPos = pausePos

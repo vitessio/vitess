@@ -44,8 +44,8 @@ var (
 	replicaLagTolerance = 10 * time.Second
 )
 
-// VReplicator provides the core logic to start vreplication streams
-type VReplicator struct {
+// vreplicator provides the core logic to start vreplication streams
+type vreplicator struct {
 	id       uint32
 	dbClient *vdbClient
 	// source
@@ -65,9 +65,9 @@ type SchemasLoader interface {
 	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error)
 }
 
-// NewVReplicator creates a new vreplicator
-func NewVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, sl SchemasLoader) *VReplicator {
-	return &VReplicator{
+// newVReplicator creates a new vreplicator
+func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, sl SchemasLoader) *vreplicator {
+	return &vreplicator{
 		id:              id,
 		source:          source,
 		sourceVStreamer: sourceVStreamer,
@@ -78,7 +78,7 @@ func NewVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreame
 }
 
 // Replicate starts a vreplication stream.
-func (vr *VReplicator) Replicate(ctx context.Context) error {
+func (vr *vreplicator) Replicate(ctx context.Context) error {
 	tableKeys, err := vr.buildTableKeys()
 	if err != nil {
 		return err
@@ -117,7 +117,7 @@ func (vr *VReplicator) Replicate(ctx context.Context) error {
 	}
 }
 
-func (vr *VReplicator) buildTableKeys() (map[string][]string, error) {
+func (vr *vreplicator) buildTableKeys() (map[string][]string, error) {
 	schema, err := vr.sl.GetSchema(vr.dbClient.DBName(), []string{"/.*/"}, nil, false)
 	if err != nil {
 		return nil, err
@@ -133,7 +133,7 @@ func (vr *VReplicator) buildTableKeys() (map[string][]string, error) {
 	return tableKeys, nil
 }
 
-func (vr *VReplicator) readSettings(ctx context.Context) (settings binlogplayer.VRSettings, numTablesToCopy int64, err error) {
+func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.VRSettings, numTablesToCopy int64, err error) {
 	settings, err = binlogplayer.ReadVRSettings(vr.dbClient, vr.id)
 	if err != nil {
 		return settings, numTablesToCopy, fmt.Errorf("error reading VReplication settings: %v", err)
@@ -168,7 +168,7 @@ func (vr *VReplicator) readSettings(ctx context.Context) (settings binlogplayer.
 	return settings, numTablesToCopy, nil
 }
 
-func (vr *VReplicator) setMessage(message string) error {
+func (vr *vreplicator) setMessage(message string) error {
 	vr.stats.History.Add(&binlogplayer.StatsHistoryRecord{
 		Time:    time.Now(),
 		Message: message,
@@ -180,7 +180,7 @@ func (vr *VReplicator) setMessage(message string) error {
 	return nil
 }
 
-func (vr *VReplicator) setState(state, message string) error {
+func (vr *vreplicator) setState(state, message string) error {
 	return binlogplayer.SetVReplicationState(vr.dbClient, vr.id, state, message)
 }
 
