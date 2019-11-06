@@ -133,9 +133,6 @@ func (vtctld *VtctldProcess) TearDown() error {
 		return nil
 	}
 
-	os.RemoveAll(vtctld.LogDir)
-	//os.RemoveAll(path.Join(vtctld.Directory, "backups"))
-
 	// Attempt graceful shutdown with SIGTERM first
 	vtctld.proc.Process.Signal(syscall.SIGTERM)
 

@@ -154,8 +154,6 @@ func (vttablet *VttabletProcess) TearDown() error {
 	// Attempt graceful shutdown with SIGTERM first
 	vttablet.proc.Process.Signal(syscall.SIGTERM)
 
-	os.RemoveAll(vttablet.Directory)
-
 	select {
 	case err := <-vttablet.exit:
 		vttablet.proc = nil
@@ -176,7 +174,7 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 	vttablet := &VttabletProcess{
 		Name:                        "vttablet",
 		Binary:                      "vttablet",
-		FileToLogQueries:            path.Join(tmpDirectory, fmt.Sprintf("/vt_%010d/vttable.pid", tabletUID)),
+		FileToLogQueries:            path.Join(tmpDirectory, fmt.Sprintf("/vt_%010d/querylog.txt", tabletUID)),
 		Directory:                   path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID)),
 		TabletPath:                  fmt.Sprintf("%s-%010d", cell, tabletUID),
 		ServiceMap:                  "grpc-queryservice,grpc-tabletmanager,grpc-updatestream",
@@ -191,7 +189,7 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),
 		Port:                        port,
 		GrpcPort:                    grpcPort,
-		PidFile:                     path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/vttable.pid", tabletUID)),
+		PidFile:                     path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/vttablet.pid", tabletUID)),
 		VtctldAddress:               fmt.Sprintf("http://%s:%d", hostname, vtctldPort),
 		ExtraArgs:                   extraArgs,
 	}
