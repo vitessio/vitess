@@ -551,7 +551,7 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 		return VRSettings{}, fmt.Errorf("failed to parse max_replication_lag column: %v", err)
 	}
 	startPos := vrRow[0].ToString()
-	// TODO: This will be removed when we start using filename:pos flavor and everythign will by a proper enconded mysql.Position
+	// TODO @rafael: This will be removed when we start using the non_gtid_flavor. In that case filename:pos flavor will be handled by the flavor with pseudo gtids. There won't be any need to have different kind of mysql positions.
 	gtidStartPos, _ := mysql.DecodePosition(startPos)
 
 	stopPos, err := mysql.DecodePosition(vrRow[1].ToString())

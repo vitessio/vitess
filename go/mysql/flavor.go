@@ -62,7 +62,7 @@ type flavor interface {
 	// stopSlave returns the command to stop the slave.
 	stopSlaveCommand() string
 
-	// sendBinlogFileDumpCommand sends the packet required to start streaming from file:post
+	// sendBinlogFileDumpCommand sends the packet required to start streaming from file:pos
 	sendBinlogFileDumpCommand(c *Conn, slaveID uint32, binlogFilename string, pos uint32) error
 
 	// sendBinlogDumpCommand sends the packet required to start
