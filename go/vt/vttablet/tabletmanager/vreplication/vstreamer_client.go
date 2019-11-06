@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -45,6 +46,7 @@ var (
 	_                       VStreamerClient = (*MySQLVStreamerClient)(nil)
 	mysqlStreamerClientOnce sync.Once
 	mysqlSrvTopo            *srvtopo.ResilientServer
+	dbcfgs                  *dbconfigs.DBConfigs
 )
 
 // VStreamerClient exposes the core interface of a vstreamer
@@ -139,11 +141,15 @@ func (vsClient *TabletVStreamerClient) VStreamRows(ctx context.Context, query st
 
 // NewMySQLVStreamerClient is a vstream client that allows you to stream directly from MySQL.
 // In order to achieve this, the following creates a vstreamer Engine with a dummy in memorytopo.
-func NewMySQLVStreamerClient(sourceConnParams *mysql.ConnParams) *MySQLVStreamerClient {
-	vsClient := &MySQLVStreamerClient{
-		sourceConnParams: sourceConnParams,
+func NewMySQLVStreamerClient() *MySQLVStreamerClient {
+	if dbcfgs == nil {
+		panic("can't use MySQLVStreamerClient without calling InitVStreamerClient() ")
 	}
-
+	// TODO: For now external mysql streams can only be used with ExternalReplWithDB creds.
+	// In the future we will support multiple users.
+	vsClient := &MySQLVStreamerClient{
+		sourceConnParams: dbcfgs.ExternalReplWithDB(),
+	}
 	return vsClient
 }
 
@@ -219,6 +225,12 @@ func (vsClient *MySQLVStreamerClient) VStreamRows(ctx context.Context, query str
 		row = r.Rows[0]
 	}
 	return vsClient.vsEngine.StreamRows(ctx, query, row, send)
+}
+
+func InitVStreamerClient(cfg *dbconfigs.DBConfigs) {
+	// Make copy of config
+	dbcfgs = &dbconfigs.DBConfigs{}
+	*dbcfgs = *cfg
 }
 
 type checker struct{}

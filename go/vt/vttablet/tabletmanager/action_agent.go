@@ -287,11 +287,12 @@ func NewActionAgent(
 		return nil, err
 	}
 
+	vreplication.InitVStreamerClient(agent.DBConfigs)
+
 	// The db name is set by the Start function called above
 	agent.VREngine = vreplication.NewEngine(ts, tabletAlias.Cell, mysqld, func() binlogplayer.DBClient {
 		return binlogplayer.NewDBClient(agent.DBConfigs.FilteredWithDB())
 	},
-		agent.DBConfigs.ExternalReplWithDB(),
 		agent.DBConfigs.FilteredWithDB().DbName,
 	)
 	servenv.OnTerm(agent.VREngine.Close)
@@ -360,7 +361,7 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
 		DBConfigs:           &dbconfigs.DBConfigs{},
-		VREngine:            vreplication.NewEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient, nil, ti.DbName()),
+		VREngine:            vreplication.NewEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient, ti.DbName()),
 		History:             history.New(historyLength),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
@@ -399,7 +400,7 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 		Cnf:                 nil,
 		MysqlDaemon:         mysqlDaemon,
 		DBConfigs:           dbcfgs,
-		VREngine:            vreplication.NewEngine(nil, "", nil, nil, nil, ""),
+		VREngine:            vreplication.NewEngine(nil, "", nil, nil, ""),
 		gotMysqlPort:        true,
 		History:             history.New(historyLength),
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
