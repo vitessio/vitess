@@ -109,6 +109,11 @@ type MessageInfo struct {
 	// returned for subscribers.
 	Fields []*querypb.Field
 
+	// IncludeTimeExpires defines whether the user wants the
+	// message manager to send the receiver the time that the message
+	// will expire and be postponed, helping to prevent duplicates.
+	IncludeTimeExpires bool
+
 	// Optional topic to subscribe to. Any messages
 	// published to the topic will be added to this table.
 	Topic string

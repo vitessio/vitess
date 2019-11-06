@@ -174,6 +174,9 @@ func loadMessageInfo(ta *Table, comment string) error {
 	if ta.MessageInfo.PollInterval, err = getDuration(keyvals, "vt_poller_interval"); err != nil {
 		return err
 	}
+	if strings.Contains(comment, "vt_include_time_expires") {
+		ta.MessageInfo.IncludeTimeExpires = true
+	}
 	for _, col := range orderedColumns {
 		num := ta.FindColumn(sqlparser.NewColIdent(col))
 		if num == -1 {

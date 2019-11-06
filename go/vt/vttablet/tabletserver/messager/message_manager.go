@@ -198,6 +198,8 @@ type messageManager struct {
 	ackQuery          *sqlparser.ParsedQuery
 	postponeQuery     *sqlparser.ParsedQuery
 	purgeQuery        *sqlparser.ParsedQuery
+
+	includeTimeExpires bool
 }
 
 // newMessageManager creates a new message manager.
@@ -218,6 +220,8 @@ func newMessageManager(tsv TabletService, table *schema.Table, conns *connpool.P
 		purgeTicks:   timer.NewTimer(table.MessageInfo.PollInterval),
 		conns:        conns,
 		postponeSema: postponeSema,
+
+		includeTimeExpires: table.MessageInfo.IncludeTimeExpires,
 	}
 	mm.cond.L = &mm.mu
 
@@ -463,9 +467,24 @@ func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 		mm.wg.Done()
 	}()
 
+	// timeMessageExpires is used for a context deadline below, and is optionally
+	// sent with the message fields
+	timeMessageExpires := time.Now().Add(mm.ackWaitTime)
+
+	// conditionally send the message expiration if the user requests it
+	var timeMessageExpiresVal sqltypes.Value
+	if mm.includeTimeExpires {
+		timeMessageExpiresVal = sqltypes.NewInt64(timeMessageExpires.UnixNano())
+	}
+
 	ids := make([]string, len(qr.Rows))
 	for i, row := range qr.Rows {
 		ids[i] = row[0].ToString()
+		// if the user wants to receive the time_expires pseudo field, append
+		// the calculated expiration time
+		if mm.includeTimeExpires {
+			qr.Rows[i] = append(qr.Rows[i], timeMessageExpiresVal)
+		}
 	}
 
 	// This is the cleanup.
@@ -519,10 +538,10 @@ func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 		// big", we'll end up spamming non-stop.
 		log.Errorf("Error sending messages: %v: %v", qr, err)
 	}
-	mm.postpone(mm.tsv, mm.name.String(), mm.ackWaitTime, ids)
+	mm.postpone(mm.tsv, mm.name.String(), timeMessageExpires, ids)
 }
 
-func (mm *messageManager) postpone(tsv TabletService, name string, ackWaitTime time.Duration, ids []string) {
+func (mm *messageManager) postpone(tsv TabletService, name string, deadline time.Time, ids []string) {
 	// ids can be empty if it's the field info being sent.
 	if len(ids) == 0 {
 		return
@@ -533,7 +552,7 @@ func (mm *messageManager) postpone(tsv TabletService, name string, ackWaitTime t
 		return
 	}
 	defer mm.postponeSema.Release()
-	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), ackWaitTime)
+	ctx, cancel := context.WithDeadline(tabletenv.LocalContext(), deadline)
 	defer cancel()
 	if _, err := tsv.PostponeMessages(ctx, nil, name, ids); err != nil {
 		// This can happen during spikes. Record the incident for monitoring.
