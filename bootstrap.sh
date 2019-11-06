@@ -37,15 +37,16 @@ function fail() {
 
 # Create main directories.
 
-VTROOT="${VTROOT:-${PWD/\/src\/vitess.io\/vitess/}}"
-mkdir -p "dist"
-mkdir -p "bin"
-mkdir -p "lib"
-mkdir -p "vthook"
+VTROOT="$PWD"
+LEGACYVTROOT="${VTROOT/\/src\/vitess.io\/vitess/}"
 
-# temporary
-rm -rf lib/*
-rm -rf vthook/*
+# This might be the testsuite running from an older bootstrap.
+# To support an upgrade, move the older directories to the new location
+
+[ -d "$LEGACYVTROOT/dist" ] && mv "$LEGACYVTROOT/dist" . || mkdir -p dist 
+[ -d "$LEGACYVTROOT/bin" ] && mv "$LEGACYVTROOT/bin" . || mkdir -p bin
+[ -d "$LEGACYVTROOT/lib" ] && mv "$LEGACYVTROOT/lib" . || mkdir -p lib
+[ -d "$LEGACYVTROOT/vthook" ] && mv "$LEGACYVTROOT/vthook" . || mkdir -p vthook
 
 # This is required for VIRTUALENV
 # Used by Python below
