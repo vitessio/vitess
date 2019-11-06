@@ -193,6 +193,13 @@ func (se *Engine) Open() error {
 	return nil
 }
 
+// IsOpen() checks if engine is open
+func (se *Engine) IsOpen() bool {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	return se.isOpen
+}
+
 // Close shuts down Engine and is idempotent.
 // It can be re-opened after Close.
 func (se *Engine) Close() {

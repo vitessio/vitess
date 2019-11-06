@@ -173,7 +173,9 @@ func (vsClient *MySQLVStreamerClient) Open(ctx context.Context) (err error) {
 	vsClient.vsEngine = vstreamer.NewEngine(mysqlSrvTopo, vsClient.sourceSe)
 	vsClient.vsEngine.InitDBConfig(vsClient.sourceConnParams)
 
-	err = vsClient.vsEngine.Open("mysqlstreamer", "cell1")
+	// We don't really need a keyspace/cell as this is a dummy engine from the
+	// topology perspective
+	err = vsClient.vsEngine.Open("", "")
 	if err != nil {
 		return err
 	}
@@ -206,7 +208,7 @@ func (vsClient *MySQLVStreamerClient) VStream(ctx context.Context, startPos stri
 // VStreamRows part of the VStreamerClient interface
 func (vsClient *MySQLVStreamerClient) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	if !vsClient.isOpen {
-		return errors.New("Can't VStream without opening client")
+		return errors.New("Can't VStreamRows without opening client")
 	}
 	var row []sqltypes.Value
 	if lastpk != nil {
