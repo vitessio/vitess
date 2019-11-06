@@ -54,11 +54,6 @@ func (vind *Binary) IsUnique() bool {
 	return true
 }
 
-// IsFunctional returns true since the Vindex is functional.
-func (vind *Binary) IsFunctional() bool {
-	return true
-}
-
 // Verify returns true if ids maps to ksids.
 func (vind *Binary) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
