@@ -272,33 +272,20 @@ func TestTabletVStreamerClientVStreamRows(t *testing.T) {
 }
 
 func TestNewMySQLVStreamerClient(t *testing.T) {
-	type args struct {
-		sourceConnParams *mysql.ConnParams
-	}
 	tests := []struct {
 		name string
-		args args
 		want *MySQLVStreamerClient
 	}{
 		{
 			name: "sets conn params for MySQLVStreamerClient ",
-			args: args{
-				sourceConnParams: &mysql.ConnParams{
-					Host: "testhost",
-					Port: 3306,
-				},
-			},
 			want: &MySQLVStreamerClient{
-				sourceConnParams: &mysql.ConnParams{
-					Host: "testhost",
-					Port: 3306,
-				},
+				sourceConnParams: env.Dbcfgs.ExternalReplWithDB(),
 			},
 		},
 	}
 	for _, tcase := range tests {
 		t.Run(tcase.name, func(t *testing.T) {
-			if got := NewMySQLVStreamerClient(tcase.args.sourceConnParams); !reflect.DeepEqual(got, tcase.want) {
+			if got := NewMySQLVStreamerClient(); !reflect.DeepEqual(got, tcase.want) {
 				t.Errorf("NewMySQLVStreamerClient() = %v, want %v", got, tcase.want)
 			}
 		})

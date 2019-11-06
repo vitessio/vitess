@@ -77,25 +77,23 @@ type Engine struct {
 	// cancel will cancel the root context, thereby all controllers.
 	cancel context.CancelFunc
 
-	ts                 *topo.Server
-	cell               string
-	mysqld             mysqlctl.MysqlDaemon
-	dbClientFactory    func() binlogplayer.DBClient
-	sourceDbConnParams *mysql.ConnParams
-	dbName             string
+	ts              *topo.Server
+	cell            string
+	mysqld          mysqlctl.MysqlDaemon
+	dbClientFactory func() binlogplayer.DBClient
+	dbName          string
 }
 
 // NewEngine creates a new Engine.
 // A nil ts means that the Engine is disabled.
-func NewEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactory func() binlogplayer.DBClient, sourceDbConnParams *mysql.ConnParams, dbName string) *Engine {
+func NewEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactory func() binlogplayer.DBClient, dbName string) *Engine {
 	vre := &Engine{
-		controllers:        make(map[int]*controller),
-		ts:                 ts,
-		cell:               cell,
-		mysqld:             mysqld,
-		dbClientFactory:    dbClientFactory,
-		sourceDbConnParams: sourceDbConnParams,
-		dbName:             dbName,
+		controllers:     make(map[int]*controller),
+		ts:              ts,
+		cell:            cell,
+		mysqld:          mysqld,
+		dbClientFactory: dbClientFactory,
+		dbName:          dbName,
 	}
 	return vre
 }
@@ -189,7 +187,7 @@ func (vre *Engine) initAll() error {
 		return err
 	}
 	for _, row := range rows {
-		ct, err := newController(vre.ctx, row, vre.dbClientFactory, vre.sourceDbConnParams, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil)
+		ct, err := newController(vre.ctx, row, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil)
 		if err != nil {
 			return err
 		}
@@ -282,7 +280,7 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 			if err != nil {
 				return nil, err
 			}
-			ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.sourceDbConnParams, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil)
+			ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -320,7 +318,7 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 			}
 			// Create a new controller in place of the old one.
 			// For continuity, the new controller inherits the previous stats.
-			ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.sourceDbConnParams, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, blpStats[id])
+			ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, blpStats[id])
 			if err != nil {
 				return nil, err
 			}
