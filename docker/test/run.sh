@@ -182,14 +182,16 @@ run_bootstrap_cmd="export GO111MODULE=on"
 # run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "if [[ \$(diff -w bootstrap.sh /tmp/src/bootstrap.sh) ]]; then cp -f /tmp/src/bootstrap.sh .; bootstrap=1; fi")
 # run bootstrap.sh if necessary
 # run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "if [[ -n \$bootstrap ]]; then ./bootstrap.sh; fi")
-run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "cp /tmp/src/bootstrap.sh .;./bootstrap.sh")
-copy_src_cmd=$(append_cmd "$copy_src_cmd" "$run_bootstrap_cmd")
 
-# Create symlinks to support legacy VTROOT/VTTOP structure
-#copy_src_cmd=$(append_cmd "$copy_src_cmd" "ln -s /vt/dist /vt/src/vitess.io/vitess/dist")
-#copy_src_cmd=$(append_cmd "$copy_src_cmd" "ln -s /vt/bin /vt/src/vitess.io/vitess/bin")
-#copy_src_cmd=$(append_cmd "$copy_src_cmd" "ln -s /vt/lib /vt/src/vitess.io/vitess/lib")
-#copy_src_cmd=$(append_cmd "$copy_src_cmd" "ln -s /vt/vthook /vt/src/vitess.io/vitess/vthook")
+run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "[ -d /vt/dist ] && mv /vt/dist .")
+run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "[ -d /vt/bin ] && mv /vt/bin .")
+run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "[ -d /vt/lib ] && mv /vt/lib .")
+run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "[ -d /vt/vthook ] && mv /vt/vthook .")
+
+run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "cp /tmp/src/bootstrap.sh .;./bootstrap.sh")
+run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "source ./dev.env")
+
+copy_src_cmd=$(append_cmd "$copy_src_cmd" "$run_bootstrap_cmd")
 
 # Construct the command we will actually run.
 #
