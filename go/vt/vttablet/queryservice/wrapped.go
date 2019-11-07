@@ -265,6 +265,13 @@ func (ws *wrappedService) VStreamRows(ctx context.Context, target *querypb.Targe
 	})
 }
 
+func (ws *wrappedService) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
+	return ws.wrapper(ctx, target, ws.impl, "VStreamResults", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
+		innerErr := conn.VStreamResults(ctx, target, query, send)
+		return false, innerErr
+	})
+}
+
 func (ws *wrappedService) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
 	return ws.wrapper(ctx, nil, ws.impl, "StreamHealth", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		innerErr := conn.StreamHealth(ctx, callback)

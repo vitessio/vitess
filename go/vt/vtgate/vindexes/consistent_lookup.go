@@ -199,11 +199,6 @@ func (lu *clCommon) String() string {
 	return lu.name
 }
 
-// IsFunctional returns false since the Vindex is not functional.
-func (lu *clCommon) IsFunctional() bool {
-	return false
-}
-
 // Verify returns true if ids maps to ksids.
 func (lu *clCommon) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	return lu.lkp.VerifyCustom(vcursor, ids, ksidsToValues(ksids), vtgate.CommitOrder_PRE)

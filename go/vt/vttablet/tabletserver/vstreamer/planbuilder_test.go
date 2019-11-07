@@ -362,7 +362,7 @@ func TestPlanbuilder(t *testing.T) {
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(id, 'lookup', '-80')"},
-		outErr:  `vindex must be Unique and Functional to be used for VReplication: lookup`,
+		outErr:  `vindex must be Unique to be used for VReplication: lookup`,
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(id, 'hash', '80')"},

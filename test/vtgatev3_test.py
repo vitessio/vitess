@@ -1822,7 +1822,7 @@ class TestVTGateFunctions(unittest.TestCase):
     try:
       vtgate_conn.begin()
       with self.assertRaisesRegexp(dbexceptions.DatabaseError,
-                                   '.*could not map NULL to a keyspace id.*'):
+                                   '.*could not map.*NULL.*to a keyspace id.*'):
         self.execute_on_master(
             vtgate_conn,
             'insert into vt_user_extra (email) values (:email)',
