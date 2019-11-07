@@ -23,6 +23,4 @@ source $script_root/env.sh
 
 pid=`cat $VTDATAROOT/tmp/vtctld.pid`
 echo "Stopping vtctld..."
-kill $pid
-
-kill -9 "$(pgrep -f "/bin/vtctld")"
+kill -9 $pid
