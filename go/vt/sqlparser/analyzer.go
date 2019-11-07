@@ -115,7 +115,7 @@ func Preview(sql string) StatementType {
 	case "lock":
 		return StmtLock
 	case "unlock":
-		return StmtLock
+		return StmtUnlock
 	}
 	return StmtUnknown
 }
