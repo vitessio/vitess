@@ -238,6 +238,8 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		return e.handleOther(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
 	case sqlparser.StmtComment:
 		return e.handleComment(sql)
+	case sqlparser.StmtLock, sqlparser.StmtUnlock:
+		return nil, nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }
@@ -1543,6 +1545,8 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 	case sqlparser.StmtShow:
 		res, err := e.handleShow(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
 		return res.Fields, err
+	case sqlparser.StmtLock, sqlparser.StmtUnlock:
+		return nil, nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }

@@ -52,6 +52,8 @@ const (
 	StmtOther
 	StmtUnknown
 	StmtComment
+	StmtLock
+	StmtUnlock
 )
 
 // Preview analyzes the beginning of the query using a simpler and faster
@@ -110,6 +112,10 @@ func Preview(sql string) StatementType {
 		return StmtUse
 	case "analyze", "describe", "desc", "explain", "repair", "optimize":
 		return StmtOther
+	case "lock":
+		return StmtLock
+	case "unlock":
+		return StmtLock
 	}
 	return StmtUnknown
 }
