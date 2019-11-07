@@ -177,7 +177,7 @@ class TestReparent(unittest.TestCase):
                                  '-keyspace_shard', 'test_keyspace/0',
                                  '-new_master', tablet_62044.tablet_alias],
                                 expect_fail=True)
-    self.assertIn('DemoteMaster failed', stderr)
+    self.assertIn('current master must be healthy to perform planned reparent', stderr)
 
     # Run forced reparent operation, this should now proceed unimpeded.
     utils.run_vtctl(['EmergencyReparentShard',
@@ -255,7 +255,13 @@ class TestReparent(unittest.TestCase):
     utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
     self._test_reparent_graceful('0')
 
-  def _test_reparent_graceful(self, shard_id):
+  def test_reparent_graceful_recovery(self):
+    # Test that PRS can perform a graceful recovery
+    # as long as all tablets are responding.
+    utils.run_vtctl(['CreateKeyspace', 'test_keyspace'])
+    self._test_reparent_graceful('0', confused_master=True)
+
+  def _test_reparent_graceful(self, shard_id, confused_master=False):
     # create the database so vttablets start, as they are serving
     tablet_62344.create_db('vt_test_keyspace')
     tablet_62044.create_db('vt_test_keyspace')
@@ -295,6 +301,20 @@ class TestReparent(unittest.TestCase):
     self.assertIn('master', lines[0])  # master first
 
     # Perform a graceful reparent operation.
+    utils.run_vtctl(['PlannedReparentShard',
+                     '-keyspace_shard', 'test_keyspace/' + shard_id,
+                     '-new_master', tablet_62044.tablet_alias], auto_log=True)
+    utils.validate_topology()
+
+    if confused_master:
+      # Simulate a master that forgets it's master and becomes replica.
+      # PRS should be able to recover by reparenting to the same master again,
+      # as long as all tablets are available to check that it's safe.
+      tablet_62044.init_tablet('replica', 'test_keyspace', shard_id, start=False)
+      utils.run_vtctl(['RefreshState', tablet_62044.tablet_alias])
+
+    # Perform a graceful reparent to the same master.
+    # It should be idempotent, and should fix any inconsistencies if necessary.
     utils.run_vtctl(['PlannedReparentShard',
                      '-keyspace_shard', 'test_keyspace/' + shard_id,
                      '-new_master', tablet_62044.tablet_alias], auto_log=True)
@@ -621,10 +641,10 @@ class TestReparent(unittest.TestCase):
 
     utils.pause('check orphan')
 
-    # reparent the tablet (will not start replication, so we have to
-    # do it ourselves), then it should catch up on replication really quickly
-    utils.run_vtctl(['ReparentTablet', tablet_41983.tablet_alias])
-    utils.run_vtctl(['StartSlave', tablet_41983.tablet_alias])
+    # Use the same PlannedReparentShard command to fix up the tablet.
+    utils.run_vtctl(['PlannedReparentShard',
+                    '-keyspace_shard', 'test_keyspace/' + shard_id,
+                    '-new_master', tablet_62044.tablet_alias])
 
     # wait until it gets the data
     self._check_vt_insert_test(tablet_41983, 3)
@@ -754,7 +774,7 @@ class TestReparent(unittest.TestCase):
                                  '-keyspace_shard', 'test_keyspace/0',
                                  '-new_master', tablet_62044.tablet_alias],
                                 expect_fail=True)
-    self.assertIn('master failed to PopulateReparentJournal, canceling slaves',
+    self.assertIn('master failed to PopulateReparentJournal',
                   stderr)
 
     # Clean up the tablets.

@@ -21,8 +21,11 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
@@ -290,4 +293,120 @@ func RestoreWasInterrupted(cnf *Mycnf) bool {
 // given keyspace/shard are (or will be) stored
 func GetBackupDir(keyspace, shard string) string {
 	return fmt.Sprintf("%v/%v", keyspace, shard)
+}
+
+// isDbDir returns true if the given directory contains a DB
+func isDbDir(p string) bool {
+	// db.opt is there
+	if _, err := os.Stat(path.Join(p, "db.opt")); err == nil {
+		return true
+	}
+
+	// Look for at least one database file
+	fis, err := ioutil.ReadDir(p)
+	if err != nil {
+		return false
+	}
+	for _, fi := range fis {
+		if strings.HasSuffix(fi.Name(), ".frm") {
+			return true
+		}
+
+		// the MyRocks engine stores data in RocksDB .sst files
+		// https://github.com/facebook/rocksdb/wiki/Rocksdb-BlockBasedTable-Format
+		if strings.HasSuffix(fi.Name(), ".sst") {
+			return true
+		}
+
+		// .frm files were removed in MySQL 8, so we need to check for two other file types
+		// https://dev.mysql.com/doc/refman/8.0/en/data-dictionary-file-removal.html
+		if strings.HasSuffix(fi.Name(), ".ibd") {
+			return true
+		}
+		// https://dev.mysql.com/doc/refman/8.0/en/serialized-dictionary-information.html
+		if strings.HasSuffix(fi.Name(), ".sdi") {
+			return true
+		}
+	}
+
+	return false
+}
+
+func addDirectory(fes []FileEntry, base string, baseDir string, subDir string) ([]FileEntry, int64, error) {
+	p := path.Join(baseDir, subDir)
+	var size int64
+
+	fis, err := ioutil.ReadDir(p)
+	if err != nil {
+		return nil, 0, err
+	}
+	for _, fi := range fis {
+		fes = append(fes, FileEntry{
+			Base: base,
+			Name: path.Join(subDir, fi.Name()),
+		})
+		size = size + fi.Size()
+	}
+	return fes, size, nil
+}
+
+// addMySQL8DataDictionary checks to see if the new data dictionary introduced in MySQL 8 exists
+// and adds it to the backup manifest if it does
+// https://dev.mysql.com/doc/refman/8.0/en/data-dictionary-transactional-storage.html
+func addMySQL8DataDictionary(fes []FileEntry, base string, baseDir string) ([]FileEntry, int64, error) {
+	filePath := path.Join(baseDir, dataDictionaryFile)
+
+	// no-op if this file doesn't exist
+	fi, err := os.Stat(filePath)
+	if os.IsNotExist(err) {
+		return fes, 0, nil
+	}
+
+	fes = append(fes, FileEntry{
+		Base: base,
+		Name: dataDictionaryFile,
+	})
+
+	return fes, fi.Size(), nil
+}
+
+func findFilesToBackup(cnf *Mycnf) ([]FileEntry, int64, error) {
+	var err error
+	var result []FileEntry
+	var totalSize int64
+
+	// first add inno db files
+	result, totalSize, err = addDirectory(result, backupInnodbDataHomeDir, cnf.InnodbDataHomeDir, "")
+	if err != nil {
+		return nil, 0, err
+	}
+	result, size, err := addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, "")
+	if err != nil {
+		return nil, 0, err
+	}
+	totalSize = totalSize + size
+	// then add the transactional data dictionary if it exists
+	result, size, err = addMySQL8DataDictionary(result, backupData, cnf.DataDir)
+	if err != nil {
+		return nil, 0, err
+	}
+	totalSize = totalSize + size
+
+	// then add DB directories
+	fis, err := ioutil.ReadDir(cnf.DataDir)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	for _, fi := range fis {
+		p := path.Join(cnf.DataDir, fi.Name())
+		if isDbDir(p) {
+			result, size, err = addDirectory(result, backupData, cnf.DataDir, fi.Name())
+			if err != nil {
+				return nil, 0, err
+			}
+			totalSize = totalSize + size
+		}
+	}
+	return result, totalSize, nil
 }

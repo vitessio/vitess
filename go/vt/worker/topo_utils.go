@@ -77,7 +77,7 @@ func waitForHealthyTablets(ctx context.Context, wr *wrangler.Wrangler, tsc *disc
 		cell, keyspace, shard, minHealthyRdonlyTablets, time.Until(deadlineForLog).Seconds())
 
 	// Wait for at least one RDONLY tablet initially before checking the list.
-	if err := tsc.WaitForTablets(busywaitCtx, cell, keyspace, shard, tabletType); err != nil {
+	if err := tsc.WaitForTablets(busywaitCtx, keyspace, shard, tabletType); err != nil {
 		return nil, vterrors.Wrapf(err, "error waiting for %v tablets for (%v,%v/%v)", tabletType, cell, keyspace, shard)
 	}
 

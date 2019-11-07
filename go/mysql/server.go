@@ -88,6 +88,10 @@ type Handler interface {
 	// ConnectionClosed is called when a connection is closed.
 	ConnectionClosed(c *Conn)
 
+	// InitDB is called once at the beginning to set db name,
+	// and subsequently for every ComInitDB event.
+	ComInitDB(c *Conn, schemaName string)
+
 	// ComQuery is called when a connection receives a query.
 	// Note the contents of the query slice may change after
 	// the first call to callback. So the Handler should not
@@ -447,6 +451,9 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		log.Warningf("Slow connection from %s: %v", c, connectTime)
 	}
 
+	// Set initial db name.
+	l.handler.ComInitDB(c, c.schemaName)
+
 	for {
 		err := c.handleNextCommand(l.handler)
 		if err != nil {
@@ -674,7 +681,7 @@ func (l *Listener) parseClientHandshakePacket(c *Conn, firstTime bool, data []by
 		if !ok {
 			return "", "", nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "parseClientHandshakePacket: can't read dbname")
 		}
-		c.SchemaName = dbname
+		c.schemaName = dbname
 	}
 
 	// authMethod (with default)

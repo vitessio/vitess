@@ -958,7 +958,7 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	defer watcher.Stop()
 
 	// Wait for at least one tablet.
-	if err := tsc.WaitForTablets(ctx, cell, keyspace, shard, servedType); err != nil {
+	if err := tsc.WaitForTablets(ctx, keyspace, shard, servedType); err != nil {
 		return fmt.Errorf("%v: error waiting for initial %v tablets for %v/%v: %v", cell, servedType, keyspace, shard, err)
 	}
 

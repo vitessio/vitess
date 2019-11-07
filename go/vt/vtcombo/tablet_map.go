@@ -490,6 +490,12 @@ func (itc *internalTabletConn) VStreamRows(ctx context.Context, target *querypb.
 	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
+// VStreamResults is part of the QueryService interface.
+func (itc *internalTabletConn) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
+	err := itc.tablet.qsc.QueryService().VStreamResults(ctx, target, query, send)
+	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+}
+
 //
 // TabletManagerClient implementation
 //
@@ -630,6 +636,10 @@ func (itmc *internalTabletManagerClient) MasterPosition(ctx context.Context, tab
 	return "", fmt.Errorf("not implemented in vtcombo")
 }
 
+func (itmc *internalTabletManagerClient) WaitForPosition(ctx context.Context, tablet *topodatapb.Tablet, pos string) error {
+	return fmt.Errorf("not implemented in vtcombo")
+}
+
 func (itmc *internalTabletManagerClient) StopSlave(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }
@@ -694,7 +704,7 @@ func (itmc *internalTabletManagerClient) SlaveWasPromoted(ctx context.Context, t
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error {
+func (itmc *internalTabletManagerClient) SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }
 

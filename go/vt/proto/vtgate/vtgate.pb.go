@@ -5,8 +5,9 @@ package vtgate
 
 import (
 	fmt "fmt"
-	proto "github.com/golang/protobuf/proto"
 	math "math"
+
+	proto "github.com/golang/protobuf/proto"
 	binlogdata "vitess.io/vitess/go/vt/proto/binlogdata"
 	query "vitess.io/vitess/go/vt/proto/query"
 	topodata "vitess.io/vitess/go/vt/proto/topodata"

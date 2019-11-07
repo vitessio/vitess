@@ -73,7 +73,7 @@ func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error
 	result := make([]sqltypes.Value, len(plan.ColExprs))
 	for i, colExpr := range plan.ColExprs {
 		if colExpr.ColNum >= len(values) {
-			return false, nil, fmt.Errorf("index out of range. colExpr.ColNum: %d   len(values):%d!!", colExpr.ColNum, len(values))
+			return false, nil, fmt.Errorf("index out of range, colExpr.ColNum: %d, len(values): %d", colExpr.ColNum, len(values))
 		}
 		result[i] = values[colExpr.ColNum]
 	}
@@ -360,8 +360,8 @@ func (plan *Plan) analyzeInKeyRange(kschema *vindexes.KeyspaceSchema, exprs sqlp
 		if err != nil {
 			return err
 		}
-		if !plan.Vindex.IsUnique() || !plan.Vindex.IsFunctional() {
-			return fmt.Errorf("vindex must be Unique and Functional to be used for VReplication: %s", vtype)
+		if !plan.Vindex.IsUnique() {
+			return fmt.Errorf("vindex must be Unique to be used for VReplication: %s", vtype)
 		}
 		krExpr = exprs[2]
 	default:

@@ -83,6 +83,9 @@ var (
 	versionRegex = regexp.MustCompile(`Ver ([0-9]+)\.([0-9]+)\.([0-9]+)`)
 )
 
+// How many bytes from MySQL error log to sample for error messages
+const maxLogFileSampleSize = 4096
+
 // Mysqld is the object that represents a mysqld daemon running on this server.
 type Mysqld struct {
 	dbcfgs  *dbconfigs.DBConfigs
@@ -647,7 +650,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	// Start mysqld. We do not use Start, as we have to wait using
 	// the root user.
 	if err = mysqld.startNoWait(ctx, cnf); err != nil {
-		log.Errorf("failed starting mysqld (check mysql error log %v for more info): %v", cnf.ErrorLogPath, err)
+		log.Errorf("failed starting mysqld: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
 		return err
 	}
 
@@ -659,7 +662,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 		UnixSocket: cnf.SocketFile,
 	}
 	if err = mysqld.wait(ctx, cnf, params); err != nil {
-		log.Errorf("failed starting mysqld in time (check mysyql error log %v for more info): %v", cnf.ErrorLogPath, err)
+		log.Errorf("failed starting mysqld in time: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
 		return err
 	}
 
@@ -674,6 +677,36 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	}
 
 	return nil
+}
+
+// For debugging purposes show the last few lines of the MySQL error log.
+// Return a suggestion (string) if the file is non regular or can not be opened.
+// This helps prevent cases where the error log is symlinked to /dev/stderr etc,
+// In which case the user can manually open the file.
+func readTailOfMysqldErrorLog(fileName string) string {
+	fileInfo, err := os.Stat(fileName)
+	if err != nil {
+		return fmt.Sprintf("could not stat mysql error log (%v): %v", fileName, err)
+	}
+	if !fileInfo.Mode().IsRegular() {
+		return fmt.Sprintf("mysql error log file is not a regular file: %v", fileName)
+	}
+	file, err := os.Open(fileName)
+	if err != nil {
+		return fmt.Sprintf("could not open mysql error log (%v): %v", fileName, err)
+	}
+	defer file.Close()
+	startPos := int64(0)
+	if fileInfo.Size() > maxLogFileSampleSize {
+		startPos = fileInfo.Size() - maxLogFileSampleSize
+	}
+	// Show the last few KB of the MySQL error log.
+	buf := make([]byte, maxLogFileSampleSize)
+	flen, err := file.ReadAt(buf, startPos)
+	if err != nil && err != io.EOF {
+		return fmt.Sprintf("could not read mysql error log (%v): %v", fileName, err)
+	}
+	return fmt.Sprintf("tail of mysql error log (%v):\n%s", fileName, buf[:flen])
 }
 
 func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
@@ -698,7 +731,7 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 			"--initialize-insecure", // Use empty 'root'@'localhost' password.
 		}
 		if _, _, err = execCmd(mysqldPath, args, nil, mysqlRoot, nil); err != nil {
-			log.Errorf("mysqld --initialize-insecure failed: %v", err)
+			log.Errorf("mysqld --initialize-insecure failed: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
 			return err
 		}
 		return nil
@@ -714,7 +747,7 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 		return err
 	}
 	if _, _, err = execCmd(cmdPath, args, nil, mysqlRoot, nil); err != nil {
-		log.Errorf("mysql_install_db failed: %v", err)
+		log.Errorf("mysql_install_db failed: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
 		return err
 	}
 	return nil
@@ -771,8 +804,7 @@ func (mysqld *Mysqld) getMycnfTemplates(root string) []string {
 		cnfTemplatePaths = append(cnfTemplatePaths, parts...)
 	}
 
-	// Only include these files if they exist.
-	// master_{flavor}.cnf
+	// Only include files if they exist.
 	// Percona Server == MySQL in this context
 
 	f := flavorMariaDB
@@ -780,15 +812,9 @@ func (mysqld *Mysqld) getMycnfTemplates(root string) []string {
 		f = flavorMySQL
 	}
 
-	p := path.Join(root, fmt.Sprintf("config/mycnf/master_%s.cnf", f))
-	_, err := os.Stat(p)
-	if err == nil && !contains(cnfTemplatePaths, p) {
-		cnfTemplatePaths = append(cnfTemplatePaths, p)
-	}
-
 	// master_{flavor}{major}{minor}.cnf
-	p = path.Join(root, fmt.Sprintf("config/mycnf/master_%s%d%d.cnf", f, mysqld.capabilities.version.Major, mysqld.capabilities.version.Minor))
-	_, err = os.Stat(p)
+	p := path.Join(root, fmt.Sprintf("config/mycnf/master_%s%d%d.cnf", f, mysqld.capabilities.version.Major, mysqld.capabilities.version.Minor))
+	_, err := os.Stat(p)
 	if err == nil && !contains(cnfTemplatePaths, p) {
 		cnfTemplatePaths = append(cnfTemplatePaths, p)
 	}

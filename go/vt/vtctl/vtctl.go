@@ -231,10 +231,6 @@ var commands = []commandGroup{
 			{"GetShard", commandGetShard,
 				"<keyspace/shard>",
 				"Outputs a JSON structure that contains information about the Shard."},
-			{"TabletExternallyReparented", commandTabletExternallyReparented,
-				"<tablet alias>",
-				"Changes metadata in the topology server to acknowledge a shard master change performed by an external tool. See the Reparenting guide for more information:" +
-					"https://github.com/vitessio/vitess/blob/master/doc/Reparenting.md#external-reparents."},
 			{"ValidateShard", commandValidateShard,
 				"[-ping-tablets] <keyspace/shard>",
 				"Validates that all nodes that are reachable from this shard are consistent."},
@@ -317,6 +313,9 @@ var commands = []commandGroup{
 			{"VerticalSplitClone", commandVerticalSplitClone,
 				"<from_keyspace> <to_keyspace> <tables>",
 				"Start the VerticalSplitClone process to perform vertical resharding. Example: SplitClone from_ks to_ks 'a,/b.*/'"},
+			{"VDiff", commandVDiff,
+				"-workflow=<workflow> <target keyspace> [-source_cell=<cell>] [-target_cell=<cell>] [-tablet_types=REPLICA] [-filtered_replication_wait_time=30s]",
+				"Perform a diff of all tables in the workflow"},
 			{"MigrateServedTypes", commandMigrateServedTypes,
 				"[-cells=c1,c2,...] [-reverse] [-skip-refresh-state] <keyspace/shard> <served tablet type>",
 				"Migrates a serving type from the source shard to the shards that it replicates to. This command also rebuilds the serving graph. The <keyspace/shard> argument can specify any of the shards involved in the migration."},
@@ -327,7 +326,7 @@ var commands = []commandGroup{
 				"[-cells=c1,c2,...] [-reverse] -workflow=workflow <target keyspace> <tablet type>",
 				"Migrate read traffic for the specified workflow."},
 			{"MigrateWrites", commandMigrateWrites,
-				"[-filtered_replication_wait_time=30s] [-reverse_replication=<true/false>] -workflow=workflow <target keyspace>",
+				"[-filtered_replication_wait_time=30s] [-cancel] [-reverse_replication=false] -workflow=workflow <target keyspace>",
 				"Migrate write traffic for the specified workflow."},
 			{"CancelResharding", commandCancelResharding,
 				"<keyspace/shard>",
@@ -1206,25 +1205,6 @@ func commandGetShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.
 	return printJSON(wr.Logger(), shardInfo.Shard)
 }
 
-func commandTabletExternallyReparented(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("the <tablet alias> argument is required for the TabletExternallyReparented command")
-	}
-
-	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	ti, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return err
-	}
-	return wr.TabletManagerClient().TabletExternallyReparented(ctx, ti.Tablet, "")
-}
-
 func commandValidateShard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	pingTablets := subFlags.Bool("ping-tablets", true, "Indicates whether all tablets should be pinged during the validation process")
 	if err := subFlags.Parse(args); err != nil {
@@ -1830,6 +1810,25 @@ func commandVerticalSplitClone(ctx context.Context, wr *wrangler.Wrangler, subFl
 	return wr.VerticalSplitClone(ctx, fromKeyspace, toKeyspace, tables)
 }
 
+func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	workflow := subFlags.String("workflow", "", "Specifies the workflow name")
+	sourceCell := subFlags.String("source_cell", "", "The source cell to compare from")
+	targetCell := subFlags.String("target_cell", "", "The target cell to compare with")
+	tabletTypes := subFlags.String("tablet_types", "", "Tablet types for source and target")
+	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on master migrations. The migration will be aborted on timeout.")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("the <target keyspace> is required")
+	}
+
+	targetKeyspace := subFlags.Arg(0)
+	_, err := wr.VDiff(ctx, targetKeyspace, *workflow, *sourceCell, *targetCell, *tabletTypes, *filteredReplicationWaitTime,
+		*HealthCheckTopologyRefresh, *HealthcheckRetryDelay, *HealthCheckTimeout)
+	return err
+}
+
 func commandMigrateServedTypes(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
 	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward.")
@@ -1920,6 +1919,7 @@ func commandMigrateReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 func commandMigrateWrites(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
 	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on master migrations. The migration will be aborted on timeout.")
 	reverseReplication := subFlags.Bool("reverse_replication", true, "Also reverse the replication")
+	cancelMigrate := subFlags.Bool("cancel", false, "Cancel the failed migration and serve from source")
 	workflow := subFlags.String("workflow", "", "Specifies the workflow name")
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -1932,7 +1932,7 @@ func commandMigrateWrites(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	if *workflow == "" {
 		return fmt.Errorf("a -workflow=workflow argument is required")
 	}
-	journalID, err := wr.MigrateWrites(ctx, keyspace, *workflow, *filteredReplicationWaitTime, *reverseReplication)
+	journalID, err := wr.MigrateWrites(ctx, keyspace, *workflow, *filteredReplicationWaitTime, *cancelMigrate, *reverseReplication)
 	if err != nil {
 		return err
 	}

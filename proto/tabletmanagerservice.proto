@@ -88,6 +88,9 @@ service TabletManager {
   // MasterPosition returns the current master position
   rpc MasterPosition(tabletmanagerdata.MasterPositionRequest) returns (tabletmanagerdata.MasterPositionResponse) {};
 
+  // WaitForPosition waits for the position to be reached
+  rpc WaitForPosition(tabletmanagerdata.WaitForPositionRequest) returns (tabletmanagerdata.WaitForPositionResponse) {};
+
   // StopSlave makes mysql stop its replication
   rpc StopSlave(tabletmanagerdata.StopSlaveRequest) returns (tabletmanagerdata.StopSlaveResponse) {};
 
