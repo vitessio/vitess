@@ -461,10 +461,10 @@ func TestExecutorSet(t *testing.T) {
 	}, {
 		in:  "set sql_safe_updates = 2",
 		err: "unexpected value for sql_safe_updates: 2",
-	},{
+	}, {
 		in:  "LOCK TABLES product WRITE",
 		out: &vtgatepb.Session{Autocommit: true},
-	},{
+	}, {
 		in:  "UNLOCK TABLES",
 		out: &vtgatepb.Session{Autocommit: true},
 	}}
