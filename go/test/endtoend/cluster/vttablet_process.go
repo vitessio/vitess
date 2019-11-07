@@ -155,9 +155,9 @@ func (vttablet *VttabletProcess) TearDown() error {
 	vttablet.proc.Process.Signal(syscall.SIGTERM)
 
 	select {
-	case err := <-vttablet.exit:
+	case <-vttablet.exit:
 		vttablet.proc = nil
-		return err
+		return nil
 
 	case <-time.After(10 * time.Second):
 		vttablet.proc.Process.Kill()
