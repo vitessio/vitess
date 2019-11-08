@@ -1,5 +1,5 @@
-name: Go
-on: [push]
+name: Local Example
+on: [push, pull_request]
 jobs:
 
   build:
@@ -11,7 +11,6 @@ jobs:
       uses: actions/setup-go@v1
       with:
         go-version: 1.13
-      id: local-example
 
     - name: Check out code
       uses: actions/checkout@v1
