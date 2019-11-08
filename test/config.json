@@ -430,7 +430,7 @@
 				"e2e_test_cluster"
 			],
 			"Manual": false,
-			"Shard": 2,
+			"Shard": 5,
 			"RetryMax": 0,
 			"Tags": []
 		},
