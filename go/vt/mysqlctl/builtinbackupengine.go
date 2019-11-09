@@ -303,7 +303,7 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupPar
 	}
 
 	// open the MANIFEST
-	wc, err := bh.AddFile(ctx, backupManifestFileName, 0)
+	wc, err := bh.AddFile(ctx, backupManifestFileName, backupstorage.FileSizeUnknown)
 	if err != nil {
 		return vterrors.Wrapf(err, "cannot add %v to backup", backupManifestFileName)
 	}
