@@ -22,6 +22,7 @@ import (
 	"math/rand"
 	"os"
 	"path"
+	"time"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -262,6 +263,7 @@ func NewCluster(cell string, hostname string) *LocalProcessCluster {
 	cluster.CurrentVTDATAROOT = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vtroot_%d", cluster.GetAndReservePort()))
 	_ = createDirectory(cluster.CurrentVTDATAROOT, 0700)
 	_ = os.Setenv("VTDATAROOT", cluster.CurrentVTDATAROOT)
+	rand.Seed(time.Now().UTC().UnixNano())
 	return cluster
 }
 
