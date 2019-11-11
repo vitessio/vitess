@@ -33,6 +33,11 @@ type filePosFlavor struct {
 	savedEvent *filePosBinlogEvent
 }
 
+// newFilePosFlavor creates a new filePos flavor.
+func newFilePosFlavor() flavor {
+	return &filePosFlavor{}
+}
+
 // masterGTIDSet is part of the Flavor interface.
 func (flv *filePosFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
 	qr, err := c.ExecuteFetch("SHOW SLAVE STATUS", 100, true /* wantfields */)
@@ -114,9 +119,19 @@ func (flv *filePosFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 		event := &filePosBinlogEvent{binlogEvent: binlogEvent(result[1:])}
 		et := event.Type()
 		switch {
-		case et == eGTIDEvent || et == eAnonymousGTIDEvent || et == ePreviousGTIDsEvent:
-			// Don't transmit fake or irrelevant events because they
-			// mess up the binlog coordinates.
+		case et == eGTIDEvent || et == eAnonymousGTIDEvent || et == ePreviousGTIDsEvent || et == eMariaGTIDListEvent:
+			// Don't transmit fake or irrelevant events because we should not
+			// resume replication at these positions.
+			continue
+		case et == eMariaGTIDEvent:
+			// Copied from mariadb flavor.
+			const FLStandalone = 1
+			flags2 := result[8+4]
+			// This means that it's also a BEGIN event.
+			if flags2&FLStandalone == 0 {
+				return newFilePosBeginEvent(event.Timestamp()), nil
+			}
+			// Otherwise, don't send this event.
 			continue
 		case event.IsFormatDescription():
 			format, err := event.Format()

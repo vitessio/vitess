@@ -81,56 +81,162 @@ func (ev *filePosBinlogEvent) rotate(f BinlogFormat) (int, string) {
 
 //----------------------------------------------------------------------------
 
+// filePosBeginEvent is a fake begin event.
+type filePosBeginEvent struct {
+	filePosFakeEvent
+}
+
+func newFilePosBeginEvent(ts uint32) filePosBeginEvent {
+	return filePosBeginEvent{
+		filePosFakeEvent{
+			timestamp: ts,
+		},
+	}
+}
+
+func (ev filePosBeginEvent) IsQuery() bool {
+	return true
+}
+
+func (ev filePosBeginEvent) Query(BinlogFormat) (Query, error) {
+	return Query{
+		SQL: "begin",
+	}, nil
+}
+
+//----------------------------------------------------------------------------
+
+var _ BinlogEvent = filePosFakeEvent{}
+
+// filePosFakeEvent is the base class for fake events.
+type filePosFakeEvent struct {
+	timestamp uint32
+}
+
+func (ev filePosFakeEvent) IsValid() bool {
+	return true
+}
+
+func (ev filePosFakeEvent) IsFormatDescription() bool {
+	return false
+}
+
+func (ev filePosFakeEvent) IsQuery() bool {
+	return false
+}
+
+func (ev filePosFakeEvent) IsXID() bool {
+	return false
+}
+
+func (ev filePosFakeEvent) IsGTID() bool {
+	return false
+}
+
+func (ev filePosFakeEvent) IsRotate() bool {
+	return false
+}
+
+func (ev filePosFakeEvent) IsIntVar() bool {
+	return false
+}
+
+func (ev filePosFakeEvent) IsRand() bool {
+	return false
+}
+
+func (ev filePosFakeEvent) IsPreviousGTIDs() bool {
+	return false
+}
+
+func (ev filePosFakeEvent) IsTableMap() bool {
+	return false
+}
+
+func (ev filePosFakeEvent) IsWriteRows() bool {
+	return false
+}
+
+func (ev filePosFakeEvent) IsUpdateRows() bool {
+	return false
+}
+
+func (ev filePosFakeEvent) IsDeleteRows() bool {
+	return false
+}
+
+func (ev filePosFakeEvent) Timestamp() uint32 {
+	return ev.timestamp
+}
+
+func (ev filePosFakeEvent) Format() (BinlogFormat, error) {
+	return BinlogFormat{}, nil
+}
+
+func (ev filePosFakeEvent) GTID(BinlogFormat) (GTID, bool, error) {
+	return nil, false, nil
+}
+
+func (ev filePosFakeEvent) Query(BinlogFormat) (Query, error) {
+	return Query{}, nil
+}
+
+func (ev filePosFakeEvent) IntVar(BinlogFormat) (byte, uint64, error) {
+	return 0, 0, nil
+}
+
+func (ev filePosFakeEvent) Rand(BinlogFormat) (uint64, uint64, error) {
+	return 0, 0, nil
+}
+
+func (ev filePosFakeEvent) PreviousGTIDs(BinlogFormat) (Position, error) {
+	return Position{}, nil
+}
+
+func (ev filePosFakeEvent) TableID(BinlogFormat) uint64 {
+	return 0
+}
+
+func (ev filePosFakeEvent) TableMap(BinlogFormat) (*TableMap, error) {
+	return nil, nil
+}
+
+func (ev filePosFakeEvent) Rows(BinlogFormat, *TableMap) (Rows, error) {
+	return Rows{}, nil
+}
+
+func (ev filePosFakeEvent) StripChecksum(f BinlogFormat) (BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
+
+func (ev filePosFakeEvent) IsPseudo() bool {
+	return false
+}
+
+//----------------------------------------------------------------------------
+
 // filePosGTIDEvent is a fake GTID event for filePos.
 type filePosGTIDEvent struct {
-	gtid      filePosGTID
-	timestamp uint32
-	binlogEvent
+	filePosFakeEvent
+	gtid filePosGTID
 }
 
 func newFilePosGTIDEvent(file string, pos int, timestamp uint32) filePosGTIDEvent {
 	return filePosGTIDEvent{
+		filePosFakeEvent: filePosFakeEvent{
+			timestamp: timestamp,
+		},
 		gtid: filePosGTID{
 			file: file,
 			pos:  strconv.Itoa(pos),
 		},
-		timestamp: timestamp,
 	}
 }
 
-func (ev filePosGTIDEvent) IsPseudo() bool {
-	return true
-}
-
 func (ev filePosGTIDEvent) IsGTID() bool {
-	return false
-}
-
-func (ev filePosGTIDEvent) IsValid() bool {
 	return true
-}
-
-func (ev filePosGTIDEvent) IsFormatDescription() bool {
-	return false
-}
-
-func (ev filePosGTIDEvent) IsRotate() bool {
-	return false
-}
-
-func (ev filePosGTIDEvent) Timestamp() uint32 {
-	return ev.timestamp
 }
 
 func (ev filePosGTIDEvent) GTID(BinlogFormat) (GTID, bool, error) {
 	return ev.gtid, false, nil
-}
-
-func (ev filePosGTIDEvent) PreviousGTIDs(BinlogFormat) (Position, error) {
-	return Position{}, fmt.Errorf("filePos should not provide PREVIOUS_GTIDS_EVENT events")
-}
-
-// StripChecksum implements BinlogEvent.StripChecksum().
-func (ev filePosGTIDEvent) StripChecksum(f BinlogFormat) (BinlogEvent, []byte, error) {
-	return ev, nil, nil
 }
