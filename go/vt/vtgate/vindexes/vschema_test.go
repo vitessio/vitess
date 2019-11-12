@@ -45,7 +45,6 @@ type stFU struct {
 func (v *stFU) String() string                                                    { return v.name }
 func (*stFU) Cost() int                                                           { return 1 }
 func (*stFU) IsUnique() bool                                                      { return true }
-func (*stFU) IsFunctional() bool                                                  { return true }
 func (*stFU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
 func (*stFU) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
 
@@ -64,7 +63,6 @@ type stLN struct {
 func (v *stLN) String() string                                                    { return v.name }
 func (*stLN) Cost() int                                                           { return 0 }
 func (*stLN) IsUnique() bool                                                      { return false }
-func (*stLN) IsFunctional() bool                                                  { return false }
 func (*stLN) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
 func (*stLN) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
 func (*stLN) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error            { return nil }
@@ -87,7 +85,6 @@ type stLU struct {
 func (v *stLU) String() string                                                    { return v.name }
 func (*stLU) Cost() int                                                           { return 2 }
 func (*stLU) IsUnique() bool                                                      { return true }
-func (*stLU) IsFunctional() bool                                                  { return false }
 func (*stLU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
 func (*stLU) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
 func (*stLU) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error            { return nil }
@@ -113,7 +110,6 @@ type stLO struct {
 func (v *stLO) String() string                                                    { return v.name }
 func (*stLO) Cost() int                                                           { return 2 }
 func (*stLO) IsUnique() bool                                                      { return true }
-func (*stLO) IsFunctional() bool                                                  { return false }
 func (*stLO) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
 func (*stLO) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
 func (*stLO) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error            { return nil }
@@ -1553,38 +1549,6 @@ func TestBuildVSchemaNotUniqueFail(t *testing.T) {
 	got, _ := BuildVSchema(&bad)
 	err := got.Keyspaces["sharded"].Error
 	want := "primary vindex stln is not Unique for table t1"
-	if err == nil || err.Error() != want {
-		t.Errorf("BuildVSchema: %v, want %v", err, want)
-	}
-}
-
-func TestBuildVSchemaPrimaryNonFunctionalFail(t *testing.T) {
-	bad := vschemapb.SrvVSchema{
-		Keyspaces: map[string]*vschemapb.Keyspace{
-			"sharded": {
-				Sharded: true,
-				Vindexes: map[string]*vschemapb.Vindex{
-					"stlu": {
-						Type:  "stlu",
-						Owner: "t1",
-					},
-				},
-				Tables: map[string]*vschemapb.Table{
-					"t1": {
-						ColumnVindexes: []*vschemapb.ColumnVindex{
-							{
-								Column: "c1",
-								Name:   "stlu",
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	got, _ := BuildVSchema(&bad)
-	err := got.Keyspaces["sharded"].Error
-	want := "primary vindex stlu cannot be owned for table t1"
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}

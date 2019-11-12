@@ -59,11 +59,6 @@ func (vind *ReverseBits) IsUnique() bool {
 	return true
 }
 
-// IsFunctional returns true since the Vindex is functional.
-func (vind *ReverseBits) IsFunctional() bool {
-	return true
-}
-
 // Map returns the corresponding KeyspaceId values for the given ids.
 func (vind *ReverseBits) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, len(ids))
