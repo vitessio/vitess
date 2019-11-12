@@ -33,24 +33,29 @@ import (
 )
 
 var (
-	clusterInstance       *cluster.LocalProcessCluster
-	tmClient              *tmc.Client
-	vtParams              mysql.ConnParams
-	masterTabletParams    mysql.ConnParams
-	replicaTabletParams   mysql.ConnParams
-	replicaTabletGrpcPort int
-	masterTabletGrpcPort  int
-	hostname              = "localhost"
-	keyspaceName          = "ks"
-	dbName                = "vt_" + keyspaceName
-	username              = "vt_dba"
-	cell                  = "zone1"
-	sqlSchema             = `
-  create table t1(
-	id bigint,
-	value varchar(16),
-	primary key(id)
-) Engine=InnoDB;
+	clusterInstance     *cluster.LocalProcessCluster
+	tmClient            *tmc.Client
+	vtParams            mysql.ConnParams
+	masterTabletParams  mysql.ConnParams
+	replicaTabletParams mysql.ConnParams
+	masterTablet        cluster.Vttablet
+	replicaTablet       cluster.Vttablet
+	rdonlyTablet        cluster.Vttablet
+	replicaUID          int
+	masterUID           int
+	hostname            = "localhost"
+	keyspaceName        = "ks"
+	shardName           = "0"
+	keyspaceShard       = "ks/" + shardName
+	dbName              = "vt_" + keyspaceName
+	username            = "vt_dba"
+	cell                = "zone1"
+	sqlSchema           = `
+	create table t1(
+		id bigint,
+		value varchar(16),
+		primary key(id)
+	) Engine=InnoDB;
 `
 
 	vSchema = `
@@ -104,7 +109,8 @@ func TestMain(m *testing.M) {
 			SchemaSQL: sqlSchema,
 			VSchema:   vSchema,
 		}
-		if err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
+
+		if err = clusterInstance.StartUnshardedKeyspace(*keyspace, 1, true); err != nil {
 			return 1
 		}
 
@@ -115,16 +121,13 @@ func TestMain(m *testing.M) {
 
 		// Collect table paths and ports
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-		var masterTabletPath string
-		var replicaTabletPath string
 		for _, tablet := range tablets {
-			path := fmt.Sprintf(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tablet.TabletUID)))
 			if tablet.Type == "master" {
-				masterTabletPath = path
-				masterTabletGrpcPort = tablet.GrpcPort
+				masterTablet = tablet
+			} else if tablet.Type != "rdonly" {
+				replicaTablet = tablet
 			} else {
-				replicaTabletPath = path
-				replicaTabletGrpcPort = tablet.GrpcPort
+				rdonlyTablet = tablet
 			}
 		}
 
@@ -132,13 +135,17 @@ func TestMain(m *testing.M) {
 		masterTabletParams = mysql.ConnParams{
 			Uname:      username,
 			DbName:     dbName,
-			UnixSocket: masterTabletPath + "/mysql.sock",
+			UnixSocket: fmt.Sprintf(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", masterTablet.TabletUID))),
 		}
 		replicaTabletParams = mysql.ConnParams{
 			Uname:      username,
 			DbName:     dbName,
-			UnixSocket: replicaTabletPath + "/mysql.sock",
+			UnixSocket: fmt.Sprintf(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", replicaTablet.TabletUID))),
 		}
+
+		// Fixed UIDs for tablet which we will spawn during these tests
+		replicaUID = 62044
+		masterUID = 62344
 
 		// create tablet manager client
 		tmClient = tmc.NewClient()
