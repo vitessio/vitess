@@ -27,6 +27,8 @@ export ETCDCTL_API=2
 source "${script_root}/env.sh"
 
 etcd --data-dir "${VTDATAROOT}/etcd/"  --listen-client-urls "http://${ETCD_SERVER}" --advertise-client-urls "http://${ETCD_SERVER}" > "${VTDATAROOT}"/tmp/etcd.out 2>&1 &
+PID=$!
+echo $PID > "${VTDATAROOT}/tmp/etcd.pid"
 sleep 5
 
 echo "add /vitess/global"

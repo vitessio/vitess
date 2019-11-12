@@ -24,6 +24,6 @@ script_root=$(dirname "${BASH_SOURCE[0]}")
 # shellcheck disable=SC1091
 source "${script_root}/env.sh"
 
-# Stop etcd servers.
-echo "Stopping etcd servers..."
-killall -9 etcd
+pid=`cat $VTDATAROOT/tmp/etcd.pid`
+echo "Stopping etcd..."
+kill -9 $pid

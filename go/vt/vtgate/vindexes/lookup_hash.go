@@ -93,11 +93,6 @@ func (lh *LookupHash) IsUnique() bool {
 	return false
 }
 
-// IsFunctional returns false since the Vindex is not functional.
-func (lh *LookupHash) IsFunctional() bool {
-	return false
-}
-
 // Map can map ids to key.Destination objects.
 func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
@@ -247,11 +242,6 @@ func (lhu *LookupHashUnique) Cost() int {
 // IsUnique returns true since the Vindex is unique.
 func (lhu *LookupHashUnique) IsUnique() bool {
 	return true
-}
-
-// IsFunctional returns false since the Vindex is not functional.
-func (lhu *LookupHashUnique) IsFunctional() bool {
-	return false
 }
 
 // Map can map ids to key.Destination objects.
