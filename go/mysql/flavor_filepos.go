@@ -21,16 +21,18 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"time"
+	"unicode"
 
 	"golang.org/x/net/context"
 )
 
 type filePosFlavor struct {
-	format     BinlogFormat
-	file       string
-	pos        int
-	savedEvent *filePosBinlogEvent
+	format        BinlogFormat
+	file          string
+	savedEvent    BinlogEvent
+	inTransaction bool
 }
 
 // newFilePosFlavor creates a new filePos flavor.
@@ -92,7 +94,6 @@ func (flv *filePosFlavor) sendBinlogDumpCommand(c *Conn, slaveID uint32, startPo
 		return fmt.Errorf("invalid position: %v", startPos.GTIDSet)
 	}
 	flv.file = rpos.file
-	flv.pos = pos
 
 	return c.WriteComBinlogDump(slaveID, rpos.file, uint32(pos), 0)
 }
@@ -117,41 +118,64 @@ func (flv *filePosFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 		}
 
 		event := &filePosBinlogEvent{binlogEvent: binlogEvent(result[1:])}
-		et := event.Type()
-		switch {
-		case et == eGTIDEvent || et == eAnonymousGTIDEvent || et == ePreviousGTIDsEvent || et == eMariaGTIDListEvent:
+		switch event.Type() {
+		case eGTIDEvent, eAnonymousGTIDEvent, ePreviousGTIDsEvent, eMariaGTIDListEvent:
 			// Don't transmit fake or irrelevant events because we should not
 			// resume replication at these positions.
 			continue
-		case et == eMariaGTIDEvent:
+		case eMariaGTIDEvent:
 			// Copied from mariadb flavor.
 			const FLStandalone = 1
 			flags2 := result[8+4]
 			// This means that it's also a BEGIN event.
 			if flags2&FLStandalone == 0 {
-				return newFilePosBeginEvent(event.Timestamp()), nil
+				return flv.begin(event), nil
 			}
 			// Otherwise, don't send this event.
 			continue
-		case event.IsFormatDescription():
+		case eFormatDescriptionEvent:
 			format, err := event.Format()
 			if err != nil {
 				return nil, err
 			}
 			flv.format = format
-		case event.IsRotate():
+		case eRotateEvent:
 			if !flv.format.IsZero() {
 				stripped, _, _ := event.StripChecksum(flv.format)
-				flv.pos, flv.file = stripped.(*filePosBinlogEvent).rotate(flv.format)
+				_, flv.file = stripped.(*filePosBinlogEvent).rotate(flv.format)
 				// No need to transmit. Just update the internal position for the next event.
 				continue
 			}
+		case eXIDEvent:
+			return flv.commit(event), nil
+		case eQueryEvent:
+			query, err := event.Query(flv.format)
+			if err != nil {
+				// Let the caller handle the error.
+				return event, nil
+			}
+			fw := firstWord(query.SQL)
+			switch {
+			case strings.EqualFold(fw, "begin"):
+				return flv.begin(event), nil
+			case strings.EqualFold(fw, "commit"):
+				return flv.commit(event), nil
+			}
+		case eTableMapEvent,
+			eWriteRowsEventV0, eWriteRowsEventV1, eWriteRowsEventV2,
+			eDeleteRowsEventV0, eDeleteRowsEventV1, eDeleteRowsEventV2,
+			eUpdateRowsEventV0, eUpdateRowsEventV1, eUpdateRowsEventV2:
+			if !flv.inTransaction {
+				flv.savedEvent = event
+				return newFilePosGTIDEvent(flv.file, event.nextPosition(flv.format), event.Timestamp()), nil
+			}
+			return event, nil
 		default:
 			if !flv.format.IsZero() {
 				if v := event.nextPosition(flv.format); v != 0 {
-					flv.pos = v
-					flv.savedEvent = event
-					return newFilePosGTIDEvent(flv.file, flv.pos, event.Timestamp()), nil
+					// "repair" will get sent as OTHER event.
+					flv.savedEvent = newFilePosQueryEvent("repair", event.Timestamp())
+					return newFilePosGTIDEvent(flv.file, v, event.Timestamp()), nil
 				}
 			}
 		}
@@ -159,23 +183,34 @@ func (flv *filePosFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 	}
 }
 
+func (flv *filePosFlavor) begin(event *filePosBinlogEvent) BinlogEvent {
+	flv.inTransaction = true
+	return newFilePosQueryEvent("begin", event.Timestamp())
+}
+
+func (flv *filePosFlavor) commit(event *filePosBinlogEvent) BinlogEvent {
+	flv.inTransaction = false
+	flv.savedEvent = event
+	return newFilePosGTIDEvent(flv.file, event.nextPosition(flv.format), event.Timestamp())
+}
+
 // resetReplicationCommands is part of the Flavor interface.
 func (flv *filePosFlavor) resetReplicationCommands() []string {
 	return []string{
-		"not allowed",
+		"unsupported",
 	}
 }
 
 // setSlavePositionCommands is part of the Flavor interface.
 func (flv *filePosFlavor) setSlavePositionCommands(pos Position) []string {
 	return []string{
-		"not allowed",
+		"unsupported",
 	}
 }
 
 // setSlavePositionCommands is part of the Flavor interface.
 func (flv *filePosFlavor) changeMasterArg() string {
-	return "not allowed"
+	return "unsupported"
 }
 
 // status is part of the Flavor interface.
@@ -222,7 +257,7 @@ func (flv *filePosFlavor) waitUntilPositionCommand(ctx context.Context, pos Posi
 }
 
 func (*filePosFlavor) startSlaveUntilAfter(pos Position) string {
-	return "unimplemented"
+	return "unsupported"
 }
 
 // enableBinlogPlaybackCommand is part of the Flavor interface.
@@ -233,4 +268,12 @@ func (*filePosFlavor) enableBinlogPlaybackCommand() string {
 // disableBinlogPlaybackCommand is part of the Flavor interface.
 func (*filePosFlavor) disableBinlogPlaybackCommand() string {
 	return ""
+}
+
+func firstWord(s string) string {
+	isNotLetter := func(r rune) bool { return !unicode.IsLetter(r) }
+	if end := strings.IndexFunc(s, isNotLetter); end != -1 {
+		s = s[:end]
+	}
+	return s
 }
