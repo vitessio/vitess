@@ -165,7 +165,7 @@ func (vttablet *VttabletProcess) GetTabletStatus() string {
 }
 
 // TearDown shuts down the running vttablet service
-func (vttablet *VttabletProcess) TearDown() error {
+func (vttablet *VttabletProcess) TearDown(cleanDir bool) error {
 	if vttablet.proc == nil {
 		fmt.Printf("No process found for vttablet %d", vttablet.TabletUID)
 	}
@@ -174,6 +174,10 @@ func (vttablet *VttabletProcess) TearDown() error {
 	}
 	// Attempt graceful shutdown with SIGTERM first
 	vttablet.proc.Process.Signal(syscall.SIGTERM)
+
+	if cleanDir {
+		os.RemoveAll(vttablet.Directory)
+	}
 
 	select {
 	case <-vttablet.exit:
