@@ -81,26 +81,28 @@ func (ev *filePosBinlogEvent) rotate(f BinlogFormat) (int, string) {
 
 //----------------------------------------------------------------------------
 
-// filePosBeginEvent is a fake begin event.
-type filePosBeginEvent struct {
+// filePosQueryEvent is a fake begin event.
+type filePosQueryEvent struct {
+	query string
 	filePosFakeEvent
 }
 
-func newFilePosBeginEvent(ts uint32) filePosBeginEvent {
-	return filePosBeginEvent{
-		filePosFakeEvent{
+func newFilePosQueryEvent(query string, ts uint32) filePosQueryEvent {
+	return filePosQueryEvent{
+		query: query,
+		filePosFakeEvent: filePosFakeEvent{
 			timestamp: ts,
 		},
 	}
 }
 
-func (ev filePosBeginEvent) IsQuery() bool {
+func (ev filePosQueryEvent) IsQuery() bool {
 	return true
 }
 
-func (ev filePosBeginEvent) Query(BinlogFormat) (Query, error) {
+func (ev filePosQueryEvent) Query(BinlogFormat) (Query, error) {
 	return Query{
-		SQL: "begin",
+		SQL: ev.query,
 	}, nil
 }
 
