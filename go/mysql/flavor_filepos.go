@@ -21,18 +21,15 @@ import (
 	"fmt"
 	"io"
 	"strconv"
-	"strings"
 	"time"
-	"unicode"
 
 	"golang.org/x/net/context"
 )
 
 type filePosFlavor struct {
-	format        BinlogFormat
-	file          string
-	savedEvent    BinlogEvent
-	inTransaction bool
+	format     BinlogFormat
+	file       string
+	savedEvent BinlogEvent
 }
 
 // newFilePosFlavor creates a new filePos flavor.
@@ -52,7 +49,7 @@ func (flv *filePosFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
 			return nil, err
 		}
 		if len(qr.Rows) == 0 {
-			return nil, errors.New("No master or slave status")
+			return nil, errors.New("no master or slave status")
 		}
 		resultMap, err := resultToMap(qr)
 		if err != nil {
@@ -129,7 +126,7 @@ func (flv *filePosFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 			flags2 := result[8+4]
 			// This means that it's also a BEGIN event.
 			if flags2&FLStandalone == 0 {
-				return flv.begin(event), nil
+				return newFilePosQueryEvent("begin", event.Timestamp()), nil
 			}
 			// Otherwise, don't send this event.
 			continue
@@ -146,34 +143,17 @@ func (flv *filePosFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 				// No need to transmit. Just update the internal position for the next event.
 				continue
 			}
-		case eXIDEvent:
-			return flv.commit(event), nil
-		case eQueryEvent:
-			query, err := event.Query(flv.format)
-			if err != nil {
-				// Let the caller handle the error.
-				return event, nil
-			}
-			fw := firstWord(query.SQL)
-			switch {
-			case strings.EqualFold(fw, "begin"):
-				return flv.begin(event), nil
-			case strings.EqualFold(fw, "commit"):
-				return flv.commit(event), nil
-			}
 		case eTableMapEvent,
 			eWriteRowsEventV0, eWriteRowsEventV1, eWriteRowsEventV2,
 			eDeleteRowsEventV0, eDeleteRowsEventV1, eDeleteRowsEventV2,
 			eUpdateRowsEventV0, eUpdateRowsEventV1, eUpdateRowsEventV2:
-			if !flv.inTransaction {
-				flv.savedEvent = event
-				return newFilePosGTIDEvent(flv.file, event.nextPosition(flv.format), event.Timestamp()), nil
-			}
-			return event, nil
+			flv.savedEvent = event
+			return newFilePosGTIDEvent(flv.file, event.nextPosition(flv.format), event.Timestamp()), nil
 		default:
+			// For unrecognized events, send a fake "repair" event so that
+			// the position gets transmitted.
 			if !flv.format.IsZero() {
 				if v := event.nextPosition(flv.format); v != 0 {
-					// "repair" will get sent as OTHER event.
 					flv.savedEvent = newFilePosQueryEvent("repair", event.Timestamp())
 					return newFilePosGTIDEvent(flv.file, v, event.Timestamp()), nil
 				}
@@ -181,17 +161,6 @@ func (flv *filePosFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 		}
 		return event, nil
 	}
-}
-
-func (flv *filePosFlavor) begin(event *filePosBinlogEvent) BinlogEvent {
-	flv.inTransaction = true
-	return newFilePosQueryEvent("begin", event.Timestamp())
-}
-
-func (flv *filePosFlavor) commit(event *filePosBinlogEvent) BinlogEvent {
-	flv.inTransaction = false
-	flv.savedEvent = event
-	return newFilePosGTIDEvent(flv.file, event.nextPosition(flv.format), event.Timestamp())
 }
 
 // resetReplicationCommands is part of the Flavor interface.
@@ -246,7 +215,7 @@ func (flv *filePosFlavor) waitUntilPositionCommand(ctx context.Context, pos Posi
 	}
 
 	if deadline, ok := ctx.Deadline(); ok {
-		timeout := deadline.Sub(time.Now())
+		timeout := time.Until(deadline)
 		if timeout <= 0 {
 			return "", fmt.Errorf("timed out waiting for position %v", pos)
 		}
@@ -268,12 +237,4 @@ func (*filePosFlavor) enableBinlogPlaybackCommand() string {
 // disableBinlogPlaybackCommand is part of the Flavor interface.
 func (*filePosFlavor) disableBinlogPlaybackCommand() string {
 	return ""
-}
-
-func firstWord(s string) string {
-	isNotLetter := func(r rune) bool { return !unicode.IsLetter(r) }
-	if end := strings.IndexFunc(s, isNotLetter); end != -1 {
-		s = s[:end]
-	}
-	return s
 }
