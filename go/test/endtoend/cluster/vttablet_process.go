@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"reflect"
 	"strings"
 	"syscall"
 	"time"
@@ -62,6 +63,8 @@ type VttabletProcess struct {
 	Directory                   string
 	VerifyURL                   string
 	EnableSemiSync              bool
+	SupportBackup               bool
+	ServingStatus               string
 	//Extra Args to be set before starting the vttablet process
 	ExtraArgs []string
 
@@ -91,13 +94,17 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-enable_replication_reporter",
 		"-backup_storage_implementation", vttablet.BackupStorageImplementation,
 		"-file_backup_storage_root", vttablet.FileBackupStorageRoot,
-		"-restore_from_backup",
 		"-service_map", vttablet.ServiceMap,
 		"-vtctld_addr", vttablet.VtctldAddress,
 	)
+
+	if vttablet.SupportBackup {
+		vttablet.proc.Args = append(vttablet.proc.Args, "-restore_from_backup")
+	}
 	if vttablet.EnableSemiSync {
 		vttablet.proc.Args = append(vttablet.proc.Args, "-enable_semi_sync")
 	}
+
 	vttablet.proc.Args = append(vttablet.proc.Args, vttablet.ExtraArgs...)
 
 	vttablet.proc.Stderr = os.Stderr
@@ -119,7 +126,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	timeout := time.Now().Add(60 * time.Second)
 	for time.Now().Before(timeout) {
-		if vttablet.WaitForStatus("NOT_SERVING") {
+		if vttablet.WaitForStatus(vttablet.ServingStatus) {
 			return nil
 		}
 		select {
@@ -135,9 +142,14 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 // WaitForStatus function checks if vttablet process is up and running
 func (vttablet *VttabletProcess) WaitForStatus(status string) bool {
+	return vttablet.GetTabletStatus() == status
+}
+
+// GetTabletStatus function checks if vttablet process is up and running
+func (vttablet *VttabletProcess) GetTabletStatus() string {
 	resp, err := http.Get(vttablet.VerifyURL)
 	if err != nil {
-		return false
+		return ""
 	}
 	if resp.StatusCode == 200 {
 		resultMap := make(map[string]interface{})
@@ -146,13 +158,14 @@ func (vttablet *VttabletProcess) WaitForStatus(status string) bool {
 		if err != nil {
 			panic(err)
 		}
-		return resultMap["TabletStateName"] == status
+		status := reflect.ValueOf(resultMap["TabletStateName"]).String()
+		return status
 	}
-	return false
+	return ""
 }
 
 // TearDown shuts down the running vttablet service
-func (vttablet *VttabletProcess) TearDown() error {
+func (vttablet *VttabletProcess) TearDown(cleanDir bool) error {
 	if vttablet.proc == nil {
 		fmt.Printf("No process found for vttablet %d", vttablet.TabletUID)
 	}
@@ -161,6 +174,10 @@ func (vttablet *VttabletProcess) TearDown() error {
 	}
 	// Attempt graceful shutdown with SIGTERM first
 	vttablet.proc.Process.Signal(syscall.SIGTERM)
+
+	if cleanDir {
+		os.RemoveAll(vttablet.Directory)
+	}
 
 	select {
 	case <-vttablet.exit:
@@ -219,6 +236,8 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 		VtctldAddress:               fmt.Sprintf("http://%s:%d", hostname, vtctldPort),
 		ExtraArgs:                   extraArgs,
 		EnableSemiSync:              enableSemiSync,
+		SupportBackup:               true,
+		ServingStatus:               "NOT_SERVING",
 	}
 
 	if tabletType == "rdonly" {
