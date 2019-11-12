@@ -50,6 +50,9 @@ var (
 	// AWS API region
 	region = flag.String("s3_backup_aws_region", "us-east-1", "AWS region to use")
 
+	// AWS request retries
+	retryCount = flag.Int("s3_backup_aws_retries", -1, "AWS request retries")
+
 	// AWS endpoint, defaults to amazonaws.com but appliances may use a different location
 	endpoint = flag.String("s3_backup_aws_endpoint", "", "endpoint of the S3 backend (region must be provided)")
 
@@ -340,14 +343,20 @@ func (bs *S3BackupStorage) client() (*s3.S3, error) {
 		if err != nil {
 			return nil, err
 		}
-		bs._client = s3.New(session,
-			&aws.Config{
-				HTTPClient:       httpClient,
-				LogLevel:         logLevel,
-				Endpoint:         aws.String(*endpoint),
-				Region:           aws.String(*region),
-				S3ForcePathStyle: aws.Bool(*forcePath),
-			})
+
+		awsConfig := aws.Config{
+			HTTPClient:       httpClient,
+			LogLevel:         logLevel,
+			Endpoint:         aws.String(*endpoint),
+			Region:           aws.String(*region),
+			S3ForcePathStyle: aws.Bool(*forcePath),
+		}
+
+		if *retryCount >= 0 {
+			awsConfig.WithMaxRetries(*retryCount)
+		}
+
+		bs._client = s3.New(session, &awsConfig)
 
 		if len(*bucket) == 0 {
 			return nil, fmt.Errorf("-s3_backup_storage_bucket required")

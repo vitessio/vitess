@@ -62,6 +62,9 @@ func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit,
 
 // Lookup performs a lookup for the ids.
 func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sqltypes.Result, error) {
+	if vcursor == nil {
+		return nil, fmt.Errorf("cannot perform lookup: no vcursor provided")
+	}
 	results := make([]*sqltypes.Result, 0, len(ids))
 	for _, id := range ids {
 		bindVars := map[string]*querypb.BindVariable{

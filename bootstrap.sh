@@ -35,10 +35,8 @@ function fail() {
 
 [[ "$(dirname "$0")" = "." ]] || fail "bootstrap.sh must be run from its current directory"
 
-go version &>/dev/null  || fail "Go is not installed or is not on \$PATH"
-[[ "$(go version 2>&1)" =~ go1\.[1-9][1-9] ]] || fail "Go is not version 1.11+"
-
 # Create main directories.
+VTROOT="${VTROOT:-${PWD/\/src\/vitess.io\/vitess/}}"
 mkdir -p "$VTROOT/dist"
 mkdir -p "$VTROOT/bin"
 mkdir -p "$VTROOT/lib"
@@ -52,6 +50,9 @@ if [ "$BUILD_TESTS" == 1 ] ; then
 else
     source ./build.env
 fi
+
+go version &>/dev/null  || fail "Go is not installed or is not on \$PATH"
+goversion_min 1.12 || fail "Go is not version 1.12+"
 
 if [ "$BUILD_TESTS" == 1 ] ; then
     # Set up required soft links.
@@ -126,6 +127,14 @@ function install_dep() {
 # 1. Installation of dependencies.
 #
 
+# Wrapper around the `arch` command which plays nice with OS X
+function get_arch() {
+  case $(uname) in
+    Linux) arch;;
+    Darwin) uname -m;;
+  esac
+}
+
 
 # Install the gRPC Python library (grpcio) and the protobuf gRPC Python plugin (grpcio-tools) from PyPI.
 # Dependencies like the Python protobuf package will be installed automatically.
@@ -164,7 +173,7 @@ function install_protoc() {
     Darwin) local platform=osx;;
   esac
 
-  case $(arch) in
+  case $(get_arch) in
       aarch64)  local target=aarch_64;;
       x86_64)  local target=x86_64;;
       *)   echo "ERROR: unsupported architecture"; exit 1;;
@@ -209,7 +218,7 @@ function install_etcd() {
     Darwin) local platform=darwin; local ext=zip;;
   esac
 
-  case $(arch) in
+  case $(get_arch) in
       aarch64)  local target=arm64;;
       x86_64)  local target=amd64;;
       *)   echo "ERROR: unsupported architecture"; exit 1;;
@@ -240,7 +249,7 @@ function install_consul() {
     Darwin) local platform=darwin;;
   esac
 
-  case $(arch) in
+  case $(get_arch) in
       aarch64)  local target=arm64;;
       x86_64)  local target=amd64;;
       *)   echo "ERROR: unsupported architecture"; exit 1;;
@@ -297,9 +306,25 @@ function install_chromedriver() {
   local version="$1"
   local dist="$2"
 
-  curl -sL "https://chromedriver.storage.googleapis.com/$version/chromedriver_linux64.zip" > chromedriver_linux64.zip
-  unzip -o -q chromedriver_linux64.zip -d "$dist"
-  rm chromedriver_linux64.zip
+  if [ "$(arch)" == "aarch64" ] ; then
+      os=$(cat /etc/*release | grep "^ID=" | cut -d '=' -f 2)
+      case $os in
+          ubuntu|debian)
+              sudo apt-get update -y && sudo apt install -y --no-install-recommends unzip libglib2.0-0 libnss3 libx11-6
+	      ;;
+	  centos|fedora)
+	      sudo yum update -y && yum install -y libX11 unzip wget
+	      ;;
+      esac
+      echo "For Arm64, using prebuilt binary from electron (https://github.com/electron/electron/) of version 76.0.3809.126"
+      wget https://github.com/electron/electron/releases/download/v6.0.3/chromedriver-v6.0.3-linux-arm64.zip
+      unzip -o -q chromedriver-v6.0.3-linux-arm64.zip -d "$dist"
+      rm chromedriver-v6.0.3-linux-arm64.zip
+  else
+      curl -sL "https://chromedriver.storage.googleapis.com/$version/chromedriver_linux64.zip" > chromedriver_linux64.zip
+      unzip -o -q chromedriver_linux64.zip -d "$dist"
+      rm chromedriver_linux64.zip
+  fi
 }
 if [ "$BUILD_PYTHON" == 1 ] ; then
     install_dep "chromedriver" "73.0.3683.20" "$VTROOT/dist/chromedriver" install_chromedriver
