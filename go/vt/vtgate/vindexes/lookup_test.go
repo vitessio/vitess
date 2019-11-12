@@ -127,6 +127,16 @@ func TestLookupNonUniqueString(t *testing.T) {
 	}
 }
 
+func TestLookupNilVCursor(t *testing.T) {
+	lookupNonUnique := createLookup(t, "lookup", false)
+
+	_, err := lookupNonUnique.Map(nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
+	want := "cannot perform lookup: no vcursor provided"
+	if err == nil || err.Error() != want {
+		t.Errorf("Map(nil vcursor) err: %v, want %v", err, want)
+	}
+}
+
 func TestLookupNonUniqueMap(t *testing.T) {
 	lookupNonUnique := createLookup(t, "lookup", false)
 	vc := &vcursor{numRows: 2}
