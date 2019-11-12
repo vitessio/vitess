@@ -52,7 +52,7 @@ type VtctldProcess struct {
 }
 
 // Setup starts vtctld process with required arguements
-func (vtctld *VtctldProcess) Setup(Cell string) (err error) {
+func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error) {
 	_ = createDirectory(vtctld.LogDir, 0700)
 	_ = createDirectory(path.Join(vtctld.Directory, "backups"), 0700)
 	vtctld.proc = exec.Command(
@@ -61,7 +61,7 @@ func (vtctld *VtctldProcess) Setup(Cell string) (err error) {
 		"-topo_implementation", vtctld.CommonArg.TopoImplementation,
 		"-topo_global_server_address", vtctld.CommonArg.TopoGlobalAddress,
 		"-topo_global_root", vtctld.CommonArg.TopoGlobalRoot,
-		"-cell", Cell,
+		"-cell", cell,
 		"-web_dir", vtctld.WebDir,
 		"-web_dir2", vtctld.WebDir2,
 		"-workflow_manager_init",
@@ -74,6 +74,7 @@ func (vtctld *VtctldProcess) Setup(Cell string) (err error) {
 		"-grpc_port", fmt.Sprintf("%d", vtctld.GrpcPort),
 		"-pid_file", vtctld.PidFile,
 	)
+	vtctld.proc.Args = append(vtctld.proc.Args, extraArgs...)
 
 	vtctld.proc.Stderr = os.Stderr
 	vtctld.proc.Stdout = os.Stdout

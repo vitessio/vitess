@@ -17,6 +17,7 @@ limitations under the License.
 package cluster
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -27,6 +28,9 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -169,6 +173,24 @@ func (vttablet *VttabletProcess) TearDown() error {
 		vttablet.proc = nil
 		return <-vttablet.exit
 	}
+}
+
+// QueryTablet lets you execute query in this tablet and get the result
+func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useDb bool) (*sqltypes.Result, error) {
+	dbParams := mysql.ConnParams{
+		Uname:      "vt_dba",
+		UnixSocket: path.Join(vttablet.Directory, "mysql.sock"),
+	}
+	if useDb {
+		dbParams.DbName = "vt_" + keyspace
+	}
+	ctx := context.Background()
+	dbConn, err := mysql.Connect(ctx, &dbParams)
+	if err != nil {
+		return nil, err
+	}
+	defer dbConn.Close()
+	return dbConn.ExecuteFetch(query, 1000, true)
 }
 
 // VttabletProcessInstance returns a VttabletProcess handle for vttablet process
