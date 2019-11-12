@@ -49,7 +49,7 @@ func TestLockAndUnlock(t *testing.T) {
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
 	// now lock the replica
-	err = tmcLockTables(ctx, replicaTabletGrpcPort)
+	err = tmcLockTables(ctx, replicaTablet.GrpcPort)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,14 +58,14 @@ func TestLockAndUnlock(t *testing.T) {
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
 	// finally, make sure that unlocking the replica leads to the previous write showing up
-	err = tmcUnlockTables(ctx, replicaTabletGrpcPort)
+	err = tmcUnlockTables(ctx, replicaTablet.GrpcPort)
 	if err != nil {
 		t.Fatal(err)
 	}
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")] [VARCHAR("c")]]`)
 
 	// Unlocking when we do not have a valid lock should lead to an exception being raised
-	err = tmcUnlockTables(ctx, replicaTabletGrpcPort)
+	err = tmcUnlockTables(ctx, replicaTablet.GrpcPort)
 	want := "tables were not locked"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Table unlock: %v, must contain %s", err, want)
@@ -92,25 +92,25 @@ func TestStartSlaveUntilAfter(t *testing.T) {
 	defer replicaConn.Close()
 
 	//first we stop replication to the replica, so we can move forward step by step.
-	err = tmcStopSlave(ctx, replicaTabletGrpcPort)
+	err = tmcStopSlave(ctx, replicaTablet.GrpcPort)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	exec(t, masterConn, "insert into t1(id, value) values(1,'a')")
-	pos1, err := tmcMasterPosition(ctx, masterTabletGrpcPort)
+	pos1, err := tmcMasterPosition(ctx, masterTablet.GrpcPort)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	exec(t, masterConn, "insert into t1(id, value) values(2,'b')")
-	pos2, err := tmcMasterPosition(ctx, masterTabletGrpcPort)
+	pos2, err := tmcMasterPosition(ctx, masterTablet.GrpcPort)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	exec(t, masterConn, "insert into t1(id, value) values(3,'c')")
-	pos3, err := tmcMasterPosition(ctx, masterTabletGrpcPort)
+	pos3, err := tmcMasterPosition(ctx, masterTablet.GrpcPort)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,27 +120,27 @@ func TestStartSlaveUntilAfter(t *testing.T) {
 
 	// starts the mysql replication until
 	timeout := 10 * time.Second
-	err = tmcStartSlaveUntilAfter(ctx, replicaTabletGrpcPort, pos1, timeout)
+	err = tmcStartSlaveUntilAfter(ctx, replicaTablet.GrpcPort, pos1, timeout)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// first row should be visible
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")]]`)
 
-	err = tmcStartSlaveUntilAfter(ctx, replicaTabletGrpcPort, pos2, timeout)
+	err = tmcStartSlaveUntilAfter(ctx, replicaTablet.GrpcPort, pos2, timeout)
 	if err != nil {
 		t.Fatal(err)
 	}
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
-	err = tmcStartSlaveUntilAfter(ctx, replicaTabletGrpcPort, pos3, timeout)
+	err = tmcStartSlaveUntilAfter(ctx, replicaTablet.GrpcPort, pos3, timeout)
 	if err != nil {
 		t.Fatal(err)
 	}
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")] [VARCHAR("c")]]`)
 
 	// Strat replication to the replica
-	err = tmcStartSlave(ctx, replicaTabletGrpcPort)
+	err = tmcStartSlave(ctx, replicaTablet.GrpcPort)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func TestLockAndTimeout(t *testing.T) {
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")]]`)
 
 	// now lock the replica
-	err = tmcLockTables(ctx, replicaTabletGrpcPort)
+	err = tmcLockTables(ctx, replicaTablet.GrpcPort)
 	if err != nil {
 		t.Fatal(err)
 	}

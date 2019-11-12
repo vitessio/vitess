@@ -17,10 +17,13 @@ limitations under the License.
 package cluster
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
+
+	"vitess.io/vitess/go/mysql"
 )
 
 // MysqlctlProcess is a generic handle for a running mysqlctl command .
@@ -70,6 +73,15 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 	return tmpProcess.Start()
 }
 
+// CleanupFiles clean the mysql files to make sure we can start the same process again
+func (mysqlctl *MysqlctlProcess) CleanupFiles(tabletUID int) {
+	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/data", tabletUID)))
+	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/relay-logs", tabletUID)))
+	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/tmp", tabletUID)))
+	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/bin-logs", tabletUID)))
+	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/innodb", tabletUID)))
+}
+
 // MysqlCtlProcessInstance returns a Mysqlctl handle for mysqlctl process
 // configured with the given Config.
 func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) *MysqlctlProcess {
@@ -82,4 +94,20 @@ func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) 
 	mysqlctl.MySQLPort = mySQLPort
 	mysqlctl.TabletUID = tabletUID
 	return mysqlctl
+}
+
+// StartMySQL create a connection to tablet mysql
+func StartMySQL(ctx context.Context, tablet *Vttablet, username string, tmpDirectory string) (*mysql.Conn, error) {
+	tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
+	err := tablet.MysqlctlProcess.Start()
+	if err != nil {
+		return nil, err
+	}
+	params := mysql.ConnParams{
+		Uname:      username,
+		UnixSocket: fmt.Sprintf(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tablet.TabletUID), "/mysql.sock")),
+	}
+
+	conn, err := mysql.Connect(ctx, &params)
+	return conn, err
 }
