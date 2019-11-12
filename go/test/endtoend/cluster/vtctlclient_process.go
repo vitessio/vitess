@@ -96,3 +96,12 @@ func VtctlClientProcessInstance(hostname string, grpcPort int, tmpDirectory stri
 	}
 	return vtctlclient
 }
+
+// InitTablet initializes a tablet
+func (vtctlclient *VtctlClientProcess) InitTablet(tablet *Vttablet, cell string, keyspaceName string, hostname string, shardName string) error {
+	return vtctlclient.ExecuteCommand(
+		"InitTablet", "-hostname", hostname,
+		"-port", fmt.Sprintf("%d", tablet.HTTPPort), "-allow_update",
+		"-keyspace", keyspaceName, "-shard", shardName,
+		fmt.Sprintf("%s-%010d", cell, tablet.TabletUID), "replica")
+}
