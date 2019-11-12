@@ -352,6 +352,15 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		if err := vp.applyRowEvent(ctx, event.RowEvent); err != nil {
 			return err
 		}
+	case binlogdatapb.VEventType_OTHER:
+		// Just update the position.
+		posReached, err := vp.updatePos(event.Timestamp)
+		if err != nil {
+			return err
+		}
+		if posReached {
+			return io.EOF
+		}
 	case binlogdatapb.VEventType_DDL:
 		if vp.vr.dbClient.InTransaction {
 			return fmt.Errorf("unexpected state: DDL encountered in the middle of a transaction: %v", event.Ddl)
