@@ -22,6 +22,11 @@ set -e
 # shellcheck disable=SC2128
 script_root=$(dirname "${BASH_SOURCE}")
 
+if [[ $EUID -eq 0 ]]; then
+    echo "This script refuses to be run as root. Please switch to a regular user."
+    exit 1
+fi
+
 # start topo server
 if [ "${TOPO}" = "zk2" ]; then
     CELL=zone1 "$script_root/zk-up.sh"
