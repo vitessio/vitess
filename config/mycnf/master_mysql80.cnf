@@ -23,10 +23,9 @@ default_authentication_plugin = mysql_native_password
 # promoted or demoted.
 plugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so
 
-# When semi-sync is enabled, don't allow fallback to async
-# if you get no ack, or have no slaves. This is necessary to
-# prevent alternate futures when doing a failover in response to
-# a master that becomes unresponsive.
-rpl_semi_sync_master_timeout = 1000000000000000000
-rpl_semi_sync_master_wait_no_slave = 1
+# MySQL 8.0 will not load plugins during --initialize
+# which makes these options unknown. Prefixing with --loose
+# tells the server it's fine if they are not understood.
+loose_rpl_semi_sync_master_timeout = 1000000000000000000
+loose_rpl_semi_sync_master_wait_no_slave = 1
 
