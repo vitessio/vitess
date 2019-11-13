@@ -141,6 +141,11 @@ func TestStatements(t *testing.T) {
 		input: "describe stream1",
 	}}
 	runCases(t, nil, testcases, "")
+
+	// Test FilePos flavor
+	engine.cp.Flavor = "FilePos"
+	defer func() { engine.cp.Flavor = "" }()
+	runCases(t, nil, testcases, "")
 }
 
 func TestRegexp(t *testing.T) {
@@ -1004,7 +1009,15 @@ func execStatements(t *testing.T, queries []string) {
 
 func masterPosition(t *testing.T) string {
 	t.Helper()
-	pos, err := env.Mysqld.MasterPosition()
+	// We use the engine's cp because there is one test that overrides
+	// the flavor to FilePos. If so, we have to obtain the position
+	// in that flavor format.
+	conn, err := mysql.Connect(context.Background(), engine.cp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	pos, err := conn.MasterPosition()
 	if err != nil {
 		t.Fatal(err)
 	}
