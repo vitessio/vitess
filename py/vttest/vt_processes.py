@@ -137,7 +137,7 @@ class VtcomboProcess(VtProcess):
       ]
 
   def __init__(self, directory, topology, mysql_db, schema_dir, charset,
-               web_dir=None, web_dir2=None):
+               web_dir=None, web_dir2=None,mysql_server_bind_address=None):
     VtProcess.__init__(self, 'vtcombo-%s' % os.environ['USER'], directory,
                        environment.vtcombo_binary, port_name='vtcombo')
     self.extraparams = [
@@ -164,18 +164,21 @@ class VtcomboProcess(VtProcess):
           ['-db_host', mysql_db.hostname(),
            '-db_port', str(mysql_db.port())])
     self.vtcombo_mysql_port = environment.get_port('vtcombo_mysql_port')
+    if mysql_server_bind_address:
+        # Binding to 0.0.0.0 instead of localhost makes it possible to connect to vtgate from outside a docker container
+        self.extraparams.extend(['-mysql_server_bind_address', mysql_server_bind_address])
+    else:
+        self.extraparams.extend(['-mysql_server_bind_address', 'localhost'])
     self.extraparams.extend(
         ['-mysql_auth_server_impl', 'none',
-         '-mysql_server_port', str(self.vtcombo_mysql_port),
-         # Binding to 0.0.0.0 instead of localhost makes it possible to connect to vtgate from outside a docker container
-         '-mysql_server_bind_address', '0.0.0.0'])
+         '-mysql_server_port', str(self.vtcombo_mysql_port)])
 
 
 vtcombo_process = None
 
 
 def start_vt_processes(directory, topology, mysql_db, schema_dir,
-                       charset='utf8', web_dir=None, web_dir2=None):
+                       charset='utf8', web_dir=None, web_dir2=None, mysql_server_bind_address=None):
   """Start the vt processes.
 
   Args:
@@ -186,13 +189,15 @@ def start_vt_processes(directory, topology, mysql_db, schema_dir,
     charset: the character set for the database connections.
     web_dir: contains the web app for vtctld side of vtcombo.
     web_dir2: contains the web app for vtctld side of vtcombo.
+    mysql_server_bind_address: MySQL server bind address for vtcombo.
   """
   global vtcombo_process
 
   logging.info('start_vt_processes(directory=%s,vtcombo_binary=%s)',
                directory, environment.vtcombo_binary)
   vtcombo_process = VtcomboProcess(directory, topology, mysql_db, schema_dir,
-                                   charset, web_dir=web_dir, web_dir2=web_dir2)
+                                   charset, web_dir=web_dir, web_dir2=web_dir2,
+                                   mysql_server_bind_address=mysql_server_bind_address)
   vtcombo_process.wait_start()
 
 

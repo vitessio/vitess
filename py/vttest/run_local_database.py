@@ -112,7 +112,8 @@ def main(cmdline_options):
       default_schema_dir=cmdline_options.default_schema_dir,
       extra_my_cnf=extra_my_cnf,
       charset=cmdline_options.charset,
-      snapshot_file=cmdline_options.snapshot_file) as local_db:
+      snapshot_file=cmdline_options.snapshot_file,
+      mysql_server_bind_address=cmdline_options.mysql_server_bind_address) as local_db:
     print json.dumps(local_db.config())
     sys.stdout.flush()
     try:
@@ -189,6 +190,9 @@ if __name__ == '__main__':
   parser.add_option(
       '-f', '--extra_my_cnf',
       help='extra files to add to the config, separated by ":"')
+  parser.add_option(
+      '--mysql_server_bind_address',
+      help='mysql server bind address ":"')
   parser.add_option(
       '-v', '--verbose', action='store_true',
       help='Display extra error messages.')
