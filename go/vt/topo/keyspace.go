@@ -18,7 +18,6 @@ package topo
 
 import (
 	"path"
-	"sync"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
@@ -26,7 +25,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/event"
-	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/events"
 
@@ -228,30 +226,16 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string) 
 	}
 
 	result := make(map[string]*ShardInfo, len(shards))
-	wg := sync.WaitGroup{}
-	mu := sync.Mutex{}
-	rec := concurrency.FirstErrorRecorder{}
 	for _, shard := range shards {
-		wg.Add(1)
-		go func(shard string) {
-			defer wg.Done()
-			si, err := ts.GetShard(ctx, keyspace, shard)
-			if err != nil {
-				if IsErrType(err, NoNode) {
-					log.Warningf("GetShard(%v, %v) returned ErrNoNode, consider checking the topology.", keyspace, shard)
-				} else {
-					rec.RecordError(vterrors.Wrapf(err, "GetShard(%v, %v) failed", keyspace, shard))
-				}
-				return
+		si, err := ts.GetShard(ctx, keyspace, shard)
+		if err != nil {
+			if IsErrType(err, NoNode) {
+				log.Warningf("GetShard(%v, %v) returned ErrNoNode, consider checking the topology.", keyspace, shard)
+			} else {
+				vterrors.Wrapf(err, "GetShard(%v, %v) failed", keyspace, shard)
 			}
-			mu.Lock()
-			result[shard] = si
-			mu.Unlock()
-		}(shard)
-	}
-	wg.Wait()
-	if rec.HasErrors() {
-		return nil, rec.Error()
+		}
+		result[shard] = si
 	}
 	return result, nil
 }
