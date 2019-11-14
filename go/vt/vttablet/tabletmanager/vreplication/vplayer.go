@@ -178,10 +178,8 @@ func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEven
 		}
 
 	}
-	if _, err := vp.vr.dbClient.ExecuteWithRetry(ctx, event.Dml); err != nil {
-		log.Warningf("Fail to run: %v. Got error: %v", event.Dml, err)
-	}
-	return nil
+	_, err := vp.vr.dbClient.ExecuteWithRetry(ctx, event.Dml)
+	return err
 }
 
 func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.RowEvent) error {
