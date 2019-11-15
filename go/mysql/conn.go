@@ -898,11 +898,8 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		if stmtID != uint32(0) {
 			defer func() {
 				prepare := c.PrepareData[stmtID]
-				if prepare.BindVars != nil {
-					for k := range prepare.BindVars {
-						prepare.BindVars[k] = nil
-					}
-				}
+				paramsCount := len(prepare.BindVars)
+				prepare.BindVars = make(map[string]*querypb.BindVariable, paramsCount)
 			}()
 		}
 
