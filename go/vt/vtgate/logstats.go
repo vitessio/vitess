@@ -18,11 +18,13 @@ package vtgate
 
 import (
 	"fmt"
-	"golang.org/x/net/context"
 	"html/template"
 	"io"
 	"net/url"
 	"time"
+
+	"golang.org/x/net/context"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/tb"
