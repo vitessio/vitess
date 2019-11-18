@@ -63,6 +63,23 @@ func (vtctl *VtctlProcess) CreateKeyspace(keyspace string) (err error) {
 	return tmpProcess.Run()
 }
 
+// ExecuteCommandWithOutput executes any vtctlclient command and returns output
+func (vtctl *VtctlProcess) ExecuteCommandWithOutput(args ...string) (result string, err error) {
+	args = append([]string{
+		"-enable_queries",
+		"-topo_implementation", vtctl.TopoImplementation,
+		"-topo_global_server_address", vtctl.TopoGlobalAddress,
+		"-topo_global_root", vtctl.TopoGlobalRoot}, args...)
+	tmpProcess := exec.Command(
+		vtctl.Binary,
+		args...,
+	)
+	println(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	log.Info(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	resultByte, err := tmpProcess.CombinedOutput()
+	return string(resultByte), err
+}
+
 // VtctlProcessInstance returns a VtctlProcess handle for vtctl process
 // configured with the given Config.
 // The process must be manually started by calling setup()

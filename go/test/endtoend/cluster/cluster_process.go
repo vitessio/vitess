@@ -46,9 +46,10 @@ type LocalProcessCluster struct {
 	VtctlProcess       VtctlProcess
 
 	// background executable processes
-	TopoProcess   EtcdProcess
-	VtctldProcess VtctldProcess
-	VtgateProcess VtgateProcess
+	TopoProcess     EtcdProcess
+	VtctldProcess   VtctldProcess
+	VtgateProcess   VtgateProcess
+	VtworkerProcess VtworkerProcess
 
 	nextPortForProcess int
 
@@ -296,6 +297,11 @@ func (cluster *LocalProcessCluster) Teardown() (err error) {
 		return
 	}
 
+	if err = cluster.VtworkerProcess.TearDown(); err != nil {
+		log.Error(err.Error())
+		return
+	}
+
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {
 			for _, tablet := range shard.Vttablets {
@@ -322,6 +328,20 @@ func (cluster *LocalProcessCluster) Teardown() (err error) {
 		return
 	}
 	return err
+}
+
+func (cluster *LocalProcessCluster) StartVtworker(cell string) error {
+	httpPort := cluster.GetAndReservePort()
+	grpcPort := cluster.GetAndReservePort()
+	log.Info(fmt.Sprintf("Starting vtworker on port %d", httpPort))
+	cluster.VtworkerProcess = *VtworkerProcessInstance(
+		httpPort,
+		grpcPort,
+		cluster.TopoPort,
+		cluster.Hostname,
+		cluster.TmpDirectory)
+	return cluster.VtworkerProcess.Setup(cell)
+
 }
 
 // GetAndReservePort gives port for required process

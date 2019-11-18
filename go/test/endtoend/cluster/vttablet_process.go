@@ -123,25 +123,11 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		vttablet.exit <- vttablet.proc.Wait()
 	}()
 
-	timeout := time.Now().Add(60 * time.Second)
-	for time.Now().Before(timeout) {
-		if vttablet.WaitForStatus(vttablet.ServingStatus) {
-			return nil
-		}
-		select {
-		case err := <-vttablet.exit:
-			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vttablet.Name, err)
-		default:
-			time.Sleep(300 * time.Millisecond)
-		}
+	err = vttablet.WaitForTabletType(vttablet.ServingStatus)
+	if err != nil {
+		return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vttablet.Name, <-vttablet.exit)
 	}
-
-	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vttablet.Name, <-vttablet.exit)
-}
-
-// WaitForStatus function checks if vttablet process is up and running
-func (vttablet *VttabletProcess) WaitForStatus(status string) bool {
-	return vttablet.GetTabletStatus() == status
+	return nil
 }
 
 // GetTabletStatus function checks if vttablet process is up and running
@@ -163,11 +149,24 @@ func (vttablet *VttabletProcess) GetTabletStatus() string {
 	return ""
 }
 
+func (vttablet *VttabletProcess) WaitForTabletType(expectedType string) error {
+	timeout := time.Now().Add(10 * time.Second)
+	for time.Now().Before(timeout) {
+		if vttablet.GetTabletStatus() == expectedType {
+			return nil
+		}
+		select {
+		case err := <-vttablet.exit:
+			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vttablet.Name, err)
+		default:
+			time.Sleep(300 * time.Millisecond)
+		}
+	}
+	return fmt.Errorf("Vttablet %s, expected status not reached", vttablet.TabletPath)
+}
+
 // TearDown shuts down the running vttablet service
 func (vttablet *VttabletProcess) TearDown(cleanDir bool) error {
-	if vttablet.proc == nil {
-		fmt.Printf("No process found for vttablet %d", vttablet.TabletUID)
-	}
 	if vttablet.proc == nil || vttablet.exit == nil {
 		return nil
 	}
@@ -190,6 +189,11 @@ func (vttablet *VttabletProcess) TearDown(cleanDir bool) error {
 		vttablet.proc = nil
 		return <-vttablet.exit
 	}
+}
+
+func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
+	_, err := vttablet.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace), keyspace, false)
+	return err
 }
 
 // QueryTablet lets you execute query in this tablet and get the result

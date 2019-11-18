@@ -133,8 +133,10 @@ func (vtgate *VtgateProcess) WaitForStatus() bool {
 		object := reflect.ValueOf(resultMap["HealthcheckConnections"])
 		masterConnectionExist := false
 		if object.Kind() == reflect.Map {
-			for _, key := range object.MapKeys() {
-
+			for idx, key := range object.MapKeys() {
+				if key.String() == "" {
+					println(fmt.Sprintf("%v", object.Index(idx)))
+				}
 				if strings.Contains(key.String(), "master") {
 					masterConnectionExist = true
 				}
@@ -143,6 +145,52 @@ func (vtgate *VtgateProcess) WaitForStatus() bool {
 		return masterConnectionExist
 	}
 	return false
+}
+
+// GetStatusForTabletOfShard function gets status for a specific tablet of a shard in keyspace
+func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string) bool {
+	resp, err := http.Get(vtgate.VerifyURL)
+	if err != nil {
+		return false
+	}
+	if resp.StatusCode == 200 {
+		resultMap := make(map[string]interface{})
+		respByte, _ := ioutil.ReadAll(resp.Body)
+		err := json.Unmarshal(respByte, &resultMap)
+		if err != nil {
+			panic(err)
+		}
+		object := reflect.ValueOf(resultMap["HealthcheckConnections"])
+		masterConnectionExist := false
+		if object.Kind() == reflect.Map {
+			for _, key := range object.MapKeys() {
+				if key.String() == name {
+					value := fmt.Sprintf("%v", object.MapIndex(key))
+					return value == "1"
+				}
+
+			}
+		}
+		return masterConnectionExist
+	}
+	return false
+}
+
+// WaitForStatusOfTabletInShard function waits till status of a tablet in shard is 1
+func (vtgate *VtgateProcess) WaitForStatusOfTabletInShard(name string) error {
+	timeout := time.Now().Add(10 * time.Second)
+	for time.Now().Before(timeout) {
+		if vtgate.GetStatusForTabletOfShard(name) {
+			return nil
+		}
+		select {
+		case err := <-vtgate.exit:
+			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vtgate.Name, err)
+		default:
+			time.Sleep(300 * time.Millisecond)
+		}
+	}
+	return fmt.Errorf("Wait for %s failed", name)
 }
 
 // TearDown shuts down the running vtgate service
