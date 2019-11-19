@@ -219,7 +219,7 @@ func skipToEnd(yylex interface{}) {
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
-%type <tableNames> table_name_list
+%type <tableNames> table_name_list view_name_list
 %type <str> inner_join outer_join straight_join natural_join
 %type <tableName> table_name into_table_name
 %type <aliasedTableName> aliased_table_name
@@ -459,6 +459,16 @@ from_or_using:
   FROM {}
 | USING {}
 
+view_name_list:
+  table_name
+  {
+    $$ = TableNames{$1.ToViewName()}
+  }
+| view_name_list ',' table_name
+  {
+    $$ = append($$, $3.ToViewName())
+  }
+
 table_name_list:
   table_name
   {
@@ -565,13 +575,13 @@ create_statement:
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $7}
   }
-| CREATE VIEW table_name ddl_skip_to_end
+| CREATE VIEW table_name AS select_statement
   {
-    $$ = &DDL{Action: CreateStr, Table: $3.ToViewName()}
+    $$ = &DDL{Action: CreateStr, View: $3.ToViewName(), ViewExpr: $5}
   }
-| CREATE OR REPLACE VIEW table_name ddl_skip_to_end
+| CREATE OR REPLACE VIEW table_name AS select_statement
   {
-    $$ = &DDL{Action: CreateStr, Table: $5.ToViewName()}
+    $$ = &DDL{Action: CreateStr, View: $5.ToViewName(), ViewExpr: $7, OrReplace: true}
   }
 | CREATE DATABASE not_exists_opt ID ddl_skip_to_end
   {
@@ -1486,13 +1496,13 @@ drop_statement:
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $5}
   }
-| DROP VIEW exists_opt table_name ddl_skip_to_end
+| DROP VIEW exists_opt view_name_list
   {
     var exists bool
         if $3 != 0 {
           exists = true
         }
-    $$ = &DDL{Action: DropStr, FromTables: TableNames{$4.ToViewName()}, IfExists: exists}
+    $$ = &DDL{Action: DropStr, FromTables: $4, IfExists: exists}
   }
 | DROP DATABASE exists_opt ID
   {

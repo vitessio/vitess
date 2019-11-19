@@ -1030,11 +1030,14 @@ var (
 		input:  "create spatial index a using foo on b",
 		output: "alter table b",
 	}, {
-		input:  "create view a",
-		output: "create table a",
+		input:  "create view a as select current_timestamp()",
+		output: "create view a as select current_timestamp() from dual",
 	}, {
-		input:  "create or replace view a",
-		output: "create table a",
+		input:  "create view a_view as select * from table_1 join table_2 on table_1.table_2_id_fk = table_2.id where city = 'my city'",
+		output: "create view a_view as select * from table_1 join table_2 on table_1.table_2_id_fk = table_2.id where city = 'my city'",
+	}, {
+		input:  "create or replace view a as select current_timestamp()",
+		output: "create or replace view a as select current_timestamp() from dual",
 	}, {
 		input:  "alter view a",
 		output: "alter table a",
@@ -1675,8 +1678,8 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "CREATE TABLE A (\n\t`A` int\n)",
 		output: "create table A (\n\tA int\n)",
 	}, {
-		input:  "create view A",
-		output: "create table a",
+		input:  "create view A as select current_timestamp()",
+		output: "create view a as select current_timestamp() from dual",
 	}, {
 		input:  "alter view A",
 		output: "alter table a",
