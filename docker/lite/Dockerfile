@@ -47,6 +47,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
       libmysqlclient20 \
       mysql-client \
       mysql-server \
+      libjemalloc1 \
+      libtcmalloc-minimal4 \
  && wget https://www.percona.com/downloads/XtraBackup/Percona-XtraBackup-2.4.13/binary/debian/stretch/x86_64/percona-xtrabackup-24_2.4.13-1.stretch_amd64.deb \
  && dpkg -i percona-xtrabackup-24_2.4.13-1.stretch_amd64.deb \
  && rm -f percona-xtrabackup-24_2.4.13-1.stretch_amd64.deb \
