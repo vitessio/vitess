@@ -139,8 +139,8 @@ func (vtworker *VtworkerProcess) TearDown() error {
 
 // ExecuteCommand executes any vtctlclient command
 func (vtworker *VtworkerProcess) ExecuteCommand(args ...string) (err error) {
-	args = append([]string{"-vtworker_client_protocol", vtworker.CommonArg.TopoImplementation,
-		"-server", vtworker.Server, "-log_dir", vtworker.LogDir}, args...)
+	args = append([]string{"-vtworker_client_protocol", "grpc",
+		"-server", vtworker.Server, "-log_dir", vtworker.LogDir, "-stderrthreshold", "info"}, args...)
 	tmpProcess := exec.Command(
 		"vtworkerclient",
 		args...,

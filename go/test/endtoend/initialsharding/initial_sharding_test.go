@@ -32,9 +32,11 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"os"
+	"reflect"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -276,7 +278,9 @@ func TestResharding(t *testing.T) {
 	_ = clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, sql)
 
 	// now we can be a sharded keyspace (and propagate to SrvKeyspace)
-	_ = clusterInstance.VtctlclientProcess.ApplyVSchema(keyspaceName, fmt.Sprintf(vSchema, tableName, "custom_ksid_col"))
+	// TODO: migration this to v3 way
+	//_ = clusterInstance.VtctlclientProcess.ApplyVSchema(keyspaceName, fmt.Sprintf(vSchema, tableName, "custom_ksid_col"))
+	_ = clusterInstance.VtctlclientProcess.ExecuteCommand("SetKeyspaceShardingInfo", keyspaceName, "custom_ksid_col", "uint64")
 	_ = clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceName)
 
 	// run a health check on source replica so it responds to discovery
@@ -341,6 +345,7 @@ func TestResharding(t *testing.T) {
 	err = json.Unmarshal([]byte(output), &splitqueryresponse)
 	assert.Equal(t, len(splitqueryresponse), 1)
 	assert.Equal(t, splitqueryresponse[0].KeyRangePart.Keyspace, keyspaceName)
+	assert.Equal(t, len(splitqueryresponse[0].KeyRangePart.KeyRanges), 1)
 	assert.Empty(t, splitqueryresponse[0].KeyRangePart.KeyRanges[0])
 
 	// Check srv keyspace
@@ -357,6 +362,7 @@ func TestResharding(t *testing.T) {
 		shard1.Vttablets[2].Alias, fmt.Sprintf("%s/%s", keyspaceName, shard22.Name))
 
 	_ = clusterInstance.StartVtworker(cell)
+	// Initial clone (online).
 	_ = clusterInstance.VtworkerProcess.ExecuteCommand("SplitClone",
 		"--offline=false",
 		"--exclude_tables", "unrelated",
@@ -366,7 +372,47 @@ func TestResharding(t *testing.T) {
 		fmt.Sprintf("%s/%s", keyspaceName, shard1.Name))
 
 	println("vtworker -- " + fmt.Sprintf("http://localhost:%d/debug/vars", clusterInstance.VtworkerProcess.Port))
-	time.Sleep(10 * time.Minute)
+	vtworkerURL := fmt.Sprintf("http://localhost:%d/debug/vars", clusterInstance.VtworkerProcess.Port)
+	verifyReconciliationCounters(t, vtworkerURL, "Online", tableName, 3, 0, 0, 0)
+
+	// Reset vtworker such that we can run the next command.
+	_ = clusterInstance.VtworkerProcess.ExecuteCommand("Reset")
+
+	// Modify the destination shard. SplitClone will revert the changes.
+	// Delete row 1 (provokes an insert).
+	_, _ = shard21.Vttablets[0].VttabletProcess.QueryTablet(fmt.Sprintf("delete from %s where id=1", tableName), keyspaceName, true)
+	// Delete row 2 (provokes an insert).
+	_, _ = shard22.Vttablets[0].VttabletProcess.QueryTablet(fmt.Sprintf("delete from %s where id=2", tableName), keyspaceName, true)
+	//  Update row 3 (provokes an update).
+	_, _ = shard22.Vttablets[0].VttabletProcess.QueryTablet(fmt.Sprintf("update %s set msg='msg-not-3' where id=3", tableName), keyspaceName, true)
+	// Insert row 4 (provokes a delete).
+	var ksid uint64
+	ksid = 0xD000000000000000
+	insertSQL := fmt.Sprintf("insert into %s (parent_id, id, msg, custom_ksid_col) values (%d, %d, '%s', 0x%x) /* vtgate:: keyspace_id:%016X */ /* id:%d */",
+		tableName, fixedParentId, 4, "msg4", ksid, ksid, 4)
+	shard22.Vttablets[0].VttabletProcess.QueryTablet("begin", keyspaceName, true)
+	shard22.Vttablets[0].VttabletProcess.QueryTablet(insertSQL, keyspaceName, true)
+	shard22.Vttablets[0].VttabletProcess.QueryTablet("commit", keyspaceName, true)
+
+	_ = clusterInstance.VtworkerProcess.ExecuteCommand("SplitClone",
+		"--exclude_tables", "unrelated",
+		"--chunk_count", "10",
+		"--min_rows_per_chunk", "1",
+		"--min_healthy_rdonly_tablets", "1",
+		fmt.Sprintf("%s/%s", keyspaceName, shard1.Name))
+
+	verifyReconciliationCounters(t, vtworkerURL, "Online", tableName, 2, 1, 1, 0)
+	verifyReconciliationCounters(t, vtworkerURL, "Offline", tableName, 0, 0, 0, 3)
+
+	// check first value is in the left shard
+	sqlSelectQuery := fmt.Sprintf("select parent_id, id, msg, custom_ksid_col from %s where parent_id = %d and id = %d", tableName, fixedParentId, 1)
+	for _, tablet := range shard21.Vttablets {
+		checkValues(t, tablet, "INT64(86)", "INT64(1)", `VARCHAR("msg1")`, sqlSelectQuery, true)
+	}
+
+	for _, tablet := range shard22.Vttablets {
+		checkValues(t, tablet, "INT64(86)", "INT64(1)", `VARCHAR("msg1")`, sqlSelectQuery, false)
+	}
 
 }
 
@@ -378,4 +424,68 @@ func getSrvKeyspace(t *testing.T, cell string, ksname string) *topodata.SrvKeysp
 	err = json.Unmarshal([]byte(output), &srvKeyspace)
 	assert.Nil(t, err)
 	return &srvKeyspace
+}
+
+func verifyReconciliationCounters(t *testing.T, vtworkerURL string, availabilityType string, table string,
+	inserts int, updates int, deletes int, equals int) {
+	resp, err := http.Get(vtworkerURL)
+	assert.Nil(t, err)
+	assert.Equal(t, resp.StatusCode, 200)
+
+	resultMap := make(map[string]interface{})
+	respByte, _ := ioutil.ReadAll(resp.Body)
+	err = json.Unmarshal(respByte, &resultMap)
+	assert.Nil(t, err)
+
+	value := getValueFromJSON(resultMap, "Worker"+availabilityType+"InsertsCounters", table)
+	if inserts == 0 {
+		assert.Equal(t, value, "")
+	} else {
+		assert.Equal(t, value, fmt.Sprintf("%d", inserts))
+	}
+
+	value = getValueFromJSON(resultMap, "Worker"+availabilityType+"UpdatesCounters", table)
+	if updates == 0 {
+		assert.Equal(t, value, "")
+	} else {
+		assert.Equal(t, value, fmt.Sprintf("%d", updates))
+	}
+
+	value = getValueFromJSON(resultMap, "Worker"+availabilityType+"DeletesCounters", table)
+	if deletes == 0 {
+		assert.Equal(t, value, "")
+	} else {
+		assert.Equal(t, value, fmt.Sprintf("%d", deletes))
+	}
+
+	value = getValueFromJSON(resultMap, "Worker"+availabilityType+"EqualRowsCounters", table)
+	if equals == 0 {
+		assert.Equal(t, value, "")
+	} else {
+		assert.Equal(t, value, fmt.Sprintf("%d", equals))
+	}
+}
+
+func getValueFromJSON(jsonMap map[string]interface{}, keyname string, tableName string) string {
+	object := reflect.ValueOf(jsonMap[keyname])
+	if object.Kind() == reflect.Map {
+		for _, key := range object.MapKeys() {
+			if key.String() == tableName {
+				return fmt.Sprintf("%v", object.MapIndex(key))
+			}
+		}
+	}
+	return ""
+}
+
+func checkValues(t *testing.T, vttablet cluster.Vttablet, col1 string, col2 string, col3 string, query string, exists bool) {
+	result, err := vttablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	assert.Nil(t, err)
+	if exists {
+		assert.Equal(t, result.Rows[0][0].String(), col1)
+		assert.Equal(t, result.Rows[0][1].String(), col2)
+		assert.Equal(t, result.Rows[0][2].String(), col3)
+	} else {
+		assert.Equal(t, len(result.Rows), 0)
+	}
 }
