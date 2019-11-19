@@ -897,6 +897,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 		if stmtID != uint32(0) {
 			defer func() {
+				// Allocate a new bindvar map every time since VTGate.Execute() mutates it.
 				prepare := c.PrepareData[stmtID]
 				prepare.BindVars = make(map[string]*querypb.BindVariable, prepare.ParamsCount)
 			}()
