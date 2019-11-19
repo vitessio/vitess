@@ -228,7 +228,7 @@ func VtgateProcessInstance(port int, grpcPort int, mySQLServerPort int, cell str
 		Port:                  port,
 		GrpcPort:              grpcPort,
 		MySQLServerPort:       mySQLServerPort,
-		MySQLServerSocketPath: "/tmp/mysql.sock",
+		MySQLServerSocketPath: path.Join(tmpDirectory, "mysql.sock"),
 		Cell:                  cell,
 		CellsToWatch:          cellsToWatch,
 		TabletTypesToWait:     tabletTypesToWait,

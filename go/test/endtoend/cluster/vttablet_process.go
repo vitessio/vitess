@@ -132,21 +132,30 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 // GetTabletStatus function checks if vttablet process is up and running
 func (vttablet *VttabletProcess) GetTabletStatus() string {
+	resultMap := vttablet.GetVars()
+	if resultMap != nil {
+		return reflect.ValueOf(resultMap["TabletStateName"]).String()
+	} else {
+		return ""
+	}
+}
+
+func (vttablet *VttabletProcess) GetVars() map[string]interface{} {
 	resp, err := http.Get(vttablet.VerifyURL)
 	if err != nil {
-		return ""
+		return nil
 	}
 	if resp.StatusCode == 200 {
 		resultMap := make(map[string]interface{})
 		respByte, _ := ioutil.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
 		if err != nil {
-			panic(err)
+			return nil
+		} else {
+			return resultMap
 		}
-		status := reflect.ValueOf(resultMap["TabletStateName"]).String()
-		return status
 	}
-	return ""
+	return nil
 }
 
 func (vttablet *VttabletProcess) WaitForTabletType(expectedType string) error {
@@ -163,6 +172,28 @@ func (vttablet *VttabletProcess) WaitForTabletType(expectedType string) error {
 		}
 	}
 	return fmt.Errorf("Vttablet %s, expected status not reached", vttablet.TabletPath)
+}
+
+func (vttablet *VttabletProcess) WaitForBinLogPlayerCount(expectedCount int) error {
+	timeout := time.Now().Add(10 * time.Second)
+	for time.Now().Before(timeout) {
+		if vttablet.getVReplStreamCount() == fmt.Sprintf("%d", expectedCount) {
+			return nil
+		}
+		select {
+		case err := <-vttablet.exit:
+			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vttablet.Name, err)
+		default:
+			time.Sleep(300 * time.Millisecond)
+		}
+	}
+	return fmt.Errorf("Vttablet %s, expected status not reached", vttablet.TabletPath)
+}
+
+func (vttablet *VttabletProcess) getVReplStreamCount() string {
+	resultMap := vttablet.GetVars()
+	object := reflect.ValueOf(resultMap["VReplicationStreamCount"])
+	return object.String()
 }
 
 // TearDown shuts down the running vttablet service

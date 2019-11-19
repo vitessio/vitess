@@ -36,7 +36,9 @@ import (
 	"net/http"
 	"os"
 	"reflect"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -66,10 +68,11 @@ var (
 							index by_msg (msg)
 							) Engine=InnoDB;
 `
-	insertTabletTemplate = `insert into %s(parent_id, id, msg) values(%d, %d, "%s")`
-	fixedParentId        = 86
-	tableName            = "resharding1"
-	vSchema              = `
+	insertTabletTemplate     = `insert into %s(parent_id, id, msg) values(%d, %d, "%s")`
+	insertTabletTemplateKsId = `insert into %s (parent_id, id, msg, custom_ksid_col) values (%d, %d, '%s', 0x%x) /* vtgate:: keyspace_id:%016X */ /* id:%d */`
+	fixedParentId            = 86
+	tableName                = "resharding1"
+	vSchema                  = `
 		{
 		  "sharded": true,
 		  "vindexes": {
@@ -388,11 +391,8 @@ func TestResharding(t *testing.T) {
 	// Insert row 4 (provokes a delete).
 	var ksid uint64
 	ksid = 0xD000000000000000
-	insertSQL := fmt.Sprintf("insert into %s (parent_id, id, msg, custom_ksid_col) values (%d, %d, '%s', 0x%x) /* vtgate:: keyspace_id:%016X */ /* id:%d */",
-		tableName, fixedParentId, 4, "msg4", ksid, ksid, 4)
-	shard22.Vttablets[0].VttabletProcess.QueryTablet("begin", keyspaceName, true)
-	shard22.Vttablets[0].VttabletProcess.QueryTablet(insertSQL, keyspaceName, true)
-	shard22.Vttablets[0].VttabletProcess.QueryTablet("commit", keyspaceName, true)
+	insertSQL := fmt.Sprintf(insertTabletTemplateKsId, tableName, fixedParentId, 4, "msg4", ksid, ksid, 4)
+	insertToTablet(insertSQL, shard22.Vttablets[0])
 
 	_ = clusterInstance.VtworkerProcess.ExecuteCommand("SplitClone",
 		"--exclude_tables", "unrelated",
@@ -405,15 +405,78 @@ func TestResharding(t *testing.T) {
 	verifyReconciliationCounters(t, vtworkerURL, "Offline", tableName, 0, 0, 0, 3)
 
 	// check first value is in the left shard
-	sqlSelectQuery := fmt.Sprintf("select parent_id, id, msg, custom_ksid_col from %s where parent_id = %d and id = %d", tableName, fixedParentId, 1)
 	for _, tablet := range shard21.Vttablets {
-		checkValues(t, tablet, "INT64(86)", "INT64(1)", `VARCHAR("msg1")`, sqlSelectQuery, true)
+		checkValues(t, tablet, "INT64(86)", "INT64(1)", `VARCHAR("msg1")`, 1, true)
 	}
 
 	for _, tablet := range shard22.Vttablets {
-		checkValues(t, tablet, "INT64(86)", "INT64(1)", `VARCHAR("msg1")`, sqlSelectQuery, false)
+		checkValues(t, tablet, "INT64(86)", "INT64(1)", `VARCHAR("msg1")`, 1, false)
 	}
 
+	for _, tablet := range shard21.Vttablets {
+		checkValues(t, tablet, "INT64(86)", "INT64(2)", `VARCHAR("msg2")`, 2, false)
+	}
+
+	for _, tablet := range shard22.Vttablets {
+		checkValues(t, tablet, "INT64(86)", "INT64(2)", `VARCHAR("msg2")`, 2, true)
+	}
+
+	for _, tablet := range shard21.Vttablets {
+		checkValues(t, tablet, "INT64(86)", "INT64(3)", `VARCHAR("msg3")`, 3, false)
+	}
+
+	for _, tablet := range shard22.Vttablets {
+		checkValues(t, tablet, "INT64(86)", "INT64(3)", `VARCHAR("msg3")`, 3, true)
+	}
+
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateSchemaKeyspace", keyspaceName)
+	assert.Nil(t, err)
+
+	// check the binlog players are running
+	checkDestinationMaster(t, shard21.Vttablets[0], []string{fmt.Sprintf("%s/%s", keyspaceName, shard1.Name)})
+	checkDestinationMaster(t, shard22.Vttablets[0], []string{fmt.Sprintf("%s/%s", keyspaceName, shard1.Name)})
+
+	//  check that binlog server exported the stats vars
+	checkBinlogServerVars(t, shard1.Vttablets[1], 0, 0)
+
+	for _, tablet := range []cluster.Vttablet{shard21.Vttablets[2], shard22.Vttablets[2]} {
+		err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", tablet.Alias)
+		assert.Nil(t, err)
+	}
+
+	// testing filtered replication: insert a bunch of data on shard 1,
+	// check we get most of it after a few seconds, wait for binlog server
+	// timeout, check we get all of it.
+	insertLots(1000, shard1MasterTablet)
+
+	assert.True(t, checkLotsTimeout(t, shard22.Vttablets[1], 1000))
+	checkLotsNotPresent(t, shard21.Vttablets[1], 1000)
+
+	checkDestinationMaster(t, shard21.Vttablets[0], []string{fmt.Sprintf("%s/%s", keyspaceName, shard1.Name)})
+	checkDestinationMaster(t, shard22.Vttablets[0], []string{fmt.Sprintf("%s/%s", keyspaceName, shard1.Name)})
+	checkBinlogServerVars(t, shard1.Vttablets[1], 1000, 1000)
+
+	// Teardown
+	//for _, tablet := range shard1.Vttablets {
+	//	_ = tablet.MysqlctlProcess.Stop()
+	//	_ = tablet.VttabletProcess.TearDown(false)
+	//}
+	//_ = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", shard1.Vttablets[1].Alias)
+	//_ = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", shard1.Vttablets[2].Alias)
+	//_ = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", shard1MasterTablet.Alias)
+	//
+	//_ = clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceName)
+	//_ = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteShard", keyspaceName + "/" + shard1.Name)
+	//
+	//for _, tablet := range shard21.Vttablets {
+	//	_ = tablet.MysqlctlProcess.Stop()
+	//	_ = tablet.VttabletProcess.TearDown(false)
+	//}
+	//
+	//for _, tablet := range shard22.Vttablets {
+	//	_ = tablet.MysqlctlProcess.Stop()
+	//	_ = tablet.VttabletProcess.TearDown(false)
+	//}
 }
 
 func getSrvKeyspace(t *testing.T, cell string, ksname string) *topodata.SrvKeyspace {
@@ -478,14 +541,125 @@ func getValueFromJSON(jsonMap map[string]interface{}, keyname string, tableName 
 	return ""
 }
 
-func checkValues(t *testing.T, vttablet cluster.Vttablet, col1 string, col2 string, col3 string, query string, exists bool) {
+func checkValues(t *testing.T, vttablet cluster.Vttablet, col1 string, col2 string, col3 string, id int, exists bool) bool {
+	query := fmt.Sprintf("select parent_id, id, msg, custom_ksid_col from %s where parent_id = %d and id = %d", tableName, fixedParentId, id)
 	result, err := vttablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
 	assert.Nil(t, err)
-	if exists {
-		assert.Equal(t, result.Rows[0][0].String(), col1)
-		assert.Equal(t, result.Rows[0][1].String(), col2)
-		assert.Equal(t, result.Rows[0][2].String(), col3)
+	isFound := false
+	if exists && len(result.Rows) > 0 {
+		isFound = assert.Equal(t, result.Rows[0][0].String(), col1)
+		isFound = assert.Equal(t, result.Rows[0][1].String(), col2)
+		isFound = assert.Equal(t, result.Rows[0][2].String(), col3)
 	} else {
 		assert.Equal(t, len(result.Rows), 0)
 	}
+	return isFound
+}
+
+func checkDestinationMaster(t *testing.T, vttablet cluster.Vttablet, sourceShards []string) {
+	_ = vttablet.VttabletProcess.WaitForBinLogPlayerCount(len(sourceShards))
+	checkBinlogVars(t, vttablet)
+	// TODO: check_stream_health_equals_binlog_player_vars
+}
+
+func checkBinlogVars(t *testing.T, vttablet cluster.Vttablet) {
+	resultMap := vttablet.VttabletProcess.GetVars()
+	assert.Contains(t, resultMap, "VReplicationStreamCount")
+	assert.Contains(t, resultMap, "VReplicationSecondsBehindMasterMax")
+	assert.Contains(t, resultMap, "VReplicationSecondsBehindMaster")
+	assert.Contains(t, resultMap, "VReplicationSource")
+	// TODO: complete all assertion from base_sharding
+}
+
+func checkBinlogServerVars(t *testing.T, vttablet cluster.Vttablet, minStatement int, minTxn int) {
+	resultMap := vttablet.VttabletProcess.GetVars()
+	assert.Contains(t, resultMap, "UpdateStreamKeyRangeStatements")
+	assert.Contains(t, resultMap, "UpdateStreamKeyRangeTransactions")
+	if minStatement > 0 {
+		value := reflect.ValueOf(resultMap["UpdateStreamKeyRangeStatements"]).String()
+		iValue, _ := strconv.Atoi(value)
+		assert.True(t, iValue >= minStatement)
+	}
+
+	if minTxn > 0 {
+		value := reflect.ValueOf(resultMap["UpdateStreamKeyRangeTransactions"]).String()
+		iValue, _ := strconv.Atoi(value)
+		assert.True(t, iValue >= minTxn)
+	}
+}
+
+func insertLots(count uint64, vttablet cluster.Vttablet) {
+	var query1, query2 string
+	var base1, base2, i uint64
+	base1 = 0xA000000000000000
+	base2 = 0xE000000000000000
+	for i = 0; i < count; i++ {
+		query1 = fmt.Sprintf(insertTabletTemplateKsId, tableName, fixedParentId, 10000+i, fmt.Sprintf("msg-range1-%d", 10000+i), base1+i, base1+i, 10000+i)
+		query2 = fmt.Sprintf(insertTabletTemplateKsId, tableName, fixedParentId, 20000+i, fmt.Sprintf("msg-range2-%d", 20000+i), base2+i, base2+i, 20000+i)
+
+		insertToTablet(query1, vttablet)
+		insertToTablet(query2, vttablet)
+	}
+}
+
+func insertToTablet(query string, vttablet cluster.Vttablet) {
+	_, _ = vttablet.VttabletProcess.QueryTablet("begin", keyspaceName, true)
+	_, _ = vttablet.VttabletProcess.QueryTablet(query, keyspaceName, true)
+	_, _ = vttablet.VttabletProcess.QueryTablet("commit", keyspaceName, true)
+}
+
+func checkLotsTimeout(t *testing.T, vttablet cluster.Vttablet, count int) bool {
+	timeout := time.Now().Add(10 * time.Second)
+	for time.Now().Before(timeout) {
+		percentFound := checkLots(t, vttablet, count)
+		fmt.Println(fmt.Sprintf("Total rows found %f", percentFound))
+		if percentFound == 100 {
+			return true
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+	return false
+}
+
+func checkLotsNotPresent(t *testing.T, vttablet cluster.Vttablet, count int) {
+	for i := 0; i < count; i++ {
+		assert.False(t, checkValues(t, vttablet, "INT64(86)",
+			fmt.Sprintf("INT64(%d)", 10000+i),
+			fmt.Sprintf(`VARCHAR("msg-range1-%d")`, 10000+i),
+			10000+i, true))
+
+		assert.False(t, checkValues(t, vttablet, "INT64(86)",
+			fmt.Sprintf("INT64(%d)", 20000+i),
+			fmt.Sprintf(`VARCHAR("msg-range2-%d")`, 20000+i),
+			20000+i, true))
+	}
+}
+
+func checkLots(t *testing.T, vttablet cluster.Vttablet, count int) float32 {
+	var isFound bool
+	var totalFound int
+	for i := 0; i < count; i++ {
+		// "INT64(1)" `VARCHAR("msg1")`,
+		isFound = checkValues(t, vttablet, "INT64(86)",
+			fmt.Sprintf("INT64(%d)", 10000+i),
+			fmt.Sprintf(`VARCHAR("msg-range1-%d")`, 10000+i),
+			10000+i, true)
+		if isFound {
+			totalFound++
+		} else {
+			println(fmt.Sprintf("Row not found for %d", 10000+i))
+		}
+
+		isFound = checkValues(t, vttablet, "INT64(86)",
+			fmt.Sprintf("INT64(%d)", 20000+i),
+			fmt.Sprintf(`VARCHAR("msg-range2-%d")`, 20000+i),
+			20000+i, true)
+		if isFound {
+			totalFound++
+		} else {
+			println(fmt.Sprintf("Row not found for %d", 20000+i))
+		}
+	}
+	println(fmt.Sprintf("found %d", totalFound))
+	return float32(totalFound * 100 / count / 2)
 }
