@@ -127,12 +127,11 @@ func (stats *LogStats) Logf(w io.Writer, params url.Values) error {
 		return nil
 	}
 
-	// FormatBindVariables call might panic so we're going to catch it here and print out the stack trace to help us
-	// debug it better.
+	// FormatBindVariables call might panic so we're going to catch it here
+	// and print out the stack trace for debugging.
 	defer func() {
 		if x := recover(); x != nil {
 			log.Errorf("Uncaught panic:\n%v\n%s", x, tb.Stack(4))
-			log.Fatal()
 		}
 	}()
 
