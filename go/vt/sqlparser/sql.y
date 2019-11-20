@@ -281,6 +281,7 @@ func skipToEnd(yylex interface{}) {
 %type <boolVal> unsigned_opt zero_fill_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
 %type <boolVal> null_opt auto_increment_opt
+%type <byt> or_replace_opt
 %type <colKeyOpt> column_key_opt
 %type <strs> enum_values
 %type <columnDefinition> column_definition
@@ -558,6 +559,15 @@ set_session_or_global:
     $$ = GlobalStr
   }
 
+or_replace_opt:
+  {
+    $$ = 0
+  }
+| OR REPLACE
+  {
+    $$ = 1
+  }
+
 create_statement:
   create_table_prefix table_spec
   {
@@ -575,13 +585,13 @@ create_statement:
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $7}
   }
-| CREATE VIEW table_name AS select_statement
+| CREATE or_replace_opt VIEW table_name AS select_statement
   {
-    $$ = &DDL{Action: CreateStr, View: $3.ToViewName(), ViewExpr: $5}
-  }
-| CREATE OR REPLACE VIEW table_name AS select_statement
-  {
-    $$ = &DDL{Action: CreateStr, View: $5.ToViewName(), ViewExpr: $7, OrReplace: true}
+    var orreplace bool = false
+    if $2 == 1 {
+      orreplace = true
+    }
+    $$ = &DDL{Action: CreateStr, View: $4.ToViewName(), ViewExpr: $6, OrReplace: orreplace}
   }
 | CREATE DATABASE not_exists_opt ID ddl_skip_to_end
   {
@@ -1502,7 +1512,7 @@ drop_statement:
         if $3 != 0 {
           exists = true
         }
-    $$ = &DDL{Action: DropStr, FromTables: $4, IfExists: exists}
+    $$ = &DDL{Action: DropStr, FromViews: $4, IfExists: exists}
   }
 | DROP DATABASE exists_opt ID
   {
@@ -3210,7 +3220,9 @@ constraint_opt:
   { $$ = struct{}{} }
 | UNIQUE
   { $$ = struct{}{} }
-| sql_id
+| FULLTEXT
+  { $$ = struct{}{} }
+| SPATIAL
   { $$ = struct{}{} }
 
 using_opt:
