@@ -737,9 +737,9 @@ type DDL struct {
 	// Table is set if Action is other than RenameStr or DropStr.
 	Table TableName
 
-        // View name.
-        View TableName
-        ViewExpr SelectStatement
+	// View name.
+	View TableName
+	ViewExpr SelectStatement
 
 	// FromViews is set if Action is DropStr.
 	FromViews TableNames
@@ -1075,8 +1075,8 @@ type ColumnType struct {
 	Default       Expr
 	OnUpdate      Expr
 	Comment       *SQLVal
-        sawnull       bool
-        sawai         bool
+	sawnull       bool
+	sawai         bool
 
 	// Numeric field options
 	Length   *SQLVal
