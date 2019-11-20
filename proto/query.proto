@@ -338,7 +338,7 @@ message Field {
 message Row {
   // lengths contains the length of each value in values.
   // A length of -1 means that the field is NULL. While
-  // reading values, you have to accummulate the length
+  // reading values, you have to accumulate the length
   // to know the offset where the next value begins in values.
   repeated sint64 lengths = 1;
   // values contains a concatenation of all values in the row.

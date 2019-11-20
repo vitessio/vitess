@@ -44,7 +44,7 @@ message CallerID {
   // database call, or the container engine ID used by the servlet.
   string component = 2;
 
-  // subcomponent describes a component inisde the immediate caller which
+  // subcomponent describes a component inside the immediate caller which
   // is responsible for generating is request. Suggested values are a
   // servlet name or an API endpoint name.
   string subcomponent = 3;
