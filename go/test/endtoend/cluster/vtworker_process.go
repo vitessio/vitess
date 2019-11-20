@@ -150,6 +150,30 @@ func (vtworker *VtworkerProcess) ExecuteCommand(args ...string) (err error) {
 	return tmpProcess.Run()
 }
 
+// ExecuteVtworkerCommand executes any vtctlclient command
+func (vtworker *VtworkerProcess) ExecuteVtworkerCommand(port int, grpcPort int, args ...string) (err error) {
+	args = append([]string{
+		"-port", fmt.Sprintf("%d", port),
+		"-executefetch_retry_time", vtworker.ExecuteRetryTime,
+		"-tablet_manager_protocol", "grpc",
+		"-tablet_protocol", "grpc",
+		"-topo_implementation", vtworker.CommonArg.TopoImplementation,
+		"-topo_global_server_address", vtworker.CommonArg.TopoGlobalAddress,
+		"-topo_global_root", vtworker.CommonArg.TopoGlobalRoot,
+		"-service_map", vtworker.ServiceMap,
+		"-grpc_port", fmt.Sprintf("%d", grpcPort),
+		"-cell", vtworker.Cell,
+		"--use_v3_resharding_mode=false",
+		"-log_dir", vtworker.LogDir, "-stderrthreshold", "1"}, args...)
+	tmpProcess := exec.Command(
+		"vtworker",
+		args...,
+	)
+	println(fmt.Sprintf("Executing vtworker with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	log.Info(fmt.Sprintf("Executing vtworker with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	return tmpProcess.Run()
+}
+
 // VtworkerProcessInstance returns a vtworker handle
 // configured with the given Config.
 // The process must be manually started by calling setup()

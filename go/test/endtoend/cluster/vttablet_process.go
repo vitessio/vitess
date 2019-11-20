@@ -140,6 +140,21 @@ func (vttablet *VttabletProcess) GetTabletStatus() string {
 	}
 }
 
+// GetStatus function checks if vttablet process is up and running
+func (vttablet *VttabletProcess) GetStatus() string {
+	URL := fmt.Sprintf("http://%s:%d/debug/status", vttablet.TabletHostname, vttablet.Port)
+	resp, err := http.Get(URL)
+	if err != nil {
+		return ""
+	}
+	if resp.StatusCode == 200 {
+		respByte, _ := ioutil.ReadAll(resp.Body)
+		defer resp.Body.Close()
+		return string(respByte)
+	}
+	return ""
+}
+
 func (vttablet *VttabletProcess) GetVars() map[string]interface{} {
 	resp, err := http.Get(vttablet.VerifyURL)
 	if err != nil {

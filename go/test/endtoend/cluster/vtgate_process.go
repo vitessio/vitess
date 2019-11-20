@@ -133,10 +133,7 @@ func (vtgate *VtgateProcess) WaitForStatus() bool {
 		object := reflect.ValueOf(resultMap["HealthcheckConnections"])
 		masterConnectionExist := false
 		if object.Kind() == reflect.Map {
-			for idx, key := range object.MapKeys() {
-				if key.String() == "" {
-					println(fmt.Sprintf("%v", object.Index(idx)))
-				}
+			for _, key := range object.MapKeys() {
 				if strings.Contains(key.String(), "master") {
 					masterConnectionExist = true
 				}

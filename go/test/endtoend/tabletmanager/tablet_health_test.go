@@ -249,13 +249,7 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 }
 
 func waitForTabletStatus(tablet cluster.Vttablet, status string) {
-	timeout := time.Now().Add(10 * time.Second)
-	for time.Now().Before(timeout) {
-		if tablet.VttabletProcess.WaitForStatus(status) {
-			return
-		}
-		time.Sleep(300 * time.Millisecond)
-	}
+	_ = tablet.VttabletProcess.WaitForTabletType(status)
 }
 
 func TestNoMysqlHealthCheck(t *testing.T) {

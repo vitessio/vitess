@@ -78,6 +78,30 @@ type Shard struct {
 	Vttablets []Vttablet
 }
 
+// MasterTablet get the 1st tablet which is master
+func (shard *Shard) MasterTablet() *Vttablet {
+	return &shard.Vttablets[0]
+}
+
+// Rdonly get the last tablet which is rdonly
+func (shard *Shard) Rdonly() *Vttablet {
+	if len(shard.Vttablets) > 2 {
+		return &shard.Vttablets[len(shard.Vttablets)-1]
+	} else {
+		return nil
+	}
+}
+
+// Replica get the last but one tablet which is replica
+// Mostly we have either 2 or 3 tablet setup [master, replica], [master, replica, rdonly]
+func (shard *Shard) Replica() *Vttablet {
+	if len(shard.Vttablets) > 1 {
+		return &shard.Vttablets[len(shard.Vttablets)-2]
+	} else {
+		return nil
+	}
+}
+
 // Vttablet stores the properties needed to start a vttablet process
 type Vttablet struct {
 	Type      string
