@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -958,7 +958,7 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	defer watcher.Stop()
 
 	// Wait for at least one tablet.
-	if err := tsc.WaitForTablets(ctx, cell, keyspace, shard, servedType); err != nil {
+	if err := tsc.WaitForTablets(ctx, keyspace, shard, servedType); err != nil {
 		return fmt.Errorf("%v: error waiting for initial %v tablets for %v/%v: %v", cell, servedType, keyspace, shard, err)
 	}
 

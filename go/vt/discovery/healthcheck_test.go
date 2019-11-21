@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -656,6 +656,22 @@ func (l *listener) StatsUpdate(ts *TabletStats) {
 	l.output <- ts
 }
 
+type fakeConn struct {
+	queryservice.QueryService
+	tablet *topodatapb.Tablet
+	// If fixedResult is set, the channels are not used.
+	fixedResult *querypb.StreamHealthResponse
+	// hcChan should be an unbuffered channel which holds the tablet's next health response.
+	hcChan chan *querypb.StreamHealthResponse
+	// errCh is either an unbuffered channel which holds the stream error to return, or nil.
+	errCh chan error
+	// cbErrCh is a channel which receives errors returned from the supplied callback.
+	cbErrCh chan error
+
+	mu       sync.Mutex
+	canceled bool
+}
+
 func createFakeConn(tablet *topodatapb.Tablet, c chan *querypb.StreamHealthResponse) *fakeConn {
 	key := TabletToMapKey(tablet)
 	conn := &fakeConn{
@@ -668,27 +684,27 @@ func createFakeConn(tablet *topodatapb.Tablet, c chan *querypb.StreamHealthRespo
 	return conn
 }
 
+func createFixedHealthConn(tablet *topodatapb.Tablet, fixedResult *querypb.StreamHealthResponse) *fakeConn {
+	key := TabletToMapKey(tablet)
+	conn := &fakeConn{
+		QueryService: fakes.ErrorQueryService,
+		tablet:       tablet,
+		fixedResult:  fixedResult,
+	}
+	connMap[key] = conn
+	return conn
+}
+
 func discoveryDialer(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 	key := TabletToMapKey(tablet)
 	return connMap[key], nil
 }
 
-type fakeConn struct {
-	queryservice.QueryService
-	tablet *topodatapb.Tablet
-	// hcChan should be an unbuffered channel which holds the tablet's next health response.
-	hcChan chan *querypb.StreamHealthResponse
-	// errCh is either an unbuffered channel which holds the stream error to return, or nil.
-	errCh chan error
-	// cbErrCh is a channel which receives errors returned from the supplied callback.
-	cbErrCh chan error
-
-	mu       sync.Mutex
-	canceled bool
-}
-
 // StreamHealth implements queryservice.QueryService.
 func (fc *fakeConn) StreamHealth(ctx context.Context, callback func(shr *querypb.StreamHealthResponse) error) error {
+	if fc.fixedResult != nil {
+		return callback(fc.fixedResult)
+	}
 	for {
 		select {
 		case shr := <-fc.hcChan:
@@ -696,7 +712,10 @@ func (fc *fakeConn) StreamHealth(ctx context.Context, callback func(shr *querypb
 				if err == io.EOF {
 					return nil
 				}
-				fc.cbErrCh <- err
+				select {
+				case fc.cbErrCh <- err:
+				case <-ctx.Done():
+				}
 				return err
 			}
 		case err := <-fc.errCh:

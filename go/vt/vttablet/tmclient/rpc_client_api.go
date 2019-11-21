@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -116,6 +116,9 @@ type TabletManagerClient interface {
 	// MasterPosition returns the tablet's master position
 	MasterPosition(ctx context.Context, tablet *topodatapb.Tablet) (string, error)
 
+	// WaitForPosition waits for the position to be reached
+	WaitForPosition(ctx context.Context, tablet *topodatapb.Tablet, pos string) error
+
 	// StopSlave stops the mysql replication
 	StopSlave(ctx context.Context, tablet *topodatapb.Tablet) error
 
@@ -184,7 +187,7 @@ type TabletManagerClient interface {
 	// SetMaster tells a tablet to make itself a slave to the
 	// passed in master tablet alias, and wait for the row in the
 	// reparent_journal table (if timeCreatedNS is non-zero).
-	SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error
+	SetMaster(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) error
 
 	// SlaveWasRestarted tells the remote tablet its master has changed
 	SlaveWasRestarted(ctx context.Context, tablet *topodatapb.Tablet, parent *topodatapb.TabletAlias) error

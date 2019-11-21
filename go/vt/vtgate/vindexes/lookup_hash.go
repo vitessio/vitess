@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -90,11 +90,6 @@ func (lh *LookupHash) Cost() int {
 
 // IsUnique returns false since the Vindex is not unique.
 func (lh *LookupHash) IsUnique() bool {
-	return false
-}
-
-// IsFunctional returns false since the Vindex is not functional.
-func (lh *LookupHash) IsFunctional() bool {
 	return false
 }
 
@@ -247,11 +242,6 @@ func (lhu *LookupHashUnique) Cost() int {
 // IsUnique returns true since the Vindex is unique.
 func (lhu *LookupHashUnique) IsUnique() bool {
 	return true
-}
-
-// IsFunctional returns false since the Vindex is not functional.
-func (lhu *LookupHashUnique) IsFunctional() bool {
-	return false
 }
 
 // Map can map ids to key.Destination objects.

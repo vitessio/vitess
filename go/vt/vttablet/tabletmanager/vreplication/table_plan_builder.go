@@ -28,6 +28,9 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+// ExcludeStr is the filter value for excluding tables that match a rule.
+const ExcludeStr = "exclude"
+
 type tablePlanBuilder struct {
 	name       sqlparser.TableIdent
 	sendSelect *sqlparser.Select
@@ -84,7 +87,7 @@ const (
 // buildExecutionPlan is the function that builds the full plan.
 func buildReplicatorPlan(filter *binlogdatapb.Filter, tableKeys map[string][]string, copyState map[string]*sqltypes.Result) (*ReplicatorPlan, error) {
 	plan := &ReplicatorPlan{
-		VStreamFilter: &binlogdatapb.Filter{},
+		VStreamFilter: &binlogdatapb.Filter{FieldEventMode: filter.FieldEventMode},
 		TargetTables:  make(map[string]*TablePlan),
 		TablePlans:    make(map[string]*TablePlan),
 		tableKeys:     tableKeys,
@@ -95,7 +98,7 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, tableKeys map[string][]str
 			// Don't replicate uncopied tables.
 			continue
 		}
-		rule, err := tableMatches(tableName, filter)
+		rule, err := MatchTable(tableName, filter)
 		if err != nil {
 			return nil, err
 		}
@@ -120,8 +123,8 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, tableKeys map[string][]str
 	return plan, nil
 }
 
-// tableMatches is similar to the one defined in vstreamer.
-func tableMatches(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Rule, error) {
+// MatchTable is similar to tableMatches defined in vstreamer.
+func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Rule, error) {
 	for _, rule := range filter.Rules {
 		switch {
 		case strings.HasPrefix(rule.Match, "/"):
@@ -152,7 +155,7 @@ func buildTablePlan(tableName, filter string, tableKeys map[string][]string, las
 		buf := sqlparser.NewTrackedBuffer(nil)
 		buf.Myprintf("select * from %v where in_keyrange(%v)", sqlparser.NewTableIdent(tableName), sqlparser.NewStrVal([]byte(filter)))
 		query = buf.String()
-	case filter == "exclude":
+	case filter == ExcludeStr:
 		return nil, nil
 	}
 	sel, fromTable, err := analyzeSelectFrom(query)

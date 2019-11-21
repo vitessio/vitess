@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -56,10 +56,11 @@ type Engine struct {
 	isOpen bool
 	// wg is incremented for every Stream, and decremented on end.
 	// Close waits for all current streams to end by waiting on wg.
-	wg           sync.WaitGroup
-	streamers    map[int]*vstreamer
-	rowStreamers map[int]*rowStreamer
-	streamIdx    int
+	wg              sync.WaitGroup
+	streamers       map[int]*vstreamer
+	rowStreamers    map[int]*rowStreamer
+	resultStreamers map[int]*resultStreamer
+	streamIdx       int
 
 	// watcherOnce is used for initializing kschema
 	// and setting up the vschema watch. It's guaranteed that
@@ -80,11 +81,12 @@ type Engine struct {
 // Open and Close can be called multiple times and are idempotent.
 func NewEngine(ts srvtopo.Server, se *schema.Engine) *Engine {
 	vse := &Engine{
-		streamers:    make(map[int]*vstreamer),
-		rowStreamers: make(map[int]*rowStreamer),
-		kschema:      &vindexes.KeyspaceSchema{},
-		ts:           ts,
-		se:           se,
+		streamers:       make(map[int]*vstreamer),
+		rowStreamers:    make(map[int]*rowStreamer),
+		resultStreamers: make(map[int]*resultStreamer),
+		kschema:         &vindexes.KeyspaceSchema{},
+		ts:              ts,
+		se:              se,
 	}
 	once.Do(func() {
 		vschemaErrors = stats.NewCounter("VSchemaErrors", "Count of VSchema errors")
@@ -120,12 +122,14 @@ func (vse *Engine) Close() {
 		if !vse.isOpen {
 			return
 		}
+		// cancels are non-blocking.
 		for _, s := range vse.streamers {
-			// cancel is non-blocking.
 			s.Cancel()
 		}
 		for _, s := range vse.rowStreamers {
-			// cancel is non-blocking.
+			s.Cancel()
+		}
+		for _, s := range vse.resultStreamers {
 			s.Cancel()
 		}
 		vse.isOpen = false
@@ -219,6 +223,40 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 
 	// No lock is held while streaming, but wg is incremented.
 	return rowStreamer.Stream()
+}
+
+// StreamResults streams results of the query with the gtid.
+func (vse *Engine) StreamResults(ctx context.Context, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
+	// Create stream and add it to the map.
+	resultStreamer, idx, err := func() (*resultStreamer, int, error) {
+		vse.mu.Lock()
+		defer vse.mu.Unlock()
+		if !vse.isOpen {
+			return nil, 0, errors.New("VStreamer is not open")
+		}
+		resultStreamer := newResultStreamer(ctx, vse.cp, query, send)
+		idx := vse.streamIdx
+		vse.resultStreamers[idx] = resultStreamer
+		vse.streamIdx++
+		// Now that we've added the stream, increment wg.
+		// This must be done before releasing the lock.
+		vse.wg.Add(1)
+		return resultStreamer, idx, nil
+	}()
+	if err != nil {
+		return err
+	}
+
+	// Remove stream from map and decrement wg when it ends.
+	defer func() {
+		vse.mu.Lock()
+		defer vse.mu.Unlock()
+		delete(vse.resultStreamers, idx)
+		vse.wg.Done()
+	}()
+
+	// No lock is held while streaming, but wg is incremented.
+	return resultStreamer.Stream()
 }
 
 // ServeHTTP shows the current VSchema.

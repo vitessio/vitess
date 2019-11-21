@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,10 +22,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
-	"strings"
 	"sync"
 	"time"
 
@@ -35,7 +33,6 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
@@ -127,142 +124,22 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 	return fd, nil
 }
 
-// isDbDir returns true if the given directory contains a DB
-func isDbDir(p string) bool {
-	// db.opt is there
-	if _, err := os.Stat(path.Join(p, "db.opt")); err == nil {
-		return true
-	}
-
-	// Look for at least one database file
-	fis, err := ioutil.ReadDir(p)
-	if err != nil {
-		return false
-	}
-	for _, fi := range fis {
-		if strings.HasSuffix(fi.Name(), ".frm") {
-			return true
-		}
-
-		// the MyRocks engine stores data in RocksDB .sst files
-		// https://github.com/facebook/rocksdb/wiki/Rocksdb-BlockBasedTable-Format
-		if strings.HasSuffix(fi.Name(), ".sst") {
-			return true
-		}
-
-		// .frm files were removed in MySQL 8, so we need to check for two other file types
-		// https://dev.mysql.com/doc/refman/8.0/en/data-dictionary-file-removal.html
-		if strings.HasSuffix(fi.Name(), ".ibd") {
-			return true
-		}
-		// https://dev.mysql.com/doc/refman/8.0/en/serialized-dictionary-information.html
-		if strings.HasSuffix(fi.Name(), ".sdi") {
-			return true
-		}
-	}
-
-	return false
-}
-
-func addDirectory(fes []FileEntry, base string, baseDir string, subDir string) ([]FileEntry, error) {
-	p := path.Join(baseDir, subDir)
-
-	fis, err := ioutil.ReadDir(p)
-	if err != nil {
-		return nil, err
-	}
-	for _, fi := range fis {
-		fes = append(fes, FileEntry{
-			Base: base,
-			Name: path.Join(subDir, fi.Name()),
-		})
-	}
-	return fes, nil
-}
-
-// addMySQL8DataDictionary checks to see if the new data dictionary introduced in MySQL 8 exists
-// and adds it to the backup manifest if it does
-// https://dev.mysql.com/doc/refman/8.0/en/data-dictionary-transactional-storage.html
-func addMySQL8DataDictionary(fes []FileEntry, base string, baseDir string) ([]FileEntry, error) {
-	filePath := path.Join(baseDir, dataDictionaryFile)
-
-	// no-op if this file doesn't exist
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return fes, nil
-	}
-
-	fes = append(fes, FileEntry{
-		Base: base,
-		Name: dataDictionaryFile,
-	})
-
-	return fes, nil
-}
-
-func findFilesToBackup(cnf *Mycnf) ([]FileEntry, error) {
-	var err error
-	var result []FileEntry
-
-	// first add inno db files
-	result, err = addDirectory(result, backupInnodbDataHomeDir, cnf.InnodbDataHomeDir, "")
-	if err != nil {
-		return nil, err
-	}
-	result, err = addDirectory(result, backupInnodbLogGroupHomeDir, cnf.InnodbLogGroupHomeDir, "")
-	if err != nil {
-		return nil, err
-	}
-
-	// then add the transactional data dictionary if it exists
-	result, err = addMySQL8DataDictionary(result, backupData, cnf.DataDir)
-	if err != nil {
-		return nil, err
-	}
-
-	// then add DB directories
-	fis, err := ioutil.ReadDir(cnf.DataDir)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, fi := range fis {
-		p := path.Join(cnf.DataDir, fi.Name())
-		if isDbDir(p) {
-			result, err = addDirectory(result, backupData, cnf.DataDir, fi.Name())
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-	return result, nil
-}
-
 // ExecuteBackup returns a boolean that indicates if the backup is usable,
 // and an overall error.
 func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
 
-	// extract all params from BackupParams
-	cnf := params.Cnf
-	mysqld := params.Mysqld
-	logger := params.Logger
-	backupConcurrency := params.Concurrency
-	hookExtraEnv := params.HookExtraEnv
-	topoServer := params.TopoServer
-	keyspace := params.Keyspace
-	shard := params.Shard
-
-	logger.Infof("Hook: %v, Compress: %v", *backupStorageHook, *backupStorageCompress)
+	params.Logger.Infof("Hook: %v, Compress: %v", *backupStorageHook, *backupStorageCompress)
 
 	// Save initial state so we can restore.
 	slaveStartRequired := false
 	sourceIsMaster := false
 	readOnly := true
 	var replicationPosition mysql.Position
-	semiSyncMaster, semiSyncSlave := mysqld.SemiSyncEnabled()
+	semiSyncMaster, semiSyncSlave := params.Mysqld.SemiSyncEnabled()
 
 	// See if we need to restart replication after backup.
-	logger.Infof("getting current replication status")
-	slaveStatus, err := mysqld.SlaveStatus()
+	params.Logger.Infof("getting current replication status")
+	slaveStatus, err := params.Mysqld.SlaveStatus()
 	switch err {
 	case nil:
 		slaveStartRequired = slaveStatus.SlaveRunning()
@@ -274,7 +151,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	}
 
 	// get the read-only flag
-	readOnly, err = mysqld.IsReadOnly()
+	readOnly, err = params.Mysqld.IsReadOnly()
 	if err != nil {
 		return false, vterrors.Wrap(err, "can't get read-only status")
 	}
@@ -282,47 +159,47 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	// get the replication position
 	if sourceIsMaster {
 		if !readOnly {
-			logger.Infof("turning master read-only before backup")
-			if err = mysqld.SetReadOnly(true); err != nil {
+			params.Logger.Infof("turning master read-only before backup")
+			if err = params.Mysqld.SetReadOnly(true); err != nil {
 				return false, vterrors.Wrap(err, "can't set read-only status")
 			}
 		}
-		replicationPosition, err = mysqld.MasterPosition()
+		replicationPosition, err = params.Mysqld.MasterPosition()
 		if err != nil {
 			return false, vterrors.Wrap(err, "can't get master position")
 		}
 	} else {
-		if err = mysqld.StopSlave(hookExtraEnv); err != nil {
+		if err = params.Mysqld.StopSlave(params.HookExtraEnv); err != nil {
 			return false, vterrors.Wrapf(err, "can't stop slave")
 		}
 		var slaveStatus mysql.SlaveStatus
-		slaveStatus, err = mysqld.SlaveStatus()
+		slaveStatus, err = params.Mysqld.SlaveStatus()
 		if err != nil {
 			return false, vterrors.Wrap(err, "can't get slave status")
 		}
 		replicationPosition = slaveStatus.Position
 	}
-	logger.Infof("using replication position: %v", replicationPosition)
+	params.Logger.Infof("using replication position: %v", replicationPosition)
 
 	// shutdown mysqld
-	err = mysqld.Shutdown(ctx, cnf, true)
+	err = params.Mysqld.Shutdown(ctx, params.Cnf, true)
 	if err != nil {
 		return false, vterrors.Wrap(err, "can't shutdown mysqld")
 	}
 
 	// Backup everything, capture the error.
-	backupErr := be.backupFiles(ctx, cnf, mysqld, logger, bh, replicationPosition, backupConcurrency, hookExtraEnv)
+	backupErr := be.backupFiles(ctx, params, bh, replicationPosition)
 	usable := backupErr == nil
 
 	// Try to restart mysqld, use background context in case we timed out the original context
-	err = mysqld.Start(context.Background(), cnf)
+	err = params.Mysqld.Start(context.Background(), params.Cnf)
 	if err != nil {
 		return usable, vterrors.Wrap(err, "can't restart mysqld")
 	}
 
 	// And set read-only mode
-	logger.Infof("resetting mysqld read-only to %v", readOnly)
-	if err := mysqld.SetReadOnly(readOnly); err != nil {
+	params.Logger.Infof("resetting mysqld read-only to %v", readOnly)
+	if err := params.Mysqld.SetReadOnly(readOnly); err != nil {
 		return usable, err
 	}
 
@@ -330,21 +207,21 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 	if semiSyncMaster || semiSyncSlave {
 		// Only do this if one of them was on, since both being off could mean
 		// the plugin isn't even loaded, and the server variables don't exist.
-		logger.Infof("restoring semi-sync settings from before backup: master=%v, slave=%v",
+		params.Logger.Infof("restoring semi-sync settings from before backup: master=%v, slave=%v",
 			semiSyncMaster, semiSyncSlave)
-		err := mysqld.SetSemiSyncEnabled(semiSyncMaster, semiSyncSlave)
+		err := params.Mysqld.SetSemiSyncEnabled(semiSyncMaster, semiSyncSlave)
 		if err != nil {
 			return usable, err
 		}
 	}
 	if slaveStartRequired {
-		logger.Infof("restarting mysql replication")
-		if err := mysqld.StartSlave(hookExtraEnv); err != nil {
+		params.Logger.Infof("restarting mysql replication")
+		if err := params.Mysqld.StartSlave(params.HookExtraEnv); err != nil {
 			return usable, vterrors.Wrap(err, "cannot restart slave")
 		}
 
 		// this should be quick, but we might as well just wait
-		if err := WaitForSlaveStart(mysqld, slaveStartDeadline); err != nil {
+		if err := WaitForSlaveStart(params.Mysqld, slaveStartDeadline); err != nil {
 			return usable, vterrors.Wrap(err, "slave is not restarting")
 		}
 
@@ -360,7 +237,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 		remoteCtx, remoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
 		defer remoteCancel()
 
-		masterPos, err := getMasterPosition(remoteCtx, tmc, topoServer, keyspace, shard)
+		masterPos, err := getMasterPosition(remoteCtx, tmc, params.TopoServer, params.Keyspace, params.Shard)
 		// If we are unable to get master position, return error.
 		if err != nil {
 			return usable, err
@@ -370,7 +247,7 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 				if err := ctx.Err(); err != nil {
 					return usable, err
 				}
-				status, err := mysqld.SlaveStatus()
+				status, err := params.Mysqld.SlaveStatus()
 				if err != nil {
 					return usable, err
 				}
@@ -387,16 +264,18 @@ func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupP
 }
 
 // backupFiles finds the list of files to backup, and creates the backup.
-func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, replicationPosition mysql.Position, backupConcurrency int, hookExtraEnv map[string]string) (finalErr error) {
+func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, replicationPosition mysql.Position) (finalErr error) {
+
 	// Get the files to backup.
-	fes, err := findFilesToBackup(cnf)
+	// We don't care about totalSize because we add each file separately.
+	fes, _, err := findFilesToBackup(params.Cnf)
 	if err != nil {
 		return vterrors.Wrap(err, "can't find files to backup")
 	}
-	logger.Infof("found %v files to backup", len(fes))
+	params.Logger.Infof("found %v files to backup", len(fes))
 
 	// Backup with the provided concurrency.
-	sema := sync2.NewSemaphore(backupConcurrency, 0)
+	sema := sync2.NewSemaphore(params.Concurrency, 0)
 	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for i := range fes {
@@ -414,7 +293,7 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysq
 
 			// Backup the individual file.
 			name := fmt.Sprintf("%v", i)
-			rec.RecordError(be.backupFile(ctx, cnf, mysqld, logger, bh, &fes[i], name, hookExtraEnv))
+			rec.RecordError(be.backupFile(ctx, params, bh, &fes[i], name))
 		}(i)
 	}
 
@@ -440,6 +319,7 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysq
 		BackupManifest: BackupManifest{
 			BackupMethod: builtinBackupEngineName,
 			Position:     replicationPosition,
+			BackupTime:   params.BackupTime.UTC().Format(time.RFC3339),
 			FinishedTime: time.Now().UTC().Format(time.RFC3339),
 		},
 
@@ -460,9 +340,9 @@ func (be *BuiltinBackupEngine) backupFiles(ctx context.Context, cnf *Mycnf, mysq
 }
 
 // backupFile backs up an individual file.
-func (be *BuiltinBackupEngine) backupFile(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, bh backupstorage.BackupHandle, fe *FileEntry, name string, hookExtraEnv map[string]string) (finalErr error) {
+func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, fe *FileEntry, name string) (finalErr error) {
 	// Open the source file for reading.
-	source, err := fe.open(cnf, true)
+	source, err := fe.open(params.Cnf, true)
 	if err != nil {
 		return err
 	}
@@ -473,7 +353,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, cnf *Mycnf, mysql
 		return err
 	}
 
-	logger.Infof("Backing up file: %v", fe.Name)
+	params.Logger.Infof("Backing up file: %v", fe.Name)
 	// Open the destination file for writing, and a buffer.
 	wc, err := bh.AddFile(ctx, name, fi.Size())
 	if err != nil {
@@ -483,7 +363,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, cnf *Mycnf, mysql
 		if rerr := wc.Close(); rerr != nil {
 			if finalErr != nil {
 				// We already have an error, just log this one.
-				logger.Errorf2(rerr, "failed to close file %v,%v", name, fe.Name)
+				params.Logger.Errorf2(rerr, "failed to close file %v,%v", name, fe.Name)
 			} else {
 				finalErr = rerr
 			}
@@ -500,7 +380,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, cnf *Mycnf, mysql
 	var wait hook.WaitFunc
 	if *backupStorageHook != "" {
 		h := hook.NewHook(*backupStorageHook, []string{"-operation", "write"})
-		h.ExtraEnv = hookExtraEnv
+		h.ExtraEnv = params.HookExtraEnv
 		pipe, wait, _, err = h.ExecuteAsWritePipe(writer)
 		if err != nil {
 			return vterrors.Wrapf(err, "'%v' hook returned error", *backupStorageHook)
@@ -540,7 +420,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, cnf *Mycnf, mysql
 		}
 		stderr, err := wait()
 		if stderr != "" {
-			logger.Infof("'%v' hook returned stderr: %v", *backupStorageHook, stderr)
+			params.Logger.Infof("'%v' hook returned stderr: %v", *backupStorageHook, stderr)
 		}
 		if err != nil {
 			return vterrors.Wrapf(err, "'%v' returned error", *backupStorageHook)
@@ -560,45 +440,39 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, cnf *Mycnf, mysql
 // ExecuteRestore restores from a backup. If the restore is successful
 // we return the position from which replication should start
 // otherwise an error is returned
-func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (mysql.Position, error) {
+func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error) {
 
-	cnf := params.Cnf
-	mysqld := params.Mysqld
-	logger := params.Logger
-	restoreConcurrency := params.Concurrency
-	hookExtraEnv := params.HookExtraEnv
-
-	zeroPosition := mysql.Position{}
 	var bm builtinBackupManifest
 
 	if err := getBackupManifestInto(ctx, bh, &bm); err != nil {
-		return zeroPosition, err
+		return nil, err
 	}
 
 	// mark restore as in progress
-	if err := createStateFile(cnf); err != nil {
-		return zeroPosition, err
+	if err := createStateFile(params.Cnf); err != nil {
+		return nil, err
 	}
 
-	if err := prepareToRestore(ctx, cnf, mysqld, logger); err != nil {
-		return zeroPosition, err
+	if err := prepareToRestore(ctx, params.Cnf, params.Mysqld, params.Logger); err != nil {
+		return nil, err
 	}
 
-	logger.Infof("Restore: copying %v files", len(bm.FileEntries))
+	params.Logger.Infof("Restore: copying %v files", len(bm.FileEntries))
 
-	if err := be.restoreFiles(context.Background(), cnf, bh, bm.FileEntries, bm.TransformHook, !bm.SkipCompress, restoreConcurrency, hookExtraEnv, logger); err != nil {
+	if err := be.restoreFiles(context.Background(), params, bh, bm); err != nil {
 		// don't delete the file here because that is how we detect an interrupted restore
-		return zeroPosition, vterrors.Wrap(err, "failed to restore files")
+		return nil, vterrors.Wrap(err, "failed to restore files")
 	}
 
-	logger.Infof("Restore: returning replication position %v", bm.Position)
-	return bm.Position, nil
+	params.Logger.Infof("Restore: returning replication position %v", bm.Position)
+	return &bm.BackupManifest, nil
 }
 
 // restoreFiles will copy all the files from the BackupStorage to the
 // right place.
-func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, fes []FileEntry, transformHook string, compress bool, restoreConcurrency int, hookExtraEnv map[string]string, logger logutil.Logger) error {
-	sema := sync2.NewSemaphore(restoreConcurrency, 0)
+func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
+	fes := bm.FileEntries
+	sema := sync2.NewSemaphore(params.Concurrency, 0)
 	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for i := range fes {
@@ -616,8 +490,8 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, cnf *Mycnf, bh 
 
 			// And restore the file.
 			name := fmt.Sprintf("%v", i)
-			logger.Infof("Copying file %v: %v", name, fes[i].Name)
-			err := be.restoreFile(ctx, cnf, bh, &fes[i], transformHook, compress, name, hookExtraEnv)
+			params.Logger.Infof("Copying file %v: %v", name, fes[i].Name)
+			err := be.restoreFile(ctx, params, bh, &fes[i], bm.TransformHook, !bm.SkipCompress, name)
 			if err != nil {
 				rec.RecordError(vterrors.Wrapf(err, "can't restore file %v to %v", name, fes[i].Name))
 			}
@@ -628,7 +502,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, cnf *Mycnf, bh 
 }
 
 // restoreFile restores an individual file.
-func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, cnf *Mycnf, bh backupstorage.BackupHandle, fe *FileEntry, transformHook string, compress bool, name string, hookExtraEnv map[string]string) (finalErr error) {
+func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, fe *FileEntry, transformHook string, compress bool, name string) (finalErr error) {
 	// Open the source file for reading.
 	source, err := bh.ReadFile(ctx, name)
 	if err != nil {
@@ -637,7 +511,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, cnf *Mycnf, bh b
 	defer source.Close()
 
 	// Open the destination file for writing.
-	dstFile, err := fe.open(cnf, false)
+	dstFile, err := fe.open(params.Cnf, false)
 	if err != nil {
 		return vterrors.Wrap(err, "can't open destination file for writing")
 	}
@@ -666,7 +540,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, cnf *Mycnf, bh b
 	var wait hook.WaitFunc
 	if transformHook != "" {
 		h := hook.NewHook(transformHook, []string{"-operation", "read"})
-		h.ExtraEnv = hookExtraEnv
+		h.ExtraEnv = params.HookExtraEnv
 		reader, wait, _, err = h.ExecuteAsReadPipe(reader)
 		if err != nil {
 			return vterrors.Wrapf(err, "'%v' hook returned error", transformHook)

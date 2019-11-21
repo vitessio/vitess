@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,9 +17,6 @@
 temp_log_file="$(mktemp --suffix .unit_test_race.log)"
 trap '[ -f "$temp_log_file" ] && rm $temp_log_file' EXIT
 
-# This can be removed once the docker images are rebuilt
-export GO111MODULE=on
-
 # Wrapper around go test -race.
 
 # This script exists because the -race test doesn't allow to distinguish
@@ -30,7 +27,16 @@ export GO111MODULE=on
 # TODO(mberlin): Test all packages (go/... instead of go/vt/...) once
 #                go/cgzip is moved into a separate repository. We currently
 #                skip the cgzip package because -race takes >30 sec for it.
-go test $VT_GO_PARALLEL -race ./go/vt/... 2>&1 | tee $temp_log_file
+
+# All Go packages with test files.
+# Output per line: <full Go package name> <all _test.go files in the package>*
+packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}' ./go/vt/... | sort)
+
+# endtoend tests should be in a directory called endtoend
+all_except_e2e_tests=$(echo "$packages_with_tests" | cut -d" " -f1 | grep -v "endtoend")
+
+# Run non endtoend tests.
+echo "$all_except_e2e_tests" | xargs go test $VT_GO_PARALLEL -race 2>&1 | tee $temp_log_file
 if [ ${PIPESTATUS[0]} -ne 0 ]; then
   if grep "WARNING: DATA RACE" -q $temp_log_file; then
     echo

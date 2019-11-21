@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -78,6 +78,29 @@ func TestInitMasterShard(t *testing.T) {
 	master.StartActionLoop(t, wr)
 	defer master.StopActionLoop(t)
 
+	// wait for shard record to be updated with master
+	startTime := time.Now()
+	for {
+		if time.Since(startTime) > 10*time.Second /* timeout */ {
+			si, err := ts.GetShard(ctx, master.Tablet.Keyspace, master.Tablet.Shard)
+			if err != nil {
+				t.Fatalf("GetShard(%v, %v) failed: %v", master.Tablet.Keyspace, master.Tablet.Shard, err)
+			}
+			if !topoproto.TabletAliasEqual(si.MasterAlias, master.Tablet.Alias) {
+				t.Fatalf("ShardInfo should have MasterAlias %v but has %v", topoproto.TabletAliasString(master.Tablet.Alias), topoproto.TabletAliasString(si.MasterAlias))
+			}
+		}
+		si, err := ts.GetShard(ctx, master.Tablet.Keyspace, master.Tablet.Shard)
+		if err != nil {
+			t.Fatalf("GetShard(%v, %v) failed: %v", master.Tablet.Keyspace, master.Tablet.Shard, err)
+		}
+		if topoproto.TabletAliasEqual(si.MasterAlias, master.Tablet.Alias) {
+			break
+		} else {
+			time.Sleep(100 * time.Millisecond /* interval at which to re-check the shard record */)
+		}
+	}
+
 	// Slave1: expect to be reset and re-parented
 	goodSlave1.FakeMysqlDaemon.ReadOnly = true
 	goodSlave1.FakeMysqlDaemon.SetSlavePositionPos = master.FakeMysqlDaemon.CurrentMasterPosition
@@ -155,7 +178,8 @@ func TestInitMasterShardChecks(t *testing.T) {
 	// (master2 needs to run InitTablet with -force, as it is the second
 	// master in the same shard)
 	master2 := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_MASTER, db, ForceInitTablet())
-	if err := wr.InitShardMaster(ctx, master2.Tablet.Keyspace, master2.Tablet.Shard, master2.Tablet.Alias, false /*force*/, 10*time.Second); err == nil || !strings.Contains(err.Error(), "is not the only master in the shard") {
+
+	if err := wr.InitShardMaster(ctx, master2.Tablet.Keyspace, master2.Tablet.Shard, master2.Tablet.Alias, false /*force*/, 10*time.Second); err == nil || !strings.Contains(err.Error(), "is not the shard master") {
 		t.Errorf("InitShardMaster with two masters returned wrong error: %v", err)
 	}
 
@@ -207,6 +231,29 @@ func TestInitMasterShardOneSlaveFails(t *testing.T) {
 	}
 	master.StartActionLoop(t, wr)
 	defer master.StopActionLoop(t)
+
+	// wait for shard record to be updated with master
+	startTime := time.Now()
+	for {
+		if time.Since(startTime) > 10*time.Second /* timeout */ {
+			si, err := ts.GetShard(ctx, master.Tablet.Keyspace, master.Tablet.Shard)
+			if err != nil {
+				t.Fatalf("GetShard(%v, %v) failed: %v", master.Tablet.Keyspace, master.Tablet.Shard, err)
+			}
+			if !topoproto.TabletAliasEqual(si.MasterAlias, master.Tablet.Alias) {
+				t.Fatalf("ShardInfo should have MasterAlias %v but has %v", topoproto.TabletAliasString(master.Tablet.Alias), topoproto.TabletAliasString(si.MasterAlias))
+			}
+		}
+		si, err := ts.GetShard(ctx, master.Tablet.Keyspace, master.Tablet.Shard)
+		if err != nil {
+			t.Fatalf("GetShard(%v, %v) failed: %v", master.Tablet.Keyspace, master.Tablet.Shard, err)
+		}
+		if topoproto.TabletAliasEqual(si.MasterAlias, master.Tablet.Alias) {
+			break
+		} else {
+			time.Sleep(100 * time.Millisecond /* interval at which to re-check the shard record */)
+		}
+	}
 
 	// goodSlave: expect to be re-parented
 	goodSlave.FakeMysqlDaemon.ReadOnly = true

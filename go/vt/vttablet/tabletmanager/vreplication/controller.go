@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"time"
 
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/golang/protobuf/proto"
@@ -37,7 +38,12 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
-var retryDelay = flag.Duration("vreplication_retry_delay", 5*time.Second, "delay before retrying a failed binlog connection")
+var (
+	healthcheckTopologyRefresh = flag.Duration("vreplication_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology")
+	healthcheckRetryDelay      = flag.Duration("vreplication_healthcheck_retry_delay", 5*time.Second, "healthcheck retry delay")
+	healthcheckTimeout         = flag.Duration("vreplication_healthcheck_timeout", 1*time.Minute, "healthcheck retry delay")
+	retryDelay                 = flag.Duration("vreplication_retry_delay", 5*time.Second, "delay before retrying a failed binlog connection")
+)
 
 // controller is created by Engine. Members are initialized upfront.
 // There is no mutex within a controller becaust its members are
@@ -50,7 +56,7 @@ type controller struct {
 	id           uint32
 	source       binlogdatapb.BinlogSource
 	stopPos      string
-	tabletPicker *tabletPicker
+	tabletPicker *discovery.TabletPicker
 
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -99,7 +105,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	if v, ok := params["tablet_types"]; ok {
 		tabletTypesStr = v
 	}
-	tp, err := newTabletPicker(ctx, ts, cell, ct.source.Keyspace, ct.source.Shard, tabletTypesStr)
+	tp, err := discovery.NewTabletPicker(ctx, ts, cell, ct.source.Keyspace, ct.source.Shard, tabletTypesStr, *healthcheckTopologyRefresh, *healthcheckRetryDelay, *healthcheckTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +175,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	}
 	defer dbClient.Close()
 
-	tablet, err := ct.tabletPicker.Pick(ctx)
+	tablet, err := ct.tabletPicker.PickForStreaming(ctx)
 	if err != nil {
 		return err
 	}

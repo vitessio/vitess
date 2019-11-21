@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,8 +19,6 @@ package tabletmanager
 import (
 	"context"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestTabletExternallyReparentedAlwaysUpdatesTimestamp(t *testing.T) {
@@ -31,27 +29,17 @@ func TestTabletExternallyReparentedAlwaysUpdatesTimestamp(t *testing.T) {
 	if err := agent.TabletExternallyReparented(ctx, "unused_id"); err != nil {
 		t.Fatal(err)
 	}
-	if agent._tabletExternallyReparentedTime.IsZero() {
-		t.Fatalf("externally_reparented_time should have been updated")
+	if agent._masterTermStartTime.IsZero() {
+		t.Fatalf("master_term_start_time should have been updated")
 	}
 
 	// Run RPC again and verify that the timestamp was updated.
-	ter1 := agent._tabletExternallyReparentedTime
+	ter1 := agent._masterTermStartTime
 	if err := agent.TabletExternallyReparented(ctx, "unused_id"); err != nil {
 		t.Fatal(err)
 	}
-	ter2 := agent._tabletExternallyReparentedTime
+	ter2 := agent._masterTermStartTime
 	if ter1 == ter2 {
-		t.Fatalf("subsequent TER call did not update the timestamp: %v = %v", ter1, ter2)
+		t.Fatalf("subsequent TER call did not update the master_term_start_time: %v = %v", ter1, ter2)
 	}
-}
-
-func TestShouldNotReparent(t *testing.T) {
-	ctx := context.Background()
-	agent := createTestAgent(ctx, t, nil)
-	soTrue := true
-	neverReparent = &soTrue
-
-	err := agent.TabletExternallyReparented(ctx, "unused_id")
-	assert.Error(t, err)
 }

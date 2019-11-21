@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -156,6 +156,23 @@ func IsDML(sql string) bool {
 		return true
 	}
 	return false
+}
+
+// SplitAndExpression breaks up the Expr into AND-separated conditions
+// and appends them to filters. Outer parenthesis are removed. Precedence
+// should be taken into account if expressions are recombined.
+func SplitAndExpression(filters []Expr, node Expr) []Expr {
+	if node == nil {
+		return filters
+	}
+	switch node := node.(type) {
+	case *AndExpr:
+		filters = SplitAndExpression(filters, node.Left)
+		return SplitAndExpression(filters, node.Right)
+	case *ParenExpr:
+		return SplitAndExpression(filters, node.Expr)
+	}
+	return append(filters, node)
 }
 
 // GetTableName returns the table name from the SimpleTableExpr

@@ -1,7 +1,7 @@
 #!/bin/bash
 # shellcheck disable=SC2164
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -35,10 +35,8 @@ function fail() {
 
 [[ "$(dirname "$0")" = "." ]] || fail "bootstrap.sh must be run from its current directory"
 
-go version &>/dev/null  || fail "Go is not installed or is not on \$PATH"
-[[ "$(go version 2>&1)" =~ go1\.[1-9][1-9] ]] || fail "Go is not version 1.11+"
-
 # Create main directories.
+VTROOT="${VTROOT:-${PWD/\/src\/vitess.io\/vitess/}}"
 mkdir -p "$VTROOT/dist"
 mkdir -p "$VTROOT/bin"
 mkdir -p "$VTROOT/lib"
@@ -52,6 +50,9 @@ if [ "$BUILD_TESTS" == 1 ] ; then
 else
     source ./build.env
 fi
+
+go version &>/dev/null  || fail "Go is not installed or is not on \$PATH"
+goversion_min 1.12 || fail "Go is not version 1.12+"
 
 if [ "$BUILD_TESTS" == 1 ] ; then
     # Set up required soft links.
@@ -126,6 +127,14 @@ function install_dep() {
 # 1. Installation of dependencies.
 #
 
+# Wrapper around the `arch` command which plays nice with OS X
+function get_arch() {
+  case $(uname) in
+    Linux) arch;;
+    Darwin) uname -m;;
+  esac
+}
+
 
 # Install the gRPC Python library (grpcio) and the protobuf gRPC Python plugin (grpcio-tools) from PyPI.
 # Dependencies like the Python protobuf package will be installed automatically.
@@ -164,8 +173,14 @@ function install_protoc() {
     Darwin) local platform=osx;;
   esac
 
-  wget "https://github.com/google/protobuf/releases/download/v$version/protoc-$version-$platform-x86_64.zip"
-  unzip "protoc-$version-$platform-x86_64.zip"
+  case $(get_arch) in
+      aarch64)  local target=aarch_64;;
+      x86_64)  local target=x86_64;;
+      *)   echo "ERROR: unsupported architecture"; exit 1;;
+  esac
+
+  wget https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
+  unzip "protoc-$version-$platform-${target}.zip"
   ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
 }
 protoc_ver=3.6.1
@@ -203,8 +218,14 @@ function install_etcd() {
     Darwin) local platform=darwin; local ext=zip;;
   esac
 
+  case $(get_arch) in
+      aarch64)  local target=arm64;;
+      x86_64)  local target=amd64;;
+      *)   echo "ERROR: unsupported architecture"; exit 1;;
+  esac
+
   download_url=https://github.com/coreos/etcd/releases/download
-  file="etcd-${version}-${platform}-amd64.${ext}"
+  file="etcd-${version}-${platform}-${target}.${ext}"
 
   wget "$download_url/$version/$file"
   if [ "$ext" = "tar.gz" ]; then
@@ -213,9 +234,9 @@ function install_etcd() {
     unzip "$file"
   fi
   rm "$file"
-  ln -snf "$dist/etcd-${version}-${platform}-amd64/etcd" "$VTROOT/bin/etcd"
+  ln -snf "$dist/etcd-${version}-${platform}-${target}/etcd" "$VTROOT/bin/etcd"
 }
-install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
+which etcd || install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
 
 
 # Download and install consul, link consul binary into our root.
@@ -228,9 +249,15 @@ function install_consul() {
     Darwin) local platform=darwin;;
   esac
 
+  case $(get_arch) in
+      aarch64)  local target=arm64;;
+      x86_64)  local target=amd64;;
+      *)   echo "ERROR: unsupported architecture"; exit 1;;
+  esac
+
   download_url=https://releases.hashicorp.com/consul
-  wget "${download_url}/${version}/consul_${version}_${platform}_amd64.zip"
-  unzip "consul_${version}_${platform}_amd64.zip"
+  wget "${download_url}/${version}/consul_${version}_${platform}_${target}.zip"
+  unzip "consul_${version}_${platform}_${target}.zip"
   ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
 install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul
@@ -279,9 +306,25 @@ function install_chromedriver() {
   local version="$1"
   local dist="$2"
 
-  curl -sL "https://chromedriver.storage.googleapis.com/$version/chromedriver_linux64.zip" > chromedriver_linux64.zip
-  unzip -o -q chromedriver_linux64.zip -d "$dist"
-  rm chromedriver_linux64.zip
+  if [ "$(arch)" == "aarch64" ] ; then
+      os=$(cat /etc/*release | grep "^ID=" | cut -d '=' -f 2)
+      case $os in
+          ubuntu|debian)
+              sudo apt-get update -y && sudo apt install -y --no-install-recommends unzip libglib2.0-0 libnss3 libx11-6
+	      ;;
+	  centos|fedora)
+	      sudo yum update -y && yum install -y libX11 unzip wget
+	      ;;
+      esac
+      echo "For Arm64, using prebuilt binary from electron (https://github.com/electron/electron/) of version 76.0.3809.126"
+      wget https://github.com/electron/electron/releases/download/v6.0.3/chromedriver-v6.0.3-linux-arm64.zip
+      unzip -o -q chromedriver-v6.0.3-linux-arm64.zip -d "$dist"
+      rm chromedriver-v6.0.3-linux-arm64.zip
+  else
+      curl -sL "https://chromedriver.storage.googleapis.com/$version/chromedriver_linux64.zip" > chromedriver_linux64.zip
+      unzip -o -q chromedriver_linux64.zip -d "$dist"
+      rm chromedriver_linux64.zip
+  fi
 }
 if [ "$BUILD_PYTHON" == 1 ] ; then
     install_dep "chromedriver" "73.0.3683.20" "$VTROOT/dist/chromedriver" install_chromedriver

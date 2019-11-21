@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -82,6 +82,8 @@ type RPCAgent interface {
 
 	MasterPosition(ctx context.Context) (string, error)
 
+	WaitForPosition(ctx context.Context, pos string) error
+
 	StopSlave(ctx context.Context) error
 
 	StopSlaveMinimum(ctx context.Context, position string, waitTime time.Duration) (string, error)
@@ -116,7 +118,7 @@ type RPCAgent interface {
 
 	SlaveWasPromoted(ctx context.Context) error
 
-	SetMaster(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, forceStartSlave bool) error
+	SetMaster(ctx context.Context, parent *topodatapb.TabletAlias, timeCreatedNS int64, waitPosition string, forceStartSlave bool) error
 
 	SlaveWasRestarted(ctx context.Context, parent *topodatapb.TabletAlias) error
 

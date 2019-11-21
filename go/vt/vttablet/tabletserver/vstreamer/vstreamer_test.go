@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -114,19 +114,29 @@ func TestStatements(t *testing.T) {
 	}, {
 		// repair, optimize and analyze show up in binlog stream, but ignored by vitess.
 		input: "repair table stream2",
+		output: [][]string{{
+			`gtid`,
+			`type:OTHER `,
+		}},
 	}, {
 		input: "optimize table stream2",
+		output: [][]string{{
+			`gtid`,
+			`type:OTHER `,
+		}},
 	}, {
 		input: "analyze table stream2",
+		output: [][]string{{
+			`gtid`,
+			`type:OTHER `,
+		}},
 	}, {
-		// select, set, show, analyze and describe don't get logged.
+		// select, set, show and describe don't get logged.
 		input: "select * from stream1",
 	}, {
 		input: "set @val=1",
 	}, {
 		input: "show tables",
-	}, {
-		input: "analyze table stream1",
 	}, {
 		input: "describe stream1",
 	}}
@@ -435,9 +445,8 @@ func TestUnsentDDL(t *testing.T) {
 		},
 		// An unsent DDL is sent as an empty transaction.
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
-			`commit`,
+			`gtid`,
+			`type:OTHER `,
 		}},
 	}}
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -224,10 +224,14 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 		if err != nil {
 			return err
 		}
-		if _, ok := vschema.uniqueVindexes[vname]; ok {
-			vschema.uniqueVindexes[vname] = nil
-		} else {
-			vschema.uniqueVindexes[vname] = vindex
+
+		// If the keyspace requires explicit routing, don't include it in global routing
+		if !ks.RequireExplicitRouting {
+			if _, ok := vschema.uniqueVindexes[vname]; ok {
+				vschema.uniqueVindexes[vname] = nil
+			} else {
+				vschema.uniqueVindexes[vname] = vindex
+			}
 		}
 		ksvschema.Vindexes[vname] = vindex
 	}
@@ -309,9 +313,6 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 				if !columnVindex.Vindex.IsUnique() {
 					return fmt.Errorf("primary vindex %s is not Unique for table %s", ind.Name, tname)
 				}
-				if owned {
-					return fmt.Errorf("primary vindex %s cannot be owned for table %s", ind.Name, tname)
-				}
 			}
 			t.ColumnVindexes = append(t.ColumnVindexes, columnVindex)
 			if owned {
@@ -326,10 +327,13 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 		t.Ordered = colVindexSorted(t.ColumnVindexes)
 
 		// Add the table to the map entries.
-		if _, ok := vschema.uniqueTables[tname]; ok {
-			vschema.uniqueTables[tname] = nil
-		} else {
-			vschema.uniqueTables[tname] = t
+		// If the keyspace requires explicit routing, don't include it in global routing
+		if !ks.RequireExplicitRouting {
+			if _, ok := vschema.uniqueTables[tname]; ok {
+				vschema.uniqueTables[tname] = nil
+			} else {
+				vschema.uniqueTables[tname] = t
+			}
 		}
 		ksvschema.Tables[tname] = t
 	}
@@ -363,9 +367,7 @@ func addDual(vschema *VSchema) {
 		t := &Table{
 			Name:     sqlparser.NewTableIdent("dual"),
 			Keyspace: ks.Keyspace,
-		}
-		if ks.Keyspace.Sharded {
-			t.Pinned = []byte{0}
+			Type:     TypeReference,
 		}
 		ks.Tables["dual"] = t
 		if first == "" || first > ksname {

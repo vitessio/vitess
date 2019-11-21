@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -57,16 +57,6 @@ type Vindex interface {
 	// Which means Map() maps to either a KeyRange or a single KeyspaceID.
 	IsUnique() bool
 
-	// IsFunctional returns true if the Vindex can compute
-	// the keyspace id from the id without a lookup.
-	// A Functional vindex is also required to be Unique.
-	// Which means Map() maps to either a KeyRange or a single KeyspaceID.
-	IsFunctional() bool
-
-	// Verify must be implented by all vindexes. It should return
-	// true if the ids can be mapped to the keyspace ids.
-	Verify(cursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error)
-
 	// Map can map ids to key.Destination objects.
 	// If the Vindex is unique, each id would map to either
 	// a KeyRange, or a single KeyspaceID.
@@ -74,7 +64,18 @@ type Vindex interface {
 	// a KeyRange, or a list of KeyspaceID.
 	// If the error returned if nil, then the array len of the
 	// key.Destination array must match len(ids).
-	Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error)
+	Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error)
+
+	// Verify must be implented by all vindexes. It should return
+	// true if the ids can be mapped to the keyspace ids.
+	Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error)
+}
+
+// MultiColumn defines the interface for vindexes that can
+// support multi-column vindexes.
+type MultiColumn interface {
+	MapMulti(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error)
+	VerifyMulti(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error)
 }
 
 // A Reversible vindex is one that can perform a
@@ -82,7 +83,7 @@ type Vindex interface {
 // is optional. If present, VTGate can use it to
 // fill column values based on the target keyspace id.
 type Reversible interface {
-	ReverseMap(cursor VCursor, ks [][]byte) ([]sqltypes.Value, error)
+	ReverseMap(vcursor VCursor, ks [][]byte) ([]sqltypes.Value, error)
 }
 
 // A Lookup vindex is one that needs to lookup
@@ -137,4 +138,28 @@ func CreateVindex(vindexType, name string, params map[string]string) (Vindex, er
 		return nil, fmt.Errorf("vindexType %q not found", vindexType)
 	}
 	return f(name, params)
+}
+
+// Map invokes MapMulti or Map depending on which is available.
+func Map(vindex Vindex, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
+	if multi, ok := vindex.(MultiColumn); ok {
+		return multi.MapMulti(vcursor, rowsColValues)
+	}
+	return vindex.Map(vcursor, firstColsOnly(rowsColValues))
+}
+
+// Verify invokes VerifyMulti or Verify depending on which is available.
+func Verify(vindex Vindex, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	if multi, ok := vindex.(MultiColumn); ok {
+		return multi.VerifyMulti(vcursor, rowsColValues, ksids)
+	}
+	return vindex.Verify(vcursor, firstColsOnly(rowsColValues), ksids)
+}
+
+func firstColsOnly(rowsColValues [][]sqltypes.Value) []sqltypes.Value {
+	firstCols := make([]sqltypes.Value, 0, len(rowsColValues))
+	for _, val := range rowsColValues {
+		firstCols = append(firstCols, val[0])
+	}
+	return firstCols
 }
