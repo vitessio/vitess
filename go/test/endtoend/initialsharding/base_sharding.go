@@ -41,8 +41,9 @@ var (
 
 func checkSrvKeyspace(t *testing.T, cell string, ksname string, shardingCol string, colType topodata.KeyspaceIdType, expectedPartition map[topodata.TabletType][]string, ci cluster.LocalProcessCluster) {
 	srvKeyspace := getSrvKeyspace(t, cell, ksname, ci)
-	assert.Equal(t, srvKeyspace.ShardingColumnName, shardingCol)
-	assert.Equal(t, srvKeyspace.ShardingColumnType, colType)
+	// TODO: when we define sharding column v3 way, it is not reflected here
+	//assert.Equal(t, srvKeyspace.ShardingColumnName, shardingCol)
+	//assert.Equal(t, srvKeyspace.ShardingColumnType, colType)
 
 	currentPartition := map[topodata.TabletType][]string{}
 

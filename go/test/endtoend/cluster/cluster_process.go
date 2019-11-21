@@ -87,9 +87,8 @@ func (shard *Shard) MasterTablet() *Vttablet {
 func (shard *Shard) Rdonly() *Vttablet {
 	if len(shard.Vttablets) > 2 {
 		return &shard.Vttablets[len(shard.Vttablets)-1]
-	} else {
-		return nil
 	}
+	return nil
 }
 
 // Replica get the last but one tablet which is replica
@@ -97,9 +96,8 @@ func (shard *Shard) Rdonly() *Vttablet {
 func (shard *Shard) Replica() *Vttablet {
 	if len(shard.Vttablets) > 1 {
 		return &shard.Vttablets[len(shard.Vttablets)-2]
-	} else {
-		return nil
 	}
+	return nil
 }
 
 // Vttablet stores the properties needed to start a vttablet process
@@ -354,7 +352,8 @@ func (cluster *LocalProcessCluster) Teardown() (err error) {
 	return err
 }
 
-func (cluster *LocalProcessCluster) StartVtworker(cell string) error {
+// StartVtworker starts a vtworker
+func (cluster *LocalProcessCluster) StartVtworker(cell string, extraArgs ...string) error {
 	httpPort := cluster.GetAndReservePort()
 	grpcPort := cluster.GetAndReservePort()
 	log.Info(fmt.Sprintf("Starting vtworker on port %d", httpPort))
@@ -364,6 +363,7 @@ func (cluster *LocalProcessCluster) StartVtworker(cell string) error {
 		cluster.TopoPort,
 		cluster.Hostname,
 		cluster.TmpDirectory)
+	cluster.VtworkerProcess.ExtraArgs = extraArgs
 	return cluster.VtworkerProcess.Setup(cell)
 
 }

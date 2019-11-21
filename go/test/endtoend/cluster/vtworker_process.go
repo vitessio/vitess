@@ -44,13 +44,14 @@ type VtworkerProcess struct {
 	Cell                   string
 	Server                 string
 	CommandDisplayInterval string
+	ExtraArgs              []string
 
 	proc *exec.Cmd
 	exit chan error
 }
 
 // Setup starts vtworker process with required arguements
-func (vtworker *VtworkerProcess) Setup(cell string, extraArgs ...string) (err error) {
+func (vtworker *VtworkerProcess) Setup(cell string) (err error) {
 
 	vtworker.proc = exec.Command(
 		vtworker.Binary,
@@ -66,9 +67,8 @@ func (vtworker *VtworkerProcess) Setup(cell string, extraArgs ...string) (err er
 		"-grpc_port", fmt.Sprintf("%d", vtworker.GrpcPort),
 		"-cell", cell,
 		"-command_display_interval", "10ms",
-		"--use_v3_resharding_mode=false",
 	)
-	vtworker.proc.Args = append(vtworker.proc.Args, extraArgs...)
+	vtworker.proc.Args = append(vtworker.proc.Args, vtworker.ExtraArgs...)
 
 	vtworker.proc.Stderr = os.Stderr
 	vtworker.proc.Stdout = os.Stdout
@@ -163,7 +163,6 @@ func (vtworker *VtworkerProcess) ExecuteVtworkerCommand(port int, grpcPort int, 
 		"-service_map", vtworker.ServiceMap,
 		"-grpc_port", fmt.Sprintf("%d", grpcPort),
 		"-cell", vtworker.Cell,
-		"--use_v3_resharding_mode=false",
 		"-log_dir", vtworker.LogDir, "-stderrthreshold", "1"}, args...)
 	tmpProcess := exec.Command(
 		"vtworker",
