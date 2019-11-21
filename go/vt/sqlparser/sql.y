@@ -219,7 +219,7 @@ func skipToEnd(yylex interface{}) {
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
-%type <tableNames> table_name_list
+%type <tableNames> table_name_list view_name_list
 %type <str> inner_join outer_join straight_join natural_join
 %type <tableName> table_name into_table_name
 %type <aliasedTableName> aliased_table_name
@@ -281,6 +281,7 @@ func skipToEnd(yylex interface{}) {
 %type <boolVal> unsigned_opt zero_fill_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
 %type <boolVal> null_opt auto_increment_opt
+%type <byt> or_replace_opt
 %type <colKeyOpt> column_key_opt
 %type <strs> enum_values
 %type <columnDefinition> column_definition
@@ -459,6 +460,16 @@ from_or_using:
   FROM {}
 | USING {}
 
+view_name_list:
+  table_name
+  {
+    $$ = TableNames{$1.ToViewName()}
+  }
+| view_name_list ',' table_name
+  {
+    $$ = append($$, $3.ToViewName())
+  }
+
 table_name_list:
   table_name
   {
@@ -548,6 +559,15 @@ set_session_or_global:
     $$ = GlobalStr
   }
 
+or_replace_opt:
+  {
+    $$ = 0
+  }
+| OR REPLACE
+  {
+    $$ = 1
+  }
+
 create_statement:
   create_table_prefix table_spec
   {
@@ -565,13 +585,13 @@ create_statement:
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $7}
   }
-| CREATE VIEW table_name ddl_skip_to_end
+| CREATE or_replace_opt VIEW table_name AS select_statement
   {
-    $$ = &DDL{Action: CreateStr, Table: $3.ToViewName()}
-  }
-| CREATE OR REPLACE VIEW table_name ddl_skip_to_end
-  {
-    $$ = &DDL{Action: CreateStr, Table: $5.ToViewName()}
+    var orreplace bool = false
+    if $2 == 1 {
+      orreplace = true
+    }
+    $$ = &DDL{Action: CreateStr, View: $4.ToViewName(), ViewExpr: $6, OrReplace: orreplace}
   }
 | CREATE DATABASE not_exists_opt ID ddl_skip_to_end
   {
@@ -1486,13 +1506,13 @@ drop_statement:
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $5}
   }
-| DROP VIEW exists_opt table_name ddl_skip_to_end
+| DROP VIEW exists_opt view_name_list
   {
     var exists bool
         if $3 != 0 {
           exists = true
         }
-    $$ = &DDL{Action: DropStr, FromTables: TableNames{$4.ToViewName()}, IfExists: exists}
+    $$ = &DDL{Action: DropStr, FromViews: $4, IfExists: exists}
   }
 | DROP DATABASE exists_opt ID
   {
@@ -3200,7 +3220,9 @@ constraint_opt:
   { $$ = struct{}{} }
 | UNIQUE
   { $$ = struct{}{} }
-| sql_id
+| FULLTEXT
+  { $$ = struct{}{} }
+| SPATIAL
   { $$ = struct{}{} }
 
 using_opt:

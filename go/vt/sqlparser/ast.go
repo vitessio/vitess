@@ -737,9 +737,17 @@ type DDL struct {
 	// Table is set if Action is other than RenameStr or DropStr.
 	Table TableName
 
+	// View name.
+	View TableName
+	ViewExpr SelectStatement
+
+	// FromViews is set if Action is DropStr.
+	FromViews TableNames
+
 	// The following fields are set if a DDL was fully analyzed.
 	IfExists bool
 	IfNotExists bool
+	OrReplace bool
 
 	// TableSpec contains the full table spec in case of a create, or a single column in case of an add, drop, or alter.
 	TableSpec     *TableSpec
@@ -778,23 +786,35 @@ const (
 func (node *DDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
 	case CreateStr:
-		notExists := ""
-		if node.IfNotExists {
-			notExists = " if not exists"
-		}
-		if node.OptLike != nil {
-			buf.Myprintf("%s table%s %v %v", node.Action, notExists, node.Table, node.OptLike)
-		} else if node.TableSpec != nil {
-			buf.Myprintf("%s table%s %v %v", node.Action, notExists, node.Table, node.TableSpec)
+		if !node.View.IsEmpty() {
+			orReplace := ""
+			if node.OrReplace {
+				orReplace = "or replace "
+			}
+			buf.Myprintf("%s %sview %v as %v", node.Action, orReplace, node.View, node.ViewExpr)
 		} else {
-			buf.Myprintf("%s table%s %v", node.Action, notExists, node.Table)
+			notExists := ""
+			if node.IfNotExists {
+				notExists = " if not exists"
+			}
+			if node.OptLike != nil {
+				buf.Myprintf("%s table%s %v %v", node.Action, notExists, node.Table, node.OptLike)
+			} else if node.TableSpec != nil {
+				buf.Myprintf("%s table%s %v %v", node.Action, notExists, node.Table, node.TableSpec)
+			} else {
+				buf.Myprintf("%s table%s %v", node.Action, notExists, node.Table)
+			}
 		}
 	case DropStr:
 		exists := ""
 		if node.IfExists {
 			exists = " if exists"
 		}
-		buf.Myprintf("%s table%s %v", node.Action, exists, node.FromTables)
+		if len(node.FromViews) > 0 {
+			buf.Myprintf("%s view%s %v", node.Action, exists, node.FromViews)
+		} else {
+			buf.Myprintf("%s table%s %v", node.Action, exists, node.FromTables)
+		}
 	case RenameStr:
 		buf.Myprintf("%s table %v to %v", node.Action, node.FromTables[0], node.ToTables[0])
 		for i := 1; i < len(node.FromTables); i++ {
@@ -1055,8 +1075,8 @@ type ColumnType struct {
 	Default       Expr
 	OnUpdate      Expr
 	Comment       *SQLVal
-        sawnull       bool
-        sawai         bool
+	sawnull       bool
+	sawai         bool
 
 	// Numeric field options
 	Length   *SQLVal
