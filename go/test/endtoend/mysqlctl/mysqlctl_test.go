@@ -23,28 +23,18 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 )
 
 var (
-	clusterInstance     *cluster.LocalProcessCluster
-	vtParams            mysql.ConnParams
-	masterTabletParams  mysql.ConnParams
-	replicaTabletParams mysql.ConnParams
-	masterTablet        cluster.Vttablet
-	replicaTablet       cluster.Vttablet
-	rdonlyTablet        cluster.Vttablet
-	replicaUID          int
-	masterUID           int
-	hostname            = "localhost"
-	keyspaceName        = "test_keyspace"
-	shardName           = "0"
-	keyspaceShard       = "ks/" + shardName
-	dbName              = "vt_" + keyspaceName
-	username            = "vt_dba"
-	cell                = "zone1"
+	clusterInstance *cluster.LocalProcessCluster
+	masterTablet    cluster.Vttablet
+	replicaTablet   cluster.Vttablet
+	hostname        = "localhost"
+	keyspaceName    = "test_keyspace"
+	shardName       = "0"
+	cell            = "zone1"
 )
 
 func TestMain(m *testing.M) {
@@ -73,8 +63,6 @@ func TestMain(m *testing.M) {
 				masterTablet = tablet
 			} else if tablet.Type != "rdonly" {
 				replicaTablet = tablet
-			} else {
-				rdonlyTablet = tablet
 			}
 		}
 
@@ -161,7 +149,7 @@ func TestAutoDetect(t *testing.T) {
 	assert.Nil(t, err, "error should be Nil")
 
 	// Reparent tablets, which requires flavor detection
-	clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, masterTablet.TabletUID)
+	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, masterTablet.TabletUID)
 	assert.Nil(t, err, "error should be Nil")
 
 	//Reset flavor
