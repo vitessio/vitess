@@ -15,7 +15,7 @@ limitations under the License.
 
 */
 
-package initialsharding
+package sharding
 
 import (
 	"encoding/json"
@@ -36,14 +36,18 @@ import (
 var (
 	lotRange1                uint64 = 0xA000000000000000
 	lotRange2                uint64 = 0xE000000000000000
-	insertTabletTemplateKsID        = `insert into %s (parent_id, id, msg, custom_ksid_col) values (%d, %d, '%s', 0x%x) /* vtgate:: keyspace_id:%016X */ /* id:%d */`
+	InsertTabletTemplateKsID        = `insert into %s (parent_id, id, msg, custom_ksid_col) values (%d, %d, '%s', 0x%x) /* vtgate:: keyspace_id:%016X */ /* id:%d */`
 )
 
-func checkSrvKeyspace(t *testing.T, cell string, ksname string, shardingCol string, colType topodata.KeyspaceIdType, expectedPartition map[topodata.TabletType][]string, ci cluster.LocalProcessCluster) {
+func CheckSrvKeyspace(t *testing.T, cell string, ksname string, shardingCol string, colType topodata.KeyspaceIdType, expectedPartition map[topodata.TabletType][]string, ci cluster.LocalProcessCluster) {
 	srvKeyspace := getSrvKeyspace(t, cell, ksname, ci)
-	// TODO: when we define sharding column v3 way, it is not reflected here
-	//assert.Equal(t, srvKeyspace.ShardingColumnName, shardingCol)
-	//assert.Equal(t, srvKeyspace.ShardingColumnType, colType)
+	if shardingCol != "" {
+		assert.Equal(t, srvKeyspace.ShardingColumnName, shardingCol)
+	}
+	if colType != 0 {
+		assert.Equal(t, srvKeyspace.ShardingColumnType, colType)
+	}
+
 
 	currentPartition := map[topodata.TabletType][]string{}
 
@@ -67,7 +71,7 @@ func getSrvKeyspace(t *testing.T, cell string, ksname string, ci cluster.LocalPr
 	return &srvKeyspace
 }
 
-func verifyReconciliationCounters(t *testing.T, vtworkerURL string, availabilityType string, table string,
+func VerifyReconciliationCounters(t *testing.T, vtworkerURL string, availabilityType string, table string,
 	inserts int, updates int, deletes int, equals int) {
 	resp, err := http.Get(vtworkerURL)
 	assert.Nil(t, err)
@@ -119,8 +123,8 @@ func getValueFromJSON(jsonMap map[string]interface{}, keyname string, tableName 
 	return ""
 }
 
-// checkValues check value from sql query to table with expected values
-func checkValues(t *testing.T, vttablet cluster.Vttablet, values []string, id uint64, exists bool, tableName string, parentID int, ks string) bool {
+// CheckValues check value from sql query to table with expected values
+func CheckValues(t *testing.T, vttablet cluster.Vttablet, values []string, id uint64, exists bool, tableName string, parentID int, ks string) bool {
 	query := fmt.Sprintf("select parent_id, id, msg, custom_ksid_col from %s where parent_id = %d and id = %d", tableName, parentID, id)
 	result, err := vttablet.VttabletProcess.QueryTablet(query, ks, true)
 	assert.Nil(t, err)
@@ -136,14 +140,14 @@ func checkValues(t *testing.T, vttablet cluster.Vttablet, values []string, id ui
 	return isFound
 }
 
-func checkDestinationMaster(t *testing.T, vttablet cluster.Vttablet, sourceShards []string, ci cluster.LocalProcessCluster) {
+func CheckDestinationMaster(t *testing.T, vttablet cluster.Vttablet, sourceShards []string, ci cluster.LocalProcessCluster) {
 	_ = vttablet.VttabletProcess.WaitForBinLogPlayerCount(len(sourceShards))
-	checkBinlogPlayerVars(t, vttablet, sourceShards, 0)
+	CheckBinlogPlayerVars(t, vttablet, sourceShards, 0)
 	checkStreamHealthEqualsBinlogPlayerVars(t, vttablet, len(sourceShards), ci)
 }
 
 // checkBinlogPlayerVars Checks the binlog player variables are correctly exported.
-func checkBinlogPlayerVars(t *testing.T, vttablet cluster.Vttablet, sourceShards []string, secondBehindMaster int64) {
+func CheckBinlogPlayerVars(t *testing.T, vttablet cluster.Vttablet, sourceShards []string, secondBehindMaster int64) {
 	tabletVars := vttablet.VttabletProcess.GetVars()
 
 	assert.Contains(t, tabletVars, "VReplicationStreamCount")
@@ -214,7 +218,7 @@ func checkStreamHealthEqualsBinlogPlayerVars(t *testing.T, vttablet cluster.Vtta
 	assert.Equal(t, secondBehindMaserMax, float64(streamHealthResponse.RealtimeStats.SecondsBehindMasterFilteredReplication))
 }
 
-func checkBinlogServerVars(t *testing.T, vttablet cluster.Vttablet, minStatement int, minTxn int) {
+func CheckBinlogServerVars(t *testing.T, vttablet cluster.Vttablet, minStatement int, minTxn int) {
 	resultMap := vttablet.VttabletProcess.GetVars()
 	assert.Contains(t, resultMap, "UpdateStreamKeyRangeStatements")
 	assert.Contains(t, resultMap, "UpdateStreamKeyRangeTransactions")
@@ -231,28 +235,28 @@ func checkBinlogServerVars(t *testing.T, vttablet cluster.Vttablet, minStatement
 	}
 }
 
-func insertLots(count uint64, vttablet cluster.Vttablet, table string, parentID int, ks string) {
+func InsertLots(count uint64, vttablet cluster.Vttablet, table string, parentID int, ks string) {
 	var query1, query2 string
 	var i uint64
 	for i = 0; i < count; i++ {
-		query1 = fmt.Sprintf(insertTabletTemplateKsID, table, parentID, 10000+i, fmt.Sprintf("msg-range1-%d", 10000+i), lotRange1+i, lotRange1+i, 10000+i)
-		query2 = fmt.Sprintf(insertTabletTemplateKsID, table, parentID, 20000+i, fmt.Sprintf("msg-range2-%d", 20000+i), lotRange2+i, lotRange2+i, 20000+i)
+		query1 = fmt.Sprintf(InsertTabletTemplateKsID, table, parentID, 10000+i, fmt.Sprintf("msg-range1-%d", 10000+i), lotRange1+i, lotRange1+i, 10000+i)
+		query2 = fmt.Sprintf(InsertTabletTemplateKsID, table, parentID, 20000+i, fmt.Sprintf("msg-range2-%d", 20000+i), lotRange2+i, lotRange2+i, 20000+i)
 
-		insertToTablet(query1, vttablet, ks)
-		insertToTablet(query2, vttablet, ks)
+		InsertToTablet(query1, vttablet, ks)
+		InsertToTablet(query2, vttablet, ks)
 	}
 }
 
-func insertToTablet(query string, vttablet cluster.Vttablet, ks string) {
+func InsertToTablet(query string, vttablet cluster.Vttablet, ks string) {
 	_, _ = vttablet.VttabletProcess.QueryTablet("begin", ks, true)
 	_, _ = vttablet.VttabletProcess.QueryTablet(query, ks, true)
 	_, _ = vttablet.VttabletProcess.QueryTablet("commit", ks, true)
 }
 
-func checkLotsTimeout(t *testing.T, vttablet cluster.Vttablet, count uint64, table string, parentID int, ks string) bool {
+func CheckLotsTimeout(t *testing.T, vttablet cluster.Vttablet, count uint64, table string, parentID int, ks string,  keyType topodata.KeyspaceIdType) bool {
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
-		percentFound := checkLots(t, vttablet, count, table, parentID, ks)
+		percentFound := checkLots(t, vttablet, count, table, parentID, ks, keyType)
 		if percentFound == 100 {
 			return true
 		}
@@ -261,42 +265,50 @@ func checkLotsTimeout(t *testing.T, vttablet cluster.Vttablet, count uint64, tab
 	return false
 }
 
-func checkLotsNotPresent(t *testing.T, vttablet cluster.Vttablet, count uint64, table string, parentID int, ks string) {
+func CheckLotsNotPresent(t *testing.T, vttablet cluster.Vttablet, count uint64, table string, parentID int, ks string, keyType topodata.KeyspaceIdType) {
 	var i uint64
+	fmtValue := "UINT64(%d)"
+	if keyType == topodata.KeyspaceIdType_BYTES {
+		fmtValue = "VARBINARY(%d)"
+	}
 	for i = 0; i < count; i++ {
-		assert.False(t, checkValues(t, vttablet, []string{"INT64(86)",
+		assert.False(t, CheckValues(t, vttablet, []string{"INT64(86)",
 			fmt.Sprintf("INT64(%d)", 10000+i),
 			fmt.Sprintf(`VARCHAR("msg-range1-%d")`, 10000+i),
-			fmt.Sprintf("UINT64(%d)", lotRange1+i)},
+			fmt.Sprintf(fmtValue, lotRange1+i)},
 			10000+i, true, table, parentID, ks))
 
-		assert.False(t, checkValues(t, vttablet, []string{"INT64(86)",
+		assert.False(t, CheckValues(t, vttablet, []string{"INT64(86)",
 			fmt.Sprintf("INT64(%d)", 20000+i),
 			fmt.Sprintf(`VARCHAR("msg-range2-%d")`, 20000+i),
-			fmt.Sprintf("UINT64(%d)", lotRange2+i)},
+			fmt.Sprintf(fmtValue, lotRange2+i)},
 			20000+i, true, table, parentID, ks))
 	}
 }
 
-func checkLots(t *testing.T, vttablet cluster.Vttablet, count uint64, table string, parentID int, ks string) float32 {
+func checkLots(t *testing.T, vttablet cluster.Vttablet, count uint64, table string, parentID int, ks string,  keyType topodata.KeyspaceIdType) float32 {
 	var isFound bool
 	var totalFound int
 	var i uint64
+	fmtValue := "UINT64(%d)"
+	if keyType == topodata.KeyspaceIdType_BYTES {
+		fmtValue = "VARBINARY(%d)"
+	}
 	for i = 0; i < count; i++ {
 		// "INT64(1)" `VARCHAR("msg1")`,
-		isFound = checkValues(t, vttablet, []string{"INT64(86)",
+		isFound = CheckValues(t, vttablet, []string{"INT64(86)",
 			fmt.Sprintf("INT64(%d)", 10000+i),
 			fmt.Sprintf(`VARCHAR("msg-range1-%d")`, 10000+i),
-			fmt.Sprintf("UINT64(%d)", lotRange1+i)},
+			fmt.Sprintf(fmtValue, lotRange1+i)},
 			10000+i, true, table, parentID, ks)
 		if isFound {
 			totalFound++
 		}
 
-		isFound = checkValues(t, vttablet, []string{"INT64(86)",
+		isFound = CheckValues(t, vttablet, []string{"INT64(86)",
 			fmt.Sprintf("INT64(%d)", 20000+i),
 			fmt.Sprintf(`VARCHAR("msg-range2-%d")`, 20000+i),
-			fmt.Sprintf("UINT64(%d)", lotRange2+i)},
+			fmt.Sprintf(fmtValue, lotRange2+i)},
 			20000+i, true, table, parentID, ks)
 		if isFound {
 			totalFound++
@@ -305,20 +317,20 @@ func checkLots(t *testing.T, vttablet cluster.Vttablet, count uint64, table stri
 	return float32(totalFound * 100 / int(count) / 2)
 }
 
-func checkRunningBinlogPlayer(t *testing.T, vttablet cluster.Vttablet, numberOfQueries int, numberOfTxns int) {
+func CheckRunningBinlogPlayer(t *testing.T, vttablet cluster.Vttablet, numberOfQueries int, numberOfTxns int) {
 	status := vttablet.VttabletProcess.GetStatus()
 	assert.Contains(t, status, "VReplication state: Open")
 	assert.Contains(t, status, fmt.Sprintf("<td><b>All</b>: %d<br><b>Query</b>: %d<br><b>Transaction</b>: %d<br></td>", numberOfQueries+numberOfTxns, numberOfQueries, numberOfTxns))
 	assert.Contains(t, status, "</html>")
 }
 
-func checkTabletQueryServices(t *testing.T, vttablets []cluster.Vttablet, expectedStatus string, tabletControlEnabled bool, ci cluster.LocalProcessCluster) {
+func CheckTabletQueryServices(t *testing.T, vttablets []cluster.Vttablet, expectedStatus string, tabletControlEnabled bool, ci cluster.LocalProcessCluster) {
 	for _, tablet := range vttablets {
-		checkTabletQueryService(t, tablet, expectedStatus, tabletControlEnabled, ci)
+		CheckTabletQueryService(t, tablet, expectedStatus, tabletControlEnabled, ci)
 	}
 }
 
-func checkTabletQueryService(t *testing.T, vttablet cluster.Vttablet, expectedStatus string, tabletControlEnabled bool, ci cluster.LocalProcessCluster) {
+func CheckTabletQueryService(t *testing.T, vttablet cluster.Vttablet, expectedStatus string, tabletControlEnabled bool, ci cluster.LocalProcessCluster) {
 	tabletStatus := vttablet.VttabletProcess.GetTabletStatus()
 	assert.Equal(t, tabletStatus, expectedStatus)
 
@@ -338,6 +350,10 @@ func checkTabletQueryService(t *testing.T, vttablet cluster.Vttablet, expectedSt
 	}
 }
 
-func hexToDbStr(number uint64) string {
-	return fmt.Sprintf("UINT64(%d)", number)
+func HexToDbStr(number uint64, keyType topodata.KeyspaceIdType) string {
+	fmtValue := "UINT64(%d)"
+	if keyType == topodata.KeyspaceIdType_BYTES {
+		fmtValue = "VARBINARY(%d)"
+	}
+	return fmt.Sprintf(fmtValue, number)
 }
