@@ -132,6 +132,9 @@ var (
 	}, {
 		input: "select /* distinct */ distinct 1 from t",
 	}, {
+		input: "select all col from t",
+		output: "select col from t",
+	}, {
 		input: "select /* straight_join */ straight_join 1 from t",
 	}, {
 		input: "select /* for update */ 1 from t for update",

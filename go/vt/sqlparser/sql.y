@@ -1879,6 +1879,10 @@ distinct_opt:
   {
     $$ = ""
   }
+| ALL
+  {
+    $$ = ""
+  }
 | DISTINCT
   {
     $$ = DistinctStr
