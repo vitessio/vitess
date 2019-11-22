@@ -142,7 +142,6 @@ func TestAutoDetect(t *testing.T) {
 	sqlFlavor := os.Getenv("MYSQL_FLAVOR")
 	os.Setenv("MYSQL_FLAVOR", "")
 
-	// Start vttablet process, should be in NOT_SERVING state as mysqld is not running
 	err := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.Setup()
 	assert.Nil(t, err, "error should be Nil")
 	err = clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].VttabletProcess.Setup()
