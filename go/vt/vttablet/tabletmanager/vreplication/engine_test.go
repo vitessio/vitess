@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package vreplication
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,13 +28,12 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestEngineOpen(t *testing.T) {
 	defer func() { globalStats = &vrStats{} }()
 
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 	resetBinlogClient()
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
@@ -81,7 +81,7 @@ func TestEngineOpen(t *testing.T) {
 func TestEngineExec(t *testing.T) {
 	defer func() { globalStats = &vrStats{} }()
 
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 	resetBinlogClient()
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
@@ -242,7 +242,7 @@ func TestEngineExec(t *testing.T) {
 func TestEngineBadInsert(t *testing.T) {
 	defer func() { globalStats = &vrStats{} }()
 
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 	resetBinlogClient()
 
 	dbClient := binlogplayer.NewMockDBClient(t)
@@ -272,7 +272,7 @@ func TestEngineBadInsert(t *testing.T) {
 }
 
 func TestEngineSelect(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 	resetBinlogClient()
 	dbClient := binlogplayer.NewMockDBClient(t)
 
@@ -401,8 +401,9 @@ func TestWaitForPosCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	err := vre.WaitForPos(ctx, 1, "MariaDB/0-1-1084")
-	if err == nil || err != context.Canceled {
-		t.Errorf("WaitForPos: %v, want %v", err, context.Canceled)
+	want := "error waiting for pos: MariaDB/0-1-1084, last pos: MariaDB/0-1-1083: context canceled"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("WaitForPos: %v, must contain %v", err, want)
 	}
 	dbClient.Wait()
 
@@ -416,7 +417,7 @@ func TestWaitForPosCancel(t *testing.T) {
 		sqltypes.NewVarBinary(""),
 	}}}, nil)
 	err = vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
-	want := "vreplication is closing: context canceled"
+	want = "vreplication is closing: context canceled"
 	if err == nil || err.Error() != want {
 		t.Errorf("WaitForPos: %v, want %v", err, want)
 	}
@@ -425,7 +426,7 @@ func TestWaitForPosCancel(t *testing.T) {
 func TestCreateDBAndTable(t *testing.T) {
 	defer func() { globalStats = &vrStats{} }()
 
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 	resetBinlogClient()
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }

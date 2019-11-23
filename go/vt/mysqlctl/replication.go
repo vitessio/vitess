@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -180,6 +180,17 @@ func (mysqld *Mysqld) WaitMasterPos(ctx context.Context, targetPos mysql.Positio
 		return err
 	}
 	defer conn.Recycle()
+
+	// If we are the master, WaitUntilPositionCommand will fail.
+	// But position is most likely reached. So, check the position
+	// first.
+	mpos, err := conn.MasterPosition()
+	if err != nil {
+		return fmt.Errorf("WaitMasterPos: MasterPosition failed: %v", err)
+	}
+	if mpos.AtLeast(targetPos) {
+		return nil
+	}
 
 	// Find the query to run, run it.
 	query, err := conn.WaitUntilPositionCommand(ctx, targetPos)

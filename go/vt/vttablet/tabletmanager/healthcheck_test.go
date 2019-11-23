@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -723,6 +723,29 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 		t.Fatalf("TabletExternallyReparented failed: %v", err)
 	}
 	<-agent.finalizeReparentCtx.Done()
+	// It is not enough to wait for finalizeReparentCtx to be done, we have to wait for shard_sync to finish
+	startTime := time.Now()
+	for {
+		if time.Since(startTime) > 10*time.Second /* timeout */ {
+			si, err := agent.TopoServer.GetShard(ctx, agent.Tablet().Keyspace, agent.Tablet().Shard)
+			if err != nil {
+				t.Fatalf("GetShard(%v, %v) failed: %v", agent.Tablet().Keyspace, agent.Tablet().Shard, err)
+			}
+			if !topoproto.TabletAliasEqual(si.MasterAlias, agent.Tablet().Alias) {
+				t.Fatalf("ShardInfo should have MasterAlias %v but has %v", topoproto.TabletAliasString(agent.Tablet().Alias), topoproto.TabletAliasString(si.MasterAlias))
+			}
+		}
+		si, err := agent.TopoServer.GetShard(ctx, agent.Tablet().Keyspace, agent.Tablet().Shard)
+		if err != nil {
+			t.Fatalf("GetShard(%v, %v) failed: %v", agent.Tablet().Keyspace, agent.Tablet().Shard, err)
+		}
+		if topoproto.TabletAliasEqual(si.MasterAlias, agent.Tablet().Alias) {
+			break
+		} else {
+			time.Sleep(100 * time.Millisecond /* interval at which to re-check the shard record */)
+		}
+	}
+
 	ti, err := agent.TopoServer.GetTablet(ctx, tabletAlias)
 	if err != nil {
 		t.Fatalf("GetTablet failed: %v", err)
@@ -795,9 +818,8 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 	}
 	// Consume health broadcast sent out due to QueryService state change from
 	// (MASTER, SERVING) to (MASTER, NOT_SERVING).
-	// Since we didn't run healthcheck again yet, the broadcast data contains the
-	// cached replication lag of 20 instead of 21.
-	if _, err := expectBroadcastData(agent.QueryServiceControl, false, "", 20); err != nil {
+	// RefreshState on MASTER always sets the replicationDelay to 0
+	if _, err := expectBroadcastData(agent.QueryServiceControl, false, "", 0); err != nil {
 		t.Fatal(err)
 	}
 	if err := expectStateChange(agent.QueryServiceControl, false, topodatapb.TabletType_MASTER); err != nil {
@@ -845,8 +867,9 @@ func TestStateChangeImmediateHealthBroadcast(t *testing.T) {
 		t.Errorf("Query service should not be running")
 	}
 	// Since we didn't run healthcheck again yet, the broadcast data contains the
-	// cached replication lag of 22 instead of 23.
-	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "", 22); err != nil {
+	// cached replication lag of 0. This is because
+	// RefreshState on MASTER always sets the replicationDelay to 0
+	if _, err := expectBroadcastData(agent.QueryServiceControl, true, "", 0); err != nil {
 		t.Fatal(err)
 	}
 	if err := expectStateChange(agent.QueryServiceControl, true, topodatapb.TabletType_MASTER); err != nil {
@@ -907,7 +930,7 @@ func TestBackupStateChange(t *testing.T) {
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 16 * time.Second
 
 	// change to BACKUP, query service will turn off
-	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_BACKUP); err != nil {
+	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_BACKUP, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := agent.RefreshState(ctx); err != nil {
@@ -921,7 +944,7 @@ func TestBackupStateChange(t *testing.T) {
 	}
 	// change back to REPLICA, query service should not start
 	// because replication delay > unhealthyThreshold
-	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_REPLICA); err != nil {
+	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_REPLICA, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := agent.RefreshState(ctx); err != nil {
@@ -961,7 +984,7 @@ func TestRestoreStateChange(t *testing.T) {
 	agent.HealthReporter.(*fakeHealthCheck).reportReplicationDelay = 16 * time.Second
 
 	// change to RESTORE, query service will turn off
-	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_RESTORE); err != nil {
+	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_RESTORE, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := agent.RefreshState(ctx); err != nil {
@@ -975,7 +998,7 @@ func TestRestoreStateChange(t *testing.T) {
 	}
 	// change back to REPLICA, query service should not start
 	// because replication delay > unhealthyThreshold
-	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_REPLICA); err != nil {
+	if _, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_REPLICA, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := agent.RefreshState(ctx); err != nil {

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -226,6 +226,7 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 	if err != nil {
 		return err
 	}
+	c.fillFlavor(params)
 
 	// Sanity check.
 	if capabilities&CapabilityClientProtocol41 == 0 {
@@ -392,7 +393,6 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 	if !ok {
 		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: packet has no server version")
 	}
-	c.fillFlavor()
 
 	// Read the connection id.
 	c.ConnectionID, pos, ok = readUint32(data, pos)
@@ -625,7 +625,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 	// DbName, only if server supports it.
 	if params.DbName != "" && (capabilities&CapabilityClientConnectWithDB != 0) {
 		pos = writeNullString(data, pos, params.DbName)
-		c.SchemaName = params.DbName
+		c.schemaName = params.DbName
 	}
 
 	// Assume native client during response

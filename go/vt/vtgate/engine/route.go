@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -331,7 +331,7 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 		})
 	}
 
-	return mergeSort(vcursor, route.Query, route.OrderBy, rss, bvs, func(qr *sqltypes.Result) error {
+	return MergeSort(vcursor, route.Query, route.OrderBy, rss, bvs, func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(route.TruncateColumnCount))
 	})
 }

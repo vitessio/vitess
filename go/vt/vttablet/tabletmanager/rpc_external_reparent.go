@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,8 +28,10 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/topotools/events"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -77,9 +79,9 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 		return err
 	}
 
-	// The external failover tool told us that we are still the MASTER. Update the
-	// timestamp to the current time.
-	agent.setExternallyReparentedTime(startTime)
+	// The external failover tool told us that we are still the MASTER.
+	// Update the timestamp to the current time (start a new term).
+	agent.setMasterTermStartTime(startTime)
 
 	// Create a reusable Reparent event with available info.
 	ev := &events.Reparent{
@@ -106,7 +108,7 @@ func (agent *ActionAgent) TabletExternallyReparented(ctx context.Context, extern
 		// tablet record. The actual record in topo will be updated later.
 		newTablet := proto.Clone(tablet).(*topodatapb.Tablet)
 		newTablet.Type = topodatapb.TabletType_MASTER
-
+		newTablet.MasterTermStartTime = logutil.TimeToProto(agent.masterTermStartTime())
 		// This is where updateState will block for gracePeriod, while it gives
 		// vtgate a chance to stop sending replica queries.
 		agent.updateState(ctx, newTablet, "fastTabletExternallyReparented")
@@ -151,15 +153,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 		defer wg.Done()
 		log.Infof("finalizeTabletExternallyReparented: updating tablet record for new master: %v", agent.TabletAlias)
 		// Update our own record to master if needed
-		_, err := agent.TopoServer.UpdateTabletFields(ctx, agent.TabletAlias,
-			func(tablet *topodatapb.Tablet) error {
-				if tablet.Type != topodatapb.TabletType_MASTER {
-					tablet.Type = topodatapb.TabletType_MASTER
-					return nil
-				}
-				// returning NoUpdateNeeded avoids unnecessary calls to UpdateTablet
-				return topo.NewError(topo.NoUpdateNeeded, agent.TabletAlias.String())
-			})
+		_, err := topotools.ChangeType(ctx, agent.TopoServer, agent.TabletAlias, topodatapb.TabletType_MASTER, logutil.TimeToProto(agent.masterTermStartTime()))
 		if err != nil {
 			errs.RecordError(err)
 		}
@@ -174,16 +168,10 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 
 			// Forcibly demote the old master in topology, since we can't rely on the
 			// old master to be up to change its own record.
+			// Call UpdateTabletFields instead of ChangeType so that we can check the type
+			// before changing it and avoid unnecessary topo updates
 			var err error
-			oldMasterTablet, err = agent.TopoServer.UpdateTabletFields(ctx, oldMasterAlias,
-				func(tablet *topodatapb.Tablet) error {
-					if tablet.Type == topodatapb.TabletType_MASTER {
-						tablet.Type = topodatapb.TabletType_REPLICA
-						return nil
-					}
-					// returning NoUpdateNeeded avoids unnecessary calls to UpdateTablet
-					return topo.NewError(topo.NoUpdateNeeded, oldMasterAlias.String())
-				})
+			oldMasterTablet, err = topotools.ChangeType(ctx, agent.TopoServer, oldMasterAlias, topodatapb.TabletType_REPLICA, nil)
 			if err != nil {
 				errs.RecordError(err)
 				return
@@ -271,14 +259,7 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 			go func(alias *topodatapb.TabletAlias) {
 				defer wg.Done()
 				var err error
-				tab, err := agent.TopoServer.UpdateTabletFields(ctx, alias,
-					func(tablet *topodatapb.Tablet) error {
-						if tablet.Type == topodatapb.TabletType_MASTER {
-							tablet.Type = topodatapb.TabletType_REPLICA
-							return nil
-						}
-						return topo.NewError(topo.NoUpdateNeeded, alias.String())
-					})
+				tab, err := topotools.ChangeType(ctx, agent.TopoServer, alias, topodatapb.TabletType_REPLICA, nil)
 				if err != nil {
 					errs.RecordError(err)
 					return
@@ -300,16 +281,4 @@ func (agent *ActionAgent) finalizeTabletExternallyReparented(ctx context.Context
 
 	event.DispatchUpdate(ev, "finished")
 	return nil
-}
-
-// setExternallyReparentedTime remembers the last time when we were told we're
-// the master.
-// If another tablet claims to be master and offers a more recent time,
-// that tablet will be trusted over us.
-func (agent *ActionAgent) setExternallyReparentedTime(t time.Time) {
-	agent.mutex.Lock()
-	defer agent.mutex.Unlock()
-
-	agent._tabletExternallyReparentedTime = t
-	agent._replicationDelay = 0
 }

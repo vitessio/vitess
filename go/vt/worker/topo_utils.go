@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -77,7 +77,7 @@ func waitForHealthyTablets(ctx context.Context, wr *wrangler.Wrangler, tsc *disc
 		cell, keyspace, shard, minHealthyRdonlyTablets, time.Until(deadlineForLog).Seconds())
 
 	// Wait for at least one RDONLY tablet initially before checking the list.
-	if err := tsc.WaitForTablets(busywaitCtx, cell, keyspace, shard, tabletType); err != nil {
+	if err := tsc.WaitForTablets(busywaitCtx, keyspace, shard, tabletType); err != nil {
 		return nil, vterrors.Wrapf(err, "error waiting for %v tablets for (%v,%v/%v)", tabletType, cell, keyspace, shard)
 	}
 

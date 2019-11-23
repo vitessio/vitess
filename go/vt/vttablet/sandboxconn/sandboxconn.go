@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -388,6 +388,11 @@ func (sbc *SandboxConn) VStream(ctx context.Context, target *querypb.Target, sta
 
 // VStreamRows is part of the QueryService interface.
 func (sbc *SandboxConn) VStreamRows(ctx context.Context, target *querypb.Target, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	return fmt.Errorf("not implemented in test")
+}
+
+// VStreamResults is part of the QueryService interface.
+func (sbc *SandboxConn) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
 	return fmt.Errorf("not implemented in test")
 }
 

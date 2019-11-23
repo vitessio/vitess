@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -313,9 +313,6 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 				if !columnVindex.Vindex.IsUnique() {
 					return fmt.Errorf("primary vindex %s is not Unique for table %s", ind.Name, tname)
 				}
-				if owned {
-					return fmt.Errorf("primary vindex %s cannot be owned for table %s", ind.Name, tname)
-				}
 			}
 			t.ColumnVindexes = append(t.ColumnVindexes, columnVindex)
 			if owned {
@@ -370,9 +367,7 @@ func addDual(vschema *VSchema) {
 		t := &Table{
 			Name:     sqlparser.NewTableIdent("dual"),
 			Keyspace: ks.Keyspace,
-		}
-		if ks.Keyspace.Sharded {
-			t.Pinned = []byte{0}
+			Type:     TypeReference,
 		}
 		ks.Tables["dual"] = t
 		if first == "" || first > ksname {

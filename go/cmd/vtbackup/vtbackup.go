@@ -70,6 +70,7 @@ import (
 	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
@@ -124,16 +125,22 @@ var (
 	mysqlSocket   = flag.String("mysql_socket", "", "path to the mysql socket")
 	mysqlTimeout  = flag.Duration("mysql_timeout", 5*time.Minute, "how long to wait for mysqld startup")
 	initDBSQLFile = flag.String("init_db_sql_file", "", "path to .sql file to run after mysql_install_db")
+	detachedMode  = flag.Bool("detach", false, "detached mode - run backups detached from the terminal")
 )
 
 func main() {
 	defer exit.Recover()
-	defer logutil.Flush()
-
 	dbconfigs.RegisterFlags(dbconfigs.All...)
 	mysqlctl.RegisterFlags()
 
 	servenv.ParseFlags("vtbackup")
+
+	if *detachedMode {
+		// this method will call os.Exit and kill this process
+		cmd.DetachFromTerminalAndExit()
+	}
+
+	defer logutil.Flush()
 
 	if *minRetentionCount < 1 {
 		log.Errorf("min_retention_count must be at least 1 to allow restores to succeed")
@@ -372,12 +379,17 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		}
 	}
 
+	// Stop replication and see where we are.
+	if err := mysqld.StopSlave(nil); err != nil {
+		return fmt.Errorf("can't stop replication: %v", err)
+	}
+
 	// Did we make any progress?
 	status, err := mysqld.SlaveStatus()
 	if err != nil {
 		return fmt.Errorf("can't get replication status: %v", err)
 	}
-	log.Infof("Replication caught up to at least %v", status.Position)
+	log.Infof("Replication caught up to %v", status.Position)
 	if !status.Position.AtLeast(masterPos) && status.Position.Equal(restorePos) {
 		return fmt.Errorf("not taking backup: replication did not make any progress from restore point: %v", restorePos)
 	}

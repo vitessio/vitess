@@ -1,4 +1,4 @@
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -401,6 +401,7 @@ class Tablet(object):
     args = ['InitTablet',
             '-hostname', 'localhost',
             '-port', str(self.port),
+            '-grpc_port', str(self.grpc_port),
             '-allow_update']
     if include_mysql_port:
       args.extend(['-mysql_port', str(self.mysql_port)])
