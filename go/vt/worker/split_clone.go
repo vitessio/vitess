@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -844,7 +844,7 @@ func (scw *SplitCloneWorker) findDestinationMasters(ctx context.Context) error {
 	scw.wr.Logger().Infof("Finding a MASTER tablet for each destination shard...")
 	for _, si := range scw.destinationShards {
 		waitCtx, waitCancel := context.WithTimeout(ctx, *waitForHealthyTabletsTimeout)
-		err := scw.tsc.WaitForTablets(waitCtx, scw.cell, si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER)
+		err := scw.tsc.WaitForTablets(waitCtx, si.Keyspace(), si.ShardName(), topodatapb.TabletType_MASTER)
 		waitCancel()
 		if err != nil {
 			return vterrors.Wrapf(err, "cannot find MASTER tablet for destination shard for %v/%v (in cell: %v)", si.Keyspace(), si.ShardName(), scw.cell)

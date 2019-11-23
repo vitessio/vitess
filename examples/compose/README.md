@@ -5,10 +5,24 @@ To understand it better, you can run it.
 
 First you will need to [install docker-compose](https://docs.docker.com/compose/install/).
 
+### Before you begin
+You will need to create a docker-compose.yml file. There are 2 ways to do this.
+1. Run `go run vtcompose/vtcompose.go --args`. [Instructions can be found here](#programatically-create-vitess-configuration-for-docker "Generate docker-compose")
+2. Use the `docker-compose.beginners.yml` to generate your `docker-compose.yml` file. Run:  
+```
+vitess/examples/compose$ cp docker-compose.beginners.yml docker-compose.yml
+```
+Create your .env file  
+```
+vitess/examples/compose$ cp template.env .env
+```
+
+You can then proceed to the instructions under [`Start the Cluster`](#start-the-cluster "Start the cluster") section.
+
 ### Programatically create Vitess configuration for Docker
 To create a configuration to your specifications, run vtcompose. Creates corresponding docker-compose file, vschema files per keyspace, and loads schemas.
 ```
-vitess/examples/compose$ go run vtcompose.go
+vitess/examples/compose$ go run vtcompose/vtcompose.go  --args(optional)
 ```
 
 Use `-h` or `--help` to get list of flags with descriptions.
@@ -21,11 +35,26 @@ Flags available:
 * **gRpcPort** - Specifies gRPC port to be used.
 * **mySqlPort** - Specifies mySql port to be used.
 * **cell** - `Specifies Vitess cell name to be used.
-* **keyspaceData** - List of `keyspace_name:num_of_shards:num_of_replica_tablets:schema_file_names:<optional>lookup_keyspace_name` separated by ' '. 
+* **keyspaceData** - List of `keyspace_name:num_of_shards:num_of_replica_tablets:schema_file_names:<optional>lookup_keyspace_name` separated by ';'. 
     * This is where you specify most of the data for the program to build your vSchema and docker-compose files.
+    * Examples you can run;
+    * Default
+    ```
+    go run vtcompose/vtcompose.go
+    ```
     * Use `0` for `num_of_shards` to specify an unsharded keyspace
     ```
-    e.g "test_keyspace:2:1:create_messages.sql,create_tokens.sql:lookup_keyspace lookup_keyspace:1:1:create_tokens_token_lookup.sql,create_messages_message_lookup.sql"
+    go run vtcompose/vtcompose.go -keyspaceData="test_keyspace:0:2:create_messages.sql"
+    ```
+    * Multiple keyspaces with sharded test_keyspace
+    ```
+    go run vtcompose/vtcompose.go -keyspaceData="test_keyspace:2:1:create_messages.sql,create_tokens.sql:lookup_keyspace;lookup_keyspace:1:1:create_tokens_token_lookup.sql,create_messages_message_lookup.sql"
+    ```
+* **externalDbData** - Specifies which databases/keyspaces are external and provides data along with it to connect to the external db.
+    List of `<external_db_name>,<DB_HOST>,<DB_PORT>,<DB_USER>,<DB_PASS>,<DB_CHARSET>` seperated by ';'.  
+    When using this, make sure to have the external_db_name/keyspace in the `keyspaceData` flag with no schema_file_names specified.  
+    ```
+    go run vtcompose/vtcompose.go -keyspaces="test:0:2::" -externalDbData="test:192.68.99.101:3306:admin:pass:CHARACTER SET utf8 COLLATE utf8_general_ci"
     ```
 
 
@@ -36,7 +65,7 @@ vitess/examples/compose$ docker-compose up -d
 ```
 
 ### Check the status of the containers
-You can check the logs of the containers (vtgate, vttablet1, vttablet2, vttablet3) at any time.
+You can check the logs of the containers (vtgate, vttablet101, vttablet102, vttablet103) at any time.
 For example to check vtgate logs, run the following;
 ```
 vitess/examples/compose$ docker-compose logs -f vtgate
@@ -47,13 +76,14 @@ vitess/examples/compose$ docker-compose logs -f vtgate
 
 We need to create a few tables into our new cluster. To do that, we can run the `ApplySchema` command.	
 ```	
-vitess/examples/compose$ ./lvtctl.sh ApplySchema -sql "$(cat create_test_table.sql)" test_keyspace	
+vitess/examples/compose$ ./lvtctl.sh ApplySchema -sql "$(cat tables/create_messages.sql)" test_keyspace	
 ```
 
 ### Create Vschema	
-Create Vschema (should not be needed if VtCompose was used)
+***Note: Should not be needed if VtCompose was used.***  
+Create Vschema
 ```	
-vitess/examples/compose$ ./lvtctl.sh ApplyVschema -vschema '{"tables": {"messages": {} } }' test_keyspace	
+vitess/examples/compose$ ./lvtctl.sh ApplyVschema -vschema '{"sharded": false }' test_keyspace	
 ```
 
 ### Run the client to insert and read some data
@@ -65,10 +95,12 @@ vitess/examples/compose$ ./client.sh
 
 ### Connect to vgate and run queries
 vtgate responds to the MySQL protocol, so we can connect to it using the default MySQL client command line.
+You can also use the `./lmysql.sh` helper script.  
 ```
 vitess/examples/compose$ mysql --port=15306 --host=127.0.0.1
+vitess/examples/compose$ ./lmysql.sh --port=15306 --host=127.0.0.1
 ```
-
+**Note that you may need to replace `127.0.0.1` with `docker ip` or `docker-machine ip`** 
 
 ### Play around with vtctl commands
 
@@ -82,14 +114,18 @@ vitess/examples/compose$ ./lvtctl.sh Help
   http://localhost:15000
 
 - vttablets web ui:
-  http://localhost:15001/debug/status
-  http://localhost:15002/debug/status
-  http://localhost:15003/debug/status
+  http://localhost:15101/debug/status
+  http://localhost:15102/debug/status
+  http://localhost:15103/debug/status
 
 - vtgate web ui:
   http://localhost:15099/debug/status
   
-
+- Stream querylog
+  `curl -S localhost:15099/debug/querylog`
+  
+**Note that you may need to replace `localhost` with `docker ip` or `docker-machine ip`**  
+ 
 ## Troubleshooting
 If the cluster gets in a bad state, you most likely will have to stop and kill the containers. Note: you will lose all the data.
 ```
@@ -184,6 +220,7 @@ mysql> show tables;
 The following helper scripts are included to help you perform various actions easily
 * vitess/examples/compose/lvtctl.sh
 * vitess/examples/compose/lfixrepl.sh
+* vitess/examples/compose/lmysql.sh
 
 You may run them as below
 ```
@@ -193,7 +230,7 @@ vitess/examples/compose$ ./lvtctl.sh <args>
 To run against a specific compose service/container, use the environment variable **$CS**
 
 ```
-vitess/examples/compose$ (export CS=vttablet2; ./lvtctl.sh <args> )
+vitess/examples/compose$ (export CS=vttablet101; ./lvtctl.sh <args> )
 ```
 
 ## Common Errors
@@ -208,10 +245,10 @@ exit status 1
 ```
 To resolve use the [SetReadWrite](../../doc/Troubleshooting.md#master-starts-up-read-only) command on master.
 ```sh
-vitess/examples/compose$ ./lvtctl.sh SetReadWrite test-1
+vitess/examples/compose$ ./lvtctl.sh SetReadWrite test-101
 
 ```
-
+<strike>
 2. Running ./lvtctl.sh ApplyVschema -vschema '{"sharded":false }' may result in an error referenced by this [issue](https://github.com/vitessio/vitess/issues/4013 )
 
 
@@ -219,3 +256,6 @@ A quick fix for unsharded db is;
 ```
 vitess/examples/compose$ ./lvtctl.sh ApplyVschema -vschema '{"sharded":false, "tables": {"*": {} } }' external_db_name
 ```
+</strike>
+This has since been fixed by  
+https://github.com/vitessio/vitess/pull/4868 & https://github.com/vitessio/vitess/pull/5010

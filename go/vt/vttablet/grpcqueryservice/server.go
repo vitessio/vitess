@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -390,6 +390,17 @@ func (q *query) VStreamRows(request *binlogdatapb.VStreamRowsRequest, stream que
 		request.ImmediateCallerId,
 	)
 	err = q.server.VStreamRows(ctx, request.Target, request.Query, request.Lastpk, stream.Send)
+	return vterrors.ToGRPC(err)
+}
+
+// VStreamResults is part of the queryservice.QueryServer interface
+func (q *query) VStreamResults(request *binlogdatapb.VStreamResultsRequest, stream queryservicepb.Query_VStreamResultsServer) (err error) {
+	defer q.server.HandlePanic(&err)
+	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
+		request.EffectiveCallerId,
+		request.ImmediateCallerId,
+	)
+	err = q.server.VStreamResults(ctx, request.Target, request.Query, stream.Send)
 	return vterrors.ToGRPC(err)
 }
 

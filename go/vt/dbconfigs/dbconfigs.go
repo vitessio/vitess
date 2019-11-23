@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -97,6 +97,7 @@ func registerBaseFlags() {
 	flag.IntVar(&baseConfig.Port, "db_port", 0, "tcp port")
 	flag.StringVar(&baseConfig.Charset, "db_charset", "", "Character set. Only utf8 or latin1 based character sets are supported.")
 	flag.Uint64Var(&baseConfig.Flags, "db_flags", 0, "Flag values as defined by MySQL.")
+	flag.StringVar(&baseConfig.Flavor, "db_flavor", "", "Flavor overrid. Valid value is FilePos.")
 	flag.StringVar(&baseConfig.SslCa, "db_ssl_ca", "", "connection ssl ca")
 	flag.StringVar(&baseConfig.SslCaPath, "db_ssl_ca_path", "", "connection ssl ca path")
 	flag.StringVar(&baseConfig.SslCert, "db_ssl_cert", "", "connection ssl certificate")
@@ -275,6 +276,7 @@ func Init(defaultSocketFile string) (*DBConfigs, error) {
 		if baseConfig.Flags != 0 {
 			uc.param.Flags = baseConfig.Flags
 		}
+		uc.param.Flavor = baseConfig.Flavor
 		if uc.useSSL {
 			uc.param.SslCa = baseConfig.SslCa
 			uc.param.SslCaPath = baseConfig.SslCaPath

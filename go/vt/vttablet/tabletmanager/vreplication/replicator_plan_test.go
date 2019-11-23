@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -671,7 +672,10 @@ func TestBuildPlayerPlanNoDup(t *testing.T) {
 		}},
 	}
 	_, err := buildReplicatorPlan(input, tableKeys, nil)
-	assert.Contains(t, err.Error(), "more than one target for source table t:")
+	want := "more than one target for source table t"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("buildReplicatorPlan err: %v, must contain: %v", err, want)
+	}
 }
 
 func TestBuildPlayerPlanExclude(t *testing.T) {

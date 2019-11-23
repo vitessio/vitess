@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -158,6 +158,17 @@ message Tablet {
   // for legacy behavior.
   int32 mysql_port = 13;
 
+  // master_term_start_time is the time (in UTC) at which the current term of
+  // the current tablet began as master. If this tablet is not currently the
+  // master, this value is ignored.
+  //
+  // A new master term begins any time an authoritative decision is communicated
+  // about which tablet should be the master, such as via Vitess
+  // replication-management commands like PlannedReparentShard,
+  // EmergencyReparentShard, and TabletExternallyReparented.
+  //
+  vttime.Time master_term_start_time = 14;
+
   // OBSOLETE: ip and tablet health information
   // string ip = 3;
   // map<string, string> health_map = 11;
@@ -168,13 +179,26 @@ message Tablet {
 message Shard {
   // master_alias is the tablet alias of the master for the shard.
   // If it is unset, then there is no master in this shard yet.
-
   // No lock is necessary to update this field, when for instance
   // TabletExternallyReparented updates this. However, we lock the
   // shard for reparenting operations (InitShardMaster,
   // PlannedReparentShard,EmergencyReparentShard), to guarantee
   // exclusive operation.
   TabletAlias master_alias = 1;
+
+  // master_term_start_time is the time (in UTC) at which the current term of
+  // the master specified in master_alias began.
+  //
+  // A new master term begins any time an authoritative decision is communicated
+  // about which tablet should be the master, such as via Vitess
+  // replication-management commands like PlannedReparentShard,
+  // EmergencyReparentShard, and TabletExternallyReparented.
+  //
+  // The master_alias should only ever be changed if the new master's term began
+  // at a later time than this. Note that a new term can start for the tablet
+  // that is already the master. In that case, the master_term_start_time would
+  // be increased without changing the master_alias.
+  vttime.Time master_term_start_time = 8;
 
   // key_range is the KeyRange for this shard. It can be unset if:
   // - we are not using range-based sharding in this shard.

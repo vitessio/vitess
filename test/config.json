@@ -216,6 +216,17 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"client_test": {
+                        "File": "",
+                        "Args": [],
+                        "Command": [
+                                "test/client_test.sh"
+                        ],
+                        "Manual": false,
+                        "Shard": 3,
+                        "RetryMax": 0,
+                        "Tags": []
+		},
 		"merge_sharding": {
 			"File": "merge_sharding.py",
 			"Args": [],
@@ -400,6 +411,29 @@
 				"site_test"
 			]
 		},
+		"endtoend": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"tools/e2e_test_runner.sh"
+			],
+			"Manual": false,
+			"Shard": 3,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"e2e_race": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"make",
+				"e2e_test_race"
+			],
+			"Manual": false,
+			"Shard": 1,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"unit": {
 			"File": "",
 			"Args": [],
@@ -407,7 +441,7 @@
 				"tools/unit_test_runner.sh"
 			],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 0,
 			"RetryMax": 0,
 			"Tags": []
 		},

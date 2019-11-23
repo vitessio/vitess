@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,6 +18,21 @@ limitations under the License.
 // It allows you to register multiple security policies for enforcing
 // ACLs for users or HTTP requests. The specific policy to use must be
 // specified from a command line argument and cannot be changed on-the-fly.
+//
+// For actual authentication and authorization, you would need to implement your
+// own policy as a package that calls RegisterPolicy(), and compile it into all
+// Vitess binaries that you use.
+//
+// By default (when no security_policy is specified), everyone is allowed to do
+// anything.
+//
+// For convenience, there are two other built-in policies that also do NOT do
+// any authentication, but allow you to globally disable some roles entirely:
+//   * `deny-all` disallows all roles for everyone. Note that access is still
+//     allowed to endpoints that are considered "public" (no ACL check at all).
+//   * `read-only` allows anyone to act as DEBUGGING or MONITORING, but no one
+//     is allowed to act as ADMIN. It also disallows any other custom roles that
+//     are requested.
 package acl
 
 import (
@@ -39,7 +54,7 @@ const (
 )
 
 var (
-	securityPolicy = flag.String("security_policy", "", "security policy to enforce for URLs")
+	securityPolicy = flag.String("security_policy", "", "the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)")
 	policies       = make(map[string]Policy)
 	once           sync.Once
 	currentPolicy  Policy
@@ -69,13 +84,16 @@ func RegisterPolicy(name string, policy Policy) {
 
 func savePolicy() {
 	if *securityPolicy == "" {
+		// Setting the policy to nil means Allow All from Anyone.
+		currentPolicy = nil
 		return
 	}
-	currentPolicy = policies[*securityPolicy]
-	if currentPolicy == nil {
-		log.Warningf("policy %s not found, using fallback policy", *securityPolicy)
-		currentPolicy = FallbackPolicy{}
+	if policy, ok := policies[*securityPolicy]; ok {
+		currentPolicy = policy
+		return
 	}
+	log.Warningf("security_policy %q not found; using fallback policy (deny-all)", *securityPolicy)
+	currentPolicy = denyAllPolicy{}
 }
 
 // CheckAccessActor uses the current security policy to

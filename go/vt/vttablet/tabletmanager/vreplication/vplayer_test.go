@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestMySQLVstreamerClient(t *testing.T) {
@@ -133,7 +132,7 @@ func TestMySQLVstreamerClient(t *testing.T) {
 }
 
 func TestPlayerFilters(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
 		"create table src1(id int, val varbinary(128), primary key(id))",
@@ -387,7 +386,7 @@ func TestPlayerFilters(t *testing.T) {
 }
 
 func TestPlayerKeywordNames(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
 		"create table `begin`(`primary` int, `column` varbinary(128), primary key(`primary`))",
@@ -561,7 +560,7 @@ func TestPlayerKeywordNames(t *testing.T) {
 	}
 }
 func TestUnicode(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
 		"create table src1(id int, val varchar(128) COLLATE utf8_unicode_ci, primary key(id))",
@@ -634,7 +633,7 @@ func TestUnicode(t *testing.T) {
 }
 
 func TestPlayerUpdates(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
 		"create table t1(id int, grouped int, ungrouped int, summed int, primary key(id))",
@@ -749,7 +748,7 @@ func TestPlayerUpdates(t *testing.T) {
 }
 
 func TestPlayerRowMove(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
 		"create table src(id int, val1 int, val2 int, primary key(id))",
@@ -809,7 +808,7 @@ func TestPlayerRowMove(t *testing.T) {
 }
 
 func TestPlayerTypes(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
 		"create table vitess_ints(tiny tinyint, tinyu tinyint unsigned, small smallint, smallu smallint unsigned, medium mediumint, mediumu mediumint unsigned, normal int, normalu int unsigned, big bigint, bigu bigint unsigned, y year, primary key(tiny))",
@@ -929,7 +928,7 @@ func TestPlayerTypes(t *testing.T) {
 }
 
 func TestPlayerDDL(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 	execStatements(t, []string{
 		"create table t1(id int, primary key(id))",
 		fmt.Sprintf("create table %s.t1(id int, primary key(id))", vrepldb),
@@ -1016,6 +1015,8 @@ func TestPlayerDDL(t *testing.T) {
 	expectDBClientQueries(t, []string{
 		"alter table t1 add column val1 varchar(128)",
 		"/update _vt.vreplication set pos=",
+		// The apply of the DDL on target generates an "other" event.
+		"/update _vt.vreplication set pos=",
 	})
 	execStatements(t, []string{"alter table t1 add column val2 varchar(128)"})
 	expectDBClientQueries(t, []string{
@@ -1042,6 +1043,8 @@ func TestPlayerDDL(t *testing.T) {
 	expectDBClientQueries(t, []string{
 		"alter table t1 add column val1 varchar(128)",
 		"/update _vt.vreplication set pos=",
+		// The apply of the DDL on target generates an "other" event.
+		"/update _vt.vreplication set pos=",
 	})
 	execStatements(t, []string{"alter table t1 add column val2 varchar(128)"})
 	expectDBClientQueries(t, []string{
@@ -1052,7 +1055,7 @@ func TestPlayerDDL(t *testing.T) {
 }
 
 func TestPlayerStopPos(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
 		"create table yes(id int, val varbinary(128), primary key(id))",
@@ -1149,7 +1152,7 @@ func TestPlayerStopPos(t *testing.T) {
 }
 
 func TestPlayerIdleUpdate(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 
 	savedIdleTimeout := idleTimeout
 	defer func() { idleTimeout = savedIdleTimeout }()
@@ -1203,7 +1206,7 @@ func TestPlayerIdleUpdate(t *testing.T) {
 }
 
 func TestPlayerSplitTransaction(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 	flag.Set("vstream_packet_size", "10")
 	defer flag.Set("vstream_packet_size", "10000")
 
@@ -1249,7 +1252,7 @@ func TestPlayerSplitTransaction(t *testing.T) {
 }
 
 func TestPlayerLockErrors(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
 		"create table t1(id int, val varbinary(128), primary key(id))",
@@ -1329,7 +1332,7 @@ func TestPlayerLockErrors(t *testing.T) {
 }
 
 func TestPlayerCancelOnLock(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
 		"create table t1(id int, val varbinary(128), primary key(id))",
@@ -1407,7 +1410,7 @@ func TestPlayerCancelOnLock(t *testing.T) {
 }
 
 func TestPlayerBatching(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
 		"create table t1(id int, val varbinary(128), primary key(id))",
@@ -1492,11 +1495,14 @@ func TestPlayerBatching(t *testing.T) {
 		"/update _vt.vreplication set pos=",
 		"alter table t1 drop column val2",
 		"/update _vt.vreplication set pos=",
+		// The apply of the DDLs on target generates two "other" event.
+		"/update _vt.vreplication set pos=",
+		"/update _vt.vreplication set pos=",
 	})
 }
 
 func TestPlayerRelayLogMaxSize(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 
 	for i := 0; i < 2; i++ {
 		// First iteration checks max size, second checks max items
@@ -1601,7 +1607,7 @@ func TestPlayerRelayLogMaxSize(t *testing.T) {
 }
 
 func TestRestartOnVStreamEnd(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 
 	savedDelay := *retryDelay
 	defer func() { *retryDelay = savedDelay }()
@@ -1662,7 +1668,7 @@ func TestRestartOnVStreamEnd(t *testing.T) {
 }
 
 func TestTimestamp(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 
 	execStatements(t, []string{
 		"create table t1(id int, ts timestamp, dt datetime)",

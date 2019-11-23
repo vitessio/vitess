@@ -1,4 +1,4 @@
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -126,7 +126,7 @@ class MariaDB(MysqlFlavor):
     ]
 
   def extra_my_cnf(self):
-    return environment.vttop + "/config/mycnf/master_mariadb.cnf"
+    return environment.vttop + "/config/mycnf/master_mariadb100.cnf"
 
   def master_position(self, tablet):
     gtid = tablet.mquery("", "SELECT @@GLOBAL.gtid_binlog_pos")[0][0]
@@ -228,10 +228,10 @@ def set_mysql_flavor(flavor):
   global MYSQL_FLAVOR
 
   if not flavor:
-    flavor = os.environ.get("MYSQL_FLAVOR", "MariaDB")
+    flavor = os.environ.get("MYSQL_FLAVOR", "MySQL56")
     # The environment variable might be set, but equal to "".
     if not flavor:
-      flavor = "MariaDB"
+      flavor = "MySQL56"
 
   v = flavor_map.get(flavor, None)
   if not v:

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -45,7 +45,6 @@ type stFU struct {
 func (v *stFU) String() string                                                    { return v.name }
 func (*stFU) Cost() int                                                           { return 1 }
 func (*stFU) IsUnique() bool                                                      { return true }
-func (*stFU) IsFunctional() bool                                                  { return true }
 func (*stFU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
 func (*stFU) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
 
@@ -64,7 +63,6 @@ type stLN struct {
 func (v *stLN) String() string                                                    { return v.name }
 func (*stLN) Cost() int                                                           { return 0 }
 func (*stLN) IsUnique() bool                                                      { return false }
-func (*stLN) IsFunctional() bool                                                  { return false }
 func (*stLN) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
 func (*stLN) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
 func (*stLN) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error            { return nil }
@@ -87,7 +85,6 @@ type stLU struct {
 func (v *stLU) String() string                                                    { return v.name }
 func (*stLU) Cost() int                                                           { return 2 }
 func (*stLU) IsUnique() bool                                                      { return true }
-func (*stLU) IsFunctional() bool                                                  { return false }
 func (*stLU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
 func (*stLU) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
 func (*stLU) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error            { return nil }
@@ -113,7 +110,6 @@ type stLO struct {
 func (v *stLO) String() string                                                    { return v.name }
 func (*stLO) Cost() int                                                           { return 2 }
 func (*stLO) IsUnique() bool                                                      { return true }
-func (*stLO) IsFunctional() bool                                                  { return false }
 func (*stLO) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
 func (*stLO) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
 func (*stLO) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error            { return nil }
@@ -176,6 +172,7 @@ func TestUnshardedVSchema(t *testing.T) {
 	dual := &Table{
 		Name:     sqlparser.NewTableIdent("dual"),
 		Keyspace: ks,
+		Type:     TypeReference,
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
@@ -239,6 +236,7 @@ func TestVSchemaColumns(t *testing.T) {
 	dual := &Table{
 		Name:     sqlparser.NewTableIdent("dual"),
 		Keyspace: ks,
+		Type:     TypeReference,
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
@@ -305,6 +303,7 @@ func TestVSchemaColumnListAuthoritative(t *testing.T) {
 	dual := &Table{
 		Name:     sqlparser.NewTableIdent("dual"),
 		Keyspace: ks,
+		Type:     TypeReference,
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
@@ -385,7 +384,7 @@ func TestVSchemaPinned(t *testing.T) {
 	dual := &Table{
 		Name:     sqlparser.NewTableIdent("dual"),
 		Keyspace: ks,
-		Pinned:   []byte{0},
+		Type:     TypeReference,
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
@@ -489,7 +488,7 @@ func TestShardedVSchemaOwned(t *testing.T) {
 	dual := &Table{
 		Name:     sqlparser.NewTableIdent("dual"),
 		Keyspace: ks,
-		Pinned:   []byte{0},
+		Type:     TypeReference,
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
@@ -706,11 +705,12 @@ func TestVSchemaRoutingRules(t *testing.T) {
 	dual1 := &Table{
 		Name:     sqlparser.NewTableIdent("dual"),
 		Keyspace: ks1,
-		Pinned:   []byte{0},
+		Type:     TypeReference,
 	}
 	dual2 := &Table{
 		Name:     sqlparser.NewTableIdent("dual"),
 		Keyspace: ks2,
+		Type:     TypeReference,
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{
@@ -948,7 +948,7 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 	dual := &Table{
 		Name:     sqlparser.NewTableIdent("dual"),
 		Keyspace: ks,
-		Pinned:   []byte{0},
+		Type:     TypeReference,
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
@@ -1048,7 +1048,7 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 	dual := &Table{
 		Name:     sqlparser.NewTableIdent("dual"),
 		Keyspace: ks,
-		Pinned:   []byte{0},
+		Type:     TypeReference,
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
@@ -1175,10 +1175,12 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 	duala := &Table{
 		Name:     sqlparser.NewTableIdent("dual"),
 		Keyspace: ksa,
+		Type:     TypeReference,
 	}
 	dualb := &Table{
 		Name:     sqlparser.NewTableIdent("dual"),
 		Keyspace: ksb,
+		Type:     TypeReference,
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
@@ -1246,10 +1248,12 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 	duala := &Table{
 		Name:     sqlparser.NewTableIdent("dual"),
 		Keyspace: ksa,
+		Type:     TypeReference,
 	}
 	dualb := &Table{
 		Name:     sqlparser.NewTableIdent("dual"),
 		Keyspace: ksb,
+		Type:     TypeReference,
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
@@ -1380,12 +1384,12 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 	duala := &Table{
 		Name:     sqlparser.NewTableIdent("dual"),
 		Keyspace: ksa,
-		Pinned:   []byte{0},
+		Type:     TypeReference,
 	}
 	dualb := &Table{
 		Name:     sqlparser.NewTableIdent("dual"),
 		Keyspace: ksb,
-		Pinned:   []byte{0},
+		Type:     TypeReference,
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
@@ -1550,38 +1554,6 @@ func TestBuildVSchemaNotUniqueFail(t *testing.T) {
 	}
 }
 
-func TestBuildVSchemaPrimaryNonFunctionalFail(t *testing.T) {
-	bad := vschemapb.SrvVSchema{
-		Keyspaces: map[string]*vschemapb.Keyspace{
-			"sharded": {
-				Sharded: true,
-				Vindexes: map[string]*vschemapb.Vindex{
-					"stlu": {
-						Type:  "stlu",
-						Owner: "t1",
-					},
-				},
-				Tables: map[string]*vschemapb.Table{
-					"t1": {
-						ColumnVindexes: []*vschemapb.ColumnVindex{
-							{
-								Column: "c1",
-								Name:   "stlu",
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	got, _ := BuildVSchema(&bad)
-	err := got.Keyspaces["sharded"].Error
-	want := "primary vindex stlu cannot be owned for table t1"
-	if err == nil || err.Error() != want {
-		t.Errorf("BuildVSchema: %v, want %v", err, want)
-	}
-}
-
 func TestSequence(t *testing.T) {
 	good := vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
@@ -1699,11 +1671,12 @@ func TestSequence(t *testing.T) {
 	duala := &Table{
 		Name:     sqlparser.NewTableIdent("dual"),
 		Keyspace: ksu,
+		Type:     TypeReference,
 	}
 	dualb := &Table{
 		Name:     sqlparser.NewTableIdent("dual"),
 		Keyspace: kss,
-		Pinned:   []byte{0},
+		Type:     TypeReference,
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -161,6 +161,7 @@ func TestAPI(t *testing.T) {
 		{"GET", "shards/ks1/", "", `["-80","80-"]`},
 		{"GET", "shards/ks1/-80", "", `{
 				"master_alias": null,
+				"master_term_start_time":null,
 				"key_range": {
 					"start": null,
 					"end":"gA=="
@@ -204,7 +205,8 @@ func TestAPI(t *testing.T) {
 				"db_name_override": "",
 				"tags": {},
 				"mysql_hostname":"",
-				"mysql_port":0
+				"mysql_port":0,
+				"master_term_start_time":null
 			}`},
 		{"GET", "tablets/nonexistent-999", "", "404 page not found"},
 		{"POST", "tablets/cell1-100?action=TestTabletAction", "", `{

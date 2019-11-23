@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2018 The Vitess Authors.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ script_root=$(dirname "${BASH_SOURCE}")
 
 SHARD=-80 CELL=zone1 KEYSPACE=customer UID_BASE=300 "$script_root/vttablet-up.sh"
 SHARD=80- CELL=zone1 KEYSPACE=customer UID_BASE=400 "$script_root/vttablet-up.sh"
-sleep 15
+
 ./lvtctl.sh InitShardMaster -force customer/-80 zone1-300
 ./lvtctl.sh InitShardMaster -force customer/80- zone1-400
 ./lvtctl.sh CopySchemaShard customer/0 customer/-80

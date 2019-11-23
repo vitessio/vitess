@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2018 The Vitess Authors.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@ set -e
 script_root=$(dirname "${BASH_SOURCE}")
 
 CELL=zone1 KEYSPACE=customer UID_BASE=200 "$script_root/vttablet-up.sh"
-sleep 15
+
 ./lvtctl.sh InitShardMaster -force customer/0 zone1-200
 ./lvtctl.sh CopySchemaShard -tables customer,corder commerce/0 customer/0
 ./lvtctl.sh ApplyVSchema -vschema_file vschema_commerce_vsplit.json commerce

@@ -207,7 +207,7 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	vp.unsavedEvent = nil
 	vp.timeLastSaved = time.Now()
 	vp.vr.stats.SetLastPosition(vp.pos)
-	posReached = !vp.stopPos.IsZero() && vp.pos.Equal(vp.stopPos)
+	posReached = !vp.stopPos.IsZero() && vp.pos.AtLeast(vp.stopPos)
 	if posReached {
 		if vp.saveStop {
 			if err := vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
@@ -267,7 +267,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 				mustSave := false
 				switch event.Type {
 				case binlogdatapb.VEventType_COMMIT:
-					if vp.pos.Equal(vp.stopPos) {
+					if !vp.stopPos.IsZero() && vp.pos.AtLeast(vp.stopPos) {
 						mustSave = true
 						break
 					}
@@ -313,15 +313,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		vp.unsavedEvent = nil
 		if vp.stopPos.IsZero() {
 			return nil
-		}
-		if !vp.pos.Equal(vp.stopPos) && vp.pos.AtLeast(vp.stopPos) {
-			// Code is unreachable, but bad data can cause this to happen.
-			if vp.saveStop {
-				if err := vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("next event position %v exceeds stop pos %v, exiting without applying", vp.pos, vp.stopPos)); err != nil {
-					return err
-				}
-			}
-			return io.EOF
 		}
 	case binlogdatapb.VEventType_BEGIN:
 		// No-op: begin is called as needed.
@@ -372,6 +363,15 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		}
 		if err := vp.applyRowEvent(ctx, event.RowEvent); err != nil {
 			return err
+		}
+	case binlogdatapb.VEventType_OTHER:
+		// Just update the position.
+		posReached, err := vp.updatePos(event.Timestamp)
+		if err != nil {
+			return err
+		}
+		if posReached {
+			return io.EOF
 		}
 	case binlogdatapb.VEventType_DDL:
 		if vp.vr.dbClient.InTransaction {
