@@ -470,6 +470,25 @@ func TestTxPoolBeginWithError(t *testing.T) {
 	}
 }
 
+func TestTxPoolCancelledContextError(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddRejectedQuery("begin", errRejected)
+	txPool := newTxPool()
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer txPool.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	want := "transaction pool aborting request due to already expired context"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Unexpected error: %v, want %s", err, want)
+	}
+	if got, want := vterrors.Code(err), vtrpcpb.Code_RESOURCE_EXHAUSTED; got != want {
+		t.Errorf("wrong error code error: got = %v, want = %v", got, want)
+	}
+}
+
 func TestTxPoolRollbackFail(t *testing.T) {
 	sql := "alter table test_table add test_column int"
 	db := fakesqldb.New(t)
