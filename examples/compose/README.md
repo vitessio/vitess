@@ -95,12 +95,17 @@ vitess/examples/compose$ ./client.sh
 
 ### Connect to vgate and run queries
 vtgate responds to the MySQL protocol, so we can connect to it using the default MySQL client command line.
-You can also use the `./lmysql.sh` helper script.  
 ```
 vitess/examples/compose$ mysql --port=15306 --host=127.0.0.1
-vitess/examples/compose$ ./lmysql.sh --port=15306 --host=127.0.0.1
 ```
 **Note that you may need to replace `127.0.0.1` with `docker ip` or `docker-machine ip`** 
+
+You can also use the `./lmysql.sh` helper script.
+```
+vitess/examples/compose$ ./lmysql.sh --port=15306 --host=<DOCKER_HOST_IP>
+```
+
+where `<DOCKER_HOST_IP>` is `docker-machine ip` or external docker host ip addr
 
 ### Play around with vtctl commands
 
