@@ -26,6 +26,7 @@ type ConnParams struct {
 	UnixSocket string `json:"unix_socket"`
 	Charset    string `json:"charset"`
 	Flags      uint64 `json:"flags"`
+	Flavor     string `json:"flavor,omitempty"`
 
 	// The following SSL flags are only used when flags |= 2048
 	// is set (CapabilityClientSSL).

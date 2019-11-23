@@ -281,12 +281,11 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			})
 		}
 		vs.pos = mysql.AppendGTID(vs.pos, gtid)
+	case ev.IsXID():
 		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_GTID,
 			Gtid: mysql.EncodePosition(vs.pos),
-		})
-	case ev.IsXID():
-		vevents = append(vevents, &binlogdatapb.VEvent{
+		}, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_COMMIT,
 		})
 	case ev.IsQuery():
@@ -306,11 +305,18 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		case sqlparser.StmtDDL:
 			if mustSendDDL(q, vs.cp.DbName, vs.filter) {
 				vevents = append(vevents, &binlogdatapb.VEvent{
+					Type: binlogdatapb.VEventType_GTID,
+					Gtid: mysql.EncodePosition(vs.pos),
+				}, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_DDL,
 					Ddl:  q.SQL,
 				})
 			} else {
+				// If the DDL need not be sent, send a dummy OTHER event.
 				vevents = append(vevents, &binlogdatapb.VEvent{
+					Type: binlogdatapb.VEventType_GTID,
+					Gtid: mysql.EncodePosition(vs.pos),
+				}, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_OTHER,
 				})
 			}
@@ -321,6 +327,9 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		case sqlparser.StmtOther:
 			// These are DBA statements like REPAIR that can be ignored.
 			vevents = append(vevents, &binlogdatapb.VEvent{
+				Type: binlogdatapb.VEventType_GTID,
+				Gtid: mysql.EncodePosition(vs.pos),
+			}, &binlogdatapb.VEvent{
 				Type: binlogdatapb.VEventType_OTHER,
 			})
 		default:
