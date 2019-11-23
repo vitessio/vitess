@@ -196,7 +196,7 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 	qr, err := session.Execute(ctx, subFlags.Arg(0), bindVars)
 	if err != nil {
 		//lint:ignore ST1005 function name
-		return fmt.Errorf("Execute failed: %v", err)
+		return fmt.Errorf("execute failed: %v", err)
 	}
 	if *json {
 		return printJSON(wr.Logger(), qr)
@@ -445,7 +445,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 	}, subFlags.Arg(1), bindVars, int64(*transactionID), executeOptions)
 	if err != nil {
 		//lint:ignore ST1005 function name
-		return fmt.Errorf("Execute failed: %v", err)
+		return fmt.Errorf("execute failed: %v", err)
 	}
 	if *json {
 		return printJSON(wr.Logger(), qr)
