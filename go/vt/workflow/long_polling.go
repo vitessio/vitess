@@ -249,7 +249,7 @@ func (m *Manager) HandleHTTPLongPolling(pattern string) {
 
 		ctx := context.TODO()
 		if err := m.NodeManager().Action(ctx, ap); err != nil {
-			return fmt.Errorf("Action failed: %v", err)
+			return fmt.Errorf("action failed: %v", err)
 		}
 		http.Error(w, "", http.StatusOK)
 		return nil
