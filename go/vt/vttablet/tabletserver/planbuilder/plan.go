@@ -130,9 +130,14 @@ func PlanByName(s string) (pt PlanType, ok bool) {
 	return NumPlans, false
 }
 
-// IsSelect returns true if PlanType is about a select query.
+// IsSelect returns true if PlanType is a select query.
 func (pt PlanType) IsSelect() bool {
 	return pt == PlanPassSelect || pt == PlanSelectLock || pt == PlanSelectImpossible
+}
+
+// IsInsert returns true if PlanType is an insert query.
+func (pt PlanType) IsInsert() bool {
+	return pt == PlanInsertPK || pt == PlanInsertSubquery || pt == PlanInsertTopic || pt == PlanInsertMessage
 }
 
 // MarshalJSON returns a json string for PlanType.
