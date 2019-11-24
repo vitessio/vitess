@@ -843,9 +843,9 @@ func TestJournal(t *testing.T) {
 		},
 		// External table events don't get sent.
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:JOURNAL journal:<id:1 migration_type:SHARDS > `,
+			`gtid`,
 			`commit`,
 		}},
 	}}

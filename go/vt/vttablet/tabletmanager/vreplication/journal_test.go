@@ -63,6 +63,7 @@ func TestJournalOneToOne(t *testing.T) {
 	defer execStatements(t, []string{"delete from _vt.resharding_journal"})
 
 	expectDBClientQueries(t, []string{
+		"/update _vt.vreplication set pos=",
 		"begin",
 		`/insert into _vt.vreplication.*workflow, source, pos.*values.*'test', 'keyspace:\\"other_keyspace\\" shard:\\"0\\.*'MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10'`,
 		fmt.Sprintf("delete from _vt.vreplication where id=%d", firstID),
@@ -121,6 +122,7 @@ func TestJournalOneToMany(t *testing.T) {
 	defer execStatements(t, []string{"delete from _vt.resharding_journal"})
 
 	expectDBClientQueries(t, []string{
+		"/update _vt.vreplication set pos=",
 		"begin",
 		`/insert into _vt.vreplication.*workflow, source, pos.*values.*'test', 'keyspace:\\"other_keyspace\\" shard:\\"-80\\.*'MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-5'`,
 		`/insert into _vt.vreplication.*workflow, source, pos.*values.*'test', 'keyspace:\\"other_keyspace\\" shard:\\"80-\\.*'MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:5-10'`,
@@ -177,6 +179,7 @@ func TestJournalTablePresent(t *testing.T) {
 	defer execStatements(t, []string{"delete from _vt.resharding_journal"})
 
 	expectDBClientQueries(t, []string{
+		"/update _vt.vreplication set pos=",
 		"begin",
 		`/insert into _vt.vreplication.*workflow, source, pos.*values.*'test', 'keyspace:\\"other_keyspace\\" shard:\\"0\\.*'MySQL56/7b04699f-f5e9-11e9-bf88-9cb6d089e1c3:1-10'`,
 		fmt.Sprintf("delete from _vt.vreplication where id=%d", firstID),
@@ -288,6 +291,7 @@ func TestJournalTableMixed(t *testing.T) {
 	defer execStatements(t, []string{"delete from _vt.resharding_journal"})
 
 	expectDBClientQueries(t, []string{
+		"/update _vt.vreplication set pos=",
 		"/update _vt.vreplication set state='Stopped', message='unable to handle journal event: tables were partially matched' where id",
 	})
 
