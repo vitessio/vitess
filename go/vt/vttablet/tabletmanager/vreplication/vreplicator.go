@@ -27,9 +27,9 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 var (
@@ -54,26 +54,22 @@ type vreplicator struct {
 
 	// target
 	stats *binlogplayer.Stats
-	// sl is used to fetch the local schema.
-	sl SchemasLoader
+
+	// mysqld is used to fetch the local schema.
+	mysqld mysqlctl.MysqlDaemon
 
 	tableKeys map[string][]string
 }
 
-// SchemasLoader provides a way to load schemas for a vreplicator
-type SchemasLoader interface {
-	GetSchema(dbName string, tables, excludeTables []string, includeViews bool) (*tabletmanagerdatapb.SchemaDefinition, error)
-}
-
 // newVReplicator creates a new vreplicator
-func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, sl SchemasLoader) *vreplicator {
+func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon) *vreplicator {
 	return &vreplicator{
 		id:              id,
 		source:          source,
 		sourceVStreamer: sourceVStreamer,
 		stats:           stats,
 		dbClient:        newVDBClient(dbClient, stats),
-		sl:              sl,
+		mysqld:          mysqld,
 	}
 }
 
@@ -95,16 +91,12 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 			return nil
 		}
 
-		// TODO: This will get remove once we use filename:pos flavor
-		_, err = mysql.ParseFilePosition(settings.StartPos)
-		isFilePos := err == nil
-
 		switch {
 		case numTablesToCopy != 0:
 			if err := newVCopier(vr).copyNext(ctx, settings); err != nil {
 				return err
 			}
-		case settings.GtidStartPos.IsZero() && !isFilePos:
+		case settings.StartPos.IsZero():
 			if err := newVCopier(vr).initTablesForCopy(ctx); err != nil {
 				return err
 			}
@@ -118,7 +110,7 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 }
 
 func (vr *vreplicator) buildTableKeys() (map[string][]string, error) {
-	schema, err := vr.sl.GetSchema(vr.dbClient.DBName(), []string{"/.*/"}, nil, false)
+	schema, err := vr.mysqld.GetSchema(vr.dbClient.DBName(), []string{"/.*/"}, nil, false)
 	if err != nil {
 		return nil, err
 	}

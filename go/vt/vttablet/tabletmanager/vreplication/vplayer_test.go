@@ -26,110 +26,11 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
-
-func TestMySQLVstreamerClient(t *testing.T) {
-	execStatements(t, []string{
-		"create table src1(id int, val varbinary(128), primary key(id))",
-		fmt.Sprintf("create table %s.dst1(id int, val varbinary(128), primary key(id))", vrepldb),
-		"create table src2(id int, val1 int, val2 int, primary key(id))",
-		fmt.Sprintf("create table %s.dst2(id int, val1 int, sval2 int, rcount int, primary key(id))", vrepldb),
-		"create table src3(id int, val varbinary(128), primary key(id))",
-		fmt.Sprintf("create table %s.dst3(id int, val varbinary(128), primary key(id))", vrepldb),
-		"create table yes(id int, val varbinary(128), primary key(id))",
-		fmt.Sprintf("create table %s.yes(id int, val varbinary(128), primary key(id))", vrepldb),
-		"create table no(id int, val varbinary(128), primary key(id))",
-		"create table nopk(id int, val varbinary(128))",
-		fmt.Sprintf("create table %s.nopk(id int, val varbinary(128))", vrepldb),
-	})
-	defer execStatements(t, []string{
-		"drop table src1",
-		fmt.Sprintf("drop table %s.dst1", vrepldb),
-		"drop table src2",
-		fmt.Sprintf("drop table %s.dst2", vrepldb),
-		"drop table src3",
-		fmt.Sprintf("drop table %s.dst3", vrepldb),
-		"drop table yes",
-		fmt.Sprintf("drop table %s.yes", vrepldb),
-		"drop table no",
-		"drop table nopk",
-		fmt.Sprintf("drop table %s.nopk", vrepldb),
-	})
-	env.SchemaEngine.Reload(context.Background())
-
-	filter := &binlogdatapb.Filter{
-		Rules: []*binlogdatapb.Rule{{
-			Match:  "dst1",
-			Filter: "select * from src1",
-		}, {
-			Match:  "dst2",
-			Filter: "select id, val1, sum(val2) as sval2, count(*) as rcount from src2 group by id",
-		}, {
-			Match:  "dst3",
-			Filter: "select id, val from src3 group by id, val",
-		}, {
-			Match: "/yes",
-		}, {
-			Match: "/nopk",
-		}},
-	}
-
-	bls := &binlogdatapb.BinlogSource{
-		Filter:        filter,
-		OnDdl:         binlogdatapb.OnDDLAction_IGNORE,
-		ExternalMysql: "erepl",
-	}
-
-	cancel, _ := startVReplication(t, bls, "")
-	defer cancel()
-
-	testcases := []struct {
-		input  string
-		output []string
-		table  string
-		data   [][]string
-	}{{
-		// insert with insertNormal
-		input: "insert into src1 values(1, 'aaa')",
-		output: []string{
-			"begin",
-			"insert into dst1(id,val) values (1,'aaa')",
-			"/update _vt.vreplication set pos=",
-			"commit",
-		},
-		table: "dst1",
-		data: [][]string{
-			{"1", "aaa"},
-		},
-	}, {
-		// update with insertNormal
-		input: "update src1 set val='bbb'",
-		output: []string{
-			"begin",
-			"update dst1 set val='bbb' where id=1",
-			"/update _vt.vreplication set pos=",
-			"commit",
-		},
-		table: "dst1",
-		data: [][]string{
-			{"1", "bbb"},
-		},
-	}}
-
-	for _, tcases := range testcases {
-		execStatements(t, []string{tcases.input})
-		expectDBClientQueries(t, tcases.output)
-		if tcases.table != "" {
-			expectData(t, tcases.table, tcases.data)
-		}
-	}
-
-}
 
 func TestPlayerFilters(t *testing.T) {
 	defer deleteTablet(addTablet(100))
@@ -1717,13 +1618,6 @@ func TestTimestamp(t *testing.T) {
 	expectData(t, "t1", [][]string{{"1", want, want}})
 }
 
-func execStatements(t *testing.T, queries []string) {
-	t.Helper()
-	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
-		t.Error(err)
-	}
-}
-
 func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string) (cancelFunc func(), id int) {
 	t.Helper()
 
@@ -1751,13 +1645,4 @@ func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string)
 			expectDeleteQueries(t)
 		})
 	}, int(qr.InsertID)
-}
-
-func masterPosition(t *testing.T) string {
-	t.Helper()
-	pos, err := env.Mysqld.MasterPosition()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return mysql.EncodePosition(pos)
 }

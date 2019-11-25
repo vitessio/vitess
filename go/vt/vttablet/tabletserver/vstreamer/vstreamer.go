@@ -115,16 +115,6 @@ func (vs *vstreamer) Stream() error {
 	}
 	defer conn.Close()
 
-	// TODO: This case logic depending on startPos will disappear when filename:pos flavor is introduced
-	filePos, err := mysql.ParseFilePosition(vs.startPos)
-	if err == nil {
-		events, err := conn.StartBinlogDumpFromFilePosition(vs.ctx, filePos.Name, filePos.Pos)
-		if err != nil {
-			return wrapError(err, vs.startPos)
-		}
-		err = vs.parseEvents(vs.ctx, events)
-		return wrapError(err, vs.startPos)
-	}
 	// Let's try to decode as gtidset
 	pos, err := mysql.DecodePosition(vs.startPos)
 	if err != nil {

@@ -36,13 +36,11 @@ import (
 )
 
 type vplayer struct {
-	vr                 *vreplicator
-	startPos           string
-	gtidStartPos       mysql.Position
-	stopPos            mysql.Position
-	startBinlogFilePos *mysql.BinlogFilePos
-	saveStop           bool
-	copyState          map[string]*sqltypes.Result
+	vr        *vreplicator
+	startPos  mysql.Position
+	stopPos   mysql.Position
+	saveStop  bool
+	copyState map[string]*sqltypes.Result
 
 	replicatorPlan *ReplicatorPlan
 	tablePlans     map[string]*TablePlan
@@ -68,8 +66,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 	return &vplayer{
 		vr:            vr,
 		startPos:      settings.StartPos,
-		gtidStartPos:  settings.GtidStartPos,
-		pos:           settings.GtidStartPos,
+		pos:           settings.StartPos,
 		stopPos:       settings.StopPos,
 		saveStop:      saveStop,
 		copyState:     copyState,
@@ -80,9 +77,9 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 
 // play is not resumable. If pausePos is set, play returns without updating the vreplication state.
 func (vp *vplayer) play(ctx context.Context) error {
-	if !vp.stopPos.IsZero() && vp.gtidStartPos.AtLeast(vp.stopPos) {
+	if !vp.stopPos.IsZero() && vp.startPos.AtLeast(vp.stopPos) {
 		if vp.saveStop {
-			return vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stop position %v already reached: %v", vp.gtidStartPos, vp.stopPos))
+			return vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stop position %v already reached: %v", vp.startPos, vp.stopPos))
 		}
 		return nil
 	}
@@ -123,7 +120,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 
 	streamErr := make(chan error, 1)
 	go func() {
-		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, vp.startPos, vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
+		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, mysql.EncodePosition(vp.startPos), vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
 			return relay.Send(events)
 		})
 	}()
