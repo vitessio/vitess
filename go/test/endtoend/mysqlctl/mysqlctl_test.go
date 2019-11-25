@@ -143,13 +143,13 @@ func TestAutoDetect(t *testing.T) {
 	os.Setenv("MYSQL_FLAVOR", "")
 
 	err := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.Setup()
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err, "error should be nil")
 	err = clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].VttabletProcess.Setup()
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err, "error should be nil")
 
 	// Reparent tablets, which requires flavor detection
 	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, masterTablet.TabletUID)
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err, "error should be nil")
 
 	//Reset flavor
 	os.Setenv("MYSQL_FLAVOR", sqlFlavor)
