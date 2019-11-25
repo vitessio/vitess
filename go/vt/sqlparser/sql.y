@@ -1879,6 +1879,10 @@ distinct_opt:
   {
     $$ = ""
   }
+| ALL
+  {
+    $$ = ""
+  }
 | DISTINCT
   {
     $$ = DistinctStr
@@ -2517,13 +2521,9 @@ value_expression:
   introduce side effects due to being a simple identifier
 */
 function_call_generic:
-  sql_id openb select_expression_list_opt closeb
+  sql_id openb distinct_opt select_expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: $1, Exprs: $3}
-  }
-| sql_id openb DISTINCT select_expression_list closeb
-  {
-    $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
+    $$ = &FuncExpr{Name: $1, Distinct: $3 == DistinctStr, Exprs: $4}
   }
 | table_id '.' reserved_sql_id openb select_expression_list_opt closeb
   {
