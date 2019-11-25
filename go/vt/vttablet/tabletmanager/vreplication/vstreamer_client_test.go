@@ -37,7 +37,7 @@ import (
 )
 
 func TestTabletVStreamerClientOpen(t *testing.T) {
-	tablet := addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true)
+	tablet := addTablet(100)
 	defer deleteTablet(tablet)
 
 	type fields struct {
@@ -98,7 +98,7 @@ func TestTabletVStreamerClientOpen(t *testing.T) {
 }
 
 func TestTabletVStreamerClientClose(t *testing.T) {
-	tablet := addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true)
+	tablet := addTablet(100)
 	defer deleteTablet(tablet)
 
 	type fields struct {
@@ -154,7 +154,7 @@ func TestTabletVStreamerClientClose(t *testing.T) {
 }
 
 func TestTabletVStreamerClientVStream(t *testing.T) {
-	tablet := addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true)
+	tablet := addTablet(100)
 	defer deleteTablet(tablet)
 
 	vsClient := &TabletVStreamerClient{
@@ -209,8 +209,8 @@ func TestTabletVStreamerClientVStream(t *testing.T) {
 
 	select {
 	case got := <-eventsChan:
-		if got.Type != binlogdatapb.VEventType_GTID {
-			t.Errorf("Did not get expected events: want: %v, got: %v", binlogdatapb.VEventType_GTID, got.Type)
+		if got.Type != binlogdatapb.VEventType_BEGIN {
+			t.Errorf("Did not get expected events: want: %v, got: %v", binlogdatapb.VEventType_BEGIN, got.Type)
 		}
 	case <-time.After(5 * time.Second):
 		t.Errorf("no events received")
@@ -218,7 +218,7 @@ func TestTabletVStreamerClientVStream(t *testing.T) {
 }
 
 func TestTabletVStreamerClientVStreamRows(t *testing.T) {
-	tablet := addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true)
+	tablet := addTablet(100)
 	defer deleteTablet(tablet)
 
 	vsClient := &TabletVStreamerClient{
@@ -479,8 +479,8 @@ func TestMySQLVStreamerClientVStream(t *testing.T) {
 
 	select {
 	case got := <-eventsChan:
-		if got.Type != binlogdatapb.VEventType_GTID {
-			t.Errorf("Did not get expected events: want: %v, got: %v", binlogdatapb.VEventType_GTID, got.Type)
+		if got.Type != binlogdatapb.VEventType_BEGIN {
+			t.Errorf("Did not get expected events: want: %v, got: %v", binlogdatapb.VEventType_BEGIN, got.Type)
 		}
 	case <-time.After(5 * time.Second):
 		t.Errorf("no events received")

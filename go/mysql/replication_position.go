@@ -19,7 +19,6 @@ package mysql
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -35,12 +34,6 @@ const (
 	// characters anyway.
 	MaximumPositionSize = 64000
 )
-
-// BinlogFilePos used to encode filename:pos.
-type BinlogFilePos struct {
-	Name string
-	Pos  uint32
-}
 
 // Position represents the information necessary to describe which
 // transactions a server has seen, so that it can request a replication stream
@@ -125,28 +118,6 @@ func EncodePosition(rp Position) string {
 		return ""
 	}
 	return fmt.Sprintf("%s/%s", rp.GTIDSet.Flavor(), rp.GTIDSet.String())
-}
-
-// ParseFilePosition converts a string in the format file:pos
-// to BinlogFilePos
-func ParseFilePosition(s string) (rp BinlogFilePos, err error) {
-	if s == "" {
-		return rp, vterrors.Errorf(vtrpc.Code_INTERNAL, "parse error: unknown file:pos format %#v", s)
-	}
-
-	parts := strings.SplitN(s, ":", 2)
-	if len(parts) != 2 {
-		return rp, vterrors.Errorf(vtrpc.Code_INTERNAL, "parse error: unknown file:pos format %#v", s)
-	}
-
-	pos, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return rp, vterrors.Errorf(vtrpc.Code_INTERNAL, "parse error: pos is not a valid int %#v", s)
-	}
-
-	rp.Name = parts[0]
-	rp.Pos = uint32(pos)
-	return rp, nil
 }
 
 // DecodePosition converts a string in the format returned by

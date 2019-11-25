@@ -124,6 +124,22 @@ func resetBinlogClient() {
 	globalFBC = &fakeBinlogClient{}
 }
 
+func masterPosition(t *testing.T) string {
+	t.Helper()
+	pos, err := env.Mysqld.MasterPosition()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return mysql.EncodePosition(pos)
+}
+
+func execStatements(t *testing.T, queries []string) {
+	t.Helper()
+	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
+		t.Error(err)
+	}
+}
+
 //--------------------------------------
 // Topos and tablets
 

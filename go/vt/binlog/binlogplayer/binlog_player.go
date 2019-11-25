@@ -203,9 +203,7 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 		return err
 	}
 
-	if !settings.GtidStartPos.IsZero() {
-		blp.position = settings.GtidStartPos
-	}
+	blp.position = settings.StartPos
 	blp.stopPosition = settings.StopPos
 	t, err := throttler.NewThrottler(
 		fmt.Sprintf("BinlogPlayer/%d", blp.uid),
@@ -520,12 +518,11 @@ func SetVReplicationState(dbClient DBClient, uid uint32, state, message string) 
 
 // VRSettings contains the settings of a vreplication table.
 type VRSettings struct {
-	StartPos          string
+	StartPos          mysql.Position
 	StopPos           mysql.Position
 	MaxTPS            int64
 	MaxReplicationLag int64
 	State             string
-	GtidStartPos      mysql.Position
 }
 
 // ReadVRSettings retrieves the throttler settings for
@@ -550,10 +547,10 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse max_replication_lag column: %v", err)
 	}
-	startPos := vrRow[0].ToString()
-	// TODO @rafael: This will be removed when we start using the non_gtid_flavor. In that case filename:pos flavor will be handled by the flavor with pseudo gtids. There won't be any need to have different kind of mysql positions.
-	gtidStartPos, _ := mysql.DecodePosition(startPos)
-
+	startPos, err := mysql.DecodePosition(vrRow[0].ToString())
+	if err != nil {
+		return VRSettings{}, fmt.Errorf("failed to parse pos column: %v", err)
+	}
 	stopPos, err := mysql.DecodePosition(vrRow[1].ToString())
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse stop_pos column: %v", err)
@@ -561,7 +558,6 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 
 	return VRSettings{
 		StartPos:          startPos,
-		GtidStartPos:      gtidStartPos,
 		StopPos:           stopPos,
 		MaxTPS:            maxTPS,
 		MaxReplicationLag: maxReplicationLag,

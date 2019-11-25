@@ -182,7 +182,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 
 	var tablet *topodatapb.Tablet
 	if ct.source.GetExternalMysql() == "" {
-		tablet, err := ct.tabletPicker.PickForStreaming(ctx)
+		tablet, err = ct.tabletPicker.PickForStreaming(ctx)
 		if err != nil {
 			return err
 		}
