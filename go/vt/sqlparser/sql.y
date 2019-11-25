@@ -2521,9 +2521,9 @@ value_expression:
   introduce side effects due to being a simple identifier
 */
 function_call_generic:
-  sql_id openb distinct_opt select_expression_list closeb
+  sql_id openb distinct_opt select_expression_list_opt closeb
   {
-    $$ = &FuncExpr{Name: $1, Distinct: $3, Exprs: $4}
+    $$ = &FuncExpr{Name: $1, Distinct: $3 == DistinctStr, Exprs: $4}
   }
 | table_id '.' reserved_sql_id openb select_expression_list_opt closeb
   {

@@ -1670,6 +1670,9 @@ func TestCaseSensitivity(t *testing.T) {
 	}, {
 		input: "select A(distinct B, C) from b",
 	}, {
+		input: "select A(ALL B, C) from b",
+		output: "select A(B, C) from b",
+	}, {
 		// IF is an exception. It's always lower-cased.
 		input:  "select IF(B, C) from b",
 		output: "select if(B, C) from b",
