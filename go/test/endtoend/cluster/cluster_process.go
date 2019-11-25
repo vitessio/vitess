@@ -357,7 +357,7 @@ func (cluster *LocalProcessCluster) Teardown() (err error) {
 					return
 				}
 
-				if err = tablet.VttabletProcess.TearDown(true); err != nil {
+				if err = tablet.VttabletProcess.TearDown(); err != nil {
 					log.Error(err.Error())
 					return
 				}
@@ -369,7 +369,6 @@ func (cluster *LocalProcessCluster) Teardown() (err error) {
 		log.Error(err.Error())
 		return
 	}
-
 
 	if err = cluster.TopoProcess.TearDown(cluster.Cell, cluster.OriginalVTDATAROOT, cluster.CurrentVTDATAROOT, *keepData); err != nil {
 		log.Error(err.Error())
