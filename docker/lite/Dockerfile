@@ -53,7 +53,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
  && dpkg -i percona-xtrabackup-24_2.4.13-1.stretch_amd64.deb \
  && rm -f percona-xtrabackup-24_2.4.13-1.stretch_amd64.deb \
  && rm -rf /var/lib/apt/lists/* \
- && groupadd -r vitess && useradd -r -g vitess vitess
+ && groupadd -r vitess && useradd -r -g vitess vitess \
+ && rm  /var/lib/mysql/ib_logfile0 /var/lib/mysql/ib_logfile1 /var/lib/mysql/ibdata1
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
 ENV VTTOP /vt/src/vitess.io/vitess
