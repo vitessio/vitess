@@ -29,6 +29,7 @@ import (
 )
 
 var (
+	// ClusterInstance instance to be used for test with different params
 	ClusterInstance *cluster.LocalProcessCluster
 	hostname        = "localhost"
 	keyspaceName    = "ks"
@@ -75,6 +76,7 @@ var (
 							`
 )
 
+// ClusterWrapper common wrapper code for cluster
 func ClusterWrapper() (int, error) {
 	ClusterInstance = nil
 	ClusterInstance = &cluster.LocalProcessCluster{Cell: cell, Hostname: hostname}
@@ -160,6 +162,7 @@ func initClusterForInitialSharding(shardNames []string, totalTabletsRequired int
 	}
 }
 
+// TestInitialShardingWithVersion - main test with accepts different params for various test
 func TestInitialShardingWithVersion(t *testing.T, version int, shardingKeyType topodata.KeyspaceIdType) {
 	if version == 3 {
 		commonTabletArg = append(commonTabletArg, "-binlog_use_v3_resharding_mode=true")
@@ -244,9 +247,9 @@ func TestInitialShardingWithVersion(t *testing.T, version int, shardingKeyType t
 
 	// change the schema, backfill keyspace_id, and change schema again
 	if shardingKeyType == topodata.KeyspaceIdType_BYTES {
-		sql = fmt.Sprintf("alter table %s add custom_ksid_col bigint(20) unsigned", tableName)
-	} else {
 		sql = fmt.Sprintf("alter table %s add custom_ksid_col varbinary(64)", tableName)
+	} else {
+		sql = fmt.Sprintf("alter table %s add custom_ksid_col bigint(20) unsigned", tableName)
 	}
 
 	_ = ClusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, sql)
@@ -266,10 +269,12 @@ func TestInitialShardingWithVersion(t *testing.T, version int, shardingKeyType t
 	// now we can be a sharded keyspace (and propagate to SrvKeyspace)
 	if version == 3 {
 		_ = ClusterInstance.VtctlclientProcess.ApplyVSchema(keyspaceName, fmt.Sprintf(vSchema, tableName, "custom_ksid_col"))
-	} else if version == 2 {
-		println("Executing with version 2")
+	} else if version == 2 && shardingKeyType == topodata.KeyspaceIdType_UINT64 {
 		_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("SetKeyspaceShardingInfo", keyspaceName, "custom_ksid_col", "uint64")
+	} else if version == 2 && shardingKeyType == topodata.KeyspaceIdType_BYTES {
+		_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("SetKeyspaceShardingInfo", keyspaceName, "custom_ksid_col", "bytes")
 	}
+
 	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceName)
 
 	// run a health check on source replica so it responds to discovery
@@ -344,7 +349,7 @@ func TestInitialShardingWithVersion(t *testing.T, version int, shardingKeyType t
 	expectedPartitions[topodata.TabletType_MASTER] = []string{shard1.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard1.Name}
-	checkSrvKeyspaceForSharding(t, expectedPartitions, version)
+	checkSrvKeyspaceForSharding(t, expectedPartitions, version, shardingKeyType)
 
 	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard",
 		"--exclude_tables", "unrelated",
@@ -399,27 +404,33 @@ func TestInitialShardingWithVersion(t *testing.T, version int, shardingKeyType t
 
 	// check first value is in the left shard
 	for _, tablet := range shard21.Vttablets {
-		sharding.CheckValues(t, tablet, []string{"INT64(86)", "INT64(1)", `VARCHAR("msg1")`, sharding.HexToDbStr(0x1000000000000000, shardingKeyType)}, 1, true, tableName, fixedParentID, keyspaceName)
+		sharding.CheckValues(t, tablet, []string{"INT64(86)", "INT64(1)", `VARCHAR("msg1")`, sharding.HexToDbStr(0x1000000000000000, shardingKeyType)},
+			1, true, tableName, fixedParentID, keyspaceName, shardingKeyType)
 	}
 
 	for _, tablet := range shard22.Vttablets {
-		sharding.CheckValues(t, tablet, []string{"INT64(86)", "INT64(1)", `VARCHAR("msg1")`, sharding.HexToDbStr(0x1000000000000000, shardingKeyType)}, 1, false, tableName, fixedParentID, keyspaceName)
+		sharding.CheckValues(t, tablet, []string{"INT64(86)", "INT64(1)", `VARCHAR("msg1")`, sharding.HexToDbStr(0x1000000000000000, shardingKeyType)},
+			1, false, tableName, fixedParentID, keyspaceName, shardingKeyType)
 	}
 
 	for _, tablet := range shard21.Vttablets {
-		sharding.CheckValues(t, tablet, []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, sharding.HexToDbStr(0x9000000000000000, shardingKeyType)}, 2, false, tableName, fixedParentID, keyspaceName)
+		sharding.CheckValues(t, tablet, []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, sharding.HexToDbStr(0x9000000000000000, shardingKeyType)},
+			2, false, tableName, fixedParentID, keyspaceName, shardingKeyType)
 	}
 
 	for _, tablet := range shard22.Vttablets {
-		sharding.CheckValues(t, tablet, []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, sharding.HexToDbStr(0x9000000000000000, shardingKeyType)}, 2, true, tableName, fixedParentID, keyspaceName)
+		sharding.CheckValues(t, tablet, []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, sharding.HexToDbStr(0x9000000000000000, shardingKeyType)},
+			2, true, tableName, fixedParentID, keyspaceName, shardingKeyType)
 	}
 
 	for _, tablet := range shard21.Vttablets {
-		sharding.CheckValues(t, tablet, []string{"INT64(86)", "INT64(3)", `VARCHAR("msg3")`, sharding.HexToDbStr(0xD000000000000000, shardingKeyType)}, 3, false, tableName, fixedParentID, keyspaceName)
+		sharding.CheckValues(t, tablet, []string{"INT64(86)", "INT64(3)", `VARCHAR("msg3")`, sharding.HexToDbStr(0xD000000000000000, shardingKeyType)},
+			3, false, tableName, fixedParentID, keyspaceName, shardingKeyType)
 	}
 
 	for _, tablet := range shard22.Vttablets {
-		sharding.CheckValues(t, tablet, []string{"INT64(86)", "INT64(3)", `VARCHAR("msg3")`, sharding.HexToDbStr(0xD000000000000000, shardingKeyType)}, 3, true, tableName, fixedParentID, keyspaceName)
+		sharding.CheckValues(t, tablet, []string{"INT64(86)", "INT64(3)", `VARCHAR("msg3")`, sharding.HexToDbStr(0xD000000000000000, shardingKeyType)},
+			3, true, tableName, fixedParentID, keyspaceName, shardingKeyType)
 	}
 
 	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("ValidateSchemaKeyspace", keyspaceName)
@@ -488,7 +499,7 @@ func TestInitialShardingWithVersion(t *testing.T, version int, shardingKeyType t
 	expectedPartitions[topodata.TabletType_MASTER] = []string{shard1.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard21.Name, shard22.Name}
-	checkSrvKeyspaceForSharding(t, expectedPartitions, version)
+	checkSrvKeyspaceForSharding(t, expectedPartitions, version, shardingKeyType)
 
 	_ = shard21.Rdonly().VttabletProcess.WaitForTabletType("SERVING")
 	_ = shard22.Rdonly().VttabletProcess.WaitForTabletType("SERVING")
@@ -522,7 +533,7 @@ func TestInitialShardingWithVersion(t *testing.T, version int, shardingKeyType t
 	expectedPartitions[topodata.TabletType_MASTER] = []string{shard1.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard21.Name, shard22.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard21.Name, shard22.Name}
-	checkSrvKeyspaceForSharding(t, expectedPartitions, version)
+	checkSrvKeyspaceForSharding(t, expectedPartitions, version, shardingKeyType)
 
 	//move replica back and forth
 	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", "-reverse", shard1Ks, "replica")
@@ -535,7 +546,7 @@ func TestInitialShardingWithVersion(t *testing.T, version int, shardingKeyType t
 	expectedPartitions[topodata.TabletType_MASTER] = []string{shard1.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard1.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard21.Name, shard22.Name}
-	checkSrvKeyspaceForSharding(t, expectedPartitions, version)
+	checkSrvKeyspaceForSharding(t, expectedPartitions, version, shardingKeyType)
 
 	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", shard1Ks, "replica")
 
@@ -546,7 +557,7 @@ func TestInitialShardingWithVersion(t *testing.T, version int, shardingKeyType t
 	expectedPartitions[topodata.TabletType_MASTER] = []string{shard1.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard21.Name, shard22.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard21.Name, shard22.Name}
-	checkSrvKeyspaceForSharding(t, expectedPartitions, version)
+	checkSrvKeyspaceForSharding(t, expectedPartitions, version, shardingKeyType)
 
 	// then serve master from the split shards
 	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", shard1Ks, "master")
@@ -554,7 +565,7 @@ func TestInitialShardingWithVersion(t *testing.T, version int, shardingKeyType t
 	expectedPartitions[topodata.TabletType_MASTER] = []string{shard21.Name, shard22.Name}
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard21.Name, shard22.Name}
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard21.Name, shard22.Name}
-	checkSrvKeyspaceForSharding(t, expectedPartitions, version)
+	checkSrvKeyspaceForSharding(t, expectedPartitions, version, shardingKeyType)
 
 	// check the binlog players are gone now
 	_ = shard21.MasterTablet().VttabletProcess.WaitForBinLogPlayerCount(0)
@@ -578,11 +589,11 @@ func TestInitialShardingWithVersion(t *testing.T, version int, shardingKeyType t
 	ClusterInstance.Keyspaces[0].Shards = []cluster.Shard{shard21, shard22}
 }
 
-func checkSrvKeyspaceForSharding(t *testing.T, expectedPartitions map[topodata.TabletType][]string, version int) {
+func checkSrvKeyspaceForSharding(t *testing.T, expectedPartitions map[topodata.TabletType][]string, version int, keyspaceIDType topodata.KeyspaceIdType) {
 	if version == 3 {
 		sharding.CheckSrvKeyspace(t, cell, keyspaceName, "", 0, expectedPartitions, *ClusterInstance)
 	} else {
-		sharding.CheckSrvKeyspace(t, cell, keyspaceName, "custom_ksid_col", topodata.KeyspaceIdType_UINT64, expectedPartitions, *ClusterInstance)
+		sharding.CheckSrvKeyspace(t, cell, keyspaceName, "custom_ksid_col", keyspaceIDType, expectedPartitions, *ClusterInstance)
 	}
 
 }
