@@ -105,7 +105,7 @@ func StartMySQL(ctx context.Context, tablet *Vttablet, username string, tmpDirec
 	}
 	params := mysql.ConnParams{
 		Uname:      username,
-		UnixSocket: fmt.Sprintf(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tablet.TabletUID), "/mysql.sock")),
+		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tablet.TabletUID), "/mysql.sock"),
 	}
 
 	conn, err := mysql.Connect(ctx, &params)
