@@ -100,6 +100,10 @@ func (wr *Wrangler) validateNewWorkflow(ctx context.Context, keyspace, workflow 
 	var wg sync.WaitGroup
 	allErrors := &concurrency.AllErrorRecorder{}
 	for _, si := range allshards {
+		if si.MasterAlias == nil {
+			allErrors.RecordError(fmt.Errorf("shard has no master: %v", si))
+			continue
+		}
 		wg.Add(1)
 		go func(si *topo.ShardInfo) {
 			defer wg.Done()
