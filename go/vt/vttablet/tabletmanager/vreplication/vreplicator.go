@@ -165,7 +165,7 @@ func (vr *vreplicator) setMessage(message string) error {
 		Time:    time.Now(),
 		Message: message,
 	})
-	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v", encodeString(message), vr.id)
+	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v", encodeString(binlogplayer.MessageTruncate(message)), vr.id)
 	if _, err := vr.dbClient.Execute(query); err != nil {
 		return fmt.Errorf("could not set message: %v: %v", query, err)
 	}
