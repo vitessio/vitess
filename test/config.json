@@ -1,16 +1,5 @@
 {
 	"Tests": {
-		"1worker": {
-			"File": "worker.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 2,
-			"RetryMax": 0,
-			"Tags": [
-				"worker_test"
-			]
-		},
 		"backup": {
 			"File": "backup.py",
 			"Args": [],
@@ -595,6 +584,17 @@
 			"Shard": 0,
 			"RetryMax": 0,
 			"Tags": []
+		},
+		"worker": {
+			"File": "worker.py",
+			"Args": [],
+			"Command": [],
+			"Manual": false,
+			"Shard": 5,
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
+			]
 		},
 		"xtrabackup": {
 			"File": "xtrabackup.py",
