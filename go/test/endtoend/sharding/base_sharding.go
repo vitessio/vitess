@@ -38,7 +38,8 @@ var (
 	lotRange1 uint64 = 0xA000000000000000
 	lotRange2 uint64 = 0xE000000000000000
 	// InsertTabletTemplateKsID common insert format to be used for different tests
-	InsertTabletTemplateKsID = `insert into %s (parent_id, id, msg, custom_ksid_col) values (%d, %d, '%s', 0x%x) /* vtgate:: keyspace_id:%016X */ /* id:%d */`
+	//
+	InsertTabletTemplateKsID = `insert into %s (id, msg) values (%d, '%s') /* vtgate:: keyspace_id:%016X */ /* id:%d */`
 )
 
 // CheckSrvKeyspace verifies the schema with expectedPartition
@@ -149,6 +150,29 @@ func CheckValues(t *testing.T, vttablet cluster.Vttablet, values []string, id ui
 	return isFound
 }
 
+// CheckValues check value from sql query to table with expected values
+func CheckValues1(t *testing.T, vttablet cluster.Vttablet, values []string, id uint64, exists bool, tableName string, ks string) bool {
+	query := fmt.Sprintf("select id, msg from %s where id = %d", tableName, id)
+	result, err := vttablet.VttabletProcess.QueryTablet(query, ks, true)
+	assert.Nil(t, err)
+	isFound := false
+	if exists && len(result.Rows) > 0 {
+		isFound = assert.Equal(t, result.Rows[0][0].String(), values[0])
+		isFound = isFound && assert.Equal(t, result.Rows[0][1].String(), values[1])
+		//isFound = isFound && assert.Equal(t, result.Rows[0][2].String(), values[2])
+		//if keyType == topodata.KeyspaceIdType_BYTES {
+		//	byteResult := result.Rows[0][3].ToBytes()
+		//	isFound = isFound && assert.Equal(t, fmt.Sprintf("%016x", binary.BigEndian.Uint64(byteResult[:])), values[3])
+		//} else {
+		//	isFound = isFound && assert.Equal(t, result.Rows[0][3].String(), values[3])
+		//}
+
+	} else {
+		assert.Equal(t, len(result.Rows), 0)
+	}
+	return isFound
+}
+
 // CheckDestinationMaster performs multiple checks on a destination master.
 func CheckDestinationMaster(t *testing.T, vttablet cluster.Vttablet, sourceShards []string, ci cluster.LocalProcessCluster) {
 	_ = vttablet.VttabletProcess.WaitForBinLogPlayerCount(len(sourceShards))
@@ -251,8 +275,8 @@ func InsertLots(count uint64, vttablet cluster.Vttablet, table string, parentID 
 	var query1, query2 string
 	var i uint64
 	for i = 0; i < count; i++ {
-		query1 = fmt.Sprintf(InsertTabletTemplateKsID, table, parentID, 10000+i, fmt.Sprintf("msg-range1-%d", 10000+i), lotRange1+i, lotRange1+i, 10000+i)
-		query2 = fmt.Sprintf(InsertTabletTemplateKsID, table, parentID, 20000+i, fmt.Sprintf("msg-range2-%d", 20000+i), lotRange2+i, lotRange2+i, 20000+i)
+		query1 = fmt.Sprintf(InsertTabletTemplateKsID, table, lotRange1+i, fmt.Sprintf("msg-range1-%d", 10000+i), lotRange1+i, lotRange1+i)
+		query2 = fmt.Sprintf(InsertTabletTemplateKsID, table, lotRange2+i, fmt.Sprintf("msg-range2-%d", 20000+i), lotRange2+i, lotRange2+i)
 
 		InsertToTablet(query1, vttablet, ks)
 		InsertToTablet(query2, vttablet, ks)
@@ -283,17 +307,13 @@ func CheckLotsTimeout(t *testing.T, vttablet cluster.Vttablet, count uint64, tab
 func CheckLotsNotPresent(t *testing.T, vttablet cluster.Vttablet, count uint64, table string, parentID int, ks string, keyType topodata.KeyspaceIdType) {
 	var i uint64
 	for i = 0; i < count; i++ {
-		assert.False(t, CheckValues(t, vttablet, []string{"INT64(86)",
-			fmt.Sprintf("INT64(%d)", 10000+i),
-			fmt.Sprintf(`VARCHAR("msg-range1-%d")`, 10000+i),
-			HexToDbStr(lotRange1+i, keyType)},
-			10000+i, true, table, parentID, ks, keyType))
+		assert.False(t, CheckValues1(t, vttablet, []string{HexToDbStr(lotRange1+i, keyType),
+			fmt.Sprintf(`VARCHAR("msg-range1-%d")`, 10000+i)},
+			10000+i, true, table, ks))
 
-		assert.False(t, CheckValues(t, vttablet, []string{"INT64(86)",
-			fmt.Sprintf("INT64(%d)", 20000+i),
-			fmt.Sprintf(`VARCHAR("msg-range2-%d")`, 20000+i),
-			HexToDbStr(lotRange2+i, keyType)},
-			20000+i, true, table, parentID, ks, keyType))
+		assert.False(t, CheckValues1(t, vttablet, []string{HexToDbStr(lotRange2+i, keyType),
+			fmt.Sprintf(`VARCHAR("msg-range2-%d")`, 20000+i)},
+			20000+i, true, table, ks))
 	}
 }
 
@@ -304,24 +324,22 @@ func checkLots(t *testing.T, vttablet cluster.Vttablet, count uint64, table stri
 
 	for i = 0; i < count; i++ {
 		// "INT64(1)" `VARCHAR("msg1")`,
-		isFound = CheckValues(t, vttablet, []string{"INT64(86)",
-			fmt.Sprintf("INT64(%d)", 10000+i),
+		isFound = CheckValues1(t, vttablet, []string{HexToDbStr(lotRange1+i, keyType),
 			fmt.Sprintf(`VARCHAR("msg-range1-%d")`, 10000+i),
-			HexToDbStr(lotRange1+i, keyType)},
-			10000+i, true, table, parentID, ks, keyType)
+		},
+			lotRange1+i, true, table, ks)
 		if isFound {
 			totalFound++
 		}
 
-		isFound = CheckValues(t, vttablet, []string{"INT64(86)",
-			fmt.Sprintf("INT64(%d)", 20000+i),
-			fmt.Sprintf(`VARCHAR("msg-range2-%d")`, 20000+i),
-			HexToDbStr(lotRange2+i, keyType)},
-			20000+i, true, table, parentID, ks, keyType)
+		isFound = CheckValues1(t, vttablet, []string{HexToDbStr(lotRange2+i, keyType),
+			fmt.Sprintf(`VARCHAR("msg-range2-%d")`, 20000+i)},
+			lotRange2+i, true, table, ks)
 		if isFound {
 			totalFound++
 		}
 	}
+	println(fmt.Sprintf("Total found %d", totalFound))
 	return float32(totalFound * 100 / int(count) / 2)
 }
 
