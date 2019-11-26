@@ -31,8 +31,8 @@ import (
 )
 
 var (
-	_ Vindex     = (*Hash)(nil)
-	_ Reversible = (*Hash)(nil)
+	_ SingleColumn = (*Hash)(nil)
+	_ Reversible   = (*Hash)(nil)
 )
 
 // Hash defines vindex that hashes an int64 to a KeyspaceId

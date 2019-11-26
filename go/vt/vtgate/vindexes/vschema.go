@@ -617,6 +617,10 @@ func FindVindexForSharding(tableName string, colVindexes []*ColumnVindex) (*Colu
 	}
 	result := colVindexes[0]
 	for _, colVindex := range colVindexes {
+		// Only allow SingleColumn for legacy resharding.
+		if _, ok := colVindex.Vindex.(SingleColumn); !ok {
+			continue
+		}
 		if colVindex.Vindex.Cost() < result.Vindex.Cost() && colVindex.Vindex.IsUnique() {
 			result = colVindex
 		}

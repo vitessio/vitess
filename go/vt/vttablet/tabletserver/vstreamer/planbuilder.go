@@ -38,14 +38,16 @@ type Plan struct {
 	Table        *Table
 	ColExprs     []ColExpr
 	VindexColumn int
-	Vindex       vindexes.Vindex
-	KeyRange     *topodatapb.KeyRange
+	// TODO(sougou): support MultiColumn
+	Vindex   vindexes.SingleColumn
+	KeyRange *topodatapb.KeyRange
 }
 
 // ColExpr represents a column expression.
 type ColExpr struct {
 	ColNum int
-	Vindex vindexes.Vindex
+	// TODO(sougou): support MultiColumn
+	Vindex vindexes.SingleColumn
 	Alias  sqlparser.ColIdent
 	Type   querypb.Type
 }
@@ -100,7 +102,7 @@ func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error
 	return true, result, nil
 }
 
-func getKeyspaceID(value sqltypes.Value, vindex vindexes.Vindex) (key.DestinationKeyspaceID, error) {
+func getKeyspaceID(value sqltypes.Value, vindex vindexes.SingleColumn) (key.DestinationKeyspaceID, error) {
 	destinations, err := vindex.Map(nil, []sqltypes.Value{value})
 	if err != nil {
 		return nil, err
@@ -230,7 +232,11 @@ func buildREPlan(ti *Table, kschema *vindexes.KeyspaceSchema, filter string) (*P
 		return nil, err
 	}
 	plan.VindexColumn = colnum
-	plan.Vindex = table.ColumnVindexes[0].Vindex
+	single, ok := table.ColumnVindexes[0].Vindex.(vindexes.SingleColumn)
+	if !ok {
+		return nil, fmt.Errorf("multi-column vindexes not supported")
+	}
+	plan.Vindex = single
 
 	// Parse keyrange.
 	keyranges, err := key.ParseShardingSpec(filter)
@@ -361,7 +367,11 @@ func (plan *Plan) analyzeExpr(kschema *vindexes.KeyspaceSchema, selExpr sqlparse
 		if err != nil {
 			return ColExpr{}, err
 		}
-		return ColExpr{ColNum: colnum, Vindex: table.ColumnVindexes[0].Vindex, Alias: sqlparser.NewColIdent("keyspace_id"), Type: sqltypes.VarBinary}, nil
+		single, ok := table.ColumnVindexes[0].Vindex.(vindexes.SingleColumn)
+		if !ok {
+			return ColExpr{}, fmt.Errorf("multi-column vindexes not supported")
+		}
+		return ColExpr{ColNum: colnum, Vindex: single, Alias: sqlparser.NewColIdent("keyspace_id"), Type: sqltypes.VarBinary}, nil
 	default:
 		return ColExpr{}, fmt.Errorf("unsupported: %v", sqlparser.String(aliased.Expr))
 	}
@@ -381,7 +391,11 @@ func (plan *Plan) analyzeInKeyRange(kschema *vindexes.KeyspaceSchema, exprs sqlp
 			return fmt.Errorf("table %s has no primary vindex", plan.Table.Name)
 		}
 		colname = table.ColumnVindexes[0].Columns[0]
-		plan.Vindex = table.ColumnVindexes[0].Vindex
+		single, ok := table.ColumnVindexes[0].Vindex.(vindexes.SingleColumn)
+		if !ok {
+			return fmt.Errorf("multi-column vindexes not supported")
+		}
+		plan.Vindex = single
 		krExpr = exprs[0]
 	case 3:
 		aexpr, ok := exprs[0].(*sqlparser.AliasedExpr)
@@ -400,13 +414,18 @@ func (plan *Plan) analyzeInKeyRange(kschema *vindexes.KeyspaceSchema, exprs sqlp
 		if err != nil {
 			return err
 		}
-		plan.Vindex, err = vindexes.CreateVindex(vtype, vtype, map[string]string{})
+		vindex, err := vindexes.CreateVindex(vtype, vtype, map[string]string{})
 		if err != nil {
 			return err
 		}
-		if !plan.Vindex.IsUnique() {
+		single, ok := vindex.(vindexes.SingleColumn)
+		if !ok {
+			return fmt.Errorf("multi-column vindexes not supported")
+		}
+		if !vindex.IsUnique() {
 			return fmt.Errorf("vindex must be Unique to be used for VReplication: %s", vtype)
 		}
+		plan.Vindex = single
 		krExpr = exprs[2]
 	default:
 		return fmt.Errorf("unexpected in_keyrange parameters: %v", sqlparser.String(exprs))

@@ -25,7 +25,7 @@ import (
 )
 
 var (
-	_ Vindex = (*BinaryMD5)(nil)
+	_ SingleColumn = (*BinaryMD5)(nil)
 )
 
 // BinaryMD5 is a vindex that hashes binary bits to a keyspace id.

@@ -26,10 +26,11 @@ import (
 	"vitess.io/vitess/go/vt/key"
 )
 
-var binVindex Vindex
+var binVindex SingleColumn
 
 func init() {
-	binVindex, _ = CreateVindex("binary_md5", "binary_md5_varchar", nil)
+	vindex, _ := CreateVindex("binary_md5", "binary_md5_varchar", nil)
+	binVindex = vindex.(SingleColumn)
 }
 
 func TestBinaryMD5Cost(t *testing.T) {
