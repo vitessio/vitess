@@ -236,7 +236,7 @@ function install_etcd() {
   rm "$file"
   ln -snf "$dist/etcd-${version}-${platform}-${target}/etcd" "$VTROOT/bin/etcd"
 }
-install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
+which etcd || install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
 
 
 # Download and install consul, link consul binary into our root.

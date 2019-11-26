@@ -158,7 +158,7 @@ func (be *XtrabackupEngine) ExecuteBackup(ctx context.Context, params BackupPara
 
 	// open the MANIFEST
 	params.Logger.Infof("Writing backup MANIFEST")
-	mwc, err := bh.AddFile(ctx, backupManifestFileName, 0)
+	mwc, err := bh.AddFile(ctx, backupManifestFileName, backupstorage.FileSizeUnknown)
 	if err != nil {
 		return false, vterrors.Wrapf(err, "cannot add %v to backup", backupManifestFileName)
 	}

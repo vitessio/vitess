@@ -18,6 +18,7 @@ package tlstest
 
 import (
 	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -29,6 +30,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/vt/vttls"
 )
 
@@ -45,26 +47,20 @@ func TestClientServer(t *testing.T) {
 	}
 	defer os.RemoveAll(root)
 
-	// Create the certs and configs.
-	CreateCA(root)
+	clientServerKeyPairs := createClientServerCertPairs(root)
 
-	CreateSignedCert(root, CA, "01", "servers", "Servers CA")
-	CreateSignedCert(root, "servers", "01", "server-instance", "server.example.com")
-
-	CreateSignedCert(root, CA, "02", "clients", "Clients CA")
-	CreateSignedCert(root, "clients", "01", "client-instance", "Client Instance")
 	serverConfig, err := vttls.ServerConfig(
-		path.Join(root, "server-instance-cert.pem"),
-		path.Join(root, "server-instance-key.pem"),
-		path.Join(root, "clients-cert.pem"))
+		clientServerKeyPairs.serverCert,
+		clientServerKeyPairs.serverKey,
+		clientServerKeyPairs.clientCA)
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
 	clientConfig, err := vttls.ClientConfig(
-		path.Join(root, "client-instance-cert.pem"),
-		path.Join(root, "client-instance-key.pem"),
-		path.Join(root, "servers-cert.pem"),
-		"server.example.com")
+		clientServerKeyPairs.clientCert,
+		clientServerKeyPairs.clientKey,
+		clientServerKeyPairs.serverCA,
+		clientServerKeyPairs.serverName)
 	if err != nil {
 		t.Fatalf("TLSClientConfig failed: %v", err)
 	}
@@ -121,10 +117,10 @@ func TestClientServer(t *testing.T) {
 	//
 
 	badClientConfig, err := vttls.ClientConfig(
-		path.Join(root, "server-instance-cert.pem"),
-		path.Join(root, "server-instance-key.pem"),
-		path.Join(root, "servers-cert.pem"),
-		"server.example.com")
+		clientServerKeyPairs.serverCert,
+		clientServerKeyPairs.serverKey,
+		clientServerKeyPairs.serverCA,
+		clientServerKeyPairs.serverName)
 	if err != nil {
 		t.Fatalf("TLSClientConfig failed: %v", err)
 	}
@@ -167,4 +163,128 @@ func TestClientServer(t *testing.T) {
 	if !strings.Contains(err.Error(), "bad certificate") {
 		t.Errorf("Wrong error returned: %v", err)
 	}
+}
+
+var serialCounter = 0
+
+type clientServerKeyPairs struct {
+	serverCert string
+	serverKey  string
+	serverCA   string
+	serverName string
+	clientCert string
+	clientKey  string
+	clientCA   string
+}
+
+func createClientServerCertPairs(root string) clientServerKeyPairs {
+
+	// Create the certs and configs.
+	CreateCA(root)
+
+	serverSerial := fmt.Sprintf("%03d", serialCounter*2+1)
+	clientSerial := fmt.Sprintf("%03d", serialCounter*2+2)
+
+	serialCounter = serialCounter + 1
+
+	serverName := fmt.Sprintf("server-%s", serverSerial)
+	serverCACommonName := fmt.Sprintf("Server %s CA", serverSerial)
+	serverCertName := fmt.Sprintf("server-instance-%s", serverSerial)
+	serverCertCommonName := fmt.Sprintf("server%s.example.com", serverSerial)
+
+	clientName := fmt.Sprintf("clients-%s", serverSerial)
+	clientCACommonName := fmt.Sprintf("Clients %s CA", serverSerial)
+	clientCertName := fmt.Sprintf("client-instance-%s", serverSerial)
+	clientCertCommonName := fmt.Sprintf("Client Instance %s", serverSerial)
+
+	CreateSignedCert(root, CA, serverSerial, serverName, serverCACommonName)
+	CreateSignedCert(root, serverName, serverSerial, serverCertName, serverCertCommonName)
+
+	CreateSignedCert(root, CA, clientSerial, clientName, clientCACommonName)
+	CreateSignedCert(root, clientName, serverSerial, clientCertName, clientCertCommonName)
+
+	return clientServerKeyPairs{
+		serverCert: path.Join(root, fmt.Sprintf("%s-cert.pem", serverCertName)),
+		serverKey:  path.Join(root, fmt.Sprintf("%s-key.pem", serverCertName)),
+		serverCA:   path.Join(root, fmt.Sprintf("%s-cert.pem", serverName)),
+		clientCert: path.Join(root, fmt.Sprintf("%s-cert.pem", clientCertName)),
+		clientKey:  path.Join(root, fmt.Sprintf("%s-key.pem", clientCertName)),
+		clientCA:   path.Join(root, fmt.Sprintf("%s-cert.pem", clientName)),
+		serverName: serverCertCommonName,
+	}
+
+}
+
+func getServerConfig(keypairs clientServerKeyPairs) (*tls.Config, error) {
+	return vttls.ServerConfig(
+		keypairs.clientCert,
+		keypairs.clientKey,
+		keypairs.serverCA)
+}
+
+func getClientConfig(keypairs clientServerKeyPairs) (*tls.Config, error) {
+	return vttls.ClientConfig(
+		keypairs.clientCert,
+		keypairs.clientKey,
+		keypairs.serverCA,
+		keypairs.serverName)
+}
+
+func TestServerTLSConfigCaching(t *testing.T) {
+	testConfigGeneration(t, "servertlstest", getServerConfig, func(config *tls.Config) *x509.CertPool {
+		return config.ClientCAs
+	})
+}
+
+func TestClientTLSConfigCaching(t *testing.T) {
+	testConfigGeneration(t, "clienttlstest", getClientConfig, func(config *tls.Config) *x509.CertPool {
+		return config.RootCAs
+	})
+}
+
+func testConfigGeneration(t *testing.T, rootPrefix string, generateConfig func(clientServerKeyPairs) (*tls.Config, error), getCertPool func(tlsConfig *tls.Config) *x509.CertPool) {
+	// Our test root.
+	root, err := ioutil.TempDir("", rootPrefix)
+	if err != nil {
+		t.Fatalf("TempDir failed: %v", err)
+	}
+	defer os.RemoveAll(root)
+
+	const configsToGenerate = 1
+
+	firstClientServerKeyPairs := createClientServerCertPairs(root)
+	secondClientServerKeyPairs := createClientServerCertPairs(root)
+
+	firstExpectedConfig, _ := generateConfig(firstClientServerKeyPairs)
+	secondExpectedConfig, _ := generateConfig(secondClientServerKeyPairs)
+	firstConfigChannel := make(chan *tls.Config, configsToGenerate)
+	secondConfigChannel := make(chan *tls.Config, configsToGenerate)
+
+	var configCounter = 0
+
+	for i := 1; i <= configsToGenerate; i++ {
+		go func() {
+			firstConfig, _ := generateConfig(firstClientServerKeyPairs)
+			firstConfigChannel <- firstConfig
+			secondConfig, _ := generateConfig(secondClientServerKeyPairs)
+			secondConfigChannel <- secondConfig
+		}()
+	}
+
+	for {
+		select {
+		case firstConfig := <-firstConfigChannel:
+			assert.Equal(t, &firstExpectedConfig.Certificates, &firstConfig.Certificates)
+			assert.Equal(t, getCertPool(firstExpectedConfig), getCertPool(firstConfig))
+		case secondConfig := <-secondConfigChannel:
+			assert.Equal(t, &secondExpectedConfig.Certificates, &secondConfig.Certificates)
+			assert.Equal(t, getCertPool(secondExpectedConfig), getCertPool(secondConfig))
+		}
+		configCounter = configCounter + 1
+
+		if configCounter >= 2*configsToGenerate {
+			break
+		}
+	}
+
 }

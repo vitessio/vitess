@@ -67,7 +67,7 @@ func (st *fakeConn) Get(ctx context.Context, filePath string) (bytes []byte, ver
 // Delete is part of the Conn interface
 func (st *fakeConn) Delete(ctx context.Context, filePath string, version Version) (err error) {
 	if filePath == "error" {
-		return fmt.Errorf("Dummy error")
+		return fmt.Errorf("dummy error")
 	}
 	return err
 }
@@ -75,7 +75,7 @@ func (st *fakeConn) Delete(ctx context.Context, filePath string, version Version
 // Lock is part of the Conn interface
 func (st *fakeConn) Lock(ctx context.Context, dirPath, contents string) (lock LockDescriptor, err error) {
 	if dirPath == "error" {
-		return lock, fmt.Errorf("Dummy error")
+		return lock, fmt.Errorf("dummy error")
 
 	}
 	return lock, err
@@ -89,7 +89,7 @@ func (st *fakeConn) Watch(ctx context.Context, filePath string) (current *WatchD
 // NewMasterParticipation is part of the Conn interface
 func (st *fakeConn) NewMasterParticipation(name, id string) (mp MasterParticipation, err error) {
 	if name == "error" {
-		return mp, fmt.Errorf("Dummy error")
+		return mp, fmt.Errorf("dummy error")
 
 	}
 	return mp, err
