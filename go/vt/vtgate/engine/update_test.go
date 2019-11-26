@@ -66,7 +66,7 @@ func TestUpdateEqual(t *testing.T) {
 			Sharded: true,
 		},
 		Query:  "dummy_update",
-		Vindex: vindex,
+		Vindex: vindex.(vindexes.SingleColumn),
 		Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 	}
 
@@ -95,7 +95,7 @@ func TestUpdateScatter(t *testing.T) {
 			Sharded: true,
 		},
 		Query:  "dummy_update",
-		Vindex: vindex,
+		Vindex: vindex.(vindexes.SingleColumn),
 		Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 	}
 
@@ -118,7 +118,7 @@ func TestUpdateScatter(t *testing.T) {
 			Sharded: true,
 		},
 		Query:                "dummy_update",
-		Vindex:               vindex,
+		Vindex:               vindex.(vindexes.SingleColumn),
 		Values:               []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 		MultiShardAutocommit: true,
 	}
@@ -148,7 +148,7 @@ func TestUpdateEqualNoRoute(t *testing.T) {
 			Sharded: true,
 		},
 		Query:  "dummy_update",
-		Vindex: vindex,
+		Vindex: vindex.(vindexes.SingleColumn),
 		Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 	}
 
@@ -177,7 +177,7 @@ func TestUpdateEqualNoScatter(t *testing.T) {
 			Sharded: true,
 		},
 		Query:  "dummy_update",
-		Vindex: vindex,
+		Vindex: vindex.(vindexes.SingleColumn),
 		Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 	}
 
@@ -192,7 +192,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		Opcode:   UpdateEqual,
 		Keyspace: ks.Keyspace,
 		Query:    "dummy_update",
-		Vindex:   ks.Vindexes["hash"],
+		Vindex:   ks.Vindexes["hash"].(vindexes.SingleColumn),
 		Values:   []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 		ChangedVindexValues: map[string][]sqltypes.PlanValue{
 			"twocol": {{

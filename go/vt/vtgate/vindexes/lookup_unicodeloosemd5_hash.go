@@ -28,10 +28,10 @@ import (
 )
 
 var (
-	_ Vindex = (*LookupUnicodeLooseMD5Hash)(nil)
-	_ Lookup = (*LookupUnicodeLooseMD5Hash)(nil)
-	_ Vindex = (*LookupUnicodeLooseMD5HashUnique)(nil)
-	_ Lookup = (*LookupUnicodeLooseMD5HashUnique)(nil)
+	_ SingleColumn = (*LookupUnicodeLooseMD5Hash)(nil)
+	_ Lookup       = (*LookupUnicodeLooseMD5Hash)(nil)
+	_ SingleColumn = (*LookupUnicodeLooseMD5HashUnique)(nil)
+	_ Lookup       = (*LookupUnicodeLooseMD5HashUnique)(nil)
 )
 
 func init() {

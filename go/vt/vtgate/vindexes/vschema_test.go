@@ -52,7 +52,7 @@ func NewSTFU(name string, params map[string]string) (Vindex, error) {
 	return &stFU{name: name, Params: params}, nil
 }
 
-var _ Vindex = (*stFU)(nil)
+var _ SingleColumn = (*stFU)(nil)
 
 // stLN is a Lookup, NonUnique Vindex.
 type stLN struct {
@@ -73,7 +73,7 @@ func NewSTLN(name string, params map[string]string) (Vindex, error) {
 	return &stLN{name: name, Params: params}, nil
 }
 
-var _ Vindex = (*stLN)(nil)
+var _ SingleColumn = (*stLN)(nil)
 var _ Lookup = (*stLN)(nil)
 
 // stLU is a Lookup, Unique Vindex.
@@ -95,7 +95,7 @@ func NewSTLU(name string, params map[string]string) (Vindex, error) {
 	return &stLU{name: name, Params: params}, nil
 }
 
-var _ Vindex = (*stLO)(nil)
+var _ SingleColumn = (*stLO)(nil)
 var _ Lookup = (*stLO)(nil)
 var _ WantOwnerInfo = (*stLO)(nil)
 
@@ -126,7 +126,7 @@ func NewSTLO(name string, _ map[string]string) (Vindex, error) {
 	return &stLO{name: name}, nil
 }
 
-var _ Vindex = (*stLO)(nil)
+var _ SingleColumn = (*stLO)(nil)
 var _ Lookup = (*stLO)(nil)
 
 func init() {

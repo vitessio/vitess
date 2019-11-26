@@ -28,10 +28,14 @@ import (
 
 // createVindex creates the "numeric_static_map" vindex object which is used by
 // each test.
-func createVindex() (Vindex, error) {
+func createVindex() (SingleColumn, error) {
 	m := make(map[string]string)
 	m["json_path"] = "testdata/numeric_static_map_test.json"
-	return CreateVindex("numeric_static_map", "numericStaticMap", m)
+	vindex, err := CreateVindex("numeric_static_map", "numericStaticMap", m)
+	if err != nil {
+		panic(err)
+	}
+	return vindex.(SingleColumn), nil
 }
 
 func TestNumericStaticMapCost(t *testing.T) {

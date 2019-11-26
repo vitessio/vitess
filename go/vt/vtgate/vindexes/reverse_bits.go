@@ -29,8 +29,8 @@ import (
 )
 
 var (
-	_ Vindex     = (*ReverseBits)(nil)
-	_ Reversible = (*ReverseBits)(nil)
+	_ SingleColumn = (*ReverseBits)(nil)
+	_ Reversible   = (*ReverseBits)(nil)
 )
 
 // ReverseBits defines vindex that reverses the bits of a number.

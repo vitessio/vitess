@@ -27,10 +27,10 @@ import (
 )
 
 var (
-	_ Vindex = (*LookupHash)(nil)
-	_ Lookup = (*LookupHash)(nil)
-	_ Vindex = (*LookupHashUnique)(nil)
-	_ Lookup = (*LookupHashUnique)(nil)
+	_ SingleColumn = (*LookupHash)(nil)
+	_ Lookup       = (*LookupHash)(nil)
+	_ SingleColumn = (*LookupHashUnique)(nil)
+	_ Lookup       = (*LookupHashUnique)(nil)
 )
 
 func init() {
