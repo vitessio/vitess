@@ -103,31 +103,30 @@ func (vs *vstreamer) Cancel() {
 func (vs *vstreamer) Stream() error {
 	defer vs.cancel()
 
+	pos, err := mysql.DecodePosition(vs.startPos)
+	if err != nil {
+		return err
+	}
+	vs.pos = pos
+
 	// Ensure se is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized.
 	if err := vs.se.Open(); err != nil {
-		return wrapError(err, vs.startPos)
+		return wrapError(err, vs.pos)
 	}
 
 	conn, err := binlog.NewSlaveConnection(vs.cp)
 	if err != nil {
-		return wrapError(err, vs.startPos)
+		return wrapError(err, vs.pos)
 	}
 	defer conn.Close()
 
-	// Let's try to decode as gtidset
-	pos, err := mysql.DecodePosition(vs.startPos)
-	if err != nil {
-		return wrapError(err, vs.startPos)
-	}
-
-	vs.pos = pos
 	events, err := conn.StartBinlogDumpFromPosition(vs.ctx, vs.pos)
 	if err != nil {
-		return wrapError(err, vs.startPos)
+		return wrapError(err, vs.pos)
 	}
 	err = vs.parseEvents(vs.ctx, events)
-	return wrapError(err, vs.pos.String())
+	return wrapError(err, vs.pos)
 }
 
 func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.BinlogEvent) error {
@@ -558,7 +557,7 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 	return plan.filter(values)
 }
 
-func wrapError(err error, stopPos string) error {
+func wrapError(err error, stopPos mysql.Position) error {
 	if err != nil {
 		err = fmt.Errorf("stream error @ %v: %v", stopPos, err)
 		log.Error(err)
