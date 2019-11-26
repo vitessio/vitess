@@ -40,6 +40,13 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     gnupg dirmngr ca-certificates wget libdbd-mysql-perl rsync libaio1 libatomic1 libcurl3 libev4 \
  && for i in $(seq 1 10); do apt-key adv --no-tty --recv-keys --keyserver keyserver.ubuntu.com 8C718D3B5072E1F5 && break; done \
  && echo 'deb http://repo.mysql.com/apt/debian/ stretch mysql-5.7' > /etc/apt/sources.list.d/mysql.list \
+ && for i in $(seq 1 10); do apt-key adv --no-tty --keyserver keys.gnupg.net --recv-keys 9334A25F8507EFA5 && break; done \
+ && echo 'deb http://repo.percona.com/apt stretch main' > /etc/apt/sources.list.d/percona.list && \
+    { \
+        echo debconf debconf/frontend select Noninteractive; \
+        echo percona-server-server-5.7 percona-server-server/root_password password 'unused'; \
+        echo percona-server-server-5.7 percona-server-server/root_password_again password 'unused'; \
+    } | debconf-set-selections \
  && apt-get update \
  && DEBIAN_FRONTEND=noninteractive \
     apt-get install -y --no-install-recommends \
@@ -49,9 +56,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
       mysql-server \
       libjemalloc1 \
       libtcmalloc-minimal4 \
- && wget https://www.percona.com/downloads/XtraBackup/Percona-XtraBackup-2.4.13/binary/debian/stretch/x86_64/percona-xtrabackup-24_2.4.13-1.stretch_amd64.deb \
- && dpkg -i percona-xtrabackup-24_2.4.13-1.stretch_amd64.deb \
- && rm -f percona-xtrabackup-24_2.4.13-1.stretch_amd64.deb \
+      percona-xtrabackup-24 \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd -r vitess && useradd -r -g vitess vitess
 
