@@ -742,6 +742,9 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 		"--defaults-file=" + cnf.path,
 		"--basedir=" + mysqlBaseDir,
 	}
+	if mysqld.capabilities.hasMaria104InstallDb() {
+		args = append(args, "--auth-root-authentication-method=normal")
+	}
 	cmdPath, err := binaryPath(mysqlRoot, "mysql_install_db")
 	if err != nil {
 		return err

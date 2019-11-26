@@ -639,7 +639,7 @@ func TestExpired(t *testing.T) {
 		p.Put(r)
 	}
 	cancel()
-	want := "resource pool timed out"
+	want := "resource pool context already expired"
 	if err == nil || err.Error() != want {
 		t.Errorf("got %v, want %s", err, want)
 	}

@@ -509,7 +509,7 @@ func AlterVReplicationTable() []string {
 
 // SetVReplicationState updates the state in the _vt.vreplication table.
 func SetVReplicationState(dbClient DBClient, uid uint32, state, message string) error {
-	query := fmt.Sprintf("update _vt.vreplication set state='%v', message=%v where id=%v", state, encodeString(message), uid)
+	query := fmt.Sprintf("update _vt.vreplication set state='%v', message=%v where id=%v", state, encodeString(MessageTruncate(message)), uid)
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set state: %v: %v", query, err)
 	}
@@ -614,12 +614,21 @@ func StartVReplicationUntil(uid uint32, pos string) string {
 func StopVReplication(uid uint32, message string) string {
 	return fmt.Sprintf(
 		"update _vt.vreplication set state='%v', message=%v where id=%v",
-		BlpStopped, encodeString(message), uid)
+		BlpStopped, encodeString(MessageTruncate(message)), uid)
 }
 
 // DeleteVReplication returns a statement to delete the replication.
 func DeleteVReplication(uid uint32) string {
 	return fmt.Sprintf("delete from _vt.vreplication where id=%v", uid)
+}
+
+// MessageTruncate truncates the message string to a safe length.
+func MessageTruncate(msg string) string {
+	// message length is 1000 bytes.
+	if len(msg) > 950 {
+		return msg[:950] + "..."
+	}
+	return msg
 }
 
 func encodeString(in string) string {
