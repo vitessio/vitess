@@ -38,6 +38,9 @@ var (
 	// ErrTimeout is returned if a resource get times out.
 	ErrTimeout = errors.New("resource pool timed out")
 
+	// ErrCtxTimeout is returned if a ctx is already expired by the time the resource pool is used
+	ErrCtxTimeout = errors.New("resource pool context already expired")
+
 	prefillTimeout = 30 * time.Second
 )
 
@@ -198,7 +201,7 @@ func (rp *ResourcePool) get(ctx context.Context) (resource Resource, err error) 
 	// If ctx has already expired, avoid racing with rp's resource channel.
 	select {
 	case <-ctx.Done():
-		return nil, ErrTimeout
+		return nil, ErrCtxTimeout
 	default:
 	}
 

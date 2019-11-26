@@ -441,7 +441,7 @@ func (m *NodeManager) Action(ctx context.Context, ap *ActionParameters) error {
 
 	if n.Listener == nil {
 		m.mu.Unlock()
-		return fmt.Errorf("Action %v is invoked on a node without listener (node path is %v)", ap.Name, ap.Path)
+		return fmt.Errorf("action %v is invoked on a node without listener (node path is %v)", ap.Name, ap.Path)
 	}
 	nodeListener := n.Listener
 	m.mu.Unlock()

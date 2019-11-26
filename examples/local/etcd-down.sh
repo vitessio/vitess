@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is an example script that stops the ZooKeeper servers started by zk-up.sh.
+# This is an example script that stops the etcd servers started by etcd-up.sh.
 
 set -e
 
