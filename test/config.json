@@ -590,7 +590,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 2,
+			"Shard": 5,
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"
