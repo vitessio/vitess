@@ -27,8 +27,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpcclient"
-	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/topo/memorytopo"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -42,11 +41,9 @@ import (
 )
 
 var (
-	_                       VStreamerClient = (*TabletVStreamerClient)(nil)
-	_                       VStreamerClient = (*MySQLVStreamerClient)(nil)
-	mysqlStreamerClientOnce sync.Once
-	mysqlSrvTopo            *srvtopo.ResilientServer
-	dbcfgs                  *dbconfigs.DBConfigs
+	_      VStreamerClient = (*TabletVStreamerClient)(nil)
+	_      VStreamerClient = (*MySQLVStreamerClient)(nil)
+	dbcfgs *dbconfigs.DBConfigs
 )
 
 // VStreamerClient exposes the core interface of a vstreamer
@@ -83,7 +80,6 @@ type MySQLVStreamerClient struct {
 	isOpen bool
 
 	sourceConnParams *mysql.ConnParams
-	vsEngine         *vstreamer.Engine
 	sourceSe         *schema.Engine
 }
 
@@ -162,12 +158,7 @@ func (vsClient *MySQLVStreamerClient) Open(ctx context.Context) (err error) {
 	}
 	vsClient.isOpen = true
 
-	mysqlStreamerClientOnce.Do(func() {
-		memorytopo := memorytopo.NewServer("mysqlstreamer")
-		mysqlSrvTopo = srvtopo.NewResilientServer(memorytopo, "")
-	})
-
-	// Let's create all the required components by vstreamer.Engine
+	// Let's create all the required components by vstreamer
 
 	vsClient.sourceSe = schema.NewEngine(checker{}, tabletenv.DefaultQsConfig)
 	vsClient.sourceSe.InitDBConfig(vsClient.sourceConnParams)
@@ -175,17 +166,6 @@ func (vsClient *MySQLVStreamerClient) Open(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
-
-	vsClient.vsEngine = vstreamer.NewEngine(mysqlSrvTopo, vsClient.sourceSe)
-	vsClient.vsEngine.InitDBConfig(vsClient.sourceConnParams)
-
-	// We don't really need a keyspace/cell as this is a dummy engine from the
-	// topology perspective
-	err = vsClient.vsEngine.Open("", "")
-	if err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -198,7 +178,6 @@ func (vsClient *MySQLVStreamerClient) Close(ctx context.Context) (err error) {
 	}
 
 	vsClient.isOpen = false
-	vsClient.vsEngine.Close()
 	vsClient.sourceSe.Close()
 	return nil
 }
@@ -208,7 +187,8 @@ func (vsClient *MySQLVStreamerClient) VStream(ctx context.Context, startPos stri
 	if !vsClient.isOpen {
 		return errors.New("Can't VStream without opening client")
 	}
-	return vsClient.vsEngine.Stream(ctx, startPos, filter, send)
+	streamer := vstreamer.NewVStreamer(ctx, vsClient.sourceConnParams, vsClient.sourceSe, startPos, filter, &vindexes.KeyspaceSchema{}, send)
+	return streamer.Stream()
 }
 
 // VStreamRows part of the VStreamerClient interface
@@ -224,7 +204,8 @@ func (vsClient *MySQLVStreamerClient) VStreamRows(ctx context.Context, query str
 		}
 		row = r.Rows[0]
 	}
-	return vsClient.vsEngine.StreamRows(ctx, query, row, send)
+	streamer := vstreamer.NewRowStreamer(ctx, vsClient.sourceConnParams, vsClient.sourceSe, query, row, &vindexes.KeyspaceSchema{}, send)
+	return streamer.Stream()
 }
 
 func InitVStreamerClient(cfg *dbconfigs.DBConfigs) {

@@ -355,10 +355,6 @@ func TestMySQLVStreamerClientOpen(t *testing.T) {
 			if !vsClient.sourceSe.IsOpen() {
 				t.Errorf("MySQLVStreamerClient.Open() expected sourceSe to be opened")
 			}
-
-			if !vsClient.vsEngine.IsOpen() {
-				t.Errorf("MySQLVStreamerClient.Open() expected vsEngine to be opened")
-			}
 		})
 	}
 }
@@ -417,10 +413,6 @@ func TestMySQLVStreamerClientClose(t *testing.T) {
 
 			if vsClient.sourceSe.IsOpen() {
 				t.Errorf("MySQLVStreamerClient.Close() expected sourceSe to be closed")
-			}
-
-			if vsClient.vsEngine.IsOpen() {
-				t.Errorf("MySQLVStreamerClient.Close() expected vsEngine to be closed")
 			}
 		})
 	}

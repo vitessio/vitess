@@ -277,7 +277,9 @@ func Init(defaultSocketFile string) (*DBConfigs, error) {
 		if baseConfig.Flags != 0 {
 			uc.param.Flags = baseConfig.Flags
 		}
-		uc.param.Flavor = baseConfig.Flavor
+		if user != ExternalRepl {
+			uc.param.Flavor = baseConfig.Flavor
+		}
 		if uc.useSSL {
 			uc.param.SslCa = baseConfig.SslCa
 			uc.param.SslCaPath = baseConfig.SslCaPath
