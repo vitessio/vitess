@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package bytes2
+package bytes2 // import "vitess.io/vitess/go/bytes2"
 
 // Buffer implements a subset of the write portion of
 // bytes.Buffer, but more efficiently. This is meant to

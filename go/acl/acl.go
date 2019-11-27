@@ -33,7 +33,7 @@ limitations under the License.
 //   * `read-only` allows anyone to act as DEBUGGING or MONITORING, but no one
 //     is allowed to act as ADMIN. It also disallows any other custom roles that
 //     are requested.
-package acl
+package acl // import "vitess.io/vitess/go/acl"
 
 import (
 	"flag"
