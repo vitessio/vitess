@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package eventtoken includes utility methods for event token
 // handling.
-package eventtoken
+package eventtoken // import "vitess.io/vitess/go/vt/binlog/eventtoken"
 
 import (
 	"vitess.io/vitess/go/mysql"

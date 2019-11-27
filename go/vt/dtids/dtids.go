@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Package dtids contains dtid convenience functions.
-package dtids
+package dtids // import "vitess.io/vitess/go/vt/dtids"
 
 import (
 	"fmt"

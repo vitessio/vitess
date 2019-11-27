@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package binlogplayertest
+package binlogplayertest // import "vitess.io/vitess/go/vt/binlog/binlogplayertest"
 
 import (
 	"fmt"

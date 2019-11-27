@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package events defines common structures used for events dispatched from
 // various other package.
-package events
+package events // import "vitess.io/vitess/go/vt/events"
 
 import (
 	"time"

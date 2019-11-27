@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package callerid stores/retrieves CallerIDs (immediate CallerID
 // and effective CallerID) to/from the Context
-package callerid
+package callerid // import "vitess.io/vitess/go/vt/callerid/"
 
 import (
 	"golang.org/x/net/context"

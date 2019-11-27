@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package grpcbinlogplayer
+package grpcbinlogplayer // import "vitess.io/vitess/go/vt/binlog/grpcbinlogplayer"
 
 import (
 	"golang.org/x/net/context"

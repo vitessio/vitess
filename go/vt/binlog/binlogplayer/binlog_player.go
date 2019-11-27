@@ -17,7 +17,7 @@ limitations under the License.
 // Package binlogplayer contains the code that plays a vreplication
 // stream on a client database. It usually runs inside the destination master
 // vttablet process.
-package binlogplayer
+package binlogplayer // import "vitess.io/vitess/go/vt/binlog/binlogplayer"
 
 import (
 	"bytes"

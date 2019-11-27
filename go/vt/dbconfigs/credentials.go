@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package dbconfigs
+package dbconfigs // import "vitess.io/vitess/go/vt/dbconfigs"
 
 // This file contains logic for a pluggable credentials system.
 // The default implementation is file based.

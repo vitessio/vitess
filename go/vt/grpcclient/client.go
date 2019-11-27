@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package grpcclient contains utility methods for gRPC client implementations
 // to use. It also supports plug-in authentication.
-package grpcclient
+package grpcclient // import "vitess.io/vitess/go/vt/grpcclient"
 
 import (
 	"flag"
