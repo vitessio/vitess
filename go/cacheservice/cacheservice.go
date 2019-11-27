@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package cacheservice
+package cacheservice // import "vitess.io/vitess/go/cacheservice"
 
 import (
 	"fmt"

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package goclienttest
+package goclienttest // import "vitess.io/vitess/go/vtgateclienttest/goclienttest"
 
 import (
 	"encoding/json"
