@@ -403,7 +403,7 @@ func (vre *Engine) fetchIDs(dbClient binlogplayer.DBClient, selector string) (id
 	return ids, bv, nil
 }
 
-func (vre *Engine) journalRegister(journal *binlogdatapb.Journal, id int) error {
+func (vre *Engine) registerJournal(journal *binlogdatapb.Journal, id int) error {
 	vre.mu.Lock()
 	defer vre.mu.Unlock()
 	if !vre.isOpen {
