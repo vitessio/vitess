@@ -129,6 +129,7 @@ func registerPerUserFlags(dbc *userConfig, userKey string) {
 	flag.StringVar(&dbc.param.SslCert, "db-config-"+userKey+"-ssl-cert", "", "deprecated: use db_ssl_cert")
 	flag.StringVar(&dbc.param.SslKey, "db-config-"+userKey+"-ssl-key", "", "deprecated: use db_ssl_key")
 	flag.StringVar(&dbc.param.ServerName, "db-config-"+userKey+"-server_name", "", "deprecated: use db_server_name")
+	flag.StringVar(&dbc.param.Flavor, "db-config-"+userKey+"-flavor", "", "deprecated: use db_flavor")
 
 	flag.StringVar(&dbc.param.DeprecatedDBName, "db-config-"+userKey+"-dbname", "", "deprecated: dbname does not need to be explicitly configured")
 
