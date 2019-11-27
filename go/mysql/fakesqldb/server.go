@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Package fakesqldb provides a MySQL server for tests.
-package fakesqldb
+package fakesqldb // import "vitess.io/vitess/go/fakesqldb"
 
 import (
 	"errors"

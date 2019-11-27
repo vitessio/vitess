@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Package memcache is a client for memcached.
-package memcache
+package memcache // import "vitess.io/vitess/go/memcache"
 
 import (
 	"bufio"

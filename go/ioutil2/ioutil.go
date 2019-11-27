@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Package ioutil2 provides extra functionality along similar lines to io/ioutil.
-package ioutil2
+package ioutil2 // import "vitess.io/vitess/go/ioutil2"
 
 import (
 	"io/ioutil"

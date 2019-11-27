@@ -16,7 +16,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package race
+package race // import "vitess.io/vitess/go/race"
 
 // Enabled is set to true in the build if the race detector is enabled.
 // This is useful to skip tests when the race detector is on.

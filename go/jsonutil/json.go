@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Package jsonutil contains json-related utility functions
-package jsonutil
+package jsonutil // import "vitess.io/vitess/go/jsonutil"
 
 import (
 	"bytes"

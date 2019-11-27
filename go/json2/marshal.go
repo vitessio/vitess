@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package json2
+package json2 // import "vitess.io/vitess/go/json2"
 
 import (
 	"bytes"
