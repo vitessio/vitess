@@ -405,10 +405,12 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			}
 		}
 	case binlogdatapb.VEventType_JOURNAL:
+		// Ensure that we don't have a partial set of table matches in the journal.
 		switch event.Journal.MigrationType {
 		case binlogdatapb.MigrationType_SHARDS:
-			// no-op
+			// All tables of the source were migrated. So, no validation needed.
 		case binlogdatapb.MigrationType_TABLES:
+			// Validate that all or none of the tables are in the journal.
 			jtables := make(map[string]bool)
 			for _, table := range event.Journal.Tables {
 				jtables[table] = true
@@ -436,7 +438,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			// All were found. We must register journal.
 		}
 
-		if err := vp.vr.vre.journalRegister(event.Journal, int(vp.vr.id)); err != nil {
+		if err := vp.vr.vre.registerJournal(event.Journal, int(vp.vr.id)); err != nil {
 			if err := vp.vr.setState(binlogplayer.BlpStopped, err.Error()); err != nil {
 				return err
 			}
