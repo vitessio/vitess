@@ -30,8 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 
-	//	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
-
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
@@ -137,8 +135,6 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 			cancel()
 			<-streamErr
 		}()
-
-		log.Infof("error applying events: %v", err)
 
 		// If the apply thread ends with io.EOF, it means either the Engine
 		// is shutting down and canceled the context, or stop position was reached.
@@ -354,7 +350,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			return err
 		}
 	case binlogdatapb.VEventType_ROW:
-		// This player is configured for row based replicaiton
+		// This player is configured for row based replication
 		if err := vp.vr.dbClient.Begin(); err != nil {
 			return err
 		}
