@@ -16,7 +16,7 @@ limitations under the License.
 This adds sharded keyspace dynamically in this test only and test sql insert, select
 */
 
-package clustertest
+package clustertest // import "vitess.io/vitess/go/test/endtoend/clustertest"
 
 import (
 	"context"

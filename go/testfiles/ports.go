@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package testfiles
+package testfiles // import "vitess.io/vitess/go/testfiles"
 
 import (
 	"fmt"

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package sequence
+package sequence // import "vitess.io/vitess/go/test/endtoend/vtgate/sequence"
 
 import (
 	"context"

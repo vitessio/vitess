@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package vtbench
+package vtbench // import "vitess.io/vitess/go/vtbench"
 
 import (
 	"context"

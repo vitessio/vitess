@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package transaction
+package transaction // import "vitess.io/vitess/go/test/endtoend/vtgate/transaction"
 
 import (
 	"context"
