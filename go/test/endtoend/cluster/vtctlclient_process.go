@@ -113,7 +113,7 @@ func (vtctlclient *VtctlClientProcess) InitTablet(tablet *Vttablet, cell string,
 		tabletType = "replica"
 	}
 	args := []string{"InitTablet", "-hostname", hostname,
-		"-port", fmt.Sprintf("%d", tablet.HTTPPort), "-allow_update",
+		"-port", fmt.Sprintf("%d", tablet.HTTPPort), "-allow_update", "-parent",
 		"-keyspace", keyspaceName,
 		"-shard", shardName}
 	if tablet.MySQLPort > 0 {

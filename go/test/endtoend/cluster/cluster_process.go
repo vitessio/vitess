@@ -74,8 +74,10 @@ type Keyspace struct {
 
 // Shard with associated vttablets
 type Shard struct {
-	Name      string
-	Vttablets []Vttablet
+	Name         string
+	Vttablets    []Vttablet
+	ReplicaCount int
+	RdonlyCount  int
 }
 
 // MasterTablet get the 1st tablet which is master
@@ -275,6 +277,86 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 	return
 }
 
+// LaunchCluster Initiate required number of shard and the corresponding tablets
+// replicaCount: total number of replicas
+// rdonlyCount: total number of replicas
+func (cluster *LocalProcessCluster) LaunchCluster(keyspace *Keyspace, shards []*Shard) (err error) {
+
+	log.Info("Starting keyspace : " + keyspace.Name)
+
+	// Start topo server
+	_ = cluster.StartTopo()
+
+	// Create Keyspace
+	err = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// Create shard
+	//shard = &Shard{Name: shardName}
+	for _, shard := range shards {
+
+		// Init Master Tablet
+		tablet := cluster.GetVttabletInstance("replica", 0)
+		err = cluster.VtctlclientProcess.InitTablet(tablet, cluster.Cell, keyspace.Name, cluster.Hostname, shard.Name)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		shard.Vttablets = append(shard.Vttablets, *tablet)
+
+		// Init Replica Tablet
+		for i := 0; i < shard.ReplicaCount; i++ {
+			tablet := cluster.GetVttabletInstance("replica", 0)
+			err = cluster.VtctlclientProcess.InitTablet(tablet, cluster.Cell, keyspace.Name, cluster.Hostname, shard.Name)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			shard.Vttablets = append(shard.Vttablets, *tablet)
+		}
+
+		// Init rdonly Tablet
+		for i := 0; i < shard.RdonlyCount; i++ {
+			tablet := cluster.GetVttabletInstance("rdonly", 0)
+			err = cluster.VtctlclientProcess.InitTablet(tablet, cluster.Cell, keyspace.Name, cluster.Hostname, shard.Name)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+			shard.Vttablets = append(shard.Vttablets, *tablet)
+		}
+		keyspace.Shards = append(keyspace.Shards, *shard)
+		fmt.Println(len(shard.Vttablets))
+	}
+	// Do Not Start Mysqlctl process
+	// Do Not Start vttablet process
+	// No database created
+	// No Init shard master
+
+	// if the keyspace is present then append the shard info
+	existingKeyspace := false
+	for idx, ks := range cluster.Keyspaces {
+		if ks.Name == keyspace.Name {
+			cluster.Keyspaces[idx].Shards = append(cluster.Keyspaces[idx].Shards, keyspace.Shards...)
+			existingKeyspace = true
+		}
+	}
+	if !existingKeyspace {
+		cluster.Keyspaces = append(cluster.Keyspaces, *keyspace)
+	}
+
+	// Do NOT Apply Schema SQL
+
+	// Do Not Apply VSchema
+	fmt.Println(err)
+
+	log.Info("Done launching keyspace : " + keyspace.Name)
+	return err
+}
+
 // StartVtgate starts vtgate
 func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 	vtgateHTTPPort := cluster.GetAndReservePort()
@@ -391,7 +473,7 @@ func getRandomNumber(maxNumber int32, baseNumber int) int {
 }
 
 // GetVttabletInstance create a new vttablet object
-func (cluster *LocalProcessCluster) GetVttabletInstance(UID int) *Vttablet {
+func (cluster *LocalProcessCluster) GetVttabletInstance(tabletType string, UID int) *Vttablet {
 	if UID == 0 {
 		UID = cluster.GetAndReserveTabletUID()
 	}
@@ -400,7 +482,7 @@ func (cluster *LocalProcessCluster) GetVttabletInstance(UID int) *Vttablet {
 		HTTPPort:  cluster.GetAndReservePort(),
 		GrpcPort:  cluster.GetAndReservePort(),
 		MySQLPort: cluster.GetAndReservePort(),
-		Type:      "replica",
+		Type:      tabletType,
 		Alias:     fmt.Sprintf("%s-%010d", cluster.Cell, UID),
 	}
 }
