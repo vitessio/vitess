@@ -54,6 +54,15 @@ func LoadTable(conn *connpool.DBConn, tableName string, tableType string, commen
 	return ta, nil
 }
 
+// LoadTableBaisc creates a Table with just the column info loaded.
+func LoadTableBasic(conn *connpool.DBConn, tableName string) (*Table, error) {
+	ta := NewTable(tableName)
+	if err := fetchColumns(ta, conn, tableName); err != nil {
+		return nil, err
+	}
+	return ta, nil
+}
+
 func fetchColumns(ta *Table, conn *connpool.DBConn, sqlTableName string) error {
 	qr, err := conn.Exec(tabletenv.LocalContext(), fmt.Sprintf("select * from %s where 1 != 1", sqlTableName), 0, true)
 	if err != nil {
