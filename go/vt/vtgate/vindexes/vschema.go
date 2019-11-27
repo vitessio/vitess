@@ -313,6 +313,9 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 				if !columnVindex.Vindex.IsUnique() {
 					return fmt.Errorf("primary vindex %s is not Unique for table %s", ind.Name, tname)
 				}
+				if owned {
+					return fmt.Errorf("primary vindex %s cannot be owned for table %s", ind.Name, tname)
+				}
 			}
 			t.ColumnVindexes = append(t.ColumnVindexes, columnVindex)
 			if owned {

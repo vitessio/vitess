@@ -1554,6 +1554,38 @@ func TestBuildVSchemaNotUniqueFail(t *testing.T) {
 	}
 }
 
+func TestBuildVSchemaPrimaryCannotBeOwned(t *testing.T) {
+	bad := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"stlu": {
+						Type:  "stlu",
+						Owner: "t1",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "c1",
+								Name:   "stlu",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	got, _ := BuildVSchema(&bad)
+	err := got.Keyspaces["sharded"].Error
+	want := "primary vindex stlu cannot be owned for table t1"
+	if err == nil || err.Error() != want {
+		t.Errorf("BuildVSchema: %v, want %v", err, want)
+	}
+}
+
 func TestSequence(t *testing.T) {
 	good := vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{

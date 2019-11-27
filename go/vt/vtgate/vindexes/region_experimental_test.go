@@ -25,6 +25,14 @@ import (
 	"vitess.io/vitess/go/vt/key"
 )
 
+func TestRegionExperimentalCost(t *testing.T) {
+	ge, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, ge.Cost())
+	assert.Equal(t, "region_experimental", ge.String())
+	assert.True(t, ge.IsUnique())
+}
+
 func TestRegionExperimentalMapMulti1(t *testing.T) {
 	vindex, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
 	assert.NoError(t, err)
