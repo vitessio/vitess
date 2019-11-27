@@ -656,12 +656,24 @@ func TestInsertShardedGeo(t *testing.T) {
 							"region_bytes": "1",
 						},
 					},
+					"lookup": {
+						Type: "lookup_unique",
+						Params: map[string]string{
+							"table": "id_idx",
+							"from":  "id",
+							"to":    "keyspace_id",
+						},
+						Owner: "t1",
+					},
 				},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
 							Name:    "geo",
 							Columns: []string{"id", "region"},
+						}, {
+							Name:    "lookup",
+							Columns: []string{"id"},
 						}},
 					},
 				},
@@ -694,6 +706,16 @@ func TestInsertShardedGeo(t *testing.T) {
 					Value: sqltypes.NewInt64(255),
 				}},
 			}},
+		}, {
+			// colVindex columns: id
+			Values: []sqltypes.PlanValue{{
+				// rows for id
+				Values: []sqltypes.PlanValue{{
+					Value: sqltypes.NewInt64(1),
+				}, {
+					Value: sqltypes.NewInt64(1),
+				}},
+			}},
 		}},
 		ks.Tables["t1"],
 		"prefix",
@@ -710,6 +732,9 @@ func TestInsertShardedGeo(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
+		`Execute insert into id_idx(id, keyspace_id) values(:id0, :keyspace_id0), (:id1, :keyspace_id1) ` +
+			`id0: type:INT64 value:"1" id1: type:INT64 value:"1" ` +
+			`keyspace_id0: type:VARBINARY value:"\001\026k@\264J\272K\326" keyspace_id1: type:VARBINARY value:"\377\026k@\264J\272K\326"  true`,
 		`ResolveDestinations sharded [value:"0"  value:"1" ] Destinations:DestinationKeyspaceID(01166b40b44aba4bd6),DestinationKeyspaceID(ff166b40b44aba4bd6)`,
 		`ExecuteMultiShard sharded.20-: prefix mid1 suffix /* vtgate:: keyspace_id:01166b40b44aba4bd6 */ ` +
 			`{_id0: type:INT64 value:"1" _id1: type:INT64 value:"1" ` +
