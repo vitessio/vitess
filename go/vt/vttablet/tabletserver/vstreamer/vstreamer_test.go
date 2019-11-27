@@ -852,45 +852,6 @@ func TestMinimalMode(t *testing.T) {
 	}
 }
 
-func TestStatementMode(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-
-	execStatements(t, []string{
-		"create table t1(id int, val1 varbinary(128), val2 varbinary(128), primary key(id))",
-		"insert into t1 values(1, 'aaa', 'bbb')",
-	})
-	defer execStatements(t, []string{
-		"drop table t1",
-	})
-	engine.se.Reload(context.Background())
-
-	// Record position before the next few statements.
-	pos := masterPosition(t)
-	execStatements(t, []string{
-		"set @@session.binlog_format='statement'",
-		"update t1 set val1='bbb' where id=1",
-		"set @@session.binlog_format='row'",
-	})
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	ch := make(chan []*binlogdatapb.VEvent)
-	go func() {
-		for evs := range ch {
-			t.Errorf("received: %v", evs)
-		}
-	}()
-	defer close(ch)
-	err := vstream(ctx, t, pos, nil, ch)
-	want := "unexpected statement type"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must contain '%s'", err, want)
-	}
-}
-
 func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, postion string) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
