@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Package streamlog provides a non-blocking message broadcaster.
-package streamlog
+package streamlog // import "vitess.io/vitess/go/streamlog"
 
 import (
 	"flag"

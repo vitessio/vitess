@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Package ratelimiter implements rate limiting functionality.
-package ratelimiter
+package ratelimiter // import "vitess.io/vitess/go/ratelimiter"
 
 import (
 	"sync"

@@ -23,7 +23,7 @@ limitations under the License.
 // style are likely to be rare, but require more context to debug
 // properly. The additional cost of computing a stack trace is
 // therefore negligible.
-package tb
+package tb // import "vitess.io/vitess/go/tb"
 
 import (
 	"bytes"

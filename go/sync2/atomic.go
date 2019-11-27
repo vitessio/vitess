@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package sync2
+package sync2 // import "vitess.io/vitess/go/sync2"
 
 import (
 	"sync"

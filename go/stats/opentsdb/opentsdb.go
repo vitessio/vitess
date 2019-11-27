@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Package opentsdb adds support for pushing stats to opentsdb.
-package opentsdb
+package opentsdb // import "vitess.io/vitess/go/stats/opentsdb"
 
 import (
 	"bytes"
