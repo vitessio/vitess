@@ -22,8 +22,10 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/log"
 )
 
 // MysqlctlProcess is a generic handle for a running mysqlctl command .
@@ -110,4 +112,16 @@ func StartMySQL(ctx context.Context, tablet *Vttablet, username string, tmpDirec
 
 	conn, err := mysql.Connect(ctx, &params)
 	return conn, err
+}
+
+// ExecuteCommandWithOutput executes any mysqlctl command and returns output
+func (mysqlctl *MysqlctlProcess) ExecuteCommandWithOutput(args ...string) (result string, err error) {
+	tmpProcess := exec.Command(
+		mysqlctl.Binary,
+		args...,
+	)
+	println(fmt.Sprintf("Executing mysqlctl with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	log.Info(fmt.Sprintf("Executing mysqlctl with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	resultByte, err := tmpProcess.CombinedOutput()
+	return string(resultByte), err
 }
