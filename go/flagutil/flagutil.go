@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package flagutil contains flags that parse string lists and string
 // maps.
-package flagutil
+package flagutil // import "vitess.io/vitess/go/flagutil"
 
 import (
 	"errors"

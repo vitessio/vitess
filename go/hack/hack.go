@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package hack gives you some efficient functionality at the cost of
 // breaking some Go rules.
-package hack
+package hack // import "vitess.io/vitess/go/hack"
 
 import (
 	"reflect"

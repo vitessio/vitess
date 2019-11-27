@@ -74,7 +74,7 @@ that accepts interface{} will be called for every event type. Listeners can also
 accept pointer types, but they will only be called if the dispatch site calls
 Dispatch() on a pointer.
 */
-package event
+package event // import "vitess.io/vitess/go/event"
 
 import (
 	"fmt"

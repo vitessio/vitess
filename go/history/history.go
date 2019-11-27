@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Package history implements a circular buffer with adjacent-item deduplication.
-package history
+package history // import "vitess.io/vitess/go/history"
 
 import (
 	"sync"

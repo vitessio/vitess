@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Package fileutil contains utility functions related to files and paths.
-package fileutil
+package fileutil // import "vitess.io/vitess/go/fileutil"
 
 // HasWildcard checks if a string has a wildcard in it. In the cases
 // where we detect a bad pattern, we return 'true', and let the path.Match

@@ -45,7 +45,7 @@ goroutine that deferred exit.Recover(). Usually this means Return() should
 only be used from within main(), or within functions that are only ever
 called from main(). See Recover() and Return() for more details.
 */
-package exit
+package exit // import "vitess.io/vitess/go/exit"
 
 import (
 	"os"
