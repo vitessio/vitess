@@ -108,7 +108,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 		if v, ok := params["cell"]; ok {
 			cell = v
 		}
-		if v, ok := params["tablet_types"]; ok {
+		if v := params["tablet_types"]; v != "" {
 			tabletTypesStr = v
 		}
 		tp, err := discovery.NewTabletPicker(ctx, ts, cell, ct.source.Keyspace, ct.source.Shard, tabletTypesStr, *healthcheckTopologyRefresh, *healthcheckRetryDelay, *healthcheckTimeout)
