@@ -253,11 +253,12 @@ func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 		cluster.VtGateExtraArgs)
 
 	log.Info(fmt.Sprintf("Vtgate started, connect to mysql using : mysql -h 127.0.0.1 -P %d", cluster.VtgateMySQLPort))
-	err = cluster.VtgateProcess.Setup()
-	if err != nil {
-		return
+	if err = cluster.VtgateProcess.Setup(); err != nil {
+		return err
 	}
-	cluster.WaitForTabletsToHealthyInVtgate()
+	if err = cluster.WaitForTabletsToHealthyInVtgate(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -288,23 +289,31 @@ func (cluster *LocalProcessCluster) ReStartVtgate() (err error) {
 }
 
 // WaitForTabletsToHealthyInVtgate waits for all tablets in all shards to be healthy as per vtgate
-func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() {
+func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error) {
 	var isRdOnlyPresent bool
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {
 			isRdOnlyPresent = false
-			_ = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspace.Name, shard.Name))
-			_ = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace.Name, shard.Name))
+			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspace.Name, shard.Name)); err != nil {
+				return err
+			}
+			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace.Name, shard.Name)); err != nil {
+				return err
+			}
 			for _, tablet := range shard.Vttablets {
 				if tablet.Type == "rdonly" {
 					isRdOnlyPresent = true
 				}
 			}
 			if isRdOnlyPresent {
-				_ = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspace.Name, shard.Name))
+				err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspace.Name, shard.Name))
+			}
+			if err != nil {
+				return err
 			}
 		}
 	}
+	return nil
 }
 
 // Teardown brings down the cluster by invoking teardown for individual processes
