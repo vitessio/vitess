@@ -852,6 +852,44 @@ func TestMinimalMode(t *testing.T) {
 	}
 }
 
+func TestStatementMode(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	execStatements(t, []string{
+		"create table stream1(id int, val varbinary(128), primary key(id))",
+		"create table stream2(id int, val varbinary(128), primary key(id))",
+	})
+
+	engine.se.Reload(context.Background())
+
+	defer execStatements(t, []string{
+		"drop table stream1",
+		"drop table stream2",
+	})
+
+	testcases := []testcase{{
+		input: []string{
+			"set @@session.binlog_format='STATEMENT'",
+			"begin",
+			"insert into stream1 values (1, 'aaa')",
+			"update stream1 set val='bbb' where id = 1",
+			"delete from stream1 where id = 1",
+			"commit",
+			"set @@session.binlog_format='ROW'",
+		},
+		output: [][]string{{
+			`begin`,
+			`type:INSERT dml:"insert into stream1 values (1, 'aaa')" `,
+			`type:UPDATE dml:"update stream1 set val='bbb' where id = 1" `,
+			`type:DELETE dml:"delete from stream1 where id = 1" `,
+			`gtid`,
+			`commit`,
+		}},
+	}}
+	runCases(t, nil, testcases, "")
+}
+
 func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, postion string) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
