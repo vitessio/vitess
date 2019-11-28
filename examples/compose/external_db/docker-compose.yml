@@ -17,7 +17,6 @@ services:
     volumes:
       - vol-db:/var/lib/mysql
       - ./mysql/:/docker-entrypoint-initdb.d/
-      - ./mysql/master_mysql56.cnf:/etc/mysql/conf.d/master_mysql56.cnf
       - ./mysql/query.log:/var/log/mysql/query.log
       - ./mysql/slow.log:/var/log/mysql/slow.log
     healthcheck:
