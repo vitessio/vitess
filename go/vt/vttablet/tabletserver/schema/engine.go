@@ -311,6 +311,17 @@ func (se *Engine) Reload(ctx context.Context) error {
 	return rec.Error()
 }
 
+// LoadTableBasic loads a table with minimal info. This is used by vstreamer
+// to load _vt.resharding_journal.
+func (se *Engine) LoadTableBasic(ctx context.Context, tableName string) (*Table, error) {
+	conn, err := se.conns.Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+	return LoadTableBasic(conn, tableName)
+}
+
 func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, error) {
 	tm, err := conn.Exec(ctx, "select unix_timestamp()", 1, false)
 	if err != nil {

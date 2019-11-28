@@ -46,24 +46,23 @@ var (
 
 // vreplicator provides the core logic to start vreplication streams
 type vreplicator struct {
+	vre      *Engine
 	id       uint32
 	dbClient *vdbClient
 	// source
 	source          *binlogdatapb.BinlogSource
 	sourceVStreamer VStreamerClient
 
-	// target
 	stats *binlogplayer.Stats
-
 	// mysqld is used to fetch the local schema.
-	mysqld mysqlctl.MysqlDaemon
-
+	mysqld    mysqlctl.MysqlDaemon
 	tableKeys map[string][]string
 }
 
 // newVReplicator creates a new vreplicator
-func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon) *vreplicator {
+func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine) *vreplicator {
 	return &vreplicator{
+		vre:             vre,
 		id:              id,
 		source:          source,
 		sourceVStreamer: sourceVStreamer,
@@ -84,7 +83,7 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 	for {
 		settings, numTablesToCopy, err := vr.readSettings(ctx)
 		if err != nil {
-			return fmt.Errorf("error reading VReplication settings: %v", err)
+			return err
 		}
 		// If any of the operations below changed state to Stopped, we should return.
 		if settings.State == binlogplayer.BlpStopped {

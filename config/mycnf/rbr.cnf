@@ -1,1 +1,3 @@
-binlog-format=row
+# This file is used to allow legacy tests to pass
+# In theory it should not be required
+binlog_format=row
