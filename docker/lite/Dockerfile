@@ -63,14 +63,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 # Set up Vitess environment (just enough to run pre-built Go binaries)
 ENV VTTOP /vt/src/vitess.io/vitess
 ENV VTROOT /vt
-ENV GOTOP $VTTOP/go
 ENV VTDATAROOT $VTROOT/vtdataroot
-ENV GOBIN $VTROOT/bin
-ENV GOPATH $VTROOT
 ENV PATH $VTROOT/bin:$PATH
-ENV VT_MYSQL_ROOT /usr
-ENV PKG_CONFIG_PATH $VTROOT/lib
-ENV MYSQL_FLAVOR MySQL56
 
 # Copy binaries (placed by build.sh)
 COPY --from=staging /vt/ /vt/

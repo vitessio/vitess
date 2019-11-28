@@ -14,7 +14,6 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     libtool \
     make \
     openjdk-8-jdk \
-    pkg-config \
     python-crypto \
     python-dev \
     python-mysqldb \
@@ -40,17 +39,11 @@ RUN mkdir -p /vt/dist && \
 # Set up Vitess environment (equivalent to '. dev.env')
 ENV VTTOP /vt/src/vitess.io/vitess
 ENV VTROOT /vt
-ENV GOTOP $VTTOP/go
-ENV PYTOP $VTTOP/py
 ENV VTDATAROOT $VTROOT/vtdataroot
 ENV VTPORTSTART 15000
 ENV PYTHONPATH $VTROOT/dist/grpc/usr/local/lib/python2.7/site-packages:$VTROOT/dist/py-mock-1.0.1/lib/python2.7/site-packages:$VTROOT/py-vtdb:$VTROOT/dist/selenium/lib/python2.7/site-packages
-ENV GOBIN $VTROOT/bin
 ENV PATH $VTROOT/bin:$VTROOT/dist/maven/bin:$VTROOT/dist/chromedriver:$PATH
-ENV VT_MYSQL_ROOT /usr
-ENV PKG_CONFIG_PATH $VTROOT/lib
 ENV USER vitess
-ENV GO111MODULE on
 
 # Copy files needed for bootstrap
 COPY bootstrap.sh dev.env build.env go.mod go.sum /vt/src/vitess.io/vitess/

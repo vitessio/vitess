@@ -32,7 +32,7 @@ jobs:
 
     - name: Build
       run: |
-        GOBIN=$PWD/bin make build
+        VTROOT=$PWD VTTOP=$PWD make build
 
     - name: Run Local Example
       run: |
