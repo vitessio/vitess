@@ -284,6 +284,119 @@ func TestREKeyRange(t *testing.T) {
 	}})
 }
 
+func TestInKeyRangeMultiColumn(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table t1(region int, id int, val varbinary(128), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+
+	if err := env.SetVSchema(multicolumnVSchema); err != nil {
+		t.Fatal(err)
+	}
+	defer env.SetVSchema("{}")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select id, region, val, keyspace_id() from t1 where in_keyrange('-80')",
+		}},
+	}
+	ch := startStream(ctx, t, filter, "")
+
+	// 1, 2, 3 and 5 are in shard -80.
+	// 4 and 6 are in shard 80-.
+	input := []string{
+		"begin",
+		"insert into t1 values (1, 1, 'aaa')",
+		"insert into t1 values (128, 2, 'bbb')",
+		// Stay in shard.
+		"update t1 set region = 2 where id = 1",
+		// Move from -80 to 80-.
+		"update t1 set region = 128 where id = 1",
+		// Move from 80- to -80.
+		"update t1 set region = 1 where id = 2",
+		"commit",
+	}
+	execStatements(t, input)
+	expectLog(ctx, t, input, ch, [][]string{{
+		`begin`,
+		`type:FIELD field_event:<table_name:"t1" fields:<name:"id" type:INT32 > fields:<name:"region" type:INT32 > fields:<name:"val" type:VARBINARY > fields:<name:"keyspace_id" type:VARBINARY > > `,
+		`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:1 lengths:3 lengths:9 values:"11aaa\001\026k@\264J\272K\326" > > > `,
+		`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:1 lengths:3 lengths:9 values:"11aaa\001\026k@\264J\272K\326" > ` +
+			`after:<lengths:1 lengths:1 lengths:3 lengths:9 values:"12aaa\002\026k@\264J\272K\326" > > > `,
+		`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:1 lengths:3 lengths:9 values:"12aaa\002\026k@\264J\272K\326" > > > `,
+		`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:1 lengths:3 lengths:9 values:"21bbb\001\006\347\352\"\316\222p\217" > > > `,
+		`gtid`,
+		`commit`,
+	}})
+}
+
+func TestREMultiColumnVindex(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table t1(region int, id int, val varbinary(128), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+
+	if err := env.SetVSchema(multicolumnVSchema); err != nil {
+		t.Fatal(err)
+	}
+	defer env.SetVSchema("{}")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "/.*/",
+			Filter: "-80",
+		}},
+	}
+	ch := startStream(ctx, t, filter, "")
+
+	// 1, 2, 3 and 5 are in shard -80.
+	// 4 and 6 are in shard 80-.
+	input := []string{
+		"begin",
+		"insert into t1 values (1, 1, 'aaa')",
+		"insert into t1 values (128, 2, 'bbb')",
+		// Stay in shard.
+		"update t1 set region = 2 where id = 1",
+		// Move from -80 to 80-.
+		"update t1 set region = 128 where id = 1",
+		// Move from 80- to -80.
+		"update t1 set region = 1 where id = 2",
+		"commit",
+	}
+	execStatements(t, input)
+	expectLog(ctx, t, input, ch, [][]string{{
+		`begin`,
+		`type:FIELD field_event:<table_name:"t1" fields:<name:"region" type:INT32 > fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
+		`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:1 lengths:3 values:"11aaa" > > > `,
+		`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:1 lengths:3 values:"11aaa" > after:<lengths:1 lengths:1 lengths:3 values:"21aaa" > > > `,
+		`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:1 lengths:3 values:"21aaa" > > > `,
+		`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:1 lengths:3 values:"12bbb" > > > `,
+		`gtid`,
+		`commit`,
+	}})
+}
+
 func TestSelectFilter(t *testing.T) {
 	if testing.Short() {
 		t.Skip()

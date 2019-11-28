@@ -87,22 +87,22 @@ func (ge *RegionExperimental) Map(vcursor VCursor, rowsColValues [][]sqltypes.Va
 			destinations = append(destinations, key.DestinationNone{})
 			continue
 		}
+		// Compute region prefix.
+		rn, err := sqltypes.ToUint64(row[0])
+		if err != nil {
+			destinations = append(destinations, key.DestinationNone{})
+			continue
+		}
+		r := make([]byte, 2, 2+8)
+		binary.BigEndian.PutUint16(r, uint16(rn))
+
 		// Compute hash.
-		hn, err := sqltypes.ToUint64(row[0])
+		hn, err := sqltypes.ToUint64(row[1])
 		if err != nil {
 			destinations = append(destinations, key.DestinationNone{})
 			continue
 		}
 		h := vhash(hn)
-
-		// Compute region prefix.
-		rn, err := sqltypes.ToUint64(row[1])
-		if err != nil {
-			destinations = append(destinations, key.DestinationNone{})
-			continue
-		}
-		r := make([]byte, 2)
-		binary.BigEndian.PutUint16(r, uint16(rn))
 
 		// Concatenate and add to destinations.
 		if ge.regionBytes == 1 {

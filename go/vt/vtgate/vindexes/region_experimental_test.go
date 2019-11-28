@@ -25,7 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/key"
 )
 
-func TestRegionExperimentalCost(t *testing.T) {
+func TestRegionExperimentalMisc(t *testing.T) {
 	ge, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, ge.Cost())
@@ -33,24 +33,24 @@ func TestRegionExperimentalCost(t *testing.T) {
 	assert.True(t, ge.IsUnique())
 }
 
-func TestRegionExperimentalMapMulti1(t *testing.T) {
+func TestRegionExperimentalMap(t *testing.T) {
 	vindex, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
 	assert.NoError(t, err)
 	ge := vindex.(MultiColumn)
 	got, err := ge.Map(nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1), sqltypes.NewInt64(1),
 	}, {
-		sqltypes.NewInt64(1), sqltypes.NewInt64(255),
+		sqltypes.NewInt64(255), sqltypes.NewInt64(1),
 	}, {
-		sqltypes.NewInt64(1), sqltypes.NewInt64(256),
+		sqltypes.NewInt64(256), sqltypes.NewInt64(1),
 	}, {
 		// Invalid length.
 		sqltypes.NewInt64(1),
 	}, {
-		// Invalid id.
+		// Invalid region.
 		sqltypes.NewVarBinary("abcd"), sqltypes.NewInt64(256),
 	}, {
-		// Invalid region.
+		// Invalid id.
 		sqltypes.NewInt64(1), sqltypes.NewVarBinary("abcd"),
 	}})
 	assert.NoError(t, err)
@@ -73,11 +73,11 @@ func TestRegionExperimentalMapMulti2(t *testing.T) {
 	got, err := ge.Map(nil, [][]sqltypes.Value{{
 		sqltypes.NewInt64(1), sqltypes.NewInt64(1),
 	}, {
-		sqltypes.NewInt64(1), sqltypes.NewInt64(255),
+		sqltypes.NewInt64(255), sqltypes.NewInt64(1),
 	}, {
-		sqltypes.NewInt64(1), sqltypes.NewInt64(256),
+		sqltypes.NewInt64(256), sqltypes.NewInt64(1),
 	}, {
-		sqltypes.NewInt64(1), sqltypes.NewInt64(0x10000),
+		sqltypes.NewInt64(0x10000), sqltypes.NewInt64(1),
 	}})
 	assert.NoError(t, err)
 
