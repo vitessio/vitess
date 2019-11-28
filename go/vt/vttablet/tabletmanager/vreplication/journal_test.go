@@ -43,7 +43,14 @@ func TestJournalOneToOne(t *testing.T) {
 			Match: "t",
 		}},
 	}
-	_, firstID := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+
+	_, firstID := startVReplication(t, bls, "")
 
 	journal := &binlogdatapb.Journal{
 		Id:            1,
@@ -98,7 +105,14 @@ func TestJournalOneToMany(t *testing.T) {
 			Match: "t",
 		}},
 	}
-	_, firstID := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+
+	_, firstID := startVReplication(t, bls, "")
 
 	journal := &binlogdatapb.Journal{
 		Id:            1,
@@ -158,7 +172,13 @@ func TestJournalTablePresent(t *testing.T) {
 			Match: "t",
 		}},
 	}
-	_, firstID := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	_, firstID := startVReplication(t, bls, "")
 
 	journal := &binlogdatapb.Journal{
 		Id:            1,
@@ -213,7 +233,14 @@ func TestJournalTableNotPresent(t *testing.T) {
 			Match: "t",
 		}},
 	}
-	_, _ = startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+
+	_, _ = startVReplication(t, bls, "")
 
 	journal := &binlogdatapb.Journal{
 		Id:            1,
@@ -270,7 +297,13 @@ func TestJournalTableMixed(t *testing.T) {
 			Match: "t1",
 		}},
 	}
-	_, _ = startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	_, _ = startVReplication(t, bls, "")
 
 	journal := &binlogdatapb.Journal{
 		Id:            1,

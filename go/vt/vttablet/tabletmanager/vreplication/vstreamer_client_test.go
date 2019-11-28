@@ -159,6 +159,11 @@ func TestTabletVStreamerClientVStream(t *testing.T) {
 
 	vsClient := &TabletVStreamerClient{
 		tablet: tablet,
+		target: &querypb.Target{
+			Keyspace:   tablet.Keyspace,
+			Shard:      tablet.Shard,
+			TabletType: tablet.Type,
+		},
 	}
 
 	filter := &binlogdatapb.Filter{
