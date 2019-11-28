@@ -106,9 +106,11 @@ func (ev filePosQueryEvent) Query(BinlogFormat) (Query, error) {
 	}, nil
 }
 
-//----------------------------------------------------------------------------
+func (ev filePosQueryEvent) StripChecksum(f BinlogFormat) (BinlogEvent, []byte, error) {
+	return ev, nil, nil
+}
 
-var _ BinlogEvent = filePosFakeEvent{}
+//----------------------------------------------------------------------------
 
 // filePosFakeEvent is the base class for fake events.
 type filePosFakeEvent struct {
@@ -207,10 +209,6 @@ func (ev filePosFakeEvent) Rows(BinlogFormat, *TableMap) (Rows, error) {
 	return Rows{}, nil
 }
 
-func (ev filePosFakeEvent) StripChecksum(f BinlogFormat) (BinlogEvent, []byte, error) {
-	return ev, nil, nil
-}
-
 func (ev filePosFakeEvent) IsPseudo() bool {
 	return false
 }
@@ -237,6 +235,10 @@ func newFilePosGTIDEvent(file string, pos int, timestamp uint32) filePosGTIDEven
 
 func (ev filePosGTIDEvent) IsGTID() bool {
 	return true
+}
+
+func (ev filePosGTIDEvent) StripChecksum(f BinlogFormat) (BinlogEvent, []byte, error) {
+	return ev, nil, nil
 }
 
 func (ev filePosGTIDEvent) GTID(BinlogFormat) (GTID, bool, error) {
