@@ -670,7 +670,7 @@ func TestInsertShardedGeo(t *testing.T) {
 					"t1": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
 							Name:    "geo",
-							Columns: []string{"id", "region"},
+							Columns: []string{"region", "id"},
 						}, {
 							Name:    "lookup",
 							Columns: []string{"id"},
@@ -690,20 +690,20 @@ func TestInsertShardedGeo(t *testing.T) {
 		InsertSharded,
 		ks.Keyspace,
 		[]sqltypes.PlanValue{{
-			// colVindex columns: id, region
+			// colVindex columns: region, id
 			Values: []sqltypes.PlanValue{{
-				// rows for id
-				Values: []sqltypes.PlanValue{{
-					Value: sqltypes.NewInt64(1),
-				}, {
-					Value: sqltypes.NewInt64(1),
-				}},
-			}, {
 				// rows for region
 				Values: []sqltypes.PlanValue{{
 					Value: sqltypes.NewInt64(1),
 				}, {
 					Value: sqltypes.NewInt64(255),
+				}},
+			}, {
+				// rows for id
+				Values: []sqltypes.PlanValue{{
+					Value: sqltypes.NewInt64(1),
+				}, {
+					Value: sqltypes.NewInt64(1),
 				}},
 			}},
 		}, {
