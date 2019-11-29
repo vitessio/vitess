@@ -1,4 +1,4 @@
-name: Local Example
+name: check_make_parser
 on: [push, pull_request]
 jobs:
 
@@ -30,12 +30,8 @@ jobs:
         cp .github/bootstrap.sh .
         ./bootstrap.sh
 
-    - name: Build
-      run: |
-        GOBIN=$PWD/bin make build
-
-    - name: Run Local Example
+    - name: check_make_parser
       run: |
         export PATH=$PWD/bin:$PATH
-        VTDATAROOT=/tmp/vtdataroot VTTOP=$PWD VTROOT=$PWD test/local_example.sh
+        VTDATAROOT=/tmp/vtdataroot VTTOP=$PWD VTROOT=$PWD tools/check_make_parser.sh
 

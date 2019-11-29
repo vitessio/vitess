@@ -68,9 +68,9 @@ func (c *Conn) WriteComBinlogDumpGTID(serverID uint32, binlogFilename string, bi
 	return nil
 }
 
-// SemisyncExtensionLoaded checks if the semisync extension has been loaded.
+// SemiSyncExtensionLoaded checks if the semisync extension has been loaded.
 // It should work for both MariaDB and MySQL.
-func (c *Conn) SemisyncExtensionLoaded() bool {
+func (c *Conn) SemiSyncExtensionLoaded() bool {
 	qr, err := c.ExecuteFetch("SHOW GLOBAL VARIABLES LIKE 'rpl_semi_sync%'", 10, false)
 	if err != nil {
 		return false
