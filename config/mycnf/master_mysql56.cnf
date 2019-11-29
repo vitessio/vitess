@@ -1,20 +1,29 @@
 # This file is auto-included when MySQL 5.6 is detected.
 
-# Options for enabling GTID
-# https://dev.mysql.com/doc/refman/5.6/en/replication-gtids-howto.html
-gtid_mode = ON
+# MySQL 5.6 does not enable the binary log by default, and 
+# the default for sync_binlog is unsafe. The format is TABLE, and
+# info repositories also default to file.
+
 log_bin
+sync_binlog = 1
+gtid_mode = ON
+binlog_format = ROW
 log_slave_updates
 enforce_gtid_consistency
-
-# Crash-safe replication settings.
+expire_logs_days = 3
 master_info_repository = TABLE
 relay_log_info_repository = TABLE
 relay_log_purge = 1
 relay_log_recovery = 1
+slave_net_timeout = 60
 
-# Native AIO tends to run into aio-max-nr limit during test startup.
-innodb_use_native_aio = 0
+# In MySQL 5.6 the default charset is latin1
+
+character_set_server = utf8
+collation_server = utf8_general_ci
+
+# MySQL 5.6 is unstrict by default
+sql_mode = STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION
 
 # Semi-sync replication is required for automated unplanned failover
 # (when the master goes away). Here we just load the plugin so it's
@@ -31,3 +40,4 @@ plugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisy
 # a master that becomes unresponsive.
 rpl_semi_sync_master_timeout = 1000000000000000000
 rpl_semi_sync_master_wait_no_slave = 1
+
