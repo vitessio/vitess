@@ -94,7 +94,7 @@
 				"tools/check_make_parser.sh"
 			],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 5,
 			"RetryMax": 1,
 			"Tags": []
 		},
@@ -212,7 +212,7 @@
 				"test/local_example.sh"
 			],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 5,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -418,7 +418,7 @@
 				"tools/e2e_test_runner.sh"
 			],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 5,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -442,7 +442,7 @@
 				"e2e_test_race"
 			],
 			"Manual": false,
-			"Shard": 1,
+			"Shard": 5,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -453,7 +453,7 @@
 				"tools/unit_test_runner.sh"
 			],
 			"Manual": false,
-			"Shard": 0,
+			"Shard": 5,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -465,7 +465,7 @@
 				"unit_test_race"
 			],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 5,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -590,7 +590,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 2,
+			"Shard": 5,
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"

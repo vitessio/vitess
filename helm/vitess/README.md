@@ -392,7 +392,7 @@ metadata:
 data:
   extra.cnf: |-
     early-plugin-load=keyring_vault=keyring_vault.so
-    # this includes default rpl plugins, see https://github.com/vitessio/vitess/blob/master/config/mycnf/master_mysql56.cnf for details
+    # this includes default rpl plugins, see https://github.com/vitessio/vitess/blob/master/config/mycnf/master_mysql57.cnf for details
     plugin-load=rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so;keyring_udf=keyring_udf.so
     keyring_vault_config=/vt/usersecrets/vttablet-vault/vault.conf # load keyring configuration from secret
     innodb_encrypt_tables=ON # encrypt all tables by default
