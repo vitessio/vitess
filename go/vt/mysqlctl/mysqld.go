@@ -798,8 +798,6 @@ func (mysqld *Mysqld) getMycnfTemplates(root string) []string {
 
 	cnfTemplatePaths := []string{
 		path.Join(root, "config/mycnf/default.cnf"),
-		path.Join(root, "config/mycnf/master.cnf"),
-		path.Join(root, "config/mycnf/replica.cnf"),
 	}
 
 	if extraCnf := os.Getenv("EXTRA_MY_CNF"); extraCnf != "" {

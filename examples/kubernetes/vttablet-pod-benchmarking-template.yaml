@@ -87,9 +87,6 @@ spec:
           -tablet_uid {{uid}}
           -socket_file $VTDATAROOT/mysqlctl.sock
           -init_db_sql_file $VTROOT/config/init_db.sql" vitess
-      env:
-        - name: EXTRA_MY_CNF
-          value: /vt/config/mycnf/benchmark.cnf:/vt/config/mycnf/master_mysql56.cnf
   volumes:
     - name: syslog
       hostPath: {path: /dev/log}
