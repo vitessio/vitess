@@ -201,10 +201,10 @@ vtgate:
   # The options below are the most commonly adjusted, but any flag can be put here.
   # run vtgate --help to see all available flags
   extraFlags:
-    # MySQL server version to advertise. (default "5.5.10-Vitess")
-    # If running 8.0, you may need to use something like "8.0.13-Vitess"
+    # MySQL server version to advertise. (default "5.7.9-Vitess")
+    # If running 8.0, you may prefer to use something like "8.0.13-Vitess"
     # to prevent db clients from running deprecated queries on startup
-    mysql_server_version: "5.5.10-Vitess"
+    mysql_server_version: "5.7.9-Vitess"
 
   secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
 
