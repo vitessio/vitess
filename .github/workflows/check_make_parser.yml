@@ -1,4 +1,4 @@
-name: e2e Test Cluster
+name: check_make_parser
 on: [push, pull_request]
 jobs:
 
@@ -30,12 +30,8 @@ jobs:
         cp .github/bootstrap.sh .
         ./bootstrap.sh
 
-    - name: Build
-      run: |
-        VTROOT=$PWD VTTOP=$PWD make build
-
-    - name: Run e2e test cluster
+    - name: check_make_parser
       run: |
         export PATH=$PWD/bin:$PATH
-        source ./dev.env
-        VTDATAROOT=/tmp/vtdataroot VTTOP=$PWD VTROOT=$PWD tools/e2e_test_cluster.sh
+        VTDATAROOT=/tmp/vtdataroot VTTOP=$PWD VTROOT=$PWD tools/check_make_parser.sh
+
