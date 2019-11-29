@@ -1,4 +1,4 @@
-name: Local Example
+name: cluster_endtoend
 on: [push, pull_request]
 jobs:
 
@@ -32,10 +32,10 @@ jobs:
 
     - name: Build
       run: |
-        VTROOT=$PWD VTTOP=$PWD make build
+        GOBIN=$PWD/bin make build
 
-    - name: Run Local Example
+    - name: cluster_endtoend
       run: |
         export PATH=$PWD/bin:$PATH
-        VTDATAROOT=/tmp/vtdataroot VTTOP=$PWD VTROOT=$PWD test/local_example.sh
-
+        source ./dev.env
+        VTDATAROOT=/tmp/vtdataroot VTTOP=$PWD VTROOT=$PWD make e2e_test_cluster
