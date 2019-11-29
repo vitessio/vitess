@@ -253,7 +253,13 @@ func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 		cluster.VtGateExtraArgs)
 
 	log.Info(fmt.Sprintf("Vtgate started, connect to mysql using : mysql -h 127.0.0.1 -P %d", cluster.VtgateMySQLPort))
-	return cluster.VtgateProcess.Setup()
+	if err = cluster.VtgateProcess.Setup(); err != nil {
+		return err
+	}
+	if err = cluster.WaitForTabletsToHealthyInVtgate(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // NewCluster instantiates a new cluster
@@ -280,6 +286,34 @@ func (cluster *LocalProcessCluster) ReStartVtgate() (err error) {
 		return
 	}
 	return err
+}
+
+// WaitForTabletsToHealthyInVtgate waits for all tablets in all shards to be healthy as per vtgate
+func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error) {
+	var isRdOnlyPresent bool
+	for _, keyspace := range cluster.Keyspaces {
+		for _, shard := range keyspace.Shards {
+			isRdOnlyPresent = false
+			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspace.Name, shard.Name)); err != nil {
+				return err
+			}
+			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace.Name, shard.Name)); err != nil {
+				return err
+			}
+			for _, tablet := range shard.Vttablets {
+				if tablet.Type == "rdonly" {
+					isRdOnlyPresent = true
+				}
+			}
+			if isRdOnlyPresent {
+				err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspace.Name, shard.Name))
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // Teardown brings down the cluster by invoking teardown for individual processes
