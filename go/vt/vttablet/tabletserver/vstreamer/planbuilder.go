@@ -424,7 +424,7 @@ func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.Selec
 		if err != nil {
 			return err
 		}
-		plan.Vindex, err = vindexes.CreateVindex(vtype, vtype, map[string]string{})
+		plan.Vindex, err = vschema.FindOrCreateVindex(vtype)
 		if err != nil {
 			return err
 		}
