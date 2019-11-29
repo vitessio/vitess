@@ -18,6 +18,7 @@ package vstreamer
 
 import (
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -40,4 +41,28 @@ func (lvs *localVSchema) FindTable(tablename string) (*vindexes.Table, error) {
 		return nil, fmt.Errorf("table %s not found", tablename)
 	}
 	return table, nil
+}
+
+func (lvs *localVSchema) FindOrCreateVindex(qualifiedName string) (vindexes.Vindex, error) {
+	splits := strings.Split(qualifiedName, ".")
+	var keyspace, name string
+	switch len(splits) {
+	case 1:
+		name = splits[0]
+	case 2:
+		keyspace, name = splits[0], splits[1]
+	default:
+		return nil, fmt.Errorf("invalid vindex name: %v", qualifiedName)
+	}
+	vindex, err := lvs.vschema.FindVindex(keyspace, name)
+	if err != nil {
+		return nil, err
+	}
+	if vindex != nil {
+		return vindex, nil
+	}
+	if keyspace != "" {
+		return nil, fmt.Errorf("vindex %v not found", qualifiedName)
+	}
+	return vindexes.CreateVindex(name, name, map[string]string{})
 }
