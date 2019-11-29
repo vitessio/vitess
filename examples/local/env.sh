@@ -55,14 +55,7 @@ if [ "${TOPO}" = "zk2" ]; then
 else
     echo "enter etcd2 env"
 
-    case $(uname) in
-      Linux)  etcd_platform=linux;;
-      Darwin) etcd_platform=darwin;;
-    esac
-
     ETCD_SERVER="localhost:2379"
-    ETCD_VERSION=$(cat "${VTROOT}/dist/etcd/.installed_version")
-    ETCD_BINDIR="${VTROOT}/dist/etcd/etcd-${ETCD_VERSION}-${etcd_platform}-amd64/"
     TOPOLOGY_FLAGS="-topo_implementation etcd2 -topo_global_server_address $ETCD_SERVER -topo_global_root /vitess/global"
 
     mkdir -p "${VTDATAROOT}/tmp"

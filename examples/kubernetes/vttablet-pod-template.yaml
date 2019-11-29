@@ -69,9 +69,6 @@ spec:
           -orc_api_url http://orchestrator/api
           -orc_discover_interval 5m
           -restore_from_backup {{backup_flags}}" vitess
-      env:
-        - name: EXTRA_MY_CNF
-          value: /vt/config/mycnf/master_mysql56.cnf
     - name: mysql
       image: {{vitess_image}}
       volumeMounts:
@@ -96,9 +93,6 @@ spec:
           -tablet_uid {{uid}}
           -socket_file $VTDATAROOT/mysqlctl.sock
           -init_db_sql_file $VTROOT/config/init_db.sql" vitess
-      env:
-        - name: EXTRA_MY_CNF
-          value: /vt/config/mycnf/master_mysql56.cnf
   volumes:
     - name: syslog
       hostPath: {path: /dev/log}

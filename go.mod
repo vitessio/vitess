@@ -8,6 +8,7 @@ require (
 	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878 // indirect
 	github.com/aws/aws-sdk-go v0.0.0-20180223184012-ebef4262e06a
 	github.com/boltdb/bolt v1.3.1 // indirect
+	github.com/cespare/xxhash/v2 v2.1.1
 	github.com/cockroachdb/cmux v0.0.0-20170110192607-30d10be49292 // indirect
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd // indirect
 	github.com/coreos/etcd v0.0.0-20170626015032-703663d1f6ed
@@ -24,7 +25,6 @@ require (
 	github.com/golang/mock v1.3.1
 	github.com/golang/protobuf v1.3.2
 	github.com/golang/snappy v0.0.0-20170215233205-553a64147049
-	github.com/google/btree v1.0.0 // indirect
 	github.com/google/shlex v0.0.0-20181106134648-c34317bd91bf // indirect
 	github.com/gorilla/websocket v0.0.0-20160912153041-2d1e4548da23
 	github.com/grpc-ecosystem/go-grpc-middleware v1.1.0
@@ -49,8 +49,6 @@ require (
 	github.com/minio/minio-go v0.0.0-20190131015406-c8a261de75c1
 	github.com/mitchellh/go-testing-interface v1.0.0 // indirect
 	github.com/mitchellh/mapstructure v1.1.2 // indirect
-	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
-	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/olekukonko/tablewriter v0.0.0-20160115111002-cca8bbc07984
 	github.com/opentracing-contrib/go-grpc v0.0.0-20180928155321-4b5a12d3ff02
 	github.com/opentracing/opentracing-go v1.1.0

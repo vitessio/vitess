@@ -864,6 +864,8 @@ func TestPlayerDDL(t *testing.T) {
 	expectDBClientQueries(t, []string{
 		"alter table t1 add column val1 varchar(128)",
 		"/update _vt.vreplication set pos=",
+		// The apply of the DDL on target generates an "other" event.
+		"/update _vt.vreplication set pos=",
 	})
 	execStatements(t, []string{"alter table t1 add column val2 varchar(128)"})
 	expectDBClientQueries(t, []string{
@@ -883,6 +885,8 @@ func TestPlayerDDL(t *testing.T) {
 	execStatements(t, []string{"alter table t1 add column val1 varchar(128)"})
 	expectDBClientQueries(t, []string{
 		"alter table t1 add column val1 varchar(128)",
+		"/update _vt.vreplication set pos=",
+		// The apply of the DDL on target generates an "other" event.
 		"/update _vt.vreplication set pos=",
 	})
 	execStatements(t, []string{"alter table t1 add column val2 varchar(128)"})
@@ -1303,6 +1307,9 @@ func TestPlayerBatching(t *testing.T) {
 		"alter table t1 add column val2 varbinary(128)",
 		"/update _vt.vreplication set pos=",
 		"alter table t1 drop column val2",
+		"/update _vt.vreplication set pos=",
+		// The apply of the DDLs on target generates two "other" event.
+		"/update _vt.vreplication set pos=",
 		"/update _vt.vreplication set pos=",
 	})
 }

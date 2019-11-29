@@ -43,8 +43,6 @@ func TestMycnf(t *testing.T) {
 	}
 	cnfTemplatePaths := []string{
 		path.Join(root, "config/mycnf/default.cnf"),
-		path.Join(root, "config/mycnf/replica.cnf"),
-		path.Join(root, "config/mycnf/master.cnf"),
 	}
 	data, err := cnf.makeMycnf(cnfTemplatePaths)
 	if err != nil {

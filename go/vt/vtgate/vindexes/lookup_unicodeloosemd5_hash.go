@@ -94,11 +94,6 @@ func (lh *LookupUnicodeLooseMD5Hash) IsUnique() bool {
 	return false
 }
 
-// IsFunctional returns false since the Vindex is not functional.
-func (lh *LookupUnicodeLooseMD5Hash) IsFunctional() bool {
-	return false
-}
-
 // Map can map ids to key.Destination objects.
 func (lh *LookupUnicodeLooseMD5Hash) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
@@ -259,11 +254,6 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) Cost() int {
 // IsUnique returns true since the Vindex is unique.
 func (lhu *LookupUnicodeLooseMD5HashUnique) IsUnique() bool {
 	return true
-}
-
-// IsFunctional returns false since the Vindex is not functional.
-func (lhu *LookupUnicodeLooseMD5HashUnique) IsFunctional() bool {
-	return false
 }
 
 // Map can map ids to key.Destination objects.

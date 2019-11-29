@@ -962,7 +962,7 @@ func TestTabletServerBeginFail(t *testing.T) {
 	defer cancel()
 	tsv.Begin(ctx, &target, nil)
 	_, err = tsv.Begin(ctx, &target, nil)
-	want := "transaction pool connection limit exceeded"
+	want := "transaction pool aborting request due to already expired context"
 	if err == nil || err.Error() != want {
 		t.Fatalf("Begin err: %v, want %v", err, want)
 	}

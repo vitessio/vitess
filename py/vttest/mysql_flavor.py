@@ -47,7 +47,6 @@ class MariaDB(MysqlFlavor):
   def my_cnf(self):
     files = [
         os.path.join(vtroot, "config/mycnf/default-fast.cnf"),
-        os.path.join(vtroot, "config/mycnf/master_mariadb100.cnf"),
     ]
     return ":".join(files)
 
@@ -57,7 +56,6 @@ class MariaDB103(MysqlFlavor):
   def my_cnf(self):
     files = [
       os.path.join(vtroot, "config/mycnf/default-fast.cnf"),
-      os.path.join(vtroot, "config/mycnf/master_mariadb103.cnf"),
     ]
     return ":".join(files)
 
@@ -67,7 +65,6 @@ class MySQL56(MysqlFlavor):
   def my_cnf(self):
     files = [
         os.path.join(vtroot, "config/mycnf/default-fast.cnf"),
-        os.path.join(vtroot, "config/mycnf/master_mysql56.cnf"),
     ]
     return ":".join(files)
 
@@ -77,7 +74,6 @@ class MySQL80(MysqlFlavor):
   def my_cnf(self):
     files = [
         os.path.join(vtroot, "config/mycnf/default-fast.cnf"),
-        os.path.join(vtroot, "config/mycnf/master_mysql80.cnf"),
     ]
     return ":".join(files)
 

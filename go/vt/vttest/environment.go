@@ -115,23 +115,8 @@ func GetMySQLOptions(flavor string) (string, []string, error) {
 		flavor = DefaultMySQLFlavor
 	}
 
-	mycnf := []string{"config/mycnf/vtcombo.cnf"}
-	switch flavor {
-	case "MariaDB103":
-		mycnf = append(mycnf, "config/mycnf/default-fast.cnf")
-		mycnf = append(mycnf, "config/mycnf/master_mariadb103.cnf")
-	case "MariaDB":
-		mycnf = append(mycnf, "config/mycnf/default-fast.cnf")
-		mycnf = append(mycnf, "config/mycnf/master_mariadb100.cnf")
-	case "MySQL80":
-		mycnf = append(mycnf, "config/mycnf/default-fast.cnf")
-		mycnf = append(mycnf, "config/mycnf/master_mysql80.cnf")
-	case "MySQL56":
-		mycnf = append(mycnf, "config/mycnf/default-fast.cnf")
-		mycnf = append(mycnf, "config/mycnf/master_mysql56.cnf")
-	default:
-		return "", nil, fmt.Errorf("unknown mysql flavor: %s", flavor)
-	}
+	mycnf := []string{}
+	mycnf = append(mycnf, "config/mycnf/default-fast.cnf")
 
 	for i, cnf := range mycnf {
 		mycnf[i] = path.Join(os.Getenv("VTROOT"), cnf)
