@@ -90,7 +90,7 @@ func (mariadbFlavor) resetReplicationCommands(c *Conn) []string {
 		"RESET MASTER",
 		"SET GLOBAL gtid_slave_pos = ''",
 	}
-	if c.SemisyncExtensionLoaded() {
+	if c.SemiSyncExtensionLoaded() {
 		resetCommands = append(resetCommands, "SET GLOBAL rpl_semi_sync_master_enabled = false, GLOBAL rpl_semi_sync_slave_enabled = false") // semi-sync will be enabled if needed when slave is started.
 	}
 	return resetCommands

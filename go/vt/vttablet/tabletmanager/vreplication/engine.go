@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/topo"
 )
@@ -82,6 +83,13 @@ type Engine struct {
 	mysqld          mysqlctl.MysqlDaemon
 	dbClientFactory func() binlogplayer.DBClient
 	dbName          string
+
+	journaler map[string]*journalEvent
+}
+
+type journalEvent struct {
+	journal      *binlogdatapb.Journal
+	participants map[string]int
 }
 
 // NewEngine creates a new Engine.
@@ -94,6 +102,7 @@ func NewEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClie
 		mysqld:          mysqld,
 		dbClientFactory: dbClientFactory,
 		dbName:          dbName,
+		journaler:       make(map[string]*journalEvent),
 	}
 	return vre
 }
@@ -187,7 +196,7 @@ func (vre *Engine) initAll() error {
 		return err
 	}
 	for _, row := range rows {
-		ct, err := newController(vre.ctx, row, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil)
+		ct, err := newController(vre.ctx, row, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil, vre)
 		if err != nil {
 			return err
 		}
@@ -280,7 +289,7 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 			if err != nil {
 				return nil, err
 			}
-			ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil)
+			ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil, vre)
 			if err != nil {
 				return nil, err
 			}
@@ -318,7 +327,7 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 			}
 			// Create a new controller in place of the old one.
 			// For continuity, the new controller inherits the previous stats.
-			ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, blpStats[id])
+			ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, blpStats[id], vre)
 			if err != nil {
 				return nil, err
 			}
@@ -392,6 +401,139 @@ func (vre *Engine) fetchIDs(dbClient binlogplayer.DBClient, selector string) (id
 	}
 	bv = map[string]*querypb.BindVariable{"ids": bvval}
 	return ids, bv, nil
+}
+
+func (vre *Engine) registerJournal(journal *binlogdatapb.Journal, id int) error {
+	vre.mu.Lock()
+	defer vre.mu.Unlock()
+	if !vre.isOpen {
+		// Unreachable.
+		return nil
+	}
+
+	workflow := vre.controllers[id].workflow
+	key := fmt.Sprintf("%s:%d", workflow, journal.Id)
+	je, ok := vre.journaler[key]
+	if !ok {
+		log.Infof("Journal encountered: %v", journal)
+		controllerSources := make(map[string]bool)
+		for _, ct := range vre.controllers {
+			if ct.workflow != workflow {
+				// Only compare with streams that belong to the current workflow.
+				continue
+			}
+			ks := fmt.Sprintf("%s:%s", ct.source.Keyspace, ct.source.Shard)
+			controllerSources[ks] = true
+		}
+		je = &journalEvent{
+			journal:      journal,
+			participants: make(map[string]int),
+		}
+		for _, jks := range journal.Participants {
+			ks := fmt.Sprintf("%s:%s", jks.Keyspace, jks.Shard)
+			if _, ok := controllerSources[ks]; !ok {
+				return fmt.Errorf("cannot redirect on journal: not all sources are present in this workflow: missing %v", ks)
+			}
+			je.participants[ks] = 0
+		}
+		vre.journaler[key] = je
+	}
+
+	ks := fmt.Sprintf("%s:%s", vre.controllers[id].source.Keyspace, vre.controllers[id].source.Shard)
+	log.Infof("Registering id %v against %v", id, ks)
+	je.participants[ks] = id
+	for _, pid := range je.participants {
+		if pid == 0 {
+			// Still need to wait.
+			return nil
+		}
+	}
+	go vre.transitionJournal(key)
+	return nil
+}
+
+func (vre *Engine) transitionJournal(key string) {
+	vre.mu.Lock()
+	defer vre.mu.Unlock()
+	if !vre.isOpen {
+		return
+	}
+
+	log.Infof("Transitioning for journal:workload %v", key)
+	je := vre.journaler[key]
+	defer delete(vre.journaler, key)
+	// Wait for participating controllers to stop.
+	// Also collect one id reference.
+	refid := 0
+	for _, id := range je.participants {
+		refid = id
+		vre.controllers[id].Stop()
+	}
+
+	dbClient := vre.dbClientFactory()
+	if err := dbClient.Connect(); err != nil {
+		log.Errorf("transitionJournal: unable to connect to the database: %v", err)
+		return
+	}
+	defer dbClient.Close()
+
+	if err := dbClient.Begin(); err != nil {
+		log.Errorf("transitionJournal: %v", err)
+		return
+	}
+
+	params, err := readRow(dbClient, refid)
+	if err != nil {
+		log.Errorf("transitionJournal: %v", err)
+		return
+	}
+	var newids []int
+	for _, sgtid := range je.journal.ShardGtids {
+		bls := vre.controllers[refid].source
+		bls.Keyspace, bls.Shard = sgtid.Keyspace, sgtid.Shard
+		query := fmt.Sprintf("insert into _vt.vreplication "+
+			"(workflow, source, pos, max_tps, max_replication_lag, tablet_types, time_updated, transaction_timestamp, state, db_name) "+
+			"values (%v, %v, %v, %v, %v, %v, %v, 0, '%v', %v)",
+			encodeString(params["workflow"]), encodeString(bls.String()), encodeString(sgtid.Gtid), params["max_tps"], params["max_replication_lag"], encodeString(params["tablet_types"]), time.Now().Unix(), binlogplayer.BlpRunning, encodeString(vre.dbName))
+		qr, err := vre.executeFetchMaybeCreateTable(dbClient, query, 1)
+		if err != nil {
+			log.Errorf("transitionJournal: %v", err)
+			return
+		}
+		log.Infof("Created stream: %v for %v", qr.InsertID, sgtid)
+		newids = append(newids, int(qr.InsertID))
+	}
+	for _, id := range je.participants {
+		_, err := vre.executeFetchMaybeCreateTable(dbClient, binlogplayer.DeleteVReplication(uint32(id)), 1)
+		if err != nil {
+			log.Errorf("transitionJournal: %v", err)
+			return
+		}
+		log.Infof("Deleted stream: %v", id)
+	}
+	if err := dbClient.Commit(); err != nil {
+		log.Errorf("transitionJournal: %v", err)
+		return
+	}
+
+	for _, id := range je.participants {
+		delete(vre.controllers, id)
+	}
+
+	for _, id := range newids {
+		params, err := readRow(dbClient, id)
+		if err != nil {
+			log.Errorf("transitionJournal: %v", err)
+			return
+		}
+		ct, err := newController(vre.ctx, params, vre.dbClientFactory, vre.mysqld, vre.ts, vre.cell, *tabletTypesStr, nil, vre)
+		if err != nil {
+			log.Errorf("transitionJournal: %v", err)
+			return
+		}
+		vre.controllers[id] = ct
+	}
+	log.Infof("Completed transition for journal:workload %v", key)
 }
 
 // WaitForPos waits for the replication to reach the specified position.
