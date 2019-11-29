@@ -194,7 +194,7 @@ func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb
 	return false
 }
 
-func buildPlan(ti *Table, kschema *vindexes.KeyspaceSchema, filter *binlogdatapb.Filter) (*Plan, error) {
+func buildPlan(ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter) (*Plan, error) {
 	for _, rule := range filter.Rules {
 		switch {
 		case strings.HasPrefix(rule.Match, "/"):
@@ -206,15 +206,15 @@ func buildPlan(ti *Table, kschema *vindexes.KeyspaceSchema, filter *binlogdatapb
 			if !result {
 				continue
 			}
-			return buildREPlan(ti, kschema, rule.Filter)
+			return buildREPlan(ti, vschema, rule.Filter)
 		case rule.Match == ti.Name:
-			return buildTablePlan(ti, kschema, rule.Filter)
+			return buildTablePlan(ti, vschema, rule.Filter)
 		}
 	}
 	return nil, nil
 }
 
-func buildREPlan(ti *Table, kschema *vindexes.KeyspaceSchema, filter string) (*Plan, error) {
+func buildREPlan(ti *Table, vschema *localVSchema, filter string) (*Plan, error) {
 	plan := &Plan{
 		Table: ti,
 	}
@@ -230,17 +230,15 @@ func buildREPlan(ti *Table, kschema *vindexes.KeyspaceSchema, filter string) (*P
 
 	// We need to additionally set VindexColumn, Vindex and KeyRange
 	// based on the Primary Vindex of the table.
-	// Find table in kschema.
-	table := kschema.Tables[ti.Name]
-	if table == nil {
-		return nil, fmt.Errorf("no vschema definition for table %s", ti.Name)
+	table, err := vschema.FindTable(ti.Name)
+	if err != nil {
+		return nil, err
 	}
 	// Get Primary Vindex.
 	if len(table.ColumnVindexes) == 0 {
 		return nil, fmt.Errorf("table %s has no primary vindex", ti.Name)
 	}
 	plan.Vindex = table.ColumnVindexes[0].Vindex
-	var err error
 	plan.VindexColumns, err = buildVindexColumns(plan.Table, table.ColumnVindexes[0].Columns)
 	if err != nil {
 		return nil, err
@@ -258,7 +256,7 @@ func buildREPlan(ti *Table, kschema *vindexes.KeyspaceSchema, filter string) (*P
 	return plan, nil
 }
 
-func buildTablePlan(ti *Table, kschema *vindexes.KeyspaceSchema, query string) (*Plan, error) {
+func buildTablePlan(ti *Table, vschema *localVSchema, query string) (*Plan, error) {
 	sel, fromTable, err := analyzeSelect(query)
 	if err != nil {
 		return nil, err
@@ -270,7 +268,7 @@ func buildTablePlan(ti *Table, kschema *vindexes.KeyspaceSchema, query string) (
 	plan := &Plan{
 		Table: ti,
 	}
-	if err := plan.analyzeExprs(kschema, sel.SelectExprs); err != nil {
+	if err := plan.analyzeExprs(vschema, sel.SelectExprs); err != nil {
 		return nil, err
 	}
 
@@ -285,7 +283,7 @@ func buildTablePlan(ti *Table, kschema *vindexes.KeyspaceSchema, query string) (
 	if !funcExpr.Name.EqualString("in_keyrange") {
 		return nil, fmt.Errorf("unsupported where clause: %v", sqlparser.String(sel.Where))
 	}
-	if err := plan.analyzeInKeyRange(kschema, funcExpr.Exprs); err != nil {
+	if err := plan.analyzeInKeyRange(vschema, funcExpr.Exprs); err != nil {
 		return nil, err
 	}
 	return plan, nil
@@ -314,10 +312,10 @@ func analyzeSelect(query string) (sel *sqlparser.Select, fromTable sqlparser.Tab
 	return sel, fromTable, nil
 }
 
-func (plan *Plan) analyzeExprs(kschema *vindexes.KeyspaceSchema, selExprs sqlparser.SelectExprs) error {
+func (plan *Plan) analyzeExprs(vschema *localVSchema, selExprs sqlparser.SelectExprs) error {
 	if _, ok := selExprs[0].(*sqlparser.StarExpr); !ok {
 		for _, expr := range selExprs {
-			cExpr, err := plan.analyzeExpr(kschema, expr)
+			cExpr, err := plan.analyzeExpr(vschema, expr)
 			if err != nil {
 				return err
 			}
@@ -337,7 +335,7 @@ func (plan *Plan) analyzeExprs(kschema *vindexes.KeyspaceSchema, selExprs sqlpar
 	return nil
 }
 
-func (plan *Plan) analyzeExpr(kschema *vindexes.KeyspaceSchema, selExpr sqlparser.SelectExpr) (cExpr ColExpr, err error) {
+func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExpr) (cExpr ColExpr, err error) {
 	aliased, ok := selExpr.(*sqlparser.AliasedExpr)
 	if !ok {
 		return ColExpr{}, fmt.Errorf("unsupported: %v", sqlparser.String(selExpr))
@@ -367,9 +365,9 @@ func (plan *Plan) analyzeExpr(kschema *vindexes.KeyspaceSchema, selExpr sqlparse
 		if len(inner.Exprs) != 0 {
 			return ColExpr{}, fmt.Errorf("unexpected: %v", sqlparser.String(inner))
 		}
-		table := kschema.Tables[plan.Table.Name]
-		if table == nil {
-			return ColExpr{}, fmt.Errorf("no vschema definition for table %s", plan.Table.Name)
+		table, err := vschema.FindTable(plan.Table.Name)
+		if err != nil {
+			return ColExpr{}, err
 		}
 		// Get Primary Vindex.
 		if len(table.ColumnVindexes) == 0 {
@@ -390,14 +388,14 @@ func (plan *Plan) analyzeExpr(kschema *vindexes.KeyspaceSchema, selExpr sqlparse
 	}
 }
 
-func (plan *Plan) analyzeInKeyRange(kschema *vindexes.KeyspaceSchema, exprs sqlparser.SelectExprs) error {
+func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.SelectExprs) error {
 	var colnames []sqlparser.ColIdent
 	var krExpr sqlparser.SelectExpr
 	switch {
 	case len(exprs) == 1:
-		table := kschema.Tables[plan.Table.Name]
-		if table == nil {
-			return fmt.Errorf("no vschema definition for table %s", plan.Table.Name)
+		table, err := vschema.FindTable(plan.Table.Name)
+		if err != nil {
+			return err
 		}
 		// Get Primary Vindex.
 		if len(table.ColumnVindexes) == 0 {
