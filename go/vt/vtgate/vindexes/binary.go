@@ -54,6 +54,11 @@ func (vind *Binary) IsUnique() bool {
 	return true
 }
 
+// NeedVCursor satisfies the Vindex interface.
+func (vind *Binary) NeedVCursor() bool {
+	return false
+}
+
 // Verify returns true if ids maps to ksids.
 func (vind *Binary) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
