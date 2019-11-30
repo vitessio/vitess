@@ -177,7 +177,7 @@ func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb
 			expr := strings.Trim(rule.Match, "/")
 			result, err := regexp.MatchString(expr, table.Name.String())
 			if err != nil {
-				return true
+				continue
 			}
 			if !result {
 				continue
