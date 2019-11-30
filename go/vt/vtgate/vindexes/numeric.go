@@ -57,6 +57,11 @@ func (*Numeric) IsUnique() bool {
 	return true
 }
 
+// NeedVCursor satisfies the Vindex interface.
+func (*Numeric) NeedVCursor() bool {
+	return false
+}
+
 // Verify returns true if ids and ksids match.
 func (*Numeric) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))

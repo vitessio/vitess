@@ -20,8 +20,7 @@ import (
 	"reflect"
 	"testing"
 
-	"strings"
-
+	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
@@ -33,16 +32,11 @@ func init() {
 	binVindex = vindex.(SingleColumn)
 }
 
-func TestBinaryMD5Cost(t *testing.T) {
-	if binVindex.Cost() != 1 {
-		t.Errorf("Cost(): %d, want 1", binVindex.Cost())
-	}
-}
-
-func TestBinaryMD5String(t *testing.T) {
-	if strings.Compare("binary_md5_varchar", binVindex.String()) != 0 {
-		t.Errorf("String(): %s, want binary_md5_varchar", binVindex.String())
-	}
+func TestBinaryMD5Info(t *testing.T) {
+	assert.Equal(t, 1, binVindex.Cost())
+	assert.Equal(t, "binary_md5_varchar", binVindex.String())
+	assert.True(t, binVindex.IsUnique())
+	assert.False(t, binVindex.NeedVCursor())
 }
 
 func TestBinaryMD5Map(t *testing.T) {

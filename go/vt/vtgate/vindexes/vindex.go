@@ -56,8 +56,15 @@ type Vindex interface {
 	Cost() int
 
 	// IsUnique returns true if the Vindex is unique.
-	// Which means Map() maps to either a KeyRange or a single KeyspaceID.
+	// A Unique Vindex is allowed to return non-unique values like
+	// a keyrange. This is in situations where the vindex does not
+	// have enough information to map to a keyspace id. If so, such
+	// a vindex cannot be primary.
 	IsUnique() bool
+
+	// NeedVCursor returns true if the Vindex makes calls into the
+	// VCursor. Such vindexes cannot be used by vreplication.
+	NeedVCursor() bool
 }
 
 // SingleColumn defines the interface for a single column vindex.

@@ -18,9 +18,9 @@ package vindexes
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
@@ -35,16 +35,11 @@ func init() {
 	null = hv.(SingleColumn)
 }
 
-func TestNullCost(t *testing.T) {
-	if null.Cost() != 0 {
-		t.Errorf("Cost(): %d, want 0", null.Cost())
-	}
-}
-
-func TestNullString(t *testing.T) {
-	if strings.Compare("nn", null.String()) != 0 {
-		t.Errorf("String(): %s, want null", null.String())
-	}
+func TestNullInfo(t *testing.T) {
+	assert.Equal(t, 0, null.Cost())
+	assert.Equal(t, "nn", null.String())
+	assert.True(t, null.IsUnique())
+	assert.False(t, null.NeedVCursor())
 }
 
 func TestNullMap(t *testing.T) {

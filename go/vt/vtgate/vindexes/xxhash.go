@@ -56,6 +56,11 @@ func (vind *XXHash) IsUnique() bool {
 	return true
 }
 
+// NeedVCursor satisfies the Vindex interface.
+func (vind *XXHash) NeedVCursor() bool {
+	return false
+}
+
 // Map can map ids to key.Destination objects.
 func (vind *XXHash) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, len(ids))

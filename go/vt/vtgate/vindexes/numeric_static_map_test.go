@@ -20,8 +20,8 @@ import (
 	"reflect"
 	"testing"
 
-	"strings"
-
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
@@ -38,24 +38,13 @@ func createVindex() (SingleColumn, error) {
 	return vindex.(SingleColumn), nil
 }
 
-func TestNumericStaticMapCost(t *testing.T) {
+func TestNumericStaticMapInfo(t *testing.T) {
 	numericStaticMap, err := createVindex()
-	if err != nil {
-		t.Fatalf("failed to create vindex: %v", err)
-	}
-	if numericStaticMap.Cost() != 1 {
-		t.Errorf("Cost(): %d, want 1", numericStaticMap.Cost())
-	}
-}
-
-func TestNumericStaticMapString(t *testing.T) {
-	numericStaticMap, err := createVindex()
-	if err != nil {
-		t.Fatalf("failed to create vindex: %v", err)
-	}
-	if strings.Compare("numericStaticMap", numericStaticMap.String()) != 0 {
-		t.Errorf("String(): %s, want num", numericStaticMap.String())
-	}
+	require.NoError(t, err)
+	assert.Equal(t, 1, numericStaticMap.Cost())
+	assert.Equal(t, "numericStaticMap", numericStaticMap.String())
+	assert.True(t, numericStaticMap.IsUnique())
+	assert.False(t, numericStaticMap.NeedVCursor())
 }
 
 func TestNumericStaticMapMap(t *testing.T) {

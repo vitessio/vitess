@@ -18,9 +18,9 @@ package vindexes
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -49,28 +49,18 @@ func TestLookupHashNew(t *testing.T) {
 	}
 }
 
-func TestLookupHashCost(t *testing.T) {
+func TestLookupHashInfo(t *testing.T) {
 	lookuphash := createLookup(t, "lookup_hash", false)
+	assert.Equal(t, 20, lookuphash.Cost())
+	assert.Equal(t, "lookup_hash", lookuphash.String())
+	assert.False(t, lookuphash.IsUnique())
+	assert.True(t, lookuphash.NeedVCursor())
+
 	lookuphashunique := createLookup(t, "lookup_hash_unique", false)
-
-	if lookuphash.Cost() != 20 {
-		t.Errorf("Cost(): %d, want 20", lookuphash.Cost())
-	}
-	if lookuphashunique.Cost() != 10 {
-		t.Errorf("Cost(): %d, want 10", lookuphashunique.Cost())
-	}
-}
-
-func TestLookupHashString(t *testing.T) {
-	lookuphash := createLookup(t, "lookup_hash", false)
-	lookuphashunique := createLookup(t, "lookup_hash_unique", false)
-
-	if strings.Compare("lookup_hash", lookuphash.String()) != 0 {
-		t.Errorf("String(): %s, want lookup_hash", lookuphash.String())
-	}
-	if strings.Compare("lookup_hash_unique", lookuphashunique.String()) != 0 {
-		t.Errorf("String(): %s, want lookup_hash_unique", lookuphashunique.String())
-	}
+	assert.Equal(t, 10, lookuphashunique.Cost())
+	assert.Equal(t, "lookup_hash_unique", lookuphashunique.String())
+	assert.True(t, lookuphashunique.IsUnique())
+	assert.True(t, lookuphashunique.NeedVCursor())
 }
 
 func TestLookupHashMap(t *testing.T) {

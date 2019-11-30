@@ -58,6 +58,11 @@ func (vind *Null) IsUnique() bool {
 	return true
 }
 
+// NeedVCursor satisfies the Vindex interface.
+func (vind *Null) NeedVCursor() bool {
+	return false
+}
+
 // Map can map ids to key.Destination objects.
 func (vind *Null) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))

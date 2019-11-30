@@ -20,6 +20,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -54,11 +55,12 @@ func TestLookupHashUniqueNew(t *testing.T) {
 	}
 }
 
-func TestLookupHashUniqueCost(t *testing.T) {
+func TestLookupHashUniqueInfo(t *testing.T) {
 	lhu := createLookup(t, "lookup_hash_unique", false)
-	if lhu.Cost() != 10 {
-		t.Errorf("Cost(): %d, want 10", lhu.Cost())
-	}
+	assert.Equal(t, 10, lhu.Cost())
+	assert.Equal(t, "lookup_hash_unique", lhu.String())
+	assert.True(t, lhu.IsUnique())
+	assert.True(t, lhu.NeedVCursor())
 }
 
 func TestLookupHashUniqueMap(t *testing.T) {

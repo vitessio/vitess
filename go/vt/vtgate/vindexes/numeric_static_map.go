@@ -80,6 +80,11 @@ func (vind *NumericStaticMap) IsUnique() bool {
 	return true
 }
 
+// NeedVCursor satisfies the Vindex interface.
+func (vind *NumericStaticMap) NeedVCursor() bool {
+	return false
+}
+
 // Verify returns true if ids and ksids match.
 func (vind *NumericStaticMap) Verify(_ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
