@@ -48,9 +48,9 @@ func (vind *Null) String() string {
 	return vind.name
 }
 
-// Cost returns the cost of this index as 0.
+// Cost returns the cost of this index as 100.
 func (vind *Null) Cost() int {
-	return 0
+	return 100
 }
 
 // IsUnique returns true since the Vindex is unique.
