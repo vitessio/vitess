@@ -58,7 +58,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
       libtcmalloc-minimal4 \
       percona-xtrabackup-24 \
  && rm -rf /var/lib/apt/lists/* \
- && groupadd -r vitess && useradd -r -g vitess vitess
+ && groupadd -r vitess && useradd -r -g vitess vitess \
+ && rm -rf /var/lib/mysql/
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
 ENV VTTOP /vt/src/vitess.io/vitess
