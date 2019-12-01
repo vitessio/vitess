@@ -19,6 +19,7 @@ package wrangler
 import (
 	"flag"
 	"fmt"
+	"sync"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
@@ -51,11 +52,13 @@ const (
 type testVDiffEnv struct {
 	wr         *Wrangler
 	workflow   string
-	tablets    map[int]*testVDiffTablet
 	topoServ   *topo.Server
 	cell       string
 	tabletType topodatapb.TabletType
 	tmc        *testVDiffTMClient
+
+	mu      sync.Mutex
+	tablets map[int]*testVDiffTablet
 }
 
 // vdiffEnv has to be a global for RegisterDialer to work.
@@ -63,6 +66,8 @@ var vdiffEnv *testVDiffEnv
 
 func init() {
 	tabletconn.RegisterDialer("VDiffTest", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+		vdiffEnv.mu.Lock()
+		defer vdiffEnv.mu.Unlock()
 		return vdiffEnv.tablets[int(tablet.Alias.Uid)], nil
 	})
 }
@@ -163,12 +168,17 @@ func newTestVDiffEnv(sourceShards, targetShards []string, query string, position
 }
 
 func (env *testVDiffEnv) close() {
+	env.mu.Lock()
+	defer env.mu.Unlock()
 	for _, t := range env.tablets {
-		env.deleteTablet(t.tablet)
+		env.topoServ.DeleteTablet(context.Background(), t.tablet.Alias)
 	}
+	env.tablets = nil
 }
 
 func (env *testVDiffEnv) addTablet(id int, keyspace, shard string, tabletType topodatapb.TabletType) *testVDiffTablet {
+	env.mu.Lock()
+	defer env.mu.Unlock()
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: env.cell,
@@ -196,11 +206,6 @@ func (env *testVDiffEnv) addTablet(id int, keyspace, shard string, tabletType to
 		}
 	}
 	return env.tablets[id]
-}
-
-func (env *testVDiffEnv) deleteTablet(tablet *topodatapb.Tablet) {
-	env.topoServ.DeleteTablet(context.Background(), tablet.Alias)
-	delete(env.tablets, int(tablet.Alias.Uid))
 }
 
 //----------------------------------------------
