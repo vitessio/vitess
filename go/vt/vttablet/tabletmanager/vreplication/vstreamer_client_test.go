@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -41,7 +40,6 @@ func TestTabletVStreamerClientOpen(t *testing.T) {
 	defer deleteTablet(tablet)
 
 	type fields struct {
-		mu             sync.Mutex
 		isOpen         bool
 		tablet         *topodatapb.Tablet
 		target         *querypb.Target
@@ -102,7 +100,6 @@ func TestTabletVStreamerClientClose(t *testing.T) {
 	defer deleteTablet(tablet)
 
 	type fields struct {
-		mu             sync.Mutex
 		isOpen         bool
 		tablet         *topodatapb.Tablet
 		target         *querypb.Target
@@ -366,7 +363,6 @@ func TestMySQLVStreamerClientOpen(t *testing.T) {
 
 func TestMySQLVStreamerClientClose(t *testing.T) {
 	type fields struct {
-		mu               sync.Mutex
 		isOpen           bool
 		sourceConnParams *mysql.ConnParams
 		vsEngine         *vstreamer.Engine

@@ -32,6 +32,93 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
+func TestPlayerStatementModeWithFilter(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table src1(id int, val varbinary(128), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table src1",
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "dst1",
+			Filter: "select * from src1",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	input := []string{
+		"set @@session.binlog_format='STATEMENT'",
+		"insert into src1 values(1, 'aaa')",
+		"set @@session.binlog_format='ROW'",
+	}
+
+	// It does not work when filter is enabled
+	output := []string{
+		"begin",
+		"/update _vt.vreplication set message='Filter rules are not supported for SBR",
+	}
+
+	execStatements(t, input)
+	expectDBClientQueries(t, output)
+}
+
+func TestPlayerStatementMode(t *testing.T) {
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table src1(id int, val varbinary(128), primary key(id))",
+		fmt.Sprintf("create table %s.src1(id int, val varbinary(128), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table src1",
+		fmt.Sprintf("drop table %s.src1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "/.*",
+			Filter: "",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
+	defer cancel()
+
+	input := []string{
+		"set @@session.binlog_format='STATEMENT'",
+		"insert into src1 values(1, 'aaa')",
+		"set @@session.binlog_format='ROW'",
+	}
+
+	output := []string{
+		"begin",
+		"insert into src1 values(1, 'aaa')",
+		"/update _vt.vreplication set pos=",
+		"commit",
+	}
+
+	execStatements(t, input)
+	expectDBClientQueries(t, output)
+}
+
 func TestPlayerFilters(t *testing.T) {
 	defer deleteTablet(addTablet(100))
 
