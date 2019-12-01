@@ -21,7 +21,6 @@
 # 0. Initialization and helper methods.
 # 1. Installation of dependencies.
 
-BUILD_TESTS=${BUILD_TESTS:-1}
 BUILD_PYTHON=${BUILD_PYTHON:-1}
 BUILD_JAVA=${BUILD_JAVA:-1}
 

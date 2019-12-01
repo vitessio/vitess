@@ -14,6 +14,9 @@
 
 MAKEFLAGS = -s
 
+export GOBIN=$(PWD)/bin
+export GO111MODULE=on
+
 # Disabled parallel processing of target prerequisites to avoid that integration tests are racing each other (e.g. for ports) and may fail.
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
@@ -59,8 +62,9 @@ parser:
 # To pass extra flags, run test.go manually.
 # For example: go run test.go -docker=false -- --extra-flag
 # For more info see: go run test.go -help
-test:
-	go run test.go -docker=false
+test: build dependency_check
+	echo $$(date): Running unit tests
+	tools/unit_test_runner.sh
 
 site_test: unit_test site_integration_test
 
@@ -83,11 +87,7 @@ cleanall:
 	# - exclude vtdataroot and vthook as they may have data we want
 	rm -rf ../../../../bin ../../../../dist ../../../../lib ../../../../pkg
 	# Remind people to run bootstrap.sh again
-	echo "Please run bootstrap.sh again to setup your environment"
-
-unit_test: build
-	echo $$(date): Running unit tests
-	go test $(VT_GO_PARALLEL) ./go/...
+	echo "Please run 'make tools' again to setup your environment"
 
 e2e_test: build
 	echo $$(date): Running endtoend tests
@@ -99,7 +99,7 @@ e2e_test: build
 unit_test_cover: build
 	go test $(VT_GO_PARALLEL) -cover ./go/... | misc/parse_cover.py
 
-unit_test_race: build
+unit_test_race: build  dependency_check
 	tools/unit_test_race.sh
 
 e2e_test_race: build
@@ -293,4 +293,7 @@ packages: docker_base
 
 tools:
 	echo $$(date): Installing dependencies
-	BUILD_PYTHON=0 BUILD_JAVA=0 ./bootstrap.sh
+	BUILD_PYTHON=0 ./bootstrap.sh
+
+dependency_check:
+	./tools/dependency_check.sh
