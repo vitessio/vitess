@@ -33,43 +33,43 @@ config:
 
     # choose a backup service - valid values are gcs/s3
     # TODO: add file and ceph support
-    # backup_storage_implementation: gcs
+    backup_storage_implementation: gcs
 
     #########
     # gcs settings
     #########
 
     # Google Cloud Storage bucket to use for backups
-    # gcs_backup_storage_bucket: vitess-backups
+    gcs_backup_storage_bucket: vitess-backups
 
     # root prefix for all backup-related object names
-    # gcs_backup_storage_root: vtbackups
+    gcs_backup_storage_root: vtbackups
 
     # secret that contains Google service account json with read/write access to the bucket
     # kubectl create secret generic vitess-backups-creds --from-file=gcp-creds.json
     # can be omitted if running on a GCE/GKE node with default permissions
-    # gcsSecret: vitess-gcs-creds
+    gcsSecret: vitess-gcs-creds
 
     #########
     # s3 settings
     #########
 
     # AWS region to use
-    # s3_backup_aws_region: us-east-1
+    s3_backup_aws_region: us-east-1
 
     # S3 bucket to use for backups
-    # s3_backup_storage_bucket: vitess-backups
+    s3_backup_storage_bucket: vitess-backups
 
     # root prefix for all backup-related object names
-    # s3_backup_storage_root: vtbackups
+    s3_backup_storage_root: vtbackups
 
     # server-side encryption algorithm (e.g., AES256, aws:kms)
-    # s3_backup_server_side_encryption: AES256
+    s3_backup_server_side_encryption: AES256
 
     # secret that contains AWS S3 credentials file with read/write access to the bucket
     # kubectl create secret generic s3-credentials --from-file=s3-creds
     # can be omitted if running on a node with default permissions
-    # s3Secret: vitess-s3-creds
+    s3Secret: vitess-s3-creds
 
 topology:
   globalCell:
