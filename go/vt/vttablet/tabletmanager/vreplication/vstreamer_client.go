@@ -208,10 +208,9 @@ func (vsClient *MySQLVStreamerClient) VStreamRows(ctx context.Context, query str
 	return streamer.Stream()
 }
 
+// InitVStreamerClient initializes config for vstreamer client
 func InitVStreamerClient(cfg *dbconfigs.DBConfigs) {
-	// Make copy of config
-	dbcfgs = &dbconfigs.DBConfigs{}
-	*dbcfgs = *cfg
+	dbcfgs = cfg
 }
 
 type checker struct{}
