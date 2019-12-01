@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+### This file is executed by 'make tools'. You do not need to execute it directly.
 
 # Outline of this file.
 # 0. Initialization and helper methods.
@@ -38,36 +39,7 @@ function fail() {
 # Create main directories.
 
 VTROOT="$PWD"
-LEGACYVTROOT="${VTROOT/\/src\/vitess.io\/vitess/}"
-
-mkdir -p dist
-mkdir -p bin
-mkdir -p lib
-mkdir -p vthook
-
-# This is required for VIRTUALENV
-# Used by Python below
-
 source ./dev.env
-
-go version &>/dev/null  || fail "Go is not installed or is not on \$PATH"
-goversion_min 1.12 || fail "Go is not version 1.12+"
-
-# Set up required soft links.
-# TODO(mberlin): Which of these can be deleted?
-ln -snf "$VTROOT/py" "$VTROOT/py-vtdb"
-ln -snf "$VTROOT/go/vt/zkctl/zksrv.sh" "$VTROOT/bin/zksrv.sh"
-ln -snf "$VTROOT/test/vthook-test.sh" "$VTROOT/vthook/test.sh"
-ln -snf "$VTROOT/test/vthook-test_backup_error" "$VTROOT/vthook/test_backup_error"
-ln -snf "$VTROOT/test/vthook-test_backup_transform" "$VTROOT/vthook/test_backup_transform"
-
-# git hooks are only required if someone intends to contribute.
-
-echo "creating git hooks"
-mkdir -p "$VTROOT/.git/hooks"
-ln -sf "$VTROOT/misc/git/pre-commit" "$VTROOT/.git/hooks/pre-commit"
-ln -sf "$VTROOT/misc/git/commit-msg" "$VTROOT/.git/hooks/commit-msg"
-(cd "$VTROOT" && git config core.hooksPath "$VTROOT/.git/hooks")
 
 # install_dep is a helper function to generalize the download and installation of dependencies.
 #
@@ -326,4 +298,4 @@ if [ "$BUILD_PYTHON" == 1 ] ; then
 fi
 
 echo
-echo "bootstrap finished - run 'source dev.env' or 'source build.env' in your shell before building."
+echo "bootstrap finished - run 'make build' to compile"

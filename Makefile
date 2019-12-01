@@ -18,7 +18,7 @@ MAKEFLAGS = -s
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build build_web test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race
+.PHONY: all build build_web test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race tools
 
 all: build
 
@@ -50,6 +50,7 @@ build:
 ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
+	bash ./build.env
 	go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
 
 parser:
@@ -289,3 +290,7 @@ packages: docker_base
 	docker build -f docker/packaging/Dockerfile -t vitess/packaging .
 	docker run --rm -v ${PWD}/releases:/vt/releases --env VERSION=$(VERSION) vitess/packaging --package /vt/releases -t deb --deb-no-default-config-files
 	docker run --rm -v ${PWD}/releases:/vt/releases --env VERSION=$(VERSION) vitess/packaging --package /vt/releases -t rpm
+
+tools:
+	echo $$(date): Installing dependencies
+	BUILD_PYTHON=0 BUILD_JAVA=0 ./bootstrap.sh
