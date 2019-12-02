@@ -71,7 +71,7 @@ type flavor interface {
 
 	// resetReplicationCommands returns the commands to completely reset
 	// replication on the host.
-	resetReplicationCommands() []string
+	resetReplicationCommands(c *Conn) []string
 
 	// setSlavePositionCommands returns the commands to set the
 	// replication position at which the slave will resume.
@@ -191,7 +191,7 @@ func (c *Conn) ReadBinlogEvent() (BinlogEvent, error) {
 // ResetReplicationCommands returns the commands to completely reset
 // replication on the host.
 func (c *Conn) ResetReplicationCommands() []string {
-	return c.flavor.resetReplicationCommands()
+	return c.flavor.resetReplicationCommands(c)
 }
 
 // SetSlavePositionCommands returns the commands to set the

@@ -164,7 +164,7 @@ func (flv *filePosFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 }
 
 // resetReplicationCommands is part of the Flavor interface.
-func (flv *filePosFlavor) resetReplicationCommands() []string {
+func (flv *filePosFlavor) resetReplicationCommands(c *Conn) []string {
 	return []string{
 		"unsupported",
 	}
