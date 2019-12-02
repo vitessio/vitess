@@ -3,6 +3,7 @@
 ### Changes
 * Update images of Vitess components to v4.0.0
 * Update MySQL image to Percona 5.7.26
+* Support for OpenTracing
 
 ## 1.0.6 - 2019-01-20
 
