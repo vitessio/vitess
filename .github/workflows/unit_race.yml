@@ -10,7 +10,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v1
       with:
-        go-version: 1.13
+        go-version: 1.12
 
     - name: Check out code
       uses: actions/checkout@v1
@@ -26,13 +26,11 @@ jobs:
 
     - name: Run bootstrap.sh
       run: |
-        echo "Copying new bootstrap over location of legacy one."
-        cp .github/bootstrap.sh .
-        ./bootstrap.sh
+        VTTOP=$PWD VTROOT=$PWD BUILD_PYTHON=0 ./bootstrap.sh
 
     - name: Build
       run: |
-        GOBIN=$PWD/bin make build
+        VTROOT=$PWD VTTOP=$PWD make build
 
     - name: unit_race
       run: |

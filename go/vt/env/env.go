@@ -19,6 +19,7 @@ package env
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -60,20 +61,22 @@ func VtDataRoot() string {
 	return DefaultVtDataRoot
 }
 
-// VtMysqlRoot returns the root for the mysql distribution, which
-// contains bin/mysql CLI for instance.
+// VtMysqlRoot returns the root for the mysql distribution,
+// which contains bin/mysql CLI for instance.
+// If it is not set, look for mysqld in the path.
 func VtMysqlRoot() (string, error) {
 	// if the environment variable is set, use that
 	if root := os.Getenv("VT_MYSQL_ROOT"); root != "" {
 		return root, nil
 	}
 
-	// otherwise let's use VTROOT
-	root, err := VtRoot()
+	// otherwise let's use the mysqld in the PATH
+	path, err := exec.LookPath("mysqld")
 	if err != nil {
-		return "", errors.New("VT_MYSQL_ROOT is not set and could not be guessed from the executable location. Please set $VT_MYSQL_ROOT")
+		return "", errors.New("VT_MYSQL_ROOT is not set and no mysqld could be found in your PATH")
 	}
-	return root, nil
+	path = filepath.Dir(filepath.Dir(path)) // strip mysqld, and the sbin
+	return path, nil
 }
 
 // VtMysqlBaseDir returns the Mysql base directory, which
