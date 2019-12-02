@@ -1,3 +1,9 @@
+## 1.0.7-5 - 2019-12-02
+
+### Changes
+* Update images of Vitess components to v4.0.0
+* Update MySQL image to Percona 5.7.26
+
 ## 1.0.6 - 2019-01-20
 
 ### Changes
