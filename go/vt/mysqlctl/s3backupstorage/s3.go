@@ -21,7 +21,7 @@ limitations under the License.
 // - credentials file at ~/.aws/credentials
 // - if running on an EC2 instance, an IAM role
 // See details at http://blogs.aws.amazon.com/security/post/Tx3D6U6WSFGOK2H/A-New-and-Standardized-Way-to-Manage-Credentials-in-the-AWS-SDKs
-package s3backupstorage
+package s3backupstorage // import "vitess.io/vitess/go/vt/mysqlctl/s3backupstorage"
 
 import (
 	"crypto/tls"

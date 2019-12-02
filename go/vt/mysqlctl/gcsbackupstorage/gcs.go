@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package gcsbackupstorage implements the BackupStorage interface
 // for Google Cloud Storage.
-package gcsbackupstorage
+package gcsbackupstorage // import "vitess.io/vitess/go/vt/mysqlctl/gcsbackupstorage"
 
 import (
 	"flag"

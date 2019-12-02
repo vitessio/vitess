@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package grpcmysqlctlclient contains the gRPC1 version of the mysqlctl
 // client protocol.
-package grpcmysqlctlclient
+package grpcmysqlctlclient // import "vitess.io/vitess/go/vt/mysqlctl/grpcmysqlctlclient"
 
 import (
 	"fmt"

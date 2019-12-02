@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package cephbackupstorage implements the BackupStorage interface
 // for Ceph Cloud Storage.
-package cephbackupstorage
+package cephbackupstorage // import "vitess.io/vitess/go/vt/mysqlctl/cephbackupstorage"
 
 import (
 	"encoding/json"

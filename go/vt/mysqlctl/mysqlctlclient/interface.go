@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package mysqlctlclient contains the generic client side of the remote
 // mysqlctl protocol.
-package mysqlctlclient
+package mysqlctlclient // import "vitess.io/vitess/go/vt/binlog/mysqlctl/mysqlctlclient"
 
 import (
 	"flag"

@@ -18,7 +18,7 @@ limitations under the License.
 Package grpcmysqlctlserver contains the gRPC implementation of the server
 side of the remote execution of mysqlctl commands.
 */
-package grpcmysqlctlserver
+package grpcmysqlctlserver // import "vitess.io/vitess/go/vt/mysqlctl/grpcmysqlctlserver"
 
 import (
 	"google.golang.org/grpc"

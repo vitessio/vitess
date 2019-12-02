@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package fakemysqldaemon
+package fakemysqldaemon // import "vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
 
 import (
 	"fmt"

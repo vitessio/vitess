@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package backupstorage contains the interface and file system implementation
 // of the backup system.
-package backupstorage
+package backupstorage // import "vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 
 import (
 	"flag"
