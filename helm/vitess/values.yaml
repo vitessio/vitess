@@ -180,7 +180,7 @@ etcd:
 # Default values for vtctld resources defined in 'topology'
 vtctld:
   serviceType: ClusterIP
-  vitessTag: helm-1.0.6
+  vitessTag: helm-1.0.7-5
   resources:
     # requests:
     #   cpu: 100m
@@ -191,7 +191,7 @@ vtctld:
 # Default values for vtgate resources defined in 'topology'
 vtgate:
   serviceType: ClusterIP
-  vitessTag: helm-1.0.6
+  vitessTag: helm-1.0.7-5
   resources:
     # requests:
     #   cpu: 500m
@@ -210,13 +210,13 @@ vtgate:
 
 # Default values for vtctlclient resources defined in 'topology'
 vtctlclient:
-  vitessTag: helm-1.0.6
+  vitessTag: helm-1.0.7-5
   extraFlags: {}
   secrets: [] # secrets are mounted under /vt/usersecrets/{secretname}
 
 # Default values for vtworker resources defined in 'jobs'
 vtworker:
-  vitessTag: helm-1.0.6
+  vitessTag: helm-1.0.7-5
   extraFlags: {}
   resources:
     # requests:
@@ -227,7 +227,7 @@ vtworker:
 
 # Default values for vttablet resources defined in 'topology'
 vttablet:
-  vitessTag: helm-1.0.6
+  vitessTag: helm-1.0.7-5
 
   # valid values are
   # - mysql56 (for MySQL 8.0)
@@ -237,7 +237,7 @@ vttablet:
   # the flavor determines the base my.cnf file for vitess to function
   flavor: mysql56
 
-  mysqlImage: percona:5.7.23
+  mysqlImage: percona:5.7.26
   # mysqlImage: mysql:5.7.24
   # mysqlImage: mariadb:10.3.11
 

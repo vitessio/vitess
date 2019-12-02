@@ -419,3 +419,15 @@ vttablet:
   secrets:
   - vttablet-vault
 ```
+
+### Enable tracing (opentracing-jaeger)
+
+To enable tracing using opentracing Jaeger of Vitess components add tracing config with tracer `opentracing-jaeger` to `extraFlags`. For example to enable tracing for `vtgate`:
+
+```yaml
+vtgate:
+  extraFlags:
+    jaeger-agent-host: "JAEGER-AGENT:6831"
+    tracing-sampling-rate: 0.1
+    tracer: opentracing-jaeger
+```
