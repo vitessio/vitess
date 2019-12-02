@@ -123,11 +123,11 @@ func TestMain(m *testing.M) {
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 		for _, tablet := range tablets {
 			if tablet.Type == "master" {
-				masterTablet = tablet
+				masterTablet = *tablet
 			} else if tablet.Type != "rdonly" {
-				replicaTablet = tablet
+				replicaTablet = *tablet
 			} else {
-				rdonlyTablet = tablet
+				rdonlyTablet = *tablet
 			}
 		}
 

@@ -134,7 +134,7 @@ func initClusterForInitialSharding(shardNames []string, totalTabletsRequired int
 			}
 
 			// start vttablet process
-			tablet.VttabletProcess = *cluster.VttabletProcessInstance(tablet.HTTPPort,
+			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
 				tablet.GrpcPort,
 				tablet.TabletUID,
 				ClusterInstance.Cell,
@@ -149,7 +149,7 @@ func initClusterForInitialSharding(shardNames []string, totalTabletsRequired int
 				ClusterInstance.EnableSemiSync)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 
-			shard.Vttablets = append(shard.Vttablets, *tablet)
+			shard.Vttablets = append(shard.Vttablets, tablet)
 		}
 		if ksExists {
 			ClusterInstance.Keyspaces[0].Shards = append(ClusterInstance.Keyspaces[0].Shards, *shard)
@@ -288,7 +288,7 @@ func TestInitialShardingWithVersion(t *testing.T, version int, shardingKeyType t
 	for _, shard := range []cluster.Shard{shard21, shard22} {
 		for _, vttablet := range shard.Vttablets {
 			vttablet.VttabletProcess.ExtraArgs = commonTabletArg
-			_ = ClusterInstance.VtctlclientProcess.InitTablet(&vttablet, cell, keyspaceName, hostname, shard.Name)
+			_ = ClusterInstance.VtctlclientProcess.InitTablet(vttablet, cell, keyspaceName, hostname, shard.Name)
 			_ = vttablet.VttabletProcess.CreateDB(keyspaceName)
 			err = vttablet.VttabletProcess.Setup()
 			assert.Nil(t, err)
@@ -404,32 +404,32 @@ func TestInitialShardingWithVersion(t *testing.T, version int, shardingKeyType t
 
 	// check first value is in the left shard
 	for _, tablet := range shard21.Vttablets {
-		sharding.CheckValues(t, tablet, []string{"INT64(86)", "INT64(1)", `VARCHAR("msg1")`, sharding.HexToDbStr(0x1000000000000000, shardingKeyType)},
+		sharding.CheckValues(t, *tablet, []string{"INT64(86)", "INT64(1)", `VARCHAR("msg1")`, sharding.HexToDbStr(0x1000000000000000, shardingKeyType)},
 			1, true, tableName, fixedParentID, keyspaceName, shardingKeyType)
 	}
 
 	for _, tablet := range shard22.Vttablets {
-		sharding.CheckValues(t, tablet, []string{"INT64(86)", "INT64(1)", `VARCHAR("msg1")`, sharding.HexToDbStr(0x1000000000000000, shardingKeyType)},
+		sharding.CheckValues(t, *tablet, []string{"INT64(86)", "INT64(1)", `VARCHAR("msg1")`, sharding.HexToDbStr(0x1000000000000000, shardingKeyType)},
 			1, false, tableName, fixedParentID, keyspaceName, shardingKeyType)
 	}
 
 	for _, tablet := range shard21.Vttablets {
-		sharding.CheckValues(t, tablet, []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, sharding.HexToDbStr(0x9000000000000000, shardingKeyType)},
+		sharding.CheckValues(t, *tablet, []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, sharding.HexToDbStr(0x9000000000000000, shardingKeyType)},
 			2, false, tableName, fixedParentID, keyspaceName, shardingKeyType)
 	}
 
 	for _, tablet := range shard22.Vttablets {
-		sharding.CheckValues(t, tablet, []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, sharding.HexToDbStr(0x9000000000000000, shardingKeyType)},
+		sharding.CheckValues(t, *tablet, []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, sharding.HexToDbStr(0x9000000000000000, shardingKeyType)},
 			2, true, tableName, fixedParentID, keyspaceName, shardingKeyType)
 	}
 
 	for _, tablet := range shard21.Vttablets {
-		sharding.CheckValues(t, tablet, []string{"INT64(86)", "INT64(3)", `VARCHAR("msg3")`, sharding.HexToDbStr(0xD000000000000000, shardingKeyType)},
+		sharding.CheckValues(t, *tablet, []string{"INT64(86)", "INT64(3)", `VARCHAR("msg3")`, sharding.HexToDbStr(0xD000000000000000, shardingKeyType)},
 			3, false, tableName, fixedParentID, keyspaceName, shardingKeyType)
 	}
 
 	for _, tablet := range shard22.Vttablets {
-		sharding.CheckValues(t, tablet, []string{"INT64(86)", "INT64(3)", `VARCHAR("msg3")`, sharding.HexToDbStr(0xD000000000000000, shardingKeyType)},
+		sharding.CheckValues(t, *tablet, []string{"INT64(86)", "INT64(3)", `VARCHAR("msg3")`, sharding.HexToDbStr(0xD000000000000000, shardingKeyType)},
 			3, true, tableName, fixedParentID, keyspaceName, shardingKeyType)
 	}
 
@@ -451,7 +451,7 @@ func TestInitialShardingWithVersion(t *testing.T, version int, shardingKeyType t
 	// testing filtered replication: insert a bunch of data on shard 1,
 	// check we get most of it after a few seconds, wait for binlog server
 	// timeout, check we get all of it.
-	sharding.InsertLots(1000, shard1MasterTablet, tableName, fixedParentID, keyspaceName)
+	sharding.InsertLots(1000, 0, shard1MasterTablet, tableName, fixedParentID, keyspaceName)
 
 	assert.True(t, sharding.CheckLotsTimeout(t, *shard22.Replica(), 1000, tableName, fixedParentID, keyspaceName, shardingKeyType))
 	sharding.CheckLotsNotPresent(t, *shard21.Replica(), 1000, tableName, fixedParentID, keyspaceName, shardingKeyType)

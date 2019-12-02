@@ -31,6 +31,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+
+	//topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -248,12 +250,14 @@ func CheckBinlogServerVars(t *testing.T, vttablet cluster.Vttablet, minStatement
 }
 
 // InsertLots inserts multiple values to vttablet
-func InsertLots(count uint64, vttablet cluster.Vttablet, table string, parentID int, ks string) {
+func InsertLots(count uint64, base uint64, vttablet cluster.Vttablet, table string, parentID int, ks string) {
 	var query1, query2 string
 	var i uint64
 	for i = 0; i < count; i++ {
-		query1 = fmt.Sprintf(InsertTabletTemplateKsID, table, parentID, 10000+i, fmt.Sprintf("msg-range1-%d", 10000+i), lotRange1+i, lotRange1+i, 10000+i)
-		query2 = fmt.Sprintf(InsertTabletTemplateKsID, table, parentID, 20000+i, fmt.Sprintf("msg-range2-%d", 20000+i), lotRange2+i, lotRange2+i, 20000+i)
+		query1 = fmt.Sprintf(InsertTabletTemplateKsID, table, parentID, 10000+base+i,
+			fmt.Sprintf("msg-range1-%d", 10000+base+i), lotRange1+base+i, lotRange1+base+i, 10000+base+i)
+		query2 = fmt.Sprintf(InsertTabletTemplateKsID, table, parentID, 20000+base+i,
+			fmt.Sprintf("msg-range2-%d", 20000+base+i), lotRange2+base+i, lotRange2+base+i, 20000+base+i)
 
 		InsertToTablet(query1, vttablet, ks)
 		InsertToTablet(query2, vttablet, ks)
@@ -387,6 +391,41 @@ func CheckTabletQueryService(t *testing.T, vttablet cluster.Vttablet, expectedSt
 		tabletStatus = vttablet.VttabletProcess.GetTabletStatus()
 		assert.Equal(t, tabletStatus, expectedStatus)
 	}
+}
+
+// CheckShardQueryServices checks DisableQueryService in the shard record's TabletControlMap.
+func CheckShardQueryServices(t *testing.T, ci cluster.LocalProcessCluster, shards []cluster.Shard, cell string,
+	keyspaceName string, tabletType topodata.TabletType, expectedState bool) {
+	for _, shard := range shards {
+		CheckShardQueryService(t, ci, cell, keyspaceName, shard.Name, tabletType, expectedState)
+	}
+}
+
+// CheckShardQueryService checks DisableQueryService in the shard record's TabletControlMap.
+func CheckShardQueryService(t *testing.T, ci cluster.LocalProcessCluster, cell string, keyspaceName string,
+	shardName string, tabletType topodata.TabletType, expectedState bool) {
+	// We assume that query service should be enabled unless
+	// DisableQueryService is explicitly True
+	queryServiceEnabled := true
+	srvKeyspace := GetSrvKeyspace(t, cell, keyspaceName, ci)
+	for _, partition := range srvKeyspace.Partitions {
+		tType := partition.GetServedType()
+		if tabletType != tType {
+			continue
+		}
+		for _, shardTabletControl := range partition.GetShardTabletControls() {
+			if shardTabletControl.GetName() == shardName {
+				if shardTabletControl.GetQueryServiceDisabled() {
+					queryServiceEnabled = false
+				}
+			}
+		}
+	}
+
+	assert.True(t, queryServiceEnabled == expectedState,
+		fmt.Sprintf("shard %s does not have the correct query service state: got %t but expected %t",
+			shardName, queryServiceEnabled, expectedState))
+
 }
 
 // HexToDbStr converts number to comparable string we got after querying to database.

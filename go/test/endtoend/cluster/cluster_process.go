@@ -75,21 +75,19 @@ type Keyspace struct {
 
 // Shard with associated vttablets
 type Shard struct {
-	Name         string
-	Vttablets    []Vttablet
-	ReplicaCount int
-	RdonlyCount  int
+	Name      string
+	Vttablets []*Vttablet
 }
 
 // MasterTablet get the 1st tablet which is master
 func (shard *Shard) MasterTablet() *Vttablet {
-	return &shard.Vttablets[0]
+	return shard.Vttablets[0]
 }
 
 // Rdonly get the last tablet which is rdonly
 func (shard *Shard) Rdonly() *Vttablet {
 	if len(shard.Vttablets) > 2 {
-		return &shard.Vttablets[len(shard.Vttablets)-1]
+		return shard.Vttablets[len(shard.Vttablets)-1]
 	}
 	return nil
 }
@@ -98,7 +96,7 @@ func (shard *Shard) Rdonly() *Vttablet {
 // Mostly we have either 2 or 3 tablet setup [master, replica], [master, replica, rdonly]
 func (shard *Shard) Replica() *Vttablet {
 	if len(shard.Vttablets) > 1 {
-		return &shard.Vttablets[len(shard.Vttablets)-2]
+		return shard.Vttablets[len(shard.Vttablets)-2]
 	}
 	return nil
 }
@@ -111,6 +109,7 @@ type Vttablet struct {
 	GrpcPort  int
 	MySQLPort int
 	Alias     string
+	Cell      string
 
 	// background executable processes
 	MysqlctlProcess MysqlctlProcess
@@ -228,7 +227,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				cluster.EnableSemiSync)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 
-			shard.Vttablets = append(shard.Vttablets, *tablet)
+			shard.Vttablets = append(shard.Vttablets, tablet)
 		}
 
 		// wait till all mysqlctl is instantiated
@@ -294,16 +293,16 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 // LaunchCluster Initiate required number of shard and the corresponding tablets
 // replicaCount: total number of replicas
 // rdonlyCount: total number of replicas
-func (cluster *LocalProcessCluster) LaunchCluster(keyspace *Keyspace, shards []*Shard) (err error) {
+func (cluster *LocalProcessCluster) LaunchCluster(keyspace *Keyspace, shards []Shard) (err error) {
 
 	log.Info("Starting keyspace : " + keyspace.Name)
 
 	// Start topo server
-	err = cluster.StartTopo()
-	if err != nil {
-		log.Error(err)
-		return
-	}
+	//err = cluster.StartTopo()
+	//if err != nil {
+	//	log.Error(err)
+	//	return
+	//}
 
 	// Create Keyspace
 	err = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
@@ -314,15 +313,9 @@ func (cluster *LocalProcessCluster) LaunchCluster(keyspace *Keyspace, shards []*
 
 	// Create shard
 	for _, shard := range shards {
-
-		// Init Tablets // i=0 is master
-		for i := 0; i < 1+shard.ReplicaCount+shard.RdonlyCount; i++ {
-			tablet := cluster.GetVttabletInstance("replica", 0)
-			if i > shard.ReplicaCount {
-				tablet.Type = "rdonly"
-			}
-
-			err = cluster.VtctlclientProcess.InitTablet(tablet, cluster.Cell, keyspace.Name, cluster.Hostname, shard.Name)
+		for _, tablet := range shard.Vttablets {
+			//tablet := cluster.GetVttabletInstance("replica", 0)
+			err = cluster.VtctlclientProcess.InitTablet(tablet, tablet.Cell, keyspace.Name, cluster.Hostname, shard.Name)
 			if err != nil {
 				log.Error(err)
 				return
@@ -335,7 +328,7 @@ func (cluster *LocalProcessCluster) LaunchCluster(keyspace *Keyspace, shards []*
 				tablet.HTTPPort,
 				tablet.GrpcPort,
 				tablet.TabletUID,
-				cluster.Cell,
+				tablet.Cell,
 				shard.Name,
 				keyspace.Name,
 				cluster.VtctldProcess.Port,
@@ -346,10 +339,10 @@ func (cluster *LocalProcessCluster) LaunchCluster(keyspace *Keyspace, shards []*
 				cluster.VtTabletExtraArgs,
 				cluster.EnableSemiSync)
 
-			shard.Vttablets = append(shard.Vttablets, *tablet)
+			//shard.Vttablets = append(shard.Vttablets, tablet)
 		}
 
-		keyspace.Shards = append(keyspace.Shards, *shard)
+		keyspace.Shards = append(keyspace.Shards, shard)
 	}
 	// Do Not Start Mysqlctl process
 	// Do Not Start vttablet process
@@ -499,9 +492,12 @@ func getRandomNumber(maxNumber int32, baseNumber int) int {
 }
 
 // GetVttabletInstance create a new vttablet object
-func (cluster *LocalProcessCluster) GetVttabletInstance(tabletType string, UID int) *Vttablet {
+func (cluster *LocalProcessCluster) GetVttabletInstance(tabletType string, UID int, cell string) *Vttablet {
 	if UID == 0 {
 		UID = cluster.GetAndReserveTabletUID()
+	}
+	if cell == "" {
+		cell = cluster.Cell
 	}
 	return &Vttablet{
 		TabletUID: UID,
@@ -509,7 +505,8 @@ func (cluster *LocalProcessCluster) GetVttabletInstance(tabletType string, UID i
 		GrpcPort:  cluster.GetAndReservePort(),
 		MySQLPort: cluster.GetAndReservePort(),
 		Type:      tabletType,
-		Alias:     fmt.Sprintf("%s-%010d", cluster.Cell, UID),
+		Cell:      cell,
+		Alias:     fmt.Sprintf("%s-%010d", cell, UID),
 	}
 }
 
