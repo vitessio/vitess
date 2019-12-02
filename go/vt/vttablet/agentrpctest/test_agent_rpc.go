@@ -55,7 +55,7 @@ type fakeRPCAgent struct {
 func (fra *fakeRPCAgent) LockTables(ctx context.Context) error {
 	panic("implement me")
 }
-``
+
 func (fra *fakeRPCAgent) UnlockTables(ctx context.Context) error {
 	panic("implement me")
 }
