@@ -36,14 +36,6 @@ ifdef VT_EXTRA_BUILD_FLAGS
 export EXTRA_BUILD_FLAGS := $(VT_EXTRA_BUILD_FLAGS)
 endif
 
-# Link against the MySQL library in $VT_MYSQL_ROOT if it's specified.
-ifdef VT_MYSQL_ROOT
-# Clutter the env var only if it's a non-standard path.
-  ifneq ($(VT_MYSQL_ROOT),/usr)
-    CGO_LDFLAGS += -L$(VT_MYSQL_ROOT)/lib
-  endif
-endif
-
 build_web:
 	echo $$(date): Building web artifacts
 	cd web/vtctld2 && ng build -prod
@@ -249,9 +241,6 @@ docker_lite_alpine:
 
 docker_guestbook:
 	cd examples/kubernetes/guestbook && ./build.sh
-
-docker_publish_site:
-	docker build -f docker/publish-site/Dockerfile -t vitess/publish-site .
 
 # This rule loads the working copy of the code into a bootstrap image,
 # and then runs the tests inside Docker.

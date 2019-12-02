@@ -56,8 +56,9 @@ def start_vitess():
           '--port', '12345',
           '--proto_topo', text_format.MessageToString(topology,
                                                       as_one_line=True),
-          '--web_dir', os.path.join(vtroot, 'web/vtctld'),
-          '--schema_dir', os.path.join(vtroot, 'examples/demo/schema')]
+          '--web_dir', os.path.join(vttop, 'web/vtctld'),
+          '--schema_dir', os.path.join(vttop, 'examples/demo/schema'),
+          '--mysql_server_bind_address', '0.0.0.0']
   sp = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
   # This load will make us wait for vitess to come up.

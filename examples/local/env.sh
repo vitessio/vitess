@@ -17,19 +17,6 @@
 hostname=`hostname -f`
 vtctld_web_port=15000
 
-# Try to find mysqld on PATH.
-if [ -z "$VT_MYSQL_ROOT" ]; then
-  mysql_path=`which mysqld`
-  if [ -z "$mysql_path" ]; then
-    echo "Can't guess location of mysqld. Please set VT_MYSQL_ROOT manually."
-    exit 1
-  fi
-  export VT_MYSQL_ROOT=$(dirname `dirname $mysql_path`)
-fi
-
-# Previously the file specified MYSQL_FLAVOR
-# it is now autodetected
-
 if [ "${TOPO}" = "zk2" ]; then
     # Each ZooKeeper server needs a list of all servers in the quorum.
     # Since we're running them all locally, we need to give them unique ports.

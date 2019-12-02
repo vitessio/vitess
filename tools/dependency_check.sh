@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,26 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM vitess/base
+function fail() {
+  echo "ERROR: $1"
+  exit 1
+}
 
-USER root
+# TODO: Add zksrv.sh
 
-# Install gem and use gem to install fpm
-RUN apt-get update \
- && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-   build-essential \
-   ruby-dev \
-   rubygems \
-   rpm \
- && rm -rf /var/lib/apt/lists/* \
- && gem install --no-ri --no-rdoc fpm
-
-RUN mkdir /vt/packaging
-
-COPY docker/packaging/* /vt/packaging/
-
-RUN chown -R vitess:vitess /vt/packaging
-
-USER vitess
-
-ENTRYPOINT ["/bin/bash", "/vt/packaging/package_vitess.sh"]
+for binary in mysqld consul etcd etctctl; do
+  command -v "$binary" > /dev/null || fail "${binary} is not installed in PATH. Run 'make tools' to install dependencies."
+done;

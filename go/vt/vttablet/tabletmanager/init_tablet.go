@@ -40,7 +40,7 @@ import (
 )
 
 var (
-	initDbNameOverride   = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet")
+	initDbNameOverride   = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>")
 	initKeyspace         = flag.String("init_keyspace", "", "(init parameter) keyspace to use for this tablet")
 	initShard            = flag.String("init_shard", "", "(init parameter) shard to use for this tablet")
 	initTags             flagutil.StringMapValue

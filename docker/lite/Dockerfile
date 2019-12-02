@@ -58,18 +58,13 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
       libtcmalloc-minimal4 \
       percona-xtrabackup-24 \
  && rm -rf /var/lib/apt/lists/* \
- && groupadd -r vitess && useradd -r -g vitess vitess
+ && groupadd -r vitess && useradd -r -g vitess vitess \
+ && rm -rf /var/lib/mysql/
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
 ENV VTROOT /vt/src/vitess.io/vitess
-ENV GOTOP $VTTOP/go
-ENV VTDATAROOT $VTROOT/vtdataroot
-ENV GOBIN $VTROOT/bin
-ENV GOPATH $VTROOT
+ENV VTDATAROOT /vt/vtdataroot
 ENV PATH $VTROOT/bin:$PATH
-ENV VT_MYSQL_ROOT /usr
-ENV PKG_CONFIG_PATH $VTROOT/lib
-ENV MYSQL_FLAVOR MySQL56
 
 # Copy binaries (placed by build.sh)
 COPY --from=staging /vt/ /vt/
