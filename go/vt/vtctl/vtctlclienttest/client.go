@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package vtctlclienttest contains the testsuite against which each
 // RPC implementation of the vtctlclient interface must be tested.
-package vtctlclienttest
+package vtctlclienttest // import "vitess.io/vitess/go/vt/vtctl/vtctlclienttest"
 
 // NOTE: This file is not test-only code because it is referenced by tests in
 //			 other packages and therefore it has to be regularly visible.

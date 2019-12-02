@@ -18,7 +18,7 @@ limitations under the License.
 Package grpcvtctlserver contains the gRPC implementation of the server side
 of the remote execution of vtctl commands.
 */
-package grpcvtctlserver
+package grpcvtctlserver // import "vitess.io/vitess/go/vt/vtctl/grpcvtctlserver"
 
 import (
 	"sync"
