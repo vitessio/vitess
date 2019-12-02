@@ -17,6 +17,8 @@
 # This runs client tests. It used to be part of local_example,
 # but has been moved to its own test. It hijacks the public examples scripts
 
+source build.env
+
 set -xe
 cd "$VTROOT/examples/local"
 

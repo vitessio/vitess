@@ -21,7 +21,7 @@ export GO111MODULE=on
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build build_web test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race tools
+.PHONY: all build build_web test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race minimaltools tools
 
 all: build
 
@@ -91,7 +91,7 @@ e2e_test: build
 unit_test_cover: build
 	go test $(VT_GO_PARALLEL) -cover ./go/... | misc/parse_cover.py
 
-unit_test_race: build  dependency_check
+unit_test_race: build dependency_check
 	tools/unit_test_race.sh
 
 e2e_test_race: build
@@ -113,7 +113,7 @@ site_integration_test:
 
 java_test:
 	go install ./go/cmd/vtgateclienttest ./go/cmd/vtcombo
-	mvn -f java/pom.xml -B clean verify
+	VTROOT=${PWD} mvn -f java/pom.xml -B clean verify
 
 install_protoc-gen-go:
 	go install github.com/golang/protobuf/protoc-gen-go
@@ -283,6 +283,10 @@ packages: docker_base
 tools:
 	echo $$(date): Installing dependencies
 	BUILD_PYTHON=0 ./bootstrap.sh
+
+minimaltools:
+	echo $$(date): Installing minimal dependencies
+	BUILD_PYTHON=0 BULD_JAVA=0 BUILD_CONSUL=0 ./bootstrap.sh
 
 dependency_check:
 	./tools/dependency_check.sh

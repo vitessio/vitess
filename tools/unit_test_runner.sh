@@ -31,7 +31,6 @@
 # and not via the Makefile.
 
 source build.env
-export VTDATAROOT=`mktemp -d`
 
 if [[ -z $VT_GO_PARALLEL && -n $VT_GO_PARALLEL_VALUE ]]; then
   VT_GO_PARALLEL="-p $VT_GO_PARALLEL_VALUE"

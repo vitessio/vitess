@@ -17,6 +17,11 @@
 hostname=`hostname -f`
 vtctld_web_port=15000
 
+function fail() {
+  echo "ERROR: $1"
+  exit 1
+}
+
 if [ "${TOPO}" = "zk2" ]; then
     # Each ZooKeeper server needs a list of all servers in the quorum.
     # Since we're running them all locally, we need to give them unique ports.

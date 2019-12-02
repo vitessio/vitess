@@ -24,14 +24,11 @@ jobs:
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
 
-    - name: Run bootstrap.sh
+    - name: Run make minimaltools
       run: |
-        echo "Copying new bootstrap over location of legacy one."
-        cp .github/bootstrap.sh .
-        ./bootstrap.sh
+        make minimaltools
 
     - name: check_make_parser
       run: |
-        export PATH=$PWD/bin:$PATH
-        VTDATAROOT=/tmp/vtdataroot VTTOP=$PWD VTROOT=$PWD tools/check_make_parser.sh
+        tools/check_make_parser.sh
 

@@ -23,6 +23,7 @@
 
 BUILD_PYTHON=${BUILD_PYTHON:-1}
 BUILD_JAVA=${BUILD_JAVA:-1}
+BUILD_CONSUL=${BUILD_CONSUL:-1}
 
 #
 # 0. Initialization and helper methods.
@@ -221,8 +222,10 @@ function install_consul() {
   unzip "consul_${version}_${platform}_${target}.zip"
   ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
-install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul
 
+if [ "$BUILD_CONSUL" == 1 ] ; then
+  install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul
+fi
 
 # Install py-mock.
 function install_pymock() {

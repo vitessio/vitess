@@ -83,3 +83,6 @@ releases
 dist/*
 py-vtdb*
 vthook*
+bin*
+
+vtdataroot*

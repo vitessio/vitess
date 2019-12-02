@@ -24,18 +24,10 @@ jobs:
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
 
-    - name: Run bootstrap.sh
+    - name: Run make minimaltools
       run: |
-        echo "Copying new bootstrap over location of legacy one."
-        cp .github/bootstrap.sh .
-        ./bootstrap.sh
-
-    - name: Build
-      run: |
-        VTROOT=$PWD VTTOP=$PWD make build
+        make minimaltools
 
     - name: e2e_race
       run: |
-        export PATH=$PWD/bin:$PATH
-        source ./dev.env
-        VTDATAROOT=/tmp/vtdataroot VTTOP=$PWD VTROOT=$PWD make e2e_test_race
+        make e2e_test_race

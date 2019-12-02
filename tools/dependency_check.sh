@@ -14,13 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+source build.env
+
 function fail() {
   echo "ERROR: $1"
   exit 1
 }
 
-# TODO: Add zksrv.sh
-
-for binary in mysqld consul etcd etctctl; do
+for binary in mysqld consul etcd etcdctl zksrv.sh; do
   command -v "$binary" > /dev/null || fail "${binary} is not installed in PATH. Run 'make tools' to install dependencies."
 done;
