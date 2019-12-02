@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package memorytopo
+package memorytopo // import "vitess.io/vitess/go/vt/topo/memorytopo"
 
 import (
 	"golang.org/x/net/context"

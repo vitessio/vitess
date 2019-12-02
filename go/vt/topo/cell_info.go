@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package topo
+package topo // import "vitess.io/vitess/go/vt/topo"
 
 import (
 	"fmt"
