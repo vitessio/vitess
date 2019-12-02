@@ -133,8 +133,8 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 
 	/*
 	 By default Vitess searches in vtenv.VtMysqlRoot() for a mysqld binary.
-	 This is usually the VT_MYSQL_ROOT env, but if it is unset or empty, it
-	 will substitute VtRoot(). See go/vt/env/env.go.
+	 This is historically the VT_MYSQL_ROOT env, but if it is unset or empty,
+	 Vitess will search the PATH. See go/vt/env/env.go.
 
 	 A number of subdirs inside vtenv.VtMysqlRoot() will be searched, see
 	 func binaryPath() for context. If no mysqld binary is found (possibly
@@ -153,12 +153,14 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 		f, v, err = getVersionFromEnv()
 		if err != nil {
 			vtenvMysqlRoot, _ := vtenv.VtMysqlRoot()
-			message := fmt.Sprintf(`could not auto-detect MySQL version. You may need to set VT_MYSQL_ROOT so a mysqld binary can be found, or set the environment variable MYSQL_FLAVOR if mysqld is not available locally:
+			message := fmt.Sprintf(`could not auto-detect MySQL version. You may need to set your PATH so a mysqld binary can be found, or set the environment variable MYSQL_FLAVOR if mysqld is not available locally:
+	PATH: %s
 	VT_MYSQL_ROOT: %s
 	VTROOT: %s
 	vtenv.VtMysqlRoot(): %s
 	MYSQL_FLAVOR: %s
 	`,
+				os.Getenv("PATH"),
 				os.Getenv("VT_MYSQL_ROOT"),
 				os.Getenv("VTROOT"),
 				vtenvMysqlRoot,
@@ -265,12 +267,12 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 	}
 
 	// Find mysql_upgrade. If not there, we do nothing.
-	dir, err := vtenv.VtMysqlRoot()
+	vtMysqlRoot, err := vtenv.VtMysqlRoot()
 	if err != nil {
 		log.Warningf("VT_MYSQL_ROOT not set, skipping mysql_upgrade step: %v", err)
 		return nil
 	}
-	name, err := binaryPath(dir, "mysql_upgrade")
+	name, err := binaryPath(vtMysqlRoot, "mysql_upgrade")
 	if err != nil {
 		log.Warningf("mysql_upgrade binary not present, skipping it: %v", err)
 		return nil
@@ -301,7 +303,8 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 		"--force", // Don't complain if it's already been upgraded.
 	}
 	cmd := exec.Command(name, args...)
-	cmd.Env = []string{os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql")}
+	libPath := fmt.Sprintf("LD_LIBRARY_PATH=%s/lib/mysql", vtMysqlRoot)
+	cmd.Env = []string{libPath}
 	out, err := cmd.CombinedOutput()
 	log.Infof("mysql_upgrade output: %s", out)
 	return err
@@ -344,16 +347,16 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 	case hook.HOOK_DOES_NOT_EXIST:
 		// hook doesn't exist, run mysqld_safe ourselves
 		log.Infof("%v: No mysqld_start hook, running mysqld_safe directly", ts)
-		dir, err := vtenv.VtMysqlRoot()
+		vtMysqlRoot, err := vtenv.VtMysqlRoot()
 		if err != nil {
 			return err
 		}
-		name, err = binaryPath(dir, "mysqld_safe")
+		name, err = binaryPath(vtMysqlRoot, "mysqld_safe")
 		if err != nil {
 			// The movement to use systemd means that mysqld_safe is not always provided.
 			// This should not be considered an issue do not generate a warning.
 			log.Infof("%v: trying to launch mysqld instead", err)
-			name, err = binaryPath(dir, "mysqld")
+			name, err = binaryPath(vtMysqlRoot, "mysqld")
 			// If this also fails, return an error.
 			if err != nil {
 				return err
@@ -368,10 +371,11 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 			"--basedir=" + mysqlBaseDir,
 		}
 		arg = append(arg, mysqldArgs...)
-		env := []string{os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql")}
+		libPath := fmt.Sprintf("LD_LIBRARY_PATH=%s/lib/mysql", vtMysqlRoot)
+		env := []string{libPath}
 
 		cmd := exec.Command(name, arg...)
-		cmd.Dir = dir
+		cmd.Dir = vtMysqlRoot
 		cmd.Env = env
 		log.Infof("%v %#v", ts, cmd)
 		stderr, err := cmd.StderrPipe()
