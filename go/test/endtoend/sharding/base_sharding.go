@@ -237,13 +237,13 @@ func CheckBinlogServerVars(t *testing.T, vttablet cluster.Vttablet, minStatement
 	if minStatement > 0 {
 		value := fmt.Sprintf("%v", reflect.ValueOf(resultMap["UpdateStreamKeyRangeStatements"]))
 		iValue, _ := strconv.Atoi(value)
-		assert.True(t, iValue >= minStatement)
+		assert.True(t, iValue >= minStatement, fmt.Sprintf("only got %d < %d statements", iValue, minStatement))
 	}
 
 	if minTxn > 0 {
 		value := fmt.Sprintf("%v", reflect.ValueOf(resultMap["UpdateStreamKeyRangeStatements"]))
 		iValue, _ := strconv.Atoi(value)
-		assert.True(t, iValue >= minTxn)
+		assert.True(t, iValue >= minTxn, fmt.Sprintf("only got %d < %d transactions", iValue, minTxn))
 	}
 }
 
@@ -263,8 +263,35 @@ func InsertLots(count uint64, vttablet cluster.Vttablet, table string, parentID 
 // InsertToTablet inserts a single row to vttablet
 func InsertToTablet(query string, vttablet cluster.Vttablet, ks string) {
 	_, _ = vttablet.VttabletProcess.QueryTablet("begin", ks, true)
-	_, _ = vttablet.VttabletProcess.QueryTablet(query, ks, true)
+	_, err := vttablet.VttabletProcess.QueryTablet(query, ks, true)
 	_, _ = vttablet.VttabletProcess.QueryTablet("commit", ks, true)
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
+// InsertMultiValueToTablet inserts a multiple values to vttablet
+func InsertMultiValueToTablet(tablet cluster.Vttablet, keyspaceName string, tableName string,
+	fixedParentID int, ids []int, msgs []string, ksIDs []uint64) {
+	queryStr := fmt.Sprintf("insert into %s (parent_id, id, msg, custom_ksid_col) values", tableName)
+	valueSQL := ""
+	keyspaceIds := ""
+	valueIds := ""
+	for i := range ids {
+		valueSQL += fmt.Sprintf(`(%d, %d, "%s", 0x%x)`, fixedParentID, ids[i], msgs[i], ksIDs[i])
+		keyspaceIds += fmt.Sprintf("%016X", ksIDs[i])
+		valueIds += fmt.Sprintf("%d", ids[i])
+		if i < len(ids)-1 {
+			valueSQL += ","
+			keyspaceIds += ","
+			valueIds += ","
+		}
+	}
+
+	queryStr += valueSQL
+	queryStr += fmt.Sprintf(" /* vtgate:: keyspace_id:%s */", keyspaceIds)
+	queryStr += fmt.Sprintf(" /* id:%s */", valueIds)
+	InsertToTablet(queryStr, tablet, keyspaceName)
 }
 
 // CheckLotsTimeout waits till all values are inserted
