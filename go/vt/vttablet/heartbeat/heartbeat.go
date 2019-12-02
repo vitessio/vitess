@@ -26,7 +26,7 @@ limitations under the License.
 // It's additionally used as a source for healthchecks and will impact the serving state of a tablet, if enabled.
 // The heartbeat interval is purposefully kept distinct from the health check interval because lag measurement
 // requires more frequent polling that the healthcheck typically is configured for.
-package heartbeat
+package heartbeat // import "vitess.io/vitess/go/vt/vttablet/heartbeat"
 
 import (
 	"vitess.io/vitess/go/stats"

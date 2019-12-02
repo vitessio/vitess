@@ -14,7 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package filecustomrule
+package filecustomrule //import "vitess.io/vitess/go/vt/vttablet/customrule/filecustomrule"
+
 
 import (
 	"io/ioutil"

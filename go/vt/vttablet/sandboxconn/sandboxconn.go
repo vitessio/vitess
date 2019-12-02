@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package sandboxconn provides a fake QueryService implementation for tests.
 // It can return real results, and simulate error cases.
-package sandboxconn
+package sandboxconn // import "vitess.io/vitess/go/vt/vttablet/sandboxconn"
 
 import (
 	"fmt"

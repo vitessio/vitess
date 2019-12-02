@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package tmclient
+package tmclient // import "vitess.io/vitess/go/vt/vttablet/tmclient"
 
 import (
 	"flag"

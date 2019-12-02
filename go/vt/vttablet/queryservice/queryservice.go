@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package queryservice contains the interface for the service definition
 // of the Query Service.
-package queryservice
+package queryservice // import "vitess.io/vitess/go/vt/vttablet/queryservice"
 
 import (
 	"io"

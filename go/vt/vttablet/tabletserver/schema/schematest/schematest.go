@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package schematest provides support for testing packages
 // that depend on schema
-package schematest
+package schematest // import "vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder/schema/schematest"
 
 import (
 	"vitess.io/vitess/go/mysql"

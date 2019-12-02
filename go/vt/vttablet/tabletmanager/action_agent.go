@@ -31,7 +31,7 @@ RPC calls that change the tablet record will also call updateState.
 See rpc_server.go for all cases, and which actions take the actionMutex,
 and which run changeCallback.
 */
-package tabletmanager
+package tabletmanager // import "vitess.io/vitess/go/vt/vttablet/tabletmanager"
 
 import (
 	"encoding/hex"

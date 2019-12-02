@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package faketmclient
+package faketmclient // import "vitess.io/vitess/go/vt/vttablet/faketmclient/"
 
 // This file contains a "fake" implementation of the TabletManagerClient interface, which
 // may be useful for running tests without having to bring up a cluster. The implementation

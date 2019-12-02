@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package agentrpctest
+package agentrpctest // import "vitess.io/vitess/go/vt/vttablet/agentrpctest"
 
 import (
 	"fmt"
@@ -55,7 +55,7 @@ type fakeRPCAgent struct {
 func (fra *fakeRPCAgent) LockTables(ctx context.Context) error {
 	panic("implement me")
 }
-
+``
 func (fra *fakeRPCAgent) UnlockTables(ctx context.Context) error {
 	panic("implement me")
 }

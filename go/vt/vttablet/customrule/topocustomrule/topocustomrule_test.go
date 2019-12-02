@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package topocustomrule
+package topocustomrule //import "vitess.io/vitess/go/vt/vttablet/customrule/topocustomrule"
 
 import (
 	"context"
