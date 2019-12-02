@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package testsuite // import "vitess.io/vitess/go/vt/callerid/testsuite"
+package testsuite // import "vitess.io/vitess/go/vt/binlog/callerid/testsuite"
 
 import (
 	"testing"

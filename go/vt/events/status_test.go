@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package events
+package events // import "vitess.io/vitess/go/vt/binlog/events"
 
 import (
 	"testing"

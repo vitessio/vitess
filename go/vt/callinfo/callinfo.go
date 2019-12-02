@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package callinfo stores custom values into the Context
 // (related to the RPC source)
-package callinfo // import "vitess.io/vitess/go/vt/callinfo"
+package callinfo // import "vitess.io/vitess/go/vt/binlog/callinfo"
 
 import (
 	"html/template"
