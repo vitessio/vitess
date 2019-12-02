@@ -226,6 +226,7 @@ func (c *Conn) clientHandshake(characterSet uint8, params *ConnParams) error {
 	if err != nil {
 		return err
 	}
+	c.fillFlavor(params)
 
 	// Sanity check.
 	if capabilities&CapabilityClientProtocol41 == 0 {
@@ -392,7 +393,6 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 	if !ok {
 		return 0, nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "parseInitialHandshakePacket: packet has no server version")
 	}
-	c.fillFlavor()
 
 	// Read the connection id.
 	c.ConnectionID, pos, ok = readUint32(data, pos)
@@ -625,7 +625,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 	// DbName, only if server supports it.
 	if params.DbName != "" && (capabilities&CapabilityClientConnectWithDB != 0) {
 		pos = writeNullString(data, pos, params.DbName)
-		c.SchemaName = params.DbName
+		c.schemaName = params.DbName
 	}
 
 	// Assume native client during response

@@ -30,6 +30,10 @@ var (
 	// BackupStorageImplementation is the implementation to use
 	// for BackupStorage. Exported for test purposes.
 	BackupStorageImplementation = flag.String("backup_storage_implementation", "", "which implementation to use for the backup storage feature")
+	// FileSizeUnknown is a special value indicating that the file size is not known.
+	// This is typically used while creating a file programmatically, where it is
+	// impossible to compute the final size on disk ahead of time.
+	FileSizeUnknown = int64(-1)
 )
 
 // BackupHandle describes an individual backup.
@@ -49,6 +53,10 @@ type BackupHandle interface {
 	// multiple go routines once a backup has been started.
 	// The context is valid for the duration of the writes, until the
 	// WriteCloser is closed.
+	// filesize should not be treated as an exact value but rather
+	// as an approximate value.
+	// A filesize of -1 should be treated as a special value indicating that
+	// the file size is unknown.
 	AddFile(ctx context.Context, filename string, filesize int64) (io.WriteCloser, error)
 
 	// EndBackup stops and closes a backup. The contents should be kept.

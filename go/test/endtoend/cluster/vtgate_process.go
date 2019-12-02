@@ -134,6 +134,7 @@ func (vtgate *VtgateProcess) WaitForStatus() bool {
 		masterConnectionExist := false
 		if object.Kind() == reflect.Map {
 			for _, key := range object.MapKeys() {
+
 				if strings.Contains(key.String(), "master") {
 					masterConnectionExist = true
 				}

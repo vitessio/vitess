@@ -58,11 +58,11 @@ func TestStatements(t *testing.T) {
 		// MySQL issues GTID->BEGIN.
 		// MariaDB issues BEGIN->GTID.
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:FIELD field_event:<table_name:"stream1" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
 			`type:ROW row_event:<table_name:"stream1" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
 			`type:ROW row_event:<table_name:"stream1" row_changes:<before:<lengths:1 lengths:3 values:"1aaa" > after:<lengths:1 lengths:3 values:"1bbb" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}, {
@@ -90,8 +90,7 @@ func TestStatements(t *testing.T) {
 			"commit",
 		},
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:FIELD field_event:<table_name:"stream1" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
 			`type:ROW row_event:<table_name:"stream1" row_changes:<after:<lengths:1 lengths:3 values:"2bbb" > > > `,
 			`type:FIELD field_event:<table_name:"stream2" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
@@ -102,6 +101,7 @@ func TestStatements(t *testing.T) {
 			`type:ROW row_event:<table_name:"stream1" ` +
 				`row_changes:<before:<lengths:1 lengths:3 values:"1ccc" > > ` +
 				`row_changes:<before:<lengths:1 lengths:3 values:"2ccc" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}, {
@@ -114,22 +114,37 @@ func TestStatements(t *testing.T) {
 	}, {
 		// repair, optimize and analyze show up in binlog stream, but ignored by vitess.
 		input: "repair table stream2",
+		output: [][]string{{
+			`gtid`,
+			`type:OTHER `,
+		}},
 	}, {
 		input: "optimize table stream2",
+		output: [][]string{{
+			`gtid`,
+			`type:OTHER `,
+		}},
 	}, {
 		input: "analyze table stream2",
+		output: [][]string{{
+			`gtid`,
+			`type:OTHER `,
+		}},
 	}, {
-		// select, set, show, analyze and describe don't get logged.
+		// select, set, show and describe don't get logged.
 		input: "select * from stream1",
 	}, {
 		input: "set @val=1",
 	}, {
 		input: "show tables",
 	}, {
-		input: "analyze table stream1",
-	}, {
 		input: "describe stream1",
 	}}
+	runCases(t, nil, testcases, "")
+
+	// Test FilePos flavor
+	engine.cp.Flavor = "FilePos"
+	defer func() { engine.cp.Flavor = "" }()
 	runCases(t, nil, testcases, "")
 }
 
@@ -164,11 +179,11 @@ func TestRegexp(t *testing.T) {
 			"commit",
 		},
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:FIELD field_event:<table_name:"yes_stream" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
 			`type:ROW row_event:<table_name:"yes_stream" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
 			`type:ROW row_event:<table_name:"yes_stream" row_changes:<before:<lengths:1 lengths:3 values:"1aaa" > after:<lengths:1 lengths:3 values:"1bbb" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}}
@@ -220,13 +235,13 @@ func TestREKeyRange(t *testing.T) {
 	}
 	execStatements(t, input)
 	expectLog(ctx, t, input, ch, [][]string{{
-		`gtid|begin`,
-		`gtid|begin`,
+		`begin`,
 		`type:FIELD field_event:<table_name:"t1" fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
 		`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:1 lengths:3 values:"14aaa" > > > `,
 		`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:1 lengths:3 values:"14aaa" > after:<lengths:1 lengths:1 lengths:3 values:"24aaa" > > > `,
 		`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:1 lengths:3 values:"24aaa" > > > `,
 		`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:1 lengths:3 values:"31bbb" > > > `,
+		`gtid`,
 		`commit`,
 	}})
 
@@ -262,9 +277,9 @@ func TestREKeyRange(t *testing.T) {
 	}
 	execStatements(t, input)
 	expectLog(ctx, t, input, ch, [][]string{{
-		`gtid|begin`,
-		`gtid|begin`,
+		`begin`,
 		`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:1 lengths:3 values:"41aaa" > > > `,
+		`gtid`,
 		`commit`,
 	}})
 }
@@ -299,10 +314,10 @@ func TestSelectFilter(t *testing.T) {
 		// MySQL issues GTID->BEGIN.
 		// MariaDB issues BEGIN->GTID.
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:FIELD field_event:<table_name:"t1" fields:<name:"id2" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
 			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}}
@@ -362,12 +377,12 @@ func TestDDLAddColumn(t *testing.T) {
 	}()
 	expectLog(ctx, t, "ddls", ch, [][]string{{
 		// Current schema has 3 columns, but they'll be truncated to match the two columns in the event.
-		`gtid|begin`,
-		`gtid|begin`,
+		`begin`,
 		`type:FIELD field_event:<table_name:"ddl_test1" fields:<name:"id" type:INT32 > fields:<name:"val1" type:VARBINARY > > `,
 		`type:ROW row_event:<table_name:"ddl_test1" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
 		`type:FIELD field_event:<table_name:"ddl_test2" fields:<name:"id" type:INT32 > fields:<name:"val1" type:VARBINARY > > `,
 		`type:ROW row_event:<table_name:"ddl_test2" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
+		`gtid`,
 		`commit`,
 	}, {
 		`gtid`,
@@ -378,12 +393,12 @@ func TestDDLAddColumn(t *testing.T) {
 	}, {
 		// The plan will be updated to now include the third column
 		// because the new table map will have three columns.
-		`gtid|begin`,
-		`gtid|begin`,
+		`begin`,
 		`type:FIELD field_event:<table_name:"ddl_test1" fields:<name:"id" type:INT32 > fields:<name:"val1" type:VARBINARY > fields:<name:"val2" type:VARBINARY > > `,
 		`type:ROW row_event:<table_name:"ddl_test1" row_changes:<after:<lengths:1 lengths:3 lengths:3 values:"2bbbccc" > > > `,
 		`type:FIELD field_event:<table_name:"ddl_test2" fields:<name:"id" type:INT32 > fields:<name:"val1" type:VARBINARY > fields:<name:"val2" type:VARBINARY > > `,
 		`type:ROW row_event:<table_name:"ddl_test2" row_changes:<after:<lengths:1 lengths:3 lengths:3 values:"2bbbccc" > > > `,
+		`gtid`,
 		`commit`,
 	}})
 }
@@ -435,9 +450,8 @@ func TestUnsentDDL(t *testing.T) {
 		},
 		// An unsent DDL is sent as an empty transaction.
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
-			`commit`,
+			`gtid`,
+			`type:OTHER `,
 		}},
 	}}
 
@@ -471,11 +485,11 @@ func TestBuffering(t *testing.T) {
 			"commit",
 		},
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:FIELD field_event:<table_name:"packet_test" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
 			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:3 values:"1123" > > > `,
 			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:3 values:"2456" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}, {
@@ -490,8 +504,7 @@ func TestBuffering(t *testing.T) {
 			"commit",
 		},
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:6 values:"3123456" > > > `,
 		}, {
 			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:6 values:"4789012" > > > `,
@@ -499,6 +512,7 @@ func TestBuffering(t *testing.T) {
 			`type:ROW row_event:<table_name:"packet_test" row_changes:<before:<lengths:1 lengths:6 values:"3123456" > > > `,
 		}, {
 			`type:ROW row_event:<table_name:"packet_test" row_changes:<before:<lengths:1 lengths:6 values:"4789012" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}, {
@@ -511,13 +525,13 @@ func TestBuffering(t *testing.T) {
 			"commit",
 		},
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:6 values:"5123456" > > > `,
 		}, {
 			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:11 values:"612345678901" > > > `,
 		}, {
 			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:5 values:"723456" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}, {
@@ -529,11 +543,11 @@ func TestBuffering(t *testing.T) {
 			"commit",
 		},
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:3 values:"8123" > > > `,
 		}, {
 			`type:ROW row_event:<table_name:"packet_test" row_changes:<before:<lengths:1 lengths:3 values:"8123" > after:<lengths:1 lengths:3 values:"8456" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}, {
@@ -580,19 +594,19 @@ func TestBestEffortNameInFieldEvent(t *testing.T) {
 		// In this case, we don't have information about vitess_test since it was renamed to vitess_test_test.
 		// information returned by binlog for val column == varchar (rather than varbinary).
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:FIELD field_event:<table_name:"vitess_test" fields:<name:"@1" type:INT32 > fields:<name:"@2" type:VARCHAR > > `,
 			`type:ROW row_event:<table_name:"vitess_test" row_changes:<after:<lengths:1 lengths:3 values:"1abc" > > > `,
+			`gtid`,
 			`commit`,
 		}, {
-			`gtid|begin`,
+			`gtid`,
 			`type:DDL ddl:"rename table vitess_test to vitess_test_new" `,
 		}, {
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:FIELD field_event:<table_name:"vitess_test_new" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
 			`type:ROW row_event:<table_name:"vitess_test_new" row_changes:<after:<lengths:1 lengths:3 values:"2abc" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}}
@@ -626,8 +640,7 @@ func TestTypes(t *testing.T) {
 			"insert into vitess_ints values(-128, 255, -32768, 65535, -8388608, 16777215, -2147483648, 4294967295, -9223372036854775808, 18446744073709551615, 2012)",
 		},
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:FIELD field_event:<table_name:"vitess_ints" ` +
 				`fields:<name:"tiny" type:INT8 > ` +
 				`fields:<name:"tinyu" type:UINT8 > ` +
@@ -653,6 +666,7 @@ func TestTypes(t *testing.T) {
 				`18446744073709551615` +
 				`2012` +
 				`" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}, {
@@ -660,8 +674,7 @@ func TestTypes(t *testing.T) {
 			"insert into vitess_fracts values(1, 1.99, 2.99, 3.99, 4.99)",
 		},
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:FIELD field_event:<table_name:"vitess_fracts" ` +
 				`fields:<name:"id" type:INT32 > ` +
 				`fields:<name:"deci" type:DECIMAL > ` +
@@ -675,6 +688,7 @@ func TestTypes(t *testing.T) {
 				`3.99E+00` +
 				`4.99E+00` +
 				`" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}, {
@@ -683,8 +697,7 @@ func TestTypes(t *testing.T) {
 			"insert into vitess_strings values('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b')",
 		},
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:FIELD field_event:<table_name:"vitess_strings" ` +
 				`fields:<name:"vb" type:VARBINARY > ` +
 				`fields:<name:"c" type:CHAR > ` +
@@ -698,6 +711,7 @@ func TestTypes(t *testing.T) {
 				`fields:<name:"s" type:SET > > `,
 			`type:ROW row_event:<table_name:"vitess_strings" row_changes:<after:<lengths:1 lengths:1 lengths:1 lengths:4 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 ` +
 				`values:"abcd\000\000\000efgh13" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}, {
@@ -706,8 +720,7 @@ func TestTypes(t *testing.T) {
 			"insert into vitess_misc values(1, '\x01', '2012-01-01', '2012-01-01 15:45:45', '15:45:45', point(1, 2))",
 		},
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:FIELD field_event:<table_name:"vitess_misc" ` +
 				`fields:<name:"id" type:INT32 > ` +
 				`fields:<name:"b" type:BIT > ` +
@@ -723,6 +736,7 @@ func TestTypes(t *testing.T) {
 				`15:45:45` +
 				`\000\000\000\000\001\001\000\000\000\000\000\000\000\000\000\360?\000\000\000\000\000\000\000@` +
 				`" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}, {
@@ -730,10 +744,10 @@ func TestTypes(t *testing.T) {
 			"insert into vitess_null values(1, null)",
 		},
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:FIELD field_event:<table_name:"vitess_null" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
 			`type:ROW row_event:<table_name:"vitess_null" row_changes:<after:<lengths:1 lengths:-1 values:"1" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}}
@@ -759,10 +773,10 @@ func TestJSON(t *testing.T) {
 			`insert into vitess_json values(1, '{"foo": "bar"}')`,
 		},
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:FIELD field_event:<table_name:"vitess_json" fields:<name:"id" type:INT32 > fields:<name:"val" type:JSON > > `,
 			`type:ROW row_event:<table_name:"vitess_json" row_changes:<after:<lengths:1 lengths:24 values:"1JSON_OBJECT('foo','bar')" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}}
@@ -791,8 +805,8 @@ func TestExternalTable(t *testing.T) {
 		},
 		// External table events don't get sent.
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
+			`gtid`,
 			`commit`,
 		}},
 	}}
@@ -920,8 +934,8 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 			// CurrentTime is not testable.
 			evs[i].CurrentTime = 0
 			switch want {
-			case "gtid|begin":
-				if evs[i].Type != binlogdatapb.VEventType_GTID && evs[i].Type != binlogdatapb.VEventType_BEGIN {
+			case "begin":
+				if evs[i].Type != binlogdatapb.VEventType_BEGIN {
 					t.Fatalf("%v (%d): event: %v, want gtid or begin", input, i, evs[i])
 				}
 			case "gtid":
@@ -995,7 +1009,15 @@ func execStatements(t *testing.T, queries []string) {
 
 func masterPosition(t *testing.T) string {
 	t.Helper()
-	pos, err := env.Mysqld.MasterPosition()
+	// We use the engine's cp because there is one test that overrides
+	// the flavor to FilePos. If so, we have to obtain the position
+	// in that flavor format.
+	conn, err := mysql.Connect(context.Background(), engine.cp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	pos, err := conn.MasterPosition()
 	if err != nil {
 		t.Fatal(err)
 	}

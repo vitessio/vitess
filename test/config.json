@@ -216,6 +216,17 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"client_test": {
+                        "File": "",
+                        "Args": [],
+                        "Command": [
+                                "test/client_test.sh"
+                        ],
+                        "Manual": false,
+                        "Shard": 3,
+                        "RetryMax": 0,
+                        "Tags": []
+		},
 		"merge_sharding": {
 			"File": "merge_sharding.py",
 			"Args": [],
@@ -419,7 +430,7 @@
 				"e2e_test_cluster"
 			],
 			"Manual": false,
-			"Shard": 2,
+			"Shard": 5,
 			"RetryMax": 0,
 			"Tags": []
 		},

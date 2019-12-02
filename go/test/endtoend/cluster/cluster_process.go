@@ -17,11 +17,13 @@ limitations under the License.
 package cluster
 
 import (
+	"flag"
 	"fmt"
 	"math/rand"
 	"os"
 	"os/exec"
 	"path"
+	"time"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -29,14 +31,20 @@ import (
 // DefaultCell : If no cell name is passed, then use following
 const DefaultCell = "zone1"
 
+var (
+	keepData = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
+)
+
 // LocalProcessCluster Testcases need to use this to iniate a cluster
 type LocalProcessCluster struct {
-	Keyspaces     []Keyspace
-	Cell          string
-	BaseTabletUID int
-	Hostname      string
-	TopoPort      int
-	TmpDirectory  string
+	Keyspaces          []Keyspace
+	Cell               string
+	BaseTabletUID      int
+	Hostname           string
+	TopoPort           int
+	TmpDirectory       string
+	OriginalVTDATAROOT string
+	CurrentVTDATAROOT  string
 
 	VtgateMySQLPort int
 	VtgateGrpcPort  int
@@ -390,6 +398,17 @@ func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 	return cluster.VtgateProcess.Setup()
 }
 
+// NewCluster instantiates a new cluster
+func NewCluster(cell string, hostname string) *LocalProcessCluster {
+	cluster := &LocalProcessCluster{Cell: cell, Hostname: hostname}
+	cluster.OriginalVTDATAROOT = os.Getenv("VTDATAROOT")
+	cluster.CurrentVTDATAROOT = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vtroot_%d", cluster.GetAndReservePort()))
+	_ = createDirectory(cluster.CurrentVTDATAROOT, 0700)
+	_ = os.Setenv("VTDATAROOT", cluster.CurrentVTDATAROOT)
+	rand.Seed(time.Now().UTC().UnixNano())
+	return cluster
+}
+
 // ReStartVtgate starts vtgate with updated configs
 func (cluster *LocalProcessCluster) ReStartVtgate() (err error) {
 	err = cluster.VtgateProcess.TearDown()
@@ -429,7 +448,7 @@ func (cluster *LocalProcessCluster) Teardown() (err error) {
 					mysqlctlProcessList = append(mysqlctlProcessList, proc)
 				}
 
-				if err = tablet.VttabletProcess.TearDown(true); err != nil {
+				if err = tablet.VttabletProcess.TearDown(); err != nil {
 					log.Error(err.Error())
 					return
 				}
@@ -446,7 +465,7 @@ func (cluster *LocalProcessCluster) Teardown() (err error) {
 		return
 	}
 
-	if err = cluster.TopoProcess.TearDown(cluster.Cell); err != nil {
+	if err = cluster.TopoProcess.TearDown(cluster.Cell, cluster.OriginalVTDATAROOT, cluster.CurrentVTDATAROOT, *keepData); err != nil {
 		log.Error(err.Error())
 		return
 	}

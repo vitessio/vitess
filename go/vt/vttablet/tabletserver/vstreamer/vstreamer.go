@@ -145,8 +145,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		case binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_BEGIN, binlogdatapb.VEventType_FIELD:
 			// We never have to send GTID, BEGIN or FIELD events on their own.
 			bufferedEvents = append(bufferedEvents, vevent)
-		case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_HEARTBEAT:
-			// COMMIT, DDL and HEARTBEAT must be immediately sent.
+		case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER, binlogdatapb.VEventType_HEARTBEAT:
+			// COMMIT, DDL, OTHER and HEARTBEAT must be immediately sent.
 			bufferedEvents = append(bufferedEvents, vevent)
 			vevents := bufferedEvents
 			bufferedEvents = nil
@@ -281,12 +281,11 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			})
 		}
 		vs.pos = mysql.AppendGTID(vs.pos, gtid)
+	case ev.IsXID():
 		vevents = append(vevents, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_GTID,
 			Gtid: mysql.EncodePosition(vs.pos),
-		})
-	case ev.IsXID():
-		vevents = append(vevents, &binlogdatapb.VEvent{
+		}, &binlogdatapb.VEvent{
 			Type: binlogdatapb.VEventType_COMMIT,
 		})
 	case ev.IsQuery():
@@ -306,17 +305,20 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		case sqlparser.StmtDDL:
 			if mustSendDDL(q, vs.cp.DbName, vs.filter) {
 				vevents = append(vevents, &binlogdatapb.VEvent{
+					Type: binlogdatapb.VEventType_GTID,
+					Gtid: mysql.EncodePosition(vs.pos),
+				}, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_DDL,
 					Ddl:  q.SQL,
 				})
 			} else {
-				vevents = append(vevents,
-					&binlogdatapb.VEvent{
-						Type: binlogdatapb.VEventType_BEGIN,
-					},
-					&binlogdatapb.VEvent{
-						Type: binlogdatapb.VEventType_COMMIT,
-					})
+				// If the DDL need not be sent, send a dummy OTHER event.
+				vevents = append(vevents, &binlogdatapb.VEvent{
+					Type: binlogdatapb.VEventType_GTID,
+					Gtid: mysql.EncodePosition(vs.pos),
+				}, &binlogdatapb.VEvent{
+					Type: binlogdatapb.VEventType_OTHER,
+				})
 			}
 			// Proactively reload schema.
 			// If the DDL adds a column, comparing with an older snapshot of the
@@ -324,6 +326,12 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			vs.se.Reload(vs.ctx)
 		case sqlparser.StmtOther:
 			// These are DBA statements like REPAIR that can be ignored.
+			vevents = append(vevents, &binlogdatapb.VEvent{
+				Type: binlogdatapb.VEventType_GTID,
+				Gtid: mysql.EncodePosition(vs.pos),
+			}, &binlogdatapb.VEvent{
+				Type: binlogdatapb.VEventType_OTHER,
+			})
 		default:
 			return nil, fmt.Errorf("unexpected statement type %s in row-based replication: %q", cat, q.SQL)
 		}
