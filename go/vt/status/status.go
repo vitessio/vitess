@@ -16,7 +16,7 @@ limitations under the License.
 
 // Package status defines a few useful functions for our binaries,
 // mainly to link the status page with a vtctld instance.
-package status
+package status // import "vitess.io/vitess/go/vt/status/"
 
 import (
 	"flag"

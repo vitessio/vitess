@@ -21,7 +21,7 @@ limitations under the License.
 // /streamqueryz or /txlogz.
 //
 // See tabletserver/querylogz.go for an example how to use it.
-package logz
+package logz // import "vitess.io/vitess/go/vt/logz"
 
 import (
 	"bytes"
