@@ -214,7 +214,7 @@ func (vttablet *VttabletProcess) WaitForBinLogPlayerCount(expectedCount int) err
 func (vttablet *VttabletProcess) getVReplStreamCount() string {
 	resultMap := vttablet.GetVars()
 	object := reflect.ValueOf(resultMap["VReplicationStreamCount"])
-	return object.String()
+	return fmt.Sprintf("%v", object)
 }
 
 // TearDown shuts down the running vttablet service

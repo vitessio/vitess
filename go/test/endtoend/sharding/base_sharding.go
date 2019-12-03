@@ -18,15 +18,20 @@ limitations under the License.
 package sharding
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"path"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/mysql"
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -74,6 +79,14 @@ func GetSrvKeyspace(t *testing.T, cell string, ksname string, ci cluster.LocalPr
 	err = json.Unmarshal([]byte(output), &srvKeyspace)
 	assert.Nil(t, err)
 	return &srvKeyspace
+}
+
+// VerifyTabletHealth checks that the tablet URL is reachable.
+func VerifyTabletHealth(t *testing.T, vttablet cluster.Vttablet, hostname string) {
+	tabletUrl := fmt.Sprintf("http://%s:%d/healthz", hostname, vttablet.HTTPPort)
+	resp, err := http.Get(tabletUrl)
+	assert.Nil(t, err)
+	assert.Equal(t, resp.StatusCode, 200)
 }
 
 // VerifyReconciliationCounters checks that the reconciliation Counters have the expected values.
@@ -251,6 +264,15 @@ func CheckBinlogServerVars(t *testing.T, vttablet cluster.Vttablet, minStatement
 
 // InsertLots inserts multiple values to vttablet
 func InsertLots(count uint64, base uint64, vttablet cluster.Vttablet, table string, parentID int, ks string) {
+	ctx := context.Background()
+	dbParams := mysql.ConnParams{
+		Uname:      "vt_dba",
+		UnixSocket: path.Join(vttablet.VttabletProcess.Directory, "mysql.sock"),
+		DbName:     "vt_" + ks,
+	}
+	dbConn, _ := mysql.Connect(ctx, &dbParams)
+	defer dbConn.Close()
+
 	var query1, query2 string
 	var i uint64
 	for i = 0; i < count; i++ {
@@ -259,8 +281,8 @@ func InsertLots(count uint64, base uint64, vttablet cluster.Vttablet, table stri
 		query2 = fmt.Sprintf(InsertTabletTemplateKsID, table, parentID, 20000+base+i,
 			fmt.Sprintf("msg-range2-%d", 20000+base+i), lotRange2+base+i, lotRange2+base+i, 20000+base+i)
 
-		InsertToTablet(query1, vttablet, ks)
-		InsertToTablet(query2, vttablet, ks)
+		InsertToTabletUsingSameConn(query1, vttablet, ks, dbConn)
+		InsertToTabletUsingSameConn(query2, vttablet, ks, dbConn)
 	}
 }
 
@@ -269,6 +291,14 @@ func InsertToTablet(query string, vttablet cluster.Vttablet, ks string) {
 	_, _ = vttablet.VttabletProcess.QueryTablet("begin", ks, true)
 	_, err := vttablet.VttabletProcess.QueryTablet(query, ks, true)
 	_, _ = vttablet.VttabletProcess.QueryTablet("commit", ks, true)
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
+// InsertToTabletUsingSameConn inserts a single row to vttablet using existing connection
+func InsertToTabletUsingSameConn(query string, vttablet cluster.Vttablet, ks string, dbConn *mysql.Conn) {
+	_, err := dbConn.ExecuteFetch(query, 1000, true)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -435,4 +465,20 @@ func HexToDbStr(number uint64, keyType topodata.KeyspaceIdType) string {
 		fmtValue = "%016x"
 	}
 	return fmt.Sprintf(fmtValue, number)
+}
+
+func GetShardInfo(t *testing.T, shard1Ks string, ci cluster.LocalProcessCluster) *topodata.Shard {
+	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("GetShard", shard1Ks)
+	assert.Nil(t, err)
+
+	var shard topodata.Shard
+	//err = json.Unmarshal([]byte(output), &shard)
+	d := json.NewDecoder(strings.NewReader(output))
+	d.UseNumber()
+	err = d.Decode(&shard)
+
+	assert.Nil(t, err)
+
+	return &shard
+
 }
