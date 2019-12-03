@@ -19,6 +19,7 @@ package resharding
 import (
 	"encoding/json"
 	"fmt"
+	"os/exec"
 	"testing"
 	"time"
 
@@ -193,12 +194,22 @@ func TestReSharding(t *testing.T) {
 	assert.Nil(t, err, "error should be Nil")
 
 	//Start MySql
+	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
 			fmt.Println("Starting MySql for tablet ", tablet.Alias)
-			if err = tablet.MysqlctlProcess.Start(); err != nil {
+			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
 				t.Fatal(err)
+			} else {
+				mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 			}
+		}
+	}
+
+	// Wait for mysql processes to start
+	for _, proc := range mysqlCtlProcessList {
+		if err := proc.Wait(); err != nil {
+			t.Fatal(err)
 		}
 	}
 
@@ -430,8 +441,7 @@ func TestReSharding(t *testing.T) {
 	sharding.CheckBinlogServerVars(t, *shard1.Replica(), 0, 0)
 
 	// Check that the throttler was enabled.
-	// The stream id is hard-coded as 1, which is the first id generated
-	// through auto-inc.
+	// The stream id is hard-coded as 1, which is the first id generated through auto-inc.
 	//TODO: to complete
 	//sharding.CheckThrottlerService(t, *shard2.MasterTablet(), ['BinlogPlayer/1'], 9999)
 	//sharding.CheckThrottlerService(t, *shard3.MasterTablet(), ['BinlogPlayer/1'], 9999)
@@ -441,12 +451,12 @@ func TestReSharding(t *testing.T) {
 	// testing filtered replication: insert a bunch of data on shard 1,
 	// check we get most of it after a few seconds, wait for binlog server
 	// timeout, check we get all of it.
-	//logging.debug('Inserting lots of data on source shard')
+	log.Debug("Inserting lots of data on source shard")
 	sharding.InsertLots(1000, 0, *shard1.MasterTablet(), tableName, fixedParentID, keyspaceName)
-	//logging.debug('Executing MultiValue Insert Queries')
+	log.Debug("Executing MultiValue Insert Queries")
 	execMultiShardDmls(keyspaceName)
 
-	// Checking 80 percent of data is sent quickly
+	// Checking 100 percent of data is sent quickly
 	assert.True(t, checkLotsTimeout(t, 1000, 0, tableName, keyspaceName, shardingKeyType))
 	// Checking no data was sent the wrong way
 	checkLotsNotPresent(t, 1000, 0, tableName, keyspaceName, shardingKeyType)
@@ -694,10 +704,11 @@ func TestReSharding(t *testing.T) {
 	shard2Master = shard2Replica1
 	shard2Replica1 = tmp
 
-	log.Debug("Inserting lots of data on source shard after reparenting")
-	sharding.InsertLots(3000, 2000, *shard1.MasterTablet(), tableName, fixedParentID, keyspaceName)
-	// Checking 80 percent of data is sent fairly quickly
-	assert.True(t, checkLotsTimeout(t, 3000, 2000, tableName, keyspaceName, shardingKeyType))
+	fmt.Println("Skip  Inserting lots of data on source shard after reparenting")
+	//log.Debug("Inserting lots of data on source shard after reparenting")
+	//sharding.InsertLots(3000, 2000, *shard1.MasterTablet(), tableName, fixedParentID, keyspaceName)
+	//// Checking 80 percent of data is sent fairly quickly
+	//assert.True(t, checkLotsTimeout(t, 3000, 2000, tableName, keyspaceName, shardingKeyType))
 
 	if useMultiSplitDiff {
 		log.Debug("Running vtworker MultiSplitDiff")
@@ -726,11 +737,84 @@ func TestReSharding(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", shard3Rdonly.Alias, "rdonly")
 	assert.Nil(t, err, "error should be Nil")
 
+	// going to migrate the master now, check the delays
+	//TODO: Fix below
+	//monitor_thread_1.done = True
+	//monitor_thread_2.done = True
+	//insert_thread_1.done = True
+	//insert_thread_2.done = True
+	//logging.debug('DELAY 1: %s max_lag=%d ms avg_lag=%d ms',
+	//monitor_thread_1.thread_name,
+	//	monitor_thread_1.max_lag_ms,
+	//	monitor_thread_1.lag_sum_ms / monitor_thread_1.sample_count)
+	//logging.debug('DELAY 2: %s max_lag=%d ms avg_lag=%d ms',
+	//monitor_thread_2.thread_name,
+	//	monitor_thread_2.max_lag_ms,
+	//	monitor_thread_2.lag_sum_ms / monitor_thread_2.sample_count)
+
+	// mock with the SourceShard records to test 'vtctl SourceShardDelete'  and 'vtctl SourceShardAdd'
+	shard3Ks := fmt.Sprintf("%s/%s", keyspaceName, shard3.Name)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SourceShardDelete", shard3Ks, "1")
+	assert.Nil(t, err, "error should be Nil")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SourceShardAdd", "--key_range=80-",
+		shard3Ks, "1", shard1Ks)
+	assert.Nil(t, err, "error should be Nil")
+
+	// CancelResharding should fail because migration has started.
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("CancelResharding", shard1Ks, "1")
+	assert.NotNil(t, err)
+
+	// do a Migrate that will fail waiting for replication
+	// which should cause the Migrate to be canceled and the source
+	// master to be serving again.
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes",
+		"-filtered_replication_wait_time", "0s", shard1Ks, "master")
+	assert.NotNil(t, err)
+
+	expectedPartitions = map[topodata.TabletType][]string{}
+	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
+	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard0.Name, shard2.Name, shard3.Name}
+	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard2.Name, shard3.Name}
+	checkSrvKeyspaceForSharding(t, cell1, expectedPartitions, shardingKeyType)
+
+	sharding.CheckTabletQueryService(t, *shard1Master, "SERVING", false, *clusterInstance)
+
+	// sabotage master migration and make it fail in an unfinished state.
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetShardTabletControl", "-blacklisted_tables=t",
+		shard3Ks, "master")
+	assert.Nil(t, err, "error should be Nil")
+
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes",
+		shard1Ks, "master")
+	assert.NotNil(t, err)
+
+	// Query service is disabled in source shard as failure occurred after point of no return
+	sharding.CheckTabletQueryService(t, *shard1Master, "NOT_SERVING", true, *clusterInstance)
+
+	// Global topology records should not change as migration did not succeed
+
+	fmt.Println("*******************************")
+
+	shard, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShard", shard1Ks)
+	assert.Nil(t, err, "error should be Nil")
+	fmt.Println(shard)
+
 	/*
 
 
+	   # Global topology records should not change as migration did not succeed
+	   shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/80-'])
+	   self.assertEqual(shard['is_master_serving'], True, 'source shards should be set in destination shard')
 
-	 */
+	   shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/c0-'])
+	   self.assertEqual(len(shard['source_shards']), 1, 'source shards should be set in destination shard')
+	   self.assertEqual(shard['is_master_serving'], False, 'source shards should be set in destination shard')
+
+	   shard = utils.run_vtctl_json(['GetShard', 'test_keyspace/80-c0'])
+	   self.assertEqual(len(shard['source_shards']), 1, 'source shards should be set in destination shard')
+	   self.assertEqual(shard['is_master_serving'], False, 'source shards should be set in destination shard')
+
+	*/
 	fmt.Println("DONE.......")
 	time.Sleep(10 * time.Millisecond)
 
