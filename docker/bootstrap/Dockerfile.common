@@ -30,8 +30,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     && rm -rf /var/lib/apt/lists/*
 
 # Install Maven 3.1+
-RUN mkdir -p /vt/dist && \
-    cd /vt/dist && \
+RUN mkdir -p /vt/src/vitess.io/vitess/dist && \
+    cd /vt/src/vitess.io/vitess/dist && \
     curl -sL --connect-timeout 10 --retry 3 \
         http://www-us.apache.org/dist/maven/maven-3/3.3.9/binaries/apache-maven-3.3.9-bin.tar.gz | tar -xz && \
     mv apache-maven-3.3.9 maven
