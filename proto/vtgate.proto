@@ -105,6 +105,9 @@ message Session {
 
   // post_sessions contains sessions that have to be committed last.
   repeated ShardSession post_sessions = 10;
+
+ // last_insert_id keeps track of the last seen insert_id for this session
+  uint64 last_insert_id = 11;
 }
 
 // ExecuteRequest is the payload to Execute.
