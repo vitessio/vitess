@@ -18,10 +18,10 @@ limitations under the License.
 package sharding
 
 import (
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"reflect"
 	"strconv"
@@ -128,44 +128,21 @@ func getValueFromJSON(jsonMap map[string]interface{}, keyname string, tableName 
 }
 
 // CheckValues check value from sql query to table with expected values
-func CheckValues(t *testing.T, vttablet cluster.Vttablet, values []string, id uint64, exists bool, tableName string, parentID int, ks string, keyType topodata.KeyspaceIdType) bool {
-	query := fmt.Sprintf("select parent_id, id, msg, custom_ksid_col from %s where parent_id = %d and id = %d", tableName, parentID, id)
-	result, err := vttablet.VttabletProcess.QueryTablet(query, ks, true)
-	assert.Nil(t, err)
-	isFound := false
-	if exists && len(result.Rows) > 0 {
-		isFound = assert.Equal(t, result.Rows[0][0].String(), values[0])
-		isFound = isFound && assert.Equal(t, result.Rows[0][1].String(), values[1])
-		isFound = isFound && assert.Equal(t, result.Rows[0][2].String(), values[2])
-		if keyType == topodata.KeyspaceIdType_BYTES {
-			byteResult := result.Rows[0][3].ToBytes()
-			isFound = isFound && assert.Equal(t, fmt.Sprintf("%016x", binary.BigEndian.Uint64(byteResult[:])), values[3])
-		} else {
-			isFound = isFound && assert.Equal(t, result.Rows[0][3].String(), values[3])
-		}
-
-	} else {
-		assert.Equal(t, len(result.Rows), 0)
-	}
-	return isFound
-}
-
-// CheckValues check value from sql query to table with expected values
-func CheckValues1(t *testing.T, vttablet cluster.Vttablet, values []string, id uint64, exists bool, tableName string, ks string) bool {
+func CheckValues(t *testing.T, vttablet cluster.Vttablet, id uint64, msg string, exists bool, tableName string, ks string, keyType topodata.KeyspaceIdType) bool {
 	query := fmt.Sprintf("select id, msg from %s where id = %d", tableName, id)
+	if keyType == topodata.KeyspaceIdType_BYTES {
+		query = fmt.Sprintf("select id, msg from %s where id = '%d'", tableName, id)
+	}
+
 	result, err := vttablet.VttabletProcess.QueryTablet(query, ks, true)
 	assert.Nil(t, err)
 	isFound := false
 	if exists && len(result.Rows) > 0 {
-		isFound = assert.Equal(t, result.Rows[0][0].String(), values[0])
-		isFound = isFound && assert.Equal(t, result.Rows[0][1].String(), values[1])
-		//isFound = isFound && assert.Equal(t, result.Rows[0][2].String(), values[2])
-		//if keyType == topodata.KeyspaceIdType_BYTES {
-		//	byteResult := result.Rows[0][3].ToBytes()
-		//	isFound = isFound && assert.Equal(t, fmt.Sprintf("%016x", binary.BigEndian.Uint64(byteResult[:])), values[3])
-		//} else {
-		//	isFound = isFound && assert.Equal(t, result.Rows[0][3].String(), values[3])
-		//}
+		if keyType == topodata.KeyspaceIdType_BYTES {
+			isFound = assert.Equal(t, fmt.Sprintf("%v", result.Rows), fmt.Sprintf(`[[VARBINARY("%d") VARCHAR("%s")]]`, id, msg))
+		} else {
+			isFound = assert.Equal(t, fmt.Sprintf("%v", result.Rows), fmt.Sprintf(`[[UINT64(%d) VARCHAR("%s")]]`, id, msg))
+		}
 
 	} else {
 		assert.Equal(t, len(result.Rows), 0)
@@ -271,7 +248,7 @@ func CheckBinlogServerVars(t *testing.T, vttablet cluster.Vttablet, minStatement
 }
 
 // InsertLots inserts multiple values to vttablet
-func InsertLots(count uint64, vttablet cluster.Vttablet, table string, parentID int, ks string) {
+func InsertLots(count uint64, vttablet cluster.Vttablet, table string, ks string) {
 	var query1, query2 string
 	var i uint64
 	for i = 0; i < count; i++ {
@@ -291,56 +268,52 @@ func InsertToTablet(query string, vttablet cluster.Vttablet, ks string) {
 }
 
 // CheckLotsTimeout waits till all values are inserted
-func CheckLotsTimeout(t *testing.T, vttablet cluster.Vttablet, count uint64, table string, parentID int, ks string, keyType topodata.KeyspaceIdType) bool {
+func CheckLotsTimeout(t *testing.T, vttablet cluster.Vttablet, count uint64, table string, ks string, keyType topodata.KeyspaceIdType, pctFound int) bool {
 	timeout := time.Now().Add(10 * time.Second)
+	var percentFound float64
 	for time.Now().Before(timeout) {
-		percentFound := checkLots(t, vttablet, count, table, parentID, ks, keyType)
-		if percentFound == 100 {
+		percentFound = checkLots(t, vttablet, count, table, ks, keyType)
+		if int(math.Round(percentFound)) == pctFound {
 			return true
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
+	println(fmt.Sprintf("expected pct %d, got pct %f", pctFound, percentFound))
 	return false
 }
 
 // CheckLotsNotPresent verifies that no rows should be present in vttablet
-func CheckLotsNotPresent(t *testing.T, vttablet cluster.Vttablet, count uint64, table string, parentID int, ks string, keyType topodata.KeyspaceIdType) {
+func CheckLotsNotPresent(t *testing.T, vttablet cluster.Vttablet, count uint64, table string, ks string, keyType topodata.KeyspaceIdType) {
 	var i uint64
 	for i = 0; i < count; i++ {
-		assert.False(t, CheckValues1(t, vttablet, []string{HexToDbStr(lotRange1+i, keyType),
-			fmt.Sprintf(`VARCHAR("msg-range1-%d")`, 10000+i)},
-			10000+i, true, table, ks))
+		assert.False(t, CheckValues(t, vttablet,
+			lotRange1+i, fmt.Sprintf("msg-range1-%d", 10000+i), true, table, ks, keyType))
 
-		assert.False(t, CheckValues1(t, vttablet, []string{HexToDbStr(lotRange2+i, keyType),
-			fmt.Sprintf(`VARCHAR("msg-range2-%d")`, 20000+i)},
-			20000+i, true, table, ks))
+		assert.False(t, CheckValues(t, vttablet,
+			lotRange2+i, fmt.Sprintf("msg-range2-%d", 20000+i), true, table, ks, keyType))
 	}
 }
 
-func checkLots(t *testing.T, vttablet cluster.Vttablet, count uint64, table string, parentID int, ks string, keyType topodata.KeyspaceIdType) float32 {
+func checkLots(t *testing.T, vttablet cluster.Vttablet, count uint64, table string, ks string, keyType topodata.KeyspaceIdType) float64 {
 	var isFound bool
 	var totalFound int
 	var i uint64
 
 	for i = 0; i < count; i++ {
-		// "INT64(1)" `VARCHAR("msg1")`,
-		isFound = CheckValues1(t, vttablet, []string{HexToDbStr(lotRange1+i, keyType),
-			fmt.Sprintf(`VARCHAR("msg-range1-%d")`, 10000+i),
-		},
-			lotRange1+i, true, table, ks)
+		isFound = CheckValues(t, vttablet,
+			lotRange1+i, fmt.Sprintf("msg-range1-%d", 10000+i), true, table, ks, keyType)
 		if isFound {
 			totalFound++
 		}
 
-		isFound = CheckValues1(t, vttablet, []string{HexToDbStr(lotRange2+i, keyType),
-			fmt.Sprintf(`VARCHAR("msg-range2-%d")`, 20000+i)},
-			lotRange2+i, true, table, ks)
+		isFound = CheckValues(t, vttablet,
+			lotRange2+i, fmt.Sprintf("msg-range2-%d", 20000+i), true, table, ks, keyType)
 		if isFound {
 			totalFound++
 		}
 	}
 	println(fmt.Sprintf("Total found %d", totalFound))
-	return float32(totalFound * 100 / int(count) / 2)
+	return float64(float64(totalFound) * 100 / float64(count) / 2)
 }
 
 // CheckRunningBinlogPlayer Checks binlog player is running and showing in status
@@ -377,13 +350,4 @@ func CheckTabletQueryService(t *testing.T, vttablet cluster.Vttablet, expectedSt
 		tabletStatus = vttablet.VttabletProcess.GetTabletStatus()
 		assert.Equal(t, tabletStatus, expectedStatus)
 	}
-}
-
-// HexToDbStr converts number to comparable string we got after querying to database.
-func HexToDbStr(number uint64, keyType topodata.KeyspaceIdType) string {
-	fmtValue := "UINT64(%d)"
-	if keyType == topodata.KeyspaceIdType_BYTES {
-		fmtValue = "%016x"
-	}
-	return fmt.Sprintf(fmtValue, number)
 }

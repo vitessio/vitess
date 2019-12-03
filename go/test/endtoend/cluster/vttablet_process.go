@@ -64,6 +64,7 @@ type VttabletProcess struct {
 	EnableSemiSync              bool
 	SupportBackup               bool
 	ServingStatus               string
+	DbPwd                       string
 	//Extra Args to be set before starting the vttablet process
 	ExtraArgs []string
 
@@ -173,6 +174,7 @@ func (vttablet *VttabletProcess) GetVars() map[string]interface{} {
 	return nil
 }
 
+// WaitForTabletType waits till the tablet status reaches desired type
 func (vttablet *VttabletProcess) WaitForTabletType(expectedType string) error {
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
@@ -189,6 +191,7 @@ func (vttablet *VttabletProcess) WaitForTabletType(expectedType string) error {
 	return fmt.Errorf("Vttablet %s, expected status not reached", vttablet.TabletPath)
 }
 
+// WaitForBinLogPlayerCount waits till binlog player count var matches
 func (vttablet *VttabletProcess) WaitForBinLogPlayerCount(expectedCount int) error {
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
@@ -202,13 +205,13 @@ func (vttablet *VttabletProcess) WaitForBinLogPlayerCount(expectedCount int) err
 			time.Sleep(300 * time.Millisecond)
 		}
 	}
-	return fmt.Errorf("Vttablet %s, expected status not reached", vttablet.TabletPath)
+	return fmt.Errorf("vttablet %s, expected status not reached", vttablet.TabletPath)
 }
 
 func (vttablet *VttabletProcess) getVReplStreamCount() string {
 	resultMap := vttablet.GetVars()
 	object := reflect.ValueOf(resultMap["VReplicationStreamCount"])
-	return object.String()
+	return fmt.Sprintf("%v", object)
 }
 
 // TearDown shuts down the running vttablet service
@@ -237,6 +240,7 @@ func (vttablet *VttabletProcess) TearDown(cleanDir bool) error {
 	}
 }
 
+// CreateDB created vt_keyspace database
 func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
 	_, err := vttablet.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace), keyspace, false)
 	return err
@@ -250,6 +254,9 @@ func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useD
 	}
 	if useDb {
 		dbParams.DbName = "vt_" + keyspace
+	}
+	if vttablet.DbPwd != "" {
+		dbParams.Pass = vttablet.DbPwd
 	}
 	ctx := context.Background()
 	dbConn, err := mysql.Connect(ctx, &dbParams)

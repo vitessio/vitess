@@ -36,10 +36,10 @@ import (
 )
 
 func TestInitialSharding(t *testing.T) {
-	code, err := sharding.ClusterWrapper()
+	code, err := sharding.ClusterWrapper(false)
 	if err != nil {
 		t.Errorf("setup failed with status code %d", code)
 	}
-	sharding.TestInitialShardingWithVersion(t, 3, topodata.KeyspaceIdType_UINT64)
+	sharding.TestInitialShardingWithVersion(t, &sharding.ClusterInstance.Keyspaces[0], topodata.KeyspaceIdType_UINT64, false, false)
 	defer sharding.ClusterInstance.Teardown()
 }

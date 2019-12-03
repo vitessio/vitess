@@ -187,7 +187,7 @@ func (vtgate *VtgateProcess) WaitForStatusOfTabletInShard(name string) error {
 			time.Sleep(300 * time.Millisecond)
 		}
 	}
-	return fmt.Errorf("Wait for %s failed", name)
+	return fmt.Errorf("wait for %s failed", name)
 }
 
 // TearDown shuts down the running vtgate service

@@ -13,11 +13,20 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-This test simulates the first time a database has to be split with v2 way of sharding
+This test simulates the first time a database has to be split.
+
+- we start with a keyspace with a single shard and a single table
+- we add and populate the sharding key
+- we set the sharding key in the topology
+- we clone into 2 instances
+- we enable filtered replication
+- we move all serving types
+- we remove the source tablets
+- we remove the original shard
 
 */
 
-package v2
+package multi
 
 import (
 	"testing"
@@ -26,11 +35,12 @@ import (
 	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func TestInitialShardingV2(t *testing.T) {
-	code, err := sharding.ClusterWrapper()
+func TestInitialShardingMulti(t *testing.T) {
+	code, err := sharding.ClusterWrapper(true)
 	if err != nil {
 		t.Errorf("setup failed with status code %d", code)
 	}
-	sharding.TestInitialShardingWithVersion(t, 2, topodata.KeyspaceIdType_UINT64)
+	sharding.TestInitialShardingWithVersion(t, &sharding.ClusterInstance.Keyspaces[0], topodata.KeyspaceIdType_UINT64, true, false)
+	sharding.KillTabletsInKeyspace(&sharding.ClusterInstance.Keyspaces[0])
 	defer sharding.ClusterInstance.Teardown()
 }
