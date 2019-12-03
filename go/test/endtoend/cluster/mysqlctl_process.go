@@ -50,16 +50,26 @@ func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 	return tmpProcess.Run()
 }
 
-// Start executes mysqlctl command to start mysql instance
-func (mysqlctl *MysqlctlProcess) Start() (err error) {
+func (mysqlctl *MysqlctlProcess) Start() error {
+	return mysqlctl.StartWithArgs("")
+}
+
+// StartWithArgs executes mysqlctl command to start mysql instance with arguments
+func (mysqlctl *MysqlctlProcess) StartWithArgs(extraCnf string, extraArgs ...string) (err error) {
+	if extraCnf != "" {
+		os.Setenv("EXTRA_MY_CNF", extraCnf)
+	}
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
 		"-log_dir", mysqlctl.LogDirectory,
 		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 		"-mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
-		"init",
-		"-init_db_sql_file", mysqlctl.InitDBFile,
 	)
+	if len(extraArgs) > 0 {
+		tmpProcess.Args = append(tmpProcess.Args, extraArgs...)
+	}
+	tmpProcess.Args = append(tmpProcess.Args, "init",
+		"-init_db_sql_file", mysqlctl.InitDBFile)
 	return tmpProcess.Run()
 }
 

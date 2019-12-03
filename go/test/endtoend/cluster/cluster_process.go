@@ -111,7 +111,7 @@ type Vttablet struct {
 
 	// background executable processes
 	MysqlctlProcess MysqlctlProcess
-	VttabletProcess VttabletProcess
+	VttabletProcess *VttabletProcess
 }
 
 // StartTopo starts topology server
@@ -206,7 +206,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			}
 
 			// start vttablet process
-			tablet.VttabletProcess = *VttabletProcessInstance(tablet.HTTPPort,
+			tablet.VttabletProcess = VttabletProcessInstance(tablet.HTTPPort,
 				tablet.GrpcPort,
 				tablet.TabletUID,
 				cluster.Cell,
@@ -408,7 +408,7 @@ func (cluster *LocalProcessCluster) GetVttabletInstance(UID int) *Vttablet {
 // StartVttablet start a new tablet
 func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatus string,
 	supportBackup bool, cell string, keyspaceName string, hostname string, shardName string) error {
-	tablet.VttabletProcess = *VttabletProcessInstance(
+	tablet.VttabletProcess = VttabletProcessInstance(
 		tablet.HTTPPort,
 		tablet.GrpcPort,
 		tablet.TabletUID,
