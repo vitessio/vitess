@@ -125,7 +125,7 @@ var (
 
 // TestReSharding - main test with accepts different params for various test
 func TestReSharding(t *testing.T) {
-	clusterInstance = &cluster.LocalProcessCluster{Cell: cell1, Hostname: hostname}
+	clusterInstance = cluster.NewCluster(cell1, hostname)
 	defer clusterInstance.Teardown()
 
 	// Launch keyspace
@@ -682,50 +682,49 @@ func TestReSharding(t *testing.T) {
 	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard0.Name, shard2.Name, shard3.Name}
 	checkSrvKeyspaceForSharding(t, cell1, expectedPartitions, shardingKeyType)
 
-	//
-	//// reparent shard_2 to shard_2_replica1, then insert more data and
-	//// see it flow through still
-	//shard2Ks := fmt.Sprintf("%s/%s", keyspaceName, shard2.Name)
-	//err = clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard", shard2Ks,
-	//	"-new_master", shard2Replica1.Alias)
-	//assert.Nil(t, err, "error should be Nil")
-	//
-	////update our test variables to point at the new master
-	//tmp := shard2Master
-	//shard2Master  = shard2Replica1
-	//shard2Replica1 = tmp
-	//
-	//log.Debug("Inserting lots of data on source shard after reparenting")
-	//sharding.InsertLots(3000, 2000, *shard1.MasterTablet(), tableName, fixedParentID, keyspaceName)
-	//// Checking 80 percent of data is sent fairly quickly
-	//assert.True(t, checkLotsTimeout(t, 3000, 2000, tableName, keyspaceName, shardingKeyType))
-	//
-	//if useMultiSplitDiff {
-	//	log.Debug("Running vtworker MultiSplitDiff")
-	//	err = clusterInstance.VtworkerProcess.ExecuteVtworkerCommand(clusterInstance.GetAndReservePort(),
-	//		clusterInstance.GetAndReservePort(),
-	//		"--use_v3_resharding_mode=false",
-	//		"MultiSplitDiff",
-	//		"--exclude_tables", "unrelated",
-	//		"--min_healthy_rdonly_tablets", "1",
-	//		fmt.Sprintf("%s/%s", keyspaceName, shard1.Name))
-	//	assert.Nil(t, err, "error should be Nil")
-	//} else {
-	//	log.Debug("Running vtworker SplitDiff")
-	//	err = clusterInstance.VtworkerProcess.ExecuteVtworkerCommand(clusterInstance.GetAndReservePort(),
-	//		clusterInstance.GetAndReservePort(),
-	//		"--use_v3_resharding_mode=false",
-	//		"SplitDiff",
-	//		"--exclude_tables", "unrelated",
-	//		"--min_healthy_rdonly_tablets", "1",
-	//		fmt.Sprintf("%s/%s", keyspaceName, shard3.Name))
-	//	assert.Nil(t, err, "error should be Nil")
-	//}
-	//
-	//err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", shard1Rdonly.Alias, "rdonly")
-	//assert.Nil(t, err, "error should be Nil")
-	//err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", shard3Rdonly.Alias, "rdonly")
-	//assert.Nil(t, err, "error should be Nil")
+	// reparent shard_2 to shard_2_replica1, then insert more data and
+	// see it flow through still
+	shard2Ks := fmt.Sprintf("%s/%s", keyspaceName, shard2.Name)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard", shard2Ks,
+		"-new_master", shard2Replica1.Alias)
+	assert.Nil(t, err, "error should be Nil")
+
+	//update our test variables to point at the new master
+	tmp := shard2Master
+	shard2Master = shard2Replica1
+	shard2Replica1 = tmp
+
+	log.Debug("Inserting lots of data on source shard after reparenting")
+	sharding.InsertLots(3000, 2000, *shard1.MasterTablet(), tableName, fixedParentID, keyspaceName)
+	// Checking 80 percent of data is sent fairly quickly
+	assert.True(t, checkLotsTimeout(t, 3000, 2000, tableName, keyspaceName, shardingKeyType))
+
+	if useMultiSplitDiff {
+		log.Debug("Running vtworker MultiSplitDiff")
+		err = clusterInstance.VtworkerProcess.ExecuteVtworkerCommand(clusterInstance.GetAndReservePort(),
+			clusterInstance.GetAndReservePort(),
+			"--use_v3_resharding_mode=false",
+			"MultiSplitDiff",
+			"--exclude_tables", "unrelated",
+			"--min_healthy_rdonly_tablets", "1",
+			fmt.Sprintf("%s/%s", keyspaceName, shard1.Name))
+		assert.Nil(t, err, "error should be Nil")
+	} else {
+		log.Debug("Running vtworker SplitDiff")
+		err = clusterInstance.VtworkerProcess.ExecuteVtworkerCommand(clusterInstance.GetAndReservePort(),
+			clusterInstance.GetAndReservePort(),
+			"--use_v3_resharding_mode=false",
+			"SplitDiff",
+			"--exclude_tables", "unrelated",
+			"--min_healthy_rdonly_tablets", "1",
+			fmt.Sprintf("%s/%s", keyspaceName, shard3.Name))
+		assert.Nil(t, err, "error should be Nil")
+	}
+
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", shard1Rdonly.Alias, "rdonly")
+	assert.Nil(t, err, "error should be Nil")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", shard3Rdonly.Alias, "rdonly")
+	assert.Nil(t, err, "error should be Nil")
 
 	/*
 
