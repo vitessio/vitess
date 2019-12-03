@@ -34,11 +34,22 @@ We follow these conventions within this package:
 package etcd2topo
 
 import (
+	"crypto/tls"
+	"flag"
+	"github.com/coreos/etcd/pkg/transport"
+	"io/ioutil"
 	"strings"
 	"time"
+	"vitess.io/vitess/go/vt/log"
 
 	"github.com/coreos/etcd/clientv3"
 	"vitess.io/vitess/go/vt/topo"
+)
+
+var (
+	certPath = flag.String("topo_etcd2_tls_cert", "", "the cert to use to connect to the etcd topo server, requires topo_etcd2_tls_key, enables TLS")
+	keyPath = flag.String("topo_etcd2_tls_key", "", "the key to use to connect to the etcd topo server, enables TLS")
+	caPath  = flag.String("topo_etcd2_tls_ca", "", "the server ca to use to validate servers when connecting to the etcd topo server")
 )
 
 // Factory is the consul topo.Factory implementation.
@@ -71,12 +82,42 @@ func (s *Server) Close() {
 	s.cli = nil
 }
 
-// NewServer returns a new etcdtopo.Server.
-func NewServer(serverAddr, root string) (*Server, error) {
-	cli, err := clientv3.New(clientv3.Config{
-		Endpoints:   strings.Split(serverAddr, ","),
+// TODO: Rename this to NewServer and change NewServer to a name that signifies it's global.
+func NewServerWithOpts(serverAddr, root string, certPath *string, keyPath *string, caPath *string) (*Server, error){
+	config := clientv3.Config{
+		Endpoints:  strings.Split(serverAddr, ","),
 		DialTimeout: 5 * time.Second,
-	})
+	}
+
+	// If TLS is enabled, attach TLS config info.
+	if *certPath != "" && *keyPath != "" {
+		// Verify we can load provided cert and key.
+		_, err := tls.LoadX509KeyPair(*certPath, *keyPath)
+		if err != nil {
+			log.Fatalf("Unable to load cert %v and key %v, err %v", *certPath, *keyPath, err)
+		}
+
+		// Verify we can open ca cert.
+		_, err = ioutil.ReadFile(*caPath)
+		if err != nil {
+			log.Fatalf("Unable to open ca cert %v, err %v", *caPath, err)
+		}
+
+		// Safe now to build up TLS info.
+		tlsInfo := transport.TLSInfo{
+			CertFile:   *certPath,
+			KeyFile:    *keyPath,
+			TrustedCAFile: *caPath,
+		}
+
+		tlsConfig, err := tlsInfo.ClientConfig()
+		if err != nil {
+			log.Fatalf("Unable to generate client config, err %v", err)
+		}
+		config.TLS = tlsConfig
+	}
+
+	cli, err := clientv3.New(config)
 	if err != nil {
 		return nil, err
 	}
@@ -85,6 +126,12 @@ func NewServer(serverAddr, root string) (*Server, error) {
 		cli:  cli,
 		root: root,
 	}, nil
+}
+
+// TODO: Rename this to a name to signifies this is a global etcd server.
+// NewServer returns a new etcdtopo.Server.
+func NewServer(serverAddr, root string) (*Server, error) {
+	return NewServerWithOpts(serverAddr, root, certPath, keyPath, caPath)
 }
 
 func init() {
