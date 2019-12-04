@@ -57,14 +57,17 @@ func (wr *Wrangler) Materialize(ctx context.Context, ms *vtctldatapb.Materialize
 	if err := mz.deploySchema(ctx); err != nil {
 		return err
 	}
-	return nil
+	inserts, err := mz.generateInserts(ctx)
+	if err != nil {
+		return err
+	}
+	if err := mz.createStreams(ctx, inserts); err != nil {
+		return err
+	}
+	return mz.startStreams(ctx)
 }
 
 func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.MaterializeSettings) (*materializer, error) {
-	// TODO(sougou): if createddl=="copy", make sure source and target table names match.
-	// TODO(sougou): ensure sources and targets have MasterAlias set.
-	// TODO(sougou): ensure source tables exist.
-	// TODO(sougou): accept cell and tablet types.
 	vschema, err := wr.ts.GetVSchema(ctx, ms.TargetKeyspace)
 	if err != nil {
 		return nil, err
@@ -89,6 +92,11 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 	targetShards, err := wr.ts.GetServingShards(ctx, ms.TargetKeyspace)
 	if err != nil {
 		return nil, err
+	}
+	for _, target := range targetShards {
+		if target.MasterAlias == nil {
+			return nil, fmt.Errorf("target shard must have a master: %v", target.ShardName())
+		}
 	}
 	return &materializer{
 		wr:            wr,
@@ -115,7 +123,18 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 			}
 			createddl := ts.CreateDdl
 			if createddl == "copy" {
-				sourceSchema, err := mz.wr.GetSchema(ctx, mz.sourceShards[0].MasterAlias, []string{ts.TargetTable}, nil, false)
+				sourceTableName, err := sqlparser.TableFromStatement(ts.SourceExpression)
+				if err != nil {
+					return err
+				}
+				if sourceTableName.Name.String() != ts.TargetTable {
+					return fmt.Errorf("source and target table names must match for copying schema: %v vs %v", sqlparser.String(sourceTableName), ts.TargetTable)
+				}
+				sourceMaster := mz.sourceShards[0].MasterAlias
+				if sourceMaster == nil {
+					return fmt.Errorf("source shard must have a master for copying schema: %v", mz.sourceShards[0].ShardName())
+				}
+				sourceSchema, err := mz.wr.GetSchema(ctx, sourceMaster, []string{ts.TargetTable}, nil, false)
 				if err != nil {
 					return err
 				}
@@ -150,13 +169,13 @@ func (mz *materializer) generateInserts(ctx context.Context) (string, error) {
 				Match: ts.TargetTable,
 			}
 			if mz.targetVSchema.Keyspace.Sharded && mz.targetVSchema.Tables[ts.TargetTable].Type != vindexes.TypeReference {
-				stmt, err := sqlparser.Parse(ts.Source)
+				stmt, err := sqlparser.Parse(ts.SourceExpression)
 				if err != nil {
 					return "", err
 				}
 				sel, ok := stmt.(*sqlparser.Select)
 				if !ok {
-					return "", fmt.Errorf("unrecognized statement: %s", ts.Source)
+					return "", fmt.Errorf("unrecognized statement: %s", ts.SourceExpression)
 				}
 				cv, err := vindexes.FindBestColVindex(mz.targetVSchema.Tables[ts.TargetTable])
 				if err != nil {
@@ -176,7 +195,7 @@ func (mz *materializer) generateInserts(ctx context.Context) (string, error) {
 				}
 				vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
 				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte(vindexName))})
-				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte("'{{.}}'"))})
+				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte("'{{keyrange}}'"))})
 				sel.Where = &sqlparser.Where{
 					Type: sqlparser.WhereStr,
 					Expr: &sqlparser.FuncExpr{
@@ -186,11 +205,11 @@ func (mz *materializer) generateInserts(ctx context.Context) (string, error) {
 				}
 				rule.Filter = sqlparser.String(sel)
 			} else {
-				rule.Filter = ts.Source
+				rule.Filter = ts.SourceExpression
 			}
 			bls.Filter.Rules = append(bls.Filter.Rules, rule)
 		}
-		ig.AddRow(mz.ms.Workflow, bls, "", "", "")
+		ig.AddRow(mz.ms.Workflow, bls, "", mz.ms.Cell, mz.ms.TabletTypes)
 	}
 	return ig.String(), nil
 }
@@ -224,19 +243,37 @@ func matchColInSelect(col sqlparser.ColIdent, sel *sqlparser.Select) (*sqlparser
 	return nil, fmt.Errorf("could not find vindex column %v", sqlparser.String(col))
 }
 
-func (mz *materializer) createStreams(ctx context.Context) error {
+func (mz *materializer) createStreams(ctx context.Context, inserts string) error {
 	return mz.forAllTargets(func(target *topo.ShardInfo) error {
 		targetMaster, err := mz.wr.ts.GetTablet(ctx, target.MasterAlias)
 		if err != nil {
 			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.MasterAlias)
 		}
 		buf := &strings.Builder{}
-		t := template.Must(template.New("").Parse(mz.inserts))
-		if err := t.Execute(buf, key.KeyRangeString(target.KeyRange)); err != nil {
+		t := template.Must(template.New("").Parse(inserts))
+		input := map[string]string{
+			"keyrange": key.KeyRangeString(target.KeyRange),
+			"dbname":   targetMaster.DbName(),
+		}
+		if err := t.Execute(buf, input); err != nil {
 			return err
 		}
 		if _, err := mz.wr.TabletManagerClient().VReplicationExec(ctx, targetMaster.Tablet, buf.String()); err != nil {
 			return err
+		}
+		return nil
+	})
+}
+
+func (mz *materializer) startStreams(ctx context.Context) error {
+	return mz.forAllTargets(func(target *topo.ShardInfo) error {
+		targetMaster, err := mz.wr.ts.GetTablet(ctx, target.MasterAlias)
+		if err != nil {
+			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.MasterAlias)
+		}
+		query := fmt.Sprintf("update _vt.vreplication set state='Running' where db_name=%s", encodeString(targetMaster.DbName()))
+		if _, err := mz.wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, query); err != nil {
+			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", targetMaster.Tablet, query)
 		}
 		return nil
 	})
