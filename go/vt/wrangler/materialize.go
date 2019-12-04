@@ -18,20 +18,31 @@ package wrangler
 
 import (
 	"fmt"
+	"html/template"
+	"strings"
+	"sync"
 
 	"golang.org/x/net/context"
 
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/key"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 )
 
 type materializer struct {
 	wr            *Wrangler
 	ms            *vtctldatapb.MaterializeSettings
-	targetVSchema *vschemapb.Keyspace
+	targetVSchema *vindexes.KeyspaceSchema
 	sourceShards  []*topo.ShardInfo
 	targetShards  []*topo.ShardInfo
+	inserts       string
 }
 
 // Materialize performs the steps needed to materialize a list of tables based on the materialization specs.
@@ -53,14 +64,19 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 	// TODO(sougou): if createddl=="copy", make sure source and target table names match.
 	// TODO(sougou): ensure sources and targets have MasterAlias set.
 	// TODO(sougou): ensure source tables exist.
-	targetVSchema, err := wr.ts.GetVSchema(ctx, ms.TargetKeyspace)
+	// TODO(sougou): accept cell and tablet types.
+	vschema, err := wr.ts.GetVSchema(ctx, ms.TargetKeyspace)
+	if err != nil {
+		return nil, err
+	}
+	targetVSchema, err := vindexes.BuildKeyspaceSchema(vschema, ms.TargetKeyspace)
 	if err != nil {
 		return nil, err
 	}
 	for _, ts := range ms.TableSettings {
 		_, ok := targetVSchema.Tables[ts.TargetTable]
 		if !ok {
-			if targetVSchema.Sharded {
+			if targetVSchema.Keyspace.Sharded {
 				return nil, fmt.Errorf("table %s not found in vschema for keyspace %s", ts.TargetTable, ms.TargetKeyspace)
 			}
 		}
@@ -84,7 +100,7 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 }
 
 func (mz *materializer) deploySchema(ctx context.Context) error {
-	for _, target := range mz.targetShards {
+	return mz.forAllTargets(func(target *topo.ShardInfo) error {
 		for _, ts := range mz.ms.TableSettings {
 			tableSchema, err := mz.wr.GetSchema(ctx, target.MasterAlias, []string{ts.TargetTable}, nil, false)
 			if err != nil {
@@ -116,6 +132,129 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 				return err
 			}
 		}
+		return nil
+	})
+}
+
+func (mz *materializer) generateInserts(ctx context.Context) (string, error) {
+	ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, "{{dbname}}")
+
+	for _, source := range mz.sourceShards {
+		bls := &binlogdatapb.BinlogSource{
+			Keyspace: mz.ms.SourceKeyspace,
+			Shard:    source.ShardName(),
+			Filter:   &binlogdatapb.Filter{},
+		}
+		for _, ts := range mz.ms.TableSettings {
+			rule := &binlogdatapb.Rule{
+				Match: ts.TargetTable,
+			}
+			if mz.targetVSchema.Keyspace.Sharded && mz.targetVSchema.Tables[ts.TargetTable].Type != vindexes.TypeReference {
+				stmt, err := sqlparser.Parse(ts.Source)
+				if err != nil {
+					return "", err
+				}
+				sel, ok := stmt.(*sqlparser.Select)
+				if !ok {
+					return "", fmt.Errorf("unrecognized statement: %s", ts.Source)
+				}
+				cv, err := vindexes.FindBestColVindex(mz.targetVSchema.Tables[ts.TargetTable])
+				if err != nil {
+					return "", err
+				}
+				mappedCols := make([]*sqlparser.ColName, 0, len(cv.Columns))
+				for _, col := range cv.Columns {
+					colName, err := matchColInSelect(col, sel)
+					if err != nil {
+						return "", err
+					}
+					mappedCols = append(mappedCols, colName)
+				}
+				subExprs := make(sqlparser.SelectExprs, 0, len(mappedCols)+2)
+				for _, mappedCol := range mappedCols {
+					subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: mappedCol})
+				}
+				vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
+				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte(vindexName))})
+				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte("'{{.}}'"))})
+				sel.Where = &sqlparser.Where{
+					Type: sqlparser.WhereStr,
+					Expr: &sqlparser.FuncExpr{
+						Name:  sqlparser.NewColIdent("in_keyrange"),
+						Exprs: subExprs,
+					},
+				}
+				rule.Filter = sqlparser.String(sel)
+			} else {
+				rule.Filter = ts.Source
+			}
+			bls.Filter.Rules = append(bls.Filter.Rules, rule)
+		}
+		ig.AddRow(mz.ms.Workflow, bls, "", "", "")
 	}
-	return nil
+	return ig.String(), nil
+}
+
+func matchColInSelect(col sqlparser.ColIdent, sel *sqlparser.Select) (*sqlparser.ColName, error) {
+	for _, selExpr := range sel.SelectExprs {
+		switch selExpr := selExpr.(type) {
+		case *sqlparser.StarExpr:
+			return &sqlparser.ColName{Name: col}, nil
+		case *sqlparser.AliasedExpr:
+			match := selExpr.As
+			if match.IsEmpty() {
+				if colExpr, ok := selExpr.Expr.(*sqlparser.ColName); ok {
+					match = colExpr.Name
+				} else {
+					// Cannot match against a complex expression.
+					continue
+				}
+			}
+			if match.Equal(col) {
+				colExpr, ok := selExpr.Expr.(*sqlparser.ColName)
+				if !ok {
+					return nil, fmt.Errorf("vindex column cannot be a complex expression: %v", sqlparser.String(selExpr))
+				}
+				return colExpr, nil
+			}
+		default:
+			return nil, fmt.Errorf("unsupported select expression: %v", sqlparser.String(selExpr))
+		}
+	}
+	return nil, fmt.Errorf("could not find vindex column %v", sqlparser.String(col))
+}
+
+func (mz *materializer) createStreams(ctx context.Context) error {
+	return mz.forAllTargets(func(target *topo.ShardInfo) error {
+		targetMaster, err := mz.wr.ts.GetTablet(ctx, target.MasterAlias)
+		if err != nil {
+			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.MasterAlias)
+		}
+		buf := &strings.Builder{}
+		t := template.Must(template.New("").Parse(mz.inserts))
+		if err := t.Execute(buf, key.KeyRangeString(target.KeyRange)); err != nil {
+			return err
+		}
+		if _, err := mz.wr.TabletManagerClient().VReplicationExec(ctx, targetMaster.Tablet, buf.String()); err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
+func (mz *materializer) forAllTargets(f func(*topo.ShardInfo) error) error {
+	var wg sync.WaitGroup
+	allErrors := &concurrency.AllErrorRecorder{}
+	for _, target := range mz.targetShards {
+		wg.Add(1)
+		go func(target *topo.ShardInfo) {
+			defer wg.Done()
+
+			if err := f(target); err != nil {
+				allErrors.RecordError(err)
+			}
+		}(target)
+	}
+	wg.Wait()
+	return allErrors.AggrError(vterrors.Aggregate)
 }
