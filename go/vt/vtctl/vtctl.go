@@ -307,6 +307,9 @@ var commands = []commandGroup{
 			{"ValidateKeyspace", commandValidateKeyspace,
 				"[-ping-tablets] <keyspace name>",
 				"Validates that all nodes reachable from the specified keyspace are consistent."},
+			{"Reshard", commandReshard,
+				"[-skip_schema_copy] <keyspace.workflow> <source_shards> <target_shards>",
+				"Start a Resharding process. Example: Reshard ks.workflow001 '0' '-80,80-'"},
 			{"SplitClone", commandSplitClone,
 				"<keyspace> <from_shards> <to_shards>",
 				"Start the SplitClone process to perform horizontal resharding. Example: SplitClone ks '0' '-80,80-'"},
@@ -1782,6 +1785,23 @@ func commandValidateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlag
 
 	keyspace := subFlags.Arg(0)
 	return wr.ValidateKeyspace(ctx, keyspace, *pingTablets)
+}
+
+func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	skipSchemaCopy := subFlags.Bool("skip_schema_copy", false, "Skip copying of schema to targets")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 3 {
+		return fmt.Errorf("three arguments are required: <keyspace.workflow>, source_shards, target_shards")
+	}
+	keyspace, workflow, err := splitKeyspaceWorkflow(subFlags.Arg(0))
+	if err != nil {
+		return err
+	}
+	source := strings.Split(subFlags.Arg(1), ",")
+	target := strings.Split(subFlags.Arg(2), ",")
+	return wr.Reshard(ctx, keyspace, workflow, source, target, *skipSchemaCopy)
 }
 
 func commandSplitClone(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
