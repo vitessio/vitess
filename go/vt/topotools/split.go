@@ -17,13 +17,65 @@ limitations under the License.
 package topotools
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/key"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 )
+
+// ValidateForReshard returns an error if sourceShards cannot reshard into
+// targetShards.
+func ValidateForReshard(sourceShards, targetShards []*topo.ShardInfo) error {
+	for _, source := range sourceShards {
+		for _, target := range targetShards {
+			if key.KeyRangeEqual(source.KeyRange, target.KeyRange) {
+				return fmt.Errorf("same keyrange is present in source and target: %v", key.KeyRangeString(source.KeyRange))
+			}
+		}
+	}
+	sourcekr, err := combineKeyRanges(sourceShards)
+	if err != nil {
+		return err
+	}
+	targetkr, err := combineKeyRanges(targetShards)
+	if err != nil {
+		return err
+	}
+	if !key.KeyRangeEqual(sourcekr, targetkr) {
+		return fmt.Errorf("source and target keyranges don't match: %v vs %v", key.KeyRangeString(sourcekr), key.KeyRangeString(targetkr))
+	}
+	return nil
+}
+
+func combineKeyRanges(shards []*topo.ShardInfo) (*topodatapb.KeyRange, error) {
+	if len(shards) == 0 {
+		return nil, fmt.Errorf("there are no shards to combine")
+	}
+	result := shards[0].KeyRange
+	krmap := make(map[string]*topodatapb.KeyRange)
+	for _, si := range shards[1:] {
+		krmap[si.ShardName()] = si.KeyRange
+	}
+	for len(krmap) != 0 {
+		foundOne := false
+		for k, kr := range krmap {
+			newkr, ok := key.KeyRangeAdd(result, kr)
+			if ok {
+				foundOne = true
+				result = newkr
+				delete(krmap, k)
+			}
+		}
+		if !foundOne {
+			return nil, errors.New("shards don't form a contiguous keyrange")
+		}
+	}
+	return result, nil
+}
 
 // OverlappingShards contains sets of shards that overlap which each-other.
 // With this library, there is no guarantee of which set will be left or right.
