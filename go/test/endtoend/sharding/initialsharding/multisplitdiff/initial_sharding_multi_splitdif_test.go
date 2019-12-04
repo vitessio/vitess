@@ -13,11 +13,20 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
+This test simulates the first time a database has to be split.
 
-"""Re-runs initial_sharding_test.go with a varbinary keyspace_id."""
+- we start with a keyspace with a single shard and a single table
+- we add and populate the sharding key
+- we set the sharding key in the topology
+- we clone into 2 instances
+- we enable filtered replication
+- we move all serving types
+- we remove the source tablets
+- we remove the original shard
+
 */
 
-package bytes
+package multisplitdiff
 
 import (
 	"testing"
@@ -26,11 +35,11 @@ import (
 	"vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func TestInitialShardingBytes(t *testing.T) {
+func TestInitialShardingMultiSplitDiff(t *testing.T) {
 	code, err := sharding.ClusterWrapper(false)
 	if err != nil {
 		t.Errorf("setup failed with status code %d", code)
 	}
-	sharding.TestInitialSharding(t, &sharding.ClusterInstance.Keyspaces[0], topodata.KeyspaceIdType_BYTES, false, false, false)
+	sharding.TestInitialSharding(t, &sharding.ClusterInstance.Keyspaces[0], topodata.KeyspaceIdType_UINT64, false, false, true)
 	defer sharding.ClusterInstance.Teardown()
 }

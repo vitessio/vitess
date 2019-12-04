@@ -29,6 +29,7 @@ This test simulates the first time a database has to be split.
 package multi
 
 import (
+	"fmt"
 	"testing"
 
 	sharding "vitess.io/vitess/go/test/endtoend/sharding/initialsharding"
@@ -40,7 +41,17 @@ func TestInitialShardingMulti(t *testing.T) {
 	if err != nil {
 		t.Errorf("setup failed with status code %d", code)
 	}
-	sharding.TestInitialShardingWithVersion(t, &sharding.ClusterInstance.Keyspaces[0], topodata.KeyspaceIdType_UINT64, true, false)
+	println(fmt.Sprintf("total keyspace %d", len(sharding.ClusterInstance.Keyspaces)))
+	sharding.TestInitialSharding(t, &sharding.ClusterInstance.Keyspaces[0], topodata.KeyspaceIdType_UINT64, true, false, false)
+	println("Done with 1st keyspace test")
+	sharding.TestInitialSharding(t, &sharding.ClusterInstance.Keyspaces[1], topodata.KeyspaceIdType_UINT64, true, true, false)
+	println("Done with 2nd keyspace test")
+	if len(sharding.VtgateInstances) > 0 {
+		for _, vtgateInstance := range sharding.VtgateInstances {
+			_ = vtgateInstance.TearDown()
+		}
+	}
 	sharding.KillTabletsInKeyspace(&sharding.ClusterInstance.Keyspaces[0])
+	sharding.KillTabletsInKeyspace(&sharding.ClusterInstance.Keyspaces[1])
 	defer sharding.ClusterInstance.Teardown()
 }

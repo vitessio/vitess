@@ -40,6 +40,6 @@ func TestInitialSharding(t *testing.T) {
 	if err != nil {
 		t.Errorf("setup failed with status code %d", code)
 	}
-	sharding.TestInitialShardingWithVersion(t, &sharding.ClusterInstance.Keyspaces[0], topodata.KeyspaceIdType_UINT64, false, false)
+	sharding.TestInitialSharding(t, &sharding.ClusterInstance.Keyspaces[0], topodata.KeyspaceIdType_UINT64, false, false, false)
 	defer sharding.ClusterInstance.Teardown()
 }

@@ -121,7 +121,9 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	vttablet.exit = make(chan error)
 	go func() {
-		vttablet.exit <- vttablet.proc.Wait()
+		if vttablet.proc != nil {
+			vttablet.exit <- vttablet.proc.Wait()
+		}
 	}()
 
 	err = vttablet.WaitForTabletType(vttablet.ServingStatus)

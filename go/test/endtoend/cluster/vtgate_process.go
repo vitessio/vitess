@@ -80,7 +80,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"-gateway_implementation", vtgate.GatewayImplementation,
 		"-service_map", vtgate.ServiceMap,
 		"-mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
-		"-pid_file", vtgate.PidFile,
+		//"-pid_file", vtgate.PidFile,
 	)
 	vtgate.proc.Args = append(vtgate.proc.Args, vtgate.ExtraArgs...)
 
@@ -98,7 +98,9 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 
 	vtgate.exit = make(chan error)
 	go func() {
-		vtgate.exit <- vtgate.proc.Wait()
+		if vtgate.proc != nil {
+			vtgate.exit <- vtgate.proc.Wait()
+		}
 	}()
 
 	timeout := time.Now().Add(60 * time.Second)

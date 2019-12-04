@@ -22,7 +22,6 @@ import (
 	"os"
 	"path"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -34,12 +33,13 @@ var (
 	// ClusterInstance instance to be used for test with different params
 	ClusterInstance  *cluster.LocalProcessCluster
 	hostname         = "localhost"
-	keyspaceName1    = "ks"
-	keyspaceName2    = "ks-2"
+	keyspaceName1    = "ks1"
+	keyspaceName2    = "ks2"
 	dbPwd            = ""
 	cell             = "zone1"
 	newInitDbFile    string
 	dbCredentialFile string
+	VtgateInstances  []*cluster.VtgateProcess
 	commonTabletArg  = []string{
 		"-vreplication_healthcheck_topology_refresh", "1s",
 		"-vreplication_healthcheck_retry_delay", "1s",
@@ -99,7 +99,6 @@ func ClusterWrapper(isMulti bool) (int, error) {
 	}
 
 	if isMulti {
-		println("writing db credential")
 		writeDbCredentialToTmp()
 		tablet := &cluster.Vttablet{
 			Type:            "relpica",
@@ -107,7 +106,6 @@ func ClusterWrapper(isMulti bool) (int, error) {
 			MySQLPort:       15000,
 			MysqlctlProcess: *cluster.MysqlCtlProcessInstance(100, 15000, ClusterInstance.TmpDirectory),
 		}
-		println("writing init db file")
 		writeInitDBFile(tablet)
 		tablet = nil
 		dbPwd = "VtDbaPass"
@@ -115,14 +113,17 @@ func ClusterWrapper(isMulti bool) (int, error) {
 
 	if err := ClusterInstance.VtctlProcess.CreateKeyspace(keyspaceName1); err != nil {
 		return 1, err
+	} else {
+		ClusterInstance.Keyspaces = append(ClusterInstance.Keyspaces, cluster.Keyspace{Name: keyspaceName1})
 	}
 	if isMulti {
 		if err := ClusterInstance.VtctlProcess.CreateKeyspace(keyspaceName2); err != nil {
 			return 1, err
+		} else {
+			ClusterInstance.Keyspaces = append(ClusterInstance.Keyspaces, cluster.Keyspace{Name: keyspaceName2})
 		}
 	}
 
-	println("done with db file and cred")
 	initClusterForInitialSharding(keyspaceName1, []string{"0"}, 3, true, isMulti)
 	println("done with ks - 1 ,shard 1")
 	initClusterForInitialSharding(keyspaceName1, []string{"-80", "80-"}, 3, true, isMulti)
@@ -138,19 +139,7 @@ func ClusterWrapper(isMulti bool) (int, error) {
 	return 0, nil
 }
 
-func initClusterForInitialSharding(ksName string, shardNames []string, totalTabletsRequired int, rdonly bool, isMulti bool) {
-	var keyspace cluster.Keyspace
-	var ksExists bool
-	if ClusterInstance.Keyspaces == nil {
-		keyspace = cluster.Keyspace{
-			Name: ksName,
-		}
-	} else {
-		// this is single keyspace test, so picking up 0th index
-		ksExists = true
-		keyspace = ClusterInstance.Keyspaces[0]
-	}
-
+func initClusterForInitialSharding(keyspaceName string, shardNames []string, totalTabletsRequired int, rdonly bool, isMulti bool) {
 	for _, shardName := range shardNames {
 		shard := &cluster.Shard{
 			Name: shardName,
@@ -190,7 +179,7 @@ func initClusterForInitialSharding(ksName string, shardNames []string, totalTabl
 				tablet.TabletUID,
 				ClusterInstance.Cell,
 				shardName,
-				ksName,
+				keyspaceName,
 				ClusterInstance.VtctldProcess.Port,
 				tablet.Type,
 				ClusterInstance.TopoProcess.Port,
@@ -201,21 +190,20 @@ func initClusterForInitialSharding(ksName string, shardNames []string, totalTabl
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 			tablet.VttabletProcess.DbPwd = dbPwd
 			tablet.VttabletProcess.EnableSemiSync = true
+			tablet.VttabletProcess.SupportBackup = false
 			shard.Vttablets = append(shard.Vttablets, *tablet)
 		}
-		if ksExists {
-			ClusterInstance.Keyspaces[0].Shards = append(ClusterInstance.Keyspaces[0].Shards, *shard)
-		} else {
-			keyspace.Shards = append(keyspace.Shards, *shard)
+		for idx, ks := range ClusterInstance.Keyspaces {
+			if ks.Name == keyspaceName {
+				ClusterInstance.Keyspaces[idx].Shards = append(ClusterInstance.Keyspaces[idx].Shards, *shard)
+			}
 		}
 	}
-	if len(ClusterInstance.Keyspaces) == 0 {
-		ClusterInstance.Keyspaces = append(ClusterInstance.Keyspaces, keyspace)
-	}
+
 }
 
-// TestInitialShardingWithVersion - main test with accepts different params for various test
-func TestInitialShardingWithVersion(t *testing.T, keyspace *cluster.Keyspace, shardingKeyType topodata.KeyspaceIdType, isMulti bool, isExternal bool) {
+// TestInitialSharding - main test with accepts different params for various test
+func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, shardingKeyType topodata.KeyspaceIdType, isMulti bool, isExternal bool, isMultiSplitDiff bool) {
 	if isExternal {
 		commonTabletArg = append(commonTabletArg, "-db_host", "127.0.0.1")
 		commonTabletArg = append(commonTabletArg, "-disable_active_reparents")
@@ -229,6 +217,7 @@ func TestInitialShardingWithVersion(t *testing.T, keyspace *cluster.Keyspace, sh
 		commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)
 	}
 	// Start the master and rdonly of 1st shard
+	println(fmt.Sprintf("total shards in keyspace is %d", len(keyspace.Shards)))
 	shard1 := keyspace.Shards[0]
 	keyspaceName := keyspace.Name
 	shard1Ks := fmt.Sprintf("%s/%s", keyspaceName, shard1.Name)
@@ -237,10 +226,23 @@ func TestInitialShardingWithVersion(t *testing.T, keyspace *cluster.Keyspace, sh
 
 	// master tablet start
 	shard1MasterTablet.VttabletProcess.ExtraArgs = append(shard1MasterTablet.VttabletProcess.ExtraArgs, commonTabletArg...)
-	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("createshard", shard1.Name)
-	_ = ClusterInstance.VtctlclientProcess.InitTablet(&shard1MasterTablet, cell, keyspaceName, hostname, shard1.Name)
+	var err error
+	if isExternal {
+		err = ClusterInstance.VtctlclientProcess.ExecuteCommand("InitTablet", "-hostname", ClusterInstance.Hostname,
+			"-port", fmt.Sprintf("%d", shard1MasterTablet.HTTPPort), "-allow_update",
+			"-mysql_port", fmt.Sprintf("%d", shard1MasterTablet.MySQLPort), "-parent",
+			"-keyspace", keyspaceName, "-shard", shard1.Name, shard1MasterTablet.Alias, "replica")
+		assert.Nil(t, err)
+	} else {
+		_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("createshard", "-force", shard1.Name)
+		err = ClusterInstance.VtctlclientProcess.InitTablet(&shard1MasterTablet, cell, keyspaceName, hostname, shard1.Name)
+		assert.Nil(t, err)
+	}
+	println("init tablet done")
 	_ = shard1MasterTablet.VttabletProcess.CreateDB(keyspaceName)
-	err := shard1MasterTablet.VttabletProcess.Setup()
+	println("create db done")
+	err = shard1MasterTablet.VttabletProcess.Setup()
+	println("setup done")
 	assert.Nil(t, err)
 
 	// replica tablet init
@@ -255,10 +257,11 @@ func TestInitialShardingWithVersion(t *testing.T, keyspace *cluster.Keyspace, sh
 	err = shard1.Rdonly().VttabletProcess.Setup()
 	assert.Nil(t, err)
 
-	output, _ := ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
-		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard1.Name), shard1MasterTablet.Alias)
-	assert.Contains(t, output, fmt.Sprintf("tablet %s ResetReplication failed", shard1.Replica().Alias))
-
+	if !isMulti {
+		output, _ := ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
+			"-force", fmt.Sprintf("%s/%s", keyspaceName, shard1.Name), shard1MasterTablet.Alias)
+		assert.Contains(t, output, fmt.Sprintf("tablet %s ResetReplication failed", shard1.Replica().Alias))
+	}
 	// start replica
 	err = shard1.Replica().VttabletProcess.Setup()
 	assert.Nil(t, err)
@@ -295,7 +298,10 @@ func TestInitialShardingWithVersion(t *testing.T, keyspace *cluster.Keyspace, sh
 	for _, vttablet := range shard1.Vttablets {
 		_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("ReloadSchema", vttablet.Alias)
 	}
-	err = ClusterInstance.StartVtgate()
+	println("Starting vtgate")
+	vtgateInstance := ClusterInstance.GetVtgateInstance()
+	err = vtgateInstance.Setup()
+	VtgateInstances = append(VtgateInstances, vtgateInstance)
 	assert.Nil(t, err)
 
 	_ = ClusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspaceName, shard1.Name))
@@ -309,8 +315,8 @@ func TestInitialShardingWithVersion(t *testing.T, keyspace *cluster.Keyspace, sh
 	assert.Nil(t, err)
 
 	// create the split shards
-	shard21 := ClusterInstance.Keyspaces[0].Shards[1]
-	shard22 := ClusterInstance.Keyspaces[0].Shards[2]
+	shard21 := keyspace.Shards[1]
+	shard22 := keyspace.Shards[2]
 
 	for _, shard := range []cluster.Shard{shard21, shard22} {
 		for _, vttablet := range shard.Vttablets {
@@ -341,8 +347,8 @@ func TestInitialShardingWithVersion(t *testing.T, keyspace *cluster.Keyspace, sh
 	// must restart vtgate after tablets are up, or else wait until 1min refresh
 	// we want cache_ttl at zero so we re-read the topology for every test query.
 
-	_ = ClusterInstance.VtgateProcess.TearDown()
-	_ = ClusterInstance.VtgateProcess.Setup()
+	_ = vtgateInstance.TearDown()
+	_ = vtgateInstance.Setup()
 
 	// Wait for the endpoints, either local or remote.
 	for _, shard := range []cluster.Shard{shard1, shard21, shard22} {
@@ -461,24 +467,32 @@ func TestInitialShardingWithVersion(t *testing.T, keyspace *cluster.Keyspace, sh
 
 	//use vtworker to compare the data
 	ClusterInstance.VtworkerProcess.Cell = cell
-	err = ClusterInstance.VtworkerProcess.ExecuteVtworkerCommand(ClusterInstance.GetAndReservePort(),
-		ClusterInstance.GetAndReservePort(),
-		"--use_v3_resharding_mode=true",
-		"SplitDiff",
-		"--min_healthy_rdonly_tablets", "1",
-		fmt.Sprintf("%s/%s", keyspaceName, shard21.Name))
-	if err != nil {
-		time.Sleep(5 * time.Minute)
-	}
-	assert.Nil(t, err)
+	if isMultiSplitDiff {
+		err = ClusterInstance.VtworkerProcess.ExecuteVtworkerCommand(ClusterInstance.GetAndReservePort(),
+			ClusterInstance.GetAndReservePort(),
+			"--use_v3_resharding_mode=true",
+			"MultiSplitDiff",
+			"--min_healthy_rdonly_tablets", "1",
+			fmt.Sprintf("%s/%s", keyspaceName, shard1.Name))
+		assert.Nil(t, err)
 
-	err = ClusterInstance.VtworkerProcess.ExecuteVtworkerCommand(ClusterInstance.GetAndReservePort(),
-		ClusterInstance.GetAndReservePort(),
-		"--use_v3_resharding_mode=true",
-		"SplitDiff",
-		"--min_healthy_rdonly_tablets", "1",
-		fmt.Sprintf("%s/%s", keyspaceName, shard22.Name))
-	assert.Nil(t, err)
+	} else {
+		err = ClusterInstance.VtworkerProcess.ExecuteVtworkerCommand(ClusterInstance.GetAndReservePort(),
+			ClusterInstance.GetAndReservePort(),
+			"--use_v3_resharding_mode=true",
+			"SplitDiff",
+			"--min_healthy_rdonly_tablets", "1",
+			fmt.Sprintf("%s/%s", keyspaceName, shard21.Name))
+		assert.Nil(t, err)
+
+		err = ClusterInstance.VtworkerProcess.ExecuteVtworkerCommand(ClusterInstance.GetAndReservePort(),
+			ClusterInstance.GetAndReservePort(),
+			"--use_v3_resharding_mode=true",
+			"SplitDiff",
+			"--min_healthy_rdonly_tablets", "1",
+			fmt.Sprintf("%s/%s", keyspaceName, shard22.Name))
+		assert.Nil(t, err)
+	}
 
 	// get status for the destination master tablet, make sure we have it all
 	if !isExternal {
@@ -565,6 +579,7 @@ func TestInitialShardingWithVersion(t *testing.T, keyspace *cluster.Keyspace, sh
 	if !isMulti {
 		KillTabletsInKeyspace(keyspace)
 	}
+
 }
 
 // KillTabletsInKeyspace kill the first shard tablets in ordered way
@@ -610,7 +625,6 @@ func writeInitDBFile(vttablet *cluster.Vttablet) {
 					FLUSH PRIVILEGES;
 					`
 	pwdCol, _ := getPasswordField(vttablet)
-	println("Got pwd col as " + pwdCol)
 	sql = sql + fmt.Sprintf(pwdChangeCmd, pwdCol, pwdCol, pwdCol, pwdCol, pwdCol, pwdCol) + `
 # connecting through a port requires 127.0.0.1
 # --host=localhost will connect through socket
