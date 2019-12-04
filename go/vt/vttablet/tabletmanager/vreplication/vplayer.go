@@ -53,6 +53,8 @@ type vplayer struct {
 	lastTimestampNs int64
 	// timeOffsetNs keeps track of the clock difference with respect to source tablet.
 	timeOffsetNs int64
+	// canAcceptStmtEvents set to true if the current player can accept events in statement mode. Only true for filters that are match all.
+	canAcceptStmtEvents bool
 }
 
 func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result, pausePos mysql.Position) *vplayer {
@@ -87,6 +89,15 @@ func (vp *vplayer) play(ctx context.Context) error {
 		return err
 	}
 	vp.replicatorPlan = plan
+
+	// We can't run in statement mode if there are filters defined.
+	vp.canAcceptStmtEvents = true
+	for _, rule := range vp.vr.source.Filter.Rules {
+		if rule.Filter != "" || rule.Match != "/.*" {
+			vp.canAcceptStmtEvents = false
+			break
+		}
+	}
 
 	if err := vp.fetchAndApply(ctx); err != nil {
 		msg := err.Error()
@@ -166,14 +177,11 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 }
 
 func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEvent) error {
-	for _, rule := range vp.vr.source.Filter.Rules {
-		if rule.Filter != "" || rule.Match != "/.*" {
-			return fmt.Errorf("Filter rules are not supported for SBR replication: %v", rule)
-		}
-
+	if vp.canAcceptStmtEvents {
+		_, err := vp.vr.dbClient.ExecuteWithRetry(ctx, event.Dml)
+		return err
 	}
-	_, err := vp.vr.dbClient.ExecuteWithRetry(ctx, event.Dml)
-	return err
+	return fmt.Errorf("Filter rules are not supported for SBR replication: %v", vp.vr.source.Filter.GetRules())
 }
 
 func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.RowEvent) error {
