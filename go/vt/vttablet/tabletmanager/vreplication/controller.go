@@ -186,10 +186,12 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 
 	var tablet *topodatapb.Tablet
 	if ct.source.GetExternalMysql() == "" {
+		log.Infof("trying to find a tablet eligible for vreplication. stream id: %v", ct.id)
 		tablet, err = ct.tabletPicker.PickForStreaming(ctx)
 		if err != nil {
 			return err
 		}
+		log.Infof("found a tablet eligible for vreplication. stream id: %v  tablet: %s", ct.id, tablet.Alias.String())
 		ct.sourceTablet.Set(tablet.Alias.String())
 	}
 

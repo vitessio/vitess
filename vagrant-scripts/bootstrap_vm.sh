@@ -26,9 +26,7 @@ apt-get install -y make \
                    python-pip \
                    libssl-dev \
                    g++ \
-                   mercurial \
                    git \
-                   pkg-config \
                    bison \
                    curl \
                    openjdk-8-jdk \
