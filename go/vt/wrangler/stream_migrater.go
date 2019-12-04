@@ -22,7 +22,6 @@ import (
 	"strings"
 	"sync"
 	"text/template"
-	"time"
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
@@ -33,7 +32,6 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -500,23 +498,11 @@ func (sm *streamMigrater) createTargetStreams(ctx context.Context, tmpl []*vrStr
 			}
 		}
 
-		buf := &strings.Builder{}
-		buf.WriteString("insert into _vt.vreplication(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name) values ")
-		prefix := ""
+		ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, target.master.DbName())
 		for _, vrs := range tabletStreams {
-			fmt.Fprintf(buf, "%s(%v, %v, %v, %v, %v, %v, 0, '%v', %v)",
-				prefix,
-				encodeString(vrs.workflow),
-				encodeString(vrs.bls.String()),
-				encodeString(mysql.EncodePosition(vrs.pos)),
-				throttler.MaxRateModuleDisabled,
-				throttler.ReplicationLagModuleDisabled,
-				time.Now().Unix(),
-				binlogplayer.BlpStopped,
-				encodeString(target.master.DbName()))
-			prefix = ", "
+			ig.AddRow(vrs.workflow, vrs.bls, mysql.EncodePosition(vrs.pos), "", "")
 		}
-		_, err := sm.mi.wr.VReplicationExec(ctx, target.master.Alias, buf.String())
+		_, err := sm.mi.wr.VReplicationExec(ctx, target.master.Alias, ig.String())
 		return err
 	})
 }
