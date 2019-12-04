@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='vtctldata',
   syntax='proto3',
   serialized_options=_b('Z&vitess.io/vitess/go/vt/proto/vtctldata'),
-  serialized_pb=_b('\n\x0fvtctldata.proto\x12\tvtctldata\x1a\rlogutil.proto\"B\n\x1a\x45xecuteVtctlCommandRequest\x12\x0c\n\x04\x61rgs\x18\x01 \x03(\t\x12\x16\n\x0e\x61\x63tion_timeout\x18\x02 \x01(\x03\"<\n\x1b\x45xecuteVtctlCommandResponse\x12\x1d\n\x05\x65vent\x18\x01 \x01(\x0b\x32\x0e.logutil.Event\"T\n\x18TableMaterializeSettings\x12\x14\n\x0ctarget_table\x18\x01 \x01(\t\x12\x0e\n\x06source\x18\x02 \x01(\t\x12\x12\n\ncreate_ddl\x18\x03 \x01(\t\"\xaf\x01\n\x13MaterializeSettings\x12\x10\n\x08workflow\x18\x01 \x01(\t\x12\x17\n\x0fsource_keyspace\x18\x02 \x01(\t\x12\x17\n\x0ftarget_keyspace\x18\x03 \x01(\t\x12\x17\n\x0fstop_after_copy\x18\x04 \x01(\x08\x12;\n\x0etable_settings\x18\x05 \x03(\x0b\x32#.vtctldata.TableMaterializeSettingsB(Z&vitess.io/vitess/go/vt/proto/vtctldatab\x06proto3')
+  serialized_pb=_b('\n\x0fvtctldata.proto\x12\tvtctldata\x1a\rlogutil.proto\"B\n\x1a\x45xecuteVtctlCommandRequest\x12\x0c\n\x04\x61rgs\x18\x01 \x03(\t\x12\x16\n\x0e\x61\x63tion_timeout\x18\x02 \x01(\x03\"<\n\x1b\x45xecuteVtctlCommandResponse\x12\x1d\n\x05\x65vent\x18\x01 \x01(\x0b\x32\x0e.logutil.Event\"_\n\x18TableMaterializeSettings\x12\x14\n\x0ctarget_table\x18\x01 \x01(\t\x12\x19\n\x11source_expression\x18\x02 \x01(\t\x12\x12\n\ncreate_ddl\x18\x03 \x01(\t\"\xd3\x01\n\x13MaterializeSettings\x12\x10\n\x08workflow\x18\x01 \x01(\t\x12\x17\n\x0fsource_keyspace\x18\x02 \x01(\t\x12\x17\n\x0ftarget_keyspace\x18\x03 \x01(\t\x12\x17\n\x0fstop_after_copy\x18\x04 \x01(\x08\x12;\n\x0etable_settings\x18\x05 \x03(\x0b\x32#.vtctldata.TableMaterializeSettings\x12\x0c\n\x04\x63\x65ll\x18\x06 \x01(\t\x12\x14\n\x0ctablet_types\x18\x07 \x01(\tB(Z&vitess.io/vitess/go/vt/proto/vtctldatab\x06proto3')
   ,
   dependencies=[logutil__pb2.DESCRIPTOR,])
 
@@ -111,7 +111,7 @@ _TABLEMATERIALIZESETTINGS = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='source', full_name='vtctldata.TableMaterializeSettings.source', index=1,
+      name='source_expression', full_name='vtctldata.TableMaterializeSettings.source_expression', index=1,
       number=2, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
@@ -137,7 +137,7 @@ _TABLEMATERIALIZESETTINGS = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=175,
-  serialized_end=259,
+  serialized_end=270,
 )
 
 
@@ -183,6 +183,20 @@ _MATERIALIZESETTINGS = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='cell', full_name='vtctldata.MaterializeSettings.cell', index=5,
+      number=6, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='tablet_types', full_name='vtctldata.MaterializeSettings.tablet_types', index=6,
+      number=7, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -195,8 +209,8 @@ _MATERIALIZESETTINGS = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=262,
-  serialized_end=437,
+  serialized_start=273,
+  serialized_end=484,
 )
 
 _EXECUTEVTCTLCOMMANDRESPONSE.fields_by_name['event'].message_type = logutil__pb2._EVENT
