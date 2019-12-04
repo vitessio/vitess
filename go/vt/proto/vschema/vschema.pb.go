@@ -5,8 +5,9 @@ package vschema
 
 import (
 	fmt "fmt"
-	proto "github.com/golang/protobuf/proto"
 	math "math"
+
+	proto "github.com/golang/protobuf/proto"
 	query "vitess.io/vitess/go/vt/proto/query"
 )
 
