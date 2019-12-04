@@ -20,6 +20,7 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/vt/topo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -90,6 +91,64 @@ func compareResultLists(t *testing.T, os []*OverlappingShards, expected []expect
 		if !found {
 			t.Errorf("OverlappingShard %v not found in expected %v", o, expected)
 			return
+		}
+	}
+}
+
+func TestValidateForReshard(t *testing.T) {
+	testcases := []struct {
+		sources []string
+		targets []string
+		out     string
+	}{{
+		sources: []string{"-80", "80-"},
+		targets: []string{"-40", "40-"},
+		out:     "",
+	}, {
+		sources: []string{"80-", "-80"},
+		targets: []string{"-40", "40-"},
+		out:     "",
+	}, {
+		sources: []string{"-40", "40-80", "80-"},
+		targets: []string{"-30", "30-"},
+		out:     "",
+	}, {
+		sources: []string{"0"},
+		targets: []string{"-40", "40-"},
+		out:     "",
+	}, {
+		sources: []string{"-40", "40-80", "80-"},
+		targets: []string{"-40", "40-"},
+		out:     "same keyrange is present in source and target: -40",
+	}, {
+		sources: []string{"-30", "30-80"},
+		targets: []string{"-40", "40-"},
+		out:     "source and target keyranges don't match: -80 vs -",
+	}, {
+		sources: []string{"-30", "20-80"},
+		targets: []string{"-40", "40-"},
+		out:     "shards don't form a contiguous keyrange",
+	}}
+	buildShards := func(shards []string) []*topo.ShardInfo {
+		sis := make([]*topo.ShardInfo, 0, len(shards))
+		for _, shard := range shards {
+			_, kr, err := topo.ValidateShardName(shard)
+			if err != nil {
+				panic(err)
+			}
+			sis = append(sis, topo.NewShardInfo("", shard, &topodatapb.Shard{KeyRange: kr}, nil))
+		}
+		return sis
+	}
+
+	for _, tcase := range testcases {
+		sources := buildShards(tcase.sources)
+		targets := buildShards(tcase.targets)
+		err := ValidateForReshard(sources, targets)
+		if tcase.out == "" {
+			assert.NoError(t, err)
+		} else {
+			assert.EqualError(t, err, tcase.out)
 		}
 	}
 }
