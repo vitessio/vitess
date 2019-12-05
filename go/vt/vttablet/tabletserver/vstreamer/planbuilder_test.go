@@ -383,7 +383,7 @@ func TestPlanbuilder(t *testing.T) {
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val, max(val) from t1"},
-		outErr:  `unsupported: max(val)`,
+		outErr:  `unsupported function: max(val)`,
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id+1, val from t1"},
