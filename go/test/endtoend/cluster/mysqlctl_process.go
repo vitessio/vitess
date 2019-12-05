@@ -98,8 +98,18 @@ func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) 
 	return mysqlctl
 }
 
-// StartMySQL create a connection to tablet mysql
-func StartMySQL(ctx context.Context, tablet *Vttablet, username string, tmpDirectory string) (*mysql.Conn, error) {
+// StartMySQL process
+func StartMySQL(ctx context.Context, tablet *Vttablet, username string, tmpDirectory string) error {
+	tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
+	err := tablet.MysqlctlProcess.Start()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// StartMySQLAndGetConnection create a connection to tablet mysql
+func StartMySQLAndGetConnection(ctx context.Context, tablet *Vttablet, username string, tmpDirectory string) (*mysql.Conn, error) {
 	tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
 	err := tablet.MysqlctlProcess.Start()
 	if err != nil {
