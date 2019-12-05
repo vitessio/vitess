@@ -170,8 +170,6 @@ func TestTabletVStreamerClientVStream(t *testing.T) {
 	}
 	eventsChan := make(chan *binlogdatapb.VEvent, 1000)
 	send := func(events []*binlogdatapb.VEvent) error {
-		fmt.Println(events)
-		fmt.Println(len(events))
 		for _, e := range events {
 			eventsChan <- e
 		}
@@ -431,8 +429,6 @@ func TestMySQLVStreamerClientVStream(t *testing.T) {
 	}
 	eventsChan := make(chan *binlogdatapb.VEvent, 1000)
 	send := func(events []*binlogdatapb.VEvent) error {
-		fmt.Println(events)
-		fmt.Println(len(events))
 		for _, e := range events {
 			eventsChan <- e
 		}
