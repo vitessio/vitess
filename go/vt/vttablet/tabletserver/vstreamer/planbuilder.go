@@ -35,20 +35,28 @@ import (
 
 // Plan represents the plan for a table.
 type Plan struct {
-	Table         *Table
-	ColExprs      []ColExpr
-	VindexColumns []int
+	Table    *Table
+	ColExprs []ColExpr
+
+	// Vindex, VindexColumns and KeyRange, if set, will be used
+	// to filter the row.
 	Vindex        vindexes.Vindex
+	VindexColumns []int
 	KeyRange      *topodatapb.KeyRange
 }
 
 // ColExpr represents a column expression.
 type ColExpr struct {
-	ColNum        int
+	// ColNum specifies the source column value.
+	ColNum int
+
+	// Vindex and VindexColumns, if set, will be used to generate
+	// a keyspace_id. If so, ColNum is ignored.
 	Vindex        vindexes.Vindex
 	VindexColumns []int
-	Alias         sqlparser.ColIdent
-	Type          querypb.Type
+
+	Alias sqlparser.ColIdent
+	Type  querypb.Type
 }
 
 // Table contains the metadata for a table.
