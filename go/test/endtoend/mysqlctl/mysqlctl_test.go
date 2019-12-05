@@ -20,11 +20,13 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"testing"
+
+	"vitess.io/vitess/go/vt/log"
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/log"
 )
 
 var (
@@ -79,7 +81,7 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 		shard := &cluster.Shard{
 			Name: shardName,
 		}
-
+		var mysqlCtlProcessList []*exec.Cmd
 		for i := 0; i < totalTabletsRequired; i++ {
 			// instantiate vttablet object with reserved ports
 			tabletUID := clusterInstance.GetAndReserveTabletUID()
@@ -95,12 +97,14 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 			}
 			// Start Mysqlctl process
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
-			if err := tablet.MysqlctlProcess.Start(); err != nil {
+			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
 				return
+			} else {
+				mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 			}
 
 			// start vttablet process
-			tablet.VttabletProcess = *cluster.VttabletProcessInstance(tablet.HTTPPort,
+			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
 				tablet.GrpcPort,
 				tablet.TabletUID,
 				clusterInstance.Cell,
@@ -115,12 +119,19 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 				clusterInstance.EnableSemiSync)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 
+			shard.Vttablets = append(shard.Vttablets, *tablet)
+		}
+		for _, proc := range mysqlCtlProcessList {
+			if err := proc.Wait(); err != nil {
+				return
+			}
+		}
+
+		for _, tablet := range shard.Vttablets {
 			if _, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace.Name), keyspace.Name, false); err != nil {
 				log.Error(err.Error())
 				return
 			}
-
-			shard.Vttablets = append(shard.Vttablets, *tablet)
 		}
 
 		keyspace.Shards = append(keyspace.Shards, *shard)
