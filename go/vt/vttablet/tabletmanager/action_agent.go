@@ -308,10 +308,14 @@ func NewActionAgent(
 		return nil, err
 	}
 
+	vreplication.InitVStreamerClient(agent.DBConfigs)
+
 	// The db name is set by the Start function called above
 	agent.VREngine = vreplication.NewEngine(ts, tabletAlias.Cell, mysqld, func() binlogplayer.DBClient {
 		return binlogplayer.NewDBClient(agent.DBConfigs.FilteredWithDB())
-	}, agent.DBConfigs.FilteredWithDB().DbName)
+	},
+		agent.DBConfigs.FilteredWithDB().DbName,
+	)
 	servenv.OnTerm(agent.VREngine.Close)
 
 	// Run a background task to rebuild the SrvKeyspace in our cell/keyspace

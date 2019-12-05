@@ -71,7 +71,7 @@ type streamerPlan struct {
 	TableMap *mysql.TableMap
 }
 
-func newVStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, startPos string, filter *binlogdatapb.Filter, kschema *vindexes.KeyspaceSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
+func NewVStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, startPos string, filter *binlogdatapb.Filter, kschema *vindexes.KeyspaceSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &vstreamer{
 		ctx:      ctx,
@@ -154,6 +154,16 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			bufferedEvents = nil
 			curSize = 0
 			return vs.send(vevents)
+		case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE, binlogdatapb.VEventType_REPLACE:
+			newSize := len(vevent.GetDml())
+			if curSize+newSize > *PacketSize {
+				vevents := bufferedEvents
+				bufferedEvents = []*binlogdatapb.VEvent{vevent}
+				curSize = newSize
+				return vs.send(vevents)
+			}
+			curSize += newSize
+			bufferedEvents = append(bufferedEvents, vevent)
 		case binlogdatapb.VEventType_ROW:
 			// ROW events happen inside transactions. So, we can chunk them.
 			// Buffer everything until packet size is reached, and then send.
@@ -295,7 +305,41 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		if err != nil {
 			return nil, fmt.Errorf("can't get query from binlog event: %v, event data: %#v", err, ev)
 		}
+		// Insert/Delete/Update are supported only to be used in the context of external mysql streams where source databases
+		// could be using SBR. Vitess itself will never run into cases where it needs to consume non rbr statements.
 		switch cat := sqlparser.Preview(q.SQL); cat {
+		case sqlparser.StmtInsert:
+			mustSend := mustSendStmt(q, vs.cp.DbName)
+			if mustSend {
+				vevents = append(vevents, &binlogdatapb.VEvent{
+					Type: binlogdatapb.VEventType_INSERT,
+					Dml:  q.SQL,
+				})
+			}
+		case sqlparser.StmtUpdate:
+			mustSend := mustSendStmt(q, vs.cp.DbName)
+			if mustSend {
+				vevents = append(vevents, &binlogdatapb.VEvent{
+					Type: binlogdatapb.VEventType_UPDATE,
+					Dml:  q.SQL,
+				})
+			}
+		case sqlparser.StmtDelete:
+			mustSend := mustSendStmt(q, vs.cp.DbName)
+			if mustSend {
+				vevents = append(vevents, &binlogdatapb.VEvent{
+					Type: binlogdatapb.VEventType_DELETE,
+					Dml:  q.SQL,
+				})
+			}
+		case sqlparser.StmtReplace:
+			mustSend := mustSendStmt(q, vs.cp.DbName)
+			if mustSend {
+				vevents = append(vevents, &binlogdatapb.VEvent{
+					Type: binlogdatapb.VEventType_REPLACE,
+					Dml:  q.SQL,
+				})
+			}
 		case sqlparser.StmtBegin:
 			vevents = append(vevents, &binlogdatapb.VEvent{
 				Type: binlogdatapb.VEventType_BEGIN,

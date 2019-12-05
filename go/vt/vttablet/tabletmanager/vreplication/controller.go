@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -102,18 +103,20 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	}
 	ct.stopPos = params["stop_pos"]
 
-	// tabletPicker
-	if v, ok := params["cell"]; ok {
-		cell = v
+	if ct.source.GetExternalMysql() == "" {
+		// tabletPicker
+		if v, ok := params["cell"]; ok {
+			cell = v
+		}
+		if v := params["tablet_types"]; v != "" {
+			tabletTypesStr = v
+		}
+		tp, err := discovery.NewTabletPicker(ctx, ts, cell, ct.source.Keyspace, ct.source.Shard, tabletTypesStr, *healthcheckTopologyRefresh, *healthcheckRetryDelay, *healthcheckTimeout)
+		if err != nil {
+			return nil, err
+		}
+		ct.tabletPicker = tp
 	}
-	if v := params["tablet_types"]; v != "" {
-		tabletTypesStr = v
-	}
-	tp, err := discovery.NewTabletPicker(ctx, ts, cell, ct.source.Keyspace, ct.source.Shard, tabletTypesStr, *healthcheckTopologyRefresh, *healthcheckRetryDelay, *healthcheckTimeout)
-	if err != nil {
-		return nil, err
-	}
-	ct.tabletPicker = tp
 
 	// cancel
 	ctx, ct.cancel = context.WithCancel(ctx)
@@ -126,7 +129,9 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 func (ct *controller) run(ctx context.Context) {
 	defer func() {
 		log.Infof("stream %v: stopped", ct.id)
-		ct.tabletPicker.Close()
+		if ct.tabletPicker != nil {
+			ct.tabletPicker.Close()
+		}
 		close(ct.done)
 	}()
 
@@ -179,13 +184,16 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	}
 	defer dbClient.Close()
 
-	log.Infof("trying to find a tablet eligible for vreplication. stream id: %v", ct.id)
-	tablet, err := ct.tabletPicker.PickForStreaming(ctx)
-	if err != nil {
-		return err
+	var tablet *topodatapb.Tablet
+	if ct.source.GetExternalMysql() == "" {
+		log.Infof("trying to find a tablet eligible for vreplication. stream id: %v", ct.id)
+		tablet, err = ct.tabletPicker.PickForStreaming(ctx)
+		if err != nil {
+			return err
+		}
+		log.Infof("found a tablet eligible for vreplication. stream id: %v  tablet: %s", ct.id, tablet.Alias.String())
+		ct.sourceTablet.Set(tablet.Alias.String())
 	}
-	log.Infof("found a tablet eligible for vreplication. stream id: %v  tablet: %s", ct.id, tablet.Alias.String())
-	ct.sourceTablet.Set(tablet.Alias.String())
 
 	switch {
 	case len(ct.source.Tables) > 0:
@@ -211,8 +219,16 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		if _, err := dbClient.ExecuteFetch("set names binary", 10000); err != nil {
 			return err
 		}
-		vreplicator := newVReplicator(ct.id, &ct.source, tablet, ct.blpStats, dbClient, ct.mysqld, ct.vre)
-		return vreplicator.Replicate(ctx)
+
+		var vsClient VStreamerClient
+		if ct.source.GetExternalMysql() == "" {
+			vsClient = NewTabletVStreamerClient(tablet)
+		} else {
+			vsClient = NewMySQLVStreamerClient()
+		}
+
+		vr := newVReplicator(ct.id, &ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre)
+		return vr.Replicate(ctx)
 	}
 	return fmt.Errorf("missing source")
 }
