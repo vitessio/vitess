@@ -143,10 +143,6 @@ func TestMain(m *testing.M) {
 			UnixSocket: fmt.Sprintf(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", replicaTablet.TabletUID))),
 		}
 
-		// Fixed UIDs for tablet which we will spawn during these tests
-		replicaUID = 62044
-		masterUID = 62344
-
 		// create tablet manager client
 		tmClient = tmc.NewClient()
 
