@@ -160,33 +160,25 @@ case "$mode" in
   "create_cache") echo "Creating cache image $cache_image ..." ;;
 esac
 
-# Construct "cp" command to copy the source code.
-#
-# Copy the full source tree except:
-# - vendor
-# That's because these directories are already part of the image.
-#
-# Note that we're using the Bash extended Glob support "!(vendor)" on
-# purpose here to minimize the size of the cache image: With this trick,
-# we do not move or overwrite the existing files while copying the other
-# directories. Therefore, the existing files do not count as changed and will
-# not be part of the new Docker layer of the cache image.
-copy_src_cmd="cp -R /tmp/src/!(vtdataroot|lib|vthook|py-vtdb) ."
-# Copy the .git directory because travis/check_make_proto.sh needs a working
-# Git repository.
-copy_src_cmd=$(append_cmd "$copy_src_cmd" "cp -R /tmp/src/.git .")
+bashcmd=""
 
-# run bootstrap.sh
-run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "./bootstrap.sh")
-copy_src_cmd=$(append_cmd "$copy_src_cmd" "$run_bootstrap_cmd")
-
-# Construct the command we will actually run.
-#
-# Uncomment the next line if you need to debug "bashcmd".
-#bashcmd="set -x"
 if [[ -z "$existing_cache_image" ]]; then
-  bashcmd=$(append_cmd "$bashcmd" "$copy_src_cmd")
+
+  # Construct "cp" command to copy the source code.
+  bashcmd=$(append_cmd "$bashcmd" "cp -R /tmp/src/!(vtdataroot|lib|vthook|py-vtdb) . && cp -R /tmp/src/.git .")
+
 fi
+
+# Reset the environment if this was an old bootstrap. We can detect this from VTTOP presence.
+bashcmd=$(append_cmd "$bashcmd" "[ -v VTTOP ] && export VTROOT=/vt/src/vitess.io/vitess && export VTDATAROOT=/vt/vtdataroot")
+bashcmd=$(append_cmd "$bashcmd" "[ -v VTTOP ] && export PYTHONPATH=/vt/src/vitess.io/vitess/dist/grpc/usr/local/lib/python2.7/site-packages:/vt/src/vitess.io/vitess/dist/py-mock-1.0.1/lib/python2.7/site-packages:/vt/src/vitess.io/vitess/py-vtdb:/vt/src/vitess.io/vitess/dist/selenium/lib/python2.7/site-packages")
+bashcmd=$(append_cmd "$bashcmd" "[ -v VTTOP ] && export PATH=/vt/src/vitess.io/vitess/bin:/vt/src/vitess.io/vitess/dist/maven/bin:/vt/src/vitess.io/vitess/dist/chromedriver:\$PATH")
+bashcmd=$(append_cmd "$bashcmd" "[ -v VTTOP ] && unset VTTOP")
+
+
+# Run bootstrap every time now
+bashcmd=$(append_cmd "$bashcmd" "./bootstrap.sh")
+
 # At last, append the user's command.
 bashcmd=$(append_cmd "$bashcmd" "$cmd")
 
