@@ -126,46 +126,106 @@ const (
 	Code_UNAVAILABLE Code = 14
 	// DATA_LOSS indicates unrecoverable data loss or corruption.
 	Code_DATA_LOSS Code = 15
+
+	// MySQL related specific error codes
+
+	// Disk full (%s); waiting for someone to free some space... (errno: %d - %s)
+	Code_MYSQL_DISK_FULL Code = 1021
+	// Out of memory; restart server and try again (needed %d bytes)
+	Code_MYSQL_OUT_OF_MEMORY Code = 1037
+	// Out of sort memory, consider increasing server sort buffer size
+	Code_MYSQL_OUT_OF_SORT_MEMORY Code = 1038
+	// Too many connections
+	Code_MYSQL_CONNECTIONS_COUNT Code = 1040
+	// Out of memory; check if mysqld or some other process uses all available
+	// memory; if not, you may have to use 'ulimit' to allow mysqld to use
+	// more memory or you can add more swap space
+	Code_MYSQL_OUT_OF_RESOURCES Code = 1041
+	// The table '%s' is full
+	Code_MYSQL_RECORD_FILE_FULL Code = 1114
+	// Host '%s' is blocked because of many connection errors; unblock with
+	// 'mysqladmin flush-hosts'
+	Code_MYSQL_HOST_IS_BLOCKED Code = 1129
+	// Can't create a new thread (errno %d); if you are not out of available
+	// memory, you can consult the manual for a possible OS-dependent bug
+	Code_MYSQL_CREATE_THREAD_FAILED Code = 1135
+	// Too many delayed threads in use
+	Code_MYSQL_DELAYED_THREADS_COUNT Code = 1151
+	// Got a packet bigger than 'max_allowed_packet' bytes
+	Code_MYSQL_NET_PACKET_TOO_LARGE Code = 1153
+	// User %s already has more than 'max_user_connections' active connections
+	Code_MYSQL_USER_CONNECTIONS_COUNT Code = 1203
+  // The total number of locks exceeds the lock table size
+	Code_MYSQL_LOCK_TABLE_FULL Code = 1206
+  // User '%s' has exceeded the '%s' resource (current value: %ld)
+	Code_MYSQL_USER_LIMIT_REACHED Code = 1226
+
 )
 
 var Code_name = map[int32]string{
-	0:  "OK",
-	1:  "CANCELED",
-	2:  "UNKNOWN",
-	3:  "INVALID_ARGUMENT",
-	4:  "DEADLINE_EXCEEDED",
-	5:  "NOT_FOUND",
-	6:  "ALREADY_EXISTS",
-	7:  "PERMISSION_DENIED",
-	16: "UNAUTHENTICATED",
-	8:  "RESOURCE_EXHAUSTED",
-	9:  "FAILED_PRECONDITION",
-	10: "ABORTED",
-	11: "OUT_OF_RANGE",
-	12: "UNIMPLEMENTED",
-	13: "INTERNAL",
-	14: "UNAVAILABLE",
-	15: "DATA_LOSS",
+	0:    "OK",
+	1:    "CANCELED",
+	2:    "UNKNOWN",
+	3:    "INVALID_ARGUMENT",
+	4:    "DEADLINE_EXCEEDED",
+	5:    "NOT_FOUND",
+	6:    "ALREADY_EXISTS",
+	7:    "PERMISSION_DENIED",
+	16:   "UNAUTHENTICATED",
+	8:    "RESOURCE_EXHAUSTED",
+	9:    "FAILED_PRECONDITION",
+	10:   "ABORTED",
+	11:   "OUT_OF_RANGE",
+	12:   "UNIMPLEMENTED",
+	13:   "INTERNAL",
+	14:   "UNAVAILABLE",
+	15:   "DATA_LOSS",
+	1021: "MYSQL_DISK_FULL",
+	1037: "MYSQL_OUT_OF_MEMORY",
+	1038: "MYSQL_OUT_OF_SORT_MEMORY",
+  1040: "MYSQL_CONNECTIONS_COUNT",
+	1041: "MYSQL_OUT_OF_RESOURCES",
+	1114: "MYSQL_RECORD_FILE_FULL",
+	1129: "MYSQL_HOST_IS_BLOCKED",
+	1135: "MYSQL_CREATE_THREAD_FAILED",
+	1151: "MYSQL_DELAYED_THREADS_COUNT",
+	1153: "MYSQL_NET_PACKET_TOO_LARGE",
+	1203: "MYSQL_USER_CONNECTIONS_COUNT",
+	1206: "MYSQL_LOCK_TABLE_FULL",
+	1226: "MYSQL_USER_LIMIT_REACHED",
 }
 
 var Code_value = map[string]int32{
-	"OK":                  0,
-	"CANCELED":            1,
-	"UNKNOWN":             2,
-	"INVALID_ARGUMENT":    3,
-	"DEADLINE_EXCEEDED":   4,
-	"NOT_FOUND":           5,
-	"ALREADY_EXISTS":      6,
-	"PERMISSION_DENIED":   7,
-	"UNAUTHENTICATED":     16,
-	"RESOURCE_EXHAUSTED":  8,
-	"FAILED_PRECONDITION": 9,
-	"ABORTED":             10,
-	"OUT_OF_RANGE":        11,
-	"UNIMPLEMENTED":       12,
-	"INTERNAL":            13,
-	"UNAVAILABLE":         14,
-	"DATA_LOSS":           15,
+	"OK":                           0,
+	"CANCELED":                     1,
+	"UNKNOWN":                      2,
+	"INVALID_ARGUMENT":             3,
+	"DEADLINE_EXCEEDED":            4,
+	"NOT_FOUND":                    5,
+	"ALREADY_EXISTS":               6,
+	"PERMISSION_DENIED":            7,
+	"UNAUTHENTICATED":              16,
+	"RESOURCE_EXHAUSTED":           8,
+	"FAILED_PRECONDITION":          9,
+	"ABORTED":                      10,
+	"OUT_OF_RANGE":                 11,
+	"UNIMPLEMENTED":                12,
+	"INTERNAL":                     13,
+	"UNAVAILABLE":                  14,
+	"DATA_LOSS":                    15,
+	"MYSQL_DISK_FULL":              1021,
+	"MYSQL_OUT_OF_MEMORY":          1037,
+	"MYSQL_OUT_OF_SORT_MEMORY":     1038,
+  "MYSQL_CONNECTIONS_COUNT":      1040,
+	"MYSQL_OUT_OF_RESOURCES":       1041,
+	"MYSQL_RECORD_FILE_FULL":       1114,
+	"MYSQL_HOST_IS_BLOCKED":        1129,
+	"MYSQL_CREATE_THREAD_FAILED":   1135,
+	"MYSQL_DELAYED_THREADS_COUNT":  1151,
+	"MYSQL_NET_PACKET_TOO_LARGE":   1153,
+	"MYSQL_USER_CONNECTIONS_COUNT": 1203,
+	"MYSQL_LOCK_TABLE_FULL":        1206,
+	"MYSQL_USER_LIMIT_REACHED":     1226,
 }
 
 func (x Code) String() string {

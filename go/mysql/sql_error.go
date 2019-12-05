@@ -121,6 +121,32 @@ func NewSQLErrorFromError(err error) error {
 			num = ERAccessDeniedError
 		case vtrpcpb.Code_RESOURCE_EXHAUSTED:
 			num = ERTooManyUserConnections
+		case vtrpcpb.Code_MYSQL_DISK_FULL:
+			num = ERDiskFull
+		case vtrpcpb.Code_MYSQL_OUT_OF_MEMORY:
+			num = EROutOfMemory
+		case vtrpcpb.Code_MYSQL_OUT_OF_SORT_MEMORY:
+			num = EROutOfSortMemory
+		case vtrpcpb.Code_MYSQL_CONNECTIONS_COUNT:
+			num = ERConCount
+		case vtrpcpb.Code_MYSQL_OUT_OF_RESOURCES:
+			num = EROutOfResources
+		case vtrpcpb.Code_MYSQL_RECORD_FILE_FULL:
+			num = ERRecordFileFull
+		case vtrpcpb.Code_MYSQL_HOST_IS_BLOCKED:
+			num = ERHostIsBlocked
+		case vtrpcpb.Code_MYSQL_CREATE_THREAD_FAILED:
+			num = ERCantCreateThread
+		case vtrpcpb.Code_MYSQL_DELAYED_THREADS_COUNT:
+			num = ERTooManyDelayedThreads
+		case vtrpcpb.Code_MYSQL_NET_PACKET_TOO_LARGE:
+			num = ERNetPacketTooLarge
+		case vtrpcpb.Code_MYSQL_USER_CONNECTIONS_COUNT:
+			num = ERTooManyUserConnections
+		case vtrpcpb.Code_MYSQL_LOCK_TABLE_FULL:
+			num = ERLockTableFull
+		case vtrpcpb.Code_MYSQL_USER_LIMIT_REACHED:
+			num = ERUserLimitReached
 		case vtrpcpb.Code_FAILED_PRECONDITION:
 			num = ERUnknownError
 		case vtrpcpb.Code_ABORTED:

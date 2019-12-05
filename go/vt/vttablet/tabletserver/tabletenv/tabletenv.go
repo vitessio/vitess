@@ -65,6 +65,19 @@ var (
 		vtrpcpb.Code_INTERNAL.String(),
 		vtrpcpb.Code_UNAVAILABLE.String(),
 		vtrpcpb.Code_DATA_LOSS.String(),
+		vtrpcpb.Code_MYSQL_DISK_FULL.String(),
+		vtrpcpb.Code_MYSQL_OUT_OF_MEMORY.String(),
+		vtrpcpb.Code_MYSQL_OUT_OF_SORT_MEMORY.String(),
+		vtrpcpb.Code_MYSQL_CONNECTIONS_COUNT.String(),
+		vtrpcpb.Code_MYSQL_OUT_OF_RESOURCES.String(),
+		vtrpcpb.Code_MYSQL_RECORD_FILE_FULL.String(),
+		vtrpcpb.Code_MYSQL_HOST_IS_BLOCKED.String(),
+		vtrpcpb.Code_MYSQL_CREATE_THREAD_FAILED.String(),
+		vtrpcpb.Code_MYSQL_DELAYED_THREADS_COUNT.String(),
+		vtrpcpb.Code_MYSQL_NET_PACKET_TOO_LARGE.String(),
+		vtrpcpb.Code_MYSQL_USER_CONNECTIONS_COUNT.String(),
+	  vtrpcpb.Code_MYSQL_LOCK_TABLE_FULL.String(),
+	  vtrpcpb.Code_MYSQL_USER_LIMIT_REACHED.String(),
 	)
 	// InternalErrors shows number of errors from internal components.
 	InternalErrors = stats.NewCountersWithSingleLabel("InternalErrors", "Internal component errors", "type", "Task", "StrayTransactions", "Panic", "HungQuery", "Schema", "TwopcCommit", "TwopcResurrection", "WatchdogFail", "Messages")

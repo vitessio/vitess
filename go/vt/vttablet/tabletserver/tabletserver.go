@@ -1689,9 +1689,34 @@ func convertErrorCode(err error) vtrpcpb.Code {
 	switch errnum {
 	case mysql.ERNotSupportedYet:
 		errCode = vtrpcpb.Code_UNIMPLEMENTED
-	case mysql.ERDiskFull, mysql.EROutOfMemory, mysql.EROutOfSortMemory, mysql.ERConCount, mysql.EROutOfResources, mysql.ERRecordFileFull, mysql.ERHostIsBlocked,
-		mysql.ERCantCreateThread, mysql.ERTooManyDelayedThreads, mysql.ERNetPacketTooLarge, mysql.ERTooManyUserConnections, mysql.ERLockTableFull, mysql.ERUserLimitReached, mysql.ERVitessMaxRowsExceeded:
+	case mysql.ERVitessMaxRowsExceeded:
 		errCode = vtrpcpb.Code_RESOURCE_EXHAUSTED
+	case mysql.ERDiskFull:
+		errCode = vtrpcpb.Code_MYSQL_DISK_FULL
+	case mysql.EROutOfMemory:
+		errCode = vtrpcpb.Code_MYSQL_OUT_OF_MEMORY
+	case mysql.EROutOfSortMemory:
+		errCode = vtrpcpb.Code_MYSQL_OUT_OF_SORT_MEMORY
+	case mysql.ERConCount:
+		errCode = vtrpcpb.Code_MYSQL_CONNECTIONS_COUNT
+	case mysql.EROutOfResources:
+		errCode = vtrpcpb.Code_MYSQL_OUT_OF_RESOURCES
+	case mysql.ERRecordFileFull:
+		errCode = vtrpcpb.Code_MYSQL_RECORD_FILE_FULL
+	case mysql.ERHostIsBlocked:
+		errCode = vtrpcpb.Code_MYSQL_HOST_IS_BLOCKED
+	case mysql.ERCantCreateThread:
+		errCode = vtrpcpb.Code_MYSQL_CREATE_THREAD_FAILED
+	case mysql.ERTooManyDelayedThreads:
+		errCode = vtrpcpb.Code_MYSQL_DELAYED_THREADS_COUNT
+	case mysql.ERNetPacketTooLarge:
+		errCode = vtrpcpb.Code_MYSQL_NET_PACKET_TOO_LARGE
+	case mysql.ERTooManyUserConnections:
+		errCode = vtrpcpb.Code_MYSQL_USER_CONNECTIONS_COUNT
+	case mysql.ERLockTableFull:
+		errCode = vtrpcpb.Code_MYSQL_LOCK_TABLE_FULL
+	case mysql.ERUserLimitReached:
+		errCode = vtrpcpb.Code_MYSQL_USER_LIMIT_REACHED
 	case mysql.ERLockWaitTimeout:
 		errCode = vtrpcpb.Code_DEADLINE_EXCEEDED
 	case mysql.CRServerGone, mysql.ERServerShutdown:
