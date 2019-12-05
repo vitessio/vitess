@@ -591,7 +591,13 @@ func TestPlayerKeyspaceID(t *testing.T) {
 			Filter: "select id, keyspace_id() as val from src1",
 		}},
 	}
-	cancel, _ := startVReplication(t, filter, binlogdatapb.OnDDLAction_IGNORE, "")
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
 	testcases := []struct {
