@@ -300,7 +300,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 	vtgateInstance := *cluster.GetVtgateInstance()
 	cluster.VtgateProcess = vtgateInstance
-	cluster.VtgateMySQLPort = vtgateInstance.MySQLServerPort
+	//cluster.VtgateMySQLPort = vtgateInstance.MySQLServerPort
 	log.Info(fmt.Sprintf("Starting vtgate on port %d", vtgateInstance.Port))
 	log.Info(fmt.Sprintf("Vtgate started, connect to mysql using : mysql -h 127.0.0.1 -P %d", cluster.VtgateMySQLPort))
 	return cluster.VtgateProcess.Setup()
@@ -310,6 +310,7 @@ func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 func (cluster *LocalProcessCluster) GetVtgateInstance() *VtgateProcess {
 	vtgateHTTPPort := cluster.GetAndReservePort()
 	vtgateGrpcPort := cluster.GetAndReservePort()
+	cluster.VtgateMySQLPort = cluster.GetAndReservePort()
 	vtgateProcInstance := VtgateProcessInstance(
 		vtgateHTTPPort,
 		vtgateGrpcPort,

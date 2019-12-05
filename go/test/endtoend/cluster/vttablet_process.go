@@ -66,6 +66,7 @@ type VttabletProcess struct {
 	SupportsBackup              bool
 	ServingStatus               string
 	DbPassword                  string
+	DbPort                      int
 	//Extra Args to be set before starting the vttablet process
 	ExtraArgs []string
 
@@ -113,6 +114,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	vttablet.proc.Env = append(vttablet.proc.Env, os.Environ()...)
 
+	println(fmt.Sprintf("%v", vttablet.proc.Args))
 	log.Infof("%v %v", strings.Join(vttablet.proc.Args, " "))
 
 	err = vttablet.proc.Start()
@@ -250,8 +252,12 @@ func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
 // QueryTablet lets you execute a query in this tablet and get the result
 func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useDb bool) (*sqltypes.Result, error) {
 	dbParams := mysql.ConnParams{
-		Uname:      "vt_dba",
-		UnixSocket: path.Join(vttablet.Directory, "mysql.sock"),
+		Uname: "vt_dba",
+	}
+	if vttablet.DbPort > 0 {
+		dbParams.Port = vttablet.DbPort
+	} else {
+		dbParams.UnixSocket = path.Join(vttablet.Directory, "mysql.sock")
 	}
 	if useDb {
 		dbParams.DbName = "vt_" + keyspace

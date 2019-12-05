@@ -53,7 +53,7 @@ func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 }
 
 // StartWithArgs executes mysqlctl command to start mysql instance with arguments
-func (mysqlctl *MysqlctlProcess) StartWithArgs(extraCnf string, extraArgs ...string) (err error) {
+func (mysqlctl *MysqlctlProcess) StartWithArgs(extraCnf string, extraArgs ...string) (cmd *exec.Cmd, err error) {
 	if extraCnf != "" {
 		os.Setenv("EXTRA_MY_CNF", extraCnf)
 	}
@@ -70,7 +70,7 @@ func (mysqlctl *MysqlctlProcess) StartWithArgs(extraCnf string, extraArgs ...str
 	}
 	tmpProcess.Args = append(tmpProcess.Args, "init",
 		"-init_db_sql_file", mysqlctl.InitDBFile)
-	return tmpProcess.Run()
+	return tmpProcess, tmpProcess.Start()
 }
 
 // Start executes mysqlctl command to start mysql instance

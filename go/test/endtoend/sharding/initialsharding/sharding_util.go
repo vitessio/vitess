@@ -20,8 +20,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -140,6 +142,11 @@ func ClusterWrapper(isMulti bool) (int, error) {
 }
 
 func initClusterForInitialSharding(keyspaceName string, shardNames []string, totalTabletsRequired int, rdonly bool, isMulti bool) {
+	var mysqlProcesses []*exec.Cmd
+	var extraArgs []string
+	if isMulti {
+		extraArgs = []string{"-db-credentials-file", dbCredentialFile}
+	}
 	for _, shardName := range shardNames {
 		shard := &cluster.Shard{
 			Name: shardName,
@@ -162,14 +169,15 @@ func initClusterForInitialSharding(keyspaceName string, shardNames []string, tot
 			}
 			// Start Mysqlctl process
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, ClusterInstance.TmpDirectory)
-			if !isMulti {
-				if err := tablet.MysqlctlProcess.StartWithArgs(path.Join(os.Getenv("VTROOT"), "config", "mycnf", "rbr.cnf")); err != nil {
-					return
-				}
-			} else {
+
+			if isMulti {
 				tablet.MysqlctlProcess.InitDBFile = newInitDbFile
-				if err := tablet.MysqlctlProcess.StartWithArgs(path.Join(os.Getenv("VTROOT"), "config", "mycnf", "rbr.cnf"), "-db-credentials-file", dbCredentialFile); err != nil {
+			}
+			if keyspaceName == keyspaceName1 {
+				if proc, err := tablet.MysqlctlProcess.StartWithArgs(path.Join(os.Getenv("VTROOT"), "config", "mycnf", "rbr.cnf"), extraArgs...); err != nil {
 					return
+				} else {
+					mysqlProcesses = append(mysqlProcesses, proc)
 				}
 			}
 
@@ -199,7 +207,26 @@ func initClusterForInitialSharding(keyspaceName string, shardNames []string, tot
 			}
 		}
 	}
+	for _, proc := range mysqlProcesses {
+		proc.Wait()
+	}
 
+}
+
+func AssignMysqlPortFromKs1ToKs2() {
+	portMap := map[string]int{}
+	for _, shard := range ClusterInstance.Keyspaces[0].Shards {
+		for _, tablet := range shard.Vttablets {
+			portMap[fmt.Sprintf("%s-%s", shard.Name, tablet.Type)] = tablet.MySQLPort
+		}
+	}
+
+	for _, shard := range ClusterInstance.Keyspaces[1].Shards {
+		for _, tablet := range shard.Vttablets {
+			tablet.MySQLPort = portMap[fmt.Sprintf("%s-%s", shard.Name, tablet.Type)]
+			tablet.VttabletProcess.DbPort = tablet.MySQLPort
+		}
+	}
 }
 
 // TestInitialSharding - main test with accepts different params for various test
@@ -300,13 +327,23 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, shardingKeyTy
 	}
 	println("Starting vtgate")
 	vtgateInstance := ClusterInstance.GetVtgateInstance()
+	vtgateInstance.PidFile = path.Join(ClusterInstance.TmpDirectory, fmt.Sprintf("vtgate-%s.pid", keyspaceName))
+	vtgateInstance.MySQLServerSocketPath = path.Join(ClusterInstance.TmpDirectory, fmt.Sprintf("mysql-%s.sock", keyspaceName))
+	vtgateInstance.ExtraArgs = []string{"-retry-count", fmt.Sprintf("%d", 2), "-tablet_protocol", "grpc", "-normalize_queries", "-tablet_refresh_interval", "2s"}
 	err = vtgateInstance.Setup()
 	VtgateInstances = append(VtgateInstances, vtgateInstance)
+	if err != nil {
+		println("Vtgate not hooked up, please check")
+		time.Sleep(10 * time.Minute)
+	}
 	assert.Nil(t, err)
+	println("Vtgate started")
 
-	_ = ClusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspaceName, shard1.Name))
-	_ = ClusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard1.Name))
-	_ = ClusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard1.Name))
+	for _, tabletType := range []string{"master", "replica", "rdonly"} {
+		if err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.%s", keyspaceName, shard1.Name, tabletType)); err != nil {
+			assert.Fail(t, err.Error())
+		}
+	}
 
 	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceName)
 
@@ -352,12 +389,12 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, shardingKeyTy
 
 	// Wait for the endpoints, either local or remote.
 	for _, shard := range []cluster.Shard{shard1, shard21, shard22} {
-		_ = ClusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspaceName, shard.Name))
-		_ = ClusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard.Name))
-		_ = ClusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard.Name))
+		_ = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspaceName, shard.Name))
+		_ = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard.Name))
+		_ = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard.Name))
 	}
 
-	status := ClusterInstance.VtgateProcess.GetStatusForTabletOfShard(keyspaceName + ".80-.master")
+	status := vtgateInstance.GetStatusForTabletOfShard(keyspaceName + ".80-.master")
 	assert.True(t, status)
 
 	// Check srv keyspace
@@ -520,8 +557,8 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, shardingKeyTy
 	_ = shard21.Rdonly().VttabletProcess.WaitForTabletType("SERVING")
 	_ = shard22.Rdonly().VttabletProcess.WaitForTabletType("SERVING")
 
-	_ = ClusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard21.Name))
-	_ = ClusterInstance.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard22.Name))
+	_ = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard21.Name))
+	_ = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard22.Name))
 
 	//then serve replica from the split shards
 

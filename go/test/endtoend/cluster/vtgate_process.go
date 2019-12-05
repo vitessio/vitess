@@ -80,7 +80,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"-gateway_implementation", vtgate.GatewayImplementation,
 		"-service_map", vtgate.ServiceMap,
 		"-mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
-		//"-pid_file", vtgate.PidFile,
+		"-pid_file", vtgate.PidFile,
 	)
 	vtgate.proc.Args = append(vtgate.proc.Args, vtgate.ExtraArgs...)
 
@@ -89,13 +89,14 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 
 	vtgate.proc.Env = append(vtgate.proc.Env, os.Environ()...)
 
+	println(fmt.Sprintf("%v", vtgate.proc.Args))
 	log.Infof("%v %v", strings.Join(vtgate.proc.Args, " "))
 
 	err = vtgate.proc.Start()
 	if err != nil {
 		return
 	}
-
+	println("started vtgate - after start")
 	vtgate.exit = make(chan error)
 	go func() {
 		if vtgate.proc != nil {
@@ -108,6 +109,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		if vtgate.WaitForStatus() {
 			return nil
 		}
+		println("checking vtgate status")
 		select {
 		case err := <-vtgate.exit:
 			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vtgate.Name, err)
@@ -121,11 +123,13 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 
 // WaitForStatus function checks if vtgate process is up and running
 func (vtgate *VtgateProcess) WaitForStatus() bool {
+	println("hitting vtgate url - " + vtgate.VerifyURL)
 	resp, err := http.Get(vtgate.VerifyURL)
 	if err != nil {
 		return false
 	}
 	if resp.StatusCode == 200 {
+		println("vtgate status meet")
 		return true
 	}
 	return false
@@ -207,7 +211,7 @@ func VtgateProcessInstance(port int, grpcPort int, mySQLServerPort int, cell str
 		Binary:                "vtgate",
 		FileToLogQueries:      path.Join(tmpDirectory, "/vtgate_querylog.txt"),
 		Directory:             os.Getenv("VTDATAROOT"),
-		ServiceMap:            "grpc-vtgateservice",
+		ServiceMap:            "grpc-tabletmanager,grpc-throttler,grpc-queryservice,grpc-updatestream,grpc-vtctl,grpc-vtworker,grpc-vtgateservice",
 		LogDir:                tmpDirectory,
 		Port:                  port,
 		GrpcPort:              grpcPort,
