@@ -83,7 +83,7 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = &cluster.LocalProcessCluster{Cell: cell, Hostname: hostname}
+		clusterInstance = cluster.NewCluster(cell, hostname)
 		defer clusterInstance.Teardown()
 
 		// Start topo server
@@ -142,10 +142,6 @@ func TestMain(m *testing.M) {
 			DbName:     dbName,
 			UnixSocket: fmt.Sprintf(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", replicaTablet.TabletUID))),
 		}
-
-		// Fixed UIDs for tablet which we will spawn during these tests
-		replicaUID = 62044
-		masterUID = 62344
 
 		// create tablet manager client
 		tmClient = tmc.NewClient()
