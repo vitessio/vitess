@@ -895,39 +895,38 @@ func TestStatementMode(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-
 	execStatements(t, []string{
-		"create table t1(id int, val1 varbinary(128), val2 varbinary(128), primary key(id))",
-		"insert into t1 values(1, 'aaa', 'bbb')",
+		"create table stream1(id int, val varbinary(128), primary key(id))",
+		"create table stream2(id int, val varbinary(128), primary key(id))",
 	})
-	defer execStatements(t, []string{
-		"drop table t1",
-	})
+
 	engine.se.Reload(context.Background())
 
-	// Record position before the next few statements.
-	pos := masterPosition(t)
-	execStatements(t, []string{
-		"set @@session.binlog_format='statement'",
-		"update t1 set val1='bbb' where id=1",
-		"set @@session.binlog_format='row'",
+	defer execStatements(t, []string{
+		"drop table stream1",
+		"drop table stream2",
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	ch := make(chan []*binlogdatapb.VEvent)
-	go func() {
-		for evs := range ch {
-			t.Errorf("received: %v", evs)
-		}
-	}()
-	defer close(ch)
-	err := vstream(ctx, t, pos, nil, ch)
-	want := "unexpected statement type"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must contain '%s'", err, want)
-	}
+	testcases := []testcase{{
+		input: []string{
+			"set @@session.binlog_format='STATEMENT'",
+			"begin",
+			"insert into stream1 values (1, 'aaa')",
+			"update stream1 set val='bbb' where id = 1",
+			"delete from stream1 where id = 1",
+			"commit",
+			"set @@session.binlog_format='ROW'",
+		},
+		output: [][]string{{
+			`begin`,
+			`type:INSERT dml:"insert into stream1 values (1, 'aaa')" `,
+			`type:UPDATE dml:"update stream1 set val='bbb' where id = 1" `,
+			`type:DELETE dml:"delete from stream1 where id = 1" `,
+			`gtid`,
+			`commit`,
+		}},
+	}}
+	runCases(t, nil, testcases, "")
 }
 
 func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, postion string) {
