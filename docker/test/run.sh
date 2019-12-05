@@ -161,16 +161,22 @@ case "$mode" in
 esac
 
 # Construct "cp" command to copy the source code.
-copy_src_cmd="cp -R /tmp/src/ ."
+#
+# Copy the full source tree except:
+# - vendor
+# That's because these directories are already part of the image.
+#
+# Note that we're using the Bash extended Glob support "!(vendor)" on
+# purpose here to minimize the size of the cache image: With this trick,
+# we do not move or overwrite the existing files while copying the other
+# directories. Therefore, the existing files do not count as changed and will
+# not be part of the new Docker layer of the cache image.
+copy_src_cmd="cp -R /tmp/src/!(vtdataroot|lib|vthook|py-vtdb) ."
 # Copy the .git directory because travis/check_make_proto.sh needs a working
 # Git repository.
 copy_src_cmd=$(append_cmd "$copy_src_cmd" "cp -R /tmp/src/.git .")
 
-run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "[ -d /vt/dist ] && rm -rf dist && ln -s /vt/dist /vt/src/vitess.io/vitess/dist")
-run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "[ -d /vt/bin ] && rm -rf bin && ln -s /vt/bin /vt/src/vitess.io/vitess/bin")
-run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "[ -d /vt/lib ] && rm -rf lib && ln -s /vt/lib /vt/src/vitess.io/vitess/lib")
-run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "[ -d /vt/vthook ] && rm -rf vthook && ln -s /vt/vthook /vt/src/vitess.io/vitess/vthook")
-run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "export VTROOT=/vt/src/vitess.io/vitess && unset VTTOP")
+# run bootstrap.sh
 run_bootstrap_cmd=$(append_cmd "$run_bootstrap_cmd" "./bootstrap.sh")
 copy_src_cmd=$(append_cmd "$copy_src_cmd" "$run_bootstrap_cmd")
 
