@@ -20,25 +20,22 @@ package sharding
 import (
 	"context"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"path"
 	"reflect"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
-
-	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-
-	//topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/topodata"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -76,7 +73,7 @@ func GetSrvKeyspace(t *testing.T, cell string, ksname string, ci cluster.LocalPr
 	assert.Nil(t, err)
 	var srvKeyspace topodata.SrvKeyspace
 
-	err = json.Unmarshal([]byte(output), &srvKeyspace)
+	err = json2.Unmarshal([]byte(output), &srvKeyspace)
 	assert.Nil(t, err)
 	return &srvKeyspace
 }
@@ -98,7 +95,7 @@ func VerifyReconciliationCounters(t *testing.T, vtworkerURL string, availability
 
 	resultMap := make(map[string]interface{})
 	respByte, _ := ioutil.ReadAll(resp.Body)
-	err = json.Unmarshal(respByte, &resultMap)
+	err = json2.Unmarshal(respByte, &resultMap)
 	assert.Nil(t, err)
 
 	value := getValueFromJSON(resultMap, "Worker"+availabilityType+"InsertsCounters", table)
@@ -233,7 +230,7 @@ func checkStreamHealthEqualsBinlogPlayerVars(t *testing.T, vttablet cluster.Vtta
 	assert.Nil(t, err)
 
 	var streamHealthResponse querypb.StreamHealthResponse
-	err = json.Unmarshal([]byte(streamHealth), &streamHealthResponse)
+	err = json2.Unmarshal([]byte(streamHealth), &streamHealthResponse)
 	assert.Nil(t, err, "error should be Nil")
 	assert.Equal(t, streamHealthResponse.Serving, false)
 	assert.NotNil(t, streamHealthResponse.RealtimeStats)
@@ -470,15 +467,26 @@ func HexToDbStr(number uint64, keyType topodata.KeyspaceIdType) string {
 func GetShardInfo(t *testing.T, shard1Ks string, ci cluster.LocalProcessCluster) *topodata.Shard {
 	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("GetShard", shard1Ks)
 	assert.Nil(t, err)
-
 	var shard topodata.Shard
-	//err = json.Unmarshal([]byte(output), &shard)
-	d := json.NewDecoder(strings.NewReader(output))
-	d.UseNumber()
-	err = d.Decode(&shard)
-
+	err = json2.Unmarshal([]byte(output), &shard)
 	assert.Nil(t, err)
-
 	return &shard
+}
 
+// checkThrottlerServiceMaxRates Checks the vtctl ThrottlerMaxRates and ThrottlerSetRate commands.
+func checkThrottlerServiceMaxRates(t *testing.T, server string, ci cluster.LocalProcessCluster) {
+	// Avoid flakes by waiting for all throttlers. (Necessary because filtered
+	// replication on vttablet will register the throttler asynchronously.)
+	timeout := time.Now().Add(10 * time.Second)
+	for time.Now().Before(timeout) {
+		output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerMaxRates", "--server", server)
+		assert.Nil(t, err)
+		fmt.Println(output)
+		// TODO: To be complete
+	}
+	//return false
+}
+
+func CheckThrottlerService(t *testing.T, server string, names []string, rate int, ci cluster.LocalProcessCluster) {
+	checkThrottlerServiceMaxRates(t, server, ci)
 }
