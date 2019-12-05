@@ -116,7 +116,7 @@ func (vtworker *VtworkerProcess) IsHealthy() bool {
 	return false
 }
 
-// TearDown shutdowns the running vtworker service
+// TearDown shutdowns the running vtworker process
 func (vtworker *VtworkerProcess) TearDown() error {
 	if vtworker.proc == nil || vtworker.exit == nil {
 		return nil
@@ -137,7 +137,7 @@ func (vtworker *VtworkerProcess) TearDown() error {
 	}
 }
 
-// ExecuteCommand executes any vtctlclient command
+// ExecuteCommand executes any vtworker command
 func (vtworker *VtworkerProcess) ExecuteCommand(args ...string) (err error) {
 	args = append([]string{"-vtworker_client_protocol", "grpc",
 		"-server", vtworker.Server, "-log_dir", vtworker.LogDir, "-stderrthreshold", "info"}, args...)
@@ -150,7 +150,7 @@ func (vtworker *VtworkerProcess) ExecuteCommand(args ...string) (err error) {
 	return tmpProcess.Run()
 }
 
-// ExecuteVtworkerCommand executes any vtctlclient command
+// ExecuteVtworkerCommand executes any vtworker command
 func (vtworker *VtworkerProcess) ExecuteVtworkerCommand(port int, grpcPort int, args ...string) (err error) {
 	args = append([]string{
 		"-port", fmt.Sprintf("%d", port),
@@ -175,7 +175,7 @@ func (vtworker *VtworkerProcess) ExecuteVtworkerCommand(port int, grpcPort int, 
 
 // VtworkerProcessInstance returns a vtworker handle
 // configured with the given Config.
-// The process must be manually started by calling setup()
+// The process must be manually started by calling Setup()
 func VtworkerProcessInstance(httpPort int, grpcPort int, topoPort int, hostname string, tmpDirectory string) *VtworkerProcess {
 	vtctl := VtctlProcessInstance(topoPort, hostname)
 	vtworker := &VtworkerProcess{

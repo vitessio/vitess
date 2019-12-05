@@ -52,17 +52,13 @@ func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 	return tmpProcess.Run()
 }
 
-func (mysqlctl *MysqlctlProcess) Start() error {
-	return mysqlctl.StartWithArgs("")
-}
-
 // StartWithArgs executes mysqlctl command to start mysql instance with arguments
 func (mysqlctl *MysqlctlProcess) StartWithArgs(extraCnf string, extraArgs ...string) (err error) {
 	if extraCnf != "" {
 		os.Setenv("EXTRA_MY_CNF", extraCnf)
 	}
-  
-  tmpProcess := exec.Command(
+
+	tmpProcess := exec.Command(
 		mysqlctl.Binary,
 		"-log_dir", mysqlctl.LogDirectory,
 		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
@@ -74,8 +70,6 @@ func (mysqlctl *MysqlctlProcess) StartWithArgs(extraCnf string, extraArgs ...str
 	}
 	tmpProcess.Args = append(tmpProcess.Args, "init",
 		"-init_db_sql_file", mysqlctl.InitDBFile)
-	return tmpProcess.Run()
-
 	return tmpProcess.Run()
 }
 
@@ -130,15 +124,6 @@ func (mysqlctl *MysqlctlProcess) CleanupFiles(tabletUID int) {
 	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/innodb", tabletUID)))
 }
 
-// CleanupFiles clean the mysql files to make sure we can start the same process again
-func (mysqlctl *MysqlctlProcess) CleanupFiles(tabletUID int) {
-	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/data", tabletUID)))
-	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/relay-logs", tabletUID)))
-	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/tmp", tabletUID)))
-	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/bin-logs", tabletUID)))
-	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/innodb", tabletUID)))
-}
-
 // MysqlCtlProcessInstance returns a Mysqlctl handle for mysqlctl process
 // configured with the given Config.
 func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) *MysqlctlProcess {
@@ -153,9 +138,8 @@ func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) 
 	return mysqlctl
 }
 
-
 // StartMySQL create a connection to tablet mysql
-func StartMySQL(ctx context.Context, tablet *Vttablet, username string, tmpDirectory string) (*mysql.Conn, error) {
+func StartMySQL(ctx context.Context, tablet *Vttablet, username string, tmpDirectory string) error {
 	tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
 	err := tablet.MysqlctlProcess.Start()
 	if err != nil {
@@ -179,7 +163,6 @@ func StartMySQLAndGetConnection(ctx context.Context, tablet *Vttablet, username 
 	conn, err := mysql.Connect(ctx, &params)
 	return conn, err
 }
-
 
 // ExecuteCommandWithOutput executes any mysqlctl command and returns output
 func (mysqlctl *MysqlctlProcess) ExecuteCommandWithOutput(args ...string) (result string, err error) {

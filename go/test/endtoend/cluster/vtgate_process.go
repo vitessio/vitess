@@ -148,33 +148,6 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string) bool {
 		masterConnectionExist := false
 		if object.Kind() == reflect.Map {
 			for _, key := range object.MapKeys() {
-				if strings.Contains(key.String(), "master") {
-					masterConnectionExist = true
-				}
-			}
-		}
-		return masterConnectionExist
-	}
-	return false
-}
-
-// GetStatusForTabletOfShard function gets status for a specific tablet of a shard in keyspace
-func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string) bool {
-	resp, err := http.Get(vtgate.VerifyURL)
-	if err != nil {
-		return false
-	}
-	if resp.StatusCode == 200 {
-		resultMap := make(map[string]interface{})
-		respByte, _ := ioutil.ReadAll(resp.Body)
-		err := json.Unmarshal(respByte, &resultMap)
-		if err != nil {
-			panic(err)
-		}
-		object := reflect.ValueOf(resultMap["HealthcheckConnections"])
-		masterConnectionExist := false
-		if object.Kind() == reflect.Map {
-			for _, key := range object.MapKeys() {
 				if key.String() == name {
 					value := fmt.Sprintf("%v", object.MapIndex(key))
 					return value == "1"

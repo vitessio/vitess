@@ -67,7 +67,7 @@ func TestTabletReshuffle(t *testing.T) {
 		"-mycnf_server_id", fmt.Sprintf("%d", rTablet.TabletUID),
 		"-db_socket", fmt.Sprintf("%s/mysql.sock", masterTablet.VttabletProcess.Directory),
 	}
-	// SupportBackup=False prevents vttablet from trying to restore
+	// SupportsBackup=False prevents vttablet from trying to restore
 	// Start vttablet process
 	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
 	assert.Nil(t, err, "error should be Nil")
@@ -169,7 +169,6 @@ func checkHealth(t *testing.T, port int, shouldError bool) {
 	}
 }
 
-
 func checkTabletType(t *testing.T, tabletAlias string, typeWant string) {
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", tabletAlias)
 	assert.Nil(t, err, "error should be Nil")
@@ -246,7 +245,6 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 	assert.Nil(t, err, "error should be Nil")
 	checkHealth(t, rdonlyTablet.HTTPPort, false)
 }
-
 
 func waitForTabletStatus(tablet cluster.Vttablet, status string) error {
 	timeout := time.Now().Add(10 * time.Second)

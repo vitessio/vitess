@@ -188,9 +188,9 @@ func initClusterForInitialSharding(keyspaceName string, shardNames []string, tot
 				ClusterInstance.VtTabletExtraArgs,
 				ClusterInstance.EnableSemiSync)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
-			tablet.VttabletProcess.DbPwd = dbPwd
+			tablet.VttabletProcess.DbPassword = dbPwd
 			tablet.VttabletProcess.EnableSemiSync = true
-			tablet.VttabletProcess.SupportBackup = false
+			tablet.VttabletProcess.SupportsBackup = false
 			shard.Vttablets = append(shard.Vttablets, *tablet)
 		}
 		for idx, ks := range ClusterInstance.Keyspaces {
@@ -588,7 +588,7 @@ func KillTabletsInKeyspace(keyspace *cluster.Keyspace) {
 	shard1 := keyspace.Shards[0]
 	for _, tablet := range []cluster.Vttablet{*shard1.MasterTablet(), *shard1.Replica(), *shard1.Rdonly()} {
 		_ = tablet.MysqlctlProcess.Stop()
-		_ = tablet.VttabletProcess.TearDown(true)
+		_ = tablet.VttabletProcess.TearDown()
 	}
 	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", shard1.Replica().Alias)
 	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", shard1.Rdonly().Alias)

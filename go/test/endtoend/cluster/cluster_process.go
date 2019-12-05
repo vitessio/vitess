@@ -101,7 +101,7 @@ func (shard *Shard) Rdonly() *Vttablet {
 }
 
 // Replica get the last but one tablet which is replica
-// Mostly we have either 2 or 3 tablet setup [master, replica], [master, replica, rdonly]
+// Mostly we have either 3 tablet setup [master, replica], [master, replica, rdonly]
 func (shard *Shard) Replica() *Vttablet {
 	if len(shard.Vttablets) > 1 {
 		return &shard.Vttablets[len(shard.Vttablets)-2]
@@ -321,15 +321,7 @@ func (cluster *LocalProcessCluster) GetVtgateInstance() *VtgateProcess {
 		cluster.TopoProcess.Port,
 		cluster.TmpDirectory,
 		cluster.VtGateExtraArgs)
-
-	log.Info(fmt.Sprintf("Vtgate started, connect to mysql using : mysql -h 127.0.0.1 -P %d", cluster.VtgateMySQLPort))
-	if err = cluster.VtgateProcess.Setup(); err != nil {
-		return err
-	}
-	if err = cluster.WaitForTabletsToHealthyInVtgate(); err != nil {
-		return err
-	}
-	return nil
+	return vtgateProcInstance
 }
 
 // NewCluster instantiates a new cluster
@@ -411,11 +403,9 @@ func (cluster *LocalProcessCluster) Teardown() (err error) {
 		}
 	}
 
-
 	for _, proc := range mysqlctlProcessList {
 		proc.Wait()
 	}
-
 
 	if err = cluster.VtctldProcess.TearDown(); err != nil {
 		log.Error(err.Error())
@@ -467,7 +457,7 @@ func getRandomNumber(maxNumber int32, baseNumber int) int {
 	return int(rand.Int31n(maxNumber)) + baseNumber
 }
 
-// GetVttabletInstance create a new vttablet object
+// GetVttabletInstance creates a new vttablet object
 func (cluster *LocalProcessCluster) GetVttabletInstance(UID int) *Vttablet {
 	if UID == 0 {
 		UID = cluster.GetAndReserveTabletUID()
@@ -482,7 +472,7 @@ func (cluster *LocalProcessCluster) GetVttabletInstance(UID int) *Vttablet {
 	}
 }
 
-// StartVttablet start a new tablet
+// StartVttablet starts a new tablet
 func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatus string,
 	supportBackup bool, cell string, keyspaceName string, hostname string, shardName string) error {
 	tablet.VttabletProcess = VttabletProcessInstance(
@@ -500,7 +490,7 @@ func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatu
 		cluster.VtTabletExtraArgs,
 		cluster.EnableSemiSync)
 
-	tablet.VttabletProcess.SupportBackup = supportBackup
+	tablet.VttabletProcess.SupportsBackup = supportBackup
 	tablet.VttabletProcess.ServingStatus = servingStatus
 	return tablet.VttabletProcess.Setup()
 }

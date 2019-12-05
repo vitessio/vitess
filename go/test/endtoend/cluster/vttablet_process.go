@@ -63,9 +63,9 @@ type VttabletProcess struct {
 	Directory                   string
 	VerifyURL                   string
 	EnableSemiSync              bool
-	SupportBackup               bool
+	SupportsBackup              bool
 	ServingStatus               string
-	DbPwd                       string
+	DbPassword                  string
 	//Extra Args to be set before starting the vttablet process
 	ExtraArgs []string
 
@@ -99,7 +99,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-vtctld_addr", vttablet.VtctldAddress,
 	)
 
-	if vttablet.SupportBackup {
+	if vttablet.SupportsBackup {
 		vttablet.proc.Args = append(vttablet.proc.Args, "-restore_from_backup")
 	}
 	if vttablet.EnableSemiSync {
@@ -127,22 +127,11 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		}
 	}()
 
-
 	err = vttablet.WaitForTabletType(vttablet.ServingStatus)
 	if err != nil {
 		return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vttablet.Name, <-vttablet.exit)
 	}
 	return nil
-}
-
-// GetTabletStatus function checks if vttablet process is up and running
-func (vttablet *VttabletProcess) GetTabletStatus() string {
-	resultMap := vttablet.GetVars()
-	if resultMap != nil {
-		return reflect.ValueOf(resultMap["TabletStateName"]).String()
-	} else {
-		return ""
-	}
 }
 
 // GetStatus function checks if vttablet process is up and running
@@ -160,6 +149,7 @@ func (vttablet *VttabletProcess) GetStatus() string {
 	return ""
 }
 
+// GetVars gets the debug vars as map
 func (vttablet *VttabletProcess) GetVars() map[string]interface{} {
 	resp, err := http.Get(vttablet.VerifyURL)
 	if err != nil {
@@ -171,9 +161,8 @@ func (vttablet *VttabletProcess) GetVars() map[string]interface{} {
 		err := json.Unmarshal(respByte, &resultMap)
 		if err != nil {
 			return nil
-		} else {
-			return resultMap
 		}
+		return resultMap
 	}
 	return nil
 }
@@ -188,11 +177,9 @@ func (vttablet *VttabletProcess) GetTabletStatus() string {
 	resultMap := vttablet.GetVars()
 	if resultMap != nil {
 		return reflect.ValueOf(resultMap["TabletStateName"]).String()
-	} else {
-		return ""
 	}
+	return ""
 }
-
 
 // WaitForTabletType waits till the tablet status reaches desired type
 func (vttablet *VttabletProcess) WaitForTabletType(expectedType string) error {
@@ -235,7 +222,7 @@ func (vttablet *VttabletProcess) getVReplStreamCount() string {
 }
 
 // TearDown shuts down the running vttablet service
-func (vttablet *VttabletProcess) TearDown(cleanDir bool) error {
+func (vttablet *VttabletProcess) TearDown() error {
 	if vttablet.proc == nil || vttablet.exit == nil {
 		return nil
 	}
@@ -254,13 +241,13 @@ func (vttablet *VttabletProcess) TearDown(cleanDir bool) error {
 	}
 }
 
-// CreateDB created vt_keyspace database
+// CreateDB creates the database for keyspace
 func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
 	_, err := vttablet.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace), keyspace, false)
 	return err
 }
 
-// QueryTablet lets you execute query in this tablet and get the result
+// QueryTablet lets you execute a query in this tablet and get the result
 func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useDb bool) (*sqltypes.Result, error) {
 	dbParams := mysql.ConnParams{
 		Uname:      "vt_dba",
@@ -270,8 +257,8 @@ func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useD
 		dbParams.DbName = "vt_" + keyspace
 	}
 
-	if vttablet.DbPwd != "" {
-		dbParams.Pass = vttablet.DbPwd
+	if vttablet.DbPassword != "" {
+		dbParams.Pass = vttablet.DbPassword
 	}
 	ctx := context.Background()
 	dbConn, err := mysql.Connect(ctx, &dbParams)
@@ -309,7 +296,7 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 		VtctldAddress:               fmt.Sprintf("http://%s:%d", hostname, vtctldPort),
 		ExtraArgs:                   extraArgs,
 		EnableSemiSync:              enableSemiSync,
-		SupportBackup:               true,
+		SupportsBackup:              true,
 		ServingStatus:               "NOT_SERVING",
 	}
 
