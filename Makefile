@@ -1,4 +1,4 @@
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,6 +13,12 @@
 # limitations under the License.
 
 MAKEFLAGS = -s
+
+# Soon this can be $PWD/bin, with no dependencies
+# Waiting on https://github.com/vitessio/vitess/issues/5378
+
+export GOBIN=$(VTROOT)/bin
+export GO111MODULE=on
 
 # Disabled parallel processing of target prerequisites to avoid that integration tests are racing each other (e.g. for ports) and may fail.
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
@@ -31,14 +37,6 @@ endif
 
 ifdef VT_EXTRA_BUILD_FLAGS
 export EXTRA_BUILD_FLAGS := $(VT_EXTRA_BUILD_FLAGS)
-endif
-
-# Link against the MySQL library in $VT_MYSQL_ROOT if it's specified.
-ifdef VT_MYSQL_ROOT
-# Clutter the env var only if it's a non-standard path.
-  ifneq ($(VT_MYSQL_ROOT),/usr)
-    CGO_LDFLAGS += -L$(VT_MYSQL_ROOT)/lib
-  endif
 endif
 
 build_web:
@@ -248,9 +246,6 @@ docker_lite_alpine:
 
 docker_guestbook:
 	cd examples/kubernetes/guestbook && ./build.sh
-
-docker_publish_site:
-	docker build -f docker/publish-site/Dockerfile -t vitess/publish-site .
 
 # This rule loads the working copy of the code into a bootstrap image,
 # and then runs the tests inside Docker.

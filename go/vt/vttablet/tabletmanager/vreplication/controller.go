@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"time"
 
+	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/golang/protobuf/proto"
@@ -37,20 +38,27 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
-var retryDelay = flag.Duration("vreplication_retry_delay", 5*time.Second, "delay before retrying a failed binlog connection")
+var (
+	healthcheckTopologyRefresh = flag.Duration("vreplication_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology")
+	healthcheckRetryDelay      = flag.Duration("vreplication_healthcheck_retry_delay", 5*time.Second, "healthcheck retry delay")
+	healthcheckTimeout         = flag.Duration("vreplication_healthcheck_timeout", 1*time.Minute, "healthcheck retry delay")
+	retryDelay                 = flag.Duration("vreplication_retry_delay", 5*time.Second, "delay before retrying a failed binlog connection")
+)
 
 // controller is created by Engine. Members are initialized upfront.
 // There is no mutex within a controller becaust its members are
 // either read-only or self-synchronized.
 type controller struct {
+	vre             *Engine
 	dbClientFactory func() binlogplayer.DBClient
 	mysqld          mysqlctl.MysqlDaemon
 	blpStats        *binlogplayer.Stats
 
 	id           uint32
+	workflow     string
 	source       binlogdatapb.BinlogSource
 	stopPos      string
-	tabletPicker *tabletPicker
+	tabletPicker *discovery.TabletPicker
 
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -61,11 +69,12 @@ type controller struct {
 
 // newController creates a new controller. Unless a stream is explicitly 'Stopped',
 // this function launches a goroutine to perform continuous vreplication.
-func newController(ctx context.Context, params map[string]string, dbClientFactory func() binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, ts *topo.Server, cell, tabletTypesStr string, blpStats *binlogplayer.Stats) (*controller, error) {
+func newController(ctx context.Context, params map[string]string, dbClientFactory func() binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, ts *topo.Server, cell, tabletTypesStr string, blpStats *binlogplayer.Stats, vre *Engine) (*controller, error) {
 	if blpStats == nil {
 		blpStats = binlogplayer.NewStats()
 	}
 	ct := &controller{
+		vre:             vre,
 		dbClientFactory: dbClientFactory,
 		mysqld:          mysqld,
 		blpStats:        blpStats,
@@ -78,6 +87,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 		return nil, err
 	}
 	ct.id = uint32(id)
+	ct.workflow = params["workflow"]
 
 	// Nothing to do if replication is stopped.
 	if params["state"] == binlogplayer.BlpStopped {
@@ -96,10 +106,10 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	if v, ok := params["cell"]; ok {
 		cell = v
 	}
-	if v, ok := params["tablet_types"]; ok {
+	if v := params["tablet_types"]; v != "" {
 		tabletTypesStr = v
 	}
-	tp, err := newTabletPicker(ctx, ts, cell, ct.source.Keyspace, ct.source.Shard, tabletTypesStr)
+	tp, err := discovery.NewTabletPicker(ctx, ts, cell, ct.source.Keyspace, ct.source.Shard, tabletTypesStr, *healthcheckTopologyRefresh, *healthcheckRetryDelay, *healthcheckTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +179,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	}
 	defer dbClient.Close()
 
-	tablet, err := ct.tabletPicker.Pick(ctx)
+	tablet, err := ct.tabletPicker.PickForStreaming(ctx)
 	if err != nil {
 		return err
 	}
@@ -199,7 +209,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		if _, err := dbClient.ExecuteFetch("set names binary", 10000); err != nil {
 			return err
 		}
-		vreplicator := newVReplicator(ct.id, &ct.source, tablet, ct.blpStats, dbClient, ct.mysqld)
+		vreplicator := newVReplicator(ct.id, &ct.source, tablet, ct.blpStats, dbClient, ct.mysqld, ct.vre)
 		return vreplicator.Replicate(ctx)
 	}
 	return fmt.Errorf("missing source")

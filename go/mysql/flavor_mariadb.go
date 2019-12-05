@@ -83,14 +83,17 @@ func (mariadbFlavor) sendBinlogDumpCommand(c *Conn, slaveID uint32, startPos Pos
 }
 
 // resetReplicationCommands is part of the Flavor interface.
-func (mariadbFlavor) resetReplicationCommands() []string {
-	return []string{
+func (mariadbFlavor) resetReplicationCommands(c *Conn) []string {
+	resetCommands := []string{
 		"STOP SLAVE",
 		"RESET SLAVE ALL", // "ALL" makes it forget master host:port.
 		"RESET MASTER",
 		"SET GLOBAL gtid_slave_pos = ''",
-		"SET GLOBAL rpl_semi_sync_master_enabled = false, GLOBAL rpl_semi_sync_slave_enabled = false", // semi-sync will be enabled if needed when slave is started.
 	}
+	if c.SemiSyncExtensionLoaded() {
+		resetCommands = append(resetCommands, "SET GLOBAL rpl_semi_sync_master_enabled = false, GLOBAL rpl_semi_sync_slave_enabled = false") // semi-sync will be enabled if needed when slave is started.
+	}
+	return resetCommands
 }
 
 // setSlavePositionCommands is part of the Flavor interface.

@@ -144,7 +144,8 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) error {
 			<-streamErr
 		}()
 		// If the apply thread ends with io.EOF, it means either the Engine
-		// is shutting down and canceled the context, or stop position was reached.
+		// is shutting down and canceled the context, or stop position was reached,
+		// or a journal event was encountered.
 		// If so, we return nil which will cause the controller to not retry.
 		if err == io.EOF {
 			return nil
@@ -196,7 +197,7 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	vp.unsavedEvent = nil
 	vp.timeLastSaved = time.Now()
 	vp.vr.stats.SetLastPosition(vp.pos)
-	posReached = !vp.stopPos.IsZero() && vp.pos.Equal(vp.stopPos)
+	posReached = !vp.stopPos.IsZero() && vp.pos.AtLeast(vp.stopPos)
 	if posReached {
 		if vp.saveStop {
 			if err := vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
@@ -256,7 +257,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 				mustSave := false
 				switch event.Type {
 				case binlogdatapb.VEventType_COMMIT:
-					if vp.pos.Equal(vp.stopPos) {
+					if !vp.stopPos.IsZero() && vp.pos.AtLeast(vp.stopPos) {
 						mustSave = true
 						break
 					}
@@ -303,15 +304,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		if vp.stopPos.IsZero() {
 			return nil
 		}
-		if !vp.pos.Equal(vp.stopPos) && vp.pos.AtLeast(vp.stopPos) {
-			// Code is unreachable, but bad data can cause this to happen.
-			if vp.saveStop {
-				if err := vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("next event position %v exceeds stop pos %v, exiting without applying", vp.pos, vp.stopPos)); err != nil {
-					return err
-				}
-			}
-			return io.EOF
-		}
 	case binlogdatapb.VEventType_BEGIN:
 		// No-op: begin is called as needed.
 	case binlogdatapb.VEventType_COMMIT:
@@ -351,6 +343,15 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		}
 		if err := vp.applyRowEvent(ctx, event.RowEvent); err != nil {
 			return err
+		}
+	case binlogdatapb.VEventType_OTHER:
+		// Just update the position.
+		posReached, err := vp.updatePos(event.Timestamp)
+		if err != nil {
+			return err
+		}
+		if posReached {
+			return io.EOF
 		}
 	case binlogdatapb.VEventType_DDL:
 		if vp.vr.dbClient.InTransaction {
@@ -403,6 +404,47 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 				return io.EOF
 			}
 		}
+	case binlogdatapb.VEventType_JOURNAL:
+		// Ensure that we don't have a partial set of table matches in the journal.
+		switch event.Journal.MigrationType {
+		case binlogdatapb.MigrationType_SHARDS:
+			// All tables of the source were migrated. So, no validation needed.
+		case binlogdatapb.MigrationType_TABLES:
+			// Validate that all or none of the tables are in the journal.
+			jtables := make(map[string]bool)
+			for _, table := range event.Journal.Tables {
+				jtables[table] = true
+			}
+			found := false
+			notFound := false
+			for tableName := range vp.replicatorPlan.TablePlans {
+				if _, ok := jtables[tableName]; ok {
+					found = true
+				} else {
+					notFound = true
+				}
+			}
+			switch {
+			case found && notFound:
+				// Some were found and some were not found. We can't handle this.
+				if err := vp.vr.setState(binlogplayer.BlpStopped, "unable to handle journal event: tables were partially matched"); err != nil {
+					return err
+				}
+				return io.EOF
+			case notFound:
+				// None were found. Ignore journal.
+				return nil
+			}
+			// All were found. We must register journal.
+		}
+
+		if err := vp.vr.vre.registerJournal(event.Journal, int(vp.vr.id)); err != nil {
+			if err := vp.vr.setState(binlogplayer.BlpStopped, err.Error()); err != nil {
+				return err
+			}
+			return io.EOF
+		}
+		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
 		// No-op: heartbeat timings are calculated in outer loop.
 	}

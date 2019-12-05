@@ -86,6 +86,10 @@ func (mh *proxyHandler) ConnectionClosed(c *mysql.Conn) {
 	}
 }
 
+func (mh *proxyHandler) ComInitDB(c *mysql.Conn, schemaName string) {
+	mh.session(c).TargetString = schemaName
+}
+
 func (mh *proxyHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	var ctx context.Context
 	var cancel context.CancelFunc
@@ -107,23 +111,8 @@ func (mh *proxyHandler) ComQuery(c *mysql.Conn, query string, callback func(*sql
 		"mysqlproxy MySQL Connector" /* subcomponent: part of the client */)
 	ctx = callerid.NewContext(ctx, ef, im)
 
-	session, _ := c.ClientData.(*mysqlproxy.ProxySession)
-	if session == nil {
-		session = &mysqlproxy.ProxySession{
-			Options: &querypb.ExecuteOptions{
-				IncludedFields: querypb.ExecuteOptions_ALL,
-			},
-			Autocommit: true,
-		}
-		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
-			session.Options.ClientFoundRows = true
-		}
-	}
-	if session.TargetString == "" && c.SchemaName != "" {
-		session.TargetString = c.SchemaName
-	}
+	session := mh.session(c)
 	session, result, err := mh.mp.Execute(ctx, session, query, make(map[string]*querypb.BindVariable))
-	c.ClientData = session
 	err = mysql.NewSQLErrorFromError(err)
 	if err != nil {
 		return err
@@ -145,7 +134,23 @@ func (mh *proxyHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData
 }
 
 func (mh *proxyHandler) ComResetConnection(c *mysql.Conn) {
+}
 
+func (mh *proxyHandler) session(c *mysql.Conn) *mysqlproxy.ProxySession {
+	session, _ := c.ClientData.(*mysqlproxy.ProxySession)
+	if session == nil {
+		session = &mysqlproxy.ProxySession{
+			Options: &querypb.ExecuteOptions{
+				IncludedFields: querypb.ExecuteOptions_ALL,
+			},
+			Autocommit: true,
+		}
+		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
+			session.Options.ClientFoundRows = true
+		}
+		c.ClientData = session
+	}
+	return session
 }
 
 var mysqlListener *mysql.Listener

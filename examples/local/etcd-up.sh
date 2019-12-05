@@ -20,20 +20,23 @@ set -e
 cell=${CELL:-'test'}
 
 script_root=$(dirname "${BASH_SOURCE[0]}")
+export ETCDCTL_API=2
 
 # shellcheck source=./env.sh
 # shellcheck disable=SC1091
 source "${script_root}/env.sh"
 
-${ETCD_BINDIR}/etcd --data-dir "${VTDATAROOT}/etcd/"  --listen-client-urls "http://${ETCD_SERVER}" --advertise-client-urls "http://${ETCD_SERVER}" > "${VTDATAROOT}"/tmp/etcd.out 2>&1 &
+etcd --enable-v2=true --data-dir "${VTDATAROOT}/etcd/"  --listen-client-urls "http://${ETCD_SERVER}" --advertise-client-urls "http://${ETCD_SERVER}" > "${VTDATAROOT}"/tmp/etcd.out 2>&1 &
+PID=$!
+echo $PID > "${VTDATAROOT}/tmp/etcd.pid"
 sleep 5
 
 echo "add /vitess/global"
-${ETCD_BINDIR}/etcdctl --endpoints "http://${ETCD_SERVER}" mkdir /vitess/global &
+etcdctl --endpoints "http://${ETCD_SERVER}" mkdir /vitess/global &
 
 
 echo "add /vitess/$cell"
-${ETCD_BINDIR}/etcdctl --endpoints "http://${ETCD_SERVER}" mkdir /vitess/$cell &
+etcdctl --endpoints "http://${ETCD_SERVER}" mkdir /vitess/$cell &
 
 # And also add the CellInfo description for the cell.
 # If the node already exists, it's fine, means we used existing data.

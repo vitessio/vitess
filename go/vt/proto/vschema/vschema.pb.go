@@ -116,13 +116,14 @@ func (m *RoutingRule) GetToTables() []string {
 // Keyspace is the vschema for a keyspace.
 type Keyspace struct {
 	// If sharded is false, vindexes and tables are ignored.
-	Sharded                bool               `protobuf:"varint,1,opt,name=sharded,proto3" json:"sharded,omitempty"`
-	Vindexes               map[string]*Vindex `protobuf:"bytes,2,rep,name=vindexes,proto3" json:"vindexes,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	Tables                 map[string]*Table  `protobuf:"bytes,3,rep,name=tables,proto3" json:"tables,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
-	RequireExplicitRouting bool               `protobuf:"varint,4,opt,name=require_explicit_routing,json=requireExplicitRouting,proto3" json:"require_explicit_routing,omitempty"`
-	XXX_NoUnkeyedLiteral   struct{}           `json:"-"`
-	XXX_unrecognized       []byte             `json:"-"`
-	XXX_sizecache          int32              `json:"-"`
+	Sharded  bool               `protobuf:"varint,1,opt,name=sharded,proto3" json:"sharded,omitempty"`
+	Vindexes map[string]*Vindex `protobuf:"bytes,2,rep,name=vindexes,proto3" json:"vindexes,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	Tables   map[string]*Table  `protobuf:"bytes,3,rep,name=tables,proto3" json:"tables,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"bytes,2,opt,name=value,proto3"`
+	// If require_explicit_routing is true, vindexes and tables are not added to global routing
+	RequireExplicitRouting bool     `protobuf:"varint,4,opt,name=require_explicit_routing,json=requireExplicitRouting,proto3" json:"require_explicit_routing,omitempty"`
+	XXX_NoUnkeyedLiteral   struct{} `json:"-"`
+	XXX_unrecognized       []byte   `json:"-"`
+	XXX_sizecache          int32    `json:"-"`
 }
 
 func (m *Keyspace) Reset()         { *m = Keyspace{} }

@@ -782,7 +782,7 @@ Recapitulating what we’ve covered so far:
 
 Once we start allowing joins and subqueries, we have a whole bunch of table aliases and relationships to deal with. We have to contend with name clashes, self-joins, as well as scoping rules. In a way, the vschema has acted as a static symbol table so far. But that’s not going to be enough any more.
 
-The core of the symbol table will contain a map whose key will be a table alias, and the elements will be [similar to the table in vschema](https://github.com/vitessio/vitess/blob/master/go/vt/vtgate/planbuilder/schema.go#L22). However, it will also contain a column list that will be built as the query is parsed.
+The core of the symbol table will contain a map whose key will be a table alias, and the elements will be [similar to the table in vschema](https://github.com/vitessio/vitess/blob/0b3de7c4a2de8daec545f040639b55a835361685/go/vt/vtgate/vindexes/vschema.go#L82). However, it will also contain a column list that will be built as the query is parsed.
 
 ### A simple example
 

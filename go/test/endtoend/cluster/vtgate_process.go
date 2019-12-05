@@ -126,6 +126,18 @@ func (vtgate *VtgateProcess) WaitForStatus() bool {
 		return false
 	}
 	if resp.StatusCode == 200 {
+		return true
+	}
+	return false
+}
+
+// GetStatusForTabletOfShard function gets status for a specific tablet of a shard in keyspace
+func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string) bool {
+	resp, err := http.Get(vtgate.VerifyURL)
+	if err != nil {
+		return false
+	}
+	if resp.StatusCode == 200 {
 		resultMap := make(map[string]interface{})
 		respByte, _ := ioutil.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)

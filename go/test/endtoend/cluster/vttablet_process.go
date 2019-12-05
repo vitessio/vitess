@@ -12,6 +12,7 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
 */
 
 package cluster
@@ -126,6 +127,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		}
 	}()
 
+
 	err = vttablet.WaitForTabletType(vttablet.ServingStatus)
 	if err != nil {
 		return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vttablet.Name, <-vttablet.exit)
@@ -176,6 +178,22 @@ func (vttablet *VttabletProcess) GetVars() map[string]interface{} {
 	return nil
 }
 
+// WaitForStatus function checks if vttablet process is up and running
+func (vttablet *VttabletProcess) WaitForStatus(status string) bool {
+	return vttablet.GetTabletStatus() == status
+}
+
+// GetTabletStatus function checks if vttablet process is up and running
+func (vttablet *VttabletProcess) GetTabletStatus() string {
+	resultMap := vttablet.GetVars()
+	if resultMap != nil {
+		return reflect.ValueOf(resultMap["TabletStateName"]).String()
+	} else {
+		return ""
+	}
+}
+
+
 // WaitForTabletType waits till the tablet status reaches desired type
 func (vttablet *VttabletProcess) WaitForTabletType(expectedType string) error {
 	timeout := time.Now().Add(10 * time.Second)
@@ -224,16 +242,10 @@ func (vttablet *VttabletProcess) TearDown(cleanDir bool) error {
 	// Attempt graceful shutdown with SIGTERM first
 	vttablet.proc.Process.Signal(syscall.SIGTERM)
 
-	if cleanDir {
-		os.RemoveAll(vttablet.Directory)
-	} else {
-		os.RemoveAll(vttablet.PidFile)
-	}
-
 	select {
-	case err := <-vttablet.exit:
+	case <-vttablet.exit:
 		vttablet.proc = nil
-		return err
+		return nil
 
 	case <-time.After(10 * time.Second):
 		vttablet.proc.Process.Kill()
@@ -257,6 +269,7 @@ func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useD
 	if useDb {
 		dbParams.DbName = "vt_" + keyspace
 	}
+
 	if vttablet.DbPwd != "" {
 		dbParams.Pass = vttablet.DbPwd
 	}
@@ -277,7 +290,7 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 	vttablet := &VttabletProcess{
 		Name:                        "vttablet",
 		Binary:                      "vttablet",
-		FileToLogQueries:            path.Join(tmpDirectory, fmt.Sprintf("/vt_%010d/vttable.pid", tabletUID)),
+		FileToLogQueries:            path.Join(tmpDirectory, fmt.Sprintf("/vt_%010d/querylog.txt", tabletUID)),
 		Directory:                   path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID)),
 		TabletPath:                  fmt.Sprintf("%s-%010d", cell, tabletUID),
 		ServiceMap:                  "grpc-queryservice,grpc-tabletmanager,grpc-updatestream",
@@ -292,7 +305,7 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),
 		Port:                        port,
 		GrpcPort:                    grpcPort,
-		PidFile:                     path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/vttable.pid", tabletUID)),
+		PidFile:                     path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/vttablet.pid", tabletUID)),
 		VtctldAddress:               fmt.Sprintf("http://%s:%d", hostname, vtctldPort),
 		ExtraArgs:                   extraArgs,
 		EnableSemiSync:              enableSemiSync,

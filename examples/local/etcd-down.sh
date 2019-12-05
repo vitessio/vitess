@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is an example script that stops the ZooKeeper servers started by zk-up.sh.
+# This is an example script that stops the etcd servers started by etcd-up.sh.
 
 set -e
 
@@ -24,6 +24,6 @@ script_root=$(dirname "${BASH_SOURCE[0]}")
 # shellcheck disable=SC1091
 source "${script_root}/env.sh"
 
-# Stop etcd servers.
-echo "Stopping etcd servers..."
-kill -9 "$(pgrep -f "${ETCD_BINDIR}/etcd")"
+pid=`cat $VTDATAROOT/tmp/etcd.pid`
+echo "Stopping etcd..."
+kill -9 $pid

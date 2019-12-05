@@ -95,7 +95,7 @@ func (etcd *EtcdProcess) Setup() (err error) {
 }
 
 // TearDown shutdowns the running mysqld service
-func (etcd *EtcdProcess) TearDown(Cell string) error {
+func (etcd *EtcdProcess) TearDown(Cell string, originalVtRoot string, currentRoot string, keepdata bool) error {
 	if etcd.proc == nil || etcd.exit == nil {
 		return nil
 	}
@@ -104,7 +104,12 @@ func (etcd *EtcdProcess) TearDown(Cell string) error {
 
 	// Attempt graceful shutdown with SIGTERM first
 	_ = etcd.proc.Process.Signal(syscall.SIGTERM)
-	_ = os.RemoveAll(etcd.DataDirectory)
+	if !*keepData {
+		_ = os.RemoveAll(etcd.DataDirectory)
+		_ = os.RemoveAll(currentRoot)
+	}
+	_ = os.Setenv("VTDATAROOT", originalVtRoot)
+
 	select {
 	case err := <-etcd.exit:
 		etcd.proc = nil

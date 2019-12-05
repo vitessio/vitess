@@ -20,19 +20,6 @@ vtctld_web_port=15000
 # Set up environment.
 export VTTOP=${VTTOP-$VTROOT/src/vitess.io/vitess}
 
-# Try to find mysqld_safe on PATH.
-if [ -z "$VT_MYSQL_ROOT" ]; then
-  mysql_path=`which mysqld_safe`
-  if [ -z "$mysql_path" ]; then
-    echo "Can't guess location of mysqld_safe. Please set VT_MYSQL_ROOT so it can be found at \$VT_MYSQL_ROOT/bin/mysqld_safe."
-    exit 1
-  fi
-  export VT_MYSQL_ROOT=$(dirname `dirname $mysql_path`)
-fi
-
-# Previously the file specified MYSQL_FLAVOR
-# it is now autodetected
-
 if [ "${TOPO}" = "zk2" ]; then
     # Each ZooKeeper server needs a list of all servers in the quorum.
     # Since we're running them all locally, we need to give them unique ports.
@@ -58,14 +45,7 @@ if [ "${TOPO}" = "zk2" ]; then
 else
     echo "enter etcd2 env"
 
-    case $(uname) in
-      Linux)  etcd_platform=linux;;
-      Darwin) etcd_platform=darwin;;
-    esac
-
     ETCD_SERVER="localhost:2379"
-    ETCD_VERSION=$(cat "${VTROOT}/dist/etcd/.installed_version")
-    ETCD_BINDIR="${VTROOT}/dist/etcd/etcd-${ETCD_VERSION}-${etcd_platform}-amd64/"
     TOPOLOGY_FLAGS="-topo_implementation etcd2 -topo_global_server_address $ETCD_SERVER -topo_global_root /vitess/global"
 
     mkdir -p "${VTDATAROOT}/tmp"

@@ -17,10 +17,13 @@ limitations under the License.
 package cluster
 
 import (
+	"flag"
 	"fmt"
 	"math/rand"
 	"os"
+	"os/exec"
 	"path"
+	"time"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -28,14 +31,20 @@ import (
 // DefaultCell : If no cell name is passed, then use following
 const DefaultCell = "zone1"
 
+var (
+	keepData = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
+)
+
 // LocalProcessCluster Testcases need to use this to iniate a cluster
 type LocalProcessCluster struct {
-	Keyspaces     []Keyspace
-	Cell          string
-	BaseTabletUID int
-	Hostname      string
-	TopoPort      int
-	TmpDirectory  string
+	Keyspaces          []Keyspace
+	Cell               string
+	BaseTabletUID      int
+	Hostname           string
+	TopoPort           int
+	TmpDirectory       string
+	OriginalVTDATAROOT string
+	CurrentVTDATAROOT  string
 
 	VtgateMySQLPort int
 	VtgateGrpcPort  int
@@ -177,11 +186,13 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 
 	log.Info("Starting keyspace : " + keyspace.Name)
 	_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
+	var mysqlctlProcessList []*exec.Cmd
 	for _, shardName := range shardNames {
 		shard := &Shard{
 			Name: shardName,
 		}
 		log.Info("Starting shard : " + shardName)
+		mysqlctlProcessList = []*exec.Cmd{}
 		for i := 0; i < totalTabletsRequired; i++ {
 			// instantiate vttablet object with reserved ports
 			tabletUID := cluster.GetAndReserveTabletUID()
@@ -200,9 +211,11 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			// Start Mysqlctl process
 			log.Info(fmt.Sprintf("Starting mysqlctl for table uid %d, mysql port %d", tablet.TabletUID, tablet.MySQLPort))
 			tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory)
-			if err = tablet.MysqlctlProcess.Start(); err != nil {
+			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
 				log.Error(err.Error())
-				return
+				return err
+			} else {
+				mysqlctlProcessList = append(mysqlctlProcessList, proc)
 			}
 
 			// start vttablet process
@@ -220,7 +233,17 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				cluster.VtTabletExtraArgs,
 				cluster.EnableSemiSync)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
+			shard.Vttablets = append(shard.Vttablets, *tablet)
+		}
 
+		// wait till all mysqlctl is instantiated
+		for _, proc := range mysqlctlProcessList {
+			if err = proc.Wait(); err != nil {
+				log.Errorf("Unable to start mysql , error %v", err.Error())
+				return err
+			}
+		}
+		for _, tablet := range shard.Vttablets {
 			if _, err = tablet.VttabletProcess.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace.Name), keyspace.Name, false); err != nil {
 				log.Error(err.Error())
 				return
@@ -232,8 +255,6 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				log.Error(err.Error())
 				return
 			}
-
-			shard.Vttablets = append(shard.Vttablets, *tablet)
 		}
 
 		// Make first tablet as master
@@ -300,7 +321,26 @@ func (cluster *LocalProcessCluster) GetVtgateInstance() *VtgateProcess {
 		cluster.TopoProcess.Port,
 		cluster.TmpDirectory,
 		cluster.VtGateExtraArgs)
-	return vtgateProcInstance
+
+	log.Info(fmt.Sprintf("Vtgate started, connect to mysql using : mysql -h 127.0.0.1 -P %d", cluster.VtgateMySQLPort))
+	if err = cluster.VtgateProcess.Setup(); err != nil {
+		return err
+	}
+	if err = cluster.WaitForTabletsToHealthyInVtgate(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// NewCluster instantiates a new cluster
+func NewCluster(cell string, hostname string) *LocalProcessCluster {
+	cluster := &LocalProcessCluster{Cell: cell, Hostname: hostname}
+	cluster.OriginalVTDATAROOT = os.Getenv("VTDATAROOT")
+	cluster.CurrentVTDATAROOT = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vtroot_%d", cluster.GetAndReservePort()))
+	_ = createDirectory(cluster.CurrentVTDATAROOT, 0700)
+	_ = os.Setenv("VTDATAROOT", cluster.CurrentVTDATAROOT)
+	rand.Seed(time.Now().UTC().UnixNano())
+	return cluster
 }
 
 // ReStartVtgate starts vtgate with updated configs
@@ -318,27 +358,52 @@ func (cluster *LocalProcessCluster) ReStartVtgate() (err error) {
 	return err
 }
 
+// WaitForTabletsToHealthyInVtgate waits for all tablets in all shards to be healthy as per vtgate
+func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error) {
+	var isRdOnlyPresent bool
+	for _, keyspace := range cluster.Keyspaces {
+		for _, shard := range keyspace.Shards {
+			isRdOnlyPresent = false
+			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspace.Name, shard.Name)); err != nil {
+				return err
+			}
+			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace.Name, shard.Name)); err != nil {
+				return err
+			}
+			for _, tablet := range shard.Vttablets {
+				if tablet.Type == "rdonly" {
+					isRdOnlyPresent = true
+				}
+			}
+			if isRdOnlyPresent {
+				err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspace.Name, shard.Name))
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // Teardown brings down the cluster by invoking teardown for individual processes
 func (cluster *LocalProcessCluster) Teardown() (err error) {
 	if err = cluster.VtgateProcess.TearDown(); err != nil {
 		log.Error(err.Error())
 		return
 	}
-
-	if err = cluster.VtworkerProcess.TearDown(); err != nil {
-		log.Error(err.Error())
-		return
-	}
-
+	mysqlctlProcessList := []*exec.Cmd{}
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {
 			for _, tablet := range shard.Vttablets {
-				if err = tablet.MysqlctlProcess.Stop(); err != nil {
+				if proc, err := tablet.MysqlctlProcess.StopProcess(); err != nil {
 					log.Error(err.Error())
-					return
+					return err
+				} else {
+					mysqlctlProcessList = append(mysqlctlProcessList, proc)
 				}
 
-				if err = tablet.VttabletProcess.TearDown(true); err != nil {
+				if err = tablet.VttabletProcess.TearDown(); err != nil {
 					log.Error(err.Error())
 					return
 				}
@@ -346,12 +411,18 @@ func (cluster *LocalProcessCluster) Teardown() (err error) {
 		}
 	}
 
+
+	for _, proc := range mysqlctlProcessList {
+		proc.Wait()
+	}
+
+
 	if err = cluster.VtctldProcess.TearDown(); err != nil {
 		log.Error(err.Error())
 		return
 	}
 
-	if err = cluster.TopoProcess.TearDown(cluster.Cell); err != nil {
+	if err = cluster.TopoProcess.TearDown(cluster.Cell, cluster.OriginalVTDATAROOT, cluster.CurrentVTDATAROOT, *keepData); err != nil {
 		log.Error(err.Error())
 		return
 	}

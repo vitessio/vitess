@@ -192,7 +192,7 @@ func checkDataOnReplica(t *testing.T, replicaConn *mysql.Conn, want string) {
 		qr := exec(t, replicaConn, "select value from t1")
 		got := fmt.Sprintf("%v", qr.Rows)
 
-		if time.Since(startTime) > 2*time.Second /* timeout */ {
+		if time.Since(startTime) > 3*time.Second /* timeout */ {
 			assert.Equal(t, want, got)
 			break
 		}

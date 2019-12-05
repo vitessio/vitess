@@ -69,8 +69,7 @@ var (
 )
 
 // vtgateHandler implements the Listener interface.
-// It stores the Session in the ClientData of a Connection, if a transaction
-// is in progress.
+// It stores the Session in the ClientData of a Connection.
 type vtgateHandler struct {
 	vtg *VTGate
 }
@@ -86,15 +85,13 @@ func (vh *vtgateHandler) NewConnection(c *mysql.Conn) {
 
 func (vh *vtgateHandler) ComResetConnection(c *mysql.Conn) {
 	ctx := context.Background()
-	session, _ := c.ClientData.(*vtgatepb.Session)
-	if session != nil {
-		if session.InTransaction {
-			defer atomic.AddInt32(&busyConnections, -1)
-		}
-		_, _, err := vh.vtg.Execute(ctx, session, "rollback", make(map[string]*querypb.BindVariable))
-		if err != nil {
-			log.Errorf("Error happened in transaction rollback: %v", err)
-		}
+	session := vh.session(c)
+	if session.InTransaction {
+		defer atomic.AddInt32(&busyConnections, -1)
+	}
+	_, _, err := vh.vtg.Execute(ctx, session, "rollback", make(map[string]*querypb.BindVariable))
+	if err != nil {
+		log.Errorf("Error happened in transaction rollback: %v", err)
 	}
 }
 
@@ -108,13 +105,11 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	} else {
 		ctx = context.Background()
 	}
-	session, _ := c.ClientData.(*vtgatepb.Session)
-	if session != nil {
-		if session.InTransaction {
-			defer atomic.AddInt32(&busyConnections, -1)
-		}
-		_, _, _ = vh.vtg.Execute(ctx, session, "rollback", make(map[string]*querypb.BindVariable))
+	session := vh.session(c)
+	if session.InTransaction {
+		defer atomic.AddInt32(&busyConnections, -1)
 	}
+	_, _, _ = vh.vtg.Execute(ctx, session, "rollback", make(map[string]*querypb.BindVariable))
 }
 
 // Regexp to extract parent span id over the sql query
@@ -146,6 +141,10 @@ func startSpan(ctx context.Context, query, label string) (trace.Span, context.Co
 	return startSpanTestable(ctx, query, label, trace.NewSpan, trace.NewFromString)
 }
 
+func (vh *vtgateHandler) ComInitDB(c *mysql.Conn, schemaName string) {
+	vh.session(c).TargetString = schemaName
+}
+
 func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	ctx := context.Background()
 	var cancel context.CancelFunc
@@ -174,19 +173,7 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 		"VTGate MySQL Connector" /* subcomponent: part of the client */)
 	ctx = callerid.NewContext(ctx, ef, im)
 
-	session, _ := c.ClientData.(*vtgatepb.Session)
-	if session == nil {
-		session = &vtgatepb.Session{
-			Options: &querypb.ExecuteOptions{
-				IncludedFields: querypb.ExecuteOptions_ALL,
-			},
-			Autocommit: true,
-		}
-		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
-			session.Options.ClientFoundRows = true
-		}
-	}
-
+	session := vh.session(c)
 	if !session.InTransaction {
 		atomic.AddInt32(&busyConnections, 1)
 	}
@@ -196,15 +183,11 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 		}
 	}()
 
-	if session.TargetString == "" && c.SchemaName != "" {
-		session.TargetString = c.SchemaName
-	}
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
 		err := vh.vtg.StreamExecute(ctx, session, query, make(map[string]*querypb.BindVariable), callback)
 		return mysql.NewSQLErrorFromError(err)
 	}
 	session, result, err := vh.vtg.Execute(ctx, session, query, make(map[string]*querypb.BindVariable))
-	c.ClientData = session
 	err = mysql.NewSQLErrorFromError(err)
 	if err != nil {
 		return err
@@ -237,19 +220,7 @@ func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Fie
 		"VTGate MySQL Connector" /* subcomponent: part of the client */)
 	ctx = callerid.NewContext(ctx, ef, im)
 
-	session, _ := c.ClientData.(*vtgatepb.Session)
-	if session == nil {
-		session = &vtgatepb.Session{
-			Options: &querypb.ExecuteOptions{
-				IncludedFields: querypb.ExecuteOptions_ALL,
-			},
-			Autocommit: true,
-		}
-		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
-			session.Options.ClientFoundRows = true
-		}
-	}
-
+	session := vh.session(c)
 	if !session.InTransaction {
 		atomic.AddInt32(&busyConnections, 1)
 	}
@@ -259,12 +230,7 @@ func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Fie
 		}
 	}()
 
-	if session.TargetString == "" && c.SchemaName != "" {
-		session.TargetString = c.SchemaName
-	}
-
 	session, fld, err := vh.vtg.Prepare(ctx, session, query, make(map[string]*querypb.BindVariable))
-	c.ClientData = session
 	err = mysql.NewSQLErrorFromError(err)
 	if err != nil {
 		return nil, err
@@ -296,19 +262,7 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 		"VTGate MySQL Connector" /* subcomponent: part of the client */)
 	ctx = callerid.NewContext(ctx, ef, im)
 
-	session, _ := c.ClientData.(*vtgatepb.Session)
-	if session == nil {
-		session = &vtgatepb.Session{
-			Options: &querypb.ExecuteOptions{
-				IncludedFields: querypb.ExecuteOptions_ALL,
-			},
-			Autocommit: true,
-		}
-		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
-			session.Options.ClientFoundRows = true
-		}
-	}
-
+	session := vh.session(c)
 	if !session.InTransaction {
 		atomic.AddInt32(&busyConnections, 1)
 	}
@@ -318,9 +272,6 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 		}
 	}()
 
-	if session.TargetString == "" && c.SchemaName != "" {
-		session.TargetString = c.SchemaName
-	}
 	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
 		err := vh.vtg.StreamExecute(ctx, session, prepare.PrepareStmt, prepare.BindVars, callback)
 		return mysql.NewSQLErrorFromError(err)
@@ -335,11 +286,24 @@ func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareDat
 }
 
 func (vh *vtgateHandler) WarningCount(c *mysql.Conn) uint16 {
+	return uint16(len(vh.session(c).GetWarnings()))
+}
+
+func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 	session, _ := c.ClientData.(*vtgatepb.Session)
-	if session != nil {
-		return uint16(len(session.GetWarnings()))
+	if session == nil {
+		session = &vtgatepb.Session{
+			Options: &querypb.ExecuteOptions{
+				IncludedFields: querypb.ExecuteOptions_ALL,
+			},
+			Autocommit: true,
+		}
+		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
+			session.Options.ClientFoundRows = true
+		}
+		c.ClientData = session
 	}
-	return 0
+	return session
 }
 
 var mysqlListener *mysql.Listener

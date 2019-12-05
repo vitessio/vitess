@@ -46,6 +46,7 @@ var (
 )
 
 type vreplicator struct {
+	vre          *Engine
 	id           uint32
 	source       *binlogdatapb.BinlogSource
 	sourceTablet *topodatapb.Tablet
@@ -57,8 +58,9 @@ type vreplicator struct {
 	tableKeys map[string][]string
 }
 
-func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceTablet *topodatapb.Tablet, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon) *vreplicator {
+func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceTablet *topodatapb.Tablet, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine) *vreplicator {
 	return &vreplicator{
+		vre:          vre,
 		id:           id,
 		source:       source,
 		sourceTablet: sourceTablet,
@@ -78,7 +80,7 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 	for {
 		settings, numTablesToCopy, err := vr.readSettings(ctx)
 		if err != nil {
-			return fmt.Errorf("error reading VReplication settings: %v", err)
+			return err
 		}
 		// If any of the operations below changed state to Stopped, we should return.
 		if settings.State == binlogplayer.BlpStopped {
@@ -158,7 +160,7 @@ func (vr *vreplicator) setMessage(message string) error {
 		Time:    time.Now(),
 		Message: message,
 	})
-	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v", encodeString(message), vr.id)
+	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v", encodeString(binlogplayer.MessageTruncate(message)), vr.id)
 	if _, err := vr.dbClient.Execute(query); err != nil {
 		return fmt.Errorf("could not set message: %v: %v", query, err)
 	}

@@ -205,6 +205,7 @@ func (db *DB) Close() {
 	db.listener.Close()
 	db.acceptWG.Wait()
 
+	db.WaitForClose(250 * time.Millisecond)
 	db.CloseAllConnections()
 
 	tmpDir := path.Dir(db.socketFile)
@@ -213,7 +214,7 @@ func (db *DB) Close() {
 
 // CloseAllConnections can be used to provoke MySQL client errors for open
 // connections.
-// Make sure to call WaitForShutdown() as well.
+// Make sure to call WaitForClose() as well.
 func (db *DB) CloseAllConnections() {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -311,6 +312,10 @@ func (db *DB) ConnectionClosed(c *mysql.Conn) {
 		panic(fmt.Errorf("BUG: Cannot delete connection from list of open connections because it is not registered. ID: %v Conn: %v", c.ConnectionID, c))
 	}
 	delete(db.connections, c.ConnectionID)
+}
+
+// ComInitDB is part of the mysql.Handler interface.
+func (db *DB) ComInitDB(c *mysql.Conn, schemaName string) {
 }
 
 // ComQuery is part of the mysql.Handler interface.

@@ -256,6 +256,13 @@ func (s *server) MasterPosition(ctx context.Context, request *tabletmanagerdatap
 	return response, err
 }
 
+func (s *server) WaitForPosition(ctx context.Context, request *tabletmanagerdatapb.WaitForPositionRequest) (response *tabletmanagerdatapb.WaitForPositionResponse, err error) {
+	defer s.agent.HandleRPCPanic(ctx, "WaitForPosition", request, response, false /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.WaitForPositionResponse{}
+	return response, s.agent.WaitForPosition(ctx, request.Position)
+}
+
 func (s *server) StopSlave(ctx context.Context, request *tabletmanagerdatapb.StopSlaveRequest) (response *tabletmanagerdatapb.StopSlaveResponse, err error) {
 	defer s.agent.HandleRPCPanic(ctx, "StopSlave", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
@@ -402,7 +409,7 @@ func (s *server) SetMaster(ctx context.Context, request *tabletmanagerdatapb.Set
 	defer s.agent.HandleRPCPanic(ctx, "SetMaster", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.SetMasterResponse{}
-	return response, s.agent.SetMaster(ctx, request.Parent, request.TimeCreatedNs, request.ForceStartSlave)
+	return response, s.agent.SetMaster(ctx, request.Parent, request.TimeCreatedNs, request.WaitPosition, request.ForceStartSlave)
 }
 
 func (s *server) SlaveWasRestarted(ctx context.Context, request *tabletmanagerdatapb.SlaveWasRestartedRequest) (response *tabletmanagerdatapb.SlaveWasRestartedResponse, err error) {

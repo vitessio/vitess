@@ -19,6 +19,7 @@ package vreplication
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
 	"regexp"
@@ -125,50 +126,50 @@ func resetBinlogClient() {
 //--------------------------------------
 // Topos and tablets
 
-func addTablet(id int, shard string, tabletType topodatapb.TabletType, serving, healthy bool) *topodatapb.Tablet {
-	t := newTablet(id, shard, tabletType, serving, healthy)
-	if err := env.TopoServ.CreateTablet(context.Background(), t); err != nil {
-		panic(err)
-	}
-	return t
-}
-
-func deleteTablet(t *topodatapb.Tablet) {
-	env.TopoServ.DeleteTablet(context.Background(), t.Alias)
-	// This is not automatically removed from shard replication, which results in log spam.
-	topo.DeleteTabletReplicationData(context.Background(), env.TopoServ, t)
-}
-
-func newTablet(id int, shard string, tabletType topodatapb.TabletType, serving, healthy bool) *topodatapb.Tablet {
-	stag := "not_serving"
-	if serving {
-		stag = "serving"
-	}
-	htag := "not_healthy"
-	if healthy {
-		htag = "healthy"
-	}
-	_, kr, err := topo.ValidateShardName(shard)
-	if err != nil {
-		panic(err)
-	}
-	return &topodatapb.Tablet{
+func addTablet(id int) *topodatapb.Tablet {
+	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: env.Cells[0],
 			Uid:  uint32(id),
 		},
 		Keyspace: env.KeyspaceName,
 		Shard:    env.ShardName,
-		KeyRange: kr,
-		Type:     tabletType,
-		Tags: map[string]string{
-			"serving": stag,
-			"healthy": htag,
-		},
+		KeyRange: &topodatapb.KeyRange{},
+		Type:     topodatapb.TabletType_REPLICA,
 		PortMap: map[string]int32{
 			"test": int32(id),
 		},
 	}
+	if err := env.TopoServ.CreateTablet(context.Background(), tablet); err != nil {
+		panic(err)
+	}
+	return tablet
+}
+
+func addOtherTablet(id int, keyspace, shard string) *topodatapb.Tablet {
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: env.Cells[0],
+			Uid:  uint32(id),
+		},
+		Keyspace: keyspace,
+		Shard:    shard,
+		KeyRange: &topodatapb.KeyRange{},
+		Type:     topodatapb.TabletType_REPLICA,
+		PortMap: map[string]int32{
+			"test": int32(id),
+		},
+	}
+	if err := env.TopoServ.CreateTablet(context.Background(), tablet); err != nil {
+		panic(err)
+	}
+	return tablet
+}
+
+func deleteTablet(tablet *topodatapb.Tablet) {
+	env.TopoServ.DeleteTablet(context.Background(), tablet.Alias)
+	// This is not automatically removed from shard replication, which results in log spam.
+	topo.DeleteTabletReplicationData(context.Background(), env.TopoServ, tablet)
 }
 
 // fakeTabletConn implement TabletConn interface. We only care about the
@@ -181,28 +182,23 @@ type fakeTabletConn struct {
 
 // StreamHealth is part of queryservice.QueryService.
 func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
-	serving := true
-	if s, ok := ftc.tablet.Tags["serving"]; ok {
-		serving = (s == "serving")
-	}
-	var herr string
-	if s, ok := ftc.tablet.Tags["healthy"]; ok && s != "healthy" {
-		herr = "err"
-	}
-	callback(&querypb.StreamHealthResponse{
-		Serving: serving,
+	return callback(&querypb.StreamHealthResponse{
+		Serving: true,
 		Target: &querypb.Target{
 			Keyspace:   ftc.tablet.Keyspace,
 			Shard:      ftc.tablet.Shard,
 			TabletType: ftc.tablet.Type,
 		},
-		RealtimeStats: &querypb.RealtimeStats{HealthError: herr},
+		RealtimeStats: &querypb.RealtimeStats{},
 	})
-	return nil
 }
 
 // VStream directly calls into the pre-initialized engine.
 func (ftc *fakeTabletConn) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	if target.Keyspace != "vttest" {
+		<-ctx.Done()
+		return io.EOF
+	}
 	return streamerEngine.Stream(ctx, startPos, filter, send)
 }
 
@@ -274,9 +270,9 @@ type btStream struct {
 	sent bool
 }
 
-func (t *btStream) Recv() (*binlogdatapb.BinlogTransaction, error) {
-	if !t.sent {
-		t.sent = true
+func (bts *btStream) Recv() (*binlogdatapb.BinlogTransaction, error) {
+	if !bts.sent {
+		bts.sent = true
 		return &binlogdatapb.BinlogTransaction{
 			Statements: []*binlogdatapb.BinlogTransaction_Statement{
 				{
@@ -290,8 +286,8 @@ func (t *btStream) Recv() (*binlogdatapb.BinlogTransaction, error) {
 			},
 		}, nil
 	}
-	<-t.ctx.Done()
-	return nil, t.ctx.Err()
+	<-bts.ctx.Done()
+	return nil, bts.ctx.Err()
 }
 
 func expectFBCRequest(t *testing.T, tablet *topodatapb.Tablet, pos string, tables []string, kr *topodatapb.KeyRange) {

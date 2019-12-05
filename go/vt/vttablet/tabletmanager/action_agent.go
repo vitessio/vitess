@@ -151,6 +151,11 @@ type ActionAgent struct {
 	// It is protected by actionMutex.
 	gotMysqlPort bool
 
+	// mysqlAdvertisePort is the port to publish for our own mysqld in the
+	// tablet record. If this is greater than 0, we simply advertise this value
+	// instead of asking mysqld what port it's serving on.
+	mysqlAdvertisePort int32
+
 	// initReplication remembers whether an action has initialized
 	// replication.  It is protected by actionMutex.
 	initReplication bool
@@ -168,6 +173,16 @@ type ActionAgent struct {
 	// mutex protects all the following fields (that start with '_'),
 	// only hold the mutex to update the fields, nothing else.
 	mutex sync.Mutex
+
+	// _shardSyncChan is a channel for informing the shard sync goroutine that
+	// it should wake up and recheck the tablet state, to make sure it and the
+	// shard record are in sync.
+	//
+	// Call agent.notifyShardSync() instead of sending directly to this channel.
+	_shardSyncChan chan struct{}
+
+	// _shardSyncCancel is the function to stop the background shard sync goroutine.
+	_shardSyncCancel context.CancelFunc
 
 	// _tablet has the Tablet record we last read from the topology server.
 	_tablet *topodatapb.Tablet
@@ -199,8 +214,8 @@ type ActionAgent struct {
 	// replication delay the last time we got it
 	_replicationDelay time.Duration
 
-	// last time we ran TabletExternallyReparented
-	_tabletExternallyReparentedTime time.Time
+	// _masterTermStartTime is the time at which our term as master began.
+	_masterTermStartTime time.Time
 
 	// _ignoreHealthErrorExpr can be set by RPC to selectively disable certain
 	// healthcheck errors. It should only be accessed while holding actionMutex.
@@ -273,6 +288,12 @@ func NewActionAgent(
 	if appConfig := dbcfgs.AppWithDB(); appConfig.Host != "" {
 		mysqlHost = appConfig.Host
 		mysqlPort = int32(appConfig.Port)
+
+		// Remember this port as the advertise port. When we're connecting over
+		// host:port, it doesn't make sense to ask mysqld for its port after
+		// connecting. We should just tell others to use the same port we were
+		// told to use, in case it's a proxy.
+		agent.mysqlAdvertisePort = mysqlPort
 	} else {
 		// Assume unix socket was specified and try to get the port from mysqld
 		var err error
@@ -438,6 +459,9 @@ func (agent *ActionAgent) setTablet(tablet *topodatapb.Tablet) {
 	agent.mutex.Lock()
 	agent._tablet = proto.Clone(tablet).(*topodatapb.Tablet)
 	agent.mutex.Unlock()
+
+	// Notify the shard sync loop that the tablet state changed.
+	agent.notifyShardSync()
 }
 
 // Tablet reads the stored Tablet from the agent, protected by mutex.
@@ -672,6 +696,10 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 	startingTablet.Type = topodatapb.TabletType_UNKNOWN
 	agent.setTablet(startingTablet)
 
+	// Start a background goroutine to watch and update the shard record,
+	// to make sure it and our tablet record are in sync.
+	agent.startShardSync()
+
 	return nil
 }
 
@@ -699,6 +727,7 @@ func (agent *ActionAgent) Close() {
 // while taking lameduck into account. However, this may be useful for tests,
 // when you want to clean up an agent immediately.
 func (agent *ActionAgent) Stop() {
+	agent.stopShardSync()
 	if agent.UpdateStream != nil {
 		agent.UpdateStream.Disable()
 	}
@@ -724,14 +753,24 @@ func (agent *ActionAgent) hookExtraEnv() map[string]string {
 // The actionMutex lock must be held when calling this function.
 func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topodatapb.Tablet) *topodatapb.Tablet {
 	agent.checkLock()
-	mport, err := agent.MysqlDaemon.GetMysqlPort()
-	if err != nil {
-		// Only log the first time, so we don't spam the logs.
-		if !agent.waitingForMysql {
-			log.Warningf("Cannot get current mysql port, not checking it (will retry at healthcheck interval): %v", err)
-			agent.waitingForMysql = true
+
+	var mport int32
+
+	// If we have stored an advertise port, just assume that.
+	// Otherwise, ask mysqld (presumably over unix socket) what its port is.
+	if agent.mysqlAdvertisePort > 0 {
+		mport = agent.mysqlAdvertisePort
+	} else {
+		var err error
+		mport, err = agent.MysqlDaemon.GetMysqlPort()
+		if err != nil {
+			// Only log the first time, so we don't spam the logs.
+			if !agent.waitingForMysql {
+				log.Warningf("Cannot get current mysql port, not checking it (will retry at healthcheck interval): %v", err)
+				agent.waitingForMysql = true
+			}
+			return nil
 		}
-		return nil
 	}
 
 	if mport == topoproto.MysqlPort(tablet) {
