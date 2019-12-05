@@ -111,7 +111,7 @@ func (bps *Stats) MessageHistory() []string {
 func NewStats() *Stats {
 	bps := &Stats{}
 	bps.Timings = stats.NewTimings("", "", "")
-	bps.Rates = stats.NewRates("", bps.Timings, 15, 60e9)
+	bps.Rates = stats.NewRates("", bps.Timings, 15*60/5, 5*time.Second)
 	bps.History = history.New(3)
 	bps.SecondsBehindMaster.Set(math.MaxInt64)
 	return bps
@@ -202,6 +202,7 @@ func (blp *BinlogPlayer) applyEvents(ctx context.Context) error {
 		log.Error(err)
 		return err
 	}
+
 	blp.position = settings.StartPos
 	blp.stopPosition = settings.StopPos
 	t, err := throttler.NewThrottler(
