@@ -107,8 +107,8 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	vttablet.proc.Args = append(vttablet.proc.Args, vttablet.ExtraArgs...)
 
-	vttablet.proc.Stderr = os.Stderr
-	vttablet.proc.Stdout = os.Stdout
+	errFile, _ := os.Create(path.Join(vttablet.LogDir, vttablet.TabletPath+"-vttablet-stderr.txt"))
+	vttablet.proc.Stderr = errFile
 
 	vttablet.proc.Env = append(vttablet.proc.Env, os.Environ()...)
 

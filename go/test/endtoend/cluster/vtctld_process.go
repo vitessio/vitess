@@ -76,8 +76,8 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 	)
 	vtctld.proc.Args = append(vtctld.proc.Args, extraArgs...)
 
-	vtctld.proc.Stderr = os.Stderr
-	vtctld.proc.Stdout = os.Stdout
+	errFile, _ := os.Create(path.Join(vtctld.LogDir, "vtctld-stderr.txt"))
+	vtctld.proc.Stderr = errFile
 
 	vtctld.proc.Env = append(vtctld.proc.Env, os.Environ()...)
 

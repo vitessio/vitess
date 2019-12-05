@@ -357,44 +357,40 @@ func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error
 }
 
 // Teardown brings down the cluster by invoking teardown for individual processes
-func (cluster *LocalProcessCluster) Teardown() (err error) {
-	if err = cluster.VtgateProcess.TearDown(); err != nil {
-		log.Error(err.Error())
-		return
+func (cluster *LocalProcessCluster) Teardown() {
+	if err := cluster.VtgateProcess.TearDown(); err != nil {
+		log.Errorf("Error in vtgate teardown - %s", err.Error())
 	}
 	mysqlctlProcessList := []*exec.Cmd{}
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {
 			for _, tablet := range shard.Vttablets {
 				if proc, err := tablet.MysqlctlProcess.StopProcess(); err != nil {
-					log.Error(err.Error())
-					return err
+					log.Errorf("Error in mysqlctl teardown - %s", err.Error())
 				} else {
 					mysqlctlProcessList = append(mysqlctlProcessList, proc)
 				}
 
-				if err = tablet.VttabletProcess.TearDown(); err != nil {
-					log.Error(err.Error())
-					return
+				if err := tablet.VttabletProcess.TearDown(); err != nil {
+					log.Errorf("Error in vttablet teardown - %s", err.Error())
 				}
 			}
 		}
 	}
 
 	for _, proc := range mysqlctlProcessList {
-		proc.Wait()
+		if err := proc.Wait(); err != nil {
+			log.Errorf("Error in mysqlctl teardown wait - %s", err.Error())
+		}
 	}
 
-	if err = cluster.VtctldProcess.TearDown(); err != nil {
-		log.Error(err.Error())
-		return
+	if err := cluster.VtctldProcess.TearDown(); err != nil {
+		log.Errorf("Error in vtctld teardown - %s", err.Error())
 	}
 
-	if err = cluster.TopoProcess.TearDown(cluster.Cell, cluster.OriginalVTDATAROOT, cluster.CurrentVTDATAROOT, *keepData); err != nil {
-		log.Error(err.Error())
-		return
+	if err := cluster.TopoProcess.TearDown(cluster.Cell, cluster.OriginalVTDATAROOT, cluster.CurrentVTDATAROOT, *keepData); err != nil {
+		log.Errorf("Error in etcd teardown - %s", err.Error())
 	}
-	return err
 }
 
 // GetAndReservePort gives port for required process
