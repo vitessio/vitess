@@ -18,9 +18,9 @@ package wrangler
 
 import (
 	"fmt"
-	"html/template"
 	"strings"
 	"sync"
+	"text/template"
 
 	"golang.org/x/net/context"
 
@@ -42,7 +42,6 @@ type materializer struct {
 	targetVSchema *vindexes.KeyspaceSchema
 	sourceShards  []*topo.ShardInfo
 	targetShards  []*topo.ShardInfo
-	inserts       string
 }
 
 // Materialize performs the steps needed to materialize a list of tables based on the materialization specs.
@@ -76,10 +75,9 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 	if err != nil {
 		return nil, err
 	}
-	for _, ts := range ms.TableSettings {
-		_, ok := targetVSchema.Tables[ts.TargetTable]
-		if !ok {
-			if targetVSchema.Keyspace.Sharded {
+	if targetVSchema.Keyspace.Sharded {
+		for _, ts := range ms.TableSettings {
+			if targetVSchema.Tables[ts.TargetTable] == nil {
 				return nil, fmt.Errorf("table %s not found in vschema for keyspace %s", ts.TargetTable, ms.TargetKeyspace)
 			}
 		}
@@ -92,11 +90,6 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 	targetShards, err := wr.ts.GetServingShards(ctx, ms.TargetKeyspace)
 	if err != nil {
 		return nil, err
-	}
-	for _, target := range targetShards {
-		if target.MasterAlias == nil {
-			return nil, fmt.Errorf("target shard must have a master: %v", target.ShardName())
-		}
 	}
 	return &materializer{
 		wr:            wr,
@@ -156,7 +149,7 @@ func (mz *materializer) deploySchema(ctx context.Context) error {
 }
 
 func (mz *materializer) generateInserts(ctx context.Context) (string, error) {
-	ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, "{{dbname}}")
+	ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, "{{.dbname}}")
 
 	for _, source := range mz.sourceShards {
 		bls := &binlogdatapb.BinlogSource{
@@ -168,15 +161,16 @@ func (mz *materializer) generateInserts(ctx context.Context) (string, error) {
 			rule := &binlogdatapb.Rule{
 				Match: ts.TargetTable,
 			}
+			// Validate the query.
+			stmt, err := sqlparser.Parse(ts.SourceExpression)
+			if err != nil {
+				return "", err
+			}
+			sel, ok := stmt.(*sqlparser.Select)
+			if !ok {
+				return "", fmt.Errorf("unrecognized statement: %s", ts.SourceExpression)
+			}
 			if mz.targetVSchema.Keyspace.Sharded && mz.targetVSchema.Tables[ts.TargetTable].Type != vindexes.TypeReference {
-				stmt, err := sqlparser.Parse(ts.SourceExpression)
-				if err != nil {
-					return "", err
-				}
-				sel, ok := stmt.(*sqlparser.Select)
-				if !ok {
-					return "", fmt.Errorf("unrecognized statement: %s", ts.SourceExpression)
-				}
 				cv, err := vindexes.FindBestColVindex(mz.targetVSchema.Tables[ts.TargetTable])
 				if err != nil {
 					return "", err
@@ -195,7 +189,7 @@ func (mz *materializer) generateInserts(ctx context.Context) (string, error) {
 				}
 				vindexName := fmt.Sprintf("%s.%s", mz.ms.TargetKeyspace, cv.Name)
 				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte(vindexName))})
-				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte("'{{keyrange}}'"))})
+				subExprs = append(subExprs, &sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte("'{{.keyrange}}'"))})
 				sel.Where = &sqlparser.Where{
 					Type: sqlparser.WhereStr,
 					Expr: &sqlparser.FuncExpr{
@@ -271,7 +265,7 @@ func (mz *materializer) startStreams(ctx context.Context) error {
 		if err != nil {
 			return vterrors.Wrapf(err, "GetTablet(%v) failed", target.MasterAlias)
 		}
-		query := fmt.Sprintf("update _vt.vreplication set state='Running' where db_name=%s", encodeString(targetMaster.DbName()))
+		query := fmt.Sprintf("update _vt.vreplication set state='Running' where db_name=%s and workflow=%s", encodeString(targetMaster.DbName()), encodeString(mz.ms.Workflow))
 		if _, err := mz.wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, query); err != nil {
 			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", targetMaster.Tablet, query)
 		}
