@@ -114,7 +114,6 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	vttablet.proc.Env = append(vttablet.proc.Env, os.Environ()...)
 
-	println(fmt.Sprintf("%v", vttablet.proc.Args))
 	log.Infof("%v %v", strings.Join(vttablet.proc.Args, " "))
 
 	err = vttablet.proc.Start()
@@ -129,14 +128,15 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		}
 	}()
 
-	err = vttablet.WaitForTabletType(vttablet.ServingStatus)
-	if err != nil {
-		return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vttablet.Name, <-vttablet.exit)
+	if vttablet.ServingStatus != "" {
+		if err = vttablet.WaitForTabletType(vttablet.ServingStatus); err != nil {
+			return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vttablet.Name, <-vttablet.exit)
+		}
 	}
 	return nil
 }
 
-// GetStatus function checks if vttablet process is up and running
+// GetStatus returns /debug/status endpoint result
 func (vttablet *VttabletProcess) GetStatus() string {
 	URL := fmt.Sprintf("http://%s:%d/debug/status", vttablet.TabletHostname, vttablet.Port)
 	resp, err := http.Get(URL)
@@ -169,12 +169,12 @@ func (vttablet *VttabletProcess) GetVars() map[string]interface{} {
 	return nil
 }
 
-// WaitForStatus function checks if vttablet process is up and running
+// WaitForStatus waits till desired status of tablet is reached
 func (vttablet *VttabletProcess) WaitForStatus(status string) bool {
 	return vttablet.GetTabletStatus() == status
 }
 
-// GetTabletStatus function checks if vttablet process is up and running
+// GetTabletStatus returns the tablet state as seen in /debug/vars TabletStateName
 func (vttablet *VttabletProcess) GetTabletStatus() string {
 	resultMap := vttablet.GetVars()
 	if resultMap != nil {

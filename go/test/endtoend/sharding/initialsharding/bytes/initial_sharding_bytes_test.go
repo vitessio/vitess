@@ -23,7 +23,7 @@ import (
 	"testing"
 
 	sharding "vitess.io/vitess/go/test/endtoend/sharding/initialsharding"
-	"vitess.io/vitess/go/vt/proto/topodata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestInitialShardingBytes(t *testing.T) {
@@ -31,6 +31,6 @@ func TestInitialShardingBytes(t *testing.T) {
 	if err != nil {
 		t.Errorf("setup failed with status code %d", code)
 	}
-	sharding.TestInitialSharding(t, &sharding.ClusterInstance.Keyspaces[0], topodata.KeyspaceIdType_BYTES, false, false, false)
+	sharding.TestInitialSharding(t, &sharding.ClusterInstance.Keyspaces[0], querypb.Type_VARBINARY, false, false, false)
 	defer sharding.ClusterInstance.Teardown()
 }

@@ -39,7 +39,7 @@ var (
 	lotRange2 uint64 = 0xE000000000000000
 	// InsertTabletTemplateKsID common insert format to be used for different tests
 	//
-	InsertTabletTemplateKsID = `insert into %s (id, msg) values (%d, '%s') /* vtgate:: keyspace_id:%016X */ /* id:%d */`
+	InsertTabletTemplateKsID = `insert into %s (id, msg) values (%d, '%s') /* id:%d */`
 )
 
 // CheckSrvKeyspace verifies the schema with expectedPartition
@@ -128,9 +128,9 @@ func getValueFromJSON(jsonMap map[string]interface{}, keyname string, tableName 
 }
 
 // CheckValues check value from sql query to table with expected values
-func CheckValues(t *testing.T, vttablet cluster.Vttablet, id uint64, msg string, exists bool, tableName string, ks string, keyType topodata.KeyspaceIdType) bool {
+func CheckValues(t *testing.T, vttablet cluster.Vttablet, id uint64, msg string, exists bool, tableName string, ks string, keyType querypb.Type) bool {
 	query := fmt.Sprintf("select id, msg from %s where id = %d", tableName, id)
-	if keyType == topodata.KeyspaceIdType_BYTES {
+	if keyType == querypb.Type_VARBINARY {
 		query = fmt.Sprintf("select id, msg from %s where id = '%d'", tableName, id)
 	}
 
@@ -138,7 +138,7 @@ func CheckValues(t *testing.T, vttablet cluster.Vttablet, id uint64, msg string,
 	assert.Nil(t, err)
 	isFound := false
 	if exists && len(result.Rows) > 0 {
-		if keyType == topodata.KeyspaceIdType_BYTES {
+		if keyType == querypb.Type_VARBINARY {
 			isFound = assert.Equal(t, fmt.Sprintf("%v", result.Rows), fmt.Sprintf(`[[VARBINARY("%d") VARCHAR("%s")]]`, id, msg))
 		} else {
 			isFound = assert.Equal(t, fmt.Sprintf("%v", result.Rows), fmt.Sprintf(`[[UINT64(%d) VARCHAR("%s")]]`, id, msg))
@@ -252,8 +252,8 @@ func InsertLots(count uint64, vttablet cluster.Vttablet, table string, ks string
 	var query1, query2 string
 	var i uint64
 	for i = 0; i < count; i++ {
-		query1 = fmt.Sprintf(InsertTabletTemplateKsID, table, lotRange1+i, fmt.Sprintf("msg-range1-%d", 10000+i), lotRange1+i, lotRange1+i)
-		query2 = fmt.Sprintf(InsertTabletTemplateKsID, table, lotRange2+i, fmt.Sprintf("msg-range2-%d", 20000+i), lotRange2+i, lotRange2+i)
+		query1 = fmt.Sprintf(InsertTabletTemplateKsID, table, lotRange1+i, fmt.Sprintf("msg-range1-%d", 10000+i), lotRange1+i)
+		query2 = fmt.Sprintf(InsertTabletTemplateKsID, table, lotRange2+i, fmt.Sprintf("msg-range2-%d", 20000+i), lotRange2+i)
 
 		InsertToTablet(query1, vttablet, ks)
 		InsertToTablet(query2, vttablet, ks)
@@ -268,7 +268,7 @@ func InsertToTablet(query string, vttablet cluster.Vttablet, ks string) {
 }
 
 // CheckLotsTimeout waits till all values are inserted
-func CheckLotsTimeout(t *testing.T, vttablet cluster.Vttablet, count uint64, table string, ks string, keyType topodata.KeyspaceIdType, pctFound int) bool {
+func CheckLotsTimeout(t *testing.T, vttablet cluster.Vttablet, count uint64, table string, ks string, keyType querypb.Type, pctFound int) bool {
 	timeout := time.Now().Add(10 * time.Second)
 	var percentFound float64
 	for time.Now().Before(timeout) {
@@ -283,7 +283,7 @@ func CheckLotsTimeout(t *testing.T, vttablet cluster.Vttablet, count uint64, tab
 }
 
 // CheckLotsNotPresent verifies that no rows should be present in vttablet
-func CheckLotsNotPresent(t *testing.T, vttablet cluster.Vttablet, count uint64, table string, ks string, keyType topodata.KeyspaceIdType) {
+func CheckLotsNotPresent(t *testing.T, vttablet cluster.Vttablet, count uint64, table string, ks string, keyType querypb.Type) {
 	var i uint64
 	for i = 0; i < count; i++ {
 		assert.False(t, CheckValues(t, vttablet,
@@ -294,7 +294,7 @@ func CheckLotsNotPresent(t *testing.T, vttablet cluster.Vttablet, count uint64, 
 	}
 }
 
-func checkLots(t *testing.T, vttablet cluster.Vttablet, count uint64, table string, ks string, keyType topodata.KeyspaceIdType) float64 {
+func checkLots(t *testing.T, vttablet cluster.Vttablet, count uint64, table string, ks string, keyType querypb.Type) float64 {
 	var isFound bool
 	var totalFound int
 	var i uint64

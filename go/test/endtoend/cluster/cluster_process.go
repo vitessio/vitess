@@ -306,7 +306,7 @@ func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 	return cluster.VtgateProcess.Setup()
 }
 
-// StartVtgate starts vtgate
+// GetVtgateInstance returns an instance of vtgateprocess
 func (cluster *LocalProcessCluster) GetVtgateInstance() *VtgateProcess {
 	vtgateHTTPPort := cluster.GetAndReservePort()
 	vtgateGrpcPort := cluster.GetAndReservePort()
@@ -391,7 +391,6 @@ func (cluster *LocalProcessCluster) Teardown() (err error) {
 			for _, tablet := range shard.Vttablets {
 				if proc, err := tablet.MysqlctlProcess.StopProcess(); err != nil {
 					log.Error(err.Error())
-					return err
 				} else {
 					mysqlctlProcessList = append(mysqlctlProcessList, proc)
 				}

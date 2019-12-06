@@ -32,7 +32,7 @@ import (
 	"testing"
 
 	sharding "vitess.io/vitess/go/test/endtoend/sharding/initialsharding"
-	"vitess.io/vitess/go/vt/proto/topodata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestInitialShardingMulti(t *testing.T) {
@@ -41,11 +41,11 @@ func TestInitialShardingMulti(t *testing.T) {
 		t.Errorf("setup failed with status code %d", code)
 	}
 	sharding.AssignMysqlPortFromKs1ToKs2()
-	sharding.TestInitialSharding(t, &sharding.ClusterInstance.Keyspaces[0], topodata.KeyspaceIdType_UINT64, true, false, false)
+	sharding.TestInitialSharding(t, &sharding.ClusterInstance.Keyspaces[0], querypb.Type_UINT64, true, false, false)
 	println("-----------------------------")
 	println("Done with 1st keyspace test")
 	println("-----------------------------")
-	sharding.TestInitialSharding(t, &sharding.ClusterInstance.Keyspaces[1], topodata.KeyspaceIdType_UINT64, true, true, false)
+	sharding.TestInitialSharding(t, &sharding.ClusterInstance.Keyspaces[1], querypb.Type_UINT64, true, true, false)
 	println("----------Done with 2nd keyspace test----------")
 	if len(sharding.VtgateInstances) > 0 {
 		for _, vtgateInstance := range sharding.VtgateInstances {
