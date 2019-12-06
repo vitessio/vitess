@@ -38,7 +38,6 @@ function fail() {
 
 # Create main directories.
 
-VTROOT="$PWD"
 source ./dev.env
 
 # install_dep is a helper function to generalize the download and installation of dependencies.
