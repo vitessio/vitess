@@ -63,6 +63,10 @@ RUN cd /vt/src/vitess.io/vitess && \
 # Create mount point for actual data (e.g. MySQL data dir)
 VOLUME /vt/vtdataroot
 
+# The docker lite images copy from the builder in /vt/bin
+# Add compatibility to the previous layout for now
+RUN su vitess -c "mkdir -p /vt/src/vitess.io/vitess/bin && rm -rf /vt/bin && ln -s /vt/src/vitess.io/vitess/bin /vt/bin"
+
 # If the user doesn't specify a command, load a shell.
 CMD ["/bin/bash"]
 
