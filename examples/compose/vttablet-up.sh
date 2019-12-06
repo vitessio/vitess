@@ -68,8 +68,6 @@ if [ $tablet_role != "master" ]; then
         echo "CREATE DATABASE IF NOT EXISTS $db_name;" >> $init_db_sql_file
     fi
 fi
-# Enforce Row Based Replication
-export EXTRA_MY_CNF=$VTROOT/config/mycnf/default-fast.cnf:$VTROOT/config/mycnf/rbr.cnf
 
 mkdir -p $VTDATAROOT/backups
 
