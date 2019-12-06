@@ -37,6 +37,7 @@ type MysqlctlProcess struct {
 	TabletUID    int
 	MySQLPort    int
 	InitDBFile   string
+	ExtraArgs    []string
 }
 
 // InitDb executes mysqlctl command to add cell info
@@ -109,8 +110,12 @@ func (mysqlctl *MysqlctlProcess) StopProcess() (*exec.Cmd, error) {
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
 		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
-		"shutdown",
 	)
+	if len(mysqlctl.ExtraArgs) > 0 {
+		tmpProcess.Args = append(tmpProcess.Args, mysqlctl.ExtraArgs...)
+	}
+	tmpProcess.Args = append(tmpProcess.Args, "shutdown")
+	fmt.Printf("%v", tmpProcess.Args)
 	return tmpProcess, tmpProcess.Start()
 }
 

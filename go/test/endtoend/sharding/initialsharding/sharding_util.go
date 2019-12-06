@@ -171,7 +171,9 @@ func initClusterForInitialSharding(keyspaceName string, shardNames []string, tot
 
 			if isMulti {
 				tablet.MysqlctlProcess.InitDBFile = newInitDbFile
+				tablet.MysqlctlProcess.ExtraArgs = extraArgs
 			}
+			// Start Mysqlctl process, for multi keyspace we need only 1st keyspace sql procs, that is why this check is added
 			if keyspaceName == keyspaceName1 {
 				if proc, err := tablet.MysqlctlProcess.StartWithArgs(path.Join(os.Getenv("VTROOT"), "config", "mycnf", "rbr.cnf"), extraArgs...); err != nil {
 					return

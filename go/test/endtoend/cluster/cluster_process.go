@@ -388,12 +388,13 @@ func (cluster *LocalProcessCluster) Teardown() {
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {
 			for _, tablet := range shard.Vttablets {
-				if proc, err := tablet.MysqlctlProcess.StopProcess(); err != nil {
-					log.Errorf("Error in mysqlctl teardown - %s", err.Error())
-				} else {
-					mysqlctlProcessList = append(mysqlctlProcessList, proc)
+				if tablet.MysqlctlProcess.TabletUID > 0 {
+					if proc, err := tablet.MysqlctlProcess.StopProcess(); err != nil {
+						log.Errorf("Error in mysqlctl teardown - %s", err.Error())
+					} else {
+						mysqlctlProcessList = append(mysqlctlProcessList, proc)
+					}
 				}
-
 				if err := tablet.VttabletProcess.TearDown(); err != nil {
 					log.Errorf("Error in vttablet teardown - %s", err.Error())
 				}
@@ -486,7 +487,7 @@ func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatu
 		cluster.TmpDirectory,
 		cluster.VtTabletExtraArgs,
 		cluster.EnableSemiSync)
-  
+
 	tablet.VttabletProcess.SupportsBackup = supportBackup
 	tablet.VttabletProcess.ServingStatus = servingStatus
 	return tablet.VttabletProcess.Setup()
