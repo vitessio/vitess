@@ -170,16 +170,17 @@ if [[ -z "$existing_cache_image" ]]; then
 fi
 
 # Reset the environment if this was an old bootstrap. We can detect this from VTTOP presence.
-bashcmd=$(append_cmd "$bashcmd" "[ -v VTTOP ] && export VTROOT=/vt/src/vitess.io/vitess && export VTDATAROOT=/vt/vtdataroot")
+bashcmd=$(append_cmd "$bashcmd" "export VTROOT=/vt/src/vitess.io/vitess")
+bashcmd=$(append_cmd "$bashcmd" "export VTDATAROOT=/vt/vtdataroot")
+bashcmd=$(append_cmd "$bashcmd" "export PYTHONPATH=/vt/src/vitess.io/vitess/dist/grpc/usr/local/lib/python2.7/site-packages:/vt/src/vitess.io/vitess/dist/py-mock-1.0.1/lib/python2.7/site-packages:/vt/src/vitess.io/vitess/py-vtdb:/vt/src/vitess.io/vitess/dist/selenium/lib/python2.7/site-packages")
 
 # Maven is setup in /vt/dist, need to move it.
-bashcmd=$(append_cmd "$bashcmd" "[ -v VTTOP ] && mkdir -p /vt/src/vitess.io/vitess/dist && mv /vt/dist/* /vt/src/vitess.io/vitess/dist")
-bashcmd=$(append_cmd "$bashcmd" "[ -v VTTOP ] && ln -s /vt/src/vitess.io/vitess/dist /vt/dist")
+bashcmd=$(append_cmd "$bashcmd" "mkdir -p /vt/src/vitess.io/vitess/dist; mv /vt/dist/* /vt/src/vitess.io/vitess/dist")
 
-bashcmd=$(append_cmd "$bashcmd" "[ -v VTTOP ] && rm -rf /vt/bin  && ln -s /vt/src/vitess.io/vitess/bin /vt/bin")
-bashcmd=$(append_cmd "$bashcmd" "[ -v VTTOP ] && rm -rf /vt/lib  && ln -s /vt/src/vitess.io/vitess/lib /vt/lib")
-bashcmd=$(append_cmd "$bashcmd" "[ -v VTTOP ] && rm -rf /vt/vthook && ln -s /vt/src/vitess.io/vitess/vthook /vt/vthook")
-bashcmd=$(append_cmd "$bashcmd" "[ -v VTTOP ] && export PYTHONPATH=/vt/src/vitess.io/vitess/dist/grpc/usr/local/lib/python2.7/site-packages:/vt/src/vitess.io/vitess/dist/py-mock-1.0.1/lib/python2.7/site-packages:/vt/src/vitess.io/vitess/py-vtdb:/vt/src/vitess.io/vitess/dist/selenium/lib/python2.7/site-packages")
+bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/dist; ln -s /vt/src/vitess.io/vitess/dist /vt/dist")
+bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/bin; ln -s /vt/src/vitess.io/vitess/bin /vt/bin")
+bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/lib; ln -s /vt/src/vitess.io/vitess/lib /vt/lib")
+bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/vthook; ln -s /vt/src/vitess.io/vitess/vthook /vt/vthook")
 
 # etcd is broken in the bootstrap image.
 bashcmd=$(append_cmd "$bashcmd" "which etcdctl || rm -rf /vt/src/vitess.io/vitess/dist/etcd* && rm -rf /vt/src/vitess.io/vitess/bin/etcd*")
@@ -187,11 +188,7 @@ bashcmd=$(append_cmd "$bashcmd" "which etcdctl || rm -rf /vt/src/vitess.io/vites
 # These were broken somehow
 bashcmd=$(append_cmd "$bashcmd" "which protoc || rm -rf /vt/src/vitess.io/vitess/dist/vt-protoc-3.6.1")
 bashcmd=$(append_cmd "$bashcmd" "which consul || rm -rf /vt/src/vitess.io/vitess/dist/consul")
-
-bashcmd=$(append_cmd "$bashcmd" "[ -v VTTOP ] && unset VTTOP")
-
-# Need to re-add PATH for now as well
-bashcmd=$(append_cmd "$bashcmd" "export PATH=/vt/src/vitess.io/vitess/bin:/vt/src/vitess.io/vitess/dist/maven/bin:/vt/src/vitess.io/vitess/dist/chromedriver:/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+bashcmd=$(append_cmd "$bashcmd" "unset VTTOP")
 
 # Run bootstrap every time now
 bashcmd=$(append_cmd "$bashcmd" "./bootstrap.sh")
