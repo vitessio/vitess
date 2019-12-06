@@ -48,7 +48,7 @@ function append_cmd() {
   local cmd="$1"
   local append="$2"
   if [[ -n "$cmd" ]]; then
-    cmd+=" && "
+    cmd+=" ; "
   fi
   cmd+="$append"
   echo "$cmd"
@@ -181,7 +181,8 @@ bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/lib; ln -s /vt/src/vitess.io/vitess/
 bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/vthook; ln -s /vt/src/vitess.io/vitess/vthook /vt/vthook")
 
 # Maven was setup in /vt/dist, may need to reinstall it.
-bashcmd=$(append_cmd "$bashcmd" "command -v mvn || curl -sL --connect-timeout 10 --retry 3 http://www-us.apache.org/dist/maven/maven-3/3.3.9/binaries/apache-maven-3.3.9-bin.tar.gz | tar -xz && mv apache-maven-3.3.9 dist/maven")
+bashcmd=$(append_cmd "$bashcmd" "echo 'Checking if mvn needs installing...'")
+bashcmd=$(append_cmd "$bashcmd" "command -v mvn || echo 'Fetching maven...' && curl -sL --connect-timeout 10 --retry 3 http://www-us.apache.org/dist/maven/maven-3/3.3.9/binaries/apache-maven-3.3.9-bin.tar.gz | tar -xz && mv apache-maven-3.3.9 /vt/dist/maven")
 
 # Run bootstrap every time now
 bashcmd=$(append_cmd "$bashcmd" "./bootstrap.sh")
