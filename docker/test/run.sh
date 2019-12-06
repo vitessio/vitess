@@ -48,7 +48,7 @@ function append_cmd() {
   local cmd="$1"
   local append="$2"
   if [[ -n "$cmd" ]]; then
-    cmd+=" ; "
+    cmd+=" && "
   fi
   cmd+="$append"
   echo "$cmd"
