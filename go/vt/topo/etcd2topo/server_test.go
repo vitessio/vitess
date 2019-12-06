@@ -106,13 +106,13 @@ func startEtcdWithTLS(t *testing.T) (*exec.Cmd, string, string) {
 	// Get our two ports to listen to.
 	port := testfiles.GoVtTopoEtcd2topoPort
 	name := "vitess_unit_test"
-	clientAddr := fmt.Sprintf("http://localhost:%v", port)
+	clientAddr := fmt.Sprintf("https://localhost:%v", port)
 	peerAddr := fmt.Sprintf("http://localhost:%v", port+1)
 	initialCluster := fmt.Sprintf("%v=%v", name, peerAddr)
 
 	// Generate cert and key in /tmp
 	err = exec.Command("openssl", "req", "-new", "-newkey", "rsa:4096", "-days", "365", "-nodes", "-x509",
-		"-subj", "/C=US/ST=Denial/L=Springfield/O=Dis/CN=www.example.com",
+		"-subj", "/C=US/ST=Denial/L=Springfield/O=Dis/CN=127.0.0.1",
 		"-keyout", testKeyPath, "-out", testCertPath).Run()
 	if err != nil {
 		t.Fatalf("unable to generate test key and cert using openssl: %v", err)
@@ -137,7 +137,7 @@ func startEtcdWithTLS(t *testing.T) (*exec.Cmd, string, string) {
 	tlsInfo := transport.TLSInfo{
 		CertFile:   testCertPath,
 		KeyFile:    testKeyPath,
-		TrustedCAFile: *caPath,
+		TrustedCAFile: testCertPath,
 	}
 
 	tlsConfig, err := tlsInfo.ClientConfig()
@@ -172,26 +172,24 @@ func startEtcdWithTLS(t *testing.T) (*exec.Cmd, string, string) {
 func TestEtcd2TLS(t *testing.T) {
 	// Start a single etcd in the background.
 	cmd, dataDir, clientAddr := startEtcdWithTLS(t)
-	defer func() {
-		cmd.Process.Kill()
-		cmd.Wait()
-		os.RemoveAll(dataDir)
-	}()
-
 	testIndex := 0
 	testRoot := fmt.Sprintf("/test-%v", testIndex)
+
 	// Create the server on the new root.
 	server, err := NewServerWithOpts(clientAddr, testRoot, &testCertPath, &testKeyPath, &testCertPath)
 	if err != nil {
 		t.Fatalf("NewServerWithOpts failed: %v", err)
 	}
-
 	client := server.cli
-	// If TLS is not setup correctly, this will fail
-	_, err = client.Dial(clientAddr)
-	if err != nil {
-		t.Fatalf("Failed to connect to server: %v", err)
-	}
+
+	defer func() {
+		cmd.Process.Kill()
+		cmd.Wait()
+		os.RemoveAll(dataDir)
+		server.Close()
+		client.Close()
+	}()
+
 
 	testCtx := context.Background()
 	testKey := "testkey"
@@ -207,8 +205,6 @@ func TestEtcd2TLS(t *testing.T) {
 	if len(val.Kvs) == 1 && string(val.Kvs[0].Value) != testVal {
 		t.Fatalf("Value returned doesn't match %s, err: %v", testVal, err)
 	}
-	client.Close()
-	server.Close()
 }
 
 func TestEtcd2Topo(t *testing.T) {

@@ -36,10 +36,11 @@ package etcd2topo
 import (
 	"crypto/tls"
 	"flag"
-	"github.com/coreos/etcd/pkg/transport"
 	"io/ioutil"
 	"strings"
 	"time"
+
+	"github.com/coreos/etcd/pkg/transport"
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/coreos/etcd/clientv3"
@@ -47,9 +48,9 @@ import (
 )
 
 var (
-	certPath = flag.String("topo_etcd2_tls_cert", "", "the cert to use to connect to the etcd topo server, requires topo_etcd2_tls_key, enables TLS")
-	keyPath = flag.String("topo_etcd2_tls_key", "", "the key to use to connect to the etcd topo server, enables TLS")
-	caPath  = flag.String("topo_etcd2_tls_ca", "", "the server ca to use to validate servers when connecting to the etcd topo server")
+	clientCertPath = flag.String("topo_etcd2_tls_cert", "", "the client cert to use to connect to the etcd topo server, requires topo_etcd2_tls_key, enables TLS")
+	clientKeyPath  = flag.String("topo_etcd2_tls_key", "", "the client key to use to connect to the etcd topo server, enables TLS")
+	clientCaPath   = flag.String("topo_etcd2_tls_ca", "", "the ca to use to validate clients when connecting to the etcd topo server")
 )
 
 // Factory is the consul topo.Factory implementation.
@@ -83,9 +84,9 @@ func (s *Server) Close() {
 }
 
 // TODO: Rename this to NewServer and change NewServer to a name that signifies it's global.
-func NewServerWithOpts(serverAddr, root string, certPath *string, keyPath *string, caPath *string) (*Server, error){
+func NewServerWithOpts(serverAddr, root string, certPath *string, keyPath *string, caPath *string) (*Server, error) {
 	config := clientv3.Config{
-		Endpoints:  strings.Split(serverAddr, ","),
+		Endpoints:   strings.Split(serverAddr, ","),
 		DialTimeout: 5 * time.Second,
 	}
 
@@ -105,8 +106,8 @@ func NewServerWithOpts(serverAddr, root string, certPath *string, keyPath *strin
 
 		// Safe now to build up TLS info.
 		tlsInfo := transport.TLSInfo{
-			CertFile:   *certPath,
-			KeyFile:    *keyPath,
+			CertFile:      *certPath,
+			KeyFile:       *keyPath,
 			TrustedCAFile: *caPath,
 		}
 
@@ -131,7 +132,7 @@ func NewServerWithOpts(serverAddr, root string, certPath *string, keyPath *strin
 // TODO: Rename this to a name to signifies this is a global etcd server.
 // NewServer returns a new etcdtopo.Server.
 func NewServer(serverAddr, root string) (*Server, error) {
-	return NewServerWithOpts(serverAddr, root, certPath, keyPath, caPath)
+	return NewServerWithOpts(serverAddr, root, clientCertPath, clientKeyPath, clientCaPath)
 }
 
 func init() {
