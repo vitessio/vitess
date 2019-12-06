@@ -459,11 +459,13 @@ func TestReSharding(t *testing.T) {
 
 	// Check that the throttler was enabled.
 	// The stream id is hard-coded as 1, which is the first id generated through auto-inc.
-	//TODO: to complete
-	//sharding.CheckThrottlerService(t, *shard2.MasterTablet(), ['BinlogPlayer/1'], 9999)
-	//sharding.CheckThrottlerService(t, *shard3.MasterTablet(), ['BinlogPlayer/1'], 9999)
-	//self.check_throttler_service(shard_2_master.rpc_endpoint(),
-	//['BinlogPlayer/1'], 9999)
+	//TODO: Work in progress
+	//sharding.CheckThrottlerService(t, fmt.Sprintf("%s:%d", hostname, shard2Master.GrpcPort),
+	//	[]string{"BinlogPlayer/1"}, 9999, *clusterInstance)
+	//sharding.CheckThrottlerService(t, fmt.Sprintf("%s:%d", hostname, shard3Master.GrpcPort),
+	//	[]string{"BinlogPlayer/1"}, 9999, *clusterInstance)
+	//fmt.Println("waiting.....")
+	//time.Sleep(5*time.Minute)
 
 	// testing filtered replication: insert a bunch of data on shard 1,
 	// check we get most of it after a few seconds, wait for binlog server

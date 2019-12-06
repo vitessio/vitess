@@ -39,10 +39,10 @@ import (
 )
 
 var (
-	lotRange1 uint64 = 0xA000000000000000
-	lotRange2 uint64 = 0xE000000000000000
+	lotRange1 uint64 = 14987979559889010670 //11529215046068469760 // 0xA000000000000000 //key5
+	lotRange2 uint64 = 10376293541461622789 //16140901064495857664 // 0xE000000000000000 //key4
 	// InsertTabletTemplateKsID common insert format to be used for different tests
-	InsertTabletTemplateKsID = `insert into %s (parent_id, id, msg, custom_ksid_col) values (%d, %d, '%s', 0x%x) /* vtgate:: keyspace_id:%016X */ /* id:%d */`
+	InsertTabletTemplateKsID = `insert into %s (parent_id, id, msg, custom_ksid_col) values (%d, %d, '%s', %d) /* vtgate:: keyspace_id:%d */ /* id:%d */`
 )
 
 // CheckSrvKeyspace verifies the schema with expectedPartition
@@ -274,9 +274,9 @@ func InsertLots(count uint64, base uint64, vttablet cluster.Vttablet, table stri
 	var i uint64
 	for i = 0; i < count; i++ {
 		query1 = fmt.Sprintf(InsertTabletTemplateKsID, table, parentID, 10000+base+i,
-			fmt.Sprintf("msg-range1-%d", 10000+base+i), lotRange1+base+i, lotRange1+base+i, 10000+base+i)
+			fmt.Sprintf("msg-range1-%d", 10000+base+i), lotRange1+i, lotRange1+i, 10000+base+i)
 		query2 = fmt.Sprintf(InsertTabletTemplateKsID, table, parentID, 20000+base+i,
-			fmt.Sprintf("msg-range2-%d", 20000+base+i), lotRange2+base+i, lotRange2+base+i, 20000+base+i)
+			fmt.Sprintf("msg-range2-%d", 20000+base+i), lotRange2+i, lotRange2+i, 20000+base+i)
 
 		InsertToTabletUsingSameConn(query1, vttablet, ks, dbConn)
 		InsertToTabletUsingSameConn(query2, vttablet, ks, dbConn)
@@ -309,8 +309,8 @@ func InsertMultiValueToTablet(tablet cluster.Vttablet, keyspaceName string, tabl
 	keyspaceIds := ""
 	valueIds := ""
 	for i := range ids {
-		valueSQL += fmt.Sprintf(`(%d, %d, "%s", 0x%x)`, fixedParentID, ids[i], msgs[i], ksIDs[i])
-		keyspaceIds += fmt.Sprintf("%016X", ksIDs[i])
+		valueSQL += fmt.Sprintf(`(%d, %d, "%s", %d)`, fixedParentID, ids[i], msgs[i], ksIDs[i])
+		keyspaceIds += fmt.Sprintf("%d", ksIDs[i])
 		valueIds += fmt.Sprintf("%d", ids[i])
 		if i < len(ids)-1 {
 			valueSQL += ","
