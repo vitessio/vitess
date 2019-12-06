@@ -10,10 +10,10 @@ The following is the full list, alphabetically ordered.
 * Derek Perkins ([derekperkins](https://github.com/derekperkins)) derek@nozzle.io
 * Harshit Gangal ([harshit-gangal](https://github.com/harshit-gangal)) harshit.gangal@gmail.com
 * Jon Tirsen ([tirsen](https://github.com/tirsen)) jontirsen@squareup.com
-* Leo X. Lin ([leoxlin](https://github.com/leoxlin)) llin@hubspot.com
 * Michael Demmer ([demmer](https://github.com/demmer)) mdemmer@slack-corp.com
 * Michael Pawliszyn ([mpawliszyn](https://github.com/mpawliszyn)) mikepaw@squareup.com
 * Morgan Tocker ([morgo](https://github.com/morgo)) morgan@planetscale.com
+* Paul Hemberger ([pH14](https://github.com/pH14)) phemberger@hubspot.com
 * Rafael Chacon ([rafael](https://github.com/rafael)) rchacon@slack-corp.com
 * Sugu Sougoumarane ([sougou](https://github.com/sougou)) sougou@planetscale.com
 
@@ -35,7 +35,7 @@ sougou, dweitzman, deepthi, systay
 deepthi, rafael, enisoc
 
 ### Java
-mpawliszyn, leoxlin, harshit-gangal
+mpawliszyn, pH14, harshit-gangal
 
 ### Kubernetes
 derekperkins, dkhenry, enisoc

@@ -100,7 +100,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-vtctld_addr", vttablet.VtctldAddress,
 	)
 
-	if vttablet.SupportsBackup {
+  if vttablet.SupportsBackup {
 		vttablet.proc.Args = append(vttablet.proc.Args, "-restore_from_backup")
 	}
 	if vttablet.EnableSemiSync {
@@ -109,8 +109,8 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	vttablet.proc.Args = append(vttablet.proc.Args, vttablet.ExtraArgs...)
 
-	vttablet.proc.Stderr = os.Stderr
-	vttablet.proc.Stdout = os.Stdout
+	errFile, _ := os.Create(path.Join(vttablet.LogDir, vttablet.TabletPath+"-vttablet-stderr.txt"))
+	vttablet.proc.Stderr = errFile
 
 	vttablet.proc.Env = append(vttablet.proc.Env, os.Environ()...)
 
@@ -221,6 +221,7 @@ func (vttablet *VttabletProcess) getVReplStreamCount() string {
 	resultMap := vttablet.GetVars()
 	object := reflect.ValueOf(resultMap["VReplicationStreamCount"])
 	return fmt.Sprintf("%v", object)
+
 }
 
 // TearDown shuts down the running vttablet service
@@ -243,6 +244,7 @@ func (vttablet *VttabletProcess) TearDown() error {
 	}
 }
 
+
 // CreateDB creates the database for keyspace
 func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
 	_, err := vttablet.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace), keyspace, false)
@@ -262,7 +264,6 @@ func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useD
 	if useDb {
 		dbParams.DbName = "vt_" + keyspace
 	}
-
 	if vttablet.DbPassword != "" {
 		dbParams.Pass = vttablet.DbPassword
 	}

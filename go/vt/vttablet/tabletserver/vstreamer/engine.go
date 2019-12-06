@@ -28,7 +28,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
@@ -97,8 +96,8 @@ func NewEngine(ts srvtopo.Server, se *schema.Engine) *Engine {
 }
 
 // InitDBConfig performs saves the required info from dbconfigs for future use.
-func (vse *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
-	vse.cp = dbcfgs.DbaWithDB()
+func (vse *Engine) InitDBConfig(cp *mysql.ConnParams) {
+	vse.cp = cp
 }
 
 // Open starts the Engine service.
@@ -112,6 +111,13 @@ func (vse *Engine) Open(keyspace, cell string) error {
 	vse.keyspace = keyspace
 	vse.cell = cell
 	return nil
+}
+
+// IsOpen checks if the engine is opened
+func (vse *Engine) IsOpen() bool {
+	vse.mu.Lock()
+	defer vse.mu.Unlock()
+	return vse.isOpen
 }
 
 // Close closes the Engine service.
@@ -160,7 +166,7 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, filter *binlogda
 		if !vse.isOpen {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
-		streamer := newVStreamer(ctx, vse.cp, vse.se, startPos, filter, vse.kschema, send)
+		streamer := NewVStreamer(ctx, vse.cp, vse.se, startPos, filter, vse.kschema, send)
 		idx := vse.streamIdx
 		vse.streamers[idx] = streamer
 		vse.streamIdx++
@@ -200,7 +206,7 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 		if !vse.isOpen {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
-		rowStreamer := newRowStreamer(ctx, vse.cp, vse.se, query, lastpk, vse.kschema, send)
+		rowStreamer := NewRowStreamer(ctx, vse.cp, vse.se, query, lastpk, vse.kschema, send)
 		idx := vse.streamIdx
 		vse.rowStreamers[idx] = rowStreamer
 		vse.streamIdx++

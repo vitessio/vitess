@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -45,31 +44,35 @@ var (
 	replicaLagTolerance = 10 * time.Second
 )
 
+// vreplicator provides the core logic to start vreplication streams
 type vreplicator struct {
-	vre          *Engine
-	id           uint32
-	source       *binlogdatapb.BinlogSource
-	sourceTablet *topodatapb.Tablet
-	stats        *binlogplayer.Stats
-	dbClient     *vdbClient
-	// mysqld is used to fetch the local schema.
-	mysqld mysqlctl.MysqlDaemon
+	vre      *Engine
+	id       uint32
+	dbClient *vdbClient
+	// source
+	source          *binlogdatapb.BinlogSource
+	sourceVStreamer VStreamerClient
 
+	stats *binlogplayer.Stats
+	// mysqld is used to fetch the local schema.
+	mysqld    mysqlctl.MysqlDaemon
 	tableKeys map[string][]string
 }
 
-func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceTablet *topodatapb.Tablet, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine) *vreplicator {
+// newVReplicator creates a new vreplicator
+func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine) *vreplicator {
 	return &vreplicator{
-		vre:          vre,
-		id:           id,
-		source:       source,
-		sourceTablet: sourceTablet,
-		stats:        stats,
-		dbClient:     newVDBClient(dbClient, stats),
-		mysqld:       mysqld,
+		vre:             vre,
+		id:              id,
+		source:          source,
+		sourceVStreamer: sourceVStreamer,
+		stats:           stats,
+		dbClient:        newVDBClient(dbClient, stats),
+		mysqld:          mysqld,
 	}
 }
 
+// Replicate starts a vreplication stream.
 func (vr *vreplicator) Replicate(ctx context.Context) error {
 	tableKeys, err := vr.buildTableKeys()
 	if err != nil {
@@ -86,6 +89,7 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 		if settings.State == binlogplayer.BlpStopped {
 			return nil
 		}
+
 		switch {
 		case numTablesToCopy != 0:
 			if err := newVCopier(vr).copyNext(ctx, settings); err != nil {

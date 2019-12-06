@@ -83,7 +83,7 @@ func TestMain(m *testing.M) {
 		// engines cannot be initialized in testenv because it introduces
 		// circular dependencies.
 		streamerEngine = vstreamer.NewEngine(env.SrvTopo, env.SchemaEngine)
-		streamerEngine.InitDBConfig(env.Dbcfgs)
+		streamerEngine.InitDBConfig(env.Dbcfgs.DbaWithDB())
 		streamerEngine.Open(env.KeyspaceName, env.Cells[0])
 		defer streamerEngine.Close()
 
@@ -96,6 +96,8 @@ func TestMain(m *testing.M) {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
 		}
+
+		InitVStreamerClient(env.Dbcfgs)
 
 		playerEngine = NewEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, vrepldb)
 		if err := playerEngine.Open(context.Background()); err != nil {
@@ -121,6 +123,22 @@ func TestMain(m *testing.M) {
 
 func resetBinlogClient() {
 	globalFBC = &fakeBinlogClient{}
+}
+
+func masterPosition(t *testing.T) string {
+	t.Helper()
+	pos, err := env.Mysqld.MasterPosition()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return mysql.EncodePosition(pos)
+}
+
+func execStatements(t *testing.T, queries []string) {
+	t.Helper()
+	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
+		t.Error(err)
+	}
 }
 
 //--------------------------------------

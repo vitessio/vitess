@@ -30,10 +30,8 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -176,20 +174,14 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		return fmt.Errorf("plan not found for table: %s, current plans are: %#v", tableName, plan.TargetTables)
 	}
 
-	vsClient, err := tabletconn.GetDialer()(vc.vr.sourceTablet, grpcclient.FailFast(false))
+	err = vc.vr.sourceVStreamer.Open(ctx)
 	if err != nil {
-		return fmt.Errorf("error dialing tablet: %v", err)
+		return fmt.Errorf("error opening vsclient: %v", err)
 	}
-	defer vsClient.Close(ctx)
+	defer vc.vr.sourceVStreamer.Close(ctx)
 
 	ctx, cancel := context.WithTimeout(ctx, copyTimeout)
 	defer cancel()
-
-	target := &querypb.Target{
-		Keyspace:   vc.vr.sourceTablet.Keyspace,
-		Shard:      vc.vr.sourceTablet.Shard,
-		TabletType: vc.vr.sourceTablet.Type,
-	}
 
 	var lastpkpb *querypb.QueryResult
 	if lastpkqr := copyState[tableName]; lastpkqr != nil {
@@ -198,7 +190,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 	var pkfields []*querypb.Field
 	var updateCopyState *sqlparser.ParsedQuery
-	err = vsClient.VStreamRows(ctx, target, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
+	err = vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		select {
 		case <-ctx.Done():
 			return io.EOF

@@ -84,7 +84,6 @@ func (mysqlctl *MysqlctlProcess) Start() (err error) {
 
 // StartProcess starts the mysqlctl and returns the process reference
 func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
-
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
 		"-log_dir", mysqlctl.LogDirectory,
