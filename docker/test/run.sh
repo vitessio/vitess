@@ -174,12 +174,15 @@ bashcmd=$(append_cmd "$bashcmd" "export VTROOT=/vt/src/vitess.io/vitess")
 bashcmd=$(append_cmd "$bashcmd" "export VTDATAROOT=/vt/vtdataroot")
 bashcmd=$(append_cmd "$bashcmd" "export PYTHONPATH=/vt/src/vitess.io/vitess/dist/grpc/usr/local/lib/python2.7/site-packages:/vt/src/vitess.io/vitess/dist/py-mock-1.0.1/lib/python2.7/site-packages:/vt/src/vitess.io/vitess/py-vtdb:/vt/src/vitess.io/vitess/dist/selenium/lib/python2.7/site-packages")
 
-# Maven is setup in /vt/dist, need to move it.
-bashcmd=$(append_cmd "$bashcmd" "[[ -L "/vt/dist" && -d "/vt/dist" ]] || mkdir -p /vt/src/vitess.io/vitess/dist && mv /vt/dist/* /vt/src/vitess.io/vitess/dist")
-bashcmd=$(append_cmd "$bashcmd" "[[ -L "/vt/dist" && -d "/vt/dist" ]] || rm -rf /vt/dist && ln -s /vt/src/vitess.io/vitess/dist /vt/dist")
-bashcmd=$(append_cmd "$bashcmd" "[[ -L "/vt/bin" && -d "/vt/bin" ]] || rm -rf /vt/bin && mkdir -p /vt/src/vitess.io/vitess/bin ln -s /vt/src/vitess.io/vitess/bin /vt/bin")
-bashcmd=$(append_cmd "$bashcmd" "[[ -L "/vt/lib" && -d "/vt/lib" ]] || rm -rf /vt/lib && mkdir -p /vt/src/vitess.io/vitess/lib && ln -s /vt/src/vitess.io/vitess/lib /vt/lib")
-bashcmd=$(append_cmd "$bashcmd" "[[ -L "/vt/vthook" && -d "/vt/vthook" ]] || rm -rf /vt/vthook && mkdir -p /vt/src/vitess.io/vitess/vthook & ln -s /vt/src/vitess.io/vitess/vthook /vt/vthook")
+bashcmd=$(append_cmd "$bashcmd" "mkdir -p dist; mkdir -p bin; mkdir -p lib; mkdir -p vthook")
+
+# Maven was setup in /vt/dist, may need to reinstall it.
+bashcmd=$(append_cmd "$bashcmd" "mvn || curl -sL --connect-timeout 10 --retry 3 http://www-us.apache.org/dist/maven/maven-3/3.3.9/binaries/apache-maven-3.3.9-bin.tar.gz | tar -xz && mv apache-maven-3.3.9 dist/maven")
+
+bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/dist; ln -s /vt/src/vitess.io/vitess/dist /vt/dist")
+bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/bin; ln -s /vt/src/vitess.io/vitess/bin /vt/bin")
+bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/lib; ln -s /vt/src/vitess.io/vitess/lib /vt/lib")
+bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/vthook; ln -s /vt/src/vitess.io/vitess/vthook /vt/vthook")
 
 # etcd is broken in the bootstrap image.
 bashcmd=$(append_cmd "$bashcmd" "which etcdctl || rm -rf /vt/src/vitess.io/vitess/dist/etcd* && rm -rf /vt/src/vitess.io/vitess/bin/etcd*")
