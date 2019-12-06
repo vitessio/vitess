@@ -165,7 +165,7 @@ bashcmd=""
 if [[ -z "$existing_cache_image" ]]; then
 
   # Construct "cp" command to copy the source code.
-  bashcmd=$(append_cmd "$bashcmd" "cp -R /tmp/src/!(vtdataroot|lib|vthook|py-vtdb) . && cp -R /tmp/src/.git .")
+  bashcmd=$(append_cmd "$bashcmd" "cp -R /tmp/src/!(vtdataroot|dist|bin|lib|vthook|py-vtdb) . && cp -R /tmp/src/.git .")
 
 fi
 
@@ -175,22 +175,13 @@ bashcmd=$(append_cmd "$bashcmd" "export VTDATAROOT=/vt/vtdataroot")
 bashcmd=$(append_cmd "$bashcmd" "export PYTHONPATH=/vt/src/vitess.io/vitess/dist/grpc/usr/local/lib/python2.7/site-packages:/vt/src/vitess.io/vitess/dist/py-mock-1.0.1/lib/python2.7/site-packages:/vt/src/vitess.io/vitess/py-vtdb:/vt/src/vitess.io/vitess/dist/selenium/lib/python2.7/site-packages")
 
 bashcmd=$(append_cmd "$bashcmd" "mkdir -p dist; mkdir -p bin; mkdir -p lib; mkdir -p vthook")
-
-# Maven was setup in /vt/dist, may need to reinstall it.
-bashcmd=$(append_cmd "$bashcmd" "mvn || curl -sL --connect-timeout 10 --retry 3 http://www-us.apache.org/dist/maven/maven-3/3.3.9/binaries/apache-maven-3.3.9-bin.tar.gz | tar -xz && mv apache-maven-3.3.9 dist/maven")
-
 bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/dist; ln -s /vt/src/vitess.io/vitess/dist /vt/dist")
 bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/bin; ln -s /vt/src/vitess.io/vitess/bin /vt/bin")
 bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/lib; ln -s /vt/src/vitess.io/vitess/lib /vt/lib")
 bashcmd=$(append_cmd "$bashcmd" "rm -rf /vt/vthook; ln -s /vt/src/vitess.io/vitess/vthook /vt/vthook")
 
-# etcd is broken in the bootstrap image.
-bashcmd=$(append_cmd "$bashcmd" "which etcdctl || rm -rf /vt/src/vitess.io/vitess/dist/etcd* && rm -rf /vt/src/vitess.io/vitess/bin/etcd*")
-
-# These were broken somehow
-bashcmd=$(append_cmd "$bashcmd" "which protoc || rm -rf /vt/src/vitess.io/vitess/dist/vt-protoc-3.6.1")
-bashcmd=$(append_cmd "$bashcmd" "which consul || rm -rf /vt/src/vitess.io/vitess/dist/consul")
-bashcmd=$(append_cmd "$bashcmd" "unset VTTOP")
+# Maven was setup in /vt/dist, may need to reinstall it.
+bashcmd=$(append_cmd "$bashcmd" "command -v mvn || curl -sL --connect-timeout 10 --retry 3 http://www-us.apache.org/dist/maven/maven-3/3.3.9/binaries/apache-maven-3.3.9-bin.tar.gz | tar -xz && mv apache-maven-3.3.9 dist/maven")
 
 # Run bootstrap every time now
 bashcmd=$(append_cmd "$bashcmd" "./bootstrap.sh")
