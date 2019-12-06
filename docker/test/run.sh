@@ -180,13 +180,18 @@ bashcmd=$(append_cmd "$bashcmd" "[ -v VTTOP ] && rm -rf /vt/bin  && ln -s /vt/sr
 bashcmd=$(append_cmd "$bashcmd" "[ -v VTTOP ] && rm -rf /vt/lib  && ln -s /vt/src/vitess.io/vitess/lib /vt/lib")
 bashcmd=$(append_cmd "$bashcmd" "[ -v VTTOP ] && rm -rf /vt/vthook && ln -s /vt/src/vitess.io/vitess/vthook /vt/vthook")
 bashcmd=$(append_cmd "$bashcmd" "[ -v VTTOP ] && export PYTHONPATH=/vt/src/vitess.io/vitess/dist/grpc/usr/local/lib/python2.7/site-packages:/vt/src/vitess.io/vitess/dist/py-mock-1.0.1/lib/python2.7/site-packages:/vt/src/vitess.io/vitess/py-vtdb:/vt/src/vitess.io/vitess/dist/selenium/lib/python2.7/site-packages")
-bashcmd=$(append_cmd "$bashcmd" "[ -v VTTOP ] && export PATH=/vt/src/vitess.io/vitess/bin:/vt/src/vitess.io/vitess/dist/maven/bin:/vt/src/vitess.io/vitess/dist/chromedriver:\$PATH")
+
+# etcd is broken in the bootstrap image.
+bashcmd=$(append_cmd "$bashcmd" "which etcdctl || rm -rf /vt/src/vitess.io/vitess/dist/etcd* && rm -rf /vt/src/vitess.io/vitess/bin/etcd*")
 
 # These were broken somehow
 bashcmd=$(append_cmd "$bashcmd" "which protoc || rm -rf /vt/src/vitess.io/vitess/dist/vt-protoc-3.6.1")
 bashcmd=$(append_cmd "$bashcmd" "which consul || rm -rf /vt/src/vitess.io/vitess/dist/consul")
 
 bashcmd=$(append_cmd "$bashcmd" "[ -v VTTOP ] && unset VTTOP")
+
+# Need to re-add PATH for now as well
+bashcmd=$(append_cmd "$bashcmd" "export PATH=/vt/src/vitess.io/vitess/bin:/vt/src/vitess.io/vitess/dist/maven/bin:/vt/src/vitess.io/vitess/dist/chromedriver:/go/bin:/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
 
 # Run bootstrap every time now
 bashcmd=$(append_cmd "$bashcmd" "./bootstrap.sh")
