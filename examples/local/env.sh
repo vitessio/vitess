@@ -17,8 +17,10 @@
 hostname=`hostname -f`
 vtctld_web_port=15000
 
-# Set up environment.
-export VTTOP=${VTTOP-$VTROOT/src/vitess.io/vitess}
+function fail() {
+  echo "ERROR: $1"
+  exit 1
+}
 
 if [ "${TOPO}" = "zk2" ]; then
     # Each ZooKeeper server needs a list of all servers in the quorum.

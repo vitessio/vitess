@@ -33,7 +33,7 @@ def main():
   parser.add_option(
       '-s', '--sql_file', help='File containing sql schema',
       default=os.path.join(
-          os.environ['VTTOP'], 'examples/kubernetes/create_test_table.sql'))
+          os.environ['VTROOT'], 'examples/kubernetes/create_test_table.sql'))
   logging.getLogger().setLevel(logging.INFO)
 
   options, _ = parser.parse_args()

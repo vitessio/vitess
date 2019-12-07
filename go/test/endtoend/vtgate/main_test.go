@@ -168,7 +168,7 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance =  cluster.NewCluster(Cell, "localhost")
+		clusterInstance = cluster.NewCluster(Cell, "localhost")
 		defer clusterInstance.Teardown()
 
 		// Start topo server
