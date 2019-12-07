@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,13 +13,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# Don't run this. It is only used as part of build.sh.
 
-set -e
+source build.env
 
-# Collect all the local Python libs we need.
-mkdir -p /out/pkg/py-vtdb
-cp -R $VTROOT/py/* /out/pkg/py-vtdb/
-cp -R /usr/local/lib/python2.7/dist-packages /out/pkg/
-cp -R /vt/dist/py-* /out/pkg/
+function fail() {
+  echo "ERROR: $1"
+  exit 1
+}
 
+for binary in mysqld consul etcd etcdctl zksrv.sh; do
+  command -v "$binary" > /dev/null || fail "${binary} is not installed in PATH. Run 'make tools' to install dependencies."
+done;

@@ -35,7 +35,7 @@ class TestKeytarWeb(unittest.TestCase):
   def setUpClass(cls):
     cls.driver = environment.create_webdriver()
     port = environment.reserve_ports(1)
-    keytar_folder = os.path.join(environment.vttop, 'test/cluster/keytar')
+    keytar_folder = os.path.join(environment.vtroot, 'test/cluster/keytar')
     cls.flask_process = subprocess.Popen(
         [os.path.join(keytar_folder, 'keytar.py'),
          '--config_file=%s' % os.path.join(keytar_folder, 'test_config.yaml'),

@@ -24,16 +24,10 @@ jobs:
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
 
-    - name: Run bootstrap.sh
+    - name: Run make tools
       run: |
-        VTTOP=$PWD VTROOT=$PWD BUILD_PYTHON=0 ./bootstrap.sh
-
-    - name: Build
-      run: |
-        VTROOT=$PWD VTTOP=$PWD make build
+        make tools
 
     - name: unit_race
       run: |
-        export PATH=$PWD/bin:$PATH
-        source ./dev.env
-        VTDATAROOT=/tmp/vtdataroot VTTOP=$PWD VTROOT=$PWD make unit_test_race
+        make unit_test_race

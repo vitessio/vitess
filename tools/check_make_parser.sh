@@ -6,6 +6,8 @@
 # This is used in Travis to verify that the currently committed version was
 # generated with the proper version of goyacc.
 
+source build.env
+
 CUR="sql.go"
 TMP="/tmp/sql.$$.go"
 
