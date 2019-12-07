@@ -126,6 +126,7 @@ import (
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
 )
@@ -310,6 +311,9 @@ var commands = []commandGroup{
 			{"Reshard", commandReshard,
 				"[-skip_schema_copy] <keyspace.workflow> <source_shards> <target_shards>",
 				"Start a Resharding process. Example: Reshard ks.workflow001 '0' '-80,80-'"},
+			{"Materialize", commandMaterialize,
+				`<json_spe>, example : '{"workflow": "aaa", "source_keyspace": "source", "target_keyspace": "target", "table_settings": [{"target_table": "customer", "source_expression": "select * from customer", "create_ddl": "copy"}]}'`,
+				"Performs materialization based on the json spec."},
 			{"SplitClone", commandSplitClone,
 				"<keyspace> <from_shards> <to_shards>",
 				"Start the SplitClone process to perform horizontal resharding. Example: SplitClone ks '0' '-80,80-'"},
@@ -1802,6 +1806,20 @@ func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 	source := strings.Split(subFlags.Arg(1), ",")
 	target := strings.Split(subFlags.Arg(2), ",")
 	return wr.Reshard(ctx, keyspace, workflow, source, target, *skipSchemaCopy)
+}
+
+func commandMaterialize(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("a single argument is required: <json_spec>")
+	}
+	ms := &vtctldatapb.MaterializeSettings{}
+	if err := json2.Unmarshal([]byte(subFlags.Arg(0)), ms); err != nil {
+		return err
+	}
+	return wr.Materialize(ctx, ms)
 }
 
 func commandSplitClone(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
