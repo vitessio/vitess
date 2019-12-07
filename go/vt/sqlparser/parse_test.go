@@ -1489,9 +1489,7 @@ func TestValid(t *testing.T) {
 		// There's no way automated way to verify that a node calls
 		// all its children. But we can examine code coverage and
 		// ensure that all walkSubtree functions were called.
-		Walk(func(node SQLNode) (bool, error) {
-			return true, nil
-		}, tree)
+		Walk(tree, Identity)
 	}
 }
 

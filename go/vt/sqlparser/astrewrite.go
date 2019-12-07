@@ -10,18 +10,29 @@ import (
 // bool is false.
 type WalkFunc func(SQLNode) (SQLNode, bool)
 
+// VisitFunc describes a function to be called for each node during a Walk.
+// If the function returns false, walking will stop.
+type VisitFunc func(SQLNode) bool
+
 // Identity is a function that will return the same AST after passing through every element in it
 var Identity = func(in SQLNode) (SQLNode, bool) {
 	return in, true
 }
 
-// Walk2 traverses an AST in depth-first order: It starts by calling
+// VisitAll will visit all elements of the AST until one of them returns false
+func VisitAll(root SQLNode, fn VisitFunc) {
+	Walk(root, func(node SQLNode) (SQLNode, bool) {
+		return node, fn(node)
+	})
+}
+
+// Walk traverses an AST in depth-first order: It starts by calling
 // fn(node); node must not be nil. It returns the rewritten node. If fn returns
 // true, Walk invokes fn recursively for each of the non-nil children of node,
 // followed by a call of fn(nil). The returned node of fn can be used to
 // rewrite the passed node to fn. Panics if the returned type is not the same
 // type as the original one.
-func Walk2(node SQLNode, fn WalkFunc) SQLNode {
+func Walk(node SQLNode, fn WalkFunc) SQLNode {
 	if node == nil {
 		return nil
 	}
@@ -50,450 +61,450 @@ func Walk2(node SQLNode, fn WalkFunc) SQLNode {
 	case TableIdent:
 
 	case *AliasedExpr:
-		n.As = Walk2(n.As, fn).(ColIdent)
-		n.Expr = Walk2(n.Expr, fn).(Expr)
+		n.As = Walk(n.As, fn).(ColIdent)
+		n.Expr = Walk(n.Expr, fn).(Expr)
 
 	case *AliasedTableExpr:
-		n.Expr = Walk2(n.Expr, fn).(SimpleTableExpr)
+		n.Expr = Walk(n.Expr, fn).(SimpleTableExpr)
 		for i, p := range n.Partitions {
-			n.Partitions[i] = Walk2(p, fn).(ColIdent)
+			n.Partitions[i] = Walk(p, fn).(ColIdent)
 		}
-		n.As = Walk2(n.As, fn).(TableIdent)
+		n.As = Walk(n.As, fn).(TableIdent)
 		if n.Hints != nil {
-			n.Hints = Walk2(n.Hints, fn).(*IndexHints)
+			n.Hints = Walk(n.Hints, fn).(*IndexHints)
 		}
 
 	case *AndExpr:
-		n.Left = Walk2(n.Left, fn).(Expr)
-		n.Right = Walk2(n.Right, fn).(Expr)
+		n.Left = Walk(n.Left, fn).(Expr)
+		n.Right = Walk(n.Right, fn).(Expr)
 
 	case *AutoIncSpec:
-		n.Column = Walk2(n.Column, fn).(ColIdent)
-		n.Sequence = Walk2(n.Sequence, fn).(TableName)
+		n.Column = Walk(n.Column, fn).(ColIdent)
+		n.Sequence = Walk(n.Sequence, fn).(TableName)
 
 	case *BinaryExpr:
-		n.Left = Walk2(n.Left, fn).(Expr)
-		n.Right = Walk2(n.Right, fn).(Expr)
+		n.Left = Walk(n.Left, fn).(Expr)
+		n.Right = Walk(n.Right, fn).(Expr)
 
 	case *CaseExpr:
 		if n.Expr != nil {
-			n.Expr = Walk2(n.Expr, fn).(Expr)
+			n.Expr = Walk(n.Expr, fn).(Expr)
 		}
 		for i, p := range n.Whens {
-			n.Whens[i] = Walk2(p, fn).(*When)
+			n.Whens[i] = Walk(p, fn).(*When)
 		}
 		if n.Else != nil {
-			n.Else = Walk2(n.Else, fn).(Expr)
+			n.Else = Walk(n.Else, fn).(Expr)
 		}
 
 	case *ColName:
-		n.Name = Walk2(n.Name, fn).(ColIdent)
-		n.Qualifier = Walk2(n.Qualifier, fn).(TableName)
+		n.Name = Walk(n.Name, fn).(ColIdent)
+		n.Qualifier = Walk(n.Qualifier, fn).(TableName)
 
 	case *CollateExpr:
-		n.Expr = Walk2(n.Expr, fn).(Expr)
+		n.Expr = Walk(n.Expr, fn).(Expr)
 
 	case *ColumnDefinition:
-		n.Name = Walk2(n.Name, fn).(ColIdent)
+		n.Name = Walk(n.Name, fn).(ColIdent)
 
 	case *ComparisonExpr:
-		n.Left = Walk2(n.Left, fn).(Expr)
-		n.Right = Walk2(n.Right, fn).(Expr)
+		n.Left = Walk(n.Left, fn).(Expr)
+		n.Right = Walk(n.Right, fn).(Expr)
 		if n.Escape != nil {
-			n.Escape = Walk2(n.Escape, fn).(Expr)
+			n.Escape = Walk(n.Escape, fn).(Expr)
 		}
 
 	case *ConvertExpr:
 		if n.Expr != nil {
-			n.Expr = Walk2(n.Expr, fn).(Expr)
+			n.Expr = Walk(n.Expr, fn).(Expr)
 		}
 		if n.Type != nil {
-			n.Type = Walk2(n.Type, fn).(*ConvertType)
+			n.Type = Walk(n.Type, fn).(*ConvertType)
 		}
 
 	case *ConvertType:
 		if n.Length != nil {
-			n.Length = Walk2(n.Length, fn).(*SQLVal)
+			n.Length = Walk(n.Length, fn).(*SQLVal)
 		}
 		if n.Scale != nil {
-			n.Scale = Walk2(n.Scale, fn).(*SQLVal)
+			n.Scale = Walk(n.Scale, fn).(*SQLVal)
 		}
 
 	case *ConvertUsingExpr:
 		if n.Expr != nil {
-			n.Expr = Walk2(n.Expr, fn).(Expr)
+			n.Expr = Walk(n.Expr, fn).(Expr)
 		}
 
 	case *CurTimeFuncExpr:
-		n.Name = Walk2(n.Name, fn).(ColIdent)
+		n.Name = Walk(n.Name, fn).(ColIdent)
 		if n.Fsp != nil {
-			n.Fsp = Walk2(n.Fsp, fn).(Expr)
+			n.Fsp = Walk(n.Fsp, fn).(Expr)
 		}
 
 	case *Delete:
 		if n.Comments != nil {
-			n.Comments = Walk2(n.Comments, fn).(Comments)
+			n.Comments = Walk(n.Comments, fn).(Comments)
 		}
 		for i, e := range n.Targets {
-			n.Targets[i] = Walk2(e, fn).(TableName)
+			n.Targets[i] = Walk(e, fn).(TableName)
 		}
 		for i, from := range n.TableExprs {
-			n.TableExprs[i] = Walk2(from, fn).(TableExpr)
+			n.TableExprs[i] = Walk(from, fn).(TableExpr)
 		}
 		for i, p := range n.Partitions {
-			n.Partitions[i] = Walk2(p, fn).(ColIdent)
+			n.Partitions[i] = Walk(p, fn).(ColIdent)
 		}
 		if n.Where != nil {
-			n.Where = Walk2(n.Where, fn).(*Where)
+			n.Where = Walk(n.Where, fn).(*Where)
 		}
 		for i, e := range n.OrderBy {
-			n.OrderBy[i] = Walk2(e, fn).(*Order)
+			n.OrderBy[i] = Walk(e, fn).(*Order)
 		}
 		if n.Limit != nil {
-			n.Limit = Walk2(n.Limit, fn).(*Limit)
+			n.Limit = Walk(n.Limit, fn).(*Limit)
 		}
 
 	case *DDL:
 		if n.FromTables != nil {
-			n.FromTables = Walk2(n.FromTables, fn).(TableNames)
+			n.FromTables = Walk(n.FromTables, fn).(TableNames)
 		}
 		if n.ToTables != nil {
-			n.ToTables = Walk2(n.ToTables, fn).(TableNames)
+			n.ToTables = Walk(n.ToTables, fn).(TableNames)
 		}
-		n.Table = Walk2(n.Table, fn).(TableName)
+		n.Table = Walk(n.Table, fn).(TableName)
 		if n.TableSpec != nil {
-			n.TableSpec = Walk2(n.TableSpec, fn).(*TableSpec)
+			n.TableSpec = Walk(n.TableSpec, fn).(*TableSpec)
 		}
 		if n.OptLike != nil {
-			n.OptLike = Walk2(n.OptLike, fn).(*OptLike)
+			n.OptLike = Walk(n.OptLike, fn).(*OptLike)
 		}
 		if n.PartitionSpec != nil {
-			n.PartitionSpec = Walk2(n.PartitionSpec, fn).(*PartitionSpec)
+			n.PartitionSpec = Walk(n.PartitionSpec, fn).(*PartitionSpec)
 		}
 		if n.VindexSpec != nil {
-			n.VindexSpec = Walk2(n.VindexSpec, fn).(*VindexSpec)
+			n.VindexSpec = Walk(n.VindexSpec, fn).(*VindexSpec)
 		}
 		if n.AutoIncSpec != nil {
-			n.AutoIncSpec = Walk2(n.AutoIncSpec, fn).(*AutoIncSpec)
+			n.AutoIncSpec = Walk(n.AutoIncSpec, fn).(*AutoIncSpec)
 		}
 		for i, c := range n.VindexCols {
-			n.VindexCols[i] = Walk2(c, fn).(ColIdent)
+			n.VindexCols[i] = Walk(c, fn).(ColIdent)
 		}
 
 	case *GroupConcatExpr:
 		for i, e := range n.Exprs {
-			n.Exprs[i] = Walk2(e, fn).(SelectExpr)
+			n.Exprs[i] = Walk(e, fn).(SelectExpr)
 		}
 		for i, e := range n.OrderBy {
-			n.OrderBy[i] = Walk2(e, fn).(*Order)
+			n.OrderBy[i] = Walk(e, fn).(*Order)
 		}
 
 	case *ExistsExpr:
-		n.Subquery = Walk2(n.Subquery, fn).(*Subquery)
+		n.Subquery = Walk(n.Subquery, fn).(*Subquery)
 
 	case *FuncExpr:
-		n.Qualifier = Walk2(n.Qualifier, fn).(TableIdent)
-		n.Name = Walk2(n.Name, fn).(ColIdent)
+		n.Qualifier = Walk(n.Qualifier, fn).(TableIdent)
+		n.Name = Walk(n.Name, fn).(ColIdent)
 		for i, e := range n.Exprs {
-			n.Exprs[i] = Walk2(e, fn).(SelectExpr)
+			n.Exprs[i] = Walk(e, fn).(SelectExpr)
 		}
 
 	case *IndexHints:
 		for i, p := range n.Indexes {
-			n.Indexes[i] = Walk2(p, fn).(ColIdent)
+			n.Indexes[i] = Walk(p, fn).(ColIdent)
 		}
 
 	case *IntervalExpr:
 		if n.Expr != nil {
-			n.Expr = Walk2(n.Expr, fn).(Expr)
+			n.Expr = Walk(n.Expr, fn).(Expr)
 		}
 
 	case *Insert:
 		if n.Comments != nil {
-			n.Comments = Walk2(n.Comments, fn).(Comments)
+			n.Comments = Walk(n.Comments, fn).(Comments)
 		}
-		n.Table = Walk2(n.Table, fn).(TableName)
+		n.Table = Walk(n.Table, fn).(TableName)
 		for i, p := range n.Partitions {
-			n.Partitions[i] = Walk2(p, fn).(ColIdent)
+			n.Partitions[i] = Walk(p, fn).(ColIdent)
 		}
 		for i, p := range n.Columns {
-			n.Columns[i] = Walk2(p, fn).(ColIdent)
+			n.Columns[i] = Walk(p, fn).(ColIdent)
 		}
 		if n.Rows != nil {
-			n.Rows = Walk2(n.Rows, fn).(InsertRows)
+			n.Rows = Walk(n.Rows, fn).(InsertRows)
 		}
 		for i, p := range n.OnDup {
-			n.OnDup[i] = Walk2(p, fn).(*UpdateExpr)
+			n.OnDup[i] = Walk(p, fn).(*UpdateExpr)
 		}
 
 	case *IsExpr:
-		n.Expr = Walk2(n.Expr, fn).(Expr)
+		n.Expr = Walk(n.Expr, fn).(Expr)
 
 	case *JoinTableExpr:
 		if n.LeftExpr != nil {
-			n.LeftExpr = Walk2(n.LeftExpr, fn).(TableExpr)
+			n.LeftExpr = Walk(n.LeftExpr, fn).(TableExpr)
 		}
 		if n.RightExpr != nil {
-			n.RightExpr = Walk2(n.RightExpr, fn).(TableExpr)
+			n.RightExpr = Walk(n.RightExpr, fn).(TableExpr)
 		}
-		n.Condition = Walk2(n.Condition, fn).(JoinCondition)
+		n.Condition = Walk(n.Condition, fn).(JoinCondition)
 
 	case JoinCondition:
 		if n.On != nil {
-			n.On = Walk2(n.On, fn).(Expr)
+			n.On = Walk(n.On, fn).(Expr)
 		}
 		for i, c := range n.Using {
-			n.Using[i] = Walk2(c, fn).(ColIdent)
+			n.Using[i] = Walk(c, fn).(ColIdent)
 		}
 
 	case *Limit:
 		if n.Offset != nil {
-			n.Offset = Walk2(n.Offset, fn).(Expr)
+			n.Offset = Walk(n.Offset, fn).(Expr)
 		}
 		if n.Rowcount != nil {
-			n.Rowcount = Walk2(n.Rowcount, fn).(Expr)
+			n.Rowcount = Walk(n.Rowcount, fn).(Expr)
 		}
 
 	case *MatchExpr:
 		for i, p := range n.Columns {
-			n.Columns[i] = Walk2(p, fn).(SelectExpr)
+			n.Columns[i] = Walk(p, fn).(SelectExpr)
 		}
 		if n.Expr != nil {
-			n.Expr = Walk2(n.Expr, fn).(Expr)
+			n.Expr = Walk(n.Expr, fn).(Expr)
 		}
 
 	case Nextval:
 		if n.Expr != nil {
-			n.Expr = Walk2(n.Expr, fn).(Expr)
+			n.Expr = Walk(n.Expr, fn).(Expr)
 		}
 
 	case *NotExpr:
 		if n.Expr != nil {
-			n.Expr = Walk2(n.Expr, fn).(Expr)
+			n.Expr = Walk(n.Expr, fn).(Expr)
 		}
 
 	case *Order:
 		if n.Expr != nil {
-			n.Expr = Walk2(n.Expr, fn).(Expr)
+			n.Expr = Walk(n.Expr, fn).(Expr)
 		}
 
 	case *OrExpr:
-		n.Left = Walk2(n.Left, fn).(Expr)
-		n.Right = Walk2(n.Right, fn).(Expr)
+		n.Left = Walk(n.Left, fn).(Expr)
+		n.Right = Walk(n.Right, fn).(Expr)
 
 	case *ParenExpr:
 		if n.Expr != nil {
-			n.Expr = Walk2(n.Expr, fn).(Expr)
+			n.Expr = Walk(n.Expr, fn).(Expr)
 		}
 
 	case *ParenSelect:
-		n.Select = Walk2(n.Select, fn).(SelectStatement)
+		n.Select = Walk(n.Select, fn).(SelectStatement)
 
 	case *ParenTableExpr:
 		for i, e := range n.Exprs {
-			n.Exprs[i] = Walk2(e, fn).(TableExpr)
+			n.Exprs[i] = Walk(e, fn).(TableExpr)
 		}
 
 	case *PartitionSpec:
-		n.Name = Walk2(n.Name, fn).(ColIdent)
+		n.Name = Walk(n.Name, fn).(ColIdent)
 		for i, pd := range n.Definitions {
-			n.Definitions[i] = Walk2(pd, fn).(*PartitionDefinition)
+			n.Definitions[i] = Walk(pd, fn).(*PartitionDefinition)
 		}
 
 	case *PartitionDefinition:
-		n.Name = Walk2(n.Name, fn).(ColIdent)
+		n.Name = Walk(n.Name, fn).(ColIdent)
 		if n.Limit != nil {
-			n.Limit = Walk2(n.Limit, fn).(Expr)
+			n.Limit = Walk(n.Limit, fn).(Expr)
 		}
 
 	case *Set:
 		if n.Comments != nil {
-			n.Comments = Walk2(n.Comments, fn).(Comments)
+			n.Comments = Walk(n.Comments, fn).(Comments)
 		}
 		for i, e := range n.Exprs {
-			n.Exprs[i] = Walk2(e, fn).(*SetExpr)
+			n.Exprs[i] = Walk(e, fn).(*SetExpr)
 		}
 
 	case *SetExpr:
 		if n.Expr != nil {
-			n.Expr = Walk2(n.Expr, fn).(Expr)
+			n.Expr = Walk(n.Expr, fn).(Expr)
 		}
-		n.Name = Walk2(n.Name, fn).(ColIdent)
+		n.Name = Walk(n.Name, fn).(ColIdent)
 
 	case *Select:
 		if n.Comments != nil {
-			n.Comments = Walk2(n.Comments, fn).(Comments)
+			n.Comments = Walk(n.Comments, fn).(Comments)
 		}
 		for i, e := range n.SelectExprs {
-			n.SelectExprs[i] = Walk2(e, fn).(SelectExpr)
+			n.SelectExprs[i] = Walk(e, fn).(SelectExpr)
 		}
 		for i, from := range n.From {
-			n.From[i] = Walk2(from, fn).(TableExpr)
+			n.From[i] = Walk(from, fn).(TableExpr)
 		}
 		if n.Where != nil {
-			n.Where = Walk2(n.Where, fn).(*Where)
+			n.Where = Walk(n.Where, fn).(*Where)
 		}
 		for i, e := range n.GroupBy {
-			n.GroupBy[i] = Walk2(e, fn).(Expr)
+			n.GroupBy[i] = Walk(e, fn).(Expr)
 		}
 		if n.Having != nil {
-			n.Having = Walk2(n.Having, fn).(*Where)
+			n.Having = Walk(n.Having, fn).(*Where)
 		}
 		for i, e := range n.OrderBy {
-			n.OrderBy[i] = Walk2(e, fn).(*Order)
+			n.OrderBy[i] = Walk(e, fn).(*Order)
 		}
 		if n.Limit != nil {
-			n.Limit = Walk2(n.Limit, fn).(*Limit)
+			n.Limit = Walk(n.Limit, fn).(*Limit)
 		}
 
 	case *Show:
-		n.OnTable = Walk2(n.OnTable, fn).(TableName)
-		n.Table = Walk2(n.Table, fn).(TableName)
+		n.OnTable = Walk(n.OnTable, fn).(TableName)
+		n.Table = Walk(n.Table, fn).(TableName)
 		if n.ShowCollationFilterOpt != nil {
-			x := Walk2(*n.ShowCollationFilterOpt, fn).(Expr)
+			x := Walk(*n.ShowCollationFilterOpt, fn).(Expr)
 			n.ShowCollationFilterOpt = &x
 		}
 
 	case *StarExpr:
-		n.TableName = Walk2(n.TableName, fn).(TableName)
+		n.TableName = Walk(n.TableName, fn).(TableName)
 
 	case *Stream:
 		if n.Comments != nil {
-			n.Comments = Walk2(n.Comments, fn).(Comments)
+			n.Comments = Walk(n.Comments, fn).(Comments)
 		}
 		if n.SelectExpr != nil {
-			n.SelectExpr = Walk2(n.SelectExpr, fn).(SelectExpr)
+			n.SelectExpr = Walk(n.SelectExpr, fn).(SelectExpr)
 		}
-		n.Table = Walk2(n.Table, fn).(TableName)
+		n.Table = Walk(n.Table, fn).(TableName)
 
 	case *Subquery:
 		if n.Select != nil {
-			n.Select = Walk2(n.Select, fn).(SelectStatement)
+			n.Select = Walk(n.Select, fn).(SelectStatement)
 		}
 
 	case *SubstrExpr:
 		if n.Name != nil {
-			n.Name = Walk2(n.Name, fn).(*ColName)
+			n.Name = Walk(n.Name, fn).(*ColName)
 		}
 		if n.StrVal != nil {
-			n.StrVal = Walk2(n.StrVal, fn).(*SQLVal)
+			n.StrVal = Walk(n.StrVal, fn).(*SQLVal)
 		}
 		if n.From != nil {
-			n.From = Walk2(n.From, fn).(Expr)
+			n.From = Walk(n.From, fn).(Expr)
 		}
 		if n.To != nil {
-			n.To = Walk2(n.To, fn).(Expr)
+			n.To = Walk(n.To, fn).(Expr)
 		}
 
 	case *RangeCond:
 		if n.Left != nil {
-			n.Left = Walk2(n.Left, fn).(Expr)
+			n.Left = Walk(n.Left, fn).(Expr)
 		}
 		if n.From != nil {
-			n.From = Walk2(n.From, fn).(Expr)
+			n.From = Walk(n.From, fn).(Expr)
 		}
 		if n.To != nil {
-			n.To = Walk2(n.To, fn).(Expr)
+			n.To = Walk(n.To, fn).(Expr)
 		}
 
 	case TableNames:
 		for i, t := range n {
-			n[i] = Walk2(t, fn).(TableName)
+			n[i] = Walk(t, fn).(TableName)
 		}
 
 	case TableName:
-		n.Name = Walk2(n.Name, fn).(TableIdent)
-		n.Qualifier = Walk2(n.Qualifier, fn).(TableIdent)
+		n.Name = Walk(n.Name, fn).(TableIdent)
+		n.Qualifier = Walk(n.Qualifier, fn).(TableIdent)
 
 	case *TableSpec:
 		for i, o := range n.Columns {
-			n.Columns[i] = Walk2(o, fn).(*ColumnDefinition)
+			n.Columns[i] = Walk(o, fn).(*ColumnDefinition)
 		}
 		for i, o := range n.Indexes {
-			n.Indexes[i] = Walk2(o, fn).(*IndexDefinition)
+			n.Indexes[i] = Walk(o, fn).(*IndexDefinition)
 		}
 		for i, o := range n.Constraints {
-			n.Constraints[i] = Walk2(o, fn).(*ConstraintDefinition)
+			n.Constraints[i] = Walk(o, fn).(*ConstraintDefinition)
 		}
 
 	case *TimestampFuncExpr:
 		if n.Expr1 != nil {
-			n.Expr1 = Walk2(n.Expr1, fn).(Expr)
+			n.Expr1 = Walk(n.Expr1, fn).(Expr)
 		}
 		if n.Expr2 != nil {
-			n.Expr2 = Walk2(n.Expr2, fn).(Expr)
+			n.Expr2 = Walk(n.Expr2, fn).(Expr)
 		}
 
 	case *UnaryExpr:
 		if n.Expr != nil {
-			n.Expr = Walk2(n.Expr, fn).(Expr)
+			n.Expr = Walk(n.Expr, fn).(Expr)
 		}
 
 	case *Union:
-		n.Left = Walk2(n.Left, fn).(SelectStatement)
-		n.Right = Walk2(n.Right, fn).(SelectStatement)
+		n.Left = Walk(n.Left, fn).(SelectStatement)
+		n.Right = Walk(n.Right, fn).(SelectStatement)
 		for i, o := range n.OrderBy {
-			n.OrderBy[i] = Walk2(o, fn).(*Order)
+			n.OrderBy[i] = Walk(o, fn).(*Order)
 		}
 		if n.Limit != nil {
-			n.Limit = Walk2(n.Limit, fn).(*Limit)
+			n.Limit = Walk(n.Limit, fn).(*Limit)
 		}
 
 	case *Update:
 		if n.Comments != nil {
-			n.Comments = Walk2(n.Comments, fn).(Comments)
+			n.Comments = Walk(n.Comments, fn).(Comments)
 		}
 		for i, t := range n.TableExprs {
-			n.TableExprs[i] = Walk2(t, fn).(TableExpr)
+			n.TableExprs[i] = Walk(t, fn).(TableExpr)
 		}
 		for i, e := range n.Exprs {
-			n.Exprs[i] = Walk2(e, fn).(*UpdateExpr)
+			n.Exprs[i] = Walk(e, fn).(*UpdateExpr)
 		}
 		if n.Where != nil {
-			n.Where = Walk2(n.Where, fn).(*Where)
+			n.Where = Walk(n.Where, fn).(*Where)
 		}
 		for i, o := range n.OrderBy {
-			n.OrderBy[i] = Walk2(o, fn).(*Order)
+			n.OrderBy[i] = Walk(o, fn).(*Order)
 		}
 		if n.Limit != nil {
-			n.Limit = Walk2(n.Limit, fn).(*Limit)
+			n.Limit = Walk(n.Limit, fn).(*Limit)
 		}
 
 	case *UpdateExpr:
-		n.Name = Walk2(n.Name, fn).(*ColName)
+		n.Name = Walk(n.Name, fn).(*ColName)
 		if n.Expr != nil {
-			n.Expr = Walk2(n.Expr, fn).(Expr)
+			n.Expr = Walk(n.Expr, fn).(Expr)
 		}
 
 	case *Use:
-		n.DBName = Walk2(n.DBName, fn).(TableIdent)
+		n.DBName = Walk(n.DBName, fn).(TableIdent)
 
 	case Values:
 		for i, v := range n {
-			n[i] = Walk2(v, fn).(ValTuple)
+			n[i] = Walk(v, fn).(ValTuple)
 		}
 
 	case *ValuesFuncExpr:
 		if n.Name != nil {
-			n.Name = Walk2(n.Name, fn).(*ColName)
+			n.Name = Walk(n.Name, fn).(*ColName)
 		}
 
 	case ValTuple:
 		for i, v := range n {
-			n[i] = Walk2(v, fn).(Expr)
+			n[i] = Walk(v, fn).(Expr)
 		}
 
 	case *VindexSpec:
-		n.Name = Walk2(n.Name, fn).(ColIdent)
-		n.Type = Walk2(n.Type, fn).(ColIdent)
+		n.Name = Walk(n.Name, fn).(ColIdent)
+		n.Type = Walk(n.Type, fn).(ColIdent)
 
 	case *When:
-		n.Cond = Walk2(n.Cond, fn).(Expr)
-		n.Val = Walk2(n.Val, fn).(Expr)
+		n.Cond = Walk(n.Cond, fn).(Expr)
+		n.Val = Walk(n.Val, fn).(Expr)
 
 	case *Where:
 		if n.Expr != nil {
-			n.Expr = Walk2(n.Expr, fn).(Expr)
+			n.Expr = Walk(n.Expr, fn).(Expr)
 		}
 
 	default:

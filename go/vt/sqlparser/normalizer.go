@@ -33,7 +33,7 @@ import (
 // treated as distinct.
 func Normalize(stmt Statement, bindVars map[string]*querypb.BindVariable, prefix string) {
 	nz := newNormalizer(stmt, bindVars, prefix)
-	_ = Walk(nz.WalkStatement, stmt)
+	VisitAll(stmt, nz.WalkStatement)
 }
 
 type normalizer struct {
@@ -59,12 +59,12 @@ func newNormalizer(stmt Statement, bindVars map[string]*querypb.BindVariable, pr
 // WalkStatement is the top level walk function.
 // If it encounters a Select, it switches to a mode
 // where variables are deduped.
-func (nz *normalizer) WalkStatement(node SQLNode) (bool, error) {
+func (nz *normalizer) WalkStatement(node SQLNode) bool {
 	switch node := node.(type) {
 	case *Select:
-		_ = Walk(nz.WalkSelect, node)
+		VisitAll(node, nz.WalkSelect)
 		// Don't continue
-		return false, nil
+		return false
 	case *SQLVal:
 		nz.convertSQLVal(node)
 	case *ComparisonExpr:
@@ -72,13 +72,13 @@ func (nz *normalizer) WalkStatement(node SQLNode) (bool, error) {
 	case *ColName, TableName:
 		// Common node types that never contain SQLVals or ListArgs but create a lot of object
 		// allocations.
-		return false, nil
+		return false
 	}
-	return true, nil
+	return true
 }
 
 // WalkSelect normalizes the AST in Select mode.
-func (nz *normalizer) WalkSelect(node SQLNode) (bool, error) {
+func (nz *normalizer) WalkSelect(node SQLNode) bool {
 	switch node := node.(type) {
 	case *SQLVal:
 		nz.convertSQLValDedup(node)
@@ -87,12 +87,12 @@ func (nz *normalizer) WalkSelect(node SQLNode) (bool, error) {
 	case *ColName, TableName:
 		// Common node types that never contain SQLVals or ListArgs but create a lot of object
 		// allocations.
-		return false, nil
+		return false
 	case OrderBy, GroupBy:
 		// do not make a bind var for order by column_position
-		return false, nil
+		return false
 	}
-	return true, nil
+	return true
 }
 
 func (nz *normalizer) convertSQLValDedup(node *SQLVal) {
@@ -220,12 +220,12 @@ func (nz *normalizer) newName() string {
 // Ideally, this should be done only once.
 func GetBindvars(stmt Statement) map[string]struct{} {
 	bindvars := make(map[string]struct{})
-	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
+	VisitAll(stmt, func(node SQLNode) bool {
 		switch node := node.(type) {
 		case *ColName, TableName:
 			// Common node types that never contain SQLVals or ListArgs but create a lot of object
 			// allocations.
-			return false, nil
+			return false
 		case *SQLVal:
 			if node.Type == ValArg {
 				bindvars[string(node.Val[1:])] = struct{}{}
@@ -233,7 +233,7 @@ func GetBindvars(stmt Statement) map[string]struct{} {
 		case ListArg:
 			bindvars[string(node[2:])] = struct{}{}
 		}
-		return true, nil
-	}, stmt)
+		return true
+	})
 	return bindvars
 }

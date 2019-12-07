@@ -19,7 +19,9 @@ package planbuilder
 import (
 	"bytes"
 	"errors"
-	"fmt"
+
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -97,12 +99,14 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 	// pulled out.
 	constructsMap := make(map[*sqlparser.Subquery]sqlparser.Expr)
 
-	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+	var failure error
+	sqlparser.VisitAll(expr, func(node sqlparser.SQLNode) bool {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
 			newOrigin, isLocal, err := pb.st.Find(node)
 			if err != nil {
-				return false, err
+				failure = err
+				return false
 			}
 			if isLocal && newOrigin.Order() > highestOrigin.Order() {
 				highestOrigin = newOrigin
@@ -120,14 +124,17 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 			switch stmt := node.Select.(type) {
 			case *sqlparser.Select:
 				if err := spb.processSelect(stmt, pb.st); err != nil {
-					return false, err
+					failure = err
+					return false
 				}
 			case *sqlparser.Union:
 				if err := spb.processUnion(stmt, pb.st); err != nil {
-					return false, err
+					failure = err
+					return false
 				}
 			default:
-				return false, fmt.Errorf("BUG: unexpected SELECT type: %T", node)
+				failure = vterrors.Errorf(vtrpc.Code_INTERNAL, "BUG: unexpected SELECT type: %T", node)
+				return false
 			}
 			sqi := subqueryInfo{
 				ast:  node,
@@ -149,21 +156,22 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 				}
 			}
 			subqueries = append(subqueries, sqi)
-			return false, nil
+			return false
 		case *sqlparser.FuncExpr:
 			switch {
 			// If it's last_insert_id, ensure it's a single unsharded route.
 			case node.Name.EqualString("last_insert_id"):
 				if rb, isRoute := pb.bldr.(*route); !isRoute || !rb.removeShardedOptions() {
-					return false, errors.New("unsupported: LAST_INSERT_ID is only allowed for unsharded keyspaces")
+					failure = vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "unsupported: LAST_INSERT_ID is only allowed for unsharded keyspaces")
+					return false
 				}
 			}
-			return true, nil
+			return true
 		}
-		return true, nil
-	}, expr)
-	if err != nil {
-		return nil, nil, nil, err
+		return true
+	})
+	if failure != nil {
+		return nil, nil, nil, failure
 	}
 
 	highestRoute, _ := highestOrigin.(*route)
@@ -230,13 +238,13 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 
 func hasSubquery(node sqlparser.SQLNode) bool {
 	has := false
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+	sqlparser.VisitAll(node, func(node sqlparser.SQLNode) bool {
 		if _, ok := node.(*sqlparser.Subquery); ok {
 			has = true
-			return false, errors.New("dummy")
+			return false
 		}
-		return true, nil
-	}, node)
+		return true
+	})
 	return has
 }
 
@@ -252,54 +260,54 @@ func (pb *primitiveBuilder) finalizeUnshardedDMLSubqueries(nodes ...sqlparser.SQ
 	for _, node := range nodes {
 		samePlan := true
 		inSubQuery := false
-		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		sqlparser.VisitAll(node, func(node sqlparser.SQLNode) bool {
 			switch nodeType := node.(type) {
 			case *sqlparser.Subquery, *sqlparser.Insert:
 				inSubQuery = true
-				return true, nil
+				return true
 			case *sqlparser.Select:
 				if !inSubQuery {
-					return true, nil
+					return true
 				}
 				spb := newPrimitiveBuilder(pb.vschema, pb.jt)
 				if err := spb.processSelect(nodeType, pb.st); err != nil {
 					samePlan = false
-					return false, err
+					return false
 				}
 				innerRoute, ok := spb.bldr.(*route)
 				if !ok {
 					samePlan = false
-					return false, errors.New("dummy")
+					return false
 				}
 				if !innerRoute.removeOptionsWithUnmatchedKeyspace(keyspace) {
 					samePlan = false
-					return false, errors.New("dummy")
+					return false
 				}
 				for _, sub := range innerRoute.routeOptions[0].substitutions {
 					*sub.oldExpr = *sub.newExpr
 				}
 			case *sqlparser.Union:
 				if !inSubQuery {
-					return true, nil
+					return true
 				}
 				spb := newPrimitiveBuilder(pb.vschema, pb.jt)
 				if err := spb.processUnion(nodeType, pb.st); err != nil {
 					samePlan = false
-					return false, err
+					return false
 				}
 				innerRoute, ok := spb.bldr.(*route)
 				if !ok {
 					samePlan = false
-					return false, errors.New("dummy")
+					return false
 				}
 				if !innerRoute.removeOptionsWithUnmatchedKeyspace(keyspace) {
 					samePlan = false
-					return false, errors.New("dummy")
+					return false
 				}
 			}
 
-			return true, nil
-		}, node)
+			return true
+		})
 		if !samePlan {
 			return false
 		}

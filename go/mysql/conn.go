@@ -857,15 +857,15 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		}
 
 		paramsCount := uint16(0)
-		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+		sqlparser.VisitAll(statement, func(node sqlparser.SQLNode) bool {
 			switch node := node.(type) {
 			case *sqlparser.SQLVal:
 				if strings.HasPrefix(string(node.Val), ":v") {
 					paramsCount++
 				}
 			}
-			return true, nil
-		}, statement)
+			return true
+		})
 
 		if paramsCount > 0 {
 			prepare.ParamsCount = paramsCount

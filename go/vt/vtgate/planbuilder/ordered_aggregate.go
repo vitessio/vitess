@@ -141,22 +141,22 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 
 func nodeHasAggregates(node sqlparser.SQLNode) bool {
 	hasAggregates := false
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+	sqlparser.VisitAll(node, func(node sqlparser.SQLNode) bool {
 		switch node := node.(type) {
 		case *sqlparser.FuncExpr:
 			if node.IsAggregate() {
 				hasAggregates = true
-				return false, errors.New("unused error")
+				return false
 			}
 		case *sqlparser.GroupConcatExpr:
 			hasAggregates = true
-			return false, errors.New("unused error")
+			return false
 		case *sqlparser.Subquery:
 			// Subqueries are analyzed by themselves.
-			return false, nil
+			return false
 		}
-		return true, nil
-	}, node)
+		return true
+	})
 	return hasAggregates
 }
 

@@ -433,17 +433,21 @@ func BuildColName(rcs []*resultColumn, index int) (*sqlparser.ColName, error) {
 // If a symbol cannot be resolved or if the expression contains
 // a subquery, an error is returned.
 func (st *symtab) ResolveSymbols(node sqlparser.SQLNode) error {
-	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+	var failure error
+	sqlparser.VisitAll(node, func(node sqlparser.SQLNode) bool {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
 			if _, _, err := st.Find(node); err != nil {
-				return false, err
+				failure = err
+				return false
 			}
 		case *sqlparser.Subquery:
-			return false, errors.New("unsupported: subqueries disallowed in GROUP or ORDER BY")
+			failure = errors.New("unsupported: subqueries disallowed in GROUP or ORDER BY")
+			return false
 		}
-		return true, nil
-	}, node)
+		return true
+	})
+	return failure
 }
 
 // table is part of symtab.

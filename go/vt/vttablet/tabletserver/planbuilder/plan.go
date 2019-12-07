@@ -349,15 +349,18 @@ func BuildMessageStreaming(name string, tables map[string]*schema.Table) (*Plan,
 // a call to GET_LOCK(), which is unsafe with server-side connection pooling.
 // For more background, see https://github.com/vitessio/vitess/issues/3631.
 func checkForPoolingUnsafeConstructs(expr sqlparser.SQLNode) error {
-	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+	var failure error
+	sqlparser.VisitAll(expr, func(node sqlparser.SQLNode) bool {
 		if f, ok := node.(*sqlparser.FuncExpr); ok {
 			if f.Name.Lowered() == "get_lock" {
-				return false, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "get_lock() not allowed")
+				failure = vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "get_lock() not allowed")
+				return false
 			}
 		}
 
 		// TODO: This could be smarter about not walking down parts of the AST that can't contain
 		// function calls.
-		return true, nil
-	}, expr)
+		return true
+	})
+	return failure
 }

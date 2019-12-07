@@ -344,23 +344,27 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 			return cexpr, nil
 		}
 	}
-	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+	var err error
+	sqlparser.VisitAll(aliased.Expr, func(node sqlparser.SQLNode) bool {
 		switch node := node.(type) {
 		case *sqlparser.ColName:
 			if !node.Qualifier.IsEmpty() {
-				return false, fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(node))
+				err = fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(node))
+				return false
 			}
 			tpb.addCol(node.Name)
 			cexpr.references[node.Name.Lowered()] = true
 		case *sqlparser.Subquery:
-			return false, fmt.Errorf("unsupported subquery: %v", sqlparser.String(node))
+			err = fmt.Errorf("unsupported subquery: %v", sqlparser.String(node))
+			return false
 		case *sqlparser.FuncExpr:
 			if node.IsAggregate() {
-				return false, fmt.Errorf("unexpected: %v", sqlparser.String(node))
+				err = fmt.Errorf("unexpected: %v", sqlparser.String(node))
+				return false
 			}
 		}
-		return true, nil
-	}, aliased.Expr)
+		return true
+	})
 	if err != nil {
 		return nil, err
 	}

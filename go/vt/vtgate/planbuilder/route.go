@@ -273,9 +273,10 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 	}
 
 	// Fix up the AST.
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+	sqlparser.VisitAll(rb.Select, func(node sqlparser.SQLNode) bool {
 		switch node := node.(type) {
 		case *sqlparser.Select:
+			// If empty SELECT, make it SELECT 1
 			if len(node.SelectExprs) == 0 {
 				node.SelectExprs = sqlparser.SelectExprs([]sqlparser.SelectExpr{
 					&sqlparser.AliasedExpr{
@@ -284,14 +285,15 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 				})
 			}
 		case *sqlparser.ComparisonExpr:
+			// 12 = column  =>  column = 12
 			if node.Operator == sqlparser.EqualStr {
 				if ro.exprIsValue(node.Left) && !ro.exprIsValue(node.Right) {
 					node.Left, node.Right = node.Right, node.Left
 				}
 			}
 		}
-		return true, nil
-	}, rb.Select)
+		return true
+	})
 
 	// Substitute table names
 	for _, sub := range ro.substitutions {

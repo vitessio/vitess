@@ -235,18 +235,21 @@ func (jb *join) PushOrderBy(orderBy sqlparser.OrderBy) (builder, error) {
 		} else {
 			// Analyze column references within the expression to make sure they all
 			// go to the left.
-			err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			var err error
+			sqlparser.VisitAll(order.Expr, func(node sqlparser.SQLNode) bool {
 				switch node := node.(type) {
 				case *sqlparser.ColName:
 					if node.Metadata.(*column).Origin().Order() > jb.Left.Order() {
-						return false, errors.New("unsupported: order by spans across shards")
+						err = errors.New("unsupported: order by spans across shards")
+						return false
 					}
 				case *sqlparser.Subquery:
 					// Unreachable because ResolveSymbols perfoms this check up above.
-					return false, errors.New("unsupported: order by has subquery")
+					err = errors.New("unsupported: order by has subquery")
+					return false
 				}
-				return true, nil
-			}, order.Expr)
+				return true
+			})
 			if err != nil {
 				return newMemorySort(jb, orderBy)
 			}

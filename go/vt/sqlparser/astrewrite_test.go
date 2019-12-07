@@ -11,7 +11,7 @@ func TestSimple(t *testing.T) {
 	statement, err := Parse("select 1 + 2")
 	assert.NoError(t, err)
 
-	result := Walk2(statement, func(node SQLNode) (SQLNode, bool) {
+	result := Walk(statement, func(node SQLNode) (SQLNode, bool) {
 
 		a, ok := node.(*BinaryExpr)
 		if ok {

@@ -64,15 +64,15 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 }
 
 func buildSubqueryPermissions(stmt sqlparser.Statement, role tableacl.Role, permissions []Permission) []Permission {
-	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+	sqlparser.VisitAll(stmt, func(node sqlparser.SQLNode) bool {
 		switch node := node.(type) {
 		case *sqlparser.Select:
 			permissions = buildTableExprsPermissions(node.From, role, permissions)
 		case sqlparser.TableExprs:
-			return false, nil
+			return false
 		}
-		return true, nil
-	}, stmt)
+		return true
+	})
 	return permissions
 }
 

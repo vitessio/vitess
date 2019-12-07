@@ -570,13 +570,13 @@ func TestReplaceExpr(t *testing.T) {
 			t.Fatal(err)
 		}
 		var from *Subquery
-		_ = Walk(func(node SQLNode) (kontinue bool, err error) {
+		VisitAll(tree, func(node SQLNode) bool {
 			if sq, ok := node.(*Subquery); ok {
 				from = sq
-				return false, nil
+				return false
 			}
-			return true, nil
-		}, tree)
+			return true
+		})
 		if from == nil {
 			t.Fatalf("from is nil for %s", tcase.in)
 		}
