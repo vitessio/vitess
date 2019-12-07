@@ -1267,7 +1267,7 @@ type Show struct {
 	Table                  TableName
 	ShowTablesOpt          *ShowTablesOpt
 	Scope                  string
-	ShowCollationFilterOpt *Expr
+	ShowCollationFilterOpt Expr
 }
 
 // Format formats the node.
@@ -1293,7 +1293,7 @@ func (node *Show) Format(buf *TrackedBuffer) {
 		buf.Myprintf(" on %v", node.OnTable)
 	}
 	if node.Type == "collation" && node.ShowCollationFilterOpt != nil {
-		buf.Myprintf(" where %v", *node.ShowCollationFilterOpt)
+		buf.Myprintf(" where %v", node.ShowCollationFilterOpt)
 	}
 	if node.HasTable() {
 		buf.Myprintf(" %v", node.Table)

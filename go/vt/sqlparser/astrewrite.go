@@ -361,8 +361,7 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 		n.OnTable = Walk(n.OnTable, fn).(TableName)
 		n.Table = Walk(n.Table, fn).(TableName)
 		if n.ShowCollationFilterOpt != nil {
-			x := Walk(*n.ShowCollationFilterOpt, fn).(Expr)
-			n.ShowCollationFilterOpt = &x
+			n.ShowCollationFilterOpt = Walk(n.ShowCollationFilterOpt, fn).(Expr)
 		}
 
 	case *StarExpr:
