@@ -96,4 +96,14 @@ func init() {
 	stats.NewString("GoOS").Set(AppVersion.goOS)
 	stats.NewString("GoArch").Set(AppVersion.goArch)
 
+	buildLabels := []string{"BuildHost", "BuildUser", "BuildTimestamp", "BuildGitRev", "BuildGitBranch", "BuildNumber"}
+	buildValues := []string{
+		AppVersion.buildHost,
+		AppVersion.buildUser,
+		fmt.Sprintf("%v", AppVersion.buildTime),
+		AppVersion.buildGitRev,
+		AppVersion.buildGitBranch,
+		fmt.Sprintf("%v", AppVersion.jenkinsBuildNumber),
+	}
+	stats.NewGaugesWithMultiLabels("BuildInformation", "build information exposed via label", buildLabels).Set(buildValues, 1)
 }
