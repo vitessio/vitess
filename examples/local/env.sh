@@ -16,6 +16,7 @@
 
 hostname=`hostname -f`
 vtctld_web_port=15000
+export VTDATAROOT="${VTDATAROOT:-${VTROOT}/vtdataroot}"
 
 function fail() {
   echo "ERROR: $1"
