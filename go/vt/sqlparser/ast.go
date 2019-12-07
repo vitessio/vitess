@@ -97,11 +97,18 @@ func Parse(sql string) (Statement, error) {
 		}
 		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError.Error())
 	}
-	if tokenizer.ParseTree == nil {
+	ast := tokenizer.ParseTree
+	if ast == nil {
 		return nil, ErrEmpty
 	}
-	return tokenizer.ParseTree, nil
+	//noinspection GoBoolExpressions
+	if testAstRewriter {
+		Walk2(ast, Identity)
+	}
+	return ast, nil
 }
+
+const testAstRewriter = true
 
 // ParseStrictDDL is the same as Parse except it errors on
 // partially parsed DDL statements.
