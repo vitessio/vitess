@@ -1760,6 +1760,10 @@ func (*Default) iExpr()           {}
 // and replaces it with to. If from matches root,
 // then to is returned.
 func ReplaceExpr(root, from, to Expr) Expr {
+	if root == from {
+		return to
+	}
+
 	return Walk(root, func(node SQLNode) (SQLNode, bool) {
 		if node == from {
 			return to, true
