@@ -311,6 +311,9 @@ var commands = []commandGroup{
 			{"Reshard", commandReshard,
 				"[-skip_schema_copy] <keyspace.workflow> <source_shards> <target_shards>",
 				"Start a Resharding process. Example: Reshard ks.workflow001 '0' '-80,80-'"},
+			{"Migrate", commandMigrate,
+				"[-cell=<cell>] [-tablet_types=<tablet_types>] -workflow=<workflow> <source_keyspace> <target_keyspace> <tables>",
+				"Start a table(s) migration."},
 			{"Materialize", commandMaterialize,
 				`<json_spec>, example : '{"workflow": "aaa", "source_keyspace": "source", "target_keyspace": "target", "table_settings": [{"target_table": "customer", "source_expression": "select * from customer", "create_ddl": "copy"}]}'`,
 				"Performs materialization based on the json spec."},
@@ -1806,6 +1809,25 @@ func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 	source := strings.Split(subFlags.Arg(1), ",")
 	target := strings.Split(subFlags.Arg(2), ",")
 	return wr.Reshard(ctx, keyspace, workflow, source, target, *skipSchemaCopy)
+}
+
+func commandMigrate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	workflow := subFlags.String("workflow", "", "Workflow name. Will be used to later migrate traffic.")
+	cell := subFlags.String("cell", "", "Cell to replicate from.")
+	tabletTypes := subFlags.String("tablet_types", "", "Source tablet types to replicate from.")
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 3 {
+		return fmt.Errorf("three arguments are required: source_keyspace, target_keyspace, tables")
+	}
+	if *workflow == "" {
+		return fmt.Errorf("a workflow name must be specified")
+	}
+	source := subFlags.Arg(0)
+	target := subFlags.Arg(1)
+	tables := strings.Split(subFlags.Arg(2), ",")
+	return wr.Migrate(ctx, *workflow, source, target, tables, *cell, *tabletTypes)
 }
 
 func commandMaterialize(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

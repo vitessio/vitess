@@ -44,6 +44,42 @@ type materializer struct {
 	targetShards  []*topo.ShardInfo
 }
 
+// Migrate initiates a table migration.
+func (wr *Wrangler) Migrate(ctx context.Context, workflow, sourceKeyspace, targetKeyspace string, tables []string, cell, tabletTypes string) error {
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       workflow,
+		SourceKeyspace: sourceKeyspace,
+		TargetKeyspace: targetKeyspace,
+		Cell:           cell,
+		TabletTypes:    tabletTypes,
+	}
+	for _, table := range tables {
+		buf := sqlparser.NewTrackedBuffer(nil)
+		buf.Myprintf("select * from %v", sqlparser.NewTableIdent(table))
+		ms.TableSettings = append(ms.TableSettings, &vtctldatapb.TableMaterializeSettings{
+			TargetTable:      table,
+			SourceExpression: buf.String(),
+			CreateDdl:        "copy",
+		})
+	}
+	if err := wr.Materialize(ctx, ms); err != nil {
+		return err
+	}
+
+	rules, err := wr.getRoutingRules(ctx)
+	if err != nil {
+		return err
+	}
+	for _, table := range tables {
+		rules[table] = []string{sourceKeyspace + "." + table}
+		rules[targetKeyspace+"."+table] = []string{sourceKeyspace + "." + table}
+	}
+	if err := wr.saveRoutingRules(ctx, rules); err != nil {
+		return err
+	}
+	return wr.ts.RebuildSrvVSchema(ctx, nil)
+}
+
 // Materialize performs the steps needed to materialize a list of tables based on the materialization specs.
 func (wr *Wrangler) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSettings) error {
 	if err := wr.validateNewWorkflow(ctx, ms.TargetKeyspace, ms.Workflow); err != nil {
