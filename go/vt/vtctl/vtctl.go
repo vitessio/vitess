@@ -312,8 +312,8 @@ var commands = []commandGroup{
 				"[-skip_schema_copy] <keyspace.workflow> <source_shards> <target_shards>",
 				"Start a Resharding process. Example: Reshard ks.workflow001 '0' '-80,80-'"},
 			{"Migrate", commandMigrate,
-				"[-cell=<cell>] [-tablet_types=<tablet_types>] -workflow=<workflow> <source_keyspace> <target_keyspace> <tables>",
-				"Start a table(s) migration."},
+				"[-cell=<cell>] [-tablet_types=<tablet_types>] -workflow=<workflow> <source_keyspace> <target_keyspace> <table_specs>",
+				`Start a table(s) migration, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{}, "t2":{}}`},
 			{"Materialize", commandMaterialize,
 				`<json_spec>, example : '{"workflow": "aaa", "source_keyspace": "source", "target_keyspace": "target", "table_settings": [{"target_table": "customer", "source_expression": "select * from customer", "create_ddl": "copy"}]}'`,
 				"Performs materialization based on the json spec."},
@@ -1819,15 +1819,15 @@ func commandMigrate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 		return err
 	}
 	if subFlags.NArg() != 3 {
-		return fmt.Errorf("three arguments are required: source_keyspace, target_keyspace, tables")
+		return fmt.Errorf("three arguments are required: source_keyspace, target_keyspace, tableSpecs")
 	}
 	if *workflow == "" {
 		return fmt.Errorf("a workflow name must be specified")
 	}
 	source := subFlags.Arg(0)
 	target := subFlags.Arg(1)
-	tables := strings.Split(subFlags.Arg(2), ",")
-	return wr.Migrate(ctx, *workflow, source, target, tables, *cell, *tabletTypes)
+	tableSpecs := subFlags.Arg(2)
+	return wr.Migrate(ctx, *workflow, source, target, tableSpecs, *cell, *tabletTypes)
 }
 
 func commandMaterialize(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
