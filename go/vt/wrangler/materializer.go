@@ -24,10 +24,12 @@ import (
 
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -45,7 +47,54 @@ type materializer struct {
 }
 
 // Migrate initiates a table migration.
-func (wr *Wrangler) Migrate(ctx context.Context, workflow, sourceKeyspace, targetKeyspace string, tables []string, cell, tabletTypes string) error {
+func (wr *Wrangler) Migrate(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs, cell, tabletTypes string) error {
+	var tables []string
+	var vschema *vschemapb.Keyspace
+	if strings.HasPrefix(tableSpecs, "{") {
+		wrap := fmt.Sprintf(`{"tables": %s}`, tableSpecs)
+		ks := &vschemapb.Keyspace{}
+		if err := json2.Unmarshal([]byte(wrap), ks); err != nil {
+			return err
+		}
+		var err error
+		vschema, err = wr.ts.GetVSchema(ctx, targetKeyspace)
+		if err != nil {
+			return err
+		}
+		if vschema.Tables == nil {
+			vschema.Tables = make(map[string]*vschemapb.Table)
+		}
+		for table, vtab := range ks.Tables {
+			vschema.Tables[table] = vtab
+			tables = append(tables, table)
+		}
+	} else {
+		tables = strings.Split(tableSpecs, ",")
+	}
+
+	// Save routing rules before vschema. If we save vschema first, and routing rules
+	// fails to save, we may generate duplicate table errors.
+	rules, err := wr.getRoutingRules(ctx)
+	if err != nil {
+		return err
+	}
+	for _, table := range tables {
+		rules[table] = []string{sourceKeyspace + "." + table}
+		rules[targetKeyspace+"."+table] = []string{sourceKeyspace + "." + table}
+	}
+	if err := wr.saveRoutingRules(ctx, rules); err != nil {
+		return err
+	}
+	if vschema != nil {
+		// We added to the vschema.
+		if err := wr.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
+			return err
+		}
+	}
+	if err := wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
+		return err
+	}
+
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       workflow,
 		SourceKeyspace: sourceKeyspace,
@@ -62,22 +111,7 @@ func (wr *Wrangler) Migrate(ctx context.Context, workflow, sourceKeyspace, targe
 			CreateDdl:        "copy",
 		})
 	}
-	if err := wr.Materialize(ctx, ms); err != nil {
-		return err
-	}
-
-	rules, err := wr.getRoutingRules(ctx)
-	if err != nil {
-		return err
-	}
-	for _, table := range tables {
-		rules[table] = []string{sourceKeyspace + "." + table}
-		rules[targetKeyspace+"."+table] = []string{sourceKeyspace + "." + table}
-	}
-	if err := wr.saveRoutingRules(ctx, rules); err != nil {
-		return err
-	}
-	return wr.ts.RebuildSrvVSchema(ctx, nil)
+	return wr.Materialize(ctx, ms)
 }
 
 // Materialize performs the steps needed to materialize a list of tables based on the materialization specs.
