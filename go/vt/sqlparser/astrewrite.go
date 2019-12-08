@@ -21,9 +21,6 @@ var Identity = func(in SQLNode) (SQLNode, bool) {
 
 // VisitAll will visit all elements of the AST until one of them returns false
 func VisitAll(root SQLNode, fn VisitFunc) {
-	if root == nil {
-		return
-	}
 	Walk(root, func(node SQLNode) (SQLNode, bool) {
 		return node, fn(node)
 	})
@@ -68,15 +65,19 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 			break
 		}
 		n.As = Walk(n.As, fn).(ColIdent)
-		n.Expr = Walk(n.Expr, fn).(Expr)
+		if n.Expr != nil {
+			n.Expr = Walk(n.Expr, fn).(Expr)
+		}
 
 	case *AliasedTableExpr:
 		if n == nil {
 			break
 		}
-		n.Expr = Walk(n.Expr, fn).(SimpleTableExpr)
-		for i, p := range n.Partitions {
-			n.Partitions[i] = Walk(p, fn).(ColIdent)
+		if n.Expr != nil {
+			n.Expr = Walk(n.Expr, fn).(SimpleTableExpr)
+		}
+		if n.Partitions != nil {
+			n.Partitions = Walk(n.Partitions, fn).(Partitions)
 		}
 		n.As = Walk(n.As, fn).(TableIdent)
 		if n.Hints != nil {
@@ -87,8 +88,12 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 		if n == nil {
 			break
 		}
-		n.Left = Walk(n.Left, fn).(Expr)
-		n.Right = Walk(n.Right, fn).(Expr)
+		if n.Left != nil {
+			n.Left = Walk(n.Left, fn).(Expr)
+		}
+		if n.Right != nil {
+			n.Right = Walk(n.Right, fn).(Expr)
+		}
 
 	case *AutoIncSpec:
 		if n == nil {
@@ -101,8 +106,12 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 		if n == nil {
 			break
 		}
-		n.Left = Walk(n.Left, fn).(Expr)
-		n.Right = Walk(n.Right, fn).(Expr)
+		if n.Left != nil {
+			n.Left = Walk(n.Left, fn).(Expr)
+		}
+		if n.Right != nil {
+			n.Right = Walk(n.Right, fn).(Expr)
+		}
 
 	case *CaseExpr:
 		if n == nil {
@@ -129,7 +138,9 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 		if n == nil {
 			break
 		}
-		n.Expr = Walk(n.Expr, fn).(Expr)
+		if n.Expr != nil {
+			n.Expr = Walk(n.Expr, fn).(Expr)
+		}
 
 	case *ColumnDefinition:
 		if n == nil {
@@ -197,20 +208,20 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 		if n.Comments != nil {
 			n.Comments = Walk(n.Comments, fn).(Comments)
 		}
-		for i, e := range n.Targets {
-			n.Targets[i] = Walk(e, fn).(TableName)
+		if n.Targets != nil {
+			n.Targets = Walk(n.Targets, fn).(TableNames)
 		}
-		for i, from := range n.TableExprs {
-			n.TableExprs[i] = Walk(from, fn).(TableExpr)
+		if n.TableExprs != nil {
+			n.TableExprs = Walk(n.TableExprs, fn).(TableExprs)
 		}
-		for i, p := range n.Partitions {
-			n.Partitions[i] = Walk(p, fn).(ColIdent)
+		if n.Partitions != nil {
+			n.Partitions = Walk(n.Partitions, fn).(Partitions)
 		}
 		if n.Where != nil {
 			n.Where = Walk(n.Where, fn).(*Where)
 		}
-		for i, e := range n.OrderBy {
-			n.OrderBy[i] = Walk(e, fn).(*Order)
+		if n.OrderBy != nil {
+			n.OrderBy = Walk(n.OrderBy, fn).(OrderBy)
 		}
 		if n.Limit != nil {
 			n.Limit = Walk(n.Limit, fn).(*Limit)
@@ -250,11 +261,11 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 		if n == nil {
 			break
 		}
-		for i, e := range n.Exprs {
-			n.Exprs[i] = Walk(e, fn).(SelectExpr)
+		if n.Exprs != nil {
+			n.Exprs = Walk(n.Exprs, fn).(SelectExprs)
 		}
-		for i, e := range n.OrderBy {
-			n.OrderBy[i] = Walk(e, fn).(*Order)
+		if n.OrderBy != nil {
+			n.OrderBy = Walk(n.OrderBy, fn).(OrderBy)
 		}
 
 	case *ExistsExpr:
@@ -272,8 +283,8 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 		}
 		n.Qualifier = Walk(n.Qualifier, fn).(TableIdent)
 		n.Name = Walk(n.Name, fn).(ColIdent)
-		for i, e := range n.Exprs {
-			n.Exprs[i] = Walk(e, fn).(SelectExpr)
+		if n.Exprs != nil {
+			n.Exprs = Walk(n.Exprs, fn).(SelectExprs)
 		}
 
 	case *IndexHints:
@@ -300,17 +311,17 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 			n.Comments = Walk(n.Comments, fn).(Comments)
 		}
 		n.Table = Walk(n.Table, fn).(TableName)
-		for i, p := range n.Partitions {
-			n.Partitions[i] = Walk(p, fn).(ColIdent)
+		if n.Partitions != nil {
+			n.Partitions = Walk(n.Partitions, fn).(Partitions)
 		}
-		for i, p := range n.Columns {
-			n.Columns[i] = Walk(p, fn).(ColIdent)
+		if n.Columns != nil {
+			n.Columns = Walk(n.Columns, fn).(Columns)
 		}
 		if n.Rows != nil {
 			n.Rows = Walk(n.Rows, fn).(InsertRows)
 		}
-		for i, p := range n.OnDup {
-			n.OnDup[i] = Walk(p, fn).(*UpdateExpr)
+		if n.OnDup != nil {
+			n.OnDup = Walk(n.OnDup, fn).(OnDup)
 		}
 
 	case *IsExpr:
@@ -335,8 +346,8 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 		if n.On != nil {
 			n.On = Walk(n.On, fn).(Expr)
 		}
-		for i, c := range n.Using {
-			n.Using[i] = Walk(c, fn).(ColIdent)
+		if n.Using != nil {
+			n.Using = Walk(n.Using, fn).(Columns)
 		}
 
 	case *Limit:
@@ -354,8 +365,8 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 		if n == nil {
 			break
 		}
-		for i, p := range n.Columns {
-			n.Columns[i] = Walk(p, fn).(SelectExpr)
+		if n.Columns != nil {
+			n.Columns = Walk(n.Columns, fn).(SelectExprs)
 		}
 		if n.Expr != nil {
 			n.Expr = Walk(n.Expr, fn).(Expr)
@@ -391,8 +402,12 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 		if n == nil {
 			break
 		}
-		n.Left = Walk(n.Left, fn).(Expr)
-		n.Right = Walk(n.Right, fn).(Expr)
+		if n.Left != nil {
+			n.Left = Walk(n.Left, fn).(Expr)
+		}
+		if n.Right != nil {
+			n.Right = Walk(n.Right, fn).(Expr)
+		}
 
 	case *ParenExpr:
 		if n == nil {
@@ -412,8 +427,8 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 		if n == nil {
 			break
 		}
-		for i, e := range n.Exprs {
-			n.Exprs[i] = Walk(e, fn).(TableExpr)
+		if n.Exprs != nil {
+			n.Exprs = Walk(n.Exprs, fn).(TableExprs)
 		}
 
 	case *PartitionSpec:
@@ -441,8 +456,8 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 		if n.Comments != nil {
 			n.Comments = Walk(n.Comments, fn).(Comments)
 		}
-		for i, e := range n.Exprs {
-			n.Exprs[i] = Walk(e, fn).(*SetExpr)
+		if n.Exprs != nil {
+			n.Exprs = Walk(n.Exprs, fn).(SetExprs)
 		}
 
 	case *SetExpr:
@@ -461,26 +476,31 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 		if n.Comments != nil {
 			n.Comments = Walk(n.Comments, fn).(Comments)
 		}
-		for i, e := range n.SelectExprs {
-			n.SelectExprs[i] = Walk(e, fn).(SelectExpr)
+		if n.SelectExprs != nil {
+			n.SelectExprs = Walk(n.SelectExprs, fn).(SelectExprs)
 		}
-		for i, from := range n.From {
-			n.From[i] = Walk(from, fn).(TableExpr)
+		if n.From != nil {
+			n.From = Walk(n.From, fn).(TableExprs)
 		}
 		if n.Where != nil {
 			n.Where = Walk(n.Where, fn).(*Where)
 		}
-		for i, e := range n.GroupBy {
-			n.GroupBy[i] = Walk(e, fn).(Expr)
+		if n.GroupBy != nil {
+			n.GroupBy = Walk(n.GroupBy, fn).(GroupBy)
 		}
 		if n.Having != nil {
 			n.Having = Walk(n.Having, fn).(*Where)
 		}
-		for i, e := range n.OrderBy {
-			n.OrderBy[i] = Walk(e, fn).(*Order)
+		if n.OrderBy != nil {
+			n.OrderBy = Walk(n.OrderBy, fn).(OrderBy)
 		}
 		if n.Limit != nil {
 			n.Limit = Walk(n.Limit, fn).(*Limit)
+		}
+
+	case SelectExprs:
+		for i, e := range n {
+			n[i] = Walk(e, fn).(SelectExpr)
 		}
 
 	case *Show:
@@ -550,6 +570,11 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 			n.To = Walk(n.To, fn).(Expr)
 		}
 
+	case TableExprs:
+		for i, t := range n {
+			n[i] = Walk(t, fn).(TableExpr)
+		}
+
 	case TableNames:
 		for i, t := range n {
 			n[i] = Walk(t, fn).(TableName)
@@ -596,10 +621,14 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 		if n == nil {
 			break
 		}
-		n.Left = Walk(n.Left, fn).(SelectStatement)
-		n.Right = Walk(n.Right, fn).(SelectStatement)
-		for i, o := range n.OrderBy {
-			n.OrderBy[i] = Walk(o, fn).(*Order)
+		if n.Left != nil {
+			n.Left = Walk(n.Left, fn).(SelectStatement)
+		}
+		if n.Right != nil {
+			n.Right = Walk(n.Right, fn).(SelectStatement)
+		}
+		if n.OrderBy != nil {
+			n.OrderBy = Walk(n.OrderBy, fn).(OrderBy)
 		}
 		if n.Limit != nil {
 			n.Limit = Walk(n.Limit, fn).(*Limit)
@@ -612,17 +641,17 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 		if n.Comments != nil {
 			n.Comments = Walk(n.Comments, fn).(Comments)
 		}
-		for i, t := range n.TableExprs {
-			n.TableExprs[i] = Walk(t, fn).(TableExpr)
+		if n.TableExprs != nil {
+			n.TableExprs = Walk(n.TableExprs, fn).(TableExprs)
 		}
-		for i, e := range n.Exprs {
-			n.Exprs[i] = Walk(e, fn).(*UpdateExpr)
+		if n.Exprs != nil {
+			n.Exprs = Walk(n.Exprs, fn).(UpdateExprs)
 		}
 		if n.Where != nil {
 			n.Where = Walk(n.Where, fn).(*Where)
 		}
-		for i, o := range n.OrderBy {
-			n.OrderBy[i] = Walk(o, fn).(*Order)
+		if n.OrderBy != nil {
+			n.OrderBy = Walk(n.OrderBy, fn).(OrderBy)
 		}
 		if n.Limit != nil {
 			n.Limit = Walk(n.Limit, fn).(*Limit)
@@ -635,6 +664,11 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 		n.Name = Walk(n.Name, fn).(*ColName)
 		if n.Expr != nil {
 			n.Expr = Walk(n.Expr, fn).(Expr)
+		}
+
+	case UpdateExprs:
+		for i, t := range n {
+			n[i] = Walk(t, fn).(*UpdateExpr)
 		}
 
 	case *Use:
@@ -672,8 +706,12 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 		if n == nil {
 			break
 		}
-		n.Cond = Walk(n.Cond, fn).(Expr)
-		n.Val = Walk(n.Val, fn).(Expr)
+		if n.Cond != nil {
+			n.Cond = Walk(n.Cond, fn).(Expr)
+		}
+		if n.Val != nil {
+			n.Val = Walk(n.Val, fn).(Expr)
+		}
 
 	case *Where:
 		if n == nil {
