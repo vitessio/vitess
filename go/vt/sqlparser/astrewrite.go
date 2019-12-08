@@ -1,3 +1,19 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package sqlparser
 
 import (
@@ -43,6 +59,13 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 	}
 
 	switch n := rewritten.(type) {
+	/*
+		Implementation notes for future additions to this switch statement:
+
+		- Check for nil whenever possible.
+		- Don't range into custom array types (look at OrderBy as an example of this)
+	*/
+
 	// nothing to do
 	case *Begin:
 	case BoolVal:
@@ -147,6 +170,11 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 			break
 		}
 		n.Name = Walk(n.Name, fn).(ColIdent)
+
+	case Columns:
+		for i, p := range n {
+			n[i] = Walk(p, fn).(ColIdent)
+		}
 
 	case *ComparisonExpr:
 		if n == nil {
@@ -287,6 +315,19 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 			n.Exprs = Walk(n.Exprs, fn).(SelectExprs)
 		}
 
+	case GroupBy:
+		for i, e := range n {
+			n[i] = Walk(e, fn).(Expr)
+		}
+
+	case *IndexDefinition:
+		if n.Info != nil {
+			n.Info = Walk(n.Info, fn).(*IndexInfo)
+		}
+
+	case *IndexInfo:
+		n.Name = Walk(n.Name, fn).(ColIdent)
+
 	case *IndexHints:
 		if n == nil {
 			break
@@ -393,6 +434,11 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 			n.Expr = Walk(n.Expr, fn).(Expr)
 		}
 
+	case OnDup:
+		for i, t := range n {
+			n[i] = Walk(t, fn).(*UpdateExpr)
+		}
+
 	case OrderBy:
 		for i, p := range n {
 			n[i] = Walk(p, fn).(*Order)
@@ -429,6 +475,11 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 		}
 		if n.Exprs != nil {
 			n.Exprs = Walk(n.Exprs, fn).(TableExprs)
+		}
+
+	case Partitions:
+		for i, p := range n {
+			n[i] = Walk(p, fn).(ColIdent)
 		}
 
 	case *PartitionSpec:
@@ -501,6 +552,11 @@ func Walk(node SQLNode, fn WalkFunc) SQLNode {
 	case SelectExprs:
 		for i, e := range n {
 			n[i] = Walk(e, fn).(SelectExpr)
+		}
+
+	case SetExprs:
+		for i, e := range n {
+			n[i] = Walk(e, fn).(*SetExpr)
 		}
 
 	case *Show:
