@@ -170,6 +170,10 @@ message BinlogSource {
 
   // on_ddl specifies the action to be taken when a DDL is encountered.
   OnDDLAction on_ddl = 7;
+
+  // Source is an external mysql. This attribute should be set to the username
+  // to use in the connection
+  string external_mysql = 8;
 }
 
 // VEventType enumerates the event types.
@@ -253,6 +257,7 @@ message VEvent {
   FieldEvent field_event = 6;
   VGtid vgtid = 7;
   Journal journal = 8;
+  string dml = 9;
   // current_time specifies the current time to handle clock skew.
   int64 current_time = 20;
 }

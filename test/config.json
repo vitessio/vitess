@@ -98,17 +98,6 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"custom_sharding": {
-			"File": "custom_sharding.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0,
-			"Tags": [
-				"worker_test"
-			]
-		},
 		"encrypted_replication": {
 			"File": "encrypted_replication.py",
 			"Args": [],
