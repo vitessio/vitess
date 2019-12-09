@@ -36,8 +36,10 @@ var (
 )
 
 // Hash defines vindex that hashes an int64 to a KeyspaceId
-// by using null-key 3DES hash. It's Unique, Reversible and
+// by using null-key DES hash. It's Unique, Reversible and
 // Functional.
+// Note that at once stage we used a 3DES-based hash here,
+// but for a null key as in our case, they are completely equivalent.
 type Hash struct {
 	name string
 }
@@ -114,11 +116,11 @@ func (vind *Hash) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error
 	return reverseIds, nil
 }
 
-var block3DES cipher.Block
+var blockDES cipher.Block
 
 func init() {
 	var err error
-	block3DES, err = des.NewTripleDESCipher(make([]byte, 24))
+	blockDES, err = des.NewCipher(make([]byte, 8))
 	if err != nil {
 		panic(err)
 	}
@@ -128,7 +130,7 @@ func init() {
 func vhash(shardKey uint64) []byte {
 	var keybytes, hashed [8]byte
 	binary.BigEndian.PutUint64(keybytes[:], shardKey)
-	block3DES.Encrypt(hashed[:], keybytes[:])
+	blockDES.Encrypt(hashed[:], keybytes[:])
 	return []byte(hashed[:])
 }
 
@@ -137,6 +139,6 @@ func vunhash(k []byte) (uint64, error) {
 		return 0, fmt.Errorf("invalid keyspace id: %v", hex.EncodeToString(k))
 	}
 	var unhashed [8]byte
-	block3DES.Decrypt(unhashed[:], k)
+	blockDES.Decrypt(unhashed[:], k)
 	return binary.BigEndian.Uint64(unhashed[:]), nil
 }
