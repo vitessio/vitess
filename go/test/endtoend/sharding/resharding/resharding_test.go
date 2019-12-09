@@ -375,9 +375,6 @@ func TestReSharding(t *testing.T) {
 	sharding.CheckValues(t, *shard3.MasterTablet(), []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, fmt.Sprintf("UINT64(%d)", key2)},
 		2, false, tableName, fixedParentID, keyspaceName, shardingKeyType)
 
-	//fmt.Println("Sleeping...")
-	//time.Sleep(5*time.Minute)
-
 	// Reset vtworker such that we can run the next command.
 	err = clusterInstance.VtworkerProcess.ExecuteCommand("Reset")
 	assert.Nil(t, err)
@@ -451,12 +448,6 @@ func TestReSharding(t *testing.T) {
 		shard1Ks)
 	assert.Nil(t, err)
 
-	fmt.Println("Sleeping......")
-	time.Sleep(2 * time.Minute)
-	insertValue(shard1.MasterTablet(), keyspaceName, tableName, 4, "msg4", key3)
-	insertValue(shard1.MasterTablet(), keyspaceName, tableName, 5, "msg5", key3)
-	fmt.Println("Sleeping2......")
-	time.Sleep(5 * time.Minute)
 	// Change tablet, which was taken offline, back to rdonly.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", shard1Rdonly.Alias, "rdonly")
 	assert.Nil(t, err)
@@ -766,9 +757,6 @@ func TestReSharding(t *testing.T) {
 	sharding.InsertLots(10, 20, *shard1.MasterTablet(), tableName, fixedParentID, keyspaceName)
 	// Checking 80 percent of data is sent fairly quickly
 	assert.True(t, checkLotsTimeout(t, 10, 20, tableName, keyspaceName, shardingKeyType))
-
-	fmt.Println("Sleeping.....")
-	time.Sleep(10 * time.Minute)
 
 	if useMultiSplitDiff {
 		log.Debug("Running vtworker MultiSplitDiff")
