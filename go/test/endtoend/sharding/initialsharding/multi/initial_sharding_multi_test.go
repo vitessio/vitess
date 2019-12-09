@@ -47,11 +47,7 @@ func TestInitialShardingMulti(t *testing.T) {
 	println("-----------------------------")
 	sharding.TestInitialSharding(t, &sharding.ClusterInstance.Keyspaces[1], querypb.Type_UINT64, true, true, false)
 	println("----------Done with 2nd keyspace test----------")
-	if len(sharding.VtgateInstances) > 0 {
-		for _, vtgateInstance := range sharding.VtgateInstances {
-			_ = vtgateInstance.TearDown()
-		}
-	}
+	sharding.KillVtgateInstances()
 	sharding.KillTabletsInKeyspace(&sharding.ClusterInstance.Keyspaces[0])
 	sharding.KillTabletsInKeyspace(&sharding.ClusterInstance.Keyspaces[1])
 	defer sharding.ClusterInstance.Teardown()

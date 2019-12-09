@@ -41,9 +41,8 @@ var (
 	cell             = "zone1"
 	newInitDbFile    string
 	dbCredentialFile string
-	// VtgateInstances - We need this, so that it can be teardown from outside
-	VtgateInstances []*cluster.VtgateProcess
-	commonTabletArg = []string{
+	vtgateInstances  []*cluster.VtgateProcess
+	commonTabletArg  = []string{
 		"-vreplication_healthcheck_topology_refresh", "1s",
 		"-vreplication_healthcheck_retry_delay", "1s",
 		"-vreplication_retry_delay", "1s",
@@ -329,7 +328,7 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	vtgateInstance.MySQLServerSocketPath = path.Join(ClusterInstance.TmpDirectory, fmt.Sprintf("mysql-%s.sock", keyspaceName))
 	vtgateInstance.ExtraArgs = []string{"-retry-count", fmt.Sprintf("%d", 2), "-tablet_protocol", "grpc", "-normalize_queries", "-tablet_refresh_interval", "2s"}
 	err = vtgateInstance.Setup()
-	VtgateInstances = append(VtgateInstances, vtgateInstance)
+	vtgateInstances = append(vtgateInstances, vtgateInstance)
 	assert.Nil(t, err)
 
 	for _, tabletType := range []string{"master", "replica", "rdonly"} {
@@ -511,10 +510,8 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 			ClusterInstance.GetAndReservePort(),
 			"--use_v3_resharding_mode=true",
 			"MultiSplitDiff",
-			"--min_healthy_rdonly_tablets", "1",
 			fmt.Sprintf("%s/%s", keyspaceName, shard1.Name))
 		assert.Nil(t, err)
-
 	} else {
 		err = ClusterInstance.VtworkerProcess.ExecuteVtworkerCommand(ClusterInstance.GetAndReservePort(),
 			ClusterInstance.GetAndReservePort(),
@@ -610,6 +607,7 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	assert.NotNil(t, err)
 	if !isMulti {
 		KillTabletsInKeyspace(keyspace)
+		KillVtgateInstances()
 	}
 	ClusterInstance.VtworkerProcess.TearDown()
 
@@ -634,6 +632,15 @@ func KillTabletsInKeyspace(keyspace *cluster.Keyspace) {
 
 	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspace.Name)
 	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteShard", keyspace.Name+"/"+shard1.Name)
+}
+
+// KillVtgateInstances stops the vtgate process
+func KillVtgateInstances() {
+	if len(vtgateInstances) > 0 {
+		for _, vtgateInstance := range vtgateInstances {
+			_ = vtgateInstance.TearDown()
+		}
+	}
 }
 
 func checkSrvKeyspaceForSharding(t *testing.T, ksName string, expectedPartitions map[topodata.TabletType][]string) {

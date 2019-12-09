@@ -35,8 +35,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// TODO: fix this test
-func InitialShardingMultiSplitDiff(t *testing.T) {
+func TestInitialShardingMultiSplitDiff(t *testing.T) {
 	code, err := sharding.ClusterWrapper(false)
 	if err != nil {
 		t.Errorf("setup failed with status code %d", code)
