@@ -28,12 +28,9 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type vplayer struct {
@@ -56,6 +53,8 @@ type vplayer struct {
 	lastTimestampNs int64
 	// timeOffsetNs keeps track of the clock difference with respect to source tablet.
 	timeOffsetNs int64
+	// canAcceptStmtEvents set to true if the current player can accept events in statement mode. Only true for filters that are match all.
+	canAcceptStmtEvents bool
 }
 
 func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result, pausePos mysql.Position) *vplayer {
@@ -91,6 +90,15 @@ func (vp *vplayer) play(ctx context.Context) error {
 	}
 	vp.replicatorPlan = plan
 
+	// We can't run in statement mode if there are filters defined.
+	vp.canAcceptStmtEvents = true
+	for _, rule := range vp.vr.source.Filter.Rules {
+		if rule.Filter != "" || rule.Match != "/.*" {
+			vp.canAcceptStmtEvents = false
+			break
+		}
+	}
+
 	if err := vp.fetchAndApply(ctx); err != nil {
 		msg := err.Error()
 		vp.vr.stats.History.Add(&binlogplayer.StatsHistoryRecord{
@@ -105,28 +113,23 @@ func (vp *vplayer) play(ctx context.Context) error {
 	return nil
 }
 
-func (vp *vplayer) fetchAndApply(ctx context.Context) error {
-	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, source: %v, filter: %v", vp.vr.id, vp.startPos, vp.stopPos, vp.vr.sourceTablet, vp.vr.source)
+func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
+	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, filter: %v", vp.vr.id, vp.startPos, vp.stopPos, vp.vr.source)
 
-	vsClient, err := tabletconn.GetDialer()(vp.vr.sourceTablet, grpcclient.FailFast(false))
+	err = vp.vr.sourceVStreamer.Open(ctx)
 	if err != nil {
-		return fmt.Errorf("error dialing tablet: %v", err)
+		return fmt.Errorf("error creating vstreamer client: %v", err)
 	}
-	defer vsClient.Close(ctx)
+	defer vp.vr.sourceVStreamer.Close(ctx)
+
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	relay := newRelayLog(ctx, relayLogMaxItems, relayLogMaxSize)
 
-	target := &querypb.Target{
-		Keyspace:   vp.vr.sourceTablet.Keyspace,
-		Shard:      vp.vr.sourceTablet.Shard,
-		TabletType: vp.vr.sourceTablet.Type,
-	}
-	log.Infof("Sending vstream command: %v", vp.replicatorPlan.VStreamFilter)
 	streamErr := make(chan error, 1)
 	go func() {
-		streamErr <- vsClient.VStream(ctx, target, mysql.EncodePosition(vp.startPos), vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
+		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, mysql.EncodePosition(vp.startPos), vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
 			return relay.Send(events)
 		})
 	}()
@@ -143,6 +146,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) error {
 			cancel()
 			<-streamErr
 		}()
+
 		// If the apply thread ends with io.EOF, it means either the Engine
 		// is shutting down and canceled the context, or stop position was reached,
 		// or a journal event was encountered.
@@ -170,6 +174,14 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) error {
 		}
 		return err
 	}
+}
+
+func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEvent) error {
+	if vp.canAcceptStmtEvents {
+		_, err := vp.vr.dbClient.ExecuteWithRetry(ctx, event.Dml)
+		return err
+	}
+	return fmt.Errorf("Filter rules are not supported for SBR replication: %v", vp.vr.source.Filter.GetRules())
 }
 
 func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.RowEvent) error {
@@ -337,7 +349,17 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			return err
 		}
 		vp.tablePlans[event.FieldEvent.TableName] = tplan
+	case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE, binlogdatapb.VEventType_REPLACE:
+		// This is a player using stament based replication
+		if err := vp.vr.dbClient.Begin(); err != nil {
+			return err
+		}
+
+		if err := vp.applyStmtEvent(ctx, event); err != nil {
+			return err
+		}
 	case binlogdatapb.VEventType_ROW:
+		// This player is configured for row based replication
 		if err := vp.vr.dbClient.Begin(); err != nil {
 			return err
 		}
