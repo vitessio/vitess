@@ -66,19 +66,11 @@ clean:
 	rm -rf third_party/acolyte
 	rm -rf go/vt/.proto.tmp
 
-# This will remove object files for all Go projects in the same GOPATH.
-# This is necessary, for example, to make sure dependencies are rebuilt
-# when switching between different versions of Go.
-clean_pkg:
-	rm -rf ../../../../pkg Godeps/_workspace/pkg
-
 # Remove everything including stuff pulled down by bootstrap.sh
 cleanall:
-	# symlinks
-	for f in config data py-vtdb; do test -L ../../../../$$f && rm ../../../../$$f; done
 	# directories created by bootstrap.sh
 	# - exclude vtdataroot and vthook as they may have data we want
-	rm -rf ../../../../bin ../../../../dist ../../../../lib ../../../../pkg
+	rm -rf bin dist lib pkg
 	# Remind people to run bootstrap.sh again
 	echo "Please run 'make tools' again to setup your environment"
 
