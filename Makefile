@@ -16,6 +16,7 @@ MAKEFLAGS = -s
 
 export GOBIN=$(PWD)/bin
 export GO111MODULE=on
+export GODEBUG=tls13=0
 
 # Disabled parallel processing of target prerequisites to avoid that integration tests are racing each other (e.g. for ports) and may fail.
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
