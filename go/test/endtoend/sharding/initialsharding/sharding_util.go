@@ -24,6 +24,8 @@ import (
 	"path"
 	"testing"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/sharding"
@@ -520,6 +522,10 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 			"--min_healthy_rdonly_tablets", "1",
 			fmt.Sprintf("%s/%s", keyspaceName, shard21.Name))
 		assert.Nil(t, err)
+		if err != nil {
+			println(fmt.Sprintf("SplitDiff failed for condition (isMulti %v, isExternal %v, keyspace %s/%s ) Error -  %v", isMulti, isExternal, keyspaceName, shard21.Name, err.Error()))
+			log.Errorf("SplitDiff failed for condition (isMulti %v, isExternal %v, keyspace %s/%s ) Error -  %v", isMulti, isExternal, keyspaceName, shard21.Name, err.Error())
+		}
 
 		err = ClusterInstance.VtworkerProcess.ExecuteVtworkerCommand(ClusterInstance.GetAndReservePort(),
 			ClusterInstance.GetAndReservePort(),
@@ -528,6 +534,10 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 			"--min_healthy_rdonly_tablets", "1",
 			fmt.Sprintf("%s/%s", keyspaceName, shard22.Name))
 		assert.Nil(t, err)
+		if err != nil {
+			println(fmt.Sprintf("SplitDiff failed for condition (isMulti %v, isExternal %v, keyspace %s/%s ) Error -  %v", isMulti, isExternal, keyspaceName, shard22.Name, err.Error()))
+			log.Errorf("SplitDiff failed for condition (isMulti %v, isExternal %v,  keyspace %s/%s ) Error -  %v", isMulti, isExternal, keyspaceName, shard22.Name, err.Error())
+		}
 	}
 
 	// get status for the destination master tablet, make sure we have it all
