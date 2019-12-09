@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/mysql"
 )
@@ -33,15 +35,11 @@ func TestTabletCommands(t *testing.T) {
 	ctx := context.Background()
 
 	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer masterConn.Close()
 
 	replicaConn, err := mysql.Connect(ctx, &replicaTabletParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer replicaConn.Close()
 
 	// Sanity Check
@@ -115,9 +113,7 @@ func TestTabletCommands(t *testing.T) {
 func assertExcludeFields(t *testing.T, qr string) {
 	resultMap := make(map[string]interface{})
 	err := json.Unmarshal([]byte(qr), &resultMap)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	rowsAffected := resultMap["rows_affected"]
 	want := float64(2)
@@ -130,9 +126,7 @@ func assertExcludeFields(t *testing.T, qr string) {
 func assertExecuteFetch(t *testing.T, qr string) {
 	resultMap := make(map[string]interface{})
 	err := json.Unmarshal([]byte(qr), &resultMap)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	rows := reflect.ValueOf(resultMap["rows"])
 	got := rows.Len()
@@ -185,15 +179,11 @@ func runHookAndAssert(t *testing.T, params []string, expectedStatus string, expe
 	if expectedError {
 		assert.Error(t, err, "Expected error")
 	} else {
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		resultMap := make(map[string]interface{})
 		err = json.Unmarshal([]byte(hr), &resultMap)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		exitStatus := reflect.ValueOf(resultMap["ExitStatus"]).Float()
 		status := fmt.Sprintf("%.0f", exitStatus)
@@ -229,9 +219,7 @@ func TestShardReplicationFix(t *testing.T) {
 func assertNodeCount(t *testing.T, result string, want int) {
 	resultMap := make(map[string]interface{})
 	err := json.Unmarshal([]byte(result), &resultMap)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	nodes := reflect.ValueOf(resultMap["nodes"])
 	got := nodes.Len()

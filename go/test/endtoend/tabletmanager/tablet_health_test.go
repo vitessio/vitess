@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/mysql"
@@ -38,15 +40,11 @@ func TestTabletReshuffle(t *testing.T) {
 	ctx := context.Background()
 
 	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer masterConn.Close()
 
 	replicaConn, err := mysql.Connect(ctx, &replicaTabletParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer replicaConn.Close()
 
 	// Sanity Check
@@ -59,6 +57,7 @@ func TestTabletReshuffle(t *testing.T) {
 
 	//Init Tablets
 	err = clusterInstance.VtctlclientProcess.InitTablet(rTablet, cell, keyspaceName, hostname, shardName)
+	require.NoError(t, err)
 
 	// mycnf_server_id prevents vttablet from reading the mycnf
 	// Pointing to masterTablet's socket file
@@ -70,7 +69,7 @@ func TestTabletReshuffle(t *testing.T) {
 	// SupportBackup=False prevents vttablet from trying to restore
 	// Start vttablet process
 	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 
 	sql := "select value from t1"
 	args := []string{
@@ -100,7 +99,7 @@ func TestHealthCheck(t *testing.T) {
 
 	// Start Mysql Processes and return connection
 	replicaConn, err := cluster.StartMySQLAndGetConnection(ctx, rTablet, username, clusterInstance.TmpDirectory)
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 	defer replicaConn.Close()
 
 	// Create database in mysql
@@ -114,13 +113,11 @@ func TestHealthCheck(t *testing.T) {
 	assert.Nil(t, err, "error should be Nil")
 
 	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer masterConn.Close()
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", rTablet.Alias)
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 	checkHealth(t, replicaTablet.HTTPPort, false)
 
 	// Make sure the master is still master
@@ -129,20 +126,20 @@ func TestHealthCheck(t *testing.T) {
 
 	// stop replication, make sure we don't go unhealthy.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopSlave", rTablet.Alias)
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", rTablet.Alias)
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 
 	// make sure the health stream is updated
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", rTablet.Alias)
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 	verifyStreamHealth(t, result)
 
 	// then restart replication, make sure we stay healthy
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopSlave", rTablet.Alias)
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", rTablet.Alias)
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 	checkHealth(t, replicaTablet.HTTPPort, false)
 
 	// now test VtTabletStreamHealth returns the right thing
@@ -160,7 +157,7 @@ func TestHealthCheck(t *testing.T) {
 func checkHealth(t *testing.T, port int, shouldError bool) {
 	url := fmt.Sprintf("http://localhost:%d/healthz", port)
 	resp, err := http.Get(url)
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 	if shouldError {
 		assert.True(t, resp.StatusCode > 400)
 	} else {
@@ -170,11 +167,11 @@ func checkHealth(t *testing.T, port int, shouldError bool) {
 
 func checkTabletType(t *testing.T, tabletAlias string, typeWant string) {
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", tabletAlias)
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 
 	var tablet topodatapb.Tablet
 	err = json2.Unmarshal([]byte(result), &tablet)
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 
 	actualType := tablet.GetType()
 	got := fmt.Sprintf("%d", actualType)
@@ -188,9 +185,7 @@ func checkTabletType(t *testing.T, tabletAlias string, typeWant string) {
 func verifyStreamHealth(t *testing.T, result string) {
 	var streamHealthResponse querypb.StreamHealthResponse
 	err := json2.Unmarshal([]byte(result), &streamHealthResponse)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	serving := streamHealthResponse.GetServing()
 	UID := streamHealthResponse.GetTabletAlias().GetUid()
 	realTimeStats := streamHealthResponse.GetRealtimeStats()
@@ -219,16 +214,16 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 	// implementation.)  The tablet will stay healthy, and the
 	// query service is still running.
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonlyTablet.Alias, "drained")
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 	// Trying to drain the same tablet again, should error
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonlyTablet.Alias, "drained")
 	assert.Error(t, err, "already drained")
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopSlave", rdonlyTablet.Alias)
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 	// Trigger healthcheck explicitly to avoid waiting for the next interval.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", rdonlyTablet.Alias)
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 
 	checkTabletType(t, rdonlyTablet.Alias, "DRAINED")
 
@@ -237,11 +232,11 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 
 	// Restart replication. Tablet will become healthy again.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonlyTablet.Alias, "rdonly")
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StartSlave", rdonlyTablet.Alias)
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", rdonlyTablet.Alias)
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 	checkHealth(t, rdonlyTablet.HTTPPort, false)
 }
 
@@ -262,12 +257,12 @@ func TestIgnoreHealthError(t *testing.T) {
 
 	//Init Tablets
 	err := clusterInstance.VtctlclientProcess.InitTablet(mTablet, cell, keyspaceName, hostname, shardName)
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 
 	// Start Mysql Processes
 	masterConn, err := cluster.StartMySQLAndGetConnection(ctx, mTablet, username, clusterInstance.TmpDirectory)
 	defer masterConn.Close()
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 
 	mTablet.MysqlctlProcess.Stop()
 	// Clean dir for mysql files
@@ -275,20 +270,20 @@ func TestIgnoreHealthError(t *testing.T) {
 
 	// Start Vttablet, it should be NOT_SERVING state as mysql is stopped
 	err = clusterInstance.StartVttablet(mTablet, "NOT_SERVING", false, cell, keyspaceName, hostname, shardName)
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 
 	// Force it healthy.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("IgnoreHealthError", mTablet.Alias, ".*no slave status.*")
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", mTablet.Alias)
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 	waitForTabletStatus(*mTablet, "SERVING")
 
 	// Turn off the force-healthy.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("IgnoreHealthError", mTablet.Alias, "")
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", mTablet.Alias)
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 	waitForTabletStatus(*mTablet, "NOT_SERVING")
 	checkHealth(t, mTablet.HTTPPort, true)
 
