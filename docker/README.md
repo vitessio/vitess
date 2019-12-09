@@ -48,10 +48,3 @@ If you are looking for a stable version of Vitess, use the **lite** image with a
 | **guestbook** | manual (updated with every Vitess release) | Vitess adaption of the Kubernetes guestbook example. Used to showcase sharding in Vitess. Dockerfile is located in [`examples/kubernetes/guestbook/`](https://github.com/vitessio/vitess/tree/master/examples/kubernetes/guestbook). |
 | **orchestrator** | manual | Binaries for [Orchestrator](https://github.com/github/orchestrator). It can be used with Vitess for automatic failovers. Currently not part of the Kubernetes Tutorial and only used in tests. |
 
-### Internal Tools
-
-These images are used by the Vitess project for internal workflows and testing infrastructure and can be ignored by users.
-
-| Image | How (When) Updated | Description |
-| --- | --- | --- |
-| **keytar** | manual | Keytar is a Vitess testing framework to run our Kubernetes cluster tests. Dockerfile is located in [`test/cluster/keytar/`](https://github.com/vitessio/vitess/tree/master/test/cluster/keytar). |
