@@ -146,6 +146,7 @@ func initClusterForInitialSharding(keyspaceName string, shardNames []string, tot
 	if isMulti {
 		extraArgs = []string{"-db-credentials-file", dbCredentialFile}
 	}
+	os.Setenv("EXTRA_MY_CNF", path.Join(os.Getenv("VTROOT"), "config", "mycnf", "rbr.cnf"))
 	for _, shardName := range shardNames {
 		shard := &cluster.Shard{
 			Name: shardName,
@@ -175,11 +176,13 @@ func initClusterForInitialSharding(keyspaceName string, shardNames []string, tot
 			}
 			// Start Mysqlctl process, for multi keyspace we need only 1st keyspace sql procs, that is why this check is added
 			if keyspaceName == keyspaceName1 {
-				if proc, err := tablet.MysqlctlProcess.StartWithArgs(path.Join(os.Getenv("VTROOT"), "config", "mycnf", "rbr.cnf"), extraArgs...); err != nil {
+				if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
 					return
 				} else {
 					mysqlProcesses = append(mysqlProcesses, proc)
 				}
+			} else { // Since we'll be using mysql procs of keyspace-1 for ks-2, resetting this to 0
+				tablet.MysqlctlProcess.TabletUID = 0
 			}
 
 			// start vttablet process
@@ -616,9 +619,14 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 func KillTabletsInKeyspace(keyspace *cluster.Keyspace) {
 	// Teardown
 	shard1 := keyspace.Shards[0]
+	var mysqlctlProcessList []*exec.Cmd
 	for _, tablet := range []cluster.Vttablet{*shard1.MasterTablet(), *shard1.Replica(), *shard1.Rdonly()} {
-		_ = tablet.MysqlctlProcess.Stop()
+		proc, _ := tablet.MysqlctlProcess.StopProcess()
+		mysqlctlProcessList = append(mysqlctlProcessList, proc)
 		_ = tablet.VttabletProcess.TearDown()
+	}
+	for _, proc := range mysqlctlProcessList {
+		proc.Wait()
 	}
 	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", shard1.Replica().Alias)
 	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet", shard1.Rdonly().Alias)

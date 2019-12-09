@@ -53,27 +53,6 @@ func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 	return tmpProcess.Run()
 }
 
-// StartWithArgs executes mysqlctl command to start mysql instance with arguments
-func (mysqlctl *MysqlctlProcess) StartWithArgs(extraCnf string, extraArgs ...string) (cmd *exec.Cmd, err error) {
-	if extraCnf != "" {
-		os.Setenv("EXTRA_MY_CNF", extraCnf)
-	}
-
-	tmpProcess := exec.Command(
-		mysqlctl.Binary,
-		"-log_dir", mysqlctl.LogDirectory,
-		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
-		"-mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
-	)
-
-	if len(extraArgs) > 0 {
-		tmpProcess.Args = append(tmpProcess.Args, extraArgs...)
-	}
-	tmpProcess.Args = append(tmpProcess.Args, "init",
-		"-init_db_sql_file", mysqlctl.InitDBFile)
-	return tmpProcess, tmpProcess.Start()
-}
-
 // Start executes mysqlctl command to start mysql instance
 func (mysqlctl *MysqlctlProcess) Start() (err error) {
 	if tmpProcess, err := mysqlctl.StartProcess(); err != nil {
@@ -90,9 +69,13 @@ func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
 		"-log_dir", mysqlctl.LogDirectory,
 		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 		"-mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
-		"init",
-		"-init_db_sql_file", mysqlctl.InitDBFile,
 	)
+
+	if len(mysqlctl.ExtraArgs) > 0 {
+		tmpProcess.Args = append(tmpProcess.Args, mysqlctl.ExtraArgs...)
+	}
+	tmpProcess.Args = append(tmpProcess.Args, "init",
+		"-init_db_sql_file", mysqlctl.InitDBFile)
 	return tmpProcess, tmpProcess.Start()
 }
 
@@ -115,7 +98,6 @@ func (mysqlctl *MysqlctlProcess) StopProcess() (*exec.Cmd, error) {
 		tmpProcess.Args = append(tmpProcess.Args, mysqlctl.ExtraArgs...)
 	}
 	tmpProcess.Args = append(tmpProcess.Args, "shutdown")
-	fmt.Printf("%v", tmpProcess.Args)
 	return tmpProcess, tmpProcess.Start()
 }
 

@@ -384,7 +384,7 @@ func (cluster *LocalProcessCluster) Teardown() {
 	if err := cluster.VtgateProcess.TearDown(); err != nil {
 		log.Errorf("Error in vtgate teardown - %s", err.Error())
 	}
-	mysqlctlProcessList := []*exec.Cmd{}
+	var mysqlctlProcessList []*exec.Cmd
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {
 			for _, tablet := range shard.Vttablets {
