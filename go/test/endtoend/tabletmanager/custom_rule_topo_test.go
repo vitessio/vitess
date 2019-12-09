@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -31,14 +33,10 @@ func TestTopoCustomRule(t *testing.T) {
 
 	ctx := context.Background()
 	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer masterConn.Close()
 	replicaConn, err := mysql.Connect(ctx, &replicaTabletParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer replicaConn.Close()
 
 	// Insert data for sanity checks
@@ -51,9 +49,7 @@ func TestTopoCustomRule(t *testing.T) {
 	topoCustomRulePath := "/keyspaces/ks/configs/CustomRules"
 	data := []byte("[]\n")
 	err = ioutil.WriteFile(topoCustomRuleFile, data, 0777)
-	if err != nil {
-		t.Error("Write to file failed")
-	}
+	require.NoError(t, err)
 
 	// Copy config file into topo.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TopoCp", "-to_topo", topoCustomRuleFile, topoCustomRulePath)
@@ -86,9 +82,8 @@ func TestTopoCustomRule(t *testing.T) {
 	result, err := vtctlExec("select id, value from t1", rTablet.Alias)
 	resultMap := make(map[string]interface{})
 	err = json.Unmarshal([]byte(result), &resultMap)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	rowsAffected := resultMap["rows_affected"]
 	want := float64(2)
 	assert.Equal(t, want, rowsAffected)
@@ -101,9 +96,7 @@ func TestTopoCustomRule(t *testing.T) {
 		"Query" : "(select)|(SELECT)"
 	  }]`)
 	err = ioutil.WriteFile(topoCustomRuleFile, data, 0777)
-	if err != nil {
-		t.Error("Write to file failed")
-	}
+	require.NoError(t, err)
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TopoCp", "-to_topo", topoCustomRuleFile, topoCustomRulePath)
 	assert.Nil(t, err, "error should be Nil")
