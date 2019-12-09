@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/mysql"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -34,15 +36,11 @@ func TestQPS(t *testing.T) {
 		Port: clusterInstance.VtgateMySQLPort,
 	}
 	vtGateConn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer vtGateConn.Close()
 
 	replicaConn, err := mysql.Connect(ctx, &replicaTabletParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer replicaConn.Close()
 
 	// Sanity Check
@@ -75,9 +73,7 @@ func TestQPS(t *testing.T) {
 		var streamHealthResponse querypb.StreamHealthResponse
 
 		err = json.Unmarshal([]byte(result), &streamHealthResponse)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		realTimeStats := streamHealthResponse.GetRealtimeStats()
 		qps := realTimeStats.GetQps()
