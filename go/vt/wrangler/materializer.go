@@ -223,9 +223,10 @@ func (mz *materializer) generateInserts(ctx context.Context) (string, error) {
 
 	for _, source := range mz.sourceShards {
 		bls := &binlogdatapb.BinlogSource{
-			Keyspace: mz.ms.SourceKeyspace,
-			Shard:    source.ShardName(),
-			Filter:   &binlogdatapb.Filter{},
+			Keyspace:      mz.ms.SourceKeyspace,
+			Shard:         source.ShardName(),
+			Filter:        &binlogdatapb.Filter{},
+			StopAfterCopy: mz.ms.StopAfterCopy,
 		}
 		for _, ts := range mz.ms.TableSettings {
 			rule := &binlogdatapb.Rule{
