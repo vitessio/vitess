@@ -1,5 +1,4 @@
 name: unit_race
-on: [push, pull_request]
 jobs:
 
   build:
