@@ -84,31 +84,31 @@ func (s *Server) Close() {
 }
 
 // TODO: Rename this to NewServer and change NewServer to a name that signifies it's global.
-func NewServerWithOpts(serverAddr, root string, certPath *string, keyPath *string, caPath *string) (*Server, error) {
+func NewServerWithOpts(serverAddr, root, certPath, keyPath, caPath string) (*Server, error) {
 	config := clientv3.Config{
 		Endpoints:   strings.Split(serverAddr, ","),
 		DialTimeout: 5 * time.Second,
 	}
 
 	// If TLS is enabled, attach TLS config info.
-	if *certPath != "" && *keyPath != "" {
+	if certPath != "" && keyPath != "" {
 		// Verify we can load provided cert and key.
-		_, err := tls.LoadX509KeyPair(*certPath, *keyPath)
+		_, err := tls.LoadX509KeyPair(certPath, keyPath)
 		if err != nil {
-			log.Fatalf("Unable to load cert %v and key %v, err %v", *certPath, *keyPath, err)
+			log.Fatalf("Unable to load cert %v and key %v, err %v", certPath, keyPath, err)
 		}
 
 		// Verify we can open ca cert.
-		_, err = ioutil.ReadFile(*caPath)
+		_, err = ioutil.ReadFile(caPath)
 		if err != nil {
-			log.Fatalf("Unable to open ca cert %v, err %v", *caPath, err)
+			log.Fatalf("Unable to open ca cert %v, err %v", caPath, err)
 		}
 
 		// Safe now to build up TLS info.
 		tlsInfo := transport.TLSInfo{
-			CertFile:      *certPath,
-			KeyFile:       *keyPath,
-			TrustedCAFile: *caPath,
+			CertFile:      certPath,
+			KeyFile:       keyPath,
+			TrustedCAFile: caPath,
 		}
 
 		tlsConfig, err := tlsInfo.ClientConfig()
@@ -132,7 +132,7 @@ func NewServerWithOpts(serverAddr, root string, certPath *string, keyPath *strin
 // TODO: Rename this to a name to signifies this is a global etcd server.
 // NewServer returns a new etcdtopo.Server.
 func NewServer(serverAddr, root string) (*Server, error) {
-	return NewServerWithOpts(serverAddr, root, clientCertPath, clientKeyPath, clientCaPath)
+	return NewServerWithOpts(serverAddr, root, *clientCertPath, *clientKeyPath, *clientCaPath)
 }
 
 func init() {

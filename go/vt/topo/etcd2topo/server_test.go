@@ -18,13 +18,14 @@ package etcd2topo
 
 import (
 	"fmt"
-	"github.com/coreos/etcd/pkg/transport"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
 	"testing"
 	"time"
+
+	"github.com/coreos/etcd/pkg/transport"
 
 	"golang.org/x/net/context"
 
@@ -37,7 +38,7 @@ import (
 )
 
 var (
-	testKeyPath = "/tmp/testkey.key"
+	testKeyPath  = "/tmp/testkey.key"
 	testCertPath = "/tmp/testcert.crt"
 )
 
@@ -106,7 +107,7 @@ func startEtcdWithTLS(t *testing.T) (*exec.Cmd, string, string) {
 	// Get our two ports to listen to.
 	port := testfiles.GoVtTopoEtcd2topoPort
 	name := "vitess_unit_test"
-	clientAddr := fmt.Sprintf("https://localhost:%v", port)
+	clientAddr := fmt.Sprintf("http://localhost:%v", port)
 	peerAddr := fmt.Sprintf("http://localhost:%v", port+1)
 	initialCluster := fmt.Sprintf("%v=%v", name, peerAddr)
 
@@ -135,8 +136,8 @@ func startEtcdWithTLS(t *testing.T) (*exec.Cmd, string, string) {
 
 	// Safe now to build up TLS info.
 	tlsInfo := transport.TLSInfo{
-		CertFile:   testCertPath,
-		KeyFile:    testKeyPath,
+		CertFile:      testCertPath,
+		KeyFile:       testKeyPath,
 		TrustedCAFile: testCertPath,
 	}
 
@@ -145,7 +146,7 @@ func startEtcdWithTLS(t *testing.T) (*exec.Cmd, string, string) {
 	// Create a client to connect to the created etcd.
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:   []string{clientAddr},
-		TLS: tlsConfig,
+		TLS:         tlsConfig,
 		DialTimeout: 5 * time.Second,
 	})
 	if err != nil {
@@ -176,7 +177,7 @@ func TestEtcd2TLS(t *testing.T) {
 	testRoot := fmt.Sprintf("/test-%v", testIndex)
 
 	// Create the server on the new root.
-	server, err := NewServerWithOpts(clientAddr, testRoot, &testCertPath, &testKeyPath, &testCertPath)
+	server, err := NewServerWithOpts(clientAddr, testRoot, testCertPath, testKeyPath, testCertPath)
 	if err != nil {
 		t.Fatalf("NewServerWithOpts failed: %v", err)
 	}
@@ -189,7 +190,6 @@ func TestEtcd2TLS(t *testing.T) {
 		server.Close()
 		client.Close()
 	}()
-
 
 	testCtx := context.Background()
 	testKey := "testkey"
