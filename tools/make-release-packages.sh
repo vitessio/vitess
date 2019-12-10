@@ -17,12 +17,12 @@ VERSION="5.0.0" # tmp
 
 RELEASE_ID="vitess-${VERSION}-${SHORT_REV}"
 RELEASE_DIR="${VTROOT}/releases/${RELEASE_ID}"
-DESCRIPTION='A database clustering system for horizontal scaling of MySQL
+DESCRIPTION="A database clustering system for horizontal scaling of MySQL
 
 Vitess is a database solution for deploying, scaling and managing large
-clusters of MySQL instances. It’s architected to run as effectively in a public
+clusters of MySQL instances. It's architected to run as effectively in a public
 or private cloud architecture as it does on dedicated hardware. It combines and
-extends many important MySQL features with the scalability of a NoSQL database.'
+extends many important MySQL features with the scalability of a NoSQL database."
 
 DEB_FILE="vitess_${VERSION}-${SHORT_REV}_amd64.deb"
 RPM_FILE="vitess-${VERSION}-${SHORT_REV}.x86_64.rpm"
@@ -83,6 +83,6 @@ echo "Packages created as of $(date +"%m-%d-%y") at $(date +"%r %Z")"
 echo ""
 echo "Package | SHA256"
 echo "------------ | -------------"
-echo "${TAR_FILE} | $(sha256sum ~/releases/"${TAR_FILE}" | awk '{print $1}')"
-echo "${DEB_FILE} | $(sha256sum ~/releases/"${DEB_FILE}" | awk '{print $1}')"
-echo "${RPM_FILE} | $(sha256sum ~/releases/"${RPM_FILE}" | awk '{print $1}')"
+echo "${TAR_FILE} | $(sha256sum "${VTROOT}/releases/${TAR_FILE}" | awk '{print $1}')"
+echo "${DEB_FILE} | $(sha256sum "${VTROOT}/releases/${DEB_FILE}" | awk '{print $1}')"
+echo "${RPM_FILE} | $(sha256sum "${VTROOT}/releases/${RPM_FILE}" | awk '{print $1}')"
