@@ -17,8 +17,10 @@
 # This runs client tests. It used to be part of local_example,
 # but has been moved to its own test. It hijacks the public examples scripts
 
+source build.env
+
 set -xe
-cd "$VTTOP/examples/local"
+cd "$VTROOT/examples/local"
 
 CELL=test ./etcd-up.sh
 CELL=test ./vtctld-up.sh

@@ -23,17 +23,15 @@ import os
 import sys
 
 
-# For now, vttop is only used in this module. If other people
+# For now, vtroot is only used in this module. If other people
 # need this, we should move it to environment.
-if "VTTOP" not in os.environ:
+if "VTROOT" not in os.environ:
   sys.stderr.write(
       "ERROR: Vitess environment not set up. "
       'Please run "source dev.env" first.\n')
   sys.exit(1)
 
-# vttop is the toplevel of the vitess source tree
-vttop = os.environ["VTTOP"]
-
+vtroot = os.environ["VTROOT"]
 
 class MysqlFlavor(object):
   """Base class with default SQL statements."""
@@ -48,7 +46,7 @@ class MariaDB(MysqlFlavor):
 
   def my_cnf(self):
     files = [
-        os.path.join(vttop, "config/mycnf/default-fast.cnf"),
+        os.path.join(vtroot, "config/mycnf/default-fast.cnf"),
     ]
     return ":".join(files)
 
@@ -57,7 +55,7 @@ class MariaDB103(MysqlFlavor):
 
   def my_cnf(self):
     files = [
-      os.path.join(vttop, "config/mycnf/default-fast.cnf"),
+      os.path.join(vtroot, "config/mycnf/default-fast.cnf"),
     ]
     return ":".join(files)
 
@@ -66,7 +64,7 @@ class MySQL56(MysqlFlavor):
 
   def my_cnf(self):
     files = [
-        os.path.join(vttop, "config/mycnf/default-fast.cnf"),
+        os.path.join(vtroot, "config/mycnf/default-fast.cnf"),
     ]
     return ":".join(files)
 
@@ -75,7 +73,7 @@ class MySQL80(MysqlFlavor):
 
   def my_cnf(self):
     files = [
-        os.path.join(vttop, "config/mycnf/default-fast.cnf"),
+        os.path.join(vtroot, "config/mycnf/default-fast.cnf"),
     ]
     return ":".join(files)
 

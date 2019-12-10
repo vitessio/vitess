@@ -51,8 +51,8 @@ def start_vitess():
   keyspace = topology.keyspaces.add(name='lookup')
   keyspace.shards.add(name='0')
 
-  vttop = os.environ['VTTOP']
-  args = [os.path.join(vttop, 'py/vttest/run_local_database.py'),
+  vtroot = os.environ['VTROOT']
+  args = [os.path.join(vtroot, 'py/vttest/run_local_database.py'),
           '--port', '12345',
           '--proto_topo', text_format.MessageToString(topology,
                                                       as_one_line=True),

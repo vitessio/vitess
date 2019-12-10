@@ -14,6 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+source build.env
+
 if [[ -z $VT_GO_PARALLEL && -n $VT_GO_PARALLEL_VALUE ]]; then
   VT_GO_PARALLEL="-p $VT_GO_PARALLEL_VALUE"
 fi

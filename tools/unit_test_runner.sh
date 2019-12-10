@@ -29,6 +29,9 @@
 # Set VT_GO_PARALLEL variable in the same way as the Makefile does.
 # We repeat this here because this script is called directly by test.go
 # and not via the Makefile.
+
+source build.env
+
 if [[ -z $VT_GO_PARALLEL && -n $VT_GO_PARALLEL_VALUE ]]; then
   VT_GO_PARALLEL="-p $VT_GO_PARALLEL_VALUE"
 fi

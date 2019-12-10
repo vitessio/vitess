@@ -14,17 +14,15 @@
 
 MAKEFLAGS = -s
 
-# Soon this can be $PWD/bin, with no dependencies
-# Waiting on https://github.com/vitessio/vitess/issues/5378
-
-export GOBIN=$(VTROOT)/bin
+export GOBIN=$(PWD)/bin
 export GO111MODULE=on
+export GODEBUG=tls13=0
 
 # Disabled parallel processing of target prerequisites to avoid that integration tests are racing each other (e.g. for ports) and may fail.
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build build_web test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race
+.PHONY: all build build_web test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race minimaltools tools
 
 all: build
 
@@ -48,6 +46,7 @@ build:
 ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
+	bash ./build.env
 	go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
 
 parser:
@@ -56,8 +55,9 @@ parser:
 # To pass extra flags, run test.go manually.
 # For example: go run test.go -docker=false -- --extra-flag
 # For more info see: go run test.go -help
-test:
-	go run test.go -docker=false
+test: build dependency_check
+	echo $$(date): Running unit tests
+	tools/unit_test_runner.sh
 
 site_test: unit_test site_integration_test
 
@@ -66,25 +66,13 @@ clean:
 	rm -rf third_party/acolyte
 	rm -rf go/vt/.proto.tmp
 
-# This will remove object files for all Go projects in the same GOPATH.
-# This is necessary, for example, to make sure dependencies are rebuilt
-# when switching between different versions of Go.
-clean_pkg:
-	rm -rf ../../../../pkg Godeps/_workspace/pkg
-
 # Remove everything including stuff pulled down by bootstrap.sh
 cleanall:
-	# symlinks
-	for f in config data py-vtdb; do test -L ../../../../$$f && rm ../../../../$$f; done
 	# directories created by bootstrap.sh
 	# - exclude vtdataroot and vthook as they may have data we want
-	rm -rf ../../../../bin ../../../../dist ../../../../lib ../../../../pkg
+	rm -rf bin dist lib pkg
 	# Remind people to run bootstrap.sh again
-	echo "Please run bootstrap.sh again to setup your environment"
-
-unit_test: build
-	echo $$(date): Running unit tests
-	go test $(VT_GO_PARALLEL) ./go/...
+	echo "Please run 'make tools' again to setup your environment"
 
 e2e_test: build
 	echo $$(date): Running endtoend tests
@@ -96,7 +84,7 @@ e2e_test: build
 unit_test_cover: build
 	go test $(VT_GO_PARALLEL) -cover ./go/... | misc/parse_cover.py
 
-unit_test_race: build
+unit_test_race: build dependency_check
 	tools/unit_test_race.sh
 
 e2e_test_race: build
@@ -118,7 +106,7 @@ site_integration_test:
 
 java_test:
 	go install ./go/cmd/vtgateclienttest ./go/cmd/vtcombo
-	mvn -f java/pom.xml -B clean verify
+	VTROOT=${PWD} mvn -f java/pom.xml -B clean verify
 
 install_protoc-gen-go:
 	go install github.com/golang/protobuf/protoc-gen-go
@@ -284,3 +272,14 @@ packages: docker_base
 	docker build -f docker/packaging/Dockerfile -t vitess/packaging .
 	docker run --rm -v ${PWD}/releases:/vt/releases --env VERSION=$(VERSION) vitess/packaging --package /vt/releases -t deb --deb-no-default-config-files
 	docker run --rm -v ${PWD}/releases:/vt/releases --env VERSION=$(VERSION) vitess/packaging --package /vt/releases -t rpm
+
+tools:
+	echo $$(date): Installing dependencies
+	BUILD_PYTHON=0 ./bootstrap.sh
+
+minimaltools:
+	echo $$(date): Installing minimal dependencies
+	BUILD_PYTHON=0 BUILD_JAVA=0 BUILD_CONSUL=0 ./bootstrap.sh
+
+dependency_check:
+	./tools/dependency_check.sh

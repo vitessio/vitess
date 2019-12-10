@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
@@ -36,8 +37,12 @@ func TestMycnf(t *testing.T) {
 	// Assigning ServerID to be different from tablet UID to make sure that there are no
 	// assumptions in the code that those IDs are the same.
 	cnf.ServerID = 22222
+	root, err := env.VtRoot()
+	if err != nil {
+		t.Errorf("err: %v", err)
+	}
 	cnfTemplatePaths := []string{
-		path.Join(os.Getenv("VTTOP"), "/config/mycnf/default.cnf"),
+		path.Join(root, "config/mycnf/default.cnf"),
 	}
 	data, err := cnf.makeMycnf(cnfTemplatePaths)
 	if err != nil {
@@ -74,7 +79,7 @@ func TestMycnf(t *testing.T) {
 
 // Run this test if any changes are made to hook handling / make_mycnf hook
 // other tests fail if we keep the hook around
-// 1. ln -snf $VTTOP/test/vthook-make_mycnf $VTROOT/vthook/make_mycnf
+// 1. ln -snf $VTROOT/test/vthook-make_mycnf $VTROOT/vthook/make_mycnf
 // 2. Remove "No" prefix from func name
 // 3. go test
 // 4. \rm $VTROOT/vthook/make_mycnf

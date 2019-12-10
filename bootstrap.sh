@@ -15,14 +15,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+### This file is executed by 'make tools'. You do not need to execute it directly.
 
 # Outline of this file.
 # 0. Initialization and helper methods.
 # 1. Installation of dependencies.
 
-BUILD_TESTS=${BUILD_TESTS:-1}
 BUILD_PYTHON=${BUILD_PYTHON:-1}
 BUILD_JAVA=${BUILD_JAVA:-1}
+BUILD_CONSUL=${BUILD_CONSUL:-1}
 
 #
 # 0. Initialization and helper methods.
@@ -36,47 +37,8 @@ function fail() {
 [[ "$(dirname "$0")" = "." ]] || fail "bootstrap.sh must be run from its current directory"
 
 # Create main directories.
-VTROOT="${VTROOT:-${PWD/\/src\/vitess.io\/vitess/}}"
-mkdir -p "$VTROOT/dist"
-mkdir -p "$VTROOT/bin"
-mkdir -p "$VTROOT/lib"
-mkdir -p "$VTROOT/vthook"
 
-# This is required for VIRTUALENV
-# Used by Python below
-
-if [ "$BUILD_TESTS" == 1 ] ; then
-    source ./dev.env
-else
-    source ./build.env
-fi
-
-go version &>/dev/null  || fail "Go is not installed or is not on \$PATH"
-goversion_min 1.12 || fail "Go is not version 1.12+"
-
-if [ "$BUILD_TESTS" == 1 ] ; then
-    # Set up required soft links.
-    # TODO(mberlin): Which of these can be deleted?
-    ln -snf "$VTTOP/config" "$VTROOT/config"
-    ln -snf "$VTTOP/data" "$VTROOT/data"
-    ln -snf "$VTTOP/py" "$VTROOT/py-vtdb"
-    ln -snf "$VTTOP/go/vt/zkctl/zksrv.sh" "$VTROOT/bin/zksrv.sh"
-    ln -snf "$VTTOP/test/vthook-test.sh" "$VTROOT/vthook/test.sh"
-    ln -snf "$VTTOP/test/vthook-test_backup_error" "$VTROOT/vthook/test_backup_error"
-    ln -snf "$VTTOP/test/vthook-test_backup_transform" "$VTROOT/vthook/test_backup_transform"
-else
-    ln -snf "$VTTOP/config" "$VTROOT/config"
-    ln -snf "$VTTOP/data" "$VTROOT/data"
-    ln -snf "$VTTOP/go/vt/zkctl/zksrv.sh" "$VTROOT/bin/zksrv.sh"
-fi
-
-# git hooks are only required if someone intends to contribute.
-
-echo "creating git hooks"
-mkdir -p "$VTTOP/.git/hooks"
-ln -sf "$VTTOP/misc/git/pre-commit" "$VTTOP/.git/hooks/pre-commit"
-ln -sf "$VTTOP/misc/git/commit-msg" "$VTTOP/.git/hooks/commit-msg"
-(cd "$VTTOP" && git config core.hooksPath "$VTTOP/.git/hooks")
+source ./dev.env
 
 # install_dep is a helper function to generalize the download and installation of dependencies.
 #
@@ -236,7 +198,7 @@ function install_etcd() {
   ln -snf "$dist/etcd-${version}-${platform}-${target}/etcd" "$VTROOT/bin/etcd"
   ln -snf "$dist/etcd-${version}-${platform}-${target}/etcdctl" "$VTROOT/bin/etcdctl"
 }
-which etcd || install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
+command -v etcd && echo "etcd already installed" || install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
 
 
 # Download and install consul, link consul binary into our root.
@@ -260,8 +222,10 @@ function install_consul() {
   unzip "consul_${version}_${platform}_${target}.zip"
   ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
-install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul
 
+if [ "$BUILD_CONSUL" == 1 ] ; then
+  install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul
+fi
 
 # Install py-mock.
 function install_pymock() {
@@ -273,7 +237,7 @@ function install_pymock() {
   PYTHONPATH=$(prepend_path "$PYTHONPATH" "$dist/lib/python2.7/site-packages")
   export PYTHONPATH
 
-  pushd "$VTTOP/third_party/py" >/dev/null
+  pushd "$VTROOT/third_party/py" >/dev/null
   tar -xzf "mock-$version.tar.gz"
   cd "mock-$version"
   $PYTHON ./setup.py install --prefix="$dist"
@@ -335,4 +299,4 @@ if [ "$BUILD_PYTHON" == 1 ] ; then
 fi
 
 echo
-echo "bootstrap finished - run 'source dev.env' or 'source build.env' in your shell before building."
+echo "bootstrap finished - run 'make build' to compile"

@@ -27,7 +27,7 @@ run against a given flavor, it may take some time for the corresponding
 bootstrap image (vitess/bootstrap:<flavor>) to be downloaded.
 
 It is meant to be run from the Vitess root, like so:
-  ~/src/vitess.io/vitess$ go run test.go [args]
+  $ go run test.go [args]
 
 For a list of options, run:
   $ go run test.go --help
@@ -195,6 +195,7 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 	// Also try to make them use different port ranges
 	// to mitigate failures due to zombie processes.
 	cmd.Env = updateEnv(os.Environ(), map[string]string{
+		"VTROOT":      "/vt/src/vitess.io/vitess",
 		"VTDATAROOT":  dataDir,
 		"VTPORTSTART": strconv.FormatInt(int64(getPortStart(100)), 10),
 	})
@@ -370,7 +371,7 @@ func main() {
 	}
 	tests = dup
 
-	vtTop := "."
+	vtRoot := "."
 	tmpDir := ""
 	if *docker {
 		// Copy working repo to tmpDir.
@@ -387,7 +388,7 @@ func main() {
 		if out, err := exec.Command("chmod", "-R", "go=u", tmpDir).CombinedOutput(); err != nil {
 			log.Printf("Can't set permissions on temp dir %v: %v: %s", tmpDir, err, out)
 		}
-		vtTop = tmpDir
+		vtRoot = tmpDir
 	} else {
 		// Since we're sharing the working dir, do the build once for all tests.
 		log.Printf("Running make build...")
@@ -473,7 +474,7 @@ func main() {
 
 					// Run the test.
 					start := time.Now()
-					output, err := test.run(vtTop, dataDir)
+					output, err := test.run(vtRoot, dataDir)
 					duration := time.Since(start)
 
 					// Save/print test output.
