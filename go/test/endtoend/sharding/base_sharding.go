@@ -39,8 +39,8 @@ import (
 )
 
 var (
-	lotRange1 uint64 = 14987979559889010670 //11529215046068469760 // 0xA000000000000000 //key5
-	lotRange2 uint64 = 10376293541461622789 //16140901064495857664 // 0xE000000000000000 //key4
+	lotRange1 uint64 = 0xA000000000000000
+	lotRange2 uint64 = 0xE000000000000000
 	// InsertTabletTemplateKsID common insert format to be used for different tests
 	InsertTabletTemplateKsID = `insert into %s (parent_id, id, msg, custom_ksid_col) values (%d, %d, '%s', %d) /* vtgate:: keyspace_id:%d */ /* id:%d */`
 )
@@ -151,7 +151,7 @@ func CheckValues(t *testing.T, vttablet cluster.Vttablet, values []string, id ui
 		isFound = isFound && assert.Equal(t, result.Rows[0][2].String(), values[2])
 		if keyType == topodata.KeyspaceIdType_BYTES {
 			byteResult := result.Rows[0][3].ToBytes()
-			isFound = isFound && assert.Equal(t, fmt.Sprintf("%016x", binary.BigEndian.Uint64(byteResult[:])), values[3])
+			isFound = isFound && assert.Equal(t, fmt.Sprintf("%d", binary.BigEndian.Uint64(byteResult[:])), values[3])
 		} else {
 			isFound = isFound && assert.Equal(t, result.Rows[0][3].String(), values[3])
 		}
@@ -274,12 +274,12 @@ func InsertLots(count uint64, base uint64, vttablet cluster.Vttablet, table stri
 	var i uint64
 	for i = 0; i < count; i++ {
 		query1 = fmt.Sprintf(InsertTabletTemplateKsID, table, parentID, 10000+base+i,
-			fmt.Sprintf("msg-range1-%d", 10000+base+i), lotRange1+i, lotRange1+i, 10000+base+i)
+			fmt.Sprintf("msg-range1-%d", 10000+base+i), lotRange1, lotRange1, 10000+base+i)
 		query2 = fmt.Sprintf(InsertTabletTemplateKsID, table, parentID, 20000+base+i,
-			fmt.Sprintf("msg-range2-%d", 20000+base+i), lotRange2+i, lotRange2+i, 20000+base+i)
+			fmt.Sprintf("msg-range2-%d", 20000+base+i), lotRange2, lotRange2, 20000+base+i)
 
-		InsertToTabletUsingSameConn(query1, vttablet, ks, dbConn)
-		InsertToTabletUsingSameConn(query2, vttablet, ks, dbConn)
+		InsertToTablet(query1, vttablet, ks)
+		InsertToTablet(query2, vttablet, ks)
 	}
 }
 
@@ -288,14 +288,6 @@ func InsertToTablet(query string, vttablet cluster.Vttablet, ks string) {
 	_, _ = vttablet.VttabletProcess.QueryTablet("begin", ks, true)
 	_, err := vttablet.VttabletProcess.QueryTablet(query, ks, true)
 	_, _ = vttablet.VttabletProcess.QueryTablet("commit", ks, true)
-	if err != nil {
-		fmt.Println(err)
-	}
-}
-
-// InsertToTabletUsingSameConn inserts a single row to vttablet using existing connection
-func InsertToTabletUsingSameConn(query string, vttablet cluster.Vttablet, ks string, dbConn *mysql.Conn) {
-	_, err := dbConn.ExecuteFetch(query, 1000, true)
 	if err != nil {
 		fmt.Println(err)
 	}
