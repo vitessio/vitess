@@ -26,6 +26,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+
 	"vitess.io/vitess/go/mysql"
 
 	"github.com/prometheus/common/log"
@@ -171,11 +172,10 @@ var (
 
 	// insertTabletTemplateKsID common insert format
 	insertTabletTemplateKsID = `insert into %s (parent_id, id, msg, custom_ksid_col) values (%d, %d, '%s', %d) /* vtgate:: keyspace_id:%d */ /* id:%d */`
-
 )
 
 // TestReSharding - main test with accepts different params for various test
-func TestReSharding(t *testing.T , useByteShardingKeyType bool) {
+func TestReSharding(t *testing.T, useByteShardingKeyType bool) {
 	clusterInstance = cluster.NewCluster(cell1, hostname)
 	defer clusterInstance.Teardown()
 
@@ -236,7 +236,7 @@ func TestReSharding(t *testing.T , useByteShardingKeyType bool) {
 
 	if useByteShardingKeyType {
 		shardingColumnType = "varbinary(64)"
-		shardingKeyType =  querypb.Type_VARBINARY
+		shardingKeyType = querypb.Type_VARBINARY
 	}
 
 	// Initialize Cluster
@@ -516,7 +516,6 @@ func TestReSharding(t *testing.T , useByteShardingKeyType bool) {
 	//fmt.Println("waiting.....")
 	//time.Sleep(5*time.Minute)
 
-
 	// testing filtered replication: insert a bunch of data on shard 1, check we get most of it after a few seconds,
 	// wait for binlog server timeout, check we get all of it.
 
@@ -574,7 +573,6 @@ func TestReSharding(t *testing.T , useByteShardingKeyType bool) {
 	// get status for destination master tablets, make sure we have it all
 	sharding.CheckRunningBinlogPlayer(t, *shard2Master, 436, 216)
 	sharding.CheckRunningBinlogPlayer(t, *shard3Master, 456, 216)
-
 
 	// tests a failover switching serving to a different replica
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", shard1Replica2.Alias, "replica")
@@ -942,9 +940,6 @@ func TestReSharding(t *testing.T , useByteShardingKeyType bool) {
 	// make sure we can't delete the destination shard now that it's serving
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteShard", shard2Ks)
 	assert.NotNil(t, err)
-
-	// kill everything
-	clusterInstance.Keyspaces[0].Shards = []cluster.Shard{*shard2, *shard3}
 
 }
 
