@@ -17,8 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
-	"fmt"
-	"reflect"
+	"unsafe"
 )
 
 // WalkFunc describes a function to be called for each node during a Walk. The
@@ -42,744 +41,747 @@ func VisitAll(root SQLNode, fn VisitFunc) {
 	})
 }
 
+// do nothing
+func (node *Begin) walk(_ WalkFunc) SQLNode      { return node }
+func (node BoolVal) walk(_ WalkFunc) SQLNode     { return node }
+func (node Comments) walk(_ WalkFunc) SQLNode    { return node }
+func (node *Commit) walk(_ WalkFunc) SQLNode     { return node }
+func (node ColIdent) walk(_ WalkFunc) SQLNode    { return node }
+func (node *DBDDL) walk(_ WalkFunc) SQLNode      { return node }
+func (node *Default) walk(_ WalkFunc) SQLNode    { return node }
+func (node ListArg) walk(_ WalkFunc) SQLNode     { return node }
+func (node *NullVal) walk(_ WalkFunc) SQLNode    { return node }
+func (node *OtherRead) walk(_ WalkFunc) SQLNode  { return node }
+func (node *OtherAdmin) walk(_ WalkFunc) SQLNode { return node }
+func (node *SQLVal) walk(_ WalkFunc) SQLNode     { return node }
+func (node *Rollback) walk(_ WalkFunc) SQLNode   { return node }
+func (node TableIdent) walk(_ WalkFunc) SQLNode  { return node }
+
+func (node *AliasedExpr) walk(fn WalkFunc) SQLNode {
+	node.As = Walk(node.As, fn).(ColIdent)
+	if node.Expr != nil {
+		node.Expr = Walk(node.Expr, fn).(Expr)
+	}
+	return node
+}
+
+func (node *AliasedTableExpr) walk(fn WalkFunc) SQLNode {
+	if node.Expr != nil {
+		node.Expr = Walk(node.Expr, fn).(SimpleTableExpr)
+	}
+	if node.Partitions != nil {
+		node.Partitions = Walk(node.Partitions, fn).(Partitions)
+	}
+	node.As = Walk(node.As, fn).(TableIdent)
+	if node.Hints != nil {
+		node.Hints = Walk(node.Hints, fn).(*IndexHints)
+	}
+	return node
+}
+
+func (node *AndExpr) walk(fn WalkFunc) SQLNode {
+	if node.Left != nil {
+		node.Left = Walk(node.Left, fn).(Expr)
+	}
+	if node.Right != nil {
+		node.Right = Walk(node.Right, fn).(Expr)
+	}
+	return node
+}
+
+func (node *AutoIncSpec) walk(fn WalkFunc) SQLNode {
+	node.Column = Walk(node.Column, fn).(ColIdent)
+	node.Sequence = Walk(node.Sequence, fn).(TableName)
+	return node
+}
+
+func (node *BinaryExpr) walk(fn WalkFunc) SQLNode {
+	if node.Left != nil {
+		node.Left = Walk(node.Left, fn).(Expr)
+	}
+	if node.Right != nil {
+		node.Right = Walk(node.Right, fn).(Expr)
+	}
+	return node
+}
+
+func (node *CaseExpr) walk(fn WalkFunc) SQLNode {
+	if node.Expr != nil {
+		node.Expr = Walk(node.Expr, fn).(Expr)
+	}
+	for i, p := range node.Whens {
+		node.Whens[i] = Walk(p, fn).(*When)
+	}
+	if node.Else != nil {
+		node.Else = Walk(node.Else, fn).(Expr)
+	}
+	return node
+}
+
+func (node *ColName) walk(fn WalkFunc) SQLNode {
+	node.Name = Walk(node.Name, fn).(ColIdent)
+	node.Qualifier = Walk(node.Qualifier, fn).(TableName)
+	return node
+}
+
+func (node *CollateExpr) walk(fn WalkFunc) SQLNode {
+	if node.Expr != nil {
+		node.Expr = Walk(node.Expr, fn).(Expr)
+	}
+	return node
+}
+
+func (col *ColumnDefinition) walk(fn WalkFunc) SQLNode {
+	col.Name = Walk(col.Name, fn).(ColIdent)
+	return col
+}
+
+func (node Columns) walk(fn WalkFunc) SQLNode {
+	for i, p := range node {
+		node[i] = Walk(p, fn).(ColIdent)
+	}
+	return node
+}
+
+func (node *ComparisonExpr) walk(fn WalkFunc) SQLNode {
+	if node.Left != nil {
+		node.Left = Walk(node.Left, fn).(Expr)
+	}
+	if node.Right != nil {
+		node.Right = Walk(node.Right, fn).(Expr)
+	}
+	if node.Escape != nil {
+		node.Escape = Walk(node.Escape, fn).(Expr)
+	}
+	return node
+}
+
+func (c *ConstraintDefinition) walk(fn WalkFunc) SQLNode {
+	c.Details = Walk(c.Details, fn).(ConstraintInfo)
+	return c
+}
+
+func (node *ConvertExpr) walk(fn WalkFunc) SQLNode {
+	if node.Expr != nil {
+		node.Expr = Walk(node.Expr, fn).(Expr)
+	}
+	if node.Type != nil {
+		node.Type = Walk(node.Type, fn).(*ConvertType)
+	}
+	return node
+}
+
+func (node *ConvertType) walk(fn WalkFunc) SQLNode {
+	if node.Length != nil {
+		node.Length = Walk(node.Length, fn).(*SQLVal)
+	}
+	if node.Scale != nil {
+		node.Scale = Walk(node.Scale, fn).(*SQLVal)
+	}
+	return node
+}
+
+func (node *ConvertUsingExpr) walk(fn WalkFunc) SQLNode {
+	if node.Expr != nil {
+		node.Expr = Walk(node.Expr, fn).(Expr)
+	}
+	return node
+}
+
+func (node *CurTimeFuncExpr) walk(fn WalkFunc) SQLNode {
+	node.Name = Walk(node.Name, fn).(ColIdent)
+	if node.Fsp != nil {
+		node.Fsp = Walk(node.Fsp, fn).(Expr)
+	}
+	return node
+}
+
+func (node *Delete) walk(fn WalkFunc) SQLNode {
+	if node.Comments != nil {
+		node.Comments = Walk(node.Comments, fn).(Comments)
+	}
+	if node.Targets != nil {
+		node.Targets = Walk(node.Targets, fn).(TableNames)
+	}
+	if node.TableExprs != nil {
+		node.TableExprs = Walk(node.TableExprs, fn).(TableExprs)
+	}
+	if node.Partitions != nil {
+		node.Partitions = Walk(node.Partitions, fn).(Partitions)
+	}
+	if node.Where != nil {
+		node.Where = Walk(node.Where, fn).(*Where)
+	}
+	if node.OrderBy != nil {
+		node.OrderBy = Walk(node.OrderBy, fn).(OrderBy)
+	}
+	if node.Limit != nil {
+		node.Limit = Walk(node.Limit, fn).(*Limit)
+	}
+	return node
+}
+
+func (node *DDL) walk(fn WalkFunc) SQLNode {
+	if node.FromTables != nil {
+		node.FromTables = Walk(node.FromTables, fn).(TableNames)
+	}
+	if node.ToTables != nil {
+		node.ToTables = Walk(node.ToTables, fn).(TableNames)
+	}
+	node.Table = Walk(node.Table, fn).(TableName)
+	if node.TableSpec != nil {
+		node.TableSpec = Walk(node.TableSpec, fn).(*TableSpec)
+	}
+	if node.OptLike != nil {
+		node.OptLike = Walk(node.OptLike, fn).(*OptLike)
+	}
+	if node.PartitionSpec != nil {
+		node.PartitionSpec = Walk(node.PartitionSpec, fn).(*PartitionSpec)
+	}
+	if node.VindexSpec != nil {
+		node.VindexSpec = Walk(node.VindexSpec, fn).(*VindexSpec)
+	}
+	if node.AutoIncSpec != nil {
+		node.AutoIncSpec = Walk(node.AutoIncSpec, fn).(*AutoIncSpec)
+	}
+	for i, c := range node.VindexCols {
+		node.VindexCols[i] = Walk(c, fn).(ColIdent)
+	}
+	return node
+}
+
+func (node *GroupConcatExpr) walk(fn WalkFunc) SQLNode {
+	if node.Exprs != nil {
+		node.Exprs = Walk(node.Exprs, fn).(SelectExprs)
+	}
+	if node.OrderBy != nil {
+		node.OrderBy = Walk(node.OrderBy, fn).(OrderBy)
+	}
+	return node
+}
+
+func (node *ExistsExpr) walk(fn WalkFunc) SQLNode {
+	//node.Subquery = Walk(node.Subquery, fn).(*Subquery)
+	// TODO - Keep this and document why or rewrite like everything else
+	// We don't descend into the subquery to keep parity with old behaviour.
+	if node.Subquery != nil && !isNilValue(node.Subquery) {
+		_, _ = fn(node.Subquery)
+	}
+	return node
+}
+
+func (node Exprs) walk(fn WalkFunc) SQLNode {
+	for i, p := range node {
+		node[i] = Walk(p, fn).(Expr)
+	}
+
+	return node
+}
+
+func (node *FuncExpr) walk(fn WalkFunc) SQLNode {
+	node.Qualifier = Walk(node.Qualifier, fn).(TableIdent)
+	node.Name = Walk(node.Name, fn).(ColIdent)
+	if node.Exprs != nil {
+		node.Exprs = Walk(node.Exprs, fn).(SelectExprs)
+	}
+	return node
+}
+
+func (f *ForeignKeyDefinition) walk(fn WalkFunc) SQLNode {
+	if f.Source != nil {
+		f.Source = Walk(f.Source, fn).(Columns)
+	}
+	f.ReferencedTable = Walk(f.ReferencedTable, fn).(TableName)
+	if f.ReferencedColumns != nil {
+		f.ReferencedColumns = Walk(f.ReferencedColumns, fn).(Columns)
+	}
+	return f
+}
+
+func (node GroupBy) walk(fn WalkFunc) SQLNode {
+	for i, e := range node {
+		node[i] = Walk(e, fn).(Expr)
+	}
+	return node
+}
+func (idx *IndexDefinition) walk(fn WalkFunc) SQLNode {
+	if idx.Info != nil {
+		idx.Info = Walk(idx.Info, fn).(*IndexInfo)
+	}
+	return idx
+}
+
+func (ii *IndexInfo) walk(fn WalkFunc) SQLNode {
+	ii.Name = Walk(ii.Name, fn).(ColIdent)
+	return ii
+}
+
+func (node *IndexHints) walk(fn WalkFunc) SQLNode {
+	for i, p := range node.Indexes {
+		node.Indexes[i] = Walk(p, fn).(ColIdent)
+	}
+	return node
+}
+
+func (node *IntervalExpr) walk(fn WalkFunc) SQLNode {
+	if node.Expr != nil {
+		node.Expr = Walk(node.Expr, fn).(Expr)
+	}
+	return node
+}
+
+func (node *Insert) walk(fn WalkFunc) SQLNode {
+	if node.Comments != nil {
+		node.Comments = Walk(node.Comments, fn).(Comments)
+	}
+	node.Table = Walk(node.Table, fn).(TableName)
+	if node.Partitions != nil {
+		node.Partitions = Walk(node.Partitions, fn).(Partitions)
+	}
+	if node.Columns != nil {
+		node.Columns = Walk(node.Columns, fn).(Columns)
+	}
+	if node.Rows != nil {
+		node.Rows = Walk(node.Rows, fn).(InsertRows)
+	}
+	if node.OnDup != nil {
+		node.OnDup = Walk(node.OnDup, fn).(OnDup)
+	}
+	return node
+}
+
+func (node *IsExpr) walk(fn WalkFunc) SQLNode {
+	node.Expr = Walk(node.Expr, fn).(Expr)
+	return node
+}
+
+func (node *JoinTableExpr) walk(fn WalkFunc) SQLNode {
+	if node.LeftExpr != nil {
+		node.LeftExpr = Walk(node.LeftExpr, fn).(TableExpr)
+	}
+	if node.RightExpr != nil {
+		node.RightExpr = Walk(node.RightExpr, fn).(TableExpr)
+	}
+	node.Condition = Walk(node.Condition, fn).(JoinCondition)
+	return node
+}
+
+func (node JoinCondition) walk(fn WalkFunc) SQLNode {
+	if node.On != nil {
+		node.On = Walk(node.On, fn).(Expr)
+	}
+	if node.Using != nil {
+		node.Using = Walk(node.Using, fn).(Columns)
+	}
+	return node
+}
+
+func (node *Limit) walk(fn WalkFunc) SQLNode {
+	if node.Offset != nil {
+		node.Offset = Walk(node.Offset, fn).(Expr)
+	}
+	if node.Rowcount != nil {
+		node.Rowcount = Walk(node.Rowcount, fn).(Expr)
+	}
+	return node
+}
+
+func (node *MatchExpr) walk(fn WalkFunc) SQLNode {
+	if node.Columns != nil {
+		node.Columns = Walk(node.Columns, fn).(SelectExprs)
+	}
+	if node.Expr != nil {
+		node.Expr = Walk(node.Expr, fn).(Expr)
+	}
+	return node
+}
+
+func (node Nextval) walk(fn WalkFunc) SQLNode {
+	if node.Expr != nil {
+		node.Expr = Walk(node.Expr, fn).(Expr)
+	}
+	return node
+}
+
+func (node *NotExpr) walk(fn WalkFunc) SQLNode {
+	if node.Expr != nil {
+		node.Expr = Walk(node.Expr, fn).(Expr)
+	}
+	return node
+}
+
+func (node *OptLike) walk(fn WalkFunc) SQLNode {
+	node.LikeTable = Walk(node.LikeTable, fn).(TableName)
+	return node
+}
+
+func (node *Order) walk(fn WalkFunc) SQLNode {
+	if node.Expr != nil {
+		node.Expr = Walk(node.Expr, fn).(Expr)
+	}
+	return node
+}
+
+func (node OnDup) walk(fn WalkFunc) SQLNode {
+	for i, t := range node {
+		node[i] = Walk(t, fn).(*UpdateExpr)
+	}
+	return node
+}
+
+func (node OrderBy) walk(fn WalkFunc) SQLNode {
+	for i, p := range node {
+		node[i] = Walk(p, fn).(*Order)
+	}
+	return node
+}
+
+func (node *OrExpr) walk(fn WalkFunc) SQLNode {
+	if node.Left != nil {
+		node.Left = Walk(node.Left, fn).(Expr)
+	}
+	if node.Right != nil {
+		node.Right = Walk(node.Right, fn).(Expr)
+	}
+	return node
+}
+
+func (node *ParenExpr) walk(fn WalkFunc) SQLNode {
+	if node.Expr != nil {
+		node.Expr = Walk(node.Expr, fn).(Expr)
+	}
+	return node
+}
+
+func (node *ParenSelect) walk(fn WalkFunc) SQLNode {
+	node.Select = Walk(node.Select, fn).(SelectStatement)
+	return node
+}
+
+func (node *ParenTableExpr) walk(fn WalkFunc) SQLNode {
+	if node.Exprs != nil {
+		node.Exprs = Walk(node.Exprs, fn).(TableExprs)
+	}
+	return node
+}
+
+func (node Partitions) walk(fn WalkFunc) SQLNode {
+	for i, p := range node {
+		node[i] = Walk(p, fn).(ColIdent)
+	}
+	return node
+}
+
+func (node *PartitionSpec) walk(fn WalkFunc) SQLNode {
+	node.Name = Walk(node.Name, fn).(ColIdent)
+	for i, pd := range node.Definitions {
+		node.Definitions[i] = Walk(pd, fn).(*PartitionDefinition)
+	}
+	return node
+}
+
+func (node *PartitionDefinition) walk(fn WalkFunc) SQLNode {
+	node.Name = Walk(node.Name, fn).(ColIdent)
+	if node.Limit != nil {
+		node.Limit = Walk(node.Limit, fn).(Expr)
+	}
+	return node
+}
+
+func (node *Set) walk(fn WalkFunc) SQLNode {
+	if node.Comments != nil {
+		node.Comments = Walk(node.Comments, fn).(Comments)
+	}
+	if node.Exprs != nil {
+		node.Exprs = Walk(node.Exprs, fn).(SetExprs)
+	}
+	return node
+}
+
+func (node *SetExpr) walk(fn WalkFunc) SQLNode {
+	if node.Expr != nil {
+		node.Expr = Walk(node.Expr, fn).(Expr)
+	}
+	node.Name = Walk(node.Name, fn).(ColIdent)
+	return node
+}
+
+func (node *Select) walk(fn WalkFunc) SQLNode {
+	if node.Comments != nil {
+		node.Comments = Walk(node.Comments, fn).(Comments)
+	}
+	if node.SelectExprs != nil {
+		node.SelectExprs = Walk(node.SelectExprs, fn).(SelectExprs)
+	}
+	if node.From != nil {
+		node.From = Walk(node.From, fn).(TableExprs)
+	}
+	if node.Where != nil {
+		node.Where = Walk(node.Where, fn).(*Where)
+	}
+	if node.GroupBy != nil {
+		node.GroupBy = Walk(node.GroupBy, fn).(GroupBy)
+	}
+	if node.Having != nil {
+		node.Having = Walk(node.Having, fn).(*Where)
+	}
+	if node.OrderBy != nil {
+		node.OrderBy = Walk(node.OrderBy, fn).(OrderBy)
+	}
+	if node.Limit != nil {
+		node.Limit = Walk(node.Limit, fn).(*Limit)
+	}
+	return node
+}
+
+func (node SelectExprs) walk(fn WalkFunc) SQLNode {
+	for i, e := range node {
+		node[i] = Walk(e, fn).(SelectExpr)
+	}
+	return node
+}
+
+func (node SetExprs) walk(fn WalkFunc) SQLNode {
+	for i, e := range node {
+		node[i] = Walk(e, fn).(*SetExpr)
+	}
+	return node
+}
+
+func (node *Show) walk(fn WalkFunc) SQLNode {
+	node.OnTable = Walk(node.OnTable, fn).(TableName)
+	node.Table = Walk(node.Table, fn).(TableName)
+	if node.ShowCollationFilterOpt != nil {
+		node.ShowCollationFilterOpt = Walk(node.ShowCollationFilterOpt, fn).(Expr)
+	}
+	return node
+}
+
+func (node *StarExpr) walk(fn WalkFunc) SQLNode {
+	node.TableName = Walk(node.TableName, fn).(TableName)
+	return node
+}
+
+func (node *Stream) walk(fn WalkFunc) SQLNode {
+	if node.Comments != nil {
+		node.Comments = Walk(node.Comments, fn).(Comments)
+	}
+	if node.SelectExpr != nil {
+		node.SelectExpr = Walk(node.SelectExpr, fn).(SelectExpr)
+	}
+	node.Table = Walk(node.Table, fn).(TableName)
+	return node
+}
+
+func (node *Subquery) walk(fn WalkFunc) SQLNode {
+	if node.Select != nil {
+		node.Select = Walk(node.Select, fn).(SelectStatement)
+	}
+	return node
+}
+
+func (node *SubstrExpr) walk(fn WalkFunc) SQLNode {
+	if node.Name != nil {
+		node.Name = Walk(node.Name, fn).(*ColName)
+	}
+	if node.StrVal != nil {
+		node.StrVal = Walk(node.StrVal, fn).(*SQLVal)
+	}
+	if node.From != nil {
+		node.From = Walk(node.From, fn).(Expr)
+	}
+	if node.To != nil {
+		node.To = Walk(node.To, fn).(Expr)
+	}
+	return node
+}
+
+func (node *RangeCond) walk(fn WalkFunc) SQLNode {
+	if node.Left != nil {
+		node.Left = Walk(node.Left, fn).(Expr)
+	}
+	if node.From != nil {
+		node.From = Walk(node.From, fn).(Expr)
+	}
+	if node.To != nil {
+		node.To = Walk(node.To, fn).(Expr)
+	}
+	return node
+}
+
+func (node TableExprs) walk(fn WalkFunc) SQLNode {
+	for i, t := range node {
+		node[i] = Walk(t, fn).(TableExpr)
+	}
+	return node
+}
+
+func (node TableNames) walk(fn WalkFunc) SQLNode {
+	for i, t := range node {
+		node[i] = Walk(t, fn).(TableName)
+	}
+	return node
+}
+
+func (node TableName) walk(fn WalkFunc) SQLNode {
+	node.Name = Walk(node.Name, fn).(TableIdent)
+	node.Qualifier = Walk(node.Qualifier, fn).(TableIdent)
+	return node
+}
+
+func (ts *TableSpec) walk(fn WalkFunc) SQLNode {
+	for i, o := range ts.Columns {
+		ts.Columns[i] = Walk(o, fn).(*ColumnDefinition)
+	}
+	for i, o := range ts.Indexes {
+		ts.Indexes[i] = Walk(o, fn).(*IndexDefinition)
+	}
+	for i, o := range ts.Constraints {
+		ts.Constraints[i] = Walk(o, fn).(*ConstraintDefinition)
+	}
+	return ts
+}
+
+func (node *TimestampFuncExpr) walk(fn WalkFunc) SQLNode {
+	if node.Expr1 != nil {
+		node.Expr1 = Walk(node.Expr1, fn).(Expr)
+	}
+	if node.Expr2 != nil {
+		node.Expr2 = Walk(node.Expr2, fn).(Expr)
+	}
+	return node
+}
+
+func (node *UnaryExpr) walk(fn WalkFunc) SQLNode {
+	if node.Expr != nil {
+		node.Expr = Walk(node.Expr, fn).(Expr)
+	}
+	return node
+}
+
+func (node *Union) walk(fn WalkFunc) SQLNode {
+	if node.Left != nil {
+		node.Left = Walk(node.Left, fn).(SelectStatement)
+	}
+	if node.Right != nil {
+		node.Right = Walk(node.Right, fn).(SelectStatement)
+	}
+	if node.OrderBy != nil {
+		node.OrderBy = Walk(node.OrderBy, fn).(OrderBy)
+	}
+	if node.Limit != nil {
+		node.Limit = Walk(node.Limit, fn).(*Limit)
+	}
+	return node
+}
+
+func (node *Update) walk(fn WalkFunc) SQLNode {
+	if node.Comments != nil {
+		node.Comments = Walk(node.Comments, fn).(Comments)
+	}
+	if node.TableExprs != nil {
+		node.TableExprs = Walk(node.TableExprs, fn).(TableExprs)
+	}
+	if node.Exprs != nil {
+		node.Exprs = Walk(node.Exprs, fn).(UpdateExprs)
+	}
+	if node.Where != nil {
+		node.Where = Walk(node.Where, fn).(*Where)
+	}
+	if node.OrderBy != nil {
+		node.OrderBy = Walk(node.OrderBy, fn).(OrderBy)
+	}
+	if node.Limit != nil {
+		node.Limit = Walk(node.Limit, fn).(*Limit)
+	}
+	return node
+}
+
+func (node *UpdateExpr) walk(fn WalkFunc) SQLNode {
+	node.Name = Walk(node.Name, fn).(*ColName)
+	if node.Expr != nil {
+		node.Expr = Walk(node.Expr, fn).(Expr)
+	}
+	return node
+}
+
+func (node UpdateExprs) walk(fn WalkFunc) SQLNode {
+	for i, t := range node {
+		node[i] = Walk(t, fn).(*UpdateExpr)
+	}
+	return node
+}
+
+func (node *Use) walk(fn WalkFunc) SQLNode {
+	node.DBName = Walk(node.DBName, fn).(TableIdent)
+	return node
+}
+
+func (node Values) walk(fn WalkFunc) SQLNode {
+	for i, v := range node {
+		node[i] = Walk(v, fn).(ValTuple)
+	}
+	return node
+}
+
+func (node *ValuesFuncExpr) walk(fn WalkFunc) SQLNode {
+	if node.Name != nil {
+		node.Name = Walk(node.Name, fn).(*ColName)
+	}
+	return node
+}
+
+func (node ValTuple) walk(fn WalkFunc) SQLNode {
+	for i, v := range node {
+		node[i] = Walk(v, fn).(Expr)
+	}
+	return node
+}
+
+func (node *VindexSpec) walk(fn WalkFunc) SQLNode {
+	node.Name = Walk(node.Name, fn).(ColIdent)
+	node.Type = Walk(node.Type, fn).(ColIdent)
+	return node
+}
+
+func (node *When) walk(fn WalkFunc) SQLNode {
+	if node.Cond != nil {
+		node.Cond = Walk(node.Cond, fn).(Expr)
+	}
+	if node.Val != nil {
+		node.Val = Walk(node.Val, fn).(Expr)
+	}
+	return node
+}
+
+func (node *Where) walk(fn WalkFunc) SQLNode {
+	if node.Expr != nil {
+		node.Expr = Walk(node.Expr, fn).(Expr)
+	}
+	return node
+}
+
 // Walk traverses an AST in depth-first order: It starts by calling
 // fn(node); node must not be nil. It returns the rewritten node. If fn returns
 // true, Walk invokes fn recursively for each of the non-nil children of node,
 // followed by a call of fn(nil). The returned node of fn can be used to
 // rewrite the passed node to fn. Panics if the returned type is not the same
 // type as the original one.
-func Walk(node SQLNode, fn WalkFunc) SQLNode {
-	if node == nil {
+func Walk(root SQLNode, fn WalkFunc) SQLNode {
+	if root == nil || isNilValue(root) {
 		return nil
 	}
 
-	rewritten, continueDown := fn(node)
+	rewritten, continueDown := fn(root)
 	if !continueDown {
 		return rewritten
 	}
 
-	switch n := rewritten.(type) {
-	/*
-		Implementation notes for future additions to this switch statement:
-
-		- Check for nil whenever possible.
-		- Don't range into custom array types (look at OrderBy as an example of this)
-	*/
-
-	// nothing to do
-	case *Begin:
-	case BoolVal:
-	case *Comments:
-	case Comments:
-	case *Commit:
-	case ColIdent:
-	case *DBDDL:
-	case *Default:
-	case ListArg:
-	case *NullVal:
-	case *OtherRead:
-	case *OtherAdmin:
-	case *SQLVal:
-	case *Rollback:
-	case TableIdent:
-
-	case *AliasedExpr:
-		if n == nil {
-			break
-		}
-		n.As = Walk(n.As, fn).(ColIdent)
-		if n.Expr != nil {
-			n.Expr = Walk(n.Expr, fn).(Expr)
-		}
-
-	case *AliasedTableExpr:
-		if n == nil {
-			break
-		}
-		if n.Expr != nil {
-			n.Expr = Walk(n.Expr, fn).(SimpleTableExpr)
-		}
-		if n.Partitions != nil {
-			n.Partitions = Walk(n.Partitions, fn).(Partitions)
-		}
-		n.As = Walk(n.As, fn).(TableIdent)
-		if n.Hints != nil {
-			n.Hints = Walk(n.Hints, fn).(*IndexHints)
-		}
-
-	case *AndExpr:
-		if n == nil {
-			break
-		}
-		if n.Left != nil {
-			n.Left = Walk(n.Left, fn).(Expr)
-		}
-		if n.Right != nil {
-			n.Right = Walk(n.Right, fn).(Expr)
-		}
-
-	case *AutoIncSpec:
-		if n == nil {
-			break
-		}
-		n.Column = Walk(n.Column, fn).(ColIdent)
-		n.Sequence = Walk(n.Sequence, fn).(TableName)
-
-	case *BinaryExpr:
-		if n == nil {
-			break
-		}
-		if n.Left != nil {
-			n.Left = Walk(n.Left, fn).(Expr)
-		}
-		if n.Right != nil {
-			n.Right = Walk(n.Right, fn).(Expr)
-		}
-
-	case *CaseExpr:
-		if n == nil {
-			break
-		}
-		if n.Expr != nil {
-			n.Expr = Walk(n.Expr, fn).(Expr)
-		}
-		for i, p := range n.Whens {
-			n.Whens[i] = Walk(p, fn).(*When)
-		}
-		if n.Else != nil {
-			n.Else = Walk(n.Else, fn).(Expr)
-		}
-
-	case *ColName:
-		if n == nil {
-			break
-		}
-		n.Name = Walk(n.Name, fn).(ColIdent)
-		n.Qualifier = Walk(n.Qualifier, fn).(TableName)
-
-	case *CollateExpr:
-		if n == nil {
-			break
-		}
-		if n.Expr != nil {
-			n.Expr = Walk(n.Expr, fn).(Expr)
-		}
-
-	case *ColumnDefinition:
-		if n == nil {
-			break
-		}
-		n.Name = Walk(n.Name, fn).(ColIdent)
-
-	case Columns:
-		for i, p := range n {
-			n[i] = Walk(p, fn).(ColIdent)
-		}
-
-	case *ComparisonExpr:
-		if n == nil {
-			break
-		}
-		if n.Left != nil {
-			n.Left = Walk(n.Left, fn).(Expr)
-		}
-		if n.Right != nil {
-			n.Right = Walk(n.Right, fn).(Expr)
-		}
-		if n.Escape != nil {
-			n.Escape = Walk(n.Escape, fn).(Expr)
-		}
-
-	case *ConvertExpr:
-		if n == nil {
-			break
-		}
-		if n.Expr != nil {
-			n.Expr = Walk(n.Expr, fn).(Expr)
-		}
-		if n.Type != nil {
-			n.Type = Walk(n.Type, fn).(*ConvertType)
-		}
-
-	case *ConvertType:
-		if n == nil {
-			break
-		}
-		if n.Length != nil {
-			n.Length = Walk(n.Length, fn).(*SQLVal)
-		}
-		if n.Scale != nil {
-			n.Scale = Walk(n.Scale, fn).(*SQLVal)
-		}
-
-	case *ConvertUsingExpr:
-		if n == nil {
-			break
-		}
-		if n.Expr != nil {
-			n.Expr = Walk(n.Expr, fn).(Expr)
-		}
-
-	case *CurTimeFuncExpr:
-		if n == nil {
-			break
-		}
-		n.Name = Walk(n.Name, fn).(ColIdent)
-		if n.Fsp != nil {
-			n.Fsp = Walk(n.Fsp, fn).(Expr)
-		}
-
-	case *Delete:
-		if n == nil {
-			break
-		}
-		if n.Comments != nil {
-			n.Comments = Walk(n.Comments, fn).(Comments)
-		}
-		if n.Targets != nil {
-			n.Targets = Walk(n.Targets, fn).(TableNames)
-		}
-		if n.TableExprs != nil {
-			n.TableExprs = Walk(n.TableExprs, fn).(TableExprs)
-		}
-		if n.Partitions != nil {
-			n.Partitions = Walk(n.Partitions, fn).(Partitions)
-		}
-		if n.Where != nil {
-			n.Where = Walk(n.Where, fn).(*Where)
-		}
-		if n.OrderBy != nil {
-			n.OrderBy = Walk(n.OrderBy, fn).(OrderBy)
-		}
-		if n.Limit != nil {
-			n.Limit = Walk(n.Limit, fn).(*Limit)
-		}
-
-	case *DDL:
-		if n == nil {
-			break
-		}
-		if n.FromTables != nil {
-			n.FromTables = Walk(n.FromTables, fn).(TableNames)
-		}
-		if n.ToTables != nil {
-			n.ToTables = Walk(n.ToTables, fn).(TableNames)
-		}
-		n.Table = Walk(n.Table, fn).(TableName)
-		if n.TableSpec != nil {
-			n.TableSpec = Walk(n.TableSpec, fn).(*TableSpec)
-		}
-		if n.OptLike != nil {
-			n.OptLike = Walk(n.OptLike, fn).(*OptLike)
-		}
-		if n.PartitionSpec != nil {
-			n.PartitionSpec = Walk(n.PartitionSpec, fn).(*PartitionSpec)
-		}
-		if n.VindexSpec != nil {
-			n.VindexSpec = Walk(n.VindexSpec, fn).(*VindexSpec)
-		}
-		if n.AutoIncSpec != nil {
-			n.AutoIncSpec = Walk(n.AutoIncSpec, fn).(*AutoIncSpec)
-		}
-		for i, c := range n.VindexCols {
-			n.VindexCols[i] = Walk(c, fn).(ColIdent)
-		}
-
-	case *GroupConcatExpr:
-		if n == nil {
-			break
-		}
-		if n.Exprs != nil {
-			n.Exprs = Walk(n.Exprs, fn).(SelectExprs)
-		}
-		if n.OrderBy != nil {
-			n.OrderBy = Walk(n.OrderBy, fn).(OrderBy)
-		}
-
-	case *ExistsExpr:
-		if n == nil {
-			break
-		}
-		//n.Subquery = Walk(n.Subquery, fn).(*Subquery)
-		// TODO - Keep this and document why or rewrite like everything else
-		// We don't descend into the subquery to keep parity with old behaviour.
-		_, _ = fn(n.Subquery)
-
-	case *FuncExpr:
-		if n == nil {
-			break
-		}
-		n.Qualifier = Walk(n.Qualifier, fn).(TableIdent)
-		n.Name = Walk(n.Name, fn).(ColIdent)
-		if n.Exprs != nil {
-			n.Exprs = Walk(n.Exprs, fn).(SelectExprs)
-		}
-
-	case GroupBy:
-		for i, e := range n {
-			n[i] = Walk(e, fn).(Expr)
-		}
-
-	case *IndexDefinition:
-		if n.Info != nil {
-			n.Info = Walk(n.Info, fn).(*IndexInfo)
-		}
-
-	case *IndexInfo:
-		n.Name = Walk(n.Name, fn).(ColIdent)
-
-	case *IndexHints:
-		if n == nil {
-			break
-		}
-		for i, p := range n.Indexes {
-			n.Indexes[i] = Walk(p, fn).(ColIdent)
-		}
-
-	case *IntervalExpr:
-		if n == nil {
-			break
-		}
-		if n.Expr != nil {
-			n.Expr = Walk(n.Expr, fn).(Expr)
-		}
-
-	case *Insert:
-		if n == nil {
-			break
-		}
-		if n.Comments != nil {
-			n.Comments = Walk(n.Comments, fn).(Comments)
-		}
-		n.Table = Walk(n.Table, fn).(TableName)
-		if n.Partitions != nil {
-			n.Partitions = Walk(n.Partitions, fn).(Partitions)
-		}
-		if n.Columns != nil {
-			n.Columns = Walk(n.Columns, fn).(Columns)
-		}
-		if n.Rows != nil {
-			n.Rows = Walk(n.Rows, fn).(InsertRows)
-		}
-		if n.OnDup != nil {
-			n.OnDup = Walk(n.OnDup, fn).(OnDup)
-		}
-
-	case *IsExpr:
-		if n == nil {
-			break
-		}
-		n.Expr = Walk(n.Expr, fn).(Expr)
-
-	case *JoinTableExpr:
-		if n == nil {
-			break
-		}
-		if n.LeftExpr != nil {
-			n.LeftExpr = Walk(n.LeftExpr, fn).(TableExpr)
-		}
-		if n.RightExpr != nil {
-			n.RightExpr = Walk(n.RightExpr, fn).(TableExpr)
-		}
-		n.Condition = Walk(n.Condition, fn).(JoinCondition)
-
-	case JoinCondition:
-		if n.On != nil {
-			n.On = Walk(n.On, fn).(Expr)
-		}
-		if n.Using != nil {
-			n.Using = Walk(n.Using, fn).(Columns)
-		}
-
-	case *Limit:
-		if n == nil {
-			break
-		}
-		if n.Offset != nil {
-			n.Offset = Walk(n.Offset, fn).(Expr)
-		}
-		if n.Rowcount != nil {
-			n.Rowcount = Walk(n.Rowcount, fn).(Expr)
-		}
-
-	case *MatchExpr:
-		if n == nil {
-			break
-		}
-		if n.Columns != nil {
-			n.Columns = Walk(n.Columns, fn).(SelectExprs)
-		}
-		if n.Expr != nil {
-			n.Expr = Walk(n.Expr, fn).(Expr)
-		}
-
-	case Nextval:
-		if n.Expr != nil {
-			n.Expr = Walk(n.Expr, fn).(Expr)
-		}
-
-	case *NotExpr:
-		if n == nil {
-			break
-		}
-		if n.Expr != nil {
-			n.Expr = Walk(n.Expr, fn).(Expr)
-		}
-
-	case *Order:
-		if n == nil {
-			break
-		}
-		if n.Expr != nil {
-			n.Expr = Walk(n.Expr, fn).(Expr)
-		}
-
-	case OnDup:
-		for i, t := range n {
-			n[i] = Walk(t, fn).(*UpdateExpr)
-		}
-
-	case OrderBy:
-		for i, p := range n {
-			n[i] = Walk(p, fn).(*Order)
-		}
-
-	case *OrExpr:
-		if n == nil {
-			break
-		}
-		if n.Left != nil {
-			n.Left = Walk(n.Left, fn).(Expr)
-		}
-		if n.Right != nil {
-			n.Right = Walk(n.Right, fn).(Expr)
-		}
-
-	case *ParenExpr:
-		if n == nil {
-			break
-		}
-		if n.Expr != nil {
-			n.Expr = Walk(n.Expr, fn).(Expr)
-		}
-
-	case *ParenSelect:
-		if n == nil {
-			break
-		}
-		n.Select = Walk(n.Select, fn).(SelectStatement)
-
-	case *ParenTableExpr:
-		if n == nil {
-			break
-		}
-		if n.Exprs != nil {
-			n.Exprs = Walk(n.Exprs, fn).(TableExprs)
-		}
-
-	case Partitions:
-		for i, p := range n {
-			n[i] = Walk(p, fn).(ColIdent)
-		}
-
-	case *PartitionSpec:
-		if n == nil {
-			break
-		}
-		n.Name = Walk(n.Name, fn).(ColIdent)
-		for i, pd := range n.Definitions {
-			n.Definitions[i] = Walk(pd, fn).(*PartitionDefinition)
-		}
-
-	case *PartitionDefinition:
-		if n == nil {
-			break
-		}
-		n.Name = Walk(n.Name, fn).(ColIdent)
-		if n.Limit != nil {
-			n.Limit = Walk(n.Limit, fn).(Expr)
-		}
-
-	case *Set:
-		if n == nil {
-			break
-		}
-		if n.Comments != nil {
-			n.Comments = Walk(n.Comments, fn).(Comments)
-		}
-		if n.Exprs != nil {
-			n.Exprs = Walk(n.Exprs, fn).(SetExprs)
-		}
-
-	case *SetExpr:
-		if n == nil {
-			break
-		}
-		if n.Expr != nil {
-			n.Expr = Walk(n.Expr, fn).(Expr)
-		}
-		n.Name = Walk(n.Name, fn).(ColIdent)
-
-	case *Select:
-		if n == nil {
-			break
-		}
-		if n.Comments != nil {
-			n.Comments = Walk(n.Comments, fn).(Comments)
-		}
-		if n.SelectExprs != nil {
-			n.SelectExprs = Walk(n.SelectExprs, fn).(SelectExprs)
-		}
-		if n.From != nil {
-			n.From = Walk(n.From, fn).(TableExprs)
-		}
-		if n.Where != nil {
-			n.Where = Walk(n.Where, fn).(*Where)
-		}
-		if n.GroupBy != nil {
-			n.GroupBy = Walk(n.GroupBy, fn).(GroupBy)
-		}
-		if n.Having != nil {
-			n.Having = Walk(n.Having, fn).(*Where)
-		}
-		if n.OrderBy != nil {
-			n.OrderBy = Walk(n.OrderBy, fn).(OrderBy)
-		}
-		if n.Limit != nil {
-			n.Limit = Walk(n.Limit, fn).(*Limit)
-		}
-
-	case SelectExprs:
-		for i, e := range n {
-			n[i] = Walk(e, fn).(SelectExpr)
-		}
-
-	case SetExprs:
-		for i, e := range n {
-			n[i] = Walk(e, fn).(*SetExpr)
-		}
-
-	case *Show:
-		if n == nil {
-			break
-		}
-		n.OnTable = Walk(n.OnTable, fn).(TableName)
-		n.Table = Walk(n.Table, fn).(TableName)
-		if n.ShowCollationFilterOpt != nil {
-			n.ShowCollationFilterOpt = Walk(n.ShowCollationFilterOpt, fn).(Expr)
-		}
-
-	case *StarExpr:
-		if n == nil {
-			break
-		}
-		n.TableName = Walk(n.TableName, fn).(TableName)
-
-	case *Stream:
-		if n == nil {
-			break
-		}
-		if n.Comments != nil {
-			n.Comments = Walk(n.Comments, fn).(Comments)
-		}
-		if n.SelectExpr != nil {
-			n.SelectExpr = Walk(n.SelectExpr, fn).(SelectExpr)
-		}
-		n.Table = Walk(n.Table, fn).(TableName)
-
-	case *Subquery:
-		if n == nil {
-			break
-		}
-		if n.Select != nil {
-			n.Select = Walk(n.Select, fn).(SelectStatement)
-		}
-
-	case *SubstrExpr:
-		if n == nil {
-			break
-		}
-		if n.Name != nil {
-			n.Name = Walk(n.Name, fn).(*ColName)
-		}
-		if n.StrVal != nil {
-			n.StrVal = Walk(n.StrVal, fn).(*SQLVal)
-		}
-		if n.From != nil {
-			n.From = Walk(n.From, fn).(Expr)
-		}
-		if n.To != nil {
-			n.To = Walk(n.To, fn).(Expr)
-		}
-
-	case *RangeCond:
-		if n == nil {
-			break
-		}
-		if n.Left != nil {
-			n.Left = Walk(n.Left, fn).(Expr)
-		}
-		if n.From != nil {
-			n.From = Walk(n.From, fn).(Expr)
-		}
-		if n.To != nil {
-			n.To = Walk(n.To, fn).(Expr)
-		}
-
-	case TableExprs:
-		for i, t := range n {
-			n[i] = Walk(t, fn).(TableExpr)
-		}
-
-	case TableNames:
-		for i, t := range n {
-			n[i] = Walk(t, fn).(TableName)
-		}
-
-	case TableName:
-		n.Name = Walk(n.Name, fn).(TableIdent)
-		n.Qualifier = Walk(n.Qualifier, fn).(TableIdent)
-
-	case *TableSpec:
-		if n == nil {
-			break
-		}
-		for i, o := range n.Columns {
-			n.Columns[i] = Walk(o, fn).(*ColumnDefinition)
-		}
-		for i, o := range n.Indexes {
-			n.Indexes[i] = Walk(o, fn).(*IndexDefinition)
-		}
-		for i, o := range n.Constraints {
-			n.Constraints[i] = Walk(o, fn).(*ConstraintDefinition)
-		}
-
-	case *TimestampFuncExpr:
-		if n == nil {
-			break
-		}
-		if n.Expr1 != nil {
-			n.Expr1 = Walk(n.Expr1, fn).(Expr)
-		}
-		if n.Expr2 != nil {
-			n.Expr2 = Walk(n.Expr2, fn).(Expr)
-		}
-
-	case *UnaryExpr:
-		if n == nil {
-			break
-		}
-		if n.Expr != nil {
-			n.Expr = Walk(n.Expr, fn).(Expr)
-		}
-
-	case *Union:
-		if n == nil {
-			break
-		}
-		if n.Left != nil {
-			n.Left = Walk(n.Left, fn).(SelectStatement)
-		}
-		if n.Right != nil {
-			n.Right = Walk(n.Right, fn).(SelectStatement)
-		}
-		if n.OrderBy != nil {
-			n.OrderBy = Walk(n.OrderBy, fn).(OrderBy)
-		}
-		if n.Limit != nil {
-			n.Limit = Walk(n.Limit, fn).(*Limit)
-		}
-
-	case *Update:
-		if n == nil {
-			break
-		}
-		if n.Comments != nil {
-			n.Comments = Walk(n.Comments, fn).(Comments)
-		}
-		if n.TableExprs != nil {
-			n.TableExprs = Walk(n.TableExprs, fn).(TableExprs)
-		}
-		if n.Exprs != nil {
-			n.Exprs = Walk(n.Exprs, fn).(UpdateExprs)
-		}
-		if n.Where != nil {
-			n.Where = Walk(n.Where, fn).(*Where)
-		}
-		if n.OrderBy != nil {
-			n.OrderBy = Walk(n.OrderBy, fn).(OrderBy)
-		}
-		if n.Limit != nil {
-			n.Limit = Walk(n.Limit, fn).(*Limit)
-		}
-
-	case *UpdateExpr:
-		if n == nil {
-			break
-		}
-		n.Name = Walk(n.Name, fn).(*ColName)
-		if n.Expr != nil {
-			n.Expr = Walk(n.Expr, fn).(Expr)
-		}
-
-	case UpdateExprs:
-		for i, t := range n {
-			n[i] = Walk(t, fn).(*UpdateExpr)
-		}
-
-	case *Use:
-		if n == nil {
-			break
-		}
-		n.DBName = Walk(n.DBName, fn).(TableIdent)
-
-	case Values:
-		for i, v := range n {
-			n[i] = Walk(v, fn).(ValTuple)
-		}
-
-	case *ValuesFuncExpr:
-		if n == nil {
-			break
-		}
-		if n.Name != nil {
-			n.Name = Walk(n.Name, fn).(*ColName)
-		}
-
-	case ValTuple:
-		for i, v := range n {
-			n[i] = Walk(v, fn).(Expr)
-		}
-
-	case *VindexSpec:
-		if n == nil {
-			break
-		}
-		n.Name = Walk(n.Name, fn).(ColIdent)
-		n.Type = Walk(n.Type, fn).(ColIdent)
-
-	case *When:
-		if n == nil {
-			break
-		}
-		if n.Cond != nil {
-			n.Cond = Walk(n.Cond, fn).(Expr)
-		}
-		if n.Val != nil {
-			n.Val = Walk(n.Val, fn).(Expr)
-		}
-
-	case *Where:
-		if n == nil {
-			break
-		}
-		if n.Expr != nil {
-			n.Expr = Walk(n.Expr, fn).(Expr)
-		}
-
-	default:
-		panic(fmt.Sprintf("unknown AST object: %v of type %s", node, reflect.TypeOf(node)))
-
-	}
-	return rewritten
+	return rewritten.walk(fn)
+}
+
+// This hack is for speed and less code.
+// It allows us to not have to do explicit nil checks in every single `walk` implementation in this file
+func isNilValue(i interface{}) bool {
+	return (*[2]uintptr)(unsafe.Pointer(&i))[1] == 0
 }
