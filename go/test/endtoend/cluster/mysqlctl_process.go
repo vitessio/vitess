@@ -17,10 +17,15 @@ limitations under the License.
 package cluster
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
+	"strings"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/log"
 )
 
 // MysqlctlProcess is a generic handle for a running mysqlctl command .
@@ -49,6 +54,15 @@ func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 
 // Start executes mysqlctl command to start mysql instance
 func (mysqlctl *MysqlctlProcess) Start() (err error) {
+	if tmpProcess, err := mysqlctl.StartProcess(); err != nil {
+		return err
+	} else {
+		return tmpProcess.Wait()
+	}
+}
+
+// StartProcess starts the mysqlctl and returns the process reference
+func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
 		"-log_dir", mysqlctl.LogDirectory,
@@ -57,17 +71,35 @@ func (mysqlctl *MysqlctlProcess) Start() (err error) {
 		"init",
 		"-init_db_sql_file", mysqlctl.InitDBFile,
 	)
-	return tmpProcess.Run()
+	return tmpProcess, tmpProcess.Start()
 }
 
 // Stop executes mysqlctl command to stop mysql instance
 func (mysqlctl *MysqlctlProcess) Stop() (err error) {
+	if tmpProcess, err := mysqlctl.StopProcess(); err != nil {
+		return err
+	} else {
+		return tmpProcess.Wait()
+	}
+}
+
+// StopProcess executes mysqlctl command to stop mysql instance and returns process reference
+func (mysqlctl *MysqlctlProcess) StopProcess() (*exec.Cmd, error) {
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
 		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 		"shutdown",
 	)
-	return tmpProcess.Start()
+	return tmpProcess, tmpProcess.Start()
+}
+
+// CleanupFiles clean the mysql files to make sure we can start the same process again
+func (mysqlctl *MysqlctlProcess) CleanupFiles(tabletUID int) {
+	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/data", tabletUID)))
+	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/relay-logs", tabletUID)))
+	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/tmp", tabletUID)))
+	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/bin-logs", tabletUID)))
+	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/innodb", tabletUID)))
 }
 
 // MysqlCtlProcessInstance returns a Mysqlctl handle for mysqlctl process
@@ -82,4 +114,42 @@ func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) 
 	mysqlctl.MySQLPort = mySQLPort
 	mysqlctl.TabletUID = tabletUID
 	return mysqlctl
+}
+
+// StartMySQL process
+func StartMySQL(ctx context.Context, tablet *Vttablet, username string, tmpDirectory string) error {
+	tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
+	err := tablet.MysqlctlProcess.Start()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// StartMySQLAndGetConnection create a connection to tablet mysql
+func StartMySQLAndGetConnection(ctx context.Context, tablet *Vttablet, username string, tmpDirectory string) (*mysql.Conn, error) {
+	tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
+	err := tablet.MysqlctlProcess.Start()
+	if err != nil {
+		return nil, err
+	}
+	params := mysql.ConnParams{
+		Uname:      username,
+		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tablet.TabletUID), "/mysql.sock"),
+	}
+
+	conn, err := mysql.Connect(ctx, &params)
+	return conn, err
+}
+
+// ExecuteCommandWithOutput executes any mysqlctl command and returns output
+func (mysqlctl *MysqlctlProcess) ExecuteCommandWithOutput(args ...string) (result string, err error) {
+	tmpProcess := exec.Command(
+		mysqlctl.Binary,
+		args...,
+	)
+	println(fmt.Sprintf("Executing mysqlctl with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	log.Info(fmt.Sprintf("Executing mysqlctl with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	resultByte, err := tmpProcess.CombinedOutput()
+	return string(resultByte), err
 }
