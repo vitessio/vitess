@@ -13,8 +13,16 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-This test simulates the first time a database has to be split.
+This test simulates the first time a database has to be split
+in a multi-vttablet-single-mysql environment
 
+We have 2 keyspaces. One keyspace is in managing mode. It's vttablets
+own the MySQL instances and can reparent, start/stop server, start/stop
+replication etc. Other keyspace is in non-managing mode and cannot do
+any of these actions. Only TabletExternallyReparented is allowed, but
+resharding should still work.
+
+For each keyspace:
 - we start with a keyspace with a single shard and a single table
 - we add and populate the sharding key
 - we set the sharding key in the topology

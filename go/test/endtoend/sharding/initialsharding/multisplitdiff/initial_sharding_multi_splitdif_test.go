@@ -13,16 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-This test simulates the first time a database has to be split.
-
-- we start with a keyspace with a single shard and a single table
-- we add and populate the sharding key
-- we set the sharding key in the topology
-- we clone into 2 instances
-- we enable filtered replication
-- we move all serving types
-- we remove the source tablets
-- we remove the original shard
+Re-runs InitialSharding using multiple-split-diff.
 
 */
 
