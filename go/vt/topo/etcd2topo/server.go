@@ -38,10 +38,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/coreos/etcd/pkg/transport"
-	"vitess.io/vitess/go/vt/log"
-
 	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/pkg/transport"
 	"vitess.io/vitess/go/vt/topo"
 )
 
@@ -99,7 +97,7 @@ func NewServerWithOpts(serverAddr, root, certPath, keyPath, caPath string) (*Ser
 
 		tlsConfig, err := tlsInfo.ClientConfig()
 		if err != nil {
-			log.Fatalf("Unable to generate client config, err %v", err)
+			return nil, err
 		}
 		config.TLS = tlsConfig
 	}
