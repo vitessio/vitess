@@ -146,7 +146,7 @@ func CreateVindex(vindexType, name string, params map[string]string) (Vindex, er
 	return f(name, params)
 }
 
-// Map invokes MapMulti or Map depending on which is available.
+// Map invokes the Map implementation supplied by the vindex.
 func Map(vindex Vindex, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
 	switch vindex := vindex.(type) {
 	case MultiColumn:
@@ -157,7 +157,7 @@ func Map(vindex Vindex, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]ke
 	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "vindex does not have Map functions")
 }
 
-// Verify invokes VerifyMulti or Verify depending on which is available.
+// Verify invokes the Verify implementation supplied by the vindex.
 func Verify(vindex Vindex, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	switch vindex := vindex.(type) {
 	case MultiColumn:
