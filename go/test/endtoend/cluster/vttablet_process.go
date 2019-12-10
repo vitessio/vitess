@@ -12,11 +12,13 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
 */
 
 package cluster
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -24,9 +26,13 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"reflect"
 	"strings"
 	"syscall"
 	"time"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -56,6 +62,9 @@ type VttabletProcess struct {
 	VtctldAddress               string
 	Directory                   string
 	VerifyURL                   string
+	EnableSemiSync              bool
+	SupportBackup               bool
+	ServingStatus               string
 	//Extra Args to be set before starting the vttablet process
 	ExtraArgs []string
 
@@ -82,18 +91,24 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-init_keyspace", vttablet.Keyspace,
 		"-init_tablet_type", vttablet.TabletType,
 		"-health_check_interval", fmt.Sprintf("%ds", vttablet.HealthCheckInterval),
-		"-enable_semi_sync",
 		"-enable_replication_reporter",
 		"-backup_storage_implementation", vttablet.BackupStorageImplementation,
 		"-file_backup_storage_root", vttablet.FileBackupStorageRoot,
-		"-restore_from_backup",
 		"-service_map", vttablet.ServiceMap,
 		"-vtctld_addr", vttablet.VtctldAddress,
 	)
+
+	if vttablet.SupportBackup {
+		vttablet.proc.Args = append(vttablet.proc.Args, "-restore_from_backup")
+	}
+	if vttablet.EnableSemiSync {
+		vttablet.proc.Args = append(vttablet.proc.Args, "-enable_semi_sync")
+	}
+
 	vttablet.proc.Args = append(vttablet.proc.Args, vttablet.ExtraArgs...)
 
-	vttablet.proc.Stderr = os.Stderr
-	vttablet.proc.Stdout = os.Stdout
+	errFile, _ := os.Create(path.Join(vttablet.LogDir, vttablet.TabletPath+"-vttablet-stderr.txt"))
+	vttablet.proc.Stderr = errFile
 
 	vttablet.proc.Env = append(vttablet.proc.Env, os.Environ()...)
 
@@ -111,7 +126,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	timeout := time.Now().Add(60 * time.Second)
 	for time.Now().Before(timeout) {
-		if vttablet.WaitForStatus("NOT_SERVING") {
+		if vttablet.WaitForStatus(vttablet.ServingStatus) {
 			return nil
 		}
 		select {
@@ -127,9 +142,14 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 // WaitForStatus function checks if vttablet process is up and running
 func (vttablet *VttabletProcess) WaitForStatus(status string) bool {
+	return vttablet.GetTabletStatus() == status
+}
+
+// GetTabletStatus function checks if vttablet process is up and running
+func (vttablet *VttabletProcess) GetTabletStatus() string {
 	resp, err := http.Get(vttablet.VerifyURL)
 	if err != nil {
-		return false
+		return ""
 	}
 	if resp.StatusCode == 200 {
 		resultMap := make(map[string]interface{})
@@ -138,9 +158,10 @@ func (vttablet *VttabletProcess) WaitForStatus(status string) bool {
 		if err != nil {
 			panic(err)
 		}
-		return resultMap["TabletStateName"] == status
+		status := reflect.ValueOf(resultMap["TabletStateName"]).String()
+		return status
 	}
-	return false
+	return ""
 }
 
 // TearDown shuts down the running vttablet service
@@ -166,10 +187,28 @@ func (vttablet *VttabletProcess) TearDown() error {
 	}
 }
 
+// QueryTablet lets you execute query in this tablet and get the result
+func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useDb bool) (*sqltypes.Result, error) {
+	dbParams := mysql.ConnParams{
+		Uname:      "vt_dba",
+		UnixSocket: path.Join(vttablet.Directory, "mysql.sock"),
+	}
+	if useDb {
+		dbParams.DbName = "vt_" + keyspace
+	}
+	ctx := context.Background()
+	dbConn, err := mysql.Connect(ctx, &dbParams)
+	if err != nil {
+		return nil, err
+	}
+	defer dbConn.Close()
+	return dbConn.ExecuteFetch(query, 1000, true)
+}
+
 // VttabletProcessInstance returns a VttabletProcess handle for vttablet process
 // configured with the given Config.
 // The process must be manually started by calling setup()
-func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string, shard string, keyspace string, vtctldPort int, tabletType string, topoPort int, hostname string, tmpDirectory string, extraArgs []string) *VttabletProcess {
+func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string, shard string, keyspace string, vtctldPort int, tabletType string, topoPort int, hostname string, tmpDirectory string, extraArgs []string, enableSemiSync bool) *VttabletProcess {
 	vtctl := VtctlProcessInstance(topoPort, hostname)
 	vttablet := &VttabletProcess{
 		Name:                        "vttablet",
@@ -192,6 +231,9 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 		PidFile:                     path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/vttablet.pid", tabletUID)),
 		VtctldAddress:               fmt.Sprintf("http://%s:%d", hostname, vtctldPort),
 		ExtraArgs:                   extraArgs,
+		EnableSemiSync:              enableSemiSync,
+		SupportBackup:               true,
+		ServingStatus:               "NOT_SERVING",
 	}
 
 	if tabletType == "rdonly" {

@@ -61,8 +61,8 @@ func (etcd *EtcdProcess) Setup() (err error) {
 		"--initial-cluster", fmt.Sprintf("%s=%s", etcd.Name, etcd.PeerURL),
 	)
 
-	etcd.proc.Stderr = os.Stderr
-	etcd.proc.Stdout = os.Stdout
+	errFile, _ := os.Create(path.Join(etcd.DataDirectory, "etcd-stderr.txt"))
+	etcd.proc.Stderr = errFile
 
 	etcd.proc.Env = append(etcd.proc.Env, os.Environ()...)
 
@@ -110,9 +110,9 @@ func (etcd *EtcdProcess) TearDown(Cell string, originalVtRoot string, currentRoo
 	}
 	_ = os.Setenv("VTDATAROOT", originalVtRoot)
 	select {
-	case err := <-etcd.exit:
+	case <-etcd.exit:
 		etcd.proc = nil
-		return err
+		return nil
 
 	case <-time.After(10 * time.Second):
 		etcd.proc.Process.Kill()
