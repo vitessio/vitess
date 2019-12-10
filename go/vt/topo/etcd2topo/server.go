@@ -34,9 +34,7 @@ We follow these conventions within this package:
 package etcd2topo
 
 import (
-	"crypto/tls"
 	"flag"
-	"io/ioutil"
 	"strings"
 	"time"
 
@@ -92,18 +90,6 @@ func NewServerWithOpts(serverAddr, root, certPath, keyPath, caPath string) (*Ser
 
 	// If TLS is enabled, attach TLS config info.
 	if certPath != "" && keyPath != "" {
-		// Verify we can load provided cert and key.
-		_, err := tls.LoadX509KeyPair(certPath, keyPath)
-		if err != nil {
-			log.Fatalf("Unable to load cert %v and key %v, err %v", certPath, keyPath, err)
-		}
-
-		// Verify we can open ca cert.
-		_, err = ioutil.ReadFile(caPath)
-		if err != nil {
-			log.Fatalf("Unable to open ca cert %v, err %v", caPath, err)
-		}
-
 		// Safe now to build up TLS info.
 		tlsInfo := transport.TLSInfo{
 			CertFile:      certPath,
