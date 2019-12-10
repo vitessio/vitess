@@ -80,8 +80,8 @@ func GetSrvKeyspace(t *testing.T, cell string, ksname string, ci cluster.LocalPr
 
 // VerifyTabletHealth checks that the tablet URL is reachable.
 func VerifyTabletHealth(t *testing.T, vttablet cluster.Vttablet, hostname string) {
-	tabletUrl := fmt.Sprintf("http://%s:%d/healthz", hostname, vttablet.HTTPPort)
-	resp, err := http.Get(tabletUrl)
+	tabletURL := fmt.Sprintf("http://%s:%d/healthz", hostname, vttablet.HTTPPort)
+	resp, err := http.Get(tabletURL)
 	assert.Nil(t, err)
 	assert.Equal(t, resp.StatusCode, 200)
 }
@@ -456,6 +456,7 @@ func HexToDbStr(number uint64, keyType topodata.KeyspaceIdType) string {
 	return fmt.Sprintf(fmtValue, number)
 }
 
+// GetShardInfo return the Shard information
 func GetShardInfo(t *testing.T, shard1Ks string, ci cluster.LocalProcessCluster) *topodata.Shard {
 	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("GetShard", shard1Ks)
 	assert.Nil(t, err)
@@ -479,6 +480,7 @@ func checkThrottlerServiceMaxRates(t *testing.T, server string, ci cluster.Local
 	//return false
 }
 
+// CheckThrottlerService runs checkThrottlerServiceMaxRates and checkThrottlerServiceConfigs
 func CheckThrottlerService(t *testing.T, server string, names []string, rate int, ci cluster.LocalProcessCluster) {
 	checkThrottlerServiceMaxRates(t, server, ci)
 }
