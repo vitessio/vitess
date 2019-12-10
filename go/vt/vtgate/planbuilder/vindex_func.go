@@ -40,7 +40,7 @@ type vindexFunc struct {
 	eVindexFunc *engine.VindexFunc
 }
 
-func newVindexFunc(alias sqlparser.TableName, vindex vindexes.Vindex) (*vindexFunc, *symtab) {
+func newVindexFunc(alias sqlparser.TableName, vindex vindexes.SingleColumn) (*vindexFunc, *symtab) {
 	vf := &vindexFunc{
 		order: 1,
 		eVindexFunc: &engine.VindexFunc{

@@ -27,7 +27,7 @@ import (
 )
 
 var (
-	_ Vindex = (*XXHash)(nil)
+	_ SingleColumn = (*XXHash)(nil)
 )
 
 // XXHash defines vindex that hashes any sql types to a KeyspaceId

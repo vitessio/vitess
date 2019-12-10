@@ -29,14 +29,14 @@ import (
 	"vitess.io/vitess/go/vt/key"
 )
 
-var xxHash Vindex
+var xxHash SingleColumn
 
 func init() {
 	hv, err := CreateVindex("xxhash", "xxhash_name", map[string]string{"Table": "t", "Column": "c"})
 	if err != nil {
 		panic(err)
 	}
-	xxHash = hv
+	xxHash = hv.(SingleColumn)
 }
 
 func TestXXHashCost(t *testing.T) {

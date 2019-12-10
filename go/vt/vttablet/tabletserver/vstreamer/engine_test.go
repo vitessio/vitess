@@ -26,7 +26,8 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
-var shardedVSchema = `{
+var (
+	shardedVSchema = `{
   "sharded": true,
   "vindexes": {
     "hash": {
@@ -44,6 +45,32 @@ var shardedVSchema = `{
     }
   }
 }`
+
+	multicolumnVSchema = `{
+  "sharded": true,
+  "vindexes": {
+    "region_vdx": {
+      "type": "region_experimental",
+			"params": {
+				"region_bytes": "1"
+			}
+    }
+  },
+  "tables": {
+    "t1": {
+      "column_vindexes": [
+        {
+          "columns": [
+						"region",
+						"id"
+					],
+          "name": "region_vdx"
+        }
+      ]
+    }
+  }
+}`
+)
 
 func TestUpdateVSchema(t *testing.T) {
 	if testing.Short() {

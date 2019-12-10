@@ -37,7 +37,7 @@ type routeOption struct {
 
 	// vindexMap is a map of all vindexMap that can be used
 	// for the routeOption.
-	vindexMap map[*column]vindexes.Vindex
+	vindexMap map[*column]vindexes.SingleColumn
 
 	// condition stores the AST condition that will be used
 	// to resolve the ERoute Values field.
@@ -58,7 +58,7 @@ func newSimpleRouteOption(rb *route, eroute *engine.Route) *routeOption {
 	}
 }
 
-func newRouteOption(rb *route, vst *vindexes.Table, sub *tableSubstitution, vindexMap map[*column]vindexes.Vindex, eroute *engine.Route) *routeOption {
+func newRouteOption(rb *route, vst *vindexes.Table, sub *tableSubstitution, vindexMap map[*column]vindexes.SingleColumn, eroute *engine.Route) *routeOption {
 	var subs []*tableSubstitution
 	if sub != nil && sub.newExpr != nil {
 		subs = []*tableSubstitution{sub}
@@ -95,7 +95,7 @@ func (ro *routeOption) MergeJoin(rro *routeOption, isLeftJoin bool) {
 	// Add RHS vindexes only if it's not a left join.
 	for c, v := range rro.vindexMap {
 		if ro.vindexMap == nil {
-			ro.vindexMap = make(map[*column]vindexes.Vindex)
+			ro.vindexMap = make(map[*column]vindexes.SingleColumn)
 		}
 		ro.vindexMap[c] = v
 	}
@@ -126,7 +126,7 @@ func (ro *routeOption) MergeUnion(rro *routeOption) {
 	ro.substitutions = append(ro.substitutions, rro.substitutions...)
 }
 
-func (ro *routeOption) SubqueryToTable(rb *route, vindexMap map[*column]vindexes.Vindex) {
+func (ro *routeOption) SubqueryToTable(rb *route, vindexMap map[*column]vindexes.SingleColumn) {
 	ro.rb = rb
 	ro.vschemaTable = nil
 	ro.vindexMap = vindexMap
@@ -234,14 +234,14 @@ func (ro *routeOption) UpdatePlan(pb *primitiveBuilder, filter sqlparser.Expr) {
 	}
 }
 
-func (ro *routeOption) updateRoute(opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
+func (ro *routeOption) updateRoute(opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
 	ro.eroute.Opcode = opcode
 	ro.eroute.Vindex = vindex
 	ro.condition = condition
 }
 
 // computePlan computes the plan for the specified filter.
-func (ro *routeOption) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
+func (ro *routeOption) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
 	switch node := filter.(type) {
 	case *sqlparser.ComparisonExpr:
 		switch node.Operator {
@@ -257,7 +257,7 @@ func (ro *routeOption) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) 
 }
 
 // computeEqualPlan computes the plan for an equality constraint.
-func (ro *routeOption) computeEqualPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
+func (ro *routeOption) computeEqualPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
 	left := comparison.Left
 	right := comparison.Right
 	vindex = ro.FindVindex(pb, left)
@@ -278,7 +278,7 @@ func (ro *routeOption) computeEqualPlan(pb *primitiveBuilder, comparison *sqlpar
 }
 
 // computeINPlan computes the plan for an IN constraint.
-func (ro *routeOption) computeINPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
+func (ro *routeOption) computeINPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
 	vindex = ro.FindVindex(pb, comparison.Left)
 	if vindex == nil {
 		return engine.SelectScatter, nil, nil
@@ -323,7 +323,7 @@ func (ro *routeOption) isBetterThan(other *routeOption) bool {
 	return false
 }
 
-func (ro *routeOption) FindVindex(pb *primitiveBuilder, expr sqlparser.Expr) vindexes.Vindex {
+func (ro *routeOption) FindVindex(pb *primitiveBuilder, expr sqlparser.Expr) vindexes.SingleColumn {
 	col, ok := expr.(*sqlparser.ColName)
 	if !ok {
 		return nil
