@@ -1,4 +1,4 @@
-name: e2e Test Cluster
+name: cluster_endtoend
 on: [push, pull_request]
 jobs:
 
@@ -32,10 +32,10 @@ jobs:
 
     - name: Build
       run: |
-        GOBIN=$PWD/bin make build
+        VTROOT=$PWD VTTOP=$PWD make build
 
-    - name: Run e2e test cluster
+    - name: cluster_endtoend
       run: |
         export PATH=$PWD/bin:$PATH
         source ./dev.env
-        VTDATAROOT=/tmp/vtdataroot VTTOP=$PWD VTROOT=$PWD tools/e2e_test_cluster.sh
+        VTDATAROOT=/tmp/vtdataroot VTTOP=$PWD VTROOT=$PWD make e2e_test_cluster

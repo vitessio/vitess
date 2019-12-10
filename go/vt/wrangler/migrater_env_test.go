@@ -85,9 +85,6 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 		if err != nil {
 			t.Fatal(err)
 		}
-		if sourceKeyRange == nil {
-			sourceKeyRange = &topodatapb.KeyRange{}
-		}
 		tme.sourceKeyRanges = append(tme.sourceKeyRanges, sourceKeyRange)
 	}
 	for _, shard := range targetShards {
@@ -97,9 +94,6 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 		_, targetKeyRange, err := topo.ValidateShardName(shard)
 		if err != nil {
 			t.Fatal(err)
-		}
-		if targetKeyRange == nil {
-			targetKeyRange = &topodatapb.KeyRange{}
 		}
 		tme.targetKeyRanges = append(tme.targetKeyRanges, targetKeyRange)
 	}
@@ -209,9 +203,6 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 		if err != nil {
 			t.Fatal(err)
 		}
-		if sourceKeyRange == nil {
-			sourceKeyRange = &topodatapb.KeyRange{}
-		}
 		tme.sourceKeyRanges = append(tme.sourceKeyRanges, sourceKeyRange)
 	}
 	for _, shard := range targetShards {
@@ -221,9 +212,6 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 		_, targetKeyRange, err := topo.ValidateShardName(shard)
 		if err != nil {
 			t.Fatal(err)
-		}
-		if targetKeyRange == nil {
-			targetKeyRange = &topodatapb.KeyRange{}
 		}
 		tme.targetKeyRanges = append(tme.targetKeyRanges, targetKeyRange)
 	}

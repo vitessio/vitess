@@ -101,7 +101,7 @@ func (shard *Shard) Rdonly() *Vttablet {
 }
 
 // Replica get the last but one tablet which is replica
-// Mostly we have either 2 or 3 tablet setup [master, replica], [master, replica, rdonly]
+// Mostly we have either 3 tablet setup [master, replica], [master, replica, rdonly]
 func (shard *Shard) Replica() *Vttablet {
 	if len(shard.Vttablets) > 1 {
 		return shard.Vttablets[len(shard.Vttablets)-2]
@@ -234,7 +234,6 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				cluster.VtTabletExtraArgs,
 				cluster.EnableSemiSync)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
-
 			shard.Vttablets = append(shard.Vttablets, tablet)
 		}
 
@@ -378,11 +377,20 @@ func (cluster *LocalProcessCluster) LaunchCluster(keyspace *Keyspace, shards []S
 
 // StartVtgate starts vtgate
 func (cluster *LocalProcessCluster) StartVtgate() (err error) {
+	vtgateInstance := *cluster.GetVtgateInstance()
+	cluster.VtgateProcess = vtgateInstance
+	//cluster.VtgateMySQLPort = vtgateInstance.MySQLServerPort
+	log.Info(fmt.Sprintf("Starting vtgate on port %d", vtgateInstance.Port))
+	log.Info(fmt.Sprintf("Vtgate started, connect to mysql using : mysql -h 127.0.0.1 -P %d", cluster.VtgateMySQLPort))
+	return cluster.VtgateProcess.Setup()
+}
+
+// GetVtgateInstance returns an instance of vtgateprocess
+func (cluster *LocalProcessCluster) GetVtgateInstance() *VtgateProcess {
 	vtgateHTTPPort := cluster.GetAndReservePort()
 	vtgateGrpcPort := cluster.GetAndReservePort()
 	cluster.VtgateMySQLPort = cluster.GetAndReservePort()
-	log.Info(fmt.Sprintf("Starting vtgate on port %d", vtgateHTTPPort))
-	cluster.VtgateProcess = *VtgateProcessInstance(
+	vtgateProcInstance := VtgateProcessInstance(
 		vtgateHTTPPort,
 		vtgateGrpcPort,
 		cluster.VtgateMySQLPort,
@@ -393,9 +401,7 @@ func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 		cluster.TopoProcess.Port,
 		cluster.TmpDirectory,
 		cluster.VtGateExtraArgs)
-
-	log.Info(fmt.Sprintf("Vtgate started, connect to mysql using : mysql -h 127.0.0.1 -P %d", cluster.VtgateMySQLPort))
-	return cluster.VtgateProcess.Setup()
+	return vtgateProcInstance
 }
 
 // NewCluster instantiates a new cluster
@@ -424,52 +430,71 @@ func (cluster *LocalProcessCluster) ReStartVtgate() (err error) {
 	return err
 }
 
+// WaitForTabletsToHealthyInVtgate waits for all tablets in all shards to be healthy as per vtgate
+func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error) {
+	var isRdOnlyPresent bool
+	for _, keyspace := range cluster.Keyspaces {
+		for _, shard := range keyspace.Shards {
+			isRdOnlyPresent = false
+			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspace.Name, shard.Name)); err != nil {
+				return err
+			}
+			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace.Name, shard.Name)); err != nil {
+				return err
+			}
+			for _, tablet := range shard.Vttablets {
+				if tablet.Type == "rdonly" {
+					isRdOnlyPresent = true
+				}
+			}
+			if isRdOnlyPresent {
+				err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspace.Name, shard.Name))
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // Teardown brings down the cluster by invoking teardown for individual processes
-func (cluster *LocalProcessCluster) Teardown() (err error) {
-	if err = cluster.VtgateProcess.TearDown(); err != nil {
-		log.Error(err.Error())
-		return
+func (cluster *LocalProcessCluster) Teardown() {
+	if err := cluster.VtgateProcess.TearDown(); err != nil {
+		log.Errorf("Error in vtgate teardown - %s", err.Error())
 	}
 
-	if err = cluster.VtworkerProcess.TearDown(); err != nil {
-		log.Error(err.Error())
-		return
-	}
-
-	mysqlctlProcessList := []*exec.Cmd{}
-
+	var mysqlctlProcessList []*exec.Cmd
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {
 			for _, tablet := range shard.Vttablets {
-				if proc, err := tablet.MysqlctlProcess.StopProcess(); err != nil {
-					log.Error(err.Error())
-					return err
-				} else {
-					mysqlctlProcessList = append(mysqlctlProcessList, proc)
+				if tablet.MysqlctlProcess.TabletUID > 0 {
+					if proc, err := tablet.MysqlctlProcess.StopProcess(); err != nil {
+						log.Errorf("Error in mysqlctl teardown - %s", err.Error())
+					} else {
+						mysqlctlProcessList = append(mysqlctlProcessList, proc)
+					}
 				}
-
-				if err = tablet.VttabletProcess.TearDown(); err != nil {
-					log.Error(err.Error())
-					return
+				if err := tablet.VttabletProcess.TearDown(); err != nil {
+					log.Errorf("Error in vttablet teardown - %s", err.Error())
 				}
 			}
 		}
 	}
 
 	for _, proc := range mysqlctlProcessList {
-		proc.Wait()
+		if err := proc.Wait(); err != nil {
+			log.Errorf("Error in mysqlctl teardown wait - %s", err.Error())
+		}
 	}
 
-	if err = cluster.VtctldProcess.TearDown(); err != nil {
-		log.Error(err.Error())
-		return
+	if err := cluster.VtctldProcess.TearDown(); err != nil {
+		log.Errorf("Error in vtctld teardown - %s", err.Error())
 	}
 
-	if err = cluster.TopoProcess.TearDown(cluster.Cell, cluster.OriginalVTDATAROOT, cluster.CurrentVTDATAROOT, *keepData); err != nil {
-		log.Error(err.Error())
-		return
+	if err := cluster.TopoProcess.TearDown(cluster.Cell, cluster.OriginalVTDATAROOT, cluster.CurrentVTDATAROOT, *keepData); err != nil {
+		log.Errorf("Error in etcd teardown - %s", err.Error())
 	}
-	return err
 }
 
 // StartVtworker starts a vtworker
@@ -529,7 +554,7 @@ func (cluster *LocalProcessCluster) GetVttabletInstance(tabletType string, UID i
 	}
 }
 
-// StartVttablet start a new tablet
+// StartVttablet starts a new tablet
 func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatus string,
 	supportBackup bool, cell string, keyspaceName string, hostname string, shardName string) error {
 	tablet.VttabletProcess = VttabletProcessInstance(
@@ -547,7 +572,7 @@ func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatu
 		cluster.VtTabletExtraArgs,
 		cluster.EnableSemiSync)
 
-	tablet.VttabletProcess.SupportBackup = supportBackup
+	tablet.VttabletProcess.SupportsBackup = supportBackup
 	tablet.VttabletProcess.ServingStatus = servingStatus
 	return tablet.VttabletProcess.Setup()
 }

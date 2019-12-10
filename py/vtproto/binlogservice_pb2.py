@@ -7,7 +7,6 @@ from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
 from google.protobuf import reflection as _reflection
 from google.protobuf import symbol_database as _symbol_database
-from google.protobuf import descriptor_pb2
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
@@ -20,6 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='binlogservice.proto',
   package='binlogservice',
   syntax='proto3',
+  serialized_options=_b('Z*vitess.io/vitess/go/vt/proto/binlogservice'),
   serialized_pb=_b('\n\x13\x62inlogservice.proto\x12\rbinlogservice\x1a\x10\x62inlogdata.proto2\xc2\x01\n\x0cUpdateStream\x12[\n\x0eStreamKeyRange\x12!.binlogdata.StreamKeyRangeRequest\x1a\".binlogdata.StreamKeyRangeResponse\"\x00\x30\x01\x12U\n\x0cStreamTables\x12\x1f.binlogdata.StreamTablesRequest\x1a .binlogdata.StreamTablesResponse\"\x00\x30\x01\x42,Z*vitess.io/vitess/go/vt/proto/binlogserviceb\x06proto3')
   ,
   dependencies=[binlogdata__pb2.DESCRIPTOR,])
@@ -29,15 +29,14 @@ DESCRIPTOR = _descriptor.FileDescriptor(
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
-DESCRIPTOR.has_options = True
-DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), _b('Z*vitess.io/vitess/go/vt/proto/binlogservice'))
+DESCRIPTOR._options = None
 
 _UPDATESTREAM = _descriptor.ServiceDescriptor(
   name='UpdateStream',
   full_name='binlogservice.UpdateStream',
   file=DESCRIPTOR,
   index=0,
-  options=None,
+  serialized_options=None,
   serialized_start=57,
   serialized_end=251,
   methods=[
@@ -48,7 +47,7 @@ _UPDATESTREAM = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=binlogdata__pb2._STREAMKEYRANGEREQUEST,
     output_type=binlogdata__pb2._STREAMKEYRANGERESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='StreamTables',
@@ -57,7 +56,7 @@ _UPDATESTREAM = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=binlogdata__pb2._STREAMTABLESREQUEST,
     output_type=binlogdata__pb2._STREAMTABLESRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
 ])
 _sym_db.RegisterServiceDescriptor(_UPDATESTREAM)

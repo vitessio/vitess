@@ -253,7 +253,6 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 				log.Error(err.Error())
 				return
 			}
-
 		}
 
 		keyspace.Shards = append(keyspace.Shards, *shard)

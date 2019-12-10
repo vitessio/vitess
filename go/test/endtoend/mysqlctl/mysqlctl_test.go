@@ -23,9 +23,10 @@ import (
 	"os/exec"
 	"testing"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/log"
 )
 
 var (

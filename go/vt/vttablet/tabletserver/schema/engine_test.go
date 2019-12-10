@@ -412,7 +412,7 @@ func newEngine(queryPlanCacheSize int, reloadTime time.Duration, idleTimeout tim
 	config.SchemaReloadTime = float64(reloadTime) / 1e9
 	config.IdleTimeout = float64(idleTimeout) / 1e9
 	se := NewEngine(DummyChecker, config)
-	se.InitDBConfig(newDBConfigs(db))
+	se.InitDBConfig(newDBConfigs(db).DbaWithDB())
 	return se
 }
 

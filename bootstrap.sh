@@ -127,12 +127,11 @@ function install_dep() {
 # 1. Installation of dependencies.
 #
 
-# Wrapper around the `arch` command which plays nice with OS X
+# We should not use the arch command, since it is not reliably
+# available on macOS or some linuxes:
+# https://www.gnu.org/software/coreutils/manual/html_node/arch-invocation.html
 function get_arch() {
-  case $(uname) in
-    Linux) arch;;
-    Darwin) uname -m;;
-  esac
+  uname -m
 }
 
 
@@ -235,6 +234,7 @@ function install_etcd() {
   fi
   rm "$file"
   ln -snf "$dist/etcd-${version}-${platform}-${target}/etcd" "$VTROOT/bin/etcd"
+  ln -snf "$dist/etcd-${version}-${platform}-${target}/etcdctl" "$VTROOT/bin/etcdctl"
 }
 which etcd || install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
 

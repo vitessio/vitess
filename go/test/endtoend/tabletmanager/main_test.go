@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -83,7 +85,7 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = &cluster.LocalProcessCluster{Cell: cell, Hostname: hostname}
+		clusterInstance = cluster.NewCluster(cell, hostname)
 		defer clusterInstance.Teardown()
 
 		// Start topo server
@@ -143,10 +145,6 @@ func TestMain(m *testing.M) {
 			UnixSocket: fmt.Sprintf(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", replicaTablet.TabletUID))),
 		}
 
-		// Fixed UIDs for tablet which we will spawn during these tests
-		replicaUID = 62044
-		masterUID = 62344
-
 		// create tablet manager client
 		tmClient = tmc.NewClient()
 
@@ -158,9 +156,7 @@ func TestMain(m *testing.M) {
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return qr
 }
 

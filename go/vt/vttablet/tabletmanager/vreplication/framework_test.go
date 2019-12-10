@@ -19,6 +19,7 @@ package vreplication
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
 	"regexp"
@@ -82,7 +83,7 @@ func TestMain(m *testing.M) {
 		// engines cannot be initialized in testenv because it introduces
 		// circular dependencies.
 		streamerEngine = vstreamer.NewEngine(env.SrvTopo, env.SchemaEngine)
-		streamerEngine.InitDBConfig(env.Dbcfgs)
+		streamerEngine.InitDBConfig(env.Dbcfgs.DbaWithDB())
 		streamerEngine.Open(env.KeyspaceName, env.Cells[0])
 		defer streamerEngine.Close()
 
@@ -95,6 +96,8 @@ func TestMain(m *testing.M) {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
 		}
+
+		InitVStreamerClient(env.Dbcfgs)
 
 		playerEngine = NewEngine(env.TopoServ, env.Cells[0], env.Mysqld, realDBClientFactory, vrepldb)
 		if err := playerEngine.Open(context.Background()); err != nil {
@@ -122,6 +125,22 @@ func resetBinlogClient() {
 	globalFBC = &fakeBinlogClient{}
 }
 
+func masterPosition(t *testing.T) string {
+	t.Helper()
+	pos, err := env.Mysqld.MasterPosition()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return mysql.EncodePosition(pos)
+}
+
+func execStatements(t *testing.T, queries []string) {
+	t.Helper()
+	if err := env.Mysqld.ExecuteSuperQueryList(context.Background(), queries); err != nil {
+		t.Error(err)
+	}
+}
+
 //--------------------------------------
 // Topos and tablets
 
@@ -133,6 +152,26 @@ func addTablet(id int) *topodatapb.Tablet {
 		},
 		Keyspace: env.KeyspaceName,
 		Shard:    env.ShardName,
+		KeyRange: &topodatapb.KeyRange{},
+		Type:     topodatapb.TabletType_REPLICA,
+		PortMap: map[string]int32{
+			"test": int32(id),
+		},
+	}
+	if err := env.TopoServ.CreateTablet(context.Background(), tablet); err != nil {
+		panic(err)
+	}
+	return tablet
+}
+
+func addOtherTablet(id int, keyspace, shard string) *topodatapb.Tablet {
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: env.Cells[0],
+			Uid:  uint32(id),
+		},
+		Keyspace: keyspace,
+		Shard:    shard,
 		KeyRange: &topodatapb.KeyRange{},
 		Type:     topodatapb.TabletType_REPLICA,
 		PortMap: map[string]int32{
@@ -174,6 +213,10 @@ func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, callback func(*quer
 
 // VStream directly calls into the pre-initialized engine.
 func (ftc *fakeTabletConn) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	if target.Keyspace != "vttest" {
+		<-ctx.Done()
+		return io.EOF
+	}
 	return streamerEngine.Stream(ctx, startPos, filter, send)
 }
 

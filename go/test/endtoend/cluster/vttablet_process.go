@@ -63,8 +63,10 @@ type VttabletProcess struct {
 	Directory                   string
 	VerifyURL                   string
 	EnableSemiSync              bool
-	SupportBackup               bool
+	SupportsBackup              bool
 	ServingStatus               string
+	DbPassword                  string
+	DbPort                      int
 	//Extra Args to be set before starting the vttablet process
 	ExtraArgs []string
 
@@ -98,7 +100,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-vtctld_addr", vttablet.VtctldAddress,
 	)
 
-	if vttablet.SupportBackup {
+	if vttablet.SupportsBackup {
 		vttablet.proc.Args = append(vttablet.proc.Args, "-restore_from_backup")
 	}
 	if vttablet.EnableSemiSync {
@@ -107,8 +109,8 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	vttablet.proc.Args = append(vttablet.proc.Args, vttablet.ExtraArgs...)
 
-	vttablet.proc.Stderr = os.Stderr
-	vttablet.proc.Stdout = os.Stdout
+	errFile, _ := os.Create(path.Join(vttablet.LogDir, vttablet.TabletPath+"-vttablet-stderr.txt"))
+	vttablet.proc.Stderr = errFile
 
 	vttablet.proc.Env = append(vttablet.proc.Env, os.Environ()...)
 
@@ -121,27 +123,20 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	vttablet.exit = make(chan error)
 	go func() {
-		vttablet.exit <- vttablet.proc.Wait()
+		if vttablet.proc != nil {
+			vttablet.exit <- vttablet.proc.Wait()
+		}
 	}()
 
-	err = vttablet.WaitForTabletType(vttablet.ServingStatus)
-	if err != nil {
-		return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vttablet.Name, <-vttablet.exit)
+	if vttablet.ServingStatus != "" {
+		if err = vttablet.WaitForTabletType(vttablet.ServingStatus); err != nil {
+			return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vttablet.Name, <-vttablet.exit)
+		}
 	}
 	return nil
 }
 
-// GetTabletStatus function checks if vttablet process is up and running
-func (vttablet *VttabletProcess) GetTabletStatus() string {
-	resultMap := vttablet.GetVars()
-	if resultMap != nil {
-		return reflect.ValueOf(resultMap["TabletStateName"]).String()
-	} else {
-		return ""
-	}
-}
-
-// GetStatus function checks if vttablet process is up and running
+// GetStatus returns /debug/status endpoint result
 func (vttablet *VttabletProcess) GetStatus() string {
 	URL := fmt.Sprintf("http://%s:%d/debug/status", vttablet.TabletHostname, vttablet.Port)
 	resp, err := http.Get(URL)
@@ -156,11 +151,7 @@ func (vttablet *VttabletProcess) GetStatus() string {
 	return ""
 }
 
-// WaitForStatus function checks if vttablet process is up and running
-func (vttablet *VttabletProcess) WaitForStatus(status string) bool {
-	return vttablet.GetTabletStatus() == status
-}
-
+// GetVars gets the debug vars as map
 func (vttablet *VttabletProcess) GetVars() map[string]interface{} {
 	resp, err := http.Get(vttablet.VerifyURL)
 	if err != nil {
@@ -172,13 +163,27 @@ func (vttablet *VttabletProcess) GetVars() map[string]interface{} {
 		err := json.Unmarshal(respByte, &resultMap)
 		if err != nil {
 			return nil
-		} else {
-			return resultMap
 		}
+		return resultMap
 	}
 	return nil
 }
 
+// WaitForStatus waits till desired status of tablet is reached
+func (vttablet *VttabletProcess) WaitForStatus(status string) bool {
+	return vttablet.GetTabletStatus() == status
+}
+
+// GetTabletStatus returns the tablet state as seen in /debug/vars TabletStateName
+func (vttablet *VttabletProcess) GetTabletStatus() string {
+	resultMap := vttablet.GetVars()
+	if resultMap != nil {
+		return reflect.ValueOf(resultMap["TabletStateName"]).String()
+	}
+	return ""
+}
+
+// WaitForTabletType waits till the tablet status reaches desired type
 func (vttablet *VttabletProcess) WaitForTabletType(expectedType string) error {
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
@@ -195,6 +200,7 @@ func (vttablet *VttabletProcess) WaitForTabletType(expectedType string) error {
 	return fmt.Errorf("Vttablet %s, expected status not reached", vttablet.TabletPath)
 }
 
+// WaitForBinLogPlayerCount waits till binlog player count var matches
 func (vttablet *VttabletProcess) WaitForBinLogPlayerCount(expectedCount int) error {
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
@@ -208,7 +214,7 @@ func (vttablet *VttabletProcess) WaitForBinLogPlayerCount(expectedCount int) err
 			time.Sleep(300 * time.Millisecond)
 		}
 	}
-	return fmt.Errorf("Vttablet %s, expected status not reached", vttablet.TabletPath)
+	return fmt.Errorf("vttablet %s, expected status not reached", vttablet.TabletPath)
 }
 
 func (vttablet *VttabletProcess) getVReplStreamCount() string {
@@ -237,19 +243,27 @@ func (vttablet *VttabletProcess) TearDown() error {
 	}
 }
 
+// CreateDB creates the database for keyspace
 func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
 	_, err := vttablet.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace), keyspace, false)
 	return err
 }
 
-// QueryTablet lets you execute query in this tablet and get the result
+// QueryTablet lets you execute a query in this tablet and get the result
 func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useDb bool) (*sqltypes.Result, error) {
 	dbParams := mysql.ConnParams{
-		Uname:      "vt_dba",
-		UnixSocket: path.Join(vttablet.Directory, "mysql.sock"),
+		Uname: "vt_dba",
+	}
+	if vttablet.DbPort > 0 {
+		dbParams.Port = vttablet.DbPort
+	} else {
+		dbParams.UnixSocket = path.Join(vttablet.Directory, "mysql.sock")
 	}
 	if useDb {
 		dbParams.DbName = "vt_" + keyspace
+	}
+	if vttablet.DbPassword != "" {
+		dbParams.Pass = vttablet.DbPassword
 	}
 	return executeQuery(dbParams, query)
 }
@@ -301,7 +315,7 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 		VtctldAddress:               fmt.Sprintf("http://%s:%d", hostname, vtctldPort),
 		ExtraArgs:                   extraArgs,
 		EnableSemiSync:              enableSemiSync,
-		SupportBackup:               true,
+		SupportsBackup:              true,
 		ServingStatus:               "NOT_SERVING",
 	}
 

@@ -37,6 +37,7 @@ type MysqlctlProcess struct {
 	TabletUID    int
 	MySQLPort    int
 	InitDBFile   string
+	ExtraArgs    []string
 }
 
 // InitDb executes mysqlctl command to add cell info
@@ -68,9 +69,13 @@ func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
 		"-log_dir", mysqlctl.LogDirectory,
 		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 		"-mysql_port", fmt.Sprintf("%d", mysqlctl.MySQLPort),
-		"init",
-		"-init_db_sql_file", mysqlctl.InitDBFile,
 	)
+
+	if len(mysqlctl.ExtraArgs) > 0 {
+		tmpProcess.Args = append(tmpProcess.Args, mysqlctl.ExtraArgs...)
+	}
+	tmpProcess.Args = append(tmpProcess.Args, "init",
+		"-init_db_sql_file", mysqlctl.InitDBFile)
 	return tmpProcess, tmpProcess.Start()
 }
 
@@ -88,8 +93,11 @@ func (mysqlctl *MysqlctlProcess) StopProcess() (*exec.Cmd, error) {
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
 		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
-		"shutdown",
 	)
+	if len(mysqlctl.ExtraArgs) > 0 {
+		tmpProcess.Args = append(tmpProcess.Args, mysqlctl.ExtraArgs...)
+	}
+	tmpProcess.Args = append(tmpProcess.Args, "shutdown")
 	return tmpProcess, tmpProcess.Start()
 }
 
@@ -117,7 +125,17 @@ func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) 
 }
 
 // StartMySQL create a connection to tablet mysql
-func StartMySQL(ctx context.Context, tablet *Vttablet, username string, tmpDirectory string) (*mysql.Conn, error) {
+func StartMySQL(ctx context.Context, tablet *Vttablet, username string, tmpDirectory string) error {
+	tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
+	err := tablet.MysqlctlProcess.Start()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// StartMySQLAndGetConnection create a connection to tablet mysql
+func StartMySQLAndGetConnection(ctx context.Context, tablet *Vttablet, username string, tmpDirectory string) (*mysql.Conn, error) {
 	tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
 	err := tablet.MysqlctlProcess.Start()
 	if err != nil {

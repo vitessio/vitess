@@ -7,7 +7,6 @@ from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
 from google.protobuf import reflection as _reflection
 from google.protobuf import symbol_database as _symbol_database
-from google.protobuf import descriptor_pb2
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
@@ -19,6 +18,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='mysqlctl.proto',
   package='mysqlctl',
   syntax='proto3',
+  serialized_options=_b('Z%vitess.io/vitess/go/vt/proto/mysqlctl'),
   serialized_pb=_b('\n\x0emysqlctl.proto\x12\x08mysqlctl\"#\n\x0cStartRequest\x12\x13\n\x0bmysqld_args\x18\x01 \x03(\t\"\x0f\n\rStartResponse\"*\n\x0fShutdownRequest\x12\x17\n\x0fwait_for_mysqld\x18\x01 \x01(\x08\"\x12\n\x10ShutdownResponse\"\x18\n\x16RunMysqlUpgradeRequest\"\x19\n\x17RunMysqlUpgradeResponse\"\x15\n\x13ReinitConfigRequest\"\x16\n\x14ReinitConfigResponse\"\x16\n\x14RefreshConfigRequest\"\x17\n\x15RefreshConfigResponse2\x8a\x03\n\x08MysqlCtl\x12:\n\x05Start\x12\x16.mysqlctl.StartRequest\x1a\x17.mysqlctl.StartResponse\"\x00\x12\x43\n\x08Shutdown\x12\x19.mysqlctl.ShutdownRequest\x1a\x1a.mysqlctl.ShutdownResponse\"\x00\x12X\n\x0fRunMysqlUpgrade\x12 .mysqlctl.RunMysqlUpgradeRequest\x1a!.mysqlctl.RunMysqlUpgradeResponse\"\x00\x12O\n\x0cReinitConfig\x12\x1d.mysqlctl.ReinitConfigRequest\x1a\x1e.mysqlctl.ReinitConfigResponse\"\x00\x12R\n\rRefreshConfig\x12\x1e.mysqlctl.RefreshConfigRequest\x1a\x1f.mysqlctl.RefreshConfigResponse\"\x00\x42\'Z%vitess.io/vitess/go/vt/proto/mysqlctlb\x06proto3')
 )
 
@@ -38,14 +38,14 @@ _STARTREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
   nested_types=[],
   enum_types=[
   ],
-  options=None,
+  serialized_options=None,
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
@@ -69,7 +69,7 @@ _STARTRESPONSE = _descriptor.Descriptor(
   nested_types=[],
   enum_types=[
   ],
-  options=None,
+  serialized_options=None,
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
@@ -93,14 +93,14 @@ _SHUTDOWNREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
   nested_types=[],
   enum_types=[
   ],
-  options=None,
+  serialized_options=None,
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
@@ -124,7 +124,7 @@ _SHUTDOWNRESPONSE = _descriptor.Descriptor(
   nested_types=[],
   enum_types=[
   ],
-  options=None,
+  serialized_options=None,
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
@@ -148,7 +148,7 @@ _RUNMYSQLUPGRADEREQUEST = _descriptor.Descriptor(
   nested_types=[],
   enum_types=[
   ],
-  options=None,
+  serialized_options=None,
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
@@ -172,7 +172,7 @@ _RUNMYSQLUPGRADERESPONSE = _descriptor.Descriptor(
   nested_types=[],
   enum_types=[
   ],
-  options=None,
+  serialized_options=None,
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
@@ -196,7 +196,7 @@ _REINITCONFIGREQUEST = _descriptor.Descriptor(
   nested_types=[],
   enum_types=[
   ],
-  options=None,
+  serialized_options=None,
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
@@ -220,7 +220,7 @@ _REINITCONFIGRESPONSE = _descriptor.Descriptor(
   nested_types=[],
   enum_types=[
   ],
-  options=None,
+  serialized_options=None,
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
@@ -244,7 +244,7 @@ _REFRESHCONFIGREQUEST = _descriptor.Descriptor(
   nested_types=[],
   enum_types=[
   ],
-  options=None,
+  serialized_options=None,
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
@@ -268,7 +268,7 @@ _REFRESHCONFIGRESPONSE = _descriptor.Descriptor(
   nested_types=[],
   enum_types=[
   ],
-  options=None,
+  serialized_options=None,
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
@@ -361,15 +361,14 @@ RefreshConfigResponse = _reflection.GeneratedProtocolMessageType('RefreshConfigR
 _sym_db.RegisterMessage(RefreshConfigResponse)
 
 
-DESCRIPTOR.has_options = True
-DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), _b('Z%vitess.io/vitess/go/vt/proto/mysqlctl'))
+DESCRIPTOR._options = None
 
 _MYSQLCTL = _descriptor.ServiceDescriptor(
   name='MysqlCtl',
   full_name='mysqlctl.MysqlCtl',
   file=DESCRIPTOR,
   index=0,
-  options=None,
+  serialized_options=None,
   serialized_start=296,
   serialized_end=690,
   methods=[
@@ -380,7 +379,7 @@ _MYSQLCTL = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=_STARTREQUEST,
     output_type=_STARTRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='Shutdown',
@@ -389,7 +388,7 @@ _MYSQLCTL = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=_SHUTDOWNREQUEST,
     output_type=_SHUTDOWNRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='RunMysqlUpgrade',
@@ -398,7 +397,7 @@ _MYSQLCTL = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=_RUNMYSQLUPGRADEREQUEST,
     output_type=_RUNMYSQLUPGRADERESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='ReinitConfig',
@@ -407,7 +406,7 @@ _MYSQLCTL = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=_REINITCONFIGREQUEST,
     output_type=_REINITCONFIGRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='RefreshConfig',
@@ -416,7 +415,7 @@ _MYSQLCTL = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=_REFRESHCONFIGREQUEST,
     output_type=_REFRESHCONFIGRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
 ])
 _sym_db.RegisterServiceDescriptor(_MYSQLCTL)

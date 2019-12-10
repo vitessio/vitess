@@ -84,8 +84,8 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	)
 	vtgate.proc.Args = append(vtgate.proc.Args, vtgate.ExtraArgs...)
 
-	vtgate.proc.Stderr = os.Stderr
-	vtgate.proc.Stdout = os.Stdout
+	errFile, _ := os.Create(path.Join(vtgate.LogDir, "vtgate-stderr.txt"))
+	vtgate.proc.Stderr = errFile
 
 	vtgate.proc.Env = append(vtgate.proc.Env, os.Environ()...)
 
@@ -95,10 +95,11 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	if err != nil {
 		return
 	}
-
 	vtgate.exit = make(chan error)
 	go func() {
-		vtgate.exit <- vtgate.proc.Wait()
+		if vtgate.proc != nil {
+			vtgate.exit <- vtgate.proc.Wait()
+		}
 	}()
 
 	timeout := time.Now().Add(60 * time.Second)
@@ -124,23 +125,7 @@ func (vtgate *VtgateProcess) WaitForStatus() bool {
 		return false
 	}
 	if resp.StatusCode == 200 {
-		resultMap := make(map[string]interface{})
-		respByte, _ := ioutil.ReadAll(resp.Body)
-		err := json.Unmarshal(respByte, &resultMap)
-		if err != nil {
-			panic(err)
-		}
-		object := reflect.ValueOf(resultMap["HealthcheckConnections"])
-		masterConnectionExist := false
-		if object.Kind() == reflect.Map {
-			for _, key := range object.MapKeys() {
-
-				if strings.Contains(key.String(), "master") {
-					masterConnectionExist = true
-				}
-			}
-		}
-		return masterConnectionExist
+		return true
 	}
 	return false
 }
@@ -188,7 +173,7 @@ func (vtgate *VtgateProcess) WaitForStatusOfTabletInShard(name string) error {
 			time.Sleep(300 * time.Millisecond)
 		}
 	}
-	return fmt.Errorf("Wait for %s failed", name)
+	return fmt.Errorf("wait for %s failed", name)
 }
 
 // TearDown shuts down the running vtgate service
@@ -221,7 +206,7 @@ func VtgateProcessInstance(port int, grpcPort int, mySQLServerPort int, cell str
 		Binary:                "vtgate",
 		FileToLogQueries:      path.Join(tmpDirectory, "/vtgate_querylog.txt"),
 		Directory:             os.Getenv("VTDATAROOT"),
-		ServiceMap:            "grpc-vtgateservice",
+		ServiceMap:            "grpc-tabletmanager,grpc-throttler,grpc-queryservice,grpc-updatestream,grpc-vtctl,grpc-vtworker,grpc-vtgateservice",
 		LogDir:                tmpDirectory,
 		Port:                  port,
 		GrpcPort:              grpcPort,

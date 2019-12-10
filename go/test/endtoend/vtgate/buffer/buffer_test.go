@@ -44,6 +44,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -220,9 +221,7 @@ func createCluster() (*cluster.LocalProcessCluster, int) {
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	return qr
 }
 
@@ -241,9 +240,7 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 	}
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 
 	// Insert two rows for the later threads (critical read, update).
@@ -292,9 +289,7 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 	//At least one thread should have been buffered.
 	//This may fail if a failover is too fast. Add retries then.
 	resp, err := http.Get(clusterInstance.VtgateProcess.VerifyURL)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	label := fmt.Sprintf("%s.%s", keyspaceUnshardedName, "0")
 	inFlightMax := 0
 	masterPromotedCount := 0
@@ -343,9 +338,7 @@ func getVarFromVtgate(t *testing.T, label string, param string, resultMap map[st
 				v := object.MapIndex(key)
 				s := fmt.Sprintf("%v", v.Interface())
 				paramVal, err = strconv.Atoi(s)
-				if err != nil {
-					t.Fatal(err.Error())
-				}
+				require.NoError(t, err)
 			}
 		}
 	}
@@ -410,9 +403,7 @@ func waitForReplicationPos(ctx context.Context, t *testing.T, tabletA *cluster.V
 func getMasterPosition(ctx context.Context, t *testing.T, tablet *cluster.Vttablet) (string, string) {
 	vtablet := getTablet(tablet.GrpcPort)
 	newPos, err := tmClient.MasterPosition(ctx, vtablet)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
+	require.NoError(t, err)
 	gtID := strings.SplitAfter(newPos, "/")[1]
 	return newPos, gtID
 }
@@ -420,9 +411,7 @@ func getMasterPosition(ctx context.Context, t *testing.T, tablet *cluster.Vttabl
 func positionAtLeast(t *testing.T, tablet *cluster.Vttablet, a string, b string) bool {
 	isAtleast := false
 	val, err := tablet.MysqlctlProcess.ExecuteCommandWithOutput("position", "at_least", a, b)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
+	require.NoError(t, err)
 	if strings.Contains(val, "true") {
 		isAtleast = true
 	}
@@ -432,7 +421,7 @@ func positionAtLeast(t *testing.T, tablet *cluster.Vttablet, a string, b string)
 func waitStep(t *testing.T, msg string, timeout float64, sleepTime float64) float64 {
 	timeout = timeout - sleepTime
 	if timeout < 0.0 {
-		t.Fatalf("timeout waiting for condition '%s'", msg)
+		t.Errorf("timeout waiting for condition '%s'", msg)
 	}
 	time.Sleep(time.Duration(sleepTime) * time.Second)
 	return timeout

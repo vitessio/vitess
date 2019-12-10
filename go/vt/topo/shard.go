@@ -279,7 +279,7 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 	defer unlock(&err)
 
 	// validate parameters
-	name, keyRange, err := ValidateShardName(shard)
+	_, keyRange, err := ValidateShardName(shard)
 	if err != nil {
 		return err
 	}
@@ -288,26 +288,19 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 		KeyRange: keyRange,
 	}
 
-	isMasterServing := true
-
-	// start the shard IsMasterServing. If it overlaps with
-	// other shards for some serving types, remove them.
-
-	if IsShardUsingRangeBasedSharding(name) {
-		// if we are using range-based sharding, we don't want
-		// overlapping shards to all serve and confuse the clients.
-		sis, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
-		if err != nil && !IsErrType(err, NoNode) {
-			return err
-		}
-		for _, si := range sis {
-			if si.KeyRange == nil || key.KeyRangesIntersect(si.KeyRange, keyRange) {
-				isMasterServing = false
-			}
+	// Set master as serving only if its keyrange doesn't overlap
+	// with other shards. This applies to unsharded keyspaces also
+	value.IsMasterServing = true
+	sis, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
+	if err != nil && !IsErrType(err, NoNode) {
+		return err
+	}
+	for _, si := range sis {
+		if si.KeyRange == nil || key.KeyRangesIntersect(si.KeyRange, keyRange) {
+			value.IsMasterServing = false
+			break
 		}
 	}
-
-	value.IsMasterServing = isMasterServing
 
 	// Marshal and save.
 	data, err := proto.Marshal(value)
