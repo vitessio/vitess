@@ -25,9 +25,8 @@ RUN apt-get update && \
    rm -rf /var/lib/apt/lists/*
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
-ENV VTROOT /vt
+ENV VTROOT /vt/src/vitess.io/vitess
 ENV VTDATAROOT /vtdataroot
-ENV VTTOP /vt/src/vitess.io/vitess
 
 # Prepare directory structure.
 RUN mkdir -p /vt && \
@@ -50,13 +49,13 @@ COPY --from=base /vt/bin/vtworker /vt/bin/
 COPY --from=base /vt/bin/vtbackup /vt/bin/
 
 # copy web admin files
-COPY --from=base $VTTOP/web /vt/web/
+COPY --from=base $VTROOT/web /vt/web/
 
 # copy vitess config
-COPY --from=base $VTTOP/config/init_db.sql /vt/config/
+COPY --from=base $VTROOT/config/init_db.sql /vt/config/
 
 # my.cnf include files
-COPY --from=base $VTTOP/config/mycnf /vt/config/mycnf
+COPY --from=base $VTROOT/config/mycnf /vt/config/mycnf
 
 # add vitess user and add permissions
 RUN groupadd -r --gid 2000 vitess && useradd -r -g vitess --uid 1000 vitess && \

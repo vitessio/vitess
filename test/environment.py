@@ -53,14 +53,6 @@ if os.getuid() == 1:
       'ERROR: Vitess and mysqld '
       'should not be run as root.\n')
   sys.exit(1)
-if 'VTTOP' not in os.environ:
-  sys.stderr.write(
-      'ERROR: Vitess environment not set up. '
-      'Please run "source dev.env" first.\n')
-  sys.exit(1)
-
-# vttop is the toplevel of the vitess source tree
-vttop = os.environ['VTTOP']
 
 # vtroot is where everything gets installed
 vtroot = os.environ['VTROOT']
@@ -162,7 +154,7 @@ def prog_compile(name):
     return
   compiled_progs.append(name)
   logging.debug('Compiling %s', name)
-  run(['go', 'install'], cwd=os.path.join(vttop, 'go', 'cmd', name))
+  run(['go', 'install'], cwd=os.path.join(vtroot, 'go', 'cmd', name))
 
 
 # binary management: returns the full path for a binary this should

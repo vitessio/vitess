@@ -119,7 +119,7 @@ func GetMySQLOptions(flavor string) (string, []string, error) {
 	mycnf = append(mycnf, "config/mycnf/default-fast.cnf")
 
 	for i, cnf := range mycnf {
-		mycnf[i] = path.Join(os.Getenv("VTTOP"), cnf)
+		mycnf[i] = path.Join(os.Getenv("VTROOT"), cnf)
 	}
 
 	return flavor, mycnf, nil
@@ -139,7 +139,7 @@ func (env *LocalTestEnv) BinaryPath(binary string) string {
 func (env *LocalTestEnv) MySQLManager(mycnf []string, snapshot string) (MySQLManager, error) {
 	return &Mysqlctl{
 		Binary:    env.BinaryPath("mysqlctl"),
-		InitFile:  path.Join(os.Getenv("VTTOP"), "config/init_db.sql"),
+		InitFile:  path.Join(os.Getenv("VTROOT"), "config/init_db.sql"),
 		Directory: env.TmpPath,
 		Port:      env.PortForProtocol("mysql", ""),
 		MyCnf:     append(env.DefaultMyCnf, mycnf...),

@@ -86,12 +86,12 @@ class TestVtctldWeb(unittest.TestCase):
 
     cls.db = local_database.LocalDatabase(
         topology,
-        os.path.join(environment.vttop, 'test/vttest_schema'),
+        os.path.join(environment.vtroot, 'test/vttest_schema'),
         False, None,
-        web_dir=os.path.join(environment.vttop, 'web/vtctld'),
+        web_dir=os.path.join(environment.vtroot, 'web/vtctld'),
         default_schema_dir=os.path.join(
-            environment.vttop, 'test/vttest_schema/default'),
-        web_dir2=os.path.join(environment.vttop, 'web/vtctld2/app'))
+            environment.vtroot, 'test/vttest_schema/default'),
+        web_dir2=os.path.join(environment.vtroot, 'web/vtctld2/app'))
     cls.db.setup()
     cls.vtctld_addr = 'http://localhost:%d' % cls.db.config()['port']
     utils.pause('Paused test after vtcombo was started.\n'
