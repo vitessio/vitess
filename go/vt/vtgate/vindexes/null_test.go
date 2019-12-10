@@ -25,14 +25,14 @@ import (
 	"vitess.io/vitess/go/vt/key"
 )
 
-var null Vindex
+var null SingleColumn
 
 func init() {
 	hv, err := CreateVindex("null", "nn", map[string]string{"Table": "t", "Column": "c"})
 	if err != nil {
 		panic(err)
 	}
-	null = hv
+	null = hv.(SingleColumn)
 }
 
 func TestNullCost(t *testing.T) {

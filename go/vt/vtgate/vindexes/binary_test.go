@@ -26,10 +26,11 @@ import (
 	"vitess.io/vitess/go/vt/key"
 )
 
-var binOnlyVindex Vindex
+var binOnlyVindex SingleColumn
 
 func init() {
-	binOnlyVindex, _ = CreateVindex("binary", "binary_varchar", nil)
+	vindex, _ := CreateVindex("binary", "binary_varchar", nil)
+	binOnlyVindex = vindex.(SingleColumn)
 }
 
 func TestBinaryCost(t *testing.T) {

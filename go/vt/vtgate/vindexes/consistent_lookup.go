@@ -33,10 +33,10 @@ import (
 )
 
 var (
-	_ Vindex        = (*ConsistentLookupUnique)(nil)
+	_ SingleColumn  = (*ConsistentLookupUnique)(nil)
 	_ Lookup        = (*ConsistentLookupUnique)(nil)
 	_ WantOwnerInfo = (*ConsistentLookupUnique)(nil)
-	_ Vindex        = (*ConsistentLookup)(nil)
+	_ SingleColumn  = (*ConsistentLookup)(nil)
 	_ Lookup        = (*ConsistentLookup)(nil)
 	_ WantOwnerInfo = (*ConsistentLookup)(nil)
 )

@@ -195,7 +195,11 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		return err
 	}
 	if vindex != nil {
-		pb.bldr, pb.st = newVindexFunc(alias, vindex)
+		single, ok := vindex.(vindexes.SingleColumn)
+		if !ok {
+			return fmt.Errorf("multi-column vindexes not supported")
+		}
+		pb.bldr, pb.st = newVindexFunc(alias, single)
 		return nil
 	}
 
@@ -244,7 +248,8 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 			// Use the Binary vindex, which is the identity function
 			// for keyspace id.
 			eroute = engine.NewSimpleRoute(engine.SelectEqualUnique, vst.Keyspace)
-			eroute.Vindex, _ = vindexes.NewBinary("binary", nil)
+			vindex, _ = vindexes.NewBinary("binary", nil)
+			eroute.Vindex, _ = vindex.(vindexes.SingleColumn)
 			eroute.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vst.Pinned)}}
 		}
 		// set table name into route

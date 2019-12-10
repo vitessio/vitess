@@ -26,10 +26,11 @@ import (
 	"vitess.io/vitess/go/vt/key"
 )
 
-var charVindex Vindex
+var charVindex SingleColumn
 
 func init() {
-	charVindex, _ = CreateVindex("unicode_loose_md5", "utf8ch", nil)
+	vindex, _ := CreateVindex("unicode_loose_md5", "utf8ch", nil)
+	charVindex = vindex.(SingleColumn)
 }
 
 func TestUnicodeLooseMD5Cost(t *testing.T) {

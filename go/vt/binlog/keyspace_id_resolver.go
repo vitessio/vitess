@@ -147,7 +147,8 @@ func newKeyspaceIDResolverFactoryV3(ctx context.Context, ts *topo.Server, keyspa
 			if col.Name.EqualString(shardingColumnName) {
 				// We found the column.
 				return i, &keyspaceIDResolverFactoryV3{
-					vindex: colVindex.Vindex,
+					// Only SingleColumn vindexes are returned by FindVindexForSharding.
+					vindex: colVindex.Vindex.(vindexes.SingleColumn),
 				}, nil
 			}
 		}
@@ -158,7 +159,7 @@ func newKeyspaceIDResolverFactoryV3(ctx context.Context, ts *topo.Server, keyspa
 
 // keyspaceIDResolverFactoryV3 uses the Vindex to compute the value.
 type keyspaceIDResolverFactoryV3 struct {
-	vindex vindexes.Vindex
+	vindex vindexes.SingleColumn
 }
 
 func (r *keyspaceIDResolverFactoryV3) keyspaceID(v sqltypes.Value) ([]byte, error) {

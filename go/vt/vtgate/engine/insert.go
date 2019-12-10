@@ -391,18 +391,9 @@ func (ins *Insert) getInsertShardedRoute(vcursor VCursor, bindVars map[string]*q
 	// keyspace ids. For regular inserts, a failure to find a route
 	// results in an error. For 'ignore' type inserts, the keyspace
 	// id is returned as nil, which is used later to drop the corresponding rows.
-	colVindex := ins.Table.ColumnVindexes[0]
-	keyspaceIDs, err := ins.processPrimary(vcursor, vindexRowsValues[0], colVindex)
+	keyspaceIDs, err := ins.processPrimary(vcursor, vindexRowsValues[0], ins.Table.ColumnVindexes[0])
 	if err != nil {
 		return nil, nil, vterrors.Wrap(err, "getInsertShardedRoute")
-	}
-	// Primary vindex can be owned. If so, go through the processOwned flow.
-	// If not owned, we don't do processUnowned because there's no need to verify
-	// the keyspace ids we just generated.
-	if colVindex.Owned {
-		if err := ins.processOwned(vcursor, vindexRowsValues[0], colVindex, keyspaceIDs); err != nil {
-			return nil, nil, vterrors.Wrap(err, "getInsertShardedRoute")
-		}
 	}
 
 	for vIdx := 1; vIdx < len(ins.Table.ColumnVindexes); vIdx++ {

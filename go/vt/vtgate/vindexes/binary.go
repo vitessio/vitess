@@ -25,8 +25,8 @@ import (
 )
 
 var (
-	_ Vindex     = (*Binary)(nil)
-	_ Reversible = (*Binary)(nil)
+	_ SingleColumn = (*Binary)(nil)
+	_ Reversible   = (*Binary)(nil)
 )
 
 // Binary is a vindex that converts binary bits to a keyspace id.
