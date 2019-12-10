@@ -17,6 +17,8 @@
 
 ### This file is executed by 'make tools'. You do not need to execute it directly.
 
+source ./dev.env
+
 # Outline of this file.
 # 0. Initialization and helper methods.
 # 1. Installation of dependencies.
@@ -29,16 +31,7 @@ BUILD_CONSUL=${BUILD_CONSUL:-1}
 # 0. Initialization and helper methods.
 #
 
-function fail() {
-  echo "ERROR: $1"
-  exit 1
-}
-
 [[ "$(dirname "$0")" = "." ]] || fail "bootstrap.sh must be run from its current directory"
-
-# Create main directories.
-
-source ./dev.env
 
 # install_dep is a helper function to generalize the download and installation of dependencies.
 #

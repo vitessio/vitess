@@ -23,5 +23,5 @@ function fail() {
 
 # These binaries are required to 'make test'
 for binary in mysqld consul etcd etcdctl zksrv.sh javadoc mvn ant curl wget zip unzip; do
-  command -v "$binary" > /dev/null || fail "${binary} is not installed in PATH. Run see https://vitess.io/contributing/build-from-source for install instructions."
+  command -v "$binary" > /dev/null || fail "${binary} is not installed in PATH. See https://vitess.io/contributing/build-from-source for install instructions."
 done;
