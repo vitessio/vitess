@@ -21,7 +21,9 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -96,6 +98,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 	// occurred. The construct type decides on how the query gets
 	// pulled out.
 	constructsMap := make(map[*sqlparser.Subquery]sqlparser.Expr)
+	var lastInsertIDNode *sqlparser.FuncExpr
 
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
@@ -152,11 +155,11 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 			return false, nil
 		case *sqlparser.FuncExpr:
 			switch {
-			// If it's last_insert_id, ensure it's a single unsharded route.
 			case node.Name.EqualString("last_insert_id"):
-				if rb, isRoute := pb.bldr.(*route); !isRoute || !rb.removeShardedOptions() {
-					return false, errors.New("unsupported: LAST_INSERT_ID is only allowed for unsharded keyspaces")
+				if len(node.Exprs) > 0 {
+					return false, vterrors.New(vtrpc.Code_UNIMPLEMENTED, "Argument to LAST_INSERT_ID() not supported")
 				}
+				lastInsertIDNode = node
 			}
 			return true, nil
 		}
@@ -164,6 +167,11 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 	}, expr)
 	if err != nil {
 		return nil, nil, nil, err
+	}
+
+	if lastInsertIDNode != nil {
+
+		expr = sqlparser.ReplaceExpr(expr, lastInsertIDNode, sqlparser.NewValArg([]byte(":"+engine.LastInsertIDName)))
 	}
 
 	highestRoute, _ := highestOrigin.(*route)
