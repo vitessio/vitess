@@ -297,19 +297,14 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 	return
 }
 
-// LaunchCluster Initiate required number of shard and the corresponding tablets
-// replicaCount: total number of replicas
-// rdonlyCount: total number of replicas
+// LaunchCluster creates the skeleton of a cluster. The user then have to start all the services.
+// Does not start Mysqlctl process or vttablet process
+// No database creation
+// No Init shard master
+// Does not Apply Schema or Vschema
 func (cluster *LocalProcessCluster) LaunchCluster(keyspace *Keyspace, shards []Shard) (err error) {
 
 	log.Info("Starting keyspace : " + keyspace.Name)
-
-	// Start topo server
-	//err = cluster.StartTopo()
-	//if err != nil {
-	//	log.Error(err)
-	//	return
-	//}
 
 	// Create Keyspace
 	err = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
@@ -321,7 +316,6 @@ func (cluster *LocalProcessCluster) LaunchCluster(keyspace *Keyspace, shards []S
 	// Create shard
 	for _, shard := range shards {
 		for _, tablet := range shard.Vttablets {
-			//tablet := cluster.GetVttabletInstance("replica", 0)
 			err = cluster.VtctlclientProcess.InitTablet(tablet, tablet.Cell, keyspace.Name, cluster.Hostname, shard.Name)
 			if err != nil {
 				log.Error(err)
@@ -345,16 +339,10 @@ func (cluster *LocalProcessCluster) LaunchCluster(keyspace *Keyspace, shards []S
 				cluster.TmpDirectory,
 				cluster.VtTabletExtraArgs,
 				cluster.EnableSemiSync)
-
-			//shard.Vttablets = append(shard.Vttablets, tablet)
 		}
 
 		keyspace.Shards = append(keyspace.Shards, shard)
 	}
-	// Do Not Start Mysqlctl process
-	// Do Not Start vttablet process
-	// No database created
-	// No Init shard master
 
 	// if the keyspace is present then append the shard info
 	existingKeyspace := false
@@ -367,9 +355,6 @@ func (cluster *LocalProcessCluster) LaunchCluster(keyspace *Keyspace, shards []S
 	if !existingKeyspace {
 		cluster.Keyspaces = append(cluster.Keyspaces, *keyspace)
 	}
-
-	// Do NOT Apply Schema SQL
-	// Do Not Apply VSchema
 
 	log.Info("Done launching keyspace : " + keyspace.Name)
 	return err
