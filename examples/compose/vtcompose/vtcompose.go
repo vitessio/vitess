@@ -48,7 +48,7 @@ var (
 	mySqlPort      = flag.String("mySqlPort", "15306", "mySql port to be used")
 	cell           = flag.String("cell", "test", "Vitess Cell name")
 	keyspaceData   = flag.String("keyspaceData", "test_keyspace:2:1:create_messages.sql,create_tokens.sql;unsharded_keyspace:0:0:create_dinosaurs.sql,create_eggs.sql", "List of keyspace_name/external_db_name:num_of_shards:num_of_replica_tablets:schema_files:<optional>lookup_keyspace_name separated by ';'")
-	externalDbData = flag.String("externalDbData", "", "List of Data corresponding to external DBs. List of <external_db_name>,<DB_HOST>,<DB_PORT>,<DB_USER>,<DB_PASS>,<DB_CHARSET> seperated by ';'")
+	externalDbData = flag.String("externalDbData", "", "List of Data corresponding to external DBs. List of <external_db_name>,<DB_HOST>,<DB_PORT>,<DB_USER>,<DB_PASS>,<DB_CHARSET> separated by ';'")
 )
 
 type keyspaceInfo struct {
