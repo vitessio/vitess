@@ -298,5 +298,5 @@ if [ "$BUILD_PYTHON" == 1 ] ; then
   PYTHONPATH='' $PIP install mysql-connector-python
 fi
 
-echo
-echo "bootstrap finished - run 'make build' to compile"
+# Install golangci-lint using recommended method
+command -v golangci-lint >/dev/null && echo "golangci-lint already installed" || curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.21.0
