@@ -37,6 +37,8 @@ const (
 	// This is used for sending different IN clause values
 	// to different shards.
 	ListVarName = "__vals"
+	//LastInsertIDName is a reserved bind var name for last_insert_id
+	LastInsertIDName = "__lastInsertId"
 )
 
 // VCursor defines the interface the engine will use

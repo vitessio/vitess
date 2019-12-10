@@ -76,6 +76,12 @@ create table t2_id4_idx(
 	primary key(id),
 	key idx_id4(id4)
 ) Engine=InnoDB;
+
+create table t1_last_insert_id(
+	id bigint not null auto_increment,
+	id1 bigint,
+	primary key(id)
+) Engine=InnoDB;
 `
 
 	vschema = &vschemapb.Keyspace{
@@ -149,6 +155,16 @@ create table t2_id4_idx(
 				Columns: []*vschemapb.Column{{
 					Name: "val1",
 					Type: sqltypes.VarChar,
+				}},
+			},
+			"t1_last_insert_id": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id1",
+					Name:   "hash",
+				}},
+				Columns: []*vschemapb.Column{{
+					Name: "id1",
+					Type: sqltypes.Int64,
 				}},
 			},
 		},
