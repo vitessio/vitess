@@ -31,6 +31,6 @@ func TestInitialShardingBytes(t *testing.T) {
 	if err != nil {
 		t.Errorf("setup failed with status code %d", code)
 	}
-	sharding.TestInitialSharding(t, &sharding.ClusterInstance.Keyspaces[0], querypb.Type_VARBINARY, false, false, false)
+	sharding.TestInitialSharding(t, &sharding.ClusterInstance.Keyspaces[0], querypb.Type_VARBINARY, false, false)
 	defer sharding.ClusterInstance.Teardown()
 }

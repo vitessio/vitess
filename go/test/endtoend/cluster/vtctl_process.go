@@ -74,7 +74,6 @@ func (vtctl *VtctlProcess) ExecuteCommandWithOutput(args ...string) (result stri
 		vtctl.Binary,
 		args...,
 	)
-	println(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	log.Info(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	resultByte, err := tmpProcess.CombinedOutput()
 	return string(resultByte), err

@@ -156,7 +156,6 @@ func (mysqlctl *MysqlctlProcess) ExecuteCommandWithOutput(args ...string) (resul
 		mysqlctl.Binary,
 		args...,
 	)
-	println(fmt.Sprintf("Executing mysqlctl with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	log.Info(fmt.Sprintf("Executing mysqlctl with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	resultByte, err := tmpProcess.CombinedOutput()
 	return string(resultByte), err

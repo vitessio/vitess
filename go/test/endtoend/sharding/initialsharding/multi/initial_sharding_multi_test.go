@@ -49,11 +49,11 @@ func TestInitialShardingMulti(t *testing.T) {
 		t.Errorf("setup failed with status code %d", code)
 	}
 	sharding.AssignMysqlPortFromKs1ToKs2()
-	sharding.TestInitialSharding(t, &sharding.ClusterInstance.Keyspaces[0], querypb.Type_UINT64, true, false, false)
+	sharding.TestInitialSharding(t, &sharding.ClusterInstance.Keyspaces[0], querypb.Type_UINT64, true, false)
 	println("-----------------------------")
 	println("Done with 1st keyspace test")
 	println("-----------------------------")
-	sharding.TestInitialSharding(t, &sharding.ClusterInstance.Keyspaces[1], querypb.Type_UINT64, true, true, false)
+	sharding.TestInitialSharding(t, &sharding.ClusterInstance.Keyspaces[1], querypb.Type_UINT64, true, true)
 	println("----------Done with 2nd keyspace test----------")
 	sharding.KillVtgateInstances()
 	sharding.KillTabletsInKeyspace(&sharding.ClusterInstance.Keyspaces[0])

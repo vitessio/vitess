@@ -38,7 +38,6 @@ var (
 	lotRange1 uint64 = 0xA000000000000000
 	lotRange2 uint64 = 0xE000000000000000
 	// InsertTabletTemplateKsID common insert format to be used for different tests
-	//
 	InsertTabletTemplateKsID = `insert into %s (id, msg) values (%d, '%s') /* id:%d */`
 )
 
@@ -248,22 +247,27 @@ func CheckBinlogServerVars(t *testing.T, vttablet cluster.Vttablet, minStatement
 }
 
 // InsertLots inserts multiple values to vttablet
-func InsertLots(count uint64, vttablet cluster.Vttablet, table string, ks string) {
+func InsertLots(t *testing.T, count uint64, vttablet cluster.Vttablet, table string, ks string) {
 	var query1, query2 string
 	var i uint64
 	for i = 0; i < count; i++ {
 		query1 = fmt.Sprintf(InsertTabletTemplateKsID, table, lotRange1+i, fmt.Sprintf("msg-range1-%d", 10000+i), lotRange1+i)
 		query2 = fmt.Sprintf(InsertTabletTemplateKsID, table, lotRange2+i, fmt.Sprintf("msg-range2-%d", 20000+i), lotRange2+i)
 
-		InsertToTablet(query1, vttablet, ks)
-		InsertToTablet(query2, vttablet, ks)
+		InsertToTablet(t, query1, vttablet, ks, false)
+		InsertToTablet(t, query2, vttablet, ks, false)
 	}
 }
 
 // InsertToTablet inserts a single row to vttablet
-func InsertToTablet(query string, vttablet cluster.Vttablet, ks string) {
+func InsertToTablet(t *testing.T, query string, vttablet cluster.Vttablet, ks string, expectFail bool) {
 	_, _ = vttablet.VttabletProcess.QueryTablet("begin", ks, true)
-	_, _ = vttablet.VttabletProcess.QueryTablet(query, ks, true)
+	_, err := vttablet.VttabletProcess.QueryTablet(query, ks, true)
+	if expectFail {
+		assert.NotNil(t, err)
+	} else {
+		assert.Nil(t, err)
+	}
 	_, _ = vttablet.VttabletProcess.QueryTablet("commit", ks, true)
 }
 
