@@ -81,7 +81,7 @@ releases
 .vagrant
 
 /dist/
-/py-vtdb/
+/py-vtdb
 /vthook/
 /bin/
 /vtdataroot/
