@@ -99,6 +99,7 @@ func VtctlClientProcessInstance(hostname string, grpcPort int, tmpDirectory stri
 
 // InitTablet initializes a tablet
 func (vtctlclient *VtctlClientProcess) InitTablet(tablet *Vttablet, cell string, keyspaceName string, hostname string, shardName string) error {
+
 	tabletType := "replica"
 	if tablet.Type == "rdonly" {
 		tabletType = "rdonly"

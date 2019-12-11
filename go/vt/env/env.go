@@ -18,6 +18,7 @@ package env
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path"
@@ -70,7 +71,11 @@ func VtMysqlRoot() (string, error) {
 		return root, nil
 	}
 
-	// otherwise let's use the mysqld in the PATH
+	// otherwise let's look for mysqld in the PATH.
+	// ensure that /usr/sbin is included, as it might not be by default
+	// This is the default location for mysqld from packages.
+	newPath := fmt.Sprintf("/usr/sbin:%s", os.Getenv("PATH"))
+	os.Setenv("PATH", newPath)
 	path, err := exec.LookPath("mysqld")
 	if err != nil {
 		return "", errors.New("VT_MYSQL_ROOT is not set and no mysqld could be found in your PATH")

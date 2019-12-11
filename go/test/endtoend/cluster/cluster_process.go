@@ -92,7 +92,7 @@ func (shard *Shard) MasterTablet() *Vttablet {
 	return &shard.Vttablets[0]
 }
 
-// Rdonly get the last tablet which is rdonly
+// Rdonly gets first rdonly tablet
 func (shard *Shard) Rdonly() *Vttablet {
 	for idx, tablet := range shard.Vttablets {
 		if tablet.Type == "rdonly" {
@@ -102,8 +102,7 @@ func (shard *Shard) Rdonly() *Vttablet {
 	return nil
 }
 
-// Replica get the last but one tablet which is replica
-// Mostly we have either 3 tablet setup [master, replica, rdonly]
+// Replica gets the first replica tablet
 func (shard *Shard) Replica() *Vttablet {
 	for idx, tablet := range shard.Vttablets {
 		if tablet.Type == "replica" && idx > 0 {
@@ -387,6 +386,7 @@ func (cluster *LocalProcessCluster) Teardown() {
 	if err := cluster.VtgateProcess.TearDown(); err != nil {
 		log.Errorf("Error in vtgate teardown - %s", err.Error())
 	}
+
 	var mysqlctlProcessList []*exec.Cmd
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {

@@ -313,6 +313,9 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 				if !columnVindex.Vindex.IsUnique() {
 					return fmt.Errorf("primary vindex %s is not Unique for table %s", ind.Name, tname)
 				}
+				if owned {
+					return fmt.Errorf("primary vindex %s cannot be owned for table %s", ind.Name, tname)
+				}
 			}
 			t.ColumnVindexes = append(t.ColumnVindexes, columnVindex)
 			if owned {
@@ -617,6 +620,10 @@ func FindVindexForSharding(tableName string, colVindexes []*ColumnVindex) (*Colu
 	}
 	result := colVindexes[0]
 	for _, colVindex := range colVindexes {
+		// Only allow SingleColumn for legacy resharding.
+		if _, ok := colVindex.Vindex.(SingleColumn); !ok {
+			continue
+		}
 		if colVindex.Vindex.Cost() < result.Vindex.Cost() && colVindex.Vindex.IsUnique() {
 			result = colVindex
 		}

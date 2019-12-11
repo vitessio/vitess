@@ -25,14 +25,14 @@ import (
 	"vitess.io/vitess/go/vt/key"
 )
 
-var reverseBits Vindex
+var reverseBits SingleColumn
 
 func init() {
 	hv, err := CreateVindex("reverse_bits", "rr", map[string]string{"Table": "t", "Column": "c"})
 	if err != nil {
 		panic(err)
 	}
-	reverseBits = hv
+	reverseBits = hv.(SingleColumn)
 }
 
 func TestReverseBitsCost(t *testing.T) {

@@ -412,7 +412,7 @@ func TestConsistentLookupNoUpdate(t *testing.T) {
 	vc.verifyLog(t, []string{})
 }
 
-func createConsistentLookup(t *testing.T, name string) Vindex {
+func createConsistentLookup(t *testing.T, name string) SingleColumn {
 	t.Helper()
 	l, err := CreateVindex(name, name, map[string]string{
 		"table": "t",
@@ -429,7 +429,7 @@ func createConsistentLookup(t *testing.T, name string) Vindex {
 	if err := l.(WantOwnerInfo).SetOwnerInfo("ks", "t1", cols); err != nil {
 		t.Fatal(err)
 	}
-	return l
+	return l.(SingleColumn)
 }
 
 type loggingVCursor struct {

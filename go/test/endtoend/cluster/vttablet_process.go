@@ -128,6 +128,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		}
 	}()
 
+
 	if vttablet.ServingStatus != "" {
 		if err = vttablet.WaitForTabletType(vttablet.ServingStatus); err != nil {
 			return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vttablet.Name, <-vttablet.exit)
@@ -150,6 +151,7 @@ func (vttablet *VttabletProcess) GetStatus() string {
 	}
 	return ""
 }
+
 
 // GetVars gets the debug vars as map
 func (vttablet *VttabletProcess) GetVars() map[string]interface{} {
@@ -221,7 +223,6 @@ func (vttablet *VttabletProcess) getVReplStreamCount() string {
 	resultMap := vttablet.GetVars()
 	object := reflect.ValueOf(resultMap["VReplicationStreamCount"])
 	return fmt.Sprintf("%v", object)
-
 }
 
 // TearDown shuts down the running vttablet service
@@ -267,6 +268,7 @@ func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useD
 	if vttablet.DbPassword != "" {
 		dbParams.Pass = vttablet.DbPassword
 	}
+
 	ctx := context.Background()
 	dbConn, err := mysql.Connect(ctx, &dbParams)
 	if err != nil {

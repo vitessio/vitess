@@ -88,11 +88,9 @@ func TestMain(m *testing.M) {
 		if err := clusterForKSTest.StartTopo(); err != nil {
 			return 1
 		}
-
 		if err := clusterForKSTest.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+cell2); err != nil {
 			return 1
 		}
-
 
 		if err := clusterForKSTest.VtctlProcess.AddCellInfo(cell2); err != nil {
 			return 1
@@ -262,7 +260,6 @@ func RemoveKeyspaceCell(t *testing.T) {
 
 	//Check that the shard is gone from zone2.
 	srvKeyspaceZone2 := getSrvKeyspace(t, cell2, "test_delete_keyspace_removekscell")
-
 	for _, partition := range srvKeyspaceZone2.Partitions {
 		assert.Equal(t, len(partition.ShardReferences), 1)
 	}
@@ -275,7 +272,6 @@ func RemoveKeyspaceCell(t *testing.T) {
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_delete_keyspace_removekscell")
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetKeyspace", "test_delete_keyspace_removekscell")
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShard", "test_delete_keyspace_removekscell/0")
-
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetTablet", "zone1-0000000100")
 
 	err := clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetTablet", "zone2-0000000100")

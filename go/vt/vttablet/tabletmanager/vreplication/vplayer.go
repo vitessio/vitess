@@ -181,7 +181,7 @@ func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEven
 		_, err := vp.vr.dbClient.ExecuteWithRetry(ctx, event.Dml)
 		return err
 	}
-	return fmt.Errorf("Filter rules are not supported for SBR replication: %v", vp.vr.source.Filter.GetRules())
+	return fmt.Errorf("filter rules are not supported for SBR replication: %v", vp.vr.source.Filter.GetRules())
 }
 
 func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.RowEvent) error {

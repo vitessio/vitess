@@ -76,6 +76,7 @@ func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
 	}
 	tmpProcess.Args = append(tmpProcess.Args, "init",
 		"-init_db_sql_file", mysqlctl.InitDBFile)
+
 	return tmpProcess, tmpProcess.Start()
 }
 
@@ -94,10 +95,12 @@ func (mysqlctl *MysqlctlProcess) StopProcess() (*exec.Cmd, error) {
 		mysqlctl.Binary,
 		"-tablet_uid", fmt.Sprintf("%d", mysqlctl.TabletUID),
 	)
+
 	if len(mysqlctl.ExtraArgs) > 0 {
 		tmpProcess.Args = append(tmpProcess.Args, mysqlctl.ExtraArgs...)
 	}
 	tmpProcess.Args = append(tmpProcess.Args, "shutdown")
+
 	return tmpProcess, tmpProcess.Start()
 }
 
@@ -124,7 +127,7 @@ func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) 
 	return mysqlctl
 }
 
-// StartMySQL create a connection to tablet mysql
+// StartMySQL starts mysqlctl process
 func StartMySQL(ctx context.Context, tablet *Vttablet, username string, tmpDirectory string) error {
 	tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
 	err := tablet.MysqlctlProcess.Start()
