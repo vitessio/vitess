@@ -41,6 +41,10 @@ func decNesting(yylex interface{}) {
   yylex.(*Tokenizer).nesting--
 }
 
+func yyPosition(yylex interface{}) int {
+  return yylex.(*Tokenizer).Position
+}
+
 // skipToEnd forces the lexer to end prematurely. Not all SQL statements
 // are supported by the Parser, thus calling skipToEnd will make the lexer
 // return EOF early.
@@ -60,6 +64,7 @@ func skipToEnd(yylex interface{}) {
   bytes         []byte
   bytes2        [][]byte
   str           string
+  int           int
   strs          []string
   selectExprs   SelectExprs
   selectExpr    SelectExpr
@@ -246,6 +251,7 @@ func skipToEnd(yylex interface{}) {
 %type <expr> having_opt
 %type <orderBy> order_by_opt order_list
 %type <order> order
+%type <int> lexer_position
 %type <str> asc_desc_opt
 %type <limit> limit_opt
 %type <str> lock_opt
@@ -568,6 +574,11 @@ or_replace_opt:
     $$ = 1
   }
 
+lexer_position:
+  {
+    $$ = yyPosition(yylex)
+  }
+
 create_statement:
   create_table_prefix table_spec
   {
@@ -585,13 +596,13 @@ create_statement:
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $7}
   }
-| CREATE or_replace_opt VIEW table_name AS select_statement
+| CREATE or_replace_opt VIEW table_name AS lexer_position select_statement lexer_position
   {
     var orreplace bool = false
     if $2 == 1 {
       orreplace = true
     }
-    $$ = &DDL{Action: CreateStr, View: $4.ToViewName(), ViewExpr: $6, OrReplace: orreplace}
+    $$ = &DDL{Action: CreateStr, View: $4.ToViewName(), ViewExpr: $7, SelectPositionStart: $6, SelectPositionEnd: $8, OrReplace: orreplace}
   }
 | CREATE DATABASE not_exists_opt ID ddl_skip_to_end
   {

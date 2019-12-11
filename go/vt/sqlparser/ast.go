@@ -738,8 +738,10 @@ type DDL struct {
 	Table TableName
 
 	// View name.
-	View TableName
-	ViewExpr SelectStatement
+	View                TableName
+	ViewExpr            SelectStatement
+	SelectPositionStart int
+	SelectPositionEnd   int
 
 	// FromViews is set if Action is DropStr.
 	FromViews TableNames
