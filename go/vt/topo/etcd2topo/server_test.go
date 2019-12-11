@@ -188,20 +188,18 @@ func TestEtcd2TLS(t *testing.T) {
 	}
 	defer server.Close()
 
-	client := server.cli
-
 	testCtx := context.Background()
 	testKey := "testkey"
 	testVal := "testval"
-	_, err = client.Put(testCtx, testKey, testVal)
+	_, err = server.Create(testCtx, testKey, []byte(testVal))
 	if err != nil {
 		t.Fatalf("Failed to set key value pair: %v", err)
 	}
-	val, err := client.Get(testCtx, testKey)
+	val, _, err := server.Get(testCtx, testKey)
 	if err != nil {
 		t.Fatalf("Failed to retrieve value at key we just set: %v", err)
 	}
-	if len(val.Kvs) == 1 && string(val.Kvs[0].Value) != testVal {
+	if string(val) != testVal {
 		t.Fatalf("Value returned doesn't match %s, err: %v", testVal, err)
 	}
 }
