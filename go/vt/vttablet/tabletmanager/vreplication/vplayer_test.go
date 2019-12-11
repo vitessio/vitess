@@ -67,7 +67,7 @@ func TestPlayerStatementModeWithFilter(t *testing.T) {
 	// It does not work when filter is enabled
 	output := []string{
 		"begin",
-		"/update _vt.vreplication set message='Filter rules are not supported for SBR",
+		"/update _vt.vreplication set message='filter rules are not supported for SBR",
 	}
 
 	execStatements(t, input)

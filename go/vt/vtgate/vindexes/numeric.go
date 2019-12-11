@@ -27,8 +27,8 @@ import (
 )
 
 var (
-	_ Vindex     = (*Numeric)(nil)
-	_ Reversible = (*Numeric)(nil)
+	_ SingleColumn = (*Numeric)(nil)
+	_ Reversible   = (*Numeric)(nil)
 )
 
 // Numeric defines a bit-pattern mapping of a uint64 to the KeyspaceId.

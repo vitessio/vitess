@@ -26,10 +26,11 @@ import (
 	"vitess.io/vitess/go/vt/key"
 )
 
-var numeric Vindex
+var numeric SingleColumn
 
 func init() {
-	numeric, _ = CreateVindex("numeric", "num", nil)
+	vindex, _ := CreateVindex("numeric", "num", nil)
+	numeric = vindex.(SingleColumn)
 }
 
 func TestNumericCost(t *testing.T) {

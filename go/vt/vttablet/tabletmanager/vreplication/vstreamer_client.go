@@ -122,7 +122,7 @@ func (vsClient *TabletVStreamerClient) Close(ctx context.Context) (err error) {
 // VStream part of the VStreamerClient interface
 func (vsClient *TabletVStreamerClient) VStream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	if !vsClient.isOpen {
-		return errors.New("Can't VStream without opening client")
+		return errors.New("can't VStream without opening client")
 	}
 	return vsClient.tsQueryService.VStream(ctx, vsClient.target, startPos, filter, send)
 }
@@ -130,7 +130,7 @@ func (vsClient *TabletVStreamerClient) VStream(ctx context.Context, startPos str
 // VStreamRows part of the VStreamerClient interface
 func (vsClient *TabletVStreamerClient) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	if !vsClient.isOpen {
-		return errors.New("Can't VStreamRows without opening client")
+		return errors.New("can't VStreamRows without opening client")
 	}
 	return vsClient.tsQueryService.VStreamRows(ctx, vsClient.target, query, lastpk, send)
 }
@@ -185,7 +185,7 @@ func (vsClient *MySQLVStreamerClient) Close(ctx context.Context) (err error) {
 // VStream part of the VStreamerClient interface
 func (vsClient *MySQLVStreamerClient) VStream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	if !vsClient.isOpen {
-		return errors.New("Can't VStream without opening client")
+		return errors.New("can't VStream without opening client")
 	}
 	streamer := vstreamer.NewVStreamer(ctx, vsClient.sourceConnParams, vsClient.sourceSe, startPos, filter, &vindexes.KeyspaceSchema{}, send)
 	return streamer.Stream()
@@ -194,7 +194,7 @@ func (vsClient *MySQLVStreamerClient) VStream(ctx context.Context, startPos stri
 // VStreamRows part of the VStreamerClient interface
 func (vsClient *MySQLVStreamerClient) VStreamRows(ctx context.Context, query string, lastpk *querypb.QueryResult, send func(*binlogdatapb.VStreamRowsResponse) error) error {
 	if !vsClient.isOpen {
-		return errors.New("Can't VStreamRows without opening client")
+		return errors.New("can't VStreamRows without opening client")
 	}
 	var row []sqltypes.Value
 	if lastpk != nil {

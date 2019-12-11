@@ -43,15 +43,6 @@ func (vtctlclient *VtctlClientProcess) InitShardMaster(Keyspace string, Shard st
 		fmt.Sprintf("%s-%d", Cell, TabletUID))
 }
 
-// InitShardMasterByAlias executes vtctlclient command to make one of tablet as master
-func (vtctlclient *VtctlClientProcess) InitShardMasterByAlias(keyspace string, shard string, tabletAlias string) (err error) {
-	return vtctlclient.ExecuteCommand(
-		"InitShardMaster",
-		"-force",
-		fmt.Sprintf("%s/%s", keyspace, shard),
-		tabletAlias)
-}
-
 // ApplySchema applies SQL schema to the keyspace
 func (vtctlclient *VtctlClientProcess) ApplySchema(Keyspace string, SQL string) (err error) {
 	return vtctlclient.ExecuteCommand(
@@ -108,6 +99,7 @@ func VtctlClientProcessInstance(hostname string, grpcPort int, tmpDirectory stri
 
 // InitTablet initializes a tablet
 func (vtctlclient *VtctlClientProcess) InitTablet(tablet *Vttablet, cell string, keyspaceName string, hostname string, shardName string) error {
+
 	tabletType := "replica"
 	if tablet.Type == "rdonly" {
 		tabletType = "rdonly"

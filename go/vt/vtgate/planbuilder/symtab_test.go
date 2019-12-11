@@ -28,6 +28,8 @@ func TestSymtabAddVSchemaTable(t *testing.T) {
 	tname := sqlparser.TableName{Name: sqlparser.NewTableIdent("t")}
 	rb := &route{}
 
+	null, _ := vindexes.CreateVindex("null", "null", nil)
+
 	tcases := []struct {
 		in            []*vindexes.Table
 		authoritative bool
@@ -49,6 +51,7 @@ func TestSymtabAddVSchemaTable(t *testing.T) {
 		in: []*vindexes.Table{{
 			ColumnVindexes: []*vindexes.ColumnVindex{{
 				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("C1")},
+				Vindex:  null,
 			}},
 			Columns: []vindexes.Column{{
 				Name: sqlparser.NewColIdent("C1"),
@@ -66,6 +69,7 @@ func TestSymtabAddVSchemaTable(t *testing.T) {
 					sqlparser.NewColIdent("C1"),
 					sqlparser.NewColIdent("C2"),
 				},
+				Vindex: null,
 			}},
 			Columns: []vindexes.Column{{
 				Name: sqlparser.NewColIdent("C1"),
@@ -94,6 +98,7 @@ func TestSymtabAddVSchemaTable(t *testing.T) {
 		in: []*vindexes.Table{{
 			ColumnVindexes: []*vindexes.ColumnVindex{{
 				Columns: []sqlparser.ColIdent{sqlparser.NewColIdent("C1")},
+				Vindex:  null,
 			}},
 			Columns: []vindexes.Column{{
 				Name: sqlparser.NewColIdent("C2"),
@@ -109,6 +114,7 @@ func TestSymtabAddVSchemaTable(t *testing.T) {
 					sqlparser.NewColIdent("C1"),
 					sqlparser.NewColIdent("C2"),
 				},
+				Vindex: null,
 			}},
 		}},
 		authoritative: false,
@@ -145,12 +151,14 @@ func TestSymtabAddVSchemaTable(t *testing.T) {
 				Columns: []sqlparser.ColIdent{
 					sqlparser.NewColIdent("C1"),
 				},
+				Vindex: null,
 			}},
 		}, {
 			ColumnVindexes: []*vindexes.ColumnVindex{{
 				Columns: []sqlparser.ColIdent{
 					sqlparser.NewColIdent("C2"),
 				},
+				Vindex: null,
 			}},
 		}},
 		authoritative: false,
@@ -162,10 +170,12 @@ func TestSymtabAddVSchemaTable(t *testing.T) {
 				Columns: []sqlparser.ColIdent{
 					sqlparser.NewColIdent("C1"),
 				},
+				Vindex: null,
 			}, {
 				Columns: []sqlparser.ColIdent{
 					sqlparser.NewColIdent("C2"),
 				},
+				Vindex: null,
 			}},
 		}},
 		authoritative: false,
@@ -246,6 +256,7 @@ func TestSymtabAddVSchemaTable(t *testing.T) {
 				Columns: []sqlparser.ColIdent{
 					sqlparser.NewColIdent("C2"),
 				},
+				Vindex: null,
 			}},
 		}},
 		err: "column C2 not found in t",

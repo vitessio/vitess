@@ -354,7 +354,7 @@ func TestReSharding(t *testing.T, useByteShardingKeyType bool) {
 	assert.Nil(t, err)
 
 	// Insert Data
-	insertStartupValues()
+	insertStartupValues(t)
 
 	// run a health check on source replicas so they respond to discovery
 	// (for binlog players) and on the source rdonlys (for workers)
@@ -478,8 +478,8 @@ func TestReSharding(t *testing.T, useByteShardingKeyType bool) {
 	assert.Nil(t, err)
 
 	// Insert row 4 and 5 (provokes a delete).
-	insertValue(shard3.MasterTablet(), keyspaceName, tableName, 4, "msg4", key3)
-	insertValue(shard3.MasterTablet(), keyspaceName, tableName, 5, "msg5", key3)
+	insertValue(t, shard3.MasterTablet(), keyspaceName, tableName, 4, "msg4", key3)
+	insertValue(t, shard3.MasterTablet(), keyspaceName, tableName, 5, "msg5", key3)
 
 	err = clusterInstance.VtworkerProcess.ExecuteCommand("SplitClone",
 		"--exclude_tables", "unrelated",
@@ -547,7 +547,7 @@ func TestReSharding(t *testing.T, useByteShardingKeyType bool) {
 	log.Debug("Inserting lots of data on source shard")
 	insertLots(100, 0, *shard1Master, tableName, fixedParentID, keyspaceName)
 	log.Debug("Executing MultiValue Insert Queries")
-	execMultiShardDmls(keyspaceName)
+	execMultiShardDmls(t, keyspaceName)
 
 	// Checking 100 percent of data is sent quickly
 	assert.True(t, checkLotsTimeout(t, 100, 0, tableName, keyspaceName, shardingKeyType))
@@ -895,8 +895,8 @@ func TestReSharding(t *testing.T, useByteShardingKeyType bool) {
 
 	// test reverse_replication
 	// start with inserting a row in each destination shard
-	insertValue(shard2Master, keyspaceName, "resharding2", 2, "msg2", key2)
-	insertValue(shard3Master, keyspaceName, "resharding2", 3, "msg3", key3)
+	insertValue(t, shard2Master, keyspaceName, "resharding2", 2, "msg2", key2)
+	insertValue(t, shard3Master, keyspaceName, "resharding2", 3, "msg3", key3)
 
 	// ensure the rows are not present yet
 	checkValues(t, *shard1Master, []string{"INT64(86)", "INT64(2)", `VARCHAR("msg2")`, fmt.Sprintf("UINT64(%d)", key2)},
@@ -966,49 +966,49 @@ func TestReSharding(t *testing.T, useByteShardingKeyType bool) {
 
 }
 
-func insertStartupValues() {
+func insertStartupValues(t *testing.T) {
 	insertSQL := fmt.Sprintf(insertTabletTemplateKsID, "resharding1", fixedParentID, 1, "msg1", key1, key1, 1)
-	sharding.InsertToTablet(insertSQL, *shard0.MasterTablet(), keyspaceName)
+	sharding.InsertToTablet(t, insertSQL, *shard0.MasterTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "resharding1", fixedParentID, 2, "msg2", key2, key2, 2)
-	sharding.InsertToTablet(insertSQL, *shard1.MasterTablet(), keyspaceName)
+	sharding.InsertToTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "resharding1", fixedParentID, 3, "msg3", key3, key3, 3)
-	sharding.InsertToTablet(insertSQL, *shard1.MasterTablet(), keyspaceName)
+	sharding.InsertToTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "resharding3", fixedParentID, 1, "a", key1, key1, 1)
-	sharding.InsertToTablet(insertSQL, *shard0.MasterTablet(), keyspaceName)
+	sharding.InsertToTablet(t, insertSQL, *shard0.MasterTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "resharding3", fixedParentID, 2, "b", key2, key2, 2)
-	sharding.InsertToTablet(insertSQL, *shard1.MasterTablet(), keyspaceName)
+	sharding.InsertToTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "resharding3", fixedParentID, 3, "c", key3, key3, 3)
-	sharding.InsertToTablet(insertSQL, *shard1.MasterTablet(), keyspaceName)
+	sharding.InsertToTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "no_pk", fixedParentID, 1, "msg1", key5, key5, 1)
-	sharding.InsertToTablet(insertSQL, *shard1.MasterTablet(), keyspaceName)
+	sharding.InsertToTablet(t, insertSQL, *shard1.MasterTablet(), keyspaceName, false)
 }
 
-func insertValue(tablet *cluster.Vttablet, keyspaceName string, tableName string, id int, msg string, ksID uint64) {
+func insertValue(t *testing.T, tablet *cluster.Vttablet, keyspaceName string, tableName string, id int, msg string, ksID uint64) {
 	insertSQL := fmt.Sprintf(insertTabletTemplateKsID, tableName, fixedParentID, id, msg, ksID, ksID, id)
-	sharding.InsertToTablet(insertSQL, *tablet, keyspaceName)
+	sharding.InsertToTablet(t, insertSQL, *tablet, keyspaceName, false)
 }
 
-func execMultiShardDmls(keyspaceName string) {
+func execMultiShardDmls(t *testing.T, keyspaceName string) {
 	ids := []int{10000001, 10000002, 10000003}
 	msgs := []string{"msg-id10000001", "msg-id10000002", "msg-id10000003"}
 	ksIds := []uint64{key2, key3, key4}
-	sharding.InsertMultiValueToTablet(*shard1.MasterTablet(), keyspaceName, "resharding1", fixedParentID, ids, msgs, ksIds)
+	sharding.InsertMultiValueToTablet(t, *shard1.MasterTablet(), keyspaceName, "resharding1", fixedParentID, ids, msgs, ksIds)
 
 	ids = []int{10000004, 10000005}
 	msgs = []string{"msg-id10000004", "msg-id10000005"}
 	ksIds = []uint64{key3, key4}
-	sharding.InsertMultiValueToTablet(*shard1.MasterTablet(), keyspaceName, "resharding1", fixedParentID, ids, msgs, ksIds)
+	sharding.InsertMultiValueToTablet(t, *shard1.MasterTablet(), keyspaceName, "resharding1", fixedParentID, ids, msgs, ksIds)
 
 	ids = []int{10000011, 10000012, 10000013}
 	msgs = []string{"msg-id10000011", "msg-id10000012", "msg-id10000013"}
 	ksIds = []uint64{key2, key3, key4}
-	sharding.InsertMultiValueToTablet(*shard1.MasterTablet(), keyspaceName, "resharding1", fixedParentID, ids, msgs, ksIds)
+	sharding.InsertMultiValueToTablet(t, *shard1.MasterTablet(), keyspaceName, "resharding1", fixedParentID, ids, msgs, ksIds)
 
 	// This update targets two shards.
 	sql := `update resharding1 set msg="update1" where parent_id=86 and id in (10000011,10000012)`
@@ -1021,7 +1021,7 @@ func execMultiShardDmls(keyspaceName string) {
 	ids = []int{10000014, 10000015, 10000016}
 	msgs = []string{"msg-id10000014", "msg-id10000015", "msg-id10000016"}
 	ksIds = []uint64{key2, key3, key4}
-	sharding.InsertMultiValueToTablet(*shard1.MasterTablet(), keyspaceName, "resharding1", fixedParentID, ids, msgs, ksIds)
+	sharding.InsertMultiValueToTablet(t, *shard1.MasterTablet(), keyspaceName, "resharding1", fixedParentID, ids, msgs, ksIds)
 
 	// This delete targets two shards.
 	sql = `delete from resharding1 where parent_id =86 and id in (10000014, 10000015)`
@@ -1034,17 +1034,17 @@ func execMultiShardDmls(keyspaceName string) {
 	ids = []int{10000001, 10000002, 10000003}
 	msgs = []string{"a", "b", "c"}
 	ksIds = []uint64{key2, key3, key4}
-	sharding.InsertMultiValueToTablet(*shard1.MasterTablet(), keyspaceName, "resharding3", fixedParentID, ids, msgs, ksIds)
+	sharding.InsertMultiValueToTablet(t, *shard1.MasterTablet(), keyspaceName, "resharding3", fixedParentID, ids, msgs, ksIds)
 
 	ids = []int{10000004, 10000005}
 	msgs = []string{"d", "e"}
 	ksIds = []uint64{key3, key4}
-	sharding.InsertMultiValueToTablet(*shard1.MasterTablet(), keyspaceName, "resharding3", fixedParentID, ids, msgs, ksIds)
+	sharding.InsertMultiValueToTablet(t, *shard1.MasterTablet(), keyspaceName, "resharding3", fixedParentID, ids, msgs, ksIds)
 
 	ids = []int{10000011, 10000012, 10000013}
 	msgs = []string{"k", "l", "m"}
 	ksIds = []uint64{key2, key3, key4}
-	sharding.InsertMultiValueToTablet(*shard1.MasterTablet(), keyspaceName, "resharding3", fixedParentID, ids, msgs, ksIds)
+	sharding.InsertMultiValueToTablet(t, *shard1.MasterTablet(), keyspaceName, "resharding3", fixedParentID, ids, msgs, ksIds)
 
 	// This update targets two shards.
 	sql = `update resharding3 set msg="g" where parent_id=86 and id in (10000011, 10000012)`
@@ -1057,7 +1057,7 @@ func execMultiShardDmls(keyspaceName string) {
 	ids = []int{10000014, 10000015, 10000016}
 	msgs = []string{"n", "o", "p"}
 	ksIds = []uint64{key2, key3, key4}
-	sharding.InsertMultiValueToTablet(*shard1.MasterTablet(), keyspaceName, "resharding3", fixedParentID, ids, msgs, ksIds)
+	sharding.InsertMultiValueToTablet(t, *shard1.MasterTablet(), keyspaceName, "resharding3", fixedParentID, ids, msgs, ksIds)
 
 	// This delete targets two shards.
 	sql = `delete from resharding3 where parent_id =86 and id in (10000014, 10000015)`

@@ -75,7 +75,6 @@ func (vtworker *VtworkerProcess) Setup(cell string) (err error) {
 
 	vtworker.proc.Env = append(vtworker.proc.Env, os.Environ()...)
 
-	println(fmt.Sprintf("%v", vtworker.proc.Args))
 	log.Infof("%v", strings.Join(vtworker.proc.Args, " "))
 
 	err = vtworker.proc.Start()
@@ -145,7 +144,6 @@ func (vtworker *VtworkerProcess) ExecuteCommand(args ...string) (err error) {
 		"vtworkerclient",
 		args...,
 	)
-	println(fmt.Sprintf("Executing vtworkerclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	log.Info(fmt.Sprintf("Executing vtworkerclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	return tmpProcess.Run()
 }
@@ -168,7 +166,6 @@ func (vtworker *VtworkerProcess) ExecuteVtworkerCommand(port int, grpcPort int, 
 		"vtworker",
 		args...,
 	)
-	println(fmt.Sprintf("Executing vtworker with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	log.Info(fmt.Sprintf("Executing vtworker with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	return tmpProcess.Run()
 }

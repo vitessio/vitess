@@ -246,7 +246,7 @@ func TestFieldOrder(t *testing.T) {
 	}
 }
 
-func testVindexFunc(v vindexes.Vindex) *VindexFunc {
+func testVindexFunc(v vindexes.SingleColumn) *VindexFunc {
 	return &VindexFunc{
 		Fields: sqltypes.MakeTestFields("id|keyspace_id|range_start|range_end", "varbinary|varbinary|varbinary|varbinary"),
 		Cols:   []int{0, 1, 2, 3},

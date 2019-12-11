@@ -92,19 +92,22 @@ func (shard *Shard) MasterTablet() *Vttablet {
 	return shard.Vttablets[0]
 }
 
-// Rdonly get the last tablet which is rdonly
+// Rdonly gets first rdonly tablet
 func (shard *Shard) Rdonly() *Vttablet {
-	if len(shard.Vttablets) > 2 {
-		return shard.Vttablets[len(shard.Vttablets)-1]
+	for idx, tablet := range shard.Vttablets {
+		if tablet.Type == "rdonly" {
+			return shard.Vttablets[idx]
+		}
 	}
 	return nil
 }
 
-// Replica get the last but one tablet which is replica
-// Mostly we have either 3 tablet setup [master, replica], [master, replica, rdonly]
+// Replica gets the first replica tablet
 func (shard *Shard) Replica() *Vttablet {
-	if len(shard.Vttablets) > 1 {
-		return shard.Vttablets[len(shard.Vttablets)-2]
+	for idx, tablet := range shard.Vttablets {
+		if tablet.Type == "replica" && idx > 0 {
+			return shard.Vttablets[idx]
+		}
 	}
 	return nil
 }
@@ -364,7 +367,6 @@ func (cluster *LocalProcessCluster) LaunchCluster(keyspace *Keyspace, shards []S
 func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 	vtgateInstance := *cluster.GetVtgateInstance()
 	cluster.VtgateProcess = vtgateInstance
-	//cluster.VtgateMySQLPort = vtgateInstance.MySQLServerPort
 	log.Info(fmt.Sprintf("Starting vtgate on port %d", vtgateInstance.Port))
 	log.Info(fmt.Sprintf("Vtgate started, connect to mysql using : mysql -h 127.0.0.1 -P %d", cluster.VtgateMySQLPort))
 	return cluster.VtgateProcess.Setup()
