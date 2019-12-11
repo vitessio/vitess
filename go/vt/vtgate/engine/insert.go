@@ -80,6 +80,9 @@ type Insert struct {
 
 	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
 	QueryTimeout int
+
+	// Insert does not take inputs
+	noInputs
 }
 
 // NewQueryInsert creates an Insert with a query string.
@@ -234,11 +237,6 @@ func (ins *Insert) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.B
 // GetFields fetches the field info.
 func (ins *Insert) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unreachable code for %q", ins.Query)
-}
-
-// Inputs is always empty for insert - it has no inputs.
-func (ins *Insert) Inputs() []Primitive {
-	return []Primitive{}
 }
 
 func (ins *Insert) execInsertUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {

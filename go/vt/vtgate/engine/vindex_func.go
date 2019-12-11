@@ -38,6 +38,9 @@ type VindexFunc struct {
 	Cols   []int
 	Vindex vindexes.Vindex
 	Value  sqltypes.PlanValue
+
+	// VindexFunc does not take inputs
+	noInputs
 }
 
 // MarshalJSON serializes the VindexFunc into a JSON representation.
@@ -114,11 +117,6 @@ func (vf *VindexFunc) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 // GetFields fetches the field info.
 func (vf *VindexFunc) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return &sqltypes.Result{Fields: vf.Fields}, nil
-}
-
-// Inputs is always empty for VindexFunc - it has no inputs.
-func (vf *VindexFunc) Inputs() []Primitive {
-	return []Primitive{}
 }
 
 func (vf *VindexFunc) mapVindex(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {

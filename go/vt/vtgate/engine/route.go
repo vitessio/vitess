@@ -84,6 +84,9 @@ type Route struct {
 
 	// ScatterErrorsAsWarnings is true if results should be returned even if some shards have an error
 	ScatterErrorsAsWarnings bool
+
+	// Route does not take inputs
+	noInputs
 }
 
 // NewSimpleRoute creates a Route with the bare minimum of parameters.
@@ -351,11 +354,6 @@ func (route *Route) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bind
 		return nil, err
 	}
 	return qr.Truncate(route.TruncateColumnCount), nil
-}
-
-// Inputs is always empty for route - it has no inputs.
-func (route *Route) Inputs() []Primitive {
-	return []Primitive{}
 }
 
 func (route *Route) paramsAllShards(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {

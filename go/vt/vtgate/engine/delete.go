@@ -67,6 +67,9 @@ type Delete struct {
 
 	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
 	QueryTimeout int
+
+	// Delete does not take inputs
+	noInputs
 }
 
 // MarshalJSON serializes the Delete into a JSON representation.
@@ -188,11 +191,6 @@ func (del *Delete) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.B
 // GetFields fetches the field info.
 func (del *Delete) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, fmt.Errorf("BUG: unreachable code for %q", del.Query)
-}
-
-// Inputs is always empty for delete - it has no inputs.
-func (del *Delete) Inputs() []Primitive {
-	return []Primitive{}
 }
 
 func (del *Delete) execDeleteUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
