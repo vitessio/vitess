@@ -185,7 +185,6 @@ func TestEtcd2TLS(t *testing.T) {
 		cmd.Wait()
 		os.RemoveAll(dataDir)
 		server.Close()
-		client.Close()
 	}()
 
 	testCtx := context.Background()
