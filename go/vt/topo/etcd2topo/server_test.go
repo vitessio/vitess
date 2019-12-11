@@ -94,7 +94,7 @@ func startEtcd(t *testing.T) (*exec.Cmd, string, string) {
 }
 
 // startEtcdWithTLS starts an etcd subprocess with TLS setup, and waits for it to be ready.
-func startEtcdWithTLS(t *testing.T) (*exec.Cmd, string, string, *tlstest.ClientServerKeyPairs) {
+func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs, func()) {
 	// Create a temporary directory.
 	dataDir, err := ioutil.TempDir("", "etcd")
 	if err != nil {
@@ -164,12 +164,20 @@ func startEtcdWithTLS(t *testing.T) (*exec.Cmd, string, string, *tlstest.ClientS
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	return cmd, dataDir, clientAddr, &certs
+	stopEtcd := func() {
+		cmd.Process.Kill()
+		cmd.Wait()
+		os.RemoveAll(dataDir)
+	}
+
+	return clientAddr, &certs, stopEtcd
 }
 
 func TestEtcd2TLS(t *testing.T) {
 	// Start a single etcd in the background.
-	cmd, dataDir, clientAddr, certs := startEtcdWithTLS(t)
+	clientAddr, certs, stopEtcd := startEtcdWithTLS(t)
+	defer stopEtcd()
+
 	testIndex := 0
 	testRoot := fmt.Sprintf("/test-%v", testIndex)
 
@@ -178,14 +186,9 @@ func TestEtcd2TLS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewServerWithOpts failed: %v", err)
 	}
-	client := server.cli
+	defer server.Close()
 
-	defer func() {
-		cmd.Process.Kill()
-		cmd.Wait()
-		os.RemoveAll(dataDir)
-		server.Close()
-	}()
+	client := server.cli
 
 	testCtx := context.Background()
 	testKey := "testkey"
