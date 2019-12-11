@@ -60,3 +60,9 @@ function prepend_path() {
   # Return path variable unchanged.
   echo "$1"
 }
+
+function fail() {
+  echo "ERROR: $1"
+  exit 1
+}
+

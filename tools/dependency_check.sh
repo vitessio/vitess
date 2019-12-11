@@ -21,6 +21,9 @@ function fail() {
   exit 1
 }
 
-for binary in mysqld consul etcd etcdctl zksrv.sh; do
-  command -v "$binary" > /dev/null || fail "${binary} is not installed in PATH. Run 'make tools' to install dependencies."
+# These binaries are required to 'make test'
+# mysqld might be in /usr/sbin which will not be in the default PATH
+PATH="/usr/sbin:$PATH"
+for binary in mysqld consul etcd etcdctl zksrv.sh javadoc mvn ant curl wget zip unzip; do
+  command -v "$binary" > /dev/null || fail "${binary} is not installed in PATH. See https://vitess.io/contributing/build-from-source for install instructions."
 done;
