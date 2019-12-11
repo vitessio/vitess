@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,10 +28,10 @@ import (
 )
 
 var (
-	_ Vindex = (*LookupUnicodeLooseMD5Hash)(nil)
-	_ Lookup = (*LookupUnicodeLooseMD5Hash)(nil)
-	_ Vindex = (*LookupUnicodeLooseMD5HashUnique)(nil)
-	_ Lookup = (*LookupUnicodeLooseMD5HashUnique)(nil)
+	_ SingleColumn = (*LookupUnicodeLooseMD5Hash)(nil)
+	_ Lookup       = (*LookupUnicodeLooseMD5Hash)(nil)
+	_ SingleColumn = (*LookupUnicodeLooseMD5HashUnique)(nil)
+	_ Lookup       = (*LookupUnicodeLooseMD5HashUnique)(nil)
 )
 
 func init() {
@@ -91,11 +91,6 @@ func (lh *LookupUnicodeLooseMD5Hash) Cost() int {
 
 // IsUnique returns false since the Vindex is not unique.
 func (lh *LookupUnicodeLooseMD5Hash) IsUnique() bool {
-	return false
-}
-
-// IsFunctional returns false since the Vindex is not functional.
-func (lh *LookupUnicodeLooseMD5Hash) IsFunctional() bool {
 	return false
 }
 
@@ -168,7 +163,7 @@ func (lh *LookupUnicodeLooseMD5Hash) Create(vcursor VCursor, rowsColValues [][]s
 	if err != nil {
 		return fmt.Errorf("lookup.Create.convert: %v", err)
 	}
-	return lh.lkp.Create(vcursor, rowsColValues, ksids, values, ignoreMode)
+	return lh.lkp.Create(vcursor, rowsColValues, values, ignoreMode)
 }
 
 // Update updates the entry in the vindex table.
@@ -261,11 +256,6 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) IsUnique() bool {
 	return true
 }
 
-// IsFunctional returns false since the Vindex is not functional.
-func (lhu *LookupUnicodeLooseMD5HashUnique) IsFunctional() bool {
-	return false
-}
-
 // Map can map ids to key.Destination objects.
 func (lhu *LookupUnicodeLooseMD5HashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
@@ -333,7 +323,7 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) Create(vcursor VCursor, rowsColValue
 	if err != nil {
 		return fmt.Errorf("lookup.Create.convert: %v", err)
 	}
-	return lhu.lkp.Create(vcursor, rowsColValues, ksids, values, ignoreMode)
+	return lhu.lkp.Create(vcursor, rowsColValues, values, ignoreMode)
 }
 
 // Delete deletes the entry from the vindex table.

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
     """Creates a sandlet encompassing the guestbook app built on Vitess."""
     guestbook_sandlet = sandlet.Sandlet('guestbook')
     guestbook_sandlet.dependencies = ['helm']
-    template_dir = os.path.join(os.environ['VTTOP'], 'examples/kubernetes')
+    template_dir = os.path.join(os.environ['VTROOT'], 'examples/kubernetes')
     guestbook_sandlet.components.add_component(
         self.cluster_env.Port('%s-guestbook' % self.name, 80))
     for keyspace in self.app_options.keyspaces:
@@ -54,7 +54,7 @@ class VitessKubernetesSandbox(sandbox.Sandbox):
           'create_schema_%s' % keyspace['name'], self.name, 'create_schema.py',
           self.log_dir, namespace=self.name, keyspace=keyspace['name'],
           drop_table='messages', sql_file=os.path.join(
-              os.environ['VTTOP'], 'examples/kubernetes/create_test_table.sql'))
+              os.environ['VTROOT'], 'examples/kubernetes/create_test_table.sql'))
       guestbook_sandlet.components.add_component(create_schema_subprocess)
     guestbook_sandlet.components.add_component(
         kubernetes_components.KubernetesResource(

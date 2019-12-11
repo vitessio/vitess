@@ -32,16 +32,26 @@ func TestAggregateTypes(t *testing.T) {
 	}
 	defer conn.Close()
 
-	exec(t, conn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'a',1), (3,'b',1), (4,'c',3), (5,'c',4)")
-	exec(t, conn, "insert into aggr_test(id, val1, val2) values(6,'d',null), (7,'e',null), (8,'e',1)")
+	exec(t, conn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'A',1), (3,'b',1), (4,'c',3), (5,'c',4)")
+	exec(t, conn, "insert into aggr_test(id, val1, val2) values(6,'d',null), (7,'e',null), (8,'E',1)")
 
 	qr := exec(t, conn, "select val1, count(distinct val2), count(*) from aggr_test group by val1")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[VARBINARY("a") INT64(1) INT64(2)] [VARBINARY("b") INT64(1) INT64(1)] [VARBINARY("c") INT64(2) INT64(2)] [VARBINARY("d") INT64(0) INT64(1)] [VARBINARY("e") INT64(1) INT64(2)]]`; got != want {
+	if got, want := fmt.Sprintf("%v", qr.Rows), `[[VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("d") INT64(0) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
 
 	qr = exec(t, conn, "select val1, sum(distinct val2), sum(val2) from aggr_test group by val1")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[VARBINARY("a") DECIMAL(1) DECIMAL(2)] [VARBINARY("b") DECIMAL(1) DECIMAL(1)] [VARBINARY("c") DECIMAL(7) DECIMAL(7)] [VARBINARY("d") NULL NULL] [VARBINARY("e") DECIMAL(1) DECIMAL(1)]]`; got != want {
+	if got, want := fmt.Sprintf("%v", qr.Rows), `[[VARCHAR("a") DECIMAL(1) DECIMAL(2)] [VARCHAR("b") DECIMAL(1) DECIMAL(1)] [VARCHAR("c") DECIMAL(7) DECIMAL(7)] [VARCHAR("d") NULL NULL] [VARCHAR("e") DECIMAL(1) DECIMAL(1)]]`; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	qr = exec(t, conn, "select val1, count(distinct val2) k, count(*) from aggr_test group by val1 order by k desc, val1")
+	if got, want := fmt.Sprintf("%v", qr.Rows), `[[VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)] [VARCHAR("d") INT64(0) INT64(1)]]`; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	qr = exec(t, conn, "select val1, count(distinct val2) k, count(*) from aggr_test group by val1 order by k desc, val1 limit 4")
+	if got, want := fmt.Sprintf("%v", qr.Rows), `[[VARCHAR("c") INT64(2) INT64(2)] [VARCHAR("a") INT64(1) INT64(2)] [VARCHAR("b") INT64(1) INT64(1)] [VARCHAR("e") INT64(1) INT64(2)]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
 }

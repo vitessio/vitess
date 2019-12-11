@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-// Scanners encapsulates a source and a destination. We create one of these per paralell runner.
+// Scanners encapsulates a source and a destination. We create one of these per parallel runner.
 type Scanners struct {
 	// this is how we get data from the source shard
 	sourceScanner TableScanner

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -962,7 +962,7 @@ func TestTabletServerBeginFail(t *testing.T) {
 	defer cancel()
 	tsv.Begin(ctx, &target, nil)
 	_, err = tsv.Begin(ctx, &target, nil)
-	want := "transaction pool connection limit exceeded"
+	want := "transaction pool aborting request due to already expired context"
 	if err == nil || err.Error() != want {
 		t.Fatalf("Begin err: %v, want %v", err, want)
 	}

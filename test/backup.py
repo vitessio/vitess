@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import logging
 import os
 import shutil
 import unittest
+import datetime
 
 import MySQLdb
 
@@ -30,11 +31,13 @@ from mysql_flavor import mysql_flavor
 
 use_mysqlctld = False
 use_xtrabackup = False
+xtrabackup_stripes = 0
 stream_mode = 'tar'
 tablet_master = None
 tablet_replica1 = None
 tablet_replica2 = None
 xtrabackup_args = []
+
 new_init_db = ''
 db_credentials_file = ''
 
@@ -46,6 +49,7 @@ def setUpModule():
                    '-xtrabackup_stream_mode',
                    stream_mode,
                    '-xtrabackup_user=vt_dba',
+                   '-xtrabackup_stripes=%d' % (xtrabackup_stripes),
                    '-xtrabackup_backup_flags',
                    '--password=VtDbaPass']
 
@@ -91,7 +95,7 @@ def setUpModule():
     # Create a new init_db.sql file that sets up passwords for all users.
     # Then we use a db-credentials-file with the passwords.
     new_init_db = environment.tmproot + '/init_db_with_passwords.sql'
-    with open(environment.vttop + '/config/init_db.sql') as fd:
+    with open(environment.vtroot + '/config/init_db.sql') as fd:
       init_db = fd.read()
     with open(new_init_db, 'w') as fd:
       fd.write(init_db)
@@ -115,6 +119,7 @@ def setUpModule():
       tablet_replica2.wait_for_mysqlctl_socket()
     else:
       utils.wait_procs(setup_procs)
+    logging.debug("done initializing mysql %s",str(datetime.datetime.now()))
   except:
     tearDownModule()
     raise
@@ -131,7 +136,7 @@ def tearDownModule():
       tablet_replica1.teardown_mysql(extra_args=['-db-credentials-file',
                                                  db_credentials_file]),
       tablet_replica2.teardown_mysql(extra_args=['-db-credentials-file',
-                                                 db_credentials_file]),
+                                                 db_credentials_file])
   ]
   utils.wait_procs(teardown_procs, raise_on_error=False)
 
@@ -205,13 +210,16 @@ class TestBackup(unittest.TestCase):
         logging.exception('exception waiting for data to replicate')
       timeout = utils.wait_step(msg, timeout)
 
-  def _restore(self, t, tablet_type='replica'):
+  def _restore(self, t, tablet_type='replica', extra_args=[]):
     """Erase mysql/tablet dir, then start tablet with restore enabled."""
+    logging.debug("restoring tablet %s",str(datetime.datetime.now()))
     self._reset_tablet_dir(t)
 
     xtra_args = ['-db-credentials-file', db_credentials_file]
     if use_xtrabackup:
       xtra_args.extend(xtrabackup_args)
+
+    xtra_args.extend(extra_args)
 
     t.start_vttablet(wait_for_state='SERVING',
                      init_tablet_type=tablet_type,
@@ -228,7 +236,7 @@ class TestBackup(unittest.TestCase):
       t.check_db_var('rpl_semi_sync_slave_enabled', 'OFF')
       t.check_db_status('rpl_semi_sync_slave_status', 'OFF')
 
-  def _restore_wait_for_backup(self, t, tablet_type='replica'):
+  def _restore_wait_for_backup(self, t, tablet_type='replica', extra_args=[]):
     """Erase mysql/tablet dir, then start tablet with wait_for_restore_interval."""
     self._reset_tablet_dir(t)
 
@@ -238,6 +246,7 @@ class TestBackup(unittest.TestCase):
     ]
     if use_xtrabackup:
       xtra_args.extend(xtrabackup_args)
+    xtra_args.extend(extra_args)
 
     t.start_vttablet(wait_for_state=None,
                      init_tablet_type=tablet_type,
@@ -248,16 +257,21 @@ class TestBackup(unittest.TestCase):
 
   def _reset_tablet_dir(self, t):
     """Stop mysql, delete everything including tablet dir, restart mysql."""
-    extra_args = ['-db-credentials-file', db_credentials_file]
+
+    extra_args = ['-db-credentials-file', db_credentials_file]    
+
     utils.wait_procs([t.teardown_mysql(extra_args=extra_args)])
     # Specify ignore_options because we want to delete the tree even
     # if the test's -k / --keep-logs was specified on the command line.
+
     t.remove_tree(ignore_options=True)
+    logging.debug("starting mysql %s",str(datetime.datetime.now()))    
     proc = t.init_mysql(init_db=new_init_db, extra_args=extra_args)
     if use_mysqlctld:
       t.wait_for_mysqlctl_socket()
     else:
       utils.wait_procs([proc])
+    logging.debug("done starting mysql %s",str(datetime.datetime.now()))          
 
   def _list_backups(self):
     """Get a list of backup names for the test shard."""
@@ -274,10 +288,10 @@ class TestBackup(unittest.TestCase):
         auto_log=True, mode=utils.VTCTL_VTCTL)
 
   def test_backup_rdonly(self):
-    self._test_backup('rdonly')
+    self._test_backup('rdonly', False)
 
   def test_backup_replica(self):
-    self._test_backup('replica')
+    self._test_backup('replica', False)
 
   def test_backup_master(self):
     """Test backup flow.
@@ -343,7 +357,7 @@ class TestBackup(unittest.TestCase):
 
     tablet_replica2.kill_vttablet()
 
-  def _test_backup(self, tablet_type):
+  def _test_backup(self, tablet_type, backup_only):
     """Test backup flow.
 
     test_backup will:
@@ -361,9 +375,14 @@ class TestBackup(unittest.TestCase):
       tablet_type: 'replica' or 'rdonly'.
     """
 
-    # bring up another replica concurrently, telling it to wait until a backup
+    # Bring up another replica concurrently, telling it to wait until a backup
     # is available instead of starting up empty.
-    self._restore_wait_for_backup(tablet_replica2, tablet_type=tablet_type)
+    #
+    # Override the backup engine implementation to a non-existent one for restore.
+    # This setting should only matter for taking new backups. We should be able
+    # to restore a previous backup successfully regardless of this setting.
+    self._restore_wait_for_backup(tablet_replica2, tablet_type=tablet_type,
+        extra_args=['-backup_engine_implementation', 'fake_implementation'])
 
     # insert data on master, wait for slave to get it
     tablet_master.mquery('vt_test_keyspace', self._create_vt_insert_test)
@@ -371,13 +390,19 @@ class TestBackup(unittest.TestCase):
     self._check_data(tablet_replica1, 1, 'replica1 tablet getting data')
 
     # backup the slave
-    utils.run_vtctl(['Backup', tablet_replica1.tablet_alias], auto_log=True)
+    alias = tablet_replica1.tablet_alias
+    logging.debug("taking backup %s",str(datetime.datetime.now()))
+
+    utils.run_vtctl(['Backup', alias], auto_log=True)
+
+    logging.debug("done taking backup %s",str(datetime.datetime.now()))      
+    # end if
 
     # check that the backup shows up in the listing
     backups = self._list_backups()
     logging.debug('list of backups: %s', backups)
     self.assertEqual(len(backups), 1)
-    self.assertTrue(backups[0].endswith(tablet_replica1.tablet_alias))
+    self.assertTrue(backups[0].endswith(alias))
 
     # insert more data on the master
     self._insert_data(tablet_master, 2)
@@ -402,8 +427,9 @@ class TestBackup(unittest.TestCase):
     else:
       self.assertEqual(metadata['PromotionRule'], 'must_not')
 
-    # remove the backup and check that the list is empty
-    self._remove_backup(backups[0])
+    for backup in backups:
+      self._remove_backup(backup)
+
     backups = self._list_backups()
     logging.debug('list of backups after remove: %s', backups)
     self.assertEqual(len(backups), 0)
@@ -523,7 +549,7 @@ class TestBackup(unittest.TestCase):
   def test_terminated_restore(self):
     stop_restore_msg = 'Copying file 10'
     if use_xtrabackup:
-      stop_restore_msg = 'Restore: Preparing the files'
+      stop_restore_msg = 'Restore: Preparing'
     def _terminated_restore(t):
       for e in utils.vtctld_connection.execute_vtctl_command(
           ['RestoreFromBackup', t.tablet_alias]):

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -130,6 +130,11 @@ message Rule {
 // wins.
 message Filter {
   repeated Rule rules = 1;
+  enum FieldEventMode {
+    ERR_ON_MISMATCH = 0;
+    BEST_EFFORT = 1;
+  }
+  FieldEventMode fieldEventMode = 2;
 }
 
 // OnDDLAction lists the possible actions for DDLs.
@@ -165,6 +170,10 @@ message BinlogSource {
 
   // on_ddl specifies the action to be taken when a DDL is encountered.
   OnDDLAction on_ddl = 7;
+
+  // Source is an external mysql. This attribute should be set to the username
+  // to use in the connection
+  string external_mysql = 8;
 }
 
 // VEventType enumerates the event types.
@@ -187,6 +196,7 @@ enum VEventType {
   FIELD = 13;
   HEARTBEAT = 14;
   VGTID = 15;
+  JOURNAL = 16;
 }
 
 // RowChange represents one row change
@@ -216,6 +226,27 @@ message VGtid {
   repeated ShardGtid shard_gtids = 1;
 }
 
+message KeyspaceShard {
+  string keyspace = 1;
+  string shard = 2;
+}
+
+// MigrationType specifies the type of migration for the Journal.
+enum MigrationType {
+  TABLES = 0;
+  SHARDS = 1;
+}
+
+message Journal {
+  int64 id = 1;
+  MigrationType migration_type = 2;
+  repeated string tables = 3;
+  string local_position = 4;
+  repeated ShardGtid shard_gtids = 5;
+  repeated KeyspaceShard participants = 6;
+  repeated string source_workflows = 7;
+}
+
 // VEvent represents a vstream event
 message VEvent {
   VEventType type = 1;
@@ -225,6 +256,8 @@ message VEvent {
   RowEvent row_event = 5;
   FieldEvent field_event = 6;
   VGtid vgtid = 7;
+  Journal journal = 8;
+  string dml = 9;
   // current_time specifies the current time to handle clock skew.
   int64 current_time = 20;
 }
@@ -261,4 +294,22 @@ message VStreamRowsResponse {
   string gtid = 3;
   repeated query.Row rows = 4;
   query.Row lastpk = 5;
+}
+
+// VStreamResultsRequest is the payload for VStreamResults
+// The ids match VStreamRows, in case we decide to merge the two.
+message VStreamResultsRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  query.VTGateCallerID immediate_caller_id = 2;
+  query.Target target = 3;
+
+  string query = 4;
+}
+
+// VStreamResultsResponse is the response from VStreamResults
+// The ids match VStreamRows, in case we decide to merge the two.
+message VStreamResultsResponse {
+  repeated query.Field fields = 1;
+  string gtid = 3;
+  repeated query.Row rows = 4;
 }

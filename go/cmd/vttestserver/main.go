@@ -1,3 +1,19 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 // vttestserver is a native Go implementation of `run_local_server.py`.
 // It allows users to spawn a self-contained Vitess server for local testing/CI
 package main
@@ -152,6 +168,10 @@ func parseFlags() (config vttest.Config, env vttest.Environment, err error) {
 	flag.StringVar(&config.TransactionMode, "transaction_mode", "MULTI", "Transaction mode MULTI (default), SINGLE or TWOPC ")
 	flag.Float64Var(&config.TransactionTimeout, "queryserver-config-transaction-timeout", 0, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
 
+	flag.StringVar(&config.TabletHostName, "tablet_hostname", "localhost", "The hostname to use for the tablet otherwise it will be derived from OS' hostname")
+
+	flag.BoolVar(&config.InitWorkflowManager, "workflow_manager_init", false, "Enable workflow manager")
+
 	flag.Parse()
 
 	if basePort != 0 {
@@ -197,32 +217,34 @@ func parseFlags() (config vttest.Config, env vttest.Environment, err error) {
 }
 
 func main() {
-	config, env, err := parseFlags()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Infof("Starting local cluster...")
-	log.Infof("config: %#v", config)
-
-	cluster := vttest.LocalCluster{
-		Config: config,
-		Env:    env,
-	}
-
-	err = cluster.Setup()
+	cluster := runCluster()
 	defer cluster.TearDown()
-
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	kvconf := cluster.JSONConfig()
 	if err := json.NewEncoder(os.Stdout).Encode(kvconf); err != nil {
 		log.Fatal(err)
 	}
 
+	select {}
+}
+
+func runCluster() vttest.LocalCluster {
+	config, env, err := parseFlags()
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Infof("Starting local cluster...")
+	log.Infof("config: %#v", config)
+	cluster := vttest.LocalCluster{
+		Config: config,
+		Env:    env,
+	}
+	err = cluster.Setup()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	log.Info("Local cluster started.")
 
-	select {}
+	return cluster
 }

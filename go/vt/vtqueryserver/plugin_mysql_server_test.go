@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type testHandler struct {
@@ -39,8 +40,23 @@ func (th *testHandler) NewConnection(c *mysql.Conn) {
 func (th *testHandler) ConnectionClosed(c *mysql.Conn) {
 }
 
+func (th *testHandler) ComInitDB(c *mysql.Conn, schemaName string) {
+}
+
 func (th *testHandler) ComQuery(c *mysql.Conn, q string, callback func(*sqltypes.Result) error) error {
 	return nil
+}
+
+func (th *testHandler) ComPrepare(c *mysql.Conn, q string) ([]*querypb.Field, error) {
+	return nil, nil
+}
+
+func (th *testHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
+	return nil
+}
+
+func (th *testHandler) ComResetConnection(c *mysql.Conn) {
+
 }
 
 func (th *testHandler) WarningCount(c *mysql.Conn) uint16 {

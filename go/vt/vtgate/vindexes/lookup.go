@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -27,10 +27,10 @@ import (
 )
 
 var (
-	_ Vindex = (*LookupUnique)(nil)
-	_ Lookup = (*LookupUnique)(nil)
-	_ Vindex = (*LookupNonUnique)(nil)
-	_ Lookup = (*LookupNonUnique)(nil)
+	_ SingleColumn = (*LookupUnique)(nil)
+	_ Lookup       = (*LookupUnique)(nil)
+	_ SingleColumn = (*LookupNonUnique)(nil)
+	_ Lookup       = (*LookupNonUnique)(nil)
 )
 
 func init() {
@@ -58,11 +58,6 @@ func (ln *LookupNonUnique) Cost() int {
 
 // IsUnique returns false since the Vindex is non unique.
 func (ln *LookupNonUnique) IsUnique() bool {
-	return false
-}
-
-// IsFunctional returns false since the Vindex is not functional.
-func (ln *LookupNonUnique) IsFunctional() bool {
 	return false
 }
 
@@ -108,7 +103,7 @@ func (ln *LookupNonUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [
 
 // Create reserves the id by inserting it into the vindex table.
 func (ln *LookupNonUnique) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
-	return ln.lkp.Create(vcursor, rowsColValues, ksids, ksidsToValues(ksids), ignoreMode)
+	return ln.lkp.Create(vcursor, rowsColValues, ksidsToValues(ksids), ignoreMode)
 }
 
 // Delete deletes the entry from the vindex table.
@@ -216,11 +211,6 @@ func (lu *LookupUnique) IsUnique() bool {
 	return true
 }
 
-// IsFunctional returns false since the Vindex is not functional.
-func (lu *LookupUnique) IsFunctional() bool {
-	return false
-}
-
 // Map can map ids to key.Destination objects.
 func (lu *LookupUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
@@ -261,7 +251,7 @@ func (lu *LookupUnique) Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]
 
 // Create reserves the id by inserting it into the vindex table.
 func (lu *LookupUnique) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte, ignoreMode bool) error {
-	return lu.lkp.Create(vcursor, rowsColValues, ksids, ksidsToValues(ksids), ignoreMode)
+	return lu.lkp.Create(vcursor, rowsColValues, ksidsToValues(ksids), ignoreMode)
 }
 
 // Update updates the entry in the vindex table.

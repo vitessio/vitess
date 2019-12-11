@@ -17,10 +17,14 @@ limitations under the License.
 package vreplication
 
 import (
+	"io"
 	"time"
 
+	"golang.org/x/net/context"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	"vitess.io/vitess/go/vt/log"
 )
 
 // vdbClient is a wrapper on binlogplayer.DBClient.
@@ -83,17 +87,50 @@ func (vc *vdbClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, 
 	return vc.DBClient.ExecuteFetch(query, maxrows)
 }
 
-func (vc *vdbClient) Retry() error {
+// Execute is ExecuteFetch without the maxrows.
+func (vc *vdbClient) Execute(query string) (*sqltypes.Result, error) {
+	// Number of rows should never exceed relayLogMaxSize.
+	return vc.ExecuteFetch(query, relayLogMaxSize)
+}
+
+func (vc *vdbClient) ExecuteWithRetry(ctx context.Context, query string) (*sqltypes.Result, error) {
+	qr, err := vc.Execute(query)
+	for err != nil {
+		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERLockDeadlock || sqlErr.Number() == mysql.ERLockWaitTimeout {
+			log.Infof("retryable error: %v, waiting for %v and retrying", sqlErr, dbLockRetryDelay)
+			if err := vc.Rollback(); err != nil {
+				return nil, err
+			}
+			time.Sleep(dbLockRetryDelay)
+			// Check context here. Otherwise this can become an infinite loop.
+			select {
+			case <-ctx.Done():
+				return nil, io.EOF
+			default:
+			}
+			qr, err = vc.Retry()
+			continue
+		}
+		return qr, err
+	}
+	return qr, nil
+}
+
+func (vc *vdbClient) Retry() (*sqltypes.Result, error) {
+	var qr *sqltypes.Result
 	for _, q := range vc.queries {
 		if q == "begin" {
 			if err := vc.Begin(); err != nil {
-				return err
+				return nil, err
 			}
 			continue
 		}
-		if _, err := vc.DBClient.ExecuteFetch(q, 10000); err != nil {
-			return err
+		// Number of rows should never exceed relayLogMaxSize.
+		result, err := vc.DBClient.ExecuteFetch(q, relayLogMaxSize)
+		if err != nil {
+			return nil, err
 		}
+		qr = result
 	}
-	return nil
+	return qr, nil
 }

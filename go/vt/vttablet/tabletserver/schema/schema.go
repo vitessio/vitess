@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -68,6 +68,9 @@ type Table struct {
 	// MessageInfo contains info for message tables.
 	MessageInfo *MessageInfo
 
+	// TopicInfo contains info for message topics.
+	TopicInfo *TopicInfo
+
 	// These vars can be accessed concurrently.
 	TableRows     sync2.AtomicInt64
 	DataLength    sync2.AtomicInt64
@@ -87,6 +90,13 @@ type SequenceInfo struct {
 	LastVal int64
 }
 
+// TopicInfo contains info specific to message topics.
+type TopicInfo struct {
+	// Subscribers links to all the message tables
+	// subscribed to this topic
+	Subscribers []*Table
+}
+
 // MessageInfo contains info specific to message tables.
 type MessageInfo struct {
 	// IDPKIndex is the index of the ID column
@@ -98,6 +108,10 @@ type MessageInfo struct {
 	// Fields stores the field info to be
 	// returned for subscribers.
 	Fields []*querypb.Field
+
+	// Optional topic to subscribe to. Any messages
+	// published to the topic will be added to this table.
+	Topic string
 
 	// AckWaitDuration specifies how long to wait after
 	// the message was first sent. The back-off doubles
@@ -199,6 +213,11 @@ func (ta *Table) SetMysqlStats(tr, dl, il, df, mdl sqltypes.Value) {
 // HasPrimary returns true if the table has a primary key.
 func (ta *Table) HasPrimary() bool {
 	return len(ta.Indexes) != 0 && ta.Indexes[0].Name.EqualString("primary")
+}
+
+// IsTopic returns true if TopicInfo is not nil.
+func (ta *Table) IsTopic() bool {
+	return ta.TopicInfo != nil
 }
 
 // UniqueIndexes returns the number of unique indexes on the table

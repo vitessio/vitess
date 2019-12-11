@@ -1,4 +1,4 @@
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -37,7 +37,8 @@ class LocalDatabase(object):
                extra_my_cnf=None,
                web_dir2=None,
                snapshot_file=None,
-               charset='utf8'):
+               charset='utf8',
+               mysql_server_bind_address=None):
     """Initializes an object of this class.
 
     Args:
@@ -59,6 +60,7 @@ class LocalDatabase(object):
           flag in run_local_database.py
       snapshot_file: A MySQL DB snapshot file.
       charset: MySQL charset.
+      mysql_server_bind_address: MySQL server bind address.
     """
 
     self.topology = topology
@@ -71,6 +73,7 @@ class LocalDatabase(object):
     self.web_dir2 = web_dir2
     self.snapshot_file = snapshot_file
     self.charset = charset
+    self.mysql_server_bind_address = mysql_server_bind_address
 
   def setup(self):
     """Create a MySQL instance and all Vitess processes."""
@@ -92,7 +95,8 @@ class LocalDatabase(object):
     vt_processes.start_vt_processes(self.directory, self.topology,
                                     self.mysql_db, self.schema_dir,
                                     charset=self.charset, web_dir=self.web_dir,
-                                    web_dir2=self.web_dir2)
+                                    web_dir2=self.web_dir2,
+                                    mysql_server_bind_address=self.mysql_server_bind_address)
 
   def teardown(self):
     """Kill all Vitess processes and wait for them to end.

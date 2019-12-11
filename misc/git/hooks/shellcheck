@@ -9,18 +9,21 @@ if [ -z "$shfiles" ] ; then
   exit 0
 fi
 
-# The -e SC1090,SC1091 suppressing warnings about trying to find
-# files imported with "source foo.sh". We only want to lint
-# the files modified as part of this current diff.
-if errors=$(shellcheck -e SC1090,SC1091 "$shfiles" 2>&1); then
-  # No lint errors. Return early.
-  exit 0
-fi
-
 if [ -z "$(command -v shellcheck)" ]; then
   echo "shellcheck not found, please run: brew or apt-get install shellcheck"
   exit 0
 fi
+
+errors=
+for file in $shfiles
+do
+  # The -e SC1090,SC1091 suppressing warnings about trying to find
+  # files imported with "source foo.sh". We only want to lint
+  # the files modified as part of this current diff.
+  errors+=$(shellcheck -e SC1090,SC1091 "$file" 2>&1)
+done
+
+[ -z "$errors" ] && exit 0
 
 # git doesn't give us access to user input, so let's steal it.
 if exec < /dev/tty; then

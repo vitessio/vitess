@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -82,7 +82,7 @@ func TestLookupUnicodeLooseMD5HashMap(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashMapAutocommit(t *testing.T) {
-	lookupNonUnique, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
+	vindex, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
@@ -92,6 +92,7 @@ func TestLookupUnicodeLooseMD5HashMapAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	lookupNonUnique := vindex.(SingleColumn)
 	vc := &vcursor{numRows: 2}
 
 	got, err := lookupNonUnique.Map(vc, []sqltypes.Value{sqltypes.NewInt64(10), sqltypes.NewInt64(20)})
@@ -229,7 +230,7 @@ func TestLookupUnicodeLooseMD5HashVerify(t *testing.T) {
 }
 
 func TestLookupUnicodeLooseMD5HashVerifyAutocommit(t *testing.T) {
-	lookupNonUnique, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
+	vindex, err := CreateVindex("lookup_unicodeloosemd5_hash", "lookup", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
@@ -238,6 +239,7 @@ func TestLookupUnicodeLooseMD5HashVerifyAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	lookupNonUnique := vindex.(SingleColumn)
 	vc := &vcursor{numRows: 1}
 
 	_, err = lookupNonUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(10), sqltypes.NewInt64(20)},

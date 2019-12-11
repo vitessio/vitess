@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -83,7 +83,7 @@ func TestMapSetRulesWithNil(t *testing.T) {
 		t.Errorf("GetRules failed to retrieve blacklistQueryRules that has been set: %s", err)
 	}
 	if !reflect.DeepEqual(qrs, blacklistRules) {
-		t.Errorf("blacklistQueryRules retrived is %v, but the expected value should be %v", qrs, blacklistQueryRules)
+		t.Errorf("blacklistQueryRules retrieved is %v, but the expected value should be %v", qrs, blacklistQueryRules)
 	}
 
 	qri.SetRules(blacklistQueryRules, nil)
@@ -93,7 +93,7 @@ func TestMapSetRulesWithNil(t *testing.T) {
 		t.Errorf("GetRules failed to retrieve blacklistQueryRules that has been set: %s", err)
 	}
 	if !reflect.DeepEqual(qrs, New()) {
-		t.Errorf("blacklistQueryRules retrived is %v, but the expected value should be %v", qrs, blacklistQueryRules)
+		t.Errorf("blacklistQueryRules retrieved is %v, but the expected value should be %v", qrs, blacklistQueryRules)
 	}
 }
 
@@ -136,13 +136,13 @@ func TestMapGetSetQueryRules(t *testing.T) {
 		t.Errorf("Failed to set custom Rules: %s", err)
 	}
 
-	// Test if we can successfully retrive rules that've been set
+	// Test if we can successfully retrieve rules that've been set
 	qrs, err = qri.Get(blacklistQueryRules)
 	if err != nil {
 		t.Errorf("GetRules failed to retrieve blacklistQueryRules that has been set: %s", err)
 	}
 	if !reflect.DeepEqual(qrs, blacklistRules) {
-		t.Errorf("blacklistQueryRules retrived is %v, but the expected value should be %v", qrs, blacklistRules)
+		t.Errorf("blacklistQueryRules retrieved is %v, but the expected value should be %v", qrs, blacklistRules)
 	}
 
 	qrs, err = qri.Get(blacklistQueryRules)
@@ -150,7 +150,7 @@ func TestMapGetSetQueryRules(t *testing.T) {
 		t.Errorf("GetRules failed to retrieve blacklistQueryRules that has been set: %s", err)
 	}
 	if !reflect.DeepEqual(qrs, blacklistRules) {
-		t.Errorf("blacklistQueryRules retrived is %v, but the expected value should be %v", qrs, blacklistRules)
+		t.Errorf("blacklistQueryRules retrieved is %v, but the expected value should be %v", qrs, blacklistRules)
 	}
 
 	qrs, err = qri.Get(customQueryRules)
@@ -158,7 +158,7 @@ func TestMapGetSetQueryRules(t *testing.T) {
 		t.Errorf("GetRules failed to retrieve customQueryRules that has been set: %s", err)
 	}
 	if !reflect.DeepEqual(qrs, otherRules) {
-		t.Errorf("customQueryRules retrived is %v, but the expected value should be %v", qrs, customQueryRules)
+		t.Errorf("customQueryRules retrieved is %v, but the expected value should be %v", qrs, customQueryRules)
 	}
 }
 

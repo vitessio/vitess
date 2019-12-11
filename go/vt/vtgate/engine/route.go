@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -58,11 +58,14 @@ type Route struct {
 	// Query specifies the query to be executed.
 	Query string
 
+	// TableName specifies the table to send the query to.
+	TableName string
+
 	// FieldQuery specifies the query to be executed for a GetFieldInfo request.
 	FieldQuery string
 
 	// Vindex specifies the vindex to be used.
-	Vindex vindexes.Vindex
+	Vindex vindexes.SingleColumn
 	// Values specifies the vindex values to use for routing.
 	Values []sqltypes.PlanValue
 
@@ -126,6 +129,7 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 		TruncateColumnCount     int                  `json:",omitempty"`
 		QueryTimeout            int                  `json:",omitempty"`
 		ScatterErrorsAsWarnings bool                 `json:",omitempty"`
+		Table                   string               `json:",omitempty"`
 	}{
 		Opcode:                  route.Opcode,
 		Keyspace:                route.Keyspace,
@@ -137,6 +141,7 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 		TruncateColumnCount:     route.TruncateColumnCount,
 		QueryTimeout:            route.QueryTimeout,
 		ScatterErrorsAsWarnings: route.ScatterErrorsAsWarnings,
+		Table:                   route.TableName,
 	}
 	return jsonutil.MarshalNoEscape(marshalRoute)
 }
@@ -199,6 +204,21 @@ func (code RouteOpcode) MarshalJSON() ([]byte, error) {
 // RouteType returns a description of the query routing type used by the primitive
 func (route *Route) RouteType() string {
 	return routeName[route.Opcode]
+}
+
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (route *Route) GetKeyspaceName() string {
+	return route.Keyspace.Name
+}
+
+// GetTableName specifies the table that this primitive routes to.
+func (route *Route) GetTableName() string {
+	return route.TableName
+}
+
+// SetTruncateColumnCount sets the truncate column count.
+func (route *Route) SetTruncateColumnCount(count int) {
+	route.TruncateColumnCount = count
 }
 
 // Execute performs a non-streaming exec.
@@ -311,7 +331,7 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 		})
 	}
 
-	return mergeSort(vcursor, route.Query, route.OrderBy, rss, bvs, func(qr *sqltypes.Result) error {
+	return MergeSort(vcursor, route.Query, route.OrderBy, rss, bvs, func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(route.TruncateColumnCount))
 	})
 }
@@ -443,7 +463,7 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 	return out, err
 }
 
-func resolveSingleShard(vcursor VCursor, vindex vindexes.Vindex, keyspace *vindexes.Keyspace, vindexKey sqltypes.Value) (*srvtopo.ResolvedShard, []byte, error) {
+func resolveSingleShard(vcursor VCursor, vindex vindexes.SingleColumn, keyspace *vindexes.Keyspace, vindexKey sqltypes.Value) (*srvtopo.ResolvedShard, []byte, error) {
 	destinations, err := vindex.Map(vcursor, []sqltypes.Value{vindexKey})
 	if err != nil {
 		return nil, nil, err

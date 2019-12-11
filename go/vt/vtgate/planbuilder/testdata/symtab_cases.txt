@@ -13,7 +13,8 @@
         "Sharded": true
       },
       "Query": "select predef2 from user",
-      "FieldQuery": "select predef2 from user where 1 != 1"
+      "FieldQuery": "select predef2 from user where 1 != 1",
+      "Table": "user"
     },
     "Right": {
       "Opcode": "SelectUnsharded",
@@ -22,7 +23,8 @@
         "Sharded": false
       },
       "Query": "select predef3 from unsharded where predef3 = :predef2",
-      "FieldQuery": "select predef3 from unsharded where 1 != 1"
+      "FieldQuery": "select predef3 from unsharded where 1 != 1",
+      "Table": "unsharded"
     },
     "Cols": [
       -1,

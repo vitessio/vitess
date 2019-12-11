@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -153,8 +153,29 @@ const (
 	// ComBinlogDump is COM_BINLOG_DUMP.
 	ComBinlogDump = 0x12
 
+	// ComPrepare is COM_PREPARE.
+	ComPrepare = 0x16
+
+	// ComStmtExecute is COM_STMT_EXECUTE.
+	ComStmtExecute = 0x17
+
+	// ComStmtSendLongData is COM_STMT_SEND_LONG_DATA
+	ComStmtSendLongData = 0x18
+
+	// ComStmtClose is COM_STMT_CLOSE.
+	ComStmtClose = 0x19
+
+	// ComStmtReset is COM_STMT_RESET
+	ComStmtReset = 0x1a
+
+	//ComStmtFetch is COM_STMT_FETCH
+	ComStmtFetch = 0x1c
+
 	// ComSetOption is COM_SET_OPTION
 	ComSetOption = 0x1b
+
+	// ComResetConnection is COM_RESET_CONNECTION
+	ComResetConnection = 0x1f
 
 	// ComBinlogDumpGTID is COM_BINLOG_DUMP_GTID.
 	ComBinlogDumpGTID = 0x1e

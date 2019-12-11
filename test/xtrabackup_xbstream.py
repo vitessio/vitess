@@ -23,4 +23,5 @@ import utils
 if __name__ == '__main__':
   backup.use_xtrabackup = True
   backup.stream_mode = 'xbstream'
+  backup.xtrabackup_stripes = 8
   utils.main(backup)

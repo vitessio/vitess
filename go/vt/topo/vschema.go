@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -20,6 +20,7 @@ import (
 	"path"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/golang/protobuf/proto"
@@ -66,6 +67,29 @@ func (ts *Server) GetVSchema(ctx context.Context, keyspace string) (*vschemapb.K
 	return &vs, nil
 }
 
+// EnsureVSchema makes sure that a vschema is present for this keyspace or creates a blank one if it is missing
+func (ts *Server) EnsureVSchema(ctx context.Context, keyspace string) error {
+	vschema, err := ts.GetVSchema(ctx, keyspace)
+	if vschema == nil || IsErrType(err, NoNode) {
+		err = ts.SaveVSchema(ctx, keyspace, &vschemapb.Keyspace{
+			Sharded:  false,
+			Vindexes: make(map[string]*vschemapb.Vindex),
+			Tables:   make(map[string]*vschemapb.Table),
+		})
+		if err != nil {
+			log.Errorf("could not create blank vschema: %v", err)
+			return err
+		}
+	}
+
+	err = ts.RebuildSrvVSchema(ctx, []string{} /* cells */)
+	if err != nil {
+		log.Errorf("could not rebuild SrvVschema after creating keyspace: %v", err)
+		return err
+	}
+	return nil
+}
+
 // SaveRoutingRules saves the routing rules into the topo.
 func (ts *Server) SaveRoutingRules(ctx context.Context, routingRules *vschemapb.RoutingRules) error {
 	data, err := proto.Marshal(routingRules)
@@ -75,7 +99,10 @@ func (ts *Server) SaveRoutingRules(ctx context.Context, routingRules *vschemapb.
 
 	if len(data) == 0 {
 		// No vschema, remove it. So we can remove the keyspace.
-		return ts.globalCell.Delete(ctx, RoutingRulesFile, nil)
+		if err := ts.globalCell.Delete(ctx, RoutingRulesFile, nil); err != nil && !IsErrType(err, NoNode) {
+			return err
+		}
+		return nil
 	}
 
 	_, err = ts.globalCell.Update(ctx, RoutingRulesFile, data, nil)

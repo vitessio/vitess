@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -34,7 +34,7 @@ var (
 // Clock returns the current time.
 type Clock interface {
 	// Now returns the current time as Interval.
-	// This method should be thread safe (i.e. multipe go routines can
+	// This method should be thread safe (i.e. multiple go routines can
 	// safely call this at the same time).
 	// The returned interval is guaranteed to have earliest <= latest,
 	// and all implementations enforce it.

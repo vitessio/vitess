@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -158,12 +158,13 @@ func skipToEnd(yylex interface{}) {
 
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH
-%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE
+%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES
 %token <bytes> STATUS VARIABLES WARNINGS
+%token <bytes> SEQUENCE
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK
@@ -172,7 +173,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM UUID
 %token <bytes> REAL DOUBLE FLOAT_TYPE DECIMAL NUMERIC
 %token <bytes> TIME TIMESTAMP DATETIME YEAR
-%token <bytes> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR
+%token <bytes> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR 
 %token <bytes> TEXT TINYTEXT MEDIUMTEXT LONGTEXT
 %token <bytes> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON ENUM
 %token <bytes> GEOMETRY POINT LINESTRING POLYGON GEOMETRYCOLLECTION MULTIPOINT MULTILINESTRING MULTIPOLYGON
@@ -181,7 +182,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
-%token <bytes> COLLATION DATABASES SCHEMAS TABLES VITESS_KEYSPACES VITESS_SHARDS VITESS_TABLETS VSCHEMA VSCHEMA_TABLES VITESS_TARGET FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
+%token <bytes> COLLATION DATABASES TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -200,7 +201,13 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION
 
 // MySQL reserved words that are unused by this grammar will map to this token.
-%token <bytes> UNUSED
+%token <bytes> UNUSED ARRAY CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD MEMBER
+%token <bytes> NTH_VALUE NTILE OF OVER PERCENT_RANK RANK RECURSIVE ROW_NUMBER SYSTEM WINDOW
+%token <bytes> ACTIVE ADMIN BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
+%token <bytes> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
+%token <bytes> NESTED NETWORK_NAMESPACE NOWAIT NULLS OJ OLD OPTIONAL ORDINALITY ORGANIZATION OTHERS PATH PERSIST PERSIST_ONLY PRECEDING PRIVILEGE_CHECKS_USER PROCESS
+%token <bytes> RANDOM REFERENCE REQUIRE_ROW_FORMAT RESOURCE RESPECT RESTART RETAIN REUSE ROLE SECONDARY SECONDARY_ENGINE SECONDARY_LOAD SECONDARY_UNLOAD SKIP SRID
+%token <bytes> THREAD_PRIORITY TIES UNBOUNDED VCPU VISIBLE
 
 %type <statement> command
 %type <selStmt> select_statement base_select union_lhs union_rhs
@@ -219,9 +226,9 @@ func skipToEnd(yylex interface{}) {
 %type <tableExprs> from_opt table_references
 %type <tableExpr> table_reference table_factor join_table
 %type <joinCondition> join_condition join_condition_opt on_expression_opt
-%type <tableNames> table_name_list view_name_list
+%type <tableNames> table_name_list delete_table_list view_name_list
 %type <str> inner_join outer_join straight_join natural_join
-%type <tableName> table_name into_table_name
+%type <tableName> table_name into_table_name delete_table_name
 %type <aliasedTableName> aliased_table_name
 %type <indexHints> index_hint_list
 %type <expr> where_expression_opt
@@ -261,7 +268,7 @@ func skipToEnd(yylex interface{}) {
 %type <bytes> for_from
 %type <str> ignore_opt column_opt default_opt
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields
-%type <showFilter> like_or_where_opt
+%type <showFilter> like_or_where_opt like_opt
 %type <byt> exists_opt not_exists_opt
 %type <empty> non_add_drop_or_rename_operation to_opt to_or_as index_opt constraint_opt
 %type <bytes> reserved_keyword non_reserved_keyword
@@ -455,6 +462,10 @@ delete_statement:
   {
     $$ = &Delete{Comments: Comments($2), Targets: $3, TableExprs: $5, Where: NewWhere(WhereStr, $6)}
   }
+|DELETE comment_opt delete_table_list from_or_using table_references where_expression_opt
+  {
+    $$ = &Delete{Comments: Comments($2), Targets: $3, TableExprs: $5, Where: NewWhere(WhereStr, $6)}
+  }
 
 from_or_using:
   FROM {}
@@ -476,6 +487,16 @@ table_name_list:
     $$ = TableNames{$1}
   }
 | table_name_list ',' table_name
+  {
+    $$ = append($$, $3)
+  }
+
+delete_table_list:
+  delete_table_name
+  {
+    $$ = TableNames{$1}
+  }
+| delete_table_list ',' delete_table_name
   {
     $$ = append($$, $3)
   }
@@ -1386,19 +1407,27 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
   }
-| ALTER VSCHEMA CREATE VINDEX sql_id vindex_type_opt vindex_params_opt
+| ALTER VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
   {
-    $$ = &DDL{Action: CreateVindexStr, VindexSpec: &VindexSpec{
-        Name: $5,
-        Type: $6,
-        Params: $7,
-    }}
+    $$ = &DDL{
+        Action: CreateVindexStr,
+        Table: $5,
+        VindexSpec: &VindexSpec{
+          Name: NewColIdent($5.Name.String()),
+          Type: $6,
+          Params: $7,
+        },
+      }
   }
-| ALTER VSCHEMA DROP VINDEX sql_id
+| ALTER VSCHEMA DROP VINDEX table_name
   {
-    $$ = &DDL{Action: DropVindexStr, VindexSpec: &VindexSpec{
-        Name: $5,
-    }}
+    $$ = &DDL{
+        Action: DropVindexStr,
+        Table: $5,
+        VindexSpec: &VindexSpec{
+          Name: NewColIdent($5.Name.String()),
+        },
+      }
   }
 | ALTER VSCHEMA ADD TABLE table_name
   {
@@ -1431,6 +1460,21 @@ alter_statement:
         },
       }
   }
+| ALTER VSCHEMA ADD SEQUENCE table_name
+  {
+    $$ = &DDL{Action: AddSequenceStr, Table: $5}
+  }
+| ALTER VSCHEMA ON table_name ADD AUTO_INCREMENT sql_id USING table_name
+  {
+    $$ = &DDL{
+        Action: AddAutoIncStr,
+        Table: $4,
+        AutoIncSpec: &AutoIncSpec{
+            Column: $7,
+            Sequence: $9,
+        },
+    }
+  }
 
 column_opt:
   { }
@@ -1439,6 +1483,11 @@ column_opt:
 
 ignored_alter_object_type:
   CONSTRAINT
+
+alter_object_type:
+  CHECK
+| COLUMN
+| CONSTRAINT
 | FOREIGN
 | FULLTEXT
 | INDEX
@@ -1581,10 +1630,6 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW SCHEMAS ddl_skip_to_end
-  {
-    $$ = &Show{Type: string($2)}
-  }
 | SHOW ENGINES
   {
     $$ = &Show{Type: string($2)}
@@ -1642,21 +1687,10 @@ show_statement:
     showCollationFilterOpt := $4
     $$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
   }
-| SHOW VITESS_KEYSPACES
+| SHOW VITESS_METADATA VARIABLES like_opt
   {
-    $$ = &Show{Type: string($2)}
-  }
-| SHOW VITESS_SHARDS
-  {
-    $$ = &Show{Type: string($2)}
-  }
-| SHOW VITESS_TABLETS
-  {
-    $$ = &Show{Type: string($2)}
-  }
-| SHOW VITESS_TARGET
-  {
-    $$ = &Show{Type: string($2)}
+    showTablesOpt := &ShowTablesOpt{Filter: $4}
+    $$ = &Show{Scope: string($2), Type: string($3), ShowTablesOpt: showTablesOpt}
   }
 | SHOW VSCHEMA TABLES
   {
@@ -1679,6 +1713,10 @@ show_statement:
  *
  *  SHOW BINARY LOGS
  *  SHOW INVALID
+ *  SHOW VITESS_KEYSPACES
+ *  SHOW VITESS_TABLETS
+ *  SHOW VITESS_SHARDS
+ *  SHOW VITESS_TARGET
  */
 | SHOW ID ddl_skip_to_end
   {
@@ -1742,6 +1780,16 @@ like_or_where_opt:
   {
     $$ = &ShowFilter{Filter:$2}
   }
+
+like_opt:
+  /* empty */
+    {
+      $$ = nil
+    }
+  | LIKE STRING
+    {
+      $$ = &ShowFilter{Like:string($2)}
+    }
 
 show_session_or_global:
   /* empty */
@@ -2165,6 +2213,12 @@ table_name:
 | table_id '.' reserved_table_id
   {
     $$ = TableName{Qualifier: $1, Name: $3}
+  }
+
+delete_table_name:
+table_id '.' '*'
+  {
+    $$ = TableName{Name: $1}
   }
 
 index_hint_list:
@@ -3275,6 +3329,7 @@ reserved_table_id:
 */
 reserved_keyword:
   ADD
+| ARRAY 
 | AND
 | AS
 | ASC
@@ -3287,6 +3342,7 @@ reserved_keyword:
 | CONVERT
 | CREATE
 | CROSS
+| CUME_DIST
 | CURRENT_DATE
 | CURRENT_TIME
 | CURRENT_TIMESTAMP
@@ -3296,6 +3352,7 @@ reserved_keyword:
 | DATABASES
 | DEFAULT
 | DELETE
+| DENSE_RANK
 | DESC
 | DESCRIBE
 | DISTINCT
@@ -3307,10 +3364,13 @@ reserved_keyword:
 | EXISTS
 | EXPLAIN
 | FALSE
+| FIRST_VALUE
 | FOR
 | FORCE
 | FROM
 | GROUP
+| GROUPING
+| GROUPS
 | HAVING
 | IF
 | IGNORE
@@ -3322,35 +3382,50 @@ reserved_keyword:
 | INTO
 | IS
 | JOIN
+| JSON_TABLE
 | KEY
+| LAG
+| LAST_VALUE
+| LATERAL
+| LEAD
 | LEFT
 | LIKE
 | LIMIT
 | LOCALTIME
 | LOCALTIMESTAMP
 | LOCK
+| MEMBER
 | MATCH
 | MAXVALUE
 | MOD
 | NATURAL
 | NEXT // next should be doable as non-reserved, but is not due to the special `select next num_val` query that vitess supports
 | NOT
+| NTH_VALUE
+| NTILE
 | NULL
+| OF
 | OFF
 | ON
 | OR
 | ORDER
 | OUTER
+| OVER
+| PERCENT_RANK
+| RANK
+| RECURSIVE
 | REGEXP
 | RENAME
 | REPLACE
 | RIGHT
+| ROW_NUMBER
 | SCHEMA
 | SELECT
 | SEPARATOR
 | SET
 | SHOW
 | STRAIGHT_JOIN
+| SYSTEM
 | TABLE
 | THEN
 | TIMESTAMPADD
@@ -3370,6 +3445,7 @@ reserved_keyword:
 | VALUES
 | WHEN
 | WHERE
+| WINDOW
 
 /*
   These are non-reserved Vitess, because they don't cause conflicts in the grammar.
@@ -3381,39 +3457,56 @@ reserved_keyword:
 non_reserved_keyword:
   AGAINST
 | ACTION
+| ACTIVE
+| ADMIN
 | BEGIN
 | BIGINT
 | BIT
 | BLOB
 | BOOL
 | BOOLEAN
+| BUCKETS
 | CASCADE
 | CHAR
 | CHARACTER
 | CHARSET
+| CHECK
+| CLONE
 | COLLATION
 | COLUMNS
 | COMMENT_KEYWORD
 | COMMIT
 | COMMITTED
+| COMPONENT
 | DATE
 | DATETIME
 | DECIMAL
+| DEFINITION
+| DESCRIPTION
 | DOUBLE
 | DUPLICATE
+| ENFORCED
 | ENGINES
 | ENUM
+| EXCLUDE
 | EXPANSION
 | FLOAT_TYPE
 | FIELDS
 | FLUSH
+| FOLLOWING
 | FOREIGN
 | FULLTEXT
+| GEOMCOLLECTION
 | GEOMETRY
 | GEOMETRYCOLLECTION
+| GET_MASTER_PUBLIC_KEY
 | GLOBAL
+| HISTOGRAM
+| HISTORY
+| INACTIVE
 | INT
 | INTEGER
+| INVISIBLE
 | ISOLATION
 | JSON
 | KEY_BLOCK_SIZE
@@ -3423,8 +3516,13 @@ non_reserved_keyword:
 | LESS
 | LEVEL
 | LINESTRING
+| LOCKED
 | LONGBLOB
 | LONGTEXT
+| MASTER_COMPRESSION_ALGORITHMS
+| MASTER_PUBLIC_KEY_PATH
+| MASTER_TLS_CIPHERSUITES
+| MASTER_ZSTD_COMPRESSION_LEVEL
 | MEDIUMBLOB
 | MEDIUMINT
 | MEDIUMTEXT
@@ -3434,38 +3532,71 @@ non_reserved_keyword:
 | MULTIPOLYGON
 | NAMES
 | NCHAR
+| NESTED
+| NETWORK_NAMESPACE
+| NOWAIT
 | NO
+| NULLS
 | NUMERIC
 | OFFSET
+| OJ
+| OLD
+| OPTIONAL
+| ORDINALITY
+| ORGANIZATION
 | ONLY
 | OPTIMIZE
+| OTHERS
 | PARTITION
+| PATH
+| PERSIST
+| PERSIST_ONLY
+| PRECEDING
+| PRIVILEGE_CHECKS_USER
+| PROCESS
 | PLUGINS
 | POINT
 | POLYGON
 | PRIMARY
 | PROCEDURE
 | QUERY
+| RANDOM
 | READ
 | REAL
+| REFERENCE
 | REFERENCES
 | REORGANIZE
 | REPAIR
 | REPEATABLE
 | RESTRICT
+| REQUIRE_ROW_FORMAT
+| RESOURCE
+| RESPECT
+| RESTART
+| RETAIN
+| REUSE
+| ROLE
 | ROLLBACK
-| SCHEMAS
+| SECONDARY
+| SECONDARY_ENGINE
+| SECONDARY_LOAD
+| SECONDARY_UNLOAD
+| SEQUENCE
 | SESSION
 | SERIALIZABLE
 | SHARE
 | SIGNED
+| SKIP
 | SMALLINT
 | SPATIAL
+| SRID
 | START
 | STATUS
 | TABLES
 | TEXT
 | THAN
+| THREAD_PRIORITY
+| TIES
 | TIME
 | TIMESTAMP
 | TINYBLOB
@@ -3474,6 +3605,7 @@ non_reserved_keyword:
 | TRANSACTION
 | TRIGGER
 | TRUNCATE
+| UNBOUNDED
 | UNCOMMITTED
 | UNSIGNED
 | UNUSED
@@ -3481,15 +3613,13 @@ non_reserved_keyword:
 | VARBINARY
 | VARCHAR
 | VARIABLES
+| VCPU
 | VIEW
 | VINDEX
 | VINDEXES
-| VITESS_KEYSPACES
-| VITESS_SHARDS
-| VITESS_TABLETS
+| VISIBLE
+| VITESS_METADATA
 | VSCHEMA
-| VSCHEMA_TABLES
-| VITESS_TARGET
 | WARNINGS
 | WITH
 | WRITE

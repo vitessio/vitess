@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -39,10 +39,9 @@ import (
 // hashIndex is a functional, unique Vindex.
 type hashIndex struct{ name string }
 
-func (v *hashIndex) String() string   { return v.name }
-func (*hashIndex) Cost() int          { return 1 }
-func (*hashIndex) IsUnique() bool     { return true }
-func (*hashIndex) IsFunctional() bool { return true }
+func (v *hashIndex) String() string { return v.name }
+func (*hashIndex) Cost() int        { return 1 }
+func (*hashIndex) IsUnique() bool   { return true }
 func (*hashIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
@@ -57,10 +56,9 @@ func newHashIndex(name string, _ map[string]string) (vindexes.Vindex, error) {
 // lookupIndex is a unique Vindex, and satisfies Lookup.
 type lookupIndex struct{ name string }
 
-func (v *lookupIndex) String() string   { return v.name }
-func (*lookupIndex) Cost() int          { return 2 }
-func (*lookupIndex) IsUnique() bool     { return true }
-func (*lookupIndex) IsFunctional() bool { return false }
+func (v *lookupIndex) String() string { return v.name }
+func (*lookupIndex) Cost() int        { return 2 }
+func (*lookupIndex) IsUnique() bool   { return true }
 func (*lookupIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
@@ -82,10 +80,9 @@ var _ vindexes.Lookup = (*lookupIndex)(nil)
 // multiIndex satisfies Lookup, NonUnique.
 type multiIndex struct{ name string }
 
-func (v *multiIndex) String() string   { return v.name }
-func (*multiIndex) Cost() int          { return 3 }
-func (*multiIndex) IsUnique() bool     { return false }
-func (*multiIndex) IsFunctional() bool { return false }
+func (v *multiIndex) String() string { return v.name }
+func (*multiIndex) Cost() int        { return 3 }
+func (*multiIndex) IsUnique() bool   { return false }
 func (*multiIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
@@ -108,10 +105,9 @@ var _ vindexes.Lookup = (*multiIndex)(nil)
 // costlyIndex satisfies Lookup, NonUnique.
 type costlyIndex struct{ name string }
 
-func (v *costlyIndex) String() string   { return v.name }
-func (*costlyIndex) Cost() int          { return 10 }
-func (*costlyIndex) IsUnique() bool     { return false }
-func (*costlyIndex) IsFunctional() bool { return false }
+func (v *costlyIndex) String() string { return v.name }
+func (*costlyIndex) Cost() int        { return 10 }
+func (*costlyIndex) IsUnique() bool   { return false }
 func (*costlyIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
@@ -157,6 +153,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "unsupported_cases.txt", vschema)
 	testFile(t, "vindex_func_cases.txt", vschema)
 	testFile(t, "wireup_cases.txt", vschema)
+	testFile(t, "memory_sort_cases.txt", vschema)
 }
 
 func TestOne(t *testing.T) {

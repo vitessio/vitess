@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ function msg() {
 }
 
 PYLINT=${PYLINT:-/usr/bin/gpylint}
-pylint_script=$VTTOP/tools/pylint.sh
+pylint_script=$VTROOT/tools/pylint.sh
 
 # This script does not handle file names that contain spaces.
 pyfiles=$(git diff --cached --name-only --diff-filter=ACM | grep '.*\.py$' | grep -v '^py/vtproto/')
@@ -70,7 +70,7 @@ if [[ $? -eq 0 ]]; then
   do
     echo
     msg "Press enter to show the warnings for $pyfile:"
-    read -p "  \$VTTOP/tools/pylint.sh $pyfile"
+    read -p "  \$VTROOT/tools/pylint.sh $pyfile"
     $pylint_script $pyfile
   done
   read -r -p \

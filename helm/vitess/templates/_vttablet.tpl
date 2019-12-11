@@ -195,6 +195,7 @@ spec:
 
       # remove the old socket file if it is still around
       rm -f /vtdataroot/tabletdata/mysql.sock
+      rm -f /vtdataroot/tabletdata/mysql.sock.lock
 
 {{- end -}}
 
@@ -533,7 +534,7 @@ spec:
 {{ define "cont-logrotate" }}
 
 - name: logrotate
-  image: vitess/logrotate:helm-1.0.6
+  image: vitess/logrotate:helm-1.0.7-5
   imagePullPolicy: IfNotPresent
   volumeMounts:
     - name: vtdataroot
@@ -547,7 +548,7 @@ spec:
 {{ define "cont-mysql-errorlog" }}
 
 - name: error-log
-  image: vitess/logtail:helm-1.0.6
+  image: vitess/logtail:helm-1.0.7-5
   imagePullPolicy: IfNotPresent
 
   env:
@@ -565,7 +566,7 @@ spec:
 {{ define "cont-mysql-slowlog" }}
 
 - name: slow-log
-  image: vitess/logtail:helm-1.0.6
+  image: vitess/logtail:helm-1.0.7-5
   imagePullPolicy: IfNotPresent
 
   env:
@@ -583,7 +584,7 @@ spec:
 {{ define "cont-mysql-generallog" }}
 
 - name: general-log
-  image: vitess/logtail:helm-1.0.6
+  image: vitess/logtail:helm-1.0.7-5
   imagePullPolicy: IfNotPresent
 
   env:

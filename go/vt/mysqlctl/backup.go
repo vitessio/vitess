@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package mysqlctl
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,7 +29,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -42,11 +42,13 @@ const (
 	backupInnodbLogGroupHomeDir = "InnoDBLog"
 	backupData                  = "Data"
 
-	// the manifest file name
-	backupManifest = "MANIFEST"
+	// backupManifestFileName is the MANIFEST file name within a backup.
+	backupManifestFileName = "MANIFEST"
 	// RestoreState is the name of the sentinel file used to detect whether a previous restore
 	// terminated abnormally
 	RestoreState = "restore_in_progress"
+	// BackupTimestampFormat is the format in which we save BackupTime and FinishedTime
+	BackupTimestampFormat = "2006-01-02.150405"
 )
 
 const (
@@ -90,14 +92,17 @@ var (
 // - uses the BackupStorage service to store a new backup
 // - shuts down Mysqld during the backup
 // - remember if we were replicating, restore the exact same state
-func Backup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.Logger, dir, name string, backupConcurrency int, hookExtraEnv map[string]string) error {
+func Backup(ctx context.Context, params BackupParams) error {
+
+	backupDir := GetBackupDir(params.Keyspace, params.Shard)
+	name := fmt.Sprintf("%v.%v", params.BackupTime.UTC().Format(BackupTimestampFormat), params.TabletAlias)
 	// Start the backup with the BackupStorage.
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
 		return vterrors.Wrap(err, "unable to get backup storage")
 	}
 	defer bs.Close()
-	bh, err := bs.StartBackup(ctx, dir, name)
+	bh, err := bs.StartBackup(ctx, backupDir, name)
 	if err != nil {
 		return vterrors.Wrap(err, "StartBackup failed")
 	}
@@ -108,7 +113,8 @@ func Backup(ctx context.Context, cnf *Mycnf, mysqld MysqlDaemon, logger logutil.
 	}
 
 	// Take the backup, and either AbortBackup or EndBackup.
-	usable, err := be.ExecuteBackup(ctx, cnf, mysqld, logger, bh, backupConcurrency, hookExtraEnv)
+	usable, err := be.ExecuteBackup(ctx, params, bh)
+	logger := params.Logger
 	var finishErr error
 	if usable {
 		finishErr = bh.EndBackup(ctx)
@@ -215,81 +221,81 @@ func removeExistingFiles(cnf *Mycnf) error {
 // Restore is the main entry point for backup restore.  If there is no
 // appropriate backup on the BackupStorage, Restore logs an error
 // and returns ErrNoBackup. Any other error is returned.
-func Restore(
-	ctx context.Context,
-	cnf *Mycnf,
-	mysqld MysqlDaemon,
-	dir string,
-	restoreConcurrency int,
-	hookExtraEnv map[string]string,
-	localMetadata map[string]string,
-	logger logutil.Logger,
-	deleteBeforeRestore bool,
-	dbName string) (mysql.Position, error) {
+func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error) {
 
-	rval := mysql.Position{}
-
-	if !deleteBeforeRestore {
-		logger.Infof("Restore: Checking if a restore is in progress")
-		if !RestoreWasInterrupted(cnf) {
-			logger.Infof("Restore: No %v file found, checking no existing data is present", RestoreState)
+	if !params.DeleteBeforeRestore {
+		params.Logger.Infof("Restore: Checking if a restore is in progress")
+		if !RestoreWasInterrupted(params.Cnf) {
+			params.Logger.Infof("Restore: No %v file found, checking no existing data is present", RestoreState)
 			// Wait for mysqld to be ready, in case it was launched in parallel with us.
-			if err := mysqld.Wait(ctx, cnf); err != nil {
-				return mysql.Position{}, err
+			if err := params.Mysqld.Wait(ctx, params.Cnf); err != nil {
+				return nil, err
 			}
 
-			ok, err := checkNoDB(ctx, mysqld, dbName)
+			ok, err := checkNoDB(ctx, params.Mysqld, params.DbName)
 			if err != nil {
-				return mysql.Position{}, err
+				return nil, err
 			}
 			if !ok {
-				logger.Infof("Auto-restore is enabled, but mysqld already contains data. Assuming vttablet was just restarted.")
-				if err = PopulateMetadataTables(mysqld, localMetadata, dbName); err == nil {
+				params.Logger.Infof("Auto-restore is enabled, but mysqld already contains data. Assuming vttablet was just restarted.")
+				if err = PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName); err == nil {
 					err = ErrExistingDB
 				}
-				return mysql.Position{}, err
+				return nil, err
 			}
 		}
 	}
 
 	// find the right backup handle: most recent one, with a MANIFEST
-	logger.Infof("Restore: looking for a suitable backup to restore")
+	params.Logger.Infof("Restore: looking for a suitable backup to restore")
 	bs, err := backupstorage.GetBackupStorage()
 	if err != nil {
-		return mysql.Position{}, err
+		return nil, err
 	}
 	defer bs.Close()
 
-	bhs, err := bs.ListBackups(ctx, dir)
+	// Backups are stored in a directory structure that starts with
+	// <keyspace>/<shard>
+	backupDir := GetBackupDir(params.Keyspace, params.Shard)
+	bhs, err := bs.ListBackups(ctx, backupDir)
 	if err != nil {
-		return mysql.Position{}, vterrors.Wrap(err, "ListBackups failed")
+		return nil, vterrors.Wrap(err, "ListBackups failed")
 	}
 
 	if len(bhs) == 0 {
 		// There are no backups (not even broken/incomplete ones).
-		logger.Errorf("no backup to restore on BackupStorage for directory %v. Starting up empty.", dir)
+		params.Logger.Errorf("no backup to restore on BackupStorage for directory %v. Starting up empty.", backupDir)
 		// Wait for mysqld to be ready, in case it was launched in parallel with us.
-		if err = mysqld.Wait(ctx, cnf); err != nil {
-			logger.Errorf("mysqld is not running: %v", err)
-			return mysql.Position{}, err
+		if err = params.Mysqld.Wait(ctx, params.Cnf); err != nil {
+			params.Logger.Errorf("mysqld is not running: %v", err)
+			return nil, err
 		}
 		// Since this is an empty database make sure we start replication at the beginning
-		if err = mysqld.ResetReplication(ctx); err == nil {
-			err = ErrNoBackup
+		if err := params.Mysqld.ResetReplication(ctx); err != nil {
+			params.Logger.Errorf("error resetting slave replication: %v. Continuing", err)
 		}
 
-		if err2 := PopulateMetadataTables(mysqld, localMetadata, dbName); err2 == nil {
-			err = ErrNoBackup
+		if err := PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName); err != nil {
+			params.Logger.Errorf("error populating metadata tables: %v. Continuing", err)
+
 		}
-		return mysql.Position{}, err
+		// Always return ErrNoBackup
+		return nil, ErrNoBackup
 	}
 
-	be, err := GetBackupEngine()
+	bh, err := FindBackupToRestore(ctx, params, bhs)
 	if err != nil {
-		return mysql.Position{}, vterrors.Wrap(err, "Failed to find backup engine")
+		return nil, err
 	}
-	if rval, err = be.ExecuteRestore(ctx, cnf, mysqld, logger, dir, bhs, restoreConcurrency, hookExtraEnv); err != nil {
-		return rval, err
+
+	re, err := GetRestoreEngine(ctx, bh)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "Failed to find restore engine")
+	}
+
+	manifest, err := re.ExecuteRestore(ctx, params, bh)
+	if err != nil {
+		return nil, err
 	}
 
 	// mysqld needs to be running in order for mysql_upgrade to work.
@@ -299,41 +305,45 @@ func Restore(
 	// is executed. And since with --skip-grant-tables anyone can connect to MySQL
 	// without password, we are passing --skip-networking to greatly reduce the set
 	// of those who can connect.
-	logger.Infof("Restore: starting mysqld for mysql_upgrade")
+	params.Logger.Infof("Restore: starting mysqld for mysql_upgrade")
 	// Note Start will use dba user for waiting, this is fine, it will be allowed.
-	err = mysqld.Start(context.Background(), cnf, "--skip-grant-tables", "--skip-networking")
+	err = params.Mysqld.Start(context.Background(), params.Cnf, "--skip-grant-tables", "--skip-networking")
 	if err != nil {
-		return mysql.Position{}, err
+		return nil, err
 	}
 
-	logger.Infof("Restore: running mysql_upgrade")
-	if err := mysqld.RunMysqlUpgrade(); err != nil {
-		return mysql.Position{}, vterrors.Wrap(err, "mysql_upgrade failed")
+	params.Logger.Infof("Restore: running mysql_upgrade")
+	if err := params.Mysqld.RunMysqlUpgrade(); err != nil {
+		return nil, vterrors.Wrap(err, "mysql_upgrade failed")
 	}
+
+	// Add backupTime and restorePosition to LocalMetadata
+	params.LocalMetadata["RestoredBackupTime"] = manifest.BackupTime
+	params.LocalMetadata["RestorePosition"] = mysql.EncodePosition(manifest.Position)
 
 	// Populate local_metadata before starting without --skip-networking,
 	// so it's there before we start announcing ourselves.
-	logger.Infof("Restore: populating local_metadata")
-	err = PopulateMetadataTables(mysqld, localMetadata, dbName)
+	params.Logger.Infof("Restore: populating local_metadata")
+	err = PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName)
 	if err != nil {
-		return mysql.Position{}, err
+		return nil, err
 	}
 
 	// The MySQL manual recommends restarting mysqld after running mysql_upgrade,
 	// so that any changes made to system tables take effect.
-	logger.Infof("Restore: restarting mysqld after mysql_upgrade")
-	err = mysqld.Shutdown(context.Background(), cnf, true)
+	params.Logger.Infof("Restore: restarting mysqld after mysql_upgrade")
+	err = params.Mysqld.Shutdown(context.Background(), params.Cnf, true)
 	if err != nil {
-		return mysql.Position{}, err
+		return nil, err
 	}
-	err = mysqld.Start(context.Background(), cnf)
+	err = params.Mysqld.Start(context.Background(), params.Cnf)
 	if err != nil {
-		return mysql.Position{}, err
+		return nil, err
 	}
 
-	if err = removeStateFile(cnf); err != nil {
-		return mysql.Position{}, err
+	if err = removeStateFile(params.Cnf); err != nil {
+		return nil, err
 	}
 
-	return rval, nil
+	return manifest, nil
 }

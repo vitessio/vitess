@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -662,9 +662,10 @@ type Set struct {
 
 // Set.Scope or Show.Scope
 const (
-	SessionStr  = "session"
-	GlobalStr   = "global"
-	ImplicitStr = ""
+	SessionStr        = "session"
+	GlobalStr         = "global"
+	VitessMetadataStr = "vitess_metadata"
+	ImplicitStr       = ""
 )
 
 // Format formats the node.
@@ -759,6 +760,9 @@ type DDL struct {
 
 	// VindexCols is set for AddColVindexStr.
 	VindexCols []ColIdent
+
+	// AutoIncSpec is set for AddAutoIncStr.
+	AutoIncSpec *AutoIncSpec
 }
 
 // DDL strings.
@@ -776,6 +780,8 @@ const (
 	DropVschemaTableStr = "drop vschema table"
 	AddColVindexStr     = "on table add vindex"
 	DropColVindexStr    = "on table drop vindex"
+	AddSequenceStr      = "add sequence"
+	AddAutoIncStr       = "add auto_increment"
 
 	// Vindex DDL param to specify the owner of a vindex
 	VindexOwnerStr = "owner"
@@ -835,9 +841,9 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 	case FlushStr:
 		buf.Myprintf("%s", node.Action)
 	case CreateVindexStr:
-		buf.Myprintf("alter vschema create vindex %v %v", node.VindexSpec.Name, node.VindexSpec)
+		buf.Myprintf("alter vschema create vindex %v %v", node.Table, node.VindexSpec)
 	case DropVindexStr:
-		buf.Myprintf("alter vschema drop vindex %v", node.VindexSpec.Name)
+		buf.Myprintf("alter vschema drop vindex %v", node.Table)
 	case AddVschemaTableStr:
 		buf.Myprintf("alter vschema add table %v", node.Table)
 	case DropVschemaTableStr:
@@ -857,6 +863,10 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		}
 	case DropColVindexStr:
 		buf.Myprintf("alter vschema on %v drop vindex %v", node.Table, node.VindexSpec.Name)
+	case AddSequenceStr:
+		buf.Myprintf("alter vschema add sequence %v", node.Table)
+	case AddAutoIncStr:
+		buf.Myprintf("alter vschema on %v add auto_increment %v", node.Table, node.AutoIncSpec)
 	default:
 		buf.Myprintf("%s table %v", node.Action, node.Table)
 	}
@@ -1396,6 +1406,23 @@ type VindexSpec struct {
 	Name   ColIdent
 	Type   ColIdent
 	Params []VindexParam
+}
+
+// AutoIncSpec defines and autoincrement value for a ADD AUTO_INCREMENT statement
+type AutoIncSpec struct {
+	Column   ColIdent
+	Sequence TableName
+}
+
+// Format formats the node.
+func (node *AutoIncSpec) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%v ", node.Column)
+	buf.Myprintf("using %v", node.Sequence)
+}
+
+func (node *AutoIncSpec) walkSubtree(visit Visit) error {
+	err := Walk(visit, node.Sequence, node.Column)
+	return err
 }
 
 // ParseParams parses the vindex parameter list, pulling out the special-case
@@ -2026,7 +2053,7 @@ func (node TableName) walkSubtree(visit Visit) error {
 
 // IsEmpty returns true if TableName is nil or empty.
 func (node TableName) IsEmpty() bool {
-	// If Name is empty, Qualifer is also empty.
+	// If Name is empty, Qualifier is also empty.
 	return node.Name.IsEmpty()
 }
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -242,7 +242,7 @@ func (res *Resolver) ExecuteBatch(
 // one shard since it cannot merge-sort the results to guarantee ordering of
 // response which is needed for checkpointing.
 // Note we guarantee the callback will not be called concurrently
-// by mutiple go routines.
+// by multiple go routines.
 func (res *Resolver) StreamExecute(
 	ctx context.Context,
 	sql string,
@@ -449,6 +449,14 @@ func (res *Resolver) vstreamOneShard(ctx context.Context, keyspace, shard string
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected number or shards: %v", rss)
 		}
 		err = rss[0].QueryService.VStream(ctx, rss[0].Target, startPos, filter, func(events []*binlogdatapb.VEvent) error {
+			// Remove all heartbeat events for now.
+			// Otherwise they can accumulate indefinitely if there are no real events.
+			// TODO(sougou): figure out a model for this.
+			for i := 0; i < len(events); i++ {
+				if events[i].Type == binlogdatapb.VEventType_HEARTBEAT {
+					events = append(events[:i], events[i+1:]...)
+				}
+			}
 			if len(events) == 0 {
 				return nil
 			}

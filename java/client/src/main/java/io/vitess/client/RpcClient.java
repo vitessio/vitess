@@ -1,12 +1,12 @@
 /*
- * Copyright 2017 Google Inc.
- *
+ * Copyright 2019 The Vitess Authors.
+
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+
  *     http://www.apache.org/licenses/LICENSE-2.0
- *
+
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -48,6 +48,8 @@ import io.vitess.proto.Vtgate.StreamExecuteKeyRangesRequest;
 import io.vitess.proto.Vtgate.StreamExecuteKeyspaceIdsRequest;
 import io.vitess.proto.Vtgate.StreamExecuteRequest;
 import io.vitess.proto.Vtgate.StreamExecuteShardsRequest;
+import io.vitess.proto.Vtgate.VStreamRequest;
+import io.vitess.proto.Vtgate.VStreamResponse;
 
 import java.io.Closeable;
 import java.sql.SQLException;
@@ -245,4 +247,16 @@ public interface RpcClient extends Closeable {
    */
   ListenableFuture<GetSrvKeyspaceResponse> getSrvKeyspace(
       Context ctx, GetSrvKeyspaceRequest request) throws SQLException;
+
+  /**
+   * Starts streaming the vstream binlog events.
+   *
+   * Stream begins at the specified VGTID.
+   *
+   * <p>See the
+   * <a href="https://github.com/vitessio/vitess/blob/master/proto/vtgateservice.proto">proto</a>
+   * definition for canonical documentation on this VTGate API.
+   */
+  StreamIterator<VStreamResponse> getVStream(
+      Context ctx, VStreamRequest vstreamRequest) throws SQLException;
 }

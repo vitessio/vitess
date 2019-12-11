@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -269,7 +269,7 @@ func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altere
 		}
 		if me.managers[name] != nil {
 			tabletenv.InternalErrors.Add("Messages", 1)
-			log.Errorf("Newly created table alread exists in messages: %s", name)
+			log.Errorf("Newly created table already exists in messages: %s", name)
 			continue
 		}
 		mm := newMessageManager(me.tsv, t, me.conns, me.postponeSema)

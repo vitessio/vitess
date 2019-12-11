@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -779,6 +779,65 @@ func TestResolverVStreamRetry(t *testing.T) {
 		t.Errorf("count: %d, want 2", count)
 	}
 	wantErr := "final error"
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
+	}
+}
+
+func TestResolverVStreamHeartbeat(t *testing.T) {
+	name := "TestResolverVStream"
+	_ = createSandbox(name)
+	hc := discovery.NewFakeHealthCheck()
+	res := newTestResolver(hc, new(sandboxTopo), "aa")
+	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
+
+	send0 := []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_HEARTBEAT},
+	}
+	sbc0.AddVStreamEvents(send0, nil)
+
+	send1 := []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_HEARTBEAT},
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid01"},
+		{Type: binlogdatapb.VEventType_FIELD, FieldEvent: &binlogdatapb.FieldEvent{TableName: "f0"}},
+		{Type: binlogdatapb.VEventType_HEARTBEAT},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "t0"}},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}
+	wantvgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: name,
+			Shard:    "-20",
+			Gtid:     "gtid01",
+		}},
+	}
+	want := &binlogdatapb.VStreamResponse{Events: []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_VGTID, Vgtid: wantvgtid},
+		{Type: binlogdatapb.VEventType_FIELD, FieldEvent: &binlogdatapb.FieldEvent{TableName: "TestResolverVStream.f0"}},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "TestResolverVStream.t0"}},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}
+	sbc0.AddVStreamEvents(send1, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: name,
+			Shard:    "-20",
+			Gtid:     "pos",
+		}},
+	}
+	err := res.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, func(events []*binlogdatapb.VEvent) error {
+		got := &binlogdatapb.VStreamResponse{Events: events}
+		if !proto.Equal(got, want) {
+			t.Fatalf("vstream:\n%v, want\n%v", got, want)
+		}
+		cancel()
+		return nil
+	})
+	wantErr := "context canceled"
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
 	}

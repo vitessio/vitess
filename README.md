@@ -30,7 +30,7 @@ Ask questions in the
 discussion forum.
 
 For topics that are better discussed live, please join the
-[Vitess Slack](https://bit.ly/vitess-slack) workspace.
+[Vitess Slack](https://vitess.io/slack) workspace.
 
 Subscribe to
 [vitess-announce@googlegroups.com](https://groups.google.com/forum/#!forum/vitess-announce)

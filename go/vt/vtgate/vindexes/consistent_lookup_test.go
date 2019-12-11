@@ -55,9 +55,6 @@ func TestConsistentLookupInfo(t *testing.T) {
 	if lookup.IsUnique() {
 		t.Errorf("IsUnique(): %v, want false", lookup.IsUnique())
 	}
-	if lookup.IsFunctional() {
-		t.Errorf("IsFunctional(): %v, want false", lookup.IsFunctional())
-	}
 }
 
 func TestConsistentLookupUniqueInfo(t *testing.T) {
@@ -70,9 +67,6 @@ func TestConsistentLookupUniqueInfo(t *testing.T) {
 	}
 	if !lookup.IsUnique() {
 		t.Errorf("IsUnique(): %v, want true", lookup.IsUnique())
-	}
-	if lookup.IsFunctional() {
-		t.Errorf("IsFunctional(): %v, want false", lookup.IsFunctional())
 	}
 }
 
@@ -178,8 +172,8 @@ func TestConsistentLookupVerify(t *testing.T) {
 		t.Error(err)
 	}
 	vc.verifyLog(t, []string{
-		"Execute select fromc1 from t where fromc1 = :fromc1 and toc = :toc [{fromc1 1} {toc test1}] false",
-		"Execute select fromc1 from t where fromc1 = :fromc1 and toc = :toc [{fromc1 2} {toc test2}] false",
+		"ExecutePre select fromc1 from t where fromc1 = :fromc1 and toc = :toc [{fromc1 1} {toc test1}] false",
+		"ExecutePre select fromc1 from t where fromc1 = :fromc1 and toc = :toc [{fromc1 2} {toc test2}] false",
 	})
 
 	// Test query fail.
@@ -418,7 +412,7 @@ func TestConsistentLookupNoUpdate(t *testing.T) {
 	vc.verifyLog(t, []string{})
 }
 
-func createConsistentLookup(t *testing.T, name string) Vindex {
+func createConsistentLookup(t *testing.T, name string) SingleColumn {
 	t.Helper()
 	l, err := CreateVindex(name, name, map[string]string{
 		"table": "t",
@@ -435,7 +429,7 @@ func createConsistentLookup(t *testing.T, name string) Vindex {
 	if err := l.(WantOwnerInfo).SetOwnerInfo("ks", "t1", cols); err != nil {
 		t.Fatal(err)
 	}
-	return l
+	return l.(SingleColumn)
 }
 
 type loggingVCursor struct {
@@ -499,7 +493,7 @@ func (vc *loggingVCursor) verifyLog(t *testing.T, want []string) {
 			t.Fatalf("index exceeded: %v", vc.log[i:])
 		}
 		if got != want[i] {
-			t.Errorf("log(%d):\n%s, want\n%s", i, got, want[i])
+			t.Errorf("log(%d):\n%q, want\n%q", i, got, want[i])
 		}
 	}
 	if len(want) > len(vc.log) {

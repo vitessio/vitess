@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -94,7 +94,7 @@ function drawQPSChart() {
           	var idx = qps[planTypes[j]].length - i - 1;
             datum.push(+qps[planTypes[j]][idx].toFixed(2));
           } else {
-            // Assume 0.0 QPS for older, non-existant data points.
+            // Assume 0.0 QPS for older, non-existent data points.
             datum.push(0);
           }
         }

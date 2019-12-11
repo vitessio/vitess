@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ var (
 
 func initProxy(dbcfgs *dbconfigs.DBConfigs) (*tabletserver.TabletServer, error) {
 	target.Keyspace = *targetKeyspace
-	log.Infof("initalizing vtqueryserver.Proxy for target %s", target.Keyspace)
+	log.Infof("initializing vtqueryserver.Proxy for target %s", target.Keyspace)
 
 	// creates and registers the query service
 	qs := tabletserver.NewTabletServerWithNilTopoServer(tabletenv.Config)

@@ -7,7 +7,6 @@ from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
 from google.protobuf import reflection as _reflection
 from google.protobuf import symbol_database as _symbol_database
-from google.protobuf import descriptor_pb2
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
@@ -20,6 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='vtctldata.proto',
   package='vtctldata',
   syntax='proto3',
+  serialized_options=_b('Z&vitess.io/vitess/go/vt/proto/vtctldata'),
   serialized_pb=_b('\n\x0fvtctldata.proto\x12\tvtctldata\x1a\rlogutil.proto\"B\n\x1a\x45xecuteVtctlCommandRequest\x12\x0c\n\x04\x61rgs\x18\x01 \x03(\t\x12\x16\n\x0e\x61\x63tion_timeout\x18\x02 \x01(\x03\"<\n\x1b\x45xecuteVtctlCommandResponse\x12\x1d\n\x05\x65vent\x18\x01 \x01(\x0b\x32\x0e.logutil.EventB(Z&vitess.io/vitess/go/vt/proto/vtctldatab\x06proto3')
   ,
   dependencies=[logutil__pb2.DESCRIPTOR,])
@@ -40,21 +40,21 @@ _EXECUTEVTCTLCOMMANDREQUEST = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
       name='action_timeout', full_name='vtctldata.ExecuteVtctlCommandRequest.action_timeout', index=1,
       number=2, type=3, cpp_type=2, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
   nested_types=[],
   enum_types=[
   ],
-  options=None,
+  serialized_options=None,
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
@@ -78,14 +78,14 @@ _EXECUTEVTCTLCOMMANDRESPONSE = _descriptor.Descriptor(
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      options=None, file=DESCRIPTOR),
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
   nested_types=[],
   enum_types=[
   ],
-  options=None,
+  serialized_options=None,
   is_extendable=False,
   syntax='proto3',
   extension_ranges=[],
@@ -115,6 +115,5 @@ ExecuteVtctlCommandResponse = _reflection.GeneratedProtocolMessageType('ExecuteV
 _sym_db.RegisterMessage(ExecuteVtctlCommandResponse)
 
 
-DESCRIPTOR.has_options = True
-DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), _b('Z&vitess.io/vitess/go/vt/proto/vtctldata'))
+DESCRIPTOR._options = None
 # @@protoc_insertion_point(module_scope)

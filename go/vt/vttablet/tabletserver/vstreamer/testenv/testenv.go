@@ -92,7 +92,7 @@ func Init() (*Env, error) {
 				},
 			},
 		},
-		ExtraMyCnf: []string{path.Join(os.Getenv("VTTOP"), "config/mycnf/rbr.cnf")},
+		ExtraMyCnf: []string{path.Join(os.Getenv("VTROOT"), "config/mycnf/rbr.cnf")},
 		OnlyMySQL:  true,
 	}
 	te.cluster = &vttest.LocalCluster{
@@ -106,7 +106,7 @@ func Init() (*Env, error) {
 	te.Dbcfgs = dbconfigs.NewTestDBConfigs(te.cluster.MySQLConnParams(), te.cluster.MySQLAppDebugConnParams(), te.cluster.DbName())
 	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
 	te.SchemaEngine = schema.NewEngine(checker{}, tabletenv.DefaultQsConfig)
-	te.SchemaEngine.InitDBConfig(te.Dbcfgs)
+	te.SchemaEngine.InitDBConfig(te.Dbcfgs.DbaWithDB())
 
 	// The first vschema should not be empty. Leads to Node not found error.
 	// TODO(sougou): need to fix the bug.

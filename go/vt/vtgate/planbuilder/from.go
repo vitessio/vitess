@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -79,7 +79,7 @@ func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr) erro
 	case *sqlparser.JoinTableExpr:
 		return pb.processJoin(tableExpr)
 	}
-	panic(fmt.Sprintf("BUG: unexpected table expression type: %T", tableExpr))
+	return fmt.Errorf("BUG: unexpected table expression type: %T", tableExpr)
 }
 
 // processAliasedTable produces a builder subtree for the given AliasedTableExpr.
@@ -105,7 +105,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 				return err
 			}
 		default:
-			panic(fmt.Sprintf("BUG: unexpected SELECT type: %T", stmt))
+			return fmt.Errorf("BUG: unexpected SELECT type: %T", stmt)
 		}
 
 		subroute, ok := spb.bldr.(*route)
@@ -168,7 +168,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		pb.bldr, pb.st = rb, st
 		return nil
 	}
-	panic(fmt.Sprintf("BUG: unexpected table expression type: %T", tableExpr.Expr))
+	return fmt.Errorf("BUG: unexpected table expression type: %T", tableExpr.Expr)
 }
 
 // buildTablePrimitive builds a primitive based on the table name.
@@ -195,7 +195,11 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		return err
 	}
 	if vindex != nil {
-		pb.bldr, pb.st = newVindexFunc(alias, vindex)
+		single, ok := vindex.(vindexes.SingleColumn)
+		if !ok {
+			return fmt.Errorf("multi-column vindexes not supported")
+		}
+		pb.bldr, pb.st = newVindexFunc(alias, single)
 		return nil
 	}
 
@@ -242,11 +246,15 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		default:
 			// Pinned tables have their keyspace ids already assigned.
 			// Use the Binary vindex, which is the identity function
-			// for keyspace id. Currently only dual tables are pinned.
+			// for keyspace id.
 			eroute = engine.NewSimpleRoute(engine.SelectEqualUnique, vst.Keyspace)
-			eroute.Vindex, _ = vindexes.NewBinary("binary", nil)
+			vindex, _ = vindexes.NewBinary("binary", nil)
+			eroute.Vindex, _ = vindex.(vindexes.SingleColumn)
 			eroute.Values = []sqltypes.PlanValue{{Value: sqltypes.MakeTrusted(sqltypes.VarBinary, vst.Pinned)}}
 		}
+		// set table name into route
+		eroute.TableName = vst.Name.String()
+
 		rb.routeOptions = append(rb.routeOptions, newRouteOption(rb, vst, sub, vindexMaps[i], eroute))
 	}
 	return nil

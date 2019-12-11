@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"time"
 
 	"golang.org/x/net/context"
@@ -27,12 +28,9 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type vplayer struct {
@@ -55,6 +53,8 @@ type vplayer struct {
 	lastTimestampNs int64
 	// timeOffsetNs keeps track of the clock difference with respect to source tablet.
 	timeOffsetNs int64
+	// canAcceptStmtEvents set to true if the current player can accept events in statement mode. Only true for filters that are match all.
+	canAcceptStmtEvents bool
 }
 
 func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result, pausePos mysql.Position) *vplayer {
@@ -90,6 +90,15 @@ func (vp *vplayer) play(ctx context.Context) error {
 	}
 	vp.replicatorPlan = plan
 
+	// We can't run in statement mode if there are filters defined.
+	vp.canAcceptStmtEvents = true
+	for _, rule := range vp.vr.source.Filter.Rules {
+		if rule.Filter != "" || rule.Match != "/.*" {
+			vp.canAcceptStmtEvents = false
+			break
+		}
+	}
+
 	if err := vp.fetchAndApply(ctx); err != nil {
 		msg := err.Error()
 		vp.vr.stats.History.Add(&binlogplayer.StatsHistoryRecord{
@@ -104,28 +113,23 @@ func (vp *vplayer) play(ctx context.Context) error {
 	return nil
 }
 
-func (vp *vplayer) fetchAndApply(ctx context.Context) error {
-	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, source: %v, filter: %v", vp.vr.id, vp.startPos, vp.stopPos, vp.vr.sourceTablet, vp.vr.source)
+func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
+	log.Infof("Starting VReplication player id: %v, startPos: %v, stop: %v, filter: %v", vp.vr.id, vp.startPos, vp.stopPos, vp.vr.source)
 
-	vsClient, err := tabletconn.GetDialer()(vp.vr.sourceTablet, grpcclient.FailFast(false))
+	err = vp.vr.sourceVStreamer.Open(ctx)
 	if err != nil {
-		return fmt.Errorf("error dialing tablet: %v", err)
+		return fmt.Errorf("error creating vstreamer client: %v", err)
 	}
-	defer vsClient.Close(ctx)
+	defer vp.vr.sourceVStreamer.Close(ctx)
+
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	relay := newRelayLog(ctx, relayLogMaxItems, relayLogMaxSize)
 
-	target := &querypb.Target{
-		Keyspace:   vp.vr.sourceTablet.Keyspace,
-		Shard:      vp.vr.sourceTablet.Shard,
-		TabletType: vp.vr.sourceTablet.Type,
-	}
-	log.Infof("Sending vstream command: %v", vp.replicatorPlan.VStreamFilter)
 	streamErr := make(chan error, 1)
 	go func() {
-		streamErr <- vsClient.VStream(ctx, target, mysql.EncodePosition(vp.startPos), vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
+		streamErr <- vp.vr.sourceVStreamer.VStream(ctx, mysql.EncodePosition(vp.startPos), vp.replicatorPlan.VStreamFilter, func(events []*binlogdatapb.VEvent) error {
 			return relay.Send(events)
 		})
 	}()
@@ -142,8 +146,10 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) error {
 			cancel()
 			<-streamErr
 		}()
+
 		// If the apply thread ends with io.EOF, it means either the Engine
-		// is shutting down and canceled the context, or stop position was reached.
+		// is shutting down and canceled the context, or stop position was reached,
+		// or a journal event was encountered.
 		// If so, we return nil which will cause the controller to not retry.
 		if err == io.EOF {
 			return nil
@@ -170,20 +176,25 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) error {
 	}
 }
 
+func (vp *vplayer) applyStmtEvent(ctx context.Context, event *binlogdatapb.VEvent) error {
+	if vp.canAcceptStmtEvents {
+		_, err := vp.vr.dbClient.ExecuteWithRetry(ctx, event.Dml)
+		return err
+	}
+	return fmt.Errorf("filter rules are not supported for SBR replication: %v", vp.vr.source.Filter.GetRules())
+}
+
 func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.RowEvent) error {
 	tplan := vp.tablePlans[rowEvent.TableName]
 	if tplan == nil {
 		return fmt.Errorf("unexpected event on table %s", rowEvent.TableName)
 	}
 	for _, change := range rowEvent.RowChanges {
-		queries, err := tplan.generateStatements(change)
+		_, err := tplan.applyChange(change, func(sql string) (*sqltypes.Result, error) {
+			return vp.vr.dbClient.ExecuteWithRetry(ctx, sql)
+		})
 		if err != nil {
 			return err
-		}
-		for _, query := range queries {
-			if err := vp.exec(ctx, query); err != nil {
-				return err
-			}
 		}
 	}
 	return nil
@@ -191,14 +202,14 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 
 func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts)
-	if _, err := vp.vr.dbClient.ExecuteFetch(update, 0); err != nil {
+	if _, err := vp.vr.dbClient.Execute(update); err != nil {
 		vp.vr.dbClient.Rollback()
 		return false, fmt.Errorf("error %v updating position", err)
 	}
 	vp.unsavedEvent = nil
 	vp.timeLastSaved = time.Now()
 	vp.vr.stats.SetLastPosition(vp.pos)
-	posReached = !vp.stopPos.IsZero() && vp.pos.Equal(vp.stopPos)
+	posReached = !vp.stopPos.IsZero() && vp.pos.AtLeast(vp.stopPos)
 	if posReached {
 		if vp.saveStop {
 			if err := vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
@@ -209,31 +220,11 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	return posReached, nil
 }
 
-func (vp *vplayer) exec(ctx context.Context, sql string) error {
-	vp.vr.stats.Timings.Record("query", time.Now())
-	_, err := vp.vr.dbClient.ExecuteFetch(sql, 0)
-	for err != nil {
-		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERLockDeadlock || sqlErr.Number() == mysql.ERLockWaitTimeout {
-			log.Infof("retryable error: %v, waiting for %v and retrying", sqlErr, dbLockRetryDelay)
-			if err := vp.vr.dbClient.Rollback(); err != nil {
-				return err
-			}
-			time.Sleep(dbLockRetryDelay)
-			// Check context here. Otherwise this can become an infinite loop.
-			select {
-			case <-ctx.Done():
-				return io.EOF
-			default:
-			}
-			err = vp.vr.dbClient.Retry()
-			continue
-		}
-		return err
-	}
-	return nil
-}
-
 func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
+	// If we're not running, set SecondsBehindMaster to be very high.
+	// TODO(sougou): if we also stored the time of the last event, we
+	// can estimate this value more accurately.
+	defer vp.vr.stats.SecondsBehindMaster.Set(math.MaxInt64)
 	for {
 		items, err := relay.Fetch()
 		if err != nil {
@@ -278,7 +269,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 				mustSave := false
 				switch event.Type {
 				case binlogdatapb.VEventType_COMMIT:
-					if vp.pos.Equal(vp.stopPos) {
+					if !vp.stopPos.IsZero() && vp.pos.AtLeast(vp.stopPos) {
 						mustSave = true
 						break
 					}
@@ -325,15 +316,6 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		if vp.stopPos.IsZero() {
 			return nil
 		}
-		if !vp.pos.Equal(vp.stopPos) && vp.pos.AtLeast(vp.stopPos) {
-			// Code is unreachable, but bad data can cause this to happen.
-			if vp.saveStop {
-				if err := vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("next event position %v exceeds stop pos %v, exiting without applying", vp.pos, vp.stopPos)); err != nil {
-					return err
-				}
-			}
-			return io.EOF
-		}
 	case binlogdatapb.VEventType_BEGIN:
 		// No-op: begin is called as needed.
 	case binlogdatapb.VEventType_COMMIT:
@@ -367,12 +349,31 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			return err
 		}
 		vp.tablePlans[event.FieldEvent.TableName] = tplan
+	case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE, binlogdatapb.VEventType_REPLACE:
+		// This is a player using stament based replication
+		if err := vp.vr.dbClient.Begin(); err != nil {
+			return err
+		}
+
+		if err := vp.applyStmtEvent(ctx, event); err != nil {
+			return err
+		}
 	case binlogdatapb.VEventType_ROW:
+		// This player is configured for row based replication
 		if err := vp.vr.dbClient.Begin(); err != nil {
 			return err
 		}
 		if err := vp.applyRowEvent(ctx, event.RowEvent); err != nil {
 			return err
+		}
+	case binlogdatapb.VEventType_OTHER:
+		// Just update the position.
+		posReached, err := vp.updatePos(event.Timestamp)
+		if err != nil {
+			return err
+		}
+		if posReached {
+			return io.EOF
 		}
 	case binlogdatapb.VEventType_DDL:
 		if vp.vr.dbClient.InTransaction {
@@ -403,7 +404,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			}
 			return io.EOF
 		case binlogdatapb.OnDDLAction_EXEC:
-			if err := vp.exec(ctx, event.Ddl); err != nil {
+			if _, err := vp.vr.dbClient.ExecuteWithRetry(ctx, event.Ddl); err != nil {
 				return err
 			}
 			posReached, err := vp.updatePos(event.Timestamp)
@@ -414,7 +415,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 				return io.EOF
 			}
 		case binlogdatapb.OnDDLAction_EXEC_IGNORE:
-			if err := vp.exec(ctx, event.Ddl); err != nil {
+			if _, err := vp.vr.dbClient.ExecuteWithRetry(ctx, event.Ddl); err != nil {
 				log.Infof("Ignoring error: %v for DDL: %s", err, event.Ddl)
 			}
 			posReached, err := vp.updatePos(event.Timestamp)
@@ -425,6 +426,47 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 				return io.EOF
 			}
 		}
+	case binlogdatapb.VEventType_JOURNAL:
+		// Ensure that we don't have a partial set of table matches in the journal.
+		switch event.Journal.MigrationType {
+		case binlogdatapb.MigrationType_SHARDS:
+			// All tables of the source were migrated. So, no validation needed.
+		case binlogdatapb.MigrationType_TABLES:
+			// Validate that all or none of the tables are in the journal.
+			jtables := make(map[string]bool)
+			for _, table := range event.Journal.Tables {
+				jtables[table] = true
+			}
+			found := false
+			notFound := false
+			for tableName := range vp.replicatorPlan.TablePlans {
+				if _, ok := jtables[tableName]; ok {
+					found = true
+				} else {
+					notFound = true
+				}
+			}
+			switch {
+			case found && notFound:
+				// Some were found and some were not found. We can't handle this.
+				if err := vp.vr.setState(binlogplayer.BlpStopped, "unable to handle journal event: tables were partially matched"); err != nil {
+					return err
+				}
+				return io.EOF
+			case notFound:
+				// None were found. Ignore journal.
+				return nil
+			}
+			// All were found. We must register journal.
+		}
+
+		if err := vp.vr.vre.registerJournal(event.Journal, int(vp.vr.id)); err != nil {
+			if err := vp.vr.setState(binlogplayer.BlpStopped, err.Error()); err != nil {
+				return err
+			}
+			return io.EOF
+		}
+		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
 		// No-op: heartbeat timings are calculated in outer loop.
 	}

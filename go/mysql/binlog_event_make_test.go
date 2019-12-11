@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -358,7 +358,7 @@ func TestRowsEvent(t *testing.T) {
 	// 1076895760 is 0x40302010.
 	identifies, _ := rows.StringIdentifiesForTests(tm, 0)
 	if expected := []string{"1076895760", "abc"}; !reflect.DeepEqual(identifies, expected) {
-		t.Fatalf("bad Rows idenfity, got %v expected %v", identifies, expected)
+		t.Fatalf("bad Rows identify, got %v expected %v", identifies, expected)
 	}
 	values, _ := rows.StringValuesForTests(tm, 0)
 	if expected := []string{"1076895760", "abcd"}; !reflect.DeepEqual(values, expected) {

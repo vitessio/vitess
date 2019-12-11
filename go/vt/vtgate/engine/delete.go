@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ type Delete struct {
 	Query string
 
 	// Vindex specifies the vindex to be used.
-	Vindex vindexes.Vindex
+	Vindex vindexes.SingleColumn
 	// Values specifies the vindex values to use for routing.
 	// For now, only one value is specified.
 	Values []sqltypes.PlanValue
@@ -143,6 +143,19 @@ func (code DeleteOpcode) MarshalJSON() ([]byte, error) {
 // RouteType returns a description of the query routing type used by the primitive
 func (del *Delete) RouteType() string {
 	return delName[del.Opcode]
+}
+
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (del *Delete) GetKeyspaceName() string {
+	return del.Keyspace.Name
+}
+
+// GetTableName specifies the table that this primitive routes to.
+func (del *Delete) GetTableName() string {
+	if del.Table != nil {
+		return del.Table.Name.String()
+	}
+	return ""
 }
 
 // Execute performs a non-streaming exec.

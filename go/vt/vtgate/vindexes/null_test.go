@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,14 +25,14 @@ import (
 	"vitess.io/vitess/go/vt/key"
 )
 
-var null Vindex
+var null SingleColumn
 
 func init() {
 	hv, err := CreateVindex("null", "nn", map[string]string{"Table": "t", "Column": "c"})
 	if err != nil {
 		panic(err)
 	}
-	null = hv
+	null = hv.(SingleColumn)
 }
 
 func TestNullCost(t *testing.T) {

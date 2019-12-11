@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -30,13 +30,13 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 )
 
-// mergeSort performs a merge-sort of rows returned by a streaming scatter query.
+// MergeSort performs a merge-sort of rows returned by a streaming scatter query.
 // Each shard of the scatter query is treated as a stream. One row from each stream
 // is added to the merge-sorter heap. Every time a value is pulled out of the heap,
 // a new value is added to it from the stream that was the source of the value that
 // was pulled out. Since the input streams are sorted the same way that the heap is
 // sorted, this guarantees that the merged stream will also be sorted the same way.
-func mergeSort(vcursor VCursor, query string, orderBy []OrderbyParams, rss []*srvtopo.ResolvedShard, bvs []map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+func MergeSort(vcursor VCursor, query string, orderBy []OrderbyParams, rss []*srvtopo.ResolvedShard, bvs []map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
 	ctx, cancel := context.WithCancel(vcursor.Context())
 	defer cancel()
 
@@ -123,7 +123,7 @@ func mergeSort(vcursor VCursor, query string, orderBy []OrderbyParams, rss []*sr
 // The fields channel is used by the stream to transmit the field info, which
 // is the first packet. Following this, the stream sends each row to the row
 // channel. At the end of the stream, fields and row are closed. If there
-// was an error, err is set before the channels are closed. The mergeSort
+// was an error, err is set before the channels are closed. The MergeSort
 // routine that pulls the rows out of each streamHandle can abort the stream
 // by calling canceling the context.
 type streamHandle struct {
@@ -190,10 +190,12 @@ type scatterHeap struct {
 	err     error
 }
 
+// Len satisfies sort.Interface and heap.Interface.
 func (sh *scatterHeap) Len() int {
 	return len(sh.rows)
 }
 
+// Less satisfies sort.Interface and heap.Interface.
 func (sh *scatterHeap) Less(i, j int) bool {
 	for _, order := range sh.orderBy {
 		if sh.err != nil {
@@ -215,14 +217,17 @@ func (sh *scatterHeap) Less(i, j int) bool {
 	return true
 }
 
+// Swap satisfies sort.Interface and heap.Interface.
 func (sh *scatterHeap) Swap(i, j int) {
 	sh.rows[i], sh.rows[j] = sh.rows[j], sh.rows[i]
 }
 
+// Push satisfies heap.Interface.
 func (sh *scatterHeap) Push(x interface{}) {
 	sh.rows = append(sh.rows, x.(streamRow))
 }
 
+// Pop satisfies heap.Interface.
 func (sh *scatterHeap) Pop() interface{} {
 	n := len(sh.rows)
 	x := sh.rows[n-1]
