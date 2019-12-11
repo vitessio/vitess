@@ -104,8 +104,8 @@ func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs, func
 	// Get our two ports to listen to.
 	port := testfiles.GoVtTopoEtcd2topoPort
 	name := "vitess_unit_test"
-	clientAddr := fmt.Sprintf("https://localhost:%v", port)
-	peerAddr := fmt.Sprintf("https://localhost:%v", port+1)
+	clientAddr := fmt.Sprintf("https://localhost:%v", port+2)
+	peerAddr := fmt.Sprintf("https://localhost:%v", port+3)
 	initialCluster := fmt.Sprintf("%v=%v", name, peerAddr)
 
 	certs := tlstest.CreateClientServerCertPairs(dataDir)
@@ -142,6 +142,7 @@ func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs, func
 
 	var cli *clientv3.Client
 	// Create client
+	start := time.Now()
 	for {
 		// Create a client to connect to the created etcd.
 		cli, err = clientv3.New(clientv3.Config{
@@ -152,6 +153,10 @@ func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs, func
 		if err == nil {
 			break
 		}
+		t.Logf("error establishing client for etcd tls test: %v", err)
+		if time.Since(start) > 60*time.Second {
+			t.Fatalf("Failed to start etcd daemon in time")
+		}
 		time.Sleep(100 * time.Millisecond)
 	}
 	defer cli.Close()
@@ -159,15 +164,15 @@ func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs, func
 	// Wait until we can list "/", or timeout.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	start := time.Now()
+	start = time.Now()
 	for {
 		if _, err := cli.Get(ctx, "/"); err == nil {
 			break
 		}
-		if time.Since(start) > 10*time.Second {
+		if time.Since(start) > 60*time.Second {
 			t.Fatalf("Failed to start etcd daemon in time")
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	stopEtcd := func() {
