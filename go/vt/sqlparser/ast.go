@@ -738,10 +738,13 @@ type DDL struct {
 	Table TableName
 
 	// View name.
-	View                TableName
-	ViewExpr            SelectStatement
-	SelectPositionStart int
-	SelectPositionEnd   int
+	View                    TableName
+	ViewExpr                SelectStatement
+	// This exposes the start and end index or the string that makes up the
+	// ViewExpr in the parsed input. These are byte offsets in the parsed
+	// string or input reader.
+	ViewSelectPositionStart int
+	ViewSelectPositionEnd   int
 
 	// FromViews is set if Action is DropStr.
 	FromViews TableNames

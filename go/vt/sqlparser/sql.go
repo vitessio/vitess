@@ -3341,7 +3341,7 @@ yydefault:
 			if yyDollar[2].byt == 1 {
 				orreplace = true
 			}
-			yyVAL.statement = &DDL{Action: CreateStr, View: yyDollar[4].tableName.ToViewName(), ViewExpr: yyDollar[7].selStmt, SelectPositionStart: yyDollar[6].int, SelectPositionEnd: yyDollar[8].int, OrReplace: orreplace}
+			yyVAL.statement = &DDL{Action: CreateStr, View: yyDollar[4].tableName.ToViewName(), ViewExpr: yyDollar[7].selStmt, ViewSelectPositionStart: yyDollar[6].int, ViewSelectPositionEnd: yyDollar[8].int - 1, OrReplace: orreplace}
 		}
 	case 71:
 		yyDollar = yyS[yypt-5 : yypt+1]

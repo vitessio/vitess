@@ -602,7 +602,7 @@ create_statement:
     if $2 == 1 {
       orreplace = true
     }
-    $$ = &DDL{Action: CreateStr, View: $4.ToViewName(), ViewExpr: $7, SelectPositionStart: $6, SelectPositionEnd: $8, OrReplace: orreplace}
+    $$ = &DDL{Action: CreateStr, View: $4.ToViewName(), ViewExpr: $7, ViewSelectPositionStart: $6, ViewSelectPositionEnd: $8 - 1, OrReplace: orreplace}
   }
 | CREATE DATABASE not_exists_opt ID ddl_skip_to_end
   {

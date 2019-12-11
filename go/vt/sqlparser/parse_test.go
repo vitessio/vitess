@@ -1530,7 +1530,7 @@ func TestCreateViewSelectPosition(t *testing.T) {
 		if !ok {
 			t.Errorf("Expected DDL when parsing (%q)", tcase.query)
 		}
-		sel := tcase.query[ddl.SelectPositionStart:ddl.SelectPositionEnd-1]
+		sel := tcase.query[ddl.ViewSelectPositionStart:ddl.ViewSelectPositionEnd]
 		if sel != tcase.sel {
 			t.Errorf("expected select to be %q, got %q", tcase.sel, sel)
 		}
