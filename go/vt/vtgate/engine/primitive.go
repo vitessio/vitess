@@ -163,3 +163,10 @@ type Primitive interface {
 	// The inputs to this Primitive
 	Inputs() []Primitive
 }
+
+type noInputs struct{}
+
+// Inputs implements no inputs
+func (noInputs) Inputs() []Primitive {
+	return nil
+}

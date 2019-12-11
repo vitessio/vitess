@@ -70,6 +70,9 @@ type Update struct {
 
 	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
 	QueryTimeout int
+
+	// Update does not take inputs
+	noInputs
 }
 
 // MarshalJSON serializes the Update into a JSON representation.
@@ -192,11 +195,6 @@ func (upd *Update) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.B
 // GetFields fetches the field info.
 func (upd *Update) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return nil, fmt.Errorf("BUG: unreachable code for %q", upd.Query)
-}
-
-// Inputs is always empty for update - it has no inputs.
-func (upd *Update) Inputs() []Primitive {
-	return []Primitive{}
 }
 
 func (upd *Update) execUpdateUnsharded(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
