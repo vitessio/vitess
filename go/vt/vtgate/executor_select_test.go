@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -231,6 +233,24 @@ func TestStreamBuffering(t *testing.T) {
 			t.Errorf("Buffered streaming:\n%v, want\n%v", gotResults[i], wantResults[i])
 		}
 	}
+}
+
+func TestSelectLastInsertId(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	sql := "select last_insert_id()"
+	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "select :__lastInsertId from dual",
+		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
+	}}
+
+	assert.Equal(t, wantQueries, sbc1.Queries)
 }
 
 func TestSelectBindvars(t *testing.T) {

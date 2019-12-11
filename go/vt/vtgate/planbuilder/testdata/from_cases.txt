@@ -1800,6 +1800,54 @@
   }
 }
 
+# last_insert_id for dual
+"select last_insert_id()"
+{
+  "Original": "select last_insert_id()",
+  "Instructions": {
+    "Opcode": "SelectReference",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select :__lastInsertId from dual",
+    "FieldQuery": "select :__lastInsertId from dual where 1 != 1",
+    "Table": "dual"
+  }
+}
+
+# last_insert_id for sharded keyspace
+"select last_insert_id() from user"
+{
+  "Original": "select last_insert_id() from user",
+  "Instructions": {
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select :__lastInsertId from user",
+    "FieldQuery": "select :__lastInsertId from user where 1 != 1",
+    "Table": "user"
+  }
+}
+
+# last_insert_id for unsharded route
+"select last_insert_id() from main.unsharded"
+{
+  "Original": "select last_insert_id() from main.unsharded",
+  "Instructions": {
+    "Opcode": "SelectUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select :__lastInsertId from unsharded",
+    "FieldQuery": "select :__lastInsertId from unsharded where 1 != 1",
+    "Table": "unsharded"
+  }
+}
+
 # verify ',' vs JOIN precedence
 "select u1.a from unsharded u1, unsharded u2 join unsharded u3 on u1.a = u2.a"
 "symbol u1.a not found"
