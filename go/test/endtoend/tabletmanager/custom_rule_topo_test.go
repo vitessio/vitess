@@ -80,6 +80,7 @@ func TestTopoCustomRule(t *testing.T) {
 
 	// Verify that query is working
 	result, err := vtctlExec("select id, value from t1", rTablet.Alias)
+	assert.Nil(t, err)
 	resultMap := make(map[string]interface{})
 	err = json.Unmarshal([]byte(result), &resultMap)
 	require.NoError(t, err)

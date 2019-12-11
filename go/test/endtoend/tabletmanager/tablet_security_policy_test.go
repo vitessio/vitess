@@ -66,6 +66,7 @@ func assertNotAllowedURLTest(t *testing.T, url string) {
 	assert.Nil(t, err)
 
 	body, err := ioutil.ReadAll(resp.Body)
+	assert.Nil(t, err)
 	defer resp.Body.Close()
 
 	assert.True(t, resp.StatusCode > 400)
@@ -77,6 +78,7 @@ func assertAllowedURLTest(t *testing.T, url string) {
 	assert.Nil(t, err)
 
 	body, err := ioutil.ReadAll(resp.Body)
+	assert.Nil(t, err)
 	defer resp.Body.Close()
 
 	assert.NotContains(t, string(body), "Access denied: not allowed")

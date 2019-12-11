@@ -37,7 +37,6 @@ import (
 var (
 	clusterInstance     *cluster.LocalProcessCluster
 	tmClient            *tmc.Client
-	vtParams            mysql.ConnParams
 	masterTabletParams  mysql.ConnParams
 	replicaTabletParams mysql.ConnParams
 	masterTablet        cluster.Vttablet
@@ -137,12 +136,12 @@ func TestMain(m *testing.M) {
 		masterTabletParams = mysql.ConnParams{
 			Uname:      username,
 			DbName:     dbName,
-			UnixSocket: fmt.Sprintf(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", masterTablet.TabletUID))),
+			UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", masterTablet.TabletUID)),
 		}
 		replicaTabletParams = mysql.ConnParams{
 			Uname:      username,
 			DbName:     dbName,
-			UnixSocket: fmt.Sprintf(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", replicaTablet.TabletUID))),
+			UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", replicaTablet.TabletUID)),
 		}
 
 		// create tablet manager client
