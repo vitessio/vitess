@@ -95,11 +95,9 @@ var (
 							primary key (name)
 							) Engine=InnoDB;
 							`
-
-	insertTabletTemplate = `insert into %s(parent_id, id, msg, custom_ksid_col) values(%d, %d, "%s", "%s")`
-	fixedParentID        = 86
-	tableName            = "resharding1"
-	vSchema              = `
+	fixedParentID = 86
+	tableName     = "resharding1"
+	vSchema       = `
 							{
 							  "sharded": true,
 							  "vindexes": {
@@ -125,6 +123,14 @@ var (
 								  ] 
 								},
                                 "resharding3": {
+								   "column_vindexes": [
+									{
+									  "column": "custom_ksid_col",
+									  "name": "hash_index"
+									}
+								  ] 
+								},
+								"no_pk": {
 								   "column_vindexes": [
 									{
 									  "column": "custom_ksid_col",
@@ -190,6 +196,7 @@ func TestReSharding(t *testing.T, useByteShardingKeyType bool) {
 
 	// Adding another cell in the same cluster
 	err = clusterInstance.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+cell2)
+	assert.Nil(t, err)
 	err = clusterInstance.VtctlProcess.AddCellInfo(cell2)
 	assert.Nil(t, err)
 
@@ -320,6 +327,7 @@ func TestReSharding(t *testing.T, useByteShardingKeyType bool) {
 
 	// check for shards
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("FindAllShardsInKeyspace", keyspaceName)
+	assert.Nil(t, err)
 	resultMap := make(map[string]interface{})
 	err = json.Unmarshal([]byte(result), &resultMap)
 	assert.Nil(t, err)
@@ -334,9 +342,11 @@ func TestReSharding(t *testing.T, useByteShardingKeyType bool) {
 	assert.Nil(t, err)
 	err = clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, fmt.Sprintf(createViewTemplate, "view1", "resharding3"))
 	assert.Nil(t, err)
+	err = clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, fmt.Sprintf(createNoPkTable, shardingColumnType))
+	assert.Nil(t, err)
 	err = clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, fmt.Sprintf(createTimestampTable, shardingColumnType))
 	assert.Nil(t, err)
-	err = clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, fmt.Sprintf(createUnrelatedTable))
+	err = clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, createUnrelatedTable)
 	assert.Nil(t, err)
 
 	// Apply VSchema
@@ -518,7 +528,9 @@ func TestReSharding(t *testing.T, useByteShardingKeyType bool) {
 	// accidentally modify data on the destination masters while they are not
 	// migrated yet and the source shards are still the source of truth.
 	err = shard2Master.VttabletProcess.WaitForTabletType("NOT_SERVING")
+	assert.Nil(t, err)
 	err = shard3Master.VttabletProcess.WaitForTabletType("NOT_SERVING")
+	assert.Nil(t, err)
 
 	// check that binlog server exported the stats vars
 	sharding.CheckBinlogServerVars(t, *shard1Replica1, 0, 0)
@@ -532,8 +544,6 @@ func TestReSharding(t *testing.T, useByteShardingKeyType bool) {
 
 	// testing filtered replication: insert a bunch of data on shard 1, check we get most of it after a few seconds,
 	// wait for binlog server timeout, check we get all of it.
-
-	fmt.Println("Inserting lots of data on source shard, this will take time")
 	log.Debug("Inserting lots of data on source shard")
 	insertLots(100, 0, *shard1Master, tableName, fixedParentID, keyspaceName)
 	log.Debug("Executing MultiValue Insert Queries")
@@ -603,7 +613,6 @@ func TestReSharding(t *testing.T, useByteShardingKeyType bool) {
 	assert.Nil(t, err)
 
 	// test data goes through again
-	fmt.Println("Inserting lots of data-part2 on source shard, this will take time")
 	log.Debug("Inserting lots of data on source shard")
 	insertLots(100, 100, *shard1Master, tableName, fixedParentID, keyspaceName)
 	log.Debug("Checking 100 percent of data was sent quickly")
@@ -767,7 +776,7 @@ func TestReSharding(t *testing.T, useByteShardingKeyType bool) {
 	shard2Master = shard2Replica1
 	shard2Replica1 = tmp
 
-	fmt.Println("Inserting lots of data-part3 on source shard,this will take time")
+	// Insert another set of the data and see it flow through
 	insertLots(100, 200, *shard1.MasterTablet(), tableName, fixedParentID, keyspaceName)
 	// Checking 100 percent of data is sent fairly quickly
 	assert.True(t, checkLotsTimeout(t, 100, 200, tableName, keyspaceName, shardingKeyType))
@@ -975,6 +984,9 @@ func insertStartupValues() {
 
 	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "resharding3", fixedParentID, 3, "c", key3, key3, 3)
 	sharding.InsertToTablet(insertSQL, *shard1.MasterTablet(), keyspaceName)
+
+	insertSQL = fmt.Sprintf(insertTabletTemplateKsID, "no_pk", fixedParentID, 1, "msg1", key5, key5, 1)
+	sharding.InsertToTablet(insertSQL, *shard1.MasterTablet(), keyspaceName)
 }
 
 func insertValue(tablet *cluster.Vttablet, keyspaceName string, tableName string, id int, msg string, ksID uint64) {
@@ -1083,6 +1095,16 @@ func checkStartupValues(t *testing.T, shardingKeyType querypb.Type) {
 		checkValues(t, *tablet, []string{"INT64(86)", "INT64(3)", `BIT("c")`, fmt.Sprintf("UINT64(%d)", key3)},
 			3, true, "resharding3", fixedParentID, keyspaceName, shardingKeyType)
 	}
+
+	// Check for no_pk table
+	for _, tablet := range shard2.Vttablets {
+		checkValues(t, *tablet, []string{"INT64(86)", "INT64(1)", `VARCHAR("msg1")`, fmt.Sprintf("UINT64(%d)", key5)},
+			1, true, "no_pk", fixedParentID, keyspaceName, shardingKeyType)
+	}
+	for _, tablet := range shard3.Vttablets {
+		checkValues(t, *tablet, []string{"INT64(86)", "INT64(1)", `BIT("msg1")`, fmt.Sprintf("UINT64(%d)", key5)},
+			1, false, "no_pk", fixedParentID, keyspaceName, shardingKeyType)
+	}
 }
 
 // checkLotsNotPresent verifies that no rows should be present in vttablet
@@ -1154,7 +1176,7 @@ func checkValues(t *testing.T, vttablet cluster.Vttablet, values []string, id ui
 		isFound = isFound && assert.Equal(t, result.Rows[0][2].String(), values[2])
 		if keyType == querypb.Type_VARBINARY {
 			r := strings.NewReplacer("UINT64(", "VARBINARY(\"", ")", "\")")
-			expected := fmt.Sprintf(r.Replace(values[3]))
+			expected := r.Replace(values[3])
 			isFound = isFound && assert.Equal(t, result.Rows[0][3].String(), expected)
 		} else {
 			isFound = isFound && assert.Equal(t, result.Rows[0][3].String(), values[3])
