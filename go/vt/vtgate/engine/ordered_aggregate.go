@@ -309,6 +309,11 @@ func (oa *OrderedAggregate) GetFields(vcursor VCursor, bindVars map[string]*quer
 	return qr.Truncate(oa.TruncateColumnCount), nil
 }
 
+// Inputs returns the Primitive input for this aggregation
+func (oa *OrderedAggregate) Inputs() []Primitive {
+	return []Primitive{oa.Input}
+}
+
 func (oa *OrderedAggregate) keysEqual(row1, row2 []sqltypes.Value) (bool, error) {
 	for _, key := range oa.Keys {
 		cmp, err := sqltypes.NullsafeCompare(row1[key], row2[key])

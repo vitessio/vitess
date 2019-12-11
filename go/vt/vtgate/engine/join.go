@@ -171,6 +171,11 @@ func (jn *Join) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVari
 	return result, nil
 }
 
+// Inputs returns the input primitives for this join
+func (jn *Join) Inputs() []Primitive {
+	return []Primitive{jn.Left, jn.Right}
+}
+
 func joinFields(lfields, rfields []*querypb.Field, cols []int) []*querypb.Field {
 	fields := make([]*querypb.Field, len(cols))
 	for i, index := range cols {

@@ -119,6 +119,28 @@ func (p *Plan) Stats() (execCount uint64, execTime time.Duration, shardQueries, 
 	return
 }
 
+// Match is used to check if a Primitive matches
+type Match func(node Primitive) bool
+
+// Find will return the first Primitive that matches the evaluate function. If no match is found, nil will be returned
+func Find(isMatch Match, start Primitive) Primitive {
+	if isMatch(start) {
+		return start
+	}
+	for _, input := range start.Inputs() {
+		result := Find(isMatch, input)
+		if result != nil {
+			return result
+		}
+	}
+	return nil
+}
+
+// Exists traverses recursively down the Primitive tree structure, and returns true when Match returns true
+func Exists(m Match, p Primitive) bool {
+	return Find(m, p) != nil
+}
+
 // Size is defined so that Plan can be given to a cache.LRUCache.
 // VTGate needs to maintain a cache of plans. It uses LRUCache, which
 // in turn requires its objects to define a Size function.
@@ -126,8 +148,10 @@ func (p *Plan) Size() int {
 	return 1
 }
 
-// Primitive is the interface that needs to be satisfied by
-// all primitives of a plan.
+// Primitive is the building block of the engine execution plan. They form a tree structure, where the leaves typically
+// issue queries to one or more vttablet.
+// During execution, the Primitive's pass Result objects up the tree structure, until reaching the root,
+// and its result is passed to the client.
 type Primitive interface {
 	RouteType() string
 	GetKeyspaceName() string
@@ -135,4 +159,14 @@ type Primitive interface {
 	Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
 	StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error
 	GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
+
+	// The inputs to this Primitive
+	Inputs() []Primitive
+}
+
+type noInputs struct{}
+
+// Inputs implements no inputs
+func (noInputs) Inputs() []Primitive {
+	return nil
 }
