@@ -24,7 +24,6 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"path"
 	"strings"
 	"sync"
 	"testing"
@@ -47,20 +46,20 @@ func TestClientServer(t *testing.T) {
 	}
 	defer os.RemoveAll(root)
 
-	clientServerKeyPairs := createClientServerCertPairs(root)
+	clientServerKeyPairs := CreateClientServerCertPairs(root)
 
 	serverConfig, err := vttls.ServerConfig(
-		clientServerKeyPairs.serverCert,
-		clientServerKeyPairs.serverKey,
-		clientServerKeyPairs.clientCA)
+		clientServerKeyPairs.ServerCert,
+		clientServerKeyPairs.ServerKey,
+		clientServerKeyPairs.ClientCA)
 	if err != nil {
 		t.Fatalf("TLSServerConfig failed: %v", err)
 	}
 	clientConfig, err := vttls.ClientConfig(
-		clientServerKeyPairs.clientCert,
-		clientServerKeyPairs.clientKey,
-		clientServerKeyPairs.serverCA,
-		clientServerKeyPairs.serverName)
+		clientServerKeyPairs.ClientCert,
+		clientServerKeyPairs.ClientKey,
+		clientServerKeyPairs.ServerCA,
+		clientServerKeyPairs.ServerName)
 	if err != nil {
 		t.Fatalf("TLSClientConfig failed: %v", err)
 	}
@@ -117,10 +116,10 @@ func TestClientServer(t *testing.T) {
 	//
 
 	badClientConfig, err := vttls.ClientConfig(
-		clientServerKeyPairs.serverCert,
-		clientServerKeyPairs.serverKey,
-		clientServerKeyPairs.serverCA,
-		clientServerKeyPairs.serverName)
+		clientServerKeyPairs.ServerCert,
+		clientServerKeyPairs.ServerKey,
+		clientServerKeyPairs.ServerCA,
+		clientServerKeyPairs.ServerName)
 	if err != nil {
 		t.Fatalf("TLSClientConfig failed: %v", err)
 	}
@@ -165,69 +164,19 @@ func TestClientServer(t *testing.T) {
 	}
 }
 
-var serialCounter = 0
-
-type clientServerKeyPairs struct {
-	serverCert string
-	serverKey  string
-	serverCA   string
-	serverName string
-	clientCert string
-	clientKey  string
-	clientCA   string
-}
-
-func createClientServerCertPairs(root string) clientServerKeyPairs {
-
-	// Create the certs and configs.
-	CreateCA(root)
-
-	serverSerial := fmt.Sprintf("%03d", serialCounter*2+1)
-	clientSerial := fmt.Sprintf("%03d", serialCounter*2+2)
-
-	serialCounter = serialCounter + 1
-
-	serverName := fmt.Sprintf("server-%s", serverSerial)
-	serverCACommonName := fmt.Sprintf("Server %s CA", serverSerial)
-	serverCertName := fmt.Sprintf("server-instance-%s", serverSerial)
-	serverCertCommonName := fmt.Sprintf("server%s.example.com", serverSerial)
-
-	clientName := fmt.Sprintf("clients-%s", serverSerial)
-	clientCACommonName := fmt.Sprintf("Clients %s CA", serverSerial)
-	clientCertName := fmt.Sprintf("client-instance-%s", serverSerial)
-	clientCertCommonName := fmt.Sprintf("Client Instance %s", serverSerial)
-
-	CreateSignedCert(root, CA, serverSerial, serverName, serverCACommonName)
-	CreateSignedCert(root, serverName, serverSerial, serverCertName, serverCertCommonName)
-
-	CreateSignedCert(root, CA, clientSerial, clientName, clientCACommonName)
-	CreateSignedCert(root, clientName, serverSerial, clientCertName, clientCertCommonName)
-
-	return clientServerKeyPairs{
-		serverCert: path.Join(root, fmt.Sprintf("%s-cert.pem", serverCertName)),
-		serverKey:  path.Join(root, fmt.Sprintf("%s-key.pem", serverCertName)),
-		serverCA:   path.Join(root, fmt.Sprintf("%s-cert.pem", serverName)),
-		clientCert: path.Join(root, fmt.Sprintf("%s-cert.pem", clientCertName)),
-		clientKey:  path.Join(root, fmt.Sprintf("%s-key.pem", clientCertName)),
-		clientCA:   path.Join(root, fmt.Sprintf("%s-cert.pem", clientName)),
-		serverName: serverCertCommonName,
-	}
-
-}
-
-func getServerConfig(keypairs clientServerKeyPairs) (*tls.Config, error) {
+func getServerConfig(keypairs ClientServerKeyPairs) (*tls.Config, error) {
 	return vttls.ServerConfig(
-		keypairs.clientCert,
-		keypairs.clientKey,
-		keypairs.serverCA)
+		keypairs.ClientCert,
+		keypairs.ClientKey,
+		keypairs.ServerCA)
 }
 
-func getClientConfig(keypairs clientServerKeyPairs) (*tls.Config, error) {
+func getClientConfig(keypairs ClientServerKeyPairs) (*tls.Config, error) {
 	return vttls.ClientConfig(
-		keypairs.clientCert,
-		keypairs.clientKey,
-		keypairs.serverCA,
-		keypairs.serverName)
+		keypairs.ClientCert,
+		keypairs.ClientKey,
+		keypairs.ServerCA,
+		keypairs.ServerName)
 }
 
 func TestServerTLSConfigCaching(t *testing.T) {
@@ -242,7 +191,7 @@ func TestClientTLSConfigCaching(t *testing.T) {
 	})
 }
 
-func testConfigGeneration(t *testing.T, rootPrefix string, generateConfig func(clientServerKeyPairs) (*tls.Config, error), getCertPool func(tlsConfig *tls.Config) *x509.CertPool) {
+func testConfigGeneration(t *testing.T, rootPrefix string, generateConfig func(ClientServerKeyPairs) (*tls.Config, error), getCertPool func(tlsConfig *tls.Config) *x509.CertPool) {
 	// Our test root.
 	root, err := ioutil.TempDir("", rootPrefix)
 	if err != nil {
@@ -252,8 +201,8 @@ func testConfigGeneration(t *testing.T, rootPrefix string, generateConfig func(c
 
 	const configsToGenerate = 1
 
-	firstClientServerKeyPairs := createClientServerCertPairs(root)
-	secondClientServerKeyPairs := createClientServerCertPairs(root)
+	firstClientServerKeyPairs := CreateClientServerCertPairs(root)
+	secondClientServerKeyPairs := CreateClientServerCertPairs(root)
 
 	firstExpectedConfig, _ := generateConfig(firstClientServerKeyPairs)
 	secondExpectedConfig, _ := generateConfig(secondClientServerKeyPairs)

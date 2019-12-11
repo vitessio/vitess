@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/tlstest"
+
 	"github.com/coreos/etcd/pkg/transport"
 
 	"golang.org/x/net/context"
@@ -35,11 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/test"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-)
-
-var (
-	testKeyPath  = "/tmp/testkey.key"
-	testCertPath = "/tmp/testcert.crt"
 )
 
 // startEtcd starts an etcd subprocess, and waits for it to be ready.
@@ -97,7 +94,7 @@ func startEtcd(t *testing.T) (*exec.Cmd, string, string) {
 }
 
 // startEtcdWithTLS starts an etcd subprocess with TLS setup, and waits for it to be ready.
-func startEtcdWithTLS(t *testing.T) (*exec.Cmd, string, string) {
+func startEtcdWithTLS(t *testing.T) (*exec.Cmd, string, string, *tlstest.ClientServerKeyPairs) {
 	// Create a temporary directory.
 	dataDir, err := ioutil.TempDir("", "etcd")
 	if err != nil {
@@ -107,17 +104,11 @@ func startEtcdWithTLS(t *testing.T) (*exec.Cmd, string, string) {
 	// Get our two ports to listen to.
 	port := testfiles.GoVtTopoEtcd2topoPort
 	name := "vitess_unit_test"
-	clientAddr := fmt.Sprintf("http://localhost:%v", port)
-	peerAddr := fmt.Sprintf("http://localhost:%v", port+1)
+	clientAddr := fmt.Sprintf("https://localhost:%v", port)
+	peerAddr := fmt.Sprintf("https://localhost:%v", port+1)
 	initialCluster := fmt.Sprintf("%v=%v", name, peerAddr)
 
-	// Generate cert and key in /tmp
-	err = exec.Command("openssl", "req", "-new", "-newkey", "rsa:4096", "-days", "365", "-nodes", "-x509",
-		"-subj", "/C=US/ST=Denial/L=Springfield/O=Dis/CN=127.0.0.1",
-		"-keyout", testKeyPath, "-out", testCertPath).Run()
-	if err != nil {
-		t.Fatalf("unable to generate test key and cert using openssl: %v", err)
-	}
+	certs := tlstest.CreateClientServerCertPairs(dataDir)
 
 	cmd := exec.Command("etcd",
 		"-name", name,
@@ -126,9 +117,15 @@ func startEtcdWithTLS(t *testing.T) (*exec.Cmd, string, string) {
 		"-listen-client-urls", clientAddr,
 		"-listen-peer-urls", peerAddr,
 		"-initial-cluster", initialCluster,
-		"-cert-file", testCertPath,
-		"-key-file", testKeyPath,
+		"-cert-file", certs.ServerCert,
+		"-key-file", certs.ServerKey,
+		"-trusted-ca-file", certs.ClientCA,
+		"-peer-trusted-ca-file", certs.ClientCA,
+		"-peer-cert-file", certs.ServerCert,
+		"-peer-key-file", certs.ServerKey,
+		"-client-cert-auth",
 		"-data-dir", dataDir)
+
 	err = cmd.Start()
 	if err != nil {
 		t.Fatalf("failed to start etcd: %v", err)
@@ -136,9 +133,9 @@ func startEtcdWithTLS(t *testing.T) (*exec.Cmd, string, string) {
 
 	// Safe now to build up TLS info.
 	tlsInfo := transport.TLSInfo{
-		CertFile:      testCertPath,
-		KeyFile:       testKeyPath,
-		TrustedCAFile: testCertPath,
+		CertFile:      certs.ClientCert,
+		KeyFile:       certs.ClientKey,
+		TrustedCAFile: certs.ServerCA,
 	}
 
 	tlsConfig, err := tlsInfo.ClientConfig()
@@ -167,17 +164,17 @@ func startEtcdWithTLS(t *testing.T) (*exec.Cmd, string, string) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	return cmd, dataDir, clientAddr
+	return cmd, dataDir, clientAddr, &certs
 }
 
 func TestEtcd2TLS(t *testing.T) {
 	// Start a single etcd in the background.
-	cmd, dataDir, clientAddr := startEtcdWithTLS(t)
+	cmd, dataDir, clientAddr, certs := startEtcdWithTLS(t)
 	testIndex := 0
 	testRoot := fmt.Sprintf("/test-%v", testIndex)
 
 	// Create the server on the new root.
-	server, err := NewServerWithOpts(clientAddr, testRoot, testCertPath, testKeyPath, testCertPath)
+	server, err := NewServerWithOpts(clientAddr, testRoot, certs.ClientCert, certs.ClientKey, certs.ServerCA)
 	if err != nil {
 		t.Fatalf("NewServerWithOpts failed: %v", err)
 	}
