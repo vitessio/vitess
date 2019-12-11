@@ -44,9 +44,9 @@ import (
 )
 
 var (
-	clientCertPath = flag.String("topo_etcd_tls_cert", "", "the client cert to use to connect to the etcd topo server, requires topo_etcd2_tls_key, enables TLS")
-	clientKeyPath  = flag.String("topo_etcd_tls_key", "", "the client key to use to connect to the etcd topo server, enables TLS")
-	clientCaPath   = flag.String("topo_etcd_tls_ca", "", "the ca to use to validate clients when connecting to the etcd topo server")
+	clientCertPath = flag.String("topo_etcd_tls_cert", "", "path to the client cert to use to connect to the etcd topo server, requires topo_etcd_tls_key, enables TLS")
+	clientKeyPath  = flag.String("topo_etcd_tls_key", "", "path to the client key to use to connect to the etcd topo server, enables TLS")
+	serverCaPath   = flag.String("topo_etcd_tls_ca", "", "path to the ca to use to validate the server cert when connecting to the etcd topo server")
 )
 
 // Factory is the consul topo.Factory implementation.
