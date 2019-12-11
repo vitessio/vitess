@@ -1482,11 +1482,7 @@ column_opt:
   { }
 
 ignored_alter_object_type:
-  CONSTRAINT
-
-alter_object_type:
   CHECK
-| COLUMN
 | CONSTRAINT
 | FOREIGN
 | FULLTEXT
