@@ -79,8 +79,9 @@ func (s *Server) Close() {
 	s.cli = nil
 }
 
-// TODO: Rename this to NewServer and change NewServer to a name that signifies it uses the process-wide TLS settings.
 func NewServerWithOpts(serverAddr, root, certPath, keyPath, caPath string) (*Server, error) {
+	// TODO: Rename this to NewServer and change NewServer to a name that signifies it uses the process-wide TLS settings.
+
 	config := clientv3.Config{
 		Endpoints:   strings.Split(serverAddr, ","),
 		DialTimeout: 5 * time.Second,
@@ -113,10 +114,11 @@ func NewServerWithOpts(serverAddr, root, certPath, keyPath, caPath string) (*Ser
 	}, nil
 }
 
-// TODO: Rename this to a name to signifies this function uses the process-wide TLS settings.
 // NewServer returns a new etcdtopo.Server.
 func NewServer(serverAddr, root string) (*Server, error) {
-	return NewServerWithOpts(serverAddr, root, *clientCertPath, *clientKeyPath, *clientCaPath)
+	// TODO: Rename this to a name to signifies this function uses the process-wide TLS settings.
+
+	return NewServerWithOpts(serverAddr, root, *clientCertPath, *clientKeyPath, *serverCaPath)
 }
 
 func init() {
