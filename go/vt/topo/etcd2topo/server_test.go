@@ -140,15 +140,21 @@ func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs, func
 
 	tlsConfig, err := tlsInfo.ClientConfig()
 
-	// Create a client to connect to the created etcd.
-	cli, err := clientv3.New(clientv3.Config{
-		Endpoints:   []string{clientAddr},
-		TLS:         tlsConfig,
-		DialTimeout: 5 * time.Second,
-	})
-	if err != nil {
-		t.Fatalf("newCellClient(%v) failed: %v", clientAddr, err)
+	var cli *clientv3.Client
+	// Create client
+	for {
+		// Create a client to connect to the created etcd.
+		cli, err = clientv3.New(clientv3.Config{
+			Endpoints:   []string{clientAddr},
+			TLS:         tlsConfig,
+			DialTimeout: 5 * time.Second,
+		})
+		if err == nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
+	defer cli.Close()
 
 	// Wait until we can list "/", or timeout.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
