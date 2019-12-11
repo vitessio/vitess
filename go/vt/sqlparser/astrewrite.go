@@ -136,6 +136,29 @@ func (col *ColumnDefinition) walk(fn WalkFunc) SQLNode {
 	return col
 }
 
+func (ct *ColumnType) walk(fn WalkFunc) SQLNode {
+	ct.NotNull = Walk(ct.NotNull, fn).(BoolVal)
+	ct.Autoincrement = Walk(ct.Autoincrement, fn).(BoolVal)
+	if ct.Default != nil {
+		ct.Default = Walk(ct.Default, fn).(Expr)
+	}
+	if ct.OnUpdate != nil {
+		ct.OnUpdate = Walk(ct.OnUpdate, fn).(Expr)
+	}
+	if ct.Comment != nil {
+		ct.Comment = Walk(ct.Comment, fn).(*SQLVal)
+	}
+	if ct.Length != nil {
+		ct.Length = Walk(ct.Length, fn).(*SQLVal)
+	}
+	ct.Unsigned = Walk(ct.Unsigned, fn).(BoolVal)
+	ct.Zerofill = Walk(ct.Zerofill, fn).(BoolVal)
+	if ct.Scale != nil {
+		ct.Scale = Walk(ct.Scale, fn).(*SQLVal)
+	}
+	return ct
+}
+
 func (node Columns) walk(fn WalkFunc) SQLNode {
 	for i, p := range node {
 		node[i] = Walk(p, fn).(ColIdent)
@@ -553,6 +576,13 @@ func (node *Show) walk(fn WalkFunc) SQLNode {
 	node.Table = Walk(node.Table, fn).(TableName)
 	if node.ShowCollationFilterOpt != nil {
 		node.ShowCollationFilterOpt = Walk(node.ShowCollationFilterOpt, fn).(Expr)
+	}
+	return node
+}
+
+func (node *ShowFilter) walk(fn WalkFunc) SQLNode {
+	if node.Filter != nil {
+		node.Filter = Walk(node.Filter, fn).(Expr)
 	}
 	return node
 }
