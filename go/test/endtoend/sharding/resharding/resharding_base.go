@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"path"
 	"strings"
@@ -184,8 +183,6 @@ var (
 func TestReSharding(t *testing.T, useByteShardingKeyType bool) {
 	clusterInstance = cluster.NewCluster(cell1, hostname)
 	defer clusterInstance.Teardown()
-
-	os.Setenv("EXTRA_MY_CNF", path.Join(os.Getenv("VTROOT"), "config", "mycnf", "rbr.cnf"))
 
 	// Launch keyspace
 	keyspace := &cluster.Keyspace{Name: keyspaceName}

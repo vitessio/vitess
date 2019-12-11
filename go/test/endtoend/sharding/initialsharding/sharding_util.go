@@ -142,7 +142,7 @@ func initClusterForInitialSharding(keyspaceName string, shardNames []string, tot
 	if isMulti {
 		extraArgs = []string{"-db-credentials-file", dbCredentialFile}
 	}
-	os.Setenv("EXTRA_MY_CNF", path.Join(os.Getenv("VTROOT"), "config", "mycnf", "rbr.cnf"))
+
 	for _, shardName := range shardNames {
 		shard := &cluster.Shard{
 			Name: shardName,
