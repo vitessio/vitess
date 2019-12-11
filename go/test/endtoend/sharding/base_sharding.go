@@ -434,20 +434,81 @@ func GetShardInfo(t *testing.T, shard1Ks string, ci cluster.LocalProcessCluster)
 }
 
 // checkThrottlerServiceMaxRates Checks the vtctl ThrottlerMaxRates and ThrottlerSetRate commands.
-func checkThrottlerServiceMaxRates(t *testing.T, server string, ci cluster.LocalProcessCluster) {
+func checkThrottlerServiceMaxRates(t *testing.T, server string, names []string, rate int, ci cluster.LocalProcessCluster) {
 	// Avoid flakes by waiting for all throttlers. (Necessary because filtered
 	// replication on vttablet will register the throttler asynchronously.)
-	timeout := time.Now().Add(10 * time.Second)
-	for time.Now().Before(timeout) {
-		output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerMaxRates", "--server", server)
-		assert.Nil(t, err)
-		fmt.Println(output)
-		// TODO: To be complete
+	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerMaxRates", "--server", server)
+	assert.Nil(t, err)
+	msg := fmt.Sprintf("%d active throttler(s)", len(names))
+	assert.Contains(t, output, msg)
+
+	for _, name := range names {
+		str := fmt.Sprintf("| %s | %d |", name, rate)
+		assert.Contains(t, output, str)
 	}
-	//return false
+
+	// Check that it's possible to change the max rate on the throttler.
+	newRate := "unlimited"
+	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerSetMaxRate", "--server", server, newRate)
+	assert.Nil(t, err)
+	assert.Contains(t, output, msg)
+
+	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerMaxRates", "--server", server)
+	assert.Nil(t, err)
+	for _, name := range names {
+		str := fmt.Sprintf("| %s | %s |", name, newRate)
+		assert.Contains(t, output, str)
+	}
+	assert.Contains(t, output, msg)
+}
+
+// checkThrottlerServiceConfiguration checks the vtctl (Get|Update|Reset)ThrottlerConfiguration commands.
+func checkThrottlerServiceConfiguration(t *testing.T, server string, names []string, ci cluster.LocalProcessCluster) {
+	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput(
+		"UpdateThrottlerConfiguration", "--server", server,
+		"--copy_zero_values",
+		"target_replication_lag_sec:12345 "+
+			"max_replication_lag_sec:65789 "+
+			"initial_rate:3 max_increase:0.4 "+
+			"emergency_decrease:0.5 "+
+			"min_duration_between_increases_sec:6 "+
+			"max_duration_between_increases_sec:7 "+
+			"min_duration_between_decreases_sec:8 "+
+			"spread_backlog_across_sec:9 "+
+			"ignore_n_slowest_replicas:0 "+
+			"ignore_n_slowest_rdonlys:0 "+
+			"age_bad_rate_after_sec:12 "+
+			"bad_rate_increase:0.13 "+
+			"max_rate_approach_threshold: 0.9 ",
+	)
+	assert.Nil(t, err)
+	msg := fmt.Sprintf("%d active throttler(s)", len(names))
+	assert.Contains(t, output, msg)
+
+	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("GetThrottlerConfiguration", "--server", server)
+	assert.Nil(t, err)
+	for _, name := range names {
+		str := fmt.Sprintf("| %s | target_replication_lag_sec:12345 ", name)
+		assert.Contains(t, output, str)
+		assert.NotContains(t, output, "ignore_n_slowest_replicas")
+	}
+	assert.Contains(t, output, msg)
+
+	// Reset clears our configuration values.
+	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("ResetThrottlerConfiguration", "--server", server)
+	assert.Nil(t, err)
+	assert.Contains(t, output, msg)
+
+	// Check that the reset configuration no longer has our values.
+	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("GetThrottlerConfiguration", "--server", server)
+	assert.Nil(t, err)
+	assert.NotContains(t, output, "target_replication_lag_sec:12345")
+	assert.Contains(t, output, msg)
+
 }
 
 // CheckThrottlerService runs checkThrottlerServiceMaxRates and checkThrottlerServiceConfigs
 func CheckThrottlerService(t *testing.T, server string, names []string, rate int, ci cluster.LocalProcessCluster) {
-	checkThrottlerServiceMaxRates(t, server, ci)
+	checkThrottlerServiceMaxRates(t, server, names, rate, ci)
+	checkThrottlerServiceConfiguration(t, server, names, ci)
 }
