@@ -17,6 +17,7 @@ jobs:
 
     - name: Get dependencies
       run: |
+        sudo apt-get update
         sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget ant openjdk-8-jdk
         sudo service mysql stop
         sudo service etcd stop
