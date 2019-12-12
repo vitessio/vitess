@@ -91,8 +91,7 @@ func Init() (*Env, error) {
 				},
 			},
 		},
-		ExtraMyCnf: []string{},
-		OnlyMySQL:  true,
+		OnlyMySQL: true,
 	}
 	te.cluster = &vttest.LocalCluster{
 		Config: cfg,

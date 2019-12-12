@@ -126,7 +126,6 @@ func TestMain(m *testing.M) {
 				}},
 			}},
 		}
-		cfg.ExtraMyCnf = []string{}
 		if err := cfg.InitSchemas("ks", schema, vschema); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.RemoveAll(cfg.SchemaDir)
