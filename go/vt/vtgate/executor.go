@@ -840,6 +840,14 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 				}
 			}
 		}
+	case sqlparser.KeywordString(sqlparser.COLUMNS):
+		if !show.OnTable.Qualifier.IsEmpty() {
+			destKeyspace = show.OnTable.Qualifier.String()
+			show.OnTable.Qualifier = sqlparser.NewTableIdent("")
+		} else {
+			break
+		}
+		sql = sqlparser.String(show)
 	case sqlparser.KeywordString(sqlparser.TABLES):
 		if show.ShowTablesOpt != nil && show.ShowTablesOpt.DbName != "" {
 			if destKeyspace == "" {
