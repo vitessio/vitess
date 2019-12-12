@@ -281,15 +281,15 @@ func skipToEnd(yylex interface{}) {
 %type <str> charset
 %type <str> set_session_or_global show_session_or_global
 %type <convertType> convert_type
-%type <columnType> column_type  column_type_with_options
+%type <columnType> column_type  column_type_options
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
-%type <sqlVal> length_opt column_comment_opt
-%type <optVal> column_default_opt on_update_opt
+%type <sqlVal> length_opt column_comment
+%type <optVal> column_default on_update
 %type <str> charset_opt collate_opt
 %type <boolVal> unsigned_opt zero_fill_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
-%type <boolVal> null_opt auto_increment_opt
-%type <colKeyOpt> column_key_opt
+%type <boolVal> null_or_not_null auto_increment
+%type <colKeyOpt> column_key
 %type <strs> enum_values
 %type <columnDefinition> column_definition
 %type <indexDefinition> index_definition
@@ -704,71 +704,71 @@ table_column_list:
   }
 
 column_definition:
-  ID column_type_with_options
+  ID column_type column_type_options
   {
+    if err := $2.merge($3); err != nil {
+      yylex.Error(err.Error())
+      return 1
+    }
     $$ = &ColumnDefinition{Name: NewColIdent(string($1)), Type: $2}
   }
 
-column_type_with_options:
-  column_type
+column_type_options:
   {
-    $1.KeyOpt = colKeyNone
+    $$ = ColumnType{}
+  }
+| column_type_options null_or_not_null
+  {
+    opt := ColumnType{NotNull: $2, sawnull: true}
+    if err := $1.merge(opt); err != nil {
+    	yylex.Error(err.Error())
+    	return 1
+    }
     $$ = $1
   }
-| column_type_with_options null_opt
+| column_type_options column_default
   {
-    if $1.sawnull {
-      yylex.Error("cannot include NULL / NOT NULL more than once")
-      return 1
+    opt := ColumnType{Default: $2}
+    if err := $1.merge(opt); err != nil {
+    	yylex.Error(err.Error())
+    	return 1
     }
-    $1.NotNull = $2
-    $1.sawnull = true
     $$ = $1
   }
-| column_type_with_options column_default_opt
+| column_type_options on_update
   {
-    if $1.Default != nil {
-      yylex.Error("cannot include DEFAULT more than once")
-      return 1
+    opt := ColumnType{OnUpdate: $2}
+    if err := $1.merge(opt); err != nil {
+    	yylex.Error(err.Error())
+    	return 1
     }
-    $1.Default = $2
     $$ = $1
   }
-| column_type_with_options on_update_opt
+| column_type_options auto_increment
   {
-    if $1.OnUpdate != nil {
-      yylex.Error("cannot include ON UPDATE more than once")
-      return 1
+    opt := ColumnType{Autoincrement: $2, sawai: true}
+    if err := $1.merge(opt); err != nil {
+    	yylex.Error(err.Error())
+    	return 1
     }
-    $1.OnUpdate = $2
     $$ = $1
   }
-| column_type_with_options auto_increment_opt
+| column_type_options column_key
   {
-    if $1.sawai {
-      yylex.Error("cannot include AUTO_INCREMENT more than once")
-      return 1
+    opt := ColumnType{KeyOpt: $2}
+    if err := $1.merge(opt); err != nil {
+    	yylex.Error(err.Error())
+    	return 1
     }
-    $1.Autoincrement = $2
-    $1.sawai = true
     $$ = $1
   }
-| column_type_with_options column_key_opt
+| column_type_options column_comment
   {
-    if $1.KeyOpt != colKeyNone {
-      yylex.Error("cannot include more than one key option for a column definition")
-      return 1
+    opt := ColumnType{Comment: $2}
+    if err := $1.merge(opt); err != nil {
+    	yylex.Error(err.Error())
+    	return 1
     }
-    $1.KeyOpt = $2
-    $$ = $1
-  }
-| column_type_with_options column_comment_opt
-  {
-    if $1.Comment != nil {
-      yylex.Error("cannot include more than one comment for a column definition")
-      return 1
-    }
-    $1.Comment = $2
     $$ = $1
   }
 
@@ -1052,7 +1052,7 @@ zero_fill_opt:
   }
 
 // Null opt returns false to mean NULL (i.e. the default) and true for NOT NULL
-null_opt:
+null_or_not_null:
   NULL
   {
     $$ = BoolVal(false)
@@ -1062,19 +1062,19 @@ null_opt:
     $$ = BoolVal(true)
   }
 
-column_default_opt:
+column_default:
   DEFAULT value_expression
   {
     $$ = $2
   }
 
-on_update_opt:
+on_update:
   ON UPDATE function_call_nonkeyword
   {
     $$ = $3
   }
 
-auto_increment_opt:
+auto_increment:
   AUTO_INCREMENT
   {
     $$ = BoolVal(true)
@@ -1106,7 +1106,7 @@ collate_opt:
     $$ = string($2)
   }
 
-column_key_opt:
+column_key:
   PRIMARY KEY
   {
     $$ = colKeyPrimary
@@ -1124,7 +1124,7 @@ column_key_opt:
     $$ = colKeyUnique
   }
 
-column_comment_opt:
+column_comment:
   COMMENT_KEYWORD STRING
   {
     $$ = NewStrVal($2)

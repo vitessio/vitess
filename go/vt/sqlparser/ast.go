@@ -1073,7 +1073,7 @@ func (col *ColumnDefinition) walkSubtree(visit Visit) error {
 	)
 }
 
-// ColumnType represents a sql type in a CREATE TABLE statement
+// ColumnType represents a sql type in a CREATE TABLE or ALTER TABLE statement
 // All optional fields are nil if not specified
 type ColumnType struct {
 	// The base type string
@@ -1103,6 +1103,54 @@ type ColumnType struct {
 
 	// Key specification
 	KeyOpt ColumnKeyOption
+}
+
+func (ct *ColumnType) merge(other ColumnType) error {
+	if other.sawnull {
+		if ct.sawnull {
+			return errors.New("cannot include NULL / NOT NULL more than once")
+		}
+		ct.sawnull = true
+		ct.NotNull = other.NotNull
+	}
+
+	if other.Default != nil {
+		if ct.Default != nil {
+			return errors.New("cannot include DEFAULT more than once")
+		}
+		ct.Default = other.Default
+	}
+
+	if other.OnUpdate != nil {
+		if ct.OnUpdate != nil {
+			return errors.New("cannot include ON UPDATE more than once")
+		}
+		ct.OnUpdate = other.OnUpdate
+	}
+
+	if other.sawai {
+		if ct.sawai {
+			return errors.New("cannot include AUTO_INCREMENT more than once")
+		}
+		ct.sawai = true
+		ct.Autoincrement = other.Autoincrement
+	}
+
+	if other.KeyOpt != colKeyNone {
+		if ct.KeyOpt != colKeyNone {
+			return errors.New("cannot include more than one key option for a column definition")
+		}
+		ct.KeyOpt = other.KeyOpt
+	}
+
+	if other.Comment != nil {
+		if ct.Comment != nil {
+			return errors.New("cannot include more than one comment for a column definition")
+		}
+		ct.Comment = other.Comment
+	}
+
+	return nil
 }
 
 // Format returns a canonical string representation of the type and all relevant options

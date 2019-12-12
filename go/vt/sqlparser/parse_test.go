@@ -1618,6 +1618,12 @@ func TestInvalid(t *testing.T) {
 		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique default 1)",
 		err:   "cannot include DEFAULT more than once at position 129",
 	}, {
+		input:  "create table t (c not null int default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
+		err: "syntax error at position 22 near 'not'",
+	}, {
+		input:  "create table t (c default 0 int on update current_timestamp() auto_increment comment 'a comment here' unique)",
+		err: "syntax error at position 26 near 'default'",
+	}, {
 		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique null)",
 		err:   "cannot include NULL / NOT NULL more than once at position 126 near 'null'",
 	}, {
@@ -1635,6 +1641,12 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique default 1)",
 		err:   "cannot include DEFAULT more than once at position 132",
+	}, {
+		input:  "alter table t add (c not null int default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
+		err: "syntax error at position 25 near 'not'",
+	}, {
+		input:  "alter table t add (c default 0 int on update current_timestamp() auto_increment comment 'a comment here' unique)",
+		err: "syntax error at position 29 near 'default'",
 	}}
 	for _, tcase := range invalidDDL {
 		_, err := ParseStrictDDL(tcase.input)
