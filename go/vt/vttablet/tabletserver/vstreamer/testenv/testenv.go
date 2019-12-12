@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -92,7 +91,7 @@ func Init() (*Env, error) {
 				},
 			},
 		},
-		ExtraMyCnf: []string{path.Join(os.Getenv("VTROOT"), "config/mycnf/rbr.cnf")},
+		ExtraMyCnf: []string{},
 		OnlyMySQL:  true,
 	}
 	te.cluster = &vttest.LocalCluster{
