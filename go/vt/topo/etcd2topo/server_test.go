@@ -126,6 +126,8 @@ func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs, func
 		"-client-cert-auth",
 		"-data-dir", dataDir)
 
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
 	err = cmd.Start()
 	if err != nil {
 		t.Fatalf("failed to start etcd: %v", err)
