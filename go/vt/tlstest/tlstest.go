@@ -175,7 +175,7 @@ func CreateClientServerCertPairs(root string) ClientServerKeyPairs {
 	serverCertCommonName := fmt.Sprintf("server%s.example.com", serverSerial)
 
 	clientName := fmt.Sprintf("clients-%s", serverSerial)
-	clientCACommonName := fmt.Sprintf("Clients %s CA", serverSerial)
+	clientCACommonName := fmt.Sprintf("clients-%s-ca", serverSerial)
 	clientCertName := fmt.Sprintf("client-instance-%s", serverSerial)
 	clientCertCommonName := fmt.Sprintf("Client Instance %s", serverSerial)
 
