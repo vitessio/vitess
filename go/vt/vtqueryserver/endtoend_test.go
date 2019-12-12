@@ -223,10 +223,6 @@ func TestPassthroughDMLs(t *testing.T) {
 
 	// Subquery DMLs are errors in passthrough mode with SBR, unless
 	// SetAllowUnsafeDMLs is set
-	_, err = conn.ExecuteFetch("update test set val='goodbye'", 1000, true)
-	if err == nil || !strings.Contains(err.Error(), "cannot identify primary key of statement") {
-		t.Fatalf("expected error but got: %v", err)
-	}
 
 	queryServer.SetAllowUnsafeDMLs(true)
 
