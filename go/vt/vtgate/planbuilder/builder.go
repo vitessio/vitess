@@ -267,20 +267,19 @@ func Build(query string, vschema ContextVSchema) (*engine.Plan, error) {
 // and engine.Plan can be built by the caller.
 func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchema) (*engine.Plan, error) {
 	var err error
-	plan := &engine.Plan{
-		Original: query,
-	}
+	var instruction engine.Primitive
+	var needsLastInsertID bool
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
-		plan.Instructions, err = buildSelectPlan(stmt, vschema)
+		instruction, needsLastInsertID, err = buildSelectPlan(stmt, vschema)
 	case *sqlparser.Insert:
-		plan.Instructions, err = buildInsertPlan(stmt, vschema)
+		instruction, err = buildInsertPlan(stmt, vschema)
 	case *sqlparser.Update:
-		plan.Instructions, err = buildUpdatePlan(stmt, vschema)
+		instruction, err = buildUpdatePlan(stmt, vschema)
 	case *sqlparser.Delete:
-		plan.Instructions, err = buildDeletePlan(stmt, vschema)
+		instruction, err = buildDeletePlan(stmt, vschema)
 	case *sqlparser.Union:
-		plan.Instructions, err = buildUnionPlan(stmt, vschema)
+		instruction, err = buildUnionPlan(stmt, vschema)
 	case *sqlparser.Set:
 		return nil, errors.New("unsupported construct: set")
 	case *sqlparser.Show:
@@ -304,6 +303,11 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 	}
 	if err != nil {
 		return nil, err
+	}
+	plan := &engine.Plan{
+		Original:          query,
+		Instructions:      instruction,
+		NeedsLastInsertID: needsLastInsertID,
 	}
 	return plan, nil
 }

@@ -253,6 +253,24 @@ func TestSelectLastInsertId(t *testing.T) {
 	assert.Equal(t, wantQueries, sbc1.Queries)
 }
 
+func TestSelectLastInsertIdInWhere(t *testing.T) {
+	executor, _, _, lookup := createExecutorEnv()
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	sql := "select id from music_user_map where id = last_insert_id()"
+	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "select id from music_user_map where id = :__lastInsertId",
+		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
+	}}
+
+	assert.Equal(t, wantQueries, lookup.Queries)
+}
+
 func TestSelectBindvars(t *testing.T) {
 	executor, sbc1, sbc2, lookup := createExecutorEnv()
 	logChan := QueryLogger.Subscribe("Test")

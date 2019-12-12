@@ -96,6 +96,8 @@ type Plan struct {
 	Rows uint64 `json:",omitempty"`
 	// Total number of errors
 	Errors uint64 `json:",omitempty"`
+	// NeedsLastInsertID signals whether this plan will need to be provided with last_insert_id
+	NeedsLastInsertID bool `json:"-"` // don't include in the json representation
 }
 
 // AddStats updates the plan execution statistics

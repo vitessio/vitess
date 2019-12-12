@@ -21,9 +21,7 @@ import (
 	"errors"
 	"fmt"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -98,7 +96,6 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 	// occurred. The construct type decides on how the query gets
 	// pulled out.
 	constructsMap := make(map[*sqlparser.Subquery]sqlparser.Expr)
-	var lastInsertIDNode *sqlparser.FuncExpr
 
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
@@ -153,25 +150,11 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 			}
 			subqueries = append(subqueries, sqi)
 			return false, nil
-		case *sqlparser.FuncExpr:
-			switch {
-			case node.Name.EqualString("last_insert_id"):
-				if len(node.Exprs) > 0 {
-					return false, vterrors.New(vtrpc.Code_UNIMPLEMENTED, "Argument to LAST_INSERT_ID() not supported")
-				}
-				lastInsertIDNode = node
-			}
-			return true, nil
 		}
 		return true, nil
 	}, expr)
 	if err != nil {
 		return nil, nil, nil, err
-	}
-
-	if lastInsertIDNode != nil {
-
-		expr = sqlparser.ReplaceExpr(expr, lastInsertIDNode, sqlparser.NewValArg([]byte(":"+engine.LastInsertIDName)))
 	}
 
 	highestRoute, _ := highestOrigin.(*route)
