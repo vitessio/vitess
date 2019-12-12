@@ -1331,7 +1331,7 @@ var (
 		output: "show columns on foobar",
 	}, {
 		input:  "desc foobar",
-		output: "otherread",
+		output: "show columns on foobar",
 	}, {
 		input:  "explain foobar",
 		output: "otherread",

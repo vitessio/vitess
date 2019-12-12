@@ -120,7 +120,8 @@ func skipToEnd(yylex interface{}) {
 %token LEX_ERROR
 %left <bytes> UNION
 %token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
-%token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS
+%token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE DEFAULT SET LOCK UNLOCK KEYS
+%right <bytes> UNIQUE KEY
 %token <bytes> VALUES LAST_INSERT_ID
 %token <bytes> NEXT VALUE SHARE MODE
 %token <bytes> SQL_NO_CACHE SQL_CACHE
@@ -158,7 +159,7 @@ func skipToEnd(yylex interface{}) {
 
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH
-%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF UNIQUE PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK
+%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
@@ -170,7 +171,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK
 
 // Type Tokens
-%token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM UUID
+%token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
 %token <bytes> REAL DOUBLE FLOAT_TYPE DECIMAL NUMERIC
 %token <bytes> TIME TIMESTAMP DATETIME YEAR
 %token <bytes> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR 
@@ -266,29 +267,28 @@ func skipToEnd(yylex interface{}) {
 %type <setExpr> set_expression transaction_char
 %type <str> isolation_level
 %type <bytes> for_from
-%type <str> ignore_opt column_opt default_opt
+%type <str> ignore_opt default_opt
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields
 %type <showFilter> like_or_where_opt like_opt
 %type <byt> exists_opt not_exists_opt
-%type <empty> non_add_drop_or_rename_operation to_opt to_or_as index_opt constraint_opt
+%type <empty> non_add_drop_or_rename_operation index_opt constraint_opt
+%type <empty> to_opt to_or_as as_opt column_opt describe
+%type <empty> skip_to_end ddl_skip_to_end
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
 %type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id
-%type <empty> as_opt
-%type <empty> skip_to_end ddl_skip_to_end
 %type <str> charset
 %type <str> set_session_or_global show_session_or_global
 %type <convertType> convert_type
-%type <columnType> column_type column_type_with_options
-%type <columnType> int_type decimal_type numeric_type uuid_type time_type char_type spatial_type
+%type <columnType> column_type  column_type_with_options
+%type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <sqlVal> length_opt column_comment_opt
 %type <optVal> column_default_opt on_update_opt
 %type <str> charset_opt collate_opt
 %type <boolVal> unsigned_opt zero_fill_opt
 %type <LengthScaleOption> float_length_opt decimal_length_opt
 %type <boolVal> null_opt auto_increment_opt
-%type <byt> or_replace_opt
 %type <colKeyOpt> column_key_opt
 %type <strs> enum_values
 %type <columnDefinition> column_definition
@@ -580,15 +580,6 @@ set_session_or_global:
     $$ = GlobalStr
   }
 
-or_replace_opt:
-  {
-    $$ = 0
-  }
-| OR REPLACE
-  {
-    $$ = 1
-  }
-
 create_statement:
   create_table_prefix table_spec
   {
@@ -606,13 +597,13 @@ create_statement:
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $7}
   }
-| CREATE or_replace_opt VIEW table_name AS select_statement
+| CREATE VIEW table_name AS select_statement
   {
-    var orreplace bool = false
-    if $2 == 1 {
-      orreplace = true
-    }
-    $$ = &DDL{Action: CreateStr, View: $4.ToViewName(), ViewExpr: $6, OrReplace: orreplace}
+    $$ = &DDL{Action: CreateStr, View: $3.ToViewName(), ViewExpr: $5}
+  }
+| CREATE OR REPLACE VIEW table_name AS select_statement
+  {
+    $$ = &DDL{Action: CreateStr, View: $5.ToViewName(), ViewExpr: $7, OrReplace: true}
   }
 | CREATE DATABASE not_exists_opt ID ddl_skip_to_end
   {
@@ -788,7 +779,6 @@ column_type:
     $$.Unsigned = $2
     $$.Zerofill = $3
   }
-| uuid_type
 | char_type
 | time_type
 | spatial_type
@@ -802,12 +792,6 @@ numeric_type:
 | decimal_type
   {
     $$ = $1
-  }
-
-uuid_type:
-  UUID
-  {
-    $$ = ColumnType{Type: string($1)}
   }
 
 int_type:
@@ -1833,17 +1817,17 @@ rollback_statement:
     $$ = &Rollback{}
   }
 
+describe:
+  DESCRIBE { }
+| DESC { }
+
 other_statement:
-  DESC skip_to_end
-  {
-    $$ = &OtherRead{}
-  }
-| DESCRIBE table_name
+  describe table_name
   // rewrite describe table as show columns from table
   {
       $$ = &Show{Type: "columns", OnTable: $2}
   }
-| DESCRIBE skip_to_end
+| describe skip_to_end
   {
     $$ = &OtherRead{}
   }
@@ -3437,7 +3421,6 @@ reserved_keyword:
 | UTC_DATE
 | UTC_TIME
 | UTC_TIMESTAMP
-| UUID
 | VALUES
 | WHEN
 | WHERE
@@ -3605,7 +3588,6 @@ non_reserved_keyword:
 | UNCOMMITTED
 | UNSIGNED
 | UNUSED
-| UUID
 | VARBINARY
 | VARCHAR
 | VARIABLES

@@ -374,7 +374,6 @@ var keywords = map[string]int{
 	"unique":              UNIQUE,
 	"unlock":              UNLOCK,
 	"unsigned":            UNSIGNED,
-	"uuid": 							 UUID,
 	"update":              UPDATE,
 	"usage":               UNUSED,
 	"use":                 USE,
