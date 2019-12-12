@@ -123,7 +123,9 @@ func SplitMarginComments(sql string) (query string, comments MarginComments) {
 		Leading:  strings.TrimLeftFunc(sql[:leadingEnd], unicode.IsSpace),
 		Trailing: strings.TrimRightFunc(sql[trailingStart:], unicode.IsSpace),
 	}
-	return strings.TrimFunc(sql[leadingEnd:trailingStart], unicode.IsSpace), comments
+	return strings.TrimFunc(sql[leadingEnd:trailingStart], func(c rune) bool {
+		return unicode.IsSpace(c) || c == ';'
+	}), comments
 }
 
 // StripLeadingComments trims the SQL string and removes any leading comments
