@@ -325,6 +325,32 @@ func TestLastInsertIDInSubQueryExpression(t *testing.T) {
 	assert.Equal(t, wantQueries, sbc1.Queries)
 }
 
+func TestSelectDatabase(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	sql := "select database()"
+	session := NewSafeSession(masterSession)
+	session.TargetString = "TestExecutor@master"
+	_, err := executor.Execute(
+		context.Background(),
+		"TestExecute",
+		session,
+		sql,
+		map[string]*querypb.BindVariable{})
+
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "select :__vtdbname from dual",
+		BindVariables: map[string]*querypb.BindVariable{"__vtdbname": sqltypes.StringBindVariable("TestExecutor")},
+	}}
+
+	assert.Equal(t, wantQueries, sbc1.Queries)
+}
+
 func TestSelectBindvars(t *testing.T) {
 	executor, sbc1, sbc2, lookup := createExecutorEnv()
 	logChan := QueryLogger.Subscribe("Test")
