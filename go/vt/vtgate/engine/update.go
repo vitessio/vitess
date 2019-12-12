@@ -70,6 +70,9 @@ type Update struct {
 
 	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
 	QueryTimeout int
+
+	// Update does not take inputs
+	noInputs
 }
 
 // MarshalJSON serializes the Update into a JSON representation.

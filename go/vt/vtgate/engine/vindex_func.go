@@ -39,6 +39,9 @@ type VindexFunc struct {
 	// TODO(sougou): add support for MultiColumn.
 	Vindex vindexes.SingleColumn
 	Value  sqltypes.PlanValue
+
+	// VindexFunc does not take inputs
+	noInputs
 }
 
 // MarshalJSON serializes the VindexFunc into a JSON representation.

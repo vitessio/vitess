@@ -33,6 +33,7 @@ const (
   <a href="/debug/querylogz">Current Query Log</a><br>
   <a href="/debug/queryz">Query Plan Stats</a><br>
   <a href="/debug/query_plans">Query Plans</a><br>
+  <a href="/debug/scatter_stats">Scatter Query Statistics</a><br>
 </td>
 </tr>
 </table>

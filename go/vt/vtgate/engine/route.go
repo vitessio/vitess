@@ -84,6 +84,9 @@ type Route struct {
 
 	// ScatterErrorsAsWarnings is true if results should be returned even if some shards have an error
 	ScatterErrorsAsWarnings bool
+
+	// Route does not take inputs
+	noInputs
 }
 
 // NewSimpleRoute creates a Route with the bare minimum of parameters.

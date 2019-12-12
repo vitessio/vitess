@@ -40,6 +40,12 @@ type fakePrimitive struct {
 	log []string
 }
 
+func (f *fakePrimitive) Inputs() []Primitive {
+	return []Primitive{}
+}
+
+var _ Primitive = (*fakePrimitive)(nil)
+
 func (f *fakePrimitive) rewind() {
 	f.curResult = 0
 	f.log = nil
