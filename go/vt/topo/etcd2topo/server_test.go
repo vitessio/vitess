@@ -157,7 +157,7 @@ func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs, func
 		}
 		t.Logf("error establishing client for etcd tls test: %v", err)
 		if time.Since(start) > 60*time.Second {
-			t.Fatalf("Failed to start etcd daemon in time")
+			t.Fatalf("Failed to start client for etcd tls test in time.")
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
