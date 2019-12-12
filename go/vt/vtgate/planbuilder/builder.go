@@ -269,9 +269,10 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 	var err error
 	var instruction engine.Primitive
 	var needsLastInsertID bool
+	var needsDBName bool
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
-		instruction, needsLastInsertID, err = buildSelectPlan(stmt, vschema)
+		instruction, needsLastInsertID, needsDBName, err = buildSelectPlan(stmt, vschema)
 	case *sqlparser.Insert:
 		instruction, err = buildInsertPlan(stmt, vschema)
 	case *sqlparser.Update:
@@ -308,6 +309,7 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 		Original:          query,
 		Instructions:      instruction,
 		NeedsLastInsertID: needsLastInsertID,
+		NeedsDatabaseName: needsDBName,
 	}
 	return plan, nil
 }

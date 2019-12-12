@@ -113,3 +113,21 @@ func TestRewriteLIIDComplex2(t *testing.T) {
 	assert.Equal(t, expected, result.Expression)
 	assert.True(t, result.NeedLastInsertID, "should need last insert id")
 }
+
+func TestRewriteDatabaseFunc(t *testing.T) {
+	// SELECT database()
+	database := &sqlparser.FuncExpr{
+		Qualifier: sqlparser.TableIdent{},
+		Name:      sqlparser.NewColIdent("database"),
+		Distinct:  false,
+		Exprs:     nil,
+	}
+	result, err := Rewrite(database)
+	assert.NoError(t, err)
+	assert.Equal(t, databaseBindVar(), result.Expression)
+	assert.True(t, result.NeedDatabase, "should need database name")
+}
+
+func databaseBindVar() sqlparser.Expr {
+	return sqlparser.NewValArg([]byte(":" + engine.DBVarName))
+}

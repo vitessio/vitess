@@ -37,8 +37,10 @@ const (
 	// This is used for sending different IN clause values
 	// to different shards.
 	ListVarName = "__vals"
-	//LastInsertIDName is a reserved bind var name for last_insert_id
+	//LastInsertIDName is a reserved bind var name for last_insert_id()
 	LastInsertIDName = "__lastInsertId"
+	//DBVarName is a reserved bind var name for database()
+	DBVarName = "__vtdbname"
 )
 
 // VCursor defines the interface the engine will use
@@ -98,6 +100,8 @@ type Plan struct {
 	Errors uint64 `json:",omitempty"`
 	// NeedsLastInsertID signals whether this plan will need to be provided with last_insert_id
 	NeedsLastInsertID bool `json:"-"` // don't include in the json representation
+	// NeedsDatabaseName signals whether this plan will need to be provided with the database name
+	NeedsDatabaseName bool `json:"-"` // don't include in the json representation
 }
 
 // AddStats updates the plan execution statistics

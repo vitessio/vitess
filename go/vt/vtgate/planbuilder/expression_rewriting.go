@@ -27,23 +27,22 @@ import (
 type RewriteResult struct {
 	Expression       sqlparser.Expr
 	NeedLastInsertID bool
+	NeedDatabase     bool
+}
+
+// UpdateBindVarNeeds copies bind var needs from primitiveBuilders used for subqueries
+func (rr *RewriteResult) UpdateBindVarNeeds(pb *primitiveBuilder) {
+	pb.needsDbName = pb.needsDbName || rr.NeedDatabase
+	pb.needsLastInsertID = pb.needsLastInsertID || rr.NeedLastInsertID
 }
 
 // Rewrite will rewrite an expression. Currently it does the following rewrites:
 //  - `last_insert_id()` => `:vtlastid`
+//  - `database()`       => `:vtdbname`
 func Rewrite(in sqlparser.Expr) (*RewriteResult, error) {
-	result, needLastInsertID, err := rewriteLastInsertID(in)
-	if err != nil {
-		return nil, err
-	}
-	return &RewriteResult{
-		Expression:       result,
-		NeedLastInsertID: needLastInsertID,
-	}, nil
-}
-
-func rewriteLastInsertID(in sqlparser.Expr) (_ sqlparser.Expr, needLastInsertID bool, _ error) {
-	matchingNodes := make([]*sqlparser.FuncExpr, 0)
+	rewrites := make(map[*sqlparser.FuncExpr]sqlparser.Expr)
+	liid := false
+	db := false
 
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
@@ -53,7 +52,14 @@ func rewriteLastInsertID(in sqlparser.Expr) (_ sqlparser.Expr, needLastInsertID 
 				if len(node.Exprs) > 0 {
 					return false, vterrors.New(vtrpc.Code_UNIMPLEMENTED, "Argument to LAST_INSERT_ID() not supported")
 				}
-				matchingNodes = append(matchingNodes, node)
+				rewrites[node] = bindVarExpression(engine.LastInsertIDName)
+				liid = true
+			case node.Name.EqualString("database"):
+				if len(node.Exprs) > 0 {
+					return false, vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Syntax error. DATABASE() takes no arguments")
+				}
+				rewrites[node] = bindVarExpression(engine.DBVarName)
+				db = true
 			}
 			return true, nil
 		}
@@ -61,16 +67,20 @@ func rewriteLastInsertID(in sqlparser.Expr) (_ sqlparser.Expr, needLastInsertID 
 	}, in)
 
 	if err != nil {
-		return nil, false, err
+		return nil, err
 	}
 
-	for _, node := range matchingNodes {
-		in = sqlparser.ReplaceExpr(in, node, bindVarExpression())
+	for from, to := range rewrites {
+		in = sqlparser.ReplaceExpr(in, from, to)
 	}
 
-	return in, len(matchingNodes) > 0, nil
+	return &RewriteResult{
+		Expression:       in,
+		NeedLastInsertID: liid,
+		NeedDatabase:     db,
+	}, nil
 }
 
-func bindVarExpression() *sqlparser.SQLVal {
-	return sqlparser.NewValArg([]byte(":" + engine.LastInsertIDName))
+func bindVarExpression(name string) *sqlparser.SQLVal {
+	return sqlparser.NewValArg([]byte(":" + name))
 }

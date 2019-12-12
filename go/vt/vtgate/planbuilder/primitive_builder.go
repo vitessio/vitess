@@ -26,6 +26,7 @@ type primitiveBuilder struct {
 	bldr              builder
 	st                *symtab
 	needsLastInsertID bool
+	needsDbName       bool
 }
 
 func newPrimitiveBuilder(vschema ContextVSchema, jt *jointab) *primitiveBuilder {
@@ -35,6 +36,7 @@ func newPrimitiveBuilder(vschema ContextVSchema, jt *jointab) *primitiveBuilder 
 	}
 }
 
-func (pb *primitiveBuilder) updateInsertIDNeed(needsLastInsertID bool) {
-	pb.needsLastInsertID = pb.needsLastInsertID || needsLastInsertID
+func (pb *primitiveBuilder) copyBindVarNeeds(subQ *primitiveBuilder) {
+	pb.needsLastInsertID = pb.needsLastInsertID || subQ.needsLastInsertID
+	pb.needsDbName = pb.needsDbName || subQ.needsDbName
 }

@@ -309,6 +309,14 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 	if plan.NeedsLastInsertID {
 		bindVars[engine.LastInsertIDName] = sqltypes.Uint64BindVariable(safeSession.GetLastInsertId())
 	}
+	if plan.NeedsDatabaseName {
+		keyspace, _, _, _ := e.ParseDestinationTarget(safeSession.TargetString)
+		if keyspace == "" {
+			bindVars[engine.DBVarName] = sqltypes.NullBindVariable
+		} else {
+			bindVars[engine.DBVarName] = sqltypes.StringBindVariable(keyspace)
+		}
+	}
 
 	qr, err := plan.Instructions.Execute(vcursor, bindVars, true)
 	logStats.ExecuteTime = time.Since(execStart)
