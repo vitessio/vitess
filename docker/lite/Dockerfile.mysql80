@@ -39,6 +39,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 ENV VTROOT /vt/src/vitess.io/vitess
 ENV VTDATAROOT /vt/vtdataroot
 ENV PATH $VTROOT/bin:$PATH
+ENV MYSQL_FLAVOR MySQL80
 
 # Copy binaries (placed by build.sh)
 COPY --from=staging /vt/ /vt/
