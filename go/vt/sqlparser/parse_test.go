@@ -1443,6 +1443,9 @@ var (
 	}, {
 		input: "begin",
 	}, {
+		input:  "begin;",
+		output: "begin",
+	}, {
 		input:  "start transaction",
 		output: "begin",
 	}, {
