@@ -37,4 +37,4 @@ case $flavor in
 	*)
 		;;
 esac
-docker build --no-cache -f docker/bootstrap/Dockerfile.$flavor$arch_ext -t vitess/bootstrap:$flavor .
+docker build --no-cache -f docker/bootstrap/Dockerfile.$flavor$arch_ext -t vitess/bootstrap:$flavor$arch_ex .
