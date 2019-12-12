@@ -271,6 +271,60 @@ func TestSelectLastInsertIdInWhere(t *testing.T) {
 	assert.Equal(t, wantQueries, lookup.Queries)
 }
 
+func TestLastInsertIDInVirtualTable(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+	result1 := []*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
+		},
+		RowsAffected: 1,
+		InsertID:     0,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(3),
+		}},
+	}}
+	sbc1.SetResults(result1)
+	_, err := executorExec(executor, "select * from (select last_insert_id()) as t", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "select * from (select :__lastInsertId from dual) as t",
+		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
+	}}
+
+	assert.Equal(t, wantQueries, sbc1.Queries)
+}
+
+func TestLastInsertIDInSubQueryExpression(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+	result1 := []*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
+		},
+		RowsAffected: 1,
+		InsertID:     0,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(3),
+		}},
+	}}
+	sbc1.SetResults(result1)
+	_, err := executorExec(executor, "select (select last_insert_id()) as x", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "select (select :__lastInsertId from dual) as x from dual",
+		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
+	}}
+
+	assert.Equal(t, wantQueries, sbc1.Queries)
+}
+
 func TestSelectBindvars(t *testing.T) {
 	executor, sbc1, sbc2, lookup := createExecutorEnv()
 	logChan := QueryLogger.Subscribe("Test")

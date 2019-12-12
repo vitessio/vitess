@@ -166,6 +166,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		rb.routeOptions = subroute.routeOptions
 		subroute.Redirect = rb
 		pb.bldr, pb.st = rb, st
+		pb.updateInsertIDNeed(spb.needsLastInsertID)
 		return nil
 	}
 	return fmt.Errorf("BUG: unexpected table expression type: %T", tableExpr.Expr)

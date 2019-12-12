@@ -149,6 +149,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 				}
 			}
 			subqueries = append(subqueries, sqi)
+			pb.updateInsertIDNeed(spb.needsLastInsertID)
 			return false, nil
 		}
 		return true, nil
