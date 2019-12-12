@@ -41,6 +41,10 @@ func decNesting(yylex interface{}) {
   yylex.(*Tokenizer).nesting--
 }
 
+func yyPosition(yylex interface{}) int {
+  return yylex.(*Tokenizer).Position
+}
+
 // skipToEnd forces the lexer to end prematurely. Not all SQL statements
 // are supported by the Parser, thus calling skipToEnd will make the lexer
 // return EOF early.
@@ -60,6 +64,7 @@ func skipToEnd(yylex interface{}) {
   bytes         []byte
   bytes2        [][]byte
   str           string
+  int           int
   strs          []string
   selectExprs   SelectExprs
   selectExpr    SelectExpr
@@ -254,6 +259,7 @@ func skipToEnd(yylex interface{}) {
 %type <expr> having_opt
 %type <orderBy> order_by_opt order_list
 %type <order> order
+%type <int> lexer_position
 %type <str> asc_desc_opt
 %type <limit> limit_opt
 %type <str> lock_opt
@@ -580,6 +586,11 @@ set_session_or_global:
     $$ = GlobalStr
   }
 
+lexer_position:
+  {
+    $$ = yyPosition(yylex)
+  }
+
 create_statement:
   create_table_prefix table_spec
   {
@@ -597,13 +608,13 @@ create_statement:
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $7}
   }
-| CREATE VIEW table_name AS select_statement
+| CREATE VIEW table_name AS lexer_position select_statement lexer_position
   {
-    $$ = &DDL{Action: CreateStr, View: $3.ToViewName(), ViewExpr: $5}
+    $$ = &DDL{Action: CreateStr, View: $3.ToViewName(), ViewExpr: $6, ViewSelectPositionStart: $5, ViewSelectPositionEnd: $7 - 1}
   }
-| CREATE OR REPLACE VIEW table_name AS select_statement
+| CREATE OR REPLACE VIEW table_name AS lexer_position select_statement lexer_position
   {
-    $$ = &DDL{Action: CreateStr, View: $5.ToViewName(), ViewExpr: $7, OrReplace: true}
+    $$ = &DDL{Action: CreateStr, View: $5.ToViewName(), ViewExpr: $8, ViewSelectPositionStart: $7, ViewSelectPositionEnd: $9 - 1, OrReplace: true}
   }
 | CREATE DATABASE not_exists_opt ID ddl_skip_to_end
   {

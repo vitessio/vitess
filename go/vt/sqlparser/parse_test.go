@@ -1544,6 +1544,33 @@ func TestValid(t *testing.T) {
 	}
 }
 
+func TestCreateViewSelectPosition(t *testing.T) {
+	cases := []struct {
+		query string
+		sel   string
+	}{{
+		query: "create view a as select current_timestamp()",
+		sel:   "select current_timestamp()",
+	},{
+		query: "create view a as select /* comment */ 2 + 2 from dual",
+		sel:   "select /* comment */ 2 + 2 from dual",
+	}}
+	for _, tcase := range cases {
+		tree, err := Parse(tcase.query)
+		if err != nil {
+			t.Errorf("Parse(%q) err: %v", tcase.query, err)
+		}
+		ddl, ok := tree.(*DDL)
+		if !ok {
+			t.Errorf("Expected DDL when parsing (%q)", tcase.query)
+		}
+		sel := tcase.query[ddl.ViewSelectPositionStart:ddl.ViewSelectPositionEnd]
+		if sel != tcase.sel {
+			t.Errorf("expected select to be %q, got %q", tcase.sel, sel)
+		}
+	}
+}
+
 // Ensure there is no corruption from using a pooled yyParserImpl in Parse.
 func TestValidParallel(t *testing.T) {
 	parallelism := 100
