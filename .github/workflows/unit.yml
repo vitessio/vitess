@@ -18,11 +18,13 @@ jobs:
     - name: Get dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget ant openjdk-8-jdk
+        sudo apt-get install -y mysql-server mysql-client make unzip g++ curl git wget ant openjdk-8-jdk
         sudo service mysql stop
-        sudo service etcd stop
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        mkdir -p dist bin
+        curl -L https://github.com/coreos/etcd/releases/download/v3.3.10/etcd-v3.3.10-linux-amd64.tar.gz | tar -zxC dist
+        mv dist/etcd-v3.3.10-linux-amd64/{etcd,etcdctl} bin/
         go mod download
 
     - name: Run make tools
