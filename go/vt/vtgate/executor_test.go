@@ -890,6 +890,13 @@ func TestExecutorShow(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+
+	// Test SHOW FULL COLUMNS FROM where query has a qualifier
+	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show full columns from %v.table1", KsTestUnsharded), nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
 	// Just test for first & last.
 	qr.Rows = [][]sqltypes.Value{qr.Rows[0], qr.Rows[len(qr.Rows)-1]}
 	wantqr = &sqltypes.Result{
