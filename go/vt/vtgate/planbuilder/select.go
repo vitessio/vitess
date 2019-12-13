@@ -126,12 +126,11 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 // pushes it down, and updates the route info if the new constraint improves
 // the primitive. This function can push to a WHERE or HAVING clause.
 func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string) error {
-	rewritten, err := Rewrite(in)
+	rewritten, err := RewriteAndUpdateBuilder(in, pb)
 	if err != nil {
 		return vterrors.Wrap(err, "failed to Rewrite expressions")
 	}
-	rewritten.UpdateBindVarNeeds(pb)
-	filters := splitAndExpression(nil, rewritten.Expression)
+	filters := splitAndExpression(nil, rewritten)
 	reorderBySubquery(filters)
 	for _, filter := range filters {
 		pullouts, origin, expr, err := pb.findOrigin(filter)
@@ -196,17 +195,16 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 	for _, node := range selectExprs {
 		switch node := node.(type) {
 		case *sqlparser.AliasedExpr:
-			rewritten, err := Rewrite(node.Expr)
+			rewritten, err := RewriteAndUpdateBuilder(node.Expr, pb)
 			if err != nil {
 				return nil, vterrors.Wrap(err, "failed to Rewrite expression")
 			}
-			if rewritten.Expression != node.Expr && node.As.IsEmpty() {
+			if rewritten != node.Expr && node.As.IsEmpty() {
 				buf := sqlparser.NewTrackedBuffer(nil)
 				node.Expr.Format(buf)
 				node.As = sqlparser.NewColIdent(buf.String())
 			}
-			rewritten.UpdateBindVarNeeds(pb)
-			pullouts, origin, expr, err := pb.findOrigin(rewritten.Expression)
+			pullouts, origin, expr, err := pb.findOrigin(rewritten)
 			if err != nil {
 				return nil, err
 			}
