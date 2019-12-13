@@ -100,6 +100,7 @@ func skipToEnd(yylex interface{}) {
   aliasedTableName *AliasedTableExpr
   TableSpec  *TableSpec
   columnType    ColumnType
+  columnOrder   *ColumnOrder
   colKeyOpt     ColumnKeyOption
   optVal        Expr
   LengthScaleOption LengthScaleOption
@@ -166,6 +167,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH
 %token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
+%token <bytes> FIRST AFTER
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES
@@ -218,7 +220,8 @@ func skipToEnd(yylex interface{}) {
 %type <statement> command
 %type <selStmt> select_statement base_select union_lhs union_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement
-%type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement
+%type <statement> create_statement rename_statement drop_statement truncate_statement flush_statement
+%type <statement> alter_statement alter_table_statement alter_view_statement alter_vschema_statement
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement
@@ -258,6 +261,7 @@ func skipToEnd(yylex interface{}) {
 %type <exprs> group_by_opt
 %type <expr> having_opt
 %type <orderBy> order_by_opt order_list
+%type <columnOrder> column_order_opt
 %type <order> order
 %type <int> lexer_position
 %type <str> asc_desc_opt
@@ -1350,6 +1354,11 @@ table_opt_value:
   }
 
 alter_statement:
+  alter_table_statement
+| alter_view_statement
+| alter_vschema_statement
+
+alter_table_statement:
   ALTER ignore_opt TABLE table_name non_add_drop_or_rename_operation skip_to_end
   {
     $$ = &DDL{Action: AlterStr, Table: $4}
@@ -1361,9 +1370,9 @@ alter_statement:
     ddl.Column = $8.Name
     $$ = ddl
   }
-| ALTER ignore_opt TABLE table_name ADD column_opt column_definition skip_to_end
+| ALTER ignore_opt TABLE table_name ADD column_opt column_definition column_order_opt skip_to_end
   {
-    ddl := &DDL{Action: AlterStr, ColumnAction: AddStr, Table: $4, TableSpec: &TableSpec{}}
+    ddl := &DDL{Action: AlterStr, ColumnAction: AddStr, Table: $4, TableSpec: &TableSpec{}, ColumnOrder: $8}
     ddl.TableSpec.AddColumn($7)
     ddl.Column = $7.Name
     $$ = ddl
@@ -1394,15 +1403,32 @@ alter_statement:
     // Rename an index can just be an alter
     $$ = &DDL{Action: AlterStr, Table: $4}
   }
-| ALTER VIEW table_name ddl_skip_to_end
-  {
-    $$ = &DDL{Action: AlterStr, Table: $3.ToViewName()}
-  }
 | ALTER ignore_opt TABLE table_name partition_operation
   {
     $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
   }
-| ALTER VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
+
+column_order_opt:
+  {
+    $$ = nil
+  }
+| FIRST
+  {
+    $$ = &ColumnOrder{First: true}
+  }
+| AFTER ID
+  {
+    $$ = &ColumnOrder{AfterColumn: NewColIdent(string($2))}
+  }
+
+alter_view_statement:
+  ALTER VIEW table_name ddl_skip_to_end
+  {
+    $$ = &DDL{Action: AlterStr, Table: $3.ToViewName()}
+  }
+
+alter_vschema_statement:
+  ALTER VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
   {
     $$ = &DDL{
         Action: CreateVindexStr,
@@ -1470,6 +1496,7 @@ alter_statement:
         },
     }
   }
+
 
 column_opt:
   { }
@@ -3324,6 +3351,7 @@ reserved_table_id:
 */
 reserved_keyword:
   ADD
+| AFTER
 | ARRAY 
 | AND
 | AS
@@ -3359,6 +3387,7 @@ reserved_keyword:
 | EXISTS
 | EXPLAIN
 | FALSE
+| FIRST
 | FIRST_VALUE
 | FOR
 | FORCE

@@ -726,6 +726,9 @@ type DDL struct {
 	// Set for column add / drop / rename statements
 	Column ColIdent
 
+	// Set for column add / drop / modify statements that specify a column order
+	ColumnOrder *ColumnOrder
+
 	// Set for column rename
 	ToColumn ColIdent
 
@@ -768,6 +771,14 @@ type DDL struct {
 
 	// AutoIncSpec is set for AddAutoIncStr.
 	AutoIncSpec *AutoIncSpec
+}
+
+// ColumnOrder is used in some DDL statements to specify or change the order of a column in a schema.
+type ColumnOrder struct {
+	// First is true if this column should be first in the schema
+	First bool
+	// AfterColumn is set if this column should be after the one named
+	AfterColumn ColIdent
 }
 
 // DDL strings.
@@ -835,7 +846,15 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 		if node.PartitionSpec != nil {
 			buf.Myprintf("%s table %v %v", node.Action, node.Table, node.PartitionSpec)
 		} else if node.ColumnAction == AddStr {
-			buf.Myprintf("%s table %v %s column %v", node.Action, node.Table, node.ColumnAction, node.TableSpec)
+			after := ""
+			if node.ColumnOrder != nil {
+				if node.ColumnOrder.First {
+					after = " first"
+				} else {
+					after = " after " + node.ColumnOrder.AfterColumn.String()
+				}
+			}
+			buf.Myprintf("%s table %v %s column %v%s", node.Action, node.Table, node.ColumnAction, node.TableSpec, after)
 		} else if node.ColumnAction == DropStr {
 			buf.Myprintf("%s table %v %s column %v", node.Action, node.Table, node.ColumnAction, node.Column)
 		} else if node.ColumnAction == RenameStr {
