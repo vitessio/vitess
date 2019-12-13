@@ -327,11 +327,10 @@ func TestLastInsertIDInSubQueryExpression(t *testing.T) {
 
 func TestSelectDatabase(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
-	logChan := QueryLogger.Subscribe("Test")
-	defer QueryLogger.Unsubscribe(logChan)
 
 	sql := "select database()"
-	session := NewSafeSession(masterSession)
+	newSession := *masterSession
+	session := NewSafeSession(&newSession)
 	session.TargetString = "TestExecutor@master"
 	_, err := executor.Execute(
 		context.Background(),
