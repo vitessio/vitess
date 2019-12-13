@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package callerid stores/retrives CallerIDs (immediate CallerID
+// Package callerid stores/retrieves CallerIDs (immediate CallerID
 // and effective CallerID) to/from the Context
 package callerid
 

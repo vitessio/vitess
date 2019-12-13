@@ -23,21 +23,21 @@ apt-get install -y make \
                    python-dev \
                    python-virtualenv \
                    python-mysqldb \
+                   python-pip \
                    libssl-dev \
                    g++ \
-                   mercurial \
                    git \
-                   pkg-config \
                    bison \
                    curl \
-                   openjdk-7-jdk \
+                   openjdk-8-jdk \
                    ant \
                    zip \
                    unzip
+pip install mysql-connector-python
 
 # Install golang
-GO_VER='1.11.1'
-GO_DOWNLOAD_URL='https://storage.googleapis.com/golang'
+GO_VER='1.12.7'
+GO_DOWNLOAD_URL='https://dl.google.com/go/'
 GO_FILENAME="go${GO_VER}.linux-amd64.tar.gz"
 wget "${GO_DOWNLOAD_URL}/${GO_FILENAME}" -O "${TMP_DIR}/${GO_FILENAME}"
 tar xzf "${TMP_DIR}/${GO_FILENAME}" -C "/usr/local"

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -180,6 +180,7 @@ func (agent *ActionAgent) runHealthCheck() {
 }
 
 func (agent *ActionAgent) runHealthCheckLocked() {
+	agent.checkLock()
 	// read the current tablet record and tablet control
 	agent.mutex.Lock()
 	tablet := proto.Clone(agent._tablet).(*topodatapb.Tablet)
@@ -237,7 +238,7 @@ func (agent *ActionAgent) runHealthCheckLocked() {
 			//
 			// We don't care if the QueryService state actually
 			// changed because we'll broadcast the latest health
-			// status after this immediately anway.
+			// status after this immediately anyway.
 			_ /* state changed */, healthErr = agent.QueryServiceControl.SetServingType(tablet.Type, true, nil)
 
 			if healthErr == nil {
@@ -265,7 +266,7 @@ func (agent *ActionAgent) runHealthCheckLocked() {
 
 			// We don't care if the QueryService state actually
 			// changed because we'll broadcast the latest health
-			// status after this immediately anway.
+			// status after this immediately anyway.
 			log.Infof("Disabling query service because of health-check failure: %v", healthErr)
 			if _ /* state changed */, err := agent.QueryServiceControl.SetServingType(tablet.Type, false, nil); err != nil {
 				log.Errorf("SetServingType(serving=false) failed: %v", err)
@@ -284,7 +285,7 @@ func (agent *ActionAgent) runHealthCheckLocked() {
 	}
 
 	// All master tablets have to run the VReplication engine.
-	// There is no guarantee that VREngine was succesfully started when tabletmanager
+	// There is no guarantee that VREngine was successfully started when tabletmanager
 	// came up. This is because the mysql could have been in read-only mode, etc.
 	// So, start the engine if it's not already running.
 	if tablet.Type == topodatapb.TabletType_MASTER && !agent.VREngine.IsOpen() {

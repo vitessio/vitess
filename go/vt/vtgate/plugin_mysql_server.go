@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -21,9 +21,13 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"regexp"
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/trace"
@@ -65,8 +69,7 @@ var (
 )
 
 // vtgateHandler implements the Listener interface.
-// It stores the Session in the ClientData of a Connection, if a transaction
-// is in progress.
+// It stores the Session in the ClientData of a Connection.
 type vtgateHandler struct {
 	vtg *VTGate
 }
@@ -80,6 +83,18 @@ func newVtgateHandler(vtg *VTGate) *vtgateHandler {
 func (vh *vtgateHandler) NewConnection(c *mysql.Conn) {
 }
 
+func (vh *vtgateHandler) ComResetConnection(c *mysql.Conn) {
+	ctx := context.Background()
+	session := vh.session(c)
+	if session.InTransaction {
+		defer atomic.AddInt32(&busyConnections, -1)
+	}
+	_, _, err := vh.vtg.Execute(ctx, session, "rollback", make(map[string]*querypb.BindVariable))
+	if err != nil {
+		log.Errorf("Error happened in transaction rollback: %v", err)
+	}
+}
+
 func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	// Rollback if there is an ongoing transaction. Ignore error.
 	var ctx context.Context
@@ -90,13 +105,44 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	} else {
 		ctx = context.Background()
 	}
-	session, _ := c.ClientData.(*vtgatepb.Session)
-	if session != nil {
-		if session.InTransaction {
-			defer atomic.AddInt32(&busyConnections, -1)
-		}
-		_, _, _ = vh.vtg.Execute(ctx, session, "rollback", make(map[string]*querypb.BindVariable))
+	session := vh.session(c)
+	if session.InTransaction {
+		defer atomic.AddInt32(&busyConnections, -1)
 	}
+	_, _, _ = vh.vtg.Execute(ctx, session, "rollback", make(map[string]*querypb.BindVariable))
+}
+
+// Regexp to extract parent span id over the sql query
+var r = regexp.MustCompile(`/\*VT_SPAN_CONTEXT=(.*)\*/`)
+
+// this function is here to make this logic easy to test by decoupling the logic from the `trace.NewSpan` and `trace.NewFromString` functions
+func startSpanTestable(ctx context.Context, query, label string,
+	newSpan func(context.Context, string) (trace.Span, context.Context),
+	newSpanFromString func(context.Context, string, string) (trace.Span, context.Context, error)) (trace.Span, context.Context, error) {
+	_, comments := sqlparser.SplitMarginComments(query)
+	match := r.FindStringSubmatch(comments.Leading)
+	var span trace.Span
+	if len(match) == 0 {
+		span, ctx = newSpan(ctx, label)
+	} else {
+		var err error
+		span, ctx, err = newSpanFromString(ctx, match[1], label)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	trace.AnnotateSQL(span, query)
+
+	return span, ctx, nil
+}
+
+func startSpan(ctx context.Context, query, label string) (trace.Span, context.Context, error) {
+	return startSpanTestable(ctx, query, label, trace.NewSpan, trace.NewFromString)
+}
+
+func (vh *vtgateHandler) ComInitDB(c *mysql.Conn, schemaName string) {
+	vh.session(c).TargetString = schemaName
 }
 
 func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
@@ -106,8 +152,11 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 		ctx, cancel = context.WithTimeout(ctx, *mysqlQueryTimeout)
 		defer cancel()
 	}
-	span, ctx := trace.NewSpan(ctx, "vtgateHandler.ComQuery")
-	trace.AnnotateSQL(span, query)
+
+	span, ctx, err := startSpan(ctx, query, "vtgateHandler.ComQuery")
+	if err != nil {
+		return vterrors.Wrap(err, "failed to extract span")
+	}
 	defer span.Finish()
 
 	ctx = callinfo.MysqlCallInfo(ctx, c)
@@ -124,6 +173,123 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 		"VTGate MySQL Connector" /* subcomponent: part of the client */)
 	ctx = callerid.NewContext(ctx, ef, im)
 
+	session := vh.session(c)
+	if !session.InTransaction {
+		atomic.AddInt32(&busyConnections, 1)
+	}
+	defer func() {
+		if !session.InTransaction {
+			atomic.AddInt32(&busyConnections, -1)
+		}
+	}()
+
+	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
+		err := vh.vtg.StreamExecute(ctx, session, query, make(map[string]*querypb.BindVariable), callback)
+		return mysql.NewSQLErrorFromError(err)
+	}
+	session, result, err := vh.vtg.Execute(ctx, session, query, make(map[string]*querypb.BindVariable))
+	err = mysql.NewSQLErrorFromError(err)
+	if err != nil {
+		return err
+	}
+	return callback(result)
+}
+
+// ComPrepare is the handler for command prepare.
+func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Field, error) {
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if *mysqlQueryTimeout != 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), *mysqlQueryTimeout)
+		defer cancel()
+	} else {
+		ctx = context.Background()
+	}
+
+	ctx = callinfo.MysqlCallInfo(ctx, c)
+
+	// Fill in the ImmediateCallerID with the UserData returned by
+	// the AuthServer plugin for that user. If nothing was
+	// returned, use the User. This lets the plugin map a MySQL
+	// user used for authentication to a Vitess User used for
+	// Table ACLs and Vitess authentication in general.
+	im := c.UserData.Get()
+	ef := callerid.NewEffectiveCallerID(
+		c.User,                  /* principal: who */
+		c.RemoteAddr().String(), /* component: running client process */
+		"VTGate MySQL Connector" /* subcomponent: part of the client */)
+	ctx = callerid.NewContext(ctx, ef, im)
+
+	session := vh.session(c)
+	if !session.InTransaction {
+		atomic.AddInt32(&busyConnections, 1)
+	}
+	defer func() {
+		if !session.InTransaction {
+			atomic.AddInt32(&busyConnections, -1)
+		}
+	}()
+
+	session, fld, err := vh.vtg.Prepare(ctx, session, query, make(map[string]*querypb.BindVariable))
+	err = mysql.NewSQLErrorFromError(err)
+	if err != nil {
+		return nil, err
+	}
+	return fld, nil
+}
+
+func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if *mysqlQueryTimeout != 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), *mysqlQueryTimeout)
+		defer cancel()
+	} else {
+		ctx = context.Background()
+	}
+
+	ctx = callinfo.MysqlCallInfo(ctx, c)
+
+	// Fill in the ImmediateCallerID with the UserData returned by
+	// the AuthServer plugin for that user. If nothing was
+	// returned, use the User. This lets the plugin map a MySQL
+	// user used for authentication to a Vitess User used for
+	// Table ACLs and Vitess authentication in general.
+	im := c.UserData.Get()
+	ef := callerid.NewEffectiveCallerID(
+		c.User,                  /* principal: who */
+		c.RemoteAddr().String(), /* component: running client process */
+		"VTGate MySQL Connector" /* subcomponent: part of the client */)
+	ctx = callerid.NewContext(ctx, ef, im)
+
+	session := vh.session(c)
+	if !session.InTransaction {
+		atomic.AddInt32(&busyConnections, 1)
+	}
+	defer func() {
+		if !session.InTransaction {
+			atomic.AddInt32(&busyConnections, -1)
+		}
+	}()
+
+	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
+		err := vh.vtg.StreamExecute(ctx, session, prepare.PrepareStmt, prepare.BindVars, callback)
+		return mysql.NewSQLErrorFromError(err)
+	}
+	_, qr, err := vh.vtg.Execute(ctx, session, prepare.PrepareStmt, prepare.BindVars)
+	if err != nil {
+		err = mysql.NewSQLErrorFromError(err)
+		return err
+	}
+
+	return callback(qr)
+}
+
+func (vh *vtgateHandler) WarningCount(c *mysql.Conn) uint16 {
+	return uint16(len(vh.session(c).GetWarnings()))
+}
+
+func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 	session, _ := c.ClientData.(*vtgatepb.Session)
 	if session == nil {
 		session = &vtgatepb.Session{
@@ -135,39 +301,9 @@ func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sq
 		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
 			session.Options.ClientFoundRows = true
 		}
+		c.ClientData = session
 	}
-
-	if !session.InTransaction {
-		atomic.AddInt32(&busyConnections, 1)
-	}
-	defer func() {
-		if !session.InTransaction {
-			atomic.AddInt32(&busyConnections, -1)
-		}
-	}()
-
-	if c.SchemaName != "" {
-		session.TargetString = c.SchemaName
-	}
-	if session.Options.Workload == querypb.ExecuteOptions_OLAP {
-		err := vh.vtg.StreamExecute(ctx, session, query, make(map[string]*querypb.BindVariable), callback)
-		return mysql.NewSQLErrorFromError(err)
-	}
-	session, result, err := vh.vtg.Execute(ctx, session, query, make(map[string]*querypb.BindVariable))
-	c.ClientData = session
-	err = mysql.NewSQLErrorFromError(err)
-	if err != nil {
-		return err
-	}
-	return callback(result)
-}
-
-func (vh *vtgateHandler) WarningCount(c *mysql.Conn) uint16 {
-	session, _ := c.ClientData.(*vtgatepb.Session)
-	if session != nil {
-		return uint16(len(session.GetWarnings()))
-	}
-	return 0
+	return session
 }
 
 var mysqlListener *mysql.Listener

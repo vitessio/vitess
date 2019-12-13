@@ -19,4 +19,16 @@ select name from user where id in (select id from t1) /* non-correlated subquery
 select name from user where id not in (select id from t1) /* non-correlated subquery in NOT IN clause */;
 select name from user where exists (select id from t1) /* non-correlated subquery as EXISTS */;
 
-select * from name_info order by info /* select * and order by varchar column */
+select * from name_info order by info /* select * and order by varchar column */;
+
+select distinct(name) from user where id = 1 /* select distinct */;
+select distinct name from user where id = 1 /* select distinct */;
+
+select id, substring(name, 1, -1) from user where id = 123 /* select substring */;
+select id, substring_index(name, '123456', -1) from user where id = 123 /* select substring_index */;
+
+select id, case when name = 'alice' then 'ALICE' when name = 'bob' then 'BOB' end as name from user where id = 1 /* select case */;
+select id, case when name = 'alice' then 'ALICE' when name = 'bob' then 'BOB' else 'OTHER' end as name from user where id = 1 /* select case */;
+select id, case when substr(name, 1, 5) = 'alice' then 'ALICE' when name = 'bob' then 'BOB' else 'OTHER' end as name from user where id = 1 /* select case */;
+
+select id, 'abc' as test from user where id = 1 union all select id, 'def' as test from user where id = 1 union all select id, 'ghi' as test from user where id = 1 /* union all */;

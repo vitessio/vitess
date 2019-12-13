@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -43,40 +42,37 @@ var (
 	relayLogMaxItems    = 1000
 	copyTimeout         = 1 * time.Hour
 	replicaLagTolerance = 10 * time.Second
-
-	// CreateCopyState is the list of statements to execute for creating
-	// the _vt.copy_state table
-	CreateCopyState = []string{
-		`create table if not exists _vt.copy_state (
-  vrepl_id int,
-  table_name varbinary(128),
-  lastpk varbinary(2000),
-  primary key (vrepl_id, table_name))`}
 )
 
+// vreplicator provides the core logic to start vreplication streams
 type vreplicator struct {
-	id           uint32
-	source       *binlogdatapb.BinlogSource
-	sourceTablet *topodatapb.Tablet
-	stats        *binlogplayer.Stats
-	dbClient     *vdbClient
-	// mysqld is used to fetch the local schema.
-	mysqld mysqlctl.MysqlDaemon
+	vre      *Engine
+	id       uint32
+	dbClient *vdbClient
+	// source
+	source          *binlogdatapb.BinlogSource
+	sourceVStreamer VStreamerClient
 
+	stats *binlogplayer.Stats
+	// mysqld is used to fetch the local schema.
+	mysqld    mysqlctl.MysqlDaemon
 	tableKeys map[string][]string
 }
 
-func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceTablet *topodatapb.Tablet, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon) *vreplicator {
+// newVReplicator creates a new vreplicator
+func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine) *vreplicator {
 	return &vreplicator{
-		id:           id,
-		source:       source,
-		sourceTablet: sourceTablet,
-		stats:        stats,
-		dbClient:     newVDBClient(dbClient, stats),
-		mysqld:       mysqld,
+		vre:             vre,
+		id:              id,
+		source:          source,
+		sourceVStreamer: sourceVStreamer,
+		stats:           stats,
+		dbClient:        newVDBClient(dbClient, stats),
+		mysqld:          mysqld,
 	}
 }
 
+// Replicate starts a vreplication stream.
 func (vr *vreplicator) Replicate(ctx context.Context) error {
 	tableKeys, err := vr.buildTableKeys()
 	if err != nil {
@@ -87,12 +83,13 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 	for {
 		settings, numTablesToCopy, err := vr.readSettings(ctx)
 		if err != nil {
-			return fmt.Errorf("error reading VReplication settings: %v", err)
+			return err
 		}
 		// If any of the operations below changed state to Stopped, we should return.
 		if settings.State == binlogplayer.BlpStopped {
 			return nil
 		}
+
 		switch {
 		case numTablesToCopy != 0:
 			if err := newVCopier(vr).copyNext(ctx, settings); err != nil {
@@ -134,7 +131,7 @@ func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.
 	}
 
 	query := fmt.Sprintf("select count(*) from _vt.copy_state where vrepl_id=%d", vr.id)
-	qr, err := vr.dbClient.ExecuteFetch(query, 10)
+	qr, err := vr.dbClient.Execute(query)
 	if err != nil {
 		// If it's a not found error, create it.
 		merr, isSQLErr := err.(*mysql.SQLError)
@@ -142,14 +139,12 @@ func (vr *vreplicator) readSettings(ctx context.Context) (settings binlogplayer.
 			return settings, numTablesToCopy, err
 		}
 		log.Info("Looks like _vt.copy_state table may not exist. Trying to create... ")
-		for _, query := range CreateCopyState {
-			if _, merr := vr.dbClient.ExecuteFetch(query, 0); merr != nil {
-				log.Errorf("Failed to ensure _vt.copy_state table exists: %v", merr)
-				return settings, numTablesToCopy, err
-			}
+		if _, merr := vr.dbClient.Execute(createCopyState); merr != nil {
+			log.Errorf("Failed to ensure _vt.copy_state table exists: %v", merr)
+			return settings, numTablesToCopy, err
 		}
 		// Redo the read.
-		qr, err = vr.dbClient.ExecuteFetch(query, 10)
+		qr, err = vr.dbClient.Execute(query)
 		if err != nil {
 			return settings, numTablesToCopy, err
 		}
@@ -169,8 +164,8 @@ func (vr *vreplicator) setMessage(message string) error {
 		Time:    time.Now(),
 		Message: message,
 	})
-	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v", encodeString(message), vr.id)
-	if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
+	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v", encodeString(binlogplayer.MessageTruncate(message)), vr.id)
+	if _, err := vr.dbClient.Execute(query); err != nil {
 		return fmt.Errorf("could not set message: %v: %v", query, err)
 	}
 	return nil

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -654,7 +654,7 @@ func TestInsertShardedKeyrange(t *testing.T) {
 
 	// If a unique vindex returns a keyrange, we fail the insert
 	_, err := executorExec(executor, "insert into keyrange_table(krcol_unique, krcol) values(1, 1)", nil)
-	want := "execInsertSharded: getInsertShardedRoute: could not map INT64(1) to a unique keyspace id: DestinationKeyRange(-10)"
+	want := "execInsertSharded: getInsertShardedRoute: could not map [INT64(1)] to a unique keyspace id: DestinationKeyRange(-10)"
 	if err == nil || err.Error() != want {
 		t.Errorf("executorExec error: %v, want %s", err, want)
 	}
@@ -786,13 +786,9 @@ func TestInsertShardedIgnore(t *testing.T) {
 		Sql: "insert ignore into insert_ignore_test(pv, owned, verify) values (:_pv0, :_owned0, :_verify0),(:_pv4, :_owned4, :_verify4) /* vtgate:: keyspace_id:166b40b44aba4bd6,166b40b44aba4bd6 */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_pv0":     sqltypes.Int64BindVariable(1),
-			"_pv2":     sqltypes.Int64BindVariable(3),
-			"_pv3":     sqltypes.Int64BindVariable(4),
 			"_pv4":     sqltypes.Int64BindVariable(5),
 			"_pv5":     sqltypes.Int64BindVariable(6),
 			"_owned0":  sqltypes.Int64BindVariable(1),
-			"_owned2":  sqltypes.Int64BindVariable(3),
-			"_owned3":  sqltypes.Int64BindVariable(4),
 			"_owned4":  sqltypes.Int64BindVariable(5),
 			"_owned5":  sqltypes.Int64BindVariable(6),
 			"_verify0": sqltypes.Int64BindVariable(1),
@@ -807,13 +803,9 @@ func TestInsertShardedIgnore(t *testing.T) {
 		Sql: "insert ignore into insert_ignore_test(pv, owned, verify) values (:_pv5, :_owned5, :_verify5) /* vtgate:: keyspace_id:4eb190c9a2fa169c */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_pv0":     sqltypes.Int64BindVariable(1),
-			"_pv2":     sqltypes.Int64BindVariable(3),
-			"_pv3":     sqltypes.Int64BindVariable(4),
 			"_pv4":     sqltypes.Int64BindVariable(5),
 			"_pv5":     sqltypes.Int64BindVariable(6),
 			"_owned0":  sqltypes.Int64BindVariable(1),
-			"_owned2":  sqltypes.Int64BindVariable(3),
-			"_owned3":  sqltypes.Int64BindVariable(4),
 			"_owned4":  sqltypes.Int64BindVariable(5),
 			"_owned5":  sqltypes.Int64BindVariable(6),
 			"_verify0": sqltypes.Int64BindVariable(1),
@@ -1754,4 +1746,80 @@ func TestKeyShardDestQuery(t *testing.T) {
 	sbc1.Queries = nil
 	sbc2.Queries = nil
 	masterSession.TargetString = ""
+}
+
+// Prepared statement tests
+func TestUpdateEqualWithPrepare(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	_, err := executorPrepare(executor, "update music set a = :a0 where id = :id0", map[string]*querypb.BindVariable{
+		"a0":  sqltypes.Int64BindVariable(3),
+		"id0": sqltypes.Int64BindVariable(2),
+	})
+	if err != nil {
+		t.Error(err)
+	}
+
+	var wantQueries []*querypb.BoundQuery
+
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: %+v, want %+v\n", sbclookup.Queries, wantQueries)
+	}
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+	}
+	if sbc1.Queries != nil {
+		t.Errorf("sbc1.Queries: %+v, want nil\n", sbc1.Queries)
+	}
+}
+func TestInsertShardedWithPrepare(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	_, err := executorPrepare(executor, "insert into user(id, v, name) values (:_Id0, 2, ':_name0')", map[string]*querypb.BindVariable{
+		"_Id0":   sqltypes.Int64BindVariable(1),
+		"_name0": sqltypes.BytesBindVariable([]byte("myname")),
+		"__seq0": sqltypes.Int64BindVariable(1),
+	})
+	if err != nil {
+		t.Error(err)
+	}
+
+	var wantQueries []*querypb.BoundQuery
+
+	if !reflect.DeepEqual(sbc1.Queries, wantQueries) {
+		t.Errorf("sbc1.Queries:\n%+v, want\n%+v\n", sbc1.Queries, wantQueries)
+	}
+	if sbc2.Queries != nil {
+		t.Errorf("sbc2.Queries: %+v, want nil\n", sbc2.Queries)
+	}
+
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries: \n%+v, want \n%+v", sbclookup.Queries, wantQueries)
+	}
+}
+
+func TestDeleteEqualWithPrepare(t *testing.T) {
+	executor, sbc, _, sbclookup := createExecutorEnv()
+	_, err := executorPrepare(executor, "delete from user where id = :id0", map[string]*querypb.BindVariable{
+		"id0": sqltypes.Int64BindVariable(1),
+	})
+	if err != nil {
+		t.Error(err)
+	}
+
+	var wantQueries []*querypb.BoundQuery
+
+	if !reflect.DeepEqual(sbc.Queries, wantQueries) {
+		t.Errorf("sbc.Queries:\n%+v, want\n%+v\n", sbc.Queries, wantQueries)
+	}
+
+	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
+		t.Errorf("sbclookup.Queries:\n%+v, want\n%+v\n", sbclookup.Queries, wantQueries)
+	}
 }

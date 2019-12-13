@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -70,7 +70,13 @@ func purgeLogsOnce(now time.Time, dir, program string, ctimeDelta time.Duration,
 		return
 	}
 	for _, file := range files {
-		if current[file] {
+		statInfo, err := os.Lstat(file)
+		if err != nil {
+			// Failed to stat file
+			continue
+		}
+		if current[file] || !statInfo.Mode().IsRegular() {
+			// Do not purge current file or any non-regular files (symlinks etc)
 			continue
 		}
 		purgeFile := false
@@ -106,8 +112,8 @@ func PurgeLogs() {
 	}
 	logDir := f.Value.String()
 	program := filepath.Base(os.Args[0])
-	timer := time.NewTimer(*purgeLogsInterval)
-	for range timer.C {
+	ticker := time.NewTicker(*purgeLogsInterval)
+	for range ticker.C {
 		purgeLogsOnce(time.Now(), logDir, program, *keepLogsByCtime, *keepLogsByMtime)
 	}
 }

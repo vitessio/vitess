@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -204,7 +204,7 @@ func generateQuery(statement sqlparser.Statement) string {
 
 // getDMLRouting returns the vindex and values for the DML,
 // If it cannot find a unique vindex match, it returns an error.
-func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (vindexes.Vindex, []sqltypes.PlanValue, error) {
+func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (vindexes.SingleColumn, []sqltypes.PlanValue, error) {
 	if where == nil {
 		return nil, nil, errors.New("unsupported: multi-shard where clause in DML")
 	}
@@ -212,8 +212,12 @@ func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (vindexes.Vind
 		if !index.Vindex.IsUnique() {
 			continue
 		}
+		single, ok := index.Vindex.(vindexes.SingleColumn)
+		if !ok {
+			continue
+		}
 		if pv, ok := getMatch(where.Expr, index.Columns[0]); ok {
-			return index.Vindex, []sqltypes.PlanValue{pv}, nil
+			return single, []sqltypes.PlanValue{pv}, nil
 		}
 	}
 	return nil, nil, errors.New("unsupported: multi-shard where clause in DML")

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -28,6 +28,48 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
+
+// Utility function to write sql query as packets to test parseComPrepare
+func MockQueryPackets(t *testing.T, query string) []byte {
+	data := make([]byte, len(query)+1)
+	// Not sure if it makes a difference
+	pos := 0
+	pos = writeByte(data, pos, ComPrepare)
+	copy(data[pos:], query)
+	return data
+}
+
+func MockPrepareData(t *testing.T) (*PrepareData, *sqltypes.Result) {
+	sql := "select * from test_table where id = ?"
+
+	result := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Name: "id",
+				Type: querypb.Type_INT32,
+			},
+		},
+		Rows: [][]sqltypes.Value{
+			{
+				sqltypes.MakeTrusted(querypb.Type_INT32, []byte("1")),
+			},
+		},
+		RowsAffected: 1,
+	}
+
+	prepare := &PrepareData{
+		StatementID: 18,
+		PrepareStmt: sql,
+		ParamsCount: 1,
+		ParamsType:  []int32{263},
+		ColumnNames: []string{"id"},
+		BindVars: map[string]*querypb.BindVariable{
+			"v1": sqltypes.Int32BindVariable(10),
+		},
+	}
+
+	return prepare, result
+}
 
 func TestComInitDB(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
@@ -76,6 +118,139 @@ func TestComSetOption(t *testing.T) {
 	}
 }
 
+func TestComStmtPrepare(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	sql := "select * from test_table where id = ?"
+	mockData := MockQueryPackets(t, sql)
+
+	if err := cConn.writePacket(mockData); err != nil {
+		t.Fatalf("writePacket failed: %v", err)
+	}
+
+	data, err := sConn.ReadPacket()
+	if err != nil {
+		t.Fatalf("sConn.ReadPacket - ComPrepare failed: %v", err)
+	}
+
+	parsedQuery := sConn.parseComPrepare(data)
+	if parsedQuery != sql {
+		t.Fatalf("Received incorrect query, want: %v, got: %v", sql, parsedQuery)
+	}
+
+	prepare, result := MockPrepareData(t)
+	sConn.PrepareData = make(map[uint32]*PrepareData)
+	sConn.PrepareData[prepare.StatementID] = prepare
+
+	// write the response to the client
+	if err := sConn.writePrepare(result.Fields, prepare); err != nil {
+		t.Fatalf("sConn.writePrepare failed: %v", err)
+	}
+
+	resp, err := cConn.ReadPacket()
+	if err != nil {
+		t.Fatalf("cConn.ReadPacket failed: %v", err)
+	}
+	if uint32(resp[1]) != prepare.StatementID {
+		t.Fatalf("Received incorrect Statement ID, want: %v, got: %v", prepare.StatementID, resp[1])
+	}
+}
+
+func TestComStmtSendLongData(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	prepare, result := MockPrepareData(t)
+	cConn.PrepareData = make(map[uint32]*PrepareData)
+	cConn.PrepareData[prepare.StatementID] = prepare
+	if err := cConn.writePrepare(result.Fields, prepare); err != nil {
+		t.Fatalf("writePrepare failed: %v", err)
+	}
+
+	// Since there's no writeComStmtSendLongData, we'll write a prepareStmt and check if we can read the StatementID
+	data, err := sConn.ReadPacket()
+	if err != nil || len(data) == 0 {
+		t.Fatalf("sConn.ReadPacket - ComStmtClose failed: %v %v", data, err)
+	}
+	stmtID, paramID, chunkData, ok := sConn.parseComStmtSendLongData(data)
+	if !ok {
+		t.Fatalf("parseComStmtSendLongData failed")
+	}
+	if paramID != 1 {
+		t.Fatalf("Received incorrect ParamID, want %v, got %v:", paramID, 1)
+	}
+	if stmtID != prepare.StatementID {
+		t.Fatalf("Received incorrect value, want: %v, got: %v", uint32(data[1]), prepare.StatementID)
+	}
+	// Check length of chunkData, Since its a subset of `data` and compare with it after we subtract the number of bytes that was read from it.
+	// sizeof(uint32) + sizeof(uint16) + 1 = 7
+	if len(chunkData) != len(data)-7 {
+		t.Fatalf("Received bad chunkData")
+	}
+}
+
+func TestComStmtExecute(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	prepare, _ := MockPrepareData(t)
+	cConn.PrepareData = make(map[uint32]*PrepareData)
+	cConn.PrepareData[prepare.StatementID] = prepare
+
+	// This is simulated packets for `select * from test_table where id = ?`
+	data := []byte{23, 18, 0, 0, 0, 128, 1, 0, 0, 0, 0, 1, 1, 128, 1}
+
+	stmtID, _, err := sConn.parseComStmtExecute(cConn.PrepareData, data)
+	if err != nil {
+		t.Fatalf("parseComStmtExeute failed: %v", err)
+	}
+	if stmtID != 18 {
+		t.Fatalf("Parsed incorrect values")
+	}
+}
+
+func TestComStmtClose(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	prepare, result := MockPrepareData(t)
+	cConn.PrepareData = make(map[uint32]*PrepareData)
+	cConn.PrepareData[prepare.StatementID] = prepare
+	if err := cConn.writePrepare(result.Fields, prepare); err != nil {
+		t.Fatalf("writePrepare failed: %v", err)
+	}
+
+	// Since there's no writeComStmtClose, we'll write a prepareStmt and check if we can read the StatementID
+	data, err := sConn.ReadPacket()
+	if err != nil || len(data) == 0 {
+		t.Fatalf("sConn.ReadPacket - ComStmtClose failed: %v %v", data, err)
+	}
+	stmtID, ok := sConn.parseComStmtClose(data)
+	if !ok {
+		t.Fatalf("parseComStmtClose failed")
+	}
+	if stmtID != prepare.StatementID {
+		t.Fatalf("Received incorrect value, want: %v, got: %v", uint32(data[1]), prepare.StatementID)
+	}
+}
+
 func TestQueries(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	defer func() {
@@ -93,7 +268,7 @@ func TestQueries(t *testing.T) {
 		InsertID:     0x0102030405060708,
 	})
 
-	// Typicall Select with TYPE_AND_NAME.
+	// Typical Select with TYPE_AND_NAME.
 	// One value is also NULL.
 	checkQuery(t, "type and name", sConn, cConn, &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -119,7 +294,7 @@ func TestQueries(t *testing.T) {
 		RowsAffected: 2,
 	})
 
-	// Typicall Select with TYPE_AND_NAME.
+	// Typical Select with TYPE_AND_NAME.
 	// All types are represented.
 	// One row has all NULL values.
 	checkQuery(t, "all types", sConn, cConn, &sqltypes.Result{
@@ -222,7 +397,7 @@ func TestQueries(t *testing.T) {
 		RowsAffected: 2,
 	})
 
-	// Typicall Select with TYPE_AND_NAME.
+	// Typical Select with TYPE_AND_NAME.
 	// First value first column is an empty string, so it's encoded as 0.
 	checkQuery(t, "first empty string", sConn, cConn, &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -242,7 +417,7 @@ func TestQueries(t *testing.T) {
 		RowsAffected: 2,
 	})
 
-	// Typicall Select with TYPE_ONLY.
+	// Typical Select with TYPE_ONLY.
 	checkQuery(t, "type only", sConn, cConn, &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{
@@ -260,7 +435,7 @@ func TestQueries(t *testing.T) {
 		RowsAffected: 2,
 	})
 
-	// Typicall Select with ALL.
+	// Typical Select with ALL.
 	checkQuery(t, "complete", sConn, cConn, &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{

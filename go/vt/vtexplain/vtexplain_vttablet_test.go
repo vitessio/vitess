@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -109,7 +109,7 @@ func TestErrParseSchema(t *testing.T) {
 	testSchema := `
 create table t1 like t2;
 `
-	expected := "check your schema, table[t2] doesnt exist"
+	expected := "check your schema, table[t2] doesn't exist"
 	ddl, err := parseSchema(testSchema, &Options{StrictDDL: true})
 	if err != nil {
 		t.Fatalf("parseSchema: %v", err)

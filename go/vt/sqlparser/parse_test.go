@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,9 +17,11 @@ limitations under the License.
 package sqlparser
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"math/rand"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -938,6 +940,12 @@ var (
 		input:  "alter table a drop spatial index idx (id)",
 		output: "alter table a",
 	}, {
+		input:  "alter table a add check ch_1",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop check ch_1",
+		output: "alter table a",
+	}, {
 		input:  "alter table a drop foreign key",
 		output: "alter table a",
 	}, {
@@ -977,20 +985,41 @@ var (
 	}, {
 		input: "alter vschema create vindex hash_vdx using hash",
 	}, {
+		input: "alter vschema create vindex keyspace.hash_vdx using hash",
+	}, {
 		input: "alter vschema create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
 	}, {
 		input: "alter vschema create vindex xyz_vdx using xyz with param1=hello, param2='world', param3=123",
 	}, {
 		input: "alter vschema drop vindex hash_vdx",
 	}, {
+		input: "alter vschema drop vindex ks.hash_vdx",
+	}, {
 		input: "alter vschema add table a",
+	}, {
+		input: "alter vschema add table ks.a",
+	}, {
+		input: "alter vschema add sequence a_seq",
+	}, {
+		input: "alter vschema add sequence ks.a_seq",
+	}, {
+		input: "alter vschema on a add auto_increment id using a_seq",
+	}, {
+		input: "alter vschema on ks.a add auto_increment id using a_seq",
 	}, {
 		input: "alter vschema drop table a",
 	}, {
+		input: "alter vschema drop table ks.a",
+	}, {
 		input: "alter vschema on a add vindex hash (id)",
+	}, {
+		input: "alter vschema on ks.a add vindex hash (id)",
 	}, {
 		input:  "alter vschema on a add vindex `hash` (`id`)",
 		output: "alter vschema on a add vindex hash (id)",
+	}, {
+		input:  "alter vschema on `ks`.a add vindex `hash` (`id`)",
+		output: "alter vschema on ks.a add vindex hash (id)",
 	}, {
 		input:  "alter vschema on a add vindex hash (id) using `hash`",
 		output: "alter vschema on a add vindex hash (id) using hash",
@@ -1008,6 +1037,8 @@ var (
 		output: "alter vschema on user2 add vindex name_lastname_lookup_vdx (name, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
 	}, {
 		input: "alter vschema on a drop vindex hash",
+	}, {
+		input: "alter vschema on ks.a drop vindex hash",
 	}, {
 		input:  "alter vschema on a drop vindex `hash`",
 		output: "alter vschema on a drop vindex hash",
@@ -1300,7 +1331,7 @@ var (
 		output: "show columns on foobar",
 	}, {
 		input:  "desc foobar",
-		output: "otherread",
+		output: "show columns on foobar",
 	}, {
 		input:  "explain foobar",
 		output: "otherread",
@@ -1445,45 +1476,48 @@ var (
 	}, {
 		input:  "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
 		output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-        }, {
+	}, {
 		// Same input with options backwards.
 		input:  "create table t (c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null)",
 		output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-        }, {
+	}, {
 		// Transpose pairs in original
 		input:  "create table t (c int default 0 not null auto_increment on update current_timestamp() unique comment 'a comment here')",
 		output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-        }, {
+	}, {
 		// Transpose pairs in reversed
 		input:  "create table t (c int comment 'a comment here' unique on update current_timestamp() auto_increment not null default 0)",
 		output: "create table t (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-        }, {
+	}, {
 		// Those tests for ALTER TABLE ADD (...
 		input:  "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
 		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-        }, {
+	}, {
 		input:  "alter table t add (c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null)",
 		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-        }, {
+	}, {
 		input:  "alter table t add (c int default 0 not null auto_increment on update current_timestamp() unique comment 'a comment here')",
 		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-        }, {
+	}, {
 		input:  "alter table t add (c int comment 'a comment here' unique on update current_timestamp() auto_increment not null default 0)",
 		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-        }, {
+	}, {
 		// Those tests for ALTER TABLE ADD COLUMN name ...
 		input:  "alter table t add column c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique",
 		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-        }, {
+	}, {
 		input:  "alter table t add column c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null",
 		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-        }, {
+	}, {
 		input:  "alter table t add column c int default 0 not null auto_increment on update current_timestamp() unique comment 'a comment here'",
 		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-        }, {
+	}, {
 		input:  "alter table t add column c int comment 'a comment here' unique on update current_timestamp() auto_increment not null default 0",
 		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
-        }}
+	}, {
+		input:  "delete a.*, b.* from tbl_a a, tbl_b b where a.id = b.id and b.name = 'test'",
+		output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.name = 'test'",
+	}}
 )
 
 func TestValid(t *testing.T) {
@@ -1611,6 +1645,12 @@ func TestInvalid(t *testing.T) {
 		input: "create table t (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique default 1)",
 		err:   "cannot include DEFAULT more than once at position 129",
 	}, {
+		input:  "create table t (c not null int default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
+		err: "syntax error at position 22 near 'not'",
+	}, {
+		input:  "create table t (c default 0 int on update current_timestamp() auto_increment comment 'a comment here' unique)",
+		err: "syntax error at position 26 near 'default'",
+	}, {
 		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique null)",
 		err:   "cannot include NULL / NOT NULL more than once at position 126 near 'null'",
 	}, {
@@ -1628,6 +1668,12 @@ func TestInvalid(t *testing.T) {
 	}, {
 		input: "alter table t add (c int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique default 1)",
 		err:   "cannot include DEFAULT more than once at position 132",
+	}, {
+		input:  "alter table t add (c not null int default 0 on update current_timestamp() auto_increment comment 'a comment here' unique)",
+		err: "syntax error at position 25 near 'not'",
+	}, {
+		input:  "alter table t add (c default 0 int on update current_timestamp() auto_increment comment 'a comment here' unique)",
+		err: "syntax error at position 29 near 'default'",
 	}}
 	for _, tcase := range invalidDDL {
 		_, err := ParseStrictDDL(tcase.input)
@@ -2635,6 +2681,25 @@ func TestSkipToEnd(t *testing.T) {
 		_, err := Parse(tcase.input)
 		if err == nil || err.Error() != tcase.output {
 			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
+		}
+	}
+}
+
+func TestParseDjangoQueries(t *testing.T) {
+
+	file, err := os.Open("./test_queries/django_queries.txt")
+	defer file.Close()
+	if err != nil {
+		t.Errorf(" Error: %v", err)
+	}
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+
+		_, err := Parse(string(scanner.Text()))
+		if err != nil {
+			t.Error(scanner.Text())
+			t.Errorf(" Error: %v", err)
 		}
 	}
 }

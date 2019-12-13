@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttest"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -31,10 +32,11 @@ import (
 )
 
 var (
-	cluster     *vttest.LocalCluster
-	vtParams    mysql.ConnParams
-	mysqlParams mysql.ConnParams
-	grpcAddress string
+	cluster        *vttest.LocalCluster
+	vtParams       mysql.ConnParams
+	mysqlParams    mysql.ConnParams
+	grpcAddress    string
+	tabletHostName = flag.String("tablet_hostname", "", "the tablet hostname")
 
 	schema = `
 create table t1(
@@ -57,9 +59,23 @@ create table vstream_test(
 
 create table aggr_test(
 	id bigint,
-	val1 varbinary(16),
+	val1 varchar(16),
 	val2 bigint,
 	primary key(id)
+) Engine=InnoDB;
+
+create table t2(
+	id3 bigint,
+	id4 bigint,
+	primary key(id3)
+) Engine=InnoDB;
+
+create table t2_id4_idx(
+	id bigint not null auto_increment,
+	id4 bigint,
+	id3 bigint,
+	primary key(id),
+	key idx_id4(id4)
 ) Engine=InnoDB;
 `
 
@@ -78,6 +94,16 @@ create table aggr_test(
 				},
 				Owner: "t1",
 			},
+			"t2_id4_idx": {
+				Type: "lookup_hash",
+				Params: map[string]string{
+					"table":      "t2_id4_idx",
+					"from":       "id4",
+					"to":         "id3",
+					"autocommit": "true",
+				},
+				Owner: "t2",
+			},
 		},
 		Tables: map[string]*vschemapb.Table{
 			"t1": {
@@ -95,6 +121,21 @@ create table aggr_test(
 					Name:   "hash",
 				}},
 			},
+			"t2": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id3",
+					Name:   "hash",
+				}, {
+					Column: "id4",
+					Name:   "t2_id4_idx",
+				}},
+			},
+			"t2_id4_idx": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id4",
+					Name:   "hash",
+				}},
+			},
 			"vstream_test": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "id",
@@ -105,6 +146,10 @@ create table aggr_test(
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "id",
 					Name:   "hash",
+				}},
+				Columns: []*vschemapb.Column{{
+					Name: "val1",
+					Type: sqltypes.VarChar,
 				}},
 			},
 		},
@@ -126,13 +171,15 @@ func TestMain(m *testing.M) {
 				}},
 			}},
 		}
-		cfg.ExtraMyCnf = []string{path.Join(os.Getenv("VTTOP"), "config/mycnf/rbr.cnf")}
+		cfg.ExtraMyCnf = []string{path.Join(os.Getenv("VTROOT"), "config/mycnf/rbr.cnf")}
 		if err := cfg.InitSchemas("ks", schema, vschema); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.RemoveAll(cfg.SchemaDir)
 			return 1
 		}
 		defer os.RemoveAll(cfg.SchemaDir)
+
+		cfg.TabletHostName = *tabletHostName
 
 		cluster = &vttest.LocalCluster{
 			Config: cfg,

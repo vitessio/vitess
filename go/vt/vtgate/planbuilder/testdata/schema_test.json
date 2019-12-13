@@ -47,6 +47,10 @@
           "type": "lookup_test",
           "owner": "multicolvin"
         },
+        "cola_kid_map": {
+          "type": "lookup_test",
+          "owner": "overlap_vindex"
+        },
         "name_user_map": {
           "type": "multi",
           "owner": "user"
@@ -66,6 +70,14 @@
         "hash_dup": {
           "type": "hash_test",
           "owner": "user"
+        },
+        "vindex1": {
+          "type": "hash_test",
+          "owner": "samecolvin"
+        },
+        "vindex2": {
+          "type": "lookup_test",
+          "owner": "samecolvin"
         }
       },
       "tables": {
@@ -170,6 +182,24 @@
           ],
           "column_list_authoritative": true
         },
+        "samecolvin": {
+          "column_vindexes": [
+            {
+              "column": "col",
+              "name": "vindex1"
+            },
+            {
+              "column": "col",
+              "name": "vindex2"
+            }
+          ],
+          "columns": [
+            {
+              "name": "col"
+            }
+          ],
+          "column_list_authoritative": true
+        },
         "multicolvin": {
           "column_vindexes": [
             {
@@ -183,6 +213,18 @@
             {
               "columns": ["column_b", "column_c"],
               "name": "colb_colc_map"
+            }
+          ]
+        },
+        "overlap_vindex": {
+          "column_vindexes": [
+            {
+              "column": "kid",
+              "name": "kid_index"
+            },
+            {
+              "columns": ["column_a", "kid"],
+              "name": "cola_kid_map"
             }
           ]
         },

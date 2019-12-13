@@ -1,9 +1,12 @@
 /*
-Copyright 2018 The Vitess Authors
- Licensed under the Apache License, Version 2.0 (the "License");
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
+
      http://www.apache.org/licenses/LICENSE-2.0
+
  Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -64,7 +67,7 @@ func (st *fakeConn) Get(ctx context.Context, filePath string) (bytes []byte, ver
 // Delete is part of the Conn interface
 func (st *fakeConn) Delete(ctx context.Context, filePath string, version Version) (err error) {
 	if filePath == "error" {
-		return fmt.Errorf("Dummy error")
+		return fmt.Errorf("dummy error")
 	}
 	return err
 }
@@ -72,7 +75,7 @@ func (st *fakeConn) Delete(ctx context.Context, filePath string, version Version
 // Lock is part of the Conn interface
 func (st *fakeConn) Lock(ctx context.Context, dirPath, contents string) (lock LockDescriptor, err error) {
 	if dirPath == "error" {
-		return lock, fmt.Errorf("Dummy error")
+		return lock, fmt.Errorf("dummy error")
 
 	}
 	return lock, err
@@ -86,7 +89,7 @@ func (st *fakeConn) Watch(ctx context.Context, filePath string) (current *WatchD
 // NewMasterParticipation is part of the Conn interface
 func (st *fakeConn) NewMasterParticipation(name, id string) (mp MasterParticipation, err error) {
 	if name == "error" {
-		return mp, fmt.Errorf("Dummy error")
+		return mp, fmt.Errorf("dummy error")
 
 	}
 	return mp, err

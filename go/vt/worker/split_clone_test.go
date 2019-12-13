@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -252,7 +252,7 @@ func (tc *splitCloneTestCase) setUpWithConcurrency(v3 bool, concurrency, writeQu
 		tc.rightMasterFakeDb.AddExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", nil)
 	}
 
-	// Fake stream health reponses because vtworker needs them to find the master.
+	// Fake stream health responses because vtworker needs them to find the master.
 	shqs := fakes.NewStreamHealthQueryService(leftMaster.Target())
 	shqs.AddDefaultHealthResponse()
 	tc.leftMasterQs = newTestQueryService(tc.t, leftMaster.Target(), shqs, 0, 2, topoproto.TabletAliasString(leftMaster.Tablet.Alias), false /* omitKeyspaceID */)
@@ -829,7 +829,7 @@ func TestSplitCloneV2_Offline_Reconciliation(t *testing.T) {
 	tc.rightMasterQs.modifyFirstRows(2)
 
 	// The destination tablets should see inserts, updates and deletes.
-	// Clear the entries added by setUp() because the reconcilation will
+	// Clear the entries added by setUp() because the reconciliation will
 	// produce different statements in this test case.
 	tc.leftMasterFakeDb.DeleteAllEntries()
 	tc.rightMasterFakeDb.DeleteAllEntries()

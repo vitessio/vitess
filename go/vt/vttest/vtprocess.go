@@ -1,5 +1,5 @@
 /*
-Copyright 2017 GitHub Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -91,7 +91,7 @@ func (vtp *VtProcess) Address() string {
 	return fmt.Sprintf("localhost:%d", vtp.Port)
 }
 
-// WaitTerminate attemps to gracefully shutdown the Vitess process by sending
+// WaitTerminate attempts to gracefully shutdown the Vitess process by sending
 // a SIGTERM, then wait for up to 10s for it to exit. If the process hasn't
 // exited cleanly after 10s, a SIGKILL is forced and the corresponding exit
 // error is returned to the user
@@ -239,6 +239,12 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 	}
 	if args.TransactionTimeout != 0 {
 		vt.ExtraArgs = append(vt.ExtraArgs, "-queryserver-config-transaction-timeout", fmt.Sprintf("%f", args.TransactionTimeout))
+	}
+	if args.TabletHostName != "" {
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-tablet_hostname", args.TabletHostName}...)
+	}
+	if args.InitWorkflowManager {
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-workflow_manager_init"}...)
 	}
 
 	if socket != "" {

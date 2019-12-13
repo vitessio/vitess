@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -224,6 +224,19 @@ func (code JoinOpcode) MarshalJSON() ([]byte, error) {
 // RouteType returns a description of the query routing type used by the primitive
 func (jn *Join) RouteType() string {
 	return "Join"
+}
+
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (jn *Join) GetKeyspaceName() string {
+	if jn.Left.GetKeyspaceName() == jn.Right.GetKeyspaceName() {
+		return jn.Left.GetKeyspaceName()
+	}
+	return jn.Left.GetKeyspaceName() + "_" + jn.Right.GetKeyspaceName()
+}
+
+// GetTableName specifies the table that this primitive routes to.
+func (jn *Join) GetTableName() string {
+	return jn.Left.GetTableName() + "_" + jn.Right.GetTableName()
 }
 
 func combineVars(bv1, bv2 map[string]*querypb.BindVariable) map[string]*querypb.BindVariable {

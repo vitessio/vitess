@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -52,7 +52,7 @@ type SafeSession struct {
 // be issued if the state is autocommitable,
 // implying that no intermediate transactions were started.
 // If so, the state transitions to autocommited, which is terminal.
-// If the token is succesfully issued, the caller has to perform
+// If the token is successfully issued, the caller has to perform
 // the commit. If a token cannot be issued, then a traditional
 // commit has to be performed at the outermost level where
 // the autocommitable transition happened.

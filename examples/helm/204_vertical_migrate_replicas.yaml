@@ -53,7 +53,7 @@ vtgate:
   resources:
 
 vttablet:
-  mysqlSize: "test"
+  mysqlSize: "prod"
   resources:
   mysqlResources:
 

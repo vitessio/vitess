@@ -163,7 +163,7 @@ topology:
         enabled: false
         username: myuser
         # this is the secret that will be mounted as the user password
-        # kubectl create secret generic myuser_password --from-literal=password=abc123
+        # kubectl create secret generic myuser-password --from-literal=password=abc123
         passwordSecret: myuser-password
 
       keyspaces:
@@ -392,7 +392,7 @@ metadata:
 data:
   extra.cnf: |-
     early-plugin-load=keyring_vault=keyring_vault.so
-    # this includes default rpl plugins, see https://github.com/vitessio/vitess/blob/master/config/mycnf/master_mysql56.cnf for details
+    # this includes default rpl plugins, see https://github.com/vitessio/vitess/blob/master/config/mycnf/master_mysql57.cnf for details
     plugin-load=rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so;keyring_udf=keyring_udf.so
     keyring_vault_config=/vt/usersecrets/vttablet-vault/vault.conf # load keyring configuration from secret
     innodb_encrypt_tables=ON # encrypt all tables by default
@@ -418,4 +418,16 @@ vttablet:
   extraMyCnf: vttablet-extra-config
   secrets:
   - vttablet-vault
+```
+
+### Enable tracing (opentracing-jaeger)
+
+To enable tracing using opentracing Jaeger of Vitess components add tracing config with tracer `opentracing-jaeger` to `extraFlags`. For example to enable tracing for `vtgate`:
+
+```yaml
+vtgate:
+  extraFlags:
+    jaeger-agent-host: "JAEGER-AGENT:6831"
+    tracing-sampling-rate: 0.1
+    tracer: opentracing-jaeger
 ```

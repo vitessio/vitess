@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -171,7 +171,7 @@ func (sc *SlaveConnection) streamEvents(ctx context.Context) chan mysql.BinlogEv
 // The startup phase will list all the binary logs, and find the one
 // that has events starting strictly before the provided timestamp. It
 // will then start from there, and stream all events. It is the
-// responsability of the calling site to filter the events more.
+// responsibility of the calling site to filter the events more.
 //
 // MySQL 5.6+ note: we need to do it that way because of the way the
 // GTIDSet works. In the previous two streaming functions, we pass in

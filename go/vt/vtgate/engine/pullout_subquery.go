@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -41,6 +41,16 @@ type PulloutSubquery struct {
 // RouteType returns a description of the query routing type used by the primitive
 func (ps *PulloutSubquery) RouteType() string {
 	return ps.Opcode.String()
+}
+
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (ps *PulloutSubquery) GetKeyspaceName() string {
+	return ps.Underlying.GetKeyspaceName()
+}
+
+// GetTableName specifies the table that this primitive routes to.
+func (ps *PulloutSubquery) GetTableName() string {
+	return ps.Underlying.GetTableName()
 }
 
 // Execute satisfies the Primitive interface.

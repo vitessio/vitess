@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package vreplication
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,13 +28,12 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestEngineOpen(t *testing.T) {
 	defer func() { globalStats = &vrStats{} }()
 
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 	resetBinlogClient()
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
@@ -69,7 +69,7 @@ func TestEngineOpen(t *testing.T) {
 
 	// Verify stats
 	if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
-		t.Errorf("stats are mismatched: %v, wnat %v", globalStats.controllers, vre.controllers)
+		t.Errorf("stats are mismatched: %v, want %v", globalStats.controllers, vre.controllers)
 	}
 
 	ct := vre.controllers[1]
@@ -81,7 +81,7 @@ func TestEngineOpen(t *testing.T) {
 func TestEngineExec(t *testing.T) {
 	defer func() { globalStats = &vrStats{} }()
 
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 	resetBinlogClient()
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
@@ -98,7 +98,7 @@ func TestEngineExec(t *testing.T) {
 	defer vre.Close()
 
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequest("insert into _vt.vreplication values (null)", &sqltypes.Result{InsertID: 1}, nil)
+	dbClient.ExpectRequest("insert into _vt.vreplication values(null)", &sqltypes.Result{InsertID: 1}, nil)
 	dbClient.ExpectRequest("select * from _vt.vreplication where id = 1", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id|state|source",
@@ -130,7 +130,7 @@ func TestEngineExec(t *testing.T) {
 
 	// Verify stats
 	if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
-		t.Errorf("stats are mismatched: %v, wnat %v", globalStats.controllers, vre.controllers)
+		t.Errorf("stats are mismatched: %v, want %v", globalStats.controllers, vre.controllers)
 	}
 
 	// Test Update
@@ -138,7 +138,8 @@ func TestEngineExec(t *testing.T) {
 	savedBlp := ct.blpStats
 
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequest("update _vt.vreplication set pos = 'MariaDB/0-1-1084', state = 'Running' where id = 1", testDMLResponse, nil)
+	dbClient.ExpectRequest("select id from _vt.vreplication where id = 1", testSelectorResponse1, nil)
+	dbClient.ExpectRequest("update _vt.vreplication set pos = 'MariaDB/0-1-1084', state = 'Running' where id in (1)", testDMLResponse, nil)
 	dbClient.ExpectRequest("select * from _vt.vreplication where id = 1", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id|state|source",
@@ -172,16 +173,28 @@ func TestEngineExec(t *testing.T) {
 
 	// Verify stats
 	if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
-		t.Errorf("stats are mismatched: %v, wnat %v", globalStats.controllers, vre.controllers)
+		t.Errorf("stats are mismatched: %v, want %v", globalStats.controllers, vre.controllers)
 	}
+
+	// Test no update
+	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest("select id from _vt.vreplication where id = 2", &sqltypes.Result{}, nil)
+	_, err = vre.Exec("update _vt.vreplication set pos = 'MariaDB/0-1-1084', state = 'Running' where id = 2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dbClient.Wait()
 
 	// Test Delete
 
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
-	delQuery := "delete from _vt.vreplication where id = 1"
-	dbClient.ExpectRequest(delQuery, testDMLResponse, nil)
+	dbClient.ExpectRequest("select id from _vt.vreplication where id = 1", testSelectorResponse1, nil)
+	dbClient.ExpectRequest("begin", nil, nil)
+	dbClient.ExpectRequest("delete from _vt.vreplication where id in (1)", testDMLResponse, nil)
+	dbClient.ExpectRequest("delete from _vt.copy_state where vrepl_id in (1)", nil, nil)
+	dbClient.ExpectRequest("commit", nil, nil)
 
-	qr, err = vre.Exec(delQuery)
+	qr, err = vre.Exec("delete from _vt.vreplication where id = 1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,12 +213,36 @@ func TestEngineExec(t *testing.T) {
 	if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
 		t.Errorf("stats are mismatched: %v, want %v", globalStats.controllers, vre.controllers)
 	}
+
+	// Test Delete of multiple rows
+
+	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest("select id from _vt.vreplication where id > 1", testSelectorResponse2, nil)
+	dbClient.ExpectRequest("begin", nil, nil)
+	dbClient.ExpectRequest("delete from _vt.vreplication where id in (1, 2)", testDMLResponse, nil)
+	dbClient.ExpectRequest("delete from _vt.copy_state where vrepl_id in (1, 2)", nil, nil)
+	dbClient.ExpectRequest("commit", nil, nil)
+
+	_, err = vre.Exec("delete from _vt.vreplication where id > 1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dbClient.Wait()
+
+	// Test no delete
+	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest("select id from _vt.vreplication where id = 3", &sqltypes.Result{}, nil)
+	_, err = vre.Exec("delete from _vt.vreplication where id = 3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dbClient.Wait()
 }
 
 func TestEngineBadInsert(t *testing.T) {
 	defer func() { globalStats = &vrStats{} }()
 
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 	resetBinlogClient()
 
 	dbClient := binlogplayer.NewMockDBClient(t)
@@ -221,7 +258,7 @@ func TestEngineBadInsert(t *testing.T) {
 	defer vre.Close()
 
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequest("insert into _vt.vreplication values (null)", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest("insert into _vt.vreplication values(null)", &sqltypes.Result{}, nil)
 	_, err := vre.Exec("insert into _vt.vreplication values(null)")
 	want := "insert failed to generate an id"
 	if err == nil || err.Error() != want {
@@ -230,12 +267,12 @@ func TestEngineBadInsert(t *testing.T) {
 
 	// Verify stats
 	if !reflect.DeepEqual(globalStats.controllers, vre.controllers) {
-		t.Errorf("stats are mismatched: %v, wnat %v", globalStats.controllers, vre.controllers)
+		t.Errorf("stats are mismatched: %v, want %v", globalStats.controllers, vre.controllers)
 	}
 }
 
 func TestEngineSelect(t *testing.T) {
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 	resetBinlogClient()
 	dbClient := binlogplayer.NewMockDBClient(t)
 
@@ -364,8 +401,9 @@ func TestWaitForPosCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	err := vre.WaitForPos(ctx, 1, "MariaDB/0-1-1084")
-	if err == nil || err != context.Canceled {
-		t.Errorf("WaitForPos: %v, want %v", err, context.Canceled)
+	want := "error waiting for pos: MariaDB/0-1-1084, last pos: MariaDB/0-1-1083: context canceled"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("WaitForPos: %v, must contain %v", err, want)
 	}
 	dbClient.Wait()
 
@@ -379,7 +417,7 @@ func TestWaitForPosCancel(t *testing.T) {
 		sqltypes.NewVarBinary(""),
 	}}}, nil)
 	err = vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
-	want := "vreplication is closing: context canceled"
+	want = "vreplication is closing: context canceled"
 	if err == nil || err.Error() != want {
 		t.Errorf("WaitForPos: %v, want %v", err, want)
 	}
@@ -388,7 +426,7 @@ func TestWaitForPosCancel(t *testing.T) {
 func TestCreateDBAndTable(t *testing.T) {
 	defer func() { globalStats = &vrStats{} }()
 
-	defer deleteTablet(addTablet(100, "0", topodatapb.TabletType_REPLICA, true, true))
+	defer deleteTablet(addTablet(100))
 	resetBinlogClient()
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
@@ -412,6 +450,7 @@ func TestCreateDBAndTable(t *testing.T) {
 	dbClient.ExpectRequest("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("DROP TABLE IF EXISTS _vt.blp_checkpoint", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequestRE("CREATE TABLE IF NOT EXISTS _vt.vreplication.*", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequestRE("create table if not exists _vt.resharding_journal.*", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 
 	// Non-recoverable error.
@@ -420,13 +459,14 @@ func TestCreateDBAndTable(t *testing.T) {
 
 	// Missing table. Statement should get retried after creating everything.
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequest("insert into _vt.vreplication values (null)", &sqltypes.Result{}, &tableNotFound)
+	dbClient.ExpectRequest("insert into _vt.vreplication values(null)", &sqltypes.Result{}, &tableNotFound)
 
 	dbClient.ExpectRequest("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("DROP TABLE IF EXISTS _vt.blp_checkpoint", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequestRE("CREATE TABLE IF NOT EXISTS _vt.vreplication.*", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequestRE("create table if not exists _vt.resharding_journal.*", &sqltypes.Result{}, nil)
 
-	dbClient.ExpectRequest("insert into _vt.vreplication values (null)", &sqltypes.Result{InsertID: 1}, nil)
+	dbClient.ExpectRequest("insert into _vt.vreplication values(null)", &sqltypes.Result{InsertID: 1}, nil)
 
 	// The rest of this test is normal with no db errors or extra queries.
 

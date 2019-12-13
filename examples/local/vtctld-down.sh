@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,6 +23,4 @@ source $script_root/env.sh
 
 pid=`cat $VTDATAROOT/tmp/vtctld.pid`
 echo "Stopping vtctld..."
-kill $pid
-
-kill -9 "$(pgrep -f "/bin/vtctld")"
+kill -9 $pid

@@ -84,6 +84,13 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
   SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
   ON *.* TO 'vt_filtered'@'localhost';
 
+# User for general MySQL monitoring.
+CREATE USER 'vt_monitoring'@'localhost';
+GRANT SELECT, PROCESS, SUPER, REPLICATION CLIENT, RELOAD
+  ON *.* TO 'vt_monitoring'@'localhost';
+GRANT SELECT, UPDATE, DELETE, DROP
+  ON performance_schema.* TO 'vt_monitoring'@'localhost';
+
 # User for Orchestrator (https://github.com/github/orchestrator).
 CREATE USER 'orc_client_user'@'%' IDENTIFIED BY 'orc_client_user_password';
 GRANT SUPER, PROCESS, REPLICATION SLAVE, RELOAD

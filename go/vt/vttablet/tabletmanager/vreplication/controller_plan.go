@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,16 +18,24 @@ package vreplication
 
 import (
 	"fmt"
-	"strconv"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // controllerPlan is the plan for vreplication control statements.
 type controllerPlan struct {
-	opcode int
 	query  string
-	id     int
+	opcode int
+
+	// numInserts is set for insertQuery.
+	numInserts int
+
+	// selector and applier are set for updateQuery and deleteQuery.
+	selector string
+	applier  *sqlparser.ParsedQuery
+
+	// delCopyState is set of deletes.
+	delCopyState *sqlparser.ParsedQuery
 }
 
 const (
@@ -35,6 +43,7 @@ const (
 	updateQuery
 	deleteQuery
 	selectQuery
+	reshardingJournalQuery
 )
 
 // buildControllerPlan parses the input query and returns an appropriate plan.
@@ -43,29 +52,42 @@ func buildControllerPlan(query string) (*controllerPlan, error) {
 	if err != nil {
 		return nil, err
 	}
+	var plan *controllerPlan
 	switch stmt := stmt.(type) {
 	case *sqlparser.Insert:
-		return buildInsertPlan(stmt)
+		plan, err = buildInsertPlan(stmt)
 	case *sqlparser.Update:
-		return buildUpdatePlan(stmt)
+		plan, err = buildUpdatePlan(stmt)
 	case *sqlparser.Delete:
-		return buildDeletePlan(stmt)
+		plan, err = buildDeletePlan(stmt)
 	case *sqlparser.Select:
-		return buildSelectPlan(stmt)
+		plan, err = buildSelectPlan(stmt)
 	default:
 		return nil, fmt.Errorf("unsupported construct: %s", sqlparser.String(stmt))
 	}
+	if err != nil {
+		return nil, err
+	}
+	plan.query = query
+	return plan, nil
 }
 
 func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
+	switch sqlparser.String(ins.Table) {
+	case reshardingJournalTableName:
+		return &controllerPlan{
+			opcode: reshardingJournalQuery,
+		}, nil
+	case vreplicationTableName:
+		// no-op
+	default:
+		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(ins.Table))
+	}
 	if ins.Action != sqlparser.InsertStr {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))
 	}
 	if ins.Ignore != "" {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))
-	}
-	if sqlparser.String(ins.Table) != "_vt.vreplication" {
-		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(ins.Table))
 	}
 	if ins.Partitions != nil {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))
@@ -77,15 +99,8 @@ func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
 	if !ok {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))
 	}
-	if len(rows) != 1 {
-		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(ins))
-	}
-	row := rows[0]
 	idPos := 0
 	if len(ins.Columns) != 0 {
-		if len(ins.Columns) != len(row) {
-			return nil, fmt.Errorf("malformed statement: %v", sqlparser.String(ins))
-		}
 		idPos = -1
 		for i, col := range ins.Columns {
 			if col.EqualString("id") {
@@ -95,18 +110,30 @@ func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
 		}
 	}
 	if idPos >= 0 {
-		if _, ok := row[idPos].(*sqlparser.NullVal); !ok {
-			return nil, fmt.Errorf("id should not have a value: %v", sqlparser.String(ins))
+		for _, row := range rows {
+			if idPos >= len(row) {
+				return nil, fmt.Errorf("malformed statement: %v", sqlparser.String(ins))
+			}
+			if _, ok := row[idPos].(*sqlparser.NullVal); !ok {
+				return nil, fmt.Errorf("id should not have a value: %v", sqlparser.String(ins))
+			}
 		}
 	}
 	return &controllerPlan{
-		opcode: insertQuery,
-		query:  sqlparser.String(ins),
+		opcode:     insertQuery,
+		numInserts: len(rows),
 	}, nil
 }
 
 func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
-	if sqlparser.String(upd.TableExprs) != "_vt.vreplication" {
+	switch sqlparser.String(upd.TableExprs) {
+	case reshardingJournalTableName:
+		return &controllerPlan{
+			opcode: reshardingJournalQuery,
+		}, nil
+	case vreplicationTableName:
+		// no-op
+	default:
 		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(upd.TableExprs))
 	}
 	if upd.OrderBy != nil || upd.Limit != nil {
@@ -118,24 +145,40 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 		}
 	}
 
-	id, err := extractID(upd.Where)
-	if err != nil {
-		return nil, err
+	buf1 := sqlparser.NewTrackedBuffer(nil)
+	buf1.Myprintf("select id from %s%v", vreplicationTableName, upd.Where)
+	upd.Where = &sqlparser.Where{
+		Type: sqlparser.WhereStr,
+		Expr: &sqlparser.ComparisonExpr{
+			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent("id")},
+			Operator: sqlparser.InStr,
+			Right:    sqlparser.ListArg("::ids"),
+		},
 	}
 
+	buf2 := sqlparser.NewTrackedBuffer(nil)
+	buf2.Myprintf("%v", upd)
+
 	return &controllerPlan{
-		opcode: updateQuery,
-		query:  sqlparser.String(upd),
-		id:     id,
+		opcode:   updateQuery,
+		selector: buf1.String(),
+		applier:  buf2.ParsedQuery(),
 	}, nil
 }
 
 func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
+	switch sqlparser.String(del.TableExprs) {
+	case reshardingJournalTableName:
+		return &controllerPlan{
+			opcode: reshardingJournalQuery,
+		}, nil
+	case vreplicationTableName:
+		// no-op
+	default:
+		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(del.TableExprs))
+	}
 	if del.Targets != nil {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(del))
-	}
-	if sqlparser.String(del.TableExprs) != "_vt.vreplication" {
-		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(del.TableExprs))
 	}
 	if del.Partitions != nil {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(del))
@@ -144,46 +187,46 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 		return nil, fmt.Errorf("unsupported construct: %v", sqlparser.String(del))
 	}
 
-	id, err := extractID(del.Where)
-	if err != nil {
-		return nil, err
+	buf1 := sqlparser.NewTrackedBuffer(nil)
+	buf1.Myprintf("select id from %s%v", vreplicationTableName, del.Where)
+	del.Where = &sqlparser.Where{
+		Type: sqlparser.WhereStr,
+		Expr: &sqlparser.ComparisonExpr{
+			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent("id")},
+			Operator: sqlparser.InStr,
+			Right:    sqlparser.ListArg("::ids"),
+		},
 	}
 
+	buf2 := sqlparser.NewTrackedBuffer(nil)
+	buf2.Myprintf("%v", del)
+
+	copyStateWhere := &sqlparser.Where{
+		Type: sqlparser.WhereStr,
+		Expr: &sqlparser.ComparisonExpr{
+			Left:     &sqlparser.ColName{Name: sqlparser.NewColIdent("vrepl_id")},
+			Operator: sqlparser.InStr,
+			Right:    sqlparser.ListArg("::ids"),
+		},
+	}
+	buf3 := sqlparser.NewTrackedBuffer(nil)
+	buf3.Myprintf("delete from %s%v", copyStateTableName, copyStateWhere)
+
 	return &controllerPlan{
-		opcode: deleteQuery,
-		query:  sqlparser.String(del),
-		id:     id,
+		opcode:       deleteQuery,
+		selector:     buf1.String(),
+		applier:      buf2.ParsedQuery(),
+		delCopyState: buf3.ParsedQuery(),
 	}, nil
 }
 
 func buildSelectPlan(sel *sqlparser.Select) (*controllerPlan, error) {
-	if sqlparser.String(sel.From) != "_vt.vreplication" {
+	switch sqlparser.String(sel.From) {
+	case vreplicationTableName, reshardingJournalTableName, copyStateTableName:
+		return &controllerPlan{
+			opcode: selectQuery,
+		}, nil
+	default:
 		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(sel.From))
 	}
-	return &controllerPlan{
-		opcode: selectQuery,
-		query:  sqlparser.String(sel),
-	}, nil
-}
-
-func extractID(where *sqlparser.Where) (int, error) {
-	if where == nil {
-		return 0, fmt.Errorf("invalid where clause:%v", sqlparser.String(where))
-	}
-	comp, ok := where.Expr.(*sqlparser.ComparisonExpr)
-	if !ok {
-		return 0, fmt.Errorf("invalid where clause:%v", sqlparser.String(where))
-	}
-	if sqlparser.String(comp.Left) != "id" {
-		return 0, fmt.Errorf("invalid where clause:%v", sqlparser.String(where))
-	}
-	if comp.Operator != sqlparser.EqualStr {
-		return 0, fmt.Errorf("invalid where clause:%v", sqlparser.String(where))
-	}
-
-	id, err := strconv.Atoi(sqlparser.String(comp.Right))
-	if err != nil {
-		return 0, fmt.Errorf("invalid where clause:%v", sqlparser.String(where))
-	}
-	return id, nil
 }

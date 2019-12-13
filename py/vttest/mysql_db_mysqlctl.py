@@ -1,4 +1,4 @@
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ class MySqlDBMysqlctl(mysql_db.MySqlDB):
         '-mysql_port', str(self._port),
         'init',
         '-init_db_sql_file',
-        os.path.join(os.environ['VTTOP'], 'config/init_db.sql'),
+        os.path.join(os.environ['VTROOT'], 'config/init_db.sql'),
     ]
     env = os.environ
     env['VTDATAROOT'] = self._directory

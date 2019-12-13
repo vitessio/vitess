@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -30,10 +30,13 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+// StatementType encodes the type of a SQL statement
+type StatementType int
+
 // These constants are used to identify the SQL statement type.
 // Changing this list will require reviewing all calls to Preview.
 const (
-	StmtSelect = iota
+	StmtSelect StatementType = iota
 	StmtStream
 	StmtInsert
 	StmtReplace
@@ -53,14 +56,19 @@ const (
 
 // Preview analyzes the beginning of the query using a simpler and faster
 // textual comparison to identify the statement type.
-func Preview(sql string) int {
+func Preview(sql string) StatementType {
 	trimmed := StripLeadingComments(sql)
 
-	firstWord := trimmed
-	if end := strings.IndexFunc(trimmed, unicode.IsSpace); end != -1 {
-		firstWord = trimmed[:end]
+	if strings.Index(trimmed, "/*!") == 0 {
+		return StmtComment
 	}
-	firstWord = strings.TrimLeftFunc(firstWord, func(r rune) bool { return !unicode.IsLetter(r) })
+
+	isNotLetter := func(r rune) bool { return !unicode.IsLetter(r) }
+	firstWord := strings.TrimLeftFunc(trimmed, isNotLetter)
+
+	if end := strings.IndexFunc(firstWord, unicode.IsSpace); end != -1 {
+		firstWord = firstWord[:end]
+	}
 	// Comparison is done in order of priority.
 	loweredFirstWord := strings.ToLower(firstWord)
 	switch loweredFirstWord {
@@ -103,15 +111,11 @@ func Preview(sql string) int {
 	case "analyze", "describe", "desc", "explain", "repair", "optimize":
 		return StmtOther
 	}
-	if strings.Index(trimmed, "/*!") == 0 {
-		return StmtComment
-	}
 	return StmtUnknown
 }
 
-// StmtType returns the statement type as a string
-func StmtType(stmtType int) string {
-	switch stmtType {
+func (s StatementType) String() string {
+	switch s {
 	case StmtSelect:
 		return "SELECT"
 	case StmtStream:
@@ -152,6 +156,23 @@ func IsDML(sql string) bool {
 		return true
 	}
 	return false
+}
+
+// SplitAndExpression breaks up the Expr into AND-separated conditions
+// and appends them to filters. Outer parenthesis are removed. Precedence
+// should be taken into account if expressions are recombined.
+func SplitAndExpression(filters []Expr, node Expr) []Expr {
+	if node == nil {
+		return filters
+	}
+	switch node := node.(type) {
+	case *AndExpr:
+		filters = SplitAndExpression(filters, node.Left)
+		return SplitAndExpression(filters, node.Right)
+	case *ParenExpr:
+		return SplitAndExpression(filters, node.Expr)
+	}
+	return append(filters, node)
 }
 
 // GetTableName returns the table name from the SimpleTableExpr
@@ -285,6 +306,9 @@ func ExtractSetValues(sql string) (keyValues map[SetKey]interface{}, scope strin
 		case strings.HasPrefix(key, "@@session."):
 			scope = SessionStr
 			key = strings.TrimPrefix(key, "@@session.")
+		case strings.HasPrefix(key, "@@vitess_metadata."):
+			scope = VitessMetadataStr
+			key = strings.TrimPrefix(key, "@@vitess_metadata.")
 		case strings.HasPrefix(key, "@@"):
 			key = strings.TrimPrefix(key, "@@")
 		}

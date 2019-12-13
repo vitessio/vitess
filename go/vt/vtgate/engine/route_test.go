@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -119,7 +119,7 @@ func TestSelectEqualUnique(t *testing.T) {
 		"dummy_select",
 		"dummy_select_field",
 	)
-	sel.Vindex = vindex
+	sel.Vindex = vindex.(vindexes.SingleColumn)
 	sel.Values = []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}}
 
 	vc := &loggingVCursor{
@@ -164,7 +164,7 @@ func TestSelectEqualUniqueScatter(t *testing.T) {
 		"dummy_select",
 		"dummy_select_field",
 	)
-	sel.Vindex = vindex
+	sel.Vindex = vindex.(vindexes.SingleColumn)
 	sel.Values = []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}}
 
 	vc := &loggingVCursor{
@@ -208,7 +208,7 @@ func TestSelectEqual(t *testing.T) {
 		"dummy_select",
 		"dummy_select_field",
 	)
-	sel.Vindex = vindex
+	sel.Vindex = vindex.(vindexes.SingleColumn)
 	sel.Values = []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}}
 
 	vc := &loggingVCursor{
@@ -264,7 +264,7 @@ func TestSelectEqualNoRoute(t *testing.T) {
 		"dummy_select",
 		"dummy_select_field",
 	)
-	sel.Vindex = vindex
+	sel.Vindex = vindex.(vindexes.SingleColumn)
 	sel.Values = []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
@@ -301,7 +301,7 @@ func TestSelectINUnique(t *testing.T) {
 		"dummy_select",
 		"dummy_select_field",
 	)
-	sel.Vindex = vindex
+	sel.Vindex = vindex.(vindexes.SingleColumn)
 	sel.Values = []sqltypes.PlanValue{{
 		Values: []sqltypes.PlanValue{{
 			Value: sqltypes.NewInt64(1),
@@ -357,7 +357,7 @@ func TestSelectINNonUnique(t *testing.T) {
 		"dummy_select",
 		"dummy_select_field",
 	)
-	sel.Vindex = vindex
+	sel.Vindex = vindex.(vindexes.SingleColumn)
 	sel.Values = []sqltypes.PlanValue{{
 		Values: []sqltypes.PlanValue{{
 			Value: sqltypes.NewInt64(1),
@@ -542,7 +542,7 @@ func TestRouteGetFields(t *testing.T) {
 		"dummy_select",
 		"dummy_select_field",
 	)
-	sel.Vindex = vindex
+	sel.Vindex = vindex.(vindexes.SingleColumn)
 	sel.Values = []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -31,13 +31,15 @@ import (
 )
 
 var (
-	_ Vindex     = (*Hash)(nil)
-	_ Reversible = (*Hash)(nil)
+	_ SingleColumn = (*Hash)(nil)
+	_ Reversible   = (*Hash)(nil)
 )
 
 // Hash defines vindex that hashes an int64 to a KeyspaceId
-// by using null-key 3DES hash. It's Unique, Reversible and
+// by using null-key DES hash. It's Unique, Reversible and
 // Functional.
+// Note that at once stage we used a 3DES-based hash here,
+// but for a null key as in our case, they are completely equivalent.
 type Hash struct {
 	name string
 }
@@ -59,11 +61,6 @@ func (vind *Hash) Cost() int {
 
 // IsUnique returns true since the Vindex is unique.
 func (vind *Hash) IsUnique() bool {
-	return true
-}
-
-// IsFunctional returns true since the Vindex is functional.
-func (vind *Hash) IsFunctional() bool {
 	return true
 }
 
@@ -119,11 +116,11 @@ func (vind *Hash) ReverseMap(_ VCursor, ksids [][]byte) ([]sqltypes.Value, error
 	return reverseIds, nil
 }
 
-var block3DES cipher.Block
+var blockDES cipher.Block
 
 func init() {
 	var err error
-	block3DES, err = des.NewTripleDESCipher(make([]byte, 24))
+	blockDES, err = des.NewCipher(make([]byte, 8))
 	if err != nil {
 		panic(err)
 	}
@@ -133,7 +130,7 @@ func init() {
 func vhash(shardKey uint64) []byte {
 	var keybytes, hashed [8]byte
 	binary.BigEndian.PutUint64(keybytes[:], shardKey)
-	block3DES.Encrypt(hashed[:], keybytes[:])
+	blockDES.Encrypt(hashed[:], keybytes[:])
 	return []byte(hashed[:])
 }
 
@@ -142,6 +139,6 @@ func vunhash(k []byte) (uint64, error) {
 		return 0, fmt.Errorf("invalid keyspace id: %v", hex.EncodeToString(k))
 	}
 	var unhashed [8]byte
-	block3DES.Decrypt(unhashed[:], k)
+	blockDES.Decrypt(unhashed[:], k)
 	return binary.BigEndian.Uint64(unhashed[:]), nil
 }

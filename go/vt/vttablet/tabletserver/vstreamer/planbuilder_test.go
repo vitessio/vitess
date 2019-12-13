@@ -41,8 +41,11 @@ func init() {
     "hash": {
       "type": "hash"
     },
-    "lookup": {
-      "type": "lookup"
+    "region_vdx": {
+      "type": "region_experimental",
+			"params": {
+				"region_bytes": "1"
+			}
     }
   },
   "tables": {
@@ -51,6 +54,17 @@ func init() {
         {
           "column": "id",
           "name": "hash"
+        }
+      ]
+    },
+    "regional": {
+      "column_vindexes": [
+        {
+          "columns": [
+						"region",
+						"id"
+					],
+          "name": "region_vdx"
         }
       ]
     }
@@ -177,6 +191,19 @@ func TestPlanbuilder(t *testing.T) {
 			Type: sqltypes.VarBinary,
 		}},
 	}
+	regional := &Table{
+		Name: "regional",
+		Columns: []schema.TableColumn{{
+			Name: sqlparser.NewColIdent("region"),
+			Type: sqltypes.Int64,
+		}, {
+			Name: sqlparser.NewColIdent("id"),
+			Type: sqltypes.Int64,
+		}, {
+			Name: sqlparser.NewColIdent("val"),
+			Type: sqltypes.VarBinary,
+		}},
+	}
 
 	testcases := []struct {
 		inTable *Table
@@ -210,7 +237,7 @@ func TestPlanbuilder(t *testing.T) {
 				Alias:  sqlparser.NewColIdent("val"),
 				Type:   sqltypes.VarBinary,
 			}},
-			VindexColumn: 0,
+			VindexColumns: []int{0},
 		},
 	}, {
 		inTable: t1,
@@ -267,7 +294,7 @@ func TestPlanbuilder(t *testing.T) {
 				Alias:  sqlparser.NewColIdent("id"),
 				Type:   sqltypes.Int64,
 			}},
-			VindexColumn: 1,
+			VindexColumns: []int{0},
 		},
 	}, {
 		inTable: t1,
@@ -282,11 +309,41 @@ func TestPlanbuilder(t *testing.T) {
 				Alias:  sqlparser.NewColIdent("id"),
 				Type:   sqltypes.Int64,
 			}},
-			VindexColumn: 1,
+			VindexColumns: []int{0},
 		},
 	}, {
 		inTable: t2,
 		inRule:  &binlogdatapb.Rule{Match: "/t1/"},
+	}, {
+		inTable: regional,
+		inRule:  &binlogdatapb.Rule{Match: "regional", Filter: "select val, id from regional where in_keyrange('-80')"},
+		outPlan: &Plan{
+			ColExprs: []ColExpr{{
+				ColNum: 2,
+				Alias:  sqlparser.NewColIdent("val"),
+				Type:   sqltypes.VarBinary,
+			}, {
+				ColNum: 1,
+				Alias:  sqlparser.NewColIdent("id"),
+				Type:   sqltypes.Int64,
+			}},
+			VindexColumns: []int{0, 1},
+		},
+	}, {
+		inTable: regional,
+		inRule:  &binlogdatapb.Rule{Match: "regional", Filter: "select id, keyspace_id() from regional"},
+		outPlan: &Plan{
+			ColExprs: []ColExpr{{
+				ColNum: 1,
+				Alias:  sqlparser.NewColIdent("id"),
+				Type:   sqltypes.Int64,
+			}, {
+				Alias:         sqlparser.NewColIdent("keyspace_id"),
+				Vindex:        testKSChema.Vindexes["region_vdx"],
+				VindexColumns: []int{0, 1},
+				Type:          sqltypes.VarBinary,
+			}},
+		},
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "/*/"},
@@ -357,12 +414,8 @@ func TestPlanbuilder(t *testing.T) {
 		outErr:  `unexpected: 1`,
 	}, {
 		inTable: t1,
-		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(none, 'hash', '-80')"},
-		outErr:  `keyrange expression does not reference a column in the select list: none`,
-	}, {
-		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(id, 'lookup', '-80')"},
-		outErr:  `vindex must be Unique and Functional to be used for VReplication: lookup`,
+		outErr:  `vindex must be Unique to be used for VReplication: lookup`,
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where in_keyrange(id, 'hash', '80')"},
@@ -383,7 +436,7 @@ func TestPlanbuilder(t *testing.T) {
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val, max(val) from t1"},
-		outErr:  `unsupported: max(val)`,
+		outErr:  `unsupported function: max(val)`,
 	}, {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id+1, val from t1"},

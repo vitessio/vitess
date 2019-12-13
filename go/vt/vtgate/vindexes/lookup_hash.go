@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,10 +27,10 @@ import (
 )
 
 var (
-	_ Vindex = (*LookupHash)(nil)
-	_ Lookup = (*LookupHash)(nil)
-	_ Vindex = (*LookupHashUnique)(nil)
-	_ Lookup = (*LookupHashUnique)(nil)
+	_ SingleColumn = (*LookupHash)(nil)
+	_ Lookup       = (*LookupHash)(nil)
+	_ SingleColumn = (*LookupHashUnique)(nil)
+	_ Lookup       = (*LookupHashUnique)(nil)
 )
 
 func init() {
@@ -93,11 +93,6 @@ func (lh *LookupHash) IsUnique() bool {
 	return false
 }
 
-// IsFunctional returns false since the Vindex is not functional.
-func (lh *LookupHash) IsFunctional() bool {
-	return false
-}
-
 // Map can map ids to key.Destination objects.
 func (lh *LookupHash) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
@@ -155,7 +150,7 @@ func (lh *LookupHash) Create(vcursor VCursor, rowsColValues [][]sqltypes.Value, 
 	if err != nil {
 		return fmt.Errorf("lookup.Create.vunhash: %v", err)
 	}
-	return lh.lkp.Create(vcursor, rowsColValues, ksids, values, ignoreMode)
+	return lh.lkp.Create(vcursor, rowsColValues, values, ignoreMode)
 }
 
 // Update updates the entry in the vindex table.
@@ -249,11 +244,6 @@ func (lhu *LookupHashUnique) IsUnique() bool {
 	return true
 }
 
-// IsFunctional returns false since the Vindex is not functional.
-func (lhu *LookupHashUnique) IsFunctional() bool {
-	return false
-}
-
 // Map can map ids to key.Destination objects.
 func (lhu *LookupHashUnique) Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, 0, len(ids))
@@ -309,7 +299,7 @@ func (lhu *LookupHashUnique) Create(vcursor VCursor, rowsColValues [][]sqltypes.
 	if err != nil {
 		return fmt.Errorf("lookup.Create.vunhash: %v", err)
 	}
-	return lhu.lkp.Create(vcursor, rowsColValues, ksids, values, ignoreMode)
+	return lhu.lkp.Create(vcursor, rowsColValues, values, ignoreMode)
 }
 
 // Delete deletes the entry from the vindex table.

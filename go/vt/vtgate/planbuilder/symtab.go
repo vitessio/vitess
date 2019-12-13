@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ var errNoTable = errors.New("no table info")
 // vindex column names. These names can be resolved without the
 // need to qualify them by their table names. If there are
 // duplicates during a merge, those columns are removed from
-// the unique list, thereby disallowing unqualifed references
+// the unique list, thereby disallowing unqualified references
 // to such columns.
 //
 // After a select expression is analyzed, the
@@ -87,13 +87,13 @@ func newSymtabWithRoute(rb *route) *symtab {
 // AddVSchemaTable takes a list of vschema tables as input and
 // creates a table with multiple route options. It returns a
 // list of vindex maps, one for each input.
-func (st *symtab) AddVSchemaTable(alias sqlparser.TableName, vschemaTables []*vindexes.Table, rb *route) (vindexMaps []map[*column]vindexes.Vindex, err error) {
+func (st *symtab) AddVSchemaTable(alias sqlparser.TableName, vschemaTables []*vindexes.Table, rb *route) (vindexMaps []map[*column]vindexes.SingleColumn, err error) {
 	t := &table{
 		alias:  alias,
 		origin: rb,
 	}
 
-	vindexMaps = make([]map[*column]vindexes.Vindex, len(vschemaTables))
+	vindexMaps = make([]map[*column]vindexes.SingleColumn, len(vschemaTables))
 	for i, vst := range vschemaTables {
 		// The following logic allows the first table to be authoritative while the rest
 		// are not. But there's no need to reveal this flexibility to the user.
@@ -115,8 +115,12 @@ func (st *symtab) AddVSchemaTable(alias sqlparser.TableName, vschemaTables []*vi
 			t.isAuthoritative = true
 		}
 
-		var vindexMap map[*column]vindexes.Vindex
+		var vindexMap map[*column]vindexes.SingleColumn
 		for _, cv := range vst.ColumnVindexes {
+			single, ok := cv.Vindex.(vindexes.SingleColumn)
+			if !ok {
+				continue
+			}
 			for j, cvcol := range cv.Columns {
 				col, err := t.mergeColumn(cvcol, &column{
 					origin: rb,
@@ -128,9 +132,11 @@ func (st *symtab) AddVSchemaTable(alias sqlparser.TableName, vschemaTables []*vi
 				if j == 0 {
 					// For now, only the first column is used for vindex Map functions.
 					if vindexMap == nil {
-						vindexMap = make(map[*column]vindexes.Vindex)
+						vindexMap = make(map[*column]vindexes.SingleColumn)
 					}
-					vindexMap[col] = cv.Vindex
+					if vindexMap[col] == nil || vindexMap[col].Cost() > single.Cost() {
+						vindexMap[col] = single
+					}
 				}
 			}
 		}
@@ -400,6 +406,28 @@ func ResultFromNumber(rcs []*resultColumn, val *sqlparser.SQLVal) (int, error) {
 	return int(num - 1), nil
 }
 
+// BuildColName builds a *sqlparser.ColName for the resultColumn specified
+// by the index. The built ColName will correctly reference the resultColumn
+// it was built from.
+func BuildColName(rcs []*resultColumn, index int) (*sqlparser.ColName, error) {
+	alias := rcs[index].alias
+	if alias.IsEmpty() {
+		return nil, errors.New("cannot reference a complex expression")
+	}
+	for i, rc := range rcs {
+		if i == index {
+			continue
+		}
+		if rc.alias.Equal(alias) {
+			return nil, fmt.Errorf("ambiguous symbol reference: %v", alias)
+		}
+	}
+	return &sqlparser.ColName{
+		Metadata: rcs[index].column,
+		Name:     alias,
+	}, nil
+}
+
 // ResolveSymbols resolves all column references against symtab.
 // This makes sure that they all have their Metadata initialized.
 // If a symbol cannot be resolved or if the expression contains
@@ -436,7 +464,7 @@ func (t *table) addColumn(alias sqlparser.ColIdent, c *column) {
 	lowered := alias.Lowered()
 	// Dups are allowed, but first one wins if referenced.
 	if _, ok := t.columns[lowered]; !ok {
-		c.colnum = len(t.columnNames)
+		c.colNumber = len(t.columnNames)
 		t.columns[lowered] = c
 	}
 	t.columnNames = append(t.columnNames, alias)
@@ -457,7 +485,7 @@ func (t *table) mergeColumn(alias sqlparser.ColIdent, c *column) (*column, error
 	if t.isAuthoritative {
 		return nil, fmt.Errorf("column %v not found in %v", sqlparser.String(alias), sqlparser.String(t.alias))
 	}
-	c.colnum = len(t.columnNames)
+	c.colNumber = len(t.columnNames)
 	t.columns[lowered] = c
 	t.columnNames = append(t.columnNames, alias)
 	return c, nil
@@ -478,13 +506,13 @@ func (t *table) Origin() builder {
 //
 // Two columns are equal if their pointer values match.
 //
-// For subquery and vindexFunc, the colnum is also set because
+// For subquery and vindexFunc, the colNumber is also set because
 // the column order is known and unchangeable.
 type column struct {
-	origin builder
-	st     *symtab
-	typ    querypb.Type
-	colnum int
+	origin    builder
+	st        *symtab
+	typ       querypb.Type
+	colNumber int
 }
 
 // Origin returns the route that originates the column.

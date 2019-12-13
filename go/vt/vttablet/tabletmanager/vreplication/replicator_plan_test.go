@@ -18,8 +18,10 @@ package vreplication
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
@@ -75,6 +77,44 @@ func TestBuildPlayerPlan(t *testing.T) {
 				Rules: []*binlogdatapb.Rule{{
 					Match:  "t1",
 					Filter: "select * from t1",
+				}},
+			},
+			TargetTables: []string{"t1"},
+			TablePlans: map[string]*TestTablePlan{
+				"t1": {
+					TargetName: "t1",
+					SendRule:   "t1",
+				},
+			},
+		},
+	}, {
+		// Regular with keyrange
+		input: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "/.*",
+				Filter: "-80",
+			}},
+		},
+		plan: &TestReplicatorPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select * from t1 where in_keyrange('-80')",
+				}},
+			},
+			TargetTables: []string{"t1"},
+			TablePlans: map[string]*TestTablePlan{
+				"t1": {
+					TargetName: "t1",
+					SendRule:   "t1",
+				},
+			},
+		},
+		planpk: &TestReplicatorPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select * from t1 where in_keyrange('-80')",
 				}},
 			},
 			TargetTables: []string{"t1"},
@@ -372,6 +412,106 @@ func TestBuildPlayerPlan(t *testing.T) {
 			},
 		},
 	}, {
+		// Keywords as names.
+		input: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "t1",
+				Filter: "select c1, c2, `primary` from `primary`",
+			}},
+		},
+		plan: &TestReplicatorPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "primary",
+					Filter: "select c1, c2, `primary` from `primary`",
+				}},
+			},
+			TargetTables: []string{"t1"},
+			TablePlans: map[string]*TestTablePlan{
+				"primary": {
+					TargetName:   "t1",
+					SendRule:     "primary",
+					PKReferences: []string{"c1"},
+					InsertFront:  "insert into t1(c1,c2,`primary`)",
+					InsertValues: "(:a_c1,:a_c2,:a_primary)",
+					Insert:       "insert into t1(c1,c2,`primary`) values (:a_c1,:a_c2,:a_primary)",
+					Update:       "update t1 set c2=:a_c2, `primary`=:a_primary where c1=:b_c1",
+					Delete:       "delete from t1 where c1=:b_c1",
+				},
+			},
+		},
+		planpk: &TestReplicatorPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "primary",
+					Filter: "select c1, c2, `primary`, pk1, pk2 from `primary`",
+				}},
+			},
+			TargetTables: []string{"t1"},
+			TablePlans: map[string]*TestTablePlan{
+				"primary": {
+					TargetName:   "t1",
+					SendRule:     "primary",
+					PKReferences: []string{"c1", "pk1", "pk2"},
+					InsertFront:  "insert into t1(c1,c2,`primary`)",
+					InsertValues: "(:a_c1,:a_c2,:a_primary)",
+					Insert:       "insert into t1(c1,c2,`primary`) select :a_c1, :a_c2, :a_primary from dual where (:a_pk1,:a_pk2) <= (1,'aaa')",
+					Update:       "update t1 set c2=:a_c2, `primary`=:a_primary where c1=:b_c1 and (:b_pk1,:b_pk2) <= (1,'aaa')",
+					Delete:       "delete from t1 where c1=:b_c1 and (:b_pk1,:b_pk2) <= (1,'aaa')",
+				},
+			},
+		},
+	}, {
+		// keyspace_id
+		input: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "t1",
+				Filter: "select c1, c2, keyspace_id() ksid from t1",
+			}},
+		},
+		plan: &TestReplicatorPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select c1, c2, keyspace_id() from t1",
+				}},
+			},
+			TargetTables: []string{"t1"},
+			TablePlans: map[string]*TestTablePlan{
+				"t1": {
+					TargetName:   "t1",
+					SendRule:     "t1",
+					PKReferences: []string{"c1"},
+					InsertFront:  "insert into t1(c1,c2,ksid)",
+					InsertValues: "(:a_c1,:a_c2,:a_keyspace_id)",
+					Insert:       "insert into t1(c1,c2,ksid) values (:a_c1,:a_c2,:a_keyspace_id)",
+					Update:       "update t1 set c2=:a_c2, ksid=:a_keyspace_id where c1=:b_c1",
+					Delete:       "delete from t1 where c1=:b_c1",
+				},
+			},
+		},
+		planpk: &TestReplicatorPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select c1, c2, keyspace_id(), pk1, pk2 from t1",
+				}},
+			},
+			TargetTables: []string{"t1"},
+			TablePlans: map[string]*TestTablePlan{
+				"t1": {
+					TargetName:   "t1",
+					SendRule:     "t1",
+					PKReferences: []string{"c1", "pk1", "pk2"},
+					InsertFront:  "insert into t1(c1,c2,ksid)",
+					InsertValues: "(:a_c1,:a_c2,:a_keyspace_id)",
+					Insert:       "insert into t1(c1,c2,ksid) select :a_c1, :a_c2, :a_keyspace_id from dual where (:a_pk1,:a_pk2) <= (1,'aaa')",
+					Update:       "update t1 set c2=:a_c2, ksid=:a_keyspace_id where c1=:b_c1 and (:b_pk1,:b_pk2) <= (1,'aaa')",
+					Delete:       "delete from t1 where c1=:b_c1 and (:b_pk1,:b_pk2) <= (1,'aaa')",
+				},
+			},
+		},
+	}, {
 		// syntax error
 		input: &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
@@ -448,7 +588,7 @@ func TestBuildPlayerPlan(t *testing.T) {
 		input: &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
 				Match:  "t1",
-				Filter: "select hour(distinct c1) from t1",
+				Filter: "select hour(distinct c1) as a from t1",
 			}},
 		},
 		err: "unexpected: hour(distinct c1)",
@@ -565,4 +705,63 @@ func TestBuildPlayerPlan(t *testing.T) {
 			t.Errorf("Filter(%v,copyState):\n%s, want\n%s", tcase.input, gotPlan, wantPlan)
 		}
 	}
+}
+
+func TestBuildPlayerPlanNoDup(t *testing.T) {
+	tableKeys := map[string][]string{
+		"t1": {"c1"},
+		"t2": {"c2"},
+	}
+	input := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select * from t",
+		}, {
+			Match:  "t2",
+			Filter: "select * from t",
+		}},
+	}
+	_, err := buildReplicatorPlan(input, tableKeys, nil)
+	want := "more than one target for source table t"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("buildReplicatorPlan err: %v, must contain: %v", err, want)
+	}
+}
+
+func TestBuildPlayerPlanExclude(t *testing.T) {
+	tableKeys := map[string][]string{
+		"t1": {"c1"},
+		"t2": {"c2"},
+	}
+	input := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t2",
+			Filter: "exclude",
+		}, {
+			Match:  "/.*",
+			Filter: "",
+		}},
+	}
+	plan, err := buildReplicatorPlan(input, tableKeys, nil)
+	assert.NoError(t, err)
+
+	want := &TestReplicatorPlan{
+		VStreamFilter: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "t1",
+				Filter: "select * from t1",
+			}},
+		},
+		TargetTables: []string{"t1"},
+		TablePlans: map[string]*TestTablePlan{
+			"t1": {
+				TargetName: "t1",
+				SendRule:   "t1",
+			},
+		},
+	}
+
+	gotPlan, _ := json.Marshal(plan)
+	wantPlan, _ := json.Marshal(want)
+	assert.Equal(t, string(gotPlan), string(wantPlan))
 }

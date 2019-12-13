@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -110,10 +110,12 @@ type Conn struct {
 	// It is set during the initial handshake.
 	UserData Getter
 
-	// SchemaName is the default database name to use. It is set
+	// schemaName is the default database name to use. It is set
 	// during handshake, and by ComInitDb packets. Both client and
-	// servers maintain it.
-	SchemaName string
+	// servers maintain it. This member is private because it's
+	// non-authoritative: the client can change the schema name
+	// through the 'USE' statement, which will bypass this variable.
+	schemaName string
 
 	// ServerVersion is set during Connect with the server
 	// version.  It is not changed afterwards. It is unused for
@@ -157,6 +159,22 @@ type Conn struct {
 	// currentEphemeralBuffer for tracking allocated temporary buffer for writes and reads respectively.
 	// It can be allocated from bufPool or heap and should be recycled in the same manner.
 	currentEphemeralBuffer *[]byte
+
+	// StatementID is the prepared statement ID.
+	StatementID uint32
+
+	// PrepareData is the map to use a prepared statement.
+	PrepareData map[uint32]*PrepareData
+}
+
+// PrepareData is a buffer used for store prepare statement meta data
+type PrepareData struct {
+	StatementID uint32
+	PrepareStmt string
+	ParamsCount uint16
+	ParamsType  []int32
+	ColumnNames []string
+	BindVars    map[string]*querypb.BindVariable
 }
 
 // bufPool is used to allocate and free buffers in an efficient way.
@@ -182,9 +200,10 @@ func newConn(conn net.Conn) *Conn {
 // size for reads.
 func newServerConn(conn net.Conn, listener *Listener) *Conn {
 	c := &Conn{
-		conn:     conn,
-		listener: listener,
-		closed:   sync2.NewAtomicBool(false),
+		conn:        conn,
+		listener:    listener,
+		closed:      sync2.NewAtomicBool(false),
+		PrepareData: make(map[uint32]*PrepareData),
 	}
 	if listener.connReadBufferSize > 0 {
 		c.bufferedReader = bufio.NewReaderSize(conn, listener.connReadBufferSize)
@@ -238,7 +257,7 @@ func (c *Conn) readHeaderFrom(r io.Reader) (int, error) {
 	// Note io.ReadFull will return two different types of errors:
 	// 1. if the socket is already closed, and the go runtime knows it,
 	//   then ReadFull will return an error (different than EOF),
-	//   someting like 'read: connection reset by peer'.
+	//   something like 'read: connection reset by peer'.
 	// 2. if the socket is not closed while we start the read,
 	//   but gets closed after the read is started, we'll get io.EOF.
 	if _, err := io.ReadFull(r, header[:]); err != nil {
@@ -714,7 +733,8 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 	case ComInitDB:
 		db := c.parseComInitDB(data)
 		c.recycleReadPacket()
-		c.SchemaName = db
+		c.schemaName = db
+		handler.ComInitDB(c, db)
 		if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
 			log.Errorf("Error writing ComInitDB result to %s: %v", c, err)
 			return err
@@ -801,6 +821,235 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 				return err
 			}
 		}
+	case ComPrepare:
+		query := c.parseComPrepare(data)
+		c.recycleReadPacket()
+
+		var queries []string
+		if c.Capabilities&CapabilityClientMultiStatements != 0 {
+			queries, err = sqlparser.SplitStatementToPieces(query)
+			if err != nil {
+				log.Errorf("Conn %v: Error splitting query: %v", c, err)
+				if werr := c.writeErrorPacketFromError(err); werr != nil {
+					// If we can't even write the error, we're done.
+					log.Errorf("Conn %v: Error writing query error: %v", c, werr)
+					return werr
+				}
+			}
+		} else {
+			queries = []string{query}
+		}
+
+		if len(queries) != 1 {
+			return fmt.Errorf("can not prepare multiple statements")
+		}
+
+		// Popoulate PrepareData
+		c.StatementID++
+		prepare := &PrepareData{
+			StatementID: c.StatementID,
+			PrepareStmt: queries[0],
+		}
+
+		statement, err := sqlparser.ParseStrictDDL(query)
+		if err != nil {
+			return err
+		}
+
+		paramsCount := uint16(0)
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
+			switch node := node.(type) {
+			case *sqlparser.SQLVal:
+				if strings.HasPrefix(string(node.Val), ":v") {
+					paramsCount++
+				}
+			}
+			return true, nil
+		}, statement)
+
+		if paramsCount > 0 {
+			prepare.ParamsCount = paramsCount
+			prepare.ParamsType = make([]int32, paramsCount)
+			prepare.BindVars = make(map[string]*querypb.BindVariable, paramsCount)
+		}
+
+		c.PrepareData[c.StatementID] = prepare
+
+		fld, err := handler.ComPrepare(c, queries[0])
+
+		if err != nil {
+			if werr := c.writeErrorPacketFromError(err); werr != nil {
+				// If we can't even write the error, we're done.
+				log.Error("Error writing query error to client %v: %v", c.ConnectionID, werr)
+				return werr
+			}
+			return nil
+		}
+
+		if err := c.writePrepare(fld, c.PrepareData[c.StatementID]); err != nil {
+			return err
+		}
+
+	case ComStmtExecute:
+		queryStart := time.Now()
+		stmtID, _, err := c.parseComStmtExecute(c.PrepareData, data)
+		c.recycleReadPacket()
+
+		if stmtID != uint32(0) {
+			defer func() {
+				// Allocate a new bindvar map every time since VTGate.Execute() mutates it.
+				prepare := c.PrepareData[stmtID]
+				prepare.BindVars = make(map[string]*querypb.BindVariable, prepare.ParamsCount)
+			}()
+		}
+
+		if err != nil {
+			if werr := c.writeErrorPacketFromError(err); werr != nil {
+				// If we can't even write the error, we're done.
+				log.Error("Error writing query error to client %v: %v", c.ConnectionID, werr)
+				return werr
+			}
+			return nil
+		}
+
+		fieldSent := false
+		// sendFinished is set if the response should just be an OK packet.
+		sendFinished := false
+		prepare := c.PrepareData[stmtID]
+		err = handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
+			if sendFinished {
+				// Failsafe: Unreachable if server is well-behaved.
+				return io.EOF
+			}
+
+			if !fieldSent {
+				fieldSent = true
+
+				if len(qr.Fields) == 0 {
+					sendFinished = true
+					// We should not send any more packets after this.
+					return c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
+				}
+				if err := c.writeFields(qr); err != nil {
+					return err
+				}
+			}
+
+			return c.writeBinaryRows(qr)
+		})
+
+		// If no field was sent, we expect an error.
+		if !fieldSent {
+			// This is just a failsafe. Should never happen.
+			if err == nil || err == io.EOF {
+				err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
+			}
+			if werr := c.writeErrorPacketFromError(err); werr != nil {
+				// If we can't even write the error, we're done.
+				log.Errorf("Error writing query error to %s: %v", c, werr)
+				return werr
+			}
+		} else {
+			if err != nil {
+				// We can't send an error in the middle of a stream.
+				// All we can do is abort the send, which will cause a 2013.
+				log.Errorf("Error in the middle of a stream to %s: %v", c, err)
+				return err
+			}
+
+			// Send the end packet only sendFinished is false (results were streamed).
+			// In this case the affectedRows and lastInsertID are always 0 since it
+			// was a read operation.
+			if !sendFinished {
+				if err := c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
+					log.Errorf("Error writing result to %s: %v", c, err)
+					return err
+				}
+			}
+		}
+
+		timings.Record(queryTimingKey, queryStart)
+	case ComStmtSendLongData:
+		stmtID, paramID, chunkData, ok := c.parseComStmtSendLongData(data)
+		c.recycleReadPacket()
+		if !ok {
+			err := fmt.Errorf("error parsing statement send long data from client %v, returning error: %v", c.ConnectionID, data)
+			log.Error(err.Error())
+			return err
+		}
+
+		prepare, ok := c.PrepareData[stmtID]
+		if !ok {
+			err := fmt.Errorf("got wrong statement id from client %v, statement ID(%v) is not found from record", c.ConnectionID, stmtID)
+			log.Error(err.Error())
+			return err
+		}
+
+		if prepare.BindVars == nil ||
+			prepare.ParamsCount == uint16(0) ||
+			paramID >= prepare.ParamsCount {
+			err := fmt.Errorf("invalid parameter Number from client %v, statement: %v", c.ConnectionID, prepare.PrepareStmt)
+			log.Error(err.Error())
+			return err
+		}
+
+		chunk := make([]byte, len(chunkData))
+		copy(chunk, chunkData)
+
+		key := fmt.Sprintf("v%d", paramID+1)
+		if val, ok := prepare.BindVars[key]; ok {
+			val.Value = append(val.Value, chunk...)
+		} else {
+			prepare.BindVars[key] = sqltypes.BytesBindVariable(chunk)
+		}
+	case ComStmtClose:
+		stmtID, ok := c.parseComStmtClose(data)
+		c.recycleReadPacket()
+		if ok {
+			delete(c.PrepareData, stmtID)
+		}
+	case ComStmtReset:
+		stmtID, ok := c.parseComStmtReset(data)
+		c.recycleReadPacket()
+		if !ok {
+			log.Error("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data)
+			if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
+				log.Error("Error writing error packet to client: %v", err)
+				return err
+			}
+		}
+
+		prepare, ok := c.PrepareData[stmtID]
+		if !ok {
+			log.Error("Commands were executed in an improper order from client %v, packet: %v", c.ConnectionID, data)
+			if err := c.writeErrorPacket(CRCommandsOutOfSync, SSUnknownComError, "commands were executed in an improper order: %v", data); err != nil {
+				log.Error("Error writing error packet to client: %v", err)
+				return err
+			}
+		}
+
+		if prepare.BindVars != nil {
+			for k := range prepare.BindVars {
+				prepare.BindVars[k] = nil
+			}
+		}
+
+		if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
+			log.Error("Error writing ComStmtReset OK packet to client %v: %v", c.ConnectionID, err)
+			return err
+		}
+
+	case ComResetConnection:
+		// Clean up and reset the connection
+		c.recycleReadPacket()
+		handler.ComResetConnection(c)
+		// Reset prepared statements
+		c.PrepareData = make(map[uint32]*PrepareData)
+		err = c.writeOKPacket(0, 0, 0, 0)
+		if err != nil {
+			c.writeErrorPacketFromError(err)
+		}
+
 	default:
 		log.Errorf("Got unhandled packet (default) from %s, returning error: %v", c, data)
 		c.recycleReadPacket()
@@ -987,8 +1236,9 @@ func ParseErrorPacket(data []byte) error {
 	return NewSQLError(int(code), string(sqlState), "%v", msg)
 }
 
-func (conn *Conn) GetTLSClientCerts() []*x509.Certificate {
-	if tlsConn, ok := conn.conn.(*tls.Conn); ok {
+// GetTLSClientCerts gets TLS certificates.
+func (c *Conn) GetTLSClientCerts() []*x509.Certificate {
+	if tlsConn, ok := c.conn.(*tls.Conn); ok {
 		return tlsConn.ConnectionState().PeerCertificates
 	}
 	return nil

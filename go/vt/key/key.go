@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -117,6 +118,21 @@ func EvenShardsKeyRange(i, n int) (*topodatapb.KeyRange, error) {
 		endBytes = []byte{}
 	}
 	return &topodatapb.KeyRange{Start: startBytes, End: endBytes}, nil
+}
+
+// KeyRangeAdd adds two adjacent keyranges into a single value.
+// If the values are not adjacent, it returns false.
+func KeyRangeAdd(first, second *topodatapb.KeyRange) (*topodatapb.KeyRange, bool) {
+	if first == nil || second == nil {
+		return nil, false
+	}
+	if len(first.End) != 0 && bytes.Equal(first.End, second.Start) {
+		return &topodatapb.KeyRange{Start: first.Start, End: second.End}, true
+	}
+	if len(second.End) != 0 && bytes.Equal(second.End, first.Start) {
+		return &topodatapb.KeyRange{Start: second.Start, End: first.End}, true
+	}
+	return nil, false
 }
 
 // KeyRangeContains returns true if the provided id is in the keyrange.
@@ -295,4 +311,11 @@ func ParseShardingSpec(spec string) ([]*topodatapb.KeyRange, error) {
 		old = p
 	}
 	return ranges, nil
+}
+
+var krRegexp = regexp.MustCompile(`^[0-9a-fA-F]*-[0-9a-fA-F]*$`)
+
+// IsKeyRange returns true if the string represents a keyrange.
+func IsKeyRange(kr string) bool {
+	return krRegexp.MatchString(kr)
 }

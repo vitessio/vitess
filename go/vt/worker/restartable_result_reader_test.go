@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -136,7 +136,7 @@ func TestGenerateQuery(t *testing.T) {
 			want:              "SELECT `a`,`b`,`msg1`,`msg2` FROM `t1` WHERE `a`>=11 AND `a`<26 ORDER BY `a`,`b`",
 		},
 		{
-			desc:              "start overriden by last row (multi-column primary key)",
+			desc:              "start overridden by last row (multi-column primary key)",
 			start:             sqltypes.NewInt64(11),
 			end:               sqltypes.NewInt64(26),
 			table:             "t1",

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -106,7 +106,7 @@ type locksInfo struct {
 	// lock different things.
 	mu sync.Mutex
 
-	// info contans all the locks we took. It is indexed by
+	// info contains all the locks we took. It is indexed by
 	// keyspace (for keyspaces) or keyspace/shard (for shards).
 	info map[string]*lockInfo
 }

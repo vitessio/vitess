@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -117,7 +117,7 @@ var keywords = map[string]int{
 	"char":                CHAR,
 	"character":           CHARACTER,
 	"charset":             CHARSET,
-	"check":               UNUSED,
+	"check":               CHECK,
 	"collate":             COLLATE,
 	"collation":           COLLATION,
 	"column":              COLUMN,
@@ -318,11 +318,11 @@ var keywords = map[string]int{
 	"rlike":               REGEXP,
 	"rollback":            ROLLBACK,
 	"schema":              SCHEMA,
-	"schemas":             SCHEMAS,
 	"second_microsecond":  UNUSED,
 	"select":              SELECT,
 	"sensitive":           UNUSED,
 	"separator":           SEPARATOR,
+	"sequence":            SEQUENCE,
 	"serializable":        SERIALIZABLE,
 	"session":             SESSION,
 	"set":                 SET,
@@ -374,7 +374,6 @@ var keywords = map[string]int{
 	"unique":              UNIQUE,
 	"unlock":              UNLOCK,
 	"unsigned":            UNSIGNED,
-	"uuid": 							 UUID,
 	"update":              UPDATE,
 	"usage":               UNUSED,
 	"use":                 USE,
@@ -392,12 +391,8 @@ var keywords = map[string]int{
 	"vindex":              VINDEX,
 	"vindexes":            VINDEXES,
 	"view":                VIEW,
-	"vitess_keyspaces":    VITESS_KEYSPACES,
-	"vitess_shards":       VITESS_SHARDS,
-	"vitess_tablets":      VITESS_TABLETS,
-	"vitess_target":       VITESS_TARGET,
+	"vitess_metadata":     VITESS_METADATA,
 	"vschema":             VSCHEMA,
-	"vschema_tables":      VSCHEMA_TABLES,
 	"warnings":            WARNINGS,
 	"when":                WHEN,
 	"where":               WHERE,

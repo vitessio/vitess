@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -51,13 +51,14 @@ def start_vitess():
   keyspace = topology.keyspaces.add(name='lookup')
   keyspace.shards.add(name='0')
 
-  vttop = os.environ['VTTOP']
-  args = [os.path.join(vttop, 'py/vttest/run_local_database.py'),
+  vtroot = os.environ['VTROOT']
+  args = [os.path.join(vtroot, 'py/vttest/run_local_database.py'),
           '--port', '12345',
           '--proto_topo', text_format.MessageToString(topology,
                                                       as_one_line=True),
           '--web_dir', os.path.join(vttop, 'web/vtctld'),
-          '--schema_dir', os.path.join(vttop, 'examples/demo/schema')]
+          '--schema_dir', os.path.join(vttop, 'examples/demo/schema'),
+          '--mysql_server_bind_address', '0.0.0.0']
   sp = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
   # This load will make us wait for vitess to come up.

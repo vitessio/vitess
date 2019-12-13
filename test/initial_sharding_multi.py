@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -127,7 +127,7 @@ def setUpModule():
     # Create a new init_db.sql file that sets up passwords for all users.
     # Then we use a db-credentials-file with the passwords.
     new_init_db = environment.tmproot + '/init_db_with_passwords.sql'
-    with open(environment.vttop + '/config/init_db.sql') as fd:
+    with open(environment.vtroot + '/config/init_db.sql') as fd:
       init_db = fd.read()
     with open(new_init_db, 'w') as fd:
       fd.write(init_db)

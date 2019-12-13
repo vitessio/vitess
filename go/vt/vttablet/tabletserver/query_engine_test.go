@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ func TestStrictMode(t *testing.T) {
 	// config.EnforceStrictTransTable is true by default.
 	qe := NewQueryEngine(DummyChecker, schema.NewEngine(DummyChecker, config), config)
 	qe.InitDBConfig(dbcfgs)
-	qe.se.InitDBConfig(dbcfgs)
+	qe.se.InitDBConfig(dbcfgs.DbaWithDB())
 	qe.se.Open()
 	if err := qe.Open(); err != nil {
 		t.Error(err)
@@ -298,7 +298,7 @@ func newTestQueryEngine(queryPlanCacheSize int, idleTimeout time.Duration, stric
 	config.IdleTimeout = float64(idleTimeout) / 1e9
 	se := schema.NewEngine(DummyChecker, config)
 	qe := NewQueryEngine(DummyChecker, se, config)
-	se.InitDBConfig(dbcfgs)
+	se.InitDBConfig(dbcfgs.DbaWithDB())
 	qe.InitDBConfig(dbcfgs)
 	return qe
 }

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 
 set -e
 
-vtctld2_dir=$VTTOP/web/vtctld2
+vtctld2_dir=$VTROOT/web/vtctld2
 if [[ -d $vtctld2_dir/app ]]; then
   rm -rf $vtctld2_dir/app
 fi

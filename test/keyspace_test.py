@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 #
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import unittest
+import json
 
 from vtdb import vtgate_client
 
@@ -303,37 +304,42 @@ class TestKeyspace(unittest.TestCase):
     utils.run_vtctl(
         ['InitTablet', '-port=1234', '-keyspace=test_delete_keyspace',
          '-shard=0', 'test_nj-0000000100', 'replica'])
-    utils.run_vtctl(
-        ['InitTablet', '-port=1234', '-keyspace=test_delete_keyspace',
-         '-shard=1', 'test_nj-0000000101', 'replica'])
 
     # Create the serving/replication entries and check that they exist,
     # so we can later check they're deleted.
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_delete_keyspace'])
     utils.run_vtctl(
         ['GetShardReplication', 'test_nj', 'test_delete_keyspace/0'])
-    utils.run_vtctl(
-        ['GetShardReplication', 'test_nj', 'test_delete_keyspace/1'])
     utils.run_vtctl(['GetSrvKeyspace', 'test_nj', 'test_delete_keyspace'])
+    utils.run_vtctl(['GetSrvKeyspace', 'test_ca', 'test_delete_keyspace'])
 
     # Just remove the shard from one cell (including tablets),
     # but leaving the global records and other cells/shards alone.
     utils.run_vtctl(
         ['RemoveShardCell', '-recursive', 'test_delete_keyspace/0', 'test_nj'])
+    # Check that the shard is gone from test_nj.
+    srv_keyspace = utils.run_vtctl_json(['GetSrvKeyspace', 'test_nj', 'test_delete_keyspace'])
+    for partition in srv_keyspace['partitions']:
+      self.assertEqual(len(partition['shard_references']), 0,
+          'RemoveShardCell should have removed one shard from the target cell: ' +
+          json.dumps(srv_keyspace))
+    # Make sure the shard is still serving in test_ca.
+    srv_keyspace = utils.run_vtctl_json(['GetSrvKeyspace', 'test_ca', 'test_delete_keyspace'])
+    for partition in srv_keyspace['partitions']:
+      self.assertEqual(len(partition['shard_references']), 1,
+          'RemoveShardCell should not have changed other cells: ' +
+          json.dumps(srv_keyspace))
     utils.run_vtctl(['RebuildKeyspaceGraph', 'test_delete_keyspace'])
 
     utils.run_vtctl(['GetKeyspace', 'test_delete_keyspace'])
     utils.run_vtctl(['GetShard', 'test_delete_keyspace/0'])
     utils.run_vtctl(['GetTablet', 'test_ca-0000000100'])
     utils.run_vtctl(['GetTablet', 'test_nj-0000000100'], expect_fail=True)
-    utils.run_vtctl(['GetTablet', 'test_nj-0000000101'])
     utils.run_vtctl(
         ['GetShardReplication', 'test_ca', 'test_delete_keyspace/0'])
     utils.run_vtctl(
         ['GetShardReplication', 'test_nj', 'test_delete_keyspace/0'],
         expect_fail=True)
-    utils.run_vtctl(
-        ['GetShardReplication', 'test_nj', 'test_delete_keyspace/1'])
     utils.run_vtctl(['GetSrvKeyspace', 'test_nj', 'test_delete_keyspace'])
 
     # Add it back to do another test.
@@ -354,9 +360,6 @@ class TestKeyspace(unittest.TestCase):
         ['GetShardReplication', 'test_ca', 'test_delete_keyspace/0'])
     utils.run_vtctl(
         ['GetShardReplication', 'test_nj', 'test_delete_keyspace/0'],
-        expect_fail=True)
-    utils.run_vtctl(
-        ['GetShardReplication', 'test_nj', 'test_delete_keyspace/1'],
         expect_fail=True)
 
     # Clean up.

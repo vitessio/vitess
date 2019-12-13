@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ package mysqlctl
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -34,11 +35,11 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
-
-	"bytes"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
@@ -78,13 +79,20 @@ var (
 	dbaMysqlStats      = stats.NewTimings("MysqlDba", "MySQL DBA stats", "operation")
 	allprivsMysqlStats = stats.NewTimings("MysqlAllPrivs", "MySQl Stats for all privs", "operation")
 	appMysqlStats      = stats.NewTimings("MysqlApp", "MySQL app stats", "operation")
+
+	versionRegex = regexp.MustCompile(`Ver ([0-9]+)\.([0-9]+)\.([0-9]+)`)
 )
+
+// How many bytes from MySQL error log to sample for error messages
+const maxLogFileSampleSize = 4096
 
 // Mysqld is the object that represents a mysqld daemon running on this server.
 type Mysqld struct {
 	dbcfgs  *dbconfigs.DBConfigs
 	dbaPool *dbconnpool.ConnectionPool
 	appPool *dbconnpool.ConnectionPool
+
+	capabilities capabilitySet
 
 	// mutex protects the fields below.
 	mutex         sync.Mutex
@@ -107,7 +115,135 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout, *poolDynamicHostnameResolution)
 	result.appPool.Open(dbcfgs.AppWithDB(), appMysqlStats)
 
+	/*
+	 Unmanaged tablets are special because the MYSQL_FLAVOR detection
+	 will not be accurate because the mysqld might not be the same
+	 one as the server started.
+
+	 This skips the panic that checks that we can detect a server,
+	 but also relies on none of the flavor detection features being
+	 used at runtime. Currently this assumption is guaranteed true.
+	*/
+	if dbconfigs.HasConnectionParams() {
+		log.Info("mysqld is unmanaged or remote. Skipping flavor detection")
+		return result
+	}
+	version, getErr := getVersionString()
+	f, v, err := parseVersionString(version)
+
+	/*
+	 By default Vitess searches in vtenv.VtMysqlRoot() for a mysqld binary.
+	 This is historically the VT_MYSQL_ROOT env, but if it is unset or empty,
+	 Vitess will search the PATH. See go/vt/env/env.go.
+
+	 A number of subdirs inside vtenv.VtMysqlRoot() will be searched, see
+	 func binaryPath() for context. If no mysqld binary is found (possibly
+	 because it is in a container or both VT_MYSQL_ROOT and VTROOT are set
+	 incorrectly), there will be a fallback to using the MYSQL_FLAVOR env
+	 variable.
+
+	 If MYSQL_FLAVOR is not defined, there will be a panic.
+
+	 Note: relying on MySQL_FLAVOR is not recommended, since for historical
+	 purposes "MySQL56" actually means MySQL 5.7, which is a very strange
+	 behavior.
+	*/
+
+	if getErr != nil || err != nil {
+		f, v, err = getVersionFromEnv()
+		if err != nil {
+			vtenvMysqlRoot, _ := vtenv.VtMysqlRoot()
+			message := fmt.Sprintf(`could not auto-detect MySQL version. You may need to set your PATH so a mysqld binary can be found, or set the environment variable MYSQL_FLAVOR if mysqld is not available locally:
+	PATH: %s
+	VT_MYSQL_ROOT: %s
+	VTROOT: %s
+	vtenv.VtMysqlRoot(): %s
+	MYSQL_FLAVOR: %s
+	`,
+				os.Getenv("PATH"),
+				os.Getenv("VT_MYSQL_ROOT"),
+				os.Getenv("VTROOT"),
+				vtenvMysqlRoot,
+				os.Getenv("MYSQL_FLAVOR"))
+			panic(message)
+		}
+	}
+
+	log.Infof("Using flavor: %v, version: %v", f, v)
+	result.capabilities = newCapabilitySet(f, v)
 	return result
+}
+
+/*
+getVersionFromEnv returns the flavor and an assumed version based on the legacy
+MYSQL_FLAVOR environment variable.
+
+The assumed version may not be accurate since the legacy variable only specifies
+broad families of compatible versions. However, the differences between those
+versions should only matter if Vitess is managing the lifecycle of mysqld, in which
+case we should have a local copy of the mysqld binary from which we can fetch
+the accurate version instead of falling back to this function (see getVersionString).
+*/
+func getVersionFromEnv() (flavor mysqlFlavor, ver serverVersion, err error) {
+	env := os.Getenv("MYSQL_FLAVOR")
+	switch env {
+	case "MariaDB":
+		return flavorMariaDB, serverVersion{10, 0, 10}, nil
+	case "MariaDB103":
+		return flavorMariaDB, serverVersion{10, 3, 7}, nil
+	case "MySQL80":
+		return flavorMySQL, serverVersion{8, 0, 11}, nil
+	case "MySQL56":
+		return flavorMySQL, serverVersion{5, 7, 10}, nil
+	}
+	return flavor, ver, fmt.Errorf("could not determine version from MYSQL_FLAVOR: %s", env)
+}
+
+func getVersionString() (string, error) {
+	mysqlRoot, err := vtenv.VtMysqlRoot()
+	if err != nil {
+		return "", err
+	}
+	mysqldPath, err := binaryPath(mysqlRoot, "mysqld")
+	if err != nil {
+		return "", err
+	}
+	_, version, err := execCmd(mysqldPath, []string{"--version"}, nil, mysqlRoot, nil)
+	if err != nil {
+		return "", err
+	}
+	return version, nil
+}
+
+// parse the output of mysqld --version into a flavor and version
+func parseVersionString(version string) (flavor mysqlFlavor, ver serverVersion, err error) {
+	if strings.Contains(version, "Percona") {
+		flavor = flavorPercona
+	} else if strings.Contains(version, "MariaDB") {
+		flavor = flavorMariaDB
+	} else {
+		// OS distributed MySQL releases have a version string like:
+		// mysqld  Ver 5.7.27-0ubuntu0.19.04.1 for Linux on x86_64 ((Ubuntu))
+		flavor = flavorMySQL
+	}
+	v := versionRegex.FindStringSubmatch(version)
+	if len(v) != 4 {
+		return flavor, ver, fmt.Errorf("could not parse server version from: %s", version)
+	}
+	ver.Major, err = strconv.Atoi(string(v[1]))
+	if err != nil {
+		return flavor, ver, fmt.Errorf("could not parse server version from: %s", version)
+	}
+	ver.Minor, err = strconv.Atoi(string(v[2]))
+	if err != nil {
+		return flavor, ver, fmt.Errorf("could not parse server version from: %s", version)
+	}
+	ver.Patch, err = strconv.Atoi(string(v[3]))
+	if err != nil {
+		return flavor, ver, fmt.Errorf("could not parse server version from: %s", version)
+	}
+
+	return
 }
 
 // RunMysqlUpgrade will run the mysql_upgrade program on the current
@@ -125,13 +261,18 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 		return client.RunMysqlUpgrade(context.TODO())
 	}
 
+	if mysqld.capabilities.hasMySQLUpgradeInServer() {
+		log.Warningf("MySQL version has built-in upgrade, skipping RunMySQLUpgrade")
+		return nil
+	}
+
 	// Find mysql_upgrade. If not there, we do nothing.
-	dir, err := vtenv.VtMysqlRoot()
+	vtMysqlRoot, err := vtenv.VtMysqlRoot()
 	if err != nil {
 		log.Warningf("VT_MYSQL_ROOT not set, skipping mysql_upgrade step: %v", err)
 		return nil
 	}
-	name, err := binaryPath(dir, "mysql_upgrade")
+	name, err := binaryPath(vtMysqlRoot, "mysql_upgrade")
 	if err != nil {
 		log.Warningf("mysql_upgrade binary not present, skipping it: %v", err)
 		return nil
@@ -162,7 +303,8 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 		"--force", // Don't complain if it's already been upgraded.
 	}
 	cmd := exec.Command(name, args...)
-	cmd.Env = []string{os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql")}
+	libPath := fmt.Sprintf("LD_LIBRARY_PATH=%s/lib/mysql", vtMysqlRoot)
+	cmd.Env = []string{libPath}
 	out, err := cmd.CombinedOutput()
 	log.Infof("mysql_upgrade output: %s", out)
 	return err
@@ -205,28 +347,35 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 	case hook.HOOK_DOES_NOT_EXIST:
 		// hook doesn't exist, run mysqld_safe ourselves
 		log.Infof("%v: No mysqld_start hook, running mysqld_safe directly", ts)
-		dir, err := vtenv.VtMysqlRoot()
+		vtMysqlRoot, err := vtenv.VtMysqlRoot()
 		if err != nil {
 			return err
 		}
-		name, err = binaryPath(dir, "mysqld_safe")
+		name, err = binaryPath(vtMysqlRoot, "mysqld_safe")
 		if err != nil {
 			// The movement to use systemd means that mysqld_safe is not always provided.
 			// This should not be considered an issue do not generate a warning.
 			log.Infof("%v: trying to launch mysqld instead", err)
-			name, err = binaryPath(dir, "mysqld")
+			name, err = binaryPath(vtMysqlRoot, "mysqld")
 			// If this also fails, return an error.
 			if err != nil {
 				return err
 			}
 		}
+		mysqlBaseDir, err := vtenv.VtMysqlBaseDir()
+		if err != nil {
+			return err
+		}
 		arg := []string{
-			"--defaults-file=" + cnf.path}
+			"--defaults-file=" + cnf.path,
+			"--basedir=" + mysqlBaseDir,
+		}
 		arg = append(arg, mysqldArgs...)
-		env := []string{os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql")}
+		libPath := fmt.Sprintf("LD_LIBRARY_PATH=%s/lib/mysql", vtMysqlRoot)
+		env := []string{libPath}
 
 		cmd := exec.Command(name, arg...)
-		cmd.Dir = dir
+		cmd.Dir = vtMysqlRoot
 		cmd.Env = env
 		log.Infof("%v %#v", ts, cmd)
 		stderr, err := cmd.StderrPipe()
@@ -453,7 +602,7 @@ func execCmd(name string, args, env []string, dir string, input io.Reader) (cmd 
 // binaryPath does a limited path lookup for a command,
 // searching only within sbin and bin in the given root.
 func binaryPath(root, binary string) (string, error) {
-	subdirs := []string{"sbin", "bin", "libexec"}
+	subdirs := []string{"sbin", "bin", "libexec", "scripts"}
 	for _, subdir := range subdirs {
 		binPath := path.Join(root, subdir, binary)
 		if _, err := os.Stat(binPath); err == nil {
@@ -505,7 +654,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	// Start mysqld. We do not use Start, as we have to wait using
 	// the root user.
 	if err = mysqld.startNoWait(ctx, cnf); err != nil {
-		log.Errorf("failed starting mysqld (check mysql error log %v for more info): %v", cnf.ErrorLogPath, err)
+		log.Errorf("failed starting mysqld: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
 		return err
 	}
 
@@ -517,7 +666,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 		UnixSocket: cnf.SocketFile,
 	}
 	if err = mysqld.wait(ctx, cnf, params); err != nil {
-		log.Errorf("failed starting mysqld in time (check mysyql error log %v for more info): %v", cnf.ErrorLogPath, err)
+		log.Errorf("failed starting mysqld in time: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
 		return err
 	}
 
@@ -534,11 +683,34 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	return nil
 }
 
-// MySQL 5.7 GA and up have deprecated mysql_install_db.
-// Instead, initialization is built into mysqld.
-func useMysqldInitialize(version string) bool {
-	return strings.Contains(version, "Ver 5.7.") ||
-		strings.Contains(version, "Ver 8.0.")
+// For debugging purposes show the last few lines of the MySQL error log.
+// Return a suggestion (string) if the file is non regular or can not be opened.
+// This helps prevent cases where the error log is symlinked to /dev/stderr etc,
+// In which case the user can manually open the file.
+func readTailOfMysqldErrorLog(fileName string) string {
+	fileInfo, err := os.Stat(fileName)
+	if err != nil {
+		return fmt.Sprintf("could not stat mysql error log (%v): %v", fileName, err)
+	}
+	if !fileInfo.Mode().IsRegular() {
+		return fmt.Sprintf("mysql error log file is not a regular file: %v", fileName)
+	}
+	file, err := os.Open(fileName)
+	if err != nil {
+		return fmt.Sprintf("could not open mysql error log (%v): %v", fileName, err)
+	}
+	defer file.Close()
+	startPos := int64(0)
+	if fileInfo.Size() > maxLogFileSampleSize {
+		startPos = fileInfo.Size() - maxLogFileSampleSize
+	}
+	// Show the last few KB of the MySQL error log.
+	buf := make([]byte, maxLogFileSampleSize)
+	flen, err := file.ReadAt(buf, startPos)
+	if err != nil && err != io.EOF {
+		return fmt.Sprintf("could not read mysql error log (%v): %v", fileName, err)
+	}
+	return fmt.Sprintf("tail of mysql error log (%v):\n%s", fileName, buf[:flen])
 }
 
 func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
@@ -555,23 +727,15 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 	if err != nil {
 		return err
 	}
-
-	// Check mysqld version.
-	_, version, err := execCmd(mysqldPath, []string{"--version"}, nil, mysqlRoot, nil)
-	if err != nil {
-		return err
-	}
-
-	if useMysqldInitialize(version) {
+	if mysqld.capabilities.hasInitializeInServer() {
 		log.Infof("Installing data dir with mysqld --initialize-insecure")
-
 		args := []string{
 			"--defaults-file=" + cnf.path,
 			"--basedir=" + mysqlBaseDir,
 			"--initialize-insecure", // Use empty 'root'@'localhost' password.
 		}
 		if _, _, err = execCmd(mysqldPath, args, nil, mysqlRoot, nil); err != nil {
-			log.Errorf("mysqld --initialize-insecure failed: %v", err)
+			log.Errorf("mysqld --initialize-insecure failed: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
 			return err
 		}
 		return nil
@@ -582,12 +746,15 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 		"--defaults-file=" + cnf.path,
 		"--basedir=" + mysqlBaseDir,
 	}
+	if mysqld.capabilities.hasMaria104InstallDb() {
+		args = append(args, "--auth-root-authentication-method=normal")
+	}
 	cmdPath, err := binaryPath(mysqlRoot, "mysql_install_db")
 	if err != nil {
 		return err
 	}
 	if _, _, err = execCmd(cmdPath, args, nil, mysqlRoot, nil); err != nil {
-		log.Errorf("mysql_install_db failed: %v", err)
+		log.Errorf("mysql_install_db failed: %v\n%v", err, readTailOfMysqldErrorLog(cnf.ErrorLogPath))
 		return err
 	}
 	return nil
@@ -606,7 +773,7 @@ func (mysqld *Mysqld) initConfig(root string, cnf *Mycnf, outFile string) error 
 	switch hr := hook.NewHookWithEnv("make_mycnf", nil, env).Execute(); hr.ExitStatus {
 	case hook.HOOK_DOES_NOT_EXIST:
 		log.Infof("make_mycnf hook doesn't exist, reading template files")
-		configData, err = cnf.makeMycnf(getMycnfTemplates(root))
+		configData, err = cnf.makeMycnf(mysqld.getMycnfTemplates(root))
 	case hook.HOOK_SUCCESS:
 		configData, err = cnf.fillMycnfTemplate(hr.Stdout)
 	default:
@@ -628,15 +795,13 @@ func contains(haystack []string, needle string) bool {
 	return false
 }
 
-func getMycnfTemplates(root string) []string {
+func (mysqld *Mysqld) getMycnfTemplates(root string) []string {
 	if *mycnfTemplateFile != "" {
 		return []string{*mycnfTemplateFile}
 	}
 
 	cnfTemplatePaths := []string{
 		path.Join(root, "config/mycnf/default.cnf"),
-		path.Join(root, "config/mycnf/master.cnf"),
-		path.Join(root, "config/mycnf/replica.cnf"),
 	}
 
 	if extraCnf := os.Getenv("EXTRA_MY_CNF"); extraCnf != "" {
@@ -644,28 +809,19 @@ func getMycnfTemplates(root string) []string {
 		cnfTemplatePaths = append(cnfTemplatePaths, parts...)
 	}
 
-	switch mysqlFlavor := os.Getenv("MYSQL_FLAVOR"); mysqlFlavor {
-	case "MariaDB":
-		path := path.Join(root, "config/mycnf/master_mariadb.cnf")
-		if !contains(cnfTemplatePaths, path) {
-			cnfTemplatePaths = append(cnfTemplatePaths, path)
-		}
-	case "MariaDB103":
-		path := path.Join(root, "config/mycnf/master_mariadb103.cnf")
-		if !contains(cnfTemplatePaths, path) {
-			cnfTemplatePaths = append(cnfTemplatePaths, path)
-		}
-	case "MySQL80":
-		path := path.Join(root, "config/mycnf/master_mysql80.cnf")
-		if !contains(cnfTemplatePaths, path) {
-			cnfTemplatePaths = append(cnfTemplatePaths, path)
-		}
-	default:
-		path := path.Join(root, "config/mycnf/master_mysql56.cnf")
-		// By default we assume Mysql56 compatable
-		if !contains(cnfTemplatePaths, path) {
-			cnfTemplatePaths = append(cnfTemplatePaths, path)
-		}
+	// Only include files if they exist.
+	// Percona Server == MySQL in this context
+
+	f := flavorMariaDB
+	if mysqld.capabilities.isMySQLLike() {
+		f = flavorMySQL
+	}
+
+	// master_{flavor}{major}{minor}.cnf
+	p := path.Join(root, fmt.Sprintf("config/mycnf/master_%s%d%d.cnf", f, mysqld.capabilities.version.Major, mysqld.capabilities.version.Minor))
+	_, err := os.Stat(p)
+	if err == nil && !contains(cnfTemplatePaths, p) {
+		cnfTemplatePaths = append(cnfTemplatePaths, p)
 	}
 
 	return cnfTemplatePaths

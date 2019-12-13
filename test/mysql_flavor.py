@@ -1,4 +1,4 @@
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -126,7 +126,7 @@ class MariaDB(MysqlFlavor):
     ]
 
   def extra_my_cnf(self):
-    return environment.vttop + "/config/mycnf/master_mariadb.cnf"
+    return ""
 
   def master_position(self, tablet):
     gtid = tablet.mquery("", "SELECT @@GLOBAL.gtid_binlog_pos")[0][0]
@@ -152,7 +152,7 @@ class MariaDB103(MariaDB):
   """Overrides specific to MariaDB 10.3+."""
 
   def extra_my_cnf(self):
-    return environment.vttop + "/config/mycnf/master_mariadb103.cnf"
+    return ""
 
 class MySQL56(MysqlFlavor):
   """Overrides specific to MySQL 5.6/5.7"""
@@ -172,7 +172,7 @@ class MySQL56(MysqlFlavor):
     ]).strip() == "true"
 
   def extra_my_cnf(self):
-    return environment.vttop + "/config/mycnf/master_mysql56.cnf"
+    return ""
 
   def change_master_commands(self, host, port, pos):
     gtid = pos.split("/")[1]
@@ -186,7 +186,7 @@ class MySQL56(MysqlFlavor):
 class MySQL80(MySQL56):
   """Overrides specific to MySQL 8.0."""
   def extra_my_cnf(self):
-    return environment.vttop + "/config/mycnf/master_mysql80.cnf"
+    return ""
   def change_passwords(self, password_col):
     """set real passwords for all users"""
     return '''
@@ -228,10 +228,10 @@ def set_mysql_flavor(flavor):
   global MYSQL_FLAVOR
 
   if not flavor:
-    flavor = os.environ.get("MYSQL_FLAVOR", "MariaDB")
+    flavor = os.environ.get("MYSQL_FLAVOR", "MySQL56")
     # The environment variable might be set, but equal to "".
     if not flavor:
-      flavor = "MariaDB"
+      flavor = "MySQL56"
 
   v = flavor_map.get(flavor, None)
   if not v:

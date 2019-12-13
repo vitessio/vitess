@@ -1,4 +1,4 @@
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@ conversions = {
 }
 
 # legacy_code_to_code_map maps legacy error codes
-# to the new code that matches grpc's cannonical error codes.
+# to the new code that matches grpc's canonical error codes.
 legacy_code_to_code_map = {
     vtrpc_pb2.SUCCESS_LEGACY: vtrpc_pb2.OK,
     vtrpc_pb2.CANCELLED_LEGACY: vtrpc_pb2.CANCELED,
