@@ -521,7 +521,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 
 // execDirect is for reads inside transactions. Always send to MySQL.
 func (qre *QueryExecutor) execDirect(conn *TxConnection) (*sqltypes.Result, error) {
-	if qre.plan.Fields != nil {
+	if qre.tsv.qe.enableQueryPlanFieldCaching && qre.plan.Fields != nil {
 		result, err := qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, "", true, false)
 		if err != nil {
 			return nil, err
@@ -535,7 +535,7 @@ func (qre *QueryExecutor) execDirect(conn *TxConnection) (*sqltypes.Result, erro
 // execSelect sends a query to mysql only if another identical query is not running. Otherwise, it waits and
 // reuses the result. If the plan is missng field info, it sends the query to mysql requesting full info.
 func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
-	if qre.plan.Fields != nil {
+	if qre.tsv.qe.enableQueryPlanFieldCaching && qre.plan.Fields != nil {
 		result, err := qre.qFetch(qre.logStats, qre.plan.FullQuery, qre.bindVars)
 		if err != nil {
 			return nil, err
