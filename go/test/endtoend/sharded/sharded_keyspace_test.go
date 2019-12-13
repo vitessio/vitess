@@ -194,6 +194,7 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 		shard := &cluster.Shard{
 			Name: shardName,
 		}
+
 		var mysqlCtlProcessList []*exec.Cmd
 
 		for i := 0; i < totalTabletsRequired; i++ {
@@ -253,7 +254,6 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 				log.Error(err.Error())
 				return
 			}
-
 		}
 
 		keyspace.Shards = append(keyspace.Shards, *shard)
