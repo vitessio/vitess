@@ -246,7 +246,7 @@ func TestSelectLastInsertId(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select :__lastInsertId from dual",
+		Sql:           "select :__lastInsertId as `last_insert_id()` from dual",
 		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
 	}}
 
@@ -291,7 +291,7 @@ func TestLastInsertIDInVirtualTable(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select * from (select :__lastInsertId from dual) as t",
+		Sql:           "select * from (select :__lastInsertId as `last_insert_id()` from dual) as t",
 		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
 	}}
 
@@ -318,7 +318,7 @@ func TestLastInsertIDInSubQueryExpression(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select (select :__lastInsertId from dual) as x from dual",
+		Sql:           "select (select :__lastInsertId as `last_insert_id()` from dual) as x from dual",
 		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
 	}}
 
@@ -343,7 +343,7 @@ func TestSelectDatabase(t *testing.T) {
 		t.Error(err)
 	}
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select :__vtdbname from dual",
+		Sql:           "select :__vtdbname as `database()` from dual",
 		BindVariables: map[string]*querypb.BindVariable{"__vtdbname": sqltypes.StringBindVariable("TestExecutor")},
 	}}
 
