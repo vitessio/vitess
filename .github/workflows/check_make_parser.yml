@@ -3,7 +3,7 @@ on: [push, pull_request]
 jobs:
 
   build:
-    name: Build
+    name: Check Make Parser
     runs-on: ubuntu-latest
     steps:
 
