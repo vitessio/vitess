@@ -25,6 +25,7 @@ RUN echo '@edge http://nl.alpinelinux.org/alpine/edge/main' >> /etc/apk/reposito
 ENV VTROOT /vt/src/vitess.io/vitess
 ENV VTDATAROOT /vt/vtdataroot
 ENV PATH $VTROOT/bin:$PATH
+ENV MYSQL_FLAVOR MariaDB103
 
 # Create vitess user
 RUN addgroup -S vitess && adduser -S -G vitess vitess && mkdir -p /vt

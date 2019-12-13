@@ -3,7 +3,7 @@ on: [push, pull_request]
 jobs:
 
   build:
-    name: Build
+    name: Check Make Parser
     runs-on: ubuntu-latest
     steps:
 
@@ -17,6 +17,7 @@ jobs:
 
     - name: Get dependencies
       run: |
+        sudo apt-get update
         sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget
         sudo service mysql stop
         sudo service etcd stop

@@ -28,13 +28,12 @@ Example
 Using this SQL driver is as simple as:
 
   import (
-    "time"
     "vitess.io/vitess/go/vt/vitessdriver"
   )
 
   func main() {
     // Connect to vtgate.
-    db, err := vitessdriver.Open("localhost:15991", "keyspace", "master", 30*time.Second)
+    db, err := vitessdriver.Open("localhost:15991", "@master")
 
     // Use "db" via the Golang sql interface.
   }
