@@ -274,7 +274,7 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 	case *sqlparser.Select:
 		instruction, needsLastInsertID, needsDBName, err = buildSelectPlan(stmt, vschema)
 	case *sqlparser.Insert:
-		instruction, err = buildInsertPlan(stmt, vschema)
+		instruction, needsLastInsertID, needsDBName, err = buildInsertPlan(stmt, vschema)
 	case *sqlparser.Update:
 		instruction, err = buildUpdatePlan(stmt, vschema)
 	case *sqlparser.Delete:
