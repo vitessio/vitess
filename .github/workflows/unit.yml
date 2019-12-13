@@ -19,7 +19,7 @@ jobs:
 
     - name: Get dependencies
       run: |
-        sudo apt-get update
+        sudo apt-get update || echo "update failed"
 
         if [ ${{matrix.name}} = "mysql57" ]; then
           sudo apt-get install -y mysql-server mysql-client
@@ -29,7 +29,7 @@ jobs:
           wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.14-1_all.deb
           echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections 
           sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-          sudo apt-get update
+          sudo apt-get update || echo "update failed"
           sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
         elif [ ${{matrix.name}} = "mariadb101" ]; then
           sudo apt-get remove -y mysql-server mysql-client
