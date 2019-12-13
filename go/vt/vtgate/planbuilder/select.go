@@ -200,6 +200,11 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 			if err != nil {
 				return nil, vterrors.Wrap(err, "failed to Rewrite expression")
 			}
+			if rewritten.Expression != node.Expr && node.As.IsEmpty() {
+				buf := sqlparser.NewTrackedBuffer(nil)
+				node.Expr.Format(buf)
+				node.As = sqlparser.NewColIdent(buf.String())
+			}
 			rewritten.UpdateBindVarNeeds(pb)
 			pullouts, origin, expr, err := pb.findOrigin(rewritten.Expression)
 			if err != nil {

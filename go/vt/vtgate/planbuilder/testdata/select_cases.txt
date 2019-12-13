@@ -381,8 +381,8 @@
       "Name": "main",
       "Sharded": false
     },
-    "Query": "select database() from dual",
-    "FieldQuery": "select database() from dual where 1 != 1",
+    "Query": "select :__vtdbname as `database()` from dual",
+    "FieldQuery": "select :__vtdbname as `database()` from dual where 1 != 1",
     "Table": "dual"
   }
 }
@@ -392,17 +392,17 @@
 "NEXT used on a non-sequence table"
 
 # last_insert_id for unsharded route
-"select last_insert_id() from main.unsharded"
+"select last_insert_id() as x from main.unsharded"
 {
-  "Original": "select last_insert_id() from main.unsharded",
+  "Original": "select last_insert_id() as x from main.unsharded",
   "Instructions": {
     "Opcode": "SelectUnsharded",
     "Keyspace": {
       "Name": "main",
       "Sharded": false
     },
-    "Query": "select :__lastInsertId from unsharded",
-    "FieldQuery": "select :__lastInsertId from unsharded where 1 != 1",
+    "Query": "select :__lastInsertId as x from unsharded",
+    "FieldQuery": "select :__lastInsertId as x from unsharded where 1 != 1",
     "Table": "unsharded"
   }
 }
