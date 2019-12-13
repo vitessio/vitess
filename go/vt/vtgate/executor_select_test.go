@@ -253,6 +253,22 @@ func TestSelectLastInsertId(t *testing.T) {
 	assert.Equal(t, wantQueries, sbc1.Queries)
 }
 
+func TestSelectLastInsertIdInUnion(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+
+	sql := "select last_insert_id() as id union select id from user where 1 != 1"
+	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "select :__lastInsertId as id from dual union select id from user where 1 != 1",
+		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
+	}}
+
+	assert.Equal(t, wantQueries, sbc1.Queries)
+}
+
 func TestSelectLastInsertIdInWhere(t *testing.T) {
 	executor, _, _, lookup := createExecutorEnv()
 	logChan := QueryLogger.Subscribe("Test")
