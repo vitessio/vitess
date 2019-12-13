@@ -36,6 +36,16 @@ func (rr *RewriteResult) UpdateBindVarNeeds(pb *primitiveBuilder) {
 	pb.needsLastInsertID = pb.needsLastInsertID || rr.NeedLastInsertID
 }
 
+// RewriteAndUpdateBuilder rewrites expressions and updates the primitive builder to remember what bindvar needs it has
+func RewriteAndUpdateBuilder(in sqlparser.Expr, pb *primitiveBuilder) (sqlparser.Expr, error) {
+	out, err := Rewrite(in)
+	if err != nil {
+		return nil, err
+	}
+	out.UpdateBindVarNeeds(pb)
+	return out.Expression, nil
+}
+
 // Rewrite will rewrite an expression. Currently it does the following rewrites:
 //  - `last_insert_id()` => `:vtlastid`
 //  - `database()`       => `:vtdbname`
