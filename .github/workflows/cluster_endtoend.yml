@@ -3,7 +3,7 @@ on: [push, pull_request]
 jobs:
 
   build:
-    name: Build
+    name: Cluster End-to-End Test
     runs-on: ubuntu-latest
     steps:
 
@@ -17,7 +17,7 @@ jobs:
 
     - name: Get dependencies
       run: |
-        sudo apt-get update
+        sudo apt-get update || echo "update failed"
         sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget
         sudo service mysql stop
         sudo service etcd stop

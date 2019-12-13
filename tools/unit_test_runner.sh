@@ -55,6 +55,8 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
+echo '# Flaky tests (3 attempts permitted)'
+
 # Run flaky tests sequentially. Retry when necessary.
 for pkg in $flaky_tests; do
   max_attempts=3

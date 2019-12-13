@@ -3,7 +3,7 @@ on: [push, pull_request]
 jobs:
 
   build:
-    name: build for ${{ matrix.os }}
+    name: Local Example for ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -21,9 +21,8 @@ jobs:
 
     - name: Get dependencies
       run: |
-
         if [ ${{matrix.os}} = "ubuntu-latest" ]; then
-          sudo apt-get update
+          sudo apt-get update || echo "update failed"
           sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget
           sudo service mysql stop
           sudo service etcd stop
