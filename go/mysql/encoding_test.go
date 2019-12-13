@@ -303,6 +303,24 @@ func TestEncString(t *testing.T) {
 			t.Errorf("readLenEncStringAsBytes returned ok=true for empty value %v", test.value)
 		}
 
+		// Check successful decoding as bytes.
+		gotbcopy, posCopy, ok := readLenEncStringAsBytesCopy(test.lenEncoded, 0)
+		if !ok || string(gotb) != test.value || pos != len(test.lenEncoded) {
+			t.Errorf("readLenEncString returned %v/%v/%v but expected %v/%v/%v", gotbcopy, posCopy, ok, test.value, len(test.lenEncoded), true)
+		}
+
+		// Check failed decoding as bytes with shorter data.
+		_, _, ok = readLenEncStringAsBytesCopy(test.lenEncoded[:len(test.lenEncoded)-1], 0)
+		if ok {
+			t.Errorf("readLenEncStringAsBytes returned ok=true for shorter value %v", test.value)
+		}
+
+		// Check failed decoding as bytes with no data.
+		_, _, ok = readLenEncStringAsBytesCopy([]byte{}, 0)
+		if ok {
+			t.Errorf("readLenEncStringAsBytes returned ok=true for empty value %v", test.value)
+		}
+
 		// null encoded tests.
 
 		// Check successful encoding.
