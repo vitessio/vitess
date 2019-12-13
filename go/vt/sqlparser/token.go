@@ -318,6 +318,7 @@ var keywords = map[string]int{
 	"rlike":               REGEXP,
 	"rollback":            ROLLBACK,
 	"schema":              SCHEMA,
+	"schemas":             SCHEMAS,
 	"second_microsecond":  UNUSED,
 	"select":              SELECT,
 	"sensitive":           UNUSED,

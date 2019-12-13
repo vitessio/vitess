@@ -188,7 +188,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
 // Supported SHOW tokens
-%token <bytes> COLLATION DATABASES TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
+%token <bytes> COLLATION DATABASES SCHEMAS TABLES VITESS_METADATA VSCHEMA FULL PROCESSLIST COLUMNS FIELDS ENGINES PLUGINS
 
 // SET tokens
 %token <bytes> NAMES CHARSET GLOBAL SESSION ISOLATION LEVEL READ WRITE ONLY REPEATABLE COMMITTED UNCOMMITTED SERIALIZABLE
@@ -1618,6 +1618,10 @@ show_statement:
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
 | SHOW DATABASES ddl_skip_to_end
+  {
+    $$ = &Show{Type: string($2)}
+  }
+| SHOW SCHEMAS ddl_skip_to_end
   {
     $$ = &Show{Type: string($2)}
   }
