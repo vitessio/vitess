@@ -95,10 +95,11 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	if err != nil {
 		return
 	}
-
 	vtgate.exit = make(chan error)
 	go func() {
-		vtgate.exit <- vtgate.proc.Wait()
+		if vtgate.proc != nil {
+			vtgate.exit <- vtgate.proc.Wait()
+		}
 	}()
 
 	timeout := time.Now().Add(60 * time.Second)
@@ -205,7 +206,7 @@ func VtgateProcessInstance(port int, grpcPort int, mySQLServerPort int, cell str
 		Binary:                "vtgate",
 		FileToLogQueries:      path.Join(tmpDirectory, "/vtgate_querylog.txt"),
 		Directory:             os.Getenv("VTDATAROOT"),
-		ServiceMap:            "grpc-vtgateservice",
+		ServiceMap:            "grpc-tabletmanager,grpc-throttler,grpc-queryservice,grpc-updatestream,grpc-vtctl,grpc-vtworker,grpc-vtgateservice",
 		LogDir:                tmpDirectory,
 		Port:                  port,
 		GrpcPort:              grpcPort,
