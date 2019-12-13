@@ -280,7 +280,7 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 	case *sqlparser.Delete:
 		instruction, err = buildDeletePlan(stmt, vschema)
 	case *sqlparser.Union:
-		instruction, err = buildUnionPlan(stmt, vschema)
+		instruction, needsLastInsertID, needsDBName, err = buildUnionPlan(stmt, vschema)
 	case *sqlparser.Set:
 		return nil, errors.New("unsupported construct: set")
 	case *sqlparser.Show:

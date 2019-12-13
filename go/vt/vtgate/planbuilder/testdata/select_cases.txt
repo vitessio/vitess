@@ -1060,6 +1060,26 @@
   }
 }
 
+# union with the same target shard last_insert_id
+"select *, last_insert_id() from music where user_id = 1 union select * from user where id = 1"
+{
+  "Original": "select *, last_insert_id() from music where user_id = 1 union select * from user where id = 1",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select *, :__lastInsertId as `last_insert_id()` from music where user_id = 1 union select * from user where id = 1",
+    "FieldQuery": "select *, :__lastInsertId as `last_insert_id()` from music where 1 != 1 union select * from user where 1 != 1",
+    "Vindex": "user_index",
+    "Values": [
+      1
+    ],
+    "Table": "music"
+  }
+}
+
 "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a"
 {
   "Original": "select * from (select col1, col2 from unsharded where id = 1 union select col1, col2 from unsharded where id = 3) a",
