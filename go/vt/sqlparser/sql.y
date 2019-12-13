@@ -468,7 +468,7 @@ delete_statement:
   {
     $$ = &Delete{Comments: Comments($2), Targets: $3, TableExprs: $5, Where: NewWhere(WhereStr, $6)}
   }
-|DELETE comment_opt delete_table_list from_or_using table_references where_expression_opt
+| DELETE comment_opt delete_table_list from_or_using table_references where_expression_opt
   {
     $$ = &Delete{Comments: Comments($2), Targets: $3, TableExprs: $5, Where: NewWhere(WhereStr, $6)}
   }
