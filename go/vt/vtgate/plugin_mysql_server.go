@@ -106,7 +106,7 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	defer func() {
 		vh.mu.Lock()
 		delete(vh.connections, c)
-		vh.mu.Unlock()
+		defer vh.mu.Unlock()
 	}()
 
 	var ctx context.Context
@@ -447,6 +447,7 @@ func shutdownMysqlProtocolAndDrain() {
 			time.Sleep(1 * time.Millisecond)
 		}
 	}
+
 	for c := range vtgateHandle.connections {
 		ctx := context.Background()
 		session := vtgateHandle.session(c)
