@@ -27,6 +27,11 @@ grpc_port_base=$[16000 + $uid_base]
 mysql_port_base=$[17000 + $uid_base]
 tablet_hostname=''
 
+function fail() {
+    echo "ERROR: $1"
+    exit 1
+}
+
 # Travis hostnames are too long for MySQL, so we use IP.
 # Otherwise, blank hostname means the tablet auto-detects FQDN.
 if [ "$TRAVIS" == true ]; then
@@ -71,11 +76,27 @@ for uid_index in $uids; do
     echo "    $VTDATAROOT/$tablet_dir"
     action='start'
   fi
+
+  set +e
+
   $VTROOT/bin/mysqlctl \
     -log_dir $VTDATAROOT/tmp \
     -tablet_uid $uid \
     -mysql_port $mysql_port \
-    $action &
+    $action 
+
+    err=$?
+    if [[ $err -ne 0 ]]; then
+	echo "Checking for apparmor status for mysqld:"
+	sudo aa-status | grep mysqld
+    	if [[ $err -eq 0 ]]; then
+		apparmor is enabled for mysqld
+	fi
+        fail "This script fails to start mysqld, possibly due to apparmor or selinux protection. Please disable."
+    fi
+
+  set -e
+
 done
 
 # Wait for all mysqld to start up.
