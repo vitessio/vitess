@@ -2664,6 +2664,10 @@ function_call_keyword:
   {
   $$ = &MatchExpr{Columns: $3, Expr: $7, Option: $8}
   }
+| FIRST openb select_expression_list closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent("first"), Exprs: $3}
+  }
 | GROUP_CONCAT openb distinct_opt select_expression_list order_by_opt separator_opt closeb
   {
     $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6}
