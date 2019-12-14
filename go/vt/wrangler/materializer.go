@@ -114,6 +114,281 @@ func (wr *Wrangler) Migrate(ctx context.Context, workflow, sourceKeyspace, targe
 	return wr.Materialize(ctx, ms)
 }
 
+// CreateLookupVindex creates a lookup vindex and sets up the backfill.
+func (wr *Wrangler) CreateLookupVindex(ctx context.Context, keyspace, specs, cell, tabletTypes string) error {
+	var (
+		// vschemas
+		sourceVSchema *vschemapb.Keyspace
+		targetVSchema *vschemapb.Keyspace
+
+		// lookup vindex info
+		vindexName      string
+		vindex          *vschemapb.Vindex
+		targetKeyspace  string
+		targetTableName string
+		vindexFromCols  []string
+		vindexToCol     string
+
+		// source table info
+		sourceTableName     string
+		sourceTable         *vschemapb.Table
+		sourceVSchemaTable  *vschemapb.Table
+		sourceVindexColumns []string
+
+		// target table info
+		targetVindexType string
+		createDDL        string
+		materializeQuery string
+
+		err error
+	)
+
+	ks := &vschemapb.Keyspace{}
+	if err := json2.Unmarshal([]byte(specs), ks); err != nil {
+		return err
+	}
+
+	// Validate input vindex
+	if len(ks.Vindexes) != 1 {
+		return fmt.Errorf("only one vindex must be specified in the specs: %v", ks.Vindexes)
+	}
+	for name, vi := range ks.Vindexes {
+		vindexName = name
+		vindex = vi
+	}
+	if !strings.Contains(vindex.Type, "lookup") {
+		return fmt.Errorf("vindex %s is not a lookup type", vindex.Type)
+	}
+	strs := strings.Split(vindex.Params["table"], ".")
+	if len(strs) != 2 {
+		return fmt.Errorf("vindex 'table' must be <keyspace>.<table>: %v", vindex)
+	}
+	targetKeyspace, targetTableName = strs[0], strs[1]
+
+	vindexFromCols = strings.Split(vindex.Params["from"], ",")
+	if strings.Contains(vindex.Type, "unique") {
+		if len(vindexFromCols) != 1 {
+			return fmt.Errorf("unique vindex 'from' should have only one column: %v", vindex)
+		}
+	} else {
+		if len(vindexFromCols) < 2 {
+			return fmt.Errorf("non-unique vindex 'from' should have more than one column: %v", vindex)
+		}
+	}
+	vindexToCol = vindex.Params["to"]
+	if _, err := vindexes.CreateVindex(vindex.Type, vindexName, vindex.Params); err != nil {
+		return err
+	}
+
+	// Validate input table
+	if len(ks.Tables) != 1 {
+		return fmt.Errorf("only one table must be specified in the specs: %v", ks.Tables)
+	}
+	// Loop executes once.
+	for k, ti := range ks.Tables {
+		if len(ti.ColumnVindexes) != 1 {
+			return fmt.Errorf("only one ColumnVindex must be specified for the table: %v", ks.Tables)
+		}
+		sourceTableName = k
+		sourceTable = ti
+	}
+	if sourceTable.ColumnVindexes[0].Name != vindexName {
+		return fmt.Errorf("ColumnVindex name must match vindex name: %s vs %s", sourceTable.ColumnVindexes[0].Name, vindexName)
+	}
+
+	// Validate input table and vindex consistency
+	if vindex.Owner != "" && vindex.Owner != sourceTableName {
+		return fmt.Errorf("vindex owner must match table name: %v vs %v", vindex.Owner, sourceTableName)
+	}
+	if len(sourceTable.ColumnVindexes[0].Columns) != 0 {
+		sourceVindexColumns = sourceTable.ColumnVindexes[0].Columns
+	} else {
+		if sourceTable.ColumnVindexes[0].Column == "" {
+			return fmt.Errorf("at least one column must be specified in ColumnVindexes: %v", sourceTable.ColumnVindexes)
+		}
+		sourceVindexColumns = []string{sourceTable.ColumnVindexes[0].Column}
+	}
+	if len(sourceVindexColumns) != len(vindexFromCols) {
+		return fmt.Errorf("length of table columns differes from length of vindex columns: %v vs %v", sourceVindexColumns, vindexFromCols)
+	}
+
+	// Validate against source vschema
+	sourceVSchema, err = wr.ts.GetVSchema(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+	if sourceVSchema.Vindexes == nil {
+		sourceVSchema.Vindexes = make(map[string]*vschemapb.Vindex)
+	}
+	if _, ok := sourceVSchema.Vindexes[vindexName]; ok {
+		return fmt.Errorf("vindex %s already exists in vschema, please delete and try again", vindexName)
+	}
+	sourceVSchemaTable = sourceVSchema.Tables[sourceTableName]
+	if sourceVSchemaTable == nil {
+		return fmt.Errorf("source table %s not found in vschema", sourceTableName)
+	}
+	for _, colVindex := range sourceVSchemaTable.ColumnVindexes {
+		colName := colVindex.Column
+		if len(colVindex.Columns) != 0 {
+			colName = colVindex.Columns[0]
+		}
+		if colName == sourceVindexColumns[0] {
+			return fmt.Errorf("ColumnVindex for table %v already exists: %v, please remove it and try again", sourceTableName, colName)
+		}
+	}
+
+	// Validate against source schema
+	sourceShards, err := wr.ts.GetServingShards(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+	onesource := sourceShards[0]
+	if onesource.MasterAlias == nil {
+		return fmt.Errorf("shard has no master: %v", onesource.ShardName())
+	}
+	tableSchema, err := wr.GetSchema(ctx, onesource.MasterAlias, []string{sourceTableName}, nil, false)
+	if err != nil {
+		return err
+	}
+	if len(tableSchema.TableDefinitions) != 1 {
+		return fmt.Errorf("unexpected number of tables returned from schema: %v", tableSchema.TableDefinitions)
+	}
+
+	// Generate "create table statement"
+	lines := strings.Split(tableSchema.TableDefinitions[0].Schema, "\n")
+	if len(lines) < 3 {
+		return fmt.Errorf("schema looks incorrect: %s, expecting at least four lines", tableSchema.TableDefinitions[0].Schema)
+	}
+	var modified []string
+	modified = append(modified, strings.Replace(lines[0], sourceTableName, targetTableName, 1))
+	for i := range sourceVindexColumns {
+		line, err := generateColDef(lines, sourceVindexColumns[i], vindexFromCols[i])
+		if err != nil {
+			return err
+		}
+		modified = append(modified, line)
+	}
+	modified = append(modified, fmt.Sprintf("  `%s` VARBINARY(128),", vindexToCol))
+	buf := sqlparser.NewTrackedBuffer(nil)
+	fmt.Fprintf(buf, "  PRIMARY KEY (")
+	for _, col := range vindexFromCols {
+		fmt.Fprintf(buf, "`%s,`", col)
+	}
+	fmt.Fprintf(buf, "`%s`)", vindexToCol)
+	modified = append(modified, buf.String())
+	modified = append(modified, lines[len(lines)-1])
+	createDDL = strings.Join(modified, "\n")
+	wr.Logger().Printf("Schema: %s\n", createDDL)
+
+	// Generate vreplication query
+	buf = sqlparser.NewTrackedBuffer(nil)
+	buf.Myprintf("select ")
+	for i := range vindexFromCols {
+		buf.Myprintf("%v as %v, ", sqlparser.NewColIdent(sourceVindexColumns[i]), sqlparser.NewColIdent(vindexFromCols[i]))
+	}
+	buf.Myprintf("keyspace_id() as %v ", sqlparser.NewColIdent(vindexToCol))
+	buf.Myprintf("from %v", sqlparser.NewTableIdent(sourceTableName))
+	if vindex.Owner != "" {
+		// Only backfill
+		buf.Myprintf(" group by ")
+		prefix := ""
+		for i := range vindexFromCols {
+			buf.Myprintf("%s%v", prefix, sqlparser.NewColIdent(vindexFromCols[i]))
+			prefix = ", "
+		}
+	}
+	materializeQuery = buf.String()
+
+	// Create table and vindex in target vschema.
+	targetVSchema, err = wr.ts.GetVSchema(ctx, targetKeyspace)
+	if err != nil {
+		return err
+	}
+	if targetVSchema.Sharded {
+		// Choose a primary vindex type for target table based on source specs
+		found := false
+		for _, field := range tableSchema.TableDefinitions[0].Fields {
+			if sourceVindexColumns[0] == field.Name {
+				targetVindexType, err = vindexes.ChooseVindexForType(field.Type)
+				if err != nil {
+					return err
+				}
+				found = true
+				break
+			}
+		}
+		if !found {
+			// Unreachable. We validated column names when generating the DDL.
+			return fmt.Errorf("column %s not found in schema %v", sourceVindexColumns[0], tableSchema.TableDefinitions[0])
+		}
+		if existing, ok := targetVSchema.Vindexes[targetVindexType]; ok {
+			if existing.Type != targetVindexType {
+				return fmt.Errorf("a conflicting vindex named %s already exists in the target vschema", targetVindexType)
+			}
+		} else {
+			targetVSchema.Vindexes[targetVindexType] = &vschemapb.Vindex{
+				Type: targetVindexType,
+			}
+		}
+
+		if _, ok := targetVSchema.Tables[targetTableName]; ok {
+			return fmt.Errorf("table %v already exists in target vschema, please delete it and try again", targetTableName)
+		}
+		targetVSchema.Tables[targetTableName] = &vschemapb.Table{
+			ColumnVindexes: []*vschemapb.ColumnVindex{{
+				Column: vindexFromCols[0],
+				Name:   targetVindexType,
+			}},
+		}
+	} else {
+		targetVSchema.Tables[targetTableName] = &vschemapb.Table{}
+	}
+	if err := wr.ts.SaveVSchema(ctx, targetKeyspace, targetVSchema); err != nil {
+		return err
+	}
+
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       targetTableName + "_vdx",
+		SourceKeyspace: keyspace,
+		TargetKeyspace: targetKeyspace,
+		StopAfterCopy:  vindex.Owner != "",
+		Cell:           cell,
+		TabletTypes:    tabletTypes,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      targetTableName,
+			SourceExpression: materializeQuery,
+			CreateDdl:        createDDL,
+		}},
+	}
+	if err := wr.Materialize(ctx, ms); err != nil {
+		return err
+	}
+
+	// Create source Vindex
+	vindex.Params["write_only"] = "true"
+	sourceVSchema.Vindexes[vindexName] = vindex
+
+	// Update source table
+	sourceVSchemaTable.ColumnVindexes = append(sourceVSchemaTable.ColumnVindexes, sourceTable.ColumnVindexes[0])
+	if err := wr.ts.SaveVSchema(ctx, keyspace, sourceVSchema); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func generateColDef(lines []string, sourceVindexCol, vindexFromCol string) (string, error) {
+	for _, line := range lines[1:] {
+		if strings.Contains(line, fmt.Sprintf("`%s`", sourceVindexCol)) {
+			line = strings.Replace(line, sourceVindexCol, vindexFromCol, 1)
+			line = strings.Replace(line, " AUTO_INCREMENT", "", 1)
+			line = strings.Replace(line, " DEFAULT NULL", "", 1)
+			return line, nil
+		}
+	}
+	return "", fmt.Errorf("column %s not found in schema %v", sourceVindexCol, lines)
+}
+
 // Materialize performs the steps needed to materialize a list of tables based on the materialization specs.
 func (wr *Wrangler) Materialize(ctx context.Context, ms *vtctldatapb.MaterializeSettings) error {
 	if err := wr.validateNewWorkflow(ctx, ms.TargetKeyspace, ms.Workflow); err != nil {
