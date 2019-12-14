@@ -164,7 +164,7 @@ func skipToEnd(yylex interface{}) {
 %token <empty> JSON_EXTRACT_OP JSON_UNQUOTE_EXTRACT_OP
 
 // DDL Tokens
-%token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH
+%token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH MODIFY CHANGE
 %token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> FIRST AFTER
@@ -1402,6 +1402,19 @@ alter_table_statement:
   {
     // Rename an index can just be an alter
     $$ = &DDL{Action: AlterStr, Table: $4}
+  }
+| ALTER ignore_opt TABLE table_name MODIFY column_opt column_definition column_order_opt skip_to_end
+  {
+    ddl := &DDL{Action: AlterStr, ColumnAction: ModifyStr, Table: $4, TableSpec: &TableSpec{}, ColumnOrder: $8}
+    ddl.TableSpec.AddColumn($7)
+    ddl.Column = $7.Name
+    $$ = ddl
+  }
+| ALTER ignore_opt TABLE table_name CHANGE column_opt ID column_definition column_order_opt skip_to_end
+  {
+    ddl := &DDL{Action: AlterStr, ColumnAction: ChangeStr, Table: $4, TableSpec: &TableSpec{}, Column: NewColIdent(string($7)), ColumnOrder: $9}
+    ddl.TableSpec.AddColumn($8)
+    $$ = ddl
   }
 | ALTER ignore_opt TABLE table_name partition_operation
   {

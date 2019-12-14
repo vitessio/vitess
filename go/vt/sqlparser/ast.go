@@ -788,6 +788,8 @@ const (
 	AddStr              = "add"
 	DropStr             = "drop"
 	RenameStr           = "rename"
+	ModifyStr					  = "modify"
+	ChangeStr           = "change"
 	TruncateStr         = "truncate"
 	FlushStr            = "flush"
 	CreateVindexStr     = "create vindex"
@@ -855,6 +857,16 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 				}
 			}
 			buf.Myprintf("%s table %v %s column %v%s", node.Action, node.Table, node.ColumnAction, node.TableSpec, after)
+		} else if node.ColumnAction == ModifyStr || node.ColumnAction == ChangeStr {
+			after := ""
+			if node.ColumnOrder != nil {
+				if node.ColumnOrder.First {
+					after = " first"
+				} else {
+					after = " after " + node.ColumnOrder.AfterColumn.String()
+				}
+			}
+			buf.Myprintf("%s table %v %s column %v %v%s", node.Action, node.Table, node.ColumnAction, node.Column, node.TableSpec, after)
 		} else if node.ColumnAction == DropStr {
 			buf.Myprintf("%s table %v %s column %v", node.Action, node.Table, node.ColumnAction, node.Column)
 		} else if node.ColumnAction == RenameStr {
