@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -53,9 +52,8 @@ type vstreamer struct {
 	filter   *binlogdatapb.Filter
 	send     func([]*binlogdatapb.VEvent) error
 
-	// A kschema is a VSchema for just one keyspace.
-	kevents        chan *vindexes.KeyspaceSchema
-	kschema        *vindexes.KeyspaceSchema
+	vevents        chan *localVSchema
+	vschema        *localVSchema
 	plans          map[uint64]*streamerPlan
 	journalTableID uint64
 
@@ -71,7 +69,7 @@ type streamerPlan struct {
 	TableMap *mysql.TableMap
 }
 
-func NewVStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, startPos string, filter *binlogdatapb.Filter, kschema *vindexes.KeyspaceSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
+func NewVStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, startPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &vstreamer{
 		ctx:      ctx,
@@ -81,18 +79,18 @@ func NewVStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, 
 		startPos: startPos,
 		filter:   filter,
 		send:     send,
-		kevents:  make(chan *vindexes.KeyspaceSchema, 1),
-		kschema:  kschema,
+		vevents:  make(chan *localVSchema, 1),
+		vschema:  vschema,
 		plans:    make(map[uint64]*streamerPlan),
 	}
 }
 
-// SetKSchema updates all existing against the new kschema.
-func (vs *vstreamer) SetKSchema(kschema *vindexes.KeyspaceSchema) {
+// SetVSchema updates all existing streams against the new vschema.
+func (vs *vstreamer) SetVSchema(vschema *localVSchema) {
 	// Since vs.Stream is a single-threaded loop. We just send an event to
 	// that thread, which helps us avoid mutexes to update the plans.
 	select {
-	case vs.kevents <- kschema:
+	case vs.vevents <- vschema:
 	case <-vs.ctx.Done():
 	}
 }
@@ -223,7 +221,7 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 					return fmt.Errorf("error sending event: %v", err)
 				}
 			}
-		case vs.kschema = <-vs.kevents:
+		case vs.vschema = <-vs.vevents:
 			if err := vs.rebuildPlans(); err != nil {
 				return err
 			}
@@ -470,7 +468,7 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 		Name:    tm.Name,
 		Columns: cols,
 	}
-	plan, err := buildPlan(table, vs.kschema, vs.filter)
+	plan, err := buildPlan(table, vs.vschema, vs.filter)
 	if err != nil {
 		return nil, err
 	}
@@ -600,11 +598,11 @@ func (vs *vstreamer) processRowEvent(vevents []*binlogdatapb.VEvent, plan *strea
 func (vs *vstreamer) rebuildPlans() error {
 	for id, plan := range vs.plans {
 		if plan == nil {
-			// If a table has no plan, a kschema change will not
+			// If a table has no plan, a vschema change will not
 			// cause that to change.
 			continue
 		}
-		newPlan, err := buildPlan(plan.Table, vs.kschema, vs.filter)
+		newPlan, err := buildPlan(plan.Table, vs.vschema, vs.filter)
 		if err != nil {
 			return err
 		}
