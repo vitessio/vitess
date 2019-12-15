@@ -116,7 +116,7 @@ func (wr *Wrangler) Migrate(ctx context.Context, workflow, sourceKeyspace, targe
 }
 
 // CreateLookupVindex creates a lookup vindex and sets up the backfill.
-func (wr *Wrangler) CreateLookupVindex(ctx context.Context, keyspace, specs, cell, tabletTypes string) error {
+func (wr *Wrangler) CreateLookupVindex(ctx context.Context, keyspace string, specs *vschemapb.Keyspace, cell, tabletTypes string) error {
 	// Important variables are pulled out here.
 	var (
 		// vschemas
@@ -148,16 +148,11 @@ func (wr *Wrangler) CreateLookupVindex(ctx context.Context, keyspace, specs, cel
 		err error
 	)
 
-	ks := &vschemapb.Keyspace{}
-	if err := json2.Unmarshal([]byte(specs), ks); err != nil {
-		return err
-	}
-
 	// Validate input vindex
-	if len(ks.Vindexes) != 1 {
-		return fmt.Errorf("only one vindex must be specified in the specs: %v", ks.Vindexes)
+	if len(specs.Vindexes) != 1 {
+		return fmt.Errorf("only one vindex must be specified in the specs: %v", specs.Vindexes)
 	}
-	for name, vi := range ks.Vindexes {
+	for name, vi := range specs.Vindexes {
 		vindexName = name
 		vindex = vi
 	}
@@ -190,13 +185,13 @@ func (wr *Wrangler) CreateLookupVindex(ctx context.Context, keyspace, specs, cel
 	}
 
 	// Validate input table
-	if len(ks.Tables) != 1 {
-		return fmt.Errorf("only one table must be specified in the specs: %v", ks.Tables)
+	if len(specs.Tables) != 1 {
+		return fmt.Errorf("exactly one table must be specified in the specs: %v", specs.Tables)
 	}
 	// Loop executes once.
-	for k, ti := range ks.Tables {
+	for k, ti := range specs.Tables {
 		if len(ti.ColumnVindexes) != 1 {
-			return fmt.Errorf("only one ColumnVindex must be specified for the table: %v", ks.Tables)
+			return fmt.Errorf("exactly one ColumnVindex must be specified for the table: %v", specs.Tables)
 		}
 		sourceTableName = k
 		sourceTable = ti
@@ -302,11 +297,10 @@ func (wr *Wrangler) CreateLookupVindex(ctx context.Context, keyspace, specs, cel
 	if vindex.Owner != "" {
 		// Only backfill
 		buf.Myprintf(" group by ")
-		prefix := ""
 		for i := range vindexFromCols {
-			buf.Myprintf("%s%v", prefix, sqlparser.NewColIdent(vindexFromCols[i]))
-			prefix = ", "
+			buf.Myprintf("%v, ", sqlparser.NewColIdent(vindexFromCols[i]))
 		}
+		buf.Myprintf("%v", sqlparser.NewColIdent(vindexToCol))
 	}
 	materializeQuery = buf.String()
 
