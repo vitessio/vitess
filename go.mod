@@ -20,7 +20,7 @@ require (
 	github.com/evanphx/json-patch v4.5.0+incompatible
 	github.com/go-critic/go-critic v0.4.0 // indirect
 	github.com/go-ini/ini v1.12.0 // indirect
-	github.com/gogo/protobuf v1.3.1 // indirect
+	github.com/gogo/protobuf v1.3.1
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/groupcache v0.0.0-20190702054246-869f871628b6 // indirect
 	github.com/golang/mock v1.3.1
