@@ -271,63 +271,208 @@ func Append(buf *strings.Builder, node SQLNode) {
 	node.Format(tbuf)
 }
 
-// Statement represents a statement.
-type Statement interface {
-	iStatement()
-	SQLNode
-}
+type ( // Statements
+	// Statement represents a statement.
+	Statement interface {
+		iStatement()
+		SQLNode
+	}
 
-func (*Union) iStatement()      {}
-func (*Select) iStatement()     {}
-func (*Stream) iStatement()     {}
-func (*Insert) iStatement()     {}
-func (*Update) iStatement()     {}
-func (*Delete) iStatement()     {}
-func (*Set) iStatement()        {}
-func (*DBDDL) iStatement()      {}
-func (*DDL) iStatement()        {}
-func (*Show) iStatement()       {}
-func (*Use) iStatement()        {}
-func (*Begin) iStatement()      {}
-func (*Commit) iStatement()     {}
-func (*Rollback) iStatement()   {}
-func (*OtherRead) iStatement()  {}
-func (*OtherAdmin) iStatement() {}
+	// SelectStatement any SELECT statement.
+	SelectStatement interface {
+		iSelectStatement()
+		iStatement()
+		iInsertRows()
+		AddOrder(*Order)
+		SetLimit(*Limit)
+		SQLNode
+	}
+
+	// Select represents a SELECT statement.
+	Select struct {
+		Cache       string
+		Comments    Comments
+		Distinct    string
+		Hints       string
+		SelectExprs SelectExprs
+		From        TableExprs
+		Where       *Where
+		GroupBy     GroupBy
+		Having      *Where
+		OrderBy     OrderBy
+		Limit       *Limit
+		Lock        string
+	}
+
+	// Union represents a UNION statement.
+	Union struct {
+		Type        string
+		Left, Right SelectStatement
+		OrderBy     OrderBy
+		Limit       *Limit
+		Lock        string
+	}
+
+	// Stream represents a SELECT statement.
+	Stream struct {
+		Comments   Comments
+		SelectExpr SelectExpr
+		Table      TableName
+	}
+
+	// Insert represents an INSERT or REPLACE statement.
+	// Per the MySQL docs, http://dev.mysql.com/doc/refman/5.7/en/replace.html
+	// Replace is the counterpart to `INSERT IGNORE`, and works exactly like a
+	// normal INSERT except if the row exists. In that case it first deletes
+	// the row and re-inserts with new values. For that reason we keep it as an Insert struct.
+	// Replaces are currently disallowed in sharded schemas because
+	// of the implications the deletion part may have on vindexes.
+	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
+	Insert struct {
+		Action     string
+		Comments   Comments
+		Ignore     string
+		Table      TableName
+		Partitions Partitions
+		Columns    Columns
+		Rows       InsertRows
+		OnDup      OnDup
+	}
+
+	// Update represents an UPDATE statement.
+	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
+	Update struct {
+		Comments   Comments
+		Ignore     string
+		TableExprs TableExprs
+		Exprs      UpdateExprs
+		Where      *Where
+		OrderBy    OrderBy
+		Limit      *Limit
+	}
+
+	// Delete represents a DELETE statement.
+	// If you add fields here, consider adding them to calls to validateUnshardedRoute.
+	Delete struct {
+		Comments   Comments
+		Targets    TableNames
+		TableExprs TableExprs
+		Partitions Partitions
+		Where      *Where
+		OrderBy    OrderBy
+		Limit      *Limit
+	}
+
+	// Set represents a SET statement.
+	Set struct {
+		Comments Comments
+		Exprs    SetExprs
+		Scope    string
+	}
+
+	// DBDDL represents a CREATE, DROP database statement.
+	DBDDL struct {
+		Action   string
+		DBName   string
+		IfExists bool
+		Collate  string
+		Charset  string
+	}
+
+	// DDL represents a CREATE, ALTER, DROP, RENAME, TRUNCATE or ANALYZE statement.
+	DDL struct {
+		Action string
+
+		// FromTables is set if Action is RenameStr or DropStr.
+		FromTables TableNames
+
+		// ToTables is set if Action is RenameStr.
+		ToTables TableNames
+
+		// Table is set if Action is other than RenameStr or DropStr.
+		Table TableName
+
+		// The following fields are set if a DDL was fully analyzed.
+		IfExists      bool
+		TableSpec     *TableSpec
+		OptLike       *OptLike
+		PartitionSpec *PartitionSpec
+
+		// VindexSpec is set for CreateVindexStr, DropVindexStr, AddColVindexStr, DropColVindexStr.
+		VindexSpec *VindexSpec
+
+		// VindexCols is set for AddColVindexStr.
+		VindexCols []ColIdent
+
+		// AutoIncSpec is set for AddAutoIncStr.
+		AutoIncSpec *AutoIncSpec
+	}
+
+	// ParenSelect is a parenthesized SELECT statement.
+	ParenSelect struct {
+		Select SelectStatement
+	}
+
+	// Show represents a show statement.
+	Show struct {
+		Type                   string
+		OnTable                TableName
+		Table                  TableName
+		ShowTablesOpt          *ShowTablesOpt
+		Scope                  string
+		ShowCollationFilterOpt *Expr
+	}
+
+	// Use represents a use statement.
+	Use struct {
+		DBName TableIdent
+	}
+
+	// Begin represents a Begin statement.
+	Begin struct{}
+
+	// Commit represents a Commit statement.
+	Commit struct{}
+
+	// Rollback represents a Rollback statement.
+	Rollback struct{}
+
+	// OtherRead represents a DESCRIBE, or EXPLAIN statement.
+	// It should be used only as an indicator. It does not contain
+	// the full AST for the statement.
+	OtherRead struct{}
+
+	// OtherAdmin represents a misc statement that relies on ADMIN privileges,
+	// such as REPAIR, OPTIMIZE, or TRUNCATE statement.
+	// It should be used only as an indicator. It does not contain
+	// the full AST for the statement.
+	OtherAdmin struct{}
+)
+
+func (*Union) iStatement()             {}
+func (*Select) iStatement()            {}
+func (*Stream) iStatement()            {}
+func (*Insert) iStatement()            {}
+func (*Update) iStatement()            {}
+func (*Delete) iStatement()            {}
+func (*Set) iStatement()               {}
+func (*DBDDL) iStatement()             {}
+func (*DDL) iStatement()               {}
+func (*Show) iStatement()              {}
+func (*Use) iStatement()               {}
+func (*Begin) iStatement()             {}
+func (*Commit) iStatement()            {}
+func (*Rollback) iStatement()          {}
+func (*OtherRead) iStatement()         {}
+func (*OtherAdmin) iStatement()        {}
+func (*Select) iSelectStatement()      {}
+func (*Union) iSelectStatement()       {}
+func (*ParenSelect) iSelectStatement() {}
 
 // ParenSelect can actually not be a top level statement,
 // but we have to allow it because it's a requirement
 // of SelectStatement.
 func (*ParenSelect) iStatement() {}
-
-// SelectStatement any SELECT statement.
-type SelectStatement interface {
-	iSelectStatement()
-	iStatement()
-	iInsertRows()
-	AddOrder(*Order)
-	SetLimit(*Limit)
-	SQLNode
-}
-
-func (*Select) iSelectStatement()      {}
-func (*Union) iSelectStatement()       {}
-func (*ParenSelect) iSelectStatement() {}
-
-// Select represents a SELECT statement.
-type Select struct {
-	Cache       string
-	Comments    Comments
-	Distinct    string
-	Hints       string
-	SelectExprs SelectExprs
-	From        TableExprs
-	Where       *Where
-	GroupBy     GroupBy
-	Having      *Where
-	OrderBy     OrderBy
-	Limit       *Limit
-	Lock        string
-}
 
 // Select.Distinct
 const (
@@ -427,11 +572,6 @@ func (node *Select) AddHaving(expr Expr) {
 	}
 }
 
-// ParenSelect is a parenthesized SELECT statement.
-type ParenSelect struct {
-	Select SelectStatement
-}
-
 // AddOrder adds an order by element
 func (node *ParenSelect) AddOrder(order *Order) {
 	panic("unreachable")
@@ -455,15 +595,6 @@ func (node *ParenSelect) walkSubtree(visit Visit) error {
 		visit,
 		node.Select,
 	)
-}
-
-// Union represents a UNION statement.
-type Union struct {
-	Type        string
-	Left, Right SelectStatement
-	OrderBy     OrderBy
-	Limit       *Limit
-	Lock        string
 }
 
 // Union.Type
@@ -500,13 +631,6 @@ func (node *Union) walkSubtree(visit Visit) error {
 	)
 }
 
-// Stream represents a SELECT statement.
-type Stream struct {
-	Comments   Comments
-	SelectExpr SelectExpr
-	Table      TableName
-}
-
 // Format formats the node.
 func (node *Stream) Format(buf *TrackedBuffer) {
 	buf.Myprintf("stream %v%v from %v",
@@ -523,25 +647,6 @@ func (node *Stream) walkSubtree(visit Visit) error {
 		node.SelectExpr,
 		node.Table,
 	)
-}
-
-// Insert represents an INSERT or REPLACE statement.
-// Per the MySQL docs, http://dev.mysql.com/doc/refman/5.7/en/replace.html
-// Replace is the counterpart to `INSERT IGNORE`, and works exactly like a
-// normal INSERT except if the row exists. In that case it first deletes
-// the row and re-inserts with new values. For that reason we keep it as an Insert struct.
-// Replaces are currently disallowed in sharded schemas because
-// of the implications the deletion part may have on vindexes.
-// If you add fields here, consider adding them to calls to validateUnshardedRoute.
-type Insert struct {
-	Action     string
-	Comments   Comments
-	Ignore     string
-	Table      TableName
-	Partitions Partitions
-	Columns    Columns
-	Rows       InsertRows
-	OnDup      OnDup
 }
 
 // DDL strings.
@@ -583,18 +688,6 @@ func (*Union) iInsertRows()       {}
 func (Values) iInsertRows()       {}
 func (*ParenSelect) iInsertRows() {}
 
-// Update represents an UPDATE statement.
-// If you add fields here, consider adding them to calls to validateUnshardedRoute.
-type Update struct {
-	Comments   Comments
-	Ignore     string
-	TableExprs TableExprs
-	Exprs      UpdateExprs
-	Where      *Where
-	OrderBy    OrderBy
-	Limit      *Limit
-}
-
 // Format formats the node.
 func (node *Update) Format(buf *TrackedBuffer) {
 	buf.Myprintf("update %v%s%v set %v%v%v%v",
@@ -615,18 +708,6 @@ func (node *Update) walkSubtree(visit Visit) error {
 		node.OrderBy,
 		node.Limit,
 	)
-}
-
-// Delete represents a DELETE statement.
-// If you add fields here, consider adding them to calls to validateUnshardedRoute.
-type Delete struct {
-	Comments   Comments
-	Targets    TableNames
-	TableExprs TableExprs
-	Partitions Partitions
-	Where      *Where
-	OrderBy    OrderBy
-	Limit      *Limit
 }
 
 // Format formats the node.
@@ -651,13 +732,6 @@ func (node *Delete) walkSubtree(visit Visit) error {
 		node.OrderBy,
 		node.Limit,
 	)
-}
-
-// Set represents a SET statement.
-type Set struct {
-	Comments Comments
-	Exprs    SetExprs
-	Scope    string
 }
 
 // Set.Scope or Show.Scope
@@ -688,15 +762,6 @@ func (node *Set) walkSubtree(visit Visit) error {
 	)
 }
 
-// DBDDL represents a CREATE, DROP database statement.
-type DBDDL struct {
-	Action   string
-	DBName   string
-	IfExists bool
-	Collate  string
-	Charset  string
-}
-
 // Format formats the node.
 func (node *DBDDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
@@ -714,35 +779,6 @@ func (node *DBDDL) Format(buf *TrackedBuffer) {
 // walkSubtree walks the nodes of the subtree.
 func (node *DBDDL) walkSubtree(visit Visit) error {
 	return nil
-}
-
-// DDL represents a CREATE, ALTER, DROP, RENAME, TRUNCATE or ANALYZE statement.
-type DDL struct {
-	Action string
-
-	// FromTables is set if Action is RenameStr or DropStr.
-	FromTables TableNames
-
-	// ToTables is set if Action is RenameStr.
-	ToTables TableNames
-
-	// Table is set if Action is other than RenameStr or DropStr.
-	Table TableName
-
-	// The following fields are set if a DDL was fully analyzed.
-	IfExists      bool
-	TableSpec     *TableSpec
-	OptLike       *OptLike
-	PartitionSpec *PartitionSpec
-
-	// VindexSpec is set for CreateVindexStr, DropVindexStr, AddColVindexStr, DropColVindexStr.
-	VindexSpec *VindexSpec
-
-	// VindexCols is set for AddColVindexStr.
-	VindexCols []ColIdent
-
-	// AutoIncSpec is set for AddAutoIncStr.
-	AutoIncSpec *AutoIncSpec
 }
 
 // DDL strings.
@@ -1540,16 +1576,6 @@ func (f *ForeignKeyDefinition) walkSubtree(visit Visit) error {
 	return Walk(visit, f.ReferencedColumns)
 }
 
-// Show represents a show statement.
-type Show struct {
-	Type                   string
-	OnTable                TableName
-	Table                  TableName
-	ShowTablesOpt          *ShowTablesOpt
-	Scope                  string
-	ShowCollationFilterOpt *Expr
-}
-
 // Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
 	if (node.Type == "tables" || node.Type == "columns" || node.Type == "fields") && node.ShowTablesOpt != nil {
@@ -1624,11 +1650,6 @@ func (node *ShowFilter) walkSubtree(visit Visit) error {
 	return nil
 }
 
-// Use represents a use statement.
-type Use struct {
-	DBName TableIdent
-}
-
 // Format formats the node.
 func (node *Use) Format(buf *TrackedBuffer) {
 	if node.DBName.v != "" {
@@ -1642,9 +1663,6 @@ func (node *Use) walkSubtree(visit Visit) error {
 	return Walk(visit, node.DBName)
 }
 
-// Begin represents a Begin statement.
-type Begin struct{}
-
 // Format formats the node.
 func (node *Begin) Format(buf *TrackedBuffer) {
 	buf.WriteString("begin")
@@ -1653,9 +1671,6 @@ func (node *Begin) Format(buf *TrackedBuffer) {
 func (node *Begin) walkSubtree(visit Visit) error {
 	return nil
 }
-
-// Commit represents a Commit statement.
-type Commit struct{}
 
 // Format formats the node.
 func (node *Commit) Format(buf *TrackedBuffer) {
@@ -1666,9 +1681,6 @@ func (node *Commit) walkSubtree(visit Visit) error {
 	return nil
 }
 
-// Rollback represents a Rollback statement.
-type Rollback struct{}
-
 // Format formats the node.
 func (node *Rollback) Format(buf *TrackedBuffer) {
 	buf.WriteString("rollback")
@@ -1678,11 +1690,6 @@ func (node *Rollback) walkSubtree(visit Visit) error {
 	return nil
 }
 
-// OtherRead represents a DESCRIBE, or EXPLAIN statement.
-// It should be used only as an indicator. It does not contain
-// the full AST for the statement.
-type OtherRead struct{}
-
 // Format formats the node.
 func (node *OtherRead) Format(buf *TrackedBuffer) {
 	buf.WriteString("otherread")
@@ -1691,12 +1698,6 @@ func (node *OtherRead) Format(buf *TrackedBuffer) {
 func (node *OtherRead) walkSubtree(visit Visit) error {
 	return nil
 }
-
-// OtherAdmin represents a misc statement that relies on ADMIN privileges,
-// such as REPAIR, OPTIMIZE, or TRUNCATE statement.
-// It should be used only as an indicator. It does not contain
-// the full AST for the statement.
-type OtherAdmin struct{}
 
 // Format formats the node.
 func (node *OtherAdmin) Format(buf *TrackedBuffer) {
