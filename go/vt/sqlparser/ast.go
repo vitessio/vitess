@@ -2177,6 +2177,8 @@ func (node *Where) walkSubtree(visit Visit) error {
 	)
 }
 
+// *********** Expressions
+
 // Expr represents an expression.
 type Expr interface {
 	iExpr()
@@ -2187,6 +2189,205 @@ type Expr interface {
 	SQLNode
 }
 
+type (
+	// AndExpr represents an AND expression.
+	AndExpr struct {
+		Left, Right Expr
+	}
+
+	// OrExpr represents an OR expression.
+	OrExpr struct {
+		Left, Right Expr
+	}
+
+	// NotExpr represents a NOT expression.
+	NotExpr struct {
+		Expr Expr
+	}
+
+	// ParenExpr represents a parenthesized boolean expression.
+	ParenExpr struct {
+		Expr Expr
+	}
+
+	// ComparisonExpr represents a two-value comparison expression.
+	ComparisonExpr struct {
+		Operator    string
+		Left, Right Expr
+		Escape      Expr
+	}
+
+	// RangeCond represents a BETWEEN or a NOT BETWEEN expression.
+	RangeCond struct {
+		Operator string
+		Left     Expr
+		From, To Expr
+	}
+
+	// IsExpr represents an IS ... or an IS NOT ... expression.
+	IsExpr struct {
+		Operator string
+		Expr     Expr
+	}
+
+	// ExistsExpr represents an EXISTS expression.
+	ExistsExpr struct {
+		Subquery *Subquery
+	}
+
+	// SQLVal represents a single value.
+	SQLVal struct {
+		Type ValType
+		Val  []byte
+	}
+
+	// NullVal represents a NULL value.
+	NullVal struct{}
+
+	// BoolVal is true or false.
+	BoolVal bool
+
+	// ColName represents a column name.
+	ColName struct {
+		// Metadata is not populated by the parser.
+		// It's a placeholder for analyzers to store
+		// additional data, typically info about which
+		// table or column this node references.
+		Metadata  interface{}
+		Name      ColIdent
+		Qualifier TableName
+	}
+
+	// ColTuple represents a list of column values.
+	// It can be ValTuple, Subquery, ListArg.
+	ColTuple interface {
+		iColTuple()
+		Expr
+	}
+
+	// Subquery represents a subquery.
+	Subquery struct {
+		Select SelectStatement
+	}
+
+	// ListArg represents a named list argument.
+	ListArg []byte
+
+	// ValTuple represents a tuple of actual values.
+	ValTuple Exprs
+
+	// BinaryExpr represents a binary value expression.
+	BinaryExpr struct {
+		Operator    string
+		Left, Right Expr
+	}
+
+	// UnaryExpr represents a unary value expression.
+	UnaryExpr struct {
+		Operator string
+		Expr     Expr
+	}
+
+	// IntervalExpr represents a date-time INTERVAL expression.
+	IntervalExpr struct {
+		Expr Expr
+		Unit string
+	}
+
+	// TimestampFuncExpr represents the function and arguments for TIMESTAMP{ADD,DIFF} functions.
+	TimestampFuncExpr struct {
+		Name  string
+		Expr1 Expr
+		Expr2 Expr
+		Unit  string
+	}
+
+	// CollateExpr represents dynamic collate operator.
+	CollateExpr struct {
+		Expr    Expr
+		Charset string
+	}
+
+	// FuncExpr represents a function call.
+	FuncExpr struct {
+		Qualifier TableIdent
+		Name      ColIdent
+		Distinct  bool
+		Exprs     SelectExprs
+	}
+
+	// GroupConcatExpr represents a call to GROUP_CONCAT
+	GroupConcatExpr struct {
+		Distinct  string
+		Exprs     SelectExprs
+		OrderBy   OrderBy
+		Separator string
+	}
+
+	// ValuesFuncExpr represents a function call.
+	ValuesFuncExpr struct {
+		Name *ColName
+	}
+
+	// SubstrExpr represents a call to SubstrExpr(column, value_expression) or SubstrExpr(column, value_expression,value_expression)
+	// also supported syntax SubstrExpr(column from value_expression for value_expression).
+	// Additionally to column names, SubstrExpr is also supported for string values, e.g.:
+	// SubstrExpr('static string value', value_expression, value_expression)
+	// In this case StrVal will be set instead of Name.
+	SubstrExpr struct {
+		Name   *ColName
+		StrVal *SQLVal
+		From   Expr
+		To     Expr
+	}
+
+	// ConvertExpr represents a call to CONVERT(expr, type)
+	// or it's equivalent CAST(expr AS type). Both are rewritten to the former.
+	ConvertExpr struct {
+		Expr Expr
+		Type *ConvertType
+	}
+
+	// ConvertUsingExpr represents a call to CONVERT(expr USING charset).
+	ConvertUsingExpr struct {
+		Expr Expr
+		Type string
+	}
+
+	// MatchExpr represents a call to the MATCH function
+	MatchExpr struct {
+		Columns SelectExprs
+		Expr    Expr
+		Option  string
+	}
+
+	// CaseExpr represents a CASE expression.
+	CaseExpr struct {
+		Expr  Expr
+		Whens []*When
+		Else  Expr
+	}
+
+	// Default represents a DEFAULT expression.
+	Default struct {
+		ColName string
+	}
+
+	// When represents a WHEN sub-expression.
+	When struct {
+		Cond Expr
+		Val  Expr
+	}
+
+	// CurTimeFuncExpr represents the function and arguments for CURRENT DATE/TIME functions
+	// supported functions are documented in the grammar
+	CurTimeFuncExpr struct {
+		Name ColIdent
+		Fsp  Expr // fractional seconds precision, integer from 0 to 6
+	}
+)
+
+// iExpr ensures that only expressions nodes can be assigned to a Expr
 func (*AndExpr) iExpr()           {}
 func (*OrExpr) iExpr()            {}
 func (*NotExpr) iExpr()           {}
@@ -2269,11 +2470,6 @@ func (node Exprs) walkSubtree(visit Visit) error {
 	return nil
 }
 
-// AndExpr represents an AND expression.
-type AndExpr struct {
-	Left, Right Expr
-}
-
 // Format formats the node.
 func (node *AndExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v and %v", node.Left, node.Right)
@@ -2292,11 +2488,6 @@ func (node *AndExpr) walkSubtree(visit Visit) error {
 
 func (node *AndExpr) replace(from, to Expr) bool {
 	return replaceExprs(from, to, &node.Left, &node.Right)
-}
-
-// OrExpr represents an OR expression.
-type OrExpr struct {
-	Left, Right Expr
 }
 
 // Format formats the node.
@@ -2319,11 +2510,6 @@ func (node *OrExpr) replace(from, to Expr) bool {
 	return replaceExprs(from, to, &node.Left, &node.Right)
 }
 
-// NotExpr represents a NOT expression.
-type NotExpr struct {
-	Expr Expr
-}
-
 // Format formats the node.
 func (node *NotExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("not %v", node.Expr)
@@ -2343,11 +2529,6 @@ func (node *NotExpr) replace(from, to Expr) bool {
 	return replaceExprs(from, to, &node.Expr)
 }
 
-// ParenExpr represents a parenthesized boolean expression.
-type ParenExpr struct {
-	Expr Expr
-}
-
 // Format formats the node.
 func (node *ParenExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("(%v)", node.Expr)
@@ -2365,13 +2546,6 @@ func (node *ParenExpr) walkSubtree(visit Visit) error {
 
 func (node *ParenExpr) replace(from, to Expr) bool {
 	return replaceExprs(from, to, &node.Expr)
-}
-
-// ComparisonExpr represents a two-value comparison expression.
-type ComparisonExpr struct {
-	Operator    string
-	Left, Right Expr
-	Escape      Expr
 }
 
 // ComparisonExpr.Operator
@@ -2443,13 +2617,6 @@ func (node *ComparisonExpr) IsImpossible() bool {
 	return false
 }
 
-// RangeCond represents a BETWEEN or a NOT BETWEEN expression.
-type RangeCond struct {
-	Operator string
-	Left     Expr
-	From, To Expr
-}
-
 // RangeCond.Operator
 const (
 	BetweenStr    = "between"
@@ -2475,12 +2642,6 @@ func (node *RangeCond) walkSubtree(visit Visit) error {
 
 func (node *RangeCond) replace(from, to Expr) bool {
 	return replaceExprs(from, to, &node.Left, &node.From, &node.To)
-}
-
-// IsExpr represents an IS ... or an IS NOT ... expression.
-type IsExpr struct {
-	Operator string
-	Expr     Expr
 }
 
 // IsExpr.Operator
@@ -2510,11 +2671,6 @@ func (node *IsExpr) walkSubtree(visit Visit) error {
 
 func (node *IsExpr) replace(from, to Expr) bool {
 	return replaceExprs(from, to, &node.Expr)
-}
-
-// ExistsExpr represents an EXISTS expression.
-type ExistsExpr struct {
-	Subquery *Subquery
 }
 
 // Format formats the node.
@@ -2571,12 +2727,6 @@ const (
 	ValArg
 	BitVal
 )
-
-// SQLVal represents a single value.
-type SQLVal struct {
-	Type ValType
-	Val  []byte
-}
 
 // NewStrVal builds a new StrVal.
 func NewStrVal(in []byte) *SQLVal {
@@ -2649,9 +2799,6 @@ func (node *SQLVal) HexDecode() ([]byte, error) {
 	return dst, err
 }
 
-// NullVal represents a NULL value.
-type NullVal struct{}
-
 // Format formats the node.
 func (node *NullVal) Format(buf *TrackedBuffer) {
 	buf.Myprintf("null")
@@ -2664,9 +2811,6 @@ func (node *NullVal) walkSubtree(visit Visit) error {
 func (node *NullVal) replace(from, to Expr) bool {
 	return false
 }
-
-// BoolVal is true or false.
-type BoolVal bool
 
 // Format formats the node.
 func (node BoolVal) Format(buf *TrackedBuffer) {
@@ -2683,17 +2827,6 @@ func (node BoolVal) walkSubtree(visit Visit) error {
 
 func (node BoolVal) replace(from, to Expr) bool {
 	return false
-}
-
-// ColName represents a column name.
-type ColName struct {
-	// Metadata is not populated by the parser.
-	// It's a placeholder for analyzers to store
-	// additional data, typically info about which
-	// table or column this node references.
-	Metadata  interface{}
-	Name      ColIdent
-	Qualifier TableName
 }
 
 // Format formats the node.
@@ -2728,19 +2861,9 @@ func (node *ColName) Equal(c *ColName) bool {
 	return node.Name.Equal(c.Name) && node.Qualifier == c.Qualifier
 }
 
-// ColTuple represents a list of column values.
-// It can be ValTuple, Subquery, ListArg.
-type ColTuple interface {
-	iColTuple()
-	Expr
-}
-
 func (ValTuple) iColTuple()  {}
 func (*Subquery) iColTuple() {}
 func (ListArg) iColTuple()   {}
-
-// ValTuple represents a tuple of actual values.
-type ValTuple Exprs
 
 // Format formats the node.
 func (node ValTuple) Format(buf *TrackedBuffer) {
@@ -2758,11 +2881,6 @@ func (node ValTuple) replace(from, to Expr) bool {
 		}
 	}
 	return false
-}
-
-// Subquery represents a subquery.
-type Subquery struct {
-	Select SelectStatement
 }
 
 // Format formats the node.
@@ -2784,9 +2902,6 @@ func (node *Subquery) replace(from, to Expr) bool {
 	return false
 }
 
-// ListArg represents a named list argument.
-type ListArg []byte
-
 // Format formats the node.
 func (node ListArg) Format(buf *TrackedBuffer) {
 	buf.WriteArg(string(node))
@@ -2798,12 +2913,6 @@ func (node ListArg) walkSubtree(visit Visit) error {
 
 func (node ListArg) replace(from, to Expr) bool {
 	return false
-}
-
-// BinaryExpr represents a binary value expression.
-type BinaryExpr struct {
-	Operator    string
-	Left, Right Expr
 }
 
 // BinaryExpr.Operator
@@ -2841,12 +2950,6 @@ func (node *BinaryExpr) replace(from, to Expr) bool {
 	return replaceExprs(from, to, &node.Left, &node.Right)
 }
 
-// UnaryExpr represents a unary value expression.
-type UnaryExpr struct {
-	Operator string
-	Expr     Expr
-}
-
 // UnaryExpr.Operator
 const (
 	UPlusStr   = "+"
@@ -2881,12 +2984,6 @@ func (node *UnaryExpr) replace(from, to Expr) bool {
 	return replaceExprs(from, to, &node.Expr)
 }
 
-// IntervalExpr represents a date-time INTERVAL expression.
-type IntervalExpr struct {
-	Expr Expr
-	Unit string
-}
-
 // Format formats the node.
 func (node *IntervalExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("interval %v %s", node.Expr, node.Unit)
@@ -2904,14 +3001,6 @@ func (node *IntervalExpr) walkSubtree(visit Visit) error {
 
 func (node *IntervalExpr) replace(from, to Expr) bool {
 	return replaceExprs(from, to, &node.Expr)
-}
-
-// TimestampFuncExpr represents the function and arguments for TIMESTAMP{ADD,DIFF} functions.
-type TimestampFuncExpr struct {
-	Name  string
-	Expr1 Expr
-	Expr2 Expr
-	Unit  string
 }
 
 // Format formats the node.
@@ -2940,13 +3029,6 @@ func (node *TimestampFuncExpr) replace(from, to Expr) bool {
 	return false
 }
 
-// CurTimeFuncExpr represents the function and arguments for CURRENT DATE/TIME functions
-// supported functions are documented in the grammar
-type CurTimeFuncExpr struct {
-	Name ColIdent
-	Fsp  Expr // fractional seconds precision, integer from 0 to 6
-}
-
 // Format formats the node.
 func (node *CurTimeFuncExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%s(%v)", node.Name.String(), node.Fsp)
@@ -2966,12 +3048,6 @@ func (node *CurTimeFuncExpr) replace(from, to Expr) bool {
 	return replaceExprs(from, to, &node.Fsp)
 }
 
-// CollateExpr represents dynamic collate operator.
-type CollateExpr struct {
-	Expr    Expr
-	Charset string
-}
-
 // Format formats the node.
 func (node *CollateExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v collate %s", node.Expr, node.Charset)
@@ -2989,14 +3065,6 @@ func (node *CollateExpr) walkSubtree(visit Visit) error {
 
 func (node *CollateExpr) replace(from, to Expr) bool {
 	return replaceExprs(from, to, &node.Expr)
-}
-
-// FuncExpr represents a function call.
-type FuncExpr struct {
-	Qualifier TableIdent
-	Name      ColIdent
-	Distinct  bool
-	Exprs     SelectExprs
 }
 
 // Format formats the node.
@@ -3064,14 +3132,6 @@ func (node *FuncExpr) IsAggregate() bool {
 	return Aggregates[node.Name.Lowered()]
 }
 
-// GroupConcatExpr represents a call to GROUP_CONCAT
-type GroupConcatExpr struct {
-	Distinct  string
-	Exprs     SelectExprs
-	OrderBy   OrderBy
-	Separator string
-}
-
 // Format formats the node
 func (node *GroupConcatExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("group_concat(%s%v%v%s)", node.Distinct, node.Exprs, node.OrderBy, node.Separator)
@@ -3106,11 +3166,6 @@ func (node *GroupConcatExpr) replace(from, to Expr) bool {
 	return false
 }
 
-// ValuesFuncExpr represents a function call.
-type ValuesFuncExpr struct {
-	Name *ColName
-}
-
 // Format formats the node.
 func (node *ValuesFuncExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("values(%v)", node.Name)
@@ -3128,18 +3183,6 @@ func (node *ValuesFuncExpr) walkSubtree(visit Visit) error {
 
 func (node *ValuesFuncExpr) replace(from, to Expr) bool {
 	return false
-}
-
-// SubstrExpr represents a call to SubstrExpr(column, value_expression) or SubstrExpr(column, value_expression,value_expression)
-// also supported syntax SubstrExpr(column from value_expression for value_expression).
-// Additionally to column names, SubstrExpr is also supported for string values, e.g.:
-// SubstrExpr('static string value', value_expression, value_expression)
-// In this case StrVal will be set instead of Name.
-type SubstrExpr struct {
-	Name   *ColName
-	StrVal *SQLVal
-	From   Expr
-	To     Expr
 }
 
 // Format formats the node.
@@ -3174,13 +3217,6 @@ func (node *SubstrExpr) walkSubtree(visit Visit) error {
 	)
 }
 
-// ConvertExpr represents a call to CONVERT(expr, type)
-// or it's equivalent CAST(expr AS type). Both are rewritten to the former.
-type ConvertExpr struct {
-	Expr Expr
-	Type *ConvertType
-}
-
 // Format formats the node.
 func (node *ConvertExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("convert(%v, %v)", node.Expr, node.Type)
@@ -3199,12 +3235,6 @@ func (node *ConvertExpr) walkSubtree(visit Visit) error {
 
 func (node *ConvertExpr) replace(from, to Expr) bool {
 	return replaceExprs(from, to, &node.Expr)
-}
-
-// ConvertUsingExpr represents a call to CONVERT(expr USING charset).
-type ConvertUsingExpr struct {
-	Expr Expr
-	Type string
 }
 
 // Format formats the node.
@@ -3260,13 +3290,6 @@ func (node *ConvertType) walkSubtree(visit Visit) error {
 	return nil
 }
 
-// MatchExpr represents a call to the MATCH function
-type MatchExpr struct {
-	Columns SelectExprs
-	Expr    Expr
-	Option  string
-}
-
 // MatchExpr.Option
 const (
 	BooleanModeStr                           = " in boolean mode"
@@ -3302,13 +3325,6 @@ func (node *MatchExpr) replace(from, to Expr) bool {
 		}
 	}
 	return replaceExprs(from, to, &node.Expr)
-}
-
-// CaseExpr represents a CASE expression.
-type CaseExpr struct {
-	Expr  Expr
-	Whens []*When
-	Else  Expr
 }
 
 // Format formats the node.
@@ -3350,11 +3366,6 @@ func (node *CaseExpr) replace(from, to Expr) bool {
 	return replaceExprs(from, to, &node.Expr, &node.Else)
 }
 
-// Default represents a DEFAULT expression.
-type Default struct {
-	ColName string
-}
-
 // Format formats the node.
 func (node *Default) Format(buf *TrackedBuffer) {
 	buf.Myprintf("default")
@@ -3369,12 +3380,6 @@ func (node *Default) walkSubtree(visit Visit) error {
 
 func (node *Default) replace(from, to Expr) bool {
 	return false
-}
-
-// When represents a WHEN sub-expression.
-type When struct {
-	Cond Expr
-	Val  Expr
 }
 
 // Format formats the node.
