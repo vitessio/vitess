@@ -54,9 +54,14 @@ func TestMigrateTables(t *testing.T) {
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	assert.NoError(t, err)
 	got := fmt.Sprintf("%v", vschema)
-	want := `keyspaces:<key:"sourceks" value:<> > keyspaces:<key:"targetks" value:<> > ` +
-		`routing_rules:<rules:<from_table:"t1" to_tables:"sourceks.t1" > rules:<from_table:"targetks.t1" to_tables:"sourceks.t1" > > `
-	assert.Equal(t, got, want)
+	want := []string{
+		`keyspaces:<key:"sourceks" value:<> > keyspaces:<key:"targetks" value:<> >`,
+		`rules:<from_table:"t1" to_tables:"sourceks.t1" >`,
+		`rules:<from_table:"targetks.t1" to_tables:"sourceks.t1" >`,
+	}
+	for _, wantstr := range want {
+		assert.Contains(t, got, wantstr)
+	}
 }
 
 func TestMigrateVSchema(t *testing.T) {
@@ -81,10 +86,14 @@ func TestMigrateVSchema(t *testing.T) {
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	assert.NoError(t, err)
 	got := fmt.Sprintf("%v", vschema)
-	want := `keyspaces:<key:"sourceks" value:<> > ` +
-		`keyspaces:<key:"targetks" value:<tables:<key:"t1" value:<> > > > ` +
-		`routing_rules:<rules:<from_table:"t1" to_tables:"sourceks.t1" > rules:<from_table:"targetks.t1" to_tables:"sourceks.t1" > > `
-	assert.Equal(t, got, want)
+	want := []string{`keyspaces:<key:"sourceks" value:<> >`,
+		`keyspaces:<key:"targetks" value:<tables:<key:"t1" value:<> > > >`,
+		`rules:<from_table:"t1" to_tables:"sourceks.t1" >`,
+		`rules:<from_table:"targetks.t1" to_tables:"sourceks.t1" >`,
+	}
+	for _, wantstr := range want {
+		assert.Contains(t, got, wantstr)
+	}
 }
 
 func TestMaterializerOneToOne(t *testing.T) {
