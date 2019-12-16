@@ -221,12 +221,12 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			// Start Mysqlctl process
 			log.Info(fmt.Sprintf("Starting mysqlctl for table uid %d, mysql port %d", tablet.TabletUID, tablet.MySQLPort))
 			tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory)
-			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			if err != nil {
 				log.Error(err.Error())
 				return err
-			} else {
-				mysqlctlProcessList = append(mysqlctlProcessList, proc)
 			}
+			mysqlctlProcessList = append(mysqlctlProcessList, proc)
 
 			// start vttablet process
 			tablet.VttabletProcess = VttabletProcessInstance(tablet.HTTPPort,
@@ -573,7 +573,7 @@ func (cluster *LocalProcessCluster) GetVttabletInstance(tabletType string, UID i
 	}
 }
 
-// GetVttabletInstance creates a new vttablet object
+// GetVtprocessInstanceFromVttablet creates a new vttablet object
 func (cluster *LocalProcessCluster) GetVtprocessInstanceFromVttablet(tablet *Vttablet, shardName string, ksName string) *VttabletProcess {
 	return VttabletProcessInstance(tablet.HTTPPort,
 		tablet.GrpcPort,
