@@ -22,9 +22,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -94,6 +96,223 @@ func TestMigrateVSchema(t *testing.T) {
 	}
 	for _, wantstr := range want {
 		assert.Contains(t, got, wantstr)
+	}
+}
+
+func TestCreateLookupVindexCreateDDL(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+	}
+	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	defer env.close()
+	vs := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"hash": {
+				Type: "hash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "col1",
+					Name:   "hash",
+				}},
+			},
+		},
+	}
+	if err := env.topoServ.SaveVSchema(context.Background(), ms.SourceKeyspace, vs); err != nil {
+		t.Fatal(err)
+	}
+
+	testcases := []struct {
+		description  string
+		specs        *vschemapb.Keyspace
+		sourceSchema string
+		out          string
+		err          string
+	}{{
+		description: "unique lookup",
+		specs: &vschemapb.Keyspace{
+			Vindexes: map[string]*vschemapb.Vindex{
+				"v": {
+					Type: "lookup_unique",
+					Params: map[string]string{
+						"table": fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+						"from":  "c1",
+						"to":    "c2",
+					},
+					Owner: "t1",
+				},
+			},
+			Tables: map[string]*vschemapb.Table{
+				"t1": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Name:   "v",
+						Column: "col2",
+					}},
+				},
+			},
+		},
+		sourceSchema: "CREATE TABLE `t1` (\n" +
+			"  `col1` int(11) NOT NULL AUTO_INCREMENT,\n" +
+			"  `col2` int(11) DEFAULT NULL,\n" +
+			"  `col3` int(11) DEFAULT NULL,\n" +
+			"  PRIMARY KEY (`id`)\n" +
+			") ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1",
+		out: "CREATE TABLE `lkp` (\n" +
+			"  `c1` int(11),\n" +
+			"  `c2` varbinary(128),\n" +
+			"  PRIMARY KEY (`c1`)\n" +
+			")",
+	}, {
+		description: "unique lookup, also pk",
+		specs: &vschemapb.Keyspace{
+			Vindexes: map[string]*vschemapb.Vindex{
+				"v": {
+					Type: "lookup_unique",
+					Params: map[string]string{
+						"table": fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+						"from":  "c1",
+						"to":    "c2",
+					},
+					Owner: "t1",
+				},
+			},
+			Tables: map[string]*vschemapb.Table{
+				"t1": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Name:   "v",
+						Column: "col2",
+					}},
+				},
+			},
+		},
+		sourceSchema: "CREATE TABLE `t1` (\n" +
+			"  `col2` int(11) NOT NULL AUTO_INCREMENT,\n" +
+			"  `col1` int(11) DEFAULT NULL,\n" +
+			"  `col4` int(11) DEFAULT NULL,\n" +
+			"  PRIMARY KEY (`id`)\n" +
+			") ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1",
+		out: "CREATE TABLE `lkp` (\n" +
+			"  `c1` int(11) NOT NULL,\n" +
+			"  `c2` varbinary(128),\n" +
+			"  PRIMARY KEY (`c1`)\n" +
+			")",
+	}, {
+		description: "non-unique lookup, also pk",
+		specs: &vschemapb.Keyspace{
+			Vindexes: map[string]*vschemapb.Vindex{
+				"v": {
+					Type: "lookup",
+					Params: map[string]string{
+						"table": fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+						"from":  "c1,c2",
+						"to":    "c3",
+					},
+					Owner: "t1",
+				},
+			},
+			Tables: map[string]*vschemapb.Table{
+				"t1": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Name:    "v",
+						Columns: []string{"col2", "col1"},
+					}},
+				},
+			},
+		},
+		sourceSchema: "CREATE TABLE `t1` (\n" +
+			"  `col1` int(11) NOT NULL AUTO_INCREMENT,\n" +
+			"  `col2` int(11) NOT NULL,\n" +
+			"  `col3` int(11) DEFAULT NULL,\n" +
+			"  PRIMARY KEY (`id`)\n" +
+			") ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1",
+		out: "CREATE TABLE `lkp` (\n" +
+			"  `c1` int(11) NOT NULL,\n" +
+			"  `c2` int(11) NOT NULL,\n" +
+			"  `c3` varbinary(128),\n" +
+			"  PRIMARY KEY (`c1`, `c2`)\n" +
+			")",
+	}, {
+		description: "column missing",
+		specs: &vschemapb.Keyspace{
+			Vindexes: map[string]*vschemapb.Vindex{
+				"v": {
+					Type: "lookup_unique",
+					Params: map[string]string{
+						"table": fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+						"from":  "c1",
+						"to":    "c2",
+					},
+					Owner: "t1",
+				},
+			},
+			Tables: map[string]*vschemapb.Table{
+				"t1": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Name:   "v",
+						Column: "nocol",
+					}},
+				},
+			},
+		},
+		sourceSchema: "CREATE TABLE `t1` (\n" +
+			"  `col1` int(11) NOT NULL AUTO_INCREMENT,\n" +
+			"  `col2` int(11) NOT NULL,\n" +
+			"  `col3` int(11) DEFAULT NULL,\n" +
+			"  PRIMARY KEY (`id`)\n" +
+			") ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1",
+		err: "column nocol not found in schema",
+	}, {
+		description: "no table in schema",
+		specs: &vschemapb.Keyspace{
+			Vindexes: map[string]*vschemapb.Vindex{
+				"v": {
+					Type: "lookup_unique",
+					Params: map[string]string{
+						"table": fmt.Sprintf("%s.lkp", ms.TargetKeyspace),
+						"from":  "c1",
+						"to":    "c2",
+					},
+					Owner: "t1",
+				},
+			},
+			Tables: map[string]*vschemapb.Table{
+				"t1": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Name:   "v",
+						Column: "nocol",
+					}},
+				},
+			},
+		},
+		sourceSchema: "",
+		err:          "unexpected number of tables returned from schema",
+	}}
+	for _, tcase := range testcases {
+		if tcase.sourceSchema != "" {
+			env.tmc.schema[ms.SourceKeyspace+".t1"] = &tabletmanagerdatapb.SchemaDefinition{
+				TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+					Schema: tcase.sourceSchema,
+				}},
+			}
+		} else {
+			delete(env.tmc.schema, ms.SourceKeyspace+".t1")
+		}
+
+		outms, _, _, err := env.wr.prepareCreateLookup(context.Background(), ms.SourceKeyspace, tcase.specs)
+		if tcase.err != "" {
+			if err == nil || !strings.Contains(err.Error(), tcase.err) {
+				t.Errorf("prepareCreateLookup(%s) err: %v, must contain %v", tcase.description, err, tcase.err)
+			}
+			continue
+		}
+		require.NoError(t, err)
+		want := strings.Split(tcase.out, "\n")
+		got := strings.Split(outms.TableSettings[0].CreateDdl, "\n")
+		assert.Equal(t, want, got, tcase.description)
 	}
 }
 
@@ -839,7 +1058,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 		"v": {
 			Type: "lookup_unique",
 			Params: map[string]string{
-				"table": "ks.t",
+				"table": "targetks.t",
 				"from":  "c1",
 				"to":    "c2",
 			},
@@ -855,7 +1074,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 			"v": {
 				Type: "lookup_unique",
 				Params: map[string]string{
-					"table":      "ks.t",
+					"table":      "targetks.t",
 					"from":       "c1",
 					"to":         "c2",
 					"write_only": "true",
@@ -871,8 +1090,10 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 			},
 		},
 	}
-
-	if err := topoServ.SaveVSchema(context.Background(), "ks", vs); err != nil {
+	if err := topoServ.SaveVSchema(context.Background(), "sourceks", vs); err != nil {
+		t.Fatal(err)
+	}
+	if err := topoServ.SaveVSchema(context.Background(), "targetks", &vschemapb.Keyspace{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -923,7 +1144,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 				"v": {
 					Type: "lookup_unique",
 					Params: map[string]string{
-						"table": "ks.t",
+						"table": "targetks.t",
 						"from":  "c1,c2",
 					},
 				},
@@ -937,7 +1158,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 				"v": {
 					Type: "lookup",
 					Params: map[string]string{
-						"table": "ks.t",
+						"table": "targetks.t",
 						"from":  "c1",
 					},
 				},
@@ -951,7 +1172,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 				"v": {
 					Type: "lookup_noexist",
 					Params: map[string]string{
-						"table": "ks.t",
+						"table": "targetks.t",
 						"from":  "c1,c2",
 					},
 				},
@@ -993,7 +1214,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 				"v": {
 					Type: "lookup_unique",
 					Params: map[string]string{
-						"table": "ks.t",
+						"table": "targetks.t",
 						"from":  "c1",
 					},
 					Owner: "otherTable",
@@ -1042,7 +1263,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 				"other": {
 					Type: "lookup_unique",
 					Params: map[string]string{
-						"table": "ks.t",
+						"table": "targetks.t",
 						"from":  "c1",
 					},
 					Owner: "t1",
@@ -1088,7 +1309,7 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 		err: "ColumnVindex for table t1 already exists: c1",
 	}}
 	for _, tcase := range testcases {
-		err := wr.CreateLookupVindex(context.Background(), "ks", tcase.input, "", "")
+		err := wr.CreateLookupVindex(context.Background(), "sourceks", tcase.input, "", "")
 		if !strings.Contains(err.Error(), tcase.err) {
 			t.Errorf("CreateLookupVindex(%s) err: %v, must contain %v", tcase.description, err, tcase.err)
 		}
