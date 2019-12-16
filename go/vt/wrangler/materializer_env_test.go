@@ -90,7 +90,9 @@ func newTestMaterializerEnv(t *testing.T, ms *vtctldatapb.MaterializeSettings, s
 			}},
 		}
 	}
-	env.expectValidation()
+	if ms.Workflow != "" {
+		env.expectValidation()
+	}
 	return env
 }
 
