@@ -19,201 +19,14 @@ package sqlparser
 import (
 	"encoding/hex"
 	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
 	"strings"
-	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
-
-// parserPool is a pool for parser objects.
-var parserPool = sync.Pool{}
-
-// zeroParser is a zero-initialized parser to help reinitialize the parser for pooling.
-var zeroParser = *(yyNewParser().(*yyParserImpl))
-
-// yyParsePooled is a wrapper around yyParse that pools the parser objects. There isn't a
-// particularly good reason to use yyParse directly, since it immediately discards its parser.  What
-// would be ideal down the line is to actually pool the stacks themselves rather than the parser
-// objects, as per https://github.com/cznic/goyacc/blob/master/main.go. However, absent an upstream
-// change to goyacc, this is the next best option.
-//
-// N.B: Parser pooling means that you CANNOT take references directly to parse stack variables (e.g.
-// $$ = &$4) in sql.y rules. You must instead add an intermediate reference like so:
-//    showCollationFilterOpt := $4
-//    $$ = &Show{Type: string($2), ShowCollationFilterOpt: &showCollationFilterOpt}
-func yyParsePooled(yylex yyLexer) int {
-	// Being very particular about using the base type and not an interface type b/c we depend on
-	// the implementation to know how to reinitialize the parser.
-	var parser *yyParserImpl
-
-	i := parserPool.Get()
-	if i != nil {
-		parser = i.(*yyParserImpl)
-	} else {
-		parser = yyNewParser().(*yyParserImpl)
-	}
-
-	defer func() {
-		*parser = zeroParser
-		parserPool.Put(parser)
-	}()
-	return parser.Parse(yylex)
-}
-
-// Instructions for creating new types: If a type
-// needs to satisfy an interface, declare that function
-// along with that interface. This will help users
-// identify the list of types to which they can assert
-// those interfaces.
-// If the member of a type has a string with a predefined
-// list of values, declare those values as const following
-// the type.
-// For interfaces that define dummy functions to consolidate
-// a set of types, define the function as iTypeName.
-// This will help avoid name collisions.
-
-// Parse parses the SQL in full and returns a Statement, which
-// is the AST representation of the query. If a DDL statement
-// is partially parsed but still contains a syntax error, the
-// error is ignored and the DDL is returned anyway.
-func Parse(sql string) (Statement, error) {
-	tokenizer := NewStringTokenizer(sql)
-	if yyParsePooled(tokenizer) != 0 {
-		if tokenizer.partialDDL != nil {
-			if typ, val := tokenizer.Scan(); typ != 0 {
-				return nil, fmt.Errorf("extra characters encountered after end of DDL: '%s'", string(val))
-			}
-			log.Warningf("ignoring error parsing DDL '%s': %v", sql, tokenizer.LastError)
-			tokenizer.ParseTree = tokenizer.partialDDL
-			return tokenizer.ParseTree, nil
-		}
-		return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, tokenizer.LastError.Error())
-	}
-	if tokenizer.ParseTree == nil {
-		return nil, ErrEmpty
-	}
-	return tokenizer.ParseTree, nil
-}
-
-// ParseStrictDDL is the same as Parse except it errors on
-// partially parsed DDL statements.
-func ParseStrictDDL(sql string) (Statement, error) {
-	tokenizer := NewStringTokenizer(sql)
-	if yyParsePooled(tokenizer) != 0 {
-		return nil, tokenizer.LastError
-	}
-	if tokenizer.ParseTree == nil {
-		return nil, ErrEmpty
-	}
-	return tokenizer.ParseTree, nil
-}
-
-// ParseTokenizer is a raw interface to parse from the given tokenizer.
-// This does not used pooled parsers, and should not be used in general.
-func ParseTokenizer(tokenizer *Tokenizer) int {
-	return yyParse(tokenizer)
-}
-
-// ParseNext parses a single SQL statement from the tokenizer
-// returning a Statement which is the AST representation of the query.
-// The tokenizer will always read up to the end of the statement, allowing for
-// the next call to ParseNext to parse any subsequent SQL statements. When
-// there are no more statements to parse, a error of io.EOF is returned.
-func ParseNext(tokenizer *Tokenizer) (Statement, error) {
-	return parseNext(tokenizer, false)
-}
-
-// ParseNextStrictDDL is the same as ParseNext except it errors on
-// partially parsed DDL statements.
-func ParseNextStrictDDL(tokenizer *Tokenizer) (Statement, error) {
-	return parseNext(tokenizer, true)
-}
-
-func parseNext(tokenizer *Tokenizer, strict bool) (Statement, error) {
-	if tokenizer.lastChar == ';' {
-		tokenizer.next()
-		tokenizer.skipBlank()
-	}
-	if tokenizer.lastChar == eofChar {
-		return nil, io.EOF
-	}
-
-	tokenizer.reset()
-	tokenizer.multi = true
-	if yyParsePooled(tokenizer) != 0 {
-		if tokenizer.partialDDL != nil && !strict {
-			tokenizer.ParseTree = tokenizer.partialDDL
-			return tokenizer.ParseTree, nil
-		}
-		return nil, tokenizer.LastError
-	}
-	if tokenizer.ParseTree == nil {
-		return ParseNext(tokenizer)
-	}
-	return tokenizer.ParseTree, nil
-}
-
-// ErrEmpty is a sentinel error returned when parsing empty statements.
-var ErrEmpty = errors.New("empty statement")
-
-// SplitStatement returns the first sql statement up to either a ; or EOF
-// and the remainder from the given buffer
-func SplitStatement(blob string) (string, string, error) {
-	tokenizer := NewStringTokenizer(blob)
-	tkn := 0
-	for {
-		tkn, _ = tokenizer.Scan()
-		if tkn == 0 || tkn == ';' || tkn == eofChar {
-			break
-		}
-	}
-	if tokenizer.LastError != nil {
-		return "", "", tokenizer.LastError
-	}
-	if tkn == ';' {
-		return blob[:tokenizer.Position-2], blob[tokenizer.Position-1:], nil
-	}
-	return blob, "", nil
-}
-
-// SplitStatementToPieces split raw sql statement that may have multi sql pieces to sql pieces
-// returns the sql pieces blob contains; or error if sql cannot be parsed
-func SplitStatementToPieces(blob string) (pieces []string, err error) {
-	pieces = make([]string, 0, 16)
-	tokenizer := NewStringTokenizer(blob)
-
-	tkn := 0
-	var stmt string
-	stmtBegin := 0
-	for {
-		tkn, _ = tokenizer.Scan()
-		if tkn == ';' {
-			stmt = blob[stmtBegin : tokenizer.Position-2]
-			pieces = append(pieces, stmt)
-			stmtBegin = tokenizer.Position - 1
-
-		} else if tkn == 0 || tkn == eofChar {
-			blobTail := tokenizer.Position - 2
-
-			if stmtBegin < blobTail {
-				stmt = blob[stmtBegin : blobTail+1]
-				pieces = append(pieces, stmt)
-			}
-			break
-		}
-	}
-
-	err = tokenizer.LastError
-	return
-}
 
 // SQLNode defines the interface for all nodes
 // generated by the parser.
@@ -250,17 +63,6 @@ func Walk(visit Visit, nodes ...SQLNode) error {
 		}
 	}
 	return nil
-}
-
-// String returns a string representation of an SQLNode.
-func String(node SQLNode) string {
-	if node == nil {
-		return "<nil>"
-	}
-
-	buf := NewTrackedBuffer(nil)
-	buf.Myprintf("%v", node)
-	return buf.String()
 }
 
 // Append appends the SQLNode to the buffer.
@@ -475,34 +277,6 @@ func (*ParenSelect) iSelectStatement() {}
 // of SelectStatement.
 func (*ParenSelect) iStatement() {}
 
-// Select.Distinct
-const (
-	DistinctStr      = "distinct "
-	StraightJoinHint = "straight_join "
-)
-
-// Select.Lock
-const (
-	ForUpdateStr = " for update"
-	ShareModeStr = " lock in share mode"
-)
-
-// Select.Cache
-const (
-	SQLCacheStr   = "sql_cache "
-	SQLNoCacheStr = "sql_no_cache "
-)
-
-// AddOrder adds an order by element
-func (node *Select) AddOrder(order *Order) {
-	node.OrderBy = append(node.OrderBy, order)
-}
-
-// SetLimit sets the limit clause
-func (node *Select) SetLimit(limit *Limit) {
-	node.Limit = limit
-}
-
 func (node *Select) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -520,60 +294,6 @@ func (node *Select) walkSubtree(visit Visit) error {
 	)
 }
 
-// AddWhere adds the boolean expression to the
-// WHERE clause as an AND condition. If the expression
-// is an OR clause, it parenthesizes it. Currently,
-// the OR operator is the only one that's lower precedence
-// than AND.
-func (node *Select) AddWhere(expr Expr) {
-	if _, ok := expr.(*OrExpr); ok {
-		expr = &ParenExpr{Expr: expr}
-	}
-	if node.Where == nil {
-		node.Where = &Where{
-			Type: WhereStr,
-			Expr: expr,
-		}
-		return
-	}
-	node.Where.Expr = &AndExpr{
-		Left:  node.Where.Expr,
-		Right: expr,
-	}
-}
-
-// AddHaving adds the boolean expression to the
-// HAVING clause as an AND condition. If the expression
-// is an OR clause, it parenthesizes it. Currently,
-// the OR operator is the only one that's lower precedence
-// than AND.
-func (node *Select) AddHaving(expr Expr) {
-	if _, ok := expr.(*OrExpr); ok {
-		expr = &ParenExpr{Expr: expr}
-	}
-	if node.Having == nil {
-		node.Having = &Where{
-			Type: HavingStr,
-			Expr: expr,
-		}
-		return
-	}
-	node.Having.Expr = &AndExpr{
-		Left:  node.Having.Expr,
-		Right: expr,
-	}
-}
-
-// AddOrder adds an order by element
-func (node *ParenSelect) AddOrder(order *Order) {
-	panic("unreachable")
-}
-
-// SetLimit sets the limit clause
-func (node *ParenSelect) SetLimit(limit *Limit) {
-	panic("unreachable")
-}
-
 func (node *ParenSelect) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -582,23 +302,6 @@ func (node *ParenSelect) walkSubtree(visit Visit) error {
 		visit,
 		node.Select,
 	)
-}
-
-// Union.Type
-const (
-	UnionStr         = "union"
-	UnionAllStr      = "union all"
-	UnionDistinctStr = "union distinct"
-)
-
-// AddOrder adds an order by element
-func (node *Union) AddOrder(order *Order) {
-	node.OrderBy = append(node.OrderBy, order)
-}
-
-// SetLimit sets the limit clause
-func (node *Union) SetLimit(limit *Limit) {
-	node.Limit = limit
 }
 
 func (node *Union) walkSubtree(visit Visit) error {
@@ -623,12 +326,6 @@ func (node *Stream) walkSubtree(visit Visit) error {
 		node.Table,
 	)
 }
-
-// DDL strings.
-const (
-	InsertStr  = "insert"
-	ReplaceStr = "replace"
-)
 
 func (node *Insert) walkSubtree(visit Visit) error {
 	if node == nil {
@@ -685,14 +382,6 @@ func (node *Delete) walkSubtree(visit Visit) error {
 	)
 }
 
-// Set.Scope or Show.Scope
-const (
-	SessionStr        = "session"
-	GlobalStr         = "global"
-	VitessMetadataStr = "vitess_metadata"
-	ImplicitStr       = ""
-)
-
 func (node *Set) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -708,27 +397,6 @@ func (node *Set) walkSubtree(visit Visit) error {
 func (node *DBDDL) walkSubtree(visit Visit) error {
 	return nil
 }
-
-// DDL strings.
-const (
-	CreateStr           = "create"
-	AlterStr            = "alter"
-	DropStr             = "drop"
-	RenameStr           = "rename"
-	TruncateStr         = "truncate"
-	FlushStr            = "flush"
-	CreateVindexStr     = "create vindex"
-	DropVindexStr       = "drop vindex"
-	AddVschemaTableStr  = "add vschema table"
-	DropVschemaTableStr = "drop vschema table"
-	AddColVindexStr     = "on table add vindex"
-	DropColVindexStr    = "on table drop vindex"
-	AddSequenceStr      = "add sequence"
-	AddAutoIncStr       = "add auto_increment"
-
-	// Vindex DDL param to specify the owner of a vindex
-	VindexOwnerStr = "owner"
-)
 
 func (node *DDL) walkSubtree(visit Visit) error {
 	if node == nil {
@@ -752,11 +420,6 @@ func (node *DDL) AffectedTables() TableNames {
 	}
 	return TableNames{node.Table}
 }
-
-// Partition strings
-const (
-	ReorganizeStr = "reorganize partition"
-)
 
 // OptLike works for create table xxx like xxx
 type OptLike struct {
@@ -1171,11 +834,22 @@ type ConstraintDefinition struct {
 	Details ConstraintInfo
 }
 
-// ConstraintInfo details a constraint in a CREATE TABLE statement
-type ConstraintInfo interface {
-	SQLNode
-	constraintInfo()
-}
+type (
+	// ConstraintInfo details a constraint in a CREATE TABLE statement
+	ConstraintInfo interface {
+		SQLNode
+		constraintInfo()
+	}
+
+	// ForeignKeyDefinition describes a foreign key in a CREATE TABLE statement
+	ForeignKeyDefinition struct {
+		Source            Columns
+		ReferencedTable   TableName
+		ReferencedColumns Columns
+		OnDelete          ReferenceAction
+		OnUpdate          ReferenceAction
+	}
+)
 
 func (c *ConstraintDefinition) walkSubtree(visit Visit) error {
 	return Walk(visit, c.Details)
@@ -1198,15 +872,6 @@ const (
 )
 
 func (a ReferenceAction) walkSubtree(visit Visit) error { return nil }
-
-// ForeignKeyDefinition describes a foreign key in a CREATE TABLE statement
-type ForeignKeyDefinition struct {
-	Source            Columns
-	ReferencedTable   TableName
-	ReferencedColumns Columns
-	OnDelete          ReferenceAction
-	OnUpdate          ReferenceAction
-}
 
 var _ ConstraintInfo = &ForeignKeyDefinition{}
 
@@ -1297,20 +962,33 @@ func (node SelectExprs) walkSubtree(visit Visit) error {
 	return nil
 }
 
-// SelectExpr represents a SELECT expression.
-type SelectExpr interface {
-	iSelectExpr()
-	SQLNode
-}
+type (
+	// SelectExpr represents a SELECT expression.
+	SelectExpr interface {
+		iSelectExpr()
+		SQLNode
+	}
+
+	// StarExpr defines a '*' or 'table.*' expression.
+	StarExpr struct {
+		TableName TableName
+	}
+
+	// AliasedExpr defines an aliased SELECT expression.
+	AliasedExpr struct {
+		Expr Expr
+		As   ColIdent
+	}
+
+	// Nextval defines the NEXT VALUE expression.
+	Nextval struct {
+		Expr Expr
+	}
+)
 
 func (*StarExpr) iSelectExpr()    {}
 func (*AliasedExpr) iSelectExpr() {}
 func (Nextval) iSelectExpr()      {}
-
-// StarExpr defines a '*' or 'table.*' expression.
-type StarExpr struct {
-	TableName TableName
-}
 
 func (node *StarExpr) walkSubtree(visit Visit) error {
 	if node == nil {
@@ -1322,12 +1000,6 @@ func (node *StarExpr) walkSubtree(visit Visit) error {
 	)
 }
 
-// AliasedExpr defines an aliased SELECT expression.
-type AliasedExpr struct {
-	Expr Expr
-	As   ColIdent
-}
-
 func (node *AliasedExpr) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -1337,11 +1009,6 @@ func (node *AliasedExpr) walkSubtree(visit Visit) error {
 		node.Expr,
 		node.As,
 	)
-}
-
-// Nextval defines the NEXT VALUE expression.
-type Nextval struct {
-	Expr Expr
 }
 
 func (node Nextval) walkSubtree(visit Visit) error {
@@ -1395,25 +1062,40 @@ func (node TableExprs) walkSubtree(visit Visit) error {
 	return nil
 }
 
-// TableExpr represents a table expression.
-type TableExpr interface {
-	iTableExpr()
-	SQLNode
-}
+type (
+	// TableExpr represents a table expression.
+	TableExpr interface {
+		iTableExpr()
+		SQLNode
+	}
+
+	// AliasedTableExpr represents a table expression
+	// coupled with an optional alias or index hint.
+	// If As is empty, no alias was used.
+	AliasedTableExpr struct {
+		Expr       SimpleTableExpr
+		Partitions Partitions
+		As         TableIdent
+		Hints      *IndexHints
+	}
+
+	// JoinTableExpr represents a TableExpr that's a JOIN operation.
+	JoinTableExpr struct {
+		LeftExpr  TableExpr
+		Join      string
+		RightExpr TableExpr
+		Condition JoinCondition
+	}
+
+	// ParenTableExpr represents a parenthesized list of TableExpr.
+	ParenTableExpr struct {
+		Exprs TableExprs
+	}
+)
 
 func (*AliasedTableExpr) iTableExpr() {}
 func (*ParenTableExpr) iTableExpr()   {}
 func (*JoinTableExpr) iTableExpr()    {}
-
-// AliasedTableExpr represents a table expression
-// coupled with an optional alias or index hint.
-// If As is empty, no alias was used.
-type AliasedTableExpr struct {
-	Expr       SimpleTableExpr
-	Partitions Partitions
-	As         TableIdent
-	Hints      *IndexHints
-}
 
 func (node *AliasedTableExpr) walkSubtree(visit Visit) error {
 	if node == nil {
@@ -1434,11 +1116,27 @@ func (node *AliasedTableExpr) RemoveHints() *AliasedTableExpr {
 	return &noHints
 }
 
-// SimpleTableExpr represents a simple table expression.
-type SimpleTableExpr interface {
-	iSimpleTableExpr()
-	SQLNode
-}
+type (
+	// SimpleTableExpr represents a simple table expression.
+	SimpleTableExpr interface {
+		iSimpleTableExpr()
+		SQLNode
+	}
+
+	// TableName represents a table  name.
+	// Qualifier, if specified, represents a database or keyspace.
+	// TableName is a value struct whose fields are case sensitive.
+	// This means two TableName vars can be compared for equality
+	// and a TableName can also be used as key in a map.
+	TableName struct {
+		Name, Qualifier TableIdent
+	}
+
+	// Subquery represents a subquery.
+	Subquery struct {
+		Select SelectStatement
+	}
+)
 
 func (TableName) iSimpleTableExpr() {}
 func (*Subquery) iSimpleTableExpr() {}
@@ -1453,15 +1151,6 @@ func (node TableNames) walkSubtree(visit Visit) error {
 		}
 	}
 	return nil
-}
-
-// TableName represents a table  name.
-// Qualifier, if specified, represents a database or keyspace.
-// TableName is a value struct whose fields are case sensitive.
-// This means two TableName vars can be compared for equality
-// and a TableName can also be used as key in a map.
-type TableName struct {
-	Name, Qualifier TableIdent
 }
 
 func (node TableName) walkSubtree(visit Visit) error {
@@ -1486,11 +1175,6 @@ func (node TableName) ToViewName() TableName {
 		Qualifier: node.Qualifier,
 		Name:      NewTableIdent(strings.ToLower(node.Name.v)),
 	}
-}
-
-// ParenTableExpr represents a parenthesized list of TableExpr.
-type ParenTableExpr struct {
-	Exprs TableExprs
 }
 
 func (node *ParenTableExpr) walkSubtree(visit Visit) error {
@@ -1518,25 +1202,6 @@ func (node JoinCondition) walkSubtree(visit Visit) error {
 	)
 }
 
-// JoinTableExpr represents a TableExpr that's a JOIN operation.
-type JoinTableExpr struct {
-	LeftExpr  TableExpr
-	Join      string
-	RightExpr TableExpr
-	Condition JoinCondition
-}
-
-// JoinTableExpr.Join
-const (
-	JoinStr             = "join"
-	StraightJoinStr     = "straight_join"
-	LeftJoinStr         = "left join"
-	RightJoinStr        = "right join"
-	NaturalJoinStr      = "natural join"
-	NaturalLeftJoinStr  = "natural left join"
-	NaturalRightJoinStr = "natural right join"
-)
-
 func (node *JoinTableExpr) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -1555,13 +1220,6 @@ type IndexHints struct {
 	Indexes []ColIdent
 }
 
-// Index hints.
-const (
-	UseStr    = "use "
-	IgnoreStr = "ignore "
-	ForceStr  = "force "
-)
-
 func (node *IndexHints) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -1579,12 +1237,6 @@ type Where struct {
 	Type string
 	Expr Expr
 }
-
-// Where.Type
-const (
-	WhereStr  = "where"
-	HavingStr = "having"
-)
 
 // NewWhere creates a WHERE or HAVING clause out
 // of a Expr. If the expression is nil, it returns nil.
@@ -1606,18 +1258,17 @@ func (node *Where) walkSubtree(visit Visit) error {
 }
 
 // *********** Expressions
-
-// Expr represents an expression.
-type Expr interface {
-	iExpr()
-	// replace replaces any subexpression that matches
-	// from with to. The implementation can use the
-	// replaceExprs convenience function.
-	replace(from, to Expr) bool
-	SQLNode
-}
-
 type (
+	// Expr represents an expression.
+	Expr interface {
+		iExpr()
+		// replace replaces any subexpression that matches
+		// from with to. The implementation can use the
+		// replaceExprs convenience function.
+		replace(from, to Expr) bool
+		SQLNode
+	}
+
 	// AndExpr represents an AND expression.
 	AndExpr struct {
 		Left, Right Expr
@@ -1691,11 +1342,6 @@ type (
 	ColTuple interface {
 		iColTuple()
 		Expr
-	}
-
-	// Subquery represents a subquery.
-	Subquery struct {
-		Select SelectStatement
 	}
 
 	// ListArg represents a named list argument.
@@ -1947,25 +1593,6 @@ func (node *ParenExpr) replace(from, to Expr) bool {
 	return replaceExprs(from, to, &node.Expr)
 }
 
-// ComparisonExpr.Operator
-const (
-	EqualStr             = "="
-	LessThanStr          = "<"
-	GreaterThanStr       = ">"
-	LessEqualStr         = "<="
-	GreaterEqualStr      = ">="
-	NotEqualStr          = "!="
-	NullSafeEqualStr     = "<=>"
-	InStr                = "in"
-	NotInStr             = "not in"
-	LikeStr              = "like"
-	NotLikeStr           = "not like"
-	RegexpStr            = "regexp"
-	NotRegexpStr         = "not regexp"
-	JSONExtractOp        = "->"
-	JSONUnquoteExtractOp = "->>"
-)
-
 func (node *ComparisonExpr) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -2008,12 +1635,6 @@ func (node *ComparisonExpr) IsImpossible() bool {
 	return false
 }
 
-// RangeCond.Operator
-const (
-	BetweenStr    = "between"
-	NotBetweenStr = "not between"
-)
-
 func (node *RangeCond) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -2029,16 +1650,6 @@ func (node *RangeCond) walkSubtree(visit Visit) error {
 func (node *RangeCond) replace(from, to Expr) bool {
 	return replaceExprs(from, to, &node.Left, &node.From, &node.To)
 }
-
-// IsExpr.Operator
-const (
-	IsNullStr     = "is null"
-	IsNotNullStr  = "is not null"
-	IsTrueStr     = "is true"
-	IsNotTrueStr  = "is not true"
-	IsFalseStr    = "is false"
-	IsNotFalseStr = "is not false"
-)
 
 func (node *IsExpr) walkSubtree(visit Visit) error {
 	if node == nil {
@@ -2236,21 +1847,6 @@ func (node ListArg) replace(from, to Expr) bool {
 	return false
 }
 
-// BinaryExpr.Operator
-const (
-	BitAndStr     = "&"
-	BitOrStr      = "|"
-	BitXorStr     = "^"
-	PlusStr       = "+"
-	MinusStr      = "-"
-	MultStr       = "*"
-	DivStr        = "/"
-	IntDivStr     = "div"
-	ModStr        = "%"
-	ShiftLeftStr  = "<<"
-	ShiftRightStr = ">>"
-)
-
 func (node *BinaryExpr) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -2265,17 +1861,6 @@ func (node *BinaryExpr) walkSubtree(visit Visit) error {
 func (node *BinaryExpr) replace(from, to Expr) bool {
 	return replaceExprs(from, to, &node.Left, &node.Right)
 }
-
-// UnaryExpr.Operator
-const (
-	UPlusStr   = "+"
-	UMinusStr  = "-"
-	TildaStr   = "~"
-	BangStr    = "!"
-	BinaryStr  = "binary "
-	UBinaryStr = "_binary "
-	Utf8mb4Str = "_utf8mb4 "
-)
 
 func (node *UnaryExpr) walkSubtree(visit Visit) error {
 	if node == nil {
@@ -2501,23 +2086,9 @@ type ConvertType struct {
 	Charset  string
 }
 
-// this string is "character set" and this comment is required
-const (
-	CharacterSetStr = " character set"
-	CharsetStr      = "charset"
-)
-
 func (node *ConvertType) walkSubtree(visit Visit) error {
 	return nil
 }
-
-// MatchExpr.Option
-const (
-	BooleanModeStr                           = " in boolean mode"
-	NaturalLanguageModeStr                   = " in natural language mode"
-	NaturalLanguageModeWithQueryExpansionStr = " in natural language mode with query expansion"
-	QueryExpansionStr                        = " with query expansion"
-)
 
 func (node *MatchExpr) walkSubtree(visit Visit) error {
 	if node == nil {
@@ -2616,12 +2187,6 @@ type Order struct {
 	Direction string
 }
 
-// Order.Direction
-const (
-	AscScr  = "asc"
-	DescScr = "desc"
-)
-
 func (node *Order) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
@@ -2706,20 +2271,6 @@ type SetExpr struct {
 	Name ColIdent
 	Expr Expr
 }
-
-// SetExpr.Expr, for SET TRANSACTION ... or START TRANSACTION
-const (
-	// TransactionStr is the Name for a SET TRANSACTION statement
-	TransactionStr = "transaction"
-
-	IsolationLevelReadUncommitted = "isolation level read uncommitted"
-	IsolationLevelReadCommitted   = "isolation level read committed"
-	IsolationLevelRepeatableRead  = "isolation level repeatable read"
-	IsolationLevelSerializable    = "isolation level serializable"
-
-	TxReadOnly  = "read only"
-	TxReadWrite = "read write"
-)
 
 func (node *SetExpr) walkSubtree(visit Visit) error {
 	if node == nil {
