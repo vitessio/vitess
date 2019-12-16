@@ -56,11 +56,11 @@ func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 
 // Start executes mysqlctl command to start mysql instance
 func (mysqlctl *MysqlctlProcess) Start() (err error) {
-	if tmpProcess, err := mysqlctl.StartProcess(); err != nil {
+	tmpProcess, err := mysqlctl.StartProcess()
+	if err != nil {
 		return err
-	} else {
-		return tmpProcess.Wait()
 	}
+	return tmpProcess.Wait()
 }
 
 // StartProcess starts the mysqlctl and returns the process reference
@@ -78,19 +78,20 @@ func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
 	if mysqlctl.InitMysql {
 		tmpProcess.Args = append(tmpProcess.Args, "init",
 			"-init_db_sql_file", mysqlctl.InitDBFile)
-	} else {
-		tmpProcess.Args = append(tmpProcess.Args, "start")
 	}
+	tmpProcess.Args = append(tmpProcess.Args, "start")
+
 	return tmpProcess, tmpProcess.Start()
 }
 
 // Stop executes mysqlctl command to stop mysql instance
 func (mysqlctl *MysqlctlProcess) Stop() (err error) {
-	if tmpProcess, err := mysqlctl.StopProcess(); err != nil {
+	tmpProcess, err := mysqlctl.StopProcess()
+	if err != nil {
 		return err
-	} else {
-		return tmpProcess.Wait()
 	}
+	return tmpProcess.Wait()
+
 }
 
 // StopProcess executes mysqlctl command to stop mysql instance and returns process reference

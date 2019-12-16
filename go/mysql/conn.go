@@ -853,7 +853,12 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 		statement, err := sqlparser.ParseStrictDDL(query)
 		if err != nil {
-			return err
+			log.Errorf("Conn %v: Error parsing prepared statement: %v", c, err)
+			if werr := c.writeErrorPacketFromError(err); werr != nil {
+				// If we can't even write the error, we're done.
+				log.Errorf("Conn %v: Error writing prepared statement error: %v", c, werr)
+				return werr
+			}
 		}
 
 		paramsCount := uint16(0)

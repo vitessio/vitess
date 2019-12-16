@@ -45,22 +45,21 @@ func GetMasterPosition(t *testing.T, vttablet Vttablet, hostname string) (string
 	return pos, gtID
 }
 
-// Verify total number of rows in a tablet
+// VerifyRowsInTablet Verify total number of rows in a tablet
 func VerifyRowsInTablet(t *testing.T, vttablet *Vttablet, ksName string, expectedRows int) {
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
 		qr, err := vttablet.VttabletProcess.QueryTablet("select * from vt_insert_test", ksName, true)
 		assert.Nil(t, err)
-		if len(qr.Rows) != expectedRows {
-			time.Sleep(300 * time.Millisecond)
-		} else {
+		if len(qr.Rows) == expectedRows {
 			return
 		}
+		time.Sleep(300 * time.Millisecond)
 	}
 	assert.Fail(t, "expected rows not found.")
 }
 
-// Verify Local Metadata of a tablet
+// VerifyLocalMetadata Verify Local Metadata of a tablet
 func VerifyLocalMetadata(t *testing.T, tablet *Vttablet, ksName string, shardName string, cell string) {
 	qr, err := tablet.VttabletProcess.QueryTablet("select * from _vt.local_metadata", ksName, false)
 	assert.Nil(t, err)
@@ -74,7 +73,7 @@ func VerifyLocalMetadata(t *testing.T, tablet *Vttablet, ksName string, shardNam
 	}
 }
 
-//Lists back preset in shard
+// ListBackups Lists back preset in shard
 func (cluster LocalProcessCluster) ListBackups(shardKsName string) ([]string, error) {
 	output, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("ListBackups", shardKsName)
 	if err != nil {
