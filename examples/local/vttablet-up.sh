@@ -31,8 +31,6 @@ tablet_hostname=''
 # Otherwise, blank hostname means the tablet auto-detects FQDN.
 if [ "$TRAVIS" == true ]; then
   tablet_hostname=`hostname -i`
-elif [ $(uname) == "Darwin" ]; then
-  tablet_hostname="localhost"
 fi
 
 script_root=`dirname "${BASH_SOURCE}"`
