@@ -135,10 +135,12 @@ done
 echo "Waiting for tablets to be listening..."
 for uid_index in $uids; do
   port=$[$port_base + $uid_index]
-  while true; do
+  for i in $(seq 0 300); do
    curl -I "http://$hostname:$port/debug/status" >/dev/null 2>&1 && break
    sleep 0.1
   done;
+  # check one last time
+  curl -I "http://$hostname:$port/debug/status" || fail "tablets could not be started!"
 done;
 echo "Tablets up!"
 
