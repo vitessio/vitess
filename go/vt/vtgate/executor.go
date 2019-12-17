@@ -749,7 +749,6 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 	}
 	execStart := time.Now()
 	defer func() { logStats.ExecuteTime = time.Since(execStart) }()
-
 	switch strings.ToLower(show.Type) {
 	case sqlparser.KeywordString(sqlparser.COLLATION), sqlparser.KeywordString(sqlparser.VARIABLES):
 		if show.Scope == sqlparser.VitessMetadataStr {
@@ -827,24 +826,18 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			RowsAffected: 2,
 		}, nil
 	case "create table":
-		if destKeyspace == "" && show.HasTable() {
-			// For "show create table", if there isn't a targeted keyspace already
-			// we can either get a keyspace from the statement or potentially from
-			// the vschema.
-
-			if !show.Table.Qualifier.IsEmpty() {
-				// Explicit keyspace was passed. Use that for targeting but remove from the query itself.
-				destKeyspace = show.Table.Qualifier.String()
-				show.Table.Qualifier = sqlparser.NewTableIdent("")
-				sql = sqlparser.String(show)
-			} else {
-				// No keyspace was indicated. Try to find one using the vschema.
-				tbl, err := e.VSchema().FindTable("", show.Table.Name.String())
-				if err == nil {
-					destKeyspace = tbl.Keyspace.Name
-				}
+		if !show.Table.Qualifier.IsEmpty() {
+			// Explicit keyspace was passed. Use that for targeting but remove from the query itself.
+			destKeyspace = show.Table.Qualifier.String()
+			show.Table.Qualifier = sqlparser.NewTableIdent("")
+		} else {
+			// No keyspace was indicated. Try to find one using the vschema.
+			tbl, err := e.VSchema().FindTable("", show.Table.Name.String())
+			if err == nil {
+				destKeyspace = tbl.Keyspace.Name
 			}
 		}
+		sql = sqlparser.String(show)
 	case sqlparser.KeywordString(sqlparser.COLUMNS):
 		if !show.OnTable.Qualifier.IsEmpty() {
 			destKeyspace = show.OnTable.Qualifier.String()
