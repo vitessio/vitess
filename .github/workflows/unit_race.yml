@@ -20,7 +20,6 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y mysql-server mysql-client make unzip g++ curl git wget
         sudo service mysql stop
-        sudo service etcd stop
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
 
