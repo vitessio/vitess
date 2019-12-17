@@ -18,6 +18,9 @@
 
 set -e
 
+# macOS is currently flake in CI, and it't not clear what causes it.
+if [[ ! -z "$GITHUB_WORKFLOW" ]]; then set -x; fi
+
 cell=${CELL:-'test'}
 keyspace=${KEYSPACE:-'test_keyspace'}
 shard=${SHARD:-'0'}
@@ -135,7 +138,7 @@ done
 echo "Waiting for tablets to be listening..."
 for uid_index in $uids; do
   port=$[$port_base + $uid_index]
-  for i in $(seq 0 300); do
+  for i in $(seq 0 600); do
    curl -I "http://$hostname:$port/debug/status" >/dev/null 2>&1 && break
    sleep 0.1
   done;
