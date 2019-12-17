@@ -6,7 +6,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        name: [mysql57, mysql80, mariadb101]
+        name: [mysql57, mysql80]
 
     steps:
     - name: Set up Go
@@ -15,7 +15,7 @@ jobs:
         go-version: 1.12
 
     - name: Check out code
-      uses: actions/checkout@v1
+      uses: actions/checkout@v2
 
     - name: Get dependencies
       run: |
