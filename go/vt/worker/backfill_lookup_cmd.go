@@ -112,9 +112,9 @@ func commandBackfillLookup(wi *Instance, wr *wrangler.Wrangler, subFlags *flag.F
 	if err := subFlags.Parse(args); err != nil {
 		return nil, err
 	}
-	if subFlags.NArg() != 1 {
+	if subFlags.NArg() != 2 {
 		subFlags.Usage()
-		return nil, fmt.Errorf("command BackfillLookup requires <keyspace/vindexName>")
+		return nil, fmt.Errorf("command BackfillLookup requires <keyspace> <table>")
 	}
 
 	keyspace := subFlags.Arg(0)

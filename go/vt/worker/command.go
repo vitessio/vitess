@@ -73,6 +73,11 @@ var commands = []commandGroup{
 		"Internal commands to test the general worker functionality",
 		[]Command{},
 	},
+	{
+		"Square",
+		"Square specific commands",
+		[]Command{},
+	},
 }
 
 // AddCommand registers a command and makes it available.

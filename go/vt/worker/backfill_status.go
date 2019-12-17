@@ -24,7 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
-// backfillStatus keeps track of the status for a given table.
+// status keeps track of the status for a given table.
 type backfillStatus struct {
 	name string
 
@@ -49,7 +49,7 @@ func (bs *backfillStatus) initialize(sourceTableDefinition *tabletmanagerdata.Ta
 	defer bs.mu.Unlock()
 
 	if bs.initialized {
-		panic(fmt.Errorf("backfillStatus is already initialized: %v", bs))
+		panic(fmt.Errorf("status is already initialized: %v", bs))
 	}
 
 	bs.name = sourceTableDefinition.Name
