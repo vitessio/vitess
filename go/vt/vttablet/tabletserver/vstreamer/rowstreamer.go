@@ -25,7 +25,6 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -41,14 +40,14 @@ type rowStreamer struct {
 	query   string
 	lastpk  []sqltypes.Value
 	send    func(*binlogdatapb.VStreamRowsResponse) error
-	kschema *vindexes.KeyspaceSchema
+	vschema *localVSchema
 
 	plan      *Plan
 	pkColumns []int
 	sendQuery string
 }
 
-func NewRowStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, query string, lastpk []sqltypes.Value, kschema *vindexes.KeyspaceSchema, send func(*binlogdatapb.VStreamRowsResponse) error) *rowStreamer {
+func NewRowStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error) *rowStreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &rowStreamer{
 		ctx:     ctx,
@@ -58,7 +57,7 @@ func NewRowStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine
 		query:   query,
 		lastpk:  lastpk,
 		send:    send,
-		kschema: kschema,
+		vschema: vschema,
 	}
 }
 
@@ -103,7 +102,7 @@ func (rs *rowStreamer) buildPlan() error {
 		Name:    st.Name.String(),
 		Columns: st.Columns,
 	}
-	rs.plan, err = buildTablePlan(ti, rs.kschema, rs.query)
+	rs.plan, err = buildTablePlan(ti, rs.vschema, rs.query)
 	if err != nil {
 		return err
 	}
