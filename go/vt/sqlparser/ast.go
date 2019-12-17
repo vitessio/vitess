@@ -97,7 +97,7 @@ type (
 		Comments    Comments
 		Distinct    string
 		Hints       string
-		SelectExprs SelectExprs
+		SelectExprs []SelectExpr
 		From        TableExprs
 		Where       *Where
 		GroupBy     GroupBy
@@ -281,10 +281,16 @@ func (node *Select) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}
+	err := Walk(visit, node.Comments)
+	if err != nil {
+		return err
+	}
+	err = walkSelectExpressions(visit, node.SelectExprs)
+	if err != nil {
+		return err
+	}
 	return Walk(
 		visit,
-		node.Comments,
-		node.SelectExprs,
 		node.From,
 		node.Where,
 		node.GroupBy,
@@ -950,18 +956,6 @@ func (node Comments) walkSubtree(visit Visit) error {
 	return nil
 }
 
-// SelectExprs represents SELECT expressions.
-type SelectExprs []SelectExpr
-
-func (node SelectExprs) walkSubtree(visit Visit) error {
-	for _, n := range node {
-		if err := Walk(visit, n); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 type (
 	// SelectExpr represents a SELECT expression.
 	SelectExpr interface {
@@ -1387,13 +1381,13 @@ type (
 		Qualifier TableIdent
 		Name      ColIdent
 		Distinct  bool
-		Exprs     SelectExprs
+		Exprs     []SelectExpr
 	}
 
 	// GroupConcatExpr represents a call to GROUP_CONCAT
 	GroupConcatExpr struct {
 		Distinct  string
-		Exprs     SelectExprs
+		Exprs     []SelectExpr
 		OrderBy   OrderBy
 		Separator string
 	}
@@ -1430,7 +1424,7 @@ type (
 
 	// MatchExpr represents a call to the MATCH function
 	MatchExpr struct {
-		Columns SelectExprs
+		Columns []SelectExpr
 		Expr    Expr
 		Option  string
 	}
@@ -1943,12 +1937,15 @@ func (node *FuncExpr) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}
-	return Walk(
+	err := Walk(
 		visit,
 		node.Qualifier,
 		node.Name,
-		node.Exprs,
 	)
+	if err != nil {
+		return err
+	}
+	return walkSelectExpressions(visit, node.Exprs)
 }
 
 func (node *FuncExpr) replace(from, to Expr) bool {
@@ -1993,11 +1990,21 @@ func (node *GroupConcatExpr) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}
-	return Walk(
-		visit,
-		node.Exprs,
-		node.OrderBy,
-	)
+	err := walkSelectExpressions(visit, node.Exprs)
+	if err != nil {
+		return err
+	}
+	return Walk(visit, node.OrderBy)
+}
+
+func walkSelectExpressions(visit Visit, nodes []SelectExpr) error {
+	for _, e := range nodes {
+		err := Walk(visit, e)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (node *GroupConcatExpr) replace(from, to Expr) bool {
@@ -2094,11 +2101,11 @@ func (node *MatchExpr) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}
-	return Walk(
-		visit,
-		node.Columns,
-		node.Expr,
-	)
+	err := walkSelectExpressions(visit, node.Columns)
+	if err != nil {
+		return nil
+	}
+	return Walk(visit, node.Expr)
 }
 
 func (node *MatchExpr) replace(from, to Expr) bool {

@@ -184,7 +184,7 @@ func (pb *primitiveBuilder) pushSelectExprs(sel *sqlparser.Select) error {
 
 // pushSelectRoutes is a convenience function that pushes all the select
 // expressions and returns the list of resultColumns generated for it.
-func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) ([]*resultColumn, error) {
+func (pb *primitiveBuilder) pushSelectRoutes(selectExprs []sqlparser.SelectExpr) ([]*resultColumn, error) {
 	resultColumns := make([]*resultColumn, 0, len(selectExprs))
 	for _, node := range selectExprs {
 		switch node := node.(type) {

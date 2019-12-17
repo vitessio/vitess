@@ -51,7 +51,7 @@ type yySymType struct {
 	bytes2               [][]byte
 	str                  string
 	strs                 []string
-	selectExprs          SelectExprs
+	selectExprs          []SelectExpr
 	selectExpr           SelectExpr
 	columns              Columns
 	partitions           Partitions
@@ -3664,7 +3664,7 @@ yydefault:
 		yyDollar = yyS[yypt-7 : yypt+1]
 //line sql.y:373
 		{
-			yyVAL.selStmt = &Select{Comments: Comments(yyDollar[2].bytes2), Cache: yyDollar[3].str, SelectExprs: SelectExprs{Nextval{Expr: yyDollar[5].expr}}, From: TableExprs{&AliasedTableExpr{Expr: yyDollar[7].tableName}}}
+			yyVAL.selStmt = &Select{Comments: Comments(yyDollar[2].bytes2), Cache: yyDollar[3].str, SelectExprs: []SelectExpr{Nextval{Expr: yyDollar[5].expr}}, From: TableExprs{&AliasedTableExpr{Expr: yyDollar[7].tableName}}}
 		}
 	case 27:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -5526,7 +5526,7 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:1850
 		{
-			yyVAL.selectExprs = SelectExprs{yyDollar[1].selectExpr}
+			yyVAL.selectExprs = []SelectExpr{yyDollar[1].selectExpr}
 		}
 	case 334:
 		yyDollar = yyS[yypt-3 : yypt+1]

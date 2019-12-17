@@ -312,7 +312,7 @@ func analyzeSelect(query string) (sel *sqlparser.Select, fromTable sqlparser.Tab
 	return sel, fromTable, nil
 }
 
-func (plan *Plan) analyzeExprs(vschema *localVSchema, selExprs sqlparser.SelectExprs) error {
+func (plan *Plan) analyzeExprs(vschema *localVSchema, selExprs []sqlparser.SelectExpr) error {
 	if _, ok := selExprs[0].(*sqlparser.StarExpr); !ok {
 		for _, expr := range selExprs {
 			cExpr, err := plan.analyzeExpr(vschema, expr)
@@ -323,7 +323,7 @@ func (plan *Plan) analyzeExprs(vschema *localVSchema, selExprs sqlparser.SelectE
 		}
 	} else {
 		if len(selExprs) != 1 {
-			return fmt.Errorf("unsupported: %v", sqlparser.String(selExprs))
+			return fmt.Errorf("unsupported: %v", sqlparser.StringNodes(selExprs))
 		}
 		plan.ColExprs = make([]ColExpr, len(plan.Table.Columns))
 		for i, col := range plan.Table.Columns {
@@ -388,7 +388,7 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 	}
 }
 
-func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.SelectExprs) error {
+func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs []sqlparser.SelectExpr) error {
 	var colnames []sqlparser.ColIdent
 	var krExpr sqlparser.SelectExpr
 	switch {
@@ -434,7 +434,7 @@ func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.Selec
 
 		krExpr = exprs[len(exprs)-1]
 	default:
-		return fmt.Errorf("unexpected in_keyrange parameters: %v", sqlparser.String(exprs))
+		return fmt.Errorf("unexpected in_keyrange parameters: %v", sqlparser.StringNodes(exprs))
 	}
 	var err error
 	plan.VindexColumns, err = buildVindexColumns(plan.Table, colnames)

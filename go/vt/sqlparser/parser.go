@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 	"sync"
 
 	"vitess.io/vitess/go/vt/log"
@@ -218,5 +219,17 @@ func String(node SQLNode) string {
 
 	buf := NewTrackedBuffer(nil)
 	buf.Myprintf("%v", node)
+	return buf.String()
+}
+
+// StringNodes returns a string representation of collection of SQLNodes.
+// The input argument is typed as interface{} so an array of any type can be passed in
+func StringNodes(node interface{}) string {
+	if node == nil {
+		return "<nil>"
+	}
+
+	buf := NewTrackedBuffer(nil)
+	buf.reflectPrint(reflect.ValueOf(node))
 	return buf.String()
 }

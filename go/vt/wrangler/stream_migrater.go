@@ -472,7 +472,7 @@ func (sm *streamMigrater) templatizeKeyRange(ctx context.Context, rule *binlogda
 	vtable := sm.mi.sourceKSSchema.Tables[rule.Match]
 	inkr := &sqlparser.FuncExpr{
 		Name: sqlparser.NewColIdent("in_keyrange"),
-		Exprs: sqlparser.SelectExprs{
+		Exprs: []sqlparser.SelectExpr{
 			&sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: vtable.ColumnVindexes[0].Columns[0]}},
 			&sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte(vtable.ColumnVindexes[0].Type))},
 			&sqlparser.AliasedExpr{Expr: sqlparser.NewStrVal([]byte("{{.}}"))},

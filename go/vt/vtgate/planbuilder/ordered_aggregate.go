@@ -74,7 +74,12 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	if sel.Distinct != "" {
 		hasAggregates = true
 	} else {
-		hasAggregates = nodeHasAggregates(sel.SelectExprs)
+		for _, e := range sel.SelectExprs {
+			hasAggregates = nodeHasAggregates(e)
+			if hasAggregates {
+				break
+			}
+		}
 	}
 	if len(sel.GroupBy) > 0 {
 		hasAggregates = true
@@ -219,7 +224,7 @@ func (pb *primitiveBuilder) groupByHasUniqueVindex(sel *sqlparser.Select, rb *ro
 	})
 }
 
-func findAlias(colname *sqlparser.ColName, selects sqlparser.SelectExprs) sqlparser.Expr {
+func findAlias(colname *sqlparser.ColName, selects []sqlparser.SelectExpr) sqlparser.Expr {
 	// Qualified column names cannot match an (unqualified) alias.
 	if !colname.Qualifier.IsEmpty() {
 		return nil

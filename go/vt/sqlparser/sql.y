@@ -61,7 +61,7 @@ func skipToEnd(yylex interface{}) {
   bytes2        [][]byte
   str           string
   strs          []string
-  selectExprs   SelectExprs
+  selectExprs   []SelectExpr
   selectExpr    SelectExpr
   columns       Columns
   partitions    Partitions
@@ -371,7 +371,7 @@ select_statement:
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
-    $$ = &Select{Comments: Comments($2), Cache: $3, SelectExprs: SelectExprs{Nextval{Expr: $5}}, From: TableExprs{&AliasedTableExpr{Expr: $7}}}
+    $$ = &Select{Comments: Comments($2), Cache: $3, SelectExprs: []SelectExpr{Nextval{Expr: $5}}, From: TableExprs{&AliasedTableExpr{Expr: $7}}}
   }
 
 stream_statement:
@@ -1848,7 +1848,7 @@ select_expression_list_opt:
 select_expression_list:
   select_expression
   {
-    $$ = SelectExprs{$1}
+    $$ = []SelectExpr{$1}
   }
 | select_expression_list ',' select_expression
   {

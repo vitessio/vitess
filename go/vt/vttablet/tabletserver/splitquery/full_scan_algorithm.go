@@ -181,7 +181,7 @@ func buildNoninitialQuery(
 	}
 }
 
-func convertColumnsToSelectExprs(columns []*schema.TableColumn) sqlparser.SelectExprs {
+func convertColumnsToSelectExprs(columns []*schema.TableColumn) []sqlparser.SelectExpr {
 	result := make([]sqlparser.SelectExpr, 0, len(columns))
 	for _, column := range columns {
 		result = append(result,

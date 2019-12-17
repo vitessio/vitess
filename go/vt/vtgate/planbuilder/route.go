@@ -277,11 +277,11 @@ func (rb *route) Wireup(bldr builder, jt *jointab) error {
 		switch node := node.(type) {
 		case *sqlparser.Select:
 			if len(node.SelectExprs) == 0 {
-				node.SelectExprs = sqlparser.SelectExprs([]sqlparser.SelectExpr{
+				node.SelectExprs = []sqlparser.SelectExpr{
 					&sqlparser.AliasedExpr{
 						Expr: sqlparser.NewIntVal([]byte{'1'}),
 					},
-				})
+				}
 			}
 		case *sqlparser.ComparisonExpr:
 			if node.Operator == sqlparser.EqualStr {
@@ -394,7 +394,7 @@ func (rb *route) generateFieldQuery(sel sqlparser.SelectStatement, jt *jointab) 
 }
 
 // SupplyVar satisfies the builder interface.
-func (rb *route) SupplyVar(from, to int, col *sqlparser.ColName, varname string) {
+func (rb *route) SupplyVar(int, int, *sqlparser.ColName, string) {
 	// route is an atomic primitive. So, SupplyVar cannot be
 	// called on it.
 	panic("BUG: route is an atomic node.")

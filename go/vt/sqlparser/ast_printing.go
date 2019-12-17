@@ -464,15 +464,6 @@ func (node Comments) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node SelectExprs) Format(buf *TrackedBuffer) {
-	var prefix string
-	for _, n := range node {
-		buf.Myprintf("%s%v", prefix, n)
-		prefix = ", "
-	}
-}
-
-// Format formats the node.
 func (node *StarExpr) Format(buf *TrackedBuffer) {
 	if !node.TableName.IsEmpty() {
 		buf.Myprintf("%v.", node.TableName)

@@ -18,6 +18,7 @@ package sqlparser
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -74,9 +75,10 @@ func (buf *TrackedBuffer) Myprintf(format string, values ...interface{}) {
 			break
 		}
 		i++ // '%'
+		this := values[fieldnum]
 		switch format[i] {
 		case 'c':
-			switch v := values[fieldnum].(type) {
+			switch v := this.(type) {
 			case byte:
 				buf.WriteByte(v)
 			case rune:
@@ -85,7 +87,7 @@ func (buf *TrackedBuffer) Myprintf(format string, values ...interface{}) {
 				panic(fmt.Sprintf("unexpected TrackedBuffer type %T", v))
 			}
 		case 's':
-			switch v := values[fieldnum].(type) {
+			switch v := this.(type) {
 			case []byte:
 				buf.Write(v)
 			case string:
@@ -94,20 +96,70 @@ func (buf *TrackedBuffer) Myprintf(format string, values ...interface{}) {
 				panic(fmt.Sprintf("unexpected TrackedBuffer type %T", v))
 			}
 		case 'v':
-			node := values[fieldnum].(SQLNode)
-			if buf.nodeFormatter == nil {
-				node.Format(buf)
+			node, ok := this.(SQLNode)
+			if ok {
+				if buf.nodeFormatter == nil {
+					node.Format(buf)
+				} else {
+					buf.nodeFormatter(buf, node)
+				}
 			} else {
-				buf.nodeFormatter(buf, node)
+				buf.reflectPrint(reflect.ValueOf(this))
 			}
+
 		case 'a':
-			buf.WriteArg(values[fieldnum].(string))
+			buf.WriteArg(this.(string))
 		default:
 			panic("unexpected")
 		}
 		fieldnum++
 		i++
 	}
+}
+
+func (buf *TrackedBuffer) reflectPrint(x reflect.Value) {
+	switch x.Kind() {
+	case reflect.Array:
+		length := x.Len()
+		if length > 0 {
+			for i, n := 0, length; i < n; i++ {
+				curr := x.Index(i)
+				buf.reflectPrint(curr)
+
+				// don't print after the last item
+				if !(i == length-1) {
+					_, _ = buf.WriteString(", ")
+				}
+			}
+		}
+	case reflect.Slice:
+		length := x.Len()
+		if length > 0 {
+			for i, n := 0, length; i < n; i++ {
+				curr := x.Index(i)
+				buf.reflectPrint(curr)
+
+				// don't print after the last item
+				if !(i == length-1) {
+					_, _ = buf.WriteString(", ")
+				}
+			}
+		}
+
+	default:
+		v := x.Interface()
+		switch v := v.(type) {
+		case string:
+			// print strings in quotes
+			_, _ = buf.WriteString(v)
+			return
+		case SQLNode:
+			buf.Myprintf("%v", v)
+		default:
+			panic("I'm feeling overwhelmed..." + x.Kind().String())
+		}
+	}
+
 }
 
 // WriteArg writes a value argument into the buffer along with
