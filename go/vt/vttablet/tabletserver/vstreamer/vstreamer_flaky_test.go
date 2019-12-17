@@ -965,8 +965,6 @@ func TestJournal(t *testing.T) {
 	runCases(t, nil, testcases, "")
 }
 
-/*
- FIXME: This fails reliably on MariaDB.
 func TestMinimalMode(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -1005,7 +1003,6 @@ func TestMinimalMode(t *testing.T) {
 		t.Errorf("err: %v, must contain '%s'", err, want)
 	}
 }
-*/
 
 func TestStatementMode(t *testing.T) {
 	if testing.Short() {
