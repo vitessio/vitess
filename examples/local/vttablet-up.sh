@@ -18,8 +18,14 @@
 
 set -e
 
-# macOS is currently flake in CI, and it't not clear what causes it.
-if [[ ! -z "$GITHUB_WORKFLOW" ]]; then set -x; fi
+# macOS is currently flake in CI, and it's suspected of load,
+# since the CI runner is only 2 core.
+if [[ -n "$GITHUB_WORKFLOW" ]]; then
+ set -x
+ if [ "$(uname)" = "Darwin" ]; then
+   sleep 5
+ fi
+fi
 
 cell=${CELL:-'test'}
 keyspace=${KEYSPACE:-'test_keyspace'}
