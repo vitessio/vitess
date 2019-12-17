@@ -31,7 +31,7 @@ import (
 // buildInsertPlan builds the route for an INSERT statement.
 func buildInsertPlan(ins *sqlparser.Insert, vschema ContextVSchema) (*engine.Insert, error) {
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(ins)))
-	exprs := sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: ins.Table}}
+	exprs := []sqlparser.TableExpr{&sqlparser.AliasedTableExpr{Expr: ins.Table}}
 	ro, err := pb.processDMLTable(exprs)
 	if err != nil {
 		return nil, err

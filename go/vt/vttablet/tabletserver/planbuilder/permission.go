@@ -68,7 +68,7 @@ func buildSubqueryPermissions(stmt sqlparser.Statement, role tableacl.Role, perm
 		switch node := node.(type) {
 		case *sqlparser.Select:
 			permissions = buildTableExprsPermissions(node.From, role, permissions)
-		case sqlparser.TableExprs:
+		case sqlparser.TableExpr:
 			return false, nil
 		}
 		return true, nil
@@ -76,7 +76,7 @@ func buildSubqueryPermissions(stmt sqlparser.Statement, role tableacl.Role, perm
 	return permissions
 }
 
-func buildTableExprsPermissions(node sqlparser.TableExprs, role tableacl.Role, permissions []Permission) []Permission {
+func buildTableExprsPermissions(node []sqlparser.TableExpr, role tableacl.Role, permissions []Permission) []Permission {
 	for _, node := range node {
 		permissions = buildTableExprPermissions(node, role, permissions)
 	}

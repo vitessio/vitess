@@ -281,7 +281,7 @@ func buildDifferPlan(table *tabletmanagerdatapb.TableDefinition, query string) (
 	}
 
 	sourceSelect.From = sel.From
-	targetSelect.From = sqlparser.TableExprs{
+	targetSelect.From = []sqlparser.TableExpr{
 		&sqlparser.AliasedTableExpr{
 			Expr: &sqlparser.TableName{
 				Name: sqlparser.NewTableIdent(table.Name),

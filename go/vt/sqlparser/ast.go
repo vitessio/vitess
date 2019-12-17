@@ -98,7 +98,7 @@ type (
 		Distinct    string
 		Hints       string
 		SelectExprs []SelectExpr
-		From        TableExprs
+		From        []TableExpr
 		Where       *Where
 		GroupBy     GroupBy
 		Having      *Where
@@ -147,7 +147,7 @@ type (
 	Update struct {
 		Comments   Comments
 		Ignore     string
-		TableExprs TableExprs
+		TableExprs []TableExpr
 		Exprs      UpdateExprs
 		Where      *Where
 		OrderBy    OrderBy
@@ -159,7 +159,7 @@ type (
 	Delete struct {
 		Comments   Comments
 		Targets    TableNames
-		TableExprs TableExprs
+		TableExprs []TableExpr
 		Partitions Partitions
 		Where      *Where
 		OrderBy    OrderBy
@@ -289,9 +289,12 @@ func (node *Select) walkSubtree(visit Visit) error {
 	if err != nil {
 		return err
 	}
+	err = walkTableExpressions(visit, node.From)
+	if err != nil {
+		return err
+	}
 	return Walk(
 		visit,
-		node.From,
 		node.Where,
 		node.GroupBy,
 		node.Having,
@@ -362,10 +365,16 @@ func (node *Update) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}
+	err := Walk(visit, node.Comments)
+	if err != nil {
+		return err
+	}
+	err = walkTableExpressions(visit, node.TableExprs)
+	if err != nil {
+		return err
+	}
 	return Walk(
 		visit,
-		node.Comments,
-		node.TableExprs,
 		node.Exprs,
 		node.Where,
 		node.OrderBy,
@@ -377,11 +386,16 @@ func (node *Delete) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}
+	err := Walk(visit, node.Comments, node.Targets)
+	if err != nil {
+		return err
+	}
+	err = walkTableExpressions(visit, node.TableExprs)
+	if err != nil {
+		return err
+	}
 	return Walk(
 		visit,
-		node.Comments,
-		node.Targets,
-		node.TableExprs,
 		node.Where,
 		node.OrderBy,
 		node.Limit,
@@ -1044,18 +1058,6 @@ func (node Partitions) walkSubtree(visit Visit) error {
 	return nil
 }
 
-// TableExprs represents a list of table expressions.
-type TableExprs []TableExpr
-
-func (node TableExprs) walkSubtree(visit Visit) error {
-	for _, n := range node {
-		if err := Walk(visit, n); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 type (
 	// TableExpr represents a table expression.
 	TableExpr interface {
@@ -1083,7 +1085,7 @@ type (
 
 	// ParenTableExpr represents a parenthesized list of TableExpr.
 	ParenTableExpr struct {
-		Exprs TableExprs
+		Exprs []TableExpr
 	}
 )
 
@@ -1175,10 +1177,7 @@ func (node *ParenTableExpr) walkSubtree(visit Visit) error {
 	if node == nil {
 		return nil
 	}
-	return Walk(
-		visit,
-		node.Exprs,
-	)
+	return walkTableExpressions(visit, node.Exprs)
 }
 
 // JoinCondition represents the join conditions (either a ON or USING clause)
@@ -1998,6 +1997,16 @@ func (node *GroupConcatExpr) walkSubtree(visit Visit) error {
 }
 
 func walkSelectExpressions(visit Visit, nodes []SelectExpr) error {
+	for _, e := range nodes {
+		err := Walk(visit, e)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func walkTableExpressions(visit Visit, nodes []TableExpr) error {
 	for _, e := range nodes {
 		err := Walk(visit, e)
 		if err != nil {

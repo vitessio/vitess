@@ -242,7 +242,7 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 	return plan, nil
 }
 
-func analyzeFrom(tableExprs sqlparser.TableExprs) sqlparser.TableIdent {
+func analyzeFrom(tableExprs []sqlparser.TableExpr) sqlparser.TableIdent {
 	if len(tableExprs) > 1 {
 		return sqlparser.NewTableIdent("")
 	}
@@ -463,7 +463,7 @@ func analyzeInsertNoType(ins *sqlparser.Insert, plan *Plan, table *schema.Table)
 	tableAlias := &sqlparser.AliasedTableExpr{Expr: ins.Table}
 	upd := &sqlparser.Update{
 		Comments:   ins.Comments,
-		TableExprs: sqlparser.TableExprs{tableAlias},
+		TableExprs: []sqlparser.TableExpr{tableAlias},
 		Exprs:      sqlparser.UpdateExprs(ins.OnDup),
 	}
 

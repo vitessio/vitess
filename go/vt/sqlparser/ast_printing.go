@@ -511,15 +511,6 @@ func (node Partitions) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node TableExprs) Format(buf *TrackedBuffer) {
-	var prefix string
-	for _, n := range node {
-		buf.Myprintf("%s%v", prefix, n)
-		prefix = ", "
-	}
-}
-
-// Format formats the node.
 func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v%v", node.Expr, node.Partitions)
 	if !node.As.IsEmpty() {

@@ -56,7 +56,7 @@ type yySymType struct {
 	columns              Columns
 	partitions           Partitions
 	colName              *ColName
-	tableExprs           TableExprs
+	tableExprs           []TableExpr
 	tableExpr            TableExpr
 	joinCondition        JoinCondition
 	tableName            TableName
@@ -3664,7 +3664,7 @@ yydefault:
 		yyDollar = yyS[yypt-7 : yypt+1]
 //line sql.y:373
 		{
-			yyVAL.selStmt = &Select{Comments: Comments(yyDollar[2].bytes2), Cache: yyDollar[3].str, SelectExprs: []SelectExpr{Nextval{Expr: yyDollar[5].expr}}, From: TableExprs{&AliasedTableExpr{Expr: yyDollar[7].tableName}}}
+			yyVAL.selStmt = &Select{Comments: Comments(yyDollar[2].bytes2), Cache: yyDollar[3].str, SelectExprs: []SelectExpr{Nextval{Expr: yyDollar[5].expr}}, From: []TableExpr{&AliasedTableExpr{Expr: yyDollar[7].tableName}}}
 		}
 	case 27:
 		yyDollar = yyS[yypt-5 : yypt+1]
@@ -3750,7 +3750,7 @@ yydefault:
 		yyDollar = yyS[yypt-8 : yypt+1]
 //line sql.y:453
 		{
-			yyVAL.statement = &Delete{Comments: Comments(yyDollar[2].bytes2), TableExprs: TableExprs{&AliasedTableExpr{Expr: yyDollar[4].tableName}}, Partitions: yyDollar[5].partitions, Where: NewWhere(WhereStr, yyDollar[6].expr), OrderBy: yyDollar[7].orderBy, Limit: yyDollar[8].limit}
+			yyVAL.statement = &Delete{Comments: Comments(yyDollar[2].bytes2), TableExprs: []TableExpr{&AliasedTableExpr{Expr: yyDollar[4].tableName}}, Partitions: yyDollar[5].partitions, Where: NewWhere(WhereStr, yyDollar[6].expr), OrderBy: yyDollar[7].orderBy, Limit: yyDollar[8].limit}
 		}
 	case 39:
 		yyDollar = yyS[yypt-7 : yypt+1]
@@ -5586,7 +5586,7 @@ yydefault:
 		yyDollar = yyS[yypt-0 : yypt+1]
 //line sql.y:1897
 		{
-			yyVAL.tableExprs = TableExprs{&AliasedTableExpr{Expr: TableName{Name: NewTableIdent("dual")}}}
+			yyVAL.tableExprs = []TableExpr{&AliasedTableExpr{Expr: TableName{Name: NewTableIdent("dual")}}}
 		}
 	case 345:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -5598,7 +5598,7 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:1907
 		{
-			yyVAL.tableExprs = TableExprs{yyDollar[1].tableExpr}
+			yyVAL.tableExprs = []TableExpr{yyDollar[1].tableExpr}
 		}
 	case 347:
 		yyDollar = yyS[yypt-3 : yypt+1]

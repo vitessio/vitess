@@ -194,8 +194,8 @@ func convertColumnsToSelectExprs(columns []*schema.TableColumn) []sqlparser.Sele
 	return result
 }
 
-func buildFromClause(splitTableName sqlparser.TableIdent) sqlparser.TableExprs {
-	return sqlparser.TableExprs{
+func buildFromClause(splitTableName sqlparser.TableIdent) []sqlparser.TableExpr {
+	return []sqlparser.TableExpr{
 		&sqlparser.AliasedTableExpr{
 			Expr: sqlparser.TableName{Name: splitTableName},
 			Hints: &sqlparser.IndexHints{

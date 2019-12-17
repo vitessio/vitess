@@ -29,7 +29,7 @@ import (
 // This file has functions to analyze the FROM clause.
 
 // processDMLTable analyzes the FROM clause for DMLs and returns a routeOption.
-func (pb *primitiveBuilder) processDMLTable(tableExprs sqlparser.TableExprs) (*routeOption, error) {
+func (pb *primitiveBuilder) processDMLTable(tableExprs []sqlparser.TableExpr) (*routeOption, error) {
 	if err := pb.processTableExprs(tableExprs); err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ func (pb *primitiveBuilder) processDMLTable(tableExprs sqlparser.TableExprs) (*r
 
 // processTableExprs analyzes the FROM clause. It produces a builder
 // with all the routes identified.
-func (pb *primitiveBuilder) processTableExprs(tableExprs sqlparser.TableExprs) error {
+func (pb *primitiveBuilder) processTableExprs(tableExprs []sqlparser.TableExpr) error {
 	if len(tableExprs) == 1 {
 		return pb.processTableExpr(tableExprs[0])
 	}
@@ -73,7 +73,7 @@ func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr) erro
 		// into it. FROM a, (b, c) should not become FROM a, b, c.
 		if rb, ok := pb.bldr.(*route); ok {
 			sel := rb.Select.(*sqlparser.Select)
-			sel.From = sqlparser.TableExprs{&sqlparser.ParenTableExpr{Exprs: sel.From}}
+			sel.From = []sqlparser.TableExpr{&sqlparser.ParenTableExpr{Exprs: sel.From}}
 		}
 		return err
 	case *sqlparser.JoinTableExpr:
@@ -123,7 +123,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		// build a route primitive that has the subquery in its
 		// FROM clause. This allows for other constructs to be
 		// later pushed into it.
-		rb, st := newRoute(&sqlparser.Select{From: sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr})})
+		rb, st := newRoute(&sqlparser.Select{From: []sqlparser.TableExpr{tableExpr}})
 
 		// The subquery needs to be represented as a new logical table in the symtab.
 		// The new route will inherit the routeOptions of the underlying subquery.
@@ -177,7 +177,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 	if !tableExpr.As.IsEmpty() {
 		alias = sqlparser.TableName{Name: tableExpr.As}
 	}
-	sel := &sqlparser.Select{From: sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr})}
+	sel := &sqlparser.Select{From: []sqlparser.TableExpr{tableExpr}}
 
 	if systemTable(tableName.Qualifier.String()) {
 		ks, err := pb.vschema.DefaultKeyspace()
@@ -288,7 +288,7 @@ func convertToLeftJoin(ajoin *sqlparser.JoinTableExpr) {
 	// Otherwise, it can be used as is.
 	if _, ok := newRHS.(*sqlparser.JoinTableExpr); ok {
 		newRHS = &sqlparser.ParenTableExpr{
-			Exprs: sqlparser.TableExprs{newRHS},
+			Exprs: []sqlparser.TableExpr{newRHS},
 		}
 	}
 	ajoin.LeftExpr, ajoin.RightExpr = ajoin.RightExpr, newRHS
@@ -344,7 +344,7 @@ func (pb *primitiveBuilder) mergeRoutes(rpb *primitiveBuilder, routeOptions []*r
 		rhsSel := rRoute.Select.(*sqlparser.Select)
 		sel.From = append(sel.From, rhsSel.From...)
 	} else {
-		sel.From = sqlparser.TableExprs{ajoin}
+		sel.From = []sqlparser.TableExpr{ajoin}
 	}
 	rRoute.Redirect = lRoute
 	// Since the routes have merged, set st.singleRoute to point at

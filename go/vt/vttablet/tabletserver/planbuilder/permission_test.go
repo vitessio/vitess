@@ -17,10 +17,12 @@ limitations under the License.
 package planbuilder
 
 import (
-	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/vt/sqlparser"
+
 	"vitess.io/vitess/go/vt/tableacl"
 )
 
@@ -169,13 +171,11 @@ func TestBuildPermissions(t *testing.T) {
 	}}
 
 	for _, tcase := range tcases {
-		stmt, err := sqlparser.Parse(tcase.input)
-		if err != nil {
-			t.Fatal(err)
-		}
-		got := BuildPermissions(stmt)
-		if !reflect.DeepEqual(got, tcase.output) {
-			t.Errorf("BuildPermissions(%s): %v, want %v", tcase.input, got, tcase.output)
-		}
+		t.Run(tcase.input, func(t *testing.T) {
+			stmt, err := sqlparser.Parse(tcase.input)
+			require.NoError(t, err)
+			got := BuildPermissions(stmt)
+			assert.Equal(t, got, tcase.output)
+		})
 	}
 }

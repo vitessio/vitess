@@ -66,7 +66,7 @@ func skipToEnd(yylex interface{}) {
   columns       Columns
   partitions    Partitions
   colName       *ColName
-  tableExprs    TableExprs
+  tableExprs    []TableExpr
   tableExpr     TableExpr
   joinCondition JoinCondition
   tableName     TableName
@@ -371,7 +371,7 @@ select_statement:
   }
 | SELECT comment_opt cache_opt NEXT num_val for_from table_name
   {
-    $$ = &Select{Comments: Comments($2), Cache: $3, SelectExprs: []SelectExpr{Nextval{Expr: $5}}, From: TableExprs{&AliasedTableExpr{Expr: $7}}}
+    $$ = &Select{Comments: Comments($2), Cache: $3, SelectExprs: []SelectExpr{Nextval{Expr: $5}}, From: []TableExpr{&AliasedTableExpr{Expr: $7}}}
   }
 
 stream_statement:
@@ -451,7 +451,7 @@ update_statement:
 delete_statement:
   DELETE comment_opt FROM table_name opt_partition_clause where_expression_opt order_by_opt limit_opt
   {
-    $$ = &Delete{Comments: Comments($2), TableExprs:  TableExprs{&AliasedTableExpr{Expr:$4}}, Partitions: $5, Where: NewWhere(WhereStr, $6), OrderBy: $7, Limit: $8}
+    $$ = &Delete{Comments: Comments($2), TableExprs:  []TableExpr{&AliasedTableExpr{Expr:$4}}, Partitions: $5, Where: NewWhere(WhereStr, $6), OrderBy: $7, Limit: $8}
   }
 | DELETE comment_opt FROM table_name_list USING table_references where_expression_opt
   {
@@ -1895,7 +1895,7 @@ col_alias:
 
 from_opt:
   {
-    $$ = TableExprs{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}
+    $$ = []TableExpr{&AliasedTableExpr{Expr:TableName{Name: NewTableIdent("dual")}}}
   }
 | FROM table_references
   {
@@ -1905,7 +1905,7 @@ from_opt:
 table_references:
   table_reference
   {
-    $$ = TableExprs{$1}
+    $$ = []TableExpr{$1}
   }
 | table_references ',' table_reference
   {

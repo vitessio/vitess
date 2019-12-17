@@ -120,7 +120,7 @@ func TestRemoveHints(t *testing.T) {
 			t.Fatal(err)
 		}
 		sel := tree.(*Select)
-		sel.From = TableExprs{
+		sel.From = []TableExpr{
 			sel.From[0].(*AliasedTableExpr).RemoveHints(),
 		}
 		buf := NewTrackedBuffer(nil)
