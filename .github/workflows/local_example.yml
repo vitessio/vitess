@@ -3,7 +3,7 @@ on: [push, pull_request]
 jobs:
 
   build:
-    name: Local Example for ${{ matrix.os }}
+    name: Local Example on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -47,4 +47,3 @@ jobs:
           export PATH="/usr/local/opt/mysql@5.7/bin:$PATH"
         fi
         test/local_example.sh
-
