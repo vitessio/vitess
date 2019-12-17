@@ -100,36 +100,46 @@ func TestUpdateVSchema(t *testing.T) {
 	expectUpdateCount(t, startCount+1)
 
 	want := `{
-  "sharded": true,
-  "tables": {
-    "t1": {
-      "name": "t1",
-      "column_vindexes": [
-        {
-          "columns": [
-            "id1"
+  "routing_rules": {},
+  "keyspaces": {
+    "vttest": {
+      "sharded": true,
+      "tables": {
+        "dual": {
+          "type": "reference",
+          "name": "dual"
+        },
+        "t1": {
+          "name": "t1",
+          "column_vindexes": [
+            {
+              "columns": [
+                "id1"
+              ],
+              "type": "hash",
+              "name": "hash",
+              "vindex": {}
+            }
           ],
-          "type": "hash",
-          "name": "hash",
-          "vindex": {}
+          "ordered": [
+            {
+              "columns": [
+                "id1"
+              ],
+              "type": "hash",
+              "name": "hash",
+              "vindex": {}
+            }
+          ]
         }
-      ],
-      "ordered": [
-        {
-          "columns": [
-            "id1"
-          ],
-          "type": "hash",
-          "name": "hash",
-          "vindex": {}
-        }
-      ]
+      },
+      "vindexes": {
+        "hash": {}
+      }
     }
-  },
-  "vindexes": {
-    "hash": {}
   }
 }`
+
 	b, err := json.MarshalIndent(engine.vschema(), "", "  ")
 	if err != nil {
 		t.Fatal(err)

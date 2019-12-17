@@ -164,7 +164,8 @@ type QueryEngine struct {
 
 	strictTransTables bool
 
-	enableConsolidator bool
+	enableConsolidator          bool
+	enableQueryPlanFieldCaching bool
 
 	// Loggers
 	accessCheckerLogger *logutil.ThrottledLogger
@@ -204,6 +205,7 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		checker,
 	)
 	qe.enableConsolidator = config.EnableConsolidator
+	qe.enableQueryPlanFieldCaching = config.EnableQueryPlanFieldCaching
 	qe.consolidator = sync2.NewConsolidator()
 	qe.txSerializer = txserializer.New(config.EnableHotRowProtectionDryRun,
 		config.HotRowProtectionMaxQueueSize,
@@ -346,7 +348,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
 	plan.buildAuthorized()
 	if plan.PlanID.IsSelect() {
-		if plan.FieldQuery != nil {
+		if qe.enableQueryPlanFieldCaching && plan.FieldQuery != nil {
 			conn, err := qe.getQueryConn(ctx)
 			if err != nil {
 				return nil, err
