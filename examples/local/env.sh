@@ -15,6 +15,9 @@
 # limitations under the License.
 
 hostname=`hostname -f`
+if [ $(uname) == "Darwin" ]; then
+  hostname="localhost"
+fi
 vtctld_web_port=15000
 export VTDATAROOT="${VTDATAROOT:-${VTROOT}/vtdataroot}"
 
