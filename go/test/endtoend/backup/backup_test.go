@@ -40,9 +40,9 @@ func TestReplicaBackup(t *testing.T) {
 	testBackup(t, "replica")
 }
 
-//func TestRdonlyBackup(t *testing.T) {
-//	testBackup(t, "rdonly")
-//}
+func TestRdonlyBackup(t *testing.T) {
+	testBackup(t, "rdonly")
+}
 
 //
 //Test backup flow.
@@ -63,7 +63,7 @@ func TestReplicaBackup(t *testing.T) {
 //
 //
 func testBackup(t *testing.T, tabletType string) {
-	restoreWaitForBackup(t)
+	restoreWaitForBackup(t, tabletType)
 	_, err := master.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
 	assert.Nil(t, err)
 	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
@@ -86,7 +86,27 @@ func testBackup(t *testing.T, tabletType string) {
 
 	qr, err := replica2.VttabletProcess.QueryTablet("select * from _vt.local_metadata", keyspaceName, false)
 	assert.Nil(t, err)
-	fmt.Printf("%v", qr.Rows)
+	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[0]), fmt.Sprintf(`[VARCHAR("Alias") BLOB("%s") VARBINARY("vt_%s")]`, replica2.Alias, keyspaceName))
+	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[1]), fmt.Sprintf(`[VARCHAR("ClusterAlias") BLOB("%s.%s") VARBINARY("vt_%s")]`, keyspaceName, shardName, keyspaceName))
+	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[2]), fmt.Sprintf(`[VARCHAR("DataCenter") BLOB("%s") VARBINARY("vt_%s")]`, cell, keyspaceName))
+	if tabletType == "replica" {
+		assert.Equal(t, fmt.Sprintf("%v", qr.Rows[3]), fmt.Sprintf(`[VARCHAR("PromotionRule") BLOB("neutral") VARBINARY("vt_%s")]`, keyspaceName))
+	} else if tabletType == "rdonly" {
+		assert.Equal(t, fmt.Sprintf("%v", qr.Rows[3]), fmt.Sprintf(`[VARCHAR("PromotionRule") BLOB("must_not") VARBINARY("vt_%s")]`, keyspaceName))
+	}
+	// Remove the backup
+	for _, backup := range backups {
+		err = localCluster.VtctlclientProcess.ExecuteCommand("RemoveBackup", shardKsName, backup)
+		assert.Nil(t, err)
+	}
+
+	// Now, there should not be no backup
+	backups = listBackups(t)
+	assert.Equal(t, len(backups), 0)
+
+	replica2.VttabletProcess.TearDown()
+	master.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
+
 }
 
 // Bring up another replica concurrently, telling it to wait until a backup
@@ -95,11 +115,15 @@ func testBackup(t *testing.T, tabletType string) {
 // Override the backup engine implementation to a non-existent one for restore.
 // This setting should only matter for taking new backups. We should be able
 // to restore a previous backup successfully regardless of this setting.
-func restoreWaitForBackup(t *testing.T) {
+func restoreWaitForBackup(t *testing.T, tabletType string) {
+	if tabletType == "rdonly" {
+		replica2.Type = "rdonly"
+	}
 	resetTabletDir(t)
 	replicaTabletArgs := commonTabletArg
 	replicaTabletArgs = append(replicaTabletArgs, "-backup_engine_implementation", "fake_implementation")
 	replicaTabletArgs = append(replicaTabletArgs, "-wait_for_backup_interval", "1s")
+	replicaTabletArgs = append(replicaTabletArgs, "-init_tablet_type", tabletType)
 	replica2.VttabletProcess.ExtraArgs = replicaTabletArgs
 	replica2.VttabletProcess.ServingStatus = ""
 	err := replica2.VttabletProcess.Setup()
