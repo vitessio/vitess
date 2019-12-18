@@ -63,6 +63,7 @@ func TestTabletCommands(t *testing.T) {
 	// make sure direct dba queries work
 	sql = "select * from t1"
 	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDba", "-json", masterTablet.Alias, sql)
+
 	assert.Nil(t, err)
 	assertExecuteFetch(t, result)
 

@@ -356,7 +356,6 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 
 	// Wait for replica to catch up to master.
 	waitForReplicationPos(ctx, t, master, replica, 60.0)
-
 	duration := time.Since(start)
 	minUnavailabilityInS := 1.0
 	if duration.Seconds() < minUnavailabilityInS {
