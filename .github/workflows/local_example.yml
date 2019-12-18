@@ -3,8 +3,12 @@ on: [push, pull_request]
 jobs:
 
   build:
-    name: Build
-    runs-on: ubuntu-latest
+    name: Local Example on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
     steps:
 
     - name: Set up Go
@@ -17,25 +21,29 @@ jobs:
 
     - name: Get dependencies
       run: |
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget
-        sudo service mysql stop
-        sudo service etcd stop
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        if [ ${{matrix.os}} = "ubuntu-latest" ]; then
+          sudo apt-get update || echo "update failed"
+          sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget
+          sudo service mysql stop
+          sudo service etcd stop
+          sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+          sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        elif [ ${{matrix.os}} = "macos-latest" ]; then
+          brew install mysql@5.7 make unzip etcd curl git wget
+        fi
         go mod download
 
-    - name: Run bootstrap.sh
+    - name: Run make minimaltools
       run: |
-        echo "Copying new bootstrap over location of legacy one."
-        cp .github/bootstrap.sh .
-        ./bootstrap.sh
+        make minimaltools
 
     - name: Build
       run: |
-        VTROOT=$PWD VTTOP=$PWD make build
+        make build
 
     - name: local_example
       run: |
-        export PATH=$PWD/bin:$PATH
-        VTDATAROOT=/tmp/vtdataroot VTTOP=$PWD VTROOT=$PWD test/local_example.sh
-
+        if [ ${{matrix.os}} = "macos-latest" ]; then
+          export PATH="/usr/local/opt/mysql@5.7/bin:$PATH"
+        fi
+        test/local_example.sh

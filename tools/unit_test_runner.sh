@@ -29,6 +29,9 @@
 # Set VT_GO_PARALLEL variable in the same way as the Makefile does.
 # We repeat this here because this script is called directly by test.go
 # and not via the Makefile.
+
+source build.env
+
 if [[ -z $VT_GO_PARALLEL && -n $VT_GO_PARALLEL_VALUE ]]; then
   VT_GO_PARALLEL="-p $VT_GO_PARALLEL_VALUE"
 fi
@@ -51,6 +54,8 @@ if [ $? -ne 0 ]; then
   echo "If so, please rename it to the suffix _flaky_test.go."
   exit 1
 fi
+
+echo '# Flaky tests (3 attempts permitted)'
 
 # Run flaky tests sequentially. Retry when necessary.
 for pkg in $flaky_tests; do

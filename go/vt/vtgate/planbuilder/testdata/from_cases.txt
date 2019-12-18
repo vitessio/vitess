@@ -927,35 +927,19 @@
   }
 }
 
-# reference table doesn't merge with other opcodes yet.
+# reference table can merge with other opcodes left to right.
 "select ref.col from ref join user"
 {
   "Original": "select ref.col from ref join user",
   "Instructions": {
-    "Opcode": "Join",
-    "Left": {
-      "Opcode": "SelectReference",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select ref.col from ref",
-      "FieldQuery": "select ref.col from ref where 1 != 1",
-      "Table": "ref"
+    "Opcode": "SelectScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
     },
-    "Right": {
-      "Opcode": "SelectScatter",
-      "Keyspace": {
-        "Name": "user",
-        "Sharded": true
-      },
-      "Query": "select 1 from user",
-      "FieldQuery": "select 1 from user where 1 != 1",
-      "Table": "user"
-    },
-    "Cols": [
-      -1
-    ]
+    "Query": "select ref.col from ref join user",
+    "FieldQuery": "select ref.col from ref join user where 1 != 1",
+    "Table": "user"
   }
 }
 

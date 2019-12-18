@@ -3,7 +3,7 @@ on: [push, pull_request]
 jobs:
 
   build:
-    name: Build
+    name: End-to-End Test
     runs-on: ubuntu-latest
     steps:
 
@@ -17,6 +17,7 @@ jobs:
 
     - name: Get dependencies
       run: |
+        sudo apt-get update || echo "update failed"
         sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget
         sudo service mysql stop
         sudo service etcd stop
@@ -24,19 +25,14 @@ jobs:
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
 
-    - name: Run bootstrap.sh
+    - name: Run make minimaltools
       run: |
-        echo "Copying new bootstrap over location of legacy one."
-        cp .github/bootstrap.sh .
-        ./bootstrap.sh
+        make minimaltools
 
     - name: Build
       run: |
-        VTROOT=$PWD VTTOP=$PWD make build
+        make build
 
     - name: endtoend
       run: |
-        export PATH=$PWD/bin:$PATH
-        source ./dev.env
-        mkdir -p /tmp/vtdataroot
-        VTDATAROOT=/tmp/vtdataroot VTTOP=$PWD VTROOT=$PWD tools/e2e_test_runner.sh
+        tools/e2e_test_runner.sh

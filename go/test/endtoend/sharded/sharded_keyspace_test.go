@@ -194,6 +194,7 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 		shard := &cluster.Shard{
 			Name: shardName,
 		}
+
 		var mysqlCtlProcessList []*exec.Cmd
 
 		for i := 0; i < totalTabletsRequired; i++ {

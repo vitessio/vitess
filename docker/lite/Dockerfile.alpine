@@ -22,10 +22,10 @@ RUN echo '@edge http://nl.alpinelinux.org/alpine/edge/main' >> /etc/apk/reposito
     apk add --no-cache mariadb@edge mariadb-client@edge bzip2 bash
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
-ENV VTTOP /vt/src/vitess.io/vitess
-ENV VTROOT /vt
-ENV VTDATAROOT $VTROOT/vtdataroot
+ENV VTROOT /vt/src/vitess.io/vitess
+ENV VTDATAROOT /vt/vtdataroot
 ENV PATH $VTROOT/bin:$PATH
+ENV MYSQL_FLAVOR MariaDB103
 
 # Create vitess user
 RUN addgroup -S vitess && adduser -S -G vitess vitess && mkdir -p /vt

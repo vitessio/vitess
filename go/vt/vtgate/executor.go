@@ -92,6 +92,10 @@ type Executor struct {
 
 var executorOnce sync.Once
 
+const pathQueryPlans = "/debug/query_plans"
+const pathScatterStats = "/debug/scatter_stats"
+const pathVSchema = "/debug/vschema"
+
 // NewExecutor creates a new Executor.
 func NewExecutor(ctx context.Context, serv srvtopo.Server, cell, statsName string, resolver *Resolver, normalize bool, streamSize int, queryPlanCacheSize int64) *Executor {
 	e := &Executor{
@@ -117,8 +121,9 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell, statsName strin
 		stats.Publish("QueryPlanCacheOldest", stats.StringFunc(func() string {
 			return fmt.Sprintf("%v", e.plans.Oldest())
 		}))
-		http.Handle("/debug/query_plans", e)
-		http.Handle("/debug/vschema", e)
+		http.Handle(pathQueryPlans, e)
+		http.Handle(pathScatterStats, e)
+		http.Handle(pathVSchema, e)
 	})
 	return e
 }
@@ -840,6 +845,14 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 				}
 			}
 		}
+	case sqlparser.KeywordString(sqlparser.COLUMNS):
+		if !show.OnTable.Qualifier.IsEmpty() {
+			destKeyspace = show.OnTable.Qualifier.String()
+			show.OnTable.Qualifier = sqlparser.NewTableIdent("")
+		} else {
+			break
+		}
+		sql = sqlparser.String(show)
 	case sqlparser.KeywordString(sqlparser.TABLES):
 		if show.ShowTablesOpt != nil && show.ShowTablesOpt.DbName != "" {
 			if destKeyspace == "" {
@@ -1419,29 +1432,29 @@ func (e *Executor) ServeHTTP(response http.ResponseWriter, request *http.Request
 		acl.SendError(response, err)
 		return
 	}
-	if request.URL.Path == "/debug/query_plans" {
-		response.Header().Set("Content-Type", "application/json; charset=utf-8")
-		buf, err := json.MarshalIndent(e.plans.Items(), "", " ")
-		if err != nil {
-			response.Write([]byte(err.Error()))
-			return
-		}
-		ebuf := bytes.NewBuffer(nil)
-		json.HTMLEscape(ebuf, buf)
-		response.Write(ebuf.Bytes())
-	} else if request.URL.Path == "/debug/vschema" {
-		response.Header().Set("Content-Type", "application/json; charset=utf-8")
-		b, err := json.MarshalIndent(e.VSchema(), "", " ")
-		if err != nil {
-			response.Write([]byte(err.Error()))
-			return
-		}
-		buf := bytes.NewBuffer(nil)
-		json.HTMLEscape(buf, b)
-		response.Write(buf.Bytes())
-	} else {
+
+	switch request.URL.Path {
+	case pathQueryPlans:
+		returnAsJSON(response, e.plans.Items())
+	case pathVSchema:
+		returnAsJSON(response, e.VSchema())
+	case pathScatterStats:
+		e.WriteScatterStats(response)
+	default:
 		response.WriteHeader(http.StatusNotFound)
 	}
+}
+
+func returnAsJSON(response http.ResponseWriter, stuff interface{}) {
+	response.Header().Set("Content-Type", "application/json; charset=utf-8")
+	buf, err := json.MarshalIndent(stuff, "", " ")
+	if err != nil {
+		_, _ = response.Write([]byte(err.Error()))
+		return
+	}
+	ebuf := bytes.NewBuffer(nil)
+	json.HTMLEscape(ebuf, buf)
+	_, _ = response.Write(ebuf.Bytes())
 }
 
 // Plans returns the LRU plan cache

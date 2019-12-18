@@ -1,3 +1,4 @@
+#!/bin/bash
 # Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,13 +12,15 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# Don't run this. It is only used as part of build.sh.
 
-set -e
+# Unfortunately golangci-lint does not work well on checking just modified files.
+# We will enable it for everything here, but with most of the linters disabled.
+# See: https://github.com/vitessio/vitess/issues/5503
 
-# Collect all the local Python libs we need.
-mkdir -p /out/pkg/py-vtdb
-cp -R $VTROOT/py/* /out/pkg/py-vtdb/
-cp -R /usr/local/lib/python2.7/dist-packages /out/pkg/
-cp -R /vt/dist/py-* /out/pkg/
+GOLANGCI_LINT=$(command -v golangci-lint >/dev/null 2>&1)
+if [ $? -eq 1 ]; then
+  echo "Downloading golangci-lint..."
+  curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.21.0
+fi
 
+golangci-lint run --disable=ineffassign,unused,gosimple,staticcheck,errcheck,structcheck,varcheck,deadcode

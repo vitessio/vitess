@@ -32,7 +32,7 @@ import (
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
-var testKSChema *vindexes.KeyspaceSchema
+var testLocalVSchema *localVSchema
 
 func init() {
 	input := `{
@@ -74,11 +74,19 @@ func init() {
 	if err := json2.Unmarshal([]byte(input), &kspb); err != nil {
 		panic(fmt.Errorf("Unmarshal failed: %v", err))
 	}
-	kschema, err := vindexes.BuildKeyspaceSchema(&kspb, "ks")
+	srvVSchema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ks": &kspb,
+		},
+	}
+	vschema, err := vindexes.BuildVSchema(srvVSchema)
 	if err != nil {
 		panic(err)
 	}
-	testKSChema = kschema
+	testLocalVSchema = &localVSchema{
+		keyspace: "ks",
+		vschema:  vschema,
+	}
 }
 
 func TestMustSendDDL(t *testing.T) {
@@ -339,7 +347,7 @@ func TestPlanbuilder(t *testing.T) {
 				Type:   sqltypes.Int64,
 			}, {
 				Alias:         sqlparser.NewColIdent("keyspace_id"),
-				Vindex:        testKSChema.Vindexes["region_vdx"],
+				Vindex:        testLocalVSchema.vschema.Keyspaces["ks"].Vindexes["region_vdx"],
 				VindexColumns: []int{0, 1},
 				Type:          sqltypes.VarBinary,
 			}},
@@ -351,7 +359,7 @@ func TestPlanbuilder(t *testing.T) {
 	}, {
 		inTable: t2,
 		inRule:  &binlogdatapb.Rule{Match: "/.*/", Filter: "-80"},
-		outErr:  `no vschema definition for table t2`,
+		outErr:  `table t2 not found`,
 	}, {
 		inTable: t1alt,
 		inRule:  &binlogdatapb.Rule{Match: "/.*/", Filter: "-80"},
@@ -457,7 +465,7 @@ func TestPlanbuilder(t *testing.T) {
 	}}
 
 	for _, tcase := range testcases {
-		plan, err := buildPlan(tcase.inTable, testKSChema, &binlogdatapb.Filter{
+		plan, err := buildPlan(tcase.inTable, testLocalVSchema, &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{tcase.inRule},
 		})
 		if plan != nil {

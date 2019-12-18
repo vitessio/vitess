@@ -285,7 +285,7 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	if !isMulti {
 		output, err := ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
 			"-force", fmt.Sprintf("%s/%s", keyspaceName, shard1.Name), shard1MasterTablet.Alias)
-		assert.NotNil(t, err)
+		assert.NotNil(t, err, "Should fail as no replica tablet is present.")
 		assert.Contains(t, output, fmt.Sprintf("tablet %s ResetReplication failed", shard1.Replica().Alias))
 	}
 	// start replica
@@ -400,13 +400,13 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 
 	// Wait for the endpoints, either local or remote.
 	for _, shard := range []cluster.Shard{shard1, shard21, shard22} {
-		_ = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspaceName, shard.Name))
-		_ = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard.Name))
-		_ = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard.Name))
+		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspaceName, shard.Name))
+		assert.Nil(t, err)
+		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard.Name))
+		assert.Nil(t, err)
+		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard.Name))
+		assert.Nil(t, err)
 	}
-
-	status := vtgateInstance.GetStatusForTabletOfShard(keyspaceName + ".80-.master")
-	assert.True(t, status)
 
 	// Check srv keyspace
 	expectedPartitions := map[topodata.TabletType][]string{}
@@ -415,15 +415,18 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard1.Name}
 	checkSrvKeyspaceForSharding(t, keyspaceName, expectedPartitions)
 
-	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard",
+	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard",
 		"--exclude_tables", "unrelated",
 		shard1.Rdonly().Alias, fmt.Sprintf("%s/%s", keyspaceName, shard21.Name))
+	assert.Nil(t, err)
 
-	_ = ClusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard",
+	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard",
 		"--exclude_tables", "unrelated",
 		shard1.Rdonly().Alias, fmt.Sprintf("%s/%s", keyspaceName, shard22.Name))
+	assert.Nil(t, err)
 
-	_ = ClusterInstance.StartVtworker(cell, "--use_v3_resharding_mode=true")
+	err = ClusterInstance.StartVtworker(cell, "--use_v3_resharding_mode=true")
+	assert.Nil(t, err)
 
 	// Initial clone (online).
 	_ = ClusterInstance.VtworkerProcess.ExecuteCommand("SplitClone",
@@ -524,21 +527,15 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 		assert.Nil(t, err)
 	}
 
-	err = ClusterInstance.VtworkerProcess.ExecuteVtworkerCommand(ClusterInstance.GetAndReservePort(),
-		ClusterInstance.GetAndReservePort(),
-		"--use_v3_resharding_mode=true",
-		"SplitDiff",
-		"--min_healthy_rdonly_tablets", "1",
-		fmt.Sprintf("%s/%s", keyspaceName, shard21.Name))
-	assert.Nil(t, err)
-
-	err = ClusterInstance.VtworkerProcess.ExecuteVtworkerCommand(ClusterInstance.GetAndReservePort(),
-		ClusterInstance.GetAndReservePort(),
-		"--use_v3_resharding_mode=true",
-		"SplitDiff",
-		"--min_healthy_rdonly_tablets", "1",
-		fmt.Sprintf("%s/%s", keyspaceName, shard22.Name))
-	assert.Nil(t, err)
+	for _, shard := range []string{shard21.Name, shard22.Name} {
+		err = ClusterInstance.VtworkerProcess.ExecuteVtworkerCommand(ClusterInstance.GetAndReservePort(),
+			ClusterInstance.GetAndReservePort(),
+			"--use_v3_resharding_mode=true",
+			"SplitDiff",
+			"--min_healthy_rdonly_tablets", "1",
+			fmt.Sprintf("%s/%s", keyspaceName, shard))
+		assert.Nil(t, err)
+	}
 
 	// get status for the destination master tablet, make sure we have it all
 	sharding.CheckRunningBinlogPlayer(t, *shard21.MasterTablet(), 3954, 2000)

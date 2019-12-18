@@ -233,13 +233,17 @@
 {
   "Original": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "Opcode": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
     "Query": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
     "FieldQuery": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where 1 != 1",
+    "Vindex": "user_index",
+    "Values": [
+      5
+    ],
     "Table": "user"
   }
 }

@@ -15,17 +15,36 @@
 # limitations under the License.
 
 hostname=`hostname -f`
+if [ $(uname) == "Darwin" ]; then
+  hostname="localhost"
+fi
 vtctld_web_port=15000
+export VTDATAROOT="${VTDATAROOT:-${VTROOT}/vtdataroot}"
 
-# Set up environment.
-export VTTOP=${VTTOP-$VTROOT/src/vitess.io/vitess}
+function fail() {
+  echo "ERROR: $1"
+  exit 1
+}
+
+if [[ $EUID -eq 0 ]]; then
+  fail "This script refuses to be run as root. Please switch to a regular user."
+fi
+
+# mysqld might be in /usr/sbin which will not be in the default PATH
+PATH="/usr/sbin:$PATH"
+for binary in mysqld etcd etcdctl curl vtctlclient vttablet vtgate vtctld mysqlctl; do
+  command -v "$binary" > /dev/null || fail "${binary} is not installed in PATH. See https://vitess.io/docs/get-started/local/ for install instructions."
+done;
+
+if [ -z "$VTROOT" ]; then
+  fail "VTROOT is not set. See https://vitess.io/docs/get-started/local/ for install instructions."
+fi
 
 if [ "${TOPO}" = "zk2" ]; then
     # Each ZooKeeper server needs a list of all servers in the quorum.
     # Since we're running them all locally, we need to give them unique ports.
     # In a real deployment, these should be on different machines, and their
     # respective hostnames should be given.
-    echo "enter zk2 env"
     zkcfg=(\
         "1@$hostname:28881:38881:21811" \
         "2@$hostname:28882:38882:21812" \
@@ -43,8 +62,6 @@ if [ "${TOPO}" = "zk2" ]; then
 
     mkdir -p $VTDATAROOT/tmp
 else
-    echo "enter etcd2 env"
-
     ETCD_SERVER="localhost:2379"
     TOPOLOGY_FLAGS="-topo_implementation etcd2 -topo_global_server_address $ETCD_SERVER -topo_global_root /vitess/global"
 

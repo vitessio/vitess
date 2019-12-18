@@ -161,6 +161,11 @@ func (l *Limit) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVari
 	return l.Input.GetFields(vcursor, bindVars)
 }
 
+// Inputs returns the input to limit
+func (l *Limit) Inputs() []Primitive {
+	return []Primitive{l.Input}
+}
+
 func (l *Limit) fetchCount(bindVars map[string]*querypb.BindVariable) (int, error) {
 	resolved, err := l.Count.ResolveValue(bindVars)
 	if err != nil {

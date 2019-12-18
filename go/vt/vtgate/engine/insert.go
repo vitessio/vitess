@@ -80,6 +80,9 @@ type Insert struct {
 
 	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
 	QueryTimeout int
+
+	// Insert does not take inputs
+	noInputs
 }
 
 // NewQueryInsert creates an Insert with a query string.
