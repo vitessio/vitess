@@ -55,6 +55,7 @@ func TestTabletReshuffle(t *testing.T) {
 	//Create new tablet
 	rTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
 
+
 	//Init Tablets
 	err = clusterInstance.VtctlclientProcess.InitTablet(rTablet, cell, keyspaceName, hostname, shardName)
 	require.NoError(t, err)
@@ -66,7 +67,7 @@ func TestTabletReshuffle(t *testing.T) {
 		"-mycnf_server_id", fmt.Sprintf("%d", rTablet.TabletUID),
 		"-db_socket", fmt.Sprintf("%s/mysql.sock", masterTablet.VttabletProcess.Directory),
 	}
-	// SupportBackup=False prevents vttablet from trying to restore
+	// SupportsBackup=False prevents vttablet from trying to restore
 	// Start vttablet process
 	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
 	assert.Nil(t, err)
@@ -97,10 +98,11 @@ func TestHealthCheck(t *testing.T) {
 	ctx := context.Background()
 
 	rTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
-
+  
 	// Start Mysql Processes and return connection
 	replicaConn, err := cluster.StartMySQLAndGetConnection(ctx, rTablet, username, clusterInstance.TmpDirectory)
 	assert.Nil(t, err)
+
 	defer replicaConn.Close()
 
 	// Create database in mysql
