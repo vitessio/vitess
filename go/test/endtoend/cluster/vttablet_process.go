@@ -217,9 +217,30 @@ func (vttablet *VttabletProcess) WaitForBinLogPlayerCount(expectedCount int) err
 	return fmt.Errorf("vttablet %s, expected status not reached", vttablet.TabletPath)
 }
 
+// WaitForBinlogServerState wait for the tablet's binlog server to be in the provided state.
+func (vttablet *VttabletProcess) WaitForBinlogServerState(expectedStatus string) error {
+	timeout := time.Now().Add(10 * time.Second)
+	for time.Now().Before(timeout) {
+		if vttablet.getVarValue("UpdateStreamState") == expectedStatus {
+			return nil
+		}
+		select {
+		case err := <-vttablet.exit:
+			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vttablet.Name, err)
+		default:
+			time.Sleep(300 * time.Millisecond)
+		}
+	}
+	return fmt.Errorf("vttablet %s, expected status not reached", vttablet.TabletPath)
+}
+
 func (vttablet *VttabletProcess) getVReplStreamCount() string {
+	return vttablet.getVarValue("VReplicationStreamCount")
+}
+
+func (vttablet *VttabletProcess) getVarValue(keyname string) string {
 	resultMap := vttablet.GetVars()
-	object := reflect.ValueOf(resultMap["VReplicationStreamCount"])
+	object := reflect.ValueOf(resultMap[keyname])
 	return fmt.Sprintf("%v", object)
 }
 

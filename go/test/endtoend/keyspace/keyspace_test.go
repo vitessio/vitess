@@ -88,6 +88,7 @@ func TestMain(m *testing.M) {
 		if err := clusterForKSTest.StartTopo(); err != nil {
 			return 1
 		}
+
 		if err := clusterForKSTest.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+cell2); err != nil {
 			return 1
 		}

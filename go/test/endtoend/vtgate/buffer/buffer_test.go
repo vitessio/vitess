@@ -48,8 +48,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
-	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
 var (
@@ -64,8 +62,7 @@ var (
 		msg VARCHAR(64) NOT NULL,
 		PRIMARY KEY (id)
 	) Engine=InnoDB;`
-	wg       = &sync.WaitGroup{}
-	tmClient = tmc.NewClient()
+	wg = &sync.WaitGroup{}
 )
 
 const (
@@ -74,7 +71,6 @@ const (
 	demoteMasterQuery          = "SET GLOBAL read_only = ON;FLUSH TABLES WITH READ LOCK;UNLOCK TABLES;"
 	disableSemiSyncMasterQuery = "SET GLOBAL rpl_semi_sync_master_enabled = 0"
 	enableSemiSyncMasterQuery  = "SET GLOBAL rpl_semi_sync_master_enabled = 1"
-	masterPositionQuery        = "SELECT @@GLOBAL.gtid_executed;"
 	promoteSlaveQuery          = "STOP SLAVE;RESET SLAVE ALL;SET GLOBAL read_only = OFF;"
 )
 
@@ -360,7 +356,6 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 
 	// Wait for replica to catch up to master.
 	waitForReplicationPos(ctx, t, master, replica, 60.0)
-
 	duration := time.Since(start)
 	minUnavailabilityInS := 1.0
 	if duration.Seconds() < minUnavailabilityInS {
@@ -377,7 +372,7 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 	}
 
 	// Configure old master to replicate from new master.
-	_, gtID := getMasterPosition(ctx, t, newMaster)
+	_, gtID := cluster.GetMasterPosition(t, *newMaster, hostname)
 
 	// Use 'localhost' as hostname because Travis CI worker hostnames
 	// are too long for MySQL replication.
@@ -389,23 +384,15 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 }
 
 func waitForReplicationPos(ctx context.Context, t *testing.T, tabletA *cluster.Vttablet, tabletB *cluster.Vttablet, timeout float64) {
-	replicationPosA, _ := getMasterPosition(ctx, t, tabletA)
+	replicationPosA, _ := cluster.GetMasterPosition(t, *tabletA, hostname)
 	for {
-		replicationPosB, _ := getMasterPosition(ctx, t, tabletB)
+		replicationPosB, _ := cluster.GetMasterPosition(t, *tabletB, hostname)
 		if positionAtLeast(t, tabletA, replicationPosB, replicationPosA) {
 			break
 		}
 		msg := fmt.Sprintf("%s's replication position to catch up to %s's;currently at: %s, waiting to catch up to: %s", tabletB.Alias, tabletA.Alias, replicationPosB, replicationPosA)
 		waitStep(t, msg, timeout, 0.01)
 	}
-}
-
-func getMasterPosition(ctx context.Context, t *testing.T, tablet *cluster.Vttablet) (string, string) {
-	vtablet := getTablet(tablet.GrpcPort)
-	newPos, err := tmClient.MasterPosition(ctx, vtablet)
-	require.NoError(t, err)
-	gtID := strings.SplitAfter(newPos, "/")[1]
-	return newPos, gtID
 }
 
 func positionAtLeast(t *testing.T, tablet *cluster.Vttablet, a string, b string) bool {
@@ -425,10 +412,4 @@ func waitStep(t *testing.T, msg string, timeout float64, sleepTime float64) floa
 	}
 	time.Sleep(time.Duration(sleepTime) * time.Second)
 	return timeout
-}
-
-func getTablet(tabletGrpcPort int) *tabletpb.Tablet {
-	portMap := make(map[string]int32)
-	portMap["grpc"] = int32(tabletGrpcPort)
-	return &tabletpb.Tablet{Hostname: hostname, PortMap: portMap}
 }
