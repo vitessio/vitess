@@ -482,7 +482,6 @@ func (cluster *LocalProcessCluster) Teardown() {
 	if err := cluster.TopoProcess.TearDown(cluster.Cell, cluster.OriginalVTDATAROOT, cluster.CurrentVTDATAROOT, *keepData); err != nil {
 		log.Errorf("Error in etcd teardown - %s", err.Error())
 	}
-
 }
 
 // StartVtworker starts a vtworker

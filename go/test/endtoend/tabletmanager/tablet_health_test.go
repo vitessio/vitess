@@ -54,8 +54,6 @@ func TestTabletReshuffle(t *testing.T) {
 
 	//Create new tablet
 	rTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
-
-
 	//Init Tablets
 	err = clusterInstance.VtctlclientProcess.InitTablet(rTablet, cell, keyspaceName, hostname, shardName)
 	require.NoError(t, err)
@@ -98,7 +96,7 @@ func TestHealthCheck(t *testing.T) {
 	ctx := context.Background()
 
 	rTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
-  
+
 	// Start Mysql Processes and return connection
 	replicaConn, err := cluster.StartMySQLAndGetConnection(ctx, rTablet, username, clusterInstance.TmpDirectory)
 	assert.Nil(t, err)

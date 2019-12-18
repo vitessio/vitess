@@ -70,7 +70,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 5,
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"
@@ -81,7 +81,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 5,
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"
