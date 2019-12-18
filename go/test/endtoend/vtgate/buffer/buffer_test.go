@@ -356,6 +356,7 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 
 	// Wait for replica to catch up to master.
 	waitForReplicationPos(ctx, t, master, replica, 60.0)
+
 	duration := time.Since(start)
 	minUnavailabilityInS := 1.0
 	if duration.Seconds() < minUnavailabilityInS {
@@ -373,6 +374,7 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 
 	// Configure old master to replicate from new master.
 	_, gtID := cluster.GetMasterPosition(t, *newMaster, hostname)
+
 	// Use 'localhost' as hostname because Travis CI worker hostnames
 	// are too long for MySQL replication.
 	changeMasterCommands := fmt.Sprintf("RESET SLAVE;SET GLOBAL gtid_slave_pos = '%s';CHANGE MASTER TO MASTER_HOST='%s', MASTER_PORT=%d ,MASTER_USER='vt_repl', MASTER_USE_GTID = slave_pos;START SLAVE;", gtID, "localhost", newMaster.MySQLPort)
