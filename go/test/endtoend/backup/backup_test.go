@@ -133,9 +133,7 @@ func checkData(t *testing.T, vttablet *cluster.Vttablet, totalRows int) {
 	for time.Now().Before(timeout) {
 		qr, err := vttablet.VttabletProcess.QueryTablet("select * from vt_insert_test", keyspaceName, true)
 		assert.Nil(t, err)
-		matched := assert.Equal(t, len(qr.Rows), totalRows)
-		if !matched {
-			println(fmt.Sprintf("Found rows %v", qr.Rows))
+		if len(qr.Rows) != totalRows {
 			time.Sleep(300 * time.Millisecond)
 		} else {
 			return
