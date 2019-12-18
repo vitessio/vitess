@@ -77,8 +77,7 @@ var (
 							) Engine=InnoDB;
 							`
 	// Make sure that clone and diff work with tables which have no primary key.
-	// RBR only because Vitess requires the primary key for query rewrites if
-	// it is running with statement based replication.
+	// Work with RBR only
 	createNoPkTable = `
 							create table no_pk(
 							custom_ksid_col %s not null,
@@ -168,19 +167,19 @@ var (
 	shard3 = &cluster.Shard{Name: "c0-"}
 
 	// Sharding keys
-	key1 uint64 = 1152921504606846976  // decimal of 0x1000000000000000  // redirect to shard 0
-	key2 uint64 = 14987979559889010688 // decimal of 0xD000000000000000  // redirect to shard 1,2
-	key3 uint64 = 10376293541461622784 // decimal of 0x9000000000000000  // redirect to shard 1,3
-	key4 uint64 = 10376293541461622789 // decimal of 0xE000000000000000  // redirect to shard 3
-	key5 uint64 = 14987979559889010670 // decimal of 0xA000000000000000  // redirect to shard 2
-	key6 uint64 = 17293822569102704640 // decimal of 0xF000000000000000
+	key1 uint64 = 1152921504606846976  // Key redirect to shard 0
+	key2 uint64 = 14987979559889010688 // key redirect to shard 1 (& 2 after Resharding)
+	key3 uint64 = 10376293541461622784 // Key redirect to shard 1 (& 3 after Resharding)
+	key4 uint64 = 10376293541461622789 // Key redirect to shard 1 (& 3 after Resharding)
+	key5 uint64 = 14987979559889010670 // key redirect to shard 1 (& 2 after Resharding)
+	key6 uint64 = 17293822569102704640
 
 	// insertTabletTemplateKsID common insert format
 	insertTabletTemplateKsID = `insert into %s (parent_id, id, msg, custom_ksid_col) values (%d, %d, '%s', %d) /* vtgate:: keyspace_id:%d */ /* id:%d */`
 )
 
-// TestReSharding - main test with accepts different params for various test
-func TestReSharding(t *testing.T, useByteShardingKeyType bool) {
+// TestResharding - main test with accepts different params for various test
+func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	clusterInstance = cluster.NewCluster(cell1, hostname)
 	defer clusterInstance.Teardown()
 
@@ -238,7 +237,7 @@ func TestReSharding(t *testing.T, useByteShardingKeyType bool) {
 	shardingColumnType := "bigint(20) unsigned"
 	shardingKeyType := querypb.Type_UINT64
 
-	if useByteShardingKeyType {
+	if useVarbinaryShardingKeyType {
 		shardingColumnType = "varbinary(64)"
 		shardingKeyType = querypb.Type_VARBINARY
 	}
@@ -995,17 +994,17 @@ func execMultiShardDmls(t *testing.T, keyspaceName string) {
 	ids := []int{10000001, 10000002, 10000003}
 	msgs := []string{"msg-id10000001", "msg-id10000002", "msg-id10000003"}
 	ksIds := []uint64{key2, key3, key4}
-	sharding.InsertMultiValueToTablet(t, *shard1.MasterTablet(), keyspaceName, "resharding1", fixedParentID, ids, msgs, ksIds)
+	sharding.InsertMultiValues(t, *shard1.MasterTablet(), keyspaceName, "resharding1", fixedParentID, ids, msgs, ksIds)
 
 	ids = []int{10000004, 10000005}
 	msgs = []string{"msg-id10000004", "msg-id10000005"}
 	ksIds = []uint64{key3, key4}
-	sharding.InsertMultiValueToTablet(t, *shard1.MasterTablet(), keyspaceName, "resharding1", fixedParentID, ids, msgs, ksIds)
+	sharding.InsertMultiValues(t, *shard1.MasterTablet(), keyspaceName, "resharding1", fixedParentID, ids, msgs, ksIds)
 
 	ids = []int{10000011, 10000012, 10000013}
 	msgs = []string{"msg-id10000011", "msg-id10000012", "msg-id10000013"}
 	ksIds = []uint64{key2, key3, key4}
-	sharding.InsertMultiValueToTablet(t, *shard1.MasterTablet(), keyspaceName, "resharding1", fixedParentID, ids, msgs, ksIds)
+	sharding.InsertMultiValues(t, *shard1.MasterTablet(), keyspaceName, "resharding1", fixedParentID, ids, msgs, ksIds)
 
 	// This update targets two shards.
 	sql := `update resharding1 set msg="update1" where parent_id=86 and id in (10000011,10000012)`
@@ -1018,7 +1017,7 @@ func execMultiShardDmls(t *testing.T, keyspaceName string) {
 	ids = []int{10000014, 10000015, 10000016}
 	msgs = []string{"msg-id10000014", "msg-id10000015", "msg-id10000016"}
 	ksIds = []uint64{key2, key3, key4}
-	sharding.InsertMultiValueToTablet(t, *shard1.MasterTablet(), keyspaceName, "resharding1", fixedParentID, ids, msgs, ksIds)
+	sharding.InsertMultiValues(t, *shard1.MasterTablet(), keyspaceName, "resharding1", fixedParentID, ids, msgs, ksIds)
 
 	// This delete targets two shards.
 	sql = `delete from resharding1 where parent_id =86 and id in (10000014, 10000015)`
@@ -1031,17 +1030,17 @@ func execMultiShardDmls(t *testing.T, keyspaceName string) {
 	ids = []int{10000001, 10000002, 10000003}
 	msgs = []string{"a", "b", "c"}
 	ksIds = []uint64{key2, key3, key4}
-	sharding.InsertMultiValueToTablet(t, *shard1.MasterTablet(), keyspaceName, "resharding3", fixedParentID, ids, msgs, ksIds)
+	sharding.InsertMultiValues(t, *shard1.MasterTablet(), keyspaceName, "resharding3", fixedParentID, ids, msgs, ksIds)
 
 	ids = []int{10000004, 10000005}
 	msgs = []string{"d", "e"}
 	ksIds = []uint64{key3, key4}
-	sharding.InsertMultiValueToTablet(t, *shard1.MasterTablet(), keyspaceName, "resharding3", fixedParentID, ids, msgs, ksIds)
+	sharding.InsertMultiValues(t, *shard1.MasterTablet(), keyspaceName, "resharding3", fixedParentID, ids, msgs, ksIds)
 
 	ids = []int{10000011, 10000012, 10000013}
 	msgs = []string{"k", "l", "m"}
 	ksIds = []uint64{key2, key3, key4}
-	sharding.InsertMultiValueToTablet(t, *shard1.MasterTablet(), keyspaceName, "resharding3", fixedParentID, ids, msgs, ksIds)
+	sharding.InsertMultiValues(t, *shard1.MasterTablet(), keyspaceName, "resharding3", fixedParentID, ids, msgs, ksIds)
 
 	// This update targets two shards.
 	sql = `update resharding3 set msg="g" where parent_id=86 and id in (10000011, 10000012)`
@@ -1054,7 +1053,7 @@ func execMultiShardDmls(t *testing.T, keyspaceName string) {
 	ids = []int{10000014, 10000015, 10000016}
 	msgs = []string{"n", "o", "p"}
 	ksIds = []uint64{key2, key3, key4}
-	sharding.InsertMultiValueToTablet(t, *shard1.MasterTablet(), keyspaceName, "resharding3", fixedParentID, ids, msgs, ksIds)
+	sharding.InsertMultiValues(t, *shard1.MasterTablet(), keyspaceName, "resharding3", fixedParentID, ids, msgs, ksIds)
 
 	// This delete targets two shards.
 	sql = `delete from resharding3 where parent_id =86 and id in (10000014, 10000015)`

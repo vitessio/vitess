@@ -281,8 +281,8 @@ func InsertToTablet(t *testing.T, query string, vttablet cluster.Vttablet, ks st
 	_, _ = vttablet.VttabletProcess.QueryTablet("commit", ks, true)
 }
 
-// InsertMultiValueToTablet inserts a multiple values to vttablet
-func InsertMultiValueToTablet(t *testing.T, tablet cluster.Vttablet, keyspaceName string, tableName string,
+// InsertMultiValues inserts a multiple values to vttablet
+func InsertMultiValues(t *testing.T, tablet cluster.Vttablet, keyspaceName string, tableName string,
 	fixedParentID int, ids []int, msgs []string, ksIDs []uint64) {
 	queryStr := fmt.Sprintf("insert into %s (parent_id, id, msg, custom_ksid_col) values", tableName)
 	valueSQL := ""
@@ -390,7 +390,7 @@ func CheckTabletQueryService(t *testing.T, vttablet cluster.Vttablet, expectedSt
 	}
 }
 
-// CheckShardQueryServices checks DisableQueryService in the shard record's TabletControlMap.
+// CheckShardQueryServices checks DisableQueryService for all shards
 func CheckShardQueryServices(t *testing.T, ci cluster.LocalProcessCluster, shards []cluster.Shard, cell string,
 	keyspaceName string, tabletType topodata.TabletType, expectedState bool) {
 	for _, shard := range shards {

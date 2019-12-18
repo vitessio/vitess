@@ -24,6 +24,6 @@ import (
 
 // TestV3ReSharding - main tests resharding using a INT column
 func TestV3ReSharding(t *testing.T) {
-	sharding.TestReSharding(t, false)
+	sharding.TestResharding(t, false)
 
 }

@@ -300,11 +300,10 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 	return
 }
 
-// LaunchCluster creates the skeleton of a cluster. The user then have to start all the services.
-// Does not start Mysqlctl process or vttablet process
-// No database creation
-// No Init shard master
-// Does not Apply Schema or Vschema
+// LaunchCluster creates the skeleton for a cluster by creating keyspace
+// shards and initializing tablets and mysqlctl processes.
+// This does not start any process and user have to explicitly start all
+// the required services (ex topo, vtgate, mysql and vttablet)
 func (cluster *LocalProcessCluster) LaunchCluster(keyspace *Keyspace, shards []Shard) (err error) {
 
 	log.Info("Starting keyspace : " + keyspace.Name)
@@ -522,7 +521,7 @@ func getRandomNumber(maxNumber int32, baseNumber int) int {
 	return int(rand.Int31n(maxNumber)) + baseNumber
 }
 
-// GetVttabletInstance create a new vttablet object
+// GetVttabletInstance creates a new vttablet object
 func (cluster *LocalProcessCluster) GetVttabletInstance(tabletType string, UID int, cell string) *Vttablet {
 	if UID == 0 {
 		UID = cluster.GetAndReserveTabletUID()

@@ -22,8 +22,8 @@ import (
 	sharding "vitess.io/vitess/go/test/endtoend/sharding/resharding"
 )
 
-// TestReShardingByte - using a VARBINARY column for resharding.
-func TestReShardingByte(t *testing.T) {
-	sharding.TestReSharding(t, true)
+// TestReshardingString - using a VARBINARY column for resharding.
+func TestReshardingString(t *testing.T) {
+	sharding.TestResharding(t, true)
 
 }
