@@ -158,7 +158,6 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 		sourceVindexColumns []string
 
 		// target table info
-		targetVindexType string
 		createDDL        string
 		materializeQuery string
 	)
@@ -336,9 +335,11 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	}
 	materializeQuery = buf.String()
 
-	// updateTargetVSchema
+	// Update targetVSchema
+	var targetTable *vschemapb.Table
 	if targetVSchema.Sharded {
 		// Choose a primary vindex type for target table based on source specs
+		var targetVindexType string
 		var targetVindex *vschemapb.Vindex
 		for _, field := range tableSchema.TableDefinitions[0].Fields {
 			if sourceVindexColumns[0] == field.Name {
@@ -358,23 +359,27 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 		}
 		if existing, ok := targetVSchema.Vindexes[targetVindexType]; ok {
 			if !proto.Equal(existing, targetVindex) {
-				return nil, nil, nil, fmt.Errorf("a conflicting vindex named %s already exists in the target vschema", targetVindexType)
+				return nil, nil, nil, fmt.Errorf("a conflicting vindex named %v already exists in the target vschema", targetVindexType)
 			}
 		} else {
 			targetVSchema.Vindexes[targetVindexType] = targetVindex
 		}
 
-		if _, ok := targetVSchema.Tables[targetTableName]; ok {
-			return nil, nil, nil, fmt.Errorf("table %v already exists in target vschema, please delete it and try again", targetTableName)
-		}
-		targetVSchema.Tables[targetTableName] = &vschemapb.Table{
+		targetTable = &vschemapb.Table{
 			ColumnVindexes: []*vschemapb.ColumnVindex{{
 				Column: vindexFromCols[0],
 				Name:   targetVindexType,
 			}},
 		}
 	} else {
-		targetVSchema.Tables[targetTableName] = &vschemapb.Table{}
+		targetTable = &vschemapb.Table{}
+	}
+	if existing, ok := targetVSchema.Tables[targetTableName]; ok {
+		if !proto.Equal(existing, targetTable) {
+			return nil, nil, nil, fmt.Errorf("a conflicting table named %v already exists in the target vschema", targetTableName)
+		}
+	} else {
+		targetVSchema.Tables[targetTableName] = targetTable
 	}
 
 	ms = &vtctldatapb.MaterializeSettings{
@@ -392,6 +397,7 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	// Update sourceVSchema
 	sourceVSchema.Vindexes[vindexName] = vindex
 	sourceVSchemaTable.ColumnVindexes = append(sourceVSchemaTable.ColumnVindexes, sourceTable.ColumnVindexes[0])
+
 	return ms, sourceVSchema, targetVSchema, nil
 }
 
