@@ -42,6 +42,7 @@ var (
 	dbPassword       = "VtDbaPass"
 	shardKsName      string
 	dbCredentialFile string
+	shardName        = "0"
 	commonTabletArg  = []string{
 		"-vreplication_healthcheck_topology_refresh", "1s",
 		"-vreplication_healthcheck_retry_delay", "1s",
@@ -83,7 +84,7 @@ func TestMain(m *testing.M) {
 		commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)
 
 		shard := cluster.Shard{
-			Name: "0",
+			Name: shardName,
 		}
 		shardKsName = fmt.Sprintf("%s/%s", keyspaceName, shard.Name)
 

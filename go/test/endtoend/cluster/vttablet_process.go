@@ -186,8 +186,10 @@ func (vttablet *VttabletProcess) GetTabletStatus() string {
 // WaitForTabletType waits till the tablet status reaches desired type
 func (vttablet *VttabletProcess) WaitForTabletType(expectedType string) error {
 	timeout := time.Now().Add(10 * time.Second)
+	var currentStatus string
 	for time.Now().Before(timeout) {
-		if vttablet.GetTabletStatus() == expectedType {
+		currentStatus = vttablet.GetTabletStatus()
+		if currentStatus == expectedType {
 			return nil
 		}
 		select {
@@ -197,7 +199,7 @@ func (vttablet *VttabletProcess) WaitForTabletType(expectedType string) error {
 			time.Sleep(300 * time.Millisecond)
 		}
 	}
-	return fmt.Errorf("Vttablet %s, expected status not reached", vttablet.TabletPath)
+	return fmt.Errorf("vttablet %s, expected status [%s] not reached, current status - [%s]", vttablet.TabletPath, expectedType, currentStatus)
 }
 
 // WaitForBinLogPlayerCount waits till binlog player count var matches
