@@ -43,9 +43,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -360,7 +359,7 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 	}
 
 	// Wait for replica to catch up to master.
-	waitForReplicationPos(ctx, t, &master, &replica, 60.0)
+	waitForReplicationPos(ctx, t, master, replica, 60.0)
 
 	duration := time.Since(start)
 	minUnavailabilityInS := 1.0
@@ -378,7 +377,7 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 	}
 
 	// Configure old master to replicate from new master.
-	_, gtID := getMasterPosition(ctx, t, &newMaster)
+	_, gtID := getMasterPosition(ctx, t, newMaster)
 
 	// Use 'localhost' as hostname because Travis CI worker hostnames
 	// are too long for MySQL replication.

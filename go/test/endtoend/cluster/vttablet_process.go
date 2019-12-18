@@ -100,7 +100,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-vtctld_addr", vttablet.VtctldAddress,
 	)
 
-  if vttablet.SupportsBackup {
+	if vttablet.SupportsBackup {
 		vttablet.proc.Args = append(vttablet.proc.Args, "-restore_from_backup")
 	}
 	if vttablet.EnableSemiSync {
@@ -128,7 +128,6 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		}
 	}()
 
-
 	if vttablet.ServingStatus != "" {
 		if err = vttablet.WaitForTabletType(vttablet.ServingStatus); err != nil {
 			return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vttablet.Name, <-vttablet.exit)
@@ -151,7 +150,6 @@ func (vttablet *VttabletProcess) GetStatus() string {
 	}
 	return ""
 }
-
 
 // GetVars gets the debug vars as map
 func (vttablet *VttabletProcess) GetVars() map[string]interface{} {
@@ -245,7 +243,6 @@ func (vttablet *VttabletProcess) TearDown() error {
 	}
 }
 
-
 // CreateDB creates the database for keyspace
 func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
 	_, err := vttablet.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace), keyspace, false)
@@ -268,7 +265,20 @@ func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useD
 	if vttablet.DbPassword != "" {
 		dbParams.Pass = vttablet.DbPassword
 	}
+	return executeQuery(dbParams, query)
+}
 
+// QueryTabletWithDB lets you execute query on a specific DB in this tablet and get the result
+func (vttablet *VttabletProcess) QueryTabletWithDB(query string, dbname string) (*sqltypes.Result, error) {
+	dbParams := mysql.ConnParams{
+		Uname:      "vt_dba",
+		UnixSocket: path.Join(vttablet.Directory, "mysql.sock"),
+		DbName:     dbname,
+	}
+	return executeQuery(dbParams, query)
+}
+
+func executeQuery(dbParams mysql.ConnParams, query string) (*sqltypes.Result, error) {
 	ctx := context.Background()
 	dbConn, err := mysql.Connect(ctx, &dbParams)
 	if err != nil {
@@ -289,7 +299,7 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 		FileToLogQueries:            path.Join(tmpDirectory, fmt.Sprintf("/vt_%010d/querylog.txt", tabletUID)),
 		Directory:                   path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID)),
 		TabletPath:                  fmt.Sprintf("%s-%010d", cell, tabletUID),
-		ServiceMap:                  "grpc-queryservice,grpc-tabletmanager,grpc-updatestream",
+		ServiceMap:                  "grpc-queryservice,grpc-tabletmanager,grpc-updatestream,grpc-throttler",
 		LogDir:                      tmpDirectory,
 		Shard:                       shard,
 		TabletHostname:              hostname,
