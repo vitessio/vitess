@@ -27,11 +27,6 @@ grpc_port_base=$[16000 + $uid_base]
 mysql_port_base=$[17000 + $uid_base]
 tablet_hostname=''
 
-function fail() {
-    echo "ERROR: $1"
-    exit 1
-}
-
 # Travis hostnames are too long for MySQL, so we use IP.
 # Otherwise, blank hostname means the tablet auto-detects FQDN.
 if [ "$TRAVIS" == true ]; then
@@ -83,20 +78,20 @@ for uid_index in $uids; do
     -log_dir $VTDATAROOT/tmp \
     -tablet_uid $uid \
     -mysql_port $mysql_port \
-    $action 
+    $action
 
-    err=$?
-    if [[ $err -ne 0 ]]; then
-	echo "Checking for apparmor status for mysqld:"
-	sudo aa-status | grep mysqld
-    	if [[ $err -eq 0 ]]; then
-		apparmor is enabled for mysqld
-	fi
-        fail "This script fails to start mysqld, possibly due to apparmor or selinux protection. Please disable."
-    fi
-
-  set -e
-
+    err=$?    
+    if [[ $err -ne 0 ]]; then    
+        fail "This script fails to start mysqld, possibly due to apparmor or selinux protection.     
+        Utilities to help investigate:    
+                apparmor: \"sudo aa-status\"    
+                selinux:  \"sudo sestatus\"    
+        Please disable if so indicated.    
+        You may also need to empty your \$VTDATAROOT to start clean."    
+    fi    
+    
+  set -e    
+    
 done
 
 # Wait for all mysqld to start up.
@@ -156,10 +151,12 @@ done
 echo "Waiting for tablets to be listening..."
 for uid_index in $uids; do
   port=$[$port_base + $uid_index]
-  while true; do
+  for i in $(seq 0 300); do
    curl -I "http://$hostname:$port/debug/status" >/dev/null 2>&1 && break
    sleep 0.1
   done;
+  # check one last time
+  curl -I "http://$hostname:$port/debug/status" || fail "tablets could not be started!"
 done;
 echo "Tablets up!"
 
