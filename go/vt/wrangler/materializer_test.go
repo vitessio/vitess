@@ -26,6 +26,7 @@ import (
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -313,6 +314,243 @@ func TestCreateLookupVindexCreateDDL(t *testing.T) {
 		want := strings.Split(tcase.out, "\n")
 		got := strings.Split(outms.TableSettings[0].CreateDdl, "\n")
 		assert.Equal(t, want, got, tcase.description)
+	}
+}
+
+func TestCreateLookupVindexTargetVSchema(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+	}
+	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	defer env.close()
+	sourcevs := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"hash": {
+				Type: "hash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "col1",
+					Name:   "hash",
+				}},
+			},
+		},
+	}
+	if err := env.topoServ.SaveVSchema(context.Background(), ms.SourceKeyspace, sourcevs); err != nil {
+		t.Fatal(err)
+	}
+
+	// withTable is a target vschema with a pre-existing table.
+	withTable := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"hash": {
+				Type: "hash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t2": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "c1",
+					Name:   "hash",
+				}},
+			},
+		},
+	}
+
+	specs := &vschemapb.Keyspace{
+		Vindexes: map[string]*vschemapb.Vindex{
+			"v": {
+				Type: "lookup_unique",
+				Params: map[string]string{
+					"table": "will be set by the test case",
+					"from":  "c1",
+					"to":    "c2",
+				},
+				Owner: "t1",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Name:   "v",
+					Column: "col2",
+				}},
+			},
+		},
+	}
+	// Dummy sourceSchema
+	sourceSchema := "CREATE TABLE `t1` (\n" +
+		"  `col1` int(11) NOT NULL AUTO_INCREMENT,\n" +
+		"  `col2` int(11) DEFAULT NULL,\n" +
+		"  PRIMARY KEY (`id`)\n" +
+		") ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1"
+
+	testcases := []struct {
+		description     string
+		targetTable     string
+		sourceFieldType querypb.Type
+		targetVSchema   *vschemapb.Keyspace
+		out             *vschemapb.Keyspace
+		err             string
+	}{{
+		description:     "sharded, int64, empty target",
+		targetTable:     "lkp",
+		sourceFieldType: querypb.Type_INT64,
+		targetVSchema:   &vschemapb.Keyspace{Sharded: true},
+		out: &vschemapb.Keyspace{
+			Sharded: true,
+			Vindexes: map[string]*vschemapb.Vindex{
+				"hash": {
+					Type: "hash",
+				},
+			},
+			Tables: map[string]*vschemapb.Table{
+				"lkp": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Column: "c1",
+						Name:   "hash",
+					}},
+				},
+			},
+		},
+	}, {
+		description:     "sharded, varchar, empty target",
+		targetTable:     "lkp",
+		sourceFieldType: querypb.Type_VARCHAR,
+		targetVSchema:   &vschemapb.Keyspace{Sharded: true},
+		out: &vschemapb.Keyspace{
+			Sharded: true,
+			Vindexes: map[string]*vschemapb.Vindex{
+				"unicode_loose_md5": {
+					Type: "unicode_loose_md5",
+				},
+			},
+			Tables: map[string]*vschemapb.Table{
+				"lkp": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Column: "c1",
+						Name:   "unicode_loose_md5",
+					}},
+				},
+			},
+		},
+	}, {
+		description:     "sharded, int64, good vindex",
+		targetTable:     "lkp",
+		sourceFieldType: querypb.Type_INT64,
+		targetVSchema: &vschemapb.Keyspace{
+			Sharded: true,
+			Vindexes: map[string]*vschemapb.Vindex{
+				// Create a misleading vindex name.
+				"hash": {
+					Type: "hash",
+				},
+			},
+		},
+		out: &vschemapb.Keyspace{
+			Sharded: true,
+			Vindexes: map[string]*vschemapb.Vindex{
+				"hash": {
+					Type: "hash",
+				},
+			},
+			Tables: map[string]*vschemapb.Table{
+				"lkp": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Column: "c1",
+						Name:   "hash",
+					}},
+				},
+			},
+		},
+	}, {
+		description:     "sharded, int64, bad vindex",
+		targetTable:     "lkp",
+		sourceFieldType: querypb.Type_INT64,
+		targetVSchema: &vschemapb.Keyspace{
+			Sharded: true,
+			Vindexes: map[string]*vschemapb.Vindex{
+				// Create a misleading vindex name.
+				"hash": {
+					Type: "unicode_loose_md5",
+				},
+			},
+		},
+		err: "a conflicting vindex named hash already exists in the target vschema",
+	}, {
+		description:     "sharded, int64, good table",
+		targetTable:     "t2",
+		sourceFieldType: querypb.Type_INT64,
+		targetVSchema:   withTable,
+		out: &vschemapb.Keyspace{
+			Sharded: true,
+			Vindexes: map[string]*vschemapb.Vindex{
+				"hash": {
+					Type: "hash",
+				},
+			},
+			Tables: map[string]*vschemapb.Table{
+				"t2": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Column: "c1",
+						Name:   "hash",
+					}},
+				},
+			},
+		},
+	}, {
+		description:     "sharded, int64, table mismatch",
+		targetTable:     "t2",
+		sourceFieldType: querypb.Type_VARCHAR,
+		targetVSchema:   withTable,
+		err:             "a conflicting table named t2 already exists in the target vschema",
+	}, {
+		description:     "unsharded",
+		targetTable:     "lkp",
+		sourceFieldType: querypb.Type_INT64,
+		targetVSchema:   &vschemapb.Keyspace{},
+		out: &vschemapb.Keyspace{
+			Vindexes: map[string]*vschemapb.Vindex{},
+			Tables: map[string]*vschemapb.Table{
+				"lkp": {},
+			},
+		},
+	}, {
+		description:     "invalid column type",
+		targetTable:     "lkp",
+		sourceFieldType: querypb.Type_SET,
+		targetVSchema:   &vschemapb.Keyspace{Sharded: true},
+		err:             "type SET is not recommended for a vindex",
+	}}
+	for _, tcase := range testcases {
+		env.tmc.schema[ms.SourceKeyspace+".t1"] = &tabletmanagerdatapb.SchemaDefinition{
+			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+				Fields: []*querypb.Field{{
+					Name: "col2",
+					Type: tcase.sourceFieldType,
+				}},
+				Schema: sourceSchema,
+			}},
+		}
+		specs.Vindexes["v"].Params["table"] = fmt.Sprintf("%s.%s", ms.TargetKeyspace, tcase.targetTable)
+		if err := env.topoServ.SaveVSchema(context.Background(), ms.TargetKeyspace, tcase.targetVSchema); err != nil {
+			t.Fatal(err)
+		}
+
+		_, _, got, err := env.wr.prepareCreateLookup(context.Background(), ms.SourceKeyspace, specs)
+		if tcase.err != "" {
+			if err == nil || !strings.Contains(err.Error(), tcase.err) {
+				t.Errorf("prepareCreateLookup(%s) err: %v, must contain %v", tcase.description, err, tcase.err)
+			}
+			continue
+		}
+		require.NoError(t, err)
+		assert.Equal(t, tcase.out, got, tcase.description)
 	}
 }
 
