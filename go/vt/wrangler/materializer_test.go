@@ -101,6 +101,129 @@ func TestMigrateVSchema(t *testing.T) {
 	}
 }
 
+func TestCreateLookupVindexFull(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       "lkp_vdx",
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+	}
+	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	defer env.close()
+
+	specs := &vschemapb.Keyspace{
+		Vindexes: map[string]*vschemapb.Vindex{
+			"v": {
+				Type: "lookup_unique",
+				Params: map[string]string{
+					"table": "targetks.lkp",
+					"from":  "c1",
+					"to":    "c2",
+				},
+				Owner: "t1",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Name:   "v",
+					Column: "col2",
+				}},
+			},
+		},
+	}
+	// Dummy sourceSchema
+	sourceSchema := "CREATE TABLE `t1` (\n" +
+		"  `col1` int(11) NOT NULL AUTO_INCREMENT,\n" +
+		"  `col2` int(11) DEFAULT NULL,\n" +
+		"  PRIMARY KEY (`id`)\n" +
+		") ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=latin1"
+
+	sourceVSchema := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"hash": {
+				Type: "hash",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Name:   "hash",
+					Column: "col1",
+				}},
+			},
+		},
+	}
+	env.tmc.schema[ms.SourceKeyspace+".t1"] = &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+			Fields: []*querypb.Field{{
+				Name: "col1",
+				Type: querypb.Type_INT64,
+			}, {
+				Name: "col2",
+				Type: querypb.Type_INT64,
+			}},
+			Schema: sourceSchema,
+		}},
+	}
+	if err := env.topoServ.SaveVSchema(context.Background(), ms.TargetKeyspace, &vschemapb.Keyspace{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.topoServ.SaveVSchema(context.Background(), ms.SourceKeyspace, sourceVSchema); err != nil {
+		t.Fatal(err)
+	}
+
+	env.tmc.expectVRQuery(200, "/CREATE TABLE `lkp`", &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_targetks' and workflow='lkp_vdx'", &sqltypes.Result{})
+
+	ctx := context.Background()
+	err := env.wr.CreateLookupVindex(ctx, ms.SourceKeyspace, specs, "cell", "MASTER")
+	require.NoError(t, err)
+
+	wantvschema := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"hash": {
+				Type: "hash",
+			},
+			"v": {
+				Type: "lookup_unique",
+				Params: map[string]string{
+					"table":      "targetks.lkp",
+					"from":       "c1",
+					"to":         "c2",
+					"write_only": "true",
+				},
+				Owner: "t1",
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Name:   "hash",
+					Column: "col1",
+				}, {
+					Name:   "v",
+					Column: "col2",
+				}},
+			},
+		},
+	}
+	vschema, err := env.topoServ.GetVSchema(ctx, ms.SourceKeyspace)
+	require.NoError(t, err)
+	assert.Equal(t, wantvschema, vschema)
+
+	wantvschema = &vschemapb.Keyspace{
+		Tables: map[string]*vschemapb.Table{
+			"lkp": {},
+		},
+	}
+	vschema, err = env.topoServ.GetVSchema(ctx, ms.TargetKeyspace)
+	require.NoError(t, err)
+	assert.Equal(t, wantvschema, vschema)
+}
+
 func TestCreateLookupVindexCreateDDL(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
 		SourceKeyspace: "sourceks",
@@ -901,6 +1024,272 @@ func TestCreateLookupVindexSameKeyspace(t *testing.T) {
 	}
 }
 
+func TestCreateLookupVindexFailures(t *testing.T) {
+	topoServ := memorytopo.NewServer("cell")
+	wr := New(logutil.NewConsoleLogger(), topoServ, nil)
+
+	unique := map[string]*vschemapb.Vindex{
+		"v": {
+			Type: "lookup_unique",
+			Params: map[string]string{
+				"table": "targetks.t",
+				"from":  "c1",
+				"to":    "c2",
+			},
+		},
+	}
+
+	vs := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"other": {
+				Type: "hash",
+			},
+			"v": {
+				Type: "lookup_unique",
+				Params: map[string]string{
+					"table":      "targetks.t",
+					"from":       "c1",
+					"to":         "c2",
+					"write_only": "true",
+				},
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "c1",
+					Name:   "v",
+				}},
+			},
+		},
+	}
+	if err := topoServ.SaveVSchema(context.Background(), "sourceks", vs); err != nil {
+		t.Fatal(err)
+	}
+	if err := topoServ.SaveVSchema(context.Background(), "targetks", &vschemapb.Keyspace{}); err != nil {
+		t.Fatal(err)
+	}
+
+	testcases := []struct {
+		description string
+		input       *vschemapb.Keyspace
+		err         string
+	}{{
+		description: "dup vindex",
+		input: &vschemapb.Keyspace{
+			Vindexes: map[string]*vschemapb.Vindex{
+				"v1": {
+					Type: "hash",
+				},
+				"v2": {
+					Type: "hash",
+				},
+			},
+		},
+		err: "only one vindex must be specified in the specs",
+	}, {
+		description: "not a lookup",
+		input: &vschemapb.Keyspace{
+			Vindexes: map[string]*vschemapb.Vindex{
+				"v": {
+					Type: "hash",
+				},
+			},
+		},
+		err: "vindex hash is not a lookup type",
+	}, {
+		description: "unqualified table",
+		input: &vschemapb.Keyspace{
+			Vindexes: map[string]*vschemapb.Vindex{
+				"v": {
+					Type: "lookup",
+					Params: map[string]string{
+						"table": "t",
+					},
+				},
+			},
+		},
+		err: "vindex 'table' must be <keyspace>.<table>",
+	}, {
+		description: "unique lookup should have only one from column",
+		input: &vschemapb.Keyspace{
+			Vindexes: map[string]*vschemapb.Vindex{
+				"v": {
+					Type: "lookup_unique",
+					Params: map[string]string{
+						"table": "targetks.t",
+						"from":  "c1,c2",
+					},
+				},
+			},
+		},
+		err: "unique vindex 'from' should have only one column",
+	}, {
+		description: "non-unique lookup should have more than one column",
+		input: &vschemapb.Keyspace{
+			Vindexes: map[string]*vschemapb.Vindex{
+				"v": {
+					Type: "lookup",
+					Params: map[string]string{
+						"table": "targetks.t",
+						"from":  "c1",
+					},
+				},
+			},
+		},
+		err: "non-unique vindex 'from' should have more than one column",
+	}, {
+		description: "vindex not found",
+		input: &vschemapb.Keyspace{
+			Vindexes: map[string]*vschemapb.Vindex{
+				"v": {
+					Type: "lookup_noexist",
+					Params: map[string]string{
+						"table": "targetks.t",
+						"from":  "c1,c2",
+					},
+				},
+			},
+		},
+		err: `vindexType "lookup_noexist" not found`,
+	}, {
+		description: "only one table",
+		input: &vschemapb.Keyspace{
+			Vindexes: unique,
+		},
+		err: "exactly one table must be specified in the specs",
+	}, {
+		description: "only one colvindex",
+		input: &vschemapb.Keyspace{
+			Vindexes: unique,
+			Tables: map[string]*vschemapb.Table{
+				"t1": {},
+			},
+		},
+		err: "exactly one ColumnVindex must be specified for the table",
+	}, {
+		description: "vindex name must match",
+		input: &vschemapb.Keyspace{
+			Vindexes: unique,
+			Tables: map[string]*vschemapb.Table{
+				"t1": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Name: "other",
+					}},
+				},
+			},
+		},
+		err: "ColumnVindex name must match vindex name: other vs v",
+	}, {
+		description: "owner must match",
+		input: &vschemapb.Keyspace{
+			Vindexes: map[string]*vschemapb.Vindex{
+				"v": {
+					Type: "lookup_unique",
+					Params: map[string]string{
+						"table": "targetks.t",
+						"from":  "c1",
+					},
+					Owner: "otherTable",
+				},
+			},
+			Tables: map[string]*vschemapb.Table{
+				"t1": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Name: "v",
+					}},
+				},
+			},
+		},
+		err: "vindex owner must match table name: otherTable vs t1",
+	}, {
+		description: "owner must match",
+		input: &vschemapb.Keyspace{
+			Vindexes: unique,
+			Tables: map[string]*vschemapb.Table{
+				"t1": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Name: "v",
+					}},
+				},
+			},
+		},
+		err: "at least one column must be specified in ColumnVindexes",
+	}, {
+		description: "columnvindex length mismatch",
+		input: &vschemapb.Keyspace{
+			Vindexes: unique,
+			Tables: map[string]*vschemapb.Table{
+				"t1": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Name:    "v",
+						Columns: []string{"col1", "col2"},
+					}},
+				},
+			},
+		},
+		err: "length of table columns differes from length of vindex columns",
+	}, {
+		description: "vindex mismatches with what's in vschema",
+		input: &vschemapb.Keyspace{
+			Vindexes: map[string]*vschemapb.Vindex{
+				"other": {
+					Type: "lookup_unique",
+					Params: map[string]string{
+						"table": "targetks.t",
+						"from":  "c1",
+					},
+					Owner: "t1",
+				},
+			},
+			Tables: map[string]*vschemapb.Table{
+				"t1": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Name:   "other",
+						Column: "col",
+					}},
+				},
+			},
+		},
+		err: "a conflicting vindex named other already exists in the source vschema",
+	}, {
+		description: "source table not in vschema",
+		input: &vschemapb.Keyspace{
+			Vindexes: unique,
+			Tables: map[string]*vschemapb.Table{
+				"other": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Name:   "v",
+						Column: "col",
+					}},
+				},
+			},
+		},
+		err: "source table other not found in vschema",
+	}, {
+		description: "colvindex already exists in vschema",
+		input: &vschemapb.Keyspace{
+			Vindexes: unique,
+			Tables: map[string]*vschemapb.Table{
+				"t1": {
+					ColumnVindexes: []*vschemapb.ColumnVindex{{
+						Name:   "v",
+						Column: "c1",
+					}},
+				},
+			},
+		},
+		err: "ColumnVindex for table t1 already exists: c1",
+	}}
+	for _, tcase := range testcases {
+		err := wr.CreateLookupVindex(context.Background(), "sourceks", tcase.input, "", "")
+		if !strings.Contains(err.Error(), tcase.err) {
+			t.Errorf("CreateLookupVindex(%s) err: %v, must contain %v", tcase.description, err, tcase.err)
+		}
+	}
+}
+
 func TestMaterializerOneToOne(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
@@ -1633,270 +2022,4 @@ func TestMaterializerNoVindexInExpression(t *testing.T) {
 
 	err := env.wr.Materialize(context.Background(), ms)
 	assert.EqualError(t, err, "could not find vindex column c1")
-}
-
-func TestCreateLookupVindexFailures(t *testing.T) {
-	topoServ := memorytopo.NewServer("cell")
-	wr := New(logutil.NewConsoleLogger(), topoServ, nil)
-
-	unique := map[string]*vschemapb.Vindex{
-		"v": {
-			Type: "lookup_unique",
-			Params: map[string]string{
-				"table": "targetks.t",
-				"from":  "c1",
-				"to":    "c2",
-			},
-		},
-	}
-
-	vs := &vschemapb.Keyspace{
-		Sharded: true,
-		Vindexes: map[string]*vschemapb.Vindex{
-			"other": {
-				Type: "hash",
-			},
-			"v": {
-				Type: "lookup_unique",
-				Params: map[string]string{
-					"table":      "targetks.t",
-					"from":       "c1",
-					"to":         "c2",
-					"write_only": "true",
-				},
-			},
-		},
-		Tables: map[string]*vschemapb.Table{
-			"t1": {
-				ColumnVindexes: []*vschemapb.ColumnVindex{{
-					Column: "c1",
-					Name:   "v",
-				}},
-			},
-		},
-	}
-	if err := topoServ.SaveVSchema(context.Background(), "sourceks", vs); err != nil {
-		t.Fatal(err)
-	}
-	if err := topoServ.SaveVSchema(context.Background(), "targetks", &vschemapb.Keyspace{}); err != nil {
-		t.Fatal(err)
-	}
-
-	testcases := []struct {
-		description string
-		input       *vschemapb.Keyspace
-		err         string
-	}{{
-		description: "dup vindex",
-		input: &vschemapb.Keyspace{
-			Vindexes: map[string]*vschemapb.Vindex{
-				"v1": {
-					Type: "hash",
-				},
-				"v2": {
-					Type: "hash",
-				},
-			},
-		},
-		err: "only one vindex must be specified in the specs",
-	}, {
-		description: "not a lookup",
-		input: &vschemapb.Keyspace{
-			Vindexes: map[string]*vschemapb.Vindex{
-				"v": {
-					Type: "hash",
-				},
-			},
-		},
-		err: "vindex hash is not a lookup type",
-	}, {
-		description: "unqualified table",
-		input: &vschemapb.Keyspace{
-			Vindexes: map[string]*vschemapb.Vindex{
-				"v": {
-					Type: "lookup",
-					Params: map[string]string{
-						"table": "t",
-					},
-				},
-			},
-		},
-		err: "vindex 'table' must be <keyspace>.<table>",
-	}, {
-		description: "unique lookup should have only one from column",
-		input: &vschemapb.Keyspace{
-			Vindexes: map[string]*vschemapb.Vindex{
-				"v": {
-					Type: "lookup_unique",
-					Params: map[string]string{
-						"table": "targetks.t",
-						"from":  "c1,c2",
-					},
-				},
-			},
-		},
-		err: "unique vindex 'from' should have only one column",
-	}, {
-		description: "non-unique lookup should have more than one column",
-		input: &vschemapb.Keyspace{
-			Vindexes: map[string]*vschemapb.Vindex{
-				"v": {
-					Type: "lookup",
-					Params: map[string]string{
-						"table": "targetks.t",
-						"from":  "c1",
-					},
-				},
-			},
-		},
-		err: "non-unique vindex 'from' should have more than one column",
-	}, {
-		description: "vindex not found",
-		input: &vschemapb.Keyspace{
-			Vindexes: map[string]*vschemapb.Vindex{
-				"v": {
-					Type: "lookup_noexist",
-					Params: map[string]string{
-						"table": "targetks.t",
-						"from":  "c1,c2",
-					},
-				},
-			},
-		},
-		err: `vindexType "lookup_noexist" not found`,
-	}, {
-		description: "only one table",
-		input: &vschemapb.Keyspace{
-			Vindexes: unique,
-		},
-		err: "exactly one table must be specified in the specs",
-	}, {
-		description: "only one colvindex",
-		input: &vschemapb.Keyspace{
-			Vindexes: unique,
-			Tables: map[string]*vschemapb.Table{
-				"t1": {},
-			},
-		},
-		err: "exactly one ColumnVindex must be specified for the table",
-	}, {
-		description: "vindex name must match",
-		input: &vschemapb.Keyspace{
-			Vindexes: unique,
-			Tables: map[string]*vschemapb.Table{
-				"t1": {
-					ColumnVindexes: []*vschemapb.ColumnVindex{{
-						Name: "other",
-					}},
-				},
-			},
-		},
-		err: "ColumnVindex name must match vindex name: other vs v",
-	}, {
-		description: "owner must match",
-		input: &vschemapb.Keyspace{
-			Vindexes: map[string]*vschemapb.Vindex{
-				"v": {
-					Type: "lookup_unique",
-					Params: map[string]string{
-						"table": "targetks.t",
-						"from":  "c1",
-					},
-					Owner: "otherTable",
-				},
-			},
-			Tables: map[string]*vschemapb.Table{
-				"t1": {
-					ColumnVindexes: []*vschemapb.ColumnVindex{{
-						Name: "v",
-					}},
-				},
-			},
-		},
-		err: "vindex owner must match table name: otherTable vs t1",
-	}, {
-		description: "owner must match",
-		input: &vschemapb.Keyspace{
-			Vindexes: unique,
-			Tables: map[string]*vschemapb.Table{
-				"t1": {
-					ColumnVindexes: []*vschemapb.ColumnVindex{{
-						Name: "v",
-					}},
-				},
-			},
-		},
-		err: "at least one column must be specified in ColumnVindexes",
-	}, {
-		description: "columnvindex length mismatch",
-		input: &vschemapb.Keyspace{
-			Vindexes: unique,
-			Tables: map[string]*vschemapb.Table{
-				"t1": {
-					ColumnVindexes: []*vschemapb.ColumnVindex{{
-						Name:    "v",
-						Columns: []string{"col1", "col2"},
-					}},
-				},
-			},
-		},
-		err: "length of table columns differes from length of vindex columns",
-	}, {
-		description: "vindex mismatches with what's in vschema",
-		input: &vschemapb.Keyspace{
-			Vindexes: map[string]*vschemapb.Vindex{
-				"other": {
-					Type: "lookup_unique",
-					Params: map[string]string{
-						"table": "targetks.t",
-						"from":  "c1",
-					},
-					Owner: "t1",
-				},
-			},
-			Tables: map[string]*vschemapb.Table{
-				"t1": {
-					ColumnVindexes: []*vschemapb.ColumnVindex{{
-						Name:   "other",
-						Column: "col",
-					}},
-				},
-			},
-		},
-		err: "a conflicting vindex named other already exists in the source vschema",
-	}, {
-		description: "source table not in vschema",
-		input: &vschemapb.Keyspace{
-			Vindexes: unique,
-			Tables: map[string]*vschemapb.Table{
-				"other": {
-					ColumnVindexes: []*vschemapb.ColumnVindex{{
-						Name:   "v",
-						Column: "col",
-					}},
-				},
-			},
-		},
-		err: "source table other not found in vschema",
-	}, {
-		description: "colvindex already exists in vschema",
-		input: &vschemapb.Keyspace{
-			Vindexes: unique,
-			Tables: map[string]*vschemapb.Table{
-				"t1": {
-					ColumnVindexes: []*vschemapb.ColumnVindex{{
-						Name:   "v",
-						Column: "c1",
-					}},
-				},
-			},
-		},
-		err: "ColumnVindex for table t1 already exists: c1",
-	}}
-	for _, tcase := range testcases {
-		err := wr.CreateLookupVindex(context.Background(), "sourceks", tcase.input, "", "")
-		if !strings.Contains(err.Error(), tcase.err) {
-			t.Errorf("CreateLookupVindex(%s) err: %v, must contain %v", tcase.description, err, tcase.err)
-		}
-	}
 }
