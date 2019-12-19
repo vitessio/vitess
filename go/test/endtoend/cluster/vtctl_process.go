@@ -47,6 +47,7 @@ func (vtctl *VtctlProcess) AddCellInfo(Cell string) (err error) {
 		"-server_address", vtctl.TopoServerAddress,
 		Cell,
 	)
+	log.Info(fmt.Sprintf("Adding Cell into Keyspace with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	return tmpProcess.Run()
 }
 
