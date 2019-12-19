@@ -57,8 +57,8 @@ func (*Numeric) IsUnique() bool {
 	return true
 }
 
-// NeedVCursor satisfies the Vindex interface.
-func (*Numeric) NeedVCursor() bool {
+// NeedsVCursor satisfies the Vindex interface.
+func (*Numeric) NeedsVCursor() bool {
 	return false
 }
 

@@ -36,7 +36,7 @@ func TestNumericInfo(t *testing.T) {
 	assert.Equal(t, 0, numeric.Cost())
 	assert.Equal(t, "num", numeric.String())
 	assert.True(t, numeric.IsUnique())
-	assert.False(t, numeric.NeedVCursor())
+	assert.False(t, numeric.NeedsVCursor())
 }
 
 func TestNumericMap(t *testing.T) {

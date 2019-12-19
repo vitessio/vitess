@@ -282,10 +282,10 @@ func (dp DestinationAnyShardPickerFirstShard) PickShard(shardCount int) int {
 type keyRangeLookuper struct {
 }
 
-func (v *keyRangeLookuper) String() string  { return "keyrange_lookuper" }
-func (*keyRangeLookuper) Cost() int         { return 0 }
-func (*keyRangeLookuper) IsUnique() bool    { return false }
-func (*keyRangeLookuper) NeedVCursor() bool { return false }
+func (v *keyRangeLookuper) String() string   { return "keyrange_lookuper" }
+func (*keyRangeLookuper) Cost() int          { return 0 }
+func (*keyRangeLookuper) IsUnique() bool     { return false }
+func (*keyRangeLookuper) NeedsVCursor() bool { return false }
 func (*keyRangeLookuper) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
@@ -307,10 +307,10 @@ func newKeyRangeLookuper(name string, params map[string]string) (vindexes.Vindex
 type keyRangeLookuperUnique struct {
 }
 
-func (v *keyRangeLookuperUnique) String() string  { return "keyrange_lookuper" }
-func (*keyRangeLookuperUnique) Cost() int         { return 0 }
-func (*keyRangeLookuperUnique) IsUnique() bool    { return true }
-func (*keyRangeLookuperUnique) NeedVCursor() bool { return false }
+func (v *keyRangeLookuperUnique) String() string   { return "keyrange_lookuper" }
+func (*keyRangeLookuperUnique) Cost() int          { return 0 }
+func (*keyRangeLookuperUnique) IsUnique() bool     { return true }
+func (*keyRangeLookuperUnique) NeedsVCursor() bool { return false }
 func (*keyRangeLookuperUnique) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }

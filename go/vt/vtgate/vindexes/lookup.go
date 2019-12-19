@@ -61,8 +61,8 @@ func (ln *LookupNonUnique) IsUnique() bool {
 	return false
 }
 
-// NeedVCursor satisfies the Vindex interface.
-func (ln *LookupNonUnique) NeedVCursor() bool {
+// NeedsVCursor satisfies the Vindex interface.
+func (ln *LookupNonUnique) NeedsVCursor() bool {
 	return true
 }
 
@@ -216,8 +216,8 @@ func (lu *LookupUnique) IsUnique() bool {
 	return true
 }
 
-// NeedVCursor satisfies the Vindex interface.
-func (lu *LookupUnique) NeedVCursor() bool {
+// NeedsVCursor satisfies the Vindex interface.
+func (lu *LookupUnique) NeedsVCursor() bool {
 	return true
 }
 

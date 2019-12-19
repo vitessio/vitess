@@ -80,8 +80,8 @@ func (vind *NumericStaticMap) IsUnique() bool {
 	return true
 }
 
-// NeedVCursor satisfies the Vindex interface.
-func (vind *NumericStaticMap) NeedVCursor() bool {
+// NeedsVCursor satisfies the Vindex interface.
+func (vind *NumericStaticMap) NeedsVCursor() bool {
 	return false
 }
 

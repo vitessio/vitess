@@ -81,7 +81,7 @@ func identifyColVindex(table *vindexes.Table) (*vindexes.ColumnVindex, error) {
 	}
 	var result *vindexes.ColumnVindex
 	for _, cv := range table.ColumnVindexes {
-		if cv.Vindex.NeedVCursor() {
+		if cv.Vindex.NeedsVCursor() {
 			continue
 		}
 		if !cv.Vindex.IsUnique() {

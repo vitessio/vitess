@@ -64,8 +64,8 @@ func (vind *Hash) IsUnique() bool {
 	return true
 }
 
-// NeedVCursor satisfies the Vindex interface.
-func (vind *Hash) NeedVCursor() bool {
+// NeedsVCursor satisfies the Vindex interface.
+func (vind *Hash) NeedsVCursor() bool {
 	return false
 }
 

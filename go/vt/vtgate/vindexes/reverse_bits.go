@@ -59,8 +59,8 @@ func (vind *ReverseBits) IsUnique() bool {
 	return true
 }
 
-// NeedVCursor satisfies the Vindex interface.
-func (vind *ReverseBits) NeedVCursor() bool {
+// NeedsVCursor satisfies the Vindex interface.
+func (vind *ReverseBits) NeedsVCursor() bool {
 	return false
 }
 

@@ -54,8 +54,8 @@ func (vind *Binary) IsUnique() bool {
 	return true
 }
 
-// NeedVCursor satisfies the Vindex interface.
-func (vind *Binary) NeedVCursor() bool {
+// NeedsVCursor satisfies the Vindex interface.
+func (vind *Binary) NeedsVCursor() bool {
 	return false
 }
 

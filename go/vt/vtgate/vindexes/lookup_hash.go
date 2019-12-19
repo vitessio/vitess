@@ -93,8 +93,8 @@ func (lh *LookupHash) IsUnique() bool {
 	return false
 }
 
-// NeedVCursor satisfies the Vindex interface.
-func (lh *LookupHash) NeedVCursor() bool {
+// NeedsVCursor satisfies the Vindex interface.
+func (lh *LookupHash) NeedsVCursor() bool {
 	return true
 }
 
@@ -249,8 +249,8 @@ func (lhu *LookupHashUnique) IsUnique() bool {
 	return true
 }
 
-// NeedVCursor satisfies the Vindex interface.
-func (lhu *LookupHashUnique) NeedVCursor() bool {
+// NeedsVCursor satisfies the Vindex interface.
+func (lhu *LookupHashUnique) NeedsVCursor() bool {
 	return true
 }
 
