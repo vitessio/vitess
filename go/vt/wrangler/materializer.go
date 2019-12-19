@@ -238,7 +238,7 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 	if sourceVSchema.Vindexes == nil {
 		sourceVSchema.Vindexes = make(map[string]*vschemapb.Vindex)
 	}
-	// If source and target keyspaces are same, Make vscehmas point to the same object.
+	// If source and target keyspaces are same, Make vschemas point to the same object.
 	if keyspace == targetKeyspace {
 		targetVSchema = sourceVSchema
 	} else {
@@ -263,6 +263,10 @@ func (wr *Wrangler) prepareCreateLookup(ctx context.Context, keyspace string, sp
 		return nil, nil, nil, fmt.Errorf("source table %s not found in vschema", sourceTableName)
 	}
 	for _, colVindex := range sourceVSchemaTable.ColumnVindexes {
+		// For a conflict, the vindex name and column should match.
+		if colVindex.Name != vindexName {
+			continue
+		}
 		colName := colVindex.Column
 		if len(colVindex.Columns) != 0 {
 			colName = colVindex.Columns[0]
