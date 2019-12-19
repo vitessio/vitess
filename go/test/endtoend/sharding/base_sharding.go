@@ -239,18 +239,23 @@ func checkStreamHealthEqualsBinlogPlayerVars(t *testing.T, vttablet cluster.Vtta
 }
 
 // CheckBinlogServerVars checks the binlog server variables are correctly exported.
-func CheckBinlogServerVars(t *testing.T, vttablet cluster.Vttablet, minStatement int, minTxn int) {
+func CheckBinlogServerVars(t *testing.T, vttablet cluster.Vttablet, minStatement int, minTxn int, isVerticalSplit bool) {
 	resultMap := vttablet.VttabletProcess.GetVars()
-	assert.Contains(t, resultMap, "UpdateStreamKeyRangeStatements")
-	assert.Contains(t, resultMap, "UpdateStreamKeyRangeTransactions")
+	skey := "UpdateStreamKeyRangeStatements"
+	tkey := "UpdateStreamKeyRangeTransactions"
+	if isVerticalSplit {
+		skey = "UpdateStreamTablesStatements"
+		tkey = "UpdateStreamTablesTransactions"
+	}
+	assert.Contains(t, resultMap, skey)
+	assert.Contains(t, resultMap, tkey)
 	if minStatement > 0 {
-		value := fmt.Sprintf("%v", reflect.ValueOf(resultMap["UpdateStreamKeyRangeStatements"]))
+		value := fmt.Sprintf("%v", reflect.ValueOf(resultMap[skey]))
 		iValue, _ := strconv.Atoi(value)
 		assert.True(t, iValue >= minStatement, fmt.Sprintf("only got %d < %d statements", iValue, minStatement))
 	}
-
 	if minTxn > 0 {
-		value := fmt.Sprintf("%v", reflect.ValueOf(resultMap["UpdateStreamKeyRangeStatements"]))
+		value := fmt.Sprintf("%v", reflect.ValueOf(resultMap[tkey]))
 		iValue, _ := strconv.Atoi(value)
 		assert.True(t, iValue >= minTxn, fmt.Sprintf("only got %d < %d transactions", iValue, minTxn))
 	}
