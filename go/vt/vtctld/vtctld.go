@@ -21,7 +21,6 @@ package vtctld
 import (
 	"flag"
 	"net/http"
-	"path"
 	"strings"
 	"time"
 
@@ -37,18 +36,12 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var s string
 var (
-	webDir = &s //flag.String("web_dir", "", "directory from which to serve vtctld web interface resources")
-	// webDir2 is a temporary additional dir for a new, in-development UI.
-	//webDir2             = &s //        = flag.String("web_dir2", "", "directory from which to serve vtctld2 web interface resources")
 	enableRealtimeStats = flag.Bool("enable_realtime_stats", false, "Required for the Realtime Stats view. If set, vtctld will maintain a streaming RPC to each tablet (in all cells) to gather the realtime health stats.")
 )
 
 const (
 	appPrefix = "/app/"
-	// appPrefix2 is a temporary additional path for a new, in-development UI.
-	appPrefix2 = "/app2/"
 )
 
 // InitVtctld initializes all the vtctld functionnality.
@@ -126,30 +119,13 @@ func InitVtctld(ts *topo.Server) {
 			return "", wr.ReloadSchema(ctx, tabletAlias)
 		})
 
-	// Anything unrecognized gets redirected to the main app2 page.
+	// Anything unrecognized gets redirected to the main app page.
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, appPrefix2, http.StatusFound)
+		http.Redirect(w, r, appPrefix, http.StatusFound)
 	})
 
-	// Serve the static files for the vtctld web app.
+	// Serve the static files for the vtctld2 web app
 	http.HandleFunc(appPrefix, func(w http.ResponseWriter, r *http.Request) {
-		// Strip the prefix.
-		parts := strings.SplitN(r.URL.Path, "/", 3)
-		if len(parts) != 3 {
-			http.NotFound(w, r)
-			return
-		}
-		rest := parts[2]
-		if rest == "" {
-			rest = "index.html"
-		}
-		http.ServeFile(w, r, path.Join(*webDir, rest))
-	})
-
-	// Serve the static files for the vtctld2 web app.
-	// This is a temporary additional URL for serving the new,
-	// in-development UI side-by-side with the current one.
-	http.HandleFunc(appPrefix2, func(w http.ResponseWriter, r *http.Request) {
 		// Strip the prefix.
 		parts := strings.SplitN(r.URL.Path, "/", 3)
 		if len(parts) != 3 {
