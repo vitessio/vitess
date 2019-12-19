@@ -54,6 +54,7 @@ func TestTabletReshuffle(t *testing.T) {
 
 	//Create new tablet
 	rTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
+
 	//Init Tablets
 	err = clusterInstance.VtctlclientProcess.InitTablet(rTablet, cell, keyspaceName, hostname, shardName)
 	require.NoError(t, err)
