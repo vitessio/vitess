@@ -68,7 +68,7 @@ func TestMasterBackup(t *testing.T) {
 	assert.Equal(t, len(backups), 0)
 
 	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", "-allow_master=true", master.Alias)
-	assert.NotNil(t, err)
+	assert.Nil(t, err)
 
 	backups = listBackups(t)
 	assert.Equal(t, len(backups), 1)
@@ -77,7 +77,9 @@ func TestMasterBackup(t *testing.T) {
 	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
 	assert.Nil(t, err)
 
-	restoreTablet(t)
+	restoreWaitForBackup(t, "replica")
+	err = replica2.VttabletProcess.WaitForTabletType("SERVING")
+	assert.Nil(t, err)
 
 	checkData(t, replica2, 2)
 	verifyLocalMetadata(t, "replica")
@@ -131,6 +133,7 @@ func testBackup(t *testing.T, tabletType string) {
 	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
 
 	replica2.VttabletProcess.TearDown()
+	localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", replica2.Alias)
 	master.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
 
 }
@@ -215,12 +218,4 @@ func verifyAfterRemovingBackupNoBackupShouldBePresent(t *testing.T, backups []st
 	// Now, there should not be no backup
 	backups = listBackups(t)
 	assert.Equal(t, len(backups), 0)
-}
-
-func restoreTablet(t *testing.T) {
-	resetTabletDir(t)
-	replica2.VttabletProcess.ExtraArgs = commonTabletArg
-	replica2.VttabletProcess.ServingStatus = "SERVING"
-	err := replica2.VttabletProcess.Setup()
-	assert.Nil(t, err)
 }
