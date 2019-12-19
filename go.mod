@@ -59,7 +59,7 @@ require (
 	github.com/pkg/errors v0.8.1
 	github.com/prometheus/client_golang v1.1.0
 	github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4 // indirect
-	github.com/prometheus/common v0.7.0 // indirect
+	github.com/prometheus/common v0.7.0
 	github.com/prometheus/procfs v0.0.5 // indirect
 	github.com/satori/go.uuid v0.0.0-20160713180306-0aa62d5ddceb // indirect
 	github.com/stretchr/testify v1.4.0
