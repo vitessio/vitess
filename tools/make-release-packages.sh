@@ -7,7 +7,7 @@
 set -euo pipefail
 
 # sudo gem install --no-ri --no-rdoc fpm
-
+# shellcheck disable=SC1091
 source build.env
 
 SHORT_REV="$(git rev-parse --short HEAD)"
@@ -42,6 +42,8 @@ done;
 # Copy remaining files, preserving date/permissions
 # But resolving symlinks
 cp -rpfL {config,vthook,web,examples} "${RELEASE_DIR}/"
+
+echo "Follow the binary installation instructions at: https://vitess.io/docs/get-started/local/" > "${RELEASE_DIR}"/README.md
 
 cd "${RELEASE_DIR}/.."
 tar -czf "${TAR_FILE}" "${RELEASE_ID}"
