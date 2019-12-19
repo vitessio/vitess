@@ -43,7 +43,7 @@ func TestClearTextClientAuth(t *testing.T) {
 	}
 
 	// Create the listener.
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -101,7 +101,7 @@ func TestSSLConnection(t *testing.T) {
 	}
 
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}

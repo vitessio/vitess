@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	proxyproto "github.com/pires/go-proxyproto"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -184,10 +185,14 @@ func NewFromListener(l net.Listener, authServer AuthServer, handler Handler, con
 }
 
 // NewListener creates a new Listener.
-func NewListener(protocol, address string, authServer AuthServer, handler Handler, connReadTimeout time.Duration, connWriteTimeout time.Duration) (*Listener, error) {
+func NewListener(protocol, address string, authServer AuthServer, handler Handler, connReadTimeout time.Duration, connWriteTimeout time.Duration, proxyProtocol bool) (*Listener, error) {
 	listener, err := net.Listen(protocol, address)
 	if err != nil {
 		return nil, err
+	}
+	if proxyProtocol {
+		proxyListener := &proxyproto.Listener{Listener: listener}
+		return NewFromListener(proxyListener, authServer, handler, connReadTimeout, connWriteTimeout)
 	}
 
 	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout)
