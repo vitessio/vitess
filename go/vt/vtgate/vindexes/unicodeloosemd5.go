@@ -62,8 +62,8 @@ func (vind *UnicodeLooseMD5) IsUnique() bool {
 	return true
 }
 
-// NeedVCursor satisfies the Vindex interface.
-func (vind *UnicodeLooseMD5) NeedVCursor() bool {
+// NeedsVCursor satisfies the Vindex interface.
+func (vind *UnicodeLooseMD5) NeedsVCursor() bool {
 	return false
 }
 

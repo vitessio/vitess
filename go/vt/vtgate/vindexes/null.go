@@ -58,8 +58,8 @@ func (vind *Null) IsUnique() bool {
 	return true
 }
 
-// NeedVCursor satisfies the Vindex interface.
-func (vind *Null) NeedVCursor() bool {
+// NeedsVCursor satisfies the Vindex interface.
+func (vind *Null) NeedsVCursor() bool {
 	return false
 }
 

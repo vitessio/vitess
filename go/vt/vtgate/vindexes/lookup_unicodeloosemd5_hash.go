@@ -94,8 +94,8 @@ func (lh *LookupUnicodeLooseMD5Hash) IsUnique() bool {
 	return false
 }
 
-// NeedVCursor satisfies the Vindex interface.
-func (lh *LookupUnicodeLooseMD5Hash) NeedVCursor() bool {
+// NeedsVCursor satisfies the Vindex interface.
+func (lh *LookupUnicodeLooseMD5Hash) NeedsVCursor() bool {
 	return true
 }
 
@@ -261,8 +261,8 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) IsUnique() bool {
 	return true
 }
 
-// NeedVCursor satisfies the Vindex interface.
-func (lhu *LookupUnicodeLooseMD5HashUnique) NeedVCursor() bool {
+// NeedsVCursor satisfies the Vindex interface.
+func (lhu *LookupUnicodeLooseMD5HashUnique) NeedsVCursor() bool {
 	return true
 }
 

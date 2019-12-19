@@ -79,8 +79,8 @@ func (ge *RegionExperimental) IsUnique() bool {
 	return true
 }
 
-// NeedVCursor satisfies the Vindex interface.
-func (ge *RegionExperimental) NeedVCursor() bool {
+// NeedsVCursor satisfies the Vindex interface.
+func (ge *RegionExperimental) NeedsVCursor() bool {
 	return false
 }
 

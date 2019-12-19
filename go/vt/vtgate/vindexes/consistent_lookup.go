@@ -75,8 +75,8 @@ func (lu *ConsistentLookup) IsUnique() bool {
 	return false
 }
 
-// NeedVCursor satisfies the Vindex interface.
-func (lu *ConsistentLookup) NeedVCursor() bool {
+// NeedsVCursor satisfies the Vindex interface.
+func (lu *ConsistentLookup) NeedsVCursor() bool {
 	return true
 }
 
@@ -134,8 +134,8 @@ func (lu *ConsistentLookupUnique) IsUnique() bool {
 	return true
 }
 
-// NeedVCursor satisfies the Vindex interface.
-func (lu *ConsistentLookupUnique) NeedVCursor() bool {
+// NeedsVCursor satisfies the Vindex interface.
+func (lu *ConsistentLookupUnique) NeedsVCursor() bool {
 	return true
 }
 

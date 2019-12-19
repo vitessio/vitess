@@ -62,9 +62,9 @@ type Vindex interface {
 	// a vindex cannot be primary.
 	IsUnique() bool
 
-	// NeedVCursor returns true if the Vindex makes calls into the
+	// NeedsVCursor returns true if the Vindex makes calls into the
 	// VCursor. Such vindexes cannot be used by vreplication.
-	NeedVCursor() bool
+	NeedsVCursor() bool
 }
 
 // SingleColumn defines the interface for a single column vindex.
