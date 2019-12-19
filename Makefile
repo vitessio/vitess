@@ -37,6 +37,11 @@ ifdef VT_EXTRA_BUILD_FLAGS
 export EXTRA_BUILD_FLAGS := $(VT_EXTRA_BUILD_FLAGS)
 endif
 
+embed_static: 
+	cd go/vt/vtctld
+	rice embed-go
+	go build .
+
 build_web:
 	echo $$(date): Building web artifacts
 	cd web/vtctld2 && ng build -prod
