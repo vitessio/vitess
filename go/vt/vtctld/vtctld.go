@@ -21,9 +21,11 @@ package vtctld
 import (
 	"flag"
 	"net/http"
-	"os"
 	"path"
 	"strings"
+	"time"
+
+	rice "github.com/GeertJohan/go.rice"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/log"
@@ -35,10 +37,11 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+var s string
 var (
-	webDir = flag.String("web_dir", "", "directory from which to serve vtctld web interface resources")
+	webDir = &s //flag.String("web_dir", "", "directory from which to serve vtctld web interface resources")
 	// webDir2 is a temporary additional dir for a new, in-development UI.
-	webDir2             = flag.String("web_dir2", "", "directory from which to serve vtctld2 web interface resources")
+	webDir2             = &s //        = flag.String("web_dir2", "", "directory from which to serve vtctld2 web interface resources")
 	enableRealtimeStats = flag.Bool("enable_realtime_stats", false, "Required for the Realtime Stats view. If set, vtctld will maintain a streaming RPC to each tablet (in all cells) to gather the realtime health stats.")
 )
 
@@ -157,19 +160,27 @@ func InitVtctld(ts *topo.Server) {
 		if rest == "" {
 			rest = "index.html"
 		}
-		filePath := path.Join(*webDir2, rest)
-		if _, err := os.Stat(filePath); err != nil {
-			// The requested file doesn't exist.
-			if strings.ContainsAny(rest, "/.") {
-				// This looks like a real file path, so return Not Found.
-				http.NotFound(w, r)
-				return
-			}
-			// It looks like a virtual route path (for pages within the app).
-			// For these, we must serve index.html to initialize the app.
-			filePath = path.Join(*webDir2, "index.html")
+
+		riceBox, err := rice.FindBox("../../../web/vtctld2/app")
+		if err != nil {
+			log.Errorf("Unable to open rice box %s", err)
+			http.NotFound(w, r)
 		}
-		http.ServeFile(w, r, filePath)
+		log.Infof("Opening file from rice box : ", rest)
+		fileToServe, err := riceBox.Open(rest)
+		if err != nil {
+			if strings.ContainsAny(rest, "/.") == false {
+				//This is a virtual route so pass index.html
+				fileToServe, err = riceBox.Open("index.html")
+			}
+			if err != nil {
+				log.Errorf("Unable to open file from rice box %s : %s", rest, err)
+				http.NotFound(w, r)
+			}
+		}
+		if fileToServe != nil {
+			http.ServeContent(w, r, rest, time.Now(), fileToServe)
+		}
 	})
 
 	var realtimeStats *realtimeStats
