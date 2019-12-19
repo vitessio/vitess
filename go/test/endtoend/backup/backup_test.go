@@ -44,6 +44,49 @@ func TestRdonlyBackup(t *testing.T) {
 	testBackup(t, "rdonly")
 }
 
+//test_backup will:
+//- create a shard with master and replica1 only
+//- run InitShardMaster
+//- insert some data
+//- take a backup on master
+//- insert more data on the master
+//- bring up tablet_replica2 after the fact, let it restore the backup
+//- check all data is right (before+after backup data)
+//- list the backup, remove it
+func TestMasterBackup(t *testing.T) {
+	_, err := master.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+	assert.Nil(t, err)
+	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
+	assert.Nil(t, err)
+	checkData(t, replica1, 1)
+
+	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("Backup", master.Alias)
+	assert.NotNil(t, err)
+	assert.Contains(t, output, "type MASTER cannot take backup. if you really need to do this, rerun the backup command with -allow_master")
+
+	backups := listBackups(t)
+	assert.Equal(t, len(backups), 0)
+
+	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", "-allow_master=true", master.Alias)
+	assert.NotNil(t, err)
+
+	backups = listBackups(t)
+	assert.Equal(t, len(backups), 1)
+	assert.Contains(t, backups[0], master.Alias)
+
+	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
+	assert.Nil(t, err)
+
+	restoreTablet(t)
+
+	checkData(t, replica2, 2)
+	verifyLocalMetadata(t, "replica")
+	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
+
+	replica2.VttabletProcess.TearDown()
+	master.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
+}
+
 //
 //Test backup flow.
 //
@@ -84,25 +127,8 @@ func testBackup(t *testing.T, tabletType string) {
 
 	checkData(t, replica2, 2)
 
-	qr, err := replica2.VttabletProcess.QueryTablet("select * from _vt.local_metadata", keyspaceName, false)
-	assert.Nil(t, err)
-	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[0]), fmt.Sprintf(`[VARCHAR("Alias") BLOB("%s") VARBINARY("vt_%s")]`, replica2.Alias, keyspaceName))
-	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[1]), fmt.Sprintf(`[VARCHAR("ClusterAlias") BLOB("%s.%s") VARBINARY("vt_%s")]`, keyspaceName, shardName, keyspaceName))
-	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[2]), fmt.Sprintf(`[VARCHAR("DataCenter") BLOB("%s") VARBINARY("vt_%s")]`, cell, keyspaceName))
-	if tabletType == "replica" {
-		assert.Equal(t, fmt.Sprintf("%v", qr.Rows[3]), fmt.Sprintf(`[VARCHAR("PromotionRule") BLOB("neutral") VARBINARY("vt_%s")]`, keyspaceName))
-	} else if tabletType == "rdonly" {
-		assert.Equal(t, fmt.Sprintf("%v", qr.Rows[3]), fmt.Sprintf(`[VARCHAR("PromotionRule") BLOB("must_not") VARBINARY("vt_%s")]`, keyspaceName))
-	}
-	// Remove the backup
-	for _, backup := range backups {
-		err = localCluster.VtctlclientProcess.ExecuteCommand("RemoveBackup", shardKsName, backup)
-		assert.Nil(t, err)
-	}
-
-	// Now, there should not be no backup
-	backups = listBackups(t)
-	assert.Equal(t, len(backups), 0)
+	verifyLocalMetadata(t, tabletType)
+	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
 
 	replica2.VttabletProcess.TearDown()
 	master.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
@@ -164,4 +190,37 @@ func checkData(t *testing.T, vttablet *cluster.Vttablet, totalRows int) {
 		}
 	}
 	assert.Fail(t, "expected rows not found.")
+}
+
+func verifyLocalMetadata(t *testing.T, tabletType string) {
+	qr, err := replica2.VttabletProcess.QueryTablet("select * from _vt.local_metadata", keyspaceName, false)
+	assert.Nil(t, err)
+	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[0]), fmt.Sprintf(`[VARCHAR("Alias") BLOB("%s") VARBINARY("vt_%s")]`, replica2.Alias, keyspaceName))
+	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[1]), fmt.Sprintf(`[VARCHAR("ClusterAlias") BLOB("%s.%s") VARBINARY("vt_%s")]`, keyspaceName, shardName, keyspaceName))
+	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[2]), fmt.Sprintf(`[VARCHAR("DataCenter") BLOB("%s") VARBINARY("vt_%s")]`, cell, keyspaceName))
+	if tabletType == "replica" {
+		assert.Equal(t, fmt.Sprintf("%v", qr.Rows[3]), fmt.Sprintf(`[VARCHAR("PromotionRule") BLOB("neutral") VARBINARY("vt_%s")]`, keyspaceName))
+	} else if tabletType == "rdonly" {
+		assert.Equal(t, fmt.Sprintf("%v", qr.Rows[3]), fmt.Sprintf(`[VARCHAR("PromotionRule") BLOB("must_not") VARBINARY("vt_%s")]`, keyspaceName))
+	}
+}
+
+func verifyAfterRemovingBackupNoBackupShouldBePresent(t *testing.T, backups []string) {
+	// Remove the backup
+	for _, backup := range backups {
+		err := localCluster.VtctlclientProcess.ExecuteCommand("RemoveBackup", shardKsName, backup)
+		assert.Nil(t, err)
+	}
+
+	// Now, there should not be no backup
+	backups = listBackups(t)
+	assert.Equal(t, len(backups), 0)
+}
+
+func restoreTablet(t *testing.T) {
+	resetTabletDir(t)
+	replica2.VttabletProcess.ExtraArgs = commonTabletArg
+	replica2.VttabletProcess.ServingStatus = "SERVING"
+	err := replica2.VttabletProcess.Setup()
+	assert.Nil(t, err)
 }
