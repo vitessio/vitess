@@ -100,7 +100,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-vtctld_addr", vttablet.VtctldAddress,
 	)
 
-  if vttablet.SupportsBackup {
+	if vttablet.SupportsBackup {
 		vttablet.proc.Args = append(vttablet.proc.Args, "-restore_from_backup")
 	}
 	if vttablet.EnableSemiSync {
@@ -128,7 +128,6 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		}
 	}()
 
-
 	if vttablet.ServingStatus != "" {
 		if err = vttablet.WaitForTabletType(vttablet.ServingStatus); err != nil {
 			return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vttablet.Name, <-vttablet.exit)
@@ -151,7 +150,6 @@ func (vttablet *VttabletProcess) GetStatus() string {
 	}
 	return ""
 }
-
 
 // GetVars gets the debug vars as map
 func (vttablet *VttabletProcess) GetVars() map[string]interface{} {
@@ -219,9 +217,30 @@ func (vttablet *VttabletProcess) WaitForBinLogPlayerCount(expectedCount int) err
 	return fmt.Errorf("vttablet %s, expected status not reached", vttablet.TabletPath)
 }
 
+// WaitForBinlogServerState wait for the tablet's binlog server to be in the provided state.
+func (vttablet *VttabletProcess) WaitForBinlogServerState(expectedStatus string) error {
+	timeout := time.Now().Add(10 * time.Second)
+	for time.Now().Before(timeout) {
+		if vttablet.getVarValue("UpdateStreamState") == expectedStatus {
+			return nil
+		}
+		select {
+		case err := <-vttablet.exit:
+			return fmt.Errorf("process '%s' exited prematurely (err: %s)", vttablet.Name, err)
+		default:
+			time.Sleep(300 * time.Millisecond)
+		}
+	}
+	return fmt.Errorf("vttablet %s, expected status not reached", vttablet.TabletPath)
+}
+
 func (vttablet *VttabletProcess) getVReplStreamCount() string {
+	return vttablet.getVarValue("VReplicationStreamCount")
+}
+
+func (vttablet *VttabletProcess) getVarValue(keyname string) string {
 	resultMap := vttablet.GetVars()
-	object := reflect.ValueOf(resultMap["VReplicationStreamCount"])
+	object := reflect.ValueOf(resultMap[keyname])
 	return fmt.Sprintf("%v", object)
 }
 
@@ -245,7 +264,6 @@ func (vttablet *VttabletProcess) TearDown() error {
 	}
 }
 
-
 // CreateDB creates the database for keyspace
 func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
 	_, err := vttablet.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace), keyspace, false)
@@ -268,7 +286,20 @@ func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useD
 	if vttablet.DbPassword != "" {
 		dbParams.Pass = vttablet.DbPassword
 	}
+	return executeQuery(dbParams, query)
+}
 
+// QueryTabletWithDB lets you execute query on a specific DB in this tablet and get the result
+func (vttablet *VttabletProcess) QueryTabletWithDB(query string, dbname string) (*sqltypes.Result, error) {
+	dbParams := mysql.ConnParams{
+		Uname:      "vt_dba",
+		UnixSocket: path.Join(vttablet.Directory, "mysql.sock"),
+		DbName:     dbname,
+	}
+	return executeQuery(dbParams, query)
+}
+
+func executeQuery(dbParams mysql.ConnParams, query string) (*sqltypes.Result, error) {
 	ctx := context.Background()
 	dbConn, err := mysql.Connect(ctx, &dbParams)
 	if err != nil {
@@ -289,7 +320,7 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 		FileToLogQueries:            path.Join(tmpDirectory, fmt.Sprintf("/vt_%010d/querylog.txt", tabletUID)),
 		Directory:                   path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID)),
 		TabletPath:                  fmt.Sprintf("%s-%010d", cell, tabletUID),
-		ServiceMap:                  "grpc-queryservice,grpc-tabletmanager,grpc-updatestream",
+		ServiceMap:                  "grpc-queryservice,grpc-tabletmanager,grpc-updatestream,grpc-throttler",
 		LogDir:                      tmpDirectory,
 		Shard:                       shard,
 		TabletHostname:              hostname,

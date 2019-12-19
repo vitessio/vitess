@@ -53,8 +53,7 @@ func TestTabletReshuffle(t *testing.T) {
 	checkDataOnReplica(t, replicaConn, `[[VARCHAR("a")] [VARCHAR("b")]]`)
 
 	//Create new tablet
-	rTablet := clusterInstance.GetVttabletInstance(0)
-
+	rTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
 	//Init Tablets
 	err = clusterInstance.VtctlclientProcess.InitTablet(rTablet, cell, keyspaceName, hostname, shardName)
 	require.NoError(t, err)
@@ -66,7 +65,7 @@ func TestTabletReshuffle(t *testing.T) {
 		"-mycnf_server_id", fmt.Sprintf("%d", rTablet.TabletUID),
 		"-db_socket", fmt.Sprintf("%s/mysql.sock", masterTablet.VttabletProcess.Directory),
 	}
-	// SupportBackup=False prevents vttablet from trying to restore
+	// SupportsBackup=False prevents vttablet from trying to restore
 	// Start vttablet process
 	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
 	assert.Nil(t, err)
@@ -80,6 +79,7 @@ func TestTabletReshuffle(t *testing.T) {
 		sql,
 	}
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
+	assert.Nil(t, err)
 	assertExcludeFields(t, result)
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Backup", rTablet.Alias)
@@ -95,11 +95,12 @@ func TestHealthCheck(t *testing.T) {
 	// (for the replica, we let vttablet do the InitTablet)
 	ctx := context.Background()
 
-	rTablet := clusterInstance.GetVttabletInstance(0)
+	rTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
 
 	// Start Mysql Processes and return connection
 	replicaConn, err := cluster.StartMySQLAndGetConnection(ctx, rTablet, username, clusterInstance.TmpDirectory)
 	assert.Nil(t, err)
+
 	defer replicaConn.Close()
 
 	// Create database in mysql
@@ -107,10 +108,11 @@ func TestHealthCheck(t *testing.T) {
 
 	//Init Replica Tablet
 	err = clusterInstance.VtctlclientProcess.InitTablet(rTablet, cell, keyspaceName, hostname, shardName)
+	assert.Nil(t, err)
 
 	// start vttablet process, should be in SERVING state as we already have a master
 	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
-	assert.Nil(t, err, "error should be Nil")
+	assert.Nil(t, err)
 
 	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
 	require.NoError(t, err)
@@ -144,6 +146,7 @@ func TestHealthCheck(t *testing.T) {
 
 	// now test VtTabletStreamHealth returns the right thing
 	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "2", rTablet.Alias)
+	assert.Nil(t, err)
 	scanner := bufio.NewScanner(strings.NewReader(result))
 	for scanner.Scan() {
 		// fmt.Println() // Println will add back the final '\n'
@@ -253,7 +256,7 @@ func waitForTabletStatus(tablet cluster.Vttablet, status string) error {
 
 func TestIgnoreHealthError(t *testing.T) {
 	ctx := context.Background()
-	mTablet := clusterInstance.GetVttabletInstance(masterUID)
+	mTablet := clusterInstance.GetVttabletInstance("replica", masterUID, "")
 
 	//Init Tablets
 	err := clusterInstance.VtctlclientProcess.InitTablet(mTablet, cell, keyspaceName, hostname, shardName)
@@ -261,8 +264,8 @@ func TestIgnoreHealthError(t *testing.T) {
 
 	// Start Mysql Processes
 	masterConn, err := cluster.StartMySQLAndGetConnection(ctx, mTablet, username, clusterInstance.TmpDirectory)
-	defer masterConn.Close()
 	assert.Nil(t, err)
+	defer masterConn.Close()
 
 	mTablet.MysqlctlProcess.Stop()
 	// Clean dir for mysql files

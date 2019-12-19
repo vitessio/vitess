@@ -18,7 +18,6 @@ limitations under the License.
 package sharding
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -28,10 +27,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
+	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -43,7 +44,7 @@ var (
 
 // CheckSrvKeyspace verifies the schema with expectedPartition
 func CheckSrvKeyspace(t *testing.T, cell string, ksname string, shardingCol string, colType topodata.KeyspaceIdType, expectedPartition map[topodata.TabletType][]string, ci cluster.LocalProcessCluster) {
-	srvKeyspace := getSrvKeyspace(t, cell, ksname, ci)
+	srvKeyspace := GetSrvKeyspace(t, cell, ksname, ci)
 	if shardingCol != "" {
 		assert.Equal(t, srvKeyspace.ShardingColumnName, shardingCol)
 	}
@@ -63,14 +64,23 @@ func CheckSrvKeyspace(t *testing.T, cell string, ksname string, shardingCol stri
 	assert.True(t, reflect.DeepEqual(currentPartition, expectedPartition))
 }
 
-func getSrvKeyspace(t *testing.T, cell string, ksname string, ci cluster.LocalProcessCluster) *topodata.SrvKeyspace {
+// GetSrvKeyspace return the Srv Keyspace structure
+func GetSrvKeyspace(t *testing.T, cell string, ksname string, ci cluster.LocalProcessCluster) *topodata.SrvKeyspace {
 	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, ksname)
 	assert.Nil(t, err)
 	var srvKeyspace topodata.SrvKeyspace
 
-	err = json.Unmarshal([]byte(output), &srvKeyspace)
+	err = json2.Unmarshal([]byte(output), &srvKeyspace)
 	assert.Nil(t, err)
 	return &srvKeyspace
+}
+
+// VerifyTabletHealth checks that the tablet URL is reachable.
+func VerifyTabletHealth(t *testing.T, vttablet cluster.Vttablet, hostname string) {
+	tabletURL := fmt.Sprintf("http://%s:%d/healthz", hostname, vttablet.HTTPPort)
+	resp, err := http.Get(tabletURL)
+	assert.Nil(t, err)
+	assert.Equal(t, resp.StatusCode, 200)
 }
 
 // VerifyReconciliationCounters checks that the reconciliation Counters have the expected values.
@@ -82,7 +92,7 @@ func VerifyReconciliationCounters(t *testing.T, vtworkerURL string, availability
 
 	resultMap := make(map[string]interface{})
 	respByte, _ := ioutil.ReadAll(resp.Body)
-	err = json.Unmarshal(respByte, &resultMap)
+	err = json2.Unmarshal(respByte, &resultMap)
 	assert.Nil(t, err)
 
 	value := getValueFromJSON(resultMap, "Worker"+availabilityType+"InsertsCounters", table)
@@ -217,7 +227,7 @@ func checkStreamHealthEqualsBinlogPlayerVars(t *testing.T, vttablet cluster.Vtta
 	assert.Nil(t, err)
 
 	var streamHealthResponse querypb.StreamHealthResponse
-	err = json.Unmarshal([]byte(streamHealth), &streamHealthResponse)
+	err = json2.Unmarshal([]byte(streamHealth), &streamHealthResponse)
 	assert.Nil(t, err, "error should be Nil")
 	assert.Equal(t, streamHealthResponse.Serving, false)
 	assert.NotNil(t, streamHealthResponse.RealtimeStats)
@@ -236,13 +246,13 @@ func CheckBinlogServerVars(t *testing.T, vttablet cluster.Vttablet, minStatement
 	if minStatement > 0 {
 		value := fmt.Sprintf("%v", reflect.ValueOf(resultMap["UpdateStreamKeyRangeStatements"]))
 		iValue, _ := strconv.Atoi(value)
-		assert.True(t, iValue >= minStatement)
+		assert.True(t, iValue >= minStatement, fmt.Sprintf("only got %d < %d statements", iValue, minStatement))
 	}
 
 	if minTxn > 0 {
 		value := fmt.Sprintf("%v", reflect.ValueOf(resultMap["UpdateStreamKeyRangeStatements"]))
 		iValue, _ := strconv.Atoi(value)
-		assert.True(t, iValue >= minTxn)
+		assert.True(t, iValue >= minTxn, fmt.Sprintf("only got %d < %d transactions", iValue, minTxn))
 	}
 }
 
@@ -269,6 +279,30 @@ func InsertToTablet(t *testing.T, query string, vttablet cluster.Vttablet, ks st
 		assert.Nil(t, err)
 	}
 	_, _ = vttablet.VttabletProcess.QueryTablet("commit", ks, true)
+}
+
+// InsertMultiValues inserts a multiple values to vttablet
+func InsertMultiValues(t *testing.T, tablet cluster.Vttablet, keyspaceName string, tableName string,
+	fixedParentID int, ids []int, msgs []string, ksIDs []uint64) {
+	queryStr := fmt.Sprintf("insert into %s (parent_id, id, msg, custom_ksid_col) values", tableName)
+	valueSQL := ""
+	keyspaceIds := ""
+	valueIds := ""
+	for i := range ids {
+		valueSQL += fmt.Sprintf(`(%d, %d, "%s", %d)`, fixedParentID, ids[i], msgs[i], ksIDs[i])
+		keyspaceIds += fmt.Sprintf("%d", ksIDs[i])
+		valueIds += fmt.Sprintf("%d", ids[i])
+		if i < len(ids)-1 {
+			valueSQL += ","
+			keyspaceIds += ","
+			valueIds += ","
+		}
+	}
+
+	queryStr += valueSQL
+	queryStr += fmt.Sprintf(" /* vtgate:: keyspace_id:%s */", keyspaceIds)
+	queryStr += fmt.Sprintf(" /* id:%s */", valueIds)
+	InsertToTablet(t, queryStr, tablet, keyspaceName, false)
 }
 
 // CheckLotsTimeout waits till all values are inserted
@@ -354,4 +388,129 @@ func CheckTabletQueryService(t *testing.T, vttablet cluster.Vttablet, expectedSt
 		tabletStatus = vttablet.VttabletProcess.GetTabletStatus()
 		assert.Equal(t, tabletStatus, expectedStatus)
 	}
+}
+
+// CheckShardQueryServices checks DisableQueryService for all shards
+func CheckShardQueryServices(t *testing.T, ci cluster.LocalProcessCluster, shards []cluster.Shard, cell string,
+	keyspaceName string, tabletType topodata.TabletType, expectedState bool) {
+	for _, shard := range shards {
+		CheckShardQueryService(t, ci, cell, keyspaceName, shard.Name, tabletType, expectedState)
+	}
+}
+
+// CheckShardQueryService checks DisableQueryService in the shard record's TabletControlMap.
+func CheckShardQueryService(t *testing.T, ci cluster.LocalProcessCluster, cell string, keyspaceName string,
+	shardName string, tabletType topodata.TabletType, expectedState bool) {
+	// We assume that query service should be enabled unless
+	// DisableQueryService is explicitly True
+	queryServiceEnabled := true
+	srvKeyspace := GetSrvKeyspace(t, cell, keyspaceName, ci)
+	for _, partition := range srvKeyspace.Partitions {
+		tType := partition.GetServedType()
+		if tabletType != tType {
+			continue
+		}
+		for _, shardTabletControl := range partition.GetShardTabletControls() {
+			if shardTabletControl.GetName() == shardName {
+				if shardTabletControl.GetQueryServiceDisabled() {
+					queryServiceEnabled = false
+				}
+			}
+		}
+	}
+
+	assert.True(t, queryServiceEnabled == expectedState,
+		fmt.Sprintf("shard %s does not have the correct query service state: got %t but expected %t",
+			shardName, queryServiceEnabled, expectedState))
+
+}
+
+// GetShardInfo return the Shard information
+func GetShardInfo(t *testing.T, shard1Ks string, ci cluster.LocalProcessCluster) *topodata.Shard {
+	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("GetShard", shard1Ks)
+	assert.Nil(t, err)
+	var shard topodata.Shard
+	err = json2.Unmarshal([]byte(output), &shard)
+	assert.Nil(t, err)
+	return &shard
+}
+
+// checkThrottlerServiceMaxRates Checks the vtctl ThrottlerMaxRates and ThrottlerSetRate commands.
+func checkThrottlerServiceMaxRates(t *testing.T, server string, names []string, rate int, ci cluster.LocalProcessCluster) {
+	// Avoid flakes by waiting for all throttlers. (Necessary because filtered
+	// replication on vttablet will register the throttler asynchronously.)
+	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerMaxRates", "--server", server)
+	assert.Nil(t, err)
+	msg := fmt.Sprintf("%d active throttler(s)", len(names))
+	assert.Contains(t, output, msg)
+
+	for _, name := range names {
+		str := fmt.Sprintf("| %s | %d |", name, rate)
+		assert.Contains(t, output, str)
+	}
+
+	// Check that it's possible to change the max rate on the throttler.
+	newRate := "unlimited"
+	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerSetMaxRate", "--server", server, newRate)
+	assert.Nil(t, err)
+	assert.Contains(t, output, msg)
+
+	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerMaxRates", "--server", server)
+	assert.Nil(t, err)
+	for _, name := range names {
+		str := fmt.Sprintf("| %s | %s |", name, newRate)
+		assert.Contains(t, output, str)
+	}
+	assert.Contains(t, output, msg)
+}
+
+// checkThrottlerServiceConfiguration checks the vtctl (Get|Update|Reset)ThrottlerConfiguration commands.
+func checkThrottlerServiceConfiguration(t *testing.T, server string, names []string, ci cluster.LocalProcessCluster) {
+	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput(
+		"UpdateThrottlerConfiguration", "--server", server,
+		"--copy_zero_values",
+		"target_replication_lag_sec:12345 "+
+			"max_replication_lag_sec:65789 "+
+			"initial_rate:3 max_increase:0.4 "+
+			"emergency_decrease:0.5 "+
+			"min_duration_between_increases_sec:6 "+
+			"max_duration_between_increases_sec:7 "+
+			"min_duration_between_decreases_sec:8 "+
+			"spread_backlog_across_sec:9 "+
+			"ignore_n_slowest_replicas:0 "+
+			"ignore_n_slowest_rdonlys:0 "+
+			"age_bad_rate_after_sec:12 "+
+			"bad_rate_increase:0.13 "+
+			"max_rate_approach_threshold: 0.9 ",
+	)
+	assert.Nil(t, err)
+	msg := fmt.Sprintf("%d active throttler(s)", len(names))
+	assert.Contains(t, output, msg)
+
+	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("GetThrottlerConfiguration", "--server", server)
+	assert.Nil(t, err)
+	for _, name := range names {
+		str := fmt.Sprintf("| %s | target_replication_lag_sec:12345 ", name)
+		assert.Contains(t, output, str)
+		assert.NotContains(t, output, "ignore_n_slowest_replicas")
+	}
+	assert.Contains(t, output, msg)
+
+	// Reset clears our configuration values.
+	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("ResetThrottlerConfiguration", "--server", server)
+	assert.Nil(t, err)
+	assert.Contains(t, output, msg)
+
+	// Check that the reset configuration no longer has our values.
+	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("GetThrottlerConfiguration", "--server", server)
+	assert.Nil(t, err)
+	assert.NotContains(t, output, "target_replication_lag_sec:12345")
+	assert.Contains(t, output, msg)
+
+}
+
+// CheckThrottlerService runs checkThrottlerServiceMaxRates and checkThrottlerServiceConfigs
+func CheckThrottlerService(t *testing.T, server string, names []string, rate int, ci cluster.LocalProcessCluster) {
+	checkThrottlerServiceMaxRates(t, server, names, rate, ci)
+	checkThrottlerServiceConfiguration(t, server, names, ci)
 }

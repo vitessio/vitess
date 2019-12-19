@@ -233,8 +233,7 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 				clusterInstance.VtTabletExtraArgs,
 				clusterInstance.EnableSemiSync)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
-
-			shard.Vttablets = append(shard.Vttablets, *tablet)
+			shard.Vttablets = append(shard.Vttablets, tablet)
 		}
 		for _, proc := range mysqlCtlProcessList {
 			if err := proc.Wait(); err != nil {
