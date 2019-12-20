@@ -25,6 +25,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/log"
 )
 
 var (
@@ -36,6 +37,7 @@ var (
 	certDirectory   string
 )
 
+// This test makes sure that we can use SSL replication with Vitess
 func TestSecure(t *testing.T) {
 	testReplicationBase(t, true)
 	testReplicationBase(t, false)
@@ -46,10 +48,9 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 	flag.Parse()
 
 	// initialize cluster
-	code, err := initializeCluster(t)
-	if err != nil {
-		t.Errorf("setup failed with status code %d", code)
-	}
+	_, err := initializeCluster(t)
+	assert.Nil(t, err, "setup failed")
+
 	defer teardownCluster()
 
 	masterTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
@@ -57,6 +58,7 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 
 	err = clusterInstance.VtctlclientProcess.InitTablet(&masterTablet, clusterInstance.Cell, keyspace, hostname, shardName)
 	assert.Nil(t, err)
+	// create database so vttablet can start behaving normally
 	err = masterTablet.VttabletProcess.CreateDB(keyspace)
 	assert.Nil(t, err)
 
@@ -67,15 +69,18 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 			"-db_ssl_key", path.Join(certDirectory, "client-key.pem"),
 		)
 	}
+
 	err = clusterInstance.VtctlclientProcess.InitTablet(&replicaTablet, clusterInstance.Cell, keyspace, hostname, shardName)
 	assert.Nil(t, err)
 	err = replicaTablet.VttabletProcess.CreateDB(keyspace)
 	assert.Nil(t, err)
 
+	// start the tablets
 	for _, tablet := range []cluster.Vttablet{masterTablet, replicaTablet} {
 		_ = tablet.VttabletProcess.Setup()
 	}
 
+	// Reparent using SSL (this will also check replication works)
 	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspace, shardName, clusterInstance.Cell, masterTablet.TabletUID)
 	if isClientCertPassed {
 		assert.Nil(t, err)
@@ -94,7 +99,7 @@ func initializeCluster(t *testing.T) (int, error) {
 	}
 
 	// create certs directory
-	t.Log("Creating certificates")
+	log.Info("Creating certificates")
 	certDirectory = path.Join(clusterInstance.TmpDirectory, "certs")
 	_ = createDirectory(certDirectory, 0700)
 
