@@ -1290,6 +1290,129 @@ func TestCreateLookupVindexFailures(t *testing.T) {
 	}
 }
 
+func TestExternalizeVindex(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+	}
+	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"-80", "80-"})
+	defer env.close()
+
+	sourceVSchema := &vschemapb.Keyspace{
+		Sharded: true,
+		Vindexes: map[string]*vschemapb.Vindex{
+			"hash": {
+				Type: "hash",
+			},
+			"owned": {
+				Type: "lookup_unique",
+				Params: map[string]string{
+					"table":      "targetks.lkp",
+					"from":       "c1",
+					"to":         "c2",
+					"write_only": "true",
+				},
+				Owner: "t1",
+			},
+			"unowned": {
+				Type: "lookup_unique",
+				Params: map[string]string{
+					"table":      "targetks.lkp",
+					"from":       "c1",
+					"to":         "c2",
+					"write_only": "true",
+				},
+			},
+			"bad": {
+				Type: "lookup_unique",
+				Params: map[string]string{
+					"table": "unqualified",
+					"from":  "c1",
+					"to":    "c2",
+				},
+			},
+		},
+		Tables: map[string]*vschemapb.Table{
+			"t1": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Name:   "hash",
+					Column: "col1",
+				}, {
+					Name:   "owned",
+					Column: "col2",
+				}},
+			},
+		},
+	}
+	fields := sqltypes.MakeTestFields(
+		"id|state|message",
+		"int64|varbinary|varbinary",
+	)
+	running := sqltypes.MakeTestResult(fields, "1|Running|msg")
+	stopped := sqltypes.MakeTestResult(fields, "1|Stopped|Stopped after copy")
+	testcases := []struct {
+		input        string
+		vrResponse   *sqltypes.Result
+		expectDelete bool
+		err          string
+	}{{
+		input:        "sourceks.owned",
+		vrResponse:   stopped,
+		expectDelete: true,
+	}, {
+		input:      "sourceks.unowned",
+		vrResponse: running,
+	}, {
+		input: "unqualified",
+		err:   "vindex name should be of the form keyspace.vindex: unqualified",
+	}, {
+		input: "sourceks.absent",
+		err:   "vindex sourceks.absent not found in vschema",
+	}, {
+		input: "sourceks.bad",
+		err:   "table name in vindex should be of the form keyspace.table: unqualified",
+	}, {
+		input:      "sourceks.owned",
+		vrResponse: running,
+		err:        "is not in Stopped after copy state",
+	}, {
+		input:      "sourceks.unowned",
+		vrResponse: stopped,
+		err:        "is not in Running state",
+	}}
+	for _, tcase := range testcases {
+		// Resave the source schema for every iteration.
+		if err := env.topoServ.SaveVSchema(context.Background(), ms.SourceKeyspace, sourceVSchema); err != nil {
+			t.Fatal(err)
+		}
+		if tcase.vrResponse != nil {
+			validationQuery := "select id, state, message from _vt.vreplication where workflow='lkp_vdx' and db_name='vt_targetks'"
+			env.tmc.expectVRQuery(200, validationQuery, tcase.vrResponse)
+			env.tmc.expectVRQuery(210, validationQuery, tcase.vrResponse)
+		}
+
+		if tcase.expectDelete {
+			deleteQuery := "delete from _vt.vreplication where db_name='vt_targetks' and workflow='lkp_vdx'"
+			env.tmc.expectVRQuery(200, deleteQuery, &sqltypes.Result{})
+			env.tmc.expectVRQuery(210, deleteQuery, &sqltypes.Result{})
+		}
+
+		err := env.wr.ExternalizeVindex(context.Background(), tcase.input)
+		if tcase.err != "" {
+			if err == nil || !strings.Contains(err.Error(), tcase.err) {
+				t.Errorf("ExternalizeVindex(%s) err: %v, must contain %v", tcase.input, err, tcase.err)
+			}
+			continue
+		}
+		require.NoError(t, err)
+
+		outvschema, err := env.topoServ.GetVSchema(context.Background(), ms.SourceKeyspace)
+		require.NoError(t, err)
+		vindexName := strings.Split(tcase.input, ".")[1]
+		assert.NotContains(t, outvschema.Vindexes[vindexName].Params, "write_only", tcase.input)
+	}
+}
+
 func TestMaterializerOneToOne(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
