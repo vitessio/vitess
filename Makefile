@@ -37,6 +37,7 @@ ifdef VT_EXTRA_BUILD_FLAGS
 export EXTRA_BUILD_FLAGS := $(VT_EXTRA_BUILD_FLAGS)
 endif
 
+# This target needs to be manually run every time any file within web/vtctld2/app is modified to regenerate rice-box.go
 embed_static: 
 	cd go/vt/vtctld
 	go run github.com/GeertJohan/go.rice/rice embed-go
@@ -47,7 +48,7 @@ build_web:
 	cd web/vtctld2 && ng build -prod
 	cp -f web/vtctld2/src/{favicon.ico,plotly-latest.min.js,primeui-ng-all.min.css} web/vtctld2/dist/
 
-build: embed_static
+build:
 ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
