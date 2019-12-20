@@ -22,7 +22,7 @@ export GODEBUG=tls13=0
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build build_web test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race minimaltools tools
+.PHONY: all build build_web install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race minimaltools tools
 
 all: build
 
@@ -55,6 +55,20 @@ ifndef NOBANNER
 endif
 	bash ./build.env
 	go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" -gcflags -'N -l' ./go/...
+
+# install copies the files needed to run Vitess into the given directory tree.
+# Usage: make install PREFIX=/path/to/install/root
+install: build
+	# binaries
+	mkdir -p "$${PREFIX}/bin"
+	cp "$${VTROOT}/bin/"{mysqlctld,vtctld,vtctlclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
+	# config files
+	cp -R config "$${PREFIX}/"
+	# vtctld web UI files
+	mkdir -p "$${PREFIX}/src/vitess.io/vitess/web"
+	cp -R web/vtctld "$${PREFIX}/src/vitess.io/vitess/web/"
+	mkdir -p "$${PREFIX}/src/vitess.io/vitess/web/vtctld2"
+	cp -R web/vtctld2/app "$${PREFIX}/src/vitess.io/vitess/web/vtctld2/"
 
 parser:
 	make -C go/vt/sqlparser
@@ -206,38 +220,45 @@ docker_base_percona80:
 	chmod -R o=g *
 	docker build -f docker/base/Dockerfile.percona80 -t vitess/base:percona80 .
 
-# Run "make docker_lite PROMPT_NOTICE=false" to avoid that the script
-# prompts you to press ENTER and confirm that the vitess/base image is not
-# rebuild by this target as well.
 docker_lite:
-	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE)
+	chmod -R o=g *
+	docker build -f docker/lite/Dockerfile -t vitess/lite .
 
 docker_lite_mysql56:
-	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) mysql56
+	chmod -R o=g *
+	docker build -f docker/lite/Dockerfile.mysql56 -t vitess/lite:mysql56 .
 
 docker_lite_mysql57:
-	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) mysql57
+	chmod -R o=g *
+	docker build -f docker/lite/Dockerfile.mysql57 -t vitess/lite:mysql57 .
 
 docker_lite_mysql80:
-	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) mysql80
+	chmod -R o=g *
+	docker build -f docker/lite/Dockerfile.mysql80 -t vitess/lite:mysql80 .
 
 docker_lite_mariadb:
-	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) mariadb
+	chmod -R o=g *
+	docker build -f docker/lite/Dockerfile.mariadb -t vitess/lite:mariadb .
 
 docker_lite_mariadb103:
-	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) mariadb103
+	chmod -R o=g *
+	docker build -f docker/lite/Dockerfile.mariadb103 -t vitess/lite:mariadb103 .
 
 docker_lite_percona:
-	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) percona
+	chmod -R o=g *
+	docker build -f docker/lite/Dockerfile.percona -t vitess/lite:percona .
 
 docker_lite_percona57:
-	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) percona57
+	chmod -R o=g *
+	docker build -f docker/lite/Dockerfile.percona57 -t vitess/lite:percona57 .
 
 docker_lite_percona80:
-	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) percona80
+	chmod -R o=g *
+	docker build -f docker/lite/Dockerfile.percona80 -t vitess/lite:percona80 .
 
 docker_lite_alpine:
-	cd docker/lite && ./build.sh --prompt=$(PROMPT_NOTICE) alpine
+	chmod -R o=g *
+	docker build -f docker/lite/Dockerfile.alpine -t vitess/lite:alpine .
 
 docker_guestbook:
 	cd examples/kubernetes/guestbook && ./build.sh
