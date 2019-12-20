@@ -48,14 +48,19 @@ func (vind *Null) String() string {
 	return vind.name
 }
 
-// Cost returns the cost of this index as 0.
+// Cost returns the cost of this index as 100.
 func (vind *Null) Cost() int {
-	return 0
+	return 100
 }
 
 // IsUnique returns true since the Vindex is unique.
 func (vind *Null) IsUnique() bool {
 	return true
+}
+
+// NeedsVCursor satisfies the Vindex interface.
+func (vind *Null) NeedsVCursor() bool {
+	return false
 }
 
 // Map can map ids to key.Destination objects.

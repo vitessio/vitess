@@ -59,6 +59,11 @@ func (vind *ReverseBits) IsUnique() bool {
 	return true
 }
 
+// NeedsVCursor satisfies the Vindex interface.
+func (vind *ReverseBits) NeedsVCursor() bool {
+	return false
+}
+
 // Map returns the corresponding KeyspaceId values for the given ids.
 func (vind *ReverseBits) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, len(ids))

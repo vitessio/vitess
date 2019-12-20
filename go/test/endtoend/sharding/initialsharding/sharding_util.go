@@ -341,7 +341,7 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	assert.Nil(t, err)
 
 	for _, tabletType := range []string{"master", "replica", "rdonly"} {
-		if err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.%s", keyspaceName, shard1.Name, tabletType)); err != nil {
+		if err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.%s", keyspaceName, shard1.Name, tabletType), 1); err != nil {
 			assert.Fail(t, err.Error())
 		}
 	}
@@ -400,12 +400,11 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 
 	// Wait for the endpoints, either local or remote.
 	for _, shard := range []cluster.Shard{shard1, shard21, shard22} {
-
-		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspaceName, shard.Name))
+		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspaceName, shard.Name), 1)
 		assert.Nil(t, err)
-		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard.Name))
+		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard.Name), 1)
 		assert.Nil(t, err)
-		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard.Name))
+		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard.Name), 1)
 		assert.Nil(t, err)
 	}
 
@@ -493,7 +492,7 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	sharding.CheckDestinationMaster(t, *shard22.MasterTablet(), []string{shard1Ks}, *ClusterInstance)
 
 	//  check that binlog server exported the stats vars
-	sharding.CheckBinlogServerVars(t, *shard1.Replica(), 0, 0)
+	sharding.CheckBinlogServerVars(t, *shard1.Replica(), 0, 0, false)
 
 	for _, tablet := range []cluster.Vttablet{*shard21.Rdonly(), *shard22.Rdonly()} {
 		err = ClusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", tablet.Alias)
@@ -510,7 +509,7 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 
 	sharding.CheckDestinationMaster(t, *shard21.MasterTablet(), []string{shard1Ks}, *ClusterInstance)
 	sharding.CheckDestinationMaster(t, *shard22.MasterTablet(), []string{shard1Ks}, *ClusterInstance)
-	sharding.CheckBinlogServerVars(t, *shard1.Replica(), 1000, 1000)
+	sharding.CheckBinlogServerVars(t, *shard1.Replica(), 1000, 1000, false)
 
 	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", shard21.Rdonly().Alias)
 	assert.Nil(t, err)
@@ -558,8 +557,8 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	_ = shard21.Rdonly().VttabletProcess.WaitForTabletType("SERVING")
 	_ = shard22.Rdonly().VttabletProcess.WaitForTabletType("SERVING")
 
-	_ = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard21.Name))
-	_ = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard22.Name))
+	_ = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard21.Name), 1)
+	_ = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard22.Name), 1)
 
 	//then serve replica from the split shards
 
