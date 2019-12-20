@@ -26,6 +26,7 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/key"
@@ -417,6 +418,110 @@ func generateColDef(lines []string, sourceVindexCol, vindexFromCol string) (stri
 		}
 	}
 	return "", fmt.Errorf("column %s not found in schema %v", sourceVindexCol, lines)
+}
+
+// ExternalizeVindex externalizes a lookup vindex that's finished backfilling or has caught up.
+func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName string) error {
+	splits := strings.Split(qualifiedVindexName, ".")
+	if len(splits) != 2 {
+		return fmt.Errorf("vindex name should be of the form keyspace.vindex: %s", qualifiedVindexName)
+	}
+	sourceKeyspace, vindexName := splits[0], splits[1]
+	sourceVSchema, err := wr.ts.GetVSchema(ctx, sourceKeyspace)
+	if err != nil {
+		return err
+	}
+	sourceVindex := sourceVSchema.Vindexes[vindexName]
+	if sourceVindex == nil {
+		return fmt.Errorf("vindex %s not found in vschema", qualifiedVindexName)
+	}
+	qualifiedTableName := sourceVindex.Params["table"]
+	splits = strings.Split(qualifiedTableName, ".")
+	if len(splits) != 2 {
+		return fmt.Errorf("table name in vindex should be of the form keyspace.table: %s", qualifiedTableName)
+	}
+	targetKeyspace, targetTableName := splits[0], splits[1]
+	workflow := targetTableName + "_vdx"
+	targetShards, err := wr.ts.GetServingShards(ctx, targetKeyspace)
+	if err != nil {
+		return err
+	}
+
+	// Create a parallelizer function.
+	forAllTargets := func(f func(*topo.ShardInfo) error) error {
+		var wg sync.WaitGroup
+		allErrors := &concurrency.AllErrorRecorder{}
+		for _, targetShard := range targetShards {
+			wg.Add(1)
+			go func(targetShard *topo.ShardInfo) {
+				defer wg.Done()
+
+				if err := f(targetShard); err != nil {
+					allErrors.RecordError(err)
+				}
+			}(targetShard)
+		}
+		wg.Wait()
+		return allErrors.AggrError(vterrors.Aggregate)
+	}
+
+	err = forAllTargets(func(targetShard *topo.ShardInfo) error {
+		targetMaster, err := wr.ts.GetTablet(ctx, targetShard.MasterAlias)
+		if err != nil {
+			return err
+		}
+		p3qr, err := wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, fmt.Sprintf("select id, state, message from _vt.vreplication where workflow=%s and db_name=%s", encodeString(workflow), encodeString(targetMaster.DbName())))
+		if err != nil {
+			return err
+		}
+		qr := sqltypes.Proto3ToResult(p3qr)
+		for _, row := range qr.Rows {
+			id, err := sqltypes.ToInt64(row[0])
+			if err != nil {
+				return err
+			}
+			state := row[1].ToString()
+			message := row[2].ToString()
+			if sourceVindex.Owner == "" {
+				// If there's no owner, all streams need to be running.
+				if state != binlogplayer.BlpRunning {
+					return fmt.Errorf("stream %d for %v.%v is not in Running state: %v", id, targetShard.Keyspace(), targetShard.ShardName(), state)
+				}
+			} else {
+				// If there is an owner, all streams need to be stopped after copy.
+				if state != binlogplayer.BlpStopped || !strings.Contains(message, "Stopped after copy") {
+					return fmt.Errorf("stream %d for %v.%v is not in Stopped after copy state: %v, %v", id, targetShard.Keyspace(), targetShard.ShardName(), state, message)
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	if sourceVindex.Owner != "" {
+		// If there is an owner, we have to delete the streams.
+		err := forAllTargets(func(targetShard *topo.ShardInfo) error {
+			targetMaster, err := wr.ts.GetTablet(ctx, targetShard.MasterAlias)
+			if err != nil {
+				return err
+			}
+			query := fmt.Sprintf("delete from _vt.vreplication where db_name=%s and workflow=%s", encodeString(targetMaster.DbName()), encodeString(workflow))
+			_, err = wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, query)
+			if err != nil {
+				return err
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	// Remove the write_only param and save the source vschema.
+	delete(sourceVindex.Params, "write_only")
+	return wr.ts.SaveVSchema(ctx, sourceKeyspace, sourceVSchema)
 }
 
 // Materialize performs the steps needed to materialize a list of tables based on the materialization specs.
