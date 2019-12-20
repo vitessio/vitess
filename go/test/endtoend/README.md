@@ -38,12 +38,14 @@ So far we have converted the following Python end to end test cases
 - sharded tests
 - tabletmanager tests
 - vtgate v3 tests
- 
-### In-progress 
 - Inital sharding
 - resharding
-- vsplit 
-
+- vsplit
+- reparent
+ 
+### In-progress 
+- Backup
+- Encryption
 
 After a Python test is migrated in Go it will be removed from end to end ci test run by updating the shard value to 5 in `test/config.json`
 
