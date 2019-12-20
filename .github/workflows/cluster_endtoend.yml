@@ -31,4 +31,4 @@ jobs:
 
     - name: cluster_endtoend
       run: |
-        make e2e_test_cluster
+        go run test.go -docker -use_docker_cache -print-log -shard 10

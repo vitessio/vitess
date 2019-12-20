@@ -50,7 +50,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 5,
+			"Shard": 10,
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"
