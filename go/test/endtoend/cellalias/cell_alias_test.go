@@ -116,11 +116,11 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-		shard1Master = localCluster.GetVttabletInstance("master", 0, "")
+		shard1Master = localCluster.GetVttabletInstance("replica", 0, "")
 		shard1Replica = localCluster.GetVttabletInstance("replica", 0, cell2)
 		shard1Rdonly = localCluster.GetVttabletInstance("rdonly", 0, cell2)
 
-		shard2Master = localCluster.GetVttabletInstance("master", 0, "")
+		shard2Master = localCluster.GetVttabletInstance("replica", 0, "")
 		shard2Replica = localCluster.GetVttabletInstance("replica", 0, cell2)
 		shard2Rdonly = localCluster.GetVttabletInstance("rdonly", 0, cell2)
 
