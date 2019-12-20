@@ -1178,10 +1178,40 @@
   }
 }
 
-# join of information_schema with normal table
-"select foo from information_schema.a join unsharded"
+# access to unqualified column names in information_schema
+"select * from information_schema.a where b=10"
 {
-  "Original": "select foo from information_schema.a join unsharded",
+  "Original": "select * from information_schema.a where b=10",
+  "Instructions": {
+    "Opcode": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select * from information_schema.a where b = 10",
+    "FieldQuery": "select * from information_schema.a where 1 != 1"
+  }
+}
+
+# access to qualified column names in information_schema
+"select * from information_schema.a where information_schema.a.b=10"
+{
+  "Original": "select * from information_schema.a where information_schema.a.b=10",
+  "Instructions": {
+    "Opcode": "SelectDBA",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "select * from information_schema.a where information_schema.a.b = 10",
+    "FieldQuery": "select * from information_schema.a where 1 != 1"
+  }
+}
+
+# join of information_schema with normal table
+"select unsharded.foo from information_schema.a join unsharded"
+{
+  "Original": "select unsharded.foo from information_schema.a join unsharded",
   "Instructions": {
     "Opcode": "Join",
     "Left": {
@@ -1190,8 +1220,8 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select foo from information_schema.a",
-      "FieldQuery": "select foo from information_schema.a where 1 != 1"
+      "Query": "select 1 from information_schema.a",
+      "FieldQuery": "select 1 from information_schema.a where 1 != 1"
     },
     "Right": {
       "Opcode": "SelectUnsharded",
@@ -1199,20 +1229,20 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select 1 from unsharded",
-      "FieldQuery": "select 1 from unsharded where 1 != 1",
+      "Query": "select unsharded.foo from unsharded",
+      "FieldQuery": "select unsharded.foo from unsharded where 1 != 1",
       "Table": "unsharded"
     },
     "Cols": [
-      -1
+      1
     ]
   }
 }
 
 # join of normal table with information_schema
-"select foo from unsharded join information_schema.a"
+"select unsharded.foo from unsharded join information_schema.a"
 {
-  "Original": "select foo from unsharded join information_schema.a",
+  "Original": "select unsharded.foo from unsharded join information_schema.a",
   "Instructions": {
     "Opcode": "Join",
     "Left": {
@@ -1221,8 +1251,8 @@
         "Name": "main",
         "Sharded": false
       },
-      "Query": "select foo from unsharded",
-      "FieldQuery": "select foo from unsharded where 1 != 1",
+      "Query": "select unsharded.foo from unsharded",
+      "FieldQuery": "select unsharded.foo from unsharded where 1 != 1",
       "Table": "unsharded"
     },
     "Right": {
