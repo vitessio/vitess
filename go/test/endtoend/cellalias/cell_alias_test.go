@@ -116,11 +116,11 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-		shard1Master = localCluster.GetVttabletInstance("master", 0, "")
+		shard1Master = localCluster.GetVttabletInstance("replica", 0, "")
 		shard1Replica = localCluster.GetVttabletInstance("replica", 0, cell2)
 		shard1Rdonly = localCluster.GetVttabletInstance("rdonly", 0, cell2)
 
-		shard2Master = localCluster.GetVttabletInstance("master", 0, "")
+		shard2Master = localCluster.GetVttabletInstance("replica", 0, "")
 		shard2Replica = localCluster.GetVttabletInstance("replica", 0, cell2)
 		shard2Rdonly = localCluster.GetVttabletInstance("rdonly", 0, cell2)
 
@@ -289,11 +289,11 @@ func TestAlias(t *testing.T) {
 
 func waitTillAllTabletsAreHealthyInVtgate(t *testing.T, vtgateInstance cluster.VtgateProcess, shards ...string) {
 	for _, shard := range shards {
-		err := vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspaceName, shard))
+		err := vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspaceName, shard), 1)
 		assert.Nil(t, err)
-		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard))
+		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard), 1)
 		assert.Nil(t, err)
-		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard))
+		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard), 1)
 		assert.Nil(t, err)
 	}
 }

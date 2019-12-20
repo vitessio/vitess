@@ -17,14 +17,14 @@
 # These test uses excutables and launch them as process
 # After that all tests run, here we are testing those
 
-# All Go packages with test files.
+# All Go packages with only sharding test files.
 # Output per line: <full Go package name> <all _test.go files in the package>*
 
 source build.env
 
 packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}' ./go/.../endtoend/... | sort)
 
-cluster_tests=$(echo "$packages_with_tests" | grep -E "go/test/endtoend" | grep -vE "go/test/endtoend/sharding" | cut -d" " -f1)
+cluster_tests=$(echo "$packages_with_tests" | grep -E "go/test/endtoend/sharding" | cut -d" " -f1)
 
 # Run cluster test sequentially
 echo "running cluster tests $cluster_tests"

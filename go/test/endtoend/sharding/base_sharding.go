@@ -27,7 +27,6 @@ import (
 	"testing"
 	"time"
 
-
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -65,7 +64,6 @@ func CheckSrvKeyspace(t *testing.T, cell string, ksname string, shardingCol stri
 	assert.True(t, reflect.DeepEqual(currentPartition, expectedPartition))
 }
 
-
 // GetSrvKeyspace return the Srv Keyspace structure
 func GetSrvKeyspace(t *testing.T, cell string, ksname string, ci cluster.LocalProcessCluster) *topodata.SrvKeyspace {
 
@@ -78,7 +76,6 @@ func GetSrvKeyspace(t *testing.T, cell string, ksname string, ci cluster.LocalPr
 	return &srvKeyspace
 }
 
-
 // VerifyTabletHealth checks that the tablet URL is reachable.
 func VerifyTabletHealth(t *testing.T, vttablet cluster.Vttablet, hostname string) {
 	tabletURL := fmt.Sprintf("http://%s:%d/healthz", hostname, vttablet.HTTPPort)
@@ -86,7 +83,6 @@ func VerifyTabletHealth(t *testing.T, vttablet cluster.Vttablet, hostname string
 	assert.Nil(t, err)
 	assert.Equal(t, resp.StatusCode, 200)
 }
-
 
 // VerifyReconciliationCounters checks that the reconciliation Counters have the expected values.
 func VerifyReconciliationCounters(t *testing.T, vtworkerURL string, availabilityType string, table string,
@@ -244,18 +240,23 @@ func checkStreamHealthEqualsBinlogPlayerVars(t *testing.T, vttablet cluster.Vtta
 }
 
 // CheckBinlogServerVars checks the binlog server variables are correctly exported.
-func CheckBinlogServerVars(t *testing.T, vttablet cluster.Vttablet, minStatement int, minTxn int) {
+func CheckBinlogServerVars(t *testing.T, vttablet cluster.Vttablet, minStatement int, minTxn int, isVerticalSplit bool) {
 	resultMap := vttablet.VttabletProcess.GetVars()
-	assert.Contains(t, resultMap, "UpdateStreamKeyRangeStatements")
-	assert.Contains(t, resultMap, "UpdateStreamKeyRangeTransactions")
+	skey := "UpdateStreamKeyRangeStatements"
+	tkey := "UpdateStreamKeyRangeTransactions"
+	if isVerticalSplit {
+		skey = "UpdateStreamTablesStatements"
+		tkey = "UpdateStreamTablesTransactions"
+	}
+	assert.Contains(t, resultMap, skey)
+	assert.Contains(t, resultMap, tkey)
 	if minStatement > 0 {
-		value := fmt.Sprintf("%v", reflect.ValueOf(resultMap["UpdateStreamKeyRangeStatements"]))
+		value := fmt.Sprintf("%v", reflect.ValueOf(resultMap[skey]))
 		iValue, _ := strconv.Atoi(value)
 		assert.True(t, iValue >= minStatement, fmt.Sprintf("only got %d < %d statements", iValue, minStatement))
 	}
-
 	if minTxn > 0 {
-		value := fmt.Sprintf("%v", reflect.ValueOf(resultMap["UpdateStreamKeyRangeStatements"]))
+		value := fmt.Sprintf("%v", reflect.ValueOf(resultMap[tkey]))
 		iValue, _ := strconv.Atoi(value)
 		assert.True(t, iValue >= minTxn, fmt.Sprintf("only got %d < %d transactions", iValue, minTxn))
 	}
@@ -309,7 +310,6 @@ func InsertMultiValues(t *testing.T, tablet cluster.Vttablet, keyspaceName strin
 	queryStr += fmt.Sprintf(" /* id:%s */", valueIds)
 	InsertToTablet(t, queryStr, tablet, keyspaceName, false)
 }
-
 
 // CheckLotsTimeout waits till all values are inserted
 func CheckLotsTimeout(t *testing.T, vttablet cluster.Vttablet, count uint64, table string, ks string, keyType querypb.Type, pctFound int) bool {
@@ -395,7 +395,6 @@ func CheckTabletQueryService(t *testing.T, vttablet cluster.Vttablet, expectedSt
 		assert.Equal(t, tabletStatus, expectedStatus)
 	}
 }
-
 
 // CheckShardQueryServices checks DisableQueryService for all shards
 func CheckShardQueryServices(t *testing.T, ci cluster.LocalProcessCluster, shards []cluster.Shard, cell string,

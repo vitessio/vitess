@@ -278,6 +278,10 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	//Start Tablets and Wait for the Process
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
+			// Init Tablet
+			err := clusterInstance.VtctlclientProcess.InitTablet(tablet, tablet.Cell, keyspaceName, hostname, shard.Name)
+			assert.Nil(t, err)
+
 			// Start the tablet
 			err = tablet.VttabletProcess.Setup()
 			assert.Nil(t, err)
@@ -529,7 +533,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	assert.Nil(t, err)
 
 	// check that binlog server exported the stats vars
-	sharding.CheckBinlogServerVars(t, *shard1Replica1, 0, 0)
+	sharding.CheckBinlogServerVars(t, *shard1Replica1, 0, 0, false)
 
 	// Check that the throttler was enabled.
 	// The stream id is hard-coded as 1, which is the first id generated through auto-inc.
@@ -554,7 +558,8 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	checkMultiShardValues(t, keyspaceName, shardingKeyType)
 	sharding.CheckBinlogPlayerVars(t, *shard2Master, []string{shard1Ks}, 30)
 	sharding.CheckBinlogPlayerVars(t, *shard3Master, []string{shard1Ks}, 30)
-	sharding.CheckBinlogServerVars(t, *shard1Replica1, 100, 100)
+
+	sharding.CheckBinlogServerVars(t, *shard1Replica1, 100, 100, false)
 
 	// use vtworker to compare the data (after health-checking the destination
 	// rdonly tablets so discovery works)
@@ -613,7 +618,8 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	insertLots(100, 100, *shard1Master, tableName, fixedParentID, keyspaceName)
 	log.Debug("Checking 100 percent of data was sent quickly")
 	assert.True(t, checkLotsTimeout(t, 100, 100, tableName, keyspaceName, shardingKeyType))
-	sharding.CheckBinlogServerVars(t, *shard1Replica2, 80, 80)
+
+	sharding.CheckBinlogServerVars(t, *shard1Replica2, 80, 80, false)
 
 	// check we can't migrate the master just yet
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", shard1Ks, "master")

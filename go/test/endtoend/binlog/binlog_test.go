@@ -110,11 +110,11 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-		srcMaster = localCluster.GetVttabletInstance("master", 0, "")
+		srcMaster = localCluster.GetVttabletInstance("replica", 0, "")
 		srcReplica = localCluster.GetVttabletInstance("replica", 0, "")
 		srcRdonly = localCluster.GetVttabletInstance("rdonly", 0, "")
 
-		destMaster = localCluster.GetVttabletInstance("master", 0, "")
+		destMaster = localCluster.GetVttabletInstance("replica", 0, "")
 		destReplica = localCluster.GetVttabletInstance("replica", 0, "")
 		destRdonly = localCluster.GetVttabletInstance("rdonly", 0, "")
 
