@@ -519,21 +519,26 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 			"MultiSplitDiff",
 			fmt.Sprintf("%s/%s", keyspaceName, shard1.Name))
 		assert.Nil(t, err)
+
+		for _, shard := range []string{shard21.Name, shard22.Name} {
+			err = ClusterInstance.VtworkerProcess.ExecuteVtworkerCommand(ClusterInstance.GetAndReservePort(),
+				ClusterInstance.GetAndReservePort(),
+				"--use_v3_resharding_mode=true",
+				"SplitDiff",
+				"--min_healthy_rdonly_tablets", "1",
+				fmt.Sprintf("%s/%s", keyspaceName, shard))
+			assert.Nil(t, err)
+		}
 	}
 
-	for _, shard := range []string{shard21.Name, shard22.Name} {
-		err = ClusterInstance.VtworkerProcess.ExecuteVtworkerCommand(ClusterInstance.GetAndReservePort(),
-			ClusterInstance.GetAndReservePort(),
-			"--use_v3_resharding_mode=true",
-			"SplitDiff",
-			"--min_healthy_rdonly_tablets", "1",
-			fmt.Sprintf("%s/%s", keyspaceName, shard))
-		assert.Nil(t, err)
+	if isExternal {
+		// get status for the destination master tablet, make sure we have it all
+		sharding.CheckRunningBinlogPlayer(t, *shard21.MasterTablet(), 3956, 2002)
+		sharding.CheckRunningBinlogPlayer(t, *shard22.MasterTablet(), 4048, 2002)
+	} else {
+		sharding.CheckRunningBinlogPlayer(t, *shard21.MasterTablet(), 3954, 2000)
+		sharding.CheckRunningBinlogPlayer(t, *shard22.MasterTablet(), 4046, 2000)
 	}
-
-	// get status for the destination master tablet, make sure we have it all
-	sharding.CheckRunningBinlogPlayer(t, *shard21.MasterTablet(), 3954, 2000)
-	sharding.CheckRunningBinlogPlayer(t, *shard22.MasterTablet(), 4046, 2000)
 
 	// check we can't migrate the master just yet
 	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", shard1Ks, "master")
