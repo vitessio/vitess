@@ -58,7 +58,7 @@ func TestMasterBackup(t *testing.T) {
 	assert.Nil(t, err)
 	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
 	assert.Nil(t, err)
-	checkData(t, replica1, 1)
+	verifyRowsInTablet(t, replica1, 1)
 
 	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("Backup", master.Alias)
 	assert.NotNil(t, err)
@@ -78,15 +78,78 @@ func TestMasterBackup(t *testing.T) {
 	assert.Nil(t, err)
 
 	restoreWaitForBackup(t, "replica")
-	err = replica2.VttabletProcess.WaitForTabletType("SERVING")
+	err = replica2.VttabletProcess.WaitForTabletTypeForTimeout("SERVING", 15*time.Second)
 	assert.Nil(t, err)
 
-	checkData(t, replica2, 2)
+	verifyRowsInTablet(t, replica2, 2)
 	verifyLocalMetadata(t, "replica")
 	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
 
 	replica2.VttabletProcess.TearDown()
 	master.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
+}
+
+//    Test a master and slave from the same backup.
+//
+//    Check that a slave and master both restored from the same backup
+//    can replicate successfully.
+func TestMasterSlaveSameBackup(t *testing.T) {
+	// insert data on master, wait for slave to get it
+	_, err := master.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+	assert.Nil(t, err)
+	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
+	assert.Nil(t, err)
+	verifyRowsInTablet(t, replica1, 1)
+
+	// backup the slave
+	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
+	assert.Nil(t, err)
+
+	//  insert more data on the master
+	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
+	assert.Nil(t, err)
+
+	// now bring up the other slave, letting it restore from backup.
+	restoreWaitForBackup(t, "replica")
+	err = replica2.VttabletProcess.WaitForTabletTypeForTimeout("SERVING", 15*time.Second)
+	assert.Nil(t, err)
+
+	// check the new slave has the data
+	verifyRowsInTablet(t, replica2, 2)
+
+	// Promote replica2 to master
+	err = localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard",
+		"-keyspace_shard", shardKsName,
+		"-new_master", replica2.Alias)
+	assert.Nil(t, err)
+
+	// insert more data on replica2 (current master)
+	_, err = replica2.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test3')", keyspaceName, true)
+	assert.Nil(t, err)
+
+	// Force replica1 to restore from backup.
+	verifyRestoreTablet(t, replica1, "SERVING")
+
+	// wait for replica1 to catch up.
+	verifyRowsInTablet(t, replica1, 3)
+
+	// This is to test that replicationPosition is processed correctly
+	// while doing backup/restore after a reparent.
+	// It is written into the MANIFEST and read back from the MANIFEST.
+	//
+	// Take another backup on the slave.
+	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
+	assert.Nil(t, err)
+
+	// Insert more data on replica2 (current master).
+	_, err = replica2.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test4')", keyspaceName, true)
+	assert.Nil(t, err)
+
+	// Force replica1 to restore from backup.
+	verifyRestoreTablet(t, replica1, "SERVING")
+
+	verifyRowsInTablet(t, replica1, 4)
+	replica2.VttabletProcess.TearDown()
 }
 
 //
@@ -113,7 +176,7 @@ func testBackup(t *testing.T, tabletType string) {
 	assert.Nil(t, err)
 	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
 	assert.Nil(t, err)
-	checkData(t, replica1, 1)
+	verifyRowsInTablet(t, replica1, 1)
 
 	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	assert.Nil(t, err)
@@ -124,10 +187,10 @@ func testBackup(t *testing.T, tabletType string) {
 	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
 	assert.Nil(t, err)
 
-	err = replica2.VttabletProcess.WaitForTabletType("SERVING")
+	err = replica2.VttabletProcess.WaitForTabletTypeForTimeout("SERVING", 15*time.Second)
 	assert.Nil(t, err)
 
-	checkData(t, replica2, 2)
+	verifyRowsInTablet(t, replica2, 2)
 
 	verifyLocalMetadata(t, tabletType)
 	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
@@ -148,7 +211,7 @@ func restoreWaitForBackup(t *testing.T, tabletType string) {
 	if tabletType == "rdonly" {
 		replica2.Type = "rdonly"
 	}
-	resetTabletDir(t)
+	resetTabletDir(t, replica2)
 	replicaTabletArgs := commonTabletArg
 	replicaTabletArgs = append(replicaTabletArgs, "-backup_engine_implementation", "fake_implementation")
 	replicaTabletArgs = append(replicaTabletArgs, "-wait_for_backup_interval", "1s")
@@ -159,12 +222,12 @@ func restoreWaitForBackup(t *testing.T, tabletType string) {
 	assert.Nil(t, err)
 }
 
-func resetTabletDir(t *testing.T) {
-	replica2.MysqlctlProcess.Stop()
-	replica2.VttabletProcess.TearDown()
-	os.RemoveAll(replica2.VttabletProcess.Directory)
+func resetTabletDir(t *testing.T, tablet *cluster.Vttablet) {
+	tablet.MysqlctlProcess.Stop()
+	tablet.VttabletProcess.TearDown()
+	os.RemoveAll(tablet.VttabletProcess.Directory)
 
-	err := replica2.MysqlctlProcess.Start()
+	err := tablet.MysqlctlProcess.Start()
 	assert.Nil(t, err)
 }
 
@@ -181,7 +244,7 @@ func listBackups(t *testing.T) []string {
 	return returnResult
 }
 
-func checkData(t *testing.T, vttablet *cluster.Vttablet, totalRows int) {
+func verifyRowsInTablet(t *testing.T, vttablet *cluster.Vttablet, totalRows int) {
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
 		qr, err := vttablet.VttabletProcess.QueryTablet("select * from vt_insert_test", keyspaceName, true)
@@ -218,4 +281,17 @@ func verifyAfterRemovingBackupNoBackupShouldBePresent(t *testing.T, backups []st
 	// Now, there should not be no backup
 	backups = listBackups(t)
 	assert.Equal(t, len(backups), 0)
+}
+
+func verifyRestoreTablet(t *testing.T, tablet *cluster.Vttablet, status string) {
+	tablet.VttabletProcess.TearDown()
+	resetTabletDir(t, tablet)
+	tablet.VttabletProcess.ServingStatus = ""
+	err := tablet.VttabletProcess.Setup()
+	assert.Nil(t, err)
+	if status != "" {
+		err = tablet.VttabletProcess.WaitForTabletTypeForTimeout(status, 15*time.Second)
+		assert.Nil(t, err)
+	}
+
 }

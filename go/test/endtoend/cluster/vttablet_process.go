@@ -183,11 +183,16 @@ func (vttablet *VttabletProcess) GetTabletStatus() string {
 	return ""
 }
 
-// WaitForTabletType waits till the tablet status reaches desired type
+// WaitForTabletType waits for 10 second till expected type reached
 func (vttablet *VttabletProcess) WaitForTabletType(expectedType string) error {
-	timeout := time.Now().Add(20 * time.Second)
+	return vttablet.WaitForTabletTypeForTimeout(expectedType, 10*time.Second)
+}
+
+// WaitForTabletTypeForTimeout waits for specified duration till the tablet status reaches desired type
+func (vttablet *VttabletProcess) WaitForTabletTypeForTimeout(expectedType string, timeout time.Duration) error {
+	timeToWait := time.Now().Add(timeout)
 	var currentStatus string
-	for time.Now().Before(timeout) {
+	for time.Now().Before(timeToWait) {
 		currentStatus = vttablet.GetTabletStatus()
 		if currentStatus == expectedType {
 			return nil

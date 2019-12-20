@@ -40,7 +40,7 @@ var (
 	hostname         = "localhost"
 	keyspaceName     = "ks"
 	dbPassword       = "VtDbaPass"
-	shardKsName      string
+	shardKsName      = fmt.Sprintf("%s/%s", keyspaceName, shardName)
 	dbCredentialFile string
 	shardName        = "0"
 	commonTabletArg  = []string{
@@ -86,7 +86,6 @@ func TestMain(m *testing.M) {
 		shard := cluster.Shard{
 			Name: shardName,
 		}
-		shardKsName = fmt.Sprintf("%s/%s", keyspaceName, shard.Name)
 
 		var mysqlProcs []*exec.Cmd
 		for i := 0; i < 3; i++ {
