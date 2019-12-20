@@ -230,16 +230,12 @@ func buildREPlan(ti *Table, vschema *localVSchema, filter string) (*Plan, error)
 
 	// We need to additionally set VindexColumn, Vindex and KeyRange
 	// based on the Primary Vindex of the table.
-	table, err := vschema.FindTable(ti.Name)
+	cv, err := vschema.FindColVindex(ti.Name)
 	if err != nil {
 		return nil, err
 	}
-	// Get Primary Vindex.
-	if len(table.ColumnVindexes) == 0 {
-		return nil, fmt.Errorf("table %s has no primary vindex", ti.Name)
-	}
-	plan.Vindex = table.ColumnVindexes[0].Vindex
-	plan.VindexColumns, err = buildVindexColumns(plan.Table, table.ColumnVindexes[0].Columns)
+	plan.Vindex = cv.Vindex
+	plan.VindexColumns, err = buildVindexColumns(plan.Table, cv.Columns)
 	if err != nil {
 		return nil, err
 	}
@@ -365,20 +361,16 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 		if len(inner.Exprs) != 0 {
 			return ColExpr{}, fmt.Errorf("unexpected: %v", sqlparser.String(inner))
 		}
-		table, err := vschema.FindTable(plan.Table.Name)
+		cv, err := vschema.FindColVindex(plan.Table.Name)
 		if err != nil {
 			return ColExpr{}, err
 		}
-		// Get Primary Vindex.
-		if len(table.ColumnVindexes) == 0 {
-			return ColExpr{}, fmt.Errorf("table %s has no primary vindex", plan.Table.Name)
-		}
-		vindexColumns, err := buildVindexColumns(plan.Table, table.ColumnVindexes[0].Columns)
+		vindexColumns, err := buildVindexColumns(plan.Table, cv.Columns)
 		if err != nil {
 			return ColExpr{}, err
 		}
 		return ColExpr{
-			Vindex:        table.ColumnVindexes[0].Vindex,
+			Vindex:        cv.Vindex,
 			VindexColumns: vindexColumns,
 			Alias:         sqlparser.NewColIdent("keyspace_id"),
 			Type:          sqltypes.VarBinary,
@@ -393,16 +385,12 @@ func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.Selec
 	var krExpr sqlparser.SelectExpr
 	switch {
 	case len(exprs) == 1:
-		table, err := vschema.FindTable(plan.Table.Name)
+		cv, err := vschema.FindColVindex(plan.Table.Name)
 		if err != nil {
 			return err
 		}
-		// Get Primary Vindex.
-		if len(table.ColumnVindexes) == 0 {
-			return fmt.Errorf("table %s has no primary vindex", plan.Table.Name)
-		}
-		colnames = table.ColumnVindexes[0].Columns
-		plan.Vindex = table.ColumnVindexes[0].Vindex
+		colnames = cv.Columns
+		plan.Vindex = cv.Vindex
 		krExpr = exprs[0]
 	case len(exprs) >= 3:
 		for _, expr := range exprs[:len(exprs)-2] {

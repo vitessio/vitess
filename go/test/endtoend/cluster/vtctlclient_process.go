@@ -99,9 +99,17 @@ func VtctlClientProcessInstance(hostname string, grpcPort int, tmpDirectory stri
 
 // InitTablet initializes a tablet
 func (vtctlclient *VtctlClientProcess) InitTablet(tablet *Vttablet, cell string, keyspaceName string, hostname string, shardName string) error {
-	return vtctlclient.ExecuteCommand(
-		"InitTablet", "-hostname", hostname,
-		"-port", fmt.Sprintf("%d", tablet.HTTPPort), "-allow_update",
-		"-keyspace", keyspaceName, "-shard", shardName,
-		fmt.Sprintf("%s-%010d", cell, tablet.TabletUID), "replica")
+	tabletType := "replica"
+	if tablet.Type == "rdonly" {
+		tabletType = "rdonly"
+	}
+	args := []string{"InitTablet", "-hostname", hostname,
+		"-port", fmt.Sprintf("%d", tablet.HTTPPort), "-allow_update", "-parent",
+		"-keyspace", keyspaceName,
+		"-shard", shardName}
+	if tablet.MySQLPort > 0 {
+		args = append(args, "-mysql_port", fmt.Sprintf("%d", tablet.MySQLPort))
+	}
+	args = append(args, fmt.Sprintf("%s-%010d", cell, tablet.TabletUID), tabletType)
+	return vtctlclient.ExecuteCommand(args...)
 }

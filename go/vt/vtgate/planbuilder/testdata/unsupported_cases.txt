@@ -147,6 +147,10 @@
 "select id, b as id, count(*) from user order by id"
 "ambiguous symbol reference: id"
 
+# order by with ambiguous column reference ; valid in MySQL
+"select id, id from user order by id"
+"ambiguous symbol reference: id"
+
 # scatter aggregate with ambiguous aliases
 "select distinct a, b as a from user"
 "generating order by clause: ambiguous symbol reference: a"

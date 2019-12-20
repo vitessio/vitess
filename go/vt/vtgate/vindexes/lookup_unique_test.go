@@ -18,9 +18,9 @@ package vindexes
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -56,18 +56,11 @@ func TestLookupUniqueNew(t *testing.T) {
 	}
 }
 
-func TestLookupUniqueCost(t *testing.T) {
+func TestLookupUniqueInfo(t *testing.T) {
 	lookupUnique := createLookup(t, "lookup_unique", false)
-	if lookupUnique.Cost() != 10 {
-		t.Errorf("Cost(): %d, want 10", lookupUnique.Cost())
-	}
-}
-
-func TestLookupUniqueString(t *testing.T) {
-	lookupUnique := createLookup(t, "lookup_unique", false)
-	if strings.Compare("lookup_unique", lookupUnique.String()) != 0 {
-		t.Errorf("String(): %s, want lookup_unique", lookupUnique.String())
-	}
+	assert.Equal(t, 10, lookupUnique.Cost())
+	assert.Equal(t, "lookup_unique", lookupUnique.String())
+	assert.True(t, lookupUnique.IsUnique())
 }
 
 func TestLookupUniqueMap(t *testing.T) {

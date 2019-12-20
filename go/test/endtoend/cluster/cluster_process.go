@@ -55,9 +55,10 @@ type LocalProcessCluster struct {
 	VtctlProcess       VtctlProcess
 
 	// background executable processes
-	TopoProcess   EtcdProcess
-	VtctldProcess VtctldProcess
-	VtgateProcess VtgateProcess
+	TopoProcess     EtcdProcess
+	VtctldProcess   VtctldProcess
+	VtgateProcess   VtgateProcess
+	VtworkerProcess VtworkerProcess
 
 	nextPortForProcess int
 
@@ -83,7 +84,33 @@ type Keyspace struct {
 // Shard with associated vttablets
 type Shard struct {
 	Name      string
-	Vttablets []Vttablet
+	Vttablets []*Vttablet
+}
+
+// MasterTablet get the 1st tablet which is master
+func (shard *Shard) MasterTablet() *Vttablet {
+	return shard.Vttablets[0]
+}
+
+// Rdonly get the last tablet which is rdonly
+func (shard *Shard) Rdonly() *Vttablet {
+	for idx, tablet := range shard.Vttablets {
+		if tablet.Type == "rdonly" {
+			return shard.Vttablets[idx]
+		}
+	}
+	return nil
+}
+
+// Replica get the last but one tablet which is replica
+// Mostly we have either 3 tablet setup [master, replica, rdonly]
+func (shard *Shard) Replica() *Vttablet {
+	for idx, tablet := range shard.Vttablets {
+		if tablet.Type == "replica" && idx > 0 {
+			return shard.Vttablets[idx]
+		}
+	}
+	return nil
 }
 
 // Vttablet stores the properties needed to start a vttablet process
@@ -94,6 +121,7 @@ type Vttablet struct {
 	GrpcPort  int
 	MySQLPort int
 	Alias     string
+	Cell      string
 
 	// background executable processes
 	MysqlctlProcess MysqlctlProcess
@@ -210,8 +238,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 				cluster.VtTabletExtraArgs,
 				cluster.EnableSemiSync)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
-
-			shard.Vttablets = append(shard.Vttablets, *tablet)
+			shard.Vttablets = append(shard.Vttablets, tablet)
 		}
 
 		// wait till all mysqlctl is instantiated
@@ -274,13 +301,83 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 	return
 }
 
+// LaunchCluster creates the skeleton for a cluster by creating keyspace
+// shards and initializing tablets and mysqlctl processes.
+// This does not start any process and user have to explicitly start all
+// the required services (ex topo, vtgate, mysql and vttablet)
+func (cluster *LocalProcessCluster) LaunchCluster(keyspace *Keyspace, shards []Shard) (err error) {
+
+	log.Info("Starting keyspace : " + keyspace.Name)
+
+	// Create Keyspace
+	err = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	// Create shard
+	for _, shard := range shards {
+		for _, tablet := range shard.Vttablets {
+			err = cluster.VtctlclientProcess.InitTablet(tablet, tablet.Cell, keyspace.Name, cluster.Hostname, shard.Name)
+			if err != nil {
+				log.Error(err)
+				return
+			}
+
+			// Setup MysqlctlProcess
+			tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory)
+			// Setup VttabletProcess
+			tablet.VttabletProcess = VttabletProcessInstance(
+				tablet.HTTPPort,
+				tablet.GrpcPort,
+				tablet.TabletUID,
+				tablet.Cell,
+				shard.Name,
+				keyspace.Name,
+				cluster.VtctldProcess.Port,
+				tablet.Type,
+				cluster.TopoProcess.Port,
+				cluster.Hostname,
+				cluster.TmpDirectory,
+				cluster.VtTabletExtraArgs,
+				cluster.EnableSemiSync)
+		}
+
+		keyspace.Shards = append(keyspace.Shards, shard)
+	}
+
+	// if the keyspace is present then append the shard info
+	existingKeyspace := false
+	for idx, ks := range cluster.Keyspaces {
+		if ks.Name == keyspace.Name {
+			cluster.Keyspaces[idx].Shards = append(cluster.Keyspaces[idx].Shards, keyspace.Shards...)
+			existingKeyspace = true
+		}
+	}
+	if !existingKeyspace {
+		cluster.Keyspaces = append(cluster.Keyspaces, *keyspace)
+	}
+
+	log.Info("Done launching keyspace : " + keyspace.Name)
+	return err
+}
+
 // StartVtgate starts vtgate
 func (cluster *LocalProcessCluster) StartVtgate() (err error) {
+	vtgateInstance := *cluster.GetVtgateInstance()
+	cluster.VtgateProcess = vtgateInstance
+	log.Info(fmt.Sprintf("Starting vtgate on port %d", vtgateInstance.Port))
+	log.Info(fmt.Sprintf("Vtgate started, connect to mysql using : mysql -h 127.0.0.1 -P %d", cluster.VtgateMySQLPort))
+	return cluster.VtgateProcess.Setup()
+}
+
+// GetVtgateInstance returns an instance of vtgateprocess
+func (cluster *LocalProcessCluster) GetVtgateInstance() *VtgateProcess {
 	vtgateHTTPPort := cluster.GetAndReservePort()
 	vtgateGrpcPort := cluster.GetAndReservePort()
 	cluster.VtgateMySQLPort = cluster.GetAndReservePort()
-	log.Info(fmt.Sprintf("Starting vtgate on port %d", vtgateHTTPPort))
-	cluster.VtgateProcess = *VtgateProcessInstance(
+	vtgateProcInstance := VtgateProcessInstance(
 		vtgateHTTPPort,
 		vtgateGrpcPort,
 		cluster.VtgateMySQLPort,
@@ -291,15 +388,7 @@ func (cluster *LocalProcessCluster) StartVtgate() (err error) {
 		cluster.TopoProcess.Port,
 		cluster.TmpDirectory,
 		cluster.VtGateExtraArgs)
-
-	log.Info(fmt.Sprintf("Vtgate started, connect to mysql using : mysql -h 127.0.0.1 -P %d", cluster.VtgateMySQLPort))
-	if err = cluster.VtgateProcess.Setup(); err != nil {
-		return err
-	}
-	if err = cluster.WaitForTabletsToHealthyInVtgate(); err != nil {
-		return err
-	}
-	return nil
+	return vtgateProcInstance
 }
 
 // NewCluster instantiates a new cluster
@@ -334,10 +423,10 @@ func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {
 			isRdOnlyPresent = false
-			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspace.Name, shard.Name)); err != nil {
+			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspace.Name, shard.Name), 1); err != nil {
 				return err
 			}
-			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace.Name, shard.Name)); err != nil {
+			if err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace.Name, shard.Name), 1); err != nil {
 				return err
 			}
 			for _, tablet := range shard.Vttablets {
@@ -346,7 +435,7 @@ func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error
 				}
 			}
 			if isRdOnlyPresent {
-				err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspace.Name, shard.Name))
+				err = cluster.VtgateProcess.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspace.Name, shard.Name), 1)
 			}
 			if err != nil {
 				return err
@@ -361,16 +450,18 @@ func (cluster *LocalProcessCluster) Teardown() {
 	if err := cluster.VtgateProcess.TearDown(); err != nil {
 		log.Errorf("Error in vtgate teardown - %s", err.Error())
 	}
-	mysqlctlProcessList := []*exec.Cmd{}
+
+	var mysqlctlProcessList []*exec.Cmd
 	for _, keyspace := range cluster.Keyspaces {
 		for _, shard := range keyspace.Shards {
 			for _, tablet := range shard.Vttablets {
-				if proc, err := tablet.MysqlctlProcess.StopProcess(); err != nil {
-					log.Errorf("Error in mysqlctl teardown - %s", err.Error())
-				} else {
-					mysqlctlProcessList = append(mysqlctlProcessList, proc)
+				if tablet.MysqlctlProcess.TabletUID > 0 {
+					if proc, err := tablet.MysqlctlProcess.StopProcess(); err != nil {
+						log.Errorf("Error in mysqlctl teardown - %s", err.Error())
+					} else {
+						mysqlctlProcessList = append(mysqlctlProcessList, proc)
+					}
 				}
-
 				if err := tablet.VttabletProcess.TearDown(); err != nil {
 					log.Errorf("Error in vttablet teardown - %s", err.Error())
 				}
@@ -391,6 +482,22 @@ func (cluster *LocalProcessCluster) Teardown() {
 	if err := cluster.TopoProcess.TearDown(cluster.Cell, cluster.OriginalVTDATAROOT, cluster.CurrentVTDATAROOT, *keepData); err != nil {
 		log.Errorf("Error in etcd teardown - %s", err.Error())
 	}
+}
+
+// StartVtworker starts a vtworker
+func (cluster *LocalProcessCluster) StartVtworker(cell string, extraArgs ...string) error {
+	httpPort := cluster.GetAndReservePort()
+	grpcPort := cluster.GetAndReservePort()
+	log.Info(fmt.Sprintf("Starting vtworker on port %d", httpPort))
+	cluster.VtworkerProcess = *VtworkerProcessInstance(
+		httpPort,
+		grpcPort,
+		cluster.TopoPort,
+		cluster.Hostname,
+		cluster.TmpDirectory)
+	cluster.VtworkerProcess.ExtraArgs = extraArgs
+	return cluster.VtworkerProcess.Setup(cell)
+
 }
 
 // GetAndReservePort gives port for required process
@@ -415,22 +522,26 @@ func getRandomNumber(maxNumber int32, baseNumber int) int {
 	return int(rand.Int31n(maxNumber)) + baseNumber
 }
 
-// GetVttabletInstance create a new vttablet object
-func (cluster *LocalProcessCluster) GetVttabletInstance(UID int) *Vttablet {
+// GetVttabletInstance creates a new vttablet object
+func (cluster *LocalProcessCluster) GetVttabletInstance(tabletType string, UID int, cell string) *Vttablet {
 	if UID == 0 {
 		UID = cluster.GetAndReserveTabletUID()
+	}
+	if cell == "" {
+		cell = cluster.Cell
 	}
 	return &Vttablet{
 		TabletUID: UID,
 		HTTPPort:  cluster.GetAndReservePort(),
 		GrpcPort:  cluster.GetAndReservePort(),
 		MySQLPort: cluster.GetAndReservePort(),
-		Type:      "replica",
-		Alias:     fmt.Sprintf("%s-%010d", cluster.Cell, UID),
+		Type:      tabletType,
+		Cell:      cell,
+		Alias:     fmt.Sprintf("%s-%010d", cell, UID),
 	}
 }
 
-// StartVttablet start a new tablet
+// StartVttablet starts a new tablet
 func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatus string,
 	supportBackup bool, cell string, keyspaceName string, hostname string, shardName string) error {
 	tablet.VttabletProcess = VttabletProcessInstance(
@@ -448,7 +559,7 @@ func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatu
 		cluster.VtTabletExtraArgs,
 		cluster.EnableSemiSync)
 
-	tablet.VttabletProcess.SupportBackup = supportBackup
+	tablet.VttabletProcess.SupportsBackup = supportBackup
 	tablet.VttabletProcess.ServingStatus = servingStatus
 	return tablet.VttabletProcess.Setup()
 }

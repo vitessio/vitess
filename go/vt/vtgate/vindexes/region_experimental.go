@@ -79,6 +79,11 @@ func (ge *RegionExperimental) IsUnique() bool {
 	return true
 }
 
+// NeedsVCursor satisfies the Vindex interface.
+func (ge *RegionExperimental) NeedsVCursor() bool {
+	return false
+}
+
 // Map satisfies MultiColumn.
 func (ge *RegionExperimental) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
 	destinations := make([]key.Destination, 0, len(rowsColValues))

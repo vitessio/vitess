@@ -21,16 +21,18 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
 
 func TestRegionExperimentalMisc(t *testing.T) {
 	ge, err := createRegionVindex(t, "region_experimental", "f1,f2", 1)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, 1, ge.Cost())
 	assert.Equal(t, "region_experimental", ge.String())
 	assert.True(t, ge.IsUnique())
+	assert.False(t, ge.NeedsVCursor())
 }
 
 func TestRegionExperimentalMap(t *testing.T) {

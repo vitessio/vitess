@@ -19,9 +19,9 @@ package vindexes
 import (
 	"bytes"
 	"reflect"
-	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
@@ -33,16 +33,11 @@ func init() {
 	binOnlyVindex = vindex.(SingleColumn)
 }
 
-func TestBinaryCost(t *testing.T) {
-	if binOnlyVindex.Cost() != 1 {
-		t.Errorf("Cost(): %d, want 1", binOnlyVindex.Cost())
-	}
-}
-
-func TestBinaryString(t *testing.T) {
-	if strings.Compare("binary_varchar", binOnlyVindex.String()) != 0 {
-		t.Errorf("String(): %s, want binary_varchar", binOnlyVindex.String())
-	}
+func TestBinaryInfo(t *testing.T) {
+	assert.Equal(t, 1, binOnlyVindex.Cost())
+	assert.Equal(t, "binary_varchar", binOnlyVindex.String())
+	assert.True(t, binOnlyVindex.IsUnique())
+	assert.False(t, binOnlyVindex.NeedsVCursor())
 }
 
 func TestBinaryMap(t *testing.T) {

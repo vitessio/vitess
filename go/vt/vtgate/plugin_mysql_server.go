@@ -52,6 +52,7 @@ var (
 	mysqlAuthServerImpl           = flag.String("mysql_auth_server_impl", "static", "Which auth server implementation to use.")
 	mysqlAllowClearTextWithoutTLS = flag.Bool("mysql_allow_clear_text_without_tls", false, "If set, the server will allow the use of a clear text password over non-SSL connections.")
 	mysqlServerVersion            = flag.String("mysql_server_version", mysql.DefaultServerVersion, "MySQL server version to advertise.")
+	mysqlProxyProtocol            = flag.Bool("proxy_protocol", false, "Enable HAProxy PROXY protocol on MySQL listener socket")
 
 	mysqlServerRequireSecureTransport = flag.Bool("mysql_server_require_secure_transport", false, "Reject insecure connections but only if mysql_server_ssl_cert and mysql_server_ssl_key are provided")
 
@@ -339,7 +340,7 @@ func initMySQLProtocol() {
 	var err error
 	vh := newVtgateHandler(rpcVTGate)
 	if *mysqlServerPort >= 0 {
-		mysqlListener, err = mysql.NewListener(*mysqlTCPVersion, net.JoinHostPort(*mysqlServerBindAddress, fmt.Sprintf("%v", *mysqlServerPort)), authServer, vh, *mysqlConnReadTimeout, *mysqlConnWriteTimeout)
+		mysqlListener, err = mysql.NewListener(*mysqlTCPVersion, net.JoinHostPort(*mysqlServerBindAddress, fmt.Sprintf("%v", *mysqlServerPort)), authServer, vh, *mysqlConnReadTimeout, *mysqlConnWriteTimeout, *mysqlProxyProtocol)
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
 		}
@@ -382,7 +383,7 @@ func initMySQLProtocol() {
 // newMysqlUnixSocket creates a new unix socket mysql listener. If a socket file already exists, attempts
 // to clean it up.
 func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mysql.Handler) (*mysql.Listener, error) {
-	listener, err := mysql.NewListener("unix", address, authServer, handler, *mysqlConnReadTimeout, *mysqlConnWriteTimeout)
+	listener, err := mysql.NewListener("unix", address, authServer, handler, *mysqlConnReadTimeout, *mysqlConnWriteTimeout, false)
 	switch err := err.(type) {
 	case nil:
 		return listener, nil
@@ -403,7 +404,7 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 			log.Errorf("Couldn't remove existent socket file: %s", address)
 			return nil, err
 		}
-		listener, listenerErr := mysql.NewListener("unix", address, authServer, handler, *mysqlConnReadTimeout, *mysqlConnWriteTimeout)
+		listener, listenerErr := mysql.NewListener("unix", address, authServer, handler, *mysqlConnReadTimeout, *mysqlConnWriteTimeout, false)
 		return listener, listenerErr
 	default:
 		return nil, err
