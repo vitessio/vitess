@@ -150,19 +150,13 @@ func initClusterForInitialSharding(keyspaceName string, shardNames []string, tot
 
 		for i := 0; i < totalTabletsRequired; i++ {
 			// instantiate vttablet object with reserved ports
-			tabletUID := ClusterInstance.GetAndReserveTabletUID()
-			tablet := &cluster.Vttablet{
-				TabletUID: tabletUID,
-				HTTPPort:  ClusterInstance.GetAndReservePort(),
-				GrpcPort:  ClusterInstance.GetAndReservePort(),
-				MySQLPort: ClusterInstance.GetAndReservePort(),
-				Alias:     fmt.Sprintf("%s-%010d", ClusterInstance.Cell, tabletUID),
-				Type:      "replica",
-			}
-			if i == 0 { // Make the first one as master
-				tablet.Type = "master"
-			} else if i == totalTabletsRequired-1 && rdonly { // Make the last one as rdonly if rdonly flag is passed
-				tablet.Type = "rdonly"
+			var tablet *cluster.Vttablet
+			if i == totalTabletsRequired-1 && rdonly {
+				tablet = ClusterInstance.GetVttabletInstance("rdonly", 0, "")
+			} else if i == 0 {
+				tablet = ClusterInstance.GetVttabletInstance("master", 0, "")
+			} else {
+				tablet = ClusterInstance.GetVttabletInstance("replica", 0, "")
 			}
 			// Start Mysqlctl process
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, ClusterInstance.TmpDirectory)

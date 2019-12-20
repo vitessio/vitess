@@ -107,6 +107,9 @@ e2e_test_race: build
 e2e_test_cluster: build
 	tools/e2e_test_cluster.sh
 
+e2e_test_cluster_sharding: build
+	tools/e2e_test_cluster_sharding.sh
+
 .ONESHELL:
 SHELL = /bin/bash
 
