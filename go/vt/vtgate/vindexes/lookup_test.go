@@ -23,6 +23,7 @@ import (
 
 	"strings"
 
+	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/key"
@@ -113,18 +114,12 @@ func TestLookupNonUniqueNew(t *testing.T) {
 	}
 }
 
-func TestLookupNonUniqueCost(t *testing.T) {
+func TestLookupNonUniqueInfo(t *testing.T) {
 	lookupNonUnique := createLookup(t, "lookup", false)
-	if lookupNonUnique.Cost() != 20 {
-		t.Errorf("Cost(): %d, want 20", lookupNonUnique.Cost())
-	}
-}
-
-func TestLookupNonUniqueString(t *testing.T) {
-	lookupNonUnique := createLookup(t, "lookup", false)
-	if strings.Compare("lookup", lookupNonUnique.String()) != 0 {
-		t.Errorf("String(): %s, want lookup", lookupNonUnique.String())
-	}
+	assert.Equal(t, 20, lookupNonUnique.Cost())
+	assert.Equal(t, "lookup", lookupNonUnique.String())
+	assert.False(t, lookupNonUnique.IsUnique())
+	assert.True(t, lookupNonUnique.NeedsVCursor())
 }
 
 func TestLookupNilVCursor(t *testing.T) {

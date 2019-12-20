@@ -220,7 +220,7 @@ func checkTables(t *testing.T, count int) {
 }
 
 // checkTablesCount checks the number of tables in the given tablet
-func checkTablesCount(t *testing.T, tablet cluster.Vttablet, count int) {
+func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, count int) {
 	queryResult, err := tablet.VttabletProcess.QueryTablet("show tables;", keyspaceName, true)
 	assert.Nil(t, err)
 	assert.Equal(t, len(queryResult.Rows), count)

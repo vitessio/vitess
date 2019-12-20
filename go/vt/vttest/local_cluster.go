@@ -113,6 +113,9 @@ type Config struct {
 
 	// Whether to enable/disable workflow manager
 	InitWorkflowManager bool
+
+	// Authorize vschema ddl operations to a list of users
+	VSchemaDDLAuthorizedUsers string
 }
 
 // InitSchemas is a shortcut for tests that just want to setup a single

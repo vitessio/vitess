@@ -1,0 +1,40 @@
+# This creates a {tar.gz,deb,rpm} file and uploads it to a release.
+# To trigger this, create a new release.. but make sure that you publish
+# it immediately and do not save it as a DRAFT.
+
+name: Release
+on:
+  release:
+    types: [created]
+
+jobs:
+  build:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Set up Go
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.12
+
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Get dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y make ruby ruby-dev
+        go mod download
+        sudo gem install --no-ri --no-rdoc fpm
+
+    - name: Make Packages
+      run: |
+        ./tools/make-release-packages.sh
+
+    - name: Upload Files
+      uses: csexton/release-asset-action@master
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        pattern: "releases/*.{tar.gz,rpm,deb}"
+

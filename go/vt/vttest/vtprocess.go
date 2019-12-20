@@ -246,6 +246,9 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 	if args.InitWorkflowManager {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-workflow_manager_init"}...)
 	}
+	if args.VSchemaDDLAuthorizedUsers != "" {
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-vschema_ddl_authorized_users", args.VSchemaDDLAuthorizedUsers}...)
+	}
 
 	if socket != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{
