@@ -85,3 +85,7 @@ releases
 /vthook/
 /bin/
 /vtdataroot/
+
+# Rice generated files
+/go/vt/vtctld/rice-box.go
+
