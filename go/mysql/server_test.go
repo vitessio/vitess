@@ -719,11 +719,6 @@ func TestServer(t *testing.T) {
 // TestClearTextServer creates a Server that needs clear text
 // passwords from the client.
 func TestClearTextServer(t *testing.T) {
-	// If the database we're using is MariaDB, the client
-	// is also the MariaDB client, that does support
-	// clear text by default.
-	isMariaDB := os.Getenv("MYSQL_FLAVOR") == "MariaDB"
-
 	th := &testHandler{}
 
 	authServer := NewAuthServerStatic()
@@ -740,6 +735,9 @@ func TestClearTextServer(t *testing.T) {
 	go l.Accept()
 
 	host, port := getHostPort(t, l.Addr())
+
+	version, _ := runMysql(t, nil, "--version")
+	isMariaDB := strings.Contains(version, "MariaDB")
 
 	// Setup the right parameters.
 	params := &ConnParams{
@@ -1170,30 +1168,34 @@ func runMysql(t *testing.T, params *ConnParams, command string) (string, bool) {
 		command = command[len(enableCleartextPluginPrefix):]
 		args = append(args, "--enable-cleartext-plugin")
 	}
-	args = append(args, "-e", command)
-	if params.UnixSocket != "" {
-		args = append(args, "-S", params.UnixSocket)
+	if command == "--version" {
+		args = append(args, command)
 	} else {
-		args = append(args,
-			"-h", params.Host,
-			"-P", fmt.Sprintf("%v", params.Port))
-	}
-	if params.Uname != "" {
-		args = append(args, "-u", params.Uname)
-	}
-	if params.Pass != "" {
-		args = append(args, "-p"+params.Pass)
-	}
-	if params.DbName != "" {
-		args = append(args, "-D", params.DbName)
-	}
-	if params.Flags&CapabilityClientSSL > 0 {
-		args = append(args,
-			"--ssl",
-			"--ssl-ca", params.SslCa,
-			"--ssl-cert", params.SslCert,
-			"--ssl-key", params.SslKey,
-			"--ssl-verify-server-cert")
+		args = append(args, "-e", command)
+		if params.UnixSocket != "" {
+			args = append(args, "-S", params.UnixSocket)
+		} else {
+			args = append(args,
+				"-h", params.Host,
+				"-P", fmt.Sprintf("%v", params.Port))
+		}
+		if params.Uname != "" {
+			args = append(args, "-u", params.Uname)
+		}
+		if params.Pass != "" {
+			args = append(args, "-p"+params.Pass)
+		}
+		if params.DbName != "" {
+			args = append(args, "-D", params.DbName)
+		}
+		if params.Flags&CapabilityClientSSL > 0 {
+			args = append(args,
+				"--ssl",
+				"--ssl-ca", params.SslCa,
+				"--ssl-cert", params.SslCert,
+				"--ssl-key", params.SslKey,
+				"--ssl-verify-server-cert")
+		}
 	}
 	env := []string{
 		"LD_LIBRARY_PATH=" + path.Join(dir, "lib/mysql"),
