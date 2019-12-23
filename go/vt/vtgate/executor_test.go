@@ -564,7 +564,7 @@ func TestExecutorDeleteMetadata(t *testing.T) {
 	assert.NoError(t, err)
 
 	show = `show vitess_metadata variables like 'app\\_%'`
-	result, err = executor.Execute(context.Background(), "TestExecute", session, show, nil)
+	_, err = executor.Execute(context.Background(), "TestExecute", session, show, nil)
 	assert.True(t, topo.IsErrType(err, topo.NoNode))
 }
 
@@ -1612,12 +1612,6 @@ func TestExecutorAddSequenceDDL(t *testing.T) {
 
 	// Should fail adding a table on a sharded keyspace
 	ksSharded := "TestExecutor"
-	vschemaTables = []string{}
-	vschema = executor.vm.GetCurrentSrvVschema()
-	for t := range vschema.Keyspaces[ksSharded].Tables {
-		vschemaTables = append(vschemaTables, t)
-	}
-
 	session = NewSafeSession(&vtgatepb.Session{TargetString: ksSharded})
 
 	stmt = "alter vschema add sequence sequence_table"

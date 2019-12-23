@@ -69,7 +69,7 @@ func Run() error {
 	}
 
 	if options.StaticAuthFile != "" {
-		mysql.RegisterAuthServerStaticFromParams(options.StaticAuthFile, "")
+		mysql.RegisterAuthServerStaticFromParams(options.StaticAuthFile, "", 0)
 
 		fmt.Printf("Static auth file %s looks good\n", options.StaticAuthFile)
 	}
