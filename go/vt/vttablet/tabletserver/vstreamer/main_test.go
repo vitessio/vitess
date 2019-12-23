@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 )
@@ -52,6 +53,12 @@ func TestMain(m *testing.M) {
 		engine.InitDBConfig(env.Dbcfgs.DbaWithDB())
 		engine.Open(env.KeyspaceName, env.Cells[0])
 		defer engine.Close()
+
+		// GH actions machines sometimes exhibit multi-second delays on replication.
+		// So, give a generously high value for heartbeat time for all tests.
+		saveHeartbeat := HeartbeatTime
+		defer func() { HeartbeatTime = saveHeartbeat }()
+		HeartbeatTime = 10 * time.Second
 
 		return m.Run()
 	}()

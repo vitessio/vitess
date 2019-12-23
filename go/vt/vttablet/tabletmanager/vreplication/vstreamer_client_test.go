@@ -184,6 +184,7 @@ func TestTabletVStreamerClientVStream(t *testing.T) {
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})
+	env.SchemaEngine.Reload(context.Background())
 
 	ctx := context.Background()
 	err := vsClient.Open(ctx)
@@ -241,6 +242,7 @@ func TestTabletVStreamerClientVStreamRows(t *testing.T) {
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})
+	env.SchemaEngine.Reload(context.Background())
 
 	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), "select now()")
 	if err != nil {
@@ -443,6 +445,7 @@ func TestMySQLVStreamerClientVStream(t *testing.T) {
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})
+	env.SchemaEngine.Reload(context.Background())
 
 	ctx := context.Background()
 	err := vsClient.Open(ctx)
@@ -497,6 +500,7 @@ func TestMySQLVStreamerClientVStreamRows(t *testing.T) {
 		"drop table t1",
 		fmt.Sprintf("drop table %s.t1", vrepldb),
 	})
+	env.SchemaEngine.Reload(context.Background())
 
 	qr, err := env.Mysqld.FetchSuperQuery(context.Background(), "select now()")
 	if err != nil {

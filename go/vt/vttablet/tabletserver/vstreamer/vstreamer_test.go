@@ -55,8 +55,6 @@ func TestStatements(t *testing.T) {
 			"update stream1 set val='bbb' where id = 1",
 			"commit",
 		},
-		// MySQL issues GTID->BEGIN.
-		// MariaDB issues BEGIN->GTID.
 		output: [][]string{{
 			`begin`,
 			`type:FIELD field_event:<table_name:"stream1" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
@@ -111,34 +109,6 @@ func TestStatements(t *testing.T) {
 			`gtid`,
 			`type:DDL ddl:"truncate table stream2" `,
 		}},
-	}, {
-		// repair, optimize and analyze show up in binlog stream, but ignored by vitess.
-		input: "repair table stream2",
-		output: [][]string{{
-			`gtid`,
-			`type:OTHER `,
-		}},
-	}, {
-		input: "optimize table stream2",
-		output: [][]string{{
-			`gtid`,
-			`type:OTHER `,
-		}},
-	}, {
-		input: "analyze table stream2",
-		output: [][]string{{
-			`gtid`,
-			`type:OTHER `,
-		}},
-	}, {
-		// select, set, show and describe don't get logged.
-		input: "select * from stream1",
-	}, {
-		input: "set @val=1",
-	}, {
-		input: "show tables",
-	}, {
-		input: "describe stream1",
 	}}
 	runCases(t, nil, testcases, "")
 
@@ -146,6 +116,70 @@ func TestStatements(t *testing.T) {
 	engine.cp.Flavor = "FilePos"
 	defer func() { engine.cp.Flavor = "" }()
 	runCases(t, nil, testcases, "")
+}
+
+// TestOther tests "other" statements. These statements produce
+// very different events depending on the version of mysql or mariadb
+// So, we just show that vreplication transmits "OTHER" events
+// if the binlog is affected by the statement.
+func TestOther(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table stream1(id int, val varbinary(128), primary key(id))",
+		"create table stream2(id int, val varbinary(128), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table stream1",
+		"drop table stream2",
+	})
+	engine.se.Reload(context.Background())
+
+	testcases := []string{
+		"repair table stream2",
+		"optimize table stream2",
+		"analyze table stream2",
+		"select * from stream1",
+		"set @val=1",
+		"show tables",
+		"describe stream1",
+	}
+
+	// customRun is a modified version of runCases.
+	customRun := func(mode string) {
+		t.Logf("Run mode: %v", mode)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		ch := startStream(ctx, t, nil, "")
+
+		want := [][]string{{
+			`gtid`,
+			`type:OTHER `,
+		}}
+
+		for _, stmt := range testcases {
+			startPosition := masterPosition(t)
+			execStatement(t, stmt)
+			endPosition := masterPosition(t)
+			if startPosition == endPosition {
+				t.Logf("statement %s did not affect binlog", stmt)
+				continue
+			}
+			expectLog(ctx, t, stmt, ch, want)
+		}
+		cancel()
+		if evs, ok := <-ch; ok {
+			t.Fatalf("unexpected evs: %v", evs)
+		}
+	}
+	customRun("gtid")
+
+	// Test FilePos flavor
+	engine.cp.Flavor = "FilePos"
+	defer func() { engine.cp.Flavor = "" }()
+	customRun("filePos")
 }
 
 func TestRegexp(t *testing.T) {
@@ -424,8 +458,6 @@ func TestSelectFilter(t *testing.T) {
 			"insert into t1 values (2, 4, 'aaa')",
 			"commit",
 		},
-		// MySQL issues GTID->BEGIN.
-		// MariaDB issues BEGIN->GTID.
 		output: [][]string{{
 			`begin`,
 			`type:FIELD field_event:<table_name:"t1" fields:<name:"id2" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
