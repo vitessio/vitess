@@ -53,7 +53,6 @@ func TestRdonlyBackup(t *testing.T) {
 	testBackup(t, "rdonly")
 }
 
-//test_backup will:
 //- create a shard with master and replica1 only
 //- run InitShardMaster
 //- insert some data
@@ -94,15 +93,15 @@ func TestMasterBackup(t *testing.T) {
 	master.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
 }
 
-//    Test a master and slave from the same backup.
+//    Test a master and replica from the same backup.
 //
-//    Check that a slave and master both restored from the same backup
+//    Check that a replica and master both restored from the same backup
 //    can replicate successfully.
-func TestMasterSlaveSameBackup(t *testing.T) {
-	// insert data on master, wait for slave to get it
+func TestMasterReplicaSameBackup(t *testing.T) {
+	// insert data on master, wait for replica to get it
 	verifyInitialReplication(t)
 
-	// backup the slave
+	// backup the replica
 	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	assert.Nil(t, err)
 
@@ -110,12 +109,12 @@ func TestMasterSlaveSameBackup(t *testing.T) {
 	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
 	assert.Nil(t, err)
 
-	// now bring up the other slave, letting it restore from backup.
+	// now bring up the other replica, letting it restore from backup.
 	restoreWaitForBackup(t, "replica")
 	err = replica2.VttabletProcess.WaitForTabletTypeForTimeout("SERVING", 15*time.Second)
 	assert.Nil(t, err)
 
-	// check the new slave has the data
+	// check the new replica has the data
 	verifyRowsInTablet(t, replica2, 2)
 
 	// Promote replica2 to master
@@ -138,7 +137,7 @@ func TestMasterSlaveSameBackup(t *testing.T) {
 	// while doing backup/restore after a reparent.
 	// It is written into the MANIFEST and read back from the MANIFEST.
 	//
-	// Take another backup on the slave.
+	// Take another backup on the replica.
 	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	assert.Nil(t, err)
 
@@ -151,7 +150,7 @@ func TestMasterSlaveSameBackup(t *testing.T) {
 
 	verifyRowsInTablet(t, replica1, 4)
 	replica2.VttabletProcess.TearDown()
-	master.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
+	restartMasterReplica(t)
 }
 
 func TestRestoreOldMasterByRestart(t *testing.T) {
@@ -173,10 +172,10 @@ func TestRestoreOldMasterInPlace(t *testing.T) {
 //this function is called to force a restore on the provided tablet
 //
 func testRestoreOldMaster(t *testing.T, method restoreMethod) {
-	// insert data on master, wait for slave to get it
+	// insert data on master, wait for replica to get it
 	verifyInitialReplication(t)
 
-	// backup the slave
+	// backup the replica
 	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	assert.Nil(t, err)
 
@@ -199,6 +198,9 @@ func testRestoreOldMaster(t *testing.T, method restoreMethod) {
 
 	// wait for it to catch up.
 	verifyRowsInTablet(t, master, 3)
+
+	// teardown
+	restartMasterReplica(t)
 }
 
 func restoreUsingRestart(t *testing.T, tablet *cluster.Vttablet) {
@@ -211,12 +213,54 @@ func restoreInPlace(t *testing.T, tablet *cluster.Vttablet) {
 	assert.Nil(t, err)
 }
 
-func TestTerminatedRestore(t *testing.T) {
+func restartMasterReplica(t *testing.T) {
+	// Stop all master, replica tablet and mysql instance
+	stopAllTablets()
 
-	// insert data on master, wait for slave to get it
+	// remove all backups
+	backups := listBackups(t)
+	for _, backup := range backups {
+		localCluster.VtctlclientProcess.ExecuteCommand("RemoveBackup", shardKsName, backup)
+	}
+	// start all tablet and mysql instances
+	var mysqlProcs []*exec.Cmd
+	for _, tablet := range []*cluster.Vttablet{master, replica1} {
+		proc, _ := tablet.MysqlctlProcess.StartProcess()
+		mysqlProcs = append(mysqlProcs, proc)
+
+		err := localCluster.VtctlclientProcess.InitTablet(tablet, cell, keyspaceName, hostname, shardName)
+		assert.Nil(t, err)
+		tablet.VttabletProcess.CreateDB(keyspaceName)
+		tablet.VttabletProcess.Setup()
+	}
+	for _, proc := range mysqlProcs {
+		proc.Wait()
+	}
+	err := localCluster.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, master.TabletUID)
+	assert.Nil(t, err)
+}
+
+func stopAllTablets() {
+	var mysqlProcs []*exec.Cmd
+	for _, tablet := range []*cluster.Vttablet{master, replica1, replica2} {
+		tablet.VttabletProcess.TearDown()
+		proc, _ := tablet.MysqlctlProcess.StopProcess()
+		mysqlProcs = append(mysqlProcs, proc)
+		localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", tablet.Alias)
+	}
+	for _, proc := range mysqlProcs {
+		proc.Wait()
+	}
+	for _, tablet := range []*cluster.Vttablet{master, replica1} {
+		os.RemoveAll(tablet.VttabletProcess.Directory)
+	}
+}
+
+func TestTerminatedRestore(t *testing.T) {
+	// insert data on master, wait for replica to get it
 	verifyInitialReplication(t)
 
-	// backup the slave
+	// backup the replica
 	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	assert.Nil(t, err)
 
@@ -251,11 +295,9 @@ func TestTerminatedRestore(t *testing.T) {
 	assert.True(t, os.IsNotExist(err))
 
 	verifyRowsInTablet(t, master, 3)
+	stopAllTablets()
 }
 
-//
-//Test backup flow.
-//
 //test_backup will:
 //- create a shard with master and replica1 only
 //- run InitShardMaster
@@ -400,8 +442,20 @@ func verifyRestoreTablet(t *testing.T, tablet *cluster.Vttablet, status string) 
 		assert.Nil(t, err)
 	}
 
-	// TODO: Check db vars and status rpl_semi_sync_slave_enabled, rpl_semi_sync_slave_status
+	if tablet.Type == "replica" {
+		verifyReplicationStatus(t, tablet, "ON")
+	} else if tablet.Type == "rdonly" {
+		verifyReplicationStatus(t, tablet, "OFF")
+	}
+}
 
+func verifyReplicationStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStatus string) {
+	status, err := vttablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", keyspaceName)
+	assert.Nil(t, err)
+	assert.Equal(t, status, expectedStatus)
+	status, err = vttablet.VttabletProcess.GetDBStatus("rpl_semi_sync_slave_status", keyspaceName)
+	assert.Nil(t, err)
+	assert.Equal(t, status, expectedStatus)
 }
 
 func terminateRestore(t *testing.T) {
