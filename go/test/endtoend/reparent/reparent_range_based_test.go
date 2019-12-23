@@ -46,7 +46,7 @@ func TestReparentGracefulRangeBased(t *testing.T) {
 		assert.Nil(t, err)
 	}
 
-	// Force the slaves to reparent assuming that all the datasets are identical.
+	// Force the replica to reparent assuming that all the datasets are identical.
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard1Name), masterTablet.Alias)
 	assert.Nil(t, err)
@@ -84,7 +84,7 @@ func TestReparentGracefulRangeBased(t *testing.T) {
 
 	checkMasterTablet(t, replicaTablet)
 
-	// insert data into the new master, check the connected slave work
+	// insert data into the new master, check the connected replica work
 	insertSQL := fmt.Sprintf(insertSQL, 1, 1)
 	runSQL(ctx, t, insertSQL, replicaTablet)
 	err = checkInsertedValues(ctx, t, masterTablet, 1)
