@@ -6,7 +6,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        name: [mysql57, mysql80]
+        name: [percona56, mysql57, mysql80, mariadb101, mariadb102, mariadb103]
 
     steps:
     - name: Set up Go

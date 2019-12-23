@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/sharding"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 )
@@ -295,7 +296,7 @@ func TestVerticalSplit(t *testing.T) {
 	sharding.CheckBinlogServerVars(t, sourceReplicaTablet, 100, 100, true)
 
 	// use vtworker to compare the data
-	t.Log("Running vtworker VerticalSplitDiff")
+	log.Info("Running vtworker VerticalSplitDiff")
 	err = clusterInstance.VtworkerProcess.ExecuteVtworkerCommand(clusterInstance.GetAndReservePort(),
 		clusterInstance.GetAndReservePort(),
 		"--use_v3_resharding_mode=true",
@@ -539,7 +540,7 @@ func checkClientConnRedirectionExecuteKeyrange(ctx context.Context, t *testing.T
 }
 
 func checkValues(t *testing.T, tablet *cluster.Vttablet, keyspace string, dbname string, table string, first int, count int) {
-	t.Logf("Checking %d values from %s/%s starting at %d", count, dbname, table, first)
+	log.Info("Checking %d values from %s/%s starting at %d", count, dbname, table, first)
 	qr, _ := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("select id, msg from %s where id>=%d order by id limit %d", table, first, count), keyspace, true)
 	assert.Equal(t, count, len(qr.Rows), fmt.Sprintf("got wrong number of rows: %d != %d", len(qr.Rows), count))
 	i := 0
