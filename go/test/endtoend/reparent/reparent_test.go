@@ -123,7 +123,7 @@ func TestReparentDownMaster(t *testing.T) {
 
 	checkMasterTablet(t, tablet62044)
 
-	// insert data into the new master, check the connected slaves work
+	// insert data into the new master, check the connected replica work
 	insertSQL := fmt.Sprintf(insertSQL, 2, 2)
 	runSQL(ctx, t, insertSQL, tablet62044)
 	err = checkInsertedValues(ctx, t, tablet41983, 2)
@@ -131,14 +131,14 @@ func TestReparentDownMaster(t *testing.T) {
 	err = checkInsertedValues(ctx, t, tablet31981, 2)
 	assert.Nil(t, err)
 
-	// bring back the old master as a slave, check that it catches up
+	// bring back the old master as a replica, check that it catches up
 	tablet62344.MysqlctlProcess.InitMysql = false
 	err = tablet62344.MysqlctlProcess.Start()
 	assert.Nil(t, err)
 	err = clusterInstance.VtctlclientProcess.InitTablet(tablet62344, tablet62344.Cell, keyspaceName, hostname, shardName)
 	assert.Nil(t, err)
 
-	// As there is already a master the new slave will come directly in SERVING state
+	// As there is already a master the new replica will come directly in SERVING state
 	tablet62344.VttabletProcess.ServingStatus = "SERVING"
 	// Start the tablet
 	err = tablet62344.VttabletProcess.Setup()
@@ -172,7 +172,7 @@ func TestReparentCrossCell(t *testing.T) {
 		assert.Nil(t, err)
 	}
 
-	// Force the slaves to reparent assuming that all the datasets are identical.
+	// Force the replica to reparent assuming that all the datasets are identical.
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
 	assert.Nil(t, err)
@@ -227,7 +227,7 @@ func reparentGraceful(t *testing.T, confusedMaster bool) {
 		assert.Nil(t, err)
 	}
 
-	// Force the slaves to reparent assuming that all the datasets are identical.
+	// Force the replica to reparent assuming that all the datasets are identical.
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shardName), tablet62344.Alias)
 	assert.Nil(t, err)
@@ -249,7 +249,7 @@ func reparentGraceful(t *testing.T, confusedMaster bool) {
 	if strArray[len(strArray)-1] == "" {
 		strArray = strArray[:len(strArray)-1] // Truncate slice, remove empty line
 	}
-	assert.Equal(t, 4, len(strArray))         // one master, three slaves
+	assert.Equal(t, 4, len(strArray))         // one master, three replicas
 	assert.Contains(t, strArray[0], "master") // master first
 
 	// Perform a graceful reparent operation
@@ -287,7 +287,7 @@ func reparentGraceful(t *testing.T, confusedMaster bool) {
 
 	checkMasterTablet(t, tablet62044)
 
-	// insert data into the new master, check the connected slaves work
+	// insert data into the new master, check the connected replica work
 	insertSQL := fmt.Sprintf(insertSQL, 1, 1)
 	runSQL(ctx, t, insertSQL, tablet62044)
 	err = checkInsertedValues(ctx, t, tablet41983, 1)
@@ -320,7 +320,7 @@ func TestReparentSlaveOffline(t *testing.T) {
 		assert.Nil(t, err)
 	}
 
-	// Force the slaves to reparent assuming that all the datasets are identical.
+	// Force the replica to reparent assuming that all the datasets are identical.
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
 		"-force", keyspaceShard, tablet62344.Alias)
 	assert.Nil(t, err)
@@ -370,7 +370,7 @@ func TestReparentAvoid(t *testing.T) {
 		assert.Nil(t, err)
 	}
 
-	// Force the slaves to reparent assuming that all the dataset's are identical.
+	// Force the replica to reparent assuming that all the dataset's are identical.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
 		"-force", keyspaceShard, tablet62344.Alias)
 	assert.Nil(t, err)
@@ -425,10 +425,10 @@ func TestReparentFromOutside(t *testing.T) {
 	reparentFromOutside(t, false)
 }
 
-func TestReparentFromOutsideBrutal(t *testing.T) {
+func TestReparentFromOutsideWithNoMater(t *testing.T) {
 	reparentFromOutside(t, true)
 
-	// We will have to restart mysql to avoid hanging/locks due to external Reparent brutal
+	// We will have to restart mysql to avoid hanging/locks due to external Reparent
 	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
 		fmt.Println("Restarting MySql for tablet  ", tablet.Alias)
 		err := tablet.MysqlctlProcess.Stop()
@@ -439,14 +439,14 @@ func TestReparentFromOutsideBrutal(t *testing.T) {
 	}
 }
 
-func reparentFromOutside(t *testing.T, brutal bool) {
-	//This test will start a master and 3 slaves.
+func reparentFromOutside(t *testing.T, downMaster bool) {
+	//This test will start a master and 3 replicas.
 	//Then:
-	//- one slave will be the new master
-	//- one slave will be reparented to that new master
-	//- one slave will be busted and dead in the water and we'll call TabletExternallyReparented.
+	//- one replica will be the new master
+	//- one replica will be reparented to that new master
+	//- one replica will be busted and dead in the water and we'll call TabletExternallyReparented.
 	//Args:
-	//brutal: kills the old master first
+	//downMaster: kills the old master first
 
 	ctx := context.Background()
 
@@ -482,7 +482,7 @@ func reparentFromOutside(t *testing.T, brutal bool) {
 	// 62044 will be the new master
 	// 31981 won't be re-parented, so it will be busted
 
-	if !brutal {
+	if !downMaster {
 		// commands to stop the current master
 		demoteMasterCommands := "SET GLOBAL read_only = ON; FLUSH TABLES WITH READ LOCK; UNLOCK TABLES"
 		runSQL(ctx, t, demoteMasterCommands, tablet62344)
@@ -492,7 +492,7 @@ func reparentFromOutside(t *testing.T, brutal bool) {
 		assert.Nil(t, err)
 	}
 
-	// commands to convert a slave to a master
+	// commands to convert a replica to a master
 	promoteSlaveCommands := "STOP SLAVE; RESET SLAVE ALL; SET GLOBAL read_only = OFF;"
 	runSQL(ctx, t, promoteSlaveCommands, tablet62044)
 
@@ -514,8 +514,8 @@ func reparentFromOutside(t *testing.T, brutal bool) {
 		"START SLAVE;", gtID, hostname, tablet62044.MySQLPort)
 	runSQL(ctx, t, changeMasterCommands, tablet41983)
 
-	// in brutal mode, we kill the old master first and delete its tablet record
-	if brutal {
+	// To test the downMaster, we kill the old master first and delete its tablet record
+	if downMaster {
 		err := tablet62344.VttabletProcess.TearDown()
 		assert.Nil(t, err)
 		err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteTablet",
@@ -528,9 +528,9 @@ func reparentFromOutside(t *testing.T, brutal bool) {
 		tablet62044.Alias)
 	assert.Nil(t, err)
 
-	checkReparentFromOutside(t, tablet62044, brutal, baseTime)
+	checkReparentFromOutside(t, tablet62044, downMaster, baseTime)
 
-	if !brutal {
+	if !downMaster {
 		err := tablet62344.VttabletProcess.TearDown()
 		assert.Nil(t, err)
 	}
@@ -570,7 +570,7 @@ func TestReparentWithDownSlave(t *testing.T) {
 	// create Tables
 	runSQL(ctx, t, sqlSchema, tablet62344)
 
-	// Stop Slave mysql Process
+	// Stop replica mysql Process
 	err = tablet41983.MysqlctlProcess.Stop()
 	assert.Nil(t, err)
 
@@ -582,7 +582,7 @@ func TestReparentWithDownSlave(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Contains(t, output, "TabletManager.SetMaster on zone1-0000041983 error")
 
-	// insert data into the new master, check the connected slaves work
+	// insert data into the new master, check the connected replica work
 	insertSQL := fmt.Sprintf(insertSQL, 3, 3)
 	runSQL(ctx, t, insertSQL, tablet62044)
 	err = checkInsertedValues(ctx, t, tablet31981, 3)
@@ -590,7 +590,7 @@ func TestReparentWithDownSlave(t *testing.T) {
 	err = checkInsertedValues(ctx, t, tablet62344, 3)
 	assert.Nil(t, err)
 
-	// restart mysql on the old slave, should still be connecting to the old master
+	// restart mysql on the old replica, should still be connecting to the old master
 	tablet41983.MysqlctlProcess.InitMysql = false
 	err = tablet41983.MysqlctlProcess.Start()
 	assert.Nil(t, err)
@@ -642,7 +642,7 @@ func TestChangeTypeSemiSync(t *testing.T) {
 		assert.Nil(t, err)
 	}
 
-	// Updated rdonly tablet ans set the right slave type
+	// Updated rdonly tablet and set tablet type to rdonly
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonly1.Alias, "rdonly")
 	assert.Nil(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", rdonly2.Alias, "rdonly")
@@ -657,7 +657,7 @@ func TestChangeTypeSemiSync(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("StopSlave", rdonly1.Alias)
 	assert.Nil(t, err)
 
-	// Check semi-sync on slaves.
+	// Check semi-sync on replicas.
 	// The flag is only an indication of the value to use next time
 	// we turn replication on, so also check the status.
 	// rdonly1 is not replicating, so its status is off.
@@ -766,10 +766,10 @@ func positionAtLeast(t *testing.T, tablet *cluster.Vttablet, a string, b string)
 	return isAtleast
 }
 
-func checkReparentFromOutside(t *testing.T, tablet *cluster.Vttablet, brutal bool, baseTime int64) {
+func checkReparentFromOutside(t *testing.T, tablet *cluster.Vttablet, downMaster bool, baseTime int64) {
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell1, keyspaceShard)
 	assert.Nil(t, err, "error should be Nil")
-	if !brutal {
+	if !downMaster {
 		assertNodeCount(t, result, int(3))
 	} else {
 		assertNodeCount(t, result, int(2))
