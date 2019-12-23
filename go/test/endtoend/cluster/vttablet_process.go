@@ -316,6 +316,27 @@ func executeQuery(dbParams mysql.ConnParams, query string) (*sqltypes.Result, er
 	return dbConn.ExecuteFetch(query, 1000, true)
 }
 
+// GetDBVar returns first matching database variable's value
+func (vttablet *VttabletProcess) GetDBVar(varName string, ksName string) (string, error) {
+	return vttablet.getDBSystemValues("variables", varName, ksName)
+}
+
+// GetDBStatus returns first matching database variable's value
+func (vttablet *VttabletProcess) GetDBStatus(status string, ksName string) (string, error) {
+	return vttablet.getDBSystemValues("status", status, ksName)
+}
+
+func (vttablet *VttabletProcess) getDBSystemValues(placeholder string, value string, ksName string) (string, error) {
+	output, err := vttablet.QueryTablet(fmt.Sprintf("show %s like '%s'", placeholder, value), ksName, true)
+	if err != nil || output.Rows == nil {
+		return "", err
+	}
+	if len(output.Rows) > 0 {
+		return fmt.Sprintf("%s", output.Rows[0][1].ToBytes()), nil
+	}
+	return "", nil
+}
+
 // VttabletProcessInstance returns a VttabletProcess handle for vttablet process
 // configured with the given Config.
 // The process must be manually started by calling setup()

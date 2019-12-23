@@ -518,16 +518,15 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 			"MultiSplitDiff",
 			fmt.Sprintf("%s/%s", keyspaceName, shard1.Name))
 		assert.Nil(t, err)
-	}
-
-	for _, shard := range []string{shard21.Name, shard22.Name} {
-		err = ClusterInstance.VtworkerProcess.ExecuteVtworkerCommand(ClusterInstance.GetAndReservePort(),
-			ClusterInstance.GetAndReservePort(),
-			"--use_v3_resharding_mode=true",
-			"SplitDiff",
-			"--min_healthy_rdonly_tablets", "1",
-			fmt.Sprintf("%s/%s", keyspaceName, shard))
-		assert.Nil(t, err)
+		for _, shard := range []string{shard21.Name, shard22.Name} {
+			err = ClusterInstance.VtworkerProcess.ExecuteVtworkerCommand(ClusterInstance.GetAndReservePort(),
+				ClusterInstance.GetAndReservePort(),
+				"--use_v3_resharding_mode=true",
+				"SplitDiff",
+				"--min_healthy_rdonly_tablets", "1",
+				fmt.Sprintf("%s/%s", keyspaceName, shard))
+			assert.Nil(t, err)
+		}
 	}
 
 	// get status for the destination master tablet, make sure we have it all

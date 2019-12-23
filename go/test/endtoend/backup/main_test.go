@@ -89,10 +89,11 @@ func TestMain(m *testing.M) {
 
 		var mysqlProcs []*exec.Cmd
 		for i := 0; i < 3; i++ {
-			tablet := localCluster.GetVttabletInstance(0)
+			tabletType := "replica"
 			if i == 0 {
-				tablet.Type = "master"
+				tabletType = "master"
 			}
+			tablet := localCluster.GetVttabletInstance(tabletType, 0, cell)
 			tablet.VttabletProcess = localCluster.GetVtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
 			tablet.VttabletProcess.DbPassword = dbPassword
 			tablet.VttabletProcess.ExtraArgs = commonTabletArg
@@ -107,16 +108,16 @@ func TestMain(m *testing.M) {
 			} else {
 				mysqlProcs = append(mysqlProcs, proc)
 			}
-			shard.Vttablets = append(shard.Vttablets, *tablet)
+			shard.Vttablets = append(shard.Vttablets, tablet)
 		}
 		for _, proc := range mysqlProcs {
 			if err := proc.Wait(); err != nil {
 				return 1, err
 			}
 		}
-		master = &shard.Vttablets[0]
-		replica1 = &shard.Vttablets[1]
-		replica2 = &shard.Vttablets[2]
+		master = shard.Vttablets[0]
+		replica1 = shard.Vttablets[1]
+		replica2 = shard.Vttablets[2]
 
 		if err := localCluster.VtctlclientProcess.InitTablet(master, cell, keyspaceName, hostname, shard.Name); err != nil {
 			return 1, err
