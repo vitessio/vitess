@@ -1545,6 +1545,41 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 	}
 }
 
+func TestInsertBadAutoInc(t *testing.T) {
+	vschema := `
+{
+	"sharded": true,
+	"vindexes": {
+		"hash_index": {
+			"type": "hash"
+		}
+	},
+	"tables": {
+		"bad_auto": {
+			"column_vindexes": [
+				{
+					"column": "id",
+					"name": "hash_index"
+				}
+			],
+			"auto_increment": {
+				"column": "id",
+				"sequence": "absent"
+			}
+		}
+	}
+}
+`
+	executor, _, _, _ := createCustomExecutor(vschema)
+
+	// If auto inc table cannot be found, the table should not be added to vschema.
+	_, err := executorExec(executor, "insert into bad_auto(v, name) values (1, 'myname')", nil)
+	want := "table bad_auto not found"
+	if err == nil || err.Error() != want {
+		t.Errorf("bad auto inc err: %v, want %v", err, want)
+	}
+}
+
 func TestKeyDestRangeQuery(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	// it works in a single shard key range
