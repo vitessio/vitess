@@ -38,7 +38,7 @@ var (
 	tmClient        *tmc.Client
 	keyspaceName    = "ks"
 	shardName       = "0"
-	shard1Name      = "0000000000000000-ffffffffffffffff"
+	shard1Name      = "-80"
 	keyspaceShard   = keyspaceName + "/" + shardName
 	dbName          = "vt_" + keyspaceName
 	username        = "vt_dba"
