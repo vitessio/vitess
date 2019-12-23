@@ -355,11 +355,11 @@ func initMySQLProtocol() {
 			}
 			mysqlListener.RequireSecureTransport = *mysqlServerRequireSecureTransport
 		}
-		mysqlListener.AllowClearTextWithoutTLS = *mysqlAllowClearTextWithoutTLS
+		mysqlListener.AllowClearTextWithoutTLS.Set(*mysqlAllowClearTextWithoutTLS)
 		// Check for the connection threshold
 		if *mysqlSlowConnectWarnThreshold != 0 {
 			log.Infof("setting mysql slow connection threshold to %v", mysqlSlowConnectWarnThreshold)
-			mysqlListener.SlowConnectWarnThreshold = *mysqlSlowConnectWarnThreshold
+			mysqlListener.SlowConnectWarnThreshold.Set(*mysqlSlowConnectWarnThreshold)
 		}
 		// Start listening for tcp
 		go mysqlListener.Accept()

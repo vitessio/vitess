@@ -1,5 +1,5 @@
 name: unit_race
-on: [repository_dispatch] # disable for now
+on: [push, pull_request]
 jobs:
 
   build:
