@@ -106,7 +106,7 @@ const (
 	configFileName = "test/config.json"
 
 	// List of flavors for which a bootstrap Docker image is available.
-	flavors = "mariadb,mysql56,mysql57,percona,percona57"
+	flavors = "mysql56,mysql57,mysql80,mariadb,mariadb103,percona,percona57,percona80"
 )
 
 // Config is the overall object serialized in test/config.json.
