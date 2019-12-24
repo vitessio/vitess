@@ -26,6 +26,8 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
@@ -840,6 +842,104 @@ func TestResolverVStreamHeartbeat(t *testing.T) {
 	wantErr := "context canceled"
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
+	}
+}
+
+func TestResolverResolveVStreamParams(t *testing.T) {
+	name := "TestResolverVStream"
+	_ = createSandbox(name)
+	hc := discovery.NewFakeHealthCheck()
+	res := newTestResolver(hc, new(sandboxTopo), "aa")
+	testcases := []struct {
+		input  *binlogdatapb.VGtid
+		output *binlogdatapb.VGtid
+	}{{
+		input: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: "TestResolverVStream",
+			}},
+		},
+		output: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: "TestResolverVStream",
+				Shard:    "-20",
+				Gtid:     "current",
+			}, {
+				Keyspace: "TestResolverVStream",
+				Shard:    "20-40",
+				Gtid:     "current",
+			}, {
+				Keyspace: "TestResolverVStream",
+				Shard:    "40-60",
+				Gtid:     "current",
+			}, {
+				Keyspace: "TestResolverVStream",
+				Shard:    "60-80",
+				Gtid:     "current",
+			}, {
+				Keyspace: "TestResolverVStream",
+				Shard:    "80-a0",
+				Gtid:     "current",
+			}, {
+				Keyspace: "TestResolverVStream",
+				Shard:    "a0-c0",
+				Gtid:     "current",
+			}, {
+				Keyspace: "TestResolverVStream",
+				Shard:    "c0-e0",
+				Gtid:     "current",
+			}, {
+				Keyspace: "TestResolverVStream",
+				Shard:    "e0-",
+				Gtid:     "current",
+			}},
+		},
+	}, {
+		input: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: "TestResolverVStream",
+				Shard:    "-20",
+			}},
+		},
+		output: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: "TestResolverVStream",
+				Shard:    "-20",
+				Gtid:     "current",
+			}},
+		},
+	}, {
+		input: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: "TestResolverVStream",
+				Shard:    "-20",
+				Gtid:     "other",
+			}},
+		},
+		output: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: "TestResolverVStream",
+				Shard:    "-20",
+				Gtid:     "other",
+			}},
+		},
+	}}
+	wantFilter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	for _, tcase := range testcases {
+		filter, vgtid, err := res.resolveVStreamParams(context.Background(), topodatapb.TabletType_REPLICA, tcase.input, nil)
+		require.NoError(t, err)
+		assert.Equal(t, tcase.output, vgtid)
+		assert.Equal(t, wantFilter, filter)
+	}
+	// Special-case empty vgtid because output is too big.
+	_, vgtid, err := res.resolveVStreamParams(context.Background(), topodatapb.TabletType_REPLICA, nil, nil)
+	require.NoError(t, err)
+	if got, want := len(vgtid.ShardGtids), 8; want >= got {
+		t.Errorf("len(vgtid.ShardGtids): %v, must be >%d", got, want)
 	}
 }
 

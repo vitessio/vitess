@@ -350,6 +350,11 @@ func (res *Resolver) VStream(ctx context.Context, tabletType topodatapb.TabletTy
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	filter, vgtid, err := res.resolveVStreamParams(ctx, tabletType, vgtid, filter)
+	if err != nil {
+		return err
+	}
+
 	// mu protects sending on ch, err and positions.
 	// mu is needed for sending because transactions can come
 	// in separate chunks. If so, we have to send all the
@@ -429,6 +434,53 @@ func (res *Resolver) VStream(ctx context.Context, tabletType topodatapb.TabletTy
 	return outerErr
 }
 
+// resolveVStreamParams provides defaults for the inputs if they're not specified.
+func (res *Resolver) resolveVStreamParams(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter) (*binlogdatapb.Filter, *binlogdatapb.VGtid, error) {
+	if filter == nil {
+		filter = &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match: "/.*",
+			}},
+		}
+	}
+	if vgtid == nil {
+		vgtid = &binlogdatapb.VGtid{}
+	}
+	if len(vgtid.ShardGtids) == 0 {
+		keyspaces, err := res.toposerv.GetSrvKeyspaceNames(ctx, res.cell)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, keyspace := range keyspaces {
+			vgtid.ShardGtids = append(vgtid.ShardGtids, &binlogdatapb.ShardGtid{Keyspace: keyspace})
+		}
+	}
+	newvgtid := &binlogdatapb.VGtid{}
+	for _, sgtid := range vgtid.ShardGtids {
+		if sgtid.Shard == "" {
+			// TODO(sougou): this should work with the new Migrate workflow
+			_, _, allShards, err := res.resolver.GetKeyspaceShards(ctx, sgtid.Keyspace, tabletType)
+			if err != nil {
+				return nil, nil, err
+			}
+			for _, shard := range allShards {
+				newvgtid.ShardGtids = append(newvgtid.ShardGtids, &binlogdatapb.ShardGtid{
+					Keyspace: sgtid.Keyspace,
+					Shard:    shard.Name,
+				})
+			}
+		} else {
+			newvgtid.ShardGtids = append(newvgtid.ShardGtids, sgtid)
+		}
+	}
+	for _, sgtid := range newvgtid.ShardGtids {
+		if sgtid.Gtid == "" {
+			sgtid.Gtid = "current"
+		}
+	}
+	return filter, newvgtid, nil
+}
+
 // vstreamOneShard streams from one shard. If transactions come in separate chunks, they are grouped and sent.
 func (res *Resolver) vstreamOneShard(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, startPos string, filter *binlogdatapb.Filter, send func(eventss [][]*binlogdatapb.VEvent) error) error {
 	errCount := 0
@@ -478,7 +530,8 @@ func (res *Resolver) vstreamOneShard(ctx context.Context, keyspace, shard string
 			// Unreachable.
 			err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstream ended unexpectedly")
 		}
-		if !isRetryableError(err) {
+		// Don't use isRetryableError here, because we're not using the discovery gateway, which retries on UNAVAILABLE.
+		if vterrors.Code(err) != vtrpcpb.Code_FAILED_PRECONDITION && vterrors.Code(err) != vtrpcpb.Code_UNAVAILABLE {
 			log.Errorf("vstream for %s/%s error: %v", keyspace, shard, err)
 			return err
 		}
