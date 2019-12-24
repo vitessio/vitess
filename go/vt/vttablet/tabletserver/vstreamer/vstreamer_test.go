@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 
@@ -237,9 +238,7 @@ func TestREKeyRange(t *testing.T) {
 	})
 	engine.se.Reload(context.Background())
 
-	if err := env.SetVSchema(shardedVSchema); err != nil {
-		t.Fatal(err)
-	}
+	setVSchema(t, shardedVSchema)
 	defer env.SetVSchema("{}")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -298,9 +297,7 @@ func TestREKeyRange(t *testing.T) {
     }
   }
 }`
-	if err := env.SetVSchema(altVSchema); err != nil {
-		t.Fatal(err)
-	}
+	setVSchema(t, altVSchema)
 
 	// Only the first insert should be sent.
 	input = []string{
@@ -331,9 +328,7 @@ func TestInKeyRangeMultiColumn(t *testing.T) {
 	})
 	engine.se.Reload(context.Background())
 
-	if err := env.SetVSchema(multicolumnVSchema); err != nil {
-		t.Fatal(err)
-	}
+	setVSchema(t, multicolumnVSchema)
 	defer env.SetVSchema("{}")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -388,9 +383,7 @@ func TestREMultiColumnVindex(t *testing.T) {
 	})
 	engine.se.Reload(context.Background())
 
-	if err := env.SetVSchema(multicolumnVSchema); err != nil {
-		t.Fatal(err)
-	}
+	setVSchema(t, multicolumnVSchema)
 	defer env.SetVSchema("{}")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1205,4 +1198,27 @@ func masterPosition(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return mysql.EncodePosition(pos)
+}
+
+func setVSchema(t *testing.T, vschema string) {
+	t.Helper()
+
+	curCount := vschemaUpdates.Get()
+
+	if err := env.SetVSchema(vschema); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for curCount to go up.
+	updated := false
+	for i := 0; i < 10; i++ {
+		if vschemaUpdates.Get() != curCount {
+			updated = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !updated {
+		t.Error("vschema did not get updated")
+	}
 }
