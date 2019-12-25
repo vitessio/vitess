@@ -437,13 +437,13 @@ func TestResolveVStreamParams(t *testing.T) {
 		}},
 	}
 	for _, tcase := range testcases {
-		filter, vgtid, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, tcase.input, nil)
+		vgtid, filter, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, tcase.input, nil)
 		require.NoError(t, err)
 		assert.Equal(t, tcase.output, vgtid)
 		assert.Equal(t, wantFilter, filter)
 	}
 	// Special-case empty vgtid because output is too big.
-	_, vgtid, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, nil, nil)
+	vgtid, _, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, nil, nil)
 	require.NoError(t, err)
 	if got, want := len(vgtid.ShardGtids), 8; want >= got {
 		t.Errorf("len(vgtid.ShardGtids): %v, must be >%d", got, want)

@@ -39,16 +39,27 @@ type vstreamManager struct {
 
 // vstream contains the metadata for one VStream request.
 type vstream struct {
-	// mu protects vgtid and err
+	// mu protects parts of vgtid, and the semantics of a send.
+	// Once streaming begins, the Gtid within each ShardGtid will be updated on each event.
+	// Also, the list of ShardGtids can change on a journaling event.
+	// All other parts of vgtid can be read without a lock.
+	// The lock is also held to ensure that all grouped events are sent together.
+	// This can happen if vstreamer breaks up large transactions into smaller chunks.
 	mu    sync.Mutex
 	vgtid *binlogdatapb.VGtid
-	err   error
+	send  func(events []*binlogdatapb.VEvent) error
+
+	// err can only be set once.
+	once sync.Once
+	err  error
 
 	// Other input parameters
 	tabletType topodatapb.TabletType
 	filter     *binlogdatapb.Filter
-	send       func(events []*binlogdatapb.VEvent) error
 	resolver   *srvtopo.Resolver
+
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
 }
 
 func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell string) *vstreamManager {
@@ -60,7 +71,7 @@ func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell str
 }
 
 func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, send func(events []*binlogdatapb.VEvent) error) error {
-	filter, vgtid, err := vsm.resolveParams(ctx, tabletType, vgtid, filter)
+	vgtid, filter, err := vsm.resolveParams(ctx, tabletType, vgtid, filter)
 	if err != nil {
 		return err
 	}
@@ -75,7 +86,7 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 }
 
 // resolveParams provides defaults for the inputs if they're not specified.
-func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter) (*binlogdatapb.Filter, *binlogdatapb.VGtid, error) {
+func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter) (*binlogdatapb.VGtid, *binlogdatapb.Filter, error) {
 	if filter == nil {
 		filter = &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
@@ -118,80 +129,41 @@ func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodat
 			sgtid.Gtid = "current"
 		}
 	}
-	return filter, newvgtid, nil
+	return newvgtid, filter, nil
 }
 
 func (vs *vstream) stream(ctx context.Context) error {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	ctx, vs.cancel = context.WithCancel(ctx)
+	defer vs.cancel()
 
-	// mu protects sending on ch, err and positions.
-	// mu is needed for sending because transactions can come
-	// in separate chunks. If so, we have to send all the
-	// chunks together.
-	ch := make(chan []*binlogdatapb.VEvent)
-
-	var wg sync.WaitGroup
-	for _, sgtid := range vs.vgtid.ShardGtids {
-		wg.Add(1)
-		go func(sgtid *binlogdatapb.ShardGtid) {
-			defer wg.Done()
-			err := vs.vstreamOneShard(ctx, sgtid.Keyspace, sgtid.Shard, vs.tabletType, sgtid.Gtid, vs.filter, func(eventss [][]*binlogdatapb.VEvent) error {
-				vs.mu.Lock()
-				defer vs.mu.Unlock()
-
-				// Send all chunks while holding the lock.
-				for _, evs := range eventss {
-					// Replace GTID and table names.
-					for _, ev := range evs {
-						switch ev.Type {
-						case binlogdatapb.VEventType_GTID:
-							// Update the VGtid and send that instead.
-							sgtid.Gtid = ev.Gtid
-							ev.Type = binlogdatapb.VEventType_VGTID
-							ev.Gtid = ""
-							ev.Vgtid = proto.Clone(vs.vgtid).(*binlogdatapb.VGtid)
-						case binlogdatapb.VEventType_FIELD:
-							ev.FieldEvent.TableName = sgtid.Keyspace + "." + ev.FieldEvent.TableName
-						case binlogdatapb.VEventType_ROW:
-							ev.RowEvent.TableName = sgtid.Keyspace + "." + ev.RowEvent.TableName
-						}
-					}
-					select {
-					case <-ctx.Done():
-						return ctx.Err()
-					case ch <- evs:
-					}
-				}
-				return nil
-			})
-
-			// Set the error on exit. First one wins.
-			vs.mu.Lock()
-			defer vs.mu.Unlock()
-			if vs.err == nil {
-				vs.err = err
-				cancel()
-			}
-		}(sgtid)
+	// Make a copy first, because the ShardGtids list can change once streaming starts.
+	copylist := append(([]*binlogdatapb.ShardGtid)(nil), vs.vgtid.ShardGtids...)
+	for _, sgtid := range copylist {
+		vs.startOneStream(ctx, sgtid)
 	}
-
-	go func() {
-		wg.Wait()
-		close(ch)
-	}()
-
-	for ev := range ch {
-		if err := vs.send(ev); err != nil {
-			return err
-		}
-	}
-
+	vs.wg.Wait()
 	return vs.err
 }
 
-// vstreamOneShard streams from one shard. If transactions come in separate chunks, they are grouped and sent.
-func (vs *vstream) vstreamOneShard(ctx context.Context, keyspace, shard string, tabletType topodatapb.TabletType, startPos string, filter *binlogdatapb.Filter, send func(eventss [][]*binlogdatapb.VEvent) error) error {
+// startOneStream sets up one shard stream.
+func (vs *vstream) startOneStream(ctx context.Context, sgtid *binlogdatapb.ShardGtid) {
+	vs.wg.Add(1)
+	go func() {
+		defer vs.wg.Done()
+		err := vs.streamFromTablet(ctx, sgtid)
+
+		// Set the error on exit. First one wins.
+		if err != nil {
+			vs.once.Do(func() {
+				vs.err = err
+				vs.cancel()
+			})
+		}
+	}()
+}
+
+// streamFromTablet streams from one shard. If transactions come in separate chunks, they are grouped and sent.
+func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.ShardGtid) error {
 	errCount := 0
 	for {
 		select {
@@ -201,7 +173,7 @@ func (vs *vstream) vstreamOneShard(ctx context.Context, keyspace, shard string, 
 		}
 
 		var eventss [][]*binlogdatapb.VEvent
-		rss, err := vs.resolver.ResolveDestination(ctx, keyspace, tabletType, key.DestinationShard(shard))
+		rss, err := vs.resolver.ResolveDestination(ctx, sgtid.Keyspace, vs.tabletType, key.DestinationShard(sgtid.Shard))
 		if err != nil {
 			return err
 		}
@@ -209,7 +181,14 @@ func (vs *vstream) vstreamOneShard(ctx context.Context, keyspace, shard string, 
 			// Unreachable.
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected number or shards: %v", rss)
 		}
-		err = rss[0].QueryService.VStream(ctx, rss[0].Target, startPos, filter, func(events []*binlogdatapb.VEvent) error {
+		// Safe to access sgtid.Gtid here (because it can't change until streaming begins).
+		err = rss[0].QueryService.VStream(ctx, rss[0].Target, sgtid.Gtid, vs.filter, func(events []*binlogdatapb.VEvent) error {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+
 			// Remove all heartbeat events for now.
 			// Otherwise they can accumulate indefinitely if there are no real events.
 			// TODO(sougou): figure out a model for this.
@@ -228,7 +207,7 @@ func (vs *vstream) vstreamOneShard(ctx context.Context, keyspace, shard string, 
 			lastEvent := events[len(events)-1]
 			switch lastEvent.Type {
 			case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL:
-				if err := send(eventss); err != nil {
+				if err := vs.convertAndSend(sgtid, eventss); err != nil {
 					return err
 				}
 				eventss = nil
@@ -239,15 +218,42 @@ func (vs *vstream) vstreamOneShard(ctx context.Context, keyspace, shard string, 
 			// Unreachable.
 			err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstream ended unexpectedly")
 		}
-		// Don't use isRetryableError here, because we're not using the discovery gateway, which retries on UNAVAILABLE.
 		if vterrors.Code(err) != vtrpcpb.Code_FAILED_PRECONDITION && vterrors.Code(err) != vtrpcpb.Code_UNAVAILABLE {
-			log.Errorf("vstream for %s/%s error: %v", keyspace, shard, err)
+			log.Errorf("vstream for %s/%s error: %v", sgtid.Keyspace, sgtid.Shard, err)
 			return err
 		}
 		errCount++
 		if errCount >= 3 {
-			log.Errorf("vstream for %s/%s had three consecutive failures: %v", keyspace, shard, err)
+			log.Errorf("vstream for %s/%s had three consecutive failures: %v", sgtid.Keyspace, sgtid.Shard, err)
 			return err
 		}
 	}
+}
+
+func (vs *vstream) convertAndSend(sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdatapb.VEvent) error {
+	vs.mu.Lock()
+	defer vs.mu.Unlock()
+
+	// Send all chunks while holding the lock.
+	for _, evs := range eventss {
+		// Replace GTID and table names.
+		for _, ev := range evs {
+			switch ev.Type {
+			case binlogdatapb.VEventType_GTID:
+				// Update the VGtid and send that instead.
+				sgtid.Gtid = ev.Gtid
+				ev.Type = binlogdatapb.VEventType_VGTID
+				ev.Gtid = ""
+				ev.Vgtid = proto.Clone(vs.vgtid).(*binlogdatapb.VGtid)
+			case binlogdatapb.VEventType_FIELD:
+				ev.FieldEvent.TableName = sgtid.Keyspace + "." + ev.FieldEvent.TableName
+			case binlogdatapb.VEventType_ROW:
+				ev.RowEvent.TableName = sgtid.Keyspace + "." + ev.RowEvent.TableName
+			}
+		}
+		if err := vs.send(evs); err != nil {
+			return err
+		}
+	}
+	return nil
 }
