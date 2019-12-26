@@ -17,6 +17,8 @@ limitations under the License.
 package vtgate
 
 import (
+	"fmt"
+	"io"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
@@ -39,15 +41,16 @@ type vstreamManager struct {
 
 // vstream contains the metadata for one VStream request.
 type vstream struct {
-	// mu protects parts of vgtid, and the semantics of a send.
+	// mu protects parts of vgtid, the semantics of a send, and journaler.
 	// Once streaming begins, the Gtid within each ShardGtid will be updated on each event.
 	// Also, the list of ShardGtids can change on a journaling event.
 	// All other parts of vgtid can be read without a lock.
 	// The lock is also held to ensure that all grouped events are sent together.
 	// This can happen if vstreamer breaks up large transactions into smaller chunks.
-	mu    sync.Mutex
-	vgtid *binlogdatapb.VGtid
-	send  func(events []*binlogdatapb.VEvent) error
+	mu        sync.Mutex
+	vgtid     *binlogdatapb.VGtid
+	send      func(events []*binlogdatapb.VEvent) error
+	journaler map[int64]*journalEvent
 
 	// err can only be set once.
 	once sync.Once
@@ -60,6 +63,12 @@ type vstream struct {
 
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
+}
+
+type journalEvent struct {
+	journal      *binlogdatapb.Journal
+	participants map[*binlogdatapb.ShardGtid]bool
+	done         chan struct{}
 }
 
 func newVStreamManager(resolver *srvtopo.Resolver, serv srvtopo.Server, cell string) *vstreamManager {
@@ -175,11 +184,19 @@ func (vs *vstream) startOneStream(ctx context.Context, sgtid *binlogdatapb.Shard
 
 // streamFromTablet streams from one shard. If transactions come in separate chunks, they are grouped and sent.
 func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.ShardGtid) error {
+	// If streamCtx is canceled, we ignore all events until we exit.
+	// This is used to ensure that we don't send more events after a valid journal is encountered.
+	streamCtx, streamCancel := context.WithCancel(ctx)
+	defer streamCancel()
+
 	errCount := 0
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case <-streamCtx.Done():
+			// Unreachable
+			return nil
 		default:
 		}
 
@@ -197,15 +214,38 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
+			case <-streamCtx.Done():
+				// Unreachable
+				return io.EOF
 			default:
 			}
 
-			// Remove all heartbeat events for now.
-			// Otherwise they can accumulate indefinitely if there are no real events.
-			// TODO(sougou): figure out a model for this.
 			for i := 0; i < len(events); i++ {
-				if events[i].Type == binlogdatapb.VEventType_HEARTBEAT {
+				switch events[i].Type {
+				case binlogdatapb.VEventType_HEARTBEAT:
+					// Remove all heartbeat events for now.
+					// Otherwise they can accumulate indefinitely if there are no real events.
+					// TODO(sougou): figure out a model for this.
 					events = append(events[:i], events[i+1:]...)
+				case binlogdatapb.VEventType_JOURNAL:
+					journal := events[i].Journal
+					// Don't send journals even if ignored.
+					events = append(events[:i], events[i+1:]...)
+					je, err := vs.getJournalEvent(ctx, sgtid, journal)
+					if err != nil {
+						return err
+					}
+					if je == nil {
+						continue
+					}
+					// Wait till all other participants converge and return EOF.
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					case <-je.done:
+						streamCancel()
+						return io.EOF
+					}
 				}
 			}
 			if len(events) == 0 {
@@ -267,4 +307,62 @@ func (vs *vstream) convertAndSend(sgtid *binlogdatapb.ShardGtid, eventss [][]*bi
 		}
 	}
 	return nil
+}
+
+func (vs *vstream) getJournalEvent(ctx context.Context, sgtid *binlogdatapb.ShardGtid, journal *binlogdatapb.Journal) (*journalEvent, error) {
+	if journal.MigrationType == binlogdatapb.MigrationType_TABLES {
+		return nil, nil
+	}
+
+	vs.mu.Lock()
+	defer vs.mu.Unlock()
+
+	je, ok := vs.journaler[journal.Id]
+	if !ok {
+		log.Infof("Journal encountered: %v", journal)
+		je = &journalEvent{
+			journal:      journal,
+			participants: make(map[*binlogdatapb.ShardGtid]bool),
+			done:         make(chan struct{}),
+		}
+		matched := false
+		for _, jks := range journal.Participants {
+			participantMatched := false
+			for _, inner := range vs.vgtid.ShardGtids {
+				if inner.Keyspace == jks.Keyspace && inner.Shard == jks.Shard {
+					je.participants[inner] = false
+					if sgtid == inner {
+						matched = true
+					}
+				}
+			}
+			if !participantMatched {
+				return nil, fmt.Errorf("not all journaling participants are in the stream: %v", jks)
+			}
+		}
+		if !matched {
+			// This sgtid is not a participant.
+			return nil, nil
+		}
+		vs.journaler[journal.Id] = je
+	}
+
+	je.participants[sgtid] = true
+
+	for _, active := range je.participants {
+		if !active {
+			return je, nil
+		}
+	}
+	for i := 0; i < len(vs.vgtid.ShardGtids); i++ {
+		if je.participants[vs.vgtid.ShardGtids[i]] {
+			vs.vgtid.ShardGtids = append(vs.vgtid.ShardGtids[:i], vs.vgtid.ShardGtids[i+1:]...)
+		}
+	}
+	for _, sgtid := range je.journal.ShardGtids {
+		vs.vgtid.ShardGtids = append(vs.vgtid.ShardGtids, sgtid)
+		vs.startOneStream(ctx, sgtid)
+	}
+	close(je.done)
+	return je, nil
 }
