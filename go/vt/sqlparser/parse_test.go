@@ -134,7 +134,7 @@ var (
 	}, {
 		input: "select /* distinct */ distinct 1 from t",
 	}, {
-		input: "select all col from t",
+		input:  "select all col from t",
 		output: "select col from t",
 	}, {
 		input: "select /* straight_join */ straight_join 1 from t",
@@ -842,12 +842,6 @@ var (
 		input:  "alter table a alter foo",
 		output: "alter table a",
 	}, {
-		input:  "alter table a change foo",
-		output: "alter table a",
-	}, {
-		input:  "alter table a modify foo",
-		output: "alter table a",
-	}, {
 		input:  "alter table a drop foo",
 		output: "alter table a drop column foo",
 	}, {
@@ -926,7 +920,7 @@ var (
 		input:  "alter table a add constraint",
 		output: "alter table a",
 	}, {
-		input:  "alter table a drop column id",
+		input: "alter table a drop column id",
 	}, {
 		input:  "alter table a drop partition p2712",
 		output: "alter table a",
@@ -1509,11 +1503,23 @@ var (
 		input:  "alter table t add column c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null",
 		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
 	}, {
+		input:  "alter table t add column c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null after foo",
+		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n) after foo",
+	}, {
+		input:  "alter table t add column c int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null first",
+		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n) first",
+	}, {
 		input:  "alter table t add column c int default 0 not null auto_increment on update current_timestamp() unique comment 'a comment here'",
 		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
 	}, {
 		input:  "alter table t add column c int comment 'a comment here' unique on update current_timestamp() auto_increment not null default 0",
 		output: "alter table t add column (\n\tc int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n)",
+	}, {
+		input:  "alter table t change foo bar int not null auto_increment first",
+		output: "alter table t change column foo (\n\tbar int not null auto_increment\n) first",
+	}, {
+		input:  "alter table a modify foo int unique comment 'a comment here' auto_increment on update current_timestamp() default 0 not null after bar",
+		output: "alter table a modify column foo (\n\tfoo int not null default 0 on update current_timestamp() auto_increment comment 'a comment here' unique\n) after bar",
 	}, {
 		input:  "delete a.*, b.* from tbl_a a, tbl_b b where a.id = b.id and b.name = 'test'",
 		output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.name = 'test'",
