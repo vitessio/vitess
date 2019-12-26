@@ -28,5 +28,4 @@ jobs:
     - name: cluster_endtoend_shard_12
       run: |
         source build.env
-        echo $VTDATAROOT
         go run test.go -docker=false -print-log -shard 12
