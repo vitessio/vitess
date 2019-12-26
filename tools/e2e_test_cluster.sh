@@ -24,7 +24,7 @@ source build.env
 
 packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}' ./go/.../endtoend/... | sort)
 
-cluster_tests=$(echo "$packages_with_tests" | grep -E "go/test/endtoend" cut -d" " -f1)
+cluster_tests=$(echo "$packages_with_tests" | grep -E "go/test/endtoend" | cut -d" " -f1)
 
 # Run cluster test sequentially
 echo "running cluster tests $cluster_tests"
