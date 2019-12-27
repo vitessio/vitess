@@ -90,6 +90,7 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 		filter:     filter,
 		send:       send,
 		resolver:   vsm.resolver,
+		journaler:  make(map[int64]*journalEvent),
 	}
 	return vs.stream(ctx)
 }
@@ -184,17 +185,16 @@ func (vs *vstream) startOneStream(ctx context.Context, sgtid *binlogdatapb.Shard
 
 // streamFromTablet streams from one shard. If transactions come in separate chunks, they are grouped and sent.
 func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.ShardGtid) error {
-	// If streamCtx is canceled, we ignore all events until we exit.
-	// This is used to ensure that we don't send more events after a valid journal is encountered.
-	streamCtx, streamCancel := context.WithCancel(ctx)
-	defer streamCancel()
+	// jounralDone is assigned a channel when a journal event is encountered.
+	// It will be closed when all journal events converge.
+	var journalDone chan struct{}
 
 	errCount := 0
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-streamCtx.Done():
+		case <-journalDone:
 			// Unreachable
 			return nil
 		default:
@@ -214,60 +214,83 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-streamCtx.Done():
+			case <-journalDone:
 				// Unreachable
 				return io.EOF
 			default:
 			}
 
-			for i := 0; i < len(events); i++ {
-				switch events[i].Type {
+			sendevents := make([]*binlogdatapb.VEvent, 0, len(events))
+			for _, event := range events {
+				switch event.Type {
+				case binlogdatapb.VEventType_GTID:
+					// Update the VGtid and send that instead.
+					sgtid.Gtid = event.Gtid
+					sendevents = append(sendevents, &binlogdatapb.VEvent{
+						Type:  binlogdatapb.VEventType_VGTID,
+						Vgtid: proto.Clone(vs.vgtid).(*binlogdatapb.VGtid),
+					})
+				case binlogdatapb.VEventType_FIELD:
+					// Update table names and send.
+					ev := proto.Clone(event).(*binlogdatapb.VEvent)
+					ev.FieldEvent.TableName = sgtid.Keyspace + "." + ev.FieldEvent.TableName
+					sendevents = append(sendevents, ev)
+				case binlogdatapb.VEventType_ROW:
+					// Update table names and send.
+					ev := proto.Clone(event).(*binlogdatapb.VEvent)
+					ev.RowEvent.TableName = sgtid.Keyspace + "." + ev.RowEvent.TableName
+					sendevents = append(sendevents, ev)
 				case binlogdatapb.VEventType_HEARTBEAT:
 					// Remove all heartbeat events for now.
 					// Otherwise they can accumulate indefinitely if there are no real events.
 					// TODO(sougou): figure out a model for this.
-					events = append(events[:i], events[i+1:]...)
 				case binlogdatapb.VEventType_JOURNAL:
-					journal := events[i].Journal
-					// Don't send journals even if ignored.
-					events = append(events[:i], events[i+1:]...)
+					journal := event.Journal
+					// Journal events are not sent to clients.
 					je, err := vs.getJournalEvent(ctx, sgtid, journal)
 					if err != nil {
 						return err
 					}
-					if je == nil {
-						continue
+					if je != nil {
+						// Wait till all other participants converge and return EOF.
+						journalDone = je.done
+						select {
+						case <-ctx.Done():
+							return ctx.Err()
+						case <-journalDone:
+							return io.EOF
+						}
 					}
-					// Wait till all other participants converge and return EOF.
-					select {
-					case <-ctx.Done():
-						return ctx.Err()
-					case <-je.done:
-						streamCancel()
-						return io.EOF
-					}
+				default:
+					sendevents = append(sendevents, event)
 				}
 			}
-			if len(events) == 0 {
+			if len(sendevents) == 0 {
 				return nil
 			}
 			// We received a valid event. Reset error count.
 			errCount = 0
 
-			eventss = append(eventss, events)
-			lastEvent := events[len(events)-1]
+			eventss = append(eventss, sendevents)
+			lastEvent := sendevents[len(sendevents)-1]
 			switch lastEvent.Type {
 			case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL:
-				if err := vs.convertAndSend(sgtid, eventss); err != nil {
+				if err := vs.sendAll(sgtid, eventss); err != nil {
 					return err
 				}
 				eventss = nil
 			}
 			return nil
 		})
+		// If stream was ended (by a journal event), return nil without checking for error.
+		select {
+		case <-journalDone:
+			return nil
+		default:
+		}
 		if err == nil {
 			// Unreachable.
-			err = vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vstream ended unexpectedly")
+			err = vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "vstream ended unexpectedly")
 		}
 		if vterrors.Code(err) != vtrpcpb.Code_FAILED_PRECONDITION && vterrors.Code(err) != vtrpcpb.Code_UNAVAILABLE {
 			log.Errorf("vstream for %s/%s error: %v", sgtid.Keyspace, sgtid.Shard, err)
@@ -278,30 +301,17 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			log.Errorf("vstream for %s/%s had three consecutive failures: %v", sgtid.Keyspace, sgtid.Shard, err)
 			return err
 		}
+		log.Infof("vstream for %s/%s error, retrying: %v", sgtid.Keyspace, sgtid.Shard, err)
 	}
 }
 
-func (vs *vstream) convertAndSend(sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdatapb.VEvent) error {
+// sendAll sends a group of events together while holding the lock.
+func (vs *vstream) sendAll(sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdatapb.VEvent) error {
 	vs.mu.Lock()
 	defer vs.mu.Unlock()
 
 	// Send all chunks while holding the lock.
 	for _, evs := range eventss {
-		// Replace GTID and table names.
-		for _, ev := range evs {
-			switch ev.Type {
-			case binlogdatapb.VEventType_GTID:
-				// Update the VGtid and send that instead.
-				sgtid.Gtid = ev.Gtid
-				ev.Type = binlogdatapb.VEventType_VGTID
-				ev.Gtid = ""
-				ev.Vgtid = proto.Clone(vs.vgtid).(*binlogdatapb.VGtid)
-			case binlogdatapb.VEventType_FIELD:
-				ev.FieldEvent.TableName = sgtid.Keyspace + "." + ev.FieldEvent.TableName
-			case binlogdatapb.VEventType_ROW:
-				ev.RowEvent.TableName = sgtid.Keyspace + "." + ev.RowEvent.TableName
-			}
-		}
 		if err := vs.send(evs); err != nil {
 			return err
 		}
@@ -320,49 +330,63 @@ func (vs *vstream) getJournalEvent(ctx context.Context, sgtid *binlogdatapb.Shar
 	je, ok := vs.journaler[journal.Id]
 	if !ok {
 		log.Infof("Journal encountered: %v", journal)
+		// Identify the list of ShardGtids that match the participants of the journal.
 		je = &journalEvent{
 			journal:      journal,
 			participants: make(map[*binlogdatapb.ShardGtid]bool),
 			done:         make(chan struct{}),
 		}
-		matched := false
 		for _, jks := range journal.Participants {
 			participantMatched := false
 			for _, inner := range vs.vgtid.ShardGtids {
 				if inner.Keyspace == jks.Keyspace && inner.Shard == jks.Shard {
+					participantMatched = true
 					je.participants[inner] = false
-					if sgtid == inner {
-						matched = true
-					}
+					break
 				}
 			}
 			if !participantMatched {
 				return nil, fmt.Errorf("not all journaling participants are in the stream: %v", jks)
 			}
 		}
-		if !matched {
+		if _, ok := je.participants[sgtid]; !ok {
 			// This sgtid is not a participant.
+			// Only a participant should add je to the journaler.
 			return nil, nil
 		}
 		vs.journaler[journal.Id] = je
 	}
 
+	if _, ok := je.participants[sgtid]; !ok {
+		// This sgtid is not a participant.
+		return nil, nil
+	}
 	je.participants[sgtid] = true
 
-	for _, active := range je.participants {
-		if !active {
+	for _, waiting := range je.participants {
+		if !waiting {
+			// Some participants are yet to join the wait.
 			return je, nil
 		}
 	}
-	for i := 0; i < len(vs.vgtid.ShardGtids); i++ {
-		if je.participants[vs.vgtid.ShardGtids[i]] {
-			vs.vgtid.ShardGtids = append(vs.vgtid.ShardGtids[:i], vs.vgtid.ShardGtids[i+1:]...)
+	// All participants are waiting. Replace old shard gtids with new ones.
+	newsgtids := make([]*binlogdatapb.ShardGtid, 0, len(vs.vgtid.ShardGtids)-len(je.participants)+len(je.journal.ShardGtids))
+	log.Infof("Removing shard gtids: %v", je.participants)
+	for _, cursgtid := range vs.vgtid.ShardGtids {
+		if je.participants[cursgtid] {
+			continue
 		}
+		newsgtids = append(newsgtids, cursgtid)
 	}
+
+	log.Infof("Adding shard gtids: %v", je.journal.ShardGtids)
 	for _, sgtid := range je.journal.ShardGtids {
-		vs.vgtid.ShardGtids = append(vs.vgtid.ShardGtids, sgtid)
+		newsgtids = append(newsgtids, sgtid)
+		// It's ok to start the streams eventhough ShardGtids is not updated yet.
+		// This is because we're still holding the lock.
 		vs.startOneStream(ctx, sgtid)
 	}
+	vs.vgtid.ShardGtids = newsgtids
 	close(je.done)
 	return je, nil
 }
