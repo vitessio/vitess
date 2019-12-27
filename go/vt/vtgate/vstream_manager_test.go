@@ -26,6 +26,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/proto/binlogdata"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -65,15 +66,14 @@ func TestVStreamEvents(t *testing.T) {
 		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid02"},
 		{Type: binlogdatapb.VEventType_DDL},
 	}
-	wantvgtid2 := &binlogdatapb.VGtid{
-		ShardGtids: []*binlogdatapb.ShardGtid{{
-			Keyspace: name,
-			Shard:    "-20",
-			Gtid:     "gtid02",
-		}},
-	}
 	want2 := &binlogdatapb.VStreamResponse{Events: []*binlogdatapb.VEvent{
-		{Type: binlogdatapb.VEventType_VGTID, Vgtid: wantvgtid2},
+		{Type: binlogdatapb.VEventType_VGTID, Vgtid: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: name,
+				Shard:    "-20",
+				Gtid:     "gtid02",
+			}},
+		}},
 		{Type: binlogdatapb.VEventType_DDL},
 	}}
 	sbc0.AddVStreamEvents(send2, nil)
@@ -383,7 +383,6 @@ func TestVStreamJournalOneToMany(t *testing.T) {
 	sbc0.AddVStreamEvents(send1, nil)
 
 	send2 := []*binlogdatapb.VEvent{
-		{Type: binlogdatapb.VEventType_BEGIN},
 		{Type: binlogdatapb.VEventType_JOURNAL, Journal: &binlogdatapb.Journal{
 			Id:            1,
 			MigrationType: binlogdatapb.MigrationType_SHARDS,
@@ -500,7 +499,6 @@ func TestVStreamJournalManyToOne(t *testing.T) {
 	sbc2.AddVStreamEvents(send4, nil)
 
 	send2 := []*binlogdatapb.VEvent{
-		{Type: binlogdatapb.VEventType_BEGIN},
 		{Type: binlogdatapb.VEventType_JOURNAL, Journal: &binlogdatapb.Journal{
 			Id:            1,
 			MigrationType: binlogdatapb.MigrationType_SHARDS,
@@ -522,8 +520,6 @@ func TestVStreamJournalManyToOne(t *testing.T) {
 	}
 	// Journal event has to be sent by both shards.
 	sbc1.AddVStreamEvents(send2, nil)
-	// Copy before sending so they don't overlap.
-	send2 = append(([]*binlogdatapb.VEvent)(nil), send2...)
 	sbc2.AddVStreamEvents(send2, nil)
 
 	send1 := []*binlogdatapb.VEvent{
@@ -600,6 +596,246 @@ func TestVStreamJournalManyToOne(t *testing.T) {
 	}
 	cancel()
 	<-ch
+}
+
+func TestVStreamJournalNoMatch(t *testing.T) {
+	name := "TestVStream"
+	_ = createSandbox(name)
+	hc := discovery.NewFakeHealthCheck()
+	vsm := newTestVStreamManager(hc, new(sandboxTopo), "aa")
+	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
+
+	send1 := []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid01"},
+		{Type: binlogdatapb.VEventType_FIELD, FieldEvent: &binlogdatapb.FieldEvent{TableName: "f0"}},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "t0"}},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}
+	want1 := &binlogdatapb.VStreamResponse{Events: []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_VGTID, Vgtid: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: name,
+				Shard:    "-20",
+				Gtid:     "gtid01",
+			}},
+		}},
+		{Type: binlogdatapb.VEventType_FIELD, FieldEvent: &binlogdatapb.FieldEvent{TableName: "TestVStream.f0"}},
+		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "TestVStream.t0"}},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}
+	sbc0.AddVStreamEvents(send1, nil)
+
+	tableJournal := []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_JOURNAL, Journal: &binlogdatapb.Journal{
+			Id:            1,
+			MigrationType: binlogdatapb.MigrationType_TABLES,
+		}},
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "jn1"},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}
+	wantjn1 := &binlogdata.VStreamResponse{Events: []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_VGTID, Vgtid: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: name,
+				Shard:    "-20",
+				Gtid:     "jn1",
+			}},
+		}},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}
+	sbc0.AddVStreamEvents(tableJournal, nil)
+
+	send2 := []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid02"},
+		{Type: binlogdatapb.VEventType_DDL},
+	}
+	want2 := &binlogdatapb.VStreamResponse{Events: []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_VGTID, Vgtid: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: name,
+				Shard:    "-20",
+				Gtid:     "gtid02",
+			}},
+		}},
+		{Type: binlogdatapb.VEventType_DDL},
+	}}
+	sbc0.AddVStreamEvents(send2, nil)
+
+	shardJournal := []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_JOURNAL, Journal: &binlogdatapb.Journal{
+			Id:            2,
+			MigrationType: binlogdatapb.MigrationType_SHARDS,
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: name,
+				Shard:    "c0-",
+				Gtid:     "posc0",
+			}},
+			Participants: []*binlogdatapb.KeyspaceShard{{
+				Keyspace: name,
+				Shard:    "c0-e0",
+			}, {
+				Keyspace: name,
+				Shard:    "e0-",
+			}},
+		}},
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "jn2"},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}
+	wantjn2 := &binlogdata.VStreamResponse{Events: []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_VGTID, Vgtid: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: name,
+				Shard:    "-20",
+				Gtid:     "jn2",
+			}},
+		}},
+		{Type: binlogdatapb.VEventType_COMMIT},
+	}}
+	sbc0.AddVStreamEvents(shardJournal, nil)
+
+	send3 := []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_GTID, Gtid: "gtid03"},
+		{Type: binlogdatapb.VEventType_DDL},
+	}
+	want3 := &binlogdatapb.VStreamResponse{Events: []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_VGTID, Vgtid: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: name,
+				Shard:    "-20",
+				Gtid:     "gtid03",
+			}},
+		}},
+		{Type: binlogdatapb.VEventType_DDL},
+	}}
+	sbc0.AddVStreamEvents(send3, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: name,
+			Shard:    "-20",
+			Gtid:     "pos",
+		}},
+	}
+	ch := make(chan *binlogdatapb.VStreamResponse)
+	go func() {
+		err := vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, func(events []*binlogdatapb.VEvent) error {
+			ch <- &binlogdatapb.VStreamResponse{Events: events}
+			return nil
+		})
+		wantErr := "context canceled"
+		if err == nil || !strings.Contains(err.Error(), wantErr) {
+			t.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
+		}
+		ch <- nil
+	}()
+	got := <-ch
+	if !proto.Equal(got, want1) {
+		t.Errorf("vstream(1):\n%v, want\n%v", got, want1)
+	}
+	got = <-ch
+	if !proto.Equal(got, wantjn1) {
+		t.Errorf("vstream(1):\n%v, want\n%v", got, want2)
+	}
+	got = <-ch
+	if !proto.Equal(got, want2) {
+		t.Errorf("vstream(1):\n%v, want\n%v", got, want2)
+	}
+	got = <-ch
+	if !proto.Equal(got, wantjn2) {
+		t.Errorf("vstream(1):\n%v, want\n%v", got, want2)
+	}
+	got = <-ch
+	if !proto.Equal(got, want3) {
+		t.Errorf("vstream(1):\n%v, want\n%v", got, want3)
+	}
+	cancel()
+	// Ensure the go func error return was verified.
+	<-ch
+}
+
+func TestVStreamJournalPartialMatch(t *testing.T) {
+	// Variable names are maintained like in OneToMany, but order is different.1
+	name := "TestVStream"
+	_ = createSandbox(name)
+	hc := discovery.NewFakeHealthCheck()
+	vsm := newTestVStreamManager(hc, new(sandboxTopo), "aa")
+	_ = hc.AddTestTablet("aa", "1.1.1.1", 1002, name, "-10", topodatapb.TabletType_MASTER, true, 1, nil)
+	sbc2 := hc.AddTestTablet("aa", "1.1.1.1", 1003, name, "10-20", topodatapb.TabletType_MASTER, true, 1, nil)
+
+	send := []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_JOURNAL, Journal: &binlogdatapb.Journal{
+			Id:            1,
+			MigrationType: binlogdatapb.MigrationType_SHARDS,
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: name,
+				Shard:    "10-30",
+				Gtid:     "pos1040",
+			}},
+			Participants: []*binlogdatapb.KeyspaceShard{{
+				Keyspace: name,
+				Shard:    "10-20",
+			}, {
+				Keyspace: name,
+				Shard:    "20-30",
+			}},
+		}},
+	}
+	sbc2.AddVStreamEvents(send, nil)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	vgtid := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Keyspace: name,
+			Shard:    "-10",
+			Gtid:     "pos10",
+		}, {
+			Keyspace: name,
+			Shard:    "10-20",
+			Gtid:     "pos1020",
+		}},
+	}
+	err := vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, func(events []*binlogdatapb.VEvent) error {
+		t.Errorf("unexpected events: %v", events)
+		return nil
+	})
+	wantErr := "not all journaling participants are in the stream"
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Errorf("vstream end: %v, must contain %v", err, wantErr)
+	}
+
+	// Try a different order (different code path)
+	send = []*binlogdatapb.VEvent{
+		{Type: binlogdatapb.VEventType_JOURNAL, Journal: &binlogdatapb.Journal{
+			Id:            1,
+			MigrationType: binlogdatapb.MigrationType_SHARDS,
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: name,
+				Shard:    "10-30",
+				Gtid:     "pos1040",
+			}},
+			Participants: []*binlogdatapb.KeyspaceShard{{
+				Keyspace: name,
+				Shard:    "20-30",
+			}, {
+				Keyspace: name,
+				Shard:    "10-20",
+			}},
+		}},
+	}
+	sbc2.AddVStreamEvents(send, nil)
+	err = vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, func(events []*binlogdatapb.VEvent) error {
+		t.Errorf("unexpected events: %v", events)
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Errorf("vstream end: %v, must contain %v", err, wantErr)
+	}
+	cancel()
 }
 
 func TestResolveVStreamParams(t *testing.T) {
