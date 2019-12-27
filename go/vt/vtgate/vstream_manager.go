@@ -336,29 +336,43 @@ func (vs *vstream) getJournalEvent(ctx context.Context, sgtid *binlogdatapb.Shar
 			participants: make(map[*binlogdatapb.ShardGtid]bool),
 			done:         make(chan struct{}),
 		}
+		const (
+			undecided = iota
+			matchAll
+			matchNone
+		)
+		mode := undecided
+	nextParticipant:
 		for _, jks := range journal.Participants {
-			participantMatched := false
 			for _, inner := range vs.vgtid.ShardGtids {
 				if inner.Keyspace == jks.Keyspace && inner.Shard == jks.Shard {
-					participantMatched = true
-					je.participants[inner] = false
-					break
+					switch mode {
+					case undecided, matchAll:
+						mode = matchAll
+						je.participants[inner] = false
+					case matchNone:
+						return nil, fmt.Errorf("not all journaling participants are in the stream: journal: %v, stream: %v", journal.Participants, vs.vgtid.ShardGtids)
+					}
+					continue nextParticipant
 				}
 			}
-			if !participantMatched {
-				return nil, fmt.Errorf("not all journaling participants are in the stream: %v", jks)
+			switch mode {
+			case undecided, matchNone:
+				mode = matchNone
+			case matchAll:
+				return nil, fmt.Errorf("not all journaling participants are in the stream: journal: %v, stream: %v", journal.Participants, vs.vgtid.ShardGtids)
 			}
 		}
-		if _, ok := je.participants[sgtid]; !ok {
-			// This sgtid is not a participant.
-			// Only a participant should add je to the journaler.
+		if mode == matchNone {
+			// Unreachable. Journal events are only added to participants.
+			// But if we do receive such an event, the right action will be to ignore it.
 			return nil, nil
 		}
 		vs.journaler[journal.Id] = je
 	}
 
 	if _, ok := je.participants[sgtid]; !ok {
-		// This sgtid is not a participant.
+		// Unreachable. See above.
 		return nil, nil
 	}
 	je.participants[sgtid] = true
