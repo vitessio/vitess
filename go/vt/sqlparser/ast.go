@@ -286,6 +286,7 @@ func (*Delete) iStatement()     {}
 func (*Set) iStatement()        {}
 func (*DBDDL) iStatement()      {}
 func (*DDL) iStatement()        {}
+func (*Explain) iStatement()    {}
 func (*Show) iStatement()       {}
 func (*Use) iStatement()        {}
 func (*Begin) iStatement()      {}
@@ -1668,6 +1669,37 @@ func (f *ForeignKeyDefinition) walkSubtree(visit Visit) error {
 		return err
 	}
 	return Walk(visit, f.ReferencedColumns)
+}
+
+// Format strings for explain statements
+const (
+	TraditionalStr = "traditional"
+	TreeStr = "tree"
+	JsonStr = "json"
+)
+
+// Explain represents an explain statement
+type Explain struct {
+	Statement     Statement
+	Analyze       bool
+	ExplainFormat string
+}
+
+// Format formats the node.
+func (node *Explain) Format(buf *TrackedBuffer) {
+	analyzeOpt := ""
+	if node.Analyze {
+		analyzeOpt = "analyze "
+	}
+	formatOpt := ""
+	if !node.Analyze && node.ExplainFormat != "" {
+		formatOpt = fmt.Sprintf("format = %s ", node.ExplainFormat)
+	}
+	buf.Myprintf("explain %s%s%v", analyzeOpt, formatOpt, node.Statement)
+}
+
+func (node *Explain) walkSubtree(visit Visit) error {
+	return nil
 }
 
 // Show represents a show statement.
