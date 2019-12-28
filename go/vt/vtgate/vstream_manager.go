@@ -211,6 +211,9 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		}
 		// Safe to access sgtid.Gtid here (because it can't change until streaming begins).
 		err = rss[0].QueryService.VStream(ctx, rss[0].Target, sgtid.Gtid, vs.filter, func(events []*binlogdatapb.VEvent) error {
+			// We received a valid event. Reset error count.
+			errCount = 0
+
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -223,13 +226,6 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			sendevents := make([]*binlogdatapb.VEvent, 0, len(events))
 			for _, event := range events {
 				switch event.Type {
-				case binlogdatapb.VEventType_GTID:
-					// Update the VGtid and send that instead.
-					sgtid.Gtid = event.Gtid
-					sendevents = append(sendevents, &binlogdatapb.VEvent{
-						Type:  binlogdatapb.VEventType_VGTID,
-						Vgtid: proto.Clone(vs.vgtid).(*binlogdatapb.VGtid),
-					})
 				case binlogdatapb.VEventType_FIELD:
 					// Update table names and send.
 					ev := proto.Clone(event).(*binlogdatapb.VEvent)
@@ -240,6 +236,14 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					ev := proto.Clone(event).(*binlogdatapb.VEvent)
 					ev.RowEvent.TableName = sgtid.Keyspace + "." + ev.RowEvent.TableName
 					sendevents = append(sendevents, ev)
+				case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL:
+					sendevents = append(sendevents, event)
+					eventss = append(eventss, sendevents)
+					if err := vs.sendAll(sgtid, eventss); err != nil {
+						return err
+					}
+					eventss = nil
+					sendevents = nil
 				case binlogdatapb.VEventType_HEARTBEAT:
 					// Remove all heartbeat events for now.
 					// Otherwise they can accumulate indefinitely if there are no real events.
@@ -265,20 +269,8 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 					sendevents = append(sendevents, event)
 				}
 			}
-			if len(sendevents) == 0 {
-				return nil
-			}
-			// We received a valid event. Reset error count.
-			errCount = 0
-
-			eventss = append(eventss, sendevents)
-			lastEvent := sendevents[len(sendevents)-1]
-			switch lastEvent.Type {
-			case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL:
-				if err := vs.sendAll(sgtid, eventss); err != nil {
-					return err
-				}
-				eventss = nil
+			if len(sendevents) != 0 {
+				eventss = append(eventss, sendevents)
 			}
 			return nil
 		})
@@ -311,8 +303,19 @@ func (vs *vstream) sendAll(sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdat
 	defer vs.mu.Unlock()
 
 	// Send all chunks while holding the lock.
-	for _, evs := range eventss {
-		if err := vs.send(evs); err != nil {
+	for _, events := range eventss {
+		// convert all gtids to vgtids. This should be done here while holding the lock.
+		for j, event := range events {
+			if event.Type == binlogdatapb.VEventType_GTID {
+				// Update the VGtid and send that instead.
+				sgtid.Gtid = event.Gtid
+				events[j] = &binlogdatapb.VEvent{
+					Type:  binlogdatapb.VEventType_VGTID,
+					Vgtid: proto.Clone(vs.vgtid).(*binlogdatapb.VGtid),
+				}
+			}
+		}
+		if err := vs.send(events); err != nil {
 			return err
 		}
 	}
