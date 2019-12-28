@@ -36,6 +36,9 @@ import (
 )
 
 func TestVStreamEvents(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	name := "TestVStream"
 	_ = createSandbox(name)
 	hc := discovery.NewFakeHealthCheck()
@@ -78,9 +81,6 @@ func TestVStreamEvents(t *testing.T) {
 	}}
 	sbc0.AddVStreamEvents(send2, nil)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: name,
@@ -100,22 +100,19 @@ func TestVStreamEvents(t *testing.T) {
 		}
 		ch <- nil
 	}()
-	got := <-ch
-	if !proto.Equal(got, want1) {
-		t.Errorf("vstream(1):\n%v, want\n%v", got, want1)
-	}
-	got = <-ch
-	if !proto.Equal(got, want2) {
-		t.Errorf("vstream(1):\n%v, want\n%v", got, want2)
-	}
-	cancel()
+	verifyEvents(t, ch, want1, want2)
+
 	// Ensure the go func error return was verified.
+	cancel()
 	<-ch
 }
 
 // TestVStreamChunks ensures that a transaction that's broken
 // into chunks is sent together.
 func TestVStreamChunks(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	name := "TestVStream"
 	_ = createSandbox(name)
 	hc := discovery.NewFakeHealthCheck()
@@ -128,9 +125,6 @@ func TestVStreamChunks(t *testing.T) {
 		sbc1.AddVStreamEvents([]*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "t0"}}}, nil)
 	}
 	sbc1.AddVStreamEvents([]*binlogdatapb.VEvent{{Type: binlogdatapb.VEventType_COMMIT}}, nil)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	rowEncountered := false
 	doneCounting := false
@@ -186,6 +180,9 @@ func TestVStreamChunks(t *testing.T) {
 }
 
 func TestVStreamMulti(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	name := "TestVStream"
 	_ = createSandbox(name)
 	hc := discovery.NewFakeHealthCheck()
@@ -205,11 +202,6 @@ func TestVStreamMulti(t *testing.T) {
 	}
 	sbc1.AddVStreamEvents(send1, nil)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	var got *binlogdatapb.VGtid
-	i := 0
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: name,
@@ -221,18 +213,15 @@ func TestVStreamMulti(t *testing.T) {
 			Gtid:     "pos",
 		}},
 	}
-	_ = vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, func(events []*binlogdatapb.VEvent) error {
-		defer func() { i++ }()
-		for _, ev := range events {
-			if ev.Type == binlogdatapb.VEventType_VGTID {
-				got = ev.Vgtid
-			}
+	ch := startVStream(ctx, t, vsm, vgtid)
+	<-ch
+	response := <-ch
+	var got *binlogdatapb.VGtid
+	for _, ev := range response.Events {
+		if ev.Type == binlogdatapb.VEventType_VGTID {
+			got = ev.Vgtid
 		}
-		if i == 1 {
-			cancel()
-		}
-		return nil
-	})
+	}
 	want := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: name,
@@ -250,28 +239,24 @@ func TestVStreamMulti(t *testing.T) {
 }
 
 func TestVStreamRetry(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	name := "TestVStream"
 	_ = createSandbox(name)
 	hc := discovery.NewFakeHealthCheck()
 	vsm := newTestVStreamManager(hc, new(sandboxTopo), "aa")
 	sbc0 := hc.AddTestTablet("aa", "1.1.1.1", 1001, name, "-20", topodatapb.TabletType_MASTER, true, 1, nil)
 
-	send1 := []*binlogdatapb.VEvent{
+	commit := []*binlogdatapb.VEvent{
 		{Type: binlogdatapb.VEventType_COMMIT},
 	}
-	sbc0.AddVStreamEvents(send1, nil)
+	sbc0.AddVStreamEvents(commit, nil)
 	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "aa"))
-
-	send2 := []*binlogdatapb.VEvent{
-		{Type: binlogdatapb.VEventType_COMMIT},
-	}
-	sbc0.AddVStreamEvents(send2, nil)
+	sbc0.AddVStreamEvents(commit, nil)
 	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "bb"))
 	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cc"))
 	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "final error"))
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	count := 0
 	vgtid := &binlogdatapb.VGtid{
@@ -285,9 +270,7 @@ func TestVStreamRetry(t *testing.T) {
 		count++
 		return nil
 	})
-	if count != 2 {
-		t.Errorf("count: %d, want 2", count)
-	}
+	assert.Equal(t, 2, count)
 	wantErr := "final error"
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
 		t.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
@@ -295,6 +278,9 @@ func TestVStreamRetry(t *testing.T) {
 }
 
 func TestVStreamHeartbeat(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	name := "TestVStream"
 	_ = createSandbox(name)
 	hc := discovery.NewFakeHealthCheck()
@@ -314,23 +300,19 @@ func TestVStreamHeartbeat(t *testing.T) {
 		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "t0"}},
 		{Type: binlogdatapb.VEventType_COMMIT},
 	}
-	wantvgtid := &binlogdatapb.VGtid{
-		ShardGtids: []*binlogdatapb.ShardGtid{{
-			Keyspace: name,
-			Shard:    "-20",
-			Gtid:     "gtid01",
-		}},
-	}
 	want := &binlogdatapb.VStreamResponse{Events: []*binlogdatapb.VEvent{
-		{Type: binlogdatapb.VEventType_VGTID, Vgtid: wantvgtid},
+		{Type: binlogdatapb.VEventType_VGTID, Vgtid: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: name,
+				Shard:    "-20",
+				Gtid:     "gtid01",
+			}},
+		}},
 		{Type: binlogdatapb.VEventType_FIELD, FieldEvent: &binlogdatapb.FieldEvent{TableName: "TestVStream.f0"}},
 		{Type: binlogdatapb.VEventType_ROW, RowEvent: &binlogdatapb.RowEvent{TableName: "TestVStream.t0"}},
 		{Type: binlogdatapb.VEventType_COMMIT},
 	}}
 	sbc0.AddVStreamEvents(send1, nil)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
@@ -339,21 +321,14 @@ func TestVStreamHeartbeat(t *testing.T) {
 			Gtid:     "pos",
 		}},
 	}
-	err := vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, func(events []*binlogdatapb.VEvent) error {
-		got := &binlogdatapb.VStreamResponse{Events: events}
-		if !proto.Equal(got, want) {
-			t.Fatalf("vstream:\n%v, want\n%v", got, want)
-		}
-		cancel()
-		return nil
-	})
-	wantErr := "context canceled"
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
-	}
+	ch := startVStream(ctx, t, vsm, vgtid)
+	verifyEvents(t, ch, want)
 }
 
 func TestVStreamJournalOneToMany(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	name := "TestVStream"
 	_ = createSandbox(name)
 	hc := discovery.NewFakeHealthCheck()
@@ -421,9 +396,6 @@ func TestVStreamJournalOneToMany(t *testing.T) {
 	sbc2.ExpectVStreamStartPos("pos1020")
 	sbc2.AddVStreamEvents(send4, nil)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: name,
@@ -431,26 +403,13 @@ func TestVStreamJournalOneToMany(t *testing.T) {
 			Gtid:     "pos",
 		}},
 	}
-	ch := make(chan *binlogdatapb.VStreamResponse)
-	go func() {
-		err := vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, func(events []*binlogdatapb.VEvent) error {
-			ch <- &binlogdatapb.VStreamResponse{Events: events}
-			return nil
-		})
-		wantErr := "context canceled"
-		if err == nil || !strings.Contains(err.Error(), wantErr) {
-			t.Errorf("vstream end: %v, must contain %v", err, wantErr)
-		}
-		ch <- nil
-	}()
-	got := <-ch
-	if !proto.Equal(got, want1) {
-		t.Errorf("vstream(1):\n%v, want\n%v", got, want1)
-	}
+	ch := startVStream(ctx, t, vsm, vgtid)
+	verifyEvents(t, ch, want1)
+
 	// The following two events from the different shards can come in any order.
 	// But the resulting VGTID should be the same after both are received.
 	<-ch
-	got = <-ch
+	got := <-ch
 	wantevent := &binlogdatapb.VEvent{
 		Type: binlogdatapb.VEventType_VGTID,
 		Vgtid: &binlogdatapb.VGtid{
@@ -468,12 +427,13 @@ func TestVStreamJournalOneToMany(t *testing.T) {
 	if !proto.Equal(got.Events[0], wantevent) {
 		t.Errorf("vgtid: %v, want %v", got.Events[0], wantevent)
 	}
-	cancel()
-	<-ch
 }
 
 func TestVStreamJournalManyToOne(t *testing.T) {
-	// Variable names are maintained like in OneToMany, but order is different.1
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Variable names are maintained like in OneToMany, but order is different.
 	name := "TestVStream"
 	_ = createSandbox(name)
 	hc := discovery.NewFakeHealthCheck()
@@ -543,9 +503,6 @@ func TestVStreamJournalManyToOne(t *testing.T) {
 	sbc0.ExpectVStreamStartPos("pos20")
 	sbc0.AddVStreamEvents(send1, nil)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: name,
@@ -557,18 +514,7 @@ func TestVStreamJournalManyToOne(t *testing.T) {
 			Gtid:     "pos1020",
 		}},
 	}
-	ch := make(chan *binlogdatapb.VStreamResponse)
-	go func() {
-		err := vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, func(events []*binlogdatapb.VEvent) error {
-			ch <- &binlogdatapb.VStreamResponse{Events: events}
-			return nil
-		})
-		wantErr := "context canceled"
-		if err == nil || !strings.Contains(err.Error(), wantErr) {
-			t.Errorf("vstream end: %v, must contain %v", err, wantErr)
-		}
-		ch <- nil
-	}()
+	ch := startVStream(ctx, t, vsm, vgtid)
 	// The following two events from the different shards can come in any order.
 	// But the resulting VGTID should be the same after both are received.
 	<-ch
@@ -590,15 +536,13 @@ func TestVStreamJournalManyToOne(t *testing.T) {
 	if !proto.Equal(got.Events[0], wantevent) {
 		t.Errorf("vgtid: %v, want %v", got.Events[0], wantevent)
 	}
-	got = <-ch
-	if !proto.Equal(got, want1) {
-		t.Errorf("vstream(1):\n%v, want\n%v", got, want1)
-	}
-	cancel()
-	<-ch
+	verifyEvents(t, ch, want1)
 }
 
 func TestVStreamJournalNoMatch(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	name := "TestVStream"
 	_ = createSandbox(name)
 	hc := discovery.NewFakeHealthCheck()
@@ -709,9 +653,6 @@ func TestVStreamJournalNoMatch(t *testing.T) {
 	}}
 	sbc0.AddVStreamEvents(send3, nil)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: name,
@@ -719,44 +660,14 @@ func TestVStreamJournalNoMatch(t *testing.T) {
 			Gtid:     "pos",
 		}},
 	}
-	ch := make(chan *binlogdatapb.VStreamResponse)
-	go func() {
-		err := vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, func(events []*binlogdatapb.VEvent) error {
-			ch <- &binlogdatapb.VStreamResponse{Events: events}
-			return nil
-		})
-		wantErr := "context canceled"
-		if err == nil || !strings.Contains(err.Error(), wantErr) {
-			t.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
-		}
-		ch <- nil
-	}()
-	got := <-ch
-	if !proto.Equal(got, want1) {
-		t.Errorf("vstream(1):\n%v, want\n%v", got, want1)
-	}
-	got = <-ch
-	if !proto.Equal(got, wantjn1) {
-		t.Errorf("vstream(1):\n%v, want\n%v", got, want2)
-	}
-	got = <-ch
-	if !proto.Equal(got, want2) {
-		t.Errorf("vstream(1):\n%v, want\n%v", got, want2)
-	}
-	got = <-ch
-	if !proto.Equal(got, wantjn2) {
-		t.Errorf("vstream(1):\n%v, want\n%v", got, want2)
-	}
-	got = <-ch
-	if !proto.Equal(got, want3) {
-		t.Errorf("vstream(1):\n%v, want\n%v", got, want3)
-	}
-	cancel()
-	// Ensure the go func error return was verified.
-	<-ch
+	ch := startVStream(ctx, t, vsm, vgtid)
+	verifyEvents(t, ch, want1, wantjn1, want2, wantjn2, want3)
 }
 
 func TestVStreamJournalPartialMatch(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Variable names are maintained like in OneToMany, but order is different.1
 	name := "TestVStream"
 	_ = createSandbox(name)
@@ -784,9 +695,6 @@ func TestVStreamJournalPartialMatch(t *testing.T) {
 		}},
 	}
 	sbc2.AddVStreamEvents(send, nil)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
@@ -969,4 +877,25 @@ func newTestVStreamManager(hc discovery.HealthCheck, serv srvtopo.Server, cell s
 	gw := gateway.GetCreator()(context.Background(), hc, serv, cell, 3)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	return newVStreamManager(srvResolver, serv, cell)
+}
+
+func startVStream(ctx context.Context, t *testing.T, vsm *vstreamManager, vgtid *binlogdatapb.VGtid) <-chan *binlogdatapb.VStreamResponse {
+	ch := make(chan *binlogdatapb.VStreamResponse)
+	go func() {
+		_ = vsm.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, nil, func(events []*binlogdatapb.VEvent) error {
+			ch <- &binlogdatapb.VStreamResponse{Events: events}
+			return nil
+		})
+	}()
+	return ch
+}
+
+func verifyEvents(t *testing.T, ch <-chan *binlogdatapb.VStreamResponse, wants ...*binlogdatapb.VStreamResponse) {
+	t.Helper()
+	for i, want := range wants {
+		got := <-ch
+		if !proto.Equal(got, want) {
+			t.Errorf("vstream(%d):\n%v, want\n%v", i, got, want)
+		}
+	}
 }
