@@ -125,14 +125,19 @@ func (vs *vstreamer) Cancel() {
 func (vs *vstreamer) Stream() error {
 	defer vs.cancel()
 
+	curpos, err := vs.currentPosition()
+	if err != nil {
+		return vterrors.Wrap(err, "could not obtain current position")
+	}
 	if vs.startPos == "current" {
-		if err := vs.useCurrentPosition(); err != nil {
-			return vterrors.Wrap(err, "could not obtain current position")
-		}
+		vs.pos = curpos
 	} else {
 		pos, err := mysql.DecodePosition(vs.startPos)
 		if err != nil {
 			return vterrors.Wrap(err, "could not decode position")
+		}
+		if !curpos.AtLeast(pos) {
+			return fmt.Errorf("requested position %v is ahead of current position %v", mysql.EncodePosition(pos), mysql.EncodePosition(curpos))
 		}
 		vs.pos = pos
 	}
@@ -157,14 +162,13 @@ func (vs *vstreamer) Stream() error {
 	return wrapError(err, vs.pos)
 }
 
-func (vs *vstreamer) useCurrentPosition() error {
+func (vs *vstreamer) currentPosition() (mysql.Position, error) {
 	conn, err := mysql.Connect(vs.ctx, vs.cp)
 	if err != nil {
-		return err
+		return mysql.Position{}, err
 	}
 	defer conn.Close()
-	vs.pos, err = conn.MasterPosition()
-	return err
+	return conn.MasterPosition()
 }
 
 func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.BinlogEvent) error {
