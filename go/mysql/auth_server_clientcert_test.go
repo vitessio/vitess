@@ -100,7 +100,7 @@ func TestValidCert(t *testing.T) {
 		t.Errorf("Got wrong result from ExecuteFetch(ssl echo): %v", result)
 	}
 
-	userData := th.lastConn.UserData.Get()
+	userData := th.LastConn().UserData.Get()
 	if userData.Username != clientCertUsername {
 		t.Errorf("userdata username is %v, expected %v", userData.Username, clientCertUsername)
 	}

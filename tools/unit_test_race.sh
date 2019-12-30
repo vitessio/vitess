@@ -54,7 +54,7 @@ for pkg in $flaky_tests; do
   max_attempts=3
   attempt=1
   # Set a timeout because some tests may deadlock when they flake.
-  until go test -timeout 30s $VT_GO_PARALLEL $pkg -race -count=1; do
+  until go test -timeout 2m $VT_GO_PARALLEL $pkg -race -count=1; do
     echo "FAILED (try $attempt/$max_attempts) in $pkg (return code $?). See above for errors."
     if [ $((++attempt)) -gt $max_attempts ]; then
       echo "ERROR: Flaky Go unit tests in package $pkg failed too often (after $max_attempts retries). Please reduce the flakiness."

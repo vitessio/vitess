@@ -19,6 +19,7 @@ package wrangler
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
@@ -292,11 +293,27 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 }
 
 func (tme *testMigraterEnv) startTablets(t *testing.T) {
-	for _, master := range tme.sourceMasters {
+	allMasters := append(tme.sourceMasters, tme.targetMasters...)
+	for _, master := range allMasters {
 		master.StartActionLoop(t, tme.wr)
 	}
-	for _, master := range tme.targetMasters {
-		master.StartActionLoop(t, tme.wr)
+	// Wait for the shard record masters to be set.
+	for _, master := range allMasters {
+		masterFound := false
+		for i := 0; i < 10; i++ {
+			si, err := tme.wr.ts.GetShard(context.Background(), master.Tablet.Keyspace, master.Tablet.Shard)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if si.MasterAlias != nil {
+				masterFound = true
+				break
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+		if !masterFound {
+			t.Fatalf("shard master did not get updated for tablet: %v", master)
+		}
 	}
 }
 

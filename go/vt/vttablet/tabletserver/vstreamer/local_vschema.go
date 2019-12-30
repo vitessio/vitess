@@ -85,6 +85,8 @@ func identifyColVindex(table *vindexes.Table) (*vindexes.ColumnVindex, error) {
 			continue
 		}
 		if !cv.Vindex.IsUnique() {
+			// This is currently unreachable because all existing non-unique vindexes
+			// need vcursor.
 			continue
 		}
 		if result == nil || result.Vindex.Cost() > cv.Vindex.Cost() {

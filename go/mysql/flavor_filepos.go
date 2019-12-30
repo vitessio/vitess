@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"time"
 
 	"golang.org/x/net/context"
@@ -143,10 +144,17 @@ func (flv *filePosFlavor) readBinlogEvent(c *Conn) (BinlogEvent, error) {
 				// No need to transmit. Just update the internal position for the next event.
 				continue
 			}
-		case eXIDEvent, eQueryEvent, eTableMapEvent,
+		case eXIDEvent, eTableMapEvent,
 			eWriteRowsEventV0, eWriteRowsEventV1, eWriteRowsEventV2,
 			eDeleteRowsEventV0, eDeleteRowsEventV1, eDeleteRowsEventV2,
 			eUpdateRowsEventV0, eUpdateRowsEventV1, eUpdateRowsEventV2:
+			flv.savedEvent = event
+			return newFilePosGTIDEvent(flv.file, event.nextPosition(flv.format), event.Timestamp()), nil
+		case eQueryEvent:
+			q, err := event.Query(flv.format)
+			if err == nil && strings.HasPrefix(q.SQL, "#") {
+				continue
+			}
 			flv.savedEvent = event
 			return newFilePosGTIDEvent(flv.file, event.nextPosition(flv.format), event.Timestamp()), nil
 		default:
