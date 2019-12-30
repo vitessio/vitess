@@ -17,11 +17,12 @@ limitations under the License.
 package testlib
 
 import (
+	"flag"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
-
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -435,4 +436,71 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 		t.Fatalf("new master should be MASTER but is: %v", tablet.Type)
 	}
 
+}
+
+func TestRPCTabletExternallyReparentedDemotesMasterToConfiguredTabletType(t *testing.T) {
+	flag.Set("demote_master_type", "spare")
+	flag.Set("disable_active_reparents", "true")
+
+	// Reset back to default values
+	defer func() {
+		flag.Set("demote_master_type", "replica")
+		flag.Set("disable_active_reparents", "false")
+	}()
+
+	ctx := context.Background()
+	ts := memorytopo.NewServer("cell1")
+	wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
+
+	// Create an old master and a new master
+	oldMaster := NewFakeTablet(t, wr, "cell1", 0, topodatapb.TabletType_MASTER, nil)
+	newMaster := NewFakeTablet(t, wr, "cell1", 1, topodatapb.TabletType_SPARE, nil)
+
+	oldMaster.StartActionLoop(t, wr)
+	newMaster.StartActionLoop(t, wr)
+
+	defer oldMaster.StopActionLoop(t)
+	defer newMaster.StopActionLoop(t)
+
+	// Build keyspace graph
+	err := topotools.RebuildKeyspace(context.Background(), logutil.NewConsoleLogger(), ts, oldMaster.Tablet.Keyspace, []string{"cell1"})
+	assert.NoError(t, err, "RebuildKeyspaceLocked failed: %v", err)
+
+	// Reparent to new master
+	ti, err := ts.GetTablet(ctx, newMaster.Tablet.Alias)
+	if err != nil {
+		t.Fatalf("GetTablet failed: %v", err)
+	}
+
+	if err := wr.TabletExternallyReparented(context.Background(), ti.Tablet.Alias); err != nil {
+		t.Fatalf("TabletExternallyReparented failed: %v", err)
+	}
+
+	// We have to wait for shard sync to do its magic in the background
+	startTime := time.Now()
+	for {
+		if time.Since(startTime) > 10*time.Second /* timeout */ {
+			tablet, err := ts.GetTablet(ctx, oldMaster.Tablet.Alias)
+			if err != nil {
+				t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
+			}
+			t.Fatalf("old master (%v) should be spare but is: %v", topoproto.TabletAliasString(oldMaster.Tablet.Alias), tablet.Type)
+		}
+		// check the old master was converted to replica
+		tablet, err := ts.GetTablet(ctx, oldMaster.Tablet.Alias)
+		if err != nil {
+			t.Fatalf("GetTablet(%v) failed: %v", oldMaster.Tablet.Alias, err)
+		}
+		if tablet.Type == topodatapb.TabletType_SPARE {
+			break
+		} else {
+			time.Sleep(100 * time.Millisecond /* interval at which to check again */)
+		}
+	}
+
+	shardInfo, err := ts.GetShard(context.Background(), newMaster.Tablet.Keyspace, newMaster.Tablet.Shard)
+	assert.NoError(t, err)
+
+	assert.True(t, topoproto.TabletAliasEqual(newMaster.Tablet.Alias, shardInfo.MasterAlias))
+	assert.Equal(t, topodatapb.TabletType_MASTER, newMaster.Agent.Tablet().Type)
 }

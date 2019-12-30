@@ -80,12 +80,6 @@ type Config struct {
 	// Charset is the default charset used by MySQL
 	Charset string
 
-	// WebDir is the location of the vtcld web server files
-	WebDir string
-
-	// WebDir2 is the location of the vtcld2 web server files
-	WebDir2 string
-
 	// ExtraMyCnf are the extra .CNF files to be added to the MySQL config
 	ExtraMyCnf []string
 
@@ -113,6 +107,9 @@ type Config struct {
 
 	// Whether to enable/disable workflow manager
 	InitWorkflowManager bool
+
+	// Authorize vschema ddl operations to a list of users
+	VSchemaDDLAuthorizedUsers string
 }
 
 // InitSchemas is a shortcut for tests that just want to setup a single

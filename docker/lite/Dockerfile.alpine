@@ -1,25 +1,44 @@
-# This image is only meant to be built from within the build.sh script.
-FROM vitess/base AS builder
-FROM alpine:3.8 AS staging
+# Copyright 2019 The Vitess Authors.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-RUN mkdir -p /vt/vtdataroot/ && mkdir -p /vt/bin && mkdir -p /vt/src/vitess.io/vitess/web/vtctld2
+# NOTE: We have to build the Vitess binaries from scratch instead of sharing
+#       a base image because Docker Hub dropped the feature we relied upon to
+#       ensure images contain the right binaries.
 
-COPY --from=builder /vt/src/vitess.io/vitess/web/vtctld /vt/src/vitess.io/vitess/web/vtctld
-COPY --from=builder /vt/src/vitess.io/vitess/web/vtctld2/app /vt/src/vitess.io/vitess/web/vtctld2/app
-COPY --from=builder /vt/src/vitess.io/vitess/config /vt/config
-COPY --from=builder /vt/bin/mysqlctld /vt/bin/
-COPY --from=builder /vt/bin/vtctld /vt/bin/
-COPY --from=builder /vt/bin/vtctlclient /vt/bin/
-COPY --from=builder /vt/bin/vtgate /vt/bin/
-COPY --from=builder /vt/bin/vttablet /vt/bin/
-COPY --from=builder /vt/bin/vtworker /vt/bin/
-COPY --from=builder /vt/bin/vtbackup /vt/bin/
+# Use a temporary layer for the build stage.
+FROM vitess/bootstrap:mariadb103 AS builder
 
+# Allows some docker builds to disable CGO
+ARG CGO_ENABLED=0
+
+# Re-copy sources from working tree.
+COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
+
+# Build and install Vitess in a temporary output directory.
+USER vitess
+RUN make install PREFIX=/vt/install
+
+# Start over and build the final image.
 FROM alpine:3.8 
 
 # Install dependencies
 RUN echo '@edge http://nl.alpinelinux.org/alpine/edge/main' >> /etc/apk/repositories && \
     apk add --no-cache mariadb@edge mariadb-client@edge bzip2 bash
+
+# Set up Vitess user and directory tree.
+RUN addgroup -S vitess && adduser -S -G vitess vitess
+RUN mkdir -p /vt/vtdataroot && chown -R vitess:vitess /vt
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
 ENV VTROOT /vt/src/vitess.io/vitess
@@ -27,7 +46,9 @@ ENV VTDATAROOT /vt/vtdataroot
 ENV PATH $VTROOT/bin:$PATH
 ENV MYSQL_FLAVOR MariaDB103
 
-# Create vitess user
-RUN addgroup -S vitess && adduser -S -G vitess vitess && mkdir -p /vt
-COPY --from=staging /vt/ /vt/
+# Copy artifacts from builder layer.
+COPY --from=builder --chown=vitess:vitess /vt/install /vt
+
+# Create mount point for actual data (e.g. MySQL data dir)
+VOLUME /vt/vtdataroot
 USER vitess

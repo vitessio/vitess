@@ -18,9 +18,9 @@ package vindexes
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
@@ -35,16 +35,11 @@ func init() {
 	reverseBits = hv.(SingleColumn)
 }
 
-func TestReverseBitsCost(t *testing.T) {
-	if reverseBits.Cost() != 1 {
-		t.Errorf("Cost(): %d, want 1", reverseBits.Cost())
-	}
-}
-
-func TestReverseBitsString(t *testing.T) {
-	if strings.Compare("rr", reverseBits.String()) != 0 {
-		t.Errorf("String(): %s, want hash", reverseBits.String())
-	}
+func TestReverseBitsInfo(t *testing.T) {
+	assert.Equal(t, 1, reverseBits.Cost())
+	assert.Equal(t, "rr", reverseBits.String())
+	assert.True(t, reverseBits.IsUnique())
+	assert.False(t, reverseBits.NeedsVCursor())
 }
 
 func TestReverseBitsMap(t *testing.T) {

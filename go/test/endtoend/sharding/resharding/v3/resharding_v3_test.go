@@ -14,21 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
-
-// Imports and register the gRPC queryservice server
+package v3
 
 import (
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vttablet/grpcqueryservice"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver"
+	"testing"
+
+	sharding "vitess.io/vitess/go/test/endtoend/sharding/resharding"
 )
 
-func init() {
-	tabletserver.RegisterFunctions = append(tabletserver.RegisterFunctions, func(qsc tabletserver.Controller) {
-		if servenv.GRPCCheckServiceMap("queryservice") {
-			grpcqueryservice.Register(servenv.GRPCServer, qsc.QueryService())
-		}
-	})
+// TestV3ReSharding - main tests resharding using a INT column
+func TestV3ReSharding(t *testing.T) {
+	sharding.TestResharding(t, false)
 
 }

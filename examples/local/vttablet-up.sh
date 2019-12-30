@@ -71,11 +71,27 @@ for uid_index in $uids; do
     echo "    $VTDATAROOT/$tablet_dir"
     action='start'
   fi
+
+  set +e
+
   $VTROOT/bin/mysqlctl \
     -log_dir $VTDATAROOT/tmp \
     -tablet_uid $uid \
     -mysql_port $mysql_port \
-    $action &
+    $action
+
+    err=$?    
+    if [[ $err -ne 0 ]]; then    
+        fail "This script fails to start mysqld, possibly due to apparmor or selinux protection.     
+        Utilities to help investigate:    
+                apparmor: \"sudo aa-status\"    
+                selinux:  \"sudo sestatus\"    
+        Please disable if so indicated.    
+        You may also need to empty your \$VTDATAROOT to start clean."    
+    fi    
+    
+  set -e    
+    
 done
 
 # Wait for all mysqld to start up.
