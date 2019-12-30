@@ -72,12 +72,12 @@ select name, count(*) from user group by name /* scatter aggregate */
 1 ks_sharded/c0-: select name, count(*) from user group by name limit 10001 /* scatter aggregate */
 
 ----------------------------------------------------------------------
-select 1, "hello", 3.14 from user limit 10 /* select constant sql values */
+select 1, "hello", 3.14, null from user limit 10 /* select constant sql values */
 
-1 ks_sharded/-40: select 1, 'hello', 3.14 from user limit 10 /* select constant sql values */
-1 ks_sharded/40-80: select 1, 'hello', 3.14 from user limit 10 /* select constant sql values */
-1 ks_sharded/80-c0: select 1, 'hello', 3.14 from user limit 10 /* select constant sql values */
-1 ks_sharded/c0-: select 1, 'hello', 3.14 from user limit 10 /* select constant sql values */
+1 ks_sharded/-40: select 1, 'hello', 3.14, null from user limit 10 /* select constant sql values */
+1 ks_sharded/40-80: select 1, 'hello', 3.14, null from user limit 10 /* select constant sql values */
+1 ks_sharded/80-c0: select 1, 'hello', 3.14, null from user limit 10 /* select constant sql values */
+1 ks_sharded/c0-: select 1, 'hello', 3.14, null from user limit 10 /* select constant sql values */
 
 ----------------------------------------------------------------------
 select * from (select id from user) s /* scatter paren select */
