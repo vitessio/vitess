@@ -63,18 +63,9 @@ func TestFindColVindex(t *testing.T) {
 							Columns: []string{"id"},
 						}},
 					},
-					"nogoodvindex1": {
+					"nogoodvindex": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
 							Name:    "lookup_unique",
-							Columns: []string{"id"},
-						}},
-					},
-					"nogoodvindex2": {
-						ColumnVindexes: []*vschemapb.ColumnVindex{{
-							Name:    "lookup_unique",
-							Columns: []string{"id"},
-						}, {
-							Name:    "lookup",
 							Columns: []string{"id"},
 						}},
 					},
@@ -110,12 +101,8 @@ func TestFindColVindex(t *testing.T) {
 		vindexname: "hash",
 	}, {
 		keyspace:  "ks1",
-		tablename: "nogoodvindex1",
-		err:       "could not find a vindex to compute keyspace id for table nogoodvindex1",
-	}, {
-		keyspace:  "ks1",
-		tablename: "nogoodvindex2",
-		err:       "could not find a vindex to compute keyspace id for table nogoodvindex2",
+		tablename: "nogoodvindex",
+		err:       "could not find a vindex to compute keyspace id for table nogoodvindex",
 	}, {
 		keyspace:   "ks1",
 		tablename:  "cheapest",
