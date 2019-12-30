@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -41,6 +42,17 @@ var PacketSize = flag.Int("vstream_packet_size", 30000, "Suggested packet size f
 // set by VPlayer at slightly above 1s. This minimizes conflicts
 // between the two timeouts.
 var HeartbeatTime = 900 * time.Millisecond
+
+// VStreamer exposes an externally usable interface to vstreamer.
+type VStreamer interface {
+	Stream() error
+	Cancel()
+}
+
+// NewVStreamer returns a VStreamer.
+func NewVStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) VStreamer {
+	return newVStreamer(ctx, cp, se, startPos, filter, &localVSchema{vschema: &vindexes.VSchema{}}, send)
+}
 
 type vstreamer struct {
 	ctx    context.Context
@@ -69,7 +81,7 @@ type streamerPlan struct {
 	TableMap *mysql.TableMap
 }
 
-func NewVStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, startPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
+func newVStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, startPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &vstreamer{
 		ctx:      ctx,
