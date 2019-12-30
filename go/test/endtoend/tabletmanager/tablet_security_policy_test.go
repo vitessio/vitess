@@ -28,7 +28,7 @@ import (
 
 func TestFallbackSecurityPolicy(t *testing.T) {
 	ctx := context.Background()
-	mTablet := clusterInstance.GetVttabletInstance(masterUID)
+	mTablet := clusterInstance.GetVttabletInstance("replica", masterUID, "")
 
 	//Init Tablets
 	err := clusterInstance.VtctlclientProcess.InitTablet(mTablet, cell, keyspaceName, hostname, shardName)
@@ -66,6 +66,7 @@ func assertNotAllowedURLTest(t *testing.T, url string) {
 	assert.Nil(t, err)
 
 	body, err := ioutil.ReadAll(resp.Body)
+	assert.Nil(t, err)
 	defer resp.Body.Close()
 
 	assert.True(t, resp.StatusCode > 400)
@@ -77,6 +78,7 @@ func assertAllowedURLTest(t *testing.T, url string) {
 	assert.Nil(t, err)
 
 	body, err := ioutil.ReadAll(resp.Body)
+	assert.Nil(t, err)
 	defer resp.Body.Close()
 
 	assert.NotContains(t, string(body), "Access denied: not allowed")
@@ -84,7 +86,7 @@ func assertAllowedURLTest(t *testing.T, url string) {
 
 func TestDenyAllSecurityPolicy(t *testing.T) {
 	ctx := context.Background()
-	mTablet := clusterInstance.GetVttabletInstance(masterUID)
+	mTablet := clusterInstance.GetVttabletInstance("replica", masterUID, "")
 
 	//Init Tablets
 	err := clusterInstance.VtctlclientProcess.InitTablet(mTablet, cell, keyspaceName, hostname, shardName)
@@ -119,7 +121,7 @@ func TestDenyAllSecurityPolicy(t *testing.T) {
 
 func TestReadOnlySecurityPolicy(t *testing.T) {
 	ctx := context.Background()
-	mTablet := clusterInstance.GetVttabletInstance(0)
+	mTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
 
 	//Init Tablets
 	err := clusterInstance.VtctlclientProcess.InitTablet(mTablet, cell, keyspaceName, hostname, shardName)

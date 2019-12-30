@@ -20,10 +20,10 @@ import (
 	"bytes"
 	"fmt"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/cespare/xxhash/v2"
+	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -39,16 +39,11 @@ func init() {
 	xxHash = hv.(SingleColumn)
 }
 
-func TestXXHashCost(t *testing.T) {
-	if xxHash.Cost() != 1 {
-		t.Errorf("Cost(): %d, want 1", xxHash.Cost())
-	}
-}
-
-func TestXXHashString(t *testing.T) {
-	if strings.Compare("xxhash_name", xxHash.String()) != 0 {
-		t.Errorf("String(): %s, want xxhash_name", xxHash.String())
-	}
+func TestXXHashInfo(t *testing.T) {
+	assert.Equal(t, 1, xxHash.Cost())
+	assert.Equal(t, "xxhash_name", xxHash.String())
+	assert.True(t, xxHash.IsUnique())
+	assert.False(t, xxHash.NeedsVCursor())
 }
 
 func TestXXHashMap(t *testing.T) {

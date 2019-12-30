@@ -25,6 +25,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -46,28 +47,18 @@ func TestConsistentLookupInit(t *testing.T) {
 
 func TestConsistentLookupInfo(t *testing.T) {
 	lookup := createConsistentLookup(t, "consistent_lookup")
-	if lookup.Cost() != 20 {
-		t.Errorf("Cost(): %d, want 20", lookup.Cost())
-	}
-	if strings.Compare("consistent_lookup", lookup.String()) != 0 {
-		t.Errorf("String(): %s, want consistent_lookup", lookup.String())
-	}
-	if lookup.IsUnique() {
-		t.Errorf("IsUnique(): %v, want false", lookup.IsUnique())
-	}
+	assert.Equal(t, 20, lookup.Cost())
+	assert.Equal(t, "consistent_lookup", lookup.String())
+	assert.False(t, lookup.IsUnique())
+	assert.True(t, lookup.NeedsVCursor())
 }
 
 func TestConsistentLookupUniqueInfo(t *testing.T) {
 	lookup := createConsistentLookup(t, "consistent_lookup_unique")
-	if lookup.Cost() != 10 {
-		t.Errorf("Cost(): %d, want 10", lookup.Cost())
-	}
-	if strings.Compare("consistent_lookup_unique", lookup.String()) != 0 {
-		t.Errorf("String(): %s, want consistent_lookup_unique", lookup.String())
-	}
-	if !lookup.IsUnique() {
-		t.Errorf("IsUnique(): %v, want true", lookup.IsUnique())
-	}
+	assert.Equal(t, 10, lookup.Cost())
+	assert.Equal(t, "consistent_lookup_unique", lookup.String())
+	assert.True(t, lookup.IsUnique())
+	assert.True(t, lookup.NeedsVCursor())
 }
 
 func TestConsistentLookupMap(t *testing.T) {

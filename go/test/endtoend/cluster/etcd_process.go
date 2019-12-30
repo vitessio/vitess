@@ -109,6 +109,7 @@ func (etcd *EtcdProcess) TearDown(Cell string, originalVtRoot string, currentRoo
 		_ = os.RemoveAll(currentRoot)
 	}
 	_ = os.Setenv("VTDATAROOT", originalVtRoot)
+
 	select {
 	case <-etcd.exit:
 		etcd.proc = nil

@@ -14,17 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package v3
 
 import (
-	"vitess.io/vitess/go/trace"
+	"testing"
 
-	"vitess.io/vitess/go/vt/servenv"
+	sharding "vitess.io/vitess/go/test/endtoend/sharding/resharding"
 )
 
-func init() {
-	servenv.OnRun(func() {
-		closer := trace.StartTracing("vtqueryserver")
-		servenv.OnClose(trace.LogErrorsWhenClosing(closer))
-	})
+// TestReshardingString - using a VARBINARY column for resharding.
+func TestReshardingString(t *testing.T) {
+	sharding.TestResharding(t, true)
+
 }

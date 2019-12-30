@@ -22,6 +22,9 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"vitess.io/vitess/go/mysql"
+
 	"vitess.io/vitess/go/vt/vttest"
 
 	"github.com/golang/protobuf/jsonpb"
@@ -40,19 +43,40 @@ type columnVindex struct {
 
 func TestRunsVschemaMigrations(t *testing.T) {
 	schemaDirArg := "-schema_dir=data/schema"
-	webDirArg := "-web_dir=web/vtctld/app"
-	webDir2Arg := "-web_dir2=web/vtctld2/app"
 	tabletHostname := "-tablet_hostname=localhost"
 	keyspaceArg := "-keyspaces=test_keyspace,app_customer"
 	numShardsArg := "-num_shards=2,2"
+	vschemaDDLAuthorizedUsers := "-vschema_ddl_authorized_users=%"
 
-	os.Args = append(os.Args, []string{schemaDirArg, keyspaceArg, numShardsArg, webDirArg, webDir2Arg, tabletHostname}...)
+	os.Args = append(os.Args, []string{schemaDirArg, keyspaceArg, numShardsArg, tabletHostname, vschemaDDLAuthorizedUsers}...)
 
 	cluster := runCluster()
 	defer cluster.TearDown()
 
 	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "test_table", vindex: "my_vdx", vindexType: "hash", column: "id"})
 	assertColumnVindex(t, cluster, columnVindex{keyspace: "app_customer", table: "customers", vindex: "hash", vindexType: "hash", column: "id"})
+
+	// Add Hash vindex via vtgate execution on table
+	err := addColumnVindex(cluster, "test_keyspace", "alter vschema on test_table1 add vindex my_vdx (id)")
+	assert.NoError(t, err)
+	assertColumnVindex(t, cluster, columnVindex{keyspace: "test_keyspace", table: "test_table1", vindex: "my_vdx", vindexType: "hash", column: "id"})
+}
+
+func addColumnVindex(cluster vttest.LocalCluster, keyspace string, vschemaMigration string) error {
+	ctx := context.Background()
+	vtParams := mysql.ConnParams{
+		Host:   "localhost",
+		DbName: keyspace,
+		Port:   cluster.Env.PortForProtocol("vtcombo_mysql_port", ""),
+	}
+
+	conn, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	_, err = conn.ExecuteFetch(vschemaMigration, 1, false)
+	return err
 }
 
 func assertColumnVindex(t *testing.T, cluster vttest.LocalCluster, expected columnVindex) {
