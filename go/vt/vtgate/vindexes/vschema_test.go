@@ -1806,10 +1806,8 @@ func TestBadSequence(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}
-
-	t1Seq := got.Keyspaces["sharded"].Tables["t1"].AutoIncrement.Sequence
-	if t1Seq != nil {
-		t.Errorf("BuildVSchema: unexpected sequence for table t1: %v", t1Seq)
+	if t1 := got.Keyspaces["sharded"].Tables["t1"]; t1 != nil {
+		t.Errorf("BuildVSchema: table t1 must not be present in the keyspace: %v", t1)
 	}
 
 	// Verify that a failure to set up a sequence for t1 doesn't prevent setting up
@@ -1855,6 +1853,9 @@ func TestBadSequenceName(t *testing.T) {
 	want := "cannot resolve sequence a.b.seq: table a.b.seq not found"
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildVSchema: %v, want %v", err, want)
+	}
+	if t1 := got.Keyspaces["sharded"].Tables["t1"]; t1 != nil {
+		t.Errorf("BuildVSchema: table t1 must not be present in the keyspace: %v", t1)
 	}
 }
 

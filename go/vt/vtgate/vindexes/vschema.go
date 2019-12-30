@@ -351,13 +351,18 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) {
 			if t == nil || table.AutoIncrement == nil {
 				continue
 			}
-			t.AutoIncrement = &AutoIncrement{Column: sqlparser.NewColIdent(table.AutoIncrement.Column)}
 			seq, err := vschema.findQualified(table.AutoIncrement.Sequence)
 			if err != nil {
+				// Better to remove the table than to leave it partially initialized.
+				delete(ksvschema.Tables, tname)
+				delete(vschema.uniqueTables, tname)
 				ksvschema.Error = fmt.Errorf("cannot resolve sequence %s: %v", table.AutoIncrement.Sequence, err)
 				continue
 			}
-			t.AutoIncrement.Sequence = seq
+			t.AutoIncrement = &AutoIncrement{
+				Column:   sqlparser.NewColIdent(table.AutoIncrement.Column),
+				Sequence: seq,
+			}
 		}
 	}
 }
