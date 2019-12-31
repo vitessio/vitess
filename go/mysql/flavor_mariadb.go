@@ -51,6 +51,14 @@ func (mariadbFlavor) startSlaveCommand() string {
 	return "START SLAVE"
 }
 
+func (mariadbFlavor) restartSlaveCommands() []string {
+	return []string{
+		"STOP SLAVE",
+		"RESET SLAVE",
+		"START SLAVE",
+	}
+}
+
 func (mariadbFlavor) stopSlaveCommand() string {
 	return "STOP SLAVE"
 }
