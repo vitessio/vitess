@@ -22,10 +22,8 @@ fi
 
 # All Go packages with test files.
 # Output per line: <full Go package name> <all _test.go files in the package>*
-# TODO: This tests ./go/vt/... instead of ./go/... due to a historical reason.
-# When https://github.com/vitessio/vitess/issues/5493 is closed, we should change it.
 
-packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}' ./go/vt/... | sort)
+packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}' ./go/... | sort)
 
 # exclude end to end tests
 packages_to_test=$(echo "$packages_with_tests" | cut -d" " -f1 | grep -v "endtoend")

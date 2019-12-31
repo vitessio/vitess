@@ -278,6 +278,10 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	//Start Tablets and Wait for the Process
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
+			// Init Tablet
+			err := clusterInstance.VtctlclientProcess.InitTablet(tablet, tablet.Cell, keyspaceName, hostname, shard.Name)
+			assert.Nil(t, err)
+
 			// Start the tablet
 			err = tablet.VttabletProcess.Setup()
 			assert.Nil(t, err)
