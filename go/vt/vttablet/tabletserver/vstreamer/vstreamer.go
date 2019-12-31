@@ -101,8 +101,14 @@ type streamerPlan struct {
 // filter: the list of filtering rules. If a rule has a select expressinon for its filter,
 //   the select list can only reference direct columns. No other experssions are allowed.
 //   The select expression is allowed to contain the special 'keyspace_id()' function which
-//   will return the keyspace id of the row. For more info, see the documentation
-//   for binlogdatapb.Filter.
+//   will return the keyspace id of the row. Examples:
+//   "select * from t", same as an empty Filter,
+//   "select * from t where in_keyrange('-80')", same as "-80",
+//   "select * from t where in_keyrange(col1, 'hash', '-80')",
+//   "select col1, col2 from t where...",
+//   "select col1, keyspace_id() from t where...".
+//   Only "in_keyrange" expressions are supported in the where clause.
+//   Other constructs like joins, group by, etc. are not supported.
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
 func newVStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, startPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
@@ -529,6 +535,9 @@ func (vs *vstreamer) buildJournalPlan(id uint64, tm *mysql.TableMap) error {
 		Name:    "_vt.resharding_journal",
 		Columns: st.Columns[:len(tm.Types)],
 	}
+	// Build a normal table plan, which means, return all rows
+	// and columns as is. Special handling is done when we actually
+	// receive the row event. We'll build a JOURNAL event instead.
 	plan, err := buildREPlan(table, nil, "")
 	if err != nil {
 		return err
@@ -620,24 +629,27 @@ nextrow:
 			return nil, err
 		}
 		if !afterOK {
+			// This can happen if someone manually deleted rows.
 			continue
 		}
+		// Exclude events that don't match the db_name.
 		for i, fld := range plan.fields() {
-			switch fld.Name {
-			case "db_name":
-				if afterValues[i].ToString() != vs.cp.DbName {
-					continue nextrow
-				}
-			case "val":
-				journal := &binlogdatapb.Journal{}
-				if err := proto.UnmarshalText(afterValues[i].ToString(), journal); err != nil {
-					return nil, err
-				}
-				vevents = append(vevents, &binlogdatapb.VEvent{
-					Type:    binlogdatapb.VEventType_JOURNAL,
-					Journal: journal,
-				})
+			if fld.Name == "db_name" && afterValues[i].ToString() != vs.cp.DbName {
+				continue nextrow
 			}
+		}
+		for i, fld := range plan.fields() {
+			if fld.Name != "val" {
+				continue
+			}
+			journal := &binlogdatapb.Journal{}
+			if err := proto.UnmarshalText(afterValues[i].ToString(), journal); err != nil {
+				return nil, err
+			}
+			vevents = append(vevents, &binlogdatapb.VEvent{
+				Type:    binlogdatapb.VEventType_JOURNAL,
+				Journal: journal,
+			})
 		}
 	}
 	return vevents, nil
