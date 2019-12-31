@@ -213,7 +213,7 @@ func restoreTablet(t *testing.T, tablet *cluster.Vttablet, restoreKSName string)
 	err = tablet.VttabletProcess.Setup()
 	assert.Nil(t, err)
 
-	err = tablet.VttabletProcess.WaitForTabletTypeForTimeout("SERVING", 20*time.Second)
+	err = tablet.VttabletProcess.WaitForTabletTypesForTimeout([]string{"SERVING"}, 20*time.Second)
 	assert.Nil(t, err)
 }
 func listBackups(t *testing.T) []string {
