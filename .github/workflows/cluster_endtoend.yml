@@ -20,7 +20,7 @@ jobs:
     - name: Get dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget
+        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
         sudo service mysql stop
         sudo service etcd stop
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
@@ -30,4 +30,4 @@ jobs:
     - name: sharded cluster_endtoend
       run: |
         source build.env
-        go run test.go -docker=false -print-log -shard ${{matrix.name}} 
+        eatmydata -- go run test.go -docker=false -print-log -shard ${{matrix.name}} 
