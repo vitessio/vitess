@@ -1635,9 +1635,13 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW CREATE DATABASE ddl_skip_to_end
+| SHOW CREATE DATABASE not_exists_opt ID ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{Type: string($2) + " " + string($3), IfNotExists: $4 == 1, Database: string($5)}
+  }
+| SHOW CREATE SCHEMA not_exists_opt ID ddl_skip_to_end
+  {
+    $$ = &Show{Type: string($2) + " " + string($3), IfNotExists: $4 == 1, Database: string($5)}
   }
 /* Rule to handle SHOW CREATE EVENT, SHOW CREATE FUNCTION, etc. */
 | SHOW CREATE ID ddl_skip_to_end

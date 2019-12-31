@@ -1128,7 +1128,12 @@ var (
 		output: "show collation where `Charset` = 'utf8' and `Collation` = 'utf8_bin'",
 	}, {
 		input:  "show create database d",
-		output: "show create database",
+	}, {
+		input:  "show create schema d",
+	}, {
+		input:  "show create database if not exists d",
+	}, {
+		input:  "show create schema if not exists d",
 	}, {
 		input:  "show create event e",
 		output: "show create event",
