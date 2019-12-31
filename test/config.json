@@ -429,7 +429,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 11,
+			"Shard": 14,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -505,7 +505,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/recovery"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 11,
+			"Shard": 14,
 			"RetryMax": 0,
 			"Tags": []
 		},
