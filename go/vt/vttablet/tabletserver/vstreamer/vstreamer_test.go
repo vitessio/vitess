@@ -1170,9 +1170,7 @@ func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter,
 	ch := make(chan []*binlogdatapb.VEvent)
 	go func() {
 		defer close(ch)
-		if err := vstream(ctx, t, position, filter, ch); err != nil {
-			t.Error(err)
-		}
+		_ = vstream(ctx, t, position, filter, ch)
 	}()
 	return ch
 }
