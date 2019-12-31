@@ -628,6 +628,9 @@ func inferColTypeFromExpr(node sqlparser.Expr, colTypeMap map[string]querypb.Typ
 		colNames, colTypes = inferColTypeFromExpr(node.Expr, colTypeMap, colNames, colTypes)
 	case *sqlparser.CaseExpr:
 		colNames, colTypes = inferColTypeFromExpr(node.Whens[0].Val, colTypeMap, colNames, colTypes)
+	case *sqlparser.NullVal:
+		colNames = append(colNames, sqlparser.String(node))
+		colTypes = append(colTypes, querypb.Type_NULL_TYPE)
 	default:
 		log.Errorf("vtexplain: unsupported select expression type +%v node %s", reflect.TypeOf(node), sqlparser.String(node))
 	}

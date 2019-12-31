@@ -130,7 +130,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	if vttablet.ServingStatus != "" {
 		if err = vttablet.WaitForTabletType(vttablet.ServingStatus); err != nil {
-			return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vttablet.Name, <-vttablet.exit)
+			return fmt.Errorf("process '%s' timed out after 10s (err: %s)", vttablet.Name, err)
 		}
 	}
 	return nil
@@ -185,9 +185,16 @@ func (vttablet *VttabletProcess) GetTabletStatus() string {
 
 // WaitForTabletType waits till the tablet status reaches desired type
 func (vttablet *VttabletProcess) WaitForTabletType(expectedType string) error {
+	return vttablet.WaitForTabletTypes([]string{expectedType})
+}
+
+// WaitForTabletTypes waits till the tablet reaches to any of the provided status
+func (vttablet *VttabletProcess) WaitForTabletTypes(expectedTypes []string) error {
 	timeout := time.Now().Add(10 * time.Second)
+	var status string
 	for time.Now().Before(timeout) {
-		if vttablet.GetTabletStatus() == expectedType {
+		status = vttablet.GetTabletStatus()
+		if contains(expectedTypes, status) {
 			return nil
 		}
 		select {
@@ -197,7 +204,17 @@ func (vttablet *VttabletProcess) WaitForTabletType(expectedType string) error {
 			time.Sleep(300 * time.Millisecond)
 		}
 	}
-	return fmt.Errorf("Vttablet %s, expected status not reached", vttablet.TabletPath)
+	return fmt.Errorf("Vttablet %s, current status = %s, expected status [%s] not reached ",
+		vttablet.TabletPath, status, strings.Join(expectedTypes, ","))
+}
+
+func contains(arr []string, str string) bool {
+	for _, a := range arr {
+		if a == str {
+			return true
+		}
+	}
+	return false
 }
 
 // WaitForBinLogPlayerCount waits till binlog player count var matches
@@ -266,7 +283,8 @@ func (vttablet *VttabletProcess) TearDown() error {
 
 // CreateDB creates the database for keyspace
 func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
-	_, err := vttablet.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace), keyspace, false)
+	_, _ = vttablet.QueryTablet(fmt.Sprintf("drop database IF EXISTS vt_%s", keyspace), keyspace, false)
+	_, err := vttablet.QueryTablet(fmt.Sprintf("create database IF NOT EXISTS vt_%s", keyspace), keyspace, false)
 	return err
 }
 

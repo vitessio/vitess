@@ -319,11 +319,6 @@ func (cluster *LocalProcessCluster) LaunchCluster(keyspace *Keyspace, shards []S
 	// Create shard
 	for _, shard := range shards {
 		for _, tablet := range shard.Vttablets {
-			err = cluster.VtctlclientProcess.InitTablet(tablet, tablet.Cell, keyspace.Name, cluster.Hostname, shard.Name)
-			if err != nil {
-				log.Error(err)
-				return
-			}
 
 			// Setup MysqlctlProcess
 			tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory)

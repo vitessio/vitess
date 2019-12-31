@@ -150,19 +150,13 @@ func initClusterForInitialSharding(keyspaceName string, shardNames []string, tot
 
 		for i := 0; i < totalTabletsRequired; i++ {
 			// instantiate vttablet object with reserved ports
-			tabletUID := ClusterInstance.GetAndReserveTabletUID()
-			tablet := &cluster.Vttablet{
-				TabletUID: tabletUID,
-				HTTPPort:  ClusterInstance.GetAndReservePort(),
-				GrpcPort:  ClusterInstance.GetAndReservePort(),
-				MySQLPort: ClusterInstance.GetAndReservePort(),
-				Alias:     fmt.Sprintf("%s-%010d", ClusterInstance.Cell, tabletUID),
-				Type:      "replica",
-			}
-			if i == 0 { // Make the first one as master
-				tablet.Type = "master"
-			} else if i == totalTabletsRequired-1 && rdonly { // Make the last one as rdonly if rdonly flag is passed
-				tablet.Type = "rdonly"
+			var tablet *cluster.Vttablet
+			if i == totalTabletsRequired-1 && rdonly {
+				tablet = ClusterInstance.GetVttabletInstance("rdonly", 0, "")
+			} else if i == 0 {
+				tablet = ClusterInstance.GetVttabletInstance("master", 0, "")
+			} else {
+				tablet = ClusterInstance.GetVttabletInstance("replica", 0, "")
 			}
 			// Start Mysqlctl process
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, ClusterInstance.TmpDirectory)
@@ -525,21 +519,26 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 			"MultiSplitDiff",
 			fmt.Sprintf("%s/%s", keyspaceName, shard1.Name))
 		assert.Nil(t, err)
+
+		for _, shard := range []string{shard21.Name, shard22.Name} {
+			err = ClusterInstance.VtworkerProcess.ExecuteVtworkerCommand(ClusterInstance.GetAndReservePort(),
+				ClusterInstance.GetAndReservePort(),
+				"--use_v3_resharding_mode=true",
+				"SplitDiff",
+				"--min_healthy_rdonly_tablets", "1",
+				fmt.Sprintf("%s/%s", keyspaceName, shard))
+			assert.Nil(t, err)
+		}
 	}
 
-	for _, shard := range []string{shard21.Name, shard22.Name} {
-		err = ClusterInstance.VtworkerProcess.ExecuteVtworkerCommand(ClusterInstance.GetAndReservePort(),
-			ClusterInstance.GetAndReservePort(),
-			"--use_v3_resharding_mode=true",
-			"SplitDiff",
-			"--min_healthy_rdonly_tablets", "1",
-			fmt.Sprintf("%s/%s", keyspaceName, shard))
-		assert.Nil(t, err)
+	if isExternal {
+		// get status for the destination master tablet, make sure we have it all
+		sharding.CheckRunningBinlogPlayer(t, *shard21.MasterTablet(), 3956, 2002)
+		sharding.CheckRunningBinlogPlayer(t, *shard22.MasterTablet(), 4048, 2002)
+	} else {
+		sharding.CheckRunningBinlogPlayer(t, *shard21.MasterTablet(), 3954, 2000)
+		sharding.CheckRunningBinlogPlayer(t, *shard22.MasterTablet(), 4046, 2000)
 	}
-
-	// get status for the destination master tablet, make sure we have it all
-	sharding.CheckRunningBinlogPlayer(t, *shard21.MasterTablet(), 3954, 2000)
-	sharding.CheckRunningBinlogPlayer(t, *shard22.MasterTablet(), 4046, 2000)
 
 	// check we can't migrate the master just yet
 	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", shard1Ks, "master")
