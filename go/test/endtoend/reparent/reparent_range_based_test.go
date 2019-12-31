@@ -29,7 +29,7 @@ import (
 func TestReparentGracefulRangeBased(t *testing.T) {
 	ctx := context.Background()
 
-	for _, tablet := range []cluster.Vttablet{*masterTablet, *replicaTablet, *replica2Tablet, *replica3Tablet} {
+	for _, tablet := range []cluster.Vttablet{*masterTablet, *replicaTablet} {
 		// create database
 		err := tablet.VttabletProcess.CreateDB(keyspaceName)
 		assert.Nil(t, err)
@@ -41,7 +41,7 @@ func TestReparentGracefulRangeBased(t *testing.T) {
 		assert.Nil(t, err)
 	}
 
-	for _, tablet := range []cluster.Vttablet{*masterTablet, *replicaTablet, *replica2Tablet, *replica3Tablet} {
+	for _, tablet := range []cluster.Vttablet{*masterTablet, *replicaTablet} {
 		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
 		assert.Nil(t, err)
 	}
@@ -69,7 +69,7 @@ func TestReparentGracefulRangeBased(t *testing.T) {
 	if strArray[len(strArray)-1] == "" {
 		strArray = strArray[:len(strArray)-1] // Truncate slice, remove empty line
 	}
-	assert.Equal(t, 4, len(strArray))         // one master, three slaves
+	assert.Equal(t, 2, len(strArray))         // one master, one slave
 	assert.Contains(t, strArray[0], "master") // master first
 
 	// Perform a graceful reparent operation
@@ -89,9 +89,4 @@ func TestReparentGracefulRangeBased(t *testing.T) {
 	runSQL(ctx, t, insertSQL, replicaTablet)
 	err = checkInsertedValues(ctx, t, masterTablet, 1)
 	assert.Nil(t, err)
-	err = checkInsertedValues(ctx, t, replica2Tablet, 1)
-	assert.Nil(t, err)
-	err = checkInsertedValues(ctx, t, replica3Tablet, 1)
-	assert.Nil(t, err)
-
 }
