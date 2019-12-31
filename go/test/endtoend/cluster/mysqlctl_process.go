@@ -38,6 +38,7 @@ type MysqlctlProcess struct {
 	MySQLPort    int
 	InitDBFile   string
 	ExtraArgs    []string
+	InitMysql    bool
 }
 
 // InitDb executes mysqlctl command to add cell info
@@ -74,8 +75,12 @@ func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
 	if len(mysqlctl.ExtraArgs) > 0 {
 		tmpProcess.Args = append(tmpProcess.Args, mysqlctl.ExtraArgs...)
 	}
-	tmpProcess.Args = append(tmpProcess.Args, "init",
-		"-init_db_sql_file", mysqlctl.InitDBFile)
+	if mysqlctl.InitMysql {
+		tmpProcess.Args = append(tmpProcess.Args, "init",
+			"-init_db_sql_file", mysqlctl.InitDBFile)
+	} else {
+		tmpProcess.Args = append(tmpProcess.Args, "start")
+	}
 	return tmpProcess, tmpProcess.Start()
 }
 
@@ -121,6 +126,7 @@ func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) 
 	}
 	mysqlctl.MySQLPort = mySQLPort
 	mysqlctl.TabletUID = tabletUID
+	mysqlctl.InitMysql = true
 	return mysqlctl
 }
 

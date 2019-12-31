@@ -3,7 +3,7 @@ on: [push, pull_request]
 jobs:
 
   build:
-    name: Cluster End-to-End Test
+    name: Cluster End-to-End Test for Shard 11
     runs-on: ubuntu-latest
     steps:
 
@@ -25,10 +25,7 @@ jobs:
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
 
-    - name: Run make minimaltools
+    - name: cluster_endtoend_shard_11
       run: |
-        make minimaltools
-
-    - name: cluster_endtoend
-      run: |
-        make e2e_test_cluster
+        source build.env
+        go run test.go -docker=false -print-log -shard 11
