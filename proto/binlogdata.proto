@@ -115,7 +115,7 @@ message StreamTablesResponse {
   BinlogTransaction binlog_transaction = 1;
 }
 
-// Rule represents one rule.
+// Rule represents one rule in a Filter.
 message Rule {
   // Match can be a table name or a regular expression.
   // If it starts with a '/', it's a regular expression.
@@ -123,12 +123,20 @@ message Rule {
   // "/t.*" matches all tables that begin with 't'.
   string match = 1;
   // Filter: If empty, all columns and rows of the matching tables
-  // are sent. If it's a keyrange, only rows that match the
-  // keyrange are sent.
+  // are sent. If it's a keyrange like "-80", only rows that
+  // match the keyrange are sent.
   // If Match is a table name instead of a regular expression,
-  // the Filter can also be a select expression.
+  // the Filter can also be a select expression like this:
+  // "select * from t", same as an empty Filter, or
+  // "select * from t where in_keyrange('-80')", same as "-80", or
+  // "select col1, col2 from t where in_keyrange(col1, 'hash', '-80'), or
   // What is allowed in a select expression depends on whether
-  // it's a vstreamer or vreplication request.
+  // it's a vstreamer or vreplication request. For more details,
+  // please refer to the specific package documentation.
+  // On the vreplication side, Filter can also accept a special
+  // "exclude" value, which will cause the matched tables
+  // to be excluded.
+  // TODO(sougou): support this on vstreamer side also.
   string filter = 2;
 }
 
@@ -308,7 +316,7 @@ message Journal {
 // which contains the table name.
 // A GTID event always precedes a commitable event, which can be
 // COMMIT, DDL or OTHER.
-// OTHER events are non-material events that have no metadata.
+// OTHER events are non-material events that have no additional metadata.
 message VEvent {
   VEventType type = 1;
   // Timestamp is the binlog timestamp in seconds.
@@ -329,11 +337,12 @@ message VEvent {
   Journal journal = 8;
   // Dml is set if the event type is INSERT, REPLACE, UPDATE or DELETE.
   string dml = 9;
-  // CurrentType specifies the current time to handle clock skew.
+  // CurrentTime specifies the current time when the message was sent.
+  // This can be used to compenssate for clock skew.
   int64 current_time = 20;
 }
 
-// VStreamRequest is the payload for VStream
+// VStreamRequest is the payload for VStreamer
 message VStreamRequest {
   vtrpc.CallerID effective_caller_id = 1;
   query.VTGateCallerID immediate_caller_id = 2;
@@ -343,7 +352,7 @@ message VStreamRequest {
   Filter filter = 5;
 }
 
-// VStreamResponse is the response from VStream
+// VStreamResponse is the response from VStreamer
 message VStreamResponse {
   repeated VEvent events = 1;
 }
