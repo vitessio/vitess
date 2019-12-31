@@ -587,6 +587,7 @@ func TestServer(t *testing.T) {
 	initialTimingCounts := timings.Counts()
 	initialConnAccept := connAccept.Get()
 	initialConnSlow := connSlow.Get()
+	initialConnCount := connCount.Get()
 
 	// Run an 'error' command.
 	th.SetErr(NewSQLError(ERUnknownComError, SSUnknownComError, "forced query error"))
@@ -598,8 +599,8 @@ func TestServer(t *testing.T) {
 		!strings.Contains(output, "forced query error") {
 		t.Errorf("Unexpected output for 'error': %v", output)
 	}
-	if connCount.Get() != 0 {
-		t.Errorf("Expected ConnCount=0, got %d", connCount.Get())
+	if connCount.Get()-initialConnCount != 0 {
+		t.Errorf("Expected ConnCount delta=0, got %d", connCount.Get()-initialConnCount)
 	}
 	if connAccept.Get()-initialConnAccept != 1 {
 		t.Errorf("Expected ConnAccept delta=1, got %d", connAccept.Get()-initialConnAccept)
