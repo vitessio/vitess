@@ -536,6 +536,23 @@ func (cluster *LocalProcessCluster) GetVttabletInstance(tabletType string, UID i
 	}
 }
 
+// GetVttabletInstance creates a new vttablet object
+func (cluster *LocalProcessCluster) GetVtprocessInstanceFromVttablet(tablet *Vttablet, shardName string, ksName string) *VttabletProcess {
+	return VttabletProcessInstance(tablet.HTTPPort,
+		tablet.GrpcPort,
+		tablet.TabletUID,
+		cluster.Cell,
+		shardName,
+		ksName,
+		cluster.VtctldProcess.Port,
+		tablet.Type,
+		cluster.TopoProcess.Port,
+		cluster.Hostname,
+		cluster.TmpDirectory,
+		cluster.VtTabletExtraArgs,
+		cluster.EnableSemiSync)
+}
+
 // StartVttablet starts a new tablet
 func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatus string,
 	supportBackup bool, cell string, keyspaceName string, hostname string, shardName string) error {
