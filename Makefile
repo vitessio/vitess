@@ -156,9 +156,13 @@ endif
 $(PROTO_PY_OUTS): py/vtproto/%_pb2.py: proto/%.proto
 	$(PROTOC_COMMAND) -Iproto $< --python_out=py/vtproto --grpc_python_out=py/vtproto
 
+# TODO(sougou): find a better way around this temp hack.
+VTTOP=$(VTROOT)/../../..
 $(PROTO_GO_OUTS): install_protoc-gen-go proto/*.proto
 	for name in $(PROTO_SRC_NAMES); do \
-		cd $(VTROOT)/src && PATH=$(VTROOT)/bin:$(PATH) $(VTROOT)/bin/protoc --go_out=plugins=grpc:. -Ivitess.io/vitess/proto vitess.io/vitess/proto/$${name}.proto; \
+		cd $(VTTOP)/src && \
+		$(VTROOT)/bin/protoc --go_out=plugins=grpc:. -Ivitess.io/vitess/proto vitess.io/vitess/proto/$${name}.proto && \
+		goimports -w $(VTROOT)/go/vt/proto/$${name}/$${name}.pb.go; \
 	done
 
 # Helper targets for building Docker images.
