@@ -11,7 +11,7 @@ select count(*) from user where id = 1 /* point aggregate */;
 select count(*) from user where name in ('alice','bob') /* scatter aggregate */;
 select name, count(*) from user group by name /* scatter aggregate */;
 
-select 1, "hello", 3.14 from user limit 10 /* select constant sql values */;
+select 1, "hello", 3.14, null from user limit 10 /* select constant sql values */;
 select * from (select id from user) s /* scatter paren select */;
 
 select name from user where id = (select id from t1) /* non-correlated subquery as value */;

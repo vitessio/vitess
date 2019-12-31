@@ -81,7 +81,7 @@ func TestMasterBackup(t *testing.T) {
 	assert.Nil(t, err)
 
 	restoreWaitForBackup(t, "replica")
-	err = replica2.VttabletProcess.WaitForTabletTypeForTimeout("SERVING", 15*time.Second)
+	err = replica2.VttabletProcess.WaitForTabletTypesForTimeout([]string{"SERVING"}, 15*time.Second)
 	assert.Nil(t, err)
 
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
@@ -110,7 +110,7 @@ func TestMasterReplicaSameBackup(t *testing.T) {
 
 	// now bring up the other replica, letting it restore from backup.
 	restoreWaitForBackup(t, "replica")
-	err = replica2.VttabletProcess.WaitForTabletTypeForTimeout("SERVING", 15*time.Second)
+	err = replica2.VttabletProcess.WaitForTabletTypesForTimeout([]string{"SERVING"}, 15*time.Second)
 	assert.Nil(t, err)
 
 	// check the new replica has the data
@@ -325,7 +325,7 @@ func testBackup(t *testing.T, tabletType string) {
 	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
 	assert.Nil(t, err)
 
-	err = replica2.VttabletProcess.WaitForTabletTypeForTimeout("SERVING", 15*time.Second)
+	err = replica2.VttabletProcess.WaitForTabletTypesForTimeout([]string{"SERVING"}, 15*time.Second)
 	assert.Nil(t, err)
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
@@ -396,7 +396,7 @@ func verifyRestoreTablet(t *testing.T, tablet *cluster.Vttablet, status string) 
 	err := tablet.VttabletProcess.Setup()
 	assert.Nil(t, err)
 	if status != "" {
-		err = tablet.VttabletProcess.WaitForTabletTypeForTimeout(status, 15*time.Second)
+		err = tablet.VttabletProcess.WaitForTabletTypesForTimeout([]string{status}, 15*time.Second)
 		assert.Nil(t, err)
 	}
 

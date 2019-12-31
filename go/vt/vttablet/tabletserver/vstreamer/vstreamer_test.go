@@ -20,7 +20,10 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -237,9 +240,7 @@ func TestREKeyRange(t *testing.T) {
 	})
 	engine.se.Reload(context.Background())
 
-	if err := env.SetVSchema(shardedVSchema); err != nil {
-		t.Fatal(err)
-	}
+	setVSchema(t, shardedVSchema)
 	defer env.SetVSchema("{}")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -298,9 +299,7 @@ func TestREKeyRange(t *testing.T) {
     }
   }
 }`
-	if err := env.SetVSchema(altVSchema); err != nil {
-		t.Fatal(err)
-	}
+	setVSchema(t, altVSchema)
 
 	// Only the first insert should be sent.
 	input = []string{
@@ -331,9 +330,7 @@ func TestInKeyRangeMultiColumn(t *testing.T) {
 	})
 	engine.se.Reload(context.Background())
 
-	if err := env.SetVSchema(multicolumnVSchema); err != nil {
-		t.Fatal(err)
-	}
+	setVSchema(t, multicolumnVSchema)
 	defer env.SetVSchema("{}")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -388,9 +385,7 @@ func TestREMultiColumnVindex(t *testing.T) {
 	})
 	engine.se.Reload(context.Background())
 
-	if err := env.SetVSchema(multicolumnVSchema); err != nil {
-		t.Fatal(err)
-	}
+	setVSchema(t, multicolumnVSchema)
 	defer env.SetVSchema("{}")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1074,6 +1069,20 @@ func TestStatementMode(t *testing.T) {
 	runCases(t, nil, testcases, "")
 }
 
+func TestHeartbeat(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := startStream(ctx, t, nil, "")
+	evs := <-ch
+	require.Equal(t, 1, len(evs))
+	assert.Equal(t, binlogdatapb.VEventType_HEARTBEAT, evs[0].Type)
+}
+
 func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, postion string) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1101,14 +1110,25 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 	t.Helper()
 	for _, wantset := range output {
 		var evs []*binlogdatapb.VEvent
-		var ok bool
-		select {
-		case evs, ok = <-ch:
-			if !ok {
+		for {
+			select {
+			case allevs, ok := <-ch:
+				if !ok {
+					t.Fatal("stream ended early")
+				}
+				for _, ev := range allevs {
+					// Ignore spurious heartbeats that can happen on slow machines.
+					if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
+						continue
+					}
+					evs = append(evs, ev)
+				}
+			case <-ctx.Done():
 				t.Fatal("stream ended early")
 			}
-		case <-ctx.Done():
-			t.Fatal("stream ended early")
+			if len(evs) != 0 {
+				break
+			}
 		}
 		if len(wantset) != len(evs) {
 			t.Fatalf("%v: evs\n%v, want\n%v", input, evs, wantset)
@@ -1205,4 +1225,27 @@ func masterPosition(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return mysql.EncodePosition(pos)
+}
+
+func setVSchema(t *testing.T, vschema string) {
+	t.Helper()
+
+	curCount := vschemaUpdates.Get()
+
+	if err := env.SetVSchema(vschema); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for curCount to go up.
+	updated := false
+	for i := 0; i < 10; i++ {
+		if vschemaUpdates.Get() != curCount {
+			updated = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !updated {
+		t.Error("vschema did not get updated")
+	}
 }
