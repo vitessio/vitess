@@ -19,7 +19,6 @@ package backup
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
 	"os"
 	"os/exec"
 	"path"
@@ -85,8 +84,8 @@ func TestMasterBackup(t *testing.T) {
 	err = replica2.VttabletProcess.WaitForTabletTypeForTimeout("SERVING", 15*time.Second)
 	assert.Nil(t, err)
 
-	verifyRowsInTablet(t, replica2, 2)
-	verifyLocalMetadata(t, "replica")
+	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
+	cluster.VerifyLocalMetadata(t, replica2, keyspaceName, shardName, cell)
 	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
 
 	replica2.VttabletProcess.TearDown()
@@ -115,7 +114,7 @@ func TestMasterReplicaSameBackup(t *testing.T) {
 	assert.Nil(t, err)
 
 	// check the new replica has the data
-	verifyRowsInTablet(t, replica2, 2)
+	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
 	// Promote replica2 to master
 	err = localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard",
@@ -131,7 +130,7 @@ func TestMasterReplicaSameBackup(t *testing.T) {
 	verifyRestoreTablet(t, replica1, "SERVING")
 
 	// wait for replica1 to catch up.
-	verifyRowsInTablet(t, replica1, 3)
+	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 3)
 
 	// This is to test that replicationPosition is processed correctly
 	// while doing backup/restore after a reparent.
@@ -148,7 +147,7 @@ func TestMasterReplicaSameBackup(t *testing.T) {
 	// Force replica1 to restore from backup.
 	verifyRestoreTablet(t, replica1, "SERVING")
 
-	verifyRowsInTablet(t, replica1, 4)
+	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 4)
 	replica2.VttabletProcess.TearDown()
 	restartMasterReplica(t)
 }
@@ -197,7 +196,7 @@ func testRestoreOldMaster(t *testing.T, method restoreMethod) {
 	method(t, master)
 
 	// wait for it to catch up.
-	verifyRowsInTablet(t, master, 3)
+	cluster.VerifyRowsInTablet(t, master, keyspaceName, 3)
 
 	// teardown
 	restartMasterReplica(t)
@@ -294,7 +293,7 @@ func TestTerminatedRestore(t *testing.T) {
 	_, err = os.Stat(path.Join(master.VttabletProcess.Directory, "restore_in_progress"))
 	assert.True(t, os.IsNotExist(err))
 
-	verifyRowsInTablet(t, master, 3)
+	cluster.VerifyRowsInTablet(t, master, keyspaceName, 3)
 	stopAllTablets()
 }
 
@@ -328,10 +327,9 @@ func testBackup(t *testing.T, tabletType string) {
 
 	err = replica2.VttabletProcess.WaitForTabletTypeForTimeout("SERVING", 15*time.Second)
 	assert.Nil(t, err)
+	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
-	verifyRowsInTablet(t, replica2, 2)
-
-	verifyLocalMetadata(t, tabletType)
+	cluster.VerifyLocalMetadata(t, replica2, keyspaceName, shardName, cell)
 	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
 
 	replica2.VttabletProcess.TearDown()
@@ -346,7 +344,7 @@ func verifyInitialReplication(t *testing.T) {
 	assert.Nil(t, err)
 	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
 	assert.Nil(t, err)
-	verifyRowsInTablet(t, replica1, 1)
+	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
 }
 
 // Bring up another replica concurrently, telling it to wait until a backup
@@ -356,9 +354,7 @@ func verifyInitialReplication(t *testing.T) {
 // This setting should only matter for taking new backups. We should be able
 // to restore a previous backup successfully regardless of this setting.
 func restoreWaitForBackup(t *testing.T, tabletType string) {
-	if tabletType == "rdonly" {
-		replica2.Type = "rdonly"
-	}
+	replica2.Type = tabletType
 	resetTabletDir(t, replica2)
 	replicaTabletArgs := commonTabletArg
 	replicaTabletArgs = append(replicaTabletArgs, "-backup_engine_implementation", "fake_implementation")
@@ -371,52 +367,14 @@ func restoreWaitForBackup(t *testing.T, tabletType string) {
 }
 
 func resetTabletDir(t *testing.T, tablet *cluster.Vttablet) {
-	tablet.MysqlctlProcess.Stop()
-	tablet.VttabletProcess.TearDown()
-	os.RemoveAll(tablet.VttabletProcess.Directory)
-
-	err := tablet.MysqlctlProcess.Start()
+	err := cluster.ResetTabletDirectory(*tablet)
 	assert.Nil(t, err)
 }
 
 func listBackups(t *testing.T) []string {
-	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("ListBackups", shardKsName)
+	output, err := localCluster.ListBackups(shardKsName)
 	assert.Nil(t, err)
-	result := strings.Split(output, "\n")
-	var returnResult []string
-	for _, str := range result {
-		if str != "" {
-			returnResult = append(returnResult, str)
-		}
-	}
-	return returnResult
-}
-
-func verifyRowsInTablet(t *testing.T, vttablet *cluster.Vttablet, totalRows int) {
-	timeout := time.Now().Add(10 * time.Second)
-	for time.Now().Before(timeout) {
-		qr, err := vttablet.VttabletProcess.QueryTablet("select * from vt_insert_test", keyspaceName, true)
-		assert.Nil(t, err)
-		if len(qr.Rows) != totalRows {
-			time.Sleep(300 * time.Millisecond)
-		} else {
-			return
-		}
-	}
-	assert.Fail(t, "expected rows not found.")
-}
-
-func verifyLocalMetadata(t *testing.T, tabletType string) {
-	qr, err := replica2.VttabletProcess.QueryTablet("select * from _vt.local_metadata", keyspaceName, false)
-	assert.Nil(t, err)
-	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[0]), fmt.Sprintf(`[VARCHAR("Alias") BLOB("%s") VARBINARY("vt_%s")]`, replica2.Alias, keyspaceName))
-	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[1]), fmt.Sprintf(`[VARCHAR("ClusterAlias") BLOB("%s.%s") VARBINARY("vt_%s")]`, keyspaceName, shardName, keyspaceName))
-	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[2]), fmt.Sprintf(`[VARCHAR("DataCenter") BLOB("%s") VARBINARY("vt_%s")]`, cell, keyspaceName))
-	if tabletType == "replica" {
-		assert.Equal(t, fmt.Sprintf("%v", qr.Rows[3]), fmt.Sprintf(`[VARCHAR("PromotionRule") BLOB("neutral") VARBINARY("vt_%s")]`, keyspaceName))
-	} else if tabletType == "rdonly" {
-		assert.Equal(t, fmt.Sprintf("%v", qr.Rows[3]), fmt.Sprintf(`[VARCHAR("PromotionRule") BLOB("must_not") VARBINARY("vt_%s")]`, keyspaceName))
-	}
+	return output
 }
 
 func verifyAfterRemovingBackupNoBackupShouldBePresent(t *testing.T, backups []string) {
