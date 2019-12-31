@@ -425,7 +425,7 @@ func TestReparentFromOutside(t *testing.T) {
 	reparentFromOutside(t, false)
 }
 
-func TestReparentFromOutsideWithNoMater(t *testing.T) {
+func TestReparentFromOutsideWithNoMaster(t *testing.T) {
 	reparentFromOutside(t, true)
 
 	// We will have to restart mysql to avoid hanging/locks due to external Reparent
@@ -488,7 +488,7 @@ func reparentFromOutside(t *testing.T, downMaster bool) {
 		runSQL(ctx, t, demoteMasterCommands, tablet62344)
 
 		//Get the position of the old master and wait for the new one to catch up.
-		err = waitForReplicationPosition(ctx, t, tablet62344, tablet62044)
+		err = waitForReplicationPosition(t, tablet62344, tablet62044)
 		assert.Nil(t, err)
 	}
 
@@ -743,7 +743,7 @@ func TestReparentDoesntHangIfMasterFails(t *testing.T) {
 }
 
 //	Waits for tablet B to catch up to the replication position of tablet A.
-func waitForReplicationPosition(ctx context.Context, t *testing.T, tabletA *cluster.Vttablet, tabletB *cluster.Vttablet) error {
+func waitForReplicationPosition(t *testing.T, tabletA *cluster.Vttablet, tabletB *cluster.Vttablet) error {
 	posA, _ := cluster.GetMasterPosition(t, *tabletA, hostname)
 	timeout := time.Now().Add(5 * time.Second)
 	for time.Now().Before(timeout) {
