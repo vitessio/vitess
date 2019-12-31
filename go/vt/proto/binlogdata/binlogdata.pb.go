@@ -599,7 +599,8 @@ func (m *StreamTablesResponse) GetBinlogTransaction() *BinlogTransaction {
 // Rule represents one rule.
 type Rule struct {
 	// match can be a table name or a regular expression
-	// delineated by '/' and '/'.
+	// if it starts with a '/'. For example, "/.*" matches
+	// all tables.
 	Match string `protobuf:"bytes,1,opt,name=match,proto3" json:"match,omitempty"`
 	// filter can be an empty string or keyrange if the match
 	// is a regular expression. Otherwise, it must be a select
@@ -699,8 +700,8 @@ func (m *Filter) GetFieldEventMode() Filter_FieldEventMode {
 }
 
 // BinlogSource specifies the source  and filter parameters for
-// Filtered Replication. It currently supports a keyrange
-// or a list of tables.
+// Filtered Replication. KeyRange and Tables are legacy. Filter
+// is the new way to specify the filtering rules.
 type BinlogSource struct {
 	// the source keyspace
 	Keyspace string `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
@@ -816,7 +817,10 @@ func (m *BinlogSource) GetStopAfterCopy() bool {
 	return false
 }
 
-// RowChange represents one row change
+// RowChange represents one row change.
+// If Before is set and not After, it's a delete.
+// If After is set and not Before, it's an insert.
+// If both are set, it's an update.
 type RowChange struct {
 	Before               *query.Row `protobuf:"bytes,1,opt,name=before,proto3" json:"before,omitempty"`
 	After                *query.Row `protobuf:"bytes,2,opt,name=after,proto3" json:"after,omitempty"`
@@ -864,7 +868,7 @@ func (m *RowChange) GetAfter() *query.Row {
 	return nil
 }
 
-// RowEvent represent row events for one table
+// RowEvent represent row events for one table.
 type RowEvent struct {
 	TableName            string       `protobuf:"bytes,1,opt,name=table_name,json=tableName,proto3" json:"table_name,omitempty"`
 	RowChanges           []*RowChange `protobuf:"bytes,2,rep,name=row_changes,json=rowChanges,proto3" json:"row_changes,omitempty"`
@@ -912,6 +916,7 @@ func (m *RowEvent) GetRowChanges() []*RowChange {
 	return nil
 }
 
+// FieldEvent represents the field info for a table.
 type FieldEvent struct {
 	TableName            string         `protobuf:"bytes,1,opt,name=table_name,json=tableName,proto3" json:"table_name,omitempty"`
 	Fields               []*query.Field `protobuf:"bytes,2,rep,name=fields,proto3" json:"fields,omitempty"`
@@ -959,6 +964,11 @@ func (m *FieldEvent) GetFields() []*query.Field {
 	return nil
 }
 
+// ShardGtid contains the GTID position for one shard.
+// It's used in a request for requesting a starting position.
+// It's used in a response to transmit the current position
+// of a shard. It's also used in a Journal to indicate the
+// list of targets and shard positions to migrate to.
 type ShardGtid struct {
 	Keyspace             string   `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	Shard                string   `protobuf:"bytes,2,opt,name=shard,proto3" json:"shard,omitempty"`
@@ -1014,6 +1024,7 @@ func (m *ShardGtid) GetGtid() string {
 	return ""
 }
 
+// A VGtid is a list of ShardGtids.
 type VGtid struct {
 	ShardGtids           []*ShardGtid `protobuf:"bytes,1,rep,name=shard_gtids,json=shardGtids,proto3" json:"shard_gtids,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
@@ -1053,6 +1064,7 @@ func (m *VGtid) GetShardGtids() []*ShardGtid {
 	return nil
 }
 
+// KeyspaceShard represents a keyspace and shard.
 type KeyspaceShard struct {
 	Keyspace             string   `protobuf:"bytes,1,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
 	Shard                string   `protobuf:"bytes,2,opt,name=shard,proto3" json:"shard,omitempty"`
@@ -1100,17 +1112,25 @@ func (m *KeyspaceShard) GetShard() string {
 	return ""
 }
 
+// Journal contains the metadata for a journal event.
 type Journal struct {
-	Id                   int64            `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	MigrationType        MigrationType    `protobuf:"varint,2,opt,name=migration_type,json=migrationType,proto3,enum=binlogdata.MigrationType" json:"migration_type,omitempty"`
-	Tables               []string         `protobuf:"bytes,3,rep,name=tables,proto3" json:"tables,omitempty"`
-	LocalPosition        string           `protobuf:"bytes,4,opt,name=local_position,json=localPosition,proto3" json:"local_position,omitempty"`
-	ShardGtids           []*ShardGtid     `protobuf:"bytes,5,rep,name=shard_gtids,json=shardGtids,proto3" json:"shard_gtids,omitempty"`
-	Participants         []*KeyspaceShard `protobuf:"bytes,6,rep,name=participants,proto3" json:"participants,omitempty"`
-	SourceWorkflows      []string         `protobuf:"bytes,7,rep,name=source_workflows,json=sourceWorkflows,proto3" json:"source_workflows,omitempty"`
-	XXX_NoUnkeyedLiteral struct{}         `json:"-"`
-	XXX_unrecognized     []byte           `json:"-"`
-	XXX_sizecache        int32            `json:"-"`
+	// Id represents a unique journal id.
+	Id            int64         `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	MigrationType MigrationType `protobuf:"varint,2,opt,name=migration_type,json=migrationType,proto3,enum=binlogdata.MigrationType" json:"migration_type,omitempty"`
+	// Tables is set if the journal represents a TABLES migration.
+	Tables []string `protobuf:"bytes,3,rep,name=tables,proto3" json:"tables,omitempty"`
+	// LocalPosition is the source position at which the migration happened.
+	LocalPosition string `protobuf:"bytes,4,opt,name=local_position,json=localPosition,proto3" json:"local_position,omitempty"`
+	// ShardGtids is the list of targets to which the migration took place.
+	ShardGtids []*ShardGtid `protobuf:"bytes,5,rep,name=shard_gtids,json=shardGtids,proto3" json:"shard_gtids,omitempty"`
+	// Participants is the list of source participants for a migration.
+	Participants []*KeyspaceShard `protobuf:"bytes,6,rep,name=participants,proto3" json:"participants,omitempty"`
+	// SourceWorkflows is the list of workflows in the source shard that need
+	// to be migrated to the target.
+	SourceWorkflows      []string `protobuf:"bytes,7,rep,name=source_workflows,json=sourceWorkflows,proto3" json:"source_workflows,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
 }
 
 func (m *Journal) Reset()         { *m = Journal{} }
@@ -1187,18 +1207,32 @@ func (m *Journal) GetSourceWorkflows() []string {
 	return nil
 }
 
-// VEvent represents a vstream event
+// VEvent represents a vstream event.
+// A FieldEvent is sent once for every table, just before
+// the first event for that table. The client is expected
+// to cache this information and match it against the RowEvent
+// which contains the table name.
 type VEvent struct {
-	Type       VEventType  `protobuf:"varint,1,opt,name=type,proto3,enum=binlogdata.VEventType" json:"type,omitempty"`
-	Timestamp  int64       `protobuf:"varint,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
-	Gtid       string      `protobuf:"bytes,3,opt,name=gtid,proto3" json:"gtid,omitempty"`
-	Ddl        string      `protobuf:"bytes,4,opt,name=ddl,proto3" json:"ddl,omitempty"`
-	RowEvent   *RowEvent   `protobuf:"bytes,5,opt,name=row_event,json=rowEvent,proto3" json:"row_event,omitempty"`
+	Type VEventType `protobuf:"varint,1,opt,name=type,proto3,enum=binlogdata.VEventType" json:"type,omitempty"`
+	// Timestamp is the binlog timestamp in seconds.
+	// It's set for all events.
+	Timestamp int64 `protobuf:"varint,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	// Gtid is set if the event type is GTID.
+	Gtid string `protobuf:"bytes,3,opt,name=gtid,proto3" json:"gtid,omitempty"`
+	// Ddl is set if the event type is DDL.
+	Ddl string `protobuf:"bytes,4,opt,name=ddl,proto3" json:"ddl,omitempty"`
+	// RowEvent is set if the event type is ROW.
+	RowEvent *RowEvent `protobuf:"bytes,5,opt,name=row_event,json=rowEvent,proto3" json:"row_event,omitempty"`
+	// FieldEvent is set if the event type is FIELD.
 	FieldEvent *FieldEvent `protobuf:"bytes,6,opt,name=field_event,json=fieldEvent,proto3" json:"field_event,omitempty"`
-	Vgtid      *VGtid      `protobuf:"bytes,7,opt,name=vgtid,proto3" json:"vgtid,omitempty"`
-	Journal    *Journal    `protobuf:"bytes,8,opt,name=journal,proto3" json:"journal,omitempty"`
-	Dml        string      `protobuf:"bytes,9,opt,name=dml,proto3" json:"dml,omitempty"`
-	// current_time specifies the current time to handle clock skew.
+	// Vgtid is set if the event type is VGTID.
+	// This event is only generated by VTGate's VStream function.
+	Vgtid *VGtid `protobuf:"bytes,7,opt,name=vgtid,proto3" json:"vgtid,omitempty"`
+	// Journal is set if the event type is JOURNAL.
+	Journal *Journal `protobuf:"bytes,8,opt,name=journal,proto3" json:"journal,omitempty"`
+	// Dml is set if the event type is INSERT, REPLACE, UPDATE or DELETE.
+	Dml string `protobuf:"bytes,9,opt,name=dml,proto3" json:"dml,omitempty"`
+	// CurrentType specifies the current time to handle clock skew.
 	CurrentTime          int64    `protobuf:"varint,20,opt,name=current_time,json=currentTime,proto3" json:"current_time,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
