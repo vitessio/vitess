@@ -14,8 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// This file has the logic for performing merge-sorts of scatter queries.
-
 package engine
 
 import (
