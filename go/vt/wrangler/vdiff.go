@@ -52,26 +52,50 @@ type DiffReport struct {
 	ExtraRowsTarget int
 }
 
+// vdiff contains the metadata for performing vdiff for one workflow.
 type vdiff struct {
 	mi             *migrater
 	sourceCell     string
 	targetCell     string
 	tabletTypesStr string
-	differs        map[string]*tableDiffer
-	sources        map[string]*shardStreamer
-	targets        map[string]*shardStreamer
+
+	// differs uses the target table name for its key.
+	differs map[string]*tableDiffer
+
+	// The key for sources and targets is the shard name.
+	// The source and target keyspaces are pulled from mi.
+	sources map[string]*shardStreamer
+	targets map[string]*shardStreamer
 }
 
+// tableDiffer performs a diff for one table in the workflow.
 type tableDiffer struct {
-	targetTable      string
+	targetTable string
+	// sourceExpression and targetExpression are select queries.
 	sourceExpression string
 	targetExpression string
-	compareCols      []int
-	comparePKs       []int
-	sourcePrimitive  engine.Primitive
-	targetPrimitive  engine.Primitive
+
+	// compareCols is the list of non-pk columns to compare.
+	// If the value is -1, it's a pk column and should not be
+	// compared.
+	compareCols []int
+	// comparePKs is the list of pk columns to compare. The logic
+	// for comparing pk columns is different from compareCols
+	comparePKs []int
+
+	// source Primitive and targetPrimitive are used for streaming
+	// results from source and target.
+	sourcePrimitive engine.Primitive
+	targetPrimitive engine.Primitive
 }
 
+// shardStreamer streams rows from one shard. This works for
+// the source as well as the target.
+// shardStreamer satisfies engine.StreamExecuter, and can be
+// added to Primitives of engine.MergeSort.
+// shardStreamer is a member of vdiff, and gets reused by
+// every tableDiffer. A new result channel gets instantiated
+// for every tableDiffer iteration.
 type shardStreamer struct {
 	master           *topo.TabletInfo
 	tablet           *topodatapb.Tablet
@@ -84,6 +108,7 @@ type shardStreamer struct {
 // VDiff reports differences between the sources and targets of a vreplication workflow.
 func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceCell, targetCell, tabletTypesStr string,
 	filteredReplicationWaitTime, healthcheckTopologyRefresh, healthcheckRetryDelay, healthcheckTimeout time.Duration) (map[string]*DiffReport, error) {
+	// Assign defaults to sourceCell and targetCell if not specified.
 	if sourceCell == "" && targetCell == "" {
 		cells, err := wr.ts.GetCellInfoNames(ctx)
 		if err != nil {
@@ -102,6 +127,8 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 	if targetCell == "" {
 		targetCell = sourceCell
 	}
+
+	// Reuse migrater code to fetch and validate initial metadata about the workflow.
 	mi, err := wr.buildMigrater(ctx, targetKeyspace, workflow)
 	if err != nil {
 		wr.Logger().Errorf("buildMigrater: %v", err)
@@ -111,6 +138,8 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 		mi.wr.Logger().Errorf("validate: %v", err)
 		return nil, err
 	}
+
+	// Initialize vdiff.
 	df := &vdiff{
 		mi:             mi,
 		sourceCell:     sourceCell,
@@ -151,26 +180,37 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 			wr.Logger().Errorf("Could not restart workflow %s: %v, please restart it manually", workflow, err)
 		}
 	}(ctx)
+
+	// Perform the diffs.
+	// We need a cancelable context to abort all running streams
+	// if one stream returns an error.
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
 	// TODO(sougou): parallelize
 	diffReports := make(map[string]*DiffReport)
 	for table, td := range df.differs {
+		// Stop the targets and record their source positions.
 		if err := df.stopTargets(ctx); err != nil {
 			return nil, vterrors.Wrap(err, "stopTargets")
 		}
+		// Make sure all sources are past the target's positions and start a query stream that records the current source positions.
 		if err := df.startQueryStreams(ctx, df.mi.sourceKeyspace, df.sources, td.sourceExpression, filteredReplicationWaitTime); err != nil {
 			return nil, vterrors.Wrap(err, "startQueryStreams(sources)")
 		}
+		// Fast forward the targets to the newly recorded source positions.
 		if err := df.syncTargets(ctx, filteredReplicationWaitTime); err != nil {
 			return nil, vterrors.Wrap(err, "syncTargets")
 		}
+		// Sources and targets are in sync. Start query streams on the targets.
 		if err := df.startQueryStreams(ctx, df.mi.targetKeyspace, df.targets, td.targetExpression, filteredReplicationWaitTime); err != nil {
 			return nil, vterrors.Wrap(err, "startQueryStreams(targets)")
 		}
+		// Now that queries are running, target vreplication streams can be restarted.
 		if err := df.restartTargets(ctx); err != nil {
 			return nil, vterrors.Wrap(err, "restartTargets")
 		}
+		// Perform the diff of source and target streams.
 		dr, err := td.diff(ctx, df.mi.wr)
 		if err != nil {
 			return nil, vterrors.Wrap(err, "diff")
@@ -181,6 +221,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 	return diffReports, nil
 }
 
+// buildVDiffPlan builds all the differs.
 func (df *vdiff) buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter, schm *tabletmanagerdatapb.SchemaDefinition) error {
 	df.differs = make(map[string]*tableDiffer)
 	for _, table := range schm.TableDefinitions {
@@ -205,6 +246,7 @@ func (df *vdiff) buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter
 	return nil
 }
 
+// buildTablePlan builds one tableDiffer.
 func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, query string) (*tableDiffer, error) {
 	statement, err := sqlparser.Parse(query)
 	if err != nil {
@@ -219,10 +261,12 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 	}
 	sourceSelect := &sqlparser.Select{}
 	targetSelect := &sqlparser.Select{}
+	// aggregates contains the list if Aggregate functions, if any.
 	var aggregates []engine.AggregateParams
 	for _, selExpr := range sel.SelectExprs {
 		switch selExpr := selExpr.(type) {
 		case *sqlparser.StarExpr:
+			// If it's a '*' expression, expand column list from the schema.
 			for _, fld := range table.Fields {
 				aliased := &sqlparser.AliasedExpr{Expr: &sqlparser.ColName{Name: sqlparser.NewColIdent(fld.Name)}}
 				sourceSelect.SelectExprs = append(sourceSelect.SelectExprs, aliased)
@@ -239,6 +283,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 					return nil, fmt.Errorf("expression needs an alias: %v", sqlparser.String(selExpr))
 				}
 			}
+			// If the input was "select a as b", then source will use "a" and target will use "b".
 			sourceSelect.SelectExprs = append(sourceSelect.SelectExprs, selExpr)
 			targetSelect.SelectExprs = append(targetSelect.SelectExprs, &sqlparser.AliasedExpr{Expr: targetCol})
 
@@ -261,6 +306,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 		fields[strings.ToLower(field.Name)] = field.Type
 	}
 
+	// Start with adding all columns for comparison.
 	td.compareCols = make([]int, len(sourceSelect.SelectExprs))
 	for i := range td.compareCols {
 		colname := targetSelect.SelectExprs[i].(*sqlparser.AliasedExpr).Expr.(*sqlparser.ColName).Name.Lowered()
@@ -270,13 +316,17 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 		}
 		td.compareCols[i] = i
 		if sqltypes.IsText(typ) {
+			// For text columns, we need to additionally pull their weight string values for lexical comparisons.
 			sourceSelect.SelectExprs = append(sourceSelect.SelectExprs, wrapWeightString(sourceSelect.SelectExprs[i]))
 			targetSelect.SelectExprs = append(targetSelect.SelectExprs, wrapWeightString(targetSelect.SelectExprs[i]))
+			// Update the column number to point at the weight_string column instead.
 			td.compareCols[i] = len(sourceSelect.SelectExprs) - 1
 		}
 	}
 
 	sourceSelect.From = sel.From
+	// The target table name should the one that matched the rule.
+	// It can be different from the source table.
 	targetSelect.From = sqlparser.TableExprs{
 		&sqlparser.AliasedTableExpr{
 			Expr: &sqlparser.TableName{
@@ -307,10 +357,13 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 			Direction: sqlparser.AscScr,
 		})
 	}
+	// Remove in_keyrange. It's not understood by mysql.
 	sourceSelect.Where = removeKeyrange(sel.Where)
+	// The source should also perform the group by.
 	sourceSelect.GroupBy = sel.GroupBy
 	sourceSelect.OrderBy = orderby
 
+	// The target should perform the order by, but not the group by.
 	targetSelect.OrderBy = orderby
 
 	td.sourceExpression = sqlparser.String(sourceSelect)
@@ -318,6 +371,8 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 
 	td.sourcePrimitive = newMergeSorter(df.sources, td.comparePKs)
 	td.targetPrimitive = newMergeSorter(df.targets, td.comparePKs)
+	// If there were aggregate expressions, we have to re-aggregate
+	// the results, which engine.OrderedAggregate can do.
 	if len(aggregates) != 0 {
 		td.sourcePrimitive = &engine.OrderedAggregate{
 			Aggregates: aggregates,
@@ -329,6 +384,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 	return td, nil
 }
 
+// newMergeSorter creates an engine.MergeSort based on the shard streamers and pk columns.
 func newMergeSorter(participants map[string]*shardStreamer, comparePKs []int) *engine.MergeSort {
 	prims := make([]engine.StreamExecuter, 0, len(participants))
 	for _, participant := range participants {
@@ -344,6 +400,7 @@ func newMergeSorter(participants map[string]*shardStreamer, comparePKs []int) *e
 	}
 }
 
+// selectTablets selects the tablets that will be used for the diff.
 func (df *vdiff) selectTablets(ctx context.Context, healthcheckTopologyRefresh, healthcheckRetryDelay, healthcheckTimeout time.Duration) error {
 	var wg sync.WaitGroup
 	var err1, err2 error
@@ -394,6 +451,7 @@ func (df *vdiff) selectTablets(ctx context.Context, healthcheckTopologyRefresh, 
 	return err2
 }
 
+// stopTargets stops all the targets and records their source positions.
 func (df *vdiff) stopTargets(ctx context.Context) error {
 	var mu sync.Mutex
 
@@ -442,6 +500,9 @@ func (df *vdiff) stopTargets(ctx context.Context) error {
 	return nil
 }
 
+// starQueryStreams makes sure the sources are past the target's positions, starts the query streams,
+// and records the snapshot position of the query. It creates a result channel which StreamExecute
+// will use to serve rows.
 func (df *vdiff) startQueryStreams(ctx context.Context, keyspace string, participants map[string]*shardStreamer, query string, filteredReplicationWaitTime time.Duration) error {
 	waitCtx, cancel := context.WithTimeout(ctx, filteredReplicationWaitTime)
 	defer cancel()
@@ -473,6 +534,7 @@ func (df *vdiff) startQueryStreams(ctx context.Context, keyspace string, partici
 // Then it streams results to participant.result.
 // Before returning, it sets participant.err, and closes all channels.
 // If any channel is closed, then participant.err can be checked if there was an error.
+// The shardStreamer's StreamExecute consumes the result channel.
 func (df *vdiff) streamOne(ctx context.Context, keyspace, shard string, participant *shardStreamer, query string, gtidch chan string) {
 	defer close(participant.result)
 	defer close(gtidch)
@@ -516,6 +578,8 @@ func (df *vdiff) streamOne(ctx context.Context, keyspace, shard string, particip
 	}()
 }
 
+// syncTargets fast-forwards the vreplication to the source snapshot positons
+// and waits for the selected tablets to catch up to that point.
 func (df *vdiff) syncTargets(ctx context.Context, filteredReplicationWaitTime time.Duration) error {
 	waitCtx, cancel := context.WithTimeout(ctx, filteredReplicationWaitTime)
 	defer cancel()
@@ -550,6 +614,7 @@ func (df *vdiff) syncTargets(ctx context.Context, filteredReplicationWaitTime ti
 	return err
 }
 
+// restartTargets restarts the stopped target vreplication streams.
 func (df *vdiff) restartTargets(ctx context.Context) error {
 	return df.forAll(df.targets, func(shard string, target *shardStreamer) error {
 		query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s", encodeString(target.master.DbName()), encodeString(df.mi.workflow))
@@ -578,6 +643,8 @@ func (df *vdiff) forAll(participants map[string]*shardStreamer, f func(string, *
 //-----------------------------------------------------------------
 // primitiveExecutor
 
+// primitiveExecutor starts execution on the top level primitive
+// and provides convenience functions for row-by-row iteration.
 type primitiveExecutor struct {
 	prim     engine.Primitive
 	rows     [][]sqltypes.Value

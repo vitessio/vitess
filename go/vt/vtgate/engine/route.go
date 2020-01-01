@@ -333,6 +333,8 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 			return callback(qr.Truncate(route.TruncateColumnCount))
 		})
 	}
+
+	// There is an order by. We have to merge-sort.
 	prims := make([]StreamExecuter, 0, len(rss))
 	for i, rs := range rss {
 		prims = append(prims, &shardRoute{
@@ -345,7 +347,6 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 		Primitives: prims,
 		OrderBy:    route.OrderBy,
 	}
-
 	return ms.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(route.TruncateColumnCount))
 	})
