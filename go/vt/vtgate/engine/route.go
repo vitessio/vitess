@@ -333,8 +333,20 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 			return callback(qr.Truncate(route.TruncateColumnCount))
 		})
 	}
+	prims := make([]StreamExecuter, 0, len(rss))
+	for i, rs := range rss {
+		prims = append(prims, &shardRoute{
+			query: route.Query,
+			rs:    rs,
+			bv:    bvs[i],
+		})
+	}
+	ms := MergeSort{
+		Primitives: prims,
+		OrderBy:    route.OrderBy,
+	}
 
-	return MergeSort(vcursor, route.Query, route.OrderBy, rss, bvs, func(qr *sqltypes.Result) error {
+	return ms.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(route.TruncateColumnCount))
 	})
 }

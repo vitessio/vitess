@@ -27,24 +27,61 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/srvtopo"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// MergeSort performs a merge-sort of rows returned by a streaming scatter query.
-// Each shard of the scatter query is treated as a stream. One row from each stream
-// is added to the merge-sorter heap. Every time a value is pulled out of the heap,
+// StreamExecuter is a subset of Primitive that MergeSort
+// requires its inputs to satisfy.
+type StreamExecuter interface {
+	StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error
+}
+
+var _ Primitive = (*MergeSort)(nil)
+
+// MergeSort performs a merge-sort of rows returned by each Input. This should
+// only be used for StreamExecute. One row from each stream is added to the
+// merge-sorter heap. Every time a value is pulled out of the heap,
 // a new value is added to it from the stream that was the source of the value that
 // was pulled out. Since the input streams are sorted the same way that the heap is
 // sorted, this guarantees that the merged stream will also be sorted the same way.
-func MergeSort(vcursor VCursor, query string, orderBy []OrderbyParams, rss []*srvtopo.ResolvedShard, bvs []map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
+// MergeSort is not functionally complete and should not be used as a Primitive
+// in a plan.
+type MergeSort struct {
+	Primitives []StreamExecuter
+	OrderBy    []OrderbyParams
+	noInputs
+}
+
+// RouteType satisfies Primitive.
+func (ms *MergeSort) RouteType() string { return "MergeSort" }
+
+// GetKeyspaceName satisfies Primitive.
+func (ms *MergeSort) GetKeyspaceName() string { return "" }
+
+// GetTableName satisfies Primitive.
+func (ms *MergeSort) GetTableName() string { return "" }
+
+// Execute is not supported.
+func (ms *MergeSort) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Execute is not supported")
+}
+
+// GetFields is not supported.
+func (ms *MergeSort) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "GetFields is not supported")
+}
+
+// StreamExecute performs a streaming exec.
+func (ms *MergeSort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	ctx, cancel := context.WithCancel(vcursor.Context())
 	defer cancel()
 
-	handles := make([]*streamHandle, len(rss))
-	id := 0
-	for i, rs := range rss {
-		handles[id] = runOneStream(ctx, vcursor, query, rs, bvs[i])
-		id++
+	handles := make([]*streamHandle, len(ms.Primitives))
+	for i, input := range ms.Primitives {
+		handles[i] = runOneStream(vcursor, input, bindVars, wantfields)
+		// Need fields only from first handle, if wantfields was true.
+		wantfields = false
 	}
 
 	// Fetch field info from just one stream.
@@ -59,7 +96,7 @@ func MergeSort(vcursor VCursor, query string, orderBy []OrderbyParams, rss []*sr
 
 	sh := &scatterHeap{
 		rows:    make([]streamRow, 0, len(handles)),
-		orderBy: orderBy,
+		orderBy: ms.OrderBy,
 	}
 
 	// Prime the heap. One element must be pulled from
@@ -133,20 +170,21 @@ type streamHandle struct {
 }
 
 // runOnestream starts a streaming query on one shard, and returns a streamHandle for it.
-func runOneStream(ctx context.Context, vcursor VCursor, query string, rs *srvtopo.ResolvedShard, vars map[string]*querypb.BindVariable) *streamHandle {
+func runOneStream(vcursor VCursor, input StreamExecuter, bindVars map[string]*querypb.BindVariable, wantfields bool) *streamHandle {
 	handle := &streamHandle{
 		fields: make(chan []*querypb.Field, 1),
 		row:    make(chan []sqltypes.Value, 10),
 	}
+	ctx := vcursor.Context()
 
 	go func() {
 		defer close(handle.fields)
 		defer close(handle.row)
 
-		handle.err = vcursor.StreamExecuteMulti(
-			query,
-			[]*srvtopo.ResolvedShard{rs},
-			[]map[string]*querypb.BindVariable{vars},
+		handle.err = input.StreamExecute(
+			vcursor,
+			bindVars,
+			wantfields,
 			func(qr *sqltypes.Result) error {
 				if len(qr.Fields) != 0 {
 					select {
