@@ -168,7 +168,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> FIRST AFTER
-%token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE
+%token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE FORMAT
 %token <bytes> MAXVALUE PARTITION REORGANIZE LESS THAN PROCEDURE TRIGGER
 %token <bytes> VINDEX VINDEXES
 %token <bytes> STATUS VARIABLES WARNINGS
@@ -224,10 +224,11 @@ func skipToEnd(yylex interface{}) {
 %type <statement> alter_statement alter_table_statement alter_view_statement alter_vschema_statement
 %type <ddl> create_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
+%type <statement> describe_statement explain_statement explainable_statement
 %type <statement> begin_statement commit_statement rollback_statement
 %type <bytes2> comment_opt comment_list
 %type <str> union_op insert_or_replace
-%type <str> distinct_opt straight_join_opt cache_opt match_option separator_opt
+%type <str> distinct_opt straight_join_opt cache_opt match_option separator_opt format_opt
 %type <expr> like_escape_opt
 %type <selectExprs> select_expression_list select_expression_list_opt
 %type <selectExpr> select_expression
@@ -360,6 +361,8 @@ command:
 | begin_statement
 | commit_statement
 | rollback_statement
+| explain_statement
+| describe_statement
 | other_statement
 | flush_statement
 | /*empty*/
@@ -1632,9 +1635,13 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW CREATE DATABASE ddl_skip_to_end
+| SHOW CREATE DATABASE not_exists_opt ID ddl_skip_to_end
   {
-    $$ = &Show{Type: string($2) + " " + string($3)}
+    $$ = &Show{Type: string($2) + " " + string($3), IfNotExists: $4 == 1, Database: string($5)}
+  }
+| SHOW CREATE SCHEMA not_exists_opt ID ddl_skip_to_end
+  {
+    $$ = &Show{Type: string($2) + " " + string($3), IfNotExists: $4 == 1, Database: string($5)}
   }
 /* Rule to handle SHOW CREATE EVENT, SHOW CREATE FUNCTION, etc. */
 | SHOW CREATE ID ddl_skip_to_end
@@ -1876,21 +1883,51 @@ describe:
   DESCRIBE { }
 | DESC { }
 
-other_statement:
+explain_statement:
+  explain_verb format_opt explainable_statement
+  {
+    $$ = &Explain{ExplainFormat: $2, Statement: $3}
+  }
+| explain_verb ANALYZE select_statement
+  {
+    $$ = &Explain{Analyze: true, ExplainFormat: TreeStr, Statement: $3}
+  }
+
+explainable_statement:
+  select_statement
+  {
+    $$ = $1
+  }
+| delete_statement
+| insert_statement
+| update_statement
+
+format_opt:
+  {
+    $$ = ""
+  }
+| FORMAT '=' ID
+  {
+    $$ = string($3)
+  }
+
+explain_verb:
+  describe
+| EXPLAIN
+
+describe_statement:
   describe table_name
   // rewrite describe table as show columns from table
   {
-      $$ = &Show{Type: "columns", OnTable: $2}
+    $$ = &Show{Type: "columns", OnTable: $2}
   }
 | describe skip_to_end
   {
     $$ = &OtherRead{}
   }
-| EXPLAIN skip_to_end
-  {
-    $$ = &OtherRead{}
-  }
-| REPAIR skip_to_end
+
+other_statement:
+  REPAIR skip_to_end
   {
     $$ = &OtherAdmin{}
   }

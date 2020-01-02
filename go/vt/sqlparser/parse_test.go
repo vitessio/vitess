@@ -1128,7 +1128,12 @@ var (
 		output: "show collation where `Charset` = 'utf8' and `Collation` = 'utf8_bin'",
 	}, {
 		input:  "show create database d",
-		output: "show create database",
+	}, {
+		input:  "show create schema d",
+	}, {
+		input:  "show create database if not exists d",
+	}, {
+		input:  "show create schema if not exists d",
 	}, {
 		input:  "show create event e",
 		output: "show create event",
@@ -1327,8 +1332,17 @@ var (
 		input:  "desc foobar",
 		output: "show columns on foobar",
 	}, {
-		input:  "explain foobar",
-		output: "otherread",
+		input:  "explain select * from foobar",
+	}, {
+		input:  "explain format = tree select * from foobar",
+	}, {
+		input:  "explain analyze select * from foobar",
+	}, {
+		input:  "explain update foobar set foo = bar",
+	}, {
+		input:  "explain delete from foobar where foo = bar",
+	}, {
+		input:  "explain insert into foobar values (1, 2, 3)",
 	}, {
 		input:  "truncate table foo",
 		output: "truncate table foo",

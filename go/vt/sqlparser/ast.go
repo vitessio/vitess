@@ -286,6 +286,7 @@ func (*Delete) iStatement()     {}
 func (*Set) iStatement()        {}
 func (*DBDDL) iStatement()      {}
 func (*DDL) iStatement()        {}
+func (*Explain) iStatement()    {}
 func (*Show) iStatement()       {}
 func (*Use) iStatement()        {}
 func (*Begin) iStatement()      {}
@@ -1670,11 +1671,44 @@ func (f *ForeignKeyDefinition) walkSubtree(visit Visit) error {
 	return Walk(visit, f.ReferencedColumns)
 }
 
+// Format strings for explain statements
+const (
+	TraditionalStr = "traditional"
+	TreeStr = "tree"
+	JsonStr = "json"
+)
+
+// Explain represents an explain statement
+type Explain struct {
+	Statement     Statement
+	Analyze       bool
+	ExplainFormat string
+}
+
+// Format formats the node.
+func (node *Explain) Format(buf *TrackedBuffer) {
+	analyzeOpt := ""
+	if node.Analyze {
+		analyzeOpt = "analyze "
+	}
+	formatOpt := ""
+	if !node.Analyze && node.ExplainFormat != "" {
+		formatOpt = fmt.Sprintf("format = %s ", node.ExplainFormat)
+	}
+	buf.Myprintf("explain %s%s%v", analyzeOpt, formatOpt, node.Statement)
+}
+
+func (node *Explain) walkSubtree(visit Visit) error {
+	return nil
+}
+
 // Show represents a show statement.
 type Show struct {
 	Type                   string
 	OnTable                TableName
 	Table                  TableName
+	Database               string
+	IfNotExists            bool
 	ShowTablesOpt          *ShowTablesOpt
 	Scope                  string
 	ShowCollationFilterOpt *Expr
@@ -1694,11 +1728,21 @@ func (node *Show) Format(buf *TrackedBuffer) {
 		buf.Myprintf("%v", opt.Filter)
 		return
 	}
-	if node.Scope == "" {
-		buf.Myprintf("show %s", node.Type)
+
+	if node.Database != "" {
+		notExistsOpt := ""
+		if node.IfNotExists {
+			notExistsOpt = "if not exists "
+		}
+		buf.Myprintf("show %s %s%s", node.Type, notExistsOpt, node.Database)
 	} else {
-		buf.Myprintf("show %s %s", node.Scope, node.Type)
+		if node.Scope != "" {
+			buf.Myprintf("show %s %s", node.Scope, node.Type)
+		} else {
+			buf.Myprintf("show %s", node.Type)
+		}
 	}
+
 	if node.HasOnTable() {
 		buf.Myprintf(" on %v", node.OnTable)
 	}
