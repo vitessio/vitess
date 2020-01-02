@@ -109,7 +109,13 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 	if err != nil {
 		return err
 	}
-	wasMaster := ti.Type == topodatapb.TabletType_MASTER
+	si, err := wr.ts.GetShard(ctx, ti.Keyspace, ti.Shard)
+	if err != nil {
+		return err
+	}
+
+	// the true master tablet will have the same MasterTermStartTime as the shard
+	wasMaster := ti.Type == topodatapb.TabletType_MASTER && topoproto.TabletAliasEqual(si.MasterAlias, tabletAlias) && logutil.ProtoToTime(ti.MasterTermStartTime).Equal(logutil.ProtoToTime(si.MasterTermStartTime))
 	if wasMaster && !allowMaster {
 		return fmt.Errorf("cannot delete tablet %v as it is a master, use allow_master flag", topoproto.TabletAliasString(tabletAlias))
 	}
