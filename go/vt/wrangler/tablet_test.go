@@ -17,11 +17,13 @@ limitations under the License.
 package wrangler
 
 import (
+	"strings"
 	"testing"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
 
@@ -54,5 +56,104 @@ func TestInitTabletShardConversion(t *testing.T) {
 	}
 	if string(ti.KeyRange.Start) != "\x80" || string(ti.KeyRange.End) != "\xc0" {
 		t.Errorf("Got wrong tablet.KeyRange, got %v expected 80-c0", ti.KeyRange)
+	}
+}
+
+// TestDeleteTabletBasic tests delete of non-master tablet
+func TestDeleteTabletBasic(t *testing.T) {
+	cell := "cell1"
+	ts := memorytopo.NewServer(cell)
+	wr := New(logutil.NewConsoleLogger(), ts, nil)
+
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: cell,
+			Uid:  1,
+		},
+		Shard: "0",
+	}
+
+	if err := wr.InitTablet(context.Background(), tablet, false /*allowMasterOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
+		t.Fatalf("InitTablet failed: %v", err)
+	}
+
+	if _, err := ts.GetTablet(context.Background(), tablet.Alias); err != nil {
+		t.Fatalf("GetTablet failed: %v", err)
+	}
+
+	if err := wr.DeleteTablet(context.Background(), tablet.Alias, false); err != nil {
+		t.Fatalf("DeleteTablet failed: %v", err)
+	}
+}
+
+// TestDeleteTabletTrueMaster tests that you can delete a true master tablet
+// only if allowMaster is set to true
+func TestDeleteTabletTrueMaster(t *testing.T) {
+	cell := "cell1"
+	ts := memorytopo.NewServer(cell)
+	wr := New(logutil.NewConsoleLogger(), ts, nil)
+
+	_, err := ts.GetOrCreateShard(context.Background(), "test", "0")
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: cell,
+			Uid:  1,
+		},
+		Keyspace: "test",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_MASTER,
+	}
+
+	if err := wr.InitTablet(context.Background(), tablet, false /*allowMasterOverride*/, false /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
+		t.Fatalf("InitTablet failed: %v", err)
+	}
+	if _, err := ts.GetTablet(context.Background(), tablet.Alias); err != nil {
+		t.Fatalf("GetTablet failed: %v", err)
+	}
+
+	// set MasterAlias and MasterTermStartTime on shard to match chosen master tablet
+	_, err = ts.UpdateShardFields(context.Background(), "test", "0", func(si *topo.ShardInfo) error {
+		si.MasterAlias = tablet.Alias
+		si.MasterTermStartTime = tablet.MasterTermStartTime
+		return nil
+	})
+
+	err = wr.DeleteTablet(context.Background(), tablet.Alias, false)
+	wantError := "as it is a master, use allow_master flag"
+	if err == nil || !strings.Contains(err.Error(), wantError) {
+		t.Fatalf("DeleteTablet on master: want error = %v, got error = %v", wantError, err)
+	}
+
+	if err := wr.DeleteTablet(context.Background(), tablet.Alias, true); err != nil {
+		t.Fatalf("DeleteTablet failed: %v", err)
+	}
+}
+
+// TestDeleteTabletFalseMaster tests that you can delete a false master tablet
+// with allowMaster set to false
+func TestDeleteTabletFalseMaster(t *testing.T) {
+	cell := "cell1"
+	ts := memorytopo.NewServer(cell)
+	wr := New(logutil.NewConsoleLogger(), ts, nil)
+
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: cell,
+			Uid:  1,
+		},
+		Keyspace: "test",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_MASTER,
+	}
+
+	if err := wr.InitTablet(context.Background(), tablet, false /*allowMasterOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
+		t.Fatalf("InitTablet failed: %v", err)
+	}
+	if _, err := ts.GetTablet(context.Background(), tablet.Alias); err != nil {
+		t.Fatalf("GetTablet failed: %v", err)
+	}
+
+	if err := wr.DeleteTablet(context.Background(), tablet.Alias, false); err != nil {
+		t.Fatalf("DeleteTablet failed: %v", err)
 	}
 }
