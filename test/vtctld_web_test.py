@@ -88,10 +88,8 @@ class TestVtctldWeb(unittest.TestCase):
         topology,
         os.path.join(environment.vtroot, 'test/vttest_schema'),
         False, None,
-        web_dir=os.path.join(environment.vtroot, 'web/vtctld'),
         default_schema_dir=os.path.join(
-            environment.vtroot, 'test/vttest_schema/default'),
-        web_dir2=os.path.join(environment.vtroot, 'web/vtctld2/app'))
+            environment.vtroot, 'test/vttest_schema/default'))
     cls.db.setup()
     cls.vtctld_addr = 'http://localhost:%d' % cls.db.config()['port']
     utils.pause('Paused test after vtcombo was started.\n'
@@ -366,51 +364,6 @@ class TestVtctldWeb(unittest.TestCase):
   def _close_dialog(self, dialog):
     dismiss = dialog.find_element_by_id('vt-dismiss')
     dismiss.click()
-
-  def test_old_keyspace_overview(self):
-    logging.info('Testing old keyspace overview')
-
-    logging.info('Fetching main vtctld page: %s', self.vtctld_addr)
-    self.driver.get(self.vtctld_addr + '/app')
-
-    keyspace_names = self._get_keyspaces()
-    logging.info('Keyspaces: %s', ', '.join(keyspace_names))
-    self.assertListEqual(['test_keyspace', 'test_keyspace2'], keyspace_names)
-
-    test_keyspace_serving_shards = self._get_serving_shards('test_keyspace')
-    logging.info(
-        'Serving Shards in test_keyspace: %s', ', '.join(
-            test_keyspace_serving_shards))
-    self.assertListEqual(test_keyspace_serving_shards, ['-80', '80-'])
-
-    test_keyspace2_serving_shards = self._get_serving_shards('test_keyspace2')
-    logging.info(
-        'Serving Shards in test_keyspace2: %s', ', '.join(
-            test_keyspace2_serving_shards))
-    self.assertListEqual(test_keyspace2_serving_shards, ['0'])
-
-    with self.assertRaises(NoSuchElementException):
-      self._get_inactive_shards('test_keyspace')
-      logging.info(
-          'Inactive Shards in test_keyspace: %s', ', '.join([]))
-
-    with self.assertRaises(NoSuchElementException):
-      self._get_inactive_shards('test_keyspace2')
-      logging.info(
-          'Inactive Shards in test_keyspace2: %s', ', '.join([]))
-
-  def test_old_shard_overview(self):
-    logging.info('Testing old shard overview')
-
-    logging.info('Fetching main vtctld page: %s', self.vtctld_addr)
-    self.driver.get(self.vtctld_addr + '/app')
-
-    self._check_shard_overview(
-        'test_keyspace', '-80', {'master': 1, 'replica': 1, 'rdonly': 2})
-    self._check_shard_overview(
-        'test_keyspace', '80-', {'master': 1, 'replica': 1, 'rdonly': 2})
-    self._check_shard_overview(
-        'test_keyspace2', '0', {'master': 1, 'replica': 1, 'rdonly': 1})
 
   def test_dashboard(self):
     logging.info('Testing dashboard view')

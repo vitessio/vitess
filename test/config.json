@@ -1,14 +1,5 @@
 {
 	"Tests": {
-		"backup": {
-			"File": "backup.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 0,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"backup_only": {
 			"File": "backup_only.py",
 			"Args": [],
@@ -196,15 +187,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 1,
-			"RetryMax": 0,
-			"Tags": []
-		},
-		"recovery": {
-			"File": "recovery.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -442,6 +424,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"backup": {
+			"File": "backup.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 14,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"binlog": {
 			"File": "binlog.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/binlog"],
@@ -508,6 +499,15 @@
 			"Tags": [
 				"site_test"
 			]
+		},
+		"recovery": {
+			"File": "recovery.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/recovery"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 14,
+			"RetryMax": 0,
+			"Tags": []
 		},
 		"reparent": {
 			"File": "reparent.go",

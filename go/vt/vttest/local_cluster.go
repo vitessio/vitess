@@ -91,7 +91,6 @@ type Config struct {
 	// MySQL protocol bind address.
 	// vtcombo will bind to this address when exposing the mysql protocol socket
 	MySQLBindHost string
-
 	// SnapshotFile is the path to the MySQL Snapshot that will be used to
 	// initialize the mysqld instance in the cluster. Note that some environments
 	// do not suppport initialization through snapshot files.
