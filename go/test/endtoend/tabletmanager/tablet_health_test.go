@@ -247,49 +247,72 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 }
 
 func TestIgnoreHealthError(t *testing.T) {
-	ctx := context.Background()
-	mTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
+	// This test verify the tablet health by Ignoring the error
+	// For this case we need a healthy tablet in a shard without any master.
+	// When we try to make a connection to such tablet we get "no slave status" error.
+	// We will then ignore this error and verify if the status report the tablet as Healthy.
 
-	//Init Tablets
-	err := clusterInstance.VtctlclientProcess.InitTablet(mTablet, cell, keyspaceName, hostname, shardName)
+	// Create a new shard
+	newShard := &cluster.Shard{
+		Name: "1",
+	}
+
+	// Start mysql process
+	tablet := clusterInstance.GetVttabletInstance("replica", 0, "")
+	tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+	err := tablet.MysqlctlProcess.Start()
+
+	// start vttablet process
+	tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
+		tablet.GrpcPort,
+		tablet.TabletUID,
+		clusterInstance.Cell,
+		newShard.Name,
+		clusterInstance.Keyspaces[0].Name,
+		clusterInstance.VtctldProcess.Port,
+		tablet.Type,
+		clusterInstance.TopoProcess.Port,
+		clusterInstance.Hostname,
+		clusterInstance.TmpDirectory,
+		clusterInstance.VtTabletExtraArgs,
+		clusterInstance.EnableSemiSync)
+	tablet.Alias = tablet.VttabletProcess.TabletPath
+	newShard.Vttablets = append(newShard.Vttablets, tablet)
+
+	clusterInstance.Keyspaces[0].Shards = append(clusterInstance.Keyspaces[0].Shards, *newShard)
+
+	// Init Tablet
+	err = clusterInstance.VtctlclientProcess.InitTablet(tablet, cell, keyspaceName, hostname, newShard.Name)
 	assert.Nil(t, err)
 
-	// Start Mysql Processes
-	err = cluster.StartMySQL(ctx, mTablet, username, clusterInstance.TmpDirectory)
+	// create database
+	err = tablet.VttabletProcess.CreateDB(keyspaceName)
 	assert.Nil(t, err)
 
-	err = mTablet.MysqlctlProcess.Stop()
-	assert.Nil(t, err)
-
-	// Start Vttablet, it should be NOT_SERVING state as mysql is stopped
-	err = clusterInstance.StartVttablet(mTablet, "NOT_SERVING", false, cell, keyspaceName, hostname, shardName)
+	// Start Vttablet, it should be NOT_SERVING as there is no master
+	err = clusterInstance.StartVttablet(tablet, "NOT_SERVING", false, cell, keyspaceName, hostname, newShard.Name)
 	assert.Nil(t, err)
 
 	// Force it healthy.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("IgnoreHealthError", mTablet.Alias, ".*no slave status.*")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("IgnoreHealthError", tablet.Alias, ".*no slave status.*")
 	assert.Nil(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", mTablet.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", tablet.Alias)
 	assert.Nil(t, err)
-	fmt.Println(mTablet.VttabletProcess.GetTabletStatus())
-	err = mTablet.VttabletProcess.WaitForTabletType("SERVING")
+	err = tablet.VttabletProcess.WaitForTabletType("SERVING")
 	assert.Nil(t, err)
-	checkHealth(t, mTablet.HTTPPort, false)
+	checkHealth(t, tablet.HTTPPort, false)
 
 	// Turn off the force-healthy.
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("IgnoreHealthError", mTablet.Alias, "")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("IgnoreHealthError", tablet.Alias, "")
 	assert.Nil(t, err)
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", mTablet.Alias)
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", tablet.Alias)
 	assert.Nil(t, err)
-	err = mTablet.VttabletProcess.WaitForTabletType("NOT_SERVING")
+	err = tablet.VttabletProcess.WaitForTabletType("NOT_SERVING")
 	assert.Nil(t, err)
-	checkHealth(t, mTablet.HTTPPort, true)
-
-	// Restart master tablet
-	err = clusterInstance.StartVttablet(&masterTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
-	assert.Nil(t, err)
+	checkHealth(t, tablet.HTTPPort, true)
 
 	// Tear down custom processes
-	killTablets(t, mTablet)
+	killTablets(t, tablet)
 }
 
 func TestNoMysqlHealthCheck(t *testing.T) {
