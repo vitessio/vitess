@@ -466,8 +466,6 @@ func generateVtctld() string {
     command: ["sh", "-c", " $$VTROOT/bin/vtctld \
         %[3]s \
         -cell %[4]s \
-        -web_dir $$VTROOT/web/vtctld \
-        -web_dir2 $$VTROOT/web/vtctld2/app \
         -workflow_manager_init \
         -workflow_manager_use_election \
         -service_map 'grpc-vtctl' \

@@ -228,12 +228,6 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 	if args.SchemaDir != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-schema_dir", args.SchemaDir}...)
 	}
-	if args.WebDir != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-web_dir", args.WebDir}...)
-	}
-	if args.WebDir2 != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-web_dir2", args.WebDir2}...)
-	}
 	if args.TransactionMode != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-transaction_mode", args.TransactionMode}...)
 	}
