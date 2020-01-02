@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
 )
 
 // DetachFromTerminalAndExit allows a command line program to detach from the terminal and continue running
@@ -40,4 +41,9 @@ func DetachFromTerminalAndExit() {
 	_ = cmd.Start()
 	fmt.Println("[PID]", cmd.Process.Pid)
 	os.Exit(0)
+}
+
+// IsRunningAsRoot checks if a component is being ran as root
+func IsRunningAsRoot() bool {
+	return syscall.Geteuid() == 0
 }
