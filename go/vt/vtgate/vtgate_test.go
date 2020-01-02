@@ -1325,7 +1325,7 @@ func TestVTGateMessageStreamRetry(t *testing.T) {
 	// which should make vtgate wait for 1s (5s/5) and retry.
 	start := time.Now()
 	<-ch
-	duration := time.Since(start)
+	duration := time.Since(start).Round(time.Second)
 	if duration < 1*time.Second || duration > 2*time.Second {
 		t.Errorf("Retry duration should be around 1 second: %v", duration)
 	}
