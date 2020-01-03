@@ -175,6 +175,31 @@ func SplitAndExpression(filters []Expr, node Expr) []Expr {
 	return append(filters, node)
 }
 
+// TableFromStatement returns the qualified table name for the query.
+// This works only for select statements.
+func TableFromStatement(sql string) (TableName, error) {
+	stmt, err := Parse(sql)
+	if err != nil {
+		return TableName{}, err
+	}
+	sel, ok := stmt.(*Select)
+	if !ok {
+		return TableName{}, fmt.Errorf("unrecognized statement: %s", sql)
+	}
+	if len(sel.From) != 1 {
+		return TableName{}, fmt.Errorf("table expression is complex")
+	}
+	aliased, ok := sel.From[0].(*AliasedTableExpr)
+	if !ok {
+		return TableName{}, fmt.Errorf("table expression is complex")
+	}
+	tableName, ok := aliased.Expr.(TableName)
+	if !ok {
+		return TableName{}, fmt.Errorf("table expression is complex")
+	}
+	return tableName, nil
+}
+
 // GetTableName returns the table name from the SimpleTableExpr
 // only if it's a simple expression. Otherwise, it returns "".
 func GetTableName(node SimpleTableExpr) TableIdent {
