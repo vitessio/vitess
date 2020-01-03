@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -35,15 +36,35 @@ func TestVrLog(t *testing.T) {
 	go func() {
 		vrlogStatsHandler(ch, w, r)
 	}()
-	stats := VrLogStats{Ctx: context.Background()}
-	msg := "test msg"
-	stats.Detail = msg
-	stats.Send()
+	ctx := context.Background()
+	eventType, detail := "Test", "detail 1"
+	stats := NewVrLogStats(ctx, eventType)
+	time.Sleep(1 * time.Millisecond)
+	stats.Record(detail)
 	time.Sleep(1 * time.Millisecond)
 	s := w.Body.String()
-
-	if !strings.Contains(s, msg) { //we use Contains since the printed log is in html and also prepends current time
-		t.Fatalf(fmt.Sprintf("want %s, got %s", msg, s))
+	want := fmt.Sprintf("%s Event	%s", eventType, detail)
+	if !strings.Contains(s, want) {
+		t.Fatalf(fmt.Sprintf("want %s, got %s", want, s))
 	}
-
+	if strings.HasSuffix(s, "\\n") {
+		t.Fatalf("does not end in a newline: %s", s)
+	}
+	s = strings.TrimSuffix(s, "\n")
+	ss := strings.Split(s, "	")
+	numCols := 4
+	if ss == nil || len(ss) != numCols {
+		t.Fatalf("log line should have %d columns, not %d, : %s", numCols, len(ss), strings.Join(ss, "|"))
+	}
+	lastColValue, err := strconv.Atoi(ss[len(ss)-1])
+	if err != nil {
+		t.Fatalf("Duration is not an integer: %s", err)
+	}
+	if lastColValue < 1<<9 {
+		t.Fatalf("Waited 1 Millisecond, so duration should be greater than that: %d, %s", lastColValue, ss[len(ss)-1])
+	}
+	stats = &VrLogStats{}
+	if stats.Record("should error out since stats is not initalized") != false {
+		t.Fatalf("Uninitialized stats should not log")
+	}
 }
