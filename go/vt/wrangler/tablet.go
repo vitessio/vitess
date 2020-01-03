@@ -109,23 +109,18 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 	if err != nil {
 		return err
 	}
-	si, err := wr.ts.GetShard(ctx, ti.Keyspace, ti.Shard)
+
+	wasMaster, err := wr.isMasterTablet(ctx, ti)
 	if err != nil {
 		return err
 	}
 
-	// the true master tablet will have the same MasterTermStartTime as the shard
-	wasMaster := ti.Type == topodatapb.TabletType_MASTER && topoproto.TabletAliasEqual(si.MasterAlias, tabletAlias) && logutil.ProtoToTime(ti.MasterTermStartTime).Equal(logutil.ProtoToTime(si.MasterTermStartTime))
 	if wasMaster && !allowMaster {
 		return fmt.Errorf("cannot delete tablet %v as it is a master, use allow_master flag", topoproto.TabletAliasString(tabletAlias))
 	}
 
-	// remove the record and its replication graph entry
-	if err := topotools.DeleteTablet(ctx, wr.ts, ti.Tablet); err != nil {
-		return err
-	}
-
 	// update the Shard object if the master was scrapped.
+	// we do this before calling DeleteTablet so that the operation can be retried in case of failure.
 	if wasMaster {
 		// We lock the shard to not conflict with reparent operations.
 		ctx, unlock, lockErr := wr.ts.LockShard(ctx, ti.Keyspace, ti.Shard, fmt.Sprintf("DeleteTablet(%v)", topoproto.TabletAliasString(tabletAlias)))
@@ -143,6 +138,11 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 			si.MasterAlias = nil
 			return nil
 		})
+		return err
+	}
+
+	// remove the record and its replication graph entry
+	if err := topotools.DeleteTablet(ctx, wr.ts, ti.Tablet); err != nil {
 		return err
 	}
 
@@ -206,4 +206,24 @@ func (wr *Wrangler) VReplicationExec(ctx context.Context, tabletAlias *topodatap
 		return nil, err
 	}
 	return wr.tmc.VReplicationExec(ctx, ti.Tablet, query)
+}
+
+func (wr *Wrangler) isMasterTablet(ctx context.Context, ti *topo.TabletInfo) (bool, error) {
+	// Tablet record claims to be non-master, we believe it
+	if ti.Type != topodatapb.TabletType_MASTER {
+		return false, nil
+	}
+	si, err := wr.ts.GetShard(ctx, ti.Keyspace, ti.Shard)
+	if err != nil {
+		// strictly speaking it isn't correct to return false here, the tablet status is unknown
+		return false, err
+	}
+	// Tablet record claims to be master, and shard record matches
+	if topoproto.TabletAliasEqual(si.MasterAlias, ti.Tablet.Alias) {
+		return true, nil
+	}
+	// Shard record has another tablet as master, so check MasterTermStartTime
+	// If tablet record's MasterTermStartTime is equal to or later than the one in the shard record, then tablet is master
+	// !Before == Equal || After
+	return !logutil.ProtoToTime(ti.MasterTermStartTime).Before(logutil.ProtoToTime(si.MasterTermStartTime)), nil
 }

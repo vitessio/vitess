@@ -93,49 +93,6 @@ func TestDeleteTabletTrueMaster(t *testing.T) {
 	ts := memorytopo.NewServer(cell)
 	wr := New(logutil.NewConsoleLogger(), ts, nil)
 
-	_, err := ts.GetOrCreateShard(context.Background(), "test", "0")
-	tablet := &topodatapb.Tablet{
-		Alias: &topodatapb.TabletAlias{
-			Cell: cell,
-			Uid:  1,
-		},
-		Keyspace: "test",
-		Shard:    "0",
-		Type:     topodatapb.TabletType_MASTER,
-	}
-
-	if err := wr.InitTablet(context.Background(), tablet, false /*allowMasterOverride*/, false /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
-		t.Fatalf("InitTablet failed: %v", err)
-	}
-	if _, err := ts.GetTablet(context.Background(), tablet.Alias); err != nil {
-		t.Fatalf("GetTablet failed: %v", err)
-	}
-
-	// set MasterAlias and MasterTermStartTime on shard to match chosen master tablet
-	_, err = ts.UpdateShardFields(context.Background(), "test", "0", func(si *topo.ShardInfo) error {
-		si.MasterAlias = tablet.Alias
-		si.MasterTermStartTime = tablet.MasterTermStartTime
-		return nil
-	})
-
-	err = wr.DeleteTablet(context.Background(), tablet.Alias, false)
-	wantError := "as it is a master, use allow_master flag"
-	if err == nil || !strings.Contains(err.Error(), wantError) {
-		t.Fatalf("DeleteTablet on master: want error = %v, got error = %v", wantError, err)
-	}
-
-	if err := wr.DeleteTablet(context.Background(), tablet.Alias, true); err != nil {
-		t.Fatalf("DeleteTablet failed: %v", err)
-	}
-}
-
-// TestDeleteTabletFalseMaster tests that you can delete a false master tablet
-// with allowMaster set to false
-func TestDeleteTabletFalseMaster(t *testing.T) {
-	cell := "cell1"
-	ts := memorytopo.NewServer(cell)
-	wr := New(logutil.NewConsoleLogger(), ts, nil)
-
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: cell,
@@ -153,7 +110,71 @@ func TestDeleteTabletFalseMaster(t *testing.T) {
 		t.Fatalf("GetTablet failed: %v", err)
 	}
 
-	if err := wr.DeleteTablet(context.Background(), tablet.Alias, false); err != nil {
+	// set MasterAlias and MasterTermStartTime on shard to match chosen master tablet
+	if _, err := ts.UpdateShardFields(context.Background(), "test", "0", func(si *topo.ShardInfo) error {
+		si.MasterAlias = tablet.Alias
+		si.MasterTermStartTime = tablet.MasterTermStartTime
+		return nil
+	}); err != nil {
+		t.Fatalf("UpdateShardFields failed: %v", err)
+	}
+
+	err := wr.DeleteTablet(context.Background(), tablet.Alias, false)
+	wantError := "as it is a master, use allow_master flag"
+	if err == nil || !strings.Contains(err.Error(), wantError) {
+		t.Fatalf("DeleteTablet on master: want error = %v, got error = %v", wantError, err)
+	}
+
+	if err := wr.DeleteTablet(context.Background(), tablet.Alias, true); err != nil {
+		t.Fatalf("DeleteTablet failed: %v", err)
+	}
+}
+
+// TestDeleteTabletFalseMaster tests that you can delete a false master tablet
+// with allowMaster set to false
+func TestDeleteTabletFalseMaster(t *testing.T) {
+	cell := "cell1"
+	ts := memorytopo.NewServer(cell)
+	wr := New(logutil.NewConsoleLogger(), ts, nil)
+
+	tablet1 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: cell,
+			Uid:  1,
+		},
+		Keyspace: "test",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_MASTER,
+	}
+
+	if err := wr.InitTablet(context.Background(), tablet1, false /*allowMasterOverride*/, true /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
+		t.Fatalf("InitTablet failed: %v", err)
+	}
+
+	tablet2 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: cell,
+			Uid:  2,
+		},
+		Keyspace: "test",
+		Shard:    "0",
+		Type:     topodatapb.TabletType_MASTER,
+	}
+	if err := wr.InitTablet(context.Background(), tablet2, true /*allowMasterOverride*/, false /*createShardAndKeyspace*/, false /*allowUpdate*/); err != nil {
+		t.Fatalf("InitTablet failed: %v", err)
+	}
+
+	// set MasterAlias and MasterTermStartTime on shard to match chosen master tablet
+	if _, err := ts.UpdateShardFields(context.Background(), "test", "0", func(si *topo.ShardInfo) error {
+		si.MasterAlias = tablet2.Alias
+		si.MasterTermStartTime = tablet2.MasterTermStartTime
+		return nil
+	}); err != nil {
+		t.Fatalf("UpdateShardFields failed: %v", err)
+	}
+
+	// Should be able to delete old (false) master with allowMaster = false
+	if err := wr.DeleteTablet(context.Background(), tablet1.Alias, false); err != nil {
 		t.Fatalf("DeleteTablet failed: %v", err)
 	}
 }
