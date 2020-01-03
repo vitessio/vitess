@@ -217,31 +217,6 @@ func TestTrailingComment(t *testing.T) {
 	}
 }
 
-func TestUpsertNonPKHit(t *testing.T) {
-	client := framework.NewClient()
-	err := client.Begin(false)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer client.Rollback()
-
-	_, err = client.Execute("insert into upsert_test(id1, id2) values (1, 1)", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	_, err = client.Execute(
-		"insert into upsert_test(id1, id2) values "+
-			"(2, 1) on duplicate key update id2 = 2",
-		nil,
-	)
-	want := "Duplicate entry '1' for key 'id2_idx'"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("Execute: %v, must start with %s", err, want)
-	}
-}
-
 func TestSchemaReload(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &connParams)
