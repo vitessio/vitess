@@ -27,7 +27,7 @@ script_root=$(dirname "${BASH_SOURCE}")
 source "$script_root/env.sh"
 
 # shellcheck disable=SC2086
-"$VTROOT"/bin/vtworker \
+vtworker \
     $TOPOLOGY_FLAGS \
     -cell zone1 \
     -log_dir "$VTDATAROOT"/tmp \

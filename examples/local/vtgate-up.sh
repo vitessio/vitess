@@ -70,7 +70,7 @@ fi
 
 # Start vtgate.
 # shellcheck disable=SC2086
-$VTROOT/bin/vtgate \
+vtgate \
   $TOPOLOGY_FLAGS \
   -log_dir $VTDATAROOT/tmp \
   -log_queries_to_file $VTDATAROOT/tmp/vtgate_querylog.txt \
