@@ -87,4 +87,4 @@ releases
 /vtdataroot/
 
 # Ricebox file
-go/vt/mysqlctl/rice-box.go
+/go/vt/mysqlctl/rice-box.go
