@@ -614,6 +614,29 @@ func LoadFormalKeyspace(filename string) (*vschemapb.Keyspace, error) {
 	return formal, nil
 }
 
+// FindBestColVindex finds the best ColumnVindex for VReplication.
+func FindBestColVindex(table *Table) (*ColumnVindex, error) {
+	if len(table.ColumnVindexes) == 0 {
+		return nil, fmt.Errorf("table %s has no vindex", table.Name.String())
+	}
+	var result *ColumnVindex
+	for _, cv := range table.ColumnVindexes {
+		if cv.Vindex.NeedsVCursor() {
+			continue
+		}
+		if !cv.Vindex.IsUnique() {
+			continue
+		}
+		if result == nil || result.Vindex.Cost() > cv.Vindex.Cost() {
+			result = cv
+		}
+	}
+	if result == nil {
+		return nil, fmt.Errorf("could not find a vindex to compute keyspace id for table %v", table.Name.String())
+	}
+	return result, nil
+}
+
 // FindVindexForSharding searches through the given slice
 // to find the lowest cost unique vindex
 // primary vindex is always unique
