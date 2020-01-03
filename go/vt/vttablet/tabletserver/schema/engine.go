@@ -19,6 +19,7 @@ package schema
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"net/http"
 	"sync"
 	"time"
@@ -40,6 +41,16 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+var exposeStatsPerTable = flag.Bool("expose_stats_per_table", true,
+	"Whether to expose statistics split by table.")
+
+// This is used in some queries for table information, but is not directly
+// related to the number of tables that we report metrics for.  It might affect
+// that though, because in practice we might not hit any codepaths that report
+// stats for that table because we don't even load it.
+//
+// I don't know whether we silently don't see tables if we have more than this
+// number.
 const maxTableCount = 10000
 
 type notifier func(full map[string]*Table, created, altered, dropped []string)
@@ -76,11 +87,18 @@ func NewEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *En
 	}
 	schemaOnce.Do(func() {
 		_ = stats.NewGaugeDurationFunc("SchemaReloadTime", "vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.", se.ticks.Interval)
-		_ = stats.NewGaugesFuncWithMultiLabels("TableRows", "table rows created in tabletserver", []string{"Table"}, se.getTableRows)
-		_ = stats.NewGaugesFuncWithMultiLabels("DataLength", "data length in tabletserver", []string{"Table"}, se.getDataLength)
-		_ = stats.NewGaugesFuncWithMultiLabels("IndexLength", "index length in tabletserver", []string{"Table"}, se.getIndexLength)
-		_ = stats.NewGaugesFuncWithMultiLabels("DataFree", "data free in tabletserver", []string{"Table"}, se.getDataFree)
-		_ = stats.NewGaugesFuncWithMultiLabels("MaxDataLength", "max data length in tabletserver", []string{"Table"}, se.getMaxDataLength)
+
+		var tableLabels []string
+		if *exposeStatsPerTable {
+			tableLabels = []string{"Table"}
+		} else {
+			tableLabels = []string{}
+		}
+		_ = stats.NewGaugesFuncWithMultiLabels("TableRows", "table rows created in tabletserver", tableLabels, se.getTableRows)
+		_ = stats.NewGaugesFuncWithMultiLabels("DataLength", "data length in tabletserver", tableLabels, se.getDataLength)
+		_ = stats.NewGaugesFuncWithMultiLabels("IndexLength", "index length in tabletserver", tableLabels, se.getIndexLength)
+		_ = stats.NewGaugesFuncWithMultiLabels("DataFree", "data free in tabletserver", tableLabels, se.getDataFree)
+		_ = stats.NewGaugesFuncWithMultiLabels("MaxDataLength", "max data length in tabletserver", tableLabels, se.getMaxDataLength)
 
 		http.Handle("/debug/schema", se)
 		http.HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {
@@ -193,7 +211,7 @@ func (se *Engine) Open() error {
 	return nil
 }
 
-// IsOpen() checks if engine is open
+// IsOpen checks if engine is open
 func (se *Engine) IsOpen() bool {
 	se.mu.Lock()
 	defer se.mu.Unlock()
