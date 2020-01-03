@@ -58,12 +58,19 @@ type FakeMysqlDaemon struct {
 	// test owner responsibility to have these two match)
 	Replicating bool
 
+	// SlaveIORunning is always true except in one testcase
+	// where we want to test error handling during SetMaster
+	SlaveIORunning bool
+
 	// CurrentMasterPosition is returned by MasterPosition
 	// and SlaveStatus
 	CurrentMasterPosition mysql.Position
 
 	// SlaveStatusError is used by SlaveStatus
 	SlaveStatusError error
+
+	// StartSlaveError is used by StartSlave
+	StartSlaveError error
 
 	// CurrentMasterHost is returned by SlaveStatus
 	CurrentMasterHost string
@@ -90,6 +97,9 @@ type FakeMysqlDaemon struct {
 	// SetMasterInput is matched against the input of SetMaster
 	// (as "%v:%v"). If it doesn't match, SetMaster will return an error.
 	SetMasterInput string
+
+	// SetMasterError is used by SetMaster
+	SetMasterError error
 
 	// WaitMasterPosition is checked by WaitMasterPos, if the
 	// same it returns nil, if different it returns an error
@@ -147,8 +157,9 @@ type FakeMysqlDaemon struct {
 // 'db' can be nil if the test doesn't use a database at all.
 func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 	result := &FakeMysqlDaemon{
-		db:      db,
-		Running: true,
+		db:             db,
+		Running:        true,
+		SlaveIORunning: true,
 	}
 	if db != nil {
 		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", 5, time.Minute, 0)
@@ -211,10 +222,12 @@ func (fmd *FakeMysqlDaemon) SlaveStatus() (mysql.SlaveStatus, error) {
 	return mysql.SlaveStatus{
 		Position:            fmd.CurrentMasterPosition,
 		SecondsBehindMaster: fmd.SecondsBehindMaster,
-		SlaveIORunning:      fmd.Replicating,
-		SlaveSQLRunning:     fmd.Replicating,
-		MasterHost:          fmd.CurrentMasterHost,
-		MasterPort:          fmd.CurrentMasterPort,
+		// implemented as AND to avoid changing all tests that were
+		// previously using Replicating = false
+		SlaveIORunning:  fmd.Replicating && fmd.SlaveIORunning,
+		SlaveSQLRunning: fmd.Replicating,
+		MasterHost:      fmd.CurrentMasterHost,
+		MasterPort:      fmd.CurrentMasterPort,
 	}, nil
 }
 
@@ -250,7 +263,19 @@ func (fmd *FakeMysqlDaemon) SetSuperReadOnly(on bool) error {
 
 // StartSlave is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) StartSlave(hookExtraEnv map[string]string) error {
+	if fmd.StartSlaveError != nil {
+		return fmd.StartSlaveError
+	}
 	return fmd.ExecuteSuperQueryList(context.Background(), []string{
+		"START SLAVE",
+	})
+}
+
+// RestartSlave is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) RestartSlave(hookExtraEnv map[string]string) error {
+	return fmd.ExecuteSuperQueryList(context.Background(), []string{
+		"STOP SLAVE",
+		"RESET SLAVE",
 		"START SLAVE",
 	})
 }
@@ -288,6 +313,9 @@ func (fmd *FakeMysqlDaemon) SetMaster(ctx context.Context, masterHost string, ma
 	input := fmt.Sprintf("%v:%v", masterHost, masterPort)
 	if fmd.SetMasterInput != input {
 		return fmt.Errorf("wrong input for SetMasterCommands: expected %v got %v", fmd.SetMasterInput, input)
+	}
+	if fmd.SetMasterError != nil {
+		return fmd.SetMasterError
 	}
 	cmds := []string{}
 	if slaveStopBefore {
