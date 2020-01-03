@@ -33,7 +33,7 @@ fi
 
 echo "Starting vtctld..."
 # shellcheck disable=SC2086
-$VTROOT/bin/vtctld \
+vtctld \
   $TOPOLOGY_FLAGS \
   -cell $cell \
   -workflow_manager_init \
