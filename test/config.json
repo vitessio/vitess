@@ -429,7 +429,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 14,
+			"Shard": 11,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -438,7 +438,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/binlog"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 11,
+			"Shard": 12,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -447,7 +447,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/cellalias"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 11,
+			"Shard": 12,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -456,7 +456,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/initialsharding/v3"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 12,
+			"Shard": 13,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -465,7 +465,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/initialsharding/bytes"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 12,
+			"Shard": 13,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -474,7 +474,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/initialsharding/multi"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 12,
+			"Shard": 14,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -483,7 +483,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/keyspace"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 11,
+			"Shard": 12,
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"
@@ -494,7 +494,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/mysqlctl"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 11,
+			"Shard": 12,
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"
@@ -505,7 +505,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/recovery"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 14,
+			"Shard": 11,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -514,7 +514,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/reparent"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 13,
+			"Shard": 14,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -523,7 +523,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/resharding/v3"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 13,
+			"Shard": 15,
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"
@@ -534,7 +534,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/resharding/string"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 13,
+			"Shard": 15,
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"
@@ -554,7 +554,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 11,
+			"Shard": 16,
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"
@@ -565,7 +565,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/verticalsplit"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 11,
+			"Shard": 16,
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"
