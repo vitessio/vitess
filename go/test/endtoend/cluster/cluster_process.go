@@ -319,11 +319,6 @@ func (cluster *LocalProcessCluster) LaunchCluster(keyspace *Keyspace, shards []S
 	// Create shard
 	for _, shard := range shards {
 		for _, tablet := range shard.Vttablets {
-			err = cluster.VtctlclientProcess.InitTablet(tablet, tablet.Cell, keyspace.Name, cluster.Hostname, shard.Name)
-			if err != nil {
-				log.Error(err)
-				return
-			}
 
 			// Setup MysqlctlProcess
 			tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory)
@@ -539,6 +534,23 @@ func (cluster *LocalProcessCluster) GetVttabletInstance(tabletType string, UID i
 		Cell:      cell,
 		Alias:     fmt.Sprintf("%s-%010d", cell, UID),
 	}
+}
+
+// GetVttabletInstance creates a new vttablet object
+func (cluster *LocalProcessCluster) GetVtprocessInstanceFromVttablet(tablet *Vttablet, shardName string, ksName string) *VttabletProcess {
+	return VttabletProcessInstance(tablet.HTTPPort,
+		tablet.GrpcPort,
+		tablet.TabletUID,
+		cluster.Cell,
+		shardName,
+		ksName,
+		cluster.VtctldProcess.Port,
+		tablet.Type,
+		cluster.TopoProcess.Port,
+		cluster.Hostname,
+		cluster.TmpDirectory,
+		cluster.VtTabletExtraArgs,
+		cluster.EnableSemiSync)
 }
 
 // StartVttablet starts a new tablet

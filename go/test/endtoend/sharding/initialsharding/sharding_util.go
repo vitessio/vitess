@@ -101,15 +101,8 @@ func ClusterWrapper(isMulti bool) (int, error) {
 	}
 
 	if isMulti {
-		writeDbCredentialToTmp()
-		tablet := &cluster.Vttablet{
-			Type:            "relpica",
-			TabletUID:       100,
-			MySQLPort:       15000,
-			MysqlctlProcess: *cluster.MysqlCtlProcessInstance(100, 15000, ClusterInstance.TmpDirectory),
-		}
-		writeInitDBFile(tablet)
-		tablet = nil
+		WriteDbCredentialToTmp(ClusterInstance.TmpDirectory)
+		writeInitDBFile()
 		dbPwd = "VtDbaPass"
 	}
 
@@ -150,19 +143,13 @@ func initClusterForInitialSharding(keyspaceName string, shardNames []string, tot
 
 		for i := 0; i < totalTabletsRequired; i++ {
 			// instantiate vttablet object with reserved ports
-			tabletUID := ClusterInstance.GetAndReserveTabletUID()
-			tablet := &cluster.Vttablet{
-				TabletUID: tabletUID,
-				HTTPPort:  ClusterInstance.GetAndReservePort(),
-				GrpcPort:  ClusterInstance.GetAndReservePort(),
-				MySQLPort: ClusterInstance.GetAndReservePort(),
-				Alias:     fmt.Sprintf("%s-%010d", ClusterInstance.Cell, tabletUID),
-				Type:      "replica",
-			}
-			if i == 0 { // Make the first one as master
-				tablet.Type = "master"
-			} else if i == totalTabletsRequired-1 && rdonly { // Make the last one as rdonly if rdonly flag is passed
-				tablet.Type = "rdonly"
+			var tablet *cluster.Vttablet
+			if i == totalTabletsRequired-1 && rdonly {
+				tablet = ClusterInstance.GetVttabletInstance("rdonly", 0, "")
+			} else if i == 0 {
+				tablet = ClusterInstance.GetVttabletInstance("master", 0, "")
+			} else {
+				tablet = ClusterInstance.GetVttabletInstance("replica", 0, "")
 			}
 			// Start Mysqlctl process
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, ClusterInstance.TmpDirectory)
@@ -525,21 +512,26 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 			"MultiSplitDiff",
 			fmt.Sprintf("%s/%s", keyspaceName, shard1.Name))
 		assert.Nil(t, err)
+
+		for _, shard := range []string{shard21.Name, shard22.Name} {
+			err = ClusterInstance.VtworkerProcess.ExecuteVtworkerCommand(ClusterInstance.GetAndReservePort(),
+				ClusterInstance.GetAndReservePort(),
+				"--use_v3_resharding_mode=true",
+				"SplitDiff",
+				"--min_healthy_rdonly_tablets", "1",
+				fmt.Sprintf("%s/%s", keyspaceName, shard))
+			assert.Nil(t, err)
+		}
 	}
 
-	for _, shard := range []string{shard21.Name, shard22.Name} {
-		err = ClusterInstance.VtworkerProcess.ExecuteVtworkerCommand(ClusterInstance.GetAndReservePort(),
-			ClusterInstance.GetAndReservePort(),
-			"--use_v3_resharding_mode=true",
-			"SplitDiff",
-			"--min_healthy_rdonly_tablets", "1",
-			fmt.Sprintf("%s/%s", keyspaceName, shard))
-		assert.Nil(t, err)
+	if isExternal {
+		// get status for the destination master tablet, make sure we have it all
+		sharding.CheckRunningBinlogPlayer(t, *shard21.MasterTablet(), 3956, 2002)
+		sharding.CheckRunningBinlogPlayer(t, *shard22.MasterTablet(), 4048, 2002)
+	} else {
+		sharding.CheckRunningBinlogPlayer(t, *shard21.MasterTablet(), 3954, 2000)
+		sharding.CheckRunningBinlogPlayer(t, *shard22.MasterTablet(), 4046, 2000)
 	}
-
-	// get status for the destination master tablet, make sure we have it all
-	sharding.CheckRunningBinlogPlayer(t, *shard21.MasterTablet(), 3954, 2000)
-	sharding.CheckRunningBinlogPlayer(t, *shard22.MasterTablet(), 4046, 2000)
 
 	// check we can't migrate the master just yet
 	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", shard1Ks, "master")
@@ -657,28 +649,11 @@ func checkSrvKeyspaceForSharding(t *testing.T, ksName string, expectedPartitions
 
 // Create a new init_db.sql file that sets up passwords for all users.
 // Then we use a db-credentials-file with the passwords.
-func writeInitDBFile(vttablet *cluster.Vttablet) {
+func writeInitDBFile() {
 	initDb, _ := ioutil.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 	sql := string(initDb)
 	newInitDbFile = path.Join(ClusterInstance.TmpDirectory, "init_db_with_passwords.sql")
-	pwdChangeCmd := `
-					# Set real passwords for all users.
-					UPDATE mysql.user SET %s = PASSWORD('RootPass')
-					  WHERE User = 'root' AND Host = 'localhost';
-					UPDATE mysql.user SET %s = PASSWORD('VtDbaPass')
-					  WHERE User = 'vt_dba' AND Host = 'localhost';
-					UPDATE mysql.user SET %s = PASSWORD('VtAppPass')
-					  WHERE User = 'vt_app' AND Host = 'localhost';
-					UPDATE mysql.user SET %s = PASSWORD('VtAllprivsPass')
-					  WHERE User = 'vt_allprivs' AND Host = 'localhost';
-					UPDATE mysql.user SET %s = PASSWORD('VtReplPass')
-					  WHERE User = 'vt_repl' AND Host = '%%';
-					UPDATE mysql.user SET %s = PASSWORD('VtFilteredPass')
-					  WHERE User = 'vt_filtered' AND Host = 'localhost';
-					FLUSH PRIVILEGES;
-					`
-	pwdCol, _ := getPasswordField(vttablet)
-	sql = sql + fmt.Sprintf(pwdChangeCmd, pwdCol, pwdCol, pwdCol, pwdCol, pwdCol, pwdCol) + `
+	sql = sql + GetPasswordUpdateSQL(ClusterInstance) + `
 # connecting through a port requires 127.0.0.1
 # --host=localhost will connect through socket
 CREATE USER 'vt_dba'@'127.0.0.1' IDENTIFIED BY 'VtDbaPass';
@@ -713,7 +688,8 @@ FLUSH PRIVILEGES;
 
 }
 
-func writeDbCredentialToTmp() {
+// WriteDbCredentialToTmp writes json format db credentials to tmp directory
+func WriteDbCredentialToTmp(tmpDir string) string {
 	data := []byte(`{
         "vt_dba": ["VtDbaPass"],
         "vt_app": ["VtAppPass"],
@@ -721,17 +697,46 @@ func writeDbCredentialToTmp() {
         "vt_repl": ["VtReplPass"],
         "vt_filtered": ["VtFilteredPass"]
     	}`)
-	dbCredentialFile = path.Join(ClusterInstance.TmpDirectory, "db_credentials.json")
+	dbCredentialFile = path.Join(tmpDir, "db_credentials.json")
 	ioutil.WriteFile(dbCredentialFile, data, 0666)
+	return dbCredentialFile
+}
+
+// GetPasswordUpdateSQL returns the sql for password update
+func GetPasswordUpdateSQL(localCluster *cluster.LocalProcessCluster) string {
+	pwdChangeCmd := `
+					# Set real passwords for all users.
+					UPDATE mysql.user SET %s = PASSWORD('RootPass')
+					  WHERE User = 'root' AND Host = 'localhost';
+					UPDATE mysql.user SET %s = PASSWORD('VtDbaPass')
+					  WHERE User = 'vt_dba' AND Host = 'localhost';
+					UPDATE mysql.user SET %s = PASSWORD('VtAppPass')
+					  WHERE User = 'vt_app' AND Host = 'localhost';
+					UPDATE mysql.user SET %s = PASSWORD('VtAllprivsPass')
+					  WHERE User = 'vt_allprivs' AND Host = 'localhost';
+					UPDATE mysql.user SET %s = PASSWORD('VtReplPass')
+					  WHERE User = 'vt_repl' AND Host = '%%';
+					UPDATE mysql.user SET %s = PASSWORD('VtFilteredPass')
+					  WHERE User = 'vt_filtered' AND Host = 'localhost';
+					FLUSH PRIVILEGES;
+					`
+	pwdCol, _ := getPasswordField(localCluster)
+	return fmt.Sprintf(pwdChangeCmd, pwdCol, pwdCol, pwdCol, pwdCol, pwdCol, pwdCol)
 }
 
 // getPasswordField Determines which column is used for user passwords in this MySQL version.
-func getPasswordField(tablet *cluster.Vttablet) (pwdCol string, err error) {
+func getPasswordField(localCluster *cluster.LocalProcessCluster) (pwdCol string, err error) {
+	tablet := &cluster.Vttablet{
+		Type:            "relpica",
+		TabletUID:       100,
+		MySQLPort:       15000,
+		MysqlctlProcess: *cluster.MysqlCtlProcessInstance(100, 15000, localCluster.TmpDirectory),
+	}
 	if err = tablet.MysqlctlProcess.Start(); err != nil {
 		return "", err
 	}
 	tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort, tablet.GrpcPort, tablet.TabletUID, "", "", "", 0,
-		tablet.Type, ClusterInstance.TopoPort, "", "", nil, false)
+		tablet.Type, localCluster.TopoPort, "", "", nil, false)
 	result, err := tablet.VttabletProcess.QueryTablet("select password from mysql.user limit 0", "", false)
 	if err == nil && len(result.Rows) > 0 {
 		return "password", nil

@@ -130,7 +130,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	if vttablet.ServingStatus != "" {
 		if err = vttablet.WaitForTabletType(vttablet.ServingStatus); err != nil {
-			return fmt.Errorf("process '%s' timed out after 60s (err: %s)", vttablet.Name, <-vttablet.exit)
+			return fmt.Errorf("process '%s' timed out after 10s (err: %s)", vttablet.Name, err)
 		}
 	}
 	return nil
@@ -183,11 +183,23 @@ func (vttablet *VttabletProcess) GetTabletStatus() string {
 	return ""
 }
 
-// WaitForTabletType waits till the tablet status reaches desired type
+// WaitForTabletType waits for 10 second till expected type reached
 func (vttablet *VttabletProcess) WaitForTabletType(expectedType string) error {
-	timeout := time.Now().Add(10 * time.Second)
-	for time.Now().Before(timeout) {
-		if vttablet.GetTabletStatus() == expectedType {
+	return vttablet.WaitForTabletTypesForTimeout([]string{expectedType}, 10*time.Second)
+}
+
+// WaitForTabletTypes waits for 10 second till expected type reached
+func (vttablet *VttabletProcess) WaitForTabletTypes(expectedTypes []string) error {
+	return vttablet.WaitForTabletTypesForTimeout(expectedTypes, 10*time.Second)
+}
+
+// WaitForTabletTypesForTimeout waits till the tablet reaches to any of the provided status
+func (vttablet *VttabletProcess) WaitForTabletTypesForTimeout(expectedTypes []string, timeout time.Duration) error {
+	timeToWait := time.Now().Add(timeout)
+	var status string
+	for time.Now().Before(timeToWait) {
+		status = vttablet.GetTabletStatus()
+		if contains(expectedTypes, status) {
 			return nil
 		}
 		select {
@@ -197,7 +209,17 @@ func (vttablet *VttabletProcess) WaitForTabletType(expectedType string) error {
 			time.Sleep(300 * time.Millisecond)
 		}
 	}
-	return fmt.Errorf("Vttablet %s, expected status not reached", vttablet.TabletPath)
+	return fmt.Errorf("Vttablet %s, current status = %s, expected status [%s] not reached ",
+		vttablet.TabletPath, status, strings.Join(expectedTypes, ","))
+}
+
+func contains(arr []string, str string) bool {
+	for _, a := range arr {
+		if a == str {
+			return true
+		}
+	}
+	return false
 }
 
 // WaitForBinLogPlayerCount waits till binlog player count var matches
@@ -266,7 +288,8 @@ func (vttablet *VttabletProcess) TearDown() error {
 
 // CreateDB creates the database for keyspace
 func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
-	_, err := vttablet.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace), keyspace, false)
+	_, _ = vttablet.QueryTablet(fmt.Sprintf("drop database IF EXISTS vt_%s", keyspace), keyspace, false)
+	_, err := vttablet.QueryTablet(fmt.Sprintf("create database IF NOT EXISTS vt_%s", keyspace), keyspace, false)
 	return err
 }
 
@@ -307,6 +330,27 @@ func executeQuery(dbParams mysql.ConnParams, query string) (*sqltypes.Result, er
 	}
 	defer dbConn.Close()
 	return dbConn.ExecuteFetch(query, 1000, true)
+}
+
+// GetDBVar returns first matching database variable's value
+func (vttablet *VttabletProcess) GetDBVar(varName string, ksName string) (string, error) {
+	return vttablet.getDBSystemValues("variables", varName, ksName)
+}
+
+// GetDBStatus returns first matching database variable's value
+func (vttablet *VttabletProcess) GetDBStatus(status string, ksName string) (string, error) {
+	return vttablet.getDBSystemValues("status", status, ksName)
+}
+
+func (vttablet *VttabletProcess) getDBSystemValues(placeholder string, value string, ksName string) (string, error) {
+	output, err := vttablet.QueryTablet(fmt.Sprintf("show %s like '%s'", placeholder, value), ksName, true)
+	if err != nil || output.Rows == nil {
+		return "", err
+	}
+	if len(output.Rows) > 0 {
+		return fmt.Sprintf("%s", output.Rows[0][1].ToBytes()), nil
+	}
+	return "", nil
 }
 
 // VttabletProcessInstance returns a VttabletProcess handle for vttablet process

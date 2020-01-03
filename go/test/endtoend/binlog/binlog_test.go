@@ -100,7 +100,7 @@ func TestMain(m *testing.M) {
 	exitcode, err := func() (int, error) {
 		localCluster = cluster.NewCluster(cell, hostname)
 		defer localCluster.Teardown()
-		os.Setenv("EXTRA_MY_CNF", path.Join(os.Getenv("VTROOT"), "config", "mycnf", "rbr.cnf"))
+
 		localCluster.Keyspaces = append(localCluster.Keyspaces, cluster.Keyspace{
 			Name: keyspaceName,
 		})
