@@ -22,12 +22,14 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+// resultStreamer streams the results of the requested query
+// along with the GTID of the snapshot. This is used by vdiff
+// to synchronize the target to that GTID before comparing
+// the results.
 type resultStreamer struct {
 	ctx    context.Context
 	cancel func()
@@ -60,12 +62,12 @@ func (rs *resultStreamer) Stream() error {
 	}
 	rs.tableName = fromTable
 
-	conn, err := rs.mysqlConnect()
+	conn, err := snapshotConnect(rs.ctx, rs.cp)
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
-	gtid, err := rs.startStreaming(conn)
+	gtid, err := conn.streamWithSnapshot(rs.ctx, rs.tableName.String(), rs.query)
 	if err != nil {
 		return err
 	}
@@ -112,7 +114,7 @@ func (rs *resultStreamer) Stream() error {
 			}
 			// empty the rows so we start over, but we keep the
 			// same capacity
-			response.Rows = response.Rows[:0]
+			response.Rows = nil
 			byteCount = 0
 		}
 	}
@@ -125,44 +127,4 @@ func (rs *resultStreamer) Stream() error {
 	}
 
 	return nil
-}
-
-func (rs *resultStreamer) startStreaming(conn *mysql.Conn) (string, error) {
-	lockConn, err := rs.mysqlConnect()
-	if err != nil {
-		return "", err
-	}
-	// To be safe, always unlock tables, even if lock tables might fail.
-	defer func() {
-		_, err := lockConn.ExecuteFetch("unlock tables", 0, false)
-		if err != nil {
-			log.Warning("Unlock tables failed: %v", err)
-		} else {
-			log.Infof("Tables unlocked", rs.tableName)
-		}
-		lockConn.Close()
-	}()
-
-	log.Infof("Locking table %s for copying", rs.tableName)
-	if _, err := lockConn.ExecuteFetch(fmt.Sprintf("lock tables %s read", sqlparser.String(rs.tableName)), 0, false); err != nil {
-		return "", err
-	}
-	pos, err := lockConn.MasterPosition()
-	if err != nil {
-		return "", err
-	}
-
-	if err := conn.ExecuteStreamFetch(rs.query); err != nil {
-		return "", err
-	}
-
-	return mysql.EncodePosition(pos), nil
-}
-
-func (rs *resultStreamer) mysqlConnect() (*mysql.Conn, error) {
-	cp, err := dbconfigs.WithCredentials(rs.cp)
-	if err != nil {
-		return nil, err
-	}
-	return mysql.Connect(rs.ctx, cp)
 }
