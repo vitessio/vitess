@@ -267,6 +267,7 @@ func valsEqual(v1, v2 sqltypes.Value) bool {
 }
 
 func valueBindVariable(val sqltypes.Value) *querypb.BindVariable {
+	fmt.Printf("Value: %v\n", val)
 	if val.Type() == querypb.Type_JSON {
 		// We are using charset binary because we don't know the original
 		// charset used to write the data.
