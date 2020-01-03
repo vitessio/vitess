@@ -123,7 +123,6 @@ elif [ "$VT_DB_FLAVOR" = "mariadb103" ]; then
 fi
 
 export MYSQL_FLAVOR
-export EXTRA_MY_CNF="/vtdataroot/tabletdata/report-host.cnf:/vt/config/mycnf/rbr.cnf"
 
 {{ if . }}
 for filename in /vt/userconfig/*.cnf; do

@@ -45,7 +45,7 @@ def setUpModule():
   try:
     environment.topo_server().setup()
 
-    setup_procs = [t.init_mysql() for t in all_tablets]
+    setup_procs = [t.init_mysql(use_rbr=False) for t in all_tablets]
     utils.Vtctld().start()
     utils.wait_procs(setup_procs)
 
