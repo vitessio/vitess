@@ -192,7 +192,7 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 	}
 	for _, change := range rowEvent.RowChanges {
 		_, err := tplan.applyChange(change, func(sql string) (*sqltypes.Result, error) {
-			stats := NewVrLogStats(ctx, "RowChange")
+			stats := Fr(ctx, "ROWCHANGE")
 			result, err := vp.vr.dbClient.ExecuteWithRetry(ctx, sql)
 			stats.Record(sql)
 			return result, err
@@ -310,7 +310,7 @@ func hasAnotherCommit(items [][]*binlogdatapb.VEvent, i, j int) bool {
 }
 
 func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, mustSave bool) error {
-	stats := NewVrLogStats(ctx, event.String())
+	stats := NewVrLogStats(ctx, event.Type.String())
 	switch event.Type {
 	case binlogdatapb.VEventType_GTID:
 		pos, err := mysql.DecodePosition(event.Gtid)

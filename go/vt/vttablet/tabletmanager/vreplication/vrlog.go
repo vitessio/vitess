@@ -17,9 +17,9 @@ limitations under the License.
 package vreplication
 
 import (
-	"html/template"
 	"net/http"
 	"strconv"
+	"text/template"
 	"time"
 
 	"golang.org/x/net/context"
@@ -29,12 +29,8 @@ import (
 
 var (
 	vrLogStatsLogger   = streamlog.New("VReplication", 50)
-	vrLogStatsTemplate = template.Must(template.New("vrlog").Parse(`
-		{{.Type}}\t
-		{{.Detail}}\t
-		{{.Time}}\t
-		{{.DurationNs}}\n
-	`))
+	vrLogStatsTemplate = template.Must(template.New("vrlog").
+				Parse("{{.Type}} Event	{{.Detail}}	{{.Time}}	{{.DurationNs}}\n"))
 )
 
 type VrLogStats struct {
@@ -45,21 +41,23 @@ type VrLogStats struct {
 	DurationNs int64
 }
 
+func NewVrLogStats(ctx context.Context, eventType string) *VrLogStats {
+	return &VrLogStats{Ctx: ctx, Type: eventType, Time: time.Now()}
+}
+
 func (stats *VrLogStats) Send() {
 	vrLogStatsLogger.Send(stats)
 }
 
-func (stats *VrLogStats) Record(detail string) {
+func (stats *VrLogStats) Record(detail string) bool {
 	if stats.Ctx == nil || stats.Time.IsZero() {
-		log.Error("VrLogStats not initialized")
+		log.Error("VrLogStats not initialized for %s", detail)
+		return false
 	}
 	stats.Detail = detail
 	stats.DurationNs = time.Since(stats.Time).Nanoseconds()
 	stats.Send()
-}
-
-func NewVrLogStats(ctx context.Context, eventType string) *VrLogStats {
-	return &VrLogStats{Ctx: ctx, Type: eventType, Time: time.Now()}
+	return true
 }
 
 func init() {
