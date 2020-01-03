@@ -35,8 +35,6 @@ type VtctldProcess struct {
 	Name                        string
 	Binary                      string
 	CommonArg                   VtctlProcess
-	WebDir                      string
-	WebDir2                     string
 	ServiceMap                  string
 	BackupStorageImplementation string
 	FileBackupStorageRoot       string
@@ -62,8 +60,6 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		"-topo_global_server_address", vtctld.CommonArg.TopoGlobalAddress,
 		"-topo_global_root", vtctld.CommonArg.TopoGlobalRoot,
 		"-cell", cell,
-		"-web_dir", vtctld.WebDir,
-		"-web_dir2", vtctld.WebDir2,
 		"-workflow_manager_init",
 		"-workflow_manager_use_election",
 		"-service_map", vtctld.ServiceMap,
@@ -158,8 +154,6 @@ func VtctldProcessInstance(httpPort int, grpcPort int, topoPort int, hostname st
 		Name:                        "vtctld",
 		Binary:                      "vtctld",
 		CommonArg:                   *vtctl,
-		WebDir:                      path.Join(os.Getenv("VTROOT"), "/web/vtctld"),
-		WebDir2:                     path.Join(os.Getenv("VTROOT"), "/web/vtctld2/app"),
 		ServiceMap:                  "grpc-vtctl",
 		BackupStorageImplementation: "file",
 		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),

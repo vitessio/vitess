@@ -41,8 +41,6 @@ spec:
               chown -R vitess /vt &&
               su -p -c "/vt/bin/vtctld
               -cell {{cell}}
-              -web_dir $VTROOT/web/vtctld
-              -web_dir2 $VTROOT/web/vtctld2/app
               -workflow_manager_init
               -workflow_manager_use_election
               -log_dir $VTDATAROOT/tmp

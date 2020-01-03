@@ -21,7 +21,7 @@ option go_package = "vitess.io/vitess/go/vt/proto/logutil";
 
 package logutil;
 
-import "time.proto";
+import "vttime.proto";
 
 // Level is the level of the log messages.
 enum Level {

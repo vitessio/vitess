@@ -22,6 +22,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -1067,11 +1069,31 @@ func TestStatementMode(t *testing.T) {
 	runCases(t, nil, testcases, "")
 }
 
-func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, postion string) {
+func TestHeartbeat(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := startStream(ctx, t, nil, "")
+	evs := <-ch
+	require.Equal(t, 1, len(evs))
+	assert.Equal(t, binlogdatapb.VEventType_HEARTBEAT, evs[0].Type)
+}
+
+func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, position string) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ch := startStream(ctx, t, filter, postion)
+	ch := startStream(ctx, t, filter, position)
+
+	// If position is 'current', we wait for a heartbeat to be
+	// sure the vstreamer has started.
+	if position == "current" {
+		<-ch
+	}
 
 	for _, tcase := range testcases {
 		switch input := tcase.input.(type) {
@@ -1092,16 +1114,31 @@ func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, p
 
 func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan []*binlogdatapb.VEvent, output [][]string) {
 	t.Helper()
+	timer := time.NewTimer(1 * time.Minute)
+	defer timer.Stop()
 	for _, wantset := range output {
 		var evs []*binlogdatapb.VEvent
-		var ok bool
-		select {
-		case evs, ok = <-ch:
-			if !ok {
+		for {
+			select {
+			case allevs, ok := <-ch:
+				if !ok {
+					t.Fatal("stream ended early")
+				}
+				for _, ev := range allevs {
+					// Ignore spurious heartbeats that can happen on slow machines.
+					if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
+						continue
+					}
+					evs = append(evs, ev)
+				}
+			case <-ctx.Done():
 				t.Fatal("stream ended early")
+			case <-timer.C:
+				t.Fatalf("timed out waiting for events: %v", wantset)
 			}
-		case <-ctx.Done():
-			t.Fatal("stream ended early")
+			if len(evs) != 0 {
+				break
+			}
 		}
 		if len(wantset) != len(evs) {
 			t.Fatalf("%v: evs\n%v, want\n%v", input, evs, wantset)
@@ -1143,9 +1180,7 @@ func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter,
 	ch := make(chan []*binlogdatapb.VEvent)
 	go func() {
 		defer close(ch)
-		if err := vstream(ctx, t, position, filter, ch); err != nil {
-			t.Error(err)
-		}
+		_ = vstream(ctx, t, position, filter, ch)
 	}()
 	return ch
 }
