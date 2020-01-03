@@ -28,7 +28,7 @@ import (
 
 func TestFallbackSecurityPolicy(t *testing.T) {
 	ctx := context.Background()
-	mTablet := clusterInstance.GetVttabletInstance("replica", masterUID, "")
+	mTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
 
 	//Init Tablets
 	err := clusterInstance.VtctlclientProcess.InitTablet(mTablet, cell, keyspaceName, hostname, shardName)
@@ -86,7 +86,7 @@ func assertAllowedURLTest(t *testing.T, url string) {
 
 func TestDenyAllSecurityPolicy(t *testing.T) {
 	ctx := context.Background()
-	mTablet := clusterInstance.GetVttabletInstance("replica", masterUID, "")
+	mTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
 
 	//Init Tablets
 	err := clusterInstance.VtctlclientProcess.InitTablet(mTablet, cell, keyspaceName, hostname, shardName)
