@@ -30,19 +30,22 @@ import (
 var (
 	vrLogStatsLogger   = streamlog.New("VReplication", 50)
 	vrLogStatsTemplate = template.Must(template.New("vrlog").
-				Parse("{{.Type}} Event	{{.Detail}}	{{.Time}}	{{.DurationNs}}\n"))
+				Parse("{{.Type}} Event	{{.Detail}}	{{.LogTime}}	{{.DurationNs}}\n"))
 )
 
 type VrLogStats struct {
 	Ctx        context.Context
 	Type       string
 	Detail     string
-	Time       time.Time
+	StartTime  time.Time
+	LogTime    string
 	DurationNs int64
 }
 
 func NewVrLogStats(ctx context.Context, eventType string) *VrLogStats {
-	return &VrLogStats{Ctx: ctx, Type: eventType, Time: time.Now()}
+	stats := &VrLogStats{Ctx: ctx, Type: eventType, StartTime: time.Now()}
+	stats.LogTime = stats.StartTime.Format("2006-01-02T15:04:05")
+	return stats
 }
 
 func (stats *VrLogStats) Send() {
@@ -50,12 +53,12 @@ func (stats *VrLogStats) Send() {
 }
 
 func (stats *VrLogStats) Record(detail string) bool {
-	if stats.Ctx == nil || stats.Time.IsZero() {
+	if stats.Ctx == nil || stats.StartTime.IsZero() {
 		log.Error("VrLogStats not initialized for %s", detail)
 		return false
 	}
 	stats.Detail = detail
-	stats.DurationNs = time.Since(stats.Time).Nanoseconds()
+	stats.DurationNs = time.Since(stats.StartTime).Nanoseconds()
 	stats.Send()
 	return true
 }

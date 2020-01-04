@@ -53,7 +53,13 @@ var (
 	globalFBC       = &fakeBinlogClient{}
 	vrepldb         = "vrepl"
 	globalDBQueries = make(chan string, 1000)
+	globalLogs      = make(chan interface{}, 1000)
 )
+
+type LogExpectation struct {
+	Type   string
+	Detail string
+}
 
 func init() {
 	tabletconn.RegisterDialer("test", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
@@ -389,6 +395,49 @@ func expectDeleteQueries(t *testing.T) {
 		"/delete from _vt.copy_state",
 		"commit",
 	})
+}
+
+func listenToLogs() <-chan interface{} {
+	globalLogs = vrLogStatsLogger.Subscribe("vrlogstats")
+	return globalLogs
+}
+
+func expectLogs(t *testing.T, logs []LogExpectation) {
+	t.Helper()
+	failed := false
+	for i, log := range logs {
+		if failed {
+			t.Errorf("no logs received")
+			continue
+		}
+		select {
+		case data := <-globalLogs:
+			got, ok := data.(*VrLogStats)
+			if !ok {
+				t.Errorf("got not ok casting to VrLogStats: %v", data)
+			}
+			var match bool
+			match = (log.Type == got.Type)
+			if match {
+				if log.Detail[0] == '/' {
+					result, err := regexp.MatchString(log.Detail[1:], got.Detail)
+					if err != nil {
+						panic(err)
+					}
+					match = result
+				} else {
+					match = (got.Detail == log.Detail)
+				}
+			}
+
+			if !match {
+				t.Errorf("log:\n%q, does not match log %d:\n%q", got, i, log)
+			}
+		case <-time.After(5 * time.Second):
+			t.Errorf("no logs received, expecting %s", log)
+			failed = true
+		}
+	}
 }
 
 func expectDBClientQueries(t *testing.T, queries []string) {
