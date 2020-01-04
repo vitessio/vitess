@@ -192,7 +192,7 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 	}
 	for _, change := range rowEvent.RowChanges {
 		_, err := tplan.applyChange(change, func(sql string) (*sqltypes.Result, error) {
-			stats := Fr(ctx, "ROWCHANGE")
+			stats := NewVrLogStats(ctx, "ROWCHANGE")
 			result, err := vp.vr.dbClient.ExecuteWithRetry(ctx, sql)
 			stats.Record(sql)
 			return result, err
