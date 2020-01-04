@@ -216,11 +216,17 @@ func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, callback func(*quer
 	})
 }
 
+// vstreamHook allows you to do work just before calling VStream.
+var vstreamHook func(ctx context.Context)
+
 // VStream directly calls into the pre-initialized engine.
 func (ftc *fakeTabletConn) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	if target.Keyspace != "vttest" {
 		<-ctx.Done()
 		return io.EOF
+	}
+	if vstreamHook != nil {
+		vstreamHook(ctx)
 	}
 	return streamerEngine.Stream(ctx, startPos, filter, send)
 }
