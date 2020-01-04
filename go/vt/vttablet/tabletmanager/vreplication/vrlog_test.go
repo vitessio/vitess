@@ -40,7 +40,7 @@ func TestVrLog(t *testing.T) {
 	eventType, detail := "Test", "detail 1"
 	stats := NewVrLogStats(ctx, eventType)
 	time.Sleep(1 * time.Millisecond)
-	stats.Record(detail)
+	stats.Send(detail)
 	time.Sleep(1 * time.Millisecond)
 	s := w.Body.String()
 	want := fmt.Sprintf("%s Event	%s", eventType, detail)
@@ -63,8 +63,11 @@ func TestVrLog(t *testing.T) {
 	if lastColValue < 1<<9 {
 		t.Fatalf("Waited 1 Millisecond, so duration should be greater than that: %d, %s", lastColValue, ss[len(ss)-1])
 	}
+	defer func() {
+		if err := recover(); err == nil {
+			t.Fatalf("Uninitialized stats should not log")
+		}
+	}()
 	stats = &VrLogStats{}
-	if stats.Record("should error out since stats is not initalized") != false {
-		t.Fatalf("Uninitialized stats should not log")
-	}
+	stats.Send("should error out since stats is not initalized")
 }

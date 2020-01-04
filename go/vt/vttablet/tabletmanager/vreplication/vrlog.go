@@ -14,6 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+ * A human readable streaming log of vreplication events for vttablets available at /debug/vrlog
+ */
+
 package vreplication
 
 import (
@@ -33,6 +37,7 @@ var (
 				Parse("{{.Type}} Event	{{.Detail}}	{{.LogTime}}	{{.DurationNs}}\n"))
 )
 
+//VrLogStats collects attributes of a vreplication event for logging
 type VrLogStats struct {
 	Ctx        context.Context
 	Type       string
@@ -42,25 +47,21 @@ type VrLogStats struct {
 	DurationNs int64
 }
 
+//NewVrLogStats should be called at the start of the event to be logged
 func NewVrLogStats(ctx context.Context, eventType string) *VrLogStats {
 	stats := &VrLogStats{Ctx: ctx, Type: eventType, StartTime: time.Now()}
 	stats.LogTime = stats.StartTime.Format("2006-01-02T15:04:05")
 	return stats
 }
 
-func (stats *VrLogStats) Send() {
-	vrLogStatsLogger.Send(stats)
-}
-
-func (stats *VrLogStats) Record(detail string) bool {
+//Send records the log event, should be called on a stats object constructed by NewVrLogStats()
+func (stats *VrLogStats) Send(detail string) {
 	if stats.Ctx == nil || stats.StartTime.IsZero() {
-		log.Error("VrLogStats not initialized for %s", detail)
-		return false
+		panic("VrLogStats not initialized " + detail)
 	}
 	stats.Detail = detail
 	stats.DurationNs = time.Since(stats.StartTime).Nanoseconds()
-	stats.Send()
-	return true
+	vrLogStatsLogger.Send(stats)
 }
 
 func init() {
