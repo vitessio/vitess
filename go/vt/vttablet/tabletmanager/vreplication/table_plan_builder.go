@@ -28,6 +28,10 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+// This file contains just the builders for ReplicatorPlan and TablePlan.
+// ReplicatorPlan and TablePlan are in replicator_plan.go.
+// TODO(sougou): reorganize this in a better fashion.
+
 // ExcludeStr is the filter value for excluding tables that match a rule.
 // TODO(sougou): support this on vstreamer side also.
 const ExcludeStr = "exclude"
@@ -43,7 +47,7 @@ type tablePlanBuilder struct {
 }
 
 // colExpr describes the processing to be performed to
-// compute the value of the target table column.
+// compute the value of one column of the target table.
 type colExpr struct {
 	colName sqlparser.ColIdent
 	// operation==opExpr: full expression is set
