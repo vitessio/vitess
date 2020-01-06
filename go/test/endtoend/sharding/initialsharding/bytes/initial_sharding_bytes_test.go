@@ -12,23 +12,25 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+
+"""Re-runs initial_sharding_test.go with a varbinary keyspace_id."""
 */
 
-package main
-
-// Imports and register the gRPC queryservice server
+package bytes
 
 import (
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vttablet/grpcqueryservice"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver"
+	"testing"
+
+	sharding "vitess.io/vitess/go/test/endtoend/sharding/initialsharding"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-func init() {
-	tabletserver.RegisterFunctions = append(tabletserver.RegisterFunctions, func(qsc tabletserver.Controller) {
-		if servenv.GRPCCheckServiceMap("queryservice") {
-			grpcqueryservice.Register(servenv.GRPCServer, qsc.QueryService())
-		}
-	})
-
+func TestInitialShardingBytes(t *testing.T) {
+	code, err := sharding.ClusterWrapper(false)
+	if err != nil {
+		t.Errorf("setup failed with status code %d", code)
+	}
+	sharding.TestInitialSharding(t, &sharding.ClusterInstance.Keyspaces[0], querypb.Type_VARBINARY, false, false)
+	defer sharding.ClusterInstance.Teardown()
 }

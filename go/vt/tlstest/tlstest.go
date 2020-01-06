@@ -147,3 +147,51 @@ func CreateSignedCert(root, parent, serial, name, commonName string) {
 		"-extfile", config,
 		"-out", cert)
 }
+
+type ClientServerKeyPairs struct {
+	ServerCert string
+	ServerKey  string
+	ServerCA   string
+	ServerName string
+	ClientCert string
+	ClientKey  string
+	ClientCA   string
+}
+
+var serialCounter = 0
+
+func CreateClientServerCertPairs(root string) ClientServerKeyPairs {
+	// Create the certs and configs.
+	CreateCA(root)
+
+	serverSerial := fmt.Sprintf("%03d", serialCounter*2+1)
+	clientSerial := fmt.Sprintf("%03d", serialCounter*2+2)
+
+	serialCounter = serialCounter + 1
+
+	serverName := fmt.Sprintf("server-%s", serverSerial)
+	serverCACommonName := fmt.Sprintf("Server %s CA", serverSerial)
+	serverCertName := fmt.Sprintf("server-instance-%s", serverSerial)
+	serverCertCommonName := fmt.Sprintf("server%s.example.com", serverSerial)
+
+	clientName := fmt.Sprintf("clients-%s", serverSerial)
+	clientCACommonName := fmt.Sprintf("Clients %s CA", serverSerial)
+	clientCertName := fmt.Sprintf("client-instance-%s", serverSerial)
+	clientCertCommonName := fmt.Sprintf("Client Instance %s", serverSerial)
+
+	CreateSignedCert(root, CA, serverSerial, serverName, serverCACommonName)
+	CreateSignedCert(root, serverName, serverSerial, serverCertName, serverCertCommonName)
+
+	CreateSignedCert(root, CA, clientSerial, clientName, clientCACommonName)
+	CreateSignedCert(root, clientName, serverSerial, clientCertName, clientCertCommonName)
+
+	return ClientServerKeyPairs{
+		ServerCert: path.Join(root, fmt.Sprintf("%s-cert.pem", serverCertName)),
+		ServerKey:  path.Join(root, fmt.Sprintf("%s-key.pem", serverCertName)),
+		ServerCA:   path.Join(root, fmt.Sprintf("%s-cert.pem", serverName)),
+		ClientCert: path.Join(root, fmt.Sprintf("%s-cert.pem", clientCertName)),
+		ClientKey:  path.Join(root, fmt.Sprintf("%s-key.pem", clientCertName)),
+		ClientCA:   path.Join(root, fmt.Sprintf("%s-cert.pem", clientName)),
+		ServerName: serverCertCommonName,
+	}
+}

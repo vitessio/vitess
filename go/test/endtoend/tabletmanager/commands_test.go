@@ -57,11 +57,13 @@ func TestTabletCommands(t *testing.T) {
 		sql,
 	}
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
+	assert.Nil(t, err)
 	assertExcludeFields(t, result)
 
 	// make sure direct dba queries work
 	sql = "select * from t1"
 	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDba", "-json", masterTablet.Alias, sql)
+	assert.Nil(t, err)
 	assertExecuteFetch(t, result)
 
 	// check Ping / RefreshState / RefreshStateByShard
@@ -143,6 +145,7 @@ func assertExecuteFetch(t *testing.T, qr string) {
 func TestActionAndTimeout(t *testing.T) {
 
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("Sleep", masterTablet.Alias, "5s")
+	assert.Nil(t, err)
 	time.Sleep(1 * time.Second)
 
 	// try a frontend RefreshState that should timeout as the tablet is busy running the other one

@@ -7,22 +7,23 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
-
-// This plugin imports staticauthserver to register the flat-file implementation of AuthServer.
+package v3
 
 import (
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/vtqueryserver"
+	"testing"
+
+	sharding "vitess.io/vitess/go/test/endtoend/sharding/resharding"
 )
 
-func init() {
-	vtqueryserver.RegisterPluginInitializer(func() { mysql.InitAuthServerStatic() })
+// TestReshardingString - using a VARBINARY column for resharding.
+func TestReshardingString(t *testing.T) {
+	sharding.TestResharding(t, true)
+
 }

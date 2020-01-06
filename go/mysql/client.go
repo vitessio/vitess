@@ -380,7 +380,7 @@ func (c *Conn) parseInitialHandshakePacket(data []byte) (uint32, []byte, error) 
 		errorCode, pos, _ := readUint16(data, pos)
 		// Normally there would be a 1-byte sql_state_marker field and a 5-byte
 		// sql_state field here, but docs say these will not be present in this case.
-		errorMsg, pos, _ := readEOFString(data, pos)
+		errorMsg, _, _ := readEOFString(data, pos)
 		return 0, nil, NewSQLError(CRServerHandshakeErr, SSUnknownSQLState, "immediate error from server errorCode=%v errorMsg=%v", errorCode, errorMsg)
 	}
 

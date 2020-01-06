@@ -45,6 +45,7 @@ type stFU struct {
 func (v *stFU) String() string                                                    { return v.name }
 func (*stFU) Cost() int                                                           { return 1 }
 func (*stFU) IsUnique() bool                                                      { return true }
+func (*stFU) NeedsVCursor() bool                                                  { return false }
 func (*stFU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
 func (*stFU) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
 
@@ -63,6 +64,7 @@ type stLN struct {
 func (v *stLN) String() string                                                    { return v.name }
 func (*stLN) Cost() int                                                           { return 0 }
 func (*stLN) IsUnique() bool                                                      { return false }
+func (*stLN) NeedsVCursor() bool                                                  { return false }
 func (*stLN) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
 func (*stLN) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
 func (*stLN) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error            { return nil }
@@ -85,6 +87,7 @@ type stLU struct {
 func (v *stLU) String() string                                                    { return v.name }
 func (*stLU) Cost() int                                                           { return 2 }
 func (*stLU) IsUnique() bool                                                      { return true }
+func (*stLU) NeedsVCursor() bool                                                  { return false }
 func (*stLU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
 func (*stLU) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
 func (*stLU) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error            { return nil }
@@ -110,6 +113,7 @@ type stLO struct {
 func (v *stLO) String() string                                                    { return v.name }
 func (*stLO) Cost() int                                                           { return 2 }
 func (*stLO) IsUnique() bool                                                      { return true }
+func (*stLO) NeedsVCursor() bool                                                  { return false }
 func (*stLO) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
 func (*stLO) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
 func (*stLO) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error            { return nil }
@@ -1802,10 +1806,8 @@ func TestBadSequence(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildVSchema: %v, want %v", err, want)
 	}
-
-	t1Seq := got.Keyspaces["sharded"].Tables["t1"].AutoIncrement.Sequence
-	if t1Seq != nil {
-		t.Errorf("BuildVSchema: unexpected sequence for table t1: %v", t1Seq)
+	if t1 := got.Keyspaces["sharded"].Tables["t1"]; t1 != nil {
+		t.Errorf("BuildVSchema: table t1 must not be present in the keyspace: %v", t1)
 	}
 
 	// Verify that a failure to set up a sequence for t1 doesn't prevent setting up
@@ -1851,6 +1853,9 @@ func TestBadSequenceName(t *testing.T) {
 	want := "cannot resolve sequence a.b.seq: table a.b.seq not found"
 	if err == nil || err.Error() != want {
 		t.Errorf("BuildVSchema: %v, want %v", err, want)
+	}
+	if t1 := got.Keyspaces["sharded"].Tables["t1"]; t1 != nil {
+		t.Errorf("BuildVSchema: table t1 must not be present in the keyspace: %v", t1)
 	}
 }
 

@@ -39,7 +39,7 @@ func TestValidCert(t *testing.T) {
 	}
 
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestValidCert(t *testing.T) {
 		t.Errorf("Got wrong result from ExecuteFetch(ssl echo): %v", result)
 	}
 
-	userData := th.lastConn.UserData.Get()
+	userData := th.LastConn().UserData.Get()
 	if userData.Username != clientCertUsername {
 		t.Errorf("userdata username is %v, expected %v", userData.Username, clientCertUsername)
 	}
@@ -122,7 +122,7 @@ func TestNoCert(t *testing.T) {
 	}
 
 	// Create the listener, so we can get its host.
-	l, err := NewListener("tcp", ":0", authServer, th, 0, 0)
+	l, err := NewListener("tcp", ":0", authServer, th, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}

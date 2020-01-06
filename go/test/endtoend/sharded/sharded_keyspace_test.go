@@ -194,6 +194,7 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 		shard := &cluster.Shard{
 			Name: shardName,
 		}
+
 		var mysqlCtlProcessList []*exec.Cmd
 
 		for i := 0; i < totalTabletsRequired; i++ {
@@ -233,7 +234,7 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 				clusterInstance.EnableSemiSync)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 
-			shard.Vttablets = append(shard.Vttablets, *tablet)
+			shard.Vttablets = append(shard.Vttablets, tablet)
 		}
 		for _, proc := range mysqlCtlProcessList {
 			if err := proc.Wait(); err != nil {
@@ -253,7 +254,6 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 				log.Error(err.Error())
 				return
 			}
-
 		}
 
 		keyspace.Shards = append(keyspace.Shards, *shard)
