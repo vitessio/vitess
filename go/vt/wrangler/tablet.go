@@ -209,6 +209,16 @@ func (wr *Wrangler) VReplicationExec(ctx context.Context, tabletAlias *topodatap
 	return wr.tmc.VReplicationExec(ctx, ti.Tablet, query)
 }
 
+// isMasterTablet is a shortcut way to determine whether the current tablet
+// is a master before we allow its tablet record to be deleted. The canonical
+// way to determine the only true master in a shard is to list all the tablets
+// and find the one with the highest MasterTermStartTime among the ones that
+// claim to be master.
+// We err on the side of caution here, i.e. we should never return false for
+// a true master tablet, but it is ok to return true for a tablet that isn't
+// the true master. This can occur if someone issues a DeleteTablet while
+// the system is in transition (a reparenting event is in progress and parts of
+// the topo have not yet been updated).
 func (wr *Wrangler) isMasterTablet(ctx context.Context, ti *topo.TabletInfo) (bool, error) {
 	// Tablet record claims to be non-master, we believe it
 	if ti.Type != topodatapb.TabletType_MASTER {
@@ -224,7 +234,8 @@ func (wr *Wrangler) isMasterTablet(ctx context.Context, ti *topo.TabletInfo) (bo
 		return true, nil
 	}
 	// Shard record has another tablet as master, so check MasterTermStartTime
-	// If tablet record's MasterTermStartTime is equal to or later than the one in the shard record, then tablet is master
-	// !Before == Equal || After
-	return !logutil.ProtoToTime(ti.MasterTermStartTime).Before(logutil.ProtoToTime(si.MasterTermStartTime)), nil
+	// If tablet record's MasterTermStartTime is later than the one in the shard record, then tablet is master
+	tabletMTST := logutil.ProtoToTime(ti.MasterTermStartTime)
+	shardMTST := logutil.ProtoToTime(si.MasterTermStartTime)
+	return tabletMTST.After(shardMTST), nil
 }
