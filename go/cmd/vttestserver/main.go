@@ -172,6 +172,8 @@ func parseFlags() (config vttest.Config, env vttest.Environment, err error) {
 
 	flag.BoolVar(&config.InitWorkflowManager, "workflow_manager_init", false, "Enable workflow manager")
 
+	flag.StringVar(&config.VSchemaDDLAuthorizedUsers, "vschema_ddl_authorized_users", "", "Comma separated list of users authorized to execute vschema ddl operations via vtgate")
+
 	flag.Parse()
 
 	if basePort != 0 {

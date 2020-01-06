@@ -47,6 +47,7 @@ func (vtctl *VtctlProcess) AddCellInfo(Cell string) (err error) {
 		"-server_address", vtctl.TopoServerAddress,
 		Cell,
 	)
+	log.Info(fmt.Sprintf("Adding Cell into Keyspace with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	return tmpProcess.Run()
 }
 
@@ -61,6 +62,22 @@ func (vtctl *VtctlProcess) CreateKeyspace(keyspace string) (err error) {
 	)
 	log.Info(fmt.Sprintf("Starting CreateKeyspace with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	return tmpProcess.Run()
+}
+
+// ExecuteCommandWithOutput executes any vtctlclient command and returns output
+func (vtctl *VtctlProcess) ExecuteCommandWithOutput(args ...string) (result string, err error) {
+	args = append([]string{
+		"-enable_queries",
+		"-topo_implementation", vtctl.TopoImplementation,
+		"-topo_global_server_address", vtctl.TopoGlobalAddress,
+		"-topo_global_root", vtctl.TopoGlobalRoot}, args...)
+	tmpProcess := exec.Command(
+		vtctl.Binary,
+		args...,
+	)
+	log.Info(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	resultByte, err := tmpProcess.CombinedOutput()
+	return string(resultByte), err
 }
 
 // VtctlProcessInstance returns a VtctlProcess handle for vtctl process

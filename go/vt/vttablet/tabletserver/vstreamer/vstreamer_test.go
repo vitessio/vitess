@@ -20,7 +20,10 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -55,8 +58,6 @@ func TestStatements(t *testing.T) {
 			"update stream1 set val='bbb' where id = 1",
 			"commit",
 		},
-		// MySQL issues GTID->BEGIN.
-		// MariaDB issues BEGIN->GTID.
 		output: [][]string{{
 			`begin`,
 			`type:FIELD field_event:<table_name:"stream1" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
@@ -111,34 +112,6 @@ func TestStatements(t *testing.T) {
 			`gtid`,
 			`type:DDL ddl:"truncate table stream2" `,
 		}},
-	}, {
-		// repair, optimize and analyze show up in binlog stream, but ignored by vitess.
-		input: "repair table stream2",
-		output: [][]string{{
-			`gtid`,
-			`type:OTHER `,
-		}},
-	}, {
-		input: "optimize table stream2",
-		output: [][]string{{
-			`gtid`,
-			`type:OTHER `,
-		}},
-	}, {
-		input: "analyze table stream2",
-		output: [][]string{{
-			`gtid`,
-			`type:OTHER `,
-		}},
-	}, {
-		// select, set, show and describe don't get logged.
-		input: "select * from stream1",
-	}, {
-		input: "set @val=1",
-	}, {
-		input: "show tables",
-	}, {
-		input: "describe stream1",
 	}}
 	runCases(t, nil, testcases, "")
 
@@ -146,6 +119,70 @@ func TestStatements(t *testing.T) {
 	engine.cp.Flavor = "FilePos"
 	defer func() { engine.cp.Flavor = "" }()
 	runCases(t, nil, testcases, "")
+}
+
+// TestOther tests "other" statements. These statements produce
+// very different events depending on the version of mysql or mariadb
+// So, we just show that vreplication transmits "OTHER" events
+// if the binlog is affected by the statement.
+func TestOther(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table stream1(id int, val varbinary(128), primary key(id))",
+		"create table stream2(id int, val varbinary(128), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table stream1",
+		"drop table stream2",
+	})
+	engine.se.Reload(context.Background())
+
+	testcases := []string{
+		"repair table stream2",
+		"optimize table stream2",
+		"analyze table stream2",
+		"select * from stream1",
+		"set @val=1",
+		"show tables",
+		"describe stream1",
+	}
+
+	// customRun is a modified version of runCases.
+	customRun := func(mode string) {
+		t.Logf("Run mode: %v", mode)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		ch := startStream(ctx, t, nil, "")
+
+		want := [][]string{{
+			`gtid`,
+			`type:OTHER `,
+		}}
+
+		for _, stmt := range testcases {
+			startPosition := masterPosition(t)
+			execStatement(t, stmt)
+			endPosition := masterPosition(t)
+			if startPosition == endPosition {
+				t.Logf("statement %s did not affect binlog", stmt)
+				continue
+			}
+			expectLog(ctx, t, stmt, ch, want)
+		}
+		cancel()
+		if evs, ok := <-ch; ok {
+			t.Fatalf("unexpected evs: %v", evs)
+		}
+	}
+	customRun("gtid")
+
+	// Test FilePos flavor
+	engine.cp.Flavor = "FilePos"
+	defer func() { engine.cp.Flavor = "" }()
+	customRun("filePos")
 }
 
 func TestRegexp(t *testing.T) {
@@ -203,9 +240,7 @@ func TestREKeyRange(t *testing.T) {
 	})
 	engine.se.Reload(context.Background())
 
-	if err := env.SetVSchema(shardedVSchema); err != nil {
-		t.Fatal(err)
-	}
+	setVSchema(t, shardedVSchema)
 	defer env.SetVSchema("{}")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -264,9 +299,7 @@ func TestREKeyRange(t *testing.T) {
     }
   }
 }`
-	if err := env.SetVSchema(altVSchema); err != nil {
-		t.Fatal(err)
-	}
+	setVSchema(t, altVSchema)
 
 	// Only the first insert should be sent.
 	input = []string{
@@ -297,9 +330,7 @@ func TestInKeyRangeMultiColumn(t *testing.T) {
 	})
 	engine.se.Reload(context.Background())
 
-	if err := env.SetVSchema(multicolumnVSchema); err != nil {
-		t.Fatal(err)
-	}
+	setVSchema(t, multicolumnVSchema)
 	defer env.SetVSchema("{}")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -354,9 +385,7 @@ func TestREMultiColumnVindex(t *testing.T) {
 	})
 	engine.se.Reload(context.Background())
 
-	if err := env.SetVSchema(multicolumnVSchema); err != nil {
-		t.Fatal(err)
-	}
+	setVSchema(t, multicolumnVSchema)
 	defer env.SetVSchema("{}")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -424,8 +453,6 @@ func TestSelectFilter(t *testing.T) {
 			"insert into t1 values (2, 4, 'aaa')",
 			"commit",
 		},
-		// MySQL issues GTID->BEGIN.
-		// MariaDB issues BEGIN->GTID.
 		output: [][]string{{
 			`begin`,
 			`type:FIELD field_event:<table_name:"t1" fields:<name:"id2" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
@@ -1042,6 +1069,20 @@ func TestStatementMode(t *testing.T) {
 	runCases(t, nil, testcases, "")
 }
 
+func TestHeartbeat(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := startStream(ctx, t, nil, "")
+	evs := <-ch
+	require.Equal(t, 1, len(evs))
+	assert.Equal(t, binlogdatapb.VEventType_HEARTBEAT, evs[0].Type)
+}
+
 func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, postion string) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -1069,14 +1110,25 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 	t.Helper()
 	for _, wantset := range output {
 		var evs []*binlogdatapb.VEvent
-		var ok bool
-		select {
-		case evs, ok = <-ch:
-			if !ok {
+		for {
+			select {
+			case allevs, ok := <-ch:
+				if !ok {
+					t.Fatal("stream ended early")
+				}
+				for _, ev := range allevs {
+					// Ignore spurious heartbeats that can happen on slow machines.
+					if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
+						continue
+					}
+					evs = append(evs, ev)
+				}
+			case <-ctx.Done():
 				t.Fatal("stream ended early")
 			}
-		case <-ctx.Done():
-			t.Fatal("stream ended early")
+			if len(evs) != 0 {
+				break
+			}
 		}
 		if len(wantset) != len(evs) {
 			t.Fatalf("%v: evs\n%v, want\n%v", input, evs, wantset)
@@ -1173,4 +1225,27 @@ func masterPosition(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return mysql.EncodePosition(pos)
+}
+
+func setVSchema(t *testing.T, vschema string) {
+	t.Helper()
+
+	curCount := vschemaUpdates.Get()
+
+	if err := env.SetVSchema(vschema); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for curCount to go up.
+	updated := false
+	for i := 0; i < 10; i++ {
+		if vschemaUpdates.Get() != curCount {
+			updated = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !updated {
+		t.Error("vschema did not get updated")
+	}
 }

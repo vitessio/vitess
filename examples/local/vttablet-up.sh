@@ -71,11 +71,27 @@ for uid_index in $uids; do
     echo "    $VTDATAROOT/$tablet_dir"
     action='start'
   fi
+
+  set +e
+
   $VTROOT/bin/mysqlctl \
     -log_dir $VTDATAROOT/tmp \
     -tablet_uid $uid \
     -mysql_port $mysql_port \
-    $action &
+    $action
+
+    err=$?    
+    if [[ $err -ne 0 ]]; then    
+        fail "This script fails to start mysqld, possibly due to apparmor or selinux protection.     
+        Utilities to help investigate:    
+                apparmor: \"sudo aa-status\"    
+                selinux:  \"sudo sestatus\"    
+        Please disable if so indicated.    
+        You may also need to empty your \$VTDATAROOT to start clean."    
+    fi    
+    
+  set -e    
+    
 done
 
 # Wait for all mysqld to start up.
@@ -135,10 +151,12 @@ done
 echo "Waiting for tablets to be listening..."
 for uid_index in $uids; do
   port=$[$port_base + $uid_index]
-  while true; do
+  for i in $(seq 0 300); do
    curl -I "http://$hostname:$port/debug/status" >/dev/null 2>&1 && break
    sleep 0.1
   done;
+  # check one last time
+  curl -I "http://$hostname:$port/debug/status" || fail "tablets could not be started!"
 done;
 echo "Tablets up!"
 
