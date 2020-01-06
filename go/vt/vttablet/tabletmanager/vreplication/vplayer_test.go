@@ -182,7 +182,7 @@ func TestPlayerFilters(t *testing.T) {
 		output []string
 		table  string
 		data   [][]string
-		logs   []LogExpectation
+		logs   []LogExpectation //logs defined only for a few testcases since they are enough to test all log events
 	}{{
 		// insert with insertNormal
 		input: "insert into src1 values(1, 'aaa')",
@@ -264,8 +264,8 @@ func TestPlayerFilters(t *testing.T) {
 			{"1", "5", "1", "1"},
 		},
 		logs: []LogExpectation{
-			{"ROW", "/src2.*123.*"},
 			{"ROWCHANGE", "update dst2 set val1=5, sval2=sval2-ifnull(3, 0)+ifnull(1, 0), rcount=rcount where id=1"},
+			{"ROW", "/src2.*123.*"},
 		},
 	}, {
 		// delete with insertOnDup
@@ -388,13 +388,15 @@ func TestPlayerFilters(t *testing.T) {
 		data:  [][]string{},
 	}}
 
-	listenToLogs()
-	for _, tcases := range testcases {
-		execStatements(t, []string{tcases.input})
-		expectDBClientQueries(t, tcases.output)
-		expectLogs(t, tcases.logs)
-		if tcases.table != "" {
-			expectData(t, tcases.table, tcases.data)
+	for _, tcase := range testcases {
+		if tcase.logs != nil {
+			logch := vrLogStatsLogger.Subscribe("vrlogstats")
+			defer expectLogsAndUnsubscribe(t, tcase.logs, logch)
+		}
+		execStatements(t, []string{tcase.input})
+		expectDBClientQueries(t, tcase.output)
+		if tcase.table != "" {
+			expectData(t, tcase.table, tcase.data)
 		}
 	}
 }
