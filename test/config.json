@@ -451,6 +451,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"clustertest": {
+			"File": "clustertest.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/clustertest"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 11,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"initial_sharding": {
 			"File": "initial_sharding.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/initialsharding/v3"],
