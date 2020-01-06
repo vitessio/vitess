@@ -182,7 +182,7 @@ func TestPlayerFilters(t *testing.T) {
 		output []string
 		table  string
 		data   [][]string
-		logs   []LogExpectation //logs defined only for a few testcases since they are enough to test all log events
+		logs   []LogExpectation // logs are defined for a few testcases since they are enough to test all log events
 	}{{
 		// insert with insertNormal
 		input: "insert into src1 values(1, 'aaa')",

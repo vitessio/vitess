@@ -36,7 +36,7 @@ var (
 				Parse("{{.Type}} Event	{{.Detail}}	{{.LogTime}}	{{.DurationNs}}\n"))
 )
 
-//VrLogStats collects attributes of a vreplication event for logging
+// VrLogStats collects attributes of a vreplication event for logging
 type VrLogStats struct {
 	Type       string
 	Detail     string
@@ -45,12 +45,12 @@ type VrLogStats struct {
 	DurationNs int64
 }
 
-//NewVrLogStats should be called at the start of the event to be logged
+// NewVrLogStats should be called at the start of the event to be logged
 func NewVrLogStats(eventType string) *VrLogStats {
 	return &VrLogStats{Type: eventType, StartTime: time.Now()}
 }
 
-//Send records the log event, should be called on a stats object constructed by NewVrLogStats()
+// Send records the log event, should be called on a stats object constructed by NewVrLogStats()
 func (stats *VrLogStats) Send(detail string) {
 	if stats.StartTime.IsZero() {
 		stats.Type = "Error: Type not specified"
