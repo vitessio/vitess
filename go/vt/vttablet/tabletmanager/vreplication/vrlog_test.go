@@ -27,8 +27,6 @@ import (
 
 func TestVrLog(t *testing.T) {
 	r, _ := http.NewRequest("GET", "/debug/vrlog?timeout=100&limit=10", nil)
-	//w := httptest.NewRecorder()
-
 	w := NewHTTPStreamWriterMock()
 
 	ch := vrLogStatsLogger.Subscribe("vrlogstats")

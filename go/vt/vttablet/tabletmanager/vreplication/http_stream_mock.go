@@ -26,33 +26,33 @@ import (
 	"net/http"
 )
 
-//HTTPStreamWriterMock implements http.ResponseWriter and adds a channel to sync writes and reads
+// HTTPStreamWriterMock implements http.ResponseWriter and adds a channel to sync writes and reads
 type HTTPStreamWriterMock struct {
 	ch   chan interface{}
 	data []byte
 }
 
-//NewHTTPStreamWriterMock returns a new HTTPStreamWriterMock
+// NewHTTPStreamWriterMock returns a new HTTPStreamWriterMock
 func NewHTTPStreamWriterMock() *HTTPStreamWriterMock {
 	return &HTTPStreamWriterMock{ch: make(chan interface{}, 1), data: make([]byte, 0)}
 }
 
-//Header is a stub
+// Header is a stub
 func (w *HTTPStreamWriterMock) Header() http.Header {
 	return nil
 }
 
-//WriteHeader is a stub
+// WriteHeader is a stub
 func (w *HTTPStreamWriterMock) WriteHeader(statuscode int) {
 }
 
-//Write buffers sent data
+// Write buffers sent data
 func (w *HTTPStreamWriterMock) Write(data []byte) (int, error) {
 	w.data = append(w.data, data...)
 	return 0, nil
 }
 
-//Flush sends buffered data to the channel
+// Flush sends buffered data to the channel
 func (w *HTTPStreamWriterMock) Flush() {
 	w.ch <- w.data
 	w.data = w.data[:0]
