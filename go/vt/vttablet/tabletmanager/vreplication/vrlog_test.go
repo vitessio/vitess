@@ -17,10 +17,8 @@ limitations under the License.
 package vreplication
 
 import (
-	"context"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
@@ -28,21 +26,30 @@ import (
 )
 
 func TestVrLog(t *testing.T) {
-	r, _ := http.NewRequest("GET", "/debug/vrlog?timeout=10&limit=1", nil)
-	w := httptest.NewRecorder()
+	r, _ := http.NewRequest("GET", "/debug/vrlog?timeout=100&limit=10", nil)
+	//w := httptest.NewRecorder()
 
-	ch := vrLogStatsLogger.Subscribe("vrlog")
+	w := NewHTTPStreamWriterMock()
+
+	ch := vrLogStatsLogger.Subscribe("vrlogstats")
 	defer vrLogStatsLogger.Unsubscribe(ch)
 	go func() {
 		vrlogStatsHandler(ch, w, r)
 	}()
-	ctx := context.Background()
 	eventType, detail := "Test", "detail 1"
-	stats := NewVrLogStats(ctx, eventType)
-	time.Sleep(1 * time.Millisecond)
+	stats := NewVrLogStats(eventType)
 	stats.Send(detail)
-	time.Sleep(1 * time.Millisecond)
-	s := w.Body.String()
+	var s string
+	select {
+	case ret := <-w.ch:
+		b, ok := ret.([]byte)
+		if ok {
+			s = string(b)
+		}
+	case <-time.After(1 * time.Second):
+		s = "Timed out"
+	}
+
 	want := fmt.Sprintf("%s Event	%s", eventType, detail)
 	if !strings.Contains(s, want) {
 		t.Fatalf(fmt.Sprintf("want %s, got %s", want, s))
@@ -60,14 +67,24 @@ func TestVrLog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Duration is not an integer: %s", err)
 	}
-	if lastColValue < 1<<9 {
-		t.Fatalf("Waited 1 Millisecond, so duration should be greater than that: %d, %s", lastColValue, ss[len(ss)-1])
+	if lastColValue == 0 {
+		t.Fatalf("Duration should not be zero")
 	}
-	defer func() {
-		if err := recover(); err == nil {
-			t.Fatalf("Uninitialized stats should not log")
-		}
-	}()
+
 	stats = &VrLogStats{}
-	stats.Send("should error out since stats is not initalized")
+	stats.Send("detail123")
+
+	select {
+	case ret := <-w.ch:
+		b, ok := ret.([]byte)
+		if ok {
+			s = string(b)
+		}
+	case <-time.After(1 * time.Second):
+		s = "Timed out"
+	}
+	prefix := "Error: Type not specified"
+	if !strings.HasPrefix(s, prefix) {
+		t.Fatalf("Incorrect Type for uninitialized stat, got %v", s)
+	}
 }

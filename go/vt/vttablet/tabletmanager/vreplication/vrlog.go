@@ -26,7 +26,6 @@ import (
 	"text/template"
 	"time"
 
-	"golang.org/x/net/context"
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -39,7 +38,6 @@ var (
 
 //VrLogStats collects attributes of a vreplication event for logging
 type VrLogStats struct {
-	Ctx        context.Context
 	Type       string
 	Detail     string
 	StartTime  time.Time
@@ -48,17 +46,17 @@ type VrLogStats struct {
 }
 
 //NewVrLogStats should be called at the start of the event to be logged
-func NewVrLogStats(ctx context.Context, eventType string) *VrLogStats {
-	stats := &VrLogStats{Ctx: ctx, Type: eventType, StartTime: time.Now()}
-	stats.LogTime = stats.StartTime.Format("2006-01-02T15:04:05")
-	return stats
+func NewVrLogStats(eventType string) *VrLogStats {
+	return &VrLogStats{Type: eventType, StartTime: time.Now()}
 }
 
 //Send records the log event, should be called on a stats object constructed by NewVrLogStats()
 func (stats *VrLogStats) Send(detail string) {
-	if stats.Ctx == nil || stats.StartTime.IsZero() {
-		panic("VrLogStats not initialized " + detail)
+	if stats.StartTime.IsZero() {
+		stats.Type = "Error: Type not specified"
+		stats.StartTime = time.Now()
 	}
+	stats.LogTime = stats.StartTime.Format("2006-01-02T15:04:05")
 	stats.Detail = detail
 	stats.DurationNs = time.Since(stats.StartTime).Nanoseconds()
 	vrLogStatsLogger.Send(stats)
@@ -74,7 +72,6 @@ func init() {
 
 func vrlogStatsHandler(ch chan interface{}, w http.ResponseWriter, r *http.Request) {
 	timeout, limit := parseTimeoutLimitParams(r)
-
 	tmr := time.NewTimer(timeout)
 	defer tmr.Stop()
 	for i := 0; i < limit; i++ {

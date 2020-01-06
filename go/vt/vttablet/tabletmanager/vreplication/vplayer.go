@@ -192,7 +192,7 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 	}
 	for _, change := range rowEvent.RowChanges {
 		_, err := tplan.applyChange(change, func(sql string) (*sqltypes.Result, error) {
-			stats := NewVrLogStats(ctx, "ROWCHANGE")
+			stats := NewVrLogStats("ROWCHANGE")
 			result, err := vp.vr.dbClient.ExecuteWithRetry(ctx, sql)
 			stats.Send(sql)
 			return result, err
@@ -310,7 +310,7 @@ func hasAnotherCommit(items [][]*binlogdatapb.VEvent, i, j int) bool {
 }
 
 func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, mustSave bool) error {
-	stats := NewVrLogStats(ctx, event.Type.String())
+	stats := NewVrLogStats(event.Type.String())
 	switch event.Type {
 	case binlogdatapb.VEventType_GTID:
 		pos, err := mysql.DecodePosition(event.Gtid)
@@ -376,6 +376,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		if err := vp.applyRowEvent(ctx, event.RowEvent); err != nil {
 			return err
 		}
+		//Row event is logged AFTER RowChanges are applied so as to calculate the total elapsed time for the Row event
 		stats.Send(fmt.Sprintf("%v", event.RowEvent))
 	case binlogdatapb.VEventType_OTHER:
 		if vp.vr.dbClient.InTransaction {
