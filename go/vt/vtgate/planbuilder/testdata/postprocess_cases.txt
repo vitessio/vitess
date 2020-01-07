@@ -775,7 +775,7 @@
    }
 }
 
-#Order by with string operations operations
+#Order by with string operations
 "select * from user where id = 5 order by concat(col,col1) collate utf8_general_ci desc"
 {
    "Original":"select * from user where id = 5 order by concat(col,col1) collate utf8_general_ci desc",
