@@ -67,7 +67,7 @@ func TestCommit(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want := []string{"insert into vitess_test(intval, floatval, charval, binval) values (4, null, null, null) /* _stream vitess_test (intval ) (4 ); */"}
+	want := []string{"insert into vitess_test(intval, floatval, charval, binval) values (4, null, null, null)"}
 	if !reflect.DeepEqual(tx.Queries, want) {
 		t.Errorf("queries: %v, want %v", tx.Queries, want)
 	}
@@ -163,7 +163,7 @@ func TestRollback(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want := []string{"insert into vitess_test(intval, floatval, charval, binval) values (4, null, null, null) /* _stream vitess_test (intval ) (4 ); */"}
+	want := []string{"insert into vitess_test(intval, floatval, charval, binval) values (4, null, null, null)"}
 	if !reflect.DeepEqual(tx.Queries, want) {
 		t.Errorf("queries: %v, want %v", tx.Queries, want)
 	}
@@ -227,7 +227,7 @@ func TestAutoCommit(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want := []string{"insert into vitess_test(intval, floatval, charval, binval) values (4, null, null, null) /* _stream vitess_test (intval ) (4 ); */"}
+	want := []string{"insert into vitess_test(intval, floatval, charval, binval) values (4, null, null, null)"}
 	// Sometimes, no queries will be returned by the querylog because reliability
 	// is not guaranteed. If so, just move on without verifying. The subsequent
 	// rowcount check will anyway verify that the insert succeeded.

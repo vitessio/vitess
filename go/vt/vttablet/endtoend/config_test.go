@@ -314,8 +314,7 @@ func TestMaxDMLRows(t *testing.T) {
 	want := "begin; " +
 		"select eid, id from vitess_a where eid = 3 limit 10001 for update; " +
 		"update vitess_a set foo = 'fghi' where " +
-		"(eid = 3 and id = 1) or (eid = 3 and id = 2) or (eid = 3 and id = 3) " +
-		"/* _stream vitess_a (eid id ) (3 1 ) (3 2 ) (3 3 ); */; " +
+		"(eid = 3 and id = 1) or (eid = 3 and id = 2) or (eid = 3 and id = 3); " +
 		"commit"
 	if queryInfo.RewrittenSQL() != want {
 		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
@@ -338,10 +337,8 @@ func TestMaxDMLRows(t *testing.T) {
 	want = "begin; " +
 		"select eid, id from vitess_a where eid = 3 limit 10001 for update; " +
 		"update vitess_a set eid = 2 where " +
-		"(eid = 3 and id = 1) or (eid = 3 and id = 2) " +
-		"/* _stream vitess_a (eid id ) (3 1 ) (3 2 ) (2 1 ) (2 2 ); */; " +
-		"update vitess_a set eid = 2 where (eid = 3 and id = 3) " +
-		"/* _stream vitess_a (eid id ) (3 3 ) (2 3 ); */; " +
+		"(eid = 3 and id = 1) or (eid = 3 and id = 2); " +
+		"update vitess_a set eid = 2 where (eid = 3 and id = 3); " +
 		"commit"
 	if queryInfo.RewrittenSQL() != want {
 		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
@@ -361,9 +358,8 @@ func TestMaxDMLRows(t *testing.T) {
 	want = "begin; " +
 		"select eid, id from vitess_a where eid = 2 limit 10001 for update; " +
 		"update vitess_a set foo = 'fghi' where (eid = 2 and id = 1) or " +
-		"(eid = 2 and id = 2) /* _stream vitess_a (eid id ) (2 1 ) (2 2 ); */; " +
-		"update vitess_a set foo = 'fghi' where (eid = 2 and id = 3) " +
-		"/* _stream vitess_a (eid id ) (2 3 ); */; " +
+		"(eid = 2 and id = 2); " +
+		"update vitess_a set foo = 'fghi' where (eid = 2 and id = 3); " +
 		"commit"
 	if queryInfo.RewrittenSQL() != want {
 		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
@@ -382,10 +378,8 @@ func TestMaxDMLRows(t *testing.T) {
 	}
 	want = "begin; " +
 		"select eid, id from vitess_a where eid = 2 limit 10001 for update; " +
-		"delete from vitess_a where (eid = 2 and id = 1) or (eid = 2 and id = 2) " +
-		"/* _stream vitess_a (eid id ) (2 1 ) (2 2 ); */; " +
-		"delete from vitess_a where (eid = 2 and id = 3) " +
-		"/* _stream vitess_a (eid id ) (2 3 ); */; " +
+		"delete from vitess_a where (eid = 2 and id = 1) or (eid = 2 and id = 2); " +
+		"delete from vitess_a where (eid = 2 and id = 3); " +
 		"commit"
 	if queryInfo.RewrittenSQL() != want {
 		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)

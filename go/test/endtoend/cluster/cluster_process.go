@@ -19,17 +19,22 @@ package cluster
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
 	"path"
+	"strconv"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
 )
 
 // DefaultCell : If no cell name is passed, then use following
-const DefaultCell = "zone1"
+const (
+	DefaultCell      = "zone1"
+	DefaultStartPort = 6700
+)
 
 var (
 	keepData = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
@@ -498,10 +503,31 @@ func (cluster *LocalProcessCluster) StartVtworker(cell string, extraArgs ...stri
 // GetAndReservePort gives port for required process
 func (cluster *LocalProcessCluster) GetAndReservePort() int {
 	if cluster.nextPortForProcess == 0 {
-		cluster.nextPortForProcess = getRandomNumber(20000, 15000)
+		cluster.nextPortForProcess = getPort()
 	}
 	cluster.nextPortForProcess = cluster.nextPortForProcess + 1
 	return cluster.nextPortForProcess
+}
+
+// getPort checks if we have recent used port info in /tmp/todaytime.port
+// If no, then use a random port and save that port + 200 in the above file
+// If yes, then return that port, and save port + 200 in the same file
+// here, assumptions is 200 ports might be consumed for all tests in a package
+func getPort() int {
+	tmpPortFileName := path.Join(os.TempDir(), time.Now().Format("01022006.port"))
+	var port int
+	if _, err := os.Stat(tmpPortFileName); os.IsNotExist(err) {
+		port = getVtStartPort()
+	} else {
+		result, _ := ioutil.ReadFile(tmpPortFileName)
+		cport, err := strconv.Atoi(string(result))
+		if err != nil || cport > 60000 || cport == 0 {
+			cport = getVtStartPort()
+		}
+		port = cport
+	}
+	ioutil.WriteFile(tmpPortFileName, []byte(fmt.Sprintf("%d", port+200)), 0666)
+	return port
 }
 
 // GetAndReserveTabletUID gives tablet uid
@@ -515,6 +541,17 @@ func (cluster *LocalProcessCluster) GetAndReserveTabletUID() int {
 
 func getRandomNumber(maxNumber int32, baseNumber int) int {
 	return int(rand.Int31n(maxNumber)) + baseNumber
+}
+
+func getVtStartPort() int {
+	osVtPort := os.Getenv("VTPORTSTART")
+	if osVtPort != "" {
+		cport, err := strconv.Atoi(string(osVtPort))
+		if err == nil {
+			return cport
+		}
+	}
+	return DefaultStartPort
 }
 
 // GetVttabletInstance creates a new vttablet object
@@ -534,6 +571,23 @@ func (cluster *LocalProcessCluster) GetVttabletInstance(tabletType string, UID i
 		Cell:      cell,
 		Alias:     fmt.Sprintf("%s-%010d", cell, UID),
 	}
+}
+
+// GetVttabletInstance creates a new vttablet object
+func (cluster *LocalProcessCluster) GetVtprocessInstanceFromVttablet(tablet *Vttablet, shardName string, ksName string) *VttabletProcess {
+	return VttabletProcessInstance(tablet.HTTPPort,
+		tablet.GrpcPort,
+		tablet.TabletUID,
+		cluster.Cell,
+		shardName,
+		ksName,
+		cluster.VtctldProcess.Port,
+		tablet.Type,
+		cluster.TopoProcess.Port,
+		cluster.Hostname,
+		cluster.TmpDirectory,
+		cluster.VtTabletExtraArgs,
+		cluster.EnableSemiSync)
 }
 
 // StartVttablet starts a new tablet

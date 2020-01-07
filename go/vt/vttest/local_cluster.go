@@ -80,12 +80,6 @@ type Config struct {
 	// Charset is the default charset used by MySQL
 	Charset string
 
-	// WebDir is the location of the vtcld web server files
-	WebDir string
-
-	// WebDir2 is the location of the vtcld2 web server files
-	WebDir2 string
-
 	// ExtraMyCnf are the extra .CNF files to be added to the MySQL config
 	ExtraMyCnf []string
 
@@ -97,7 +91,6 @@ type Config struct {
 	// MySQL protocol bind address.
 	// vtcombo will bind to this address when exposing the mysql protocol socket
 	MySQLBindHost string
-
 	// SnapshotFile is the path to the MySQL Snapshot that will be used to
 	// initialize the mysqld instance in the cluster. Note that some environments
 	// do not suppport initialization through snapshot files.

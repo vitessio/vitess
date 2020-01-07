@@ -13,7 +13,7 @@ from google.protobuf import symbol_database as _symbol_database
 _sym_db = _symbol_database.Default()
 
 
-import time_pb2 as time__pb2
+import vttime_pb2 as vttime__pb2
 
 
 DESCRIPTOR = _descriptor.FileDescriptor(
@@ -21,9 +21,9 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='logutil',
   syntax='proto3',
   serialized_options=_b('Z$vitess.io/vitess/go/vt/proto/logutil'),
-  serialized_pb=_b('\n\rlogutil.proto\x12\x07logutil\x1a\ntime.proto\"m\n\x05\x45vent\x12\x1a\n\x04time\x18\x01 \x01(\x0b\x32\x0c.vttime.Time\x12\x1d\n\x05level\x18\x02 \x01(\x0e\x32\x0e.logutil.Level\x12\x0c\n\x04\x66ile\x18\x03 \x01(\t\x12\x0c\n\x04line\x18\x04 \x01(\x03\x12\r\n\x05value\x18\x05 \x01(\t*6\n\x05Level\x12\x08\n\x04INFO\x10\x00\x12\x0b\n\x07WARNING\x10\x01\x12\t\n\x05\x45RROR\x10\x02\x12\x0b\n\x07\x43ONSOLE\x10\x03\x42&Z$vitess.io/vitess/go/vt/proto/logutilb\x06proto3')
+  serialized_pb=_b('\n\rlogutil.proto\x12\x07logutil\x1a\x0cvttime.proto\"m\n\x05\x45vent\x12\x1a\n\x04time\x18\x01 \x01(\x0b\x32\x0c.vttime.Time\x12\x1d\n\x05level\x18\x02 \x01(\x0e\x32\x0e.logutil.Level\x12\x0c\n\x04\x66ile\x18\x03 \x01(\t\x12\x0c\n\x04line\x18\x04 \x01(\x03\x12\r\n\x05value\x18\x05 \x01(\t*6\n\x05Level\x12\x08\n\x04INFO\x10\x00\x12\x0b\n\x07WARNING\x10\x01\x12\t\n\x05\x45RROR\x10\x02\x12\x0b\n\x07\x43ONSOLE\x10\x03\x42&Z$vitess.io/vitess/go/vt/proto/logutilb\x06proto3')
   ,
-  dependencies=[time__pb2.DESCRIPTOR,])
+  dependencies=[vttime__pb2.DESCRIPTOR,])
 
 _LEVEL = _descriptor.EnumDescriptor(
   name='Level',
@@ -50,8 +50,8 @@ _LEVEL = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=149,
-  serialized_end=203,
+  serialized_start=151,
+  serialized_end=205,
 )
 _sym_db.RegisterEnumDescriptor(_LEVEL)
 
@@ -117,11 +117,11 @@ _EVENT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=38,
-  serialized_end=147,
+  serialized_start=40,
+  serialized_end=149,
 )
 
-_EVENT.fields_by_name['time'].message_type = time__pb2._TIME
+_EVENT.fields_by_name['time'].message_type = vttime__pb2._TIME
 _EVENT.fields_by_name['level'].enum_type = _LEVEL
 DESCRIPTOR.message_types_by_name['Event'] = _EVENT
 DESCRIPTOR.enum_types_by_name['Level'] = _LEVEL

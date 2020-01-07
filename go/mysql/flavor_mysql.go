@@ -45,6 +45,14 @@ func (mysqlFlavor) startSlaveCommand() string {
 	return "START SLAVE"
 }
 
+func (mysqlFlavor) restartSlaveCommands() []string {
+	return []string{
+		"STOP SLAVE",
+		"RESET SLAVE",
+		"START SLAVE",
+	}
+}
+
 func (mysqlFlavor) startSlaveUntilAfter(pos Position) string {
 	return fmt.Sprintf("START SLAVE UNTIL SQL_AFTER_GTIDS = '%s'", pos)
 }

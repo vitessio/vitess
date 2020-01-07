@@ -26,7 +26,7 @@ option java_package="io.vitess.proto";
 
 package topodata;
 
-import "time.proto";
+import "vttime.proto";
 
 // KeyRange describes a range of sharding keys, when range-based
 // sharding is used.

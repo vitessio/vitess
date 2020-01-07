@@ -139,12 +139,6 @@ func parseFlags() (config vttest.Config, env vttest.Environment, err error) {
 			" if --initialize_with_random_data is true. Only applies to fields"+
 			" that can contain NULL values.")
 
-	flag.StringVar(&config.WebDir, "web_dir", "",
-		"location of the vtctld web server files.")
-
-	flag.StringVar(&config.WebDir2, "web_dir2", "",
-		"location of the vtctld2 web server files.")
-
 	flag.StringVar(&config.MySQLBindHost, "mysql_bind_host", "localhost",
 		"which host to bind vtgate mysql listener to")
 

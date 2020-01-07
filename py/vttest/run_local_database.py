@@ -107,8 +107,6 @@ def main(cmdline_options):
       cmdline_options.schema_dir,
       cmdline_options.mysql_only,
       init_data_opts,
-      web_dir=cmdline_options.web_dir,
-      web_dir2=cmdline_options.web_dir2,
       default_schema_dir=cmdline_options.default_schema_dir,
       extra_my_cnf=extra_my_cnf,
       charset=cmdline_options.charset,
@@ -181,12 +179,6 @@ if __name__ == '__main__':
       help='The probability to initialize a field with "NULL" '
       ' if --initialize_with_random_data is true. Only applies to fields'
       ' that can contain NULL values.')
-  parser.add_option(
-      '-w', '--web_dir',
-      help='location of the vtctld web server files.')
-  parser.add_option(
-      '--web_dir2',
-      help='location of the vtctld2 web server files.')
   parser.add_option(
       '-f', '--extra_my_cnf',
       help='extra files to add to the config, separated by ":"')

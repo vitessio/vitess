@@ -21,7 +21,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/context"
-	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/event"
@@ -29,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/events"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // This file contains keyspace utility functions
@@ -62,25 +62,25 @@ func (ki *KeyspaceInfo) CheckServedFromMigration(tabletType topodatapb.TabletTyp
 	// master is a special case with a few extra checks
 	if tabletType == topodatapb.TabletType_MASTER {
 		if !remove {
-			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot add master back to %v", ki.keyspace)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot add master back to %v", ki.keyspace)
 		}
 		if len(cells) > 0 {
-			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot migrate only some cells for master removal in keyspace %v", ki.keyspace)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot migrate only some cells for master removal in keyspace %v", ki.keyspace)
 		}
 		if len(ki.ServedFroms) > 1 {
-			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot migrate master into %v until everything else is migrated", ki.keyspace)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot migrate master into %v until everything else is migrated", ki.keyspace)
 		}
 	}
 
 	// we can't remove a type we don't have
 	if ki.GetServedFrom(tabletType) == nil && remove {
-		return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "supplied type cannot be migrated")
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "supplied type cannot be migrated")
 	}
 
 	// check the keyspace is consistent in any case
 	for _, ksf := range ki.ServedFroms {
 		if ksf.Keyspace != keyspace {
-			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "inconsistent keyspace specified in migration: %v != %v for type %v", keyspace, ksf.Keyspace, ksf.TabletType)
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "inconsistent keyspace specified in migration: %v != %v for type %v", keyspace, ksf.Keyspace, ksf.TabletType)
 		}
 	}
 
@@ -129,7 +129,7 @@ func (ki *KeyspaceInfo) UpdateServedFromMap(tabletType topodatapb.TabletType, ce
 		}
 	} else {
 		if ksf.Keyspace != keyspace {
-			return vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "cannot UpdateServedFromMap on existing record for keyspace %v, different keyspace: %v != %v", ki.keyspace, ksf.Keyspace, keyspace)
+			return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cannot UpdateServedFromMap on existing record for keyspace %v, different keyspace: %v != %v", ki.keyspace, ksf.Keyspace, keyspace)
 		}
 		ksf.Cells = addCells(ksf.Cells, cells)
 	}
@@ -240,6 +240,30 @@ func (ts *Server) FindAllShardsInKeyspace(ctx context.Context, keyspace string) 
 	return result, nil
 }
 
+// GetServingShards returns all shards where the master is serving.
+func (ts *Server) GetServingShards(ctx context.Context, keyspace string) ([]*ShardInfo, error) {
+	shards, err := ts.GetShardNames(ctx, keyspace)
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to get list of shards for keyspace '%v'", keyspace)
+	}
+
+	result := make([]*ShardInfo, 0, len(shards))
+	for _, shard := range shards {
+		si, err := ts.GetShard(ctx, keyspace, shard)
+		if err != nil {
+			return nil, vterrors.Wrapf(err, "GetShard(%v, %v) failed", keyspace, shard)
+		}
+		if !si.IsMasterServing {
+			continue
+		}
+		result = append(result, si)
+	}
+	if len(result) == 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%v has no serving shards", keyspace)
+	}
+	return result, nil
+}
+
 // GetOnlyShard returns the single ShardInfo of an unsharded keyspace.
 func (ts *Server) GetOnlyShard(ctx context.Context, keyspace string) (*ShardInfo, error) {
 	allShards, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
@@ -251,7 +275,7 @@ func (ts *Server) GetOnlyShard(ctx context.Context, keyspace string) (*ShardInfo
 			return s, nil
 		}
 	}
-	return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "keyspace %s must have one and only one shard: %v", keyspace, allShards)
+	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace %s must have one and only one shard: %v", keyspace, allShards)
 }
 
 // DeleteKeyspace wraps the underlying Conn.Delete
