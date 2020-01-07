@@ -30,33 +30,37 @@ import (
 )
 
 // buildUpdatePlan builds the instructions for an UPDATE statement.
-func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Update, error) {
+func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (_ *engine.Update, needsLastInsertID bool, needDbName bool, _ error) {
 	eupd := &engine.Update{
 		ChangedVindexValues: make(map[string][]sqltypes.PlanValue),
 	}
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(upd)))
+	err := rewriteExpressions(pb, upd.Exprs)
+	if err != nil {
+		return nil, false, false, err
+	}
 	ro, err := pb.processDMLTable(upd.TableExprs)
 	if err != nil {
-		return nil, err
+		return nil, false, false, err
 	}
 	eupd.Keyspace = ro.eroute.Keyspace
 	if !eupd.Keyspace.Sharded {
 		// We only validate non-table subexpressions because the previous analysis has already validated them.
 		if !pb.finalizeUnshardedDMLSubqueries(upd.Exprs, upd.Where, upd.OrderBy, upd.Limit) {
-			return nil, errors.New("unsupported: sharded subqueries in DML")
+			return nil, false, false, errors.New("unsupported: sharded subqueries in DML")
 		}
 		eupd.Opcode = engine.UpdateUnsharded
 		// Generate query after all the analysis. Otherwise table name substitutions for
 		// routed tables won't happen.
 		eupd.Query = generateQuery(upd)
-		return eupd, nil
+		return eupd, pb.needsLastInsertID, pb.needsDbName, nil
 	}
 
 	if hasSubquery(upd) {
-		return nil, errors.New("unsupported: subqueries in sharded DML")
+		return nil, false, false, errors.New("unsupported: subqueries in sharded DML")
 	}
 	if len(pb.st.tables) != 1 {
-		return nil, errors.New("unsupported: multi-table update statement in sharded keyspace")
+		return nil, false, false, errors.New("unsupported: multi-table update statement in sharded keyspace")
 	}
 
 	// Generate query after all the analysis. Otherwise table name substitutions for
@@ -71,16 +75,16 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 	eupd.QueryTimeout = queryTimeout(directives)
 	eupd.Table = ro.vschemaTable
 	if eupd.Table == nil {
-		return nil, errors.New("internal error: table.vindexTable is mysteriously nil")
+		return nil, false, false, errors.New("internal error: table.vindexTable is mysteriously nil")
 	}
 
 	if ro.eroute.TargetDestination != nil {
 		if ro.eroute.TargetTabletType != topodatapb.TabletType_MASTER {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: UPDATE statement with a replica target")
+			return nil, false, false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: UPDATE statement with a replica target")
 		}
 		eupd.Opcode = engine.UpdateByDestination
 		eupd.TargetDestination = ro.eroute.TargetDestination
-		return eupd, nil
+		return eupd, pb.needsLastInsertID, pb.needsDbName, nil
 	}
 
 	eupd.Vindex, eupd.Values, err = getDMLRouting(upd.Where, eupd.Table)
@@ -92,20 +96,31 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 
 	if eupd.Opcode == engine.UpdateScatter {
 		if len(eupd.Table.Owned) != 0 {
-			return eupd, errors.New("unsupported: multi shard update on a table with owned lookup vindexes")
+			return eupd, false, false, errors.New("unsupported: multi shard update on a table with owned lookup vindexes")
 		}
 		if upd.Limit != nil {
-			return eupd, errors.New("unsupported: multi shard update with limit")
+			return eupd, false, false, errors.New("unsupported: multi shard update with limit")
 		}
 	}
 
 	if eupd.ChangedVindexValues, err = buildChangedVindexesValues(eupd, upd, eupd.Table.ColumnVindexes); err != nil {
-		return nil, err
+		return nil, false, false, err
 	}
 	if len(eupd.ChangedVindexValues) != 0 {
 		eupd.OwnedVindexQuery = generateUpdateSubquery(upd, eupd.Table)
 	}
-	return eupd, nil
+	return eupd, pb.needsLastInsertID, pb.needsDbName, nil
+}
+
+func rewriteExpressions(pb *primitiveBuilder, exprs sqlparser.UpdateExprs) error {
+	for _, e := range exprs {
+		rewritten, err := RewriteAndUpdateBuilder(e.Expr, pb)
+		if err != nil {
+			return err
+		}
+		e.Expr = rewritten
+	}
+	return nil
 }
 
 // buildChangedVindexesValues adds to the plan all the lookup vindexes that are changing.

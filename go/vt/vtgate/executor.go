@@ -187,7 +187,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 
 	switch stmtType {
 	case sqlparser.StmtSelect:
-		return e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats)
+		return e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats, stmtType)
 	case sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
 		safeSession := safeSession
 
@@ -212,7 +212,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		// at the beginning, but never after.
 		safeSession.SetAutocommittable(mustCommit)
 
-		qr, err := e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats)
+		qr, err := e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats, stmtType)
 		if err != nil {
 			return nil, err
 		}
@@ -247,7 +247,7 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }
 
-func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destKeyspace string, destTabletType topodatapb.TabletType, dest key.Destination, logStats *LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destKeyspace string, destTabletType topodatapb.TabletType, dest key.Destination, logStats *LogStats, stmtType sqlparser.StatementType) (*sqltypes.Result, error) {
 	if dest != nil {
 		// V1 mode or V3 mode with a forced shard or range target
 		// TODO(sougou): change this flow to go through V3 functions
@@ -306,8 +306,19 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 		return nil, err
 	}
 
-	qr, err := plan.Instructions.Execute(vcursor, bindVars, true)
+	if plan.NeedsLastInsertID {
+		bindVars[engine.LastInsertIDName] = sqltypes.Uint64BindVariable(safeSession.GetLastInsertId())
+	}
+	if plan.NeedsDatabaseName {
+		keyspace, _, _, _ := e.ParseDestinationTarget(safeSession.TargetString)
+		if keyspace == "" {
+			bindVars[engine.DBVarName] = sqltypes.NullBindVariable
+		} else {
+			bindVars[engine.DBVarName] = sqltypes.StringBindVariable(keyspace)
+		}
+	}
 
+	qr, err := plan.Instructions.Execute(vcursor, bindVars, true)
 	logStats.ExecuteTime = time.Since(execStart)
 
 	e.updateQueryCounts(plan.Instructions.RouteType(), plan.Instructions.GetKeyspaceName(), plan.Instructions.GetTableName(), int64(logStats.ShardQueries))
@@ -318,6 +329,9 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 		errCount = 1
 	} else {
 		logStats.RowsAffected = qr.RowsAffected
+		if qr != nil && stmtType == sqlparser.StmtInsert {
+			safeSession.LastInsertId = qr.InsertID
+		}
 	}
 
 	// Check if there was partial DML execution. If so, rollback the transaction.
