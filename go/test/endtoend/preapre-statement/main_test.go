@@ -28,22 +28,14 @@ import (
 )
 
 var (
-	clusterInstance *cluster.LocalProcessCluster
-	vtgateHost      string
-	vtgatePort      uint
-	sqlDebug        = false
-	hostname        = "localhost"
-	keyspaceName    = "test_keyspace"
-	dbInfo          = DBInfo{
-		KeyspaceName: keyspaceName,
-		Username:     "testuser1",
-		Password:     "testpassword1",
-		Params: []string{
-			"charset=utf8",
-			"parseTime=True",
-			"loc=Local",
-		},
-	}
+	clusterInstance       *cluster.LocalProcessCluster
+	vtgateHost            string
+	vtgatePort            uint
+	dbInfo                DBInfo
+	sqlDebug              = false
+	hostname              = "localhost"
+	keyspaceName          = "test_keyspace"
+	testingID             = 1
 	tableName             = "vt_prepare_stmt_test"
 	cell                  = "zone1"
 	tableACLConfig        = "/table_acl_config.json"
@@ -133,44 +125,40 @@ func TestMain(m *testing.M) {
 
 		// create acl config
 		ACLConfig := `{
-					"table_groups": [
-						{
-						   "table_names_or_prefixes": ["vt_prepare_stmt_test", "dual"],
-						   "readers": ["vtgate client 1"],
-						   "writers": ["vtgate client 1"],
-						   "admins": ["vtgate client 1"]
-						}
-					]
-			  }`
+	"table_groups": [
+		{
+			"table_names_or_prefixes": ["vt_prepare_stmt_test", "dual"],
+			"readers": ["vtgate client 1"],
+			"writers": ["vtgate client 1"],
+			"admins": ["vtgate client 1"]
+		}
+	]
+}`
 		if err := createConfig(tableACLConfig, ACLConfig); err != nil {
 			return 1, err
 		}
 
 		// create auth server config
 		SQLConfig := `{
-					"testuser1": {
-					  "Password": "testpassword1",
-					  "UserData": "vtgate client 1"
-					},
-					"testuser2": {
-					  "Password": "testpassword2",
-					  "UserData": "vtgate client 2"
-					}
-			  }`
+	"testuser1": {
+		"Password": "testpassword1",
+		"UserData": "vtgate client 1"
+	},
+	"testuser2": {
+		"Password": "testpassword2",
+		"UserData": "vtgate client 2"
+	}
+}`
 		if err := createConfig(mysqlAuthServerStatic, SQLConfig); err != nil {
 			return 1, err
 		}
 
 		// add extra arguments
 		clusterInstance.VtGateExtraArgs = []string{
-			"-mysql_auth_server_impl",
-			"static",
-			"-mysql_server_query_timeout",
-			"1s",
-			"-mysql_auth_server_static_file",
-			clusterInstance.TmpDirectory + mysqlAuthServerStatic,
-			"-mysql_server_version",
-			"8.0.16-7",
+			"-mysql_auth_server_impl", "static",
+			"-mysql_server_query_timeout", "1s",
+			"-mysql_auth_server_static_file", clusterInstance.TmpDirectory + mysqlAuthServerStatic,
+			"-mysql_server_version", "8.0.16-7",
 		}
 
 		// Start keyspace

@@ -23,9 +23,17 @@ import (
 	"testing"
 
 	"github.com/go-sql-driver/mysql"
+	"github.com/golang/glog"
 	"github.com/jinzhu/gorm"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+// tableData is tmp structure to select data of test table using gorm.
+type tableData struct {
+	Msg     string
+	Data    string
+	TextCol string
+}
 
 // DBInfo information about the database.
 type DBInfo struct {
@@ -35,6 +43,17 @@ type DBInfo struct {
 	Port         uint
 	KeyspaceName string
 	Params       []string
+}
+
+func init() {
+	dbInfo.KeyspaceName = keyspaceName
+	dbInfo.Username = "testuser1"
+	dbInfo.Password = "testpassword1"
+	dbInfo.Params = []string{
+		"charset=utf8",
+		"parseTime=True",
+		"loc=Local",
+	}
 }
 
 // ConnectionString generates the connection string using dbinfo.
@@ -73,22 +92,21 @@ func GetORM(t *testing.T, params ...string) *gorm.DB {
 // GetORMByConnectionString connect database using connection string.
 func GetORMByConnectionString(t *testing.T, str string) *gorm.DB {
 	dbo, err := gorm.Open("mysql", str)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	return dbo
 }
 
 // execWithIgnore executes the prepared query, and ignore the given error codes.
 func execWithIgnore(t *testing.T, dbo *gorm.DB, errorCodes []uint16, stmt string, params ...interface{}) {
 	if err := dbo.Exec(stmt, params...).Error; err != nil {
-		assert.Contains(t, errorCodes, err.(*mysql.MySQLError).Number)
-
-		fmt.Printf("error ignored, %v", err)
+		require.Contains(t, errorCodes, err.(*mysql.MySQLError).Number)
+		glog.Info("error_ignored", err)
 	}
 }
 
 // exec executes the query using the params.
 func exec(t *testing.T, dbo *gorm.DB, stmt string, params ...interface{}) {
-	assert.Nil(t, execErr(dbo, stmt, params...))
+	require.Nil(t, execErr(dbo, stmt, params...))
 }
 
 // execErr execute the query and return error.
@@ -103,6 +121,6 @@ func execErr(dbo *gorm.DB, stmt string, params ...interface{}) *mysql.MySQLError
 func selectWhere(t *testing.T, dbo *gorm.DB, where string, params ...interface{}) []tableData {
 	var out []tableData
 	err := dbo.Table(tableName).Where(where, params...).Scan(&out).Error
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	return out
 }
