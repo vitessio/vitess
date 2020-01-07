@@ -26,22 +26,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// tableData is tmp structure to select data of test table using gorm.
-type tableData struct {
-	Msg     string
-	Data    string
-	TextCol string
-}
-
-// testingID is id on which we perform the update and delete testing.
-const testingID = 1
-
 // TestSelect simple select the data without any condition.
 func TestSelect(t *testing.T) {
 	dbo := GetORM(t)
 	defer dbo.Close()
-	data := selectWhere(t, dbo, "")
-	fmt.Println(data)
+	selectWhere(t, dbo, "")
 }
 
 // TestInsertUpdateDelete validate all insert, update and
@@ -114,17 +103,6 @@ func TestAutoIncColumns(t *testing.T) {
 	}
 
 	exec(t, dbo, insertStmt, insertValue...)
-
-	// data := selectWhere(t, " id = last_inserted_id()")
-	// if len(data) != 1 {
-	// 	t.Fatalf("expected 1 got %d", len(data))
-	// }
-
-	// // validate value of msg column in data
-	// expectedMsg := "21"
-	// if d := data[0]; d.Msg != expectedMsg {
-	// 	t.Fatalf("Received incorrect value, wanted: %s, got %s", expectedMsg, d.Msg)
-	// }
 }
 
 // deleteRecord test deletion opeation corresponds to the testingID
