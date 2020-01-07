@@ -47,8 +47,8 @@ func RewriteAndUpdateBuilder(in sqlparser.Expr, pb *primitiveBuilder) (sqlparser
 }
 
 // Rewrite will rewrite an expression. Currently it does the following rewrites:
-//  - `last_insert_id()` => `:vtlastid`
-//  - `database()`       => `:vtdbname`
+//  - `last_insert_id()` => `:__lastInsertId`
+//  - `database()`       => `:__vtdbname`
 func Rewrite(in sqlparser.Expr) (*RewriteResult, error) {
 	rewrites := make(map[*sqlparser.FuncExpr]sqlparser.Expr)
 	liid := false
