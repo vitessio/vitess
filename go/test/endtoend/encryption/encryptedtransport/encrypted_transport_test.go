@@ -106,17 +106,13 @@ func TestSecureTransport(t *testing.T) {
 	masterTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[0]
 	replicaTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[1]
 
-	err = clusterInstance.VtctlclientProcess.InitTablet(&masterTablet, clusterInstance.Cell, keyspace, hostname, shardName)
-	assert.Nil(t, err)
-
-	// create database so vttablet can start behaving normally
-	err = masterTablet.VttabletProcess.CreateDB(keyspace)
-	assert.Nil(t, err)
-
-	err = clusterInstance.VtctlclientProcess.InitTablet(&replicaTablet, clusterInstance.Cell, keyspace, hostname, shardName)
-	assert.Nil(t, err)
-	err = replicaTablet.VttabletProcess.CreateDB(keyspace)
-	assert.Nil(t, err)
+	for _, tablet := range []cluster.Vttablet{masterTablet, replicaTablet} {
+		err = clusterInstance.VtctlclientProcess.InitTablet(&tablet, clusterInstance.Cell, keyspace, hostname, shardName)
+		assert.Nil(t, err)
+		// create database so vttablet can start behaving normally
+		err = tablet.VttabletProcess.CreateDB(keyspace)
+		assert.Nil(t, err)
+	}
 
 	// creating table_acl_config.json file
 	tableACLConfigJSON := path.Join(certDirectory, "table_acl_config.json")
@@ -131,8 +127,8 @@ func TestSecureTransport(t *testing.T) {
 		"writers": ["vtgate client 1"],
 		"admins": ["vtgate client 1"]
 	}
-	]
-	}`)
+  ]
+}`)
 	assert.Nil(t, err)
 	err = f.Close()
 	assert.Nil(t, err)
@@ -152,12 +148,12 @@ func TestSecureTransport(t *testing.T) {
 
 	// Reparenting
 	vtctlClientArgs = append(vtctlClientTmArgs, "InitShardMaster", "-force", "test_keyspace/0", masterTablet.Alias)
-	_, err = clusterInstance.VtctlProcess.ExecuteCommandWithOutput(vtctlClientArgs...)
+	err = clusterInstance.VtctlProcess.ExecuteCommand(vtctlClientArgs...)
 	assert.Nil(t, err)
 
 	// Apply schema
 	var vtctlApplySchemaArgs = append(vtctlClientTmArgs, "ApplySchema", "-sql", createVtInsertTest, "test_keyspace")
-	_, err = clusterInstance.VtctlProcess.ExecuteCommandWithOutput(vtctlApplySchemaArgs...)
+	err = clusterInstance.VtctlProcess.ExecuteCommand(vtctlApplySchemaArgs...)
 	assert.Nil(t, err)
 
 	for _, tablet := range []cluster.Vttablet{masterTablet, replicaTablet} {
@@ -300,8 +296,7 @@ func clusterSetUp(t *testing.T) (int, error) {
 		}
 		for i := 0; i < 2; i++ {
 			// instantiate vttablet object with reserved ports
-			tabletUID := clusterInstance.GetAndReserveTabletUID()
-			tablet := clusterInstance.GetVttabletInstance("replica", tabletUID, cell)
+			tablet := clusterInstance.GetVttabletInstance("replica", 0, cell)
 
 			// Start Mysqlctl process
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
