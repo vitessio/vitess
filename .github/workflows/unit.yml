@@ -12,7 +12,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v1
       with:
-        go-version: 1.12
+        go-version: 1.13
 
     - name: Check out code
       uses: actions/checkout@v2
@@ -28,8 +28,6 @@ jobs:
           sudo apt-get remove -y mysql-server mysql-client
           
           if [ ${{matrix.name}} = "percona56" ]; then
-            # Currently this fails on vt/vttablet/tabletserver/vstreamer
-            # Once we fix issue #5571 we can enable it.
             sudo rm -rf /var/lib/mysql
             wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
             sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
@@ -44,16 +42,12 @@ jobs:
           elif [ ${{matrix.name}} = "mariadb101" ]; then
             sudo apt install -y mariadb-server mariadb-client
           elif [ ${{matrix.name}} = "mariadb102" ]; then
-            # Currently this fails on vitess.io/vitess/go/mysql
-            # Once we fix issue #5569 we can enable it.
             sudo apt-get install -y software-properties-common
             sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
             sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] http://nyc2.mirrors.digitalocean.com/mariadb/repo/10.2/ubuntu bionic main'
             sudo apt update
             sudo DEBIAN_FRONTEND="noninteractive" apt install -y mariadb-server
           elif [ ${{matrix.name}} = "mariadb103" ]; then
-            # Currently this fails on vitess.io/vitess/go/mysql
-            # Once we fix issue #5569 we can enable it.
             sudo apt-get install -y software-properties-common
             sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
             sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] http://nyc2.mirrors.digitalocean.com/mariadb/repo/10.3/ubuntu bionic main'
@@ -62,7 +56,7 @@ jobs:
           fi
         fi
 
-        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-8-jdk
+        sudo apt-get install -y make unzip g++ curl git wget ant openjdk-8-jdk eatmydata
         sudo service mysql stop
         sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
@@ -80,4 +74,4 @@ jobs:
 
     - name: unit
       run: |
-        make test
+        eatmydata -- make test

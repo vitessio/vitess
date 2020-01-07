@@ -43,14 +43,12 @@ type columnVindex struct {
 
 func TestRunsVschemaMigrations(t *testing.T) {
 	schemaDirArg := "-schema_dir=data/schema"
-	webDirArg := "-web_dir=web/vtctld/app"
-	webDir2Arg := "-web_dir2=web/vtctld2/app"
 	tabletHostname := "-tablet_hostname=localhost"
 	keyspaceArg := "-keyspaces=test_keyspace,app_customer"
 	numShardsArg := "-num_shards=2,2"
 	vschemaDDLAuthorizedUsers := "-vschema_ddl_authorized_users=%"
 
-	os.Args = append(os.Args, []string{schemaDirArg, keyspaceArg, numShardsArg, webDirArg, webDir2Arg, tabletHostname, vschemaDDLAuthorizedUsers}...)
+	os.Args = append(os.Args, []string{schemaDirArg, keyspaceArg, numShardsArg, tabletHostname, vschemaDDLAuthorizedUsers}...)
 
 	cluster := runCluster()
 	defer cluster.TearDown()

@@ -76,6 +76,10 @@ func (flv *filePosFlavor) startSlaveCommand() string {
 	return "unsupported"
 }
 
+func (flv *filePosFlavor) restartSlaveCommands() []string {
+	return []string{"unsupported"}
+}
+
 func (flv *filePosFlavor) stopSlaveCommand() string {
 	return "unsupported"
 }
