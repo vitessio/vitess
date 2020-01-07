@@ -24,6 +24,8 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/sqltypes"
@@ -35,6 +37,27 @@ import (
 	"vitess.io/vitess/go/vt/proto/vschema"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
+
+// cheapVindex is a Functional, Unique Vindex.
+type cheapVindex struct {
+	name   string
+	Params map[string]string
+}
+
+func (v *cheapVindex) String() string                                           { return v.name }
+func (*cheapVindex) Cost() int                                                  { return 0 }
+func (*cheapVindex) IsUnique() bool                                             { return true }
+func (*cheapVindex) NeedsVCursor() bool                                         { return false }
+func (*cheapVindex) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error) { return []bool{}, nil }
+func (*cheapVindex) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+	return nil, nil
+}
+
+func NewCheapVindex(name string, params map[string]string) (Vindex, error) {
+	return &cheapVindex{name: name, Params: params}, nil
+}
+
+var _ SingleColumn = (*stFU)(nil)
 
 // stFU is a Functional, Unique Vindex.
 type stFU struct {
@@ -55,6 +78,25 @@ func NewSTFU(name string, params map[string]string) (Vindex, error) {
 
 var _ SingleColumn = (*stFU)(nil)
 
+// stFN is a Functional, NonUnique Vindex.
+type stFN struct {
+	name   string
+	Params map[string]string
+}
+
+func (v *stFN) String() string                                                    { return v.name }
+func (*stFN) Cost() int                                                           { return 1 }
+func (*stFN) IsUnique() bool                                                      { return false }
+func (*stFN) NeedsVCursor() bool                                                  { return false }
+func (*stFN) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
+func (*stFN) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
+
+func NewSTFN(name string, params map[string]string) (Vindex, error) {
+	return &stFN{name: name, Params: params}, nil
+}
+
+var _ SingleColumn = (*stFN)(nil)
+
 // stLN is a Lookup, NonUnique Vindex.
 type stLN struct {
 	name   string
@@ -64,7 +106,7 @@ type stLN struct {
 func (v *stLN) String() string                                                    { return v.name }
 func (*stLN) Cost() int                                                           { return 0 }
 func (*stLN) IsUnique() bool                                                      { return false }
-func (*stLN) NeedsVCursor() bool                                                  { return false }
+func (*stLN) NeedsVCursor() bool                                                  { return true }
 func (*stLN) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
 func (*stLN) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
 func (*stLN) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error            { return nil }
@@ -87,7 +129,7 @@ type stLU struct {
 func (v *stLU) String() string                                                    { return v.name }
 func (*stLU) Cost() int                                                           { return 2 }
 func (*stLU) IsUnique() bool                                                      { return true }
-func (*stLU) NeedsVCursor() bool                                                  { return false }
+func (*stLU) NeedsVCursor() bool                                                  { return true }
 func (*stLU) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
 func (*stLU) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
 func (*stLU) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error            { return nil }
@@ -113,7 +155,7 @@ type stLO struct {
 func (v *stLO) String() string                                                    { return v.name }
 func (*stLO) Cost() int                                                           { return 2 }
 func (*stLO) IsUnique() bool                                                      { return true }
-func (*stLO) NeedsVCursor() bool                                                  { return false }
+func (*stLO) NeedsVCursor() bool                                                  { return true }
 func (*stLO) Verify(VCursor, []sqltypes.Value, [][]byte) ([]bool, error)          { return []bool{}, nil }
 func (*stLO) Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) { return nil, nil }
 func (*stLO) Create(VCursor, [][]sqltypes.Value, [][]byte, bool) error            { return nil }
@@ -134,7 +176,9 @@ var _ SingleColumn = (*stLO)(nil)
 var _ Lookup = (*stLO)(nil)
 
 func init() {
+	Register("cheap", NewCheapVindex)
 	Register("stfu", NewSTFU)
+	Register("stfn", NewSTFN)
 	Register("stln", NewSTLN)
 	Register("stlu", NewSTLU)
 	Register("stlo", NewSTLO)
@@ -773,6 +817,107 @@ func TestVSchemaRoutingRules(t *testing.T) {
 		gotb, _ := json.Marshal(got)
 		wantb, _ := json.Marshal(want)
 		t.Errorf("BuildVSchema:\n%s, want\n%s", gotb, wantb)
+	}
+}
+
+func TestFindBestColVindex(t *testing.T) {
+	testSrvVSchema := &vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"ks1": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"stfu": {
+						Type: "stfu",
+					},
+					"stfn": {
+						Type: "stfn",
+					},
+					"stlu": {
+						Type: "stlu",
+					},
+					"stln": {
+						Type: "stln",
+					},
+					"cheap": {
+						Type: "cheap",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:    "stfu",
+							Columns: []string{"id"},
+						}},
+					},
+					"nogoodvindex": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:    "stlu",
+							Columns: []string{"id"},
+						}},
+					},
+					"thirdvindexgood": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:    "stlu",
+							Columns: []string{"id"},
+						}, {
+							Name:    "stfn",
+							Columns: []string{"id"},
+						}, {
+							Name:    "stfu",
+							Columns: []string{"id"},
+						}},
+					},
+					"cheapest": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:    "stfu",
+							Columns: []string{"id"},
+						}, {
+							Name:    "cheap",
+							Columns: []string{"id"},
+						}},
+					},
+				},
+			},
+			"unsharded": {
+				Tables: map[string]*vschemapb.Table{
+					"t2": {},
+				},
+			},
+		},
+	}
+	vschema, err := BuildVSchema(testSrvVSchema)
+	require.NoError(t, err)
+
+	testcases := []struct {
+		tablename  string
+		vindexname string
+		err        string
+	}{{
+		tablename:  "t1",
+		vindexname: "stfu",
+	}, {
+		tablename: "nogoodvindex",
+		err:       "could not find a vindex to compute keyspace id for table nogoodvindex",
+	}, {
+		tablename:  "thirdvindexgood",
+		vindexname: "stfu",
+	}, {
+		tablename:  "cheapest",
+		vindexname: "cheap",
+	}, {
+		tablename: "t2",
+		err:       "table t2 has no vindex",
+	}}
+	for _, tcase := range testcases {
+		table, err := vschema.FindTable("", tcase.tablename)
+		require.NoError(t, err)
+		cv, err := FindBestColVindex(table)
+		if err != nil {
+			assert.EqualError(t, err, tcase.err, tcase.tablename)
+			continue
+		}
+		assert.NoError(t, err, tcase.tablename)
+		assert.Equal(t, cv.Name, tcase.vindexname, tcase.tablename)
 	}
 }
 

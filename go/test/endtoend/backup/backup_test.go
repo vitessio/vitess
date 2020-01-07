@@ -130,7 +130,7 @@ func TestMasterReplicaSameBackup(t *testing.T) {
 	verifyRestoreTablet(t, replica1, "SERVING")
 
 	// wait for replica1 to catch up.
-	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 3)
+	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 3)
 
 	// This is to test that replicationPosition is processed correctly
 	// while doing backup/restore after a reparent.
@@ -147,7 +147,7 @@ func TestMasterReplicaSameBackup(t *testing.T) {
 	// Force replica1 to restore from backup.
 	verifyRestoreTablet(t, replica1, "SERVING")
 
-	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 4)
+	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 4)
 	replica2.VttabletProcess.TearDown()
 	restartMasterReplica(t)
 }
