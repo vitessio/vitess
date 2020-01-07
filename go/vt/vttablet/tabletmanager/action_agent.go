@@ -183,6 +183,10 @@ type ActionAgent struct {
 	// Call agent.notifyShardSync() instead of sending directly to this channel.
 	_shardSyncChan chan struct{}
 
+	// _shardSyncDone is a channel for waiting until the shard sync goroutine
+	// has really finished after _shardSyncCancel was called.
+	_shardSyncDone chan struct{}
+
 	// _shardSyncCancel is the function to stop the background shard sync goroutine.
 	_shardSyncCancel context.CancelFunc
 
@@ -732,6 +736,11 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 // then prune the tablet topology entry of all post-init fields. This prevents
 // stale identifiers from hanging around in topology.
 func (agent *ActionAgent) Close() {
+	// Stop the shard sync loop and wait for it to exit. We do this in Close()
+	// rather than registering it as an OnTerm hook so the shard sync loop keeps
+	// running during lame duck.
+	agent.stopShardSync()
+
 	// cleanup initialized fields in the tablet entry
 	f := func(tablet *topodatapb.Tablet) error {
 		if err := topotools.CheckOwnership(agent.initialTablet, tablet); err != nil {
@@ -752,11 +761,16 @@ func (agent *ActionAgent) Close() {
 // while taking lameduck into account. However, this may be useful for tests,
 // when you want to clean up an agent immediately.
 func (agent *ActionAgent) Stop() {
+	// Stop the shard sync loop and wait for it to exit. This needs to be done
+	// here in addition to in Close() because tests do not call Close().
 	agent.stopShardSync()
+
 	if agent.UpdateStream != nil {
 		agent.UpdateStream.Disable()
 	}
+
 	agent.VREngine.Close()
+
 	if agent.MysqlDaemon != nil {
 		agent.MysqlDaemon.Close()
 	}
