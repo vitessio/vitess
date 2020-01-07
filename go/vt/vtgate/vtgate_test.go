@@ -1414,7 +1414,7 @@ func TestVTGateMessageStreamFail(t *testing.T) {
 	createSandbox(ks)
 	hcVTGateTest.Reset()
 	tablet := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, "0", topodatapb.TabletType_MASTER, true, 1, nil)
-	// tablet should should fail immediately if the error is not EOF or UNAVAILABLE.
+	// tablet should fail immediately if the error is not EOF or UNAVAILABLE.
 	tablet.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1
 	err := rpcVTGate.MessageStream(context.Background(), ks, "0", nil, "msg", func(qr *sqltypes.Result) error {
 		return nil
