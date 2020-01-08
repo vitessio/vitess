@@ -70,6 +70,9 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 		"-grpc_port", fmt.Sprintf("%d", vtctld.GrpcPort),
 		"-pid_file", vtctld.PidFile,
 	)
+	if *isCoverage {
+		vtctld.proc.Args = append(vtctld.proc.Args, "-test.coverprofile="+getCoveragePath("vtctld.out", false))
+	}
 	vtctld.proc.Args = append(vtctld.proc.Args, extraArgs...)
 
 	errFile, _ := os.Create(path.Join(vtctld.LogDir, "vtctld-stderr.txt"))

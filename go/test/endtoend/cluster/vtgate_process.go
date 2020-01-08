@@ -83,6 +83,10 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 		"-mysql_auth_server_impl", vtgate.MySQLAuthServerImpl,
 		"-pid_file", vtgate.PidFile,
 	)
+	if *isCoverage {
+		vtgate.proc.Args = append(vtgate.proc.Args, "-test.coverprofile="+getCoveragePath("vtgate.out", false))
+	}
+
 	vtgate.proc.Args = append(vtgate.proc.Args, vtgate.ExtraArgs...)
 
 	errFile, _ := os.Create(path.Join(vtgate.LogDir, "vtgate-stderr.txt"))

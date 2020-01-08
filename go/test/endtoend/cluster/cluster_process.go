@@ -25,6 +25,7 @@ import (
 	"os/exec"
 	"path"
 	"strconv"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
@@ -37,7 +38,8 @@ const (
 )
 
 var (
-	keepData = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
+	keepData   = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
+	isCoverage = flag.Bool("is-coverage", false, "whether coverage is required")
 )
 
 // LocalProcessCluster Testcases need to use this to iniate a cluster
@@ -196,6 +198,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 
 	log.Info("Starting keyspace : " + keyspace.Name)
 	_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
+	println("starting keyspace")
 	var mysqlctlProcessList []*exec.Cmd
 	for _, shardName := range shardNames {
 		shard := &Shard{
@@ -611,4 +614,19 @@ func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatu
 	tablet.VttabletProcess.SupportsBackup = supportBackup
 	tablet.VttabletProcess.ServingStatus = servingStatus
 	return tablet.VttabletProcess.Setup()
+}
+
+func getCoveragePath(fileName string, isDynamic bool) string {
+	covDir := os.Getenv("COV_DIR")
+	if covDir == "" {
+		covDir = os.TempDir()
+	}
+	filePath := path.Join(covDir, fileName)
+	if isDynamic {
+		filePath = path.Join(covDir, fmt.Sprintf("%s-%d.%s",
+			strings.Split(fileName, ".")[0],
+			getRandomNumber(1000000, 0),
+			strings.Split(fileName, ".")[1]))
+	}
+	return filePath
 }
