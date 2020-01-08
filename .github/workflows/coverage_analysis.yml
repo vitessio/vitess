@@ -1,7 +1,7 @@
 name: sonar_analysis
 on:
   schedule:
-    -cron: '0 */4 * * *'
+    cron: '0 */4 * * *'
 jobs:
 
   build:
@@ -28,7 +28,7 @@ jobs:
 
       - name: Execute cluster endtoend test
         run: |
-          eatmydata -- ./tools/all_test_for_coverage_1.sh
+          eatmydata -- ./tools/all_test_for_coverage.sh
           mkdir report
           cp /tmp/*.out ./report/.
 

@@ -69,8 +69,5 @@ do
    echo "starting test for $i"
    go test  $i -v -p=1 -is-coverage=true || :
    counter=$((counter+1))
-   if [[ "$counter" -gt 2 ]]; then
-      break
-   fi
 done
 
