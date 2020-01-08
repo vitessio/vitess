@@ -34,9 +34,6 @@ for pkg in $all_except_endtoend_tests
 do
    go test -coverpkg=vitess.io/vitess/go/... -coverprofile "/tmp/unit_$counter.out" $pkg -v -p=1 || :
    counter=$((counter+1))
-   if [[ "$counter" -gt 5 ]]; then
-      break
-   fi
 done
 
 ## Copy the test files to get instrumented binaries ###
@@ -69,8 +66,5 @@ do
    echo "starting test for $i"
    go test  $i -v -p=1 -is-coverage=true || :
    counter=$((counter+1))
-   if [[ "$counter" -gt 2 ]]; then
-      break
-   fi
 done
 
