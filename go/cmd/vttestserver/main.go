@@ -40,50 +40,17 @@ type topoFlags struct {
 	rdonly    int
 }
 
-func (t *topoFlags) buildTopology() (*vttestpb.VTTestTopology, error) {
-	topo := &vttestpb.VTTestTopology{}
-	topo.Cells = strings.Split(t.cells, ",")
+var (
+	basePort  int
+	config    vttest.Config
+	doSeed    bool
+	mycnf     string
+	protoTopo string
+	seed      vttest.SeedConfig
+	topo      topoFlags
+)
 
-	keyspaces := strings.Split(t.keyspaces, ",")
-	shardCounts := strings.Split(t.shards, ",")
-	if len(keyspaces) != len(shardCounts) {
-		return nil, fmt.Errorf("--keyspaces must be same length as --shards")
-	}
-
-	for i := range keyspaces {
-		name := keyspaces[i]
-		numshards, err := strconv.ParseInt(shardCounts[i], 10, 32)
-		if err != nil {
-			return nil, err
-		}
-
-		ks := &vttestpb.Keyspace{
-			Name:         name,
-			ReplicaCount: int32(t.replicas),
-			RdonlyCount:  int32(t.rdonly),
-		}
-
-		for _, shardname := range vttest.GetShardNames(int(numshards)) {
-			ks.Shards = append(ks.Shards, &vttestpb.Shard{
-				Name: shardname,
-			})
-		}
-
-		topo.Keyspaces = append(topo.Keyspaces, ks)
-	}
-
-	return topo, nil
-}
-
-func parseFlags() (config vttest.Config, env vttest.Environment, err error) {
-	var seed vttest.SeedConfig
-	var topo topoFlags
-
-	var basePort int
-	var protoTopo string
-	var doSeed bool
-	var mycnf string
-
+func init() {
 	flag.IntVar(&basePort, "port", 0,
 		"Port to use for vtcombo. If this is 0, a random port will be chosen.")
 
@@ -167,7 +134,44 @@ func parseFlags() (config vttest.Config, env vttest.Environment, err error) {
 	flag.BoolVar(&config.InitWorkflowManager, "workflow_manager_init", false, "Enable workflow manager")
 
 	flag.StringVar(&config.VSchemaDDLAuthorizedUsers, "vschema_ddl_authorized_users", "", "Comma separated list of users authorized to execute vschema ddl operations via vtgate")
+}
 
+func (t *topoFlags) buildTopology() (*vttestpb.VTTestTopology, error) {
+	topo := &vttestpb.VTTestTopology{}
+	topo.Cells = strings.Split(t.cells, ",")
+
+	keyspaces := strings.Split(t.keyspaces, ",")
+	shardCounts := strings.Split(t.shards, ",")
+	if len(keyspaces) != len(shardCounts) {
+		return nil, fmt.Errorf("--keyspaces must be same length as --shards")
+	}
+
+	for i := range keyspaces {
+		name := keyspaces[i]
+		numshards, err := strconv.ParseInt(shardCounts[i], 10, 32)
+		if err != nil {
+			return nil, err
+		}
+
+		ks := &vttestpb.Keyspace{
+			Name:         name,
+			ReplicaCount: int32(t.replicas),
+			RdonlyCount:  int32(t.rdonly),
+		}
+
+		for _, shardname := range vttest.GetShardNames(int(numshards)) {
+			ks.Shards = append(ks.Shards, &vttestpb.Shard{
+				Name: shardname,
+			})
+		}
+
+		topo.Keyspaces = append(topo.Keyspaces, ks)
+	}
+
+	return topo, nil
+}
+
+func parseFlags() (env vttest.Environment, err error) {
 	flag.Parse()
 
 	if basePort != 0 {
@@ -213,7 +217,10 @@ func parseFlags() (config vttest.Config, env vttest.Environment, err error) {
 }
 
 func main() {
-	cluster := runCluster()
+	cluster, err := runCluster()
+	if err != nil {
+		log.Fatal(err)
+	}
 	defer cluster.TearDown()
 
 	kvconf := cluster.JSONConfig()
@@ -224,8 +231,8 @@ func main() {
 	select {}
 }
 
-func runCluster() vttest.LocalCluster {
-	config, env, err := parseFlags()
+func runCluster() (vttest.LocalCluster, error) {
+	env, err := parseFlags()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -237,10 +244,10 @@ func runCluster() vttest.LocalCluster {
 	}
 	err = cluster.Setup()
 	if err != nil {
-		log.Fatal(err)
+		return cluster, err
 	}
 
 	log.Info("Local cluster started.")
 
-	return cluster
+	return cluster, nil
 }
