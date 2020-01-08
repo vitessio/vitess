@@ -1832,3 +1832,18 @@
     "OwnedVindexQuery": "select Name, Costly from user where id = 1 for update"
   }
 }
+
+# insert using last_insert_id
+"insert into unsharded values(last_insert_id(), 2)"
+{
+  "Original": "insert into unsharded values(last_insert_id(), 2)",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "insert into unsharded values (:__lastInsertId, 2)",
+    "Table": "unsharded"
+  }
+}

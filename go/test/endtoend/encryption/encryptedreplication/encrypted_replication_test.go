@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package encryption
+package encryptedreplication
 
 import (
 	"flag"
@@ -25,6 +25,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/encryption"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -101,15 +102,15 @@ func initializeCluster(t *testing.T) (int, error) {
 	// create certs directory
 	log.Info("Creating certificates")
 	certDirectory = path.Join(clusterInstance.TmpDirectory, "certs")
-	_ = createDirectory(certDirectory, 0700)
+	_ = encryption.CreateDirectory(certDirectory, 0700)
 
-	err := executeVttlstestCommand("-root", certDirectory, "CreateCA")
+	err := encryption.ExecuteVttlstestCommand("-root", certDirectory, "CreateCA")
 	assert.Nil(t, err)
 
-	err = executeVttlstestCommand("-root", certDirectory, "CreateSignedCert", "-common_name", "Mysql Server", "-serial", "01", "server")
+	err = encryption.ExecuteVttlstestCommand("-root", certDirectory, "CreateSignedCert", "-common_name", "Mysql Server", "-serial", "01", "server")
 	assert.Nil(t, err)
 
-	err = executeVttlstestCommand("-root", certDirectory, "CreateSignedCert", "-common_name", "Mysql Client", "-serial", "02", "client")
+	err = encryption.ExecuteVttlstestCommand("-root", certDirectory, "CreateSignedCert", "-common_name", "Mysql Client", "-serial", "02", "client")
 	assert.Nil(t, err)
 
 	extraMyCnf := path.Join(certDirectory, "secure.cnf")
@@ -184,19 +185,4 @@ func initializeCluster(t *testing.T) (int, error) {
 
 func teardownCluster() {
 	clusterInstance.Teardown()
-}
-
-func createDirectory(dirName string, mode os.FileMode) error {
-	if _, err := os.Stat(dirName); os.IsNotExist(err) {
-		return os.Mkdir(dirName, mode)
-	}
-	return nil
-}
-
-func executeVttlstestCommand(args ...string) error {
-	tmpProcess := exec.Command(
-		"vttlstest",
-		args...,
-	)
-	return tmpProcess.Run()
 }

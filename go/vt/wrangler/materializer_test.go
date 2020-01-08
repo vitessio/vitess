@@ -17,6 +17,7 @@ limitations under the License.
 package wrangler
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -30,6 +31,70 @@ import (
 )
 
 const mzUpdateQuery = "update _vt.vreplication set state='Running' where db_name='vt_targetks' and workflow='workflow'"
+
+func TestMigrateTables(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       "workflow",
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+		}},
+	}
+	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	defer env.close()
+
+	env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
+
+	ctx := context.Background()
+	err := env.wr.Migrate(ctx, "workflow", "sourceks", "targetks", "t1", "", "")
+	assert.NoError(t, err)
+	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
+	assert.NoError(t, err)
+	got := fmt.Sprintf("%v", vschema)
+	want := []string{
+		`keyspaces:<key:"sourceks" value:<> > keyspaces:<key:"targetks" value:<> >`,
+		`rules:<from_table:"t1" to_tables:"sourceks.t1" >`,
+		`rules:<from_table:"targetks.t1" to_tables:"sourceks.t1" >`,
+	}
+	for _, wantstr := range want {
+		assert.Contains(t, got, wantstr)
+	}
+}
+
+func TestMigrateVSchema(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       "workflow",
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+		}},
+	}
+	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	defer env.close()
+
+	env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
+
+	ctx := context.Background()
+	err := env.wr.Migrate(ctx, "workflow", "sourceks", "targetks", `{"t1":{}}`, "", "")
+	assert.NoError(t, err)
+	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
+	assert.NoError(t, err)
+	got := fmt.Sprintf("%v", vschema)
+	want := []string{`keyspaces:<key:"sourceks" value:<> >`,
+		`keyspaces:<key:"targetks" value:<tables:<key:"t1" value:<> > > >`,
+		`rules:<from_table:"t1" to_tables:"sourceks.t1" >`,
+		`rules:<from_table:"targetks.t1" to_tables:"sourceks.t1" >`,
+	}
+	for _, wantstr := range want {
+		assert.Contains(t, got, wantstr)
+	}
+}
 
 func TestMaterializerOneToOne(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
@@ -48,7 +113,6 @@ func TestMaterializerOneToOne(t *testing.T) {
 	}
 	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 	defer env.close()
-	env.expectValidation()
 
 	env.tmc.expectVRQuery(
 		200,
@@ -81,7 +145,6 @@ func TestMaterializerManyToOne(t *testing.T) {
 	}
 	env := newTestMaterializerEnv(t, ms, []string{"-80", "80-"}, []string{"0"})
 	defer env.close()
-	env.expectValidation()
 
 	env.tmc.expectVRQuery(
 		200,
@@ -133,7 +196,6 @@ func TestMaterializerOneToMany(t *testing.T) {
 	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
 		t.Fatal(err)
 	}
-	env.expectValidation()
 
 	env.tmc.expectVRQuery(
 		200,
@@ -189,7 +251,6 @@ func TestMaterializerManyToMany(t *testing.T) {
 	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
 		t.Fatal(err)
 	}
-	env.expectValidation()
 
 	env.tmc.expectVRQuery(
 		200,
@@ -250,7 +311,6 @@ func TestMaterializerMulticolumnVindex(t *testing.T) {
 	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
 		t.Fatal(err)
 	}
-	env.expectValidation()
 
 	env.tmc.expectVRQuery(
 		200,
@@ -289,7 +349,6 @@ func TestMaterializerDeploySchema(t *testing.T) {
 	}
 	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 	defer env.close()
-	env.expectValidation()
 
 	delete(env.tmc.schema, "targetks.t2")
 
@@ -325,7 +384,6 @@ func TestMaterializerCopySchema(t *testing.T) {
 	}
 	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 	defer env.close()
-	env.expectValidation()
 
 	delete(env.tmc.schema, "targetks.t1")
 
@@ -381,7 +439,6 @@ func TestMaterializerExplicitColumns(t *testing.T) {
 	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
 		t.Fatal(err)
 	}
-	env.expectValidation()
 
 	env.tmc.expectVRQuery(
 		200,
@@ -440,7 +497,6 @@ func TestMaterializerRenamedColumns(t *testing.T) {
 	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
 		t.Fatal(err)
 	}
-	env.expectValidation()
 
 	env.tmc.expectVRQuery(
 		200,
@@ -483,7 +539,6 @@ func TestMaterializerNoTargetVSchema(t *testing.T) {
 	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
 		t.Fatal(err)
 	}
-	env.expectValidation()
 	err := env.wr.Materialize(context.Background(), ms)
 	assert.EqualError(t, err, "table t1 not found in vschema for keyspace targetks")
 }
@@ -501,7 +556,6 @@ func TestMaterializerNoDDL(t *testing.T) {
 	}
 	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 	defer env.close()
-	env.expectValidation()
 
 	delete(env.tmc.schema, "targetks.t1")
 
@@ -568,7 +622,6 @@ func TestMaterializerTableMismatch(t *testing.T) {
 	}
 	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 	defer env.close()
-	env.expectValidation()
 
 	delete(env.tmc.schema, "targetks.t1")
 
@@ -589,7 +642,6 @@ func TestMaterializerNoSourceTable(t *testing.T) {
 	}
 	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 	defer env.close()
-	env.expectValidation()
 
 	delete(env.tmc.schema, "targetks.t1")
 	delete(env.tmc.schema, "sourceks.t1")
@@ -611,7 +663,6 @@ func TestMaterializerSyntaxError(t *testing.T) {
 	}
 	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 	defer env.close()
-	env.expectValidation()
 
 	err := env.wr.Materialize(context.Background(), ms)
 	assert.EqualError(t, err, "syntax error at position 4 near 'bad'")
@@ -630,7 +681,6 @@ func TestMaterializerNotASelect(t *testing.T) {
 	}
 	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
 	defer env.close()
-	env.expectValidation()
 
 	err := env.wr.Materialize(context.Background(), ms)
 	assert.EqualError(t, err, "unrecognized statement: update t1 set val=1")
@@ -670,7 +720,6 @@ func TestMaterializerNoGoodVindex(t *testing.T) {
 	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
 		t.Fatal(err)
 	}
-	env.expectValidation()
 
 	err := env.wr.Materialize(context.Background(), ms)
 	assert.EqualError(t, err, "could not find a vindex to compute keyspace id for table t1")
@@ -710,7 +759,6 @@ func TestMaterializerComplexVindexExpression(t *testing.T) {
 	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
 		t.Fatal(err)
 	}
-	env.expectValidation()
 
 	err := env.wr.Materialize(context.Background(), ms)
 	assert.EqualError(t, err, "vindex column cannot be a complex expression: a + b as c1")
@@ -750,7 +798,6 @@ func TestMaterializerNoVindexInExpression(t *testing.T) {
 	if err := env.topoServ.SaveVSchema(context.Background(), "targetks", vs); err != nil {
 		t.Fatal(err)
 	}
-	env.expectValidation()
 
 	err := env.wr.Materialize(context.Background(), ms)
 	assert.EqualError(t, err, "could not find vindex column c1")
