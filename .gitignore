@@ -85,6 +85,3 @@ releases
 /vthook/
 /bin/
 /vtdataroot/
-
-# Ricebox file
-/go/vt/mysqlctl/rice-box.go
