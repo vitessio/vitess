@@ -313,7 +313,7 @@ var commands = []commandGroup{
 				"Start a Resharding process. Example: Reshard ks.workflow001 '0' '-80,80-'"},
 			{"Migrate", commandMigrate,
 				"[-cell=<cell>] [-tablet_types=<tablet_types>] -workflow=<workflow> <source_keyspace> <target_keyspace> <table_specs>",
-				`Start a table(s) migration, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{}, "t2":{}}`},
+				`Start a table(s) migration, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{""column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{""column": "id2", "name": "hash"}]}}`},
 			{"Materialize", commandMaterialize,
 				`<json_spec>, example : '{"workflow": "aaa", "source_keyspace": "source", "target_keyspace": "target", "table_settings": [{"target_table": "customer", "source_expression": "select * from customer", "create_ddl": "copy"}]}'`,
 				"Performs materialization based on the json spec."},
@@ -1818,11 +1818,11 @@ func commandMigrate(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.F
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
-	if subFlags.NArg() != 3 {
-		return fmt.Errorf("three arguments are required: source_keyspace, target_keyspace, tableSpecs")
-	}
 	if *workflow == "" {
 		return fmt.Errorf("a workflow name must be specified")
+	}
+	if subFlags.NArg() != 3 {
+		return fmt.Errorf("three arguments are required: source_keyspace, target_keyspace, tableSpecs")
 	}
 	source := subFlags.Arg(0)
 	target := subFlags.Arg(1)
