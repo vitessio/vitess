@@ -34,12 +34,6 @@ type TargetStats interface {
 	// reach that target.
 	// Can return topo.ErrNoNode if the target has no stats.
 	GetAggregateStats(target *querypb.Target) (*querypb.AggregateStats, queryservice.QueryService, error)
-
-	// GetMasterCell returns the master location for a keyspace/shard.
-	// Since there is only one master for a shard, we only need to
-	// know its cell to complete the Target. Also returns the QueryService
-	// to use to reach that target.
-	GetMasterCell(keyspace, shard string) (cell string, qs queryservice.QueryService, err error)
 }
 
 // TargetStatsEntry has the updated information for a Target.

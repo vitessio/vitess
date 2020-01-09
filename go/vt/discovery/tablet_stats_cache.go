@@ -386,28 +386,5 @@ func (tc *TabletStatsCache) GetAggregateStats(target *querypb.Target) (*querypb.
 	return agg, nil
 }
 
-// GetMasterCell is part of the TargetStatsListener interface.
-func (tc *TabletStatsCache) GetMasterCell(keyspace, shard string) (cell string, err error) {
-	e := tc.getEntry(keyspace, shard, topodatapb.TabletType_MASTER)
-	if e == nil {
-		return "", topo.NewError(topo.NoNode, topotools.TargetIdent(&querypb.Target{
-			Keyspace:   keyspace,
-			Shard:      shard,
-			TabletType: topodatapb.TabletType_MASTER,
-		}))
-	}
-
-	e.mu.RLock()
-	defer e.mu.RUnlock()
-	for cell := range e.aggregates {
-		return cell, nil
-	}
-	return "", topo.NewError(topo.NoNode, topotools.TargetIdent(&querypb.Target{
-		Keyspace:   keyspace,
-		Shard:      shard,
-		TabletType: topodatapb.TabletType_MASTER,
-	}))
-}
-
 // Compile-time interface check.
 var _ HealthCheckStatsListener = (*TabletStatsCache)(nil)

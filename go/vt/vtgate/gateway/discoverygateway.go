@@ -204,12 +204,6 @@ func (dg *discoveryGateway) GetAggregateStats(target *querypb.Target) (*querypb.
 	return stats, dg, err
 }
 
-// GetMasterCell is part of the srvtopo.TargetStats interface.
-func (dg *discoveryGateway) GetMasterCell(keyspace, shard string) (string, queryservice.QueryService, error) {
-	cell, err := dg.tsc.GetMasterCell(keyspace, shard)
-	return cell, dg, err
-}
-
 // Close shuts down underlying connections.
 // This function hides the inner implementation.
 func (dg *discoveryGateway) Close(ctx context.Context) error {
