@@ -489,6 +489,7 @@ func (l *Listener) isShutdown() bool {
 func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, enableTLS bool) ([]byte, error) {
 	capabilities := CapabilityClientLongPassword |
 		CapabilityClientLongFlag |
+		CapabilityClientFoundRows |
 		CapabilityClientConnectWithDB |
 		CapabilityClientProtocol41 |
 		CapabilityClientTransactions |
