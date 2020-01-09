@@ -39,10 +39,6 @@ func (s *fakeStats) GetAggregateStats(target *querypb.Target) (*querypb.Aggregat
 	return &querypb.AggregateStats{}, nil, nil
 }
 
-func (s *fakeStats) GetMasterCell(keyspace, shard string) (cell string, qs queryservice.QueryService, err error) {
-	return "", nil, nil
-}
-
 func initResolver(t *testing.T, name string) *Resolver {
 	ctx := context.Background()
 	cell := "cell1"
