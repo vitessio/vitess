@@ -488,8 +488,8 @@ func (l *Listener) isShutdown() bool {
 // It returns the salt data.
 func (c *Conn) writeHandshakeV10(serverVersion string, authServer AuthServer, enableTLS bool) ([]byte, error) {
 	capabilities := CapabilityClientLongPassword |
-		CapabilityClientLongFlag |
 		CapabilityClientFoundRows |
+		CapabilityClientLongFlag |
 		CapabilityClientConnectWithDB |
 		CapabilityClientProtocol41 |
 		CapabilityClientTransactions |
