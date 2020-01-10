@@ -48,16 +48,14 @@ var (
 	shard1Replica *cluster.Vttablet
 	shard1RdOnly  *cluster.Vttablet
 
-	localCluster         *cluster.LocalProcessCluster
-	cell                 = cluster.DefaultCell
-	hostname             = "localhost"
-	keyspaceName         = "test_keyspace"
-	recoveryKeyspaceName = "recovery_keyspace"
-	shardKsName          = fmt.Sprintf("%s/%s", keyspaceName, shardName)
-	shardName            = "0"
-	shard0Name           = "-80"
-	shard1Name           = "80-"
-	commonTabletArg      = []string{
+	localCluster    *cluster.LocalProcessCluster
+	cell            = cluster.DefaultCell
+	hostname        = "localhost"
+	keyspaceName    = "test_keyspace"
+	shardName       = "0"
+	shard0Name      = "-80"
+	shard1Name      = "80-"
+	commonTabletArg = []string{
 		"-vreplication_healthcheck_topology_refresh", "1s",
 		"-vreplication_healthcheck_retry_delay", "1s",
 		"-vreplication_retry_delay", "1s",
@@ -106,10 +104,11 @@ test_recovery will:
 - check that vtgate queries work correctly
 
 */
-
 func TestUnShardedRecoveryAfterSharding(t *testing.T) {
-	initializeCluster()
-	err := localCluster.VtctlclientProcess.ApplySchema(keyspaceName, vtInsertTest)
+	_, err := initializeCluster()
+	defer localCluster.Teardown()
+	require.Nil(t, err)
+	err = localCluster.VtctlclientProcess.ApplySchema(keyspaceName, vtInsertTest)
 	assert.Nil(t, err)
 	insertData(t, master, 1)
 	checkData(t, replica1, 1)
@@ -187,7 +186,7 @@ func TestUnShardedRecoveryAfterSharding(t *testing.T) {
 	assert.Nil(t, err)
 
 	// remove the original tablets in the original shard
-	removeTablets([]*cluster.Vttablet{master, replica1, rdOnly})
+	removeTablets(t, []*cluster.Vttablet{master, replica1, rdOnly})
 
 	for _, tablet := range []*cluster.Vttablet{replica1, rdOnly} {
 		err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
@@ -195,10 +194,6 @@ func TestUnShardedRecoveryAfterSharding(t *testing.T) {
 	}
 	err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", master.Alias)
 	assert.Nil(t, err)
-
-	//master = nil
-	//replica1 = nil
-	//rdOnly = nil
 
 	// rebuild the serving graph, all mentions of the old shards should be gone
 	err = localCluster.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", "test_keyspace")
@@ -246,30 +241,31 @@ func TestUnShardedRecoveryAfterSharding(t *testing.T) {
 	verifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(2)")
 
 	vtgateConn.Close()
-	vtgateInstance.TearDown()
-	localCluster.Teardown()
+	err = vtgateInstance.TearDown()
+	assert.Nil(t, err)
 }
 
+/*
+Test recovery from backup flow.
+
+test_recovery will:
+- create a shard with master and replica1 only
+- run InitShardMaster
+- insert some data
+- perform a resharding
+- take a backup of both new shards
+- insert more data on the masters of both shards
+- create a recovery keyspace
+- bring up tablet_replica2 and tablet_replica3 in the new keyspace
+- check that new tablets do not have data created after backup
+- check that vtgate queries work correctly
+*/
 func TestShardedRecovery(t *testing.T) {
 
-	/*
-			Test recovery from backup flow.
-
-		    test_recovery will:
-		    - create a shard with master and replica1 only
-		    - run InitShardMaster
-		    - insert some data
-		    - perform a resharding
-		    - take a backup of both new shards
-		    - insert more data on the masters of both shards
-		    - create a recovery keyspace
-		    - bring up tablet_replica2 and tablet_replica3 in the new keyspace
-		    - check that new tablets do not have data created after backup
-		    - check that vtgate queries work correctly
-	*/
-
-	initializeCluster()
-	err := localCluster.VtctlclientProcess.ApplySchema(keyspaceName, vtInsertTest)
+	_, err := initializeCluster()
+	defer localCluster.Teardown()
+	require.Nil(t, err)
+	err = localCluster.VtctlclientProcess.ApplySchema(keyspaceName, vtInsertTest)
 	assert.Nil(t, err)
 	insertData(t, master, 1)
 	checkData(t, replica1, 1)
@@ -334,7 +330,7 @@ func TestShardedRecovery(t *testing.T) {
 	assert.Nil(t, err)
 
 	// remove the original tablets in the original shard
-	removeTablets([]*cluster.Vttablet{master, replica1, rdOnly})
+	removeTablets(t, []*cluster.Vttablet{master, replica1, rdOnly})
 
 	for _, tablet := range []*cluster.Vttablet{replica1, rdOnly} {
 		err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", tablet.Alias)
@@ -412,7 +408,8 @@ func TestShardedRecovery(t *testing.T) {
 	executeQueriesUsingVtgate(t, session, "insert into vt_insert_test (id, msg) values (3,'test 3')")
 
 	vtgateConn.Close()
-	vtgateInstance.TearDown()
+	err = vtgateInstance.TearDown()
+	assert.Nil(t, err)
 
 	// now bring up the recovery keyspace and 2 tablets, letting it restore from backup.
 	restoreTablet(t, replica2, recoveryKS, "-80")
@@ -456,8 +453,8 @@ func TestShardedRecovery(t *testing.T) {
 	verifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(2)")
 
 	vtgateConn.Close()
-	vtgateInstance.TearDown()
-	localCluster.Teardown()
+	err = vtgateInstance.TearDown()
+	assert.Nil(t, err)
 }
 
 func insertData(t *testing.T, tablet *cluster.Vttablet, index int) {
@@ -481,7 +478,7 @@ func checkData(t *testing.T, tablet *cluster.Vttablet, count int) {
 	}
 }
 
-func removeTablets(tablets []*cluster.Vttablet) {
+func removeTablets(t *testing.T, tablets []*cluster.Vttablet) {
 	var mysqlProcs []*exec.Cmd
 	for _, tablet := range tablets {
 		proc, _ := tablet.MysqlctlProcess.StopProcess()
@@ -489,7 +486,8 @@ func removeTablets(tablets []*cluster.Vttablet) {
 		tablet.VttabletProcess.TearDown()
 	}
 	for _, proc := range mysqlProcs {
-		proc.Wait()
+		err := proc.Wait()
+		assert.Nil(t, err)
 	}
 }
 
