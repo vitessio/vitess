@@ -122,8 +122,7 @@ func (vtbackup *VtbackupProcess) TearDown() error {
 // VtbackupProcessInstance returns a vtbackup handle
 // configured with the given Config.
 // The process must be manually started by calling Setup()
-
-func VtbackupProcessInstance(tabletUid int, mysqlPort int, newInitDBFile string, keyspace string, shard string,
+func VtbackupProcessInstance(tabletUID int, mysqlPort int, newInitDBFile string, keyspace string, shard string,
 	cell string, hostname string, tmpDirectory string, topoPort int, initialBackup bool) *VtbackupProcess {
 	vtctl := VtctlProcessInstance(topoPort, hostname)
 	vtbackup := &VtbackupProcess{
@@ -132,7 +131,7 @@ func VtbackupProcessInstance(tabletUid int, mysqlPort int, newInitDBFile string,
 		CommonArg:     *vtctl,
 		LogDir:        tmpDirectory,
 		Directory:     os.Getenv("VTDATAROOT"),
-		TabletAlias:   fmt.Sprintf("%s-%010d", cell, tabletUid),
+		TabletAlias:   fmt.Sprintf("%s-%010d", cell, tabletUID),
 		initDBfile:    newInitDBFile,
 		Keyspace:      keyspace,
 		Shard:         shard,
