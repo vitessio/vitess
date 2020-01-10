@@ -35,9 +35,7 @@ jobs:
 
       - name: Publish coverage to codecov.com
         run: |
-          find report -type f -name '*.out' -exec cat {} + >> coverage.txt
-          ls -l  coverage.txt | cut -d " " -f5 
-          bash <(curl -s https://codecov.io/bash) -t ${CODECOV_TOKEN}
+          bash <(curl -s https://codecov.io/bash) -f "report/*.out"
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
