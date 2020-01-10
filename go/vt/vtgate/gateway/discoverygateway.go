@@ -198,12 +198,6 @@ func (dg *discoveryGateway) WaitForTablets(ctx context.Context, tabletTypesToWai
 	return dg.tsc.WaitForAllServingTablets(ctx, targets)
 }
 
-// GetAggregateStats is part of the srvtopo.TargetStats interface.
-func (dg *discoveryGateway) GetAggregateStats(target *querypb.Target) (*querypb.AggregateStats, queryservice.QueryService, error) {
-	stats, err := dg.tsc.GetAggregateStats(target)
-	return stats, dg, err
-}
-
 // Close shuts down underlying connections.
 // This function hides the inner implementation.
 func (dg *discoveryGateway) Close(ctx context.Context) error {

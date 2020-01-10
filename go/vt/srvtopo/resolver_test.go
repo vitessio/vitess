@@ -26,18 +26,11 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
+	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
-
-// fakeStats implements TargetStats.
-type fakeStats struct{}
-
-func (s *fakeStats) GetAggregateStats(target *querypb.Target) (*querypb.AggregateStats, queryservice.QueryService, error) {
-	return &querypb.AggregateStats{}, nil, nil
-}
 
 func initResolver(t *testing.T, name string) *Resolver {
 	ctx := context.Background()
@@ -75,7 +68,7 @@ func initResolver(t *testing.T, name string) *Resolver {
 		}
 	}
 
-	return NewResolver(rs, &fakeStats{}, cell)
+	return NewResolver(rs, &tabletconntest.FakeQueryService{}, cell)
 }
 
 func TestResolveDestinations(t *testing.T) {

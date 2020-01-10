@@ -53,14 +53,8 @@ func init() {
 // A Gateway is the query processing module for each shard,
 // which is used by ScatterConn.
 type Gateway interface {
-	// TODO(alainjobart) The QueryService part of this interface
-	// will be removed soon, in favor of the TargetStats part (that
-	// returns a QueryService)
+	// the query service that this Gateway wraps around
 	queryservice.QueryService
-
-	// srvtopo.TargetStats allows this Gateway to resolve a Target
-	// into a QueryService. It is used by the srvtopo.Resolver object.
-	srvtopo.TargetStats
 
 	// WaitForTablets asks the gateway to wait for the provided
 	// tablets types to be available. It the context is canceled
