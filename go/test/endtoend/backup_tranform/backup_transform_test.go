@@ -19,7 +19,6 @@ package backuptransform
 import (
 	"os"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,14 +49,12 @@ func TestBackupTransform(t *testing.T) {
 		"-restore_from_backup",
 		"-backup_storage_implementation", "file",
 		"-file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot}
-	replica1.VttabletProcess.ServingStatus = ""
+	replica1.VttabletProcess.ServingStatus = "SERVING"
 	err := replica1.VttabletProcess.Setup()
-	assert.Nil(t, err)
-	err = replica1.VttabletProcess.WaitForTabletTypesForTimeout([]string{"SERVING"}, 25*time.Second)
 	assert.Nil(t, err)
 
 	// take backup, it should not give any error
-	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", "-allow_master=true", replica1.Alias)
+	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	assert.Nil(t, err)
 
 	// insert data in master
@@ -69,7 +66,7 @@ func TestBackupTransform(t *testing.T) {
 	backups := listBackups(t)
 	assert.Equalf(t, 1, len(backups), "invalid backups: %v", backups)
 
-	// reading from the manifest is pending
+	// TODO: reading from the manifest is pending
 
 	// restore replica2 from backup, should not give any error
 	// Note: we don't need to pass in the backup_storage_transform parameter,
@@ -77,13 +74,11 @@ func TestBackupTransform(t *testing.T) {
 	replica2.MysqlctlProcess.ExtraArgs = []string{
 		"-db-credentials-file", dbCredentialFile}
 	// clear replica2
-	proc, _ := replica2.MysqlctlProcess.StopProcess()
-	proc.Wait()
+	replica2.MysqlctlProcess.Stop()
 	os.RemoveAll(replica2.VttabletProcess.Directory)
 
 	// start replica2 from backup
-	proc, _ = replica2.MysqlctlProcess.StartProcess()
-	proc.Wait()
+	replica2.MysqlctlProcess.Start()
 	err = localCluster.VtctlclientProcess.InitTablet(replica2, cell, keyspaceName, hostname, shardName)
 	assert.Nil(t, err)
 	replica2.VttabletProcess.CreateDB(keyspaceName)
@@ -92,12 +87,12 @@ func TestBackupTransform(t *testing.T) {
 		"-restore_from_backup",
 		"-backup_storage_implementation", "file",
 		"-file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot}
+	replica2.VttabletProcess.ServingStatus = "SERVING"
 	replica2.VttabletProcess.Setup()
-	err = replica2.VttabletProcess.WaitForTabletTypesForTimeout([]string{"SERVING"}, 25*time.Second)
 	assert.Nil(t, err)
 	defer replica2.VttabletProcess.TearDown()
 
-	// validate that semi-sync is enabled for replica, desable for rdOnly
+	// validate that semi-sync is enabled for replica, disable for rdOnly
 	if replica2.Type == "replica" {
 		verifyReplicationStatus(t, replica2, "ON")
 	} else if replica2.Type == "rdonly" {
@@ -113,8 +108,13 @@ func TestBackupTransform(t *testing.T) {
 		assert.Nil(t, err)
 	}
 
+}
+
+// TestBackupTransformErr validate backup with test_backup_error
+// backup_storage_hook, which should fail.
+func TestBackupTransformErr(t *testing.T) {
 	// restart the replica with transform param
-	err = replica1.VttabletProcess.TearDown()
+	err := replica1.VttabletProcess.TearDown()
 	require.Nil(t, err)
 
 	replica1.VttabletProcess.ServingStatus = ""
@@ -124,9 +124,8 @@ func TestBackupTransform(t *testing.T) {
 		"-restore_from_backup",
 		"-backup_storage_implementation", "file",
 		"-file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot}
+	replica1.VttabletProcess.ServingStatus = "SERVING"
 	err = replica1.VttabletProcess.Setup()
-	assert.Nil(t, err)
-	err = replica1.VttabletProcess.WaitForTabletTypesForTimeout([]string{"SERVING"}, 25*time.Second)
 	assert.Nil(t, err)
 
 	// create backup, it should fail
@@ -134,7 +133,7 @@ func TestBackupTransform(t *testing.T) {
 	assert.NotNil(t, err)
 
 	// validate there is no backup left
-	backups = listBackups(t)
+	backups := listBackups(t)
 	assert.Equalf(t, 0, len(backups), "invalid backups: %v", backups)
 }
 

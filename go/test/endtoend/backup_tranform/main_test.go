@@ -92,9 +92,6 @@ func TestMain(m *testing.M) {
 		var mysqlProcs []*exec.Cmd
 		for i := 0; i < 3; i++ {
 			tabletType := "replica"
-			if i == 0 {
-				tabletType = "master"
-			}
 			tablet := localCluster.GetVttabletInstance(tabletType, 0, cell)
 			tablet.VttabletProcess = localCluster.GetVtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
 			tablet.VttabletProcess.DbPassword = dbPassword
@@ -124,11 +121,10 @@ func TestMain(m *testing.M) {
 		replica1 = shard.Vttablets[1]
 		replica2 = shard.Vttablets[2]
 
-		if err := localCluster.VtctlclientProcess.InitTablet(master, cell, keyspaceName, hostname, shard.Name); err != nil {
-			return 1, err
-		}
-		if err := localCluster.VtctlclientProcess.InitTablet(replica1, cell, keyspaceName, hostname, shard.Name); err != nil {
-			return 1, err
+		for _, tablet := range []*cluster.Vttablet{master, replica1} {
+			if err := localCluster.VtctlclientProcess.InitTablet(tablet, cell, keyspaceName, hostname, shard.Name); err != nil {
+				return 1, err
+			}
 		}
 
 		// create database direct in vtTablet
@@ -141,7 +137,7 @@ func TestMain(m *testing.M) {
 			}
 		}
 
-		// initialize tablet tablet at 0th index as master
+		// initialize master and start replication
 		if err := localCluster.VtctlclientProcess.InitShardMaster(keyspaceName, shard.Name, cell, master.TabletUID); err != nil {
 			return 1, err
 		}

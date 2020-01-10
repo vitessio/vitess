@@ -141,7 +141,7 @@ func TestMain(m *testing.M) {
 			}
 		}
 
-		// initialize tablet tablet at 0th index as master
+		// initialize master and start replication
 		if err := localCluster.VtctlclientProcess.InitShardMaster(keyspaceName, shard.Name, cell, master.TabletUID); err != nil {
 			return 1, err
 		}
