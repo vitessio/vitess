@@ -319,6 +319,9 @@ func (vttablet *VttabletProcess) QueryTabletWithDB(query string, dbname string) 
 		UnixSocket: path.Join(vttablet.Directory, "mysql.sock"),
 		DbName:     dbname,
 	}
+	if vttablet.DbPassword != "" {
+		dbParams.Pass = vttablet.DbPassword
+	}
 	return executeQuery(dbParams, query)
 }
 
