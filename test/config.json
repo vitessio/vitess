@@ -1,14 +1,5 @@
 {
 	"Tests": {
-		"backup_only": {
-			"File": "backup_only.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 2,
-			"RetryMax": 0,
-			"Tags": []
-	        },
 		"backup_mysqlctld": {
 			"File": "backup_mysqlctld.py",
 			"Args": [],
@@ -236,7 +227,16 @@
 		},
 		"backup": {
 			"File": "backup.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtctlbackup"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 11,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"backup_only": {
+			"File": "backup_only.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtbackup"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 11,
