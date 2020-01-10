@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -36,18 +37,18 @@ import (
 
 var (
 	// This is the account name
-	accountName = flag.String("azblob_backup_account_name", "", "Azure Account Name for Backups")
+	accountName = flag.String("azblob_backup_account_name", "", "Azure Account Name for Backups, alternative environment paramater is VITESS_AZBLOB_ACCOUNT_NAME")
 
 	// This is the private access key
-	accountKey = flag.String("azblob_backup_account_key", "", "Azure Account Key")
+	accountKey = flag.String("azblob_backup_account_key", "", "Azure Account Key, alternative environment paramater is VITESS_AZBLOB_ACCOUNT_KEY")
 
 	// This is the name of the container that will store the backups
-	containerName = flag.String("azblob_backup_contain_name", "", "Azure Blob Contain Name")
+	containerName = flag.String("azblob_backup_container_name", "", "Azure Blob Container Name")
 
 	// This is an optional previx to prepend to all files
-	prefix = flag.String("azblob_backup_prefix", "", "Azure Blob prefix")
+	storageRoot = flag.String("azblob_backup_storage_root", "", "Azure Blob storage root")
 
-	azBlobParallelism = flag.Int("azblob_parallelism", 1, "Azure blob operation parallelism (requires extra memory when increased)")
+	azBlobParallelism = flag.Int("azblob_backup_parallelism", 1, "Azure blob operation parallelism (requires extra memory when increased)")
 )
 
 const (
@@ -55,7 +56,25 @@ const (
 	delimiter         = "/"
 )
 
+// Return a Shared credential from the available credential sources.
+// We will use credentials in the following order
+// 1. Direct Command Line Flag (azblob_backup_account_name, azblob_backup_account_key)
+// 2. Environment Paramaters
 func azCredentials() (*azblob.SharedKeyCredential, error) {
+	actName := *accountName
+	if len(actName) == 0 {
+		// Check the Environmental Value
+		actName = os.Getenv("VITESS_AZBLOB_ACCOUNT_NAME")
+	}
+
+	actKey := *accountKey
+	if len(actKey) == 0 {
+		actKey = os.Getenv("VITESS_AZBLOB_ACCOUNT_NAME")
+	}
+
+	if len(actName) == 0 || len(actKey) == 0 {
+		return nil, fmt.Errorf("can not get Account Credentials from CLI or Environment paramaters")
+	}
 	return azblob.NewSharedKeyCredential(*accountName, *accountKey)
 }
 
@@ -152,7 +171,7 @@ func (bh *AZBlobBackupHandle) ReadFile(ctx context.Context, filename string) (io
 		return nil, fmt.Errorf("ReadFile cannot be called on read-write backup")
 	}
 
-	obj := objName(bh.dir, bh.name, filename)
+	obj := objName(bh.dir, filename)
 	containerURL, err := bh.bs.containerURL()
 	if err != nil {
 		return nil, err
@@ -166,7 +185,10 @@ func (bh *AZBlobBackupHandle) ReadFile(ctx context.Context, filename string) (io
 	return resp.Body(azblob.RetryReaderOptions{
 		MaxRetryRequests: defaultRetryCount,
 		NotifyFailedRead: func(failureCount int, lastError error, offset int64, count int64, willRetry bool) {
-			bh.errors.RecordError(lastError)
+			log.Infof("ReadFile: [azblob] container: %s, directory: %s, filename: %s, error: %v", *containerName, objName(bh.dir, ""), filename, lastError)
+			if !willRetry {
+				bh.errors.RecordError(lastError)
+			}
 		},
 		TreatEarlyCloseAsError: true,
 	}), nil
@@ -187,7 +209,7 @@ func (bs *AZBlobBackupStorage) containerURL() (*azblob.ContainerURL, error) {
 
 // ListBackups implements BackupStorage.
 func (bs *AZBlobBackupStorage) ListBackups(ctx context.Context, dir string) ([]backupstorage.BackupHandle, error) {
-	log.Infof("ListBackups: [azblob] container: %v, prefix: %v", *containerName, dir)
+	log.Infof("ListBackups: [azblob] container: %s, directory: %v", *containerName, objName(dir, ""))
 
 	containerURL, err := bs.containerURL()
 	if err != nil {
@@ -200,6 +222,7 @@ func (bs *AZBlobBackupStorage) ListBackups(ctx context.Context, dir string) ([]b
 	var subdirs []string
 
 	for marker := (azblob.Marker{}); marker.NotDone(); {
+		// This returns Blobs in sorted order so we don't need to sort them a second time
 		resp, err := containerURL.ListBlobsHierarchySegment(ctx, marker, delimiter, azblob.ListBlobsSegmentOptions{
 			Prefix:     searchPrefix,
 			MaxResults: 0,
@@ -242,7 +265,7 @@ func (bs *AZBlobBackupStorage) StartBackup(ctx context.Context, dir, name string
 
 // RemoveBackup implements BackupStorage.
 func (bs *AZBlobBackupStorage) RemoveBackup(ctx context.Context, dir, name string) error {
-	log.Infof("ListBackups: [azblob] container: %v, prefix: %v", *containerName, dir)
+	log.Infof("ListBackups: [azblob] container: %s, directory: %s", *containerName, objName(dir, ""))
 
 	containerURL, err := bs.containerURL()
 	if err != nil {
@@ -284,10 +307,10 @@ func (bs *AZBlobBackupStorage) Close() error {
 
 // objName joins path parts into an object name.
 // Unlike path.Join, it doesn't collapse ".." or strip trailing slashes.
-// It also adds the value of the -gcs_backup_storage_root flag if set.
+// It also adds the value of the -azblob_backup_storage_root flag if set.
 func objName(parts ...string) string {
-	if *prefix != "" {
-		return *prefix + "/" + strings.Join(parts, "/")
+	if *storageRoot != "" {
+		return *storageRoot + "/" + strings.Join(parts, "/")
 	}
 	return strings.Join(parts, "/")
 }
