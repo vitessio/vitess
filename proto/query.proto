@@ -776,14 +776,10 @@ message AggregateStats {
 }
 
 // StreamHealthResponse is streamed by StreamHealth on a regular basis.
-// When StreamHealth is used between a vtgate and vttablet:
+// It is expected to be used between a vtgate and vttablet:
 // - target describes the tablet.
 // - realtime_stats is set.
-// - aggregate_stats is not set.
-// When StreamHealth is used between two vtgates:
-// - target describes the group of tablets.
-// - realtime_stats is not set.
-// - aggregate_stats is set.
+// - aggregate_stats is not set (deprecated)
 message StreamHealthResponse {
   // target is the current server type. Only queries with that exact Target
   // record will be accepted (the cell may not match, however).
@@ -826,9 +822,11 @@ message StreamHealthResponse {
   // It is only filled in if the information is about a tablet.
   RealtimeStats realtime_stats = 4;
 
+  reserved 6;
+  // Deprecated
   // AggregateStats constrains information about the group of tablet status.
   // It is only filled in if the information is about a group of tablets.
-  AggregateStats aggregate_stats = 6;
+  // AggregateStats aggregate_stats = 6;
 
   // tablet_alias is the alias of the sending tablet. The discovery/healthcheck.go
   // code uses it to verify that it's talking to the correct tablet and that it
