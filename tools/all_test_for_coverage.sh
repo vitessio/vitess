@@ -59,16 +59,11 @@ go test -coverpkg=vitess.io/vitess/go/...  -c vitess.io/vitess/go/cmd/vtworkercl
 echo "--------- executing endtoend testcases ---------"
 cluster_tests=$(echo "$packages_with_all_tests" | grep -E "go/test/endtoend" | cut -d" " -f1)
 
-counter=0
+
 # Run cluster test sequentially
 for i in $cluster_tests
 do
    echo "starting test for $i"
    go test  $i -v -p=1 -is-coverage=true || :
-
-   if [[ "$counter" -gt 2 ]]; then
-      break
-   fi
-   counter=$((counter+1))
 done
 
