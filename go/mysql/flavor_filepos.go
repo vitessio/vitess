@@ -56,9 +56,14 @@ func (flv *filePosFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
 		if err != nil {
 			return nil, err
 		}
+		pos, err := strconv.Atoi(resultMap["Position"])
+		if err != nil {
+			return nil, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", resultMap["Position"])
+		}
+
 		return filePosGTID{
 			file: resultMap["File"],
-			pos:  resultMap["Position"],
+			pos:  pos,
 		}, nil
 	}
 
@@ -66,9 +71,14 @@ func (flv *filePosFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
 	if err != nil {
 		return nil, err
 	}
+	pos, err := strconv.Atoi(resultMap["Exec_Master_Log_Pos"])
+	if err != nil {
+		return nil, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", resultMap["Exec_Master_Log_Pos"])
+	}
+
 	return filePosGTID{
 		file: resultMap["Relay_Master_Log_File"],
-		pos:  resultMap["Exec_Master_Log_Pos"],
+		pos:  pos,
 	}, nil
 }
 
@@ -91,13 +101,8 @@ func (flv *filePosFlavor) sendBinlogDumpCommand(c *Conn, slaveID uint32, startPo
 		return fmt.Errorf("startPos.GTIDSet is wrong type - expected filePosGTID, got: %#v", startPos.GTIDSet)
 	}
 
-	pos, err := strconv.Atoi(rpos.pos)
-	if err != nil {
-		return fmt.Errorf("invalid position: %v", startPos.GTIDSet)
-	}
 	flv.file = rpos.file
-
-	return c.WriteComBinlogDump(slaveID, rpos.file, uint32(pos), 0)
+	return c.WriteComBinlogDump(slaveID, rpos.file, uint32(rpos.pos), 0)
 }
 
 // readBinlogEvent is part of the Flavor interface.
@@ -212,9 +217,14 @@ func (flv *filePosFlavor) status(c *Conn) (SlaveStatus, error) {
 	}
 
 	status := parseSlaveStatus(resultMap)
+	pos, err := strconv.Atoi(resultMap["Exec_Master_Log_Pos"])
+	if err != nil {
+		return SlaveStatus{}, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", resultMap["Exec_Master_Log_Pos"])
+	}
+
 	status.Position.GTIDSet = filePosGTID{
 		file: resultMap["Relay_Master_Log_File"],
-		pos:  resultMap["Exec_Master_Log_Pos"],
+		pos:  pos,
 	}
 	return status, nil
 }
@@ -231,10 +241,10 @@ func (flv *filePosFlavor) waitUntilPositionCommand(ctx context.Context, pos Posi
 		if timeout <= 0 {
 			return "", fmt.Errorf("timed out waiting for position %v", pos)
 		}
-		return fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %s, %.6f)", filePosPos.file, filePosPos.pos, timeout.Seconds()), nil
+		return fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %d, %.6f)", filePosPos.file, filePosPos.pos, timeout.Seconds()), nil
 	}
 
-	return fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %s)", filePosPos.file, filePosPos.pos), nil
+	return fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %d)", filePosPos.file, filePosPos.pos), nil
 }
 
 func (*filePosFlavor) startSlaveUntilAfter(pos Position) string {
