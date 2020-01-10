@@ -70,6 +70,7 @@ func TestTabletInitialBackup(t *testing.T) {
 	// Run the entire backup test
 	firstBackupTest(t, "replica")
 
+	tearDown(t, true)
 }
 func TestTabletBackupOnly(t *testing.T) {
 	// Test Backup Flow
@@ -88,6 +89,8 @@ func TestTabletBackupOnly(t *testing.T) {
 
 	initTablets(t, true, true)
 	firstBackupTest(t, "replica")
+
+	tearDown(t, false)
 }
 
 func firstBackupTest(t *testing.T, tabletType string) {
@@ -155,7 +158,6 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	backups = countBackups(t)
 	assert.Equal(t, 0, backups)
 
-	tearDown(t)
 }
 
 func vtBackup(t *testing.T, initialBackup bool) {
@@ -243,7 +245,7 @@ func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForS
 	// Erase mysql/tablet dir, then start tablet with restore enabled.
 
 	log.Info("restoring tablet %s", time.Now())
-	resetTabletDirectory(t, *tablet)
+	resetTabletDirectory(t, *tablet, true)
 
 	err := tablet.VttabletProcess.CreateDB(keyspaceName)
 	assert.Nil(t, err)
@@ -257,7 +259,7 @@ func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForS
 	assert.Nil(t, err)
 }
 
-func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet) {
+func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet, initMysql bool) {
 
 	extraArgs := []string{"-db-credentials-file", dbCredentialFile}
 	tablet.MysqlctlProcess.ExtraArgs = extraArgs
@@ -273,36 +275,39 @@ func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet) {
 	err = os.RemoveAll(tablet.VttabletProcess.Directory)
 	assert.Nil(t, err)
 
-	// Init the Mysql
-	tablet.MysqlctlProcess.InitDBFile = newInitDBFile
-	err = tablet.MysqlctlProcess.Start()
-	assert.Nil(t, err)
+	if initMysql {
+		// Init the Mysql
+		tablet.MysqlctlProcess.InitDBFile = newInitDBFile
+		err = tablet.MysqlctlProcess.Start()
+		assert.Nil(t, err)
+	}
+
 }
 
-func tearDown(t *testing.T) {
+func tearDown(t *testing.T, initMysql bool) {
 	for _, tablet := range []cluster.Vttablet{*master, *replica1, *replica2} {
 		//Tear down Tablet
-		err := tablet.VttabletProcess.TearDown()
-		assert.Nil(t, err)
-		err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", tablet.Alias)
+		//err := tablet.VttabletProcess.TearDown()
+		//assert.Nil(t, err)
+		err := localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", tablet.Alias)
 		assert.Nil(t, err)
 
-		//resetTabletDirectory(t, tablet)
+		resetTabletDirectory(t, tablet, initMysql)
 	}
 
-	// reset replication
-	promoteSlaveCommands := "STOP SLAVE; RESET SLAVE ALL; RESET MASTER;"
-	disableSemiSyncCommands := "SET GLOBAL rpl_semi_sync_master_enabled = false; SET GLOBAL rpl_semi_sync_slave_enabled = false"
-	for _, tablet := range []cluster.Vttablet{*master, *replica1, *replica2} {
-		_, err := tablet.VttabletProcess.QueryTablet(promoteSlaveCommands, keyspaceName, true)
-		assert.Nil(t, err)
-		_, err = tablet.VttabletProcess.QueryTablet(disableSemiSyncCommands, keyspaceName, true)
-		assert.Nil(t, err)
-
-		for _, db := range []string{"_vt", "vt_insert_test"} {
-			_, err = tablet.VttabletProcess.QueryTablet(fmt.Sprintf("drop database if exists %s", db), keyspaceName, true)
-			assert.Nil(t, err)
-		}
-	}
+	//// reset replication
+	//promoteSlaveCommands := "STOP SLAVE; RESET SLAVE ALL; RESET MASTER;"
+	//disableSemiSyncCommands := "SET GLOBAL rpl_semi_sync_master_enabled = false; SET GLOBAL rpl_semi_sync_slave_enabled = false"
+	//for _, tablet := range []cluster.Vttablet{*master, *replica1, *replica2} {
+	//	_, err := tablet.VttabletProcess.QueryTablet(promoteSlaveCommands, keyspaceName, true)
+	//	assert.Nil(t, err)
+	//	_, err = tablet.VttabletProcess.QueryTablet(disableSemiSyncCommands, keyspaceName, true)
+	//	assert.Nil(t, err)
+	//
+	//	for _, db := range []string{"_vt", "vt_insert_test"} {
+	//		_, err = tablet.VttabletProcess.QueryTablet(fmt.Sprintf("drop database if exists %s", db), keyspaceName, true)
+	//		assert.Nil(t, err)
+	//	}
+	//}
 
 }
