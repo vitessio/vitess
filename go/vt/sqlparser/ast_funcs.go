@@ -37,15 +37,30 @@ func Walk(visit Visit, nodes ...SQLNode) error {
 		if node == nil {
 			continue
 		}
-		kontinue, err := visit(node)
+		var err error
+		var kontinue bool
+		pre := func(cursor *Cursor) bool {
+			// If we already have found an error, don't visit these nodes, just exit early
+			if err != nil {
+				return false
+			}
+			kontinue, err = visit(cursor.Node())
+			if err != nil {
+				return true // we have to return true here so that post gets called
+			}
+			return kontinue
+		}
+		post := func(cursor *Cursor) bool {
+			if err != nil {
+				return false // now we can abort the traversal if an error was found
+			}
+
+			return true
+		}
+
+		Rewrite(node, pre, post)
 		if err != nil {
 			return err
-		}
-		if kontinue {
-			err = node.walkSubtree(visit)
-			if err != nil {
-				return err
-			}
 		}
 	}
 	return nil
@@ -137,128 +152,6 @@ const (
 	BitVal
 )
 
-func (node *Select) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Comments,
-		node.SelectExprs,
-		node.From,
-		node.Where,
-		node.GroupBy,
-		node.Having,
-		node.OrderBy,
-		node.Limit,
-	)
-}
-
-func (node *ParenSelect) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Select,
-	)
-}
-
-func (node *Union) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Left,
-		node.Right,
-	)
-}
-
-func (node *Stream) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Comments,
-		node.SelectExpr,
-		node.Table,
-	)
-}
-
-func (node *Insert) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Comments,
-		node.Table,
-		node.Columns,
-		node.Rows,
-		node.OnDup,
-	)
-}
-
-func (node *Update) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Comments,
-		node.TableExprs,
-		node.Exprs,
-		node.Where,
-		node.OrderBy,
-		node.Limit,
-	)
-}
-
-func (node *Delete) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Comments,
-		node.Targets,
-		node.TableExprs,
-		node.Where,
-		node.OrderBy,
-		node.Limit,
-	)
-}
-
-func (node *Set) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Comments,
-		node.Exprs,
-	)
-}
-
-// walkSubtree walks the nodes of the subtree.
-func (node *DBDDL) walkSubtree(visit Visit) error {
-	return nil
-}
-
-func (node *DDL) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	for _, t := range node.AffectedTables() {
-		if err := Walk(visit, t); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // AffectedTables returns the list table names affected by the DDL.
 func (node *DDL) AffectedTables() TableNames {
 	if node.Action == RenameStr || node.Action == DropStr {
@@ -268,39 +161,6 @@ func (node *DDL) AffectedTables() TableNames {
 		return list
 	}
 	return TableNames{node.Table}
-}
-
-func (node *OptLike) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(visit, node.LikeTable)
-}
-
-func (node *PartitionSpec) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	if err := Walk(visit, node.Name); err != nil {
-		return err
-	}
-	for _, def := range node.Definitions {
-		if err := Walk(visit, def); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (node *PartitionDefinition) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Name,
-		node.Limit,
-	)
 }
 
 // AddColumn appends the given column to the list in the spec
@@ -316,43 +176,6 @@ func (ts *TableSpec) AddIndex(id *IndexDefinition) {
 // AddConstraint appends the given index to the list in the spec
 func (ts *TableSpec) AddConstraint(cd *ConstraintDefinition) {
 	ts.Constraints = append(ts.Constraints, cd)
-}
-
-func (ts *TableSpec) walkSubtree(visit Visit) error {
-	if ts == nil {
-		return nil
-	}
-
-	for _, n := range ts.Columns {
-		if err := Walk(visit, n); err != nil {
-			return err
-		}
-	}
-
-	for _, n := range ts.Indexes {
-		if err := Walk(visit, n); err != nil {
-			return err
-		}
-	}
-
-	for _, n := range ts.Constraints {
-		if err := Walk(visit, n); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (col *ColumnDefinition) walkSubtree(visit Visit) error {
-	if col == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		col.Name,
-		&col.Type,
-	)
 }
 
 // DescribeType returns the abbreviated type information as required for
@@ -479,33 +302,6 @@ func (ct *ColumnType) SQLType() querypb.Type {
 	panic("unimplemented type " + ct.Type)
 }
 
-func (ct *ColumnType) walkSubtree(visit Visit) error {
-	return nil
-}
-
-func (idx *IndexDefinition) walkSubtree(visit Visit) error {
-	if idx == nil {
-		return nil
-	}
-
-	for _, n := range idx.Columns {
-		if err := Walk(visit, n.Column); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (ii *IndexInfo) walkSubtree(visit Visit) error {
-	return Walk(visit, ii.Name)
-}
-
-func (node *AutoIncSpec) walkSubtree(visit Visit) error {
-	err := Walk(visit, node.Sequence, node.Column)
-	return err
-}
-
 // ParseParams parses the vindex parameter list, pulling out the special-case
 // "owner" parameter
 func (node *VindexSpec) ParseParams() (string, map[string]string) {
@@ -521,50 +317,9 @@ func (node *VindexSpec) ParseParams() (string, map[string]string) {
 	return owner, params
 }
 
-func (node *VindexSpec) walkSubtree(visit Visit) error {
-	err := Walk(visit,
-		node.Name,
-	)
-
-	if err != nil {
-		return err
-	}
-
-	for _, p := range node.Params {
-		err := Walk(visit, p)
-
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (node VindexParam) walkSubtree(visit Visit) error {
-	return Walk(visit,
-		node.Key,
-	)
-}
-
-func (c *ConstraintDefinition) walkSubtree(visit Visit) error {
-	return Walk(visit, c.Details)
-}
-
-func (a ReferenceAction) walkSubtree(visit Visit) error { return nil }
-
 var _ ConstraintInfo = &ForeignKeyDefinition{}
 
 func (f *ForeignKeyDefinition) iConstraintInfo() {}
-
-func (f *ForeignKeyDefinition) walkSubtree(visit Visit) error {
-	if err := Walk(visit, f.Source); err != nil {
-		return err
-	}
-	if err := Walk(visit, f.ReferencedTable); err != nil {
-		return err
-	}
-	return Walk(visit, f.ReferencedColumns)
-}
 
 // HasOnTable returns true if the show statement has an "on" clause
 func (node *Show) HasOnTable() bool {
@@ -575,85 +330,6 @@ func (node *Show) HasOnTable() bool {
 // Not all show statements parse table names.
 func (node *Show) HasTable() bool {
 	return node.Table.Name.v != ""
-}
-
-func (node *Show) walkSubtree(visit Visit) error {
-	return nil
-}
-
-func (node *ShowFilter) walkSubtree(visit Visit) error {
-	return nil
-}
-
-func (node *Use) walkSubtree(visit Visit) error {
-	return Walk(visit, node.DBName)
-}
-
-func (node *Begin) walkSubtree(visit Visit) error {
-	return nil
-}
-
-func (node *Commit) walkSubtree(visit Visit) error {
-	return nil
-}
-
-func (node *Rollback) walkSubtree(visit Visit) error {
-	return nil
-}
-
-func (node *OtherRead) walkSubtree(visit Visit) error {
-	return nil
-}
-
-func (node *OtherAdmin) walkSubtree(visit Visit) error {
-	return nil
-}
-
-func (node Comments) walkSubtree(visit Visit) error {
-	return nil
-}
-
-func (node SelectExprs) walkSubtree(visit Visit) error {
-	for _, n := range node {
-		if err := Walk(visit, n); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (node *StarExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.TableName,
-	)
-}
-
-func (node *AliasedExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Expr,
-		node.As,
-	)
-}
-
-func (node Nextval) walkSubtree(visit Visit) error {
-	return Walk(visit, node.Expr)
-}
-
-func (node Columns) walkSubtree(visit Visit) error {
-	for _, n := range node {
-		if err := Walk(visit, n); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // FindColumn finds a column in the column list, returning
@@ -667,58 +343,11 @@ func (node Columns) FindColumn(col ColIdent) int {
 	return -1
 }
 
-func (node Partitions) walkSubtree(visit Visit) error {
-	for _, n := range node {
-		if err := Walk(visit, n); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (node TableExprs) walkSubtree(visit Visit) error {
-	for _, n := range node {
-		if err := Walk(visit, n); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (node *AliasedTableExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Expr,
-		node.As,
-		node.Hints,
-	)
-}
-
 // RemoveHints returns a new AliasedTableExpr with the hints removed.
 func (node *AliasedTableExpr) RemoveHints() *AliasedTableExpr {
 	noHints := *node
 	noHints.Hints = nil
 	return &noHints
-}
-
-func (node TableNames) walkSubtree(visit Visit) error {
-	for _, n := range node {
-		if err := Walk(visit, n); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (node TableName) walkSubtree(visit Visit) error {
-	return Walk(
-		visit,
-		node.Name,
-		node.Qualifier,
-	)
 }
 
 // IsEmpty returns true if TableName is nil or empty.
@@ -737,48 +366,6 @@ func (node TableName) ToViewName() TableName {
 	}
 }
 
-func (node *ParenTableExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Exprs,
-	)
-}
-
-func (node JoinCondition) walkSubtree(visit Visit) error {
-	return Walk(
-		visit,
-		node.On,
-		node.Using,
-	)
-}
-
-func (node *JoinTableExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.LeftExpr,
-		node.RightExpr,
-		node.Condition,
-	)
-}
-
-func (node *IndexHints) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	for _, n := range node.Indexes {
-		if err := Walk(visit, n); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // NewWhere creates a WHERE or HAVING clause out
 // of a Expr. If the expression is nil, it returns nil.
 func NewWhere(typ string, expr Expr) *Where {
@@ -788,126 +375,30 @@ func NewWhere(typ string, expr Expr) *Where {
 	return &Where{Type: typ, Expr: expr}
 }
 
-func (node *Where) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Expr,
-	)
-}
-
 // ReplaceExpr finds the from expression from root
 // and replaces it with to. If from matches root,
 // then to is returned.
 func ReplaceExpr(root, from, to Expr) Expr {
-	if root == from {
-		return to
+	expr, success := Rewrite(root, replaceExpr(from, to), nil).(Expr)
+	if !success {
+		panic("expression rewriting ended up with a non-expression")
 	}
-	root.replace(from, to)
-	return root
+
+	return expr
 }
 
-// replaceExprs is a convenience function used by implementors
-// of the replace method.
-func replaceExprs(from, to Expr, exprs ...*Expr) bool {
-	for _, expr := range exprs {
-		if *expr == nil {
-			continue
+func replaceExpr(from, to Expr) func(cursor *Cursor) bool {
+	return func(cursor *Cursor) bool {
+		if cursor.Node() == from {
+			cursor.Replace(to)
 		}
-		if *expr == from {
-			*expr = to
-			return true
+		switch cursor.Node().(type) {
+		case *ExistsExpr, *SQLVal, *Subquery, *ValuesFuncExpr, *Default:
+			return false
 		}
-		if (*expr).replace(from, to) {
-			return true
-		}
+
+		return true
 	}
-	return false
-}
-
-func (node Exprs) walkSubtree(visit Visit) error {
-	for _, n := range node {
-		if err := Walk(visit, n); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (node *AndExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Left,
-		node.Right,
-	)
-}
-
-func (node *AndExpr) replace(from, to Expr) bool {
-	return replaceExprs(from, to, &node.Left, &node.Right)
-}
-
-func (node *OrExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Left,
-		node.Right,
-	)
-}
-
-func (node *OrExpr) replace(from, to Expr) bool {
-	return replaceExprs(from, to, &node.Left, &node.Right)
-}
-
-func (node *NotExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Expr,
-	)
-}
-
-func (node *NotExpr) replace(from, to Expr) bool {
-	return replaceExprs(from, to, &node.Expr)
-}
-
-func (node *ParenExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Expr,
-	)
-}
-
-func (node *ParenExpr) replace(from, to Expr) bool {
-	return replaceExprs(from, to, &node.Expr)
-}
-
-func (node *ComparisonExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Left,
-		node.Right,
-		node.Escape,
-	)
-}
-
-func (node *ComparisonExpr) replace(from, to Expr) bool {
-	return replaceExprs(from, to, &node.Left, &node.Right, &node.Escape)
 }
 
 // IsImpossible returns true if the comparison in the expression can never evaluate to true.
@@ -933,50 +424,6 @@ func (node *ComparisonExpr) IsImpossible() bool {
 		}
 		return true
 	}
-	return false
-}
-
-func (node *RangeCond) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Left,
-		node.From,
-		node.To,
-	)
-}
-
-func (node *RangeCond) replace(from, to Expr) bool {
-	return replaceExprs(from, to, &node.Left, &node.From, &node.To)
-}
-
-func (node *IsExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Expr,
-	)
-}
-
-func (node *IsExpr) replace(from, to Expr) bool {
-	return replaceExprs(from, to, &node.Expr)
-}
-
-func (node *ExistsExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Subquery,
-	)
-}
-
-func (node *ExistsExpr) replace(from, to Expr) bool {
 	return false
 }
 
@@ -1033,14 +480,6 @@ func NewValArg(in []byte) *SQLVal {
 	return &SQLVal{Type: ValArg, Val: in}
 }
 
-func (node *SQLVal) walkSubtree(visit Visit) error {
-	return nil
-}
-
-func (node *SQLVal) replace(from, to Expr) bool {
-	return false
-}
-
 // HexDecode decodes the hexval into bytes.
 func (node *SQLVal) HexDecode() ([]byte, error) {
 	dst := make([]byte, hex.DecodedLen(len([]byte(node.Val))))
@@ -1051,37 +490,6 @@ func (node *SQLVal) HexDecode() ([]byte, error) {
 	return dst, err
 }
 
-func (node *NullVal) walkSubtree(visit Visit) error {
-	return nil
-}
-
-func (node *NullVal) replace(from, to Expr) bool {
-	return false
-}
-
-func (node BoolVal) walkSubtree(visit Visit) error {
-	return nil
-}
-
-func (node BoolVal) replace(from, to Expr) bool {
-	return false
-}
-
-func (node *ColName) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Name,
-		node.Qualifier,
-	)
-}
-
-func (node *ColName) replace(from, to Expr) bool {
-	return false
-}
-
 // Equal returns true if the column names match.
 func (node *ColName) Equal(c *ColName) bool {
 	// Failsafe: ColName should not be empty.
@@ -1089,158 +497,6 @@ func (node *ColName) Equal(c *ColName) bool {
 		return false
 	}
 	return node.Name.Equal(c.Name) && node.Qualifier == c.Qualifier
-}
-
-func (node ValTuple) walkSubtree(visit Visit) error {
-	return Walk(visit, Exprs(node))
-}
-
-func (node ValTuple) replace(from, to Expr) bool {
-	for i := range node {
-		if replaceExprs(from, to, &node[i]) {
-			return true
-		}
-	}
-	return false
-}
-
-func (node *Subquery) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Select,
-	)
-}
-
-func (node *Subquery) replace(from, to Expr) bool {
-	return false
-}
-
-func (node ListArg) walkSubtree(visit Visit) error {
-	return nil
-}
-
-func (node ListArg) replace(from, to Expr) bool {
-	return false
-}
-
-func (node *BinaryExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Left,
-		node.Right,
-	)
-}
-
-func (node *BinaryExpr) replace(from, to Expr) bool {
-	return replaceExprs(from, to, &node.Left, &node.Right)
-}
-
-func (node *UnaryExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Expr,
-	)
-}
-
-func (node *UnaryExpr) replace(from, to Expr) bool {
-	return replaceExprs(from, to, &node.Expr)
-}
-
-func (node *IntervalExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Expr,
-	)
-}
-
-func (node *IntervalExpr) replace(from, to Expr) bool {
-	return replaceExprs(from, to, &node.Expr)
-}
-
-func (node *TimestampFuncExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Expr1,
-		node.Expr2,
-	)
-}
-
-func (node *TimestampFuncExpr) replace(from, to Expr) bool {
-	if replaceExprs(from, to, &node.Expr1) {
-		return true
-	}
-	if replaceExprs(from, to, &node.Expr2) {
-		return true
-	}
-	return false
-}
-
-func (node *CurTimeFuncExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Fsp,
-	)
-}
-
-func (node *CurTimeFuncExpr) replace(from, to Expr) bool {
-	return replaceExprs(from, to, &node.Fsp)
-}
-
-func (node *CollateExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Expr,
-	)
-}
-
-func (node *CollateExpr) replace(from, to Expr) bool {
-	return replaceExprs(from, to, &node.Expr)
-}
-
-func (node *FuncExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Qualifier,
-		node.Name,
-		node.Exprs,
-	)
-}
-
-func (node *FuncExpr) replace(from, to Expr) bool {
-	for _, sel := range node.Exprs {
-		aliased, ok := sel.(*AliasedExpr)
-		if !ok {
-			continue
-		}
-		if replaceExprs(from, to, &aliased.Expr) {
-			return true
-		}
-	}
-	return false
 }
 
 // Aggregates is a map of all aggregate functions.
@@ -1268,266 +524,11 @@ func (node *FuncExpr) IsAggregate() bool {
 	return Aggregates[node.Name.Lowered()]
 }
 
-func (node *GroupConcatExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Exprs,
-		node.OrderBy,
-	)
-}
-
-func (node *GroupConcatExpr) replace(from, to Expr) bool {
-	for _, sel := range node.Exprs {
-		aliased, ok := sel.(*AliasedExpr)
-		if !ok {
-			continue
-		}
-		if replaceExprs(from, to, &aliased.Expr) {
-			return true
-		}
-	}
-	for _, order := range node.OrderBy {
-		if replaceExprs(from, to, &order.Expr) {
-			return true
-		}
-	}
-	return false
-}
-
-func (node *ValuesFuncExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Name,
-	)
-}
-
-func (node *ValuesFuncExpr) replace(from, to Expr) bool {
-	return false
-}
-
-func (node *SubstrExpr) replace(from, to Expr) bool {
-	return replaceExprs(from, to, &node.From, &node.To)
-}
-
-func (node *SubstrExpr) walkSubtree(visit Visit) error {
-	if node == nil || node.Name == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Name,
-		node.From,
-		node.To,
-	)
-}
-
-func (node *ConvertExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Expr,
-		node.Type,
-	)
-}
-
-func (node *ConvertExpr) replace(from, to Expr) bool {
-	return replaceExprs(from, to, &node.Expr)
-}
-
-func (node *ConvertUsingExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Expr,
-	)
-}
-
-func (node *ConvertUsingExpr) replace(from, to Expr) bool {
-	return replaceExprs(from, to, &node.Expr)
-}
-
-func (node *ConvertType) walkSubtree(visit Visit) error {
-	return nil
-}
-
-func (node *MatchExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Columns,
-		node.Expr,
-	)
-}
-
-func (node *MatchExpr) replace(from, to Expr) bool {
-	for _, sel := range node.Columns {
-		aliased, ok := sel.(*AliasedExpr)
-		if !ok {
-			continue
-		}
-		if replaceExprs(from, to, &aliased.Expr) {
-			return true
-		}
-	}
-	return replaceExprs(from, to, &node.Expr)
-}
-
-func (node *CaseExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	if err := Walk(visit, node.Expr); err != nil {
-		return err
-	}
-	for _, n := range node.Whens {
-		if err := Walk(visit, n); err != nil {
-			return err
-		}
-	}
-	return Walk(visit, node.Else)
-}
-
-func (node *CaseExpr) replace(from, to Expr) bool {
-	for _, when := range node.Whens {
-		if replaceExprs(from, to, &when.Cond, &when.Val) {
-			return true
-		}
-	}
-	return replaceExprs(from, to, &node.Expr, &node.Else)
-}
-
-func (node *Default) walkSubtree(visit Visit) error {
-	return nil
-}
-
-func (node *Default) replace(from, to Expr) bool {
-	return false
-}
-
-func (node *When) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Cond,
-		node.Val,
-	)
-}
-
-func (node GroupBy) walkSubtree(visit Visit) error {
-	for _, n := range node {
-		if err := Walk(visit, n); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (node OrderBy) walkSubtree(visit Visit) error {
-	for _, n := range node {
-		if err := Walk(visit, n); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (node *Order) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Expr,
-	)
-}
-
-func (node *Limit) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Offset,
-		node.Rowcount,
-	)
-}
-
-func (node Values) walkSubtree(visit Visit) error {
-	for _, n := range node {
-		if err := Walk(visit, n); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (node UpdateExprs) walkSubtree(visit Visit) error {
-	for _, n := range node {
-		if err := Walk(visit, n); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (node *UpdateExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Name,
-		node.Expr,
-	)
-}
-
-func (node SetExprs) walkSubtree(visit Visit) error {
-	for _, n := range node {
-		if err := Walk(visit, n); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (node *SetExpr) walkSubtree(visit Visit) error {
-	if node == nil {
-		return nil
-	}
-	return Walk(
-		visit,
-		node.Name,
-		node.Expr,
-	)
-}
-
-func (node OnDup) walkSubtree(visit Visit) error {
-	return Walk(visit, UpdateExprs(node))
-}
-
 // NewColIdent makes a new ColIdent.
 func NewColIdent(str string) ColIdent {
 	return ColIdent{
 		val: str,
 	}
-}
-
-func (node ColIdent) walkSubtree(visit Visit) error {
-	return nil
 }
 
 // IsEmpty returns true if the name is empty.
@@ -1591,10 +592,6 @@ func (node *ColIdent) UnmarshalJSON(b []byte) error {
 // NewTableIdent creates a new TableIdent.
 func NewTableIdent(str string) TableIdent {
 	return TableIdent{v: str}
-}
-
-func (node TableIdent) walkSubtree(visit Visit) error {
-	return nil
 }
 
 // IsEmpty returns true if TabIdent is empty.
