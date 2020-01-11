@@ -35,7 +35,7 @@ for zkid in $zkids; do
     echo "    $VTDATAROOT/$zkdir"
     action='start'
   fi
-  $VTROOT/bin/zkctl -zk.myid $zkid -zk.cfg $zkcfg -log_dir $VTDATAROOT/tmp $action \
+  zkctl -zk.myid $zkid -zk.cfg $zkcfg -log_dir $VTDATAROOT/tmp $action \
     > $VTDATAROOT/tmp/zkctl_$zkid.out 2>&1 &
   pids[$zkid]=$!
 done
@@ -56,7 +56,7 @@ echo "Started zk servers."
 # If the node already exists, it's fine, means we used existing data.
 set +e
 # shellcheck disable=SC2086
-$VTROOT/bin/vtctl $TOPOLOGY_FLAGS AddCellInfo \
+vtctl $TOPOLOGY_FLAGS AddCellInfo \
   -root /vitess/$cell \
   -server_address $ZK_SERVER \
   $cell
