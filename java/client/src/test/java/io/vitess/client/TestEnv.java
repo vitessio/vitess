@@ -78,7 +78,7 @@ public class TestEnv {
     }
     String schemaDir = getTestDataPath() + "/schema";
     List<String> command = new ArrayList<String>();
-    command.add(vtRoot + "/py/vttest/run_local_database.py");
+    command.add(vtRoot + "/py-vtdb/vttest/run_local_database.py");
     command.add("--port");
     command.add(Integer.toString(port));
     command.add("--proto_topo");

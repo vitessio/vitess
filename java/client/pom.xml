@@ -29,6 +29,11 @@
       <artifactId>commons-collections4</artifactId>
     </dependency>
 
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-api</artifactId>
+    </dependency>
+
     <!-- Dependencies with limited scope. -->
     <dependency>
       <groupId>com.google.code.findbugs</groupId>
@@ -53,11 +58,6 @@
       <scope>test</scope>
     </dependency>
 
-    <dependency>
-      <groupId>log4j</groupId>
-      <artifactId>log4j</artifactId>
-      <scope>test</scope>
-    </dependency>
   </dependencies>
 
   <build>
