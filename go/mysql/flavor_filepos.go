@@ -40,44 +40,25 @@ func newFilePosFlavor() flavor {
 
 // masterGTIDSet is part of the Flavor interface.
 func (flv *filePosFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
-	qr, err := c.ExecuteFetch("SHOW SLAVE STATUS", 100, true /* wantfields */)
+	qr, err := c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
 	if err != nil {
 		return nil, err
 	}
 	if len(qr.Rows) == 0 {
-		qr, err = c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
-		if err != nil {
-			return nil, err
-		}
-		if len(qr.Rows) == 0 {
-			return nil, errors.New("no master or slave status")
-		}
-		resultMap, err := resultToMap(qr)
-		if err != nil {
-			return nil, err
-		}
-		pos, err := strconv.Atoi(resultMap["Position"])
-		if err != nil {
-			return nil, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", resultMap["Position"])
-		}
-
-		return filePosGTID{
-			file: resultMap["File"],
-			pos:  pos,
-		}, nil
+		return nil, errors.New("no master status")
 	}
 
 	resultMap, err := resultToMap(qr)
 	if err != nil {
 		return nil, err
 	}
-	pos, err := strconv.Atoi(resultMap["Exec_Master_Log_Pos"])
+	pos, err := strconv.Atoi(resultMap["Position"])
 	if err != nil {
-		return nil, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", resultMap["Exec_Master_Log_Pos"])
+		return nil, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", resultMap["Position"])
 	}
 
 	return filePosGTID{
-		file: resultMap["Relay_Master_Log_File"],
+		file: resultMap["File"],
 		pos:  pos,
 	}, nil
 }
