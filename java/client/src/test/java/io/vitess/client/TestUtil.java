@@ -30,15 +30,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.log4j.LogManager;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.joda.time.Duration;
 import org.junit.Assert;
 import vttest.Vttest.VTTestTopology;
 
 public class TestUtil {
 
-  static final Logger logger = LogManager.getLogger(TestUtil.class.getName());
+  static final Logger logger = LogManager.getLogger(TestUtil.class);
   public static final String PROPERTY_KEY_CLIENT_TEST_ENV = "vitess.client.testEnv";
   public static final String PROPERTY_KEY_CLIENT_TEST_PORT = "vitess.client.testEnv.portName";
   public static final String PROPERTY_KEY_CLIENT_FACTORY_CLASS = "vitess.client.factory";
