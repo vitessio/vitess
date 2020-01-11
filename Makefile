@@ -87,6 +87,11 @@ install: build
 parser:
 	make -C go/vt/sqlparser
 
+visitor:
+	go build -o visitorgen go/visitorgen/main/main.go
+	./visitorgen -input=go/vt/sqlparser/ast.go -output=go/vt/sqlparser/rewriter.go
+	rm ./visitorgen
+
 # To pass extra flags, run test.go manually.
 # For example: go run test.go -docker=false -- --extra-flag
 # For more info see: go run test.go -help
@@ -100,9 +105,10 @@ clean:
 	go clean -i ./go/...
 	rm -rf third_party/acolyte
 	rm -rf go/vt/.proto.tmp
+	rm -rf ./visitorgen
 
 # Remove everything including stuff pulled down by bootstrap.sh
-cleanall:
+cleanall: clean
 	# directories created by bootstrap.sh
 	# - exclude vtdataroot and vthook as they may have data we want
 	rm -rf bin dist lib pkg
