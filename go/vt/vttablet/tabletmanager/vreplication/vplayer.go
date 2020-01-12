@@ -112,18 +112,7 @@ func (vp *vplayer) play(ctx context.Context) error {
 		}
 	}
 
-	if err := vp.fetchAndApply(ctx); err != nil {
-		msg := err.Error()
-		vp.vr.stats.History.Add(&binlogplayer.StatsHistoryRecord{
-			Time:    time.Now(),
-			Message: msg,
-		})
-		if err := vp.vr.setMessage(msg); err != nil {
-			log.Errorf("Failed to set error state: %v", err)
-		}
-		return err
-	}
-	return nil
+	return vp.fetchAndApply(ctx)
 }
 
 // fetchAndApply performs the fetching and application of the binlogs.
