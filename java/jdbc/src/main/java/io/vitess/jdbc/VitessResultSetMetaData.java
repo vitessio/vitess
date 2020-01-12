@@ -25,7 +25,6 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.util.List;
-import java.util.logging.Logger;
 
 
 /**
@@ -33,8 +32,6 @@ import java.util.logging.Logger;
  */
 public class VitessResultSetMetaData implements ResultSetMetaData {
 
-  /* Get actual class name to be printed on */
-  private static Logger logger = Logger.getLogger(VitessResultSetMetaData.class.getName());
   private List<FieldWithMetadata> fields;
 
   public VitessResultSetMetaData(List<FieldWithMetadata> fields) throws SQLException {
