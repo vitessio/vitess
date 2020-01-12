@@ -41,7 +41,6 @@ import java.util.Map;
 import java.util.SortedMap;
 import java.util.StringTokenizer;
 import java.util.TreeMap;
-import java.util.logging.Logger;
 
 /**
  * Created by ashudeep.sharma on 15/02/16.
@@ -50,7 +49,6 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData implemen
     DatabaseMetaData {
 
   private static final String DRIVER_NAME = "Vitess MySQL JDBC Driver";
-  private static Logger logger = Logger.getLogger(VitessMySQLDatabaseMetadata.class.getName());
   private static String mysqlKeywordsThatArentSQL92;
 
   static {
