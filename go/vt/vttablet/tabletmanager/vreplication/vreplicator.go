@@ -113,6 +113,16 @@ func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreame
 // However, there are some subtle differences, explained in the plan builder
 // code.
 func (vr *vreplicator) Replicate(ctx context.Context) error {
+	err := vr.replicate(ctx)
+	if err != nil {
+		if err := vr.setMessage(err.Error()); err != nil {
+			log.Errorf("Failed to set error state: %v", err)
+		}
+	}
+	return err
+}
+
+func (vr *vreplicator) replicate(ctx context.Context) error {
 	tableKeys, err := vr.buildTableKeys()
 	if err != nil {
 		return err
@@ -218,7 +228,18 @@ func (vr *vreplicator) setMessage(message string) error {
 }
 
 func (vr *vreplicator) setState(state, message string) error {
-	return binlogplayer.SetVReplicationState(vr.dbClient, vr.id, state, message)
+	if message != "" {
+		vr.stats.History.Add(&binlogplayer.StatsHistoryRecord{
+			Time:    time.Now(),
+			Message: message,
+		})
+	}
+	vr.stats.State.Set(state)
+	query := fmt.Sprintf("update _vt.vreplication set state='%v', message=%v where id=%v", state, encodeString(binlogplayer.MessageTruncate(message)), vr.id)
+	if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
+		return fmt.Errorf("could not set state: %v: %v", query, err)
+	}
+	return nil
 }
 
 func encodeString(in string) string {
