@@ -518,6 +518,33 @@ func TestMaterializerRenamedColumns(t *testing.T) {
 	env.tmc.verifyQueries(t)
 }
 
+func TestMaterializerStopAfterCopy(t *testing.T) {
+	ms := &vtctldatapb.MaterializeSettings{
+		Workflow:       "workflow",
+		SourceKeyspace: "sourceks",
+		TargetKeyspace: "targetks",
+		StopAfterCopy:  true,
+		TableSettings: []*vtctldatapb.TableMaterializeSettings{{
+			TargetTable:      "t1",
+			SourceExpression: "select * from t1",
+			CreateDdl:        "t1ddl",
+		}, {
+			TargetTable:      "t2",
+			SourceExpression: "select * from t3",
+			CreateDdl:        "t2ddl",
+		}},
+	}
+	env := newTestMaterializerEnv(t, ms, []string{"0"}, []string{"0"})
+	defer env.close()
+
+	env.tmc.expectVRQuery(200, insertPrefix+`.*stop_after_copy:true`, &sqltypes.Result{})
+	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
+
+	err := env.wr.Materialize(context.Background(), ms)
+	assert.NoError(t, err)
+	env.tmc.verifyQueries(t)
+}
+
 func TestMaterializerNoTargetVSchema(t *testing.T) {
 	ms := &vtctldatapb.MaterializeSettings{
 		Workflow:       "workflow",
