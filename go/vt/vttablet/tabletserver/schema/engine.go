@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -514,7 +515,7 @@ func (se *Engine) getTableRows() map[string]int64 {
 	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range se.tables {
-		tstats[k] = v.TableRows.Get()
+		tstats[strings.Replace(k, ".", "_", -1)] = v.TableRows.Get()
 	}
 	return tstats
 }
@@ -524,7 +525,7 @@ func (se *Engine) getDataLength() map[string]int64 {
 	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range se.tables {
-		tstats[k] = v.DataLength.Get()
+		tstats[strings.Replace(k, ".", "_", -1)] = v.DataLength.Get()
 	}
 	return tstats
 }
@@ -534,7 +535,7 @@ func (se *Engine) getIndexLength() map[string]int64 {
 	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range se.tables {
-		tstats[k] = v.IndexLength.Get()
+		tstats[strings.Replace(k, ".", "_", -1)] = v.IndexLength.Get()
 	}
 	return tstats
 }
@@ -544,7 +545,7 @@ func (se *Engine) getDataFree() map[string]int64 {
 	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range se.tables {
-		tstats[k] = v.DataFree.Get()
+		tstats[strings.Replace(k, ".", "_", -1)] = v.DataFree.Get()
 	}
 	return tstats
 }
@@ -554,7 +555,7 @@ func (se *Engine) getMaxDataLength() map[string]int64 {
 	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range se.tables {
-		tstats[k] = v.MaxDataLength.Get()
+		tstats[strings.Replace(k, ".", "_", -1)] = v.MaxDataLength.Get()
 	}
 	return tstats
 }
