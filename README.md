@@ -4,6 +4,7 @@
 [![Go Report Card](https://goreportcard.com/badge/vitess.io/vitess)](https://goreportcard.com/report/vitess.io/vitess)
 [![FOSSA Status](https://app.fossa.io/api/projects/git%2Bgithub.com%2Fvitessio%2Fvitess.svg?type=shield)](https://app.fossa.io/projects/git%2Bgithub.com%2Fvitessio%2Fvitess?ref=badge_shield)
 [![CII Best Practices](https://bestpractices.coreinfrastructure.org/projects/1724/badge)](https://bestpractices.coreinfrastructure.org/projects/1724)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=vitessio&metric=coverage)](https://sonarcloud.io/dashboard?id=vitessio)
 
 # Vitess 
 

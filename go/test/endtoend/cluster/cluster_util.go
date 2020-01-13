@@ -120,3 +120,18 @@ func getTablet(tabletGrpcPort int, hostname string) *tabletpb.Tablet {
 	portMap["grpc"] = int32(tabletGrpcPort)
 	return &tabletpb.Tablet{Hostname: hostname, PortMap: portMap}
 }
+
+func filterResultWhenRunsForCoverage(input string) string {
+	lines := strings.Split(input, "\n")
+	var result string
+	for _, line := range lines {
+		if strings.Contains(line, "=== RUN") {
+			continue
+		}
+		if strings.Contains(line, "--- PASS:") || strings.Contains(line, "PASS") {
+			break
+		}
+		result = result + line + "\n"
+	}
+	return result
+}
