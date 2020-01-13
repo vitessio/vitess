@@ -484,10 +484,6 @@ func (cluster *LocalProcessCluster) Teardown() {
 		log.Errorf("Error in etcd teardown - %s", err.Error())
 	}
 
-	if err := cluster.VtbackupProcess.TearDown(); err != nil {
-		log.Errorf("Error in VtBackup teardown - %s", err.Error())
-	}
-
 }
 
 // StartVtworker starts a vtworker
