@@ -61,7 +61,7 @@ func TestTopoCustomRule(t *testing.T) {
 	}
 
 	// Start a new Tablet
-	rTablet := clusterInstance.GetVttabletInstance("replica", replicaUID, "")
+	rTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
 
 	// Init Tablets
 	err = clusterInstance.VtctlclientProcess.InitTablet(rTablet, cell, keyspaceName, hostname, shardName)

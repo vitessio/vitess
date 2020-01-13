@@ -29,31 +29,47 @@ import (
 )
 
 // buildInsertPlan builds the route for an INSERT statement.
-func buildInsertPlan(ins *sqlparser.Insert, vschema ContextVSchema) (*engine.Insert, error) {
+func buildInsertPlan(ins *sqlparser.Insert, vschema ContextVSchema) (_ engine.Primitive, needsLastInsertID bool, needsDBName bool, _ error) {
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(ins)))
 	exprs := sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: ins.Table}}
 	ro, err := pb.processDMLTable(exprs)
 	if err != nil {
-		return nil, err
+		return nil, false, false, err
 	}
 	// The table might have been routed to a different one.
 	ins.Table = exprs[0].(*sqlparser.AliasedTableExpr).Expr.(sqlparser.TableName)
 	if ro.eroute.TargetDestination != nil {
-		return nil, errors.New("unsupported: INSERT with a target destination")
+		return nil, false, false, errors.New("unsupported: INSERT with a target destination")
 	}
 	if !ro.vschemaTable.Keyspace.Sharded {
 		if !pb.finalizeUnshardedDMLSubqueries(ins) {
-			return nil, errors.New("unsupported: sharded subquery in insert values")
+			return nil, false, false, errors.New("unsupported: sharded subquery in insert values")
 		}
-		return buildInsertUnshardedPlan(ins, ro.vschemaTable, vschema)
+		return buildInsertUnshardedPlan(ins, ro.vschemaTable)
 	}
 	if ins.Action == sqlparser.ReplaceStr {
-		return nil, errors.New("unsupported: REPLACE INTO with sharded schema")
+		return nil, false, false, errors.New("unsupported: REPLACE INTO with sharded schema")
 	}
 	return buildInsertShardedPlan(ins, ro.vschemaTable)
 }
 
-func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vschema ContextVSchema) (*engine.Insert, error) {
+// rewriteValues will go over the insert values and rewrite them when needed
+func rewriteValues(in sqlparser.Values) (_ sqlparser.Values, needsLastInsertID bool, needsDBName bool, _ error) {
+	for i, row := range in {
+		for j, val := range row {
+			rewritten, err := Rewrite(val)
+			if err != nil {
+				return nil, false, false, vterrors.Wrap(err, "failed to rewrite insert value")
+			}
+			in[i][j] = rewritten.Expression
+			needsLastInsertID = needsLastInsertID || rewritten.NeedLastInsertID
+			needsDBName = needsDBName || rewritten.NeedDatabase
+		}
+	}
+	return in, needsLastInsertID, needsDBName, nil
+}
+
+func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (_ engine.Primitive, needsLastInsertID bool, needsDBName bool, _ error) {
 	eins := engine.NewSimpleInsert(
 		engine.InsertUnsharded,
 		table,
@@ -63,41 +79,45 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, vsch
 	switch insertValues := ins.Rows.(type) {
 	case *sqlparser.Select, *sqlparser.Union:
 		if eins.Table.AutoIncrement != nil {
-			return nil, errors.New("unsupported: auto-inc and select in insert")
+			return nil, false, false, errors.New("unsupported: auto-inc and select in insert")
 		}
 		eins.Query = generateQuery(ins)
-		return eins, nil
+		return eins, false, false, nil
 	case sqlparser.Values:
-		rows = insertValues
+		var err error
+		rows, needsLastInsertID, needsDBName, err = rewriteValues(insertValues)
+		if err != nil {
+			return nil, false, false, err
+		}
 	default:
-		return nil, fmt.Errorf("BUG: unexpected construct in insert: %T", insertValues)
+		return nil, false, false, fmt.Errorf("BUG: unexpected construct in insert: %T", insertValues)
 	}
 	if eins.Table.AutoIncrement == nil {
 		eins.Query = generateQuery(ins)
-		return eins, nil
+	} else {
+		// Table has auto-inc and has a VALUES clause.
+		if len(ins.Columns) == 0 {
+			if table.ColumnListAuthoritative {
+				populateInsertColumnlist(ins, table)
+			} else {
+				return nil, false, false, errors.New("column list required for tables with auto-inc columns")
+			}
+		}
+		for _, row := range rows {
+			if len(ins.Columns) != len(row) {
+				return nil, false, false, errors.New("column list doesn't match values")
+			}
+		}
+		if err := modifyForAutoinc(ins, eins); err != nil {
+			return nil, false, false, err
+		}
+		eins.Query = generateQuery(ins)
 	}
 
-	// Table has auto-inc and has a VALUES clause.
-	if len(ins.Columns) == 0 {
-		if table.ColumnListAuthoritative {
-			populateInsertColumnlist(ins, table)
-		} else {
-			return nil, errors.New("column list required for tables with auto-inc columns")
-		}
-	}
-	for _, row := range rows {
-		if len(ins.Columns) != len(row) {
-			return nil, errors.New("column list doesn't match values")
-		}
-	}
-	if err := modifyForAutoinc(ins, eins); err != nil {
-		return nil, err
-	}
-	eins.Query = generateQuery(ins)
-	return eins, nil
+	return eins, needsLastInsertID, needsDBName, nil
 }
 
-func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engine.Insert, error) {
+func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (_ engine.Primitive, needsLastInsertID bool, needsDBName bool, _ error) {
 	eins := engine.NewSimpleInsert(
 		engine.InsertSharded,
 		table,
@@ -108,7 +128,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 	}
 	if ins.OnDup != nil {
 		if isVindexChanging(sqlparser.UpdateExprs(ins.OnDup), eins.Table.ColumnVindexes) {
-			return nil, errors.New("unsupported: DML cannot change vindex column")
+			return nil, false, false, errors.New("unsupported: DML cannot change vindex column")
 		}
 		eins.Opcode = engine.InsertShardedIgnore
 	}
@@ -116,7 +136,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 		if table.ColumnListAuthoritative {
 			populateInsertColumnlist(ins, table)
 		} else {
-			return nil, errors.New("no column list")
+			return nil, false, false, errors.New("no column list")
 		}
 	}
 
@@ -130,24 +150,28 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 	var rows sqlparser.Values
 	switch insertValues := ins.Rows.(type) {
 	case *sqlparser.Select, *sqlparser.Union:
-		return nil, errors.New("unsupported: insert into select")
+		return nil, false, false, errors.New("unsupported: insert into select")
 	case sqlparser.Values:
-		rows = insertValues
+		var err error
+		rows, needsLastInsertID, needsDBName, err = rewriteValues(insertValues)
+		if err != nil {
+			return nil, false, false, err
+		}
 		if hasSubquery(rows) {
-			return nil, errors.New("unsupported: subquery in insert values")
+			return nil, false, false, errors.New("unsupported: subquery in insert values")
 		}
 	default:
-		return nil, fmt.Errorf("BUG: unexpected construct in insert: %T", insertValues)
+		return nil, false, false, fmt.Errorf("BUG: unexpected construct in insert: %T", insertValues)
 	}
 	for _, value := range rows {
 		if len(ins.Columns) != len(value) {
-			return nil, errors.New("column list doesn't match values")
+			return nil, false, false, errors.New("column list doesn't match values")
 		}
 	}
 
 	if eins.Table.AutoIncrement != nil {
 		if err := modifyForAutoinc(ins, eins); err != nil {
-			return nil, err
+			return nil, false, false, err
 		}
 	}
 
@@ -161,7 +185,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 			for rowNum, row := range rows {
 				innerpv, err := sqlparser.NewPlanValue(row[colNum])
 				if err != nil {
-					return nil, vterrors.Wrapf(err, "could not compute value for vindex or auto-inc column")
+					return nil, false, false, vterrors.Wrapf(err, "could not compute value for vindex or auto-inc column")
 				}
 				routeValues[vIdx].Values[colIdx].Values[rowNum] = innerpv
 			}
@@ -180,7 +204,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (*engi
 	eins.VindexValues = routeValues
 	eins.Query = generateQuery(ins)
 	generateInsertShardedQuery(ins, eins, rows)
-	return eins, nil
+	return eins, needsLastInsertID, needsDBName, nil
 }
 
 func populateInsertColumnlist(ins *sqlparser.Insert, table *vindexes.Table) {

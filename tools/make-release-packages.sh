@@ -11,9 +11,7 @@ set -euo pipefail
 source build.env
 
 SHORT_REV="$(git rev-parse --short HEAD)"
-VERSION="5.0.0" # tmp
-# TODO: We can discover version from the last tag, we just need to have this setup.
-# TAG_VERSION="$(git describe --tags --dirty --always | sed  s/v//)"
+VERSION="$(git describe --tags --dirty --always | sed  s/v//)"
 
 RELEASE_ID="vitess-${VERSION}-${SHORT_REV}"
 RELEASE_DIR="${VTROOT}/releases/${RELEASE_ID}"
@@ -41,7 +39,7 @@ done;
 
 # Copy remaining files, preserving date/permissions
 # But resolving symlinks
-cp -rpfL {config,vthook,web,examples} "${RELEASE_DIR}/"
+cp -rpfL {config,vthook,examples} "${RELEASE_DIR}/"
 
 echo "Follow the binary installation instructions at: https://vitess.io/docs/get-started/local/" > "${RELEASE_DIR}"/README.md
 

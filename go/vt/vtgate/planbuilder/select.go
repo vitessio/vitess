@@ -20,20 +20,22 @@ import (
 	"errors"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
 // buildSelectPlan is the new function to build a Select plan.
-func buildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (primitive engine.Primitive, err error) {
+func buildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (_ engine.Primitive, needsLastInsertID bool, needsDBName bool, _ error) {
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(sel)))
 	if err := pb.processSelect(sel, nil); err != nil {
-		return nil, err
+		return nil, false, false, err
 	}
 	if err := pb.bldr.Wireup(pb.bldr, pb.jt); err != nil {
-		return nil, err
+		return nil, false, false, err
 	}
-	return pb.bldr.Primitive(), nil
+	return pb.bldr.Primitive(), pb.needsLastInsertID, pb.needsDbName, nil
 }
 
 // processSelect builds a primitive tree for the given query or subquery.
@@ -123,8 +125,12 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 // pushFilter identifies the target route for the specified bool expr,
 // pushes it down, and updates the route info if the new constraint improves
 // the primitive. This function can push to a WHERE or HAVING clause.
-func (pb *primitiveBuilder) pushFilter(boolExpr sqlparser.Expr, whereType string) error {
-	filters := splitAndExpression(nil, boolExpr)
+func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string) error {
+	rewritten, err := RewriteAndUpdateBuilder(in, pb)
+	if err != nil {
+		return vterrors.Wrap(err, "failed to Rewrite expressions")
+	}
+	filters := splitAndExpression(nil, rewritten)
 	reorderBySubquery(filters)
 	for _, filter := range filters {
 		pullouts, origin, expr, err := pb.findOrigin(filter)
@@ -189,7 +195,16 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 	for _, node := range selectExprs {
 		switch node := node.(type) {
 		case *sqlparser.AliasedExpr:
-			pullouts, origin, expr, err := pb.findOrigin(node.Expr)
+			rewritten, err := RewriteAndUpdateBuilder(node.Expr, pb)
+			if err != nil {
+				return nil, vterrors.Wrap(err, "failed to Rewrite expression")
+			}
+			if rewritten != node.Expr && node.As.IsEmpty() {
+				buf := sqlparser.NewTrackedBuffer(nil)
+				node.Expr.Format(buf)
+				node.As = sqlparser.NewColIdent(buf.String())
+			}
+			pullouts, origin, expr, err := pb.findOrigin(rewritten)
 			if err != nil {
 				return nil, err
 			}

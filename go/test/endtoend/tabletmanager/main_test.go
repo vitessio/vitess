@@ -42,8 +42,6 @@ var (
 	masterTablet        cluster.Vttablet
 	replicaTablet       cluster.Vttablet
 	rdonlyTablet        cluster.Vttablet
-	replicaUID          int
-	masterUID           int
 	hostname            = "localhost"
 	keyspaceName        = "ks"
 	shardName           = "0"

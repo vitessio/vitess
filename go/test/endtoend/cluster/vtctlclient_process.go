@@ -110,6 +110,9 @@ func (vtctlclient *VtctlClientProcess) InitTablet(tablet *Vttablet, cell string,
 	if tablet.MySQLPort > 0 {
 		args = append(args, "-mysql_port", fmt.Sprintf("%d", tablet.MySQLPort))
 	}
+	if tablet.GrpcPort > 0 {
+		args = append(args, "-grpc_port", fmt.Sprintf("%d", tablet.GrpcPort))
+	}
 	args = append(args, fmt.Sprintf("%s-%010d", cell, tablet.TabletUID), tabletType)
 	return vtctlclient.ExecuteCommand(args...)
 }

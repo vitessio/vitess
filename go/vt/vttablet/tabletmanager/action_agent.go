@@ -80,7 +80,8 @@ const (
 )
 
 var (
-	tabletHostname = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
+	tabletHostname   = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
+	demoteMasterType = flag.String("demote_master_type", "REPLICA", "the tablet type a demoted master will transition to")
 )
 
 // ActionAgent is the main class for the agent.
@@ -95,6 +96,7 @@ type ActionAgent struct {
 	MysqlDaemon         mysqlctl.MysqlDaemon
 	DBConfigs           *dbconfigs.DBConfigs
 	VREngine            *vreplication.Engine
+	DemoteMasterType    topodatapb.TabletType
 
 	// exportStats is set only for production tablet.
 	exportStats bool
@@ -181,6 +183,10 @@ type ActionAgent struct {
 	// Call agent.notifyShardSync() instead of sending directly to this channel.
 	_shardSyncChan chan struct{}
 
+	// _shardSyncDone is a channel for waiting until the shard sync goroutine
+	// has really finished after _shardSyncCancel was called.
+	_shardSyncDone chan struct{}
+
 	// _shardSyncCancel is the function to stop the background shard sync goroutine.
 	_shardSyncCancel context.CancelFunc
 
@@ -252,6 +258,11 @@ func NewActionAgent(
 		return nil, err
 	}
 
+	demoteMasterTabletType, err := validateDemoteMasterType()
+	if err != nil {
+		return nil, err
+	}
+
 	agent = &ActionAgent{
 		QueryServiceControl: queryServiceControl,
 		HealthReporter:      health.DefaultAggregator,
@@ -262,6 +273,7 @@ func NewActionAgent(
 		MysqlDaemon:         mysqld,
 		DBConfigs:           dbcfgs,
 		History:             history.New(historyLength),
+		DemoteMasterType:    demoteMasterTabletType,
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 		orc:                 orc,
 	}
@@ -372,6 +384,12 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 	if err != nil {
 		panic(vterrors.Wrap(err, "failed reading tablet"))
 	}
+
+	demoteMasterTabletType, err := validateDemoteMasterType()
+	if err != nil {
+		panic(vterrors.Wrapf(err, "failed to parse tablet type %v", demoteMasterTabletType))
+	}
+
 	agent := &ActionAgent{
 		QueryServiceControl: tabletservermock.NewController(),
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
@@ -384,6 +402,7 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		VREngine:            vreplication.NewEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient, ti.DbName()),
 		History:             history.New(historyLength),
+		DemoteMasterType:    demoteMasterTabletType,
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
 	if preStart != nil {
@@ -411,6 +430,11 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 // within the vtcombo binary. It cannot be called concurrently,
 // as it changes the flags.
 func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs *dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletType string) *ActionAgent {
+	demoteMasterType, err := validateDemoteMasterType()
+	if err != nil {
+		panic(vterrors.Wrapf(err, "failed to parse tablet type %v", tabletType))
+	}
+
 	agent := &ActionAgent{
 		QueryServiceControl: queryServiceControl,
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
@@ -424,6 +448,7 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 		VREngine:            vreplication.NewEngine(nil, "", nil, nil, ""),
 		gotMysqlPort:        true,
 		History:             history.New(historyLength),
+		DemoteMasterType:    demoteMasterType,
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
 	agent.registerQueryRuleSources()
@@ -711,6 +736,11 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 // then prune the tablet topology entry of all post-init fields. This prevents
 // stale identifiers from hanging around in topology.
 func (agent *ActionAgent) Close() {
+	// Stop the shard sync loop and wait for it to exit. We do this in Close()
+	// rather than registering it as an OnTerm hook so the shard sync loop keeps
+	// running during lame duck.
+	agent.stopShardSync()
+
 	// cleanup initialized fields in the tablet entry
 	f := func(tablet *topodatapb.Tablet) error {
 		if err := topotools.CheckOwnership(agent.initialTablet, tablet); err != nil {
@@ -731,11 +761,16 @@ func (agent *ActionAgent) Close() {
 // while taking lameduck into account. However, this may be useful for tests,
 // when you want to clean up an agent immediately.
 func (agent *ActionAgent) Stop() {
+	// Stop the shard sync loop and wait for it to exit. This needs to be done
+	// here in addition to in Close() because tests do not call Close().
 	agent.stopShardSync()
+
 	if agent.UpdateStream != nil {
 		agent.UpdateStream.Disable()
 	}
+
 	agent.VREngine.Close()
+
 	if agent.MysqlDaemon != nil {
 		agent.MysqlDaemon.Close()
 	}
@@ -848,4 +883,18 @@ func (agent *ActionAgent) withRetry(ctx context.Context, description string, wor
 			backoff = time.Duration(f)
 		}
 	}
+}
+
+func validateDemoteMasterType() (topodatapb.TabletType, error) {
+	tabletType, err := topoproto.ParseTabletType(*demoteMasterType)
+	if err != nil {
+		return topodatapb.TabletType_UNKNOWN, err
+	}
+	if tabletType != topodatapb.TabletType_SPARE && tabletType != topodatapb.TabletType_REPLICA {
+		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("invalid demote_master_type %v; can only be REPLICA or SPARE", tabletType)
+	}
+	if tabletType == topodatapb.TabletType_SPARE && !*mysqlctl.DisableActiveReparents {
+		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("demote to SPARE is only allowed when active reparents is disabled (set the -disable_active_reparents flag to disable)")
+	}
+	return tabletType, nil
 }

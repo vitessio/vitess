@@ -81,11 +81,7 @@ func (plan *Plan) fields() []*querypb.Field {
 // If the row matched, it returns the columns to be sent.
 func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error) {
 	if plan.Vindex != nil {
-		vindexValues := make([]sqltypes.Value, 0, len(plan.VindexColumns))
-		for _, col := range plan.VindexColumns {
-			vindexValues = append(vindexValues, values[col])
-		}
-		ksid, err := getKeyspaceID(vindexValues, plan.Vindex)
+		ksid, err := getKeyspaceID(values, plan.Vindex, plan.VindexColumns)
 		if err != nil {
 			return false, nil, err
 		}
@@ -102,11 +98,7 @@ func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error
 		if colExpr.Vindex == nil {
 			result[i] = values[colExpr.ColNum]
 		} else {
-			vindexValues := make([]sqltypes.Value, 0, len(colExpr.VindexColumns))
-			for _, col := range colExpr.VindexColumns {
-				vindexValues = append(vindexValues, values[col])
-			}
-			ksid, err := getKeyspaceID(vindexValues, colExpr.Vindex)
+			ksid, err := getKeyspaceID(values, colExpr.Vindex, colExpr.VindexColumns)
 			if err != nil {
 				return false, nil, err
 			}
@@ -116,8 +108,12 @@ func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error
 	return true, result, nil
 }
 
-func getKeyspaceID(values []sqltypes.Value, vindex vindexes.Vindex) (key.DestinationKeyspaceID, error) {
-	destinations, err := vindexes.Map(vindex, nil, [][]sqltypes.Value{values})
+func getKeyspaceID(values []sqltypes.Value, vindex vindexes.Vindex, vindexColumns []int) (key.DestinationKeyspaceID, error) {
+	vindexValues := make([]sqltypes.Value, 0, len(vindexColumns))
+	for _, col := range vindexColumns {
+		vindexValues = append(vindexValues, values[col])
+	}
+	destinations, err := vindexes.Map(vindex, nil, [][]sqltypes.Value{vindexValues})
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +122,7 @@ func getKeyspaceID(values []sqltypes.Value, vindex vindexes.Vindex) (key.Destina
 	}
 	ksid, ok := destinations[0].(key.DestinationKeyspaceID)
 	if !ok || len(ksid) == 0 {
-		return nil, fmt.Errorf("could not map %v to a keyspace id, got destination %v", values, destinations[0])
+		return nil, fmt.Errorf("could not map %v to a keyspace id, got destination %v", vindexValues, destinations[0])
 	}
 	return ksid, nil
 }
@@ -181,7 +177,7 @@ func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb
 			expr := strings.Trim(rule.Match, "/")
 			result, err := regexp.MatchString(expr, table.Name.String())
 			if err != nil {
-				return true
+				continue
 			}
 			if !result {
 				continue
