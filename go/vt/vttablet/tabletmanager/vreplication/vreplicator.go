@@ -100,6 +100,9 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 				return err
 			}
 		default:
+			if vr.source.StopAfterCopy {
+				return vr.setState(binlogplayer.BlpStopped, "Stopped after copy.")
+			}
 			if err := vr.setState(binlogplayer.BlpRunning, ""); err != nil {
 				return err
 			}

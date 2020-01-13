@@ -40,7 +40,7 @@ for uid_index in $uids; do
   wait_pids="$wait_pids $pid"
 
   echo "Stopping MySQL for tablet $alias..."
-  $VTROOT/bin/mysqlctl \
+  mysqlctl \
     -tablet_uid $uid \
     shutdown &
 done

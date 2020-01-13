@@ -23,7 +23,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='binlogdata',
   syntax='proto3',
   serialized_options=_b('Z\'vitess.io/vitess/go/vt/proto/binlogdata'),
-  serialized_pb=_b('\n\x10\x62inlogdata.proto\x12\nbinlogdata\x1a\x0bvtrpc.proto\x1a\x0bquery.proto\x1a\x0etopodata.proto\"7\n\x07\x43harset\x12\x0e\n\x06\x63lient\x18\x01 \x01(\x05\x12\x0c\n\x04\x63onn\x18\x02 \x01(\x05\x12\x0e\n\x06server\x18\x03 \x01(\x05\"\xb5\x03\n\x11\x42inlogTransaction\x12;\n\nstatements\x18\x01 \x03(\x0b\x32\'.binlogdata.BinlogTransaction.Statement\x12&\n\x0b\x65vent_token\x18\x04 \x01(\x0b\x32\x11.query.EventToken\x1a\xae\x02\n\tStatement\x12\x42\n\x08\x63\x61tegory\x18\x01 \x01(\x0e\x32\x30.binlogdata.BinlogTransaction.Statement.Category\x12$\n\x07\x63harset\x18\x02 \x01(\x0b\x32\x13.binlogdata.Charset\x12\x0b\n\x03sql\x18\x03 \x01(\x0c\"\xa9\x01\n\x08\x43\x61tegory\x12\x13\n\x0f\x42L_UNRECOGNIZED\x10\x00\x12\x0c\n\x08\x42L_BEGIN\x10\x01\x12\r\n\tBL_COMMIT\x10\x02\x12\x0f\n\x0b\x42L_ROLLBACK\x10\x03\x12\x15\n\x11\x42L_DML_DEPRECATED\x10\x04\x12\n\n\x06\x42L_DDL\x10\x05\x12\n\n\x06\x42L_SET\x10\x06\x12\r\n\tBL_INSERT\x10\x07\x12\r\n\tBL_UPDATE\x10\x08\x12\r\n\tBL_DELETE\x10\tJ\x04\x08\x02\x10\x03J\x04\x08\x03\x10\x04\"v\n\x15StreamKeyRangeRequest\x12\x10\n\x08position\x18\x01 \x01(\t\x12%\n\tkey_range\x18\x02 \x01(\x0b\x32\x12.topodata.KeyRange\x12$\n\x07\x63harset\x18\x03 \x01(\x0b\x32\x13.binlogdata.Charset\"S\n\x16StreamKeyRangeResponse\x12\x39\n\x12\x62inlog_transaction\x18\x01 \x01(\x0b\x32\x1d.binlogdata.BinlogTransaction\"]\n\x13StreamTablesRequest\x12\x10\n\x08position\x18\x01 \x01(\t\x12\x0e\n\x06tables\x18\x02 \x03(\t\x12$\n\x07\x63harset\x18\x03 \x01(\x0b\x32\x13.binlogdata.Charset\"Q\n\x14StreamTablesResponse\x12\x39\n\x12\x62inlog_transaction\x18\x01 \x01(\x0b\x32\x1d.binlogdata.BinlogTransaction\"%\n\x04Rule\x12\r\n\x05match\x18\x01 \x01(\t\x12\x0e\n\x06\x66ilter\x18\x02 \x01(\t\"\x9c\x01\n\x06\x46ilter\x12\x1f\n\x05rules\x18\x01 \x03(\x0b\x32\x10.binlogdata.Rule\x12\x39\n\x0e\x66ieldEventMode\x18\x02 \x01(\x0e\x32!.binlogdata.Filter.FieldEventMode\"6\n\x0e\x46ieldEventMode\x12\x13\n\x0f\x45RR_ON_MISMATCH\x10\x00\x12\x0f\n\x0b\x42\x45ST_EFFORT\x10\x01\"\xf6\x01\n\x0c\x42inlogSource\x12\x10\n\x08keyspace\x18\x01 \x01(\t\x12\r\n\x05shard\x18\x02 \x01(\t\x12)\n\x0btablet_type\x18\x03 \x01(\x0e\x32\x14.topodata.TabletType\x12%\n\tkey_range\x18\x04 \x01(\x0b\x32\x12.topodata.KeyRange\x12\x0e\n\x06tables\x18\x05 \x03(\t\x12\"\n\x06\x66ilter\x18\x06 \x01(\x0b\x32\x12.binlogdata.Filter\x12\'\n\x06on_ddl\x18\x07 \x01(\x0e\x32\x17.binlogdata.OnDDLAction\x12\x16\n\x0e\x65xternal_mysql\x18\x08 \x01(\t\"B\n\tRowChange\x12\x1a\n\x06\x62\x65\x66ore\x18\x01 \x01(\x0b\x32\n.query.Row\x12\x19\n\x05\x61\x66ter\x18\x02 \x01(\x0b\x32\n.query.Row\"J\n\x08RowEvent\x12\x12\n\ntable_name\x18\x01 \x01(\t\x12*\n\x0brow_changes\x18\x02 \x03(\x0b\x32\x15.binlogdata.RowChange\">\n\nFieldEvent\x12\x12\n\ntable_name\x18\x01 \x01(\t\x12\x1c\n\x06\x66ields\x18\x02 \x03(\x0b\x32\x0c.query.Field\":\n\tShardGtid\x12\x10\n\x08keyspace\x18\x01 \x01(\t\x12\r\n\x05shard\x18\x02 \x01(\t\x12\x0c\n\x04gtid\x18\x03 \x01(\t\"3\n\x05VGtid\x12*\n\x0bshard_gtids\x18\x01 \x03(\x0b\x32\x15.binlogdata.ShardGtid\"0\n\rKeyspaceShard\x12\x10\n\x08keyspace\x18\x01 \x01(\t\x12\r\n\x05shard\x18\x02 \x01(\t\"\xe7\x01\n\x07Journal\x12\n\n\x02id\x18\x01 \x01(\x03\x12\x31\n\x0emigration_type\x18\x02 \x01(\x0e\x32\x19.binlogdata.MigrationType\x12\x0e\n\x06tables\x18\x03 \x03(\t\x12\x16\n\x0elocal_position\x18\x04 \x01(\t\x12*\n\x0bshard_gtids\x18\x05 \x03(\x0b\x32\x15.binlogdata.ShardGtid\x12/\n\x0cparticipants\x18\x06 \x03(\x0b\x32\x19.binlogdata.KeyspaceShard\x12\x18\n\x10source_workflows\x18\x07 \x03(\t\"\x9d\x02\n\x06VEvent\x12$\n\x04type\x18\x01 \x01(\x0e\x32\x16.binlogdata.VEventType\x12\x11\n\ttimestamp\x18\x02 \x01(\x03\x12\x0c\n\x04gtid\x18\x03 \x01(\t\x12\x0b\n\x03\x64\x64l\x18\x04 \x01(\t\x12\'\n\trow_event\x18\x05 \x01(\x0b\x32\x14.binlogdata.RowEvent\x12+\n\x0b\x66ield_event\x18\x06 \x01(\x0b\x32\x16.binlogdata.FieldEvent\x12 \n\x05vgtid\x18\x07 \x01(\x0b\x32\x11.binlogdata.VGtid\x12$\n\x07journal\x18\x08 \x01(\x0b\x32\x13.binlogdata.Journal\x12\x0b\n\x03\x64ml\x18\t \x01(\t\x12\x14\n\x0c\x63urrent_time\x18\x14 \x01(\x03\"\xc7\x01\n\x0eVStreamRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12\x10\n\x08position\x18\x04 \x01(\t\x12\"\n\x06\x66ilter\x18\x05 \x01(\x0b\x32\x12.binlogdata.Filter\"5\n\x0fVStreamResponse\x12\"\n\x06\x65vents\x18\x01 \x03(\x0b\x32\x12.binlogdata.VEvent\"\xc8\x01\n\x12VStreamRowsRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12\r\n\x05query\x18\x04 \x01(\t\x12\"\n\x06lastpk\x18\x05 \x01(\x0b\x32\x12.query.QueryResult\"\x97\x01\n\x13VStreamRowsResponse\x12\x1c\n\x06\x66ields\x18\x01 \x03(\x0b\x32\x0c.query.Field\x12\x1e\n\x08pkfields\x18\x02 \x03(\x0b\x32\x0c.query.Field\x12\x0c\n\x04gtid\x18\x03 \x01(\t\x12\x18\n\x04rows\x18\x04 \x03(\x0b\x32\n.query.Row\x12\x1a\n\x06lastpk\x18\x05 \x01(\x0b\x32\n.query.Row\"\xa7\x01\n\x15VStreamResultsRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12\r\n\x05query\x18\x04 \x01(\t\"^\n\x16VStreamResultsResponse\x12\x1c\n\x06\x66ields\x18\x01 \x03(\x0b\x32\x0c.query.Field\x12\x0c\n\x04gtid\x18\x03 \x01(\t\x12\x18\n\x04rows\x18\x04 \x03(\x0b\x32\n.query.Row*>\n\x0bOnDDLAction\x12\n\n\x06IGNORE\x10\x00\x12\x08\n\x04STOP\x10\x01\x12\x08\n\x04\x45XEC\x10\x02\x12\x0f\n\x0b\x45XEC_IGNORE\x10\x03*\xd1\x01\n\nVEventType\x12\x0b\n\x07UNKNOWN\x10\x00\x12\x08\n\x04GTID\x10\x01\x12\t\n\x05\x42\x45GIN\x10\x02\x12\n\n\x06\x43OMMIT\x10\x03\x12\x0c\n\x08ROLLBACK\x10\x04\x12\x07\n\x03\x44\x44L\x10\x05\x12\n\n\x06INSERT\x10\x06\x12\x0b\n\x07REPLACE\x10\x07\x12\n\n\x06UPDATE\x10\x08\x12\n\n\x06\x44\x45LETE\x10\t\x12\x07\n\x03SET\x10\n\x12\t\n\x05OTHER\x10\x0b\x12\x07\n\x03ROW\x10\x0c\x12\t\n\x05\x46IELD\x10\r\x12\r\n\tHEARTBEAT\x10\x0e\x12\t\n\x05VGTID\x10\x0f\x12\x0b\n\x07JOURNAL\x10\x10*\'\n\rMigrationType\x12\n\n\x06TABLES\x10\x00\x12\n\n\x06SHARDS\x10\x01\x42)Z\'vitess.io/vitess/go/vt/proto/binlogdatab\x06proto3')
+  serialized_pb=_b('\n\x10\x62inlogdata.proto\x12\nbinlogdata\x1a\x0bvtrpc.proto\x1a\x0bquery.proto\x1a\x0etopodata.proto\"7\n\x07\x43harset\x12\x0e\n\x06\x63lient\x18\x01 \x01(\x05\x12\x0c\n\x04\x63onn\x18\x02 \x01(\x05\x12\x0e\n\x06server\x18\x03 \x01(\x05\"\xb5\x03\n\x11\x42inlogTransaction\x12;\n\nstatements\x18\x01 \x03(\x0b\x32\'.binlogdata.BinlogTransaction.Statement\x12&\n\x0b\x65vent_token\x18\x04 \x01(\x0b\x32\x11.query.EventToken\x1a\xae\x02\n\tStatement\x12\x42\n\x08\x63\x61tegory\x18\x01 \x01(\x0e\x32\x30.binlogdata.BinlogTransaction.Statement.Category\x12$\n\x07\x63harset\x18\x02 \x01(\x0b\x32\x13.binlogdata.Charset\x12\x0b\n\x03sql\x18\x03 \x01(\x0c\"\xa9\x01\n\x08\x43\x61tegory\x12\x13\n\x0f\x42L_UNRECOGNIZED\x10\x00\x12\x0c\n\x08\x42L_BEGIN\x10\x01\x12\r\n\tBL_COMMIT\x10\x02\x12\x0f\n\x0b\x42L_ROLLBACK\x10\x03\x12\x15\n\x11\x42L_DML_DEPRECATED\x10\x04\x12\n\n\x06\x42L_DDL\x10\x05\x12\n\n\x06\x42L_SET\x10\x06\x12\r\n\tBL_INSERT\x10\x07\x12\r\n\tBL_UPDATE\x10\x08\x12\r\n\tBL_DELETE\x10\tJ\x04\x08\x02\x10\x03J\x04\x08\x03\x10\x04\"v\n\x15StreamKeyRangeRequest\x12\x10\n\x08position\x18\x01 \x01(\t\x12%\n\tkey_range\x18\x02 \x01(\x0b\x32\x12.topodata.KeyRange\x12$\n\x07\x63harset\x18\x03 \x01(\x0b\x32\x13.binlogdata.Charset\"S\n\x16StreamKeyRangeResponse\x12\x39\n\x12\x62inlog_transaction\x18\x01 \x01(\x0b\x32\x1d.binlogdata.BinlogTransaction\"]\n\x13StreamTablesRequest\x12\x10\n\x08position\x18\x01 \x01(\t\x12\x0e\n\x06tables\x18\x02 \x03(\t\x12$\n\x07\x63harset\x18\x03 \x01(\x0b\x32\x13.binlogdata.Charset\"Q\n\x14StreamTablesResponse\x12\x39\n\x12\x62inlog_transaction\x18\x01 \x01(\x0b\x32\x1d.binlogdata.BinlogTransaction\"%\n\x04Rule\x12\r\n\x05match\x18\x01 \x01(\t\x12\x0e\n\x06\x66ilter\x18\x02 \x01(\t\"\x9c\x01\n\x06\x46ilter\x12\x1f\n\x05rules\x18\x01 \x03(\x0b\x32\x10.binlogdata.Rule\x12\x39\n\x0e\x66ieldEventMode\x18\x02 \x01(\x0e\x32!.binlogdata.Filter.FieldEventMode\"6\n\x0e\x46ieldEventMode\x12\x13\n\x0f\x45RR_ON_MISMATCH\x10\x00\x12\x0f\n\x0b\x42\x45ST_EFFORT\x10\x01\"\x8f\x02\n\x0c\x42inlogSource\x12\x10\n\x08keyspace\x18\x01 \x01(\t\x12\r\n\x05shard\x18\x02 \x01(\t\x12)\n\x0btablet_type\x18\x03 \x01(\x0e\x32\x14.topodata.TabletType\x12%\n\tkey_range\x18\x04 \x01(\x0b\x32\x12.topodata.KeyRange\x12\x0e\n\x06tables\x18\x05 \x03(\t\x12\"\n\x06\x66ilter\x18\x06 \x01(\x0b\x32\x12.binlogdata.Filter\x12\'\n\x06on_ddl\x18\x07 \x01(\x0e\x32\x17.binlogdata.OnDDLAction\x12\x16\n\x0e\x65xternal_mysql\x18\x08 \x01(\t\x12\x17\n\x0fstop_after_copy\x18\t \x01(\x08\"B\n\tRowChange\x12\x1a\n\x06\x62\x65\x66ore\x18\x01 \x01(\x0b\x32\n.query.Row\x12\x19\n\x05\x61\x66ter\x18\x02 \x01(\x0b\x32\n.query.Row\"J\n\x08RowEvent\x12\x12\n\ntable_name\x18\x01 \x01(\t\x12*\n\x0brow_changes\x18\x02 \x03(\x0b\x32\x15.binlogdata.RowChange\">\n\nFieldEvent\x12\x12\n\ntable_name\x18\x01 \x01(\t\x12\x1c\n\x06\x66ields\x18\x02 \x03(\x0b\x32\x0c.query.Field\":\n\tShardGtid\x12\x10\n\x08keyspace\x18\x01 \x01(\t\x12\r\n\x05shard\x18\x02 \x01(\t\x12\x0c\n\x04gtid\x18\x03 \x01(\t\"3\n\x05VGtid\x12*\n\x0bshard_gtids\x18\x01 \x03(\x0b\x32\x15.binlogdata.ShardGtid\"0\n\rKeyspaceShard\x12\x10\n\x08keyspace\x18\x01 \x01(\t\x12\r\n\x05shard\x18\x02 \x01(\t\"\xe7\x01\n\x07Journal\x12\n\n\x02id\x18\x01 \x01(\x03\x12\x31\n\x0emigration_type\x18\x02 \x01(\x0e\x32\x19.binlogdata.MigrationType\x12\x0e\n\x06tables\x18\x03 \x03(\t\x12\x16\n\x0elocal_position\x18\x04 \x01(\t\x12*\n\x0bshard_gtids\x18\x05 \x03(\x0b\x32\x15.binlogdata.ShardGtid\x12/\n\x0cparticipants\x18\x06 \x03(\x0b\x32\x19.binlogdata.KeyspaceShard\x12\x18\n\x10source_workflows\x18\x07 \x03(\t\"\x9d\x02\n\x06VEvent\x12$\n\x04type\x18\x01 \x01(\x0e\x32\x16.binlogdata.VEventType\x12\x11\n\ttimestamp\x18\x02 \x01(\x03\x12\x0c\n\x04gtid\x18\x03 \x01(\t\x12\x0b\n\x03\x64\x64l\x18\x04 \x01(\t\x12\'\n\trow_event\x18\x05 \x01(\x0b\x32\x14.binlogdata.RowEvent\x12+\n\x0b\x66ield_event\x18\x06 \x01(\x0b\x32\x16.binlogdata.FieldEvent\x12 \n\x05vgtid\x18\x07 \x01(\x0b\x32\x11.binlogdata.VGtid\x12$\n\x07journal\x18\x08 \x01(\x0b\x32\x13.binlogdata.Journal\x12\x0b\n\x03\x64ml\x18\t \x01(\t\x12\x14\n\x0c\x63urrent_time\x18\x14 \x01(\x03\"\xc7\x01\n\x0eVStreamRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12\x10\n\x08position\x18\x04 \x01(\t\x12\"\n\x06\x66ilter\x18\x05 \x01(\x0b\x32\x12.binlogdata.Filter\"5\n\x0fVStreamResponse\x12\"\n\x06\x65vents\x18\x01 \x03(\x0b\x32\x12.binlogdata.VEvent\"\xc8\x01\n\x12VStreamRowsRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12\r\n\x05query\x18\x04 \x01(\t\x12\"\n\x06lastpk\x18\x05 \x01(\x0b\x32\x12.query.QueryResult\"\x97\x01\n\x13VStreamRowsResponse\x12\x1c\n\x06\x66ields\x18\x01 \x03(\x0b\x32\x0c.query.Field\x12\x1e\n\x08pkfields\x18\x02 \x03(\x0b\x32\x0c.query.Field\x12\x0c\n\x04gtid\x18\x03 \x01(\t\x12\x18\n\x04rows\x18\x04 \x03(\x0b\x32\n.query.Row\x12\x1a\n\x06lastpk\x18\x05 \x01(\x0b\x32\n.query.Row\"\xa7\x01\n\x15VStreamResultsRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12\r\n\x05query\x18\x04 \x01(\t\"^\n\x16VStreamResultsResponse\x12\x1c\n\x06\x66ields\x18\x01 \x03(\x0b\x32\x0c.query.Field\x12\x0c\n\x04gtid\x18\x03 \x01(\t\x12\x18\n\x04rows\x18\x04 \x03(\x0b\x32\n.query.Row*>\n\x0bOnDDLAction\x12\n\n\x06IGNORE\x10\x00\x12\x08\n\x04STOP\x10\x01\x12\x08\n\x04\x45XEC\x10\x02\x12\x0f\n\x0b\x45XEC_IGNORE\x10\x03*\xd1\x01\n\nVEventType\x12\x0b\n\x07UNKNOWN\x10\x00\x12\x08\n\x04GTID\x10\x01\x12\t\n\x05\x42\x45GIN\x10\x02\x12\n\n\x06\x43OMMIT\x10\x03\x12\x0c\n\x08ROLLBACK\x10\x04\x12\x07\n\x03\x44\x44L\x10\x05\x12\n\n\x06INSERT\x10\x06\x12\x0b\n\x07REPLACE\x10\x07\x12\n\n\x06UPDATE\x10\x08\x12\n\n\x06\x44\x45LETE\x10\t\x12\x07\n\x03SET\x10\n\x12\t\n\x05OTHER\x10\x0b\x12\x07\n\x03ROW\x10\x0c\x12\t\n\x05\x46IELD\x10\r\x12\r\n\tHEARTBEAT\x10\x0e\x12\t\n\x05VGTID\x10\x0f\x12\x0b\n\x07JOURNAL\x10\x10*\'\n\rMigrationType\x12\n\n\x06TABLES\x10\x00\x12\n\n\x06SHARDS\x10\x01\x42)Z\'vitess.io/vitess/go/vt/proto/binlogdatab\x06proto3')
   ,
   dependencies=[vtrpc__pb2.DESCRIPTOR,query__pb2.DESCRIPTOR,topodata__pb2.DESCRIPTOR,])
 
@@ -52,8 +52,8 @@ _ONDDLACTION = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=3174,
-  serialized_end=3236,
+  serialized_start=3199,
+  serialized_end=3261,
 )
 _sym_db.RegisterEnumDescriptor(_ONDDLACTION)
 
@@ -135,8 +135,8 @@ _VEVENTTYPE = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=3239,
-  serialized_end=3448,
+  serialized_start=3264,
+  serialized_end=3473,
 )
 _sym_db.RegisterEnumDescriptor(_VEVENTTYPE)
 
@@ -158,8 +158,8 @@ _MIGRATIONTYPE = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=3450,
-  serialized_end=3489,
+  serialized_start=3475,
+  serialized_end=3514,
 )
 _sym_db.RegisterEnumDescriptor(_MIGRATIONTYPE)
 
@@ -686,6 +686,13 @@ _BINLOGSOURCE = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='stop_after_copy', full_name='binlogdata.BinlogSource.stop_after_copy', index=8,
+      number=9, type=8, cpp_type=7, label=1,
+      has_default_value=False, default_value=False,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -699,7 +706,7 @@ _BINLOGSOURCE = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=1153,
-  serialized_end=1399,
+  serialized_end=1424,
 )
 
 
@@ -736,8 +743,8 @@ _ROWCHANGE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1401,
-  serialized_end=1467,
+  serialized_start=1426,
+  serialized_end=1492,
 )
 
 
@@ -774,8 +781,8 @@ _ROWEVENT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1469,
-  serialized_end=1543,
+  serialized_start=1494,
+  serialized_end=1568,
 )
 
 
@@ -812,8 +819,8 @@ _FIELDEVENT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1545,
-  serialized_end=1607,
+  serialized_start=1570,
+  serialized_end=1632,
 )
 
 
@@ -857,8 +864,8 @@ _SHARDGTID = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1609,
-  serialized_end=1667,
+  serialized_start=1634,
+  serialized_end=1692,
 )
 
 
@@ -888,8 +895,8 @@ _VGTID = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1669,
-  serialized_end=1720,
+  serialized_start=1694,
+  serialized_end=1745,
 )
 
 
@@ -926,8 +933,8 @@ _KEYSPACESHARD = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1722,
-  serialized_end=1770,
+  serialized_start=1747,
+  serialized_end=1795,
 )
 
 
@@ -999,8 +1006,8 @@ _JOURNAL = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1773,
-  serialized_end=2004,
+  serialized_start=1798,
+  serialized_end=2029,
 )
 
 
@@ -1093,8 +1100,8 @@ _VEVENT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2007,
-  serialized_end=2292,
+  serialized_start=2032,
+  serialized_end=2317,
 )
 
 
@@ -1152,8 +1159,8 @@ _VSTREAMREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2295,
-  serialized_end=2494,
+  serialized_start=2320,
+  serialized_end=2519,
 )
 
 
@@ -1183,8 +1190,8 @@ _VSTREAMRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2496,
-  serialized_end=2549,
+  serialized_start=2521,
+  serialized_end=2574,
 )
 
 
@@ -1242,8 +1249,8 @@ _VSTREAMROWSREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2552,
-  serialized_end=2752,
+  serialized_start=2577,
+  serialized_end=2777,
 )
 
 
@@ -1301,8 +1308,8 @@ _VSTREAMROWSRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2755,
-  serialized_end=2906,
+  serialized_start=2780,
+  serialized_end=2931,
 )
 
 
@@ -1353,8 +1360,8 @@ _VSTREAMRESULTSREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2909,
-  serialized_end=3076,
+  serialized_start=2934,
+  serialized_end=3101,
 )
 
 
@@ -1398,8 +1405,8 @@ _VSTREAMRESULTSRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=3078,
-  serialized_end=3172,
+  serialized_start=3103,
+  serialized_end=3197,
 )
 
 _BINLOGTRANSACTION_STATEMENT.fields_by_name['category'].enum_type = _BINLOGTRANSACTION_STATEMENT_CATEGORY

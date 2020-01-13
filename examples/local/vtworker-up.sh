@@ -23,7 +23,7 @@ script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
 echo "Starting vtworker..."
-exec $VTROOT/bin/vtworker \
+vtworker \
   $TOPOLOGY_FLAGS \
   -cell $cell \
   -log_dir $VTDATAROOT/tmp \

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -494,7 +495,8 @@ type QueryStats struct {
 
 // AddStats adds the given stats for the planName.tableName
 func (qe *QueryEngine) AddStats(planName, tableName string, queryCount int64, duration, mysqlTime time.Duration, rowCount, errorCount int64) {
-	key := tableName + "." + planName
+	// table names can contain "." characters, replace them!
+	key := strings.Replace(tableName, ".", "_", -1) + "." + planName
 
 	qe.queryStatsMu.RLock()
 	stats, ok := qe.queryStats[key]

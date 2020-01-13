@@ -17,34 +17,29 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"bytes"
 	"io/ioutil"
 	"os"
-	"path"
 	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/env"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
 var MycnfPath = "/tmp/my.cnf"
 
 func TestMycnf(t *testing.T) {
-	os.Setenv("MYSQL_FLAVOR", "MariaDB")
 	uid := uint32(11111)
 	cnf := NewMycnf(uid, 6802)
+	myTemplateSource := new(bytes.Buffer)
+	myTemplateSource.WriteString("[mysqld]\n")
 	// Assigning ServerID to be different from tablet UID to make sure that there are no
 	// assumptions in the code that those IDs are the same.
 	cnf.ServerID = 22222
-	root, err := env.VtRoot()
-	if err != nil {
-		t.Errorf("err: %v", err)
-	}
-	cnfTemplatePaths := []string{
-		path.Join(root, "config/mycnf/default.cnf"),
-	}
-	data, err := cnf.makeMycnf(cnfTemplatePaths)
+	f, _ := ioutil.ReadFile("../../../config/mycnf/default.cnf")
+	myTemplateSource.Write(f)
+	data, err := cnf.makeMycnf(myTemplateSource.String())
 	if err != nil {
 		t.Errorf("err: %v", err)
 	} else {
@@ -85,7 +80,6 @@ func TestMycnf(t *testing.T) {
 // 4. \rm $VTROOT/vthook/make_mycnf
 // 5. Add No Prefix back
 func NoTestMycnfHook(t *testing.T) {
-	os.Setenv("MYSQL_FLAVOR", "MariaDB")
 	uid := uint32(11111)
 	cnf := NewMycnf(uid, 6802)
 	// Assigning ServerID to be different from tablet UID to make sure that there are no
