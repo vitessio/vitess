@@ -448,20 +448,19 @@ func shutdownMysqlProtocolAndDrain() {
 			time.Sleep(1 * time.Millisecond)
 		}
 	}
+}
 
+func rollbackAtShutdown() {
 	for c := range vtgateHandle.connections {
-		ctx := context.Background()
-		session := vtgateHandle.session(c)
-		_, _, err := vtgateHandle.vtg.Execute(ctx, session, "rollback", make(map[string]*querypb.BindVariable))
-		if err != nil {
-			log.Errorf("Error happened in transaction rollback: %v", err)
-		}
+		log.Warningf("Rolling back transactions associated with connection ID: %v", c.ConnectionID)
+		vtgateHandle.ConnectionClosed(c)
 	}
 }
 
 func init() {
 	servenv.OnRun(initMySQLProtocol)
 	servenv.OnTermSync(shutdownMysqlProtocolAndDrain)
+	servenv.OnClose(rollbackAtShutdown)
 }
 
 var pluginInitializers []func()
