@@ -30,6 +30,13 @@ type RewriteResult struct {
 	NeedDatabase     bool
 }
 
+// RewriteASTResult contains the rewritten ast and meta information about it
+type RewriteASTResult struct {
+	AST              sqlparser.Statement
+	NeedLastInsertID bool
+	NeedDatabase     bool
+}
+
 // UpdateBindVarNeeds copies bind var needs from primitiveBuilders used for subqueries
 func (rr *RewriteResult) UpdateBindVarNeeds(pb *primitiveBuilder) {
 	pb.needsDbName = pb.needsDbName || rr.NeedDatabase
@@ -44,6 +51,61 @@ func RewriteAndUpdateBuilder(in sqlparser.Expr, pb *primitiveBuilder) (sqlparser
 	}
 	out.UpdateBindVarNeeds(pb)
 	return out.Expression, nil
+}
+
+type expressionRewriter struct {
+	lastInsertID, database bool
+	err                    error
+}
+
+func (er *expressionRewriter) abortOnError(*sqlparser.Cursor) bool {
+	return er.err == nil
+}
+
+func (er *expressionRewriter) changeExpressions(cursor *sqlparser.Cursor) bool {
+	switch node := cursor.Node().(type) {
+	case *sqlparser.AliasedExpr:
+		if node.As.IsEmpty() {
+			buf := sqlparser.NewTrackedBuffer(nil)
+			node.Expr.Format(buf)
+			node.As = sqlparser.NewColIdent(buf.String())
+		}
+
+	case *sqlparser.FuncExpr:
+		switch {
+		case node.Name.EqualString("last_insert_id"):
+			if len(node.Exprs) > 0 {
+				er.err = vterrors.New(vtrpc.Code_UNIMPLEMENTED, "Argument to LAST_INSERT_ID() not supported")
+			} else {
+				cursor.Replace(bindVarExpression(engine.LastInsertIDName))
+				er.lastInsertID = true
+			}
+		case node.Name.EqualString("database"):
+			if len(node.Exprs) > 0 {
+				er.err = vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Syntax error. DATABASE() takes no arguments")
+			} else {
+				cursor.Replace(bindVarExpression(engine.DBVarName))
+				er.database = true
+			}
+		}
+	}
+	return true
+}
+
+func (er *expressionRewriter) didAnythingChange() bool {
+	return er.database || er.lastInsertID
+}
+
+// RewriteAST rewrites the whole AST, replacing function calls and adding column aliases to queries
+func RewriteAST(in sqlparser.Statement) (*RewriteASTResult, error) {
+	er := new(expressionRewriter)
+	sqlparser.Rewrite(in, er.changeExpressions, er.abortOnError)
+
+	return &RewriteASTResult{
+		AST:              in,
+		NeedLastInsertID: er.lastInsertID,
+		NeedDatabase:     er.database,
+	}, nil
 }
 
 // Rewrite will rewrite an expression. Currently it does the following rewrites:
