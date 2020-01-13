@@ -22,6 +22,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -231,6 +233,137 @@ func TestStreamBuffering(t *testing.T) {
 			t.Errorf("Buffered streaming:\n%v, want\n%v", gotResults[i], wantResults[i])
 		}
 	}
+}
+
+func TestSelectLastInsertId(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	sql := "select last_insert_id()"
+	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "select :__lastInsertId as `last_insert_id()` from dual",
+		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
+	}}
+
+	assert.Equal(t, wantQueries, sbc1.Queries)
+}
+
+func TestSelectLastInsertIdInUnion(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+
+	sql := "select last_insert_id() as id union select id from user where 1 != 1"
+	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "select :__lastInsertId as id from dual union select id from user where 1 != 1",
+		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
+	}}
+
+	assert.Equal(t, wantQueries, sbc1.Queries)
+}
+
+func TestSelectLastInsertIdInWhere(t *testing.T) {
+	executor, _, _, lookup := createExecutorEnv()
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	sql := "select id from music_user_map where id = last_insert_id()"
+	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "select id from music_user_map where id = :__lastInsertId",
+		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
+	}}
+
+	assert.Equal(t, wantQueries, lookup.Queries)
+}
+
+func TestLastInsertIDInVirtualTable(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+	result1 := []*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
+		},
+		RowsAffected: 1,
+		InsertID:     0,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(3),
+		}},
+	}}
+	sbc1.SetResults(result1)
+	_, err := executorExec(executor, "select * from (select last_insert_id()) as t", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "select * from (select :__lastInsertId as `last_insert_id()` from dual) as t",
+		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
+	}}
+
+	assert.Equal(t, wantQueries, sbc1.Queries)
+}
+
+func TestLastInsertIDInSubQueryExpression(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+	result1 := []*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "id", Type: sqltypes.Int32},
+			{Name: "col", Type: sqltypes.Int32},
+		},
+		RowsAffected: 1,
+		InsertID:     0,
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt32(1),
+			sqltypes.NewInt32(3),
+		}},
+	}}
+	sbc1.SetResults(result1)
+	_, err := executorExec(executor, "select (select last_insert_id()) as x", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "select (select :__lastInsertId as `last_insert_id()` from dual) as x from dual",
+		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
+	}}
+
+	assert.Equal(t, wantQueries, sbc1.Queries)
+}
+
+func TestSelectDatabase(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+
+	sql := "select database()"
+	newSession := *masterSession
+	session := NewSafeSession(&newSession)
+	session.TargetString = "TestExecutor@master"
+	_, err := executor.Execute(
+		context.Background(),
+		"TestExecute",
+		session,
+		sql,
+		map[string]*querypb.BindVariable{})
+
+	if err != nil {
+		t.Error(err)
+	}
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "select :__vtdbname as `database()` from dual",
+		BindVariables: map[string]*querypb.BindVariable{"__vtdbname": sqltypes.StringBindVariable("TestExecutor")},
+	}}
+
+	assert.Equal(t, wantQueries, sbc1.Queries)
 }
 
 func TestSelectBindvars(t *testing.T) {

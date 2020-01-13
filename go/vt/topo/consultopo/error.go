@@ -18,6 +18,7 @@ package consultopo
 
 import (
 	"errors"
+	"net/url"
 
 	"golang.org/x/net/context"
 
@@ -38,11 +39,18 @@ var (
 // convertError converts a context error into a topo error. All errors
 // are either application-level errors, or context errors.
 func convertError(err error, nodePath string) error {
+	// Unwrap errors from the Go HTTP client.
+	if urlErr, ok := err.(*url.Error); ok {
+		err = urlErr.Err
+	}
+
+	// Convert specific sentinel values.
 	switch err {
 	case context.Canceled:
 		return topo.NewError(topo.Interrupted, nodePath)
 	case context.DeadlineExceeded:
 		return topo.NewError(topo.Timeout, nodePath)
 	}
+
 	return err
 }

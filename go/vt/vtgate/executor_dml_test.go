@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -1545,6 +1547,41 @@ func TestMultiInsertGeneratorSparse(t *testing.T) {
 	}
 }
 
+func TestInsertBadAutoInc(t *testing.T) {
+	vschema := `
+{
+	"sharded": true,
+	"vindexes": {
+		"hash_index": {
+			"type": "hash"
+		}
+	},
+	"tables": {
+		"bad_auto": {
+			"column_vindexes": [
+				{
+					"column": "id",
+					"name": "hash_index"
+				}
+			],
+			"auto_increment": {
+				"column": "id",
+				"sequence": "absent"
+			}
+		}
+	}
+}
+`
+	executor, _, _, _ := createCustomExecutor(vschema)
+
+	// If auto inc table cannot be found, the table should not be added to vschema.
+	_, err := executorExec(executor, "insert into bad_auto(v, name) values (1, 'myname')", nil)
+	want := "table bad_auto not found"
+	if err == nil || err.Error() != want {
+		t.Errorf("bad auto inc err: %v, want %v", err, want)
+	}
+}
+
 func TestKeyDestRangeQuery(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 	// it works in a single shard key range
@@ -1822,4 +1859,19 @@ func TestDeleteEqualWithPrepare(t *testing.T) {
 	if !reflect.DeepEqual(sbclookup.Queries, wantQueries) {
 		t.Errorf("sbclookup.Queries:\n%+v, want\n%+v\n", sbclookup.Queries, wantQueries)
 	}
+}
+
+func TestUpdateLastInsertID(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+
+	sql := "update user set a = last_insert_id() where id = 1"
+	masterSession.LastInsertId = 43
+	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "update user set a = :__lastInsertId where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(43)},
+	}}
+
+	require.Equal(t, wantQueries, sbc1.Queries)
 }

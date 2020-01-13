@@ -370,6 +370,10 @@ func (wr *Wrangler) buildMigrationTargets(ctx context.Context, targetKeyspace, w
 		if err != nil {
 			return nil, false, err
 		}
+		if targetsi.MasterAlias == nil {
+			// This can happen if bad inputs are given.
+			return nil, false, fmt.Errorf("shard %v:%v doesn't have a master set", targetKeyspace, targetShard)
+		}
 		targetMaster, err := wr.ts.GetTablet(ctx, targetsi.MasterAlias)
 		if err != nil {
 			return nil, false, err

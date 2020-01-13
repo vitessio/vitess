@@ -137,7 +137,7 @@ class VtcomboProcess(VtProcess):
       ]
 
   def __init__(self, directory, topology, mysql_db, schema_dir, charset,
-               web_dir=None, web_dir2=None,mysql_server_bind_address=None):
+               mysql_server_bind_address=None):
     VtProcess.__init__(self, 'vtcombo-%s' % os.environ['USER'], directory,
                        environment.vtcombo_binary, port_name='vtcombo')
     self.extraparams = [
@@ -153,10 +153,6 @@ class VtcomboProcess(VtProcess):
     ] + self.QUERYSERVER_PARAMETERS + environment.extra_vtcombo_parameters()
     if schema_dir:
       self.extraparams.extend(['-schema_dir', schema_dir])
-    if web_dir:
-      self.extraparams.extend(['-web_dir', web_dir])
-    if web_dir2:
-      self.extraparams.extend(['-web_dir2', web_dir2])
     if mysql_db.unix_socket():
       self.extraparams.extend(['-db_socket', mysql_db.unix_socket()])
     else:
@@ -178,7 +174,7 @@ vtcombo_process = None
 
 
 def start_vt_processes(directory, topology, mysql_db, schema_dir,
-                       charset='utf8', web_dir=None, web_dir2=None, mysql_server_bind_address=None):
+                       charset='utf8', mysql_server_bind_address=None):
   """Start the vt processes.
 
   Args:
@@ -187,8 +183,6 @@ def start_vt_processes(directory, topology, mysql_db, schema_dir,
     mysql_db: an instance of the mysql_db.MySqlDB class.
     schema_dir: the directory that contains the schema / vschema.
     charset: the character set for the database connections.
-    web_dir: contains the web app for vtctld side of vtcombo.
-    web_dir2: contains the web app for vtctld side of vtcombo.
     mysql_server_bind_address: MySQL server bind address for vtcombo.
   """
   global vtcombo_process
@@ -196,8 +190,7 @@ def start_vt_processes(directory, topology, mysql_db, schema_dir,
   logging.info('start_vt_processes(directory=%s,vtcombo_binary=%s)',
                directory, environment.vtcombo_binary)
   vtcombo_process = VtcomboProcess(directory, topology, mysql_db, schema_dir,
-                                   charset, web_dir=web_dir, web_dir2=web_dir2,
-                                   mysql_server_bind_address=mysql_server_bind_address)
+                                   charset, mysql_server_bind_address=mysql_server_bind_address)
   vtcombo_process.wait_start()
 
 

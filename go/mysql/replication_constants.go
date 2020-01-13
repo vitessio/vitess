@@ -189,10 +189,10 @@ const (
 	eAnonymousGTIDEvent     = 34
 	ePreviousGTIDsEvent     = 35
 
-	// MySQL 5.7 events
-	eTransactionContextEvent = 36
-	eViewChangeEvent         = 37
-	eXAPrepareLogEvent       = 38
+	// MySQL 5.7 events. Unused.
+	//eTransactionContextEvent = 36
+	//eViewChangeEvent         = 37
+	//eXAPrepareLogEvent       = 38
 
 	// MariaDB specific values. They start at 160.
 	eMariaAnnotateRowsEvent     = 160

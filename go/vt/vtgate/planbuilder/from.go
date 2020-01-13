@@ -166,6 +166,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		rb.routeOptions = subroute.routeOptions
 		subroute.Redirect = rb
 		pb.bldr, pb.st = rb, st
+		pb.copyBindVarNeeds(spb)
 		return nil
 	}
 	return fmt.Errorf("BUG: unexpected table expression type: %T", tableExpr.Expr)
@@ -187,7 +188,11 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		rb, st := newRoute(sel)
 		rb.routeOptions = []*routeOption{newSimpleRouteOption(rb, engine.NewSimpleRoute(engine.SelectDBA, ks))}
 		pb.bldr, pb.st = rb, st
-		return nil
+		// Add the table to symtab
+		return st.AddTable(&table{
+			alias:  tableName,
+			origin: rb,
+		})
 	}
 
 	vschemaTables, vindex, _, destTableType, destTarget, err := pb.vschema.FindTablesOrVindex(tableName)

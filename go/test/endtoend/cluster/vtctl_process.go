@@ -80,6 +80,21 @@ func (vtctl *VtctlProcess) ExecuteCommandWithOutput(args ...string) (result stri
 	return string(resultByte), err
 }
 
+// ExecuteCommand executes any vtctlclient command
+func (vtctl *VtctlProcess) ExecuteCommand(args ...string) (err error) {
+	args = append([]string{
+		"-enable_queries",
+		"-topo_implementation", vtctl.TopoImplementation,
+		"-topo_global_server_address", vtctl.TopoGlobalAddress,
+		"-topo_global_root", vtctl.TopoGlobalRoot}, args...)
+	tmpProcess := exec.Command(
+		vtctl.Binary,
+		args...,
+	)
+	log.Info(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	return tmpProcess.Run()
+}
+
 // VtctlProcessInstance returns a VtctlProcess handle for vtctl process
 // configured with the given Config.
 // The process must be manually started by calling setup()

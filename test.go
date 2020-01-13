@@ -106,7 +106,7 @@ const (
 	configFileName = "test/config.json"
 
 	// List of flavors for which a bootstrap Docker image is available.
-	flavors = "mariadb,mysql56,mysql57,percona,percona57"
+	flavors = "mysql56,mysql57,mysql80,mariadb,mariadb103,percona,percona57,percona80"
 )
 
 // Config is the overall object serialized in test/config.json.
@@ -164,8 +164,14 @@ func (t *Test) hasAnyTag(want []string) bool {
 func (t *Test) run(dir, dataDir string) ([]byte, error) {
 	testCmd := t.Command
 	if len(testCmd) == 0 {
-		testCmd = []string{"test/" + t.File, "-v", "--skip-build", "--keep-logs"}
-		testCmd = append(testCmd, t.Args...)
+		if strings.Contains(fmt.Sprintf("%v", t.File), ".go") {
+			testCmd = []string{"tools/e2e_go_test.sh"}
+			testCmd = append(testCmd, t.Args...)
+			testCmd = append(testCmd, "--skip-build", "--keep-logs")
+		} else {
+			testCmd = []string{"test/" + t.File, "-v", "--skip-build", "--keep-logs"}
+			testCmd = append(testCmd, t.Args...)
+		}
 		testCmd = append(testCmd, extraArgs...)
 		if *docker {
 			// Teardown is unnecessary since Docker kills everything.

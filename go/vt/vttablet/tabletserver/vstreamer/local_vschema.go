@@ -36,7 +36,7 @@ func (lvs *localVSchema) FindColVindex(tablename string) (*vindexes.ColumnVindex
 	if err != nil {
 		return nil, err
 	}
-	return identifyColVindex(table)
+	return vindexes.FindBestColVindex(table)
 }
 
 func (lvs *localVSchema) FindOrCreateVindex(qualifiedName string) (vindexes.Vindex, error) {
@@ -73,26 +73,4 @@ func (lvs *localVSchema) findTable(tablename string) (*vindexes.Table, error) {
 		return nil, fmt.Errorf("table %s not found", tablename)
 	}
 	return table, nil
-}
-
-func identifyColVindex(table *vindexes.Table) (*vindexes.ColumnVindex, error) {
-	if len(table.ColumnVindexes) == 0 {
-		return nil, fmt.Errorf("table %s has no vindex", table.Name.String())
-	}
-	var result *vindexes.ColumnVindex
-	for _, cv := range table.ColumnVindexes {
-		if cv.Vindex.NeedsVCursor() {
-			continue
-		}
-		if !cv.Vindex.IsUnique() {
-			continue
-		}
-		if result == nil || result.Vindex.Cost() > cv.Vindex.Cost() {
-			result = cv
-		}
-	}
-	if result == nil {
-		return nil, fmt.Errorf("could not find a vindex to compute keyspace id for table %v", table.Name.String())
-	}
-	return result, nil
 }
