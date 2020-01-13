@@ -4,7 +4,7 @@ This is an alphabetical list of known adopters of Vitess. Some have already gone
 * [BetterCloud](https://bettercloud.com)
 * [CloudSigma](https://www.cloudsigma.com/)
 * [FlipKart](https://flipkart.com)
-* [GitHub](http://github.com/)
+* [GitHub](https://github.com/)
 * [HubSpot](https://product.hubspot.com/)
 * [JD](https://jd.com/)
 * [New Relic](https://newrelic.com)
