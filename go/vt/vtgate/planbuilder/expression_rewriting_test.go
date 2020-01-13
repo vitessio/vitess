@@ -128,6 +128,38 @@ func TestRewriteDatabaseFunc(t *testing.T) {
 	assert.True(t, result.NeedDatabase, "should need database name")
 }
 
+func TestRewriteSelectExpr(t *testing.T) {
+	// SELECT database() => SELECT :__vtdbname AS `database()`
+
+	stmt, err := sqlparser.Parse("SELECT database()")
+	assert.NoError(t, err)
+
+	result, err := RewriteAST(stmt)
+	assert.NoError(t, err)
+
+	expected, err := sqlparser.Parse("SELECT :__vtdbname as `database()`")
+	assert.NoError(t, err)
+
+	assert.Equal(t, expected, result.AST)
+	assert.True(t, result.NeedDatabase, "should need database name")
+}
+
+func TestDoesNotOverwriteALias(t *testing.T) {
+	// SELECT last_insert_id() as test => SELECT :__lastInsertId AS as test
+
+	stmt, err := sqlparser.Parse("SELECT last_insert_id() as test")
+	assert.NoError(t, err)
+
+	result, err := RewriteAST(stmt)
+	assert.NoError(t, err)
+
+	expected, err := sqlparser.Parse("SELECT :__lastInsertId as test")
+	assert.NoError(t, err)
+
+	assert.Equal(t, expected, result.AST)
+	assert.True(t, result.NeedLastInsertID, "should need database name")
+}
+
 func databaseBindVar() sqlparser.Expr {
 	return sqlparser.NewValArg([]byte(":" + engine.DBVarName))
 }
