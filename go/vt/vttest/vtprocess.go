@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 
 	"github.com/golang/protobuf/proto"
 )
@@ -236,6 +237,9 @@ func VtcomboProcess(env Environment, args *Config, mysql MySQLManager) *VtProces
 	}
 	if args.TabletHostName != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-tablet_hostname", args.TabletHostName}...)
+	}
+	if *servenv.GRPCAuth == "mtls" {
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-grpc_auth_mode", *servenv.GRPCAuth, "-grpc_key", *servenv.GRPCKey, "-grpc_cert", *servenv.GRPCCert, "-grpc_ca", *servenv.GRPCCA, "-grpc_auth_mtls_allowed_substrings", *servenv.ClientCertSubstrings}...)
 	}
 	if args.InitWorkflowManager {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"-workflow_manager_init"}...)

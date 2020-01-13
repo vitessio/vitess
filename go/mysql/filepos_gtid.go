@@ -18,6 +18,7 @@ package mysql
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -31,9 +32,14 @@ func parseFilePosGTID(s string) (GTID, error) {
 		return nil, fmt.Errorf("invalid FilePos GTID (%v): expecting file:pos", s)
 	}
 
+	pos, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", s)
+	}
+
 	return filePosGTID{
 		file: parts[0],
-		pos:  parts[1],
+		pos:  pos,
 	}, nil
 }
 
@@ -48,12 +54,13 @@ func parseFilePosGTIDSet(s string) (GTIDSet, error) {
 
 // filePosGTID implements GTID.
 type filePosGTID struct {
-	file, pos string
+	file string
+	pos  int
 }
 
 // String implements GTID.String().
 func (gtid filePosGTID) String() string {
-	return gtid.file + ":" + gtid.pos
+	return fmt.Sprintf("%s:%d", gtid.file, gtid.pos)
 }
 
 // Flavor implements GTID.Flavor().

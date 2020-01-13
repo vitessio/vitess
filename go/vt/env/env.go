@@ -29,6 +29,8 @@ import (
 const (
 	// DefaultVtDataRoot is the default value for VTROOT environment variable
 	DefaultVtDataRoot = "/vt"
+	// DefaultVtRoot is only required for hooks
+	DefaultVtRoot = "/usr/local/vitess"
 )
 
 // VtRoot returns $VTROOT or tries to guess its value if it's not set.
@@ -47,8 +49,7 @@ func VtRoot() (root string, err error) {
 	if strings.HasSuffix(dir, "/bin") {
 		return path.Dir(dir), nil
 	}
-	err = errors.New("VTROOT could not be guessed from the executable location. Please set $VTROOT")
-	return
+	return DefaultVtRoot, nil
 }
 
 // VtDataRoot returns $VTDATAROOT or the default if $VTDATAROOT is not

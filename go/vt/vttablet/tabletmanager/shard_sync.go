@@ -49,10 +49,13 @@ var (
 // topo watch on the shard record. It gets woken up for tablet state changes by
 // a notification signal from setTablet().
 func (agent *ActionAgent) shardSyncLoop(ctx context.Context) {
-	// Make a copy of the channel so we don't race when stopShardSync() clears it.
+	// Make a copy of the channels so we don't race when stopShardSync() clears them.
 	agent.mutex.Lock()
 	notifyChan := agent._shardSyncChan
+	doneChan := agent._shardSyncDone
 	agent.mutex.Unlock()
+
+	defer close(doneChan)
 
 	// retryChan is how we wake up after going to sleep between retries.
 	// If no retry is pending, this channel will be nil, which means it's fine
@@ -232,6 +235,7 @@ func (agent *ActionAgent) startShardSync() {
 	// be told it needs to recheck the state.
 	agent.mutex.Lock()
 	agent._shardSyncChan = make(chan struct{}, 1)
+	agent._shardSyncDone = make(chan struct{})
 	ctx, cancel := context.WithCancel(context.Background())
 	agent._shardSyncCancel = cancel
 	agent.mutex.Unlock()
@@ -244,13 +248,23 @@ func (agent *ActionAgent) startShardSync() {
 }
 
 func (agent *ActionAgent) stopShardSync() {
+	var doneChan <-chan struct{}
+
 	agent.mutex.Lock()
 	if agent._shardSyncCancel != nil {
 		agent._shardSyncCancel()
 		agent._shardSyncCancel = nil
 		agent._shardSyncChan = nil
+
+		doneChan = agent._shardSyncDone
+		agent._shardSyncDone = nil
 	}
 	agent.mutex.Unlock()
+
+	// If the shard sync loop was running, wait for it to fully stop.
+	if doneChan != nil {
+		<-doneChan
+	}
 }
 
 func (agent *ActionAgent) notifyShardSync() {

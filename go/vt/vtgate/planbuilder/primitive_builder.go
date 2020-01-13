@@ -21,10 +21,12 @@ package planbuilder
 // the jointab. It can create transient planBuilders due
 // to the recursive nature of SQL.
 type primitiveBuilder struct {
-	vschema ContextVSchema
-	jt      *jointab
-	bldr    builder
-	st      *symtab
+	vschema           ContextVSchema
+	jt                *jointab
+	bldr              builder
+	st                *symtab
+	needsLastInsertID bool
+	needsDbName       bool
 }
 
 func newPrimitiveBuilder(vschema ContextVSchema, jt *jointab) *primitiveBuilder {
@@ -32,4 +34,9 @@ func newPrimitiveBuilder(vschema ContextVSchema, jt *jointab) *primitiveBuilder 
 		vschema: vschema,
 		jt:      jt,
 	}
+}
+
+func (pb *primitiveBuilder) copyBindVarNeeds(subQ *primitiveBuilder) {
+	pb.needsLastInsertID = pb.needsLastInsertID || subQ.needsLastInsertID
+	pb.needsDbName = pb.needsDbName || subQ.needsDbName
 }

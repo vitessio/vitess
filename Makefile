@@ -43,17 +43,29 @@ embed_static:
 	go run github.com/GeertJohan/go.rice/rice embed-go
 	go build .
 
+embed_config:
+	cd go/vt/mysqlctl
+	go run github.com/GeertJohan/go.rice/rice embed-go
+	go build .
+
 build_web:
 	echo $$(date): Building web artifacts
 	cd web/vtctld2 && ng build -prod
 	cp -f web/vtctld2/src/{favicon.ico,plotly-latest.min.js,primeui-ng-all.min.css} web/vtctld2/dist/
 
-build:
+build: embed_config
 ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
 	bash ./build.env
 	go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
+
+debug:
+ifndef NOBANNER
+	echo $$(date): Building source tree
+endif
+	bash ./build.env
+	go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" -gcflags -'N -l' ./go/...
 
 # install copies the files needed to run Vitess into the given directory tree.
 # Usage: make install PREFIX=/path/to/install/root

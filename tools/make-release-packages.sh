@@ -39,7 +39,7 @@ done;
 
 # Copy remaining files, preserving date/permissions
 # But resolving symlinks
-cp -rpfL {config,vthook,examples} "${RELEASE_DIR}/"
+cp -rpfL {examples} "${RELEASE_DIR}/"
 
 echo "Follow the binary installation instructions at: https://vitess.io/docs/get-started/local/" > "${RELEASE_DIR}"/README.md
 

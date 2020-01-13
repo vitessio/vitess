@@ -90,6 +90,7 @@ func newTestMaterializerEnv(t *testing.T, ms *vtctldatapb.MaterializeSettings, s
 			}},
 		}
 	}
+	env.expectValidation()
 	return env
 }
 
