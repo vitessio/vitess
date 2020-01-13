@@ -18,7 +18,6 @@ package vtbackup
 
 import (
 	"bufio"
-	"fmt"
 	"os"
 	"path"
 	"strings"
@@ -137,7 +136,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	err = localCluster.VtctlclientProcess.InitTablet(replica2, cell, keyspaceName, hostname, shardName)
 	assert.Nil(t, err)
 	restore(t, replica2, "replica", "SERVING")
-	// Replica2 takes time to server. Sleeping for 5 sec.
+	// Replica2 takes time to serve. Sleeping for 5 sec.
 	time.Sleep(5 * time.Second)
 	//check the new slave has the data
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
@@ -229,14 +228,6 @@ func initTablets(t *testing.T, startTablet bool, initShardMaster bool) {
 	if initShardMaster {
 		// choose master and start replication
 		err := localCluster.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, master.TabletUID)
-
-		if err != nil {
-			fmt.Println("*********______________****************")
-			fmt.Println(err)
-			fmt.Println(master.HTTPPort)
-			fmt.Println(replica1.HTTPPort)
-			time.Sleep(5 * time.Minute)
-		}
 		assert.Nil(t, err)
 	}
 }
