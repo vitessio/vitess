@@ -43,11 +43,15 @@ func (vtctl *VtctlProcess) AddCellInfo(Cell string) (err error) {
 		"-topo_implementation", vtctl.TopoImplementation,
 		"-topo_global_server_address", vtctl.TopoGlobalAddress,
 		"-topo_global_root", vtctl.TopoGlobalRoot,
+	)
+	if *isCoverage {
+		tmpProcess.Args = append(tmpProcess.Args, "-test.coverprofile="+getCoveragePath("vtctl-addcell.out"))
+	}
+	tmpProcess.Args = append(tmpProcess.Args,
 		"AddCellInfo",
 		"-root", vtctl.TopoRootPath+Cell,
 		"-server_address", vtctl.TopoServerAddress,
-		Cell,
-	)
+		Cell)
 	log.Info(fmt.Sprintf("Adding Cell into Keyspace with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	fmt.Println(fmt.Sprintf("Adding Cell into Keyspace with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	return tmpProcess.Run()
@@ -60,8 +64,12 @@ func (vtctl *VtctlProcess) CreateKeyspace(keyspace string) (err error) {
 		"-topo_implementation", vtctl.TopoImplementation,
 		"-topo_global_server_address", vtctl.TopoGlobalAddress,
 		"-topo_global_root", vtctl.TopoGlobalRoot,
-		"CreateKeyspace", keyspace,
 	)
+	if *isCoverage {
+		tmpProcess.Args = append(tmpProcess.Args, "-test.coverprofile="+getCoveragePath("vtctl-create-ks.out"))
+	}
+	tmpProcess.Args = append(tmpProcess.Args,
+		"CreateKeyspace", keyspace)
 	log.Info(fmt.Sprintf("Starting CreateKeyspace with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	return tmpProcess.Run()
 }
@@ -73,13 +81,16 @@ func (vtctl *VtctlProcess) ExecuteCommandWithOutput(args ...string) (result stri
 		"-topo_implementation", vtctl.TopoImplementation,
 		"-topo_global_server_address", vtctl.TopoGlobalAddress,
 		"-topo_global_root", vtctl.TopoGlobalRoot}, args...)
+	if *isCoverage {
+		args = append([]string{"-test.coverprofile=" + getCoveragePath("vtctl-o-"+args[0]+".out"), "-test.v"}, args...)
+	}
 	tmpProcess := exec.Command(
 		vtctl.Binary,
 		args...,
 	)
 	log.Info(fmt.Sprintf("Executing vtctlclient with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	resultByte, err := tmpProcess.CombinedOutput()
-	return string(resultByte), err
+	return filterResultWhenRunsForCoverage(string(resultByte)), err
 }
 
 // ExecuteCommand executes any vtctlclient command
@@ -89,6 +100,9 @@ func (vtctl *VtctlProcess) ExecuteCommand(args ...string) (err error) {
 		"-topo_implementation", vtctl.TopoImplementation,
 		"-topo_global_server_address", vtctl.TopoGlobalAddress,
 		"-topo_global_root", vtctl.TopoGlobalRoot}, args...)
+	if *isCoverage {
+		args = append([]string{"-test.coverprofile=" + getCoveragePath("vtctl-"+args[0]+".out"), "-test.v"}, args...)
+	}
 	tmpProcess := exec.Command(
 		vtctl.Binary,
 		args...,
