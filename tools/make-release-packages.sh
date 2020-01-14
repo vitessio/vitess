@@ -11,7 +11,11 @@ set -euo pipefail
 source build.env
 
 SHORT_REV="$(git rev-parse --short HEAD)"
-VERSION="$(git describe --tags --dirty --always | sed  s/v//)"
+if [ -n "$*" ]; then
+    VERSION="$1"
+else
+    VERSION="$(git describe --tags --dirty --always | sed  s/^v// | sed s/-dirty//)"
+fi
 
 RELEASE_ID="vitess-${VERSION}-${SHORT_REV}"
 RELEASE_DIR="${VTROOT}/releases/${RELEASE_ID}"
@@ -22,8 +26,6 @@ clusters of MySQL instances. It's architected to run as effectively in a public
 or private cloud architecture as it does on dedicated hardware. It combines and
 extends many important MySQL features with the scalability of a NoSQL database."
 
-DEB_FILE="vitess_${VERSION}-${SHORT_REV}_amd64.deb"
-RPM_FILE="vitess-${VERSION}-${SHORT_REV}.x86_64.rpm"
 TAR_FILE="${RELEASE_ID}.tar.gz"
 
 make tools
@@ -39,7 +41,7 @@ done;
 
 # Copy remaining files, preserving date/permissions
 # But resolving symlinks
-cp -rpfL {examples} "${RELEASE_DIR}/"
+cp -rpfL examples "${RELEASE_DIR}/"
 
 echo "Follow the binary installation instructions at: https://vitess.io/docs/get-started/local/" > "${RELEASE_DIR}"/README.md
 
@@ -83,6 +85,6 @@ echo "Packages created as of $(date +"%m-%d-%y") at $(date +"%r %Z")"
 echo ""
 echo "Package | SHA256"
 echo "------------ | -------------"
-echo "${TAR_FILE} | $(sha256sum "${VTROOT}/releases/${TAR_FILE}" | awk '{print $1}')"
-echo "${DEB_FILE} | $(sha256sum "${VTROOT}/releases/${DEB_FILE}" | awk '{print $1}')"
-echo "${RPM_FILE} | $(sha256sum "${VTROOT}/releases/${RPM_FILE}" | awk '{print $1}')"
+for file in $(find . -type f -printf '%T@ %p\n' | sort -n | tail -3 | awk '{print $2}' | sed s?^./??); do
+    echo "$file | $(sha256sum "$file" | awk '{print $1}')";
+done
