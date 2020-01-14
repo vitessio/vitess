@@ -122,6 +122,9 @@ func getTablet(tabletGrpcPort int, hostname string) *tabletpb.Tablet {
 }
 
 func filterResultWhenRunsForCoverage(input string) string {
+	if !*isCoverage {
+		return input
+	}
 	lines := strings.Split(input, "\n")
 	var result string
 	for _, line := range lines {
