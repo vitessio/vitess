@@ -87,6 +87,8 @@ func newVtgateHandler(vtg *VTGate) *vtgateHandler {
 }
 
 func (vh *vtgateHandler) NewConnection(c *mysql.Conn) {
+	vh.mu.Lock()
+	defer vh.mu.Unlock()
 	vh.connections[c] = true
 }
 
@@ -106,8 +108,8 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	// Rollback if there is an ongoing transaction. Ignore error.
 	defer func() {
 		vh.mu.Lock()
-		delete(vh.connections, c)
 		defer vh.mu.Unlock()
+		delete(vh.connections, c)
 	}()
 
 	var ctx context.Context
