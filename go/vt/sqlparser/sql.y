@@ -1494,13 +1494,22 @@ show_statement:
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
 /* SHOW CHARACTER SET and SHOW CHARSET are equivalent */
-| SHOW CHARACTER SET ddl_skip_to_end
+| SHOW CHARACTER SET 
   {
     $$ = &Show{Type: CharsetStr}
   }
-| SHOW CHARSET ddl_skip_to_end
+| SHOW CHARACTER SET WHERE expression
+  {
+    showCharsetFilterOpt := $5
+    $$ = &Show{Type: CharsetStr, ShowCharsetFilterOpt: showCharsetFilterOpt}
+  }
+| SHOW CHARSET
   {
     $$ = &Show{Type: string($2)}
+  }
+| SHOW CHARSET WHERE expression
+  {
+    $$ = &Show{Type: string($2), ShowCharsetFilterOpt: $4}
   }
 | SHOW CREATE DATABASE ddl_skip_to_end
   {
