@@ -23,55 +23,55 @@ func init() {
 	}
 	file5 := &embedded.EmbeddedFile{
 		Filename:    "mycnf/default-fast.cnf",
-		FileModTime: time.Unix(1578076938, 0),
+		FileModTime: time.Unix(1579019392, 0),
 
 		Content: string("# This sets some unsafe settings specifically for \n# the test-suite which is currently MySQL 5.7 based\n# In future it should be renamed testsuite.cnf\n\ninnodb_buffer_pool_size = 32M\ninnodb_flush_log_at_trx_commit = 0\ninnodb_log_buffer_size = 1M\ninnodb_log_file_size = 5M\n\n# Native AIO tends to run into aio-max-nr limit during test startup.\ninnodb_use_native_aio = 0\n\nkey_buffer_size = 2M\nsync_binlog=0\ninnodb_doublewrite=0\n\n# These two settings are required for the testsuite to pass, \n# but enabling them does not spark joy. They should be removed\n# in the future. See:\n# https://github.com/vitessio/vitess/issues/5396\n\nsql_mode = STRICT_TRANS_TABLES\n"),
 	}
 	file6 := &embedded.EmbeddedFile{
 		Filename:    "mycnf/default.cnf",
-		FileModTime: time.Unix(1578945638, 0),
+		FileModTime: time.Unix(1579019403, 0),
 
 		Content: string("# Global configuration that is auto-included for all MySQL/MariaDB versions\n\ndatadir = {{.DataDir}}\ninnodb_data_home_dir = {{.InnodbDataHomeDir}}\ninnodb_log_group_home_dir = {{.InnodbLogGroupHomeDir}}\nlog-error = {{.ErrorLogPath}}\nlog-bin = {{.BinLogPath}}\npid-file = {{.PidFile}}\nport = {{.MysqlPort}}\n\n# all db instances should start in read-only mode - once the db is started and\n# fully functional, we'll push it into read-write mode\nread-only\nserver-id = {{.ServerID}}\n\n# all db instances should skip the slave startup - that way we can do any\n# additional configuration (like enabling semi-sync) before we connect to\n# the master.\nskip_slave_start\nslave_load_tmpdir = {{.SlaveLoadTmpDir}}\nsocket = {{.SocketFile}}\ntmpdir = {{.TmpDir}}\n\nslow-query-log-file = {{.SlowLogPath}}\n\n# These are sensible defaults that apply to all MySQL/MariaDB versions\n\nlong_query_time = 2\nslow-query-log\nskip-name-resolve\nconnect_timeout = 30\ninnodb_lock_wait_timeout = 20\nmax_allowed_packet = 64M\nmax_connections = 500\n\n\n"),
 	}
 	file7 := &embedded.EmbeddedFile{
 		Filename:    "mycnf/master_mariadb100.cnf",
-		FileModTime: time.Unix(1578945415, 0),
+		FileModTime: time.Unix(1579019403, 0),
 
 		Content: string("# This file is auto-included when MariaDB 10.0 is detected.\n\n# Semi-sync replication is required for automated unplanned failover\n# (when the master goes away). Here we just load the plugin so it's\n# available if desired, but it's disabled at startup.\n#\n# If the -enable_semi_sync flag is used, VTTablet will enable semi-sync\n# at the proper time when replication is set up, or when masters are\n# promoted or demoted.\nplugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so\n\nslave_net_timeout = 60\n\n# MariaDB 10.0 is unstrict by default\nsql_mode = STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION\n\n# enable strict mode so it's safe to compare sequence numbers across different server IDs.\ngtid_strict_mode = 1\ninnodb_stats_persistent = 0\n\n# When semi-sync is enabled, don't allow fallback to async\n# if you get no ack, or have no slaves. This is necessary to\n# prevent alternate futures when doing a failover in response to\n# a master that becomes unresponsive.\nrpl_semi_sync_master_timeout = 1000000000000000000\nrpl_semi_sync_master_wait_no_slave = 1\n\n\ncharacter_set_server = utf8\ncollation_server = utf8_general_ci\n\nexpire_logs_days = 3\n\nsync_binlog = 1\nbinlog_format = ROW\nlog_slave_updates\nexpire_logs_days = 3\n\n# In MariaDB the default charset is latin1\n\ncharacter_set_server = utf8\ncollation_server = utf8_general_ci\n\n"),
 	}
 	file8 := &embedded.EmbeddedFile{
 		Filename:    "mycnf/master_mariadb101.cnf",
-		FileModTime: time.Unix(1578945366, 0),
+		FileModTime: time.Unix(1579019403, 0),
 
 		Content: string("# This file is auto-included when MariaDB 10.1 is detected.\n\n# Semi-sync replication is required for automated unplanned failover\n# (when the master goes away). Here we just load the plugin so it's\n# available if desired, but it's disabled at startup.\n#\n# If the -enable_semi_sync flag is used, VTTablet will enable semi-sync\n# at the proper time when replication is set up, or when masters are\n# promoted or demoted.\nplugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so\n\nslave_net_timeout = 60\n\n# MariaDB 10.1 default is only no-engine-substitution and no-auto-create-user\nsql_mode = STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION,NO_AUTO_CREATE_USER\n\n# enable strict mode so it's safe to compare sequence numbers across different server IDs.\ngtid_strict_mode = 1\ninnodb_stats_persistent = 0\n\n# When semi-sync is enabled, don't allow fallback to async\n# if you get no ack, or have no slaves. This is necessary to\n# prevent alternate futures when doing a failover in response to\n# a master that becomes unresponsive.\nrpl_semi_sync_master_timeout = 1000000000000000000\nrpl_semi_sync_master_wait_no_slave = 1\n\n\ncharacter_set_server = utf8\ncollation_server = utf8_general_ci\n\nexpire_logs_days = 3\n\nsync_binlog = 1\nbinlog_format = ROW\nlog_slave_updates\nexpire_logs_days = 3\n\n# In MariaDB the default charset is latin1\n\ncharacter_set_server = utf8\ncollation_server = utf8_general_ci\n"),
 	}
 	file9 := &embedded.EmbeddedFile{
 		Filename:    "mycnf/master_mariadb102.cnf",
-		FileModTime: time.Unix(1578945434, 0),
+		FileModTime: time.Unix(1579019403, 0),
 
 		Content: string("# This file is auto-included when MariaDB 10.2 is detected.\n\n# Semi-sync replication is required for automated unplanned failover\n# (when the master goes away). Here we just load the plugin so it's\n# available if desired, but it's disabled at startup.\n#\n# If the -enable_semi_sync flag is used, VTTablet will enable semi-sync\n# at the proper time when replication is set up, or when masters are\n# promoted or demoted.\nplugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so\n\n# enable strict mode so it's safe to compare sequence numbers across different server IDs.\ngtid_strict_mode = 1\ninnodb_stats_persistent = 0\n\n# When semi-sync is enabled, don't allow fallback to async\n# if you get no ack, or have no slaves. This is necessary to\n# prevent alternate futures when doing a failover in response to\n# a master that becomes unresponsive.\nrpl_semi_sync_master_timeout = 1000000000000000000\nrpl_semi_sync_master_wait_no_slave = 1\n\n\ncharacter_set_server = utf8\ncollation_server = utf8_general_ci\n\nexpire_logs_days = 3\n\nsync_binlog = 1\nbinlog_format = ROW\nlog_slave_updates\nexpire_logs_days = 3\n\n# In MariaDB the default charset is latin1\n\ncharacter_set_server = utf8\ncollation_server = utf8_general_ci\n"),
 	}
 	filea := &embedded.EmbeddedFile{
 		Filename:    "mycnf/master_mariadb103.cnf",
-		FileModTime: time.Unix(1578945443, 0),
+		FileModTime: time.Unix(1579019403, 0),
 
 		Content: string("# This file is auto-included when MariaDB 10.3 is detected.\n\n# enable strict mode so it's safe to compare sequence numbers across different server IDs.\ngtid_strict_mode = 1\ninnodb_stats_persistent = 0\n\n# When semi-sync is enabled, don't allow fallback to async\n# if you get no ack, or have no slaves. This is necessary to\n# prevent alternate futures when doing a failover in response to\n# a master that becomes unresponsive.\nrpl_semi_sync_master_timeout = 1000000000000000000\nrpl_semi_sync_master_wait_no_slave = 1\n\n\ncharacter_set_server = utf8\ncollation_server = utf8_general_ci\n\nexpire_logs_days = 3\n\nsync_binlog = 1\nbinlog_format = ROW\nlog_slave_updates\nexpire_logs_days = 3\n\n# In MariaDB the default charset is latin1\n\ncharacter_set_server = utf8\ncollation_server = utf8_general_ci\n\n\n"),
 	}
 	fileb := &embedded.EmbeddedFile{
 		Filename:    "mycnf/master_mariadb104.cnf",
-		FileModTime: time.Unix(1578945450, 0),
+		FileModTime: time.Unix(1579019403, 0),
 
 		Content: string("# This file is auto-included when MariaDB 10.4 is detected.\n\n# enable strict mode so it's safe to compare sequence numbers across different server IDs.\ngtid_strict_mode = 1\ninnodb_stats_persistent = 0\n\n# When semi-sync is enabled, don't allow fallback to async\n# if you get no ack, or have no slaves. This is necessary to\n# prevent alternate futures when doing a failover in response to\n# a master that becomes unresponsive.\nrpl_semi_sync_master_timeout = 1000000000000000000\nrpl_semi_sync_master_wait_no_slave = 1\n\n\ncharacter_set_server = utf8\ncollation_server = utf8_general_ci\n\nexpire_logs_days = 3\n\nsync_binlog = 1\nbinlog_format = ROW\nlog_slave_updates\nexpire_logs_days = 3\n\n# In MariaDB the default charset is latin1\n\ncharacter_set_server = utf8\ncollation_server = utf8_general_ci\n\n\n"),
 	}
 	filec := &embedded.EmbeddedFile{
 		Filename:    "mycnf/master_mysql56.cnf",
-		FileModTime: time.Unix(1578945465, 0),
+		FileModTime: time.Unix(1579019403, 0),
 
 		Content: string("# This file is auto-included when MySQL 5.6 is detected.\n\n# MySQL 5.6 does not enable the binary log by default, and \n# the default for sync_binlog is unsafe. The format is TABLE, and\n# info repositories also default to file.\n\nsync_binlog = 1\ngtid_mode = ON\nbinlog_format = ROW\nlog_slave_updates\nenforce_gtid_consistency\nexpire_logs_days = 3\nmaster_info_repository = TABLE\nrelay_log_info_repository = TABLE\nrelay_log_purge = 1\nrelay_log_recovery = 1\nslave_net_timeout = 60\n\n# In MySQL 5.6 the default charset is latin1\n\ncharacter_set_server = utf8\ncollation_server = utf8_general_ci\n\n# MySQL 5.6 is unstrict by default\nsql_mode = STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION\n\n# Semi-sync replication is required for automated unplanned failover\n# (when the master goes away). Here we just load the plugin so it's\n# available if desired, but it's disabled at startup.\n#\n# If the -enable_semi_sync flag is used, VTTablet will enable semi-sync\n# at the proper time when replication is set up, or when masters are\n# promoted or demoted.\nplugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so\n\n# When semi-sync is enabled, don't allow fallback to async\n# if you get no ack, or have no slaves. This is necessary to\n# prevent alternate futures when doing a failover in response to\n# a master that becomes unresponsive.\nrpl_semi_sync_master_timeout = 1000000000000000000\nrpl_semi_sync_master_wait_no_slave = 1\n\n"),
 	}
 	filed := &embedded.EmbeddedFile{
 		Filename:    "mycnf/master_mysql57.cnf",
-		FileModTime: time.Unix(1578945488, 0),
+		FileModTime: time.Unix(1579019403, 0),
 
 		Content: string("# This file is auto-included when MySQL 5.7 is detected.\n\n# MySQL 5.7 does not enable the binary log by default, and \n# info repositories default to file\n\ngtid_mode = ON\nlog_slave_updates\nenforce_gtid_consistency\nexpire_logs_days = 3\nmaster_info_repository = TABLE\nrelay_log_info_repository = TABLE\nrelay_log_purge = 1\nrelay_log_recovery = 1\n\n# In MySQL 5.7 the default charset is latin1\n\ncharacter_set_server = utf8\ncollation_server = utf8_general_ci\n\n# Semi-sync replication is required for automated unplanned failover\n# (when the master goes away). Here we just load the plugin so it's\n# available if desired, but it's disabled at startup.\n#\n# If the -enable_semi_sync flag is used, VTTablet will enable semi-sync\n# at the proper time when replication is set up, or when masters are\n# promoted or demoted.\nplugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so\n\n# When semi-sync is enabled, don't allow fallback to async\n# if you get no ack, or have no slaves. This is necessary to\n# prevent alternate futures when doing a failover in response to\n# a master that becomes unresponsive.\nrpl_semi_sync_master_timeout = 1000000000000000000\nrpl_semi_sync_master_wait_no_slave = 1\n\n"),
 	}
@@ -83,7 +83,7 @@ func init() {
 	}
 	filef := &embedded.EmbeddedFile{
 		Filename:    "mycnf/sbr.cnf",
-		FileModTime: time.Unix(1578076938, 0),
+		FileModTime: time.Unix(1579019392, 0),
 
 		Content: string("# This file is used to allow legacy tests to pass\n# In theory it should not be required\nbinlog_format=statement\n"),
 	}
@@ -113,7 +113,7 @@ func init() {
 	}
 	dir4 := &embedded.EmbeddedDir{
 		Filename:   "mycnf",
-		DirModTime: time.Unix(1578945638, 0),
+		DirModTime: time.Unix(1579019403, 0),
 		ChildFiles: []*embedded.EmbeddedFile{
 			file5, // "mycnf/default-fast.cnf"
 			file6, // "mycnf/default.cnf"
