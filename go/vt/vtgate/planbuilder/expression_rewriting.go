@@ -56,20 +56,47 @@ func RewriteAndUpdateBuilder(in sqlparser.Expr, pb *primitiveBuilder) (sqlparser
 type expressionRewriter struct {
 	lastInsertID, database bool
 	err                    error
+	aliases                []*sqlparser.AliasedExpr
 }
 
-func (er *expressionRewriter) abortOnError(*sqlparser.Cursor) bool {
-	return er.err == nil
+func (er *expressionRewriter) comingUp(cursor *sqlparser.Cursor) bool {
+	if er.err != nil {
+		return false
+	}
+
+	n := len(er.aliases) - 1
+	if n > 0 {
+		// if we encounter the last alias when coming up, we'll pop it from the stack
+		topOfStack := er.aliases[n]
+		if cursor.Node() == topOfStack {
+			er.aliases = er.aliases[:n]
+		}
+	}
+
+	return true
 }
 
-func (er *expressionRewriter) changeExpressions(cursor *sqlparser.Cursor) bool {
-	switch node := cursor.Node().(type) {
-	case *sqlparser.AliasedExpr:
+// walks the stack of seen AliasedExpr and adds column aliases where there isn't any already
+func (er *expressionRewriter) addAliasIfNeeded() {
+	idents := make([]sqlparser.ColIdent, len(er.aliases))
+	for i, node := range er.aliases {
 		if node.As.IsEmpty() {
 			buf := sqlparser.NewTrackedBuffer(nil)
 			node.Expr.Format(buf)
-			node.As = sqlparser.NewColIdent(buf.String())
+			idents[i] = sqlparser.NewColIdent(buf.String())
+		} else {
+			idents[i] = node.As
 		}
+	}
+	for i, node := range er.aliases {
+		node.As = idents[i]
+	}
+}
+
+func (er *expressionRewriter) goingDown(cursor *sqlparser.Cursor) bool {
+	switch node := cursor.Node().(type) {
+	case *sqlparser.AliasedExpr:
+		er.aliases = append(er.aliases, node)
 
 	case *sqlparser.FuncExpr:
 		switch {
@@ -77,6 +104,7 @@ func (er *expressionRewriter) changeExpressions(cursor *sqlparser.Cursor) bool {
 			if len(node.Exprs) > 0 {
 				er.err = vterrors.New(vtrpc.Code_UNIMPLEMENTED, "Argument to LAST_INSERT_ID() not supported")
 			} else {
+				er.addAliasIfNeeded()
 				cursor.Replace(bindVarExpression(engine.LastInsertIDName))
 				er.lastInsertID = true
 			}
@@ -84,6 +112,7 @@ func (er *expressionRewriter) changeExpressions(cursor *sqlparser.Cursor) bool {
 			if len(node.Exprs) > 0 {
 				er.err = vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Syntax error. DATABASE() takes no arguments")
 			} else {
+				er.addAliasIfNeeded()
 				cursor.Replace(bindVarExpression(engine.DBVarName))
 				er.database = true
 			}
@@ -99,7 +128,7 @@ func (er *expressionRewriter) didAnythingChange() bool {
 // RewriteAST rewrites the whole AST, replacing function calls and adding column aliases to queries
 func RewriteAST(in sqlparser.Statement) (*RewriteASTResult, error) {
 	er := new(expressionRewriter)
-	sqlparser.Rewrite(in, er.changeExpressions, er.abortOnError)
+	sqlparser.Rewrite(in, er.goingDown, er.comingUp)
 
 	return &RewriteASTResult{
 		AST:              in,
