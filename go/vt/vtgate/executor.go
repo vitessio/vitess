@@ -834,19 +834,19 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			"UTF-8 Unicode",
 			"utf8mb4_general_ci")
 		row1 = append(row1, sqltypes.NewInt32(4))
-		
+
 		var rowsAffected uint64
 
-		if showFilterOpt := show.ShowCharsetFilterOpt; showFilterOpt != nil {
+		if where := show.Where; where != nil {
 			buf := sqlparser.NewTrackedBuffer(nil)
-			showFilterOpt.Format(buf)
-			showFilterOptStr := buf.String()
+			where.Format(buf)
+			whereStr := buf.String()
 
-			switch showFilterOptStr {
-			case "`charset` = 'utf8'":
+			switch whereStr {
+			case " where `charset` = 'utf8'":
 				rows = append(rows, row0)
 				rowsAffected = 1
-			case "`charset` = 'utf8mb4'":
+			case "` where `charset` = 'utf8mb4'":
 				rows = append(rows, row1)
 				rowsAffected = 1
 			}

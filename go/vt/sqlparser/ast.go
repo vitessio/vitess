@@ -1545,10 +1545,10 @@ type Show struct {
 	Type                   string
 	OnTable                TableName
 	Table                  TableName
+	Where                  *Where
 	ShowTablesOpt          *ShowTablesOpt
 	Scope                  string
 	ShowCollationFilterOpt *Expr
-	ShowCharsetFilterOpt   Expr
 }
 
 // Format formats the node.
@@ -1576,8 +1576,8 @@ func (node *Show) Format(buf *TrackedBuffer) {
 	if node.Type == "collation" && node.ShowCollationFilterOpt != nil {
 		buf.Myprintf(" where %v", *node.ShowCollationFilterOpt)
 	}
-	if node.Type == "charset" && node.ShowCharsetFilterOpt != nil {
-		buf.Myprintf(" where %v", node.ShowCharsetFilterOpt)
+	if node.Type == "charset" && node.Where != nil {
+		buf.Myprintf(" %v", node.Where)
 	}
 	if node.HasTable() {
 		buf.Myprintf(" %v", node.Table)
