@@ -74,7 +74,10 @@ install: build
 	mkdir -p "$${PREFIX}/bin"
 	cp "$${VTROOT}/bin/"{mysqlctld,vtctld,vtctlclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
 	# config files
-	cp -R config "$${PREFIX}/"
+	mkdir -p "$${PREFIX}/src/vitess.io/vitess"
+	cp -R config "$${PREFIX}/src/vitess.io/vitess/"
+	# also symlink config files in the old location
+	ln -sf src/vitess.io/vitess/config "$${PREFIX}/config"
 	# vtctld web UI files
 	mkdir -p "$${PREFIX}/src/vitess.io/vitess/web"
 	cp -R web/vtctld "$${PREFIX}/src/vitess.io/vitess/web/"
