@@ -307,14 +307,14 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 	}
 
 	if plan.NeedsLastInsertID {
-		bindVars[engine.LastInsertIDName] = sqltypes.Uint64BindVariable(safeSession.GetLastInsertId())
+		bindVars[sqlparser.LastInsertIDName] = sqltypes.Uint64BindVariable(safeSession.GetLastInsertId())
 	}
 	if plan.NeedsDatabaseName {
 		keyspace, _, _, _ := e.ParseDestinationTarget(safeSession.TargetString)
 		if keyspace == "" {
-			bindVars[engine.DBVarName] = sqltypes.NullBindVariable
+			bindVars[sqlparser.DBVarName] = sqltypes.NullBindVariable
 		} else {
-			bindVars[engine.DBVarName] = sqltypes.StringBindVariable(keyspace)
+			bindVars[sqlparser.DBVarName] = sqltypes.StringBindVariable(keyspace)
 		}
 	}
 
@@ -1399,7 +1399,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		return nil, err
 	}
 	if !e.normalize {
-		plan, err := planbuilder.BuildFromStmt(sql, stmt, vcursor)
+		plan, err := planbuilder.BuildFromStmt(sql, stmt, vcursor, false, false)
 		if err != nil {
 			return nil, err
 		}
@@ -1410,8 +1410,12 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	}
 
 	// Normalize and retry.
-	sqlparser.Normalize(stmt, bindVars, "vtg")
-	normalized := sqlparser.String(stmt)
+	result, err := sqlparser.PrepareAST(stmt, bindVars, "vtg")
+	if err != nil {
+		return nil, vterrors.Wrap(err, "failed to rewrite ast before planning")
+	}
+	rewrittenStatement := result.AST
+	normalized := sqlparser.String(rewrittenStatement)
 
 	if logStats != nil {
 		logStats.SQL = comments.Leading + normalized + comments.Trailing
@@ -1422,11 +1426,11 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	if result, ok := e.plans.Get(planKey); ok {
 		return result.(*engine.Plan), nil
 	}
-	plan, err := planbuilder.BuildFromStmt(normalized, stmt, vcursor)
+	plan, err := planbuilder.BuildFromStmt(normalized, rewrittenStatement, vcursor, result.NeedLastInsertID, result.NeedDatabase)
 	if err != nil {
 		return nil, err
 	}
-	if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(stmt) {
+	if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(rewrittenStatement) {
 		e.plans.Set(planKey, plan)
 	}
 	return plan, nil

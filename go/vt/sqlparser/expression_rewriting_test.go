@@ -14,14 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package planbuilder
+package sqlparser
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type myTestCase struct {
@@ -61,17 +59,22 @@ func TestRewrites(in *testing.T) {
 			expected: "select (select :__vtdbname as `database()` from test) as `(select database() from test)` from test",
 			db:       true, liid: false,
 		},
+		{
+			in:       "select id from user where database()",
+			expected: "select id from user where :__vtdbname",
+			db:       true, liid: false,
+		},
 	}
 
 	for _, tc := range tests {
 		in.Run(tc.in, func(t *testing.T) {
-			stmt, err := sqlparser.Parse(tc.in)
+			stmt, err := Parse(tc.in)
 			require.NoError(t, err)
 
 			result, err := RewriteAST(stmt)
 			require.NoError(t, err)
 
-			expected, err := sqlparser.Parse(tc.expected)
+			expected, err := Parse(tc.expected)
 			require.NoError(t, err)
 
 			s := toString(expected)
@@ -82,8 +85,8 @@ func TestRewrites(in *testing.T) {
 	}
 }
 
-func toString(node sqlparser.SQLNode) string {
-	buf := sqlparser.NewTrackedBuffer(nil)
+func toString(node SQLNode) string {
+	buf := NewTrackedBuffer(nil)
 	node.Format(buf)
 	return buf.String()
 }
