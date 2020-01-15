@@ -1863,6 +1863,7 @@ func TestDeleteEqualWithPrepare(t *testing.T) {
 
 func TestUpdateLastInsertID(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
+	executor.normalize = true
 
 	sql := "update user set a = last_insert_id() where id = 1"
 	masterSession.LastInsertId = 43

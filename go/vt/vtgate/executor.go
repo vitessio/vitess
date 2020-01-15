@@ -274,9 +274,24 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 			if err != nil {
 				return nil, err
 			}
-			sqlparser.Normalize(stmt, bindVars, "vtg")
-			normalized := sqlparser.String(stmt)
+			rewriteResult, err := sqlparser.PrepareAST(stmt, bindVars, "vtg")
+			if err != nil {
+				return nil, err
+			}
+			normalized := sqlparser.String(rewriteResult.AST)
 			sql = comments.Leading + normalized + comments.Trailing
+			if rewriteResult.NeedDatabase {
+				keyspace, _, _, _ := e.ParseDestinationTarget(safeSession.TargetString)
+				log.Warningf("This is the keyspace name: ---> %v", keyspace)
+				if keyspace == "" {
+					bindVars[sqlparser.DBVarName] = sqltypes.NullBindVariable
+				} else {
+					bindVars[sqlparser.DBVarName] = sqltypes.StringBindVariable(keyspace)
+				}
+			}
+			if rewriteResult.NeedLastInsertID {
+				bindVars[sqlparser.LastInsertIDName] = sqltypes.Uint64BindVariable(safeSession.GetLastInsertId())
+			}
 		}
 		logStats.PlanTime = execStart.Sub(logStats.StartTime)
 		logStats.SQL = sql
