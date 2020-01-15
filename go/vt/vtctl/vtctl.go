@@ -312,10 +312,10 @@ var commands = []commandGroup{
 				"[-skip_schema_copy] <keyspace.workflow> <source_shards> <target_shards>",
 				"Start a Resharding process. Example: Reshard ks.workflow001 '0' '-80,80-'"},
 			{"Migrate", commandMigrate,
-				"[-cell=<cell>] [-tablet_types=<tablet_types>] -workflow=<workflow> <source_keyspace> <target_keyspace> <table_specs>",
+				"[-cell=<cell>] [-tablet_types=<source_tablet_types>] -workflow=<workflow> <source_keyspace> <target_keyspace> <table_specs>",
 				`Start a table(s) migration, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{""column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{""column": "id2", "name": "hash"}]}}`},
 			{"CreateLookupVindex", commandCreateLookupVindex,
-				"[-cell=<cell>] [-tablet_types=<tablet_types>] <keyspace> <json_spec>",
+				"[-cell=<cell>] [-tablet_types=<source_tablet_types>] <keyspace> <json_spec>",
 				`Create and backfill a lookup vindex. the json_spec must contain the vindex and colvindex specs for the new lookup.`},
 			{"Materialize", commandMaterialize,
 				`<json_spec>, example : '{"workflow": "aaa", "source_keyspace": "source", "target_keyspace": "target", "table_settings": [{"target_table": "customer", "source_expression": "select * from customer", "create_ddl": "copy"}]}'`,
@@ -1840,7 +1840,7 @@ func commandCreateLookupVindex(ctx context.Context, wr *wrangler.Wrangler, subFl
 		return err
 	}
 	if subFlags.NArg() != 2 {
-		return fmt.Errorf("two arguments are required: keyspace and specs")
+		return fmt.Errorf("two arguments are required: keyspace and json_spec")
 	}
 	keyspace := subFlags.Arg(0)
 	specs := &vschemapb.Keyspace{}
