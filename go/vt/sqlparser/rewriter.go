@@ -2,6 +2,8 @@
 
 package sqlparser
 
+//go:generate make visitor
+
 import (
 	"reflect"
 )
