@@ -17,6 +17,7 @@ MAKEFLAGS = -s
 export GOBIN=$(PWD)/bin
 export GO111MODULE=on
 export GODEBUG=tls13=0
+export REWRITER=go/vt/sqlparser/rewriter.go
 
 # Disabled parallel processing of target prerequisites to avoid that integration tests are racing each other (e.g. for ports) and may fail.
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
@@ -89,7 +90,7 @@ parser:
 
 visitor:
 	go build -o visitorgen go/visitorgen/main/main.go
-	./visitorgen -input=go/vt/sqlparser/ast.go -output=go/vt/sqlparser/rewriter.go
+	./visitorgen -input=go/vt/sqlparser/ast.go -output=$(REWRITER)
 	rm ./visitorgen
 
 # To pass extra flags, run test.go manually.
