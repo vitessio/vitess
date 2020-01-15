@@ -2362,3 +2362,18 @@ options:PassthroughDMLs
 # named locks are unsafe with server-side connection pooling
 "select get_lock('foo') from dual"
 "get_lock() not allowed"
+
+# select DISTINCT ((1,2),(1,2)) from dual;
+"select DISTINCT ((1,2),(1,2)) from dual"
+{
+  "PlanID": "PASS_SELECT",
+  "TableName": "dual",
+  "Permissions": [
+    {
+      "TableName": "dual",
+      "Role": 0
+    }
+  ],
+  "FieldQuery": "select ((1, 2), (1, 2)) from dual where 1 != 1",
+  "FullQuery": "select distinct ((1, 2), (1, 2)) from dual limit :#maxLimit"
+}
