@@ -82,7 +82,6 @@ var (
 	appMysqlStats      = stats.NewTimings("MysqlApp", "MySQL app stats", "operation")
 
 	versionRegex = regexp.MustCompile(`Ver ([0-9]+)\.([0-9]+)\.([0-9]+)`)
-	riceBox, _   = rice.FindBox("../../../config")
 )
 
 // How many bytes from MySQL error log to sample for error messages
@@ -667,6 +666,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	}
 
 	if initDBSQLFile == "" { // default to built-in
+		riceBox := rice.MustFindBox("../../../config")
 		sqlFile, err := riceBox.Open("init_db.sql")
 		if err != nil {
 			return fmt.Errorf("could not open built-in init_db.sql file")
@@ -797,6 +797,7 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 	myTemplateSource := new(bytes.Buffer)
 	myTemplateSource.WriteString("[mysqld]\n")
 
+	riceBox := rice.MustFindBox("../../../config")
 	b, err := riceBox.Bytes("mycnf/default.cnf")
 	if err != nil {
 		log.Warningf("could not open embedded default.cnf config file")
