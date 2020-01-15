@@ -92,6 +92,12 @@ func (vh *vtgateHandler) NewConnection(c *mysql.Conn) {
 	vh.connections[c] = true
 }
 
+func (vh *vtgateHandler) numConnections() int {
+	vh.mu.Lock()
+	defer vh.mu.Unlock()
+	return len(vh.connections)
+}
+
 func (vh *vtgateHandler) ComResetConnection(c *mysql.Conn) {
 	ctx := context.Background()
 	session := vh.session(c)
@@ -453,10 +459,29 @@ func shutdownMysqlProtocolAndDrain() {
 }
 
 func rollbackAtShutdown() {
-	for c := range vtgateHandle.connections {
-		log.Warningf("Rolling back transactions associated with connection ID: %v", c.ConnectionID)
-		vtgateHandle.ConnectionClosed(c)
+	defer log.Flush()
+
+	// Close all open connections. If they're waiting for reads, this will cause
+	// them to error out, which will automatically rollback open transactions.
+	func() {
+		vtgateHandle.mu.Lock()
+		defer vtgateHandle.mu.Unlock()
+		for c := range vtgateHandle.connections {
+			log.Infof("Rolling back transactions associated with connection ID: %v", c.ConnectionID)
+			c.Close()
+		}
+	}()
+
+	// If vtgate is instead busy executing a query, the number of open conns
+	// will be non-zero. Give another second for those queries to finish.
+	for i := 0; i < 100; i++ {
+		if vtgateHandle.numConnections() == 0 {
+			log.Infof("All connections have been rolled back.")
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
+	log.Errorf("All connections did not go idle. Shutting down anyway.")
 }
 
 func init() {
