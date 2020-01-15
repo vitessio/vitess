@@ -192,7 +192,7 @@ func (vtgate *VtgateProcess) TearDown() error {
 		vtgate.proc = nil
 		return err
 
-	case <-time.After(15 * time.Second):
+	case <-time.After(10 * time.Second):
 		vtgate.proc.Process.Kill()
 		vtgate.proc = nil
 		return <-vtgate.exit
@@ -244,7 +244,6 @@ func (vtgate *VtgateProcess) GetVars() (map[string]interface{}, error) {
 			return nil, fmt.Errorf("not able to parse response body")
 		}
 		return resultMap, nil
-	} else {
-		return nil, fmt.Errorf("unsuccessful response")
 	}
+	return nil, fmt.Errorf("unsuccessful response")
 }

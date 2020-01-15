@@ -67,8 +67,8 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
-		// Starting Vtgate in SINGLE transaction mode
-		clusterInstance.VtGateExtraArgs = []string{"-transaction_mode", "SINGLE"}
+		// Set a short onterm timeout so the test goes faster.
+		clusterInstance.VtGateExtraArgs = []string{"-onterm_timeout", "1s"}
 		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1, err
 		}
