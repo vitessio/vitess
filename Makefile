@@ -53,7 +53,7 @@ build_web:
 	cd web/vtctld2 && ng build -prod
 	cp -f web/vtctld2/src/{favicon.ico,plotly-latest.min.js,primeui-ng-all.min.css} web/vtctld2/dist/
 
-build: embed_config
+build:
 ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
