@@ -1111,13 +1111,13 @@ var (
 		output: "show charset",
 	}, {
 		input:  "show character set like '%foo'",
-		output: "show charset",
+		output: "show charset like '%foo'",
 	}, {
 		input:  "show charset",
 		output: "show charset",
 	}, {
 		input:  "show charset like '%foo'",
-		output: "show charset",
+		output: "show charset like '%foo'",
 	}, {
 		input:  "show collation",
 		output: "show collation",

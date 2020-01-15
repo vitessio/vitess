@@ -1545,7 +1545,6 @@ type Show struct {
 	Type                   string
 	OnTable                TableName
 	Table                  TableName
-	Where                  *Where
 	ShowTablesOpt          *ShowTablesOpt
 	Scope                  string
 	ShowCollationFilterOpt *Expr
@@ -1576,8 +1575,8 @@ func (node *Show) Format(buf *TrackedBuffer) {
 	if node.Type == "collation" && node.ShowCollationFilterOpt != nil {
 		buf.Myprintf(" where %v", *node.ShowCollationFilterOpt)
 	}
-	if node.Type == "charset" && node.Where != nil {
-		buf.Myprintf(" %v", node.Where)
+	if node.Type == "charset" && node.ShowTablesOpt != nil {
+		buf.Myprintf("%v", node.ShowTablesOpt.Filter)
 	}
 	if node.HasTable() {
 		buf.Myprintf(" %v", node.Table)
