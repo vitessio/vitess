@@ -35,10 +35,6 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (_ *engine.U
 		ChangedVindexValues: make(map[string][]sqltypes.PlanValue),
 	}
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(upd)))
-	err := rewriteExpressions(pb, upd.Exprs)
-	if err != nil {
-		return nil, false, false, err
-	}
 	ro, err := pb.processDMLTable(upd.TableExprs)
 	if err != nil {
 		return nil, false, false, err
@@ -110,17 +106,6 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (_ *engine.U
 		eupd.OwnedVindexQuery = generateUpdateSubquery(upd, eupd.Table)
 	}
 	return eupd, pb.needsLastInsertID, pb.needsDbName, nil
-}
-
-func rewriteExpressions(pb *primitiveBuilder, exprs sqlparser.UpdateExprs) error {
-	for _, e := range exprs {
-		rewritten, err := RewriteAndUpdateBuilder(e.Expr, pb)
-		if err != nil {
-			return err
-		}
-		e.Expr = rewritten
-	}
-	return nil
 }
 
 // buildChangedVindexesValues adds to the plan all the lookup vindexes that are changing.

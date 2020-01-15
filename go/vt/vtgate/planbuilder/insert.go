@@ -53,22 +53,6 @@ func buildInsertPlan(ins *sqlparser.Insert, vschema ContextVSchema) (_ engine.Pr
 	return buildInsertShardedPlan(ins, ro.vschemaTable)
 }
 
-// rewriteValues will go over the insert values and rewrite them when needed
-func rewriteValues(in sqlparser.Values) (_ sqlparser.Values, needsLastInsertID bool, needsDBName bool, _ error) {
-	for i, row := range in {
-		for j, val := range row {
-			rewritten, err := Rewrite(val)
-			if err != nil {
-				return nil, false, false, vterrors.Wrap(err, "failed to rewrite insert value")
-			}
-			in[i][j] = rewritten.Expression
-			needsLastInsertID = needsLastInsertID || rewritten.NeedLastInsertID
-			needsDBName = needsDBName || rewritten.NeedDatabase
-		}
-	}
-	return in, needsLastInsertID, needsDBName, nil
-}
-
 func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (_ engine.Primitive, needsLastInsertID bool, needsDBName bool, _ error) {
 	eins := engine.NewSimpleInsert(
 		engine.InsertUnsharded,
@@ -84,11 +68,7 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (_ e
 		eins.Query = generateQuery(ins)
 		return eins, false, false, nil
 	case sqlparser.Values:
-		var err error
-		rows, needsLastInsertID, needsDBName, err = rewriteValues(insertValues)
-		if err != nil {
-			return nil, false, false, err
-		}
+		rows = insertValues
 	default:
 		return nil, false, false, fmt.Errorf("BUG: unexpected construct in insert: %T", insertValues)
 	}
@@ -152,11 +132,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table) (_ eng
 	case *sqlparser.Select, *sqlparser.Union:
 		return nil, false, false, errors.New("unsupported: insert into select")
 	case sqlparser.Values:
-		var err error
-		rows, needsLastInsertID, needsDBName, err = rewriteValues(insertValues)
-		if err != nil {
-			return nil, false, false, err
-		}
+		rows = insertValues
 		if hasSubquery(rows) {
 			return nil, false, false, errors.New("unsupported: subquery in insert values")
 		}
