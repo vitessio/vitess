@@ -37,7 +37,8 @@ const (
 )
 
 var (
-	keepData = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
+	keepData   = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
+	topoFlavor = flag.String("topo-flavor", "etcd", "choose a topo server from etcd, zkctl or consul")
 )
 
 // LocalProcessCluster Testcases need to use this to iniate a cluster
@@ -60,7 +61,7 @@ type LocalProcessCluster struct {
 	VtctlProcess       VtctlProcess
 
 	// background executable processes
-	TopoProcess     EtcdProcess
+	TopoProcess     TopoProcess
 	VtctldProcess   VtctldProcess
 	VtgateProcess   VtgateProcess
 	VtworkerProcess VtworkerProcess
@@ -140,22 +141,25 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	}
 	cluster.TopoPort = cluster.GetAndReservePort()
 	cluster.TmpDirectory = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/tmp_%d", cluster.GetAndReservePort()))
-	cluster.TopoProcess = *EtcdProcessInstance(cluster.TopoPort, cluster.GetAndReservePort(), cluster.Hostname, "global")
-	log.Info(fmt.Sprintf("Starting etcd server on port : %d", cluster.TopoPort))
-	if err = cluster.TopoProcess.Setup(); err != nil {
+	cluster.TopoProcess = *TopoProcessInstance(cluster.TopoPort, cluster.GetAndReservePort(), cluster.Hostname, *topoFlavor, "global")
+
+	log.Info(fmt.Sprintf("Starting topo server %v on port : %d", topoFlavor, cluster.TopoPort))
+	if err = cluster.TopoProcess.Setup(*topoFlavor, cluster); err != nil {
 		log.Error(err.Error())
 		return
 	}
 
-	log.Info("Creating topo dirs")
-	if err = cluster.TopoProcess.ManageTopoDir("mkdir", "/vitess/global"); err != nil {
-		log.Error(err.Error())
-		return
-	}
+	if *topoFlavor == "etcd" {
+		log.Info("Creating topo dirs")
+		if err = cluster.TopoProcess.ManageTopoDir("mkdir", "/vitess/global"); err != nil {
+			log.Error(err.Error())
+			return
+		}
 
-	if err = cluster.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+cluster.Cell); err != nil {
-		log.Error(err.Error())
-		return
+		if err = cluster.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+cluster.Cell); err != nil {
+			log.Error(err.Error())
+			return
+		}
 	}
 
 	log.Info("Adding cell info")
@@ -479,8 +483,8 @@ func (cluster *LocalProcessCluster) Teardown() {
 		log.Errorf("Error in vtctld teardown - %s", err.Error())
 	}
 
-	if err := cluster.TopoProcess.TearDown(cluster.Cell, cluster.OriginalVTDATAROOT, cluster.CurrentVTDATAROOT, *keepData); err != nil {
-		log.Errorf("Error in etcd teardown - %s", err.Error())
+	if err := cluster.TopoProcess.TearDown(cluster.Cell, cluster.OriginalVTDATAROOT, cluster.CurrentVTDATAROOT, *keepData, *topoFlavor); err != nil {
+		log.Errorf("Error in topo server teardown - %s", err.Error())
 	}
 }
 

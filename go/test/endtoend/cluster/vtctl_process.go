@@ -48,6 +48,7 @@ func (vtctl *VtctlProcess) AddCellInfo(Cell string) (err error) {
 		Cell,
 	)
 	log.Info(fmt.Sprintf("Adding Cell into Keyspace with arguments %v", strings.Join(tmpProcess.Args, " ")))
+	fmt.Println(fmt.Sprintf("Adding Cell into Keyspace with arguments %v", strings.Join(tmpProcess.Args, " ")))
 	return tmpProcess.Run()
 }
 
@@ -99,10 +100,18 @@ func (vtctl *VtctlProcess) ExecuteCommand(args ...string) (err error) {
 // configured with the given Config.
 // The process must be manually started by calling setup()
 func VtctlProcessInstance(topoPort int, hostname string) *VtctlProcess {
+	topoImplementation := "etcd2"
+	switch *topoFlavor {
+	case "zkctl":
+		topoImplementation = "zk2"
+	case "consul":
+		topoImplementation = "consul"
+	}
+
 	vtctl := &VtctlProcess{
 		Name:               "vtctl",
 		Binary:             "vtctl",
-		TopoImplementation: "etcd2",
+		TopoImplementation: topoImplementation,
 		TopoGlobalAddress:  fmt.Sprintf("%s:%d", hostname, topoPort),
 		TopoGlobalRoot:     "/vitess/global",
 		TopoServerAddress:  fmt.Sprintf("%s:%d", hostname, topoPort),
