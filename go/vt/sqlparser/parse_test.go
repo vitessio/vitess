@@ -1501,8 +1501,7 @@ var (
 	}, {
 		input:  "select distinctrow a.* from (select (1) from dual union all select 1 from dual) a",
 		output: "select distinct a.* from (select (1) from dual union all select 1 from dual) as a",
-	},
-	}
+	}}
 )
 
 func TestValid(t *testing.T) {
