@@ -36,8 +36,6 @@ fi
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
-init_db_sql_file="$VTROOT/config/init_db.sql"
-
 mkdir -p $VTDATAROOT/backups
 
 # Start 3 vttablets by default.
@@ -65,7 +63,7 @@ for uid_index in $uids; do
   export TABLET_TYPE=$tablet_type
 
   echo "Starting MySQL for tablet $alias..."
-  action="init -init_db_sql_file $init_db_sql_file"
+  action="init"
   if [ -d $VTDATAROOT/$tablet_dir ]; then
     echo "Resuming from existing vttablet dir:"
     echo "    $VTDATAROOT/$tablet_dir"
@@ -74,7 +72,7 @@ for uid_index in $uids; do
 
   set +e
 
-  $VTROOT/bin/mysqlctl \
+  mysqlctl \
     -log_dir $VTDATAROOT/tmp \
     -tablet_uid $uid \
     -mysql_port $mysql_port \
@@ -119,7 +117,7 @@ for uid_index in $uids; do
 
   echo "Starting vttablet for $alias..."
   # shellcheck disable=SC2086
-  $VTROOT/bin/vttablet \
+  vttablet \
     $TOPOLOGY_FLAGS \
     -log_dir $VTDATAROOT/tmp \
     -log_queries_to_file $VTDATAROOT/tmp/$tablet_logfile \

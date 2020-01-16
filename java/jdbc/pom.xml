@@ -39,6 +39,11 @@
       <version>2.6</version>
     </dependency>
 
+    <dependency>
+      <groupId>org.apache.logging.log4j</groupId>
+      <artifactId>log4j-api</artifactId>
+    </dependency>
+
     <!-- Dependencies with limited scope. -->
     <dependency>
       <groupId>junit</groupId>

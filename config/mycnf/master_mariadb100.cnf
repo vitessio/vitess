@@ -31,7 +31,6 @@ collation_server = utf8_general_ci
 
 expire_logs_days = 3
 
-log_bin
 sync_binlog = 1
 binlog_format = ROW
 log_slave_updates

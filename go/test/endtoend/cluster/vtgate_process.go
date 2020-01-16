@@ -244,7 +244,6 @@ func (vtgate *VtgateProcess) GetVars() (map[string]interface{}, error) {
 			return nil, fmt.Errorf("not able to parse response body")
 		}
 		return resultMap, nil
-	} else {
-		return nil, fmt.Errorf("unsuccessful response")
 	}
+	return nil, fmt.Errorf("unsuccessful response")
 }

@@ -22,7 +22,6 @@ import (
 	"bytes"
 	"crypto/rand"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"path"
 	"text/template"
@@ -121,19 +120,9 @@ func (cnf *Mycnf) directoryList() []string {
 	}
 }
 
-// makeMycnf will join cnf files cnfPaths and substitute in the right values.
-func (cnf *Mycnf) makeMycnf(cnfFiles []string) (string, error) {
-	myTemplateSource := new(bytes.Buffer)
-	myTemplateSource.WriteString("[mysqld]\n")
-	for _, path := range cnfFiles {
-		data, dataErr := ioutil.ReadFile(path)
-		if dataErr != nil {
-			return "", dataErr
-		}
-		myTemplateSource.WriteString("## " + path + "\n")
-		myTemplateSource.Write(data)
-	}
-	return cnf.fillMycnfTemplate(myTemplateSource.String())
+// makeMycnf will substitute values
+func (cnf *Mycnf) makeMycnf(partialcnf string) (string, error) {
+	return cnf.fillMycnfTemplate(partialcnf)
 }
 
 // fillMycnfTemplate will fill in the passed in template with the values
