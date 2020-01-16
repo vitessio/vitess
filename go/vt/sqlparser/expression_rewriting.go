@@ -113,9 +113,11 @@ func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 				cursor.Replace(bindVarExpression(LastInsertIDName))
 				er.lastInsertID = true
 			}
-		case node.Name.EqualString("database") && er.shouldRewriteDatabaseFunc:
+		case er.shouldRewriteDatabaseFunc &&
+			(node.Name.EqualString("database") ||
+			 node.Name.EqualString("schema")):
 			if len(node.Exprs) > 0 {
-				er.err = vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Syntax error. DATABASE() takes no arguments")
+				er.err = vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Syntax error. %s() takes no arguments", node.Name.String())
 			} else {
 				cursor.Replace(bindVarExpression(DBVarName))
 				er.database = true

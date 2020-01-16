@@ -2663,6 +2663,10 @@ function_call_conflict:
   {
     $$ = &FuncExpr{Name: NewColIdent("database"), Exprs: $3}
   }
+| SCHEMA openb select_expression_list_opt closeb
+  {
+    $$ = &FuncExpr{Name: NewColIdent("schema"), Exprs: $3}
+  }
 | MOD openb select_expression_list closeb
   {
     $$ = &FuncExpr{Name: NewColIdent("mod"), Exprs: $3}
