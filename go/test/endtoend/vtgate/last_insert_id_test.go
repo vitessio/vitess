@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package endtoend
+package vtgate
 
 import (
 	"context"
@@ -24,7 +24,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 )
 
-func TestDatabaseFunc(t *testing.T) {
+func TestLastInsertId(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
@@ -32,9 +32,10 @@ func TestDatabaseFunc(t *testing.T) {
 	}
 	defer conn.Close()
 
-	exec(t, conn, "use ks")
-	qr := exec(t, conn, "select database()")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[VARCHAR("ks")]]`; got != want {
+	exec(t, conn, "insert into t1_last_insert_id(id1) values(42)")
+
+	qr := exec(t, conn, "select last_insert_id()")
+	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1)]]`; got != want {
 		t.Errorf("select:\n%v want\n%v", got, want)
 	}
 }
