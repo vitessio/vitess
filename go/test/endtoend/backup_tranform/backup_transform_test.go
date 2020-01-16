@@ -17,6 +17,9 @@ limitations under the License.
 package backuptransform
 
 import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"os"
 	"testing"
 
@@ -64,9 +67,11 @@ func TestBackupTransform(t *testing.T) {
 	// validate that MANIFEST is having TransformHook
 	// every file is starting with 'header'
 	backups := listBackups(t)
-	assert.Equalf(t, 1, len(backups), "invalid backups: %v", backups)
+	require.Equalf(t, 1, len(backups), "invalid backups: %v", backups)
 
-	// TODO: reading from the manifest is pending
+	backupLocation := localCluster.CurrentVTDATAROOT + "/backups/" + shardKsName + "/" + backups[0]
+
+	validateManifestFile(t, backupLocation)
 
 	// restore replica2 from backup, should not give any error
 	// Note: we don't need to pass in the backup_storage_transform parameter,
@@ -142,6 +147,37 @@ func listBackups(t *testing.T) []string {
 	output, err := localCluster.ListBackups(shardKsName)
 	assert.Nil(t, err)
 	return output
+}
+
+func validateManifestFile(t *testing.T, backupLocation string) {
+
+	// reading manifest
+	data, err := ioutil.ReadFile(backupLocation + "/MANIFEST")
+	require.Nilf(t, err, "error while reading MANIFEST %v", err)
+	manifest := make(map[string]interface{})
+
+	// parsing manifest
+	err = json.Unmarshal(data, &manifest)
+	require.Nilf(t, err, "error while parsing MANIFEST %v", err)
+
+	// validate manifest
+	transformHook, _ := manifest["TransformHook"]
+	require.Equalf(t, "test_backup_transform", transformHook, "invalid transformHook in MANIFEST")
+	skipCompress, _ := manifest["SkipCompress"]
+	assert.Equalf(t, skipCompress, true, "invalid value of skipCompress")
+
+	// validate backup files
+	for i := range manifest["FileEntries"].([]interface{}) {
+		f, err := os.Open(fmt.Sprintf("%s/%d", backupLocation, i))
+		require.Nilf(t, err, "error while opening backup_file %d: %v", i, err)
+		var fileHeader string
+		_, err = fmt.Fscanln(f, &fileHeader)
+		f.Close()
+
+		require.Nilf(t, err, "error while reading backup_file %d: %v", i, err)
+		require.Equalf(t, "header", fileHeader, "wrong file contents for %d", i)
+	}
+
 }
 
 // verifyReplicationStatus validate the replication status in tablet.
