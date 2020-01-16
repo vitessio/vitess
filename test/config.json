@@ -18,15 +18,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"backup_transform": {
-			"File": "backup_transform.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 0,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"backup_transform_mysqlctld": {
 			"File": "backup_transform_mysqlctld.py",
 			"Args": [],
@@ -282,6 +273,15 @@
 		"cellalias": {
 			"File": "cellalias.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/cellalias"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 12,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"backup_transform": {
+			"File": "backup_transform_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup_transform"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 12,
