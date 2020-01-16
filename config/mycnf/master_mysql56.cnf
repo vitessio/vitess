@@ -4,7 +4,6 @@
 # the default for sync_binlog is unsafe. The format is TABLE, and
 # info repositories also default to file.
 
-log_bin
 sync_binlog = 1
 gtid_mode = ON
 binlog_format = ROW

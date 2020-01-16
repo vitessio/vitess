@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -612,6 +613,19 @@ func LoadFormalKeyspace(filename string) (*vschemapb.Keyspace, error) {
 		return nil, err
 	}
 	return formal, nil
+}
+
+// ChooseVindexForType chooses the most appropriate vindex for the give type.
+func ChooseVindexForType(typ querypb.Type) (string, error) {
+	switch {
+	case sqltypes.IsIntegral(typ):
+		return "hash", nil
+	case sqltypes.IsText(typ):
+		return "unicode_loose_md5", nil
+	case sqltypes.IsBinary(typ):
+		return "binary_md5", nil
+	}
+	return "", fmt.Errorf("type %v is not recommended for a vindex", typ)
 }
 
 // FindBestColVindex finds the best ColumnVindex for VReplication.

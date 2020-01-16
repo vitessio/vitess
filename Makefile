@@ -43,6 +43,11 @@ embed_static:
 	go run github.com/GeertJohan/go.rice/rice embed-go
 	go build .
 
+embed_config:
+	cd go/vt/mysqlctl
+	go run github.com/GeertJohan/go.rice/rice embed-go
+	go build .
+
 build_web:
 	echo $$(date): Building web artifacts
 	cd web/vtctld2 && ng build -prod
@@ -55,6 +60,13 @@ endif
 	bash ./build.env
 	go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
 
+debug:
+ifndef NOBANNER
+	echo $$(date): Building source tree
+endif
+	bash ./build.env
+	go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" -gcflags -'N -l' ./go/...
+
 # install copies the files needed to run Vitess into the given directory tree.
 # Usage: make install PREFIX=/path/to/install/root
 install: build
@@ -62,7 +74,10 @@ install: build
 	mkdir -p "$${PREFIX}/bin"
 	cp "$${VTROOT}/bin/"{mysqlctld,vtctld,vtctlclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
 	# config files
-	cp -R config "$${PREFIX}/"
+	mkdir -p "$${PREFIX}/src/vitess.io/vitess"
+	cp -R config "$${PREFIX}/src/vitess.io/vitess/"
+	# also symlink config files in the old location
+	ln -sf src/vitess.io/vitess/config "$${PREFIX}/config"
 	# vtctld web UI files
 	mkdir -p "$${PREFIX}/src/vitess.io/vitess/web"
 	cp -R web/vtctld "$${PREFIX}/src/vitess.io/vitess/web/"
