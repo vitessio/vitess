@@ -296,10 +296,6 @@ func TestConsolidation(t *testing.T) {
 		wg.Wait()
 
 		vend := framework.DebugVars()
-		if err := compareIntDiff(vend, "Waits/TotalCount", vstart, 1); err != nil {
-			t.Logf("DebugVars Waits/TotalCount not incremented with sleep=%v", sleep)
-			continue
-		}
 		if err := compareIntDiff(vend, "Waits/Histograms/Consolidations/Count", vstart, 1); err != nil {
 			t.Logf("DebugVars Waits/Histograms/Consolidations/Count not incremented with sleep=%v", sleep)
 			continue

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -822,4 +823,45 @@ func TestManualTwopcz(t *testing.T) {
 	fmt.Printf("%s/twopcz\n", framework.ServerAddress)
 	fmt.Print("Sleeping for 30 seconds\n")
 	time.Sleep(30 * time.Second)
+}
+
+func TestTransactionPoolResourceWaitTime(t *testing.T) {
+	defer framework.Server.SetPoolSize(framework.Server.TxPoolSize())
+	defer framework.Server.SetTxPoolTimeout(framework.Server.TxPoolTimeout())
+	framework.Server.SetTxPoolSize(1)
+	framework.Server.SetTxPoolTimeout(10 * time.Second)
+	debugVarPath := "Waits/Histograms/TransactionPoolResourceWaitTime/Count"
+
+	for sleep := 0.1; sleep < 10.0; sleep *= 2 {
+		vstart := framework.DebugVars()
+		var wg sync.WaitGroup
+		wg.Add(2)
+
+		transactionFunc := func() {
+			client := framework.NewClient()
+
+			bv := map[string]*querypb.BindVariable{}
+			query := fmt.Sprintf("select sleep(%v) from dual", sleep)
+			if _, err := client.BeginExecute(query, bv); err != nil {
+				t.Error(err)
+				return
+			}
+			if err := client.Rollback(); err != nil {
+				t.Error(err)
+				return
+			}
+			wg.Done()
+		}
+		go transactionFunc()
+		go transactionFunc()
+		wg.Wait()
+		vend := framework.DebugVars()
+		if err := compareIntDiff(vend, debugVarPath, vstart, 1); err != nil {
+			t.Logf("DebugVars %v not incremented with sleep=%v", debugVarPath, sleep)
+			continue
+		}
+		t.Logf("DebugVars %v properly incremented with sleep=%v", debugVarPath, sleep)
+		return
+	}
+	t.Errorf("DebugVars %v not incremented", debugVarPath)
 }
