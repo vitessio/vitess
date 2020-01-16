@@ -29,22 +29,18 @@ import (
 )
 
 // create query for test table creation
-var (
-	vtInsertTest = `
-					create table vt_insert_test (
-					  id bigint auto_increment,
-					  msg varchar(64),
-					  primary key (id)
-					  ) Engine=InnoDB`
-)
+var vtInsertTest = `create table vt_insert_test (
+		id bigint auto_increment,
+		msg varchar(64),
+		primary key (id)
+		) Engine=InnoDB`
 
 func TestBackupTransform(t *testing.T) {
-	// insert data in master, validate in slave
+	// insert data in master, validate same in slave
 	verifyInitialReplication(t)
 
 	// restart the replica with transform parameter
 	replica1.VttabletProcess.TearDown()
-
 	replica1.VttabletProcess.ExtraArgs = []string{
 		"-db-credentials-file", dbCredentialFile,
 		"-backup_storage_hook", "test_backup_transform",
@@ -64,13 +60,14 @@ func TestBackupTransform(t *testing.T) {
 	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
 	assert.Nil(t, err)
 
-	// validate that MANIFEST is having TransformHook
-	// every file is starting with 'header'
+	// validate backup_list, expecting 1 backup available
 	backups := listBackups(t)
 	require.Equalf(t, 1, len(backups), "invalid backups: %v", backups)
 
 	backupLocation := localCluster.CurrentVTDATAROOT + "/backups/" + shardKsName + "/" + backups[0]
 
+	// validate that MANIFEST is having TransformHook
+	// every file is starting with 'header'
 	validateManifestFile(t, backupLocation)
 
 	// restore replica2 from backup, should not give any error
@@ -104,10 +101,10 @@ func TestBackupTransform(t *testing.T) {
 		verifyReplicationStatus(t, replica2, "OFF")
 	}
 
-	// validate new slave has all the data
+	// validate that new slave has all the data
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
-	// Remove the backup
+	// Remove all backups
 	for _, backup := range listBackups(t) {
 		err := localCluster.VtctlclientProcess.ExecuteCommand("RemoveBackup", shardKsName, backup)
 		assert.Nil(t, err)
@@ -122,7 +119,6 @@ func TestBackupTransformErr(t *testing.T) {
 	err := replica1.VttabletProcess.TearDown()
 	require.Nil(t, err)
 
-	replica1.VttabletProcess.ServingStatus = ""
 	replica1.VttabletProcess.ExtraArgs = []string{
 		"-db-credentials-file", dbCredentialFile,
 		"-backup_storage_hook", "test_backup_error",
@@ -134,8 +130,9 @@ func TestBackupTransformErr(t *testing.T) {
 	assert.Nil(t, err)
 
 	// create backup, it should fail
-	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
-	assert.NotNil(t, err)
+	out, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("Backup", replica1.Alias)
+	require.NotNil(t, err)
+	assert.Containsf(t, out, "backup is not usable, aborting it", "unexpected error received %v", err)
 
 	// validate there is no backup left
 	backups := listBackups(t)
@@ -149,6 +146,10 @@ func listBackups(t *testing.T) []string {
 	return output
 }
 
+// validateManifestFile reads manifest and validates that it is
+// having a TransformHook, SkipCompress and FileEntries. It also
+// validates that backup_files avalable in FileEntries are having
+// 'header' at it's first line.
 func validateManifestFile(t *testing.T, backupLocation string) {
 
 	// reading manifest
