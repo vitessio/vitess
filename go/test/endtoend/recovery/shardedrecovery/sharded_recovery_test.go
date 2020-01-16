@@ -17,14 +17,13 @@ limitations under the License.
 package shardedrecovery
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os/exec"
 	"strconv"
 	"strings"
 	"testing"
-	"time"
+	"vitess.io/vitess/go/test/endtoend/recovery"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -89,32 +88,31 @@ var (
 }`
 )
 
-/* Test recovery from backup flow.
+// Test recovery from backup flow.
 
-test_recovery will:
-- create a shard with master and replica1 only
-- run InitShardMaster
-- insert some data
-- take a backup
-- insert more data on the master
-- perform a resharding
-- create a recovery keyspace
-- bring up tablet_replica2 in the new keyspace
-- check that new tablet does not have data created after backup
-- check that vtgate queries work correctly
+// test_recovery will:
+// - create a shard with master and replica1 only
+// - run InitShardMaster
+// - insert some data
+// - take a backup
+// - insert more data on the master
+// - perform a resharding
+// - create a recovery keyspace
+// - bring up tablet_replica2 in the new keyspace
+// - check that new tablet does not have data created after backup
+// - check that vtgate queries work correctly
 
-*/
 func TestUnShardedRecoveryAfterSharding(t *testing.T) {
-	_, err := initializeCluster()
+	_, err := initializeCluster(t)
 	defer localCluster.Teardown()
 	require.Nil(t, err)
 	err = localCluster.VtctlclientProcess.ApplySchema(keyspaceName, vtInsertTest)
 	assert.Nil(t, err)
-	insertData(t, master, 1)
+	recovery.InsertData(t, master, 1, keyspaceName)
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
 
 	// insert more data on the master
-	insertData(t, master, 2)
+	recovery.InsertData(t, master, 2, keyspaceName)
 
 	// backup the replica
 	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
@@ -127,7 +125,7 @@ func TestUnShardedRecoveryAfterSharding(t *testing.T) {
 	assert.True(t, strings.HasSuffix(output[0], replica1.Alias))
 
 	// insert more data on the master
-	insertData(t, master, 3)
+	recovery.InsertData(t, master, 3, keyspaceName)
 
 	err = localCluster.VtctlclientProcess.ApplyVSchema(keyspaceName, vSchema)
 	assert.Nil(t, err)
@@ -204,7 +202,7 @@ func TestUnShardedRecoveryAfterSharding(t *testing.T) {
 	assert.Nil(t, err)
 
 	// now bring up the recovery keyspace and a tablet, letting it restore from backup.
-	restoreTablet(t, replica2, recoveryKS, "0")
+	recovery.RestoreTablet(t, localCluster, replica2, recoveryKS, "0", keyspaceName, commonTabletArg)
 
 	// check the new replica does not have the data
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
@@ -232,52 +230,51 @@ func TestUnShardedRecoveryAfterSharding(t *testing.T) {
 	assert.Nil(t, err)
 
 	session := vtgateConn.Session("@replica", nil)
-	verifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(3)")
+	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(3)")
 
 	// check that new tablet is accessible by using ks.table
-	verifyQueriesUsingVtgate(t, session, "select count(*) from recovery_keyspace.vt_insert_test", "INT64(2)")
+	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from recovery_keyspace.vt_insert_test", "INT64(2)")
 
 	// check that new tablet is accessible with 'use ks'
-	executeQueriesUsingVtgate(t, session, "use `recovery_keyspace@replica`")
-	verifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(2)")
+	recovery.ExecuteQueriesUsingVtgate(t, session, "use `recovery_keyspace@replica`")
+	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(2)")
 
 	// check that new tablet is accessible with `use ks:shard`
-	executeQueriesUsingVtgate(t, session, "use `recovery_keyspace:0@replica`")
-	verifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(2)")
+	recovery.ExecuteQueriesUsingVtgate(t, session, "use `recovery_keyspace:0@replica`")
+	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(2)")
 
 	vtgateConn.Close()
 	err = vtgateInstance.TearDown()
 	assert.Nil(t, err)
 }
 
-/*
-Test recovery from backup flow.
+// Test recovery from backup flow.
 
-test_recovery will:
-- create a shard with master and replica1 only
-- run InitShardMaster
-- insert some data
-- perform a resharding
-- take a backup of both new shards
-- insert more data on the masters of both shards
-- create a recovery keyspace
-- bring up tablet_replica2 and tablet_replica3 in the new keyspace
-- check that new tablets do not have data created after backup
-- check that vtgate queries work correctly
-*/
+// test_recovery will:
+// - create a shard with master and replica1 only
+// - run InitShardMaster
+// - insert some data
+// - perform a resharding
+// - take a backup of both new shards
+// - insert more data on the masters of both shards
+// - create a recovery keyspace
+// - bring up tablet_replica2 and tablet_replica3 in the new keyspace
+// - check that new tablets do not have data created after backup
+// - check that vtgate queries work correctly
+
 func TestShardedRecovery(t *testing.T) {
 
-	_, err := initializeCluster()
+	_, err := initializeCluster(t)
 	defer localCluster.Teardown()
 	require.Nil(t, err)
 	err = localCluster.VtctlclientProcess.ApplySchema(keyspaceName, vtInsertTest)
 	assert.Nil(t, err)
-	insertData(t, master, 1)
+	recovery.InsertData(t, master, 1, keyspaceName)
 
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
 
 	// insert more data on the master
-	insertData(t, master, 4)
+	recovery.InsertData(t, master, 4, keyspaceName)
 
 	err = localCluster.VtctlclientProcess.ApplyVSchema(keyspaceName, vSchema)
 	assert.Nil(t, err)
@@ -412,16 +409,16 @@ func TestShardedRecovery(t *testing.T) {
 	vtgateConn, err := vtgateconn.Dial(context.Background(), grpcAddress)
 	assert.Nil(t, err)
 	session := vtgateConn.Session("@master", nil)
-	executeQueriesUsingVtgate(t, session, "insert into vt_insert_test (id, msg) values (2,'test 2')")
-	executeQueriesUsingVtgate(t, session, "insert into vt_insert_test (id, msg) values (3,'test 3')")
+	recovery.ExecuteQueriesUsingVtgate(t, session, "insert into vt_insert_test (id, msg) values (2,'test 2')")
+	recovery.ExecuteQueriesUsingVtgate(t, session, "insert into vt_insert_test (id, msg) values (3,'test 3')")
 
 	vtgateConn.Close()
 	err = vtgateInstance.TearDown()
 	assert.Nil(t, err)
 
 	// now bring up the recovery keyspace and 2 tablets, letting it restore from backup.
-	restoreTablet(t, replica2, recoveryKS, "-80")
-	restoreTablet(t, replica3, recoveryKS, "80-")
+	recovery.RestoreTablet(t, localCluster, replica2, recoveryKS, "-80", keyspaceName, commonTabletArg)
+	recovery.RestoreTablet(t, localCluster, replica3, recoveryKS, "80-", keyspaceName, commonTabletArg)
 
 	// check the new replicas have the correct number of rows
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, shard0Count)
@@ -451,31 +448,26 @@ func TestShardedRecovery(t *testing.T) {
 	vtgateConn, err = vtgateconn.Dial(context.Background(), grpcAddress)
 	assert.Nil(t, err)
 	session = vtgateConn.Session("@replica", nil)
-	verifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(4)")
+	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(4)")
 
 	// check that new keyspace is accessible by using ks.table
-	verifyQueriesUsingVtgate(t, session, "select count(*) from recovery_keyspace.vt_insert_test", "INT64(2)")
+	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from recovery_keyspace.vt_insert_test", "INT64(2)")
 
 	// check that new keyspace is accessible with 'use ks'
-	executeQueriesUsingVtgate(t, session, "use recovery_keyspace@replica")
-	verifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(2)")
+	recovery.ExecuteQueriesUsingVtgate(t, session, "use recovery_keyspace@replica")
+	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(2)")
 
 	// check that new tablet is accessible with use `ks:shard`
-	executeQueriesUsingVtgate(t, session, "use `recovery_keyspace:-80@replica`")
-	verifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64("+shard0CountStr+")")
-	verifyQueriesUsingVtgate(t, session, "select id from vt_insert_test", "INT64("+shard0TestId+")")
+	recovery.ExecuteQueriesUsingVtgate(t, session, "use `recovery_keyspace:-80@replica`")
+	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64("+shard0CountStr+")")
+	recovery.VerifyQueriesUsingVtgate(t, session, "select id from vt_insert_test", "INT64("+shard0TestId+")")
 
-	executeQueriesUsingVtgate(t, session, "use `recovery_keyspace:80-@replica`")
-	verifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64("+shard1CountStr+")")
-	verifyQueriesUsingVtgate(t, session, "select id from vt_insert_test", "INT64("+shard1TestId+")")
+	recovery.ExecuteQueriesUsingVtgate(t, session, "use `recovery_keyspace:80-@replica`")
+	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64("+shard1CountStr+")")
+	recovery.VerifyQueriesUsingVtgate(t, session, "select id from vt_insert_test", "INT64("+shard1TestId+")")
 
 	vtgateConn.Close()
 	err = vtgateInstance.TearDown()
-	assert.Nil(t, err)
-}
-
-func insertData(t *testing.T, tablet *cluster.Vttablet, index int) {
-	_, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("insert into vt_insert_test (id, msg) values (%d, 'test %d')", index, index), keyspaceName, true)
 	assert.Nil(t, err)
 }
 
@@ -492,45 +484,7 @@ func removeTablets(t *testing.T, tablets []*cluster.Vttablet) {
 	}
 }
 
-func restoreTablet(t *testing.T, tablet *cluster.Vttablet, restoreKSName string, shardName string) {
-	err := cluster.ResetTabletDirectory(*tablet)
-	assert.Nil(t, err)
-	tm := time.Now().UTC()
-	tm.Format(time.RFC3339)
-	_, err = localCluster.VtctlProcess.ExecuteCommandWithOutput("CreateKeyspace",
-		"-keyspace_type=SNAPSHOT", "-base_keyspace="+keyspaceName,
-		"-snapshot_time", tm.Format(time.RFC3339), restoreKSName)
-	assert.Nil(t, err)
-
-	replicaTabletArgs := commonTabletArg
-	replicaTabletArgs = append(replicaTabletArgs, "-disable_active_reparents",
-		"-enable_replication_reporter=false",
-		"-init_tablet_type", "replica",
-		"-init_keyspace", restoreKSName,
-		"-init_shard", shardName)
-	tablet.VttabletProcess.SupportsBackup = true
-	tablet.VttabletProcess.ExtraArgs = replicaTabletArgs
-
-	tablet.VttabletProcess.ServingStatus = ""
-	err = tablet.VttabletProcess.Setup()
-	assert.Nil(t, err)
-
-	err = tablet.VttabletProcess.WaitForTabletTypesForTimeout([]string{"SERVING"}, 20*time.Second)
-	assert.Nil(t, err)
-}
-
-func verifyQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, query string, value string) {
-	qr, err := session.Execute(context.Background(), query, nil)
-	assert.Nil(t, err)
-	assert.Equal(t, value, fmt.Sprintf("%v", qr.Rows[0][0]))
-}
-
-func executeQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, query string) {
-	_, err := session.Execute(context.Background(), query, nil)
-	assert.Nil(t, err)
-}
-
-func initializeCluster() (int, error) {
+func initializeCluster(t *testing.T) (int, error) {
 
 	localCluster = cluster.NewCluster(cell, hostname)
 
@@ -545,65 +499,56 @@ func initializeCluster() (int, error) {
 	}
 	localCluster.Keyspaces = append(localCluster.Keyspaces, *keyspace)
 
-	shard := cluster.Shard{
+	shard := &cluster.Shard{
 		Name: shardName,
 	}
-	shard0 := cluster.Shard{
+	shard0 := &cluster.Shard{
 		Name: shard0Name,
 	}
-	shard1 := cluster.Shard{
+	shard1 := &cluster.Shard{
 		Name: shard1Name,
 	}
 
-	var mysqlProcs []*exec.Cmd
-	for _, eachShard := range []cluster.Shard{shard, shard0, shard1} {
-		tabletsRequired := 3
-		if eachShard.Name == shardName {
-			tabletsRequired = 5
-		}
-		for i := 0; i < tabletsRequired; i++ {
-			tabletType := "replica"
-			if i == 0 {
-				tabletType = "master"
-			}
-			if i == 2 {
-				tabletType = "rdonly"
-			}
-			tablet := localCluster.GetVttabletInstance(tabletType, 0, cell)
-			tablet.VttabletProcess = localCluster.GetVtprocessInstanceFromVttablet(tablet, eachShard.Name, keyspaceName)
-			tablet.VttabletProcess.ExtraArgs = commonTabletArg
-			tablet.VttabletProcess.SupportsBackup = true
-			tablet.VttabletProcess.EnableSemiSync = true
-			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
+	// Defining all the tablets
+	master = localCluster.GetVttabletInstance("replica", 0, "")
+	replica1 = localCluster.GetVttabletInstance("replica", 0, "")
+	rdOnly = localCluster.GetVttabletInstance("rdonly", 0, "")
+	replica2 = localCluster.GetVttabletInstance("replica", 0, "")
+	replica3 = localCluster.GetVttabletInstance("replica", 0, "")
+	shard0Master = localCluster.GetVttabletInstance("replica", 0, "")
+	shard0Replica = localCluster.GetVttabletInstance("replica", 0, "")
+	shard0RdOnly = localCluster.GetVttabletInstance("rdonly", 0, "")
+	shard1Master = localCluster.GetVttabletInstance("replica", 0, "")
+	shard1Replica = localCluster.GetVttabletInstance("replica", 0, "")
+	shard1RdOnly = localCluster.GetVttabletInstance("rdonly", 0, "")
+
+	shard.Vttablets = []*cluster.Vttablet{master, replica1, rdOnly, replica2, replica3}
+	shard0.Vttablets = []*cluster.Vttablet{shard0Master, shard0Replica, shard0RdOnly}
+	shard1.Vttablets = []*cluster.Vttablet{shard1Master, shard1Replica, shard1RdOnly}
+
+	localCluster.VtTabletExtraArgs = append(localCluster.VtTabletExtraArgs, commonTabletArg...)
+	localCluster.VtTabletExtraArgs = append(localCluster.VtTabletExtraArgs, "-restore_from_backup", "-enable_semi_sync")
+
+	err = localCluster.LaunchCluster(keyspace, []cluster.Shard{*shard, *shard0, *shard1})
+
+	// Start MySql
+	var mysqlCtlProcessList []*exec.Cmd
+	for _, shard := range localCluster.Keyspaces[0].Shards {
+		for _, tablet := range shard.Vttablets {
 			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
-				return 1, err
+				t.Fatal(err)
 			} else {
-				mysqlProcs = append(mysqlProcs, proc)
+				mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 			}
-			eachShard.Vttablets = append(eachShard.Vttablets, tablet)
 		}
-		localCluster.Keyspaces[0].Shards = append(localCluster.Keyspaces[0].Shards, eachShard)
 	}
 
-	for _, proc := range mysqlProcs {
-		var stderr bytes.Buffer
-		proc.Stderr = &stderr
+	// Wait for mysql processes to start
+	for _, proc := range mysqlCtlProcessList {
 		if err := proc.Wait(); err != nil {
-			return 1, err
+			t.Fatal(err)
 		}
 	}
-
-	master = localCluster.Keyspaces[0].Shards[0].Vttablets[0]
-	replica1 = localCluster.Keyspaces[0].Shards[0].Vttablets[1]
-	rdOnly = localCluster.Keyspaces[0].Shards[0].Vttablets[2]
-	replica2 = localCluster.Keyspaces[0].Shards[0].Vttablets[3]
-	replica3 = localCluster.Keyspaces[0].Shards[0].Vttablets[4]
-	shard0Master = localCluster.Keyspaces[0].Shards[1].Vttablets[0]
-	shard0Replica = localCluster.Keyspaces[0].Shards[1].Vttablets[1]
-	shard0RdOnly = localCluster.Keyspaces[0].Shards[1].Vttablets[2]
-	shard1Master = localCluster.Keyspaces[0].Shards[2].Vttablets[0]
-	shard1Replica = localCluster.Keyspaces[0].Shards[2].Vttablets[1]
-	shard1RdOnly = localCluster.Keyspaces[0].Shards[2].Vttablets[2]
 
 	if err = localCluster.VtctlclientProcess.InitTablet(master, cell, keyspaceName, hostname, shard.Name); err != nil {
 		return 1, err
