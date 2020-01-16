@@ -111,7 +111,7 @@ func TestUnShardedRecoveryAfterSharding(t *testing.T) {
 	err = localCluster.VtctlclientProcess.ApplySchema(keyspaceName, vtInsertTest)
 	assert.Nil(t, err)
 	insertData(t, master, 1)
-	checkData(t, replica1, 1)
+	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
 
 	// insert more data on the master
 	insertData(t, master, 2)
@@ -207,7 +207,7 @@ func TestUnShardedRecoveryAfterSharding(t *testing.T) {
 	restoreTablet(t, replica2, recoveryKS, "0")
 
 	// check the new replica does not have the data
-	checkData(t, replica2, 2)
+	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
 	vtgateInstance := localCluster.GetVtgateInstance()
 	vtgateInstance.TabletTypesToWait = "REPLICA"
@@ -230,6 +230,7 @@ func TestUnShardedRecoveryAfterSharding(t *testing.T) {
 	grpcAddress := fmt.Sprintf("%s:%d", localCluster.Hostname, localCluster.VtgateGrpcPort)
 	vtgateConn, err := vtgateconn.Dial(context.Background(), grpcAddress)
 	assert.Nil(t, err)
+
 	session := vtgateConn.Session("@replica", nil)
 	verifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(3)")
 
@@ -237,7 +238,11 @@ func TestUnShardedRecoveryAfterSharding(t *testing.T) {
 	verifyQueriesUsingVtgate(t, session, "select count(*) from recovery_keyspace.vt_insert_test", "INT64(2)")
 
 	// check that new tablet is accessible with 'use ks'
-	executeQueriesUsingVtgate(t, session, "use recovery_keyspace@replica")
+	executeQueriesUsingVtgate(t, session, "use `recovery_keyspace@replica`")
+	verifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(2)")
+
+	// check that new tablet is accessible with `use ks:shard`
+	executeQueriesUsingVtgate(t, session, "use `recovery_keyspace:0@replica`")
 	verifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(2)")
 
 	vtgateConn.Close()
@@ -268,7 +273,8 @@ func TestShardedRecovery(t *testing.T) {
 	err = localCluster.VtctlclientProcess.ApplySchema(keyspaceName, vtInsertTest)
 	assert.Nil(t, err)
 	insertData(t, master, 1)
-	checkData(t, replica1, 1)
+
+	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
 
 	// insert more data on the master
 	insertData(t, master, 4)
@@ -349,25 +355,27 @@ func TestShardedRecovery(t *testing.T) {
 
 	qr, err := shard0Master.VttabletProcess.QueryTablet("select count(*) from vt_insert_test", keyspaceName, true)
 	require.Nil(t, err)
-	shard0Count, err := strconv.Atoi(fmt.Sprintf("%s", qr.Rows[0][0].ToBytes()))
+	shard0CountStr := fmt.Sprintf("%s", qr.Rows[0][0].ToBytes())
+	shard0Count, err := strconv.Atoi(shard0CountStr)
 	require.Nil(t, err)
-	//var shard0TestId int
+	var shard0TestId string
 	if shard0Count > 0 {
 		qr, err := shard0Master.VttabletProcess.QueryTablet("select id from vt_insert_test", keyspaceName, true)
 		require.Nil(t, err)
-		_, err = strconv.Atoi(fmt.Sprintf("%s", qr.Rows[0][0].ToBytes()))
+		shard0TestId = fmt.Sprintf("%s", qr.Rows[0][0].ToBytes())
 		require.Nil(t, err)
 	}
 
 	qr, err = shard1Master.VttabletProcess.QueryTablet("select count(*) from vt_insert_test", keyspaceName, true)
 	require.Nil(t, err)
-	shard1Count, err := strconv.Atoi(fmt.Sprintf("%s", qr.Rows[0][0].ToBytes()))
+	shard1CountStr := fmt.Sprintf("%s", qr.Rows[0][0].ToBytes())
+	shard1Count, err := strconv.Atoi(shard1CountStr)
 	require.Nil(t, err)
-	// var shard1TestId int
+	var shard1TestId string
 	if shard1Count > 0 {
 		qr, err := shard1Master.VttabletProcess.QueryTablet("select id from vt_insert_test", keyspaceName, true)
 		require.Nil(t, err)
-		_, err = strconv.Atoi(fmt.Sprintf("%s", qr.Rows[0][0].ToBytes()))
+		shard1TestId = fmt.Sprintf("%s", qr.Rows[0][0].ToBytes())
 		require.Nil(t, err)
 	}
 
@@ -416,8 +424,8 @@ func TestShardedRecovery(t *testing.T) {
 	restoreTablet(t, replica3, recoveryKS, "80-")
 
 	// check the new replicas have the correct number of rows
-	checkData(t, replica2, shard0Count)
-	checkData(t, replica3, shard1Count)
+	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, shard0Count)
+	cluster.VerifyRowsInTablet(t, replica3, keyspaceName, shard1Count)
 
 	// start vtgate
 	vtgateInstance = localCluster.GetVtgateInstance()
@@ -452,6 +460,15 @@ func TestShardedRecovery(t *testing.T) {
 	executeQueriesUsingVtgate(t, session, "use recovery_keyspace@replica")
 	verifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(2)")
 
+	// check that new tablet is accessible with use `ks:shard`
+	executeQueriesUsingVtgate(t, session, "use `recovery_keyspace:-80@replica`")
+	verifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64("+shard0CountStr+")")
+	verifyQueriesUsingVtgate(t, session, "select id from vt_insert_test", "INT64("+shard0TestId+")")
+
+	executeQueriesUsingVtgate(t, session, "use `recovery_keyspace:80-@replica`")
+	verifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64("+shard1CountStr+")")
+	verifyQueriesUsingVtgate(t, session, "select id from vt_insert_test", "INT64("+shard1TestId+")")
+
 	vtgateConn.Close()
 	err = vtgateInstance.TearDown()
 	assert.Nil(t, err)
@@ -460,22 +477,6 @@ func TestShardedRecovery(t *testing.T) {
 func insertData(t *testing.T, tablet *cluster.Vttablet, index int) {
 	_, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("insert into vt_insert_test (id, msg) values (%d, 'test %d')", index, index), keyspaceName, true)
 	assert.Nil(t, err)
-}
-
-func checkData(t *testing.T, tablet *cluster.Vttablet, count int) {
-	// Check that the specified tablet has the expected number of rows.
-	qr, err := tablet.VttabletProcess.QueryTablet("select count(*) from vt_insert_test", keyspaceName, true)
-	if err != nil {
-		time.Sleep(10 * time.Millisecond)
-		checkData(t, tablet, count)
-	}
-	if len(qr.Rows) > 0 {
-		countResult, err := strconv.Atoi(fmt.Sprintf("%s", qr.Rows[0][0].ToBytes()))
-		require.Nil(t, err)
-		if countResult != count {
-			checkData(t, tablet, count)
-		}
-	}
 }
 
 func removeTablets(t *testing.T, tablets []*cluster.Vttablet) {
@@ -626,5 +627,6 @@ func initializeCluster() (int, error) {
 	if err = localCluster.VtctlclientProcess.InitShardMaster(keyspaceName, shard.Name, cell, master.TabletUID); err != nil {
 		return 1, err
 	}
+
 	return 0, nil
 }
