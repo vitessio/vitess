@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -823,37 +824,11 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		fields := buildVarCharFields("Charset", "Description", "Default collation")
 		maxLenField := &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}
 		fields = append(fields, maxLenField)
-		rows := make([][]sqltypes.Value, 0, 4)
-		row0 := buildVarCharRow(
-			"utf8",
-			"UTF-8 Unicode",
-			"utf8_general_ci")
-		row0 = append(row0, sqltypes.NewInt32(3))
-		row1 := buildVarCharRow(
-			"utf8mb4",
-			"UTF-8 Unicode",
-			"utf8mb4_general_ci")
-		row1 = append(row1, sqltypes.NewInt32(4))
 
-		var rowsAffected uint64
-
-		if where := show.Where; where != nil {
-			buf := sqlparser.NewTrackedBuffer(nil)
-			where.Format(buf)
-			whereStr := buf.String()
-
-			switch whereStr {
-			case " where `charset` = 'utf8'":
-				rows = append(rows, row0)
-				rowsAffected = 1
-			case "` where `charset` = 'utf8mb4'":
-				rows = append(rows, row1)
-				rowsAffected = 1
-			}
-		} else {
-			rows = append(rows, row0, row1)
-			rowsAffected = 2
-		}
+		charsets := []string{"utf8", "utf8mb4"}
+		filter := show.ShowTablesOpt.Filter
+		rows := generateCharsetRows(filter, charsets)
+		rowsAffected := uint64(len(rows))
 
 		return &sqltypes.Result{
 			Fields:       fields,
@@ -1534,6 +1509,88 @@ func buildVarCharRow(values ...string) []sqltypes.Value {
 		row[i] = sqltypes.NewVarChar(v)
 	}
 	return row
+}
+
+func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) [][]sqltypes.Value {
+	if showFilter == nil {
+		return buildCharsetRows("both")
+	}
+
+	var filteredColName string
+	if showFilter.Like != "" {
+		filteredColName = checkLikeOpt(showFilter.Like, colNames)
+	}
+
+	cmpExp, ok := showFilter.Filter.(*sqlparser.ComparisonExpr)
+	if ok {
+		left, ok := cmpExp.Left.(*sqlparser.ColName)
+		if !ok {
+			panic("expect left side to be 'charset'")
+		}
+		leftOk := left.Name.EqualString("charset")
+
+		if leftOk {
+			sqlVal, ok := cmpExp.Right.(*sqlparser.SQLVal)
+			if !ok {
+				panic("we expect the right side to be a string")
+			}
+			rightString := string(sqlVal.Val)
+
+			switch cmpExp.Operator {
+			case "=":
+				for _, colName := range colNames {
+					if rightString == colName {
+						filteredColName = colName
+					}
+				}
+			case "like":
+				filteredColName = checkLikeOpt(rightString, colNames)
+			}
+		}
+
+	}
+	
+	return buildCharsetRows(filteredColName)
+}
+
+func buildCharsetRows(colName string) [][]sqltypes.Value {
+	rows := make([][]sqltypes.Value, 0, 4)
+	row0 := buildVarCharRow(
+		"utf8",
+		"UTF-8 Unicode",
+		"utf8_general_ci")
+	row0 = append(row0, sqltypes.NewInt32(3))
+	row1 := buildVarCharRow(
+		"utf8mb4",
+		"UTF-8 Unicode",
+		"utf8mb4_general_ci")
+	row1 = append(row1, sqltypes.NewInt32(4))
+
+	switch colName {
+	case "utf8":
+		rows = append(rows, row0)
+	case "utf8mb4":
+		rows = append(rows, row1)
+	case "both":
+		rows = append(rows, row0, row1)
+	}
+
+	return rows
+}
+
+func checkLikeOpt(likeOpt string, colNames []string) string {
+	likeRegexp := strings.ReplaceAll(likeOpt, "%", ".*")
+	for _, v := range colNames {
+		match, err := regexp.MatchString(likeRegexp, v)
+		if err != nil {
+			panic(err)
+		}
+		if match {
+			return v
+		}
+	}
+
+	return ""
 }
 
 // Prepare executes a prepare statements.
