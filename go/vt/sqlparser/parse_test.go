@@ -1471,6 +1471,9 @@ var (
 	}, {
 		input:  "delete a.*, b.* from tbl_a a, tbl_b b where a.id = b.id and b.name = 'test'",
 		output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.name = 'test'",
+	}, {
+		input:  "select distinctrow a.* from (select (1) from dual union all select 1 from dual) a",
+		output: "select distinct a.* from (select (1) from dual union all select 1 from dual) as a",
 	}}
 )
 

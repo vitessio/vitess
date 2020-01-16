@@ -46,4 +46,6 @@ jobs:
         if [ ${{matrix.os}} = "macos-latest" ]; then
           export PATH="/usr/local/opt/mysql@5.7/bin:$PATH"
         fi
+        # Make sure that testing is entirely non-reliant on config
+        mv config config-moved
         eatmydata -- test/local_example.sh

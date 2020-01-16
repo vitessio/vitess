@@ -820,6 +820,115 @@ func TestVSchemaRoutingRules(t *testing.T) {
 	}
 }
 
+func TestChooseVindexForType(t *testing.T) {
+	testcases := []struct {
+		in  querypb.Type
+		out string
+	}{{
+		in:  sqltypes.Null,
+		out: "",
+	}, {
+		in:  sqltypes.Int8,
+		out: "hash",
+	}, {
+		in:  sqltypes.Uint8,
+		out: "hash",
+	}, {
+		in:  sqltypes.Int16,
+		out: "hash",
+	}, {
+		in:  sqltypes.Uint16,
+		out: "hash",
+	}, {
+		in:  sqltypes.Int24,
+		out: "hash",
+	}, {
+		in:  sqltypes.Uint24,
+		out: "hash",
+	}, {
+		in:  sqltypes.Int32,
+		out: "hash",
+	}, {
+		in:  sqltypes.Uint32,
+		out: "hash",
+	}, {
+		in:  sqltypes.Int64,
+		out: "hash",
+	}, {
+		in:  sqltypes.Uint64,
+		out: "hash",
+	}, {
+		in:  sqltypes.Float32,
+		out: "hash",
+	}, {
+		in:  sqltypes.Float64,
+		out: "",
+	}, {
+		in:  sqltypes.Timestamp,
+		out: "",
+	}, {
+		in:  sqltypes.Date,
+		out: "",
+	}, {
+		in:  sqltypes.Time,
+		out: "",
+	}, {
+		in:  sqltypes.Datetime,
+		out: "",
+	}, {
+		in:  sqltypes.Year,
+		out: "hash",
+	}, {
+		in:  sqltypes.Decimal,
+		out: "",
+	}, {
+		in:  sqltypes.Text,
+		out: "unicode_loose_md5",
+	}, {
+		in:  sqltypes.Blob,
+		out: "binary_md5",
+	}, {
+		in:  sqltypes.VarChar,
+		out: "unicode_loose_md5",
+	}, {
+		in:  sqltypes.VarBinary,
+		out: "binary_md5",
+	}, {
+		in:  sqltypes.Char,
+		out: "unicode_loose_md5",
+	}, {
+		in:  sqltypes.Binary,
+		out: "binary_md5",
+	}, {
+		in:  sqltypes.Bit,
+		out: "",
+	}, {
+		in:  sqltypes.Enum,
+		out: "",
+	}, {
+		in:  sqltypes.Set,
+		out: "",
+	}, {
+		in:  sqltypes.Geometry,
+		out: "",
+	}, {
+		in:  sqltypes.TypeJSON,
+		out: "",
+	}, {
+		in:  sqltypes.Expression,
+		out: "",
+	}}
+
+	for _, tcase := range testcases {
+		out, err := ChooseVindexForType(tcase.in)
+		if out == "" {
+			assert.Error(t, err, tcase.in)
+			continue
+		}
+		assert.Equal(t, out, tcase.out, tcase.in)
+	}
+}
+
 func TestFindBestColVindex(t *testing.T) {
 	testSrvVSchema := &vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{

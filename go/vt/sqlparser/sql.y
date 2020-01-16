@@ -121,6 +121,7 @@ func skipToEnd(yylex interface{}) {
 %left <bytes> UNION
 %token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS
+%token <bytes> DISTINCTROW
 %token <bytes> VALUES LAST_INSERT_ID
 %token <bytes> NEXT VALUE SHARE MODE
 %token <bytes> SQL_NO_CACHE SQL_CACHE
@@ -1826,6 +1827,10 @@ distinct_opt:
   {
     $$ = DistinctStr
   }
+| DISTINCTROW
+  {
+    $$ = DistinctStr
+  }
 
 straight_join_opt:
   {
@@ -3243,6 +3248,7 @@ reserved_keyword:
 | DESC
 | DESCRIBE
 | DISTINCT
+| DISTINCTROW
 | DIV
 | DROP
 | ELSE
