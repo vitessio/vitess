@@ -22,6 +22,7 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -80,7 +81,8 @@ func TestBackupTransform(t *testing.T) {
 	os.RemoveAll(replica2.VttabletProcess.Directory)
 
 	// start replica2 from backup
-	replica2.MysqlctlProcess.Start()
+	err = replica2.MysqlctlProcess.Start()
+	require.Nil(t, err)
 	err = localCluster.VtctlclientProcess.InitTablet(replica2, cell, keyspaceName, hostname, shardName)
 	assert.Nil(t, err)
 	replica2.VttabletProcess.CreateDB(keyspaceName)
@@ -89,9 +91,11 @@ func TestBackupTransform(t *testing.T) {
 		"-restore_from_backup",
 		"-backup_storage_implementation", "file",
 		"-file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot}
-	replica2.VttabletProcess.ServingStatus = "SERVING"
-	replica2.VttabletProcess.Setup()
-	assert.Nil(t, err)
+	replica2.VttabletProcess.ServingStatus = ""
+	err = replica2.VttabletProcess.Setup()
+	require.Nil(t, err)
+	err = replica2.VttabletProcess.WaitForTabletTypesForTimeout([]string{"SERVING"}, 25*time.Second)
+	require.Nil(t, err)
 	defer replica2.VttabletProcess.TearDown()
 
 	// validate that semi-sync is enabled for replica, disable for rdOnly
