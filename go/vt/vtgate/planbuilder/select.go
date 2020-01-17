@@ -25,15 +25,15 @@ import (
 )
 
 // buildSelectPlan is the new function to build a Select plan.
-func buildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (_ engine.Primitive, needsLastInsertID bool, needsDBName bool, _ error) {
+func buildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(sel)))
 	if err := pb.processSelect(sel, nil); err != nil {
-		return nil, false, false, err
+		return nil, err
 	}
 	if err := pb.bldr.Wireup(pb.bldr, pb.jt); err != nil {
-		return nil, false, false, err
+		return nil, err
 	}
-	return pb.bldr.Primitive(), pb.needsLastInsertID, pb.needsDbName, nil
+	return pb.bldr.Primitive(), nil
 }
 
 // processSelect builds a primitive tree for the given query or subquery.
