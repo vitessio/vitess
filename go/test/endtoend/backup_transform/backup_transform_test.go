@@ -185,10 +185,10 @@ func validateManifestFile(t *testing.T, backupLocation string) {
 func verifyReplicationStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStatus string) {
 	status, err := vttablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", keyspaceName)
 	assert.Nil(t, err)
-	assert.Equal(t, status, expectedStatus)
+	assert.Equal(t, expectedStatus, status)
 	status, err = vttablet.VttabletProcess.GetDBStatus("rpl_semi_sync_slave_status", keyspaceName)
 	assert.Nil(t, err)
-	assert.Equal(t, status, expectedStatus)
+	assert.Equal(t, expectedStatus, status)
 }
 
 // verifyInitialReplication creates schema in master, insert some data to master and verify the same data in replica
