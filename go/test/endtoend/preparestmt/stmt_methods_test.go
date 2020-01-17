@@ -41,7 +41,7 @@ func TestInsertUpdateDelete(t *testing.T) {
 	dbo := Connect(t)
 	defer dbo.Close()
 	// prepare insert statement
-	insertStmt := `insert into ` + tableName + ` values(?,  ?,  ?,  ?,  ?,  ?,  ?,  
+	insertStmt := `insert into ` + tableName + ` values( ?,  ?,  ?,  ?,  ?,  ?,  ?,  
 		?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?,  ?, ?,  ?,  ?,  ?,  ?,  ?, ?, ?, ?);`
 
 	textValue := fake.FullName()
