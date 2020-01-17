@@ -78,7 +78,7 @@ require (
 	github.com/ugorji/go v1.1.7 // indirect
 	github.com/uudashr/gocognit v1.0.1 // indirect
 	github.com/z-division/go-zookeeper v0.0.0-20190128072838-6d7457066b9b
-	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
+	golang.org/x/crypto v0.0.0-20191205180655-e7c4368fe9dd
 	golang.org/x/lint v0.0.0-20190409202823-959b441ac422
 	golang.org/x/net v0.0.0-20190926025831-c00fd9afed17
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
