@@ -263,7 +263,7 @@
 		},
 		"backup_transform": {
 			"File": "backup_transform_test.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup_transform"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backuptransform"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 12,
