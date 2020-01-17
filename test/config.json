@@ -141,15 +141,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"sharded_recovery": {
-			"File": "sharded_recovery.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"tabletmanager_consul": {
 			"File": "tabletmanager.py",
 			"Args": [
@@ -366,7 +357,7 @@
 		},
 		"recovery": {
 			"File": "recovery.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/recovery"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/unshardedrecovery"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 11,
@@ -410,6 +401,15 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 11,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"sharded_recovery": {
+			"File": "sharded_recovery.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/shardedrecovery"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 16,
 			"RetryMax": 0,
 			"Tags": []
 		},
