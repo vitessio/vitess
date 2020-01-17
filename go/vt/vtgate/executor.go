@@ -828,6 +828,9 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		charsets := []string{"utf8", "utf8mb4"}
 		filter := show.ShowTablesOpt.Filter
 		rows, err := generateCharsetRows(filter, charsets)
+		if err != nil {
+			return nil, err
+		}
 		rowsAffected := uint64(len(rows))
 
 		return &sqltypes.Result{
@@ -1517,26 +1520,30 @@ func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) ([
 	}
 
 	var filteredColName string
-	err := errors.New("Please use where or like to filter charset table")
+	var err error
 
 	if showFilter.Like != "" {
 		filteredColName, err = checkLikeOpt(showFilter.Like, colNames)
-	}
+		if err != nil {
+			return nil, err
+		}
 
-	cmpExp, ok := showFilter.Filter.(*sqlparser.ComparisonExpr)
-	if ok {
-		err = nil
-		
+	} else {
+		cmpExp, ok := showFilter.Filter.(*sqlparser.ComparisonExpr)
+		if !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expect a 'LIKE' or '=' expression")
+		}
+
 		left, ok := cmpExp.Left.(*sqlparser.ColName)
 		if !ok {
-			err = errors.New("expect left side to be 'charset'")
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expect left side to be 'charset'")
 		}
 		leftOk := left.Name.EqualString("charset")
 
 		if leftOk {
 			sqlVal, ok := cmpExp.Right.(*sqlparser.SQLVal)
 			if !ok {
-				err = errors.New("we expect the right side to be a string")
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "we expect the right side to be a string")
 			}
 			rightString := string(sqlVal.Val)
 
@@ -1554,7 +1561,7 @@ func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) ([
 
 	}
 
-	return buildCharsetRows(filteredColName), err
+	return buildCharsetRows(filteredColName), nil
 }
 
 func buildCharsetRows(colName string) [][]sqltypes.Value {
