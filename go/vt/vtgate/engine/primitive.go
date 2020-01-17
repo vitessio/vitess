@@ -20,6 +20,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -94,10 +96,8 @@ type Plan struct {
 	Rows uint64 `json:",omitempty"`
 	// Total number of errors
 	Errors uint64 `json:",omitempty"`
-	// NeedsLastInsertID signals whether this plan will need to be provided with last_insert_id
-	NeedsLastInsertID bool `json:"-"` // don't include in the json representation
-	// NeedsDatabaseName signals whether this plan will need to be provided with the database name
-	NeedsDatabaseName bool `json:"-"` // don't include in the json representation
+
+	sqlparser.BindVarNeeds
 }
 
 // AddStats updates the plan execution statistics
