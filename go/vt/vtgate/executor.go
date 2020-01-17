@@ -827,14 +827,14 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 
 		charsets := []string{"utf8", "utf8mb4"}
 		filter := show.ShowTablesOpt.Filter
-		rows := generateCharsetRows(filter, charsets)
+		rows, err := generateCharsetRows(filter, charsets)
 		rowsAffected := uint64(len(rows))
 
 		return &sqltypes.Result{
 			Fields:       fields,
 			Rows:         rows,
 			RowsAffected: rowsAffected,
-		}, nil
+		}, err
 	case "create table":
 		if destKeyspace == "" && show.HasTable() {
 			// For "show create table", if there isn't a targeted keyspace already
@@ -1511,28 +1511,30 @@ func buildVarCharRow(values ...string) []sqltypes.Value {
 	return row
 }
 
-func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) [][]sqltypes.Value {
+func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) ([][]sqltypes.Value, error) {
 	if showFilter == nil {
-		return buildCharsetRows("both")
+		return buildCharsetRows("both"), nil
 	}
 
 	var filteredColName string
+	err := errors.New("Please use where or like to filter charset table")
+
 	if showFilter.Like != "" {
-		filteredColName = checkLikeOpt(showFilter.Like, colNames)
+		filteredColName, err = checkLikeOpt(showFilter.Like, colNames)
 	}
 
 	cmpExp, ok := showFilter.Filter.(*sqlparser.ComparisonExpr)
 	if ok {
 		left, ok := cmpExp.Left.(*sqlparser.ColName)
 		if !ok {
-			panic("expect left side to be 'charset'")
+			err = errors.New("expect left side to be 'charset'")
 		}
 		leftOk := left.Name.EqualString("charset")
 
 		if leftOk {
 			sqlVal, ok := cmpExp.Right.(*sqlparser.SQLVal)
 			if !ok {
-				panic("we expect the right side to be a string")
+				err = errors.New("we expect the right side to be a string")
 			}
 			rightString := string(sqlVal.Val)
 
@@ -1544,17 +1546,16 @@ func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) []
 					}
 				}
 			case "like":
-				filteredColName = checkLikeOpt(rightString, colNames)
+				filteredColName, err = checkLikeOpt(rightString, colNames)
 			}
 		}
 
 	}
-	
-	return buildCharsetRows(filteredColName)
+
+	return buildCharsetRows(filteredColName), err
 }
 
 func buildCharsetRows(colName string) [][]sqltypes.Value {
-	rows := make([][]sqltypes.Value, 0, 4)
 	row0 := buildVarCharRow(
 		"utf8",
 		"UTF-8 Unicode",
@@ -1568,29 +1569,29 @@ func buildCharsetRows(colName string) [][]sqltypes.Value {
 
 	switch colName {
 	case "utf8":
-		rows = append(rows, row0)
+		return [][]sqltypes.Value{row0}
 	case "utf8mb4":
-		rows = append(rows, row1)
+		return [][]sqltypes.Value{row1}
 	case "both":
-		rows = append(rows, row0, row1)
+		return [][]sqltypes.Value{row0, row1}
 	}
 
-	return rows
+	return [][]sqltypes.Value{}
 }
 
-func checkLikeOpt(likeOpt string, colNames []string) string {
+func checkLikeOpt(likeOpt string, colNames []string) (string, error) {
 	likeRegexp := strings.ReplaceAll(likeOpt, "%", ".*")
 	for _, v := range colNames {
 		match, err := regexp.MatchString(likeRegexp, v)
 		if err != nil {
-			panic(err)
+			return "", err
 		}
 		if match {
-			return v
+			return v, nil
 		}
 	}
 
-	return ""
+	return "", nil
 }
 
 // Prepare executes a prepare statements.
