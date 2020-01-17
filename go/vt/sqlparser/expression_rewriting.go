@@ -29,17 +29,29 @@ func PrepareAST(in Statement, bindVars map[string]*querypb.BindVariable, prefix 
 	return RewriteAST(in)
 }
 
+// BindVarNeeds represents the bind vars that need to be provided as the result of expression rewriting.
+type BindVarNeeds struct {
+	NeedLastInsertID bool
+	NeedDatabase     bool
+}
+
 // RewriteAST rewrites the whole AST, replacing function calls and adding column aliases to queries
 func RewriteAST(in Statement) (*RewriteASTResult, error) {
-	er := new(expressionRewriter)
+	er := newExpressionRewriter()
 	er.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
 	Rewrite(in, er.goingDown, nil)
 
-	return &RewriteASTResult{
-		AST:              in,
-		NeedLastInsertID: er.lastInsertID,
-		NeedDatabase:     er.database,
-	}, nil
+	r := &RewriteASTResult{
+		AST: in,
+	}
+	if _, ok := er.bindVars[LastInsertIDName]; ok {
+		r.NeedLastInsertID = true
+	}
+	if _, ok := er.bindVars[DBVarName]; ok {
+		r.NeedDatabase = true
+	}
+
+	return r, nil
 }
 
 func shouldRewriteDatabaseFunc(in Statement) bool {
@@ -63,20 +75,24 @@ func shouldRewriteDatabaseFunc(in Statement) bool {
 
 // RewriteASTResult contains the rewritten ast and meta information about it
 type RewriteASTResult struct {
-	AST              Statement
-	NeedLastInsertID bool
-	NeedDatabase     bool
+	BindVarNeeds
+	AST Statement // The rewritten AST
 }
 
 type expressionRewriter struct {
-	lastInsertID, database    bool
+	bindVars                  map[string]struct{}
 	shouldRewriteDatabaseFunc bool
 	err                       error
+}
+
+func newExpressionRewriter() *expressionRewriter {
+	return &expressionRewriter{bindVars: make(map[string]struct{})}
 }
 
 const (
 	//LastInsertIDName is a reserved bind var name for last_insert_id()
 	LastInsertIDName = "__lastInsertId"
+
 	//DBVarName is a reserved bind var name for database()
 	DBVarName = "__vtdbname"
 )
@@ -87,7 +103,7 @@ func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 		if node.As.IsEmpty() {
 			buf := NewTrackedBuffer(nil)
 			node.Expr.Format(buf)
-			inner := new(expressionRewriter)
+			inner := newExpressionRewriter()
 			inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
 			tmp := Rewrite(node.Expr, inner.goingDown, nil)
 			newExpr, ok := tmp.(Expr)
@@ -96,10 +112,11 @@ func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 				return false
 			}
 			node.Expr = newExpr
-			er.database = er.database || inner.database
-			er.lastInsertID = er.lastInsertID || inner.lastInsertID
 			if inner.didAnythingChange() {
 				node.As = NewColIdent(buf.String())
+			}
+			for k := range inner.bindVars {
+				er.needBindVarFor(k)
 			}
 			return false
 		}
@@ -111,24 +128,31 @@ func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 				er.err = vterrors.New(vtrpc.Code_UNIMPLEMENTED, "Argument to LAST_INSERT_ID() not supported")
 			} else {
 				cursor.Replace(bindVarExpression(LastInsertIDName))
-				er.lastInsertID = true
+				er.needBindVarFor(LastInsertIDName)
 			}
 		case er.shouldRewriteDatabaseFunc &&
 			(node.Name.EqualString("database") ||
-			 node.Name.EqualString("schema")):
+				node.Name.EqualString("schema")):
 			if len(node.Exprs) > 0 {
 				er.err = vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Syntax error. %s() takes no arguments", node.Name.String())
 			} else {
 				cursor.Replace(bindVarExpression(DBVarName))
-				er.database = true
+				er.needBindVarFor(DBVarName)
 			}
 		}
 	}
 	return true
 }
 
+// instead of creating new objects, we'll reuse this one
+var token = struct{}{}
+
+func (er *expressionRewriter) needBindVarFor(name string) {
+	er.bindVars[name] = token
+}
+
 func (er *expressionRewriter) didAnythingChange() bool {
-	return er.database || er.lastInsertID
+	return len(er.bindVars) > 0
 }
 
 func bindVarExpression(name string) *SQLVal {
