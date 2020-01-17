@@ -102,7 +102,7 @@ func (vtctl *VtctlProcess) ExecuteCommand(args ...string) (err error) {
 func VtctlProcessInstance(topoPort int, hostname string) *VtctlProcess {
 	topoImplementation := "etcd2"
 	switch *topoFlavor {
-	case "zkctl":
+	case "zk2":
 		topoImplementation = "zk2"
 	case "consul":
 		topoImplementation = "consul"

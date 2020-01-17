@@ -53,7 +53,7 @@ type TopoProcess struct {
 // Setup starts a new topo service
 func (topo *TopoProcess) Setup(topoFlavor string, cluster *LocalProcessCluster) (err error) {
 	switch topoFlavor {
-	case "zkctl":
+	case "zk2":
 		return topo.SetupZookeeper(cluster)
 	case "consul":
 		return topo.SetupConsul(cluster)
@@ -112,16 +112,13 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 // SetupZookeeper spawns a new zookeeper topo service and initializes it with the defaults.
 // The service is kept running in the background until TearDown() is called.
 func (topo *TopoProcess) SetupZookeeper(cluster *LocalProcessCluster) (err error) {
-	fmt.Println(os.Hostname())
-	fmt.Println(topo.LogDirectory)
 
 	topo.ZKPorts = fmt.Sprintf("%d:%d:%d", cluster.GetAndReservePort(), cluster.GetAndReservePort(), topo.Port)
 
-	// -zk.cfg zkid@server1:leaderPort1:electionPort1:clientPort1
 	topo.proc = exec.Command(
 		topo.Binary,
 		"-log_dir", topo.LogDirectory,
-		"-zk.cfg", fmt.Sprintf("1@%v:%s", "macpro.local", topo.ZKPorts),
+		"-zk.cfg", fmt.Sprintf("1@%v:%s", topo.Host, topo.ZKPorts),
 		"init",
 	)
 
@@ -130,6 +127,7 @@ func (topo *TopoProcess) SetupZookeeper(cluster *LocalProcessCluster) (err error
 	topo.proc.Env = append(topo.proc.Env, os.Environ()...)
 
 	log.Infof("%v %v", strings.Join(topo.proc.Args, " "))
+	fmt.Println(strings.Join(topo.proc.Args, " "))
 	err = topo.proc.Run()
 	if err != nil {
 		return
@@ -148,8 +146,6 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 	config := fmt.Sprintf(`{"ports":{"dns":%d,"http":%d,"serf_lan":%d,"serf_wan":%d}}`,
 		cluster.GetAndReservePort(), topo.Port, cluster.GetAndReservePort(), cluster.GetAndReservePort())
 
-	//jsonMsg, err := json.Marshal(config)
-
 	err = ioutil.WriteFile(configFile, []byte(config), 0666)
 	if err != nil {
 		return
@@ -167,7 +163,7 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 	topo.proc.Env = append(topo.proc.Env, os.Environ()...)
 
 	log.Infof("%v %v", strings.Join(topo.proc.Args, " "))
-	println("Starting consul with args " + strings.Join(topo.proc.Args, " "))
+	println("Starting consul with args =>" + strings.Join(topo.proc.Args, " "))
 	err = topo.proc.Start()
 	if err != nil {
 		return
@@ -196,10 +192,8 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 
 // TearDown shutdowns the running topo service
 func (topo *TopoProcess) TearDown(Cell string, originalVtRoot string, currentRoot string, keepdata bool, topoFlavor string) error {
-	fmt.Println("Topo TEARDOWN ******************:", topo.proc)
-	fmt.Println(os.Getenv("VTDATAROOT"))
-	_ = os.Setenv("VTDATAROOT", currentRoot)
-	if topoFlavor == "zkctl" {
+
+	if topoFlavor == "zk2" {
 		cmd := "shutdown"
 		if keepdata {
 			cmd = "teardown"
@@ -207,41 +201,47 @@ func (topo *TopoProcess) TearDown(Cell string, originalVtRoot string, currentRoo
 		topo.proc = exec.Command(
 			topo.Binary,
 			"-log_dir", topo.LogDirectory,
-			"-zk.cfg", fmt.Sprintf("1@%v:%s", "macpro.local", topo.ZKPorts),
+			"-zk.cfg", fmt.Sprintf("1@%v:%s", topo.Host, topo.ZKPorts),
 			cmd,
 		)
 
-		fmt.Printf("%v", strings.Join(topo.proc.Args, " "))
+		err := topo.proc.Run()
+		if err != nil {
+			return err
+		}
+	} else {
+		if topo.proc == nil || topo.exit == nil {
+			return nil
+		}
+
+		topo.removeTopoDirectories(Cell)
+
+		// Attempt graceful shutdown with SIGTERM first
+		_ = topo.proc.Process.Signal(syscall.SIGTERM)
+
+		fmt.Println("*** All Done 2***")
+		select {
+		case <-topo.exit:
+			topo.proc = nil
+			return nil
+
+		case <-time.After(10 * time.Second):
+			topo.proc.Process.Kill()
+			topo.proc = nil
+			return <-topo.exit
+		}
 	}
 
-	if topo.proc == nil || topo.exit == nil {
-		return nil
-	}
-
-	topo.removeTopoDirectories(Cell)
-
-	// Attempt graceful shutdown with SIGTERM first
-	_ = topo.proc.Process.Signal(syscall.SIGTERM)
+	fmt.Println("*** All Done ***")
 	if !*keepData {
 		_ = os.RemoveAll(topo.DataDirectory)
 		_ = os.RemoveAll(currentRoot)
 	}
-	//_ = os.Setenv("VTDATAROOT", originalVtRoot)
-
-	select {
-	case <-topo.exit:
-		topo.proc = nil
-		return nil
-
-	case <-time.After(10 * time.Second):
-		topo.proc.Process.Kill()
-		topo.proc = nil
-		return <-topo.exit
-	}
-
+	_ = os.Setenv("VTDATAROOT", originalVtRoot)
+	return nil
 }
 
-// IsHealthy function checks if etcd server is up and running
+// IsHealthy function checks if topo server is up and running
 func (topo *TopoProcess) IsHealthy() bool {
 	resp, err := http.Get(topo.VerifyURL)
 	if err != nil {
@@ -280,9 +280,17 @@ func (topo *TopoProcess) ManageTopoDir(command string, directory string) (err er
 // configured with the given Config.
 // The process must be manually started by calling setup()
 func TopoProcessInstance(port int, peerPort int, hostname string, flavor string, name string) *TopoProcess {
+	binary := "etcd"
+	if flavor == "zk2" {
+		binary = "zkctl"
+	}
+	if flavor == "consul" {
+		binary = "consul"
+	}
+
 	topo := &TopoProcess{
 		Name:     name,
-		Binary:   flavor,
+		Binary:   binary,
 		Port:     port,
 		Host:     hostname,
 		PeerPort: peerPort,
