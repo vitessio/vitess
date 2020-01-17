@@ -254,6 +254,7 @@ func TestVTGateExecute(t *testing.T) {
 			},
 			TransactionId: 1,
 		}},
+		FoundRows: 1,
 	}
 	if !proto.Equal(wantSession, session) {
 		t.Errorf("want \n%+v, got \n%+v", wantSession, session)
