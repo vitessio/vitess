@@ -149,7 +149,6 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 				}
 			}
 			subqueries = append(subqueries, sqi)
-			pb.copyBindVarNeeds(spb)
 			return false, nil
 		}
 		return true, nil
@@ -313,12 +312,12 @@ func valEqual(a, b sqlparser.Expr) bool {
 		switch a.Type {
 		case sqlparser.ValArg:
 			if b.Type == sqlparser.ValArg {
-				return bytes.Equal([]byte(a.Val), []byte(b.Val))
+				return bytes.Equal(a.Val, b.Val)
 			}
 		case sqlparser.StrVal:
 			switch b.Type {
 			case sqlparser.StrVal:
-				return bytes.Equal([]byte(a.Val), []byte(b.Val))
+				return bytes.Equal(a.Val, b.Val)
 			case sqlparser.HexVal:
 				return hexEqual(b, a)
 			}
@@ -326,7 +325,7 @@ func valEqual(a, b sqlparser.Expr) bool {
 			return hexEqual(a, b)
 		case sqlparser.IntVal:
 			if b.Type == (sqlparser.IntVal) {
-				return bytes.Equal([]byte(a.Val), []byte(b.Val))
+				return bytes.Equal(a.Val, b.Val)
 			}
 		}
 	}

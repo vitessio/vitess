@@ -123,7 +123,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		// build a route primitive that has the subquery in its
 		// FROM clause. This allows for other constructs to be
 		// later pushed into it.
-		rb, st := newRoute(&sqlparser.Select{From: sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr})})
+		rb, st := newRoute(&sqlparser.Select{From: []sqlparser.TableExpr{tableExpr}})
 
 		// The subquery needs to be represented as a new logical table in the symtab.
 		// The new route will inherit the routeOptions of the underlying subquery.
@@ -166,7 +166,6 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		rb.routeOptions = subroute.routeOptions
 		subroute.Redirect = rb
 		pb.bldr, pb.st = rb, st
-		pb.copyBindVarNeeds(spb)
 		return nil
 	}
 	return fmt.Errorf("BUG: unexpected table expression type: %T", tableExpr.Expr)

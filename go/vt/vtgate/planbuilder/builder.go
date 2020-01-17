@@ -275,15 +275,15 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 	var instruction engine.Primitive
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
-		instruction, _, _, err = buildSelectPlan(stmt, vschema)
+		instruction, err = buildSelectPlan(stmt, vschema)
 	case *sqlparser.Insert:
-		instruction, _, _, err = buildInsertPlan(stmt, vschema)
+		instruction, err = buildInsertPlan(stmt, vschema)
 	case *sqlparser.Update:
-		instruction, _, _, err = buildUpdatePlan(stmt, vschema)
+		instruction, err = buildUpdatePlan(stmt, vschema)
 	case *sqlparser.Delete:
-		instruction, _, _, err = buildDeletePlan(stmt, vschema)
+		instruction, err = buildDeletePlan(stmt, vschema)
 	case *sqlparser.Union:
-		instruction, _, _, err = buildUnionPlan(stmt, vschema)
+		instruction, err = buildUnionPlan(stmt, vschema)
 	case *sqlparser.Set:
 		return nil, errors.New("unsupported construct: set")
 	case *sqlparser.Show:
