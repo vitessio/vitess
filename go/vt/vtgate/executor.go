@@ -1525,6 +1525,8 @@ func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) ([
 
 	cmpExp, ok := showFilter.Filter.(*sqlparser.ComparisonExpr)
 	if ok {
+		err = nil
+		
 		left, ok := cmpExp.Left.(*sqlparser.ColName)
 		if !ok {
 			err = errors.New("expect left side to be 'charset'")
