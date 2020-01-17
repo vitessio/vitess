@@ -114,15 +114,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"mysql_server": {
-			"File": "mysql_server_test.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"prepared_statement": {
 			"File": "prepared_statement_test.py",
 			"Args": [],
@@ -138,15 +129,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 1,
-			"RetryMax": 0,
-			"Tags": []
-		},
-		"sharded_recovery": {
-			"File": "sharded_recovery.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -288,6 +270,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"mysql_server": {
+			"File": "mysql_server_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/mysqlserver"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 12,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"clustertest": {
 			"File": "clustertest.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/clustertest"],
@@ -366,7 +357,7 @@
 		},
 		"recovery": {
 			"File": "recovery.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/recovery"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/unshardedrecovery"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 11,
@@ -410,6 +401,15 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 11,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"sharded_recovery": {
+			"File": "sharded_recovery.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/shardedrecovery"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 16,
 			"RetryMax": 0,
 			"Tags": []
 		},
