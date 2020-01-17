@@ -145,6 +145,9 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 
 	logStats := NewLogStats(ctx, method, sql, bindVars)
 	result, err = e.execute(ctx, safeSession, sql, bindVars, logStats)
+	if err == nil {
+		safeSession.FoundRows = result.RowsAffected
+	}
 	logStats.Error = err
 	if result != nil && len(result.Rows) > *warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
@@ -339,6 +342,9 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 		} else {
 			bindVars[sqlparser.DBVarName] = sqltypes.StringBindVariable(keyspace)
 		}
+	}
+	if bindVarNeeds.NeedFoundRows {
+		bindVars[sqlparser.FoundRowsName] = sqltypes.Uint64BindVariable(safeSession.FoundRows)
 	}
 
 	qr, err := plan.Instructions.Execute(vcursor, bindVars, true)

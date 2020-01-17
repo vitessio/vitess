@@ -137,7 +137,9 @@ type Session struct {
 	// post_sessions contains sessions that have to be committed last.
 	PostSessions []*Session_ShardSession `protobuf:"bytes,10,rep,name=post_sessions,json=postSessions,proto3" json:"post_sessions,omitempty"`
 	// last_insert_id keeps track of the last seen insert_id for this session
-	LastInsertId         uint64   `protobuf:"varint,11,opt,name=last_insert_id,json=lastInsertId,proto3" json:"last_insert_id,omitempty"`
+	LastInsertId uint64 `protobuf:"varint,11,opt,name=last_insert_id,json=lastInsertId,proto3" json:"last_insert_id,omitempty"`
+	// found_rows keeps track of how many rows the last query returned
+	FoundRows            uint64   `protobuf:"varint,11,opt,name=found_rows,json=foundRows,proto3" json:"found_rows,omitempty"`
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
 	XXX_sizecache        int32    `json:"-"`
