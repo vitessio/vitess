@@ -108,6 +108,8 @@ func TestTabletExecutorValidate(t *testing.T) {
 	sqls := []string{
 		"ALTER TABLE test_table ADD COLUMN new_id bigint(20)",
 		"CREATE TABLE test_table_02 (pk int)",
+		"ALTER DATABASE db_name DEFAULT CHARACTER SET = utf8mb4",
+		"ALTER SCHEMA db_name CHARACTER SET = utf8mb4",
 	}
 
 	if err := executor.Validate(ctx, sqls); err == nil {
