@@ -1863,25 +1863,25 @@ func TestPositionedErr(t *testing.T) {
 		output PositionedErr
 	}{{
 		input:  "select convert('abc' as date) from t",
-		output: PositionedErr{"syntax error at position 24 near 'as'", 24, []byte("as")},
+		output: PositionedErr{"syntax error", 24, []byte("as")},
 	}, {
 		input:  "select convert from t",
-		output: PositionedErr{"syntax error at position 20 near 'from'", 20, []byte("from")},
+		output: PositionedErr{"syntax error", 20, []byte("from")},
 	}, {
 		input:  "select cast('foo', decimal) from t",
-		output: PositionedErr{"syntax error at position 19", 19, nil},
+		output: PositionedErr{"syntax error", 19, nil},
 	}, {
 		input:  "select convert('abc', datetime(4+9)) from t",
-		output: PositionedErr{"syntax error at position 34", 34, nil},
+		output: PositionedErr{"syntax error", 34, nil},
 	}, {
 		input:  "select convert('abc', decimal(4+9)) from t",
-		output: PositionedErr{"syntax error at position 33", 33, nil},
+		output: PositionedErr{"syntax error", 33, nil},
 	}, {
 		input:  "set transaction isolation level 12345",
-		output: PositionedErr{"syntax error at position 38 near '12345'", 38, []byte("12345")},
+		output: PositionedErr{"syntax error", 38, []byte("12345")},
 	}, {
 		input:  "select * from a left join b",
-		output: PositionedErr{"syntax error at position 28", 28, nil},
+		output: PositionedErr{"syntax error", 28, nil},
 	}}
 
 	for _, tcase := range invalidSQL {
@@ -1890,7 +1890,7 @@ func TestPositionedErr(t *testing.T) {
 
 		if posErr, ok := err.(PositionedErr); !ok {
 			t.Errorf("%s: %v expected PositionedErr, got (%T) %v", tcase.input, err, err, tcase.output)
-		} else if posErr.Pos != tcase.output.Pos || !bytes.Equal(posErr.Near, tcase.output.Near) || err.Error() != tcase.output.Err {
+		} else if posErr.Pos != tcase.output.Pos || !bytes.Equal(posErr.Near, tcase.output.Near) || err.Error() != tcase.output.Error() {
 			t.Errorf("%s: %v, want: %v", tcase.input, err, tcase.output)
 		}
 	}
