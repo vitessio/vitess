@@ -2,12 +2,13 @@ package vreplication
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"os/exec"
 	"strings"
 	_ "strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -16,66 +17,68 @@ import (
 
 var (
 	vtdataroot string
-
 )
 
 var globalConfig = struct {
-	hostname string
-	topoPort int
-	vtctldPort int
-	vtctldGrpcPort int
-	tmpDir string
-	vtgatePort int
-	vtgateGrpcPort int
+	hostname        string
+	topoPort        int
+	vtctldPort      int
+	vtctldGrpcPort  int
+	tmpDir          string
+	vtgatePort      int
+	vtgateGrpcPort  int
 	vtgateMySQLPort int
-	tabletTypes string //TODO
-} {"localhost", 2379, 15000, 15999, vtdataroot+"/tmp",
+	tabletTypes     string //TODO
+}{"localhost", 2379, 15000, 15999, vtdataroot + "/tmp",
 	15001, 15991, 15306, "MASTER,REPLICA"}
-
 
 //TODO ports should be automatically (incrementally) allocated based on what is available?
 var (
-	tabletIndex = 1
-	tabletSubIndex = 0
-	tabletPortBase = 15000
-	tabletGrpcPortBase = 16000
+	tabletIndex         = 1
+	tabletSubIndex      = 0
+	tabletPortBase      = 15000
+	tabletGrpcPortBase  = 16000
 	tabletMysqlPortBase = 17000
 )
 
+// TODO
 type VitessCluster struct {
-	Name string
-	Cells map[string]*Cell
-	Topo *cluster.EtcdProcess
-	Vtctld *cluster.VtctldProcess
-	Vtctl *cluster.VtctlProcess
+	Name        string
+	Cells       map[string]*Cell
+	Topo        *cluster.EtcdProcess
+	Vtctld      *cluster.VtctldProcess
+	Vtctl       *cluster.VtctlProcess
 	VtctlClient *cluster.VtctlClientProcess
 }
 
+// TODO
 type Cell struct {
-	Name string
+	Name      string
 	Keyspaces map[string]*Keyspace
-	Vtgates []*cluster.VtgateProcess
+	Vtgates   []*cluster.VtgateProcess
 }
 
+// TODO
 type Keyspace struct {
-	Name string
-	Shards map[string]*Shard
+	Name    string
+	Shards  map[string]*Shard
 	VSchema string
-	Schema string
+	Schema  string
 }
 
+// TODO
 type Shard struct {
-	Name string
+	Name      string
 	IsSharded bool
-	Tablets map[string]*Tablet
+	Tablets   map[string]*Tablet
 }
 
+// TODO
 type Tablet struct {
-	Name string
+	Name     string
 	Vttablet *cluster.VttabletProcess
 	DbServer *cluster.MysqlctlProcess
 }
-
 
 func initGlobals() {
 	vtdataroot = os.Getenv("VTDATAROOT")
@@ -83,10 +86,12 @@ func initGlobals() {
 	//TODO init some vars (like ports, indexes) here rather than hardcoding
 }
 
-func NewVitessCluster (name string) (cluster *VitessCluster, err error) {
-	return &VitessCluster{Name:name, Cells:make(map[string]*Cell)}, nil
+// TODO
+func NewVitessCluster(name string) (cluster *VitessCluster, err error) {
+	return &VitessCluster{Name: name, Cells: make(map[string]*Cell)}, nil
 }
 
+// TODO
 func InitCluster(t *testing.T, cellName string) *VitessCluster {
 	initGlobals()
 	vc, _ := NewVitessCluster("Vdemo")
@@ -100,7 +105,7 @@ func InitCluster(t *testing.T, cellName string) *VitessCluster {
 
 	vtctld := cluster.VtctldProcessInstance(globalConfig.vtctldPort, globalConfig.vtctldGrpcPort,
 		globalConfig.topoPort, globalConfig.hostname, globalConfig.tmpDir)
-	vc.Vtctld =vtctld
+	vc.Vtctld = vtctld
 	assert.NotNil(t, vc.Vtctld)
 	vc.Vtctld.Setup(cellName)
 
@@ -108,7 +113,8 @@ func InitCluster(t *testing.T, cellName string) *VitessCluster {
 	assert.NotNil(t, vc.Vtctl)
 	vc.Vtctl.AddCellInfo(cellName)
 	cell, err := vc.AddCell(t, cellName)
-	assert.Nil(t, err); assert.NotNil(t, cell)
+	assert.Nil(t, err)
+	assert.NotNil(t, cell)
 
 	vc.VtctlClient = cluster.VtctlClientProcessInstance(globalConfig.hostname, vc.Vtctld.GrpcPort, globalConfig.tmpDir)
 	assert.NotNil(t, vc.VtctlClient)
@@ -116,10 +122,11 @@ func InitCluster(t *testing.T, cellName string) *VitessCluster {
 	return vc
 }
 
+// TODO
 func (vc *VitessCluster) AddKeyspace(t *testing.T, cell *Cell, ksName string, shards string, vschema string, schema string, numReplicas int, numRdonly int) (*Keyspace, error) {
 	keyspace := &Keyspace{
-		Name:    ksName,
-		Shards:  make(map[string]*Shard),
+		Name:   ksName,
+		Shards: make(map[string]*Shard),
 	}
 
 	if err := vc.Vtctl.CreateKeyspace(keyspace.Name); err != nil {
@@ -145,16 +152,17 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cell *Cell, ksName string, sh
 	return keyspace, nil
 }
 
+// TODO
 func (vc *VitessCluster) AddTablet(t *testing.T, cell *Cell, keyspace *Keyspace, shard *Shard, tabletType string) (*Tablet, *exec.Cmd, error) {
 	tablet := &Tablet{}
-	var tabletId int
-	tabletId = tabletIndex*100 + tabletSubIndex
-	tabletSubIndex += 1
+	var tabletID int
+	tabletID = tabletIndex*100 + tabletSubIndex
+	tabletSubIndex++
 
 	vttablet := cluster.VttabletProcessInstance(
-		tabletPortBase+tabletId,
-		tabletGrpcPortBase+tabletId,
-		tabletId,
+		tabletPortBase+tabletID,
+		tabletGrpcPortBase+tabletID,
+		tabletID,
 		cell.Name,
 		shard.Name,
 		keyspace.Name,
@@ -169,7 +177,7 @@ func (vc *VitessCluster) AddTablet(t *testing.T, cell *Cell, keyspace *Keyspace,
 	//vttablet.ServingStatus = "SERVING"
 	vttablet.SupportsBackup = false
 
-	tablet.DbServer = cluster.MysqlCtlProcessInstance(tabletId, tabletMysqlPortBase+tabletId, globalConfig.tmpDir)
+	tablet.DbServer = cluster.MysqlCtlProcessInstance(tabletID, tabletMysqlPortBase+tabletID, globalConfig.tmpDir)
 	assert.NotNil(t, tablet.DbServer)
 	tablet.DbServer.InitMysql = true
 	proc, err := tablet.DbServer.StartProcess()
@@ -177,13 +185,14 @@ func (vc *VitessCluster) AddTablet(t *testing.T, cell *Cell, keyspace *Keyspace,
 		t.Fatal(err.Error())
 	}
 	assert.NotNil(t, proc)
-	tablet.Name = fmt.Sprintf("%s-%d", cell.Name, tabletId )
+	tablet.Name = fmt.Sprintf("%s-%d", cell.Name, tabletID)
 	tablet.Vttablet = vttablet
 	shard.Tablets[tablet.Name] = tablet
 
 	return tablet, proc, nil
 }
 
+// TODO
 func (vc *VitessCluster) AddShards(t *testing.T, cell *Cell, keyspace *Keyspace, names string, numReplicas int, numRdonly int) error {
 	arrNames := strings.Split(names, ",")
 	isSharded := len(arrNames) > 1
@@ -207,7 +216,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cell *Cell, keyspace *Keyspace,
 		}
 		for i := 0; i < numReplicas; i++ {
 			fmt.Println("Adding Replica tablet")
-			tablet, proc, err := vc.AddTablet(t, cell,  keyspace, shard, "replica")
+			tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "replica")
 			if err != nil {
 				t.Fatalf(err.Error())
 			}
@@ -217,7 +226,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cell *Cell, keyspace *Keyspace,
 		}
 		for i := 0; i < numRdonly; i++ {
 			fmt.Println("Adding RdOnly tablet")
-			tablet, proc, err := vc.AddTablet(t, cell,  keyspace, shard, "rdonly")
+			tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "rdonly")
 			if err != nil {
 				t.Fatalf(err.Error())
 			}
@@ -254,6 +263,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cell *Cell, keyspace *Keyspace,
 	return nil
 }
 
+// TODO
 func (vc *VitessCluster) StartVtgate(t *testing.T, cell *Cell) {
 	vtgate := cluster.VtgateProcessInstance(
 		globalConfig.vtgatePort,
@@ -267,18 +277,21 @@ func (vc *VitessCluster) StartVtgate(t *testing.T, cell *Cell) {
 		globalConfig.tmpDir,
 		nil)
 	assert.NotNil(t, vtgate)
-	err := vtgate.Setup(); if err != nil {
+	err := vtgate.Setup()
+	if err != nil {
 		t.Fatalf(err.Error())
 	}
 	cell.Vtgates[0] = vtgate
 }
 
+// TODO
 func (vc *VitessCluster) AddCell(t *testing.T, name string) (*Cell, error) {
-	cell := &Cell{Name: name, Keyspaces: make(map[string]*Keyspace), Vtgates:make([]*cluster.VtgateProcess,1)}
+	cell := &Cell{Name: name, Keyspaces: make(map[string]*Keyspace), Vtgates: make([]*cluster.VtgateProcess, 1)}
 	vc.Cells[name] = cell
 	return cell, nil
 }
 
+// TODO
 func (vc *VitessCluster) TearDown() {
 	for _, cell := range vc.Cells {
 		for _, vtgate := range cell.Vtgates {

@@ -2,9 +2,10 @@ package vreplication
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var (
@@ -44,8 +45,7 @@ create table orders(
 `
 )
 
-
-func TestBasicVreplicationWorkflow (t *testing.T) {
+func TestBasicVreplicationWorkflow(t *testing.T) {
 	// TODO remove Setenv block below
 	// This TEMPORARY HACK is required because GoLand is not using my env variables and defining them in Run/Edit Configurations did not work :(
 
@@ -63,7 +63,7 @@ func TestBasicVreplicationWorkflow (t *testing.T) {
 	}
 
 	vc := InitCluster(t, "zone1")
-	if false {  //TODO use the keep-data flag
+	if false { //TODO use the keep-data flag
 		defer vc.TearDown()
 	}
 
