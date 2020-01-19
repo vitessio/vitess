@@ -317,6 +317,9 @@ var commands = []commandGroup{
 			{"CreateLookupVindex", commandCreateLookupVindex,
 				"[-cell=<cell>] [-tablet_types=<source_tablet_types>] <keyspace> <json_spec>",
 				`Create and backfill a lookup vindex. the json_spec must contain the vindex and colvindex specs for the new lookup.`},
+			{"ExternalizeVindex", commandExternalizeVindex,
+				"<keyspace>.<vindex>",
+				`Externalize a backfilled vindex.`},
 			{"Materialize", commandMaterialize,
 				`<json_spec>, example : '{"workflow": "aaa", "source_keyspace": "source", "target_keyspace": "target", "table_settings": [{"target_table": "customer", "source_expression": "select * from customer", "create_ddl": "copy"}]}'`,
 				"Performs materialization based on the json spec."},
@@ -1848,6 +1851,16 @@ func commandCreateLookupVindex(ctx context.Context, wr *wrangler.Wrangler, subFl
 		return err
 	}
 	return wr.CreateLookupVindex(ctx, keyspace, specs, *cell, *tabletTypes)
+}
+
+func commandExternalizeVindex(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+	if err := subFlags.Parse(args); err != nil {
+		return err
+	}
+	if subFlags.NArg() != 1 {
+		return fmt.Errorf("one argument is required: keyspace.vindex")
+	}
+	return wr.ExternalizeVindex(ctx, subFlags.Arg(0))
 }
 
 func commandMaterialize(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
