@@ -360,10 +360,27 @@ func TestResolveVStreamParams(t *testing.T) {
 	testcases := []struct {
 		input  *binlogdatapb.VGtid
 		output *binlogdatapb.VGtid
+		err    string
 	}{{
+		input: nil,
+		err:   "vgtid must have at least one value with a starting position",
+	}, {
+		input: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{}},
+		},
+		err: "for an empty keyspace, the Gtid value must be 'current'",
+	}, {
 		input: &binlogdatapb.VGtid{
 			ShardGtids: []*binlogdatapb.ShardGtid{{
 				Keyspace: "TestVStream",
+			}},
+		},
+		err: "if shards are unspecified, the Gtid value must be 'current'",
+	}, {
+		input: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: "TestVStream",
+				Gtid:     "current",
 			}},
 		},
 		output: &binlogdatapb.VGtid{
@@ -406,6 +423,7 @@ func TestResolveVStreamParams(t *testing.T) {
 			ShardGtids: []*binlogdatapb.ShardGtid{{
 				Keyspace: "TestVStream",
 				Shard:    "-20",
+				Gtid:     "current",
 			}},
 		},
 		output: &binlogdatapb.VGtid{
@@ -438,13 +456,24 @@ func TestResolveVStreamParams(t *testing.T) {
 	}
 	for _, tcase := range testcases {
 		vgtid, filter, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, tcase.input, nil)
-		require.NoError(t, err)
-		assert.Equal(t, tcase.output, vgtid)
-		assert.Equal(t, wantFilter, filter)
+		if tcase.err != "" {
+			if err == nil || !strings.Contains(err.Error(), tcase.err) {
+				t.Errorf("resolve(%v) err: %v, must contain %v", tcase.input, err, tcase.err)
+			}
+			continue
+		}
+		require.NoError(t, err, tcase.input)
+		assert.Equal(t, tcase.output, vgtid, tcase.input)
+		assert.Equal(t, wantFilter, filter, tcase.input)
 	}
-	// Special-case empty vgtid because output is too big.
-	vgtid, _, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, nil, nil)
-	require.NoError(t, err)
+	// Special-case: empty keyspace because output is too big.
+	input := &binlogdatapb.VGtid{
+		ShardGtids: []*binlogdatapb.ShardGtid{{
+			Gtid: "current",
+		}},
+	}
+	vgtid, _, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, input, nil)
+	require.NoError(t, err, input)
 	if got, want := len(vgtid.ShardGtids), 8; want >= got {
 		t.Errorf("len(vgtid.ShardGtids): %v, must be >%d", got, want)
 	}

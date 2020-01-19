@@ -94,21 +94,36 @@ func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodat
 			}},
 		}
 	}
-	if vgtid == nil {
-		vgtid = &binlogdatapb.VGtid{}
+	if vgtid == nil || len(vgtid.ShardGtids) == 0 {
+		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vgtid must have at least one value with a starting position")
 	}
-	if len(vgtid.ShardGtids) == 0 {
+	// To fetch from all keyspaces, the input must contain a single ShardGtid
+	// that has an empty keyspace, and the Gtid must be "current". In the
+	// future, we'll allow the Gtid to be empty which will also support
+	// copying of existing data.
+	if len(vgtid.ShardGtids) == 1 && vgtid.ShardGtids[0].Keyspace == "" {
+		if vgtid.ShardGtids[0].Gtid != "current" {
+			return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "for an empty keyspace, the Gtid value must be 'current': %v", vgtid)
+		}
 		keyspaces, err := vsm.toposerv.GetSrvKeyspaceNames(ctx, vsm.cell)
 		if err != nil {
 			return nil, nil, err
 		}
+		newvgtid := &binlogdatapb.VGtid{}
 		for _, keyspace := range keyspaces {
-			vgtid.ShardGtids = append(vgtid.ShardGtids, &binlogdatapb.ShardGtid{Keyspace: keyspace})
+			newvgtid.ShardGtids = append(newvgtid.ShardGtids, &binlogdatapb.ShardGtid{
+				Keyspace: keyspace,
+				Gtid:     "current",
+			})
 		}
+		vgtid = newvgtid
 	}
 	newvgtid := &binlogdatapb.VGtid{}
 	for _, sgtid := range vgtid.ShardGtids {
 		if sgtid.Shard == "" {
+			if sgtid.Gtid != "current" {
+				return nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "if shards are unspecified, the Gtid value must be 'current': %v", vgtid)
+			}
 			// TODO(sougou): this should work with the new Migrate workflow
 			_, _, allShards, err := vsm.resolver.GetKeyspaceShards(ctx, sgtid.Keyspace, tabletType)
 			if err != nil {
@@ -118,15 +133,11 @@ func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodat
 				newvgtid.ShardGtids = append(newvgtid.ShardGtids, &binlogdatapb.ShardGtid{
 					Keyspace: sgtid.Keyspace,
 					Shard:    shard.Name,
+					Gtid:     sgtid.Gtid,
 				})
 			}
 		} else {
 			newvgtid.ShardGtids = append(newvgtid.ShardGtids, sgtid)
-		}
-	}
-	for _, sgtid := range newvgtid.ShardGtids {
-		if sgtid.Gtid == "" {
-			sgtid.Gtid = "current"
 		}
 	}
 	return newvgtid, filter, nil
