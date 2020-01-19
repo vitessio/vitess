@@ -44,7 +44,6 @@ require (
 	github.com/hashicorp/memberlist v0.1.4 // indirect
 	github.com/hashicorp/serf v0.0.0-20161207011743-d3a67ab21bc8 // indirect
 	github.com/icrowley/fake v0.0.0-20180203215853-4178557ae428
-	github.com/jinzhu/gorm v1.9.12
 	github.com/jmespath/go-jmespath v0.0.0-20160202185014-0b12d6b521d8 // indirect
 	github.com/klauspost/crc32 v1.2.0 // indirect
 	github.com/klauspost/pgzip v1.2.0
