@@ -66,6 +66,7 @@ type VttabletProcess struct {
 	ServingStatus               string
 	DbPassword                  string
 	DbPort                      int
+	VreplicationTabletType      string
 	//Extra Args to be set before starting the vttablet process
 	ExtraArgs []string
 
@@ -97,6 +98,8 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-file_backup_storage_root", vttablet.FileBackupStorageRoot,
 		"-service_map", vttablet.ServiceMap,
 		"-vtctld_addr", vttablet.VtctldAddress,
+		"-vtctld_addr", vttablet.VtctldAddress,
+		"-vreplication_tablet_type", vttablet.VreplicationTabletType,
 	)
 	if *isCoverage {
 		vttablet.proc.Args = append(vttablet.proc.Args, "-test.coverprofile="+getCoveragePath("vttablet.out"))
@@ -377,6 +380,7 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 		ServingStatus:               "NOT_SERVING",
 		BackupStorageImplementation: "file",
 		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),
+		VreplicationTabletType:      "replica",
 	}
 
 	if tabletType == "rdonly" {
