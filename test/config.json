@@ -123,24 +123,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-<<<<<<< HEAD
-		"prepared_statement": {
-			"File": "prepared_statement_test.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 5,
-=======
-		"mysql_server": {
-			"File": "mysql_server_test.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
->>>>>>> 3ab33f668... prepare statment test case.
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"python_client": {
 			"File": "python_client_test.py",
 			"Args": [],
@@ -279,15 +261,18 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-<<<<<<< HEAD
-		"mysql_server": {
-			"File": "mysql_server_test.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/mysqlserver"],
-=======
 		"prepare_statement": {
 			"File": "stmt_methods_test.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/preparestmt"],
->>>>>>> 3ab33f668... prepare statment test case.
+			"Command": [],
+			"Manual": false,
+			"Shard": 12,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"mysql_server": {
+			"File": "mysql_server_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/mysqlserver"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 12,
