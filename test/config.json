@@ -132,32 +132,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"tabletmanager_consul": {
-			"File": "tabletmanager.py",
-			"Args": [
-				"--topo-server-flavor=consul"
-			],
-			"Command": [],
-			"Manual": false,
-			"Shard": 3,
-			"RetryMax": 0,
-			"Tags": [
-				"site_test"
-			]
-		},
-		"tabletmanager_zk2": {
-			"File": "tabletmanager.py",
-			"Args": [
-				"--topo-server-flavor=zk2"
-			],
-			"Command": [],
-			"Manual": false,
-			"Shard": 2,
-			"RetryMax": 0,
-			"Tags": [
-				"site_test"
-			]
-		},
 		"update_stream": {
 			"File": "update_stream.py",
 			"Args": [],
@@ -416,6 +390,32 @@
 		"tabletmanager": {
 			"File": "tabletmanager.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 16,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
+		},
+		"tabletmanager_consul": {
+			"File": "tabletmanager.go",
+			"Args": [
+				"vitess.io/vitess/go/test/endtoend/tabletmanager","--topo-server-flavor=consul"
+			],
+			"Command": [],
+			"Manual": false,
+			"Shard": 16,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
+		},
+		"tabletmanager_zk2": {
+			"File": "tabletmanager.go",
+			"Args": [
+				"vitess.io/vitess/go/test/endtoend/tabletmanager","--topo-server-flavor=zk2"
+			],
 			"Command": [],
 			"Manual": false,
 			"Shard": 16,
