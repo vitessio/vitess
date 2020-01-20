@@ -797,7 +797,7 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 	if *mycnfTemplateFile != "" {
 		data, err := ioutil.ReadFile(*mycnfTemplateFile)
 		if err != nil {
-			log.Fatalf("mycnf template file could not be read: %v", *mycnfTemplateFile)
+			log.Fatalf("template file specified by -mysqlctl_mycnf_template could not be read: %v", *mycnfTemplateFile)
 		}
 		return string(data) // use only specified template
 	}
