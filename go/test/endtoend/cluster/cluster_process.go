@@ -38,7 +38,7 @@ const (
 
 var (
 	keepData   = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
-	topoFlavor = flag.String("topo-flavor", "etcd", "choose a topo server from etcd, zkctl or consul")
+	topoFlavor = flag.String("topo-flavor", "etcd2", "choose a topo server from etcd, zkctl or consul")
 )
 
 // LocalProcessCluster Testcases need to use this to iniate a cluster
@@ -149,7 +149,7 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 		return
 	}
 
-	if *topoFlavor == "etcd" {
+	if *topoFlavor == "etcd2" {
 		log.Info("Creating topo dirs")
 		if err = cluster.TopoProcess.ManageTopoDir("mkdir", "/vitess/global"); err != nil {
 			log.Error(err.Error())

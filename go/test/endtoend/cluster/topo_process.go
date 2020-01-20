@@ -163,7 +163,7 @@ func (topo *TopoProcess) SetupConsul(cluster *LocalProcessCluster) (err error) {
 	topo.proc.Env = append(topo.proc.Env, os.Environ()...)
 
 	log.Infof("%v %v", strings.Join(topo.proc.Args, " "))
-	println("Starting consul with args =>" + strings.Join(topo.proc.Args, " "))
+	println("Starting consul with args " + strings.Join(topo.proc.Args, " "))
 	err = topo.proc.Start()
 	if err != nil {
 		return
@@ -219,7 +219,6 @@ func (topo *TopoProcess) TearDown(Cell string, originalVtRoot string, currentRoo
 		// Attempt graceful shutdown with SIGTERM first
 		_ = topo.proc.Process.Signal(syscall.SIGTERM)
 
-		fmt.Println("*** All Done 2***")
 		select {
 		case <-topo.exit:
 			topo.proc = nil
@@ -232,7 +231,6 @@ func (topo *TopoProcess) TearDown(Cell string, originalVtRoot string, currentRoo
 		}
 	}
 
-	fmt.Println("*** All Done ***")
 	if !*keepData {
 		_ = os.RemoveAll(topo.DataDirectory)
 		_ = os.RemoveAll(currentRoot)
