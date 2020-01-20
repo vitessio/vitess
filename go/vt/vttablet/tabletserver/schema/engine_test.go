@@ -397,6 +397,33 @@ func TestStatsURL(t *testing.T) {
 	request, _ := http.NewRequest("GET", "/debug/schema", nil)
 	response := httptest.NewRecorder()
 	se.ServeHTTP(response, request)
+
+	// Check the status code is what we expect.
+	if status := response.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, http.StatusOK)
+	}
+}
+
+func TestPrometheusStatsURL(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	for query, result := range schematest.Queries() {
+		db.AddQuery(query, result)
+	}
+	se := newEngine(10, 1*time.Second, 1*time.Second, true, db)
+	se.Open()
+	defer se.Close()
+
+	request, _ := http.NewRequest("GET", "/metrics", nil)
+	response := httptest.NewRecorder()
+	se.ServeHTTP(response, request)
+
+	// Check the status code is what we expect.
+	if status := response.Code; status != http.StatusOK {
+		t.Errorf("handler returned wrong status code: got %v want %v",
+			status, http.StatusOK)
+	}
 }
 
 type dummyChecker struct {
