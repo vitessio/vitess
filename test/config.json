@@ -114,15 +114,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"prepared_statement": {
-			"File": "prepared_statement_test.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 5,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"python_client": {
 			"File": "python_client_test.py",
 			"Args": [],
@@ -264,6 +255,15 @@
 		"backup_transform": {
 			"File": "backup_transform_test.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/backuptransform"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 12,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"prepare_statement": {
+			"File": "stmt_methods_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/preparestmt"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 12,
