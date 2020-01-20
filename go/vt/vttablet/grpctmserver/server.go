@@ -127,6 +127,13 @@ func (s *server) RefreshState(ctx context.Context, request *tabletmanagerdatapb.
 	return response, s.agent.RefreshState(ctx)
 }
 
+func (s *server) UpdateBlacklistedTables(ctx context.Context, request *tabletmanagerdatapb.UpdateBlacklistedTablesRequest) (response *tabletmanagerdatapb.UpdateBlacklistedTablesResponse, err error) {
+	defer s.agent.HandleRPCPanic(ctx, "UpdateBlacklistedTables", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.UpdateBlacklistedTablesResponse{}
+	return response, s.agent.UpdateBlacklistedTables(ctx)
+}
+
 func (s *server) RunHealthCheck(ctx context.Context, request *tabletmanagerdatapb.RunHealthCheckRequest) (response *tabletmanagerdatapb.RunHealthCheckResponse, err error) {
 	defer s.agent.HandleRPCPanic(ctx, "RunHealthCheck", request, response, false /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)

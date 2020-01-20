@@ -58,6 +58,8 @@ service TabletManager {
 
   rpc RefreshState(tabletmanagerdata.RefreshStateRequest) returns (tabletmanagerdata.RefreshStateResponse) {};
 
+  rpc UpdateBlacklistedTables(tabletmanagerdata.UpdateBlacklistedTablesRequest) returns (tabletmanagerdata.UpdateBlacklistedTablesResponse) {};
+
   rpc RunHealthCheck(tabletmanagerdata.RunHealthCheckRequest) returns (tabletmanagerdata.RunHealthCheckResponse) {};
 
   rpc IgnoreHealthError(tabletmanagerdata.IgnoreHealthErrorRequest) returns (tabletmanagerdata.IgnoreHealthErrorResponse) {};

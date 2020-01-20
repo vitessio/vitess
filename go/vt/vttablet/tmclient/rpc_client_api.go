@@ -74,6 +74,9 @@ type TabletManagerClient interface {
 	// RefreshState asks the remote tablet to reload its tablet record
 	RefreshState(ctx context.Context, tablet *topodatapb.Tablet) error
 
+	// UpdatedBlackListedTables asks the remote tablet to reload its tablet record
+	UpdateBlacklistedTables(ctx context.Context, tablet *topodatapb.Tablet, tabletType topodatapb.TabletType, cells []string, remove bool, tables []string) error
+
 	// RunHealthCheck asks the remote tablet to run a health check cycle
 	RunHealthCheck(ctx context.Context, tablet *topodatapb.Tablet) error
 

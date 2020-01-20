@@ -127,6 +127,11 @@ func (client *FakeTabletManagerClient) RefreshState(ctx context.Context, tablet 
 	return nil
 }
 
+// UpdateBlacklistedTables is part of the tmclient.TabletManagerClient interface.
+func (client *FakeTabletManagerClient) UpdateBlacklistedTables(ctx context.Context, tablet *topodatapb.Tablet, tabletType topodatapb.TabletType, cells []string, remove bool, tables []string) error {
+	return nil
+}
+
 // RunHealthCheck is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) RunHealthCheck(ctx context.Context, tablet *topodatapb.Tablet) error {
 	return nil

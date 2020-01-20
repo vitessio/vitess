@@ -62,6 +62,11 @@ class TabletManagerStub(object):
         request_serializer=tabletmanagerdata__pb2.RefreshStateRequest.SerializeToString,
         response_deserializer=tabletmanagerdata__pb2.RefreshStateResponse.FromString,
         )
+    self.UpdateBlacklistedTables = channel.unary_unary(
+        '/tabletmanagerservice.TabletManager/UpdateBlacklistedTables',
+        request_serializer=tabletmanagerdata__pb2.UpdateBlacklistedTablesRequest.SerializeToString,
+        response_deserializer=tabletmanagerdata__pb2.UpdateBlacklistedTablesResponse.FromString,
+        )
     self.RunHealthCheck = channel.unary_unary(
         '/tabletmanagerservice.TabletManager/RunHealthCheck',
         request_serializer=tabletmanagerdata__pb2.RunHealthCheckRequest.SerializeToString,
@@ -311,6 +316,13 @@ class TabletManagerServicer(object):
     raise NotImplementedError('Method not implemented!')
 
   def RefreshState(self, request, context):
+    # missing associated documentation comment in .proto file
+    pass
+    context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+    context.set_details('Method not implemented!')
+    raise NotImplementedError('Method not implemented!')
+
+  def UpdateBlacklistedTables(self, request, context):
     # missing associated documentation comment in .proto file
     pass
     context.set_code(grpc.StatusCode.UNIMPLEMENTED)
@@ -654,6 +666,11 @@ def add_TabletManagerServicer_to_server(servicer, server):
           servicer.RefreshState,
           request_deserializer=tabletmanagerdata__pb2.RefreshStateRequest.FromString,
           response_serializer=tabletmanagerdata__pb2.RefreshStateResponse.SerializeToString,
+      ),
+      'UpdateBlacklistedTables': grpc.unary_unary_rpc_method_handler(
+          servicer.UpdateBlacklistedTables,
+          request_deserializer=tabletmanagerdata__pb2.UpdateBlacklistedTablesRequest.FromString,
+          response_serializer=tabletmanagerdata__pb2.UpdateBlacklistedTablesResponse.SerializeToString,
       ),
       'RunHealthCheck': grpc.unary_unary_rpc_method_handler(
           servicer.RunHealthCheck,

@@ -171,6 +171,12 @@ message RefreshStateRequest {
 message RefreshStateResponse {
 }
 
+message UpdateBlacklistedTablesRequest {
+}
+
+message UpdateBlacklistedTablesResponse {
+}
+
 message RunHealthCheckRequest {
 }
 

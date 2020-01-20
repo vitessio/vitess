@@ -145,6 +145,16 @@ func (agent *ActionAgent) RefreshState(ctx context.Context) error {
 	return agent.refreshTablet(ctx, "RefreshState")
 }
 
+// UpdateBlacklistedTables reload the tablet record from the topo server.
+func (agent *ActionAgent) UpdateBlacklistedTables(ctx context.Context) error {
+	if err := agent.lock(ctx); err != nil {
+		return err
+	}
+	defer agent.unlock()
+
+	return agent.refreshTablet(ctx, "UpdateBlackListedTables")
+}
+
 // RunHealthCheck will manually run the health check on the tablet.
 func (agent *ActionAgent) RunHealthCheck(ctx context.Context) {
 	agent.runHealthCheck()

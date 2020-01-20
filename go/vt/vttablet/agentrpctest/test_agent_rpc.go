@@ -458,6 +458,17 @@ func (fra *fakeRPCAgent) RefreshState(ctx context.Context) error {
 	return nil
 }
 
+func (fra *fakeRPCAgent) UpdateBlacklistedTables(ctx context.Context) error {
+	if fra.panics {
+		panic(fmt.Errorf("test-triggered panic"))
+	}
+	if testRefreshStateCalled {
+		fra.t.Errorf("RefreshState called multiple times?")
+	}
+	testRefreshStateCalled = true
+	return nil
+}
+
 func agentRPCTestRefreshState(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	err := client.RefreshState(ctx, tablet)
 	if err != nil {

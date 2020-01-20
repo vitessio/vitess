@@ -56,6 +56,8 @@ type RPCAgent interface {
 
 	RefreshState(ctx context.Context) error
 
+	UpdateBlacklistedTables(ctx context.Context) error
+
 	RunHealthCheck(ctx context.Context)
 
 	IgnoreHealthError(ctx context.Context, pattern string) error

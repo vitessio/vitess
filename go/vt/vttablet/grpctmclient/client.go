@@ -266,6 +266,17 @@ func (client *Client) RefreshState(ctx context.Context, tablet *topodatapb.Table
 	return err
 }
 
+// UpdateBlacklistedTables is part of the tmclient.TabletManagerClient interface.
+func (client *Client) UpdateBlacklistedTables(ctx context.Context, tablet *topodatapb.Tablet, tabletType topodatapb.TabletType, cells []string, remove bool, tables []string) error {
+	cc, c, err := client.dial(tablet)
+	if err != nil {
+		return err
+	}
+	defer cc.Close()
+	_, err = c.UpdateBlacklistedTables(ctx, &tabletmanagerdatapb.UpdateBlacklistedTablesRequest{})
+	return err
+}
+
 // RunHealthCheck is part of the tmclient.TabletManagerClient interface.
 func (client *Client) RunHealthCheck(ctx context.Context, tablet *topodatapb.Tablet) error {
 	cc, c, err := client.dial(tablet)

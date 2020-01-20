@@ -574,6 +574,14 @@ func (itmc *internalTabletManagerClient) RefreshState(ctx context.Context, table
 	return t.agent.RefreshState(ctx)
 }
 
+func (itmc *internalTabletManagerClient) UpdateBlacklistedTables(ctx context.Context, tablet *topodatapb.Tablet, tabletType topodatapb.TabletType, cells []string, remove bool, tables []string) error {
+	t, ok := tabletMap[tablet.Alias.Uid]
+	if !ok {
+		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
+	}
+	return t.agent.UpdateBlacklistedTables(ctx)
+}
+
 func (itmc *internalTabletManagerClient) RunHealthCheck(ctx context.Context, tablet *topodatapb.Tablet) error {
 	t, ok := tabletMap[tablet.Alias.Uid]
 	if !ok {
