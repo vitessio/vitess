@@ -33,6 +33,7 @@ type VtctlProcess struct {
 	TopoGlobalAddress  string
 	TopoGlobalRoot     string
 	TopoServerAddress  string
+	TopoRootCell       string
 }
 
 // AddCellInfo executes vtctl command to add cell info
@@ -43,7 +44,7 @@ func (vtctl *VtctlProcess) AddCellInfo(Cell string) (err error) {
 		"-topo_global_server_address", vtctl.TopoGlobalAddress,
 		"-topo_global_root", vtctl.TopoGlobalRoot,
 		"AddCellInfo",
-		"-root", "/vitess/"+Cell,
+		"-root", vtctl.TopoRootCell,
 		"-server_address", vtctl.TopoServerAddress,
 		Cell,
 	)
@@ -99,13 +100,21 @@ func (vtctl *VtctlProcess) ExecuteCommand(args ...string) (err error) {
 // VtctlProcessInstance returns a VtctlProcess handle for vtctl process
 // configured with the given Config.
 // The process must be manually started by calling setup()
-func VtctlProcessInstance(topoPort int, hostname string) *VtctlProcess {
+func VtctlProcessInstance(topoPort int, hostname string, cell string) *VtctlProcess {
+
+	// Checking and resetting the parameters for required topo server.
+	// For consul we do not need "/" in the path
 	topoImplementation := "etcd2"
+	topoGlobalRoot := "/global"
+	topoRootCell := fmt.Sprintf("%s%s", "/", cell)
+
 	switch *topoFlavor {
 	case "zk2":
 		topoImplementation = "zk2"
 	case "consul":
 		topoImplementation = "consul"
+		topoGlobalRoot = "global"
+		topoRootCell = fmt.Sprintf("%s", cell)
 	}
 
 	vtctl := &VtctlProcess{
@@ -113,8 +122,9 @@ func VtctlProcessInstance(topoPort int, hostname string) *VtctlProcess {
 		Binary:             "vtctl",
 		TopoImplementation: topoImplementation,
 		TopoGlobalAddress:  fmt.Sprintf("%s:%d", hostname, topoPort),
-		TopoGlobalRoot:     "/vitess/global",
+		TopoGlobalRoot:     topoGlobalRoot,
 		TopoServerAddress:  fmt.Sprintf("%s:%d", hostname, topoPort),
+		TopoRootCell:       topoRootCell,
 	}
 	return vtctl
 }

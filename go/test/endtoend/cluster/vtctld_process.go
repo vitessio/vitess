@@ -148,8 +148,8 @@ func (vtctld *VtctldProcess) TearDown() error {
 // VtctldProcessInstance returns a VtctlProcess handle for vtctl process
 // configured with the given Config.
 // The process must be manually started by calling setup()
-func VtctldProcessInstance(httpPort int, grpcPort int, topoPort int, hostname string, tmpDirectory string) *VtctldProcess {
-	vtctl := VtctlProcessInstance(topoPort, hostname)
+func VtctldProcessInstance(httpPort int, grpcPort int, topoPort int, hostname string, cell string, tmpDirectory string) *VtctldProcess {
+	vtctl := VtctlProcessInstance(topoPort, hostname, cell)
 	vtctld := &VtctldProcess{
 		Name:                        "vtctld",
 		Binary:                      "vtctld",

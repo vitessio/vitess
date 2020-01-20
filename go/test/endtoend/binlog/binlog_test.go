@@ -222,6 +222,7 @@ func TestMain(m *testing.M) {
 			localCluster.GetAndReservePort(),
 			localCluster.TopoPort,
 			localCluster.Hostname,
+			cell,
 			localCluster.TmpDirectory)
 		localCluster.VtworkerProcess.Cell = cell
 		if err := localCluster.VtworkerProcess.ExecuteVtworkerCommand(localCluster.VtworkerProcess.Port,

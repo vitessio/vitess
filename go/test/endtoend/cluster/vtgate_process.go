@@ -203,7 +203,7 @@ func (vtgate *VtgateProcess) TearDown() error {
 // configured with the given Config.
 // The process must be manually started by calling setup()
 func VtgateProcessInstance(port int, grpcPort int, mySQLServerPort int, cell string, cellsToWatch string, hostname string, tabletTypesToWait string, topoPort int, tmpDirectory string, extraArgs []string) *VtgateProcess {
-	vtctl := VtctlProcessInstance(topoPort, hostname)
+	vtctl := VtctlProcessInstance(topoPort, hostname, cell)
 	vtgate := &VtgateProcess{
 		Name:                  "vtgate",
 		Binary:                "vtgate",

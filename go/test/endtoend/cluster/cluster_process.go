@@ -163,13 +163,14 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	}
 
 	log.Info("Adding cell info")
-	cluster.VtctlProcess = *VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
+	cluster.VtctlProcess = *VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname, cluster.Cell)
 	if err = cluster.VtctlProcess.AddCellInfo(cluster.Cell); err != nil {
 		log.Error(err)
 		return
 	}
 
-	cluster.VtctldProcess = *VtctldProcessInstance(cluster.GetAndReservePort(), cluster.GetAndReservePort(), cluster.TopoProcess.Port, cluster.Hostname, cluster.TmpDirectory)
+	cluster.VtctldProcess = *VtctldProcessInstance(cluster.GetAndReservePort(), cluster.GetAndReservePort(),
+		cluster.TopoProcess.Port, cluster.Hostname, cluster.Cell, cluster.TmpDirectory)
 	log.Info(fmt.Sprintf("Starting vtctld server on port : %d", cluster.VtctldProcess.Port))
 	cluster.VtctldHTTPPort = cluster.VtctldProcess.Port
 	if err = cluster.VtctldProcess.Setup(cluster.Cell, cluster.VtctldExtraArgs...); err != nil {
@@ -498,6 +499,7 @@ func (cluster *LocalProcessCluster) StartVtworker(cell string, extraArgs ...stri
 		grpcPort,
 		cluster.TopoPort,
 		cluster.Hostname,
+		cell,
 		cluster.TmpDirectory)
 	cluster.VtworkerProcess.ExtraArgs = extraArgs
 	return cluster.VtworkerProcess.Setup(cell)

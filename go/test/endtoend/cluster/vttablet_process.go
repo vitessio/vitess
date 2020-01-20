@@ -357,7 +357,7 @@ func (vttablet *VttabletProcess) getDBSystemValues(placeholder string, value str
 // configured with the given Config.
 // The process must be manually started by calling setup()
 func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string, shard string, keyspace string, vtctldPort int, tabletType string, topoPort int, hostname string, tmpDirectory string, extraArgs []string, enableSemiSync bool) *VttabletProcess {
-	vtctl := VtctlProcessInstance(topoPort, hostname)
+	vtctl := VtctlProcessInstance(topoPort, hostname, cell)
 	vttablet := &VttabletProcess{
 		Name:                        "vttablet",
 		Binary:                      "vttablet",
