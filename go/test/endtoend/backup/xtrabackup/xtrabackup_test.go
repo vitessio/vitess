@@ -16,18 +16,24 @@ limitations under the License.
 
 package vtctlbackup
 
-import "testing"
+import (
+	"fmt"
+	"testing"
 
-// TestBackupMain - main tests backup using vtctl commands
-func TestBackupMain(t *testing.T) {
-	code, err := LaunchCluster(false)
+	backup "vitess.io/vitess/go/test/endtoend/backup/vtctlbackup"
+)
+
+// TestXtraBackup - tests the back using xtrabackup arguments
+func TestXtraBackup(t *testing.T) {
+	code, err := backup.LaunchCluster(true)
+	fmt.Println(err)
 	if err != nil {
 		t.Errorf("setup failed with status code %d", code)
 	}
 
 	// Run all the backup tests
-	TestBackup(t)
+	backup.TestBackup(t)
 
 	// Teardown the cluster
-	TearDownCluster()
+	backup.TearDownCluster()
 }
