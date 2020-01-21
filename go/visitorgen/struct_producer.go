@@ -138,14 +138,14 @@ func (s *SingleFieldItem) asReplMethod() string {
 	_, isRef := s.StructType.(*Ref)
 
 	if isRef {
-		return fmt.Sprintf(`func %s(new SQLNode, parent SQLNode) {
-	parent.(%s).%s = new.(%s)
+		return fmt.Sprintf(`func %s(newNode, parent SQLNode) {
+	parent.(%s).%s = newNode.(%s)
 }`, s.typeName(), s.StructType.toTypString(), s.FieldName, s.FieldType.toTypString())
 	}
 
-	return fmt.Sprintf(`func %s(new, parent SQLNode) {
+	return fmt.Sprintf(`func %s(newNode, parent SQLNode) {
 	tmp := parent.(%s)
-	tmp.%s = new.(%s)
+	tmp.%s = newNode.(%s)
 }`, s.typeName(), s.StructType.toTypString(), s.FieldName, s.FieldType.toTypString())
 
 }
@@ -154,8 +154,8 @@ func (ai *ArrayItem) asReplMethod() string {
 	name := ai.typeName()
 	return fmt.Sprintf(`type %s int
 
-func (r *%s) replace(new, container SQLNode) {
-	container.(%s)[int(*r)] = new.(%s)
+func (r *%s) replace(newNode, container SQLNode) {
+	container.(%s)[int(*r)] = newNode.(%s)
 }
 
 func (r *%s) inc() {
@@ -167,8 +167,8 @@ func (afi *ArrayFieldItem) asReplMethod() string {
 	name := afi.typeName()
 	return fmt.Sprintf(`type %s int
 
-func (r *%s) replace(new, container SQLNode) {
-	container.(%s).%s[int(*r)] = new.(%s)
+func (r *%s) replace(newNode, container SQLNode) {
+	container.(%s).%s[int(*r)] = newNode.(%s)
 }
 
 func (r *%s) inc() {
