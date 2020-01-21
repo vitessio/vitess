@@ -127,7 +127,7 @@ func TestMain(m *testing.M) {
 			}
 		}
 
-		// create database direct in vtTablet
+		// create database for master and replica
 		for _, tablet := range []cluster.Vttablet{*master, *replica1} {
 			if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
 				return 1, err

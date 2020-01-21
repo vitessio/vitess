@@ -40,7 +40,7 @@ func TestBackupTransform(t *testing.T) {
 	// insert data in master, validate same in slave
 	verifyInitialReplication(t)
 
-	// restart the replica with transform parameter
+	// restart the replica with transform hook parameter
 	replica1.VttabletProcess.TearDown()
 	replica1.VttabletProcess.ExtraArgs = []string{
 		"-db-credentials-file", dbCredentialFile,
@@ -62,13 +62,12 @@ func TestBackupTransform(t *testing.T) {
 	assert.Nil(t, err)
 
 	// validate backup_list, expecting 1 backup available
-	backups := listBackups(t)
-	require.Equalf(t, 1, len(backups), "invalid backups: %v", backups)
+	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
 
 	backupLocation := localCluster.CurrentVTDATAROOT + "/backups/" + shardKsName + "/" + backups[0]
 
-	// validate that MANIFEST is having TransformHook
-	// every file is starting with 'header'
+	// validate that MANIFEST has TransformHook
+	// every file should start with 'header'
 	validateManifestFile(t, backupLocation)
 
 	// restore replica2 from backup, should not give any error
@@ -109,17 +108,14 @@ func TestBackupTransform(t *testing.T) {
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
 	// Remove all backups
-	for _, backup := range listBackups(t) {
-		err := localCluster.VtctlclientProcess.ExecuteCommand("RemoveBackup", shardKsName, backup)
-		assert.Nil(t, err)
-	}
+	localCluster.RemoveAllBackups(t, shardKsName)
 
 }
 
-// TestBackupTransformErr validate backup with test_backup_error
+// TestBackupTransformError validate backup with test_backup_error
 // backup_storage_hook, which should fail.
-func TestBackupTransformErr(t *testing.T) {
-	// restart the replica with transform param
+func TestBackupTransformError(t *testing.T) {
+	// restart the replica with transform hook parameter
 	err := replica1.VttabletProcess.TearDown()
 	require.Nil(t, err)
 
@@ -139,21 +135,13 @@ func TestBackupTransformErr(t *testing.T) {
 	assert.Containsf(t, out, "backup is not usable, aborting it", "unexpected error received %v", err)
 
 	// validate there is no backup left
-	backups := listBackups(t)
-	assert.Equalf(t, 0, len(backups), "invalid backups: %v", backups)
+	localCluster.VerifyBackupCount(t, shardKsName, 0)
 }
 
-// listBackups fetches the list of backup
-func listBackups(t *testing.T) []string {
-	output, err := localCluster.ListBackups(shardKsName)
-	assert.Nil(t, err)
-	return output
-}
-
-// validateManifestFile reads manifest and validates that it is
-// having a TransformHook, SkipCompress and FileEntries. It also
-// validates that backup_files avalable in FileEntries are having
-// 'header' at it's first line.
+// validateManifestFile reads manifest and validates that it
+// has a TransformHook, SkipCompress and FileEntries. It also
+// validates that backup_files available in FileEntries have
+// 'header' as their first line.
 func validateManifestFile(t *testing.T, backupLocation string) {
 
 	// reading manifest
@@ -185,7 +173,7 @@ func validateManifestFile(t *testing.T, backupLocation string) {
 
 }
 
-// verifyReplicationStatus validate the replication status in tablet.
+// verifyReplicationStatus validates the replication status in tablet.
 func verifyReplicationStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStatus string) {
 	status, err := vttablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", keyspaceName)
 	assert.Nil(t, err)
