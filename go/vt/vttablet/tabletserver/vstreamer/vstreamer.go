@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
@@ -124,11 +125,17 @@ func (vs *vstreamer) Cancel() {
 func (vs *vstreamer) Stream() error {
 	defer vs.cancel()
 
-	pos, err := mysql.DecodePosition(vs.startPos)
-	if err != nil {
-		return err
+	if vs.startPos == "current" {
+		if err := vs.useCurrentPosition(); err != nil {
+			return vterrors.Wrap(err, "could not obtain current position")
+		}
+	} else {
+		pos, err := mysql.DecodePosition(vs.startPos)
+		if err != nil {
+			return vterrors.Wrap(err, "could not decode position")
+		}
+		vs.pos = pos
 	}
-	vs.pos = pos
 
 	// Ensure se is Open. If vttablet came up in a non_serving role,
 	// the schema engine may not have been initialized.
@@ -148,6 +155,16 @@ func (vs *vstreamer) Stream() error {
 	}
 	err = vs.parseEvents(vs.ctx, events)
 	return wrapError(err, vs.pos)
+}
+
+func (vs *vstreamer) useCurrentPosition() error {
+	conn, err := mysql.Connect(vs.ctx, vs.cp)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	vs.pos, err = conn.MasterPosition()
+	return err
 }
 
 func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.BinlogEvent) error {

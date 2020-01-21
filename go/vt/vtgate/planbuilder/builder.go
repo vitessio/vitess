@@ -252,35 +252,38 @@ func (rsb *resultsBuilder) SupplyWeightString(colNumber int) (weightcolNumber in
 //-------------------------------------------------------------------------
 
 // Build builds a plan for a query based on the specified vschema.
-// It's the main entry point for this package.
+// This method is only used from tests
 func Build(query string, vschema ContextVSchema) (*engine.Plan, error) {
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
 		return nil, err
 	}
-	return BuildFromStmt(query, stmt, vschema)
+	result, err := sqlparser.RewriteAST(stmt)
+	if err != nil {
+		return nil, err
+	}
+
+	return BuildFromStmt(query, result.AST, vschema, result.NeedLastInsertID, result.NeedDatabase)
 }
 
 // BuildFromStmt builds a plan based on the AST provided.
 // TODO(sougou): The query input is trusted as the source
 // of the AST. Maybe this function just returns instructions
 // and engine.Plan can be built by the caller.
-func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchema) (*engine.Plan, error) {
+func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchema, needsLastInsertID, needsDBName bool) (*engine.Plan, error) {
 	var err error
 	var instruction engine.Primitive
-	var needsLastInsertID bool
-	var needsDBName bool
 	switch stmt := stmt.(type) {
 	case *sqlparser.Select:
-		instruction, needsLastInsertID, needsDBName, err = buildSelectPlan(stmt, vschema)
+		instruction, err = buildSelectPlan(stmt, vschema)
 	case *sqlparser.Insert:
-		instruction, needsLastInsertID, needsDBName, err = buildInsertPlan(stmt, vschema)
+		instruction, err = buildInsertPlan(stmt, vschema)
 	case *sqlparser.Update:
-		instruction, needsLastInsertID, needsDBName, err = buildUpdatePlan(stmt, vschema)
+		instruction, err = buildUpdatePlan(stmt, vschema)
 	case *sqlparser.Delete:
-		instruction, needsLastInsertID, needsDBName, err = buildDeletePlan(stmt, vschema)
+		instruction, err = buildDeletePlan(stmt, vschema)
 	case *sqlparser.Union:
-		instruction, needsLastInsertID, needsDBName, err = buildUnionPlan(stmt, vschema)
+		instruction, err = buildUnionPlan(stmt, vschema)
 	case *sqlparser.Set:
 		return nil, errors.New("unsupported construct: set")
 	case *sqlparser.Show:
