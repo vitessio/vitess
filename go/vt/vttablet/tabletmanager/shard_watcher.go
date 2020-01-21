@@ -53,12 +53,13 @@ func (sw *shardWatcher) stop() {
 		return
 	}
 
+	log.Infof("Stopping shard watch...")
 	sw.watchCancel()
 
 	// Drain all remaining watch events.
-	log.Infof("Stopping shard watch...")
 	for range sw.watchChan {
 	}
+	log.Infof("Shard watch stopped.")
 
 	sw.watchChan = nil
 	sw.watchCancel = nil

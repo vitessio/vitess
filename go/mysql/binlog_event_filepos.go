@@ -19,7 +19,6 @@ package mysql
 import (
 	"encoding/binary"
 	"fmt"
-	"strconv"
 )
 
 // filePosBinlogEvent wraps a raw packet buffer and provides methods to examine
@@ -228,7 +227,7 @@ func newFilePosGTIDEvent(file string, pos int, timestamp uint32) filePosGTIDEven
 		},
 		gtid: filePosGTID{
 			file: file,
-			pos:  strconv.Itoa(pos),
+			pos:  pos,
 		},
 	}
 }

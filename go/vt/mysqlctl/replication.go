@@ -114,6 +114,29 @@ func (mysqld *Mysqld) StopSlave(hookExtraEnv map[string]string) error {
 	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopSlaveCommand()})
 }
 
+// RestartSlave stops, resets and starts a slave.
+func (mysqld *Mysqld) RestartSlave(hookExtraEnv map[string]string) error {
+	h := hook.NewSimpleHook("preflight_stop_slave")
+	h.ExtraEnv = hookExtraEnv
+	if err := h.ExecuteOptional(); err != nil {
+		return err
+	}
+	ctx := context.TODO()
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	if err := mysqld.executeSuperQueryListConn(ctx, conn, conn.RestartSlaveCommands()); err != nil {
+		return err
+	}
+
+	h = hook.NewSimpleHook("postflight_start_slave")
+	h.ExtraEnv = hookExtraEnv
+	return h.ExecuteOptional()
+}
+
 // GetMysqlPort returns mysql port
 func (mysqld *Mysqld) GetMysqlPort() (int32, error) {
 	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SHOW VARIABLES LIKE 'port'")

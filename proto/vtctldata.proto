@@ -35,3 +35,28 @@ message ExecuteVtctlCommandRequest {
 message ExecuteVtctlCommandResponse {
   logutil.Event event = 1;
 }
+
+// TableMaterializeSttings contains the settings for one table.
+message TableMaterializeSettings {
+  string target_table = 1;
+  // source_expression is a select statement.
+  string source_expression = 2;
+  // create_ddl contains the DDL to create the target table.
+  // If empty, the target table must already exist.
+  // if "copy", the target table DDL is the same as the source table.
+  string create_ddl = 3;
+}
+
+// MaterializeSettings contains the settings for the Materialize command.
+message MaterializeSettings {
+  // workflow is the name of the workflow.
+  string workflow = 1;
+  string source_keyspace = 2;
+  string target_keyspace = 3;
+  // stop_after_copy specifies if vreplication should be stopped after copying.
+  bool stop_after_copy = 4;
+  repeated TableMaterializeSettings table_settings = 5;
+  // optional parameters.
+  string cell = 6;
+  string tablet_types = 7;
+}

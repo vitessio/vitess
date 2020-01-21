@@ -101,7 +101,7 @@ func (wr *Wrangler) validateNewWorkflow(ctx context.Context, keyspace, workflow 
 	allErrors := &concurrency.AllErrorRecorder{}
 	for _, si := range allshards {
 		if si.MasterAlias == nil {
-			allErrors.RecordError(fmt.Errorf("shard has no master: %v", si))
+			allErrors.RecordError(fmt.Errorf("shard has no master: %v", si.ShardName()))
 			continue
 		}
 		wg.Add(1)

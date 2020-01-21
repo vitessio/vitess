@@ -20,7 +20,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path"
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
@@ -76,6 +75,12 @@ create table t2_id4_idx(
 	id3 bigint,
 	primary key(id),
 	key idx_id4(id4)
+) Engine=InnoDB;
+
+create table t1_last_insert_id(
+	id bigint not null auto_increment,
+	id1 bigint,
+	primary key(id)
 ) Engine=InnoDB;
 `
 
@@ -152,6 +157,16 @@ create table t2_id4_idx(
 					Type: sqltypes.VarChar,
 				}},
 			},
+			"t1_last_insert_id": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id1",
+					Name:   "hash",
+				}},
+				Columns: []*vschemapb.Column{{
+					Name: "id1",
+					Type: sqltypes.Int64,
+				}},
+			},
 		},
 	}
 )
@@ -171,7 +186,6 @@ func TestMain(m *testing.M) {
 				}},
 			}},
 		}
-		cfg.ExtraMyCnf = []string{path.Join(os.Getenv("VTROOT"), "config/mycnf/rbr.cnf")}
 		if err := cfg.InitSchemas("ks", schema, vschema); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.RemoveAll(cfg.SchemaDir)

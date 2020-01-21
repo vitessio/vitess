@@ -105,7 +105,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 
 	if ct.source.GetExternalMysql() == "" {
 		// tabletPicker
-		if v, ok := params["cell"]; ok {
+		if v := params["cell"]; v != "" {
 			cell = v
 		}
 		if v := params["tablet_types"]; v != "" {

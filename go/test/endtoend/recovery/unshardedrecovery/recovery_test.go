@@ -14,14 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package recovery
+package unshardedrecovery
 
 import (
 	"context"
 	"fmt"
 	"os/exec"
 	"testing"
-	"time"
+	"vitess.io/vitess/go/test/endtoend/recovery"
 
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
@@ -81,7 +81,7 @@ func TestRecovery(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Contains(t, output, "vt_insert_test")
 
-	restoreTablet(t, replica2, recoveryKS1)
+	recovery.RestoreTablet(t, localCluster, replica2, recoveryKS1, "0", keyspaceName, commonTabletArg)
 
 	output, err = localCluster.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvVSchema", cell)
 	assert.Nil(t, err)
@@ -120,7 +120,7 @@ func TestRecovery(t *testing.T) {
 	assert.Nil(t, err)
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 3)
 
-	restoreTablet(t, replica3, recoveryKS2)
+	recovery.RestoreTablet(t, localCluster, replica3, recoveryKS2, "0", keyspaceName, commonTabletArg)
 
 	output, err = localCluster.VtctlclientProcess.ExecuteCommandWithOutput("GetVSchema", recoveryKS2)
 	assert.Nil(t, err)
@@ -163,22 +163,16 @@ func TestRecovery(t *testing.T) {
 	session := vtgateConn.Session("@replica", nil)
 
 	//check that vtgate doesn't route queries to new tablet
-	verifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(3)")
-	verifyQueriesUsingVtgate(t, session, "select msg from vt_insert_test where id = 1", `VARCHAR("msgx2")`)
-	verifyQueriesUsingVtgate(t, session, fmt.Sprintf("select count(*) from %s.vt_insert_test", recoveryKS1), "INT64(1)")
-	verifyQueriesUsingVtgate(t, session, fmt.Sprintf("select msg from %s.vt_insert_test where id = 1", recoveryKS1), `VARCHAR("test1")`)
-	verifyQueriesUsingVtgate(t, session, fmt.Sprintf("select count(*) from %s.vt_insert_test", recoveryKS2), "INT64(2)")
-	verifyQueriesUsingVtgate(t, session, fmt.Sprintf("select msg from %s.vt_insert_test where id = 1", recoveryKS2), `VARCHAR("msgx1")`)
+	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(3)")
+	recovery.VerifyQueriesUsingVtgate(t, session, "select msg from vt_insert_test where id = 1", `VARCHAR("msgx2")`)
+	recovery.VerifyQueriesUsingVtgate(t, session, fmt.Sprintf("select count(*) from %s.vt_insert_test", recoveryKS1), "INT64(1)")
+	recovery.VerifyQueriesUsingVtgate(t, session, fmt.Sprintf("select msg from %s.vt_insert_test where id = 1", recoveryKS1), `VARCHAR("test1")`)
+	recovery.VerifyQueriesUsingVtgate(t, session, fmt.Sprintf("select count(*) from %s.vt_insert_test", recoveryKS2), "INT64(2)")
+	recovery.VerifyQueriesUsingVtgate(t, session, fmt.Sprintf("select msg from %s.vt_insert_test where id = 1", recoveryKS2), `VARCHAR("msgx1")`)
 
 	vtgateConn.Close()
 	vtgateInstance.TearDown()
 	tabletsTeardown()
-}
-
-func verifyQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, query string, value string) {
-	qr, err := session.Execute(context.Background(), query, nil)
-	assert.Nil(t, err)
-	assert.Equal(t, value, fmt.Sprintf("%v", qr.Rows[0][0]))
 }
 
 // This will create schema in master, insert some data to master and verify the same data in replica
@@ -190,32 +184,6 @@ func verifyInitialReplication(t *testing.T) {
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
 }
 
-func restoreTablet(t *testing.T, tablet *cluster.Vttablet, restoreKSName string) {
-	err := cluster.ResetTabletDirectory(*tablet)
-	assert.Nil(t, err)
-	tm := time.Now().UTC()
-	tm.Format(time.RFC3339)
-	_, err = localCluster.VtctlProcess.ExecuteCommandWithOutput("CreateKeyspace",
-		"-keyspace_type=SNAPSHOT", "-base_keyspace="+keyspaceName,
-		"-snapshot_time", tm.Format(time.RFC3339), restoreKSName)
-	assert.Nil(t, err)
-
-	replicaTabletArgs := commonTabletArg
-	replicaTabletArgs = append(replicaTabletArgs, "-disable_active_reparents",
-		"-enable_replication_reporter=false",
-		"-init_tablet_type", "replica",
-		"-init_keyspace", restoreKSName,
-		"-init_shard", "0")
-	tablet.VttabletProcess.SupportsBackup = true
-	tablet.VttabletProcess.ExtraArgs = replicaTabletArgs
-
-	tablet.VttabletProcess.ServingStatus = ""
-	err = tablet.VttabletProcess.Setup()
-	assert.Nil(t, err)
-
-	err = tablet.VttabletProcess.WaitForTabletTypesForTimeout([]string{"SERVING"}, 20*time.Second)
-	assert.Nil(t, err)
-}
 func listBackups(t *testing.T) []string {
 	output, err := localCluster.ListBackups(shardKsName)
 	assert.Nil(t, err)
