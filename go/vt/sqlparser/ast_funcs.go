@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"strings"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -220,9 +222,7 @@ func (ct *ColumnType) SQLType() querypb.Type {
 			return sqltypes.Uint24
 		}
 		return sqltypes.Int24
-	case keywordStrings[INT]:
-		fallthrough
-	case keywordStrings[INTEGER]:
+	case keywordStrings[INT], keywordStrings[INTEGER]:
 		if ct.Unsigned {
 			return sqltypes.Uint32
 		}
@@ -379,9 +379,11 @@ func NewWhere(typ string, expr Expr) *Where {
 // and replaces it with to. If from matches root,
 // then to is returned.
 func ReplaceExpr(root, from, to Expr) Expr {
-	expr, success := Rewrite(root, replaceExpr(from, to), nil).(Expr)
+	tmp := Rewrite(root, replaceExpr(from, to), nil)
+	expr, success := tmp.(Expr)
 	if !success {
-		panic("expression rewriting ended up with a non-expression")
+		log.Errorf("Failed to rewrite expression. Rewriter returned a non-expression: " + String(tmp))
+		return from
 	}
 
 	return expr
