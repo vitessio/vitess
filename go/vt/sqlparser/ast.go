@@ -688,7 +688,7 @@ func (node *Set) walkSubtree(visit Visit) error {
 	)
 }
 
-// DBDDL represents a CREATE, DROP database statement.
+// DBDDL represents a CREATE, DROP, or ALTER database statement.
 type DBDDL struct {
 	Action   string
 	DBName   string
@@ -700,7 +700,7 @@ type DBDDL struct {
 // Format formats the node.
 func (node *DBDDL) Format(buf *TrackedBuffer) {
 	switch node.Action {
-	case CreateStr:
+	case CreateStr, AlterStr:
 		buf.WriteString(fmt.Sprintf("%s database %s", node.Action, node.DBName))
 	case DropStr:
 		exists := ""
