@@ -5,6 +5,8 @@ innodb_data_home_dir = {{.InnodbDataHomeDir}}
 innodb_log_group_home_dir = {{.InnodbLogGroupHomeDir}}
 log-error = {{.ErrorLogPath}}
 log-bin = {{.BinLogPath}}
+relay-log = {{.RelayLogPath}}
+relay-log-index =  {{.RelayLogIndexPath}}
 pid-file = {{.PidFile}}
 port = {{.MysqlPort}}
 
