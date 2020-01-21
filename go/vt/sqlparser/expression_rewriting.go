@@ -17,6 +17,7 @@ limitations under the License.
 package sqlparser
 
 import (
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -31,7 +32,7 @@ func PrepareAST(in Statement, bindVars map[string]*querypb.BindVariable, prefix 
 // RewriteAST rewrites the whole AST, replacing function calls and adding column aliases to queries
 func RewriteAST(in Statement) (*RewriteASTResult, error) {
 	er := new(expressionRewriter)
-	Rewrite(in, er.goingDown, er.comingUp)
+	Rewrite(in, er.goingDown, nil)
 
 	return &RewriteASTResult{
 		AST:              in,
@@ -50,41 +51,6 @@ type RewriteASTResult struct {
 type expressionRewriter struct {
 	lastInsertID, database bool
 	err                    error
-	aliases                []*AliasedExpr
-}
-
-func (er *expressionRewriter) comingUp(cursor *Cursor) bool {
-	if er.err != nil {
-		return false
-	}
-
-	n := len(er.aliases) - 1
-	if n >= 0 {
-		// if we encounter the last alias when coming up, we'll pop it from the stack
-		topOfStack := er.aliases[n]
-		if cursor.Node() == topOfStack {
-			er.aliases = er.aliases[:n]
-		}
-	}
-
-	return true
-}
-
-// walks the stack of seen AliasedExpr and adds column aliases where there isn't any already
-func (er *expressionRewriter) addAliasIfNeeded() {
-	idents := make([]ColIdent, len(er.aliases))
-	for i, node := range er.aliases {
-		if node.As.IsEmpty() {
-			buf := NewTrackedBuffer(nil)
-			node.Expr.Format(buf)
-			idents[i] = NewColIdent(buf.String())
-		} else {
-			idents[i] = node.As
-		}
-	}
-	for i, node := range er.aliases {
-		node.As = idents[i]
-	}
 }
 
 const (
@@ -97,7 +63,24 @@ const (
 func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 	switch node := cursor.Node().(type) {
 	case *AliasedExpr:
-		er.aliases = append(er.aliases, node)
+		if node.As.IsEmpty() {
+			buf := NewTrackedBuffer(nil)
+			node.Expr.Format(buf)
+			inner := new(expressionRewriter)
+			tmp := Rewrite(node.Expr, inner.goingDown, nil)
+			newExpr, ok := tmp.(Expr)
+			if !ok {
+				log.Errorf("failed to rewrite AST. function expected to return Expr returned a %s", String(tmp))
+				return false
+			}
+			node.Expr = newExpr
+			er.database = er.database || inner.database
+			er.lastInsertID = er.lastInsertID || inner.lastInsertID
+			if inner.didAnythingChange() {
+				node.As = NewColIdent(buf.String())
+			}
+			return false
+		}
 
 	case *FuncExpr:
 		switch {
@@ -105,7 +88,6 @@ func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 			if len(node.Exprs) > 0 {
 				er.err = vterrors.New(vtrpc.Code_UNIMPLEMENTED, "Argument to LAST_INSERT_ID() not supported")
 			} else {
-				er.addAliasIfNeeded()
 				cursor.Replace(bindVarExpression(LastInsertIDName))
 				er.lastInsertID = true
 			}
@@ -113,7 +95,6 @@ func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 			if len(node.Exprs) > 0 {
 				er.err = vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Syntax error. DATABASE() takes no arguments")
 			} else {
-				er.addAliasIfNeeded()
 				cursor.Replace(bindVarExpression(DBVarName))
 				er.database = true
 			}
