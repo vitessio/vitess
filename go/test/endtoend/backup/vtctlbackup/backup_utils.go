@@ -58,16 +58,15 @@ var (
 		"-lock_tables_timeout", "5s",
 		"-watch_replication_stream",
 		"-enable_replication_reporter",
-		"-serving_state_grace_period", "1s"}
+		"-serving_state_grace_period", "1s",
+	}
 	xtrabackupArgs = []string{
-		"-backup_engine_implementation",
-		"xtrabackup",
+		"-backup_engine_implementation", "xtrabackup",
 		"-xtrabackup_stream_mode", "tar",
 		"-xtrabackup_user=vt_dba",
 		"-xtrabackup_stripes=0",
-		"-xtrabackup_backup_flags",
-		fmt.Sprintf("--password=%s", dbPassword)}
-
+		"-xtrabackup_backup_flags", fmt.Sprintf("--password=%s", dbPassword),
+	}
 	vtInsertTest = `
 					create table vt_insert_test (
 					  id bigint auto_increment,
@@ -384,16 +383,17 @@ func restartMasterReplica(t *testing.T) {
 	for _, tablet := range []*cluster.Vttablet{master, replica1} {
 		proc, _ := tablet.MysqlctlProcess.StartProcess()
 		mysqlProcs = append(mysqlProcs, proc)
-
+	}
+	for _, proc := range mysqlProcs {
+		proc.Wait()
+	}
+	for _, tablet := range []*cluster.Vttablet{master, replica1} {
 		err := localCluster.VtctlclientProcess.InitTablet(tablet, cell, keyspaceName, hostname, shardName)
 		assert.Nil(t, err)
 		err = tablet.VttabletProcess.CreateDB(keyspaceName)
 		assert.Nil(t, err)
 		err = tablet.VttabletProcess.Setup()
 		assert.Nil(t, err)
-	}
-	for _, proc := range mysqlProcs {
-		proc.Wait()
 	}
 	err := localCluster.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, master.TabletUID)
 	assert.Nil(t, err)
@@ -478,14 +478,12 @@ func vtctlBackup(t *testing.T, tabletType string) {
 
 	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	assert.Nil(t, err)
-	fmt.Println(err)
 
 	backups := listBackups(t)
 	assert.Equal(t, len(backups), 1)
-	time.Sleep(10 * time.Second)
+
 	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
 	assert.Nil(t, err)
-	fmt.Println(err)
 
 	err = replica2.VttabletProcess.WaitForTabletTypesForTimeout([]string{"SERVING"}, 25*time.Second)
 	assert.Nil(t, err)
