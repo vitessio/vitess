@@ -38,7 +38,7 @@ const (
 
 var (
 	keepData   = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
-	topoFlavor = flag.String("topo-flavor", "etcd2", "choose a topo server from etcd, zkctl or consul")
+	topoFlavor = flag.String("topo-flavor", "etcd2", "choose a topo server from etcd2, zk2 or consul")
 )
 
 // LocalProcessCluster Testcases need to use this to iniate a cluster

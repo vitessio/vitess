@@ -102,18 +102,19 @@ func (vtctl *VtctlProcess) ExecuteCommand(args ...string) (err error) {
 // The process must be manually started by calling setup()
 func VtctlProcessInstance(topoPort int, hostname string, cell string) *VtctlProcess {
 
-	// Checking and resetting the parameters for required topo server.
-	// For consul we do not need "/" in the path
+	// Default values for etcd2 topo server.
 	topoImplementation := "etcd2"
 	topoGlobalRoot := "/global"
 	topoRootCell := fmt.Sprintf("%s%s", "/", cell)
 
+	// Checking and resetting the parameters for required topo server.
 	switch *topoFlavor {
 	case "zk2":
 		topoImplementation = "zk2"
 	case "consul":
 		topoImplementation = "consul"
 		topoGlobalRoot = "global"
+		// For consul we do not need "/" in the path
 		topoRootCell = fmt.Sprintf("%s", cell)
 	}
 
