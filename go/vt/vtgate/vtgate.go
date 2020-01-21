@@ -106,6 +106,7 @@ type VTGate struct {
 	// VTGate still needs resolver and txConn to support legacy functions.
 	executor *Executor
 	resolver *Resolver
+	vsm      *vstreamManager
 	txConn   *TxConn
 	gw       gateway.Gateway
 
@@ -180,10 +181,12 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 	sc := NewScatterConn("VttabletCall", tc, gw, hc)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	resolver := NewResolver(srvResolver, serv, cell, sc)
+	vsm := newVStreamManager(srvResolver, serv, cell)
 
 	rpcVTGate = &VTGate{
 		executor: NewExecutor(ctx, serv, cell, "VTGateExecutor", resolver, *normalizeQueries, *streamBufferSize, *queryPlanCacheSize),
 		resolver: resolver,
+		vsm:      vsm,
 		txConn:   tc,
 		gw:       gw,
 		timings: stats.NewMultiTimings(
@@ -1065,7 +1068,7 @@ func (vtg *VTGate) UpdateStream(ctx context.Context, keyspace string, shard stri
 
 // VStream streams binlog events.
 func (vtg *VTGate) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	return vtg.resolver.VStream(ctx, tabletType, vgtid, filter, send)
+	return vtg.vsm.VStream(ctx, tabletType, vgtid, filter, send)
 }
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.
