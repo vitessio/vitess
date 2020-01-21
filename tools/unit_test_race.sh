@@ -22,20 +22,42 @@ fi
 
 # All Go packages with test files.
 # Output per line: <full Go package name> <all _test.go files in the package>*
-# TODO: This tests ./go/vt/... instead of ./go/... due to a historical reason.
-# When https://github.com/vitessio/vitess/issues/5493 is closed, we should change it.
 
-packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}' ./go/vt/... | sort)
+packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}' ./go/... | sort)
 
-# endtoend tests should be in a directory called endtoend
-all_except_e2e_tests=$(echo "$packages_with_tests" | cut -d" " -f1 | grep -v "endtoend")
+# exclude end to end tests
+packages_to_test=$(echo "$packages_with_tests" | cut -d" " -f1 | grep -v "endtoend")
+all_except_flaky_tests=$(echo "$packages_to_test" | grep -vE ".+ .+_flaky_test\.go" | cut -d" " -f1 | grep -v "endtoend")
+flaky_tests=$(echo "$packages_to_test" | grep -E ".+ .+_flaky_test\.go" | cut -d" " -f1)
 
-# Run non endtoend tests.
-echo "$all_except_e2e_tests" | xargs go test $VT_GO_PARALLEL -race
+# Flaky tests have the suffix "_flaky_test.go".
+# Exclude endtoend tests
+all_except_flaky_tests=$(echo "$packages_with_tests" | grep -vE ".+ .+_flaky_test\.go" | cut -d" " -f1 | grep -v "endtoend")
+flaky_tests=$(echo "$packages_with_tests" | grep -E ".+ .+_flaky_test\.go" | cut -d" " -f1)
 
+# Run non-flaky tests.
+echo "$all_except_flaky_tests" | xargs go test $VT_GO_PARALLEL -race -count=1
 if [ $? -ne 0 ]; then
-  echo "WARNING: POSSIBLE DATA RACE"
+  echo "ERROR: Go unit tests failed. See above for errors."
   echo
-  echo "ERROR: go test -race failed. See log above."
+  echo "This should NOT happen. Did you introduce a flaky unit test?"
+  echo "If so, please rename it to the suffix _flaky_test.go."
   exit 1
 fi
+
+echo '# Flaky tests (3 attempts permitted)'
+
+# Run flaky tests sequentially. Retry when necessary.
+for pkg in $flaky_tests; do
+  max_attempts=3
+  attempt=1
+  # Set a timeout because some tests may deadlock when they flake.
+  until go test -timeout 2m $VT_GO_PARALLEL $pkg -race -count=1; do
+    echo "FAILED (try $attempt/$max_attempts) in $pkg (return code $?). See above for errors."
+    if [ $((++attempt)) -gt $max_attempts ]; then
+      echo "ERROR: Flaky Go unit tests in package $pkg failed too often (after $max_attempts retries). Please reduce the flakiness."
+      exit 1
+    fi
+  done
+done
+

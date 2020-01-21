@@ -100,6 +100,7 @@ func TestMain(m *testing.M) {
 func TestSchemaChange(t *testing.T) {
 	testWithInitialSchema(t)
 	testWithAlterSchema(t)
+	testWithAlterDatabase(t)
 	testWithDropCreateSchema(t)
 	testSchemaChangePreflightErrorPartially(t)
 	testDropNonExistentTables(t)
@@ -133,6 +134,13 @@ func testWithAlterSchema(t *testing.T) {
 	err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, sqlQuery)
 	assert.Nil(t, err)
 	matchSchema(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.TabletPath, clusterInstance.Keyspaces[0].Shards[1].Vttablets[0].VttabletProcess.TabletPath)
+}
+
+// testWithAlterDatabase tests that ALTER DATABASE is accepted by the validator.
+func testWithAlterDatabase(t *testing.T) {
+	sql := "create database alter_database_test; alter database alter_database_test default character set = utf8mb4; drop database alter_database_test"
+	err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, sql)
+	assert.NoError(t, err)
 }
 
 // testWithDropCreateSchema , we should be able to drop and create same schema
@@ -220,7 +228,7 @@ func checkTables(t *testing.T, count int) {
 }
 
 // checkTablesCount checks the number of tables in the given tablet
-func checkTablesCount(t *testing.T, tablet cluster.Vttablet, count int) {
+func checkTablesCount(t *testing.T, tablet *cluster.Vttablet, count int) {
 	queryResult, err := tablet.VttabletProcess.QueryTablet("show tables;", keyspaceName, true)
 	assert.Nil(t, err)
 	assert.Equal(t, len(queryResult.Rows), count)

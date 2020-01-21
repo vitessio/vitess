@@ -61,7 +61,7 @@ func TestTopoCustomRule(t *testing.T) {
 	}
 
 	// Start a new Tablet
-	rTablet := clusterInstance.GetVttabletInstance(replicaUID)
+	rTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
 
 	// Init Tablets
 	err = clusterInstance.VtctlclientProcess.InitTablet(rTablet, cell, keyspaceName, hostname, shardName)
@@ -80,6 +80,7 @@ func TestTopoCustomRule(t *testing.T) {
 
 	// Verify that query is working
 	result, err := vtctlExec("select id, value from t1", rTablet.Alias)
+	assert.Nil(t, err)
 	resultMap := make(map[string]interface{})
 	err = json.Unmarshal([]byte(result), &resultMap)
 	require.NoError(t, err)

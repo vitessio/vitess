@@ -15,7 +15,7 @@
 FROM debian:jessie
 
 # Install Percona XtraDB Cluster (Galera)
-RUN apt-key adv --keyserver keys.gnupg.net --recv-keys 8507EFA5 && \
+RUN apt-key adv --keyserver keys.gnupg.net --recv-keys 9334A25F8507EFA5 && \
     echo 'deb http://repo.percona.com/apt jessie main' > /etc/apt/sources.list.d/mysql.list && \
     apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \

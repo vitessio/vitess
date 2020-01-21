@@ -36,8 +36,6 @@ fi
 script_root=`dirname "${BASH_SOURCE}"`
 source $script_root/env.sh
 
-init_db_sql_file="$VTROOT/config/init_db.sql"
-
 mkdir -p $VTDATAROOT/backups
 
 # Start 3 vttablets by default.
@@ -65,17 +63,33 @@ for uid_index in $uids; do
   export TABLET_TYPE=$tablet_type
 
   echo "Starting MySQL for tablet $alias..."
-  action="init -init_db_sql_file $init_db_sql_file"
+  action="init"
   if [ -d $VTDATAROOT/$tablet_dir ]; then
     echo "Resuming from existing vttablet dir:"
     echo "    $VTDATAROOT/$tablet_dir"
     action='start'
   fi
-  $VTROOT/bin/mysqlctl \
+
+  set +e
+
+  mysqlctl \
     -log_dir $VTDATAROOT/tmp \
     -tablet_uid $uid \
     -mysql_port $mysql_port \
-    $action &
+    $action
+
+    err=$?    
+    if [[ $err -ne 0 ]]; then    
+        fail "This script fails to start mysqld, possibly due to apparmor or selinux protection.     
+        Utilities to help investigate:    
+                apparmor: \"sudo aa-status\"    
+                selinux:  \"sudo sestatus\"    
+        Please disable if so indicated.    
+        You may also need to empty your \$VTDATAROOT to start clean."    
+    fi    
+    
+  set -e    
+    
 done
 
 # Wait for all mysqld to start up.
@@ -103,7 +117,7 @@ for uid_index in $uids; do
 
   echo "Starting vttablet for $alias..."
   # shellcheck disable=SC2086
-  $VTROOT/bin/vttablet \
+  vttablet \
     $TOPOLOGY_FLAGS \
     -log_dir $VTDATAROOT/tmp \
     -log_queries_to_file $VTDATAROOT/tmp/$tablet_logfile \
@@ -135,10 +149,12 @@ done
 echo "Waiting for tablets to be listening..."
 for uid_index in $uids; do
   port=$[$port_base + $uid_index]
-  while true; do
+  for i in $(seq 0 300); do
    curl -I "http://$hostname:$port/debug/status" >/dev/null 2>&1 && break
    sleep 0.1
   done;
+  # check one last time
+  curl -I "http://$hostname:$port/debug/status" || fail "tablets could not be started!"
 done;
 echo "Tablets up!"
 

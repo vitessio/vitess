@@ -135,7 +135,7 @@ func TestMySQLProtocolExecuteUseStatement(t *testing.T) {
 	require.NoError(t, err)
 
 	// No replica tablets, this should also fail
-	qr, err = c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
+	_, err = c.ExecuteFetch("select id from t1", 10, true /* wantfields */)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no valid tablet")
 }

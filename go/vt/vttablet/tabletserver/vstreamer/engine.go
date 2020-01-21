@@ -166,7 +166,7 @@ func (vse *Engine) Stream(ctx context.Context, startPos string, filter *binlogda
 		if !vse.isOpen {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
-		streamer := NewVStreamer(ctx, vse.cp, vse.se, startPos, filter, vse.lvschema, send)
+		streamer := newVStreamer(ctx, vse.cp, vse.se, startPos, filter, vse.lvschema, send)
 		idx := vse.streamIdx
 		vse.streamers[idx] = streamer
 		vse.streamIdx++
@@ -206,7 +206,7 @@ func (vse *Engine) StreamRows(ctx context.Context, query string, lastpk []sqltyp
 		if !vse.isOpen {
 			return nil, 0, errors.New("VStreamer is not open")
 		}
-		rowStreamer := NewRowStreamer(ctx, vse.cp, vse.se, query, lastpk, vse.lvschema, send)
+		rowStreamer := newRowStreamer(ctx, vse.cp, vse.se, query, lastpk, vse.lvschema, send)
 		idx := vse.streamIdx
 		vse.rowStreamers[idx] = rowStreamer
 		vse.streamIdx++

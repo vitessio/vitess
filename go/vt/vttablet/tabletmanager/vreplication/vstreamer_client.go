@@ -186,7 +186,7 @@ func (vsClient *MySQLVStreamerClient) VStream(ctx context.Context, startPos stri
 	if !vsClient.isOpen {
 		return errors.New("can't VStream without opening client")
 	}
-	streamer := vstreamer.NewVStreamer(ctx, vsClient.sourceConnParams, vsClient.sourceSe, startPos, filter, nil, send)
+	streamer := vstreamer.NewVStreamer(ctx, vsClient.sourceConnParams, vsClient.sourceSe, startPos, filter, send)
 	return streamer.Stream()
 }
 
@@ -203,7 +203,7 @@ func (vsClient *MySQLVStreamerClient) VStreamRows(ctx context.Context, query str
 		}
 		row = r.Rows[0]
 	}
-	streamer := vstreamer.NewRowStreamer(ctx, vsClient.sourceConnParams, vsClient.sourceSe, query, row, nil, send)
+	streamer := vstreamer.NewRowStreamer(ctx, vsClient.sourceConnParams, vsClient.sourceSe, query, row, send)
 	return streamer.Stream()
 }
 

@@ -1,5 +1,5 @@
 name: unit_race
-on: [push]
+on: [push, pull_request]
 jobs:
 
   build:
@@ -10,19 +10,23 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v1
       with:
-        go-version: 1.12
+        go-version: 1.13
 
     - name: Check out code
-      uses: actions/checkout@v1
+      uses: actions/checkout@v2
 
     - name: Get dependencies
       run: |
-        sudo apt-get update || echo "update failed"
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget
+        sudo apt-get update
+        sudo apt-get install -y mysql-server mysql-client make unzip g++ curl git wget eatmydata
         sudo service mysql stop
-        sudo service etcd stop
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+
+        mkdir -p dist bin
+        curl -L https://github.com/coreos/etcd/releases/download/v3.3.10/etcd-v3.3.10-linux-amd64.tar.gz | tar -zxC dist
+        mv dist/etcd-v3.3.10-linux-amd64/{etcd,etcdctl} bin/
+
         go mod download
 
     - name: Run make tools
@@ -31,4 +35,4 @@ jobs:
 
     - name: unit_race
       run: |
-        make unit_test_race
+        eatmydata -- make unit_test_race

@@ -37,14 +37,11 @@ import (
 var (
 	clusterInstance     *cluster.LocalProcessCluster
 	tmClient            *tmc.Client
-	vtParams            mysql.ConnParams
 	masterTabletParams  mysql.ConnParams
 	replicaTabletParams mysql.ConnParams
 	masterTablet        cluster.Vttablet
 	replicaTablet       cluster.Vttablet
 	rdonlyTablet        cluster.Vttablet
-	replicaUID          int
-	masterUID           int
 	hostname            = "localhost"
 	keyspaceName        = "ks"
 	shardName           = "0"
@@ -125,11 +122,11 @@ func TestMain(m *testing.M) {
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 		for _, tablet := range tablets {
 			if tablet.Type == "master" {
-				masterTablet = tablet
+				masterTablet = *tablet
 			} else if tablet.Type != "rdonly" {
-				replicaTablet = tablet
+				replicaTablet = *tablet
 			} else {
-				rdonlyTablet = tablet
+				rdonlyTablet = *tablet
 			}
 		}
 
@@ -137,12 +134,12 @@ func TestMain(m *testing.M) {
 		masterTabletParams = mysql.ConnParams{
 			Uname:      username,
 			DbName:     dbName,
-			UnixSocket: fmt.Sprintf(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", masterTablet.TabletUID))),
+			UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", masterTablet.TabletUID)),
 		}
 		replicaTabletParams = mysql.ConnParams{
 			Uname:      username,
 			DbName:     dbName,
-			UnixSocket: fmt.Sprintf(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", replicaTablet.TabletUID))),
+			UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/mysql.sock", replicaTablet.TabletUID)),
 		}
 
 		// create tablet manager client

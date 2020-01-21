@@ -13,11 +13,11 @@ jobs:
         go-version: 1.13
 
     - name: Check out code
-      uses: actions/checkout@v1
+      uses: actions/checkout@v2
 
     - name: Get dependencies
       run: |
-        sudo apt-get update || echo "update failed" 
+        sudo apt-get update
         sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget
         sudo service mysql stop
         sudo service etcd stop

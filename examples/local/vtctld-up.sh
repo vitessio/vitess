@@ -33,11 +33,9 @@ fi
 
 echo "Starting vtctld..."
 # shellcheck disable=SC2086
-$VTROOT/bin/vtctld \
+vtctld \
   $TOPOLOGY_FLAGS \
   -cell $cell \
-  -web_dir $VTROOT/web/vtctld \
-  -web_dir2 $VTROOT/web/vtctld2/app \
   -workflow_manager_init \
   -workflow_manager_use_election \
   -service_map 'grpc-vtctl' \

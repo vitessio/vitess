@@ -25,6 +25,7 @@ import (
 	"os/exec"
 	"path"
 	"reflect"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -95,10 +96,11 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	if err != nil {
 		return
 	}
-
 	vtgate.exit = make(chan error)
 	go func() {
-		vtgate.exit <- vtgate.proc.Wait()
+		if vtgate.proc != nil {
+			vtgate.exit <- vtgate.proc.Wait()
+		}
 	}()
 
 	timeout := time.Now().Add(60 * time.Second)
@@ -130,7 +132,8 @@ func (vtgate *VtgateProcess) WaitForStatus() bool {
 }
 
 // GetStatusForTabletOfShard function gets status for a specific tablet of a shard in keyspace
-func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string) bool {
+// endPointsCount : number of endpoints
+func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string, endPointsCount int) bool {
 	resp, err := http.Get(vtgate.VerifyURL)
 	if err != nil {
 		return false
@@ -148,9 +151,9 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string) bool {
 			for _, key := range object.MapKeys() {
 				if key.String() == name {
 					value := fmt.Sprintf("%v", object.MapIndex(key))
-					return value == "1"
+					countStr := strconv.Itoa(endPointsCount)
+					return value == countStr
 				}
-
 			}
 		}
 		return masterConnectionExist
@@ -159,10 +162,11 @@ func (vtgate *VtgateProcess) GetStatusForTabletOfShard(name string) bool {
 }
 
 // WaitForStatusOfTabletInShard function waits till status of a tablet in shard is 1
-func (vtgate *VtgateProcess) WaitForStatusOfTabletInShard(name string) error {
+// endPointsCount: how many endpoints to wait for
+func (vtgate *VtgateProcess) WaitForStatusOfTabletInShard(name string, endPointsCount int) error {
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
-		if vtgate.GetStatusForTabletOfShard(name) {
+		if vtgate.GetStatusForTabletOfShard(name, endPointsCount) {
 			return nil
 		}
 		select {
@@ -205,7 +209,7 @@ func VtgateProcessInstance(port int, grpcPort int, mySQLServerPort int, cell str
 		Binary:                "vtgate",
 		FileToLogQueries:      path.Join(tmpDirectory, "/vtgate_querylog.txt"),
 		Directory:             os.Getenv("VTDATAROOT"),
-		ServiceMap:            "grpc-vtgateservice",
+		ServiceMap:            "grpc-tabletmanager,grpc-throttler,grpc-queryservice,grpc-updatestream,grpc-vtctl,grpc-vtworker,grpc-vtgateservice",
 		LogDir:                tmpDirectory,
 		Port:                  port,
 		GrpcPort:              grpcPort,
@@ -224,4 +228,22 @@ func VtgateProcessInstance(port int, grpcPort int, mySQLServerPort int, cell str
 	vtgate.VerifyURL = fmt.Sprintf("http://%s:%d/debug/vars", hostname, port)
 
 	return vtgate
+}
+
+// GetVars returns map of vars
+func (vtgate *VtgateProcess) GetVars() (map[string]interface{}, error) {
+	resultMap := make(map[string]interface{})
+	resp, err := http.Get(vtgate.VerifyURL)
+	if err != nil {
+		return nil, fmt.Errorf("error getting response from %s", vtgate.VerifyURL)
+	}
+	if resp.StatusCode == 200 {
+		respByte, _ := ioutil.ReadAll(resp.Body)
+		err := json.Unmarshal(respByte, &resultMap)
+		if err != nil {
+			return nil, fmt.Errorf("not able to parse response body")
+		}
+		return resultMap, nil
+	}
+	return nil, fmt.Errorf("unsuccessful response")
 }

@@ -358,8 +358,8 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		"select id from none",
 		nil,
 	)
-	want = "vtgate: : target: TestUnsharded.noshard.master, no valid tablet: node doesn't exist: TestUnsharded/noshard (MASTER)"
-	if err == nil || err.Error() != want {
+	want = "TestUnsharded.noshard.master: no valid tablet"
+	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Execute: %v, want %s", err, want)
 	}
 }
@@ -1325,7 +1325,7 @@ func TestVTGateMessageStreamRetry(t *testing.T) {
 	// which should make vtgate wait for 1s (5s/5) and retry.
 	start := time.Now()
 	<-ch
-	duration := time.Since(start)
+	duration := time.Since(start).Round(time.Second)
 	if duration < 1*time.Second || duration > 2*time.Second {
 		t.Errorf("Retry duration should be around 1 second: %v", duration)
 	}
@@ -1414,7 +1414,7 @@ func TestVTGateMessageStreamFail(t *testing.T) {
 	createSandbox(ks)
 	hcVTGateTest.Reset()
 	tablet := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, "0", topodatapb.TabletType_MASTER, true, 1, nil)
-	// tablet should should fail immediately if the error is not EOF or UNAVAILABLE.
+	// tablet should fail immediately if the error is not EOF or UNAVAILABLE.
 	tablet.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1
 	err := rpcVTGate.MessageStream(context.Background(), ks, "0", nil, "msg", func(qr *sqltypes.Result) error {
 		return nil

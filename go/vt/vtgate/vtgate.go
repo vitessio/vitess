@@ -84,16 +84,7 @@ func getTxMode() vtgatepb.TransactionMode {
 var (
 	rpcVTGate *VTGate
 
-	qpsByOperation *stats.Rates
-	qpsByKeyspace  *stats.Rates
-	qpsByDbType    *stats.Rates
-
 	vschemaCounters *stats.CountersWithSingleLabel
-
-	errorsByOperation *stats.Rates
-	errorsByKeyspace  *stats.Rates
-	errorsByDbType    *stats.Rates
-	errorsByCode      *stats.Rates
 
 	// Error counters should be global so they can be set from anywhere
 	errorCounts *stats.CountersWithMultiLabels
@@ -115,6 +106,7 @@ type VTGate struct {
 	// VTGate still needs resolver and txConn to support legacy functions.
 	executor *Executor
 	resolver *Resolver
+	vsm      *vstreamManager
 	txConn   *TxConn
 	gw       gateway.Gateway
 
@@ -189,10 +181,12 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 	sc := NewScatterConn("VttabletCall", tc, gw, hc)
 	srvResolver := srvtopo.NewResolver(serv, gw, cell)
 	resolver := NewResolver(srvResolver, serv, cell, sc)
+	vsm := newVStreamManager(srvResolver, serv, cell)
 
 	rpcVTGate = &VTGate{
 		executor: NewExecutor(ctx, serv, cell, "VTGateExecutor", resolver, *normalizeQueries, *streamBufferSize, *queryPlanCacheSize),
 		resolver: resolver,
+		vsm:      vsm,
 		txConn:   tc,
 		gw:       gw,
 		timings: stats.NewMultiTimings(
@@ -221,14 +215,14 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 
 	errorCounts = stats.NewCountersWithMultiLabels("VtgateApiErrorCounts", "Vtgate API error counts per error type", []string{"Operation", "Keyspace", "DbType", "Code"})
 
-	qpsByOperation = stats.NewRates("QPSByOperation", stats.CounterForDimension(rpcVTGate.timings, "Operation"), 15, 1*time.Minute)
-	qpsByKeyspace = stats.NewRates("QPSByKeyspace", stats.CounterForDimension(rpcVTGate.timings, "Keyspace"), 15, 1*time.Minute)
-	qpsByDbType = stats.NewRates("QPSByDbType", stats.CounterForDimension(rpcVTGate.timings, "DbType"), 15*60/5, 5*time.Second)
+	_ = stats.NewRates("QPSByOperation", stats.CounterForDimension(rpcVTGate.timings, "Operation"), 15, 1*time.Minute)
+	_ = stats.NewRates("QPSByKeyspace", stats.CounterForDimension(rpcVTGate.timings, "Keyspace"), 15, 1*time.Minute)
+	_ = stats.NewRates("QPSByDbType", stats.CounterForDimension(rpcVTGate.timings, "DbType"), 15*60/5, 5*time.Second)
 
-	errorsByOperation = stats.NewRates("ErrorsByOperation", stats.CounterForDimension(errorCounts, "Operation"), 15, 1*time.Minute)
-	errorsByKeyspace = stats.NewRates("ErrorsByKeyspace", stats.CounterForDimension(errorCounts, "Keyspace"), 15, 1*time.Minute)
-	errorsByDbType = stats.NewRates("ErrorsByDbType", stats.CounterForDimension(errorCounts, "DbType"), 15, 1*time.Minute)
-	errorsByCode = stats.NewRates("ErrorsByCode", stats.CounterForDimension(errorCounts, "Code"), 15, 1*time.Minute)
+	_ = stats.NewRates("ErrorsByOperation", stats.CounterForDimension(errorCounts, "Operation"), 15, 1*time.Minute)
+	_ = stats.NewRates("ErrorsByKeyspace", stats.CounterForDimension(errorCounts, "Keyspace"), 15, 1*time.Minute)
+	_ = stats.NewRates("ErrorsByDbType", stats.CounterForDimension(errorCounts, "DbType"), 15, 1*time.Minute)
+	_ = stats.NewRates("ErrorsByCode", stats.CounterForDimension(errorCounts, "Code"), 15, 1*time.Minute)
 
 	warnings = stats.NewCountersWithSingleLabel("VtGateWarnings", "Vtgate warnings", "type", "IgnoredSet", "ResultsExceeded")
 
@@ -1074,7 +1068,7 @@ func (vtg *VTGate) UpdateStream(ctx context.Context, keyspace string, shard stri
 
 // VStream streams binlog events.
 func (vtg *VTGate) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	return vtg.resolver.VStream(ctx, tabletType, vgtid, filter, send)
+	return vtg.vsm.VStream(ctx, tabletType, vgtid, filter, send)
 }
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.

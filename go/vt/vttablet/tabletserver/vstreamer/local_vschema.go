@@ -31,16 +31,12 @@ type localVSchema struct {
 	vschema  *vindexes.VSchema
 }
 
-func (lvs *localVSchema) FindTable(tablename string) (*vindexes.Table, error) {
-	ks, ok := lvs.vschema.Keyspaces[lvs.keyspace]
-	if !ok {
-		return nil, fmt.Errorf("keyspace %s not found in vschema", lvs.keyspace)
+func (lvs *localVSchema) FindColVindex(tablename string) (*vindexes.ColumnVindex, error) {
+	table, err := lvs.findTable(tablename)
+	if err != nil {
+		return nil, err
 	}
-	table := ks.Tables[tablename]
-	if table == nil {
-		return nil, fmt.Errorf("table %s not found", tablename)
-	}
-	return table, nil
+	return vindexes.FindBestColVindex(table)
 }
 
 func (lvs *localVSchema) FindOrCreateVindex(qualifiedName string) (vindexes.Vindex, error) {
@@ -65,4 +61,16 @@ func (lvs *localVSchema) FindOrCreateVindex(qualifiedName string) (vindexes.Vind
 		return nil, fmt.Errorf("vindex %v not found", qualifiedName)
 	}
 	return vindexes.CreateVindex(name, name, map[string]string{})
+}
+
+func (lvs *localVSchema) findTable(tablename string) (*vindexes.Table, error) {
+	ks, ok := lvs.vschema.Keyspaces[lvs.keyspace]
+	if !ok {
+		return nil, fmt.Errorf("keyspace %s not found in vschema", lvs.keyspace)
+	}
+	table := ks.Tables[tablename]
+	if table == nil {
+		return nil, fmt.Errorf("table %s not found", tablename)
+	}
+	return table, nil
 }

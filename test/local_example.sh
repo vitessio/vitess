@@ -24,6 +24,8 @@ set -xe
 
 cd "$VTROOT/examples/local"
 
+unset VTROOT # ensure that the examples can run without VTROOT now.
+
 ./101_initial_cluster.sh
 
 mysql -h 127.0.0.1 -P 15306 < ../common/insert_commerce_data.sql

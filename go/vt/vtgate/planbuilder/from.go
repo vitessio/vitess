@@ -123,7 +123,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		// build a route primitive that has the subquery in its
 		// FROM clause. This allows for other constructs to be
 		// later pushed into it.
-		rb, st := newRoute(&sqlparser.Select{From: sqlparser.TableExprs([]sqlparser.TableExpr{tableExpr})})
+		rb, st := newRoute(&sqlparser.Select{From: []sqlparser.TableExpr{tableExpr}})
 
 		// The subquery needs to be represented as a new logical table in the symtab.
 		// The new route will inherit the routeOptions of the underlying subquery.
@@ -187,7 +187,11 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		rb, st := newRoute(sel)
 		rb.routeOptions = []*routeOption{newSimpleRouteOption(rb, engine.NewSimpleRoute(engine.SelectDBA, ks))}
 		pb.bldr, pb.st = rb, st
-		return nil
+		// Add the table to symtab
+		return st.AddTable(&table{
+			alias:  tableName,
+			origin: rb,
+		})
 	}
 
 	vschemaTables, vindex, _, destTableType, destTarget, err := pb.vschema.FindTablesOrVindex(tableName)
