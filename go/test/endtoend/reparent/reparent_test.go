@@ -770,9 +770,9 @@ func checkReparentFromOutside(t *testing.T, tablet *cluster.Vttablet, downMaster
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell1, keyspaceShard)
 	assert.Nil(t, err, "error should be Nil")
 	if !downMaster {
-		assertNodeCount(t, result, int(3))
+		assertNodeCount(t, result, int(4))
 	} else {
-		assertNodeCount(t, result, int(2))
+		assertNodeCount(t, result, int(3))
 	}
 
 	// make sure the master status page says it's the master
