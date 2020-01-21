@@ -24,7 +24,7 @@ import (
 
 // TestXtraBackup - tests the back using xtrabackup arguments
 func TestXtraBackup(t *testing.T) {
-	code, err := backup.LaunchCluster(true, "tar", 0)
+	code, err := backup.LaunchCluster(true, "xbstream", 8)
 	if err != nil {
 		t.Errorf("setup failed with status code %d", code)
 	}

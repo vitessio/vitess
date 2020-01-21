@@ -20,7 +20,7 @@ import "testing"
 
 // TestBackupMain - main tests backup using vtctl commands
 func TestBackupMain(t *testing.T) {
-	code, err := LaunchCluster(false)
+	code, err := LaunchCluster(false, "", 0)
 	if err != nil {
 		t.Errorf("setup failed with status code %d", code)
 	}

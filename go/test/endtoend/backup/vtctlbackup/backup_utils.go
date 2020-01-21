@@ -44,6 +44,8 @@ var (
 	localCluster     *cluster.LocalProcessCluster
 	newInitDBFile    string
 	useXtrabackup    bool
+	xbStreamMode     string
+	xbStripes        int
 	cell             = cluster.DefaultCell
 	hostname         = "localhost"
 	keyspaceName     = "ks"
@@ -63,9 +65,9 @@ var (
 	}
 	xtrabackupArgs = []string{
 		"-backup_engine_implementation", "xtrabackup",
-		"-xtrabackup_stream_mode", "tar",
+		"-xtrabackup_stream_mode", xbStreamMode,
 		"-xtrabackup_user=vt_dba",
-		"-xtrabackup_stripes=0",
+		fmt.Sprintf("-xtrabackup_stripes=%d", xbStripes),
 		"-xtrabackup_backup_flags", fmt.Sprintf("--password=%s", dbPassword),
 	}
 	vtInsertTest = `
@@ -76,7 +78,7 @@ var (
 					  ) Engine=InnoDB`
 )
 
-func LaunchCluster(xtrabackup bool) (int, error) {
+func LaunchCluster(xtrabackup bool, streamMode string, stripes int) (int, error) {
 	localCluster = cluster.NewCluster(cell, hostname)
 
 	// Start topo server
@@ -106,6 +108,8 @@ func LaunchCluster(xtrabackup bool) (int, error) {
 
 	if xtrabackup {
 		useXtrabackup = xtrabackup
+		xbStreamMode = streamMode
+		xbStripes = stripes
 		commonTabletArg = append(commonTabletArg, xtrabackupArgs...)
 	}
 
