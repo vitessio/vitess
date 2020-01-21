@@ -198,15 +198,6 @@
 				"worker_test"
 			]
 		},
-		"xtrabackup": {
-			"File": "xtrabackup.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 1,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"xb_recovery": {
 			"File": "xb_recovery.py",
 			"Args": [],
@@ -240,6 +231,15 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 11,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"backup_xtrabackup": {
+			"File": "xtrabackup.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/xtrabackup"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 19,
 			"RetryMax": 0,
 			"Tags": []
 		},
