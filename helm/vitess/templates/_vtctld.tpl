@@ -90,6 +90,8 @@ spec:
 
               eval exec /vt/bin/vtctld $(cat <<END_OF_COMMAND
                 -cell={{$cellClean | quote}}
+                -web_dir="/vt/web/vtctld"
+                -web_dir2="/vt/web/vtctld2/app"
                 -workflow_manager_init
                 -workflow_manager_use_election
                 -logtostderr=true
