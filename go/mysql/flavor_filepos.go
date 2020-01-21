@@ -40,40 +40,35 @@ func newFilePosFlavor() flavor {
 
 // masterGTIDSet is part of the Flavor interface.
 func (flv *filePosFlavor) masterGTIDSet(c *Conn) (GTIDSet, error) {
-	qr, err := c.ExecuteFetch("SHOW SLAVE STATUS", 100, true /* wantfields */)
+	qr, err := c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
 	if err != nil {
 		return nil, err
 	}
 	if len(qr.Rows) == 0 {
-		qr, err = c.ExecuteFetch("SHOW MASTER STATUS", 100, true /* wantfields */)
-		if err != nil {
-			return nil, err
-		}
-		if len(qr.Rows) == 0 {
-			return nil, errors.New("no master or slave status")
-		}
-		resultMap, err := resultToMap(qr)
-		if err != nil {
-			return nil, err
-		}
-		return filePosGTID{
-			file: resultMap["File"],
-			pos:  resultMap["Position"],
-		}, nil
+		return nil, errors.New("no master status")
 	}
 
 	resultMap, err := resultToMap(qr)
 	if err != nil {
 		return nil, err
 	}
+	pos, err := strconv.Atoi(resultMap["Position"])
+	if err != nil {
+		return nil, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", resultMap["Position"])
+	}
+
 	return filePosGTID{
-		file: resultMap["Relay_Master_Log_File"],
-		pos:  resultMap["Exec_Master_Log_Pos"],
+		file: resultMap["File"],
+		pos:  pos,
 	}, nil
 }
 
 func (flv *filePosFlavor) startSlaveCommand() string {
 	return "unsupported"
+}
+
+func (flv *filePosFlavor) restartSlaveCommands() []string {
+	return []string{"unsupported"}
 }
 
 func (flv *filePosFlavor) stopSlaveCommand() string {
@@ -87,13 +82,8 @@ func (flv *filePosFlavor) sendBinlogDumpCommand(c *Conn, slaveID uint32, startPo
 		return fmt.Errorf("startPos.GTIDSet is wrong type - expected filePosGTID, got: %#v", startPos.GTIDSet)
 	}
 
-	pos, err := strconv.Atoi(rpos.pos)
-	if err != nil {
-		return fmt.Errorf("invalid position: %v", startPos.GTIDSet)
-	}
 	flv.file = rpos.file
-
-	return c.WriteComBinlogDump(slaveID, rpos.file, uint32(pos), 0)
+	return c.WriteComBinlogDump(slaveID, rpos.file, uint32(rpos.pos), 0)
 }
 
 // readBinlogEvent is part of the Flavor interface.
@@ -208,9 +198,14 @@ func (flv *filePosFlavor) status(c *Conn) (SlaveStatus, error) {
 	}
 
 	status := parseSlaveStatus(resultMap)
+	pos, err := strconv.Atoi(resultMap["Exec_Master_Log_Pos"])
+	if err != nil {
+		return SlaveStatus{}, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", resultMap["Exec_Master_Log_Pos"])
+	}
+
 	status.Position.GTIDSet = filePosGTID{
 		file: resultMap["Relay_Master_Log_File"],
-		pos:  resultMap["Exec_Master_Log_Pos"],
+		pos:  pos,
 	}
 	return status, nil
 }
@@ -227,10 +222,10 @@ func (flv *filePosFlavor) waitUntilPositionCommand(ctx context.Context, pos Posi
 		if timeout <= 0 {
 			return "", fmt.Errorf("timed out waiting for position %v", pos)
 		}
-		return fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %s, %.6f)", filePosPos.file, filePosPos.pos, timeout.Seconds()), nil
+		return fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %d, %.6f)", filePosPos.file, filePosPos.pos, timeout.Seconds()), nil
 	}
 
-	return fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %s)", filePosPos.file, filePosPos.pos), nil
+	return fmt.Sprintf("SELECT MASTER_POS_WAIT('%s', %d)", filePosPos.file, filePosPos.pos), nil
 }
 
 func (*filePosFlavor) startSlaveUntilAfter(pos Position) string {

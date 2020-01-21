@@ -121,6 +121,7 @@ func skipToEnd(yylex interface{}) {
 %left <bytes> UNION
 %token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE KEY DEFAULT SET LOCK UNLOCK KEYS
+%token <bytes> DISTINCTROW
 %token <bytes> VALUES LAST_INSERT_ID
 %token <bytes> NEXT VALUE SHARE MODE
 %token <bytes> SQL_NO_CACHE SQL_CACHE
@@ -1314,6 +1315,14 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
   }
+| ALTER DATABASE ID ddl_skip_to_end
+  {
+    $$ = &DBDDL{Action: AlterStr, DBName: string($3)}
+  }
+| ALTER SCHEMA ID ddl_skip_to_end
+  {
+    $$ = &DBDDL{Action: AlterStr, DBName: string($3)}
+  }
 | ALTER VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
   {
     $$ = &DDL{
@@ -1823,6 +1832,10 @@ distinct_opt:
     $$ = ""
   }
 | DISTINCT
+  {
+    $$ = DistinctStr
+  }
+| DISTINCTROW
   {
     $$ = DistinctStr
   }
@@ -3243,6 +3256,7 @@ reserved_keyword:
 | DESC
 | DESCRIBE
 | DISTINCT
+| DISTINCTROW
 | DIV
 | DROP
 | ELSE

@@ -491,11 +491,9 @@ func (vre *Engine) transitionJournal(key string) {
 	for _, sgtid := range je.journal.ShardGtids {
 		bls := vre.controllers[refid].source
 		bls.Keyspace, bls.Shard = sgtid.Keyspace, sgtid.Shard
-		query := fmt.Sprintf("insert into _vt.vreplication "+
-			"(workflow, source, pos, max_tps, max_replication_lag, tablet_types, time_updated, transaction_timestamp, state, db_name) "+
-			"values (%v, %v, %v, %v, %v, %v, %v, 0, '%v', %v)",
-			encodeString(params["workflow"]), encodeString(bls.String()), encodeString(sgtid.Gtid), params["max_tps"], params["max_replication_lag"], encodeString(params["tablet_types"]), time.Now().Unix(), binlogplayer.BlpRunning, encodeString(vre.dbName))
-		qr, err := vre.executeFetchMaybeCreateTable(dbClient, query, 1)
+		ig := NewInsertGenerator(binlogplayer.BlpRunning, vre.dbName)
+		ig.AddRow(params["workflow"], &bls, sgtid.Gtid, params["cell"], params["tablet_types"])
+		qr, err := vre.executeFetchMaybeCreateTable(dbClient, ig.String(), 1)
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)
 			return
