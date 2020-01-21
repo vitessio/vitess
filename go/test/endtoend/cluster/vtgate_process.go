@@ -100,6 +100,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	go func() {
 		if vtgate.proc != nil {
 			vtgate.exit <- vtgate.proc.Wait()
+			vtgate.proc = nil
 		}
 	}()
 
@@ -194,7 +195,6 @@ func (vtgate *VtgateProcess) TearDown() error {
 
 	case <-time.After(10 * time.Second):
 		vtgate.proc.Process.Kill()
-		vtgate.proc = nil
 		return <-vtgate.exit
 	}
 }

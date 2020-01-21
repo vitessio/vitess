@@ -87,6 +87,7 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 	vtctld.exit = make(chan error)
 	go func() {
 		vtctld.exit <- vtctld.proc.Wait()
+		vtctld.proc = nil
 	}()
 
 	timeout := time.Now().Add(60 * time.Second)
@@ -140,7 +141,6 @@ func (vtctld *VtctldProcess) TearDown() error {
 
 	case <-time.After(10 * time.Second):
 		vtctld.proc.Process.Kill()
-		vtctld.proc = nil
 		return <-vtctld.exit
 	}
 }

@@ -76,6 +76,7 @@ func (etcd *EtcdProcess) Setup() (err error) {
 	etcd.exit = make(chan error)
 	go func() {
 		etcd.exit <- etcd.proc.Wait()
+		etcd.proc = nil
 	}()
 
 	timeout := time.Now().Add(60 * time.Second)
@@ -117,7 +118,6 @@ func (etcd *EtcdProcess) TearDown(Cell string, originalVtRoot string, currentRoo
 
 	case <-time.After(10 * time.Second):
 		etcd.proc.Process.Kill()
-		etcd.proc = nil
 		return <-etcd.exit
 	}
 

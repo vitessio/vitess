@@ -85,6 +85,7 @@ func (vtworker *VtworkerProcess) Setup(cell string) (err error) {
 	vtworker.exit = make(chan error)
 	go func() {
 		vtworker.exit <- vtworker.proc.Wait()
+		vtworker.proc = nil
 	}()
 
 	timeout := time.Now().Add(60 * time.Second)
@@ -131,7 +132,6 @@ func (vtworker *VtworkerProcess) TearDown() error {
 
 	case <-time.After(10 * time.Second):
 		vtworker.proc.Process.Kill()
-		vtworker.proc = nil
 		return <-vtworker.exit
 	}
 }
