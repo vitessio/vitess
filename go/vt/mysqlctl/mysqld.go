@@ -267,18 +267,6 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 		return nil
 	}
 
-	// Find mysql_upgrade. If not there, we do nothing.
-	vtMysqlRoot, err := vtenv.VtMysqlRoot()
-	if err != nil {
-		log.Warningf("VT_MYSQL_ROOT not set, skipping mysql_upgrade step: %v", err)
-		return nil
-	}
-	name, err := binaryPath(vtMysqlRoot, "mysql_upgrade")
-	if err != nil {
-		log.Warningf("mysql_upgrade binary not present, skipping it: %v", err)
-		return nil
-	}
-
 	// Since we started mysql with --skip-grant-tables, we should
 	// be able to run mysql_upgrade without any valid user or
 	// password. However, mysql_upgrade executes a 'flush
@@ -303,11 +291,26 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 		"--defaults-file=" + defaultsFile,
 		"--force", // Don't complain if it's already been upgraded.
 	}
-	cmd := exec.Command(name, args...)
-	libPath := fmt.Sprintf("LD_LIBRARY_PATH=%s/lib/mysql", vtMysqlRoot)
-	cmd.Env = []string{libPath}
-	out, err := cmd.CombinedOutput()
-	log.Infof("mysql_upgrade output: %s", out)
+
+	// Find mysql_upgrade. If not there, we do nothing.
+	vtMysqlRoot, err := vtenv.VtMysqlRoot()
+	if err != nil {
+		log.Warningf("VT_MYSQL_ROOT not set, skipping mysql_upgrade step: %v", err)
+		return nil
+	}
+	name, err := binaryPath(vtMysqlRoot, "mysql_upgrade")
+	if err != nil {
+		log.Warningf("mysql_upgrade binary not present, skipping it: %v", err)
+		return nil
+	}
+
+	env, err := buildLdPaths()
+	if err != nil {
+		log.Warningf("skipping mysql_upgrade step: %v", err)
+		return nil
+	}
+
+	_, _, err = execCmd(name, args, env, "", nil)
 	return err
 }
 
@@ -367,15 +370,17 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 		if err != nil {
 			return err
 		}
-		arg := []string{
+		args := []string{
 			"--defaults-file=" + cnf.path,
 			"--basedir=" + mysqlBaseDir,
 		}
-		arg = append(arg, mysqldArgs...)
-		libPath := fmt.Sprintf("LD_LIBRARY_PATH=%s/lib/mysql", vtMysqlRoot)
-		env := []string{libPath}
+		args = append(args, mysqldArgs...)
+		env, err := buildLdPaths()
+		if err != nil {
+			return err
+		}
 
-		cmd := exec.Command(name, arg...)
+		cmd := exec.Command(name, args...)
 		cmd.Dir = vtMysqlRoot
 		cmd.Env = env
 		log.Infof("%v %#v", ts, cmd)
@@ -541,11 +546,11 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 			"--wait=10",
 			"shutdown",
 		}
-		env := []string{
-			os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql"),
-		}
-		_, _, err = execCmd(name, args, env, dir, nil)
+		env, err := buildLdPaths()
 		if err != nil {
+			return err
+		}
+		if _, _, err = execCmd(name, args, env, dir, nil); err != nil {
 			return err
 		}
 	default:
@@ -1027,8 +1032,9 @@ func (mysqld *Mysqld) executeMysqlScript(connParams *mysql.ConnParams, sql io.Re
 		"--defaults-extra-file=" + cnf,
 		"--batch",
 	}
-	env := []string{
-		"LD_LIBRARY_PATH=" + path.Join(dir, "lib/mysql"),
+	env, err := buildLdPaths()
+	if err != nil {
+		return err
 	}
 	_, _, err = execCmd(name, args, env, dir, sql)
 	if err != nil {
@@ -1114,4 +1120,18 @@ func (mysqld *Mysqld) OnTerm(f func()) {
 	mysqld.mutex.Lock()
 	defer mysqld.mutex.Unlock()
 	mysqld.onTermFuncs = append(mysqld.onTermFuncs, f)
+}
+
+func buildLdPaths() ([]string, error) {
+	vtMysqlRoot, err := vtenv.VtMysqlRoot()
+	if err != nil {
+		return []string{}, err
+	}
+
+	ldPaths := []string{
+		fmt.Sprintf("LD_LIBRARY_PATH=%s/lib/mysql", vtMysqlRoot),
+		os.ExpandEnv("LD_PRELOAD=$LD_PRELOAD"),
+	}
+
+	return ldPaths, nil
 }
