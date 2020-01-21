@@ -43,6 +43,7 @@ var (
 	replica2         *cluster.Vttablet
 	localCluster     *cluster.LocalProcessCluster
 	newInitDBFile    string
+	useXtrabackup    bool
 	cell             = cluster.DefaultCell
 	hostname         = "localhost"
 	keyspaceName     = "ks"
@@ -104,6 +105,7 @@ func LaunchCluster(xtrabackup bool) (int, error) {
 	commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)
 
 	if xtrabackup {
+		useXtrabackup = xtrabackup
 		commonTabletArg = append(commonTabletArg, xtrabackupArgs...)
 	}
 
@@ -584,6 +586,10 @@ func verifyReplicationStatus(t *testing.T, vttablet *cluster.Vttablet, expectedS
 
 func terminateRestore(t *testing.T) {
 	stopRestoreMsg := "Copying file 10"
+	if useXtrabackup {
+		stopRestoreMsg = "Restore: Preparing"
+	}
+
 	args := append([]string{"-server", localCluster.VtctlclientProcess.Server, "-alsologtostderr"}, "RestoreFromBackup", master.Alias)
 	tmpProcess := exec.Command(
 		"vtctlclient",
@@ -596,6 +602,7 @@ func terminateRestore(t *testing.T) {
 	found := false
 
 	scanner := bufio.NewScanner(reader)
+
 	for scanner.Scan() {
 		text := scanner.Text()
 		if strings.Contains(text, stopRestoreMsg) {

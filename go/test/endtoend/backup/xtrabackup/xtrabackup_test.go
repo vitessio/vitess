@@ -17,7 +17,6 @@ limitations under the License.
 package vtctlbackup
 
 import (
-	"fmt"
 	"testing"
 
 	backup "vitess.io/vitess/go/test/endtoend/backup/vtctlbackup"
@@ -26,7 +25,6 @@ import (
 // TestXtraBackup - tests the back using xtrabackup arguments
 func TestXtraBackup(t *testing.T) {
 	code, err := backup.LaunchCluster(true)
-	fmt.Println(err)
 	if err != nil {
 		t.Errorf("setup failed with status code %d", code)
 	}
