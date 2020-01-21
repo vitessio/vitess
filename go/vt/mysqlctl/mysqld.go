@@ -72,7 +72,8 @@ var (
 
 	poolDynamicHostnameResolution = flag.Duration("pool_hostname_resolve_interval", 0, "if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)")
 
-	socketFile = flag.String("mysqlctl_socket", "", "socket file to use for remote mysqlctl actions (empty for local actions)")
+	mycnfTemplateFile = flag.String("mysqlctl_mycnf_template", "", "template file to use for generating the my.cnf file during server init")
+	socketFile        = flag.String("mysqlctl_socket", "", "socket file to use for remote mysqlctl actions (empty for local actions)")
 
 	// masterConnectRetry is used in 'SET MASTER' commands
 	masterConnectRetry = flag.Duration("master_connect_retry", 10*time.Second, "how long to wait in between slave -> connection attempts. Only precise to the second.")
@@ -798,7 +799,13 @@ func (mysqld *Mysqld) initConfig(cnf *Mycnf, outFile string) error {
 }
 
 func (mysqld *Mysqld) getMycnfTemplate() string {
-
+	if *mycnfTemplateFile != "" {
+		data, err := ioutil.ReadFile(*mycnfTemplateFile)
+		if err != nil {
+			log.Fatalf("template file specified by -mysqlctl_mycnf_template could not be read: %v", *mycnfTemplateFile)
+		}
+		return string(data) // use only specified template
+	}
 	myTemplateSource := new(bytes.Buffer)
 	myTemplateSource.WriteString("[mysqld]\n")
 
