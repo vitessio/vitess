@@ -22,8 +22,8 @@ import (
 	backup "vitess.io/vitess/go/test/endtoend/backup/vtctlbackup"
 )
 
-// TestXtraBackup - tests the back using xtrabackup arguments
-func TestXtraBackup(t *testing.T) {
+// TestXtrabackupStream - tests the backup using xtrabackup with xbstream mode
+func TestXtrabackupStream(t *testing.T) {
 	code, err := backup.LaunchCluster(true, "xbstream", 8)
 	if err != nil {
 		t.Errorf("setup failed with status code %d", code)

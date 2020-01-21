@@ -63,13 +63,7 @@ var (
 		"-enable_replication_reporter",
 		"-serving_state_grace_period", "1s",
 	}
-	xtrabackupArgs = []string{
-		"-backup_engine_implementation", "xtrabackup",
-		fmt.Sprintf("-xtrabackup_stream_mode=%s", xbStreamMode),
-		"-xtrabackup_user=vt_dba",
-		fmt.Sprintf("-xtrabackup_stripes=%d", xbStripes),
-		"-xtrabackup_backup_flags", fmt.Sprintf("--password=%s", dbPassword),
-	}
+
 	vtInsertTest = `
 					create table vt_insert_test (
 					  id bigint auto_increment,
@@ -106,10 +100,20 @@ func LaunchCluster(xtrabackup bool, streamMode string, stripes int) (int, error)
 	extraArgs := []string{"-db-credentials-file", dbCredentialFile}
 	commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)
 
+	// Update arguments for xtrabackup
 	if xtrabackup {
 		useXtrabackup = xtrabackup
 		xbStreamMode = streamMode
 		xbStripes = stripes
+
+		xtrabackupArgs := []string{
+			"-backup_engine_implementation", "xtrabackup",
+			fmt.Sprintf("-xtrabackup_stream_mode=%s", xbStreamMode),
+			"-xtrabackup_user=vt_dba",
+			fmt.Sprintf("-xtrabackup_stripes=%d", xbStripes),
+			"-xtrabackup_backup_flags", fmt.Sprintf("--password=%s", dbPassword),
+		}
+
 		commonTabletArg = append(commonTabletArg, xtrabackupArgs...)
 	}
 
