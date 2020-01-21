@@ -89,6 +89,23 @@ func (cluster LocalProcessCluster) ListBackups(shardKsName string) ([]string, er
 	return returnResult, nil
 }
 
+// VerifyBackupCount compares the backup count with expected count.
+func (cluster LocalProcessCluster) VerifyBackupCount(t *testing.T, shardKsName string, expected int) []string {
+	backups, err := cluster.ListBackups(shardKsName)
+	assert.Nil(t, err)
+	assert.Equalf(t, expected, len(backups), "invalid number of backups")
+	return backups
+}
+
+// RemoveAllBackups removes all the backup corresponds to list backup.
+func (cluster LocalProcessCluster) RemoveAllBackups(t *testing.T, shardKsName string) {
+	backups, err := cluster.ListBackups(shardKsName)
+	assert.Nil(t, err)
+	for _, backup := range backups {
+		cluster.VtctlclientProcess.ExecuteCommand("RemoveBackup", shardKsName, backup)
+	}
+}
+
 // ResetTabletDirectory transitions back to tablet state (i.e. mysql process restarts with cleaned directory and tablet is off)
 func ResetTabletDirectory(tablet Vttablet) error {
 	tablet.MysqlctlProcess.Stop()
