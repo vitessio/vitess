@@ -207,15 +207,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"xtrabackup_xbstream": {
-			"File": "xtrabackup_xbstream.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 3,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"backup": {
 			"File": "backup.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtctlbackup"],
@@ -240,6 +231,15 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 19,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"backup_xtrabackup_xbstream": {
+			"File": "xtrabackup_xbstream.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/xtrabackupstream"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 20,
 			"RetryMax": 0,
 			"Tags": []
 		},
