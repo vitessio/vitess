@@ -1863,14 +1863,17 @@ func TestDeleteEqualWithPrepare(t *testing.T) {
 
 func TestUpdateLastInsertID(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
+	executor.normalize = true
 
 	sql := "update user set a = last_insert_id() where id = 1"
 	masterSession.LastInsertId = 43
 	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "update user set a = :__lastInsertId where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
-		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(43)},
+		Sql: "update user set a = :__lastInsertId where id = :vtg1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
+		BindVariables: map[string]*querypb.BindVariable{
+			"__lastInsertId": sqltypes.Uint64BindVariable(43),
+			"vtg1":           sqltypes.Int64BindVariable(1)},
 	}}
 
 	require.Equal(t, wantQueries, sbc1.Queries)
