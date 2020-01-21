@@ -29,8 +29,8 @@ func TestSingleItem(t *testing.T) {
 		FieldName:  "Field",
 	}
 
-	expectedReplacer := `func replaceStructField(new SQLNode, parent SQLNode) {
-	parent.(*Struct).Field = new.(string)
+	expectedReplacer := `func replaceStructField(newNode, parent SQLNode) {
+	parent.(*Struct).Field = newNode.(string)
 }`
 
 	expectedSwitch := `		a.apply(node, n.Field, replaceStructField)`
@@ -47,8 +47,8 @@ func TestArrayFieldItem(t *testing.T) {
 
 	expectedReplacer := `type replaceStructField int
 
-func (r *replaceStructField) replace(new, container SQLNode) {
-	container.(*Struct).Field[int(*r)] = new.(string)
+func (r *replaceStructField) replace(newNode, container SQLNode) {
+	container.(*Struct).Field[int(*r)] = newNode.(string)
 }
 
 func (r *replaceStructField) inc() {
@@ -73,8 +73,8 @@ func TestArrayItem(t *testing.T) {
 
 	expectedReplacer := `type replaceStructItems int
 
-func (r *replaceStructItems) replace(new, container SQLNode) {
-	container.(*Struct)[int(*r)] = new.(string)
+func (r *replaceStructItems) replace(newNode, container SQLNode) {
+	container.(*Struct)[int(*r)] = newNode.(string)
 }
 
 func (r *replaceStructItems) inc() {

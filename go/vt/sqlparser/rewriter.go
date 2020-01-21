@@ -8,7 +8,7 @@ import (
 	"reflect"
 )
 
-type replacerFunc func(newNode SQLNode, parent SQLNode)
+type replacerFunc func(newNode, parent SQLNode)
 
 // application carries all the shared data so we can pass it around cheaply.
 type application struct {
@@ -16,641 +16,641 @@ type application struct {
 	cursor    Cursor
 }
 
-func replaceAliasedExprAs(new SQLNode, parent SQLNode) {
-	parent.(*AliasedExpr).As = new.(ColIdent)
+func replaceAliasedExprAs(newNode, parent SQLNode) {
+	parent.(*AliasedExpr).As = newNode.(ColIdent)
 }
 
-func replaceAliasedExprExpr(new SQLNode, parent SQLNode) {
-	parent.(*AliasedExpr).Expr = new.(Expr)
+func replaceAliasedExprExpr(newNode, parent SQLNode) {
+	parent.(*AliasedExpr).Expr = newNode.(Expr)
 }
 
-func replaceAliasedTableExprAs(new SQLNode, parent SQLNode) {
-	parent.(*AliasedTableExpr).As = new.(TableIdent)
+func replaceAliasedTableExprAs(newNode, parent SQLNode) {
+	parent.(*AliasedTableExpr).As = newNode.(TableIdent)
 }
 
-func replaceAliasedTableExprExpr(new SQLNode, parent SQLNode) {
-	parent.(*AliasedTableExpr).Expr = new.(SimpleTableExpr)
+func replaceAliasedTableExprExpr(newNode, parent SQLNode) {
+	parent.(*AliasedTableExpr).Expr = newNode.(SimpleTableExpr)
 }
 
-func replaceAliasedTableExprHints(new SQLNode, parent SQLNode) {
-	parent.(*AliasedTableExpr).Hints = new.(*IndexHints)
+func replaceAliasedTableExprHints(newNode, parent SQLNode) {
+	parent.(*AliasedTableExpr).Hints = newNode.(*IndexHints)
 }
 
-func replaceAliasedTableExprPartitions(new SQLNode, parent SQLNode) {
-	parent.(*AliasedTableExpr).Partitions = new.(Partitions)
+func replaceAliasedTableExprPartitions(newNode, parent SQLNode) {
+	parent.(*AliasedTableExpr).Partitions = newNode.(Partitions)
 }
 
-func replaceAndExprLeft(new SQLNode, parent SQLNode) {
-	parent.(*AndExpr).Left = new.(Expr)
+func replaceAndExprLeft(newNode, parent SQLNode) {
+	parent.(*AndExpr).Left = newNode.(Expr)
 }
 
-func replaceAndExprRight(new SQLNode, parent SQLNode) {
-	parent.(*AndExpr).Right = new.(Expr)
+func replaceAndExprRight(newNode, parent SQLNode) {
+	parent.(*AndExpr).Right = newNode.(Expr)
 }
 
-func replaceAutoIncSpecColumn(new SQLNode, parent SQLNode) {
-	parent.(*AutoIncSpec).Column = new.(ColIdent)
+func replaceAutoIncSpecColumn(newNode, parent SQLNode) {
+	parent.(*AutoIncSpec).Column = newNode.(ColIdent)
 }
 
-func replaceAutoIncSpecSequence(new SQLNode, parent SQLNode) {
-	parent.(*AutoIncSpec).Sequence = new.(TableName)
+func replaceAutoIncSpecSequence(newNode, parent SQLNode) {
+	parent.(*AutoIncSpec).Sequence = newNode.(TableName)
 }
 
-func replaceBinaryExprLeft(new SQLNode, parent SQLNode) {
-	parent.(*BinaryExpr).Left = new.(Expr)
+func replaceBinaryExprLeft(newNode, parent SQLNode) {
+	parent.(*BinaryExpr).Left = newNode.(Expr)
 }
 
-func replaceBinaryExprRight(new SQLNode, parent SQLNode) {
-	parent.(*BinaryExpr).Right = new.(Expr)
+func replaceBinaryExprRight(newNode, parent SQLNode) {
+	parent.(*BinaryExpr).Right = newNode.(Expr)
 }
 
-func replaceCaseExprElse(new SQLNode, parent SQLNode) {
-	parent.(*CaseExpr).Else = new.(Expr)
+func replaceCaseExprElse(newNode, parent SQLNode) {
+	parent.(*CaseExpr).Else = newNode.(Expr)
 }
 
-func replaceCaseExprExpr(new SQLNode, parent SQLNode) {
-	parent.(*CaseExpr).Expr = new.(Expr)
+func replaceCaseExprExpr(newNode, parent SQLNode) {
+	parent.(*CaseExpr).Expr = newNode.(Expr)
 }
 
 type replaceCaseExprWhens int
 
-func (r *replaceCaseExprWhens) replace(new, container SQLNode) {
-	container.(*CaseExpr).Whens[int(*r)] = new.(*When)
+func (r *replaceCaseExprWhens) replace(newNode, container SQLNode) {
+	container.(*CaseExpr).Whens[int(*r)] = newNode.(*When)
 }
 
 func (r *replaceCaseExprWhens) inc() {
 	*r++
 }
 
-func replaceColNameName(new SQLNode, parent SQLNode) {
-	parent.(*ColName).Name = new.(ColIdent)
+func replaceColNameName(newNode, parent SQLNode) {
+	parent.(*ColName).Name = newNode.(ColIdent)
 }
 
-func replaceColNameQualifier(new SQLNode, parent SQLNode) {
-	parent.(*ColName).Qualifier = new.(TableName)
+func replaceColNameQualifier(newNode, parent SQLNode) {
+	parent.(*ColName).Qualifier = newNode.(TableName)
 }
 
-func replaceCollateExprExpr(new SQLNode, parent SQLNode) {
-	parent.(*CollateExpr).Expr = new.(Expr)
+func replaceCollateExprExpr(newNode, parent SQLNode) {
+	parent.(*CollateExpr).Expr = newNode.(Expr)
 }
 
-func replaceColumnDefinitionName(new SQLNode, parent SQLNode) {
-	parent.(*ColumnDefinition).Name = new.(ColIdent)
+func replaceColumnDefinitionName(newNode, parent SQLNode) {
+	parent.(*ColumnDefinition).Name = newNode.(ColIdent)
 }
 
-func replaceColumnTypeAutoincrement(new SQLNode, parent SQLNode) {
-	parent.(*ColumnType).Autoincrement = new.(BoolVal)
+func replaceColumnTypeAutoincrement(newNode, parent SQLNode) {
+	parent.(*ColumnType).Autoincrement = newNode.(BoolVal)
 }
 
-func replaceColumnTypeComment(new SQLNode, parent SQLNode) {
-	parent.(*ColumnType).Comment = new.(*SQLVal)
+func replaceColumnTypeComment(newNode, parent SQLNode) {
+	parent.(*ColumnType).Comment = newNode.(*SQLVal)
 }
 
-func replaceColumnTypeDefault(new SQLNode, parent SQLNode) {
-	parent.(*ColumnType).Default = new.(Expr)
+func replaceColumnTypeDefault(newNode, parent SQLNode) {
+	parent.(*ColumnType).Default = newNode.(Expr)
 }
 
-func replaceColumnTypeLength(new SQLNode, parent SQLNode) {
-	parent.(*ColumnType).Length = new.(*SQLVal)
+func replaceColumnTypeLength(newNode, parent SQLNode) {
+	parent.(*ColumnType).Length = newNode.(*SQLVal)
 }
 
-func replaceColumnTypeNotNull(new SQLNode, parent SQLNode) {
-	parent.(*ColumnType).NotNull = new.(BoolVal)
+func replaceColumnTypeNotNull(newNode, parent SQLNode) {
+	parent.(*ColumnType).NotNull = newNode.(BoolVal)
 }
 
-func replaceColumnTypeOnUpdate(new SQLNode, parent SQLNode) {
-	parent.(*ColumnType).OnUpdate = new.(Expr)
+func replaceColumnTypeOnUpdate(newNode, parent SQLNode) {
+	parent.(*ColumnType).OnUpdate = newNode.(Expr)
 }
 
-func replaceColumnTypeScale(new SQLNode, parent SQLNode) {
-	parent.(*ColumnType).Scale = new.(*SQLVal)
+func replaceColumnTypeScale(newNode, parent SQLNode) {
+	parent.(*ColumnType).Scale = newNode.(*SQLVal)
 }
 
-func replaceColumnTypeUnsigned(new SQLNode, parent SQLNode) {
-	parent.(*ColumnType).Unsigned = new.(BoolVal)
+func replaceColumnTypeUnsigned(newNode, parent SQLNode) {
+	parent.(*ColumnType).Unsigned = newNode.(BoolVal)
 }
 
-func replaceColumnTypeZerofill(new SQLNode, parent SQLNode) {
-	parent.(*ColumnType).Zerofill = new.(BoolVal)
+func replaceColumnTypeZerofill(newNode, parent SQLNode) {
+	parent.(*ColumnType).Zerofill = newNode.(BoolVal)
 }
 
 type replaceColumnsItems int
 
-func (r *replaceColumnsItems) replace(new, container SQLNode) {
-	container.(Columns)[int(*r)] = new.(ColIdent)
+func (r *replaceColumnsItems) replace(newNode, container SQLNode) {
+	container.(Columns)[int(*r)] = newNode.(ColIdent)
 }
 
 func (r *replaceColumnsItems) inc() {
 	*r++
 }
 
-func replaceComparisonExprEscape(new SQLNode, parent SQLNode) {
-	parent.(*ComparisonExpr).Escape = new.(Expr)
+func replaceComparisonExprEscape(newNode, parent SQLNode) {
+	parent.(*ComparisonExpr).Escape = newNode.(Expr)
 }
 
-func replaceComparisonExprLeft(new SQLNode, parent SQLNode) {
-	parent.(*ComparisonExpr).Left = new.(Expr)
+func replaceComparisonExprLeft(newNode, parent SQLNode) {
+	parent.(*ComparisonExpr).Left = newNode.(Expr)
 }
 
-func replaceComparisonExprRight(new SQLNode, parent SQLNode) {
-	parent.(*ComparisonExpr).Right = new.(Expr)
+func replaceComparisonExprRight(newNode, parent SQLNode) {
+	parent.(*ComparisonExpr).Right = newNode.(Expr)
 }
 
-func replaceConstraintDefinitionDetails(new SQLNode, parent SQLNode) {
-	parent.(*ConstraintDefinition).Details = new.(ConstraintInfo)
+func replaceConstraintDefinitionDetails(newNode, parent SQLNode) {
+	parent.(*ConstraintDefinition).Details = newNode.(ConstraintInfo)
 }
 
-func replaceConvertExprExpr(new SQLNode, parent SQLNode) {
-	parent.(*ConvertExpr).Expr = new.(Expr)
+func replaceConvertExprExpr(newNode, parent SQLNode) {
+	parent.(*ConvertExpr).Expr = newNode.(Expr)
 }
 
-func replaceConvertExprType(new SQLNode, parent SQLNode) {
-	parent.(*ConvertExpr).Type = new.(*ConvertType)
+func replaceConvertExprType(newNode, parent SQLNode) {
+	parent.(*ConvertExpr).Type = newNode.(*ConvertType)
 }
 
-func replaceConvertTypeLength(new SQLNode, parent SQLNode) {
-	parent.(*ConvertType).Length = new.(*SQLVal)
+func replaceConvertTypeLength(newNode, parent SQLNode) {
+	parent.(*ConvertType).Length = newNode.(*SQLVal)
 }
 
-func replaceConvertTypeScale(new SQLNode, parent SQLNode) {
-	parent.(*ConvertType).Scale = new.(*SQLVal)
+func replaceConvertTypeScale(newNode, parent SQLNode) {
+	parent.(*ConvertType).Scale = newNode.(*SQLVal)
 }
 
-func replaceConvertUsingExprExpr(new SQLNode, parent SQLNode) {
-	parent.(*ConvertUsingExpr).Expr = new.(Expr)
+func replaceConvertUsingExprExpr(newNode, parent SQLNode) {
+	parent.(*ConvertUsingExpr).Expr = newNode.(Expr)
 }
 
-func replaceCurTimeFuncExprFsp(new SQLNode, parent SQLNode) {
-	parent.(*CurTimeFuncExpr).Fsp = new.(Expr)
+func replaceCurTimeFuncExprFsp(newNode, parent SQLNode) {
+	parent.(*CurTimeFuncExpr).Fsp = newNode.(Expr)
 }
 
-func replaceCurTimeFuncExprName(new SQLNode, parent SQLNode) {
-	parent.(*CurTimeFuncExpr).Name = new.(ColIdent)
+func replaceCurTimeFuncExprName(newNode, parent SQLNode) {
+	parent.(*CurTimeFuncExpr).Name = newNode.(ColIdent)
 }
 
-func replaceDDLAutoIncSpec(new SQLNode, parent SQLNode) {
-	parent.(*DDL).AutoIncSpec = new.(*AutoIncSpec)
+func replaceDDLAutoIncSpec(newNode, parent SQLNode) {
+	parent.(*DDL).AutoIncSpec = newNode.(*AutoIncSpec)
 }
 
-func replaceDDLFromTables(new SQLNode, parent SQLNode) {
-	parent.(*DDL).FromTables = new.(TableNames)
+func replaceDDLFromTables(newNode, parent SQLNode) {
+	parent.(*DDL).FromTables = newNode.(TableNames)
 }
 
-func replaceDDLOptLike(new SQLNode, parent SQLNode) {
-	parent.(*DDL).OptLike = new.(*OptLike)
+func replaceDDLOptLike(newNode, parent SQLNode) {
+	parent.(*DDL).OptLike = newNode.(*OptLike)
 }
 
-func replaceDDLPartitionSpec(new SQLNode, parent SQLNode) {
-	parent.(*DDL).PartitionSpec = new.(*PartitionSpec)
+func replaceDDLPartitionSpec(newNode, parent SQLNode) {
+	parent.(*DDL).PartitionSpec = newNode.(*PartitionSpec)
 }
 
-func replaceDDLTable(new SQLNode, parent SQLNode) {
-	parent.(*DDL).Table = new.(TableName)
+func replaceDDLTable(newNode, parent SQLNode) {
+	parent.(*DDL).Table = newNode.(TableName)
 }
 
-func replaceDDLTableSpec(new SQLNode, parent SQLNode) {
-	parent.(*DDL).TableSpec = new.(*TableSpec)
+func replaceDDLTableSpec(newNode, parent SQLNode) {
+	parent.(*DDL).TableSpec = newNode.(*TableSpec)
 }
 
-func replaceDDLToTables(new SQLNode, parent SQLNode) {
-	parent.(*DDL).ToTables = new.(TableNames)
+func replaceDDLToTables(newNode, parent SQLNode) {
+	parent.(*DDL).ToTables = newNode.(TableNames)
 }
 
 type replaceDDLVindexCols int
 
-func (r *replaceDDLVindexCols) replace(new, container SQLNode) {
-	container.(*DDL).VindexCols[int(*r)] = new.(ColIdent)
+func (r *replaceDDLVindexCols) replace(newNode, container SQLNode) {
+	container.(*DDL).VindexCols[int(*r)] = newNode.(ColIdent)
 }
 
 func (r *replaceDDLVindexCols) inc() {
 	*r++
 }
 
-func replaceDDLVindexSpec(new SQLNode, parent SQLNode) {
-	parent.(*DDL).VindexSpec = new.(*VindexSpec)
+func replaceDDLVindexSpec(newNode, parent SQLNode) {
+	parent.(*DDL).VindexSpec = newNode.(*VindexSpec)
 }
 
-func replaceDeleteComments(new SQLNode, parent SQLNode) {
-	parent.(*Delete).Comments = new.(Comments)
+func replaceDeleteComments(newNode, parent SQLNode) {
+	parent.(*Delete).Comments = newNode.(Comments)
 }
 
-func replaceDeleteLimit(new SQLNode, parent SQLNode) {
-	parent.(*Delete).Limit = new.(*Limit)
+func replaceDeleteLimit(newNode, parent SQLNode) {
+	parent.(*Delete).Limit = newNode.(*Limit)
 }
 
-func replaceDeleteOrderBy(new SQLNode, parent SQLNode) {
-	parent.(*Delete).OrderBy = new.(OrderBy)
+func replaceDeleteOrderBy(newNode, parent SQLNode) {
+	parent.(*Delete).OrderBy = newNode.(OrderBy)
 }
 
-func replaceDeletePartitions(new SQLNode, parent SQLNode) {
-	parent.(*Delete).Partitions = new.(Partitions)
+func replaceDeletePartitions(newNode, parent SQLNode) {
+	parent.(*Delete).Partitions = newNode.(Partitions)
 }
 
-func replaceDeleteTableExprs(new SQLNode, parent SQLNode) {
-	parent.(*Delete).TableExprs = new.(TableExprs)
+func replaceDeleteTableExprs(newNode, parent SQLNode) {
+	parent.(*Delete).TableExprs = newNode.(TableExprs)
 }
 
-func replaceDeleteTargets(new SQLNode, parent SQLNode) {
-	parent.(*Delete).Targets = new.(TableNames)
+func replaceDeleteTargets(newNode, parent SQLNode) {
+	parent.(*Delete).Targets = newNode.(TableNames)
 }
 
-func replaceDeleteWhere(new SQLNode, parent SQLNode) {
-	parent.(*Delete).Where = new.(*Where)
+func replaceDeleteWhere(newNode, parent SQLNode) {
+	parent.(*Delete).Where = newNode.(*Where)
 }
 
-func replaceExistsExprSubquery(new SQLNode, parent SQLNode) {
-	parent.(*ExistsExpr).Subquery = new.(*Subquery)
+func replaceExistsExprSubquery(newNode, parent SQLNode) {
+	parent.(*ExistsExpr).Subquery = newNode.(*Subquery)
 }
 
 type replaceExprsItems int
 
-func (r *replaceExprsItems) replace(new, container SQLNode) {
-	container.(Exprs)[int(*r)] = new.(Expr)
+func (r *replaceExprsItems) replace(newNode, container SQLNode) {
+	container.(Exprs)[int(*r)] = newNode.(Expr)
 }
 
 func (r *replaceExprsItems) inc() {
 	*r++
 }
 
-func replaceForeignKeyDefinitionOnDelete(new SQLNode, parent SQLNode) {
-	parent.(*ForeignKeyDefinition).OnDelete = new.(ReferenceAction)
+func replaceForeignKeyDefinitionOnDelete(newNode, parent SQLNode) {
+	parent.(*ForeignKeyDefinition).OnDelete = newNode.(ReferenceAction)
 }
 
-func replaceForeignKeyDefinitionOnUpdate(new SQLNode, parent SQLNode) {
-	parent.(*ForeignKeyDefinition).OnUpdate = new.(ReferenceAction)
+func replaceForeignKeyDefinitionOnUpdate(newNode, parent SQLNode) {
+	parent.(*ForeignKeyDefinition).OnUpdate = newNode.(ReferenceAction)
 }
 
-func replaceForeignKeyDefinitionReferencedColumns(new SQLNode, parent SQLNode) {
-	parent.(*ForeignKeyDefinition).ReferencedColumns = new.(Columns)
+func replaceForeignKeyDefinitionReferencedColumns(newNode, parent SQLNode) {
+	parent.(*ForeignKeyDefinition).ReferencedColumns = newNode.(Columns)
 }
 
-func replaceForeignKeyDefinitionReferencedTable(new SQLNode, parent SQLNode) {
-	parent.(*ForeignKeyDefinition).ReferencedTable = new.(TableName)
+func replaceForeignKeyDefinitionReferencedTable(newNode, parent SQLNode) {
+	parent.(*ForeignKeyDefinition).ReferencedTable = newNode.(TableName)
 }
 
-func replaceForeignKeyDefinitionSource(new SQLNode, parent SQLNode) {
-	parent.(*ForeignKeyDefinition).Source = new.(Columns)
+func replaceForeignKeyDefinitionSource(newNode, parent SQLNode) {
+	parent.(*ForeignKeyDefinition).Source = newNode.(Columns)
 }
 
-func replaceFuncExprExprs(new SQLNode, parent SQLNode) {
-	parent.(*FuncExpr).Exprs = new.(SelectExprs)
+func replaceFuncExprExprs(newNode, parent SQLNode) {
+	parent.(*FuncExpr).Exprs = newNode.(SelectExprs)
 }
 
-func replaceFuncExprName(new SQLNode, parent SQLNode) {
-	parent.(*FuncExpr).Name = new.(ColIdent)
+func replaceFuncExprName(newNode, parent SQLNode) {
+	parent.(*FuncExpr).Name = newNode.(ColIdent)
 }
 
-func replaceFuncExprQualifier(new SQLNode, parent SQLNode) {
-	parent.(*FuncExpr).Qualifier = new.(TableIdent)
+func replaceFuncExprQualifier(newNode, parent SQLNode) {
+	parent.(*FuncExpr).Qualifier = newNode.(TableIdent)
 }
 
 type replaceGroupByItems int
 
-func (r *replaceGroupByItems) replace(new, container SQLNode) {
-	container.(GroupBy)[int(*r)] = new.(Expr)
+func (r *replaceGroupByItems) replace(newNode, container SQLNode) {
+	container.(GroupBy)[int(*r)] = newNode.(Expr)
 }
 
 func (r *replaceGroupByItems) inc() {
 	*r++
 }
 
-func replaceGroupConcatExprExprs(new SQLNode, parent SQLNode) {
-	parent.(*GroupConcatExpr).Exprs = new.(SelectExprs)
+func replaceGroupConcatExprExprs(newNode, parent SQLNode) {
+	parent.(*GroupConcatExpr).Exprs = newNode.(SelectExprs)
 }
 
-func replaceGroupConcatExprOrderBy(new SQLNode, parent SQLNode) {
-	parent.(*GroupConcatExpr).OrderBy = new.(OrderBy)
+func replaceGroupConcatExprOrderBy(newNode, parent SQLNode) {
+	parent.(*GroupConcatExpr).OrderBy = newNode.(OrderBy)
 }
 
-func replaceIndexDefinitionInfo(new SQLNode, parent SQLNode) {
-	parent.(*IndexDefinition).Info = new.(*IndexInfo)
+func replaceIndexDefinitionInfo(newNode, parent SQLNode) {
+	parent.(*IndexDefinition).Info = newNode.(*IndexInfo)
 }
 
 type replaceIndexHintsIndexes int
 
-func (r *replaceIndexHintsIndexes) replace(new, container SQLNode) {
-	container.(*IndexHints).Indexes[int(*r)] = new.(ColIdent)
+func (r *replaceIndexHintsIndexes) replace(newNode, container SQLNode) {
+	container.(*IndexHints).Indexes[int(*r)] = newNode.(ColIdent)
 }
 
 func (r *replaceIndexHintsIndexes) inc() {
 	*r++
 }
 
-func replaceIndexInfoName(new SQLNode, parent SQLNode) {
-	parent.(*IndexInfo).Name = new.(ColIdent)
+func replaceIndexInfoName(newNode, parent SQLNode) {
+	parent.(*IndexInfo).Name = newNode.(ColIdent)
 }
 
-func replaceInsertColumns(new SQLNode, parent SQLNode) {
-	parent.(*Insert).Columns = new.(Columns)
+func replaceInsertColumns(newNode, parent SQLNode) {
+	parent.(*Insert).Columns = newNode.(Columns)
 }
 
-func replaceInsertComments(new SQLNode, parent SQLNode) {
-	parent.(*Insert).Comments = new.(Comments)
+func replaceInsertComments(newNode, parent SQLNode) {
+	parent.(*Insert).Comments = newNode.(Comments)
 }
 
-func replaceInsertOnDup(new SQLNode, parent SQLNode) {
-	parent.(*Insert).OnDup = new.(OnDup)
+func replaceInsertOnDup(newNode, parent SQLNode) {
+	parent.(*Insert).OnDup = newNode.(OnDup)
 }
 
-func replaceInsertPartitions(new SQLNode, parent SQLNode) {
-	parent.(*Insert).Partitions = new.(Partitions)
+func replaceInsertPartitions(newNode, parent SQLNode) {
+	parent.(*Insert).Partitions = newNode.(Partitions)
 }
 
-func replaceInsertRows(new SQLNode, parent SQLNode) {
-	parent.(*Insert).Rows = new.(InsertRows)
+func replaceInsertRows(newNode, parent SQLNode) {
+	parent.(*Insert).Rows = newNode.(InsertRows)
 }
 
-func replaceInsertTable(new SQLNode, parent SQLNode) {
-	parent.(*Insert).Table = new.(TableName)
+func replaceInsertTable(newNode, parent SQLNode) {
+	parent.(*Insert).Table = newNode.(TableName)
 }
 
-func replaceIntervalExprExpr(new SQLNode, parent SQLNode) {
-	parent.(*IntervalExpr).Expr = new.(Expr)
+func replaceIntervalExprExpr(newNode, parent SQLNode) {
+	parent.(*IntervalExpr).Expr = newNode.(Expr)
 }
 
-func replaceIsExprExpr(new SQLNode, parent SQLNode) {
-	parent.(*IsExpr).Expr = new.(Expr)
+func replaceIsExprExpr(newNode, parent SQLNode) {
+	parent.(*IsExpr).Expr = newNode.(Expr)
 }
 
-func replaceJoinConditionOn(new, parent SQLNode) {
+func replaceJoinConditionOn(newNode, parent SQLNode) {
 	tmp := parent.(JoinCondition)
-	tmp.On = new.(Expr)
+	tmp.On = newNode.(Expr)
 }
 
-func replaceJoinConditionUsing(new, parent SQLNode) {
+func replaceJoinConditionUsing(newNode, parent SQLNode) {
 	tmp := parent.(JoinCondition)
-	tmp.Using = new.(Columns)
+	tmp.Using = newNode.(Columns)
 }
 
-func replaceJoinTableExprCondition(new SQLNode, parent SQLNode) {
-	parent.(*JoinTableExpr).Condition = new.(JoinCondition)
+func replaceJoinTableExprCondition(newNode, parent SQLNode) {
+	parent.(*JoinTableExpr).Condition = newNode.(JoinCondition)
 }
 
-func replaceJoinTableExprLeftExpr(new SQLNode, parent SQLNode) {
-	parent.(*JoinTableExpr).LeftExpr = new.(TableExpr)
+func replaceJoinTableExprLeftExpr(newNode, parent SQLNode) {
+	parent.(*JoinTableExpr).LeftExpr = newNode.(TableExpr)
 }
 
-func replaceJoinTableExprRightExpr(new SQLNode, parent SQLNode) {
-	parent.(*JoinTableExpr).RightExpr = new.(TableExpr)
+func replaceJoinTableExprRightExpr(newNode, parent SQLNode) {
+	parent.(*JoinTableExpr).RightExpr = newNode.(TableExpr)
 }
 
-func replaceLimitOffset(new SQLNode, parent SQLNode) {
-	parent.(*Limit).Offset = new.(Expr)
+func replaceLimitOffset(newNode, parent SQLNode) {
+	parent.(*Limit).Offset = newNode.(Expr)
 }
 
-func replaceLimitRowcount(new SQLNode, parent SQLNode) {
-	parent.(*Limit).Rowcount = new.(Expr)
+func replaceLimitRowcount(newNode, parent SQLNode) {
+	parent.(*Limit).Rowcount = newNode.(Expr)
 }
 
-func replaceMatchExprColumns(new SQLNode, parent SQLNode) {
-	parent.(*MatchExpr).Columns = new.(SelectExprs)
+func replaceMatchExprColumns(newNode, parent SQLNode) {
+	parent.(*MatchExpr).Columns = newNode.(SelectExprs)
 }
 
-func replaceMatchExprExpr(new SQLNode, parent SQLNode) {
-	parent.(*MatchExpr).Expr = new.(Expr)
+func replaceMatchExprExpr(newNode, parent SQLNode) {
+	parent.(*MatchExpr).Expr = newNode.(Expr)
 }
 
-func replaceNextvalExpr(new, parent SQLNode) {
+func replaceNextvalExpr(newNode, parent SQLNode) {
 	tmp := parent.(Nextval)
-	tmp.Expr = new.(Expr)
+	tmp.Expr = newNode.(Expr)
 }
 
-func replaceNotExprExpr(new SQLNode, parent SQLNode) {
-	parent.(*NotExpr).Expr = new.(Expr)
+func replaceNotExprExpr(newNode, parent SQLNode) {
+	parent.(*NotExpr).Expr = newNode.(Expr)
 }
 
 type replaceOnDupItems int
 
-func (r *replaceOnDupItems) replace(new, container SQLNode) {
-	container.(OnDup)[int(*r)] = new.(*UpdateExpr)
+func (r *replaceOnDupItems) replace(newNode, container SQLNode) {
+	container.(OnDup)[int(*r)] = newNode.(*UpdateExpr)
 }
 
 func (r *replaceOnDupItems) inc() {
 	*r++
 }
 
-func replaceOptLikeLikeTable(new SQLNode, parent SQLNode) {
-	parent.(*OptLike).LikeTable = new.(TableName)
+func replaceOptLikeLikeTable(newNode, parent SQLNode) {
+	parent.(*OptLike).LikeTable = newNode.(TableName)
 }
 
-func replaceOrExprLeft(new SQLNode, parent SQLNode) {
-	parent.(*OrExpr).Left = new.(Expr)
+func replaceOrExprLeft(newNode, parent SQLNode) {
+	parent.(*OrExpr).Left = newNode.(Expr)
 }
 
-func replaceOrExprRight(new SQLNode, parent SQLNode) {
-	parent.(*OrExpr).Right = new.(Expr)
+func replaceOrExprRight(newNode, parent SQLNode) {
+	parent.(*OrExpr).Right = newNode.(Expr)
 }
 
-func replaceOrderExpr(new SQLNode, parent SQLNode) {
-	parent.(*Order).Expr = new.(Expr)
+func replaceOrderExpr(newNode, parent SQLNode) {
+	parent.(*Order).Expr = newNode.(Expr)
 }
 
 type replaceOrderByItems int
 
-func (r *replaceOrderByItems) replace(new, container SQLNode) {
-	container.(OrderBy)[int(*r)] = new.(*Order)
+func (r *replaceOrderByItems) replace(newNode, container SQLNode) {
+	container.(OrderBy)[int(*r)] = newNode.(*Order)
 }
 
 func (r *replaceOrderByItems) inc() {
 	*r++
 }
 
-func replaceParenExprExpr(new SQLNode, parent SQLNode) {
-	parent.(*ParenExpr).Expr = new.(Expr)
+func replaceParenExprExpr(newNode, parent SQLNode) {
+	parent.(*ParenExpr).Expr = newNode.(Expr)
 }
 
-func replaceParenSelectSelect(new SQLNode, parent SQLNode) {
-	parent.(*ParenSelect).Select = new.(SelectStatement)
+func replaceParenSelectSelect(newNode, parent SQLNode) {
+	parent.(*ParenSelect).Select = newNode.(SelectStatement)
 }
 
-func replaceParenTableExprExprs(new SQLNode, parent SQLNode) {
-	parent.(*ParenTableExpr).Exprs = new.(TableExprs)
+func replaceParenTableExprExprs(newNode, parent SQLNode) {
+	parent.(*ParenTableExpr).Exprs = newNode.(TableExprs)
 }
 
-func replacePartitionDefinitionLimit(new SQLNode, parent SQLNode) {
-	parent.(*PartitionDefinition).Limit = new.(Expr)
+func replacePartitionDefinitionLimit(newNode, parent SQLNode) {
+	parent.(*PartitionDefinition).Limit = newNode.(Expr)
 }
 
-func replacePartitionDefinitionName(new SQLNode, parent SQLNode) {
-	parent.(*PartitionDefinition).Name = new.(ColIdent)
+func replacePartitionDefinitionName(newNode, parent SQLNode) {
+	parent.(*PartitionDefinition).Name = newNode.(ColIdent)
 }
 
 type replacePartitionSpecDefinitions int
 
-func (r *replacePartitionSpecDefinitions) replace(new, container SQLNode) {
-	container.(*PartitionSpec).Definitions[int(*r)] = new.(*PartitionDefinition)
+func (r *replacePartitionSpecDefinitions) replace(newNode, container SQLNode) {
+	container.(*PartitionSpec).Definitions[int(*r)] = newNode.(*PartitionDefinition)
 }
 
 func (r *replacePartitionSpecDefinitions) inc() {
 	*r++
 }
 
-func replacePartitionSpecName(new SQLNode, parent SQLNode) {
-	parent.(*PartitionSpec).Name = new.(ColIdent)
+func replacePartitionSpecName(newNode, parent SQLNode) {
+	parent.(*PartitionSpec).Name = newNode.(ColIdent)
 }
 
 type replacePartitionsItems int
 
-func (r *replacePartitionsItems) replace(new, container SQLNode) {
-	container.(Partitions)[int(*r)] = new.(ColIdent)
+func (r *replacePartitionsItems) replace(newNode, container SQLNode) {
+	container.(Partitions)[int(*r)] = newNode.(ColIdent)
 }
 
 func (r *replacePartitionsItems) inc() {
 	*r++
 }
 
-func replaceRangeCondFrom(new SQLNode, parent SQLNode) {
-	parent.(*RangeCond).From = new.(Expr)
+func replaceRangeCondFrom(newNode, parent SQLNode) {
+	parent.(*RangeCond).From = newNode.(Expr)
 }
 
-func replaceRangeCondLeft(new SQLNode, parent SQLNode) {
-	parent.(*RangeCond).Left = new.(Expr)
+func replaceRangeCondLeft(newNode, parent SQLNode) {
+	parent.(*RangeCond).Left = newNode.(Expr)
 }
 
-func replaceRangeCondTo(new SQLNode, parent SQLNode) {
-	parent.(*RangeCond).To = new.(Expr)
+func replaceRangeCondTo(newNode, parent SQLNode) {
+	parent.(*RangeCond).To = newNode.(Expr)
 }
 
-func replaceSelectComments(new SQLNode, parent SQLNode) {
-	parent.(*Select).Comments = new.(Comments)
+func replaceSelectComments(newNode, parent SQLNode) {
+	parent.(*Select).Comments = newNode.(Comments)
 }
 
-func replaceSelectFrom(new SQLNode, parent SQLNode) {
-	parent.(*Select).From = new.(TableExprs)
+func replaceSelectFrom(newNode, parent SQLNode) {
+	parent.(*Select).From = newNode.(TableExprs)
 }
 
-func replaceSelectGroupBy(new SQLNode, parent SQLNode) {
-	parent.(*Select).GroupBy = new.(GroupBy)
+func replaceSelectGroupBy(newNode, parent SQLNode) {
+	parent.(*Select).GroupBy = newNode.(GroupBy)
 }
 
-func replaceSelectHaving(new SQLNode, parent SQLNode) {
-	parent.(*Select).Having = new.(*Where)
+func replaceSelectHaving(newNode, parent SQLNode) {
+	parent.(*Select).Having = newNode.(*Where)
 }
 
-func replaceSelectLimit(new SQLNode, parent SQLNode) {
-	parent.(*Select).Limit = new.(*Limit)
+func replaceSelectLimit(newNode, parent SQLNode) {
+	parent.(*Select).Limit = newNode.(*Limit)
 }
 
-func replaceSelectOrderBy(new SQLNode, parent SQLNode) {
-	parent.(*Select).OrderBy = new.(OrderBy)
+func replaceSelectOrderBy(newNode, parent SQLNode) {
+	parent.(*Select).OrderBy = newNode.(OrderBy)
 }
 
-func replaceSelectSelectExprs(new SQLNode, parent SQLNode) {
-	parent.(*Select).SelectExprs = new.(SelectExprs)
+func replaceSelectSelectExprs(newNode, parent SQLNode) {
+	parent.(*Select).SelectExprs = newNode.(SelectExprs)
 }
 
-func replaceSelectWhere(new SQLNode, parent SQLNode) {
-	parent.(*Select).Where = new.(*Where)
+func replaceSelectWhere(newNode, parent SQLNode) {
+	parent.(*Select).Where = newNode.(*Where)
 }
 
 type replaceSelectExprsItems int
 
-func (r *replaceSelectExprsItems) replace(new, container SQLNode) {
-	container.(SelectExprs)[int(*r)] = new.(SelectExpr)
+func (r *replaceSelectExprsItems) replace(newNode, container SQLNode) {
+	container.(SelectExprs)[int(*r)] = newNode.(SelectExpr)
 }
 
 func (r *replaceSelectExprsItems) inc() {
 	*r++
 }
 
-func replaceSetComments(new SQLNode, parent SQLNode) {
-	parent.(*Set).Comments = new.(Comments)
+func replaceSetComments(newNode, parent SQLNode) {
+	parent.(*Set).Comments = newNode.(Comments)
 }
 
-func replaceSetExprs(new SQLNode, parent SQLNode) {
-	parent.(*Set).Exprs = new.(SetExprs)
+func replaceSetExprs(newNode, parent SQLNode) {
+	parent.(*Set).Exprs = newNode.(SetExprs)
 }
 
-func replaceSetExprExpr(new SQLNode, parent SQLNode) {
-	parent.(*SetExpr).Expr = new.(Expr)
+func replaceSetExprExpr(newNode, parent SQLNode) {
+	parent.(*SetExpr).Expr = newNode.(Expr)
 }
 
-func replaceSetExprName(new SQLNode, parent SQLNode) {
-	parent.(*SetExpr).Name = new.(ColIdent)
+func replaceSetExprName(newNode, parent SQLNode) {
+	parent.(*SetExpr).Name = newNode.(ColIdent)
 }
 
 type replaceSetExprsItems int
 
-func (r *replaceSetExprsItems) replace(new, container SQLNode) {
-	container.(SetExprs)[int(*r)] = new.(*SetExpr)
+func (r *replaceSetExprsItems) replace(newNode, container SQLNode) {
+	container.(SetExprs)[int(*r)] = newNode.(*SetExpr)
 }
 
 func (r *replaceSetExprsItems) inc() {
 	*r++
 }
 
-func replaceShowOnTable(new SQLNode, parent SQLNode) {
-	parent.(*Show).OnTable = new.(TableName)
+func replaceShowOnTable(newNode, parent SQLNode) {
+	parent.(*Show).OnTable = newNode.(TableName)
 }
 
-func replaceShowTable(new SQLNode, parent SQLNode) {
-	parent.(*Show).Table = new.(TableName)
+func replaceShowTable(newNode, parent SQLNode) {
+	parent.(*Show).Table = newNode.(TableName)
 }
 
-func replaceShowFilterFilter(new SQLNode, parent SQLNode) {
-	parent.(*ShowFilter).Filter = new.(Expr)
+func replaceShowFilterFilter(newNode, parent SQLNode) {
+	parent.(*ShowFilter).Filter = newNode.(Expr)
 }
 
-func replaceStarExprTableName(new SQLNode, parent SQLNode) {
-	parent.(*StarExpr).TableName = new.(TableName)
+func replaceStarExprTableName(newNode, parent SQLNode) {
+	parent.(*StarExpr).TableName = newNode.(TableName)
 }
 
-func replaceStreamComments(new SQLNode, parent SQLNode) {
-	parent.(*Stream).Comments = new.(Comments)
+func replaceStreamComments(newNode, parent SQLNode) {
+	parent.(*Stream).Comments = newNode.(Comments)
 }
 
-func replaceStreamSelectExpr(new SQLNode, parent SQLNode) {
-	parent.(*Stream).SelectExpr = new.(SelectExpr)
+func replaceStreamSelectExpr(newNode, parent SQLNode) {
+	parent.(*Stream).SelectExpr = newNode.(SelectExpr)
 }
 
-func replaceStreamTable(new SQLNode, parent SQLNode) {
-	parent.(*Stream).Table = new.(TableName)
+func replaceStreamTable(newNode, parent SQLNode) {
+	parent.(*Stream).Table = newNode.(TableName)
 }
 
-func replaceSubquerySelect(new SQLNode, parent SQLNode) {
-	parent.(*Subquery).Select = new.(SelectStatement)
+func replaceSubquerySelect(newNode, parent SQLNode) {
+	parent.(*Subquery).Select = newNode.(SelectStatement)
 }
 
-func replaceSubstrExprFrom(new SQLNode, parent SQLNode) {
-	parent.(*SubstrExpr).From = new.(Expr)
+func replaceSubstrExprFrom(newNode, parent SQLNode) {
+	parent.(*SubstrExpr).From = newNode.(Expr)
 }
 
-func replaceSubstrExprName(new SQLNode, parent SQLNode) {
-	parent.(*SubstrExpr).Name = new.(*ColName)
+func replaceSubstrExprName(newNode, parent SQLNode) {
+	parent.(*SubstrExpr).Name = newNode.(*ColName)
 }
 
-func replaceSubstrExprStrVal(new SQLNode, parent SQLNode) {
-	parent.(*SubstrExpr).StrVal = new.(*SQLVal)
+func replaceSubstrExprStrVal(newNode, parent SQLNode) {
+	parent.(*SubstrExpr).StrVal = newNode.(*SQLVal)
 }
 
-func replaceSubstrExprTo(new SQLNode, parent SQLNode) {
-	parent.(*SubstrExpr).To = new.(Expr)
+func replaceSubstrExprTo(newNode, parent SQLNode) {
+	parent.(*SubstrExpr).To = newNode.(Expr)
 }
 
 type replaceTableExprsItems int
 
-func (r *replaceTableExprsItems) replace(new, container SQLNode) {
-	container.(TableExprs)[int(*r)] = new.(TableExpr)
+func (r *replaceTableExprsItems) replace(newNode, container SQLNode) {
+	container.(TableExprs)[int(*r)] = newNode.(TableExpr)
 }
 
 func (r *replaceTableExprsItems) inc() {
 	*r++
 }
 
-func replaceTableNameName(new, parent SQLNode) {
+func replaceTableNameName(newNode, parent SQLNode) {
 	tmp := parent.(TableName)
-	tmp.Name = new.(TableIdent)
+	tmp.Name = newNode.(TableIdent)
 }
 
-func replaceTableNameQualifier(new, parent SQLNode) {
+func replaceTableNameQualifier(newNode, parent SQLNode) {
 	tmp := parent.(TableName)
-	tmp.Qualifier = new.(TableIdent)
+	tmp.Qualifier = newNode.(TableIdent)
 }
 
 type replaceTableNamesItems int
 
-func (r *replaceTableNamesItems) replace(new, container SQLNode) {
-	container.(TableNames)[int(*r)] = new.(TableName)
+func (r *replaceTableNamesItems) replace(newNode, container SQLNode) {
+	container.(TableNames)[int(*r)] = newNode.(TableName)
 }
 
 func (r *replaceTableNamesItems) inc() {
@@ -659,8 +659,8 @@ func (r *replaceTableNamesItems) inc() {
 
 type replaceTableSpecColumns int
 
-func (r *replaceTableSpecColumns) replace(new, container SQLNode) {
-	container.(*TableSpec).Columns[int(*r)] = new.(*ColumnDefinition)
+func (r *replaceTableSpecColumns) replace(newNode, container SQLNode) {
+	container.(*TableSpec).Columns[int(*r)] = newNode.(*ColumnDefinition)
 }
 
 func (r *replaceTableSpecColumns) inc() {
@@ -669,8 +669,8 @@ func (r *replaceTableSpecColumns) inc() {
 
 type replaceTableSpecConstraints int
 
-func (r *replaceTableSpecConstraints) replace(new, container SQLNode) {
-	container.(*TableSpec).Constraints[int(*r)] = new.(*ConstraintDefinition)
+func (r *replaceTableSpecConstraints) replace(newNode, container SQLNode) {
+	container.(*TableSpec).Constraints[int(*r)] = newNode.(*ConstraintDefinition)
 }
 
 func (r *replaceTableSpecConstraints) inc() {
@@ -679,92 +679,92 @@ func (r *replaceTableSpecConstraints) inc() {
 
 type replaceTableSpecIndexes int
 
-func (r *replaceTableSpecIndexes) replace(new, container SQLNode) {
-	container.(*TableSpec).Indexes[int(*r)] = new.(*IndexDefinition)
+func (r *replaceTableSpecIndexes) replace(newNode, container SQLNode) {
+	container.(*TableSpec).Indexes[int(*r)] = newNode.(*IndexDefinition)
 }
 
 func (r *replaceTableSpecIndexes) inc() {
 	*r++
 }
 
-func replaceTimestampFuncExprExpr1(new SQLNode, parent SQLNode) {
-	parent.(*TimestampFuncExpr).Expr1 = new.(Expr)
+func replaceTimestampFuncExprExpr1(newNode, parent SQLNode) {
+	parent.(*TimestampFuncExpr).Expr1 = newNode.(Expr)
 }
 
-func replaceTimestampFuncExprExpr2(new SQLNode, parent SQLNode) {
-	parent.(*TimestampFuncExpr).Expr2 = new.(Expr)
+func replaceTimestampFuncExprExpr2(newNode, parent SQLNode) {
+	parent.(*TimestampFuncExpr).Expr2 = newNode.(Expr)
 }
 
-func replaceUnaryExprExpr(new SQLNode, parent SQLNode) {
-	parent.(*UnaryExpr).Expr = new.(Expr)
+func replaceUnaryExprExpr(newNode, parent SQLNode) {
+	parent.(*UnaryExpr).Expr = newNode.(Expr)
 }
 
-func replaceUnionLeft(new SQLNode, parent SQLNode) {
-	parent.(*Union).Left = new.(SelectStatement)
+func replaceUnionLeft(newNode, parent SQLNode) {
+	parent.(*Union).Left = newNode.(SelectStatement)
 }
 
-func replaceUnionLimit(new SQLNode, parent SQLNode) {
-	parent.(*Union).Limit = new.(*Limit)
+func replaceUnionLimit(newNode, parent SQLNode) {
+	parent.(*Union).Limit = newNode.(*Limit)
 }
 
-func replaceUnionOrderBy(new SQLNode, parent SQLNode) {
-	parent.(*Union).OrderBy = new.(OrderBy)
+func replaceUnionOrderBy(newNode, parent SQLNode) {
+	parent.(*Union).OrderBy = newNode.(OrderBy)
 }
 
-func replaceUnionRight(new SQLNode, parent SQLNode) {
-	parent.(*Union).Right = new.(SelectStatement)
+func replaceUnionRight(newNode, parent SQLNode) {
+	parent.(*Union).Right = newNode.(SelectStatement)
 }
 
-func replaceUpdateComments(new SQLNode, parent SQLNode) {
-	parent.(*Update).Comments = new.(Comments)
+func replaceUpdateComments(newNode, parent SQLNode) {
+	parent.(*Update).Comments = newNode.(Comments)
 }
 
-func replaceUpdateExprs(new SQLNode, parent SQLNode) {
-	parent.(*Update).Exprs = new.(UpdateExprs)
+func replaceUpdateExprs(newNode, parent SQLNode) {
+	parent.(*Update).Exprs = newNode.(UpdateExprs)
 }
 
-func replaceUpdateLimit(new SQLNode, parent SQLNode) {
-	parent.(*Update).Limit = new.(*Limit)
+func replaceUpdateLimit(newNode, parent SQLNode) {
+	parent.(*Update).Limit = newNode.(*Limit)
 }
 
-func replaceUpdateOrderBy(new SQLNode, parent SQLNode) {
-	parent.(*Update).OrderBy = new.(OrderBy)
+func replaceUpdateOrderBy(newNode, parent SQLNode) {
+	parent.(*Update).OrderBy = newNode.(OrderBy)
 }
 
-func replaceUpdateTableExprs(new SQLNode, parent SQLNode) {
-	parent.(*Update).TableExprs = new.(TableExprs)
+func replaceUpdateTableExprs(newNode, parent SQLNode) {
+	parent.(*Update).TableExprs = newNode.(TableExprs)
 }
 
-func replaceUpdateWhere(new SQLNode, parent SQLNode) {
-	parent.(*Update).Where = new.(*Where)
+func replaceUpdateWhere(newNode, parent SQLNode) {
+	parent.(*Update).Where = newNode.(*Where)
 }
 
-func replaceUpdateExprExpr(new SQLNode, parent SQLNode) {
-	parent.(*UpdateExpr).Expr = new.(Expr)
+func replaceUpdateExprExpr(newNode, parent SQLNode) {
+	parent.(*UpdateExpr).Expr = newNode.(Expr)
 }
 
-func replaceUpdateExprName(new SQLNode, parent SQLNode) {
-	parent.(*UpdateExpr).Name = new.(*ColName)
+func replaceUpdateExprName(newNode, parent SQLNode) {
+	parent.(*UpdateExpr).Name = newNode.(*ColName)
 }
 
 type replaceUpdateExprsItems int
 
-func (r *replaceUpdateExprsItems) replace(new, container SQLNode) {
-	container.(UpdateExprs)[int(*r)] = new.(*UpdateExpr)
+func (r *replaceUpdateExprsItems) replace(newNode, container SQLNode) {
+	container.(UpdateExprs)[int(*r)] = newNode.(*UpdateExpr)
 }
 
 func (r *replaceUpdateExprsItems) inc() {
 	*r++
 }
 
-func replaceUseDBName(new SQLNode, parent SQLNode) {
-	parent.(*Use).DBName = new.(TableIdent)
+func replaceUseDBName(newNode, parent SQLNode) {
+	parent.(*Use).DBName = newNode.(TableIdent)
 }
 
 type replaceValTupleItems int
 
-func (r *replaceValTupleItems) replace(new, container SQLNode) {
-	container.(ValTuple)[int(*r)] = new.(Expr)
+func (r *replaceValTupleItems) replace(newNode, container SQLNode) {
+	container.(ValTuple)[int(*r)] = newNode.(Expr)
 }
 
 func (r *replaceValTupleItems) inc() {
@@ -773,51 +773,51 @@ func (r *replaceValTupleItems) inc() {
 
 type replaceValuesItems int
 
-func (r *replaceValuesItems) replace(new, container SQLNode) {
-	container.(Values)[int(*r)] = new.(ValTuple)
+func (r *replaceValuesItems) replace(newNode, container SQLNode) {
+	container.(Values)[int(*r)] = newNode.(ValTuple)
 }
 
 func (r *replaceValuesItems) inc() {
 	*r++
 }
 
-func replaceValuesFuncExprName(new SQLNode, parent SQLNode) {
-	parent.(*ValuesFuncExpr).Name = new.(*ColName)
+func replaceValuesFuncExprName(newNode, parent SQLNode) {
+	parent.(*ValuesFuncExpr).Name = newNode.(*ColName)
 }
 
-func replaceVindexParamKey(new, parent SQLNode) {
+func replaceVindexParamKey(newNode, parent SQLNode) {
 	tmp := parent.(VindexParam)
-	tmp.Key = new.(ColIdent)
+	tmp.Key = newNode.(ColIdent)
 }
 
-func replaceVindexSpecName(new SQLNode, parent SQLNode) {
-	parent.(*VindexSpec).Name = new.(ColIdent)
+func replaceVindexSpecName(newNode, parent SQLNode) {
+	parent.(*VindexSpec).Name = newNode.(ColIdent)
 }
 
 type replaceVindexSpecParams int
 
-func (r *replaceVindexSpecParams) replace(new, container SQLNode) {
-	container.(*VindexSpec).Params[int(*r)] = new.(VindexParam)
+func (r *replaceVindexSpecParams) replace(newNode, container SQLNode) {
+	container.(*VindexSpec).Params[int(*r)] = newNode.(VindexParam)
 }
 
 func (r *replaceVindexSpecParams) inc() {
 	*r++
 }
 
-func replaceVindexSpecType(new SQLNode, parent SQLNode) {
-	parent.(*VindexSpec).Type = new.(ColIdent)
+func replaceVindexSpecType(newNode, parent SQLNode) {
+	parent.(*VindexSpec).Type = newNode.(ColIdent)
 }
 
-func replaceWhenCond(new SQLNode, parent SQLNode) {
-	parent.(*When).Cond = new.(Expr)
+func replaceWhenCond(newNode, parent SQLNode) {
+	parent.(*When).Cond = newNode.(Expr)
 }
 
-func replaceWhenVal(new SQLNode, parent SQLNode) {
-	parent.(*When).Val = new.(Expr)
+func replaceWhenVal(newNode, parent SQLNode) {
+	parent.(*When).Val = newNode.(Expr)
 }
 
-func replaceWhereExpr(new SQLNode, parent SQLNode) {
-	parent.(*Where).Expr = new.(Expr)
+func replaceWhereExpr(newNode, parent SQLNode) {
+	parent.(*Where).Expr = newNode.(Expr)
 }
 
 // apply is where the visiting happens. Here is where we keep the big switch-case that will be used

@@ -112,7 +112,7 @@ import (
 	"reflect"
 )
 
-type replacerFunc func(newNode SQLNode, parent SQLNode)
+type replacerFunc func(newNode, parent SQLNode)
 
 // application carries all the shared data so we can pass it around cheaply.
 type application struct {
