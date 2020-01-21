@@ -226,7 +226,6 @@ func TestVerticalSplit(t *testing.T) {
 		grpcPort,
 		clusterInstance.TopoPort,
 		clusterInstance.Hostname,
-		clusterInstance.Cell,
 		clusterInstance.TmpDirectory)
 
 	err = clusterInstance.VtworkerProcess.ExecuteVtworkerCommand(httpPort, grpcPort,
@@ -326,7 +325,7 @@ func TestVerticalSplit(t *testing.T) {
 	assert.Nil(t, err)
 
 	// check SrvKeyspace
-	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, "ServedFrom(master): source_keyspace\nServedFrom(replica): source_keyspace\n", *clusterInstance)
+	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, ksServedFrom, *clusterInstance)
 	checkBlacklistedTables(t, sourceMasterTablet, sourceKeyspace, nil)
 	checkBlacklistedTables(t, sourceReplicaTablet, sourceKeyspace, nil)
 	checkBlacklistedTables(t, sourceRdOnlyTablet1, sourceKeyspace, nil)

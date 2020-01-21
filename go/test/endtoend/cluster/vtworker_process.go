@@ -173,8 +173,8 @@ func (vtworker *VtworkerProcess) ExecuteVtworkerCommand(port int, grpcPort int, 
 // VtworkerProcessInstance returns a vtworker handle
 // configured with the given Config.
 // The process must be manually started by calling Setup()
-func VtworkerProcessInstance(httpPort int, grpcPort int, topoPort int, hostname string, cell string, tmpDirectory string) *VtworkerProcess {
-	vtctl := VtctlProcessInstance(topoPort, hostname, cell)
+func VtworkerProcessInstance(httpPort int, grpcPort int, topoPort int, hostname string, tmpDirectory string) *VtworkerProcess {
+	vtctl := VtctlProcessInstance(topoPort, hostname)
 	vtworker := &VtworkerProcess{
 		Name:                   "vtworker",
 		Binary:                 "vtworker",
