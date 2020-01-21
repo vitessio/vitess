@@ -829,6 +829,11 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("Got: %v. Want: %v", lastQuery, wantQuery)
 	}
 
+	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show full columns from unknown from %v", KsTestUnsharded), nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
 	for _, query := range []string{"show charset", "show charset like '%foo'", "show character set", "show character set like '%foo'"} {
 		qr, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
 		if err != nil {
