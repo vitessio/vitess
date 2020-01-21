@@ -65,7 +65,7 @@ var (
 	}
 	xtrabackupArgs = []string{
 		"-backup_engine_implementation", "xtrabackup",
-		"-xtrabackup_stream_mode", xbStreamMode,
+		fmt.Sprintf("-xtrabackup_stream_mode=%s", xbStreamMode),
 		"-xtrabackup_user=vt_dba",
 		fmt.Sprintf("-xtrabackup_stripes=%d", xbStripes),
 		"-xtrabackup_backup_flags", fmt.Sprintf("--password=%s", dbPassword),
