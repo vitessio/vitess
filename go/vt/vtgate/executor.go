@@ -80,12 +80,13 @@ type Executor struct {
 	scatterConn *ScatterConn
 	txConn      *TxConn
 
-	mu           sync.Mutex
-	vschema      *vindexes.VSchema
-	normalize    bool
-	streamSize   int
-	plans        *cache.LRUCache
-	vschemaStats *VSchemaStats
+	mu            sync.Mutex
+	vschema       *vindexes.VSchema
+	normalize     bool
+	auditCallerID bool
+	streamSize    int
+	plans         *cache.LRUCache
+	vschemaStats  *VSchemaStats
 
 	vm VSchemaManager
 }
@@ -97,16 +98,17 @@ const pathScatterStats = "/debug/scatter_stats"
 const pathVSchema = "/debug/vschema"
 
 // NewExecutor creates a new Executor.
-func NewExecutor(ctx context.Context, serv srvtopo.Server, cell, statsName string, resolver *Resolver, normalize bool, streamSize int, queryPlanCacheSize int64) *Executor {
+func NewExecutor(ctx context.Context, serv srvtopo.Server, cell, statsName string, resolver *Resolver, normalize, auditCallerID bool, streamSize int, queryPlanCacheSize int64) *Executor {
 	e := &Executor{
-		serv:        serv,
-		cell:        cell,
-		resolver:    resolver,
-		scatterConn: resolver.scatterConn,
-		txConn:      resolver.scatterConn.txConn,
-		plans:       cache.NewLRUCache(queryPlanCacheSize),
-		normalize:   normalize,
-		streamSize:  streamSize,
+		serv:          serv,
+		cell:          cell,
+		resolver:      resolver,
+		scatterConn:   resolver.scatterConn,
+		txConn:        resolver.scatterConn.txConn,
+		plans:         cache.NewLRUCache(queryPlanCacheSize),
+		normalize:     normalize,
+		auditCallerID: auditCallerID,
+		streamSize:    streamSize,
 	}
 
 	vschemaacl.Init()
@@ -183,6 +185,10 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 	// can actually return them.
 	if stmtType != sqlparser.StmtShow {
 		safeSession.ClearWarnings()
+	}
+
+	if e.auditCallerID {
+		sql = addCallerIDUserToQuery(ctx, sql)
 	}
 
 	switch stmtType {
@@ -1177,6 +1183,11 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	if bindVars == nil {
 		bindVars = make(map[string]*querypb.BindVariable)
 	}
+
+	if e.auditCallerID {
+		sql = addCallerIDUserToQuery(ctx, sql)
+	}
+
 	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor := newVCursorImpl(ctx, safeSession, target.Keyspace, target.TabletType, comments, e, logStats)
 
