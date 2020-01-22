@@ -9,8 +9,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -34,8 +32,6 @@ var globalConfig = struct {
 
 //TODO ports should be automatically (incrementally) allocated based on what is available?
 var (
-	tabletIndex         = 1
-	tabletSubIndex      = 0
 	tabletPortBase      = 15000
 	tabletGrpcPortBase  = 16000
 	tabletMysqlPortBase = 17000
@@ -123,7 +119,7 @@ func InitCluster(t *testing.T, cellName string) *VitessCluster {
 }
 
 // TODO
-func (vc *VitessCluster) AddKeyspace(t *testing.T, cell *Cell, ksName string, shards string, vschema string, schema string, numReplicas int, numRdonly int) (*Keyspace, error) {
+func (vc *VitessCluster) AddKeyspace(t *testing.T, cell *Cell, ksName string, shards string, vschema string, schema string, numReplicas int, numRdonly int, tabletIDBase int) (*Keyspace, error) {
 	keyspace := &Keyspace{
 		Name:   ksName,
 		Shards: make(map[string]*Shard),
@@ -133,31 +129,31 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cell *Cell, ksName string, sh
 		t.Fatalf(err.Error())
 	}
 	cell.Keyspaces[ksName] = keyspace
-	if err := vc.AddShards(t, cell, keyspace, shards, numReplicas, numRdonly); err != nil {
+	if err := vc.AddShards(t, cell, keyspace, shards, numReplicas, numRdonly, tabletIDBase); err != nil {
 		t.Fatalf(err.Error())
 	}
-	if err := vc.VtctlClient.ApplySchema(ksName, schema); err != nil {
-		t.Fatalf(err.Error())
+	if schema != "" {
+		if err := vc.VtctlClient.ApplySchema(ksName, schema); err != nil {
+			t.Fatalf(err.Error())
+		}
 	}
 	keyspace.Schema = schema
-	if err := vc.VtctlClient.ApplyVSchema(ksName, vschema); err != nil {
-		t.Fatalf(err.Error())
+	if vschema != "" {
+		if err := vc.VtctlClient.ApplyVSchema(ksName, vschema); err != nil {
+			t.Fatalf(err.Error())
+		}
 	}
 	keyspace.VSchema = vschema
-	fmt.Println("Starting vtgate")
 	if len(cell.Vtgates) == 0 {
+		fmt.Println("Starting vtgate")
 		vc.StartVtgate(t, cell)
-		//cell.Vtgates[0].WaitForStatusOfTabletInShard() //TODO
 	}
 	return keyspace, nil
 }
 
 // TODO
-func (vc *VitessCluster) AddTablet(t *testing.T, cell *Cell, keyspace *Keyspace, shard *Shard, tabletType string) (*Tablet, *exec.Cmd, error) {
+func (vc *VitessCluster) AddTablet(t *testing.T, cell *Cell, keyspace *Keyspace, shard *Shard, tabletType string, tabletID int) (*Tablet, *exec.Cmd, error) {
 	tablet := &Tablet{}
-	var tabletID int
-	tabletID = tabletIndex*100 + tabletSubIndex
-	tabletSubIndex++
 
 	vttablet := cluster.VttabletProcessInstance(
 		tabletPortBase+tabletID,
@@ -172,7 +168,7 @@ func (vc *VitessCluster) AddTablet(t *testing.T, cell *Cell, keyspace *Keyspace,
 		globalConfig.hostname,
 		globalConfig.tmpDir,
 		nil,
-		true)
+		false)
 	assert.NotNil(t, vttablet)
 	//vttablet.ServingStatus = "SERVING"
 	vttablet.SupportsBackup = false
@@ -193,17 +189,20 @@ func (vc *VitessCluster) AddTablet(t *testing.T, cell *Cell, keyspace *Keyspace,
 }
 
 // TODO
-func (vc *VitessCluster) AddShards(t *testing.T, cell *Cell, keyspace *Keyspace, names string, numReplicas int, numRdonly int) error {
+func (vc *VitessCluster) AddShards(t *testing.T, cell *Cell, keyspace *Keyspace, names string, numReplicas int, numRdonly int, tabletIdBase int) error {
 	arrNames := strings.Split(names, ",")
 	isSharded := len(arrNames) > 1
-	dbProcesses := make([]*exec.Cmd, 0)
-	tablets := make([]*Tablet, 0)
-	for _, name := range arrNames {
-		fmt.Printf("Adding Shard %s\n", name)
+	tabletIndex := 0
+	for _, shardName := range arrNames {
+		dbProcesses := make([]*exec.Cmd, 0)
+		tablets := make([]*Tablet, 0)
 
-		shard := &Shard{Name: name, IsSharded: isSharded, Tablets: make(map[string]*Tablet, 1)}
+		fmt.Printf("Adding Shard %s\n", shardName)
+
+		shard := &Shard{Name: shardName, IsSharded: isSharded, Tablets: make(map[string]*Tablet, 1)}
 		fmt.Println("Adding Master tablet")
-		master, proc, err := vc.AddTablet(t, cell, keyspace, shard, "replica")
+		master, proc, err := vc.AddTablet(t, cell, keyspace, shard, "replica", tabletIdBase+tabletIndex)
+		tabletIndex++
 		master.Vttablet.VreplicationTabletType = "MASTER"
 		if err != nil {
 			t.Fatalf(err.Error())
@@ -216,7 +215,8 @@ func (vc *VitessCluster) AddShards(t *testing.T, cell *Cell, keyspace *Keyspace,
 		}
 		for i := 0; i < numReplicas; i++ {
 			fmt.Println("Adding Replica tablet")
-			tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "replica")
+			tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "replica", tabletIdBase+tabletIndex)
+			tabletIndex++
 			if err != nil {
 				t.Fatalf(err.Error())
 			}
@@ -226,7 +226,8 @@ func (vc *VitessCluster) AddShards(t *testing.T, cell *Cell, keyspace *Keyspace,
 		}
 		for i := 0; i < numRdonly; i++ {
 			fmt.Println("Adding RdOnly tablet")
-			tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "rdonly")
+			tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "rdonly", tabletIdBase+tabletIndex)
+			tabletIndex++
 			if err != nil {
 				t.Fatalf(err.Error())
 			}
@@ -235,7 +236,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cell *Cell, keyspace *Keyspace,
 			dbProcesses = append(dbProcesses, proc)
 		}
 
-		keyspace.Shards[name] = shard
+		keyspace.Shards[shardName] = shard
 		for ind, proc := range dbProcesses {
 			fmt.Printf("Waiting for mysql process for tablet %s\n", tablets[ind].Name)
 			if err := proc.Wait(); err != nil {
@@ -254,7 +255,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cell *Cell, keyspace *Keyspace,
 			}
 		}
 		fmt.Printf("InitShardMaster for %d\n", master.Vttablet.TabletUID)
-		err = vc.VtctlClient.InitShardMaster(keyspace.Name, name, cell.Name, master.Vttablet.TabletUID)
+		err = vc.VtctlClient.InitShardMaster(keyspace.Name, shardName, cell.Name, master.Vttablet.TabletUID)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -281,12 +282,12 @@ func (vc *VitessCluster) StartVtgate(t *testing.T, cell *Cell) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	cell.Vtgates[0] = vtgate
+	cell.Vtgates = append(cell.Vtgates, vtgate)
 }
 
 // TODO
 func (vc *VitessCluster) AddCell(t *testing.T, name string) (*Cell, error) {
-	cell := &Cell{Name: name, Keyspaces: make(map[string]*Keyspace), Vtgates: make([]*cluster.VtgateProcess, 1)}
+	cell := &Cell{Name: name, Keyspaces: make(map[string]*Keyspace), Vtgates: make([]*cluster.VtgateProcess, 0)}
 	vc.Cells[name] = cell
 	return cell, nil
 }
@@ -337,11 +338,4 @@ func (vc *VitessCluster) TearDown() {
 			log.Errorf("Error in etcd teardown - %s", err.Error())
 		}
 	}
-}
-
-func execQuery(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	t.Helper()
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	assert.Nil(t, err)
-	return qr
 }

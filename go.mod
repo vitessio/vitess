@@ -100,6 +100,7 @@ require (
 	github.com/mattn/go-isatty v0.0.11 // indirect
 	github.com/minio/minio-go v0.0.0-20190131015406-c8a261de75c1
 	github.com/mitchellh/copystructure v0.0.0-20160804032330-cdac8253d00f // indirect
+	github.com/mitchellh/go-testing-interface v1.0.0 // indirect
 	github.com/mitchellh/hashstructure v0.0.0-20170609045927-2bca23e0e452 // indirect
 	github.com/mitchellh/reflectwalk v1.0.1 // indirect
 	github.com/nicolai86/scaleway-sdk v1.10.2-0.20180628010248-798f60e20bb2 // indirect
@@ -156,6 +157,7 @@ require (
 	gopkg.in/mgo.v2 v2.0.0-20160818020120-3f83fa500528 // indirect
 	gopkg.in/ory-am/dockertest.v3 v3.3.4 // indirect
 	gopkg.in/square/go-jose.v2 v2.3.1 // indirect
+	gopkg.in/yaml.v2 v2.2.8
 	honnef.co/go/tools v0.0.1-2019.2.3
 	k8s.io/apiextensions-apiserver v0.17.3
 	k8s.io/apimachinery v0.17.3
