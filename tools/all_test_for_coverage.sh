@@ -14,11 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# These test uses excutables and launch them as process
-# After that all tests run, here we are testing those
-
-# All Go packages with test files.
-# Output per line: <full Go package name> <all _test.go files in the package>*
+# The purpose of this script is to run testcase and get coverage report
+# These script runs all unit testcases including go endtoend testcase
+# Here we ignore any error from testcase as the purpose is to collect coverage.
+# So if there is a flaky test, it will get only chance to run, if it fails we ignore coverage from that.
 
 
 ### Execute unit testcase ###
