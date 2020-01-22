@@ -44,7 +44,6 @@ require (
 	github.com/hashicorp/memberlist v0.1.4 // indirect
 	github.com/hashicorp/serf v0.0.0-20161207011743-d3a67ab21bc8 // indirect
 	github.com/icrowley/fake v0.0.0-20180203215853-4178557ae428
-	github.com/jinzhu/gorm v1.9.12
 	github.com/jmespath/go-jmespath v0.0.0-20160202185014-0b12d6b521d8 // indirect
 	github.com/klauspost/crc32 v1.2.0 // indirect
 	github.com/klauspost/pgzip v1.2.0
@@ -90,6 +89,7 @@ require (
 	google.golang.org/api v0.9.0
 	google.golang.org/genproto v0.0.0-20190926190326-7ee9db18f195 // indirect
 	google.golang.org/grpc v1.24.0
+	gopkg.in/DataDog/dd-trace-go.v1 v1.17.0
 	gopkg.in/asn1-ber.v1 v1.0.0-20150924051756-4e86f4367175 // indirect
 	gopkg.in/ldap.v2 v2.5.0
 	honnef.co/go/tools v0.0.1-2019.2.3

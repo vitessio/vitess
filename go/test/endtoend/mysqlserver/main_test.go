@@ -24,8 +24,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-
-	_ "github.com/jinzhu/gorm/dialects/mysql"
 )
 
 var (

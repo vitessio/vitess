@@ -1,14 +1,5 @@
 {
 	"Tests": {
-		"backup_only": {
-			"File": "backup_only.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 2,
-			"RetryMax": 0,
-			"Tags": []
-	        },
 		"backup_mysqlctld": {
 			"File": "backup_mysqlctld.py",
 			"Args": [],
@@ -123,15 +114,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"prepared_statement": {
-			"File": "prepared_statement_test.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 5,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"python_client": {
 			"File": "python_client_test.py",
 			"Args": [],
@@ -216,15 +198,6 @@
 				"worker_test"
 			]
 		},
-		"xtrabackup": {
-			"File": "xtrabackup.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 1,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"xb_recovery": {
 			"File": "xb_recovery.py",
 			"Args": [],
@@ -234,21 +207,39 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"xtrabackup_xbstream": {
-			"File": "xtrabackup_xbstream.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 3,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"backup": {
 			"File": "backup.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtctlbackup"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 11,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"backup_only": {
+			"File": "backup_only.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtbackup"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 11,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"backup_xtrabackup": {
+			"File": "xtrabackup.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/xtrabackup"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 19,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"backup_xtrabackup_xbstream": {
+			"File": "xtrabackup_xbstream.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/xtrabackupstream"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 20,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -264,6 +255,15 @@
 		"cellalias": {
 			"File": "cellalias.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/cellalias"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 12,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"prepare_statement": {
+			"File": "stmt_methods_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/preparestmt"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 12,

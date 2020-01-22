@@ -78,9 +78,9 @@ func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
 	if mysqlctl.InitMysql {
 		tmpProcess.Args = append(tmpProcess.Args, "init",
 			"-init_db_sql_file", mysqlctl.InitDBFile)
-	} else {
-		tmpProcess.Args = append(tmpProcess.Args, "start")
 	}
+	tmpProcess.Args = append(tmpProcess.Args, "start")
+
 	return tmpProcess, tmpProcess.Start()
 }
 

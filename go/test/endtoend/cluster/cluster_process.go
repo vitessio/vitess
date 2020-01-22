@@ -64,6 +64,7 @@ type LocalProcessCluster struct {
 	VtctldProcess   VtctldProcess
 	VtgateProcess   VtgateProcess
 	VtworkerProcess VtworkerProcess
+	VtbackupProcess VtbackupProcess
 
 	nextPortForProcess int
 
@@ -222,12 +223,12 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			// Start Mysqlctl process
 			log.Info(fmt.Sprintf("Starting mysqlctl for table uid %d, mysql port %d", tablet.TabletUID, tablet.MySQLPort))
 			tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory)
-			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			if err != nil {
 				log.Error(err.Error())
 				return err
-			} else {
-				mysqlctlProcessList = append(mysqlctlProcessList, proc)
 			}
+			mysqlctlProcessList = append(mysqlctlProcessList, proc)
 
 			// start vttablet process
 			tablet.VttabletProcess = VttabletProcessInstance(tablet.HTTPPort,
@@ -489,6 +490,7 @@ func (cluster *LocalProcessCluster) Teardown() {
 	if err := cluster.TopoProcess.TearDown(cluster.Cell, cluster.OriginalVTDATAROOT, cluster.CurrentVTDATAROOT, *keepData); err != nil {
 		log.Errorf("Error in etcd teardown - %s", err.Error())
 	}
+
 }
 
 // StartVtworker starts a vtworker
@@ -504,6 +506,26 @@ func (cluster *LocalProcessCluster) StartVtworker(cell string, extraArgs ...stri
 		cluster.TmpDirectory)
 	cluster.VtworkerProcess.ExtraArgs = extraArgs
 	return cluster.VtworkerProcess.Setup(cell)
+
+}
+
+// StartVtbackup starts a vtbackup
+func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initalBackup bool,
+	keyspace string, shard string, cell string, extraArgs ...string) error {
+	log.Info("Starting vtbackup")
+	cluster.VtbackupProcess = *VtbackupProcessInstance(
+		cluster.GetAndReserveTabletUID(),
+		cluster.GetAndReservePort(),
+		newInitDBFile,
+		keyspace,
+		shard,
+		cell,
+		cluster.Hostname,
+		cluster.TmpDirectory,
+		cluster.TopoPort,
+		initalBackup)
+	cluster.VtbackupProcess.ExtraArgs = extraArgs
+	return cluster.VtbackupProcess.Setup()
 
 }
 
@@ -580,7 +602,7 @@ func (cluster *LocalProcessCluster) GetVttabletInstance(tabletType string, UID i
 	}
 }
 
-// GetVttabletInstance creates a new vttablet object
+// GetVtprocessInstanceFromVttablet creates a new vttablet object
 func (cluster *LocalProcessCluster) GetVtprocessInstanceFromVttablet(tablet *Vttablet, shardName string, ksName string) *VttabletProcess {
 	return VttabletProcessInstance(tablet.HTTPPort,
 		tablet.GrpcPort,
