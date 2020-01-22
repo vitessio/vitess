@@ -36,6 +36,7 @@ type MysqlctldProcess struct {
 	Name         string
 	Binary       string
 	LogDirectory string
+	Password     string
 	TabletUID    int
 	MySQLPort    int
 	InitDBFile   string
@@ -59,6 +60,9 @@ func (mysqlctld *MysqlctldProcess) InitDb() (err error) {
 
 // Start starts the mysqlctld and returns the error.
 func (mysqlctld *MysqlctldProcess) Start() error {
+	if mysqlctld.proc != nil {
+		return fmt.Errorf("process is already running")
+	}
 	_ = createDirectory(mysqlctld.LogDirectory, 0700)
 	mysqlctld.proc = exec.Command(
 		mysqlctld.Binary,
@@ -96,7 +100,7 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 
 	timeout := time.Now().Add(60 * time.Second)
 	for time.Now().Before(timeout) {
-		if err := healthCheck(context.Background(), mysqlctld.TabletUID); err == nil {
+		if mysqlctld.IsHealthy() {
 			return nil
 		}
 		select {
@@ -126,7 +130,7 @@ func (mysqlctld *MysqlctldProcess) Stop() (err error) {
 		mysqlctld.proc = nil
 		return err
 
-	case <-time.After(15 * time.Second):
+	case <-time.After(10 * time.Second):
 		mysqlctld.proc.Process.Kill()
 		return <-mysqlctld.exit
 	}
@@ -185,12 +189,19 @@ func (mysqlctld *MysqlctldProcess) ExecuteCommandWithOutput(args ...string) (res
 	return string(resultByte), err
 }
 
-func healthCheck(ctx context.Context, tabletUID int) error {
-	params := mysql.ConnParams{
-		Uname:      "vt_dba",
-		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID), "/mysql.sock"),
-	}
-
-	_, err := mysql.Connect(ctx, &params)
-	return err
+// IsHealthy gives the health status of mysql.
+func (mysqlctld *MysqlctldProcess) IsHealthy() bool {
+	socketFile := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", mysqlctld.TabletUID), "/mysql.sock")
+	params := mysql.NewConnParams(mysqlctld.MySQLPort, mysqlctld.Password, socketFile, "")
+	_, err := mysql.Connect(context.Background(), &params)
+	return err == nil
 }
+
+// func fileExists(path string) bool {
+// 	_, err := os.Stat(path)
+// 	if os.IsNotExist(err) {
+// 		return false
+// 	}
+
+// 	return true
+// }

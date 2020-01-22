@@ -59,3 +59,19 @@ func (cp *ConnParams) SslEnabled() bool {
 func (cp *ConnParams) EnableClientFoundRows() {
 	cp.Flags |= CapabilityClientFoundRows
 }
+
+// NewConnParams creates ConnParams corresponds to given arguments.
+func NewConnParams(port int, password, socketPath, keyspace string) ConnParams {
+	cp := ConnParams{
+		Uname:      "vt_dba",
+		Port:       port,
+		UnixSocket: socketPath,
+		Pass:       password,
+	}
+
+	if keyspace != "" {
+		cp.DbName = "vt_" + keyspace
+	}
+
+	return cp
+}
