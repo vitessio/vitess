@@ -959,6 +959,30 @@ var (
 		input:  "alter table a drop id",
 		output: "alter table a",
 	}, {
+		input:  "alter database d default character set = charset",
+		output: "alter database d",
+	}, {
+		input:  "alter database d character set = charset",
+		output: "alter database d",
+	}, {
+		input:  "alter database d default collate = collation",
+		output: "alter database d",
+	}, {
+		input:  "alter database d collate = collation",
+		output: "alter database d",
+	}, {
+		input:  "alter schema d default character set = charset",
+		output: "alter database d",
+	}, {
+		input:  "alter schema d character set = charset",
+		output: "alter database d",
+	}, {
+		input:  "alter schema d default collate = collation",
+		output: "alter database d",
+	}, {
+		input:  "alter schema d collate = collation",
+		output: "alter database d",
+	}, {
 		input: "create table a",
 	}, {
 		input:  "create table a (\n\t`a` int\n)",

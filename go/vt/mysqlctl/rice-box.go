@@ -29,9 +29,9 @@ func init() {
 	}
 	file6 := &embedded.EmbeddedFile{
 		Filename:    "mycnf/default.cnf",
-		FileModTime: time.Unix(1579019403, 0),
+		FileModTime: time.Unix(1579632282, 0),
 
-		Content: string("# Global configuration that is auto-included for all MySQL/MariaDB versions\n\ndatadir = {{.DataDir}}\ninnodb_data_home_dir = {{.InnodbDataHomeDir}}\ninnodb_log_group_home_dir = {{.InnodbLogGroupHomeDir}}\nlog-error = {{.ErrorLogPath}}\nlog-bin = {{.BinLogPath}}\npid-file = {{.PidFile}}\nport = {{.MysqlPort}}\n\n# all db instances should start in read-only mode - once the db is started and\n# fully functional, we'll push it into read-write mode\nread-only\nserver-id = {{.ServerID}}\n\n# all db instances should skip the slave startup - that way we can do any\n# additional configuration (like enabling semi-sync) before we connect to\n# the master.\nskip_slave_start\nslave_load_tmpdir = {{.SlaveLoadTmpDir}}\nsocket = {{.SocketFile}}\ntmpdir = {{.TmpDir}}\n\nslow-query-log-file = {{.SlowLogPath}}\n\n# These are sensible defaults that apply to all MySQL/MariaDB versions\n\nlong_query_time = 2\nslow-query-log\nskip-name-resolve\nconnect_timeout = 30\ninnodb_lock_wait_timeout = 20\nmax_allowed_packet = 64M\nmax_connections = 500\n\n\n"),
+		Content: string("# Global configuration that is auto-included for all MySQL/MariaDB versions\n\ndatadir = {{.DataDir}}\ninnodb_data_home_dir = {{.InnodbDataHomeDir}}\ninnodb_log_group_home_dir = {{.InnodbLogGroupHomeDir}}\nlog-error = {{.ErrorLogPath}}\nlog-bin = {{.BinLogPath}}\nrelay-log = {{.RelayLogPath}}\nrelay-log-index =  {{.RelayLogIndexPath}}\npid-file = {{.PidFile}}\nport = {{.MysqlPort}}\n\n# all db instances should start in read-only mode - once the db is started and\n# fully functional, we'll push it into read-write mode\nread-only\nserver-id = {{.ServerID}}\n\n# all db instances should skip the slave startup - that way we can do any\n# additional configuration (like enabling semi-sync) before we connect to\n# the master.\nskip_slave_start\nslave_load_tmpdir = {{.SlaveLoadTmpDir}}\nsocket = {{.SocketFile}}\ntmpdir = {{.TmpDir}}\n\nslow-query-log-file = {{.SlowLogPath}}\n\n# These are sensible defaults that apply to all MySQL/MariaDB versions\n\nlong_query_time = 2\nslow-query-log\nskip-name-resolve\nconnect_timeout = 30\ninnodb_lock_wait_timeout = 20\nmax_allowed_packet = 64M\nmax_connections = 500\n\n\n"),
 	}
 	file7 := &embedded.EmbeddedFile{
 		Filename:    "mycnf/master_mariadb100.cnf",
@@ -113,7 +113,7 @@ func init() {
 	}
 	dir4 := &embedded.EmbeddedDir{
 		Filename:   "mycnf",
-		DirModTime: time.Unix(1579019403, 0),
+		DirModTime: time.Unix(1579632282, 0),
 		ChildFiles: []*embedded.EmbeddedFile{
 			file5, // "mycnf/default-fast.cnf"
 			file6, // "mycnf/default.cnf"

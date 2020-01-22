@@ -73,6 +73,7 @@ func TestMain(m *testing.M) {
 		}
 		localCluster.Keyspaces = append(localCluster.Keyspaces, *keyspace)
 
+		// update password of mysql users
 		dbCredentialFile = initialsharding.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 		initDb, _ := ioutil.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
@@ -87,6 +88,7 @@ func TestMain(m *testing.M) {
 			Name: shardName,
 		}
 
+		// start mysql process for all replicas and master
 		var mysqlProcs []*exec.Cmd
 		for i := 0; i < 3; i++ {
 			tabletType := "replica"
@@ -103,11 +105,12 @@ func TestMain(m *testing.M) {
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
 			tablet.MysqlctlProcess.InitDBFile = newInitDBFile
 			tablet.MysqlctlProcess.ExtraArgs = extraArgs
-			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			if err != nil {
 				return 1, err
-			} else {
-				mysqlProcs = append(mysqlProcs, proc)
 			}
+			mysqlProcs = append(mysqlProcs, proc)
+
 			shard.Vttablets = append(shard.Vttablets, tablet)
 		}
 		for _, proc := range mysqlProcs {
@@ -115,6 +118,8 @@ func TestMain(m *testing.M) {
 				return 1, err
 			}
 		}
+
+		// initialize tablets
 		master = shard.Vttablets[0]
 		replica1 = shard.Vttablets[1]
 		replica2 = shard.Vttablets[2]
@@ -126,6 +131,7 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
+		// create database direct in vtTablet
 		for _, tablet := range []cluster.Vttablet{*master, *replica1} {
 			if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
 				return 1, err
@@ -135,6 +141,7 @@ func TestMain(m *testing.M) {
 			}
 		}
 
+		// initialize master and start replication
 		if err := localCluster.VtctlclientProcess.InitShardMaster(keyspaceName, shard.Name, cell, master.TabletUID); err != nil {
 			return 1, err
 		}
