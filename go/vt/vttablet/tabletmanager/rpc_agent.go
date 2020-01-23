@@ -56,7 +56,7 @@ type RPCAgent interface {
 
 	RefreshState(ctx context.Context) error
 
-	UpdateBlacklistedTables(ctx context.Context) error
+	UpdateBlacklistedTables(ctx context.Context, tablettype topodatapb.TabletType, cells []string, remove bool, tables []string) error
 
 	RunHealthCheck(ctx context.Context)
 

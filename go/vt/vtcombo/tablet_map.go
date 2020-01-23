@@ -579,7 +579,7 @@ func (itmc *internalTabletManagerClient) UpdateBlacklistedTables(ctx context.Con
 	if !ok {
 		return fmt.Errorf("tmclient: cannot find tablet %v", tablet.Alias.Uid)
 	}
-	return t.agent.UpdateBlacklistedTables(ctx)
+	return t.agent.UpdateBlacklistedTables(ctx, tabletType, cells, remove, tables)
 }
 
 func (itmc *internalTabletManagerClient) RunHealthCheck(ctx context.Context, tablet *topodatapb.Tablet) error {

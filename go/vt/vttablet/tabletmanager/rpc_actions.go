@@ -146,7 +146,7 @@ func (agent *ActionAgent) RefreshState(ctx context.Context) error {
 }
 
 // UpdateBlacklistedTables reload the tablet record from the topo server.
-func (agent *ActionAgent) UpdateBlacklistedTables(ctx context.Context) error {
+func (agent *ActionAgent) UpdateBlacklistedTables(ctx context.Context, tablettype topodatapb.TabletType, cells []string, remove bool, tables []string) error {
 	if err := agent.lock(ctx); err != nil {
 		return err
 	}

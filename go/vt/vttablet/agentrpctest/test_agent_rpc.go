@@ -458,7 +458,7 @@ func (fra *fakeRPCAgent) RefreshState(ctx context.Context) error {
 	return nil
 }
 
-func (fra *fakeRPCAgent) UpdateBlacklistedTables(ctx context.Context) error {
+func (fra *fakeRPCAgent) UpdateBlacklistedTables(ctx context.Context, tablettype topodatapb.TabletType, cells []string, remove bool, tables []string) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}

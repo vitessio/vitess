@@ -273,7 +273,11 @@ func (client *Client) UpdateBlacklistedTables(ctx context.Context, tablet *topod
 		return err
 	}
 	defer cc.Close()
-	_, err = c.UpdateBlacklistedTables(ctx, &tabletmanagerdatapb.UpdateBlacklistedTablesRequest{})
+	_, err = c.UpdateBlacklistedTables(ctx, &tabletmanagerdatapb.UpdateBlacklistedTablesRequest{
+		TabletType: tabletType,
+		Cells:      cells,
+		Remove:     remove,
+		Tables:     tables})
 	return err
 }
 

@@ -172,6 +172,10 @@ message RefreshStateResponse {
 }
 
 message UpdateBlacklistedTablesRequest {
+  topodata.TabletType TabletType = 1;
+  repeated string Cells = 2;
+  bool Remove = 3;
+  repeated string Tables = 4;
 }
 
 message UpdateBlacklistedTablesResponse {

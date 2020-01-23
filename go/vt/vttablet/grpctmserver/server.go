@@ -131,7 +131,7 @@ func (s *server) UpdateBlacklistedTables(ctx context.Context, request *tabletman
 	defer s.agent.HandleRPCPanic(ctx, "UpdateBlacklistedTables", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.UpdateBlacklistedTablesResponse{}
-	return response, s.agent.UpdateBlacklistedTables(ctx)
+	return response, s.agent.UpdateBlacklistedTables(ctx, request.TabletType, request.Cells, request.Remove, request.Tables)
 }
 
 func (s *server) RunHealthCheck(ctx context.Context, request *tabletmanagerdatapb.RunHealthCheckRequest) (response *tabletmanagerdatapb.RunHealthCheckResponse, err error) {
