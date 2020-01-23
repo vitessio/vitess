@@ -19,7 +19,6 @@ package cluster
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -50,7 +49,7 @@ func VerifyRowsInTablet(t *testing.T, vttablet *Vttablet, ksName string, expecte
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
 		qr, err := vttablet.VttabletProcess.QueryTablet("select * from vt_insert_test", ksName, true)
-		assert.Nil(t, err)
+		require.Nil(t, err)
 		if len(qr.Rows) == expectedRows {
 			return
 		}
@@ -90,12 +89,8 @@ func (cluster LocalProcessCluster) ListBackups(shardKsName string) ([]string, er
 }
 
 // ResetTabletDirectory transitions back to tablet state (i.e. mysql process restarts with cleaned directory and tablet is off)
-func ResetTabletDirectory(tablet Vttablet) error {
-	tablet.MysqlctlProcess.Stop()
-	tablet.VttabletProcess.TearDown()
-	os.RemoveAll(tablet.VttabletProcess.Directory)
-
-	return tablet.MysqlctlProcess.Start()
+func ResetTabletDirectory(tablet *Vttablet) error {
+	return tablet.Restart()
 }
 
 func getTablet(tabletGrpcPort int, hostname string) *tabletpb.Tablet {

@@ -295,6 +295,9 @@ func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
 
 // QueryTablet lets you execute a query in this tablet and get the result
 func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useDb bool) (*sqltypes.Result, error) {
+	if !useDb {
+		keyspace = ""
+	}
 	dbParams := mysql.NewConnParams(vttablet.DbPort, vttablet.DbPassword, path.Join(vttablet.Directory, "mysql.sock"), keyspace)
 	return executeQuery(dbParams, query)
 }

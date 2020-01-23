@@ -23,7 +23,6 @@ import (
 	"os/exec"
 	"path"
 	"strings"
-	"syscall"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
@@ -64,39 +63,42 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 		return fmt.Errorf("process is already running")
 	}
 	_ = createDirectory(mysqlctld.LogDirectory, 0700)
-	mysqlctld.proc = exec.Command(
+	tempProcess := exec.Command(
 		mysqlctld.Binary,
 		"-log_dir", mysqlctld.LogDirectory,
 		"-tablet_uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
 		"-mysql_port", fmt.Sprintf("%d", mysqlctld.MySQLPort),
 	)
 
-	mysqlctld.proc.Args = append(mysqlctld.proc.Args, mysqlctld.ExtraArgs...)
+	tempProcess.Args = append(tempProcess.Args, mysqlctld.ExtraArgs...)
 
 	if mysqlctld.InitMysql {
-		mysqlctld.proc.Args = append(mysqlctld.proc.Args,
+		tempProcess.Args = append(tempProcess.Args,
 			"-init_db_sql_file", mysqlctld.InitDBFile)
 	}
 
 	errFile, _ := os.Create(path.Join(mysqlctld.LogDirectory, "mysqlctld-stderr.txt"))
-	mysqlctld.proc.Stderr = errFile
+	tempProcess.Stderr = errFile
 
-	mysqlctld.proc.Env = append(mysqlctld.proc.Env, os.Environ()...)
-	mysqlctld.proc.Stdout = os.Stdout
-	mysqlctld.proc.Stderr = os.Stderr
+	tempProcess.Env = append(tempProcess.Env, os.Environ()...)
+	tempProcess.Stdout = os.Stdout
+	tempProcess.Stderr = os.Stderr
 
-	log.Infof("%v %v", strings.Join(mysqlctld.proc.Args, " "))
+	log.Infof("%v %v", strings.Join(tempProcess.Args, " "))
 
-	err := mysqlctld.proc.Start()
+	err := tempProcess.Start()
 	if err != nil {
 		return err
 	}
 
+	mysqlctld.proc = tempProcess
+
 	mysqlctld.exit = make(chan error)
-	go func() {
-		mysqlctld.exit <- mysqlctld.proc.Wait()
+	go func(mysqlctld *MysqlctldProcess) {
+		err := mysqlctld.proc.Wait()
 		mysqlctld.proc = nil
-	}()
+		mysqlctld.exit <- err
+	}(mysqlctld)
 
 	timeout := time.Now().Add(60 * time.Second)
 	for time.Now().Before(timeout) {
@@ -116,24 +118,22 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 }
 
 // Stop executes mysqlctld command to stop mysql instance
-func (mysqlctld *MysqlctldProcess) Stop() (err error) {
+func (mysqlctld *MysqlctldProcess) Stop() error {
 	if mysqlctld.proc == nil || mysqlctld.exit == nil {
 		return nil
 	}
 
-	// Attempt graceful shutdown with SIGTERM first
-	mysqlctld.proc.Process.Signal(syscall.SIGTERM)
-	// mysqlctld.proc.Process.Signal(syscall.SIGTERM)
-
-	select {
-	case err := <-mysqlctld.exit:
-		mysqlctld.proc = nil
+	tmpProcess := exec.Command(
+		"mysqlctl",
+		"-tablet_uid", fmt.Sprintf("%d", mysqlctld.TabletUID),
+	)
+	tmpProcess.Args = append(tmpProcess.Args, mysqlctld.ExtraArgs...)
+	tmpProcess.Args = append(tmpProcess.Args, "shutdown")
+	err := tmpProcess.Run()
+	if err != nil {
 		return err
-
-	case <-time.After(10 * time.Second):
-		mysqlctld.proc.Process.Kill()
-		return <-mysqlctld.exit
 	}
+	return <-mysqlctld.exit
 }
 
 // CleanupFiles clean the mysql files to make sure we can start the same process again
@@ -141,9 +141,9 @@ func (mysqlctld *MysqlctldProcess) CleanupFiles(tabletUID int) {
 	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tabletUID)))
 }
 
-// MysqlctldProcessInstance returns a Mysqlctld handle for mysqlctld process
+// MysqlCtldProcessInstance returns a Mysqlctld handle for mysqlctld process
 // configured with the given Config.
-func MysqlctldProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) *MysqlctldProcess {
+func MysqlCtldProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) *MysqlctldProcess {
 	mysqlctld := &MysqlctldProcess{
 		Name:         "mysqlctld",
 		Binary:       "mysqlctld",
@@ -158,13 +158,13 @@ func MysqlctldProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string)
 
 // StartMySQLctld starts mysqlctld process
 func StartMySQLctld(ctx context.Context, tablet *Vttablet, username string, tmpDirectory string) error {
-	tablet.MysqlctldProcess = *MysqlctldProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
+	tablet.MysqlctldProcess = *MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
 	return tablet.MysqlctldProcess.Start()
 }
 
 // StartMySQLctldAndGetConnection create a connection to tablet mysql
 func StartMySQLctldAndGetConnection(ctx context.Context, tablet *Vttablet, username string, tmpDirectory string) (*mysql.Conn, error) {
-	tablet.MysqlctldProcess = *MysqlctldProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
+	tablet.MysqlctldProcess = *MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
 	err := tablet.MysqlctldProcess.Start()
 	if err != nil {
 		return nil, err

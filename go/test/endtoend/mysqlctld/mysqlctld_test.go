@@ -30,8 +30,8 @@ import (
 
 var (
 	clusterInstance *cluster.LocalProcessCluster
-	masterTablet    cluster.Vttablet
-	replicaTablet   cluster.Vttablet
+	masterTablet    *cluster.Vttablet
+	replicaTablet   *cluster.Vttablet
 	hostname        = "localhost"
 	keyspaceName    = "test_keyspace"
 	shardName       = "0"
@@ -63,9 +63,9 @@ func TestMain(m *testing.M) {
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 		for _, tablet := range tablets {
 			if tablet.Type == "master" {
-				masterTablet = *tablet
+				masterTablet = tablet
 			} else if tablet.Type != "rdonly" {
-				replicaTablet = *tablet
+				replicaTablet = tablet
 			}
 		}
 
@@ -96,7 +96,7 @@ func initCluster(shardNames []string, totalTabletsRequired int) error {
 				tablet.Type = "master"
 			}
 			// Start Mysqlctld process
-			tablet.MysqlctldProcess = *cluster.MysqlctldProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+			tablet.MysqlctldProcess = *cluster.MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
 			err := tablet.MysqlctldProcess.Start()
 			if err != nil {
 				return err
@@ -122,7 +122,7 @@ func initCluster(shardNames []string, totalTabletsRequired int) error {
 		}
 
 		for _, tablet := range shard.Vttablets {
-			if _, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace.Name), keyspace.Name, false); err != nil {
+			if _, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("create database vt_%s", keyspace.Name), "", false); err != nil {
 				log.Error(err.Error())
 				return err
 			}

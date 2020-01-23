@@ -135,6 +135,27 @@ type Vttablet struct {
 	VttabletProcess  *VttabletProcess
 }
 
+// Restart restarts vttablet and mysql.
+func (tablet *Vttablet) Restart() error {
+	if tablet.MysqlctlProcess.TabletUID|tablet.MysqlctldProcess.TabletUID == 0 {
+		return fmt.Errorf("no mysql process is running")
+	}
+
+	if tablet.MysqlctlProcess.TabletUID > 0 {
+		tablet.MysqlctlProcess.Stop()
+		tablet.VttabletProcess.TearDown()
+		os.RemoveAll(tablet.VttabletProcess.Directory)
+
+		return tablet.MysqlctlProcess.Start()
+	}
+
+	tablet.MysqlctldProcess.Stop()
+	tablet.VttabletProcess.TearDown()
+	os.RemoveAll(tablet.VttabletProcess.Directory)
+
+	return tablet.MysqlctldProcess.Start()
+}
+
 // StartTopo starts topology server
 func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	if cluster.Cell == "" {
