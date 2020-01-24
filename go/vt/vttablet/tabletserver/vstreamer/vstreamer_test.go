@@ -113,12 +113,12 @@ func TestStatements(t *testing.T) {
 			`type:DDL ddl:"truncate table stream2" `,
 		}},
 	}}
-	runCases(t, nil, testcases, "")
+	runCases(t, nil, testcases, "current")
 
 	// Test FilePos flavor
 	engine.cp.Flavor = "FilePos"
 	defer func() { engine.cp.Flavor = "" }()
-	runCases(t, nil, testcases, "")
+	runCases(t, nil, testcases, "current")
 }
 
 // TestOther tests "other" statements. These statements produce

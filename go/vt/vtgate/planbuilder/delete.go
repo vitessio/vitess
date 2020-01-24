@@ -29,31 +29,31 @@ import (
 )
 
 // buildDeletePlan builds the instructions for a DELETE statement.
-func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (_ *engine.Delete, needsLastInsertID bool, needDbName bool, _ error) {
+func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Delete, error) {
 	edel := &engine.Delete{}
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(del)))
 	ro, err := pb.processDMLTable(del.TableExprs)
 	if err != nil {
-		return nil, false, false, err
+		return nil, err
 	}
 	edel.Query = generateQuery(del)
 	edel.Keyspace = ro.eroute.Keyspace
 	if !edel.Keyspace.Sharded {
 		// We only validate non-table subexpressions because the previous analysis has already validated them.
 		if !pb.finalizeUnshardedDMLSubqueries(del.Targets, del.Where, del.OrderBy, del.Limit) {
-			return nil, false, false, errors.New("unsupported: sharded subqueries in DML")
+			return nil, errors.New("unsupported: sharded subqueries in DML")
 		}
 		edel.Opcode = engine.DeleteUnsharded
 		// Generate query after all the analysis. Otherwise table name substitutions for
 		// routed tables won't happen.
 		edel.Query = generateQuery(del)
-		return edel, pb.needsLastInsertID, pb.needsDbName, nil
+		return edel, nil
 	}
 	if del.Targets != nil || ro.vschemaTable == nil {
-		return nil, false, false, errors.New("unsupported: multi-table delete statement in sharded keyspace")
+		return nil, errors.New("unsupported: multi-table delete statement in sharded keyspace")
 	}
 	if hasSubquery(del) {
-		return nil, false, false, errors.New("unsupported: subqueries in sharded DML")
+		return nil, errors.New("unsupported: subqueries in sharded DML")
 	}
 	edel.Table = ro.vschemaTable
 	// Generate query after all the analysis. Otherwise table name substitutions for
@@ -68,11 +68,11 @@ func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (_ *engine.D
 	edel.QueryTimeout = queryTimeout(directives)
 	if ro.eroute.TargetDestination != nil {
 		if ro.eroute.TargetTabletType != topodatapb.TabletType_MASTER {
-			return nil, false, false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: DELETE statement with a replica target")
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: DELETE statement with a replica target")
 		}
 		edel.Opcode = engine.DeleteByDestination
 		edel.TargetDestination = ro.eroute.TargetDestination
-		return edel, pb.needsLastInsertID, pb.needsDbName, nil
+		return edel, nil
 	}
 	edel.Vindex, edel.Values, err = getDMLRouting(del.Where, edel.Table)
 	// We couldn't generate a route for a single shard
@@ -85,15 +85,15 @@ func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (_ *engine.D
 
 	if edel.Opcode == engine.DeleteScatter {
 		if len(edel.Table.Owned) != 0 {
-			return nil, false, false, errors.New("unsupported: multi shard delete on a table with owned lookup vindexes")
+			return nil, errors.New("unsupported: multi shard delete on a table with owned lookup vindexes")
 		}
 		if del.Limit != nil {
-			return nil, false, false, errors.New("unsupported: multi shard delete with limit")
+			return nil, errors.New("unsupported: multi shard delete with limit")
 		}
 	}
 
 	edel.OwnedVindexQuery = generateDeleteSubquery(del, edel.Table)
-	return edel, pb.needsLastInsertID, pb.needsDbName, nil
+	return edel, nil
 }
 
 // generateDeleteSubquery generates the query to fetch the rows

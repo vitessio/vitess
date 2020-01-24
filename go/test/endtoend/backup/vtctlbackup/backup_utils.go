@@ -270,14 +270,12 @@ func masterBackup(t *testing.T) {
 	assert.NotNil(t, err)
 	assert.Contains(t, output, "type MASTER cannot take backup. if you really need to do this, rerun the backup command with -allow_master")
 
-	backups := listBackups(t)
-	assert.Equal(t, len(backups), 0)
+	localCluster.VerifyBackupCount(t, shardKsName, 0)
 
 	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", "-allow_master=true", master.Alias)
 	assert.Nil(t, err)
 
-	backups = listBackups(t)
-	assert.Equal(t, len(backups), 1)
+	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
 	assert.Contains(t, backups[0], master.Alias)
 
 	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
@@ -425,11 +423,7 @@ func restartMasterReplica(t *testing.T) {
 	stopAllTablets()
 
 	// remove all backups
-	backups := listBackups(t)
-	for _, backup := range backups {
-		err := localCluster.VtctlclientProcess.ExecuteCommand("RemoveBackup", shardKsName, backup)
-		assert.Nil(t, err)
-	}
+	localCluster.RemoveAllBackups(t, shardKsName)
 	// start all tablet and mysql instances
 	var mysqlProcs []*exec.Cmd
 	for _, tablet := range []*cluster.Vttablet{master, replica1, replica2} {
@@ -541,8 +535,7 @@ func vtctlBackup(t *testing.T, tabletType string) {
 	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	assert.Nil(t, err)
 
-	backups := listBackups(t)
-	assert.Equal(t, len(backups), 1)
+	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
 
 	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
 	assert.Nil(t, err)
@@ -592,12 +585,6 @@ func restoreWaitForBackup(t *testing.T, tabletType string) {
 	assert.Nil(t, err)
 }
 
-func listBackups(t *testing.T) []string {
-	output, err := localCluster.ListBackups(shardKsName)
-	assert.Nil(t, err)
-	return output
-}
-
 func verifyAfterRemovingBackupNoBackupShouldBePresent(t *testing.T, backups []string) {
 	// Remove the backup
 	for _, backup := range backups {
@@ -606,8 +593,7 @@ func verifyAfterRemovingBackupNoBackupShouldBePresent(t *testing.T, backups []st
 	}
 
 	// Now, there should not be no backup
-	backups = listBackups(t)
-	assert.Equal(t, len(backups), 0)
+	localCluster.VerifyBackupCount(t, shardKsName, 0)
 }
 
 func verifyRestoreTablet(t *testing.T, tablet *cluster.Vttablet, status string) {

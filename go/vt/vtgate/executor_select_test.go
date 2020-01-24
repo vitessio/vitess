@@ -237,6 +237,7 @@ func TestStreamBuffering(t *testing.T) {
 
 func TestSelectLastInsertId(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
+	executor.normalize = true
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
@@ -255,14 +256,14 @@ func TestSelectLastInsertId(t *testing.T) {
 
 func TestSelectLastInsertIdInUnion(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
-
-	sql := "select last_insert_id() as id union select id from user where 1 != 1"
+	executor.normalize = true
+	sql := "select last_insert_id() as id union select id from user"
 	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	if err != nil {
 		t.Error(err)
 	}
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select :__lastInsertId as id from dual union select id from user where 1 != 1",
+		Sql:           "select :__lastInsertId as id from dual union select id from user",
 		BindVariables: map[string]*querypb.BindVariable{"__lastInsertId": sqltypes.Uint64BindVariable(0)},
 	}}
 
@@ -271,6 +272,7 @@ func TestSelectLastInsertIdInUnion(t *testing.T) {
 
 func TestSelectLastInsertIdInWhere(t *testing.T) {
 	executor, _, _, lookup := createExecutorEnv()
+	executor.normalize = true
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
@@ -289,6 +291,7 @@ func TestSelectLastInsertIdInWhere(t *testing.T) {
 
 func TestLastInsertIDInVirtualTable(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
+	executor.normalize = true
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
@@ -316,6 +319,7 @@ func TestLastInsertIDInVirtualTable(t *testing.T) {
 
 func TestLastInsertIDInSubQueryExpression(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
+	executor.normalize = true
 	result1 := []*sqltypes.Result{{
 		Fields: []*querypb.Field{
 			{Name: "id", Type: sqltypes.Int32},
@@ -343,7 +347,7 @@ func TestLastInsertIDInSubQueryExpression(t *testing.T) {
 
 func TestSelectDatabase(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
-
+	executor.normalize = true
 	sql := "select database()"
 	newSession := *masterSession
 	session := NewSafeSession(&newSession)
