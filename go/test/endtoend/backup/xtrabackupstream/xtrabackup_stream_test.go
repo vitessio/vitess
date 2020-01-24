@@ -24,14 +24,5 @@ import (
 
 // TestXtrabackupStream - tests the backup using xtrabackup with xbstream mode
 func TestXtrabackupStream(t *testing.T) {
-	code, err := backup.LaunchCluster(true, "xbstream", 8)
-	if err != nil {
-		t.Errorf("setup failed with status code %d", code)
-	}
-
-	// Run all the backup tests
-	backup.TestBackup(t)
-
-	// Teardown the cluster
-	backup.TearDownCluster()
+	backup.TestBackup(t, backup.ExtraBackup, "xbstream", 8)
 }

@@ -32,17 +32,18 @@ import (
 // MysqlctldProcess is a generic handle for a running mysqlctld command .
 // It can be spawned manually
 type MysqlctldProcess struct {
-	Name         string
-	Binary       string
-	LogDirectory string
-	Password     string
-	TabletUID    int
-	MySQLPort    int
-	InitDBFile   string
-	ExtraArgs    []string
-	InitMysql    bool
-	proc         *exec.Cmd
-	exit         chan error
+	Name               string
+	Binary             string
+	LogDirectory       string
+	Password           string
+	TabletUID          int
+	MySQLPort          int
+	InitDBFile         string
+	ExtraArgs          []string
+	process            *exec.Cmd
+	exit               chan error
+	InitMysql          bool
+	exitSignalReceived bool
 }
 
 // InitDb executes mysqlctld command to add cell info
@@ -59,7 +60,7 @@ func (mysqlctld *MysqlctldProcess) InitDb() (err error) {
 
 // Start starts the mysqlctld and returns the error.
 func (mysqlctld *MysqlctldProcess) Start() error {
-	if mysqlctld.proc != nil {
+	if mysqlctld.process != nil {
 		return fmt.Errorf("process is already running")
 	}
 	_ = createDirectory(mysqlctld.LogDirectory, 0700)
@@ -91,12 +92,16 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 		return err
 	}
 
-	mysqlctld.proc = tempProcess
+	mysqlctld.process = tempProcess
 
 	mysqlctld.exit = make(chan error)
 	go func(mysqlctld *MysqlctldProcess) {
-		err := mysqlctld.proc.Wait()
-		mysqlctld.proc = nil
+		err := mysqlctld.process.Wait()
+		if !mysqlctld.exitSignalReceived {
+			fmt.Printf("mysqlctld stopped unexpectedly, tabletUID %v, mysql port %v, PID %v\n", mysqlctld.TabletUID, mysqlctld.MySQLPort, mysqlctld.process.Process.Pid)
+		}
+		mysqlctld.process = nil
+		mysqlctld.exitSignalReceived = false
 		mysqlctld.exit <- err
 	}(mysqlctld)
 
@@ -119,10 +124,10 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 
 // Stop executes mysqlctld command to stop mysql instance
 func (mysqlctld *MysqlctldProcess) Stop() error {
-	if mysqlctld.proc == nil || mysqlctld.exit == nil {
-		return nil
-	}
-
+	// if mysqlctld.process == nil || mysqlctld.exit == nil {
+	// 	return nil
+	// }
+	mysqlctld.exitSignalReceived = true
 	tmpProcess := exec.Command(
 		"mysqlctl",
 		"-tablet_uid", fmt.Sprintf("%d", mysqlctld.TabletUID),

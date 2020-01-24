@@ -22,7 +22,7 @@ import (
 	backup "vitess.io/vitess/go/test/endtoend/backup/vtctlbackup"
 )
 
-// TestXtraBackup - tests the backup using xtrabackup
-func TestXtrabackup(t *testing.T) {
-	backup.TestBackup(t, backup.ExtraBackup, "tar", 0)
+// TestBackupMysqlctld - tests the backup using mysqlctld.
+func TestBackupMysqlctld(t *testing.T) {
+	backup.TestBackup(t, backup.Mysqlctld, "", 0)
 }

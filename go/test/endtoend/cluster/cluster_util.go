@@ -88,11 +88,6 @@ func (cluster LocalProcessCluster) ListBackups(shardKsName string) ([]string, er
 	return returnResult, nil
 }
 
-// ResetTabletDirectory transitions back to tablet state (i.e. mysql process restarts with cleaned directory and tablet is off)
-func ResetTabletDirectory(tablet *Vttablet) error {
-	return tablet.Restart()
-}
-
 func getTablet(tabletGrpcPort int, hostname string) *tabletpb.Tablet {
 	portMap := make(map[string]int32)
 	portMap["grpc"] = int32(tabletGrpcPort)

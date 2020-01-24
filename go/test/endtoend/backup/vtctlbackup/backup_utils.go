@@ -34,7 +34,14 @@ import (
 	"vitess.io/vitess/go/vt/proto/topodata"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+)
+
+const (
+	ExtraBackup = iota
+	Backup
+	Mysqlctld
 )
 
 var (
@@ -44,8 +51,6 @@ var (
 	localCluster     *cluster.LocalProcessCluster
 	newInitDBFile    string
 	useXtrabackup    bool
-	xbStreamMode     string
-	xbStripes        int
 	cell             = cluster.DefaultCell
 	hostname         = "localhost"
 	keyspaceName     = "ks"
@@ -72,7 +77,8 @@ var (
 					  ) Engine=InnoDB`
 )
 
-func LaunchCluster(xtrabackup bool, streamMode string, stripes int) (int, error) {
+// LaunchCluster :
+func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
 	localCluster = cluster.NewCluster(cell, hostname)
 
 	// Start topo server
@@ -101,16 +107,14 @@ func LaunchCluster(xtrabackup bool, streamMode string, stripes int) (int, error)
 	commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)
 
 	// Update arguments for xtrabackup
-	if xtrabackup {
-		useXtrabackup = xtrabackup
-		xbStreamMode = streamMode
-		xbStripes = stripes
+	if setupType == ExtraBackup {
+		useXtrabackup = true
 
 		xtrabackupArgs := []string{
 			"-backup_engine_implementation", "xtrabackup",
-			fmt.Sprintf("-xtrabackup_stream_mode=%s", xbStreamMode),
+			fmt.Sprintf("-xtrabackup_stream_mode=%s", streamMode),
 			"-xtrabackup_user=vt_dba",
-			fmt.Sprintf("-xtrabackup_stripes=%d", xbStripes),
+			fmt.Sprintf("-xtrabackup_stripes=%d", stripes),
 			"-xtrabackup_backup_flags", fmt.Sprintf("--password=%s", dbPassword),
 		}
 
@@ -134,14 +138,27 @@ func LaunchCluster(xtrabackup bool, streamMode string, stripes int) (int, error)
 		tablet.VttabletProcess.SupportsBackup = true
 		tablet.VttabletProcess.EnableSemiSync = true
 
+		if setupType == Mysqlctld {
+			tablet.MysqlctldProcess = *cluster.MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
+			tablet.MysqlctldProcess.InitDBFile = newInitDBFile
+			tablet.MysqlctldProcess.ExtraArgs = extraArgs
+			tablet.MysqlctldProcess.Password = tablet.VttabletProcess.DbPassword
+			if err := tablet.MysqlctldProcess.Start(); err != nil {
+				return 1, err
+			}
+			shard.Vttablets = append(shard.Vttablets, tablet)
+			continue
+		}
+
 		tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
 		tablet.MysqlctlProcess.InitDBFile = newInitDBFile
 		tablet.MysqlctlProcess.ExtraArgs = extraArgs
-		if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
+		proc, err := tablet.MysqlctlProcess.StartProcess()
+		if err != nil {
 			return 1, err
-		} else {
-			mysqlProcs = append(mysqlProcs, proc)
 		}
+		mysqlProcs = append(mysqlProcs, proc)
+
 		shard.Vttablets = append(shard.Vttablets, tablet)
 	}
 	for _, proc := range mysqlProcs {
@@ -179,35 +196,60 @@ func TearDownCluster() {
 	localCluster.Teardown()
 }
 
-func TestBackup(t *testing.T) {
+func TestBackup(t *testing.T, setupType int, streamMode string, stripes int) {
+
+	testMethods := []struct {
+		name   string
+		method func(t *testing.T)
+	}{
+		{
+			name: "TestReplicaBackup",
+			method: func(t *testing.T) {
+				vtctlBackup(t, "replica")
+			},
+		}, //
+		{
+			name: "TestRdonlyBackup",
+			method: func(t *testing.T) {
+				vtctlBackup(t, "rdonly")
+			},
+		}, //
+		{
+			name:   "TestMasterBackup",
+			method: masterBackup,
+		}, //
+		{
+			name:   "TestMasterReplicaSameBackup",
+			method: masterReplicaSameBackup,
+		}, //
+		{
+			name:   "TestRestoreOldMasterByRestart",
+			method: restoreOldMasterByRestart,
+		}, //
+		{
+			name:   "TestRestoreOldMasterInPlace",
+			method: restoreOldMasterInPlace,
+		}, //
+		{
+			name:   "TestTerminatedRestore",
+			method: terminatedRestore,
+		}, //
+	}
+
+	// setup cluster for the testing
+	code, err := LaunchCluster(setupType, streamMode, stripes)
+	require.Nilf(t, err, "setup failed with status code %d", code)
+
+	// Teardown the cluster
+	defer TearDownCluster()
+
 	// Run all the backup tests
-	t.Run("TestReplicaBackup", func(t *testing.T) {
-		vtctlBackup(t, "replica")
-	})
 
-	t.Run("TestRdonlyBackup", func(t *testing.T) {
-		vtctlBackup(t, "rdonly")
-	})
-
-	t.Run("TestMasterBackup", func(t *testing.T) {
-		masterBackup(t)
-	})
-
-	t.Run("TestMasterReplicaSameBackup", func(t *testing.T) {
-		masterReplicaSameBackup(t)
-	})
-
-	t.Run("TestRestoreOldMasterByRestart", func(t *testing.T) {
-		restoreOldMasterByRestart(t)
-	})
-
-	t.Run("TestRestoreOldMasterInPlace", func(t *testing.T) {
-		restoreOldMasterInPlace(t)
-	})
-
-	t.Run("TestTerminatedRestore", func(t *testing.T) {
-		terminatedRestore(t)
-	})
+	for _, test := range testMethods {
+		fmt.Printf("test %v started \n", test.name)
+		pass := t.Run(test.name, test.method)
+		fmt.Printf("test %v completed, isPass %v\n", test.name, pass)
+	}
 
 }
 
@@ -390,7 +432,12 @@ func restartMasterReplica(t *testing.T) {
 	}
 	// start all tablet and mysql instances
 	var mysqlProcs []*exec.Cmd
-	for _, tablet := range []*cluster.Vttablet{master, replica1} {
+	for _, tablet := range []*cluster.Vttablet{master, replica1, replica2} {
+		if tablet.MysqlctldProcess.TabletUID > 0 {
+			err := tablet.MysqlctldProcess.Start()
+			require.Nilf(t, err, "error while starting mysqlctld, tabletUID %v", tablet.TabletUID)
+			continue
+		}
 		proc, _ := tablet.MysqlctlProcess.StartProcess()
 		mysqlProcs = append(mysqlProcs, proc)
 	}
@@ -413,6 +460,11 @@ func stopAllTablets() {
 	var mysqlProcs []*exec.Cmd
 	for _, tablet := range []*cluster.Vttablet{master, replica1, replica2} {
 		tablet.VttabletProcess.TearDown()
+		if tablet.MysqlctldProcess.TabletUID > 0 {
+			tablet.MysqlctldProcess.Stop()
+			localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", tablet.Alias)
+			continue
+		}
 		proc, _ := tablet.MysqlctlProcess.StopProcess()
 		mysqlProcs = append(mysqlProcs, proc)
 		localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", tablet.Alias)
@@ -529,7 +581,7 @@ func verifyInitialReplication(t *testing.T) {
 // to restore a previous backup successfully regardless of this setting.
 func restoreWaitForBackup(t *testing.T, tabletType string) {
 	replica2.Type = tabletType
-	resetTabletDir(t, replica2)
+	replica2.ValidareTabletRestart(t)
 	replicaTabletArgs := commonTabletArg
 	replicaTabletArgs = append(replicaTabletArgs, "-backup_engine_implementation", "fake_implementation")
 	replicaTabletArgs = append(replicaTabletArgs, "-wait_for_backup_interval", "1s")
@@ -537,11 +589,6 @@ func restoreWaitForBackup(t *testing.T, tabletType string) {
 	replica2.VttabletProcess.ExtraArgs = replicaTabletArgs
 	replica2.VttabletProcess.ServingStatus = ""
 	err := replica2.VttabletProcess.Setup()
-	assert.Nil(t, err)
-}
-
-func resetTabletDir(t *testing.T, tablet *cluster.Vttablet) {
-	err := cluster.ResetTabletDirectory(*tablet)
 	assert.Nil(t, err)
 }
 
@@ -564,12 +611,10 @@ func verifyAfterRemovingBackupNoBackupShouldBePresent(t *testing.T, backups []st
 }
 
 func verifyRestoreTablet(t *testing.T, tablet *cluster.Vttablet, status string) {
-	err := tablet.VttabletProcess.TearDown()
-	assert.Nil(t, err)
 
-	resetTabletDir(t, tablet)
+	tablet.ValidareTabletRestart(t)
 	tablet.VttabletProcess.ServingStatus = ""
-	err = tablet.VttabletProcess.Setup()
+	err := tablet.VttabletProcess.Setup()
 	assert.Nil(t, err)
 	if status != "" {
 		err = tablet.VttabletProcess.WaitForTabletTypesForTimeout([]string{status}, 25*time.Second)
@@ -596,6 +641,7 @@ func terminateRestore(t *testing.T) {
 	stopRestoreMsg := "Copying file 10"
 	if useXtrabackup {
 		stopRestoreMsg = "Restore: Preparing"
+		useXtrabackup = false
 	}
 
 	args := append([]string{"-server", localCluster.VtctlclientProcess.Server, "-alsologtostderr"}, "RestoreFromBackup", master.Alias)

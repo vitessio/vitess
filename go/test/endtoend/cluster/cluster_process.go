@@ -25,8 +25,10 @@ import (
 	"os/exec"
 	"path"
 	"strconv"
+	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -154,6 +156,11 @@ func (tablet *Vttablet) Restart() error {
 	os.RemoveAll(tablet.VttabletProcess.Directory)
 
 	return tablet.MysqlctldProcess.Start()
+}
+
+// ValidareTabletRestart restarts the tablet and validate error if there is any.
+func (tablet *Vttablet) ValidareTabletRestart(t *testing.T) {
+	require.Nilf(t, tablet.Restart(), "tablet restart failed")
 }
 
 // StartTopo starts topology server
