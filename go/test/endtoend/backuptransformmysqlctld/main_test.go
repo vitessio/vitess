@@ -14,13 +14,14 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package backuptransform
+package backuptransformmysqlctld
 
-import "testing"
+import (
+	"testing"
 
-func TestBackupTransform(t *testing.T) {
-	TestBackupTransformImpl(t)
-}
-func TestBackupTransformError(t *testing.T) {
-	TestBackupTransformErrorImpl(t)
+	"vitess.io/vitess/go/test/endtoend/backuptransform"
+)
+
+func TestMain(m *testing.M) {
+	backuptransform.TestMainSetup(m, true)
 }
