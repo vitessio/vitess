@@ -426,6 +426,9 @@ var (
 	}, {
 		input: "select /* function with distinct */ count(distinct a) from t",
 	}, {
+		input:  "select count(distinctrow(1)) from (select (1) from dual union all select 1 from dual) a",
+		output: "select count(distinct (1)) from (select (1) from dual union all select 1 from dual) as a",
+	}, {
 		input: "select /* if as func */ 1 from t where a = if(b)",
 	}, {
 		input: "select /* current_timestamp */ current_timestamp() from t",
