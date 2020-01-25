@@ -40,6 +40,32 @@ func replaceAliasedTableExprPartitions(newNode, parent SQLNode) {
 	parent.(*AliasedTableExpr).Partitions = newNode.(Partitions)
 }
 
+func replaceAlterSpecColumnDropped(newNode, parent SQLNode) {
+	parent.(*AlterSpec).ColumnDropped = newNode.(ColIdent)
+}
+
+type replaceAlterSpecColumnsAdded int
+
+func (r *replaceAlterSpecColumnsAdded) replace(newNode, container SQLNode) {
+	container.(*AlterSpec).ColumnsAdded[int(*r)] = newNode.(*ColumnDefinition)
+}
+
+func (r *replaceAlterSpecColumnsAdded) inc() {
+	*r++
+}
+
+func replaceAlterSpecIndexAdded(newNode, parent SQLNode) {
+	parent.(*AlterSpec).IndexAdded = newNode.(*IndexDefinition)
+}
+
+func replaceAlterSpecPartitionAdded(newNode, parent SQLNode) {
+	parent.(*AlterSpec).PartitionAdded = newNode.(*PartitionDefinition)
+}
+
+func replaceAlterSpecPartitionsDropped(newNode, parent SQLNode) {
+	parent.(*AlterSpec).PartitionsDropped = newNode.(Partitions)
+}
+
 func replaceAndExprLeft(newNode, parent SQLNode) {
 	parent.(*AndExpr).Left = newNode.(Expr)
 }
@@ -186,6 +212,16 @@ func replaceCurTimeFuncExprFsp(newNode, parent SQLNode) {
 
 func replaceCurTimeFuncExprName(newNode, parent SQLNode) {
 	parent.(*CurTimeFuncExpr).Name = newNode.(ColIdent)
+}
+
+type replaceDDLAlterSpecs int
+
+func (r *replaceDDLAlterSpecs) replace(newNode, container SQLNode) {
+	container.(*DDL).AlterSpecs[int(*r)] = newNode.(*AlterSpec)
+}
+
+func (r *replaceDDLAlterSpecs) inc() {
+	*r++
 }
 
 func replaceDDLAutoIncSpec(newNode, parent SQLNode) {
@@ -852,6 +888,18 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		a.apply(node, n.Hints, replaceAliasedTableExprHints)
 		a.apply(node, n.Partitions, replaceAliasedTableExprPartitions)
 
+	case *AlterSpec:
+		a.apply(node, n.ColumnDropped, replaceAlterSpecColumnDropped)
+		replacerColumnsAdded := replaceAlterSpecColumnsAdded(0)
+		replacerColumnsAddedB := &replacerColumnsAdded
+		for _, item := range n.ColumnsAdded {
+			a.apply(node, item, replacerColumnsAddedB.replace)
+			replacerColumnsAddedB.inc()
+		}
+		a.apply(node, n.IndexAdded, replaceAlterSpecIndexAdded)
+		a.apply(node, n.PartitionAdded, replaceAlterSpecPartitionAdded)
+		a.apply(node, n.PartitionsDropped, replaceAlterSpecPartitionsDropped)
+
 	case *AndExpr:
 		a.apply(node, n.Left, replaceAndExprLeft)
 		a.apply(node, n.Right, replaceAndExprRight)
@@ -939,6 +987,12 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 	case *DBDDL:
 
 	case *DDL:
+		replacerAlterSpecs := replaceDDLAlterSpecs(0)
+		replacerAlterSpecsB := &replacerAlterSpecs
+		for _, item := range n.AlterSpecs {
+			a.apply(node, item, replacerAlterSpecsB.replace)
+			replacerAlterSpecsB.inc()
+		}
 		a.apply(node, n.AutoIncSpec, replaceDDLAutoIncSpec)
 		a.apply(node, n.FromTables, replaceDDLFromTables)
 		a.apply(node, n.OptLike, replaceDDLOptLike)

@@ -171,6 +171,16 @@ type (
 
 		// AutoIncSpec is set for AddAutoIncStr.
 		AutoIncSpec *AutoIncSpec
+
+		// Ignore is set to the IGNORE option on the ALTER or RENAME statement. It
+		// will end with a trailing space.
+		Ignore string
+
+		// AlterSpecs includes the specifics of an ALTER statement that involves
+		// adding, dropping, or renaming columns or changes a table's
+		// configuration. ALTERs that rename a table are still handled as a RENAME
+		// Action with From and ToTables set.
+		AlterSpecs []*AlterSpec
 	}
 
 	// ParenSelect is a parenthesized SELECT statement.
@@ -212,6 +222,30 @@ type (
 	// It should be used only as an indicator. It does not contain
 	// the full AST for the statement.
 	OtherAdmin struct{}
+
+	// AlterSpec represents a specific command in an ALTER statement. An ALTER
+	// statement can have some kinds of commands multiple times or with other
+	// commands. Those are the kinds of commands that an AlterSpec represents.
+	AlterSpec struct {
+		// The kind of operation the ALTER command is.
+		Action AlterAction
+		// ColumnsAdded is set when the Action is AlterAddColumn.
+		ColumnsAdded []*ColumnDefinition
+		// ColumnDropped is set when the Action is AlterDropColumn.
+		ColumnDropped ColIdent
+		// IndexAdded is set when the Action is AlterAddIndexOrKey.
+		IndexAdded *IndexDefinition
+		// IndexDropped is set when the Action is AlterDropIndexOrKey. It's the name of the index or key dropped by this ALTER command.
+		IndexDropped *ColIdent
+		// PartitionAdded is set when the Action is AlterAddPartition.
+		PartitionAdded *PartitionDefinition
+		// PartitionsDropped is the name of the partition is dropped. It's set when
+		// AlterDropPartition is set.
+		PartitionsDropped Partitions
+
+		// ForeignKeyDropped is set when the Action is AlterDropForeignKey.
+		ForeignKeyDropped *ColIdent
+	}
 )
 
 func (*Union) iStatement()             {}
@@ -323,11 +357,13 @@ type IndexDefinition struct {
 
 // IndexInfo describes the name and type of an index in a CREATE TABLE statement
 type IndexInfo struct {
-	Type    string
-	Name    ColIdent
-	Primary bool
-	Spatial bool
-	Unique  bool
+	Type     string
+	Name     ColIdent
+	Primary  bool
+	Spatial  bool
+	Foreign  bool
+	Fulltext bool
+	Unique   bool
 }
 
 // VindexSpec defines a vindex for a CREATE VINDEX or DROP VINDEX statement
@@ -907,7 +943,23 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			buf.Myprintf(", %v to %v", node.FromTables[i], node.ToTables[i])
 		}
 	case AlterStr:
-		if node.PartitionSpec != nil {
+		if len(node.AlterSpecs) != 0 {
+			buf.Myprintf("%s %stable %v ", node.Action, node.Ignore, node.Table)
+			if len(node.AlterSpecs) == 1 {
+				buf.Myprintf("%v", node.AlterSpecs[0])
+			} else {
+				buf.Myprintf("(")
+				for i, spec := range node.AlterSpecs {
+					if i != 0 {
+						buf.Myprintf(", %v", spec)
+					} else {
+						buf.Myprintf("%v", spec)
+					}
+				}
+				buf.Myprintf(")")
+			}
+
+		} else if node.PartitionSpec != nil {
 			buf.Myprintf("%s table %v %v", node.Action, node.Table, node.PartitionSpec)
 		} else {
 			buf.Myprintf("%s table %v", node.Action, node.Table)
@@ -994,6 +1046,35 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 	}
 
 	buf.Myprintf("\n)%s", strings.Replace(ts.Options, ", ", ",\n  ", -1))
+}
+
+// Format formats the node as a SQL command.
+func (spec *AlterSpec) Format(buf *TrackedBuffer) {
+	switch spec.Action {
+	case AlterAddColumn:
+		buf.Myprintf("add column ")
+		for i, col := range spec.ColumnsAdded {
+			if i == 0 {
+				buf.Myprintf("%v", col)
+			} else {
+				buf.Myprintf(", %v", col)
+			}
+		}
+	case AlterDropColumn:
+		buf.Myprintf("drop column %v", spec.ColumnDropped)
+	case AlterAddIndexOrKey:
+		buf.Myprintf("add %v", spec.IndexAdded)
+	case AlterDropIndexOrKey:
+		buf.Myprintf("drop index %v", *spec.IndexDropped)
+	case AlterAddPartition:
+		buf.Myprintf("add partition %v", spec.PartitionAdded)
+	case AlterDropPartition:
+		buf.Myprintf("drop%v", spec.PartitionsDropped)
+	case AlterDropForeignKey:
+		buf.Myprintf("drop foreign key %v", spec.ForeignKeyDropped)
+	case AlterDropPrimaryKey:
+		buf.Myprintf("drop primary key")
+	}
 }
 
 // Format formats the node.

@@ -94,11 +94,14 @@ func skipToEnd(yylex interface{}) {
   convertType   *ConvertType
   aliasedTableName *AliasedTableExpr
   TableSpec  *TableSpec
+  alterSpec  *AlterSpec
+  alterSpecs  []*AlterSpec
   columnType    ColumnType
   colKeyOpt     ColumnKeyOption
   optVal        Expr
   LengthScaleOption LengthScaleOption
   columnDefinition *ColumnDefinition
+  columnDefinitions []*ColumnDefinition
   indexDefinition *IndexDefinition
   indexInfo     *IndexInfo
   indexOption   *IndexOption
@@ -202,7 +205,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION
 
 // MySQL reserved words that are unused by this grammar will map to this token.
-%token <bytes> UNUSED ARRAY CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD MEMBER
+%token <bytes> UNUSED AFTER ARRAY CUME_DIST DESCRIPTION DENSE_RANK EMPTY EXCEPT FIRST FIRST_VALUE GROUPING GROUPS JSON_TABLE LAG LAST_VALUE LATERAL LEAD MEMBER
 %token <bytes> NTH_VALUE NTILE OF OVER PERCENT_RANK RANK RECURSIVE ROW_NUMBER SYSTEM WINDOW
 %token <bytes> ACTIVE ADMIN BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
 %token <bytes> INACTIVE INVISIBLE LOCKED MASTER_COMPRESSION_ALGORITHMS MASTER_PUBLIC_KEY_PATH MASTER_TLS_CIPHERSUITES MASTER_ZSTD_COMPRESSION_LEVEL
@@ -214,7 +217,7 @@ func skipToEnd(yylex interface{}) {
 %type <selStmt> select_statement base_select union_lhs union_rhs
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement
-%type <ddl> create_table_prefix rename_list
+%type <ddl> create_table_prefix alter_table_prefix rename_list
 %type <statement> analyze_statement show_statement use_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement
 %type <bytes2> comment_opt comment_list
@@ -271,7 +274,7 @@ func skipToEnd(yylex interface{}) {
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields
 %type <showFilter> like_or_where_opt like_opt
 %type <byt> exists_opt
-%type <empty> not_exists_opt non_add_drop_or_rename_operation to_opt index_opt constraint_opt
+%type <empty> not_exists_opt column_opt to_opt index_opt constraint_opt
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
 %type <expr> charset_value
@@ -292,12 +295,16 @@ func skipToEnd(yylex interface{}) {
 %type <colKeyOpt> column_key_opt
 %type <strs> enum_values
 %type <columnDefinition> column_definition
+%type <columnDefinitions> alter_column_def_list
+%type <empty> alter_column_first_after_opt
 %type <indexDefinition> index_definition
 %type <constraintDefinition> constraint_definition
 %type <str> index_or_key
 %type <str> name_opt
 %type <str> equal_opt
 %type <TableSpec> table_spec table_column_list
+%type <alterSpec> alter_spec
+%type <alterSpecs> alter_specs
 %type <optLike> create_like
 %type <str> table_option_list table_option table_opt_value
 %type <indexInfo> index_info
@@ -312,7 +319,6 @@ func skipToEnd(yylex interface{}) {
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
 %type <colIdent> vindex_type vindex_type_opt
-%type <bytes> alter_object_type
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
 
 %start any_command
@@ -1130,6 +1136,11 @@ index_info:
   {
     $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent($3), Spatial: true, Unique: false}
   }
+| FULLTEXT index_or_key name_opt
+  {
+    $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent($3), Fulltext: true, Unique: false}
+  }
+
 | UNIQUE index_or_key name_opt
   {
     $$ = &IndexInfo{Type: string($1) + " " + string($2), Name: NewColIdent($3), Unique: true}
@@ -1284,19 +1295,108 @@ table_opt_value:
     $$ = string($1)
   }
 
+alter_column_def_list:
+  column_definition alter_column_first_after_opt
+  {
+    $$ = []*ColumnDefinition{}
+    $$ = append($$, $1)
+  }
+| alter_column_def_list ',' column_definition alter_column_first_after_opt
+
+  {
+    $$ = append($$, $3)
+  }
+
+alter_table_prefix:
+  ALTER ignore_opt TABLE table_name
+  {
+    $$ = &DDL{Action: AlterStr, Table: $4, Ignore: $2}
+    setDDL(yylex, $$)
+  }
+
+alter_column_first_after_opt:
+{ $$ = struct{}{} }
+| FIRST { $$ = struct{}{} }
+| AFTER column_name { $$ = struct{}{} }
+
+column_opt:
+  /* empty */
+  {
+    $$ = struct{}{}
+  }
+| COLUMN
+  {
+    $$ = struct{}{}
+  }
+
+alter_spec:
+  ADD column_opt column_definition alter_column_first_after_opt
+  {
+    $$ = &AlterSpec{Action: AlterAddColumn, ColumnsAdded: []*ColumnDefinition{$3}}
+  }
+| ADD column_opt openb alter_column_def_list closeb
+  {
+    $$ = &AlterSpec{Action: AlterAddColumn, ColumnsAdded: $4}
+  }
+| ADD index_definition
+  {
+    $$ = &AlterSpec{Action: AlterAddIndexOrKey, IndexAdded: $2}
+  }
+| ADD CHECK openb expression closeb
+  {
+    // ADD CHECK is ignored by all engines, so we're skipping it here.
+    $$ = nil
+  }
+| DROP column_opt sql_id
+  {
+    $$ = &AlterSpec{Action: AlterDropColumn, ColumnDropped: $3}
+  }
+| DROP index_opt sql_id
+  {
+    idx := $3
+    $$ = &AlterSpec{Action: AlterDropIndexOrKey, IndexDropped: &idx}
+  }
+| DROP FOREIGN KEY sql_id
+  {
+    key := $4
+    $$ = &AlterSpec{Action: AlterDropForeignKey, ForeignKeyDropped: &key}
+  }
+| DROP PRIMARY KEY
+  {
+    $$ = &AlterSpec{Action: AlterDropPrimaryKey}
+  }
+
+alter_specs:
+  alter_spec
+  {
+    $$ = []*AlterSpec{$1}
+  }
+| alter_specs ',' alter_spec
+  {
+    if $3 != nil {
+      $$ = append($$, $3)
+    }
+  }
+
 alter_statement:
-  ALTER ignore_opt TABLE table_name non_add_drop_or_rename_operation skip_to_end
+// alter_specs parses the ALTER commands that can have more than just them and
+// more than just one of them in the ALTER statement.
+  alter_table_prefix alter_specs
   {
-    $$ = &DDL{Action: AlterStr, Table: $4}
+    $1.AlterSpecs = $2
+    $$ = $1
   }
-| ALTER ignore_opt TABLE table_name ADD alter_object_type skip_to_end
+| alter_table_prefix ADD partition_definition
   {
-    $$ = &DDL{Action: AlterStr, Table: $4}
+    $1.AlterSpecs = []*AlterSpec{{Action: AlterAddPartition, PartitionAdded: $3}}
+    $$ = $1
   }
-| ALTER ignore_opt TABLE table_name DROP alter_object_type skip_to_end
+| alter_table_prefix DROP PARTITION partition_list
   {
-    $$ = &DDL{Action: AlterStr, Table: $4}
+    $1.AlterSpecs = []*AlterSpec{{Action: AlterDropPartition, PartitionsDropped: $4}}
+    $$ = $1
   }
+
 | ALTER ignore_opt TABLE table_name RENAME to_opt table_name
   {
     // Change this to a rename statement
@@ -1391,20 +1491,6 @@ alter_statement:
         },
     }
   }
-
-alter_object_type:
-  CHECK
-| COLUMN
-| CONSTRAINT
-| FOREIGN
-| FULLTEXT
-| ID
-| INDEX
-| KEY
-| PRIMARY
-| SPATIAL
-| PARTITION
-| UNIQUE
 
 partition_operation:
   REORGANIZE PARTITION sql_id INTO openb partition_definitions closeb
@@ -2490,7 +2576,7 @@ function_call_generic:
 | sql_id openb DISTINCTROW select_expression_list closeb
   {
     $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
-  }  
+  }
 | table_id '.' reserved_sql_id openb select_expression_list_opt closeb
   {
     $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: $5}
@@ -3141,28 +3227,6 @@ ignore_opt:
 | IGNORE
   { $$ = IgnoreStr }
 
-non_add_drop_or_rename_operation:
-  ALTER
-  { $$ = struct{}{} }
-| AUTO_INCREMENT
-  { $$ = struct{}{} }
-| CHARACTER
-  { $$ = struct{}{} }
-| COMMENT_KEYWORD
-  { $$ = struct{}{} }
-| DEFAULT
-  { $$ = struct{}{} }
-| ORDER
-  { $$ = struct{}{} }
-| CONVERT
-  { $$ = struct{}{} }
-| PARTITION
-  { $$ = struct{}{} }
-| UNUSED
-  { $$ = struct{}{} }
-| ID
-  { $$ = struct{}{} }
-
 to_opt:
   { $$ = struct{}{} }
 | TO
@@ -3233,6 +3297,7 @@ reserved_table_id:
 */
 reserved_keyword:
   ADD
+| AFTER
 | ARRAY 
 | AND
 | AS
@@ -3269,9 +3334,11 @@ reserved_keyword:
 | EXISTS
 | EXPLAIN
 | FALSE
+| FIRST
 | FIRST_VALUE
 | FOR
 | FORCE
+| FOREIGN
 | FROM
 | GROUP
 | GROUPING
@@ -3316,7 +3383,9 @@ reserved_keyword:
 | ORDER
 | OUTER
 | OVER
+| PARTITION
 | PERCENT_RANK
+| PRIMARY
 | RANK
 | RECURSIVE
 | REGEXP
@@ -3398,7 +3467,6 @@ non_reserved_keyword:
 | FIELDS
 | FLUSH
 | FOLLOWING
-| FOREIGN
 | FULLTEXT
 | GEOMCOLLECTION
 | GEOMETRY
@@ -3451,7 +3519,6 @@ non_reserved_keyword:
 | ONLY
 | OPTIMIZE
 | OTHERS
-| PARTITION
 | PATH
 | PERSIST
 | PERSIST_ONLY
@@ -3461,7 +3528,6 @@ non_reserved_keyword:
 | PLUGINS
 | POINT
 | POLYGON
-| PRIMARY
 | PROCEDURE
 | QUERY
 | RANDOM

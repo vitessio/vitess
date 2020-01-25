@@ -161,3 +161,35 @@ const (
 	TxReadOnly  = "read only"
 	TxReadWrite = "read write"
 )
+
+// AlterAction is used to determine what kind of ALTER command is being
+// represented by an AlterSpec.
+type AlterAction int
+
+const (
+	// AlterAddColumn is set when the ALTER command adds a column. Multiple
+	// columns can be added within one `ADD COLUMN` sub-command.
+	AlterAddColumn AlterAction = iota
+
+	// AlterDropColumn is set when the ALTER command drops a column or index.
+	AlterDropColumn
+
+	// AlterAddIndexOrKey is set when the ALTER command adds an index or key.
+	AlterAddIndexOrKey
+
+	// AlterDropIndexOrKey is set when the ALTER command drops an index or key.
+	AlterDropIndexOrKey
+
+	// AlterAddPartition is set when the ALTER command adds a partition.
+	AlterAddPartition
+
+	// AlterDropPartition is set when the ALTER command drops a partition.
+	AlterDropPartition
+
+	// AlterDropForeignKey is set when the ALTER command drops a foreign key constraint.
+	AlterDropForeignKey
+
+	// AlterDropPrimaryKey is set when the ALTER command drops the primary key
+	// from the table.
+	AlterDropPrimaryKey
+)
