@@ -145,3 +145,24 @@ func PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string,
 	_, err = conn.ExecuteFetch("COMMIT", 0, false)
 	return err
 }
+
+func CreateBlacklistedTables(mysqld MysqlDaemon) error {
+	conn, err := mysqld.GetDbaConnection()
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecuteFetch("SET @@session.sql_log_bin = 0", 0, false); err != nil {
+		return err
+	}
+
+	if _, err := conn.ExecuteFetch("CREATE DATABASE IF NOT EXISTS _vt", 0, false); err != nil {
+		return err
+	}
+
+	if _, err := conn.ExecuteFetch("CREATE TABLE IF NOT EXISTS _vt.blacklisted_tables(dbname VARCHAR(255), table_name VARCHAR(255), PRIMARY KEY(dbname, table_name)) ENGINE=InnoDB)", 0, false); err != nil {
+		return err
+	}
+	return nil
+}

@@ -257,5 +257,11 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		}
 	}
 
+	// Create table to maintain the blacklisted tables list, so far we do not need a flag for it.
+	err = mysqlctl.CreateBlacklistedTables(agent.MysqlDaemon)
+	if err != nil {
+		return vterrors.Wrap(err, "Failed to create blacklisted tables")
+	}
+
 	return nil
 }
