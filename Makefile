@@ -89,9 +89,7 @@ parser:
 	make -C go/vt/sqlparser
 
 visitor:
-	go build -o visitorgen go/visitorgen/main/main.go
-	./visitorgen -input=go/vt/sqlparser/ast.go -output=$(REWRITER)
-	rm ./visitorgen
+	go generate go/vt/sqlparser/rewriter.go
 
 # To pass extra flags, run test.go manually.
 # For example: go run test.go -docker=false -- --extra-flag
