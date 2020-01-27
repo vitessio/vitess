@@ -15,4 +15,4 @@
 
 # this script, which should run before committing code, makes sure that the visitor is re-generated when the ast changes
 
-go run ./go/visitorgen/main -compareOnly=true -input=go/vt/sqlparser/ast.go -output=go/vt/sqlparser/rewriter.go
+go run ./go/vt/sqlparser/visitorgen/main -compareOnly=true -input=go/vt/sqlparser/ast.go -output=go/vt/sqlparser/rewriter.go
