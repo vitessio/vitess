@@ -15,11 +15,4 @@
 
 # this script, which should run before committing code, makes sure that the visitor is re-generated when the ast changes
 
-make visitor REWRITER=tmp_rewriter.go
-if ! cmp -s "tmp_rewriter.go" "go/vt/sqlparser/rewriter.go"; then
-	echo "The ast.go has changed, but not rewriter.go"
-	echo "You should 'make visitor' to update the generated rewriter"
-	rm -f tmp_rewriter.go
-	exit 1
-fi
-rm -f tmp_rewriter.go
+go run ./go/visitorgen/main -compareOnly=true -input=go/vt/sqlparser/ast.go -output=go/vt/sqlparser/rewriter.go
