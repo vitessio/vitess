@@ -37,7 +37,12 @@ const (
   name VARCHAR(255) NOT NULL,
   value MEDIUMBLOB NOT NULL,
   PRIMARY KEY (name)
-  ) ENGINE=InnoDB`
+	) ENGINE=InnoDB`
+	sqlCreateBlacklistedTables = `CREATE TABLE IF NOT EXISTS _vt.blacklisted_tables(
+	dbname VARCHAR(255), 
+	table_name VARCHAR(255), 
+	PRIMARY KEY(dbname, table_name)
+	) ENGINE=InnoDB`
 	sqlUpdateLocalMetadataTable = "UPDATE _vt.local_metadata SET db_name='%s' WHERE db_name=''"
 	sqlUpdateShardMetadataTable = "UPDATE _vt.shard_metadata SET db_name='%s' WHERE db_name=''"
 )
@@ -161,7 +166,7 @@ func CreateBlacklistedTables(mysqld MysqlDaemon) error {
 		return err
 	}
 
-	if _, err := conn.ExecuteFetch("CREATE TABLE IF NOT EXISTS _vt.blacklisted_tables(dbname VARCHAR(255), table_name VARCHAR(255), PRIMARY KEY(dbname, table_name)) ENGINE=InnoDB)", 0, false); err != nil {
+	if _, err := conn.ExecuteFetch(sqlCreateBlacklistedTables, 0, false); err != nil {
 		return err
 	}
 	return nil
