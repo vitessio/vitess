@@ -40,7 +40,6 @@ type TopoProcess struct {
 	ListenClientURL    string
 	AdvertiseClientURL string
 	Port               int
-	PeerPort           int
 	Host               string
 	VerifyURL          string
 	PeerURL            string
@@ -287,11 +286,10 @@ func TopoProcessInstance(port int, peerPort int, hostname string, flavor string,
 	}
 
 	topo := &TopoProcess{
-		Name:     name,
-		Binary:   binary,
-		Port:     port,
-		Host:     hostname,
-		PeerPort: peerPort,
+		Name:   name,
+		Binary: binary,
+		Port:   port,
+		Host:   hostname,
 	}
 
 	topo.AdvertiseClientURL = fmt.Sprintf("http://%s:%d", topo.Host, topo.Port)
