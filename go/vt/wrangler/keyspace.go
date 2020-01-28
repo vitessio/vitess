@@ -1248,7 +1248,11 @@ func (wr *Wrangler) replicaMigrateServedFrom(ctx context.Context, ki *topo.Keysp
 	// Save the source shard (its blacklisted tables field has changed)
 	event.DispatchUpdate(ev, "updating source shard")
 	if _, err := wr.ts.UpdateShardFields(ctx, sourceShard.Keyspace(), sourceShard.ShardName(), func(si *topo.ShardInfo) error {
-		return si.UpdateSourceBlacklistedTables(ctx, servedType, cells, reverse, tables)
+		sourceMasterTabletInfo, err := wr.ts.GetTablet(ctx, sourceShard.MasterAlias)
+		if err != nil {
+			return err
+		}
+		return wr.tmc.UpdateBlacklistedTables(ctx, sourceMasterTabletInfo.Tablet, servedType, cells, reverse, tables)
 	}); err != nil {
 		return err
 	}
@@ -1285,7 +1289,7 @@ func (wr *Wrangler) masterMigrateServedFrom(ctx context.Context, ki *topo.Keyspa
 	// Update source shard (more blacklisted tables)
 	event.DispatchUpdate(ev, "updating source shard")
 	if _, err := wr.ts.UpdateShardFields(ctx, sourceShard.Keyspace(), sourceShard.ShardName(), func(si *topo.ShardInfo) error {
-		return si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_MASTER, nil, false, tables)
+		return wr.tmc.UpdateBlacklistedTables(ctx, sourceMasterTabletInfo.Tablet, topodatapb.TabletType_MASTER, nil, false, tables)
 	}); err != nil {
 		return err
 	}

@@ -621,7 +621,7 @@ func (mi *migrater) stopSourceWrites(ctx context.Context) error {
 func (mi *migrater) changeTableSourceWrites(ctx context.Context, access accessType) error {
 	return mi.forAllSources(func(source *miSource) error {
 		if _, err := mi.wr.ts.UpdateShardFields(ctx, mi.sourceKeyspace, source.si.ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_MASTER, nil, access == allowWrites /* remove */, mi.tables)
+			return mi.wr.tmc.UpdateBlacklistedTables(ctx, source.master.Tablet, topodatapb.TabletType_MASTER, nil, access == allowWrites /* remove */, mi.tables)
 		}); err != nil {
 			return err
 		}
@@ -817,7 +817,7 @@ func (mi *migrater) allowTargetWrites(ctx context.Context) error {
 func (mi *migrater) allowTableTargetWrites(ctx context.Context) error {
 	return mi.forAllTargets(func(target *miTarget) error {
 		if _, err := mi.wr.ts.UpdateShardFields(ctx, mi.targetKeyspace, target.si.ShardName(), func(si *topo.ShardInfo) error {
-			return si.UpdateSourceBlacklistedTables(ctx, topodatapb.TabletType_MASTER, nil, true, mi.tables)
+			return mi.wr.tmc.UpdateBlacklistedTables(ctx, target.master.Tablet, topodatapb.TabletType_MASTER, nil, true, mi.tables)
 		}); err != nil {
 			return err
 		}
