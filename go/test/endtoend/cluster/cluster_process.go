@@ -65,6 +65,7 @@ type LocalProcessCluster struct {
 	VtctldProcess   VtctldProcess
 	VtgateProcess   VtgateProcess
 	VtworkerProcess VtworkerProcess
+	VtbackupProcess VtbackupProcess
 
 	nextPortForProcess int
 
@@ -487,6 +488,7 @@ func (cluster *LocalProcessCluster) Teardown() {
 	if err := cluster.TopoProcess.TearDown(cluster.Cell, cluster.OriginalVTDATAROOT, cluster.CurrentVTDATAROOT, *keepData, *topoFlavor); err != nil {
 		log.Errorf("Error in topo server teardown - %s", err.Error())
 	}
+
 }
 
 // StartVtworker starts a vtworker
@@ -502,6 +504,26 @@ func (cluster *LocalProcessCluster) StartVtworker(cell string, extraArgs ...stri
 		cluster.TmpDirectory)
 	cluster.VtworkerProcess.ExtraArgs = extraArgs
 	return cluster.VtworkerProcess.Setup(cell)
+
+}
+
+// StartVtbackup starts a vtbackup
+func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initalBackup bool,
+	keyspace string, shard string, cell string, extraArgs ...string) error {
+	log.Info("Starting vtbackup")
+	cluster.VtbackupProcess = *VtbackupProcessInstance(
+		cluster.GetAndReserveTabletUID(),
+		cluster.GetAndReservePort(),
+		newInitDBFile,
+		keyspace,
+		shard,
+		cell,
+		cluster.Hostname,
+		cluster.TmpDirectory,
+		cluster.TopoPort,
+		initalBackup)
+	cluster.VtbackupProcess.ExtraArgs = extraArgs
+	return cluster.VtbackupProcess.Setup()
 
 }
 
