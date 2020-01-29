@@ -193,6 +193,26 @@ func TestExecutorTransactionsNoAutoCommit(t *testing.T) {
 	}
 }
 
+func TestDirectTargetRewrites(t *testing.T) {
+	executor, _, _, sbclookup := createExecutorEnv()
+	executor.normalize = true
+
+	session := &vtgatepb.Session{
+		TargetString:    "TestUnsharded/0@master",
+		Autocommit:      true,
+		TransactionMode: vtgatepb.TransactionMode_MULTI,
+	}
+	sql := "select database()"
+
+	if _, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{}); err != nil {
+		t.Error(err)
+	}
+	testQueries(t, "sbclookup", sbclookup, []*querypb.BoundQuery{{
+		Sql:           "select :__vtdbname as `database()` from dual",
+		BindVariables: map[string]*querypb.BindVariable{"__vtdbname": sqltypes.StringBindVariable("TestUnsharded")},
+	}})
+}
+
 func TestExecutorTransactionsAutoCommit(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master", Autocommit: true})
@@ -807,6 +827,11 @@ func TestExecutorShow(t *testing.T) {
 	wantQuery = "show create table unknown"
 	if lastQuery != wantQuery {
 		t.Errorf("Got: %v. Want: %v", lastQuery, wantQuery)
+	}
+
+	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show full columns from unknown from %v", KsTestUnsharded), nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
 	}
 
 	for _, query := range []string{"show charset", "show charset like '%foo'", "show character set", "show character set like '%foo'"} {

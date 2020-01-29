@@ -426,6 +426,9 @@ var (
 	}, {
 		input: "select /* function with distinct */ count(distinct a) from t",
 	}, {
+		input:  "select count(distinctrow(1)) from (select (1) from dual union all select 1 from dual) a",
+		output: "select count(distinct (1)) from (select (1) from dual union all select 1 from dual) as a",
+	}, {
 		input: "select /* if as func */ 1 from t where a = if(b)",
 	}, {
 		input: "select /* current_timestamp */ current_timestamp() from t",
@@ -958,6 +961,30 @@ var (
 	}, {
 		input:  "alter table a drop id",
 		output: "alter table a",
+	}, {
+		input:  "alter database d default character set = charset",
+		output: "alter database d",
+	}, {
+		input:  "alter database d character set = charset",
+		output: "alter database d",
+	}, {
+		input:  "alter database d default collate = collation",
+		output: "alter database d",
+	}, {
+		input:  "alter database d collate = collation",
+		output: "alter database d",
+	}, {
+		input:  "alter schema d default character set = charset",
+		output: "alter database d",
+	}, {
+		input:  "alter schema d character set = charset",
+		output: "alter database d",
+	}, {
+		input:  "alter schema d default collate = collation",
+		output: "alter database d",
+	}, {
+		input:  "alter schema d collate = collation",
+		output: "alter database d",
 	}, {
 		input: "create table a",
 	}, {
@@ -1502,7 +1529,7 @@ func TestValid(t *testing.T) {
 }
 
 // Ensure there is no corruption from using a pooled yyParserImpl in Parse.
-func TestValidParallel(t *testing.T) {
+func TestParallelValid(t *testing.T) {
 	parallelism := 100
 	numIters := 1000
 
@@ -2592,10 +2619,10 @@ func TestSkipToEnd(t *testing.T) {
 func TestParseDjangoQueries(t *testing.T) {
 
 	file, err := os.Open("./test_queries/django_queries.txt")
-	defer file.Close()
 	if err != nil {
 		t.Errorf(" Error: %v", err)
 	}
+	defer file.Close()
 	scanner := bufio.NewScanner(file)
 
 	for scanner.Scan() {
