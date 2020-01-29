@@ -291,6 +291,8 @@ func tearDown(t *testing.T, initMysql bool) {
 		}
 	}
 
+	// TODO: Ideally we should not be resetting the mysql.
+	// So in below code we will have to uncomment the commented code and remove resetTabletDirectory
 	for _, tablet := range []cluster.Vttablet{*master, *replica1, *replica2} {
 		//Tear down Tablet
 		//err := tablet.VttabletProcess.TearDown()
@@ -300,5 +302,4 @@ func tearDown(t *testing.T, initMysql bool) {
 
 		resetTabletDirectory(t, tablet, initMysql)
 	}
-
 }

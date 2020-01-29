@@ -163,30 +163,12 @@
 				"worker_test"
 			]
 		},
-		"xtrabackup": {
-			"File": "xtrabackup.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 1,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"xb_recovery": {
 			"File": "xb_recovery.py",
 			"Args": [],
 			"Command": [],
 			"Manual": false,
 			"Shard": 2,
-			"RetryMax": 0,
-			"Tags": []
-		},
-		"xtrabackup_xbstream": {
-			"File": "xtrabackup_xbstream.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 3,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -204,7 +186,25 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtbackup"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 11,
+			"Shard": 19,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"backup_xtrabackup": {
+			"File": "xtrabackup.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/xtrabackup"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 20,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"backup_xtrabackup_xbstream": {
+			"File": "xtrabackup_xbstream.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/xtrabackupstream"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 20,
 			"RetryMax": 0,
 			"Tags": []
 		},
