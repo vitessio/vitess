@@ -198,7 +198,7 @@
 			"Shard": 20,
 			"RetryMax": 0,
 			"Tags": []
-		}
+		},
 		"backup_xtrabackup_xbstream": {
 			"File": "xtrabackup_xbstream.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/xtrabackupstream"],
