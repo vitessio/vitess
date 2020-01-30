@@ -174,8 +174,6 @@ func SplitAndExpression(filters []Expr, node Expr) []Expr {
 	case *AndExpr:
 		filters = SplitAndExpression(filters, node.Left)
 		return SplitAndExpression(filters, node.Right)
-	case *ParenExpr:
-		return SplitAndExpression(filters, node.Expr)
 	}
 	return append(filters, node)
 }

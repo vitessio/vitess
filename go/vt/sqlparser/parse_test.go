@@ -26,6 +26,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 )
 
@@ -313,7 +314,8 @@ var (
 	}, {
 		input: "select /* exists */ 1 from t where exists (select 1 from t)",
 	}, {
-		input: "select /* (boolean) */ 1 from t where not (a = b)",
+		input:  "select /* (boolean) */ 1 from t where not (a = b)",
+		output: "select /* (boolean) */ 1 from t where not a = b",
 	}, {
 		input: "select /* in value list */ 1 from t where a in (b, c)",
 	}, {
@@ -376,11 +378,14 @@ var (
 	}, {
 		input: "select /* select as a value expression */ 1 from t where a = (select a from t)",
 	}, {
-		input: "select /* parenthesised value */ 1 from t where a = (b)",
+		input:  "select /* parenthesised value */ 1 from t where a = (b)",
+		output: "select /* parenthesised value */ 1 from t where a = b",
 	}, {
-		input: "select /* over-parenthesize */ ((1)) from t where ((a)) in (((1))) and ((a, b)) in ((((1, 1))), ((2, 2)))",
+		input:  "select /* over-parenthesize */ ((1)) from t where ((a)) in (((1))) and ((a, b)) in ((((1, 1))), ((2, 2)))",
+		output: "select /* over-parenthesize */ 1 from t where a in (1) and (a, b) in ((1, 1), (2, 2))",
 	}, {
-		input: "select /* dot-parenthesize */ (a.b) from t where (b.c) = 2",
+		input:  "select /* dot-parenthesize */ (a.b) from t where (b.c) = 2",
+		output: "select /* dot-parenthesize */ a.b from t where b.c = 2",
 	}, {
 		input: "select /* & */ 1 from t where a = b & c",
 	}, {
@@ -431,7 +436,7 @@ var (
 		input: "select /* function with distinct */ count(distinct a) from t",
 	}, {
 		input:  "select count(distinctrow(1)) from (select (1) from dual union all select 1 from dual) a",
-		output: "select count(distinct (1)) from (select (1) from dual union all select 1 from dual) as a",
+		output: "select count(distinct 1) from (select 1 from dual union all select 1 from dual) as a",
 	}, {
 		input: "select /* if as func */ 1 from t where a = if(b)",
 	}, {
@@ -604,7 +609,8 @@ var (
 	}, {
 		input: "select /* OR of mixed columns in where */ * from t where a = 5 or b and c is not null",
 	}, {
-		input: "select /* OR in select columns */ (a or b) from t where c = 5",
+		input:  "select /* OR in select columns */ (a or b) from t where c = 5",
+		output: "select /* OR in select columns */ a or b from t where c = 5",
 	}, {
 		input: "select /* bool as select value */ a, true from t",
 	}, {
@@ -1532,7 +1538,7 @@ var (
 		output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.name = 'test'",
 	}, {
 		input:  "select distinctrow a.* from (select (1) from dual union all select 1 from dual) a",
-		output: "select distinct a.* from (select (1) from dual union all select 1 from dual) as a",
+		output: "select distinct a.* from (select 1 from dual union all select 1 from dual) as a",
 	}, {
 		input: "select `weird function name`() from t",
 	}, {
@@ -1572,8 +1578,8 @@ func TestValid(t *testing.T) {
 			tree, err := Parse(tcase.input)
 			require.NoError(t, err)
 			out := String(tree)
-			if out != tcase.output {
-				t.Errorf("Parse(%q) = %q, want: %q", tcase.input, out, tcase.output)
+			if diff := cmp.Diff(tcase.output, out); diff != "" {
+				t.Errorf("Parse(%q):\n%s", tcase.input, diff)
 			}
 			// This test just exercises the tree walking functionality.
 			// There's no way automated way to verify that a node calls

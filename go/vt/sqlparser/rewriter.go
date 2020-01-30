@@ -459,10 +459,6 @@ func (r *replaceOrderByItems) inc() {
 	*r++
 }
 
-func replaceParenExprExpr(newNode, parent SQLNode) {
-	parent.(*ParenExpr).Expr = newNode.(Expr)
-}
-
 func replaceParenSelectSelect(newNode, parent SQLNode) {
 	parent.(*ParenSelect).Select = newNode.(SelectStatement)
 }
@@ -503,12 +499,12 @@ func (r *replacePartitionsItems) inc() {
 	*r++
 }
 
-func replaceRangeCondFrom(newNode, parent SQLNode) {
-	parent.(*RangeCond).From = newNode.(Expr)
+func replaceRangeCondExpr(newNode, parent SQLNode) {
+	parent.(*RangeCond).Expr = newNode.(Expr)
 }
 
-func replaceRangeCondLeft(newNode, parent SQLNode) {
-	parent.(*RangeCond).Left = newNode.(Expr)
+func replaceRangeCondFrom(newNode, parent SQLNode) {
+	parent.(*RangeCond).From = newNode.(Expr)
 }
 
 func replaceRangeCondTo(newNode, parent SQLNode) {
@@ -1090,9 +1086,6 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *OtherRead:
 
-	case *ParenExpr:
-		a.apply(node, n.Expr, replaceParenExprExpr)
-
 	case *ParenSelect:
 		a.apply(node, n.Select, replaceParenSelectSelect)
 
@@ -1121,8 +1114,8 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 		}
 
 	case *RangeCond:
+		a.apply(node, n.Expr, replaceRangeCondExpr)
 		a.apply(node, n.From, replaceRangeCondFrom)
-		a.apply(node, n.Left, replaceRangeCondLeft)
 		a.apply(node, n.To, replaceRangeCondTo)
 
 	case ReferenceAction:

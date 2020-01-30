@@ -281,8 +281,8 @@ func TestQueries(t *testing.T) {
 				{"1"},
 			},
 			Rewritten: []string{
-				"select (eid) from vitess_a where 1 != 1",
-				"select /* parenthesised col */ (eid) from vitess_a where eid = 1 and id = 1 limit 10001",
+				"select eid from vitess_a where 1 != 1",
+				"select /* parenthesised col */ eid from vitess_a where eid = 1 and id = 1 limit 10001",
 			},
 			RowsAffected: 1,
 		},
@@ -355,7 +355,7 @@ func TestQueries(t *testing.T) {
 			},
 			Rewritten: []string{
 				"select * from vitess_a where 1 != 1",
-				"select /* (condition) */ * from vitess_a where (eid = 1) limit 10001",
+				"select /* (condition) */ * from vitess_a where eid = 1 limit 10001",
 			},
 			RowsAffected: 2,
 		},

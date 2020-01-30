@@ -413,12 +413,6 @@ func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlpars
 	case *sqlparser.AndExpr:
 		filters = splitAndExpression(filters, node.Left)
 		return splitAndExpression(filters, node.Right)
-	case *sqlparser.ParenExpr:
-		// If the inner expression is AndExpr, then we can remove
-		// the parenthesis because they are unnecessary.
-		if node, ok := node.Expr.(*sqlparser.AndExpr); ok {
-			return splitAndExpression(filters, node)
-		}
 	}
 	return append(filters, node)
 }

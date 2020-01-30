@@ -2256,11 +2256,11 @@ condition:
   }
 | value_expression BETWEEN value_expression AND value_expression
   {
-    $$ = &RangeCond{Left: $1, Operator: BetweenStr, From: $3, To: $5}
+    $$ = &RangeCond{Expr: $1, Operator: BetweenStr, From: $3, To: $5}
   }
 | value_expression NOT BETWEEN value_expression AND value_expression
   {
-    $$ = &RangeCond{Left: $1, Operator: NotBetweenStr, From: $4, To: $6}
+    $$ = &RangeCond{Expr: $1, Operator: NotBetweenStr, From: $4, To: $6}
   }
 | EXISTS subquery
   {
@@ -3078,7 +3078,7 @@ tuple_expression:
   row_tuple
   {
     if len($1) == 1 {
-      $$ = &ParenExpr{$1[0]}
+      $$ = $1[0]
     } else {
       $$ = $1
     }
