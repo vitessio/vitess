@@ -1,23 +1,5 @@
 {
 	"Tests": {
-		"backup_mysqlctld": {
-			"File": "backup_mysqlctld.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 0,
-			"RetryMax": 0,
-			"Tags": []
-		},
-		"backup_transform_mysqlctld": {
-			"File": "backup_transform_mysqlctld.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 0,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"check_make_parser": {
 			"File": "",
 			"Args": [],
@@ -232,6 +214,24 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 12,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"backup_mysqlctld": {
+			"File": "backup_mysqlctld_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backupmysqlctld"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 12,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"backup_transform_mysqlctld": {
+			"File": "backup_transform_mysqlctld_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backuptransformmysqlctld"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 12, 
 			"RetryMax": 0,
 			"Tags": []
 		},
