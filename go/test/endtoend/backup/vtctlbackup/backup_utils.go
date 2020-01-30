@@ -574,7 +574,7 @@ func verifyInitialReplication(t *testing.T) {
 // to restore a previous backup successfully regardless of this setting.
 func restoreWaitForBackup(t *testing.T, tabletType string) {
 	replica2.Type = tabletType
-	replica2.ValidareTabletRestart(t)
+	replica2.ValidateTabletRestart(t)
 	replicaTabletArgs := commonTabletArg
 	replicaTabletArgs = append(replicaTabletArgs, "-backup_engine_implementation", "fake_implementation")
 	replicaTabletArgs = append(replicaTabletArgs, "-wait_for_backup_interval", "1s")
@@ -598,7 +598,7 @@ func verifyAfterRemovingBackupNoBackupShouldBePresent(t *testing.T, backups []st
 
 func verifyRestoreTablet(t *testing.T, tablet *cluster.Vttablet, status string) {
 
-	tablet.ValidareTabletRestart(t)
+	tablet.ValidateTabletRestart(t)
 	tablet.VttabletProcess.ServingStatus = ""
 	err := tablet.VttabletProcess.Setup()
 	assert.Nil(t, err)

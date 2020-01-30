@@ -25,10 +25,8 @@ import (
 	"os/exec"
 	"path"
 	"strconv"
-	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -39,7 +37,8 @@ const (
 )
 
 var (
-	keepData = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
+	keepData   = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
+	topoFlavor = flag.String("topo-flavor", "etcd2", "choose a topo server from etcd2, zk2 or consul")
 )
 
 // LocalProcessCluster Testcases need to use this to iniate a cluster
@@ -62,7 +61,7 @@ type LocalProcessCluster struct {
 	VtctlProcess       VtctlProcess
 
 	// background executable processes
-	TopoProcess     EtcdProcess
+	TopoProcess     TopoProcess
 	VtctldProcess   VtctldProcess
 	VtgateProcess   VtgateProcess
 	VtworkerProcess VtworkerProcess
@@ -121,48 +120,6 @@ func (shard *Shard) Replica() *Vttablet {
 	return nil
 }
 
-// Vttablet stores the properties needed to start a vttablet process
-type Vttablet struct {
-	Type      string
-	TabletUID int
-	HTTPPort  int
-	GrpcPort  int
-	MySQLPort int
-	Alias     string
-	Cell      string
-
-	// background executable processes
-	MysqlctlProcess  MysqlctlProcess
-	MysqlctldProcess MysqlctldProcess
-	VttabletProcess  *VttabletProcess
-}
-
-// Restart restarts vttablet and mysql.
-func (tablet *Vttablet) Restart() error {
-	if tablet.MysqlctlProcess.TabletUID|tablet.MysqlctldProcess.TabletUID == 0 {
-		return fmt.Errorf("no mysql process is running")
-	}
-
-	if tablet.MysqlctlProcess.TabletUID > 0 {
-		tablet.MysqlctlProcess.Stop()
-		tablet.VttabletProcess.TearDown()
-		os.RemoveAll(tablet.VttabletProcess.Directory)
-
-		return tablet.MysqlctlProcess.Start()
-	}
-
-	tablet.MysqlctldProcess.Stop()
-	tablet.VttabletProcess.TearDown()
-	os.RemoveAll(tablet.VttabletProcess.Directory)
-
-	return tablet.MysqlctldProcess.Start()
-}
-
-// ValidareTabletRestart restarts the tablet and validate error if there is any.
-func (tablet *Vttablet) ValidareTabletRestart(t *testing.T) {
-	require.Nilf(t, tablet.Restart(), "tablet restart failed")
-}
-
 // StartTopo starts topology server
 func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	if cluster.Cell == "" {
@@ -170,22 +127,25 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	}
 	cluster.TopoPort = cluster.GetAndReservePort()
 	cluster.TmpDirectory = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/tmp_%d", cluster.GetAndReservePort()))
-	cluster.TopoProcess = *EtcdProcessInstance(cluster.TopoPort, cluster.GetAndReservePort(), cluster.Hostname, "global")
-	log.Info(fmt.Sprintf("Starting etcd server on port : %d", cluster.TopoPort))
-	if err = cluster.TopoProcess.Setup(); err != nil {
+	cluster.TopoProcess = *TopoProcessInstance(cluster.TopoPort, cluster.GetAndReservePort(), cluster.Hostname, *topoFlavor, "global")
+
+	log.Info(fmt.Sprintf("Starting topo server %v on port : %d", topoFlavor, cluster.TopoPort))
+	if err = cluster.TopoProcess.Setup(*topoFlavor, cluster); err != nil {
 		log.Error(err.Error())
 		return
 	}
 
-	log.Info("Creating topo dirs")
-	if err = cluster.TopoProcess.ManageTopoDir("mkdir", "/vitess/global"); err != nil {
-		log.Error(err.Error())
-		return
-	}
+	if *topoFlavor == "etcd2" {
+		log.Info("Creating topo dirs")
+		if err = cluster.TopoProcess.ManageTopoDir("mkdir", "/vitess/global"); err != nil {
+			log.Error(err.Error())
+			return
+		}
 
-	if err = cluster.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+cluster.Cell); err != nil {
-		log.Error(err.Error())
-		return
+		if err = cluster.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+cluster.Cell); err != nil {
+			log.Error(err.Error())
+			return
+		}
 	}
 
 	log.Info("Adding cell info")
@@ -195,7 +155,8 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 		return
 	}
 
-	cluster.VtctldProcess = *VtctldProcessInstance(cluster.GetAndReservePort(), cluster.GetAndReservePort(), cluster.TopoProcess.Port, cluster.Hostname, cluster.TmpDirectory)
+	cluster.VtctldProcess = *VtctldProcessInstance(cluster.GetAndReservePort(), cluster.GetAndReservePort(),
+		cluster.TopoProcess.Port, cluster.Hostname, cluster.TmpDirectory)
 	log.Info(fmt.Sprintf("Starting vtctld server on port : %d", cluster.VtctldProcess.Port))
 	cluster.VtctldHTTPPort = cluster.VtctldProcess.Port
 	if err = cluster.VtctldProcess.Setup(cluster.Cell, cluster.VtctldExtraArgs...); err != nil {
@@ -432,8 +393,8 @@ func NewCluster(cell string, hostname string) *LocalProcessCluster {
 	return cluster
 }
 
-// ReStartVtgate starts vtgate with updated configs
-func (cluster *LocalProcessCluster) ReStartVtgate() (err error) {
+// RestartVtgate starts vtgate with updated configs
+func (cluster *LocalProcessCluster) RestartVtgate() (err error) {
 	err = cluster.VtgateProcess.TearDown()
 	if err != nil {
 		log.Error(err.Error())
@@ -515,8 +476,8 @@ func (cluster *LocalProcessCluster) Teardown() {
 		log.Errorf("Error in vtctld teardown - %s", err.Error())
 	}
 
-	if err := cluster.TopoProcess.TearDown(cluster.Cell, cluster.OriginalVTDATAROOT, cluster.CurrentVTDATAROOT, *keepData); err != nil {
-		log.Errorf("Error in etcd teardown - %s", err.Error())
+	if err := cluster.TopoProcess.TearDown(cluster.Cell, cluster.OriginalVTDATAROOT, cluster.CurrentVTDATAROOT, *keepData, *topoFlavor); err != nil {
+		log.Errorf("Error in topo server teardown - %s", err.Error())
 	}
 
 }

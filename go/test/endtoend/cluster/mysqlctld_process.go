@@ -197,16 +197,7 @@ func (mysqlctld *MysqlctldProcess) ExecuteCommandWithOutput(args ...string) (res
 // IsHealthy gives the health status of mysql.
 func (mysqlctld *MysqlctldProcess) IsHealthy() bool {
 	socketFile := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", mysqlctld.TabletUID), "/mysql.sock")
-	params := mysql.NewConnParams(mysqlctld.MySQLPort, mysqlctld.Password, socketFile, "")
+	params := NewConnParams(mysqlctld.MySQLPort, mysqlctld.Password, socketFile, "")
 	_, err := mysql.Connect(context.Background(), &params)
 	return err == nil
 }
-
-// func fileExists(path string) bool {
-// 	_, err := os.Stat(path)
-// 	if os.IsNotExist(err) {
-// 		return false
-// 	}
-
-// 	return true
-// }
