@@ -121,9 +121,9 @@ func TestStatements(t *testing.T) {
 	runCases(t, nil, testcases, "current")
 }
 
-// TestOther tests "other" statements. These statements produce
-// very different events depending on the version of mysql or mariadb
-// So, we just show that vreplication transmits "OTHER" events
+// TestOther tests "other" and "priv" statements. These statements can
+// produce very different events depending on the version of mysql or
+// mariadb. So, we just show that vreplication transmits "OTHER" events
 // if the binlog is affected by the statement.
 func TestOther(t *testing.T) {
 	if testing.Short() {
@@ -148,6 +148,8 @@ func TestOther(t *testing.T) {
 		"set @val=1",
 		"show tables",
 		"describe stream1",
+		"grant select on stream1 to current_user()",
+		"revoke select on stream1 from current_user()",
 	}
 
 	// customRun is a modified version of runCases.
