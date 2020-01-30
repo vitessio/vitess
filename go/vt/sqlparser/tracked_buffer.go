@@ -110,6 +110,12 @@ func (buf *TrackedBuffer) Myprintf(format string, values ...interface{}) {
 	}
 }
 
+// WriteString appends the contents of s to b's buffer.
+// It returns the length of s and a nil error.
+func (buf *TrackedBuffer) WriteString(s string) (int, error) {
+	return buf.Builder.WriteString(s)
+}
+
 // WriteArg writes a value argument into the buffer along with
 // tracking information for future substitutions. arg must contain
 // the ":" or "::" prefix.

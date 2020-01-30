@@ -781,7 +781,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select * from user where name = 'abc' and (id = 4) limit 5",
+    "Query": "select * from user where name = 'abc' and id = 4 limit 5",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
     "Values": [
@@ -801,7 +801,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select * from user where (id = 4) and (name = 'abc') limit 5",
+    "Query": "select * from user where id = 4 and name = 'abc' limit 5",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
     "Values": [
@@ -881,7 +881,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select * from user where (id = 1) and name = true limit 5",
+    "Query": "select * from user where id = 1 and name = true limit 5",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
     "Values": [
@@ -901,7 +901,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select * from user where (id = 1) and name limit 5",
+    "Query": "select * from user where id = 1 and name limit 5",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
     "Values": [
@@ -921,7 +921,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select * from user where (id = 5) and name = true limit 5",
+    "Query": "select * from user where id = 5 and name = true limit 5",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
     "Values": [

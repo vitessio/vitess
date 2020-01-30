@@ -526,11 +526,6 @@ type (
 		Expr Expr
 	}
 
-	// ParenExpr represents a parenthesized boolean expression.
-	ParenExpr struct {
-		Expr Expr
-	}
-
 	// ComparisonExpr represents a two-value comparison expression.
 	ComparisonExpr struct {
 		Operator    string
@@ -541,7 +536,7 @@ type (
 	// RangeCond represents a BETWEEN or a NOT BETWEEN expression.
 	RangeCond struct {
 		Operator string
-		Left     Expr
+		Expr     Expr
 		From, To Expr
 	}
 
@@ -708,7 +703,6 @@ type (
 func (*AndExpr) iExpr()           {}
 func (*OrExpr) iExpr()            {}
 func (*NotExpr) iExpr()           {}
-func (*ParenExpr) iExpr()         {}
 func (*ComparisonExpr) iExpr()    {}
 func (*RangeCond) iExpr()         {}
 func (*IsExpr) iExpr()            {}
@@ -1406,27 +1400,30 @@ func (node Exprs) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *AndExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v and %v", node.Left, node.Right)
+	printWithParensIfNeeded(node, node.Left, buf)
+	buf.WriteString(" and ")
+	printWithParensIfNeeded(node, node.Right, buf)
 }
 
 // Format formats the node.
 func (node *OrExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v or %v", node.Left, node.Right)
+	printWithParensIfNeeded(node, node.Left, buf)
+	buf.WriteString(" or ")
+	printWithParensIfNeeded(node, node.Right, buf)
 }
 
 // Format formats the node.
 func (node *NotExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("not %v", node.Expr)
-}
-
-// Format formats the node.
-func (node *ParenExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("(%v)", node.Expr)
+	buf.WriteString("not ")
+	printWithParensIfNeeded(node, node.Expr, buf)
 }
 
 // Format formats the node.
 func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v %s %v", node.Left, node.Operator, node.Right)
+	printWithParensIfNeeded(node, node.Left, buf)
+	buf.Myprintf(" %s ", node.Operator)
+	printWithParensIfNeeded(node, node.Right, buf)
+
 	if node.Escape != nil {
 		buf.Myprintf(" escape %v", node.Escape)
 	}
@@ -1434,7 +1431,11 @@ func (node *ComparisonExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *RangeCond) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v %s %v and %v", node.Left, node.Operator, node.From, node.To)
+	printWithParensIfNeeded(node, node.Expr, buf)
+	buf.Myprintf(" %s ", node.Operator)
+	printWithParensIfNeeded(node, node.From, buf)
+	buf.WriteString(" and ")
+	printWithParensIfNeeded(node, node.To, buf)
 }
 
 // Format formats the node.
@@ -1504,21 +1505,27 @@ func (node ListArg) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *BinaryExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("%v %s %v", node.Left, node.Operator, node.Right)
+	printWithParensIfNeeded(node, node.Left, buf)
+	buf.Myprintf(" %s ", node.Operator)
+	printWithParensIfNeeded(node, node.Right, buf)
 }
 
 // Format formats the node.
 func (node *UnaryExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%s", node.Operator)
 	if _, unary := node.Expr.(*UnaryExpr); unary {
-		buf.Myprintf("%s %v", node.Operator, node.Expr)
+		buf.Myprintf(" %v", node.Expr)
 		return
 	}
-	buf.Myprintf("%s%v", node.Operator, node.Expr)
+
+	printWithParensIfNeeded(node, node.Expr, buf)
 }
 
 // Format formats the node.
 func (node *IntervalExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("interval %v %s", node.Expr, node.Unit)
+	buf.WriteString("interval ")
+	printWithParensIfNeeded(node, node.Expr, buf)
+	buf.Myprintf(" %s", node.Unit)
 }
 
 // Format formats the node.

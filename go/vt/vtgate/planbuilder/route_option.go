@@ -169,7 +169,6 @@ func (ro *routeOption) canMerge(rro *routeOption, customCheck func() bool) bool 
 // mergeable by unique vindex. The constraint has to be an equality
 // like a.id = b.id where both columns have the same unique vindex.
 func (ro *routeOption) canMergeOnFilter(pb *primitiveBuilder, rro *routeOption, filter sqlparser.Expr) bool {
-	filter = skipParenthesis(filter)
 	comparison, ok := filter.(*sqlparser.ComparisonExpr)
 	if !ok {
 		return false
@@ -254,8 +253,6 @@ func (ro *routeOption) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) 
 		case sqlparser.InStr:
 			return ro.computeINPlan(pb, node)
 		}
-	case *sqlparser.ParenExpr:
-		return ro.computePlan(pb, node.Expr)
 	}
 	return engine.SelectScatter, nil, nil
 }

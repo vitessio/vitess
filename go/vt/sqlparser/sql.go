@@ -6037,13 +6037,13 @@ yydefault:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:2258
 		{
-			yyVAL.expr = &RangeCond{Left: yyDollar[1].expr, Operator: BetweenStr, From: yyDollar[3].expr, To: yyDollar[5].expr}
+			yyVAL.expr = &RangeCond{Expr: yyDollar[1].expr, Operator: BetweenStr, From: yyDollar[3].expr, To: yyDollar[5].expr}
 		}
 	case 426:
 		yyDollar = yyS[yypt-6 : yypt+1]
 //line sql.y:2262
 		{
-			yyVAL.expr = &RangeCond{Left: yyDollar[1].expr, Operator: NotBetweenStr, From: yyDollar[4].expr, To: yyDollar[6].expr}
+			yyVAL.expr = &RangeCond{Expr: yyDollar[1].expr, Operator: NotBetweenStr, From: yyDollar[4].expr, To: yyDollar[6].expr}
 		}
 	case 427:
 		yyDollar = yyS[yypt-2 : yypt+1]
@@ -7097,7 +7097,7 @@ yydefault:
 //line sql.y:3079
 		{
 			if len(yyDollar[1].valTuple) == 1 {
-				yyVAL.expr = &ParenExpr{yyDollar[1].valTuple[0]}
+				yyVAL.expr = yyDollar[1].valTuple[0]
 			} else {
 				yyVAL.expr = yyDollar[1].valTuple
 			}

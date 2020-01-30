@@ -882,10 +882,6 @@ func removeExprKeyrange(node sqlparser.Expr) sqlparser.Expr {
 			Left:  removeExprKeyrange(node.Left),
 			Right: removeExprKeyrange(node.Right),
 		}
-	case *sqlparser.ParenExpr:
-		return &sqlparser.ParenExpr{
-			Expr: removeExprKeyrange(node.Expr),
-		}
 	}
 	return node
 }

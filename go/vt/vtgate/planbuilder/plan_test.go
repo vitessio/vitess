@@ -243,7 +243,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vindexes.VSchema)
 
 				if out != tcase.output {
 					fail = true
-					t.Errorf("File: %s, Line: %v\n %s", filename, tcase.lineno, cmp.Diff(out, tcase.output))
+					t.Errorf("File: %s, Line: %v\n %s", filename, tcase.lineno, cmp.Diff(tcase.output, out))
 				}
 
 				if err != nil {

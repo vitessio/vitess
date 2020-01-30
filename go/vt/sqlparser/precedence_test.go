@@ -19,6 +19,8 @@ package sqlparser
 import (
 	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func readable(node Expr) string {
@@ -108,5 +110,42 @@ func TestIsPrecedence(t *testing.T) {
 		if expr != tcase.output {
 			t.Errorf("Parse: \n%s, want: \n%s", expr, tcase.output)
 		}
+	}
+}
+
+func TestParens(t *testing.T) {
+	tests := []struct {
+		in, expected string
+	}{
+		{in: "12", expected: "12"},
+		{in: "(12)", expected: "12"},
+		{in: "((12))", expected: "12"},
+		{in: "((true) and (false))", expected: "true and false"},
+		{in: "((true) and (false)) and (true)", expected: "true and false and true"},
+		{in: "((true) and (false))", expected: "true and false"},
+		{in: "a=b and (c=d or e=f)", expected: "a = b and (c = d or e = f)"},
+		{in: "(a=b and c=d) or e=f", expected: "a = b and c = d or e = f"},
+		{in: "a & (b | c)", expected: "a & (b | c)"},
+		{in: "(a & b) | c", expected: "a & b | c"},
+		{in: "not (a=b and c=d)", expected: "not (a = b and c = d)"},
+		{in: "not (a=b) and c=d", expected: "not a = b and c = d"},
+		{in: "-(12)", expected: "-12"},
+		{in: "-(12 + 12)", expected: "-(12 + 12)"},
+		{in: "(1 > 2) and (1 = b)", expected: "1 > 2 and 1 = b"},
+		{in: "(a / b) + c", expected: "a / b + c"},
+		{in: "a / (b + c)", expected: "a / (b + c)"},
+		{in: "(1,2,3)", expected: "(1, 2, 3)"},
+		{in: "(a) between (5) and (7)", expected: "a between 5 and 7"},
+		{in: "(a | b) between (5) and (7)", expected: "a | b between 5 and 7"},
+		{in: "(a and b) between (5) and (7)", expected: "(a and b) between 5 and 7"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.in, func(t *testing.T) {
+			stmt, err := Parse("select " + tc.in)
+			require.NoError(t, err)
+			out := String(stmt)
+			require.Equal(t, "select "+tc.expected+" from dual", out)
+		})
 	}
 }
