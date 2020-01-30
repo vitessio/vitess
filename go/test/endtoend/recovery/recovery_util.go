@@ -39,7 +39,7 @@ func ExecuteQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, 
 }
 
 func RestoreTablet(t *testing.T, localCluster *cluster.LocalProcessCluster, tablet *cluster.Vttablet, restoreKSName string, shardName string, keyspaceName string, commonTabletArg []string) {
-	tablet.ValidareTabletRestart(t)
+	tablet.ValidateTabletRestart(t)
 	tm := time.Now().UTC()
 	tm.Format(time.RFC3339)
 	_, err := localCluster.VtctlProcess.ExecuteCommandWithOutput("CreateKeyspace",

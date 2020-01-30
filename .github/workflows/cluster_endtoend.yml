@@ -6,7 +6,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        name: [11, 12, 13, 14, 15, 16, 17, 19, 20]
+        name: [11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
 
     steps:
     - name: Set up Go
@@ -27,6 +27,7 @@ jobs:
         sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
         go mod download
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo apt-get install -y gnupg2
         sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get update
         sudo apt-get install percona-xtrabackup-24
