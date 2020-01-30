@@ -36,6 +36,48 @@ var (
 	tmClient = tmc.NewClient()
 )
 
+// Vttablet stores the properties needed to start a vttablet process
+type Vttablet struct {
+	Type      string
+	TabletUID int
+	HTTPPort  int
+	GrpcPort  int
+	MySQLPort int
+	Alias     string
+	Cell      string
+
+	// background executable processes
+	MysqlctlProcess  MysqlctlProcess
+	MysqlctldProcess MysqlctldProcess
+	VttabletProcess  *VttabletProcess
+}
+
+// Restart restarts vttablet and mysql.
+func (tablet *Vttablet) Restart() error {
+	if tablet.MysqlctlProcess.TabletUID|tablet.MysqlctldProcess.TabletUID == 0 {
+		return fmt.Errorf("no mysql process is running")
+	}
+
+	if tablet.MysqlctlProcess.TabletUID > 0 {
+		tablet.MysqlctlProcess.Stop()
+		tablet.VttabletProcess.TearDown()
+		os.RemoveAll(tablet.VttabletProcess.Directory)
+
+		return tablet.MysqlctlProcess.Start()
+	}
+
+	tablet.MysqlctldProcess.Stop()
+	tablet.VttabletProcess.TearDown()
+	os.RemoveAll(tablet.VttabletProcess.Directory)
+
+	return tablet.MysqlctldProcess.Start()
+}
+
+// ValidateTabletRestart restarts the tablet and validate error if there is any.
+func (tablet *Vttablet) ValidateTabletRestart(t *testing.T) {
+	require.Nilf(t, tablet.Restart(), "tablet restart failed")
+}
+
 // GetMasterPosition gets the master position of required vttablet
 func GetMasterPosition(t *testing.T, vttablet Vttablet, hostname string) (string, string) {
 	ctx := context.Background()

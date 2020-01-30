@@ -161,39 +161,6 @@ func MysqlCtldProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string)
 	return mysqlctld
 }
 
-// StartMySQLctld starts mysqlctld process
-func StartMySQLctld(ctx context.Context, tablet *Vttablet, username string, tmpDirectory string) error {
-	tablet.MysqlctldProcess = *MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
-	return tablet.MysqlctldProcess.Start()
-}
-
-// StartMySQLctldAndGetConnection create a connection to tablet mysql
-func StartMySQLctldAndGetConnection(ctx context.Context, tablet *Vttablet, username string, tmpDirectory string) (*mysql.Conn, error) {
-	tablet.MysqlctldProcess = *MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
-	err := tablet.MysqlctldProcess.Start()
-	if err != nil {
-		return nil, err
-	}
-
-	params := mysql.ConnParams{
-		Uname:      username,
-		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tablet.TabletUID), "/mysql.sock"),
-	}
-
-	return mysql.Connect(ctx, &params)
-}
-
-// ExecuteCommandWithOutput executes any mysqlctld command and returns output
-func (mysqlctld *MysqlctldProcess) ExecuteCommandWithOutput(args ...string) (result string, err error) {
-	tmpProcess := exec.Command(
-		mysqlctld.Binary,
-		args...,
-	)
-	log.Info(fmt.Sprintf("Executing mysqlctld with arguments %v", strings.Join(tmpProcess.Args, " ")))
-	resultByte, err := tmpProcess.CombinedOutput()
-	return string(resultByte), err
-}
-
 // IsHealthy gives the health status of mysql.
 func (mysqlctld *MysqlctldProcess) IsHealthy() bool {
 	socketFile := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", mysqlctld.TabletUID), "/mysql.sock")

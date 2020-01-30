@@ -77,7 +77,7 @@ var (
 					  ) Engine=InnoDB`
 )
 
-// LaunchCluster :
+// LaunchCluster : starts the cluster as per given params.
 func LaunchCluster(setupType int, streamMode string, stripes int) (int, error) {
 	localCluster = cluster.NewCluster(cell, hostname)
 
@@ -246,9 +246,7 @@ func TestBackup(t *testing.T, setupType int, streamMode string, stripes int) {
 	// Run all the backup tests
 
 	for _, test := range testMethods {
-		fmt.Printf("test %v started \n", test.name)
-		pass := t.Run(test.name, test.method)
-		fmt.Printf("test %v completed, isPass %v\n", test.name, pass)
+		t.Run(test.name, test.method)
 	}
 
 }
