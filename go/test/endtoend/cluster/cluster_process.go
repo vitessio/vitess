@@ -393,8 +393,8 @@ func NewCluster(cell string, hostname string) *LocalProcessCluster {
 	return cluster
 }
 
-// RestartVtgate starts vtgate with updated configs
-func (cluster *LocalProcessCluster) RestartVtgate() (err error) {
+// ReStartVtgate starts vtgate with updated configs
+func (cluster *LocalProcessCluster) ReStartVtgate() (err error) {
 	err = cluster.VtgateProcess.TearDown()
 	if err != nil {
 		log.Error(err.Error())
