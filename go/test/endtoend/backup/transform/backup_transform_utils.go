@@ -75,9 +75,14 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
 			Name: keyspaceName,
+			Shards: []cluster.Shard{
+				{
+					Name: shardName,
+				},
+			},
 		}
 		localCluster.Keyspaces = append(localCluster.Keyspaces, *keyspace)
-
+		shard := &keyspace.Shards[0]
 		// changing password for mysql user
 		dbCredentialFile = initialsharding.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 		initDb, _ := ioutil.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
@@ -88,10 +93,6 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 
 		extraArgs := []string{"-db-credentials-file", dbCredentialFile}
 		commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)
-
-		shard := cluster.Shard{
-			Name: shardName,
-		}
 
 		// start mysql process for all replicas and master
 		var mysqlProcs []*exec.Cmd
