@@ -186,7 +186,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 21,
+			"Shard": 19,
 			"RetryMax": 0,
 			"Tags": []
 		},
