@@ -165,7 +165,7 @@
 		},
 		"backup_mysqlctld": {
 			"File": "backup_mysqlctld_test.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/mysqlctld"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/mysqlctld"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 21,
@@ -183,7 +183,7 @@
 		},
 		"backup_transform": {
 			"File": "backup_transform_test.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/transform"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 21,
@@ -192,7 +192,7 @@
 		},
 		"backup_transform_mysqlctld": {
 			"File": "backup_transform_mysqlctld_test.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/transformmysqlctld"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transformmysqlctld"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 21, 
