@@ -19,13 +19,16 @@ package vtbackup
 import (
 	"fmt"
 	"os"
+	"path"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -52,7 +55,8 @@ func TestTabletInitialBackup(t *testing.T) {
 	//    - list the backups, remove them
 
 	vtBackup(t, true)
-	localCluster.VerifyBackupCount(t, shardKsName, 1)
+	verifyBackupCount(t, shardKsName, 1)
+
 	// Initialize the tablets
 	initTablets(t, false, false)
 
@@ -103,7 +107,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	//    - list the backup, remove it
 
 	// Store initial backup counts
-	listbackups, err := localCluster.ListBackups(shardKsName)
+	backups, err := listBackups(shardKsName)
 	require.Nil(t, err)
 
 	// insert data on master, wait for slave to get it
@@ -122,7 +126,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	log.Info("done taking backup %s", time.Now())
 
 	// check that the backup shows up in the listing
-	localCluster.VerifyBackupCount(t, shardKsName, len(listbackups)+1)
+	verifyBackupCount(t, shardKsName, len(backups)+1)
 
 	// insert more data on the master
 	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
@@ -150,8 +154,8 @@ func firstBackupTest(t *testing.T, tabletType string) {
 		assert.Equal(t, "must_not", result.Rows[3][1].ToString(), "PromotionRule")
 	}
 
-	localCluster.RemoveAllBackups(t, shardKsName)
-	localCluster.VerifyBackupCount(t, shardKsName, 0)
+	removeBackups(t)
+	verifyBackupCount(t, shardKsName, 0)
 
 }
 
@@ -161,6 +165,48 @@ func vtBackup(t *testing.T, initialBackup bool) {
 	log.Info("starting backup tablet %s", time.Now())
 	err := localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
 	assert.Nil(t, err)
+}
+
+func verifyBackupCount(t *testing.T, shardKsName string, expected int) []string {
+	backups, err := listBackups(shardKsName)
+	assert.Nil(t, err)
+	assert.Equalf(t, expected, len(backups), "invalid number of backups")
+	return backups
+}
+
+func listBackups(shardKsName string) ([]string, error) {
+	backups, err := localCluster.VtctlProcess.ExecuteCommandWithOutput(
+		"-backup_storage_implementation", "file",
+		"-file_backup_storage_root",
+		path.Join(os.Getenv("VTDATAROOT"), "tmp", "backupstorage"),
+		"ListBackups", shardKsName,
+	)
+	if err != nil {
+		return nil, err
+	}
+	result := strings.Split(backups, "\n")
+	var returnResult []string
+	for _, str := range result {
+		if str != "" {
+			returnResult = append(returnResult, str)
+		}
+	}
+	return returnResult, nil
+}
+
+func removeBackups(t *testing.T) {
+	// Remove all the backups from the shard
+	backups, err := listBackups(shardKsName)
+	assert.Nil(t, err)
+	for _, backup := range backups {
+		_, err := localCluster.VtctlProcess.ExecuteCommandWithOutput(
+			"-backup_storage_implementation", "file",
+			"-file_backup_storage_root",
+			path.Join(os.Getenv("VTDATAROOT"), "tmp", "backupstorage"),
+			"RemoveBackup", shardKsName, backup,
+		)
+		assert.Nil(t, err)
+	}
 }
 
 func initTablets(t *testing.T, startTablet bool, initShardMaster bool) {
