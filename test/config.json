@@ -163,12 +163,39 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"backup_mysqlctld": {
+			"File": "backup_mysqlctld_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/mysqlctld"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 21,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"backup_only": {
 			"File": "backup_only.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtbackup"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 19,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"backup_transform": {
+			"File": "backup_transform_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/transform"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 21,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"backup_transform_mysqlctld": {
+			"File": "backup_transform_mysqlctld_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/transformmysqlctld"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 21, 
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -205,33 +232,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 12,
-			"RetryMax": 0,
-			"Tags": []
-		},
-		"backup_transform": {
-			"File": "backup_transform_test.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backuptransform"],
-			"Command": [],
-			"Manual": false,
-			"Shard": 12,
-			"RetryMax": 0,
-			"Tags": []
-		},
-		"backup_mysqlctld": {
-			"File": "backup_mysqlctld_test.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backupmysqlctld"],
-			"Command": [],
-			"Manual": false,
-			"Shard": 12,
-			"RetryMax": 0,
-			"Tags": []
-		},
-		"backup_transform_mysqlctld": {
-			"File": "backup_transform_mysqlctld_test.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backuptransformmysqlctld"],
-			"Command": [],
-			"Manual": false,
-			"Shard": 12, 
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -321,6 +321,17 @@
 		"mysqlctl": {
 			"File": "mysqlctl.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/mysqlctl"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 12,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
+		},
+		"mysqlctld": {
+			"File": "mysqlctld_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/mysqlctld"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 12,

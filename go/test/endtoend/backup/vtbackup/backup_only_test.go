@@ -18,6 +18,7 @@ package vtbackup
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -185,7 +186,7 @@ func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForS
 	// Erase mysql/tablet dir, then start tablet with restore enabled.
 
 	log.Info("restoring tablet %s", time.Now())
-	tablet.ValidateTabletRestart(t)
+	resetTabletDirectory(t, *tablet, true)
 
 	err := tablet.VttabletProcess.CreateDB(keyspaceName)
 	assert.Nil(t, err)
@@ -197,6 +198,31 @@ func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForS
 	tablet.VttabletProcess.SupportsBackup = true
 	err = tablet.VttabletProcess.Setup()
 	assert.Nil(t, err)
+}
+
+func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet, initMysql bool) {
+
+	extraArgs := []string{"-db-credentials-file", dbCredentialFile}
+	tablet.MysqlctlProcess.ExtraArgs = extraArgs
+
+	// Shutdown Mysql
+	err := tablet.MysqlctlProcess.Stop()
+	assert.Nil(t, err)
+	// Teardown Tablet
+	err = tablet.VttabletProcess.TearDown()
+	assert.Nil(t, err)
+
+	// Empty the dir
+	err = os.RemoveAll(tablet.VttabletProcess.Directory)
+	assert.Nil(t, err)
+
+	if initMysql {
+		// Init the Mysql
+		tablet.MysqlctlProcess.InitDBFile = newInitDBFile
+		err = tablet.MysqlctlProcess.Start()
+		assert.Nil(t, err)
+	}
+
 }
 
 func tearDown(t *testing.T, initMysql bool) {
@@ -223,6 +249,6 @@ func tearDown(t *testing.T, initMysql bool) {
 		err := localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", tablet.Alias)
 		assert.Nil(t, err)
 
-		tablet.ValidateTabletRestart(t)
+		resetTabletDirectory(t, tablet, initMysql)
 	}
 }
