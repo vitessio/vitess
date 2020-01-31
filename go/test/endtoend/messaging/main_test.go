@@ -27,11 +27,17 @@ import (
 
 var (
 	clusterInstance      *cluster.LocalProcessCluster
+	shard0Master         *cluster.Vttablet
+	shard0Replica        *cluster.Vttablet
+	shard1Master         *cluster.Vttablet
+	lookupMaster         *cluster.Vttablet
 	hostname             = "localhost"
 	keyspaceName         = "test_keyspace"
 	testingID            = 1
 	tableName            = "vt_prepare_stmt_test"
 	cell                 = "zone1"
+	userKeyspace         = "user"
+	lookupKeyspace       = "lookup"
 	createShardedMessage = `create table sharded_message(
 		time_scheduled bigint,
 		id bigint,
@@ -98,7 +104,7 @@ func TestMain(m *testing.M) {
 
 		// Start unsharded keyspace
 		keyspace := &cluster.Keyspace{
-			Name:      "lookup",
+			Name:      lookupKeyspace,
 			SchemaSQL: createUnshardedMessage,
 			VSchema:   lookupVschema,
 		}
@@ -108,7 +114,7 @@ func TestMain(m *testing.M) {
 
 		// Start sharded keyspace
 		keyspace = &cluster.Keyspace{
-			Name:      "user",
+			Name:      userKeyspace,
 			SchemaSQL: createShardedMessage,
 			VSchema:   userVschema,
 		}
@@ -120,6 +126,11 @@ func TestMain(m *testing.M) {
 		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1, err
 		}
+
+		shard0Master = clusterInstance.Keyspaces[1].Shards[0].MasterTablet()
+		shard1Master = clusterInstance.Keyspaces[1].Shards[1].MasterTablet()
+		lookupMaster = clusterInstance.Keyspaces[0].Shards[0].MasterTablet()
+		shard0Replica = clusterInstance.Keyspaces[1].Shards[0].Replica()
 
 		return m.Run(), nil
 	}()
