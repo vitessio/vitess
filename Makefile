@@ -80,8 +80,6 @@ install: build
 	# also symlink config files in the old location
 	ln -sf src/vitess.io/vitess/config "$${PREFIX}/config"
 	# vtctld web UI files
-	mkdir -p "$${PREFIX}/src/vitess.io/vitess/web"
-	cp -R web/vtctld "$${PREFIX}/src/vitess.io/vitess/web/"
 	mkdir -p "$${PREFIX}/src/vitess.io/vitess/web/vtctld2"
 	cp -R web/vtctld2/app "$${PREFIX}/src/vitess.io/vitess/web/vtctld2/"
 
