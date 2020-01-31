@@ -19,7 +19,7 @@
 				"java_test"
 			],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 0,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -28,7 +28,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 1,
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"
@@ -52,7 +52,7 @@
 					"test/client_test.sh"
 			],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 2,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -101,7 +101,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 2,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -110,7 +110,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 2,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -119,7 +119,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 1,
 			"RetryMax": 0,
 			"Tags": [
 				"webdriver"
