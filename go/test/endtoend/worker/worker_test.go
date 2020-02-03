@@ -120,7 +120,7 @@ func TestReparentDuringWorkerCopy(t *testing.T) {
 	waitForReplicationPos(t, master, rdOnly1, 60)
 
 	copySchemaToDestinationShard(t)
-	verifySuccessfulWorkerCopyWithReparent(t, false)
+	verifySuccessfulWorkerCopyWithReparent(t, true)
 }
 
 func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
@@ -177,6 +177,7 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 		// self.check_throttler_service('localhost:%d' % worker_rpc_port,
 		//                              ['test_keyspace/-80', 'test_keyspace/80-'],
 		//
+		time.Sleep(5 * time.Second)
 		sharding.CheckThrottlerService(t, fmt.Sprintf("%s:%d", hostname, localCluster.VtworkerProcess.GrpcPort),
 			[]string{"test_keyspace/-80", "test_keyspace/80-"}, 9999, *localCluster)
 
@@ -186,14 +187,15 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 		var mysqlCtlProcessList []*exec.Cmd
 
 		for _, tablet := range []*cluster.Vttablet{shard0Master, shard1Master} {
-			proc, err = tablet.MysqlctlProcess.StopProcess()
+			tablet.MysqlctlProcess.InitMysql = false
+			sqlProc, err := tablet.MysqlctlProcess.StopProcess()
 			assert.Nil(t, err)
-			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
+			mysqlCtlProcessList = append(mysqlCtlProcessList, sqlProc)
 		}
 
 		// Wait for mysql processes to stop
-		for _, proc := range mysqlCtlProcessList {
-			if err := proc.Wait(); err != nil {
+		for _, sqlProc := range mysqlCtlProcessList {
+			if err := sqlProc.Wait(); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -213,14 +215,15 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 		var mysqlCtlProcessStartList []*exec.Cmd
 
 		for _, tablet := range []*cluster.Vttablet{shard0Master, shard1Master} {
-			proc, err = tablet.MysqlctlProcess.StartProcess()
+			tablet.MysqlctlProcess.InitMysql = false
+			sqlProc, err := tablet.MysqlctlProcess.StartProcess()
 			assert.Nil(t, err)
-			mysqlCtlProcessStartList = append(mysqlCtlProcessStartList, proc)
+			mysqlCtlProcessStartList = append(mysqlCtlProcessStartList, sqlProc)
 		}
 
 		// Wait for mysql processes to start
-		for _, proc := range mysqlCtlProcessStartList {
-			if err := proc.Wait(); err != nil {
+		for _, sqlProc := range mysqlCtlProcessStartList {
+			if err := sqlProc.Wait(); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -255,22 +258,21 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 			"test_keyspace/80-", "-new_master", shard1Replica.Alias)
 
 	}
-	err = proc.Wait()
-	//assert.Nil(t, err)
-
-	//err = localCluster.VtworkerProcess.TearDown()
-	//assert.Nil(t, err)
+	_ = proc.Wait()
 
 	// Verify that we were forced to re-resolve and retry.
 	resultMap, err := localCluster.VtworkerProcess.GetVars()
 	workerRetryCount := fmt.Sprintf("%v", reflect.ValueOf(resultMap["WorkerRetryCount"]))
 	workerRetryCountInt, err := strconv.Atoi(workerRetryCount)
 	assert.Nil(t, err)
+	assert.Greater(t, workerRetryCountInt, 1, "expected vtworker to retry each of the two reparented destination masters at least once, but it didn't")
+
 	err = localCluster.VtworkerProcess.TearDown()
 	assert.Nil(t, err)
+
 	waitForReplicationPos(t, shard0Replica, shard0RdOnly1, 60)
 	waitForReplicationPos(t, shard1Replica, shard1RdOnly1, 60)
-	assert.Greater(t, workerRetryCountInt, 1, "expected vtworker to retry each of the two reparented destination masters at least once, but it didn't")
+
 	err = localCluster.VtworkerProcess.ExecuteVtworkerCommand(localCluster.GetAndReservePort(), localCluster.GetAndReservePort(), "-cell", cell,
 		"--use_v3_resharding_mode=true",
 		"SplitClone",
@@ -350,11 +352,13 @@ func pollForVarsWorkerRetryCount(t *testing.T, count int) {
 	var workerRetryCountInt int
 	for {
 		resultMap, err = localCluster.VtworkerProcess.GetVars()
-		assert.Nil(t, err)
+		if err != nil {
+			continue
+		}
 		workerRetryCount := fmt.Sprintf("%v", reflect.ValueOf(resultMap["WorkerRetryCount"]))
 		workerRetryCountInt, err = strconv.Atoi(workerRetryCount)
 		assert.Nil(t, err)
-		if workerRetryCountInt > 2 || (time.Now().After(startTime.Add(60 * time.Second))) {
+		if workerRetryCountInt >= 2 || (time.Now().After(startTime.Add(60 * time.Second))) {
 			break
 		}
 		continue
