@@ -75,4 +75,4 @@ jobs:
 
     - name: unit
       run: |
-        eatmydata -- make test
+        eatmydata -- make unit_test
