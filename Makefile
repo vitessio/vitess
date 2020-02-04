@@ -92,9 +92,8 @@ visitor:
 # To pass extra flags, run test.go manually.
 # For example: go run test.go -docker=false -- --extra-flag
 # For more info see: go run test.go -help
-test: build dependency_check
-	echo $$(date): Running unit tests
-	tools/unit_test_runner.sh
+test:
+	go run test.go -docker=false
 
 site_test: unit_test site_integration_test
 
@@ -111,6 +110,10 @@ cleanall: clean
 	rm -rf bin dist lib pkg
 	# Remind people to run bootstrap.sh again
 	echo "Please run 'make tools' again to setup your environment"
+
+unit_test: build dependency_check
+	echo $$(date): Running unit tests
+	tools/unit_test_runner.sh
 
 e2e_test: build
 	echo $$(date): Running endtoend tests
