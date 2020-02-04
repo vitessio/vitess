@@ -102,10 +102,7 @@ func (dc *dbClientImpl) Rollback() error {
 }
 
 func (dc *dbClientImpl) Close() {
-	if dc.dbConn != nil {
-		dc.dbConn.Close()
-		dc.dbConn = nil
-	}
+	dc.dbConn.Close()
 }
 
 func (dc *dbClientImpl) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {

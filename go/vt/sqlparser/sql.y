@@ -2487,6 +2487,10 @@ function_call_generic:
   {
     $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
   }
+| sql_id openb DISTINCTROW select_expression_list closeb
+  {
+    $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
+  }  
 | table_id '.' reserved_sql_id openb select_expression_list_opt closeb
   {
     $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: $5}

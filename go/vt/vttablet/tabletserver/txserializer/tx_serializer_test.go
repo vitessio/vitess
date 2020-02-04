@@ -439,7 +439,7 @@ func TestTxSerializerDryRun(t *testing.T) {
 
 // TestTxSerializerGlobalQueueOverflow shows that the global queue can exceed
 // its limit without rejecting errors. This is the case when all transactions
-// are the first first one for their row range.
+// are the first one for their row range.
 // This is done on purpose to avoid that a too low global queue limit would
 // reject transactions although they may succeed within the txpool constraints
 // and RPC deadline.

@@ -408,8 +408,11 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			// If the DDL adds a column, comparing with an older snapshot of the
 			// schema will make us think that a column was dropped and error out.
 			vs.se.Reload(vs.ctx)
-		case sqlparser.StmtOther:
-			// These are DBA statements like REPAIR that can be ignored.
+		case sqlparser.StmtOther, sqlparser.StmtPriv:
+			// These are either:
+			// 1) DBA statements like REPAIR that can be ignored.
+			// 2) Privilege-altering statements like GRANT/REVOKE
+			//    that we want to keep out of the stream for now.
 			vevents = append(vevents, &binlogdatapb.VEvent{
 				Type: binlogdatapb.VEventType_GTID,
 				Gtid: mysql.EncodePosition(vs.pos),

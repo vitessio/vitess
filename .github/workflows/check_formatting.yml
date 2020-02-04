@@ -1,0 +1,21 @@
+name: check_formatting
+on: [pull_request]
+jobs:
+
+  build:
+    name: Check Formatting
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Set up Go
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.13
+
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Run go fmt
+      run: |
+        gofmt -l . | grep -vF vendor/ && exit 1 || echo "All files formatted correctly"
+
