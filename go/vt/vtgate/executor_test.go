@@ -834,11 +834,9 @@ func TestExecutorShow(t *testing.T) {
 			t.Errorf("%v:\n%+v, want\n%+v", query, qr, wantqr)
 		}
 	}
-	for _, query := range []string{"show charset like '%foo'", "show character set like 'foo%'", "show charset like 'foo%'","show character set where foo like 'utf8'", "show character set where charset like '%foo'", "show charset where charset = '%foo'"} {
+	for _, query := range []string{"show charset like '%foo'", "show character set like 'foo%'", "show charset like 'foo%'", "show character set where foo like 'utf8'", "show character set where charset like '%foo'", "show charset where charset = '%foo'"} {
 		qr, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
-		if err != nil {
-			t.Error(err)
-		}
+		require.NoError(t, err)
 		wantqr := &sqltypes.Result{
 			Fields:       append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}),
 			Rows:         [][]sqltypes.Value{},
@@ -850,9 +848,7 @@ func TestExecutorShow(t *testing.T) {
 	}
 	for _, query := range []string{"show charset like 'utf8'", "show character set like 'utf8'", "show charset where charset = 'utf8'", "show character set where charset = 'utf8'"} {
 		qr, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
-		if err != nil {
-			t.Error(err)
-		}
+		require.NoError(t, err)
 		wantqr := &sqltypes.Result{
 			Fields: append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}),
 			Rows: [][]sqltypes.Value{
@@ -869,9 +865,7 @@ func TestExecutorShow(t *testing.T) {
 	}
 	for _, query := range []string{"show charset like 'utf8mb4'", "show character set like 'utf8mb4'", "show charset where charset = 'utf8mb4'", "show character set where charset = 'utf8mb4'"} {
 		qr, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
-		if err != nil {
-			t.Error(err)
-		}
+		require.NoError(t, err)
 		wantqr := &sqltypes.Result{
 			Fields: append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}),
 			Rows: [][]sqltypes.Value{
