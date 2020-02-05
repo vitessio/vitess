@@ -22,6 +22,8 @@ import (
 	"os"
 	"testing"
 
+	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -32,7 +34,6 @@ var (
 	shard1Master         *cluster.Vttablet
 	lookupMaster         *cluster.Vttablet
 	hostname             = "localhost"
-	keyspaceName         = "test_keyspace"
 	testingID            = 1
 	tableName            = "vt_prepare_stmt_test"
 	cell                 = "zone1"
@@ -94,7 +95,7 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
-		clusterInstance = &cluster.LocalProcessCluster{Cell: cell, Hostname: hostname}
+		clusterInstance = cluster.NewCluster(cell, hostname)
 		defer clusterInstance.Teardown()
 
 		// Start topo server
@@ -103,22 +104,22 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start unsharded keyspace
-		keyspace := &cluster.Keyspace{
+		keyspace := cluster.Keyspace{
 			Name:      lookupKeyspace,
 			SchemaSQL: createUnshardedMessage,
 			VSchema:   lookupVschema,
 		}
-		if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
+		if err := clusterInstance.StartUnshardedKeyspace(keyspace, 1, false); err != nil {
 			return 1, err
 		}
 
 		// Start sharded keyspace
-		keyspace = &cluster.Keyspace{
+		keyspace = cluster.Keyspace{
 			Name:      userKeyspace,
 			SchemaSQL: createShardedMessage,
 			VSchema:   userVschema,
 		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, false); err != nil {
+		if err := clusterInstance.StartKeyspace(keyspace, []string{"-80", "80-"}, 1, false); err != nil {
 			return 1, err
 		}
 
@@ -130,7 +131,7 @@ func TestMain(m *testing.M) {
 		shard0Master = clusterInstance.Keyspaces[1].Shards[0].MasterTablet()
 		shard1Master = clusterInstance.Keyspaces[1].Shards[1].MasterTablet()
 		lookupMaster = clusterInstance.Keyspaces[0].Shards[0].MasterTablet()
-		shard0Replica = clusterInstance.Keyspaces[1].Shards[0].Replica()
+		shard0Replica = clusterInstance.Keyspaces[1].Shards[0].Vttablets[1]
 
 		return m.Run(), nil
 	}()
