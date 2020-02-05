@@ -6,7 +6,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        name: [11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+        name: [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 22]
 
     steps:
     - name: Set up Go
