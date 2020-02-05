@@ -31,7 +31,7 @@ type converter struct {
 
 func (cv *converter) ToNative(v sqltypes.Value) (interface{}, error) {
 	switch v.Type() {
-	case sqltypes.Datetime:
+	case sqltypes.Datetime, sqltypes.Timestamp:
 		return DatetimeToNative(v, cv.location)
 	case sqltypes.Date:
 		return DateToNative(v, cv.location)
