@@ -19,7 +19,6 @@ package vindexes
 import (
 	"encoding/binary"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -124,6 +123,6 @@ func (rv *RegionVindex) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) (
 }
 
 // NeedVCursor staisfies the Vindex interface.
-func (rv *RegionVindex) NeedVCursor() bool {
+func (rv *RegionVindex) NeedsVCursor() bool {
 	return false
 }
