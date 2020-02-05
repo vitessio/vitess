@@ -22,7 +22,7 @@ import (
 	sharding "vitess.io/vitess/go/test/endtoend/sharding/mergesharding"
 )
 
-// TestV3MergeSharding - main tests merge sharding using a INT column
+// TestV3MergeSharding - tests merge sharding using a INT column
 func TestV3MergeSharding(t *testing.T) {
 	sharding.TestMergesharding(t, false)
 
