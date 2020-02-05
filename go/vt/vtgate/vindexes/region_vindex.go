@@ -122,6 +122,20 @@ func (rv *RegionVindex) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) (
 	return destinations, nil
 }
 
+// Verify satisfies MultiColumn
+func (rv *RegionVindex) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]bytes) ([]bool, error) {
+	result := make([]bool, len(rowsColValues))
+	destinations, _ := rv.Map(vcursor, rowsColValues)
+	for i, dest := range destinations {
+		destksid, ok := dest.(key.DestinationKeyspaceID)
+		if !ok {
+			continue
+		}
+		result[i] = bytes.Equal([]byte(destksid), ksids[i])
+	}
+	return result, nil
+}
+
 // NeedVCursor staisfies the Vindex interface.
 func (rv *RegionVindex) NeedsVCursor() bool {
 	return false
