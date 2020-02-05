@@ -185,7 +185,7 @@ func (vs *vstream) startOneStream(ctx context.Context, sgtid *binlogdatapb.Shard
 
 // streamFromTablet streams from one shard. If transactions come in separate chunks, they are grouped and sent.
 func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.ShardGtid) error {
-	// jounralDone is assigned a channel when a journal event is encountered.
+	// journalDone is assigned a channel when a journal event is encountered.
 	// It will be closed when all journal events converge.
 	var journalDone chan struct{}
 
@@ -195,7 +195,9 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-journalDone:
-			// Unreachable
+			// Unreachable.
+			// This can happen if a server misbehaves and does not end
+			// the stream after we return an error.
 			return nil
 		default:
 		}
@@ -218,7 +220,9 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 			case <-ctx.Done():
 				return ctx.Err()
 			case <-journalDone:
-				// Unreachable
+				// Unreachable.
+				// This can happen if a server misbehaves and does not end
+				// the stream after we return an error.
 				return io.EOF
 			default:
 			}
@@ -228,6 +232,8 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 				switch event.Type {
 				case binlogdatapb.VEventType_FIELD:
 					// Update table names and send.
+					// If we're streaming from multiple keyspaces, this will disambiguate
+					// duplicate table names.
 					ev := proto.Clone(event).(*binlogdatapb.VEvent)
 					ev.FieldEvent.TableName = sgtid.Keyspace + "." + ev.FieldEvent.TableName
 					sendevents = append(sendevents, ev)
@@ -322,8 +328,20 @@ func (vs *vstream) sendAll(sgtid *binlogdatapb.ShardGtid, eventss [][]*binlogdat
 	return nil
 }
 
+// getJournalEvent returns a journalEvent. The caller has to wait on its done channel.
+// Once it closes, the caller has to return (end their stream).
+// The function has three parts:
+// Part 1: For the first stream that encounters an event, it creates a journal event.
+// Part 2: Every stream joins the journalEvent. If all have not joined, the journalEvent
+// is returned to the caller.
+// Part 3: If all streams have joined, then new streams are created to replace existing
+// streams, the done channel is closed and returned. This section is executed exactly
+// once after the last stream joins.
 func (vs *vstream) getJournalEvent(ctx context.Context, sgtid *binlogdatapb.ShardGtid, journal *binlogdatapb.Journal) (*journalEvent, error) {
 	if journal.MigrationType == binlogdatapb.MigrationType_TABLES {
+		// We cannot support table migrations yet because there is no
+		// good model for it yet. For example, what if a table is migrated
+		// out of the current keyspace we're streaming from.
 		return nil, nil
 	}
 
@@ -344,6 +362,8 @@ func (vs *vstream) getJournalEvent(ctx context.Context, sgtid *binlogdatapb.Shar
 			matchAll
 			matchNone
 		)
+		// We start off as undecided. Once we transition to
+		// matchAll or matchNone, we have to stay in that state.
 		mode := undecided
 	nextParticipant:
 		for _, jks := range journal.Participants {
