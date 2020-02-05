@@ -459,6 +459,8 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 	// source or destination keyrange. If it matches either,
 	// we'll just ask for all the data. If the overlap is a subset,
 	// we'll filter.
+	sdw.wr.Logger().Infof("Left keyrange  %v", sdw.shardInfo.KeyRange)
+	sdw.wr.Logger().Infof("Right keyrange  %v", sdw.sourceShard.KeyRange)
 	overlap, err := key.KeyRangesOverlap(sdw.shardInfo.KeyRange, sdw.sourceShard.KeyRange)
 	if err != nil {
 		return vterrors.Wrap(err, "Source shard doesn't overlap with destination")
@@ -496,6 +498,8 @@ func (sdw *SplitDiffWorker) diff(ctx context.Context) error {
 			// On the source, see if we need a full scan
 			// or a filtered scan.
 			var sourceQueryResultReader *QueryResultReader
+			sdw.wr.Logger().Infof("Left keyrange  %v", overlap)
+			sdw.wr.Logger().Infof("Right keyrange  %v", sdw.sourceShard.KeyRange)
 			if key.KeyRangeEqual(overlap, sdw.sourceShard.KeyRange) {
 				sourceQueryResultReader, err = TableScan(ctx, sdw.wr.Logger(), sdw.wr.TopoServer(), sdw.sourceAlias, tableDefinition)
 			} else {
