@@ -861,10 +861,11 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 			show.Table.Qualifier = sqlparser.NewTableIdent("")
 		} else {
 			// No keyspace was indicated. Try to find one using the vschema.
-			tbl, err := e.VSchema().FindTable("", show.Table.Name.String())
-			if err == nil {
-				destKeyspace = tbl.Keyspace.Name
+			tbl, err := e.VSchema().FindTable(destKeyspace, show.Table.Name.String())
+			if err != nil {
+				return nil, err
 			}
+			destKeyspace = tbl.Keyspace.Name
 		}
 		sql = sqlparser.String(show)
 	case sqlparser.KeywordString(sqlparser.COLUMNS):

@@ -801,9 +801,10 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("%v:\n%+v, want\n%+v", query, qr, wantqr)
 	}
 
+	wantErrNoTable := "table unknown_table not found"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "show create table unknown_table", nil)
-	if err != errNoKeyspace {
-		t.Errorf("Got: %v. Want: %v", err, errNoKeyspace)
+	if err.Error() != wantErrNoTable {
+		t.Errorf("Got: %v. Want: %v", err, wantErrNoTable)
 	}
 
 	// SHOW CREATE table using vschema to find keyspace.
