@@ -830,6 +830,15 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("Got: %v. Want: %v", lastQuery, wantQuery)
 	}
 
+	// Set desitation keyspace in session
+	session.TargetString = KsTestUnsharded
+	_, err = executor.Execute(context.Background(), "TestExecute", session, "show create table unknown", nil)
+	if err != nil {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	// Reset target string so other tests dont fail.
+	session.TargetString = "@master"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show full columns from unknown from %v", KsTestUnsharded), nil)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
