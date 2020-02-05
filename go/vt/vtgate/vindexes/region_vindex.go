@@ -121,3 +121,8 @@ func (rv *RegionVindex) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) (
 	}
 	return destinations, nil
 }
+
+// NeedVCursor staisfies the Vindex interface.
+func (rv *RegionVindex) NeedVCursor() bool {
+	return false
+}
