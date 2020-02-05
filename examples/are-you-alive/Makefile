@@ -1,5 +1,5 @@
-# We are using the "dev" project in our registry for this
-NAME   := "us.gcr.io/planetscale-dev/are-you-alive"
+# We are using the public "planetscale-vitess" registry for this
+NAME   := "us.gcr.io/planetscale-vitess/are-you-alive"
 TAG    := $$(git log -1 --pretty=%H)
 IMG    := ${NAME}:${TAG}
 LATEST := ${NAME}:latest
