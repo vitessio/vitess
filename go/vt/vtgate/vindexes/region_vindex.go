@@ -28,9 +28,6 @@ import (
 )
 
 var (
-	_ Vindex        = (*RegionVindex)(nil)
-	_ Lookup        = (*RegionVindex)(nil)
-	_ WantOwnerInfo = (*RegionVindex)(nil)
 	_ MultiColumn   = (*RegionVindex)(nil)
 )
 
@@ -45,8 +42,8 @@ type RegionMap map[string]uint64
 // The table is expected to define the id column as unique. It's
 // Unique and a Lookup.
 type RegionVindex struct {
-	regionMap RegionMap
-	*RegionExperimental
+	name        string
+	regionMap   RegionMap
 }
 
 // NewRegionVindex creates a RegionVindex vindex.
@@ -66,23 +63,29 @@ func NewRegionVindex(name string, m map[string]string) (Vindex, error) {
 		return nil, err
 	}
 
-	vindex, err := NewRegionExperimental(name, m)
-	if err != nil {
-		// Unreachable.
-		return nil, err
-	}
-	re := vindex.(*RegionExperimental)
-	if len(re.ConsistentLookupUnique.lkp.FromColumns) != 2 {
-		return nil, fmt.Errorf("two columns are required for region_experimental: %v", re.ConsistentLookupUnique.lkp.FromColumns)
-	}
 	return &RegionVindex{
-		regionMap:          rmap,
-		RegionExperimental: re,
+		name:      name,
+		regionMap: rmap,
 	}, nil
 }
 
-// MapMulti satisfies MultiColumn.
-func (rv *RegionVindex) MapMulti(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
+// String returns the name of the vindex.
+func (rv *RegionVindex) String() string {
+	return rv.name
+}
+
+// Cost returns the cost of this index as 1.
+func (rv *RegionVindex) Cost() int {
+	return 1
+}
+
+// IsUnique returns true since the Vindex is unique.
+func (rv *RegionVindex) IsUnique() bool {
+	return true;
+}
+
+// Map satisfies MultiColumn.
+func (rv *RegionVindex) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
 	destinations := make([]key.Destination, 0, len(rowsColValues))
 	for _, row := range rowsColValues {
 		if len(row) != 2 {
