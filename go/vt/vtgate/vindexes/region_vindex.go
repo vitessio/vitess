@@ -124,7 +124,7 @@ func (rv *RegionVindex) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) (
 }
 
 // Verify satisfies MultiColumn
-func (rv *RegionVindex) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]bytes) ([]bool, error) {
+func (rv *RegionVindex) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	result := make([]bool, len(rowsColValues))
 	destinations, _ := rv.Map(vcursor, rowsColValues)
 	for i, dest := range destinations {
