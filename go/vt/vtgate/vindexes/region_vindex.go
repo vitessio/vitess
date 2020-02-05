@@ -44,6 +44,7 @@ type RegionMap map[string]uint64
 type RegionVindex struct {
 	name        string
 	regionMap   RegionMap
+	regionBytes int
 }
 
 // NewRegionVindex creates a RegionVindex vindex.
