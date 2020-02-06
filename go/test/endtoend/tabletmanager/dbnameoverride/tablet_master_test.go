@@ -19,7 +19,6 @@ import (
 	"context"
 	"flag"
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -116,5 +115,5 @@ func TestDbNameOverride(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
-	require.Equal(t, strings.ToLower(dbName), qr.Rows[0][0].ToString())
+	require.Equal(t, dbName, qr.Rows[0][0].ToString())
 }
