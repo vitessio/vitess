@@ -36,22 +36,6 @@ var (
 	tmClient = tmc.NewClient()
 )
 
-// Vttablet stores the properties needed to start a vttablet process
-type Vttablet struct {
-	Type      string
-	TabletUID int
-	HTTPPort  int
-	GrpcPort  int
-	MySQLPort int
-	Alias     string
-	Cell      string
-
-	// background executable processes
-	MysqlctlProcess  MysqlctlProcess
-	MysqlctldProcess MysqlctldProcess
-	VttabletProcess  *VttabletProcess
-}
-
 // Restart restarts vttablet and mysql.
 func (tablet *Vttablet) Restart() error {
 	if tablet.MysqlctlProcess.TabletUID|tablet.MysqlctldProcess.TabletUID == 0 {
@@ -166,6 +150,9 @@ func getTablet(tabletGrpcPort int, hostname string) *tabletpb.Tablet {
 
 // NewConnParams creates ConnParams corresponds to given arguments.
 func NewConnParams(port int, password, socketPath, keyspace string) mysql.ConnParams {
+	if port != 0 {
+		socketPath = ""
+	}
 	cp := mysql.ConnParams{
 		Uname:      "vt_dba",
 		Port:       port,

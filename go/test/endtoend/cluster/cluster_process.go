@@ -80,6 +80,22 @@ type LocalProcessCluster struct {
 	EnableSemiSync bool
 }
 
+// Vttablet stores the properties needed to start a vttablet process
+type Vttablet struct {
+	Type      string
+	TabletUID int
+	HTTPPort  int
+	GrpcPort  int
+	MySQLPort int
+	Alias     string
+	Cell      string
+
+	// background executable processes
+	MysqlctlProcess  MysqlctlProcess
+	MysqlctldProcess MysqlctldProcess
+	VttabletProcess  *VttabletProcess
+}
+
 // Keyspace : Cluster accepts keyspace to launch it
 type Keyspace struct {
 	Name      string
