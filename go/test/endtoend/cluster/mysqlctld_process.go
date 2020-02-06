@@ -118,7 +118,7 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 		}
 	}
 
-	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", mysqlctld.Name, <-mysqlctld.exit)
+	return fmt.Errorf("process '%s' timed out after 60s (err: %s)", mysqlctld.Name, mysqlctld.Stop())
 
 }
 
@@ -164,7 +164,7 @@ func MysqlCtldProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string)
 // IsHealthy gives the health status of mysql.
 func (mysqlctld *MysqlctldProcess) IsHealthy() bool {
 	socketFile := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", mysqlctld.TabletUID), "/mysql.sock")
-	params := NewConnParams(mysqlctld.MySQLPort, mysqlctld.Password, socketFile, "")
+	params := NewConnParams(0, mysqlctld.Password, socketFile, "")
 	_, err := mysql.Connect(context.Background(), &params)
 	return err == nil
 }
