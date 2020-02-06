@@ -108,6 +108,9 @@ func TestConnection(t *testing.T) {
 
 	name := "sharded_message"
 
+	// 1 sec sleep added to avoid invalid connection count
+	time.Sleep(time.Second)
+
 	// create two grpc connection with vtgate and verify
 	// client connection count in vttablet of the master
 	assert.Equal(t, 0, getClientCount(shard0Master))
