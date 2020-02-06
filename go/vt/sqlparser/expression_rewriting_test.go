@@ -45,6 +45,11 @@ func TestRewrites(in *testing.T) {
 			db:       true, liid: false,
 		},
 		{
+			in:       "SELECT database() from test",
+			expected: "SELECT database() from test",
+			db:       false, liid: false,
+		},
+		{
 			in:       "SELECT last_insert_id() as test",
 			expected: "SELECT :__lastInsertId as test",
 			db:       false, liid: true,
@@ -53,6 +58,16 @@ func TestRewrites(in *testing.T) {
 			in:       "SELECT last_insert_id() + database()",
 			expected: "SELECT :__lastInsertId + :__vtdbname as `last_insert_id() + database()`",
 			db:       true, liid: true,
+		},
+		{
+			in:       "select (select database()) from test",
+			expected: "select (select database() from dual) from test",
+			db:       false, liid: false,
+		},
+		{
+			in:       "select (select database() from dual) from test",
+			expected: "select (select database() from dual) from test",
+			db:       false, liid: false,
 		},
 		{
 			in:       "select (select database() from dual) from dual",
