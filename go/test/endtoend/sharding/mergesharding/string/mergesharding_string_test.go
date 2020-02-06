@@ -24,6 +24,6 @@ import (
 
 // TestMergeShardingStringShardingKey - tests merge sharding using a String column
 func TestMergeShardingStringShardingKey(t *testing.T) {
-	sharding.TestMergesharding(t /* useVarbinaryShardingKeyType */, true)
+	sharding.TestMergesharding(t, true /* useVarbinaryShardingKeyType */)
 
 }
