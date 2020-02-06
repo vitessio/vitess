@@ -1315,6 +1315,14 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
   }
+| ALTER DATABASE ID ddl_skip_to_end
+  {
+    $$ = &DBDDL{Action: AlterStr, DBName: string($3)}
+  }
+| ALTER SCHEMA ID ddl_skip_to_end
+  {
+    $$ = &DBDDL{Action: AlterStr, DBName: string($3)}
+  }
 | ALTER VSCHEMA CREATE VINDEX table_name vindex_type_opt vindex_params_opt
   {
     $$ = &DDL{
@@ -2481,6 +2489,10 @@ function_call_generic:
   {
     $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
   }
+| sql_id openb DISTINCTROW select_expression_list closeb
+  {
+    $$ = &FuncExpr{Name: $1, Distinct: true, Exprs: $4}
+  }  
 | table_id '.' reserved_sql_id openb select_expression_list_opt closeb
   {
     $$ = &FuncExpr{Qualifier: $1, Name: $3, Exprs: $5}

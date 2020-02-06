@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package backup
+package vtbackup
 
 import (
 	"flag"
@@ -39,10 +39,10 @@ var (
 	cell             = cluster.DefaultCell
 	hostname         = "localhost"
 	keyspaceName     = "ks"
+	shardName        = "0"
 	dbPassword       = "VtDbaPass"
 	shardKsName      = fmt.Sprintf("%s/%s", keyspaceName, shardName)
 	dbCredentialFile string
-	shardName        = "0"
 	commonTabletArg  = []string{
 		"-vreplication_healthcheck_topology_refresh", "1s",
 		"-vreplication_healthcheck_retry_delay", "1s",
@@ -73,12 +73,17 @@ func TestMain(m *testing.M) {
 		}
 		localCluster.Keyspaces = append(localCluster.Keyspaces, *keyspace)
 
+		// Create a new init_db.sql file that sets up passwords for all users.
+		// Then we use a db-credentials-file with the passwords.
 		dbCredentialFile = initialsharding.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 		initDb, _ := ioutil.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
 		sql = sql + initialsharding.GetPasswordUpdateSQL(localCluster)
-		ioutil.WriteFile(newInitDBFile, []byte(sql), 0666)
+		err = ioutil.WriteFile(newInitDBFile, []byte(sql), 0666)
+		if err != nil {
+			return 1, err
+		}
 
 		extraArgs := []string{"-db-credentials-file", dbCredentialFile}
 		commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)
@@ -87,13 +92,14 @@ func TestMain(m *testing.M) {
 			Name: shardName,
 		}
 
+		master = localCluster.GetVttabletInstance("replica", 0, "")
+		replica1 = localCluster.GetVttabletInstance("replica", 0, "")
+		replica2 = localCluster.GetVttabletInstance("replica", 0, "")
+		shard.Vttablets = []*cluster.Vttablet{master, replica1, replica2}
+
+		// Start MySql processes
 		var mysqlProcs []*exec.Cmd
-		for i := 0; i < 3; i++ {
-			tabletType := "replica"
-			if i == 0 {
-				tabletType = "master"
-			}
-			tablet := localCluster.GetVttabletInstance(tabletType, 0, cell)
+		for _, tablet := range shard.Vttablets {
 			tablet.VttabletProcess = localCluster.GetVtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
 			tablet.VttabletProcess.DbPassword = dbPassword
 			tablet.VttabletProcess.ExtraArgs = commonTabletArg
@@ -108,36 +114,20 @@ func TestMain(m *testing.M) {
 			} else {
 				mysqlProcs = append(mysqlProcs, proc)
 			}
-			shard.Vttablets = append(shard.Vttablets, tablet)
 		}
 		for _, proc := range mysqlProcs {
 			if err := proc.Wait(); err != nil {
 				return 1, err
 			}
 		}
-		master = shard.Vttablets[0]
-		replica1 = shard.Vttablets[1]
-		replica2 = shard.Vttablets[2]
 
-		if err := localCluster.VtctlclientProcess.InitTablet(master, cell, keyspaceName, hostname, shard.Name); err != nil {
-			return 1, err
-		}
-		if err := localCluster.VtctlclientProcess.InitTablet(replica1, cell, keyspaceName, hostname, shard.Name); err != nil {
-			return 1, err
-		}
-
+		// Create database
 		for _, tablet := range []cluster.Vttablet{*master, *replica1} {
 			if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
 				return 1, err
 			}
-			if err := tablet.VttabletProcess.Setup(); err != nil {
-				return 1, err
-			}
 		}
 
-		if err := localCluster.VtctlclientProcess.InitShardMaster(keyspaceName, shard.Name, cell, master.TabletUID); err != nil {
-			return 1, err
-		}
 		return m.Run(), nil
 	}()
 

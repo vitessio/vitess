@@ -14,11 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package backup
+package vtctlbackup
 
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -27,6 +29,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/test/endtoend/sharding/initialsharding"
+
 	"vitess.io/vitess/go/vt/proto/topodata"
 
 	"github.com/stretchr/testify/assert"
@@ -34,6 +38,32 @@ import (
 )
 
 var (
+	master           *cluster.Vttablet
+	replica1         *cluster.Vttablet
+	replica2         *cluster.Vttablet
+	localCluster     *cluster.LocalProcessCluster
+	newInitDBFile    string
+	useXtrabackup    bool
+	xbStreamMode     string
+	xbStripes        int
+	cell             = cluster.DefaultCell
+	hostname         = "localhost"
+	keyspaceName     = "ks"
+	dbPassword       = "VtDbaPass"
+	shardKsName      = fmt.Sprintf("%s/%s", keyspaceName, shardName)
+	dbCredentialFile string
+	shardName        = "0"
+	commonTabletArg  = []string{
+		"-vreplication_healthcheck_topology_refresh", "1s",
+		"-vreplication_healthcheck_retry_delay", "1s",
+		"-vreplication_retry_delay", "1s",
+		"-degraded_threshold", "5s",
+		"-lock_tables_timeout", "5s",
+		"-watch_replication_stream",
+		"-enable_replication_reporter",
+		"-serving_state_grace_period", "1s",
+	}
+
 	vtInsertTest = `
 					create table vt_insert_test (
 					  id bigint auto_increment,
@@ -42,15 +72,146 @@ var (
 					  ) Engine=InnoDB`
 )
 
+func LaunchCluster(xtrabackup bool, streamMode string, stripes int) (int, error) {
+	localCluster = cluster.NewCluster(cell, hostname)
+
+	// Start topo server
+	err := localCluster.StartTopo()
+	if err != nil {
+		return 1, err
+	}
+
+	// Start keyspace
+	keyspace := &cluster.Keyspace{
+		Name: keyspaceName,
+	}
+	localCluster.Keyspaces = append(localCluster.Keyspaces, *keyspace)
+
+	dbCredentialFile = initialsharding.WriteDbCredentialToTmp(localCluster.TmpDirectory)
+	initDb, _ := ioutil.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
+	sql := string(initDb)
+	newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
+	sql = sql + initialsharding.GetPasswordUpdateSQL(localCluster)
+	err = ioutil.WriteFile(newInitDBFile, []byte(sql), 0666)
+	if err != nil {
+		return 1, err
+	}
+
+	extraArgs := []string{"-db-credentials-file", dbCredentialFile}
+	commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)
+
+	// Update arguments for xtrabackup
+	if xtrabackup {
+		useXtrabackup = xtrabackup
+		xbStreamMode = streamMode
+		xbStripes = stripes
+
+		xtrabackupArgs := []string{
+			"-backup_engine_implementation", "xtrabackup",
+			fmt.Sprintf("-xtrabackup_stream_mode=%s", xbStreamMode),
+			"-xtrabackup_user=vt_dba",
+			fmt.Sprintf("-xtrabackup_stripes=%d", xbStripes),
+			"-xtrabackup_backup_flags", fmt.Sprintf("--password=%s", dbPassword),
+		}
+
+		commonTabletArg = append(commonTabletArg, xtrabackupArgs...)
+	}
+
+	shard := cluster.Shard{
+		Name: shardName,
+	}
+
+	var mysqlProcs []*exec.Cmd
+	for i := 0; i < 3; i++ {
+		tabletType := "replica"
+		if i == 0 {
+			tabletType = "master"
+		}
+		tablet := localCluster.GetVttabletInstance(tabletType, 0, cell)
+		tablet.VttabletProcess = localCluster.GetVtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
+		tablet.VttabletProcess.DbPassword = dbPassword
+		tablet.VttabletProcess.ExtraArgs = commonTabletArg
+		tablet.VttabletProcess.SupportsBackup = true
+		tablet.VttabletProcess.EnableSemiSync = true
+
+		tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
+		tablet.MysqlctlProcess.InitDBFile = newInitDBFile
+		tablet.MysqlctlProcess.ExtraArgs = extraArgs
+		if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
+			return 1, err
+		} else {
+			mysqlProcs = append(mysqlProcs, proc)
+		}
+		shard.Vttablets = append(shard.Vttablets, tablet)
+	}
+	for _, proc := range mysqlProcs {
+		if err := proc.Wait(); err != nil {
+			return 1, err
+		}
+	}
+	master = shard.Vttablets[0]
+	replica1 = shard.Vttablets[1]
+	replica2 = shard.Vttablets[2]
+
+	if err := localCluster.VtctlclientProcess.InitTablet(master, cell, keyspaceName, hostname, shard.Name); err != nil {
+		return 1, err
+	}
+	if err := localCluster.VtctlclientProcess.InitTablet(replica1, cell, keyspaceName, hostname, shard.Name); err != nil {
+		return 1, err
+	}
+
+	for _, tablet := range []cluster.Vttablet{*master, *replica1} {
+		if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
+			return 1, err
+		}
+		if err := tablet.VttabletProcess.Setup(); err != nil {
+			return 1, err
+		}
+	}
+
+	if err := localCluster.VtctlclientProcess.InitShardMaster(keyspaceName, shard.Name, cell, master.TabletUID); err != nil {
+		return 1, err
+	}
+	return 0, nil
+}
+
+func TearDownCluster() {
+	localCluster.Teardown()
+}
+
+func TestBackup(t *testing.T) {
+	// Run all the backup tests
+	t.Run("TestReplicaBackup", func(t *testing.T) {
+		vtctlBackup(t, "replica")
+	})
+
+	t.Run("TestRdonlyBackup", func(t *testing.T) {
+		vtctlBackup(t, "rdonly")
+	})
+
+	t.Run("TestMasterBackup", func(t *testing.T) {
+		masterBackup(t)
+	})
+
+	t.Run("TestMasterReplicaSameBackup", func(t *testing.T) {
+		masterReplicaSameBackup(t)
+	})
+
+	t.Run("TestRestoreOldMasterByRestart", func(t *testing.T) {
+		restoreOldMasterByRestart(t)
+	})
+
+	t.Run("TestRestoreOldMasterInPlace", func(t *testing.T) {
+		restoreOldMasterInPlace(t)
+	})
+
+	t.Run("TestTerminatedRestore", func(t *testing.T) {
+		terminatedRestore(t)
+	})
+
+}
+
 type restoreMethod func(t *testing.T, tablet *cluster.Vttablet)
-
-func TestReplicaBackup(t *testing.T) {
-	testBackup(t, "replica")
-}
-
-func TestRdonlyBackup(t *testing.T) {
-	testBackup(t, "rdonly")
-}
 
 //- create a shard with master and replica1 only
 //- run InitShardMaster
@@ -60,7 +221,7 @@ func TestRdonlyBackup(t *testing.T) {
 //- bring up tablet_replica2 after the fact, let it restore the backup
 //- check all data is right (before+after backup data)
 //- list the backup, remove it
-func TestMasterBackup(t *testing.T) {
+func masterBackup(t *testing.T) {
 	verifyInitialReplication(t)
 
 	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("Backup", master.Alias)
@@ -88,15 +249,18 @@ func TestMasterBackup(t *testing.T) {
 	cluster.VerifyLocalMetadata(t, replica2, keyspaceName, shardName, cell)
 	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
 
-	replica2.VttabletProcess.TearDown()
-	master.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
+	err = replica2.VttabletProcess.TearDown()
+	assert.Nil(t, err)
+
+	_, err = master.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
+	assert.Nil(t, err)
 }
 
 //    Test a master and replica from the same backup.
 //
 //    Check that a replica and master both restored from the same backup
 //    can replicate successfully.
-func TestMasterReplicaSameBackup(t *testing.T) {
+func masterReplicaSameBackup(t *testing.T) {
 	// insert data on master, wait for replica to get it
 	verifyInitialReplication(t)
 
@@ -148,15 +312,16 @@ func TestMasterReplicaSameBackup(t *testing.T) {
 	verifyRestoreTablet(t, replica1, "SERVING")
 
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 4)
-	replica2.VttabletProcess.TearDown()
+	err = replica2.VttabletProcess.TearDown()
+	assert.Nil(t, err)
 	restartMasterReplica(t)
 }
 
-func TestRestoreOldMasterByRestart(t *testing.T) {
+func restoreOldMasterByRestart(t *testing.T) {
 	testRestoreOldMaster(t, restoreUsingRestart)
 }
 
-func TestRestoreOldMasterInPlace(t *testing.T) {
+func restoreOldMasterInPlace(t *testing.T) {
 	testRestoreOldMaster(t, restoreInPlace)
 }
 
@@ -203,7 +368,8 @@ func testRestoreOldMaster(t *testing.T, method restoreMethod) {
 }
 
 func restoreUsingRestart(t *testing.T, tablet *cluster.Vttablet) {
-	tablet.VttabletProcess.TearDown()
+	err := tablet.VttabletProcess.TearDown()
+	assert.Nil(t, err)
 	verifyRestoreTablet(t, tablet, "SERVING")
 }
 
@@ -219,21 +385,25 @@ func restartMasterReplica(t *testing.T) {
 	// remove all backups
 	backups := listBackups(t)
 	for _, backup := range backups {
-		localCluster.VtctlclientProcess.ExecuteCommand("RemoveBackup", shardKsName, backup)
+		err := localCluster.VtctlclientProcess.ExecuteCommand("RemoveBackup", shardKsName, backup)
+		assert.Nil(t, err)
 	}
 	// start all tablet and mysql instances
 	var mysqlProcs []*exec.Cmd
 	for _, tablet := range []*cluster.Vttablet{master, replica1} {
 		proc, _ := tablet.MysqlctlProcess.StartProcess()
 		mysqlProcs = append(mysqlProcs, proc)
-
-		err := localCluster.VtctlclientProcess.InitTablet(tablet, cell, keyspaceName, hostname, shardName)
-		assert.Nil(t, err)
-		tablet.VttabletProcess.CreateDB(keyspaceName)
-		tablet.VttabletProcess.Setup()
 	}
 	for _, proc := range mysqlProcs {
 		proc.Wait()
+	}
+	for _, tablet := range []*cluster.Vttablet{master, replica1} {
+		err := localCluster.VtctlclientProcess.InitTablet(tablet, cell, keyspaceName, hostname, shardName)
+		assert.Nil(t, err)
+		err = tablet.VttabletProcess.CreateDB(keyspaceName)
+		assert.Nil(t, err)
+		err = tablet.VttabletProcess.Setup()
+		assert.Nil(t, err)
 	}
 	err := localCluster.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, master.TabletUID)
 	assert.Nil(t, err)
@@ -255,7 +425,7 @@ func stopAllTablets() {
 	}
 }
 
-func TestTerminatedRestore(t *testing.T) {
+func terminatedRestore(t *testing.T) {
 	// insert data on master, wait for replica to get it
 	verifyInitialReplication(t)
 
@@ -312,7 +482,7 @@ func TestTerminatedRestore(t *testing.T) {
 //tablet_type: 'replica' or 'rdonly'.
 //
 //
-func testBackup(t *testing.T, tabletType string) {
+func vtctlBackup(t *testing.T, tabletType string) {
 	restoreWaitForBackup(t, tabletType)
 	verifyInitialReplication(t)
 
@@ -332,9 +502,13 @@ func testBackup(t *testing.T, tabletType string) {
 	cluster.VerifyLocalMetadata(t, replica2, keyspaceName, shardName, cell)
 	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
 
-	replica2.VttabletProcess.TearDown()
-	localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", replica2.Alias)
-	master.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
+	err = replica2.VttabletProcess.TearDown()
+	assert.Nil(t, err)
+
+	err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", replica2.Alias)
+	assert.Nil(t, err)
+	_, err = master.VttabletProcess.QueryTablet("DROP TABLE vt_insert_test", keyspaceName, true)
+	assert.Nil(t, err)
 
 }
 
@@ -390,10 +564,12 @@ func verifyAfterRemovingBackupNoBackupShouldBePresent(t *testing.T, backups []st
 }
 
 func verifyRestoreTablet(t *testing.T, tablet *cluster.Vttablet, status string) {
-	tablet.VttabletProcess.TearDown()
+	err := tablet.VttabletProcess.TearDown()
+	assert.Nil(t, err)
+
 	resetTabletDir(t, tablet)
 	tablet.VttabletProcess.ServingStatus = ""
-	err := tablet.VttabletProcess.Setup()
+	err = tablet.VttabletProcess.Setup()
 	assert.Nil(t, err)
 	if status != "" {
 		err = tablet.VttabletProcess.WaitForTabletTypesForTimeout([]string{status}, 25*time.Second)
@@ -418,6 +594,10 @@ func verifyReplicationStatus(t *testing.T, vttablet *cluster.Vttablet, expectedS
 
 func terminateRestore(t *testing.T) {
 	stopRestoreMsg := "Copying file 10"
+	if useXtrabackup {
+		stopRestoreMsg = "Restore: Preparing"
+	}
+
 	args := append([]string{"-server", localCluster.VtctlclientProcess.Server, "-alsologtostderr"}, "RestoreFromBackup", master.Alias)
 	tmpProcess := exec.Command(
 		"vtctlclient",
@@ -430,6 +610,7 @@ func terminateRestore(t *testing.T) {
 	found := false
 
 	scanner := bufio.NewScanner(reader)
+
 	for scanner.Scan() {
 		text := scanner.Text()
 		if strings.Contains(text, stopRestoreMsg) {
