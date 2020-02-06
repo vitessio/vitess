@@ -832,9 +832,7 @@ func TestExecutorShow(t *testing.T) {
 
 	for _, query := range []string{"show charset", "show character set"} {
 		qr, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
-		if err != nil {
-			t.Error(err)
-		}
+		require.NoError(t, err)
 		wantqr := &sqltypes.Result{
 			Fields: append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}),
 			Rows: [][]sqltypes.Value{

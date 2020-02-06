@@ -68,6 +68,13 @@ var (
 	queriesRoutedByTable    = stats.NewCountersWithMultiLabels("QueriesRoutedByTable", "Queries routed from vtgate to vttablet by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
 )
 
+const (
+	utf8    = "utf8"
+	utf8mb4 = "utf8mb4"
+	both    = "both"
+	charset = "charset"
+)
+
 func init() {
 	topoproto.TabletTypeVar(&defaultTabletType, "default_tablet_type", topodatapb.TabletType_MASTER, "The default tablet type to set for queries, when one is not explicitly selected")
 }
@@ -840,7 +847,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		maxLenField := &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}
 		fields = append(fields, maxLenField)
 
-		charsets := []string{"utf8", "utf8mb4"}
+		charsets := []string{utf8, utf8mb4}
 		filter := show.ShowTablesOpt.Filter
 		rows, err := generateCharsetRows(filter, charsets)
 		if err != nil {
@@ -1538,7 +1545,7 @@ func buildVarCharRow(values ...string) []sqltypes.Value {
 
 func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) ([][]sqltypes.Value, error) {
 	if showFilter == nil {
-		return buildCharsetRows("both"), nil
+		return buildCharsetRows(both), nil
 	}
 
 	var filteredColName string
@@ -1560,7 +1567,7 @@ func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) ([
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expect left side to be 'charset'")
 		}
-		leftOk := left.Name.EqualString("charset")
+		leftOk := left.Name.EqualString(charset)
 
 		if leftOk {
 			sqlVal, ok := cmpExp.Right.(*sqlparser.SQLVal)
@@ -1570,13 +1577,13 @@ func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) ([
 			rightString := string(sqlVal.Val)
 
 			switch cmpExp.Operator {
-			case "=":
+			case sqlparser.EqualStr:
 				for _, colName := range colNames {
 					if rightString == colName {
 						filteredColName = colName
 					}
 				}
-			case "like":
+			case sqlparser.LikeStr:
 				filteredColName, err = checkLikeOpt(rightString, colNames)
 			}
 		}
@@ -1599,11 +1606,11 @@ func buildCharsetRows(colName string) [][]sqltypes.Value {
 	row1 = append(row1, sqltypes.NewInt32(4))
 
 	switch colName {
-	case "utf8":
+	case utf8:
 		return [][]sqltypes.Value{row0}
-	case "utf8mb4":
+	case utf8mb4:
 		return [][]sqltypes.Value{row1}
-	case "both":
+	case both:
 		return [][]sqltypes.Value{row0, row1}
 	}
 
