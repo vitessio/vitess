@@ -435,6 +435,15 @@
 				"site_test"
 			]
 		},
+		"tabletmanager_database": {
+			"File": "tabletmanager.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager/dbnameoverride"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 19,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"vertical_split": {
 			"File": "vertical_split.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/verticalsplit"],
