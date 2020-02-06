@@ -190,7 +190,7 @@ func initialSetup(t *testing.T) {
 	insertValues(master, "shard-1", 4, 1000, 1)
 
 	// wait for replication position
-	waitForReplicationPos(t, master, rdOnly1, 60)
+	sharding.WaitForReplicationPos(t, master, rdOnly1, "localhost", 60)
 
 	copySchemaToDestinationShard(t)
 }
@@ -246,10 +246,7 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 	if isMysqlDown {
 		// vtworker is blocked at this point. This is a good time to test that its
 		// throttler server is reacting to RPCs.
-		// self.check_throttler_service('localhost:%d' % worker_rpc_port,
-		//                              ['test_keyspace/-80', 'test_keyspace/80-'],
-		//
-		time.Sleep(5 * time.Second)
+		time.Sleep(1 * time.Second)
 		sharding.CheckThrottlerService(t, fmt.Sprintf("%s:%d", hostname, localCluster.VtworkerProcess.GrpcPort),
 			[]string{"test_keyspace/-80", "test_keyspace/80-"}, 9999, *localCluster)
 
@@ -275,7 +272,7 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 		// If MySQL is down, we wait until vtworker retried at least once to make
 		// sure it reached the point where a write failed due to MySQL being down.
 		// There should be two retries at least, one for each destination shard.
-		pollForVarsWorkerRetryCount(t, 2)
+		pollForVarsWorkerRetryCount(t, 1)
 
 		// Bring back masters. Since we test with semi-sync now, we need at least
 		// one replica for the new master. This test is already quite expensive,
@@ -330,20 +327,16 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 			"test_keyspace/80-", "-new_master", shard1Replica.Alias)
 
 	}
-	_ = proc.Wait()
+	proc.Wait()
 
 	// Verify that we were forced to re-resolve and retry.
-	resultMap, err := localCluster.VtworkerProcess.GetVars()
-	workerRetryCount := fmt.Sprintf("%v", reflect.ValueOf(resultMap["WorkerRetryCount"]))
-	workerRetryCountInt, err := strconv.Atoi(workerRetryCount)
-	assert.Nil(t, err)
-	assert.Greater(t, workerRetryCountInt, 1, "expected vtworker to retry each of the two reparented destination masters at least once, but it didn't")
+	pollForVarsWorkerRetryCount(t, 1)
 
 	err = localCluster.VtworkerProcess.TearDown()
 	assert.Nil(t, err)
 
-	waitForReplicationPos(t, shard0Replica, shard0RdOnly1, 60)
-	waitForReplicationPos(t, shard1Replica, shard1RdOnly1, 60)
+	sharding.WaitForReplicationPos(t, shard0Replica, shard0RdOnly1, "localhost", 60)
+	sharding.WaitForReplicationPos(t, shard1Replica, shard1RdOnly1, "localhost", 60)
 
 	err = localCluster.VtworkerProcess.ExecuteVtworkerCommand(localCluster.GetAndReservePort(), localCluster.GetAndReservePort(), "-cell", cell,
 		"--use_v3_resharding_mode=true",
@@ -430,46 +423,14 @@ func pollForVarsWorkerRetryCount(t *testing.T, count int) {
 		workerRetryCount := fmt.Sprintf("%v", reflect.ValueOf(resultMap["WorkerRetryCount"]))
 		workerRetryCountInt, err = strconv.Atoi(workerRetryCount)
 		assert.Nil(t, err)
-		if workerRetryCountInt >= 2 || (time.Now().After(startTime.Add(60 * time.Second))) {
+		if workerRetryCountInt > count || (time.Now().After(startTime.Add(60 * time.Second))) {
 			break
 		}
 		continue
 	}
-	assert.GreaterOrEqual(t, workerRetryCountInt, 2)
+	assert.Greater(t, workerRetryCountInt, count)
 }
 
-func waitForReplicationPos(t *testing.T, tabletA *cluster.Vttablet, tabletB *cluster.Vttablet, timeout float64) {
-	replicationPosA, _ := cluster.GetMasterPosition(t, *tabletA, hostname)
-	for {
-		replicationPosB, _ := cluster.GetMasterPosition(t, *tabletB, hostname)
-		if positionAtLeast(t, tabletA, replicationPosB, replicationPosA) {
-			break
-		}
-		msg := fmt.Sprintf("%s's replication position to catch up to %s's;currently at: %s, waiting to catch up to: %s", tabletB.Alias, tabletA.Alias, replicationPosB, replicationPosA)
-		waitStep(t, msg, timeout, 0.01)
-	}
-}
-
-func waitStep(t *testing.T, msg string, timeout float64, sleepTime float64) float64 {
-	timeout = timeout - sleepTime
-	if timeout < 0.0 {
-		t.Errorf("timeout waiting for condition '%s'", msg)
-	}
-	time.Sleep(time.Duration(sleepTime) * time.Second)
-	return timeout
-}
-
-func positionAtLeast(t *testing.T, tablet *cluster.Vttablet, a string, b string) bool {
-	isAtleast := false
-	val, err := tablet.MysqlctlProcess.ExecuteCommandWithOutput("position", "at_least", a, b)
-	require.NoError(t, err)
-	if strings.Contains(val, "true") {
-		isAtleast = true
-	}
-	return isAtleast
-}
-
-// Args:
 // vttablet: the Tablet instance to modify.
 //id_offset: offset for the value of `id` column.
 // msg: the value of `msg` column.
