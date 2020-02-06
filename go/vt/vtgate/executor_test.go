@@ -834,17 +834,11 @@ func TestExecutorShow(t *testing.T) {
 	// Set desitation keyspace in session
 	session.TargetString = KsTestUnsharded
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "show create table unknown", nil)
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-
+	require.NoError(t, err)
 	// Reset target string so other tests dont fail.
 	session.TargetString = "@master"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show full columns from unknown from %v", KsTestUnsharded), nil)
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-
+	require.NoError(t, err)
 	for _, query := range []string{"show charset", "show character set"} {
 		qr, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
 		require.NoError(t, err)
