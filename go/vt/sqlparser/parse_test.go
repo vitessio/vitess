@@ -1138,13 +1138,19 @@ var (
 		output: "show charset",
 	}, {
 		input:  "show character set like '%foo'",
-		output: "show charset",
+		output: "show charset like '%foo'",
 	}, {
 		input:  "show charset",
 		output: "show charset",
 	}, {
 		input:  "show charset like '%foo'",
-		output: "show charset",
+		output: "show charset like '%foo'",
+	}, {
+		input:  "show charset where 'charset' = 'utf8'",
+		output: "show charset where 'charset' = 'utf8'",
+	}, {
+		input:  "show charset where 'charset' = '%foo'",
+		output: "show charset where 'charset' = '%foo'",
 	}, {
 		input:  "show collation",
 		output: "show collation",

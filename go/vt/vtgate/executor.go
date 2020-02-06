@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -65,6 +66,13 @@ var (
 
 	queriesProcessedByTable = stats.NewCountersWithMultiLabels("QueriesProcessedByTable", "Queries processed at vtgate by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
 	queriesRoutedByTable    = stats.NewCountersWithMultiLabels("QueriesRoutedByTable", "Queries routed from vtgate to vttablet by plan type, keyspace and table", []string{"Plan", "Keyspace", "Table"})
+)
+
+const (
+	utf8    = "utf8"
+	utf8mb4 = "utf8mb4"
+	both    = "both"
+	charset = "charset"
 )
 
 func init() {
@@ -282,7 +290,6 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 			sql = comments.Leading + normalized + comments.Trailing
 			if rewriteResult.NeedDatabase {
 				keyspace, _, _, _ := e.ParseDestinationTarget(safeSession.TargetString)
-				log.Warningf("This is the keyspace name: ---> %v", keyspace)
 				if keyspace == "" {
 					bindVars[sqlparser.DBVarName] = sqltypes.NullBindVariable
 				} else {
@@ -837,23 +844,20 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 		fields := buildVarCharFields("Charset", "Description", "Default collation")
 		maxLenField := &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}
 		fields = append(fields, maxLenField)
-		rows := make([][]sqltypes.Value, 0, 4)
-		row0 := buildVarCharRow(
-			"utf8",
-			"UTF-8 Unicode",
-			"utf8_general_ci")
-		row0 = append(row0, sqltypes.NewInt32(3))
-		row1 := buildVarCharRow(
-			"utf8mb4",
-			"UTF-8 Unicode",
-			"utf8mb4_general_ci")
-		row1 = append(row1, sqltypes.NewInt32(4))
-		rows = append(rows, row0, row1)
+
+		charsets := []string{utf8, utf8mb4}
+		filter := show.ShowTablesOpt.Filter
+		rows, err := generateCharsetRows(filter, charsets)
+		if err != nil {
+			return nil, err
+		}
+		rowsAffected := uint64(len(rows))
+
 		return &sqltypes.Result{
 			Fields:       fields,
 			Rows:         rows,
-			RowsAffected: 2,
-		}, nil
+			RowsAffected: rowsAffected,
+		}, err
 	case "create table":
 		if !show.Table.Qualifier.IsEmpty() {
 			// Explicit keyspace was passed. Use that for targeting but remove from the query itself.
@@ -1530,6 +1534,95 @@ func buildVarCharRow(values ...string) []sqltypes.Value {
 		row[i] = sqltypes.NewVarChar(v)
 	}
 	return row
+}
+
+func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) ([][]sqltypes.Value, error) {
+	if showFilter == nil {
+		return buildCharsetRows(both), nil
+	}
+
+	var filteredColName string
+	var err error
+
+	if showFilter.Like != "" {
+		filteredColName, err = checkLikeOpt(showFilter.Like, colNames)
+		if err != nil {
+			return nil, err
+		}
+
+	} else {
+		cmpExp, ok := showFilter.Filter.(*sqlparser.ComparisonExpr)
+		if !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expect a 'LIKE' or '=' expression")
+		}
+
+		left, ok := cmpExp.Left.(*sqlparser.ColName)
+		if !ok {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expect left side to be 'charset'")
+		}
+		leftOk := left.Name.EqualString(charset)
+
+		if leftOk {
+			sqlVal, ok := cmpExp.Right.(*sqlparser.SQLVal)
+			if !ok {
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "we expect the right side to be a string")
+			}
+			rightString := string(sqlVal.Val)
+
+			switch cmpExp.Operator {
+			case sqlparser.EqualStr:
+				for _, colName := range colNames {
+					if rightString == colName {
+						filteredColName = colName
+					}
+				}
+			case sqlparser.LikeStr:
+				filteredColName, err = checkLikeOpt(rightString, colNames)
+			}
+		}
+
+	}
+
+	return buildCharsetRows(filteredColName), nil
+}
+
+func buildCharsetRows(colName string) [][]sqltypes.Value {
+	row0 := buildVarCharRow(
+		"utf8",
+		"UTF-8 Unicode",
+		"utf8_general_ci")
+	row0 = append(row0, sqltypes.NewInt32(3))
+	row1 := buildVarCharRow(
+		"utf8mb4",
+		"UTF-8 Unicode",
+		"utf8mb4_general_ci")
+	row1 = append(row1, sqltypes.NewInt32(4))
+
+	switch colName {
+	case utf8:
+		return [][]sqltypes.Value{row0}
+	case utf8mb4:
+		return [][]sqltypes.Value{row1}
+	case both:
+		return [][]sqltypes.Value{row0, row1}
+	}
+
+	return [][]sqltypes.Value{}
+}
+
+func checkLikeOpt(likeOpt string, colNames []string) (string, error) {
+	likeRegexp := strings.ReplaceAll(likeOpt, "%", ".*")
+	for _, v := range colNames {
+		match, err := regexp.MatchString(likeRegexp, v)
+		if err != nil {
+			return "", err
+		}
+		if match {
+			return v, nil
+		}
+	}
+
+	return "", nil
 }
 
 // Prepare executes a prepare statements.
