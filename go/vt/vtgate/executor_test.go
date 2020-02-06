@@ -49,6 +49,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestExecutorResultsExceeded(t *testing.T) {
@@ -829,16 +830,9 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("Got: %v. Want: %v", lastQuery, wantQuery)
 	}
 
-	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show full columns from unknown from %v", KsTestUnsharded), nil)
-	if err != nil {
-		t.Errorf("Unexpected error: %v", err)
-	}
-
-	for _, query := range []string{"show charset", "show charset like '%foo'", "show character set", "show character set like '%foo'"} {
+	for _, query := range []string{"show charset", "show character set"} {
 		qr, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
-		if err != nil {
-			t.Error(err)
-		}
+		require.NoError(t, err)
 		wantqr := &sqltypes.Result{
 			Fields: append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}),
 			Rows: [][]sqltypes.Value{
@@ -858,6 +852,54 @@ func TestExecutorShow(t *testing.T) {
 			t.Errorf("%v:\n%+v, want\n%+v", query, qr, wantqr)
 		}
 	}
+	for _, query := range []string{"show charset like '%foo'", "show character set like 'foo%'", "show charset like 'foo%'", "show character set where foo like 'utf8'", "show character set where charset like '%foo'", "show charset where charset = '%foo'"} {
+		qr, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
+		require.NoError(t, err)
+		wantqr := &sqltypes.Result{
+			Fields:       append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}),
+			Rows:         [][]sqltypes.Value{},
+			RowsAffected: 0,
+		}
+		if !reflect.DeepEqual(qr, wantqr) {
+			t.Errorf("%v:\n%+v, want\n%+v", query, qr, wantqr)
+		}
+	}
+	for _, query := range []string{"show charset like 'utf8'", "show character set like 'utf8'", "show charset where charset = 'utf8'", "show character set where charset = 'utf8'"} {
+		qr, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
+		require.NoError(t, err)
+		wantqr := &sqltypes.Result{
+			Fields: append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}),
+			Rows: [][]sqltypes.Value{
+				append(buildVarCharRow(
+					"utf8",
+					"UTF-8 Unicode",
+					"utf8_general_ci"), sqltypes.NewInt32(3)),
+			},
+			RowsAffected: 1,
+		}
+		if !reflect.DeepEqual(qr, wantqr) {
+			t.Errorf("%v:\n%+v, want\n%+v", query, qr, wantqr)
+		}
+	}
+	for _, query := range []string{"show charset like 'utf8mb4'", "show character set like 'utf8mb4'", "show charset where charset = 'utf8mb4'", "show character set where charset = 'utf8mb4'"} {
+		qr, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
+		require.NoError(t, err)
+		wantqr := &sqltypes.Result{
+			Fields: append(buildVarCharFields("Charset", "Description", "Default collation"), &querypb.Field{Name: "Maxlen", Type: sqltypes.Int32}),
+			Rows: [][]sqltypes.Value{
+				append(buildVarCharRow(
+					"utf8mb4",
+					"UTF-8 Unicode",
+					"utf8mb4_general_ci"),
+					sqltypes.NewInt32(4)),
+			},
+			RowsAffected: 1,
+		}
+		if !reflect.DeepEqual(qr, wantqr) {
+			t.Errorf("%v:\n%+v, want\n%+v", query, qr, wantqr)
+		}
+	}
+
 	qr, err = executor.Execute(context.Background(), "TestExecute", session, "show engines", nil)
 	if err != nil {
 		t.Error(err)
@@ -2621,6 +2663,62 @@ func TestDebugVSchema(t *testing.T) {
 	}
 	if _, ok := v["keyspaces"]; !ok {
 		t.Errorf("keyspaces missing: %v", resp.Body.String())
+	}
+}
+
+func TestGenerateCharsetRows(t *testing.T) {
+	rows := make([][]sqltypes.Value, 0, 4)
+	rows0 := [][]sqltypes.Value{
+		append(buildVarCharRow(
+			"utf8",
+			"UTF-8 Unicode",
+			"utf8_general_ci"),
+			sqltypes.NewInt32(3)),
+	}
+	rows1 := [][]sqltypes.Value{
+		append(buildVarCharRow(
+			"utf8mb4",
+			"UTF-8 Unicode",
+			"utf8mb4_general_ci"),
+			sqltypes.NewInt32(4)),
+	}
+	rows2 := [][]sqltypes.Value{
+		append(buildVarCharRow(
+			"utf8",
+			"UTF-8 Unicode",
+			"utf8_general_ci"),
+			sqltypes.NewInt32(3)),
+		append(buildVarCharRow(
+			"utf8mb4",
+			"UTF-8 Unicode",
+			"utf8mb4_general_ci"),
+			sqltypes.NewInt32(4)),
+	}
+
+	testcases := []struct {
+		input    string
+		expected [][]sqltypes.Value
+	}{
+		{input: "show charset", expected: rows2},
+		{input: "show character set", expected: rows2},
+		{input: "show charset where charset like 'foo%'", expected: rows},
+		{input: "show charset where charset like 'utf8%'", expected: rows0},
+		{input: "show charset where charset = 'utf8'", expected: rows0},
+		{input: "show charset where charset = 'foo%'", expected: rows},
+		{input: "show charset where charset = 'utf8mb4'", expected: rows1},
+	}
+
+	charsets := []string{"utf8", "utf8mb4"}
+
+	for _, tc := range testcases {
+		t.Run(tc.input, func(t *testing.T) {
+			stmt, err := sqlparser.Parse(tc.input)
+			require.NoError(t, err)
+			match := stmt.(*sqlparser.Show)
+			filter := match.ShowTablesOpt.Filter
+			actual, err := generateCharsetRows(filter, charsets)
+			require.Equal(t, tc.expected, actual)
+		})
 	}
 }
 
