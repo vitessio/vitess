@@ -88,7 +88,7 @@ var (
 	shard2 = &cluster.Shard{Name: "80-"}
 
 	// merge shard
-	// merging -40 & 40-80 t0 -80
+	// merging -40 & 40-80 to -80
 	shard3 = &cluster.Shard{Name: "-80"}
 
 	// Sharding keys
