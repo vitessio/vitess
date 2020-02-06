@@ -297,8 +297,8 @@
 			]
 		},
 		"merge_sharding": {
-			"File": "mergesharding_v3_test.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/mergesharding/v3"],
+			"File": "mergesharding_int_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/mergesharding/int"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 22,
