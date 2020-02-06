@@ -30,34 +30,40 @@ import (
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/recovery"
 	"vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
 func TestSharded(t *testing.T) {
+	// validate the messaging for sharded keyspace(user)
 	testMessaging(t, "sharded_message", userKeyspace)
 }
 
 func TestUnsharded(t *testing.T) {
+	// validate messaging for unsharded keyspace(lookup)
 	testMessaging(t, "unsharded_message", lookupKeyspace)
 }
 
+// TestRepareting checks the client connection count after reparenting.
 func TestRepareting(t *testing.T) {
 	name := "sharded_message"
 
 	ctx := context.Background()
-	stream, err := NewConn(ctx, clusterInstance)
+	// start grpc connection with vtgate and validate client
+	// connection counts in tablets
+	stream, err := VtgateGrpcConn(ctx, clusterInstance)
 	require.Nil(t, err)
 	defer stream.Close()
-	stream.MessageStream(userKeyspace, "", nil, name)
+	_, err = stream.MessageStream(userKeyspace, "", nil, name)
+	require.Nil(t, err)
 
 	assert.Equal(t, 1, getClientCount(shard0Master))
 	assert.Equal(t, 0, getClientCount(shard0Replica))
 	assert.Equal(t, 1, getClientCount(shard1Master))
 
-	// planned reparenting
+	// do planned reparenting, make one replica as master
+	// and validate client connection count in correspond tablets
 	clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
 		"PlannedReparentShard",
 		"-keyspace_shard", userKeyspace+"/-80",
@@ -75,10 +81,12 @@ func TestRepareting(t *testing.T) {
 	assert.Equal(t, 1, getClientCount(shard0Replica))
 	assert.Equal(t, 1, getClientCount(shard1Master))
 	session := stream.Session("@master", nil)
-	recovery.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (3,'hello world 3')")
+	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (3,'hello world 3')")
 
+	// validate that we have received inserted message
 	stream.Next()
 
+	// make old master again as new master
 	clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
 		"PlannedReparentShard",
 		"-keyspace_shard", userKeyspace+"/-80",
@@ -91,43 +99,56 @@ func TestRepareting(t *testing.T) {
 	assert.Equal(t, 0, getClientCount(shard0Replica))
 	assert.Equal(t, 1, getClientCount(shard1Master))
 
-	stream.MessageAck(ctx, userKeyspace, name, keyRange(3))
-
+	_, err = stream.MessageAck(ctx, userKeyspace, name, keyRange(3))
+	assert.Nil(t, err)
 }
 
+// TestConnection validate the connection count and message streaming.
 func TestConnection(t *testing.T) {
 
 	name := "sharded_message"
 
+	// create two grpc connection with vtgate and verify
+	// client connection count in vttablet of the master
 	assert.Equal(t, 0, getClientCount(shard0Master))
 	assert.Equal(t, 0, getClientCount(shard1Master))
 
 	ctx := context.Background()
-	stream, err := NewConn(ctx, clusterInstance)
+	// first connection with vtgate
+	stream, err := VtgateGrpcConn(ctx, clusterInstance)
 	require.Nil(t, err)
-	stream.MessageStream(userKeyspace, "", nil, name)
-
+	_, err = stream.MessageStream(userKeyspace, "", nil, name)
+	require.Nil(t, err)
+	// validate client count of vttablet
 	assert.Equal(t, 1, getClientCount(shard0Master))
 	assert.Equal(t, 1, getClientCount(shard1Master))
-
-	stream1, err := NewConn(ctx, clusterInstance)
+	// second connection with vtgate, secont connection
+	// will only be used for client connection counts
+	stream1, err := VtgateGrpcConn(ctx, clusterInstance)
 	require.Nil(t, err)
-	stream1.MessageStream(userKeyspace, "", nil, name)
-
+	_, err = stream1.MessageStream(userKeyspace, "", nil, name)
+	require.Nil(t, err)
+	// validate client count of vttablet
 	assert.Equal(t, 2, getClientCount(shard0Master))
 	assert.Equal(t, 2, getClientCount(shard1Master))
 
+	// insert data in master and validate that we receive this
+	// in message stream
 	session := stream.Session("@master", nil)
-	recovery.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (2,'hello world 2')")
-	recovery.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (5,'hello world 5')")
+	// insert data in master
+	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (2,'hello world 2')")
+	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (5,'hello world 5')")
+	// validate in msg stream
+	_, err = stream.Next()
+	assert.Nil(t, err)
+	_, err = stream.Next()
+	assert.Nil(t, err)
 
-	stream.Next()
-	stream.Next()
-
-	stream.MessageAck(ctx, userKeyspace, name, keyRange(2, 5))
-
+	_, err = stream.MessageAck(ctx, userKeyspace, name, keyRange(2, 5))
+	assert.Nil(t, err)
+	// After closing one stream, ensure vttablets have dropped it.
 	stream.Close()
-	time.Sleep(1 * time.Second)
+	time.Sleep(time.Second)
 	assert.Equal(t, 1, getClientCount(shard0Master))
 	assert.Equal(t, 1, getClientCount(shard1Master))
 
@@ -136,16 +157,17 @@ func TestConnection(t *testing.T) {
 
 func testMessaging(t *testing.T, name, ks string) {
 	ctx := context.Background()
-	stream, err := NewConn(ctx, clusterInstance)
+	stream, err := VtgateGrpcConn(ctx, clusterInstance)
 	require.Nil(t, err)
 	defer stream.Close()
 
 	session := stream.Session("@master", nil)
-	recovery.ExecuteQueriesUsingVtgate(t, session, "insert into "+name+" (id, message) values (1,'hello world 1')")
-	recovery.ExecuteQueriesUsingVtgate(t, session, "insert into "+name+" (id, message) values (4,'hello world 4')")
+	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into "+name+" (id, message) values (1,'hello world 1')")
+	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into "+name+" (id, message) values (4,'hello world 4')")
 
 	// validate fields
-	res := stream.MessageStream(ks, "", nil, name)
+	res, err := stream.MessageStream(ks, "", nil, name)
+	require.Nil(t, err)
 	require.Equal(t, 3, len(res.Fields))
 	validateField(t, res.Fields[0], "id", query.Type_INT64)
 	validateField(t, res.Fields[1], "time_scheduled", query.Type_INT64)
@@ -153,12 +175,14 @@ func testMessaging(t *testing.T, name, ks string) {
 
 	// validate recieved msgs
 	resMap := make(map[string]string)
-	res = stream.Next()
+	res, err = stream.Next()
+	require.Nil(t, err)
 	for _, row := range res.Rows {
 		resMap[row[0].ToString()] = row[2].ToString()
 	}
 
-	res = stream.Next()
+	res, err = stream.Next()
+	require.Nil(t, err)
 	for _, row := range res.Rows {
 		resMap[row[0].ToString()] = row[2].ToString()
 	}
@@ -166,16 +190,19 @@ func testMessaging(t *testing.T, name, ks string) {
 	assert.Equal(t, "hello world 1", resMap["1"])
 	assert.Equal(t, "hello world 4", resMap["4"])
 
+	resMap = make(map[string]string)
 	// validate message ack with id 4
 	count, err := stream.MessageAck(ctx, ks, name, keyRange(4))
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	assert.Equal(t, int64(1), count)
-	res = stream.Next()
+	res, err = stream.Next()
+	require.Nil(t, err)
 	for _, row := range res.Rows {
 		resMap[row[0].ToString()] = row[2].ToString()
 	}
 
-	res = stream.Next()
+	res, err = stream.Next()
+	require.Nil(t, err)
 	for _, row := range res.Rows {
 		resMap[row[0].ToString()] = row[2].ToString()
 	}
@@ -201,8 +228,8 @@ type VTGateStream struct {
 	*vtgateconn.VTGateConn
 }
 
-// NewConn create new msg stream for grpc connection with vtgate.
-func NewConn(ctx context.Context, cluster *cluster.LocalProcessCluster) (*VTGateStream, error) {
+// VtgateGrpcConn create new msg stream for grpc connection with vtgate.
+func VtgateGrpcConn(ctx context.Context, cluster *cluster.LocalProcessCluster) (*VTGateStream, error) {
 	stream := new(VTGateStream)
 	stream.ctx = ctx
 	stream.host = fmt.Sprintf("%s:%d", cluster.Hostname, cluster.VtgateProcess.GrpcPort)
@@ -215,23 +242,24 @@ func NewConn(ctx context.Context, cluster *cluster.LocalProcessCluster) (*VTGate
 }
 
 // MessageStream strarts the stream for the corresponding connection.
-func (stream *VTGateStream) MessageStream(ks, shard string, keyRange *topodata.KeyRange, name string) *sqltypes.Result {
+func (stream *VTGateStream) MessageStream(ks, shard string, keyRange *topodata.KeyRange, name string) (*sqltypes.Result, error) {
+	// start message stream which send received message to the respChan
 	go stream.VTGateConn.MessageStream(stream.ctx, ks, shard, keyRange, name, func(s *sqltypes.Result) error {
 		stream.respChan <- s
 		return nil
 	})
-
+	// wait for field details
 	return stream.Next()
 }
 
 // Next reads the new msg available in stream.
-func (stream *VTGateStream) Next() *sqltypes.Result {
+func (stream *VTGateStream) Next() (*sqltypes.Result, error) {
 	ticker := time.Tick(10 * time.Second)
 	select {
 	case s := <-stream.respChan:
-		return s
+		return s, nil
 	case <-ticker:
-		panic(fmt.Errorf("time limit exceeded"))
+		return nil, fmt.Errorf("time limit exceeded")
 	}
 }
 
