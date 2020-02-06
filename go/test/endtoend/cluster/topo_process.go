@@ -218,6 +218,12 @@ func (topo *TopoProcess) TearDown(Cell string, originalVtRoot string, currentRoo
 		// Attempt graceful shutdown with SIGTERM first
 		_ = topo.proc.Process.Signal(syscall.SIGTERM)
 
+		if !*keepData {
+			_ = os.RemoveAll(topo.DataDirectory)
+			_ = os.RemoveAll(currentRoot)
+		}
+		_ = os.Setenv("VTDATAROOT", originalVtRoot)
+
 		select {
 		case <-topo.exit:
 			topo.proc = nil
@@ -230,11 +236,6 @@ func (topo *TopoProcess) TearDown(Cell string, originalVtRoot string, currentRoo
 		}
 	}
 
-	if !*keepData {
-		_ = os.RemoveAll(topo.DataDirectory)
-		_ = os.RemoveAll(currentRoot)
-	}
-	_ = os.Setenv("VTDATAROOT", originalVtRoot)
 	return nil
 }
 

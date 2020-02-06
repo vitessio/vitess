@@ -20,6 +20,9 @@ package worker
 
 import (
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"net/url"
 	"os/exec"
 	"reflect"
 	"strconv"
@@ -69,9 +72,6 @@ var (
 		"-lock_tables_timeout", "5s",
 		"-watch_replication_stream",
 		"-serving_state_grace_period", "1s",
-		"-queryserver-config-max-result-size", "20000",
-		"-hot_row_protection_max_global_queue_size", "10000",
-		"-queryserver-config-warn-result-size", "10000",
 		"-binlog_use_v3_resharding_mode=true"}
 	vtWorkerTest = `create table worker_test (
 					  id bigint unsigned,
@@ -101,9 +101,82 @@ var (
 )
 
 func TestReparentDuringWorkerCopy(t *testing.T) {
-	_, err := initializeCluster(t)
+	_, err := initializeCluster(t, false)
 	defer localCluster.Teardown()
 	require.Nil(t, err)
+	initialSetup(t)
+	verifySuccessfulWorkerCopyWithReparent(t, false)
+}
+
+func TestReparentDuringWorkerCopyMysqlDown(t *testing.T) {
+	_, err := initializeCluster(t, false)
+	defer localCluster.Teardown()
+	require.Nil(t, err)
+	initialSetup(t)
+	verifySuccessfulWorkerCopyWithReparent(t, true)
+}
+
+func TestWebInterface(t *testing.T) {
+	_, err := initializeCluster(t, true)
+	defer localCluster.Teardown()
+	err = localCluster.StartVtworker(cell, "--use_v3_resharding_mode=true")
+	assert.Nil(t, err)
+	baseURL := fmt.Sprintf("http://localhost:%d", localCluster.VtworkerProcess.Port)
+
+	// Wait for /status to become available.
+	startTime := time.Now()
+	for {
+		resp, err := http.Get(baseURL + "/status")
+		if err != nil && !time.Now().After(startTime.Add(10*time.Second)) {
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		if resp.StatusCode == 200 || time.Now().After(startTime.Add(10*time.Second)) {
+			break
+		}
+	}
+
+	// Run the command twice to make sure it's idempotent.
+	i := 0
+	for i < 2 {
+		data := url.Values{"message": {"pong"}}
+		http.DefaultClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
+		resp, err := http.Post(baseURL+"/Debugging/Ping", "application/x-www-form-urlencoded", strings.NewReader(data.Encode()))
+		assert.Nil(t, err)
+		assert.Equal(t, 307, resp.StatusCode)
+
+		// Wait for the Ping command to finish.
+		pollForVars(t, "done")
+		// Verify that the command logged something and it's available at /status.
+		resp, err = http.Get(baseURL + "/status")
+		assert.Nil(t, err)
+		if resp.StatusCode == 200 {
+			respByte, _ := ioutil.ReadAll(resp.Body)
+			respStr := string(respByte)
+			assert.Contains(t, respStr, "Ping command was called with message: 'pong'", fmt.Sprintf("Command did not log output to /status: %s", respStr))
+		}
+
+		// Reset the job.
+		_, err = http.Get(baseURL + "/reset")
+		assert.Nil(t, err)
+		resp, err = http.Get(baseURL + "/status")
+		assert.Nil(t, err)
+		if resp.StatusCode == 200 {
+			respByte, _ := ioutil.ReadAll(resp.Body)
+			statusAfterReset := string(respByte)
+			assert.Contains(t, statusAfterReset, "This worker is idle.", "/status does not indicate that the reset was successful")
+		}
+		i++
+	}
+
+	err = localCluster.VtworkerProcess.TearDown()
+	assert.Nil(t, err)
+
+}
+
+func initialSetup(t *testing.T) {
 
 	// Tests that the SplitClone worker is resilient to particular failures.
 	runShardTablets(t, "0", shardTablets, true)
@@ -113,14 +186,13 @@ func TestReparentDuringWorkerCopy(t *testing.T) {
 	runShardTablets(t, "80-", shard1Tablets, false)
 
 	// insert values
-	insertValues(master, "shard-0", 1, 4000, 0)
-	insertValues(master, "shard-1", 4, 4000, 1)
+	insertValues(master, "shard-0", 1, 1000, 0)
+	insertValues(master, "shard-1", 4, 1000, 1)
 
 	// wait for replication position
 	waitForReplicationPos(t, master, rdOnly1, 60)
 
 	copySchemaToDestinationShard(t)
-	verifySuccessfulWorkerCopyWithReparent(t, true)
 }
 
 func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
@@ -181,7 +253,7 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 		sharding.CheckThrottlerService(t, fmt.Sprintf("%s:%d", hostname, localCluster.VtworkerProcess.GrpcPort),
 			[]string{"test_keyspace/-80", "test_keyspace/80-"}, 9999, *localCluster)
 
-		pollForVars(t)
+		pollForVars(t, "cloning the data (online)")
 
 		// Stop MySql
 		var mysqlCtlProcessList []*exec.Cmd
@@ -249,7 +321,7 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 		// passes for your environment (trial-and-error...)
 		// Make sure that vtworker got past the point where it picked a master
 		// for each destination shard ("finding targets" state).
-		pollForVars(t)
+		pollForVars(t, "cloning the data (online)")
 
 		localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
 			"test_keyspace/-80", "-new_master", shard0Replica.Alias)
@@ -328,7 +400,7 @@ func runSplitDiff(t *testing.T, keyspaceShard string) {
 
 }
 
-func pollForVars(t *testing.T) {
+func pollForVars(t *testing.T, mssg string) {
 	startTime := time.Now()
 	var resultMap map[string]interface{}
 	var err error
@@ -337,12 +409,12 @@ func pollForVars(t *testing.T) {
 		resultMap, err = localCluster.VtworkerProcess.GetVars()
 		assert.Nil(t, err)
 		workerState = fmt.Sprintf("%v", reflect.ValueOf(resultMap["WorkerState"]))
-		if strings.Contains(workerState, "cloning the data (online)") || (time.Now().After(startTime.Add(60 * time.Second))) {
+		if strings.Contains(workerState, mssg) || (time.Now().After(startTime.Add(60 * time.Second))) {
 			break
 		}
 		continue
 	}
-	assert.Contains(t, workerState, "cloning the data (online)")
+	assert.Contains(t, workerState, mssg)
 }
 
 func pollForVarsWorkerRetryCount(t *testing.T, count int) {
@@ -523,7 +595,7 @@ func copySchemaToDestinationShard(t *testing.T) {
 	}
 }
 
-func initializeCluster(t *testing.T) (int, error) {
+func initializeCluster(t *testing.T, onlyTopo bool) (int, error) {
 
 	localCluster = cluster.NewCluster(cell, hostname)
 
@@ -531,6 +603,10 @@ func initializeCluster(t *testing.T) (int, error) {
 	err := localCluster.StartTopo()
 	if err != nil {
 		return 1, err
+	}
+
+	if onlyTopo {
+		return 0, nil
 	}
 	// Start keyspace
 	keyspace := &cluster.Keyspace{
@@ -585,8 +661,6 @@ func initializeCluster(t *testing.T) (int, error) {
 			t.Fatal(err)
 		}
 	}
-
-	time.Sleep(10 * time.Second)
 
 	shardTablets = []*cluster.Vttablet{master, replica1, rdOnly1}
 	shard0Tablets = []*cluster.Vttablet{shard0Master, shard0Replica, shard0RdOnly1}
