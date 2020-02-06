@@ -32,6 +32,7 @@ func PrepareAST(in Statement, bindVars map[string]*querypb.BindVariable, prefix 
 // RewriteAST rewrites the whole AST, replacing function calls and adding column aliases to queries
 func RewriteAST(in Statement) (*RewriteASTResult, error) {
 	er := new(expressionRewriter)
+	er.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
 	Rewrite(in, er.goingDown, nil)
 
 	return &RewriteASTResult{
@@ -39,6 +40,25 @@ func RewriteAST(in Statement) (*RewriteASTResult, error) {
 		NeedLastInsertID: er.lastInsertID,
 		NeedDatabase:     er.database,
 	}, nil
+}
+
+func shouldRewriteDatabaseFunc(in Statement) bool {
+	selct, ok := in.(*Select)
+	if !ok {
+		return false
+	}
+	if len(selct.From) != 1 {
+		return false
+	}
+	aliasedTable, ok := selct.From[0].(*AliasedTableExpr)
+	if !ok {
+		return false
+	}
+	tableName, ok := aliasedTable.Expr.(TableName)
+	if !ok {
+		return false
+	}
+	return tableName.Name.String() == "dual"
 }
 
 // RewriteASTResult contains the rewritten ast and meta information about it
@@ -49,8 +69,9 @@ type RewriteASTResult struct {
 }
 
 type expressionRewriter struct {
-	lastInsertID, database bool
-	err                    error
+	lastInsertID, database    bool
+	shouldRewriteDatabaseFunc bool
+	err                       error
 }
 
 const (
@@ -67,6 +88,7 @@ func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 			buf := NewTrackedBuffer(nil)
 			node.Expr.Format(buf)
 			inner := new(expressionRewriter)
+			inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
 			tmp := Rewrite(node.Expr, inner.goingDown, nil)
 			newExpr, ok := tmp.(Expr)
 			if !ok {
@@ -91,7 +113,7 @@ func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 				cursor.Replace(bindVarExpression(LastInsertIDName))
 				er.lastInsertID = true
 			}
-		case node.Name.EqualString("database"):
+		case node.Name.EqualString("database") && er.shouldRewriteDatabaseFunc:
 			if len(node.Exprs) > 0 {
 				er.err = vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Syntax error. DATABASE() takes no arguments")
 			} else {
