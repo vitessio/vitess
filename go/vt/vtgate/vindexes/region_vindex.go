@@ -28,7 +28,7 @@ import (
 )
 
 var (
-	_ MultiColumn   = (*RegionVindex)(nil)
+	_ MultiColumn = (*RegionVindex)(nil)
 )
 
 func init() {
@@ -82,7 +82,7 @@ func (rv *RegionVindex) Cost() int {
 
 // IsUnique returns true since the Vindex is unique.
 func (rv *RegionVindex) IsUnique() bool {
-	return true;
+	return true
 }
 
 // Map satisfies MultiColumn.
