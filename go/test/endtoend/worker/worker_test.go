@@ -246,7 +246,7 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 	if isMysqlDown {
 		// vtworker is blocked at this point. This is a good time to test that its
 		// throttler server is reacting to RPCs.
-		time.Sleep(1 * time.Second)
+		time.Sleep(5 * time.Second)
 		sharding.CheckThrottlerService(t, fmt.Sprintf("%s:%d", hostname, localCluster.VtworkerProcess.GrpcPort),
 			[]string{"test_keyspace/-80", "test_keyspace/80-"}, 9999, *localCluster)
 
