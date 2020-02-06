@@ -802,9 +802,10 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("%v:\n%+v, want\n%+v", query, qr, wantqr)
 	}
 
+	wantErrNoTable := "table unknown_table not found"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "show create table unknown_table", nil)
-	if err != errNoKeyspace {
-		t.Errorf("Got: %v. Want: %v", err, errNoKeyspace)
+	if err.Error() != wantErrNoTable {
+		t.Errorf("Got: %v. Want: %v", err, wantErrNoTable)
 	}
 
 	// SHOW CREATE table using vschema to find keyspace.
@@ -830,6 +831,14 @@ func TestExecutorShow(t *testing.T) {
 		t.Errorf("Got: %v. Want: %v", lastQuery, wantQuery)
 	}
 
+	// Set desitation keyspace in session
+	session.TargetString = KsTestUnsharded
+	_, err = executor.Execute(context.Background(), "TestExecute", session, "show create table unknown", nil)
+	require.NoError(t, err)
+	// Reset target string so other tests dont fail.
+	session.TargetString = "@master"
+	_, err = executor.Execute(context.Background(), "TestExecute", session, fmt.Sprintf("show full columns from unknown from %v", KsTestUnsharded), nil)
+	require.NoError(t, err)
 	for _, query := range []string{"show charset", "show character set"} {
 		qr, err := executor.Execute(context.Background(), "TestExecute", session, query, nil)
 		require.NoError(t, err)
