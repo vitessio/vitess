@@ -164,8 +164,8 @@
 			"Tags": []
 		},
 		"worker": {
-			"File": "worker.py",
-			"Args": [],
+			"File": "worker_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/worker"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 5,
