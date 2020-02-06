@@ -290,7 +290,6 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 			sql = comments.Leading + normalized + comments.Trailing
 			if rewriteResult.NeedDatabase {
 				keyspace, _, _, _ := e.ParseDestinationTarget(safeSession.TargetString)
-				log.Warningf("This is the keyspace name: ---> %v", keyspace)
 				if keyspace == "" {
 					bindVars[sqlparser.DBVarName] = sqltypes.NullBindVariable
 				} else {
