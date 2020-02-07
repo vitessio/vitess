@@ -48,7 +48,7 @@ type RegionJson struct {
 }
 
 // NewRegionJson creates a RegionJson vindex.
-// The supplied map requires all the fields of "region_experimental".
+// The supplied map requires all the fields of "RegionExperimental".
 // Additionally, it requires a region_map argument representing the path to a json file
 // containing a map of country to region.
 func NewRegionJson(name string, m map[string]string) (Vindex, error) {
@@ -133,7 +133,7 @@ func (rv *RegionJson) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, 
 	return result, nil
 }
 
-// NeedVCursor staisfies the Vindex interface.
+// NeedVCursor satisfies the Vindex interface.
 func (rv *RegionJson) NeedsVCursor() bool {
 	return false
 }
