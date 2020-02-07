@@ -70,7 +70,7 @@ import (
 const (
 	// StateNotConnected is the state where tabletserver is not
 	// connected to an underlying mysql instance.
-	StateNotConnected = iota
+	StateNotConnected int64 = iota
 	// StateNotServing is the state where tabletserver is connected
 	// to an underlying mysql instance, but is not serving queries.
 	StateNotServing
