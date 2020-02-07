@@ -190,6 +190,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 	var pkfields []*querypb.Field
 	var updateCopyState *sqlparser.ParsedQuery
+	var bv map[string]*querypb.BindVariable
 	err = vc.vr.sourceVStreamer.VStreamRows(ctx, initialPlan.SendRule.Filter, lastpkpb, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		select {
 		case <-ctx.Done():
@@ -243,7 +244,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 		if err != nil {
 			return err
 		}
-		bv := map[string]*querypb.BindVariable{
+		bv = map[string]*querypb.BindVariable{
 			"lastpk": {
 				Type:  sqltypes.VarBinary,
 				Value: buf.Bytes(),
@@ -265,12 +266,14 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	// If there was a timeout, return without an error.
 	select {
 	case <-ctx.Done():
+		log.Infof("Copy of %v stopped at lastpk: %v", tableName, bv)
 		return nil
 	default:
 	}
 	if err != nil {
 		return err
 	}
+	log.Infof("Copy of %v finished at lastpk: %v", tableName, bv)
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf("delete from _vt.copy_state where vrepl_id=%s and table_name=%s", strconv.Itoa(int(vc.vr.id)), encodeString(tableName))
 	if _, err := vc.vr.dbClient.Execute(buf.String()); err != nil {

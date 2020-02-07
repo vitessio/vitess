@@ -78,6 +78,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 // play is not resumable. If pausePos is set, play returns without updating the vreplication state.
 func (vp *vplayer) play(ctx context.Context) error {
 	if !vp.stopPos.IsZero() && vp.startPos.AtLeast(vp.stopPos) {
+		log.Infof("Stop position %v already reached: %v", vp.startPos, vp.stopPos)
 		if vp.saveStop {
 			return vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stop position %v already reached: %v", vp.startPos, vp.stopPos))
 		}
@@ -211,6 +212,7 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	vp.vr.stats.SetLastPosition(vp.pos)
 	posReached = !vp.stopPos.IsZero() && vp.pos.AtLeast(vp.stopPos)
 	if posReached {
+		log.Infof("Stopped at position: %v", vp.stopPos)
 		if vp.saveStop {
 			if err := vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
 				return false, err
