@@ -42,7 +42,7 @@ type RegionMap map[string]uint64
 // The table is expected to define the id column as unique. It's
 // Unique and a Lookup.
 type RegionJson struct {
-	regionMap   RegionMap
+	regionMap RegionMap
 	*RegionExperimental
 }
 
