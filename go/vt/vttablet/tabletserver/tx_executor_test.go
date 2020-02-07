@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -43,9 +44,7 @@ func TestTxExecutorEmptyPrepare(t *testing.T) {
 	defer tsv.StopService()
 	txid := newTransaction(tsv, nil)
 	err := txe.Prepare(txid, "aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	// Nothing should be prepared.
 	if len(txe.te.preparedPool.conns) != 0 {
 		t.Errorf("len(txe.te.preparedPool.conns): %d, want 0", len(txe.te.preparedPool.conns))
@@ -58,23 +57,15 @@ func TestTxExecutorPrepare(t *testing.T) {
 	defer tsv.StopService()
 	txid := newTxForPrep(tsv)
 	err := txe.Prepare(txid, "aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	err = txe.RollbackPrepared("aa", 1)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	// A retry should still succeed.
 	err = txe.RollbackPrepared("aa", 1)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	// A retry  with no original id should also succeed.
 	err = txe.RollbackPrepared("aa", 0)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestTxExecutorPrepareNotInTx(t *testing.T) {
@@ -95,9 +86,7 @@ func TestTxExecutorPreparePoolFail(t *testing.T) {
 	txid1 := newTxForPrep(tsv)
 	txid2 := newTxForPrep(tsv)
 	err := txe.Prepare(txid1, "aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	defer txe.RollbackPrepared("aa", 0)
 	err = txe.Prepare(txid2, "bb")
 	want := "prepared transactions exceeded limit"
@@ -153,18 +142,12 @@ func TestTxExecutorCommit(t *testing.T) {
 	defer tsv.StopService()
 	txid := newTxForPrep(tsv)
 	err := txe.Prepare(txid, "aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	err = txe.CommitPrepared("aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	// Committing an absent transaction should succeed.
 	err = txe.CommitPrepared("bb")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestTxExecutorCommitRedoFail(t *testing.T) {
@@ -175,9 +158,7 @@ func TestTxExecutorCommitRedoFail(t *testing.T) {
 	// Allow all additions to redo logs to succeed
 	db.AddQueryPattern("insert into `_vt`\\.redo_state.*", &sqltypes.Result{})
 	err := txe.Prepare(txid, "bb")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	defer txe.RollbackPrepared("bb", 0)
 	db.AddQuery("update `_vt`.redo_state set state = 'Failed' where dtid = 'bb'", &sqltypes.Result{})
 	err = txe.CommitPrepared("bb")
@@ -199,9 +180,7 @@ func TestTxExecutorCommitRedoCommitFail(t *testing.T) {
 	defer tsv.StopService()
 	txid := newTxForPrep(tsv)
 	err := txe.Prepare(txid, "aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	defer txe.RollbackPrepared("aa", 0)
 	db.AddRejectedQuery("commit", errors.New("commit fail"))
 	err = txe.CommitPrepared("aa")
@@ -217,9 +196,7 @@ func TestTxExecutorRollbackBeginFail(t *testing.T) {
 	defer tsv.StopService()
 	txid := newTxForPrep(tsv)
 	err := txe.Prepare(txid, "aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	db.AddRejectedQuery("begin", errors.New("begin fail"))
 	err = txe.RollbackPrepared("aa", txid)
 	want := "begin fail"
@@ -236,9 +213,7 @@ func TestTxExecutorRollbackRedoFail(t *testing.T) {
 	// Allow all additions to redo logs to succeed
 	db.AddQueryPattern("insert into `_vt`\\.redo_state.*", &sqltypes.Result{})
 	err := txe.Prepare(txid, "bb")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	err = txe.RollbackPrepared("bb", txid)
 	want := "is not supported"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -257,9 +232,7 @@ func TestExecutorCreateTransaction(t *testing.T) {
 		Keyspace: "t1",
 		Shard:    "0",
 	}})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestExecutorStartCommit(t *testing.T) {
@@ -271,9 +244,7 @@ func TestExecutorStartCommit(t *testing.T) {
 	db.AddQuery(commitTransition, &sqltypes.Result{RowsAffected: 1})
 	txid := newTxForPrep(tsv)
 	err := txe.StartCommit(txid, "aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	db.AddQuery(commitTransition, &sqltypes.Result{})
 	txid = newTxForPrep(tsv)
@@ -293,9 +264,7 @@ func TestExecutorSetRollback(t *testing.T) {
 	db.AddQuery(rollbackTransition, &sqltypes.Result{RowsAffected: 1})
 	txid := newTxForPrep(tsv)
 	err := txe.SetRollback("aa", txid)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	db.AddQuery(rollbackTransition, &sqltypes.Result{})
 	txid = newTxForPrep(tsv)
@@ -314,9 +283,7 @@ func TestExecutorConcludeTransaction(t *testing.T) {
 	db.AddQuery("delete from `_vt`.dt_state where dtid = 'aa'", &sqltypes.Result{})
 	db.AddQuery("delete from `_vt`.dt_participant where dtid = 'aa'", &sqltypes.Result{})
 	err := txe.ConcludeTransaction("aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestExecutorReadTransaction(t *testing.T) {
@@ -326,9 +293,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 
 	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", &sqltypes.Result{})
 	got, err := txe.ReadTransaction("aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := &querypb.TransactionMetadata{}
 	if !proto.Equal(got, want) {
 		t.Errorf("ReadTransaction: %v, want %v", got, want)
@@ -361,9 +326,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 		}},
 	})
 	got, err = txe.ReadTransaction("aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want = &querypb.TransactionMetadata{
 		Dtid:        "aa",
 		State:       querypb.TransactionState_PREPARE,
@@ -397,9 +360,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
 	want.State = querypb.TransactionState_COMMIT
 	got, err = txe.ReadTransaction("aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !proto.Equal(got, want) {
 		t.Errorf("ReadTransaction: %v, want %v", got, want)
 	}
@@ -419,9 +380,7 @@ func TestExecutorReadTransaction(t *testing.T) {
 	db.AddQuery("select dtid, state, time_created from `_vt`.dt_state where dtid = 'aa'", txResult)
 	want.State = querypb.TransactionState_ROLLBACK
 	got, err = txe.ReadTransaction("aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !proto.Equal(got, want) {
 		t.Errorf("ReadTransaction: %v, want %v", got, want)
 	}
@@ -449,9 +408,7 @@ func TestExecutorReadAllTransactions(t *testing.T) {
 		}},
 	})
 	got, _, _, err := txe.ReadTwopcInflight()
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []*DistributedTx{{
 		Dtid:    "dtid0",
 		State:   "PREPARE",
