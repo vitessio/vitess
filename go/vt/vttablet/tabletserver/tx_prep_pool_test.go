@@ -18,6 +18,8 @@ package tabletserver
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestEmptyPrep(t *testing.T) {
@@ -32,13 +34,9 @@ func TestEmptyPrep(t *testing.T) {
 func TestPrepPut(t *testing.T) {
 	pp := NewTxPreparedPool(2)
 	err := pp.Put(nil, "aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	err = pp.Put(nil, "bb")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := "prepared transactions exceeded limit: 2"
 	err = pp.Put(nil, "cc")
 	if err == nil || err.Error() != want {
@@ -50,9 +48,7 @@ func TestPrepPut(t *testing.T) {
 		t.Errorf("Put err: %v, want %s", err, want)
 	}
 	_, err = pp.FetchForCommit("aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	err = pp.Put(nil, "aa")
 	want = "duplicate DTID in Prepare: aa"
 	if err == nil || err.Error() != want {
@@ -60,9 +56,7 @@ func TestPrepPut(t *testing.T) {
 	}
 	pp.Forget("aa")
 	err = pp.Put(nil, "aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestPrepFetchForRollback(t *testing.T) {
@@ -87,17 +81,13 @@ func TestPrepFetchForCommit(t *testing.T) {
 	pp := NewTxPreparedPool(2)
 	conn := &TxConnection{}
 	got, err := pp.FetchForCommit("aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if got != nil {
 		t.Errorf("Get(aa): %v, want nil", got)
 	}
 	pp.Put(conn, "aa")
 	got, err = pp.FetchForCommit("aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if got != conn {
 		t.Errorf("pp.Get(aa): %p, want %p", got, conn)
 	}
@@ -120,9 +110,7 @@ func TestPrepFetchForCommit(t *testing.T) {
 	}
 	pp.Forget("aa")
 	got, err = pp.FetchForCommit("aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if got != nil {
 		t.Errorf("Get(aa): %v, want nil", got)
 	}

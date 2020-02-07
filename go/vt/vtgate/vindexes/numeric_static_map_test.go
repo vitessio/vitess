@@ -63,9 +63,7 @@ func TestNumericStaticMapMap(t *testing.T) {
 		sqltypes.NewInt64(7),
 		sqltypes.NewInt64(8),
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	// in the third slice, we expect 2 instead of 3 as numeric_static_map_test.json
 	// has 3 mapped to 2
@@ -93,9 +91,7 @@ func TestNumericStaticMapVerify(t *testing.T) {
 	got, err := numericStaticMap.Verify(nil,
 		[]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)},
 		[][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01"), []byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []bool{true, false}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("lhu.Verify(match): %v, want %v", got, want)
