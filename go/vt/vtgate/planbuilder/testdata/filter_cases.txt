@@ -1078,7 +1078,7 @@
       "Name": "user",
       "Sharded": true
     },
-    "Query": "select id from user where :__vtdbname",
+    "Query": "select id from user where database()",
     "FieldQuery": "select id from user where 1 != 1",
     "Table": "user"
   }

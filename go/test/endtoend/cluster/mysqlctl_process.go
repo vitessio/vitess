@@ -91,7 +91,6 @@ func (mysqlctl *MysqlctlProcess) Stop() (err error) {
 		return err
 	}
 	return tmpProcess.Wait()
-
 }
 
 // StopProcess executes mysqlctl command to stop mysql instance and returns process reference
@@ -134,11 +133,7 @@ func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) 
 // StartMySQL starts mysqlctl process
 func StartMySQL(ctx context.Context, tablet *Vttablet, username string, tmpDirectory string) error {
 	tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
-	err := tablet.MysqlctlProcess.Start()
-	if err != nil {
-		return err
-	}
-	return nil
+	return tablet.MysqlctlProcess.Start()
 }
 
 // StartMySQLAndGetConnection create a connection to tablet mysql
@@ -153,8 +148,7 @@ func StartMySQLAndGetConnection(ctx context.Context, tablet *Vttablet, username 
 		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", tablet.TabletUID), "/mysql.sock"),
 	}
 
-	conn, err := mysql.Connect(ctx, &params)
-	return conn, err
+	return mysql.Connect(ctx, &params)
 }
 
 // ExecuteCommandWithOutput executes any mysqlctl command and returns output

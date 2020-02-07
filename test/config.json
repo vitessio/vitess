@@ -1,23 +1,5 @@
 {
 	"Tests": {
-		"backup_mysqlctld": {
-			"File": "backup_mysqlctld.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 0,
-			"RetryMax": 0,
-			"Tags": []
-		},
-		"backup_transform_mysqlctld": {
-			"File": "backup_transform_mysqlctld.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 0,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"check_make_parser": {
 			"File": "",
 			"Args": [],
@@ -48,7 +30,7 @@
 				"java_test"
 			],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 0,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -57,7 +39,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 1,
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"
@@ -81,31 +63,9 @@
 					"test/client_test.sh"
 			],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 2,
 			"RetryMax": 0,
 			"Tags": []
-		},
-		"merge_sharding": {
-			"File": "merge_sharding.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0,
-			"Tags": [
-				"worker_test"
-			]
-		},
-		"merge_sharding_bytes": {
-			"File": "merge_sharding_bytes.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0,
-			"Tags": [
-				"worker_test"
-			]
 		},
 		"python_client": {
 			"File": "python_client_test.py",
@@ -121,7 +81,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 2,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -130,7 +90,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 2,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -139,7 +99,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 1,
 			"RetryMax": 0,
 			"Tags": [
 				"webdriver"
@@ -183,12 +143,39 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"backup_mysqlctld": {
+			"File": "backup_mysqlctld_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/mysqlctld"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 21,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"backup_only": {
 			"File": "backup_only.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtbackup"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 19,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"backup_transform": {
+			"File": "backup_transform_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 19,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"backup_transform_mysqlctld": {
+			"File": "backup_transform_mysqlctld_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform/mysqlctld"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 21, 
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -222,15 +209,6 @@
 		"cellalias": {
 			"File": "cellalias.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/cellalias"],
-			"Command": [],
-			"Manual": false,
-			"Shard": 12,
-			"RetryMax": 0,
-			"Tags": []
-		},
-		"backup_transform": {
-			"File": "backup_transform_test.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backuptransform"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 12,
@@ -329,9 +307,42 @@
 				"site_test"
 			]
 		},
+		"merge_sharding": {
+			"File": "mergesharding_int_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/mergesharding/int"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 22,
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
+			]
+		},
+		"merge_sharding_bytes": {
+			"File": "mergesharding_string_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/mergesharding/string"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 22,
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
+			]
+		},
 		"mysqlctl": {
 			"File": "mysqlctl.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/mysqlctl"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 12,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
+		},
+		"mysqlctld": {
+			"File": "mysqlctld_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/mysqlctld"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 12,

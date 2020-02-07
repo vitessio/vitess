@@ -14,15 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package vtctlbackup
+package mysqlctld
 
 import (
 	"testing"
 
-	backup "vitess.io/vitess/go/test/endtoend/backup/vtctlbackup"
+	"vitess.io/vitess/go/test/endtoend/backup/transform"
 )
 
-// TestXtraBackup - tests the backup using xtrabackup
-func TestXtrabackup(t *testing.T) {
-	backup.TestBackup(t, backup.ExtraBackup, "tar", 0)
+func TestMain(m *testing.M) {
+	transform.TestMainSetup(m, true)
+}
+
+func TestBackupTransform(t *testing.T) {
+	transform.TestBackupTransformImpl(t)
+}
+func TestBackupTransformError(t *testing.T) {
+	transform.TestBackupTransformErrorImpl(t)
 }
