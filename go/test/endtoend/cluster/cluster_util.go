@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql"
 	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
@@ -146,6 +147,12 @@ func getTablet(tabletGrpcPort int, hostname string) *tabletpb.Tablet {
 	portMap := make(map[string]int32)
 	portMap["grpc"] = int32(tabletGrpcPort)
 	return &tabletpb.Tablet{Hostname: hostname, PortMap: portMap}
+}
+
+// ExecuteQueriesUsingVtgate sends query to vtgate using vtgate session.
+func ExecuteQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, query string) {
+	_, err := session.Execute(context.Background(), query, nil)
+	assert.Nil(t, err)
 }
 
 // NewConnParams creates ConnParams corresponds to given arguments.

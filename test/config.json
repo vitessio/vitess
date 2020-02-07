@@ -67,15 +67,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"messaging": {
-			"File": "messaging.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 3,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"python_client": {
 			"File": "python_client_test.py",
 			"Args": [],
@@ -236,6 +227,15 @@
 		"mysql_server": {
 			"File": "mysql_server_test.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/mysqlserver"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 12,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"messaging": {
+			"File": "messaging_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/messaging"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 12,
