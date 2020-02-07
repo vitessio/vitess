@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2020 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -34,8 +34,6 @@ var (
 	shard1Master         *cluster.Vttablet
 	lookupMaster         *cluster.Vttablet
 	hostname             = "localhost"
-	testingID            = 1
-	tableName            = "vt_prepare_stmt_test"
 	cell                 = "zone1"
 	userKeyspace         = "user"
 	lookupKeyspace       = "lookup"
