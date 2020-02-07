@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2020 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -101,11 +101,6 @@ func (rv *RegionJson) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]
 		}
 		h := vhash(hn)
 
-		log.Infof("Region map: %v", rv.regionMap)
-		// Compute region prefix.
-		log.Infof("Country: %v", row[1].ToString())
-		rn, ok := rv.regionMap[row[1].ToString()]
-		log.Infof("Found region %v, true/false: %v", rn, ok)
 		if !ok {
 			destinations = append(destinations, key.DestinationNone{})
 			continue
