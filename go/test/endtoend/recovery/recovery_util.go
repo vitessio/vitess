@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2020 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,6 +27,19 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
+var (
+	dbPassword = "VtDbaPass"
+
+	// UseXb flag to use extra backup for recovery teseting.
+	UseXb  = false
+	XbArgs = []string{
+		"-backup_engine_implementation", "xtrabackup",
+		"-xtrabackup_stream_mode=xbstream",
+		"-xtrabackup_user=vt_dba",
+		"-xtrabackup_backup_flags", fmt.Sprintf("--password=%s", dbPassword),
+	}
+)
+
 func VerifyQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, query string, value string) {
 	qr, err := session.Execute(context.Background(), query, nil)
 	assert.Nil(t, err)
@@ -48,6 +61,9 @@ func RestoreTablet(t *testing.T, localCluster *cluster.LocalProcessCluster, tabl
 	assert.Nil(t, err)
 
 	replicaTabletArgs := commonTabletArg
+	if UseXb {
+		replicaTabletArgs = append(replicaTabletArgs, XbArgs...)
+	}
 	replicaTabletArgs = append(replicaTabletArgs, "-disable_active_reparents",
 		"-enable_replication_reporter=false",
 		"-init_tablet_type", "replica",
