@@ -125,19 +125,19 @@ func (vs *vstreamer) Cancel() {
 func (vs *vstreamer) Stream() error {
 	defer vs.cancel()
 
-	curpos, err := vs.currentPosition()
+	curPos, err := vs.currentPosition()
 	if err != nil {
 		return vterrors.Wrap(err, "could not obtain current position")
 	}
 	if vs.startPos == "current" {
-		vs.pos = curpos
+		vs.pos = curPos
 	} else {
 		pos, err := mysql.DecodePosition(vs.startPos)
 		if err != nil {
 			return vterrors.Wrap(err, "could not decode position")
 		}
-		if !curpos.AtLeast(pos) {
-			return fmt.Errorf("requested position %v is ahead of current position %v", mysql.EncodePosition(pos), mysql.EncodePosition(curpos))
+		if !curPos.AtLeast(pos) {
+			return fmt.Errorf("requested position %v is ahead of current position %v", mysql.EncodePosition(pos), mysql.EncodePosition(curPos))
 		}
 		vs.pos = pos
 	}
