@@ -255,64 +255,69 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }
 
+func (e *Executor) handleExecDestKnown(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destKeyspace string, destTabletType topodatapb.TabletType, dest key.Destination, logStats *LogStats) (*sqltypes.Result, error) {
+	// V1 mode or V3 mode with a forced shard or range target
+	// TODO(sougou): change this flow to go through V3 functions
+	// which will allow us to benefit from the autocommitable flag.
+
+	if destKeyspace == "" {
+		return nil, errNoKeyspace
+	}
+
+	switch dest.(type) {
+	case key.DestinationExactKeyRange:
+		stmtType := sqlparser.Preview(sql)
+		if stmtType == sqlparser.StmtInsert {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "range queries not supported for inserts: %s", safeSession.TargetString)
+		}
+
+	}
+
+	execStart := time.Now()
+	sql = sqlannotation.AnnotateIfDML(sql, nil)
+	if e.normalize {
+		query, comments := sqlparser.SplitMarginComments(sql)
+		stmt, err := sqlparser.Parse(query)
+		if err != nil {
+			return nil, err
+		}
+		rewriteResult, err := sqlparser.PrepareAST(stmt, bindVars, "vtg")
+		if err != nil {
+			return nil, err
+		}
+		normalized := sqlparser.String(rewriteResult.AST)
+		sql = comments.Leading + normalized + comments.Trailing
+		if rewriteResult.NeedDatabase {
+			keyspace, _, _, _ := e.ParseDestinationTarget(safeSession.TargetString)
+
+			if keyspace == "" {
+				bindVars[sqlparser.DBVarName] = sqltypes.NullBindVariable
+			} else {
+				bindVars[sqlparser.DBVarName] = sqltypes.StringBindVariable(keyspace)
+			}
+		}
+		if rewriteResult.NeedLastInsertID {
+			bindVars[sqlparser.LastInsertIDName] = sqltypes.Uint64BindVariable(safeSession.GetLastInsertId())
+		}
+	}
+	logStats.PlanTime = execStart.Sub(logStats.StartTime)
+	logStats.SQL = sql
+	logStats.BindVariables = bindVars
+	result, err := e.destinationExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
+	logStats.ExecuteTime = time.Since(execStart)
+	e.updateQueryCounts("ShardDirect", "", "", int64(logStats.ShardQueries))
+	return result, err
+}
+
 func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, destKeyspace string, destTabletType topodatapb.TabletType, dest key.Destination, logStats *LogStats, stmtType sqlparser.StatementType) (*sqltypes.Result, error) {
 	if dest != nil {
-		// V1 mode or V3 mode with a forced shard or range target
-		// TODO(sougou): change this flow to go through V3 functions
-		// which will allow us to benefit from the autocommitable flag.
-
-		if destKeyspace == "" {
-			return nil, errNoKeyspace
-		}
-
-		switch dest.(type) {
-		case key.DestinationExactKeyRange:
-			stmtType := sqlparser.Preview(sql)
-			if stmtType == sqlparser.StmtInsert {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "range queries not supported for inserts: %s", safeSession.TargetString)
-			}
-
-		}
-
-		execStart := time.Now()
-		sql = sqlannotation.AnnotateIfDML(sql, nil)
-		if e.normalize {
-			query, comments := sqlparser.SplitMarginComments(sql)
-			stmt, err := sqlparser.Parse(query)
-			if err != nil {
-				return nil, err
-			}
-			rewriteResult, err := sqlparser.PrepareAST(stmt, bindVars, "vtg")
-			if err != nil {
-				return nil, err
-			}
-			normalized := sqlparser.String(rewriteResult.AST)
-			sql = comments.Leading + normalized + comments.Trailing
-			if rewriteResult.NeedDatabase {
-				keyspace, _, _, _ := e.ParseDestinationTarget(safeSession.TargetString)
-				if keyspace == "" {
-					bindVars[sqlparser.DBVarName] = sqltypes.NullBindVariable
-				} else {
-					bindVars[sqlparser.DBVarName] = sqltypes.StringBindVariable(keyspace)
-				}
-			}
-			if rewriteResult.NeedLastInsertID {
-				bindVars[sqlparser.LastInsertIDName] = sqltypes.Uint64BindVariable(safeSession.GetLastInsertId())
-			}
-		}
-		logStats.PlanTime = execStart.Sub(logStats.StartTime)
-		logStats.SQL = sql
-		logStats.BindVariables = bindVars
-		result, err := e.destinationExec(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
-		logStats.ExecuteTime = time.Since(execStart)
-		e.updateQueryCounts("ShardDirect", "", "", int64(logStats.ShardQueries))
-		return result, err
+		return e.handleExecDestKnown(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats)
 	}
 
 	// V3 mode.
 	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor := newVCursorImpl(ctx, safeSession, destKeyspace, destTabletType, comments, e, logStats)
-	plan, err := e.getPlan(
+	planStats, err := e.getPlan(
 		vcursor,
 		query,
 		comments,
@@ -327,6 +332,8 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 		logStats.Error = err
 		return nil, err
 	}
+
+	plan := planStats.Plan
 
 	if plan.NeedsLastInsertID {
 		bindVars[sqlparser.LastInsertIDName] = sqltypes.Uint64BindVariable(safeSession.GetLastInsertId())
@@ -362,7 +369,7 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 		err = vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction rolled back due to partial DML execution: %v", err)
 	}
 
-	plan.AddStats(1, time.Since(logStats.StartTime), uint64(logStats.ShardQueries), logStats.RowsAffected, errCount)
+	planStats.AddStats(1, time.Since(logStats.StartTime), uint64(logStats.ShardQueries), logStats.RowsAffected, errCount)
 
 	return qr, err
 }
@@ -1184,7 +1191,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 		return e.handleMessageStream(ctx, safeSession, sql, target, callback, vcursor, logStats)
 	}
 
-	plan, err := e.getPlan(
+	planStats, err := e.getPlan(
 		vcursor,
 		query,
 		comments,
@@ -1206,7 +1213,7 @@ func (e *Executor) StreamExecute(ctx context.Context, method string, safeSession
 	// dictated by stream_buffer_size.
 	result := &sqltypes.Result{}
 	byteCount := 0
-	err = plan.Instructions.StreamExecute(vcursor, bindVars, true, func(qr *sqltypes.Result) error {
+	err = planStats.Plan.Instructions.StreamExecute(vcursor, bindVars, true, func(qr *sqltypes.Result) error {
 		// If the row has field info, send it separately.
 		// TODO(sougou): this behavior is for handling tests because
 		// the framework currently sends all results as one packet.
@@ -1396,7 +1403,7 @@ func (e *Executor) ParseDestinationTarget(targetString string) (string, topodata
 
 // getPlan computes the plan for the given query. If one is in
 // the cache, it reuses it.
-func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool, logStats *LogStats) (*engine.Plan, error) {
+func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool, logStats *LogStats) (*engine.PlanStats, error) {
 	if logStats != nil {
 		logStats.SQL = comments.Leading + sql + comments.Trailing
 		logStats.BindVariables = bindVars
@@ -1408,7 +1415,7 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	keyspace := vcursor.keyspace
 	planKey := keyspace + vindexes.TabletTypeSuffix[vcursor.tabletType] + ":" + sql
 	if result, ok := e.plans.Get(planKey); ok {
-		return result.(*engine.Plan), nil
+		return result.(*engine.PlanStats), nil
 	}
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
@@ -1419,10 +1426,11 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 		if err != nil {
 			return nil, err
 		}
+		planStats := &engine.PlanStats{Plan: plan}
 		if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(stmt) {
-			e.plans.Set(planKey, plan)
+			e.plans.Set(planKey, planStats)
 		}
-		return plan, nil
+		return planStats, nil
 	}
 
 	// Normalize and retry.
@@ -1440,16 +1448,17 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 
 	planKey = keyspace + vindexes.TabletTypeSuffix[vcursor.tabletType] + ":" + normalized
 	if result, ok := e.plans.Get(planKey); ok {
-		return result.(*engine.Plan), nil
+		return result.(*engine.PlanStats), nil
 	}
 	plan, err := planbuilder.BuildFromStmt(normalized, rewrittenStatement, vcursor, result.NeedLastInsertID, result.NeedDatabase)
 	if err != nil {
 		return nil, err
 	}
+	planStats := &engine.PlanStats{Plan: plan}
 	if !skipQueryPlanCache && !sqlparser.SkipQueryPlanCacheDirective(rewrittenStatement) {
-		e.plans.Set(planKey, plan)
+		e.plans.Set(planKey, planStats)
 	}
-	return plan, nil
+	return planStats, nil
 }
 
 // skipQueryPlanCache extracts SkipQueryPlanCache from session
@@ -1694,7 +1703,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 	// V3 mode.
 	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor := newVCursorImpl(ctx, safeSession, destKeyspace, destTabletType, comments, e, logStats)
-	plan, err := e.getPlan(
+	planStats, err := e.getPlan(
 		vcursor,
 		query,
 		comments,
@@ -1710,7 +1719,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 		return nil, err
 	}
 
-	qr, err := plan.Instructions.GetFields(vcursor, bindVars)
+	qr, err := planStats.Plan.Instructions.GetFields(vcursor, bindVars)
 	logStats.ExecuteTime = time.Since(execStart)
 	var errCount uint64
 	if err != nil {
@@ -1720,7 +1729,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 	}
 	logStats.RowsAffected = qr.RowsAffected
 
-	plan.AddStats(1, time.Since(logStats.StartTime), uint64(logStats.ShardQueries), logStats.RowsAffected, errCount)
+	planStats.AddStats(1, time.Since(logStats.StartTime), uint64(logStats.ShardQueries), logStats.RowsAffected, errCount)
 
 	return qr.Fields, err
 }

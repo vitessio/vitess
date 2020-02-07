@@ -126,7 +126,7 @@ func buildTopology(opts *Options, vschemaStr string, numShardsPerKeyspace int) e
 	return err
 }
 
-func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error) {
+func vtgateExecute(sql string) ([]*engine.PlanStats, map[string]*TabletActions, error) {
 	// use the plan cache to get the set of plans used for this query, then
 	// clear afterwards for the next run
 	planCache := vtgateExecutor.Plans()
@@ -142,9 +142,9 @@ func vtgateExecute(sql string) ([]*engine.Plan, map[string]*TabletActions, error
 		return nil, nil, vterrors.Wrapf(err, "vtexplain execute error in '%s'", sql)
 	}
 
-	var plans []*engine.Plan
+	var plans []*engine.PlanStats
 	for _, item := range planCache.Items() {
-		plan := item.Value.(*engine.Plan)
+		plan := item.Value.(*engine.PlanStats)
 		plan.ExecTime = 0
 		plans = append(plans, plan)
 	}

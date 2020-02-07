@@ -46,7 +46,7 @@ func TestQueryzHandler(t *testing.T) {
 	if !ok {
 		t.Fatalf("couldn't get plan from cache")
 	}
-	plan1 := result.(*engine.Plan)
+	plan1 := result.(*engine.PlanStats)
 	plan1.ExecTime = time.Duration(1 * time.Millisecond)
 
 	// scatter
@@ -57,7 +57,7 @@ func TestQueryzHandler(t *testing.T) {
 	if !ok {
 		t.Fatalf("couldn't get plan from cache")
 	}
-	plan2 := result.(*engine.Plan)
+	plan2 := result.(*engine.PlanStats)
 	plan2.ExecTime = time.Duration(1 * time.Second)
 
 	sql = "insert into user (id, name) values (:id, :name)"
@@ -70,14 +70,14 @@ func TestQueryzHandler(t *testing.T) {
 	if !ok {
 		t.Fatalf("couldn't get plan from cache")
 	}
-	plan3 := result.(*engine.Plan)
+	plan3 := result.(*engine.PlanStats)
 
 	// vindex insert from above execution
 	result, ok = executor.plans.Get("@master:" + "insert into name_user_map(name, user_id) values(:name0, :user_id0)")
 	if !ok {
 		t.Fatalf("couldn't get plan from cache")
 	}
-	plan4 := result.(*engine.Plan)
+	plan4 := result.(*engine.PlanStats)
 
 	// same query again should add query counts to existing plans
 	sql = "insert into user (id, name) values (:id, :name)"
@@ -155,7 +155,7 @@ func TestQueryzHandler(t *testing.T) {
 	checkQueryzHasPlan(t, planPattern4, plan4, body)
 }
 
-func checkQueryzHasPlan(t *testing.T, planPattern []string, plan *engine.Plan, page []byte) {
+func checkQueryzHasPlan(t *testing.T, planPattern []string, plan *engine.PlanStats, page []byte) {
 	t.Helper()
 	matcher := regexp.MustCompile(strings.Join(planPattern, `\s*`))
 	if !matcher.Match(page) {

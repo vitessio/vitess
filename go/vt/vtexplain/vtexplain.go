@@ -137,7 +137,7 @@ type Explain struct {
 	SQL string
 
 	// the vtgate plan(s)
-	Plans []*engine.Plan
+	Plans []*engine.PlanStats
 
 	// list of queries / bind vars sent to each tablet
 	TabletActions map[string]*TabletActions

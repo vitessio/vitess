@@ -136,11 +136,11 @@ func queryzHandler(e *Executor, w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			continue
 		}
-		plan := result.(*engine.Plan)
+		planStats := result.(*engine.PlanStats)
 		Value := &queryzRow{
-			Query: logz.Wrappable(sqlparser.TruncateForUI(plan.Original)),
+			Query: logz.Wrappable(sqlparser.TruncateForUI(planStats.Plan.Original)),
 		}
-		Value.Count, Value.tm, Value.ShardQueries, Value.Rows, Value.Errors = plan.Stats()
+		Value.Count, Value.tm, Value.ShardQueries, Value.Rows, Value.Errors = planStats.Stats()
 		var timepq time.Duration
 		if Value.Count != 0 {
 			timepq = time.Duration(uint64(Value.tm) / Value.Count)

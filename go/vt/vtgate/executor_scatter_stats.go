@@ -56,14 +56,14 @@ func (e *Executor) gatherScatterStats() (statsResults, error) {
 	totalExecTime := time.Duration(0)
 	totalCount := uint64(0)
 
-	plans := make([]*engine.Plan, 0)
+	allPlanStats := make([]*engine.PlanStats, 0)
 	routes := make([]*engine.Route, 0)
 	// First we go over all plans and collect statistics and all query plans for scatter queries
 	for _, item := range e.plans.Items() {
-		plan := item.Value.(*engine.Plan)
+		plan := item.Value.(*engine.PlanStats)
 
-		scatter := engine.Find(findScatter, plan.Instructions)
-		readOnly := !engine.Exists(isUpdating, plan.Instructions)
+		scatter := engine.Find(findScatter, plan.Plan.Instructions)
+		readOnly := !engine.Exists(isUpdating, plan.Plan.Instructions)
 		isScatter := scatter != nil
 
 		if isScatter {
@@ -71,7 +71,7 @@ func (e *Executor) gatherScatterStats() (statsResults, error) {
 			if !isRoute {
 				return statsResults{}, vterrors.Errorf(vtrpc.Code_INTERNAL, "expected a route, but found a %v", scatter)
 			}
-			plans = append(plans, plan)
+			allPlanStats = append(allPlanStats, plan)
 			routes = append(routes, route)
 			scatterExecTime += plan.ExecTime
 			scatterCount += plan.ExecCount
@@ -86,18 +86,18 @@ func (e *Executor) gatherScatterStats() (statsResults, error) {
 	}
 
 	// Now we'll go over all scatter queries we've found and produce result items for each
-	resultItems := make([]*statsResultItem, len(plans))
-	for i, plan := range plans {
+	resultItems := make([]*statsResultItem, len(allPlanStats))
+	for i, planStats := range allPlanStats {
 		route := routes[i]
 		resultItems[i] = &statsResultItem{
-			Query:                  plan.Original,
-			AvgTimePerQuery:        time.Duration(plan.ExecTime.Nanoseconds() / int64(plan.ExecCount)),
-			PercentTimeOfReads:     float64(100 * plan.ExecTime / readOnlyTime),
-			PercentTimeOfScatters:  float64(100 * plan.ExecTime / scatterExecTime),
-			PercentCountOfReads:    float64(100 * plan.ExecCount / readOnlyCount),
-			PercentCountOfScatters: float64(100 * plan.ExecCount / scatterCount),
+			Query:                  planStats.Plan.Original,
+			AvgTimePerQuery:        time.Duration(planStats.ExecTime.Nanoseconds() / int64(planStats.ExecCount)),
+			PercentTimeOfReads:     float64(100 * planStats.ExecTime / readOnlyTime),
+			PercentTimeOfScatters:  float64(100 * planStats.ExecTime / scatterExecTime),
+			PercentCountOfReads:    float64(100 * planStats.ExecCount / readOnlyCount),
+			PercentCountOfScatters: float64(100 * planStats.ExecCount / scatterCount),
 			From:                   route.Keyspace.Name + "." + route.TableName,
-			Count:                  plan.ExecCount,
+			Count:                  planStats.ExecCount,
 		}
 	}
 	result := statsResults{
