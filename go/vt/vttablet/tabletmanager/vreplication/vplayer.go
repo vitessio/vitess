@@ -292,7 +292,7 @@ func hasAnotherCommit(items [][]*binlogdatapb.VEvent, i, j int) bool {
 			switch items[i][j].Type {
 			case binlogdatapb.VEventType_COMMIT:
 				return true
-			case binlogdatapb.VEventType_DDL:
+			case binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER, binlogdatapb.VEventType_JOURNAL:
 				return false
 			}
 			j++
@@ -367,6 +367,11 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			return err
 		}
 	case binlogdatapb.VEventType_OTHER:
+		if vp.vr.dbClient.InTransaction {
+			// Unreachable
+			log.Errorf("internal error: vplayer is in a transaction on event: %v", event)
+			return fmt.Errorf("internal error: vplayer is in a transaction on event: %v", event)
+		}
 		// Just update the position.
 		posReached, err := vp.updatePos(event.Timestamp)
 		if err != nil {
@@ -377,7 +382,9 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		}
 	case binlogdatapb.VEventType_DDL:
 		if vp.vr.dbClient.InTransaction {
-			return fmt.Errorf("unexpected state: DDL encountered in the middle of a transaction: %v", event.Ddl)
+			// Unreachable
+			log.Errorf("internal error: vplayer is in a transaction on event: %v", event)
+			return fmt.Errorf("internal error: vplayer is in a transaction on event: %v", event)
 		}
 		switch vp.vr.source.OnDdl {
 		case binlogdatapb.OnDDLAction_IGNORE:
@@ -427,6 +434,11 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			}
 		}
 	case binlogdatapb.VEventType_JOURNAL:
+		if vp.vr.dbClient.InTransaction {
+			// Unreachable
+			log.Errorf("internal error: vplayer is in a transaction on event: %v", event)
+			return fmt.Errorf("internal error: vplayer is in a transaction on event: %v", event)
+		}
 		// Ensure that we don't have a partial set of table matches in the journal.
 		switch event.Journal.MigrationType {
 		case binlogdatapb.MigrationType_SHARDS:
