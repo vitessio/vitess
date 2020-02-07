@@ -53,13 +53,13 @@ var (
 	primary key (id)
 	) Engine=InnoDB
 	`
-	// Tablets for for shard0
+	// Tablets for shard0
 	tablet62344 *cluster.Vttablet
 	tablet62044 *cluster.Vttablet
 	tablet41983 *cluster.Vttablet
 	tablet31981 *cluster.Vttablet
 
-	// Tablets for for shard1
+	// Tablets for shard1
 	masterTablet  *cluster.Vttablet
 	replicaTablet *cluster.Vttablet
 )

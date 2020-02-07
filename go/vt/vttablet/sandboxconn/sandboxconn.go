@@ -86,6 +86,8 @@ type SandboxConn struct {
 
 	MessageIDs []*querypb.Value
 
+	// vstream expectations.
+	StartPos      string
 	VStreamEvents [][]*binlogdatapb.VEvent
 	VStreamErrors []error
 
@@ -361,6 +363,11 @@ func (sbc *SandboxConn) UpdateStream(ctx context.Context, target *querypb.Target
 	return fmt.Errorf("not implemented in test")
 }
 
+// ExpectVStreamStartPos makes the conn verify that that the next vstream request has the right startPos.
+func (sbc *SandboxConn) ExpectVStreamStartPos(startPos string) {
+	sbc.StartPos = startPos
+}
+
 // AddVStreamEvents adds a set of VStream events to be returned.
 func (sbc *SandboxConn) AddVStreamEvents(events []*binlogdatapb.VEvent, err error) {
 	sbc.VStreamEvents = append(sbc.VStreamEvents, events)
@@ -369,6 +376,9 @@ func (sbc *SandboxConn) AddVStreamEvents(events []*binlogdatapb.VEvent, err erro
 
 // VStream is part of the QueryService interface.
 func (sbc *SandboxConn) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
+	if sbc.StartPos != "" && sbc.StartPos != startPos {
+		return fmt.Errorf("startPos(%v): %v, want %v", target, startPos, sbc.StartPos)
+	}
 	for len(sbc.VStreamEvents) != 0 {
 		ev := sbc.VStreamEvents[0]
 		err := sbc.VStreamErrors[0]
