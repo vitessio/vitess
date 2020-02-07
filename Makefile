@@ -80,8 +80,6 @@ install: build
 	# also symlink config files in the old location
 	ln -sf src/vitess.io/vitess/config "$${PREFIX}/config"
 	# vtctld web UI files
-	mkdir -p "$${PREFIX}/src/vitess.io/vitess/web"
-	cp -R web/vtctld "$${PREFIX}/src/vitess.io/vitess/web/"
 	mkdir -p "$${PREFIX}/src/vitess.io/vitess/web/vtctld2"
 	cp -R web/vtctld2/app "$${PREFIX}/src/vitess.io/vitess/web/vtctld2/"
 
@@ -89,16 +87,13 @@ parser:
 	make -C go/vt/sqlparser
 
 visitor:
-	go build -o visitorgen go/visitorgen/main/main.go
-	./visitorgen -input=go/vt/sqlparser/ast.go -output=$(REWRITER)
-	rm ./visitorgen
+	go generate go/vt/sqlparser/rewriter.go
 
 # To pass extra flags, run test.go manually.
 # For example: go run test.go -docker=false -- --extra-flag
 # For more info see: go run test.go -help
-test: build dependency_check
-	echo $$(date): Running unit tests
-	tools/unit_test_runner.sh
+test:
+	go run test.go -docker=false
 
 site_test: unit_test site_integration_test
 
@@ -115,6 +110,10 @@ cleanall: clean
 	rm -rf bin dist lib pkg
 	# Remind people to run bootstrap.sh again
 	echo "Please run 'make tools' again to setup your environment"
+
+unit_test: build dependency_check
+	echo $$(date): Running unit tests
+	tools/unit_test_runner.sh
 
 e2e_test: build
 	echo $$(date): Running endtoend tests
