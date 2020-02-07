@@ -29,10 +29,13 @@ jobs:
         wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get install -y gnupg2
         sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
-        wget https://releases.hashicorp.com/consul/1.4.0/consul_1.4.0_linux_amd64.zip
-        unzip consul_1.4.0_linux_amd64.zip
         sudo apt-get update
         sudo apt-get install percona-xtrabackup-24
+        if [ ${{matrix.name}} = 18 ]; then
+          wget https://releases.hashicorp.com/consul/1.4.0/consul_1.4.0_linux_amd64.zip
+          unzip consul_1.4.0_linux_amd64.zip
+          export PATH="$PATH:$PWD"
+        if
 
     - name: sharded cluster_endtoend
       run: |
