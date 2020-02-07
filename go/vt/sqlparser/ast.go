@@ -1191,6 +1191,9 @@ func (node *Show) Format(buf *TrackedBuffer) {
 	if node.Type == "collation" && node.ShowCollationFilterOpt != nil {
 		buf.Myprintf(" where %v", *node.ShowCollationFilterOpt)
 	}
+	if node.Type == "charset" && node.ShowTablesOpt != nil {
+		buf.Myprintf("%v", node.ShowTablesOpt.Filter)
+	}
 	if node.HasTable() {
 		buf.Myprintf(" %v", node.Table)
 	}

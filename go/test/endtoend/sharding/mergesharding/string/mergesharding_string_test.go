@@ -14,15 +14,16 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package vtctlbackup
+package v3
 
 import (
 	"testing"
 
-	backup "vitess.io/vitess/go/test/endtoend/backup/vtctlbackup"
+	sharding "vitess.io/vitess/go/test/endtoend/sharding/mergesharding"
 )
 
-// TestXtraBackup - tests the backup using xtrabackup
-func TestXtrabackup(t *testing.T) {
-	backup.TestBackup(t, backup.ExtraBackup, "tar", 0)
+// TestMergeShardingStringShardingKey - tests merge sharding using a String column
+func TestMergeShardingStringShardingKey(t *testing.T) {
+	sharding.TestMergesharding(t, true /* useVarbinaryShardingKeyType */)
+
 }
