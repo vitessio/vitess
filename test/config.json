@@ -11,6 +11,17 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"check_make_visitor": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"misc/git/hooks/visitorgen"
+			],
+			"Manual": false,
+			"Shard": 5,
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"java": {
 			"File": "",
 			"Args": [],
@@ -55,28 +66,6 @@
 			"Shard": 2,
 			"RetryMax": 0,
 			"Tags": []
-		},
-		"merge_sharding": {
-			"File": "merge_sharding.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0,
-			"Tags": [
-				"worker_test"
-			]
-		},
-		"merge_sharding_bytes": {
-			"File": "merge_sharding_bytes.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 4,
-			"RetryMax": 0,
-			"Tags": [
-				"worker_test"
-			]
 		},
 		"messaging": {
 			"File": "messaging.py",
@@ -316,6 +305,28 @@
 			"RetryMax": 0,
 			"Tags": [
 				"site_test"
+			]
+		},
+		"merge_sharding": {
+			"File": "mergesharding_int_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/mergesharding/int"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 22,
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
+			]
+		},
+		"merge_sharding_bytes": {
+			"File": "mergesharding_string_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/sharding/mergesharding/string"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 22,
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
 			]
 		},
 		"mysqlctl": {
