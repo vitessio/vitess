@@ -28,8 +28,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -447,9 +445,17 @@ func GetShardInfo(t *testing.T, shard1Ks string, ci cluster.LocalProcessCluster)
 func checkThrottlerServiceMaxRates(t *testing.T, server string, names []string, rate int, ci cluster.LocalProcessCluster) {
 	// Avoid flakes by waiting for all throttlers. (Necessary because filtered
 	// replication on vttablet will register the throttler asynchronously.)
-	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerMaxRates", "--server", server)
-	assert.Nil(t, err)
+	var output string
+	var err error
 	msg := fmt.Sprintf("%d active throttler(s)", len(names))
+	for {
+		output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerMaxRates", "--server", server)
+		assert.Nil(t, err)
+		if strings.Contains(output, msg) {
+			break
+		}
+		time.Sleep(10 * time.Second)
+	}
 	assert.Contains(t, output, msg)
 
 	for _, name := range names {
@@ -521,36 +527,4 @@ func checkThrottlerServiceConfiguration(t *testing.T, server string, names []str
 func CheckThrottlerService(t *testing.T, server string, names []string, rate int, ci cluster.LocalProcessCluster) {
 	checkThrottlerServiceMaxRates(t, server, names, rate, ci)
 	checkThrottlerServiceConfiguration(t, server, names, ci)
-}
-
-// WaitForReplicationPos will wait for replication position to catch-up
-func WaitForReplicationPos(t *testing.T, tabletA *cluster.Vttablet, tabletB *cluster.Vttablet, hostname string, timeout float64) {
-	replicationPosA, _ := cluster.GetMasterPosition(t, *tabletA, hostname)
-	for {
-		replicationPosB, _ := cluster.GetMasterPosition(t, *tabletB, hostname)
-		if positionAtLeast(t, tabletA, replicationPosB, replicationPosA) {
-			break
-		}
-		msg := fmt.Sprintf("%s's replication position to catch up to %s's;currently at: %s, waiting to catch up to: %s", tabletB.Alias, tabletA.Alias, replicationPosB, replicationPosA)
-		waitStep(t, msg, timeout, 0.01)
-	}
-}
-
-func waitStep(t *testing.T, msg string, timeout float64, sleepTime float64) float64 {
-	timeout = timeout - sleepTime
-	if timeout < 0.0 {
-		t.Errorf("timeout waiting for condition '%s'", msg)
-	}
-	time.Sleep(time.Duration(sleepTime) * time.Second)
-	return timeout
-}
-
-func positionAtLeast(t *testing.T, tablet *cluster.Vttablet, a string, b string) bool {
-	isAtleast := false
-	val, err := tablet.MysqlctlProcess.ExecuteCommandWithOutput("position", "at_least", a, b)
-	require.NoError(t, err)
-	if strings.Contains(val, "true") {
-		isAtleast = true
-	}
-	return isAtleast
 }
