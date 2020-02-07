@@ -17,7 +17,6 @@ limitations under the License.
 package vindexes
 
 import (
-	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"io/ioutil"
