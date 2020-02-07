@@ -14,29 +14,173 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package backuptransform
+package transform
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
+	"path"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/sharding/initialsharding"
+	"vitess.io/vitess/go/vt/log"
 )
+
+// test main part of the testcase
+var (
+	master           *cluster.Vttablet
+	replica1         *cluster.Vttablet
+	replica2         *cluster.Vttablet
+	localCluster     *cluster.LocalProcessCluster
+	newInitDBFile    string
+	cell             = cluster.DefaultCell
+	hostname         = "localhost"
+	keyspaceName     = "ks"
+	dbPassword       = "VtDbaPass"
+	shardKsName      = fmt.Sprintf("%s/%s", keyspaceName, shardName)
+	dbCredentialFile string
+	shardName        = "0"
+	commonTabletArg  = []string{
+		"-vreplication_healthcheck_topology_refresh", "1s",
+		"-vreplication_healthcheck_retry_delay", "1s",
+		"-vreplication_retry_delay", "1s",
+		"-degraded_threshold", "5s",
+		"-lock_tables_timeout", "5s",
+		"-watch_replication_stream",
+		"-enable_replication_reporter",
+		"-serving_state_grace_period", "1s"}
+)
+
+func TestMainSetup(m *testing.M, useMysqlctld bool) {
+	flag.Parse()
+
+	exitCode, err := func() (int, error) {
+		localCluster = cluster.NewCluster(cell, hostname)
+		defer localCluster.Teardown()
+
+		// Start topo server
+		err := localCluster.StartTopo()
+		if err != nil {
+			return 1, err
+		}
+
+		// Start keyspace
+		keyspace := &cluster.Keyspace{
+			Name: keyspaceName,
+			Shards: []cluster.Shard{
+				{
+					Name: shardName,
+				},
+			},
+		}
+		localCluster.Keyspaces = append(localCluster.Keyspaces, *keyspace)
+		shard := &keyspace.Shards[0]
+		// changing password for mysql user
+		dbCredentialFile = initialsharding.WriteDbCredentialToTmp(localCluster.TmpDirectory)
+		initDb, _ := ioutil.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
+		sql := string(initDb)
+		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
+		sql = sql + initialsharding.GetPasswordUpdateSQL(localCluster)
+		ioutil.WriteFile(newInitDBFile, []byte(sql), 0666)
+
+		extraArgs := []string{"-db-credentials-file", dbCredentialFile}
+		commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)
+
+		// start mysql process for all replicas and master
+		var mysqlProcs []*exec.Cmd
+		for i := 0; i < 3; i++ {
+			tabletType := "replica"
+			tablet := localCluster.GetVttabletInstance(tabletType, 0, cell)
+			tablet.VttabletProcess = localCluster.GetVtprocessInstanceFromVttablet(tablet, shard.Name, keyspaceName)
+			tablet.VttabletProcess.DbPassword = dbPassword
+			tablet.VttabletProcess.ExtraArgs = commonTabletArg
+			tablet.VttabletProcess.SupportsBackup = true
+			tablet.VttabletProcess.EnableSemiSync = true
+
+			if useMysqlctld {
+				tablet.MysqlctldProcess = *cluster.MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
+				tablet.MysqlctldProcess.InitDBFile = newInitDBFile
+				tablet.MysqlctldProcess.ExtraArgs = extraArgs
+				tablet.MysqlctldProcess.Password = tablet.VttabletProcess.DbPassword
+				err := tablet.MysqlctldProcess.Start()
+				if err != nil {
+					return 1, err
+				}
+
+				shard.Vttablets = append(shard.Vttablets, tablet)
+				continue
+			}
+
+			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
+			tablet.MysqlctlProcess.InitDBFile = newInitDBFile
+			tablet.MysqlctlProcess.ExtraArgs = extraArgs
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			if err != nil {
+				return 1, err
+			}
+			mysqlProcs = append(mysqlProcs, proc)
+
+			shard.Vttablets = append(shard.Vttablets, tablet)
+		}
+		for _, proc := range mysqlProcs {
+			if err := proc.Wait(); err != nil {
+				return 1, err
+			}
+		}
+
+		// initialize tablets
+		master = shard.Vttablets[0]
+		replica1 = shard.Vttablets[1]
+		replica2 = shard.Vttablets[2]
+
+		for _, tablet := range []*cluster.Vttablet{master, replica1} {
+			if err := localCluster.VtctlclientProcess.InitTablet(tablet, cell, keyspaceName, hostname, shard.Name); err != nil {
+				return 1, err
+			}
+		}
+
+		// create database for master and replica
+		for _, tablet := range []cluster.Vttablet{*master, *replica1} {
+			if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
+				return 1, err
+			}
+			if err := tablet.VttabletProcess.Setup(); err != nil {
+				return 1, err
+			}
+		}
+
+		// initialize master and start replication
+		if err := localCluster.VtctlclientProcess.InitShardMaster(keyspaceName, shard.Name, cell, master.TabletUID); err != nil {
+			return 1, err
+		}
+		return m.Run(), nil
+	}()
+
+	if err != nil {
+		log.Error(err.Error())
+		os.Exit(1)
+	} else {
+		os.Exit(exitCode)
+	}
+
+}
 
 // create query for test table creation
 var vtInsertTest = `create table vt_insert_test (
-		id bigint auto_increment,
-		msg varchar(64),
-		primary key (id)
-		) Engine=InnoDB`
+	id bigint auto_increment,
+	msg varchar(64),
+	primary key (id)
+	) Engine=InnoDB`
 
-func TestBackupTransform(t *testing.T) {
+func TestBackupTransformImpl(t *testing.T) {
 	// insert data in master, validate same in slave
 	verifyInitialReplication(t)
 
@@ -73,15 +217,22 @@ func TestBackupTransform(t *testing.T) {
 	// restore replica2 from backup, should not give any error
 	// Note: we don't need to pass in the backup_storage_transform parameter,
 	// as it is read from the MANIFEST.
-	replica2.MysqlctlProcess.ExtraArgs = []string{
-		"-db-credentials-file", dbCredentialFile}
 	// clear replica2
-	replica2.MysqlctlProcess.Stop()
-	os.RemoveAll(replica2.VttabletProcess.Directory)
 
-	// start replica2 from backup
-	err = replica2.MysqlctlProcess.Start()
-	require.Nil(t, err)
+	if replica2.MysqlctlProcess.TabletUID > 0 {
+		replica2.MysqlctlProcess.Stop()
+		os.RemoveAll(replica2.VttabletProcess.Directory)
+		// start replica2 from backup
+		err = replica2.MysqlctlProcess.Start()
+		require.Nil(t, err)
+	} else {
+		replica2.MysqlctldProcess.Stop()
+		os.RemoveAll(replica2.VttabletProcess.Directory)
+		// start replica2 from backup
+		err = replica2.MysqlctldProcess.Start()
+		require.Nil(t, err)
+	}
+
 	err = localCluster.VtctlclientProcess.InitTablet(replica2, cell, keyspaceName, hostname, shardName)
 	assert.Nil(t, err)
 	replica2.VttabletProcess.CreateDB(keyspaceName)
@@ -114,7 +265,7 @@ func TestBackupTransform(t *testing.T) {
 
 // TestBackupTransformError validate backup with test_backup_error
 // backup_storage_hook, which should fail.
-func TestBackupTransformError(t *testing.T) {
+func TestBackupTransformErrorImpl(t *testing.T) {
 	// restart the replica with transform hook parameter
 	err := replica1.VttabletProcess.TearDown()
 	require.Nil(t, err)
