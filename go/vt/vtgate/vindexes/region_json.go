@@ -42,9 +42,8 @@ type RegionMap map[string]uint64
 // The table is expected to define the id column as unique. It's
 // Unique and a Lookup.
 type RegionJson struct {
-	name        string
 	regionMap   RegionMap
-	regionBytes int
+	*RegionExperimental
 }
 
 // NewRegionJson creates a RegionJson vindex.
@@ -64,9 +63,18 @@ func NewRegionJson(name string, m map[string]string) (Vindex, error) {
 		return nil, err
 	}
 
+	vindex, err := NewRegionExperimental(name, m)
+	if err != nil {
+		// Unreachable.
+		return nil, err
+	}
+	re := vindex.(*RegionExperimental)
+	if len(re.ConsistentLookupUnique.lkp.FromColumns) != 2 {
+		return nil, fmt.Errorf("two columns are required for region_experimental: %v", re.ConsistentLookupUnique.lkp.FromColumns)
+	}
 	return &RegionJson{
-		name:      name,
-		regionMap: rmap,
+		regionMap:          rmap,
+		RegionExperimental: re,
 	}, nil
 }
 
@@ -117,20 +125,6 @@ func (rv *RegionJson) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]
 		destinations = append(destinations, key.DestinationKeyspaceID(dest))
 	}
 	return destinations, nil
-}
-
-// Verify satisfies MultiColumn
-func (rv *RegionJson) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
-	result := make([]bool, len(rowsColValues))
-	destinations, _ := rv.Map(vcursor, rowsColValues)
-	for i, dest := range destinations {
-		destksid, ok := dest.(key.DestinationKeyspaceID)
-		if !ok {
-			continue
-		}
-		result[i] = bytes.Equal([]byte(destksid), ksids[i])
-	}
-	return result, nil
 }
 
 // NeedVCursor satisfies the Vindex interface.
