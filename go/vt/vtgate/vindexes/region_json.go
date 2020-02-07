@@ -28,30 +28,30 @@ import (
 )
 
 var (
-	_ MultiColumn = (*RegionVindex)(nil)
+	_ MultiColumn = (*RegionJson)(nil)
 )
 
 func init() {
-	Register("region_vindex", NewRegionVindex)
+	Register("region_json", NewRegionJson)
 }
 
 // RegionMap is used to store mapping of country to region
 type RegionMap map[string]uint64
 
-// RegionVindex defines a vindex that uses a lookup table.
+// RegionJson defines a vindex that uses a lookup table.
 // The table is expected to define the id column as unique. It's
 // Unique and a Lookup.
-type RegionVindex struct {
+type RegionJson struct {
 	name        string
 	regionMap   RegionMap
 	regionBytes int
 }
 
-// NewRegionVindex creates a RegionVindex vindex.
+// NewRegionJson creates a RegionJson vindex.
 // The supplied map requires all the fields of "region_experimental".
 // Additionally, it requires a region_map argument representing the path to a json file
 // containing a map of country to region.
-func NewRegionVindex(name string, m map[string]string) (Vindex, error) {
+func NewRegionJson(name string, m map[string]string) (Vindex, error) {
 	rmPath := m["region_map"]
 	rmap := make(map[string]uint64)
 	data, err := ioutil.ReadFile(rmPath)
@@ -64,29 +64,29 @@ func NewRegionVindex(name string, m map[string]string) (Vindex, error) {
 		return nil, err
 	}
 
-	return &RegionVindex{
+	return &RegionJson{
 		name:      name,
 		regionMap: rmap,
 	}, nil
 }
 
 // String returns the name of the vindex.
-func (rv *RegionVindex) String() string {
+func (rv *RegionJson) String() string {
 	return rv.name
 }
 
 // Cost returns the cost of this index as 1.
-func (rv *RegionVindex) Cost() int {
+func (rv *RegionJson) Cost() int {
 	return 1
 }
 
 // IsUnique returns true since the Vindex is unique.
-func (rv *RegionVindex) IsUnique() bool {
+func (rv *RegionJson) IsUnique() bool {
 	return true
 }
 
 // Map satisfies MultiColumn.
-func (rv *RegionVindex) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
+func (rv *RegionJson) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
 	destinations := make([]key.Destination, 0, len(rowsColValues))
 	for _, row := range rowsColValues {
 		if len(row) != 2 {
@@ -124,7 +124,7 @@ func (rv *RegionVindex) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) (
 }
 
 // Verify satisfies MultiColumn
-func (rv *RegionVindex) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (rv *RegionJson) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	result := make([]bool, len(rowsColValues))
 	destinations, _ := rv.Map(vcursor, rowsColValues)
 	for i, dest := range destinations {
@@ -138,6 +138,6 @@ func (rv *RegionVindex) Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value
 }
 
 // NeedVCursor staisfies the Vindex interface.
-func (rv *RegionVindex) NeedsVCursor() bool {
+func (rv *RegionJson) NeedsVCursor() bool {
 	return false
 }
