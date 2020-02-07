@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
 	"vitess.io/vitess/go/test/endtoend/recovery"
 
 	"github.com/stretchr/testify/assert"
@@ -236,11 +237,11 @@ func TestUnShardedRecoveryAfterSharding(t *testing.T) {
 	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from recovery_keyspace.vt_insert_test", "INT64(2)")
 
 	// check that new tablet is accessible with 'use ks'
-	recovery.ExecuteQueriesUsingVtgate(t, session, "use `recovery_keyspace@replica`")
+	cluster.ExecuteQueriesUsingVtgate(t, session, "use `recovery_keyspace@replica`")
 	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(2)")
 
 	// check that new tablet is accessible with `use ks:shard`
-	recovery.ExecuteQueriesUsingVtgate(t, session, "use `recovery_keyspace:0@replica`")
+	cluster.ExecuteQueriesUsingVtgate(t, session, "use `recovery_keyspace:0@replica`")
 	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(2)")
 
 	vtgateConn.Close()
@@ -409,8 +410,8 @@ func TestShardedRecovery(t *testing.T) {
 	vtgateConn, err := vtgateconn.Dial(context.Background(), grpcAddress)
 	assert.Nil(t, err)
 	session := vtgateConn.Session("@master", nil)
-	recovery.ExecuteQueriesUsingVtgate(t, session, "insert into vt_insert_test (id, msg) values (2,'test 2')")
-	recovery.ExecuteQueriesUsingVtgate(t, session, "insert into vt_insert_test (id, msg) values (3,'test 3')")
+	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into vt_insert_test (id, msg) values (2,'test 2')")
+	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into vt_insert_test (id, msg) values (3,'test 3')")
 
 	vtgateConn.Close()
 	err = vtgateInstance.TearDown()
@@ -454,15 +455,15 @@ func TestShardedRecovery(t *testing.T) {
 	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from recovery_keyspace.vt_insert_test", "INT64(2)")
 
 	// check that new keyspace is accessible with 'use ks'
-	recovery.ExecuteQueriesUsingVtgate(t, session, "use recovery_keyspace@replica")
+	cluster.ExecuteQueriesUsingVtgate(t, session, "use recovery_keyspace@replica")
 	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(2)")
 
 	// check that new tablet is accessible with use `ks:shard`
-	recovery.ExecuteQueriesUsingVtgate(t, session, "use `recovery_keyspace:-80@replica`")
+	cluster.ExecuteQueriesUsingVtgate(t, session, "use `recovery_keyspace:-80@replica`")
 	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64("+shard0CountStr+")")
 	recovery.VerifyQueriesUsingVtgate(t, session, "select id from vt_insert_test", "INT64("+shard0TestId+")")
 
-	recovery.ExecuteQueriesUsingVtgate(t, session, "use `recovery_keyspace:80-@replica`")
+	cluster.ExecuteQueriesUsingVtgate(t, session, "use `recovery_keyspace:80-@replica`")
 	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64("+shard1CountStr+")")
 	recovery.VerifyQueriesUsingVtgate(t, session, "select id from vt_insert_test", "INT64("+shard1TestId+")")
 
