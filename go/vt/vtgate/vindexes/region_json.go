@@ -101,6 +101,7 @@ func (rv *RegionJson) Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]
 		}
 		h := vhash(hn)
 
+		rn, ok := rv.regionMap[row[1].ToString()]
 		if !ok {
 			destinations = append(destinations, key.DestinationNone{})
 			continue
