@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/tlstest"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/vt/vttest"
@@ -187,9 +188,7 @@ func assertColumnVindex(t *testing.T, cluster vttest.LocalCluster, expected colu
 		assertEqual(t, columnVindex.Name, expected.vindex, "Actual vindex name different from expected")
 		assertEqual(t, columnVindex.Columns[0], expected.column, "Actual vindex column different from expected")
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func assertEqual(t *testing.T, actual string, expected string, message string) {
