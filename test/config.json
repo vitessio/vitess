@@ -1,23 +1,5 @@
 {
 	"Tests": {
-		"backup_mysqlctld": {
-			"File": "backup_mysqlctld.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 0,
-			"RetryMax": 0,
-			"Tags": []
-		},
-		"backup_transform_mysqlctld": {
-			"File": "backup_transform_mysqlctld.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 0,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"check_make_parser": {
 			"File": "",
 			"Args": [],
@@ -48,7 +30,7 @@
 				"java_test"
 			],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 0,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -57,7 +39,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 1,
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"
@@ -81,7 +63,7 @@
 					"test/client_test.sh"
 			],
 			"Manual": false,
-			"Shard": 3,
+			"Shard": 2,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -108,7 +90,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 2,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -117,7 +99,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 2,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -126,7 +108,7 @@
 			"Args": [],
 			"Command": [],
 			"Manual": false,
-			"Shard": 4,
+			"Shard": 1,
 			"RetryMax": 0,
 			"Tags": [
 				"webdriver"
@@ -170,12 +152,39 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"backup_mysqlctld": {
+			"File": "backup_mysqlctld_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/mysqlctld"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 21,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"backup_only": {
 			"File": "backup_only.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtbackup"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 19,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"backup_transform": {
+			"File": "backup_transform_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 19,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"backup_transform_mysqlctld": {
+			"File": "backup_transform_mysqlctld_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform/mysqlctld"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 21, 
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -209,15 +218,6 @@
 		"cellalias": {
 			"File": "cellalias.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/cellalias"],
-			"Command": [],
-			"Manual": false,
-			"Shard": 12,
-			"RetryMax": 0,
-			"Tags": []
-		},
-		"backup_transform": {
-			"File": "backup_transform_test.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backuptransform"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 12,
@@ -332,6 +332,17 @@
 		"mysqlctl": {
 			"File": "mysqlctl.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/mysqlctl"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 12,
+			"RetryMax": 0,
+			"Tags": [
+				"site_test"
+			]
+		},
+		"mysqlctld": {
+			"File": "mysqlctld_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/mysqlctld"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 12,

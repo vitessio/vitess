@@ -80,6 +80,22 @@ type LocalProcessCluster struct {
 	EnableSemiSync bool
 }
 
+// Vttablet stores the properties needed to start a vttablet process
+type Vttablet struct {
+	Type      string
+	TabletUID int
+	HTTPPort  int
+	GrpcPort  int
+	MySQLPort int
+	Alias     string
+	Cell      string
+
+	// background executable processes
+	MysqlctlProcess  MysqlctlProcess
+	MysqlctldProcess MysqlctldProcess
+	VttabletProcess  *VttabletProcess
+}
+
 // Keyspace : Cluster accepts keyspace to launch it
 type Keyspace struct {
 	Name      string
@@ -118,21 +134,6 @@ func (shard *Shard) Replica() *Vttablet {
 		}
 	}
 	return nil
-}
-
-// Vttablet stores the properties needed to start a vttablet process
-type Vttablet struct {
-	Type      string
-	TabletUID int
-	HTTPPort  int
-	GrpcPort  int
-	MySQLPort int
-	Alias     string
-	Cell      string
-
-	// background executable processes
-	MysqlctlProcess MysqlctlProcess
-	VttabletProcess *VttabletProcess
 }
 
 // StartTopo starts topology server
@@ -468,6 +469,12 @@ func (cluster *LocalProcessCluster) Teardown() {
 						mysqlctlProcessList = append(mysqlctlProcessList, proc)
 					}
 				}
+				if tablet.MysqlctldProcess.TabletUID > 0 {
+					if err := tablet.MysqlctldProcess.Stop(); err != nil {
+						log.Errorf("Error in mysqlctl teardown - %s", err.Error())
+					}
+				}
+
 				if err := tablet.VttabletProcess.TearDown(); err != nil {
 					log.Errorf("Error in vttablet teardown - %s", err.Error())
 				}
