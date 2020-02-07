@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/mysql"
 	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
 	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
@@ -34,6 +35,32 @@ import (
 var (
 	tmClient = tmc.NewClient()
 )
+
+// Restart restarts vttablet and mysql.
+func (tablet *Vttablet) Restart() error {
+	if tablet.MysqlctlProcess.TabletUID|tablet.MysqlctldProcess.TabletUID == 0 {
+		return fmt.Errorf("no mysql process is running")
+	}
+
+	if tablet.MysqlctlProcess.TabletUID > 0 {
+		tablet.MysqlctlProcess.Stop()
+		tablet.VttabletProcess.TearDown()
+		os.RemoveAll(tablet.VttabletProcess.Directory)
+
+		return tablet.MysqlctlProcess.Start()
+	}
+
+	tablet.MysqlctldProcess.Stop()
+	tablet.VttabletProcess.TearDown()
+	os.RemoveAll(tablet.VttabletProcess.Directory)
+
+	return tablet.MysqlctldProcess.Start()
+}
+
+// ValidateTabletRestart restarts the tablet and validate error if there is any.
+func (tablet *Vttablet) ValidateTabletRestart(t *testing.T) {
+	require.Nilf(t, tablet.Restart(), "tablet restart failed")
+}
 
 // GetMasterPosition gets the master position of required vttablet
 func GetMasterPosition(t *testing.T, vttablet Vttablet, hostname string) (string, string) {
@@ -50,7 +77,7 @@ func VerifyRowsInTablet(t *testing.T, vttablet *Vttablet, ksName string, expecte
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
 		qr, err := vttablet.VttabletProcess.QueryTablet("select * from vt_insert_test", ksName, true)
-		assert.Nil(t, err)
+		require.Nil(t, err)
 		if len(qr.Rows) == expectedRows {
 			return
 		}
@@ -151,4 +178,23 @@ func positionAtLeast(t *testing.T, tablet *Vttablet, a string, b string) bool {
 		isAtleast = true
 	}
 	return isAtleast
+}
+
+// NewConnParams creates ConnParams corresponds to given arguments.
+func NewConnParams(port int, password, socketPath, keyspace string) mysql.ConnParams {
+	if port != 0 {
+		socketPath = ""
+	}
+	cp := mysql.ConnParams{
+		Uname:      "vt_dba",
+		Port:       port,
+		UnixSocket: socketPath,
+		Pass:       password,
+	}
+
+	if keyspace != "" {
+		cp.DbName = "vt_" + keyspace
+	}
+
+	return cp
 }

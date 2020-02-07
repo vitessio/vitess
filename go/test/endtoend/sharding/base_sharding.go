@@ -184,16 +184,16 @@ func CheckBinlogPlayerVars(t *testing.T, vttablet cluster.Vttablet, sourceShards
 	replicationSourceObj := reflect.ValueOf(tabletVars["VReplicationSource"])
 	replicationSourceValue := []string{}
 
-	assert.Equal(t,
-		fmt.Sprintf("%v", replicationSourceObj.MapKeys()),
-		fmt.Sprintf("%v", reflect.ValueOf(tabletVars["VReplicationSourceTablet"]).MapKeys()))
+	assert.Equal(t, len(replicationSourceObj.MapKeys()), len(reflect.ValueOf(tabletVars["VReplicationSourceTablet"]).MapKeys()))
 
 	for _, key := range replicationSourceObj.MapKeys() {
 		replicationSourceValue = append(replicationSourceValue,
 			fmt.Sprintf("%v", replicationSourceObj.MapIndex(key)))
 	}
 
-	assert.True(t, reflect.DeepEqual(replicationSourceValue, sourceShards))
+	for _, shard := range sourceShards {
+		assert.Containsf(t, replicationSourceValue, shard, "Source shard is not matched with vReplication shard value")
+	}
 
 	if secondBehindMaster != 0 {
 		secondBehindMaserMaxStr := fmt.Sprintf("%v", reflect.ValueOf(tabletVars["VReplicationSecondsBehindMasterMax"]))

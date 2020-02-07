@@ -45,6 +45,11 @@ func TestRewrites(in *testing.T) {
 			db:       true, liid: false,
 		},
 		{
+			in:       "SELECT database() from test",
+			expected: "SELECT database() from test",
+			db:       false, liid: false,
+		},
+		{
 			in:       "SELECT last_insert_id() as test",
 			expected: "SELECT :__lastInsertId as test",
 			db:       false, liid: true,
@@ -55,14 +60,29 @@ func TestRewrites(in *testing.T) {
 			db:       true, liid: true,
 		},
 		{
-			in:       "select (select database() from test) from test",
-			expected: "select (select :__vtdbname as `database()` from test) as `(select database() from test)` from test",
+			in:       "select (select database()) from test",
+			expected: "select (select database() from dual) from test",
+			db:       false, liid: false,
+		},
+		{
+			in:       "select (select database() from dual) from test",
+			expected: "select (select database() from dual) from test",
+			db:       false, liid: false,
+		},
+		{
+			in:       "select (select database() from dual) from dual",
+			expected: "select (select :__vtdbname as `database()` from dual) as `(select database() from dual)` from dual",
 			db:       true, liid: false,
 		},
 		{
 			in:       "select id from user where database()",
-			expected: "select id from user where :__vtdbname",
-			db:       true, liid: false,
+			expected: "select id from user where database()",
+			db:       false, liid: false,
+		},
+		{
+			in:       "select table_name from information_schema.tables where table_schema = database()",
+			expected: "select table_name from information_schema.tables where table_schema = database()",
+			db:       false, liid: false,
 		},
 	}
 
@@ -77,16 +97,10 @@ func TestRewrites(in *testing.T) {
 			expected, err := Parse(tc.expected)
 			require.NoError(t, err)
 
-			s := toString(expected)
-			require.Equal(t, s, toString(result.AST))
+			s := String(expected)
+			require.Equal(t, s, String(result.AST))
 			require.Equal(t, tc.liid, result.NeedLastInsertID, "should need last insert id")
 			require.Equal(t, tc.db, result.NeedDatabase, "should need database name")
 		})
 	}
-}
-
-func toString(node SQLNode) string {
-	buf := NewTrackedBuffer(nil)
-	node.Format(buf)
-	return buf.String()
 }
