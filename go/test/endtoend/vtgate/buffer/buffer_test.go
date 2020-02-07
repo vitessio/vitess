@@ -43,8 +43,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/sharding"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql"
@@ -357,7 +355,7 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 	}
 
 	// Wait for replica to catch up to master.
-	sharding.WaitForReplicationPos(t, master, replica, "localhost", 60.0)
+	cluster.WaitForReplicationPos(t, master, replica, "localhost", 60.0)
 
 	duration := time.Since(start)
 	minUnavailabilityInS := 1.0

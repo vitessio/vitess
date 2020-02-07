@@ -57,30 +57,24 @@ var (
 	hostname         = "localhost"
 	keyspaceName     = "test_keyspace"
 	shardName        = "0"
-	shard0Name       = "-80"
-	shard1Name       = "80-"
 	keyspaceIDType   = "uint64"
 	shardTablets     []*cluster.Vttablet
 	shard0Tablets    []*cluster.Vttablet
 	shard1Tablets    []*cluster.Vttablet
 	workerTestOffset = 0
 	commonTabletArg  = []string{
-		"-vreplication_healthcheck_topology_refresh", "1s",
-		"-vreplication_healthcheck_retry_delay", "1s",
-		"-vreplication_retry_delay", "1s",
-		"-degraded_threshold", "5s",
-		"-lock_tables_timeout", "5s",
-		"-watch_replication_stream",
-		"-serving_state_grace_period", "1s",
 		"-binlog_use_v3_resharding_mode=true"}
-	vtWorkerTest = `create table worker_test (
-					  id bigint unsigned,
-                      sid int unsigned,
-					  msg varchar(64),
-					  primary key (id),
-                      index by_msg (msg)
-					  ) Engine=InnoDB`
-	vSchema = `{
+	vtWorkerTest = `
+	create table worker_test (
+	id bigint unsigned,
+	sid int unsigned,
+	msg varchar(64),
+	primary key (id),
+    index by_msg (msg)
+	) Engine=InnoDB`
+
+	vSchema = `
+	{
     "sharded": true,
     "vindexes": {
       "hash": {
@@ -178,7 +172,6 @@ func TestWebInterface(t *testing.T) {
 
 func initialSetup(t *testing.T) {
 
-	// Tests that the SplitClone worker is resilient to particular failures.
 	runShardTablets(t, "0", shardTablets, true)
 
 	// create the split shards
@@ -190,7 +183,7 @@ func initialSetup(t *testing.T) {
 	insertValues(master, "shard-1", 4, 1000, 1)
 
 	// wait for replication position
-	sharding.WaitForReplicationPos(t, master, rdOnly1, "localhost", 60)
+	cluster.WaitForReplicationPos(t, master, rdOnly1, "localhost", 60)
 
 	copySchemaToDestinationShard(t)
 }
@@ -202,18 +195,11 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 	// Order of operations:
 	// 1. Run a background vtworker
 	// 2. Wait until the worker successfully resolves the destination masters.
-	//	3. Reparent the destination tablets
-	//	4. Wait until the vtworker copy is finished
-	//	5. Verify that the worker was forced to reresolve topology and retry writes
-	//	due to the reparent.
-	//	6. Verify that the data was copied successfully to both new shards
-	//
-	//Args:
-	//mysql_down: boolean. If True, we take down the MySQL instances on the
-	//	destination masters at first, then bring them back and reparent away.
-	//
-	//		Raises:
-	//	AssertionError if things didn't go as expected.
+	// 3. Reparent the destination tablets
+	// 4. Wait until the vtworker copy is finished
+	// 5. Verify that the worker was forced to reresolve topology and retry writes
+	//	  due to the reparent.
+	// 6. Verify that the data was copied successfully to both new shards
 
 	err := localCluster.StartVtworker(cell, "--use_v3_resharding_mode=true")
 	assert.Nil(t, err)
@@ -221,8 +207,6 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 	// --max_tps is only specified to enable the throttler and ensure that the
 	// code is executed. But the intent here is not to throttle the test, hence
 	// the rate limit is set very high.
-	// --chunk_count is 2 because rows are currently ordered by primary key such
-	// that all rows of the first shard come first and then the second shard.
 
 	var args []string
 
@@ -231,6 +215,8 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 		"--min_healthy_rdonly_tablets", "1",
 		"--max_tps", "9999")
 
+	// --chunk_count is 2 because rows are currently ordered by primary key such
+	// that all rows of the first shard come first and then the second shard.
 	// Make the clone as slow as necessary such that there is enough time to
 	// run PlannedReparent in the meantime.
 
@@ -246,7 +232,6 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 	if isMysqlDown {
 		// vtworker is blocked at this point. This is a good time to test that its
 		// throttler server is reacting to RPCs.
-		time.Sleep(5 * time.Second)
 		sharding.CheckThrottlerService(t, fmt.Sprintf("%s:%d", hostname, localCluster.VtworkerProcess.GrpcPort),
 			[]string{"test_keyspace/-80", "test_keyspace/80-"}, 9999, *localCluster)
 
@@ -296,14 +281,6 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 				t.Fatal(err)
 			}
 		}
-
-		// Reparent away from the old masters.
-		localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
-			"test_keyspace/-80", "-new_master", shard0Replica.Alias)
-
-		localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
-			"test_keyspace/80-", "-new_master", shard1Replica.Alias)
-
 	} else {
 
 		// NOTE: There is a race condition around this:
@@ -320,13 +297,15 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 		// for each destination shard ("finding targets" state).
 		pollForVars(t, "cloning the data (online)")
 
-		localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
-			"test_keyspace/-80", "-new_master", shard0Replica.Alias)
-
-		localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
-			"test_keyspace/80-", "-new_master", shard1Replica.Alias)
-
 	}
+
+	// Reparent away from the old masters.
+	localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
+		"test_keyspace/-80", "-new_master", shard0Replica.Alias)
+
+	localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
+		"test_keyspace/80-", "-new_master", shard1Replica.Alias)
+
 	proc.Wait()
 
 	// Verify that we were forced to re-resolve and retry.
@@ -335,8 +314,8 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 	err = localCluster.VtworkerProcess.TearDown()
 	assert.Nil(t, err)
 
-	sharding.WaitForReplicationPos(t, shard0Replica, shard0RdOnly1, "localhost", 60)
-	sharding.WaitForReplicationPos(t, shard1Replica, shard1RdOnly1, "localhost", 60)
+	cluster.WaitForReplicationPos(t, shard0Replica, shard0RdOnly1, "localhost", 60)
+	cluster.WaitForReplicationPos(t, shard1Replica, shard1RdOnly1, "localhost", 60)
 
 	err = localCluster.VtworkerProcess.ExecuteVtworkerCommand(localCluster.GetAndReservePort(), localCluster.GetAndReservePort(), "-cell", cell,
 		"--use_v3_resharding_mode=true",
@@ -345,6 +324,7 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 		"--min_healthy_rdonly_tablets", "1",
 		"test_keyspace/0")
 	assert.Nil(t, err)
+
 	// Make sure that everything is caught up to the same replication point
 	runSplitDiff(t, "test_keyspace/-80")
 	runSplitDiff(t, "test_keyspace/80-")
@@ -373,15 +353,9 @@ func assertShardDataEqual(t *testing.T, shardNum string, sourceTablet *cluster.V
 
 }
 
+// Runs a vtworker SplitDiff on the given keyspace/shard.
 func runSplitDiff(t *testing.T, keyspaceShard string) {
-	// Runs a vtworker SplitDiff on the given keyspace/shard.
 
-	// Sets all former rdonly slaves back to rdonly.
-
-	//	Args:
-	// keyspace_shard: keyspace/shard to run SplitDiff on (string)
-	// source_tablets: ShardTablets instance for the source shard
-	// destination_tablets: ShardTablets instance for the destination shard
 	err := localCluster.VtworkerProcess.ExecuteVtworkerCommand(localCluster.GetAndReservePort(),
 		localCluster.GetAndReservePort(),
 		"-cell", cell,
@@ -432,10 +406,8 @@ func pollForVarsWorkerRetryCount(t *testing.T, count int) {
 }
 
 // vttablet: the Tablet instance to modify.
-//id_offset: offset for the value of `id` column.
 // msg: the value of `msg` column.
-// keyspace_id: the value of `keyspace_id` column.
-// num_values: number of rows to be inserted.
+// numValues: number of rows to be inserted.
 func insertValues(tablet *cluster.Vttablet, msg string, sid int, numValues int, initialVal int) {
 
 	// For maximum performance, multiple values are inserted in one statement.
@@ -475,10 +447,9 @@ func getChunkArr(fullList []int, chunkSize int) [][]int {
 	return m
 }
 
-// Args:
-// shard_name: the name of the shard to start tablets in
-// shard_tablets: an instance of ShardTablets for the given shard
-// create_table: boolean, True iff we should create a table on the tablets
+// shardName: the name of the shard to start tablets in
+// tabletArr: an instance of ShardTablets for the given shard
+// createTable: boolean, True iff we should create a table on the tablets
 func runShardTablets(t *testing.T, shardName string, tabletArr []*cluster.Vttablet, createTable bool) error {
 	//Handles all the necessary work for initially running a shard's tablets.
 
@@ -579,10 +550,10 @@ func initializeCluster(t *testing.T, onlyTopo bool) (int, error) {
 		Name: shardName,
 	}
 	shard0 := &cluster.Shard{
-		Name: shard0Name,
+		Name: "-80",
 	}
 	shard1 := &cluster.Shard{
-		Name: shard1Name,
+		Name: "80-",
 	}
 
 	// Defining all the tablets
