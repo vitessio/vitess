@@ -21,18 +21,18 @@ source ./env.sh
 
 set -e
 
-./vtgate-down.sh
+./scripts/vtgate-down.sh
 
 # for TABLET in 100 200 300 400; do
 # vtctlclient -server localhost:15999 GetTablet zone1-$TABLET >/dev/null 2>&1 && CELL=zone1 UID_BASE=$TABLET ./vttablet-down.sh
 # done;
 
-./vtctld-down.sh
+./scripts/vtctld-down.sh
 
 if [ "${TOPO}" = "zk2" ]; then
-    CELL=zone1 ./zk-down.sh
+    CELL=zone1 ./scripts/k-down.sh
 else
-    CELL=zone1 ./etcd-down.sh
+    CELL=zone1 ./scripts/etcd-down.sh
 fi
 
 # pedantic check: grep for any remaining processes

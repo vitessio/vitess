@@ -14,6 +14,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is a convenience script to run vtctlclient against the local example.
+# This is an example script that creates a single shard vttablet deployment.
 
-exec vtctlclient -server localhost:15999 "$@"
+source ./env.sh
+
+set -e
+
+cell=${CELL:-'test'}
+uid=$TABLET_UID
+mysql_port=$[17000 + $uid]
+printf -v alias '%s-%010d' $cell $uid
+printf -v tablet_dir 'vt_%010d' $uid
+
+mkdir -p $VTDATAROOT/backups
+
+echo "Starting MySQL for tablet $alias..."
+action="init"
+
+if [ -d $VTDATAROOT/$tablet_dir ]; then
+ echo "Resuming from existing vttablet dir:"
+ echo "    $VTDATAROOT/$tablet_dir"
+ action='start'
+fi
+
+mysqlctl \
+ -log_dir $VTDATAROOT/tmp \
+ -tablet_uid $uid \
+ -mysql_port $mysql_port \
+ $action

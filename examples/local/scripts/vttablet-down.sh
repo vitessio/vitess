@@ -14,6 +14,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is a convenience script to run mysql client against the local vtgate.
+# This is an example script that stops the mysqld and vttablet instances
+# created by vttablet-up.sh
 
-mysql -h 127.0.0.1 -P 15306 -u mysql_user
+source ./env.sh
+
+uid=${TABLET_UID}
+printf -v tablet_dir 'vt_%010d' $uid
+pid=`cat $VTDATAROOT/$tablet_dir/vttablet.pid`
+
+kill $pid
+
+# Wait for vttablet to die.
+while ps -p $pid > /dev/null; do sleep 1; done
+
+

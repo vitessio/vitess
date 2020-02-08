@@ -23,12 +23,12 @@ set -e
 
 for i in 300 301 302; do
  CELL=zone1 TABLET_UID=$i ./mysqlctl-up.sh
- SHARD=-80 CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./vttablet-up.sh &
+ SHARD=-80 CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./scripts/vttablet-up.sh &
 done
 
 for i in 400 401 402; do
- CELL=zone1 TABLET_UID=$i ./mysqlctl-up.sh
- SHARD=80- CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./vttablet-up.sh &
+ CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
+ SHARD=80- CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./scripts/vttablet-up.sh &
 done
 
 sleep 20 # TODO: replace by wait for tablets
