@@ -16,9 +16,6 @@
 
 # this script migrates traffic for the master tablet
 
-set -e
-
-./lvtctl.sh MigrateServedTypes customer/0 master
+vtctlclient -server localhost:15999 MigrateServedTypes customer/0 master
 # data has been copied over to shards, and databases for the new shards are now available
 
-disown -a
