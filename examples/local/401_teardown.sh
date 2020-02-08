@@ -17,23 +17,22 @@
 # We should not assume that any of the steps have been executed.
 # This makes it possible for a user to cleanup at any point.
 
-set -e
+source ./env.sh
 
-# shellcheck disable=SC2128
-script_root=$(dirname "${BASH_SOURCE}")
+set -e
 
 ./vtgate-down.sh
 
-for TABLET in 100 200 300 400; do
- ./lvtctl.sh GetTablet zone1-$TABLET >/dev/null 2>&1 && CELL=zone1 UID_BASE=$TABLET "$script_root/vttablet-down.sh"
-done;
+# for TABLET in 100 200 300 400; do
+# vtctlclient -server localhost:15999 GetTablet zone1-$TABLET >/dev/null 2>&1 && CELL=zone1 UID_BASE=$TABLET ./vttablet-down.sh
+# done;
 
 ./vtctld-down.sh
 
 if [ "${TOPO}" = "zk2" ]; then
-    CELL=zone1 "$script_root/zk-down.sh"
+    CELL=zone1 ./zk-down.sh
 else
-    CELL=zone1 "$script_root/etcd-down.sh"
+    CELL=zone1 ./etcd-down.sh
 fi
 
 # pedantic check: grep for any remaining processes

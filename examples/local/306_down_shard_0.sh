@@ -15,11 +15,7 @@
 # limitations under the License.
 # this script brings down the tablets for customer/0 keyspace
 
-set -e
+for i in 200 201 202; do
+ CELL=zone1 TABLET_UID=$i ./vttablet-down.sh
+done
 
-# shellcheck disable=SC2128
-script_root=$(dirname "${BASH_SOURCE}")
-
-CELL=zone1 UID_BASE=200 "$script_root/vttablet-down.sh"
-
-disown -a
