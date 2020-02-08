@@ -19,8 +19,6 @@
 
 source ./env.sh
 
-set -e
-
 vtworker \
  $TOPOLOGY_FLAGS \
  -cell zone1 \

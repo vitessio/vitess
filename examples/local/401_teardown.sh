@@ -19,11 +19,8 @@
 
 source ./env.sh
 
-set -e
-
 ./scripts/vtgate-down.sh
 
-# vtctlclient -server localhost:15999 ListShardTablets commerce/0
 for tablet in 100 200 300 400; do
  if vtctlclient -server localhost:15999 GetTablet zone1-$tablet >/dev/null 2>&1 ; then
   # The zero tablet is up. Try to shutdown 0-2 tablet + mysqlctl

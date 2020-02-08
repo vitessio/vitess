@@ -18,8 +18,6 @@
 
 source ./env.sh
 
-set -e
-
 # Stop vtgate.
 echo "Stopping vtgate..."
 kill `cat $VTDATAROOT/tmp/vtgate.pid`

@@ -18,8 +18,6 @@
 
 source ./env.sh
 
-set -e
-
 # Stop ZooKeeper servers.
 echo "Stopping zk servers..."
 for zkid in $zkids; do

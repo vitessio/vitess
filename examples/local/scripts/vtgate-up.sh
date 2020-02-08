@@ -18,8 +18,6 @@
 
 source ./env.sh
 
-set -e
-
 cell=${CELL:-'test'}
 web_port=15001
 grpc_port=15991

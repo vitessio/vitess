@@ -18,7 +18,5 @@
 
 source ./env.sh
 
-set -e
-
 echo "Stopping etcd..."
 kill -9 `cat $VTDATAROOT/tmp/etcd.pid` 

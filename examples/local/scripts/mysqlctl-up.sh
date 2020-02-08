@@ -18,8 +18,6 @@
 
 source ./env.sh
 
-set -e
-
 cell=${CELL:-'test'}
 uid=$TABLET_UID
 mysql_port=$[17000 + $uid]

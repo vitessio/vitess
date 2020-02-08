@@ -18,7 +18,5 @@
 
 source ./env.sh
 
-set -xe
-
 echo "Stopping vtctld..."
 kill -9 `cat $VTDATAROOT/tmp/vtctld.pid`

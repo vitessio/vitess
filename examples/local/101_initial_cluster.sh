@@ -19,8 +19,6 @@
 
 source ./env.sh
 
-set -e
-
 # start topo server
 if [ "${TOPO}" = "zk2" ]; then
  CELL=zone1 ./scripts/zk-up.sh

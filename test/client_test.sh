@@ -58,6 +58,6 @@ for i in 100 101 102; do
  CELL=test TABLET_UID=$i ./scripts/mysqlctl-down.sh
 done
 
-./scripts/tctld-down.sh
+./scripts/vtctld-down.sh
 CELL=test ./scripts/etcd-down.sh
 

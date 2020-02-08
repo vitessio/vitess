@@ -18,7 +18,6 @@
 
 source ./env.sh
 
-set -e
 cell=${CELL:-'test'}
 export ETCDCTL_API=2
 

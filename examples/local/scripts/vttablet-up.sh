@@ -16,8 +16,6 @@
 
 source ./env.sh
 
-set -e
-
 cell=${CELL:-'test'}
 keyspace=${KEYSPACE:-'test_keyspace'}
 shard=${SHARD:-'0'}
