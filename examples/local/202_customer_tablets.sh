@@ -24,10 +24,8 @@ set -e
 
 for i in 200 201 202; do
  CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
- CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./scripts/vttablet-up.sh &
+ CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./scripts/vttablet-up.sh
 done
-
-sleep 20 # @TODO: replace with wait for tablets command
 
 vtctlclient -server localhost:15999 InitShardMaster -force customer/0 zone1-200
 vtctlclient -server localhost:15999 CopySchemaShard -tables customer,corder commerce/0 customer/0

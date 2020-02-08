@@ -34,10 +34,8 @@ CELL=zone1 ./scripts/vtctld-up.sh &
 # start vttablets for keyspace commerce
 for i in 100 101 102; do
  CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
- CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ./scripts/vttablet-up.sh &
+ CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ./scripts/vttablet-up.sh
 done
-
-sleep 20 # @TODO: replace with wait for tablets command
 
 # set one of the replicas to master
 vtctlclient -server localhost:15999 InitShardMaster -force commerce/0 zone1-100
@@ -49,6 +47,4 @@ vtctlclient -server localhost:15999 ApplySchema -sql-file create_commerce_schema
 vtctlclient -server localhost:15999 ApplyVSchema -vschema_file vschema_commerce_initial.json commerce
 
 # start vtgate
-CELL=zone1 ./scripts/vtgate-up.sh &
-
-sleep 20 # @TODO: replace with a wait command
+CELL=zone1 ./scripts/vtgate-up.sh
