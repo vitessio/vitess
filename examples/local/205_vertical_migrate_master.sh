@@ -17,8 +17,4 @@
 # this script migrates master traffic for the customer keyspace to the
 # new master tablet
 
-set -e
-
-./lvtctl.sh MigrateServedFrom customer/0 master
-
-disown -a
+vtctlclient -server localhost:15999 MigrateServedFrom customer/0 master

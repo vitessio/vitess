@@ -17,35 +17,38 @@
 # this script brings up zookeeper and all the vitess components
 # required for a single shard deployment.
 
-set -e
+source ./env.sh
 
-# shellcheck disable=SC2128
-script_root=$(dirname "${BASH_SOURCE}")
-source "${script_root}/env.sh"
+set -e
 
 # start topo server
 if [ "${TOPO}" = "zk2" ]; then
-    CELL=zone1 "$script_root/zk-up.sh"
+ CELL=zone1 ./zk-up.sh
 else
-    CELL=zone1 "$script_root/etcd-up.sh"
+ CELL=zone1 ./etcd-up.sh
 fi
 
 # start vtctld
-CELL=zone1 "$script_root/vtctld-up.sh"
+CELL=zone1 ./vtctld-up.sh &
 
 # start vttablets for keyspace commerce
-CELL=zone1 KEYSPACE=commerce UID_BASE=100 "$script_root/vttablet-up.sh"
+for i in 100 101 102; do
+ CELL=zone1 TABLET_UID=$i ./mysqlctl-up.sh
+ CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ./vttablet-up.sh &
+done
+
+sleep 20
 
 # set one of the replicas to master
-./lvtctl.sh InitShardMaster -force commerce/0 zone1-100
+vtctlclient -server localhost:15999 InitShardMaster -force commerce/0 zone1-100
 
 # create the schema
-./lvtctl.sh ApplySchema -sql-file create_commerce_schema.sql commerce
+vtctlclient -server localhost:15999 ApplySchema -sql-file create_commerce_schema.sql commerce
 
 # create the vschema
-./lvtctl.sh ApplyVSchema -vschema_file vschema_commerce_initial.json commerce
+vtctlclient -server localhost:15999 ApplyVSchema -vschema_file vschema_commerce_initial.json commerce
 
 # start vtgate
-CELL=zone1 "$script_root/vtgate-up.sh"
+CELL=zone1 ./vtgate-up.sh &
 
-disown -a
+sleep 20

@@ -18,16 +18,19 @@
 # resharding it also splits the vschema between the two keyspaces
 # old (commerce) and new (customer)
 
+source ./env.sh
+
 set -e
 
-# shellcheck disable=SC2128
-script_root=$(dirname "${BASH_SOURCE}")
+for i in 200 201 202; do
+ CELL=zone1 TABLET_UID=$i ./mysqlctl-up.sh
+ CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./vttablet-up.sh &
+done
 
-CELL=zone1 KEYSPACE=customer UID_BASE=200 "$script_root/vttablet-up.sh"
+sleep 20
 
-./lvtctl.sh InitShardMaster -force customer/0 zone1-200
-./lvtctl.sh CopySchemaShard -tables customer,corder commerce/0 customer/0
-./lvtctl.sh ApplyVSchema -vschema_file vschema_commerce_vsplit.json commerce
-./lvtctl.sh ApplyVSchema -vschema_file vschema_customer_vsplit.json customer
+vtctlclient -server localhost:15999 InitShardMaster -force customer/0 zone1-200
+vtctlclient -server localhost:15999 CopySchemaShard -tables customer,corder commerce/0 customer/0
+vtctlclient -server localhost:15999 ApplyVSchema -vschema_file vschema_commerce_vsplit.json commerce
+vtctlclient -server localhost:15999 ApplyVSchema -vschema_file vschema_customer_vsplit.json customer
 
-disown -a

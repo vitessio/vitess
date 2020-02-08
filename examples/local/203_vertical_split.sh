@@ -17,16 +17,10 @@
 # this script copies over all the data from commerce keyspace to
 # customer keyspace for the customer and corder tables
 
+source ./env.sh
+
 set -e
 
-# shellcheck disable=SC2128
-script_root=$(dirname "${BASH_SOURCE}")
-
-# shellcheck source=./env.sh
-# shellcheck disable=SC1091
-source "$script_root/env.sh"
-
-# shellcheck disable=SC2086
 vtworker \
     $TOPOLOGY_FLAGS \
     -cell zone1 \
@@ -35,4 +29,3 @@ vtworker \
     -use_v3_resharding_mode \
     VerticalSplitClone -min_healthy_tablets=1 -tables=customer,corder customer/0
 
-disown -a

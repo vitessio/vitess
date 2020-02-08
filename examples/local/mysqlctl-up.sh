@@ -14,27 +14,31 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is an example script that starts vtctld.
+# This is an example script that creates a single shard vttablet deployment.
 
 source ./env.sh
 
-set -e
+set -xe
 
 cell=${CELL:-'test'}
-grpc_port=15999
+uid=$TABLET_UID
+mysql_port=$[17000 + $uid]
+printf -v alias '%s-%010d' $cell $uid
+printf -v tablet_dir 'vt_%010d' $uid
 
-echo "Starting vtctld..."
-# shellcheck disable=SC2086
-vtctld \
- $TOPOLOGY_FLAGS \
- -cell $cell \
- -workflow_manager_init \
- -workflow_manager_use_election \
- -service_map 'grpc-vtctl' \
- -backup_storage_implementation file \
- -file_backup_storage_root $VTDATAROOT/backups \
+mkdir -p $VTDATAROOT/backups
+
+echo "Starting MySQL for tablet $alias..."
+action="init"
+
+if [ -d $VTDATAROOT/$tablet_dir ]; then
+ echo "Resuming from existing vttablet dir:"
+ echo "    $VTDATAROOT/$tablet_dir"
+ action='start'
+fi
+
+mysqlctl \
  -log_dir $VTDATAROOT/tmp \
- -port $vtctld_web_port \
- -grpc_port $grpc_port \
- -pid_file $VTDATAROOT/tmp/vtctld.pid \
-  > $VTDATAROOT/tmp/vtctld.out 2>&1
+ -tablet_uid $uid \
+ -mysql_port $mysql_port \
+ $action
