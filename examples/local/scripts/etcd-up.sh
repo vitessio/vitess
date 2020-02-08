@@ -16,15 +16,11 @@
 
 # This is an example script that creates a quorum of ZooKeeper servers.
 
+source ./env.sh
+
 set -e
 cell=${CELL:-'test'}
-
-script_root=$(dirname "${BASH_SOURCE[0]}")
 export ETCDCTL_API=2
-
-# shellcheck source=./env.sh
-# shellcheck disable=SC1091
-source "${script_root}/env.sh"
 
 # Check that etcd is not already running
 curl "http://${ETCD_SERVER}" > /dev/null 2>&1 && fail "etcd is already running. Exiting."
@@ -36,7 +32,6 @@ sleep 5
 
 echo "add /vitess/global"
 etcdctl --endpoints "http://${ETCD_SERVER}" mkdir /vitess/global &
-
 
 echo "add /vitess/$cell"
 etcdctl --endpoints "http://${ETCD_SERVER}" mkdir /vitess/$cell &
@@ -53,6 +48,5 @@ vtctl $TOPOLOGY_FLAGS AddCellInfo \
 set -e
 
 echo "etcd start done..."
-
 
 

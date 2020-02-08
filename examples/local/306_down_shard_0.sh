@@ -16,7 +16,7 @@
 # this script brings down the tablets for customer/0 keyspace
 
 for i in 200 201 202; do
- CELL=zone1 TABLET_UID=$i ./vttablet-down.sh
+ CELL=zone1 TABLET_UID=$i ./scripts/vttablet-down.sh
  #TODO: shutdown mysqlctl as well
 done
 

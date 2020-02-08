@@ -16,7 +16,7 @@
 
 source ./env.sh
 
-set -xe
+set -e
 
 cell=${CELL:-'test'}
 keyspace=${KEYSPACE:-'test_keyspace'}

@@ -14,12 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# This is an example script that stops the etcd servers started by etcd-up.sh.
+
+source ./env.sh
+
 set -e
 
-script_root=`dirname "${BASH_SOURCE}"`
-source $script_root/env.sh
-
-pid=`cat $VTDATAROOT/tmp/vtworker.pid`
-echo "Stopping vtworker..."
-kill $pid
-
+echo "Stopping etcd..."
+kill -9 `cat $VTDATAROOT/tmp/etcd.pid` 

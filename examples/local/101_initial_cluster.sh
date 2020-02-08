@@ -23,18 +23,18 @@ set -e
 
 # start topo server
 if [ "${TOPO}" = "zk2" ]; then
- CELL=zone1 ./zk-up.sh
+ CELL=zone1 ./scripts/zk-up.sh
 else
- CELL=zone1 ./etcd-up.sh
+ CELL=zone1 ./scripts/etcd-up.sh
 fi
 
 # start vtctld
-CELL=zone1 ./vtctld-up.sh &
+CELL=zone1 ./scripts/vtctld-up.sh &
 
 # start vttablets for keyspace commerce
 for i in 100 101 102; do
- CELL=zone1 TABLET_UID=$i ./mysqlctl-up.sh
- CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ./vttablet-up.sh &
+ CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
+ CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ./scripts/vttablet-up.sh &
 done
 
 sleep 20 # @TODO: replace with wait for tablets command
@@ -49,6 +49,6 @@ vtctlclient -server localhost:15999 ApplySchema -sql-file create_commerce_schema
 vtctlclient -server localhost:15999 ApplyVSchema -vschema_file vschema_commerce_initial.json commerce
 
 # start vtgate
-CELL=zone1 ./vtgate-up.sh &
+CELL=zone1 ./scripts/vtgate-up.sh &
 
-sleep 20
+sleep 20 # @TODO: replace with a wait command
