@@ -31,6 +31,8 @@ for i in 400 401 402; do
  SHARD=80- CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./vttablet-up.sh &
 done
 
+sleep 20 # TODO: replace by wait for tablets
+
 vtctlclient -server localhost:15999 InitShardMaster -force customer/-80 zone1-300
 vtctlclient -server localhost:15999 InitShardMaster -force customer/80- zone1-400
 vtctlclient -server localhost:15999 CopySchemaShard customer/0 customer/-80

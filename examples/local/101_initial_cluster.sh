@@ -37,7 +37,7 @@ for i in 100 101 102; do
  CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ./vttablet-up.sh &
 done
 
-sleep 20
+sleep 20 # @TODO: replace with wait for tablets command
 
 # set one of the replicas to master
 vtctlclient -server localhost:15999 InitShardMaster -force commerce/0 zone1-100
