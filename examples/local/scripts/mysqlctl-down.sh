@@ -19,9 +19,5 @@
 
 source ./env.sh
 
-uid=${TABLET_UID}
-
-mysqlctl \
- -tablet_uid $uid \
- shutdown 
+mysqlctl -tablet_uid $TABLET_UID shutdown 
 

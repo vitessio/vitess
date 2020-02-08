@@ -19,8 +19,7 @@
 
 source ./env.sh
 
-uid=${TABLET_UID}
-printf -v tablet_dir 'vt_%010d' $uid
+printf -v tablet_dir 'vt_%010d' $TABLET_UID
 pid=`cat $VTDATAROOT/$tablet_dir/vttablet.pid`
 
 kill $pid
