@@ -18,8 +18,6 @@
 
 source ./env.sh
 
-set -e
-
 cell=${CELL:-'test'}
 
 # Start ZooKeeper servers.
