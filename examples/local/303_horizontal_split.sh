@@ -17,22 +17,14 @@
 # this script copies the data from customer/0 to customer/-80 and customer/80-
 # each row will be copied to exactly one shard based on the vindex value
 
+source ./env.sh
+
 set -e
 
-# shellcheck disable=SC2128
-script_root=$(dirname "${BASH_SOURCE}")
-
-# shellcheck source=./env.sh
-# shellcheck disable=SC1091
-source "${script_root}/env.sh"
-
-# shellcheck disable=SC2086
 vtworker \
-    $TOPOLOGY_FLAGS \
-    -cell zone1 \
-    -log_dir "$VTDATAROOT"/tmp \
-    -alsologtostderr \
-    -use_v3_resharding_mode \
-    SplitClone -min_healthy_rdonly_tablets=1 customer/0
-
-disown -a
+ $TOPOLOGY_FLAGS \
+ -cell zone1 \
+ -log_dir "$VTDATAROOT"/tmp \
+ -alsologtostderr \
+ -use_v3_resharding_mode \
+ SplitClone -min_healthy_rdonly_tablets=1 customer/0
