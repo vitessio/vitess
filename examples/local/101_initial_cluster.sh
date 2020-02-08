@@ -29,7 +29,7 @@ else
 fi
 
 # start vtctld
-CELL=zone1 ./scripts/vtctld-up.sh &
+CELL=zone1 ./scripts/vtctld-up.sh
 
 # start vttablets for keyspace commerce
 for i in 100 101 102; do
