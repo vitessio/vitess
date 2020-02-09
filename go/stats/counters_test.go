@@ -24,6 +24,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCounters(t *testing.T) {
@@ -239,4 +241,21 @@ func TestCountersFuncWithMultiLabels_Hook(t *testing.T) {
 	if gotv != v {
 		t.Errorf("want %#v, got %#v", v, gotv)
 	}
+}
+
+func TestCountersDropDimension(t *testing.T) {
+	clear()
+	*dropDimensions = "a,c"
+
+	c1 := NewCountersWithSingleLabel("counter_dropdim1", "help", "label")
+	c1.Add("c1", 1)
+	assert.Equal(t, `{"c1": 1}`, c1.String())
+
+	c2 := NewCountersWithSingleLabel("counter_dropdim2", "help", "a")
+	c2.Add("c1", 1)
+	assert.Equal(t, `{"all": 1}`, c2.String())
+
+	c3 := NewCountersWithMultiLabels("counter_dropdim3", "help", []string{"a", "b", "c"})
+	c3.Add([]string{"c1", "c2", "c3"}, 1)
+	assert.Equal(t, `{"all.c2.all": 1}`, c3.String())
 }

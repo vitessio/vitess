@@ -97,7 +97,8 @@ func (c *counters) Help() string {
 // It provides a Counts method which can be used for tracking rates.
 type CountersWithSingleLabel struct {
 	counters
-	label string
+	label        string
+	labelDropped bool
 }
 
 // NewCountersWithSingleLabel create a new Counters instance.
@@ -112,7 +113,8 @@ func NewCountersWithSingleLabel(name, help, label string, tags ...string) *Count
 			counts: make(map[string]int64),
 			help:   help,
 		},
-		label: label,
+		label:        label,
+		labelDropped: IsDimensionDropped(label),
 	}
 
 	for _, tag := range tags {
@@ -134,11 +136,17 @@ func (c *CountersWithSingleLabel) Add(name string, value int64) {
 	if value < 0 {
 		logCounterNegative.Warningf("Adding a negative value to a counter, %v should be a gauge instead", c)
 	}
+	if c.labelDropped {
+		name = StatsAllStr
+	}
 	c.counters.add(name, value)
 }
 
 // Reset resets the value for the name.
 func (c *CountersWithSingleLabel) Reset(name string) {
+	if c.labelDropped {
+		name = StatsAllStr
+	}
 	c.counters.set(name, 0)
 }
 
@@ -152,7 +160,8 @@ func (c *CountersWithSingleLabel) ResetAll() {
 // label value where all label values are joined with ".".
 type CountersWithMultiLabels struct {
 	counters
-	labels []string
+	labels        []string
+	droppedLabels []bool
 }
 
 // NewCountersWithMultiLabels creates a new CountersWithMultiLabels
@@ -162,7 +171,11 @@ func NewCountersWithMultiLabels(name, help string, labels []string) *CountersWit
 		counters: counters{
 			counts: make(map[string]int64),
 			help:   help},
-		labels: labels,
+		labels:        labels,
+		droppedLabels: make([]bool, len(labels)),
+	}
+	for i, label := range labels {
+		t.droppedLabels[i] = IsDimensionDropped(label)
 	}
 	if name != "" {
 		publish(name, t)
@@ -185,7 +198,7 @@ func (mc *CountersWithMultiLabels) Add(names []string, value int64) {
 	if value < 0 {
 		logCounterNegative.Warningf("Adding a negative value to a counter, %v should be a gauge instead", mc)
 	}
-	mc.counters.add(safeJoinLabels(names), value)
+	mc.counters.add(safeJoinLabels(names, mc.droppedLabels), value)
 }
 
 // Reset resets the value of a named counter back to 0.
@@ -195,7 +208,7 @@ func (mc *CountersWithMultiLabels) Reset(names []string) {
 		panic("CountersWithMultiLabels: wrong number of values in Reset")
 	}
 
-	mc.counters.set(safeJoinLabels(names), 0)
+	mc.counters.set(safeJoinLabels(names, mc.droppedLabels), 0)
 }
 
 // ResetAll clears the counters
@@ -342,7 +355,7 @@ func (mg *GaugesWithMultiLabels) Set(names []string, value int64) {
 	if len(names) != len(mg.CountersWithMultiLabels.labels) {
 		panic("GaugesWithMultiLabels: wrong number of values in Set")
 	}
-	mg.counters.set(safeJoinLabels(names), value)
+	mg.counters.set(safeJoinLabels(names, nil), value)
 }
 
 // GaugesFuncWithMultiLabels is a wrapper around CountersFuncWithMultiLabels
