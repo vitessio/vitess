@@ -167,7 +167,6 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 		if strings.Contains(fmt.Sprintf("%v", t.File), ".go") {
 			testCmd = []string{"tools/e2e_go_test.sh"}
 			testCmd = append(testCmd, t.Args...)
-			testCmd = append(testCmd, "--skip-build", "--keep-logs")
 		} else {
 			testCmd = []string{"test/" + t.File, "-v", "--skip-build", "--keep-logs"}
 			testCmd = append(testCmd, t.Args...)
