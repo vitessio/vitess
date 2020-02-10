@@ -32,9 +32,9 @@ jobs:
         sudo apt-get update
         sudo apt-get install percona-xtrabackup-24
 
-    - name: Installing dependencies
-        run: |
-          make tools
+    - name: Installing minimal dependencies
+      run: |
+        make minimaltools
 
     - name: sharded cluster_endtoend
       run: |
