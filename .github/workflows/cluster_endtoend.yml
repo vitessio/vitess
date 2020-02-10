@@ -34,7 +34,8 @@ jobs:
 
     - name: Installing zookeeper and consul
       run: |
-        if [ ${{matrix.name}} = 18 || ${{matrix.name}} = 24 ]; then
+        # Only running for shard 18 and 24 where we need to install consul and zookeeper
+        if [ ${{matrix.name}} == 18 || ${{matrix.name}} == 24 ]; then
           make tools
         fi
 
