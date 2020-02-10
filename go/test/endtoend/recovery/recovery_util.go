@@ -46,11 +46,6 @@ func VerifyQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, q
 	assert.Equal(t, value, fmt.Sprintf("%v", qr.Rows[0][0]))
 }
 
-func ExecuteQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, query string) {
-	_, err := session.Execute(context.Background(), query, nil)
-	assert.Nil(t, err)
-}
-
 func RestoreTablet(t *testing.T, localCluster *cluster.LocalProcessCluster, tablet *cluster.Vttablet, restoreKSName string, shardName string, keyspaceName string, commonTabletArg []string) {
 	tablet.ValidateTabletRestart(t)
 	tm := time.Now().UTC()

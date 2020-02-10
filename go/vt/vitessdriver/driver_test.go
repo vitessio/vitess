@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -160,9 +161,7 @@ func TestOpen_InvalidJson(t *testing.T) {
 
 func TestBeginIsolation(t *testing.T) {
 	db, err := Open(testAddress, "@master")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	defer db.Close()
 	_, err = db.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	want := errIsolationUnsupported.Error()

@@ -25,6 +25,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
@@ -460,9 +461,7 @@ func TestResolverMessageAckSharded(t *testing.T) {
 		},
 	}
 	count, err := res.MessageAckKeyspaceIds(context.Background(), name, "user", idKeyspaceIDs)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if count != 2 {
 		t.Errorf("count: %d, want 2", count)
 	}
@@ -504,9 +503,7 @@ func TestResolverMessageAckUnsharded(t *testing.T) {
 		},
 	}
 	count, err := res.MessageAckKeyspaceIds(context.Background(), KsTestUnsharded, "user", idKeyspaceIDs)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if count != 2 {
 		t.Errorf("count: %d, want 2", count)
 	}

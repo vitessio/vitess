@@ -17,6 +17,7 @@ limitations under the License.
 package discovery
 
 import (
+	"errors"
 	"testing"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -28,38 +29,35 @@ func TestRemoveUnhealthyTablets(t *testing.T) {
 		desc  string
 		input []TabletStats
 		want  []TabletStats
-	}{
-		{
-			desc:  "tablets missing Stats",
-			input: []TabletStats{replica(1), replica(2)},
-			want:  []TabletStats{},
-		},
-		{
-			desc:  "all tablets healthy",
-			input: []TabletStats{healthy(replica(1)), healthy(replica(2))},
-			want:  []TabletStats{healthy(replica(1)), healthy(replica(2))},
-		},
-		{
-			desc:  "one unhealthy tablet (error)",
-			input: []TabletStats{healthy(replica(1)), unhealthyError(replica(2))},
-			want:  []TabletStats{healthy(replica(1))},
-		},
-		{
-			desc:  "one unhealthy tablet (lag)",
-			input: []TabletStats{healthy(replica(1)), unhealthyLag(replica(2))},
-			want:  []TabletStats{healthy(replica(1))},
-		},
-		{
-			desc:  "no filtering by tablet type",
-			input: []TabletStats{healthy(master(1)), healthy(replica(2)), healthy(rdonly(3))},
-			want:  []TabletStats{healthy(master(1)), healthy(replica(2)), healthy(rdonly(3))},
-		},
-		{
-			desc:  "non-serving tablets won't be removed",
-			input: []TabletStats{notServing(healthy(replica(1)))},
-			want:  []TabletStats{notServing(healthy(replica(1)))},
-		},
-	}
+	}{{
+		desc:  "tablets missing Stats",
+		input: []TabletStats{replica(1), replica(2)},
+		want:  []TabletStats{},
+	}, {
+		desc:  "all tablets healthy",
+		input: []TabletStats{healthy(replica(1)), healthy(replica(2))},
+		want:  []TabletStats{healthy(replica(1)), healthy(replica(2))},
+	}, {
+		desc:  "one unhealthy tablet (error)",
+		input: []TabletStats{healthy(replica(1)), unhealthyError(replica(2))},
+		want:  []TabletStats{healthy(replica(1))},
+	}, {
+		desc:  "one error tablet",
+		input: []TabletStats{healthy(replica(1)), unhealthyLastError(replica(2))},
+		want:  []TabletStats{healthy(replica(1))},
+	}, {
+		desc:  "one unhealthy tablet (lag)",
+		input: []TabletStats{healthy(replica(1)), unhealthyLag(replica(2))},
+		want:  []TabletStats{healthy(replica(1))},
+	}, {
+		desc:  "no filtering by tablet type",
+		input: []TabletStats{healthy(master(1)), healthy(replica(2)), healthy(rdonly(3))},
+		want:  []TabletStats{healthy(master(1)), healthy(replica(2)), healthy(rdonly(3))},
+	}, {
+		desc:  "non-serving tablets won't be removed",
+		input: []TabletStats{notServing(healthy(replica(1)))},
+		want:  []TabletStats{notServing(healthy(replica(1)))},
+	}}
 
 	for _, tc := range testcases {
 		got := RemoveUnhealthyTablets(tc.input)
@@ -120,6 +118,11 @@ func unhealthyError(ts TabletStats) TabletStats {
 	ts.Stats = &querypb.RealtimeStats{
 		HealthError: "unhealthy",
 	}
+	return ts
+}
+
+func unhealthyLastError(ts TabletStats) TabletStats {
+	ts.LastError = errors.New("err")
 	return ts
 }
 
