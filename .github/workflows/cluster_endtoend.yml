@@ -32,9 +32,11 @@ jobs:
         sudo apt-get update
         sudo apt-get install percona-xtrabackup-24
 
-    - name: Installing minimal dependencies
+    - name: Installing zookeeper and consul
       run: |
-        make minimaltools
+        if [ ${{matrix.name}} = 18 ]; then
+          make tools
+        fi
 
     - name: sharded cluster_endtoend
       run: |
