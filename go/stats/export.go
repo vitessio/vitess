@@ -267,6 +267,9 @@ func IsDimensionDropped(name string) bool {
 		dims := strings.Split(*dropDimensions, ",")
 		droppedDimensions = make(map[string]bool, len(dims))
 		for _, dim := range dims {
+			if dim == "" {
+				continue
+			}
 			droppedDimensions[dim] = true
 		}
 	}

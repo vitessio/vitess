@@ -245,6 +245,12 @@ func TestCountersFuncWithMultiLabels_Hook(t *testing.T) {
 
 func TestCountersDropDimension(t *testing.T) {
 	clear()
+	// Empty labels shouldn't be dropped.
+	c4 := NewCountersWithSingleLabel("counter_dropdim4", "help", "")
+	c4.Add("c1", 1)
+	assert.Equal(t, `{"c1": 1}`, c4.String())
+
+	clear()
 	*dropDimensions = "a,c"
 
 	c1 := NewCountersWithSingleLabel("counter_dropdim1", "help", "label")
