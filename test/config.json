@@ -420,17 +420,6 @@
 				"site_test"
 			]
 		},
-		"tabletmanager_master": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager/master"],
-			"Command": [],
-			"Manual": false,
-			"Shard": 18,
-			"RetryMax": 0,
-			"Tags": [
-				"site_test"
-			]
-		},
 		"tabletmanager_consul": {
 			"File": "unused.go",
 			"Args": [
