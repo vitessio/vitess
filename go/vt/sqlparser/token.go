@@ -654,7 +654,7 @@ func (tkn *Tokenizer) skipBlank() {
 func (tkn *Tokenizer) scanIdentifier(firstByte byte, isDbSystemVariable bool) (int, []byte) {
 	buffer := &bytes2.Buffer{}
 	buffer.WriteByte(firstByte)
-	for isLetter(tkn.lastChar) || isDigit(tkn.lastChar) || tkn.lastChar == '$' || (isDbSystemVariable && isCarat(tkn.lastChar)) {
+	for isLetter(tkn.lastChar) || isDigit(tkn.lastChar) || (isDbSystemVariable && isCarat(tkn.lastChar)) {
 		buffer.WriteByte(byte(tkn.lastChar))
 		tkn.next()
 	}
@@ -955,7 +955,7 @@ func (tkn *Tokenizer) reset() {
 }
 
 func isLetter(ch uint16) bool {
-	return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' || ch == '_' || ch == '@'
+	return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' || ch == '_' || ch == '@' || ch == '$'
 }
 
 func isCarat(ch uint16) bool {
