@@ -34,9 +34,9 @@ type Timings struct {
 	mu         sync.RWMutex
 	histograms map[string]*Histogram
 
-	help         string
-	label        string
-	labelDropped bool
+	help          string
+	label         string
+	labelCombined bool
 }
 
 // NewTimings creates a new Timings object, and publishes it if name is set.
@@ -45,10 +45,10 @@ type Timings struct {
 // first time they are updated.
 func NewTimings(name, help, label string, categories ...string) *Timings {
 	t := &Timings{
-		histograms:   make(map[string]*Histogram),
-		help:         help,
-		label:        label,
-		labelDropped: IsDimensionDropped(label),
+		histograms:    make(map[string]*Histogram),
+		help:          help,
+		label:         label,
+		labelCombined: IsDimensionCombined(label),
 	}
 	for _, cat := range categories {
 		t.histograms[cat] = NewGenericHistogram("", "", bucketCutoffs, bucketLabels, "Count", "Time")
@@ -62,7 +62,7 @@ func NewTimings(name, help, label string, categories ...string) *Timings {
 
 // Add will add a new value to the named histogram.
 func (t *Timings) Add(name string, elapsed time.Duration) {
-	if t.labelDropped {
+	if t.labelCombined {
 		name = StatsAllStr
 	}
 	// Get existing Histogram.
@@ -90,7 +90,7 @@ func (t *Timings) Add(name string, elapsed time.Duration) {
 // Record is a convenience function that records completion
 // timing data based on the provided start time of an event.
 func (t *Timings) Record(name string, startTime time.Time) {
-	if t.labelDropped {
+	if t.labelCombined {
 		name = StatsAllStr
 	}
 	t.Add(name, time.Since(startTime))
@@ -185,8 +185,8 @@ func init() {
 // with joining multiple strings with '.'.
 type MultiTimings struct {
 	Timings
-	labels        []string
-	droppedLabels []bool
+	labels         []string
+	combinedLabels []bool
 }
 
 // NewMultiTimings creates a new MultiTimings object.
@@ -196,11 +196,11 @@ func NewMultiTimings(name string, help string, labels []string) *MultiTimings {
 			histograms: make(map[string]*Histogram),
 			help:       help,
 		},
-		labels:        labels,
-		droppedLabels: make([]bool, len(labels)),
+		labels:         labels,
+		combinedLabels: make([]bool, len(labels)),
 	}
 	for i, label := range labels {
-		t.droppedLabels[i] = IsDimensionDropped(label)
+		t.combinedLabels[i] = IsDimensionCombined(label)
 	}
 	if name != "" {
 		publish(name, t)
@@ -219,7 +219,7 @@ func (mt *MultiTimings) Add(names []string, elapsed time.Duration) {
 	if len(names) != len(mt.labels) {
 		panic("MultiTimings: wrong number of values in Add")
 	}
-	mt.Timings.Add(safeJoinLabels(names, mt.droppedLabels), elapsed)
+	mt.Timings.Add(safeJoinLabels(names, mt.combinedLabels), elapsed)
 }
 
 // Record is a convenience function that records completion
@@ -228,7 +228,7 @@ func (mt *MultiTimings) Record(names []string, startTime time.Time) {
 	if len(names) != len(mt.labels) {
 		panic("MultiTimings: wrong number of values in Record")
 	}
-	mt.Timings.Record(safeJoinLabels(names, mt.droppedLabels), startTime)
+	mt.Timings.Record(safeJoinLabels(names, mt.combinedLabels), startTime)
 }
 
 // Cutoffs returns the cutoffs used in the component histograms.

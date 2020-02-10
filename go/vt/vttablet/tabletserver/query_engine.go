@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -488,7 +487,7 @@ func (qe *QueryEngine) QueryPlanCacheCap() int {
 // AddStats adds the given stats for the planName.tableName
 func (qe *QueryEngine) AddStats(planName, tableName string, queryCount int64, duration, mysqlTime time.Duration, rowCount, errorCount int64) {
 	// table names can contain "." characters, replace them!
-	keys := []string{strings.Replace(tableName, ".", "_", -1), planName}
+	keys := []string{tableName, planName}
 	queryCounts.Add(keys, queryCount)
 	queryTimes.Add(keys, int64(duration))
 	queryRowCounts.Add(keys, rowCount)

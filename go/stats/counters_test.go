@@ -243,25 +243,28 @@ func TestCountersFuncWithMultiLabels_Hook(t *testing.T) {
 	}
 }
 
-func TestCountersDropDimension(t *testing.T) {
+func TestCountersCombineDimension(t *testing.T) {
 	clear()
-	// Empty labels shouldn't be dropped.
-	c4 := NewCountersWithSingleLabel("counter_dropdim4", "help", "")
-	c4.Add("c1", 1)
-	assert.Equal(t, `{"c1": 1}`, c4.String())
+	// Empty labels shouldn't be combined.
+	c0 := NewCountersWithSingleLabel("counter_combine_dim0", "help", "")
+	c0.Add("c1", 1)
+	assert.Equal(t, `{"c1": 1}`, c0.String())
 
 	clear()
-	*dropDimensions = "a,c"
+	*combineDimensions = "a,c"
 
-	c1 := NewCountersWithSingleLabel("counter_dropdim1", "help", "label")
+	c1 := NewCountersWithSingleLabel("counter_combine_dim1", "help", "label")
 	c1.Add("c1", 1)
 	assert.Equal(t, `{"c1": 1}`, c1.String())
 
-	c2 := NewCountersWithSingleLabel("counter_dropdim2", "help", "a")
+	c2 := NewCountersWithSingleLabel("counter_combine_dim2", "help", "a")
 	c2.Add("c1", 1)
 	assert.Equal(t, `{"all": 1}`, c2.String())
 
-	c3 := NewCountersWithMultiLabels("counter_dropdim3", "help", []string{"a", "b", "c"})
-	c3.Add([]string{"c1", "c2", "c3"}, 1)
-	assert.Equal(t, `{"all.c2.all": 1}`, c3.String())
+	c3 := NewCountersWithSingleLabel("counter_combine_dim3", "help", "a")
+	assert.Equal(t, `{"all": 0}`, c3.String())
+
+	c4 := NewCountersWithMultiLabels("counter_combine_dim4", "help", []string{"a", "b", "c"})
+	c4.Add([]string{"c1", "c2", "c3"}, 1)
+	assert.Equal(t, `{"all.c2.all": 1}`, c4.String())
 }

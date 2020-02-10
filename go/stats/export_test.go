@@ -24,8 +24,8 @@ import (
 func clear() {
 	defaultVarGroup.vars = make(map[string]expvar.Var)
 	defaultVarGroup.newVarHook = nil
-	*dropDimensions = ""
-	droppedDimensions = nil
+	*combineDimensions = ""
+	combinedDimensions = nil
 }
 
 func TestNoHook(t *testing.T) {
