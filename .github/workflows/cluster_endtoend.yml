@@ -34,7 +34,9 @@ jobs:
 
     - name: Installing zookeeper and consul
       run: |
+        if [ ${{matrix.name}} = 18 ]; then
           make tools
+        fi
 
     - name: sharded cluster_endtoend
       run: |
