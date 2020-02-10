@@ -179,8 +179,8 @@ func initialSetup(t *testing.T) {
 	runShardTablets(t, "80-", shard1Tablets, false)
 
 	// insert values
-	insertValues(master, "shard-0", 1, 1000, 0)
-	insertValues(master, "shard-1", 4, 1000, 1)
+	insertValues(master, "shard-0", 1, 2000, 0)
+	insertValues(master, "shard-1", 4, 2000, 1)
 
 	// wait for replication position
 	cluster.WaitForReplicationPos(t, master, rdOnly1, "localhost", 60)
@@ -466,6 +466,7 @@ func runShardTablets(t *testing.T, shardName string, tabletArr []*cluster.Vttabl
 		if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
 			return err
 		}
+		tablet.VttabletProcess.ServiceMap = "grpc-queryservice,grpc-tabletmanager,grpc-updatestream,grpc-throttler"
 		err := tablet.VttabletProcess.Setup()
 		require.Nil(t, err)
 	}
