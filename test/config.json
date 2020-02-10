@@ -501,11 +501,22 @@
 			"Tags": []
 		},
 		"worker": {
+			"File": "worker.py",
+			"Args": ["--topo-server-flavor=etcd2"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 23,
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
+			]
+		},
+		"worker": {
 			"File": "worker_test.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/worker"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 23,
+			"Shard": 17,
 			"RetryMax": 0,
 			"Tags": [
 				"worker_test"
