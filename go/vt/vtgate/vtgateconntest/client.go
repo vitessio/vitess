@@ -27,6 +27,7 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -1126,18 +1127,14 @@ func verifyErrorString(t *testing.T, err error, method string) {
 
 func testBegin(t *testing.T, conn *vtgateconn.VTGateConn) {
 	_, err := conn.Begin(newContext())
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func testExecute(t *testing.T, session *vtgateconn.VTGateSession) {
 	ctx := newContext()
 	execCase := execMap["request1"]
 	qr, err := session.Execute(ctx, execCase.execQuery.SQL, execCase.execQuery.BindVariables)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !qr.Equal(execCase.result) {
 		t.Errorf("Unexpected result from Execute: got\n%#v want\n%#v", qr, execCase.result)
 	}
@@ -1168,9 +1165,7 @@ func testExecuteBatch(t *testing.T, session *vtgateconn.VTGateSession) {
 	ctx := newContext()
 	execCase := execMap["request1"]
 	qr, err := session.ExecuteBatch(ctx, []string{execCase.execQuery.SQL}, []map[string]*querypb.BindVariable{execCase.execQuery.BindVariables})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !qr[0].QueryResult.Equal(execCase.result) {
 		t.Errorf("Unexpected result from Execute: got\n%#v want\n%#v", qr, execCase.result)
 	}
@@ -1201,9 +1196,7 @@ func testExecuteShards(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
 	qr, err := conn.ExecuteShards(ctx, execCase.shardQuery.SQL, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.shardQuery.BindVariables, execCase.shardQuery.TabletType, testExecuteOptions)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !qr.Equal(execCase.result) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, execCase.result)
 	}
@@ -1234,9 +1227,7 @@ func testExecuteKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
 	qr, err := conn.ExecuteKeyspaceIds(ctx, execCase.keyspaceIDQuery.SQL, execCase.keyspaceIDQuery.Keyspace, execCase.keyspaceIDQuery.KeyspaceIds, execCase.keyspaceIDQuery.BindVariables, execCase.keyspaceIDQuery.TabletType, testExecuteOptions)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !qr.Equal(execCase.result) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, execCase.result)
 	}
@@ -1267,9 +1258,7 @@ func testExecuteKeyRanges(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
 	qr, err := conn.ExecuteKeyRanges(ctx, execCase.keyRangeQuery.SQL, execCase.keyRangeQuery.Keyspace, execCase.keyRangeQuery.KeyRanges, execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType, testExecuteOptions)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !qr.Equal(execCase.result) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, execCase.result)
 	}
@@ -1300,9 +1289,7 @@ func testExecuteEntityIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
 	qr, err := conn.ExecuteEntityIds(ctx, execCase.entityIdsQuery.SQL, execCase.entityIdsQuery.Keyspace, execCase.entityIdsQuery.EntityColumnName, execCase.entityIdsQuery.EntityKeyspaceIDs, execCase.entityIdsQuery.BindVariables, execCase.entityIdsQuery.TabletType, testExecuteOptions)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !qr.Equal(execCase.result) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", qr, execCase.result)
 	}
@@ -1333,9 +1320,7 @@ func testExecuteBatchShards(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
 	ql, err := conn.ExecuteBatchShards(ctx, execCase.batchQueryShard.Queries, execCase.batchQueryShard.TabletType, execCase.batchQueryShard.AsTransaction, testExecuteOptions)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !ql[0].Equal(execCase.result) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", ql, execCase.result)
 	}
@@ -1368,9 +1353,7 @@ func testExecuteBatchKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	execCase := execMap["request1"]
 	ql, err := conn.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIDBatchQuery.Queries, execCase.keyspaceIDBatchQuery.TabletType, execCase.batchQueryShard.AsTransaction, testExecuteOptions)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !ql[0].Equal(execCase.result) {
 		t.Errorf("Unexpected result from Execute: got %+v want %+v", ql, execCase.result)
 	}
@@ -1729,87 +1712,51 @@ func testTxPass(t *testing.T, conn *vtgateconn.VTGateConn) {
 
 	// ExecuteShards
 	tx, err := conn.Begin(ctx)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	_, err = tx.ExecuteShards(ctx, execCase.shardQuery.SQL, execCase.shardQuery.Keyspace, execCase.shardQuery.Shards, execCase.shardQuery.BindVariables, execCase.shardQuery.TabletType, testExecuteOptions)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	err = tx.Rollback(ctx)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	// ExecuteKeyspaceIds
 	tx, err = conn.Begin(ctx)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	_, err = tx.ExecuteKeyspaceIds(ctx, execCase.keyspaceIDQuery.SQL, execCase.keyspaceIDQuery.Keyspace, execCase.keyspaceIDQuery.KeyspaceIds, execCase.keyspaceIDQuery.BindVariables, execCase.keyspaceIDQuery.TabletType, testExecuteOptions)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	err = tx.Rollback(ctx)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	// ExecuteKeyRanges
 	tx, err = conn.Begin(ctx)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	_, err = tx.ExecuteKeyRanges(ctx, execCase.keyRangeQuery.SQL, execCase.keyRangeQuery.Keyspace, execCase.keyRangeQuery.KeyRanges, execCase.keyRangeQuery.BindVariables, execCase.keyRangeQuery.TabletType, testExecuteOptions)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	err = tx.Rollback(ctx)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	// ExecuteEntityIds
 	tx, err = conn.Begin(ctx)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	_, err = tx.ExecuteEntityIds(ctx, execCase.entityIdsQuery.SQL, execCase.entityIdsQuery.Keyspace, execCase.entityIdsQuery.EntityColumnName, execCase.entityIdsQuery.EntityKeyspaceIDs, execCase.entityIdsQuery.BindVariables, execCase.entityIdsQuery.TabletType, testExecuteOptions)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	err = tx.Rollback(ctx)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	// ExecuteBatchShards
 	tx, err = conn.Begin(ctx)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	_, err = tx.ExecuteBatchShards(ctx, execCase.batchQueryShard.Queries, execCase.batchQueryShard.TabletType, testExecuteOptions)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	err = tx.Rollback(ctx)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	// ExecuteBatchKeyspaceIds
 	tx, err = conn.Begin(ctx)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	_, err = tx.ExecuteBatchKeyspaceIds(ctx, execCase.keyspaceIDBatchQuery.Queries, execCase.keyspaceIDBatchQuery.TabletType, testExecuteOptions)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	err = tx.Rollback(ctx)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func testResolveTransaction(t *testing.T, conn *vtgateconn.VTGateConn) {
@@ -1831,9 +1778,7 @@ func testCommitError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGate
 	tx, err := conn.Begin(ctx)
 	fake.forceBeginSuccess = false
 
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	err = tx.Commit(ctx)
 	verifyError(t, err, "Commit")
 }
@@ -1845,9 +1790,7 @@ func testRollbackError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGa
 	tx, err := conn.Begin(ctx)
 	fake.forceBeginSuccess = false
 
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	err = tx.Rollback(ctx)
 	verifyError(t, err, "Rollback")
 }
@@ -1870,9 +1813,7 @@ func testCommitPanic(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGate
 	tx, err := conn.Begin(ctx)
 	fake.forceBeginSuccess = false
 
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	err = tx.Commit(ctx)
 	expectPanic(t, err)
 }
@@ -1884,9 +1825,7 @@ func testRollbackPanic(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGa
 	tx, err := conn.Begin(ctx)
 	fake.forceBeginSuccess = false
 
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	err = tx.Rollback(ctx)
 	expectPanic(t, err)
 }
@@ -1899,9 +1838,7 @@ func testResolveTransactionPanic(t *testing.T, conn *vtgateconn.VTGateConn, fake
 func testTxFail(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	tx, err := conn.Begin(ctx)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	err = tx.Commit(ctx)
 	want := "commit: session mismatch"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -1951,14 +1888,10 @@ func testTxFail(t *testing.T, conn *vtgateconn.VTGateConn) {
 	}
 
 	err = tx.Rollback(ctx)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	tx, err = conn.Begin(ctx)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	err = tx.Rollback(ctx)
 	want = "rollback: session mismatch"
 	if err == nil || !strings.Contains(err.Error(), want) {
@@ -1974,9 +1907,7 @@ func testMessageStream(t *testing.T, conn *vtgateconn.VTGateConn) {
 		}
 		return nil
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func testMessageStreamError(t *testing.T, conn *vtgateconn.VTGateConn) {
@@ -2001,9 +1932,7 @@ func testMessageAck(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if got != messageAckRowsAffected {
 		t.Errorf("MessageAck: %d, want %d", got, messageAckRowsAffected)
 	}
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func testMessageAckError(t *testing.T, conn *vtgateconn.VTGateConn) {
@@ -2024,9 +1953,7 @@ func testMessageAckKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 	if got != messageAckRowsAffected {
 		t.Errorf("MessageAckKeyspaceIds: %d, want %d", got, messageAckRowsAffected)
 	}
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func testMessageAckKeyspaceIdsError(t *testing.T, conn *vtgateconn.VTGateConn) {

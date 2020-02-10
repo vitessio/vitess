@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql"
 	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
@@ -178,6 +179,12 @@ func positionAtLeast(t *testing.T, tablet *Vttablet, a string, b string) bool {
 		isAtleast = true
 	}
 	return isAtleast
+}
+
+// ExecuteQueriesUsingVtgate sends query to vtgate using vtgate session.
+func ExecuteQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, query string) {
+	_, err := session.Execute(context.Background(), query, nil)
+	assert.Nil(t, err)
 }
 
 // NewConnParams creates ConnParams corresponds to given arguments.
