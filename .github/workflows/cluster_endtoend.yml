@@ -6,7 +6,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        name: [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+        name: [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
 
     steps:
     - name: Set up Go
@@ -31,6 +31,13 @@ jobs:
         sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
         sudo apt-get update
         sudo apt-get install percona-xtrabackup-24
+
+    - name: Installing zookeeper and consul
+      run: |
+        # Only running for shard 18 and 24 where we need to install consul and zookeeper
+        if [[ ${{matrix.name}} == 18 || ${{matrix.name}} == 24 ]]; then
+          make tools
+        fi
 
     - name: sharded cluster_endtoend
       run: |
