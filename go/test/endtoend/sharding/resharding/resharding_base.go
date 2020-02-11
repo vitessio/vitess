@@ -626,7 +626,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// check we can't migrate the master just yet
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", shard1Ks, "master")
-	assert.NotNil(t, err, "MigrateServedTypes should fail")
+	require.Error(t, err, "MigrateServedTypes should fail")
 
 	// check query service is off on master 2 and master 3, as filtered replication is enabled.
 	// Even health check that is enabled on master 3 should not interfere (we run it to be sure).
@@ -680,7 +680,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	// Shouldn't be able to rebuild keyspace graph while migration is on going
 	// (i.e there are records that have tablet controls set)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceName)
-	assert.NotNil(t, err, "Error expected")
+	require.Error(t, err, "Error expected")
 
 	// rerun migrate to ensure it doesn't fail
 	// skip refresh to make it go faster
@@ -823,14 +823,14 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// CancelResharding should fail because migration has started.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("CancelResharding", shard1Ks, "1")
-	assert.NotNil(t, err)
+	require.Error(t, err)
 
 	// do a Migrate that will fail waiting for replication
 	// which should cause the Migrate to be canceled and the source
 	// master to be serving again.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes",
 		"-filtered_replication_wait_time", "0s", shard1Ks, "master")
-	assert.NotNil(t, err)
+	require.Error(t, err)
 
 	expectedPartitions = map[topodata.TabletType][]string{}
 	expectedPartitions[topodata.TabletType_MASTER] = []string{shard0.Name, shard1.Name}
@@ -848,7 +848,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes",
 		shard1Ks, "master")
-	assert.NotNil(t, err)
+	require.Error(t, err)
 
 	// Query service is disabled in source shard as failure occurred after point of no return
 	sharding.CheckTabletQueryService(t, *shard1Master, "NOT_SERVING", true, *clusterInstance)
@@ -872,7 +872,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes",
 		"-filtered_replication_wait_time", "0s", shard1Ks, "master")
-	assert.NotNil(t, err)
+	require.Error(t, err)
 
 	sharding.CheckTabletQueryService(t, *shard1Master, "NOT_SERVING", true, *clusterInstance)
 
@@ -925,7 +925,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 		"MigrateServedTypes",
 		"-reverse_replication=true",
 		shard1Ks, "master")
-	assert.NotNil(t, err)
+	require.Error(t, err)
 
 	// CancelResharding should now succeed
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("CancelResharding", shard1Ks)
@@ -952,7 +952,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// test RemoveShardCell
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RemoveShardCell", shard0Ks, cell1)
-	assert.NotNil(t, err)
+	require.Error(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RemoveShardCell", shard1Ks, cell1)
 	require.NoError(t, err)
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RemoveShardCell", shard1Ks, cell2)
@@ -967,7 +967,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 
 	// make sure we can't delete the destination shard now that it's serving
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("DeleteShard", shard2Ks)
-	assert.NotNil(t, err)
+	require.Error(t, err)
 
 }
 

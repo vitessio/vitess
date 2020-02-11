@@ -305,7 +305,7 @@ func testQueriesInDifferentTabletType(t *testing.T, tabletType string, vtgateGrp
 		"-target", "@"+tabletType,
 		fmt.Sprintf(`select * from %s`, tableName))
 	if shouldFail {
-		assert.NotNil(t, err)
+		require.Error(t, err)
 		return
 	}
 	require.NoError(t, err)

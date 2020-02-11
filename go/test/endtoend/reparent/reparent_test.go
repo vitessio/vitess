@@ -57,7 +57,7 @@ func TestMasterToSpareStateChangeImpossible(t *testing.T) {
 
 	// We cannot change a master to spare
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeSlaveType", tablet62344.Alias, "spare")
-	assert.NotNil(t, err)
+	require.Error(t, err)
 
 	//kill Tablet
 	err = tablet62344.VttabletProcess.TearDown()
@@ -111,7 +111,7 @@ func TestReparentDownMaster(t *testing.T) {
 		"-wait-time", "5s",
 		"-keyspace_shard", keyspaceShard,
 		"-new_master", tablet62044.Alias)
-	assert.NotNil(t, err)
+	require.Error(t, err)
 
 	// Run forced reparent operation, this should now proceed unimpeded.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand(
@@ -339,7 +339,7 @@ func TestReparentSlaveOffline(t *testing.T) {
 		"PlannedReparentShard",
 		"-keyspace_shard", keyspaceShard,
 		"-new_master", tablet62044.Alias)
-	assert.NotNil(t, err)
+	require.Error(t, err)
 	assert.Contains(t, out, "tablet zone2-0000031981 SetMaster failed")
 
 	checkMasterTablet(t, tablet62044)
@@ -412,7 +412,7 @@ func TestReparentAvoid(t *testing.T) {
 		"PlannedReparentShard",
 		"-keyspace_shard", keyspaceShard,
 		"-avoid_master", tablet62044.Alias)
-	assert.NotNil(t, err)
+	require.Error(t, err)
 	assert.Contains(t, output, "cannot find a tablet to reparent to")
 
 	validateTopology(t, false)
@@ -580,7 +580,7 @@ func TestReparentWithDownSlave(t *testing.T) {
 		"PlannedReparentShard",
 		"-keyspace_shard", keyspaceShard,
 		"-new_master", tablet62044.Alias)
-	assert.NotNil(t, err)
+	require.Error(t, err)
 	assert.Contains(t, output, "TabletManager.SetMaster on zone1-0000041983 error")
 
 	// insert data into the new master, check the connected replica work
@@ -737,7 +737,7 @@ func TestReparentDoesntHangIfMasterFails(t *testing.T) {
 		"PlannedReparentShard",
 		"-keyspace_shard", keyspaceShard,
 		"-new_master", tablet62044.Alias)
-	assert.NotNil(t, err)
+	require.Error(t, err)
 	assert.Contains(t, out, "master failed to PopulateReparentJournal")
 
 	killTablets(t)

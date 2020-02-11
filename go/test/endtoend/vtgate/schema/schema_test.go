@@ -197,7 +197,7 @@ func matchSchema(t *testing.T, firstTablet string, secondTablet string) {
 func testSchemaChangePreflightErrorPartially(t *testing.T) {
 	createNewTable := fmt.Sprintf(createTable, fmt.Sprintf("vt_select_test_%02d", 5)) + fmt.Sprintf(createTable, fmt.Sprintf("vt_select_test_%02d", 2))
 	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "-sql", createNewTable, keyspaceName)
-	assert.NotNil(t, err)
+	require.Error(t, err)
 	assert.True(t, strings.Contains(output, "already exists"))
 
 	checkTables(t, totalTableCount)
@@ -212,7 +212,7 @@ func testSchemaChangePreflightErrorPartially(t *testing.T) {
 func testDropNonExistentTables(t *testing.T) {
 	dropNonExistentTable := "DROP TABLE nonexistent_table;"
 	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "-sql", dropNonExistentTable, keyspaceName)
-	assert.NotNil(t, err)
+	require.Error(t, err)
 	assert.True(t, strings.Contains(output, "Unknown table"))
 
 	dropIfExists := "DROP TABLE IF EXISTS nonexistent_table;"
@@ -279,7 +279,7 @@ func testCopySchemaShardWithDifferentDB(t *testing.T, shard int) {
 	require.NoError(t, err)
 
 	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("CopySchemaShard", source, fmt.Sprintf("%s/%d", keyspaceName, shard))
-	assert.NotNil(t, err)
+	require.Error(t, err)
 	assert.True(t, strings.Contains(output, "schemas are different"))
 
 	// shard_2_master should have the same number of tables. Only the db

@@ -268,7 +268,7 @@ func masterBackup(t *testing.T) {
 	verifyInitialReplication(t)
 
 	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("Backup", master.Alias)
-	assert.NotNil(t, err)
+	require.Error(t, err)
 	assert.Contains(t, output, "type MASTER cannot take backup. if you really need to do this, rerun the backup command with -allow_master")
 
 	localCluster.VerifyBackupCount(t, shardKsName, 0)

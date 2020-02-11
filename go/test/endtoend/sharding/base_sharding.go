@@ -280,7 +280,7 @@ func InsertToTablet(t *testing.T, query string, vttablet cluster.Vttablet, ks st
 	_, _ = vttablet.VttabletProcess.QueryTablet("begin", ks, true)
 	_, err := vttablet.VttabletProcess.QueryTablet(query, ks, true)
 	if expectFail {
-		assert.NotNil(t, err)
+		require.Error(t, err)
 	} else {
 		require.NoError(t, err)
 	}

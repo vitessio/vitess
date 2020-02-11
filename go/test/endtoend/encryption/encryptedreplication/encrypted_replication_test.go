@@ -23,7 +23,6 @@ import (
 	"path"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/encryption"
@@ -87,7 +86,7 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 	if isClientCertPassed {
 		require.NoError(t, err)
 	} else {
-		assert.NotNil(t, err)
+		require.Error(t, err)
 	}
 }
 

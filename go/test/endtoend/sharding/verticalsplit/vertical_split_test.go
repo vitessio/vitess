@@ -318,7 +318,7 @@ func TestVerticalSplit(t *testing.T) {
 
 	// check we can't migrate the master just yet
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedFrom", "destination_keyspace/0", "master")
-	assert.NotNil(t, err)
+	require.Error(t, err)
 
 	// migrate rdonly only in test_ny cell, make sure nothing is migrated
 	// in test_nj
@@ -402,7 +402,7 @@ func TestVerticalSplit(t *testing.T) {
 
 	// Cancel should fail now
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("CancelResharding", "destination_keyspace/0")
-	assert.NotNil(t, err)
+	require.Error(t, err)
 
 	// then serve master from the destination shards
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedFrom", "destination_keyspace/0", "master")
@@ -580,7 +580,7 @@ func checkBlacklistedTables(t *testing.T, tablet cluster.Vttablet, keyspace stri
 		if expected != nil && strings.Contains(strings.Join(expected, " "), "moving") {
 			// table is blacklisted, should get error
 			err := clusterInstance.VtctlclientProcess.ExecuteCommand("VtTabletExecute", "-json", tablet.Alias, fmt.Sprintf("select count(1) from %s", table))
-			assert.NotNil(t, err, "disallowed due to rule: enforce blacklisted tables")
+			require.Error(t, err, "disallowed due to rule: enforce blacklisted tables")
 		} else {
 			// table is not blacklisted, should just work
 			_, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("select count(1) from %s", table), keyspace, true)

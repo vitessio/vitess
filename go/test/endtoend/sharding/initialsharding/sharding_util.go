@@ -273,7 +273,7 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	if !isMulti {
 		output, err := ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("InitShardMaster",
 			"-force", fmt.Sprintf("%s/%s", keyspaceName, shard1.Name), shard1MasterTablet.Alias)
-		assert.NotNil(t, err, "Should fail as no replica tablet is present.")
+		require.Error(t, err, "Should fail as no replica tablet is present.")
 		assert.Contains(t, output, fmt.Sprintf("tablet %s ResetReplication failed", shard1.Replica().Alias))
 	}
 	// start replica
@@ -536,7 +536,7 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 
 	// check we can't migrate the master just yet
 	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", shard1Ks, "master")
-	assert.NotNil(t, err)
+	require.Error(t, err)
 
 	// now serve rdonly from the split shards
 	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedTypes", shard1Ks, "rdonly")
@@ -605,7 +605,7 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 
 	// make sure we can't delete a shard with tablets
 	err = ClusterInstance.VtctlclientProcess.ExecuteCommand("DeleteShard", shard1Ks)
-	assert.NotNil(t, err)
+	require.Error(t, err)
 	if !isMulti {
 		KillTabletsInKeyspace(keyspace)
 		KillVtgateInstances()

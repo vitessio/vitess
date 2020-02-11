@@ -191,7 +191,7 @@ func TestSecureTransport(t *testing.T) {
 	require.NoError(t, err)
 	qr, err = vc.Execute(ctx, request)
 	err = vterrors.FromVTRPC(qr.Error)
-	assert.NotNil(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "table acl error")
 	assert.Contains(t, err.Error(), "cannot run PASS_SELECT on table")
 
@@ -215,7 +215,7 @@ func TestSecureTransport(t *testing.T) {
 	request = getRequest("select * from vt_insert_test")
 	qr, err = vc.Execute(ctx, request)
 	err = vterrors.FromVTRPC(qr.Error)
-	assert.NotNil(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "table acl error")
 	assert.Contains(t, err.Error(), "cannot run PASS_SELECT on table")
 
@@ -235,7 +235,7 @@ func TestSecureTransport(t *testing.T) {
 	request = getRequestWithCallerID(callerID, "select * from vt_insert_test")
 	qr, err = vc.Execute(ctx, request)
 	err = vterrors.FromVTRPC(qr.Error)
-	assert.NotNil(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "table acl error")
 	assert.Contains(t, err.Error(), "cannot run PASS_SELECT on table")
 
