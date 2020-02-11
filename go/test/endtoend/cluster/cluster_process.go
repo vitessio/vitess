@@ -474,7 +474,9 @@ func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error
 
 // Teardown brings down the cluster by invoking teardown for individual processes
 func (cluster *LocalProcessCluster) Teardown() {
-	cluster.CancelFunc()
+	if cluster.CancelFunc != nil {
+		cluster.CancelFunc()
+	}
 	if err := cluster.VtgateProcess.TearDown(); err != nil {
 		log.Errorf("Error in vtgate teardown - %s", err.Error())
 	}
