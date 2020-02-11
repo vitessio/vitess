@@ -59,6 +59,15 @@ func VerifyRowsInTablet(t *testing.T, vttablet *Vttablet, ksName string, expecte
 	assert.Fail(t, "expected rows not found.")
 }
 
+// PanicHandler handles the panic in the testcase.
+func PanicHandler(t *testing.T) {
+	err := recover()
+	if t == nil {
+		return
+	}
+	require.Nilf(t, err, "panic occured in testcase %v", t.Name())
+}
+
 // VerifyLocalMetadata Verify Local Metadata of a tablet
 func VerifyLocalMetadata(t *testing.T, tablet *Vttablet, ksName string, shardName string, cell string) {
 	qr, err := tablet.VttabletProcess.QueryTablet("select * from _vt.local_metadata", ksName, false)
