@@ -223,7 +223,7 @@ func createConfig(name, data string) error {
 // Connect will connect the vtgate through mysql protocol.
 func Connect(t *testing.T, params ...string) *sql.DB {
 	dbo, err := sql.Open("mysql", dbInfo.ConnectionString(params...))
-	require.Nil(t, err)
+	require.NoError(t, err)
 	return dbo
 }
 
@@ -231,18 +231,22 @@ func Connect(t *testing.T, params ...string) *sql.DB {
 func execWithError(t *testing.T, dbo *sql.DB, errorCodes []uint16, stmt string, params ...interface{}) {
 	_, err := dbo.Exec(stmt, params...)
 	require.NotNilf(t, err, "error expected, got nil")
-	require.Contains(t, errorCodes, err.(*mysql.MySQLError).Number)
+	mysqlErr, ok := err.(*mysql.MySQLError)
+	require.Truef(t, ok, "invalid error type")
+	require.Contains(t, errorCodes, mysqlErr.Number)
 }
 
 // exec executes the query using the params.
 func exec(t *testing.T, dbo *sql.DB, stmt string, params ...interface{}) {
-	require.Nil(t, execErr(dbo, stmt, params...))
+	require.NoError(t, execErr(dbo, stmt, params...))
 }
 
 // execErr executes the query and returns an error if one occurs.
 func execErr(dbo *sql.DB, stmt string, params ...interface{}) *mysql.MySQLError {
 	if _, err := dbo.Exec(stmt, params...); err != nil {
-		return err.(*mysql.MySQLError)
+		// TODO : need to handle
+		mysqlErr, _ := err.(*mysql.MySQLError)
+		return mysqlErr
 	}
 	return nil
 }
@@ -258,7 +262,7 @@ func selectWhere(t *testing.T, dbo *sql.DB, where string, params ...interface{})
 
 	// execute query
 	r, err := dbo.Query(qry, params...)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// prepare result
 	for r.Next() {

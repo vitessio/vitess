@@ -69,7 +69,7 @@ func TestQPS(t *testing.T) {
 	timeout := time.Now().Add(12 * time.Second)
 	for time.Now().Before(timeout) {
 		result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", masterTablet.Alias)
-		assert.Nil(t, err)
+		require.NoError(t, err)
 		var streamHealthResponse querypb.StreamHealthResponse
 
 		err = json.Unmarshal([]byte(result), &streamHealthResponse)

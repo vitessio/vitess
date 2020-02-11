@@ -53,7 +53,7 @@ func TestTopoCustomRule(t *testing.T) {
 
 	// Copy config file into topo.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TopoCp", "-to_topo", topoCustomRuleFile, topoCustomRulePath)
-	assert.Nil(t, err, "error should be Nil")
+	require.NoError(t, err, "error should be Nil")
 
 	// Set extra tablet args for topo custom rule
 	clusterInstance.VtTabletExtraArgs = []string{
@@ -65,22 +65,22 @@ func TestTopoCustomRule(t *testing.T) {
 
 	// Init Tablets
 	err = clusterInstance.VtctlclientProcess.InitTablet(rTablet, cell, keyspaceName, hostname, shardName)
-	assert.Nil(t, err, "error should be Nil")
+	require.NoError(t, err, "error should be Nil")
 
 	// Start Mysql Processes
 	err = cluster.StartMySQL(ctx, rTablet, username, clusterInstance.TmpDirectory)
-	assert.Nil(t, err, "error should be Nil")
+	require.NoError(t, err, "error should be Nil")
 
 	// Start Vttablet
 	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
-	assert.Nil(t, err, "error should be Nil")
+	require.NoError(t, err, "error should be Nil")
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
-	assert.Nil(t, err, "error should be Nil")
+	require.NoError(t, err, "error should be Nil")
 
 	// Verify that query is working
 	result, err := vtctlExec("select id, value from t1", rTablet.Alias)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	resultMap := make(map[string]interface{})
 	err = json.Unmarshal([]byte(result), &resultMap)
 	require.NoError(t, err)
@@ -100,7 +100,7 @@ func TestTopoCustomRule(t *testing.T) {
 	require.NoError(t, err)
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TopoCp", "-to_topo", topoCustomRuleFile, topoCustomRulePath)
-	assert.Nil(t, err, "error should be Nil")
+	require.NoError(t, err, "error should be Nil")
 
 	// And wait until the query fails with the right error.
 	timeout := time.Now().Add(10 * time.Second)

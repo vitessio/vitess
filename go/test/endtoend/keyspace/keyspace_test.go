@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/proto/topodata"
@@ -137,7 +138,7 @@ func TestMain(m *testing.M) {
 
 func TestGetSrvKeyspaceNames(t *testing.T) {
 	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspaceNames", cell)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, strings.Split(output, "\n"), keyspaceUnshardedName)
 	assert.Contains(t, strings.Split(output, "\n"), keyspaceShardedName)
 }
@@ -172,21 +173,21 @@ func TestGetSrvKeyspacePartitions(t *testing.T) {
 
 func TestShardNames(t *testing.T) {
 	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, keyspaceShardedName)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	var srvKeyspace topodata.SrvKeyspace
 
 	err = json.Unmarshal([]byte(output), &srvKeyspace)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func TestGetKeyspace(t *testing.T) {
 	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetKeyspace", keyspaceUnshardedName)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	var keyspace topodata.Keyspace
 
 	err = json.Unmarshal([]byte(output), &keyspace)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	assert.Equal(t, keyspace.ShardingColumnName, "keyspace_id")
 	assert.Equal(t, keyspace.ShardingColumnType, topodata.KeyspaceIdType(1))
@@ -381,10 +382,10 @@ func packKeyspaceID(keyspaceID uint64) []byte {
 
 func getSrvKeyspace(t *testing.T, cell string, ksname string) *topodata.SrvKeyspace {
 	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, ksname)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	var srvKeyspace topodata.SrvKeyspace
 
 	err = json.Unmarshal([]byte(output), &srvKeyspace)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	return &srvKeyspace
 }

@@ -78,7 +78,7 @@ func VerifyRowsInTablet(t *testing.T, vttablet *Vttablet, ksName string, expecte
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
 		qr, err := vttablet.VttabletProcess.QueryTablet("select * from vt_insert_test", ksName, true)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		if len(qr.Rows) == expectedRows {
 			return
 		}
@@ -90,7 +90,7 @@ func VerifyRowsInTablet(t *testing.T, vttablet *Vttablet, ksName string, expecte
 // VerifyLocalMetadata Verify Local Metadata of a tablet
 func VerifyLocalMetadata(t *testing.T, tablet *Vttablet, ksName string, shardName string, cell string) {
 	qr, err := tablet.VttabletProcess.QueryTablet("select * from _vt.local_metadata", ksName, false)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[0][1]), fmt.Sprintf(`BLOB("%s")`, tablet.Alias))
 	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[1][1]), fmt.Sprintf(`BLOB("%s.%s")`, ksName, shardName))
 	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[2][1]), fmt.Sprintf(`BLOB("%s")`, cell))
@@ -120,7 +120,7 @@ func (cluster LocalProcessCluster) ListBackups(shardKsName string) ([]string, er
 // VerifyBackupCount compares the backup count with expected count.
 func (cluster LocalProcessCluster) VerifyBackupCount(t *testing.T, shardKsName string, expected int) []string {
 	backups, err := cluster.ListBackups(shardKsName)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equalf(t, expected, len(backups), "invalid number of backups")
 	return backups
 }
@@ -128,7 +128,7 @@ func (cluster LocalProcessCluster) VerifyBackupCount(t *testing.T, shardKsName s
 // RemoveAllBackups removes all the backup corresponds to list backup.
 func (cluster LocalProcessCluster) RemoveAllBackups(t *testing.T, shardKsName string) {
 	backups, err := cluster.ListBackups(shardKsName)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	for _, backup := range backups {
 		cluster.VtctlclientProcess.ExecuteCommand("RemoveBackup", shardKsName, backup)
 	}
@@ -152,7 +152,7 @@ func getTablet(tabletGrpcPort int, hostname string) *tabletpb.Tablet {
 // ExecuteQueriesUsingVtgate sends query to vtgate using vtgate session.
 func ExecuteQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, query string) {
 	_, err := session.Execute(context.Background(), query, nil)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 }
 
 // NewConnParams creates ConnParams corresponds to given arguments.

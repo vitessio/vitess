@@ -73,16 +73,17 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 		}
 
 		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name: keyspaceName,
-			Shards: []cluster.Shard{
-				{
-					Name: shardName,
+		localCluster.Keyspaces = []cluster.Keyspace{
+			{
+				Name: keyspaceName,
+				Shards: []cluster.Shard{
+					{
+						Name: shardName,
+					},
 				},
 			},
 		}
-		localCluster.Keyspaces = append(localCluster.Keyspaces, *keyspace)
-		shard := &keyspace.Shards[0]
+		shard := &localCluster.Keyspaces[0].Shards[0]
 		// changing password for mysql user
 		dbCredentialFile = initialsharding.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 		initDb, _ := ioutil.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
@@ -195,15 +196,15 @@ func TestBackupTransformImpl(t *testing.T) {
 		"-file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot}
 	replica1.VttabletProcess.ServingStatus = "SERVING"
 	err := replica1.VttabletProcess.Setup()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// take backup, it should not give any error
 	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// insert data in master
 	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// validate backup_list, expecting 1 backup available
 	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
@@ -224,17 +225,17 @@ func TestBackupTransformImpl(t *testing.T) {
 		os.RemoveAll(replica2.VttabletProcess.Directory)
 		// start replica2 from backup
 		err = replica2.MysqlctlProcess.Start()
-		require.Nil(t, err)
+		require.NoError(t, err)
 	} else {
 		replica2.MysqlctldProcess.Stop()
 		os.RemoveAll(replica2.VttabletProcess.Directory)
 		// start replica2 from backup
 		err = replica2.MysqlctldProcess.Start()
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}
 
 	err = localCluster.VtctlclientProcess.InitTablet(replica2, cell, keyspaceName, hostname, shardName)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	replica2.VttabletProcess.CreateDB(keyspaceName)
 	replica2.VttabletProcess.ExtraArgs = []string{
 		"-db-credentials-file", dbCredentialFile,
@@ -243,9 +244,9 @@ func TestBackupTransformImpl(t *testing.T) {
 		"-file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot}
 	replica2.VttabletProcess.ServingStatus = ""
 	err = replica2.VttabletProcess.Setup()
-	require.Nil(t, err)
+	require.NoError(t, err)
 	err = replica2.VttabletProcess.WaitForTabletTypesForTimeout([]string{"SERVING"}, 25*time.Second)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer replica2.VttabletProcess.TearDown()
 
 	// validate that semi-sync is enabled for replica, disable for rdOnly
@@ -268,7 +269,7 @@ func TestBackupTransformImpl(t *testing.T) {
 func TestBackupTransformErrorImpl(t *testing.T) {
 	// restart the replica with transform hook parameter
 	err := replica1.VttabletProcess.TearDown()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	replica1.VttabletProcess.ExtraArgs = []string{
 		"-db-credentials-file", dbCredentialFile,
@@ -278,12 +279,12 @@ func TestBackupTransformErrorImpl(t *testing.T) {
 		"-file_backup_storage_root", localCluster.VtctldProcess.FileBackupStorageRoot}
 	replica1.VttabletProcess.ServingStatus = "SERVING"
 	err = replica1.VttabletProcess.Setup()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// create backup, it should fail
 	out, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("Backup", replica1.Alias)
 	require.NotNil(t, err)
-	assert.Containsf(t, out, "backup is not usable, aborting it", "unexpected error received %v", err)
+	require.Containsf(t, out, "backup is not usable, aborting it", "unexpected error received %v", err)
 
 	// validate there is no backup left
 	localCluster.VerifyBackupCount(t, shardKsName, 0)
@@ -311,7 +312,10 @@ func validateManifestFile(t *testing.T, backupLocation string) {
 	assert.Equalf(t, skipCompress, true, "invalid value of skipCompress")
 
 	// validate backup files
-	for i := range manifest["FileEntries"].([]interface{}) {
+	fielEntries, _ := manifest["FileEntries"]
+	fileArr, ok := fielEntries.([]interface{})
+	require.True(t, ok)
+	for i := range fileArr {
 		f, err := os.Open(fmt.Sprintf("%s/%d", backupLocation, i))
 		require.Nilf(t, err, "error while opening backup_file %d: %v", i, err)
 		var fileHeader string
@@ -327,18 +331,18 @@ func validateManifestFile(t *testing.T, backupLocation string) {
 // verifyReplicationStatus validates the replication status in tablet.
 func verifyReplicationStatus(t *testing.T, vttablet *cluster.Vttablet, expectedStatus string) {
 	status, err := vttablet.VttabletProcess.GetDBVar("rpl_semi_sync_slave_enabled", keyspaceName)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, expectedStatus, status)
 	status, err = vttablet.VttabletProcess.GetDBStatus("rpl_semi_sync_slave_status", keyspaceName)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, expectedStatus, status)
 }
 
 // verifyInitialReplication creates schema in master, insert some data to master and verify the same data in replica
 func verifyInitialReplication(t *testing.T) {
 	_, err := master.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
 }

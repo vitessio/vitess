@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
@@ -32,24 +33,24 @@ func TestReparentGracefulRangeBased(t *testing.T) {
 	for _, tablet := range []cluster.Vttablet{*masterTablet, *replicaTablet} {
 		// create database
 		err := tablet.VttabletProcess.CreateDB(keyspaceName)
-		assert.Nil(t, err)
+		require.NoError(t, err)
 		// Init Tablet
 		err = clusterInstance.VtctlclientProcess.InitTablet(&tablet, tablet.Cell, keyspaceName, hostname, shard1Name)
-		assert.Nil(t, err)
+		require.NoError(t, err)
 		// Start the tablet
 		err = tablet.VttabletProcess.Setup()
-		assert.Nil(t, err)
+		require.NoError(t, err)
 	}
 
 	for _, tablet := range []cluster.Vttablet{*masterTablet, *replicaTablet} {
 		err := tablet.VttabletProcess.WaitForTabletTypes([]string{"SERVING", "NOT_SERVING"})
-		assert.Nil(t, err)
+		require.NoError(t, err)
 	}
 
 	// Force the replica to reparent assuming that all the datasets are identical.
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("InitShardMaster",
 		"-force", fmt.Sprintf("%s/%s", keyspaceName, shard1Name), masterTablet.Alias)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// Validate topology
 	validateTopology(t, true)
@@ -64,7 +65,7 @@ func TestReparentGracefulRangeBased(t *testing.T) {
 	// Run this to make sure it succeeds.
 	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
 		"ShardReplicationPositions", fmt.Sprintf("%s/%s", keyspaceName, shard1Name))
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	strArray := strings.Split(output, "\n")
 	if strArray[len(strArray)-1] == "" {
 		strArray = strArray[:len(strArray)-1] // Truncate slice, remove empty line
@@ -77,7 +78,7 @@ func TestReparentGracefulRangeBased(t *testing.T) {
 		"PlannedReparentShard",
 		"-keyspace_shard", fmt.Sprintf("%s/%s", keyspaceName, shard1Name),
 		"-new_master", replicaTablet.Alias)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// Validate topology
 	validateTopology(t, false)
@@ -88,5 +89,5 @@ func TestReparentGracefulRangeBased(t *testing.T) {
 	insertSQL := fmt.Sprintf(insertSQL, 1, 1)
 	runSQL(ctx, t, insertSQL, replicaTablet)
 	err = checkInsertedValues(ctx, t, masterTablet, 1)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 }

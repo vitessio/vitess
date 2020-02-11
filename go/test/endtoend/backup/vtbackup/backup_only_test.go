@@ -64,7 +64,7 @@ func TestTabletInitialBackup(t *testing.T) {
 	restore(t, master, "replica", "NOT_SERVING")
 	err := localCluster.VtctlclientProcess.ExecuteCommand(
 		"TabletExternallyReparented", master.Alias)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	restore(t, replica1, "replica", "SERVING")
 
 	// Run the entire backup test
@@ -108,14 +108,14 @@ func firstBackupTest(t *testing.T, tabletType string) {
 
 	// Store initial backup counts
 	backups, err := listBackups(shardKsName)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	// insert data on master, wait for slave to get it
 	_, err = master.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	// Add a single row with value 'test1' to the master tablet
 	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// Check that the specified tablet has the expected number of rows
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
@@ -130,12 +130,12 @@ func firstBackupTest(t *testing.T, tabletType string) {
 
 	// insert more data on the master
 	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 2)
 
 	// now bring up the other slave, letting it restore from backup.
 	err = localCluster.VtctlclientProcess.InitTablet(replica2, cell, keyspaceName, hostname, shardName)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	restore(t, replica2, "replica", "SERVING")
 	// Replica2 takes time to serve. Sleeping for 5 sec.
 	time.Sleep(5 * time.Second)
@@ -144,7 +144,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 
 	// check that the restored slave has the right local_metadata
 	result, err := replica2.VttabletProcess.QueryTabletWithDB("select * from local_metadata", "_vt")
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, replica2.Alias, result.Rows[0][1].ToString(), "Alias")
 	assert.Equal(t, "ks.0", result.Rows[1][1].ToString(), "ClusterAlias")
 	assert.Equal(t, cell, result.Rows[2][1].ToString(), "DataCenter")
@@ -164,12 +164,12 @@ func vtBackup(t *testing.T, initialBackup bool) {
 	extraArgs := []string{"-allow_first_backup", "-db-credentials-file", dbCredentialFile}
 	log.Info("starting backup tablet %s", time.Now())
 	err := localCluster.StartVtbackup(newInitDBFile, initialBackup, keyspaceName, shardName, cell, extraArgs...)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func verifyBackupCount(t *testing.T, shardKsName string, expected int) []string {
 	backups, err := listBackups(shardKsName)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equalf(t, expected, len(backups), "invalid number of backups")
 	return backups
 }
@@ -197,7 +197,7 @@ func listBackups(shardKsName string) ([]string, error) {
 func removeBackups(t *testing.T) {
 	// Remove all the backups from the shard
 	backups, err := listBackups(shardKsName)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	for _, backup := range backups {
 		_, err := localCluster.VtctlProcess.ExecuteCommandWithOutput(
 			"-backup_storage_implementation", "file",
@@ -205,7 +205,7 @@ func removeBackups(t *testing.T) {
 			path.Join(os.Getenv("VTDATAROOT"), "tmp", "backupstorage"),
 			"RemoveBackup", shardKsName, backup,
 		)
-		assert.Nil(t, err)
+		require.NoError(t, err)
 	}
 }
 
@@ -213,18 +213,18 @@ func initTablets(t *testing.T, startTablet bool, initShardMaster bool) {
 	// Initialize tablets
 	for _, tablet := range []cluster.Vttablet{*master, *replica1} {
 		err := localCluster.VtctlclientProcess.InitTablet(&tablet, cell, keyspaceName, hostname, shardName)
-		assert.Nil(t, err)
+		require.NoError(t, err)
 
 		if startTablet {
 			err = tablet.VttabletProcess.Setup()
-			assert.Nil(t, err)
+			require.NoError(t, err)
 		}
 	}
 
 	if initShardMaster {
 		// choose master and start replication
 		err := localCluster.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, master.TabletUID)
-		assert.Nil(t, err)
+		require.NoError(t, err)
 	}
 }
 
@@ -235,7 +235,7 @@ func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForS
 	resetTabletDirectory(t, *tablet, true)
 
 	err := tablet.VttabletProcess.CreateDB(keyspaceName)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// Start tablets
 	tablet.VttabletProcess.ExtraArgs = []string{"-db-credentials-file", dbCredentialFile}
@@ -243,7 +243,7 @@ func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForS
 	tablet.VttabletProcess.ServingStatus = waitForState
 	tablet.VttabletProcess.SupportsBackup = true
 	err = tablet.VttabletProcess.Setup()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 }
 
 func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet, initMysql bool) {
@@ -253,20 +253,20 @@ func resetTabletDirectory(t *testing.T, tablet cluster.Vttablet, initMysql bool)
 
 	// Shutdown Mysql
 	err := tablet.MysqlctlProcess.Stop()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	// Teardown Tablet
 	err = tablet.VttabletProcess.TearDown()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// Empty the dir
 	err = os.RemoveAll(tablet.VttabletProcess.Directory)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	if initMysql {
 		// Init the Mysql
 		tablet.MysqlctlProcess.InitDBFile = newInitDBFile
 		err = tablet.MysqlctlProcess.Start()
-		assert.Nil(t, err)
+		require.NoError(t, err)
 	}
 
 }
@@ -277,12 +277,12 @@ func tearDown(t *testing.T, initMysql bool) {
 	disableSemiSyncCommands := "SET GLOBAL rpl_semi_sync_master_enabled = false; SET GLOBAL rpl_semi_sync_slave_enabled = false"
 	for _, tablet := range []cluster.Vttablet{*master, *replica1, *replica2} {
 		_, err := tablet.VttabletProcess.QueryTablet(promoteSlaveCommands, keyspaceName, true)
-		assert.Nil(t, err)
+		require.NoError(t, err)
 		_, err = tablet.VttabletProcess.QueryTablet(disableSemiSyncCommands, keyspaceName, true)
-		assert.Nil(t, err)
+		require.NoError(t, err)
 		for _, db := range []string{"_vt", "vt_insert_test"} {
 			_, err = tablet.VttabletProcess.QueryTablet(fmt.Sprintf("drop database if exists %s", db), keyspaceName, true)
-			assert.Nil(t, err)
+			require.NoError(t, err)
 		}
 	}
 
@@ -291,9 +291,9 @@ func tearDown(t *testing.T, initMysql bool) {
 	for _, tablet := range []cluster.Vttablet{*master, *replica1, *replica2} {
 		//Tear down Tablet
 		//err := tablet.VttabletProcess.TearDown()
-		//assert.Nil(t, err)
+		//require.NoError(t, err)
 		err := localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", tablet.Alias)
-		assert.Nil(t, err)
+		require.NoError(t, err)
 
 		resetTabletDirectory(t, tablet, initMysql)
 	}

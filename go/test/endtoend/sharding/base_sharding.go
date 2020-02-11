@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/topodata"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -67,11 +68,11 @@ func CheckSrvKeyspace(t *testing.T, cell string, ksname string, shardingCol stri
 // GetSrvKeyspace return the Srv Keyspace structure
 func GetSrvKeyspace(t *testing.T, cell string, ksname string, ci cluster.LocalProcessCluster) *topodata.SrvKeyspace {
 	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, ksname)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	var srvKeyspace topodata.SrvKeyspace
 
 	err = json2.Unmarshal([]byte(output), &srvKeyspace)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	return &srvKeyspace
 }
 
@@ -79,7 +80,7 @@ func GetSrvKeyspace(t *testing.T, cell string, ksname string, ci cluster.LocalPr
 func VerifyTabletHealth(t *testing.T, vttablet cluster.Vttablet, hostname string) {
 	tabletURL := fmt.Sprintf("http://%s:%d/healthz", hostname, vttablet.HTTPPort)
 	resp, err := http.Get(tabletURL)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, resp.StatusCode, 200)
 }
 
@@ -87,13 +88,13 @@ func VerifyTabletHealth(t *testing.T, vttablet cluster.Vttablet, hostname string
 func VerifyReconciliationCounters(t *testing.T, vtworkerURL string, availabilityType string, table string,
 	inserts int, updates int, deletes int, equals int) {
 	resp, err := http.Get(vtworkerURL)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, resp.StatusCode, 200)
 
 	resultMap := make(map[string]interface{})
 	respByte, _ := ioutil.ReadAll(resp.Body)
 	err = json2.Unmarshal(respByte, &resultMap)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	value := getValueFromJSON(resultMap, "Worker"+availabilityType+"InsertsCounters", table)
 	if inserts == 0 {
@@ -144,7 +145,7 @@ func CheckValues(t *testing.T, vttablet cluster.Vttablet, id uint64, msg string,
 	}
 
 	result, err := vttablet.VttabletProcess.QueryTablet(query, ks, true)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	isFound := false
 	if exists && len(result.Rows) > 0 {
 		if keyType == querypb.Type_VARBINARY {
@@ -224,11 +225,11 @@ func checkStreamHealthEqualsBinlogPlayerVars(t *testing.T, vttablet cluster.Vtta
 	// tablets may not be started with it, or may not run it in time.
 	_ = ci.VtctlclientProcess.ExecuteCommand("RunHealthCheck", vttablet.Alias)
 	streamHealth, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletStreamHealth", "-count", "1", vttablet.Alias)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	var streamHealthResponse querypb.StreamHealthResponse
 	err = json2.Unmarshal([]byte(streamHealth), &streamHealthResponse)
-	assert.Nil(t, err, "error should be Nil")
+	require.NoError(t, err, "error should be Nil")
 	assert.Equal(t, streamHealthResponse.Serving, false)
 	assert.NotNil(t, streamHealthResponse.RealtimeStats)
 	assert.Equal(t, streamHealthResponse.RealtimeStats.HealthError, "")
@@ -281,7 +282,7 @@ func InsertToTablet(t *testing.T, query string, vttablet cluster.Vttablet, ks st
 	if expectFail {
 		assert.NotNil(t, err)
 	} else {
-		assert.Nil(t, err)
+		require.NoError(t, err)
 	}
 	_, _ = vttablet.VttabletProcess.QueryTablet("commit", ks, true)
 }
@@ -433,10 +434,10 @@ func CheckShardQueryService(t *testing.T, ci cluster.LocalProcessCluster, cell s
 // GetShardInfo return the Shard information
 func GetShardInfo(t *testing.T, shard1Ks string, ci cluster.LocalProcessCluster) *topodata.Shard {
 	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("GetShard", shard1Ks)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	var shard topodata.Shard
 	err = json2.Unmarshal([]byte(output), &shard)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	return &shard
 }
 
@@ -445,7 +446,7 @@ func checkThrottlerServiceMaxRates(t *testing.T, server string, names []string, 
 	// Avoid flakes by waiting for all throttlers. (Necessary because filtered
 	// replication on vttablet will register the throttler asynchronously.)
 	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerMaxRates", "--server", server)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	msg := fmt.Sprintf("%d active throttler(s)", len(names))
 	assert.Contains(t, output, msg)
 
@@ -457,11 +458,11 @@ func checkThrottlerServiceMaxRates(t *testing.T, server string, names []string, 
 	// Check that it's possible to change the max rate on the throttler.
 	newRate := "unlimited"
 	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerSetMaxRate", "--server", server, newRate)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, output, msg)
 
 	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerMaxRates", "--server", server)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	for _, name := range names {
 		str := fmt.Sprintf("| %s | %s |", name, newRate)
 		assert.Contains(t, output, str)
@@ -488,12 +489,12 @@ func checkThrottlerServiceConfiguration(t *testing.T, server string, names []str
 			"bad_rate_increase:0.13 "+
 			"max_rate_approach_threshold: 0.9 ",
 	)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	msg := fmt.Sprintf("%d active throttler(s)", len(names))
 	assert.Contains(t, output, msg)
 
 	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("GetThrottlerConfiguration", "--server", server)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	for _, name := range names {
 		str := fmt.Sprintf("| %s | target_replication_lag_sec:12345 ", name)
 		assert.Contains(t, output, str)
@@ -503,12 +504,12 @@ func checkThrottlerServiceConfiguration(t *testing.T, server string, names []str
 
 	// Reset clears our configuration values.
 	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("ResetThrottlerConfiguration", "--server", server)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.Contains(t, output, msg)
 
 	// Check that the reset configuration no longer has our values.
 	output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("GetThrottlerConfiguration", "--server", server)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	assert.NotContains(t, output, "target_replication_lag_sec:12345")
 	assert.Contains(t, output, msg)
 

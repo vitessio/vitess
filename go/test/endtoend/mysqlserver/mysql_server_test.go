@@ -91,7 +91,7 @@ func TestInsertLargerThenGrpcLimit(t *testing.T) {
 
 	grpcLimit := os.Getenv("grpc_max_message_size")
 	limit, err := strconv.Atoi(grpcLimit)
-	assert.Nilf(t, err, "int parsing error: %v", err)
+	require.Nilf(t, err, "int parsing error: %v", err)
 
 	// insert data with large blob
 	_, err = conn.ExecuteFetch("insert into vt_insert_test (id, msg, keyspace_id, data) values(2, 'huge blob', 123, '"+fake.CharactersN(limit+1)+"')", 1, false)
@@ -109,7 +109,9 @@ func TestTimeout(t *testing.T) {
 
 	_, err = conn.ExecuteFetch("SELECT SLEEP(5);", 1, false)
 	require.NotNilf(t, err, "quiry timeout error expected")
-	assert.Equal(t, 1317, err.(*mysql.SQLError).Number(), err)
+	mysqlErr, ok := err.(*mysql.SQLError)
+	require.Truef(t, ok, "invalid error type")
+	assert.Equal(t, 1317, mysqlErr.Number(), err)
 }
 
 // TestInvalidField tries to fetch invalid column and verifies the error.
@@ -122,7 +124,9 @@ func TestInvalidField(t *testing.T) {
 
 	_, err = conn.ExecuteFetch("SELECT invalid_field from vt_insert_test;", 1, false)
 	require.NotNil(t, err, "invalid field error expected")
-	assert.Equal(t, 1054, err.(*mysql.SQLError).Number(), err)
+	mysqlErr, ok := err.(*mysql.SQLError)
+	require.Truef(t, ok, "invalid error type")
+	assert.Equal(t, 1054, mysqlErr.Number(), err)
 }
 
 // TestWarnings validates the behaviour of SHOW WARNINGS.
@@ -188,7 +192,7 @@ func TestSelectWithUnauthorizedUser(t *testing.T) {
 func connectDB(t *testing.T, vtParams mysql.ConnParams, params ...string) *sql.DB {
 	connectionStr := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?%s", vtParams.Uname, vtParams.Pass, vtParams.Host, vtParams.Port, keyspaceName, strings.Join(params, "&"))
 	db, err := sql.Open("mysql", connectionStr)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	return db
 }
 

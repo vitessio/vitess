@@ -22,7 +22,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -46,13 +45,13 @@ func TestLocalMetadata(t *testing.T) {
 	}
 	rTablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(rTablet.TabletUID, rTablet.MySQLPort, clusterInstance.TmpDirectory)
 	err = rTablet.MysqlctlProcess.Start()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	log.Info(fmt.Sprintf("Started vttablet %v", rTablet))
 	// SupportsBackup=False prevents vttablet from trying to restore
 	// Start vttablet process
 	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	cluster.VerifyLocalMetadata(t, rTablet, keyspaceName, shardName, cell)
 
@@ -69,18 +68,18 @@ func TestLocalMetadata(t *testing.T) {
 	}
 	rTablet2.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(rTablet2.TabletUID, rTablet2.MySQLPort, clusterInstance.TmpDirectory)
 	err = rTablet2.MysqlctlProcess.Start()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	log.Info(fmt.Sprintf("Started vttablet %v", rTablet2))
 	// SupportsBackup=False prevents vttablet from trying to restore
 	// Start vttablet process
 	err = clusterInstance.StartVttablet(rTablet2, "SERVING", false, cell, keyspaceName, hostname, shardName)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// check that tablet did _not_ get populated
 	qr, err := rTablet2.VttabletProcess.QueryTablet("select * from _vt.local_metadata", keyspaceName, false)
-	assert.Nil(t, err)
-	assert.Nil(t, qr.Rows)
+	require.NoError(t, err)
+	require.Nil(t, qr.Rows)
 
 	// Reset the VtTabletExtraArgs and kill tablets
 	clusterInstance.VtTabletExtraArgs = []string{}
