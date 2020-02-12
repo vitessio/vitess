@@ -2135,6 +2135,10 @@ index_hint_list:
   {
     $$ = &IndexHints{Type: UseStr, Indexes: $4}
   }
+| USE INDEX openb closeb
+  {
+    $$ = &IndexHints{Type: UseStr}
+  }
 | IGNORE INDEX openb column_list closeb
   {
     $$ = &IndexHints{Type: IgnoreStr, Indexes: $4}
