@@ -16,8 +16,5 @@
 
 # this script creates a new keyspace in preparation for vertical resharding
 
-set -e
+vtctlclient -server localhost:15999 CreateKeyspace -served_from='master:commerce,replica:commerce,rdonly:commerce' customer
 
-./lvtctl.sh CreateKeyspace -served_from='master:commerce,replica:commerce,rdonly:commerce' customer
-
-disown -a

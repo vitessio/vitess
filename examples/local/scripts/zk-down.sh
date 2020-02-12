@@ -14,12 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -e
+# This is an example script that stops the ZooKeeper servers started by zk-up.sh.
 
-script_root=`dirname "${BASH_SOURCE}"`
-source $script_root/env.sh
+source ./env.sh
 
-pid=`cat $VTDATAROOT/tmp/vtworker.pid`
-echo "Stopping vtworker..."
-kill $pid
+# Stop ZooKeeper servers.
+echo "Stopping zk servers..."
+for zkid in $zkids; do
+  zkctl -zk.myid $zkid -zk.cfg $zkcfg -log_dir $VTDATAROOT/tmp shutdown
+done
 
