@@ -53,10 +53,10 @@ func TestRepareting(t *testing.T) {
 	// start grpc connection with vtgate and validate client
 	// connection counts in tablets
 	stream, err := VtgateGrpcConn(ctx, clusterInstance)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer stream.Close()
 	_, err = stream.MessageStream(userKeyspace, "", nil, name)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	assert.Equal(t, 1, getClientCount(shard0Master))
 	assert.Equal(t, 0, getClientCount(shard0Replica))
@@ -70,7 +70,7 @@ func TestRepareting(t *testing.T) {
 		"-new_master", shard0Replica.Alias)
 	// validate topology
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	// Verify connection has migrated.
 	// The wait must be at least 6s which is how long vtgate will
@@ -93,14 +93,14 @@ func TestRepareting(t *testing.T) {
 		"-new_master", shard0Master.Alias)
 	// validate topology
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
-	require.NoError(t, err)
+	require.Nil(t, err)
 	time.Sleep(10 * time.Second)
 	assert.Equal(t, 1, getClientCount(shard0Master))
 	assert.Equal(t, 0, getClientCount(shard0Replica))
 	assert.Equal(t, 1, getClientCount(shard1Master))
 
 	_, err = stream.MessageAck(ctx, userKeyspace, name, keyRange(3))
-	require.NoError(t, err)
+	require.Nil(t, err)
 }
 
 // TestConnection validate the connection count and message streaming.
@@ -119,18 +119,18 @@ func TestConnection(t *testing.T) {
 	ctx := context.Background()
 	// first connection with vtgate
 	stream, err := VtgateGrpcConn(ctx, clusterInstance)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	_, err = stream.MessageStream(userKeyspace, "", nil, name)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	// validate client count of vttablet
 	assert.Equal(t, 1, getClientCount(shard0Master))
 	assert.Equal(t, 1, getClientCount(shard1Master))
 	// second connection with vtgate, secont connection
 	// will only be used for client connection counts
 	stream1, err := VtgateGrpcConn(ctx, clusterInstance)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	_, err = stream1.MessageStream(userKeyspace, "", nil, name)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	// validate client count of vttablet
 	assert.Equal(t, 2, getClientCount(shard0Master))
 	assert.Equal(t, 2, getClientCount(shard1Master))
@@ -143,12 +143,12 @@ func TestConnection(t *testing.T) {
 	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (5,'hello world 5')")
 	// validate in msg stream
 	_, err = stream.Next()
-	require.NoError(t, err)
+	require.Nil(t, err)
 	_, err = stream.Next()
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	_, err = stream.MessageAck(ctx, userKeyspace, name, keyRange(2, 5))
-	require.NoError(t, err)
+	require.Nil(t, err)
 	// After closing one stream, ensure vttablets have dropped it.
 	stream.Close()
 	time.Sleep(time.Second)
@@ -161,7 +161,7 @@ func TestConnection(t *testing.T) {
 func testMessaging(t *testing.T, name, ks string) {
 	ctx := context.Background()
 	stream, err := VtgateGrpcConn(ctx, clusterInstance)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer stream.Close()
 
 	session := stream.Session("@master", nil)
@@ -170,7 +170,7 @@ func testMessaging(t *testing.T, name, ks string) {
 
 	// validate fields
 	res, err := stream.MessageStream(ks, "", nil, name)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	require.Equal(t, 3, len(res.Fields))
 	validateField(t, res.Fields[0], "id", query.Type_INT64)
 	validateField(t, res.Fields[1], "time_scheduled", query.Type_INT64)
@@ -179,13 +179,13 @@ func testMessaging(t *testing.T, name, ks string) {
 	// validate recieved msgs
 	resMap := make(map[string]string)
 	res, err = stream.Next()
-	require.NoError(t, err)
+	require.Nil(t, err)
 	for _, row := range res.Rows {
 		resMap[row[0].ToString()] = row[2].ToString()
 	}
 
 	res, err = stream.Next()
-	require.NoError(t, err)
+	require.Nil(t, err)
 	for _, row := range res.Rows {
 		resMap[row[0].ToString()] = row[2].ToString()
 	}
@@ -196,16 +196,16 @@ func testMessaging(t *testing.T, name, ks string) {
 	resMap = make(map[string]string)
 	// validate message ack with id 4
 	count, err := stream.MessageAck(ctx, ks, name, keyRange(4))
-	require.NoError(t, err)
+	require.Nil(t, err)
 	assert.Equal(t, int64(1), count)
 	res, err = stream.Next()
-	require.NoError(t, err)
+	require.Nil(t, err)
 	for _, row := range res.Rows {
 		resMap[row[0].ToString()] = row[2].ToString()
 	}
 
 	res, err = stream.Next()
-	require.NoError(t, err)
+	require.Nil(t, err)
 	for _, row := range res.Rows {
 		resMap[row[0].ToString()] = row[2].ToString()
 	}
@@ -214,7 +214,7 @@ func testMessaging(t *testing.T, name, ks string) {
 
 	// validate message ack with 1 and 4, only 1 should be ack
 	count, err = stream.MessageAck(ctx, ks, name, keyRange(1, 4))
-	require.NoError(t, err)
+	require.Nil(t, err)
 	assert.Equal(t, int64(1), count)
 }
 

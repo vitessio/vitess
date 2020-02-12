@@ -238,7 +238,7 @@ func TestMain(m *testing.M) {
 func TestAlias(t *testing.T) {
 	insertInitialValues(t)
 	err := localCluster.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceName)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	shard1 := localCluster.Keyspaces[0].Shards[0]
 	shard2 := localCluster.Keyspaces[0].Shards[1]
 	allCells := fmt.Sprintf("%s,%s", cell1, cell2)
@@ -254,17 +254,17 @@ func TestAlias(t *testing.T) {
 	err = localCluster.VtctlclientProcess.ExecuteCommand("AddCellsAlias",
 		"-cells", allCells,
 		"region_east_coast")
-	require.NoError(t, err)
+	require.Nil(t, err)
 	err = localCluster.VtctlclientProcess.ExecuteCommand("UpdateCellsAlias",
 		"-cells", allCells,
 		"region_east_coast")
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	vtgateInstance := localCluster.GetVtgateInstance()
 	vtgateInstance.CellsToWatch = allCells
 	vtgateInstance.TabletTypesToWait = "MASTER,REPLICA"
 	err = vtgateInstance.Setup()
-	require.NoError(t, err)
+	require.Nil(t, err)
 	waitTillAllTabletsAreHealthyInVtgate(t, *vtgateInstance, shard1.Name, shard2.Name)
 
 	testQueriesInDifferentTabletType(t, "master", vtgateInstance.GrpcPort, false)
@@ -274,13 +274,13 @@ func TestAlias(t *testing.T) {
 	// now, delete the alias, so that if we run above assertions again, it will fail for replica,rdonly target type
 	err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteCellsAlias",
 		"region_east_coast")
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	// restarts the vtgate process
 	_ = vtgateInstance.TearDown()
 	vtgateInstance.TabletTypesToWait = "MASTER"
 	err = vtgateInstance.Setup()
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	// since replica and rdonly tablets of all shards in cell2, the last 2 assertion is expected to fail
 	testQueriesInDifferentTabletType(t, "master", vtgateInstance.GrpcPort, false)
@@ -291,11 +291,11 @@ func TestAlias(t *testing.T) {
 func waitTillAllTabletsAreHealthyInVtgate(t *testing.T, vtgateInstance cluster.VtgateProcess, shards ...string) {
 	for _, shard := range shards {
 		err := vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspaceName, shard), 1)
-		require.NoError(t, err)
+		require.Nil(t, err)
 		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shard), 1)
-		require.NoError(t, err)
+		require.Nil(t, err)
 		err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.rdonly", keyspaceName, shard), 1)
-		require.NoError(t, err)
+		require.Nil(t, err)
 	}
 }
 
@@ -308,11 +308,11 @@ func testQueriesInDifferentTabletType(t *testing.T, tabletType string, vtgateGrp
 		require.Error(t, err)
 		return
 	}
-	require.NoError(t, err)
+	require.Nil(t, err)
 	var result sqltypes.Result
 
 	err = json.Unmarshal([]byte(output), &result)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	assert.Equal(t, len(result.Rows), 3)
 }
 

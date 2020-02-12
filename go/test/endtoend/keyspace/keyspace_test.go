@@ -138,7 +138,7 @@ func TestMain(m *testing.M) {
 
 func TestGetSrvKeyspaceNames(t *testing.T) {
 	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspaceNames", cell)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	assert.Contains(t, strings.Split(output, "\n"), keyspaceUnshardedName)
 	assert.Contains(t, strings.Split(output, "\n"), keyspaceShardedName)
 }
@@ -173,21 +173,21 @@ func TestGetSrvKeyspacePartitions(t *testing.T) {
 
 func TestShardNames(t *testing.T) {
 	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, keyspaceShardedName)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	var srvKeyspace topodata.SrvKeyspace
 
 	err = json.Unmarshal([]byte(output), &srvKeyspace)
-	require.NoError(t, err)
+	require.Nil(t, err)
 }
 
 func TestGetKeyspace(t *testing.T) {
 	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetKeyspace", keyspaceUnshardedName)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	var keyspace topodata.Keyspace
 
 	err = json.Unmarshal([]byte(output), &keyspace)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	assert.Equal(t, keyspace.ShardingColumnName, "keyspace_id")
 	assert.Equal(t, keyspace.ShardingColumnType, topodata.KeyspaceIdType(1))
@@ -382,10 +382,10 @@ func packKeyspaceID(keyspaceID uint64) []byte {
 
 func getSrvKeyspace(t *testing.T, cell string, ksname string) *topodata.SrvKeyspace {
 	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, ksname)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	var srvKeyspace topodata.SrvKeyspace
 
 	err = json.Unmarshal([]byte(output), &srvKeyspace)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	return &srvKeyspace
 }

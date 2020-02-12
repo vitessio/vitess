@@ -141,10 +141,10 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 
 func TestRestart(t *testing.T) {
 	err := masterTablet.MysqlctlProcess.Stop()
-	require.NoError(t, err)
+	require.Nil(t, err)
 	masterTablet.MysqlctlProcess.CleanupFiles(masterTablet.TabletUID)
 	err = masterTablet.MysqlctlProcess.Start()
-	require.NoError(t, err)
+	require.Nil(t, err)
 }
 
 func TestAutoDetect(t *testing.T) {
@@ -154,13 +154,13 @@ func TestAutoDetect(t *testing.T) {
 	os.Setenv("MYSQL_FLAVOR", "")
 
 	err := clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.Setup()
-	require.NoError(t, err, "error should be nil")
+	require.Nil(t, err, "error should be nil")
 	err = clusterInstance.Keyspaces[0].Shards[0].Vttablets[1].VttabletProcess.Setup()
-	require.NoError(t, err, "error should be nil")
+	require.Nil(t, err, "error should be nil")
 
 	// Reparent tablets, which requires flavor detection
 	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, masterTablet.TabletUID)
-	require.NoError(t, err, "error should be nil")
+	require.Nil(t, err, "error should be nil")
 
 	//Reset flavor
 	os.Setenv("MYSQL_FLAVOR", sqlFlavor)

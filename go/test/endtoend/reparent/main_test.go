@@ -160,7 +160,7 @@ func runSQL(ctx context.Context, t *testing.T, sql string, tablet *cluster.Vttab
 	// Get Connection
 	tabletParams := getMysqlConnParam(tablet)
 	conn, err := mysql.Connect(ctx, &tabletParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer conn.Close()
 
 	// runSQL
@@ -170,6 +170,6 @@ func runSQL(ctx context.Context, t *testing.T, sql string, tablet *cluster.Vttab
 func execute(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	return qr
 }

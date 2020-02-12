@@ -223,7 +223,7 @@ func createConfig(name, data string) error {
 // Connect will connect the vtgate through mysql protocol.
 func Connect(t *testing.T, params ...string) *sql.DB {
 	dbo, err := sql.Open("mysql", dbInfo.ConnectionString(params...))
-	require.NoError(t, err)
+	require.Nil(t, err)
 	return dbo
 }
 
@@ -238,7 +238,7 @@ func execWithError(t *testing.T, dbo *sql.DB, errorCodes []uint16, stmt string, 
 
 // exec executes the query using the params.
 func exec(t *testing.T, dbo *sql.DB, stmt string, params ...interface{}) {
-	require.NoError(t, execErr(dbo, stmt, params...))
+	require.Nil(t, execErr(dbo, stmt, params...))
 }
 
 // execErr executes the query and returns an error if one occurs.
@@ -262,7 +262,7 @@ func selectWhere(t *testing.T, dbo *sql.DB, where string, params ...interface{})
 
 	// execute query
 	r, err := dbo.Query(qry, params...)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	// prepare result
 	for r.Next() {

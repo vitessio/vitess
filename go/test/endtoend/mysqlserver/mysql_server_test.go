@@ -192,7 +192,7 @@ func TestSelectWithUnauthorizedUser(t *testing.T) {
 func connectDB(t *testing.T, vtParams mysql.ConnParams, params ...string) *sql.DB {
 	connectionStr := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?%s", vtParams.Uname, vtParams.Pass, vtParams.Host, vtParams.Port, keyspaceName, strings.Join(params, "&"))
 	db, err := sql.Open("mysql", connectionStr)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	return db
 }
 

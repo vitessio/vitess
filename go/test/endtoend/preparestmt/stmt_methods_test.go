@@ -86,12 +86,12 @@ func TestInsertUpdateDelete(t *testing.T) {
 // testcount validates inserted rows count with expected count.
 func testcount(t *testing.T, dbo *sql.DB, except int) {
 	r, err := dbo.Query("SELECT count(1) FROM " + tableName)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	r.Next()
 	var i int
 	err = r.Scan(&i)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	assert.Equal(t, except, i)
 }
 

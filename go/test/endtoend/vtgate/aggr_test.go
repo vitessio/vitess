@@ -29,7 +29,7 @@ import (
 func TestAggregateTypes(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer conn.Close()
 
 	exec(t, conn, "insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'A',1), (3,'b',1), (4,'c',3), (5,'c',4)")

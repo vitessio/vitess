@@ -123,16 +123,16 @@ func TestRepeatedInitShardMaster(t *testing.T) {
 
 	// Make replica tablet as master
 	err := clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, replicaTablet.TabletUID)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	// Run health check on both, make sure they are both healthy.
 	// Also make sure the types are correct.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", masterTablet.Alias)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	checkHealth(t, masterTablet.HTTPPort, false)
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", replicaTablet.Alias)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	checkHealth(t, replicaTablet.HTTPPort, false)
 
 	checkTabletType(t, masterTablet.Alias, "REPLICA")
@@ -140,16 +140,16 @@ func TestRepeatedInitShardMaster(t *testing.T) {
 
 	// Come back to the original tablet.
 	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, masterTablet.TabletUID)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	// Run health check on both, make sure they are both healthy.
 	// Also make sure the types are correct.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", masterTablet.Alias)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	checkHealth(t, masterTablet.HTTPPort, false)
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("RunHealthCheck", replicaTablet.Alias)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	checkHealth(t, replicaTablet.HTTPPort, false)
 
 	checkTabletType(t, masterTablet.Alias, "MASTER")
@@ -163,19 +163,19 @@ func TestMasterRestartSetsTERTimestamp(t *testing.T) {
 
 	// Make replica as master
 	err := clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, replicaTablet.TabletUID)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	err = replicaTablet.VttabletProcess.WaitForTabletType("SERVING")
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	// Capture the current TER.
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
 		"VtTabletStreamHealth", "-count", "1", replicaTablet.Alias)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	var streamHealthRes1 querypb.StreamHealthResponse
 	err = json.Unmarshal([]byte(result), &streamHealthRes1)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	actualType := streamHealthRes1.GetTarget().GetTabletType()
 	tabletType := topodatapb.TabletType_value["MASTER"]
 	got := fmt.Sprintf("%d", actualType)
@@ -189,20 +189,20 @@ func TestMasterRestartSetsTERTimestamp(t *testing.T) {
 
 	// kill the newly promoted master tablet
 	err = replicaTablet.VttabletProcess.TearDown()
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	// Start Vttablet
 	err = clusterInstance.StartVttablet(&replicaTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	// Make sure that the TER did not change
 	result, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(
 		"VtTabletStreamHealth", "-count", "1", replicaTablet.Alias)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	var streamHealthRes2 querypb.StreamHealthResponse
 	err = json.Unmarshal([]byte(result), &streamHealthRes2)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	actualType = streamHealthRes2.GetTarget().GetTabletType()
 	tabletType = topodatapb.TabletType_value["MASTER"]
@@ -219,16 +219,16 @@ func TestMasterRestartSetsTERTimestamp(t *testing.T) {
 
 	// Reset master
 	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspaceName, shardName, cell, masterTablet.TabletUID)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	err = masterTablet.VttabletProcess.WaitForTabletType("SERVING")
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 }
 
 func checkHealth(t *testing.T, port int, shouldError bool) {
 	url := fmt.Sprintf("http://localhost:%d/healthz", port)
 	resp, err := http.Get(url)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	if shouldError {
 		assert.True(t, resp.StatusCode > 400)
 	} else {
@@ -238,11 +238,11 @@ func checkHealth(t *testing.T, port int, shouldError bool) {
 
 func checkTabletType(t *testing.T, tabletAlias string, typeWant string) {
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetTablet", tabletAlias)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	var tablet topodatapb.Tablet
 	err = json2.Unmarshal([]byte(result), &tablet)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	actualType := tablet.GetType()
 	got := fmt.Sprintf("%d", actualType)

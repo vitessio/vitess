@@ -66,35 +66,35 @@ func TestRecovery(t *testing.T) {
 	verifyInitialReplication(t)
 
 	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	backups := listBackups(t)
 	assert.Equal(t, len(backups), 1)
 	assert.Contains(t, backups[0], replica1.Alias)
 
 	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 2)
 
 	err = localCluster.VtctlclientProcess.ApplyVSchema(keyspaceName, vSchema)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("GetVSchema", keyspaceName)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	assert.Contains(t, output, "vt_insert_test")
 
 	recovery.RestoreTablet(t, localCluster, replica2, recoveryKS1, "0", keyspaceName, commonTabletArg)
 
 	output, err = localCluster.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvVSchema", cell)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	assert.Contains(t, output, keyspaceName)
 	assert.Contains(t, output, recoveryKS1)
 
 	err = localCluster.VtctlclientProcess.ExecuteCommand("GetSrvKeyspace", cell, keyspaceName)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	output, err = localCluster.VtctlclientProcess.ExecuteCommandWithOutput("GetVSchema", recoveryKS1)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	assert.Contains(t, output, "vt_insert_test")
 
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 1)
@@ -103,65 +103,65 @@ func TestRecovery(t *testing.T) {
 
 	// update the original row in master
 	_, err = master.VttabletProcess.QueryTablet("update vt_insert_test set msg = 'msgx1' where id = 1", keyspaceName, true)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	//verify that master has new value
 	qr, err := master.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	assert.Equal(t, "msgx1", fmt.Sprintf("%s", qr.Rows[0][0].ToBytes()))
 
 	//verify that restored replica has old value
 	qr, err = replica2.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	assert.Equal(t, "test1", fmt.Sprintf("%s", qr.Rows[0][0].ToBytes()))
 
 	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test3')", keyspaceName, true)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 3)
 
 	recovery.RestoreTablet(t, localCluster, replica3, recoveryKS2, "0", keyspaceName, commonTabletArg)
 
 	output, err = localCluster.VtctlclientProcess.ExecuteCommandWithOutput("GetVSchema", recoveryKS2)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	assert.Contains(t, output, "vt_insert_test")
 
 	cluster.VerifyRowsInTablet(t, replica3, keyspaceName, 2)
 
 	// update the original row in master
 	_, err = master.VttabletProcess.QueryTablet("update vt_insert_test set msg = 'msgx2' where id = 1", keyspaceName, true)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	//verify that master has new value
 	qr, err = master.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	assert.Equal(t, "msgx2", fmt.Sprintf("%s", qr.Rows[0][0].ToBytes()))
 
 	//verify that restored replica has old value
 	qr, err = replica3.VttabletProcess.QueryTablet("select msg from vt_insert_test where id = 1", keyspaceName, true)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	assert.Equal(t, "msgx1", fmt.Sprintf("%s", qr.Rows[0][0].ToBytes()))
 
 	vtgateInstance := localCluster.GetVtgateInstance()
 	vtgateInstance.TabletTypesToWait = "REPLICA"
 	err = vtgateInstance.Setup()
 	localCluster.VtgateGrpcPort = vtgateInstance.GrpcPort
-	require.NoError(t, err)
+	require.Nil(t, err)
 	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspaceName, shardName), 1)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), 1)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", recoveryKS1, shardName), 1)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", recoveryKS2, shardName), 1)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	// Build vtgate grpc connection
 	grpcAddress := fmt.Sprintf("%s:%d", localCluster.Hostname, localCluster.VtgateGrpcPort)
 	vtgateConn, err := vtgateconn.Dial(context.Background(), grpcAddress)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	session := vtgateConn.Session("@replica", nil)
 
 	//check that vtgate doesn't route queries to new tablet
@@ -180,15 +180,15 @@ func TestRecovery(t *testing.T) {
 // This will create schema in master, insert some data to master and verify the same data in replica
 func verifyInitialReplication(t *testing.T) {
 	_, err := master.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 1)
 }
 
 func listBackups(t *testing.T) []string {
 	output, err := localCluster.ListBackups(shardKsName)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	return output
 }
 
