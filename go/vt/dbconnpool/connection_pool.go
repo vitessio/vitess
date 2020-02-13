@@ -147,7 +147,7 @@ func (cp *ConnectionPool) Open(info *mysql.ConnParams, mysqlStats *stats.Timings
 	defer cp.mu.Unlock()
 	cp.info = info
 	cp.mysqlStats = mysqlStats
-	cp.connections = pools.NewResourcePool(cp.name, cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, 0, mysqlStats)
+	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, 0, cp.getLogWaitCallback())
 	// Check if we need to resolve a hostname (The Host is not just an IP  address).
 	if cp.resolutionFrequency > 0 && net.ParseIP(info.Host) == nil {
 		cp.hostIsNotIP = true
@@ -166,6 +166,15 @@ func (cp *ConnectionPool) Open(info *mysql.ConnParams, mysqlStats *stats.Timings
 			}
 
 		}()
+	}
+}
+
+func (cp *ConnectionPool) getLogWaitCallback() func(time.Time) {
+	if cp.name == "" {
+		return func(start time.Time) {} // no op
+	}
+	return func(start time.Time) {
+		cp.mysqlStats.Record(cp.name+"ResourceWaitTime", start)
 	}
 }
 

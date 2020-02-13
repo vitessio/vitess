@@ -122,10 +122,19 @@ func (cp *Pool) Open(appParams, dbaParams, appDebugParams *mysql.ConnParams) {
 	f := func() (pools.Resource, error) {
 		return NewDBConn(cp, appParams)
 	}
-	cp.connections = pools.NewResourcePool(cp.name, f, cp.capacity, cp.capacity, cp.idleTimeout, cp.prefillParallelism, tabletenv.WaitStats)
+	cp.connections = pools.NewResourcePool(f, cp.capacity, cp.capacity, cp.idleTimeout, cp.prefillParallelism, cp.getLogWaitCallback())
 	cp.appDebugParams = appDebugParams
 
 	cp.dbaPool.Open(dbaParams, tabletenv.MySQLStats)
+}
+
+func (cp *Pool) getLogWaitCallback() func(time.Time) {
+	if cp.name == "" {
+		return func(start time.Time) {} // no op
+	}
+	return func(start time.Time) {
+		tabletenv.WaitStats.Record(cp.name+"ResourceWaitTime", start)
+	}
 }
 
 // Close will close the pool and wait for connections to be returned before
