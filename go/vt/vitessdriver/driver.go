@@ -23,6 +23,8 @@ import (
 	"encoding/json"
 	"errors"
 
+	"google.golang.org/grpc"
+	"vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
 
@@ -76,6 +78,11 @@ func OpenWithConfiguration(c Configuration) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if len(c.GRPCDialOptions) != 0 {
+		vtgateconn.RegisterDialer(c.Protocol, grpcvtgateconn.DialWithOpts(context.TODO(), c.GRPCDialOptions...))
+	}
+
 	return sql.Open("vitess", json)
 }
 
@@ -139,6 +146,13 @@ type Configuration struct {
 	// This setting has no effect if ConvertDatetime is not set.
 	// Default: UTC
 	DefaultLocation string
+
+	// GRPCDialOptions registers a new vtgateconn dialer with these dial options using the
+	// protocol as the key. This may overwrite the default grpcvtgateconn dial option
+	// if a custom one hasn't been specified in the config.
+	//
+	// Default: none
+	GRPCDialOptions []grpc.DialOption `json:"-"`
 }
 
 // toJSON converts Configuration to the JSON string which is required by the
