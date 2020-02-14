@@ -44,6 +44,7 @@ var emitStats = flag.Bool("emit_stats", false, "true iff we should emit stats to
 var statsEmitPeriod = flag.Duration("stats_emit_period", time.Duration(60*time.Second), "Interval between emitting stats to all registered backends")
 var statsBackend = flag.String("stats_backend", "", "The name of the registered push-based monitoring/stats backend to use")
 var combineDimensions = flag.String("stats_combine_dimensions", "", `List of dimensions to be combined into a single "all" value in exported stats vars`)
+var dropVariables = flag.String("stats_drop_variables", "", `Variables to be dropped from the list of exported variables.`)
 
 // StatsAllStr is the consolidated name if a dimension gets combined.
 const StatsAllStr = "all"
@@ -76,6 +77,9 @@ func (vg *varGroup) register(nvh NewVarHook) {
 }
 
 func (vg *varGroup) publish(name string, v expvar.Var) {
+	if isVarDropped(name) {
+		return
+	}
 	vg.Lock()
 	defer vg.Unlock()
 
@@ -254,14 +258,15 @@ func stringMapToString(m map[string]string) string {
 }
 
 var (
-	dimMu              sync.Mutex
+	varsMu             sync.Mutex
 	combinedDimensions map[string]bool
+	droppedVars        map[string]bool
 )
 
 // IsDimensionCombined returns true if the specified dimension should be combined.
 func IsDimensionCombined(name string) bool {
-	dimMu.Lock()
-	defer dimMu.Unlock()
+	varsMu.Lock()
+	defer varsMu.Unlock()
 
 	if combinedDimensions == nil {
 		dims := strings.Split(*combineDimensions, ",")
@@ -294,4 +299,21 @@ func safeJoinLabels(labels []string, combinedLabels []bool) string {
 
 func safeLabel(label string) string {
 	return strings.Replace(label, ".", "_", -1)
+}
+
+func isVarDropped(name string) bool {
+	varsMu.Lock()
+	defer varsMu.Unlock()
+
+	if droppedVars == nil {
+		dims := strings.Split(*dropVariables, ",")
+		droppedVars = make(map[string]bool, len(dims))
+		for _, dim := range dims {
+			if dim == "" {
+				continue
+			}
+			droppedVars[dim] = true
+		}
+	}
+	return droppedVars[name]
 }
