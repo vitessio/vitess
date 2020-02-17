@@ -132,6 +132,9 @@ const (
 	// in the clause:
 	// e.g: UPDATE `keyspace[-]`.x1 SET foo=1
 	UpdateByDestination
+	// UpdateIn is for routing an update statement with in where clause
+	// Requires: A Vindex and multiple values.
+	UpdateIn
 )
 
 var updName = map[UpdateOpcode]string{
@@ -139,6 +142,7 @@ var updName = map[UpdateOpcode]string{
 	UpdateEqual:         "UpdateEqual",
 	UpdateScatter:       "UpdateScatter",
 	UpdateByDestination: "UpdateByDestination",
+	UpdateIn:            "UpdateIn",
 }
 
 // MarshalJSON serializes the UpdateOpcode as a JSON string.
@@ -181,6 +185,8 @@ func (upd *Update) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 		return upd.execUpdateByDestination(vcursor, bindVars, key.DestinationAllShards{})
 	case UpdateByDestination:
 		return upd.execUpdateByDestination(vcursor, bindVars, upd.TargetDestination)
+	case UpdateIn:
+		return upd.execUpdateIn(vcursor, bindVars)
 	default:
 		// Unreachable.
 		return nil, fmt.Errorf("unsupported opcode: %v", upd)
@@ -291,4 +297,31 @@ func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]
 	autocommit := (len(rss) == 1 || upd.MultiShardAutocommit) && vcursor.AutocommitApproval()
 	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, autocommit)
 	return result, vterrors.Aggregate(errs)
+}
+
+func (upd *Update) execUpdateIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	keys, err := upd.Values[0].ResolveList(bindVars)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "execUpdateIn")
+	}
+	_, _, err = resolveShards(vcursor, upd.Vindex, upd.Keyspace, keys)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "execUpdateIn")
+	}
+	// just to have code compile returning blank.
+	return &sqltypes.Result{}, nil
+	/*
+		TODO: Think of, How to go about updating lookup vindex. Will it be a loop or should resolve shards be performed on it.
+
+		if len(ksids) == 0 {
+			return &sqltypes.Result{}, nil
+		}
+
+		if len(upd.ChangedVindexValues) != 0 {
+			if err := upd.updateVindexEntries(vcursor, upd.OwnedVindexQuery, bindVars, rs, ksid); err != nil {
+				return nil, vterrors.Wrap(err, "execUpdateEqual")
+			}
+		}
+		rewritten := sqlannotation.AddKeyspaceIDs(upd.Query, [][]byte{ksid}, "")*/
+	//return execShard(vcursor, rewritten, bindVars, rs, true /* isDML */, true /* canAutocommit */)
 }

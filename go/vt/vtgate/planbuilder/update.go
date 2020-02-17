@@ -87,7 +87,11 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 	if err != nil {
 		eupd.Opcode = engine.UpdateScatter
 	} else {
-		eupd.Opcode = engine.UpdateEqual
+		if eupd.Values[0].IsList() {
+			eupd.Opcode = engine.UpdateIn
+		} else {
+			eupd.Opcode = engine.UpdateEqual
+		}
 	}
 
 	if eupd.Opcode == engine.UpdateScatter {
@@ -240,13 +244,19 @@ func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) (pv sqltypes.PlanValu
 		if !ok {
 			continue
 		}
-		if comparison.Operator != sqlparser.EqualStr {
-			continue
-		}
 		if !nameMatch(comparison.Left, col) {
 			continue
 		}
-		if !sqlparser.IsValue(comparison.Right) {
+		switch comparison.Operator {
+		case sqlparser.EqualStr:
+			if !sqlparser.IsValue(comparison.Right) {
+				continue
+			}
+		case sqlparser.InStr:
+			if !sqlparser.IsSimpleTuple(comparison.Right) {
+				continue
+			}
+		default:
 			continue
 		}
 		pv, err := sqlparser.NewPlanValue(comparison.Right)
