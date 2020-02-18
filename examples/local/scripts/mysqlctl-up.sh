@@ -14,22 +14,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is an example script that runs vtworker.
+# This is an example script that creates a single shard vttablet deployment.
 
-set -e
+source ./env.sh
 
 cell=${CELL:-'test'}
-script_root=`dirname "${BASH_SOURCE}"`
-source $script_root/env.sh
+uid=$TABLET_UID
+mysql_port=$[17000 + $uid]
+printf -v alias '%s-%010d' $cell $uid
+printf -v tablet_dir 'vt_%010d' $uid
 
-echo "Starting vtworker..."
-vtworker \
-  $TOPOLOGY_FLAGS \
-  -cell $cell \
-  -log_dir $VTDATAROOT/tmp \
-  -alsologtostderr \
-  -service_map=grpc-vtworker \
-  -grpc_port 15033 \
-  -port 15032 \
-  -pid_file $VTDATAROOT/tmp/vtworker.pid \
-  -use_v3_resharding_mode &
+mkdir -p $VTDATAROOT/backups
+
+echo "Starting MySQL for tablet $alias..."
+action="init"
+
+if [ -d $VTDATAROOT/$tablet_dir ]; then
+ echo "Resuming from existing vttablet dir:"
+ echo "    $VTDATAROOT/$tablet_dir"
+ action='start'
+fi
+
+mysqlctl \
+ -log_dir $VTDATAROOT/tmp \
+ -tablet_uid $uid \
+ -mysql_port $mysql_port \
+ $action
