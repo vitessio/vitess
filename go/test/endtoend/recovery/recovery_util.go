@@ -33,17 +33,11 @@ func VerifyQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, q
 	assert.Equal(t, value, fmt.Sprintf("%v", qr.Rows[0][0]))
 }
 
-func ExecuteQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, query string) {
-	_, err := session.Execute(context.Background(), query, nil)
-	assert.Nil(t, err)
-}
-
 func RestoreTablet(t *testing.T, localCluster *cluster.LocalProcessCluster, tablet *cluster.Vttablet, restoreKSName string, shardName string, keyspaceName string, commonTabletArg []string) {
-	err := cluster.ResetTabletDirectory(*tablet)
-	assert.Nil(t, err)
+	tablet.ValidateTabletRestart(t)
 	tm := time.Now().UTC()
 	tm.Format(time.RFC3339)
-	_, err = localCluster.VtctlProcess.ExecuteCommandWithOutput("CreateKeyspace",
+	_, err := localCluster.VtctlProcess.ExecuteCommandWithOutput("CreateKeyspace",
 		"-keyspace_type=SNAPSHOT", "-base_keyspace="+keyspaceName,
 		"-snapshot_time", tm.Format(time.RFC3339), restoreKSName)
 	assert.Nil(t, err)

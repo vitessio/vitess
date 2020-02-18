@@ -80,8 +80,9 @@ const (
 )
 
 var (
-	tabletHostname   = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
-	demoteMasterType = flag.String("demote_master_type", "REPLICA", "the tablet type a demoted master will transition to")
+	tabletHostname       = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
+	demoteMasterType     = flag.String("demote_master_type", "REPLICA", "the tablet type a demoted master will transition to")
+	initPopulateMetadata = flag.Bool("init_populate_metadata", false, "(init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
 )
 
 // ActionAgent is the main class for the agent.
@@ -355,6 +356,24 @@ func NewActionAgent(
 			agent.initHealthCheck()
 		}()
 	} else {
+		// optionally populate metadata records
+		if *initPopulateMetadata {
+			// we use initialTablet here because it has the intended tabletType.
+			// the tablet returned by agent.Tablet() will have type UNKNOWN until we call
+			// refreshTablet
+			localMetadata := agent.getLocalMetadataValues(agent.initialTablet.Type)
+			if agent.Cnf != nil { // we are managing mysqld
+				// we'll use batchCtx here because we are still initializing and can't proceed unless this succeeds
+				if err := agent.MysqlDaemon.Wait(batchCtx, agent.Cnf); err != nil {
+					return nil, err
+				}
+			}
+			err := mysqlctl.PopulateMetadataTables(agent.MysqlDaemon, localMetadata, topoproto.TabletDbName(agent.initialTablet))
+			if err != nil {
+				return nil, vterrors.Wrap(err, "failed to -init_populate_metadata")
+			}
+		}
+
 		// Update our state (need the action lock).
 		if err := agent.lock(batchCtx); err != nil {
 			return nil, err

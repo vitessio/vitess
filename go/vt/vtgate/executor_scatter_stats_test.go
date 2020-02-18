@@ -22,7 +22,7 @@ import (
 
 	"net/http/httptest"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
@@ -32,11 +32,11 @@ func TestScatterStatsWithNoScatterQuery(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
 
 	_, err := executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, "select * from main1", nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	result, err := executor.gatherScatterStats()
-	assert.NoError(t, err)
-	assert.Equal(t, 0, len(result.Items))
+	require.NoError(t, err)
+	require.Equal(t, 0, len(result.Items))
 }
 
 func TestScatterStatsWithSingleScatterQuery(t *testing.T) {
@@ -44,11 +44,11 @@ func TestScatterStatsWithSingleScatterQuery(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
 
 	_, err := executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, "select * from user", nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	result, err := executor.gatherScatterStats()
-	assert.NoError(t, err)
-	assert.Equal(t, 1, len(result.Items))
+	require.NoError(t, err)
+	require.Equal(t, 1, len(result.Items))
 }
 
 func TestScatterStatsHttpWriting(t *testing.T) {
@@ -56,23 +56,23 @@ func TestScatterStatsHttpWriting(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@master"})
 
 	_, err := executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, "select * from user", nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	_, err = executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, "select * from user where Id = 15", nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	_, err = executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, "select * from user where Id > 15", nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	query4 := "select * from user as u1 join  user as u2 on u1.Id = u2.Id"
 	_, err = executor.Execute(context.Background(), "TestExecutorResultsExceeded", session, query4, nil)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	recorder := httptest.NewRecorder()
 	executor.WriteScatterStats(recorder)
 
 	// Here we are checking that the template was executed correctly.
 	// If it wasn't, instead of html, we'll get an error message
-	assert.Contains(t, recorder.Body.String(), query4)
-	assert.NoError(t, err)
+	require.Contains(t, recorder.Body.String(), query4)
+	require.NoError(t, err)
 }

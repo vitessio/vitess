@@ -27,13 +27,41 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/mysql"
 	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
 var (
 	tmClient = tmc.NewClient()
 )
+
+// Restart restarts vttablet and mysql.
+func (tablet *Vttablet) Restart() error {
+	if tablet.MysqlctlProcess.TabletUID|tablet.MysqlctldProcess.TabletUID == 0 {
+		return fmt.Errorf("no mysql process is running")
+	}
+
+	if tablet.MysqlctlProcess.TabletUID > 0 {
+		tablet.MysqlctlProcess.Stop()
+		tablet.VttabletProcess.TearDown()
+		os.RemoveAll(tablet.VttabletProcess.Directory)
+
+		return tablet.MysqlctlProcess.Start()
+	}
+
+	tablet.MysqlctldProcess.Stop()
+	tablet.VttabletProcess.TearDown()
+	os.RemoveAll(tablet.VttabletProcess.Directory)
+
+	return tablet.MysqlctldProcess.Start()
+}
+
+// ValidateTabletRestart restarts the tablet and validate error if there is any.
+func (tablet *Vttablet) ValidateTabletRestart(t *testing.T) {
+	require.Nilf(t, tablet.Restart(), "tablet restart failed")
+}
 
 // GetMasterPosition gets the master position of required vttablet
 func GetMasterPosition(t *testing.T, vttablet Vttablet, hostname string) (string, string) {
@@ -50,7 +78,7 @@ func VerifyRowsInTablet(t *testing.T, vttablet *Vttablet, ksName string, expecte
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
 		qr, err := vttablet.VttabletProcess.QueryTablet("select * from vt_insert_test", ksName, true)
-		assert.Nil(t, err)
+		require.Nil(t, err)
 		if len(qr.Rows) == expectedRows {
 			return
 		}
@@ -119,4 +147,29 @@ func getTablet(tabletGrpcPort int, hostname string) *tabletpb.Tablet {
 	portMap := make(map[string]int32)
 	portMap["grpc"] = int32(tabletGrpcPort)
 	return &tabletpb.Tablet{Hostname: hostname, PortMap: portMap}
+}
+
+// ExecuteQueriesUsingVtgate sends query to vtgate using vtgate session.
+func ExecuteQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, query string) {
+	_, err := session.Execute(context.Background(), query, nil)
+	assert.Nil(t, err)
+}
+
+// NewConnParams creates ConnParams corresponds to given arguments.
+func NewConnParams(port int, password, socketPath, keyspace string) mysql.ConnParams {
+	if port != 0 {
+		socketPath = ""
+	}
+	cp := mysql.ConnParams{
+		Uname:      "vt_dba",
+		Port:       port,
+		UnixSocket: socketPath,
+		Pass:       password,
+	}
+
+	if keyspace != "" {
+		cp.DbName = "vt_" + keyspace
+	}
+
+	return cp
 }
