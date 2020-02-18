@@ -327,7 +327,8 @@ func executeQuery(dbParams mysql.ConnParams, query string) (*sqltypes.Result, er
 		return nil, err
 	}
 	defer dbConn.Close()
-	return dbConn.ExecuteFetch(query, 10000, true)
+	qr, err := dbConn.ExecuteFetch(query, 1000, true)
+	return qr, err
 }
 
 // GetDBVar returns first matching database variable's value

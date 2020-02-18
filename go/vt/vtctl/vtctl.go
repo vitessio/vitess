@@ -1908,6 +1908,7 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	targetCell := subFlags.String("target_cell", "", "The target cell to compare with")
 	tabletTypes := subFlags.String("tablet_types", "", "Tablet types for source and target")
 	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on master migrations. The migration will be aborted on timeout.")
+	format := subFlags.String("format", "", "Format of report") //"json" or ""
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1921,7 +1922,7 @@ func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.Fla
 	}
 
 	_, err = wr.VDiff(ctx, keyspace, workflow, *sourceCell, *targetCell, *tabletTypes, *filteredReplicationWaitTime,
-		*HealthCheckTopologyRefresh, *HealthcheckRetryDelay, *HealthCheckTimeout)
+		*HealthCheckTopologyRefresh, *HealthcheckRetryDelay, *HealthCheckTimeout, format)
 	return err
 }
 

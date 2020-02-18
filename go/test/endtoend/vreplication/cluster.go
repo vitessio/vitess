@@ -1,12 +1,18 @@
 package vreplication
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 	_ "strings"
 	"testing"
+	"time"
+
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -148,6 +154,7 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cell *Cell, ksName string, sh
 		fmt.Println("Starting vtgate")
 		vc.StartVtgate(t, cell)
 	}
+	_ = vc.VtctlClient.ExecuteCommand("RebuildKeyspaceGraph", ksName)
 	return keyspace, nil
 }
 
@@ -192,8 +199,9 @@ func (vc *VitessCluster) AddTablet(t *testing.T, cell *Cell, keyspace *Keyspace,
 func (vc *VitessCluster) AddShards(t *testing.T, cell *Cell, keyspace *Keyspace, names string, numReplicas int, numRdonly int, tabletIdBase int) error {
 	arrNames := strings.Split(names, ",")
 	isSharded := len(arrNames) > 1
-	tabletIndex := 0
-	for _, shardName := range arrNames {
+	for ind, shardName := range arrNames {
+		tabletIdBase += ind * 100
+		tabletIndex := 0
 		dbProcesses := make([]*exec.Cmd, 0)
 		tablets := make([]*Tablet, 0)
 
@@ -202,6 +210,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cell *Cell, keyspace *Keyspace,
 		shard := &Shard{Name: shardName, IsSharded: isSharded, Tablets: make(map[string]*Tablet, 1)}
 		fmt.Println("Adding Master tablet")
 		master, proc, err := vc.AddTablet(t, cell, keyspace, shard, "replica", tabletIdBase+tabletIndex)
+		shard.Tablets[string(tabletIndex)] = master
 		tabletIndex++
 		master.Vttablet.VreplicationTabletType = "MASTER"
 		if err != nil {
@@ -216,6 +225,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cell *Cell, keyspace *Keyspace,
 		for i := 0; i < numReplicas; i++ {
 			fmt.Println("Adding Replica tablet")
 			tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "replica", tabletIdBase+tabletIndex)
+			shard.Tablets[string(tabletIndex)] = tablet
 			tabletIndex++
 			if err != nil {
 				t.Fatalf(err.Error())
@@ -227,6 +237,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cell *Cell, keyspace *Keyspace,
 		for i := 0; i < numRdonly; i++ {
 			fmt.Println("Adding RdOnly tablet")
 			tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "rdonly", tabletIdBase+tabletIndex)
+			shard.Tablets[string(tabletIndex)] = tablet
 			tabletIndex++
 			if err != nil {
 				t.Fatalf(err.Error())
@@ -338,4 +349,48 @@ func (vc *VitessCluster) TearDown() {
 			log.Errorf("Error in etcd teardown - %s", err.Error())
 		}
 	}
+}
+
+// waits for "workflow" to finish copying
+func (vc *VitessCluster) WaitForMigrateToComplete(vttablet *cluster.VttabletProcess, workflow string, database string, duration time.Duration) error {
+	queries := [3]string{
+		fmt.Sprintf(`select ISNULL(pos) from _vt.vreplication where workflow = "%s" and db_name = "%s"`, workflow, database),
+		"select count(*) from information_schema.tables where table_schema='_vt' and table_name='copy_state' limit 1;",
+		fmt.Sprintf(`select count(*) from _vt.copy_state where vrepl_id in (select id from _vt.vreplication where workflow = "%s" and db_name = "%s")`, workflow, database),
+	}
+	results := [3]string{"INT64(0)", "INT64(1)", "INT64(0)"}
+	for ind, query := range queries {
+		waitDuration := 100 * time.Millisecond
+		for duration > 0 {
+			qr, err := vc.execTabletQuery(vttablet, query)
+			if err != nil {
+				return err
+			}
+			if qr != nil && qr.Rows != nil && len(qr.Rows) > 0 && qr.Rows[0][0].String() == string(results[ind]) {
+				break
+			}
+
+			time.Sleep(waitDuration)
+			duration -= waitDuration
+		}
+		if duration <= 0 {
+			fmt.Printf("WaitForMigrateToComplete timed out for workflow %s, keyspace %s\n", workflow, database)
+			return errors.New("WaitForMigrateToComplete timed out")
+		}
+	}
+	return nil
+}
+
+func (vc *VitessCluster) execTabletQuery(vttablet *cluster.VttabletProcess, query string) (*sqltypes.Result, error) {
+	vtParams := mysql.ConnParams{
+		UnixSocket: fmt.Sprintf("%s/mysql.sock", vttablet.Directory),
+		Uname:      "vt_dba",
+	}
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		return nil, err
+	}
+	qr, err := conn.ExecuteFetch(query, 1000, true)
+	return qr, err
 }
