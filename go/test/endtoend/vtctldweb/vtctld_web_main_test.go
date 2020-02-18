@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -204,116 +203,6 @@ func TeardownWebDriver() {
 		seleniumService.Stop()
 
 	}
-}
-
-func GetKeyspaces() ([]string, error) {
-	element, err := wd.FindElement(selenium.ByID, "content")
-	if err != nil {
-		return nil, err
-	}
-
-	keyspace, err := element.FindElements(selenium.ByTagName, "md-card")
-	if err != nil {
-		return nil, err
-	}
-
-	var keyspaceNames []string
-	for _, ks := range keyspace {
-		e, err := ks.FindElement(selenium.ByTagName, "h2")
-		if err != nil {
-			return nil, err
-		}
-
-		k, err := e.Text()
-		if err != nil {
-			return nil, err
-		}
-
-		keyspaceNames = append(keyspaceNames, k)
-	}
-
-	return keyspaceNames, nil
-}
-
-func GetKeyspaceElem(ks string) (selenium.WebElement, error) {
-	var ksElem selenium.WebElement
-	err := wd.WaitWithTimeout(func(xwd selenium.WebDriver) (bool, error) {
-		elem, err := xwd.FindElement(selenium.ByID, ks+"-card")
-		if err != nil {
-			return false, err
-		}
-
-		ksElem = elem
-		return true, nil
-
-	}, selenium.DefaultWaitTimeout)
-
-	return ksElem, err
-}
-
-func GetShards(ks string) ([]string, error) {
-	return getList(ks + "-shards")
-}
-func GetServingShards(ks string) ([]string, error) {
-	return getList(ks + "-serving")
-}
-func GetInactiveShards(ks string) ([]string, error) {
-	return getList(ks + "-inactive")
-}
-
-func getList(pre string) ([]string, error) {
-	shard, err := wd.FindElement(selenium.ByID, pre+"-list")
-	if err != nil {
-		return nil, err
-	}
-
-	shardNames, err := shard.Text()
-	return strings.Split(shardNames, "\n"), err
-}
-
-func GetShardElem(ks, shard string) (selenium.WebElement, error) {
-
-	ksElem, err := GetKeyspaceElem(ks)
-	if err != nil {
-		return nil, err
-	}
-
-	return ksElem.FindElement(selenium.ByLinkText, shard)
-}
-
-func GetTabletNames() (map[string]string, error) {
-	ele, err := wd.FindElement(selenium.ByID, "tablets")
-	if err != nil {
-		return nil, err
-	}
-
-	mdCards, err := ele.FindElements(selenium.ByTagName, "md-card")
-	if err != nil {
-		return nil, err
-	}
-
-	var tabletTitles []string
-	for _, e := range mdCards {
-		toolBar, err := e.FindElement(selenium.ByTagName, "md-toolbar")
-		if err != nil {
-			return nil, err
-		}
-		t, err := toolBar.Text()
-		if err != nil {
-			return nil, err
-		}
-
-		tabletTitles = append(tabletTitles, strings.Split(t, "\n")[0])
-	}
-
-	out := make(map[string]string)
-
-	for _, tabletTitle := range tabletTitles {
-		tmp := strings.Split(tabletTitle, " ")
-		out[tmp[0]] = tmp[1][1 : len(tmp)-1]
-	}
-
-	return out, nil
 }
 
 func checkNewView(t *testing.T, keyspaces, cells, types, metrics []string, selectedKs, selectedCell, selectedType, selectedMetric string) {
