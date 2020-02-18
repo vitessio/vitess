@@ -55,13 +55,14 @@ func TestMain(m *testing.M) {
 
 	exitcode, err := func() (int, error) {
 
+		// runs Xvfb in background
 		tearDownXvfb, err := RunXvfb()
 		if err != nil {
 			return 1, err
 		}
 		defer tearDownXvfb()
 
-		// cluster setup
+		// cluster setup using vtcombo
 		topology := new(vttestpb.VTTestTopology)
 		topology.Cells = []string{"test", "test2"}
 		topology.Keyspaces = []*vttestpb.Keyspace{
@@ -91,7 +92,6 @@ func TestMain(m *testing.M) {
 		}
 		defer TeardownWebDriver()
 
-		// var cfg vttest.Config
 		var cfg vttest.Config
 		cfg.Topology = topology
 		cfg.SchemaDir = os.Getenv("VTROOT") + "/test/vttest_schema"
@@ -103,6 +103,7 @@ func TestMain(m *testing.M) {
 
 		err = localCluster.Setup()
 		defer localCluster.TearDown()
+
 		vtctldAddr = fmt.Sprintf("http://localhost:%d", localCluster.Env.PortForProtocol("vtcombo", "port"))
 		if err != nil {
 			return 1, err
@@ -153,6 +154,7 @@ func RunXvfb() (func() error, error) {
 func CreateWebDriver() error {
 	selenium.SetDebug(true)
 
+	// Set common Options
 	options := selenium.ChromeDriver(os.Getenv("VTROOT") + "/dist")
 
 	if os.Getenv("CI") == "true" && os.Getenv("TRAVIS") == "true" {
@@ -166,12 +168,16 @@ func CreateWebDriver() error {
 
 		var err error
 		wd, err = selenium.NewRemote(capabilities, fmt.Sprintf("%s:%s@localhost:4445/wd/hub", os.Getenv("SAUCE_USERNAME"), os.Getenv("SAUCE_ACCESS_KEY")))
-		return err
+		if err != nil {
+			return err
+		}
+
+		name, err := wd.CurrentWindowHandle()
+		return wd.ResizeWindow(name, 1280, 1024)
 	}
 
-	cc := selenium.Capabilities{
-		"browserName": "chrome",
-	}
+	// Only testing against Chrome for now
+	cc := selenium.Capabilities{"browserName": "chrome"}
 	cc.AddChrome(chrome.Capabilities{
 		Args: []string{
 			"--disable-gpu",
@@ -194,7 +200,6 @@ func CreateWebDriver() error {
 	}
 	name, err := wd.CurrentWindowHandle()
 	return wd.ResizeWindow(name, 1280, 1024)
-	// return err
 }
 
 func TeardownWebDriver() {
@@ -248,6 +253,7 @@ func checkHeatMaps(t *testing.T, selectedKs string) {
 	assert.Equal(t, selectedKs, headingTxt)
 }
 
+// changeDropdownOptions changes the selected value of dropdown.
 func changeDropdownOptions(t *testing.T, dropdownID, dropdownValue string) {
 	statusContent, err := wd.FindElement(selenium.ByTagName, "vt-status")
 	require.Nil(t, err)
@@ -271,6 +277,7 @@ func changeDropdownOptions(t *testing.T, dropdownID, dropdownValue string) {
 	}
 }
 
+// checkDropdowns validates the dropdown values and selected value.
 func checkDropdowns(t *testing.T, keyspaces, cells, types, metrics []string, selectedKs, selectedCell, selectedType, selectedMetric string) {
 
 	Options := getDropdownOptions(t, "keyspace")
@@ -299,6 +306,8 @@ func checkDropdowns(t *testing.T, keyspaces, cells, types, metrics []string, sel
 
 }
 
+// get element functions
+// getDropdownSelection fetchs selected value for corresponding group.
 func getDropdownSelection(t *testing.T, group string) string {
 	elem, err := wd.FindElement(selenium.ByTagName, "vt-status")
 	require.Nil(t, err)
@@ -312,6 +321,7 @@ func getDropdownSelection(t *testing.T, group string) string {
 	return tx
 }
 
+// getDropdownOptions fetchs list of option available for corresponding group.
 func getDropdownOptions(t *testing.T, group string) []string {
 	elem, err := wd.FindElement(selenium.ByTagName, "vt-status")
 	require.Nil(t, err)
@@ -330,6 +340,7 @@ func getDropdownOptions(t *testing.T, group string) []string {
 	return out
 }
 
+// getDashboardKeyspaces fetches keyspaces from the dashboard.
 func getDashboardKeyspaces(t *testing.T) []string {
 	wait(t, selenium.ByTagName, "vt-dashboard")
 
@@ -346,6 +357,7 @@ func getDashboardKeyspaces(t *testing.T) []string {
 	return out
 }
 
+// getDashboardShards fetches shards from the dashboard.
 func getDashboardShards(t *testing.T) []string {
 	wait(t, selenium.ByTagName, "vt-dashboard")
 
@@ -380,6 +392,7 @@ func getKeyspaceShard(t *testing.T) []string {
 	return out
 }
 
+// getShardTablets gives list of tablet type and uid.
 func getShardTablets(t *testing.T) ([]string, []string) {
 	wait(t, selenium.ByTagName, "vt-shard-view")
 	shardContent, err := wd.FindElement(selenium.ByTagName, "vt-shard-view")
@@ -413,7 +426,8 @@ func getShardTablets(t *testing.T) ([]string, []string) {
 	return tabletTypes, tabletUIDs
 }
 
-// navigation
+// navigation functions
+// navigateToDashBoard navigates chrome screen to dashboard of vitess.
 func navigateToDashBoard(t *testing.T) {
 	err := wd.Get(vtctldAddr + "/app2")
 	require.Nil(t, err)
@@ -421,6 +435,7 @@ func navigateToDashBoard(t *testing.T) {
 	wait(t, selenium.ByID, "test_keyspace")
 }
 
+// navigateToKeyspaceView navigates chrome screen to first keyspace.
 func navigateToKeyspaceView(t *testing.T) {
 	navigateToDashBoard(t)
 	dashboardContent, err := wd.FindElement(selenium.ByTagName, "vt-dashboard")
@@ -438,6 +453,7 @@ func navigateToKeyspaceView(t *testing.T) {
 	wait(t, selenium.ByClassName, "vt-card")
 }
 
+// navigateToShardView navigates chrome screen to the first shard of first keyspace.
 func navigateToShardView(t *testing.T) {
 	navigateToKeyspaceView(t)
 	ksContent, err := wd.FindElement(selenium.ByTagName, "vt-keyspace-view")
@@ -453,6 +469,8 @@ func navigateToShardView(t *testing.T) {
 	wait(t, selenium.ByID, "1")
 }
 
+// other utility
+// wait waits for the given element to be discoverable.
 func wait(t *testing.T, by, val string) {
 	err := wd.WaitWithTimeout(func(xwd selenium.WebDriver) (bool, error) {
 		_, err := xwd.FindElement(by, val)
@@ -461,6 +479,7 @@ func wait(t *testing.T, by, val string) {
 	require.Nil(t, err)
 }
 
+// assertDialogCommand validates the command in dialog.
 func assertDialogCommand(t *testing.T, dialog selenium.WebElement, cmds []string) {
 	elms, err := dialog.FindElements(selenium.ByClassName, "vt-sheet")
 	require.Nil(t, err)
@@ -473,13 +492,4 @@ func assertDialogCommand(t *testing.T, dialog selenium.WebElement, cmds []string
 	}
 
 	assert.ElementsMatch(t, cmds, tmpCmd)
-}
-
-func screenshot(t *testing.T, name string) {
-	ss, err := wd.Screenshot()
-	require.Nil(t, err)
-	f, err := os.Create("./" + name)
-	require.Nil(t, err)
-	_, err = f.Write(ss)
-	require.Nil(t, err)
 }

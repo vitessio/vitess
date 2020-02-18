@@ -25,6 +25,7 @@ import (
 	"github.com/tebeka/selenium"
 )
 
+// TestRealtimeStats checks the status by changing dropdown values.
 func TestRealtimeStats(t *testing.T) {
 	err := wd.Get(vtctldAddr + "/app2")
 	require.Nil(t, err)
@@ -61,6 +62,7 @@ func TestRealtimeStats(t *testing.T) {
 	}
 }
 
+// TestShardView validates tablet type and uids.
 func TestShardView(t *testing.T) {
 	navigateToShardView(t)
 
@@ -70,12 +72,14 @@ func TestShardView(t *testing.T) {
 	assert.ElementsMatch(t, []string{"1", "2", "3", "4", "5", "6", "7", "8"}, tabletUIDs)
 }
 
+// TestKsView validates the shard names for keyspace
 func TestKsView(t *testing.T) {
 	navigateToKeyspaceView(t)
 	shards := getKeyspaceShard(t)
 	assert.ElementsMatch(t, []string{"-80", "80-"}, shards)
 }
 
+// TestCreateKs validates the keyspace creation using ui.
 func TestCreateKs(t *testing.T) {
 	navigateToDashBoard(t)
 
@@ -185,6 +189,7 @@ func TestCreateKs(t *testing.T) {
 	assert.ElementsMatch(t, []string{"test_keyspace", "test_keyspace2"}, ksNames)
 }
 
+// TestDashboard validate the keyspaces and shard in dashboard.
 func TestDashboard(t *testing.T) {
 	navigateToDashBoard(t)
 	ksNames := getDashboardKeyspaces(t)
@@ -193,6 +198,7 @@ func TestDashboard(t *testing.T) {
 	assert.ElementsMatch(t, []string{"2 Shards", "1 Shards"}, shardNames)
 }
 
+// TestDashboardValidate validates the validate command from the ui.
 func TestDashboardValidate(t *testing.T) {
 	navigateToDashBoard(t)
 	dashboardContent, err := wd.FindElement(selenium.ByTagName, "vt-dashboard")
@@ -205,7 +211,6 @@ func TestDashboardValidate(t *testing.T) {
 
 	firstOption, err := dashboardContent.FindElement(selenium.ByClassName, "ui-menuitem-text")
 	require.Nil(t, err)
-	screenshot(t, "first_option")
 	txt, err := firstOption.Text()
 	require.Nil(t, err)
 	assert.Equal(t, "Validate", txt)
