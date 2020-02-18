@@ -52,8 +52,6 @@ require (
 	github.com/mattn/go-runewidth v0.0.1 // indirect
 	github.com/minio/minio-go v0.0.0-20190131015406-c8a261de75c1
 	github.com/mitchellh/go-testing-interface v1.0.0 // indirect
-	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
-	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/olekukonko/tablewriter v0.0.0-20160115111002-cca8bbc07984
 	github.com/opentracing-contrib/go-grpc v0.0.0-20180928155321-4b5a12d3ff02
 	github.com/opentracing/opentracing-go v1.1.0
@@ -74,6 +72,7 @@ require (
 	github.com/spf13/viper v1.6.1 // indirect
 	github.com/stretchr/testify v1.4.0
 	github.com/tchap/go-patricia v0.0.0-20160729071656-dd168db6051b
+	github.com/tebeka/selenium v0.9.9
 	github.com/tinylib/msgp v1.1.1 // indirect
 	github.com/uber-go/atomic v1.4.0 // indirect
 	github.com/uber/jaeger-client-go v2.16.0+incompatible
