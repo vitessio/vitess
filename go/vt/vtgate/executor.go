@@ -602,7 +602,7 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 			default:
 				return nil, fmt.Errorf("unexpected value for tx_isolation: %v", val)
 			}
-		case "tx_read_only":
+		case "tx_read_only", "transaction_read_only":
 			val, err := validateSetOnOff(v, k.Key)
 			if err != nil {
 				return nil, err
@@ -611,7 +611,7 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 			case 0, 1:
 				// TODO (4127): This is a dangerous NOP.
 			default:
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for tx_read_only: %d", val)
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for %v: %d", k.Key, val)
 			}
 		case "workload":
 			val, ok := v.(string)
