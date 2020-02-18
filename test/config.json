@@ -94,17 +94,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"vtctld_web": {
-			"File": "vtctld_web_test.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 1,
-			"RetryMax": 0,
-			"Tags": [
-				"webdriver"
-			]
-		},
 		"vttest_sample": {
 			"File": "vttest_sample_test.py",
 			"Args": [],
@@ -508,6 +497,15 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": 17,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"web_test": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtctldweb"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 21,
 			"RetryMax": 0,
 			"Tags": []
 		}
