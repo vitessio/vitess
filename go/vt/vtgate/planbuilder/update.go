@@ -83,31 +83,24 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 		return eupd, nil
 	}
 
-	eupd.Vindex, eupd.Values, err = getDMLRouting(upd.Where, eupd.Table)
-	if err != nil {
-		eupd.Opcode = engine.UpdateScatter
-	} else {
-		if eupd.Values[0].IsList() {
-			eupd.Opcode = engine.UpdateIn
-		} else {
-			eupd.Opcode = engine.UpdateEqual
-		}
-	}
+	routingType, vindex, vindexCol, values := getDMLRouting(upd.Where, eupd.Table)
 
-	if eupd.Opcode == engine.UpdateScatter {
-		if len(eupd.Table.Owned) != 0 {
-			return nil, errors.New("unsupported: multi shard update on a table with owned lookup vindexes")
-		}
+	if routingType == scatter {
 		if upd.Limit != nil {
 			return nil, errors.New("unsupported: multi shard update with limit")
 		}
+		eupd.Opcode = engine.UpdateScatter
+	} else {
+		eupd.Opcode = engine.UpdateEqual
+		eupd.Values = values
+		eupd.Vindex = vindex
 	}
 
-	if eupd.ChangedVindexValues, err = buildChangedVindexesValues(eupd, upd, eupd.Table.ColumnVindexes); err != nil {
+	if eupd.ChangedVindexValues, err = buildChangedVindexesValues(upd, eupd.Table.ColumnVindexes); err != nil {
 		return nil, err
 	}
 	if len(eupd.ChangedVindexValues) != 0 {
-		eupd.OwnedVindexQuery = generateUpdateSubquery(upd, eupd.Table)
+		eupd.OwnedVindexQuery = generateUpdateSubquery(upd, eupd.Table, vindexCol)
 	}
 	return eupd, nil
 }
@@ -115,7 +108,7 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 // buildChangedVindexesValues adds to the plan all the lookup vindexes that are changing.
 // Updates can only be performed to secondary lookup vindexes with no complex expressions
 // in the set clause.
-func buildChangedVindexesValues(eupd *engine.Update, update *sqlparser.Update, colVindexes []*vindexes.ColumnVindex) (map[string][]sqltypes.PlanValue, error) {
+func buildChangedVindexesValues(update *sqlparser.Update, colVindexes []*vindexes.ColumnVindex) (map[string][]sqltypes.PlanValue, error) {
 	changedVindexes := make(map[string][]sqltypes.PlanValue)
 	for i, vindex := range colVindexes {
 		var vindexValues []sqltypes.PlanValue
@@ -163,16 +156,13 @@ func buildChangedVindexesValues(eupd *engine.Update, update *sqlparser.Update, c
 	return changedVindexes, nil
 }
 
-func generateUpdateSubquery(upd *sqlparser.Update, table *vindexes.Table) string {
+func generateUpdateSubquery(upd *sqlparser.Update, table *vindexes.Table, vindex string) string {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.WriteString("select ")
-	for vIdx, cv := range table.Owned {
-		for cIdx, column := range cv.Columns {
-			if cIdx == 0 && vIdx == 0 {
-				buf.Myprintf("%v", column)
-			} else {
-				buf.Myprintf(", %v", column)
-			}
+	buf.Myprintf("%s", vindex)
+	for _, cv := range table.Owned {
+		for _, column := range cv.Columns {
+			buf.Myprintf(", %v", column)
 		}
 	}
 	buf.Myprintf(" from %v%v%v%v for update", table.Name, upd.Where, upd.OrderBy, upd.Limit)
@@ -206,12 +196,17 @@ func generateQuery(statement sqlparser.Statement) string {
 	return buf.String()
 }
 
+type dmlRoutingType int
+
+const (
+	scatter dmlRoutingType = iota
+	equal
+)
+
 // getDMLRouting returns the vindex and values for the DML,
 // If it cannot find a unique vindex match, it returns an error.
-func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (vindexes.SingleColumn, []sqltypes.PlanValue, error) {
-	if where == nil {
-		return nil, nil, errors.New("unsupported: multi-shard where clause in DML")
-	}
+func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (dmlRoutingType, vindexes.SingleColumn, string, []sqltypes.PlanValue) {
+	var keyColumn string
 	for _, index := range table.Ordered {
 		if !index.Vindex.IsUnique() {
 			continue
@@ -220,11 +215,21 @@ func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (vindexes.Sing
 		if !ok {
 			continue
 		}
+
+		keyColumn = sqlparser.String(index.Columns[0])
+		if where == nil {
+			return scatter, nil, keyColumn, nil
+		}
+
 		if pv, ok := getMatch(where.Expr, index.Columns[0]); ok {
-			return single, []sqltypes.PlanValue{pv}, nil
+			if pv.IsList() {
+				return scatter, nil, keyColumn, nil
+			}
+
+			return equal, single, keyColumn, []sqltypes.PlanValue{pv}
 		}
 	}
-	return nil, nil, errors.New("unsupported: multi-shard where clause in DML")
+	return scatter, nil, keyColumn, nil
 }
 
 // getMatch returns the matched value if there is an equality
