@@ -20,6 +20,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
@@ -39,9 +41,7 @@ func TestUpdateUnsharded(t *testing.T) {
 
 	vc := &loggingVCursor{shards: []string{"0"}}
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
 		`ExecuteMultiShard ks.0: dummy_update {} true true`,
@@ -72,9 +72,7 @@ func TestUpdateEqual(t *testing.T) {
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		`ExecuteMultiShard ks.-20: dummy_update /* vtgate:: keyspace_id:166b40b44aba4bd6 */ {} true true`,
@@ -101,9 +99,7 @@ func TestUpdateScatter(t *testing.T) {
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -125,9 +121,7 @@ func TestUpdateScatter(t *testing.T) {
 
 	vc = &loggingVCursor{shards: []string{"-20", "20-"}}
 	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
@@ -154,9 +148,7 @@ func TestUpdateEqualNoRoute(t *testing.T) {
 
 	vc := &loggingVCursor{shards: []string{"0"}}
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		// This lookup query will return no rows. So, the DML will not be sent anywhere.
 		`Execute select toc from lkp where from = :from from: type:INT64 value:"1"  false`,
@@ -210,10 +202,10 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 
 	results := []*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"c1|c2|c3",
-			"int64|int64|int64",
+			"id|c1|c2|c3",
+			"varbinary|int64|int64|int64",
 		),
-		"4|5|6",
+		"\026k@\264J\272K\326|4|5|6",
 	)}
 	vc := &loggingVCursor{
 		shards:  []string{"-20", "20-"},
@@ -221,9 +213,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 	}
 
 	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		// ResolveDestinations is hard-coded to return -20.
@@ -245,9 +235,7 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 		shards: []string{"-20", "20-"},
 	}
 	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	vc.ExpectLog(t, []string{
 		`ResolveDestinations sharded [] Destinations:DestinationKeyspaceID(166b40b44aba4bd6)`,
 		// ResolveDestinations is hard-coded to return -20.
@@ -272,6 +260,56 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 	}
 	_, err = upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
 	expectError(t, "Execute", err, "execUpdateEqual: unsupported: update changes multiple rows in the vindex")
+}
+
+func TestUpdateScatterChangedVindex(t *testing.T) {
+	// update t1 set c1 = 1, c2 = 2, c3 = 3
+	ks := buildTestVSchema().Keyspaces["sharded"]
+	upd := &Update{
+		Opcode:   UpdateScatter,
+		Keyspace: ks.Keyspace,
+		Query:    "dummy_update",
+		ChangedVindexValues: map[string][]sqltypes.PlanValue{
+			"twocol": {{
+				Value: sqltypes.NewInt64(1),
+			}, {
+				Value: sqltypes.NewInt64(2),
+			}},
+			"onecol": {{
+				Value: sqltypes.NewInt64(3),
+			}},
+		},
+		Table:            ks.Tables["t1"],
+		OwnedVindexQuery: "dummy_subquery",
+	}
+
+	results := []*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|c1|c2|c3",
+			"varbinary|int64|int64|int64",
+		),
+		"\026k@\264J\272K\326|4|5|6",
+	)}
+	vc := &loggingVCursor{
+		shards:  []string{"-20", "20-"},
+		results: results,
+	}
+
+	_, err := upd.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	require.NoError(t, err)
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard sharded.-20: dummy_subquery {} sharded.20-: dummy_subquery {} false false`,
+		// Those values are returned as 4,5 for twocol and 6 for onecol.
+		// 4,5 have to be replaced by 1,2 (the new values).
+		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp2(from1, from2, toc) values(:from10, :from20, :toc0) from10: type:INT64 value:"1" from20: type:INT64 value:"2" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		// 6 has to be replaced by 3.
+		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute insert into lkp1(from, toc) values(:from0, :toc0) from0: type:INT64 value:"3" toc0: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		// Finally, the actual update, which is also sent to -20, same route as the subquery.
+		`ExecuteMultiShard sharded.-20: dummy_update {} sharded.20-: dummy_update {} true false`,
+	})
 }
 
 func TestUpdateNoStream(t *testing.T) {

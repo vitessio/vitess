@@ -20,6 +20,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -79,11 +81,20 @@ func TestAutocommitUpdateLookup(t *testing.T) {
 
 // TestAutocommitUpdateVindexChange: transaction: select & update before final update.
 func TestAutocommitUpdateVindexChange(t *testing.T) {
-	executor, sbc1, _, sbclookup := createExecutorEnv()
+	executor, sbc, _, sbclookup := createExecutorEnv()
+	sbc.SetResults([]*sqltypes.Result{{
+		Fields: []*querypb.Field{
+			{Name: "name", Type: sqltypes.VarChar},
+		},
+		RowsAffected: 1,
+		InsertID:     0,
+		Rows:         [][]sqltypes.Value{{
+			//sqltypes.NewVarChar("myname"),
+		}},
+	}})
 
-	if _, err := autocommitExec(executor, "update user2 set name='myname', lastname='mylastname' where id = 1"); err != nil {
-		t.Fatal(err)
-	}
+	_, err := autocommitExec(executor, "update user2 set name='myname', lastname='mylastname' where id = 1")
+	require.NoError(t, err)
 
 	testQueries(t, "sbclookup", sbclookup, []*querypb.BoundQuery{{
 		Sql: "delete from name_lastname_keyspace_id_map where name = :name and lastname = :lastname and keyspace_id = :keyspace_id",
@@ -103,15 +114,15 @@ func TestAutocommitUpdateVindexChange(t *testing.T) {
 	testAsTransactionCount(t, "sbclookup", sbclookup, 0)
 	testCommitCount(t, "sbclookup", sbclookup, 1)
 
-	testQueries(t, "sbc1", sbc1, []*querypb.BoundQuery{{
-		Sql:           "select name, lastname from user2 where id = 1 for update",
+	testQueries(t, "sbc", sbc, []*querypb.BoundQuery{{
+		Sql:           "select id, name, lastname from user2 where id = 1 for update",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
 		Sql:           "update user2 set name = 'myname', lastname = 'mylastname' where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}})
-	testAsTransactionCount(t, "sbc1", sbc1, 0)
-	testCommitCount(t, "sbc1", sbc1, 1)
+	testAsTransactionCount(t, "sbc", sbc, 0)
+	testCommitCount(t, "sbc", sbc, 1)
 }
 
 // TestAutocommitDeleteSharded: instant-commit.

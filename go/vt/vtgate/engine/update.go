@@ -227,7 +227,7 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 		return &sqltypes.Result{}, nil
 	}
 	if len(upd.ChangedVindexValues) != 0 {
-		if err := upd.updateVindexEntries(vcursor, upd.OwnedVindexQuery, bindVars, rs, ksid); err != nil {
+		if err := upd.updateVindexEntries(vcursor, bindVars, rs, ksid); err != nil {
 			return nil, vterrors.Wrap(err, "execUpdateEqual")
 		}
 	}
@@ -241,7 +241,7 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 // for DMLs to reuse existing transactions.
 // Note 2: While changes are being committed, the changing row could be
 // unreachable by either the new or old column values.
-func (upd *Update) updateVindexEntries(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, ksid []byte) error {
+func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, ksid []byte) error {
 	subQueryResult, err := execShard(vcursor, upd.OwnedVindexQuery, bindVars, rs, false /* isDML */, false /* canAutocommit */)
 	if err != nil {
 		return err
@@ -252,7 +252,7 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, query string, bindVars m
 	if len(subQueryResult.Rows) > 1 {
 		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update changes multiple rows in the vindex")
 	}
-	colnum := 0
+	colnum := 1
 	for _, colVindex := range upd.Table.Owned {
 		// Fetch the column values. colnum must keep incrementing.
 		fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
@@ -263,7 +263,7 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, query string, bindVars m
 
 		// Update columns only if they're being changed.
 		if colValues, ok := upd.ChangedVindexValues[colVindex.Name]; ok {
-			vindexColumnKeys := make([]sqltypes.Value, 0, len(colValues))
+			var vindexColumnKeys []sqltypes.Value
 			for _, colValue := range colValues {
 				resolvedVal, err := colValue.ResolveValue(bindVars)
 				if err != nil {
@@ -274,6 +274,59 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, query string, bindVars m
 
 			if err := colVindex.Vindex.(vindexes.Lookup).Update(vcursor, fromIds, ksid, vindexColumnKeys); err != nil {
 				return err
+			}
+		}
+	}
+	return nil
+}
+
+// updateVindexEntries performs an update when a vindex is being modified
+// by the statement.
+// Note: the commit order may be different from the DML order because it's possible
+// for DMLs to reuse existing transactions.
+// Note 2: While changes are being committed, the changing row could be
+// unreachable by either the new or old column values.
+func (upd *Update) updateVindexEntriesScatter(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) error {
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{Sql: upd.OwnedVindexQuery, BindVariables: bindVars}
+	}
+	subQueryResult, errors := vcursor.ExecuteMultiShard(rss, queries, false, false)
+	for _, err := range errors {
+		if err != nil {
+			return vterrors.Wrap(err, "updateVindexEntriesScatter")
+		}
+	}
+
+	if len(subQueryResult.Rows) == 0 {
+		return nil
+	}
+
+	for _, row := range subQueryResult.Rows {
+		colnum := 1 // we start from the first non-vindex col
+		ksid := row[0].Raw()
+		for _, colVindex := range upd.Table.Owned {
+			// Fetch the column values. colnum must keep incrementing.
+			fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
+			for range colVindex.Columns {
+				fromIds = append(fromIds, row[colnum])
+				colnum++
+			}
+
+			// Update columns only if they're being changed.
+			if colValues, ok := upd.ChangedVindexValues[colVindex.Name]; ok {
+				var vindexColumnKeys []sqltypes.Value
+				for _, colValue := range colValues {
+					resolvedVal, err := colValue.ResolveValue(bindVars)
+					if err != nil {
+						return err
+					}
+					vindexColumnKeys = append(vindexColumnKeys, resolvedVal)
+				}
+
+				if err := colVindex.Vindex.(vindexes.Lookup).Update(vcursor, fromIds, ksid, vindexColumnKeys); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -294,22 +347,31 @@ func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]
 			BindVariables: bindVars,
 		}
 	}
+
+	// update any owned vindexes
+	if len(upd.ChangedVindexValues) != 0 {
+		if err := upd.updateVindexEntriesScatter(vcursor, bindVars, rss); err != nil {
+			return nil, vterrors.Wrap(err, "execUpdateByDestination")
+		}
+	}
+
 	autocommit := (len(rss) == 1 || upd.MultiShardAutocommit) && vcursor.AutocommitApproval()
 	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, autocommit)
 	return result, vterrors.Aggregate(errs)
 }
 
 func (upd *Update) execUpdateIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	keys, err := upd.Values[0].ResolveList(bindVars)
-	if err != nil {
-		return nil, vterrors.Wrap(err, "execUpdateIn")
-	}
-	_, _, err = resolveShards(vcursor, upd.Vindex, upd.Keyspace, keys)
-	if err != nil {
-		return nil, vterrors.Wrap(err, "execUpdateIn")
-	}
-	// just to have code compile returning blank.
-	return &sqltypes.Result{}, nil
+	panic("implement me!")
+	//keys, err := upd.Values[0].ResolveList(bindVars)
+	//if err != nil {
+	//	return nil, vterrors.Wrap(err, "execUpdateIn")
+	//}
+	//_, _, err = resolveShards(vcursor, upd.Vindex, upd.Keyspace, keys)
+	//if err != nil {
+	//	return nil, vterrors.Wrap(err, "execUpdateIn")
+	//}
+	//just to have code compile returning blank.
+	//return &sqltypes.Result{}, nil
 	/*
 		TODO: Think of, How to go about updating lookup vindex. Will it be a loop or should resolve shards be performed on it.
 
