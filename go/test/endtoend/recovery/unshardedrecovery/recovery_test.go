@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os/exec"
 	"testing"
+
 	"vitess.io/vitess/go/test/endtoend/recovery"
 
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"

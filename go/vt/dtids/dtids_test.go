@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/require"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -41,9 +42,7 @@ func TestDTID(t *testing.T) {
 		t.Errorf("generateDTID: %s, want %s", dtid, want)
 	}
 	out, err := ShardSession(dtid)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !proto.Equal(in, out) {
 		t.Errorf("ShardSession: %+v, want %+v", out, in)
 	}
@@ -61,9 +60,7 @@ func TestDTID(t *testing.T) {
 
 func TestTransactionID(t *testing.T) {
 	out, err := TransactionID("aa:0:1")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if out != 1 {
 		t.Errorf("TransactionID(aa:0:1): %d, want 1", out)
 	}
