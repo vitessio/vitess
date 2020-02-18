@@ -105,7 +105,7 @@ func (dc *dbClientImpl) Close() {
 func (dc *dbClientImpl) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
 	mqr, err := dc.dbConn.ExecuteFetch(query, maxrows, true)
 	if err != nil {
-		log.Errorf("ExecuteFetch failed w/ error %v", err)
+		log.Warningf("ExecuteFetch failed w/ error %v", err)
 		dc.handleError(err)
 		return nil, err
 	}

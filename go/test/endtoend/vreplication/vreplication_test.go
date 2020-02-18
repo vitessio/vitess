@@ -1,10 +1,16 @@
 package vreplication
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"os"
+	"strings"
 	"testing"
+	"time"
+
+	"vitess.io/vitess/go/vt/wrangler"
+
+	//"vitess.io/vitess/go/vt/wrangler"
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/mysql"
@@ -12,50 +18,39 @@ import (
 )
 
 var (
-	vc     *VitessCluster
-	vtgate *cluster.VtgateProcess
-	cell   *Cell
-	conn   *mysql.Conn
+	vc              *VitessCluster
+	vtgate          *cluster.VtgateProcess
+	cell            *Cell
+	vtgateConn      *mysql.Conn
+	defaultRdonly   int
+	defaultReplicas int
 )
 
-func tmpSetupEnv() {
-	// This TEMPORARY HACK is required because GoLand is not using my env variables and defining them in Run/Edit Configurations did not work :(
-
-	err := os.Setenv("PATH", "/home/rohit/vitess-ps/dist/etcd/etcd-v3.3.10-linux-amd64:/home/rohit/vitess-ps/bin:/home/rohit/vitess-ps/dist/etcd/etcd-v3.3.10-linux-amd64:/home/rohit/vitess-ps/bin:/usr/local/go/bin:/home/rohit/vitess/dist/etcd/etcd-v3.3.10-linux-amd64:/home/rohit/vitess/bin:/home/rohit/vitess-ps/dist/etcd/etcd-v3.3.10-linux-amd64:/home/rohit/vitess-ps/bin:/usr/local/go/bin:/home/rohit/vitess/dist/etcd/etcd-v3.3.10-linux-amd64:/home/rohit/vitess/bin:/home/rohit/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin")
-	if err != nil {
-		fmt.Printf("err %v\n", err)
-	}
-	err = os.Setenv("VTDATAROOT", "/home/rohit/vtdataroot")
-	if err != nil {
-		fmt.Printf("err %v\n", err)
-	}
-	err = os.Setenv("VTROOT", "/home/rohit/vitess-ps/")
-	if err != nil {
-		fmt.Printf("err %v\n", err)
-	}
+func init() {
+	defaultRdonly = 0
+	defaultReplicas = 1
 }
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
-	// TODO remove this before final commit
-	tmpSetupEnv()
 	cellName := "zone1"
 
 	vc = InitCluster(t, cellName)
 	assert.NotNil(t, vc)
+
 	if false { //TODO for testing: remove before commit
 		defer vc.TearDown()
 	}
 	cell = vc.Cells[cellName]
 
-	vc.AddKeyspace(t, cell, "product", "0", initialProductVSchema, initialProductSchema, 1, 1, 100)
+	vc.AddKeyspace(t, cell, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100)
 
 	vtgate = cell.Vtgates[0]
 	assert.NotNil(t, vtgate)
 	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "product", "0"), 1)
 
-	conn = getConnection(t)
-	defer conn.Close()
-
+	vtgateConn = getConnection(t, globalConfig.vtgateMySQLPort)
+	defer vtgateConn.Close()
+	verifyClusterHealth(t)
 	insertInitialData(t)
 	shardCustomerTable(t)
 
@@ -95,41 +90,65 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 func insertInitialData(t *testing.T) {
 	fmt.Printf("Inserting initial data\n")
 	lines, _ := ioutil.ReadFile("unsharded_init_data.sql")
-	execMultipleQueries(t, conn, "product:0", string(lines))
-	execVtgateQuery(t, conn, "product:0", "insert into customer_seq(id, next_id, cache) values(0, 100, 100);")
+	execMultipleQueries(t, vtgateConn, "product:0", string(lines))
+	execVtgateQuery(t, vtgateConn, "product:0", "insert into customer_seq(id, next_id, cache) values(0, 100, 100);")
 	fmt.Printf("Done inserting initial data\n")
 
-	qr := execQuery(t, conn, "select count(*) from product")
-	assert.NotNil(t, qr)
-	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(2)]]"; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
-	qr = execQuery(t, conn, "select * from merchant")
-	assert.NotNil(t, qr)
-	if got, want := fmt.Sprintf("%v", qr.Rows),
-		`[[VARCHAR("monoprice") VARCHAR("electronics")] [VARCHAR("newegg") VARCHAR("electronics")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
+	validateCount(t, vtgateConn, "product:0", "product", 2)
+	validateCount(t, vtgateConn, "product:0", "customer", 3)
+	validateQuery(t, vtgateConn, "product:0", "select * from merchant",
+		`[[VARCHAR("monoprice") VARCHAR("electronics")] [VARCHAR("newegg") VARCHAR("electronics")]]`)
 }
 
 func shardCustomerTable(t *testing.T) {
-	vc.AddKeyspace(t, cell, "customer", "0", customerVSchema, customerSchema, 1, 1, 200)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "customer", "0"), 1)
-	//return
-	//execVtgateQuery(t, conn, "customer", "insert into customer_seq(id, next_id, cache) values(0, 100, 100);")
+	_, _ = vc.AddKeyspace(t, cell, "customer", "-80,80-", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200)
+	_ = vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "customer", "-80"), 1)
+	_ = vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", "customer", "80-"), 1)
 
-	vc.VtctlClient.ExecuteCommand("Migrate", "-cell="+cell.Name, "-workflow=p2c",
+	_ = vc.VtctlClient.ExecuteCommand("Migrate", "-cell="+cell.Name, "-workflow=p2c",
 		"-tablet_types="+"replica,rdonly", "product", "customer", "customer")
-	return
-	vc.VtctlClient.ExecuteCommand("MigrateReads", "-cells="+cell.Name, "-tablet_types=rdonly", "customer.p2c")
-	vc.VtctlClient.ExecuteCommand("MigrateReads", "-cells="+cell.Name, "-tablet_types=readonly", "customer.p2c")
-	vc.VtctlClient.ExecuteCommand("MigrateWrites", "customer.p2c")
-	//TODO Verify
+	customerTab1 := vc.Cells[cell.Name].Keyspaces["customer"].Shards["-80"].Tablets["zone1-200"].Vttablet
+	customerTab2 := vc.Cells[cell.Name].Keyspaces["customer"].Shards["80-"].Tablets["zone1-300"].Vttablet
+	if vc.WaitForMigrateToComplete(customerTab1, "p2c", "vt_customer", 1*time.Second) != nil {
+		assert.Fail(t, "Migrate timed out for customer.p2c -80")
 
+	}
+	if vc.WaitForMigrateToComplete(customerTab2, "p2c", "vt_customer", 1*time.Second) != nil {
+		assert.Fail(t, "Migrate timed out for customer.p2c 80-")
+	}
+
+	_ = vc.VtctlClient.ExecuteCommand("MigrateReads", "-cells="+cell.Name, "-tablet_types=rdonly", "customer.p2c")
+	_ = vc.VtctlClient.ExecuteCommand("MigrateReads", "-cells="+cell.Name, "-tablet_types=replica", "customer.p2c")
+	_ = vc.VtctlClient.ExecuteCommand("MigrateWrites", "customer.p2c")
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "-tablet_types", "master,replica,rdonly", "-format", "json", "customer.p2c")
+
+	assert.Nil(t, err)
+	assert.NotNil(t, output)
+	diffReports := make(map[string]*wrangler.DiffReport)
+	err = json.Unmarshal([]byte(output), &diffReports)
+	assert.NotNil(t, err)
+	assert.True(t, len(diffReports) > 0)
+	for key, diffReport := range diffReports {
+		if diffReport.ProcessedRows != diffReport.MatchingRows {
+			fmt.Errorf("VDiff error for %s : %#v\n", key, diffReport)
+		}
+	}
+
+	assert.Empty(t, validateCountInTablet(t, customerTab1, "customer", "customer", 1))
+	assert.Empty(t, validateCountInTablet(t, customerTab2, "customer", "customer", 2))
+	assert.Empty(t, validateCount(t, vtgateConn, "customer", "customer", 3))
+	assert.Empty(t, validateCount(t, vtgateConn, "product:0", "customer", 3))
+	//assert.Empty(t, validateCount(t, vtgateConn, "customer/80-", "customer", 3))
+	/*
+		validateCount(t, vtgateConn, "customer/-80", "customer", 2)
+		validateCount(t, vtgateConn, "customer/80-", "customer", 1)
+		validateCount(t, vtgateConn, "customer", "customer", 3)
+		validateCount(t, vtgateConn, "product:0", "customer", 3)
+	*/
 }
 
 func shardMerchant(t *testing.T) {
-	vc.AddKeyspace(t, cell, "merchant", "-80,80-", merchantVSchema, "", 0, 0, 300)
+	vc.AddKeyspace(t, cell, "merchant", "-80,80-", merchantVSchema, "", 0, 0, 400)
 	vc.VtctlClient.ExecuteCommand("Migrate", "-cell="+cell.Name, "-workflow=p2m",
 		"-tablet_types="+"replica,rdonly", "product", "merchant", "merchant")
 	vc.VtctlClient.ExecuteCommand("MigrateReads", "-cells="+cell.Name, "-tablet_types=rdonly", "merchant.p2m")
@@ -149,4 +168,66 @@ func materializeSales(t *testing.T) {
 
 func reshardOrders(t *testing.T) {
 
+}
+
+func checkVtgateHealth(t *testing.T, cell *Cell) {
+	for _, vtgate := range cell.Vtgates {
+		vtgateHealthUrl := strings.Replace(vtgate.VerifyURL, "vars", "health", -1)
+		if !checkHealth(t, vtgateHealthUrl) {
+			assert.Failf(t, "Vtgate not healthy: ", vtgateHealthUrl)
+		} else {
+			//fmt.Printf("Vtgate is healthy %s\n", vtgateHealthUrl)
+		}
+	}
+}
+
+func checkTabletHealth(t *testing.T, tablet *Tablet) {
+	vttabletHealthUrl := strings.Replace(tablet.Vttablet.VerifyURL, "debug/vars", "healthz", -1)
+	if !checkHealth(t, vttabletHealthUrl) {
+		assert.Failf(t, "Vttablet not healthy: ", vttabletHealthUrl)
+	} else {
+		//fmt.Printf("Vttablet is healthy %s\n", vttabletHealthUrl)
+	}
+}
+
+func iterateTablets(t *testing.T, f func(t *testing.T, tablet *Tablet)) {
+	for _, cell := range vc.Cells {
+		for _, ks := range cell.Keyspaces {
+			for _, shard := range ks.Shards {
+				for _, tablet := range shard.Tablets {
+					f(t, tablet)
+				}
+			}
+		}
+	}
+}
+
+func iterateShards(t *testing.T, f func(t *testing.T, shard *Shard)) {
+	for _, cell := range vc.Cells {
+		for _, ks := range cell.Keyspaces {
+			for _, shard := range ks.Shards {
+				f(t, shard)
+			}
+		}
+	}
+}
+
+func iterateKeyspaces(t *testing.T, f func(t *testing.T, keyspace *Keyspace)) {
+	for _, cell := range vc.Cells {
+		for _, ks := range cell.Keyspaces {
+			f(t, ks)
+		}
+	}
+}
+
+func iterateCells(t *testing.T, f func(t *testing.T, cell *Cell)) {
+	for _, cell := range vc.Cells {
+		f(t, cell)
+	}
+}
+
+// Should check health of key components vtgate, vtctld, tablets, look for etcd keys
+func verifyClusterHealth(t *testing.T) {
+	iterateCells(t, checkVtgateHealth)
+	iterateTablets(t, checkTabletHealth)
 }

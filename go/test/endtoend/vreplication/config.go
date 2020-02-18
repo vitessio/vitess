@@ -15,26 +15,23 @@ create table customer_seq(id int, next_id bigint, cache bigint, primary key(id))
 	"product": {},
 	"customer": {},
 	"merchant": {},
-	"orders": {}
+	"orders": {},
+	"customer_seq": {
+		"type": "sequence"
+	}
   }
 }
 `
 	customerSchema  = "create table customer_seq(id int, next_id bigint, cache bigint, primary key(id)) comment 'vitess_sequence';"
 	customerVSchema = `
 {
-  "sharded": false,
-  "tables": {
-    "customer":{}
-   }
- }
-`
-	/*
-	 "vindexes": {
+  "sharded": true,
+  "vindexes": {
 	    "reverse_bits": {
 	      "type": "reverse_bits"
 	    }
 	  },
-	  "tables": {
+   "tables": {
 	    "customer": {
 	      "column_vindexes": [
 	        {
@@ -47,9 +44,10 @@ create table customer_seq(id int, next_id bigint, cache bigint, primary key(id))
 	        "sequence": "customer_seq"
 	      }
 	    }
-	  }
-
-	*/
+   }
+  
+}
+`
 	merchantVSchema = `
 {
   "sharded": true,
