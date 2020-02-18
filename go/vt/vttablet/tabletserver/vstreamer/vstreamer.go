@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -163,7 +164,11 @@ func (vs *vstreamer) Stream() error {
 }
 
 func (vs *vstreamer) currentPosition() (mysql.Position, error) {
-	conn, err := mysql.Connect(vs.ctx, vs.cp)
+	cp, err := dbconfigs.WithCredentials(vs.cp)
+	if err != nil {
+		return mysql.Position{}, err
+	}
+	conn, err := mysql.Connect(vs.ctx, cp)
 	if err != nil {
 		return mysql.Position{}, err
 	}
