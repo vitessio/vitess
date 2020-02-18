@@ -14,13 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is an example script that starts vtctld.
+# This is an example script that stops the mysqld and vttablet instances
+# created by vttablet-up.sh
 
-set -e
+source ./env.sh
 
-script_root=`dirname "${BASH_SOURCE}"`
-source $script_root/env.sh
+printf -v tablet_dir 'vt_%010d' $TABLET_UID
+pid=`cat $VTDATAROOT/$tablet_dir/vttablet.pid`
 
-pid=`cat $VTDATAROOT/tmp/vtctld.pid`
-echo "Stopping vtctld..."
-kill -9 $pid
+kill $pid
+
+# Wait for vttablet to die.
+while ps -p $pid > /dev/null; do sleep 1; done
+
+
