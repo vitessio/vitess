@@ -112,12 +112,17 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 // The service is kept running in the background until TearDown() is called.
 func (topo *TopoProcess) SetupZookeeper(cluster *LocalProcessCluster) (err error) {
 
+	host, err := os.Hostname()
+	if err != nil {
+		return
+	}
+
 	topo.ZKPorts = fmt.Sprintf("%d:%d:%d", cluster.GetAndReservePort(), cluster.GetAndReservePort(), topo.Port)
 
 	topo.proc = exec.Command(
 		topo.Binary,
 		"-log_dir", topo.LogDirectory,
-		"-zk.cfg", fmt.Sprintf("1@%v:%s", topo.Host, topo.ZKPorts),
+		"-zk.cfg", fmt.Sprintf("1@%v:%s", host, topo.ZKPorts),
 		"init",
 	)
 

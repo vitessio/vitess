@@ -14,16 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is an example script that stops the etcd servers started by etcd-up.sh.
+# This is an example script that stops the mysqld and vttablet instances
+# created by vttablet-up.sh
 
-set -e
+source ./env.sh
 
-script_root=$(dirname "${BASH_SOURCE[0]}")
+mysqlctl -tablet_uid $TABLET_UID shutdown 
 
-# shellcheck source=./env.sh
-# shellcheck disable=SC1091
-source "${script_root}/env.sh"
-
-pid=`cat $VTDATAROOT/tmp/etcd.pid`
-echo "Stopping etcd..."
-kill -9 $pid
