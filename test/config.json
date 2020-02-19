@@ -494,7 +494,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtctldweb"],
 			"Command": [],
 			"Manual": false,
-			"Shard": 21,
+			"Shard": 24,
 			"RetryMax": 0,
 			"Tags": []
 		},
