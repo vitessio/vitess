@@ -72,7 +72,7 @@ func TestShardView(t *testing.T) {
 	assert.ElementsMatch(t, []string{"1", "2", "3", "4", "5", "6", "7", "8"}, tabletUIDs)
 }
 
-// TestKsView validates the shard names for keyspace
+// TestKsView validates the shard names for keyspace.
 func TestKsView(t *testing.T) {
 	navigateToKeyspaceView(t)
 	shards := getKeyspaceShard(t)

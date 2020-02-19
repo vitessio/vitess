@@ -103,17 +103,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"worker": {
-			"File": "worker.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 5,
-			"RetryMax": 0,
-			"Tags": [
-				"worker_test"
-			]
-		},
 		"xb_recovery": {
 			"File": "xb_recovery.py",
 			"Args": [],
@@ -508,6 +497,17 @@
 			"Shard": 21,
 			"RetryMax": 0,
 			"Tags": []
+		},
+		"worker": {
+			"File": "worker_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/worker"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 23,
+			"RetryMax": 0,
+			"Tags": [
+				"worker_test"
+			]
 		}
 	}
 }
