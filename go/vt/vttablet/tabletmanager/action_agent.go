@@ -298,7 +298,7 @@ func NewActionAgent(
 
 	var mysqlHost string
 	var mysqlPort int32
-	if appConfig := dbcfgs.AppWithDB(); appConfig.Host != "" {
+	if appConfig := dbcfgs.AppWithDB().GetConnParams(); appConfig.Host != "" {
 		mysqlHost = appConfig.Host
 		mysqlPort = int32(appConfig.Port)
 
@@ -325,9 +325,9 @@ func NewActionAgent(
 
 	// The db name is set by the Start function called above
 	agent.VREngine = vreplication.NewEngine(ts, tabletAlias.Cell, mysqld, func() binlogplayer.DBClient {
-		return binlogplayer.NewDBClient(agent.DBConfigs.FilteredWithDB())
+		return binlogplayer.NewDBClient(agent.DBConfigs.FilteredWithDB().GetConnParams())
 	},
-		agent.DBConfigs.FilteredWithDB().DbName,
+		agent.DBConfigs.FilteredWithDB().GetConnParams().DbName,
 	)
 	servenv.OnTerm(agent.VREngine.Close)
 
@@ -695,7 +695,7 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 	// (it needs the dbname, so it has to be delayed up to here,
 	// but it has to be before updateState below that may use it)
 	if initUpdateStream {
-		us := binlog.NewUpdateStream(agent.TopoServer, agent.initialTablet.Keyspace, agent.TabletAlias.Cell, agent.DBConfigs.DbaWithDB(), agent.QueryServiceControl.SchemaEngine())
+		us := binlog.NewUpdateStream(agent.TopoServer, agent.initialTablet.Keyspace, agent.TabletAlias.Cell, agent.DBConfigs.DbaWithDB().GetConnParams(), agent.QueryServiceControl.SchemaEngine())
 		agent.UpdateStream = us
 		servenv.OnRun(func() {
 			us.RegisterService()

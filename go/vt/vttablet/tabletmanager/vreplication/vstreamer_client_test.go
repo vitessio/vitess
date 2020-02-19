@@ -272,7 +272,7 @@ func TestNewMySQLVStreamerClient(t *testing.T) {
 		{
 			name: "sets conn params for MySQLVStreamerClient ",
 			want: &MySQLVStreamerClient{
-				sourceConnParams: env.Dbcfgs.ExternalReplWithDB(),
+				sourceConnParams: env.Dbcfgs.ExternalReplWithDB().GetConnParams(),
 			},
 		},
 	}
@@ -301,7 +301,7 @@ func TestMySQLVStreamerClientOpen(t *testing.T) {
 		{
 			name: "initializes streamer correctly",
 			fields: fields{
-				sourceConnParams: env.Dbcfgs.ExternalReplWithDB(),
+				sourceConnParams: env.Dbcfgs.ExternalReplWithDB().GetConnParams(),
 			},
 			args: args{
 				ctx: context.Background(),
@@ -369,7 +369,7 @@ func TestMySQLVStreamerClientClose(t *testing.T) {
 		{
 			name: "closes engine correctly",
 			fields: fields{
-				sourceConnParams: env.Dbcfgs.ExternalReplWithDB(),
+				sourceConnParams: env.Dbcfgs.ExternalReplWithDB().GetConnParams(),
 			},
 			args: args{
 				ctx: context.Background(),
@@ -409,7 +409,7 @@ func TestMySQLVStreamerClientClose(t *testing.T) {
 
 func TestMySQLVStreamerClientVStream(t *testing.T) {
 	vsClient := &MySQLVStreamerClient{
-		sourceConnParams: env.Dbcfgs.ExternalReplWithDB(),
+		sourceConnParams: env.Dbcfgs.ExternalReplWithDB().GetConnParams(),
 	}
 
 	filter := &binlogdatapb.Filter{
@@ -469,7 +469,7 @@ func TestMySQLVStreamerClientVStream(t *testing.T) {
 
 func TestMySQLVStreamerClientVStreamRows(t *testing.T) {
 	vsClient := &MySQLVStreamerClient{
-		sourceConnParams: env.Dbcfgs.ExternalReplWithDB(),
+		sourceConnParams: env.Dbcfgs.ExternalReplWithDB().GetConnParams(),
 	}
 
 	eventsChan := make(chan *querypb.Row, 1000)

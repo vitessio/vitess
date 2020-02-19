@@ -105,7 +105,7 @@ func (w *Writer) Init(target querypb.Target) error {
 	log.Info("Initializing heartbeat table.")
 	w.dbName = sqlescape.EscapeID(w.dbconfigs.SidecarDBName.Get())
 	w.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
-	err := w.initializeTables(w.dbconfigs.DbaWithDB())
+	err := w.initializeTables(w.dbconfigs.DbaWithDB().GetConnParams())
 	if err != nil {
 		w.recordError(err)
 		return err
@@ -128,7 +128,7 @@ func (w *Writer) Open() {
 		return
 	}
 	log.Info("Beginning heartbeat writes")
-	w.pool.Open(w.dbconfigs.AppWithDB(), w.dbconfigs.DbaWithDB(), w.dbconfigs.AppDebugWithDB())
+	w.pool.Open(w.dbconfigs.AppWithDB().GetConnParams(), w.dbconfigs.DbaWithDB().GetConnParams(), w.dbconfigs.AppDebugWithDB().GetConnParams())
 	w.ticks.Start(func() { w.writeHeartbeat() })
 	w.isOpen = true
 }

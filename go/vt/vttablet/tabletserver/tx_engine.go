@@ -368,7 +368,7 @@ func (te *TxEngine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
 // up the metadata tables.
 func (te *TxEngine) Init() error {
 	if te.twopcEnabled {
-		return te.twoPC.Init(te.dbconfigs.SidecarDBName.Get(), te.dbconfigs.DbaWithDB())
+		return te.twoPC.Init(te.dbconfigs.SidecarDBName.Get(), te.dbconfigs.DbaWithDB().GetConnParams())
 	}
 	return nil
 }
@@ -377,7 +377,7 @@ func (te *TxEngine) Init() error {
 // all previously prepared transactions from the redo log.
 // this should only be called when the state is already locked
 func (te *TxEngine) open() {
-	te.txPool.Open(te.dbconfigs.AppWithDB(), te.dbconfigs.DbaWithDB(), te.dbconfigs.AppDebugWithDB())
+	te.txPool.Open(te.dbconfigs.AppWithDB().GetConnParams(), te.dbconfigs.DbaWithDB().GetConnParams(), te.dbconfigs.AppDebugWithDB().GetConnParams())
 
 	if te.twopcEnabled && te.state == AcceptingReadAndWrite {
 		te.twoPC.Open(te.dbconfigs)

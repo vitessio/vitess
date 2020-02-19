@@ -143,7 +143,7 @@ func NewMySQLVStreamerClient() *MySQLVStreamerClient {
 	// TODO: For now external mysql streams can only be used with ExternalReplWithDB creds.
 	// In the future we will support multiple users.
 	vsClient := &MySQLVStreamerClient{
-		sourceConnParams: dbcfgs.ExternalReplWithDB(),
+		sourceConnParams: dbcfgs.ExternalReplWithDB().GetConnParams(),
 	}
 	return vsClient
 }

@@ -119,7 +119,7 @@ func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *Writer {
 	tw.dbName = sqlescape.EscapeID(dbc.SidecarDBName.Get())
 	tw.keyspaceShard = "test:0"
 	tw.now = nowFunc
-	tw.pool.Open(dbc.AppWithDB(), dbc.DbaWithDB(), dbc.AppDebugWithDB())
+	tw.pool.Open(dbc.AppWithDB().GetConnParams(), dbc.DbaWithDB().GetConnParams(), dbc.AppDebugWithDB().GetConnParams())
 
 	return tw
 }

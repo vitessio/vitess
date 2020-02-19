@@ -112,7 +112,7 @@ func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *Reader {
 	tr.dbName = sqlescape.EscapeID(dbc.SidecarDBName.Get())
 	tr.keyspaceShard = "test:0"
 	tr.now = nowFunc
-	tr.pool.Open(dbc.AppWithDB(), dbc.DbaWithDB(), dbc.AppDebugWithDB())
+	tr.pool.Open(dbc.AppWithDB().GetConnParams(), dbc.DbaWithDB().GetConnParams(), dbc.AppDebugWithDB().GetConnParams())
 
 	return tr
 }
