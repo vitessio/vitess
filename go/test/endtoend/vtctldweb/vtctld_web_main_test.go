@@ -505,5 +505,5 @@ func ss(t *testing.T, name string) {
 }
 
 func getPort() int {
-	return 50000 + rand.Intn(10000)
+	return 2000 + rand.Intn(1000)
 }
