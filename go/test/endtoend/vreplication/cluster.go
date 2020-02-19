@@ -11,10 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-
-	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -36,14 +35,13 @@ var globalConfig = struct {
 }{"localhost", 2379, 15000, 15999, vtdataroot + "/tmp",
 	15001, 15991, 15306, "MASTER,REPLICA"}
 
-//TODO ports should be automatically (incrementally) allocated based on what is available?
 var (
 	tabletPortBase      = 15000
 	tabletGrpcPortBase  = 16000
 	tabletMysqlPortBase = 17000
 )
 
-// TODO
+// VitessCluster represents all components within the test cluster
 type VitessCluster struct {
 	Name        string
 	Cells       map[string]*Cell
@@ -53,14 +51,14 @@ type VitessCluster struct {
 	VtctlClient *cluster.VtctlClientProcess
 }
 
-// TODO
+// Cell represents a Vitess cell within the test cluster
 type Cell struct {
 	Name      string
 	Keyspaces map[string]*Keyspace
 	Vtgates   []*cluster.VtgateProcess
 }
 
-// TODO
+// Keyspace represents a Vitess keyspace contained by a cell within the test cluster
 type Keyspace struct {
 	Name    string
 	Shards  map[string]*Shard
@@ -68,14 +66,14 @@ type Keyspace struct {
 	Schema  string
 }
 
-// TODO
+// Shard represents a Vitess shard in a keyspace
 type Shard struct {
 	Name      string
 	IsSharded bool
 	Tablets   map[string]*Tablet
 }
 
-// TODO
+// Tablet represents a vttablet within a shard
 type Tablet struct {
 	Name     string
 	Vttablet *cluster.VttabletProcess
@@ -85,15 +83,14 @@ type Tablet struct {
 func initGlobals() {
 	vtdataroot = os.Getenv("VTDATAROOT")
 	globalConfig.tmpDir = vtdataroot + "/tmp"
-	//TODO init some vars (like ports, indexes) here rather than hardcoding
 }
 
-// TODO
+// NewVitessCluster creates an entire VitessCluster for e2e testing
 func NewVitessCluster(name string) (cluster *VitessCluster, err error) {
 	return &VitessCluster{Name: name, Cells: make(map[string]*Cell)}, nil
 }
 
-// TODO
+// InitCluster creates the global processes needed for a cluster
 func InitCluster(t *testing.T, cellName string) *VitessCluster {
 	initGlobals()
 	vc, _ := NewVitessCluster("Vdemo")
@@ -124,7 +121,7 @@ func InitCluster(t *testing.T, cellName string) *VitessCluster {
 	return vc
 }
 
-// TODO
+// AddKeyspace creates a keyspace with specified shard keys and number of replica/read-only tablets
 func (vc *VitessCluster) AddKeyspace(t *testing.T, cell *Cell, ksName string, shards string, vschema string, schema string, numReplicas int, numRdonly int, tabletIDBase int) (*Keyspace, error) {
 	keyspace := &Keyspace{
 		Name:   ksName,
@@ -158,7 +155,7 @@ func (vc *VitessCluster) AddKeyspace(t *testing.T, cell *Cell, ksName string, sh
 	return keyspace, nil
 }
 
-// TODO
+// AddTablet creates new tablet with specified attributes
 func (vc *VitessCluster) AddTablet(t *testing.T, cell *Cell, keyspace *Keyspace, shard *Shard, tabletType string, tabletID int) (*Tablet, *exec.Cmd, error) {
 	tablet := &Tablet{}
 
@@ -195,12 +192,12 @@ func (vc *VitessCluster) AddTablet(t *testing.T, cell *Cell, keyspace *Keyspace,
 	return tablet, proc, nil
 }
 
-// TODO
-func (vc *VitessCluster) AddShards(t *testing.T, cell *Cell, keyspace *Keyspace, names string, numReplicas int, numRdonly int, tabletIdBase int) error {
+// AddShards creates shards given list of comma-separated keys with specified tablets in each shard
+func (vc *VitessCluster) AddShards(t *testing.T, cell *Cell, keyspace *Keyspace, names string, numReplicas int, numRdonly int, tabletIDBase int) error {
 	arrNames := strings.Split(names, ",")
 	isSharded := len(arrNames) > 1
 	for ind, shardName := range arrNames {
-		tabletIdBase += ind * 100
+		tabletIDBase += ind * 100
 		tabletIndex := 0
 		dbProcesses := make([]*exec.Cmd, 0)
 		tablets := make([]*Tablet, 0)
@@ -275,7 +272,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cell *Cell, keyspace *Keyspace,
 	return nil
 }
 
-// TODO
+// StartVtgate starts a vtgate process
 func (vc *VitessCluster) StartVtgate(t *testing.T, cell *Cell) {
 	vtgate := cluster.VtgateProcessInstance(
 		globalConfig.vtgatePort,
@@ -296,14 +293,14 @@ func (vc *VitessCluster) StartVtgate(t *testing.T, cell *Cell) {
 	cell.Vtgates = append(cell.Vtgates, vtgate)
 }
 
-// TODO
+// AddCell adds a new cell to the cluster
 func (vc *VitessCluster) AddCell(t *testing.T, name string) (*Cell, error) {
 	cell := &Cell{Name: name, Keyspaces: make(map[string]*Keyspace), Vtgates: make([]*cluster.VtgateProcess, 0)}
 	vc.Cells[name] = cell
 	return cell, nil
 }
 
-// TODO
+// TearDown brings down a cluster, deleting processes, removing topo keys
 func (vc *VitessCluster) TearDown() {
 	for _, cell := range vc.Cells {
 		for _, vtgate := range cell.Vtgates {
@@ -351,7 +348,7 @@ func (vc *VitessCluster) TearDown() {
 	}
 }
 
-// waits for "workflow" to finish copying
+// WaitForMigrateToComplete waits for "workflow" to finish copying
 func (vc *VitessCluster) WaitForMigrateToComplete(vttablet *cluster.VttabletProcess, workflow string, database string, duration time.Duration) error {
 	queries := [3]string{
 		fmt.Sprintf(`select ISNULL(pos) from _vt.vreplication where workflow = "%s" and db_name = "%s"`, workflow, database),
