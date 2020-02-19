@@ -190,6 +190,7 @@ func TestMainImpl(m *testing.M) {
 // - check that new tablet has data created after backup1 but not data created after backup2
 // - check that vtgate queries work correctly
 func TestRecoveryImpl(t *testing.T) {
+	defer tabletsTeardown()
 	verifyInitialReplication(t)
 
 	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
@@ -276,6 +277,7 @@ func TestRecoveryImpl(t *testing.T) {
 	err = vtgateInstance.Setup()
 	localCluster.VtgateGrpcPort = vtgateInstance.GrpcPort
 	assert.Nil(t, err)
+	defer vtgateInstance.TearDown()
 	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", keyspaceName, shardName), 1)
 	assert.Nil(t, err)
 	err = vtgateInstance.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspaceName, shardName), 1)
@@ -289,6 +291,7 @@ func TestRecoveryImpl(t *testing.T) {
 	grpcAddress := fmt.Sprintf("%s:%d", localCluster.Hostname, localCluster.VtgateGrpcPort)
 	vtgateConn, err := vtgateconn.Dial(context.Background(), grpcAddress)
 	assert.Nil(t, err)
+	defer vtgateConn.Close()
 	session := vtgateConn.Session("@replica", nil)
 
 	//check that vtgate doesn't route queries to new tablet
@@ -299,9 +302,19 @@ func TestRecoveryImpl(t *testing.T) {
 	recovery.VerifyQueriesUsingVtgate(t, session, fmt.Sprintf("select count(*) from %s.vt_insert_test", recoveryKS2), "INT64(2)")
 	recovery.VerifyQueriesUsingVtgate(t, session, fmt.Sprintf("select msg from %s.vt_insert_test where id = 1", recoveryKS2), `VARCHAR("msgx1")`)
 
-	vtgateConn.Close()
-	vtgateInstance.TearDown()
-	tabletsTeardown()
+	// check that new keyspace is accessible with 'use ks'
+	cluster.ExecuteQueriesUsingVtgate(t, session, "use "+recoveryKS1+"@replica")
+	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(1)")
+
+	cluster.ExecuteQueriesUsingVtgate(t, session, "use "+recoveryKS2+"@replica")
+	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(2)")
+
+	// check that new tablet is accessible with use `ks:shard`
+	cluster.ExecuteQueriesUsingVtgate(t, session, "use `"+recoveryKS1+":0@replica`")
+	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(1)")
+
+	cluster.ExecuteQueriesUsingVtgate(t, session, "use `"+recoveryKS2+":0@replica`")
+	recovery.VerifyQueriesUsingVtgate(t, session, "select count(*) from vt_insert_test", "INT64(2)")
 }
 
 // verifyInitialReplication will create schema in master, insert some data to master and verify the same data in replica.
