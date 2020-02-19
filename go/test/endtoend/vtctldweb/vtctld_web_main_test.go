@@ -19,8 +19,10 @@ package vtctldweb
 import (
 	"flag"
 	"fmt"
+	"math/rand"
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -86,7 +88,7 @@ func TestMain(m *testing.M) {
 		}
 
 		// create driver here
-		err = CreateWebDriver()
+		err = CreateWebDriver(getPort())
 		if err != nil {
 			return 1, err
 		}
@@ -151,8 +153,8 @@ func RunXvfb() (func() error, error) {
 }
 
 // CreateWebDriver Creates a webdriver object (local or remote for Travis).
-func CreateWebDriver() error {
-	selenium.SetDebug(true)
+func CreateWebDriver(port int) error {
+	// selenium.SetDebug(true)
 
 	// Set common Options
 	options := selenium.ChromeDriver(os.Getenv("VTROOT") + "/dist")
@@ -189,12 +191,12 @@ func CreateWebDriver() error {
 	os.Setenv("webdriver.chrome.driver", os.Getenv("VTROOT")+"/dist")
 
 	var err error
-	seleniumService, err = selenium.NewChromeDriverService(os.Getenv("VTROOT")+"/dist/chromedriver/chromedriver", 9515, options)
+	seleniumService, err = selenium.NewChromeDriverService(os.Getenv("VTROOT")+"/dist/chromedriver/chromedriver", port, options)
 	if err != nil {
 		return err
 	}
 
-	wd, err = selenium.NewRemote(cc, "http://localhost:9515/wd/hub")
+	wd, err = selenium.NewRemote(cc, fmt.Sprintf("http://localhost:%d/wd/hub", port))
 	if err != nil {
 		return err
 	}
@@ -229,8 +231,7 @@ func checkHeatMaps(t *testing.T, selectedKs string) {
 			heading, err := elem.FindElement(selenium.ByID, "keyspaceName")
 			require.Nil(t, err)
 
-			headingTxt, err := heading.Text()
-			require.Nil(t, err)
+			headingTxt := text(t, heading)
 
 			_, err = elem.FindElement(selenium.ByID, headingTxt)
 			require.Nil(t, err)
@@ -244,8 +245,7 @@ func checkHeatMaps(t *testing.T, selectedKs string) {
 	heading, err := elems[0].FindElement(selenium.ByID, "keyspaceName")
 	require.Nil(t, err)
 
-	headingTxt, err := heading.Text()
-	require.Nil(t, err)
+	headingTxt := text(t, heading)
 
 	_, err = elem.FindElement(selenium.ByID, headingTxt)
 	require.Nil(t, err)
@@ -261,20 +261,22 @@ func changeDropdownOptions(t *testing.T, dropdownID, dropdownValue string) {
 	dropdown, err := statusContent.FindElement(selenium.ByID, dropdownID)
 	require.Nil(t, err)
 
-	err = dropdown.Click()
-	require.Nil(t, err)
+	click(t, dropdown)
 	options, err := dropdown.FindElements(selenium.ByTagName, "li")
 	require.Nil(t, err)
 
+	triedOption := []string{}
 	for _, op := range options {
-		opTxt, err := op.Text()
-		require.Nil(t, err)
+		opTxt := text(t, op)
 		if opTxt == dropdownValue {
-			err = op.Click()
-			require.Nil(t, err)
-			break
+			click(t, op)
+			return
 		}
+
+		triedOption = append(triedOption, opTxt)
 	}
+	ss(t, "option_check")
+	t.Log("dropdown options change failed", strings.Join(triedOption, ","), dropdownValue)
 }
 
 // checkDropdowns validates the dropdown values and selected value.
@@ -316,9 +318,7 @@ func getDropdownSelection(t *testing.T, group string) string {
 	elem, err = elem.FindElement(selenium.ByTagName, "label")
 	require.Nil(t, err)
 
-	tx, err := elem.Text()
-	require.Nil(t, err)
-	return tx
+	return text(t, elem)
 }
 
 // getDropdownOptions fetchs list of option available for corresponding group.
@@ -332,9 +332,7 @@ func getDropdownOptions(t *testing.T, group string) []string {
 
 	var out []string
 	for _, elem = range elems {
-		tx, err := elem.Text()
-		require.Nil(t, err)
-		out = append(out, tx)
+		out = append(out, text(t, elem))
 	}
 
 	return out
@@ -350,9 +348,7 @@ func getDashboardKeyspaces(t *testing.T) []string {
 	ksCards, err := dashboardContent.FindElements(selenium.ByClassName, "vt-keyspace-card")
 	var out []string
 	for _, ks := range ksCards {
-		txt, err := ks.Text()
-		require.Nil(t, err)
-		out = append(out, txt)
+		out = append(out, text(t, ks))
 	}
 	return out
 }
@@ -367,9 +363,7 @@ func getDashboardShards(t *testing.T) []string {
 	ksCards, err := dashboardContent.FindElements(selenium.ByClassName, "vt-shard-stats")
 	var out []string
 	for _, ks := range ksCards {
-		txt, err := ks.Text()
-		require.Nil(t, err)
-		out = append(out, txt)
+		out = append(out, text(t, ks))
 	}
 	return out
 }
@@ -384,10 +378,7 @@ func getKeyspaceShard(t *testing.T) []string {
 	require.Nil(t, err)
 	var out []string
 	for _, s := range shards {
-		txt, err := s.Text()
-		require.Nil(t, err)
-
-		out = append(out, txt)
+		out = append(out, text(t, s))
 	}
 	return out
 }
@@ -409,17 +400,14 @@ func getShardTablets(t *testing.T) ([]string, []string) {
 		typ, err := columns[1].FindElement(selenium.ByClassName, "ui-cell-data")
 		require.Nil(t, err)
 
-		typTxt, err := typ.Text()
-		require.Nil(t, err)
+		typTxt := text(t, typ)
 
 		tabletTypes = append(tabletTypes, typTxt)
 
 		uid, err := columns[3].FindElement(selenium.ByClassName, "ui-cell-data")
 		require.Nil(t, err)
 
-		uidTxt, err := uid.Text()
-		require.Nil(t, err)
-
+		uidTxt := text(t, uid)
 		tabletUIDs = append(tabletUIDs, uidTxt)
 	}
 
@@ -447,8 +435,7 @@ func navigateToKeyspaceView(t *testing.T) {
 	shardStarts, err := ksCard[0].FindElement(selenium.ByTagName, "md-list")
 	require.Nil(t, err)
 
-	err = shardStarts.Click()
-	require.Nil(t, err)
+	click(t, shardStarts)
 
 	wait(t, selenium.ByClassName, "vt-card")
 }
@@ -463,8 +450,7 @@ func navigateToShardView(t *testing.T) {
 	require.Nil(t, err)
 	require.Equal(t, 2, len(shardCards))
 
-	err = shardCards[0].Click()
-	require.Nil(t, err)
+	click(t, shardCards[0])
 
 	wait(t, selenium.ByID, "1")
 }
@@ -486,10 +472,38 @@ func assertDialogCommand(t *testing.T, dialog selenium.WebElement, cmds []string
 
 	var tmpCmd []string
 	for _, elm := range elms {
-		txt, err := elm.Text()
-		require.Nil(t, err)
-		tmpCmd = append(tmpCmd, txt)
+		tmpCmd = append(tmpCmd, text(t, elm))
 	}
 
 	assert.ElementsMatch(t, cmds, tmpCmd)
+}
+
+func text(t *testing.T, elem selenium.WebElement) string {
+	for i := 0; i < 5; i++ {
+		opTxt, err := elem.Text()
+		require.Nil(t, err)
+		if opTxt != "" {
+			return opTxt
+		}
+	}
+
+	return ""
+}
+
+func click(t *testing.T, elem selenium.WebElement) {
+	require.Nil(t, elem.Click())
+}
+
+// ss takes screenshot of chrome, for debugging only.
+func ss(t *testing.T, name string) {
+	b, err := wd.Screenshot()
+	require.Nil(t, err)
+	f, err := os.Create("./" + name)
+	require.Nil(t, err)
+	_, err = f.Write(b)
+	require.Nil(t, err)
+}
+
+func getPort() int {
+	return 50000 + rand.Intn(10000)
 }
