@@ -82,16 +82,11 @@ func TestAutocommitUpdateLookup(t *testing.T) {
 // TestAutocommitUpdateVindexChange: transaction: select & update before final update.
 func TestAutocommitUpdateVindexChange(t *testing.T) {
 	executor, sbc, _, sbclookup := createExecutorEnv()
-	sbc.SetResults([]*sqltypes.Result{{
-		Fields: []*querypb.Field{
-			{Name: "name", Type: sqltypes.VarChar},
-		},
-		RowsAffected: 1,
-		InsertID:     0,
-		Rows:         [][]sqltypes.Value{{
-			//sqltypes.NewVarChar("myname"),
-		}},
-	}})
+	sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("id|name|lastname", "varbinary|int32|varchar"),
+		"1|1|foo",
+	),
+	})
 
 	_, err := autocommitExec(executor, "update user2 set name='myname', lastname='mylastname' where id = 1")
 	require.NoError(t, err)
