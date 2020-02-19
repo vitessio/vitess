@@ -24,8 +24,11 @@ import (
 	"net/http"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -444,9 +447,18 @@ func GetShardInfo(t *testing.T, shard1Ks string, ci cluster.LocalProcessCluster)
 func checkThrottlerServiceMaxRates(t *testing.T, server string, names []string, rate int, ci cluster.LocalProcessCluster) {
 	// Avoid flakes by waiting for all throttlers. (Necessary because filtered
 	// replication on vttablet will register the throttler asynchronously.)
-	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerMaxRates", "--server", server)
-	assert.Nil(t, err)
+	var output string
+	var err error
+	startTime := time.Now()
 	msg := fmt.Sprintf("%d active throttler(s)", len(names))
+	for {
+		output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerMaxRates", "--server", server)
+		require.Nil(t, err)
+		if strings.Contains(output, msg) || (time.Now().After(startTime.Add(2 * time.Minute))) {
+			break
+		}
+		time.Sleep(2 * time.Second)
+	}
 	assert.Contains(t, output, msg)
 
 	for _, name := range names {
