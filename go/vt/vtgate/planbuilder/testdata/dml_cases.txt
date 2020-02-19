@@ -326,7 +326,7 @@
     "Vindex": "user_index",
     "Values": [1],
     "Table": "user",
-    "OwnedVindexQuery": "select Name, Costly from user where id = 1 for update"
+    "OwnedVindexQuery": "select Id, Name, Costly from user where id = 1 for update"
   }
 }
 
@@ -388,7 +388,7 @@
       1
     ],
     "Table": "user",
-    "OwnedVindexQuery": "select Name, Costly from user where id = 1 for update"
+    "OwnedVindexQuery": "select Id, Name, Costly from user where id = 1 for update"
   }
 }
 
@@ -465,7 +465,7 @@
     "Vindex": "music_user_map",
     "Values": [1],
     "Table": "music",
-    "OwnedVindexQuery": "select id from music where id = 1 for update"
+    "OwnedVindexQuery": "select user_id, id from music where id = 1 for update"
   }
 }
 
@@ -1480,7 +1480,7 @@
       1
     ],
     "Table": "multicolvin",
-    "OwnedVindexQuery": "select column_a, column_b, column_c from multicolvin where kid = 1 for update"
+    "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update"
   }
 }
 
@@ -1847,7 +1847,7 @@
   }
 }
 
-# update multiple vindex value to null
+# update vindex value to null with multiple primary keyspace id
 "update user set name = null where id in (1, 2, 3)"
 {
   "Original": "update user set name = null where id in (1, 2, 3)",
@@ -1863,5 +1863,91 @@
     },
     "Table": "user",
     "OwnedVindexQuery": "select Id, Name, Costly from user where id in (1, 2, 3) for update"
+  }
+}
+
+# update vindex value to null without a where clause
+"update user set name = null"
+{
+  "Original": "update user set name = null",
+  "Instructions": {
+    "Opcode": "UpdateScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user set name = null",
+    "ChangedVindexValues": {
+      "name_user_map": [null]
+    },
+    "Table": "user",
+    "OwnedVindexQuery": "select Id, Name, Costly from user for update"
+  }
+}
+
+# update vindex value to null with complex where clause
+"update user set name = null where id + 1 = 2"
+{
+  "Original": "update user set name = null where id + 1 = 2",
+  "Instructions": {
+    "Opcode": "UpdateScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user set name = null where id + 1 = 2",
+    "ChangedVindexValues": {
+      "name_user_map": [null]
+    },
+    "Table": "user",
+    "OwnedVindexQuery": "select Id, Name, Costly from user where id + 1 = 2 for update"
+  }
+}
+
+# delete from user by primary keyspace id with in clause
+"delete from user where id in (1, 2, 3)"
+{
+  "Original": "delete from user where id in (1, 2, 3)",
+  "Instructions": {
+    "Opcode": "DeleteScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "delete from user where id in (1, 2, 3)",
+    "Table": "user",
+    "OwnedVindexQuery": "select Id, Name, Costly from user where id in (1, 2, 3) for update"
+  }
+}
+
+# delete from user by complex expression
+"delete from user where id + 1 = 2"
+{
+  "Original": "delete from user where id + 1 = 2",
+  "Instructions": {
+    "Opcode": "DeleteScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "delete from user where id + 1 = 2",
+    "Table": "user",
+    "OwnedVindexQuery": "select Id, Name, Costly from user where id + 1 = 2 for update"
+  }
+}
+
+# delete from user without a where clause
+"delete from user"
+{
+  "Original": "delete from user",
+  "Instructions": {
+    "Opcode": "DeleteScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "delete from user",
+    "Table": "user",
+    "OwnedVindexQuery": "select Id, Name, Costly from user for update"
   }
 }
