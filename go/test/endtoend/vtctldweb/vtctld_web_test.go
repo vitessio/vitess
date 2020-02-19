@@ -33,8 +33,7 @@ func TestRealtimeStats(t *testing.T) {
 	statusBtn, err := wd.FindElement(selenium.ByPartialLinkText, "Status")
 	require.Nil(t, err)
 
-	err = statusBtn.Click()
-	require.Nil(t, err)
+	click(t, statusBtn)
 
 	wait(t, selenium.ByTagName, "vt-status")
 
@@ -92,19 +91,14 @@ func TestCreateKs(t *testing.T) {
 	dashboardMenu, err := dashboardContent.FindElement(selenium.ByClassName, "vt-menu")
 	require.Nil(t, err)
 
-	err = dashboardMenu.Click()
-	require.Nil(t, err)
+	click(t, dashboardMenu)
 
 	dashboardOptions, err := dashboardContent.FindElements(selenium.ByClassName, "ui-menuitem-text")
 	require.Nil(t, err)
 
 	for _, v := range dashboardOptions {
-		txt, err := v.Text()
-		require.Nil(t, err)
-
-		if txt == "New" {
-			err := v.Click()
-			require.Nil(t, err)
+		if text(t, v) == "New" {
+			click(t, v)
 			break
 		}
 	}
@@ -131,26 +125,22 @@ func TestCreateKs(t *testing.T) {
 	dropdown, err := dialog.FindElement(selenium.ByTagName, "p-dropdown")
 	require.Nil(t, err)
 
-	err = dropdown.Click()
-	require.Nil(t, err)
+	click(t, dropdown)
 
 	options, err := dropdown.FindElements(selenium.ByTagName, "li")
 	require.Nil(t, err)
 
-	err = options[1].Click()
-	require.Nil(t, err)
+	click(t, options[1])
 
 	assertDialogCommand(t, dialog, []string{"CreateKeyspace", "-sharding_column_name=test_id", "-sharding_column_type=BYTES", "-force=false", "test_keyspace3"})
 
 	create, err := dialog.FindElement(selenium.ByID, "vt-action")
 	require.Nil(t, err)
-	err = create.Click()
-	require.Nil(t, err)
+	click(t, create)
 
 	dismiss, err := dialog.FindElement(selenium.ByID, "vt-dismiss")
 	require.Nil(t, err)
-	err = dismiss.Click()
-	require.Nil(t, err)
+	click(t, dismiss)
 
 	ksNames := getDashboardKeyspaces(t)
 	assert.ElementsMatch(t, []string{"test_keyspace", "test_keyspace2", "test_keyspace3"}, ksNames)
@@ -159,31 +149,24 @@ func TestCreateKs(t *testing.T) {
 	require.Nil(t, err)
 	menu, err := testKs[2].FindElement(selenium.ByClassName, "vt-menu")
 	require.Nil(t, err)
-	err = menu.Click()
-	require.Nil(t, err)
+	click(t, menu)
 
 	options, err = testKs[2].FindElements(selenium.ByTagName, "li")
 	require.Nil(t, err)
 	for _, v := range options {
-		txt, err := v.Text()
-		require.Nil(t, err)
-
-		if txt == "Delete" {
-			err := v.Click()
-			require.Nil(t, err)
+		if text(t, v) == "Delete" {
+			click(t, v)
 			break
 		}
 	}
 
 	delete, err := dialog.FindElement(selenium.ByID, "vt-action")
 	require.Nil(t, err)
-	err = delete.Click()
-	require.Nil(t, err)
+	click(t, delete)
 
 	dismiss, err = dialog.FindElement(selenium.ByID, "vt-dismiss")
 	require.Nil(t, err)
-	err = dismiss.Click()
-	require.Nil(t, err)
+	click(t, dismiss)
 
 	ksNames = getDashboardKeyspaces(t)
 	assert.ElementsMatch(t, []string{"test_keyspace", "test_keyspace2"}, ksNames)
@@ -206,17 +189,13 @@ func TestDashboardValidate(t *testing.T) {
 
 	menu, err := dashboardContent.FindElement(selenium.ByClassName, "vt-menu")
 	require.Nil(t, err)
-	err = menu.Click()
-	require.Nil(t, err)
+	click(t, menu)
 
 	firstOption, err := dashboardContent.FindElement(selenium.ByClassName, "ui-menuitem-text")
 	require.Nil(t, err)
-	txt, err := firstOption.Text()
-	require.Nil(t, err)
-	assert.Equal(t, "Validate", txt)
+	assert.Equal(t, "Validate", text(t, firstOption))
 
-	err = firstOption.Click()
-	require.Nil(t, err)
+	click(t, firstOption)
 
 	dialog, err := dashboardContent.FindElement(selenium.ByTagName, "vt-dialog")
 	require.Nil(t, err)
@@ -226,24 +205,19 @@ func TestDashboardValidate(t *testing.T) {
 	checkBoxes, err := dialog.FindElements(selenium.ByClassName, "md-checkbox-inner-container")
 	require.Nil(t, err)
 
-	err = checkBoxes[0].Click()
-	require.Nil(t, err)
+	click(t, checkBoxes[0])
 
 	assertDialogCommand(t, dialog, []string{"Validate", "-ping-tablets"})
 
 	validate, err := dialog.FindElement(selenium.ByID, "vt-action")
 	require.Nil(t, err)
-	err = validate.Click()
-	require.Nil(t, err)
+	click(t, validate)
 	validateResp, err := dialog.FindElement(selenium.ByClassName, "vt-resp")
 	require.Nil(t, err)
-	txt, err = validateResp.Text()
-	require.Nil(t, err)
 
-	fmt.Printf("Validate command response: %s\n", txt)
+	fmt.Printf("Validate command response: %s\n", text(t, validateResp))
 
 	dismiss, err := dialog.FindElement(selenium.ByID, "vt-dismiss")
 	require.Nil(t, err)
-	err = dismiss.Click()
-	require.Nil(t, err)
+	click(t, dismiss)
 }
