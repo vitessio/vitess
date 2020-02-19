@@ -14,6 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is a convenience script to run vtctlclient against the local example.
+# This is an example script that stops the etcd servers started by etcd-up.sh.
 
-exec vtctlclient -server localhost:15999 "$@"
+source ./env.sh
+
+echo "Stopping etcd..."
+kill -9 `cat $VTDATAROOT/tmp/etcd.pid` 

@@ -52,7 +52,7 @@
   <scm>
     <connection>scm:git:git@github.com:vitessio/vitess.git</connection>
     <developerConnection>scm:git:git@github.com:vitessio/vitess.git</developerConnection>
-    <url>http://github.com/vitessio/vitess/tree/master</url>
+    <url>https://github.com/vitessio/vitess/tree/master</url>
   </scm>
   <issueManagement>
     <system>GitHub</system>

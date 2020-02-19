@@ -14,15 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is an example script that stops the instance started by vtgate-up.sh.
+# This is an example script that stops vtctld.
 
-set -e
+source ./env.sh
 
-script_root=`dirname "${BASH_SOURCE}"`
-source $script_root/env.sh
-
-# Stop vtgate.
-pid=`cat $VTDATAROOT/tmp/vtgate.pid`
-echo "Stopping vtgate..."
-kill $pid
-
+echo "Stopping vtctld..."
+kill -9 `cat $VTDATAROOT/tmp/vtctld.pid`
