@@ -27,7 +27,7 @@ update user set pet='fido' where id=1
 update user set name='alicia' where id=1
 
 1 ks_sharded/-40: begin
-1 ks_sharded/-40: select name from user where id = 1 limit 10001 for update
+1 ks_sharded/-40: select id, name from user where id = 1 limit 10001 for update
 2 ks_sharded/80-c0: begin
 2 ks_sharded/80-c0: delete from name_user_map where (name = 'name_val_1' and user_id = 1) /* vtgate:: keyspace_id:a6e89b54b129c33051b76db219595660 */
 3 ks_sharded/c0-: begin
@@ -43,7 +43,7 @@ update user set name='alicia' where name='alice'
 1 ks_sharded/40-80: begin
 1 ks_sharded/40-80: select user_id from name_user_map where name = 'alice' limit 10001
 2 ks_sharded/-40: begin
-2 ks_sharded/-40: select name from user where name = 'alice' limit 10001 for update
+2 ks_sharded/-40: select id, name from user where name = 'alice' limit 10001 for update
 3 ks_sharded/80-c0: begin
 3 ks_sharded/80-c0: delete from name_user_map where (name = 'name_val_1' and user_id = 1) /* vtgate:: keyspace_id:a6e89b54b129c33051b76db219595660 */
 4 ks_sharded/c0-: begin

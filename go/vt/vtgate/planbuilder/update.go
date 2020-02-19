@@ -216,7 +216,10 @@ func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (dmlRoutingTyp
 			continue
 		}
 
-		keyColumn = sqlparser.String(index.Columns[0])
+		if keyColumn == "" { //TODO - check with sougou on how to deterministically get the primary vindex column
+			keyColumn = sqlparser.String(index.Columns[0])
+		}
+
 		if where == nil {
 			return scatter, nil, keyColumn, nil
 		}

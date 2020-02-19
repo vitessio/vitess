@@ -74,15 +74,12 @@ func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Del
 		edel.TargetDestination = ro.eroute.TargetDestination
 		return edel, nil
 	}
-	routingType, vindex, _, values := getDMLRouting(del.Where, edel.Table)
+	routingType, vindex, vindexCol, values := getDMLRouting(del.Where, edel.Table)
 
 	if routingType == scatter {
 		edel.Opcode = engine.DeleteScatter
-		if len(edel.Table.Owned) != 0 {
-			return nil, errors.New("unsupported: multi shard delete on a table with owned lookup vindexes")
-		}
 		if del.Limit != nil {
-			return nil, errors.New("unsupported: multi shard delete with limit")
+			return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "unsupported: multi shard delete with limit")
 		}
 	} else {
 		edel.Values = values
@@ -90,26 +87,22 @@ func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Del
 		edel.Opcode = engine.DeleteEqual
 	}
 
-	edel.OwnedVindexQuery = generateDeleteSubquery(del, edel.Table)
+	edel.OwnedVindexQuery = generateDeleteSubquery(del, edel.Table, vindexCol)
 	return edel, nil
 }
 
 // generateDeleteSubquery generates the query to fetch the rows
 // that will be deleted. This allows VTGate to clean up any
 // owned vindexes as needed.
-func generateDeleteSubquery(del *sqlparser.Delete, table *vindexes.Table) string {
+func generateDeleteSubquery(del *sqlparser.Delete, table *vindexes.Table, vindexCol string) string {
 	if len(table.Owned) == 0 {
 		return ""
 	}
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.WriteString("select ")
-	for vIdx, cv := range table.Owned {
-		for cIdx, column := range cv.Columns {
-			if cIdx == 0 && vIdx == 0 {
-				buf.Myprintf("%v", column)
-			} else {
-				buf.Myprintf(", %v", column)
-			}
+	buf.Myprintf("select %s", vindexCol)
+	for _, cv := range table.Owned {
+		for _, column := range cv.Columns {
+			buf.Myprintf(", %v", column)
 		}
 	}
 	buf.Myprintf(" from %v%v for update", table.Name, del.Where)
