@@ -16,12 +16,9 @@
 
 # This is an example script that creates a quorum of ZooKeeper servers.
 
-set -e
+source ./env.sh
 
 cell=${CELL:-'test'}
-
-script_root=`dirname "${BASH_SOURCE}"`
-source $script_root/env.sh
 
 # Start ZooKeeper servers.
 # The "zkctl init" command won't return until the server is able to contact its

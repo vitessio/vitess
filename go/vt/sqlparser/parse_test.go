@@ -197,6 +197,8 @@ var (
 	}, {
 		input: "select /* use */ 1 from t1 use index (a) where b = 1",
 	}, {
+		input: "select /* use */ 1 from t1 use index () where b = 1",
+	}, {
 		input: "select /* keyword index */ 1 from t1 use index (`By`) where b = 1",
 	}, {
 		input: "select /* ignore */ 1 from t1 as t2 ignore index (a), t3 use index (b) where b = 1",
