@@ -57,7 +57,6 @@ var (
 	hostname         = "localhost"
 	keyspaceName     = "test_keyspace"
 	shardName        = "0"
-	keyspaceIDType   = "uint64"
 	shardTablets     []*cluster.Vttablet
 	shard0Tablets    []*cluster.Vttablet
 	shard1Tablets    []*cluster.Vttablet
@@ -112,6 +111,7 @@ func TestReparentDuringWorkerCopyMysqlDown(t *testing.T) {
 
 func TestWebInterface(t *testing.T) {
 	_, err := initializeCluster(t, true)
+	require.Nil(t, err)
 	defer localCluster.Teardown()
 	err = localCluster.StartVtworker(cell, "--use_v3_resharding_mode=true")
 	assert.Nil(t, err)
@@ -179,8 +179,8 @@ func initialSetup(t *testing.T) {
 	runShardTablets(t, "80-", shard1Tablets, false)
 
 	// insert values
-	insertValues(master, "shard-0", 1, 2000, 0)
-	insertValues(master, "shard-1", 4, 2000, 1)
+	insertValues(master, "shard-0", 1, 4000, 0)
+	insertValues(master, "shard-1", 4, 4000, 1)
 
 	// wait for replication position
 	cluster.WaitForReplicationPos(t, master, rdOnly1, "localhost", 60)
@@ -575,6 +575,7 @@ func initializeCluster(t *testing.T, onlyTopo bool) (int, error) {
 	localCluster.VtTabletExtraArgs = append(localCluster.VtTabletExtraArgs, commonTabletArg...)
 
 	err = localCluster.LaunchCluster(keyspace, []cluster.Shard{*shard, *shard0, *shard1})
+	assert.Nil(t, err)
 
 	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
