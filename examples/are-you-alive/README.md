@@ -52,8 +52,7 @@ and everything else will be set to defaults.
 ## Building
 
 ```
-dep ensure -v
-go build github.com/planetscale/are-you-alive/cmd/are-you-alive
+go build vitess.io/vitess/examples/are-you-alive/cmd/are-you-alive
 ```
 
 ## Testing
@@ -62,7 +61,6 @@ First, [install docker compose](https://docs.docker.com/compose/install/) and
 make sure it's working.  Then run:
 
 ```
-dep ensure -v
 docker-compose build
 docker-compose up
 ```
