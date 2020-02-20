@@ -179,8 +179,8 @@ func initialSetup(t *testing.T) {
 	runShardTablets(t, "80-", shard1Tablets, false)
 
 	// insert values
-	insertValues(master, "shard-0", 1, 2000, 0)
-	insertValues(master, "shard-1", 4, 2000, 1)
+	insertValues(master, "shard-0", 1, 4000, 0)
+	insertValues(master, "shard-1", 4, 4000, 1)
 
 	// wait for replication position
 	cluster.WaitForReplicationPos(t, master, rdOnly1, "localhost", 60)
