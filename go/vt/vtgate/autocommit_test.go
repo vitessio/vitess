@@ -160,7 +160,7 @@ func TestAutocommitDeleteLookup(t *testing.T) {
 	testCommitCount(t, "sbclookup", sbclookup, 1)
 
 	testQueries(t, "sbc1", sbc1, []*querypb.BoundQuery{{
-		Sql:           "select id from music where id = 1 for update",
+		Sql:           "select user_id, id from music where id = 1 for update",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
 		Sql:           "delete from music where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",

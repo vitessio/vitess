@@ -340,7 +340,7 @@ func TestDeleteEqual(t *testing.T) {
 	_, err := executorExec(executor, "delete from user where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select name from user where id = 1 for update",
+		Sql:           "select Id, name from user where id = 1 for update",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
 		Sql:           "delete from user where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
@@ -367,7 +367,7 @@ func TestDeleteEqual(t *testing.T) {
 	_, err = executorExec(executor, "delete from user where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql:           "select name from user where id = 1 for update",
+		Sql:           "select Id, name from user where id = 1 for update",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
 		Sql:           "delete from user where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */",
@@ -420,7 +420,7 @@ func TestDeleteEqual(t *testing.T) {
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{
 		{
-			Sql:           "select name, lastname from user2 where id = 1 for update",
+			Sql:           "select id, name, lastname from user2 where id = 1 for update",
 			BindVariables: map[string]*querypb.BindVariable{},
 		},
 		{
@@ -516,7 +516,7 @@ func TestDeleteComments(t *testing.T) {
 	_, err := executorExec(executor, "delete from user where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql:           "select name from user where id = 1 for update /* trailing */",
+		Sql:           "select Id, name from user where id = 1 for update /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{},
 	}, {
 		Sql:           "delete from user where id = 1 /* vtgate:: keyspace_id:166b40b44aba4bd6 */ /* trailing */",
