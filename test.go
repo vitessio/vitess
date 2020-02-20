@@ -174,7 +174,7 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 		testCmd = append(testCmd, extraArgs...)
 		if *docker {
 			// Teardown is unnecessary since Docker kills everything.
-			testCmd = append(testCmd, "--skip-teardown")
+			// testCmd = append(testCmd, "--skip-teardown")
 		}
 	}
 

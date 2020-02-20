@@ -6,7 +6,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        name: [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+        name: [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]
 
     steps:
     - name: Set up Go
@@ -35,11 +35,16 @@ jobs:
     - name: Installing zookeeper and consul
       run: |
         # Only running for shard 18 and 24 where we need to install consul and zookeeper
-        if [[ ${{matrix.name}} == 18 || ${{matrix.name}} == 24 ]]; then
+        if [[ ${{matrix.name}} == 18 || ${{matrix.name}} == 24 || ${{matrix.name}} == 25 ]]; then
           make tools
         fi
 
     - name: sharded cluster_endtoend
       run: |
         source build.env
-        eatmydata -- go run test.go -docker=false -print-log -shard ${{matrix.name}} 
+        if [[ ${{matrix.name}} == 25 ]]; then
+          eatmydata -- go run test.go -docker=true -print-log -shard ${{matrix.name}} 
+        else
+          eatmydata -- go run test.go -docker=false -print-log -shard ${{matrix.name}} 
+        fi
+        
