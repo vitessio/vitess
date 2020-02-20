@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"github.com/go-sql-driver/mysql"
-	"github.com/planetscale/are-you-alive/pkg/client"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -16,6 +15,7 @@ import (
 	"os/signal"
 	"sync"
 	"time"
+	"vitess.io/vitess/examples/are-you-alive/pkg/client"
 )
 
 /*

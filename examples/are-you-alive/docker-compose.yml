@@ -5,8 +5,8 @@ services:
     build: build/dev
     image: are-you-alive-dev
     volumes:
-      - .:/go/src/github.com/planetscale/are-you-alive
-    working_dir: /go/src/github.com/planetscale/are-you-alive
+      - .:/go/src/vitess.io/vitess/examples/are-you-alive
+    working_dir: /go/src/vitess.io/vitess/examples/are-you-alive
     environment:
       MYSQL_CONN_STRING: root:mysql@tcp(mysql)/testfixture
     depends_on:
