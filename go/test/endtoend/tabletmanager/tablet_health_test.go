@@ -261,6 +261,7 @@ func TestIgnoreHealthError(t *testing.T) {
 	tablet := clusterInstance.GetVttabletInstance("replica", 0, "")
 	tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
 	err := tablet.MysqlctlProcess.Start()
+	assert.Nil(t, err)
 
 	// start vttablet process
 	tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,

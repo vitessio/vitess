@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 
 	"vitess.io/vitess/go/vt/key"
@@ -137,9 +138,7 @@ func TestLookupNonUniqueMap(t *testing.T) {
 	vc := &vcursor{numRows: 2}
 
 	got, err := lookupNonUnique.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []key.Destination{
 		key.DestinationKeyspaceIDs([][]byte{
 			[]byte("1"),
@@ -193,9 +192,7 @@ func TestLookupNonUniqueMapAutocommit(t *testing.T) {
 	vc := &vcursor{numRows: 2}
 
 	got, err := lookupNonUnique.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []key.Destination{
 		key.DestinationKeyspaceIDs([][]byte{
 			[]byte("1"),
@@ -235,9 +232,7 @@ func TestLookupNonUniqueMapWriteOnly(t *testing.T) {
 	vc := &vcursor{numRows: 0}
 
 	got, err := lookupNonUnique.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []key.Destination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{},
@@ -256,9 +251,7 @@ func TestLookupNonUniqueMapAbsent(t *testing.T) {
 	vc := &vcursor{numRows: 0}
 
 	got, err := lookupNonUnique.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []key.Destination{
 		key.DestinationNone{},
 		key.DestinationNone{},
@@ -273,9 +266,7 @@ func TestLookupNonUniqueVerify(t *testing.T) {
 	vc := &vcursor{numRows: 1}
 
 	_, err := lookupNonUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("test1"), []byte("test2")})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	wantqueries := []*querypb.BoundQuery{{
 		Sql: "select fromc from t where fromc = :fromc and toc = :toc",
@@ -308,9 +299,7 @@ func TestLookupNonUniqueVerify(t *testing.T) {
 	vc.queries = nil
 
 	got, err := lookupNonUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte(""), []byte("")})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if vc.queries != nil {
 		t.Errorf("lookup.Verify(writeOnly), queries: %v, want nil", vc.queries)
 	}
@@ -334,9 +323,7 @@ func TestLookupNonUniqueVerifyAutocommit(t *testing.T) {
 	vc := &vcursor{numRows: 1}
 
 	_, err = lookupNonUnique.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("test1"), []byte("test2")})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	wantqueries := []*querypb.BoundQuery{{
 		Sql: "select fromc from t where fromc = :fromc and toc = :toc",
@@ -365,9 +352,7 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 	vc := &vcursor{}
 
 	err := lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}, [][]byte{[]byte("test1"), []byte("test2")}, false /* ignoreMode */)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	wantqueries := []*querypb.BoundQuery{{
 		Sql: "insert into t(fromc, toc) values(:fromc0, :toc0), (:fromc1, :toc1)",
@@ -385,9 +370,7 @@ func TestLookupNonUniqueCreate(t *testing.T) {
 	// With ignore.
 	vc.queries = nil
 	err = lookupNonUnique.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(2)}, {sqltypes.NewInt64(1)}}, [][]byte{[]byte("test2"), []byte("test1")}, true /* ignoreMode */)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	wantqueries[0].Sql = "insert ignore into t(fromc, toc) values(:fromc0, :toc0), (:fromc1, :toc1)"
 	if !reflect.DeepEqual(vc.queries, wantqueries) {
@@ -432,9 +415,7 @@ func TestLookupNonUniqueCreateAutocommit(t *testing.T) {
 		}},
 		[][]byte{[]byte("test1"), []byte("test2")},
 		false /* ignoreMode */)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	wantqueries := []*querypb.BoundQuery{{
 		Sql: "insert into t(from1, from2, toc) values(:from10, :from20, :toc0), (:from11, :from21, :toc1) on duplicate key update from1=values(from1), from2=values(from2), toc=values(toc)",
@@ -461,9 +442,7 @@ func TestLookupNonUniqueDelete(t *testing.T) {
 	vc := &vcursor{}
 
 	err := lookupNonUnique.(Lookup).Delete(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}, []byte("test"))
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	wantqueries := []*querypb.BoundQuery{{
 		Sql: "delete from t where fromc = :fromc and toc = :toc",
@@ -509,9 +488,7 @@ func TestLookupNonUniqueDeleteAutocommit(t *testing.T) {
 	vc := &vcursor{}
 
 	err := lookupNonUnique.(Lookup).Delete(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}, {sqltypes.NewInt64(2)}}, []byte("test"))
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	wantqueries := []*querypb.BoundQuery(nil)
 	if !reflect.DeepEqual(vc.queries, wantqueries) {
@@ -524,9 +501,7 @@ func TestLookupNonUniqueUpdate(t *testing.T) {
 	vc := &vcursor{}
 
 	err := lookupNonUnique.(Lookup).Update(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, []byte("test"), []sqltypes.Value{sqltypes.NewInt64(2)})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	wantqueries := []*querypb.BoundQuery{{
 		Sql: "delete from t where fromc = :fromc and toc = :toc",

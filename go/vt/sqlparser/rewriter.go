@@ -2,7 +2,7 @@
 
 package sqlparser
 
-//go:generate make visitor
+//go:generate go run visitorgen/main -input=ast.go -output=rewriter.go
 
 import (
 	"reflect"

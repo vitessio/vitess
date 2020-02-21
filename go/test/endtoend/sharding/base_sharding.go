@@ -24,8 +24,11 @@ import (
 	"net/http"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -183,16 +186,16 @@ func CheckBinlogPlayerVars(t *testing.T, vttablet cluster.Vttablet, sourceShards
 	replicationSourceObj := reflect.ValueOf(tabletVars["VReplicationSource"])
 	replicationSourceValue := []string{}
 
-	assert.Equal(t,
-		fmt.Sprintf("%v", replicationSourceObj.MapKeys()),
-		fmt.Sprintf("%v", reflect.ValueOf(tabletVars["VReplicationSourceTablet"]).MapKeys()))
+	assert.Equal(t, len(replicationSourceObj.MapKeys()), len(reflect.ValueOf(tabletVars["VReplicationSourceTablet"]).MapKeys()))
 
 	for _, key := range replicationSourceObj.MapKeys() {
 		replicationSourceValue = append(replicationSourceValue,
 			fmt.Sprintf("%v", replicationSourceObj.MapIndex(key)))
 	}
 
-	assert.True(t, reflect.DeepEqual(replicationSourceValue, sourceShards))
+	for _, shard := range sourceShards {
+		assert.Containsf(t, replicationSourceValue, shard, "Source shard is not matched with vReplication shard value")
+	}
 
 	if secondBehindMaster != 0 {
 		secondBehindMaserMaxStr := fmt.Sprintf("%v", reflect.ValueOf(tabletVars["VReplicationSecondsBehindMasterMax"]))
@@ -444,9 +447,18 @@ func GetShardInfo(t *testing.T, shard1Ks string, ci cluster.LocalProcessCluster)
 func checkThrottlerServiceMaxRates(t *testing.T, server string, names []string, rate int, ci cluster.LocalProcessCluster) {
 	// Avoid flakes by waiting for all throttlers. (Necessary because filtered
 	// replication on vttablet will register the throttler asynchronously.)
-	output, err := ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerMaxRates", "--server", server)
-	assert.Nil(t, err)
+	var output string
+	var err error
+	startTime := time.Now()
 	msg := fmt.Sprintf("%d active throttler(s)", len(names))
+	for {
+		output, err = ci.VtctlclientProcess.ExecuteCommandWithOutput("ThrottlerMaxRates", "--server", server)
+		require.Nil(t, err)
+		if strings.Contains(output, msg) || (time.Now().After(startTime.Add(2 * time.Minute))) {
+			break
+		}
+		time.Sleep(2 * time.Second)
+	}
 	assert.Contains(t, output, msg)
 
 	for _, name := range names {

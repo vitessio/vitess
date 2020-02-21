@@ -1502,13 +1502,15 @@ show_statement:
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
 /* SHOW CHARACTER SET and SHOW CHARSET are equivalent */
-| SHOW CHARACTER SET ddl_skip_to_end
+| SHOW CHARACTER SET like_or_where_opt
   {
-    $$ = &Show{Type: CharsetStr}
+    showTablesOpt := &ShowTablesOpt{Filter: $4}
+    $$ = &Show{Type: CharsetStr, ShowTablesOpt: showTablesOpt}
   }
-| SHOW CHARSET ddl_skip_to_end
+| SHOW CHARSET like_or_where_opt
   {
-    $$ = &Show{Type: string($2)}
+    showTablesOpt := &ShowTablesOpt{Filter: $3}
+    $$ = &Show{Type: string($2), ShowTablesOpt: showTablesOpt}
   }
 | SHOW CREATE DATABASE ddl_skip_to_end
   {
@@ -2132,6 +2134,10 @@ index_hint_list:
 | USE INDEX openb column_list closeb
   {
     $$ = &IndexHints{Type: UseStr, Indexes: $4}
+  }
+| USE INDEX openb closeb
+  {
+    $$ = &IndexHints{Type: UseStr}
   }
 | IGNORE INDEX openb column_list closeb
   {

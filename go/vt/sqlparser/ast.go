@@ -1191,6 +1191,9 @@ func (node *Show) Format(buf *TrackedBuffer) {
 	if node.Type == "collation" && node.ShowCollationFilterOpt != nil {
 		buf.Myprintf(" where %v", *node.ShowCollationFilterOpt)
 	}
+	if node.Type == "charset" && node.ShowTablesOpt != nil {
+		buf.Myprintf("%v", node.ShowTablesOpt.Filter)
+	}
 	if node.HasTable() {
 		buf.Myprintf(" %v", node.Table)
 	}
@@ -1369,12 +1372,16 @@ func (node *JoinTableExpr) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *IndexHints) Format(buf *TrackedBuffer) {
 	buf.Myprintf(" %sindex ", node.Type)
-	prefix := "("
-	for _, n := range node.Indexes {
-		buf.Myprintf("%s%v", prefix, n)
-		prefix = ", "
+	if len(node.Indexes) == 0 {
+		buf.Myprintf("()")
+	} else {
+		prefix := "("
+		for _, n := range node.Indexes {
+			buf.Myprintf("%s%v", prefix, n)
+			prefix = ", "
+		}
+		buf.Myprintf(")")
 	}
-	buf.Myprintf(")")
 }
 
 // Format formats the node.

@@ -16,7 +16,7 @@ limitations under the License.
 
 package schema
 
-// Yes, this sucks. It's a tiny tiny package that needs to be on its own
+// Yes, this sucks. It's a tiny package that needs to be on its own
 // It contains a data structure that's shared between sqlparser & tabletserver
 
 import (

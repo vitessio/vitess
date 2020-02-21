@@ -17,13 +17,14 @@ limitations under the License.
 package vtbackup
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"path"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
@@ -54,8 +55,7 @@ func TestTabletInitialBackup(t *testing.T) {
 	//    - list the backups, remove them
 
 	vtBackup(t, true)
-	backups := countBackups(t)
-	assert.Equal(t, 1, backups)
+	verifyBackupCount(t, shardKsName, 1)
 
 	// Initialize the tablets
 	initTablets(t, false, false)
@@ -107,10 +107,11 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	//    - list the backup, remove it
 
 	// Store initial backup counts
-	backupsCount := countBackups(t)
+	backups, err := listBackups(shardKsName)
+	require.Nil(t, err)
 
 	// insert data on master, wait for slave to get it
-	_, err := master.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+	_, err = master.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
 	assert.Nil(t, err)
 	// Add a single row with value 'test1' to the master tablet
 	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test1')", keyspaceName, true)
@@ -125,8 +126,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	log.Info("done taking backup %s", time.Now())
 
 	// check that the backup shows up in the listing
-	backups := countBackups(t)
-	assert.Equal(t, backups, backupsCount+1)
+	verifyBackupCount(t, shardKsName, len(backups)+1)
 
 	// insert more data on the master
 	_, err = master.VttabletProcess.QueryTablet("insert into vt_insert_test (msg) values ('test2')", keyspaceName, true)
@@ -155,8 +155,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	}
 
 	removeBackups(t)
-	backups = countBackups(t)
-	assert.Equal(t, 0, backups)
+	verifyBackupCount(t, shardKsName, 0)
 
 }
 
@@ -168,50 +167,46 @@ func vtBackup(t *testing.T, initialBackup bool) {
 	assert.Nil(t, err)
 }
 
-func listBackups(t *testing.T) string {
-	// Get a list of backup names for the current shard.
-	localCluster.VtctlProcess = *cluster.VtctlProcessInstance(localCluster.TopoPort, localCluster.Hostname)
+func verifyBackupCount(t *testing.T, shardKsName string, expected int) []string {
+	backups, err := listBackups(shardKsName)
+	assert.Nil(t, err)
+	assert.Equalf(t, expected, len(backups), "invalid number of backups")
+	return backups
+}
+
+func listBackups(shardKsName string) ([]string, error) {
 	backups, err := localCluster.VtctlProcess.ExecuteCommandWithOutput(
 		"-backup_storage_implementation", "file",
 		"-file_backup_storage_root",
 		path.Join(os.Getenv("VTDATAROOT"), "tmp", "backupstorage"),
 		"ListBackups", shardKsName,
 	)
-	assert.Nil(t, err)
-	return backups
-}
-
-func countBackups(t *testing.T) int {
-	// Count the number of backups available in current shard.
-	backupList := listBackups(t)
-	backupCount := 0
-	// Counts the available backups
-	scanner := bufio.NewScanner(strings.NewReader(backupList))
-	for scanner.Scan() {
-		if scanner.Text() != "" {
-			backupCount++
+	if err != nil {
+		return nil, err
+	}
+	result := strings.Split(backups, "\n")
+	var returnResult []string
+	for _, str := range result {
+		if str != "" {
+			returnResult = append(returnResult, str)
 		}
 	}
-	return backupCount
+	return returnResult, nil
 }
 
 func removeBackups(t *testing.T) {
 	// Remove all the backups from the shard
-	backupList := listBackups(t)
-
-	scanner := bufio.NewScanner(strings.NewReader(backupList))
-	for scanner.Scan() {
-		if scanner.Text() != "" {
-			_, err := localCluster.VtctlProcess.ExecuteCommandWithOutput(
-				"-backup_storage_implementation", "file",
-				"-file_backup_storage_root",
-				path.Join(os.Getenv("VTDATAROOT"), "tmp", "backupstorage"),
-				"RemoveBackup", shardKsName, scanner.Text(),
-			)
-			assert.Nil(t, err)
-		}
+	backups, err := listBackups(shardKsName)
+	assert.Nil(t, err)
+	for _, backup := range backups {
+		_, err := localCluster.VtctlProcess.ExecuteCommandWithOutput(
+			"-backup_storage_implementation", "file",
+			"-file_backup_storage_root",
+			path.Join(os.Getenv("VTDATAROOT"), "tmp", "backupstorage"),
+			"RemoveBackup", shardKsName, backup,
+		)
+		assert.Nil(t, err)
 	}
-
 }
 
 func initTablets(t *testing.T, startTablet bool, initShardMaster bool) {
@@ -291,6 +286,8 @@ func tearDown(t *testing.T, initMysql bool) {
 		}
 	}
 
+	// TODO: Ideally we should not be resetting the mysql.
+	// So in below code we will have to uncomment the commented code and remove resetTabletDirectory
 	for _, tablet := range []cluster.Vttablet{*master, *replica1, *replica2} {
 		//Tear down Tablet
 		//err := tablet.VttabletProcess.TearDown()
@@ -300,5 +297,4 @@ func tearDown(t *testing.T, initMysql bool) {
 
 		resetTabletDirectory(t, tablet, initMysql)
 	}
-
 }
