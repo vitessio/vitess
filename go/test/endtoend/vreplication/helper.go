@@ -73,7 +73,7 @@ func validateQuery(t *testing.T, conn *mysql.Conn, database string, query string
 	qr := execVtgateQuery(t, conn, database, query)
 	assert.NotNil(t, qr)
 	if got, want := fmt.Sprintf("%v", qr.Rows), want; got != want {
-		return fmt.Sprintf("select:\n%v want\n%v", got, want)
+		return fmt.Sprintf("got:\n%v want\n%v", got, want)
 	}
 	return ""
 }
@@ -84,7 +84,7 @@ func validateQueryInTablet(t *testing.T, vttablet *cluster.VttabletProcess, data
 		return err.Error()
 	}
 	if got, want := fmt.Sprintf("%v", qr.Rows), want; got != want {
-		return fmt.Sprintf("select:\n%v want\n%v", got, want)
+		return fmt.Sprintf("got:\n%v want\n%v", got, want)
 	}
 	return ""
 }
