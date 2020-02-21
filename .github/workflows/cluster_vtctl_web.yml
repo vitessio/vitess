@@ -32,5 +32,5 @@ jobs:
     - name: Run vtctl web
       run: |
         # Running web test inside docker
-        eatmydata -- go run test.go -docker=true -print-log -shard ${{matrix.name}}
+        eatmydata -- go run test.go -docker=true -print-log -shard 25
 
