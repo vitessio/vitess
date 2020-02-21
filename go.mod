@@ -72,6 +72,7 @@ require (
 	github.com/spf13/viper v1.6.1 // indirect
 	github.com/stretchr/testify v1.4.0
 	github.com/tchap/go-patricia v0.0.0-20160729071656-dd168db6051b
+	github.com/tebeka/selenium v0.9.9
 	github.com/tinylib/msgp v1.1.1 // indirect
 	github.com/uber-go/atomic v1.4.0 // indirect
 	github.com/uber/jaeger-client-go v2.16.0+incompatible

@@ -1,0 +1,36 @@
+name: cluster_vtctl_web
+on: [push, pull_request]
+jobs:
+
+  build:
+    name: cluster vtctl web
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Set up Go
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.13
+
+    - name: Check out code
+      uses: actions/checkout@v2
+
+    - name: Get dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
+        sudo service mysql stop
+        sudo service etcd stop
+        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+        go mod download
+
+    - name: Run make tools
+      run: |
+        make tools
+
+    - name: Run vtctl web
+      run: |
+        # Running web test inside docker
+        eatmydata -- go run test.go -docker=true -print-log -shard 25
+
