@@ -149,6 +149,38 @@ func getTablet(tabletGrpcPort int, hostname string) *tabletpb.Tablet {
 	return &tabletpb.Tablet{Hostname: hostname, PortMap: portMap}
 }
 
+// WaitForReplicationPos will wait for replication position to catch-up
+func WaitForReplicationPos(t *testing.T, tabletA *Vttablet, tabletB *Vttablet, hostname string, timeout float64) {
+	replicationPosA, _ := GetMasterPosition(t, *tabletA, hostname)
+	for {
+		replicationPosB, _ := GetMasterPosition(t, *tabletB, hostname)
+		if positionAtLeast(t, tabletA, replicationPosB, replicationPosA) {
+			break
+		}
+		msg := fmt.Sprintf("%s's replication position to catch up to %s's;currently at: %s, waiting to catch up to: %s", tabletB.Alias, tabletA.Alias, replicationPosB, replicationPosA)
+		waitStep(t, msg, timeout, 0.01)
+	}
+}
+
+func waitStep(t *testing.T, msg string, timeout float64, sleepTime float64) float64 {
+	timeout = timeout - sleepTime
+	if timeout < 0.0 {
+		t.Errorf("timeout waiting for condition '%s'", msg)
+	}
+	time.Sleep(time.Duration(sleepTime) * time.Second)
+	return timeout
+}
+
+func positionAtLeast(t *testing.T, tablet *Vttablet, a string, b string) bool {
+	isAtleast := false
+	val, err := tablet.MysqlctlProcess.ExecuteCommandWithOutput("position", "at_least", a, b)
+	require.NoError(t, err)
+	if strings.Contains(val, "true") {
+		isAtleast = true
+	}
+	return isAtleast
+}
+
 // ExecuteQueriesUsingVtgate sends query to vtgate using vtgate session.
 func ExecuteQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, query string) {
 	_, err := session.Execute(context.Background(), query, nil)
