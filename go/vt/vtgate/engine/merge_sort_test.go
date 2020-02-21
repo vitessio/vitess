@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -69,9 +70,7 @@ func TestMergeSortNormal(t *testing.T) {
 		results = append(results, qr)
 		return nil
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	// Results are returned one row at a time.
 	wantResults := sqltypes.MakeTestStreamingResults(idColFields,
@@ -139,9 +138,7 @@ func TestMergeSortDescending(t *testing.T) {
 		results = append(results, qr)
 		return nil
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	// Results are returned one row at a time.
 	wantResults := sqltypes.MakeTestStreamingResults(idColFields,
@@ -198,9 +195,7 @@ func TestMergeSortEmptyResults(t *testing.T) {
 		results = append(results, qr)
 		return nil
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	// Results are returned one row at a time.
 	wantResults := sqltypes.MakeTestStreamingResults(idColFields,

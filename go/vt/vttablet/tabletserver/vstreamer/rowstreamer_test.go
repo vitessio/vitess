@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -172,9 +173,7 @@ func TestStreamRowsUnicode(t *testing.T) {
 		}
 		return nil
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestStreamRowsKeyRange(t *testing.T) {

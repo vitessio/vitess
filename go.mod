@@ -7,7 +7,7 @@ require (
 	github.com/Bowery/prompt v0.0.0-20190419144237-972d0ceb96f5 // indirect
 	github.com/GeertJohan/go.rice v1.0.0
 	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878 // indirect
-	github.com/aws/aws-sdk-go v0.0.0-20180223184012-ebef4262e06a
+	github.com/aws/aws-sdk-go v1.28.8
 	github.com/boltdb/bolt v1.3.1 // indirect
 	github.com/bombsimon/wsl v1.2.8 // indirect
 	github.com/cespare/xxhash/v2 v2.1.1
@@ -36,7 +36,7 @@ require (
 	github.com/gostaticanalysis/analysisutil v0.0.3 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.1.0
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
-	github.com/hashicorp/consul v1.4.0
+	github.com/hashicorp/consul v1.5.1
 	github.com/hashicorp/go-msgpack v0.5.5 // indirect
 	github.com/hashicorp/go-rootcerts v0.0.0-20160503143440-6bb64b370b90 // indirect
 	github.com/hashicorp/go-uuid v1.0.1 // indirect
@@ -44,7 +44,6 @@ require (
 	github.com/hashicorp/memberlist v0.1.4 // indirect
 	github.com/hashicorp/serf v0.0.0-20161207011743-d3a67ab21bc8 // indirect
 	github.com/icrowley/fake v0.0.0-20180203215853-4178557ae428
-	github.com/jmespath/go-jmespath v0.0.0-20160202185014-0b12d6b521d8 // indirect
 	github.com/klauspost/crc32 v1.2.0 // indirect
 	github.com/klauspost/pgzip v1.2.0
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect

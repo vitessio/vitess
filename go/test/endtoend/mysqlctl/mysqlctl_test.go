@@ -43,7 +43,7 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterInstance = &cluster.LocalProcessCluster{Cell: cell, Hostname: hostname}
+		clusterInstance = cluster.NewCluster(cell, hostname)
 		defer clusterInstance.Teardown()
 
 		// Start topo server
@@ -58,7 +58,7 @@ func TestMain(m *testing.M) {
 
 		initCluster([]string{"0"}, 2)
 
-		// Collect table paths and ports
+		// Collect tablet paths and ports
 		tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 		for _, tablet := range tablets {
 			if tablet.Type == "master" {
@@ -97,11 +97,11 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 			}
 			// Start Mysqlctl process
 			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
-			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			if err != nil {
 				return
-			} else {
-				mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 			}
+			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
 
 			// start vttablet process
 			tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,

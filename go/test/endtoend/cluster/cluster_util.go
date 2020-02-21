@@ -27,13 +27,41 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/mysql"
 	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
 var (
 	tmClient = tmc.NewClient()
 )
+
+// Restart restarts vttablet and mysql.
+func (tablet *Vttablet) Restart() error {
+	if tablet.MysqlctlProcess.TabletUID|tablet.MysqlctldProcess.TabletUID == 0 {
+		return fmt.Errorf("no mysql process is running")
+	}
+
+	if tablet.MysqlctlProcess.TabletUID > 0 {
+		tablet.MysqlctlProcess.Stop()
+		tablet.VttabletProcess.TearDown()
+		os.RemoveAll(tablet.VttabletProcess.Directory)
+
+		return tablet.MysqlctlProcess.Start()
+	}
+
+	tablet.MysqlctldProcess.Stop()
+	tablet.VttabletProcess.TearDown()
+	os.RemoveAll(tablet.VttabletProcess.Directory)
+
+	return tablet.MysqlctldProcess.Start()
+}
+
+// ValidateTabletRestart restarts the tablet and validate error if there is any.
+func (tablet *Vttablet) ValidateTabletRestart(t *testing.T) {
+	require.Nilf(t, tablet.Restart(), "tablet restart failed")
+}
 
 // GetMasterPosition gets the master position of required vttablet
 func GetMasterPosition(t *testing.T, vttablet Vttablet, hostname string) (string, string) {
@@ -50,7 +78,7 @@ func VerifyRowsInTablet(t *testing.T, vttablet *Vttablet, ksName string, expecte
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
 		qr, err := vttablet.VttabletProcess.QueryTablet("select * from vt_insert_test", ksName, true)
-		assert.Nil(t, err)
+		require.Nil(t, err)
 		if len(qr.Rows) == expectedRows {
 			return
 		}
@@ -137,4 +165,62 @@ func filterResultWhenRunsForCoverage(input string) string {
 		result = result + line + "\n"
 	}
 	return result
+}
+
+// WaitForReplicationPos will wait for replication position to catch-up
+func WaitForReplicationPos(t *testing.T, tabletA *Vttablet, tabletB *Vttablet, hostname string, timeout float64) {
+	replicationPosA, _ := GetMasterPosition(t, *tabletA, hostname)
+	for {
+		replicationPosB, _ := GetMasterPosition(t, *tabletB, hostname)
+		if positionAtLeast(t, tabletA, replicationPosB, replicationPosA) {
+			break
+		}
+		msg := fmt.Sprintf("%s's replication position to catch up to %s's;currently at: %s, waiting to catch up to: %s", tabletB.Alias, tabletA.Alias, replicationPosB, replicationPosA)
+		waitStep(t, msg, timeout, 0.01)
+	}
+}
+
+func waitStep(t *testing.T, msg string, timeout float64, sleepTime float64) float64 {
+	timeout = timeout - sleepTime
+	if timeout < 0.0 {
+		t.Errorf("timeout waiting for condition '%s'", msg)
+	}
+	time.Sleep(time.Duration(sleepTime) * time.Second)
+	return timeout
+}
+
+func positionAtLeast(t *testing.T, tablet *Vttablet, a string, b string) bool {
+	isAtleast := false
+	val, err := tablet.MysqlctlProcess.ExecuteCommandWithOutput("position", "at_least", a, b)
+	require.NoError(t, err)
+	if strings.Contains(val, "true") {
+		isAtleast = true
+	}
+	return isAtleast
+}
+
+// ExecuteQueriesUsingVtgate sends query to vtgate using vtgate session.
+func ExecuteQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, query string) {
+	_, err := session.Execute(context.Background(), query, nil)
+	assert.Nil(t, err)
+}
+
+// NewConnParams creates ConnParams corresponds to given arguments.
+func NewConnParams(port int, password, socketPath, keyspace string) mysql.ConnParams {
+	if port != 0 {
+		socketPath = ""
+	}
+	cp := mysql.ConnParams{
+		Uname:      "vt_dba",
+		Port:       port,
+		UnixSocket: socketPath,
+		Pass:       password,
+	}
+
+	if keyspace != "" {
+		cp.DbName = "vt_" + keyspace
+	}
+
+	return cp
+
 }

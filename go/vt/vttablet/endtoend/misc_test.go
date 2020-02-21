@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -668,9 +669,7 @@ func TestClientFoundRows(t *testing.T) {
 		t.Error(err)
 	}
 	qr, err := client.Execute("update vitess_test set charval='aa' where intval=124", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if qr.RowsAffected != 0 {
 		t.Errorf("Execute(rowsFound==false): %d, want 0", qr.RowsAffected)
 	}
@@ -683,9 +682,7 @@ func TestClientFoundRows(t *testing.T) {
 		t.Error(err)
 	}
 	qr, err = client.Execute("update vitess_test set charval='aa' where intval=124", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if qr.RowsAffected != 1 {
 		t.Errorf("Execute(rowsFound==true): %d, want 1", qr.RowsAffected)
 	}
@@ -713,9 +710,7 @@ func TestLastInsertId(t *testing.T) {
 	}
 
 	qr, err := client.Execute("update vitess_autoinc_seq set sequence=last_insert_id(sequence + 1) where name='foo'", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	insID := res.InsertID
 
@@ -724,9 +719,7 @@ func TestLastInsertId(t *testing.T) {
 	}
 
 	qr, err = client.Execute("select sequence from vitess_autoinc_seq where name = 'foo'", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	wantCol := sqltypes.NewUint64(insID + uint64(1))
 	if !reflect.DeepEqual(qr.Rows[0][0], wantCol) {

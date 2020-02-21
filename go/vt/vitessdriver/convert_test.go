@@ -40,7 +40,7 @@ func TestToNative(t *testing.T) {
 	}, {
 		convert: &converter{},
 		in:      sqltypes.TestValue(sqltypes.Timestamp, "2012-02-24 23:19:43"),
-		out:     []byte("2012-02-24 23:19:43"), // TIMESTAMP is not handled
+		out:     time.Date(2012, 02, 24, 23, 19, 43, 0, time.UTC),
 	}, {
 		convert: &converter{},
 		in:      sqltypes.TestValue(sqltypes.Time, "23:19:43"),

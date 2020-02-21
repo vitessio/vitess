@@ -197,6 +197,8 @@ var (
 	}, {
 		input: "select /* use */ 1 from t1 use index (a) where b = 1",
 	}, {
+		input: "select /* use */ 1 from t1 use index () where b = 1",
+	}, {
 		input: "select /* keyword index */ 1 from t1 use index (`By`) where b = 1",
 	}, {
 		input: "select /* ignore */ 1 from t1 as t2 ignore index (a), t3 use index (b) where b = 1",
@@ -1138,13 +1140,19 @@ var (
 		output: "show charset",
 	}, {
 		input:  "show character set like '%foo'",
-		output: "show charset",
+		output: "show charset like '%foo'",
 	}, {
 		input:  "show charset",
 		output: "show charset",
 	}, {
 		input:  "show charset like '%foo'",
-		output: "show charset",
+		output: "show charset like '%foo'",
+	}, {
+		input:  "show charset where 'charset' = 'utf8'",
+		output: "show charset where 'charset' = 'utf8'",
+	}, {
+		input:  "show charset where 'charset' = '%foo'",
+		output: "show charset where 'charset' = '%foo'",
 	}, {
 		input:  "show collation",
 		output: "show collation",
