@@ -81,6 +81,10 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 	vr.tableKeys = tableKeys
 
 	for {
+		// This rollback is a no-op. It's here for safety
+		// in case the functions below leave transactions open.
+		vr.dbClient.Rollback()
+
 		settings, numTablesToCopy, err := vr.readSettings(ctx)
 		if err != nil {
 			return err
