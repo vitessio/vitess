@@ -37,7 +37,6 @@ import (
 
 var (
 	localCluster    *vttest.LocalCluster
-	cell            = "zone1"
 	hostname        = "localhost"
 	wd              selenium.WebDriver
 	seleniumService *selenium.Service
