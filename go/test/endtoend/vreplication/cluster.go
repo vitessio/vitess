@@ -45,7 +45,7 @@ var (
 type VitessCluster struct {
 	Name        string
 	Cells       map[string]*Cell
-	Topo        *cluster.EtcdProcess
+	Topo        *cluster.TopoProcess
 	Vtctld      *cluster.VtctldProcess
 	Vtctl       *cluster.VtctlProcess
 	VtctlClient *cluster.VtctlClientProcess
@@ -95,9 +95,10 @@ func InitCluster(t *testing.T, cellName string) *VitessCluster {
 	initGlobals()
 	vc, _ := NewVitessCluster("Vdemo")
 	assert.NotNil(t, vc)
-	topo := cluster.EtcdProcessInstance(globalConfig.topoPort, globalConfig.topoPort*10, globalConfig.hostname, "global")
+	topo := cluster.TopoProcessInstance(globalConfig.topoPort, globalConfig.topoPort*10, globalConfig.hostname, "etcd2", "global")
+
 	assert.NotNil(t, topo)
-	assert.Nil(t, topo.Setup())
+	assert.Nil(t, topo.Setup("etcd2", nil))
 	topo.ManageTopoDir("mkdir", "/vitess/global")
 	vc.Topo = topo
 	topo.ManageTopoDir("mkdir", "/vitess/"+cellName)
@@ -206,40 +207,37 @@ func (vc *VitessCluster) AddShards(t *testing.T, cell *Cell, keyspace *Keyspace,
 
 		shard := &Shard{Name: shardName, IsSharded: isSharded, Tablets: make(map[string]*Tablet, 1)}
 		fmt.Println("Adding Master tablet")
-		master, proc, err := vc.AddTablet(t, cell, keyspace, shard, "replica", tabletIdBase+tabletIndex)
-		shard.Tablets[string(tabletIndex)] = master
-		tabletIndex++
-		master.Vttablet.VreplicationTabletType = "MASTER"
+		master, proc, err := vc.AddTablet(t, cell, keyspace, shard, "replica", tabletIDBase+tabletIndex)
 		if err != nil {
 			t.Fatalf(err.Error())
 		}
 		assert.NotNil(t, master)
+		shard.Tablets[string(tabletIndex)] = master
+		tabletIndex++
+		master.Vttablet.VreplicationTabletType = "MASTER"
 		tablets = append(tablets, master)
 		dbProcesses = append(dbProcesses, proc)
-		if err != nil {
-			t.Fatalf(err.Error())
-		}
 		for i := 0; i < numReplicas; i++ {
 			fmt.Println("Adding Replica tablet")
-			tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "replica", tabletIdBase+tabletIndex)
-			shard.Tablets[string(tabletIndex)] = tablet
-			tabletIndex++
+			tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "replica", tabletIDBase+tabletIndex)
 			if err != nil {
 				t.Fatalf(err.Error())
 			}
 			assert.NotNil(t, tablet)
+			shard.Tablets[string(tabletIndex)] = tablet
+			tabletIndex++
 			tablets = append(tablets, tablet)
 			dbProcesses = append(dbProcesses, proc)
 		}
 		for i := 0; i < numRdonly; i++ {
 			fmt.Println("Adding RdOnly tablet")
-			tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "rdonly", tabletIdBase+tabletIndex)
-			shard.Tablets[string(tabletIndex)] = tablet
-			tabletIndex++
+			tablet, proc, err := vc.AddTablet(t, cell, keyspace, shard, "rdonly", tabletIDBase+tabletIndex)
 			if err != nil {
 				t.Fatalf(err.Error())
 			}
 			assert.NotNil(t, tablet)
+			shard.Tablets[string(tabletIndex)] = tablet
+			tabletIndex++
 			tablets = append(tablets, tablet)
 			dbProcesses = append(dbProcesses, proc)
 		}
@@ -284,10 +282,9 @@ func (vc *VitessCluster) StartVtgate(t *testing.T, cell *Cell) {
 		globalConfig.tabletTypes,
 		globalConfig.topoPort,
 		globalConfig.tmpDir,
-		nil)
+		[]string{"-tablet_refresh_interval", "10ms"})
 	assert.NotNil(t, vtgate)
-	err := vtgate.Setup()
-	if err != nil {
+	if err := vtgate.Setup(); err != nil {
 		t.Fatalf(err.Error())
 	}
 	cell.Vtgates = append(cell.Vtgates, vtgate)
@@ -342,7 +339,7 @@ func (vc *VitessCluster) TearDown() {
 	}
 
 	for _, cell := range vc.Cells {
-		if err := vc.Topo.TearDown(cell.Name, vtdataroot, vtdataroot, false); err != nil {
+		if err := vc.Topo.TearDown(cell.Name, vtdataroot, vtdataroot, false, "etcd2"); err != nil {
 			log.Errorf("Error in etcd teardown - %s", err.Error())
 		}
 	}
@@ -351,11 +348,11 @@ func (vc *VitessCluster) TearDown() {
 // WaitForMigrateToComplete waits for "workflow" to finish copying
 func (vc *VitessCluster) WaitForMigrateToComplete(vttablet *cluster.VttabletProcess, workflow string, database string, duration time.Duration) error {
 	queries := [3]string{
-		fmt.Sprintf(`select ISNULL(pos) from _vt.vreplication where workflow = "%s" and db_name = "%s"`, workflow, database),
+		fmt.Sprintf(`select sum(case when pos is null then 1 else 0 end) from _vt.vreplication where workflow = "%s" and db_name = "%s"`, workflow, database),
 		"select count(*) from information_schema.tables where table_schema='_vt' and table_name='copy_state' limit 1;",
 		fmt.Sprintf(`select count(*) from _vt.copy_state where vrepl_id in (select id from _vt.vreplication where workflow = "%s" and db_name = "%s")`, workflow, database),
 	}
-	results := [3]string{"INT64(0)", "INT64(1)", "INT64(0)"}
+	results := [3]string{"DECIMAL(0)", "INT64(1)", "INT64(0)"}
 	for ind, query := range queries {
 		waitDuration := 100 * time.Millisecond
 		for duration > 0 {
@@ -366,7 +363,7 @@ func (vc *VitessCluster) WaitForMigrateToComplete(vttablet *cluster.VttabletProc
 			if qr != nil && qr.Rows != nil && len(qr.Rows) > 0 && qr.Rows[0][0].String() == string(results[ind]) {
 				break
 			}
-
+			fmt.Printf("Waiting: %+v, %s\n", qr.Rows, query)
 			time.Sleep(waitDuration)
 			duration -= waitDuration
 		}
@@ -384,10 +381,10 @@ func (vc *VitessCluster) execTabletQuery(vttablet *cluster.VttabletProcess, quer
 		Uname:      "vt_dba",
 	}
 	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &vtParams)
-	if err != nil {
+	if conn, err := mysql.Connect(ctx, &vtParams); err != nil {
 		return nil, err
+	} else {
+		qr, err := conn.ExecuteFetch(query, 1000, true)
+		return qr, err
 	}
-	qr, err := conn.ExecuteFetch(query, 1000, true)
-	return qr, err
 }
