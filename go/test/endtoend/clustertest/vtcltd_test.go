@@ -34,7 +34,7 @@ import (
 var (
 	oneTableOutput = `+---+
 | a |
-+---+ 
++---+
 | 1 |
 +---+
 `
