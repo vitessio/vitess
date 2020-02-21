@@ -28,12 +28,14 @@ import (
 
 func TestDeleteUnsharded(t *testing.T) {
 	del := &Delete{
-		Opcode: DeleteUnsharded,
-		Keyspace: &vindexes.Keyspace{
-			Name:    "ks",
-			Sharded: false,
+		DML: DML{
+			Opcode: Unsharded,
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: false,
+			},
+			Query: "dummy_delete",
 		},
-		Query: "dummy_delete",
 	}
 
 	vc := &loggingVCursor{shards: []string{"0"}}
@@ -59,14 +61,16 @@ func TestDeleteUnsharded(t *testing.T) {
 func TestDeleteEqual(t *testing.T) {
 	vindex, _ := vindexes.NewHash("", nil)
 	del := &Delete{
-		Opcode: DeleteEqual,
-		Keyspace: &vindexes.Keyspace{
-			Name:    "ks",
-			Sharded: true,
+		DML: DML{
+			Opcode: Equal,
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: true,
+			},
+			Query:  "dummy_delete",
+			Vindex: vindex.(vindexes.SingleColumn),
+			Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 		},
-		Query:  "dummy_delete",
-		Vindex: vindex.(vindexes.SingleColumn),
-		Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 	}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
@@ -92,14 +96,16 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 		"to":    "toc",
 	})
 	del := &Delete{
-		Opcode: DeleteEqual,
-		Keyspace: &vindexes.Keyspace{
-			Name:    "ks",
-			Sharded: true,
+		DML: DML{
+			Opcode: Equal,
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: true,
+			},
+			Query:  "dummy_delete",
+			Vindex: vindex.(vindexes.SingleColumn),
+			Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 		},
-		Query:  "dummy_delete",
-		Vindex: vindex.(vindexes.SingleColumn),
-		Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 	}
 
 	vc := &loggingVCursor{shards: []string{"0"}}
@@ -121,14 +127,16 @@ func TestDeleteEqualNoScatter(t *testing.T) {
 		"write_only": "true",
 	})
 	del := &Delete{
-		Opcode: DeleteEqual,
-		Keyspace: &vindexes.Keyspace{
-			Name:    "ks",
-			Sharded: true,
+		DML: DML{
+			Opcode: Equal,
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: true,
+			},
+			Query:  "dummy_delete",
+			Vindex: vindex.(vindexes.SingleColumn),
+			Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 		},
-		Query:  "dummy_delete",
-		Vindex: vindex.(vindexes.SingleColumn),
-		Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 	}
 
 	vc := &loggingVCursor{shards: []string{"0"}}
@@ -139,13 +147,15 @@ func TestDeleteEqualNoScatter(t *testing.T) {
 func TestDeleteOwnedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
-		Opcode:           DeleteEqual,
-		Keyspace:         ks.Keyspace,
-		Query:            "dummy_delete",
-		Vindex:           ks.Vindexes["hash"].(vindexes.SingleColumn),
-		Values:           []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
-		Table:            ks.Tables["t1"],
-		OwnedVindexQuery: "dummy_subquery",
+		DML: DML{
+			Opcode:           Equal,
+			Keyspace:         ks.Keyspace,
+			Query:            "dummy_delete",
+			Vindex:           ks.Vindexes["hash"].(vindexes.SingleColumn),
+			Values:           []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+			Table:            ks.Tables["t1"],
+			OwnedVindexQuery: "dummy_subquery",
+		},
 	}
 
 	results := []*sqltypes.Result{sqltypes.MakeTestResult(
@@ -228,12 +238,14 @@ func TestDeleteOwnedVindex(t *testing.T) {
 
 func TestDeleteSharded(t *testing.T) {
 	del := &Delete{
-		Opcode: DeleteScatter,
-		Keyspace: &vindexes.Keyspace{
-			Name:    "ks",
-			Sharded: true,
+		DML: DML{
+			Opcode: Scatter,
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: true,
+			},
+			Query: "dummy_delete",
 		},
-		Query: "dummy_delete",
 	}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}

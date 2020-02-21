@@ -43,13 +43,13 @@
 "insert into `user[-]`.user_metadata (a, b) values (1,2)"
 "unsupported: INSERT with a target destination"
 
-# Unsupported DELETE statement with a replica target destination
+# Unsupported delete statement with a replica target destination
 "DELETE FROM `user[-]@replica`.user_metadata limit 1"
-"unsupported: DELETE statement with a replica target"
+"unsupported: delete statement with a replica target"
 
-# Unsupported UPDATE statement with a replica target destination
+# Unsupported update statement with a replica target destination
 "update `user[-]@replica`.user_metadata set id=2"
-"unsupported: UPDATE statement with a replica target"
+"unsupported: update statement with a replica target"
 
 # scatter order by with * expression
 "select * from user order by id"
@@ -235,21 +235,9 @@
 "update user_extra set val = 1 where (name = 'foo' or id = 1) limit 1"
 "unsupported: multi shard update with limit"
 
-# scatter update table with owned vindexes
-"update user set val = 1"
-"unsupported: multi shard update on a table with owned lookup vindexes"
-
-# delete with multi-table targets
-"delete music from music where id = 1"
-"unsupported: multi-table delete statement in sharded keyspace"
-
 # multi delete multi table
 "delete user from user join user_extra on user.id = user_extra.id where user.name = 'foo'"
 "unsupported: multi-shard or vindex write statement"
-
-# scatter delete with owned lookup vindex
-"delete from user"
-"unsupported: multi shard delete on a table with owned lookup vindexes"
 
 # update changes primary vindex column
 "update user set id = 1 where id = 1"
@@ -428,3 +416,11 @@
 
 "select func(keyspace_id) from user_index where id = :id"
 "unsupported: expression on results of a vindex function"
+
+# delete with unknown reference
+"delete music from user where id = 1"
+"Unknown table 'music' in MULTI DELETE"
+
+# delete with multi-table targets
+"delete music,user from music inner join user where music.id = user.id"
+"unsupported: multi-shard or vindex write statement"

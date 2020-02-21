@@ -165,7 +165,7 @@ func buildDMLPlan(vschema ContextVSchema, dmlType string, stmt sqlparser.Stateme
 
 	if routingType == scatter {
 		if limit != nil {
-			return nil, "", vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multi shard update with limit")
+			return nil, "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multi shard %s with limit", dmlType)
 		}
 		eupd.Opcode = engine.Scatter
 	} else {
