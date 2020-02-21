@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -37,36 +36,7 @@ var _ Primitive = (*Delete)(nil)
 
 // Delete represents the instructions to perform a delete.
 type Delete struct {
-	// Opcode is the execution opcode.
-	Opcode DeleteOpcode
-
-	// Keyspace specifies the keyspace to send the query to.
-	Keyspace *vindexes.Keyspace
-
-	// TargetDestination specifies the destination to send the query to.
-	TargetDestination key.Destination
-
-	// Query specifies the query to be executed.
-	Query string
-
-	// Vindex specifies the vindex to be used.
-	Vindex vindexes.SingleColumn
-	// Values specifies the vindex values to use for routing.
-	// For now, only one value is specified.
-	Values []sqltypes.PlanValue
-
-	// Table specifies the table for the delete.
-	Table *vindexes.Table
-
-	// OwnedVindexQuery is used for deleting lookup vindex entries.
-	OwnedVindexQuery string
-
-	// Option to override the standard behavior and allow a multi-shard delete
-	// to use single round trip autocommit.
-	MultiShardAutocommit bool
-
-	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
-	QueryTimeout int
+	DML
 
 	// Delete does not take inputs
 	noInputs
@@ -83,7 +53,7 @@ func (del *Delete) MarshalJSON() ([]byte, error) {
 		vindexName = del.Vindex.String()
 	}
 	marshalDelete := struct {
-		Opcode               DeleteOpcode
+		Opcode               string
 		Keyspace             *vindexes.Keyspace   `json:",omitempty"`
 		Query                string               `json:",omitempty"`
 		Vindex               string               `json:",omitempty"`
@@ -93,7 +63,7 @@ func (del *Delete) MarshalJSON() ([]byte, error) {
 		MultiShardAutocommit bool                 `json:",omitempty"`
 		QueryTimeout         int                  `json:",omitempty"`
 	}{
-		Opcode:               del.Opcode,
+		Opcode:               del.RouteType(),
 		Keyspace:             del.Keyspace,
 		Query:                del.Query,
 		Vindex:               vindexName,
@@ -106,41 +76,11 @@ func (del *Delete) MarshalJSON() ([]byte, error) {
 	return jsonutil.MarshalNoEscape(marshalDelete)
 }
 
-// DeleteOpcode is a number representing the opcode
-// for the Delete primitve.
-type DeleteOpcode int
-
-// This is the list of DeleteOpcode values.
-const (
-	// DeleteUnsharded is for routing a delete statement
-	// to an unsharded keyspace.
-	DeleteUnsharded = DeleteOpcode(iota)
-	// DeleteEqual is for routing a delete statement
-	// to a single shard. Requires: A Vindex, a single
-	// Value, and an OwnedVindexQuery, which will be used to
-	// determine if lookup rows need to be deleted.
-	DeleteEqual
-	// DeleteScatter is for routing a scattered
-	// delete statement.
-	DeleteScatter
-	// DeleteByDestination is to route explicitly to a given
-	// target destination. Is used when the query explicitly sets a target destination:
-	// in the from clause:
-	// e.g: DELETE FROM `keyspace[-]`.x1 LIMIT 100
-	DeleteByDestination
-)
-
-var delName = map[DeleteOpcode]string{
-	DeleteUnsharded:     "DeleteUnsharded",
-	DeleteEqual:         "DeleteEqual",
-	DeleteScatter:       "DeleteScatter",
-	DeleteByDestination: "DeleteByDestination",
-}
-
-// MarshalJSON serializes the DeleteOpcode as a JSON string.
-// It's used for testing and diagnostics.
-func (code DeleteOpcode) MarshalJSON() ([]byte, error) {
-	return json.Marshal(delName[code])
+var delName = map[DMLOpcode]string{
+	Unsharded:     "DeleteUnsharded",
+	Equal:         "DeleteEqual",
+	Scatter:       "DeleteScatter",
+	ByDestination: "DeleteByDestination",
 }
 
 // RouteType returns a description of the query routing type used by the primitive
@@ -169,13 +109,13 @@ func (del *Delete) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 	}
 
 	switch del.Opcode {
-	case DeleteUnsharded:
+	case Unsharded:
 		return del.execDeleteUnsharded(vcursor, bindVars)
-	case DeleteEqual:
+	case Equal:
 		return del.execDeleteEqual(vcursor, bindVars)
-	case DeleteScatter:
+	case Scatter:
 		return del.execDeleteByDestination(vcursor, bindVars, key.DestinationAllShards{})
-	case DeleteByDestination:
+	case ByDestination:
 		return del.execDeleteByDestination(vcursor, bindVars, del.TargetDestination)
 	default:
 		// Unreachable.
