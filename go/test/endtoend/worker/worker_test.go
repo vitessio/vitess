@@ -466,7 +466,6 @@ func runShardTablets(t *testing.T, shardName string, tabletArr []*cluster.Vttabl
 		if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
 			return err
 		}
-		tablet.VttabletProcess.ServiceMap = "grpc-queryservice,grpc-tabletmanager,grpc-updatestream,grpc-throttler"
 		err := tablet.VttabletProcess.Setup()
 		require.Nil(t, err)
 	}
