@@ -17,7 +17,6 @@ limitations under the License.
 package engine
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -37,39 +36,10 @@ var _ Primitive = (*Update)(nil)
 
 // Update represents the instructions to perform an update.
 type Update struct {
-	// Opcode is the execution opcode.
-	Opcode UpdateOpcode
-
-	// Keyspace specifies the keyspace to send the query to.
-	Keyspace *vindexes.Keyspace
-
-	// TargetDestination specifies the destination to send the query to.
-	TargetDestination key.Destination
-
-	// Query specifies the query to be executed.
-	Query string
-
-	// Vindex specifies the vindex to be used.
-	Vindex vindexes.SingleColumn
-	// Values specifies the vindex values to use for routing.
-	// For now, only one value is specified.
-	Values []sqltypes.PlanValue
+	DML
 
 	// ChangedVindexValues contains values for updated Vindexes during an update statement.
 	ChangedVindexValues map[string][]sqltypes.PlanValue
-
-	// Table specifies the table for the update.
-	Table *vindexes.Table
-
-	// OwnedVindexQuery is used for updating changes in lookup vindexes.
-	OwnedVindexQuery string
-
-	// Option to override the standard behavior and allow a multi-shard update
-	// to use single round trip autocommit.
-	MultiShardAutocommit bool
-
-	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
-	QueryTimeout int
 
 	// Update does not take inputs
 	noInputs
@@ -86,7 +56,7 @@ func (upd *Update) MarshalJSON() ([]byte, error) {
 		vindexName = upd.Vindex.String()
 	}
 	marshalUpdate := struct {
-		Opcode               UpdateOpcode
+		Opcode               string
 		Keyspace             *vindexes.Keyspace              `json:",omitempty"`
 		Query                string                          `json:",omitempty"`
 		Vindex               string                          `json:",omitempty"`
@@ -97,7 +67,7 @@ func (upd *Update) MarshalJSON() ([]byte, error) {
 		MultiShardAutocommit bool                            `json:",omitempty"`
 		QueryTimeout         int                             `json:",omitempty"`
 	}{
-		Opcode:               upd.Opcode,
+		Opcode:               upd.RouteType(),
 		Keyspace:             upd.Keyspace,
 		Query:                upd.Query,
 		Vindex:               vindexName,
@@ -111,44 +81,11 @@ func (upd *Update) MarshalJSON() ([]byte, error) {
 	return jsonutil.MarshalNoEscape(marshalUpdate)
 }
 
-// UpdateOpcode is a number representing the opcode
-// for the Update primitve.
-type UpdateOpcode int
-
-// This is the list of UpdateOpcode values.
-const (
-	// UpdateUnsharded is for routing an update statement
-	// to an unsharded keyspace.
-	UpdateUnsharded = UpdateOpcode(iota)
-	// UpdateEqual is for routing an update statement
-	// to a single shard: Requires: A Vindex, and
-	// a single Value.
-	UpdateEqual
-	// UpdateScatter is for routing a scattered
-	// update statement.
-	UpdateScatter
-	// UpdateByDestination is to route explicitly to a given
-	// target destination. Is used when the query explicitly sets a target destination:
-	// in the clause:
-	// e.g: UPDATE `keyspace[-]`.x1 SET foo=1
-	UpdateByDestination
-	// UpdateIn is for routing an update statement with in where clause
-	// Requires: A Vindex and multiple values.
-	UpdateIn
-)
-
-var updName = map[UpdateOpcode]string{
-	UpdateUnsharded:     "UpdateUnsharded",
-	UpdateEqual:         "UpdateEqual",
-	UpdateScatter:       "UpdateScatter",
-	UpdateByDestination: "UpdateByDestination",
-	UpdateIn:            "UpdateIn",
-}
-
-// MarshalJSON serializes the UpdateOpcode as a JSON string.
-// It's used for testing and diagnostics.
-func (code UpdateOpcode) MarshalJSON() ([]byte, error) {
-	return json.Marshal(updName[code])
+var updName = map[DMLOpcode]string{
+	Unsharded:     "UpdateUnsharded",
+	Equal:         "UpdateEqual",
+	Scatter:       "UpdateScatter",
+	ByDestination: "UpdateByDestination",
 }
 
 // RouteType returns a description of the query routing type used by the primitive
@@ -177,16 +114,14 @@ func (upd *Update) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVar
 	}
 
 	switch upd.Opcode {
-	case UpdateUnsharded:
+	case Unsharded:
 		return upd.execUpdateUnsharded(vcursor, bindVars)
-	case UpdateEqual:
+	case Equal:
 		return upd.execUpdateEqual(vcursor, bindVars)
-	case UpdateScatter:
+	case Scatter:
 		return upd.execUpdateByDestination(vcursor, bindVars, key.DestinationAllShards{})
-	case UpdateByDestination:
+	case ByDestination:
 		return upd.execUpdateByDestination(vcursor, bindVars, upd.TargetDestination)
-	case UpdateIn:
-		return upd.execUpdateIn(vcursor, bindVars)
 	default:
 		// Unreachable.
 		return nil, fmt.Errorf("unsupported opcode: %v", upd)
@@ -358,32 +293,4 @@ func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]
 	autocommit := (len(rss) == 1 || upd.MultiShardAutocommit) && vcursor.AutocommitApproval()
 	result, errs := vcursor.ExecuteMultiShard(rss, queries, true /* isDML */, autocommit)
 	return result, vterrors.Aggregate(errs)
-}
-
-func (upd *Update) execUpdateIn(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	panic("implement me!")
-	//keys, err := upd.Values[0].ResolveList(bindVars)
-	//if err != nil {
-	//	return nil, vterrors.Wrap(err, "execUpdateIn")
-	//}
-	//_, _, err = resolveShards(vcursor, upd.Vindex, upd.Keyspace, keys)
-	//if err != nil {
-	//	return nil, vterrors.Wrap(err, "execUpdateIn")
-	//}
-	//just to have code compile returning blank.
-	//return &sqltypes.Result{}, nil
-	/*
-		TODO: Think of, How to go about updating lookup vindex. Will it be a loop or should resolve shards be performed on it.
-
-		if len(ksids) == 0 {
-			return &sqltypes.Result{}, nil
-		}
-
-		if len(upd.ChangedVindexValues) != 0 {
-			if err := upd.updateVindexEntries(vcursor, upd.OwnedVindexQuery, bindVars, rs, ksid); err != nil {
-				return nil, vterrors.Wrap(err, "execUpdateEqual")
-			}
-		}
-		rewritten := sqlannotation.AddKeyspaceIDs(upd.Query, [][]byte{ksid}, "")*/
-	//return execShard(vcursor, rewritten, bindVars, rs, true /* isDML */, true /* canAutocommit */)
 }

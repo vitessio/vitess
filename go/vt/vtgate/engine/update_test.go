@@ -31,7 +31,7 @@ import (
 
 func TestUpdateUnsharded(t *testing.T) {
 	upd := &Update{
-		Opcode: UpdateUnsharded,
+		Opcode: Unsharded,
 		Keyspace: &vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: false,
@@ -60,7 +60,7 @@ func TestUpdateUnsharded(t *testing.T) {
 func TestUpdateEqual(t *testing.T) {
 	vindex, _ := vindexes.NewHash("", nil)
 	upd := &Update{
-		Opcode: UpdateEqual,
+		Opcode: Equal,
 		Keyspace: &vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
@@ -87,7 +87,7 @@ func TestUpdateEqual(t *testing.T) {
 func TestUpdateScatter(t *testing.T) {
 	vindex, _ := vindexes.NewHash("", nil)
 	upd := &Update{
-		Opcode: UpdateScatter,
+		Opcode: Scatter,
 		Keyspace: &vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
@@ -108,7 +108,7 @@ func TestUpdateScatter(t *testing.T) {
 
 	// works with multishard autocommit
 	upd = &Update{
-		Opcode: UpdateScatter,
+		Opcode: Scatter,
 		Keyspace: &vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
@@ -136,7 +136,7 @@ func TestUpdateEqualNoRoute(t *testing.T) {
 		"to":    "toc",
 	})
 	upd := &Update{
-		Opcode: UpdateEqual,
+		Opcode: Equal,
 		Keyspace: &vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
@@ -163,7 +163,7 @@ func TestUpdateEqualNoScatter(t *testing.T) {
 		"write_only": "true",
 	})
 	upd := &Update{
-		Opcode: UpdateEqual,
+		Opcode: Equal,
 		Keyspace: &vindexes.Keyspace{
 			Name:    "ks",
 			Sharded: true,
@@ -181,7 +181,7 @@ func TestUpdateEqualNoScatter(t *testing.T) {
 func TestUpdateEqualChangedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	upd := &Update{
-		Opcode:   UpdateEqual,
+		Opcode:   Equal,
 		Keyspace: ks.Keyspace,
 		Query:    "dummy_update",
 		Vindex:   ks.Vindexes["hash"].(vindexes.SingleColumn),
@@ -266,7 +266,7 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 	// update t1 set c1 = 1, c2 = 2, c3 = 3
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	upd := &Update{
-		Opcode:   UpdateScatter,
+		Opcode:   Scatter,
 		Keyspace: ks.Keyspace,
 		Query:    "dummy_update",
 		ChangedVindexValues: map[string][]sqltypes.PlanValue{

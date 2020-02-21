@@ -17,90 +17,35 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // buildUpdatePlan builds the instructions for an UPDATE statement.
 func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Update, error) {
-	eupd := &engine.Update{
-		ChangedVindexValues: make(map[string][]sqltypes.PlanValue),
-	}
-	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(upd)))
-	ro, err := pb.processDMLTable(upd.TableExprs)
+	dml, vindexCol, err := buildDMLPlan(vschema, "update", upd, upd.TableExprs, upd.Where, upd.OrderBy, upd.Limit, upd.Comments, upd.Exprs)
 	if err != nil {
 		return nil, err
 	}
-	eupd.Keyspace = ro.eroute.Keyspace
-	if !eupd.Keyspace.Sharded {
-		// We only validate non-table subexpressions because the previous analysis has already validated them.
-		if !pb.finalizeUnshardedDMLSubqueries(upd.Exprs, upd.Where, upd.OrderBy, upd.Limit) {
-			return nil, errors.New("unsupported: sharded subqueries in DML")
-		}
-		eupd.Opcode = engine.UpdateUnsharded
-		// Generate query after all the analysis. Otherwise table name substitutions for
-		// routed tables won't happen.
-		eupd.Query = generateQuery(upd)
+	eupd := &engine.Update{
+		DML:                 *dml,
+		ChangedVindexValues: make(map[string][]sqltypes.PlanValue),
+	}
+
+	if dml.Opcode == engine.Unsharded {
 		return eupd, nil
-	}
-
-	if hasSubquery(upd) {
-		return nil, errors.New("unsupported: subqueries in sharded DML")
-	}
-	if len(pb.st.tables) != 1 {
-		return nil, errors.New("unsupported: multi-table update statement in sharded keyspace")
-	}
-
-	// Generate query after all the analysis. Otherwise table name substitutions for
-	// routed tables won't happen.
-	eupd.Query = generateQuery(upd)
-
-	directives := sqlparser.ExtractCommentDirectives(upd.Comments)
-	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
-		eupd.MultiShardAutocommit = true
-	}
-
-	eupd.QueryTimeout = queryTimeout(directives)
-	eupd.Table = ro.vschemaTable
-	if eupd.Table == nil {
-		return nil, errors.New("internal error: table.vindexTable is mysteriously nil")
-	}
-
-	if ro.eroute.TargetDestination != nil {
-		if ro.eroute.TargetTabletType != topodatapb.TabletType_MASTER {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: UPDATE statement with a replica target")
-		}
-		eupd.Opcode = engine.UpdateByDestination
-		eupd.TargetDestination = ro.eroute.TargetDestination
-		return eupd, nil
-	}
-
-	routingType, vindex, vindexCol, values := getDMLRouting(upd.Where, eupd.Table)
-
-	if routingType == scatter {
-		if upd.Limit != nil {
-			return nil, errors.New("unsupported: multi shard update with limit")
-		}
-		eupd.Opcode = engine.UpdateScatter
-	} else {
-		eupd.Opcode = engine.UpdateEqual
-		eupd.Values = values
-		eupd.Vindex = vindex
 	}
 
 	if eupd.ChangedVindexValues, err = buildChangedVindexesValues(upd, eupd.Table.ColumnVindexes); err != nil {
 		return nil, err
 	}
 	if len(eupd.ChangedVindexValues) != 0 {
-		eupd.OwnedVindexQuery = generateUpdateSubquery(upd, eupd.Table, vindexCol)
+		eupd.OwnedVindexQuery = generateDMLSubquery(upd.Where, upd.OrderBy, upd.Limit, eupd.Table, vindexCol)
 	}
 	return eupd, nil
 }
@@ -156,19 +101,6 @@ func buildChangedVindexesValues(update *sqlparser.Update, colVindexes []*vindexe
 	return changedVindexes, nil
 }
 
-func generateUpdateSubquery(upd *sqlparser.Update, table *vindexes.Table, vindex string) string {
-	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.WriteString("select ")
-	buf.Myprintf("%s", vindex)
-	for _, cv := range table.Owned {
-		for _, column := range cv.Columns {
-			buf.Myprintf(", %v", column)
-		}
-	}
-	buf.Myprintf(" from %v%v%v%v for update", table.Name, upd.Where, upd.OrderBy, upd.Limit)
-	return buf.String()
-}
-
 // extractValueFromUpdate given an UpdateExpr attempts to extracts the Value
 // it's holding. At the moment it only supports: StrVal, HexVal, IntVal, ValArg.
 // If a complex expression is provided (e.g set name = name + 1), the update will be rejected.
@@ -178,105 +110,4 @@ func extractValueFromUpdate(upd *sqlparser.UpdateExpr) (pv sqltypes.PlanValue, e
 		return sqltypes.PlanValue{}, err
 	}
 	return sqlparser.NewPlanValue(upd.Expr)
-}
-
-// dmlFormatter strips out keyspace name from dmls.
-func dmlFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
-	switch node := node.(type) {
-	case sqlparser.TableName:
-		node.Name.Format(buf)
-		return
-	}
-	node.Format(buf)
-}
-
-func generateQuery(statement sqlparser.Statement) string {
-	buf := sqlparser.NewTrackedBuffer(dmlFormatter)
-	statement.Format(buf)
-	return buf.String()
-}
-
-type dmlRoutingType int
-
-const (
-	scatter dmlRoutingType = iota
-	equal
-)
-
-// getDMLRouting returns the vindex and values for the DML,
-// If it cannot find a unique vindex match, it returns an error.
-func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (dmlRoutingType, vindexes.SingleColumn, string, []sqltypes.PlanValue) {
-	var keyColumn string
-	for _, index := range table.Ordered {
-		if !index.Vindex.IsUnique() {
-			continue
-		}
-		single, ok := index.Vindex.(vindexes.SingleColumn)
-		if !ok {
-			continue
-		}
-
-		if keyColumn == "" { //TODO - check with sougou on how to deterministically get the primary vindex column
-			keyColumn = sqlparser.String(index.Columns[0])
-		}
-
-		if where == nil {
-			return scatter, nil, keyColumn, nil
-		}
-
-		if pv, ok := getMatch(where.Expr, index.Columns[0]); ok {
-			if pv.IsList() {
-				return scatter, nil, keyColumn, nil
-			}
-
-			return equal, single, keyColumn, []sqltypes.PlanValue{pv}
-		}
-	}
-	return scatter, nil, keyColumn, nil
-}
-
-// getMatch returns the matched value if there is an equality
-// constraint on the specified column that can be used to
-// decide on a route.
-func getMatch(node sqlparser.Expr, col sqlparser.ColIdent) (pv sqltypes.PlanValue, ok bool) {
-	filters := splitAndExpression(nil, node)
-	for _, filter := range filters {
-		filter = skipParenthesis(filter)
-		if parenthesis, ok := node.(*sqlparser.ParenExpr); ok {
-			if pv, ok := getMatch(parenthesis.Expr, col); ok {
-				return pv, ok
-			}
-			continue
-		}
-		comparison, ok := filter.(*sqlparser.ComparisonExpr)
-		if !ok {
-			continue
-		}
-		if !nameMatch(comparison.Left, col) {
-			continue
-		}
-		switch comparison.Operator {
-		case sqlparser.EqualStr:
-			if !sqlparser.IsValue(comparison.Right) {
-				continue
-			}
-		case sqlparser.InStr:
-			if !sqlparser.IsSimpleTuple(comparison.Right) {
-				continue
-			}
-		default:
-			continue
-		}
-		pv, err := sqlparser.NewPlanValue(comparison.Right)
-		if err != nil {
-			continue
-		}
-		return pv, true
-	}
-	return sqltypes.PlanValue{}, false
-}
-
-func nameMatch(node sqlparser.Expr, col sqlparser.ColIdent) bool {
-	colname, ok := node.(*sqlparser.ColName)
-	return ok && colname.Name.Equal(col)
 }
