@@ -204,7 +204,6 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts)
 	if _, err := vp.vr.dbClient.Execute(update); err != nil {
-		vp.vr.dbClient.Rollback()
 		return false, fmt.Errorf("error %v updating position", err)
 	}
 	vp.unsavedEvent = nil
@@ -223,6 +222,8 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 }
 
 func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
+	defer vp.vr.dbClient.Rollback()
+
 	// If we're not running, set SecondsBehindMaster to be very high.
 	// TODO(sougou): if we also stored the time of the last event, we
 	// can estimate this value more accurately.
