@@ -1951,3 +1951,54 @@
     "OwnedVindexQuery": "select Id, Name, Costly from user for update"
   }
 }
+
+# delete with single table targets
+"delete music from music where id = 1"
+{
+  "Original": "delete music from music where id = 1",
+  "Instructions": {
+    "Opcode": "DeleteEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "delete music from music where id = 1",
+    "Vindex": "music_user_map",
+    "Values": [
+      1
+    ],
+    "Table": "music",
+    "OwnedVindexQuery": "select user_id, id from music where id = 1 for update"
+  }
+}
+
+# scatter update table with owned vindexes without changing lookup vindex
+"update user set val = 1"
+{
+  "Original": "update user set val = 1",
+  "Instructions": {
+    "Opcode": "UpdateScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user set val = 1",
+    "Table": "user"
+  }
+}
+
+# scatter delete with owned lookup vindex
+"delete from user"
+{
+  "Original": "delete from user",
+  "Instructions": {
+    "Opcode": "DeleteScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "delete from user",
+    "Table": "user",
+    "OwnedVindexQuery": "select Id, Name, Costly from user for update"
+  }
+}

@@ -31,12 +31,14 @@ import (
 
 func TestUpdateUnsharded(t *testing.T) {
 	upd := &Update{
-		Opcode: Unsharded,
-		Keyspace: &vindexes.Keyspace{
-			Name:    "ks",
-			Sharded: false,
+		DML: DML{
+			Opcode: Unsharded,
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: false,
+			},
+			Query: "dummy_update",
 		},
-		Query: "dummy_update",
 	}
 
 	vc := &loggingVCursor{shards: []string{"0"}}
@@ -60,14 +62,16 @@ func TestUpdateUnsharded(t *testing.T) {
 func TestUpdateEqual(t *testing.T) {
 	vindex, _ := vindexes.NewHash("", nil)
 	upd := &Update{
-		Opcode: Equal,
-		Keyspace: &vindexes.Keyspace{
-			Name:    "ks",
-			Sharded: true,
+		DML: DML{
+			Opcode: Equal,
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: true,
+			},
+			Query:  "dummy_update",
+			Vindex: vindex.(vindexes.SingleColumn),
+			Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 		},
-		Query:  "dummy_update",
-		Vindex: vindex.(vindexes.SingleColumn),
-		Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 	}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
@@ -87,14 +91,16 @@ func TestUpdateEqual(t *testing.T) {
 func TestUpdateScatter(t *testing.T) {
 	vindex, _ := vindexes.NewHash("", nil)
 	upd := &Update{
-		Opcode: Scatter,
-		Keyspace: &vindexes.Keyspace{
-			Name:    "ks",
-			Sharded: true,
+		DML: DML{
+			Opcode: Scatter,
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: true,
+			},
+			Query:  "dummy_update",
+			Vindex: vindex.(vindexes.SingleColumn),
+			Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 		},
-		Query:  "dummy_update",
-		Vindex: vindex.(vindexes.SingleColumn),
-		Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 	}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
@@ -108,15 +114,17 @@ func TestUpdateScatter(t *testing.T) {
 
 	// works with multishard autocommit
 	upd = &Update{
-		Opcode: Scatter,
-		Keyspace: &vindexes.Keyspace{
-			Name:    "ks",
-			Sharded: true,
+		DML: DML{
+			Opcode: Scatter,
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: true,
+			},
+			Query:                "dummy_update",
+			Vindex:               vindex.(vindexes.SingleColumn),
+			Values:               []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+			MultiShardAutocommit: true,
 		},
-		Query:                "dummy_update",
-		Vindex:               vindex.(vindexes.SingleColumn),
-		Values:               []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
-		MultiShardAutocommit: true,
 	}
 
 	vc = &loggingVCursor{shards: []string{"-20", "20-"}}
@@ -136,14 +144,16 @@ func TestUpdateEqualNoRoute(t *testing.T) {
 		"to":    "toc",
 	})
 	upd := &Update{
-		Opcode: Equal,
-		Keyspace: &vindexes.Keyspace{
-			Name:    "ks",
-			Sharded: true,
+		DML: DML{
+			Opcode: Equal,
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: true,
+			},
+			Query:  "dummy_update",
+			Vindex: vindex.(vindexes.SingleColumn),
+			Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 		},
-		Query:  "dummy_update",
-		Vindex: vindex.(vindexes.SingleColumn),
-		Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 	}
 
 	vc := &loggingVCursor{shards: []string{"0"}}
@@ -163,14 +173,16 @@ func TestUpdateEqualNoScatter(t *testing.T) {
 		"write_only": "true",
 	})
 	upd := &Update{
-		Opcode: Equal,
-		Keyspace: &vindexes.Keyspace{
-			Name:    "ks",
-			Sharded: true,
+		DML: DML{
+			Opcode: Equal,
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: true,
+			},
+			Query:  "dummy_update",
+			Vindex: vindex.(vindexes.SingleColumn),
+			Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 		},
-		Query:  "dummy_update",
-		Vindex: vindex.(vindexes.SingleColumn),
-		Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 	}
 
 	vc := &loggingVCursor{shards: []string{"0"}}
@@ -181,11 +193,15 @@ func TestUpdateEqualNoScatter(t *testing.T) {
 func TestUpdateEqualChangedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	upd := &Update{
-		Opcode:   Equal,
-		Keyspace: ks.Keyspace,
-		Query:    "dummy_update",
-		Vindex:   ks.Vindexes["hash"].(vindexes.SingleColumn),
-		Values:   []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+		DML: DML{
+			Opcode:           Equal,
+			Keyspace:         ks.Keyspace,
+			Query:            "dummy_update",
+			Vindex:           ks.Vindexes["hash"].(vindexes.SingleColumn),
+			Values:           []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+			Table:            ks.Tables["t1"],
+			OwnedVindexQuery: "dummy_subquery",
+		},
 		ChangedVindexValues: map[string][]sqltypes.PlanValue{
 			"twocol": {{
 				Value: sqltypes.NewInt64(1),
@@ -196,8 +212,6 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 				Value: sqltypes.NewInt64(3),
 			}},
 		},
-		Table:            ks.Tables["t1"],
-		OwnedVindexQuery: "dummy_subquery",
 	}
 
 	results := []*sqltypes.Result{sqltypes.MakeTestResult(
@@ -266,9 +280,13 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 	// update t1 set c1 = 1, c2 = 2, c3 = 3
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	upd := &Update{
-		Opcode:   Scatter,
-		Keyspace: ks.Keyspace,
-		Query:    "dummy_update",
+		DML: DML{
+			Opcode:           Scatter,
+			Keyspace:         ks.Keyspace,
+			Query:            "dummy_update",
+			Table:            ks.Tables["t1"],
+			OwnedVindexQuery: "dummy_subquery",
+		},
 		ChangedVindexValues: map[string][]sqltypes.PlanValue{
 			"twocol": {{
 				Value: sqltypes.NewInt64(1),
@@ -279,8 +297,6 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 				Value: sqltypes.NewInt64(3),
 			}},
 		},
-		Table:            ks.Tables["t1"],
-		OwnedVindexQuery: "dummy_subquery",
 	}
 
 	results := []*sqltypes.Result{sqltypes.MakeTestResult(
