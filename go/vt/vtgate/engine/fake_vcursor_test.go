@@ -231,7 +231,7 @@ func (f *loggingVCursor) ResolveDestinations(keyspace string, ids []*querypb.Val
 
 func (f *loggingVCursor) ExpectLog(t *testing.T, want []string) {
 	t.Helper()
-	require.Equal(t, strings.Join(f.log, "\n"), strings.Join(want, "\n"))
+	require.Equal(t, strings.Join(want, "\n"), strings.Join(f.log, "\n"))
 }
 
 func (f *loggingVCursor) ExpectWarnings(t *testing.T, want []*querypb.QueryWarning) {

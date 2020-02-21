@@ -375,6 +375,12 @@ func buildTestVSchema() *vindexes.VSchema {
 							Columns: []string{"c3"},
 						}},
 					},
+					"t2": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Name:    "hash",
+							Columns: []string{"id"},
+						}},
+					},
 				},
 			},
 		},

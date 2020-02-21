@@ -174,7 +174,7 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 	if len(result.Rows) == 0 {
 		return nil
 	}
-	colnum := 0
+	colnum := 1 // we start from the first lookup vindex col
 	for _, colVindex := range del.Table.Owned {
 		ids := make([][]sqltypes.Value, len(result.Rows))
 		for range colVindex.Columns {
@@ -190,6 +190,42 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 	return nil
 }
 
+func (del *Delete) deleteVindexEntriesScatter(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) error {
+	queries := make([]*querypb.BoundQuery, len(rss))
+	for i := range rss {
+		queries[i] = &querypb.BoundQuery{Sql: del.OwnedVindexQuery, BindVariables: bindVars}
+	}
+	subQueryResults, errors := vcursor.ExecuteMultiShard(rss, queries, false, false)
+	for _, err := range errors {
+		if err != nil {
+			return vterrors.Wrap(err, "deleteVindexEntriesScatter")
+		}
+	}
+
+	if len(subQueryResults.Rows) == 0 {
+		return nil
+	}
+
+	for _, row := range subQueryResults.Rows {
+		ksid := row[0].Raw()
+		colnum := 1
+		for _, colVindex := range del.Table.Owned {
+			// Fetch the column values. colnum must keep incrementing.
+			fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
+			for range colVindex.Columns {
+				fromIds = append(fromIds, row[colnum])
+				colnum++
+			}
+			if err := colVindex.Vindex.(vindexes.Lookup).Delete(vcursor, [][]sqltypes.Value{fromIds}, ksid); err != nil {
+				return err
+			}
+		}
+
+	}
+
+	return nil
+}
+
 func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]*querypb.BindVariable, dest key.Destination) (*sqltypes.Result, error) {
 	rss, _, err := vcursor.ResolveDestinations(del.Keyspace.Name, nil, []key.Destination{dest})
 	if err != nil {
@@ -202,6 +238,12 @@ func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]
 		queries[i] = &querypb.BoundQuery{
 			Sql:           sql,
 			BindVariables: bindVars,
+		}
+	}
+	if len(del.Table.Owned) > 0 {
+		err = del.deleteVindexEntriesScatter(vcursor, bindVars, rss)
+		if err != nil {
+			return nil, err
 		}
 	}
 	autocommit := (len(rss) == 1 || del.MultiShardAutocommit) && vcursor.AutocommitApproval()
