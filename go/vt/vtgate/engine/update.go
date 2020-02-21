@@ -187,7 +187,7 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 	if len(subQueryResult.Rows) > 1 {
 		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update changes multiple rows in the vindex")
 	}
-	colnum := 1
+	colnum := 1 // we start from the first lookup vindex col
 	for _, colVindex := range upd.Table.Owned {
 		// Fetch the column values. colnum must keep incrementing.
 		fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
