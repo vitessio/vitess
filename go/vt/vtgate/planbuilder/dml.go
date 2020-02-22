@@ -179,8 +179,7 @@ func buildDMLPlan(vschema ContextVSchema, dmlType string, stmt sqlparser.Stateme
 
 func generateDMLSubquery(where *sqlparser.Where, orderBy sqlparser.OrderBy, limit *sqlparser.Limit, table *vindexes.Table, vindex string) string {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.WriteString("select ")
-	buf.Myprintf("%s", vindex)
+	buf.Myprintf("select %s", vindex)
 	for _, cv := range table.Owned {
 		for _, column := range cv.Columns {
 			buf.Myprintf(", %v", column)
