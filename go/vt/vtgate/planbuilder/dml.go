@@ -28,7 +28,7 @@ import (
 
 // getDMLRouting returns the vindex and values for the DML,
 // If it cannot find a unique vindex match, it returns an error.
-func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (dmlRoutingType, vindexes.SingleColumn, string, []sqltypes.PlanValue) {
+func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (engine.DMLOpcode, vindexes.SingleColumn, string, []sqltypes.PlanValue) {
 	var keyColumn string
 	for _, index := range table.Ordered {
 		if !index.Vindex.IsUnique() {
@@ -44,18 +44,18 @@ func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (dmlRoutingTyp
 		}
 
 		if where == nil {
-			return scatter, nil, keyColumn, nil
+			return engine.Scatter, nil, keyColumn, nil
 		}
 
 		if pv, ok := getMatch(where.Expr, index.Columns[0]); ok {
 			if pv.IsList() {
-				return scatter, nil, keyColumn, nil
+				return engine.Scatter, nil, keyColumn, nil
 			}
 
-			return equal, single, keyColumn, []sqltypes.PlanValue{pv}
+			return engine.Equal, single, keyColumn, []sqltypes.PlanValue{pv}
 		}
 	}
-	return scatter, nil, keyColumn, nil
+	return engine.Scatter, nil, keyColumn, nil
 }
 
 // getMatch returns the matched value if there is an equality
@@ -162,14 +162,12 @@ func buildDMLPlan(vschema ContextVSchema, dmlType string, stmt sqlparser.Stateme
 	}
 
 	routingType, vindex, vindexCol, values := getDMLRouting(where, eupd.Table)
-
-	if routingType == scatter {
+	eupd.Opcode = routingType
+	if routingType == engine.Scatter {
 		if limit != nil {
 			return nil, "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multi shard %s with limit", dmlType)
 		}
-		eupd.Opcode = engine.Scatter
 	} else {
-		eupd.Opcode = engine.Equal
 		eupd.Values = values
 		eupd.Vindex = vindex
 	}
@@ -204,10 +202,3 @@ func dmlFormatter(buf *sqlparser.TrackedBuffer, node sqlparser.SQLNode) {
 	}
 	node.Format(buf)
 }
-
-type dmlRoutingType int
-
-const (
-	scatter dmlRoutingType = iota
-	equal
-)
