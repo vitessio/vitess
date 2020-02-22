@@ -140,6 +140,11 @@ func TestAutocommitDeleteSharded(t *testing.T) {
 // TestAutocommitDeleteLookup: transaction: select before update.
 func TestAutocommitDeleteLookup(t *testing.T) {
 	executor, sbc1, _, sbclookup := createExecutorEnv()
+	sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("id|name|lastname", "varbinary|int32|varchar"),
+		"1|1|foo",
+	),
+	})
 
 	_, err := autocommitExec(executor, "delete from music where id = 1")
 	require.NoError(t, err)

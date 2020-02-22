@@ -329,11 +329,13 @@ func TestDeleteEqual(t *testing.T) {
 
 	sbc.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
+			{Name: "Id", Type: sqltypes.Int64},
 			{Name: "name", Type: sqltypes.VarChar},
 		},
 		RowsAffected: 1,
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(1),
 			sqltypes.NewVarChar("myname"),
 		}},
 	}})
@@ -416,6 +418,11 @@ func TestDeleteEqual(t *testing.T) {
 
 	sbc.Queries = nil
 	sbclookup.Queries = nil
+	sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("id|name|lastname", "varbinary|int32|varchar"),
+		"1|1|foo",
+	),
+	})
 	_, err = executorExec(executor, "delete from user2 where id = 1", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{
@@ -505,11 +512,13 @@ func TestDeleteComments(t *testing.T) {
 
 	sbc.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
+			{Name: "Id", Type: sqltypes.Int64},
 			{Name: "name", Type: sqltypes.VarChar},
 		},
 		RowsAffected: 1,
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(1),
 			sqltypes.NewVarChar("myname"),
 		}},
 	}})
