@@ -303,18 +303,28 @@ func (mm *messageManager) Close() {
 // cancel or timeout, or tabletserver shutdown, etc.
 func (mm *messageManager) Subscribe(ctx context.Context, send func(*sqltypes.Result) error) <-chan struct{} {
 	receiver, done := newMessageReceiver(ctx, send)
+
 	mm.mu.Lock()
 	defer mm.mu.Unlock()
+	if !mm.isOpen {
+		receiver.cancel()
+		return done
+	}
+
+	if err := receiver.Send(mm.fieldResult); err != nil {
+		log.Errorf("Terminating connection due to error sending field info: %v", err)
+		receiver.cancel()
+		return done
+	}
+
 	withStatus := &receiverWithStatus{
 		receiver: receiver,
-		busy:     true,
 	}
 	mm.receivers = append(mm.receivers, withStatus)
 	MessageStats.Set([]string{mm.name.String(), "ClientCount"}, int64(len(mm.receivers)))
-
-	// Send the message asynchronously.
-	mm.wg.Add(1)
-	go mm.send(withStatus, mm.fieldResult)
+	if mm.curReceiver == -1 {
+		mm.rescanReceivers(-1)
+	}
 
 	// Track the context and unsubscribe if it gets cancelled.
 	go func() {
@@ -438,7 +448,7 @@ func (mm *messageManager) runSend() {
 				go mm.pollerTicks.Trigger()
 			}
 
-			// We have rows to send, break out of this loop.
+			// If we have rows to send, break out of this loop.
 			if rows != nil {
 				break
 			}
@@ -497,17 +507,6 @@ func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 				go mm.pollerTicks.Trigger()
 			}
 			mm.mu.Unlock()
-			return
-		}
-
-		// A rare corner case:
-		// If we fail to send the field info, then we should not send
-		// rows on this connection anymore. We should instead terminate
-		// the connection.
-		if len(ids) == 0 {
-			receiver.receiver.cancel()
-			mm.unsubscribe(receiver.receiver)
-			log.Errorf("Terminating connection due to error sending field info: %v", err)
 			return
 		}
 

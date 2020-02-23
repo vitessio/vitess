@@ -167,7 +167,7 @@ func TestLockDB(t *testing.T) {
 	default:
 	}
 
-	ch2 := make(chan *sqltypes.Result)
+	ch2 := make(chan *sqltypes.Result, 1)
 	var count sync2.AtomicInt64
 	engine.Subscribe(context.Background(), "t2", func(qr *sqltypes.Result) error {
 		count.Add(1)
@@ -268,7 +268,7 @@ func newTestEngine(db *fakesqldb.DB) *Engine {
 }
 
 func newEngineReceiver() (f func(qr *sqltypes.Result) error, ch chan *sqltypes.Result) {
-	ch = make(chan *sqltypes.Result)
+	ch = make(chan *sqltypes.Result, 1)
 	return func(qr *sqltypes.Result) error {
 		ch <- qr
 		return nil

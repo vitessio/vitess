@@ -105,10 +105,12 @@ func TestReceiverCancel(t *testing.T) {
 	mm := newMessageManager(newFakeTabletServer(), mmTable, newMMConnPool(db), sync2.NewSemaphore(1, 0))
 	mm.Open()
 	defer mm.Close()
+
 	r1 := newTestReceiver(0)
 	ctx, cancel := context.WithCancel(context.Background())
+	go cancel()
 	_ = mm.Subscribe(ctx, r1.rcv)
-	cancel()
+
 	// r1 should eventually be unsubscribed.
 	for i := 0; i < 10; i++ {
 		runtime.Gosched()
@@ -140,15 +142,6 @@ func TestMessageManagerState(t *testing.T) {
 		// Idempotence.
 		mm.Close()
 	}
-
-	for i := 0; i < 2; i++ {
-		mm.Open()
-		r1 := newTestReceiver(1)
-		mm.Subscribe(context.Background(), r1.rcv)
-		// This time the wait is in a different code path.
-		runtime.Gosched()
-		mm.Close()
-	}
 }
 
 func TestMessageManagerAdd(t *testing.T) {
@@ -168,8 +161,9 @@ func TestMessageManagerAdd(t *testing.T) {
 	}
 
 	r1 := newTestReceiver(0)
+	go func() { <-r1.ch }()
 	mm.Subscribe(context.Background(), r1.rcv)
-	<-r1.ch
+
 	if !mm.Add(row1) {
 		t.Error("Add(1 receiver): false, want true")
 	}
@@ -191,8 +185,10 @@ func TestMessageManagerSend(t *testing.T) {
 	mm := newMessageManager(tsv, mmTable, newMMConnPool(db), sync2.NewSemaphore(1, 0))
 	mm.Open()
 	defer mm.Close()
+
 	r1 := newTestReceiver(1)
 	mm.Subscribe(context.Background(), r1.rcv)
+
 	want := &sqltypes.Result{
 		Fields: testFields,
 	}
@@ -245,6 +241,7 @@ func TestMessageManagerSend(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	mm.Subscribe(ctx, r2.rcv)
 	<-r2.ch
+
 	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("2")}})
 	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("3")}})
 	// Send should be round-robin.
@@ -281,6 +278,7 @@ func TestMessageManagerPostponeThrottle(t *testing.T) {
 	mm := newMessageManager(tsv, mmTable, newMMConnPool(db), sync2.NewSemaphore(1, 0))
 	mm.Open()
 	defer mm.Close()
+
 	r1 := newTestReceiver(1)
 	mm.Subscribe(context.Background(), r1.rcv)
 	<-r1.ch
@@ -352,16 +350,16 @@ func TestMessageManagerSendEOF(t *testing.T) {
 	mm := newMessageManager(newFakeTabletServer(), ti, newMMConnPool(db), sync2.NewSemaphore(1, 0))
 	mm.Open()
 	defer mm.Close()
-	r1 := newTestReceiver(0)
+
 	ctx, cancel := context.WithCancel(context.Background())
+
+	r1 := newTestReceiver(0)
+	go func() { <-r1.ch }()
 	mm.Subscribe(ctx, r1.rcv)
-	// Pull field info.
-	<-r1.ch
 
 	r2 := newTestReceiver(0)
+	go func() { <-r2.ch }()
 	mm.Subscribe(context.Background(), r2.rcv)
-	// Pull field info.
-	<-r2.ch
 
 	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("1"), sqltypes.NULL}})
 	// Wait for send to enqueue.
@@ -391,6 +389,7 @@ func TestMessageManagerSendError(t *testing.T) {
 	ctx := context.Background()
 
 	ch := make(chan *sqltypes.Result)
+	go func() { <-ch }()
 	fieldSent := false
 	mm.Subscribe(ctx, func(qr *sqltypes.Result) error {
 		ch <- qr
@@ -400,8 +399,6 @@ func TestMessageManagerSendError(t *testing.T) {
 		}
 		return errors.New("non-eof")
 	})
-	// Pull field info.
-	<-ch
 
 	postponech := make(chan string, 20)
 	tsv.SetChannel(postponech)
@@ -424,12 +421,11 @@ func TestMessageManagerFieldSendError(t *testing.T) {
 	ctx := context.Background()
 
 	ch := make(chan *sqltypes.Result)
+	go func() { <-ch }()
 	done := mm.Subscribe(ctx, func(qr *sqltypes.Result) error {
 		ch <- qr
 		return errors.New("non-eof")
 	})
-	// Pull field info.
-	<-ch
 
 	// This should not hang because a field send error must terminate
 	// subscription.
@@ -444,9 +440,11 @@ func TestMessageManagerBatchSend(t *testing.T) {
 	mm := newMessageManager(newFakeTabletServer(), ti, newMMConnPool(db), sync2.NewSemaphore(1, 0))
 	mm.Open()
 	defer mm.Close()
+
 	r1 := newTestReceiver(1)
 	mm.Subscribe(context.Background(), r1.rcv)
 	<-r1.ch
+
 	row1 := &MessageRow{
 		Row: []sqltypes.Value{sqltypes.NewVarBinary("1"), sqltypes.NULL},
 	}
@@ -523,10 +521,12 @@ func TestMessageManagerPoller(t *testing.T) {
 	mm := newMessageManager(newFakeTabletServer(), ti, newMMConnPool(db), sync2.NewSemaphore(1, 0))
 	mm.Open()
 	defer mm.Close()
-	r1 := newTestReceiver(1)
+
 	ctx, cancel := context.WithCancel(context.Background())
+	r1 := newTestReceiver(1)
 	mm.Subscribe(ctx, r1.rcv)
 	<-r1.ch
+
 	mm.pollerTicks.Trigger()
 	want := [][]sqltypes.Value{{
 		sqltypes.NewInt64(2),
@@ -593,9 +593,10 @@ func TestMessagesPending1(t *testing.T) {
 	mm := newMessageManager(newFakeTabletServer(), ti, newMMConnPool(db), sync2.NewSemaphore(1, 0))
 	mm.Open()
 	defer mm.Close()
+
 	r1 := newTestReceiver(0)
+	go func() { <-r1.ch }()
 	mm.Subscribe(context.Background(), r1.rcv)
-	<-r1.ch
 
 	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("1")}})
 	// Make sure the first message is enqueued.
@@ -660,9 +661,10 @@ func TestMessagesPending2(t *testing.T) {
 	mm := newMessageManager(newFakeTabletServer(), ti, newMMConnPool(db), sync2.NewSemaphore(1, 0))
 	mm.Open()
 	defer mm.Close()
+
 	r1 := newTestReceiver(0)
+	go func() { <-r1.ch }()
 	mm.Subscribe(context.Background(), r1.rcv)
-	<-r1.ch
 
 	// Trigger the poller.
 	mm.pollerTicks.Trigger()
