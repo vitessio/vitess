@@ -101,14 +101,14 @@ func Init() (*Env, error) {
 		return nil, fmt.Errorf("could not launch mysql: %v", err)
 	}
 
+	te.Dbcfgs = dbconfigs.NewTestDBConfigs(te.cluster.MySQLConnParams(), te.cluster.MySQLAppDebugConnParams(), te.cluster.DbName())
+	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
+	te.SchemaEngine = schema.NewEngine(checker{}, tabletenv.DefaultQsConfig)
 	dbaWithDbParams, err := te.Dbcfgs.DbaWithDB().GetConnParams()
 	if err != nil {
 		te.Close()
 		return nil, err
 	}
-	te.Dbcfgs = dbconfigs.NewTestDBConfigs(te.cluster.MySQLConnParams(), te.cluster.MySQLAppDebugConnParams(), te.cluster.DbName())
-	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
-	te.SchemaEngine = schema.NewEngine(checker{}, tabletenv.DefaultQsConfig)
 	te.SchemaEngine.InitDBConfig(dbaWithDbParams)
 
 	// The first vschema should not be empty. Leads to Node not found error.
