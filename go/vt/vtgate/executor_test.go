@@ -462,6 +462,9 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set foreign_key_checks = 0",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
+		in:  "set unique_checks = 0",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
 		in:  "set skip_query_plan_cache = 1",
 		out: &vtgatepb.Session{Autocommit: true, Options: &querypb.ExecuteOptions{SkipQueryPlanCache: true}},
 	}, {
