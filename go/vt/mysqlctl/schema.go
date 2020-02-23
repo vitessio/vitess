@@ -25,7 +25,6 @@ import (
 
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 
@@ -38,7 +37,7 @@ var autoIncr = regexp.MustCompile(` AUTO_INCREMENT=\d+`)
 // executeSchemaCommands executes some SQL commands, using the mysql
 // command line tool. It uses the dba connection parameters, with credentials.
 func (mysqld *Mysqld) executeSchemaCommands(sql string) error {
-	params, err := dbconfigs.WithCredentials(mysqld.dbcfgs.Dba().GetConnParams())
+	params, err := mysqld.dbcfgs.Dba().GetConnParams()
 	if err != nil {
 		return err
 	}

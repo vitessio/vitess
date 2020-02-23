@@ -110,12 +110,14 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	}
 
 	// Create and open the connection pool for dba access.
+	dbaParams, _ := dbcfgs.Dba().GetConnParams()
 	result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", *dbaPoolSize, *dbaIdleTimeout, *poolDynamicHostnameResolution)
-	result.dbaPool.Open(dbcfgs.Dba().GetConnParams(), dbaMysqlStats)
+	result.dbaPool.Open(dbaParams, dbaMysqlStats)
 
 	// Create and open the connection pool for app access.
+	appWithDBParams, _ := dbcfgs.AppWithDB().GetConnParams()
 	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout, *poolDynamicHostnameResolution)
-	result.appPool.Open(dbcfgs.AppWithDB().GetConnParams(), appMysqlStats)
+	result.appPool.Open(appWithDBParams, appMysqlStats)
 
 	/*
 	 Unmanaged tablets are special because the MYSQL_FLAVOR detection
@@ -274,7 +276,7 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 	// privileges' right in the middle, and then subsequent
 	// commands fail if we don't use valid credentials. So let's
 	// use dba credentials.
-	params, err := dbconfigs.WithCredentials(mysqld.dbcfgs.Dba().GetConnParams())
+	params, err := mysqld.dbcfgs.Dba().GetConnParams()
 	if err != nil {
 		return err
 	}
@@ -441,7 +443,7 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 // will use the dba credentials to try to connect. Use wait() with
 // different credentials if needed.
 func (mysqld *Mysqld) Wait(ctx context.Context, cnf *Mycnf) error {
-	params, err := dbconfigs.WithCredentials(mysqld.dbcfgs.Dba().GetConnParams())
+	params, err := mysqld.dbcfgs.Dba().GetConnParams()
 	if err != nil {
 		return err
 	}
@@ -531,7 +533,7 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 		if err != nil {
 			return err
 		}
-		params, err := dbconfigs.WithCredentials(mysqld.dbcfgs.Dba().GetConnParams())
+		params, err := mysqld.dbcfgs.Dba().GetConnParams()
 		if err != nil {
 			return err
 		}
@@ -1101,12 +1103,14 @@ func (mysqld *Mysqld) GetAppConnection(ctx context.Context) (*dbconnpool.PooledD
 
 // GetDbaConnection creates a new DBConnection.
 func (mysqld *Mysqld) GetDbaConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(mysqld.dbcfgs.Dba().GetConnParams(), dbaMysqlStats)
+	dbaParams, _ := mysqld.dbcfgs.Dba().GetConnParams()
+	return dbconnpool.NewDBConnection(dbaParams, dbaMysqlStats)
 }
 
 // GetAllPrivsConnection creates a new DBConnection.
 func (mysqld *Mysqld) GetAllPrivsConnection() (*dbconnpool.DBConnection, error) {
-	return dbconnpool.NewDBConnection(mysqld.dbcfgs.AllPrivsWithDB().GetConnParams(), allprivsMysqlStats)
+	allPrivsWithDBParams, _ := mysqld.dbcfgs.AllPrivsWithDB().GetConnParams()
+	return dbconnpool.NewDBConnection(allPrivsWithDBParams, allprivsMysqlStats)
 }
 
 // Close will close this instance of Mysqld. It will wait for all dba

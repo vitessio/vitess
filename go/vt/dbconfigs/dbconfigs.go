@@ -135,82 +135,86 @@ func registerPerUserFlags(dbc *userConfig, userKey string) {
 
 }
 
-// ConnWrapper contains mysql.connparams for now
-type ConnWrapper struct {
-	connWrapperParams *mysql.ConnParams
+// ConnParams contains mysql.connparams for now
+type ConnParams struct {
+	connParams *mysql.ConnParams
 }
 
 // GetConnParams returns the connections params
-func (cw ConnWrapper) GetConnParams() *mysql.ConnParams {
-	return cw.connWrapperParams
+func (cp ConnParams) GetConnParams() (*mysql.ConnParams, error) {
+	params, err := WithCredentials(cp.connParams)
+	if err != nil {
+		return nil, err
+	}
+	return params, nil
 }
 
 // AppWithDB returns connection parameters for app with dbname set.
-func (dbcfgs *DBConfigs) AppWithDB() ConnWrapper {
+func (dbcfgs *DBConfigs) AppWithDB() ConnParams {
 	return dbcfgs.makeParams(App, true)
 }
 
 // AppDebugWithDB returns connection parameters for appdebug with dbname set.
-func (dbcfgs *DBConfigs) AppDebugWithDB() ConnWrapper {
+func (dbcfgs *DBConfigs) AppDebugWithDB() ConnParams {
 	return dbcfgs.makeParams(AppDebug, true)
 }
 
 // AllPrivsWithDB returns connection parameters for appdebug with dbname set.
-func (dbcfgs *DBConfigs) AllPrivsWithDB() ConnWrapper {
+func (dbcfgs *DBConfigs) AllPrivsWithDB() ConnParams {
 	return dbcfgs.makeParams(AllPrivs, true)
 }
 
 // Dba returns connection parameters for dba with no dbname set.
-func (dbcfgs *DBConfigs) Dba() ConnWrapper {
+func (dbcfgs *DBConfigs) Dba() ConnParams {
 	return dbcfgs.makeParams(Dba, false)
 }
 
 // DbaWithDB returns connection parameters for appdebug with dbname set.
-func (dbcfgs *DBConfigs) DbaWithDB() ConnWrapper {
+func (dbcfgs *DBConfigs) DbaWithDB() ConnParams {
 	return dbcfgs.makeParams(Dba, true)
 }
 
 // FilteredWithDB returns connection parameters for filtered with dbname set.
-func (dbcfgs *DBConfigs) FilteredWithDB() ConnWrapper {
+func (dbcfgs *DBConfigs) FilteredWithDB() ConnParams {
 	return dbcfgs.makeParams(Filtered, true)
 }
 
 // Repl returns connection parameters for repl with no dbname set.
-func (dbcfgs *DBConfigs) Repl() ConnWrapper {
+func (dbcfgs *DBConfigs) Repl() ConnParams {
 	return dbcfgs.makeParams(Repl, false)
 }
 
 // ExternalRepl returns connection parameters for repl with no dbname set.
-func (dbcfgs *DBConfigs) ExternalRepl() ConnWrapper {
+func (dbcfgs *DBConfigs) ExternalRepl() ConnParams {
 	return dbcfgs.makeParams(ExternalRepl, true)
 }
 
 // ExternalReplWithDB returns connection parameters for repl with dbname set.
-func (dbcfgs *DBConfigs) ExternalReplWithDB() ConnWrapper {
+func (dbcfgs *DBConfigs) ExternalReplWithDB() ConnParams {
 	params := dbcfgs.makeParams(ExternalRepl, true)
 	// TODO @rafael: This is a hack to allows to configure external databases by providing
 	// db-config-erepl-dbname.
-	if params.connWrapperParams.DeprecatedDBName != "" {
-		params.connWrapperParams.DbName = params.connWrapperParams.DeprecatedDBName
+	if params.connParams.DeprecatedDBName != "" {
+		params.connParams.DbName = params.connParams.DeprecatedDBName
 		return params
 	}
 	return params
 }
 
 // AppWithDB returns connection parameters for app with dbname set.
-func (dbcfgs *DBConfigs) makeParams(userKey string, withDB bool) ConnWrapper {
+func (dbcfgs *DBConfigs) makeParams(userKey string, withDB bool) ConnParams {
 	orig := dbcfgs.userConfigs[userKey]
 	if orig == nil {
-		return ConnWrapper{
-			connWrapperParams: &mysql.ConnParams{},
+		return ConnParams{
+			connParams: &mysql.ConnParams{},
 		}
 	}
 	result := orig.param
 	if withDB {
 		result.DbName = dbcfgs.DBName.Get()
 	}
-	return ConnWrapper{
-		connWrapperParams: &result,
+	return ConnParams{
+		connParams: &result,
 	}
 }
 

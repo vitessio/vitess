@@ -273,25 +273,25 @@ func TestAccessors(t *testing.T) {
 		},
 	}
 	dbc.DBName.Set("db")
-	if got, want := dbc.AppWithDB().connWrapperParams.DbName, "db"; got != want {
+	if got, want := dbc.AppWithDB().connParams.DbName, "db"; got != want {
 		t.Errorf("dbc.AppWithDB().DbName: %v, want %v", got, want)
 	}
-	if got, want := dbc.AllPrivsWithDB().connWrapperParams.DbName, "db"; got != want {
+	if got, want := dbc.AllPrivsWithDB().connParams.DbName, "db"; got != want {
 		t.Errorf("dbc.AllPrivsWithDB().DbName: %v, want %v", got, want)
 	}
-	if got, want := dbc.AppDebugWithDB().connWrapperParams.DbName, "db"; got != want {
+	if got, want := dbc.AppDebugWithDB().connParams.DbName, "db"; got != want {
 		t.Errorf("dbc.AppDebugWithDB().DbName: %v, want %v", got, want)
 	}
-	if got, want := dbc.Dba().connWrapperParams.DbName, ""; got != want {
+	if got, want := dbc.Dba().connParams.DbName, ""; got != want {
 		t.Errorf("dbc.Dba().DbName: %v, want %v", got, want)
 	}
-	if got, want := dbc.DbaWithDB().connWrapperParams.DbName, "db"; got != want {
+	if got, want := dbc.DbaWithDB().connParams.DbName, "db"; got != want {
 		t.Errorf("dbc.DbaWithDB().DbName: %v, want %v", got, want)
 	}
-	if got, want := dbc.FilteredWithDB().connWrapperParams.DbName, "db"; got != want {
+	if got, want := dbc.FilteredWithDB().connParams.DbName, "db"; got != want {
 		t.Errorf("dbc.FilteredWithDB().DbName: %v, want %v", got, want)
 	}
-	if got, want := dbc.Repl().connWrapperParams.DbName, ""; got != want {
+	if got, want := dbc.Repl().connParams.DbName, ""; got != want {
 		t.Errorf("dbc.Repl().DbName: %v, want %v", got, want)
 	}
 }

@@ -82,8 +82,13 @@ func TestMain(m *testing.M) {
 
 		// engines cannot be initialized in testenv because it introduces
 		// circular dependencies.
+		dbaWithDBParams, err := env.Dbcfgs.DbaWithDB().GetConnParams()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+			return 1
+		}
 		streamerEngine = vstreamer.NewEngine(env.SrvTopo, env.SchemaEngine)
-		streamerEngine.InitDBConfig(env.Dbcfgs.DbaWithDB().GetConnParams())
+		streamerEngine.InitDBConfig(dbaWithDBParams)
 		streamerEngine.Open(env.KeyspaceName, env.Cells[0])
 		defer streamerEngine.Close()
 
@@ -341,7 +346,10 @@ func (dbc *realDBClient) DBName() string {
 }
 
 func (dbc *realDBClient) Connect() error {
-	app := env.Dbcfgs.AppWithDB().GetConnParams()
+	app, err := env.Dbcfgs.AppWithDB().GetConnParams()
+	if err != nil {
+		return err
+	}
 	app.DbName = vrepldb
 	conn, err := mysql.Connect(context.Background(), app)
 	if err != nil {

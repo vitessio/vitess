@@ -386,14 +386,18 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.target = target
 	tsv.dbconfigs = dbcfgs
 
-	tsv.se.InitDBConfig(tsv.dbconfigs.DbaWithDB().GetConnParams())
+	dbaWithDBParams, err := tsv.dbconfigs.DbaWithDB().GetConnParams()
+	if err != nil {
+		log.Infof("Error when reading connection paramters : %v", err)
+	}
+	tsv.se.InitDBConfig(dbaWithDBParams)
 	tsv.qe.InitDBConfig(tsv.dbconfigs)
 	tsv.teCtrl.InitDBConfig(tsv.dbconfigs)
 	tsv.hw.InitDBConfig(tsv.dbconfigs)
 	tsv.hr.InitDBConfig(tsv.dbconfigs)
 	tsv.messager.InitDBConfig(tsv.dbconfigs)
 	tsv.watcher.InitDBConfig(tsv.dbconfigs)
-	tsv.vstreamer.InitDBConfig(tsv.dbconfigs.DbaWithDB().GetConnParams())
+	tsv.vstreamer.InitDBConfig(dbaWithDBParams)
 	return nil
 }
 
@@ -537,7 +541,11 @@ func (tsv *TabletServer) decideAction(tabletType topodatapb.TabletType, serving 
 }
 
 func (tsv *TabletServer) fullStart() (err error) {
-	c, err := dbconnpool.NewDBConnection(tsv.dbconfigs.AppWithDB().GetConnParams(), tabletenv.MySQLStats)
+	appWithDBParams, err := tsv.dbconfigs.AppWithDB().GetConnParams()
+	if err != nil {
+		return err
+	}
+	c, err := dbconnpool.NewDBConnection(appWithDBParams, tabletenv.MySQLStats)
 	if err != nil {
 		log.Errorf("error creating db app connection: %v", err)
 		return err
@@ -2018,7 +2026,11 @@ func (tsv *TabletServer) UpdateStream(ctx context.Context, target *querypb.Targe
 	}
 	defer tsv.endRequest(false)
 
-	s := binlog.NewEventStreamer(tsv.dbconfigs.DbaWithDB().GetConnParams(), tsv.se, p, timestamp, callback)
+	dbaWithDBParams, err := tsv.dbconfigs.DbaWithDB().GetConnParams()
+	if err != nil {
+		return err
+	}
+	s := binlog.NewEventStreamer(dbaWithDBParams, tsv.se, p, timestamp, callback)
 
 	// Create a cancelable wrapping context.
 	streamCtx, streamCancel := context.WithCancel(ctx)

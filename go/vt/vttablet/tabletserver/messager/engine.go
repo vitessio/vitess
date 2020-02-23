@@ -86,7 +86,23 @@ func (me *Engine) Open() error {
 	if me.isOpen {
 		return nil
 	}
-	me.conns.Open(me.dbconfigs.AppWithDB().GetConnParams(), me.dbconfigs.DbaWithDB().GetConnParams(), me.dbconfigs.AppDebugWithDB().GetConnParams())
+
+	appWithDbPramas, err := me.dbconfigs.AppWithDB().GetConnParams()
+	if err != nil {
+		return err
+	}
+
+	dbaWithDbPramas, err := me.dbconfigs.AppWithDB().GetConnParams()
+	if err != nil {
+		return err
+	}
+
+	appDebugWithDbPramas, err := me.dbconfigs.AppWithDB().GetConnParams()
+	if err != nil {
+		return err
+	}
+
+	me.conns.Open(appWithDbPramas, dbaWithDbPramas, appDebugWithDbPramas)
 	me.se.RegisterNotifier("messages", me.schemaChanged)
 	me.isOpen = true
 	return nil
