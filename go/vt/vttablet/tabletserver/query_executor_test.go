@@ -323,6 +323,7 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanInsertMessage, qre.plan.PlanID)
 	ch1 := make(chan *sqltypes.Result)
+	go func() { <-ch1 }()
 	count := 0
 	tsv.messager.Subscribe(context.Background(), "msg", func(qr *sqltypes.Result) error {
 		if count > 1 {
@@ -332,7 +333,6 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 		ch1 <- qr
 		return nil
 	})
-	<-ch1
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
