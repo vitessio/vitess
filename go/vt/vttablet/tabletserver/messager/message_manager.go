@@ -130,7 +130,7 @@ type receiverWithStatus struct {
 //
 // messagesPending mode
 // This mode is a variation of the steady state mode. This mode is
-// entered when there are outstanding items on disk that need to be sent
+// entered when there are outstanding items in the database that need to be sent
 // but are not present in the cache. This state can be entered in one
 // of three ways:
 // 1. The poller read returns as many rows as the cache size
@@ -178,9 +178,10 @@ type messageManager struct {
 
 	mu     sync.Mutex
 	isOpen bool
-	// cond gets triggered if a receiver becomes available (curReceiver != -1),
-	// an item gets added to the cache, or if the manager is closed.
-	// The trigger wakes up the runSend thread.
+	// cond waits on curReceiver == -1 || cache.IsEmpty():
+	// No current receivers available or cache is empty.
+	// Also, messagesPending && cache.IsEmpty() should trigger
+	// the poller to fetch more messages from the database.
 	cond            sync.Cond
 	cache           *cache
 	receivers       []*receiverWithStatus
@@ -289,6 +290,7 @@ func (mm *messageManager) Close() {
 	mm.receivers = nil
 	MessageStats.Set([]string{mm.name.String(), "ClientCount"}, 0)
 	mm.cache.Clear()
+	// This broadcast will cause runSend to exit.
 	mm.cond.Broadcast()
 	mm.mu.Unlock()
 
@@ -375,16 +377,16 @@ func (mm *messageManager) Add(mr *MessageRow) bool {
 	if len(mm.receivers) == 0 {
 		return false
 	}
+	// If cache is empty, we have to broadcast that we're not empty
+	// any more.
+	if mm.cache.IsEmpty() {
+		mm.cond.Broadcast()
+	}
 	if !mm.cache.Add(mr) {
-		// Cache is full. Enter "messagesPending" mode to let the poller
-		// fill the cache with messages from disk as soon as a cache
-		// slot becomes available.
-		// We also skip notifying the send routine via mm.cond.Broadcast()
-		// because a full cache means that it's already active.
+		// Cache is full. Enter "messagesPending" mode.
 		mm.messagesPending = true
 		return false
 	}
-	mm.cond.Broadcast()
 	return true
 }
 
@@ -402,8 +404,8 @@ func (mm *messageManager) runSend() {
 				return
 			}
 
-			// If there are no receivers, we wait.
-			if mm.curReceiver == -1 {
+			// If there are no receivers or cache is empty, we wait.
+			if mm.curReceiver == -1 || mm.cache.IsEmpty() {
 				mm.cond.Wait()
 				continue
 			}
@@ -412,25 +414,21 @@ func (mm *messageManager) runSend() {
 			lateCount := int64(0)
 			timingsKey := []string{mm.name.String()}
 			for i := 0; i < mm.batchSize; i++ {
-				if mr := mm.cache.Pop(); mr != nil {
-					if mr.Epoch >= 1 {
-						lateCount++
-					}
-					MessageDelayTimings.Record(timingsKey, time.Unix(0, mr.TimeCreated))
-					rows = append(rows, mr.Row)
-					continue
+				mr := mm.cache.Pop()
+				if mr == nil {
+					break
 				}
-				break
+				if mr.Epoch >= 1 {
+					lateCount++
+				}
+				MessageDelayTimings.Record(timingsKey, time.Unix(0, mr.TimeCreated))
+				rows = append(rows, mr.Row)
 			}
 			MessageStats.Add([]string{mm.name.String(), "Delayed"}, lateCount)
 
-			// We have rows to send, break out of this loop.
-			if rows != nil {
-				break
-			}
-
-			if mm.messagesPending {
-				// If messages are pending, trigger the poller to fetch more.
+			// If cache became empty and there are messages pending, we have
+			// to trigger the poller to fetch more.
+			if mm.cache.IsEmpty() && mm.messagesPending {
 				// Do this as a separate goroutine. Otherwise, this could cause
 				// the following deadlock:
 				// 1. runSend obtains a lock
@@ -440,8 +438,10 @@ func (mm *messageManager) runSend() {
 				go mm.pollerTicks.Trigger()
 			}
 
-			// There are no rows in the cache. We wait.
-			mm.cond.Wait()
+			// We have rows to send, break out of this loop.
+			if rows != nil {
+				break
+			}
 		}
 		MessageStats.Add([]string{mm.name.String(), "Sent"}, int64(len(rows)))
 		// If we're here, there is a current receiver, and messages
@@ -488,18 +488,15 @@ func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 	if err := receiver.receiver.Send(qr); err != nil {
 		if err == io.EOF {
 			// If the receiver ended the stream, we do not postpone the message.
-			// Instead, we mark messagesPending, which will proactively trigger
-			// the poller when cache goes empty, and the message will be immediately
-			// resent through another receiver.
+			// Instead, we mark messagesPending. If the cache is already empty
+			// then we have to trigger the poller. Otherwise, it will get
+			// trigerred by runSend when it goes empty.
 			mm.mu.Lock()
 			mm.messagesPending = true
-			// If this was the last message from the cache, the send loop
-			// could have gone idle. If so, wake it up.
-			mm.cond.Broadcast()
+			if mm.cache.IsEmpty() {
+				go mm.pollerTicks.Trigger()
+			}
 			mm.mu.Unlock()
-			// No need to call cancel. messageReceiver already
-			// does that before returning this error.
-			mm.unsubscribe(receiver.receiver)
 			return
 		}
 
