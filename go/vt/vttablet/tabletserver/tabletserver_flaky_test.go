@@ -378,26 +378,6 @@ func TestTabletServerCheckMysql(t *testing.T) {
 	checkTabletServerState(t, tsv, StateNotServing)
 }
 
-func TestTabletServerCheckMysqlFailInvalidConn(t *testing.T) {
-	db := setUpTabletServerTest(t)
-	defer db.Close()
-	testUtils := newTestUtils()
-	config := testUtils.newQueryServiceConfig()
-	tsv := NewTabletServerWithNilTopoServer(config)
-	dbcfgs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	err := tsv.StartService(target, dbcfgs)
-	defer tsv.StopService()
-	if err != nil {
-		t.Fatalf("TabletServer.StartService should succeed, but got error: %v", err)
-	}
-	// make mysql conn fail
-	db.Close()
-	if tsv.isMySQLReachable() {
-		t.Fatalf("isMySQLReachable should return false")
-	}
-}
-
 func TestTabletServerReconnect(t *testing.T) {
 	db := setUpTabletServerTest(t)
 	defer db.Close()

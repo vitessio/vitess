@@ -211,14 +211,15 @@ func newMessageManager(tsv TabletService, table *schema.Table, conns *connpool.P
 		fieldResult: &sqltypes.Result{
 			Fields: table.MessageInfo.Fields,
 		},
-		ackWaitTime:  table.MessageInfo.AckWaitDuration,
-		purgeAfter:   table.MessageInfo.PurgeAfterDuration,
-		batchSize:    table.MessageInfo.BatchSize,
-		cache:        newCache(table.MessageInfo.CacheSize),
-		pollerTicks:  timer.NewTimer(table.MessageInfo.PollInterval),
-		purgeTicks:   timer.NewTimer(table.MessageInfo.PollInterval),
-		conns:        conns,
-		postponeSema: postponeSema,
+		ackWaitTime:     table.MessageInfo.AckWaitDuration,
+		purgeAfter:      table.MessageInfo.PurgeAfterDuration,
+		batchSize:       table.MessageInfo.BatchSize,
+		cache:           newCache(table.MessageInfo.CacheSize),
+		pollerTicks:     timer.NewTimer(table.MessageInfo.PollInterval),
+		purgeTicks:      timer.NewTimer(table.MessageInfo.PollInterval),
+		conns:           conns,
+		postponeSema:    postponeSema,
+		messagesPending: true,
 	}
 	mm.cond.L = &mm.mu
 
@@ -414,6 +415,18 @@ func (mm *messageManager) runSend() {
 				return
 			}
 
+			// If cache became empty and there are messages pending, we have
+			// to trigger the poller to fetch more.
+			if mm.cache.IsEmpty() && mm.messagesPending {
+				// Do this as a separate goroutine. Otherwise, this could cause
+				// the following deadlock:
+				// 1. runSend obtains a lock
+				// 2. Poller gets trigerred, and waits for lock.
+				// 3. runSend calls this function, but the trigger will hang because
+				// this function cannot return until poller returns.
+				go mm.pollerTicks.Trigger()
+			}
+
 			// If there are no receivers or cache is empty, we wait.
 			if mm.curReceiver == -1 || mm.cache.IsEmpty() {
 				mm.cond.Wait()
@@ -435,18 +448,6 @@ func (mm *messageManager) runSend() {
 				rows = append(rows, mr.Row)
 			}
 			MessageStats.Add([]string{mm.name.String(), "Delayed"}, lateCount)
-
-			// If cache became empty and there are messages pending, we have
-			// to trigger the poller to fetch more.
-			if mm.cache.IsEmpty() && mm.messagesPending {
-				// Do this as a separate goroutine. Otherwise, this could cause
-				// the following deadlock:
-				// 1. runSend obtains a lock
-				// 2. Poller gets trigerred, and waits for lock.
-				// 3. runSend calls this function, but the trigger will hang because
-				// this function cannot return until poller returns.
-				go mm.pollerTicks.Trigger()
-			}
 
 			// If we have rows to send, break out of this loop.
 			if rows != nil {
@@ -503,9 +504,10 @@ func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 			// trigerred by runSend when it goes empty.
 			mm.mu.Lock()
 			mm.messagesPending = true
-			if mm.cache.IsEmpty() {
-				go mm.pollerTicks.Trigger()
-			}
+			// Although messagesPending is not part of the condition,
+			// we broadcast to make it break out and trigger the poller
+			// to load more messages, if necessary.
+			mm.cond.Broadcast()
 			mm.mu.Unlock()
 			return
 		}

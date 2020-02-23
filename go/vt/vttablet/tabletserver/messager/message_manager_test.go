@@ -527,7 +527,6 @@ func TestMessageManagerPoller(t *testing.T) {
 	mm.Subscribe(ctx, r1.rcv)
 	<-r1.ch
 
-	mm.pollerTicks.Trigger()
 	want := [][]sqltypes.Value{{
 		sqltypes.NewInt64(2),
 		sqltypes.NewInt64(20),
@@ -553,7 +552,6 @@ func TestMessageManagerPoller(t *testing.T) {
 
 	// If there are no receivers, nothing should fire.
 	cancel()
-	mm.pollerTicks.Trigger()
 	runtime.Gosched()
 	select {
 	case row := <-r1.ch:
@@ -604,9 +602,6 @@ func TestMessagesPending1(t *testing.T) {
 	// This will fill up the cache.
 	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("2")}})
 	mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("3")}})
-
-	// Trigger the poller. It should do nothing.
-	mm.pollerTicks.Trigger()
 
 	// Wait for pending flag to be turned on.
 	for {
@@ -665,9 +660,6 @@ func TestMessagesPending2(t *testing.T) {
 	r1 := newTestReceiver(0)
 	go func() { <-r1.ch }()
 	mm.Subscribe(context.Background(), r1.rcv)
-
-	// Trigger the poller.
-	mm.pollerTicks.Trigger()
 
 	// Now, let's pull more than 1 item. It should
 	// trigger the poller every time cache gets empty.
