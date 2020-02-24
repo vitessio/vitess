@@ -42,4 +42,5 @@ jobs:
     - name: sharded cluster_endtoend
       run: |
         source build.env
-        eatmydata -- go run test.go -docker=false -print-log -shard ${{matrix.name}} 
+        eatmydata -- go run test.go -docker=false -print-log -shard ${{matrix.name}}
+        
