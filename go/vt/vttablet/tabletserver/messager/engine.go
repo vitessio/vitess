@@ -92,12 +92,12 @@ func (me *Engine) Open() error {
 		return err
 	}
 
-	dbaWithDbPramas, err := me.dbconfigs.AppWithDB().GetConnParams()
+	dbaWithDbPramas, err := me.dbconfigs.DbaWithDB().GetConnParams()
 	if err != nil {
 		return err
 	}
 
-	appDebugWithDbPramas, err := me.dbconfigs.AppWithDB().GetConnParams()
+	appDebugWithDbPramas, err := me.dbconfigs.AppDebugWithDB().GetConnParams()
 	if err != nil {
 		return err
 	}

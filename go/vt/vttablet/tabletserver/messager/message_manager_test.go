@@ -788,8 +788,8 @@ func newMMConnPool(db *fakesqldb.DB) *connpool.Pool {
 	dbconfigs := dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "")
 
 	appWithDbPramas, _ := dbconfigs.AppWithDB().GetConnParams()
-	dbaWithDbPramas, _ := dbconfigs.AppWithDB().GetConnParams()
-	appDebugWithDbPramas, _ := dbconfigs.AppWithDB().GetConnParams()
+	dbaWithDbPramas, _ := dbconfigs.DbaWithDB().GetConnParams()
+	appDebugWithDbPramas, _ := dbconfigs.AppDebugWithDB().GetConnParams()
 
 	pool.Open(appWithDbPramas, dbaWithDbPramas, appDebugWithDbPramas)
 	return pool

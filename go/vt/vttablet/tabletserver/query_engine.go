@@ -293,12 +293,12 @@ func (qe *QueryEngine) Open() error {
 		return err
 	}
 
-	dbaWithDBParams, err := qe.dbconfigs.AppWithDB().GetConnParams()
+	dbaWithDBParams, err := qe.dbconfigs.DbaWithDB().GetConnParams()
 	if err != nil {
 		return err
 	}
 
-	appDebugWithDBParams, err := qe.dbconfigs.AppWithDB().GetConnParams()
+	appDebugWithDBParams, err := qe.dbconfigs.AppDebugWithDB().GetConnParams()
 	if err != nil {
 		return err
 	}
