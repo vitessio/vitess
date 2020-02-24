@@ -96,6 +96,13 @@ data:
   backup.s3_backup_storage_root: {{ .backup.s3_backup_storage_root }}
   backup.s3_backup_server_side_encryption: {{ .backup.s3_backup_server_side_encryption }}
   backup.backup_engine_implementation: {{ .backup.backup_engine_implementation }}
+  backup.xtrabackup_root_path: {{ .backup.xtrabackup_root_path }}
+  backup.xtrabackup_backup_flags: {{ .backup.xtrabackup_backup_flags }}
+  backup.xbstream_restore_flags: {{ .backup.xbstream_restore_flags }}
+  backup.xtrabackup_stream_mode: {{ .backup.xtrabackup_stream_mode }}
+  backup.xtrabackup_user: {{ .backup.xtrabackup_user }}
+  backup.xtrabackup_stripes: {{ .backup.xtrabackup_stripes }}
+  backup.xtrabackup_stripe_block_size: {{ .backup.xtrabackup_stripe_block_size }}
 
   db.flavor: {{ $.Values.vttablet.flavor }}
 {{ end }} # end with config
