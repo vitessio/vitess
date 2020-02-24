@@ -152,6 +152,8 @@ done
 -restore_from_backup
     {{ end }}
 
+  -backup_storage_implementation=$VT_BACKUP_SERVICE
+
     {{ if eq .backup_storage_implementation "gcs" }}
 -gcs_backup_storage_bucket=$VT_GCS_BACKUP_STORAGE_BUCKET
 -gcs_backup_storage_root=$VT_GCS_BACKUP_STORAGE_ROOT
