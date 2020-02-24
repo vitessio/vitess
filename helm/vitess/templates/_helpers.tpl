@@ -154,6 +154,10 @@ done
 
 -backup_storage_implementation=$VT_BACKUP_SERVICE
 
+    {{ if eq .backup_engine_implementation "xtrabackup" }}
+ -backup_engine_implementation=$VT_BACKUP_ENGINE_IMPLIMENTATION
+    {{ end }}
+
     {{ if eq .backup_storage_implementation "gcs" }}
 -gcs_backup_storage_bucket=$VT_GCS_BACKUP_STORAGE_BUCKET
 -gcs_backup_storage_root=$VT_GCS_BACKUP_STORAGE_ROOT
@@ -186,6 +190,14 @@ done
     configMapKeyRef:
       name: vitess-cm
       key: backup.backup_storage_implementation
+
+{{ if eq .backup_engine_implementation "xtrabackup" }}
+
+- name: VT_BACKUP_ENGINE_IMPLIMENTATION
+  valueFrom:
+    configMapKeyRef:
+      name: vitess-cm
+      key: backup.backup_engine_implementation
 
 {{ if eq .backup_storage_implementation "gcs" }}
 
