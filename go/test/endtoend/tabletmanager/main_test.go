@@ -153,7 +153,7 @@ func TestMain(m *testing.M) {
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	return qr
 }
 

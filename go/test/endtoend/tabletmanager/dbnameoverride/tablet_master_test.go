@@ -109,11 +109,11 @@ func TestMain(m *testing.M) {
 func TestDbNameOverride(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer conn.Close()
 	qr, err := conn.ExecuteFetch("SELECT database() FROM information_schema.tables WHERE table_schema = database()", 1000, true)
 
-	require.NoError(t, err)
+	require.Nil(t, err)
 	require.Equal(t, 1, len(qr.Rows), "did not get enough rows back")
 	require.Equal(t, dbName, qr.Rows[0][0].ToString())
 }

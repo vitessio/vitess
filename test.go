@@ -174,7 +174,8 @@ func (t *Test) run(dir, dataDir string) ([]byte, error) {
 		testCmd = append(testCmd, extraArgs...)
 		if *docker {
 			// Teardown is unnecessary since Docker kills everything.
-			testCmd = append(testCmd, "--skip-teardown")
+			// Go cluster doesn't recognize 'skip-teardown' flag so commenting it out for now.
+			// testCmd = append(testCmd, "--skip-teardown")
 		}
 	}
 
