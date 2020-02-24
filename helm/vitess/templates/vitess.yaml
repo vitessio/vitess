@@ -95,6 +95,7 @@ data:
   backup.s3_backup_storage_bucket: {{ .backup.s3_backup_storage_bucket }}
   backup.s3_backup_storage_root: {{ .backup.s3_backup_storage_root }}
   backup.s3_backup_server_side_encryption: {{ .backup.s3_backup_server_side_encryption }}
+  backup.backup_engine_implementation: {{ .backup.backup_engine_implementation }}
 
   db.flavor: {{ $.Values.vttablet.flavor }}
 {{ end }} # end with config

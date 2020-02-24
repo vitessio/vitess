@@ -152,12 +152,6 @@ done
 -restore_from_backup
     {{ end }}
 
--backup_storage_implementation=$VT_BACKUP_SERVICE
-
-    {{ if eq .backup_engine_implementation "xtrabackup" }}
- -backup_engine_implementation=$VT_BACKUP_ENGINE_IMPLIMENTATION
-    {{ end }}
-
     {{ if eq .backup_storage_implementation "gcs" }}
 -gcs_backup_storage_bucket=$VT_GCS_BACKUP_STORAGE_BUCKET
 -gcs_backup_storage_root=$VT_GCS_BACKUP_STORAGE_ROOT
@@ -172,6 +166,9 @@ done
 -ceph_backup_storage_config=$CEPH_CREDENTIALS_FILE
     {{ end }}
 
+    {{ if eq .backup_engine_implementation "xtrabackup" }}
+ -backup_engine_implementation=$VT_BACKUP_ENGINE_IMPLIMENTATION
+    {{ end }}
   {{ end }}
 
 {{ end }}
@@ -190,14 +187,6 @@ done
     configMapKeyRef:
       name: vitess-cm
       key: backup.backup_storage_implementation
-
-{{ if eq .backup_engine_implementation "xtrabackup" }}
-
-- name: VT_BACKUP_ENGINE_IMPLIMENTATION
-  valueFrom:
-    configMapKeyRef:
-      name: vitess-cm
-      key: backup.backup_engine_implementation
 
 {{ if eq .backup_storage_implementation "gcs" }}
 
@@ -234,6 +223,16 @@ done
     configMapKeyRef:
       name: vitess-cm
       key: backup.s3_backup_server_side_encryption
+
+{{ end }}
+
+{{ if eq .backup_engine_implementation "xtrabackup" }}
+
+- name: VT_BACKUP_ENGINE_IMPLIMENTATION
+  valueFrom:
+    configMapKeyRef:
+      name: vitess-cm
+      key: backup.backup_engine_implementation
 
 {{ end }}
 
