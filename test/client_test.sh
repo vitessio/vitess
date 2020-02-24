@@ -22,34 +22,42 @@ source build.env
 set -xe
 cd "$VTROOT/examples/local"
 
-CELL=test ./etcd-up.sh
-CELL=test ./vtctld-up.sh
+CELL=test ./scripts/etcd-up.sh
+CELL=test ./scripts/vtctld-up.sh
 
-CELL=test KEYSPACE=test_keyspace UID_BASE=100 ./vttablet-up.sh
+for i in 100 101 102; do
+ CELL=test TABLET_UID=$i ./scripts/mysqlctl-up.sh
+ CELL=test KEYSPACE=test_keyspace TABLET_UID=$i ./scripts/vttablet-up.sh
+done
 
-./lvtctl.sh InitShardMaster -force test_keyspace/0 test-100
+vtctlclient -server localhost:15999 InitShardMaster -force test_keyspace/0 test-100
 
-./lvtctl.sh ApplySchema -sql-file create_test_table.sql test_keyspace
-./lvtctl.sh RebuildVSchemaGraph
+vtctlclient -server localhost:15999 ApplySchema -sql-file create_test_table.sql test_keyspace
+vtctlclient -server localhost:15999 RebuildVSchemaGraph
 
-CELL=test ./vtgate-up.sh
+CELL=test ./scripts/vtgate-up.sh
 
 echo "Run Python client script.."
-./client.sh
+$VTROOT/test/client.sh
 
 echo "Run Go client script..."
-go run client.go -server=localhost:15991
+go run $VTROOT/test/client.go -server=localhost:15991
 
 echo "Run Java client script..."
-./client_java.sh
+$VTROOT/test/client_java.sh
 
 echo "Run JDBC client script..."
-./client_jdbc.sh
+$VTROOT/test/client_jdbc.sh
 
 # Clean up
 
-./vtgate-down.sh
-CELL=test UID_BASE=100 ./vttablet-down.sh
-./vtctld-down.sh
-CELL=test ./etcd-down.sh
+./scripts/vtgate-down.sh
+
+for i in 100 101 102; do
+ CELL=test TABLET_UID=$i ./scripts/vttablet-down.sh
+ CELL=test TABLET_UID=$i ./scripts/mysqlctl-down.sh
+done
+
+./scripts/vtctld-down.sh
+CELL=test ./scripts/etcd-down.sh
 

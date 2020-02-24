@@ -85,10 +85,10 @@ func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Del
 
 	if edel.Opcode == engine.DeleteScatter {
 		if len(edel.Table.Owned) != 0 {
-			return edel, errors.New("unsupported: multi shard delete on a table with owned lookup vindexes")
+			return nil, errors.New("unsupported: multi shard delete on a table with owned lookup vindexes")
 		}
 		if del.Limit != nil {
-			return edel, errors.New("unsupported: multi shard delete with limit")
+			return nil, errors.New("unsupported: multi shard delete with limit")
 		}
 	}
 

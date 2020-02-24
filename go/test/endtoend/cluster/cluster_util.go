@@ -27,7 +27,9 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/mysql"
 	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
 
@@ -35,35 +37,60 @@ var (
 	tmClient = tmc.NewClient()
 )
 
+// Restart restarts vttablet and mysql.
+func (tablet *Vttablet) Restart() error {
+	if tablet.MysqlctlProcess.TabletUID|tablet.MysqlctldProcess.TabletUID == 0 {
+		return fmt.Errorf("no mysql process is running")
+	}
+
+	if tablet.MysqlctlProcess.TabletUID > 0 {
+		tablet.MysqlctlProcess.Stop()
+		tablet.VttabletProcess.TearDown()
+		os.RemoveAll(tablet.VttabletProcess.Directory)
+
+		return tablet.MysqlctlProcess.Start()
+	}
+
+	tablet.MysqlctldProcess.Stop()
+	tablet.VttabletProcess.TearDown()
+	os.RemoveAll(tablet.VttabletProcess.Directory)
+
+	return tablet.MysqlctldProcess.Start()
+}
+
+// ValidateTabletRestart restarts the tablet and validate error if there is any.
+func (tablet *Vttablet) ValidateTabletRestart(t *testing.T) {
+	require.Nilf(t, tablet.Restart(), "tablet restart failed")
+}
+
 // GetMasterPosition gets the master position of required vttablet
 func GetMasterPosition(t *testing.T, vttablet Vttablet, hostname string) (string, string) {
 	ctx := context.Background()
 	vtablet := getTablet(vttablet.GrpcPort, hostname)
 	pos, err := tmClient.MasterPosition(ctx, vtablet)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	gtID := strings.SplitAfter(pos, "/")[1]
 	return pos, gtID
 }
 
-// Verify total number of rows in a tablet
+// VerifyRowsInTablet Verify total number of rows in a tablet
 func VerifyRowsInTablet(t *testing.T, vttablet *Vttablet, ksName string, expectedRows int) {
 	timeout := time.Now().Add(10 * time.Second)
 	for time.Now().Before(timeout) {
 		qr, err := vttablet.VttabletProcess.QueryTablet("select * from vt_insert_test", ksName, true)
-		assert.Nil(t, err)
-		if len(qr.Rows) != expectedRows {
-			time.Sleep(300 * time.Millisecond)
-		} else {
+		require.Nil(t, err)
+		if len(qr.Rows) == expectedRows {
 			return
 		}
+		time.Sleep(300 * time.Millisecond)
 	}
 	assert.Fail(t, "expected rows not found.")
 }
 
-// Verify Local Metadata of a tablet
+// VerifyLocalMetadata Verify Local Metadata of a tablet
 func VerifyLocalMetadata(t *testing.T, tablet *Vttablet, ksName string, shardName string, cell string) {
 	qr, err := tablet.VttabletProcess.QueryTablet("select * from _vt.local_metadata", ksName, false)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[0][1]), fmt.Sprintf(`BLOB("%s")`, tablet.Alias))
 	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[1][1]), fmt.Sprintf(`BLOB("%s.%s")`, ksName, shardName))
 	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[2][1]), fmt.Sprintf(`BLOB("%s")`, cell))
@@ -74,7 +101,7 @@ func VerifyLocalMetadata(t *testing.T, tablet *Vttablet, ksName string, shardNam
 	}
 }
 
-//Lists back preset in shard
+// ListBackups Lists back preset in shard
 func (cluster LocalProcessCluster) ListBackups(shardKsName string) ([]string, error) {
 	output, err := cluster.VtctlclientProcess.ExecuteCommandWithOutput("ListBackups", shardKsName)
 	if err != nil {
@@ -90,6 +117,23 @@ func (cluster LocalProcessCluster) ListBackups(shardKsName string) ([]string, er
 	return returnResult, nil
 }
 
+// VerifyBackupCount compares the backup count with expected count.
+func (cluster LocalProcessCluster) VerifyBackupCount(t *testing.T, shardKsName string, expected int) []string {
+	backups, err := cluster.ListBackups(shardKsName)
+	require.Nil(t, err)
+	assert.Equalf(t, expected, len(backups), "invalid number of backups")
+	return backups
+}
+
+// RemoveAllBackups removes all the backup corresponds to list backup.
+func (cluster LocalProcessCluster) RemoveAllBackups(t *testing.T, shardKsName string) {
+	backups, err := cluster.ListBackups(shardKsName)
+	require.Nil(t, err)
+	for _, backup := range backups {
+		cluster.VtctlclientProcess.ExecuteCommand("RemoveBackup", shardKsName, backup)
+	}
+}
+
 // ResetTabletDirectory transitions back to tablet state (i.e. mysql process restarts with cleaned directory and tablet is off)
 func ResetTabletDirectory(tablet Vttablet) error {
 	tablet.MysqlctlProcess.Stop()
@@ -103,4 +147,80 @@ func getTablet(tabletGrpcPort int, hostname string) *tabletpb.Tablet {
 	portMap := make(map[string]int32)
 	portMap["grpc"] = int32(tabletGrpcPort)
 	return &tabletpb.Tablet{Hostname: hostname, PortMap: portMap}
+}
+
+func filterResultWhenRunsForCoverage(input string) string {
+	if !*isCoverage {
+		return input
+	}
+	lines := strings.Split(input, "\n")
+	var result string
+	for _, line := range lines {
+		if strings.Contains(line, "=== RUN") {
+			continue
+		}
+		if strings.Contains(line, "--- PASS:") || strings.Contains(line, "PASS") {
+			break
+		}
+		result = result + line + "\n"
+	}
+	return result
+}
+
+// WaitForReplicationPos will wait for replication position to catch-up
+func WaitForReplicationPos(t *testing.T, tabletA *Vttablet, tabletB *Vttablet, hostname string, timeout float64) {
+	replicationPosA, _ := GetMasterPosition(t, *tabletA, hostname)
+	for {
+		replicationPosB, _ := GetMasterPosition(t, *tabletB, hostname)
+		if positionAtLeast(t, tabletA, replicationPosB, replicationPosA) {
+			break
+		}
+		msg := fmt.Sprintf("%s's replication position to catch up to %s's;currently at: %s, waiting to catch up to: %s", tabletB.Alias, tabletA.Alias, replicationPosB, replicationPosA)
+		waitStep(t, msg, timeout, 0.01)
+	}
+}
+
+func waitStep(t *testing.T, msg string, timeout float64, sleepTime float64) float64 {
+	timeout = timeout - sleepTime
+	if timeout < 0.0 {
+		t.Errorf("timeout waiting for condition '%s'", msg)
+	}
+	time.Sleep(time.Duration(sleepTime) * time.Second)
+	return timeout
+}
+
+func positionAtLeast(t *testing.T, tablet *Vttablet, a string, b string) bool {
+	isAtleast := false
+	val, err := tablet.MysqlctlProcess.ExecuteCommandWithOutput("position", "at_least", a, b)
+	require.NoError(t, err)
+	if strings.Contains(val, "true") {
+		isAtleast = true
+	}
+	return isAtleast
+}
+
+// ExecuteQueriesUsingVtgate sends query to vtgate using vtgate session.
+func ExecuteQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, query string) {
+	_, err := session.Execute(context.Background(), query, nil)
+	require.Nil(t, err)
+}
+
+// NewConnParams creates ConnParams corresponds to given arguments.
+func NewConnParams(port int, password, socketPath, keyspace string) mysql.ConnParams {
+	if port != 0 {
+		socketPath = ""
+	}
+	cp := mysql.ConnParams{
+		Uname:      "vt_dba",
+		Port:       port,
+		UnixSocket: socketPath,
+		Pass:       password,
+	}
+
+	if keyspace != "" {
+		cp.DbName = "vt_" + keyspace
+	}
+
+	return cp
+
 }

@@ -52,6 +52,7 @@ const (
 	StmtOther
 	StmtUnknown
 	StmtComment
+	StmtPriv
 )
 
 // Preview analyzes the beginning of the query using a simpler and faster
@@ -110,6 +111,8 @@ func Preview(sql string) StatementType {
 		return StmtUse
 	case "analyze", "describe", "desc", "explain", "repair", "optimize":
 		return StmtOther
+	case "grant", "revoke":
+		return StmtPriv
 	}
 	return StmtUnknown
 }
@@ -144,6 +147,8 @@ func (s StatementType) String() string {
 		return "USE"
 	case StmtOther:
 		return "OTHER"
+	case StmtPriv:
+		return "PRIV"
 	default:
 		return "UNKNOWN"
 	}
@@ -173,6 +178,31 @@ func SplitAndExpression(filters []Expr, node Expr) []Expr {
 		return SplitAndExpression(filters, node.Expr)
 	}
 	return append(filters, node)
+}
+
+// TableFromStatement returns the qualified table name for the query.
+// This works only for select statements.
+func TableFromStatement(sql string) (TableName, error) {
+	stmt, err := Parse(sql)
+	if err != nil {
+		return TableName{}, err
+	}
+	sel, ok := stmt.(*Select)
+	if !ok {
+		return TableName{}, fmt.Errorf("unrecognized statement: %s", sql)
+	}
+	if len(sel.From) != 1 {
+		return TableName{}, fmt.Errorf("table expression is complex")
+	}
+	aliased, ok := sel.From[0].(*AliasedTableExpr)
+	if !ok {
+		return TableName{}, fmt.Errorf("table expression is complex")
+	}
+	tableName, ok := aliased.Expr.(TableName)
+	if !ok {
+		return TableName{}, fmt.Errorf("table expression is complex")
+	}
+	return tableName, nil
 }
 
 // GetTableName returns the table name from the SimpleTableExpr

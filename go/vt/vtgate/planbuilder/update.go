@@ -92,10 +92,10 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 
 	if eupd.Opcode == engine.UpdateScatter {
 		if len(eupd.Table.Owned) != 0 {
-			return eupd, errors.New("unsupported: multi shard update on a table with owned lookup vindexes")
+			return nil, errors.New("unsupported: multi shard update on a table with owned lookup vindexes")
 		}
 		if upd.Limit != nil {
-			return eupd, errors.New("unsupported: multi shard update with limit")
+			return nil, errors.New("unsupported: multi shard update with limit")
 		}
 	}
 

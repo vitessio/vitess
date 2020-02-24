@@ -17,6 +17,7 @@ MAKEFLAGS = -s
 export GOBIN=$(PWD)/bin
 export GO111MODULE=on
 export GODEBUG=tls13=0
+export REWRITER=go/vt/sqlparser/rewriter.go
 
 # Disabled parallel processing of target prerequisites to avoid that integration tests are racing each other (e.g. for ports) and may fail.
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
@@ -43,6 +44,11 @@ embed_static:
 	go run github.com/GeertJohan/go.rice/rice embed-go
 	go build .
 
+embed_config:
+	cd go/vt/mysqlctl
+	go run github.com/GeertJohan/go.rice/rice embed-go
+	go build .
+
 build_web:
 	echo $$(date): Building web artifacts
 	cd web/vtctld2 && ng build -prod
@@ -55,6 +61,13 @@ endif
 	bash ./build.env
 	go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" ./go/...
 
+debug:
+ifndef NOBANNER
+	echo $$(date): Building source tree
+endif
+	bash ./build.env
+	go install $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) -ldflags "$(shell tools/build_version_flags.sh)" -gcflags -'N -l' ./go/...
+
 # install copies the files needed to run Vitess into the given directory tree.
 # Usage: make install PREFIX=/path/to/install/root
 install: build
@@ -62,22 +75,25 @@ install: build
 	mkdir -p "$${PREFIX}/bin"
 	cp "$${VTROOT}/bin/"{mysqlctld,vtctld,vtctlclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
 	# config files
-	cp -R config "$${PREFIX}/"
+	mkdir -p "$${PREFIX}/src/vitess.io/vitess"
+	cp -R config "$${PREFIX}/src/vitess.io/vitess/"
+	# also symlink config files in the old location
+	ln -sf src/vitess.io/vitess/config "$${PREFIX}/config"
 	# vtctld web UI files
-	mkdir -p "$${PREFIX}/src/vitess.io/vitess/web"
-	cp -R web/vtctld "$${PREFIX}/src/vitess.io/vitess/web/"
 	mkdir -p "$${PREFIX}/src/vitess.io/vitess/web/vtctld2"
 	cp -R web/vtctld2/app "$${PREFIX}/src/vitess.io/vitess/web/vtctld2/"
 
 parser:
 	make -C go/vt/sqlparser
 
+visitor:
+	go generate go/vt/sqlparser/rewriter.go
+
 # To pass extra flags, run test.go manually.
 # For example: go run test.go -docker=false -- --extra-flag
 # For more info see: go run test.go -help
-test: build dependency_check
-	echo $$(date): Running unit tests
-	tools/unit_test_runner.sh
+test:
+	go run test.go -docker=false
 
 site_test: unit_test site_integration_test
 
@@ -85,14 +101,19 @@ clean:
 	go clean -i ./go/...
 	rm -rf third_party/acolyte
 	rm -rf go/vt/.proto.tmp
+	rm -rf ./visitorgen
 
 # Remove everything including stuff pulled down by bootstrap.sh
-cleanall:
+cleanall: clean
 	# directories created by bootstrap.sh
 	# - exclude vtdataroot and vthook as they may have data we want
 	rm -rf bin dist lib pkg
 	# Remind people to run bootstrap.sh again
 	echo "Please run 'make tools' again to setup your environment"
+
+unit_test: build dependency_check
+	echo $$(date): Running unit tests
+	tools/unit_test_runner.sh
 
 e2e_test: build
 	echo $$(date): Running endtoend tests

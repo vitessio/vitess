@@ -368,7 +368,6 @@ func (dbc *realDBClient) Rollback() error {
 
 func (dbc *realDBClient) Close() {
 	dbc.conn.Close()
-	dbc.conn = nil
 }
 
 func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {

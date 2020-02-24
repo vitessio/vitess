@@ -41,6 +41,8 @@ import (
 	"sync"
 	"time"
 
+	rice "github.com/GeertJohan/go.rice"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats"
@@ -70,8 +72,8 @@ var (
 
 	poolDynamicHostnameResolution = flag.Duration("pool_hostname_resolve_interval", 0, "if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)")
 
-	socketFile        = flag.String("mysqlctl_socket", "", "socket file to use for remote mysqlctl actions (empty for local actions)")
 	mycnfTemplateFile = flag.String("mysqlctl_mycnf_template", "", "template file to use for generating the my.cnf file during server init")
+	socketFile        = flag.String("mysqlctl_socket", "", "socket file to use for remote mysqlctl actions (empty for local actions)")
 
 	// masterConnectRetry is used in 'SET MASTER' commands
 	masterConnectRetry = flag.Duration("master_connect_retry", 10*time.Second, "how long to wait in between slave -> connection attempts. Only precise to the second.")
@@ -266,18 +268,6 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 		return nil
 	}
 
-	// Find mysql_upgrade. If not there, we do nothing.
-	vtMysqlRoot, err := vtenv.VtMysqlRoot()
-	if err != nil {
-		log.Warningf("VT_MYSQL_ROOT not set, skipping mysql_upgrade step: %v", err)
-		return nil
-	}
-	name, err := binaryPath(vtMysqlRoot, "mysql_upgrade")
-	if err != nil {
-		log.Warningf("mysql_upgrade binary not present, skipping it: %v", err)
-		return nil
-	}
-
 	// Since we started mysql with --skip-grant-tables, we should
 	// be able to run mysql_upgrade without any valid user or
 	// password. However, mysql_upgrade executes a 'flush
@@ -302,11 +292,26 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 		"--defaults-file=" + defaultsFile,
 		"--force", // Don't complain if it's already been upgraded.
 	}
-	cmd := exec.Command(name, args...)
-	libPath := fmt.Sprintf("LD_LIBRARY_PATH=%s/lib/mysql", vtMysqlRoot)
-	cmd.Env = []string{libPath}
-	out, err := cmd.CombinedOutput()
-	log.Infof("mysql_upgrade output: %s", out)
+
+	// Find mysql_upgrade. If not there, we do nothing.
+	vtMysqlRoot, err := vtenv.VtMysqlRoot()
+	if err != nil {
+		log.Warningf("VT_MYSQL_ROOT not set, skipping mysql_upgrade step: %v", err)
+		return nil
+	}
+	name, err := binaryPath(vtMysqlRoot, "mysql_upgrade")
+	if err != nil {
+		log.Warningf("mysql_upgrade binary not present, skipping it: %v", err)
+		return nil
+	}
+
+	env, err := buildLdPaths()
+	if err != nil {
+		log.Warningf("skipping mysql_upgrade step: %v", err)
+		return nil
+	}
+
+	_, _, err = execCmd(name, args, env, "", nil)
 	return err
 }
 
@@ -366,15 +371,17 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 		if err != nil {
 			return err
 		}
-		arg := []string{
+		args := []string{
 			"--defaults-file=" + cnf.path,
 			"--basedir=" + mysqlBaseDir,
 		}
-		arg = append(arg, mysqldArgs...)
-		libPath := fmt.Sprintf("LD_LIBRARY_PATH=%s/lib/mysql", vtMysqlRoot)
-		env := []string{libPath}
+		args = append(args, mysqldArgs...)
+		env, err := buildLdPaths()
+		if err != nil {
+			return err
+		}
 
-		cmd := exec.Command(name, arg...)
+		cmd := exec.Command(name, args...)
 		cmd.Dir = vtMysqlRoot
 		cmd.Env = env
 		log.Infof("%v %#v", ts, cmd)
@@ -540,11 +547,11 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 			"--wait=10",
 			"shutdown",
 		}
-		env := []string{
-			os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql"),
-		}
-		_, _, err = execCmd(name, args, env, dir, nil)
+		env, err := buildLdPaths()
 		if err != nil {
+			return err
+		}
+		if _, _, err = execCmd(name, args, env, dir, nil); err != nil {
 			return err
 		}
 	default:
@@ -622,14 +629,8 @@ func (mysqld *Mysqld) InitConfig(cnf *Mycnf) error {
 		log.Errorf("%s", err.Error())
 		return err
 	}
-	root, err := vtenv.VtRoot()
-	if err != nil {
-		log.Errorf("%s", err.Error())
-		return err
-	}
-
 	// Set up config files.
-	if err = mysqld.initConfig(root, cnf, cnf.path); err != nil {
+	if err = mysqld.initConfig(cnf, cnf.path); err != nil {
 		log.Errorf("failed creating %v: %v", cnf.path, err)
 		return err
 	}
@@ -670,7 +671,19 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 		return err
 	}
 
-	// Run initial SQL file.
+	if initDBSQLFile == "" { // default to built-in
+		riceBox := rice.MustFindBox("../../../config")
+		sqlFile, err := riceBox.Open("init_db.sql")
+		if err != nil {
+			return fmt.Errorf("could not open built-in init_db.sql file")
+		}
+		if err := mysqld.executeMysqlScript(params, sqlFile); err != nil {
+			return fmt.Errorf("failed to initialize mysqld: %v", err)
+		}
+		return nil
+	}
+
+	// else, user specified an init db file
 	sqlFile, err := os.Open(initDBSQLFile)
 	if err != nil {
 		return fmt.Errorf("can't open init_db_sql_file (%v): %v", initDBSQLFile, err)
@@ -679,7 +692,6 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	if err := mysqld.executeMysqlScript(params, sqlFile); err != nil {
 		return fmt.Errorf("can't run init_db_sql_file (%v): %v", initDBSQLFile, err)
 	}
-
 	return nil
 }
 
@@ -760,7 +772,7 @@ func (mysqld *Mysqld) installDataDir(cnf *Mycnf) error {
 	return nil
 }
 
-func (mysqld *Mysqld) initConfig(root string, cnf *Mycnf, outFile string) error {
+func (mysqld *Mysqld) initConfig(cnf *Mycnf, outFile string) error {
 	var err error
 	var configData string
 
@@ -773,7 +785,7 @@ func (mysqld *Mysqld) initConfig(root string, cnf *Mycnf, outFile string) error 
 	switch hr := hook.NewHookWithEnv("make_mycnf", nil, env).Execute(); hr.ExitStatus {
 	case hook.HOOK_DOES_NOT_EXIST:
 		log.Infof("make_mycnf hook doesn't exist, reading template files")
-		configData, err = cnf.makeMycnf(mysqld.getMycnfTemplates(root))
+		configData, err = cnf.makeMycnf(mysqld.getMycnfTemplate())
 	case hook.HOOK_SUCCESS:
 		configData, err = cnf.fillMycnfTemplate(hr.Stdout)
 	default:
@@ -786,45 +798,50 @@ func (mysqld *Mysqld) initConfig(root string, cnf *Mycnf, outFile string) error 
 	return ioutil.WriteFile(outFile, []byte(configData), 0664)
 }
 
-func contains(haystack []string, needle string) bool {
-	for _, v := range haystack {
-		if v == needle {
-			return true
-		}
-	}
-	return false
-}
-
-func (mysqld *Mysqld) getMycnfTemplates(root string) []string {
+func (mysqld *Mysqld) getMycnfTemplate() string {
 	if *mycnfTemplateFile != "" {
-		return []string{*mycnfTemplateFile}
+		data, err := ioutil.ReadFile(*mycnfTemplateFile)
+		if err != nil {
+			log.Fatalf("template file specified by -mysqlctl_mycnf_template could not be read: %v", *mycnfTemplateFile)
+		}
+		return string(data) // use only specified template
 	}
+	myTemplateSource := new(bytes.Buffer)
+	myTemplateSource.WriteString("[mysqld]\n")
 
-	cnfTemplatePaths := []string{
-		path.Join(root, "config/mycnf/default.cnf"),
+	riceBox := rice.MustFindBox("../../../config")
+	b, err := riceBox.Bytes("mycnf/default.cnf")
+	if err != nil {
+		log.Warningf("could not open embedded default.cnf config file")
 	}
+	myTemplateSource.Write(b)
 
-	if extraCnf := os.Getenv("EXTRA_MY_CNF"); extraCnf != "" {
-		parts := strings.Split(extraCnf, ":")
-		cnfTemplatePaths = append(cnfTemplatePaths, parts...)
-	}
-
-	// Only include files if they exist.
-	// Percona Server == MySQL in this context
-
+	// mysql version specific file.
+	// master_{flavor}{major}{minor}.cnf
 	f := flavorMariaDB
 	if mysqld.capabilities.isMySQLLike() {
 		f = flavorMySQL
 	}
-
-	// master_{flavor}{major}{minor}.cnf
-	p := path.Join(root, fmt.Sprintf("config/mycnf/master_%s%d%d.cnf", f, mysqld.capabilities.version.Major, mysqld.capabilities.version.Minor))
-	_, err := os.Stat(p)
-	if err == nil && !contains(cnfTemplatePaths, p) {
-		cnfTemplatePaths = append(cnfTemplatePaths, p)
+	fn := fmt.Sprintf("mycnf/master_%s%d%d.cnf", f, mysqld.capabilities.version.Major, mysqld.capabilities.version.Minor)
+	b, err = riceBox.Bytes(fn)
+	if err != nil {
+		log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
 	}
+	myTemplateSource.Write(b)
 
-	return cnfTemplatePaths
+	if extraCnf := os.Getenv("EXTRA_MY_CNF"); extraCnf != "" {
+		parts := strings.Split(extraCnf, ":")
+		for _, path := range parts {
+			data, dataErr := ioutil.ReadFile(path)
+			if dataErr != nil {
+				log.Infof("could not open config file for mycnf: %v", path)
+				continue
+			}
+			myTemplateSource.WriteString("## " + path + "\n")
+			myTemplateSource.Write(data)
+		}
+	}
+	return myTemplateSource.String()
 }
 
 // RefreshConfig attempts to recreate the my.cnf from templates, and log and
@@ -843,17 +860,13 @@ func (mysqld *Mysqld) RefreshConfig(ctx context.Context, cnf *Mycnf) error {
 	}
 
 	log.Info("Checking for updates to my.cnf")
-	root, err := vtenv.VtRoot()
-	if err != nil {
-		return err
-	}
 	f, err := ioutil.TempFile(path.Dir(cnf.path), "my.cnf")
 	if err != nil {
 		return fmt.Errorf("could not create temp file: %v", err)
 	}
 
 	defer os.Remove(f.Name())
-	err = mysqld.initConfig(root, cnf, f.Name())
+	err = mysqld.initConfig(cnf, f.Name())
 	if err != nil {
 		return fmt.Errorf("could not initConfig in %v: %v", f.Name(), err)
 	}
@@ -907,11 +920,7 @@ func (mysqld *Mysqld) ReinitConfig(ctx context.Context, cnf *Mycnf) error {
 	if err := cnf.RandomizeMysqlServerID(); err != nil {
 		return err
 	}
-	root, err := vtenv.VtRoot()
-	if err != nil {
-		return err
-	}
-	return mysqld.initConfig(root, cnf, cnf.path)
+	return mysqld.initConfig(cnf, cnf.path)
 }
 
 func (mysqld *Mysqld) createDirs(cnf *Mycnf) error {
@@ -1030,8 +1039,9 @@ func (mysqld *Mysqld) executeMysqlScript(connParams *mysql.ConnParams, sql io.Re
 		"--defaults-extra-file=" + cnf,
 		"--batch",
 	}
-	env := []string{
-		"LD_LIBRARY_PATH=" + path.Join(dir, "lib/mysql"),
+	env, err := buildLdPaths()
+	if err != nil {
+		return err
 	}
 	_, _, err = execCmd(name, args, env, dir, sql)
 	if err != nil {
@@ -1117,4 +1127,18 @@ func (mysqld *Mysqld) OnTerm(f func()) {
 	mysqld.mutex.Lock()
 	defer mysqld.mutex.Unlock()
 	mysqld.onTermFuncs = append(mysqld.onTermFuncs, f)
+}
+
+func buildLdPaths() ([]string, error) {
+	vtMysqlRoot, err := vtenv.VtMysqlRoot()
+	if err != nil {
+		return []string{}, err
+	}
+
+	ldPaths := []string{
+		fmt.Sprintf("LD_LIBRARY_PATH=%s/lib/mysql", vtMysqlRoot),
+		os.ExpandEnv("LD_PRELOAD=$LD_PRELOAD"),
+	}
+
+	return ldPaths, nil
 }

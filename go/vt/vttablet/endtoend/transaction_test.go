@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -67,7 +68,7 @@ func TestCommit(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want := []string{"insert into vitess_test(intval, floatval, charval, binval) values (4, null, null, null) /* _stream vitess_test (intval ) (4 ); */"}
+	want := []string{"insert into vitess_test(intval, floatval, charval, binval) values (4, null, null, null)"}
 	if !reflect.DeepEqual(tx.Queries, want) {
 		t.Errorf("queries: %v, want %v", tx.Queries, want)
 	}
@@ -163,7 +164,7 @@ func TestRollback(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want := []string{"insert into vitess_test(intval, floatval, charval, binval) values (4, null, null, null) /* _stream vitess_test (intval ) (4 ); */"}
+	want := []string{"insert into vitess_test(intval, floatval, charval, binval) values (4, null, null, null)"}
 	if !reflect.DeepEqual(tx.Queries, want) {
 		t.Errorf("queries: %v, want %v", tx.Queries, want)
 	}
@@ -227,7 +228,7 @@ func TestAutoCommit(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want := []string{"insert into vitess_test(intval, floatval, charval, binval) values (4, null, null, null) /* _stream vitess_test (intval ) (4 ); */"}
+	want := []string{"insert into vitess_test(intval, floatval, charval, binval) values (4, null, null, null)"}
 	// Sometimes, no queries will be returned by the querylog because reliability
 	// is not guaranteed. If so, just move on without verifying. The subsequent
 	// rowcount check will anyway verify that the insert succeeded.
@@ -551,13 +552,9 @@ func TestMMCommitFlow(t *testing.T) {
 	query := "insert into vitess_test (intval, floatval, charval, binval) " +
 		"values(4, null, null, null)"
 	err := client.Begin(false)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	_, err = client.Execute(query, nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	err = client.CreateTransaction("aa", []*querypb.Target{{
 		Keyspace: "test1",
@@ -566,9 +563,7 @@ func TestMMCommitFlow(t *testing.T) {
 		Keyspace: "test2",
 		Shard:    "1",
 	}})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	err = client.CreateTransaction("aa", []*querypb.Target{})
 	want := "Duplicate entry"
@@ -577,9 +572,7 @@ func TestMMCommitFlow(t *testing.T) {
 	}
 
 	err = client.StartCommit("aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	err = client.SetRollback("aa", 0)
 	want = "could not transition to ROLLBACK: aa (CallerID: dev)"
@@ -588,9 +581,7 @@ func TestMMCommitFlow(t *testing.T) {
 	}
 
 	info, err := client.ReadTransaction("aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	info.TimeCreated = 0
 	wantInfo := &querypb.TransactionMetadata{
 		Dtid:  "aa",
@@ -610,14 +601,10 @@ func TestMMCommitFlow(t *testing.T) {
 	}
 
 	err = client.ConcludeTransaction("aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	info, err = client.ReadTransaction("aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantInfo = &querypb.TransactionMetadata{}
 	if !proto.Equal(info, wantInfo) {
 		t.Errorf("ReadTransaction: %#v, want %#v", info, wantInfo)
@@ -631,13 +618,9 @@ func TestMMRollbackFlow(t *testing.T) {
 	query := "insert into vitess_test (intval, floatval, charval, binval) " +
 		"values(4, null, null, null)"
 	err := client.Begin(false)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	_, err = client.Execute(query, nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	err = client.CreateTransaction("aa", []*querypb.Target{{
 		Keyspace: "test1",
@@ -646,20 +629,14 @@ func TestMMRollbackFlow(t *testing.T) {
 		Keyspace: "test2",
 		Shard:    "1",
 	}})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	client.Rollback()
 
 	err = client.SetRollback("aa", 0)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	info, err := client.ReadTransaction("aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	info.TimeCreated = 0
 	wantInfo := &querypb.TransactionMetadata{
 		Dtid:  "aa",
@@ -679,9 +656,7 @@ func TestMMRollbackFlow(t *testing.T) {
 	}
 
 	err = client.ConcludeTransaction("aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestWatchdog(t *testing.T) {
@@ -690,13 +665,9 @@ func TestWatchdog(t *testing.T) {
 	query := "insert into vitess_test (intval, floatval, charval, binval) " +
 		"values(4, null, null, null)"
 	err := client.Begin(false)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	_, err = client.Execute(query, nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	start := time.Now()
 	err = client.CreateTransaction("aa", []*querypb.Target{{
@@ -706,9 +677,7 @@ func TestWatchdog(t *testing.T) {
 		Keyspace: "test2",
 		Shard:    "1",
 	}})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	// The watchdog should kick in after 1 second.
 	dtid := <-framework.ResolveChan
@@ -721,13 +690,9 @@ func TestWatchdog(t *testing.T) {
 	}
 
 	err = client.SetRollback("aa", 0)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	err = client.ConcludeTransaction("aa")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	// Make sure the watchdog stops sending messages.
 	// Check twice. Sometimes, a race can still cause

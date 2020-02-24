@@ -33,10 +33,10 @@ func TestTopoCustomRule(t *testing.T) {
 
 	ctx := context.Background()
 	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer masterConn.Close()
 	replicaConn, err := mysql.Connect(ctx, &replicaTabletParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer replicaConn.Close()
 
 	// Insert data for sanity checks
@@ -49,11 +49,11 @@ func TestTopoCustomRule(t *testing.T) {
 	topoCustomRulePath := "/keyspaces/ks/configs/CustomRules"
 	data := []byte("[]\n")
 	err = ioutil.WriteFile(topoCustomRuleFile, data, 0777)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	// Copy config file into topo.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TopoCp", "-to_topo", topoCustomRuleFile, topoCustomRulePath)
-	assert.Nil(t, err, "error should be Nil")
+	require.Nil(t, err, "error should be Nil")
 
 	// Set extra tablet args for topo custom rule
 	clusterInstance.VtTabletExtraArgs = []string{
@@ -61,29 +61,29 @@ func TestTopoCustomRule(t *testing.T) {
 	}
 
 	// Start a new Tablet
-	rTablet := clusterInstance.GetVttabletInstance("replica", replicaUID, "")
+	rTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
 
 	// Init Tablets
 	err = clusterInstance.VtctlclientProcess.InitTablet(rTablet, cell, keyspaceName, hostname, shardName)
-	assert.Nil(t, err, "error should be Nil")
+	require.Nil(t, err, "error should be Nil")
 
 	// Start Mysql Processes
 	err = cluster.StartMySQL(ctx, rTablet, username, clusterInstance.TmpDirectory)
-	assert.Nil(t, err, "error should be Nil")
+	require.Nil(t, err, "error should be Nil")
 
 	// Start Vttablet
 	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
-	assert.Nil(t, err, "error should be Nil")
+	require.Nil(t, err, "error should be Nil")
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
-	assert.Nil(t, err, "error should be Nil")
+	require.Nil(t, err, "error should be Nil")
 
 	// Verify that query is working
 	result, err := vtctlExec("select id, value from t1", rTablet.Alias)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	resultMap := make(map[string]interface{})
 	err = json.Unmarshal([]byte(result), &resultMap)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	rowsAffected := resultMap["rows_affected"]
 	want := float64(2)
@@ -97,10 +97,10 @@ func TestTopoCustomRule(t *testing.T) {
 		"Query" : "(select)|(SELECT)"
 	  }]`)
 	err = ioutil.WriteFile(topoCustomRuleFile, data, 0777)
-	require.NoError(t, err)
+	require.Nil(t, err)
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TopoCp", "-to_topo", topoCustomRuleFile, topoCustomRulePath)
-	assert.Nil(t, err, "error should be Nil")
+	require.Nil(t, err, "error should be Nil")
 
 	// And wait until the query fails with the right error.
 	timeout := time.Now().Add(10 * time.Second)

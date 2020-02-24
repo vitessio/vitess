@@ -17,23 +17,27 @@
 # We should not assume that any of the steps have been executed.
 # This makes it possible for a user to cleanup at any point.
 
-set -e
+source ./env.sh
 
-# shellcheck disable=SC2128
-script_root=$(dirname "${BASH_SOURCE}")
+./scripts/vtgate-down.sh
 
-./vtgate-down.sh
+for tablet in 100 200 300 400; do
+ if vtctlclient -server localhost:15999 GetTablet zone1-$tablet >/dev/null 2>&1 ; then
+  # The zero tablet is up. Try to shutdown 0-2 tablet + mysqlctl
+  for i in 0 1 2; do
+   uid=$[$tablet + $i]
+   CELL=zone1 TABLET_UID=$uid ./scripts/vttablet-down.sh
+   CELL=zone1 TABLET_UID=$uid ./scripts/mysqlctl-down.sh
+  done
+ fi
+done
 
-for TABLET in 100 200 300 400; do
- ./lvtctl.sh GetTablet zone1-$TABLET >/dev/null 2>&1 && CELL=zone1 UID_BASE=$TABLET "$script_root/vttablet-down.sh"
-done;
-
-./vtctld-down.sh
+./scripts/vtctld-down.sh
 
 if [ "${TOPO}" = "zk2" ]; then
-    CELL=zone1 "$script_root/zk-down.sh"
+    CELL=zone1 ./scripts/zk-down.sh
 else
-    CELL=zone1 "$script_root/etcd-down.sh"
+    CELL=zone1 ./scripts/etcd-down.sh
 fi
 
 # pedantic check: grep for any remaining processes

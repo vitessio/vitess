@@ -18,7 +18,6 @@ package wrangler
 
 import (
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -31,11 +30,11 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topotools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 )
 
 type resharder struct {
@@ -280,24 +279,7 @@ func (rs *resharder) createStreams(ctx context.Context) error {
 	err := rs.forAll(rs.targetShards, func(target *topo.ShardInfo) error {
 		targetMaster := rs.targetMasters[target.ShardName()]
 
-		buf := &strings.Builder{}
-		buf.WriteString("insert into _vt.vreplication(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name) values ")
-		prefix := ""
-
-		addLine := func(workflow string, bls *binlogdatapb.BinlogSource, cell, tabletTypes string) {
-			fmt.Fprintf(buf, "%s(%v, %v, '', %v, %v, %v, %v, %v, 0, '%v', %v)",
-				prefix,
-				encodeString(workflow),
-				encodeString(bls.String()),
-				throttler.MaxRateModuleDisabled,
-				throttler.ReplicationLagModuleDisabled,
-				encodeString(cell),
-				encodeString(tabletTypes),
-				time.Now().Unix(),
-				binlogplayer.BlpStopped,
-				encodeString(targetMaster.DbName()))
-			prefix = ", "
-		}
+		ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, targetMaster.DbName())
 
 		// copy excludeRules to prevent data race.
 		copyExcludeRules := append([]*binlogdatapb.Rule(nil), excludeRules...)
@@ -316,13 +298,13 @@ func (rs *resharder) createStreams(ctx context.Context) error {
 				Shard:    source.ShardName(),
 				Filter:   filter,
 			}
-			addLine(rs.workflow, bls, "", "")
+			ig.AddRow(rs.workflow, bls, "", "", "")
 		}
 
 		for _, rstream := range rs.refStreams {
-			addLine(rstream.workflow, rstream.bls, rstream.cell, rstream.tabletTypes)
+			ig.AddRow(rstream.workflow, rstream.bls, "", rstream.cell, rstream.tabletTypes)
 		}
-		query := buf.String()
+		query := ig.String()
 		if _, err := rs.wr.tmc.VReplicationExec(ctx, targetMaster.Tablet, query); err != nil {
 			return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", targetMaster.Tablet, query)
 		}
