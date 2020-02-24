@@ -14,9 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+set -e
+
 hostname=`hostname -f`
 vtctld_web_port=15000
-export VTDATAROOT="${VTDATAROOT:-${VTROOT}/vtdataroot}"
+export VTDATAROOT="${VTDATAROOT:-${PWD}/vtdataroot}"
 
 function fail() {
   echo "ERROR: $1"
@@ -32,10 +34,6 @@ PATH="/usr/sbin:$PATH"
 for binary in mysqld etcd etcdctl curl vtctlclient vttablet vtgate vtctld mysqlctl; do
   command -v "$binary" > /dev/null || fail "${binary} is not installed in PATH. See https://vitess.io/docs/get-started/local/ for install instructions."
 done;
-
-if [ -z "$VTROOT" ]; then
-  fail "VTROOT is not set. See https://vitess.io/docs/get-started/local/ for install instructions."
-fi
 
 if [ "${TOPO}" = "zk2" ]; then
     # Each ZooKeeper server needs a list of all servers in the quorum.

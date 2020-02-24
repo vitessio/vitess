@@ -150,15 +150,6 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr) (pullouts []*pullout
 			}
 			subqueries = append(subqueries, sqi)
 			return false, nil
-		case *sqlparser.FuncExpr:
-			switch {
-			// If it's last_insert_id, ensure it's a single unsharded route.
-			case node.Name.EqualString("last_insert_id"):
-				if rb, isRoute := pb.bldr.(*route); !isRoute || !rb.removeShardedOptions() {
-					return false, errors.New("unsupported: LAST_INSERT_ID is only allowed for unsharded keyspaces")
-				}
-			}
-			return true, nil
 		}
 		return true, nil
 	}, expr)
@@ -321,12 +312,12 @@ func valEqual(a, b sqlparser.Expr) bool {
 		switch a.Type {
 		case sqlparser.ValArg:
 			if b.Type == sqlparser.ValArg {
-				return bytes.Equal([]byte(a.Val), []byte(b.Val))
+				return bytes.Equal(a.Val, b.Val)
 			}
 		case sqlparser.StrVal:
 			switch b.Type {
 			case sqlparser.StrVal:
-				return bytes.Equal([]byte(a.Val), []byte(b.Val))
+				return bytes.Equal(a.Val, b.Val)
 			case sqlparser.HexVal:
 				return hexEqual(b, a)
 			}
@@ -334,7 +325,7 @@ func valEqual(a, b sqlparser.Expr) bool {
 			return hexEqual(a, b)
 		case sqlparser.IntVal:
 			if b.Type == (sqlparser.IntVal) {
-				return bytes.Equal([]byte(a.Val), []byte(b.Val))
+				return bytes.Equal(a.Val, b.Val)
 			}
 		}
 	}
