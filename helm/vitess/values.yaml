@@ -20,7 +20,7 @@ config:
   # These are defined globally since all components should agree.
   backup:
 
-    enabled: true
+    enabled: false
 
     # this creates 1 cron job per shard that will execute a backup using vtctlclient
     # on this schedule. The job itself uses almost no resources.
