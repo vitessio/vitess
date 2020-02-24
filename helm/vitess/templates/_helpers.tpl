@@ -152,7 +152,7 @@ done
 -restore_from_backup
     {{ end }}
 
--backup_storage_implementation=$VT_BACKUP_SERVICE
+  -backup_storage_implementation=$VT_BACKUP_SERVICE
 
     {{ if eq .backup_storage_implementation "gcs" }}
 -gcs_backup_storage_bucket=$VT_GCS_BACKUP_STORAGE_BUCKET
@@ -168,6 +168,40 @@ done
 -ceph_backup_storage_config=$CEPH_CREDENTIALS_FILE
     {{ end }}
 
+    {{ if eq .backup_engine_implementation "xtrabackup" }}
+ -backup_engine_implementation=$VT_BACKUP_ENGINE_IMPLIMENTATION
+
+    {{ if .xtrabackup_root_path   }}
+ -xtrabackup_root_path=$VT_XTRABACKUP_ROOT_PATH
+    {{ end }}
+
+    {{ if  .xtrabackup_backup_flags  }}
+ -xtrabackup_backup_flags=$VT_XTRABACKUP_BACKUP_FLAG
+    {{ end }}
+
+
+    {{ if .xbstream_restore_flags }}
+ -xbstream_restore_flags=$VT_XTRABACKUP_RESTORE_FLAGS
+    {{ end }}
+
+    {{ if .xtrabackup_stream_mode }}
+ -xtrabackup_stream_mode=$VT_XTRABACKUP_STREAM_MODE
+    {{ end }}
+
+
+    {{ if .xtrabackup_user }}
+ -xtrabackup_user=$VT_XTRABACKUP_USER
+    {{ end }}
+
+    {{ if .xtrabackup_stripes }}
+ -xtrabackup_stripes=$VT_XTRABACKUP_STRIPES
+    {{ end }}
+
+    {{ if .xtrabackup_stripe_block_size }}
+ -xtrabackup_stripe_block_size=$VT_XTRABACKUP_STRIPE_BLOCK_SIZE
+    {{ end }}
+
+    {{ end }}
   {{ end }}
 
 {{ end }}
@@ -222,6 +256,73 @@ done
     configMapKeyRef:
       name: vitess-cm
       key: backup.s3_backup_server_side_encryption
+
+{{ end }}
+
+{{ if eq .backup_engine_implementation "xtrabackup" }}
+
+- name: VT_BACKUP_ENGINE_IMPLIMENTATION
+  valueFrom:
+    configMapKeyRef:
+      name: vitess-cm
+      key: backup.backup_engine_implementation
+
+ {{ if .xtrabackup_root_path  }}
+- name: VT_XTRABACKUP_ROOT_PATH
+  valueFrom:
+    configMapKeyRef:
+      name: vitess-cm
+      key: backup.xtrabackup_root_path
+  {{ end }}
+
+  {{ if .xtrabackup_backup_flags  }}
+- name: VT_XTRABACKUP_BACKUP_FLAG
+  valueFrom:
+    configMapKeyRef:
+      name: vitess-cm
+      key: backup.xtrabackup_backup_flags
+  {{ end }}
+
+  {{ if .xbstream_restore_flags  }}
+- name: VT_XTRABACKUP_RESTORE_FLAGS
+  valueFrom:
+    configMapKeyRef:
+      name: vitess-cm
+      key: backup.xbstream_restore_flags
+  {{ end }}
+
+ {{ if .xtrabackup_stream_mode }}
+- name: VT_XTRABACKUP_STREAM_MODE
+  valueFrom:
+    configMapKeyRef:
+      name: vitess-cm
+      key: backup.xtrabackup_stream_mode
+  {{ end }}
+
+  {{ if .xtrabackup_user  }}
+- name: VT_XTRABACKUP_USER
+  valueFrom:
+    configMapKeyRef:
+      name: vitess-cm
+      key: backup.xtrabackup_user
+  {{ end }}
+
+  {{ if .xtrabackup_stripes  }}
+- name: VT_XTRABACKUP_STRIPES
+  valueFrom:
+    configMapKeyRef:
+      name: vitess-cm
+      key: backup.xtrabackup_stripes
+  {{ end }}
+
+  {{ if .xtrabackup_stripe_block_size  }}
+- name: VT_XTRABACKUP_STRIPE_BLOCK_SIZE
+  valueFrom:
+    configMapKeyRef:
+      name: vitess-cm
+      key: backup.xtrabackup_stripe_block_size
+  {{ end }}
+
 
 {{ end }}
 
