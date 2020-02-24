@@ -380,6 +380,8 @@ func ExtractSetValues(sql string) (keyValues map[SetKey]interface{}, scope strin
 			result[setKey] = expr.Name.String()
 		case *NullVal:
 			result[setKey] = nil
+		case *FuncExpr:
+			result[setKey] = nil
 		case *Default:
 			result[setKey] = "default"
 		default:

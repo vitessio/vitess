@@ -504,6 +504,9 @@ func TestExtractSetValues(t *testing.T) {
 		sql: "SET character_set_results = NULL",
 		out: map[SetKey]interface{}{{Key: "character_set_results", Scope: ImplicitStr}: nil},
 	}, {
+		sql: "SET sql_mode = concat(@@sql_mode,',STRICT_TRANS_TABLES')",
+		out: map[SetKey]interface{}{{Key: "sql_mode", Scope: ImplicitStr}: nil},
+	}, {
 		sql: "SET foo = 0x1234",
 		err: "invalid value type: 0x1234",
 	}, {
