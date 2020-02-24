@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 )
@@ -42,7 +43,7 @@ var (
 
 func VerifyQueriesUsingVtgate(t *testing.T, session *vtgateconn.VTGateSession, query string, value string) {
 	qr, err := session.Execute(context.Background(), query, nil)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	assert.Equal(t, value, fmt.Sprintf("%v", qr.Rows[0][0]))
 }
 
@@ -53,7 +54,7 @@ func RestoreTablet(t *testing.T, localCluster *cluster.LocalProcessCluster, tabl
 	_, err := localCluster.VtctlProcess.ExecuteCommandWithOutput("CreateKeyspace",
 		"-keyspace_type=SNAPSHOT", "-base_keyspace="+keyspaceName,
 		"-snapshot_time", tm.Format(time.RFC3339), restoreKSName)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	replicaTabletArgs := commonTabletArg
 	if UseXb {
@@ -69,13 +70,13 @@ func RestoreTablet(t *testing.T, localCluster *cluster.LocalProcessCluster, tabl
 
 	tablet.VttabletProcess.ServingStatus = ""
 	err = tablet.VttabletProcess.Setup()
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	err = tablet.VttabletProcess.WaitForTabletTypesForTimeout([]string{"SERVING"}, 20*time.Second)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 }
 
 func InsertData(t *testing.T, tablet *cluster.Vttablet, index int, keyspaceName string) {
 	_, err := tablet.VttabletProcess.QueryTablet(fmt.Sprintf("insert into vt_insert_test (id, msg) values (%d, 'test %d')", index, index), keyspaceName, true)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 }

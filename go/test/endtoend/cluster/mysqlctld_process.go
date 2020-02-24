@@ -134,11 +134,7 @@ func (mysqlctld *MysqlctldProcess) Stop() error {
 	)
 	tmpProcess.Args = append(tmpProcess.Args, mysqlctld.ExtraArgs...)
 	tmpProcess.Args = append(tmpProcess.Args, "shutdown")
-	err := tmpProcess.Run()
-	if err != nil {
-		return err
-	}
-	return <-mysqlctld.exit
+	return tmpProcess.Run()
 }
 
 // CleanupFiles clean the mysql files to make sure we can start the same process again

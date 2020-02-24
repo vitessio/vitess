@@ -70,7 +70,7 @@ func TestRepareting(t *testing.T) {
 		"-new_master", shard0Replica.Alias)
 	// validate topology
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	// Verify connection has migrated.
 	// The wait must be at least 6s which is how long vtgate will
@@ -93,14 +93,14 @@ func TestRepareting(t *testing.T) {
 		"-new_master", shard0Master.Alias)
 	// validate topology
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Validate")
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	time.Sleep(10 * time.Second)
 	assert.Equal(t, 1, getClientCount(shard0Master))
 	assert.Equal(t, 0, getClientCount(shard0Replica))
 	assert.Equal(t, 1, getClientCount(shard1Master))
 
 	_, err = stream.MessageAck(ctx, userKeyspace, name, keyRange(3))
-	assert.Nil(t, err)
+	require.Nil(t, err)
 }
 
 // TestConnection validate the connection count and message streaming.
@@ -143,12 +143,12 @@ func TestConnection(t *testing.T) {
 	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (5,'hello world 5')")
 	// validate in msg stream
 	_, err = stream.Next()
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	_, err = stream.Next()
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	_, err = stream.MessageAck(ctx, userKeyspace, name, keyRange(2, 5))
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	// After closing one stream, ensure vttablets have dropped it.
 	stream.Close()
 	time.Sleep(time.Second)
@@ -214,7 +214,7 @@ func testMessaging(t *testing.T, name, ks string) {
 
 	// validate message ack with 1 and 4, only 1 should be ack
 	count, err = stream.MessageAck(ctx, ks, name, keyRange(1, 4))
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	assert.Equal(t, int64(1), count)
 }
 
