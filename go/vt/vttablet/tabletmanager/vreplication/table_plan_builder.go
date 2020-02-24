@@ -29,6 +29,7 @@ import (
 )
 
 // ExcludeStr is the filter value for excluding tables that match a rule.
+// TODO(sougou): support this on vstreamer side also.
 const ExcludeStr = "exclude"
 
 type tablePlanBuilder struct {
