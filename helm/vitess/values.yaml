@@ -20,7 +20,7 @@ config:
   # These are defined globally since all components should agree.
   backup:
 
-    enabled: false
+    enabled: true
 
     # this creates 1 cron job per shard that will execute a backup using vtctlclient
     # on this schedule. The job itself uses almost no resources.
@@ -78,11 +78,11 @@ config:
     # # Specifies the implementation of the Backup Engine to use.
     backup_engine_implementation: xtrabackup
 
-    # #For the xtrabackup backup engine, directory location of the xtrabackup executable,
+    #For the xtrabackup backup engine, directory location of the xtrabackup executable,
     # xtrabackup_root_path: /usr/bin
 
     # #For the xtrabackup backup engine, flags to pass to backup command.
-    # xtrabackup_backup_flags: ""
+    # xtrabackup_backup_flags: "df"
 
     # #For the xtrabackup backup engine, flags to pass to xbstream command during restore
     # xbstream_restore_flags: --compress
