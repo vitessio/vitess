@@ -31,11 +31,11 @@ import (
 func TestConsistentLookup(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer conn.Close()
 	// conn2 is for queries that target shards.
 	conn2, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer conn2.Close()
 
 	// Simple insert.
@@ -164,11 +164,11 @@ func TestConsistentLookup(t *testing.T) {
 func TestConsistentLookupMultiInsert(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer conn.Close()
 	// conn2 is for queries that target shards.
 	conn2, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer conn2.Close()
 
 	exec(t, conn, "begin")
@@ -217,11 +217,11 @@ func TestConsistentLookupMultiInsert(t *testing.T) {
 func TestHashLookupMultiInsertIgnore(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer conn.Close()
 	// conn2 is for queries that target shards.
 	conn2, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer conn2.Close()
 
 	// DB should start out clean
@@ -253,6 +253,6 @@ func TestHashLookupMultiInsertIgnore(t *testing.T) {
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	return qr
 }

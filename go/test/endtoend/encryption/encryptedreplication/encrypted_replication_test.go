@@ -23,7 +23,7 @@ import (
 	"path"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/encryption"
 	"vitess.io/vitess/go/vt/log"
@@ -50,7 +50,7 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 
 	// initialize cluster
 	_, err := initializeCluster(t)
-	assert.Nil(t, err, "setup failed")
+	require.Nil(t, err, "setup failed")
 
 	defer teardownCluster()
 
@@ -58,10 +58,10 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 	replicaTablet := *clusterInstance.Keyspaces[0].Shards[0].Vttablets[1]
 
 	err = clusterInstance.VtctlclientProcess.InitTablet(&masterTablet, clusterInstance.Cell, keyspace, hostname, shardName)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	// create database so vttablet can start behaving normally
 	err = masterTablet.VttabletProcess.CreateDB(keyspace)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	if isClientCertPassed {
 		replicaTablet.VttabletProcess.ExtraArgs = append(replicaTablet.VttabletProcess.ExtraArgs, "-db_flags", "2048",
@@ -72,9 +72,9 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 	}
 
 	err = clusterInstance.VtctlclientProcess.InitTablet(&replicaTablet, clusterInstance.Cell, keyspace, hostname, shardName)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	err = replicaTablet.VttabletProcess.CreateDB(keyspace)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	// start the tablets
 	for _, tablet := range []cluster.Vttablet{masterTablet, replicaTablet} {
@@ -84,9 +84,9 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 	// Reparent using SSL (this will also check replication works)
 	err = clusterInstance.VtctlclientProcess.InitShardMaster(keyspace, shardName, clusterInstance.Cell, masterTablet.TabletUID)
 	if isClientCertPassed {
-		assert.Nil(t, err)
+		require.Nil(t, err)
 	} else {
-		assert.NotNil(t, err)
+		require.Error(t, err)
 	}
 }
 
@@ -105,33 +105,33 @@ func initializeCluster(t *testing.T) (int, error) {
 	_ = encryption.CreateDirectory(certDirectory, 0700)
 
 	err := encryption.ExecuteVttlstestCommand("-root", certDirectory, "CreateCA")
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	err = encryption.ExecuteVttlstestCommand("-root", certDirectory, "CreateSignedCert", "-common_name", "Mysql Server", "-serial", "01", "server")
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	err = encryption.ExecuteVttlstestCommand("-root", certDirectory, "CreateSignedCert", "-common_name", "Mysql Client", "-serial", "02", "client")
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	extraMyCnf := path.Join(certDirectory, "secure.cnf")
 	f, err := os.Create(extraMyCnf)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	_, err = f.WriteString("require_secure_transport=" + "true\n")
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	_, err = f.WriteString("ssl-ca=" + certDirectory + "/ca-cert.pem\n")
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	_, err = f.WriteString("ssl-cert=" + certDirectory + "/server-cert.pem\n")
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	_, err = f.WriteString("ssl-key=" + certDirectory + "/server-key.pem\n")
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	err = f.Close()
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	err = os.Setenv("EXTRA_MY_CNF", extraMyCnf)
 
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	for _, keyspaceStr := range []string{keyspace} {
 		KeyspacePtr := &cluster.Keyspace{Name: keyspaceStr}

@@ -37,7 +37,7 @@ func TestVtgateProcess(t *testing.T) {
 	verifyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer conn.Close()
 
 	exec(t, conn, "insert into customer(id, email) values(1,'email1')")
@@ -54,7 +54,7 @@ func verifyVtgateVariables(t *testing.T, url string) {
 		resultMap := make(map[string]interface{})
 		respByte, _ := ioutil.ReadAll(resp.Body)
 		err := json.Unmarshal(respByte, &resultMap)
-		require.NoError(t, err)
+		require.Nil(t, err)
 		if resultMap["VtgateVSchemaCounts"] == nil {
 			t.Error("Vschema count should be present in variables")
 		}
@@ -111,6 +111,6 @@ func isMasterTabletPresent(tablets map[string]interface{}) bool {
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	return qr
 }
