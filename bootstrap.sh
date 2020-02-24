@@ -283,9 +283,7 @@ function install_chromedriver() {
       rm chromedriver_linux64.zip
   fi
 }
-if [ "$BUILD_PYTHON" == 1 ] ; then
-    install_dep "chromedriver" "73.0.3683.20" "$VTROOT/dist/chromedriver" install_chromedriver
-fi
+install_dep "chromedriver" "73.0.3683.20" "$VTROOT/dist/chromedriver" install_chromedriver
 
 if [ "$BUILD_PYTHON" == 1 ] ; then
   PYTHONPATH='' $PIP install mysql-connector-python
