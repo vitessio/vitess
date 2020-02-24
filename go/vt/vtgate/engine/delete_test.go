@@ -226,10 +226,10 @@ func TestDeleteOwnedVindex(t *testing.T) {
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
 		// Delete 4,5 and 7,8 from lkp2.
-		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
-		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"7" from2: type:INT64 value:"8" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// Delete 6 and 8 from lkp1.
+		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"7" from2: type:INT64 value:"8" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"9" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// Send the DML.
 		`ExecuteMultiShard sharded.-20: dummy_delete /* vtgate:: keyspace_id:166b40b44aba4bd6 */ {} true true`,
@@ -349,8 +349,8 @@ func TestDeleteScatterOwnedVindex(t *testing.T) {
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} sharded.20-: dummy_subquery {} false false`,
 		// Delete 4,5 and 7,8 from lkp2.
-		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// Delete 6 and 8 from lkp1.
+		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"7" from2: type:INT64 value:"8" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"9" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
