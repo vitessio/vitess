@@ -13,6 +13,7 @@
 {{- $backup := index . 7 -}}
 {{- $namespace := index . 8 -}}
 {{- $defaultVtctlclient := index . 9 }}
+{{- $repo := index . 10 }}
 
 {{ if $backup.enabled }}
 # create cron job for current shard
@@ -55,7 +56,7 @@ spec:
 
           containers:
           - name: backup
-            image: "vitess/vtctlclient:{{$vitessTag}}"
+            image: "{{$repo}}/vtctlclient:{{$vitessTag}}"
             volumeMounts:
 {{ include "user-secret-volumeMounts" $defaultVtctlclient.secrets | indent 14 }}
 
