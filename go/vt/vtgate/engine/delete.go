@@ -157,7 +157,7 @@ func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb
 		return &sqltypes.Result{}, nil
 	}
 	if del.OwnedVindexQuery != "" {
-		err = del.deleteVindexEntries(vcursor, bindVars, rs, ksid)
+		err = del.deleteVindexEntries(vcursor, bindVars, []*srvtopo.ResolvedShard{rs})
 		if err != nil {
 			return nil, vterrors.Wrap(err, "execDeleteEqual")
 		}
@@ -166,31 +166,10 @@ func (del *Delete) execDeleteEqual(vcursor VCursor, bindVars map[string]*querypb
 	return execShard(vcursor, rewritten, bindVars, rs, true /* isDML */, true /* canAutocommit */)
 }
 
-func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, ksid []byte) error {
-	result, err := execShard(vcursor, del.OwnedVindexQuery, bindVars, rs, false /* isDML */, false /* canAutocommit */)
-	if err != nil {
-		return err
-	}
-	if len(result.Rows) == 0 {
-		return nil
-	}
-	colnum := 1 // we start from the first lookup vindex col
-	for _, colVindex := range del.Table.Owned {
-		ids := make([][]sqltypes.Value, len(result.Rows))
-		for range colVindex.Columns {
-			for rowIdx, row := range result.Rows {
-				ids[rowIdx] = append(ids[rowIdx], row[colnum])
-			}
-			colnum++
-		}
-		if err = colVindex.Vindex.(vindexes.Lookup).Delete(vcursor, ids, ksid); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (del *Delete) deleteVindexEntriesScatter(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) error {
+// deleteVindexEntries performs an delete if table owns vindex.
+// Note: the commit order may be different from the DML order because it's possible
+// for DMLs to reuse existing transactions.
+func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) error {
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{Sql: del.OwnedVindexQuery, BindVariables: bindVars}
@@ -198,7 +177,7 @@ func (del *Delete) deleteVindexEntriesScatter(vcursor VCursor, bindVars map[stri
 	subQueryResults, errors := vcursor.ExecuteMultiShard(rss, queries, false, false)
 	for _, err := range errors {
 		if err != nil {
-			return vterrors.Wrap(err, "deleteVindexEntriesScatter")
+			return vterrors.Wrap(err, "deleteVindexEntries")
 		}
 	}
 
@@ -207,7 +186,7 @@ func (del *Delete) deleteVindexEntriesScatter(vcursor VCursor, bindVars map[stri
 	}
 
 	for _, row := range subQueryResults.Rows {
-		ksid := row[0].Raw()
+		ksid := row[0].ToBytes()
 		colnum := 1
 		for _, colVindex := range del.Table.Owned {
 			// Fetch the column values. colnum must keep incrementing.
@@ -241,7 +220,7 @@ func (del *Delete) execDeleteByDestination(vcursor VCursor, bindVars map[string]
 		}
 	}
 	if len(del.Table.Owned) > 0 {
-		err = del.deleteVindexEntriesScatter(vcursor, bindVars, rss)
+		err = del.deleteVindexEntries(vcursor, bindVars, rss)
 		if err != nil {
 			return nil, err
 		}

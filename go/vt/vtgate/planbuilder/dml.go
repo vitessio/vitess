@@ -29,7 +29,7 @@ import (
 // getDMLRouting returns the vindex and values for the DML,
 // If it cannot find a unique vindex match, it returns an error.
 func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (engine.DMLOpcode, vindexes.SingleColumn, string, []sqltypes.PlanValue) {
-	var keyColumn string
+	var ksidCol string
 	for _, index := range table.Ordered {
 		if !index.Vindex.IsUnique() {
 			continue
@@ -39,23 +39,23 @@ func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (engine.DMLOpc
 			continue
 		}
 
-		if keyColumn == "" { //TODO - check with sougou on how to deterministically get the primary vindex column
-			keyColumn = sqlparser.String(index.Columns[0])
+		if ksidCol == "" {
+			ksidCol = sqlparser.String(index.Columns[0])
 		}
 
 		if where == nil {
-			return engine.Scatter, nil, keyColumn, nil
+			return engine.Scatter, nil, ksidCol, nil
 		}
 
 		if pv, ok := getMatch(where.Expr, index.Columns[0]); ok {
 			if pv.IsList() {
-				return engine.Scatter, nil, keyColumn, nil
+				return engine.Scatter, nil, ksidCol, nil
 			}
 
-			return engine.Equal, single, keyColumn, []sqltypes.PlanValue{pv}
+			return engine.Equal, single, ksidCol, []sqltypes.PlanValue{pv}
 		}
 	}
-	return engine.Scatter, nil, keyColumn, nil
+	return engine.Scatter, nil, ksidCol, nil
 }
 
 // getMatch returns the matched value if there is an equality
@@ -114,10 +114,8 @@ func buildDMLPlan(vschema ContextVSchema, dmlType string, stmt sqlparser.Stateme
 	eupd.Keyspace = ro.eroute.Keyspace
 	if !eupd.Keyspace.Sharded {
 		// We only validate non-table subexpressions because the previous analysis has already validated them.
-		subqueryArgs := []sqlparser.SQLNode{}
-		for _, n := range nodes {
-			subqueryArgs = append(subqueryArgs, n)
-		}
+		var subqueryArgs []sqlparser.SQLNode
+		subqueryArgs = append(subqueryArgs, nodes...)
 		subqueryArgs = append(subqueryArgs, where, orderBy, limit)
 		if !pb.finalizeUnshardedDMLSubqueries(subqueryArgs...) {
 			return nil, "", vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: sharded subqueries in DML")
@@ -161,7 +159,7 @@ func buildDMLPlan(vschema ContextVSchema, dmlType string, stmt sqlparser.Stateme
 		return eupd, "", nil
 	}
 
-	routingType, vindex, vindexCol, values := getDMLRouting(where, eupd.Table)
+	routingType, vindex, ksidCol, values := getDMLRouting(where, eupd.Table)
 	eupd.Opcode = routingType
 	if routingType == engine.Scatter {
 		if limit != nil {
@@ -172,12 +170,12 @@ func buildDMLPlan(vschema ContextVSchema, dmlType string, stmt sqlparser.Stateme
 		eupd.Vindex = vindex
 	}
 
-	return eupd, vindexCol, nil
+	return eupd, ksidCol, nil
 }
 
-func generateDMLSubquery(where *sqlparser.Where, orderBy sqlparser.OrderBy, limit *sqlparser.Limit, table *vindexes.Table, vindex string) string {
+func generateDMLSubquery(where *sqlparser.Where, orderBy sqlparser.OrderBy, limit *sqlparser.Limit, table *vindexes.Table, ksidCol string) string {
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("select %s", vindex)
+	buf.Myprintf("select %s", ksidCol)
 	for _, cv := range table.Owned {
 		for _, column := range cv.Columns {
 			buf.Myprintf(", %v", column)

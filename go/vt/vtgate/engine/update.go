@@ -162,7 +162,7 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 		return &sqltypes.Result{}, nil
 	}
 	if len(upd.ChangedVindexValues) != 0 {
-		if err := upd.updateVindexEntries(vcursor, bindVars, rs, ksid); err != nil {
+		if err := upd.updateVindexEntries(vcursor, bindVars, []*srvtopo.ResolvedShard{rs}); err != nil {
 			return nil, vterrors.Wrap(err, "execUpdateEqual")
 		}
 	}
@@ -176,52 +176,7 @@ func (upd *Update) execUpdateEqual(vcursor VCursor, bindVars map[string]*querypb
 // for DMLs to reuse existing transactions.
 // Note 2: While changes are being committed, the changing row could be
 // unreachable by either the new or old column values.
-func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, ksid []byte) error {
-	subQueryResult, err := execShard(vcursor, upd.OwnedVindexQuery, bindVars, rs, false /* isDML */, false /* canAutocommit */)
-	if err != nil {
-		return err
-	}
-	if len(subQueryResult.Rows) == 0 {
-		return nil
-	}
-	if len(subQueryResult.Rows) > 1 {
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update changes multiple rows in the vindex")
-	}
-	colnum := 1 // we start from the first lookup vindex col
-	for _, colVindex := range upd.Table.Owned {
-		// Fetch the column values. colnum must keep incrementing.
-		fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
-		for range colVindex.Columns {
-			fromIds = append(fromIds, subQueryResult.Rows[0][colnum])
-			colnum++
-		}
-
-		// Update columns only if they're being changed.
-		if colValues, ok := upd.ChangedVindexValues[colVindex.Name]; ok {
-			var vindexColumnKeys []sqltypes.Value
-			for _, colValue := range colValues {
-				resolvedVal, err := colValue.ResolveValue(bindVars)
-				if err != nil {
-					return err
-				}
-				vindexColumnKeys = append(vindexColumnKeys, resolvedVal)
-			}
-
-			if err := colVindex.Vindex.(vindexes.Lookup).Update(vcursor, fromIds, ksid, vindexColumnKeys); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-// updateVindexEntries performs an update when a vindex is being modified
-// by the statement.
-// Note: the commit order may be different from the DML order because it's possible
-// for DMLs to reuse existing transactions.
-// Note 2: While changes are being committed, the changing row could be
-// unreachable by either the new or old column values.
-func (upd *Update) updateVindexEntriesScatter(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) error {
+func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) error {
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{Sql: upd.OwnedVindexQuery, BindVariables: bindVars}
@@ -229,7 +184,7 @@ func (upd *Update) updateVindexEntriesScatter(vcursor VCursor, bindVars map[stri
 	subQueryResult, errors := vcursor.ExecuteMultiShard(rss, queries, false, false)
 	for _, err := range errors {
 		if err != nil {
-			return vterrors.Wrap(err, "updateVindexEntriesScatter")
+			return vterrors.Wrap(err, "updateVindexEntries")
 		}
 	}
 
@@ -239,7 +194,7 @@ func (upd *Update) updateVindexEntriesScatter(vcursor VCursor, bindVars map[stri
 
 	for _, row := range subQueryResult.Rows {
 		colnum := 1 // we start from the first non-vindex col
-		ksid := row[0].Raw()
+		ksid := row[0].ToBytes()
 		for _, colVindex := range upd.Table.Owned {
 			// Fetch the column values. colnum must keep incrementing.
 			fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
@@ -285,7 +240,7 @@ func (upd *Update) execUpdateByDestination(vcursor VCursor, bindVars map[string]
 
 	// update any owned vindexes
 	if len(upd.ChangedVindexValues) != 0 {
-		if err := upd.updateVindexEntriesScatter(vcursor, bindVars, rss); err != nil {
+		if err := upd.updateVindexEntries(vcursor, bindVars, rss); err != nil {
 			return nil, vterrors.Wrap(err, "execUpdateByDestination")
 		}
 	}

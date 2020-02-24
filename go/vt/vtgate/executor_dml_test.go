@@ -97,7 +97,7 @@ func TestUpdateEqual(t *testing.T) {
 	sbclookup.Queries = nil
 	sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("id|name|lastname", "varbinary|int32|varchar"),
-		"1|1|foo",
+		"\026k@\264J\272K\326|1|foo",
 	),
 	})
 
@@ -208,8 +208,8 @@ func TestUpdateMultiOwned(t *testing.T) {
 
 	sbc1.SetResults([]*sqltypes.Result{
 		sqltypes.MakeTestResult(
-			sqltypes.MakeTestFields("id|a|b|c|d|e|f", "int64|int64|int64|int64|int64|int64|int64"),
-			"1|10|20|30|40|50|60",
+			sqltypes.MakeTestFields("id|a|b|c|d|e|f", "varbinary|int64|int64|int64|int64|int64|int64"),
+			"\026k@\264J\272K\326|10|20|30|40|50|60",
 		),
 	})
 	_, err := executorExec(executor, "update user set a=1, b=2, f=4, e=3 where id=1", nil)
@@ -329,13 +329,13 @@ func TestDeleteEqual(t *testing.T) {
 
 	sbc.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{Name: "Id", Type: sqltypes.Int64},
+			{Name: "Id", Type: sqltypes.VarBinary},
 			{Name: "name", Type: sqltypes.VarChar},
 		},
 		RowsAffected: 1,
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt64(1),
+			sqltypes.NewVarBinary("\026k@\264J\272K\326"),
 			sqltypes.NewVarChar("myname"),
 		}},
 	}})
@@ -420,7 +420,7 @@ func TestDeleteEqual(t *testing.T) {
 	sbclookup.Queries = nil
 	sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields("id|name|lastname", "varbinary|int32|varchar"),
-		"1|1|foo",
+		"\026k@\264J\272K\326|1|foo",
 	),
 	})
 	_, err = executorExec(executor, "delete from user2 where id = 1", nil)
@@ -512,13 +512,13 @@ func TestDeleteComments(t *testing.T) {
 
 	sbc.SetResults([]*sqltypes.Result{{
 		Fields: []*querypb.Field{
-			{Name: "Id", Type: sqltypes.Int64},
+			{Name: "Id", Type: sqltypes.VarBinary},
 			{Name: "name", Type: sqltypes.VarChar},
 		},
 		RowsAffected: 1,
 		InsertID:     0,
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt64(1),
+			sqltypes.NewVarBinary("\026k@\264J\272K\326"),
 			sqltypes.NewVarChar("myname"),
 		}},
 	}})
