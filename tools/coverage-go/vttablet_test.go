@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,18 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package unshardedrecovery
+package main
 
 import (
 	"testing"
-
-	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 )
 
-func TestMain(m *testing.M) {
-	TestMainImpl(m)
-}
-
-func TestRecovery(t *testing.T) {
-	TestRecoveryImpl(t)
+func TestVttablet(t *testing.T) {
+	main()
 }

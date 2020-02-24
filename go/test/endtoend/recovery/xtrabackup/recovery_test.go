@@ -14,18 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package unshardedrecovery
+package xtrabackup
 
 import (
 	"testing"
 
+	"vitess.io/vitess/go/test/endtoend/recovery"
+	"vitess.io/vitess/go/test/endtoend/recovery/unshardedrecovery"
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 )
 
 func TestMain(m *testing.M) {
-	TestMainImpl(m)
+	recovery.UseXb = true
+	unshardedrecovery.TestMainImpl(m)
 }
 
 func TestRecovery(t *testing.T) {
-	TestRecoveryImpl(t)
+	unshardedrecovery.TestRecoveryImpl(t)
 }

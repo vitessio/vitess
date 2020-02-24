@@ -149,6 +149,24 @@ func getTablet(tabletGrpcPort int, hostname string) *tabletpb.Tablet {
 	return &tabletpb.Tablet{Hostname: hostname, PortMap: portMap}
 }
 
+func filterResultWhenRunsForCoverage(input string) string {
+	if !*isCoverage {
+		return input
+	}
+	lines := strings.Split(input, "\n")
+	var result string
+	for _, line := range lines {
+		if strings.Contains(line, "=== RUN") {
+			continue
+		}
+		if strings.Contains(line, "--- PASS:") || strings.Contains(line, "PASS") {
+			break
+		}
+		result = result + line + "\n"
+	}
+	return result
+}
+
 // WaitForReplicationPos will wait for replication position to catch-up
 func WaitForReplicationPos(t *testing.T, tabletA *Vttablet, tabletB *Vttablet, hostname string, timeout float64) {
 	replicationPosA, _ := GetMasterPosition(t, *tabletA, hostname)
@@ -204,4 +222,5 @@ func NewConnParams(port int, password, socketPath, keyspace string) mysql.ConnPa
 	}
 
 	return cp
+
 }
