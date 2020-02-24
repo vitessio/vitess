@@ -74,6 +74,8 @@ func OpenForStreaming(address, target string) (*sql.DB, error) {
 // It allows to pass in a Configuration struct to control all possible
 // settings of the Vitess Go SQL driver.
 func OpenWithConfiguration(c Configuration) (*sql.DB, error) {
+	c.setDefaults()
+
 	json, err := c.toJSON()
 	if err != nil {
 		return nil, err
@@ -109,12 +111,17 @@ func (d drv) Open(name string) (driver.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	c.setDefaults()
+
 	if c.convert, err = newConverter(&c.Configuration); err != nil {
 		return nil, err
 	}
+
 	if err = c.dial(); err != nil {
 		return nil, err
 	}
+
 	return c, nil
 }
 
@@ -158,7 +165,6 @@ type Configuration struct {
 // toJSON converts Configuration to the JSON string which is required by the
 // Vitess driver. Default values for empty fields will be set.
 func (c Configuration) toJSON() (string, error) {
-	c.setDefaults()
 	jsonBytes, err := json.Marshal(c)
 	if err != nil {
 		return "", err
@@ -168,6 +174,8 @@ func (c Configuration) toJSON() (string, error) {
 
 // setDefaults sets the default values for empty fields.
 func (c *Configuration) setDefaults() {
+	// if no protocol is provided default to grpc so the driver is in control
+	// of the connection protocol and not the flag vtgateconn.VtgateProtocol
 	if c.Protocol == "" {
 		c.Protocol = "grpc"
 	}
@@ -182,11 +190,7 @@ type conn struct {
 
 func (c *conn) dial() error {
 	var err error
-	if c.Protocol == "" {
-		c.conn, err = vtgateconn.Dial(context.Background(), c.Address)
-	} else {
-		c.conn, err = vtgateconn.DialProtocol(context.Background(), c.Protocol, c.Address)
-	}
+	c.conn, err = vtgateconn.DialProtocol(context.Background(), c.Protocol, c.Address)
 	if err != nil {
 		return err
 	}
