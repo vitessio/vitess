@@ -43,6 +43,9 @@ type DML struct {
 	// For now, only one value is specified.
 	Values []sqltypes.PlanValue
 
+	// Keyspace Id Vindex
+	KsidVindex vindexes.SingleColumn
+
 	// Table specifies the table for the update.
 	Table *vindexes.Table
 

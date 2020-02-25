@@ -155,15 +155,16 @@ func TestDeleteOwnedVindex(t *testing.T) {
 			Values:           []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 			Table:            ks.Tables["t1"],
 			OwnedVindexQuery: "dummy_subquery",
+			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
 		},
 	}
 
 	results := []*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id|c1|c2|c3",
-			"varbinary|int64|int64|int64",
+			"int64|int64|int64|int64",
 		),
-		"\026k@\264J\272K\326|4|5|6",
+		"1|4|5|6",
 	)}
 	vc := &loggingVCursor{
 		shards:  []string{"-20", "20-"},
@@ -207,10 +208,10 @@ func TestDeleteOwnedVindex(t *testing.T) {
 	results = []*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id|c1|c2|c3",
-			"varbinary|int64|int64|int64",
+			"int64|int64|int64|int64",
 		),
-		"\026k@\264J\272K\326|4|5|6",
-		"\026k@\264J\272K\326|7|8|9",
+		"1|4|5|6",
+		"1|7|8|9",
 	)}
 	vc = &loggingVCursor{
 		shards:  []string{"-20", "20-"},
@@ -278,15 +279,16 @@ func TestDeleteScatterOwnedVindex(t *testing.T) {
 			Query:            "dummy_delete",
 			Table:            ks.Tables["t1"],
 			OwnedVindexQuery: "dummy_subquery",
+			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
 		},
 	}
 
 	results := []*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id|c1|c2|c3",
-			"varbinary|int64|int64|int64",
+			"int64|int64|int64|int64",
 		),
-		"\026k@\264J\272K\326|4|5|6",
+		"1|4|5|6",
 	)}
 	vc := &loggingVCursor{
 		shards:  []string{"-20", "20-"},
@@ -330,10 +332,10 @@ func TestDeleteScatterOwnedVindex(t *testing.T) {
 	results = []*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id|c1|c2|c3",
-			"varbinary|int64|int64|int64",
+			"int64|int64|int64|int64",
 		),
-		"\026k@\264J\272K\326|4|5|6",
-		"\026k@\264J\272K\326|7|8|9",
+		"1|4|5|6",
+		"1|7|8|9",
 	)}
 	vc = &loggingVCursor{
 		shards:  []string{"-20", "20-"},

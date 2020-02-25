@@ -81,8 +81,8 @@ func TestAutocommitUpdateLookup(t *testing.T) {
 func TestAutocommitUpdateVindexChange(t *testing.T) {
 	executor, sbc, _, sbclookup := createExecutorEnv()
 	sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|name|lastname", "varbinary|int32|varchar"),
-		"\026k@\264J\272K\326|1|foo",
+		sqltypes.MakeTestFields("id|name|lastname", "int64|int32|varchar"),
+		"1|1|foo",
 	),
 	})
 
@@ -141,8 +141,8 @@ func TestAutocommitDeleteSharded(t *testing.T) {
 func TestAutocommitDeleteLookup(t *testing.T) {
 	executor, sbc1, _, sbclookup := createExecutorEnv()
 	sbc1.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id|name|lastname", "varbinary|int32|varchar"),
-		"\026k@\264J\272K\326|1|foo",
+		sqltypes.MakeTestFields("id|name|lastname", "int64|int32|varchar"),
+		"1|1|foo",
 	),
 	})
 
