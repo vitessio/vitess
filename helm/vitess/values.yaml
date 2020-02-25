@@ -14,8 +14,10 @@
 # will be taken from defaults defined below.
 # topology:
 
-# Name of vitess base image
+# Repository for vitess images. Defaults to vitess repo on dockerhub. 
+# Override by specifying the full path of alternate repository, e.g. <give an example>
 repo : vitess
+
 # config will be stored as a ConfigMap and mounted where appropriate
 config:
   # Backup flags will be applied to components that need them.
@@ -388,12 +390,4 @@ orchestrator:
     requests:
       cpu: 50m
       memory: 350Mi
-
-logtail:
-  image: vitess/logtail
-  tag: helm-1.0.6
-
-logrotate:
-  image: vitess/logrotate
-  tag: helm-1.0.6
 
