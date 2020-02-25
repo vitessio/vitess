@@ -1,5 +1,4 @@
 # Test cases in this file follow the code in memory_sort.go.
-
 # scatter aggregate order by references ungrouped column
 "select a, b, count(*) from user group by a order by b"
 {
@@ -533,7 +532,6 @@
         "Query": "select un.col2 from unsharded as un",
         "FieldQuery": "select un.col2 from unsharded as un where 1 != 1",
         "Table": "unsharded"
-
       },
       "Right": {
         "Opcode": "SelectScatter",
