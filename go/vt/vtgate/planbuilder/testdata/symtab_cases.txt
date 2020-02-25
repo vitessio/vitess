@@ -1,5 +1,5 @@
 # Tests in this file are for testing symtab functionality
-
+#
 # Column names need not be qualified if they are predefined in vschema and unambiguous.
 "select predef2, predef3 from user join unsharded on predef2 = predef3"
 {
