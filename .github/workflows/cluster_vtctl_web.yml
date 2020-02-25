@@ -18,5 +18,5 @@ jobs:
     - name: Run vtctl web
       run: |
         # Running web test inside docker
-        go run test.go -docker=true -print-log -shard 25
+        go run test.go -docker=true -print-log -shard 10
 
