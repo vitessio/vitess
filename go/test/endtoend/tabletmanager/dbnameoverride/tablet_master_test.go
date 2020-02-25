@@ -107,6 +107,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestDbNameOverride(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)

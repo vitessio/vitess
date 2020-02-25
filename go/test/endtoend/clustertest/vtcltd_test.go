@@ -29,6 +29,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 var (
@@ -41,6 +42,7 @@ var (
 )
 
 func TestVtctldProcess(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	url := fmt.Sprintf("http://%s:%d/api/keyspaces/", clusterInstance.Hostname, clusterInstance.VtctldHTTPPort)
 	testURL(t, url, "keyspace url")
 

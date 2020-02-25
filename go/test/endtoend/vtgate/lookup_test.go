@@ -26,9 +26,11 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 func TestConsistentLookup(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -162,6 +164,7 @@ func TestConsistentLookup(t *testing.T) {
 }
 
 func TestConsistentLookupMultiInsert(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)
@@ -215,6 +218,7 @@ func TestConsistentLookupMultiInsert(t *testing.T) {
 }
 
 func TestHashLookupMultiInsertIgnore(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.Nil(t, err)

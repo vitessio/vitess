@@ -28,6 +28,7 @@ import (
 )
 
 func TestReparentGracefulRangeBased(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	for _, tablet := range []cluster.Vttablet{*masterTablet, *replicaTablet} {

@@ -82,7 +82,7 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitCode := func() int {
-		clusterForKSTest = &cluster.LocalProcessCluster{Cell: cell, Hostname: hostname}
+		clusterForKSTest = cluster.NewCluster(cell, hostname)
 		defer clusterForKSTest.Teardown()
 
 		// Start topo server
@@ -137,6 +137,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestGetSrvKeyspaceNames(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspaceNames", cell)
 	require.Nil(t, err)
 	assert.Contains(t, strings.Split(output, "\n"), keyspaceUnshardedName)
@@ -144,6 +145,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 }
 
 func TestGetSrvKeyspacePartitions(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	shardedSrvKeyspace := getSrvKeyspace(t, cell, keyspaceShardedName)
 	otherShardRefFound := false
 	for _, partition := range shardedSrvKeyspace.Partitions {
@@ -172,6 +174,7 @@ func TestGetSrvKeyspacePartitions(t *testing.T) {
 }
 
 func TestShardNames(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, keyspaceShardedName)
 	require.Nil(t, err)
 	var srvKeyspace topodata.SrvKeyspace
@@ -181,6 +184,7 @@ func TestShardNames(t *testing.T) {
 }
 
 func TestGetKeyspace(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetKeyspace", keyspaceUnshardedName)
 	require.Nil(t, err)
 
@@ -194,6 +198,7 @@ func TestGetKeyspace(t *testing.T) {
 }
 
 func TestDeleteKeyspace(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateKeyspace", "test_delete_keyspace")
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("CreateShard", "test_delete_keyspace/0")
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("InitTablet", "-keyspace=test_delete_keyspace", "-shard=0", "zone1-0000000100", "master")
@@ -311,6 +316,7 @@ func RemoveKeyspaceCell(t *testing.T) {
 }
 
 func TestShardCountForAllKeyspaces(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	testShardCountForKeyspace(t, keyspaceUnshardedName, 1)
 	testShardCountForKeyspace(t, keyspaceShardedName, 2)
 }
@@ -327,6 +333,7 @@ func testShardCountForKeyspace(t *testing.T, keyspace string, count int) {
 }
 
 func TestShardNameForAllKeyspaces(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	testShardNameForKeyspace(t, keyspaceUnshardedName, []string{"test_ks_unsharded"})
 	testShardNameForKeyspace(t, keyspaceShardedName, []string{"-80", "80-"})
 }
@@ -345,6 +352,7 @@ func testShardNameForKeyspace(t *testing.T, keyspace string, shardNames []string
 }
 
 func TestKeyspaceToShardName(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	var id []byte
 	srvKeyspace := getSrvKeyspace(t, cell, keyspaceShardedName)
 

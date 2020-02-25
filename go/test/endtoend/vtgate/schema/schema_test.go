@@ -58,7 +58,7 @@ func TestMain(m *testing.M) {
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
-		clusterInstance = &cluster.LocalProcessCluster{Cell: cell, Hostname: hostname}
+		clusterInstance = cluster.NewCluster(cell, hostname)
 		schemaChangeDirectory = path.Join("/tmp", fmt.Sprintf("schema_change_dir_%d", clusterInstance.GetAndReserveTabletUID()))
 		defer os.RemoveAll(schemaChangeDirectory)
 		defer clusterInstance.Teardown()
@@ -99,6 +99,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestSchemaChange(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	testWithInitialSchema(t)
 	testWithAlterSchema(t)
 	testWithAlterDatabase(t)

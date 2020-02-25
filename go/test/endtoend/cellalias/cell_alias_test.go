@@ -236,6 +236,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestAlias(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	insertInitialValues(t)
 	err := localCluster.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceName)
 	require.Nil(t, err)

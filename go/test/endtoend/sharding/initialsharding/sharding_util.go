@@ -94,7 +94,7 @@ var (
 // ClusterWrapper common wrapper code for cluster
 func ClusterWrapper(isMulti bool) (int, error) {
 	ClusterInstance = nil
-	ClusterInstance = &cluster.LocalProcessCluster{Cell: cell, Hostname: hostname}
+	ClusterInstance = cluster.NewCluster(cell, hostname)
 
 	// Start topo server
 	if err := ClusterInstance.StartTopo(); err != nil {
@@ -223,6 +223,7 @@ func AssignMysqlPortFromKs1ToKs2() {
 
 // TestInitialSharding - main test which accepts different params for various test
 func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType querypb.Type, isMulti bool, isExternal bool) {
+	defer cluster.PanicHandler(t)
 	if isExternal {
 		commonTabletArg = append(commonTabletArg, "-db_host", "127.0.0.1")
 		commonTabletArg = append(commonTabletArg, "-disable_active_reparents")

@@ -140,6 +140,7 @@ func initCluster(shardNames []string, totalTabletsRequired int) {
 }
 
 func TestRestart(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	err := masterTablet.MysqlctlProcess.Stop()
 	require.Nil(t, err)
 	masterTablet.MysqlctlProcess.CleanupFiles(masterTablet.TabletUID)
@@ -148,6 +149,7 @@ func TestRestart(t *testing.T) {
 }
 
 func TestAutoDetect(t *testing.T) {
+	defer cluster.PanicHandler(t)
 
 	// Start up tablets with an empty MYSQL_FLAVOR, which means auto-detect
 	sqlFlavor := os.Getenv("MYSQL_FLAVOR")

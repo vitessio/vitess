@@ -94,6 +94,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestVSchema(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {

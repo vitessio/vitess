@@ -31,6 +31,7 @@ import (
 
 func TestTopoCustomRule(t *testing.T) {
 
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
 	require.Nil(t, err)

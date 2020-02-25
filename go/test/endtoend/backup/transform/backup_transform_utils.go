@@ -183,6 +183,7 @@ var vtInsertTest = `create table vt_insert_test (
 
 func TestBackupTransformImpl(t *testing.T) {
 	// insert data in master, validate same in slave
+	defer cluster.PanicHandler(t)
 	verifyInitialReplication(t)
 
 	// restart the replica with transform hook parameter
@@ -268,6 +269,7 @@ func TestBackupTransformImpl(t *testing.T) {
 // backup_storage_hook, which should fail.
 func TestBackupTransformErrorImpl(t *testing.T) {
 	// restart the replica with transform hook parameter
+	defer cluster.PanicHandler(t)
 	err := replica1.VttabletProcess.TearDown()
 	require.Nil(t, err)
 

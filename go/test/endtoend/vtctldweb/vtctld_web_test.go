@@ -23,10 +23,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tebeka/selenium"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 // TestRealtimeStats checks the status by changing dropdown values.
 func TestRealtimeStats(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	err := wd.Get(vtctldAddr + "/app2")
 	require.Nil(t, err)
 
@@ -63,6 +65,7 @@ func TestRealtimeStats(t *testing.T) {
 
 // TestShardView validates tablet type and uids.
 func TestShardView(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	navigateToShardView(t)
 
 	tabletTypes, tabletUIDs := getShardTablets(t)
@@ -73,6 +76,7 @@ func TestShardView(t *testing.T) {
 
 // TestKsView validates the shard names for keyspace.
 func TestKsView(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	navigateToKeyspaceView(t)
 	shards := getKeyspaceShard(t)
 	assert.ElementsMatch(t, []string{"-80", "80-"}, shards)
@@ -80,6 +84,7 @@ func TestKsView(t *testing.T) {
 
 // TestCreateKs validates the keyspace creation using ui.
 func TestCreateKs(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	navigateToDashBoard(t)
 
 	dashboardContent, err := wd.FindElement(selenium.ByTagName, "vt-dashboard")
@@ -174,6 +179,7 @@ func TestCreateKs(t *testing.T) {
 
 // TestDashboard validate the keyspaces and shard in dashboard.
 func TestDashboard(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	navigateToDashBoard(t)
 	ksNames := getDashboardKeyspaces(t)
 	assert.ElementsMatch(t, []string{"test_keyspace", "test_keyspace2"}, ksNames)
@@ -183,6 +189,7 @@ func TestDashboard(t *testing.T) {
 
 // TestDashboardValidate validates the validate command from the ui.
 func TestDashboardValidate(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	navigateToDashBoard(t)
 	dashboardContent, err := wd.FindElement(selenium.ByTagName, "vt-dashboard")
 	require.Nil(t, err)

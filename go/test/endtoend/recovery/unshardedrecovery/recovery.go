@@ -190,6 +190,7 @@ func TestMainImpl(m *testing.M) {
 // - check that new tablet has data created after backup1 but not data created after backup2
 // - check that vtgate queries work correctly
 func TestRecoveryImpl(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	defer tabletsTeardown()
 	verifyInitialReplication(t)
 

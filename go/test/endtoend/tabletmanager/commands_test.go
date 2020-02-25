@@ -28,10 +28,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 // TabletCommands tests the basic tablet commands
 func TestTabletCommands(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
@@ -144,6 +146,7 @@ func assertExecuteFetch(t *testing.T, qr string) {
 // ActionAndTimeout test
 func TestActionAndTimeout(t *testing.T) {
 
+	defer cluster.PanicHandler(t)
 	err := clusterInstance.VtctlclientProcess.ExecuteCommand("Sleep", masterTablet.Alias, "5s")
 	require.Nil(t, err)
 	time.Sleep(1 * time.Second)
@@ -155,6 +158,7 @@ func TestActionAndTimeout(t *testing.T) {
 
 func TestHook(t *testing.T) {
 	// test a regular program works
+	defer cluster.PanicHandler(t)
 	runHookAndAssert(t, []string{
 		"ExecuteHook", masterTablet.Alias, "test.sh", "--flag1", "--param1=hello"}, "0", false, "")
 
@@ -200,6 +204,7 @@ func runHookAndAssert(t *testing.T, params []string, expectedStatus string, expe
 
 func TestShardReplicationFix(t *testing.T) {
 	// make sure the replica is in the replication graph, 2 nodes: 1 master, 1 replica
+	defer cluster.PanicHandler(t)
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("GetShardReplication", cell, keyspaceShard)
 	require.Nil(t, err, "error should be Nil")
 	assertNodeCount(t, result, int(3))
