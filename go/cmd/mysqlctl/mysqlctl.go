@@ -46,8 +46,10 @@ var (
 )
 
 func initConfigCmd(subFlags *flag.FlagSet, args []string) error {
-	subFlags.Parse(args)
 
+	if err := subFlags.Parse(args); err != nil {
+		log.Fatalf("failed to parse arguments %v", err)
+	}
 	// Generate my.cnf from scratch and use it to find mysqld.
 	mysqld, cnf, err := mysqlctl.CreateMysqldAndMycnf(uint32(*tabletUID), *mysqlSocket, int32(*mysqlPort))
 	if err != nil {
@@ -63,8 +65,9 @@ func initConfigCmd(subFlags *flag.FlagSet, args []string) error {
 func initCmd(subFlags *flag.FlagSet, args []string) error {
 	waitTime := subFlags.Duration("wait_time", 5*time.Minute, "how long to wait for startup")
 	initDBSQLFile := subFlags.String("init_db_sql_file", "", "path to .sql file to run after mysql_install_db")
-	subFlags.Parse(args)
-
+	if err := subFlags.Parse(args); err != nil {
+		log.Fatalf("failed to parse arguments %v", err)
+	}
 	// Generate my.cnf from scratch and use it to find mysqld.
 	mysqld, cnf, err := mysqlctl.CreateMysqldAndMycnf(uint32(*tabletUID), *mysqlSocket, int32(*mysqlPort))
 	if err != nil {
@@ -96,8 +99,9 @@ func reinitConfigCmd(subFlags *flag.FlagSet, args []string) error {
 
 func shutdownCmd(subFlags *flag.FlagSet, args []string) error {
 	waitTime := subFlags.Duration("wait_time", 5*time.Minute, "how long to wait for shutdown")
-	subFlags.Parse(args)
-
+	if err := subFlags.Parse(args); err != nil {
+		log.Fatalf("failed to parse arguments %v", err)
+	}
 	// There ought to be an existing my.cnf, so use it to find mysqld.
 	mysqld, cnf, err := mysqlctl.OpenMysqldAndMycnf(uint32(*tabletUID))
 	if err != nil {
@@ -117,8 +121,9 @@ func startCmd(subFlags *flag.FlagSet, args []string) error {
 	waitTime := subFlags.Duration("wait_time", 5*time.Minute, "how long to wait for startup")
 	var mysqldArgs flagutil.StringListValue
 	subFlags.Var(&mysqldArgs, "mysqld_args", "List of comma-separated flags to pass additionally to mysqld")
-	subFlags.Parse(args)
-
+	if err := subFlags.Parse(args); err != nil {
+		log.Fatalf("failed to parse arguments %v", err)
+	}
 	// There ought to be an existing my.cnf, so use it to find mysqld.
 	mysqld, cnf, err := mysqlctl.OpenMysqldAndMycnf(uint32(*tabletUID))
 	if err != nil {
@@ -137,8 +142,9 @@ func startCmd(subFlags *flag.FlagSet, args []string) error {
 func teardownCmd(subFlags *flag.FlagSet, args []string) error {
 	waitTime := subFlags.Duration("wait_time", 5*time.Minute, "how long to wait for shutdown")
 	force := subFlags.Bool("force", false, "will remove the root directory even if mysqld shutdown fails")
-	subFlags.Parse(args)
-
+	if err := subFlags.Parse(args); err != nil {
+		log.Fatalf("failed to parse arguments %v", err)
+	}
 	// There ought to be an existing my.cnf, so use it to find mysqld.
 	mysqld, cnf, err := mysqlctl.OpenMysqldAndMycnf(uint32(*tabletUID))
 	if err != nil {
@@ -155,7 +161,10 @@ func teardownCmd(subFlags *flag.FlagSet, args []string) error {
 }
 
 func positionCmd(subFlags *flag.FlagSet, args []string) error {
-	subFlags.Parse(args)
+	if err := subFlags.Parse(args); err != nil {
+		log.Fatalf("failed to parse arguments %v", err)
+	}
+
 	if len(args) < 3 {
 		return fmt.Errorf("not enough arguments for position operation")
 	}

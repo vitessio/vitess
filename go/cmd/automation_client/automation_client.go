@@ -92,7 +92,7 @@ func main() {
 		Parameters: params.parameters,
 	}
 	fmt.Printf("Sending request:\n%v", proto.MarshalTextString(enqueueRequest))
-	enqueueResponse, err := client.EnqueueClusterOperation(context.Background(), enqueueRequest, grpc.FailFast(false))
+	enqueueResponse, err := client.EnqueueClusterOperation(context.Background(), enqueueRequest, grpc.WaitForReady(false))
 	if err != nil {
 		fmt.Println("Failed to enqueue ClusterOperation. Error:", err)
 		os.Exit(4)
@@ -113,7 +113,7 @@ func waitForClusterOp(client automationservicepb.AutomationClient, id string) (*
 			Id: id,
 		}
 
-		resp, err := client.GetClusterOperationDetails(context.Background(), req, grpc.FailFast(false))
+		resp, err := client.GetClusterOperationDetails(context.Background(), req, grpc.WaitForReady(false))
 		if err != nil {
 			return nil, fmt.Errorf("failed to get ClusterOperation Details. Request: %v Error: %v", req, err)
 		}

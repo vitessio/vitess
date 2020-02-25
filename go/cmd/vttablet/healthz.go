@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
@@ -36,7 +37,10 @@ func init() {
 
 			rw.Header().Set("Content-Length", fmt.Sprintf("%v", len(okMessage)))
 			rw.WriteHeader(http.StatusOK)
-			rw.Write(okMessage)
+			if _, err := rw.Write(okMessage); err != nil {
+				log.Fatalf("failed to write responce for healthz %v", err)
+			}
+
 		}))
 	})
 }

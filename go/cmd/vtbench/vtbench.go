@@ -100,7 +100,9 @@ func main() {
 
 	defer exit.Recover()
 
-	flag.Lookup("logtostderr").Value.Set("true")
+	if err := flag.Lookup("logtostderr").Value.Set("true"); err != nil {
+		log.Fatalf("failed in setting flag value of logtostderr : %v", err)
+	}
 	flag.Parse()
 
 	clientProto := vtbench.MySQL

@@ -22,9 +22,16 @@ import (
 
 func TestBuffer(t *testing.T) {
 	b := NewBuffer(nil)
-	b.Write([]byte("ab"))
-	b.WriteString("cd")
-	b.WriteByte('e')
+	if _, err := b.Write([]byte("ab")); err != nil {
+		t.Errorf("error in writing : %v", err)
+	}
+	if _, err := b.WriteString("cd"); err != nil {
+		t.Errorf("error in writing string : %v", err)
+	}
+	if err := b.WriteByte('e'); err != nil {
+		t.Errorf("error in writing byte : %v", err)
+	}
+
 	want := "abcde"
 	if got := string(b.Bytes()); got != want {
 		t.Errorf("b.Bytes(): %s, want %s", got, want)

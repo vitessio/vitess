@@ -123,7 +123,10 @@ func main() {
 	servenv.OnTermSync(func() {
 		log.Infof("mysqlctl received SIGTERM, shutting down mysqld first")
 		ctx := context.Background()
-		mysqld.Shutdown(ctx, cnf, true)
+		if err := mysqld.Shutdown(ctx, cnf, true); err != nil {
+			log.Fatalf("failed to shutdown Mysqld : %v", err)
+		}
+
 	})
 
 	// Start RPC server and wait for SIGTERM.

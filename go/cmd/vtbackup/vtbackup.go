@@ -233,7 +233,9 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		// skip shutdown just because we timed out waiting for other things.
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		mysqld.Shutdown(ctx, mycnf, false)
+		if err := mysqld.Shutdown(ctx, mycnf, false); err != nil {
+			log.Fatalf("failed to shutdown Mysqld : %v", err)
+		}
 	}()
 
 	extraEnv := map[string]string{

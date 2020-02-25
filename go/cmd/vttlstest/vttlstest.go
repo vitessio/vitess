@@ -57,7 +57,10 @@ var (
 )
 
 func cmdCreateCA(subFlags *flag.FlagSet, args []string) {
-	subFlags.Parse(args)
+
+	if err := subFlags.Parse(args); err != nil {
+		log.Fatalf("CreateCA command not able to parse arguments %v", err)
+	}
 	if subFlags.NArg() > 0 {
 		log.Fatalf("CreateCA command doesn't take any parameter")
 	}
@@ -70,7 +73,10 @@ func cmdCreateSignedCert(subFlags *flag.FlagSet, args []string) {
 	serial := subFlags.String("serial", "01", "Serial number for the certificate to create. Should be different for two certificates with the same parent.")
 	commonName := subFlags.String("common_name", "", "Common name for the certificate. If empty, uses the name.")
 
-	subFlags.Parse(args)
+	if err := subFlags.Parse(args); err != nil {
+		log.Fatalf("CreateCA command not able to parse arguments %v", err)
+	}
+
 	if subFlags.NArg() != 1 {
 		log.Fatalf("CreateSignedCert command takes a single name as a parameter")
 	}

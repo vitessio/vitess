@@ -17,6 +17,7 @@ limitations under the License.
 package grpcclienttest
 
 import (
+	"log"
 	"net"
 	"testing"
 
@@ -41,7 +42,9 @@ func TestGRPCGoClient(t *testing.T) {
 	// Create a gRPC server and listen on the port
 	server := grpc.NewServer()
 	grpcvtgateservice.RegisterForTest(server, service)
-	go server.Serve(listener)
+	if err := server.Serve(listener); err != nil {
+		log.Fatalf("failed to start grpc server : %v", err)
+	}
 
 	// and run the test suite
 	goclienttest.TestGoClient(t, "grpc", listener.Addr().String())

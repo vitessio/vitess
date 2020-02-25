@@ -81,13 +81,21 @@ func main() {
 	}
 
 	// set discoverygateway flag to default value
-	flag.Set("cells_to_watch", strings.Join(tpb.Cells, ","))
+	if err := flag.Set("cells_to_watch", strings.Join(tpb.Cells, ",")); err != nil {
+		log.Fatalf("failed in setting up flag  cells_to_watch : %v", err)
+	}
 
 	// vtctld UI requires the cell flag
-	flag.Set("cell", tpb.Cells[0])
-	flag.Set("enable_realtime_stats", "true")
+	if err := flag.Set("cell", tpb.Cells[0]); err != nil {
+		log.Fatalf("failed in setting up flag cell : %v", err)
+	}
+	if err := flag.Set("enable_realtime_stats", "true"); err != nil {
+		log.Fatalf("failed in setting up flag enable_realtime_stats : %v", err)
+	}
 	if flag.Lookup("log_dir") == nil {
-		flag.Set("log_dir", "$VTDATAROOT/tmp")
+		if err := flag.Set("log_dir", "$VTDATAROOT/tmp"); err != nil {
+			log.Fatalf("failed in setting up flag log_dir : %v", err)
+		}
 	}
 
 	// Create topo server. We use a 'memorytopo' implementation.

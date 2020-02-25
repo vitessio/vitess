@@ -191,7 +191,9 @@ func cmdWait(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 		exitIfExists = subFlags.Bool("e", false, "exit if the path already exists")
 	)
 
-	subFlags.Parse(args)
+	if err := subFlags.Parse(args); err != nil {
+		log.Fatalf("failed to parse arguments %v", err)
+	}
 
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("wait: can only wait for one path")
@@ -225,7 +227,10 @@ func cmdWait(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 
 // Watch for changes to the node.
 func cmdWatch(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
-	subFlags.Parse(args)
+
+	if err := subFlags.Parse(args); err != nil {
+		log.Fatalf("failed to parse arguments %v", err)
+	}
 
 	eventChan := make(chan zk.Event, 16)
 	for _, arg := range subFlags.Args() {
@@ -280,7 +285,9 @@ func cmdLs(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 		force            = subFlags.Bool("f", false, "no warning on nonexistent node")
 		recursiveListing = subFlags.Bool("R", false, "recursive listing")
 	)
-	subFlags.Parse(args)
+	if err := subFlags.Parse(args); err != nil {
+		log.Fatalf("failed to parse arguments %v", err)
+	}
 	if subFlags.NArg() == 0 {
 		return fmt.Errorf("ls: no path specified")
 	}
@@ -410,7 +417,9 @@ func cmdTouch(ctx context.Context, subFlags *flag.FlagSet, args []string) error 
 		touchOnly     = subFlags.Bool("c", false, "touch only - don't create")
 	)
 
-	subFlags.Parse(args)
+	if err := subFlags.Parse(args); err != nil {
+		log.Fatalf("failed to parse arguments %v", err)
+	}
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("touch: need to specify exactly one path")
 	}
@@ -455,7 +464,9 @@ func cmdRm(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 		recursiveDelete   = subFlags.Bool("r", false, "recursive delete")
 		forceAndRecursive = subFlags.Bool("rf", false, "shorthand for -r -f")
 	)
-	subFlags.Parse(args)
+	if err := subFlags.Parse(args); err != nil {
+		log.Fatalf("failed to parse arguments %v", err)
+	}
 	*force = *force || *forceAndRecursive
 	*recursiveDelete = *recursiveDelete || *forceAndRecursive
 
@@ -504,7 +515,9 @@ func cmdRm(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 }
 
 func cmdAddAuth(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
-	subFlags.Parse(args)
+	if err := subFlags.Parse(args); err != nil {
+		log.Fatalf("failed to parse arguments %v", err)
+	}
 	if subFlags.NArg() < 2 {
 		return fmt.Errorf("addAuth: expected args <scheme> <auth>")
 	}
@@ -518,7 +531,9 @@ func cmdCat(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 		force       = subFlags.Bool("f", false, "no warning on nonexistent node")
 		decodeProto = subFlags.Bool("p", false, "decode proto files and display them as text")
 	)
-	subFlags.Parse(args)
+	if err := subFlags.Parse(args); err != nil {
+		log.Fatalf("failed to parse arguments %v", err)
+	}
 	if subFlags.NArg() == 0 {
 		return fmt.Errorf("cat: no path specified")
 	}
@@ -571,7 +586,9 @@ func cmdEdit(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 	var (
 		force = subFlags.Bool("f", false, "no warning on nonexistent node")
 	)
-	subFlags.Parse(args)
+	if err := subFlags.Parse(args); err != nil {
+		log.Fatalf("failed to parse arguments %v", err)
+	}
 	if subFlags.NArg() == 0 {
 		return fmt.Errorf("edit: no path specified")
 	}
@@ -628,7 +645,9 @@ func cmdStat(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 	var (
 		force = subFlags.Bool("f", false, "no warning on nonexistent node")
 	)
-	subFlags.Parse(args)
+	if err := subFlags.Parse(args); err != nil {
+		log.Fatalf("failed to parse arguments %v", err)
+	}
 
 	if subFlags.NArg() == 0 {
 		return fmt.Errorf("stat: no path specified")
@@ -706,7 +725,9 @@ func fmtACL(acl zk.ACL) string {
 }
 
 func cmdChmod(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
-	subFlags.Parse(args)
+	if err := subFlags.Parse(args); err != nil {
+		log.Fatalf("failed to parse arguments %v", err)
+	}
 	if subFlags.NArg() < 2 {
 		return fmt.Errorf("chmod: no permission specified")
 	}
@@ -764,7 +785,9 @@ func cmdChmod(ctx context.Context, subFlags *flag.FlagSet, args []string) error 
 }
 
 func cmdCp(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
-	subFlags.Parse(args)
+	if err := subFlags.Parse(args); err != nil {
+		log.Fatalf("failed to parse arguments %v", err)
+	}
 	switch {
 	case subFlags.NArg() < 2:
 		return fmt.Errorf("cp: need to specify source and destination paths")
@@ -863,7 +886,9 @@ type zkItem struct {
 // Store a zk tree in a zip archive. This won't be immediately useful to
 // zip tools since even "directories" can contain data.
 func cmdZip(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
-	subFlags.Parse(args)
+	if err := subFlags.Parse(args); err != nil {
+		log.Fatalf("failed to parse arguments %v", err)
+	}
 	if subFlags.NArg() < 2 {
 		return fmt.Errorf("zip: need to specify source and destination paths")
 	}
@@ -931,7 +956,9 @@ func cmdZip(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
 }
 
 func cmdUnzip(ctx context.Context, subFlags *flag.FlagSet, args []string) error {
-	subFlags.Parse(args)
+	if err := subFlags.Parse(args); err != nil {
+		log.Fatalf("failed to parse arguments %v", err)
+	}
 	if subFlags.NArg() != 2 {
 		return fmt.Errorf("zip: need to specify source and destination paths")
 	}
