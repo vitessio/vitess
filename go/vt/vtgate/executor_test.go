@@ -459,6 +459,9 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set net_read_timeout = 600",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
+		in:  "set sql_quote_show_create = 1",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
 		in:  "set foreign_key_checks = 0",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
