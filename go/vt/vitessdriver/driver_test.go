@@ -79,7 +79,8 @@ func TestOpen(t *testing.T) {
 			connStr: fmt.Sprintf(`{"address": "%s", "target": "@replica", "timeout": %d}`, testAddress, int64(30*time.Second)),
 			conn: &conn{
 				Configuration: Configuration{
-					Target: "@replica",
+					Protocol: "grpc",
+					Target:   "@replica",
 				},
 				convert: &converter{
 					location: time.UTC,
@@ -90,7 +91,9 @@ func TestOpen(t *testing.T) {
 			desc:    "Open() (defaults omitted)",
 			connStr: fmt.Sprintf(`{"address": "%s", "timeout": %d}`, testAddress, int64(30*time.Second)),
 			conn: &conn{
-				Configuration: Configuration{},
+				Configuration: Configuration{
+					Protocol: "grpc",
+				},
 				convert: &converter{
 					location: time.UTC,
 				},
@@ -116,6 +119,7 @@ func TestOpen(t *testing.T) {
 				testAddress, int64(30*time.Second)),
 			conn: &conn{
 				Configuration: Configuration{
+					Protocol:        "grpc",
 					DefaultLocation: "America/Los_Angeles",
 				},
 				convert: &converter{
