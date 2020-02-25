@@ -60,6 +60,7 @@ var (
 )
 
 func TestMainSetup(m *testing.M, useMysqlctld bool) {
+	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode, err := func() (int, error) {

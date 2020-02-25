@@ -75,6 +75,7 @@ var (
 
 // TestMainImpl creates cluster for unsharded recovery testing.
 func TestMainImpl(m *testing.M) {
+	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode, err := func() (int, error) {
