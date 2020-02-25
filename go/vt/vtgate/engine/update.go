@@ -48,12 +48,15 @@ type Update struct {
 // MarshalJSON serializes the Update into a JSON representation.
 // It's used for testing and diagnostics.
 func (upd *Update) MarshalJSON() ([]byte, error) {
-	var tname, vindexName string
+	var tname, vindexName, ksidVindexName string
 	if upd.Table != nil {
 		tname = upd.Table.Name.String()
 	}
 	if upd.Vindex != nil {
 		vindexName = upd.Vindex.String()
+	}
+	if upd.KsidVindex != nil {
+		ksidVindexName = upd.KsidVindex.String()
 	}
 	marshalUpdate := struct {
 		Opcode               string
@@ -64,6 +67,7 @@ func (upd *Update) MarshalJSON() ([]byte, error) {
 		ChangedVindexValues  map[string][]sqltypes.PlanValue `json:",omitempty"`
 		Table                string                          `json:",omitempty"`
 		OwnedVindexQuery     string                          `json:",omitempty"`
+		KsidVindex           string                          `json:",omitempty"`
 		MultiShardAutocommit bool                            `json:",omitempty"`
 		QueryTimeout         int                             `json:",omitempty"`
 	}{
@@ -75,6 +79,7 @@ func (upd *Update) MarshalJSON() ([]byte, error) {
 		ChangedVindexValues:  upd.ChangedVindexValues,
 		Table:                tname,
 		OwnedVindexQuery:     upd.OwnedVindexQuery,
+		KsidVindex:           ksidVindexName,
 		MultiShardAutocommit: upd.MultiShardAutocommit,
 		QueryTimeout:         upd.QueryTimeout,
 	}
@@ -194,7 +199,10 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 
 	for _, row := range subQueryResult.Rows {
 		colnum := 1 // we start from the first non-vindex col
-		ksid := row[0].ToBytes()
+		ksid, err := resolveKeyspaceID(vcursor, upd.KsidVindex, row[0])
+		if err != nil {
+			return err
+		}
 		for _, colVindex := range upd.Table.Owned {
 			// Fetch the column values. colnum must keep incrementing.
 			fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))

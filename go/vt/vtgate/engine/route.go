@@ -490,6 +490,21 @@ func resolveSingleShard(vcursor VCursor, vindex vindexes.SingleColumn, keyspace 
 	return rss[0], ksid, nil
 }
 
+func resolveKeyspaceID(vcursor VCursor, vindex vindexes.SingleColumn, vindexKey sqltypes.Value) ([]byte, error) {
+	destinations, err := vindex.Map(vcursor, []sqltypes.Value{vindexKey})
+	if err != nil {
+		return nil, err
+	}
+	switch ksid := destinations[0].(type) {
+	case key.DestinationKeyspaceID:
+		return ksid, nil
+	case key.DestinationNone:
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("cannot map vindex to unique keyspace id: %v", destinations[0])
+	}
+}
+
 func execShard(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, isDML, canAutocommit bool) (*sqltypes.Result, error) {
 	autocommit := canAutocommit && vcursor.AutocommitApproval()
 	result, errs := vcursor.ExecuteMultiShard([]*srvtopo.ResolvedShard{rs}, []*querypb.BoundQuery{

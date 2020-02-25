@@ -45,12 +45,15 @@ type Delete struct {
 // MarshalJSON serializes the Delete into a JSON representation.
 // It's used for testing and diagnostics.
 func (del *Delete) MarshalJSON() ([]byte, error) {
-	var tname, vindexName string
+	var tname, vindexName, ksidVindexName string
 	if del.Table != nil {
 		tname = del.Table.Name.String()
 	}
 	if del.Vindex != nil {
 		vindexName = del.Vindex.String()
+	}
+	if del.KsidVindex != nil {
+		ksidVindexName = del.KsidVindex.String()
 	}
 	marshalDelete := struct {
 		Opcode               string
@@ -60,6 +63,7 @@ func (del *Delete) MarshalJSON() ([]byte, error) {
 		Values               []sqltypes.PlanValue `json:",omitempty"`
 		Table                string               `json:",omitempty"`
 		OwnedVindexQuery     string               `json:",omitempty"`
+		KsidVindex           string               `json:",omitempty"`
 		MultiShardAutocommit bool                 `json:",omitempty"`
 		QueryTimeout         int                  `json:",omitempty"`
 	}{
@@ -70,6 +74,7 @@ func (del *Delete) MarshalJSON() ([]byte, error) {
 		Values:               del.Values,
 		Table:                tname,
 		OwnedVindexQuery:     del.OwnedVindexQuery,
+		KsidVindex:           ksidVindexName,
 		MultiShardAutocommit: del.MultiShardAutocommit,
 		QueryTimeout:         del.QueryTimeout,
 	}
@@ -186,8 +191,11 @@ func (del *Delete) deleteVindexEntries(vcursor VCursor, bindVars map[string]*que
 	}
 
 	for _, row := range subQueryResults.Rows {
-		ksid := row[0].ToBytes()
 		colnum := 1
+		ksid, err := resolveKeyspaceID(vcursor, del.KsidVindex, row[0])
+		if err != nil {
+			return err
+		}
 		for _, colVindex := range del.Table.Owned {
 			// Fetch the column values. colnum must keep incrementing.
 			fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))

@@ -25,7 +25,7 @@ import (
 
 // buildDeletePlan builds the instructions for a DELETE statement.
 func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Delete, error) {
-	dml, ksidCol, err := buildDMLPlan(vschema, "delete", del, del.TableExprs, del.Where, del.OrderBy, del.Limit, del.Comments, del.Targets)
+	dml, ksidVindex, ksidCol, err := buildDMLPlan(vschema, "delete", del, del.TableExprs, del.Where, del.OrderBy, del.Limit, del.Comments, del.Targets)
 	if err != nil {
 		return nil, err
 	}
@@ -47,6 +47,7 @@ func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Del
 
 	if len(edel.Table.Owned) > 0 {
 		edel.OwnedVindexQuery = generateDMLSubquery(del.Where, del.OrderBy, del.Limit, edel.Table, ksidCol)
+		edel.KsidVindex = ksidVindex
 	}
 
 	return edel, nil

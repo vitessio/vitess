@@ -28,7 +28,7 @@ import (
 
 // buildUpdatePlan builds the instructions for an UPDATE statement.
 func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Update, error) {
-	dml, vindexCol, err := buildDMLPlan(vschema, "update", upd, upd.TableExprs, upd.Where, upd.OrderBy, upd.Limit, upd.Comments, upd.Exprs)
+	dml, ksidVindex, ksidCol, err := buildDMLPlan(vschema, "update", upd, upd.TableExprs, upd.Where, upd.OrderBy, upd.Limit, upd.Comments, upd.Exprs)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +45,8 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 		return nil, err
 	}
 	if len(eupd.ChangedVindexValues) != 0 {
-		eupd.OwnedVindexQuery = generateDMLSubquery(upd.Where, upd.OrderBy, upd.Limit, eupd.Table, vindexCol)
+		eupd.OwnedVindexQuery = generateDMLSubquery(upd.Where, upd.OrderBy, upd.Limit, eupd.Table, ksidCol)
+		eupd.KsidVindex = ksidVindex
 	}
 	return eupd, nil
 }
