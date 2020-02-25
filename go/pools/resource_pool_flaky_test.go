@@ -18,6 +18,7 @@ package pools
 
 import (
 	"errors"
+	"log"
 	"testing"
 	"time"
 
@@ -58,7 +59,7 @@ func TestOpen(t *testing.T) {
 	lastID.Set(0)
 	count.Set(0)
 	p := NewResourcePool(PoolFactory, 6, 6, time.Second, 0)
-	p.SetCapacity(5)
+	_ = p.SetCapacity(5)
 	var resources [10]Resource
 
 	// Test Get
@@ -145,7 +146,7 @@ func TestOpen(t *testing.T) {
 	}
 
 	// SetCapacity
-	p.SetCapacity(3)
+	_ = p.SetCapacity(3)
 	if count.Get() != 3 {
 		t.Errorf("Expecting 3, received %d", count.Get())
 	}
@@ -158,7 +159,7 @@ func TestOpen(t *testing.T) {
 	if p.Available() != 3 {
 		t.Errorf("Expecting 3, received %d", p.Available())
 	}
-	p.SetCapacity(6)
+	_ = p.SetCapacity(6)
 	if p.Capacity() != 6 {
 		t.Errorf("Expecting 6, received %d", p.Capacity())
 	}
@@ -244,7 +245,7 @@ func TestShrinking(t *testing.T) {
 	}
 	done := make(chan bool)
 	go func() {
-		p.SetCapacity(3)
+		_ = p.SetCapacity(3)
 		done <- true
 	}()
 	expected := `{"Capacity": 3, "Available": 0, "Active": 4, "InUse": 4, "MaxCapacity": 5, "WaitCount": 0, "WaitTime": 0, "IdleTimeout": 1000000000, "IdleClosed": 0, "Exhausted": 0}`
@@ -295,7 +296,7 @@ func TestShrinking(t *testing.T) {
 
 	// This will also wait
 	go func() {
-		p.SetCapacity(2)
+		_ = p.SetCapacity(2)
 		done <- true
 	}()
 	time.Sleep(10 * time.Millisecond)
@@ -320,7 +321,7 @@ func TestShrinking(t *testing.T) {
 	}
 
 	// Test race condition of SetCapacity with itself
-	p.SetCapacity(3)
+	_ = p.SetCapacity(3)
 	for i := 0; i < 3; i++ {
 		resources[i], err = p.Get(ctx)
 		if err != nil {
@@ -596,7 +597,9 @@ func TestSlowCreateFail(t *testing.T) {
 	// The third Get should not wait indefinitely
 	for i := 0; i < 3; i++ {
 		go func() {
-			p.Get(ctx)
+			if _, err := p.Get(ctx); err != nil {
+				log.Fatalf("failed in get pool : %v", err)
+			}
 			ch <- true
 		}()
 	}

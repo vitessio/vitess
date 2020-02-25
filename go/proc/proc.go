@@ -57,7 +57,9 @@ func Wait() os.Signal {
 	signal.Notify(c, syscall.SIGTERM, syscall.SIGUSR1, syscall.SIGINT)
 
 	http.HandleFunc(pidURL, func(r http.ResponseWriter, req *http.Request) {
-		r.Write(strconv.AppendInt(nil, int64(os.Getpid()), 10))
+		if err := r.Write(strconv.AppendInt(nil, int64(os.Getpid()), 10)); err != nil {
+			log.Errorf("enable to write response ", err)
+		}
 	})
 
 	return <-c

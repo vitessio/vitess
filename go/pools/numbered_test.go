@@ -56,14 +56,14 @@ func TestNumbered(t *testing.T) {
 		t.Errorf("want prefix 'ended at' and suffix '(test'), got '%v'", err)
 	}
 
-	p.Register(id, id, true)
+	_ = p.Register(id, id, true)
 	id++
-	p.Register(id, id, true)
+	_ = p.Register(id, id, true)
 	id++
-	p.Register(id, id, false)
+	_ = p.Register(id, id, false)
 	time.Sleep(300 * time.Millisecond)
 	id++
-	p.Register(id, id, true)
+	_ = p.Register(id, id, true)
 	time.Sleep(100 * time.Millisecond)
 
 	// p has 0, 1, 2, 3 (0, 1, 2 are aged, but 2 is not enforced)
@@ -119,7 +119,7 @@ func BenchmarkRegisterUnregister(b *testing.B) {
 	id := int64(1)
 	val := "foobarbazdummyval"
 	for i := 0; i < b.N; i++ {
-		p.Register(id, val, false)
+		_ = p.Register(id, val, false)
 		p.Unregister(id, "some reason")
 	}
 }
@@ -131,7 +131,7 @@ func BenchmarkRegisterUnregisterParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			id := rand.Int63()
-			p.Register(id, val, false)
+			_ = p.Register(id, val, false)
 			p.Unregister(id, "some reason")
 		}
 	})
