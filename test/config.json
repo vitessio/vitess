@@ -94,15 +94,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"vttest_sample": {
-			"File": "vttest_sample_test.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 0,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"backup": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtctlbackup"],
@@ -112,7 +103,7 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"backup_mysqlctld": {
+		"backup_mysqlctld": { 
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/mysqlctld"],
 			"Command": [],
@@ -483,6 +474,15 @@
 		"web_test": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtctldweb"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 10,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"vttest_sample": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtcombo"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 25,
