@@ -118,6 +118,7 @@ func (vre *Engine) Open(ctx context.Context) error {
 	if vre.isOpen {
 		return nil
 	}
+	log.Infof("Starting VReplication engine")
 
 	vre.ctx, vre.cancel = context.WithCancel(ctx)
 	vre.isOpen = true
@@ -219,6 +220,7 @@ func (vre *Engine) Close() {
 	if !vre.isOpen {
 		return
 	}
+	log.Infof("Shutting down VReplication engine")
 
 	vre.cancel()
 	// We still have to wait for all controllers to stop.

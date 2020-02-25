@@ -94,7 +94,7 @@ func testcount(t *testing.T, dbo *sql.DB, except int) {
 	r.Next()
 	var i int
 	err = r.Scan(&i)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	assert.Equal(t, except, i)
 }
 

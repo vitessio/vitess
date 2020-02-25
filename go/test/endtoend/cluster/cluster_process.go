@@ -42,6 +42,7 @@ const (
 var (
 	keepData   = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
 	topoFlavor = flag.String("topo-flavor", "etcd2", "choose a topo server from etcd2, zk2 or consul")
+	isCoverage = flag.Bool("is-coverage", false, "whether coverage is required")
 )
 
 // LocalProcessCluster Testcases need to use this to iniate a cluster
@@ -86,6 +87,22 @@ type LocalProcessCluster struct {
 	context.CancelFunc
 }
 
+// Vttablet stores the properties needed to start a vttablet process
+type Vttablet struct {
+	Type      string
+	TabletUID int
+	HTTPPort  int
+	GrpcPort  int
+	MySQLPort int
+	Alias     string
+	Cell      string
+
+	// background executable processes
+	MysqlctlProcess  MysqlctlProcess
+	MysqlctldProcess MysqlctldProcess
+	VttabletProcess  *VttabletProcess
+}
+
 // Keyspace : Cluster accepts keyspace to launch it
 type Keyspace struct {
 	Name      string
@@ -124,21 +141,6 @@ func (shard *Shard) Replica() *Vttablet {
 		}
 	}
 	return nil
-}
-
-// Vttablet stores the properties needed to start a vttablet process
-type Vttablet struct {
-	Type      string
-	TabletUID int
-	HTTPPort  int
-	GrpcPort  int
-	MySQLPort int
-	Alias     string
-	Cell      string
-
-	// background executable processes
-	MysqlctlProcess MysqlctlProcess
-	VttabletProcess *VttabletProcess
 }
 
 // CtrlCHandler handles the teardown for the ctrl-c.
@@ -492,6 +494,12 @@ func (cluster *LocalProcessCluster) Teardown() {
 						mysqlctlProcessList = append(mysqlctlProcessList, proc)
 					}
 				}
+				if tablet.MysqlctldProcess.TabletUID > 0 {
+					if err := tablet.MysqlctldProcess.Stop(); err != nil {
+						log.Errorf("Error in mysqlctl teardown - %s", err.Error())
+					}
+				}
+
 				if err := tablet.VttabletProcess.TearDown(); err != nil {
 					log.Errorf("Error in vttablet teardown - %s", err.Error())
 				}
@@ -662,4 +670,12 @@ func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatu
 	tablet.VttabletProcess.SupportsBackup = supportBackup
 	tablet.VttabletProcess.ServingStatus = servingStatus
 	return tablet.VttabletProcess.Setup()
+}
+
+func getCoveragePath(fileName string) string {
+	covDir := os.Getenv("COV_DIR")
+	if covDir == "" {
+		covDir = os.TempDir()
+	}
+	return path.Join(covDir, fileName)
 }

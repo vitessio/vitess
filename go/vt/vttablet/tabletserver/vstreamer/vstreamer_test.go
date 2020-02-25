@@ -18,6 +18,7 @@ package vstreamer
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -1083,6 +1084,46 @@ func TestHeartbeat(t *testing.T) {
 	evs := <-ch
 	require.Equal(t, 1, len(evs))
 	assert.Equal(t, binlogdatapb.VEventType_HEARTBEAT, evs[0].Type)
+}
+
+func TestNoFutureGTID(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	// Execute something to make sure we have ranges in GTIDs.
+	execStatements(t, []string{
+		"create table stream1(id int, val varbinary(128), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table stream1",
+	})
+	engine.se.Reload(context.Background())
+
+	pos := masterPosition(t)
+	t.Logf("current position: %v", pos)
+	// Both mysql and mariadb have '-' in their gtids.
+	// Invent a GTID in the future.
+	index := strings.LastIndexByte(pos, '-')
+	num, err := strconv.Atoi(pos[index+1:])
+	require.NoError(t, err)
+	future := pos[:index+1] + fmt.Sprintf("%d", num+1)
+	t.Logf("future position: %v", future)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := make(chan []*binlogdatapb.VEvent)
+	go func() {
+		for range ch {
+		}
+	}()
+	defer close(ch)
+	err = vstream(ctx, t, future, nil, ch)
+	want := "is ahead of current position"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("err: %v, must contain %s", err, want)
+	}
 }
 
 func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, position string) {

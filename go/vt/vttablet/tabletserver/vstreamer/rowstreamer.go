@@ -290,6 +290,7 @@ func (rs *rowStreamer) startStreaming(conn *mysql.Conn) (string, error) {
 		return "", err
 	}
 
+	log.Infof("Streaming query: %v\n", rs.sendQuery)
 	if err := conn.ExecuteStreamFetch(rs.sendQuery); err != nil {
 		return "", err
 	}

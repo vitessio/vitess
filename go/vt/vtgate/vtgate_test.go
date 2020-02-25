@@ -29,6 +29,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
@@ -95,9 +96,7 @@ func TestVTGateBegin(t *testing.T) {
 
 	rpcVTGate.txConn.mode = vtgatepb.TransactionMode_SINGLE
 	got, err := rpcVTGate.Begin(context.Background(), true)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantSession := &vtgatepb.Session{
 		InTransaction: true,
 		SingleDb:      true,
@@ -114,9 +113,7 @@ func TestVTGateBegin(t *testing.T) {
 
 	rpcVTGate.txConn.mode = vtgatepb.TransactionMode_MULTI
 	got, err = rpcVTGate.Begin(context.Background(), true)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{
 		InTransaction: true,
 		SingleDb:      true,
@@ -126,9 +123,7 @@ func TestVTGateBegin(t *testing.T) {
 	}
 
 	got, err = rpcVTGate.Begin(context.Background(), false)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{
 		InTransaction: true,
 	}
@@ -138,9 +133,7 @@ func TestVTGateBegin(t *testing.T) {
 
 	rpcVTGate.txConn.mode = vtgatepb.TransactionMode_TWOPC
 	got, err = rpcVTGate.Begin(context.Background(), true)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{
 		InTransaction: true,
 		SingleDb:      true,
@@ -150,9 +143,7 @@ func TestVTGateBegin(t *testing.T) {
 	}
 
 	got, err = rpcVTGate.Begin(context.Background(), false)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{
 		InTransaction: true,
 	}
@@ -182,9 +173,7 @@ func TestVTGateCommit(t *testing.T) {
 		InTransaction: true,
 	}
 	err = rpcVTGate.Commit(context.Background(), false, session)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	rpcVTGate.txConn.mode = vtgatepb.TransactionMode_MULTI
 	session = &vtgatepb.Session{
@@ -199,33 +188,25 @@ func TestVTGateCommit(t *testing.T) {
 		InTransaction: true,
 	}
 	err = rpcVTGate.Commit(context.Background(), false, session)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	rpcVTGate.txConn.mode = vtgatepb.TransactionMode_TWOPC
 	session = &vtgatepb.Session{
 		InTransaction: true,
 	}
 	err = rpcVTGate.Commit(context.Background(), true, session)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	session = &vtgatepb.Session{
 		InTransaction: true,
 	}
 	err = rpcVTGate.Commit(context.Background(), false, session)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestVTGateRollbackNil(t *testing.T) {
 	err := rpcVTGate.Rollback(context.Background(), nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestVTGateExecute(t *testing.T) {
@@ -253,9 +234,7 @@ func TestVTGateExecute(t *testing.T) {
 	}
 
 	session, err := rpcVTGate.Begin(context.Background(), false)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !session.InTransaction {
 		t.Errorf("want true, got false")
 	}
@@ -1438,9 +1417,7 @@ func TestVTGateMessageAck(t *testing.T) {
 		Value: []byte("2"),
 	}}
 	count, err := rpcVTGate.MessageAck(context.Background(), ks, "msg", ids)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if count != 2 {
 		t.Errorf("MessageAck: %d, want 2", count)
 	}
@@ -1469,9 +1446,7 @@ func TestVTGateMessageAckKeyspaceIds(t *testing.T) {
 		},
 	}
 	count, err := rpcVTGate.MessageAckKeyspaceIds(context.Background(), ks, "msg", idKeyspaceIDs)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if count != 2 {
 		t.Errorf("MessageAck: %d, want 2", count)
 	}

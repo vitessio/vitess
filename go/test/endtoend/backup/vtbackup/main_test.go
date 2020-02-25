@@ -68,10 +68,17 @@ func TestMain(m *testing.M) {
 		}
 
 		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name: keyspaceName,
+		localCluster.Keyspaces = []cluster.Keyspace{
+			{
+				Name: keyspaceName,
+				Shards: []cluster.Shard{
+					{
+						Name: shardName,
+					},
+				},
+			},
 		}
-		localCluster.Keyspaces = append(localCluster.Keyspaces, *keyspace)
+		shard := &localCluster.Keyspaces[0].Shards[0]
 
 		// Create a new init_db.sql file that sets up passwords for all users.
 		// Then we use a db-credentials-file with the passwords.
@@ -87,10 +94,6 @@ func TestMain(m *testing.M) {
 
 		extraArgs := []string{"-db-credentials-file", dbCredentialFile}
 		commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)
-
-		shard := cluster.Shard{
-			Name: shardName,
-		}
 
 		master = localCluster.GetVttabletInstance("replica", 0, "")
 		replica1 = localCluster.GetVttabletInstance("replica", 0, "")

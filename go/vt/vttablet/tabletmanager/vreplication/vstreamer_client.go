@@ -103,7 +103,7 @@ func (vsClient *TabletVStreamerClient) Open(ctx context.Context) (err error) {
 	}
 	vsClient.isOpen = true
 
-	vsClient.tsQueryService, err = tabletconn.GetDialer()(vsClient.tablet, grpcclient.FailFast(false))
+	vsClient.tsQueryService, err = tabletconn.GetDialer()(vsClient.tablet, grpcclient.FailFast(true))
 	return err
 }
 

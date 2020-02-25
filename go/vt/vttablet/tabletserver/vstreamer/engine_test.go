@@ -81,16 +81,16 @@ func TestUpdateVSchema(t *testing.T) {
 
 	// We have to start at least one stream to start the vschema watcher.
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
+	cancel()
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match: "/.*/",
 		}},
 	}
-
-	_ = startStream(ctx, t, filter, "")
-	cancel()
+	// Stream should terminate immediately due to canceled context.
+	_ = engine.Stream(ctx, "current", filter, func(_ []*binlogdatapb.VEvent) error {
+		return nil
+	})
 
 	startCount := expectUpdateCount(t, 1)
 

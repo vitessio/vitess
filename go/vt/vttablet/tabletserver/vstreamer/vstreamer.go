@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -64,6 +65,7 @@ func NewVStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, 
 // TODO(sougou): find a better way for this.
 var vschemaUpdateCount sync2.AtomicInt64
 
+// vstreamer is for serving a single vreplication stream on the source side.
 type vstreamer struct {
 	ctx    context.Context
 	cancel func()
@@ -85,12 +87,31 @@ type vstreamer struct {
 }
 
 // streamerPlan extends the original plan to also include
-// the TableMap which is used to extract values from the binlog events.
+// the TableMap, which comes from the binlog. It's used
+// to extract values from the ROW events.
 type streamerPlan struct {
 	*Plan
 	TableMap *mysql.TableMap
 }
 
+// newVStreamer creates a new vstreamer.
+// cp: the mysql conn params.
+// se: the schema engine. The vstreamer uses it to convert the TableMap into field info.
+// startPos: a flavor compliant position to stream from. This can also contain the special
+//   value "current", which means start from the current position.
+// filter: the list of filtering rules. If a rule has a select expressinon for its filter,
+//   the select list can only reference direct columns. No other experssions are allowed.
+//   The select expression is allowed to contain the special 'keyspace_id()' function which
+//   will return the keyspace id of the row. Examples:
+//   "select * from t", same as an empty Filter,
+//   "select * from t where in_keyrange('-80')", same as "-80",
+//   "select * from t where in_keyrange(col1, 'hash', '-80')",
+//   "select col1, col2 from t where...",
+//   "select col1, keyspace_id() from t where...".
+//   Only "in_keyrange" expressions are supported in the where clause.
+//   Other constructs like joins, group by, etc. are not supported.
+// vschema: the current vschema. This value can later be changed through the SetVSchema method.
+// send: callback function to send events.
 func newVStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, startPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &vstreamer{
@@ -107,7 +128,7 @@ func newVStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, 
 	}
 }
 
-// SetVSchema updates all existing streams against the new vschema.
+// SetVSchema updates the vstreamer against the new vschema.
 func (vs *vstreamer) SetVSchema(vschema *localVSchema) {
 	// Since vs.Stream is a single-threaded loop. We just send an event to
 	// that thread, which helps us avoid mutexes to update the plans.
@@ -117,22 +138,29 @@ func (vs *vstreamer) SetVSchema(vschema *localVSchema) {
 	}
 }
 
+// Cancel stops the streaming.
 func (vs *vstreamer) Cancel() {
 	vs.cancel()
 }
 
-// Stream runs a single-threaded loop.
+// Stream streams binlog events.
 func (vs *vstreamer) Stream() error {
 	defer vs.cancel()
 
+	// Validate the request against the current position.
+	curPos, err := vs.currentPosition()
+	if err != nil {
+		return vterrors.Wrap(err, "could not obtain current position")
+	}
 	if vs.startPos == "current" {
-		if err := vs.useCurrentPosition(); err != nil {
-			return vterrors.Wrap(err, "could not obtain current position")
-		}
+		vs.pos = curPos
 	} else {
 		pos, err := mysql.DecodePosition(vs.startPos)
 		if err != nil {
 			return vterrors.Wrap(err, "could not decode position")
+		}
+		if !curPos.AtLeast(pos) {
+			return fmt.Errorf("requested position %v is ahead of current position %v", mysql.EncodePosition(pos), mysql.EncodePosition(curPos))
 		}
 		vs.pos = pos
 	}
@@ -157,23 +185,35 @@ func (vs *vstreamer) Stream() error {
 	return wrapError(err, vs.pos)
 }
 
-func (vs *vstreamer) useCurrentPosition() error {
-	conn, err := mysql.Connect(vs.ctx, vs.cp)
+func (vs *vstreamer) currentPosition() (mysql.Position, error) {
+	cp, err := dbconfigs.WithCredentials(vs.cp)
 	if err != nil {
-		return err
+		return mysql.Position{}, err
+	}
+	conn, err := mysql.Connect(vs.ctx, cp)
+	if err != nil {
+		return mysql.Position{}, err
 	}
 	defer conn.Close()
-	vs.pos, err = conn.MasterPosition()
-	return err
+	return conn.MasterPosition()
 }
 
+// parseEvents parses and sends events.
 func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.BinlogEvent) error {
 	// bufferAndTransmit uses bufferedEvents and curSize to buffer events.
 	var (
 		bufferedEvents []*binlogdatapb.VEvent
 		curSize        int
 	)
-	// Buffering only takes row lengths into consideration.
+	// Only the following patterns are possible:
+	// BEGIN->ROWs or Statements->GTID->COMMIT. In the case of large transactions, this can be broken into chunks.
+	// BEGIN->JOURNAL->GTID->COMMIT
+	// GTID->DDL
+	// GTID->OTHER
+	// HEARTBEAT is issued if there's inactivity, which is likely
+	// to heppend between one group of events and another.
+	//
+	// Buffering only takes row or statement lengths into consideration.
 	// Length of other events is considered negligible.
 	// If a new row event causes the packet size to be exceeded,
 	// all existing rows are sent without the new row.
@@ -182,9 +222,14 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 		switch vevent.Type {
 		case binlogdatapb.VEventType_GTID, binlogdatapb.VEventType_BEGIN, binlogdatapb.VEventType_FIELD, binlogdatapb.VEventType_JOURNAL:
 			// We never have to send GTID, BEGIN, FIELD events on their own.
+			// A JOURNAL event is always preceded by a BEGIN and followed by a COMMIT.
+			// So, we don't have to send it right away.
 			bufferedEvents = append(bufferedEvents, vevent)
 		case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER, binlogdatapb.VEventType_HEARTBEAT:
 			// COMMIT, DDL, OTHER and HEARTBEAT must be immediately sent.
+			// Although unlikely, it's possible to get a HEARTBEAT in the middle
+			// of a transaction. If so, we still send the partial transaction along
+			// with the heartbeat.
 			bufferedEvents = append(bufferedEvents, vevent)
 			vevents := bufferedEvents
 			bufferedEvents = nil
@@ -283,8 +328,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 	}
 }
 
+// parseEvent parses an event from the binlog and converts it to a list of VEvents.
 func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, error) {
-	// Validate the buffer before reading fields from it.
 	if !ev.IsValid() {
 		return nil, fmt.Errorf("can't parse binlog event: invalid data: %#v", ev)
 	}
@@ -424,6 +469,11 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		}
 	case ev.IsTableMap():
 		// This is very frequent. It precedes every row event.
+		// If it's the first time for a table, we generate a FIELD
+		// event, and also cache the plan. Subsequent TableMap events
+		// for that table id don't generate VEvents.
+		// A schema change will result in a change in table id, which
+		// will generate a new plan and FIELD event.
 		id := ev.TableID(vs.format)
 		if _, ok := vs.plans[id]; ok {
 			return nil, nil
@@ -433,6 +483,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			return nil, err
 		}
 		if tm.Database == "_vt" && tm.Name == "resharding_journal" {
+			// A journal is a special case that generates a JOURNAL event.
 			return nil, vs.buildJournalPlan(id, tm)
 		}
 		if tm.Database != "" && tm.Database != vs.cp.DbName {
@@ -489,6 +540,9 @@ func (vs *vstreamer) buildJournalPlan(id uint64, tm *mysql.TableMap) error {
 		Name:    "_vt.resharding_journal",
 		Columns: st.Columns[:len(tm.Types)],
 	}
+	// Build a normal table plan, which means, return all rows
+	// and columns as is. Special handling is done when we actually
+	// receive the row event. We'll build a JOURNAL event instead.
 	plan, err := buildREPlan(table, nil, "")
 	if err != nil {
 		return err
@@ -580,24 +634,27 @@ nextrow:
 			return nil, err
 		}
 		if !afterOK {
+			// This can happen if someone manually deleted rows.
 			continue
 		}
+		// Exclude events that don't match the db_name.
 		for i, fld := range plan.fields() {
-			switch fld.Name {
-			case "db_name":
-				if afterValues[i].ToString() != vs.cp.DbName {
-					continue nextrow
-				}
-			case "val":
-				journal := &binlogdatapb.Journal{}
-				if err := proto.UnmarshalText(afterValues[i].ToString(), journal); err != nil {
-					return nil, err
-				}
-				vevents = append(vevents, &binlogdatapb.VEvent{
-					Type:    binlogdatapb.VEventType_JOURNAL,
-					Journal: journal,
-				})
+			if fld.Name == "db_name" && afterValues[i].ToString() != vs.cp.DbName {
+				continue nextrow
 			}
+		}
+		for i, fld := range plan.fields() {
+			if fld.Name != "val" {
+				continue
+			}
+			journal := &binlogdatapb.Journal{}
+			if err := proto.UnmarshalText(afterValues[i].ToString(), journal); err != nil {
+				return nil, err
+			}
+			vevents = append(vevents, &binlogdatapb.VEvent{
+				Type:    binlogdatapb.VEventType_JOURNAL,
+				Journal: journal,
+			})
 		}
 	}
 	return vevents, nil

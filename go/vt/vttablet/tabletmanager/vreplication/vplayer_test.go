@@ -67,6 +67,7 @@ func TestPlayerStatementModeWithFilter(t *testing.T) {
 	// It does not work when filter is enabled
 	output := []string{
 		"begin",
+		"rollback",
 		"/update _vt.vreplication set message='filter rules are not supported for SBR",
 	}
 
@@ -1218,6 +1219,114 @@ func TestPlayerStopPos(t *testing.T) {
 		// Second update is from vreplicator.
 		"/update.*'Running'",
 		"/update.*'Stopped'.*already reached",
+	})
+}
+
+func TestPlayerStopAtOther(t *testing.T) {
+	t.Skip("This test was written to verify a bug fix, but is extremely flaky. Only a manual test is possible")
+
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table t1(id int, val varbinary(128), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val varbinary(128), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	// Insert a source row.
+	execStatements(t, []string{
+		"insert into t1 values(1, 'aaa')",
+	})
+	startPos := masterPosition(t)
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	query := binlogplayer.CreateVReplicationState("test", bls, startPos, binlogplayer.BlpStopped, vrepldb)
+	qr, err := playerEngine.Exec(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := uint32(qr.InsertID)
+	for q := range globalDBQueries {
+		if strings.HasPrefix(q, "insert into _vt.vreplication") {
+			break
+		}
+	}
+	defer func() {
+		if _, err := playerEngine.Exec(fmt.Sprintf("delete from _vt.vreplication where id = %d", id)); err != nil {
+			t.Fatal(err)
+		}
+		expectDeleteQueries(t)
+	}()
+
+	vconn := &realDBClient{nolog: true}
+	if err := vconn.Connect(); err != nil {
+		t.Error(err)
+	}
+	defer vconn.Close()
+
+	// Insert the same row on the target and lock it.
+	if _, err := vconn.ExecuteFetch("insert into t1 values(1, 'aaa')", 1); err != nil {
+		t.Error(err)
+	}
+	if _, err := vconn.ExecuteFetch("begin", 1); err != nil {
+		t.Error(err)
+	}
+	if _, err := vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1); err != nil {
+		t.Error(err)
+	}
+
+	// Start a VReplication where the first transaction updates the locked row.
+	// It will cause the apply to wait, which will cause the other two events
+	// to accumulate. The stop position will be on the grant.
+	// We're testing the behavior where an OTHER transaction is part of a batch,
+	// we have to commit its stop position correctly.
+	execStatements(t, []string{
+		"update t1 set val='ccc' where id=1",
+		"insert into t1 values(2, 'ddd')",
+		"grant select on *.* to 'vt_app'@'127.0.0.1'",
+	})
+	stopPos := masterPosition(t)
+	query = binlogplayer.StartVReplicationUntil(id, stopPos)
+	if _, err := playerEngine.Exec(query); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for the begin. The update will be blocked.
+	expectDBClientQueries(t, []string{
+		"/update.*'Running'",
+		// Second update is from vreplicator.
+		"/update.*'Running'",
+		"begin",
+	})
+
+	// Give time for the other two transactions to reach the relay log.
+	time.Sleep(100 * time.Millisecond)
+	_, _ = vconn.ExecuteFetch("rollback", 1)
+
+	// This is approximately the expected sequence of updates.
+	expectDBClientQueries(t, []string{
+		"update t1 set val='ccc' where id=1",
+		"/update _vt.vreplication set pos=",
+		"commit",
+		"begin",
+		"insert into t1(id,val) values (2,'ddd')",
+		"/update _vt.vreplication set pos=",
+		"commit",
+		fmt.Sprintf("/update _vt.vreplication set pos='%s'", stopPos),
+		"/update.*'Stopped'",
 	})
 }
 
