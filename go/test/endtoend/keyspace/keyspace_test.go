@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/proto/topodata"
@@ -137,7 +138,7 @@ func TestMain(m *testing.M) {
 
 func TestGetSrvKeyspaceNames(t *testing.T) {
 	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspaceNames", cell)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	assert.Contains(t, strings.Split(output, "\n"), keyspaceUnshardedName)
 	assert.Contains(t, strings.Split(output, "\n"), keyspaceShardedName)
 }
@@ -172,21 +173,21 @@ func TestGetSrvKeyspacePartitions(t *testing.T) {
 
 func TestShardNames(t *testing.T) {
 	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, keyspaceShardedName)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	var srvKeyspace topodata.SrvKeyspace
 
 	err = json.Unmarshal([]byte(output), &srvKeyspace)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 }
 
 func TestGetKeyspace(t *testing.T) {
 	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetKeyspace", keyspaceUnshardedName)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	var keyspace topodata.Keyspace
 
 	err = json.Unmarshal([]byte(output), &keyspace)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	assert.Equal(t, keyspace.ShardingColumnName, "keyspace_id")
 	assert.Equal(t, keyspace.ShardingColumnType, topodata.KeyspaceIdType(1))
@@ -199,11 +200,11 @@ func TestDeleteKeyspace(t *testing.T) {
 
 	// Can't delete keyspace if there are shards present.
 	err := clusterForKSTest.VtctlclientProcess.ExecuteCommand("DeleteKeyspace", "test_delete_keyspace")
-	assert.NotNil(t, err)
+	require.Error(t, err)
 
 	// Can't delete shard if there are tablets present.
 	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("DeleteShard", "-even_if_serving", "test_delete_keyspace/0")
-	assert.NotNil(t, err)
+	require.Error(t, err)
 
 	// Use recursive DeleteShard to remove tablets.
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("DeleteShard", "-even_if_serving", "-recursive", "test_delete_keyspace/0")
@@ -226,15 +227,15 @@ func TestDeleteKeyspace(t *testing.T) {
 
 	// Check that everything is gone.
 	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetKeyspace", "test_delete_keyspace")
-	assert.NotNil(t, err)
+	require.Error(t, err)
 	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShard", "test_delete_keyspace/0")
-	assert.NotNil(t, err)
+	require.Error(t, err)
 	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetTablet", "zone1-0000000100")
-	assert.NotNil(t, err)
+	require.Error(t, err)
 	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", cell, "test_delete_keyspace/0")
-	assert.NotNil(t, err)
+	require.Error(t, err)
 	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetSrvKeyspace", cell, "test_delete_keyspace")
-	assert.NotNil(t, err)
+	require.Error(t, err)
 }
 
 // TODO: Fix this test, not running in CI
@@ -278,13 +279,13 @@ func RemoveKeyspaceCell(t *testing.T) {
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetTablet", "zone1-0000000100")
 
 	err := clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetTablet", "zone2-0000000100")
-	assert.NotNil(t, err)
+	require.Error(t, err)
 
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetTablet", "zone2-0000000101")
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", "zone1", "test_delete_keyspace_removekscell/0")
 
 	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/0")
-	assert.NotNil(t, err)
+	require.Error(t, err)
 
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/1")
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetSrvKeyspace", "zone2", "test_delete_keyspace_removekscell")
@@ -300,10 +301,10 @@ func RemoveKeyspaceCell(t *testing.T) {
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", "zone1", "test_delete_keyspace_removekscell/0")
 
 	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/0")
-	assert.NotNil(t, err)
+	require.Error(t, err)
 
 	err = clusterForKSTest.VtctlclientProcess.ExecuteCommand("GetShardReplication", "zone2", "test_delete_keyspace_removekscell/1")
-	assert.NotNil(t, err)
+	require.Error(t, err)
 
 	// Clean up
 	_ = clusterForKSTest.VtctlclientProcess.ExecuteCommand("DeleteKeyspace", "-recursive", "test_delete_keyspace_removekscell")
@@ -381,10 +382,10 @@ func packKeyspaceID(keyspaceID uint64) []byte {
 
 func getSrvKeyspace(t *testing.T, cell string, ksname string) *topodata.SrvKeyspace {
 	output, err := clusterForKSTest.VtctlclientProcess.ExecuteCommandWithOutput("GetSrvKeyspace", cell, ksname)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	var srvKeyspace topodata.SrvKeyspace
 
 	err = json.Unmarshal([]byte(output), &srvKeyspace)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	return &srvKeyspace
 }

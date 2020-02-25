@@ -606,7 +606,12 @@ func (wr *Wrangler) plannedReparentShardLocked(ctx context.Context, ev *events.R
 		if err != nil || (ctx.Err() != nil && ctx.Err() == context.DeadlineExceeded) {
 			// If we fail to promote the new master, try to roll back to the
 			// original master before aborting.
-			undoCtx, undoCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+			// It is possible that we have used up the original context, or that
+			// not enough time is left on it before it times out.
+			// But at this point we really need to be able to Undo so as not to
+			// leave the cluster in a bad state.
+			// So we create a fresh context based on context.Background().
+			undoCtx, undoCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
 			defer undoCancel()
 			if err1 := wr.tmc.UndoDemoteMaster(undoCtx, oldMasterTabletInfo.Tablet); err1 != nil {
 				log.Warningf("Encountered error %v while trying to undo DemoteMaster", err1)
