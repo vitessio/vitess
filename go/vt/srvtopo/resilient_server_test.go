@@ -498,7 +498,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	ts.UpdateSrvKeyspace(context.Background(), "test_cell", "test_ks2", want)
 
 	ctx := context.Background()
-	names, err := rs.GetSrvKeyspaceNames(ctx, "test_cell")
+	names, err := rs.GetSrvKeyspaceNames(ctx, "test_cell", false)
 	if err != nil {
 		t.Errorf("GetSrvKeyspaceNames unexpected error %v", err)
 	}
@@ -523,7 +523,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	// elapses but before the TTL expires
 	start := time.Now()
 	for {
-		names, err = rs.GetSrvKeyspaceNames(ctx, "test_cell")
+		names, err = rs.GetSrvKeyspaceNames(ctx, "test_cell", false)
 		if err != nil {
 			t.Errorf("GetSrvKeyspaceNames unexpected error %v", err)
 		}
@@ -541,7 +541,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 
 	// Now wait for it to expire from cache
 	for {
-		_, err = rs.GetSrvKeyspaceNames(ctx, "test_cell")
+		_, err = rs.GetSrvKeyspaceNames(ctx, "test_cell", false)
 		if err != nil {
 			break
 		}
@@ -569,7 +569,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 
 	start = time.Now()
 	for {
-		names, err = rs.GetSrvKeyspaceNames(ctx, "test_cell")
+		names, err = rs.GetSrvKeyspaceNames(ctx, "test_cell", false)
 		if err == nil {
 			break
 		}
@@ -599,7 +599,7 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	time.Sleep(*srvTopoCacheTTL)
 
 	timeoutCtx, _ := context.WithTimeout(context.Background(), *srvTopoCacheRefresh*2)
-	_, err = rs.GetSrvKeyspaceNames(timeoutCtx, "test_cell")
+	_, err = rs.GetSrvKeyspaceNames(timeoutCtx, "test_cell", false)
 	wantErr := "timed out waiting for keyspace names"
 	if err == nil || err.Error() != wantErr {
 		t.Errorf("expected error '%v', got '%v'", wantErr, err.Error())
