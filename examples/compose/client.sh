@@ -25,4 +25,4 @@ if [[ "$OSTYPE" == "msys" ]]; then
 fi
 
 # This is a convenience script to run the client.go script
-exec $tty docker-compose exec ${CS:-vtgate} go run ${script:-/script/client.go} -server=vtgate:15999
+exec $tty docker-compose exec -u root ${CS:-vtgate} go run ${script:-/script/client.go} -server=vtgate:15999
