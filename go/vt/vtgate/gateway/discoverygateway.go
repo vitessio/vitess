@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -125,6 +125,8 @@ func createDiscoveryGateway(ctx context.Context, hc discovery.HealthCheck, serv 
 				log.Exitf("Cannot parse tablet_filters parameter: %v", err)
 			}
 			tr = fbs
+		} else if len(KeyspacesToWatch) > 0 {
+			tr = discovery.NewFilterByKeyspace(dg.hc, KeyspacesToWatch)
 		}
 
 		ctw := discovery.NewCellTabletsWatcher(ctx, topoServer, tr, c, *refreshInterval, *refreshKnownTablets, *topoReadConcurrency)
@@ -196,18 +198,6 @@ func (dg *discoveryGateway) WaitForTablets(ctx context.Context, tabletTypesToWai
 	}
 
 	return dg.tsc.WaitForAllServingTablets(ctx, targets)
-}
-
-// GetAggregateStats is part of the srvtopo.TargetStats interface.
-func (dg *discoveryGateway) GetAggregateStats(target *querypb.Target) (*querypb.AggregateStats, queryservice.QueryService, error) {
-	stats, err := dg.tsc.GetAggregateStats(target)
-	return stats, dg, err
-}
-
-// GetMasterCell is part of the srvtopo.TargetStats interface.
-func (dg *discoveryGateway) GetMasterCell(keyspace, shard string) (string, queryservice.QueryService, error) {
-	cell, err := dg.tsc.GetMasterCell(keyspace, shard)
-	return cell, dg, err
 }
 
 // Close shuts down underlying connections.

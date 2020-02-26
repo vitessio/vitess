@@ -1,4 +1,4 @@
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@ def execute_vtctl_command(vtctl_args, namespace='default', timeout_s=180):
     # Default to trying to use kvtctl.sh if a forwarded port cannot be found.
     os.environ['VITESS_NAME'] = namespace
     vtctl_cmd_args = (
-        [os.path.join(os.environ['VTTOP'], 'examples/kubernetes/kvtctl.sh')]
+        [os.path.join(os.environ['VTROOT'], 'examples/kubernetes/kvtctl.sh')]
         + vtctl_args)
 
   start_time = time.time()

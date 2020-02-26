@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,6 +28,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestRestart(t *testing.T) {
@@ -65,19 +67,13 @@ func testLaunch(t *testing.T) {
 	cmd2 := launchServer(t, port, 2)
 	defer cmd2.Process.Kill()
 	err = cmd1.Wait()
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	testPid(t, port, cmd2.Process.Pid)
 
 	err = syscall.Kill(cmd2.Process.Pid, syscall.SIGTERM)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	err = cmd2.Wait()
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func launchServer(t *testing.T, port string, num int) *exec.Cmd {

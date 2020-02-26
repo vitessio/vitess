@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,7 +33,7 @@ def main():
   parser.add_option(
       '-s', '--sql_file', help='File containing sql schema',
       default=os.path.join(
-          os.environ['VTTOP'], 'examples/kubernetes/create_test_table.sql'))
+          os.environ['VTROOT'], 'examples/kubernetes/create_test_table.sql'))
   logging.getLogger().setLevel(logging.INFO)
 
   options, _ = parser.parse_args()

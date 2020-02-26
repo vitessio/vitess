@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -60,3 +60,9 @@ function prepend_path() {
   # Return path variable unchanged.
   echo "$1"
 }
+
+function fail() {
+  echo "ERROR: $1"
+  exit 1
+}
+

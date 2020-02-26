@@ -1,3 +1,17 @@
+# Copyright 2019 The Vitess Authors.
+# 
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#     http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 FROM vitess/base AS base
 
 FROM debian:stretch-slim
@@ -11,9 +25,8 @@ RUN apt-get update && \
    rm -rf /var/lib/apt/lists/*
 
 # Set up Vitess environment (just enough to run pre-built Go binaries)
-ENV VTROOT /vt
+ENV VTROOT /vt/src/vitess.io/vitess
 ENV VTDATAROOT /vtdataroot
-ENV VTTOP /vt/src/vitess.io/vitess
 
 # Prepare directory structure.
 RUN mkdir -p /vt && \
@@ -36,13 +49,13 @@ COPY --from=base /vt/bin/vtworker /vt/bin/
 COPY --from=base /vt/bin/vtbackup /vt/bin/
 
 # copy web admin files
-COPY --from=base $VTTOP/web /vt/web/
+COPY --from=base $VTROOT/web /vt/web/
 
 # copy vitess config
-COPY --from=base $VTTOP/config/init_db.sql /vt/config/
+COPY --from=base $VTROOT/config/init_db.sql /vt/config/
 
 # my.cnf include files
-COPY --from=base $VTTOP/config/mycnf /vt/config/mycnf
+COPY --from=base $VTROOT/config/mycnf /vt/config/mycnf
 
 # add vitess user and add permissions
 RUN groupadd -r --gid 2000 vitess && useradd -r -g vitess --uid 1000 vitess && \

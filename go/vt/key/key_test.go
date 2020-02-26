@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -136,6 +136,107 @@ func TestEvenShardsKeyRange(t *testing.T) {
 		if !proto.Equal(got, kr) {
 			t.Errorf("EvenShardsKeyRange(%v, %v) != ParseKeyRangeParts(%v, %v): (%x, %x) != (%x, %x)", tc.i, tc.n, parts[0], parts[1], got.Start, got.End, kr.Start, kr.End)
 		}
+	}
+}
+
+func TestKeyRangeAdd(t *testing.T) {
+	testcases := []struct {
+		first  string
+		second string
+		out    string
+		ok     bool
+	}{{
+		first:  "",
+		second: "",
+		out:    "",
+		ok:     false,
+	}, {
+		first:  "",
+		second: "-80",
+		out:    "",
+		ok:     false,
+	}, {
+		first:  "-80",
+		second: "",
+		out:    "",
+		ok:     false,
+	}, {
+		first:  "",
+		second: "80-",
+		out:    "",
+		ok:     false,
+	}, {
+		first:  "80-",
+		second: "",
+		out:    "",
+		ok:     false,
+	}, {
+		first:  "80-",
+		second: "-40",
+		out:    "",
+		ok:     false,
+	}, {
+		first:  "-40",
+		second: "80-",
+		out:    "",
+		ok:     false,
+	}, {
+		first:  "-80",
+		second: "80-",
+		out:    "-",
+		ok:     true,
+	}, {
+		first:  "80-",
+		second: "-80",
+		out:    "-",
+		ok:     true,
+	}, {
+		first:  "-40",
+		second: "40-80",
+		out:    "-80",
+		ok:     true,
+	}, {
+		first:  "40-80",
+		second: "-40",
+		out:    "-80",
+		ok:     true,
+	}, {
+		first:  "40-80",
+		second: "80-c0",
+		out:    "40-c0",
+		ok:     true,
+	}, {
+		first:  "80-c0",
+		second: "40-80",
+		out:    "40-c0",
+		ok:     true,
+	}}
+	stringToKeyRange := func(spec string) *topodatapb.KeyRange {
+		if spec == "" {
+			return nil
+		}
+		parts := strings.Split(spec, "-")
+		if len(parts) != 2 {
+			panic("invalid spec")
+		}
+		kr, err := ParseKeyRangeParts(parts[0], parts[1])
+		if err != nil {
+			panic(err)
+		}
+		return kr
+	}
+	keyRangeToString := func(kr *topodatapb.KeyRange) string {
+		if kr == nil {
+			return ""
+		}
+		return KeyRangeString(kr)
+	}
+	for _, tcase := range testcases {
+		first := stringToKeyRange(tcase.first)
+		second := stringToKeyRange(tcase.second)
+		out, ok := KeyRangeAdd(first, second)
+		assert.Equal(t, tcase.out, keyRangeToString(out))
+		assert.Equal(t, tcase.ok, ok)
 	}
 }
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
@@ -36,9 +37,7 @@ func TestStreamSQLUnsharded(t *testing.T) {
 
 	sql := "stream * from user_msgs"
 	result, err := executorStreamMessages(executor, sql)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantResult := sandboxconn.StreamRowResult
 	if !result.Equal(wantResult) {
 		t.Errorf("result: %+v, want %+v", result, wantResult)
@@ -62,9 +61,7 @@ func TestStreamSQLSharded(t *testing.T) {
 
 	sql := "stream * from sharded_user_msgs"
 	result, err := executorStreamMessages(executor, sql)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantResult := &sqltypes.Result{
 		Fields: sandboxconn.SingleRowResult.Fields,
 		Rows: [][]sqltypes.Value{

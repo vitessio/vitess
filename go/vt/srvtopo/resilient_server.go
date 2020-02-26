@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -211,11 +211,19 @@ func NewResilientServer(base *topo.Server, counterPrefix string) *ResilientServe
 		log.Fatalf("srv_topo_cache_refresh must be less than or equal to srv_topo_cache_ttl")
 	}
 
+	var metric string
+
+	if counterPrefix == "" {
+		metric = counterPrefix + "Counts"
+	} else {
+		metric = ""
+	}
+
 	return &ResilientServer{
 		topoServer:   base,
 		cacheTTL:     *srvTopoCacheTTL,
 		cacheRefresh: *srvTopoCacheRefresh,
-		counts:       stats.NewCountersWithSingleLabel(counterPrefix+"Counts", "Resilient srvtopo server operations", "type"),
+		counts:       stats.NewCountersWithSingleLabel(metric, "Resilient srvtopo server operations", "type"),
 
 		srvKeyspaceNamesCache: make(map[string]*srvKeyspaceNamesEntry),
 		srvKeyspaceCache:      make(map[string]*srvKeyspaceEntry),

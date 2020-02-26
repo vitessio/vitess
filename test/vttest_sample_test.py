@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -82,9 +82,8 @@ class TestMysqlctl(unittest.TestCase):
             '--port', str(port),
             '--proto_topo', text_format.MessageToString(topology,
                                                         as_one_line=True),
-            '--schema_dir', os.path.join(environment.vttop, 'test',
+            '--schema_dir', os.path.join(environment.vtroot, 'test',
                                          'vttest_schema'),
-            '--web_dir', environment.vttop + '/web/vtctld',
            ]
     sp = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
     config = json.loads(sp.stdout.readline())

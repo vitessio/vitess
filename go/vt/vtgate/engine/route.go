@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -65,7 +65,7 @@ type Route struct {
 	FieldQuery string
 
 	// Vindex specifies the vindex to be used.
-	Vindex vindexes.Vindex
+	Vindex vindexes.SingleColumn
 	// Values specifies the vindex values to use for routing.
 	Values []sqltypes.PlanValue
 
@@ -84,6 +84,9 @@ type Route struct {
 
 	// ScatterErrorsAsWarnings is true if results should be returned even if some shards have an error
 	ScatterErrorsAsWarnings bool
+
+	// Route does not take inputs
+	noInputs
 }
 
 // NewSimpleRoute creates a Route with the bare minimum of parameters.
@@ -331,7 +334,7 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 		})
 	}
 
-	return mergeSort(vcursor, route.Query, route.OrderBy, rss, bvs, func(qr *sqltypes.Result) error {
+	return MergeSort(vcursor, route.Query, route.OrderBy, rss, bvs, func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(route.TruncateColumnCount))
 	})
 }
@@ -463,7 +466,7 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 	return out, err
 }
 
-func resolveSingleShard(vcursor VCursor, vindex vindexes.Vindex, keyspace *vindexes.Keyspace, vindexKey sqltypes.Value) (*srvtopo.ResolvedShard, []byte, error) {
+func resolveSingleShard(vcursor VCursor, vindex vindexes.SingleColumn, keyspace *vindexes.Keyspace, vindexKey sqltypes.Value) (*srvtopo.ResolvedShard, []byte, error) {
 	destinations, err := vindex.Map(vcursor, []sqltypes.Value{vindexKey})
 	if err != nil {
 		return nil, nil, err

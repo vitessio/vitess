@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -84,7 +84,7 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 		}
 		originalType = tablet.Type
 		// update our type to BACKUP
-		if _, err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topodatapb.TabletType_BACKUP); err != nil {
+		if _, err := topotools.ChangeType(ctx, agent.TopoServer, tablet.Alias, topodatapb.TabletType_BACKUP, nil); err != nil {
 			return err
 		}
 
@@ -97,9 +97,20 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
 	// now we can run the backup
-	dir := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
-	name := fmt.Sprintf("%v.%v", time.Now().UTC().Format("2006-01-02.150405"), topoproto.TabletAliasString(tablet.Alias))
-	returnErr := mysqlctl.Backup(ctx, agent.Cnf, agent.MysqlDaemon, l, dir, name, concurrency, agent.hookExtraEnv())
+	backupParams := mysqlctl.BackupParams{
+		Cnf:          agent.Cnf,
+		Mysqld:       agent.MysqlDaemon,
+		Logger:       l,
+		Concurrency:  concurrency,
+		HookExtraEnv: agent.hookExtraEnv(),
+		TopoServer:   agent.TopoServer,
+		Keyspace:     tablet.Keyspace,
+		Shard:        tablet.Shard,
+		TabletAlias:  topoproto.TabletAliasString(tablet.Alias),
+		BackupTime:   time.Now(),
+	}
+
+	returnErr := mysqlctl.Backup(ctx, backupParams)
 
 	if engine.ShouldDrainForBackup() {
 		bgCtx := context.Background()
@@ -107,8 +118,9 @@ func (agent *ActionAgent) Backup(ctx context.Context, concurrency int, logger lo
 		// context. It is also possible that the context already timed out during the
 		// above call to Backup. Thus we use the background context to get through to the finish.
 
-		// change our type back to the original value
-		_, err = topotools.ChangeType(bgCtx, agent.TopoServer, tablet.Alias, originalType)
+		// Change our type back to the original value.
+		// Original type could be master so pass in a real value for masterTermStartTime
+		_, err = topotools.ChangeType(bgCtx, agent.TopoServer, tablet.Alias, originalType, tablet.Tablet.MasterTermStartTime)
 		if err != nil {
 			// failure in changing the topology type is probably worse,
 			// so returning that (we logged the snapshot error anyway)

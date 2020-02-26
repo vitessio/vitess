@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -46,16 +46,21 @@ const (
 
 // AuthServerStatic implements AuthServer using a static configuration.
 type AuthServerStatic struct {
-	// Method can be set to:
+	file, jsonConfig string
+	reloadInterval   time.Duration
+	// method can be set to:
 	// - MysqlNativePassword
 	// - MysqlClearPassword
 	// - MysqlDialog
 	// It defaults to MysqlNativePassword.
-	Method string
-	// This mutex helps us prevent data races between the multiple updates of Entries.
+	method string
+	// This mutex helps us prevent data races between the multiple updates of entries.
 	mu sync.Mutex
-	// Entries contains the users, passwords and user data.
-	Entries map[string][]*AuthServerStaticEntry
+	// entries contains the users, passwords and user data.
+	entries map[string][]*AuthServerStaticEntry
+
+	sigChan chan os.Signal
+	ticker  *time.Ticker
 }
 
 // AuthServerStaticEntry stores the values for a given user.
@@ -92,102 +97,104 @@ func InitAuthServerStatic() {
 	}
 
 	// Create and register auth server.
-	RegisterAuthServerStaticFromParams(*mysqlAuthServerStaticFile, *mysqlAuthServerStaticString)
-}
-
-// NewAuthServerStatic returns a new empty AuthServerStatic.
-func NewAuthServerStatic() *AuthServerStatic {
-	return &AuthServerStatic{
-		Method:  MysqlNativePassword,
-		Entries: make(map[string][]*AuthServerStaticEntry),
-	}
+	RegisterAuthServerStaticFromParams(*mysqlAuthServerStaticFile, *mysqlAuthServerStaticString, *mysqlAuthServerStaticReloadInterval)
 }
 
 // RegisterAuthServerStaticFromParams creates and registers a new
 // AuthServerStatic, loaded for a JSON file or string. If file is set,
 // it uses file. Otherwise, load the string. It log.Exits out in case
 // of error.
-func RegisterAuthServerStaticFromParams(file, str string) {
-	authServerStatic := NewAuthServerStatic()
-
-	authServerStatic.loadConfigFromParams(file, str)
-
-	if len(authServerStatic.Entries) <= 0 {
+func RegisterAuthServerStaticFromParams(file, jsonConfig string, reloadInterval time.Duration) {
+	authServerStatic := NewAuthServerStatic(file, jsonConfig, reloadInterval)
+	if len(authServerStatic.entries) <= 0 {
 		log.Exitf("Failed to populate entries from file: %v", file)
 	}
-	authServerStatic.installSignalHandlers()
-
-	// And register the server.
 	RegisterAuthServerImpl("static", authServerStatic)
 }
 
-func (a *AuthServerStatic) loadConfigFromParams(file, str string) {
-	jsonConfig := []byte(str)
-	if file != "" {
-		data, err := ioutil.ReadFile(file)
+// NewAuthServerStatic returns a new empty AuthServerStatic.
+func NewAuthServerStatic(file, jsonConfig string, reloadInterval time.Duration) *AuthServerStatic {
+	a := &AuthServerStatic{
+		file:           file,
+		jsonConfig:     jsonConfig,
+		reloadInterval: reloadInterval,
+		method:         MysqlNativePassword,
+		entries:        make(map[string][]*AuthServerStaticEntry),
+	}
+	a.reload()
+	a.installSignalHandlers()
+	return a
+}
+
+func (a *AuthServerStatic) reload() {
+	jsonBytes := []byte(a.jsonConfig)
+	if a.file != "" {
+		data, err := ioutil.ReadFile(a.file)
 		if err != nil {
 			log.Errorf("Failed to read mysql_auth_server_static_file file: %v", err)
 			return
 		}
-		jsonConfig = data
+		jsonBytes = data
 	}
 
 	entries := make(map[string][]*AuthServerStaticEntry)
-	if err := parseConfig(jsonConfig, &entries); err != nil {
+	if err := parseConfig(jsonBytes, &entries); err != nil {
 		log.Errorf("Error parsing auth server config: %v", err)
 		return
 	}
 
 	a.mu.Lock()
-	a.Entries = entries
+	a.entries = entries
 	a.mu.Unlock()
 }
 
 func (a *AuthServerStatic) installSignalHandlers() {
-	if *mysqlAuthServerStaticFile == "" {
+	if a.file == "" {
 		return
 	}
 
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGHUP)
+	a.sigChan = make(chan os.Signal, 1)
+	signal.Notify(a.sigChan, syscall.SIGHUP)
 	go func() {
-		for range sigChan {
-			a.loadConfigFromParams(*mysqlAuthServerStaticFile, "")
+		for range a.sigChan {
+			a.reload()
 		}
 	}()
 
 	// If duration is set, it will reload configuration every interval
-	if *mysqlAuthServerStaticReloadInterval > 0 {
-		ticker := time.NewTicker(*mysqlAuthServerStaticReloadInterval)
+	if a.reloadInterval > 0 {
+		a.ticker = time.NewTicker(a.reloadInterval)
 		go func() {
-			for {
-				select {
-				case <-ticker.C:
-					if *mysqlAuthServerStaticReloadInterval <= 0 {
-						ticker.Stop()
-						return
-					}
-					sigChan <- syscall.SIGHUP
-				}
+			for range a.ticker.C {
+				a.sigChan <- syscall.SIGHUP
 			}
 		}()
 	}
 }
 
-func parseConfig(jsonConfig []byte, config *map[string][]*AuthServerStaticEntry) error {
-	decoder := json.NewDecoder(bytes.NewReader(jsonConfig))
+func (a *AuthServerStatic) close() {
+	if a.ticker != nil {
+		a.ticker.Stop()
+	}
+	if a.sigChan != nil {
+		signal.Stop(a.sigChan)
+	}
+}
+
+func parseConfig(jsonBytes []byte, config *map[string][]*AuthServerStaticEntry) error {
+	decoder := json.NewDecoder(bytes.NewReader(jsonBytes))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(config); err != nil {
 		// Couldn't parse, will try to parse with legacy config
-		return parseLegacyConfig(jsonConfig, config)
+		return parseLegacyConfig(jsonBytes, config)
 	}
 	return validateConfig(*config)
 }
 
-func parseLegacyConfig(jsonConfig []byte, config *map[string][]*AuthServerStaticEntry) error {
+func parseLegacyConfig(jsonBytes []byte, config *map[string][]*AuthServerStaticEntry) error {
 	// legacy config doesn't have an array
 	legacyConfig := make(map[string]*AuthServerStaticEntry)
-	decoder := json.NewDecoder(bytes.NewReader(jsonConfig))
+	decoder := json.NewDecoder(bytes.NewReader(jsonBytes))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&legacyConfig); err != nil {
 		return err
@@ -212,7 +219,7 @@ func validateConfig(config map[string][]*AuthServerStaticEntry) error {
 
 // AuthMethod is part of the AuthServer interface.
 func (a *AuthServerStatic) AuthMethod(user string) (string, error) {
-	return a.Method, nil
+	return a.method, nil
 }
 
 // Salt is part of the AuthServer interface.
@@ -223,7 +230,7 @@ func (a *AuthServerStatic) Salt() ([]byte, error) {
 // ValidateHash is part of the AuthServer interface.
 func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse []byte, remoteAddr net.Addr) (Getter, error) {
 	a.mu.Lock()
-	entries, ok := a.Entries[user]
+	entries, ok := a.entries[user]
 	a.mu.Unlock()
 
 	if !ok {
@@ -248,17 +255,17 @@ func (a *AuthServerStatic) ValidateHash(salt []byte, user string, authResponse [
 }
 
 // Negotiate is part of the AuthServer interface.
-// It will be called if Method is anything else than MysqlNativePassword.
+// It will be called if method is anything else than MysqlNativePassword.
 // We only recognize MysqlClearPassword and MysqlDialog here.
 func (a *AuthServerStatic) Negotiate(c *Conn, user string, remoteAddr net.Addr) (Getter, error) {
 	// Finish the negotiation.
-	password, err := AuthServerNegotiateClearOrDialog(c, a.Method)
+	password, err := AuthServerNegotiateClearOrDialog(c, a.method)
 	if err != nil {
 		return nil, err
 	}
 
 	a.mu.Lock()
-	entries, ok := a.Entries[user]
+	entries, ok := a.entries[user]
 	a.mu.Unlock()
 
 	if !ok {

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,6 +24,10 @@ import (
 	"path"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/vt/tlstest"
+
+	"github.com/coreos/etcd/pkg/transport"
 
 	"golang.org/x/net/context"
 
@@ -87,6 +91,130 @@ func startEtcd(t *testing.T) (*exec.Cmd, string, string) {
 	}
 
 	return cmd, dataDir, clientAddr
+}
+
+// startEtcdWithTLS starts an etcd subprocess with TLS setup, and waits for it to be ready.
+func startEtcdWithTLS(t *testing.T) (string, *tlstest.ClientServerKeyPairs, func()) {
+	// Create a temporary directory.
+	dataDir, err := ioutil.TempDir("", "etcd")
+	if err != nil {
+		t.Fatalf("cannot create tempdir: %v", err)
+	}
+
+	// Get our two ports to listen to.
+	port := testfiles.GoVtTopoEtcd2topoPort
+	name := "vitess_unit_test"
+	clientAddr := fmt.Sprintf("https://localhost:%v", port+2)
+	peerAddr := fmt.Sprintf("https://localhost:%v", port+3)
+	initialCluster := fmt.Sprintf("%v=%v", name, peerAddr)
+
+	certs := tlstest.CreateClientServerCertPairs(dataDir)
+
+	cmd := exec.Command("etcd",
+		"-name", name,
+		"-advertise-client-urls", clientAddr,
+		"-initial-advertise-peer-urls", peerAddr,
+		"-listen-client-urls", clientAddr,
+		"-listen-peer-urls", peerAddr,
+		"-initial-cluster", initialCluster,
+		"-cert-file", certs.ServerCert,
+		"-key-file", certs.ServerKey,
+		"-trusted-ca-file", certs.ClientCA,
+		"-peer-trusted-ca-file", certs.ClientCA,
+		"-peer-cert-file", certs.ServerCert,
+		"-peer-key-file", certs.ServerKey,
+		"-client-cert-auth",
+		"-data-dir", dataDir)
+
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+	err = cmd.Start()
+	if err != nil {
+		t.Fatalf("failed to start etcd: %v", err)
+	}
+
+	// Safe now to build up TLS info.
+	tlsInfo := transport.TLSInfo{
+		CertFile:      certs.ClientCert,
+		KeyFile:       certs.ClientKey,
+		TrustedCAFile: certs.ServerCA,
+	}
+
+	tlsConfig, err := tlsInfo.ClientConfig()
+
+	var cli *clientv3.Client
+	// Create client
+	start := time.Now()
+	for {
+		// Create a client to connect to the created etcd.
+		cli, err = clientv3.New(clientv3.Config{
+			Endpoints:   []string{clientAddr},
+			TLS:         tlsConfig,
+			DialTimeout: 5 * time.Second,
+		})
+		if err == nil {
+			break
+		}
+		t.Logf("error establishing client for etcd tls test: %v", err)
+		if time.Since(start) > 60*time.Second {
+			t.Fatalf("failed to start client for etcd tls test in time")
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	defer cli.Close()
+
+	// Wait until we can list "/", or timeout.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	start = time.Now()
+	for {
+		if _, err := cli.Get(ctx, "/"); err == nil {
+			break
+		}
+		if time.Since(start) > 60*time.Second {
+			t.Fatalf("failed to start etcd daemon in time")
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	stopEtcd := func() {
+		cmd.Process.Kill()
+		cmd.Wait()
+		os.RemoveAll(dataDir)
+	}
+
+	return clientAddr, &certs, stopEtcd
+}
+
+func TestEtcd2TLS(t *testing.T) {
+	// Start a single etcd in the background.
+	clientAddr, certs, stopEtcd := startEtcdWithTLS(t)
+	defer stopEtcd()
+
+	testIndex := 0
+	testRoot := fmt.Sprintf("/test-%v", testIndex)
+
+	// Create the server on the new root.
+	server, err := NewServerWithOpts(clientAddr, testRoot, certs.ClientCert, certs.ClientKey, certs.ServerCA)
+	if err != nil {
+		t.Fatalf("NewServerWithOpts failed: %v", err)
+	}
+	defer server.Close()
+
+	testCtx := context.Background()
+	testKey := "testkey"
+	testVal := "testval"
+	_, err = server.Create(testCtx, testKey, []byte(testVal))
+	if err != nil {
+		t.Fatalf("Failed to set key value pair: %v", err)
+	}
+	val, _, err := server.Get(testCtx, testKey)
+	if err != nil {
+		t.Fatalf("Failed to retrieve value at key we just set: %v", err)
+	}
+	if string(val) != testVal {
+		t.Fatalf("Value returned doesn't match %s, err: %v", testVal, err)
+	}
 }
 
 func TestEtcd2Topo(t *testing.T) {

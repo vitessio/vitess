@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -36,6 +36,11 @@ type PulloutSubquery struct {
 	HasValues      string
 	Subquery       Primitive
 	Underlying     Primitive
+}
+
+// Inputs returns the input primitives for this join
+func (ps *PulloutSubquery) Inputs() []Primitive {
+	return []Primitive{ps.Subquery, ps.Underlying}
 }
 
 // RouteType returns a description of the query routing type used by the primitive

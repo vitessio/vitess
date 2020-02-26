@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -118,6 +118,7 @@ func NewTxEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *
 		config.FoundRowsPoolSize,
 		config.TxPoolPrefillParallelism,
 		time.Duration(config.TransactionTimeout*1e9),
+		time.Duration(config.TxPoolTimeout*1e9),
 		time.Duration(config.IdleTimeout*1e9),
 		config.TxPoolWaiterCap,
 		checker,

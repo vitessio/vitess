@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -37,8 +37,6 @@ import (
 )
 
 var (
-	_ = flag.String("gcs_backup_storage_project", "", "This flag is unused and deprecated. It will be removed entirely in a future release.")
-
 	// bucket is where the backups will go.
 	bucket = flag.String("gcs_backup_storage_bucket", "", "Google Cloud Storage bucket to use for backups")
 

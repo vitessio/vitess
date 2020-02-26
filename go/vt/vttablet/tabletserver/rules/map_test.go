@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -136,7 +136,7 @@ func TestMapGetSetQueryRules(t *testing.T) {
 		t.Errorf("Failed to set custom Rules: %s", err)
 	}
 
-	// Test if we can successfully retrive rules that've been set
+	// Test if we can successfully retrieve rules that've been set
 	qrs, err = qri.Get(blacklistQueryRules)
 	if err != nil {
 		t.Errorf("GetRules failed to retrieve blacklistQueryRules that has been set: %s", err)

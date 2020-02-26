@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -198,7 +198,7 @@ func (tc *legacySplitCloneTestCase) setUp(v3 bool) {
 		tc.rightMasterFakeDb.AddExpectedQuery("INSERT INTO `vt_ks`.`table1` (`id`, `msg`, `keyspace_id`) VALUES (*", nil)
 	}
 
-	// Fake stream health reponses because vtworker needs them to find the master.
+	// Fake stream health responses because vtworker needs them to find the master.
 	tc.leftMasterQs = fakes.NewStreamHealthQueryService(leftMaster.Target())
 	tc.leftMasterQs.AddDefaultHealthResponse()
 	tc.leftReplicaQs = fakes.NewStreamHealthQueryService(leftReplica.Target())

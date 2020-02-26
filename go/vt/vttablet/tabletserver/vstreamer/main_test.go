@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -49,7 +49,7 @@ func TestMain(m *testing.M) {
 		// engine cannot be initialized in testenv because it introduces
 		// circular dependencies.
 		engine = NewEngine(env.SrvTopo, env.SchemaEngine)
-		engine.InitDBConfig(env.Dbcfgs)
+		engine.InitDBConfig(env.Dbcfgs.DbaWithDB())
 		engine.Open(env.KeyspaceName, env.Cells[0])
 		defer engine.Close()
 

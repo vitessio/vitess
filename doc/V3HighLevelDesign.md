@@ -641,7 +641,7 @@ All other operations are considered ‘cheap’ because they can be applied as t
 
 ## Preserving the original representation
 
-In the case of VTGate, the ‘Route’ operation is capable of performing all 9 functions, as long as all the rows needed to fulfil the query reside in a single database. However, those functions have to be expressed as an SQL query. Most often, the original query could just be passed-through to a single shard. So, the one important question is: If we converted a query to its relational representation, can we then convert it back to the original query? The answer is no, or at least not trivially; The relational operators don’t always map one-to-one with the constructs of an SQL statement. Here’s a specific example:
+In the case of VTGate, the ‘Route’ operation is capable of performing all 9 functions, as long as all the rows needed to fulfill the query reside in a single database. However, those functions have to be expressed as an SQL query. Most often, the original query could just be passed-through to a single shard. So, the one important question is: If we converted a query to its relational representation, can we then convert it back to the original query? The answer is no, or at least not trivially; The relational operators don’t always map one-to-one with the constructs of an SQL statement. Here’s a specific example:
 
 `select count(*), a+1, b from t group by a+1, b`
 
@@ -782,7 +782,7 @@ Recapitulating what we’ve covered so far:
 
 Once we start allowing joins and subqueries, we have a whole bunch of table aliases and relationships to deal with. We have to contend with name clashes, self-joins, as well as scoping rules. In a way, the vschema has acted as a static symbol table so far. But that’s not going to be enough any more.
 
-The core of the symbol table will contain a map whose key will be a table alias, and the elements will be [similar to the table in vschema](https://github.com/vitessio/vitess/blob/master/go/vt/vtgate/planbuilder/schema.go#L22). However, it will also contain a column list that will be built as the query is parsed.
+The core of the symbol table will contain a map whose key will be a table alias, and the elements will be [similar to the table in vschema](https://github.com/vitessio/vitess/blob/0b3de7c4a2de8daec545f040639b55a835361685/go/vt/vtgate/vindexes/vschema.go#L82). However, it will also contain a column list that will be built as the query is parsed.
 
 ### A simple example
 

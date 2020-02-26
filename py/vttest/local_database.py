@@ -1,4 +1,4 @@
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -32,12 +32,11 @@ class LocalDatabase(object):
                schema_dir,
                mysql_only,
                init_data_options,
-               web_dir=None,
                default_schema_dir=None,
                extra_my_cnf=None,
-               web_dir2=None,
                snapshot_file=None,
-               charset='utf8'):
+               charset='utf8',
+               mysql_server_bind_address=None):
     """Initializes an object of this class.
 
     Args:
@@ -50,27 +49,23 @@ class LocalDatabase(object):
           options configuring populating the database with initial random data.
           If the value is 'None' then the database will not be initialized
           with random data.
-      web_dir: see the documentation for the corresponding command line
-          flag in run_local_database.py
       default_schema_dir: a directory to use if no keyspace is found in the
           schema_dir directory.
       extra_my_cnf: additional cnf file to use for the EXTRA_MY_CNF var.
-      web_dir2: see the documentation for the corresponding command line
-          flag in run_local_database.py
       snapshot_file: A MySQL DB snapshot file.
       charset: MySQL charset.
+      mysql_server_bind_address: MySQL server bind address.
     """
 
     self.topology = topology
     self.schema_dir = schema_dir
     self.mysql_only = mysql_only
     self.init_data_options = init_data_options
-    self.web_dir = web_dir
     self.default_schema_dir = default_schema_dir
     self.extra_my_cnf = extra_my_cnf
-    self.web_dir2 = web_dir2
     self.snapshot_file = snapshot_file
     self.charset = charset
+    self.mysql_server_bind_address = mysql_server_bind_address
 
   def setup(self):
     """Create a MySQL instance and all Vitess processes."""
@@ -91,8 +86,7 @@ class LocalDatabase(object):
 
     vt_processes.start_vt_processes(self.directory, self.topology,
                                     self.mysql_db, self.schema_dir,
-                                    charset=self.charset, web_dir=self.web_dir,
-                                    web_dir2=self.web_dir2)
+                                    charset=self.charset, mysql_server_bind_address=self.mysql_server_bind_address)
 
   def teardown(self):
     """Kill all Vitess processes and wait for them to end.

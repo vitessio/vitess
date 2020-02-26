@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -34,4 +34,29 @@ message ExecuteVtctlCommandRequest {
 // ExecuteVtctlCommandResponse is streamed back by ExecuteVtctlCommand.
 message ExecuteVtctlCommandResponse {
   logutil.Event event = 1;
+}
+
+// TableMaterializeSttings contains the settings for one table.
+message TableMaterializeSettings {
+  string target_table = 1;
+  // source_expression is a select statement.
+  string source_expression = 2;
+  // create_ddl contains the DDL to create the target table.
+  // If empty, the target table must already exist.
+  // if "copy", the target table DDL is the same as the source table.
+  string create_ddl = 3;
+}
+
+// MaterializeSettings contains the settings for the Materialize command.
+message MaterializeSettings {
+  // workflow is the name of the workflow.
+  string workflow = 1;
+  string source_keyspace = 2;
+  string target_keyspace = 3;
+  // stop_after_copy specifies if vreplication should be stopped after copying.
+  bool stop_after_copy = 4;
+  repeated TableMaterializeSettings table_settings = 5;
+  // optional parameters.
+  string cell = 6;
+  string tablet_types = 7;
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -34,11 +34,19 @@ We follow these conventions within this package:
 package etcd2topo
 
 import (
+	"flag"
 	"strings"
 	"time"
 
 	"github.com/coreos/etcd/clientv3"
+	"github.com/coreos/etcd/pkg/transport"
 	"vitess.io/vitess/go/vt/topo"
+)
+
+var (
+	clientCertPath = flag.String("topo_etcd_tls_cert", "", "path to the client cert to use to connect to the etcd topo server, requires topo_etcd_tls_key, enables TLS")
+	clientKeyPath  = flag.String("topo_etcd_tls_key", "", "path to the client key to use to connect to the etcd topo server, enables TLS")
+	serverCaPath   = flag.String("topo_etcd_tls_ca", "", "path to the ca to use to validate the server cert when connecting to the etcd topo server")
 )
 
 // Factory is the consul topo.Factory implementation.
@@ -71,12 +79,31 @@ func (s *Server) Close() {
 	s.cli = nil
 }
 
-// NewServer returns a new etcdtopo.Server.
-func NewServer(serverAddr, root string) (*Server, error) {
-	cli, err := clientv3.New(clientv3.Config{
+func NewServerWithOpts(serverAddr, root, certPath, keyPath, caPath string) (*Server, error) {
+	// TODO: Rename this to NewServer and change NewServer to a name that signifies it uses the process-wide TLS settings.
+
+	config := clientv3.Config{
 		Endpoints:   strings.Split(serverAddr, ","),
 		DialTimeout: 5 * time.Second,
-	})
+	}
+
+	// If TLS is enabled, attach TLS config info.
+	if certPath != "" && keyPath != "" {
+		// Safe now to build up TLS info.
+		tlsInfo := transport.TLSInfo{
+			CertFile:      certPath,
+			KeyFile:       keyPath,
+			TrustedCAFile: caPath,
+		}
+
+		tlsConfig, err := tlsInfo.ClientConfig()
+		if err != nil {
+			return nil, err
+		}
+		config.TLS = tlsConfig
+	}
+
+	cli, err := clientv3.New(config)
 	if err != nil {
 		return nil, err
 	}
@@ -85,6 +112,13 @@ func NewServer(serverAddr, root string) (*Server, error) {
 		cli:  cli,
 		root: root,
 	}, nil
+}
+
+// NewServer returns a new etcdtopo.Server.
+func NewServer(serverAddr, root string) (*Server, error) {
+	// TODO: Rename this to a name to signifies this function uses the process-wide TLS settings.
+
+	return NewServerWithOpts(serverAddr, root, *clientCertPath, *clientKeyPath, *serverCaPath)
 }
 
 func init() {

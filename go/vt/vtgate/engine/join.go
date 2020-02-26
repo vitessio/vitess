@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -169,6 +169,11 @@ func (jn *Join) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVari
 	}
 	result.Fields = joinFields(lresult.Fields, rresult.Fields, jn.Cols)
 	return result, nil
+}
+
+// Inputs returns the input primitives for this join
+func (jn *Join) Inputs() []Primitive {
+	return []Primitive{jn.Left, jn.Right}
 }
 
 func joinFields(lfields, rfields []*querypb.Field, cols []int) []*querypb.Field {

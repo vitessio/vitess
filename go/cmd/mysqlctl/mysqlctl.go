@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/mysql"
@@ -235,6 +236,10 @@ func main() {
 		fmt.Fprintf(os.Stderr, "\n")
 	}
 
+	if cmd.IsRunningAsRoot() {
+		fmt.Fprintln(os.Stderr, "mysqlctl cannot be ran as root. Please run as a different user")
+		exit.Return(1)
+	}
 	dbconfigs.RegisterFlags(dbconfigs.Dba)
 	flag.Parse()
 

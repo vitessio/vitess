@@ -1,4 +1,4 @@
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,14 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 # Don't run this. It is only used as part of build.sh.
 
 set -e
 
 # Collect all the local Python libs we need.
 mkdir -p /out/pkg/py-vtdb
-cp -R $VTTOP/py/* /out/pkg/py-vtdb/
+cp -R $VTROOT/py/* /out/pkg/py-vtdb/
 cp -R /usr/local/lib/python2.7/dist-packages /out/pkg/
 cp -R /vt/dist/py-* /out/pkg/
 

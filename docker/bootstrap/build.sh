@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,4 +29,8 @@ fi
 # To avoid AUFS permission issues, files must allow access by "other"
 chmod -R o=g *
 
-docker build --no-cache -f docker/bootstrap/Dockerfile.$flavor -t vitess/bootstrap:$flavor .
+arch=$(uname -m)
+[ "$arch" == "aarch64" ] && [ $flavor != "common" ] && arch_ext='-arm64v8'
+if [ -f "docker/bootstrap/Dockerfile.$flavor$arch_ext" ]; then
+    docker build --no-cache -f docker/bootstrap/Dockerfile.$flavor$arch_ext -t vitess/bootstrap:$flavor$arch_ext .
+fi

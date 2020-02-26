@@ -1,0 +1,53 @@
+name: sonar_analysis
+on:
+  push:
+    branches:
+      - 'master'
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Go
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.13
+
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Get dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
+          sudo service mysql stop
+          sudo service etcd stop
+          sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+          sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+          go mod download
+
+      - name: Execute unit test and cluster endtoend test
+        run: |
+          eatmydata -- ./tools/all_test_for_coverage.sh
+          mkdir report
+          cp /tmp/*.out ./report/.
+
+      - name: Analyse sonar
+        run: |
+          export SONAR_SCANNER_VERSION=4.2.0.1873
+          export SONAR_SCANNER_HOME=$HOME/.sonar/sonar-scanner-$SONAR_SCANNER_VERSION-linux
+          curl --create-dirs -sSLo $HOME/.sonar/sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-$SONAR_SCANNER_VERSION-linux.zip
+          unzip -o $HOME/.sonar/sonar-scanner.zip -d $HOME/.sonar/
+          export PATH=$SONAR_SCANNER_HOME/bin:$PATH
+          export SONAR_SCANNER_OPTS="-server"
+
+          sonar-scanner \
+            -Dsonar.projectKey=vitessio \
+            -Dsonar.organization=vitess \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.login=${SONAR_TOKEN} \
+            -Dsonar.go.coverage.reportPaths=report/*.out
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2018 The Vitess Authors.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,17 +17,19 @@
 # this script brings up new tablets for the two new shards that we will
 # be creating in the customer keyspace and copies the schema 
 
-set -e
+source ./env.sh
 
-# shellcheck disable=SC2128
-script_root=$(dirname "${BASH_SOURCE}")
+for i in 300 301 302; do
+ CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
+ SHARD=-80 CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./scripts/vttablet-up.sh
+done
 
-SHARD=-80 CELL=zone1 KEYSPACE=customer UID_BASE=300 "$script_root/vttablet-up.sh"
-SHARD=80- CELL=zone1 KEYSPACE=customer UID_BASE=400 "$script_root/vttablet-up.sh"
-sleep 15
-./lvtctl.sh InitShardMaster -force customer/-80 zone1-300
-./lvtctl.sh InitShardMaster -force customer/80- zone1-400
-./lvtctl.sh CopySchemaShard customer/0 customer/-80
-./lvtctl.sh CopySchemaShard customer/0 customer/80-
+for i in 400 401 402; do
+ CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
+ SHARD=80- CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./scripts/vttablet-up.sh
+done
 
-disown -a
+vtctlclient -server localhost:15999 InitShardMaster -force customer/-80 zone1-300
+vtctlclient -server localhost:15999 InitShardMaster -force customer/80- zone1-400
+vtctlclient -server localhost:15999 CopySchemaShard customer/0 customer/-80
+vtctlclient -server localhost:15999 CopySchemaShard customer/0 customer/80-

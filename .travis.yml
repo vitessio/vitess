@@ -50,8 +50,6 @@ env:
     - TEST_MATRIX="-shard 0"
     - TEST_MATRIX="-shard 1"
     - TEST_MATRIX="-shard 2"
-    - TEST_MATRIX="-shard 3"
-    - TEST_MATRIX="-shard 4"
 script:
   - go run test.go $TEST_FLAGS $TEST_MATRIX
   # Uncomment the next line to verify the GOMAXPROCS value (should be 2 as of 09/2017).

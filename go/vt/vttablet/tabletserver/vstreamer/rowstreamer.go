@@ -32,6 +32,17 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+// RowStreamer exposes an externally usable interface to rowStreamer.
+type RowStreamer interface {
+	Stream() error
+	Cancel()
+}
+
+// NewRowStreamer returns a RowStreamer
+func NewRowStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, query string, lastpk []sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error) RowStreamer {
+	return newRowStreamer(ctx, cp, se, query, lastpk, &localVSchema{vschema: &vindexes.VSchema{}}, send)
+}
+
 type rowStreamer struct {
 	ctx    context.Context
 	cancel func()
@@ -41,14 +52,14 @@ type rowStreamer struct {
 	query   string
 	lastpk  []sqltypes.Value
 	send    func(*binlogdatapb.VStreamRowsResponse) error
-	kschema *vindexes.KeyspaceSchema
+	vschema *localVSchema
 
 	plan      *Plan
 	pkColumns []int
 	sendQuery string
 }
 
-func newRowStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, query string, lastpk []sqltypes.Value, kschema *vindexes.KeyspaceSchema, send func(*binlogdatapb.VStreamRowsResponse) error) *rowStreamer {
+func newRowStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error) *rowStreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &rowStreamer{
 		ctx:     ctx,
@@ -58,7 +69,7 @@ func newRowStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine
 		query:   query,
 		lastpk:  lastpk,
 		send:    send,
-		kschema: kschema,
+		vschema: vschema,
 	}
 }
 
@@ -103,7 +114,7 @@ func (rs *rowStreamer) buildPlan() error {
 		Name:    st.Name.String(),
 		Columns: st.Columns,
 	}
-	rs.plan, err = buildTablePlan(ti, rs.kschema, rs.query)
+	rs.plan, err = buildTablePlan(ti, rs.vschema, rs.query)
 	if err != nil {
 		return err
 	}
@@ -279,6 +290,7 @@ func (rs *rowStreamer) startStreaming(conn *mysql.Conn) (string, error) {
 		return "", err
 	}
 
+	log.Infof("Streaming query: %v\n", rs.sendQuery)
 	if err := conn.ExecuteStreamFetch(rs.sendQuery); err != nil {
 		return "", err
 	}

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/require"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -90,9 +91,7 @@ func TestSetErrors(t *testing.T) {
 	}
 	before := binlogStreamerErrors.Counts()["EventStreamer"]
 	err := evs.transactionToEvent(nil, statements)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	got := binlogStreamerErrors.Counts()["EventStreamer"]
 	if got != before+1 {
 		t.Errorf("got: %v, want: %+v", got, before+1)
@@ -160,9 +159,7 @@ func TestDMLEvent(t *testing.T) {
 		},
 	}
 	err := evs.transactionToEvent(eventToken, statements)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestDDLEvent(t *testing.T) {
@@ -208,7 +205,5 @@ func TestDDLEvent(t *testing.T) {
 		},
 	}
 	err := evs.transactionToEvent(eventToken, statements)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }

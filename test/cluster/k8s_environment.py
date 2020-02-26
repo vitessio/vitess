@@ -1,4 +1,4 @@
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -121,7 +121,7 @@ class K8sEnvironment(base_environment.BaseEnvironment):
     if 'VITESS_NAME' not in kwargs:
       kwargs['VITESS_NAME'] = getpass.getuser()
     kwargs['TEST_MODE'] = '1'
-    self.script_dir = os.path.join(os.environ['VTTOP'], 'examples/kubernetes')
+    self.script_dir = os.path.join(os.environ['VTROOT'], 'examples/kubernetes')
     try:
       subprocess.check_output(['gcloud', 'config', 'list'])
     except OSError:

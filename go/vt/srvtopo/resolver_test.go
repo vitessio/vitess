@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,22 +26,11 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topotools"
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
+	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
-
-// fakeStats implements TargetStats.
-type fakeStats struct{}
-
-func (s *fakeStats) GetAggregateStats(target *querypb.Target) (*querypb.AggregateStats, queryservice.QueryService, error) {
-	return &querypb.AggregateStats{}, nil, nil
-}
-
-func (s *fakeStats) GetMasterCell(keyspace, shard string) (cell string, qs queryservice.QueryService, err error) {
-	return "", nil, nil
-}
 
 func initResolver(t *testing.T, name string) *Resolver {
 	ctx := context.Background()
@@ -79,7 +68,7 @@ func initResolver(t *testing.T, name string) *Resolver {
 		}
 	}
 
-	return NewResolver(rs, &fakeStats{}, cell)
+	return NewResolver(rs, &tabletconntest.FakeQueryService{}, cell)
 }
 
 func TestResolveDestinations(t *testing.T) {

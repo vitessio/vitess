@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
@@ -45,29 +44,35 @@ var (
 	replicaLagTolerance = 10 * time.Second
 )
 
+// vreplicator provides the core logic to start vreplication streams
 type vreplicator struct {
-	id           uint32
-	source       *binlogdatapb.BinlogSource
-	sourceTablet *topodatapb.Tablet
-	stats        *binlogplayer.Stats
-	dbClient     *vdbClient
-	// mysqld is used to fetch the local schema.
-	mysqld mysqlctl.MysqlDaemon
+	vre      *Engine
+	id       uint32
+	dbClient *vdbClient
+	// source
+	source          *binlogdatapb.BinlogSource
+	sourceVStreamer VStreamerClient
 
+	stats *binlogplayer.Stats
+	// mysqld is used to fetch the local schema.
+	mysqld    mysqlctl.MysqlDaemon
 	tableKeys map[string][]string
 }
 
-func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceTablet *topodatapb.Tablet, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon) *vreplicator {
+// newVReplicator creates a new vreplicator
+func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine) *vreplicator {
 	return &vreplicator{
-		id:           id,
-		source:       source,
-		sourceTablet: sourceTablet,
-		stats:        stats,
-		dbClient:     newVDBClient(dbClient, stats),
-		mysqld:       mysqld,
+		vre:             vre,
+		id:              id,
+		source:          source,
+		sourceVStreamer: sourceVStreamer,
+		stats:           stats,
+		dbClient:        newVDBClient(dbClient, stats),
+		mysqld:          mysqld,
 	}
 }
 
+// Replicate starts a vreplication stream.
 func (vr *vreplicator) Replicate(ctx context.Context) error {
 	tableKeys, err := vr.buildTableKeys()
 	if err != nil {
@@ -76,14 +81,19 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 	vr.tableKeys = tableKeys
 
 	for {
+		// This rollback is a no-op. It's here for safety
+		// in case the functions below leave transactions open.
+		vr.dbClient.Rollback()
+
 		settings, numTablesToCopy, err := vr.readSettings(ctx)
 		if err != nil {
-			return fmt.Errorf("error reading VReplication settings: %v", err)
+			return err
 		}
 		// If any of the operations below changed state to Stopped, we should return.
 		if settings.State == binlogplayer.BlpStopped {
 			return nil
 		}
+
 		switch {
 		case numTablesToCopy != 0:
 			if err := newVCopier(vr).copyNext(ctx, settings); err != nil {
@@ -94,6 +104,9 @@ func (vr *vreplicator) Replicate(ctx context.Context) error {
 				return err
 			}
 		default:
+			if vr.source.StopAfterCopy {
+				return vr.setState(binlogplayer.BlpStopped, "Stopped after copy.")
+			}
 			if err := vr.setState(binlogplayer.BlpRunning, ""); err != nil {
 				return err
 			}
@@ -158,7 +171,7 @@ func (vr *vreplicator) setMessage(message string) error {
 		Time:    time.Now(),
 		Message: message,
 	})
-	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v", encodeString(message), vr.id)
+	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v", encodeString(binlogplayer.MessageTruncate(message)), vr.id)
 	if _, err := vr.dbClient.Execute(query); err != nil {
 		return fmt.Errorf("could not set message: %v: %v", query, err)
 	}

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ type ConnParams struct {
 	UnixSocket string `json:"unix_socket"`
 	Charset    string `json:"charset"`
 	Flags      uint64 `json:"flags"`
+	Flavor     string `json:"flavor,omitempty"`
 
 	// The following SSL flags are only used when flags |= 2048
 	// is set (CapabilityClientSSL).

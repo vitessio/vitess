@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2018 The Vitess Authors.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,14 +13,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 # this script brings down the tablets for customer/0 keyspace
 
-set -e
+for i in 200 201 202; do
+ CELL=zone1 TABLET_UID=$i ./scripts/vttablet-down.sh
+ CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-down.sh
+done
 
-# shellcheck disable=SC2128
-script_root=$(dirname "${BASH_SOURCE}")
-
-CELL=zone1 UID_BASE=200 "$script_root/vttablet-down.sh"
-
-disown -a

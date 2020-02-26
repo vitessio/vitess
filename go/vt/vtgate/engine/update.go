@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ type Update struct {
 	Query string
 
 	// Vindex specifies the vindex to be used.
-	Vindex vindexes.Vindex
+	Vindex vindexes.SingleColumn
 	// Values specifies the vindex values to use for routing.
 	// For now, only one value is specified.
 	Values []sqltypes.PlanValue
@@ -58,7 +58,7 @@ type Update struct {
 	// ChangedVindexValues contains values for updated Vindexes during an update statement.
 	ChangedVindexValues map[string][]sqltypes.PlanValue
 
-	// Table sepcifies the table for the update.
+	// Table specifies the table for the update.
 	Table *vindexes.Table
 
 	// OwnedVindexQuery is used for updating changes in lookup vindexes.
@@ -70,6 +70,9 @@ type Update struct {
 
 	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
 	QueryTimeout int
+
+	// Update does not take inputs
+	noInputs
 }
 
 // MarshalJSON serializes the Update into a JSON representation.

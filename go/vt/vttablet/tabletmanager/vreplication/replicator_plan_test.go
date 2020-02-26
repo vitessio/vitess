@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -461,6 +462,56 @@ func TestBuildPlayerPlan(t *testing.T) {
 			},
 		},
 	}, {
+		// keyspace_id
+		input: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  "t1",
+				Filter: "select c1, c2, keyspace_id() ksid from t1",
+			}},
+		},
+		plan: &TestReplicatorPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select c1, c2, keyspace_id() from t1",
+				}},
+			},
+			TargetTables: []string{"t1"},
+			TablePlans: map[string]*TestTablePlan{
+				"t1": {
+					TargetName:   "t1",
+					SendRule:     "t1",
+					PKReferences: []string{"c1"},
+					InsertFront:  "insert into t1(c1,c2,ksid)",
+					InsertValues: "(:a_c1,:a_c2,:a_keyspace_id)",
+					Insert:       "insert into t1(c1,c2,ksid) values (:a_c1,:a_c2,:a_keyspace_id)",
+					Update:       "update t1 set c2=:a_c2, ksid=:a_keyspace_id where c1=:b_c1",
+					Delete:       "delete from t1 where c1=:b_c1",
+				},
+			},
+		},
+		planpk: &TestReplicatorPlan{
+			VStreamFilter: &binlogdatapb.Filter{
+				Rules: []*binlogdatapb.Rule{{
+					Match:  "t1",
+					Filter: "select c1, c2, keyspace_id(), pk1, pk2 from t1",
+				}},
+			},
+			TargetTables: []string{"t1"},
+			TablePlans: map[string]*TestTablePlan{
+				"t1": {
+					TargetName:   "t1",
+					SendRule:     "t1",
+					PKReferences: []string{"c1", "pk1", "pk2"},
+					InsertFront:  "insert into t1(c1,c2,ksid)",
+					InsertValues: "(:a_c1,:a_c2,:a_keyspace_id)",
+					Insert:       "insert into t1(c1,c2,ksid) select :a_c1, :a_c2, :a_keyspace_id from dual where (:a_pk1,:a_pk2) <= (1,'aaa')",
+					Update:       "update t1 set c2=:a_c2, ksid=:a_keyspace_id where c1=:b_c1 and (:b_pk1,:b_pk2) <= (1,'aaa')",
+					Delete:       "delete from t1 where c1=:b_c1 and (:b_pk1,:b_pk2) <= (1,'aaa')",
+				},
+			},
+		},
+	}, {
 		// syntax error
 		input: &binlogdatapb.Filter{
 			Rules: []*binlogdatapb.Rule{{
@@ -671,7 +722,10 @@ func TestBuildPlayerPlanNoDup(t *testing.T) {
 		}},
 	}
 	_, err := buildReplicatorPlan(input, tableKeys, nil)
-	assert.EqualError(t, err, "more than one target for source table t: t1 and t2")
+	want := "more than one target for source table t"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("buildReplicatorPlan err: %v, must contain: %v", err, want)
+	}
 }
 
 func TestBuildPlayerPlanExclude(t *testing.T) {

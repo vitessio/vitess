@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -480,9 +480,16 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 			if err != nil {
 				return nil, vterrors.Wrapf(err, "error loading sequence %s", tableName)
 			}
-			// Initialize SequenceInfo.NextVal if it wasn't already.
-			if t.SequenceInfo.NextVal == 0 {
+			// If LastVal does not match next ID, then either:
+			// VTTablet just started, and we're initializing the cache, or
+			// Someone reset the id underneath us.
+			if t.SequenceInfo.LastVal != nextID {
+				if nextID < t.SequenceInfo.LastVal {
+					log.Warningf("Sequence next ID value %v is below the currently cached max %v, updating it to max", nextID, t.SequenceInfo.LastVal)
+					nextID = t.SequenceInfo.LastVal
+				}
 				t.SequenceInfo.NextVal = nextID
+				t.SequenceInfo.LastVal = nextID
 			}
 			cache, err := sqltypes.ToInt64(qr.Rows[0][1])
 			if err != nil {
@@ -521,7 +528,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 
 // execDirect is for reads inside transactions. Always send to MySQL.
 func (qre *QueryExecutor) execDirect(conn *TxConnection) (*sqltypes.Result, error) {
-	if qre.plan.Fields != nil {
+	if qre.tsv.qe.enableQueryPlanFieldCaching && qre.plan.Fields != nil {
 		result, err := qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, "", true, false)
 		if err != nil {
 			return nil, err
@@ -535,7 +542,7 @@ func (qre *QueryExecutor) execDirect(conn *TxConnection) (*sqltypes.Result, erro
 // execSelect sends a query to mysql only if another identical query is not running. Otherwise, it waits and
 // reuses the result. If the plan is missng field info, it sends the query to mysql requesting full info.
 func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
-	if qre.plan.Fields != nil {
+	if qre.tsv.qe.enableQueryPlanFieldCaching && qre.plan.Fields != nil {
 		result, err := qre.qFetch(qre.logStats, qre.plan.FullQuery, qre.bindVars)
 		if err != nil {
 			return nil, err

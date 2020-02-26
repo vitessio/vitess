@@ -7,7 +7,6 @@ from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
 from google.protobuf import reflection as _reflection
 from google.protobuf import symbol_database as _symbol_database
-from google.protobuf import descriptor_pb2
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
@@ -20,6 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   name='throttlerservice.proto',
   package='throttlerservice',
   syntax='proto3',
+  serialized_options=_b('Z-vitess.io/vitess/go/vt/proto/throttlerservice'),
   serialized_pb=_b('\n\x16throttlerservice.proto\x12\x10throttlerservice\x1a\x13throttlerdata.proto2\xf3\x03\n\tThrottler\x12M\n\x08MaxRates\x12\x1e.throttlerdata.MaxRatesRequest\x1a\x1f.throttlerdata.MaxRatesResponse\"\x00\x12S\n\nSetMaxRate\x12 .throttlerdata.SetMaxRateRequest\x1a!.throttlerdata.SetMaxRateResponse\"\x00\x12\x65\n\x10GetConfiguration\x12&.throttlerdata.GetConfigurationRequest\x1a\'.throttlerdata.GetConfigurationResponse\"\x00\x12n\n\x13UpdateConfiguration\x12).throttlerdata.UpdateConfigurationRequest\x1a*.throttlerdata.UpdateConfigurationResponse\"\x00\x12k\n\x12ResetConfiguration\x12(.throttlerdata.ResetConfigurationRequest\x1a).throttlerdata.ResetConfigurationResponse\"\x00\x42/Z-vitess.io/vitess/go/vt/proto/throttlerserviceb\x06proto3')
   ,
   dependencies=[throttlerdata__pb2.DESCRIPTOR,])
@@ -29,15 +29,14 @@ DESCRIPTOR = _descriptor.FileDescriptor(
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 
-DESCRIPTOR.has_options = True
-DESCRIPTOR._options = _descriptor._ParseOptions(descriptor_pb2.FileOptions(), _b('Z-vitess.io/vitess/go/vt/proto/throttlerservice'))
+DESCRIPTOR._options = None
 
 _THROTTLER = _descriptor.ServiceDescriptor(
   name='Throttler',
   full_name='throttlerservice.Throttler',
   file=DESCRIPTOR,
   index=0,
-  options=None,
+  serialized_options=None,
   serialized_start=66,
   serialized_end=565,
   methods=[
@@ -48,7 +47,7 @@ _THROTTLER = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=throttlerdata__pb2._MAXRATESREQUEST,
     output_type=throttlerdata__pb2._MAXRATESRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='SetMaxRate',
@@ -57,7 +56,7 @@ _THROTTLER = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=throttlerdata__pb2._SETMAXRATEREQUEST,
     output_type=throttlerdata__pb2._SETMAXRATERESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='GetConfiguration',
@@ -66,7 +65,7 @@ _THROTTLER = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=throttlerdata__pb2._GETCONFIGURATIONREQUEST,
     output_type=throttlerdata__pb2._GETCONFIGURATIONRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='UpdateConfiguration',
@@ -75,7 +74,7 @@ _THROTTLER = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=throttlerdata__pb2._UPDATECONFIGURATIONREQUEST,
     output_type=throttlerdata__pb2._UPDATECONFIGURATIONRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
   _descriptor.MethodDescriptor(
     name='ResetConfiguration',
@@ -84,7 +83,7 @@ _THROTTLER = _descriptor.ServiceDescriptor(
     containing_service=None,
     input_type=throttlerdata__pb2._RESETCONFIGURATIONREQUEST,
     output_type=throttlerdata__pb2._RESETCONFIGURATIONRESPONSE,
-    options=None,
+    serialized_options=None,
   ),
 ])
 _sym_db.RegisterServiceDescriptor(_THROTTLER)

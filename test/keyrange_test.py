@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -115,7 +115,6 @@ class TestKeyRange(unittest.TestCase):
           self.assertNotEqual(where_clause.find('<'), -1)
       else:
         self.assertNotEqual(where_clause.find('>='), -1)
-        self.assertNotEqual(where_clause.find('>='), -1)
         self.assertNotEqual(where_clause.find('AND'), -1)
       kid_list = int_shard_kid_map[kr]
       for keyspace_id in kid_list:
@@ -145,7 +144,6 @@ class TestKeyRange(unittest.TestCase):
         else:
           self.assertNotEqual(where_clause.find('<'), -1)
       else:
-        self.assertNotEqual(where_clause.find('>='), -1)
         self.assertNotEqual(where_clause.find('>='), -1)
         self.assertNotEqual(where_clause.find('AND'), -1)
       kid_list = str_shard_kid_map[kr]

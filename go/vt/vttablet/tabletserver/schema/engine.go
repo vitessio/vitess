@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,7 +32,6 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -48,7 +48,7 @@ type notifier func(full map[string]*Table, created, altered, dropped []string)
 // Engine stores the schema info and performs operations that
 // keep itself up-to-date.
 type Engine struct {
-	dbconfigs *dbconfigs.DBConfigs
+	cp *mysql.ConnParams
 
 	// mu protects the following fields.
 	mu         sync.Mutex
@@ -100,8 +100,8 @@ func NewEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *En
 }
 
 // InitDBConfig must be called before Open.
-func (se *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
-	se.dbconfigs = dbcfgs
+func (se *Engine) InitDBConfig(cp *mysql.ConnParams) {
+	se.cp = cp
 }
 
 // Open initializes the Engine. Calling Open on an already
@@ -113,10 +113,9 @@ func (se *Engine) Open() error {
 		return nil
 	}
 	start := time.Now()
-	defer log.Infof("Time taken to load the schema: %v", time.Since(start))
+	defer func() { log.Infof("Time taken to load the schema: %v", time.Since(start)) }()
 	ctx := tabletenv.LocalContext()
-	dbaParams := se.dbconfigs.DbaWithDB()
-	se.conns.Open(dbaParams, dbaParams, dbaParams)
+	se.conns.Open(se.cp, se.cp, se.cp)
 
 	conn, err := se.conns.Get(ctx)
 	if err != nil {
@@ -193,6 +192,13 @@ func (se *Engine) Open() error {
 	se.notifiers = make(map[string]notifier)
 	se.isOpen = true
 	return nil
+}
+
+// IsOpen() checks if engine is open
+func (se *Engine) IsOpen() bool {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	return se.isOpen
 }
 
 // Close shuts down Engine and is idempotent.
@@ -304,6 +310,17 @@ func (se *Engine) Reload(ctx context.Context) error {
 
 	se.broadcast(created, altered, dropped)
 	return rec.Error()
+}
+
+// LoadTableBasic loads a table with minimal info. This is used by vstreamer
+// to load _vt.resharding_journal.
+func (se *Engine) LoadTableBasic(ctx context.Context, tableName string) (*Table, error) {
+	conn, err := se.conns.Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+	return LoadTableBasic(conn, tableName)
 }
 
 func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, error) {
@@ -498,7 +515,7 @@ func (se *Engine) getTableRows() map[string]int64 {
 	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range se.tables {
-		tstats[k] = v.TableRows.Get()
+		tstats[strings.Replace(k, ".", "_", -1)] = v.TableRows.Get()
 	}
 	return tstats
 }
@@ -508,7 +525,7 @@ func (se *Engine) getDataLength() map[string]int64 {
 	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range se.tables {
-		tstats[k] = v.DataLength.Get()
+		tstats[strings.Replace(k, ".", "_", -1)] = v.DataLength.Get()
 	}
 	return tstats
 }
@@ -518,7 +535,7 @@ func (se *Engine) getIndexLength() map[string]int64 {
 	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range se.tables {
-		tstats[k] = v.IndexLength.Get()
+		tstats[strings.Replace(k, ".", "_", -1)] = v.IndexLength.Get()
 	}
 	return tstats
 }
@@ -528,7 +545,7 @@ func (se *Engine) getDataFree() map[string]int64 {
 	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range se.tables {
-		tstats[k] = v.DataFree.Get()
+		tstats[strings.Replace(k, ".", "_", -1)] = v.DataFree.Get()
 	}
 	return tstats
 }
@@ -538,7 +555,7 @@ func (se *Engine) getMaxDataLength() map[string]int64 {
 	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range se.tables {
-		tstats[k] = v.MaxDataLength.Get()
+		tstats[strings.Replace(k, ".", "_", -1)] = v.MaxDataLength.Get()
 	}
 	return tstats
 }

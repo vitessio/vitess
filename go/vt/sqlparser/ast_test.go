@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,15 +24,14 @@ import (
 	"testing"
 	"unsafe"
 
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 )
 
 func TestAppend(t *testing.T) {
 	query := "select * from t where a = 1"
 	tree, err := Parse(query)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	var b strings.Builder
 	Append(&b, tree)
 	got := b.String()
@@ -50,9 +49,7 @@ func TestAppend(t *testing.T) {
 
 func TestSelect(t *testing.T) {
 	tree, err := Parse("select * from t where a = 1")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	expr := tree.(*Select).Where.Expr
 
 	sel := &Select{}
@@ -88,9 +85,7 @@ func TestSelect(t *testing.T) {
 
 	// OR clauses must be parenthesized.
 	tree, err = Parse("select * from t where a = 1 or b = 1")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	expr = tree.(*Select).Where.Expr
 	sel = &Select{}
 	sel.AddWhere(expr)
@@ -133,14 +128,10 @@ func TestRemoveHints(t *testing.T) {
 
 func TestAddOrder(t *testing.T) {
 	src, err := Parse("select foo, bar from baz order by foo")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	order := src.(*Select).OrderBy[0]
 	dst, err := Parse("select * from t")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	dst.(*Select).AddOrder(order)
 	buf := NewTrackedBuffer(nil)
 	dst.Format(buf)
@@ -149,9 +140,7 @@ func TestAddOrder(t *testing.T) {
 		t.Errorf("order: %q, want %s", buf.String(), want)
 	}
 	dst, err = Parse("select * from t union select * from s")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	dst.(*Union).AddOrder(order)
 	buf = NewTrackedBuffer(nil)
 	dst.Format(buf)
@@ -163,14 +152,10 @@ func TestAddOrder(t *testing.T) {
 
 func TestSetLimit(t *testing.T) {
 	src, err := Parse("select foo, bar from baz limit 4")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	limit := src.(*Select).Limit
 	dst, err := Parse("select * from t")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	dst.(*Select).SetLimit(limit)
 	buf := NewTrackedBuffer(nil)
 	dst.Format(buf)
@@ -179,9 +164,7 @@ func TestSetLimit(t *testing.T) {
 		t.Errorf("limit: %q, want %s", buf.String(), want)
 	}
 	dst, err = Parse("select * from t union select * from s")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	dst.(*Union).SetLimit(limit)
 	buf = NewTrackedBuffer(nil)
 	dst.Format(buf)
@@ -269,9 +252,7 @@ func TestDDL(t *testing.T) {
 
 func TestSetAutocommitON(t *testing.T) {
 	stmt, err := Parse("SET autocommit=ON")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	s, ok := stmt.(*Set)
 	if !ok {
 		t.Errorf("SET statement is not Set: %T", s)
@@ -296,9 +277,7 @@ func TestSetAutocommitON(t *testing.T) {
 	}
 
 	stmt, err = Parse("SET @@session.autocommit=ON")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	s, ok = stmt.(*Set)
 	if !ok {
 		t.Errorf("SET statement is not Set: %T", s)
@@ -325,9 +304,7 @@ func TestSetAutocommitON(t *testing.T) {
 
 func TestSetAutocommitOFF(t *testing.T) {
 	stmt, err := Parse("SET autocommit=OFF")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	s, ok := stmt.(*Set)
 	if !ok {
 		t.Errorf("SET statement is not Set: %T", s)
@@ -352,9 +329,7 @@ func TestSetAutocommitOFF(t *testing.T) {
 	}
 
 	stmt, err = Parse("SET @@session.autocommit=OFF")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	s, ok = stmt.(*Set)
 	if !ok {
 		t.Errorf("SET statement is not Set: %T", s)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -81,7 +81,7 @@ class HelmComponent(sandlet.SandletComponent):
     logging.info('Installing helm.')
     try:
       subprocess.check_output(
-          ['helm', 'install', os.path.join(os.environ['VTTOP'], 'helm/vitess'),
+          ['helm', 'install', os.path.join(os.environ['VTROOT'], 'helm/vitess'),
            '-n', self.sandbox_name, '--namespace', self.sandbox_name,
            '--replace', '--values', self.helm_config],
           stderr=subprocess.STDOUT)

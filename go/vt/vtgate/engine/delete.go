@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ type Delete struct {
 	Query string
 
 	// Vindex specifies the vindex to be used.
-	Vindex vindexes.Vindex
+	Vindex vindexes.SingleColumn
 	// Values specifies the vindex values to use for routing.
 	// For now, only one value is specified.
 	Values []sqltypes.PlanValue
@@ -67,6 +67,9 @@ type Delete struct {
 
 	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
 	QueryTimeout int
+
+	// Delete does not take inputs
+	noInputs
 }
 
 // MarshalJSON serializes the Delete into a JSON representation.

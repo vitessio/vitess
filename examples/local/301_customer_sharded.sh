@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2018 The Vitess Authors.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,11 +20,7 @@
 # it also changes the customer vschema from unsharded to sharded and
 # sets up the necessary vindexes
 
-set -e
-
-./lvtctl.sh ApplySchema -sql-file create_commerce_seq.sql commerce
-./lvtctl.sh ApplyVSchema -vschema_file vschema_commerce_seq.json commerce
-./lvtctl.sh ApplySchema -sql-file create_customer_sharded.sql customer
-./lvtctl.sh ApplyVSchema -vschema_file vschema_customer_sharded.json customer
-
-disown -a
+vtctlclient -server localhost:15999 ApplySchema -sql-file create_commerce_seq.sql commerce
+vtctlclient -server localhost:15999 ApplyVSchema -vschema_file vschema_commerce_seq.json commerce
+vtctlclient -server localhost:15999 ApplySchema -sql-file create_customer_sharded.sql customer
+vtctlclient -server localhost:15999 ApplyVSchema -vschema_file vschema_customer_sharded.json customer

@@ -14,7 +14,6 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     libtool \
     make \
     openjdk-8-jdk \
-    pkg-config \
     python-crypto \
     python-dev \
     python-mysqldb \
@@ -31,26 +30,19 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     && rm -rf /var/lib/apt/lists/*
 
 # Install Maven 3.1+
-RUN mkdir -p /vt/dist && \
-    cd /vt/dist && \
+RUN mkdir -p /vt/src/vitess.io/vitess/dist && \
+    cd /vt/src/vitess.io/vitess/dist && \
     curl -sL --connect-timeout 10 --retry 3 \
         http://www-us.apache.org/dist/maven/maven-3/3.3.9/binaries/apache-maven-3.3.9-bin.tar.gz | tar -xz && \
     mv apache-maven-3.3.9 maven
 
 # Set up Vitess environment (equivalent to '. dev.env')
-ENV VTTOP /vt/src/vitess.io/vitess
-ENV VTROOT /vt
-ENV GOTOP $VTTOP/go
-ENV PYTOP $VTTOP/py
-ENV VTDATAROOT $VTROOT/vtdataroot
+ENV VTROOT /vt/src/vitess.io/vitess
+ENV VTDATAROOT /vt/vtdataroot
 ENV VTPORTSTART 15000
 ENV PYTHONPATH $VTROOT/dist/grpc/usr/local/lib/python2.7/site-packages:$VTROOT/dist/py-mock-1.0.1/lib/python2.7/site-packages:$VTROOT/py-vtdb:$VTROOT/dist/selenium/lib/python2.7/site-packages
-ENV GOBIN $VTROOT/bin
 ENV PATH $VTROOT/bin:$VTROOT/dist/maven/bin:$VTROOT/dist/chromedriver:$PATH
-ENV VT_MYSQL_ROOT /usr
-ENV PKG_CONFIG_PATH $VTROOT/lib
 ENV USER vitess
-ENV GO111MODULE on
 
 # Copy files needed for bootstrap
 COPY bootstrap.sh dev.env build.env go.mod go.sum /vt/src/vitess.io/vitess/
@@ -70,6 +62,10 @@ RUN cd /vt/src/vitess.io/vitess && \
 
 # Create mount point for actual data (e.g. MySQL data dir)
 VOLUME /vt/vtdataroot
+
+# The docker lite images copy from the builder in /vt/bin
+# Add compatibility to the previous layout for now
+RUN su vitess -c "mkdir -p /vt/src/vitess.io/vitess/bin && rm -rf /vt/bin && ln -s /vt/src/vitess.io/vitess/bin /vt/bin"
 
 # If the user doesn't specify a command, load a shell.
 CMD ["/bin/bash"]
