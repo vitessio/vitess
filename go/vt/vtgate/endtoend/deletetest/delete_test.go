@@ -140,7 +140,9 @@ func TestMain(m *testing.M) {
 		}
 		if err := cluster.Setup(); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
-			cluster.TearDown()
+			if err := cluster.TearDown(); err != nil {
+				fmt.Fprintf(os.Stderr, "%v\n", err)
+			}
 			return 1
 		}
 		defer cluster.TearDown()

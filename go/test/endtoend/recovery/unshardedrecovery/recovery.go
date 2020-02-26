@@ -98,7 +98,9 @@ func TestMainImpl(m *testing.M) {
 		sql := string(initDb)
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
 		sql = sql + initialsharding.GetPasswordUpdateSQL(localCluster)
-		ioutil.WriteFile(newInitDBFile, []byte(sql), 0666)
+		if err := ioutil.WriteFile(newInitDBFile, []byte(sql), 0666); err != nil {
+			log.Errorf("failed to write file %v", err)
+		}
 
 		extraArgs := []string{"-db-credentials-file", dbCredentialFile}
 		commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)
@@ -337,9 +339,13 @@ func tabletsTeardown() {
 	for _, tablet := range []*cluster.Vttablet{master, replica1, replica2, replica3} {
 		proc, _ := tablet.MysqlctlProcess.StopProcess()
 		mysqlProcs = append(mysqlProcs, proc)
-		tablet.VttabletProcess.TearDown()
+		if err := tablet.VttabletProcess.TearDown(); err != nil {
+			log.Error(err)
+		}
 	}
 	for _, proc := range mysqlProcs {
-		proc.Wait()
+		if err := proc.Wait(); err != nil {
+			log.Error(err)
+		}
 	}
 }

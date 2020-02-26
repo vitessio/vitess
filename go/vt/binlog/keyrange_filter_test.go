@@ -83,7 +83,9 @@ func TestKeyRangeFilterPass(t *testing.T) {
 		got = bltToString(reply)
 		return nil
 	})
-	f(eventToken, statements)
+	if err := f(eventToken, statements); err != nil {
+		t.Fatalf("failed in excuting KeyRangeFilterFunc: %v", err)
+	}
 	want := `statement: <6, "set1"> statement: <7, "insert into tbl(col1, col2) values(1, a) /* vtgate:: keyspace_id:02 */"> statement: <7, "insert into tbl(col1, col2, col3) values (1, 2, 3), (4, 5, 6) /* vtgate:: keyspace_id:01,02 *//*trailing_comments */"> statement: <7, "insert into tbl(col1, col2, col3) values (1, 2, 3) /* vtgate:: keyspace_id:01,20 *//*trailing_comments */"> statement: <8, "update tbl set col1=1"> statement: <9, "delete from tbl where col1=1"> position: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want\n%s, got\n%s", want, got)
@@ -113,7 +115,9 @@ func TestKeyRangeFilterSkip(t *testing.T) {
 		got = bltToString(reply)
 		return nil
 	})
-	f(eventToken, statements)
+	if err := f(eventToken, statements); err != nil {
+		t.Fatalf("failed in excuting KeyRangeFilterFunc: %v", err)
+	}
 	want := `position: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)
@@ -143,7 +147,9 @@ func TestKeyRangeFilterDDL(t *testing.T) {
 		got = bltToString(reply)
 		return nil
 	})
-	f(eventToken, statements)
+	if err := f(eventToken, statements); err != nil {
+		t.Fatalf("failed in excuting KeyRangeFilterFunc: %v", err)
+	}
 	want := `position: "MariaDB/0-41983-1" `
 	if want != got {
 		t.Errorf("want %s, got %s", want, got)

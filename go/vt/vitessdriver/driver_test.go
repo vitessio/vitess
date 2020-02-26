@@ -57,7 +57,9 @@ func TestMain(m *testing.M) {
 	// Create a gRPC server and listen on the port.
 	server := grpc.NewServer()
 	grpcvtgateservice.RegisterForTest(server, service)
-	go server.Serve(listener)
+	if err := server.Serve(listener); err != nil {
+		panic(fmt.Sprintf("Cannot serve: %v", err))
+	}
 
 	testAddress = listener.Addr().String()
 	os.Exit(m.Run())

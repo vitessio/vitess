@@ -781,7 +781,9 @@ func (f *fakeVTGateService) MessageStream(ctx context.Context, keyspace string, 
 	if name != messageName {
 		return errors.New("MessageStream name mismatch")
 	}
-	callback(messageStreamResult)
+	if err := callback(messageStreamResult); err != nil {
+		return err
+	}
 	return nil
 }
 

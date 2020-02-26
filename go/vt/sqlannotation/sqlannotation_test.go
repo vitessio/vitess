@@ -68,25 +68,33 @@ func verifyParseError(t *testing.T, sql string) {
 
 func BenchmarkExtractKeyspaceIDKeyspaceID(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		ExtractKeyspaceIDS("DML /* vtgate:: keyspace_id:25AF */")
+		if _, err := ExtractKeyspaceIDS("DML /* vtgate:: keyspace_id:25AF */"); err != nil {
+			b.Error(err)
+		}
 	}
 }
 
 func BenchmarkNativeExtractKeyspaceIDKeyspaceID(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		ExtractKeyspaceIDS("DML /* vtgate:: keyspace_id:25AF */")
+		if _, err := ExtractKeyspaceIDS("DML /* vtgate:: keyspace_id:25AF */"); err != nil {
+			b.Error(err)
+		}
 	}
 }
 
 func BenchmarkExtractKeySpaceIDReplicationUnfriendly(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		ExtractKeyspaceIDS("DML /* vtgate:: filtered_replication_unfriendly */")
+		if _, err := ExtractKeyspaceIDS("DML /* vtgate:: filtered_replication_unfriendly */"); err != nil {
+			b.Error(err)
+		}
 	}
 }
 
 func BenchmarkExtractKeySpaceIDNothing(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		ExtractKeyspaceIDS("DML")
+		if _, err := ExtractKeyspaceIDS("DML"); err != nil {
+			b.Error(err)
+		}
 	}
 }
 

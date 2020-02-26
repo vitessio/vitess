@@ -24,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
@@ -120,7 +121,9 @@ func Init() (*Env, error) {
 func (te *Env) Close() {
 	te.SchemaEngine.Close()
 	te.Mysqld.Close()
-	te.cluster.TearDown()
+	if err := te.cluster.TearDown(); err != nil {
+		log.Error(err)
+	}
 	os.RemoveAll(te.cluster.Config.SchemaDir)
 }
 

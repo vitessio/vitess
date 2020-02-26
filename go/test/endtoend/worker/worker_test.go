@@ -172,11 +172,17 @@ func TestWebInterface(t *testing.T) {
 
 func initialSetup(t *testing.T) {
 
-	runShardTablets(t, "0", shardTablets, true)
+	if err := runShardTablets(t, "0", shardTablets, true); err != nil {
+		t.Fatalf("Failed to run shard table %v", err)
+	}
 
 	// create the split shards
-	runShardTablets(t, "-80", shard0Tablets, false)
-	runShardTablets(t, "80-", shard1Tablets, false)
+	if err := runShardTablets(t, "-80", shard0Tablets, false); err != nil {
+		t.Fatalf("Failed to create split shard  %v", err)
+	}
+	if err := runShardTablets(t, "80-", shard1Tablets, false); err != nil {
+		t.Fatalf("Failed to create split shard  %v", err)
+	}
 
 	// insert values
 	insertValues(master, "shard-0", 1, 4000, 0)
@@ -300,13 +306,19 @@ func verifySuccessfulWorkerCopyWithReparent(t *testing.T, isMysqlDown bool) {
 	}
 
 	// Reparent away from the old masters.
-	localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
-		"test_keyspace/-80", "-new_master", shard0Replica.Alias)
+	if err := localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
+		"test_keyspace/-80", "-new_master", shard0Replica.Alias); err != nil {
+		t.Fatalf("failed in excuting  replication shard test_keyspace/-80: %v", err)
+	}
 
-	localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
-		"test_keyspace/80-", "-new_master", shard1Replica.Alias)
+	if err := localCluster.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "-keyspace_shard",
+		"test_keyspace/80-", "-new_master", shard1Replica.Alias); err != nil {
+		t.Fatalf("failed in excuting  replication shard test_keyspace/80-: %v", err)
+	}
 
-	proc.Wait()
+	if err := proc.Wait(); err != nil {
+		t.Fatalf("failed to waith untill exit command: %v", err)
+	}
 
 	// Verify that we were forced to re-resolve and retry.
 	pollForVarsWorkerRetryCount(t, 1)

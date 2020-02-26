@@ -395,7 +395,10 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		if err != nil {
 			return vterrors.Wrap(err, "cannot create gziper")
 		}
-		gzip.SetConcurrency(*backupCompressBlockSize, *backupCompressBlocks)
+		err = gzip.SetConcurrency(*backupCompressBlockSize, *backupCompressBlocks)
+		if err != nil {
+			return vterrors.Wrapf(err, "'%v' hook returned error")
+		}
 		writer = gzip
 	}
 

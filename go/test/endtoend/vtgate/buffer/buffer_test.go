@@ -48,6 +48,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/log"
 )
 
 var (
@@ -140,7 +141,9 @@ func updateExecute(c *threadParams, conn *mysql.Conn) error {
 	attempts := c.i
 	// Value used in next UPDATE query. Increased after every query.
 	c.i++
-	conn.ExecuteFetch("begin", 1000, true)
+	if _, err := conn.ExecuteFetch("begin", 1000, true); err != nil {
+		log.Errorf("failed to excute fetch %v", err)
+	}
 
 	_, err := conn.ExecuteFetch(fmt.Sprintf("UPDATE buffer SET msg='update %d' WHERE id = %d", attempts, updateRowID), 1000, true)
 

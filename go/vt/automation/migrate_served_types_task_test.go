@@ -28,12 +28,17 @@ func TestMigrateServedTypesTask(t *testing.T) {
 	fake := fakevtctlclient.NewFakeVtctlClient()
 	vtctlclient.RegisterFactory("fake", fake.FakeVtctlClientFactory)
 	defer vtctlclient.UnregisterFactoryForTest("fake")
-	flag.Set("vtctl_client_protocol", "fake")
+	if err := flag.Set("vtctl_client_protocol", "fake"); err != nil {
+		t.Fatalf("failed to set flag vtctl_client_protocol %v", err)
+	}
 	task := &MigrateServedTypesTask{}
 
-	fake.RegisterResult([]string{"MigrateServedTypes", "test_keyspace/0", "rdonly"},
+	err := fake.RegisterResult([]string{"MigrateServedTypes", "test_keyspace/0", "rdonly"},
 		"",  // No output.
 		nil) // No error.
+	if err != nil {
+		t.Fatalf("failed in register fake client %v", err)
+	}
 	parameters := map[string]string{
 		"keyspace":        "test_keyspace",
 		"source_shard":    "0",
@@ -42,9 +47,12 @@ func TestMigrateServedTypesTask(t *testing.T) {
 	}
 	testTask(t, "MigrateServedTypes", task, parameters, fake)
 
-	fake.RegisterResult([]string{"MigrateServedTypes", "--cells=cell1", "--reverse=true", "test_keyspace/0", "rdonly"},
+	err = fake.RegisterResult([]string{"MigrateServedTypes", "--cells=cell1", "--reverse=true", "test_keyspace/0", "rdonly"},
 		"",  // No output.
 		nil) // No error.
+	if err != nil {
+		t.Fatalf("failed in register fake client %v", err)
+	}
 	parameters["cells"] = "cell1"
 	parameters["reverse"] = "true"
 	testTask(t, "MigrateServedTypes", task, parameters, fake)

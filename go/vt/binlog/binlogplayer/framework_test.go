@@ -116,5 +116,5 @@ var globalFBC *fakeBinlogClient
 
 func init() {
 	RegisterClientFactory("test", func() Client { return globalFBC })
-	flag.Set("binlog_player_protocol", "test")
+	_ = flag.Set("binlog_player_protocol", "test")
 }

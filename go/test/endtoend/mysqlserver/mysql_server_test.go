@@ -47,7 +47,8 @@ func TestMultiStatement(t *testing.T) {
 	var count int
 	for rows.Next() || (rows.NextResultSet() && rows.Next()) {
 		var i int
-		rows.Scan(&i)
+		err := rows.Scan(&i)
+		require.Nilf(t, err, "row scan without error, got %v", err)
 		count++
 		assert.Equalf(t, count, i, "result of query %v query should be %v, got %v", count, count, i)
 	}

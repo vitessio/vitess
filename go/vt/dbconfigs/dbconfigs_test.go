@@ -345,7 +345,9 @@ func hupTest(t *testing.T, tmpFile *os.File, oldStr, newStr string) {
 	if pass != oldStr {
 		t.Fatalf("%s's Password should still be '%s'", oldStr, oldStr)
 	}
-	syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
+	if err := syscall.Kill(syscall.Getpid(), syscall.SIGHUP); err != nil {
+		t.Error(err)
+	}
 	time.Sleep(100 * time.Millisecond) // wait for signal handler
 	_, _, err := cs.GetUserAndPassword(oldStr)
 	if err != ErrUnknownUser {

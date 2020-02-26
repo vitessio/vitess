@@ -279,7 +279,10 @@ func (be *XtrabackupEngine) backupFiles(ctx context.Context, params BackupParams
 			if err != nil {
 				return replicationPosition, vterrors.Wrap(err, "cannot create gzip compressor")
 			}
-			compressor.SetConcurrency(*backupCompressBlockSize, *backupCompressBlocks)
+			err = compressor.SetConcurrency(*backupCompressBlockSize, *backupCompressBlocks)
+			if err != nil {
+				return replicationPosition, vterrors.Wrap(err, "cannot set gzip concurrency")
+			}
 			writer = compressor
 			destCompressors = append(destCompressors, compressor)
 		}
@@ -784,7 +787,7 @@ func stripeReader(readers []io.Reader, blockSize int64) io.Reader {
 				// If we failed to copy exactly blockSize bytes for any
 				// reason other than EOF, we must abort.
 				if err != io.EOF {
-					writer.CloseWithError(err)
+					_ = writer.CloseWithError(err)
 					return
 				}
 

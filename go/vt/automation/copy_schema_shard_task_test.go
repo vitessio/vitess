@@ -28,11 +28,16 @@ func TestCopySchemaShardTask(t *testing.T) {
 	fake := fakevtctlclient.NewFakeVtctlClient()
 	vtctlclient.RegisterFactory("fake", fake.FakeVtctlClientFactory)
 	defer vtctlclient.UnregisterFactoryForTest("fake")
-	flag.Set("vtctl_client_protocol", "fake")
-	fake.RegisterResult([]string{"CopySchemaShard", "test_keyspace/0", "test_keyspace/2"},
+	if err := flag.Set("vtctl_client_protocol", "fake"); err != nil {
+		t.Fatalf("failed to set flag vtctl_client_protocol %v", err)
+	}
+
+	err := fake.RegisterResult([]string{"CopySchemaShard", "test_keyspace/0", "test_keyspace/2"},
 		"",  // No output.
 		nil) // No error.
-
+	if err != nil {
+		t.Fatalf("failed in register fake client %v", err)
+	}
 	task := &CopySchemaShardTask{}
 	parameters := map[string]string{
 		"source_keyspace_and_shard": "test_keyspace/0",
@@ -42,9 +47,12 @@ func TestCopySchemaShardTask(t *testing.T) {
 	}
 	testTask(t, "CopySchemaShard", task, parameters, fake)
 
-	fake.RegisterResult([]string{"CopySchemaShard", "--exclude_tables=excluded_table1", "test_keyspace/0", "test_keyspace/2"},
+	err = fake.RegisterResult([]string{"CopySchemaShard", "--exclude_tables=excluded_table1", "test_keyspace/0", "test_keyspace/2"},
 		"",  // No output.
 		nil) // No error.
+	if err != nil {
+		t.Fatalf("failed in register fake client %v", err)
+	}
 	parameters["exclude_tables"] = "excluded_table1"
 	testTask(t, "CopySchemaShard", task, parameters, fake)
 }

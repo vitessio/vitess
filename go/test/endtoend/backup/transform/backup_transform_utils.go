@@ -90,7 +90,9 @@ func TestMainSetup(m *testing.M, useMysqlctld bool) {
 		sql := string(initDb)
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
 		sql = sql + initialsharding.GetPasswordUpdateSQL(localCluster)
-		ioutil.WriteFile(newInitDBFile, []byte(sql), 0666)
+		if err := ioutil.WriteFile(newInitDBFile, []byte(sql), 0666); err != nil {
+			log.Fatalf("failed to write file : %v", err)
+		}
 
 		extraArgs := []string{"-db-credentials-file", dbCredentialFile}
 		commonTabletArg = append(commonTabletArg, "-db-credentials-file", dbCredentialFile)
@@ -186,7 +188,9 @@ func TestBackupTransformImpl(t *testing.T) {
 	verifyInitialReplication(t)
 
 	// restart the replica with transform hook parameter
-	replica1.VttabletProcess.TearDown()
+	if err := replica1.VttabletProcess.TearDown(); err != nil {
+		log.Fatalf("failed restart the replica with transform hook parameter : %v", err)
+	}
 	replica1.VttabletProcess.ExtraArgs = []string{
 		"-db-credentials-file", dbCredentialFile,
 		"-backup_storage_hook", "test_backup_transform",
@@ -221,13 +225,18 @@ func TestBackupTransformImpl(t *testing.T) {
 	// clear replica2
 
 	if replica2.MysqlctlProcess.TabletUID > 0 {
-		replica2.MysqlctlProcess.Stop()
+
+		if err := replica2.MysqlctlProcess.Stop(); err != nil {
+			log.Fatalf("failed mysqlctl stop process   : %v", err)
+		}
 		os.RemoveAll(replica2.VttabletProcess.Directory)
 		// start replica2 from backup
 		err = replica2.MysqlctlProcess.Start()
 		require.Nil(t, err)
 	} else {
-		replica2.MysqlctldProcess.Stop()
+		if err := replica2.MysqlctldProcess.Stop(); err != nil {
+			log.Fatalf("failed mysqlctl stop process   : %v", err)
+		}
 		os.RemoveAll(replica2.VttabletProcess.Directory)
 		// start replica2 from backup
 		err = replica2.MysqlctldProcess.Start()

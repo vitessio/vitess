@@ -89,8 +89,10 @@ func TestStripeRoundTrip(t *testing.T) {
 			readers = append(readers, &buffers[i])
 			writers = append(writers, &buffers[i])
 		}
-		copyToStripes(writers, bytes.NewReader(input), blockSize)
-
+		_, err := copyToStripes(writers, bytes.NewReader(input), blockSize)
+		if err != nil {
+			t.Errorf("dataSize=%d, blockSize=%d, stripes=%d; copy error: %v", dataSize, blockSize, stripes, err)
+		}
 		// Read it back and merge.
 		outBuf := &bytes.Buffer{}
 		written, err := io.Copy(outBuf, stripeReader(readers, blockSize))

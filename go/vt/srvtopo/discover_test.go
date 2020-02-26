@@ -51,8 +51,8 @@ func (a TargetArray) Less(i, j int) bool {
 func TestFindAllTargets(t *testing.T) {
 	ctx := context.Background()
 	ts := memorytopo.NewServer("cell1", "cell2")
-	flag.Set("srv_topo_cache_refresh", "0s") // No caching values
-	flag.Set("srv_topo_cache_ttl", "0s")     // No caching values
+	_ = flag.Set("srv_topo_cache_refresh", "0s") // No caching values
+	_ = flag.Set("srv_topo_cache_ttl", "0s")     // No caching values
 	rs := NewResilientServer(ts, "TestFindAllKeyspaceShards")
 
 	// No keyspace / shards.
