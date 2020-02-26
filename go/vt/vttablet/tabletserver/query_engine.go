@@ -166,6 +166,7 @@ type QueryEngine struct {
 	strictTransTables bool
 
 	enableConsolidator          bool
+	enableConsolidatorReplicas  bool
 	enableQueryPlanFieldCaching bool
 
 	// Loggers
@@ -206,6 +207,7 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		checker,
 	)
 	qe.enableConsolidator = config.EnableConsolidator
+	qe.enableConsolidatorReplicas = config.EnableConsolidatorReplicas
 	qe.enableQueryPlanFieldCaching = config.EnableQueryPlanFieldCaching
 	qe.consolidator = sync2.NewConsolidator()
 	qe.txSerializer = txserializer.New(config.EnableHotRowProtectionDryRun,

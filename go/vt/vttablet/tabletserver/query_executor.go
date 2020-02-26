@@ -41,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -55,6 +56,7 @@ type QueryExecutor struct {
 	ctx            context.Context
 	logStats       *tabletenv.LogStats
 	tsv            *TabletServer
+	tabletType     topodata.TabletType
 }
 
 var sequenceFields = []*querypb.Field{
@@ -829,7 +831,8 @@ func (qre *QueryExecutor) qFetch(logStats *tabletenv.LogStats, parsedQuery *sqlp
 	if err != nil {
 		return nil, err
 	}
-	if qre.tsv.qe.enableConsolidator {
+	// Check tablet type.
+	if qre.tsv.qe.enableConsolidator || (qre.tsv.qe.enableConsolidatorReplicas && qre.tabletType != topodata.TabletType_MASTER) {
 		q, original := qre.tsv.qe.consolidator.Create(string(sqlWithoutComments))
 		if original {
 			defer q.Broadcast()
