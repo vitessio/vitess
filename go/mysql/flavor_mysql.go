@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -45,6 +45,14 @@ func (mysqlFlavor) startSlaveCommand() string {
 	return "START SLAVE"
 }
 
+func (mysqlFlavor) restartSlaveCommands() []string {
+	return []string{
+		"STOP SLAVE",
+		"RESET SLAVE",
+		"START SLAVE",
+	}
+}
+
 func (mysqlFlavor) startSlaveUntilAfter(pos Position) string {
 	return fmt.Sprintf("START SLAVE UNTIL SQL_AFTER_GTIDS = '%s'", pos)
 }
@@ -66,13 +74,16 @@ func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, slaveID uint32, startPos Posit
 }
 
 // resetReplicationCommands is part of the Flavor interface.
-func (mysqlFlavor) resetReplicationCommands() []string {
-	return []string{
+func (mysqlFlavor) resetReplicationCommands(c *Conn) []string {
+	resetCommands := []string{
 		"STOP SLAVE",
 		"RESET SLAVE ALL", // "ALL" makes it forget master host:port.
 		"RESET MASTER",    // This will also clear gtid_executed and gtid_purged.
-		"SET GLOBAL rpl_semi_sync_master_enabled = false, GLOBAL rpl_semi_sync_slave_enabled = false", // semi-sync will be enabled if needed when slave is started.
 	}
+	if c.SemiSyncExtensionLoaded() {
+		resetCommands = append(resetCommands, "SET GLOBAL rpl_semi_sync_master_enabled = false, GLOBAL rpl_semi_sync_slave_enabled = false") // semi-sync will be enabled if needed when slave is started.
+	}
+	return resetCommands
 }
 
 // setSlavePositionCommands is part of the Flavor interface.

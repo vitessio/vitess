@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -55,6 +55,9 @@ type flavor interface {
 	// startSlave returns the command to start the slave.
 	startSlaveCommand() string
 
+	// restartSlave returns the commands to stop, reset and start the slave.
+	restartSlaveCommands() []string
+
 	// startSlaveUntilAfter will restart replication, but only allow it
 	// to run until `pos` is reached. After reaching pos, replication will be stopped again
 	startSlaveUntilAfter(pos Position) string
@@ -71,7 +74,7 @@ type flavor interface {
 
 	// resetReplicationCommands returns the commands to completely reset
 	// replication on the host.
-	resetReplicationCommands() []string
+	resetReplicationCommands(c *Conn) []string
 
 	// setSlavePositionCommands returns the commands to set the
 	// replication position at which the slave will resume.
@@ -99,7 +102,14 @@ type flavor interface {
 	disableBinlogPlaybackCommand() string
 }
 
-// fillFlavor fills in c.Flavor based on c.ServerVersion.
+// flavors maps flavor names to their implementation.
+// Flavors need to register only if they support being specified in the
+// connection parameters.
+var flavors = make(map[string]func() flavor)
+
+// fillFlavor fills in c.Flavor. If the params specify the flavor,
+// that is used. Otherwise, we auto-detect.
+//
 // This is the same logic as the ConnectorJ java client. We try to recognize
 // MariaDB as much as we can, but default to MySQL.
 //
@@ -109,7 +119,12 @@ type flavor interface {
 // Note on such servers, 'select version()' would return 10.0.21-MariaDB-...
 // as well (not matching what c.ServerVersion is, but matching after we remove
 // the prefix).
-func (c *Conn) fillFlavor() {
+func (c *Conn) fillFlavor(params *ConnParams) {
+	if flavorFunc := flavors[params.Flavor]; flavorFunc != nil {
+		c.flavor = flavorFunc()
+		return
+	}
+
 	if strings.HasPrefix(c.ServerVersion, mariaDBReplicationHackPrefix) {
 		c.ServerVersion = c.ServerVersion[len(mariaDBReplicationHackPrefix):]
 		c.flavor = mariadbFlavor{}
@@ -153,6 +168,11 @@ func (c *Conn) StartSlaveCommand() string {
 	return c.flavor.startSlaveCommand()
 }
 
+// RestartSlaveCommands returns the commands to stop, reset and start the slave.
+func (c *Conn) RestartSlaveCommands() []string {
+	return c.flavor.restartSlaveCommands()
+}
+
 // StartSlaveUntilAfterCommand returns the command to start the slave.
 func (c *Conn) StartSlaveUntilAfterCommand(pos Position) string {
 	return c.flavor.startSlaveUntilAfter(pos)
@@ -179,7 +199,7 @@ func (c *Conn) ReadBinlogEvent() (BinlogEvent, error) {
 // ResetReplicationCommands returns the commands to completely reset
 // replication on the host.
 func (c *Conn) ResetReplicationCommands() []string {
-	return c.flavor.resetReplicationCommands()
+	return c.flavor.resetReplicationCommands(c)
 }
 
 // SetSlavePositionCommands returns the commands to set the

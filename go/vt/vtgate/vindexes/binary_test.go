@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -19,29 +19,26 @@ package vindexes
 import (
 	"bytes"
 	"reflect"
-	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
 
-var binOnlyVindex Vindex
+var binOnlyVindex SingleColumn
 
 func init() {
-	binOnlyVindex, _ = CreateVindex("binary", "binary_varchar", nil)
+	vindex, _ := CreateVindex("binary", "binary_varchar", nil)
+	binOnlyVindex = vindex.(SingleColumn)
 }
 
-func TestBinaryCost(t *testing.T) {
-	if binOnlyVindex.Cost() != 1 {
-		t.Errorf("Cost(): %d, want 1", binOnlyVindex.Cost())
-	}
-}
-
-func TestBinaryString(t *testing.T) {
-	if strings.Compare("binary_varchar", binOnlyVindex.String()) != 0 {
-		t.Errorf("String(): %s, want binary_varchar", binOnlyVindex.String())
-	}
+func TestBinaryInfo(t *testing.T) {
+	assert.Equal(t, 1, binOnlyVindex.Cost())
+	assert.Equal(t, "binary_varchar", binOnlyVindex.String())
+	assert.True(t, binOnlyVindex.IsUnique())
+	assert.False(t, binOnlyVindex.NeedsVCursor())
 }
 
 func TestBinaryMap(t *testing.T) {
@@ -82,9 +79,7 @@ func TestBinaryVerify(t *testing.T) {
 
 func TestBinaryReverseMap(t *testing.T) {
 	got, err := binOnlyVindex.(Reversible).ReverseMap(nil, [][]byte{[]byte("\x00\x00\x00\x00\x00\x00\x00\x01")})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []sqltypes.Value{sqltypes.NewVarBinary("\x00\x00\x00\x00\x00\x00\x00\x01")}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("ReverseMap(): %+v, want %+v", got, want)

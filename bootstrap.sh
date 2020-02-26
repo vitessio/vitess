@@ -1,7 +1,7 @@
 #!/bin/bash
 # shellcheck disable=SC2164
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,67 +15,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+### This file is executed by 'make tools'. You do not need to execute it directly.
+
+source ./dev.env
 
 # Outline of this file.
 # 0. Initialization and helper methods.
 # 1. Installation of dependencies.
 
-BUILD_TESTS=${BUILD_TESTS:-1}
 BUILD_PYTHON=${BUILD_PYTHON:-1}
 BUILD_JAVA=${BUILD_JAVA:-1}
+BUILD_CONSUL=${BUILD_CONSUL:-1}
 
 #
 # 0. Initialization and helper methods.
 #
 
-function fail() {
-  echo "ERROR: $1"
-  exit 1
-}
-
 [[ "$(dirname "$0")" = "." ]] || fail "bootstrap.sh must be run from its current directory"
-
-go version &>/dev/null  || fail "Go is not installed or is not on \$PATH"
-[[ "$(go version 2>&1)" =~ go1\.[1-9][1-9] ]] || fail "Go is not version 1.11+"
-
-# Create main directories.
-mkdir -p "$VTROOT/dist"
-mkdir -p "$VTROOT/bin"
-mkdir -p "$VTROOT/lib"
-mkdir -p "$VTROOT/vthook"
-
-# This is required for VIRTUALENV
-# Used by Python below
-
-if [ "$BUILD_TESTS" == 1 ] ; then
-    source ./dev.env
-else
-    source ./build.env
-fi
-
-if [ "$BUILD_TESTS" == 1 ] ; then
-    # Set up required soft links.
-    # TODO(mberlin): Which of these can be deleted?
-    ln -snf "$VTTOP/config" "$VTROOT/config"
-    ln -snf "$VTTOP/data" "$VTROOT/data"
-    ln -snf "$VTTOP/py" "$VTROOT/py-vtdb"
-    ln -snf "$VTTOP/go/vt/zkctl/zksrv.sh" "$VTROOT/bin/zksrv.sh"
-    ln -snf "$VTTOP/test/vthook-test.sh" "$VTROOT/vthook/test.sh"
-    ln -snf "$VTTOP/test/vthook-test_backup_error" "$VTROOT/vthook/test_backup_error"
-    ln -snf "$VTTOP/test/vthook-test_backup_transform" "$VTROOT/vthook/test_backup_transform"
-else
-    ln -snf "$VTTOP/config" "$VTROOT/config"
-    ln -snf "$VTTOP/data" "$VTROOT/data"
-    ln -snf "$VTTOP/go/vt/zkctl/zksrv.sh" "$VTROOT/bin/zksrv.sh"
-fi
-
-# git hooks are only required if someone intends to contribute.
-
-echo "creating git hooks"
-mkdir -p "$VTTOP/.git/hooks"
-ln -sf "$VTTOP/misc/git/pre-commit" "$VTTOP/.git/hooks/pre-commit"
-ln -sf "$VTTOP/misc/git/commit-msg" "$VTTOP/.git/hooks/commit-msg"
-(cd "$VTTOP" && git config core.hooksPath "$VTTOP/.git/hooks")
 
 # install_dep is a helper function to generalize the download and installation of dependencies.
 #
@@ -126,6 +82,13 @@ function install_dep() {
 # 1. Installation of dependencies.
 #
 
+# We should not use the arch command, since it is not reliably
+# available on macOS or some linuxes:
+# https://www.gnu.org/software/coreutils/manual/html_node/arch-invocation.html
+function get_arch() {
+  uname -m
+}
+
 
 # Install the gRPC Python library (grpcio) and the protobuf gRPC Python plugin (grpcio-tools) from PyPI.
 # Dependencies like the Python protobuf package will be installed automatically.
@@ -164,8 +127,14 @@ function install_protoc() {
     Darwin) local platform=osx;;
   esac
 
-  wget "https://github.com/google/protobuf/releases/download/v$version/protoc-$version-$platform-x86_64.zip"
-  unzip "protoc-$version-$platform-x86_64.zip"
+  case $(get_arch) in
+      aarch64)  local target=aarch_64;;
+      x86_64)  local target=x86_64;;
+      *)   echo "ERROR: unsupported architecture"; exit 1;;
+  esac
+
+  wget https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
+  unzip "protoc-$version-$platform-${target}.zip"
   ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
 }
 protoc_ver=3.6.1
@@ -203,8 +172,14 @@ function install_etcd() {
     Darwin) local platform=darwin; local ext=zip;;
   esac
 
+  case $(get_arch) in
+      aarch64)  local target=arm64;;
+      x86_64)  local target=amd64;;
+      *)   echo "ERROR: unsupported architecture"; exit 1;;
+  esac
+
   download_url=https://github.com/coreos/etcd/releases/download
-  file="etcd-${version}-${platform}-amd64.${ext}"
+  file="etcd-${version}-${platform}-${target}.${ext}"
 
   wget "$download_url/$version/$file"
   if [ "$ext" = "tar.gz" ]; then
@@ -213,9 +188,10 @@ function install_etcd() {
     unzip "$file"
   fi
   rm "$file"
-  ln -snf "$dist/etcd-${version}-${platform}-amd64/etcd" "$VTROOT/bin/etcd"
+  ln -snf "$dist/etcd-${version}-${platform}-${target}/etcd" "$VTROOT/bin/etcd"
+  ln -snf "$dist/etcd-${version}-${platform}-${target}/etcdctl" "$VTROOT/bin/etcdctl"
 }
-install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
+command -v etcd && echo "etcd already installed" || install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
 
 
 # Download and install consul, link consul binary into our root.
@@ -228,13 +204,21 @@ function install_consul() {
     Darwin) local platform=darwin;;
   esac
 
+  case $(get_arch) in
+      aarch64)  local target=arm64;;
+      x86_64)  local target=amd64;;
+      *)   echo "ERROR: unsupported architecture"; exit 1;;
+  esac
+
   download_url=https://releases.hashicorp.com/consul
-  wget "${download_url}/${version}/consul_${version}_${platform}_amd64.zip"
-  unzip "consul_${version}_${platform}_amd64.zip"
+  wget "${download_url}/${version}/consul_${version}_${platform}_${target}.zip"
+  unzip "consul_${version}_${platform}_${target}.zip"
   ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
-install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul
 
+if [ "$BUILD_CONSUL" == 1 ] ; then
+  install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul
+fi
 
 # Install py-mock.
 function install_pymock() {
@@ -246,7 +230,7 @@ function install_pymock() {
   PYTHONPATH=$(prepend_path "$PYTHONPATH" "$dist/lib/python2.7/site-packages")
   export PYTHONPATH
 
-  pushd "$VTTOP/third_party/py" >/dev/null
+  pushd "$VTROOT/third_party/py" >/dev/null
   tar -xzf "mock-$version.tar.gz"
   cd "mock-$version"
   $PYTHON ./setup.py install --prefix="$dist"
@@ -264,7 +248,7 @@ function install_selenium() {
   local version="$1"
   local dist="$2"
 
-  $VIRTUALENV "$dist"
+  PYTHONPATH='' $VIRTUALENV "$dist"
   PIP="$dist/bin/pip"
   # PYTHONPATH is removed for `pip install` because otherwise it can pick up go/dist/grpc/usr/local/lib/python2.7/site-packages
   # instead of go/dist/selenium/lib/python3.5/site-packages and then can't find module 'pip._vendor.requests'
@@ -279,17 +263,31 @@ function install_chromedriver() {
   local version="$1"
   local dist="$2"
 
-  curl -sL "https://chromedriver.storage.googleapis.com/$version/chromedriver_linux64.zip" > chromedriver_linux64.zip
-  unzip -o -q chromedriver_linux64.zip -d "$dist"
-  rm chromedriver_linux64.zip
+  if [ "$(arch)" == "aarch64" ] ; then
+      os=$(cat /etc/*release | grep "^ID=" | cut -d '=' -f 2)
+      case $os in
+          ubuntu|debian)
+              sudo apt-get update -y && sudo apt install -y --no-install-recommends unzip libglib2.0-0 libnss3 libx11-6
+	      ;;
+	  centos|fedora)
+	      sudo yum update -y && yum install -y libX11 unzip wget
+	      ;;
+      esac
+      echo "For Arm64, using prebuilt binary from electron (https://github.com/electron/electron/) of version 76.0.3809.126"
+      wget https://github.com/electron/electron/releases/download/v6.0.3/chromedriver-v6.0.3-linux-arm64.zip
+      unzip -o -q chromedriver-v6.0.3-linux-arm64.zip -d "$dist"
+      rm chromedriver-v6.0.3-linux-arm64.zip
+  else
+      curl -sL "https://chromedriver.storage.googleapis.com/$version/chromedriver_linux64.zip" > chromedriver_linux64.zip
+      unzip -o -q chromedriver_linux64.zip -d "$dist"
+      rm chromedriver_linux64.zip
+  fi
 }
-if [ "$BUILD_PYTHON" == 1 ] ; then
-    install_dep "chromedriver" "73.0.3683.20" "$VTROOT/dist/chromedriver" install_chromedriver
-fi
+install_dep "chromedriver" "73.0.3683.20" "$VTROOT/dist/chromedriver" install_chromedriver
 
 if [ "$BUILD_PYTHON" == 1 ] ; then
   PYTHONPATH='' $PIP install mysql-connector-python
 fi
 
 echo
-echo "bootstrap finished - run 'source dev.env' or 'source build.env' in your shell before building."
+echo "bootstrap finished - run 'make build' to compile"

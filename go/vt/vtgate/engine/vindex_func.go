@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -35,9 +35,13 @@ type VindexFunc struct {
 	// Fields is the field info for the result.
 	Fields []*querypb.Field
 	// Cols contains source column numbers: 0 for id, 1 for keyspace_id.
-	Cols   []int
-	Vindex vindexes.Vindex
+	Cols []int
+	// TODO(sougou): add support for MultiColumn.
+	Vindex vindexes.SingleColumn
 	Value  sqltypes.PlanValue
+
+	// VindexFunc does not take inputs
+	noInputs
 }
 
 // MarshalJSON serializes the VindexFunc into a JSON representation.

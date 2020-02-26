@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -98,7 +98,7 @@ def main(cmdline_options):
     init_data_opts.max_table_shard_size = cmdline_options.max_table_shard_size
     init_data_opts.null_probability = cmdline_options.null_probability
 
-  extra_my_cnf = os.path.join(os.environ['VTTOP'], 'config/mycnf/vtcombo.cnf')
+  extra_my_cnf = ''
   if cmdline_options.extra_my_cnf:
     extra_my_cnf += ':' + cmdline_options.extra_my_cnf
 
@@ -107,12 +107,11 @@ def main(cmdline_options):
       cmdline_options.schema_dir,
       cmdline_options.mysql_only,
       init_data_opts,
-      web_dir=cmdline_options.web_dir,
-      web_dir2=cmdline_options.web_dir2,
       default_schema_dir=cmdline_options.default_schema_dir,
       extra_my_cnf=extra_my_cnf,
       charset=cmdline_options.charset,
-      snapshot_file=cmdline_options.snapshot_file) as local_db:
+      snapshot_file=cmdline_options.snapshot_file,
+      mysql_server_bind_address=cmdline_options.mysql_server_bind_address) as local_db:
     print json.dumps(local_db.config())
     sys.stdout.flush()
     try:
@@ -181,14 +180,11 @@ if __name__ == '__main__':
       ' if --initialize_with_random_data is true. Only applies to fields'
       ' that can contain NULL values.')
   parser.add_option(
-      '-w', '--web_dir',
-      help='location of the vtctld web server files.')
-  parser.add_option(
-      '--web_dir2',
-      help='location of the vtctld2 web server files.')
-  parser.add_option(
       '-f', '--extra_my_cnf',
       help='extra files to add to the config, separated by ":"')
+  parser.add_option(
+      '--mysql_server_bind_address',
+      help='mysql server bind address ":"')
   parser.add_option(
       '-v', '--verbose', action='store_true',
       help='Display extra error messages.')

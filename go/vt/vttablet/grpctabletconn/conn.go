@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -731,6 +731,46 @@ func (conn *gRPCQueryClient) VStreamRows(ctx context.Context, target *querypb.Ta
 			Lastpk:            lastpk,
 		}
 		stream, err := conn.c.VStreamRows(ctx, req)
+		if err != nil {
+			return nil, tabletconn.ErrorFromGRPC(err)
+		}
+		return stream, nil
+	}()
+	if err != nil {
+		return err
+	}
+	for {
+		r, err := stream.Recv()
+		if err != nil {
+			return tabletconn.ErrorFromGRPC(err)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		if err := send(r); err != nil {
+			return err
+		}
+	}
+}
+
+// VStreamResults streams rows of a query from the specified starting point.
+func (conn *gRPCQueryClient) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
+	stream, err := func() (queryservicepb.Query_VStreamResultsClient, error) {
+		conn.mu.RLock()
+		defer conn.mu.RUnlock()
+		if conn.cc == nil {
+			return nil, tabletconn.ConnClosed
+		}
+
+		req := &binlogdatapb.VStreamResultsRequest{
+			Target:            target,
+			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
+			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
+			Query:             query,
+		}
+		stream, err := conn.c.VStreamResults(ctx, req)
 		if err != nil {
 			return nil, tabletconn.ErrorFromGRPC(err)
 		}

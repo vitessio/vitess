@@ -118,7 +118,7 @@ A partially correlated subquery is similar to the completely uncorrelated subque
 5. Finish analyzing b.
 6. Analyzing b will make it correlated to a (because of c).
 
-The `findOrigin` function can already peform this analysis.
+The `findOrigin` function can already perform this analysis.
 
 So, in the above case, c cannot be pulled out beyond b. If c was not correlated with a, then we have the opportunity to pull it out further.
 

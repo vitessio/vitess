@@ -1,4 +1,4 @@
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,17 +23,15 @@ import os
 import sys
 
 
-# For now, vttop is only used in this module. If other people
+# For now, vtroot is only used in this module. If other people
 # need this, we should move it to environment.
-if "VTTOP" not in os.environ:
+if "VTROOT" not in os.environ:
   sys.stderr.write(
       "ERROR: Vitess environment not set up. "
       'Please run "source dev.env" first.\n')
   sys.exit(1)
 
-# vttop is the toplevel of the vitess source tree
-vttop = os.environ["VTTOP"]
-
+vtroot = os.environ["VTROOT"]
 
 class MysqlFlavor(object):
   """Base class with default SQL statements."""
@@ -48,8 +46,7 @@ class MariaDB(MysqlFlavor):
 
   def my_cnf(self):
     files = [
-        os.path.join(vttop, "config/mycnf/default-fast.cnf"),
-        os.path.join(vttop, "config/mycnf/master_mariadb.cnf"),
+        os.path.join(vtroot, "config/mycnf/default-fast.cnf"),
     ]
     return ":".join(files)
 
@@ -58,8 +55,7 @@ class MariaDB103(MysqlFlavor):
 
   def my_cnf(self):
     files = [
-      os.path.join(vttop, "config/mycnf/default-fast.cnf"),
-      os.path.join(vttop, "config/mycnf/master_mariadb103.cnf"),
+      os.path.join(vtroot, "config/mycnf/default-fast.cnf"),
     ]
     return ":".join(files)
 
@@ -68,8 +64,7 @@ class MySQL56(MysqlFlavor):
 
   def my_cnf(self):
     files = [
-        os.path.join(vttop, "config/mycnf/default-fast.cnf"),
-        os.path.join(vttop, "config/mycnf/master_mysql56.cnf"),
+        os.path.join(vtroot, "config/mycnf/default-fast.cnf"),
     ]
     return ":".join(files)
 
@@ -78,8 +73,7 @@ class MySQL80(MysqlFlavor):
 
   def my_cnf(self):
     files = [
-        os.path.join(vttop, "config/mycnf/default-fast.cnf"),
-        os.path.join(vttop, "config/mycnf/master_mysql80.cnf"),
+        os.path.join(vtroot, "config/mycnf/default-fast.cnf"),
     ]
     return ":".join(files)
 
@@ -99,7 +93,7 @@ def set_mysql_flavor(flavor):
   global __mysql_flavor
 
   # Last default is there because the environment variable might be set to "".
-  flavor = flavor or os.environ.get("MYSQL_FLAVOR", "MariaDB") or "MariaDB"
+  flavor = flavor or os.environ.get("MYSQL_FLAVOR", "MySQL56") or "MySQL56"
 
   # Set the environment variable explicitly in case we're overriding it via
   # command-line flag.

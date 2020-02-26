@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
@@ -589,9 +590,7 @@ func TestScatterConnSingleDB(t *testing.T) {
 	// SingleDb (legacy)
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, SingleDb: true})
 	_, err = sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_MASTER, session, false, nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	_, err = sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_MASTER, session, false, nil)
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Multi DB exec: %v, must contain %s", err, want)
@@ -600,9 +599,7 @@ func TestScatterConnSingleDB(t *testing.T) {
 	// TransactionMode_SINGLE in session
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true, TransactionMode: vtgatepb.TransactionMode_SINGLE})
 	_, err = sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_MASTER, session, false, nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	_, err = sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_MASTER, session, false, nil)
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Multi DB exec: %v, must contain %s", err, want)
@@ -612,9 +609,7 @@ func TestScatterConnSingleDB(t *testing.T) {
 	sc.txConn.mode = vtgatepb.TransactionMode_SINGLE
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	_, err = sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_MASTER, session, false, nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	_, err = sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_MASTER, session, false, nil)
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Multi DB exec: %v, must contain %s", err, want)
@@ -624,13 +619,9 @@ func TestScatterConnSingleDB(t *testing.T) {
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
 	_, err = sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_MASTER, session, false, nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	_, err = sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_MASTER, session, false, nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestAppendResult(t *testing.T) {

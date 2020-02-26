@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -192,12 +192,12 @@ func TestLogStatsFormatQuerySources(t *testing.T) {
 
 	logStats.QuerySources |= QuerySourceMySQL
 	if !strings.Contains(logStats.FmtQuerySources(), "mysql") {
-		t.Fatalf("'mysql' should be in formated query sources")
+		t.Fatalf("'mysql' should be in formatted query sources")
 	}
 
 	logStats.QuerySources |= QuerySourceConsolidator
 	if !strings.Contains(logStats.FmtQuerySources(), "consolidator") {
-		t.Fatalf("'consolidator' should be in formated query sources")
+		t.Fatalf("'consolidator' should be in formatted query sources")
 	}
 }
 

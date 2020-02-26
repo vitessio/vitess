@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -815,7 +815,7 @@ VTCTL_RPC = 3
 
 
 def run_vtctl(clargs, auto_log=False, expect_fail=False,
-              mode=VTCTL_AUTO, **kwargs):
+              mode=VTCTL_AUTO, action_timeout=10, **kwargs):
   if mode == VTCTL_AUTO:
     if not expect_fail and vtctld:
       mode = VTCTL_RPC
@@ -833,7 +833,7 @@ def run_vtctl(clargs, auto_log=False, expect_fail=False,
       logging.debug('vtctl: %s', ' '.join(clargs))
     result = vtctl_client.execute_vtctl_command(vtctld_connection, clargs,
                                                 info_to_debug=True,
-                                                action_timeout=10)
+                                                action_timeout=action_timeout)
     return result, ''
 
   raise Exception('Unknown mode: %s', mode)
@@ -1214,8 +1214,6 @@ class Vtctld(object):
     args = environment.binary_args('vtctld') + [
         '-enable_queries',
         '-cell', 'test_nj',
-        '-web_dir', environment.vttop + '/web/vtctld',
-        '-web_dir2', environment.vttop + '/web/vtctld2',
         '--log_dir', environment.vtlogroot,
         '--port', str(self.port),
         '-tablet_manager_protocol',

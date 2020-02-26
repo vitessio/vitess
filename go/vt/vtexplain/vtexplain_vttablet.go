@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -409,7 +409,7 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 		if ddl.OptLike != nil {
 			likeTable := ddl.OptLike.LikeTable.Name.String()
 			if _, ok := schemaQueries["describe "+likeTable]; !ok {
-				return fmt.Errorf("check your schema, table[%s] doesnt exist", likeTable)
+				return fmt.Errorf("check your schema, table[%s] doesn't exist", likeTable)
 			}
 			schemaQueries["show index from "+table] = schemaQueries["show index from "+likeTable]
 			schemaQueries["describe "+table] = schemaQueries["describe "+likeTable]
@@ -628,6 +628,9 @@ func inferColTypeFromExpr(node sqlparser.Expr, colTypeMap map[string]querypb.Typ
 		colNames, colTypes = inferColTypeFromExpr(node.Expr, colTypeMap, colNames, colTypes)
 	case *sqlparser.CaseExpr:
 		colNames, colTypes = inferColTypeFromExpr(node.Whens[0].Val, colTypeMap, colNames, colTypes)
+	case *sqlparser.NullVal:
+		colNames = append(colNames, sqlparser.String(node))
+		colTypes = append(colTypes, querypb.Type_NULL_TYPE)
 	default:
 		log.Errorf("vtexplain: unsupported select expression type +%v node %s", reflect.TypeOf(node), sqlparser.String(node))
 	}

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -69,14 +69,15 @@ const (
 	// AllPrivs user should have more privileges than App (should include possibility to do
 	// schema changes and write to internal Vitess tables), but it shouldn't have SUPER
 	// privilege like Dba has.
-	AllPrivs = "allprivs"
-	Dba      = "dba"
-	Filtered = "filtered"
-	Repl     = "repl"
+	AllPrivs     = "allprivs"
+	Dba          = "dba"
+	Filtered     = "filtered"
+	Repl         = "repl"
+	ExternalRepl = "erepl"
 )
 
 // All can be used to register all flags: RegisterFlags(All...)
-var All = []string{App, AppDebug, AllPrivs, Dba, Filtered, Repl}
+var All = []string{App, AppDebug, AllPrivs, Dba, Filtered, Repl, ExternalRepl}
 
 // RegisterFlags registers the flags for the given DBConfigFlag.
 // For instance, vttablet will register client, dba and repl.
@@ -96,6 +97,7 @@ func registerBaseFlags() {
 	flag.IntVar(&baseConfig.Port, "db_port", 0, "tcp port")
 	flag.StringVar(&baseConfig.Charset, "db_charset", "", "Character set. Only utf8 or latin1 based character sets are supported.")
 	flag.Uint64Var(&baseConfig.Flags, "db_flags", 0, "Flag values as defined by MySQL.")
+	flag.StringVar(&baseConfig.Flavor, "db_flavor", "", "Flavor overrid. Valid value is FilePos.")
 	flag.StringVar(&baseConfig.SslCa, "db_ssl_ca", "", "connection ssl ca")
 	flag.StringVar(&baseConfig.SslCaPath, "db_ssl_ca_path", "", "connection ssl ca path")
 	flag.StringVar(&baseConfig.SslCert, "db_ssl_cert", "", "connection ssl certificate")
@@ -127,6 +129,7 @@ func registerPerUserFlags(dbc *userConfig, userKey string) {
 	flag.StringVar(&dbc.param.SslCert, "db-config-"+userKey+"-ssl-cert", "", "deprecated: use db_ssl_cert")
 	flag.StringVar(&dbc.param.SslKey, "db-config-"+userKey+"-ssl-key", "", "deprecated: use db_ssl_key")
 	flag.StringVar(&dbc.param.ServerName, "db-config-"+userKey+"-server_name", "", "deprecated: use db_server_name")
+	flag.StringVar(&dbc.param.Flavor, "db-config-"+userKey+"-flavor", "", "deprecated: use db_flavor")
 
 	flag.StringVar(&dbc.param.DeprecatedDBName, "db-config-"+userKey+"-dbname", "", "deprecated: dbname does not need to be explicitly configured")
 
@@ -157,14 +160,31 @@ func (dbcfgs *DBConfigs) DbaWithDB() *mysql.ConnParams {
 	return dbcfgs.makeParams(Dba, true)
 }
 
-// FilteredWithDB returns connection parameters for appdebug with dbname set.
+// FilteredWithDB returns connection parameters for filtered with dbname set.
 func (dbcfgs *DBConfigs) FilteredWithDB() *mysql.ConnParams {
 	return dbcfgs.makeParams(Filtered, true)
 }
 
-// Repl returns connection parameters for appdebug with no dbname set.
+// Repl returns connection parameters for repl with no dbname set.
 func (dbcfgs *DBConfigs) Repl() *mysql.ConnParams {
 	return dbcfgs.makeParams(Repl, false)
+}
+
+// ExternalRepl returns connection parameters for repl with no dbname set.
+func (dbcfgs *DBConfigs) ExternalRepl() *mysql.ConnParams {
+	return dbcfgs.makeParams(ExternalRepl, true)
+}
+
+// ExternalReplWithDB returns connection parameters for repl with dbname set.
+func (dbcfgs *DBConfigs) ExternalReplWithDB() *mysql.ConnParams {
+	params := dbcfgs.makeParams(ExternalRepl, true)
+	// TODO @rafael: This is a hack to allows to configure external databases by providing
+	// db-config-erepl-dbname.
+	if params.DeprecatedDBName != "" {
+		params.DbName = params.DeprecatedDBName
+		return params
+	}
+	return params
 }
 
 // AppWithDB returns connection parameters for app with dbname set.
@@ -237,8 +257,13 @@ func HasConnectionParams() bool {
 // is used to initialize the per-user conn params.
 func Init(defaultSocketFile string) (*DBConfigs, error) {
 	// The new base configs, if set, supersede legacy settings.
-	for _, uc := range dbConfigs.userConfigs {
-		if HasConnectionParams() {
+	for user, uc := range dbConfigs.userConfigs {
+		// TODO @rafael: For ExternalRepl we need to respect the provided host / port
+		// At the moment this is an snowflake user connection type that it used by
+		// vreplication to connect to external mysql hosts that are not part of a vitess
+		// cluster. In the future we need to refactor all dbconfig to support custom users
+		// in a more flexible way.
+		if HasConnectionParams() && user != ExternalRepl {
 			uc.param.Host = baseConfig.Host
 			uc.param.Port = baseConfig.Port
 			uc.param.UnixSocket = baseConfig.UnixSocket
@@ -251,6 +276,9 @@ func Init(defaultSocketFile string) (*DBConfigs, error) {
 		}
 		if baseConfig.Flags != 0 {
 			uc.param.Flags = baseConfig.Flags
+		}
+		if user != ExternalRepl {
+			uc.param.Flavor = baseConfig.Flavor
 		}
 		if uc.useSSL {
 			uc.param.SslCa = baseConfig.SslCa
@@ -280,12 +308,13 @@ func Init(defaultSocketFile string) (*DBConfigs, error) {
 func NewTestDBConfigs(genParams, appDebugParams mysql.ConnParams, dbName string) *DBConfigs {
 	dbcfgs := &DBConfigs{
 		userConfigs: map[string]*userConfig{
-			App:      {param: genParams},
-			AppDebug: {param: appDebugParams},
-			AllPrivs: {param: genParams},
-			Dba:      {param: genParams},
-			Filtered: {param: genParams},
-			Repl:     {param: genParams},
+			App:          {param: genParams},
+			AppDebug:     {param: appDebugParams},
+			AllPrivs:     {param: genParams},
+			Dba:          {param: genParams},
+			Filtered:     {param: genParams},
+			Repl:         {param: genParams},
+			ExternalRepl: {param: genParams},
 		},
 	}
 	dbcfgs.DBName.Set(dbName)

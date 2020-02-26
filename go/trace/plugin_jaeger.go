@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -93,10 +93,6 @@ var _ tracer = (*jaegerTracer)(nil)
 
 type jaegerTracer struct {
 	actual opentracing.Tracer
-}
-
-func (*jaegerTracer) FromString(s string) (opentracing.SpanContext, error) {
-	return jaeger.ContextFromString(s)
 }
 
 func (jt *jaegerTracer) GetOpenTracingTracer() opentracing.Tracer {

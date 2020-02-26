@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -50,6 +50,15 @@ func LoadTable(conn *connpool.DBConn, tableName string, tableType string, commen
 			return nil, err
 		}
 		ta.Type = Message
+	}
+	return ta, nil
+}
+
+// LoadTableBaisc creates a Table with just the column info loaded.
+func LoadTableBasic(conn *connpool.DBConn, tableName string) (*Table, error) {
+	ta := NewTable(tableName)
+	if err := fetchColumns(ta, conn, tableName); err != nil {
+		return nil, err
 	}
 	return ta, nil
 }

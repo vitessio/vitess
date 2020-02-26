@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -195,8 +195,7 @@ func commandVtGateExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 
 	qr, err := session.Execute(ctx, subFlags.Arg(0), bindVars)
 	if err != nil {
-		//lint:ignore ST1005 function name
-		return fmt.Errorf("Execute failed: %v", err)
+		return fmt.Errorf("execute failed: %v", err)
 	}
 	if *json {
 		return printJSON(wr.Logger(), qr)
@@ -444,8 +443,7 @@ func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags
 		TabletType: tabletInfo.Tablet.Type,
 	}, subFlags.Arg(1), bindVars, int64(*transactionID), executeOptions)
 	if err != nil {
-		//lint:ignore ST1005 function name
-		return fmt.Errorf("Execute failed: %v", err)
+		return fmt.Errorf("execute failed: %v", err)
 	}
 	if *json {
 		return printJSON(wr.Logger(), qr)

@@ -37,7 +37,7 @@ type routeOption struct {
 
 	// vindexMap is a map of all vindexMap that can be used
 	// for the routeOption.
-	vindexMap map[*column]vindexes.Vindex
+	vindexMap map[*column]vindexes.SingleColumn
 
 	// condition stores the AST condition that will be used
 	// to resolve the ERoute Values field.
@@ -58,7 +58,7 @@ func newSimpleRouteOption(rb *route, eroute *engine.Route) *routeOption {
 	}
 }
 
-func newRouteOption(rb *route, vst *vindexes.Table, sub *tableSubstitution, vindexMap map[*column]vindexes.Vindex, eroute *engine.Route) *routeOption {
+func newRouteOption(rb *route, vst *vindexes.Table, sub *tableSubstitution, vindexMap map[*column]vindexes.SingleColumn, eroute *engine.Route) *routeOption {
 	var subs []*tableSubstitution
 	if sub != nil && sub.newExpr != nil {
 		subs = []*tableSubstitution{sub}
@@ -87,18 +87,24 @@ func (ro *routeOption) JoinCanMerge(pb *primitiveBuilder, rro *routeOption, ajoi
 }
 
 func (ro *routeOption) MergeJoin(rro *routeOption, isLeftJoin bool) {
+	ro.merge(rro)
 	ro.vschemaTable = nil
-	ro.substitutions = append(ro.substitutions, rro.substitutions...)
-	if isLeftJoin {
-		return
-	}
-	// Add RHS vindexes only if it's not a left join.
 	for c, v := range rro.vindexMap {
 		if ro.vindexMap == nil {
-			ro.vindexMap = make(map[*column]vindexes.Vindex)
+			ro.vindexMap = make(map[*column]vindexes.SingleColumn)
 		}
 		ro.vindexMap[c] = v
 	}
+}
+
+// merge merges two routeOptions. If the LHS (ro) is a SelectReference,
+// then the RHS option values supersede LHS.
+func (ro *routeOption) merge(rro *routeOption) {
+	if ro.eroute.Opcode == engine.SelectReference {
+		// Swap the values and then merge.
+		*ro, *rro = *rro, *ro
+	}
+	ro.substitutions = append(ro.substitutions, rro.substitutions...)
 }
 
 func (ro *routeOption) SubqueryCanMerge(pb *primitiveBuilder, inner *routeOption) bool {
@@ -114,7 +120,7 @@ func (ro *routeOption) SubqueryCanMerge(pb *primitiveBuilder, inner *routeOption
 }
 
 func (ro *routeOption) MergeSubquery(subqueryOption *routeOption) {
-	ro.substitutions = append(ro.substitutions, subqueryOption.substitutions...)
+	ro.merge(subqueryOption)
 }
 
 func (ro *routeOption) UnionCanMerge(rro *routeOption) bool {
@@ -122,11 +128,11 @@ func (ro *routeOption) UnionCanMerge(rro *routeOption) bool {
 }
 
 func (ro *routeOption) MergeUnion(rro *routeOption) {
+	ro.merge(rro)
 	ro.vschemaTable = nil
-	ro.substitutions = append(ro.substitutions, rro.substitutions...)
 }
 
-func (ro *routeOption) SubqueryToTable(rb *route, vindexMap map[*column]vindexes.Vindex) {
+func (ro *routeOption) SubqueryToTable(rb *route, vindexMap map[*column]vindexes.SingleColumn) {
 	ro.rb = rb
 	ro.vschemaTable = nil
 	ro.vindexMap = vindexMap
@@ -149,9 +155,7 @@ func (ro *routeOption) canMerge(rro *routeOption, customCheck func() bool) bool 
 			return true
 		}
 	case engine.SelectReference:
-		// TODO(sougou): this can be changed to true, but we'll have
-		// to merge against rro insteal of ro.
-		return false
+		return true
 	case engine.SelectNext:
 		return false
 	}
@@ -234,14 +238,14 @@ func (ro *routeOption) UpdatePlan(pb *primitiveBuilder, filter sqlparser.Expr) {
 	}
 }
 
-func (ro *routeOption) updateRoute(opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
+func (ro *routeOption) updateRoute(opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
 	ro.eroute.Opcode = opcode
 	ro.eroute.Vindex = vindex
 	ro.condition = condition
 }
 
 // computePlan computes the plan for the specified filter.
-func (ro *routeOption) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
+func (ro *routeOption) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
 	switch node := filter.(type) {
 	case *sqlparser.ComparisonExpr:
 		switch node.Operator {
@@ -257,7 +261,7 @@ func (ro *routeOption) computePlan(pb *primitiveBuilder, filter sqlparser.Expr) 
 }
 
 // computeEqualPlan computes the plan for an equality constraint.
-func (ro *routeOption) computeEqualPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
+func (ro *routeOption) computeEqualPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
 	left := comparison.Left
 	right := comparison.Right
 	vindex = ro.FindVindex(pb, left)
@@ -278,7 +282,7 @@ func (ro *routeOption) computeEqualPlan(pb *primitiveBuilder, comparison *sqlpar
 }
 
 // computeINPlan computes the plan for an IN constraint.
-func (ro *routeOption) computeINPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.Vindex, condition sqlparser.Expr) {
+func (ro *routeOption) computeINPlan(pb *primitiveBuilder, comparison *sqlparser.ComparisonExpr) (opcode engine.RouteOpcode, vindex vindexes.SingleColumn, condition sqlparser.Expr) {
 	vindex = ro.FindVindex(pb, comparison.Left)
 	if vindex == nil {
 		return engine.SelectScatter, nil, nil
@@ -323,7 +327,7 @@ func (ro *routeOption) isBetterThan(other *routeOption) bool {
 	return false
 }
 
-func (ro *routeOption) FindVindex(pb *primitiveBuilder, expr sqlparser.Expr) vindexes.Vindex {
+func (ro *routeOption) FindVindex(pb *primitiveBuilder, expr sqlparser.Expr) vindexes.SingleColumn {
 	col, ok := expr.(*sqlparser.ColName)
 	if !ok {
 		return nil

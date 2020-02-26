@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -85,10 +85,10 @@ func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Del
 
 	if edel.Opcode == engine.DeleteScatter {
 		if len(edel.Table.Owned) != 0 {
-			return edel, errors.New("unsupported: multi shard delete on a table with owned lookup vindexes")
+			return nil, errors.New("unsupported: multi shard delete on a table with owned lookup vindexes")
 		}
 		if del.Limit != nil {
-			return edel, errors.New("unsupported: multi shard delete with limit")
+			return nil, errors.New("unsupported: multi shard delete with limit")
 		}
 	}
 

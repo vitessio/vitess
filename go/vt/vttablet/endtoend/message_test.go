@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
 
@@ -104,9 +105,7 @@ func TestMessage(t *testing.T) {
 	got = <-ch
 	// Check time_scheduled separately.
 	scheduled, err := sqltypes.ToInt64(got.Rows[0][1])
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if now := time.Now().UnixNano(); now-scheduled >= int64(10*time.Second) {
 		t.Errorf("scheduled: %v, must be close to %v", scheduled, now)
 	}
@@ -168,9 +167,7 @@ func TestMessage(t *testing.T) {
 
 	// Ack the message.
 	count, err := client.MessageAck("vitess_message", []string{"1"})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if count != 1 {
 		t.Errorf("count: %d, want 1", count)
 	}
@@ -291,9 +288,7 @@ func TestThreeColMessage(t *testing.T) {
 
 	// Verify Ack.
 	count, err := client.MessageAck("vitess_message3", []string{"1"})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if count != 1 {
 		t.Errorf("count: %d, want 1", count)
 	}
@@ -404,9 +399,7 @@ func TestMessageAuto(t *testing.T) {
 	}
 
 	_, err = client.MessageAck("vitess_message_auto", []string{"1, 2, 5"})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	// Ensure msg6 is eventually received.
 	got := <-ch
@@ -565,15 +558,11 @@ func TestMessageTopic(t *testing.T) {
 
 	// ack the first subscriber
 	_, err = client.MessageAck("vitess_topic_subscriber_1", []string{"1, 2, 3"})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	// ack the second subscriber
 	_, err = client.MessageAck("vitess_topic_subscriber_2", []string{"1, 2, 3"})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	//
 	// phase 2 tests deleting one of the subscribers and making sure
@@ -658,9 +647,7 @@ func TestMessageTopic(t *testing.T) {
 
 	// ack the second subscriber
 	_, err = client.MessageAck("vitess_topic_subscriber_2", []string{"4, 5, 6"})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	//
 	// phase 3 tests deleting the last subscriber and making sure

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -299,6 +299,24 @@ func TestEncString(t *testing.T) {
 
 		// Check failed decoding as bytes with no data.
 		_, _, ok = readLenEncStringAsBytes([]byte{}, 0)
+		if ok {
+			t.Errorf("readLenEncStringAsBytes returned ok=true for empty value %v", test.value)
+		}
+
+		// Check successful decoding as bytes.
+		gotbcopy, posCopy, ok := readLenEncStringAsBytesCopy(test.lenEncoded, 0)
+		if !ok || string(gotb) != test.value || pos != len(test.lenEncoded) {
+			t.Errorf("readLenEncString returned %v/%v/%v but expected %v/%v/%v", gotbcopy, posCopy, ok, test.value, len(test.lenEncoded), true)
+		}
+
+		// Check failed decoding as bytes with shorter data.
+		_, _, ok = readLenEncStringAsBytesCopy(test.lenEncoded[:len(test.lenEncoded)-1], 0)
+		if ok {
+			t.Errorf("readLenEncStringAsBytes returned ok=true for shorter value %v", test.value)
+		}
+
+		// Check failed decoding as bytes with no data.
+		_, _, ok = readLenEncStringAsBytesCopy([]byte{}, 0)
 		if ok {
 			t.Errorf("readLenEncStringAsBytes returned ok=true for empty value %v", test.value)
 		}

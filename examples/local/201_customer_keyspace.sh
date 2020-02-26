@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2018 The Vitess Authors.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,8 +16,5 @@
 
 # this script creates a new keyspace in preparation for vertical resharding
 
-set -e
+vtctlclient -server localhost:15999 CreateKeyspace -served_from='master:commerce,replica:commerce,rdonly:commerce' customer
 
-./lvtctl.sh CreateKeyspace -served_from='master:commerce,replica:commerce,rdonly:commerce' customer
-
-disown -a

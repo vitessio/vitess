@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -307,6 +307,11 @@ func (oa *OrderedAggregate) GetFields(vcursor VCursor, bindVars map[string]*quer
 	}
 	qr = &sqltypes.Result{Fields: oa.convertFields(qr.Fields)}
 	return qr.Truncate(oa.TruncateColumnCount), nil
+}
+
+// Inputs returns the Primitive input for this aggregation
+func (oa *OrderedAggregate) Inputs() []Primitive {
+	return []Primitive{oa.Input}
 }
 
 func (oa *OrderedAggregate) keysEqual(row1, row2 []sqltypes.Value) (bool, error) {

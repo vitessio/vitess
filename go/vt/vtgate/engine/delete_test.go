@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -65,7 +65,7 @@ func TestDeleteEqual(t *testing.T) {
 			Sharded: true,
 		},
 		Query:  "dummy_delete",
-		Vindex: vindex,
+		Vindex: vindex.(vindexes.SingleColumn),
 		Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 	}
 
@@ -98,7 +98,7 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 			Sharded: true,
 		},
 		Query:  "dummy_delete",
-		Vindex: vindex,
+		Vindex: vindex.(vindexes.SingleColumn),
 		Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 	}
 
@@ -127,7 +127,7 @@ func TestDeleteEqualNoScatter(t *testing.T) {
 			Sharded: true,
 		},
 		Query:  "dummy_delete",
-		Vindex: vindex,
+		Vindex: vindex.(vindexes.SingleColumn),
 		Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 	}
 
@@ -142,7 +142,7 @@ func TestDeleteOwnedVindex(t *testing.T) {
 		Opcode:           DeleteEqual,
 		Keyspace:         ks.Keyspace,
 		Query:            "dummy_delete",
-		Vindex:           ks.Vindexes["hash"],
+		Vindex:           ks.Vindexes["hash"].(vindexes.SingleColumn),
 		Values:           []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 		Table:            ks.Tables["t1"],
 		OwnedVindexQuery: "dummy_subquery",

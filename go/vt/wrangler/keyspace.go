@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -88,6 +88,46 @@ func (wr *Wrangler) SetKeyspaceShardingInfo(ctx context.Context, keyspace, shard
 	ki.ShardingColumnName = shardingColumnName
 	ki.ShardingColumnType = shardingColumnType
 	return wr.ts.UpdateKeyspace(ctx, ki)
+}
+
+// validateNewWorkflow ensures that the specified workflow doesn't already exist
+// in the keyspace.
+func (wr *Wrangler) validateNewWorkflow(ctx context.Context, keyspace, workflow string) error {
+	allshards, err := wr.ts.FindAllShardsInKeyspace(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+	var wg sync.WaitGroup
+	allErrors := &concurrency.AllErrorRecorder{}
+	for _, si := range allshards {
+		if si.MasterAlias == nil {
+			allErrors.RecordError(fmt.Errorf("shard has no master: %v", si.ShardName()))
+			continue
+		}
+		wg.Add(1)
+		go func(si *topo.ShardInfo) {
+			defer wg.Done()
+
+			master, err := wr.ts.GetTablet(ctx, si.MasterAlias)
+			if err != nil {
+				allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.GetTablet"))
+				return
+			}
+
+			query := fmt.Sprintf("select 1 from _vt.vreplication where db_name=%s and workflow=%s", encodeString(master.DbName()), encodeString(workflow))
+			p3qr, err := wr.tmc.VReplicationExec(ctx, master.Tablet, query)
+			if err != nil {
+				allErrors.RecordError(vterrors.Wrap(err, "validateWorkflowName.VReplicationExec"))
+				return
+			}
+			if len(p3qr.Rows) != 0 {
+				allErrors.RecordError(fmt.Errorf("workflow %s already exists in keyspace %s", workflow, keyspace))
+				return
+			}
+		}(si)
+	}
+	wg.Wait()
+	return allErrors.AggrError(vterrors.Aggregate)
 }
 
 // SplitClone initiates a SplitClone workflow.
@@ -958,7 +998,7 @@ func (wr *Wrangler) waitForDrainInCell(ctx context.Context, cell, keyspace, shar
 	defer watcher.Stop()
 
 	// Wait for at least one tablet.
-	if err := tsc.WaitForTablets(ctx, cell, keyspace, shard, servedType); err != nil {
+	if err := tsc.WaitForTablets(ctx, keyspace, shard, servedType); err != nil {
 		return fmt.Errorf("%v: error waiting for initial %v tablets for %v/%v: %v", cell, servedType, keyspace, shard, err)
 	}
 

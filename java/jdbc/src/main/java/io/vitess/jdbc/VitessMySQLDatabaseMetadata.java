@@ -1,12 +1,12 @@
 /*
- * Copyright 2017 Google Inc.
- *
+ * Copyright 2019 The Vitess Authors.
+
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+
  *     http://www.apache.org/licenses/LICENSE-2.0
- *
+
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -41,7 +41,6 @@ import java.util.Map;
 import java.util.SortedMap;
 import java.util.StringTokenizer;
 import java.util.TreeMap;
-import java.util.logging.Logger;
 
 /**
  * Created by ashudeep.sharma on 15/02/16.
@@ -50,7 +49,6 @@ public class VitessMySQLDatabaseMetadata extends VitessDatabaseMetaData implemen
     DatabaseMetaData {
 
   private static final String DRIVER_NAME = "Vitess MySQL JDBC Driver";
-  private static Logger logger = Logger.getLogger(VitessMySQLDatabaseMetadata.class.getName());
   private static String mysqlKeywordsThatArentSQL92;
 
   static {

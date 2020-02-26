@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,9 +18,13 @@ package vstreamer
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -55,14 +59,12 @@ func TestStatements(t *testing.T) {
 			"update stream1 set val='bbb' where id = 1",
 			"commit",
 		},
-		// MySQL issues GTID->BEGIN.
-		// MariaDB issues BEGIN->GTID.
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:FIELD field_event:<table_name:"stream1" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
 			`type:ROW row_event:<table_name:"stream1" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
 			`type:ROW row_event:<table_name:"stream1" row_changes:<before:<lengths:1 lengths:3 values:"1aaa" > after:<lengths:1 lengths:3 values:"1bbb" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}, {
@@ -90,8 +92,7 @@ func TestStatements(t *testing.T) {
 			"commit",
 		},
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:FIELD field_event:<table_name:"stream1" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
 			`type:ROW row_event:<table_name:"stream1" row_changes:<after:<lengths:1 lengths:3 values:"2bbb" > > > `,
 			`type:FIELD field_event:<table_name:"stream2" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
@@ -102,6 +103,7 @@ func TestStatements(t *testing.T) {
 			`type:ROW row_event:<table_name:"stream1" ` +
 				`row_changes:<before:<lengths:1 lengths:3 values:"1ccc" > > ` +
 				`row_changes:<before:<lengths:1 lengths:3 values:"2ccc" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}, {
@@ -111,26 +113,79 @@ func TestStatements(t *testing.T) {
 			`gtid`,
 			`type:DDL ddl:"truncate table stream2" `,
 		}},
-	}, {
-		// repair, optimize and analyze show up in binlog stream, but ignored by vitess.
-		input: "repair table stream2",
-	}, {
-		input: "optimize table stream2",
-	}, {
-		input: "analyze table stream2",
-	}, {
-		// select, set, show, analyze and describe don't get logged.
-		input: "select * from stream1",
-	}, {
-		input: "set @val=1",
-	}, {
-		input: "show tables",
-	}, {
-		input: "analyze table stream1",
-	}, {
-		input: "describe stream1",
 	}}
-	runCases(t, nil, testcases)
+	runCases(t, nil, testcases, "current")
+
+	// Test FilePos flavor
+	engine.cp.Flavor = "FilePos"
+	defer func() { engine.cp.Flavor = "" }()
+	runCases(t, nil, testcases, "current")
+}
+
+// TestOther tests "other" and "priv" statements. These statements can
+// produce very different events depending on the version of mysql or
+// mariadb. So, we just show that vreplication transmits "OTHER" events
+// if the binlog is affected by the statement.
+func TestOther(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table stream1(id int, val varbinary(128), primary key(id))",
+		"create table stream2(id int, val varbinary(128), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table stream1",
+		"drop table stream2",
+	})
+	engine.se.Reload(context.Background())
+
+	testcases := []string{
+		"repair table stream2",
+		"optimize table stream2",
+		"analyze table stream2",
+		"select * from stream1",
+		"set @val=1",
+		"show tables",
+		"describe stream1",
+		"grant select on stream1 to current_user()",
+		"revoke select on stream1 from current_user()",
+	}
+
+	// customRun is a modified version of runCases.
+	customRun := func(mode string) {
+		t.Logf("Run mode: %v", mode)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		ch := startStream(ctx, t, nil, "")
+
+		want := [][]string{{
+			`gtid`,
+			`type:OTHER `,
+		}}
+
+		for _, stmt := range testcases {
+			startPosition := masterPosition(t)
+			execStatement(t, stmt)
+			endPosition := masterPosition(t)
+			if startPosition == endPosition {
+				t.Logf("statement %s did not affect binlog", stmt)
+				continue
+			}
+			expectLog(ctx, t, stmt, ch, want)
+		}
+		cancel()
+		if evs, ok := <-ch; ok {
+			t.Fatalf("unexpected evs: %v", evs)
+		}
+	}
+	customRun("gtid")
+
+	// Test FilePos flavor
+	engine.cp.Flavor = "FilePos"
+	defer func() { engine.cp.Flavor = "" }()
+	customRun("filePos")
 }
 
 func TestRegexp(t *testing.T) {
@@ -164,15 +219,15 @@ func TestRegexp(t *testing.T) {
 			"commit",
 		},
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:FIELD field_event:<table_name:"yes_stream" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
 			`type:ROW row_event:<table_name:"yes_stream" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
 			`type:ROW row_event:<table_name:"yes_stream" row_changes:<before:<lengths:1 lengths:3 values:"1aaa" > after:<lengths:1 lengths:3 values:"1bbb" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}}
-	runCases(t, filter, testcases)
+	runCases(t, filter, testcases, "")
 }
 
 func TestREKeyRange(t *testing.T) {
@@ -188,9 +243,7 @@ func TestREKeyRange(t *testing.T) {
 	})
 	engine.se.Reload(context.Background())
 
-	if err := env.SetVSchema(shardedVSchema); err != nil {
-		t.Fatal(err)
-	}
+	setVSchema(t, shardedVSchema)
 	defer env.SetVSchema("{}")
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -202,7 +255,7 @@ func TestREKeyRange(t *testing.T) {
 			Filter: "-80",
 		}},
 	}
-	ch := startStream(ctx, t, filter)
+	ch := startStream(ctx, t, filter, "")
 
 	// 1, 2, 3 and 5 are in shard -80.
 	// 4 and 6 are in shard 80-.
@@ -220,13 +273,13 @@ func TestREKeyRange(t *testing.T) {
 	}
 	execStatements(t, input)
 	expectLog(ctx, t, input, ch, [][]string{{
-		`gtid|begin`,
-		`gtid|begin`,
+		`begin`,
 		`type:FIELD field_event:<table_name:"t1" fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
 		`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:1 lengths:3 values:"14aaa" > > > `,
 		`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:1 lengths:3 values:"14aaa" > after:<lengths:1 lengths:1 lengths:3 values:"24aaa" > > > `,
 		`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:1 lengths:3 values:"24aaa" > > > `,
 		`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:1 lengths:3 values:"31bbb" > > > `,
+		`gtid`,
 		`commit`,
 	}})
 
@@ -249,9 +302,7 @@ func TestREKeyRange(t *testing.T) {
     }
   }
 }`
-	if err := env.SetVSchema(altVSchema); err != nil {
-		t.Fatal(err)
-	}
+	setVSchema(t, altVSchema)
 
 	// Only the first insert should be sent.
 	input = []string{
@@ -262,9 +313,118 @@ func TestREKeyRange(t *testing.T) {
 	}
 	execStatements(t, input)
 	expectLog(ctx, t, input, ch, [][]string{{
-		`gtid|begin`,
-		`gtid|begin`,
+		`begin`,
 		`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:1 lengths:3 values:"41aaa" > > > `,
+		`gtid`,
+		`commit`,
+	}})
+}
+
+func TestInKeyRangeMultiColumn(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table t1(region int, id int, val varbinary(128), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+
+	setVSchema(t, multicolumnVSchema)
+	defer env.SetVSchema("{}")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select id, region, val, keyspace_id() from t1 where in_keyrange('-80')",
+		}},
+	}
+	ch := startStream(ctx, t, filter, "")
+
+	// 1, 2, 3 and 5 are in shard -80.
+	// 4 and 6 are in shard 80-.
+	input := []string{
+		"begin",
+		"insert into t1 values (1, 1, 'aaa')",
+		"insert into t1 values (128, 2, 'bbb')",
+		// Stay in shard.
+		"update t1 set region = 2 where id = 1",
+		// Move from -80 to 80-.
+		"update t1 set region = 128 where id = 1",
+		// Move from 80- to -80.
+		"update t1 set region = 1 where id = 2",
+		"commit",
+	}
+	execStatements(t, input)
+	expectLog(ctx, t, input, ch, [][]string{{
+		`begin`,
+		`type:FIELD field_event:<table_name:"t1" fields:<name:"id" type:INT32 > fields:<name:"region" type:INT32 > fields:<name:"val" type:VARBINARY > fields:<name:"keyspace_id" type:VARBINARY > > `,
+		`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:1 lengths:3 lengths:9 values:"11aaa\001\026k@\264J\272K\326" > > > `,
+		`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:1 lengths:3 lengths:9 values:"11aaa\001\026k@\264J\272K\326" > ` +
+			`after:<lengths:1 lengths:1 lengths:3 lengths:9 values:"12aaa\002\026k@\264J\272K\326" > > > `,
+		`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:1 lengths:3 lengths:9 values:"12aaa\002\026k@\264J\272K\326" > > > `,
+		`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:1 lengths:3 lengths:9 values:"21bbb\001\006\347\352\"\316\222p\217" > > > `,
+		`gtid`,
+		`commit`,
+	}})
+}
+
+func TestREMultiColumnVindex(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table t1(region int, id int, val varbinary(128), primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+
+	setVSchema(t, multicolumnVSchema)
+	defer env.SetVSchema("{}")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "/.*/",
+			Filter: "-80",
+		}},
+	}
+	ch := startStream(ctx, t, filter, "")
+
+	// 1, 2, 3 and 5 are in shard -80.
+	// 4 and 6 are in shard 80-.
+	input := []string{
+		"begin",
+		"insert into t1 values (1, 1, 'aaa')",
+		"insert into t1 values (128, 2, 'bbb')",
+		// Stay in shard.
+		"update t1 set region = 2 where id = 1",
+		// Move from -80 to 80-.
+		"update t1 set region = 128 where id = 1",
+		// Move from 80- to -80.
+		"update t1 set region = 1 where id = 2",
+		"commit",
+	}
+	execStatements(t, input)
+	expectLog(ctx, t, input, ch, [][]string{{
+		`begin`,
+		`type:FIELD field_event:<table_name:"t1" fields:<name:"region" type:INT32 > fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
+		`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:1 lengths:3 values:"11aaa" > > > `,
+		`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:1 lengths:3 values:"11aaa" > after:<lengths:1 lengths:1 lengths:3 values:"21aaa" > > > `,
+		`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:1 lengths:3 values:"21aaa" > > > `,
+		`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:1 lengths:3 values:"12bbb" > > > `,
+		`gtid`,
 		`commit`,
 	}})
 }
@@ -296,17 +456,15 @@ func TestSelectFilter(t *testing.T) {
 			"insert into t1 values (2, 4, 'aaa')",
 			"commit",
 		},
-		// MySQL issues GTID->BEGIN.
-		// MariaDB issues BEGIN->GTID.
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:FIELD field_event:<table_name:"t1" fields:<name:"id2" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
 			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}}
-	runCases(t, filter, testcases)
+	runCases(t, filter, testcases, "")
 }
 
 func TestDDLAddColumn(t *testing.T) {
@@ -362,12 +520,12 @@ func TestDDLAddColumn(t *testing.T) {
 	}()
 	expectLog(ctx, t, "ddls", ch, [][]string{{
 		// Current schema has 3 columns, but they'll be truncated to match the two columns in the event.
-		`gtid|begin`,
-		`gtid|begin`,
+		`begin`,
 		`type:FIELD field_event:<table_name:"ddl_test1" fields:<name:"id" type:INT32 > fields:<name:"val1" type:VARBINARY > > `,
 		`type:ROW row_event:<table_name:"ddl_test1" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
 		`type:FIELD field_event:<table_name:"ddl_test2" fields:<name:"id" type:INT32 > fields:<name:"val1" type:VARBINARY > > `,
 		`type:ROW row_event:<table_name:"ddl_test2" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
+		`gtid`,
 		`commit`,
 	}, {
 		`gtid`,
@@ -378,12 +536,12 @@ func TestDDLAddColumn(t *testing.T) {
 	}, {
 		// The plan will be updated to now include the third column
 		// because the new table map will have three columns.
-		`gtid|begin`,
-		`gtid|begin`,
+		`begin`,
 		`type:FIELD field_event:<table_name:"ddl_test1" fields:<name:"id" type:INT32 > fields:<name:"val1" type:VARBINARY > fields:<name:"val2" type:VARBINARY > > `,
 		`type:ROW row_event:<table_name:"ddl_test1" row_changes:<after:<lengths:1 lengths:3 lengths:3 values:"2bbbccc" > > > `,
 		`type:FIELD field_event:<table_name:"ddl_test2" fields:<name:"id" type:INT32 > fields:<name:"val1" type:VARBINARY > fields:<name:"val2" type:VARBINARY > > `,
 		`type:ROW row_event:<table_name:"ddl_test2" row_changes:<after:<lengths:1 lengths:3 lengths:3 values:"2bbbccc" > > > `,
+		`gtid`,
 		`commit`,
 	}})
 }
@@ -435,9 +593,8 @@ func TestUnsentDDL(t *testing.T) {
 		},
 		// An unsent DDL is sent as an empty transaction.
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
-			`commit`,
+			`gtid`,
+			`type:OTHER `,
 		}},
 	}}
 
@@ -446,7 +603,7 @@ func TestUnsentDDL(t *testing.T) {
 			Match: "/none/",
 		}},
 	}
-	runCases(t, filter, testcases)
+	runCases(t, filter, testcases, "")
 }
 
 func TestBuffering(t *testing.T) {
@@ -471,11 +628,11 @@ func TestBuffering(t *testing.T) {
 			"commit",
 		},
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:FIELD field_event:<table_name:"packet_test" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
 			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:3 values:"1123" > > > `,
 			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:3 values:"2456" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}, {
@@ -490,8 +647,7 @@ func TestBuffering(t *testing.T) {
 			"commit",
 		},
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:6 values:"3123456" > > > `,
 		}, {
 			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:6 values:"4789012" > > > `,
@@ -499,6 +655,7 @@ func TestBuffering(t *testing.T) {
 			`type:ROW row_event:<table_name:"packet_test" row_changes:<before:<lengths:1 lengths:6 values:"3123456" > > > `,
 		}, {
 			`type:ROW row_event:<table_name:"packet_test" row_changes:<before:<lengths:1 lengths:6 values:"4789012" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}, {
@@ -511,13 +668,13 @@ func TestBuffering(t *testing.T) {
 			"commit",
 		},
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:6 values:"5123456" > > > `,
 		}, {
 			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:11 values:"612345678901" > > > `,
 		}, {
 			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:5 values:"723456" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}, {
@@ -529,11 +686,11 @@ func TestBuffering(t *testing.T) {
 			"commit",
 		},
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:ROW row_event:<table_name:"packet_test" row_changes:<after:<lengths:1 lengths:3 values:"8123" > > > `,
 		}, {
 			`type:ROW row_event:<table_name:"packet_test" row_changes:<before:<lengths:1 lengths:3 values:"8123" > after:<lengths:1 lengths:3 values:"8456" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}, {
@@ -546,7 +703,57 @@ func TestBuffering(t *testing.T) {
 			`type:DDL ddl:"alter table packet_test change val val varchar(128)" `,
 		}},
 	}}
-	runCases(t, nil, testcases)
+	runCases(t, nil, testcases, "")
+}
+
+func TestBestEffortNameInFieldEvent(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	filter := &binlogdatapb.Filter{
+		FieldEventMode: binlogdatapb.Filter_BEST_EFFORT,
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*/",
+		}},
+	}
+	// Modeled after vttablet endtoend compatibility tests.
+	execStatements(t, []string{
+		"create table vitess_test(id int, val varbinary(128), primary key(id))",
+	})
+	position := masterPosition(t)
+	execStatements(t, []string{
+		"insert into vitess_test values(1, 'abc')",
+		"rename table vitess_test to vitess_test_new",
+	})
+
+	defer execStatements(t, []string{
+		"drop table vitess_test_new",
+	})
+	engine.se.Reload(context.Background())
+	testcases := []testcase{{
+		input: []string{
+			"insert into vitess_test_new values(2, 'abc')",
+		},
+		// In this case, we don't have information about vitess_test since it was renamed to vitess_test_test.
+		// information returned by binlog for val column == varchar (rather than varbinary).
+		output: [][]string{{
+			`begin`,
+			`type:FIELD field_event:<table_name:"vitess_test" fields:<name:"@1" type:INT32 > fields:<name:"@2" type:VARCHAR > > `,
+			`type:ROW row_event:<table_name:"vitess_test" row_changes:<after:<lengths:1 lengths:3 values:"1abc" > > > `,
+			`gtid`,
+			`commit`,
+		}, {
+			`gtid`,
+			`type:DDL ddl:"rename table vitess_test to vitess_test_new" `,
+		}, {
+			`begin`,
+			`type:FIELD field_event:<table_name:"vitess_test_new" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
+			`type:ROW row_event:<table_name:"vitess_test_new" row_changes:<after:<lengths:1 lengths:3 values:"2abc" > > > `,
+			`gtid`,
+			`commit`,
+		}},
+	}}
+	runCases(t, filter, testcases, position)
 }
 
 func TestTypes(t *testing.T) {
@@ -576,8 +783,7 @@ func TestTypes(t *testing.T) {
 			"insert into vitess_ints values(-128, 255, -32768, 65535, -8388608, 16777215, -2147483648, 4294967295, -9223372036854775808, 18446744073709551615, 2012)",
 		},
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:FIELD field_event:<table_name:"vitess_ints" ` +
 				`fields:<name:"tiny" type:INT8 > ` +
 				`fields:<name:"tinyu" type:UINT8 > ` +
@@ -603,6 +809,7 @@ func TestTypes(t *testing.T) {
 				`18446744073709551615` +
 				`2012` +
 				`" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}, {
@@ -610,8 +817,7 @@ func TestTypes(t *testing.T) {
 			"insert into vitess_fracts values(1, 1.99, 2.99, 3.99, 4.99)",
 		},
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:FIELD field_event:<table_name:"vitess_fracts" ` +
 				`fields:<name:"id" type:INT32 > ` +
 				`fields:<name:"deci" type:DECIMAL > ` +
@@ -625,6 +831,7 @@ func TestTypes(t *testing.T) {
 				`3.99E+00` +
 				`4.99E+00` +
 				`" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}, {
@@ -633,8 +840,7 @@ func TestTypes(t *testing.T) {
 			"insert into vitess_strings values('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'a', 'a,b')",
 		},
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:FIELD field_event:<table_name:"vitess_strings" ` +
 				`fields:<name:"vb" type:VARBINARY > ` +
 				`fields:<name:"c" type:CHAR > ` +
@@ -648,6 +854,7 @@ func TestTypes(t *testing.T) {
 				`fields:<name:"s" type:SET > > `,
 			`type:ROW row_event:<table_name:"vitess_strings" row_changes:<after:<lengths:1 lengths:1 lengths:1 lengths:4 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 lengths:1 ` +
 				`values:"abcd\000\000\000efgh13" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}, {
@@ -656,8 +863,7 @@ func TestTypes(t *testing.T) {
 			"insert into vitess_misc values(1, '\x01', '2012-01-01', '2012-01-01 15:45:45', '15:45:45', point(1, 2))",
 		},
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:FIELD field_event:<table_name:"vitess_misc" ` +
 				`fields:<name:"id" type:INT32 > ` +
 				`fields:<name:"b" type:BIT > ` +
@@ -673,6 +879,7 @@ func TestTypes(t *testing.T) {
 				`15:45:45` +
 				`\000\000\000\000\001\001\000\000\000\000\000\000\000\000\000\360?\000\000\000\000\000\000\000@` +
 				`" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}, {
@@ -680,14 +887,14 @@ func TestTypes(t *testing.T) {
 			"insert into vitess_null values(1, null)",
 		},
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:FIELD field_event:<table_name:"vitess_null" fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
 			`type:ROW row_event:<table_name:"vitess_null" row_changes:<after:<lengths:1 lengths:-1 values:"1" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}}
-	runCases(t, nil, testcases)
+	runCases(t, nil, testcases, "")
 }
 
 func TestJSON(t *testing.T) {
@@ -709,14 +916,14 @@ func TestJSON(t *testing.T) {
 			`insert into vitess_json values(1, '{"foo": "bar"}')`,
 		},
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
 			`type:FIELD field_event:<table_name:"vitess_json" fields:<name:"id" type:INT32 > fields:<name:"val" type:JSON > > `,
 			`type:ROW row_event:<table_name:"vitess_json" row_changes:<after:<lengths:1 lengths:24 values:"1JSON_OBJECT('foo','bar')" > > > `,
+			`gtid`,
 			`commit`,
 		}},
 	}}
-	runCases(t, nil, testcases)
+	runCases(t, nil, testcases, "")
 }
 
 func TestExternalTable(t *testing.T) {
@@ -741,12 +948,51 @@ func TestExternalTable(t *testing.T) {
 		},
 		// External table events don't get sent.
 		output: [][]string{{
-			`gtid|begin`,
-			`gtid|begin`,
+			`begin`,
+			`gtid`,
 			`commit`,
 		}},
 	}}
-	runCases(t, nil, testcases)
+	runCases(t, nil, testcases, "")
+}
+
+func TestJournal(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table _vt.resharding_journal(id int, db_name varchar(128), val blob, primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table _vt.resharding_journal",
+	})
+	engine.se.Reload(context.Background())
+
+	journal1 := &binlogdatapb.Journal{
+		Id:            1,
+		MigrationType: binlogdatapb.MigrationType_SHARDS,
+	}
+	journal2 := &binlogdatapb.Journal{
+		Id:            2,
+		MigrationType: binlogdatapb.MigrationType_SHARDS,
+	}
+	testcases := []testcase{{
+		input: []string{
+			"begin",
+			fmt.Sprintf("insert into _vt.resharding_journal values(1, 'vttest', '%v')", journal1.String()),
+			fmt.Sprintf("insert into _vt.resharding_journal values(2, 'nosend', '%v')", journal2.String()),
+			"commit",
+		},
+		// External table events don't get sent.
+		output: [][]string{{
+			`begin`,
+			`type:JOURNAL journal:<id:1 migration_type:SHARDS > `,
+			`gtid`,
+			`commit`,
+		}},
+	}}
+	runCases(t, nil, testcases, "")
 }
 
 func TestMinimalMode(t *testing.T) {
@@ -792,47 +1038,105 @@ func TestStatementMode(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-
 	execStatements(t, []string{
-		"create table t1(id int, val1 varbinary(128), val2 varbinary(128), primary key(id))",
-		"insert into t1 values(1, 'aaa', 'bbb')",
+		"create table stream1(id int, val varbinary(128), primary key(id))",
+		"create table stream2(id int, val varbinary(128), primary key(id))",
+	})
+
+	engine.se.Reload(context.Background())
+
+	defer execStatements(t, []string{
+		"drop table stream1",
+		"drop table stream2",
+	})
+
+	testcases := []testcase{{
+		input: []string{
+			"set @@session.binlog_format='STATEMENT'",
+			"begin",
+			"insert into stream1 values (1, 'aaa')",
+			"update stream1 set val='bbb' where id = 1",
+			"delete from stream1 where id = 1",
+			"commit",
+			"set @@session.binlog_format='ROW'",
+		},
+		output: [][]string{{
+			`begin`,
+			`type:INSERT dml:"insert into stream1 values (1, 'aaa')" `,
+			`type:UPDATE dml:"update stream1 set val='bbb' where id = 1" `,
+			`type:DELETE dml:"delete from stream1 where id = 1" `,
+			`gtid`,
+			`commit`,
+		}},
+	}}
+	runCases(t, nil, testcases, "")
+}
+
+func TestHeartbeat(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := startStream(ctx, t, nil, "")
+	evs := <-ch
+	require.Equal(t, 1, len(evs))
+	assert.Equal(t, binlogdatapb.VEventType_HEARTBEAT, evs[0].Type)
+}
+
+func TestNoFutureGTID(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	// Execute something to make sure we have ranges in GTIDs.
+	execStatements(t, []string{
+		"create table stream1(id int, val varbinary(128), primary key(id))",
 	})
 	defer execStatements(t, []string{
-		"drop table t1",
+		"drop table stream1",
 	})
 	engine.se.Reload(context.Background())
 
-	// Record position before the next few statements.
 	pos := masterPosition(t)
-	execStatements(t, []string{
-		"set @@session.binlog_format='statement'",
-		"update t1 set val1='bbb' where id=1",
-		"set @@session.binlog_format='row'",
-	})
+	t.Logf("current position: %v", pos)
+	// Both mysql and mariadb have '-' in their gtids.
+	// Invent a GTID in the future.
+	index := strings.LastIndexByte(pos, '-')
+	num, err := strconv.Atoi(pos[index+1:])
+	require.NoError(t, err)
+	future := pos[:index+1] + fmt.Sprintf("%d", num+1)
+	t.Logf("future position: %v", future)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	ch := make(chan []*binlogdatapb.VEvent)
 	go func() {
-		for evs := range ch {
-			t.Errorf("received: %v", evs)
+		for range ch {
 		}
 	}()
 	defer close(ch)
-	err := vstream(ctx, t, pos, nil, ch)
-	want := "unexpected statement type"
+	err = vstream(ctx, t, future, nil, ch)
+	want := "is ahead of current position"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("err: %v, must contain '%s'", err, want)
+		t.Errorf("err: %v, must contain %s", err, want)
 	}
 }
 
-func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase) {
+func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, position string) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	ch := startStream(ctx, t, filter, position)
 
-	ch := startStream(ctx, t, filter)
+	// If position is 'current', we wait for a heartbeat to be
+	// sure the vstreamer has started.
+	if position == "current" {
+		<-ch
+	}
 
 	for _, tcase := range testcases {
 		switch input := tcase.input.(type) {
@@ -853,17 +1157,31 @@ func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase) {
 
 func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan []*binlogdatapb.VEvent, output [][]string) {
 	t.Helper()
-
+	timer := time.NewTimer(1 * time.Minute)
+	defer timer.Stop()
 	for _, wantset := range output {
 		var evs []*binlogdatapb.VEvent
-		var ok bool
-		select {
-		case evs, ok = <-ch:
-			if !ok {
+		for {
+			select {
+			case allevs, ok := <-ch:
+				if !ok {
+					t.Fatal("stream ended early")
+				}
+				for _, ev := range allevs {
+					// Ignore spurious heartbeats that can happen on slow machines.
+					if ev.Type == binlogdatapb.VEventType_HEARTBEAT {
+						continue
+					}
+					evs = append(evs, ev)
+				}
+			case <-ctx.Done():
 				t.Fatal("stream ended early")
+			case <-timer.C:
+				t.Fatalf("timed out waiting for events: %v", wantset)
 			}
-		case <-ctx.Done():
-			t.Fatal("stream ended early")
+			if len(evs) != 0 {
+				break
+			}
 		}
 		if len(wantset) != len(evs) {
 			t.Fatalf("%v: evs\n%v, want\n%v", input, evs, wantset)
@@ -872,8 +1190,8 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 			// CurrentTime is not testable.
 			evs[i].CurrentTime = 0
 			switch want {
-			case "gtid|begin":
-				if evs[i].Type != binlogdatapb.VEventType_GTID && evs[i].Type != binlogdatapb.VEventType_BEGIN {
+			case "begin":
+				if evs[i].Type != binlogdatapb.VEventType_BEGIN {
 					t.Fatalf("%v (%d): event: %v, want gtid or begin", input, i, evs[i])
 				}
 			case "gtid":
@@ -897,15 +1215,15 @@ func expectLog(ctx context.Context, t *testing.T, input interface{}, ch <-chan [
 	}
 }
 
-func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter) <-chan []*binlogdatapb.VEvent {
-	pos := masterPosition(t)
+func startStream(ctx context.Context, t *testing.T, filter *binlogdatapb.Filter, position string) <-chan []*binlogdatapb.VEvent {
+	if position == "" {
+		position = masterPosition(t)
+	}
 
 	ch := make(chan []*binlogdatapb.VEvent)
 	go func() {
 		defer close(ch)
-		if err := vstream(ctx, t, pos, filter, ch); err != nil {
-			t.Error(err)
-		}
+		_ = vstream(ctx, t, position, filter, ch)
 	}()
 	return ch
 }
@@ -945,9 +1263,40 @@ func execStatements(t *testing.T, queries []string) {
 
 func masterPosition(t *testing.T) string {
 	t.Helper()
-	pos, err := env.Mysqld.MasterPosition()
+	// We use the engine's cp because there is one test that overrides
+	// the flavor to FilePos. If so, we have to obtain the position
+	// in that flavor format.
+	conn, err := mysql.Connect(context.Background(), engine.cp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	pos, err := conn.MasterPosition()
 	if err != nil {
 		t.Fatal(err)
 	}
 	return mysql.EncodePosition(pos)
+}
+
+func setVSchema(t *testing.T, vschema string) {
+	t.Helper()
+
+	curCount := vschemaUpdates.Get()
+
+	if err := env.SetVSchema(vschema); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for curCount to go up.
+	updated := false
+	for i := 0; i < 10; i++ {
+		if vschemaUpdates.Get() != curCount {
+			updated = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !updated {
+		t.Error("vschema did not get updated")
+	}
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
@@ -187,9 +188,7 @@ func TestDDLPlan(t *testing.T) {
 func TestMessageStreamingPlan(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
 	plan, err := BuildMessageStreaming("msg", testSchema)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	bout, _ := json.Marshal(plan)
 	planJSON := string(bout)
 

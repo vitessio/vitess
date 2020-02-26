@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -108,6 +108,8 @@ func TestTabletExecutorValidate(t *testing.T) {
 	sqls := []string{
 		"ALTER TABLE test_table ADD COLUMN new_id bigint(20)",
 		"CREATE TABLE test_table_02 (pk int)",
+		"ALTER DATABASE db_name DEFAULT CHARACTER SET = utf8mb4",
+		"ALTER SCHEMA db_name CHARACTER SET = utf8mb4",
 	}
 
 	if err := executor.Validate(ctx, sqls); err == nil {

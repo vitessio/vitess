@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -62,6 +62,9 @@ func (lkp *lookupInternal) Init(lookupQueryParams map[string]string, autocommit,
 
 // Lookup performs a lookup for the ids.
 func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sqltypes.Result, error) {
+	if vcursor == nil {
+		return nil, fmt.Errorf("cannot perform lookup: no vcursor provided")
+	}
 	results := make([]*sqltypes.Result, 0, len(ids))
 	for _, id := range ids {
 		bindVars := map[string]*querypb.BindVariable{
@@ -84,19 +87,21 @@ func (lkp *lookupInternal) Lookup(vcursor VCursor, ids []sqltypes.Value) ([]*sql
 
 // Verify returns true if ids map to values.
 func (lkp *lookupInternal) Verify(vcursor VCursor, ids, values []sqltypes.Value) ([]bool, error) {
+	co := vtgatepb.CommitOrder_NORMAL
+	if lkp.Autocommit {
+		co = vtgatepb.CommitOrder_AUTOCOMMIT
+	}
+	return lkp.VerifyCustom(vcursor, ids, values, co)
+}
+
+func (lkp *lookupInternal) VerifyCustom(vcursor VCursor, ids, values []sqltypes.Value, co vtgatepb.CommitOrder) ([]bool, error) {
 	out := make([]bool, len(ids))
 	for i, id := range ids {
 		bindVars := map[string]*querypb.BindVariable{
 			lkp.FromColumns[0]: sqltypes.ValueBindVariable(id),
 			lkp.To:             sqltypes.ValueBindVariable(values[i]),
 		}
-		var err error
-		var result *sqltypes.Result
-		co := vtgatepb.CommitOrder_NORMAL
-		if lkp.Autocommit {
-			co = vtgatepb.CommitOrder_AUTOCOMMIT
-		}
-		result, err = vcursor.Execute("VindexVerify", lkp.ver, bindVars, false /* isDML */, co)
+		result, err := vcursor.Execute("VindexVerify", lkp.ver, bindVars, false /* isDML */, co)
 		if err != nil {
 			return nil, fmt.Errorf("lookup.Verify: %v", err)
 		}

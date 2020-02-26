@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/topo"
 
@@ -53,9 +54,7 @@ func checkVSchema(t *testing.T, ts *topo.Server) {
 	}
 
 	got, err := ts.GetVSchema(ctx, "test_keyspace")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := &vschemapb.Keyspace{
 		Tables: map[string]*vschemapb.Table{
 			"unsharded": {},
@@ -68,14 +67,10 @@ func checkVSchema(t *testing.T, ts *topo.Server) {
 	err = ts.SaveVSchema(ctx, "test_keyspace", &vschemapb.Keyspace{
 		Sharded: true,
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	got, err = ts.GetVSchema(ctx, "test_keyspace")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want = &vschemapb.Keyspace{
 		Sharded: true,
 	}
@@ -113,9 +108,7 @@ func checkRoutingRules(t *testing.T, ts *topo.Server) {
 	}
 
 	got, err := ts.GetRoutingRules(ctx)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !proto.Equal(got, want) {
 		t.Errorf("GetRoutingRules: %v, want %v", got, want)
 	}

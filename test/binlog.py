@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ def setUpModule():
   try:
     environment.topo_server().setup()
 
-    setup_procs = [t.init_mysql() for t in all_tablets]
+    setup_procs = [t.init_mysql(use_rbr=False) for t in all_tablets]
     utils.Vtctld().start()
     utils.wait_procs(setup_procs)
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -66,7 +66,7 @@ func NewFromString(inCtx context.Context, parent, label string) (Span, context.C
 // AnnotateSQL annotates information about a sql query in the span. This is done in a way
 // so as to not leak personally identifying information (PII), or sensitive personal information (SPI)
 func AnnotateSQL(span Span, sql string) {
-	span.Annotate("sql-statement-type", sqlparser.StmtType(sqlparser.Preview(sql)))
+	span.Annotate("sql-statement-type", sqlparser.Preview(sql).String())
 }
 
 // FromContext returns the Span from a Context if present. The bool return

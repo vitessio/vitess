@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/json2"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -224,10 +225,14 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 		if err != nil {
 			return err
 		}
-		if _, ok := vschema.uniqueVindexes[vname]; ok {
-			vschema.uniqueVindexes[vname] = nil
-		} else {
-			vschema.uniqueVindexes[vname] = vindex
+
+		// If the keyspace requires explicit routing, don't include it in global routing
+		if !ks.RequireExplicitRouting {
+			if _, ok := vschema.uniqueVindexes[vname]; ok {
+				vschema.uniqueVindexes[vname] = nil
+			} else {
+				vschema.uniqueVindexes[vname] = vindex
+			}
 		}
 		ksvschema.Vindexes[vname] = vindex
 	}
@@ -326,10 +331,13 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 		t.Ordered = colVindexSorted(t.ColumnVindexes)
 
 		// Add the table to the map entries.
-		if _, ok := vschema.uniqueTables[tname]; ok {
-			vschema.uniqueTables[tname] = nil
-		} else {
-			vschema.uniqueTables[tname] = t
+		// If the keyspace requires explicit routing, don't include it in global routing
+		if !ks.RequireExplicitRouting {
+			if _, ok := vschema.uniqueTables[tname]; ok {
+				vschema.uniqueTables[tname] = nil
+			} else {
+				vschema.uniqueTables[tname] = t
+			}
 		}
 		ksvschema.Tables[tname] = t
 	}
@@ -344,13 +352,18 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) {
 			if t == nil || table.AutoIncrement == nil {
 				continue
 			}
-			t.AutoIncrement = &AutoIncrement{Column: sqlparser.NewColIdent(table.AutoIncrement.Column)}
 			seq, err := vschema.findQualified(table.AutoIncrement.Sequence)
 			if err != nil {
+				// Better to remove the table than to leave it partially initialized.
+				delete(ksvschema.Tables, tname)
+				delete(vschema.uniqueTables, tname)
 				ksvschema.Error = fmt.Errorf("cannot resolve sequence %s: %v", table.AutoIncrement.Sequence, err)
 				continue
 			}
-			t.AutoIncrement.Sequence = seq
+			t.AutoIncrement = &AutoIncrement{
+				Column:   sqlparser.NewColIdent(table.AutoIncrement.Column),
+				Sequence: seq,
+			}
 		}
 	}
 }
@@ -363,9 +376,7 @@ func addDual(vschema *VSchema) {
 		t := &Table{
 			Name:     sqlparser.NewTableIdent("dual"),
 			Keyspace: ks.Keyspace,
-		}
-		if ks.Keyspace.Sharded {
-			t.Pinned = []byte{0}
+			Type:     TypeReference,
 		}
 		ks.Tables["dual"] = t
 		if first == "" || first > ksname {
@@ -604,6 +615,42 @@ func LoadFormalKeyspace(filename string) (*vschemapb.Keyspace, error) {
 	return formal, nil
 }
 
+// ChooseVindexForType chooses the most appropriate vindex for the give type.
+func ChooseVindexForType(typ querypb.Type) (string, error) {
+	switch {
+	case sqltypes.IsIntegral(typ):
+		return "hash", nil
+	case sqltypes.IsText(typ):
+		return "unicode_loose_md5", nil
+	case sqltypes.IsBinary(typ):
+		return "binary_md5", nil
+	}
+	return "", fmt.Errorf("type %v is not recommended for a vindex", typ)
+}
+
+// FindBestColVindex finds the best ColumnVindex for VReplication.
+func FindBestColVindex(table *Table) (*ColumnVindex, error) {
+	if len(table.ColumnVindexes) == 0 {
+		return nil, fmt.Errorf("table %s has no vindex", table.Name.String())
+	}
+	var result *ColumnVindex
+	for _, cv := range table.ColumnVindexes {
+		if cv.Vindex.NeedsVCursor() {
+			continue
+		}
+		if !cv.Vindex.IsUnique() {
+			continue
+		}
+		if result == nil || result.Vindex.Cost() > cv.Vindex.Cost() {
+			result = cv
+		}
+	}
+	if result == nil {
+		return nil, fmt.Errorf("could not find a vindex to compute keyspace id for table %v", table.Name.String())
+	}
+	return result, nil
+}
+
 // FindVindexForSharding searches through the given slice
 // to find the lowest cost unique vindex
 // primary vindex is always unique
@@ -615,6 +662,10 @@ func FindVindexForSharding(tableName string, colVindexes []*ColumnVindex) (*Colu
 	}
 	result := colVindexes[0]
 	for _, colVindex := range colVindexes {
+		// Only allow SingleColumn for legacy resharding.
+		if _, ok := colVindex.Vindex.(SingleColumn); !ok {
+			continue
+		}
 		if colVindex.Vindex.Cost() < result.Vindex.Cost() && colVindex.Vindex.IsUnique() {
 			result = colVindex
 		}

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -164,7 +165,8 @@ type QueryEngine struct {
 
 	strictTransTables bool
 
-	enableConsolidator bool
+	enableConsolidator          bool
+	enableQueryPlanFieldCaching bool
 
 	// Loggers
 	accessCheckerLogger *logutil.ThrottledLogger
@@ -204,6 +206,7 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		checker,
 	)
 	qe.enableConsolidator = config.EnableConsolidator
+	qe.enableQueryPlanFieldCaching = config.EnableQueryPlanFieldCaching
 	qe.consolidator = sync2.NewConsolidator()
 	qe.txSerializer = txserializer.New(config.EnableHotRowProtectionDryRun,
 		config.HotRowProtectionMaxQueueSize,
@@ -346,7 +349,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	plan.Rules = qe.queryRuleSources.FilterByPlan(sql, plan.PlanID, plan.TableName().String())
 	plan.buildAuthorized()
 	if plan.PlanID.IsSelect() {
-		if plan.FieldQuery != nil {
+		if qe.enableQueryPlanFieldCaching && plan.FieldQuery != nil {
 			conn, err := qe.getQueryConn(ctx)
 			if err != nil {
 				return nil, err
@@ -492,7 +495,8 @@ type QueryStats struct {
 
 // AddStats adds the given stats for the planName.tableName
 func (qe *QueryEngine) AddStats(planName, tableName string, queryCount int64, duration, mysqlTime time.Duration, rowCount, errorCount int64) {
-	key := tableName + "." + planName
+	// table names can contain "." characters, replace them!
+	key := strings.Replace(tableName, ".", "_", -1) + "." + planName
 
 	qe.queryStatsMu.RLock()
 	stats, ok := qe.queryStats[key]

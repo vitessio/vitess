@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@ limitations under the License.
 
 package schema
 
-// Yes, this sucks. It's a tiny tiny package that needs to be on its own
+// Yes, this sucks. It's a tiny package that needs to be on its own
 // It contains a data structure that's shared between sqlparser & tabletserver
 
 import (
@@ -217,10 +217,7 @@ func (ta *Table) HasPrimary() bool {
 
 // IsTopic returns true if TopicInfo is not nil.
 func (ta *Table) IsTopic() bool {
-	if ta.TopicInfo == nil {
-		return false
-	}
-	return true
+	return ta.TopicInfo != nil
 }
 
 // UniqueIndexes returns the number of unique indexes on the table

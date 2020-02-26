@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -51,9 +51,6 @@ func TestConfigVars(t *testing.T) {
 		tag string
 		val int
 	}{{
-		tag: "BeginTimeout",
-		val: int(tabletenv.Config.TxPoolTimeout * 1e9),
-	}, {
 		tag: "ConnPoolAvailable",
 		val: tabletenv.Config.PoolSize,
 	}, {
@@ -115,6 +112,9 @@ func TestConfigVars(t *testing.T) {
 		val: tabletenv.Config.TransactionCap,
 	}, {
 		tag: "TransactionPoolTimeout",
+		val: int(tabletenv.Config.TxPoolTimeout * 1e9),
+	}, {
+		tag: "TransactionTimeout",
 		val: int(tabletenv.Config.TransactionTimeout * 1e9),
 	}}
 	for _, tcase := range cases {
@@ -314,8 +314,7 @@ func TestMaxDMLRows(t *testing.T) {
 	want := "begin; " +
 		"select eid, id from vitess_a where eid = 3 limit 10001 for update; " +
 		"update vitess_a set foo = 'fghi' where " +
-		"(eid = 3 and id = 1) or (eid = 3 and id = 2) or (eid = 3 and id = 3) " +
-		"/* _stream vitess_a (eid id ) (3 1 ) (3 2 ) (3 3 ); */; " +
+		"(eid = 3 and id = 1) or (eid = 3 and id = 2) or (eid = 3 and id = 3); " +
 		"commit"
 	if queryInfo.RewrittenSQL() != want {
 		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
@@ -338,10 +337,8 @@ func TestMaxDMLRows(t *testing.T) {
 	want = "begin; " +
 		"select eid, id from vitess_a where eid = 3 limit 10001 for update; " +
 		"update vitess_a set eid = 2 where " +
-		"(eid = 3 and id = 1) or (eid = 3 and id = 2) " +
-		"/* _stream vitess_a (eid id ) (3 1 ) (3 2 ) (2 1 ) (2 2 ); */; " +
-		"update vitess_a set eid = 2 where (eid = 3 and id = 3) " +
-		"/* _stream vitess_a (eid id ) (3 3 ) (2 3 ); */; " +
+		"(eid = 3 and id = 1) or (eid = 3 and id = 2); " +
+		"update vitess_a set eid = 2 where (eid = 3 and id = 3); " +
 		"commit"
 	if queryInfo.RewrittenSQL() != want {
 		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
@@ -361,9 +358,8 @@ func TestMaxDMLRows(t *testing.T) {
 	want = "begin; " +
 		"select eid, id from vitess_a where eid = 2 limit 10001 for update; " +
 		"update vitess_a set foo = 'fghi' where (eid = 2 and id = 1) or " +
-		"(eid = 2 and id = 2) /* _stream vitess_a (eid id ) (2 1 ) (2 2 ); */; " +
-		"update vitess_a set foo = 'fghi' where (eid = 2 and id = 3) " +
-		"/* _stream vitess_a (eid id ) (2 3 ); */; " +
+		"(eid = 2 and id = 2); " +
+		"update vitess_a set foo = 'fghi' where (eid = 2 and id = 3); " +
 		"commit"
 	if queryInfo.RewrittenSQL() != want {
 		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
@@ -382,10 +378,8 @@ func TestMaxDMLRows(t *testing.T) {
 	}
 	want = "begin; " +
 		"select eid, id from vitess_a where eid = 2 limit 10001 for update; " +
-		"delete from vitess_a where (eid = 2 and id = 1) or (eid = 2 and id = 2) " +
-		"/* _stream vitess_a (eid id ) (2 1 ) (2 2 ); */; " +
-		"delete from vitess_a where (eid = 2 and id = 3) " +
-		"/* _stream vitess_a (eid id ) (2 3 ); */; " +
+		"delete from vitess_a where (eid = 2 and id = 1) or (eid = 2 and id = 2); " +
+		"delete from vitess_a where (eid = 2 and id = 3); " +
 		"commit"
 	if queryInfo.RewrittenSQL() != want {
 		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)

@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -73,6 +73,35 @@ func (st *vrStats) register() {
 			}
 			return result
 		})
+
+	stats.NewCounterFunc(
+		"VReplicationTotalSecondsBehindMaster",
+		"vreplication seconds behind master aggregated across all streams",
+		func() int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := int64(0)
+			for _, ct := range st.controllers {
+				result += ct.blpStats.SecondsBehindMaster.Get()
+			}
+			return result
+		})
+
+	stats.NewRateFunc(
+		"VReplicationQPS",
+		"vreplication operations per second aggregated across all streams",
+		func() map[string][]float64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string][]float64)
+			for _, ct := range st.controllers {
+				for k, v := range ct.blpStats.Rates.Get() {
+					result[k] = v
+				}
+			}
+			return result
+		})
+
 	stats.Publish("VReplicationSource", stats.StringMapFunc(func() map[string]string {
 		st.mu.Lock()
 		defer st.mu.Unlock()
@@ -193,5 +222,71 @@ var vreplicationTemplate = `
       <td>{{range $key, $values := .Rates}}<b>{{$key}}</b>: {{range $values}}{{.}} {{end}}<br>{{end}}</td>
       <td>{{range $index, $value := .Messages}}{{$value}}<br>{{end}}</td>
     </tr>{{end}}
+<div id="vreplication_qps_chart">QPS All Streams </div>
+
+<script type="text/javascript" src="https://www.google.com/jsapi"></script>
+<script type="text/javascript">
+
+function drawVReplicationQPSChart() {
+  var div = $('#vreplication_qps_chart').height(500).width(900).unwrap()[0]
+  var chart = new google.visualization.LineChart(div);
+
+  var options = {
+    title: "VReplication QPS across all streams",
+    focusTarget: 'category',
+    vAxis: {
+      viewWindow: {min: 0},
+    }
+  };
+
+  // If we're accessing status through a proxy that requires a URL prefix,
+  // add the prefix to the vars URL.
+  var vars_url = '/debug/vars';
+  var pos = window.location.pathname.lastIndexOf('/debug/status');
+  if (pos > 0) {
+    vars_url = window.location.pathname.substring(0, pos) + vars_url;
+  }
+
+  var redraw = function() {
+    $.getJSON(vars_url, function(input_data) {
+      var now = new Date();
+      var qps = input_data.VReplicationQPS;
+      var planTypes = Object.keys(qps);
+      if (planTypes.length === 0) {
+        planTypes = ["All"];
+        qps["All"] = [];
+      }
+
+      var data = [["Time"].concat(planTypes)];
+
+      // Create data points, starting with the most recent timestamp.
+      // (On the graph this means going from right to left.)
+      // Time span: 15 minutes in 5 second intervals.
+      for (var i = 0; i < 15*60/5; i++) {
+        var datum = [sampleDate(now, i)];
+        for (var j = 0; j < planTypes.length; j++) {
+          if (i < qps[planTypes[j]].length) {
+          	// Rates are ordered from least recent to most recent.
+          	// Therefore, we have to start reading from the end of the array.
+          	var idx = qps[planTypes[j]].length - i - 1;
+            datum.push(+qps[planTypes[j]][idx].toFixed(2));
+          } else {
+            // Assume 0.0 QPS for older, non-existent data points.
+            datum.push(0);
+          }
+        }
+        data.push(datum)
+      }
+      chart.draw(google.visualization.arrayToDataTable(data), options);
+    })
+  };
+
+  redraw();
+
+  // redraw every 2.5 seconds.
+  window.setInterval(redraw, 2500);
+}
+google.setOnLoadCallback(drawVReplicationQPSChart);
+</script>
 </table>{{else}}VReplication is closed.{{end}}
 `

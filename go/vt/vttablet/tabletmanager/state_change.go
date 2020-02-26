@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -101,7 +102,7 @@ func (agent *ActionAgent) broadcastHealth() {
 	agent.mutex.Lock()
 	replicationDelay := agent._replicationDelay
 	healthError := agent._healthy
-	terTime := agent._tabletExternallyReparentedTime
+	terTime := agent._masterTermStartTime
 	healthyTime := agent._healthyTime
 	agent.mutex.Unlock()
 
@@ -153,7 +154,10 @@ func (agent *ActionAgent) refreshTablet(ctx context.Context, reason string) erro
 	if updatedTablet := agent.checkTabletMysqlPort(ctx, tablet); updatedTablet != nil {
 		tablet = updatedTablet
 	}
-
+	// Also refresh masterTermStartTime
+	if tablet.MasterTermStartTime != nil {
+		agent.setMasterTermStartTime(logutil.ProtoToTime(tablet.MasterTermStartTime))
+	}
 	agent.updateState(ctx, tablet, reason)
 	log.Infof("Done with post-action state refresh")
 	return nil
@@ -203,7 +207,10 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 	// we're going to use it.
 	var shardInfo *topo.ShardInfo
 	var err error
+	// this is just for logging
 	var disallowQueryReason string
+	// this is actually used to set state
+	var disallowQueryService string
 	var blacklistedTables []string
 	updateBlacklistedTables := true
 	if allowQuery {
@@ -212,10 +219,35 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 			log.Errorf("Cannot read shard for this tablet %v, might have inaccurate SourceShards and TabletControls: %v", newTablet.Alias, err)
 			updateBlacklistedTables = false
 		} else {
-			if newTablet.Type == topodatapb.TabletType_MASTER {
-				if len(shardInfo.SourceShards) > 0 {
-					allowQuery = false
-					disallowQueryReason = "master tablet with filtered replication on"
+			if oldTablet.Type == topodatapb.TabletType_RESTORE {
+				// always start as NON-SERVING after a restore because
+				// healthcheck has not been initialized yet
+				allowQuery = false
+				// setting disallowQueryService permanently turns off query service
+				// since we want it to be temporary (until tablet is healthy) we don't set it
+				// disallowQueryReason is only used for logging
+				disallowQueryReason = "after restore from backup"
+			} else {
+				if newTablet.Type == topodatapb.TabletType_MASTER {
+					if len(shardInfo.SourceShards) > 0 {
+						allowQuery = false
+						disallowQueryReason = "master tablet with filtered replication on"
+						disallowQueryService = disallowQueryReason
+					}
+				} else {
+					replicationDelay, healthErr := agent.HealthReporter.Report(true, true)
+					if healthErr != nil {
+						allowQuery = false
+						disallowQueryReason = "unable to get health"
+					} else {
+						agent.mutex.Lock()
+						agent._replicationDelay = replicationDelay
+						agent.mutex.Unlock()
+						if agent._replicationDelay > *unhealthyThreshold {
+							allowQuery = false
+							disallowQueryReason = "replica tablet with unhealthy replication lag"
+						}
+					}
 				}
 			}
 			srvKeyspace, err := agent.TopoServer.GetSrvKeyspace(ctx, newTablet.Alias.Cell, newTablet.Keyspace)
@@ -233,6 +265,7 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 							if tabletControl.QueryServiceDisabled {
 								allowQuery = false
 								disallowQueryReason = "TabletControl.DisableQueryService set"
+								disallowQueryService = disallowQueryReason
 							}
 							break
 						}
@@ -248,8 +281,9 @@ func (agent *ActionAgent) changeCallback(ctx context.Context, oldTablet, newTabl
 		}
 	} else {
 		disallowQueryReason = fmt.Sprintf("not a serving tablet type(%v)", newTablet.Type)
+		disallowQueryService = disallowQueryReason
 	}
-	agent.setServicesDesiredState(disallowQueryReason, runUpdateStream)
+	agent.setServicesDesiredState(disallowQueryService, runUpdateStream)
 	if updateBlacklistedTables {
 		if err := agent.loadBlacklistRules(newTablet, blacklistedTables); err != nil {
 			// FIXME(alainjobart) how to handle this error?

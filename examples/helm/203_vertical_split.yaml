@@ -36,7 +36,7 @@ jobs:
   - name: "vertical-split"
     kind: "vtworker"
     cell: "zone1"
-    command: "VerticalSplitClone -min_healthy_rdonly_tablets=1 -tables=customer,corder customer/0"
+    command: "VerticalSplitClone -min_healthy_tablets=1 -tables=customer,corder customer/0"
 
 etcd:
   replicas: 1
@@ -51,7 +51,7 @@ vtgate:
   resources:
 
 vttablet:
-  mysqlSize: "test"
+  mysqlSize: "prod"
   resources:
   mysqlResources:
 

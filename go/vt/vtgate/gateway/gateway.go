@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -53,14 +53,8 @@ func init() {
 // A Gateway is the query processing module for each shard,
 // which is used by ScatterConn.
 type Gateway interface {
-	// TODO(alainjobart) The QueryService part of this interface
-	// will be removed soon, in favor of the TargetStats part (that
-	// returns a QueryService)
+	// the query service that this Gateway wraps around
 	queryservice.QueryService
-
-	// srvtopo.TargetStats allows this Gateway to resolve a Target
-	// into a QueryService. It is used by the srvtopo.Resolver object.
-	srvtopo.TargetStats
 
 	// WaitForTablets asks the gateway to wait for the provided
 	// tablets types to be available. It the context is canceled
@@ -106,7 +100,7 @@ func GetCreator() Creator {
 // Note it has the same name as the Gateway's interface method, as it
 // just calls it.
 func WaitForTablets(gw Gateway, tabletTypesToWait []topodatapb.TabletType) error {
-	log.Infof("Gateway waiting for serving tablets...")
+	log.Infof("Gateway waiting for serving tablets of types %v ...", tabletTypesToWait)
 	ctx, cancel := context.WithTimeout(context.Background(), *initialTabletTimeout)
 	defer cancel()
 
@@ -119,7 +113,7 @@ func WaitForTablets(gw Gateway, tabletTypesToWait []topodatapb.TabletType) error
 		// In this scenario, we were able to reach the
 		// topology service, but some tablets may not be
 		// ready. We just warn and keep going.
-		log.Warningf("Timeout waiting for all keyspaces / shards to have healthy tablets, may be in degraded mode")
+		log.Warningf("Timeout waiting for all keyspaces / shards to have healthy tablets of types %v, may be in degraded mode", tabletTypesToWait)
 		err = nil
 	default:
 		// Nothing to do here, the caller will log.Fatalf.

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ const (
   <a href="/debug/querylogz">Current Query Log</a><br>
   <a href="/debug/queryz">Query Plan Stats</a><br>
   <a href="/debug/query_plans">Query Plans</a><br>
+  <a href="/debug/scatter_stats">Scatter Query Statistics</a><br>
 </td>
 </tr>
 </table>

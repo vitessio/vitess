@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -102,10 +102,7 @@ func (dc *dbClientImpl) Rollback() error {
 }
 
 func (dc *dbClientImpl) Close() {
-	if dc.dbConn != nil {
-		dc.dbConn.Close()
-		dc.dbConn = nil
-	}
+	dc.dbConn.Close()
 }
 
 func (dc *dbClientImpl) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {

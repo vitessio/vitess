@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -238,7 +238,7 @@ func (agent *ActionAgent) runHealthCheckLocked() {
 			//
 			// We don't care if the QueryService state actually
 			// changed because we'll broadcast the latest health
-			// status after this immediately anway.
+			// status after this immediately anyway.
 			_ /* state changed */, healthErr = agent.QueryServiceControl.SetServingType(tablet.Type, true, nil)
 
 			if healthErr == nil {
@@ -266,7 +266,7 @@ func (agent *ActionAgent) runHealthCheckLocked() {
 
 			// We don't care if the QueryService state actually
 			// changed because we'll broadcast the latest health
-			// status after this immediately anway.
+			// status after this immediately anyway.
 			log.Infof("Disabling query service because of health-check failure: %v", healthErr)
 			if _ /* state changed */, err := agent.QueryServiceControl.SetServingType(tablet.Type, false, nil); err != nil {
 				log.Errorf("SetServingType(serving=false) failed: %v", err)

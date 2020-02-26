@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,7 +21,9 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/log"
@@ -32,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // This file handles the initial backup restore upon startup.
@@ -81,13 +84,40 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 	// Record local metadata values based on the original type.
 	localMetadata := agent.getLocalMetadataValues(originalType)
 	tablet := agent.Tablet()
-	dir := fmt.Sprintf("%v/%v", tablet.Keyspace, tablet.Shard)
+
+	keyspace := tablet.Keyspace
+	keyspaceInfo, err := agent.TopoServer.GetKeyspace(ctx, keyspace)
+	if err != nil {
+		return err
+	}
+	// For a SNAPSHOT keyspace, we have to look for backups of BaseKeyspace
+	// so we will pass the BaseKeyspace in RestoreParams instead of tablet.Keyspace
+	if keyspaceInfo.KeyspaceType == topodatapb.KeyspaceType_SNAPSHOT {
+		if keyspaceInfo.BaseKeyspace == "" {
+			return vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, fmt.Sprintf("snapshot keyspace %v has no base_keyspace set", tablet.Keyspace))
+		}
+		keyspace = keyspaceInfo.BaseKeyspace
+		log.Infof("Using base_keyspace %v to restore keyspace %v", keyspace, tablet.Keyspace)
+	}
+
+	params := mysqlctl.RestoreParams{
+		Cnf:                 agent.Cnf,
+		Mysqld:              agent.MysqlDaemon,
+		Logger:              logger,
+		Concurrency:         *restoreConcurrency,
+		HookExtraEnv:        agent.hookExtraEnv(),
+		LocalMetadata:       localMetadata,
+		DeleteBeforeRestore: deleteBeforeRestore,
+		DbName:              topoproto.TabletDbName(tablet),
+		Keyspace:            keyspace,
+		Shard:               tablet.Shard,
+		StartTime:           logutil.ProtoToTime(keyspaceInfo.SnapshotTime),
+	}
 
 	// Loop until a backup exists, unless we were told to give up immediately.
-	var pos mysql.Position
-	var err error
+	var backupManifest *mysqlctl.BackupManifest
 	for {
-		pos, err = mysqlctl.Restore(ctx, agent.Cnf, agent.MysqlDaemon, dir, *restoreConcurrency, agent.hookExtraEnv(), localMetadata, logger, deleteBeforeRestore, topoproto.TabletDbName(tablet))
+		backupManifest, err = mysqlctl.Restore(ctx, params)
 		if waitForBackupInterval == 0 {
 			break
 		}
@@ -104,14 +134,19 @@ func (agent *ActionAgent) restoreDataLocked(ctx context.Context, logger logutil.
 		}
 	}
 
+	var pos mysql.Position
+	if backupManifest != nil {
+		pos = backupManifest.Position
+	}
 	switch err {
 	case nil:
 		// Starting from here we won't be able to recover if we get stopped by a cancelled
 		// context. Thus we use the background context to get through to the finish.
-
-		// Reconnect to master.
-		if err := agent.startReplication(context.Background(), pos, originalType); err != nil {
-			return err
+		if keyspaceInfo.KeyspaceType == topodatapb.KeyspaceType_NORMAL {
+			// Reconnect to master only for "NORMAL" keyspaces
+			if err := agent.startReplication(context.Background(), pos, originalType); err != nil {
+				return err
+			}
 		}
 	case mysqlctl.ErrNoBackup:
 		// No-op, starting with empty database.
@@ -205,6 +240,48 @@ func (agent *ActionAgent) startReplication(ctx context.Context, pos mysql.Positi
 	if err := agent.MysqlDaemon.SetMaster(ctx, topoproto.MysqlHostname(ti.Tablet), int(topoproto.MysqlPort(ti.Tablet)), false /* slaveStopBefore */, true /* slaveStartAfter */); err != nil {
 		return vterrors.Wrap(err, "MysqlDaemon.SetMaster failed")
 	}
+
+	// wait for reliable seconds behind master
+	// we have pos where we want to resume from
+	// if MasterPosition is the same, that means no writes
+	// have happened to master, so we are up-to-date
+	// otherwise, wait for replica's Position to change from
+	// the initial pos before proceeding
+	tmc := tmclient.NewTabletManagerClient()
+	defer tmc.Close()
+	remoteCtx, remoteCancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	defer remoteCancel()
+	posStr, err := tmc.MasterPosition(remoteCtx, ti.Tablet)
+	if err != nil {
+		// It is possible that though MasterAlias is set, the master tablet is unreachable
+		// Log a warning and let tablet restore in that case
+		// If we had instead considered this fatal, all tablets would crash-loop
+		// until a master appears, which would make it impossible to elect a master.
+		log.Warningf("Can't get master replication position after restore: %v", err)
+		return nil
+	}
+	masterPos, err := mysql.DecodePosition(posStr)
+	if err != nil {
+		return vterrors.Wrapf(err, "can't decode master replication position: %q", posStr)
+	}
+
+	if !pos.Equal(masterPos) {
+		for {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			status, err := agent.MysqlDaemon.SlaveStatus()
+			if err != nil {
+				return vterrors.Wrap(err, "can't get slave status")
+			}
+			newPos := status.Position
+			if !newPos.Equal(pos) {
+				break
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}
+
 	return nil
 }
 

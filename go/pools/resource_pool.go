@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -38,6 +38,9 @@ var (
 	// ErrTimeout is returned if a resource get times out.
 	ErrTimeout = errors.New("resource pool timed out")
 
+	// ErrCtxTimeout is returned if a ctx is already expired by the time the resource pool is used
+	ErrCtxTimeout = errors.New("resource pool context already expired")
+
 	prefillTimeout = 30 * time.Second
 )
 
@@ -60,6 +63,7 @@ type ResourcePool struct {
 	waitCount  sync2.AtomicInt64
 	waitTime   sync2.AtomicDuration
 	idleClosed sync2.AtomicInt64
+	exhausted  sync2.AtomicInt64
 
 	capacity    sync2.AtomicInt64
 	idleTimeout sync2.AtomicDuration
@@ -197,7 +201,7 @@ func (rp *ResourcePool) get(ctx context.Context) (resource Resource, err error) 
 	// If ctx has already expired, avoid racing with rp's resource channel.
 	select {
 	case <-ctx.Done():
-		return nil, ErrTimeout
+		return nil, ErrCtxTimeout
 	default:
 	}
 
@@ -230,7 +234,9 @@ func (rp *ResourcePool) get(ctx context.Context) (resource Resource, err error) 
 		}
 		rp.active.Add(1)
 	}
-	rp.available.Add(-1)
+	if rp.available.Add(-1) <= 0 {
+		rp.exhausted.Add(1)
+	}
 	rp.inUse.Add(1)
 	return wrapper.resource, err
 }
@@ -334,7 +340,7 @@ func (rp *ResourcePool) SetIdleTimeout(idleTimeout time.Duration) {
 
 // StatsJSON returns the stats in JSON format.
 func (rp *ResourcePool) StatsJSON() string {
-	return fmt.Sprintf(`{"Capacity": %v, "Available": %v, "Active": %v, "InUse": %v, "MaxCapacity": %v, "WaitCount": %v, "WaitTime": %v, "IdleTimeout": %v, "IdleClosed": %v}`,
+	return fmt.Sprintf(`{"Capacity": %v, "Available": %v, "Active": %v, "InUse": %v, "MaxCapacity": %v, "WaitCount": %v, "WaitTime": %v, "IdleTimeout": %v, "IdleClosed": %v, "Exhausted": %v}`,
 		rp.Capacity(),
 		rp.Available(),
 		rp.Active(),
@@ -344,6 +350,7 @@ func (rp *ResourcePool) StatsJSON() string {
 		rp.WaitTime().Nanoseconds(),
 		rp.IdleTimeout().Nanoseconds(),
 		rp.IdleClosed(),
+		rp.Exhausted(),
 	)
 }
 
@@ -391,4 +398,9 @@ func (rp *ResourcePool) IdleTimeout() time.Duration {
 // IdleClosed returns the count of resources closed due to idle timeout.
 func (rp *ResourcePool) IdleClosed() int64 {
 	return rp.idleClosed.Get()
+}
+
+// Exhausted returns the number of times Available dropped below 1
+func (rp *ResourcePool) Exhausted() int64 {
+	return rp.exhausted.Get()
 }

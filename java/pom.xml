@@ -11,7 +11,7 @@
 
   <groupId>io.vitess</groupId>
   <artifactId>vitess-parent</artifactId>
-  <version>3.1.0-SNAPSHOT</version>
+  <version>5.0-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>Vitess Java Client libraries and Hadoop support [Parent]</name>
@@ -52,7 +52,7 @@
   <scm>
     <connection>scm:git:git@github.com:vitessio/vitess.git</connection>
     <developerConnection>scm:git:git@github.com:vitessio/vitess.git</developerConnection>
-    <url>http://github.com/vitessio/vitess/tree/master</url>
+    <url>https://github.com/vitessio/vitess/tree/master</url>
   </scm>
   <issueManagement>
     <system>GitHub</system>
@@ -70,12 +70,13 @@
     <grpc.version>1.16.0</grpc.version>
     <!-- NOTE Netty handler and boring SSL must be kept compatible with grpc
       https://github.com/grpc/grpc-java/blob/master/SECURITY.md#netty -->
-    <netty.handler.version>4.1.30.Final</netty.handler.version>
-    <tcnative.boring.ssl.version>2.0.17.Final</tcnative.boring.ssl.version>
+    <netty.handler.version>4.1.45.Final</netty.handler.version>
+    <tcnative.boring.ssl.version>2.0.28.Final</tcnative.boring.ssl.version>
 
     <protobuf.java.version>3.6.1</protobuf.java.version>
     <protobuf.protoc.version>3.6.1</protobuf.protoc.version>
     <checkstyle.plugin.version>3.0.0</checkstyle.plugin.version>
+    <log4j2.version>2.13.0</log4j2.version>
   </properties>
 
   <!-- Add new dependencies here and then add it below or in your module. -->
@@ -181,9 +182,14 @@
       </dependency>
 
       <dependency>
-        <groupId>log4j</groupId>
-        <artifactId>log4j</artifactId>
-        <version>1.2.17</version>
+        <groupId>org.apache.logging.log4j</groupId>
+        <artifactId>log4j-api</artifactId>
+        <version>${log4j2.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.logging.log4j</groupId>
+        <artifactId>log4j-core</artifactId>
+        <version>${log4j2.version}</version>
       </dependency>
 
       <dependency>
@@ -236,7 +242,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.8.0</version>
+        <version>3.8.1</version>
         <configuration>
           <source>1.8</source>
           <target>1.8</target>

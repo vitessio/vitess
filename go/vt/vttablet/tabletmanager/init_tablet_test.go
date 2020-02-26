@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ import (
 
 	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/mysql/fakesqldb"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
 	"vitess.io/vitess/go/vt/topo"
@@ -173,17 +172,6 @@ func TestInitTablet(t *testing.T) {
 	}
 	db := fakesqldb.New(t)
 	defer db.Close()
-	db.AddQueryPattern(`(SET|CREATE|BEGIN|INSERT|COMMIT|ALTER|UPDATE)\b.*`, &sqltypes.Result{})
-	/*
-		db.AddQuery("SET @@session.sql_log_bin = 0", &sqltypes.Result{})
-		db.AddQuery("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{})
-		db.AddQueryPattern(`CREATE TABLE IF NOT EXISTS _vt\.local_metadata.*`, &sqltypes.Result{})
-		db.AddQueryPattern(`CREATE TABLE IF NOT EXISTS _vt\.shard_metadata.*`, &sqltypes.Result{})
-		db.AddQuery("BEGIN", &sqltypes.Result{})
-		db.AddQueryPattern(`INSERT INTO _vt.local_metadata.*`, &sqltypes.Result{})
-		db.AddQueryPattern(`INSERT INTO _vt.shard_metadata.*`, &sqltypes.Result{})
-		db.AddQuery("COMMIT", &sqltypes.Result{})
-	*/
 
 	// start with a tablet record that doesn't exist
 	port := int32(1234)
@@ -209,7 +197,6 @@ func TestInitTablet(t *testing.T) {
 	*initKeyspace = "test_keyspace"
 	*initShard = "-C0"
 	*initTabletType = "replica"
-	*initPopulateMetadata = true
 	tabletAlias = &topodatapb.TabletAlias{
 		Cell: "cell1",
 		Uid:  2,
@@ -262,8 +249,8 @@ func TestInitTablet(t *testing.T) {
 	if string(ti.KeyRange.Start) != "" || string(ti.KeyRange.End) != "\xc0" {
 		t.Errorf("wrong KeyRange for tablet: %v", ti.KeyRange)
 	}
-	if got := agent._tabletExternallyReparentedTime; !got.IsZero() {
-		t.Fatalf("REPLICA tablet should not have an ExternallyReparentedTimestamp set: %v", got)
+	if got := agent._masterTermStartTime; !got.IsZero() {
+		t.Fatalf("REPLICA tablet should not have a MasterTermStartTime set: %v", got)
 	}
 
 	// 2. Update shard's master to our alias, then try to init again.
@@ -288,8 +275,8 @@ func TestInitTablet(t *testing.T) {
 	if ti.Type != topodatapb.TabletType_REPLICA {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
-	if got := agent._tabletExternallyReparentedTime; !got.IsZero() {
-		t.Fatalf("REPLICA tablet should not have an ExternallyReparentedTimestamp set: %v", got)
+	if got := agent._masterTermStartTime; !got.IsZero() {
+		t.Fatalf("REPLICA tablet should not have a masterTermStartTime set: %v", got)
 	}
 
 	// 3. Delete the tablet record. The shard record still says that we are the
@@ -308,9 +295,9 @@ func TestInitTablet(t *testing.T) {
 	if ti.Type != topodatapb.TabletType_MASTER {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
-	ter1 := agent._tabletExternallyReparentedTime
+	ter1 := agent._masterTermStartTime
 	if ter1.IsZero() {
-		t.Fatalf("MASTER tablet should have an ExternallyReparentedTimestamp set")
+		t.Fatalf("MASTER tablet should have a masterTermStartTime set")
 	}
 
 	// 4. Fix the tablet record to agree that we're master.
@@ -330,9 +317,9 @@ func TestInitTablet(t *testing.T) {
 	if ti.Type != topodatapb.TabletType_MASTER {
 		t.Errorf("wrong tablet type: %v", ti.Type)
 	}
-	ter2 := agent._tabletExternallyReparentedTime
-	if ter2.IsZero() || !ter2.After(ter1) {
-		t.Fatalf("After a restart, ExternallyReparentedTimestamp must be set to the current time. Previous timestamp: %v current timestamp: %v", ter1, ter2)
+	ter2 := agent._masterTermStartTime
+	if ter2.IsZero() || !ter2.Equal(ter1) {
+		t.Fatalf("After a restart, masterTermStartTime must be equal to the previous time saved in the tablet record. Previous timestamp: %v current timestamp: %v", ter1, ter2)
 	}
 
 	// 5. Subsequent inits will still start the vttablet as MASTER.
@@ -355,8 +342,8 @@ func TestInitTablet(t *testing.T) {
 	if len(ti.Tags) != 1 || ti.Tags["aaa"] != "bbb" {
 		t.Errorf("wrong tablet tags: %v", ti.Tags)
 	}
-	ter3 := agent._tabletExternallyReparentedTime
-	if ter3.IsZero() || !ter3.After(ter2) {
-		t.Fatalf("After a restart, ExternallyReparentedTimestamp must be set to the current time. Previous timestamp: %v current timestamp: %v", ter2, ter3)
+	ter3 := agent._masterTermStartTime
+	if ter3.IsZero() || !ter3.Equal(ter2) {
+		t.Fatalf("After a restart, masterTermStartTime must be set to the previous time saved in the tablet record. Previous timestamp: %v current timestamp: %v", ter2, ter3)
 	}
 }

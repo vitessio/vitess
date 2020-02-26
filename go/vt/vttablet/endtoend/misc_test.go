@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -214,31 +215,6 @@ func TestTrailingComment(t *testing.T) {
 		if v2 != v1+1 {
 			t.Errorf("QueryCacheLength(%s): %d, want %d", query, v2, v1+1)
 		}
-	}
-}
-
-func TestUpsertNonPKHit(t *testing.T) {
-	client := framework.NewClient()
-	err := client.Begin(false)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer client.Rollback()
-
-	_, err = client.Execute("insert into upsert_test(id1, id2) values (1, 1)", nil)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	_, err = client.Execute(
-		"insert into upsert_test(id1, id2) values "+
-			"(2, 1) on duplicate key update id2 = 2",
-		nil,
-	)
-	want := "Duplicate entry '1' for key 'id2_idx'"
-	if err == nil || !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("Execute: %v, must start with %s", err, want)
 	}
 }
 
@@ -693,9 +669,7 @@ func TestClientFoundRows(t *testing.T) {
 		t.Error(err)
 	}
 	qr, err := client.Execute("update vitess_test set charval='aa' where intval=124", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if qr.RowsAffected != 0 {
 		t.Errorf("Execute(rowsFound==false): %d, want 0", qr.RowsAffected)
 	}
@@ -708,9 +682,7 @@ func TestClientFoundRows(t *testing.T) {
 		t.Error(err)
 	}
 	qr, err = client.Execute("update vitess_test set charval='aa' where intval=124", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if qr.RowsAffected != 1 {
 		t.Errorf("Execute(rowsFound==true): %d, want 1", qr.RowsAffected)
 	}
@@ -738,9 +710,7 @@ func TestLastInsertId(t *testing.T) {
 	}
 
 	qr, err := client.Execute("update vitess_autoinc_seq set sequence=last_insert_id(sequence + 1) where name='foo'", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	insID := res.InsertID
 
@@ -749,9 +719,7 @@ func TestLastInsertId(t *testing.T) {
 	}
 
 	qr, err = client.Execute("select sequence from vitess_autoinc_seq where name = 'foo'", nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	wantCol := sqltypes.NewUint64(insID + uint64(1))
 	if !reflect.DeepEqual(qr.Rows[0][0], wantCol) {

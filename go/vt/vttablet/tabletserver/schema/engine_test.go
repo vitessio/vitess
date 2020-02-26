@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -412,7 +412,7 @@ func newEngine(queryPlanCacheSize int, reloadTime time.Duration, idleTimeout tim
 	config.SchemaReloadTime = float64(reloadTime) / 1e9
 	config.IdleTimeout = float64(idleTimeout) / 1e9
 	se := NewEngine(DummyChecker, config)
-	se.InitDBConfig(newDBConfigs(db))
+	se.InitDBConfig(newDBConfigs(db).DbaWithDB())
 	return se
 }
 

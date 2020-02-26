@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -42,10 +42,6 @@ var (
 // object that can communicate with a tablet. Only the tablet's
 // HostName and PortMap should be used (and maybe the alias for debug
 // messages).
-//
-// When using this TabletDialer to talk to a l2vtgate, only the Hostname
-// will be set to the full address to dial. Implementations should detect
-// this use case as the portmap will then be empty.
 //
 // timeout represents the connection timeout. If set to 0, this
 // connection should be established in the background and the

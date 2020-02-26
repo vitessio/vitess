@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -154,7 +154,7 @@ func (c *Conn) readColumnDefinition(field *querypb.Field, index int) error {
 	field.Decimals = uint32(decimals)
 
 	// If we didn't get column length or character set,
-	// we assume the orignal row on the other side was encoded from
+	// we assume the original row on the other side was encoded from
 	// a Field without that data, so we don't return the flags.
 	if field.ColumnLength != 0 || field.Charset != 0 {
 		field.Flags = uint32(flags)
@@ -261,7 +261,7 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field) ([]sqltypes.Value,
 		}
 		var s []byte
 		var ok bool
-		s, pos, ok = readLenEncStringAsBytes(data, pos)
+		s, pos, ok = readLenEncStringAsBytesCopy(data, pos)
 		if !ok {
 			return nil, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "decoding string failed")
 		}
@@ -823,7 +823,7 @@ func (c *Conn) parseStmtArgs(data []byte, typ querypb.Type, pos int) (sqltypes.V
 		}
 	case sqltypes.Decimal, sqltypes.Text, sqltypes.Blob, sqltypes.VarChar, sqltypes.VarBinary, sqltypes.Char,
 		sqltypes.Bit, sqltypes.Enum, sqltypes.Set, sqltypes.Geometry, sqltypes.Binary, sqltypes.TypeJSON:
-		val, pos, ok := readLenEncStringAsBytes(data, pos)
+		val, pos, ok := readLenEncStringAsBytesCopy(data, pos)
 		return sqltypes.MakeTrusted(sqltypes.VarBinary, val), pos, ok
 	default:
 		return sqltypes.NULL, pos, false

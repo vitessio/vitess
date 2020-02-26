@@ -1,12 +1,12 @@
 /*
- * Copyright 2017 Google Inc.
- *
+ * Copyright 2019 The Vitess Authors.
+
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
+
  *     http://www.apache.org/licenses/LICENSE-2.0
- *
+
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -26,6 +26,8 @@ import io.vitess.client.grpc.GrpcClientFactory;
 import io.vitess.client.grpc.RetryingInterceptorConfig;
 import io.vitess.client.grpc.tls.TlsOptions;
 import io.vitess.util.Constants.Property;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.sql.SQLException;
@@ -37,15 +39,13 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * Created by naveen.nahata on 24/02/16.
  */
 public class VitessVTGateManager {
 
-  private static Logger logger = Logger.getLogger(VitessVTGateManager.class.getName());
+  private static Logger logger = LogManager.getLogger(VitessVTGateManager.class);
   /*
   Current implementation have one VTGateConn for ip-port-username combination
   */
@@ -148,15 +148,14 @@ public class VitessVTGateManager {
         }
       }
       if (updatedCount > 0) {
-        logger.info("refreshed " + updatedCount + " vtgate connections due to keystore update");
+        logger.info("refreshed {} vtgate connections due to keystore update", updatedCount);
       }
     }
   }
 
   private static void closeRefreshedConnection(final VTGateConnection old) {
     if (vtgateClosureTimer != null) {
-      logger.info(String
-          .format("%s Closing connection with a %s second delay", old, vtgateClosureDelaySeconds));
+      logger.info("{} Closing connection with a {} second delay", old, vtgateClosureDelaySeconds);
       vtgateClosureTimer.schedule(new TimerTask() {
         @Override
         public void run() {
@@ -170,10 +169,10 @@ public class VitessVTGateManager {
 
   private static void actuallyCloseRefreshedConnection(final VTGateConnection old) {
     try {
-      logger.info(old + " Closing connection because it had been refreshed");
+      logger.info("{} Closing connection because it had been refreshed", old);
       old.close();
     } catch (IOException ioe) {
-      logger.log(Level.WARNING, String.format("Error closing VTGateConnection %s", old), ioe);
+      logger.warn("Error closing VTGateConnection {}", old, ioe);
     }
   }
 

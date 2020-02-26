@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -54,19 +54,30 @@ type vtgateConn struct {
 }
 
 func dial(ctx context.Context, addr string) (vtgateconn.Impl, error) {
-	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *name)
-	if err != nil {
-		return nil, err
+	return DialWithOpts(ctx)(ctx, addr)
+}
+
+// DialWithOpts allows for custom dial options to be set on a vtgateConn.
+func DialWithOpts(ctx context.Context, opts ...grpc.DialOption) vtgateconn.DialerFunc {
+	return func(ctx context.Context, address string) (vtgateconn.Impl, error) {
+		opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *name)
+		if err != nil {
+			return nil, err
+		}
+
+		opts = append(opts, opt)
+
+		cc, err := grpcclient.Dial(address, grpcclient.FailFast(false), opts...)
+		if err != nil {
+			return nil, err
+		}
+
+		c := vtgateservicepb.NewVitessClient(cc)
+		return &vtgateConn{
+			cc: cc,
+			c:  c,
+		}, nil
 	}
-	cc, err := grpcclient.Dial(addr, grpcclient.FailFast(false), opt)
-	if err != nil {
-		return nil, err
-	}
-	c := vtgateservicepb.NewVitessClient(cc)
-	return &vtgateConn{
-		cc: cc,
-		c:  c,
-	}, nil
 }
 
 func (conn *vtgateConn) Execute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error) {
