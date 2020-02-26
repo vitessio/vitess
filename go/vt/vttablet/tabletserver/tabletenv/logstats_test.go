@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/callinfo/fakecallinfo"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -54,7 +55,8 @@ func TestLogStats(t *testing.T) {
 
 func testFormat(stats *LogStats, params url.Values) string {
 	var b bytes.Buffer
-	stats.Logf(&b, params)
+	err := stats.Logf(&b, params)
+	log.Error(err)
 	return b.String()
 }
 

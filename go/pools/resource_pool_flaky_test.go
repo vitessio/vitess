@@ -18,7 +18,6 @@ package pools
 
 import (
 	"errors"
-	"log"
 	"testing"
 	"time"
 
@@ -598,7 +597,7 @@ func TestSlowCreateFail(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		go func() {
 			if _, err := p.Get(ctx); err != nil {
-				log.Fatalf("failed in get pool : %v", err)
+				t.Fatalf("failed in get pool : %v", err)
 			}
 			ch <- true
 		}()

@@ -90,7 +90,10 @@ func querylogzHandler(ch chan interface{}, w http.ResponseWriter, r *http.Reques
 	timeout, limit := parseTimeoutLimitParams(r)
 	logz.StartHTMLTable(w)
 	defer logz.EndHTMLTable(w)
-	w.Write(querylogzHeader)
+	_, err := w.Write(querylogzHeader)
+	if err != nil {
+		log.Errorf("failed to write request: %v", err)
+	}
 
 	tmr := time.NewTimer(timeout)
 	defer tmr.Stop()
@@ -105,9 +108,15 @@ func querylogzHandler(ch chan interface{}, w http.ResponseWriter, r *http.Reques
 			stats, ok := out.(*LogStats)
 			if !ok {
 				err := fmt.Errorf("unexpected value in %s: %#v (expecting value of type %T)", QueryLogger.Name(), out, &LogStats{})
-				io.WriteString(w, `<tr class="error">`)
-				io.WriteString(w, err.Error())
-				io.WriteString(w, "</tr>")
+				if _, err := io.WriteString(w, `<tr class="error">`); err != nil {
+					log.Errorf("failed to write io: %v", err)
+				}
+				if _, err := io.WriteString(w, err.Error()); err != nil {
+					log.Errorf("failed to write io: %v", err)
+				}
+				if _, err := io.WriteString(w, "</tr>"); err != nil {
+					log.Errorf("failed to write io: %v", err)
+				}
 				log.Error(err)
 				continue
 			}

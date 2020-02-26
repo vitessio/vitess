@@ -502,7 +502,9 @@ func testQueryLog(t *testing.T, logChan chan interface{}, method, stmtType, sql 
 	}
 
 	var log bytes.Buffer
-	streamlog.GetFormatter(QueryLogger)(&log, nil, logStats)
+	if err := streamlog.GetFormatter(QueryLogger)(&log, nil, logStats); err != nil {
+		t.Errorf("failed in formating query streamlog %s", err)
+	}
 	fields := strings.Split(log.String(), "\t")
 
 	// fields[0] is the method

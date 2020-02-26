@@ -68,7 +68,10 @@ func handleCollection(collection string, getFunc func(*http.Request) (interface{
 			return fmt.Errorf("cannot marshal data: %v", err)
 		}
 		w.Header().Set("Content-Type", jsonContentType)
-		w.Write(data)
+		_, err = w.Write(data)
+		if err != nil {
+			log.Error(err)
+		}
 		return nil
 	})
 }

@@ -48,7 +48,9 @@ func TestVtctlServer(t *testing.T) {
 	// Create a gRPC server and listen on the port
 	server := grpc.NewServer()
 	vtctlservicepb.RegisterVtctlServer(server, grpcvtctlserver.NewVtctlServer(ts))
-	go server.Serve(listener)
+	if err := server.Serve(listener); err != nil {
+		t.Fatalf("Cannot create server: %v", err)
+	}
 
 	// Create a VtctlClient gRPC client to talk to the fake server
 	client, err := gRPCVtctlClientFactory(fmt.Sprintf("localhost:%v", port))
@@ -80,8 +82,9 @@ func TestVtctlAuthClient(t *testing.T) {
 	server := grpc.NewServer(opts...)
 
 	vtctlservicepb.RegisterVtctlServer(server, grpcvtctlserver.NewVtctlServer(ts))
-	go server.Serve(listener)
-
+	if err := server.Serve(listener); err != nil {
+		t.Fatalf("Cannot create server: %v", err)
+	}
 	authJSON := `{
          "Username": "valid",
          "Password": "valid"
@@ -99,7 +102,9 @@ func TestVtctlAuthClient(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	flag.Set("grpc_auth_static_client_creds", f.Name())
+	if err := flag.Set("grpc_auth_static_client_creds", f.Name()); err != nil {
+		t.Fatalf("Cannot set flag grpc_auth_static_client_creds: %v", err)
+	}
 
 	// Create a VtctlClient gRPC client to talk to the fake server
 	client, err := gRPCVtctlClientFactory(fmt.Sprintf("localhost:%v", port))

@@ -48,8 +48,10 @@ func TestGRPCTabletConn(t *testing.T) {
 	// Create a gRPC server and listen on the port
 	server := grpc.NewServer()
 	grpcqueryservice.Register(server, service)
-	go server.Serve(listener)
-
+	err = server.Serve(listener)
+	if err != nil {
+		t.Fatalf("failed to start server: %v", err)
+	}
 	// run the test suite
 	tabletconntest.TestSuite(t, protocolName, &topodatapb.Tablet{
 		Keyspace: tabletconntest.TestTarget.Keyspace,
@@ -82,8 +84,10 @@ func TestGRPCTabletAuthConn(t *testing.T) {
 	server := grpc.NewServer(opts...)
 
 	grpcqueryservice.Register(server, service)
-	go server.Serve(listener)
-
+	err = server.Serve(listener)
+	if err != nil {
+		t.Fatalf("failed to start server: %v", err)
+	}
 	authJSON := `{
          "Username": "valid",
          "Password": "valid"
