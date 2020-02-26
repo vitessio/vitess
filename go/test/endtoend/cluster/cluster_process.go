@@ -27,6 +27,7 @@ import (
 	"os/signal"
 	"path"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -82,6 +83,9 @@ type LocalProcessCluster struct {
 	VtctldExtraArgs []string
 
 	EnableSemiSync bool
+
+	mx                *sync.Mutex
+	teardownCompleted bool
 
 	context.Context
 	context.CancelFunc
@@ -421,7 +425,7 @@ func (cluster *LocalProcessCluster) GetVtgateInstance() *VtgateProcess {
 
 // NewCluster instantiates a new cluster
 func NewCluster(cell string, hostname string) *LocalProcessCluster {
-	cluster := &LocalProcessCluster{Cell: cell, Hostname: hostname}
+	cluster := &LocalProcessCluster{Cell: cell, Hostname: hostname, mx: new(sync.Mutex)}
 	go cluster.CtrlCHandler()
 	cluster.OriginalVTDATAROOT = os.Getenv("VTDATAROOT")
 	cluster.CurrentVTDATAROOT = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vtroot_%d", cluster.GetAndReservePort()))
@@ -476,6 +480,12 @@ func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error
 
 // Teardown brings down the cluster by invoking teardown for individual processes
 func (cluster *LocalProcessCluster) Teardown() {
+	PanicHandler(nil)
+	cluster.mx.Lock()
+	defer cluster.mx.Unlock()
+	if cluster.teardownCompleted {
+		return
+	}
 	if cluster.CancelFunc != nil {
 		cluster.CancelFunc()
 	}
@@ -521,6 +531,7 @@ func (cluster *LocalProcessCluster) Teardown() {
 		log.Errorf("Error in topo server teardown - %s", err.Error())
 	}
 
+	cluster.teardownCompleted = true
 }
 
 // StartVtworker starts a vtworker
