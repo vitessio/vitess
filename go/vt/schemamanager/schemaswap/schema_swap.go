@@ -452,11 +452,14 @@ func (schemaSwap *Swap) createShardObjects() error {
 // stopAllHealthWatchers stops watching for health on each shard. It's separated into a separate
 // function mainly to make "defer" statement where it's used simpler.
 func (schemaSwap *Swap) stopAllHealthWatchers() {
-	schemaSwap.runOnAllShards(
+	err := schemaSwap.runOnAllShards(
 		func(shard *shardSchemaSwap) error {
 			shard.stopHealthWatchers()
 			return nil
 		})
+	if err != nil {
+		log.Error(err)
+	}
 }
 
 // initializeSwap starts the schema swap process. If there is already a schema swap process started
@@ -547,7 +550,9 @@ func (shardSwap *shardSchemaSwap) setShardInProgress(value bool) {
 	} else {
 		shardSwap.shardUINode.Display = workflow.NodeDisplayNone
 	}
-	shardSwap.shardUINode.BroadcastChanges(false /* updateChildren */)
+	if err := shardSwap.shardUINode.BroadcastChanges(false /* updateChildren */); err != nil {
+		log.Error(err)
+	}
 }
 
 // markStepInProgress marks one step of the shard schema swap workflow as running.
@@ -556,6 +561,9 @@ func (shardSwap *shardSchemaSwap) markStepInProgress(uiNode *workflow.Node) {
 	uiNode.State = workflowpb.WorkflowState_Running
 	uiNode.Display = workflow.NodeDisplayIndeterminate
 	uiNode.BroadcastChanges(false /* updateChildren */)
+	if err := uiNode.BroadcastChanges(false /* updateChildren */); err != nil {
+		log.Error(err)
+	}
 }
 
 // addShardLog prints the message into logs and adds it into logs displayed in UI on the
@@ -564,7 +572,9 @@ func (shardSwap *shardSchemaSwap) addShardLog(message string) {
 	log.Infof("Shard %v: %v", shardSwap.shardName, message)
 	shardSwap.shardUILogger.Infof(message)
 	shardSwap.shardUINode.Log = shardSwap.shardUILogger.String()
-	shardSwap.shardUINode.BroadcastChanges(false /* updateChildren */)
+	if err := shardSwap.shardUINode.BroadcastChanges(false /* updateChildren */); err != nil {
+		log.Error(err)
+	}
 }
 
 // markStepDone marks one step of the shard schema swap workflow as finished successfully
@@ -577,7 +587,9 @@ func (shardSwap *shardSchemaSwap) markStepDone(uiNode *workflow.Node, err *error
 	}
 	uiNode.State = workflowpb.WorkflowState_Done
 	uiNode.Display = workflow.NodeDisplayNone
-	uiNode.BroadcastChanges(false /* updateChildren */)
+	if err := uiNode.BroadcastChanges(false /* updateChildren */); err != nil {
+		log.Error(err)
+	}
 }
 
 // getMasterTablet returns the tablet that is currently master on the shard.
@@ -1181,6 +1193,10 @@ func (shardSwap *shardSchemaSwap) updatePropagationProgressUI() {
 		shardSwap.propagationUINode.Progress = shardSwap.numTabletsSwapped * 100 / shardSwap.numTabletsTotal
 	}
 	shardSwap.propagationUINode.BroadcastChanges(false /* updateChildren */)
+	if err := shardSwap.propagationUINode.BroadcastChanges(false /* updateChildren */); err != nil {
+		log.Error(err)
+	}
+
 }
 
 // markPropagationInProgress marks the propagation step of the shard schema swap workflow as running.
@@ -1188,7 +1204,10 @@ func (shardSwap *shardSchemaSwap) markPropagationInProgress() {
 	shardSwap.propagationUINode.Message = ""
 	shardSwap.propagationUINode.State = workflowpb.WorkflowState_Running
 	shardSwap.propagationUINode.Display = workflow.NodeDisplayDeterminate
-	shardSwap.propagationUINode.BroadcastChanges(false /* updateChildren */)
+
+	if err := shardSwap.propagationUINode.BroadcastChanges(false /* updateChildren */); err != nil {
+		log.Error(err)
+	}
 }
 
 // addPropagationLog prints the message to logs, adds it to logs displayed in the UI on the "Propagate to all tablets"
@@ -1198,7 +1217,9 @@ func (shardSwap *shardSchemaSwap) addPropagationLog(message string) {
 	shardSwap.propagationUILogger.Infof(message)
 	shardSwap.propagationUINode.Log = shardSwap.propagationUILogger.String()
 	shardSwap.propagationUINode.Message = message
-	shardSwap.propagationUINode.BroadcastChanges(false /* updateChildren */)
+	if err := shardSwap.propagationUINode.BroadcastChanges(false /* updateChildren */); err != nil {
+		log.Error(err)
+	}
 	shardSwap.addShardLog(message)
 }
 

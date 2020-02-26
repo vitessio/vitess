@@ -189,7 +189,9 @@ func (vtgate *VtgateProcess) TearDown() error {
 		return nil
 	}
 	// Attempt graceful shutdown with SIGTERM first
-	vtgate.proc.Process.Signal(syscall.SIGTERM)
+	if err := vtgate.proc.Process.Signal(syscall.SIGTERM); err != nil {
+		return err
+	}
 
 	select {
 	case err := <-vtgate.exit:

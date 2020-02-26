@@ -134,7 +134,9 @@ func (vtctld *VtctldProcess) TearDown() error {
 	}
 
 	// Attempt graceful shutdown with SIGTERM first
-	vtctld.proc.Process.Signal(syscall.SIGTERM)
+	if err := vtctld.proc.Process.Signal(syscall.SIGTERM); err != nil {
+		return err
+	}
 
 	select {
 	case err := <-vtctld.exit:

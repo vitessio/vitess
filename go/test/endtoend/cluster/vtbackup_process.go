@@ -105,7 +105,9 @@ func (vtbackup *VtbackupProcess) TearDown() error {
 	}
 
 	// Attempt graceful shutdown with SIGTERM first
-	vtbackup.proc.Process.Signal(syscall.SIGTERM)
+	if err := vtbackup.proc.Process.Signal(syscall.SIGTERM); err != nil {
+		return err
+	}
 
 	select {
 	case err := <-vtbackup.exit:

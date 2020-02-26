@@ -104,7 +104,7 @@ func TestStandalone(t *testing.T) {
 	respByte, _ := ioutil.ReadAll(resp.Body)
 	err = json.Unmarshal(respByte, &resultMap)
 	require.Nil(t, err)
-	cmd, _ := resultMap["cmdline"]
+	cmd := resultMap["cmdline"]
 	require.NotNil(t, cmd, "cmdline is not available in debug vars")
 	tmp, _ := cmd.([]interface{})
 	require.Contains(t, tmp[0], "vtcombo")

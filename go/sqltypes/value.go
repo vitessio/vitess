@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/hack"
 
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -227,13 +228,17 @@ func (v Value) String() string {
 func (v Value) EncodeSQL(b BinWriter) {
 	switch {
 	case v.typ == Null:
-		b.Write(nullstr)
+		if _, err := b.Write(nullstr); err != nil {
+			log.Error(err)
+		}
 	case v.IsQuoted():
 		encodeBytesSQL(v.val, b)
 	case v.typ == Bit:
 		encodeBytesSQLBits(v.val, b)
 	default:
-		b.Write(v.val)
+		if _, err := b.Write(v.val); err != nil {
+			log.Error(err)
+		}
 	}
 }
 
@@ -241,11 +246,15 @@ func (v Value) EncodeSQL(b BinWriter) {
 func (v Value) EncodeASCII(b BinWriter) {
 	switch {
 	case v.typ == Null:
-		b.Write(nullstr)
+		if _, err := b.Write(nullstr); err != nil {
+			log.Error(err)
+		}
 	case v.IsQuoted() || v.typ == Bit:
 		encodeBytesASCII(v.val, b)
 	default:
-		b.Write(v.val)
+		if _, err := b.Write(v.val); err != nil {
+			log.Error(err)
+		}
 	}
 }
 
@@ -334,16 +343,26 @@ func (v *Value) UnmarshalJSON(b []byte) error {
 
 func encodeBytesSQL(val []byte, b BinWriter) {
 	buf := &bytes2.Buffer{}
-	buf.WriteByte('\'')
+	if err := buf.WriteByte('\''); err != nil {
+		log.Error(err)
+	}
 	for _, ch := range val {
 		if encodedChar := SQLEncodeMap[ch]; encodedChar == DontEscape {
-			buf.WriteByte(ch)
+			if err := buf.WriteByte(ch); err != nil {
+				log.Error(err)
+			}
 		} else {
-			buf.WriteByte('\\')
-			buf.WriteByte(encodedChar)
+			if err := buf.WriteByte('\\'); err != nil {
+				log.Error(err)
+			}
+			if err := buf.WriteByte(encodedChar); err != nil {
+				log.Error(err)
+			}
 		}
 	}
-	buf.WriteByte('\'')
+	if err := buf.WriteByte('\''); err != nil {
+		log.Error(err)
+	}
 	b.Write(buf.Bytes())
 }
 

@@ -142,7 +142,9 @@ func testServer(t *testing.T, want syscall.Signal) {
 	if err != nil {
 		t.Fatalf("could not initialize listener: %v", err)
 	}
-	go http.Serve(l, nil)
+	if err := http.Serve(l, nil); err != nil {
+		t.Error(err)
+	}
 	got := Wait()
 	l.Close()
 	if want != got {

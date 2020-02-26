@@ -315,13 +315,13 @@ func validateManifestFile(t *testing.T, backupLocation string) {
 	require.Nilf(t, err, "error while parsing MANIFEST %v", err)
 
 	// validate manifest
-	transformHook, _ := manifest["TransformHook"]
+	transformHook := manifest["TransformHook"]
 	require.Equalf(t, "test_backup_transform", transformHook, "invalid transformHook in MANIFEST")
-	skipCompress, _ := manifest["SkipCompress"]
+	skipCompress := manifest["SkipCompress"]
 	assert.Equalf(t, skipCompress, true, "invalid value of skipCompress")
 
 	// validate backup files
-	fielEntries, _ := manifest["FileEntries"]
+	fielEntries := manifest["FileEntries"]
 	fileArr, ok := fielEntries.([]interface{})
 	require.True(t, ok)
 	for i := range fileArr {

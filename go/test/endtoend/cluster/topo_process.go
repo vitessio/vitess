@@ -235,7 +235,9 @@ func (topo *TopoProcess) TearDown(Cell string, originalVtRoot string, currentRoo
 			return nil
 
 		case <-time.After(10 * time.Second):
-			topo.proc.Process.Kill()
+			if err := topo.proc.Process.Kill(); err != nil {
+				return err
+			}
 			topo.proc = nil
 			return <-topo.exit
 		}

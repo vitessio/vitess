@@ -561,7 +561,9 @@ func getPort() int {
 		}
 		port = cport
 	}
-	ioutil.WriteFile(tmpPortFileName, []byte(fmt.Sprintf("%d", port+200)), 0666)
+	if err := ioutil.WriteFile(tmpPortFileName, []byte(fmt.Sprintf("%d", port+200)), 0666); err != nil {
+		log.Error(err)
+	}
 	return port
 }
 

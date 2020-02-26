@@ -44,16 +44,28 @@ func (tablet *Vttablet) Restart() error {
 	}
 
 	if tablet.MysqlctlProcess.TabletUID > 0 {
-		tablet.MysqlctlProcess.Stop()
-		tablet.VttabletProcess.TearDown()
-		os.RemoveAll(tablet.VttabletProcess.Directory)
+		if err := tablet.MysqlctlProcess.Stop(); err != nil {
+			return err
+		}
+		if err := tablet.VttabletProcess.TearDown(); err != nil {
+			return err
+		}
+		if err := os.RemoveAll(tablet.VttabletProcess.Directory); err != nil {
+			return err
+		}
 
 		return tablet.MysqlctlProcess.Start()
 	}
 
-	tablet.MysqlctldProcess.Stop()
-	tablet.VttabletProcess.TearDown()
-	os.RemoveAll(tablet.VttabletProcess.Directory)
+	if err := tablet.MysqlctldProcess.Stop(); err != nil {
+		return err
+	}
+	if err := tablet.VttabletProcess.TearDown(); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(tablet.VttabletProcess.Directory); err != nil {
+		return err
+	}
 
 	return tablet.MysqlctldProcess.Start()
 }
@@ -130,15 +142,23 @@ func (cluster LocalProcessCluster) RemoveAllBackups(t *testing.T, shardKsName st
 	backups, err := cluster.ListBackups(shardKsName)
 	require.Nil(t, err)
 	for _, backup := range backups {
-		cluster.VtctlclientProcess.ExecuteCommand("RemoveBackup", shardKsName, backup)
+		if err := cluster.VtctlclientProcess.ExecuteCommand("RemoveBackup", shardKsName, backup); err != nil {
+			t.Error((err))
+		}
 	}
 }
 
 // ResetTabletDirectory transitions back to tablet state (i.e. mysql process restarts with cleaned directory and tablet is off)
 func ResetTabletDirectory(tablet Vttablet) error {
-	tablet.MysqlctlProcess.Stop()
-	tablet.VttabletProcess.TearDown()
-	os.RemoveAll(tablet.VttabletProcess.Directory)
+	if err := tablet.MysqlctlProcess.Stop(); err != nil {
+		return err
+	}
+	if err := tablet.VttabletProcess.TearDown(); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(tablet.VttabletProcess.Directory); err != nil {
+		return err
+	}
 
 	return tablet.MysqlctlProcess.Start()
 }

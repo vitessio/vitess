@@ -23,6 +23,7 @@ import (
 
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 )
 
 const (
@@ -653,9 +654,14 @@ func (tkn *Tokenizer) skipBlank() {
 
 func (tkn *Tokenizer) scanIdentifier(firstByte byte, isDbSystemVariable bool) (int, []byte) {
 	buffer := &bytes2.Buffer{}
-	buffer.WriteByte(firstByte)
+	if err := buffer.WriteByte(firstByte); err != nil {
+		log.Error(err)
+	}
+
 	for isLetter(tkn.lastChar) || isDigit(tkn.lastChar) || (isDbSystemVariable && isCarat(tkn.lastChar)) {
-		buffer.WriteByte(byte(tkn.lastChar))
+		if err := buffer.WriteByte(byte(tkn.lastChar)); err != nil {
+			log.Error(err)
+		}
 		tkn.next()
 	}
 	lowered := bytes.ToLower(buffer.Bytes())
@@ -702,7 +708,9 @@ func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
 				break
 			}
 			backTickSeen = false
-			buffer.WriteByte('`')
+			if err := buffer.WriteByte('`'); err != nil {
+				log.Error(err)
+			}
 			tkn.next()
 			continue
 		}
@@ -808,7 +816,9 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 		}
 
 		if ch != delim && ch != '\\' {
-			buffer.WriteByte(byte(ch))
+			if err := buffer.WriteByte(byte(ch)); err != nil {
+				log.Error(err)
+			}
 
 			// Scan ahead to the next interesting character.
 			start := tkn.bufPos
@@ -850,7 +860,9 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 			break
 		}
 
-		buffer.WriteByte(byte(ch))
+		if err := buffer.WriteByte(byte(ch)); err != nil {
+			log.Error(err)
+		}
 		tkn.next()
 	}
 
@@ -859,7 +871,9 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 
 func (tkn *Tokenizer) scanCommentType1(prefix string) (int, []byte) {
 	buffer := &bytes2.Buffer{}
-	buffer.WriteString(prefix)
+	if _, err := buffer.WriteString(prefix); err != nil {
+		log.Error(err)
+	}
 	for tkn.lastChar != eofChar {
 		if tkn.lastChar == '\n' {
 			tkn.consumeNext(buffer)
@@ -872,7 +886,9 @@ func (tkn *Tokenizer) scanCommentType1(prefix string) (int, []byte) {
 
 func (tkn *Tokenizer) scanCommentType2() (int, []byte) {
 	buffer := &bytes2.Buffer{}
-	buffer.WriteString("/*")
+	if _, err := buffer.WriteString("/*"); err != nil {
+		log.Error(err)
+	}
 	for {
 		if tkn.lastChar == '*' {
 			tkn.consumeNext(buffer)

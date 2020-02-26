@@ -406,6 +406,7 @@ func TestVerticalSplit(t *testing.T) {
 
 	// then serve master from the destination shards
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("MigrateServedFrom", "destination_keyspace/0", "master")
+	require.Nil(t, err)
 	checkSrvKeyspaceServedFrom(t, cellj, destinationKeyspace, "", *clusterInstance)
 	checkBlacklistedTables(t, sourceMasterTablet, sourceKeyspace, []string{"/moving/", "view1"})
 	checkBlacklistedTables(t, sourceReplicaTablet, sourceKeyspace, []string{"/moving/", "view1"})
@@ -482,21 +483,21 @@ func checkStats(t *testing.T) {
 
 	resultMap, err := clusterInstance.VtgateProcess.GetVars()
 	require.Nil(t, err)
-	resultVtTabletCall, _ := resultMap["VttabletCall"]
+	resultVtTabletCall := resultMap["VttabletCall"]
 	resultVtTabletCallMap, _ := resultVtTabletCall.(map[string]interface{})
-	resultHistograms, _ := resultVtTabletCallMap["Histograms"]
+	resultHistograms := resultVtTabletCallMap["Histograms"]
 	resultHistogramsMap, _ := resultHistograms.(map[string]interface{})
-	resultTablet, _ := resultHistogramsMap["Execute.source_keyspace.0.replica"]
+	resultTablet := resultHistogramsMap["Execute.source_keyspace.0.replica"]
 	resultTableMap, _ := resultTablet.(map[string]interface{})
 	resultCountStr := fmt.Sprintf("%v", reflect.ValueOf(resultTableMap["Count"]))
 	assert.Equal(t, "2", resultCountStr, fmt.Sprintf("unexpected value for VttabletCall(Execute.source_keyspace.0.replica) inside %s", resultCountStr))
 
 	// Verify master reads done by self._check_client_conn_redirection().
-	resultVtgateAPI, _ := resultMap["VtgateApi"]
+	resultVtgateAPI := resultMap["VtgateApi"]
 	resultVtgateAPIMap, _ := resultVtgateAPI.(map[string]interface{})
-	resultAPIHistograms, _ := resultVtgateAPIMap["Histograms"]
+	resultAPIHistograms := resultVtgateAPIMap["Histograms"]
 	resultAPIHistogramsMap, _ := resultAPIHistograms.(map[string]interface{})
-	resultTabletDestination, _ := resultAPIHistogramsMap["ExecuteKeyRanges.destination_keyspace.master"]
+	resultTabletDestination := resultAPIHistogramsMap["ExecuteKeyRanges.destination_keyspace.master"]
 	resultTabletDestinationMap, _ := resultTabletDestination.(map[string]interface{})
 	resultCountStrDestination := fmt.Sprintf("%v", reflect.ValueOf(resultTabletDestinationMap["Count"]))
 	assert.Equal(t, "6", resultCountStrDestination, fmt.Sprintf("unexpected value for VtgateApi(ExecuteKeyRanges.destination_keyspace.master) inside %s)", resultCountStrDestination))
