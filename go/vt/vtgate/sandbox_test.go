@@ -240,7 +240,7 @@ func (sct *sandboxTopo) GetTopoServer() (*topo.Server, error) {
 }
 
 // GetSrvKeyspaceNames is part of the srvtopo.Server interface.
-func (sct *sandboxTopo) GetSrvKeyspaceNames(ctx context.Context, cell string) ([]string, error) {
+func (sct *sandboxTopo) GetSrvKeyspaceNames(ctx context.Context, cell string, staleOK bool) ([]string, error) {
 	sandboxMu.Lock()
 	defer sandboxMu.Unlock()
 	keyspaces := make([]string, 0, 1)
