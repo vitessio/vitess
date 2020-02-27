@@ -259,13 +259,13 @@ func (server *ResilientServer) GetSrvKeyspaceNames(ctx context.Context, cell str
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
 
-	cacheValid := entry.value != nil && time.Since(entry.insertionTime) < server.cacheTTL
+	cacheValid := entry.value != nil && (time.Since(entry.insertionTime) < server.cacheTTL || staleOK)
 	shouldRefresh := time.Since(entry.lastQueryTime) > server.cacheRefresh
 
 	// If it is not time to check again, then return either the cached
-	// value or the cached error but don't ask consul again.
+	// value or the cached error but don't ask topo again.
 	if !shouldRefresh {
-		if cacheValid || staleOK {
+		if cacheValid {
 			return entry.value, nil
 		}
 		return nil, entry.lastError
