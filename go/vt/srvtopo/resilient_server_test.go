@@ -567,8 +567,8 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 	// Now, wait long enough that with a stale ask, we'll get an error
 	time.Sleep(*srvTopoCacheRefresh*2 + 2*time.Millisecond)
 	_, err = rs.GetSrvKeyspaceNames(ctx, "test_cell", true)
-	if err == nil || err != forceErr {
-		t.Fatalf("expected error if asking for really stale cache data")
+	if err != forceErr {
+		t.Fatalf("expected an error if asking for really stale cache data")
 	}
 
 	// Check that we only checked the topo service 1 or 2 times during the
