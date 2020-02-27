@@ -2292,16 +2292,15 @@ func TestGetPlanCacheUnnormalized(t *testing.T) {
 	logStats1 = NewLogStats(context.Background(), "Test", "", nil)
 	_, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
 	require.NoError(t, err)
+
 	if len(r.plans.Keys()) != 0 {
 		t.Errorf("Plan keys should be 0, got: %v", len(r.plans.Keys()))
 	}
 
-	query1 = "insert into user(id) values (1), (2)"
-	_, err = r.getPlan(unshardedvc, query1, makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
+	// insert queries should not be cached
+	_, err = r.getPlan(unshardedvc, "insert into user(id) values (1), (2)", makeComments(" /* comment */"), map[string]*querypb.BindVariable{}, false, logStats1)
 	require.NoError(t, err)
-	if len(r.plans.Keys()) != 1 {
-		t.Errorf("Plan keys should be 1, got: %v", len(r.plans.Keys()))
-	}
+	require.Equal(t, int64(0), r.plans.Size(), "should not have cached insert query")
 }
 
 func TestGetPlanCacheNormalized(t *testing.T) {

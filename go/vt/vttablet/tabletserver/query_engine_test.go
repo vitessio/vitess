@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/streamlog"
 
@@ -232,6 +234,7 @@ func TestNoQueryPlanCacheDirective(t *testing.T) {
 	firstQuery := "select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from test_table_01"
 	db.AddQuery("select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from test_table_01 where 1 != 1", &sqltypes.Result{})
 	db.AddQuery("select /*vt+ SKIP_QUERY_PLAN_CACHE=1 */ * from test_table_02 where 1 != 1", &sqltypes.Result{})
+	secondQuery := "insert into test_table_01 (col) values (1)"
 
 	testUtils := newTestUtils()
 	dbcfgs := testUtils.newDBConfigs(db)
@@ -244,15 +247,14 @@ func TestNoQueryPlanCacheDirective(t *testing.T) {
 	logStats := tabletenv.NewLogStats(ctx, "GetPlanStats")
 	qe.SetQueryPlanCacheCap(1)
 	firstPlan, err := qe.GetPlan(ctx, logStats, firstQuery, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if firstPlan == nil {
-		t.Fatalf("plan should not be nil")
-	}
-	if qe.plans.Size() != 0 {
-		t.Fatalf("query plan cache should be 0")
-	}
+	require.NoError(t, err)
+	require.NotNil(t, firstPlan)
+	require.Equal(t, int64(0), qe.plans.Size(), "query plan cache should be 0")
+
+	secondPlan, err := qe.GetPlan(ctx, logStats, secondQuery, false)
+	require.NoError(t, err)
+	require.NotNil(t, secondPlan)
+	require.Equal(t, int64(0), qe.plans.Size(), "query plan cache should be 0")
 	qe.ClearQueryPlanCache()
 }
 
