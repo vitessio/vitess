@@ -557,6 +557,20 @@ func TestGetSrvKeyspaceNames(t *testing.T) {
 		t.Errorf("got error %v want %v", err, forceErr)
 	}
 
+	// Now, since the TTL has expired, check that when we ask for stale
+	// info, we'll get it.
+	_, err = rs.GetSrvKeyspaceNames(ctx, "test_cell", true)
+	if err != nil {
+		t.Fatalf("expected no error if asking for stale cache data")
+	}
+
+	// Now, wait long enough that with a stale ask, we'll get an error
+	time.Sleep(*srvTopoCacheRefresh*2 + 2*time.Millisecond)
+	_, err = rs.GetSrvKeyspaceNames(ctx, "test_cell", true)
+	if err == nil || err != forceErr {
+		t.Fatalf("expected error if asking for really stale cache data")
+	}
+
 	// Check that we only checked the topo service 1 or 2 times during the
 	// period where we got the cached error.
 	cachedReqs, ok := rs.counts.Counts()[cachedCategory]
