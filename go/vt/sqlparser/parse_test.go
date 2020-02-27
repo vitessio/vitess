@@ -1454,6 +1454,10 @@ var (
 	}, {
 		input: "select name, group_concat(distinct id, score order by id desc separator ':') from t group by name",
 	}, {
+		input: "select name, group_concat(distinct id, score order by id desc separator ':' limit 1) from t group by name",
+	}, {
+		input: "select name, group_concat(distinct id, score order by id desc separator ':' limit 10, 2) from t group by name",
+	}, {
 		input: "select * from t partition (p0)",
 	}, {
 		input: "select * from t partition (p0, p1)",
