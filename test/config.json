@@ -1,61 +1,5 @@
 {
 	"Tests": {
-		"check_make_parser": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"tools/check_make_parser.sh"
-			],
-			"Manual": false,
-			"Shard": 5,
-			"RetryMax": 1,
-			"Tags": []
-		},
-		"check_make_visitor": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"misc/git/hooks/visitorgen"
-			],
-			"Manual": false,
-			"Shard": 5,
-			"RetryMax": 1,
-			"Tags": []
-		},
-		"java": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"make",
-				"java_test"
-			],
-			"Manual": false,
-			"Shard": 0,
-			"RetryMax": 0,
-			"Tags": []
-		},
-		"legacy_resharding": {
-			"File": "legacy_resharding.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 1,
-			"RetryMax": 0,
-			"Tags": [
-				"worker_test"
-			]
-		},
-		"local_example": {
-			"File": "",
-			"Args": [],
-			"Command": [
-				"test/local_example.sh"
-			],
-			"Manual": false,
-			"Shard": 5,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"client_test": {
 			"File": "",
 			"Args": [],
@@ -99,33 +43,6 @@
 			],
 			"Manual": false,
 			"Shard": 5,
-			"RetryMax": 0,
-			"Tags": []
-		},
-		"python_client": {
-			"File": "python_client_test.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 1,
-			"RetryMax": 0,
-			"Tags": []
-		},
-		"update_stream": {
-			"File": "update_stream.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 2,
-			"RetryMax": 0,
-			"Tags": []
-		},
-		"update_stream_rbr": {
-			"File": "update_stream_rbr.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 2,
 			"RetryMax": 0,
 			"Tags": []
 		},
