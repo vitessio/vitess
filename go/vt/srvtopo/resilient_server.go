@@ -259,7 +259,11 @@ func (server *ResilientServer) GetSrvKeyspaceNames(ctx context.Context, cell str
 	entry.mutex.Lock()
 	defer entry.mutex.Unlock()
 
-	cacheValid := entry.value != nil && (time.Since(entry.insertionTime) < server.cacheTTL || staleOK)
+	// Cache iff:
+	//   * entry is still under cache TTL
+	//   * we are accepting stale values AND we haven't disabled caching
+	//     by setting the cacheTTL to zero
+	cacheValid := entry.value != nil && (time.Since(entry.insertionTime) < server.cacheTTL || (staleOK && server.cacheTTL > 0))
 	shouldRefresh := time.Since(entry.lastQueryTime) > server.cacheRefresh
 
 	// If it is not time to check again, then return either the cached
