@@ -483,6 +483,9 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set tx_read_only = 2",
 		err: "unexpected value for tx_read_only: 2",
 	}, {
+		in:  "set transaction_read_only = 2",
+		err: "unexpected value for transaction_read_only: 2",
+	}, {
 		in:  "set tx_isolation = 'invalid'",
 		err: "unexpected value for tx_isolation: invalid",
 	}, {
