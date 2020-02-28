@@ -814,6 +814,10 @@ var (
 	}, {
 		input: "set tx_read_only = 0",
 	}, {
+		input: "set transaction_read_only = 1",
+	}, {
+		input: "set transaction_read_only = 0",
+	}, {
 		input: "set tx_isolation = 'repeatable read'",
 	}, {
 		input: "set tx_isolation = 'read committed'",
