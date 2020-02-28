@@ -22,7 +22,7 @@ import (
 	"vitess.io/vitess/go/vt/srvtopo"
 )
 
-var _ StreamExecuter = (*shardRoute)(nil)
+var _ StreamExecutor = (*shardRoute)(nil)
 
 // shardRoute is an internal primitive used by Route
 // for performing merge sorts.

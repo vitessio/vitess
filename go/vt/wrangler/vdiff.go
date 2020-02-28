@@ -91,7 +91,7 @@ type tableDiffer struct {
 
 // shardStreamer streams rows from one shard. This works for
 // the source as well as the target.
-// shardStreamer satisfies engine.StreamExecuter, and can be
+// shardStreamer satisfies engine.StreamExecutor, and can be
 // added to Primitives of engine.MergeSort.
 // shardStreamer is a member of vdiff, and gets reused by
 // every tableDiffer. A new result channel gets instantiated
@@ -386,7 +386,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 
 // newMergeSorter creates an engine.MergeSort based on the shard streamers and pk columns.
 func newMergeSorter(participants map[string]*shardStreamer, comparePKs []int) *engine.MergeSort {
-	prims := make([]engine.StreamExecuter, 0, len(participants))
+	prims := make([]engine.StreamExecutor, 0, len(participants))
 	for _, participant := range participants {
 		prims = append(prims, participant)
 	}
