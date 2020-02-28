@@ -2638,6 +2638,7 @@ func TestGenerateCharsetRows(t *testing.T) {
 			match := stmt.(*sqlparser.Show)
 			filter := match.ShowTablesOpt.Filter
 			actual, err := generateCharsetRows(filter, charsets)
+			require.NoError(t, err)
 			require.Equal(t, tc.expected, actual)
 		})
 	}

@@ -385,7 +385,7 @@ func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*quer
 	if err != nil {
 		return nil, nil, vterrors.Wrap(err, "paramsSelectEqual")
 	}
-	rss, _, err := route.resolveShards(vcursor, []sqltypes.Value{key})
+	rss, _, err := resolveShards(vcursor, route.Vindex, route.Keyspace, []sqltypes.Value{key})
 	if err != nil {
 		return nil, nil, vterrors.Wrap(err, "paramsSelectEqual")
 	}
@@ -401,14 +401,14 @@ func (route *Route) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb
 	if err != nil {
 		return nil, nil, vterrors.Wrap(err, "paramsSelectIn")
 	}
-	rss, values, err := route.resolveShards(vcursor, keys)
+	rss, values, err := resolveShards(vcursor, route.Vindex, route.Keyspace, keys)
 	if err != nil {
 		return nil, nil, vterrors.Wrap(err, "paramsSelectIn")
 	}
 	return rss, shardVars(bindVars, values), nil
 }
 
-func (route *Route) resolveShards(vcursor VCursor, vindexKeys []sqltypes.Value) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+func resolveShards(vcursor VCursor, vindex vindexes.SingleColumn, keyspace *vindexes.Keyspace, vindexKeys []sqltypes.Value) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
 	// Convert vindexKeys to []*querypb.Value
 	ids := make([]*querypb.Value, len(vindexKeys))
 	for i, vik := range vindexKeys {
@@ -416,13 +416,13 @@ func (route *Route) resolveShards(vcursor VCursor, vindexKeys []sqltypes.Value) 
 	}
 
 	// Map using the Vindex
-	destinations, err := route.Vindex.Map(vcursor, vindexKeys)
+	destinations, err := vindex.Map(vcursor, vindexKeys)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// And use the Resolver to map to ResolvedShards.
-	return vcursor.ResolveDestinations(route.Keyspace.Name, ids, destinations)
+	return vcursor.ResolveDestinations(keyspace.Name, ids, destinations)
 }
 
 func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
@@ -488,6 +488,21 @@ func resolveSingleShard(vcursor VCursor, vindex vindexes.SingleColumn, keyspace 
 		return nil, nil, fmt.Errorf("ResolveDestinations maps to %v shards", len(rss))
 	}
 	return rss[0], ksid, nil
+}
+
+func resolveKeyspaceID(vcursor VCursor, vindex vindexes.SingleColumn, vindexKey sqltypes.Value) ([]byte, error) {
+	destinations, err := vindex.Map(vcursor, []sqltypes.Value{vindexKey})
+	if err != nil {
+		return nil, err
+	}
+	switch ksid := destinations[0].(type) {
+	case key.DestinationKeyspaceID:
+		return ksid, nil
+	case key.DestinationNone:
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("cannot map vindex to unique keyspace id: %v", destinations[0])
+	}
 }
 
 func execShard(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, isDML, canAutocommit bool) (*sqltypes.Result, error) {
