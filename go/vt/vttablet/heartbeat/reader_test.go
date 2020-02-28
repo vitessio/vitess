@@ -106,16 +106,15 @@ func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *Reader {
 	config := tabletenv.DefaultQsConfig
 	config.HeartbeatEnable = true
 	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
-	dbc := dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "")
+	params, _ := db.ConnParams().GetConnParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 
 	tr := NewReader(&fakeMysqlChecker{}, config)
 	tr.dbName = sqlescape.EscapeID(dbc.SidecarDBName.Get())
 	tr.keyspaceShard = "test:0"
 	tr.now = nowFunc
-	appWithDBParams, _ := dbc.AppWithDB().GetConnParams()
-	dbaWithDBParams, _ := dbc.DbaWithDB().GetConnParams()
-	appDebugWithDBParams, _ := dbc.AppDebugWithDB().GetConnParams()
-	tr.pool.Open(appWithDBParams, dbaWithDBParams, appDebugWithDBParams)
+	tr.pool.Open(dbc.AppWithDB(), dbc.DbaWithDB(), dbc.AppDebugWithDB())
 
 	return tr
 }

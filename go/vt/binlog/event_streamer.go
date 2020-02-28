@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -51,7 +52,7 @@ type EventStreamer struct {
 }
 
 // NewEventStreamer returns a new EventStreamer on top of a Streamer
-func NewEventStreamer(cp *mysql.ConnParams, se *schema.Engine, startPos mysql.Position, timestamp int64, sendEvent sendEventFunc) *EventStreamer {
+func NewEventStreamer(cp dbconfigs.ConnParams, se *schema.Engine, startPos mysql.Position, timestamp int64, sendEvent sendEventFunc) *EventStreamer {
 	evs := &EventStreamer{
 		sendEvent: sendEvent,
 	}

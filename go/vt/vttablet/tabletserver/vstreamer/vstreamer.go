@@ -53,7 +53,7 @@ type VStreamer interface {
 }
 
 // NewVStreamer returns a VStreamer.
-func NewVStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) VStreamer {
+func NewVStreamer(ctx context.Context, cp dbconfigs.ConnParams, se *schema.Engine, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) VStreamer {
 	return newVStreamer(ctx, cp, se, startPos, filter, &localVSchema{vschema: &vindexes.VSchema{}}, send)
 }
 
@@ -70,7 +70,7 @@ type vstreamer struct {
 	ctx    context.Context
 	cancel func()
 
-	cp       *mysql.ConnParams
+	cp       dbconfigs.ConnParams
 	se       *schema.Engine
 	startPos string
 	filter   *binlogdatapb.Filter
@@ -112,7 +112,7 @@ type streamerPlan struct {
 //   Other constructs like joins, group by, etc. are not supported.
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
-func newVStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, startPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
+func newVStreamer(ctx context.Context, cp dbconfigs.ConnParams, se *schema.Engine, startPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &vstreamer{
 		ctx:      ctx,
@@ -186,7 +186,7 @@ func (vs *vstreamer) Stream() error {
 }
 
 func (vs *vstreamer) currentPosition() (mysql.Position, error) {
-	cp, err := dbconfigs.WithCredentials(vs.cp)
+	cp, err := vs.cp.GetConnParams()
 	if err != nil {
 		return mysql.Position{}, err
 	}
@@ -363,6 +363,12 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 	if err != nil {
 		return nil, fmt.Errorf("can't strip checksum from binlog event: %v, event data: %#v", err, ev)
 	}
+
+	// Get the DbName for vstreamer
+	params, err := vs.cp.GetConnParams()
+	if err != nil {
+		return nil, err
+	}
 	var vevents []*binlogdatapb.VEvent
 	switch {
 	case ev.IsGTID():
@@ -392,7 +398,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 		// could be using SBR. Vitess itself will never run into cases where it needs to consume non rbr statements.
 		switch cat := sqlparser.Preview(q.SQL); cat {
 		case sqlparser.StmtInsert:
-			mustSend := mustSendStmt(q, vs.cp.DbName)
+			mustSend := mustSendStmt(q, params.DbName)
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_INSERT,
@@ -400,7 +406,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				})
 			}
 		case sqlparser.StmtUpdate:
-			mustSend := mustSendStmt(q, vs.cp.DbName)
+			mustSend := mustSendStmt(q, params.DbName)
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_UPDATE,
@@ -408,7 +414,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				})
 			}
 		case sqlparser.StmtDelete:
-			mustSend := mustSendStmt(q, vs.cp.DbName)
+			mustSend := mustSendStmt(q, params.DbName)
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_DELETE,
@@ -416,7 +422,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				})
 			}
 		case sqlparser.StmtReplace:
-			mustSend := mustSendStmt(q, vs.cp.DbName)
+			mustSend := mustSendStmt(q, params.DbName)
 			if mustSend {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_REPLACE,
@@ -432,7 +438,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 				Type: binlogdatapb.VEventType_COMMIT,
 			})
 		case sqlparser.StmtDDL:
-			if mustSendDDL(q, vs.cp.DbName, vs.filter) {
+			if mustSendDDL(q, params.DbName, vs.filter) {
 				vevents = append(vevents, &binlogdatapb.VEvent{
 					Type: binlogdatapb.VEventType_GTID,
 					Gtid: mysql.EncodePosition(vs.pos),
@@ -486,7 +492,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			// A journal is a special case that generates a JOURNAL event.
 			return nil, vs.buildJournalPlan(id, tm)
 		}
-		if tm.Database != "" && tm.Database != vs.cp.DbName {
+		if tm.Database != "" && tm.Database != params.DbName {
 			vs.plans[id] = nil
 			return nil, nil
 		}
@@ -627,6 +633,11 @@ func (vs *vstreamer) buildTableColumns(id uint64, tm *mysql.TableMap) ([]schema.
 }
 
 func (vs *vstreamer) processJounalEvent(vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {
+	// Get DbName
+	params, err := vs.cp.GetConnParams()
+	if err != nil {
+		return nil, err
+	}
 nextrow:
 	for _, row := range rows.Rows {
 		afterOK, afterValues, err := vs.extractRowAndFilter(plan, row.Data, rows.DataColumns, row.NullColumns)
@@ -639,7 +650,7 @@ nextrow:
 		}
 		// Exclude events that don't match the db_name.
 		for i, fld := range plan.fields() {
-			if fld.Name == "db_name" && afterValues[i].ToString() != vs.cp.DbName {
+			if fld.Name == "db_name" && afterValues[i].ToString() != params.DbName {
 				continue nextrow
 			}
 		}

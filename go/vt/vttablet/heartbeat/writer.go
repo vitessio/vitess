@@ -25,7 +25,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -105,12 +104,8 @@ func (w *Writer) Init(target querypb.Target) error {
 	log.Info("Initializing heartbeat table.")
 	w.dbName = sqlescape.EscapeID(w.dbconfigs.SidecarDBName.Get())
 	w.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
-	dbaWithDBParams, err := w.dbconfigs.DbaWithDB().GetConnParams()
-	if err != nil {
-		return err
-	}
 
-	err = w.initializeTables(dbaWithDBParams)
+	err := w.initializeTables(w.dbconfigs.DbaWithDB())
 	if err != nil {
 		w.recordError(err)
 		return err
@@ -133,10 +128,7 @@ func (w *Writer) Open() {
 		return
 	}
 	log.Info("Beginning heartbeat writes")
-	appWithDBParams, _ := w.dbconfigs.AppWithDB().GetConnParams()
-	dbaWithDBParams, _ := w.dbconfigs.DbaWithDB().GetConnParams()
-	appDebugWithDBParams, _ := w.dbconfigs.AppDebugWithDB().GetConnParams()
-	w.pool.Open(appWithDBParams, dbaWithDBParams, appDebugWithDBParams)
+	w.pool.Open(w.dbconfigs.AppWithDB(), w.dbconfigs.DbaWithDB(), w.dbconfigs.AppDebugWithDB())
 	w.ticks.Start(func() { w.writeHeartbeat() })
 	w.isOpen = true
 }
@@ -163,7 +155,7 @@ func (w *Writer) Close() {
 // or master. For that reason, we use values that are common between them, such as keyspace:shard,
 // and we also execute them with an isolated connection that turns off the binlog and
 // is closed at the end.
-func (w *Writer) initializeTables(cp *mysql.ConnParams) error {
+func (w *Writer) initializeTables(cp dbconfigs.ConnParams) error {
 	conn, err := dbconnpool.NewDBConnection(cp, stats.NewTimings("", "", ""))
 	if err != nil {
 		return vterrors.Wrap(err, "Failed to create connection for heartbeat")

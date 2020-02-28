@@ -23,7 +23,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -78,7 +77,7 @@ type MySQLVStreamerClient struct {
 
 	isOpen bool
 
-	sourceConnParams *mysql.ConnParams
+	sourceConnParams dbconfigs.ConnParams
 	sourceSe         *schema.Engine
 }
 
@@ -142,9 +141,8 @@ func NewMySQLVStreamerClient() *MySQLVStreamerClient {
 	}
 	// TODO: For now external mysql streams can only be used with ExternalReplWithDB creds.
 	// In the future we will support multiple users.
-	externReplWithDBParams, _ := dbcfgs.ExternalReplWithDB().GetConnParams()
 	vsClient := &MySQLVStreamerClient{
-		sourceConnParams: externReplWithDBParams,
+		sourceConnParams: dbcfgs.ExternalReplWithDB(),
 	}
 	return vsClient
 }

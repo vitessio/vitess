@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -133,7 +134,7 @@ type tableCacheEntry struct {
 // NewStreamer() again.
 type Streamer struct {
 	// The following fields at set at creation and immutable.
-	cp              *mysql.ConnParams
+	cp              dbconfigs.ConnParams
 	se              *schema.Engine
 	resolverFactory keyspaceIDResolverFactory
 	extractPK       bool
@@ -155,7 +156,7 @@ type Streamer struct {
 // startPos is the position to start streaming at. Incompatible with timestamp.
 // timestamp is the timestamp to start streaming at. Incompatible with startPos.
 // sendTransaction is called each time a transaction is committed or rolled back.
-func NewStreamer(cp *mysql.ConnParams, se *schema.Engine, clientCharset *binlogdatapb.Charset, startPos mysql.Position, timestamp int64, sendTransaction sendTransactionFunc) *Streamer {
+func NewStreamer(cp dbconfigs.ConnParams, se *schema.Engine, clientCharset *binlogdatapb.Charset, startPos mysql.Position, timestamp int64, sendTransaction sendTransactionFunc) *Streamer {
 	return &Streamer{
 		cp:              cp,
 		se:              se,
@@ -407,7 +408,8 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 					return pos, err
 				}
 			default: // BL_DDL, BL_SET, BL_INSERT, BL_UPDATE, BL_DELETE, BL_UNRECOGNIZED
-				if q.Database != "" && q.Database != bls.cp.DbName {
+				params, _ := bls.cp.GetConnParams()
+				if q.Database != "" && q.Database != params.DbName {
 					// Skip cross-db statements.
 					continue
 				}
@@ -470,9 +472,10 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 			tableMaps[tableID] = tce
 
+			params, _ := bls.cp.GetConnParams()
 			// Check we're in the right database, and if so, fill
 			// in more data.
-			if tm.Database != "" && tm.Database != bls.cp.DbName {
+			if tm.Database != "" && tm.Database != params.DbName {
 				continue
 			}
 

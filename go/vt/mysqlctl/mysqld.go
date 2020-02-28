@@ -110,14 +110,12 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	}
 
 	// Create and open the connection pool for dba access.
-	dbaParams, _ := dbcfgs.Dba().GetConnParams()
 	result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", *dbaPoolSize, *dbaIdleTimeout, *poolDynamicHostnameResolution)
-	result.dbaPool.Open(dbaParams, dbaMysqlStats)
+	result.dbaPool.Open(dbcfgs.DbaWithDB(), dbaMysqlStats)
 
 	// Create and open the connection pool for app access.
-	appWithDBParams, _ := dbcfgs.AppWithDB().GetConnParams()
 	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout, *poolDynamicHostnameResolution)
-	result.appPool.Open(appWithDBParams, appMysqlStats)
+	result.appPool.Open(dbcfgs.AppWithDB(), appMysqlStats)
 
 	/*
 	 Unmanaged tablets are special because the MYSQL_FLAVOR detection
@@ -1103,14 +1101,12 @@ func (mysqld *Mysqld) GetAppConnection(ctx context.Context) (*dbconnpool.PooledD
 
 // GetDbaConnection creates a new DBConnection.
 func (mysqld *Mysqld) GetDbaConnection() (*dbconnpool.DBConnection, error) {
-	dbaParams, _ := mysqld.dbcfgs.Dba().GetConnParams()
-	return dbconnpool.NewDBConnection(dbaParams, dbaMysqlStats)
+	return dbconnpool.NewDBConnection(mysqld.dbcfgs.Dba(), dbaMysqlStats)
 }
 
 // GetAllPrivsConnection creates a new DBConnection.
 func (mysqld *Mysqld) GetAllPrivsConnection() (*dbconnpool.DBConnection, error) {
-	allPrivsWithDBParams, _ := mysqld.dbcfgs.AllPrivsWithDB().GetConnParams()
-	return dbconnpool.NewDBConnection(allPrivsWithDBParams, allprivsMysqlStats)
+	return dbconnpool.NewDBConnection(mysqld.dbcfgs.AllPrivsWithDB(), allprivsMysqlStats)
 }
 
 // Close will close this instance of Mysqld. It will wait for all dba

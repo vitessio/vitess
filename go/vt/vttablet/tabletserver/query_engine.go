@@ -288,21 +288,7 @@ func (qe *QueryEngine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
 
 // Open must be called before sending requests to QueryEngine.
 func (qe *QueryEngine) Open() error {
-	appWithDBParams, err := qe.dbconfigs.AppWithDB().GetConnParams()
-	if err != nil {
-		return err
-	}
-
-	dbaWithDBParams, err := qe.dbconfigs.DbaWithDB().GetConnParams()
-	if err != nil {
-		return err
-	}
-
-	appDebugWithDBParams, err := qe.dbconfigs.AppDebugWithDB().GetConnParams()
-	if err != nil {
-		return err
-	}
-	qe.conns.Open(appWithDBParams, dbaWithDBParams, appDebugWithDBParams)
+	qe.conns.Open(qe.dbconfigs.AppWithDB(), qe.dbconfigs.DbaWithDB(), qe.dbconfigs.AppDebugWithDB())
 
 	conn, err := qe.conns.Get(tabletenv.LocalContext())
 	if err != nil {
@@ -317,7 +303,7 @@ func (qe *QueryEngine) Open() error {
 		return err
 	}
 
-	qe.streamConns.Open(appWithDBParams, dbaWithDBParams, appDebugWithDBParams)
+	qe.streamConns.Open(qe.dbconfigs.AppWithDB(), qe.dbconfigs.DbaWithDB(), qe.dbconfigs.AppDebugWithDB())
 	qe.se.RegisterNotifier("qe", qe.schemaChanged)
 	return nil
 }
@@ -447,11 +433,7 @@ func (qe *QueryEngine) ClearQueryPlanCache() {
 
 // IsMySQLReachable returns true if we can connect to MySQL.
 func (qe *QueryEngine) IsMySQLReachable() bool {
-	dbaWithDBParams, err := qe.dbconfigs.DbaWithDB().GetConnParams()
-	if err != nil {
-		return false
-	}
-	conn, err := dbconnpool.NewDBConnection(dbaWithDBParams, tabletenv.MySQLStats)
+	conn, err := dbconnpool.NewDBConnection(qe.dbconfigs.DbaWithDB(), tabletenv.MySQLStats)
 	if err != nil {
 		if mysql.IsConnErr(err) {
 			return false

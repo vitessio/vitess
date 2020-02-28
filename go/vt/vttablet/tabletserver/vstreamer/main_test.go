@@ -48,9 +48,8 @@ func TestMain(m *testing.M) {
 
 		// engine cannot be initialized in testenv because it introduces
 		// circular dependencies.
-		dbaWithDBParams, _ := env.Dbcfgs.DbaWithDB().GetConnParams()
 		engine = NewEngine(env.SrvTopo, env.SchemaEngine)
-		engine.InitDBConfig(dbaWithDBParams)
+		engine.InitDBConfig(env.Dbcfgs.DbaWithDB())
 		engine.Open(env.KeyspaceName, env.Cells[0])
 		defer engine.Close()
 

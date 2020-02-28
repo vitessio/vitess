@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -54,7 +55,7 @@ const (
 // It will also trigger a CheckMySQL whenever applicable.
 type DBConn struct {
 	conn    *dbconnpool.DBConnection
-	info    *mysql.ConnParams
+	info    dbconfigs.ConnParams
 	dbaPool *dbconnpool.ConnectionPool
 	pool    *Pool
 	current sync2.AtomicString
@@ -63,7 +64,7 @@ type DBConn struct {
 // NewDBConn creates a new DBConn. It triggers a CheckMySQL if creation fails.
 func NewDBConn(
 	cp *Pool,
-	appParams *mysql.ConnParams) (*DBConn, error) {
+	appParams dbconfigs.ConnParams) (*DBConn, error) {
 	c, err := dbconnpool.NewDBConnection(appParams, tabletenv.MySQLStats)
 	if err != nil {
 		cp.checker.CheckMySQL()
@@ -78,7 +79,7 @@ func NewDBConn(
 }
 
 // NewDBConnNoPool creates a new DBConn without a pool.
-func NewDBConnNoPool(params *mysql.ConnParams, dbaPool *dbconnpool.ConnectionPool) (*DBConn, error) {
+func NewDBConnNoPool(params dbconfigs.ConnParams, dbaPool *dbconnpool.ConnectionPool) (*DBConn, error) {
 	c, err := dbconnpool.NewDBConnection(params, tabletenv.MySQLStats)
 	if err != nil {
 		return nil, err

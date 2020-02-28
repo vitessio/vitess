@@ -54,8 +54,7 @@ func TestStrictMode(t *testing.T) {
 	// config.EnforceStrictTransTable is true by default.
 	qe := NewQueryEngine(DummyChecker, schema.NewEngine(DummyChecker, config), config)
 	qe.InitDBConfig(dbcfgs)
-	dbaWithDBParams, _ := dbcfgs.DbaWithDB().GetConnParams()
-	qe.se.InitDBConfig(dbaWithDBParams)
+	qe.se.InitDBConfig(dbcfgs.DbaWithDB())
 	qe.se.Open()
 	if err := qe.Open(); err != nil {
 		t.Error(err)
@@ -299,8 +298,7 @@ func newTestQueryEngine(queryPlanCacheSize int, idleTimeout time.Duration, stric
 	config.IdleTimeout = float64(idleTimeout) / 1e9
 	se := schema.NewEngine(DummyChecker, config)
 	qe := NewQueryEngine(DummyChecker, se, config)
-	dbaWithDBparmas, _ := dbcfgs.DbaWithDB().GetConnParams()
-	se.InitDBConfig(dbaWithDBparmas)
+	se.InitDBConfig(dbcfgs.DbaWithDB())
 	qe.InitDBConfig(dbcfgs)
 	return qe
 }

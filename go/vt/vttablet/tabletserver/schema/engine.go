@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -48,7 +49,7 @@ type notifier func(full map[string]*Table, created, altered, dropped []string)
 // Engine stores the schema info and performs operations that
 // keep itself up-to-date.
 type Engine struct {
-	cp *mysql.ConnParams
+	cp dbconfigs.ConnParams
 
 	// mu protects the following fields.
 	mu         sync.Mutex
@@ -100,7 +101,7 @@ func NewEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *En
 }
 
 // InitDBConfig must be called before Open.
-func (se *Engine) InitDBConfig(cp *mysql.ConnParams) {
+func (se *Engine) InitDBConfig(cp dbconfigs.ConnParams) {
 	se.cp = cp
 }
 

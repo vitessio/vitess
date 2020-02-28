@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 
+	"vitess.io/vitess/go/vt/dbconfigs"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -115,7 +116,15 @@ func TestStreamerParseEventsXID(t *testing.T) {
 		},
 	}
 	var got binlogStatements
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
+
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.MakeConnParams()
+	dbcfgs.SetConnParams(mcp)
+
+	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events)
@@ -170,8 +179,15 @@ func TestStreamerParseEventsCommit(t *testing.T) {
 			},
 		},
 	}
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.MakeConnParams()
+	dbcfgs.SetConnParams(mcp)
+
 	var got binlogStatements
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
+	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events)
@@ -190,7 +206,15 @@ func TestStreamerStop(t *testing.T) {
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		return nil
 	}
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, nil, nil, mysql.Position{}, 0, sendTransaction)
+
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.MakeConnParams()
+	dbcfgs.SetConnParams(mcp)
+
+	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
 	// Start parseEvents(), but don't send it anything, so it just waits.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -235,7 +259,15 @@ func TestStreamerParseEventsClientEOF(t *testing.T) {
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		return io.EOF
 	}
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, nil, nil, mysql.Position{}, 0, sendTransaction)
+
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.MakeConnParams()
+	dbcfgs.SetConnParams(mcp)
+
+	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events)
@@ -253,8 +285,14 @@ func TestStreamerParseEventsServerEOF(t *testing.T) {
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		return nil
 	}
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, nil, nil, mysql.Position{}, 0, sendTransaction)
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.MakeConnParams()
+	dbcfgs.SetConnParams(mcp)
 
+	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 	_, err := bls.parseEvents(context.Background(), events)
 	if err != want {
 		t.Errorf("wrong error, got %#v, want %#v", err, want)
@@ -283,7 +321,15 @@ func TestStreamerParseEventsSendErrorXID(t *testing.T) {
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		return fmt.Errorf("foobar")
 	}
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, nil, nil, mysql.Position{}, 0, sendTransaction)
+
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.MakeConnParams()
+	dbcfgs.SetConnParams(mcp)
+
+	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 
@@ -321,7 +367,15 @@ func TestStreamerParseEventsSendErrorCommit(t *testing.T) {
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		return fmt.Errorf("foobar")
 	}
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, nil, nil, mysql.Position{}, 0, sendTransaction)
+
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.MakeConnParams()
+	dbcfgs.SetConnParams(mcp)
+
+	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events)
@@ -354,7 +408,15 @@ func TestStreamerParseEventsInvalid(t *testing.T) {
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		return nil
 	}
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, nil, nil, mysql.Position{}, 0, sendTransaction)
+
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.MakeConnParams()
+	dbcfgs.SetConnParams(mcp)
+
+	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events)
@@ -389,7 +451,15 @@ func TestStreamerParseEventsInvalidFormat(t *testing.T) {
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		return nil
 	}
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, nil, nil, mysql.Position{}, 0, sendTransaction)
+
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.MakeConnParams()
+	dbcfgs.SetConnParams(mcp)
+
+	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events)
@@ -424,7 +494,15 @@ func TestStreamerParseEventsNoFormat(t *testing.T) {
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		return nil
 	}
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, nil, nil, mysql.Position{}, 0, sendTransaction)
+
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.MakeConnParams()
+	dbcfgs.SetConnParams(mcp)
+
+	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events)
@@ -457,7 +535,15 @@ func TestStreamerParseEventsInvalidQuery(t *testing.T) {
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		return nil
 	}
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, nil, nil, mysql.Position{}, 0, sendTransaction)
+
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.MakeConnParams()
+	dbcfgs.SetConnParams(mcp)
+
+	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events)
@@ -538,7 +624,14 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 		},
 	}
 	var got binlogStatements
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.MakeConnParams()
+	dbcfgs.SetConnParams(mcp)
+
+	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
@@ -603,7 +696,15 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 		},
 	}
 	var got binlogStatements
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
+
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.MakeConnParams()
+	dbcfgs.SetConnParams(mcp)
+
+	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
@@ -671,7 +772,15 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 		},
 	}
 	var got binlogStatements
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
+
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.MakeConnParams()
+	dbcfgs.SetConnParams(mcp)
+
+	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
@@ -726,7 +835,14 @@ func TestStreamerParseEventsSetInsertID(t *testing.T) {
 		},
 	}
 	var got binlogStatements
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.MakeConnParams()
+	dbcfgs.SetConnParams(mcp)
+
+	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
@@ -761,7 +877,14 @@ func TestStreamerParseEventsInvalidIntVar(t *testing.T) {
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		return nil
 	}
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, nil, nil, mysql.Position{}, 0, sendTransaction)
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.MakeConnParams()
+	dbcfgs.SetConnParams(mcp)
+
+	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events)
@@ -818,7 +941,14 @@ func TestStreamerParseEventsOtherDB(t *testing.T) {
 		},
 	}
 	var got binlogStatements
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.MakeConnParams()
+	dbcfgs.SetConnParams(mcp)
+
+	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
@@ -874,7 +1004,14 @@ func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
 		},
 	}
 	var got binlogStatements
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.MakeConnParams()
+	dbcfgs.SetConnParams(mcp)
+
+	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
@@ -909,7 +1046,14 @@ func TestStreamerParseEventsBeginAgain(t *testing.T) {
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		return nil
 	}
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, nil, nil, mysql.Position{}, 0, sendTransaction)
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.MakeConnParams()
+	dbcfgs.SetConnParams(mcp)
+
+	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 	before := binlogStreamerErrors.Counts()["ParseEvents"]
 
 	go sendTestEvents(events, input)
@@ -972,7 +1116,14 @@ func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 		},
 	}
 	var got binlogStatements
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.MakeConnParams()
+	dbcfgs.SetConnParams(mcp)
+
+	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
@@ -1025,7 +1176,14 @@ func TestStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 		},
 	}
 	var got binlogStatements
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.MakeConnParams()
+	dbcfgs.SetConnParams(mcp)
+
+	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
 	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {

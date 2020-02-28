@@ -94,7 +94,9 @@ func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 		},
 	)
 
-	dbcfgs := dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "")
+	params, _ := db.ConnParams().GetConnParams()
+	cp := *params
+	dbcfgs := dbconfigs.NewTestDBConfigs(cp, cp, "")
 	cnf := mysqlctl.NewMycnf(22222, 6802)
 	cnf.ServerID = 33333
 

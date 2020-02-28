@@ -785,12 +785,10 @@ func (fts *fakeTabletServer) PurgeMessages(ctx context.Context, target *querypb.
 
 func newMMConnPool(db *fakesqldb.DB) *connpool.Pool {
 	pool := connpool.New("", 20, 0, time.Duration(10*time.Minute), newFakeTabletServer())
-	dbconfigs := dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "")
+	params, _ := db.ConnParams().GetConnParams()
+	cp := *params
+	dbconfigs := dbconfigs.NewTestDBConfigs(cp, cp, "")
 
-	appWithDbPramas, _ := dbconfigs.AppWithDB().GetConnParams()
-	dbaWithDbPramas, _ := dbconfigs.DbaWithDB().GetConnParams()
-	appDebugWithDbPramas, _ := dbconfigs.AppDebugWithDB().GetConnParams()
-
-	pool.Open(appWithDbPramas, dbaWithDbPramas, appDebugWithDbPramas)
+	pool.Open(dbconfigs.AppWithDB(), dbconfigs.DbaWithDB(), dbconfigs.AppDebugWithDB())
 	return pool
 }

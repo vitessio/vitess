@@ -40,7 +40,7 @@ var (
 // among actual slaves in the topology.
 type SlaveConnection struct {
 	*mysql.Conn
-	cp      *mysql.ConnParams
+	cp      dbconfigs.ConnParams
 	slaveID uint32
 	cancel  context.CancelFunc
 	wg      sync.WaitGroup
@@ -53,7 +53,7 @@ type SlaveConnection struct {
 // 1) No other processes are making fake slave connections to our mysqld.
 // 2) No real slave servers will have IDs in the range 1-N where N is the peak
 //    number of concurrent fake slave connections we will ever make.
-func NewSlaveConnection(cp *mysql.ConnParams) (*SlaveConnection, error) {
+func NewSlaveConnection(cp dbconfigs.ConnParams) (*SlaveConnection, error) {
 	conn, err := connectForReplication(cp)
 	if err != nil {
 		return nil, err
@@ -69,8 +69,8 @@ func NewSlaveConnection(cp *mysql.ConnParams) (*SlaveConnection, error) {
 }
 
 // connectForReplication create a MySQL connection ready to use for replication.
-func connectForReplication(cp *mysql.ConnParams) (*mysql.Conn, error) {
-	params, err := dbconfigs.WithCredentials(cp)
+func connectForReplication(cp dbconfigs.ConnParams) (*mysql.Conn, error) {
+	params, err := cp.GetConnParams()
 	if err != nil {
 		return nil, err
 	}

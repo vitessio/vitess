@@ -112,10 +112,7 @@ func (r *Reader) Open() {
 	}
 
 	log.Info("Beginning heartbeat reads")
-	appWithDBParams, _ := r.dbconfigs.AppWithDB().GetConnParams()
-	dbaWithDBParams, _ := r.dbconfigs.DbaWithDB().GetConnParams()
-	appDebugWithDBParams, _ := r.dbconfigs.AppDebugWithDB().GetConnParams()
-	r.pool.Open(appWithDBParams, dbaWithDBParams, appDebugWithDBParams)
+	r.pool.Open(r.dbconfigs.AppWithDB(), r.dbconfigs.DbaWithDB(), r.dbconfigs.AppDebugWithDB())
 	r.ticks.Start(func() { r.readHeartbeat() })
 	r.isOpen = true
 }

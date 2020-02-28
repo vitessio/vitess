@@ -412,11 +412,12 @@ func newEngine(queryPlanCacheSize int, reloadTime time.Duration, idleTimeout tim
 	config.SchemaReloadTime = float64(reloadTime) / 1e9
 	config.IdleTimeout = float64(idleTimeout) / 1e9
 	se := NewEngine(DummyChecker, config)
-	dbaWithDbparams, _ := newDBConfigs(db).DbaWithDB().GetConnParams()
-	se.InitDBConfig(dbaWithDbparams)
+	se.InitDBConfig(newDBConfigs(db).DbaWithDB())
 	return se
 }
 
 func newDBConfigs(db *fakesqldb.DB) *dbconfigs.DBConfigs {
-	return dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "")
+	params, _ := db.ConnParams().GetConnParams()
+	cp := *params
+	return dbconfigs.NewTestDBConfigs(cp, cp, "")
 }

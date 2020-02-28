@@ -29,9 +29,9 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -56,7 +56,7 @@ type ConnectionPool struct {
 	resolutionFrequency time.Duration
 
 	// info and mysqlStats are set at Open() time
-	info      *mysql.ConnParams
+	info      dbconfigs.ConnParams
 	addresses []net.IP
 
 	ticker      *time.Ticker
@@ -97,7 +97,8 @@ func (cp *ConnectionPool) pool() (p *pools.ResourcePool) {
 
 func (cp *ConnectionPool) refreshdns() {
 	cp.mu.Lock()
-	host := cp.info.Host
+	params, _ := cp.info.GetConnParams()
+	host := params.Host
 	cp.mu.Unlock()
 
 	addrs, err := net.LookupHost(host)
@@ -141,14 +142,15 @@ func (cp *ConnectionPool) validAddress(addr net.IP) bool {
 // ...
 // conn, err := pool.Get()
 // ...
-func (cp *ConnectionPool) Open(info *mysql.ConnParams, mysqlStats *stats.Timings) {
+func (cp *ConnectionPool) Open(info dbconfigs.ConnParams, mysqlStats *stats.Timings) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	cp.info = info
 	cp.mysqlStats = mysqlStats
 	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, 0)
 	// Check if we need to resolve a hostname (The Host is not just an IP  address).
-	if cp.resolutionFrequency > 0 && net.ParseIP(info.Host) == nil {
+	params, _ := info.GetConnParams()
+	if cp.resolutionFrequency > 0 && net.ParseIP(params.Host) == nil {
 		cp.hostIsNotIP = true
 		cp.ticker = time.NewTicker(cp.resolutionFrequency)
 		cp.stop = make(chan struct{})

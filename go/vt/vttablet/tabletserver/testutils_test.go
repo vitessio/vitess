@@ -50,7 +50,9 @@ func (util *testUtils) checkEqual(t *testing.T, expected interface{}, result int
 }
 
 func (util *testUtils) newDBConfigs(db *fakesqldb.DB) *dbconfigs.DBConfigs {
-	return dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "")
+	params, _ := db.ConnParams().GetConnParams()
+	cp := *params
+	return dbconfigs.NewTestDBConfigs(cp, cp, "")
 }
 
 func (util *testUtils) newQueryServiceConfig() tabletenv.TabletConfig {

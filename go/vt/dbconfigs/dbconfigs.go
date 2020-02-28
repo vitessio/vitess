@@ -140,13 +140,28 @@ type ConnParams struct {
 	connParams *mysql.ConnParams
 }
 
+// MakeConnParams is for tests only
+func MakeConnParams() ConnParams {
+	return ConnParams{}
+}
+
 // GetConnParams returns the connections params
 func (cp ConnParams) GetConnParams() (*mysql.ConnParams, error) {
-	params, err := WithCredentials(cp.connParams)
+	params, err := withCredentials(cp.connParams)
 	if err != nil {
 		return nil, err
 	}
 	return params, nil
+}
+
+// SetConnParams is to use for tests only
+func (cp *ConnParams) SetConnParams(mcp *mysql.ConnParams) {
+	cp.connParams = mcp
+}
+
+// ConnParam is for tests only
+func (cp *ConnParams) ConnParam() *mysql.ConnParams {
+	return cp.connParams
 }
 
 // AppWithDB returns connection parameters for app with dbname set.
@@ -310,7 +325,7 @@ func Init(defaultSocketFile string) (*DBConfigs, error) {
 	// See if the CredentialsServer is working. We do not use the
 	// result for anything, this is just a check.
 	for _, uc := range dbConfigs.userConfigs {
-		if _, err := WithCredentials(&uc.param); err != nil {
+		if _, err := withCredentials(&uc.param); err != nil {
 			return nil, fmt.Errorf("dbconfig cannot be initialized: %v", err)
 		}
 		// Check for only one.

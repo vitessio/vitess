@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/tb"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -108,7 +109,7 @@ type UpdateStreamImpl struct {
 	ts       *topo.Server
 	keyspace string
 	cell     string
-	cp       *mysql.ConnParams
+	cp       dbconfigs.ConnParams
 	se       *schema.Engine
 
 	// actionLock protects the following variables
@@ -169,7 +170,7 @@ type RegisterUpdateStreamServiceFunc func(UpdateStream)
 var RegisterUpdateStreamServices []RegisterUpdateStreamServiceFunc
 
 // NewUpdateStream returns a new UpdateStreamImpl object
-func NewUpdateStream(ts *topo.Server, keyspace string, cell string, cp *mysql.ConnParams, se *schema.Engine) *UpdateStreamImpl {
+func NewUpdateStream(ts *topo.Server, keyspace string, cell string, cp dbconfigs.ConnParams, se *schema.Engine) *UpdateStreamImpl {
 	return &UpdateStreamImpl{
 		ts:       ts,
 		keyspace: keyspace,
@@ -210,7 +211,8 @@ func (updateStream *UpdateStreamImpl) Enable() {
 
 	updateStream.state.Set(usEnabled)
 	updateStream.streams.Init()
-	log.Infof("Enabling update stream, dbname: %s", updateStream.cp.DbName)
+	params, _ := updateStream.cp.GetConnParams()
+	log.Infof("Enabling update stream, dbname: %s", params.DbName)
 }
 
 // Disable will disallow any connection to the service
