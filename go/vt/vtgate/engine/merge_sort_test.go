@@ -277,7 +277,7 @@ func TestMergeSortDataFailures(t *testing.T) {
 }
 
 func testMergeSort(shardResults []*shardResult, orderBy []OrderbyParams, callback func(qr *sqltypes.Result) error) error {
-	prims := make([]StreamExecuter, 0, len(shardResults))
+	prims := make([]StreamExecutor, 0, len(shardResults))
 	for _, sr := range shardResults {
 		prims = append(prims, sr)
 	}

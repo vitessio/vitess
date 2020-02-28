@@ -29,9 +29,9 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// StreamExecuter is a subset of Primitive that MergeSort
+// StreamExecutor is a subset of Primitive that MergeSort
 // requires its inputs to satisfy.
-type StreamExecuter interface {
+type StreamExecutor interface {
 	StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error
 }
 
@@ -43,10 +43,11 @@ var _ Primitive = (*MergeSort)(nil)
 // a new value is added to it from the stream that was the source of the value that
 // was pulled out. Since the input streams are sorted the same way that the heap is
 // sorted, this guarantees that the merged stream will also be sorted the same way.
-// MergeSort is not functionally complete and should not be used as a Primitive
-// in a plan.
+// MergeSort only supports the StreamExecute function of a Primitive. So, it cannot
+// be used like other Primitives in VTGate. However, it satisfies the Primitive API
+// so that vdiff can use it. In that situation, only StreamExecute is used.
 type MergeSort struct {
-	Primitives []StreamExecuter
+	Primitives []StreamExecutor
 	OrderBy    []OrderbyParams
 	noInputs
 }
@@ -168,7 +169,7 @@ type streamHandle struct {
 }
 
 // runOnestream starts a streaming query on one shard, and returns a streamHandle for it.
-func runOneStream(vcursor VCursor, input StreamExecuter, bindVars map[string]*querypb.BindVariable, wantfields bool) *streamHandle {
+func runOneStream(vcursor VCursor, input StreamExecutor, bindVars map[string]*querypb.BindVariable, wantfields bool) *streamHandle {
 	handle := &streamHandle{
 		fields: make(chan []*querypb.Field, 1),
 		row:    make(chan []sqltypes.Value, 10),

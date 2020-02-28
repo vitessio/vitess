@@ -335,7 +335,7 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 	}
 
 	// There is an order by. We have to merge-sort.
-	prims := make([]StreamExecuter, 0, len(rss))
+	prims := make([]StreamExecutor, 0, len(rss))
 	for i, rs := range rss {
 		prims = append(prims, &shardRoute{
 			query: route.Query,
