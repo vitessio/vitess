@@ -1578,6 +1578,9 @@ func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) ([
 				}
 			case sqlparser.LikeStr:
 				filteredColName, err = checkLikeOpt(rightString, colNames)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 
