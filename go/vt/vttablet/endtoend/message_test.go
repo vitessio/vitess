@@ -55,9 +55,6 @@ func TestMessage(t *testing.T) {
 	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Acked"), 0; got != want {
 		t.Errorf("Messages/vitess_message.Acked: %d, want %d", got, want)
 	}
-	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Queued"), 0; got != want {
-		t.Errorf("Messages/vitess_message.Queued: %d, want %d", got, want)
-	}
 
 	// Start goroutine to consume message stream.
 	go waitForMessage(t, client, "vitess_message", ch, done)
@@ -95,9 +92,6 @@ func TestMessage(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 		return
-	}
-	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Queued"), 1; got != want {
-		t.Errorf("Messages/vitess_message.Queued: %d, want %d", got, want)
 	}
 
 	// Consume first message.
@@ -198,9 +192,6 @@ func TestMessage(t *testing.T) {
 	}
 
 	// Verify final counts.
-	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Queued"), 1; got != want {
-		t.Errorf("Messages/vitess_message.Queued: %d, want %d", got, want)
-	}
 	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message.Acked"), 1; got != want {
 		t.Errorf("Messages/vitess_message.Acked: %d, want %d", got, want)
 	}
@@ -351,11 +342,6 @@ func TestMessageAuto(t *testing.T) {
 		return
 	}
 
-	// Only three messages should be queued.
-	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_message_auto.Queued"), 3; got != want {
-		t.Errorf("Messages/vitess_message_auto.Queued: %d, want %d", got, want)
-	}
-
 	wantResults := []*sqltypes.Result{{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
@@ -373,6 +359,12 @@ func TestMessageAuto(t *testing.T) {
 			sqltypes.NewInt64(5),
 			sqltypes.NULL,
 			sqltypes.NewVarChar("msg5"),
+		}},
+	}, {
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(6),
+			sqltypes.NULL,
+			sqltypes.NewVarChar("msg6"),
 		}},
 	}}
 
@@ -488,16 +480,6 @@ func TestMessageTopic(t *testing.T) {
 		return
 	}
 
-	// Only three messages should be queued on the first subscription table
-	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_topic_subscriber_1.Queued"), 3; got != want {
-		t.Errorf("Messages/vitess_topic_subscriber_1.Queued: %d, want %d", got, want)
-	}
-
-	// Only three messages should be queued on the second subscription table
-	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_topic_subscriber_2.Queued"), 3; got != want {
-		t.Errorf("Messages/vitess_topic_subscriber_2.Queued: %d, want %d", got, want)
-	}
-
 	wantResults := []*sqltypes.Result{{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
@@ -590,16 +572,6 @@ func TestMessageTopic(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 		return
-	}
-
-	// no messages should be queued on the first subscription table
-	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_topic_subscriber_1.Queued"), 3; got != want {
-		t.Errorf("Messages/vitess_topic_subscriber_1.Queued: %d, want %d", got, want)
-	}
-
-	// Only three messages should be queued on the second subscription table
-	if got, want := framework.FetchInt(framework.DebugVars(), "Messages/vitess_topic_subscriber_2.Queued"), 6; got != want {
-		t.Errorf("Messages/vitess_topic_subscriber_2.Queued: %d, want %d", got, want)
 	}
 
 	wantResults = []*sqltypes.Result{{

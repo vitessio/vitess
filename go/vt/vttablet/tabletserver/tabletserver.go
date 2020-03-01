@@ -169,9 +169,9 @@ type TabletServer struct {
 	teCtrl           TxPoolController
 	hw               *heartbeat.Writer
 	hr               *heartbeat.Reader
-	messager         *messager.Engine
 	watcher          *ReplicationWatcher
 	vstreamer        *vstreamer.Engine
+	messager         *messager.Engine
 	updateStreamList *binlog.StreamList
 
 	// checkMySQLThrottler is used to throttle the number of
@@ -280,7 +280,6 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 	tsv.hw = heartbeat.NewWriter(tsv, alias, config)
 	tsv.hr = heartbeat.NewReader(tsv, config)
 	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
-	tsv.messager = messager.NewEngine(tsv, tsv.se, config)
 	tsv.watcher = NewReplicationWatcher(tsv.se, config)
 	tsv.updateStreamList = &binlog.StreamList{}
 	// FIXME(alainjobart) could we move this to the Register method below?
@@ -306,6 +305,7 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 	})
 	// TODO(sougou): move this up once the stats naming problem is fixed.
 	tsv.vstreamer = vstreamer.NewEngine(srvTopoServer, tsv.se)
+	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer, config)
 	return tsv
 }
 
@@ -392,9 +392,9 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.teCtrl.InitDBConfig(tsv.dbconfigs)
 	tsv.hw.InitDBConfig(tsv.dbconfigs)
 	tsv.hr.InitDBConfig(tsv.dbconfigs)
-	tsv.messager.InitDBConfig(tsv.dbconfigs)
 	tsv.watcher.InitDBConfig(tsv.dbconfigs)
 	tsv.vstreamer.InitDBConfig(tsv.dbconfigs.DbaWithDB())
+	tsv.messager.InitDBConfig(tsv.dbconfigs)
 	return nil
 }
 
@@ -645,6 +645,7 @@ func (tsv *TabletServer) waitForShutdown() {
 // It forcibly shuts down everything.
 func (tsv *TabletServer) closeAll() {
 	tsv.messager.Close()
+	tsv.vstreamer.Close()
 	tsv.hr.Close()
 	tsv.hw.Close()
 	tsv.teCtrl.StopGently()

@@ -17,7 +17,6 @@ limitations under the License.
 package messager
 
 import (
-	"sort"
 	"sync"
 	"time"
 
@@ -33,6 +32,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -45,6 +45,13 @@ type TabletService interface {
 	PurgeMessages(ctx context.Context, target *querypb.Target, name string, timeCutoff int64) (count int64, err error)
 }
 
+// VStreamer defines  the functions of VStreamer
+// that the messager needs.
+type VStreamer interface {
+	Stream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error
+	StreamResults(ctx context.Context, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error
+}
+
 // Engine is the engine for handling messages.
 type Engine struct {
 	dbconfigs *dbconfigs.DBConfigs
@@ -55,15 +62,17 @@ type Engine struct {
 
 	tsv          TabletService
 	se           *schema.Engine
+	vs           VStreamer
 	conns        *connpool.Pool
 	postponeSema *sync2.Semaphore
 }
 
 // NewEngine creates a new Engine.
-func NewEngine(tsv TabletService, se *schema.Engine, config tabletenv.TabletConfig) *Engine {
+func NewEngine(tsv TabletService, se *schema.Engine, vs VStreamer, config tabletenv.TabletConfig) *Engine {
 	return &Engine{
 		tsv: tsv,
 		se:  se,
+		vs:  vs,
 		conns: connpool.New(
 			config.PoolNamePrefix+"MessagerPool",
 			config.MessagePoolSize,
@@ -132,84 +141,12 @@ func (me *Engine) Subscribe(ctx context.Context, name string, send func(*sqltype
 // LockDB obtains db locks for all messages that need to
 // be updated and returns the counterpart unlock function.
 func (me *Engine) LockDB(newMessages map[string][]*MessageRow, changedMessages map[string][]string) func() {
-	// Short-circuit to avoid taking any locks if there's nothing to do.
-	if len(newMessages) == 0 && len(changedMessages) == 0 {
-		return func() {}
-	}
-
-	// Build the set of affected messages tables.
-	combined := make(map[string]struct{})
-	for name := range newMessages {
-		combined[name] = struct{}{}
-	}
-	for name := range changedMessages {
-		combined[name] = struct{}{}
-	}
-
-	// Build the list of manager objects (one per table).
-	var mms []*messageManager
-	// Don't do DBLock while holding lock on mu.
-	// It causes deadlocks.
-	func() {
-		me.mu.Lock()
-		defer me.mu.Unlock()
-		for name := range combined {
-			if mm := me.managers[name]; mm != nil {
-				mms = append(mms, mm)
-			}
-		}
-	}()
-	if len(mms) > 1 {
-		// Always use the same order in which manager objects are locked to avoid deadlocks.
-		// The previous order in "mms" is not guaranteed for multiple reasons:
-		// - We use a Go map above which does not guarantee an iteration order.
-		// - Transactions may not always use the same order when writing to multiple
-		//   messages tables.
-		sort.Slice(mms, func(i, j int) bool { return mms[i].name.String() < mms[j].name.String() })
-	}
-
-	// Lock each manager/messages table.
-	for _, mm := range mms {
-		mm.DBLock.Lock()
-	}
-	return func() {
-		for _, mm := range mms {
-			mm.DBLock.Unlock()
-		}
-	}
+	return func() {}
 }
 
 // UpdateCaches updates the caches for the committed changes.
 func (me *Engine) UpdateCaches(newMessages map[string][]*MessageRow, changedMessages map[string][]string) {
-	// Short-circuit to avoid taking any locks if there's nothing to do.
-	if len(newMessages) == 0 && len(changedMessages) == 0 {
-		return
-	}
-
-	me.mu.Lock()
-	defer me.mu.Unlock()
-	now := time.Now().UnixNano()
-	for name, mrs := range newMessages {
-		mm := me.managers[name]
-		if mm == nil {
-			continue
-		}
-		MessageStats.Add([]string{name, "Queued"}, int64(len(mrs)))
-		for _, mr := range mrs {
-			if mr.TimeNext > now {
-				// We don't handle future messages yet.
-				continue
-			}
-			mm.Add(mr)
-		}
-	}
-	for name, ids := range changedMessages {
-		mm := me.managers[name]
-		if mm == nil {
-			continue
-		}
-		mm.cache.Discard(ids)
-	}
+	return
 }
 
 // GenerateLoadMessagesQuery returns the ParsedQuery for loading messages by pk.
@@ -273,7 +210,7 @@ func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altere
 			log.Errorf("Newly created table already exists in messages: %s", name)
 			continue
 		}
-		mm := newMessageManager(me.tsv, t, me.conns, me.postponeSema)
+		mm := newMessageManager(me.tsv, me.vs, t, me.conns, me.postponeSema)
 		me.managers[name] = mm
 		mm.Open()
 	}
