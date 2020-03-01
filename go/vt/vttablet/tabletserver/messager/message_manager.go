@@ -17,12 +17,14 @@ limitations under the License.
 package messager
 
 import (
+	"fmt"
 	"io"
 	"sync"
 	"time"
 
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
@@ -33,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -165,6 +168,7 @@ type receiverWithStatus struct {
 type messageManager struct {
 	DBLock sync.Mutex
 	tsv    TabletService
+	vs     VStreamer
 
 	name         sqlparser.TableIdent
 	fieldResult  *sqltypes.Result
@@ -188,12 +192,17 @@ type messageManager struct {
 	curReceiver     int
 	messagesPending bool
 
+	streamMu         sync.Mutex
+	streamCancel     func()
+	lastPollPosition *mysql.Position
+
 	// wg is for ensuring all running goroutines have returned
 	// before we can close the manager. You need to Add before
 	// launching any gorooutine while holding a lock on mu.
 	// The goroutine must in turn defer on Done.
 	wg sync.WaitGroup
 
+	vsFilter          *binlogdatapb.Filter
 	readByTimeNext    *sqlparser.ParsedQuery
 	loadMessagesQuery *sqlparser.ParsedQuery
 	ackQuery          *sqlparser.ParsedQuery
@@ -204,9 +213,10 @@ type messageManager struct {
 // newMessageManager creates a new message manager.
 // Calls into tsv have to be made asynchronously. Otherwise,
 // it can lead to deadlocks.
-func newMessageManager(tsv TabletService, table *schema.Table, conns *connpool.Pool, postponeSema *sync2.Semaphore) *messageManager {
+func newMessageManager(tsv TabletService, vs VStreamer, table *schema.Table, conns *connpool.Pool, postponeSema *sync2.Semaphore) *messageManager {
 	mm := &messageManager{
 		tsv:  tsv,
+		vs:   vs,
 		name: table.Name,
 		fieldResult: &sqltypes.Result{
 			Fields: table.MessageInfo.Fields,
@@ -224,6 +234,13 @@ func newMessageManager(tsv TabletService, table *schema.Table, conns *connpool.P
 	mm.cond.L = &mm.mu
 
 	columnList := buildSelectColumnList(table)
+	vsQuery := fmt.Sprintf("select time_next, epoch, time_created, %s from %v", columnList, mm.name)
+	mm.vsFilter = &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  table.Name.String(),
+			Filter: vsQuery,
+		}},
+	}
 	mm.readByTimeNext = sqlparser.BuildParsedQuery(
 		"select time_next, epoch, time_created, %s from %v where time_next < %a order by time_next desc limit %a",
 		columnList, mm.name, ":time_next", ":max")
@@ -321,6 +338,9 @@ func (mm *messageManager) Subscribe(ctx context.Context, send func(*sqltypes.Res
 	withStatus := &receiverWithStatus{
 		receiver: receiver,
 	}
+	if len(mm.receivers) == 0 {
+		mm.startVStreamer(ctx)
+	}
 	mm.receivers = append(mm.receivers, withStatus)
 	MessageStats.Set([]string{mm.name.String(), "ClientCount"}, int64(len(mm.receivers)))
 	if mm.curReceiver == -1 {
@@ -353,6 +373,7 @@ func (mm *messageManager) unsubscribe(receiver *messageReceiver) {
 	mm.rescanReceivers(-1)
 	// If there are no receivers. Shut down the cache.
 	if len(mm.receivers) == 0 {
+		mm.stopVStreamer()
 		mm.cache.Clear()
 	}
 }
@@ -415,9 +436,9 @@ func (mm *messageManager) runSend() {
 				return
 			}
 
-			// If cache became empty and there are messages pending, we have
-			// to trigger the poller to fetch more.
-			if mm.cache.IsEmpty() && mm.messagesPending {
+			// If cache became empty, there are messages pending, and there are subscribed
+			// receivers, we have to trigger the poller to fetch more.
+			if mm.cache.IsEmpty() && mm.messagesPending && len(mm.receivers) != 0 {
 				// Do this as a separate goroutine. Otherwise, this could cause
 				// the following deadlock:
 				// 1. runSend obtains a lock
@@ -481,19 +502,25 @@ func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 
 	// This is the cleanup.
 	defer func() {
-		// Discard messages from cache only at the end. This will
-		// prevent them from being requeued while they're being postponed.
-		mm.cache.Discard(ids)
+		func() {
+			mm.mu.Lock()
+			defer mm.mu.Unlock()
 
-		mm.mu.Lock()
-		defer mm.mu.Unlock()
+			receiver.busy = false
+			// Rescan if there were no previously available receivers
+			// because the current receiver became non-busy.
+			if mm.curReceiver == -1 {
+				mm.rescanReceivers(-1)
+			}
+		}()
 
-		receiver.busy = false
-		// Rescan if there were no previously available receivers
-		// because the current receiver became non-busy.
-		if mm.curReceiver == -1 {
-			mm.rescanReceivers(-1)
-		}
+		func() {
+			mm.streamMu.Lock()
+			defer mm.streamMu.Unlock()
+			// Discard messages from cache only at the end. This will
+			// prevent them from being requeued while they're being postponed.
+			mm.cache.Discard(ids)
+		}()
 	}()
 
 	if err := receiver.receiver.Send(qr); err != nil {
@@ -521,10 +548,6 @@ func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 }
 
 func (mm *messageManager) postpone(tsv TabletService, name string, ackWaitTime time.Duration, ids []string) {
-	// ids can be empty if it's the field info being sent.
-	if len(ids) == 0 {
-		return
-	}
 	// Use the semaphore to limit parallelism.
 	if !mm.postponeSema.Acquire() {
 		// Unreachable.
@@ -539,7 +562,128 @@ func (mm *messageManager) postpone(tsv TabletService, name string, ackWaitTime t
 	}
 }
 
+func (mm *messageManager) startVStreamer(ctx context.Context) {
+	mm.streamMu.Lock()
+	defer mm.streamMu.Unlock()
+	if mm.streamCancel != nil {
+		return
+	}
+	ctx, mm.streamCancel = context.WithCancel(ctx)
+	go mm.runVStreamer(ctx)
+}
+
+func (mm *messageManager) stopVStreamer() {
+	mm.streamMu.Lock()
+	defer mm.streamMu.Unlock()
+	if mm.streamCancel != nil {
+		mm.streamCancel()
+		mm.streamCancel = nil
+	}
+}
+
+func (mm *messageManager) runVStreamer(ctx context.Context) {
+	for {
+		var curPos string
+		var fields []*querypb.Field
+		err := mm.vs.Stream(ctx, "current", mm.vsFilter, func(events []*binlogdatapb.VEvent) error {
+			mm.streamMu.Lock()
+			defer mm.streamMu.Unlock()
+
+			select {
+			case <-ctx.Done():
+				return io.EOF
+			default:
+			}
+
+			mustSkip := func() (bool, error) {
+				if mm.lastPollPosition == nil {
+					return false, nil
+				}
+				if curPos == "" {
+					return true, nil
+				}
+				cur, err := mysql.DecodePosition(curPos)
+				if err != nil {
+					return false, err
+				}
+				if cur.AtLeast(*mm.lastPollPosition) {
+					mm.lastPollPosition = nil
+					return false, nil
+				}
+				return true, nil
+			}
+			skipEvents, err := mustSkip()
+			if err != nil {
+				return err
+			}
+			var newPos string
+			for _, ev := range events {
+				switch ev.Type {
+				case binlogdatapb.VEventType_FIELD:
+					fields = ev.FieldEvent.Fields
+				case binlogdatapb.VEventType_ROW:
+					if skipEvents {
+						continue
+					}
+					if err := mm.processRowEvent(fields, ev.RowEvent); err != nil {
+						return err
+					}
+				case binlogdatapb.VEventType_GTID:
+					newPos = ev.Gtid
+				case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER:
+					curPos = newPos
+					skipEvents, err = mustSkip()
+					if err != nil {
+						return err
+					}
+				}
+			}
+			return nil
+		})
+		select {
+		case <-ctx.Done():
+			log.Info("Context canceled, exiting vstream")
+			return
+		default:
+		}
+		log.Infof("VStream ended: %v, retrying in 5 seconds", err)
+		time.Sleep(5 * time.Second)
+	}
+}
+
+func (mm *messageManager) processRowEvent(fields []*querypb.Field, rowEvent *binlogdatapb.RowEvent) error {
+	if fields == nil {
+		// Unreachable.
+		return fmt.Errorf("internal error: unexpected rows without fields")
+	}
+
+	now := time.Now().UnixNano()
+	for _, rc := range rowEvent.RowChanges {
+		if rc.After == nil {
+			continue
+		}
+		row := sqltypes.MakeRowTrusted(fields, rc.After)
+		mr, err := BuildMessageRow(row)
+		if err != nil {
+			return err
+		}
+		if mr.TimeNext == 0 || mr.TimeNext > now {
+			continue
+		}
+		mm.Add(mr)
+	}
+	return nil
+}
+
 func (mm *messageManager) runPoller() {
+	// Fast-path. Skip all the work.
+	if mm.receiverCount() == 0 {
+		return
+	}
+
+	mm.streamMu.Lock()
+	defer mm.streamMu.Unlock()
+
 	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), mm.pollerTicks.Interval())
 	defer func() {
 		tabletenv.LogError()
@@ -553,54 +697,45 @@ func (mm *messageManager) runPoller() {
 	}
 	defer conn.Recycle()
 
-	func() {
-		// Fast-path. Skip all the work.
-		if mm.receiverCount() == 0 {
-			return
-		}
-		mm.DBLock.Lock()
-		defer mm.DBLock.Unlock()
+	size := mm.cache.Size()
+	bindVars := map[string]*querypb.BindVariable{
+		"time_next": sqltypes.Int64BindVariable(time.Now().UnixNano()),
+		"max":       sqltypes.Int64BindVariable(int64(size)),
+	}
+	qr, err := mm.readPending(ctx, conn, bindVars)
+	if err != nil {
+		return
+	}
 
-		size := mm.cache.Size()
-		bindVars := map[string]*querypb.BindVariable{
-			"time_next": sqltypes.Int64BindVariable(time.Now().UnixNano()),
-			"max":       sqltypes.Int64BindVariable(int64(size)),
-		}
-		qr, err := mm.read(ctx, conn, mm.readByTimeNext, bindVars)
+	// Obtain mu lock to verify and preserve that len(receivers) != 0.
+	mm.mu.Lock()
+	defer mm.mu.Unlock()
+	mm.messagesPending = false
+	if len(qr.Rows) >= size {
+		// There are probably more messages to be sent.
+		mm.messagesPending = true
+	}
+	if len(mm.receivers) == 0 {
+		// Almost never reachable because we just checked this.
+		return
+	}
+	if len(qr.Rows) != 0 {
+		// We've most likely added items.
+		// Wake up the sender.
+		defer mm.cond.Broadcast()
+	}
+	for _, row := range qr.Rows {
+		mr, err := BuildMessageRow(row)
 		if err != nil {
-			return
+			tabletenv.InternalErrors.Add("Messages", 1)
+			log.Errorf("Error reading message row: %v", err)
+			continue
 		}
-
-		// Obtain mu lock to verify and preserve that len(receivers) != 0.
-		mm.mu.Lock()
-		defer mm.mu.Unlock()
-		mm.messagesPending = false
-		if len(qr.Rows) >= size {
-			// There are probably more messages to be sent.
+		if !mm.cache.Add(mr) {
 			mm.messagesPending = true
-		}
-		if len(mm.receivers) == 0 {
-			// Almost never reachable because we just checked this.
 			return
 		}
-		if len(qr.Rows) != 0 {
-			// We've most likely added items.
-			// Wake up the sender.
-			defer mm.cond.Broadcast()
-		}
-		for _, row := range qr.Rows {
-			mr, err := BuildMessageRow(row)
-			if err != nil {
-				tabletenv.InternalErrors.Add("Messages", 1)
-				log.Errorf("Error reading message row: %v", err)
-				continue
-			}
-			if !mm.cache.Add(mr) {
-				mm.messagesPending = true
-				return
-			}
-		}
-	}()
+	}
 }
 
 func (mm *messageManager) runPurge() {
@@ -676,9 +811,13 @@ func (mm *messageManager) GeneratePurgeQuery(timeCutoff int64) (string, map[stri
 
 // BuildMessageRow builds a MessageRow for a db row.
 func BuildMessageRow(row []sqltypes.Value) (*MessageRow, error) {
-	timeNext, err := sqltypes.ToInt64(row[0])
-	if err != nil {
-		return nil, err
+	var timeNext int64
+	if !row[0].IsNull() {
+		tn, err := sqltypes.ToInt64(row[0])
+		if err != nil {
+			return nil, err
+		}
+		timeNext = tn
 	}
 	epoch, err := sqltypes.ToInt64(row[1])
 	if err != nil {
@@ -702,12 +841,32 @@ func (mm *messageManager) receiverCount() int {
 	return len(mm.receivers)
 }
 
-func (mm *messageManager) read(ctx context.Context, conn *connpool.DBConn, pq *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	b, err := pq.GenerateQuery(bindVars, nil)
+func (mm *messageManager) readPending(ctx context.Context, conn *connpool.DBConn, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	query, err := mm.readByTimeNext.GenerateQuery(bindVars, nil)
 	if err != nil {
 		tabletenv.InternalErrors.Add("Messages", 1)
 		log.Errorf("Error reading rows from message table: %v", err)
 		return nil, err
 	}
-	return conn.Exec(ctx, string(b), mm.cache.Size()+1, false)
+	qr := &sqltypes.Result{}
+	err = mm.vs.StreamResults(ctx, query, func(response *binlogdatapb.VStreamResultsResponse) error {
+		if response.Fields != nil {
+			qr.Fields = response.Fields
+		}
+		if response.Gtid != "" {
+			pos, err := mysql.DecodePosition(response.Gtid)
+			if err != nil {
+				return err
+			}
+			mm.lastPollPosition = &pos
+		}
+		for _, row := range response.Rows {
+			qr.Rows = append(qr.Rows, sqltypes.MakeRowTrusted(qr.Fields, row))
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return qr, err
 }
