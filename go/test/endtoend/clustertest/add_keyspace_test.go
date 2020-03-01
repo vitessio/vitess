@@ -64,7 +64,10 @@ func TestAddKeyspace(t *testing.T) {
 	// Restart vtgate process
 	_ = clusterInstance.VtgateProcess.TearDown()
 	_ = clusterInstance.VtgateProcess.Setup()
-	clusterInstance.WaitForTabletsToHealthyInVtgate()
+
+	if err := clusterInstance.WaitForTabletsToHealthyInVtgate(); err != nil {
+		t.Error(err)
+	}
 
 	ctx := context.Background()
 	vtParams := mysql.ConnParams{

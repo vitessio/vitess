@@ -722,7 +722,9 @@ func (tkn *Tokenizer) scanLiteralIdentifier() (int, []byte) {
 			// Premature EOF.
 			return LEX_ERROR, buffer.Bytes()
 		default:
-			buffer.WriteByte(byte(tkn.lastChar))
+			if err := buffer.WriteByte(byte(tkn.lastChar)); err != nil {
+				log.Error(err)
+			}
 		}
 		tkn.next()
 	}
@@ -739,7 +741,9 @@ func (tkn *Tokenizer) scanBindVar() (int, []byte) {
 	tkn.next()
 	if tkn.lastChar == ':' {
 		token = LIST_ARG
-		buffer.WriteByte(byte(tkn.lastChar))
+		if err := buffer.WriteByte(byte(tkn.lastChar)); err != nil {
+			log.Error(err)
+		}
 		tkn.next()
 	}
 	if !isLetter(tkn.lastChar) {
@@ -829,7 +833,9 @@ func (tkn *Tokenizer) scanString(delim uint16, typ int) (int, []byte) {
 				}
 			}
 
-			buffer.Write(tkn.buf[start:tkn.bufPos])
+			if _, err := buffer.Write(tkn.buf[start:tkn.bufPos]); err != nil {
+				log.Error(err)
+			}
 			tkn.Position += (tkn.bufPos - start)
 
 			if tkn.bufPos >= tkn.bufSize {
@@ -908,7 +914,9 @@ func (tkn *Tokenizer) scanCommentType2() (int, []byte) {
 
 func (tkn *Tokenizer) scanMySQLSpecificComment() (int, []byte) {
 	buffer := &bytes2.Buffer{}
-	buffer.WriteString("/*!")
+	if _, err := buffer.WriteString("/*!"); err != nil {
+		log.Error(err)
+	}
 	tkn.next()
 	for {
 		if tkn.lastChar == '*' {

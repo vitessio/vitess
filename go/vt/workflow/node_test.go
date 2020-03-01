@@ -25,6 +25,7 @@ import (
 
 	"golang.org/x/net/context"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 )
 
@@ -83,7 +84,10 @@ func TestNodeManagerWithRoot(t *testing.T) {
 
 	// Modify root node, make sure we get notified.
 	n.Name = "name2"
-	n.BroadcastChanges(false /* updateChildren */)
+
+	if err := n.BroadcastChanges(false /* updateChildren */); err != nil {
+		log.Errorf("Failed to start server %v", err)
+	}
 	result, ok = <-notifications
 	if !ok ||
 		!strings.Contains(string(result), `"name":"name2"`) ||

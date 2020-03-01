@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"google.golang.org/grpc"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/throttler/grpcthrottlerserver"
 	"vitess.io/vitess/go/vt/throttler/throttlerclienttest"
@@ -70,6 +71,10 @@ func startGRPCServer(t *testing.T, m throttler.Manager) int {
 	grpcthrottlerserver.RegisterServer(s, m)
 	// Call Serve() after our service has been registered. Otherwise, the test
 	// will fail with the error "grpc: Server.RegisterService after Server.Serve".
-	go s.Serve(listener)
+	go func() {
+		if err := s.Serve(listener); err != nil {
+			log.Errorf("failed to start server", err)
+		}
+	}()
 	return listener.Addr().(*net.TCPAddr).Port
 }

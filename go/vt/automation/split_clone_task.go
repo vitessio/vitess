@@ -18,6 +18,7 @@ package automation
 
 import (
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/log"
 	automationpb "vitess.io/vitess/go/vt/proto/automation"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 )
@@ -31,7 +32,9 @@ func (t *SplitCloneTask) Run(parameters map[string]string) ([]*automationpb.Task
 	// Run a "Reset" first to clear the state of a previous finished command.
 	// This reset is best effort. We ignore the output and error of it.
 	// TODO(mberlin): Remove explicit reset when vtworker supports it implicility.
-	ExecuteVtworker(context.TODO(), parameters["vtworker_endpoint"], []string{"Reset"})
+	if _, err := ExecuteVtworker(context.TODO(), parameters["vtworker_endpoint"], []string{"Reset"}); err != nil {
+		log.Error(err)
+	}
 
 	// TODO(mberlin): Add parameters for the following options?
 	//                        '--source_reader_count', '1',

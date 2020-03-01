@@ -217,6 +217,7 @@ func TestSecureTransport(t *testing.T) {
 	// test with empty effective caller Id
 	request = getRequest("select * from vt_insert_test")
 	qr, err = vc.Execute(ctx, request)
+	require.Nil(t, err)
 	err = vterrors.FromVTRPC(qr.Error)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "table acl error")
@@ -228,6 +229,7 @@ func TestSecureTransport(t *testing.T) {
 	}
 	request = getRequestWithCallerID(callerID, "select * from vt_insert_test")
 	qr, err = vc.Execute(ctx, request)
+	require.Nil(t, err)
 	err = vterrors.FromVTRPC(qr.Error)
 	require.Nil(t, err)
 
@@ -237,6 +239,7 @@ func TestSecureTransport(t *testing.T) {
 	}
 	request = getRequestWithCallerID(callerID, "select * from vt_insert_test")
 	qr, err = vc.Execute(ctx, request)
+	require.Nil(t, err)
 	err = vterrors.FromVTRPC(qr.Error)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "table acl error")

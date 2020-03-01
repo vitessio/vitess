@@ -18,6 +18,7 @@ package txserializer
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -192,13 +193,13 @@ func TestTxSerializer_ConcurrentTransactions(t *testing.T) {
 
 		done3, waited3, err3 := txs.Wait(context.Background(), "t1 where1", "t1")
 		if err3 != nil {
-			t.Fatal(err3)
+			log.Fatal(err3)
 		}
 		if !waited3 {
-			t.Fatalf("tx3 must wait: %v", waited2)
+			log.Fatalf("tx3 must wait: %v", waited2)
 		}
 		if got, want := waits.Counts()["t1"], int64(1); got != want {
-			t.Fatalf("variable not incremented: got = %v, want = %v", got, want)
+			log.Fatalf("variable not incremented: got = %v, want = %v", got, want)
 		}
 
 		done3()
@@ -314,7 +315,7 @@ func TestTxSerializerCancel(t *testing.T) {
 
 		_, _, err3 := txs.Wait(ctx3, "t1 where1", "t1")
 		if err3 != context.Canceled {
-			t.Fatal(err3)
+			log.Fatal(err3)
 		}
 
 		txDone <- 3

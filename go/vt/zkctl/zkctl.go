@@ -104,9 +104,14 @@ func (zkd *Zkd) Start() error {
 			continue
 		} else {
 			err = nil
-			conn.Write([]byte("ruok"))
+			if _, err := conn.Write([]byte("ruok")); err != nil {
+				log.Error(err)
+			}
 			reply := make([]byte, 4)
-			conn.Read(reply)
+
+			if _, err := conn.Read(reply); err != nil {
+				log.Error(err)
+			}
 			if string(reply) != "imok" {
 				err = fmt.Errorf("local zk unhealthy: %v %v", zkAddr, reply)
 			}
@@ -117,7 +122,10 @@ func (zkd *Zkd) Start() error {
 	zkd.done = make(chan struct{})
 	go func(done chan<- struct{}) {
 		// wait so we don't get a bunch of defunct processes
-		cmd.Wait()
+
+		if err := cmd.Wait(); err != nil {
+			log.Error(err)
+		}
 		close(done)
 	}(zkd.done)
 	return err

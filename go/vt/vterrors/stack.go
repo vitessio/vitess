@@ -24,6 +24,8 @@ import (
 	"path"
 	"runtime"
 	"strings"
+
+	"vitess.io/vitess/go/vt/log"
 )
 
 // Frame represents a program counter inside a stack frame.
@@ -74,13 +76,17 @@ func (f Frame) Format(s fmt.State, verb rune) {
 			pc := f.pc()
 			fn := runtime.FuncForPC(pc)
 			if fn == nil {
-				io.WriteString(s, "unknown")
+				if _, err := io.WriteString(s, "unknown"); err != nil {
+					log.Error(err)
+				}
 			} else {
 				file, _ := fn.FileLine(pc)
 				fmt.Fprintf(s, "%s\n\t%s", fn.Name(), file)
 			}
 		default:
-			io.WriteString(s, path.Base(f.file()))
+			if _, err := io.WriteString(s, path.Base(f.file())); err != nil {
+				log.Error(err)
+			}
 		}
 	case 'd':
 		fmt.Fprintf(s, "%d", f.line())

@@ -24,6 +24,7 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/testfiles"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/test"
 	"vitess.io/vitess/go/vt/zkctl"
@@ -34,7 +35,11 @@ import (
 func TestZk2Topo(t *testing.T) {
 	// Start a real single ZK daemon, and close it after all tests are done.
 	zkd, serverAddr := zkctl.StartLocalZk(testfiles.GoVtTopoZk2topoZkID, testfiles.GoVtTopoZk2topoPort)
-	defer zkd.Teardown()
+	defer func() {
+		if err := zkd.Teardown(); err != nil {
+			log.Errorf("Failed to tear down zkd %v", err)
+		}
+	}()
 
 	// Run the test suite.
 	testIndex := 0

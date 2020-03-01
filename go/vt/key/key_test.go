@@ -24,6 +24,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/stretchr/testify/assert"
 
+	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -534,7 +535,9 @@ func BenchmarkKeyRangesOverlap(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		KeyRangesOverlap(kr1, kr2)
+		if _, err := KeyRangesOverlap(kr1, kr2); err != nil {
+			log.Error(err)
+		}
 	}
 }
 

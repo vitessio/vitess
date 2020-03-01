@@ -22,6 +22,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -247,7 +248,9 @@ func createTable(name string, colNames []string, colTypes []querypb.Type, pKeys 
 		}
 		table.AddColumn(colName, colType, defaultVal, "")
 	}
-	setPK(table, pKeys)
+	if err := setPK(table, pKeys); err != nil {
+		log.Fatal(err)
+	}
 	return table
 }
 

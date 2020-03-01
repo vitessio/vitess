@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/srvtopo/srvtopotest"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -217,7 +218,9 @@ func TestDiscoveryGatewayGetTabletsInRegion(t *testing.T) {
 
 	dg := createDiscoveryGateway(context.Background(), hc, srvTopo, "local-west", 2).(*discoveryGateway)
 
-	ts.CreateCellsAlias(context.Background(), "local", cellsAlias)
+	if err := ts.CreateCellsAlias(context.Background(), "local", cellsAlias); err != nil {
+		log.Error(err)
+	}
 
 	defer ts.DeleteCellsAlias(context.Background(), "local")
 
@@ -247,7 +250,9 @@ func TestDiscoveryGatewayGetTabletsWithRegion(t *testing.T) {
 
 	dg := createDiscoveryGateway(context.Background(), hc, srvTopo, "local", 2).(*discoveryGateway)
 
-	ts.CreateCellsAlias(context.Background(), "local", cellsAlias)
+	if err := ts.CreateCellsAlias(context.Background(), "local", cellsAlias); err != nil {
+		log.Error(err)
+	}
 
 	defer ts.DeleteCellsAlias(context.Background(), "local")
 

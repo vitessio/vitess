@@ -605,16 +605,26 @@ func (qe *QueryEngine) ServeHTTP(response http.ResponseWriter, request *http.Req
 func (qe *QueryEngine) handleHTTPQueryPlans(response http.ResponseWriter, request *http.Request) {
 	keys := qe.plans.Keys()
 	response.Header().Set("Content-Type", "text/plain")
-	response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys))))
+	if _, err := response.Write([]byte(fmt.Sprintf("Length: %d\n", len(keys)))); err != nil {
+		log.Fatal(err)
+	}
 	for _, v := range keys {
-		response.Write([]byte(fmt.Sprintf("%#v\n", sqlparser.TruncateForUI(v))))
+		if _, err := response.Write([]byte(fmt.Sprintf("%#v\n", sqlparser.TruncateForUI(v)))); err != nil {
+			log.Fatal(err)
+		}
 		if plan := qe.peekQuery(v); plan != nil {
 			if b, err := json.MarshalIndent(plan.Plan, "", "  "); err != nil {
-				response.Write([]byte(err.Error()))
+				if _, err := response.Write([]byte(err.Error())); err != nil {
+					log.Fatal(err)
+				}
 			} else {
-				response.Write(b)
+				if _, err := response.Write(b); err != nil {
+					log.Fatal(err)
+				}
 			}
-			response.Write(([]byte)("\n\n"))
+			if _, err := response.Write(([]byte)("\n\n")); err != nil {
+				log.Fatal(err)
+			}
 		}
 	}
 }
@@ -635,9 +645,13 @@ func (qe *QueryEngine) handleHTTPQueryStats(response http.ResponseWriter, reques
 		}
 	}
 	if b, err := json.MarshalIndent(qstats, "", "  "); err != nil {
-		response.Write([]byte(err.Error()))
+		if _, err := response.Write([]byte(err.Error())); err != nil {
+			log.Error(err)
+		}
 	} else {
-		response.Write(b)
+		if _, err := response.Write(b); err != nil {
+			log.Error(err)
+		}
 	}
 }
 

@@ -28,21 +28,29 @@ func TestRebuildKeyspaceGraphTask(t *testing.T) {
 	fake := fakevtctlclient.NewFakeVtctlClient()
 	vtctlclient.RegisterFactory("fake", fake.FakeVtctlClientFactory)
 	defer vtctlclient.UnregisterFactoryForTest("fake")
-	flag.Set("vtctl_client_protocol", "fake")
+	if err := flag.Set("vtctl_client_protocol", "fake"); err != nil {
+		t.Error(err)
+	}
 	task := &RebuildKeyspaceGraphTask{}
 
-	fake.RegisterResult([]string{"RebuildKeyspaceGraph", "test_keyspace"},
+	err := fake.RegisterResult([]string{"RebuildKeyspaceGraph", "test_keyspace"},
 		"",  // No output.
 		nil) // No error.
+	if err != nil {
+		t.Error(err)
+	}
 	parameters := map[string]string{
 		"keyspace":        "test_keyspace",
 		"vtctld_endpoint": "localhost:15000",
 	}
 	testTask(t, "RebuildKeyspaceGraph", task, parameters, fake)
 
-	fake.RegisterResult([]string{"RebuildKeyspaceGraph", "--cells=cell1", "test_keyspace"},
+	err = fake.RegisterResult([]string{"RebuildKeyspaceGraph", "--cells=cell1", "test_keyspace"},
 		"",  // No output.
 		nil) // No error.
+	if err != nil {
+		t.Error(err)
+	}
 	parameters["cells"] = "cell1"
 	testTask(t, "RebuildKeyspaceGraph", task, parameters, fake)
 }

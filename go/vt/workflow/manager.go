@@ -343,7 +343,9 @@ func (m *Manager) Start(ctx context.Context, uuid string) error {
 	}
 
 	rw.rootNode.State = workflowpb.WorkflowState_Running
-	rw.rootNode.BroadcastChanges(false /* updateChildren */)
+	if err := rw.rootNode.BroadcastChanges(false /* updateChildren */); err != nil {
+		log.Errorf("Failed to brodcast changes %v", err)
+	}
 
 	m.runWorkflow(rw)
 	return nil
@@ -408,7 +410,9 @@ func (m *Manager) executeWorkflowRun(ctx context.Context, rw *runningWorkflow) {
 	}
 
 	rw.rootNode.State = workflowpb.WorkflowState_Done
-	rw.rootNode.BroadcastChanges(false /* updateChildren */)
+	if err := rw.rootNode.BroadcastChanges(false /* updateChildren */); err != nil {
+		log.Errorf("Failed to brodcast changes %v", err)
+	}
 }
 
 // Stop stops the running workflow. It will cancel its context and

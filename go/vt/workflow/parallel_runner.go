@@ -257,7 +257,10 @@ func (p *ParallelRunner) triggerRetry(taskID string) error {
 		log.Fatal("BUG: node actions should not be empty")
 	}
 	node.Actions = []*Action{}
-	node.BroadcastChanges(false /* updateChildren */)
+
+	if err := node.BroadcastChanges(false /* updateChildren */); err != nil {
+		log.Errorf("Failed to start server %v", err)
+	}
 	close(retryChannel)
 	return nil
 }

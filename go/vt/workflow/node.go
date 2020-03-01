@@ -232,7 +232,9 @@ func (n *Node) deepCopyFrom(otherNode *Node, copyChildren bool) error {
 		otherChild.Path = path.Join(n.Path, otherChild.PathName)
 
 		child := NewNode()
-		child.deepCopyFrom(otherChild, true /* copyChildren */)
+		if err := child.deepCopyFrom(otherChild, true /* copyChildren */); err != nil {
+			log.Errorf("Failed in deepCopyFrom %v", err)
+		}
 		n.Children = append(n.Children, child)
 	}
 	return nil

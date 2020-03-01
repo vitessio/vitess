@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
 
@@ -39,7 +40,12 @@ func TestLongPolling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot listen: %v", err)
 	}
-	go http.Serve(listener, nil)
+
+	go func() {
+		if err := http.Serve(listener, nil); err != nil {
+			log.Errorf("Failed to start server %v", err)
+		}
+	}()
 
 	// Run the manager in the background.
 	wg, _, cancel := StartManager(m)
@@ -112,7 +118,9 @@ func TestLongPolling(t *testing.T) {
 
 	// Send an update, make sure we see it.
 	n.Name = "name2"
-	n.BroadcastChanges(false /* updateChildren */)
+	if err := n.BroadcastChanges(false /* updateChildren */); err != nil {
+		log.Errorf("Failed to brodcast changes %v", err)
+	}
 
 	u.Path = "/workflow/poll/1"
 	resp, err = http.Get(u.String())
