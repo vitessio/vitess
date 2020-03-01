@@ -61,7 +61,7 @@ func Dial(target string, failFast FailFast, opts ...grpc.DialOption) (*grpc.Clie
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(*grpccommon.MaxMessageSize),
 			grpc.MaxCallSendMsgSize(*grpccommon.MaxMessageSize),
-			grpc.WaitForReady(bool(failFast)),
+			grpc.FailFast(bool(failFast)),
 		),
 	}
 
