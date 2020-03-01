@@ -23,6 +23,7 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttest"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -77,7 +78,11 @@ func TestVtclient(t *testing.T) {
 	if err := cluster.Setup(); err != nil {
 		t.Fatalf("InitSchemas failed: %v", err)
 	}
-	defer cluster.TearDown()
+	defer func() {
+		if err := cluster.TearDown(); err != nil {
+			log.Errorf("Failed to tear down cluster %v", err)
+		}
+	}()
 
 	vtgateAddr := fmt.Sprintf("localhost:%v", cluster.Env.PortForProtocol("vtcombo", "grpc"))
 	queries := []struct {

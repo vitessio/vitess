@@ -31,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/sharding/initialsharding"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/topodata"
 
 	"github.com/stretchr/testify/assert"
@@ -437,7 +438,9 @@ func restartMasterReplica(t *testing.T) {
 		mysqlProcs = append(mysqlProcs, proc)
 	}
 	for _, proc := range mysqlProcs {
-		proc.Wait()
+		err := proc.Wait()
+		require.Nil(t, err)
+
 	}
 	for _, tablet := range []*cluster.Vttablet{master, replica1} {
 		err := localCluster.VtctlclientProcess.InitTablet(tablet, cell, keyspaceName, hostname, shardName)
@@ -454,15 +457,23 @@ func restartMasterReplica(t *testing.T) {
 func stopAllTablets() {
 	var mysqlProcs []*exec.Cmd
 	for _, tablet := range []*cluster.Vttablet{master, replica1, replica2} {
-		tablet.VttabletProcess.TearDown()
+		if err := tablet.VttabletProcess.TearDown(); err != nil {
+			log.Error(err)
+		}
 		if tablet.MysqlctldProcess.TabletUID > 0 {
-			tablet.MysqlctldProcess.Stop()
-			localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", tablet.Alias)
+			if err := tablet.MysqlctldProcess.Stop(); err != nil {
+				log.Error(err)
+			}
+			if err := localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", tablet.Alias); err != nil {
+				log.Error(err)
+			}
 			continue
 		}
 		proc, _ := tablet.MysqlctlProcess.StopProcess()
 		mysqlProcs = append(mysqlProcs, proc)
-		localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", tablet.Alias)
+		if err := localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "-allow_master", tablet.Alias); err != nil {
+			log.Error(err)
+		}
 	}
 	for _, proc := range mysqlProcs {
 		proc.Wait()
@@ -650,7 +661,8 @@ func terminateRestore(t *testing.T) {
 			if _, err := os.Stat(path.Join(master.VttabletProcess.Directory, "restore_in_progress")); os.IsNotExist(err) {
 				assert.Fail(t, "restore in progress file missing")
 			}
-			tmpProcess.Process.Signal(syscall.SIGTERM)
+			err = tmpProcess.Process.Signal(syscall.SIGTERM)
+			require.Nil(t, err)
 			found = true
 			return
 		}

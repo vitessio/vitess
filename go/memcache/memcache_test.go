@@ -35,8 +35,11 @@ func TestMemcache(t *testing.T) {
 		}
 		t.Fatalf("Memcache start: %v", err)
 	}
-	defer cmd.Process.Kill()
-
+	defer func() {
+		if err := cmd.Process.Kill(); err != nil {
+			t.Fatalf("Memcache Kill: %v", err)
+		}
+	}()
 	var c *Connection
 	var err error
 	deadline := time.Now().Add(10 * time.Second)

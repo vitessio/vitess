@@ -363,7 +363,9 @@ func encodeBytesSQL(val []byte, b BinWriter) {
 	if err := buf.WriteByte('\''); err != nil {
 		log.Error(err)
 	}
-	b.Write(buf.Bytes())
+	if _, err := b.Write(buf.Bytes()); err != nil {
+		log.Error(err)
+	}
 }
 
 func encodeBytesSQLBits(val []byte, b BinWriter) {
@@ -376,7 +378,10 @@ func encodeBytesSQLBits(val []byte, b BinWriter) {
 
 func encodeBytesASCII(val []byte, b BinWriter) {
 	buf := &bytes2.Buffer{}
-	buf.WriteByte('\'')
+
+	if err := buf.WriteByte('\''); err != nil {
+		log.Error(err)
+	}
 	encoder := base64.NewEncoder(base64.StdEncoding, buf)
 	encoder.Write(val)
 	encoder.Close()

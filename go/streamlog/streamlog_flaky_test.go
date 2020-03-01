@@ -52,7 +52,9 @@ func TestHTTP(t *testing.T) {
 	defer l.Close()
 	addr := l.Addr().String()
 
-	go http.Serve(l, nil)
+	if err := http.Serve(l, nil); err != nil {
+		t.Fatal(err)
+	}
 
 	logger := New("logger", 1)
 	logger.ServeLogs("/log", testLogf)
@@ -221,7 +223,9 @@ func TestFile(t *testing.T) {
 
 	// Rename and send another log which should go to the renamed file
 	rotatedPath := path.Join(dir, "test.log.1")
-	os.Rename(logPath, rotatedPath)
+	if err := os.Rename(logPath, rotatedPath); err != nil {
+		t.Fatal(err)
+	}
 
 	logger.Send(&logMessage{"test 3"})
 	time.Sleep(10 * time.Millisecond)
@@ -235,7 +239,9 @@ func TestFile(t *testing.T) {
 
 	// Send the rotate signal which should reopen the original file path
 	// for new logs to go to
-	syscall.Kill(syscall.Getpid(), syscall.SIGUSR2)
+	if err := syscall.Kill(syscall.Getpid(), syscall.SIGUSR2); err != nil {
+		t.Fatal(err)
+	}
 	time.Sleep(10 * time.Millisecond)
 
 	logger.Send(&logMessage{"test 4"})
