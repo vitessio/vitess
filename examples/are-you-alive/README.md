@@ -29,8 +29,7 @@ This client application:
    - Data loss (by writing predictable data and testing for that)
 1. Reports all these metrics to Prometheus.
 
-That's it!  Keep it as simple and generic as possible, and someday our customers
-can use this to test their clusters too!
+That's it!
 
 ## Usage
 
