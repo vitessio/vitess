@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -37,6 +38,8 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
+
+var mysqlServerFlushDelay = flag.Duration("mysql_server_flush_delay", 100*time.Millisecond, "Delay after which buffered response will flushed to client.")
 
 const (
 	// connBufferSize is how much we buffer for reading and
@@ -1072,7 +1075,12 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) error {
 	// sendFinished is set if the response should just be an OK packet.
 	sendFinished := false
 
+	var t *time.Timer
 	err := handler.ComQuery(c, query, func(qr *sqltypes.Result) error {
+		if t != nil {
+			t.Stop()
+			t = nil
+		}
 		flag := c.StatusFlags
 		if more {
 			flag |= ServerMoreResultsExists
@@ -1101,8 +1109,16 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) error {
 			}
 		}
 
-		return c.writeRows(qr)
+		if err := c.writeRows(qr); err != nil {
+			return err
+		}
+		t = time.AfterFunc(*mysqlServerFlushDelay, func() { c.flush() })
+		return nil
 	})
+	if t != nil {
+		t.Stop()
+		t = nil
+	}
 
 	// If no field was sent, we expect an error.
 	if !fieldSent {
