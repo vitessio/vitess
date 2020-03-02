@@ -68,10 +68,23 @@ create table t2_id4_idx(
 	primary key(id),
 	key idx_id4(id4)
 ) Engine=InnoDB;
-`
+
+create table t3(
+	id5 bigint,
+	id6 bigint,
+	id7 bigint,
+	primary key(id5)
+) Engine=InnoDB;
+
+create table t3_id7_idx(
+    id bigint not null auto_increment,
+	id7 bigint,
+	id6 bigint,
+    primary key(id)
+) Engine=InnoDB;`
 
 	VSchema = `
-	{
+{
   "sharded": true,
   "vindexes": {
     "hash": {
@@ -95,6 +108,15 @@ create table t2_id4_idx(
         "autocommit": "true"
       },
       "owner": "t2"
+    },
+    "t3_id7_vdx": {
+      "type": "lookup_hash",
+      "params": {
+        "table": "t3_id7_idx",
+        "from": "id7",
+        "to": "id6"
+      },
+      "owner": "t3"
     }
   },
   "tables": {
@@ -138,6 +160,26 @@ create table t2_id4_idx(
         }
       ]
     },
+    "t3": {
+      "column_vindexes": [
+        {
+          "column": "id6",
+          "name": "hash"
+        },
+        {
+          "column": "id7",
+          "name": "t3_id7_vdx"
+        }
+      ]
+    },
+    "t3_id7_idx": {
+      "column_vindexes": [
+        {
+          "column": "id7",
+          "name": "hash"
+        }
+      ]
+    },
     "vstream_test": {
       "column_vindexes": [
         {
@@ -165,6 +207,7 @@ create table t2_id4_idx(
 )
 
 func TestMain(m *testing.M) {
+	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {

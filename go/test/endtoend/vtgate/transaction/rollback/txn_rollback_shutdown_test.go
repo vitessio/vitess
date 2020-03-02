@@ -44,6 +44,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
@@ -97,6 +98,7 @@ func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 }
 
 func TestTransactionRollBackWhenShutDown(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {

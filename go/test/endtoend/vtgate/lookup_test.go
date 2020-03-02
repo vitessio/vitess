@@ -26,16 +26,18 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 func TestConsistentLookup(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer conn.Close()
 	// conn2 is for queries that target shards.
 	conn2, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer conn2.Close()
 
 	// Simple insert.
@@ -161,14 +163,105 @@ func TestConsistentLookup(t *testing.T) {
 	exec(t, conn, "delete from t1 where id1=1")
 }
 
-func TestConsistentLookupMultiInsert(t *testing.T) {
+func TestDMLScatter(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
+
+	/* Simple insert. after this dml, the tables will contain the following:
+	t3 (id5, id6, id7):
+	1 2 3
+	2 2 3
+	3 4 3
+	4 5 4
+
+	t3_id7_idx (id7, keyspace_id:id6):
+	3 2
+	3 2
+	3 4
+	4 5
+	*/
+	exec(t, conn, "begin")
+	exec(t, conn, "insert into t3(id5, id6, id7) values(1, 2, 3), (2, 2, 3), (3, 4, 3), (4, 5, 4)")
+	exec(t, conn, "commit")
+	qr := exec(t, conn, "select id5, id6, id7 from t3 order by id5")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(1) INT64(2) INT64(3)] [INT64(2) INT64(2) INT64(3)] [INT64(3) INT64(4) INT64(3)] [INT64(4) INT64(5) INT64(4)]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	/* Updating a non lookup column. after this dml, the tables will contain the following:
+	t3 (id5, id6, id7):
+	42 2 3
+	2 2 3
+	3 4 3
+	4 5 4
+
+	t3_id7_idx (id7, keyspace_id:id6):
+	3 2
+	3 2
+	3 4
+	4 5
+	*/
+	exec(t, conn, "update t3 set id5 = 42 where id5 = 1")
+	qr = exec(t, conn, "select id5, id6, id7 from t3 order by id5")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(2) INT64(2) INT64(3)] [INT64(3) INT64(4) INT64(3)] [INT64(4) INT64(5) INT64(4)] [INT64(42) INT64(2) INT64(3)]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	/* Updating a lookup column. after this dml, the tables will contain the following:
+	t3 (id5, id6, id7):
+	42 2 42
+	2 2 42
+	3 4 3
+	4 5 4
+
+	t3_id7_idx (id7, keyspace_id:id6):
+	42 2
+	42 2
+	3 4
+	4 5
+	*/
+	exec(t, conn, "begin")
+	exec(t, conn, "update t3 set id7 = 42 where id6 = 2")
+	exec(t, conn, "commit")
+	qr = exec(t, conn, "select id5, id6, id7 from t3 order by id5")
+	if got, want := fmt.Sprintf("%v", qr.Rows), "[[INT64(2) INT64(2) INT64(42)] [INT64(3) INT64(4) INT64(3)] [INT64(4) INT64(5) INT64(4)] [INT64(42) INT64(2) INT64(42)]]"; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	/* delete one specific keyspace id. after this dml, the tables will contain the following:
+	t3 (id5, id6, id7):
+	3 4 3
+	4 5 4
+
+	t3_id7_idx (id7, keyspace_id:id6):
+	3 4
+	4 5
+	*/
+	exec(t, conn, "delete from t3 where id6 = 2")
+	qr = exec(t, conn, "select * from t3 where id6 = 2")
+	require.Empty(t, qr.Rows)
+	qr = exec(t, conn, "select * from t3_id7_idx where id6 = 2")
+	require.Empty(t, qr.Rows)
+
+	// delete all the rows.
+	exec(t, conn, "delete from t3")
+	qr = exec(t, conn, "select * from t3")
+	require.Empty(t, qr.Rows)
+	qr = exec(t, conn, "select * from t3_id7_idx")
+	require.Empty(t, qr.Rows)
+}
+
+func TestConsistentLookupMultiInsert(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.Nil(t, err)
+	defer conn.Close()
 	// conn2 is for queries that target shards.
 	conn2, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer conn2.Close()
 
 	exec(t, conn, "begin")
@@ -215,13 +308,14 @@ func TestConsistentLookupMultiInsert(t *testing.T) {
 }
 
 func TestHashLookupMultiInsertIgnore(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer conn.Close()
 	// conn2 is for queries that target shards.
 	conn2, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer conn2.Close()
 
 	// DB should start out clean
@@ -253,6 +347,6 @@ func TestHashLookupMultiInsertIgnore(t *testing.T) {
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	return qr
 }

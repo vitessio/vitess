@@ -771,7 +771,11 @@ func (agent *ActionAgent) Close() {
 		tablet.PortMap = nil
 		return nil
 	}
-	if _, err := agent.TopoServer.UpdateTabletFields(context.Background(), agent.TabletAlias, f); err != nil {
+
+	updateCtx, updateCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	defer updateCancel()
+
+	if _, err := agent.TopoServer.UpdateTabletFields(updateCtx, agent.TabletAlias, f); err != nil {
 		log.Warningf("Failed to update tablet record, may contain stale identifiers: %v", err)
 	}
 }

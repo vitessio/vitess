@@ -138,11 +138,11 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
 		clusterInstance = cluster.NewCluster(cell, hostname)
-
 		defer clusterInstance.Teardown()
 
 		// Start topo server
@@ -231,7 +231,9 @@ func Connect(t *testing.T, params ...string) *sql.DB {
 func execWithError(t *testing.T, dbo *sql.DB, errorCodes []uint16, stmt string, params ...interface{}) {
 	_, err := dbo.Exec(stmt, params...)
 	require.NotNilf(t, err, "error expected, got nil")
-	require.Contains(t, errorCodes, err.(*mysql.MySQLError).Number)
+	mysqlErr, ok := err.(*mysql.MySQLError)
+	require.Truef(t, ok, "invalid error type")
+	require.Contains(t, errorCodes, mysqlErr.Number)
 }
 
 // exec executes the query using the params.
@@ -242,7 +244,9 @@ func exec(t *testing.T, dbo *sql.DB, stmt string, params ...interface{}) {
 // execErr executes the query and returns an error if one occurs.
 func execErr(dbo *sql.DB, stmt string, params ...interface{}) *mysql.MySQLError {
 	if _, err := dbo.Exec(stmt, params...); err != nil {
-		return err.(*mysql.MySQLError)
+		// TODO : need to handle
+		mysqlErr, _ := err.(*mysql.MySQLError)
+		return mysqlErr
 	}
 	return nil
 }

@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	"database/sql"
 
@@ -37,6 +38,7 @@ import (
 
 // TestMultiStmt checks that multiStatements=True and multiStatements=False work properly.
 func TestMultiStatement(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	// connect database with multiStatements=True
@@ -64,6 +66,7 @@ func TestMultiStatement(t *testing.T) {
 
 // TestLargeComment add large comment in insert stmt and validate the insert process.
 func TestLargeComment(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -82,6 +85,7 @@ func TestLargeComment(t *testing.T) {
 
 // TestInsertLargerThenGrpcLimit insert blob larger then grpc limit and verify the error.
 func TestInsertLargerThenGrpcLimit(t *testing.T) {
+	defer cluster.PanicHandler(t)
 
 	ctx := context.Background()
 
@@ -91,7 +95,7 @@ func TestInsertLargerThenGrpcLimit(t *testing.T) {
 
 	grpcLimit := os.Getenv("grpc_max_message_size")
 	limit, err := strconv.Atoi(grpcLimit)
-	assert.Nilf(t, err, "int parsing error: %v", err)
+	require.Nilf(t, err, "int parsing error: %v", err)
 
 	// insert data with large blob
 	_, err = conn.ExecuteFetch("insert into vt_insert_test (id, msg, keyspace_id, data) values(2, 'huge blob', 123, '"+fake.CharactersN(limit+1)+"')", 1, false)
@@ -101,6 +105,7 @@ func TestInsertLargerThenGrpcLimit(t *testing.T) {
 
 // TestTimeout executes sleep(5) with query_timeout of 1 second, and verifies the error.
 func TestTimeout(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -109,11 +114,14 @@ func TestTimeout(t *testing.T) {
 
 	_, err = conn.ExecuteFetch("SELECT SLEEP(5);", 1, false)
 	require.NotNilf(t, err, "quiry timeout error expected")
-	assert.Equal(t, 1317, err.(*mysql.SQLError).Number(), err)
+	mysqlErr, ok := err.(*mysql.SQLError)
+	require.Truef(t, ok, "invalid error type")
+	assert.Equal(t, 1317, mysqlErr.Number(), err)
 }
 
 // TestInvalidField tries to fetch invalid column and verifies the error.
 func TestInvalidField(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -122,11 +130,14 @@ func TestInvalidField(t *testing.T) {
 
 	_, err = conn.ExecuteFetch("SELECT invalid_field from vt_insert_test;", 1, false)
 	require.NotNil(t, err, "invalid field error expected")
-	assert.Equal(t, 1054, err.(*mysql.SQLError).Number(), err)
+	mysqlErr, ok := err.(*mysql.SQLError)
+	require.Truef(t, ok, "invalid error type")
+	assert.Equal(t, 1054, mysqlErr.Number(), err)
 }
 
 // TestWarnings validates the behaviour of SHOW WARNINGS.
 func TestWarnings(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -169,6 +180,7 @@ func TestWarnings(t *testing.T) {
 // TestSelectWithUnauthorizedUser verifies that an unauthorized user
 // is not able to read from the table.
 func TestSelectWithUnauthorizedUser(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	tmpVtParam := vtParams

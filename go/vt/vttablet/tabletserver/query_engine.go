@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -107,6 +106,12 @@ func (ep *TabletPlan) buildAuthorized() {
 	}
 }
 
+var (
+	// Global stats vars.
+	// TODO(sougou): unglobalize after componentizing TabletServer.
+	queryCounts, queryTimes, queryRowCounts, queryErrorCounts *stats.CountersWithMultiLabels
+)
+
 //_______________________________________________
 
 // QueryEngine implements the core functionality of tabletserver.
@@ -125,9 +130,6 @@ type QueryEngine struct {
 	tables           map[string]*schema.Table
 	plans            *cache.LRUCache
 	queryRuleSources *rules.Map
-
-	queryStatsMu sync.RWMutex
-	queryStats   map[string]*QueryStats
 
 	// Pools
 	conns       *connpool.Pool
@@ -186,7 +188,6 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		plans:              cache.NewLRUCache(int64(config.QueryPlanCacheSize)),
 		queryRuleSources:   rules.NewMap(),
 		queryPoolWaiterCap: sync2.NewAtomicInt64(int64(config.QueryPoolWaiterCap)),
-		queryStats:         make(map[string]*QueryStats),
 	}
 
 	qe.conns = connpool.New(
@@ -259,10 +260,10 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		stats.Publish("QueryCacheOldest", stats.StringFunc(func() string {
 			return fmt.Sprintf("%v", qe.plans.Oldest())
 		}))
-		_ = stats.NewCountersFuncWithMultiLabels("QueryCounts", "query counts", []string{"Table", "Plan"}, qe.getQueryCount)
-		_ = stats.NewCountersFuncWithMultiLabels("QueryTimesNs", "query times in ns", []string{"Table", "Plan"}, qe.getQueryTime)
-		_ = stats.NewCountersFuncWithMultiLabels("QueryRowCounts", "query row counts", []string{"Table", "Plan"}, qe.getQueryRowCount)
-		_ = stats.NewCountersFuncWithMultiLabels("QueryErrorCounts", "query error counts", []string{"Table", "Plan"}, qe.getQueryErrorCount)
+		queryCounts = stats.NewCountersWithMultiLabels("QueryCounts", "query counts", []string{"Table", "Plan"})
+		queryTimes = stats.NewCountersWithMultiLabels("QueryTimesNs", "query times in ns", []string{"Table", "Plan"})
+		queryRowCounts = stats.NewCountersWithMultiLabels("QueryRowCounts", "query row counts", []string{"Table", "Plan"})
+		queryErrorCounts = stats.NewCountersWithMultiLabels("QueryErrorCounts", "query error counts", []string{"Table", "Plan"})
 
 		http.Handle("/debug/hotrows", qe.txSerializer)
 
@@ -483,91 +484,14 @@ func (qe *QueryEngine) QueryPlanCacheCap() int {
 	return int(qe.plans.Capacity())
 }
 
-// QueryStats tracks query stats for export per planName/tableName
-type QueryStats struct {
-	mu         sync.Mutex
-	queryCount int64
-	time       time.Duration
-	mysqlTime  time.Duration
-	rowCount   int64
-	errorCount int64
-}
-
 // AddStats adds the given stats for the planName.tableName
 func (qe *QueryEngine) AddStats(planName, tableName string, queryCount int64, duration, mysqlTime time.Duration, rowCount, errorCount int64) {
 	// table names can contain "." characters, replace them!
-	key := strings.Replace(tableName, ".", "_", -1) + "." + planName
-
-	qe.queryStatsMu.RLock()
-	stats, ok := qe.queryStats[key]
-	qe.queryStatsMu.RUnlock()
-
-	if !ok {
-		// Check again with the write lock held and
-		// create a new record only if none exists
-		qe.queryStatsMu.Lock()
-		if stats, ok = qe.queryStats[key]; !ok {
-			stats = &QueryStats{}
-			qe.queryStats[key] = stats
-		}
-		qe.queryStatsMu.Unlock()
-	}
-
-	stats.mu.Lock()
-	stats.queryCount += queryCount
-	stats.time += duration
-	stats.mysqlTime += mysqlTime
-	stats.rowCount += rowCount
-	stats.errorCount += errorCount
-	stats.mu.Unlock()
-}
-
-func (qe *QueryEngine) getQueryCount() map[string]int64 {
-	qstats := make(map[string]int64)
-	qe.queryStatsMu.RLock()
-	defer qe.queryStatsMu.RUnlock()
-	for k, qs := range qe.queryStats {
-		qs.mu.Lock()
-		qstats[k] = qs.queryCount
-		qs.mu.Unlock()
-	}
-	return qstats
-}
-
-func (qe *QueryEngine) getQueryTime() map[string]int64 {
-	qstats := make(map[string]int64)
-	qe.queryStatsMu.RLock()
-	defer qe.queryStatsMu.RUnlock()
-	for k, qs := range qe.queryStats {
-		qs.mu.Lock()
-		qstats[k] = int64(qs.time)
-		qs.mu.Unlock()
-	}
-	return qstats
-}
-
-func (qe *QueryEngine) getQueryRowCount() map[string]int64 {
-	qstats := make(map[string]int64)
-	qe.queryStatsMu.RLock()
-	defer qe.queryStatsMu.RUnlock()
-	for k, qs := range qe.queryStats {
-		qs.mu.Lock()
-		qstats[k] = qs.rowCount
-		qs.mu.Unlock()
-	}
-	return qstats
-}
-
-func (qe *QueryEngine) getQueryErrorCount() map[string]int64 {
-	qstats := make(map[string]int64)
-	qe.queryStatsMu.RLock()
-	defer qe.queryStatsMu.RUnlock()
-	for k, qs := range qe.queryStats {
-		qs.mu.Lock()
-		qstats[k] = qs.errorCount
-		qs.mu.Unlock()
-	}
-	return qstats
+	keys := []string{tableName, planName}
+	queryCounts.Add(keys, queryCount)
+	queryTimes.Add(keys, int64(duration))
+	queryRowCounts.Add(keys, rowCount)
+	queryErrorCounts.Add(keys, errorCount)
 }
 
 type perQueryStats struct {

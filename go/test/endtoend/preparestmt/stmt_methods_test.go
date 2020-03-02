@@ -25,10 +25,12 @@ import (
 	"github.com/icrowley/fake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 // TestSelect simple select the data without any condition.
 func TestSelect(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	dbo := Connect(t)
 	defer dbo.Close()
 	selectWhere(t, dbo, "")
@@ -37,7 +39,7 @@ func TestSelect(t *testing.T) {
 // TestInsertUpdateDelete validates all insert, update and
 // delete method on prepared statements.
 func TestInsertUpdateDelete(t *testing.T) {
-
+	defer cluster.PanicHandler(t)
 	dbo := Connect(t)
 	defer dbo.Close()
 	// prepare insert statement
@@ -85,19 +87,21 @@ func TestInsertUpdateDelete(t *testing.T) {
 
 // testcount validates inserted rows count with expected count.
 func testcount(t *testing.T, dbo *sql.DB, except int) {
+	defer cluster.PanicHandler(t)
 	r, err := dbo.Query("SELECT count(1) FROM " + tableName)
 	require.Nil(t, err)
 
 	r.Next()
 	var i int
 	err = r.Scan(&i)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	assert.Equal(t, except, i)
 }
 
 // TestAutoIncColumns test insertion of row without passing
 // the value of auto increment columns (here it is id).
 func TestAutoIncColumns(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	dbo := Connect(t)
 	defer dbo.Close()
 	// insert a row without id
@@ -163,6 +167,7 @@ func reconnectAndTest(t *testing.T) {
 // TestWrongTableName query database using invalid
 // tablename and validate error.
 func TestWrongTableName(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	dbo := Connect(t)
 	defer dbo.Close()
 	execWithError(t, dbo, []uint16{1105}, "select * from teseting_table;")
