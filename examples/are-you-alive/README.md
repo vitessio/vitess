@@ -2,8 +2,8 @@
 
 What does it mean to be alive?
 
-Well we don't know what it means for you, but we know what it means for our
-Cloud Database!
+Well we don't know what it means for you, but we know what it means for a Vitess
+Cluster!
 
 This project contains a simulated client application that can be used to measure
 the health of a Vitess cluster over time.
@@ -74,6 +74,10 @@ Prometheus and `http://localhost:8080/metrics` to see the raw metrics being
 exported.
 
 ## Push to Registry
+
+If you have push access to the [planetscale public
+registry](https://us.gcr.io/planetscale-vitess), you can use the following
+commands to build and push the image:
 
 ```
 make build
