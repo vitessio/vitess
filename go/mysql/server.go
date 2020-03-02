@@ -380,9 +380,8 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		if err != nil {
 			return
 		}
-		//lint:ignore SA4006 This line is required because the binary protocol requires padding with 0
-		data := make([]byte, 21)
-		data = append(salt, byte(0x00))
+		// The binary protocol requires padding with 0
+		data := append(salt, byte(0x00))
 		if err := c.writeAuthSwitchRequest(MysqlNativePassword, data); err != nil {
 			log.Errorf("Error writing auth switch packet for %s: %v", c, err)
 			return
