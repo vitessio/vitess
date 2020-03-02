@@ -207,6 +207,7 @@ create table t3_id7_idx(
 )
 
 func TestMain(m *testing.M) {
+	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitCode := func() int {

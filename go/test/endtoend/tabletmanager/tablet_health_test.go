@@ -37,6 +37,7 @@ import (
 
 // TabletReshuffle test if a vttablet can be pointed at an existing mysql
 func TestTabletReshuffle(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
@@ -94,6 +95,7 @@ func TestTabletReshuffle(t *testing.T) {
 func TestHealthCheck(t *testing.T) {
 	// Add one replica that starts not initialized
 	// (for the replica, we let vttablet do the InitTablet)
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	rTablet := clusterInstance.GetVttabletInstance("replica", 0, "")
@@ -207,6 +209,7 @@ func TestHealthCheckDrainedStateDoesNotShutdownQueryService(t *testing.T) {
 	// - the query service won't be shutdown
 
 	//Wait if tablet is not in service state
+	defer cluster.PanicHandler(t)
 	err := rdonlyTablet.VttabletProcess.WaitForTabletType("SERVING")
 	require.Nil(t, err)
 
@@ -253,6 +256,7 @@ func TestIgnoreHealthError(t *testing.T) {
 	// We will then ignore this error and verify if the status report the tablet as Healthy.
 
 	// Create a new shard
+	defer cluster.PanicHandler(t)
 	newShard := &cluster.Shard{
 		Name: "1",
 	}
@@ -320,6 +324,7 @@ func TestNoMysqlHealthCheck(t *testing.T) {
 	// This test starts a vttablet with no mysql port, while mysql is down.
 	// It makes sure vttablet will start properly and be unhealthy.
 	// Then we start mysql, and make sure vttablet becomes healthy.
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	rTablet := clusterInstance.GetVttabletInstance("replica", 0, "")

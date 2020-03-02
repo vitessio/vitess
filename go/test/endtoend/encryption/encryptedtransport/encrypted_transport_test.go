@@ -98,6 +98,7 @@ var (
 )
 
 func TestSecureTransport(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	flag.Parse()
 
 	// initialize cluster

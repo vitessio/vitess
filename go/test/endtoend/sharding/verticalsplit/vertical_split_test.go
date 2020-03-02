@@ -71,6 +71,7 @@ var (
 )
 
 func TestVerticalSplit(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	flag.Parse()
 	code, err := initializeCluster()
 	if err != nil {
@@ -641,7 +642,7 @@ func checkSrvKeyspaceServedFrom(t *testing.T, cell string, ksname string, expect
 
 func initializeCluster() (int, error) {
 	var mysqlProcesses []*exec.Cmd
-	clusterInstance = &cluster.LocalProcessCluster{Cell: cellj, Hostname: hostname}
+	clusterInstance = cluster.NewCluster(cellj, hostname)
 
 	// Start topo server
 	if err := clusterInstance.StartTopo(); err != nil {

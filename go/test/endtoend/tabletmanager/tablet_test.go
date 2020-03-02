@@ -28,6 +28,7 @@ import (
 
 // TestLocalMetadata tests the contents of local_metadata table after vttablet startup
 func TestLocalMetadata(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	// by default tablets are started with -restore_from_backup
 	// so metadata should exist
 	cluster.VerifyLocalMetadata(t, &replicaTablet, keyspaceName, shardName, cell)

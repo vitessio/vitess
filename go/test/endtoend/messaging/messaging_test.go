@@ -47,6 +47,7 @@ func TestUnsharded(t *testing.T) {
 
 // TestRepareting checks the client connection count after reparenting.
 func TestRepareting(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	name := "sharded_message"
 
 	ctx := context.Background()
@@ -105,6 +106,7 @@ func TestRepareting(t *testing.T) {
 
 // TestConnection validate the connection count and message streaming.
 func TestConnection(t *testing.T) {
+	defer cluster.PanicHandler(t)
 
 	name := "sharded_message"
 
@@ -159,6 +161,7 @@ func TestConnection(t *testing.T) {
 }
 
 func testMessaging(t *testing.T, name, ks string) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 	stream, err := VtgateGrpcConn(ctx, clusterInstance)
 	require.Nil(t, err)
