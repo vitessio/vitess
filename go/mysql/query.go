@@ -1063,7 +1063,7 @@ func (c *Conn) writePrepare(fld []*querypb.Field, prepare *PrepareData) error {
 		}
 	}
 
-	return c.flush()
+	return nil
 }
 
 func (c *Conn) writeBinaryRow(fields []*querypb.Field, row []sqltypes.Value) error {
