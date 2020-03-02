@@ -84,6 +84,7 @@ type LocalProcessCluster struct {
 
 	EnableSemiSync bool
 
+	// mutex added to handle the parallel teardowns
 	mx                *sync.Mutex
 	teardownCompleted bool
 
