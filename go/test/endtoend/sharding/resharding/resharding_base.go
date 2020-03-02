@@ -183,6 +183,7 @@ var (
 
 // TestResharding - main test with accepts different params for various test
 func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
+	defer cluster.PanicHandler(t)
 	clusterInstance = cluster.NewCluster(cell1, hostname)
 	defer clusterInstance.Teardown()
 

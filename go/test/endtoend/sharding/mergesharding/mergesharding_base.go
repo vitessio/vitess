@@ -103,6 +103,7 @@ var (
 // Note this test is just testing the full workflow, not corner cases or error
 // cases. These are mostly done by the other resharding tests.
 func TestMergesharding(t *testing.T, useVarbinaryShardingKeyType bool) {
+	defer cluster.PanicHandler(t)
 	clusterInstance = cluster.NewCluster(cell, hostname)
 	defer clusterInstance.Teardown()
 

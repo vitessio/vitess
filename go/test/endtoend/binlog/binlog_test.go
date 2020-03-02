@@ -96,6 +96,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
@@ -259,6 +260,7 @@ func TestMain(m *testing.M) {
 //  pretend it's latin1. If the binlog player doesn't also pretend it's
 //  latin1, it will be inserted as utf8, which will change its value.
 func TestCharset(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	position, _ := cluster.GetMasterPosition(t, *destReplica, hostname)
 
 	_, err := queryTablet(t, *srcMaster, fmt.Sprintf(insertSql, tableName, 1, "Šṛ́rỏé"), "latin1")
@@ -272,6 +274,7 @@ func TestCharset(t *testing.T) {
 // Enable binlog_checksum, which will also force a log rotation that should
 // cause binlog streamer to notice the new checksum setting.
 func TestChecksumEnabled(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	position, _ := cluster.GetMasterPosition(t, *destReplica, hostname)
 	_, err := queryTablet(t, *destReplica, "SET @@global.binlog_checksum=1", "")
 	require.Nil(t, err)
@@ -290,6 +293,7 @@ func TestChecksumEnabled(t *testing.T) {
 // Disable binlog_checksum to make sure we can also talk to a server without
 // checksums enabled, in case they are enabled by default
 func TestChecksumDisabled(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	position, _ := cluster.GetMasterPosition(t, *destReplica, hostname)
 
 	_, err := queryTablet(t, *destReplica, "SET @@global.binlog_checksum=0", "")

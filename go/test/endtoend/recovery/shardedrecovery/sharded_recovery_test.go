@@ -104,6 +104,7 @@ var (
 // - check that vtgate queries work correctly
 
 func TestUnShardedRecoveryAfterSharding(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	_, err := initializeCluster(t)
 	defer localCluster.Teardown()
 	require.Nil(t, err)
@@ -265,6 +266,7 @@ func TestUnShardedRecoveryAfterSharding(t *testing.T) {
 
 func TestShardedRecovery(t *testing.T) {
 
+	defer cluster.PanicHandler(t)
 	_, err := initializeCluster(t)
 	defer localCluster.Teardown()
 	require.Nil(t, err)

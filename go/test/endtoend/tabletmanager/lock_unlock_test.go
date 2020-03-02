@@ -27,10 +27,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 // TestLockAndUnlock tests the lock ability by locking a replica and asserting it does not see changes
 func TestLockAndUnlock(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
@@ -71,6 +73,7 @@ func TestLockAndUnlock(t *testing.T) {
 
 // TestStartSlaveUntilAfter tests by writing three rows, noting the gtid after each, and then replaying them one by one
 func TestStartSlaveUntilAfter(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	masterConn, err := mysql.Connect(ctx, &masterTabletParams)
@@ -124,6 +127,7 @@ func TestStartSlaveUntilAfter(t *testing.T) {
 
 // TestLockAndTimeout tests that the lock times out and updates can be seen after timeout
 func TestLockAndTimeout(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	masterConn, err := mysql.Connect(ctx, &masterTabletParams)

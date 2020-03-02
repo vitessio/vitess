@@ -25,10 +25,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestQPS(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	ctx := context.Background()
 
 	vtParams := mysql.ConnParams{
