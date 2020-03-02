@@ -121,8 +121,7 @@ func TestStreamerParseEventsXID(t *testing.T) {
 	mcp := &mysql.ConnParams{
 		DbName: "vt_test_keyspace",
 	}
-	dbcfgs := dbconfigs.MakeConnParams()
-	dbcfgs.SetConnParams(mcp)
+	dbcfgs := dbconfigs.New(mcp)
 
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
@@ -183,8 +182,7 @@ func TestStreamerParseEventsCommit(t *testing.T) {
 	mcp := &mysql.ConnParams{
 		DbName: "vt_test_keyspace",
 	}
-	dbcfgs := dbconfigs.MakeConnParams()
-	dbcfgs.SetConnParams(mcp)
+	dbcfgs := dbconfigs.New(mcp)
 
 	var got binlogStatements
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
@@ -211,8 +209,7 @@ func TestStreamerStop(t *testing.T) {
 	mcp := &mysql.ConnParams{
 		DbName: "vt_test_keyspace",
 	}
-	dbcfgs := dbconfigs.MakeConnParams()
-	dbcfgs.SetConnParams(mcp)
+	dbcfgs := dbconfigs.New(mcp)
 
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
@@ -264,8 +261,7 @@ func TestStreamerParseEventsClientEOF(t *testing.T) {
 	mcp := &mysql.ConnParams{
 		DbName: "vt_test_keyspace",
 	}
-	dbcfgs := dbconfigs.MakeConnParams()
-	dbcfgs.SetConnParams(mcp)
+	dbcfgs := dbconfigs.New(mcp)
 
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
@@ -289,8 +285,7 @@ func TestStreamerParseEventsServerEOF(t *testing.T) {
 	mcp := &mysql.ConnParams{
 		DbName: "vt_test_keyspace",
 	}
-	dbcfgs := dbconfigs.MakeConnParams()
-	dbcfgs.SetConnParams(mcp)
+	dbcfgs := dbconfigs.New(mcp)
 
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 	_, err := bls.parseEvents(context.Background(), events)
@@ -326,8 +321,7 @@ func TestStreamerParseEventsSendErrorXID(t *testing.T) {
 	mcp := &mysql.ConnParams{
 		DbName: "vt_test_keyspace",
 	}
-	dbcfgs := dbconfigs.MakeConnParams()
-	dbcfgs.SetConnParams(mcp)
+	dbcfgs := dbconfigs.New(mcp)
 
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
@@ -372,8 +366,7 @@ func TestStreamerParseEventsSendErrorCommit(t *testing.T) {
 	mcp := &mysql.ConnParams{
 		DbName: "vt_test_keyspace",
 	}
-	dbcfgs := dbconfigs.MakeConnParams()
-	dbcfgs.SetConnParams(mcp)
+	dbcfgs := dbconfigs.New(mcp)
 
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
@@ -413,8 +406,7 @@ func TestStreamerParseEventsInvalid(t *testing.T) {
 	mcp := &mysql.ConnParams{
 		DbName: "vt_test_keyspace",
 	}
-	dbcfgs := dbconfigs.MakeConnParams()
-	dbcfgs.SetConnParams(mcp)
+	dbcfgs := dbconfigs.New(mcp)
 
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
@@ -456,8 +448,7 @@ func TestStreamerParseEventsInvalidFormat(t *testing.T) {
 	mcp := &mysql.ConnParams{
 		DbName: "vt_test_keyspace",
 	}
-	dbcfgs := dbconfigs.MakeConnParams()
-	dbcfgs.SetConnParams(mcp)
+	dbcfgs := dbconfigs.New(mcp)
 
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
@@ -499,8 +490,7 @@ func TestStreamerParseEventsNoFormat(t *testing.T) {
 	mcp := &mysql.ConnParams{
 		DbName: "vt_test_keyspace",
 	}
-	dbcfgs := dbconfigs.MakeConnParams()
-	dbcfgs.SetConnParams(mcp)
+	dbcfgs := dbconfigs.New(mcp)
 
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
@@ -540,8 +530,7 @@ func TestStreamerParseEventsInvalidQuery(t *testing.T) {
 	mcp := &mysql.ConnParams{
 		DbName: "vt_test_keyspace",
 	}
-	dbcfgs := dbconfigs.MakeConnParams()
-	dbcfgs.SetConnParams(mcp)
+	dbcfgs := dbconfigs.New(mcp)
 
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
@@ -628,8 +617,7 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 	mcp := &mysql.ConnParams{
 		DbName: "vt_test_keyspace",
 	}
-	dbcfgs := dbconfigs.MakeConnParams()
-	dbcfgs.SetConnParams(mcp)
+	dbcfgs := dbconfigs.New(mcp)
 
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
@@ -701,8 +689,7 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 	mcp := &mysql.ConnParams{
 		DbName: "vt_test_keyspace",
 	}
-	dbcfgs := dbconfigs.MakeConnParams()
-	dbcfgs.SetConnParams(mcp)
+	dbcfgs := dbconfigs.New(mcp)
 
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
@@ -777,8 +764,7 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 	mcp := &mysql.ConnParams{
 		DbName: "vt_test_keyspace",
 	}
-	dbcfgs := dbconfigs.MakeConnParams()
-	dbcfgs.SetConnParams(mcp)
+	dbcfgs := dbconfigs.New(mcp)
 
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
@@ -839,8 +825,7 @@ func TestStreamerParseEventsSetInsertID(t *testing.T) {
 	mcp := &mysql.ConnParams{
 		DbName: "vt_test_keyspace",
 	}
-	dbcfgs := dbconfigs.MakeConnParams()
-	dbcfgs.SetConnParams(mcp)
+	dbcfgs := dbconfigs.New(mcp)
 
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
@@ -881,8 +866,7 @@ func TestStreamerParseEventsInvalidIntVar(t *testing.T) {
 	mcp := &mysql.ConnParams{
 		DbName: "vt_test_keyspace",
 	}
-	dbcfgs := dbconfigs.MakeConnParams()
-	dbcfgs.SetConnParams(mcp)
+	dbcfgs := dbconfigs.New(mcp)
 
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
@@ -945,8 +929,7 @@ func TestStreamerParseEventsOtherDB(t *testing.T) {
 	mcp := &mysql.ConnParams{
 		DbName: "vt_test_keyspace",
 	}
-	dbcfgs := dbconfigs.MakeConnParams()
-	dbcfgs.SetConnParams(mcp)
+	dbcfgs := dbconfigs.New(mcp)
 
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
@@ -1008,8 +991,7 @@ func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
 	mcp := &mysql.ConnParams{
 		DbName: "vt_test_keyspace",
 	}
-	dbcfgs := dbconfigs.MakeConnParams()
-	dbcfgs.SetConnParams(mcp)
+	dbcfgs := dbconfigs.New(mcp)
 
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
@@ -1050,8 +1032,7 @@ func TestStreamerParseEventsBeginAgain(t *testing.T) {
 	mcp := &mysql.ConnParams{
 		DbName: "vt_test_keyspace",
 	}
-	dbcfgs := dbconfigs.MakeConnParams()
-	dbcfgs.SetConnParams(mcp)
+	dbcfgs := dbconfigs.New(mcp)
 
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 	before := binlogStreamerErrors.Counts()["ParseEvents"]
@@ -1120,8 +1101,7 @@ func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 	mcp := &mysql.ConnParams{
 		DbName: "vt_test_keyspace",
 	}
-	dbcfgs := dbconfigs.MakeConnParams()
-	dbcfgs.SetConnParams(mcp)
+	dbcfgs := dbconfigs.New(mcp)
 
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
@@ -1180,8 +1160,7 @@ func TestStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 	mcp := &mysql.ConnParams{
 		DbName: "vt_test_keyspace",
 	}
-	dbcfgs := dbconfigs.MakeConnParams()
-	dbcfgs.SetConnParams(mcp)
+	dbcfgs := dbconfigs.New(mcp)
 
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 

@@ -146,7 +146,7 @@ func (axp *TxPool) Open(appParams, dbaParams, appDebugParams dbconfigs.ConnParam
 	axp.conns.Open(appParams, dbaParams, appDebugParams)
 	foundRowsParam, _ := appParams.GetConnParams()
 	foundRowsParam.EnableClientFoundRows()
-	appParams.SetConnParams(foundRowsParam)
+	appParams = dbconfigs.New(foundRowsParam)
 	axp.foundRowsPool.Open(appParams, dbaParams, appDebugParams)
 	axp.ticks.Start(func() { axp.transactionKiller() })
 }

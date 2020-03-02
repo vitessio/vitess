@@ -261,8 +261,7 @@ func TestStreamerParseRBREvents(t *testing.T) {
 	mcp := &mysql.ConnParams{
 		DbName: "vt_test_keyspace",
 	}
-	dbcfgs := dbconfigs.MakeConnParams()
-	dbcfgs.SetConnParams(mcp)
+	dbcfgs := dbconfigs.New(mcp)
 
 	bls := NewStreamer(dbcfgs, se, nil, mysql.Position{}, 0, sendTransaction)
 
@@ -510,8 +509,7 @@ func TestStreamerParseRBRNameEscapes(t *testing.T) {
 	mcp := &mysql.ConnParams{
 		DbName: "vt_test_keyspace",
 	}
-	dbcfgs := dbconfigs.MakeConnParams()
-	dbcfgs.SetConnParams(mcp)
+	dbcfgs := dbconfigs.New(mcp)
 
 	bls := NewStreamer(dbcfgs, se, nil, mysql.Position{}, 0, sendTransaction)
 

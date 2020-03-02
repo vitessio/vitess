@@ -140,9 +140,11 @@ type ConnParams struct {
 	connParams *mysql.ConnParams
 }
 
-// MakeConnParams is for tests only
-func MakeConnParams() ConnParams {
-	return ConnParams{}
+// New initializes a ConnParams from mysql connection parameters
+func New(mcp *mysql.ConnParams) ConnParams {
+	return ConnParams{
+		connParams: mcp,
+	}
 }
 
 // GetConnParams returns the connections params
@@ -152,16 +154,6 @@ func (cp ConnParams) GetConnParams() (*mysql.ConnParams, error) {
 		return nil, err
 	}
 	return params, nil
-}
-
-// SetConnParams is to use for tests only
-func (cp *ConnParams) SetConnParams(mcp *mysql.ConnParams) {
-	cp.connParams = mcp
-}
-
-// ConnParam is for tests only
-func (cp *ConnParams) ConnParam() *mysql.ConnParams {
-	return cp.connParams
 }
 
 // AppWithDB returns connection parameters for app with dbname set.

@@ -287,8 +287,7 @@ func TestNewMySQLVStreamerClient(t *testing.T) {
 }
 
 func TestMySQLVStreamerClientOpen(t *testing.T) {
-	dbc := dbconfigs.MakeConnParams()
-	dbc.SetConnParams(&mysql.ConnParams{
+	dbc := dbconfigs.New(&mysql.ConnParams{
 		Host: "invalidhost",
 		Port: 3306,
 	})
