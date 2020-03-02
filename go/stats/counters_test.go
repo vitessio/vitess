@@ -264,7 +264,10 @@ func TestCountersCombineDimension(t *testing.T) {
 	c3 := NewCountersWithSingleLabel("counter_combine_dim3", "help", "a")
 	assert.Equal(t, `{"all": 0}`, c3.String())
 
+	// Anything under "a" and "c" should get reported under a consolidated "all" value
+	// instead of the specific supplied values.
 	c4 := NewCountersWithMultiLabels("counter_combine_dim4", "help", []string{"a", "b", "c"})
 	c4.Add([]string{"c1", "c2", "c3"}, 1)
-	assert.Equal(t, `{"all.c2.all": 1}`, c4.String())
+	c4.Add([]string{"c4", "c2", "c5"}, 1)
+	assert.Equal(t, `{"all.c2.all": 2}`, c4.String())
 }
