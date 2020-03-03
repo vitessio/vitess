@@ -284,9 +284,6 @@ docker_lite_alpine:
 	chmod -R o=g *
 	docker build -f docker/lite/Dockerfile.alpine -t vitess/lite:alpine .
 
-docker_guestbook:
-	cd examples/kubernetes/guestbook && ./build.sh
-
 # This rule loads the working copy of the code into a bootstrap image,
 # and then runs the tests inside Docker.
 # Example: $ make docker_test flavor=mariadb
