@@ -28,6 +28,10 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+// resultStreamer streams the results of the requested query
+// along with the GTID of the snapshot. This is used by vdiff
+// to synchronize the target to that GTID before comparing
+// the results.
 type resultStreamer struct {
 	ctx    context.Context
 	cancel func()
@@ -60,12 +64,12 @@ func (rs *resultStreamer) Stream() error {
 	}
 	rs.tableName = fromTable
 
-	conn, err := rs.mysqlConnect()
+	conn, err := snapshotConnect(rs.ctx, rs.cp)
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
-	gtid, err := rs.startStreaming(conn)
+	gtid, err := conn.streamWithSnapshot(rs.ctx, rs.tableName.String(), rs.query)
 	if err != nil {
 		return err
 	}
@@ -112,7 +116,7 @@ func (rs *resultStreamer) Stream() error {
 			}
 			// empty the rows so we start over, but we keep the
 			// same capacity
-			response.Rows = response.Rows[:0]
+			response.Rows = nil
 			byteCount = 0
 		}
 	}
