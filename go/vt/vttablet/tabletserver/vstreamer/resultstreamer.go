@@ -36,13 +36,13 @@ type resultStreamer struct {
 	ctx    context.Context
 	cancel func()
 
-	cp        dbconfigs.ConnParams
+	cp        dbconfigs.Connector
 	query     string
 	tableName sqlparser.TableIdent
 	send      func(*binlogdatapb.VStreamResultsResponse) error
 }
 
-func newResultStreamer(ctx context.Context, cp dbconfigs.ConnParams, query string, send func(*binlogdatapb.VStreamResultsResponse) error) *resultStreamer {
+func newResultStreamer(ctx context.Context, cp dbconfigs.Connector, query string, send func(*binlogdatapb.VStreamResultsResponse) error) *resultStreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &resultStreamer{
 		ctx:    ctx,
@@ -164,7 +164,7 @@ func (rs *resultStreamer) startStreaming(conn *mysql.Conn) (string, error) {
 }
 
 func (rs *resultStreamer) mysqlConnect() (*mysql.Conn, error) {
-	cp, err := rs.cp.GetConnParams()
+	cp, err := rs.cp.MysqlParams()
 	if err != nil {
 		return nil, err
 	}

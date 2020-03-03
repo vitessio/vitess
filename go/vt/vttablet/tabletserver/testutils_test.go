@@ -50,7 +50,7 @@ func (util *testUtils) checkEqual(t *testing.T, expected interface{}, result int
 }
 
 func (util *testUtils) newDBConfigs(db *fakesqldb.DB) *dbconfigs.DBConfigs {
-	params, _ := db.ConnParams().GetConnParams()
+	params, _ := db.ConnParams().MysqlParams()
 	cp := *params
 	return dbconfigs.NewTestDBConfigs(cp, cp, "")
 }

@@ -158,7 +158,7 @@ func TestStreamRowsUnicode(t *testing.T) {
 
 	savecp := engine.cp
 	// Rowstreamer must override this to "binary"
-	params, err := engine.cp.GetConnParams()
+	params, err := engine.cp.MysqlParams()
 	if err != nil {
 		t.Fatal(err)
 	}

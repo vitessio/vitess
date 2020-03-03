@@ -141,10 +141,10 @@ func NewTxPool(
 
 // Open makes the TxPool operational. This also starts the transaction killer
 // that will kill long-running transactions.
-func (axp *TxPool) Open(appParams, dbaParams, appDebugParams dbconfigs.ConnParams) {
+func (axp *TxPool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 	log.Infof("Starting transaction id: %d", axp.lastID)
 	axp.conns.Open(appParams, dbaParams, appDebugParams)
-	foundRowsParam, _ := appParams.GetConnParams()
+	foundRowsParam, _ := appParams.MysqlParams()
 	foundRowsParam.EnableClientFoundRows()
 	appParams = dbconfigs.New(foundRowsParam)
 	axp.foundRowsPool.Open(appParams, dbaParams, appDebugParams)

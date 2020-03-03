@@ -117,7 +117,7 @@ func TestStatements(t *testing.T) {
 	runCases(t, nil, testcases, "current")
 
 	// Test FilePos flavor
-	params, err := engine.cp.GetConnParams()
+	params, err := engine.cp.MysqlParams()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +187,7 @@ func TestOther(t *testing.T) {
 	customRun("gtid")
 
 	// Test FilePos flavor
-	params, err := engine.cp.GetConnParams()
+	params, err := engine.cp.MysqlParams()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1275,7 +1275,7 @@ func masterPosition(t *testing.T) string {
 	// We use the engine's cp because there is one test that overrides
 	// the flavor to FilePos. If so, we have to obtain the position
 	// in that flavor format.
-	connParam, err := engine.cp.GetConnParams()
+	connParam, err := engine.cp.MysqlParams()
 	if err != nil {
 		t.Fatal(err)
 	}

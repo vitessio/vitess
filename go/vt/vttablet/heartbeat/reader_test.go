@@ -106,7 +106,7 @@ func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *Reader {
 	config := tabletenv.DefaultQsConfig
 	config.HeartbeatEnable = true
 	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
-	params, _ := db.ConnParams().GetConnParams()
+	params, _ := db.ConnParams().MysqlParams()
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 

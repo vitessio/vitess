@@ -274,7 +274,7 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 	// privileges' right in the middle, and then subsequent
 	// commands fail if we don't use valid credentials. So let's
 	// use dba credentials.
-	params, err := mysqld.dbcfgs.Dba().GetConnParams()
+	params, err := mysqld.dbcfgs.Dba().MysqlParams()
 	if err != nil {
 		return err
 	}
@@ -441,7 +441,7 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 // will use the dba credentials to try to connect. Use wait() with
 // different credentials if needed.
 func (mysqld *Mysqld) Wait(ctx context.Context, cnf *Mycnf) error {
-	params, err := mysqld.dbcfgs.Dba().GetConnParams()
+	params, err := mysqld.dbcfgs.Dba().MysqlParams()
 	if err != nil {
 		return err
 	}
@@ -531,7 +531,7 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 		if err != nil {
 			return err
 		}
-		params, err := mysqld.dbcfgs.Dba().GetConnParams()
+		params, err := mysqld.dbcfgs.Dba().MysqlParams()
 		if err != nil {
 			return err
 		}

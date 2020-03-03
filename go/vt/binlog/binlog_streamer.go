@@ -134,7 +134,7 @@ type tableCacheEntry struct {
 // NewStreamer() again.
 type Streamer struct {
 	// The following fields at set at creation and immutable.
-	cp              dbconfigs.ConnParams
+	cp              dbconfigs.Connector
 	se              *schema.Engine
 	resolverFactory keyspaceIDResolverFactory
 	extractPK       bool
@@ -156,7 +156,7 @@ type Streamer struct {
 // startPos is the position to start streaming at. Incompatible with timestamp.
 // timestamp is the timestamp to start streaming at. Incompatible with startPos.
 // sendTransaction is called each time a transaction is committed or rolled back.
-func NewStreamer(cp dbconfigs.ConnParams, se *schema.Engine, clientCharset *binlogdatapb.Charset, startPos mysql.Position, timestamp int64, sendTransaction sendTransactionFunc) *Streamer {
+func NewStreamer(cp dbconfigs.Connector, se *schema.Engine, clientCharset *binlogdatapb.Charset, startPos mysql.Position, timestamp int64, sendTransaction sendTransactionFunc) *Streamer {
 	return &Streamer{
 		cp:              cp,
 		se:              se,
@@ -408,8 +408,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 					return pos, err
 				}
 			default: // BL_DDL, BL_SET, BL_INSERT, BL_UPDATE, BL_DELETE, BL_UNRECOGNIZED
-				params, _ := bls.cp.GetConnParams()
-				if q.Database != "" && q.Database != params.DbName {
+				if q.Database != "" && q.Database != bls.cp.DBName() {
 					// Skip cross-db statements.
 					continue
 				}
@@ -472,10 +471,9 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			}
 			tableMaps[tableID] = tce
 
-			params, _ := bls.cp.GetConnParams()
 			// Check we're in the right database, and if so, fill
 			// in more data.
-			if tm.Database != "" && tm.Database != params.DbName {
+			if tm.Database != "" && tm.Database != bls.cp.DBName() {
 				continue
 			}
 

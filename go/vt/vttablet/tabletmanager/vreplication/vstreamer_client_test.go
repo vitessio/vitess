@@ -292,7 +292,7 @@ func TestMySQLVStreamerClientOpen(t *testing.T) {
 		Port: 3306,
 	})
 	type fields struct {
-		sourceConnParams dbconfigs.ConnParams
+		sourceConnParams dbconfigs.Connector
 	}
 	type args struct {
 		ctx context.Context
@@ -356,7 +356,7 @@ func TestMySQLVStreamerClientOpen(t *testing.T) {
 func TestMySQLVStreamerClientClose(t *testing.T) {
 	type fields struct {
 		isOpen           bool
-		sourceConnParams dbconfigs.ConnParams
+		sourceConnParams dbconfigs.Connector
 	}
 	type args struct {
 		ctx context.Context

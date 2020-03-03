@@ -52,7 +52,7 @@ type EventStreamer struct {
 }
 
 // NewEventStreamer returns a new EventStreamer on top of a Streamer
-func NewEventStreamer(cp dbconfigs.ConnParams, se *schema.Engine, startPos mysql.Position, timestamp int64, sendEvent sendEventFunc) *EventStreamer {
+func NewEventStreamer(cp dbconfigs.Connector, se *schema.Engine, startPos mysql.Position, timestamp int64, sendEvent sendEventFunc) *EventStreamer {
 	evs := &EventStreamer{
 		sendEvent: sendEvent,
 	}

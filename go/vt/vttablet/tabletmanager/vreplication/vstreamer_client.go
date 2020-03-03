@@ -77,7 +77,7 @@ type MySQLVStreamerClient struct {
 
 	isOpen bool
 
-	sourceConnParams dbconfigs.ConnParams
+	sourceConnParams dbconfigs.Connector
 	sourceSe         *schema.Engine
 }
 

@@ -47,7 +47,7 @@ var (
 // Engine is the engine for handling vreplication streaming requests.
 type Engine struct {
 	// cp is initialized by InitDBConfig
-	cp dbconfigs.ConnParams
+	cp dbconfigs.Connector
 
 	// mu protects isOpen, streamers, streamIdx and vschema.
 	mu sync.Mutex
@@ -96,7 +96,7 @@ func NewEngine(ts srvtopo.Server, se *schema.Engine) *Engine {
 }
 
 // InitDBConfig performs saves the required info from dbconfigs for future use.
-func (vse *Engine) InitDBConfig(cp dbconfigs.ConnParams) {
+func (vse *Engine) InitDBConfig(cp dbconfigs.Connector) {
 	vse.cp = cp
 }
 

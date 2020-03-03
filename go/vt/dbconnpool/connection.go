@@ -116,10 +116,10 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 
 // NewDBConnection returns a new DBConnection based on the ConnParams
 // and will use the provided stats to collect timing.
-func NewDBConnection(info dbconfigs.ConnParams, mysqlStats *stats.Timings) (*DBConnection, error) {
+func NewDBConnection(info dbconfigs.Connector, mysqlStats *stats.Timings) (*DBConnection, error) {
 	start := time.Now()
 	defer mysqlStats.Record("Connect", start)
-	params, err := info.GetConnParams()
+	params, err := info.MysqlParams()
 	if err != nil {
 		return nil, err
 	}

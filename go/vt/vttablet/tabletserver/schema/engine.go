@@ -49,7 +49,7 @@ type notifier func(full map[string]*Table, created, altered, dropped []string)
 // Engine stores the schema info and performs operations that
 // keep itself up-to-date.
 type Engine struct {
-	cp dbconfigs.ConnParams
+	cp dbconfigs.Connector
 
 	// mu protects the following fields.
 	mu         sync.Mutex
@@ -101,7 +101,7 @@ func NewEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *En
 }
 
 // InitDBConfig must be called before Open.
-func (se *Engine) InitDBConfig(cp dbconfigs.ConnParams) {
+func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
 	se.cp = cp
 }
 

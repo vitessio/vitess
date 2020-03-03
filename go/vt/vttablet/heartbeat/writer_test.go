@@ -111,7 +111,7 @@ func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *Writer {
 	config.HeartbeatEnable = true
 	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 
-	params, _ := db.ConnParams().GetConnParams()
+	params, _ := db.ConnParams().MysqlParams()
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 

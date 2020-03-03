@@ -298,7 +298,7 @@ func NewActionAgent(
 
 	var mysqlHost string
 	var mysqlPort int32
-	if appConfig, _ := dbcfgs.AppWithDB().GetConnParams(); appConfig.Host != "" {
+	if appConfig, _ := dbcfgs.AppWithDB().MysqlParams(); appConfig.Host != "" {
 		mysqlHost = appConfig.Host
 		mysqlPort = int32(appConfig.Port)
 
@@ -324,7 +324,7 @@ func NewActionAgent(
 	vreplication.InitVStreamerClient(agent.DBConfigs)
 
 	// The db name is set by the Start function called above
-	filteredWithDBParams, _ := agent.DBConfigs.FilteredWithDB().GetConnParams()
+	filteredWithDBParams, _ := agent.DBConfigs.FilteredWithDB().MysqlParams()
 	agent.VREngine = vreplication.NewEngine(ts, tabletAlias.Cell, mysqld, func() binlogplayer.DBClient {
 		return binlogplayer.NewDBClient(agent.DBConfigs.FilteredWithDB())
 	},

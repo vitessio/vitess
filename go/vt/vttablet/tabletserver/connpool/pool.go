@@ -66,7 +66,7 @@ type Pool struct {
 	idleTimeout        time.Duration
 	dbaPool            *dbconnpool.ConnectionPool
 	checker            MySQLChecker
-	appDebugParams     dbconfigs.ConnParams
+	appDebugParams     dbconfigs.Connector
 }
 
 // New creates a new Pool. The name is used
@@ -110,7 +110,7 @@ func (cp *Pool) pool() (p *pools.ResourcePool) {
 }
 
 // Open must be called before starting to use the pool.
-func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.ConnParams) {
+func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 
@@ -307,7 +307,7 @@ func (cp *Pool) Exhausted() int64 {
 }
 
 func (cp *Pool) isCallerIDAppDebug(ctx context.Context) bool {
-	params, err := cp.appDebugParams.GetConnParams()
+	params, err := cp.appDebugParams.MysqlParams()
 	if err != nil {
 		return false
 	}

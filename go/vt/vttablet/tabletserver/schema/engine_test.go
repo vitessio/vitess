@@ -417,7 +417,7 @@ func newEngine(queryPlanCacheSize int, reloadTime time.Duration, idleTimeout tim
 }
 
 func newDBConfigs(db *fakesqldb.DB) *dbconfigs.DBConfigs {
-	params, _ := db.ConnParams().GetConnParams()
+	params, _ := db.ConnParams().MysqlParams()
 	cp := *params
 	return dbconfigs.NewTestDBConfigs(cp, cp, "")
 }

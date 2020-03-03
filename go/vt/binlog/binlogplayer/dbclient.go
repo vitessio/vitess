@@ -40,12 +40,12 @@ type DBClient interface {
 
 // dbClientImpl is a real DBClient backed by a mysql connection.
 type dbClientImpl struct {
-	dbConfig dbconfigs.ConnParams
+	dbConfig dbconfigs.Connector
 	dbConn   *mysql.Conn
 }
 
 // NewDBClient creates a DBClient instance
-func NewDBClient(params dbconfigs.ConnParams) DBClient {
+func NewDBClient(params dbconfigs.Connector) DBClient {
 	return &dbClientImpl{
 		dbConfig: params,
 	}
@@ -58,12 +58,12 @@ func (dc *dbClientImpl) handleError(err error) {
 }
 
 func (dc *dbClientImpl) DBName() string {
-	params, _ := dc.dbConfig.GetConnParams()
+	params, _ := dc.dbConfig.MysqlParams()
 	return params.DbName
 }
 
 func (dc *dbClientImpl) Connect() error {
-	params, err := dc.dbConfig.GetConnParams()
+	params, err := dc.dbConfig.MysqlParams()
 	if err != nil {
 		return err
 	}

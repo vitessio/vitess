@@ -341,7 +341,7 @@ func (dbc *realDBClient) DBName() string {
 }
 
 func (dbc *realDBClient) Connect() error {
-	app, err := env.Dbcfgs.AppWithDB().GetConnParams()
+	app, err := env.Dbcfgs.AppWithDB().MysqlParams()
 	if err != nil {
 		return err
 	}

@@ -53,7 +53,7 @@ type VStreamer interface {
 }
 
 // NewVStreamer returns a VStreamer.
-func NewVStreamer(ctx context.Context, cp dbconfigs.ConnParams, se *schema.Engine, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) VStreamer {
+func NewVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) VStreamer {
 	return newVStreamer(ctx, cp, se, startPos, filter, &localVSchema{vschema: &vindexes.VSchema{}}, send)
 }
 
@@ -70,7 +70,7 @@ type vstreamer struct {
 	ctx    context.Context
 	cancel func()
 
-	cp       dbconfigs.ConnParams
+	cp       dbconfigs.Connector
 	se       *schema.Engine
 	startPos string
 	filter   *binlogdatapb.Filter
@@ -112,7 +112,7 @@ type streamerPlan struct {
 //   Other constructs like joins, group by, etc. are not supported.
 // vschema: the current vschema. This value can later be changed through the SetVSchema method.
 // send: callback function to send events.
-func newVStreamer(ctx context.Context, cp dbconfigs.ConnParams, se *schema.Engine, startPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
+func newVStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, startPos string, filter *binlogdatapb.Filter, vschema *localVSchema, send func([]*binlogdatapb.VEvent) error) *vstreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &vstreamer{
 		ctx:      ctx,
@@ -186,7 +186,7 @@ func (vs *vstreamer) Stream() error {
 }
 
 func (vs *vstreamer) currentPosition() (mysql.Position, error) {
-	cp, err := vs.cp.GetConnParams()
+	cp, err := vs.cp.MysqlParams()
 	if err != nil {
 		return mysql.Position{}, err
 	}
@@ -365,7 +365,7 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 	}
 
 	// Get the DbName for vstreamer
-	params, err := vs.cp.GetConnParams()
+	params, err := vs.cp.MysqlParams()
 	if err != nil {
 		return nil, err
 	}
@@ -634,7 +634,7 @@ func (vs *vstreamer) buildTableColumns(id uint64, tm *mysql.TableMap) ([]schema.
 
 func (vs *vstreamer) processJounalEvent(vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {
 	// Get DbName
-	params, err := vs.cp.GetConnParams()
+	params, err := vs.cp.MysqlParams()
 	if err != nil {
 		return nil, err
 	}

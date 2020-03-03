@@ -260,7 +260,7 @@ func newTestEngine(db *fakesqldb.DB) *Engine {
 	tsv := newFakeTabletServer()
 	se := schema.NewEngine(tsv, config)
 	te := NewEngine(tsv, se, config)
-	params, _ := db.ConnParams().GetConnParams()
+	params, _ := db.ConnParams().MysqlParams()
 	cp := *params
 	te.InitDBConfig(dbconfigs.NewTestDBConfigs(cp, cp, ""))
 	te.Open()

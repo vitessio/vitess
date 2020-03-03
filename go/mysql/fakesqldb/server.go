@@ -258,7 +258,7 @@ func (db *DB) WaitForClose(timeout time.Duration) error {
 }
 
 // ConnParams returns the ConnParams to connect to the DB.
-func (db *DB) ConnParams() dbconfigs.ConnParams {
+func (db *DB) ConnParams() dbconfigs.Connector {
 	return dbconfigs.New(&mysql.ConnParams{
 		UnixSocket: db.socketFile,
 		Uname:      "user1",
@@ -269,7 +269,7 @@ func (db *DB) ConnParams() dbconfigs.ConnParams {
 }
 
 // ConnParamsWithUname returns  ConnParams to connect to the DB with the Uname set to the provided value.
-func (db *DB) ConnParamsWithUname(uname string) dbconfigs.ConnParams {
+func (db *DB) ConnParamsWithUname(uname string) dbconfigs.Connector {
 	return dbconfigs.New(&mysql.ConnParams{
 		UnixSocket: db.socketFile,
 		Uname:      uname,

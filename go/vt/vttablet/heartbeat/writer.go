@@ -155,7 +155,7 @@ func (w *Writer) Close() {
 // or master. For that reason, we use values that are common between them, such as keyspace:shard,
 // and we also execute them with an isolated connection that turns off the binlog and
 // is closed at the end.
-func (w *Writer) initializeTables(cp dbconfigs.ConnParams) error {
+func (w *Writer) initializeTables(cp dbconfigs.Connector) error {
 	conn, err := dbconnpool.NewDBConnection(cp, stats.NewTimings("", "", ""))
 	if err != nil {
 		return vterrors.Wrap(err, "Failed to create connection for heartbeat")

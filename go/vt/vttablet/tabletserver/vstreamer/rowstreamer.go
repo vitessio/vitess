@@ -39,7 +39,7 @@ type RowStreamer interface {
 }
 
 // NewRowStreamer returns a RowStreamer
-func NewRowStreamer(ctx context.Context, cp dbconfigs.ConnParams, se *schema.Engine, query string, lastpk []sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error) RowStreamer {
+func NewRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error) RowStreamer {
 	return newRowStreamer(ctx, cp, se, query, lastpk, &localVSchema{vschema: &vindexes.VSchema{}}, send)
 }
 
@@ -55,7 +55,7 @@ type rowStreamer struct {
 	ctx    context.Context
 	cancel func()
 
-	cp      dbconfigs.ConnParams
+	cp      dbconfigs.Connector
 	se      *schema.Engine
 	query   string
 	lastpk  []sqltypes.Value
@@ -67,7 +67,7 @@ type rowStreamer struct {
 	sendQuery string
 }
 
-func newRowStreamer(ctx context.Context, cp dbconfigs.ConnParams, se *schema.Engine, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error) *rowStreamer {
+func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error) *rowStreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &rowStreamer{
 		ctx:     ctx,
@@ -321,7 +321,7 @@ func (rs *rowStreamer) startStreaming(conn *mysql.Conn) (string, error) {
 }
 
 func (rs *rowStreamer) mysqlConnect() (*mysql.Conn, error) {
-	cp, err := rs.cp.GetConnParams()
+	cp, err := rs.cp.MysqlParams()
 	if err != nil {
 		return nil, err
 	}
