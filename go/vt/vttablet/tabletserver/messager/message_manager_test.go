@@ -219,6 +219,16 @@ func TestMessageManagerSend(t *testing.T) {
 		t.Errorf("Postpone: %s, want %v", got, want)
 	}
 
+	// Wait while the receiver is marked as busy.
+	for {
+		mm.mu.Lock()
+		busy := mm.receivers[0].busy
+		mm.mu.Unlock()
+		if !busy {
+			break
+		}
+	}
+
 	// Verify item has been removed from cache.
 	// Need to obtain lock to prevent data race.
 	mm.cache.mu.Lock()
