@@ -209,3 +209,20 @@ func newTestAuthServerStatic() *mysql.AuthServerStatic {
 	jsonConfig := "{\"user1\":{\"Password\":\"password1\", \"UserData\":\"userData1\", \"SourceHost\":\"localhost\"}}"
 	return mysql.NewAuthServerStatic("", jsonConfig, 0)
 }
+
+func TestDefaultWorkloadEmpty(t *testing.T) {
+	vh := &vtgateHandler{}
+	sess := vh.session(&mysql.Conn{})
+	if sess.Options.Workload != querypb.ExecuteOptions_UNSPECIFIED {
+		t.Fatalf("Expected default workload UNSPECIFIED")
+	}
+}
+
+func TestDefaultWorkloadOLAP(t *testing.T) {
+	vh := &vtgateHandler{}
+	mysqlDefaultWorkload = int32(querypb.ExecuteOptions_OLAP)
+	sess := vh.session(&mysql.Conn{})
+	if sess.Options.Workload != querypb.ExecuteOptions_OLAP {
+		t.Fatalf("Expected default workload OLAP")
+	}
+}
