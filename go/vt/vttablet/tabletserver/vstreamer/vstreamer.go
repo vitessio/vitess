@@ -186,11 +186,7 @@ func (vs *vstreamer) Stream() error {
 }
 
 func (vs *vstreamer) currentPosition() (mysql.Position, error) {
-	cp, err := vs.cp.MysqlParams()
-	if err != nil {
-		return mysql.Position{}, err
-	}
-	conn, err := mysql.Connect(vs.ctx, cp)
+	conn, err := dbconfigs.Connect(vs.ctx, vs.cp)
 	if err != nil {
 		return mysql.Position{}, err
 	}

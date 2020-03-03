@@ -70,7 +70,8 @@ func NewSlaveConnection(cp dbconfigs.Connector) (*SlaveConnection, error) {
 
 // connectForReplication create a MySQL connection ready to use for replication.
 func connectForReplication(cp dbconfigs.Connector) (*mysql.Conn, error) {
-	conn, err := dbconfigs.Connect(cp)
+	ctx := context.Background()
+	conn, err := dbconfigs.Connect(ctx, cp)
 	if err != nil {
 		return nil, err
 	}

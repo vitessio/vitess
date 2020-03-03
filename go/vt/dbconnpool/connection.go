@@ -17,6 +17,7 @@ limitations under the License.
 package dbconnpool
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -117,7 +118,9 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 func NewDBConnection(info dbconfigs.Connector, mysqlStats *stats.Timings) (*DBConnection, error) {
 	start := time.Now()
 	defer mysqlStats.Record("Connect", start)
-	c, err := dbconfigs.Connect(info)
+
+	ctx := context.Background()
+	c, err := dbconfigs.Connect(ctx, info)
 	if err != nil {
 		mysqlStats.Record("ConnectError", start)
 	}

@@ -321,9 +321,5 @@ func (rs *rowStreamer) startStreaming(conn *mysql.Conn) (string, error) {
 }
 
 func (rs *rowStreamer) mysqlConnect() (*mysql.Conn, error) {
-	cp, err := rs.cp.MysqlParams()
-	if err != nil {
-		return nil, err
-	}
-	return mysql.Connect(rs.ctx, cp)
+	return dbconfigs.Connect(rs.ctx, rs.cp)
 }

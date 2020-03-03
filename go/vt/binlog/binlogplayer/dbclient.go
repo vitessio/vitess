@@ -17,6 +17,7 @@ limitations under the License.
 package binlogplayer
 
 import (
+	"context"
 	"fmt"
 
 	"vitess.io/vitess/go/mysql"
@@ -62,7 +63,8 @@ func (dc *dbClientImpl) DBName() string {
 
 func (dc *dbClientImpl) Connect() error {
 	var err error
-	dc.dbConn, err = dbconfigs.Connect(dc.dbConfig)
+	ctx := context.Background()
+	dc.dbConn, err = dbconfigs.Connect(ctx, dc.dbConfig)
 	if err != nil {
 		return fmt.Errorf("error in connecting to mysql db with connection %v, err %v", dc.dbConn, err)
 	}

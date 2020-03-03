@@ -107,9 +107,5 @@ func (conn *snapshotConn) Close() {
 }
 
 func mysqlConnect(ctx context.Context, cp dbconfigs.Connector) (*mysql.Conn, error) {
-	params, err := cp.MysqlParams()
-	if err != nil {
-		return nil, err
-	}
-	return mysql.Connect(ctx, params)
+	return dbconfigs.Connect(ctx, cp)
 }
