@@ -602,6 +602,7 @@ func TestServer(t *testing.T) {
 	initialTimingCounts := timings.Counts()
 	initialConnAccept := connAccept.Get()
 	initialConnSlow := connSlow.Get()
+	initialconnRefuse := connRefuse.Get()
 
 	// Run an 'error' command.
 	th.SetErr(NewSQLError(ERUnknownComError, SSUnknownComError, "forced query error"))
@@ -621,6 +622,9 @@ func TestServer(t *testing.T) {
 	}
 	if connSlow.Get()-initialConnSlow != 1 {
 		t.Errorf("Expected ConnSlow delta=1, got %d", connSlow.Get()-initialConnSlow)
+	}
+	if connRefuse.Get()-initialconnRefuse != 0 {
+		t.Errorf("Expected connRefuse delta=0, got %d", connRefuse.Get()-initialconnRefuse)
 	}
 
 	expectedTimingDeltas := map[string]int64{
@@ -658,6 +662,9 @@ func TestServer(t *testing.T) {
 	}
 	if connSlow.Get()-initialConnSlow != 1 {
 		t.Errorf("Expected ConnSlow delta=1, got %d", connSlow.Get()-initialConnSlow)
+	}
+	if connRefuse.Get()-initialconnRefuse != 0 {
+		t.Errorf("Expected connRefuse delta=0, got %d", connRefuse.Get()-initialconnRefuse)
 	}
 
 	// Run a 'select rows' command with results.
@@ -1314,6 +1321,7 @@ func TestListenerShutdown(t *testing.T) {
 		Uname: "user1",
 		Pass:  "password1",
 	}
+	initialconnRefuse := connRefuse.Get()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1328,6 +1336,10 @@ func TestListenerShutdown(t *testing.T) {
 	}
 
 	l.Shutdown()
+
+	if connRefuse.Get()-initialconnRefuse != 1 {
+		t.Errorf("Expected connRefuse delta=1, got %d", connRefuse.Get()-initialconnRefuse)
+	}
 
 	if err := conn.Ping(); err != nil {
 		sqlErr, ok := err.(*SQLError)
