@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"time"
 
-	"golang.org/x/net/context"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -119,12 +117,7 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 func NewDBConnection(info dbconfigs.Connector, mysqlStats *stats.Timings) (*DBConnection, error) {
 	start := time.Now()
 	defer mysqlStats.Record("Connect", start)
-	params, err := info.MysqlParams()
-	if err != nil {
-		return nil, err
-	}
-	ctx := context.Background()
-	c, err := mysql.Connect(ctx, params)
+	c, err := dbconfigs.Connect(info)
 	if err != nil {
 		mysqlStats.Record("ConnectError", start)
 	}

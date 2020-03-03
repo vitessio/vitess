@@ -70,17 +70,10 @@ func NewSlaveConnection(cp dbconfigs.Connector) (*SlaveConnection, error) {
 
 // connectForReplication create a MySQL connection ready to use for replication.
 func connectForReplication(cp dbconfigs.Connector) (*mysql.Conn, error) {
-	params, err := cp.MysqlParams()
+	conn, err := dbconfigs.Connect(cp)
 	if err != nil {
 		return nil, err
 	}
-
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, params)
-	if err != nil {
-		return nil, err
-	}
-
 	// Tell the server that we understand the format of events
 	// that will be used if binlog_checksum is enabled on the server.
 	if _, err := conn.ExecuteFetch("SET @master_binlog_checksum=@@global.binlog_checksum", 0, false); err != nil {

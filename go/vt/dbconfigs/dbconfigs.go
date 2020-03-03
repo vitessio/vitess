@@ -21,6 +21,7 @@ limitations under the License.
 package dbconfigs
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -149,6 +150,19 @@ func New(mcp *mysql.ConnParams) Connector {
 		dbName:     mcp.DbName,
 		host:       mcp.Host,
 	}
+}
+
+func Connect(c Connector) (*mysql.Conn, error) {
+	params, err := c.MysqlParams()
+	if err != nil {
+		return nil, err
+	}
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
 }
 
 // MysqlParams returns the connections params

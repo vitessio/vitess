@@ -19,8 +19,6 @@ package binlogplayer
 import (
 	"fmt"
 
-	"golang.org/x/net/context"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -63,14 +61,10 @@ func (dc *dbClientImpl) DBName() string {
 }
 
 func (dc *dbClientImpl) Connect() error {
-	params, err := dc.dbConfig.MysqlParams()
+	var err error
+	dc.dbConn, err = dbconfigs.Connect(dc.dbConfig)
 	if err != nil {
-		return err
-	}
-	ctx := context.Background()
-	dc.dbConn, err = mysql.Connect(ctx, params)
-	if err != nil {
-		return fmt.Errorf("error in connecting to mysql db, err %v", err)
+		return fmt.Errorf("error in connecting to mysql db with connection %v, err %v", dc.dbConn, err)
 	}
 	return nil
 }
