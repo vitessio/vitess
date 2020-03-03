@@ -147,8 +147,6 @@ type Connector struct {
 func New(mcp *mysql.ConnParams) Connector {
 	return Connector{
 		connParams: mcp,
-		dbName:     mcp.DbName,
-		host:       mcp.Host,
 	}
 }
 
@@ -176,12 +174,14 @@ func (c Connector) MysqlParams() (*mysql.ConnParams, error) {
 
 // DBName gets the dbname from mysql.ConnParams
 func (c Connector) DBName() string {
-	return c.dbName
+	params, _ := c.MysqlParams()
+	return params.DbName
 }
 
 // Host gets the host from mysql.ConnParams
 func (c Connector) Host() string {
-	return c.host
+	params, _ := c.MysqlParams()
+	return params.Host
 }
 
 // AppWithDB returns connection parameters for app with dbname set.
