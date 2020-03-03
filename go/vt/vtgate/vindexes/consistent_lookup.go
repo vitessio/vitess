@@ -307,10 +307,8 @@ func (lu *clCommon) Update(vcursor VCursor, oldValues []sqltypes.Value, ksid []b
 	equal := true
 	for i := range oldValues {
 		result, err := sqltypes.NullsafeCompare(oldValues[i], newValues[i])
-		if err != nil {
-			return err
-		}
-		if result != 0 {
+		// errors from NullsafeCompare can be ignored. if they are real problems, we'll see them in the Create/Update
+		if err != nil || result != 0 {
 			equal = false
 			break
 		}
