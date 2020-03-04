@@ -15,21 +15,6 @@ jobs:
     - name: Check out code
       uses: actions/checkout@v2
 
-    - name: Get dependencies
+    - name: Run java test
       run: |
-        sudo apt-get update
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget
-        sudo service mysql stop
-        sudo service etcd stop
-        sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
-        sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
-        go mod download
-
-    - name: Run make minimaltools
-      run: |
-        make minimaltools
-
-    - name: check_make_parser
-      run: |
-        make java_test
-
+        go run test.go -docker=true java
