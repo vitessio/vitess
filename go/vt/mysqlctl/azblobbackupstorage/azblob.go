@@ -244,7 +244,7 @@ func (bs *AZBlobBackupStorage) ListBackups(ctx context.Context, dir string) ([]b
 	for _, subdir := range subdirs {
 		result = append(result, &AZBlobBackupHandle{
 			bs:       bs,
-			dir:      dir,
+			dir:      strings.Join([]string{dir, subdir}, "/"),
 			name:     subdir,
 			readOnly: true,
 		})
