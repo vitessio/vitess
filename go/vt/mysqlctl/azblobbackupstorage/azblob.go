@@ -37,10 +37,10 @@ import (
 
 var (
 	// This is the account name
-	accountName = flag.String("azblob_backup_account_name", "", "Azure Account Name for Backups, alternative environment paramater is VITESS_AZBLOB_ACCOUNT_NAME")
+	accountName = flag.String("azblob_backup_account_name", "", "Azure Storage account name for backups, if this flag is unset the environment paramater VITESS_AZBLOB_ACCOUNT_NAME will be used")
 
 	// This is the private access key
-	accountKey = flag.String("azblob_backup_account_key", "", "Azure Account Key, alternative environment paramater is VITESS_AZBLOB_ACCOUNT_KEY")
+	accountKey = flag.String("azblob_backup_account_key", "", "Azure Storage account key,if this flag is unset the environment paramater VITESS_AZBLOB_ACCOUNT_KEY will be used")
 
 	// This is the name of the container that will store the backups
 	containerName = flag.String("azblob_backup_container_name", "", "Azure Blob Container Name")
@@ -59,7 +59,7 @@ const (
 // Return a Shared credential from the available credential sources.
 // We will use credentials in the following order
 // 1. Direct Command Line Flag (azblob_backup_account_name, azblob_backup_account_key)
-// 2. Environment Paramaters
+// 2. Environment variables
 func azCredentials() (*azblob.SharedKeyCredential, error) {
 	actName := *accountName
 	if len(actName) == 0 {
@@ -69,11 +69,11 @@ func azCredentials() (*azblob.SharedKeyCredential, error) {
 
 	actKey := *accountKey
 	if len(actKey) == 0 {
-		actKey = os.Getenv("VITESS_AZBLOB_ACCOUNT_NAME")
+		actKey = os.Getenv("VITESS_AZBLOB_ACCOUNT_KEY")
 	}
 
 	if len(actName) == 0 || len(actKey) == 0 {
-		return nil, fmt.Errorf("can not get Account Credentials from CLI or Environment paramaters")
+		return nil, fmt.Errorf("can not get Azure Storage account credentials from CLI or Environment variables")
 	}
 	return azblob.NewSharedKeyCredential(*accountName, *accountKey)
 }
@@ -185,10 +185,7 @@ func (bh *AZBlobBackupHandle) ReadFile(ctx context.Context, filename string) (io
 	return resp.Body(azblob.RetryReaderOptions{
 		MaxRetryRequests: defaultRetryCount,
 		NotifyFailedRead: func(failureCount int, lastError error, offset int64, count int64, willRetry bool) {
-			log.Infof("ReadFile: [azblob] container: %s, directory: %s, filename: %s, error: %v", *containerName, objName(bh.dir, ""), filename, lastError)
-			if !willRetry {
-				bh.errors.RecordError(lastError)
-			}
+			log.Warningf("ReadFile: [azblob] container: %s, directory: %s, filename: %s, error: %v", *containerName, objName(bh.dir, ""), filename, lastError)
 		},
 		TreatEarlyCloseAsError: true,
 	}), nil
