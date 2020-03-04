@@ -88,7 +88,11 @@
         "type": 10262
       }
     ],
-    "Cols": [0, 1, 0],
+    "Cols": [
+      0,
+      1,
+      0
+    ],
     "Vindex": "user_index",
     "Value": ":id"
   }
@@ -128,7 +132,6 @@
   }
 }
 
-
 # You can even join with a vindexFunc primitive
 "select user_index.keyspace_id, unsharded.id from user_index join unsharded where user_index.id = :id"
 {
@@ -143,7 +146,9 @@
           "type": 10262
         }
       ],
-      "Cols": [1],
+      "Cols": [
+        1
+      ],
       "Vindex": "user_index",
       "Value": ":id"
     },
@@ -157,7 +162,10 @@
       "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
       "Table": "unsharded"
     },
-    "Cols": [-1, 1]
+    "Cols": [
+      -1,
+      1
+    ]
   }
 }
 

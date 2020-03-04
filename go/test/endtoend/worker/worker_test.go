@@ -57,7 +57,6 @@ var (
 	hostname         = "localhost"
 	keyspaceName     = "test_keyspace"
 	shardName        = "0"
-	keyspaceIDType   = "uint64"
 	shardTablets     []*cluster.Vttablet
 	shard0Tablets    []*cluster.Vttablet
 	shard1Tablets    []*cluster.Vttablet
@@ -95,6 +94,7 @@ var (
 )
 
 func TestReparentDuringWorkerCopy(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	_, err := initializeCluster(t, false)
 	defer localCluster.Teardown()
 	require.Nil(t, err)
@@ -103,6 +103,7 @@ func TestReparentDuringWorkerCopy(t *testing.T) {
 }
 
 func TestReparentDuringWorkerCopyMysqlDown(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	_, err := initializeCluster(t, false)
 	defer localCluster.Teardown()
 	require.Nil(t, err)
@@ -111,7 +112,9 @@ func TestReparentDuringWorkerCopyMysqlDown(t *testing.T) {
 }
 
 func TestWebInterface(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	_, err := initializeCluster(t, true)
+	require.Nil(t, err)
 	defer localCluster.Teardown()
 	err = localCluster.StartVtworker(cell, "--use_v3_resharding_mode=true")
 	assert.Nil(t, err)
@@ -179,8 +182,8 @@ func initialSetup(t *testing.T) {
 	runShardTablets(t, "80-", shard1Tablets, false)
 
 	// insert values
-	insertValues(master, "shard-0", 1, 2000, 0)
-	insertValues(master, "shard-1", 4, 2000, 1)
+	insertValues(master, "shard-0", 1, 4000, 0)
+	insertValues(master, "shard-1", 4, 4000, 1)
 
 	// wait for replication position
 	cluster.WaitForReplicationPos(t, master, rdOnly1, "localhost", 60)
@@ -466,7 +469,6 @@ func runShardTablets(t *testing.T, shardName string, tabletArr []*cluster.Vttabl
 		if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
 			return err
 		}
-		tablet.VttabletProcess.ServiceMap = "grpc-queryservice,grpc-tabletmanager,grpc-updatestream,grpc-throttler"
 		err := tablet.VttabletProcess.Setup()
 		require.Nil(t, err)
 	}
@@ -575,6 +577,7 @@ func initializeCluster(t *testing.T, onlyTopo bool) (int, error) {
 	localCluster.VtTabletExtraArgs = append(localCluster.VtTabletExtraArgs, commonTabletArg...)
 
 	err = localCluster.LaunchCluster(keyspace, []cluster.Shard{*shard, *shard0, *shard1})
+	assert.Nil(t, err)
 
 	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd

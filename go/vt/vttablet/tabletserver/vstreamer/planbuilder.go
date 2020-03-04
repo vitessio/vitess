@@ -35,11 +35,15 @@ import (
 
 // Plan represents the plan for a table.
 type Plan struct {
-	Table    *Table
+	Table *Table
+	// ColExprs is the list of column expressions to be sent
+	// in the stream.
 	ColExprs []ColExpr
 
 	// Vindex, VindexColumns and KeyRange, if set, will be used
 	// to filter the row.
+	// VindexColumns contains the column numbers of the table,
+	// and not the column numbers of the stream to be sent.
 	Vindex        vindexes.Vindex
 	VindexColumns []int
 	KeyRange      *topodatapb.KeyRange
@@ -52,9 +56,15 @@ type ColExpr struct {
 
 	// Vindex and VindexColumns, if set, will be used to generate
 	// a keyspace_id. If so, ColNum is ignored.
+	// VindexColumns contains the column numbers of the table,
+	// and not the column numbers of the stream to be sent.
 	Vindex        vindexes.Vindex
 	VindexColumns []int
 
+	// Alias is usually the column name, but it can be changed
+	// if the select expression aliases with an "AS" expression.
+	// Also, "keyspace_id()" will be aliased as "keyspace_id".
+	// This Alias is sent as field info for the returned stream.
 	Alias sqlparser.ColIdent
 	Type  querypb.Type
 }
@@ -166,7 +176,7 @@ func mustSendDDL(query mysql.Query, dbname string, filter *binlogdatapb.Filter) 
 	return true
 }
 
-// tableMatches is similar to the one defined in vreplication.
+// tableMatches is similar to buildPlan below and MatchTable in vreplication/table_plan_builder.go.
 func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb.Filter) bool {
 	if !table.Qualifier.IsEmpty() && table.Qualifier.String() != dbname {
 		return false
@@ -177,7 +187,7 @@ func tableMatches(table sqlparser.TableName, dbname string, filter *binlogdatapb
 			expr := strings.Trim(rule.Match, "/")
 			result, err := regexp.MatchString(expr, table.Name.String())
 			if err != nil {
-				continue
+				return false
 			}
 			if !result {
 				continue
@@ -210,6 +220,8 @@ func buildPlan(ti *Table, vschema *localVSchema, filter *binlogdatapb.Filter) (*
 	return nil, nil
 }
 
+// buildREPlan handles cases where Match has a regular expression.
+// If so, the Filter can be an empty string or a keyrange, like "-80".
 func buildREPlan(ti *Table, vschema *localVSchema, filter string) (*Plan, error) {
 	plan := &Plan{
 		Table: ti,
@@ -248,6 +260,8 @@ func buildREPlan(ti *Table, vschema *localVSchema, filter string) (*Plan, error)
 	return plan, nil
 }
 
+// BuildTablePlan handles cases where a specific table name is specified.
+// The filter must be a select statement.
 func buildTablePlan(ti *Table, vschema *localVSchema, query string) (*Plan, error) {
 	sel, fromTable, err := analyzeSelect(query)
 	if err != nil {
@@ -376,6 +390,9 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 	}
 }
 
+// analyzeInKeyRange allows the following constructs: "in_keyrange('-80')",
+// "in_keyrange(col, 'hash', '-80')", "in_keyrange(col, 'local_vindex', '-80')", or
+// "in_keyrange(col, 'ks.external_vindex', '-80')".
 func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.SelectExprs) error {
 	var colnames []sqlparser.ColIdent
 	var krExpr sqlparser.SelectExpr
@@ -452,6 +469,8 @@ func selString(expr sqlparser.SelectExpr) (string, error) {
 	return string(val.Val), nil
 }
 
+// buildVindexColumns builds the list of column numbers of the table
+// that will be the input to the vindex function.
 func buildVindexColumns(ti *Table, colnames []sqlparser.ColIdent) ([]int, error) {
 	vindexColumns := make([]int, 0, len(colnames))
 	for _, colname := range colnames {

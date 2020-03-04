@@ -459,7 +459,13 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set net_read_timeout = 600",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
+		in:  "set sql_quote_show_create = 1",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
 		in:  "set foreign_key_checks = 0",
+		out: &vtgatepb.Session{Autocommit: true},
+	}, {
+		in:  "set unique_checks = 0",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set skip_query_plan_cache = 1",
@@ -476,6 +482,9 @@ func TestExecutorSet(t *testing.T) {
 	}, {
 		in:  "set tx_read_only = 2",
 		err: "unexpected value for tx_read_only: 2",
+	}, {
+		in:  "set transaction_read_only = 2",
+		err: "unexpected value for transaction_read_only: 2",
 	}, {
 		in:  "set tx_isolation = 'invalid'",
 		err: "unexpected value for tx_isolation: invalid",
@@ -2632,6 +2641,7 @@ func TestGenerateCharsetRows(t *testing.T) {
 			match := stmt.(*sqlparser.Show)
 			filter := match.ShowTablesOpt.Filter
 			actual, err := generateCharsetRows(filter, charsets)
+			require.NoError(t, err)
 			require.Equal(t, tc.expected, actual)
 		})
 	}

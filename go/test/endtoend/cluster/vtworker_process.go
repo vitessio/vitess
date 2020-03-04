@@ -70,6 +70,9 @@ func (vtworker *VtworkerProcess) Setup(cell string) (err error) {
 		"-cell", cell,
 		"-command_display_interval", "10ms",
 	)
+	if *isCoverage {
+		vtworker.proc.Args = append(vtworker.proc.Args, "-test.coverprofile=vtworker.out", "-test.v")
+	}
 	vtworker.proc.Args = append(vtworker.proc.Args, vtworker.ExtraArgs...)
 
 	vtworker.proc.Stderr = os.Stderr
@@ -142,6 +145,9 @@ func (vtworker *VtworkerProcess) TearDown() error {
 func (vtworker *VtworkerProcess) ExecuteCommand(args ...string) (err error) {
 	args = append([]string{"-vtworker_client_protocol", "grpc",
 		"-server", vtworker.Server, "-log_dir", vtworker.LogDir, "-stderrthreshold", "info"}, args...)
+	if *isCoverage {
+		args = append([]string{"-test.coverprofile=" + getCoveragePath("vtworkerclient-exec-cmd.out")}, args...)
+	}
 	tmpProcess := exec.Command(
 		"vtworkerclient",
 		args...,
@@ -175,6 +181,9 @@ func (vtworker *VtworkerProcess) ExecuteVtworkerCommand(port int, grpcPort int, 
 		"-grpc_port", fmt.Sprintf("%d", grpcPort),
 		"-cell", vtworker.Cell,
 		"-log_dir", vtworker.LogDir, "-stderrthreshold", "1"}, args...)
+	if *isCoverage {
+		args = append([]string{"-test.coverprofile=" + getCoveragePath("vtworker-exec-cmd.out")}, args...)
+	}
 	tmpProcess := exec.Command(
 		"vtworker",
 		args...,

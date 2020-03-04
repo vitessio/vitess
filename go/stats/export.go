@@ -33,6 +33,7 @@ import (
 	"flag"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,6 +43,11 @@ import (
 var emitStats = flag.Bool("emit_stats", false, "true iff we should emit stats to push-based monitoring/stats backends")
 var statsEmitPeriod = flag.Duration("stats_emit_period", time.Duration(60*time.Second), "Interval between emitting stats to all registered backends")
 var statsBackend = flag.String("stats_backend", "", "The name of the registered push-based monitoring/stats backend to use")
+var combineDimensions = flag.String("stats_combine_dimensions", "", `List of dimensions to be combined into a single "all" value in exported stats vars`)
+var dropVariables = flag.String("stats_drop_variables", "", `Variables to be dropped from the list of exported variables.`)
+
+// StatsAllStr is the consolidated name if a dimension gets combined.
+const StatsAllStr = "all"
 
 // NewVarHook is the type of a hook to export variables in a different way
 type NewVarHook func(name string, v expvar.Var)
@@ -71,6 +77,9 @@ func (vg *varGroup) register(nvh NewVarHook) {
 }
 
 func (vg *varGroup) publish(name string, v expvar.Var) {
+	if isVarDropped(name) {
+		return
+	}
 	vg.Lock()
 	defer vg.Unlock()
 
@@ -246,4 +255,65 @@ func stringMapToString(m map[string]string) string {
 	}
 	fmt.Fprintf(b, "}")
 	return b.String()
+}
+
+var (
+	varsMu             sync.Mutex
+	combinedDimensions map[string]bool
+	droppedVars        map[string]bool
+)
+
+// IsDimensionCombined returns true if the specified dimension should be combined.
+func IsDimensionCombined(name string) bool {
+	varsMu.Lock()
+	defer varsMu.Unlock()
+
+	if combinedDimensions == nil {
+		dims := strings.Split(*combineDimensions, ",")
+		combinedDimensions = make(map[string]bool, len(dims))
+		for _, dim := range dims {
+			if dim == "" {
+				continue
+			}
+			combinedDimensions[dim] = true
+		}
+	}
+	return combinedDimensions[name]
+}
+
+// safeJoinLabels joins the label values with ".", but first replaces any existing
+// "." characters in the labels with the proper replacement, to avoid issues parsing
+// them apart later. The function also replaces specific label values with "all"
+// if a dimenstion is marked as true in combinedLabels.
+func safeJoinLabels(labels []string, combinedLabels []bool) string {
+	sanitizedLabels := make([]string, len(labels))
+	for idx, label := range labels {
+		if combinedLabels != nil && combinedLabels[idx] {
+			sanitizedLabels[idx] = StatsAllStr
+		} else {
+			sanitizedLabels[idx] = safeLabel(label)
+		}
+	}
+	return strings.Join(sanitizedLabels, ".")
+}
+
+func safeLabel(label string) string {
+	return strings.Replace(label, ".", "_", -1)
+}
+
+func isVarDropped(name string) bool {
+	varsMu.Lock()
+	defer varsMu.Unlock()
+
+	if droppedVars == nil {
+		dims := strings.Split(*dropVariables, ",")
+		droppedVars = make(map[string]bool, len(dims))
+		for _, dim := range dims {
+			if dim == "" {
+				continue
+			}
+			droppedVars[dim] = true
+		}
+	}
+	return droppedVars[name]
 }

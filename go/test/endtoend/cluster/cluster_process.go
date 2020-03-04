@@ -17,14 +17,18 @@ limitations under the License.
 package cluster
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path"
 	"strconv"
+	"sync"
+	"syscall"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
@@ -39,6 +43,7 @@ const (
 var (
 	keepData   = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
 	topoFlavor = flag.String("topo-flavor", "etcd2", "choose a topo server from etcd2, zk2 or consul")
+	isCoverage = flag.Bool("is-coverage", false, "whether coverage is required")
 )
 
 // LocalProcessCluster Testcases need to use this to iniate a cluster
@@ -78,6 +83,13 @@ type LocalProcessCluster struct {
 	VtctldExtraArgs []string
 
 	EnableSemiSync bool
+
+	// mutex added to handle the parallel teardowns
+	mx                *sync.Mutex
+	teardownCompleted bool
+
+	context.Context
+	context.CancelFunc
 }
 
 // Vttablet stores the properties needed to start a vttablet process
@@ -134,6 +146,20 @@ func (shard *Shard) Replica() *Vttablet {
 		}
 	}
 	return nil
+}
+
+// CtrlCHandler handles the teardown for the ctrl-c.
+func (cluster *LocalProcessCluster) CtrlCHandler() {
+	cluster.Context, cluster.CancelFunc = context.WithCancel(context.Background())
+
+	c := make(chan os.Signal, 2)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	select {
+	case <-c:
+		cluster.Teardown()
+		os.Exit(0)
+	case <-cluster.Done():
+	}
 }
 
 // StartTopo starts topology server
@@ -400,7 +426,8 @@ func (cluster *LocalProcessCluster) GetVtgateInstance() *VtgateProcess {
 
 // NewCluster instantiates a new cluster
 func NewCluster(cell string, hostname string) *LocalProcessCluster {
-	cluster := &LocalProcessCluster{Cell: cell, Hostname: hostname}
+	cluster := &LocalProcessCluster{Cell: cell, Hostname: hostname, mx: new(sync.Mutex)}
+	go cluster.CtrlCHandler()
 	cluster.OriginalVTDATAROOT = os.Getenv("VTDATAROOT")
 	cluster.CurrentVTDATAROOT = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vtroot_%d", cluster.GetAndReservePort()))
 	_ = createDirectory(cluster.CurrentVTDATAROOT, 0700)
@@ -454,6 +481,15 @@ func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error
 
 // Teardown brings down the cluster by invoking teardown for individual processes
 func (cluster *LocalProcessCluster) Teardown() {
+	PanicHandler(nil)
+	cluster.mx.Lock()
+	defer cluster.mx.Unlock()
+	if cluster.teardownCompleted {
+		return
+	}
+	if cluster.CancelFunc != nil {
+		cluster.CancelFunc()
+	}
 	if err := cluster.VtgateProcess.TearDown(); err != nil {
 		log.Errorf("Error in vtgate teardown - %s", err.Error())
 	}
@@ -496,6 +532,7 @@ func (cluster *LocalProcessCluster) Teardown() {
 		log.Errorf("Error in topo server teardown - %s", err.Error())
 	}
 
+	cluster.teardownCompleted = true
 }
 
 // StartVtworker starts a vtworker
@@ -645,4 +682,12 @@ func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatu
 	tablet.VttabletProcess.SupportsBackup = supportBackup
 	tablet.VttabletProcess.ServingStatus = servingStatus
 	return tablet.VttabletProcess.Setup()
+}
+
+func getCoveragePath(fileName string) string {
+	covDir := os.Getenv("COV_DIR")
+	if covDir == "" {
+		covDir = os.TempDir()
+	}
+	return path.Join(covDir, fileName)
 }

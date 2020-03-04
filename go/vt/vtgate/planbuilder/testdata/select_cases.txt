@@ -443,7 +443,6 @@
   }
 }
 
-
 # select from dual on sharded keyspace
 "select @@session.auto_increment_increment from user.dual"
 {
@@ -785,7 +784,9 @@
     "Query": "select * from user where name = 'abc' and (id = 4) limit 5",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": [4],
+    "Values": [
+      4
+    ],
     "Table": "user"
   }
 }
@@ -803,7 +804,9 @@
     "Query": "select * from user where (id = 4) and (name = 'abc') limit 5",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": [4],
+    "Values": [
+      4
+    ],
     "Table": "user"
   }
 }
@@ -841,7 +844,9 @@
     "Query": "select user0_.col as col0_ from user as user0_ where id = 1 order by user0_.col desc limit 2",
     "FieldQuery": "select user0_.col as col0_ from user as user0_ where 1 != 1",
     "Vindex": "user_index",
-    "Values": [1],
+    "Values": [
+      1
+    ],
     "Table": "user"
   }
 }
@@ -859,7 +864,9 @@
     "Query": "select user0_.col as col0_ from user as user0_ where id = 1 order by col0_ desc limit 3",
     "FieldQuery": "select user0_.col as col0_ from user as user0_ where 1 != 1",
     "Vindex": "user_index",
-    "Values": [1],
+    "Values": [
+      1
+    ],
     "Table": "user"
   }
 }
@@ -877,7 +884,9 @@
     "Query": "select * from user where (id = 1) and name = true limit 5",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": [1],
+    "Values": [
+      1
+    ],
     "Table": "user"
   }
 }
@@ -895,7 +904,9 @@
     "Query": "select * from user where (id = 1) and name limit 5",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": [1],
+    "Values": [
+      1
+    ],
     "Table": "user"
   }
 }
@@ -913,7 +924,9 @@
     "Query": "select * from user where (id = 5) and name = true limit 5",
     "FieldQuery": "select * from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": [5],
+    "Values": [
+      5
+    ],
     "Table": "user"
   }
 }
@@ -1055,7 +1068,9 @@
     "Query": "select * from music where user_id = 1 union select * from user where id = 1",
     "FieldQuery": "select * from music where 1 != 1 union select * from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": [1],
+    "Values": [
+      1
+    ],
     "Table": "music"
   }
 }
