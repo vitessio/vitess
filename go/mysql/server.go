@@ -55,6 +55,7 @@ var (
 	timings    = stats.NewTimings("MysqlServerTimings", "MySQL server timings", "operation")
 	connCount  = stats.NewGauge("MysqlServerConnCount", "Active MySQL server connections")
 	connAccept = stats.NewCounter("MysqlServerConnAccepted", "Connections accepted by MySQL server")
+	connRefuse = stats.NewCounter("MysqlServerConnRefused", "Connections refused by MySQL server")
 	connSlow   = stats.NewCounter("MysqlServerConnSlow", "Connections that took more than the configured mysql_slow_connect_warn_threshold to establish")
 
 	connCountByTLSVer = stats.NewGaugesWithSingleLabel("MysqlServerConnCountByTLSVer", "Active MySQL server connections by TLS version", "tls")
@@ -248,6 +249,7 @@ func (l *Listener) Accept() {
 		conn, err := l.listener.Accept()
 		if err != nil {
 			// Close() was probably called.
+			connRefuse.Add(1)
 			return
 		}
 
@@ -277,9 +279,9 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		if x := recover(); x != nil {
 			log.Errorf("mysql_server caught panic:\n%v\n%s", x, tb.Stack(4))
 		}
-		// We call flush here in case there's a premature return after
+		// We call endWriterBuffering here in case there's a premature return after
 		// startWriterBuffering is called
-		c.flush()
+		c.endWriterBuffering()
 
 		conn.Close()
 	}()
@@ -380,9 +382,8 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		if err != nil {
 			return
 		}
-		//lint:ignore SA4006 This line is required because the binary protocol requires padding with 0
-		data := make([]byte, 21)
-		data = append(salt, byte(0x00))
+		// The binary protocol requires padding with 0
+		data := append(salt, byte(0x00))
 		if err := c.writeAuthSwitchRequest(MysqlNativePassword, data); err != nil {
 			log.Errorf("Error writing auth switch packet for %s: %v", c, err)
 			return

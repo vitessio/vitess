@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -95,6 +96,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
 	exitcode, err := func() (int, error) {
@@ -258,10 +260,11 @@ func TestMain(m *testing.M) {
 //  pretend it's latin1. If the binlog player doesn't also pretend it's
 //  latin1, it will be inserted as utf8, which will change its value.
 func TestCharset(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	position, _ := cluster.GetMasterPosition(t, *destReplica, hostname)
 
 	_, err := queryTablet(t, *srcMaster, fmt.Sprintf(insertSql, tableName, 1, "Šṛ́rỏé"), "latin1")
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	println("Waiting to get rows in dest master tablet")
 	waitForReplicaEvent(t, position, "1", *destReplica)
 
@@ -271,13 +274,14 @@ func TestCharset(t *testing.T) {
 // Enable binlog_checksum, which will also force a log rotation that should
 // cause binlog streamer to notice the new checksum setting.
 func TestChecksumEnabled(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	position, _ := cluster.GetMasterPosition(t, *destReplica, hostname)
 	_, err := queryTablet(t, *destReplica, "SET @@global.binlog_checksum=1", "")
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	// Insert something and make sure it comes through intact.
 	_, err = queryTablet(t, *srcMaster, fmt.Sprintf(insertSql, tableName, 2, "value - 2"), "")
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	//  Look for it using update stream to see if binlog streamer can talk to
 	//  dest_replica, which now has binlog_checksum enabled.
@@ -289,14 +293,15 @@ func TestChecksumEnabled(t *testing.T) {
 // Disable binlog_checksum to make sure we can also talk to a server without
 // checksums enabled, in case they are enabled by default
 func TestChecksumDisabled(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	position, _ := cluster.GetMasterPosition(t, *destReplica, hostname)
 
 	_, err := queryTablet(t, *destReplica, "SET @@global.binlog_checksum=0", "")
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	// Insert something and make sure it comes through intact.
 	_, err = queryTablet(t, *srcMaster, fmt.Sprintf(insertSql, tableName, 3, "value - 3"), "")
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	// Look for it using update stream to see if binlog streamer can talk to
 	// dest_replica, which now has binlog_checksum disabled.
@@ -311,11 +316,11 @@ func waitForReplicaEvent(t *testing.T, position string, pkKey string, vttablet c
 	for time.Now().Before(timeout) {
 		println("fetching with position " + position)
 		output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("VtTabletUpdateStream", "-position", position, "-count", "1", vttablet.Alias)
-		assert.Nil(t, err)
+		require.Nil(t, err)
 
 		var binlogStreamEvent query.StreamEvent
 		err = json.Unmarshal([]byte(output), &binlogStreamEvent)
-		assert.Nil(t, err)
+		require.Nil(t, err)
 		for _, statement := range binlogStreamEvent.Statements {
 			if isCurrentRowPresent(*statement, pkKey) {
 				return
@@ -337,7 +342,7 @@ func isCurrentRowPresent(statement query.StreamEvent_Statement, pkKey string) bo
 
 func verifyData(t *testing.T, id uint64, charset string, expectedOutput string) {
 	data, err := queryTablet(t, *destMaster, fmt.Sprintf("select id, msg from %s where id = %d", tableName, id), charset)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	assert.NotNil(t, data.Rows)
 	rowFound := assert.Equal(t, len(data.Rows), 1)
 	assert.Equal(t, len(data.Fields), 2)
@@ -358,7 +363,7 @@ func queryTablet(t *testing.T, vttablet cluster.Vttablet, query string, charset 
 	}
 	ctx := context.Background()
 	dbConn, err := mysql.Connect(ctx, &dbParams)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	defer dbConn.Close()
 	return dbConn.ExecuteFetch(query, 1000, true)
 }

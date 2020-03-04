@@ -67,6 +67,41 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"e2e_race": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"make",
+				"e2e_test_race"
+			],
+			"Manual": false,
+			"Shard": 5,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"unit": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"tools/unit_test_runner.sh"
+			],
+			"Manual": false,
+			"Shard": 5,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"unit_race": {
+			"File": "",
+			"Args": [],
+			"Command": [
+				"make",
+				"unit_test_race"
+			],
+			"Manual": false,
+			"Shard": 5,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"python_client": {
 			"File": "python_client_test.py",
 			"Args": [],
@@ -94,35 +129,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"vtctld_web": {
-			"File": "vtctld_web_test.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 1,
-			"RetryMax": 0,
-			"Tags": [
-				"webdriver"
-			]
-		},
-		"vttest_sample": {
-			"File": "vttest_sample_test.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 0,
-			"RetryMax": 0,
-			"Tags": []
-		},
-		"xb_recovery": {
-			"File": "xb_recovery.py",
-			"Args": [],
-			"Command": [],
-			"Manual": false,
-			"Shard": 2,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"backup": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtctlbackup"],
@@ -132,7 +138,7 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"backup_mysqlctld": {
+		"backup_mysqlctld": { 
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/mysqlctld"],
 			"Command": [],
@@ -494,6 +500,33 @@
 		"vtgate_vschema": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/vschema"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 17,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"web_test": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtctldweb"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 10,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"vttest_sample": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtcombo"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 25,
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"xb_recovery": {
+			"File": "recovery_test.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/xtrabackup"],
 			"Command": [],
 			"Manual": false,
 			"Shard": 17,

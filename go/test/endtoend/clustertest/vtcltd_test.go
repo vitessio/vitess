@@ -28,6 +28,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 var (
@@ -40,6 +42,7 @@ var (
 )
 
 func TestVtctldProcess(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	url := fmt.Sprintf("http://%s:%d/api/keyspaces/", clusterInstance.Hostname, clusterInstance.VtctldHTTPPort)
 	testURL(t, url, "keyspace url")
 
@@ -57,13 +60,13 @@ func TestVtctldProcess(t *testing.T) {
 
 func testTopoDataAPI(t *testing.T, url string) {
 	resp, err := http.Get(url)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	assert.Equal(t, resp.StatusCode, 200)
 
 	resultMap := make(map[string]interface{})
 	respByte, _ := ioutil.ReadAll(resp.Body)
 	err = json.Unmarshal(respByte, &resultMap)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	errorValue := reflect.ValueOf(resultMap["Error"])
 	assert.Empty(t, errorValue.String())
@@ -77,7 +80,7 @@ func testTopoDataAPI(t *testing.T, url string) {
 
 func testListAllTablets(t *testing.T) {
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ListAllTablets", clusterInstance.Cell)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 
 	tablets := getAllTablets()
 
@@ -95,14 +98,14 @@ func testListAllTablets(t *testing.T) {
 
 func testTabletStatus(t *testing.T) {
 	resp, err := http.Get(fmt.Sprintf("http://%s:%d", clusterInstance.Hostname, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].HTTPPort))
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	respByte, err := ioutil.ReadAll(resp.Body)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	result := string(respByte)
 	println(result)
 	println(strings.Contains(result, "Polling health information from."))
 	matched, err := regexp.Match(`Polling health information from.+MySQLReplicationLag`, []byte(result))
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	assert.True(t, matched)
 	assert.True(t, strings.Contains(result, `Alias: <a href="http://localhost:`))
 	assert.True(t, strings.Contains(result, `</html>`))
@@ -110,13 +113,13 @@ func testTabletStatus(t *testing.T) {
 
 func testExecuteAsDba(t *testing.T) {
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsDba", clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].Alias, `SELECT 1 AS a`)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	assert.Equal(t, result, oneTableOutput)
 }
 
 func testExecuteAsApp(t *testing.T) {
 	result, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ExecuteFetchAsApp", clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].Alias, `SELECT 1 AS a`)
-	assert.Nil(t, err)
+	require.Nil(t, err)
 	assert.Equal(t, result, oneTableOutput)
 }
 

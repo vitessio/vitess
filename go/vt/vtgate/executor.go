@@ -602,7 +602,7 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 			default:
 				return nil, fmt.Errorf("unexpected value for tx_isolation: %v", val)
 			}
-		case "tx_read_only":
+		case "tx_read_only", "transaction_read_only":
 			val, err := validateSetOnOff(v, k.Key)
 			if err != nil {
 				return nil, err
@@ -611,7 +611,7 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 			case 0, 1:
 				// TODO (4127): This is a dangerous NOP.
 			default:
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for tx_read_only: %d", val)
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for %v: %d", k.Key, val)
 			}
 		case "workload":
 			val, ok := v.(string)
@@ -669,7 +669,7 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 			if !ok {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for wait_timeout: %T", v)
 			}
-		case "sql_mode", "net_write_timeout", "net_read_timeout", "lc_messages", "collation_connection", "foreign_key_checks":
+		case "sql_mode", "net_write_timeout", "net_read_timeout", "lc_messages", "collation_connection", "foreign_key_checks", "sql_quote_show_create", "unique_checks":
 			log.Warningf("Ignored inapplicable SET %v = %v", k, v)
 			warnings.Add("IgnoredSet", 1)
 		case "charset", "names":
@@ -1578,6 +1578,9 @@ func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) ([
 				}
 			case sqlparser.LikeStr:
 				filteredColName, err = checkLikeOpt(rightString, colNames)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 
