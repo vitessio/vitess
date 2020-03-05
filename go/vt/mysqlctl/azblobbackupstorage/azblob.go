@@ -23,6 +23,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/url"
 	"os"
 	"strings"
@@ -40,7 +41,7 @@ var (
 	accountName = flag.String("azblob_backup_account_name", "", "Azure Storage account name for backups, if this flag is unset the environment paramater VITESS_AZBLOB_ACCOUNT_NAME will be used")
 
 	// This is the private access key
-	accountKey = flag.String("azblob_backup_account_key", "", "Azure Storage account key,if this flag is unset the environment paramater VITESS_AZBLOB_ACCOUNT_KEY will be used")
+	accountKeyFile = flag.String("azblob_backup_account_key_file", "", "A file containing the Azure Storage account key,if this flag is unset the environment paramater VITESS_AZBLOB_ACCOUNT_KEY will be used")
 
 	// This is the name of the container that will store the backups
 	containerName = flag.String("azblob_backup_container_name", "", "Azure Blob Container Name")
@@ -67,15 +68,19 @@ func azCredentials() (*azblob.SharedKeyCredential, error) {
 		actName = os.Getenv("VITESS_AZBLOB_ACCOUNT_NAME")
 	}
 
-	actKey := *accountKey
-	if len(actKey) == 0 {
+	var actKey string
+	if len(*accountKeyFile) > 0 {
+		if dat, err := ioutil.ReadFile(*accountKeyFile); err != nil {
+			actKey = string(dat)
+		}
+	} else {
 		actKey = os.Getenv("VITESS_AZBLOB_ACCOUNT_KEY")
 	}
 
 	if len(actName) == 0 || len(actKey) == 0 {
 		return nil, fmt.Errorf("can not get Azure Storage account credentials from CLI or Environment variables")
 	}
-	return azblob.NewSharedKeyCredential(*accountName, *accountKey)
+	return azblob.NewSharedKeyCredential(actName, actKey)
 }
 
 func azServiceURL(credentials azblob.Credential) azblob.ServiceURL {
