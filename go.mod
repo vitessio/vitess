@@ -29,7 +29,7 @@ require (
 	github.com/golangci/gocyclo v0.0.0-20180528144436-0a533e8fa43d // indirect
 	github.com/golangci/golangci-lint v1.21.0 // indirect
 	github.com/golangci/revgrep v0.0.0-20180812185044-276a5c0a1039 // indirect
-	github.com/google/go-cmp v0.3.0
+	github.com/google/go-cmp v0.4.0
 	github.com/google/shlex v0.0.0-20181106134648-c34317bd91bf // indirect
 	github.com/gorilla/websocket v1.4.0
 	github.com/gostaticanalysis/analysisutil v0.0.3 // indirect
@@ -55,10 +55,8 @@ require (
 	github.com/philhofer/fwd v1.0.0 // indirect
 	github.com/pires/go-proxyproto v0.0.0-20191211124218-517ecdf5bb2b
 	github.com/pkg/errors v0.8.1
-	github.com/prometheus/client_golang v1.1.0
-	github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4 // indirect
-	github.com/prometheus/common v0.7.0
-	github.com/prometheus/procfs v0.0.5 // indirect
+	github.com/prometheus/client_golang v1.4.1
+	github.com/prometheus/common v0.9.1
 	github.com/satori/go.uuid v0.0.0-20160713180306-0aa62d5ddceb // indirect
 	github.com/securego/gosec v0.0.0-20191217083152-cb4f343eaff1 // indirect
 	github.com/spf13/afero v1.2.2 // indirect
@@ -79,7 +77,6 @@ require (
 	golang.org/x/lint v0.0.0-20190409202823-959b441ac422
 	golang.org/x/net v0.0.0-20190926025831-c00fd9afed17
 	golang.org/x/oauth2 v0.0.0-20190604053449-0f29369cfe45
-	golang.org/x/sys v0.0.0-20191218084908-4a24b4065292 // indirect
 	golang.org/x/text v0.3.2
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 	golang.org/x/tools v0.0.0-20191219041853-979b82bfef62
@@ -91,4 +88,5 @@ require (
 	honnef.co/go/tools v0.0.1-2019.2.3
 	mvdan.cc/unparam v0.0.0-20191111180625-960b1ec0f2c2 // indirect
 	sourcegraph.com/sqs/pbtypes v1.0.0 // indirect
+	vitess.io/vitess/examples/are-you-alive v0.0.0-20200302220708-6b7695375ce9 // indirect
 )
