@@ -19,6 +19,9 @@ package vtgate
 import (
 	"context"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"net/http/httptest"
 
@@ -75,4 +78,38 @@ func TestScatterStatsHttpWriting(t *testing.T) {
 	// If it wasn't, instead of html, we'll get an error message
 	require.Contains(t, recorder.Body.String(), query4)
 	require.NoError(t, err)
+}
+
+func TestDivideOrReturnZero(t *testing.T) {
+	// Expected types
+	timeDurationZero := time.Duration(0)
+	unitZero := uint64(0)
+	intZero := int64(0)
+	timeDurationOne := time.Duration(1)
+	uintOne := uint64(1)
+	intOne := int64(1)
+
+	resultZero := float64(0)
+	resultOne := float64(1)
+
+	assert.Equal(t, divideOrReturnZero(timeDurationOne, timeDurationZero), resultZero)
+	assert.Equal(t, divideOrReturnZero(timeDurationOne, unitZero), resultZero)
+	assert.Equal(t, divideOrReturnZero(timeDurationOne, intZero), resultZero)
+	assert.Equal(t, divideOrReturnZero(timeDurationOne, timeDurationOne), resultOne)
+	assert.Equal(t, divideOrReturnZero(timeDurationOne, uintOne), resultOne)
+	assert.Equal(t, divideOrReturnZero(timeDurationOne, intOne), resultOne)
+	assert.Equal(t, divideOrReturnZero(uintOne, timeDurationOne), resultOne)
+	assert.Equal(t, divideOrReturnZero(uintOne, uintOne), resultOne)
+	assert.Equal(t, divideOrReturnZero(uintOne, intOne), resultOne)
+	assert.Equal(t, divideOrReturnZero(intOne, timeDurationOne), resultOne)
+	assert.Equal(t, divideOrReturnZero(intOne, uintOne), resultOne)
+	assert.Equal(t, divideOrReturnZero(intOne, intOne), resultOne)
+
+	// Unexpected type
+	int16 := int16(1)
+	intArray := [2]int64{1, 2}
+
+	assert.Equal(t, divideOrReturnZero(uintOne, int16), resultZero)
+	assert.Equal(t, divideOrReturnZero(uintOne, intArray), resultZero)
+
 }

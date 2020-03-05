@@ -60,11 +60,11 @@ func castToFloat64(input interface{}) float64 {
 	return 0
 }
 
-func divideOrReturnZero(divident, divisor interface{}) float64 {
+func divideOrReturnZero(dividend, divisor interface{}) float64 {
 	if castToFloat64(divisor) == 0 {
 		return 0
 	}
-	return castToFloat64(divident) / castToFloat64(divisor)
+	return castToFloat64(dividend) / castToFloat64(divisor)
 }
 
 func (e *Executor) gatherScatterStats() (statsResults, error) {
