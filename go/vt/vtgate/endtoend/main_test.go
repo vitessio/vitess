@@ -17,6 +17,7 @@ limitations under the License.
 package endtoend
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -212,7 +213,24 @@ func TestMain(m *testing.M) {
 		mysqlParams = cluster.MySQLConnParams()
 		grpcAddress = fmt.Sprintf("localhost:%d", cluster.Env.PortForProtocol("vtcombo", "grpc"))
 
+		insertStartValue()
+
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+func insertStartValue() {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
+
+	// lets insert a single starting value for tests
+	_, err = conn.ExecuteFetch("insert into t1_last_insert_id(id1) values(42)", 1000, true)
+	if err != nil {
+		panic(err)
+	}
 }
