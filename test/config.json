@@ -19,7 +19,7 @@
 					"test/client_test.sh"
 			],
 			"Manual": false,
-			"Shard": 5,
+			"Shard": 25,
 			"RetryMax": 0,
 			"Tags": []
 		},
