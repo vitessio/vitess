@@ -86,7 +86,7 @@ func azCredentials() (*azblob.SharedKeyCredential, error) {
 	return azblob.NewSharedKeyCredential(actName, actKey)
 }
 
-func azServiceURL(credentials azblob.Credential) azblob.ServiceURL {
+func azServiceURL(credentials *azblob.SharedKeyCredential) azblob.ServiceURL {
 	pipeline := azblob.NewPipeline(credentials, azblob.PipelineOptions{
 		Retry: azblob.RetryOptions{
 			Policy:   azblob.RetryPolicyFixed,
@@ -96,7 +96,7 @@ func azServiceURL(credentials azblob.Credential) azblob.ServiceURL {
 			TryTimeout: 4 * time.Hour,
 		},
 	})
-	u, _ := url.Parse(fmt.Sprintf("https://%s.blob.core.windows.net/", *accountName))
+	u, _ := url.Parse(fmt.Sprintf("https://%s.blob.core.windows.net/", credentials.AccountName()))
 	return azblob.NewServiceURL(*u, pipeline)
 }
 
