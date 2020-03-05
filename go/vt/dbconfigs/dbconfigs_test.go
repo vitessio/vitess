@@ -261,6 +261,60 @@ func TestInit(t *testing.T) {
 	}
 }
 
+func TestInitTimeout(t *testing.T) {
+	f := saveDBConfigs()
+	defer f()
+
+	baseConfig = mysql.ConnParams{
+		Host:             "a",
+		Port:             1,
+		Uname:            "b",
+		Pass:             "c",
+		DbName:           "d",
+		UnixSocket:       "e",
+		Charset:          "f",
+		Flags:            2,
+		Flavor:           "flavor",
+		ConnectTimeoutMs: 250,
+	}
+	dbConfigs = DBConfigs{
+		userConfigs: map[string]*userConfig{
+			App: {
+				param: mysql.ConnParams{
+					Uname: "app",
+					Pass:  "apppass",
+				},
+			},
+		},
+	}
+
+	dbc, err := Init("default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := &DBConfigs{
+		userConfigs: map[string]*userConfig{
+			App: {
+				param: mysql.ConnParams{
+					Host:             "a",
+					Port:             1,
+					Uname:            "app",
+					Pass:             "apppass",
+					UnixSocket:       "e",
+					Charset:          "f",
+					Flags:            2,
+					Flavor:           "flavor",
+					ConnectTimeoutMs: 250,
+				},
+			},
+		},
+	}
+
+	if !reflect.DeepEqual(dbc.userConfigs[App].param, want.userConfigs[App].param) {
+		t.Errorf("dbc: \n%#v, want \n%#v", dbc.userConfigs[App].param, want.userConfigs[App].param)
+	}
+}
+
 func TestAccessors(t *testing.T) {
 	dbc := &DBConfigs{
 		userConfigs: map[string]*userConfig{

@@ -105,6 +105,7 @@ func init() {
 
 	flag.BoolVar(&Config.EnforceStrictTransTables, "enforce_strict_trans_tables", DefaultQsConfig.EnforceStrictTransTables, "If true, vttablet requires MySQL to run with STRICT_TRANS_TABLES or STRICT_ALL_TABLES on. It is recommended to not turn this flag off. Otherwise MySQL may alter your supplied values before saving them to the database.")
 	flag.BoolVar(&Config.EnableConsolidator, "enable-consolidator", DefaultQsConfig.EnableConsolidator, "This option enables the query consolidator.")
+	flag.BoolVar(&Config.EnableConsolidatorReplicas, "enable-consolidator-replicas", DefaultQsConfig.EnableConsolidatorReplicas, "This option enables the query consolidator only on replicas.")
 	flag.BoolVar(&Config.EnableQueryPlanFieldCaching, "enable-query-plan-field-caching", DefaultQsConfig.EnableQueryPlanFieldCaching, "This option fetches & caches fields (columns) when storing query plans")
 }
 
@@ -182,6 +183,7 @@ type TabletConfig struct {
 
 	EnforceStrictTransTables    bool
 	EnableConsolidator          bool
+	EnableConsolidatorReplicas  bool
 	EnableQueryPlanFieldCaching bool
 }
 
@@ -262,6 +264,7 @@ var DefaultQsConfig = TabletConfig{
 
 	EnforceStrictTransTables:    true,
 	EnableConsolidator:          true,
+	EnableConsolidatorReplicas:  false,
 	EnableQueryPlanFieldCaching: true,
 }
 

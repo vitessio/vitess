@@ -259,10 +259,6 @@
 "update user_metadata set email = 'juan@vitess.io' where user_id = 1 limit 10"
 "unsupported: Need to provide order by clause when using limit. Invalid update on vindex: email_user_map"
 
-# update multi column vindex, without values for all the vindex columns
-"update multicolvin set column_c = 2 where kid = 1"
-"unsupported: update does not have values for all the columns in vindex (colb_colc_map)"
-
 # cross-shard update tables
 "update (select id from user) as u set id = 4"
 "unsupported: subqueries in sharded DML"
