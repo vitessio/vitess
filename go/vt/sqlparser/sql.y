@@ -2547,9 +2547,9 @@ function_call_keyword:
   {
   $$ = &MatchExpr{Columns: $3, Expr: $7, Option: $8}
   }
-| GROUP_CONCAT openb distinct_opt select_expression_list order_by_opt separator_opt closeb
+| GROUP_CONCAT openb distinct_opt select_expression_list order_by_opt separator_opt limit_opt closeb
   {
-    $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6}
+    $$ = &GroupConcatExpr{Distinct: $3, Exprs: $4, OrderBy: $5, Separator: $6, Limit: $7}
   }
 | CASE expression_opt when_expression_list else_expression_opt END
   {
