@@ -70,8 +70,11 @@ func azCredentials() (*azblob.SharedKeyCredential, error) {
 
 	var actKey string
 	if len(*accountKeyFile) > 0 {
-		if dat, err := ioutil.ReadFile(*accountKeyFile); err != nil {
+		log.Infof("Getting account crednetials from file: %s", *accountKeyFile)
+		if dat, err := ioutil.ReadFile(*accountKeyFile); err == nil {
 			actKey = string(dat)
+		} else {
+			return nil, err
 		}
 	} else {
 		actKey = os.Getenv("VITESS_AZBLOB_ACCOUNT_KEY")
