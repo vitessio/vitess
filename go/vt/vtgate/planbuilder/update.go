@@ -34,7 +34,7 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 	}
 	eupd := &engine.Update{
 		DML:                 *dml,
-		ChangedVindexValues: make(map[string][]sqltypes.PlanValue),
+		ChangedVindexValues: make(map[string]engine.VindexValues),
 	}
 
 	if dml.Opcode == engine.Unsharded {
@@ -54,10 +54,10 @@ func buildUpdatePlan(upd *sqlparser.Update, vschema ContextVSchema) (*engine.Upd
 // buildChangedVindexesValues adds to the plan all the lookup vindexes that are changing.
 // Updates can only be performed to secondary lookup vindexes with no complex expressions
 // in the set clause.
-func buildChangedVindexesValues(update *sqlparser.Update, colVindexes []*vindexes.ColumnVindex) (map[string][]sqltypes.PlanValue, error) {
-	changedVindexes := make(map[string][]sqltypes.PlanValue)
+func buildChangedVindexesValues(update *sqlparser.Update, colVindexes []*vindexes.ColumnVindex) (map[string]engine.VindexValues, error) {
+	changedVindexes := make(map[string]engine.VindexValues)
 	for i, vindex := range colVindexes {
-		var vindexValues []sqltypes.PlanValue
+		vindexValueMap := make(engine.VindexValues)
 		for _, vcol := range vindex.Columns {
 			// Searching in order of columns in colvindex.
 			found := false
@@ -73,15 +73,12 @@ func buildChangedVindexesValues(update *sqlparser.Update, colVindexes []*vindexe
 				if err != nil {
 					return nil, err
 				}
-				vindexValues = append(vindexValues, pv)
+				vindexValueMap[vcol.String()] = pv
 			}
 		}
-		if len(vindexValues) == 0 {
+		if len(vindexValueMap) == 0 {
 			// Vindex not changing, continue
 			continue
-		}
-		if len(vindexValues) != len(vindex.Columns) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update does not have values for all the columns in vindex (%s)", vindex.Name)
 		}
 
 		if update.Limit != nil && len(update.OrderBy) == 0 {
@@ -96,7 +93,7 @@ func buildChangedVindexesValues(update *sqlparser.Update, colVindexes []*vindexe
 		if !vindex.Owned {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can only update owned vindexes. Invalid update on vindex: %v", vindex.Name)
 		}
-		changedVindexes[vindex.Name] = vindexValues
+		changedVindexes[vindex.Name] = vindexValueMap
 	}
 
 	return changedVindexes, nil
