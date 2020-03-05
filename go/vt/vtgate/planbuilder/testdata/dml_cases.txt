@@ -229,9 +229,9 @@
       1
     ],
     "ChangedVindexValues": {
-      "email_user_map": [
-        "juan@vitess.io"
-      ]
+      "email_user_map": {
+        "email": "juan@vitess.io"
+      }
     },
     "Table": "user_metadata",
     "OwnedVindexQuery": "select user_id, email, address from user_metadata where user_id = 1 for update",
@@ -259,12 +259,12 @@
       1
     ],
     "ChangedVindexValues": {
-      "address_user_map": [
-        "155 5th street"
-      ],
-      "email_user_map": [
-        "juan@vitess.io"
-      ]
+      "address_user_map": {
+        "address": "155 5th street"
+      },
+      "email_user_map": {
+        "email": "juan@vitess.io"
+      }
     },
     "Table": "user_metadata",
     "OwnedVindexQuery": "select user_id, email, address from user_metadata where user_id = 1 for update",
@@ -288,9 +288,9 @@
       1
     ],
     "ChangedVindexValues": {
-      "email_user_map": [
-        "juan@vitess.io"
-      ]
+      "email_user_map": {
+        "email": "juan@vitess.io"
+      }
     },
     "Table": "user_metadata",
     "OwnedVindexQuery": "select user_id, email, address from user_metadata where user_id = 1 order by user_id asc limit 10 for update",
@@ -1777,10 +1777,10 @@
       1
     ],
     "ChangedVindexValues": {
-      "colb_colc_map": [
-        1,
-        2
-      ]
+      "colb_colc_map": {
+        "column_b": 1,
+        "column_c": 2
+      }
     },
     "Table": "multicolvin",
     "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
@@ -1804,13 +1804,13 @@
       1
     ],
     "ChangedVindexValues": {
-      "cola_map": [
-        0
-      ],
-      "colb_colc_map": [
-        1,
-        2
-      ]
+      "cola_map": {
+        "column_a": 0
+      },
+      "colb_colc_map": {
+        "column_b": 1,
+        "column_c": 2
+      }
     },
     "Table": "multicolvin",
     "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
@@ -2106,9 +2106,9 @@
       1
     ],
     "ChangedVindexValues": {
-      "name_user_map": [
-        null
-      ]
+      "name_user_map": {
+        "Name": null
+      }
     },
     "Table": "user",
     "OwnedVindexQuery": "select Id, Name, Costly from user where id = 1 for update",
@@ -2143,9 +2143,9 @@
     },
     "Query": "update user set name = null where id in (1, 2, 3)",
     "ChangedVindexValues": {
-      "name_user_map": [
-        null
-      ]
+      "name_user_map": {
+        "Name": null
+      }
     },
     "Table": "user",
     "OwnedVindexQuery": "select Id, Name, Costly from user where id in (1, 2, 3) for update",
@@ -2165,9 +2165,9 @@
     },
     "Query": "update user set name = null",
     "ChangedVindexValues": {
-      "name_user_map": [
-        null
-      ]
+      "name_user_map": {
+        "Name": null
+      }
     },
     "Table": "user",
     "OwnedVindexQuery": "select Id, Name, Costly from user for update",
@@ -2187,9 +2187,9 @@
     },
     "Query": "update user set name = null where id + 1 = 2",
     "ChangedVindexValues": {
-      "name_user_map": [
-        null
-      ]
+      "name_user_map": {
+        "Name": null
+      }
     },
     "Table": "user",
     "OwnedVindexQuery": "select Id, Name, Costly from user where id + 1 = 2 for update",
@@ -2298,5 +2298,31 @@
     "Table": "user",
     "OwnedVindexQuery": "select Id, Name, Costly from user for update",
     "KsidVindex": "user_index"
+  }
+}
+
+# update multi column vindex, without values for all the vindex columns
+"update multicolvin set column_c = 2 where kid = 1"
+{
+  "Original": "update multicolvin set column_c = 2 where kid = 1",
+  "Instructions": {
+    "Opcode": "UpdateEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update multicolvin set column_c = 2 where kid = 1",
+    "Vindex": "kid_index",
+    "Values": [
+      1
+    ],
+    "ChangedVindexValues": {
+      "colb_colc_map": {
+        "column_c": 2
+      }
+    },
+    "Table": "multicolvin",
+    "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
+    "KsidVindex": "kid_index"
   }
 }

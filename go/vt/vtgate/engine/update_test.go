@@ -203,15 +203,14 @@ func TestUpdateEqualChangedVindex(t *testing.T) {
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
 		},
-		ChangedVindexValues: map[string][]sqltypes.PlanValue{
-			"twocol": {{
-				Value: sqltypes.NewInt64(1),
-			}, {
-				Value: sqltypes.NewInt64(2),
-			}},
-			"onecol": {{
-				Value: sqltypes.NewInt64(3),
-			}},
+		ChangedVindexValues: map[string]VindexValues{
+			"twocol": {
+				"c1": {Value: sqltypes.NewInt64(1)},
+				"c2": {Value: sqltypes.NewInt64(2)},
+			},
+			"onecol": {
+				"c3": {Value: sqltypes.NewInt64(3)},
+			},
 		},
 	}
 
@@ -309,15 +308,14 @@ func TestUpdateScatterChangedVindex(t *testing.T) {
 			OwnedVindexQuery: "dummy_subquery",
 			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
 		},
-		ChangedVindexValues: map[string][]sqltypes.PlanValue{
-			"twocol": {{
-				Value: sqltypes.NewInt64(1),
-			}, {
-				Value: sqltypes.NewInt64(2),
-			}},
-			"onecol": {{
-				Value: sqltypes.NewInt64(3),
-			}},
+		ChangedVindexValues: map[string]VindexValues{
+			"twocol": {
+				"c1": {Value: sqltypes.NewInt64(1)},
+				"c2": {Value: sqltypes.NewInt64(2)},
+			},
+			"onecol": {
+				"c3": {Value: sqltypes.NewInt64(3)},
+			},
 		},
 	}
 
