@@ -9,7 +9,7 @@ issues.
 Security vulnerabilities should be handled quickly and sometimes privately. The primary goal of this
 process is to reduce the total time users are vulnerable to publicly known exploits.
 
-The Vitess [maintainers](MAINTAINERS.md) team is responsible for the entire response including internal communication and external disclosure. In the future, we may delagate responsibility to a sub-team as other projects have elected to do so.
+The Vitess [maintainers](MAINTAINERS.md) team is responsible for the entire response including internal communication and external disclosure. In the future, we may delegate responsibility to a sub-team as other projects have elected to do so.
 
 ## Disclosures
 
@@ -20,11 +20,11 @@ The Vitess community asks that all suspected vulnerabilities be privately and re
 ### Public Disclosure Processes
 
 If you know of a publicly disclosed security vulnerability please IMMEDIATELY email
-[vitess-maintainers](mailto:cncf-vitess-maintainers@lists.cncf.io) to inform about the vulnerability so that we may start the patch, release, and communication process.
+[vitess-maintainers](mailto:cncf-vitess-maintainers@lists.cncf.io) so that we may start the patch, release, and communication process.
 
 ## Patch, Release, and Public Communication
 
-For each vulnerability a member of the maintainers team will volunteer to lead coordination of the fix (Fix Lead), and ensure that it is backported to each supported branch. They will then coordinate with the remainder of the maintainers team to coordinate new releases and ensure a communication plan is in place for vulnerability disclosure.
+For each reported vulnerability, a member of the maintainers team will volunteer to lead coordination of the fix (Fix Lead), and ensure that it is backported to each supported branch. They will then coordinate with the remainder of the maintainers team to coordinate new releases and ensure a communication plan is in place for vulnerability disclosure.
 
 All of the timelines below are suggestions and assume a private disclosure. The Fix Lead drives the
 schedule using their best judgment based on severity and development time. If the Fix Lead is
