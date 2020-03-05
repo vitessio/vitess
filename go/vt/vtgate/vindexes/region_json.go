@@ -38,9 +38,11 @@ func init() {
 // RegionMap is used to store mapping of country to region
 type RegionMap map[string]uint64
 
-// RegionJson defines a vindex that uses a lookup table.
-// The table is expected to define the id column as unique. It's
-// Unique and a Lookup.
+// RegionJson is a multi-column unique vindex
+// The first column is used to lookup the prefix part of the keyspace id, the second column is hashed,
+// and the two values are combined to produce the keyspace id.
+// RegionJson can be used for geo-partitioning because the first column can denote a region,
+// and it will dictate the shard range for that region.
 type RegionJson struct {
 	name        string
 	regionMap   RegionMap
