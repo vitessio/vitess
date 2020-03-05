@@ -48,6 +48,25 @@ type statsResultItem struct {
 	Count                  uint64
 }
 
+func castToFloat64(input interface{}) float64 {
+	switch input.(type) {
+	case int64:
+		return float64(input.(int64))
+	case uint64:
+		return float64(input.(uint64))
+	case time.Duration:
+		return float64(input.(time.Duration))
+	}
+	return 0
+}
+
+func divideOrReturnZero(dividend, divisor interface{}) float64 {
+	if castToFloat64(divisor) == 0 {
+		return 0
+	}
+	return castToFloat64(dividend) / castToFloat64(divisor)
+}
+
 func (e *Executor) gatherScatterStats() (statsResults, error) {
 	scatterExecTime := time.Duration(0)
 	readOnlyTime := time.Duration(0)
@@ -91,11 +110,11 @@ func (e *Executor) gatherScatterStats() (statsResults, error) {
 		route := routes[i]
 		resultItems[i] = &statsResultItem{
 			Query:                  plan.Original,
-			AvgTimePerQuery:        time.Duration(plan.ExecTime.Nanoseconds() / int64(plan.ExecCount)),
-			PercentTimeOfReads:     float64(100 * plan.ExecTime / readOnlyTime),
-			PercentTimeOfScatters:  float64(100 * plan.ExecTime / scatterExecTime),
-			PercentCountOfReads:    float64(100 * plan.ExecCount / readOnlyCount),
-			PercentCountOfScatters: float64(100 * plan.ExecCount / scatterCount),
+			AvgTimePerQuery:        time.Duration(divideOrReturnZero(plan.ExecTime.Nanoseconds(), plan.ExecCount)),
+			PercentTimeOfReads:     100 * divideOrReturnZero(plan.ExecTime, readOnlyTime),
+			PercentTimeOfScatters:  100 * divideOrReturnZero(plan.ExecTime, scatterExecTime),
+			PercentCountOfReads:    100 * divideOrReturnZero(plan.ExecCount, readOnlyTime),
+			PercentCountOfScatters: 100 * divideOrReturnZero(plan.ExecCount, scatterCount),
 			From:                   route.Keyspace.Name + "." + route.TableName,
 			Count:                  plan.ExecCount,
 		}
