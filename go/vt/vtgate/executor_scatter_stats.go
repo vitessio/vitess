@@ -113,7 +113,7 @@ func (e *Executor) gatherScatterStats() (statsResults, error) {
 			AvgTimePerQuery:        time.Duration(divideOrReturnZero(plan.ExecTime.Nanoseconds(), plan.ExecCount)),
 			PercentTimeOfReads:     100 * divideOrReturnZero(plan.ExecTime, readOnlyTime),
 			PercentTimeOfScatters:  100 * divideOrReturnZero(plan.ExecTime, scatterExecTime),
-			PercentCountOfReads:    100 * divideOrReturnZero(plan.ExecCount, readOnlyTime),
+			PercentCountOfReads:    100 * divideOrReturnZero(plan.ExecCount, readOnlyCount),
 			PercentCountOfScatters: 100 * divideOrReturnZero(plan.ExecCount, scatterCount),
 			From:                   route.Keyspace.Name + "." + route.TableName,
 			Count:                  plan.ExecCount,
