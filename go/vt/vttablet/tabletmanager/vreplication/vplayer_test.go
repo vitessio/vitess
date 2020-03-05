@@ -173,6 +173,7 @@ func TestPlayerFilters(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
+
 	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
@@ -181,6 +182,7 @@ func TestPlayerFilters(t *testing.T) {
 		output []string
 		table  string
 		data   [][]string
+		logs   []LogExpectation // logs are defined for a few testcases since they are enough to test all log events
 	}{{
 		// insert with insertNormal
 		input: "insert into src1 values(1, 'aaa')",
@@ -193,6 +195,11 @@ func TestPlayerFilters(t *testing.T) {
 		table: "dst1",
 		data: [][]string{
 			{"1", "aaa"},
+		},
+		logs: []LogExpectation{
+			{"FIELD", "/src1.*id.*INT32.*val.*VARBINARY.*"},
+			{"ROWCHANGE", "insert into dst1(id,val) values (1,'aaa')"},
+			{"ROW", "/src1.*3.*1aaa.*"},
 		},
 	}, {
 		// update with insertNormal
@@ -207,6 +214,10 @@ func TestPlayerFilters(t *testing.T) {
 		data: [][]string{
 			{"1", "bbb"},
 		},
+		logs: []LogExpectation{
+			{"ROWCHANGE", "update dst1 set val='bbb' where id=1"},
+			{"ROW", "/src1.*3.*1aaa.*"},
+		},
 	}, {
 		// delete with insertNormal
 		input: "delete from src1 where id=1",
@@ -218,6 +229,10 @@ func TestPlayerFilters(t *testing.T) {
 		},
 		table: "dst1",
 		data:  [][]string{},
+		logs: []LogExpectation{
+			{"ROWCHANGE", "delete from dst1 where id=1"},
+			{"ROW", "/src1.*3.*1bbb.*"},
+		},
 	}, {
 		// insert with insertOnDup
 		input: "insert into src2 values(1, 2, 3)",
@@ -231,6 +246,10 @@ func TestPlayerFilters(t *testing.T) {
 		data: [][]string{
 			{"1", "2", "3", "1"},
 		},
+		logs: []LogExpectation{
+			{"FIELD", "/src2.*id.*val1.*val2.*"},
+			{"ROWCHANGE", "insert into dst2(id,val1,sval2,rcount) values (1,2,ifnull(3, 0),1) on duplicate key update val1=values(val1), sval2=sval2+ifnull(values(sval2), 0), rcount=rcount+1"},
+		},
 	}, {
 		// update with insertOnDup
 		input: "update src2 set val1=5, val2=1 where id=1",
@@ -243,6 +262,10 @@ func TestPlayerFilters(t *testing.T) {
 		table: "dst2",
 		data: [][]string{
 			{"1", "5", "1", "1"},
+		},
+		logs: []LogExpectation{
+			{"ROWCHANGE", "update dst2 set val1=5, sval2=sval2-ifnull(3, 0)+ifnull(1, 0), rcount=rcount where id=1"},
+			{"ROW", "/src2.*123.*"},
 		},
 	}, {
 		// delete with insertOnDup
@@ -365,11 +388,15 @@ func TestPlayerFilters(t *testing.T) {
 		data:  [][]string{},
 	}}
 
-	for _, tcases := range testcases {
-		execStatements(t, []string{tcases.input})
-		expectDBClientQueries(t, tcases.output)
-		if tcases.table != "" {
-			expectData(t, tcases.table, tcases.data)
+	for _, tcase := range testcases {
+		if tcase.logs != nil {
+			logch := vrLogStatsLogger.Subscribe("vrlogstats")
+			defer expectLogsAndUnsubscribe(t, tcase.logs, logch)
+		}
+		execStatements(t, []string{tcase.input})
+		expectDBClientQueries(t, tcase.output)
+		if tcase.table != "" {
+			expectData(t, tcase.table, tcase.data)
 		}
 	}
 }
