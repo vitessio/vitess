@@ -124,6 +124,11 @@ func NewDBConnection(info *mysql.ConnParams, mysqlStats *stats.Timings) (*DBConn
 		return nil, err
 	}
 	ctx := context.Background()
+	if info.ConnectTimeoutMs != 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(info.ConnectTimeoutMs)*time.Millisecond)
+		defer cancel()
+	}
 	c, err := mysql.Connect(ctx, params)
 	if err != nil {
 		mysqlStats.Record("ConnectError", start)
