@@ -638,6 +638,7 @@ type (
 		Exprs     SelectExprs
 		OrderBy   OrderBy
 		Separator string
+		Limit     *Limit
 	}
 
 	// ValuesFuncExpr represents a function call.
@@ -1550,7 +1551,7 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *GroupConcatExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("group_concat(%s%v%v%s)", node.Distinct, node.Exprs, node.OrderBy, node.Separator)
+	buf.Myprintf("group_concat(%s%v%v%s%v)", node.Distinct, node.Exprs, node.OrderBy, node.Separator, node.Limit)
 }
 
 // Format formats the node.
