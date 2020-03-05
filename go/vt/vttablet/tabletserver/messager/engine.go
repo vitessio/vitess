@@ -18,17 +18,13 @@ package messager
 
 import (
 	"sync"
-	"time"
 
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -40,7 +36,6 @@ import (
 // TabletService defines the functions of TabletServer
 // that the messager needs for callback.
 type TabletService interface {
-	CheckMySQL()
 	PostponeMessages(ctx context.Context, target *querypb.Target, name string, ids []string) (count int64, err error)
 	PurgeMessages(ctx context.Context, target *querypb.Target, name string, timeCutoff int64) (count int64, err error)
 }
@@ -54,8 +49,6 @@ type VStreamer interface {
 
 // Engine is the engine for handling messages.
 type Engine struct {
-	dbconfigs *dbconfigs.DBConfigs
-
 	mu       sync.Mutex
 	isOpen   bool
 	managers map[string]*messageManager
@@ -63,31 +56,18 @@ type Engine struct {
 	tsv          TabletService
 	se           *schema.Engine
 	vs           VStreamer
-	conns        *connpool.Pool
 	postponeSema *sync2.Semaphore
 }
 
 // NewEngine creates a new Engine.
 func NewEngine(tsv TabletService, se *schema.Engine, vs VStreamer, config tabletenv.TabletConfig) *Engine {
 	return &Engine{
-		tsv: tsv,
-		se:  se,
-		vs:  vs,
-		conns: connpool.New(
-			config.PoolNamePrefix+"MessagerPool",
-			config.MessagePoolSize,
-			config.MessagePoolPrefillParallelism,
-			time.Duration(config.IdleTimeout*1e9),
-			tsv,
-		),
+		tsv:          tsv,
+		se:           se,
+		vs:           vs,
 		postponeSema: sync2.NewSemaphore(config.MessagePostponeCap, 0),
 		managers:     make(map[string]*messageManager),
 	}
-}
-
-// InitDBConfig must be called before Open.
-func (me *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
-	me.dbconfigs = dbcfgs
 }
 
 // Open starts the Engine service.
@@ -96,7 +76,6 @@ func (me *Engine) Open() error {
 		return nil
 	}
 
-	me.conns.Open(me.dbconfigs.AppWithDB(), me.dbconfigs.DbaWithDB(), me.dbconfigs.AppDebugWithDB())
 	me.se.RegisterNotifier("messages", me.schemaChanged)
 	me.isOpen = true
 	return nil
@@ -115,7 +94,6 @@ func (me *Engine) Close() {
 		mm.Close()
 	}
 	me.managers = make(map[string]*messageManager)
-	me.conns.Close()
 }
 
 // Subscribe subscribes to messages from the requested table.
@@ -136,29 +114,6 @@ func (me *Engine) Subscribe(ctx context.Context, name string, send func(*sqltype
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found", name)
 	}
 	return mm.Subscribe(ctx, send), nil
-}
-
-// LockDB obtains db locks for all messages that need to
-// be updated and returns the counterpart unlock function.
-func (me *Engine) LockDB(newMessages map[string][]*MessageRow, changedMessages map[string][]string) func() {
-	return func() {}
-}
-
-// UpdateCaches updates the caches for the committed changes.
-func (me *Engine) UpdateCaches(newMessages map[string][]*MessageRow, changedMessages map[string][]string) {
-	return
-}
-
-// GenerateLoadMessagesQuery returns the ParsedQuery for loading messages by pk.
-// The results of the query can be used in a BuildMessageRow call.
-func (me *Engine) GenerateLoadMessagesQuery(name string) (*sqlparser.ParsedQuery, error) {
-	me.mu.Lock()
-	defer me.mu.Unlock()
-	mm := me.managers[name]
-	if mm == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "message table %s not found in schema", name)
-	}
-	return mm.loadMessagesQuery, nil
 }
 
 // GenerateAckQuery returns the query and bind vars for acking a message.
@@ -210,7 +165,7 @@ func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altere
 			log.Errorf("Newly created table already exists in messages: %s", name)
 			continue
 		}
-		mm := newMessageManager(me.tsv, me.vs, t, me.conns, me.postponeSema)
+		mm := newMessageManager(me.tsv, me.vs, t, me.postponeSema)
 		me.managers[name] = mm
 		mm.Open()
 	}

@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -166,9 +165,8 @@ type receiverWithStatus struct {
 // This thread is mostly independent. It wakes up periodically
 // to delete old rows that were successfully acked.
 type messageManager struct {
-	DBLock sync.Mutex
-	tsv    TabletService
-	vs     VStreamer
+	tsv TabletService
+	vs  VStreamer
 
 	name         sqlparser.TableIdent
 	fieldResult  *sqltypes.Result
@@ -177,7 +175,6 @@ type messageManager struct {
 	batchSize    int
 	pollerTicks  *timer.Timer
 	purgeTicks   *timer.Timer
-	conns        *connpool.Pool
 	postponeSema *sync2.Semaphore
 
 	mu     sync.Mutex
@@ -192,6 +189,16 @@ type messageManager struct {
 	curReceiver     int
 	messagesPending bool
 
+	// streamMu keeps the cache and database consistent with each other.
+	// Specifically:
+	// It prevents items from being removed from cache while the poller
+	// reads from the db and adds items to it. Otherwise, the poller
+	// might add an older snapshot of a row that was just postponed.
+	// It blocks vstreamer from receiving messages while the poller
+	// reads a snapshot and updates lastPollPosition. Any events older than
+	// lastPollPosition must be ignored by the vstreamer. It consequently
+	// also blocks vstreamer from updating the cache while the poller is
+	// active.
 	streamMu         sync.Mutex
 	streamCancel     func()
 	lastPollPosition *mysql.Position
@@ -202,18 +209,17 @@ type messageManager struct {
 	// The goroutine must in turn defer on Done.
 	wg sync.WaitGroup
 
-	vsFilter          *binlogdatapb.Filter
-	readByTimeNext    *sqlparser.ParsedQuery
-	loadMessagesQuery *sqlparser.ParsedQuery
-	ackQuery          *sqlparser.ParsedQuery
-	postponeQuery     *sqlparser.ParsedQuery
-	purgeQuery        *sqlparser.ParsedQuery
+	vsFilter       *binlogdatapb.Filter
+	readByTimeNext *sqlparser.ParsedQuery
+	ackQuery       *sqlparser.ParsedQuery
+	postponeQuery  *sqlparser.ParsedQuery
+	purgeQuery     *sqlparser.ParsedQuery
 }
 
 // newMessageManager creates a new message manager.
 // Calls into tsv have to be made asynchronously. Otherwise,
 // it can lead to deadlocks.
-func newMessageManager(tsv TabletService, vs VStreamer, table *schema.Table, conns *connpool.Pool, postponeSema *sync2.Semaphore) *messageManager {
+func newMessageManager(tsv TabletService, vs VStreamer, table *schema.Table, postponeSema *sync2.Semaphore) *messageManager {
 	mm := &messageManager{
 		tsv:  tsv,
 		vs:   vs,
@@ -227,7 +233,6 @@ func newMessageManager(tsv TabletService, vs VStreamer, table *schema.Table, con
 		cache:           newCache(table.MessageInfo.CacheSize),
 		pollerTicks:     timer.NewTimer(table.MessageInfo.PollInterval),
 		purgeTicks:      timer.NewTimer(table.MessageInfo.PollInterval),
-		conns:           conns,
 		postponeSema:    postponeSema,
 		messagesPending: true,
 	}
@@ -244,9 +249,6 @@ func newMessageManager(tsv TabletService, vs VStreamer, table *schema.Table, con
 	mm.readByTimeNext = sqlparser.BuildParsedQuery(
 		"select time_next, epoch, time_created, %s from %v where time_next < %a order by time_next desc limit %a",
 		columnList, mm.name, ":time_next", ":max")
-	mm.loadMessagesQuery = sqlparser.BuildParsedQuery(
-		"select time_next, epoch, time_created, %s from %v where %a",
-		columnList, mm.name, ":#pk")
 	mm.ackQuery = sqlparser.BuildParsedQuery(
 		"update %v set time_acked = %a, time_next = null where id in %a and time_acked is null",
 		mm.name, ":time_acked", "::ids")
@@ -689,20 +691,13 @@ func (mm *messageManager) runPoller() {
 		tabletenv.LogError()
 		cancel()
 	}()
-	conn, err := mm.conns.Get(ctx)
-	if err != nil {
-		tabletenv.InternalErrors.Add("Messages", 1)
-		log.Errorf("Error getting connection: %v", err)
-		return
-	}
-	defer conn.Recycle()
 
 	size := mm.cache.Size()
 	bindVars := map[string]*querypb.BindVariable{
 		"time_next": sqltypes.Int64BindVariable(time.Now().UnixNano()),
 		"max":       sqltypes.Int64BindVariable(int64(size)),
 	}
-	qr, err := mm.readPending(ctx, conn, bindVars)
+	qr, err := mm.readPending(ctx, bindVars)
 	if err != nil {
 		return
 	}
@@ -841,7 +836,7 @@ func (mm *messageManager) receiverCount() int {
 	return len(mm.receivers)
 }
 
-func (mm *messageManager) readPending(ctx context.Context, conn *connpool.DBConn, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (mm *messageManager) readPending(ctx context.Context, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	query, err := mm.readByTimeNext.GenerateQuery(bindVars, nil)
 	if err != nil {
 		tabletenv.InternalErrors.Add("Messages", 1)

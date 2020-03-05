@@ -757,8 +757,6 @@ type fakeTabletServer struct {
 
 func newFakeTabletServer() *fakeTabletServer { return &fakeTabletServer{} }
 
-func (fts *fakeTabletServer) CheckMySQL() {}
-
 func (fts *fakeTabletServer) SetChannel(ch chan string) {
 	fts.mu.Lock()
 	fts.ch = ch
