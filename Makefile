@@ -324,11 +324,11 @@ packages: docker_base
 
 tools:
 	echo $$(date): Installing dependencies
-	./bootstrap.sh
+	BUILD_PYTHON=0 ./bootstrap.sh
 
 minimaltools:
 	echo $$(date): Installing minimal dependencies
-	BUILD_JAVA=0 BUILD_CONSUL=0 ./bootstrap.sh
+	BUILD_PYTHON=0 BUILD_JAVA=0 BUILD_CONSUL=0 ./bootstrap.sh
 
 dependency_check:
 	./tools/dependency_check.sh
