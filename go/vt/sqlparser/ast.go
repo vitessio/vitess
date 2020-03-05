@@ -626,10 +626,11 @@ type (
 
 	// FuncExpr represents a function call.
 	FuncExpr struct {
-		Qualifier TableIdent
-		Name      ColIdent
-		Distinct  bool
-		Exprs     SelectExprs
+		Qualifier        TableIdent
+		Name             ColIdent
+		Distinct         bool
+		Exprs            SelectExprs
+		ThisShouldFailCI Expr
 	}
 
 	// GroupConcatExpr represents a call to GROUP_CONCAT
