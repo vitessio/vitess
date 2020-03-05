@@ -299,10 +299,10 @@ func (te *TxEngine) Begin(ctx context.Context, options *querypb.ExecuteOptions) 
 }
 
 // Commit commits the specified transaction.
-func (te *TxEngine) Commit(ctx context.Context, transactionID int64, mc messageCommitter) (string, error) {
+func (te *TxEngine) Commit(ctx context.Context, transactionID int64) (string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxEngine.Commit")
 	defer span.Finish()
-	return te.txPool.Commit(ctx, transactionID, mc)
+	return te.txPool.Commit(ctx, transactionID)
 }
 
 // Rollback rolls back the specified transaction.

@@ -245,7 +245,7 @@ type TxPoolController interface {
 
 	// Commit commits the specified transaction, returning the statement used to execute
 	// the commit or "" in autocommit settings.
-	Commit(ctx context.Context, transactionID int64, mc messageCommitter) (string, error)
+	Commit(ctx context.Context, transactionID int64) (string, error)
 
 	// Rollback rolls back the specified transaction.
 	Rollback(ctx context.Context, transactionID int64) error
@@ -394,7 +394,6 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.hr.InitDBConfig(tsv.dbconfigs)
 	tsv.watcher.InitDBConfig(tsv.dbconfigs)
 	tsv.vstreamer.InitDBConfig(tsv.dbconfigs.DbaWithDB())
-	tsv.messager.InitDBConfig(tsv.dbconfigs)
 	return nil
 }
 
@@ -811,7 +810,7 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, tra
 			logStats.TransactionID = transactionID
 
 			var commitSQL string
-			commitSQL, err = tsv.teCtrl.Commit(ctx, transactionID, tsv.messager)
+			commitSQL, err = tsv.teCtrl.Commit(ctx, transactionID)
 
 			// If nothing was actually executed, don't count the operation in
 			// the tablet metrics, and clear out the logStats Method so that
@@ -851,7 +850,6 @@ func (tsv *TabletServer) Prepare(ctx context.Context, target *querypb.Target, tr
 				ctx:      ctx,
 				logStats: logStats,
 				te:       tsv.te,
-				messager: tsv.messager,
 			}
 			return txe.Prepare(transactionID, dtid)
 		},
@@ -869,7 +867,6 @@ func (tsv *TabletServer) CommitPrepared(ctx context.Context, target *querypb.Tar
 				ctx:      ctx,
 				logStats: logStats,
 				te:       tsv.te,
-				messager: tsv.messager,
 			}
 			return txe.CommitPrepared(dtid)
 		},
@@ -887,7 +884,6 @@ func (tsv *TabletServer) RollbackPrepared(ctx context.Context, target *querypb.T
 				ctx:      ctx,
 				logStats: logStats,
 				te:       tsv.te,
-				messager: tsv.messager,
 			}
 			return txe.RollbackPrepared(dtid, originalID)
 		},
@@ -905,7 +901,6 @@ func (tsv *TabletServer) CreateTransaction(ctx context.Context, target *querypb.
 				ctx:      ctx,
 				logStats: logStats,
 				te:       tsv.te,
-				messager: tsv.messager,
 			}
 			return txe.CreateTransaction(dtid, participants)
 		},
@@ -924,7 +919,6 @@ func (tsv *TabletServer) StartCommit(ctx context.Context, target *querypb.Target
 				ctx:      ctx,
 				logStats: logStats,
 				te:       tsv.te,
-				messager: tsv.messager,
 			}
 			return txe.StartCommit(transactionID, dtid)
 		},
@@ -943,7 +937,6 @@ func (tsv *TabletServer) SetRollback(ctx context.Context, target *querypb.Target
 				ctx:      ctx,
 				logStats: logStats,
 				te:       tsv.te,
-				messager: tsv.messager,
 			}
 			return txe.SetRollback(dtid, transactionID)
 		},
@@ -962,7 +955,6 @@ func (tsv *TabletServer) ConcludeTransaction(ctx context.Context, target *queryp
 				ctx:      ctx,
 				logStats: logStats,
 				te:       tsv.te,
-				messager: tsv.messager,
 			}
 			return txe.ConcludeTransaction(dtid)
 		},
@@ -980,7 +972,6 @@ func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Ta
 				ctx:      ctx,
 				logStats: logStats,
 				te:       tsv.te,
-				messager: tsv.messager,
 			}
 			metadata, err = txe.ReadTransaction(dtid)
 			return err
@@ -2138,7 +2129,6 @@ func (tsv *TabletServer) registerTwopczHandler() {
 			ctx:      ctx,
 			logStats: tabletenv.NewLogStats(ctx, "twopcz"),
 			te:       tsv.te,
-			messager: tsv.messager,
 		}
 		twopczHandler(txe, w, r)
 	})
