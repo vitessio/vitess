@@ -1,9 +1,9 @@
-name: java_test
+name: misc test
 on: [push, pull_request]
 jobs:
 
   build:
-    name: Java Test
+    name: Misc Test
     runs-on: ubuntu-latest
     steps:
 
@@ -15,6 +15,6 @@ jobs:
     - name: Check out code
       uses: actions/checkout@v2
 
-    - name: Run java test
+    - name: Run Misc test which requires docker
       run: |
-        go run test.go -docker=true java
+        go run test.go -docker=true -shard 25
