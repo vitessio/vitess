@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,11 +22,11 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -66,7 +66,7 @@ type Pool struct {
 	idleTimeout        time.Duration
 	dbaPool            *dbconnpool.ConnectionPool
 	checker            MySQLChecker
-	appDebugParams     *mysql.ConnParams
+	appDebugParams     dbconfigs.Connector
 }
 
 // New creates a new Pool. The name is used
@@ -98,6 +98,7 @@ func New(
 	stats.NewCounterDurationFunc(name+"WaitTime", "Tablet server wait time", cp.WaitTime)
 	stats.NewGaugeDurationFunc(name+"IdleTimeout", "Tablet server idle timeout", cp.IdleTimeout)
 	stats.NewCounterFunc(name+"IdleClosed", "Tablet server conn pool idle closed", cp.IdleClosed)
+	stats.NewCounterFunc(name+"Exhausted", "Number of times pool had zero available slots", cp.Exhausted)
 	return cp
 }
 
@@ -109,7 +110,7 @@ func (cp *Pool) pool() (p *pools.ResourcePool) {
 }
 
 // Open must be called before starting to use the pool.
-func (cp *Pool) Open(appParams, dbaParams, appDebugParams *mysql.ConnParams) {
+func (cp *Pool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 
@@ -296,10 +297,23 @@ func (cp *Pool) IdleClosed() int64 {
 	return p.IdleClosed()
 }
 
+// Exhausted returns the number of times available went to zero for the pool.
+func (cp *Pool) Exhausted() int64 {
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.Exhausted()
+}
+
 func (cp *Pool) isCallerIDAppDebug(ctx context.Context) bool {
-	if cp.appDebugParams == nil || cp.appDebugParams.Uname == "" {
+	params, err := cp.appDebugParams.MysqlParams()
+	if err != nil {
+		return false
+	}
+	if params == nil || params.Uname == "" {
 		return false
 	}
 	callerID := callerid.ImmediateCallerIDFromContext(ctx)
-	return callerID != nil && callerID.Username == cp.appDebugParams.Uname
+	return callerID != nil && callerID.Username == params.Uname
 }

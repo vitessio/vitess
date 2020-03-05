@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -240,7 +240,7 @@ func (t *TxThrottler) Close() {
 // Throttle should be called before a new transaction is started.
 // It returns true if the transaction should not proceed (the caller
 // should back off). Throttle requires that Open() was previously called
-// successfuly.
+// successfully.
 func (t *TxThrottler) Throttle() (result bool) {
 	if !t.config.enabled {
 		return false

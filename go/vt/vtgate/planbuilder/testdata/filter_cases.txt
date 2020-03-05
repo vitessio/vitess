@@ -9,7 +9,8 @@
       "Sharded": true
     },
     "Query": "select id from user",
-    "FieldQuery": "select id from user where 1 != 1"
+    "FieldQuery": "select id from user where 1 != 1",
+    "Table": "user"
   }
 }
 
@@ -26,7 +27,10 @@
     "Query": "select id from user where user.id = 5",
     "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": [5]
+    "Values": [
+      5
+    ],
+    "Table": "user"
   }
 }
 
@@ -41,7 +45,8 @@
       "Sharded": true
     },
     "Query": "select id from user where user.id = 5 + 5",
-    "FieldQuery": "select id from user where 1 != 1"
+    "FieldQuery": "select id from user where 1 != 1",
+    "Table": "user"
   }
 }
 
@@ -58,7 +63,10 @@
     "Query": "select id from music where id = 5 and user_id = 4",
     "FieldQuery": "select id from music where 1 != 1",
     "Vindex": "user_index",
-    "Values": [4]
+    "Values": [
+      4
+    ],
+    "Table": "music"
   }
 }
 
@@ -75,7 +83,10 @@
     "Query": "select id from user where costly = 'aa' and name = 'bb'",
     "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "name_user_map",
-    "Values": ["bb"]
+    "Values": [
+      "bb"
+    ],
+    "Table": "user"
   }
 }
 
@@ -93,8 +104,12 @@
     "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "name_user_map",
     "Values": [
-      ["aa", "bb"]
-    ]
+      [
+        "aa",
+        "bb"
+      ]
+    ],
+    "Table": "user"
   }
 }
 
@@ -109,7 +124,8 @@
       "Sharded": true
     },
     "Query": "select id from user where name in (col, 'bb')",
-    "FieldQuery": "select id from user where 1 != 1"
+    "FieldQuery": "select id from user where 1 != 1",
+    "Table": "user"
   }
 }
 
@@ -126,7 +142,10 @@
     "Query": "select id from user where name = :a",
     "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "name_user_map",
-    "Values": [":a"]
+    "Values": [
+      ":a"
+    ],
+    "Table": "user"
   }
 }
 
@@ -143,7 +162,10 @@
     "Query": "select id from user where name = 18446744073709551615",
     "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "name_user_map",
-    "Values": [18446744073709551615]
+    "Values": [
+      18446744073709551615
+    ],
+    "Table": "user"
   }
 }
 
@@ -160,7 +182,10 @@
     "Query": "select id from user where name in ::__vals",
     "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "name_user_map",
-    "Values": ["::list"]
+    "Values": [
+      "::list"
+    ],
+    "Table": "user"
   }
 }
 
@@ -177,7 +202,10 @@
     "Query": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user.id = 5",
     "FieldQuery": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where 1 != 1",
     "Vindex": "user_index",
-    "Values": [5]
+    "Values": [
+      5
+    ],
+    "Table": "user"
   }
 }
 
@@ -194,7 +222,10 @@
     "Query": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
     "FieldQuery": "select user_extra.id from user join user_extra on user.id = user_extra.user_id where 1 != 1",
     "Vindex": "user_index",
-    "Values": [5]
+    "Values": [
+      5
+    ],
+    "Table": "user"
   }
 }
 
@@ -211,7 +242,10 @@
     "Query": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user.id = 5",
     "FieldQuery": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where 1 != 1",
     "Vindex": "user_index",
-    "Values": [5]
+    "Values": [
+      5
+    ],
+    "Table": "user"
   }
 }
 
@@ -220,13 +254,18 @@
 {
   "Original": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
   "Instructions": {
-    "Opcode": "SelectScatter",
+    "Opcode": "SelectEqualUnique",
     "Keyspace": {
       "Name": "user",
       "Sharded": true
     },
     "Query": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where user_extra.user_id = 5",
-    "FieldQuery": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where 1 != 1"
+    "FieldQuery": "select user_extra.id from user left join user_extra on user.id = user_extra.user_id where 1 != 1",
+    "Vindex": "user_index",
+    "Values": [
+      5
+    ],
+    "Table": "user"
   }
 }
 
@@ -245,7 +284,10 @@
       "Query": "select user.col from user where user.id = 5",
       "FieldQuery": "select user.col from user where 1 != 1",
       "Vindex": "user_index",
-      "Values": [5]
+      "Values": [
+        5
+      ],
+      "Table": "user"
     },
     "Right": {
       "Opcode": "SelectScatter",
@@ -254,7 +296,8 @@
         "Sharded": true
       },
       "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
-      "FieldQuery": "select user_extra.id from user_extra where 1 != 1"
+      "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+      "Table": "user_extra"
     },
     "Cols": [
       1
@@ -280,7 +323,10 @@
       "Query": "select user.col from user where user.id = 5",
       "FieldQuery": "select user.col from user where 1 != 1",
       "Vindex": "user_index",
-      "Values": [5]
+      "Values": [
+        5
+      ],
+      "Table": "user"
     },
     "Right": {
       "Opcode": "SelectEqualUnique",
@@ -291,7 +337,10 @@
       "Query": "select user_extra.id from user_extra where user_extra.col = :user_col and user_extra.user_id = 5",
       "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
       "Vindex": "user_index",
-      "Values": [5]
+      "Values": [
+        5
+      ],
+      "Table": "user_extra"
     },
     "Cols": [
       1
@@ -315,7 +364,8 @@
         "Sharded": true
       },
       "Query": "select user.col from user",
-      "FieldQuery": "select user.col from user where 1 != 1"
+      "FieldQuery": "select user.col from user where 1 != 1",
+      "Table": "user"
     },
     "Right": {
       "Opcode": "SelectEqualUnique",
@@ -326,7 +376,10 @@
       "Query": "select user_extra.id from user_extra where user_extra.col = :user_col and user_extra.user_id = :user_col",
       "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
       "Vindex": "user_index",
-      "Values": [":user_col"]
+      "Values": [
+        ":user_col"
+      ],
+      "Table": "user_extra"
     },
     "Cols": [
       1
@@ -350,7 +403,8 @@
         "Sharded": true
       },
       "Query": "select user.col from user where 1 = 1",
-      "FieldQuery": "select user.col from user where 1 != 1"
+      "FieldQuery": "select user.col from user where 1 != 1",
+      "Table": "user"
     },
     "Right": {
       "Opcode": "SelectScatter",
@@ -359,7 +413,8 @@
         "Sharded": true
       },
       "Query": "select user_extra.id from user_extra where user_extra.col = :user_col",
-      "FieldQuery": "select user_extra.id from user_extra where 1 != 1"
+      "FieldQuery": "select user_extra.id from user_extra where 1 != 1",
+      "Table": "user_extra"
     },
     "Cols": [
       1
@@ -384,8 +439,12 @@
     "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "user_index",
     "Values": [
-      [1, 2]
-    ]
+      [
+        1,
+        2
+      ]
+    ],
+    "Table": "user"
   }
 }
 
@@ -403,8 +462,12 @@
     "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "user_index",
     "Values": [
-      [1, 2]
-    ]
+      [
+        1,
+        2
+      ]
+    ],
+    "Table": "user"
   }
 }
 
@@ -421,7 +484,10 @@
     "Query": "select (id or col) as val from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa'",
     "FieldQuery": "select (id or col) as val from user where 1 != 1",
     "Vindex": "name_user_map",
-    "Values": ["aa"]
+    "Values": [
+      "aa"
+    ],
+    "Table": "user"
   }
 }
 
@@ -438,7 +504,10 @@
     "Query": "select id from user where user.col = false and user.id in (1, 2) and user.name = 'aa'",
     "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "name_user_map",
-    "Values": ["aa"]
+    "Values": [
+      "aa"
+    ],
+    "Table": "user"
   }
 }
 
@@ -455,7 +524,10 @@
     "Query": "select id from user where user.col = 5 and user.id in (1, 2) and user.name = 'aa' and user.id = 1",
     "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": [1]
+    "Values": [
+      1
+    ],
+    "Table": "user"
   }
 }
 
@@ -472,7 +544,10 @@
     "Query": "select id from user where user.id = 1 and user.name = 'aa' and user.id in (1, 2) and user.col = 5",
     "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": [1]
+    "Values": [
+      1
+    ],
+    "Table": "user"
   }
 }
 
@@ -487,7 +562,8 @@
       "Sharded": true
     },
     "Query": "select id from user where (user.id = 1 or user.name = 'aa' and user.id in (1, 2))",
-    "FieldQuery": "select id from user where 1 != 1"
+    "FieldQuery": "select id from user where 1 != 1",
+    "Table": "user"
   }
 }
 
@@ -504,7 +580,8 @@
         "Sharded": true
       },
       "Query": "select user.id from user",
-      "FieldQuery": "select user.id from user where 1 != 1"
+      "FieldQuery": "select user.id from user where 1 != 1",
+      "Table": "user"
     },
     "Right": {
       "Opcode": "SelectUnsharded",
@@ -513,7 +590,8 @@
         "Sharded": false
       },
       "Query": "select unsharded.id from unsharded where unsharded.id = :user_id",
-      "FieldQuery": "select unsharded.id from unsharded where 1 != 1"
+      "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+      "Table": "unsharded"
     },
     "Cols": [
       1
@@ -539,7 +617,8 @@
     "Vindex": "user_index",
     "Values": [
       1
-    ]
+    ],
+    "Table": "user"
   }
 }
 
@@ -558,7 +637,8 @@
     "Vindex": "email_user_map",
     "Values": [
       "aaa"
-    ]
+    ],
+    "Table": "user_metadata"
   }
 }
 
@@ -590,7 +670,8 @@
         "Sharded": true
       },
       "Query": "select user_extra.col from user_extra",
-      "FieldQuery": "select user_extra.col from user_extra where 1 != 1"
+      "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+      "Table": "user_extra"
     },
     "Right": {
       "Opcode": "SelectIN",
@@ -602,8 +683,12 @@
       "FieldQuery": "select u.m from user as u where 1 != 1",
       "Vindex": "user_index",
       "Values": [
-        [":user_extra_col", 1]
-      ]
+        [
+          ":user_extra_col",
+          1
+        ]
+      ],
+      "Table": "user"
     },
     "Cols": [
       1
@@ -627,7 +712,8 @@
         "Sharded": true
       },
       "Query": "select 1 from user_extra",
-      "FieldQuery": "select 1 from user_extra where 1 != 1"
+      "FieldQuery": "select 1 from user_extra where 1 != 1",
+      "Table": "user_extra"
     },
     "Right": {
       "Opcode": "SelectEqualUnique",
@@ -638,7 +724,10 @@
       "Query": "select u.m from user as u where u.id = 5 and u.id in (select m2 from user where user.id = 5)",
       "FieldQuery": "select u.m from user as u where 1 != 1",
       "Vindex": "user_index",
-      "Values": [5]
+      "Values": [
+        5
+      ],
+      "Table": "user"
     },
     "Cols": [
       1
@@ -659,7 +748,8 @@
         "Sharded": true
       },
       "Query": "select user_extra.col from user_extra",
-      "FieldQuery": "select user_extra.col from user_extra where 1 != 1"
+      "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+      "Table": "user_extra"
     },
     "Right": {
       "Opcode": "SelectIN",
@@ -671,8 +761,12 @@
       "FieldQuery": "select u.m from user as u where 1 != 1",
       "Vindex": "user_index",
       "Values": [
-        [":user_extra_col", 1]
-      ]
+        [
+          ":user_extra_col",
+          1
+        ]
+      ],
+      "Table": "user"
     },
     "Cols": [
       1
@@ -694,7 +788,8 @@
       "Sharded": true
     },
     "Query": "select id from user where user.col in (select user_extra.col from user_extra where user_extra.user_id = user.id)",
-    "FieldQuery": "select id from user where 1 != 1"
+    "FieldQuery": "select id from user where 1 != 1",
+    "Table": "user"
   }
 }
 
@@ -711,7 +806,10 @@
     "Query": "select id from user where id = 5 and user.col in (select user_extra.col from user_extra where user_extra.user_id = 5)",
     "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": [5]
+    "Values": [
+      5
+    ],
+    "Table": "user"
   }
 }
 
@@ -728,7 +826,10 @@
     "Query": "select id from user where id = 'aa' and user.col in (select user_extra.col from user_extra where user_extra.user_id = 'aa')",
     "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": ["aa"]
+    "Values": [
+      "aa"
+    ],
+    "Table": "user"
   }
 }
 
@@ -745,7 +846,10 @@
     "Query": "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a)",
     "FieldQuery": "select id from user where 1 != 1",
     "Vindex": "user_index",
-    "Values": [":a"]
+    "Values": [
+      ":a"
+    ],
+    "Table": "user"
   }
 }
 
@@ -764,7 +868,8 @@
       "Sharded": true
     },
     "Query": "select id2 from user as uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))",
-    "FieldQuery": "select id2 from user as uu where 1 != 1"
+    "FieldQuery": "select id2 from user as uu where 1 != 1",
+    "Table": "user"
   }
 }
 
@@ -784,7 +889,8 @@
         "Sharded": true
       },
       "Query": "select col from user",
-      "FieldQuery": "select col from user where 1 != 1"
+      "FieldQuery": "select col from user where 1 != 1",
+      "Table": "user"
     },
     "Underlying": {
       "Opcode": "SelectIN",
@@ -797,7 +903,8 @@
       "Vindex": "user_index",
       "Values": [
         "::__sq1"
-      ]
+      ],
+      "Table": "user"
     }
   }
 }
@@ -817,7 +924,8 @@
         "Sharded": true
       },
       "Query": "select col from user",
-      "FieldQuery": "select col from user where 1 != 1"
+      "FieldQuery": "select col from user where 1 != 1",
+      "Table": "user"
     },
     "Underlying": {
       "Opcode": "SelectScatter",
@@ -826,7 +934,8 @@
         "Sharded": true
       },
       "Query": "select id from user where (:__sq_has_values1 = 0 or (id not in ::__sq1))",
-      "FieldQuery": "select id from user where 1 != 1"
+      "FieldQuery": "select id from user where 1 != 1",
+      "Table": "user"
     }
   }
 }
@@ -846,7 +955,8 @@
         "Sharded": true
       },
       "Query": "select col from user",
-      "FieldQuery": "select col from user where 1 != 1"
+      "FieldQuery": "select col from user where 1 != 1",
+      "Table": "user"
     },
     "Underlying": {
       "Opcode": "SelectScatter",
@@ -855,7 +965,8 @@
         "Sharded": true
       },
       "Query": "select id from user where :__sq_has_values1",
-      "FieldQuery": "select id from user where 1 != 1"
+      "FieldQuery": "select id from user where 1 != 1",
+      "Table": "user"
     }
   }
 }
@@ -875,7 +986,8 @@
         "Sharded": true
       },
       "Query": "select col from user",
-      "FieldQuery": "select col from user where 1 != 1"
+      "FieldQuery": "select col from user where 1 != 1",
+      "Table": "user"
     },
     "Underlying": {
       "Opcode": "SelectEqualUnique",
@@ -888,7 +1000,8 @@
       "Vindex": "user_index",
       "Values": [
         ":__sq1"
-      ]
+      ],
+      "Table": "user"
     }
   }
 }
@@ -912,7 +1025,8 @@
           "Sharded": true
         },
         "Query": "select id3 from user",
-        "FieldQuery": "select id3 from user where 1 != 1"
+        "FieldQuery": "select id3 from user where 1 != 1",
+        "Table": "user"
       },
       "Underlying": {
         "Opcode": "SelectScatter",
@@ -921,7 +1035,8 @@
           "Sharded": true
         },
         "Query": "select id2 from user where :__sq_has_values1 = 1 and (id2 in ::__sq1)",
-        "FieldQuery": "select id2 from user where 1 != 1"
+        "FieldQuery": "select id2 from user where 1 != 1",
+        "Table": "user"
       }
     },
     "Underlying": {
@@ -935,7 +1050,8 @@
       "Vindex": "user_index",
       "Values": [
         ":__sq2"
-      ]
+      ],
+      "Table": "user"
     }
   }
 }
@@ -951,7 +1067,8 @@
       "Sharded": true
     },
     "Query": "select col from user where id = (select id from user as route2 where route2.id = user.id)",
-    "FieldQuery": "select col from user where 1 != 1"
+    "FieldQuery": "select col from user where 1 != 1",
+    "Table": "user"
   }
 }
 
@@ -970,7 +1087,8 @@
         "Sharded": false
       },
       "Query": "select id from unsharded as route2",
-      "FieldQuery": "select id from unsharded as route2 where 1 != 1"
+      "FieldQuery": "select id from unsharded as route2 where 1 != 1",
+      "Table": "unsharded"
     },
     "Underlying": {
       "Opcode": "SelectEqualUnique",
@@ -983,7 +1101,8 @@
       "Vindex": "user_index",
       "Values": [
         ":__sq1"
-      ]
+      ],
+      "Table": "user"
     }
   }
 }
@@ -1001,7 +1120,10 @@
     "Query": "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where user.Id = 5",
     "FieldQuery": "select user_extra.Id from user join user_extra on user.iD = user_extra.User_Id where 1 != 1",
     "Vindex": "user_index",
-    "Values": [5]
+    "Values": [
+      5
+    ],
+    "Table": "user"
   }
 }
 
@@ -1016,7 +1138,8 @@
       "Sharded": true
     },
     "Query": "select id from user where database()",
-    "FieldQuery": "select id from user where 1 != 1"
+    "FieldQuery": "select id from user where 1 != 1",
+    "Table": "user"
   }
 }
 

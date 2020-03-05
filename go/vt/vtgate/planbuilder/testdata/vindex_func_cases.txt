@@ -88,7 +88,11 @@
         "type": 10262
       }
     ],
-    "Cols": [0, 1, 0],
+    "Cols": [
+      0,
+      1,
+      0
+    ],
     "Vindex": "user_index",
     "Value": ":id"
   }
@@ -128,7 +132,6 @@
   }
 }
 
-
 # You can even join with a vindexFunc primitive
 "select user_index.keyspace_id, unsharded.id from user_index join unsharded where user_index.id = :id"
 {
@@ -143,7 +146,9 @@
           "type": 10262
         }
       ],
-      "Cols": [1],
+      "Cols": [
+        1
+      ],
       "Vindex": "user_index",
       "Value": ":id"
     },
@@ -154,9 +159,13 @@
         "Sharded": false
       },
       "Query": "select unsharded.id from unsharded",
-      "FieldQuery": "select unsharded.id from unsharded where 1 != 1"
+      "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+      "Table": "unsharded"
     },
-    "Cols": [-1, 1]
+    "Cols": [
+      -1,
+      1
+    ]
   }
 }
 
@@ -173,7 +182,8 @@
         "Sharded": false
       },
       "Query": "select unsharded.id from unsharded",
-      "FieldQuery": "select unsharded.id from unsharded where 1 != 1"
+      "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+      "Table": "unsharded"
     },
     "Right": {
       "Opcode": "VindexMap",
@@ -228,7 +238,8 @@
         "Sharded": false
       },
       "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id",
-      "FieldQuery": "select unsharded.id from unsharded where 1 != 1"
+      "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+      "Table": "unsharded"
     },
     "Cols": [
       -1,
@@ -273,7 +284,8 @@
         "Sharded": false
       },
       "Query": "select unsharded.id from unsharded where unsharded.id = :user_index_id",
-      "FieldQuery": "select unsharded.id from unsharded where 1 != 1"
+      "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+      "Table": "unsharded"
     },
     "Cols": [
       -1,
@@ -317,7 +329,8 @@
         "Sharded": false
       },
       "Query": "select unsharded.id from unsharded where unsharded.id = :ui_id",
-      "FieldQuery": "select unsharded.id from unsharded where 1 != 1"
+      "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+      "Table": "unsharded"
     },
     "Cols": [
       -1,
@@ -331,3 +344,22 @@
 
 "select none from user_index where id = :id"
 "symbol none not found in table or subquery"
+
+"select * from samecolvin where col = :col"
+{
+  "Original": "select * from samecolvin where col = :col",
+  "Instructions": {
+    "Opcode": "SelectEqualUnique",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "select col from samecolvin where col = :col",
+    "FieldQuery": "select col from samecolvin where 1 != 1",
+    "Vindex": "vindex1",
+    "Values": [
+      ":col"
+    ],
+    "Table": "samecolvin"
+  }
+}

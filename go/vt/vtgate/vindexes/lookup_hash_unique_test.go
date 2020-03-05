@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -31,12 +33,13 @@ func TestLookupHashUniqueNew(t *testing.T) {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
 
-	l, _ = CreateVindex("lookup_hash_unique", "lookup_hash_unique", map[string]string{
+	vindex, _ := CreateVindex("lookup_hash_unique", "lookup_hash_unique", map[string]string{
 		"table":      "t",
 		"from":       "fromc",
 		"to":         "toc",
 		"write_only": "true",
 	})
+	l = vindex.(SingleColumn)
 	if want, got := l.(*LookupHashUnique).writeOnly, true; got != want {
 		t.Errorf("Create(lookup, false): %v, want %v", got, want)
 	}
@@ -53,11 +56,12 @@ func TestLookupHashUniqueNew(t *testing.T) {
 	}
 }
 
-func TestLookupHashUniqueCost(t *testing.T) {
+func TestLookupHashUniqueInfo(t *testing.T) {
 	lhu := createLookup(t, "lookup_hash_unique", false)
-	if lhu.Cost() != 10 {
-		t.Errorf("Cost(): %d, want 10", lhu.Cost())
-	}
+	assert.Equal(t, 10, lhu.Cost())
+	assert.Equal(t, "lookup_hash_unique", lhu.String())
+	assert.True(t, lhu.IsUnique())
+	assert.True(t, lhu.NeedsVCursor())
 }
 
 func TestLookupHashUniqueMap(t *testing.T) {
@@ -65,9 +69,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 	vc := &vcursor{numRows: 1}
 
 	got, err := lhu.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []key.Destination{
 		key.DestinationKeyspaceID([]byte("\x16k@\xb4J\xbaK\xd6")),
 		key.DestinationKeyspaceID([]byte("\x16k@\xb4J\xbaK\xd6")),
@@ -78,9 +80,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 
 	vc.numRows = 0
 	got, err = lhu.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want = []key.Destination{
 		key.DestinationNone{},
 		key.DestinationNone{},
@@ -102,9 +102,7 @@ func TestLookupHashUniqueMap(t *testing.T) {
 		"notint",
 	)
 	got, err = lhu.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1)})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want = []key.Destination{
 		key.DestinationNone{},
 	}
@@ -127,9 +125,7 @@ func TestLookupHashUniqueMapWriteOnly(t *testing.T) {
 	vc := &vcursor{numRows: 0}
 
 	got, err := lhu.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []key.Destination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{},
@@ -152,9 +148,7 @@ func TestLookupHashUniqueVerify(t *testing.T) {
 	got, err := lhu.Verify(vc,
 		[]sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)},
 		[][]byte{[]byte("\x16k@\xb4J\xbaK\xd6"), []byte("\x06\xe7\xea\"Βp\x8f")})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []bool{true, true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("lhu.Verify(match): %v, want %v", got, want)
@@ -162,9 +156,7 @@ func TestLookupHashUniqueVerify(t *testing.T) {
 
 	vc.numRows = 0
 	got, err = lhu.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want = []bool{false}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("lhu.Verify(mismatch): %v, want %v", got, want)
@@ -182,9 +174,7 @@ func TestLookupHashUniqueVerifyWriteOnly(t *testing.T) {
 	vc := &vcursor{numRows: 0}
 
 	got, err := lhu.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, [][]byte{[]byte("test")})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []bool{true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("lhu.Verify: %v, want %v", got, want)
@@ -199,9 +189,7 @@ func TestLookupHashUniqueCreate(t *testing.T) {
 	vc := &vcursor{}
 
 	err := lhu.(Lookup).Create(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, [][]byte{[]byte("\x16k@\xb4J\xbaK\xd6")}, false /* ignoreMode */)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if got, want := len(vc.queries), 1; got != want {
 		t.Errorf("vc.queries length: %v, want %v", got, want)
 	}
@@ -218,9 +206,7 @@ func TestLookupHashUniqueDelete(t *testing.T) {
 	vc := &vcursor{}
 
 	err := lhu.(Lookup).Delete(vc, [][]sqltypes.Value{{sqltypes.NewInt64(1)}}, []byte("\x16k@\xb4J\xbaK\xd6"))
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if got, want := len(vc.queries), 1; got != want {
 		t.Errorf("vc.queries length: %v, want %v", got, want)
 	}
@@ -237,9 +223,7 @@ func TestLookupHashUniqueUpdate(t *testing.T) {
 	vc := &vcursor{}
 
 	err := lhu.(Lookup).Update(vc, []sqltypes.Value{sqltypes.NewInt64(1)}, []byte("\x16k@\xb4J\xbaK\xd6"), []sqltypes.Value{sqltypes.NewInt64(2)})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if got, want := len(vc.queries), 2; got != want {
 		t.Errorf("vc.queries length: %v, want %v", got, want)
 	}

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -56,6 +56,9 @@ var (
 // JAEGER_AGENT_PORT
 func newJagerTracerFromEnv(serviceName string) (tracingService, io.Closer, error) {
 	cfg, err := config.FromEnv()
+	if err != nil {
+		return nil, nil, err
+	}
 	if cfg.ServiceName == "" {
 		cfg.ServiceName = serviceName
 	}
@@ -79,9 +82,19 @@ func newJagerTracerFromEnv(serviceName string) (tracingService, io.Closer, error
 
 	opentracing.SetGlobalTracer(tracer)
 
-	return openTracingService{tracer}, closer, nil
+	return openTracingService{Tracer: &jaegerTracer{actual: tracer}}, closer, nil
 }
 
 func init() {
 	tracingBackendFactories["opentracing-jaeger"] = newJagerTracerFromEnv
+}
+
+var _ tracer = (*jaegerTracer)(nil)
+
+type jaegerTracer struct {
+	actual opentracing.Tracer
+}
+
+func (jt *jaegerTracer) GetOpenTracingTracer() opentracing.Tracer {
+	return jt.actual
 }

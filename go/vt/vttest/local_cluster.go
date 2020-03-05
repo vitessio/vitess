@@ -1,5 +1,5 @@
 /*
-Copyright 2017 GitHub Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -29,6 +29,12 @@ import (
 	"path/filepath"
 	"strings"
 	"unicode"
+
+	"vitess.io/vitess/go/vt/proto/logutil"
+	// we need to import the grpcvtctlclient library so the gRPC
+	// vtctl client is registered and can be used.
+	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
+	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -74,12 +80,6 @@ type Config struct {
 	// Charset is the default charset used by MySQL
 	Charset string
 
-	// WebDir is the location of the vtcld web server files
-	WebDir string
-
-	// WebDir2 is the location of the vtcld2 web server files
-	WebDir2 string
-
 	// ExtraMyCnf are the extra .CNF files to be added to the MySQL config
 	ExtraMyCnf []string
 
@@ -91,7 +91,6 @@ type Config struct {
 	// MySQL protocol bind address.
 	// vtcombo will bind to this address when exposing the mysql protocol socket
 	MySQLBindHost string
-
 	// SnapshotFile is the path to the MySQL Snapshot that will be used to
 	// initialize the mysqld instance in the cluster. Note that some environments
 	// do not suppport initialization through snapshot files.
@@ -101,6 +100,15 @@ type Config struct {
 	TransactionMode string
 
 	TransactionTimeout float64
+
+	// The host name to use for the table otherwise it will be resolved from the local hostname
+	TabletHostName string
+
+	// Whether to enable/disable workflow manager
+	InitWorkflowManager bool
+
+	// Authorize vschema ddl operations to a list of users
+	VSchemaDDLAuthorizedUsers string
 }
 
 // InitSchemas is a shortcut for tests that just want to setup a single
@@ -235,6 +243,16 @@ func (db *LocalCluster) Setup() error {
 		return err
 	}
 
+	if !db.OnlyMySQL {
+		log.Infof("Starting vtcombo...")
+		db.vt = VtcomboProcess(db.Env, &db.Config, db.mysql)
+		if err := db.vt.WaitStart(); err != nil {
+			return err
+		}
+		log.Infof("vtcombo up: %s", db.vt.Address())
+	}
+
+	// Load schema will apply db and vschema migrations. Running after vtcombo starts to be able to apply vschema migrations
 	if err := db.loadSchema(); err != nil {
 		return err
 	}
@@ -243,15 +261,6 @@ func (db *LocalCluster) Setup() error {
 		if err := db.populateWithRandomData(); err != nil {
 			return err
 		}
-	}
-
-	if !db.OnlyMySQL {
-		log.Infof("Starting vtcombo...")
-		db.vt = VtcomboProcess(db.Env, &db.Config, db.mysql)
-		if err := db.vt.WaitStart(); err != nil {
-			return err
-		}
-		log.Infof("vtcombo up: %s", db.vt.Address())
 	}
 
 	return nil
@@ -307,6 +316,7 @@ func isDir(path string) bool {
 	return err == nil && info.IsDir()
 }
 
+// loadSchema applies sql and vschema migrations respectively for each keyspace in the topology
 func (db *LocalCluster) loadSchema() error {
 	if db.SchemaDir == "" {
 		return nil
@@ -342,10 +352,24 @@ func (db *LocalCluster) loadSchema() error {
 				return err
 			}
 
+			// One single vschema migration per file
+			if !db.OnlyMySQL && len(cmds) == 1 && strings.HasPrefix(strings.ToUpper(cmds[0]), "ALTER VSCHEMA") {
+				if err = db.applyVschema(keyspace, cmds[0]); err != nil {
+					return err
+				}
+				continue
+			}
+
 			for _, dbname := range db.shardNames(kpb) {
 				if err := db.Execute(cmds, dbname); err != nil {
 					return err
 				}
+			}
+		}
+
+		if !db.OnlyMySQL {
+			if err := db.reloadSchemaKeyspace(keyspace); err != nil {
+				return err
 			}
 		}
 	}
@@ -430,6 +454,34 @@ func (db *LocalCluster) JSONConfig() interface{} {
 	}
 
 	return config
+}
+
+// GrpcPort returns the grpc port used by vtcombo
+func (db *LocalCluster) GrpcPort() int {
+	return db.vt.PortGrpc
+}
+
+func (db *LocalCluster) applyVschema(keyspace string, migration string) error {
+	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
+	args := []string{"ApplyVSchema", "-sql", migration, keyspace}
+	fmt.Printf("Applying vschema %v", args)
+	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {
+		log.Info(e)
+	})
+
+	return err
+}
+
+func (db *LocalCluster) reloadSchemaKeyspace(keyspace string) error {
+	server := fmt.Sprintf("localhost:%v", db.vt.PortGrpc)
+	args := []string{"ReloadSchemaKeyspace", "-include_master=true", keyspace}
+	fmt.Printf("Reloading keyspace schema %v", args)
+
+	err := vtctlclient.RunCommandAndWait(context.Background(), server, args, func(e *logutil.Event) {
+		log.Info(e)
+	})
+
+	return err
 }
 
 // LoadSQLFile loads a parses a .sql file from disk, removing all the

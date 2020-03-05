@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2018 The Vitess Authors.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,35 +17,32 @@
 # this script brings up zookeeper and all the vitess components
 # required for a single shard deployment.
 
-set -e
-
-# shellcheck disable=SC2128
-script_root=$(dirname "${BASH_SOURCE}")
+source ./env.sh
 
 # start topo server
 if [ "${TOPO}" = "zk2" ]; then
-    CELL=zone1 "$script_root/zk-up.sh"
+ CELL=zone1 ./scripts/zk-up.sh
 else
-    CELL=zone1 "$script_root/etcd-up.sh"
+ CELL=zone1 ./scripts/etcd-up.sh
 fi
 
 # start vtctld
-CELL=zone1 "$script_root/vtctld-up.sh"
+CELL=zone1 ./scripts/vtctld-up.sh
 
 # start vttablets for keyspace commerce
-CELL=zone1 KEYSPACE=commerce UID_BASE=100 "$script_root/vttablet-up.sh"
-sleep 15
+for i in 100 101 102; do
+ CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
+ CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ./scripts/vttablet-up.sh
+done
 
 # set one of the replicas to master
-./lvtctl.sh InitShardMaster -force commerce/0 zone1-100
+vtctlclient -server localhost:15999 InitShardMaster -force commerce/0 zone1-100
 
 # create the schema
-./lvtctl.sh ApplySchema -sql-file create_commerce_schema.sql commerce
+vtctlclient -server localhost:15999 ApplySchema -sql-file create_commerce_schema.sql commerce
 
 # create the vschema
-./lvtctl.sh ApplyVSchema -vschema_file vschema_commerce_initial.json commerce
+vtctlclient -server localhost:15999 ApplyVSchema -vschema_file vschema_commerce_initial.json commerce
 
 # start vtgate
-CELL=zone1 "$script_root/vtgate-up.sh"
-
-disown -a
+CELL=zone1 ./scripts/vtgate-up.sh

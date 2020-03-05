@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -48,9 +48,9 @@ func (vind *Null) String() string {
 	return vind.name
 }
 
-// Cost returns the cost of this index as 0.
+// Cost returns the cost of this index as 100.
 func (vind *Null) Cost() int {
-	return 0
+	return 100
 }
 
 // IsUnique returns true since the Vindex is unique.
@@ -58,9 +58,9 @@ func (vind *Null) IsUnique() bool {
 	return true
 }
 
-// IsFunctional returns true since the Vindex is functional.
-func (vind *Null) IsFunctional() bool {
-	return true
+// NeedsVCursor satisfies the Vindex interface.
+func (vind *Null) NeedsVCursor() bool {
+	return false
 }
 
 // Map can map ids to key.Destination objects.

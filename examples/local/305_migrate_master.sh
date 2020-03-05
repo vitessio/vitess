@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2018 The Vitess Authors.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,9 +16,6 @@
 
 # this script migrates traffic for the master tablet
 
-set -e
-
-./lvtctl.sh MigrateServedTypes customer/0 master
+vtctlclient -server localhost:15999 MigrateServedTypes customer/0 master
 # data has been copied over to shards, and databases for the new shards are now available
 
-disown -a

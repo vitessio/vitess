@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -92,8 +91,7 @@ func Init() (*Env, error) {
 				},
 			},
 		},
-		ExtraMyCnf: []string{path.Join(os.Getenv("VTTOP"), "config/mycnf/rbr.cnf")},
-		OnlyMySQL:  true,
+		OnlyMySQL: true,
 	}
 	te.cluster = &vttest.LocalCluster{
 		Config: cfg,
@@ -106,7 +104,7 @@ func Init() (*Env, error) {
 	te.Dbcfgs = dbconfigs.NewTestDBConfigs(te.cluster.MySQLConnParams(), te.cluster.MySQLAppDebugConnParams(), te.cluster.DbName())
 	te.Mysqld = mysqlctl.NewMysqld(te.Dbcfgs)
 	te.SchemaEngine = schema.NewEngine(checker{}, tabletenv.DefaultQsConfig)
-	te.SchemaEngine.InitDBConfig(te.Dbcfgs)
+	te.SchemaEngine.InitDBConfig(te.Dbcfgs.DbaWithDB())
 
 	// The first vschema should not be empty. Leads to Node not found error.
 	// TODO(sougou): need to fix the bug.

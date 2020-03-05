@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,7 +18,6 @@ package sqlparser
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 
@@ -117,7 +116,7 @@ var keywords = map[string]int{
 	"char":                CHAR,
 	"character":           CHARACTER,
 	"charset":             CHARSET,
-	"check":               UNUSED,
+	"check":               CHECK,
 	"collate":             COLLATE,
 	"collation":           COLLATION,
 	"column":              COLUMN,
@@ -156,7 +155,7 @@ var keywords = map[string]int{
 	"describe":            DESCRIBE,
 	"deterministic":       UNUSED,
 	"distinct":            DISTINCT,
-	"distinctrow":         UNUSED,
+	"distinctrow":         DISTINCTROW,
 	"div":                 DIV,
 	"double":              DOUBLE,
 	"drop":                DROP,
@@ -318,11 +317,11 @@ var keywords = map[string]int{
 	"rlike":               REGEXP,
 	"rollback":            ROLLBACK,
 	"schema":              SCHEMA,
-	"schemas":             SCHEMAS,
 	"second_microsecond":  UNUSED,
 	"select":              SELECT,
 	"sensitive":           UNUSED,
 	"separator":           SEPARATOR,
+	"sequence":            SEQUENCE,
 	"serializable":        SERIALIZABLE,
 	"session":             SESSION,
 	"set":                 SET,
@@ -391,12 +390,8 @@ var keywords = map[string]int{
 	"vindex":              VINDEX,
 	"vindexes":            VINDEXES,
 	"view":                VIEW,
-	"vitess_keyspaces":    VITESS_KEYSPACES,
-	"vitess_shards":       VITESS_SHARDS,
-	"vitess_tablets":      VITESS_TABLETS,
-	"vitess_target":       VITESS_TARGET,
+	"vitess_metadata":     VITESS_METADATA,
 	"vschema":             VSCHEMA,
-	"vschema_tables":      VSCHEMA_TABLES,
 	"warnings":            WARNINGS,
 	"when":                WHEN,
 	"where":               WHERE,
@@ -456,15 +451,23 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 	return typ
 }
 
+// PositionedErr holds context related to parser errors
+type PositionedErr struct {
+	Err  string
+	Pos  int
+	Near []byte
+}
+
+func (p PositionedErr) Error() string {
+	if p.Near != nil {
+		return fmt.Sprintf("%s at position %v near '%s'", p.Err, p.Pos, p.Near)
+	}
+	return fmt.Sprintf("%s at position %v", p.Err, p.Pos)
+}
+
 // Error is called by go yacc if there's a parsing error.
 func (tkn *Tokenizer) Error(err string) {
-	buf := &bytes2.Buffer{}
-	if tkn.lastToken != nil {
-		fmt.Fprintf(buf, "%s at position %v near '%s'", err, tkn.Position, tkn.lastToken)
-	} else {
-		fmt.Fprintf(buf, "%s at position %v", err, tkn.Position)
-	}
-	tkn.LastError = errors.New(buf.String())
+	tkn.LastError = PositionedErr{Err: err, Pos: tkn.Position, Near: tkn.lastToken}
 
 	// Try and re-sync to the next statement
 	tkn.skipStatement()

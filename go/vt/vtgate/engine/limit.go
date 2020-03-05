@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -55,6 +55,16 @@ func (l *Limit) MarshalJSON() ([]byte, error) {
 // RouteType returns a description of the query routing type used by the primitive
 func (l *Limit) RouteType() string {
 	return l.Input.RouteType()
+}
+
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (l *Limit) GetKeyspaceName() string {
+	return l.Input.GetKeyspaceName()
+}
+
+// GetTableName specifies the table that this primitive routes to.
+func (l *Limit) GetTableName() string {
+	return l.Input.GetTableName()
 }
 
 // Execute satisfies the Primtive interface.
@@ -149,6 +159,11 @@ func (l *Limit) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.Bind
 // GetFields satisfies the Primtive interface.
 func (l *Limit) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return l.Input.GetFields(vcursor, bindVars)
+}
+
+// Inputs returns the input to limit
+func (l *Limit) Inputs() []Primitive {
+	return []Primitive{l.Input}
 }
 
 func (l *Limit) fetchCount(bindVars map[string]*querypb.BindVariable) (int, error) {

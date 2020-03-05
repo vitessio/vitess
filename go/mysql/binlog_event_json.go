@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -335,7 +335,7 @@ func printJSONDouble(data []byte, toplevel bool, result *bytes.Buffer) {
 }
 
 func printJSONString(data []byte, toplevel bool, result *bytes.Buffer) {
-	size, pos := readVariableInt(data, 0)
+	size, pos := readVariableLength(data, 0)
 
 	// A toplevel JSON string is printed as a JSON-escaped
 	// string inside a string, as the value is parsed as JSON.
@@ -356,7 +356,7 @@ func printJSONString(data []byte, toplevel bool, result *bytes.Buffer) {
 
 func printJSONOpaque(data []byte, toplevel bool, result *bytes.Buffer) error {
 	typ := data[0]
-	size, pos := readVariableInt(data, 1)
+	size, pos := readVariableLength(data, 1)
 
 	// A few types have special encoding.
 	switch typ {
@@ -483,16 +483,24 @@ func readOffsetOrSize(data []byte, pos int, large bool) (int, int) {
 		int(data[pos+1])<<8, pos + 2
 }
 
-func readVariableInt(data []byte, pos int) (int, int) {
-	var b int8
-	var result int
+// readVariableLength implements the logic to decode the length
+// of an arbitrarily long string as implemented by the mysql server
+// https://github.com/mysql/mysql-server/blob/5.7/sql/json_binary.cc#L234
+// https://github.com/mysql/mysql-server/blob/8.0/sql/json_binary.cc#L283
+func readVariableLength(data []byte, pos int) (int, int) {
+	var bb byte
+	var res int
+	var idx byte
 	for {
-		b = int8(data[pos])
+		bb = data[pos]
 		pos++
-		result = (result << 7) + int(b&0x7f)
-		if b >= 0 {
+		res |= int(bb&0x7f) << (7 * idx)
+		// if the high bit is 1, the integer value of the byte will be negative
+		// high bit of 1 signifies that the next byte is part of the length encoding
+		if int8(bb) >= 0 {
 			break
 		}
+		idx++
 	}
-	return result, pos
+	return res, pos
 }

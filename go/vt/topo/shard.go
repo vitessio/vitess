@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,8 +24,10 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"golang.org/x/net/context"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -174,6 +176,16 @@ func (si *ShardInfo) HasMaster() bool {
 	return !topoproto.TabletAliasIsZero(si.Shard.MasterAlias)
 }
 
+// GetMasterTermStartTime returns the shard's master term start time as a Time value.
+func (si *ShardInfo) GetMasterTermStartTime() time.Time {
+	return logutil.ProtoToTime(si.Shard.MasterTermStartTime)
+}
+
+// SetMasterTermStartTime sets the shard's master term start time as a Time value.
+func (si *ShardInfo) SetMasterTermStartTime(t time.Time) {
+	si.Shard.MasterTermStartTime = logutil.TimeToProto(t)
+}
+
 // GetShard is a high level function to read shard data.
 // It generates trace spans.
 func (ts *Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardInfo, error) {
@@ -182,7 +194,7 @@ func (ts *Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardI
 	span.Annotate("shard", shard)
 	defer span.Finish()
 
-	shardPath := path.Join(KeyspacesPath, keyspace, ShardsPath, shard, ShardFile)
+	shardPath := shardFilePath(keyspace, shard)
 	data, version, err := ts.globalCell.Get(ctx, shardPath)
 	if err != nil {
 		return nil, err
@@ -212,7 +224,7 @@ func (ts *Server) updateShard(ctx context.Context, si *ShardInfo) error {
 	if err != nil {
 		return err
 	}
-	shardPath := path.Join(KeyspacesPath, si.keyspace, ShardsPath, si.shardName, ShardFile)
+	shardPath := shardFilePath(si.keyspace, si.shardName)
 	newVersion, err := ts.globalCell.Update(ctx, shardPath, data, si.version)
 	if err != nil {
 		return err
@@ -267,7 +279,7 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 	defer unlock(&err)
 
 	// validate parameters
-	name, keyRange, err := ValidateShardName(shard)
+	_, keyRange, err := ValidateShardName(shard)
 	if err != nil {
 		return err
 	}
@@ -276,33 +288,26 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 		KeyRange: keyRange,
 	}
 
-	isMasterServing := true
-
-	// start the shard IsMasterServing. If it overlaps with
-	// other shards for some serving types, remove them.
-
-	if IsShardUsingRangeBasedSharding(name) {
-		// if we are using range-based sharding, we don't want
-		// overlapping shards to all serve and confuse the clients.
-		sis, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
-		if err != nil && !IsErrType(err, NoNode) {
-			return err
-		}
-		for _, si := range sis {
-			if si.KeyRange == nil || key.KeyRangesIntersect(si.KeyRange, keyRange) {
-				isMasterServing = false
-			}
+	// Set master as serving only if its keyrange doesn't overlap
+	// with other shards. This applies to unsharded keyspaces also
+	value.IsMasterServing = true
+	sis, err := ts.FindAllShardsInKeyspace(ctx, keyspace)
+	if err != nil && !IsErrType(err, NoNode) {
+		return err
+	}
+	for _, si := range sis {
+		if si.KeyRange == nil || key.KeyRangesIntersect(si.KeyRange, keyRange) {
+			value.IsMasterServing = false
+			break
 		}
 	}
-
-	value.IsMasterServing = isMasterServing
 
 	// Marshal and save.
 	data, err := proto.Marshal(value)
 	if err != nil {
 		return err
 	}
-	shardPath := path.Join(KeyspacesPath, keyspace, ShardsPath, shard, ShardFile)
+	shardPath := shardFilePath(keyspace, shard)
 	if _, err := ts.globalCell.Create(ctx, shardPath, data); err != nil {
 		// Return error as is, we need to propagate
 		// ErrNodeExists for instance.
@@ -349,7 +354,7 @@ func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) 
 // DeleteShard wraps the underlying conn.Delete
 // and dispatches the event.
 func (ts *Server) DeleteShard(ctx context.Context, keyspace, shard string) error {
-	shardPath := path.Join(KeyspacesPath, keyspace, ShardsPath, shard, ShardFile)
+	shardPath := shardFilePath(keyspace, shard)
 	if err := ts.globalCell.Delete(ctx, shardPath, nil); err != nil {
 		return err
 	}
@@ -577,4 +582,67 @@ func (ts *Server) GetTabletMapForShardByCell(ctx context.Context, keyspace, shar
 		gerr = err
 	}
 	return result, gerr
+}
+
+func shardFilePath(keyspace, shard string) string {
+	return path.Join(KeyspacesPath, keyspace, ShardsPath, shard, ShardFile)
+}
+
+// WatchShardData wraps the data we receive on the watch channel
+// The WatchShard API guarantees exactly one of Value or Err will be set.
+type WatchShardData struct {
+	Value *topodatapb.Shard
+	Err   error
+}
+
+// WatchShard will set a watch on the Shard object.
+// It has the same contract as conn.Watch, but it also unpacks the
+// contents into a Shard object
+func (ts *Server) WatchShard(ctx context.Context, keyspace, shard string) (*WatchShardData, <-chan *WatchShardData, CancelFunc) {
+	shardPath := shardFilePath(keyspace, shard)
+	current, wdChannel, cancel := ts.globalCell.Watch(ctx, shardPath)
+	if current.Err != nil {
+		return &WatchShardData{Err: current.Err}, nil, nil
+	}
+	value := &topodatapb.Shard{}
+	if err := proto.Unmarshal(current.Contents, value); err != nil {
+		// Cancel the watch, drain channel.
+		cancel()
+		for range wdChannel {
+		}
+		return &WatchShardData{Err: vterrors.Wrapf(err, "error unpacking initial Shard object")}, nil, nil
+	}
+
+	changes := make(chan *WatchShardData, 10)
+	// The background routine reads any event from the watch channel,
+	// translates it, and sends it to the caller.
+	// If cancel() is called, the underlying Watch() code will
+	// send an ErrInterrupted and then close the channel. We'll
+	// just propagate that back to our caller.
+	go func() {
+		defer close(changes)
+
+		for wd := range wdChannel {
+			if wd.Err != nil {
+				// Last error value, we're done.
+				// wdChannel will be closed right after
+				// this, no need to do anything.
+				changes <- &WatchShardData{Err: wd.Err}
+				return
+			}
+
+			value := &topodatapb.Shard{}
+			if err := proto.Unmarshal(wd.Contents, value); err != nil {
+				cancel()
+				for range wdChannel {
+				}
+				changes <- &WatchShardData{Err: vterrors.Wrapf(err, "error unpacking Shard object")}
+				return
+			}
+
+			changes <- &WatchShardData{Value: value}
+		}
+	}()
+
+	return &WatchShardData{Value: value}, changes, cancel
 }

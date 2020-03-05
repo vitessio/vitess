@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -36,6 +36,16 @@ func (sq *Subquery) RouteType() string {
 	return sq.Subquery.RouteType()
 }
 
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (sq *Subquery) GetKeyspaceName() string {
+	return sq.Subquery.GetKeyspaceName()
+}
+
+// GetTableName specifies the table that this primitive routes to.
+func (sq *Subquery) GetTableName() string {
+	return sq.Subquery.GetTableName()
+}
+
 // Execute performs a non-streaming exec.
 func (sq *Subquery) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	inner, err := sq.Subquery.Execute(vcursor, bindVars, wantfields)
@@ -59,6 +69,11 @@ func (sq *Subquery) GetFields(vcursor VCursor, bindVars map[string]*querypb.Bind
 		return nil, err
 	}
 	return &sqltypes.Result{Fields: sq.buildFields(inner)}, nil
+}
+
+// Inputs returns the input to this primitive
+func (sq *Subquery) Inputs() []Primitive {
+	return []Primitive{sq.Subquery}
 }
 
 // buildResult builds a new result by pulling the necessary columns from

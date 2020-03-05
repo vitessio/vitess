@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -217,6 +217,16 @@ func TestMessageManagerSend(t *testing.T) {
 	// Ensure Postpone got called.
 	if got, want := <-ch, "postpone"; got != want {
 		t.Errorf("Postpone: %s, want %v", got, want)
+	}
+
+	// Wait while the receiver is marked as busy.
+	for {
+		mm.mu.Lock()
+		busy := mm.receivers[0].busy
+		mm.mu.Unlock()
+		if !busy {
+			break
+		}
 	}
 
 	// Verify item has been removed from cache.
@@ -785,7 +795,10 @@ func (fts *fakeTabletServer) PurgeMessages(ctx context.Context, target *querypb.
 
 func newMMConnPool(db *fakesqldb.DB) *connpool.Pool {
 	pool := connpool.New("", 20, 0, time.Duration(10*time.Minute), newFakeTabletServer())
-	dbconfigs := dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "")
+	params, _ := db.ConnParams().MysqlParams()
+	cp := *params
+	dbconfigs := dbconfigs.NewTestDBConfigs(cp, cp, "")
+
 	pool.Open(dbconfigs.AppWithDB(), dbconfigs.DbaWithDB(), dbconfigs.AppDebugWithDB())
 	return pool
 }

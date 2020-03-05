@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -80,7 +80,9 @@ const (
 )
 
 var (
-	tabletHostname = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
+	tabletHostname       = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
+	demoteMasterType     = flag.String("demote_master_type", "REPLICA", "the tablet type a demoted master will transition to")
+	initPopulateMetadata = flag.Bool("init_populate_metadata", false, "(init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
 )
 
 // ActionAgent is the main class for the agent.
@@ -95,6 +97,7 @@ type ActionAgent struct {
 	MysqlDaemon         mysqlctl.MysqlDaemon
 	DBConfigs           *dbconfigs.DBConfigs
 	VREngine            *vreplication.Engine
+	DemoteMasterType    topodatapb.TabletType
 
 	// exportStats is set only for production tablet.
 	exportStats bool
@@ -104,10 +107,14 @@ type ActionAgent struct {
 	statsTabletType *stats.String
 
 	// statsTabletTypeCount exposes the current tablet type as a label,
-	// with the value counting the occurances of the respective tablet type.
+	// with the value counting the occurrences of the respective tablet type.
 	// Useful for Prometheus which doesn't support exporting strings as stat values
 	// only used if exportStats is true.
 	statsTabletTypeCount *stats.CountersWithSingleLabel
+
+	// statsBackupIsRunning is set to 1 (true) if a backup is running
+	// only used if exportStats is true
+	statsBackupIsRunning *stats.GaugesWithMultiLabels
 
 	// batchCtx is given to the agent by its creator, and should be used for
 	// any background tasks spawned by the agent.
@@ -147,6 +154,11 @@ type ActionAgent struct {
 	// It is protected by actionMutex.
 	gotMysqlPort bool
 
+	// mysqlAdvertisePort is the port to publish for our own mysqld in the
+	// tablet record. If this is greater than 0, we simply advertise this value
+	// instead of asking mysqld what port it's serving on.
+	mysqlAdvertisePort int32
+
 	// initReplication remembers whether an action has initialized
 	// replication.  It is protected by actionMutex.
 	initReplication bool
@@ -164,6 +176,20 @@ type ActionAgent struct {
 	// mutex protects all the following fields (that start with '_'),
 	// only hold the mutex to update the fields, nothing else.
 	mutex sync.Mutex
+
+	// _shardSyncChan is a channel for informing the shard sync goroutine that
+	// it should wake up and recheck the tablet state, to make sure it and the
+	// shard record are in sync.
+	//
+	// Call agent.notifyShardSync() instead of sending directly to this channel.
+	_shardSyncChan chan struct{}
+
+	// _shardSyncDone is a channel for waiting until the shard sync goroutine
+	// has really finished after _shardSyncCancel was called.
+	_shardSyncDone chan struct{}
+
+	// _shardSyncCancel is the function to stop the background shard sync goroutine.
+	_shardSyncCancel context.CancelFunc
 
 	// _tablet has the Tablet record we last read from the topology server.
 	_tablet *topodatapb.Tablet
@@ -195,8 +221,8 @@ type ActionAgent struct {
 	// replication delay the last time we got it
 	_replicationDelay time.Duration
 
-	// last time we ran TabletExternallyReparented
-	_tabletExternallyReparentedTime time.Time
+	// _masterTermStartTime is the time at which our term as master began.
+	_masterTermStartTime time.Time
 
 	// _ignoreHealthErrorExpr can be set by RPC to selectively disable certain
 	// healthcheck errors. It should only be accessed while holding actionMutex.
@@ -209,8 +235,8 @@ type ActionAgent struct {
 	// _lockTablesConnection is used to get and release the table read locks to pause replication
 	_lockTablesConnection *dbconnpool.DBConnection
 	_lockTablesTimer      *time.Timer
-	// unused
-	//_lockTablesTimeout    *time.Duration
+	// _isBackupRunning tells us whether there is a backup that is currently running
+	_isBackupRunning bool
 }
 
 // NewActionAgent creates a new ActionAgent and registers all the
@@ -233,6 +259,11 @@ func NewActionAgent(
 		return nil, err
 	}
 
+	demoteMasterTabletType, err := validateDemoteMasterType()
+	if err != nil {
+		return nil, err
+	}
+
 	agent = &ActionAgent{
 		QueryServiceControl: queryServiceControl,
 		HealthReporter:      health.DefaultAggregator,
@@ -243,6 +274,7 @@ func NewActionAgent(
 		MysqlDaemon:         mysqld,
 		DBConfigs:           dbcfgs,
 		History:             history.New(historyLength),
+		DemoteMasterType:    demoteMasterTabletType,
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 		orc:                 orc,
 	}
@@ -262,12 +294,19 @@ func NewActionAgent(
 	agent.exportStats = true
 	agent.statsTabletType = stats.NewString("TabletType")
 	agent.statsTabletTypeCount = stats.NewCountersWithSingleLabel("TabletTypeCount", "Number of times the tablet changed to the labeled type", "type")
+	agent.statsBackupIsRunning = stats.NewGaugesWithMultiLabels("BackupIsRunning", "Whether a backup is running", []string{"mode"})
 
 	var mysqlHost string
 	var mysqlPort int32
-	if appConfig := dbcfgs.AppWithDB(); appConfig.Host != "" {
+	if appConfig, _ := dbcfgs.AppWithDB().MysqlParams(); appConfig.Host != "" {
 		mysqlHost = appConfig.Host
 		mysqlPort = int32(appConfig.Port)
+
+		// Remember this port as the advertise port. When we're connecting over
+		// host:port, it doesn't make sense to ask mysqld for its port after
+		// connecting. We should just tell others to use the same port we were
+		// told to use, in case it's a proxy.
+		agent.mysqlAdvertisePort = mysqlPort
 	} else {
 		// Assume unix socket was specified and try to get the port from mysqld
 		var err error
@@ -282,10 +321,15 @@ func NewActionAgent(
 		return nil, err
 	}
 
+	vreplication.InitVStreamerClient(agent.DBConfigs)
+
 	// The db name is set by the Start function called above
+	filteredWithDBParams, _ := agent.DBConfigs.FilteredWithDB().MysqlParams()
 	agent.VREngine = vreplication.NewEngine(ts, tabletAlias.Cell, mysqld, func() binlogplayer.DBClient {
 		return binlogplayer.NewDBClient(agent.DBConfigs.FilteredWithDB())
-	}, agent.DBConfigs.FilteredWithDB().DbName)
+	},
+		filteredWithDBParams.DbName,
+	)
 	servenv.OnTerm(agent.VREngine.Close)
 
 	// Run a background task to rebuild the SrvKeyspace in our cell/keyspace
@@ -313,6 +357,24 @@ func NewActionAgent(
 			agent.initHealthCheck()
 		}()
 	} else {
+		// optionally populate metadata records
+		if *initPopulateMetadata {
+			// we use initialTablet here because it has the intended tabletType.
+			// the tablet returned by agent.Tablet() will have type UNKNOWN until we call
+			// refreshTablet
+			localMetadata := agent.getLocalMetadataValues(agent.initialTablet.Type)
+			if agent.Cnf != nil { // we are managing mysqld
+				// we'll use batchCtx here because we are still initializing and can't proceed unless this succeeds
+				if err := agent.MysqlDaemon.Wait(batchCtx, agent.Cnf); err != nil {
+					return nil, err
+				}
+			}
+			err := mysqlctl.PopulateMetadataTables(agent.MysqlDaemon, localMetadata, topoproto.TabletDbName(agent.initialTablet))
+			if err != nil {
+				return nil, vterrors.Wrap(err, "failed to -init_populate_metadata")
+			}
+		}
+
 		// Update our state (need the action lock).
 		if err := agent.lock(batchCtx); err != nil {
 			return nil, err
@@ -342,6 +404,12 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 	if err != nil {
 		panic(vterrors.Wrap(err, "failed reading tablet"))
 	}
+
+	demoteMasterTabletType, err := validateDemoteMasterType()
+	if err != nil {
+		panic(vterrors.Wrapf(err, "failed to parse tablet type %v", demoteMasterTabletType))
+	}
+
 	agent := &ActionAgent{
 		QueryServiceControl: tabletservermock.NewController(),
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
@@ -354,6 +422,7 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 		DBConfigs:           &dbconfigs.DBConfigs{},
 		VREngine:            vreplication.NewEngine(ts, tabletAlias.Cell, mysqlDaemon, binlogplayer.NewFakeDBClient, ti.DbName()),
 		History:             history.New(historyLength),
+		DemoteMasterType:    demoteMasterTabletType,
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
 	if preStart != nil {
@@ -381,6 +450,11 @@ func NewTestActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *
 // within the vtcombo binary. It cannot be called concurrently,
 // as it changes the flags.
 func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, vtPort, grpcPort int32, queryServiceControl tabletserver.Controller, dbcfgs *dbconfigs.DBConfigs, mysqlDaemon mysqlctl.MysqlDaemon, keyspace, shard, dbname, tabletType string) *ActionAgent {
+	demoteMasterType, err := validateDemoteMasterType()
+	if err != nil {
+		panic(vterrors.Wrapf(err, "failed to parse tablet type %v", tabletType))
+	}
+
 	agent := &ActionAgent{
 		QueryServiceControl: queryServiceControl,
 		UpdateStream:        binlog.NewUpdateStreamControlMock(),
@@ -394,6 +468,7 @@ func NewComboActionAgent(batchCtx context.Context, ts *topo.Server, tabletAlias 
 		VREngine:            vreplication.NewEngine(nil, "", nil, nil, ""),
 		gotMysqlPort:        true,
 		History:             history.New(historyLength),
+		DemoteMasterType:    demoteMasterType,
 		_healthy:            fmt.Errorf("healthcheck not run yet"),
 	}
 	agent.registerQueryRuleSources()
@@ -433,6 +508,9 @@ func (agent *ActionAgent) setTablet(tablet *topodatapb.Tablet) {
 	agent.mutex.Lock()
 	agent._tablet = proto.Clone(tablet).(*topodatapb.Tablet)
 	agent.mutex.Unlock()
+
+	// Notify the shard sync loop that the tablet state changed.
+	agent.notifyShardSync()
 }
 
 // Tablet reads the stored Tablet from the agent, protected by mutex.
@@ -667,6 +745,10 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 	startingTablet.Type = topodatapb.TabletType_UNKNOWN
 	agent.setTablet(startingTablet)
 
+	// Start a background goroutine to watch and update the shard record,
+	// to make sure it and our tablet record are in sync.
+	agent.startShardSync()
+
 	return nil
 }
 
@@ -674,6 +756,11 @@ func (agent *ActionAgent) Start(ctx context.Context, mysqlHost string, mysqlPort
 // then prune the tablet topology entry of all post-init fields. This prevents
 // stale identifiers from hanging around in topology.
 func (agent *ActionAgent) Close() {
+	// Stop the shard sync loop and wait for it to exit. We do this in Close()
+	// rather than registering it as an OnTerm hook so the shard sync loop keeps
+	// running during lame duck.
+	agent.stopShardSync()
+
 	// cleanup initialized fields in the tablet entry
 	f := func(tablet *topodatapb.Tablet) error {
 		if err := topotools.CheckOwnership(agent.initialTablet, tablet); err != nil {
@@ -684,7 +771,11 @@ func (agent *ActionAgent) Close() {
 		tablet.PortMap = nil
 		return nil
 	}
-	if _, err := agent.TopoServer.UpdateTabletFields(context.Background(), agent.TabletAlias, f); err != nil {
+
+	updateCtx, updateCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	defer updateCancel()
+
+	if _, err := agent.TopoServer.UpdateTabletFields(updateCtx, agent.TabletAlias, f); err != nil {
 		log.Warningf("Failed to update tablet record, may contain stale identifiers: %v", err)
 	}
 }
@@ -694,10 +785,16 @@ func (agent *ActionAgent) Close() {
 // while taking lameduck into account. However, this may be useful for tests,
 // when you want to clean up an agent immediately.
 func (agent *ActionAgent) Stop() {
+	// Stop the shard sync loop and wait for it to exit. This needs to be done
+	// here in addition to in Close() because tests do not call Close().
+	agent.stopShardSync()
+
 	if agent.UpdateStream != nil {
 		agent.UpdateStream.Disable()
 	}
+
 	agent.VREngine.Close()
+
 	if agent.MysqlDaemon != nil {
 		agent.MysqlDaemon.Close()
 	}
@@ -719,14 +816,24 @@ func (agent *ActionAgent) hookExtraEnv() map[string]string {
 // The actionMutex lock must be held when calling this function.
 func (agent *ActionAgent) checkTabletMysqlPort(ctx context.Context, tablet *topodatapb.Tablet) *topodatapb.Tablet {
 	agent.checkLock()
-	mport, err := agent.MysqlDaemon.GetMysqlPort()
-	if err != nil {
-		// Only log the first time, so we don't spam the logs.
-		if !agent.waitingForMysql {
-			log.Warningf("Cannot get current mysql port, not checking it (will retry at healthcheck interval): %v", err)
-			agent.waitingForMysql = true
+
+	var mport int32
+
+	// If we have stored an advertise port, just assume that.
+	// Otherwise, ask mysqld (presumably over unix socket) what its port is.
+	if agent.mysqlAdvertisePort > 0 {
+		mport = agent.mysqlAdvertisePort
+	} else {
+		var err error
+		mport, err = agent.MysqlDaemon.GetMysqlPort()
+		if err != nil {
+			// Only log the first time, so we don't spam the logs.
+			if !agent.waitingForMysql {
+				log.Warningf("Cannot get current mysql port, not checking it (will retry at healthcheck interval): %v", err)
+				agent.waitingForMysql = true
+			}
+			return nil
 		}
-		return nil
 	}
 
 	if mport == topoproto.MysqlPort(tablet) {
@@ -800,4 +907,18 @@ func (agent *ActionAgent) withRetry(ctx context.Context, description string, wor
 			backoff = time.Duration(f)
 		}
 	}
+}
+
+func validateDemoteMasterType() (topodatapb.TabletType, error) {
+	tabletType, err := topoproto.ParseTabletType(*demoteMasterType)
+	if err != nil {
+		return topodatapb.TabletType_UNKNOWN, err
+	}
+	if tabletType != topodatapb.TabletType_SPARE && tabletType != topodatapb.TabletType_REPLICA {
+		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("invalid demote_master_type %v; can only be REPLICA or SPARE", tabletType)
+	}
+	if tabletType == topodatapb.TabletType_SPARE && !*mysqlctl.DisableActiveReparents {
+		return topodatapb.TabletType_UNKNOWN, fmt.Errorf("demote to SPARE is only allowed when active reparents is disabled (set the -disable_active_reparents flag to disable)")
+	}
+	return tabletType, nil
 }

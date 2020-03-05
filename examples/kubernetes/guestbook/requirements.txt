@@ -1,3 +1,0 @@
-Flask==0.12.3
-grpcio==1.12.0
-grpcio-tools==1.12.0

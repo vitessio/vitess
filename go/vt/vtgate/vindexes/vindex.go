@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,9 +22,11 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // This file defines interfaces and registration for vindexes.
@@ -54,35 +56,47 @@ type Vindex interface {
 	Cost() int
 
 	// IsUnique returns true if the Vindex is unique.
-	// Which means Map() maps to either a KeyRange or a single KeyspaceID.
+	// A Unique Vindex is allowed to return non-unique values like
+	// a keyrange. This is in situations where the vindex does not
+	// have enough information to map to a keyspace id. If so, such
+	// a vindex cannot be primary.
 	IsUnique() bool
 
-	// IsFunctional returns true if the Vindex can compute
-	// the keyspace id from the id without a lookup.
-	// A Functional vindex is also required to be Unique.
-	// Which means Map() maps to either a KeyRange or a single KeyspaceID.
-	IsFunctional() bool
+	// NeedsVCursor returns true if the Vindex makes calls into the
+	// VCursor. Such vindexes cannot be used by vreplication.
+	NeedsVCursor() bool
+}
 
-	// Verify must be implented by all vindexes. It should return
-	// true if the ids can be mapped to the keyspace ids.
-	Verify(cursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error)
-
+// SingleColumn defines the interface for a single column vindex.
+type SingleColumn interface {
+	Vindex
 	// Map can map ids to key.Destination objects.
 	// If the Vindex is unique, each id would map to either
 	// a KeyRange, or a single KeyspaceID.
 	// If the Vindex is non-unique, each id would map to either
 	// a KeyRange, or a list of KeyspaceID.
-	// If the error returned if nil, then the array len of the
-	// key.Destination array must match len(ids).
-	Map(cursor VCursor, ids []sqltypes.Value) ([]key.Destination, error)
+	Map(vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error)
+
+	// Verify returns true for every id that successfully maps to the
+	// specified keyspace id.
+	Verify(vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error)
+}
+
+// MultiColumn defines the interface for a multi-column vindex.
+type MultiColumn interface {
+	Vindex
+	Map(vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error)
+	Verify(vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error)
 }
 
 // A Reversible vindex is one that can perform a
 // reverse lookup from a keyspace id to an id. This
 // is optional. If present, VTGate can use it to
 // fill column values based on the target keyspace id.
+// Reversible is supported only for SingleColumn vindexes.
 type Reversible interface {
-	ReverseMap(cursor VCursor, ks [][]byte) ([]sqltypes.Value, error)
+	SingleColumn
+	ReverseMap(vcursor VCursor, ks [][]byte) ([]sqltypes.Value, error)
 }
 
 // A Lookup vindex is one that needs to lookup
@@ -137,4 +151,34 @@ func CreateVindex(vindexType, name string, params map[string]string) (Vindex, er
 		return nil, fmt.Errorf("vindexType %q not found", vindexType)
 	}
 	return f(name, params)
+}
+
+// Map invokes the Map implementation supplied by the vindex.
+func Map(vindex Vindex, vcursor VCursor, rowsColValues [][]sqltypes.Value) ([]key.Destination, error) {
+	switch vindex := vindex.(type) {
+	case MultiColumn:
+		return vindex.Map(vcursor, rowsColValues)
+	case SingleColumn:
+		return vindex.Map(vcursor, firstColsOnly(rowsColValues))
+	}
+	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "vindex does not have Map functions")
+}
+
+// Verify invokes the Verify implementation supplied by the vindex.
+func Verify(vindex Vindex, vcursor VCursor, rowsColValues [][]sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	switch vindex := vindex.(type) {
+	case MultiColumn:
+		return vindex.Verify(vcursor, rowsColValues, ksids)
+	case SingleColumn:
+		return vindex.Verify(vcursor, firstColsOnly(rowsColValues), ksids)
+	}
+	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "vindex does not have Map functions")
+}
+
+func firstColsOnly(rowsColValues [][]sqltypes.Value) []sqltypes.Value {
+	firstCols := make([]sqltypes.Value, 0, len(rowsColValues))
+	for _, val := range rowsColValues {
+		firstCols = append(firstCols, val[0])
+	}
+	return firstCols
 }

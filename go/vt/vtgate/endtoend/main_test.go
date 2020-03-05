@@ -17,10 +17,10 @@ limitations under the License.
 package endtoend
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
-	"path"
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
@@ -32,10 +32,11 @@ import (
 )
 
 var (
-	cluster     *vttest.LocalCluster
-	vtParams    mysql.ConnParams
-	mysqlParams mysql.ConnParams
-	grpcAddress string
+	cluster        *vttest.LocalCluster
+	vtParams       mysql.ConnParams
+	mysqlParams    mysql.ConnParams
+	grpcAddress    string
+	tabletHostName = flag.String("tablet_hostname", "", "the tablet hostname")
 
 	schema = `
 create table t1(
@@ -75,6 +76,12 @@ create table t2_id4_idx(
 	id3 bigint,
 	primary key(id),
 	key idx_id4(id4)
+) Engine=InnoDB;
+
+create table t1_last_insert_id(
+	id bigint not null auto_increment,
+	id1 bigint,
+	primary key(id)
 ) Engine=InnoDB;
 `
 
@@ -151,6 +158,16 @@ create table t2_id4_idx(
 					Type: sqltypes.VarChar,
 				}},
 			},
+			"t1_last_insert_id": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id1",
+					Name:   "hash",
+				}},
+				Columns: []*vschemapb.Column{{
+					Name: "id1",
+					Type: sqltypes.Int64,
+				}},
+			},
 		},
 	}
 )
@@ -170,13 +187,14 @@ func TestMain(m *testing.M) {
 				}},
 			}},
 		}
-		cfg.ExtraMyCnf = []string{path.Join(os.Getenv("VTTOP"), "config/mycnf/rbr.cnf")}
 		if err := cfg.InitSchemas("ks", schema, vschema); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.RemoveAll(cfg.SchemaDir)
 			return 1
 		}
 		defer os.RemoveAll(cfg.SchemaDir)
+
+		cfg.TabletHostName = *tabletHostName
 
 		cluster = &vttest.LocalCluster{
 			Config: cfg,
@@ -195,7 +213,24 @@ func TestMain(m *testing.M) {
 		mysqlParams = cluster.MySQLConnParams()
 		grpcAddress = fmt.Sprintf("localhost:%d", cluster.Env.PortForProtocol("vtcombo", "grpc"))
 
+		insertStartValue()
+
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+func insertStartValue() {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		panic(err)
+	}
+	defer conn.Close()
+
+	// lets insert a single starting value for tests
+	_, err = conn.ExecuteFetch("insert into t1_last_insert_id(id1) values(42)", 1000, true)
+	if err != nil {
+		panic(err)
+	}
 }

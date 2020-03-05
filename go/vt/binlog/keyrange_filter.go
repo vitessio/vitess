@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -177,7 +177,7 @@ func logExtractKeySpaceIDError(err error) {
 	case sqlannotation.ExtractKeySpaceIDReplicationUnfriendlyError:
 		log.Errorf(
 			"Found replication unfriendly statement. (%s). "+
-				"Filtered replication should abort, but we're currenty just skipping the statement.",
+				"Filtered replication should abort, but we're currently just skipping the statement.",
 			extractErr.Message)
 		updateStreamErrors.Add("ExtractKeySpaceIDReplicationUnfriendlyError", 1)
 	default:

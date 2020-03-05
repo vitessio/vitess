@@ -21,7 +21,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path"
 	"testing"
 
 	"vitess.io/vitess/go/mysql"
@@ -32,10 +31,11 @@ import (
 )
 
 var (
-	cluster     *vttest.LocalCluster
-	vtParams    mysql.ConnParams
-	mysqlParams mysql.ConnParams
-	grpcAddress string
+	cluster        *vttest.LocalCluster
+	vtParams       mysql.ConnParams
+	mysqlParams    mysql.ConnParams
+	grpcAddress    string
+	tabletHostName = flag.String("tablet_hostname", "", "the tablet hostname")
 
 	schema = `
 create table t1(
@@ -126,13 +126,14 @@ func TestMain(m *testing.M) {
 				}},
 			}},
 		}
-		cfg.ExtraMyCnf = []string{path.Join(os.Getenv("VTTOP"), "config/mycnf/rbr.cnf")}
 		if err := cfg.InitSchemas("ks", schema, vschema); err != nil {
 			fmt.Fprintf(os.Stderr, "%v\n", err)
 			os.RemoveAll(cfg.SchemaDir)
 			return 1
 		}
 		defer os.RemoveAll(cfg.SchemaDir)
+
+		cfg.TabletHostName = *tabletHostName
 
 		cluster = &vttest.LocalCluster{
 			Config: cfg,

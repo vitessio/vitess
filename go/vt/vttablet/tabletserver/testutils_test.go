@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -50,7 +50,9 @@ func (util *testUtils) checkEqual(t *testing.T, expected interface{}, result int
 }
 
 func (util *testUtils) newDBConfigs(db *fakesqldb.DB) *dbconfigs.DBConfigs {
-	return dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "")
+	params, _ := db.ConnParams().MysqlParams()
+	cp := *params
+	return dbconfigs.NewTestDBConfigs(cp, cp, "")
 }
 
 func (util *testUtils) newQueryServiceConfig() tabletenv.TabletConfig {

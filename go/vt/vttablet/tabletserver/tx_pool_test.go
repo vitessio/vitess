@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -470,6 +470,25 @@ func TestTxPoolBeginWithError(t *testing.T) {
 	}
 }
 
+func TestTxPoolCancelledContextError(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	db.AddRejectedQuery("begin", errRejected)
+	txPool := newTxPool()
+	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
+	defer txPool.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, _, err := txPool.Begin(ctx, &querypb.ExecuteOptions{})
+	want := "transaction pool aborting request due to already expired context"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Unexpected error: %v, want %s", err, want)
+	}
+	if got, want := vterrors.Code(err), vtrpcpb.Code_RESOURCE_EXHAUSTED; got != want {
+		t.Errorf("wrong error code error: got = %v, want = %v", got, want)
+	}
+}
+
 func TestTxPoolRollbackFail(t *testing.T) {
 	sql := "alter table test_table add test_column int"
 	db := fakesqldb.New(t)
@@ -693,6 +712,7 @@ func newTxPool() *TxPool {
 	poolName := fmt.Sprintf("TestTransactionPool-%d", randID)
 	transactionCap := 300
 	transactionTimeout := time.Duration(30 * time.Second)
+	transactionPoolTimeout := time.Duration(40 * time.Second)
 	waiterCap := 500000
 	idleTimeout := time.Duration(30 * time.Second)
 	limiter := &txlimiter.TxAllowAll{}
@@ -702,6 +722,7 @@ func newTxPool() *TxPool {
 		transactionCap,
 		0,
 		transactionTimeout,
+		transactionPoolTimeout,
 		idleTimeout,
 		waiterCap,
 		DummyChecker,

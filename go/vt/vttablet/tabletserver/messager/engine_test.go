@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -214,9 +215,7 @@ func TestGenerateLoadMessagesQuery(t *testing.T) {
 	}, []string{"t1"}, nil, nil)
 
 	q, err := engine.GenerateLoadMessagesQuery("t1")
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := "select time_next, epoch, time_created, id, time_scheduled, message from t1 where :#pk"
 	if q.Query != want {
 		t.Errorf("GenerateLoadMessagesQuery: %s, want %s", q.Query, want)
@@ -261,7 +260,9 @@ func newTestEngine(db *fakesqldb.DB) *Engine {
 	tsv := newFakeTabletServer()
 	se := schema.NewEngine(tsv, config)
 	te := NewEngine(tsv, se, config)
-	te.InitDBConfig(dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), ""))
+	params, _ := db.ConnParams().MysqlParams()
+	cp := *params
+	te.InitDBConfig(dbconfigs.NewTestDBConfigs(cp, cp, ""))
 	te.Open()
 	return te
 }

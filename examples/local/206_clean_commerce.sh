@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2018 The Vitess Authors.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,11 +17,7 @@
 # this script removes the customer and corder tables from the commerce
 # keyspace
 
-set -e
-
-./lvtctl.sh ApplySchema -sql-file drop_commerce_tables.sql commerce
-./lvtctl.sh SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 rdonly
-./lvtctl.sh SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 replica
-./lvtctl.sh SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 master
-
-disown -a
+vtctlclient -server localhost:15999 ApplySchema -sql-file drop_commerce_tables.sql commerce
+vtctlclient -server localhost:15999 SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 rdonly
+vtctlclient -server localhost:15999 SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 replica
+vtctlclient -server localhost:15999 SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 master

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -52,7 +52,7 @@ func (agent *ActionAgent) lock(ctx context.Context) error {
 	}
 }
 
-// unlock is the symetrical action to lock.
+// unlock is the symmetrical action to lock.
 func (agent *ActionAgent) unlock() {
 	agent.actionMutexLocked = false
 	agent.actionMutex.Unlock()

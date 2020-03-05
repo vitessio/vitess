@@ -1,5 +1,5 @@
 /*
-Copyright 2018 The Vitess Authors.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,12 +28,14 @@ import (
 
 func TestDeleteUnsharded(t *testing.T) {
 	del := &Delete{
-		Opcode: DeleteUnsharded,
-		Keyspace: &vindexes.Keyspace{
-			Name:    "ks",
-			Sharded: false,
+		DML: DML{
+			Opcode: Unsharded,
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: false,
+			},
+			Query: "dummy_delete",
 		},
-		Query: "dummy_delete",
 	}
 
 	vc := &loggingVCursor{shards: []string{"0"}}
@@ -59,14 +61,16 @@ func TestDeleteUnsharded(t *testing.T) {
 func TestDeleteEqual(t *testing.T) {
 	vindex, _ := vindexes.NewHash("", nil)
 	del := &Delete{
-		Opcode: DeleteEqual,
-		Keyspace: &vindexes.Keyspace{
-			Name:    "ks",
-			Sharded: true,
+		DML: DML{
+			Opcode: Equal,
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: true,
+			},
+			Query:  "dummy_delete",
+			Vindex: vindex.(vindexes.SingleColumn),
+			Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 		},
-		Query:  "dummy_delete",
-		Vindex: vindex,
-		Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 	}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
@@ -92,14 +96,16 @@ func TestDeleteEqualNoRoute(t *testing.T) {
 		"to":    "toc",
 	})
 	del := &Delete{
-		Opcode: DeleteEqual,
-		Keyspace: &vindexes.Keyspace{
-			Name:    "ks",
-			Sharded: true,
+		DML: DML{
+			Opcode: Equal,
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: true,
+			},
+			Query:  "dummy_delete",
+			Vindex: vindex.(vindexes.SingleColumn),
+			Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 		},
-		Query:  "dummy_delete",
-		Vindex: vindex,
-		Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 	}
 
 	vc := &loggingVCursor{shards: []string{"0"}}
@@ -121,14 +127,16 @@ func TestDeleteEqualNoScatter(t *testing.T) {
 		"write_only": "true",
 	})
 	del := &Delete{
-		Opcode: DeleteEqual,
-		Keyspace: &vindexes.Keyspace{
-			Name:    "ks",
-			Sharded: true,
+		DML: DML{
+			Opcode: Equal,
+			Keyspace: &vindexes.Keyspace{
+				Name:    "ks",
+				Sharded: true,
+			},
+			Query:  "dummy_delete",
+			Vindex: vindex.(vindexes.SingleColumn),
+			Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 		},
-		Query:  "dummy_delete",
-		Vindex: vindex,
-		Values: []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
 	}
 
 	vc := &loggingVCursor{shards: []string{"0"}}
@@ -139,21 +147,24 @@ func TestDeleteEqualNoScatter(t *testing.T) {
 func TestDeleteOwnedVindex(t *testing.T) {
 	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
-		Opcode:           DeleteEqual,
-		Keyspace:         ks.Keyspace,
-		Query:            "dummy_delete",
-		Vindex:           ks.Vindexes["hash"],
-		Values:           []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
-		Table:            ks.Tables["t1"],
-		OwnedVindexQuery: "dummy_subquery",
+		DML: DML{
+			Opcode:           Equal,
+			Keyspace:         ks.Keyspace,
+			Query:            "dummy_delete",
+			Vindex:           ks.Vindexes["hash"].(vindexes.SingleColumn),
+			Values:           []sqltypes.PlanValue{{Value: sqltypes.NewInt64(1)}},
+			Table:            ks.Tables["t1"],
+			OwnedVindexQuery: "dummy_subquery",
+			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
+		},
 	}
 
 	results := []*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"c1|c2|c3",
-			"int64|int64|int64",
+			"id|c1|c2|c3",
+			"int64|int64|int64|int64",
 		),
-		"4|5|6",
+		"1|4|5|6",
 	)}
 	vc := &loggingVCursor{
 		shards:  []string{"-20", "20-"},
@@ -196,11 +207,11 @@ func TestDeleteOwnedVindex(t *testing.T) {
 	// Delete can affect multiple rows
 	results = []*sqltypes.Result{sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
-			"c1|c2|c3",
-			"int64|int64|int64",
+			"id|c1|c2|c3",
+			"int64|int64|int64|int64",
 		),
-		"4|5|6",
-		"7|8|9",
+		"1|4|5|6",
+		"1|7|8|9",
 	)}
 	vc = &loggingVCursor{
 		shards:  []string{"-20", "20-"},
@@ -216,10 +227,10 @@ func TestDeleteOwnedVindex(t *testing.T) {
 		// It gets used to perform the subquery to fetch the changing column values.
 		`ExecuteMultiShard sharded.-20: dummy_subquery {} false false`,
 		// Delete 4,5 and 7,8 from lkp2.
-		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
-		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"7" from2: type:INT64 value:"8" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// Delete 6 and 8 from lkp1.
+		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"7" from2: type:INT64 value:"8" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"9" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
 		// Send the DML.
 		`ExecuteMultiShard sharded.-20: dummy_delete /* vtgate:: keyspace_id:166b40b44aba4bd6 */ {} true true`,
@@ -227,13 +238,14 @@ func TestDeleteOwnedVindex(t *testing.T) {
 }
 
 func TestDeleteSharded(t *testing.T) {
+	ks := buildTestVSchema().Keyspaces["sharded"]
 	del := &Delete{
-		Opcode: DeleteScatter,
-		Keyspace: &vindexes.Keyspace{
-			Name:    "ks",
-			Sharded: true,
+		DML: DML{
+			Opcode:   Scatter,
+			Keyspace: ks.Keyspace,
+			Query:    "dummy_delete",
+			Table:    ks.Tables["t2"],
 		},
-		Query: "dummy_delete",
 	}
 
 	vc := &loggingVCursor{shards: []string{"-20", "20-"}}
@@ -242,8 +254,8 @@ func TestDeleteSharded(t *testing.T) {
 		t.Fatal(err)
 	}
 	vc.ExpectLog(t, []string{
-		`ResolveDestinations ks [] Destinations:DestinationAllShards()`,
-		`ExecuteMultiShard ks.-20: dummy_delete {} ks.20-: dummy_delete {} true false`,
+		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
+		`ExecuteMultiShard sharded.-20: dummy_delete {} sharded.20-: dummy_delete {} true false`,
 	})
 
 	// Failure case
@@ -256,4 +268,95 @@ func TestDeleteNoStream(t *testing.T) {
 	del := &Delete{}
 	err := del.StreamExecute(nil, nil, false, nil)
 	expectError(t, "StreamExecute", err, `query "" cannot be used for streaming`)
+}
+
+func TestDeleteScatterOwnedVindex(t *testing.T) {
+	ks := buildTestVSchema().Keyspaces["sharded"]
+	del := &Delete{
+		DML: DML{
+			Opcode:           Scatter,
+			Keyspace:         ks.Keyspace,
+			Query:            "dummy_delete",
+			Table:            ks.Tables["t1"],
+			OwnedVindexQuery: "dummy_subquery",
+			KsidVindex:       ks.Vindexes["hash"].(vindexes.SingleColumn),
+		},
+	}
+
+	results := []*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|c1|c2|c3",
+			"int64|int64|int64|int64",
+		),
+		"1|4|5|6",
+	)}
+	vc := &loggingVCursor{
+		shards:  []string{"-20", "20-"},
+		results: results,
+	}
+
+	_, err := del.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
+		// ResolveDestinations is hard-coded to return -20.
+		// It gets used to perform the subquery to fetch the changing column values.
+		`ExecuteMultiShard sharded.-20: dummy_subquery {} sharded.20-: dummy_subquery {} false false`,
+		// Those values are returned as 4,5 for twocol and 6 for onecol.
+		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		// Finally, the actual delete, which is also sent to -20, same route as the subquery.
+		`ExecuteMultiShard sharded.-20: dummy_delete {} sharded.20-: dummy_delete {} true false`,
+	})
+
+	// No rows changing
+	vc = &loggingVCursor{
+		shards: []string{"-20", "20-"},
+	}
+	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
+		// ResolveDestinations is hard-coded to return -20.
+		// It gets used to perform the subquery to fetch the changing column values.
+		`ExecuteMultiShard sharded.-20: dummy_subquery {} sharded.20-: dummy_subquery {} false false`,
+		// Subquery returns no rows. So, no vindexes are deleted. We still pass-through the original delete.
+		`ExecuteMultiShard sharded.-20: dummy_delete {} sharded.20-: dummy_delete {} true false`,
+	})
+
+	// Delete can affect multiple rows
+	results = []*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields(
+			"id|c1|c2|c3",
+			"int64|int64|int64|int64",
+		),
+		"1|4|5|6",
+		"1|7|8|9",
+	)}
+	vc = &loggingVCursor{
+		shards:  []string{"-20", "20-"},
+		results: results,
+	}
+	_, err = del.Execute(vc, map[string]*querypb.BindVariable{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vc.ExpectLog(t, []string{
+		`ResolveDestinations sharded [] Destinations:DestinationAllShards()`,
+		// ResolveDestinations is hard-coded to return -20.
+		// It gets used to perform the subquery to fetch the changing column values.
+		`ExecuteMultiShard sharded.-20: dummy_subquery {} sharded.20-: dummy_subquery {} false false`,
+		// Delete 4,5 and 7,8 from lkp2.
+		// Delete 6 and 8 from lkp1.
+		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"4" from2: type:INT64 value:"5" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"6" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute delete from lkp2 where from1 = :from1 and from2 = :from2 and toc = :toc from1: type:INT64 value:"7" from2: type:INT64 value:"8" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		`Execute delete from lkp1 where from = :from and toc = :toc from: type:INT64 value:"9" toc: type:VARBINARY value:"\026k@\264J\272K\326"  true`,
+		// Send the DML.
+		`ExecuteMultiShard sharded.-20: dummy_delete {} sharded.20-: dummy_delete {} true false`,
+	})
 }

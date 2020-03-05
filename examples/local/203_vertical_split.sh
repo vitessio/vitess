@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2018 The Vitess Authors.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,17 +17,9 @@
 # this script copies over all the data from commerce keyspace to
 # customer keyspace for the customer and corder tables
 
-set -e
+source ./env.sh
 
-# shellcheck disable=SC2128
-script_root=$(dirname "${BASH_SOURCE}")
-
-# shellcheck source=./env.sh
-# shellcheck disable=SC1091
-source "$script_root/env.sh"
-
-# shellcheck disable=SC2086
-"$VTROOT"/bin/vtworker \
+vtworker \
     $TOPOLOGY_FLAGS \
     -cell zone1 \
     -log_dir "$VTDATAROOT"/tmp \
@@ -35,4 +27,3 @@ source "$script_root/env.sh"
     -use_v3_resharding_mode \
     VerticalSplitClone -min_healthy_tablets=1 -tables=customer,corder customer/0
 
-disown -a

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -52,6 +52,10 @@ message TableDefinition {
 
   // approximate number of rows
   uint64 row_count = 7;
+
+  // column names along with their types.
+  // NOTE: this is a superset of columns.
+  repeated query.Field fields = 8;
 }
 
 message SchemaDefinition {
@@ -271,6 +275,13 @@ message MasterPositionResponse {
   string position = 1;
 }
 
+message WaitForPositionRequest {
+  string position = 1;
+}
+
+message WaitForPositionResponse {
+}
+
 message StopSlaveRequest {
 }
 
@@ -401,6 +412,7 @@ message SlaveWasPromotedResponse {
 message SetMasterRequest {
   topodata.TabletAlias parent = 1;
   int64 time_created_ns = 2;
+  string wait_position = 4;
   bool force_start_slave = 3;
 }
 

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -698,7 +698,7 @@ func TestTypeLimits(t *testing.T) {
 	}, {
 		query: "insert into vitess_ints(tiny) values(1.2)",
 		bv:    nil,
-		out:   "unsupported: cannot identify primary key of statement",
+		out:   "Duplicate entry '1' for key 'PRIMARY'",
 	}, {
 		query: "insert into vitess_ints(tiny) values(:fl)",
 		bv:    map[string]*querypb.BindVariable{"fl": sqltypes.Float64BindVariable(1.2)},

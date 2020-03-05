@@ -65,7 +65,7 @@ export class DialogContent {
 
   /*
     Checks to see if a particular flagId should be set as visible to the user.
-    First checks if the flag doesnt exist or if it has explicitly been set to
+    First checks if the flag doesn't exist or if it has explicitly been set to
     not be editable. Then it iterates through the blockOnEmpty and 
     BlockOnFilled lists to ensure that the values of other flags does not 
     prevent this one from being shown.

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -17,6 +17,7 @@ limitations under the License.
 package discovery
 
 import (
+	"math/rand"
 	"testing"
 	"time"
 
@@ -234,6 +235,56 @@ func checkWatcher(t *testing.T, cellTablets, refreshKnownTablets bool) {
 		t.Errorf("fhc.GetAllTablets() = %+v; want %v => %+v", allTablets, key, tablet2)
 	}
 
+	// Both tablets restart on different hosts.
+	// tablet2 happens to land on the host:port that tablet 1 used to be on.
+	// This can only be tested when we refresh known tablets.
+	if refreshKnownTablets {
+		origTablet := *tablet
+		origTablet2 := *tablet2
+
+		if _, err := ts.UpdateTabletFields(context.Background(), tablet2.Alias, func(t *topodatapb.Tablet) error {
+			t.Hostname = tablet.Hostname
+			t.PortMap = tablet.PortMap
+			tablet2 = t
+			return nil
+		}); err != nil {
+			t.Fatalf("UpdateTabletFields failed: %v", err)
+		}
+		if _, err := ts.UpdateTabletFields(context.Background(), tablet.Alias, func(t *topodatapb.Tablet) error {
+			t.Hostname = "host3"
+			tablet = t
+			return nil
+		}); err != nil {
+			t.Fatalf("UpdateTabletFields failed: %v", err)
+		}
+		tw.loadTablets()
+		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "ReplaceTablet": 2})
+		allTablets = fhc.GetAllTablets()
+		key2 := TabletToMapKey(tablet2)
+		if _, ok := allTablets[key2]; !ok {
+			t.Fatalf("tablet was lost because it's reusing an address recently used by another tablet: %v", key2)
+		}
+
+		// Change tablets back to avoid altering later tests.
+		if _, err := ts.UpdateTabletFields(context.Background(), tablet2.Alias, func(t *topodatapb.Tablet) error {
+			t.Hostname = origTablet2.Hostname
+			t.PortMap = origTablet2.PortMap
+			tablet2 = t
+			return nil
+		}); err != nil {
+			t.Fatalf("UpdateTabletFields failed: %v", err)
+		}
+		if _, err := ts.UpdateTabletFields(context.Background(), tablet.Alias, func(t *topodatapb.Tablet) error {
+			t.Hostname = origTablet.Hostname
+			tablet = t
+			return nil
+		}); err != nil {
+			t.Fatalf("UpdateTabletFields failed: %v", err)
+		}
+		tw.loadTablets()
+		counts = checkOpCounts(t, tw, counts, map[string]int64{"ListTablets": 1, "GetTablet": 2, "ReplaceTablet": 2})
+	}
+
 	// Remove the tablet and check that it is detected as being gone.
 	if err := ts.DeleteTablet(context.Background(), tablet.Alias); err != nil {
 		t.Fatalf("DeleteTablet failed: %v", err)
@@ -357,6 +408,100 @@ func TestFilterByShard(t *testing.T) {
 		got := fbs.isIncluded(tablet)
 		if got != tc.included {
 			t.Errorf("isIncluded(%v,%v) for filters %v returned %v but expected %v", tc.keyspace, tc.shard, tc.filters, got, tc.included)
+		}
+	}
+}
+
+var (
+	testFilterByKeyspace = []struct {
+		keyspace string
+		expected bool
+	}{
+		{"ks1", true},
+		{"ks2", true},
+		{"ks3", false},
+		{"ks4", true},
+		{"ks5", true},
+		{"ks6", false},
+		{"ks7", false},
+	}
+	testKeyspacesToWatch = []string{"ks1", "ks2", "ks4", "ks5"}
+	testCell             = "testCell"
+	testShard            = "testShard"
+	testHostName         = "testHostName"
+)
+
+func TestFilterByKeyspace(t *testing.T) {
+	hc := NewFakeHealthCheck()
+	tr := NewFilterByKeyspace(hc, testKeyspacesToWatch)
+	ts := memorytopo.NewServer(testCell)
+	tw := NewCellTabletsWatcher(context.Background(), ts, tr, testCell, 10*time.Minute, true, 5)
+
+	for _, test := range testFilterByKeyspace {
+		// Add a new tablet to the topology.
+		port := rand.Int31n(1000)
+		tablet := &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: testCell,
+				Uid:  rand.Uint32(),
+			},
+			Hostname: testHostName,
+			PortMap: map[string]int32{
+				"vt": port,
+			},
+			Keyspace: test.keyspace,
+			Shard:    testShard,
+		}
+
+		got := tr.isIncluded(tablet)
+		if got != test.expected {
+			t.Errorf("isIncluded(%v) for keyspace %v returned %v but expected %v", test.keyspace, test.keyspace, got, test.expected)
+		}
+
+		if err := ts.CreateTablet(context.Background(), tablet); err != nil {
+			t.Errorf("CreateTablet failed: %v", err)
+		}
+
+		tw.loadTablets()
+		key := TabletToMapKey(tablet)
+		allTablets := hc.GetAllTablets()
+
+		if _, ok := allTablets[key]; ok != test.expected && proto.Equal(allTablets[key], tablet) != test.expected {
+			t.Errorf("Error adding tablet - got %v; want %v", ok, test.expected)
+		}
+
+		// Replace the tablet we added above
+		tabletReplacement := &topodatapb.Tablet{
+			Alias: &topodatapb.TabletAlias{
+				Cell: testCell,
+				Uid:  rand.Uint32(),
+			},
+			Hostname: testHostName,
+			PortMap: map[string]int32{
+				"vt": port,
+			},
+			Keyspace: test.keyspace,
+			Shard:    testShard,
+		}
+		got = tr.isIncluded(tabletReplacement)
+		if got != test.expected {
+			t.Errorf("isIncluded(%v) for keyspace %v returned %v but expected %v", test.keyspace, test.keyspace, got, test.expected)
+		}
+		if err := ts.CreateTablet(context.Background(), tabletReplacement); err != nil {
+			t.Errorf("CreateTablet failed: %v", err)
+		}
+
+		tw.loadTablets()
+		key = TabletToMapKey(tabletReplacement)
+		allTablets = hc.GetAllTablets()
+
+		if _, ok := allTablets[key]; ok != test.expected && proto.Equal(allTablets[key], tabletReplacement) != test.expected {
+			t.Errorf("Error replacing tablet - got %v; want %v", ok, test.expected)
+		}
+
+		// Delete the tablet
+		if err := ts.DeleteTablet(context.Background(), tabletReplacement.Alias); err != nil {
+			t.Fatalf("DeleteTablet failed: %v", err)
 		}
 	}
 }

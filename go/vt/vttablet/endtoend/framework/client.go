@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -48,6 +48,21 @@ func NewClient() *QueryClient {
 			&querypb.VTGateCallerID{Username: "dev"},
 		),
 		target: Target,
+		server: Server,
+	}
+}
+
+// NewClientWithTabletType creates a new client for Server with the provided tablet type.
+func NewClientWithTabletType(tabletType topodatapb.TabletType) *QueryClient {
+	targetCopy := Target
+	targetCopy.TabletType = tabletType
+	return &QueryClient{
+		ctx: callerid.NewContext(
+			context.Background(),
+			&vtrpcpb.CallerID{},
+			&querypb.VTGateCallerID{Username: "dev"},
+		),
+		target: targetCopy,
 		server: Server,
 	}
 }

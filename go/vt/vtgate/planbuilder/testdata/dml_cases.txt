@@ -149,11 +149,12 @@
     },
     "Query": "update user set val = 1 where id = 1",
     "Vindex": "user_index",
-    "Values": [1],
+    "Values": [
+      1
+    ],
     "Table": "user"
   }
 }
-
 
 # update by primary keyspace id with alias
 "update user as user_alias set val = 1 where user_alias.id = 1"
@@ -167,7 +168,9 @@
     },
     "Query": "update user as user_alias set val = 1 where user_alias.id = 1",
     "Vindex": "user_index",
-    "Values": [1],
+    "Values": [
+      1
+    ],
     "Table": "user"
   }
 }
@@ -203,7 +206,9 @@
     },
     "Query": "update user set val = 1 where (name = 'foo' and id = 1)",
     "Vindex": "user_index",
-    "Values": [1],
+    "Values": [
+      1
+    ],
     "Table": "user"
   }
 }
@@ -220,12 +225,17 @@
     },
     "Query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1",
     "Vindex": "user_index",
-    "Values": [1],
+    "Values": [
+      1
+    ],
     "ChangedVindexValues": {
-      "email_user_map": ["juan@vitess.io"]
+      "email_user_map": {
+        "email": "juan@vitess.io"
+      }
     },
     "Table": "user_metadata",
-    "OwnedVindexQuery": "select email, address from user_metadata where user_id = 1 for update"
+    "OwnedVindexQuery": "select user_id, email, address from user_metadata where user_id = 1 for update",
+    "KsidVindex": "user_index"
   }
 }
 
@@ -245,13 +255,20 @@
     },
     "Query": "update user_metadata set email = 'juan@vitess.io', address = '155 5th street' where user_id = 1",
     "Vindex": "user_index",
-    "Values": [1],
+    "Values": [
+      1
+    ],
     "ChangedVindexValues": {
-      "address_user_map": ["155 5th street"],
-      "email_user_map": ["juan@vitess.io"]
+      "address_user_map": {
+        "address": "155 5th street"
+      },
+      "email_user_map": {
+        "email": "juan@vitess.io"
+      }
     },
     "Table": "user_metadata",
-    "OwnedVindexQuery": "select email, address from user_metadata where user_id = 1 for update"
+    "OwnedVindexQuery": "select user_id, email, address from user_metadata where user_id = 1 for update",
+    "KsidVindex": "user_index"
   }
 }
 
@@ -271,10 +288,13 @@
       1
     ],
     "ChangedVindexValues": {
-      "email_user_map": ["juan@vitess.io"]
+      "email_user_map": {
+        "email": "juan@vitess.io"
+      }
     },
     "Table": "user_metadata",
-    "OwnedVindexQuery": "select email, address from user_metadata where user_id = 1 order by user_id asc limit 10 for update"
+    "OwnedVindexQuery": "select user_id, email, address from user_metadata where user_id = 1 order by user_id asc limit 10 for update",
+    "KsidVindex": "user_index"
   }
 }
 
@@ -290,7 +310,9 @@
     },
     "Query": "update user set val = 1 where id = id2 and id = 1",
     "Vindex": "user_index",
-    "Values": [1],
+    "Values": [
+      1
+    ],
     "Table": "user"
   }
 }
@@ -307,7 +329,9 @@
     },
     "Query": "update user set val = 1 where id = 18446744073709551616 and id = 1",
     "Vindex": "user_index",
-    "Values": [1],
+    "Values": [
+      1
+    ],
     "Table": "user"
   }
 }
@@ -324,9 +348,12 @@
     },
     "Query": "delete from user where id = 1",
     "Vindex": "user_index",
-    "Values": [1],
+    "Values": [
+      1
+    ],
     "Table": "user",
-    "OwnedVindexQuery": "select Name, Costly from user where id = 1 for update"
+    "OwnedVindexQuery": "select Id, Name, Costly from user where id = 1 for update",
+    "KsidVindex": "user_index"
   }
 }
 
@@ -388,7 +415,8 @@
       1
     ],
     "Table": "user",
-    "OwnedVindexQuery": "select Name, Costly from user where id = 1 for update"
+    "OwnedVindexQuery": "select Id, Name, Costly from user where id = 1 for update",
+    "KsidVindex": "user_index"
   }
 }
 
@@ -418,7 +446,9 @@
     },
     "Query": "update music set val = 1 where id = 1",
     "Vindex": "music_user_map",
-    "Values": [1],
+    "Values": [
+      1
+    ],
     "Table": "music"
   }
 }
@@ -430,9 +460,9 @@
   "Instructions": {
     "Opcode": "UpdateUnsharded",
     "Keyspace": {
-          "Name": "main",
-          "Sharded": false
-     },
+      "Name": "main",
+      "Sharded": false
+    },
     "Query": "update unsharded_a as a join unsharded_b as b on a.id = b.id set a.val = 'foo' where b.val = 1"
   }
 }
@@ -463,9 +493,12 @@
     },
     "Query": "delete from music where id = 1",
     "Vindex": "music_user_map",
-    "Values": [1],
+    "Values": [
+      1
+    ],
     "Table": "music",
-    "OwnedVindexQuery": "select id from music where id = 1 for update"
+    "OwnedVindexQuery": "select user_id, id from music where id = 1 for update",
+    "KsidVindex": "user_index"
   }
 }
 
@@ -481,7 +514,9 @@
     },
     "Query": "delete from music_extra where user_id = 1",
     "Vindex": "user_index",
-    "Values": [1],
+    "Values": [
+      1
+    ],
     "Table": "music_extra"
   }
 }
@@ -588,7 +623,7 @@
   }
 }
 
-# sharded bulk upsert with sharding key set to vindex column 
+# sharded bulk upsert with sharding key set to vindex column
 "insert into music(user_id, id) values (1, 2), (3,4) on duplicate key update user_id = values(user_id)"
 {
   "Original": "insert into music(user_id, id) values (1, 2), (3,4) on duplicate key update user_id = values(user_id)",
@@ -758,7 +793,6 @@
   }
 }
 
-
 # unsharded insert subquery in insert value
 "insert into unsharded values((select 1 from dual), 1)"
 {
@@ -865,7 +899,23 @@
       "Sharded": true
     },
     "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0)",
-    "Values": [[[":__seq0"]],[[null]],[[null]]],
+    "Values": [
+      [
+        [
+          ":__seq0"
+        ]
+      ],
+      [
+        [
+          null
+        ]
+      ],
+      [
+        [
+          null
+        ]
+      ]
+    ],
     "Table": "user",
     "Generate": {
       "Keyspace": {
@@ -873,10 +923,14 @@
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Values": [1]
+      "Values": [
+        1
+      ]
     },
     "Prefix": "insert into user(id, Name, Costly) values ",
-    "Mid":["(:_Id0, :_Name0, :_Costly0)"]
+    "Mid": [
+      "(:_Id0, :_Name0, :_Costly0)"
+    ]
   }
 }
 
@@ -891,7 +945,23 @@
       "Sharded": true
     },
     "Query": "insert ignore into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0)",
-    "Values": [[[":__seq0"]],[[null]],[[null]]],
+    "Values": [
+      [
+        [
+          ":__seq0"
+        ]
+      ],
+      [
+        [
+          null
+        ]
+      ],
+      [
+        [
+          null
+        ]
+      ]
+    ],
     "Table": "user",
     "Generate": {
       "Keyspace": {
@@ -899,10 +969,14 @@
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Values": [1]
+      "Values": [
+        1
+      ]
     },
     "Prefix": "insert ignore into user(id, Name, Costly) values ",
-    "Mid":["(:_Id0, :_Name0, :_Costly0)"]
+    "Mid": [
+      "(:_Id0, :_Name0, :_Costly0)"
+    ]
   }
 }
 
@@ -917,7 +991,23 @@
       "Sharded": true
     },
     "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0) on duplicate key update col = 2",
-    "Values": [[[":__seq0"]],[[null]],[[null]]],
+    "Values": [
+      [
+        [
+          ":__seq0"
+        ]
+      ],
+      [
+        [
+          null
+        ]
+      ],
+      [
+        [
+          null
+        ]
+      ]
+    ],
     "Table": "user",
     "Generate": {
       "Keyspace": {
@@ -948,7 +1038,23 @@
       "Sharded": true
     },
     "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0)",
-    "Values": [[[":__seq0"]],[[null]],[[null]]],
+    "Values": [
+      [
+        [
+          ":__seq0"
+        ]
+      ],
+      [
+        [
+          null
+        ]
+      ],
+      [
+        [
+          null
+        ]
+      ]
+    ],
     "Table": "user",
     "Generate": {
       "Keyspace": {
@@ -978,7 +1084,23 @@
       "Sharded": true
     },
     "Query": "insert into user(nonid, id, Name, Costly) values (2, :_Id0, :_Name0, :_Costly0)",
-    "Values": [[[":__seq0"]],[[null]],[[null]]],
+    "Values": [
+      [
+        [
+          ":__seq0"
+        ]
+      ],
+      [
+        [
+          null
+        ]
+      ],
+      [
+        [
+          null
+        ]
+      ]
+    ],
     "Table": "user",
     "Generate": {
       "Keyspace": {
@@ -986,10 +1108,60 @@
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Values": [null]
+      "Values": [
+        null
+      ]
     },
     "Prefix": "insert into user(nonid, id, Name, Costly) values ",
-    "Mid": ["(2, :_Id0, :_Name0, :_Costly0)"]
+    "Mid": [
+      "(2, :_Id0, :_Name0, :_Costly0)"
+    ]
+  }
+}
+
+# insert with default seq
+"insert into user(id, nonid) values (default, 2)"
+{
+  "Original": "insert into user(id, nonid) values (default, 2)",
+  "Instructions": {
+    "Opcode": "InsertSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert into user(id, nonid, Name, Costly) values (:_Id0, 2, :_Name0, :_Costly0)",
+    "Values": [
+      [
+        [
+          ":__seq0"
+        ]
+      ],
+      [
+        [
+          null
+        ]
+      ],
+      [
+        [
+          null
+        ]
+      ]
+    ],
+    "Table": "user",
+    "Generate": {
+      "Keyspace": {
+        "Name": "main",
+        "Sharded": false
+      },
+      "Query": "select next :n values from seq",
+      "Values": [
+        null
+      ]
+    },
+    "Prefix": "insert into user(id, nonid, Name, Costly) values ",
+    "Mid": [
+      "(:_Id0, 2, :_Name0, :_Costly0)"
+    ]
   }
 }
 
@@ -1004,7 +1176,23 @@
       "Sharded": true
     },
     "Query": "insert into user(nonid, id, Name, Costly) values (true, :_Id0, :_Name0, :_Costly0)",
-    "Values": [[[":__seq0"]],[[null]],[[null]]],
+    "Values": [
+      [
+        [
+          ":__seq0"
+        ]
+      ],
+      [
+        [
+          null
+        ]
+      ],
+      [
+        [
+          null
+        ]
+      ]
+    ],
     "Table": "user",
     "Generate": {
       "Keyspace": {
@@ -1012,10 +1200,14 @@
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Values": [null]
+      "Values": [
+        null
+      ]
     },
     "Prefix": "insert into user(nonid, id, Name, Costly) values ",
-    "Mid": ["(true, :_Id0, :_Name0, :_Costly0)"]
+    "Mid": [
+      "(true, :_Id0, :_Name0, :_Costly0)"
+    ]
   }
 }
 
@@ -1030,7 +1222,23 @@
       "Sharded": true
     },
     "Query": "insert into user(nonid, name, id, Costly) values (2, :_Name0, :_Id0, :_Costly0)",
-    "Values": [[[":__seq0"]],[["foo"]],[[null]]],
+    "Values": [
+      [
+        [
+          ":__seq0"
+        ]
+      ],
+      [
+        [
+          "foo"
+        ]
+      ],
+      [
+        [
+          null
+        ]
+      ]
+    ],
     "Table": "user",
     "Generate": {
       "Keyspace": {
@@ -1038,10 +1246,14 @@
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Values": [1]
+      "Values": [
+        1
+      ]
     },
     "Prefix": "insert into user(nonid, name, id, Costly) values ",
-    "Mid": ["(2, :_Name0, :_Id0, :_Costly0)"]
+    "Mid": [
+      "(2, :_Name0, :_Id0, :_Costly0)"
+    ]
   }
 }
 
@@ -1056,7 +1268,13 @@
       "Sharded": true
     },
     "Query": "insert into user_extra(nonid, extra_id, user_id) values (2, :__seq0, :_user_id0)",
-    "Values": [[[null]]],
+    "Values": [
+      [
+        [
+          null
+        ]
+      ]
+    ],
     "Table": "user_extra",
     "Generate": {
       "Keyspace": {
@@ -1064,10 +1282,14 @@
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Values": [null]
+      "Values": [
+        null
+      ]
     },
     "Prefix": "insert into user_extra(nonid, extra_id, user_id) values ",
-    "Mid": ["(2, :__seq0, :_user_id0)"]
+    "Mid": [
+      "(2, :__seq0, :_user_id0)"
+    ]
   }
 }
 
@@ -1082,7 +1304,13 @@
       "Sharded": true
     },
     "Query": "insert into `weird``name`(`a``b*c`, `b*c`) values (:_a_b_c0, 2)",
-    "Values": [[[1]]],
+    "Values": [
+      [
+        [
+          1
+        ]
+      ]
+    ],
     "Table": "weird`name",
     "Prefix": "insert into `weird``name`(`a``b*c`, `b*c`) values ",
     "Mid": [
@@ -1133,7 +1361,26 @@
       "Sharded": true
     },
     "Query": "insert into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0), (:_Id1, :_Name1, :_Costly1)",
-    "Values": [[[":__seq0",":__seq1"]],[[null,null]],[[null,null]]],
+    "Values": [
+      [
+        [
+          ":__seq0",
+          ":__seq1"
+        ]
+      ],
+      [
+        [
+          null,
+          null
+        ]
+      ],
+      [
+        [
+          null,
+          null
+        ]
+      ]
+    ],
     "Table": "user",
     "Generate": {
       "Keyspace": {
@@ -1141,10 +1388,16 @@
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Values": [1,2]
+      "Values": [
+        1,
+        2
+      ]
     },
     "Prefix": "insert into user(id, Name, Costly) values ",
-    "Mid": ["(:_Id0, :_Name0, :_Costly0)","(:_Id1, :_Name1, :_Costly1)"]
+    "Mid": [
+      "(:_Id0, :_Name0, :_Costly0)",
+      "(:_Id1, :_Name1, :_Costly1)"
+    ]
   }
 }
 
@@ -1159,7 +1412,26 @@
       "Sharded": true
     },
     "Query": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0), (:_Id1, :_Name1, :_Costly1)",
-    "Values": [[[":__seq0",":__seq1"]],[[null,null]],[[null,null]]],
+    "Values": [
+      [
+        [
+          ":__seq0",
+          ":__seq1"
+        ]
+      ],
+      [
+        [
+          null,
+          null
+        ]
+      ],
+      [
+        [
+          null,
+          null
+        ]
+      ]
+    ],
     "Table": "user",
     "Generate": {
       "Keyspace": {
@@ -1167,10 +1439,16 @@
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Values": [1,2]
+      "Values": [
+        1,
+        2
+      ]
     },
     "Prefix": "insert /*vt+ QUERY_TIMEOUT_MS=1 */ into user(id, Name, Costly) values ",
-    "Mid": ["(:_Id0, :_Name0, :_Costly0)","(:_Id1, :_Name1, :_Costly1)"],
+    "Mid": [
+      "(:_Id0, :_Name0, :_Costly0)",
+      "(:_Id1, :_Name1, :_Costly1)"
+    ],
     "QueryTimeout": 1
   }
 }
@@ -1186,7 +1464,26 @@
       "Sharded": true
     },
     "Query": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id, Name, Costly) values (:_Id0, :_Name0, :_Costly0), (:_Id1, :_Name1, :_Costly1)",
-    "Values": [[[":__seq0",":__seq1"]],[[null,null]],[[null,null]]],
+    "Values": [
+      [
+        [
+          ":__seq0",
+          ":__seq1"
+        ]
+      ],
+      [
+        [
+          null,
+          null
+        ]
+      ],
+      [
+        [
+          null,
+          null
+        ]
+      ]
+    ],
     "Table": "user",
     "Generate": {
       "Keyspace": {
@@ -1194,10 +1491,16 @@
         "Sharded": false
       },
       "Query": "select next :n values from seq",
-      "Values": [1,2]
+      "Values": [
+        1,
+        2
+      ]
     },
     "Prefix": "insert /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ into user(id, Name, Costly) values ",
-    "Mid": ["(:_Id0, :_Name0, :_Costly0)","(:_Id1, :_Name1, :_Costly1)"],
+    "Mid": [
+      "(:_Id0, :_Name0, :_Costly0)",
+      "(:_Id1, :_Name1, :_Costly1)"
+    ],
     "MultiShardAutocommit": true
   }
 }
@@ -1359,6 +1662,40 @@
   }
 }
 
+# insert for overlapped vindex columns
+"insert overlap_vindex (kid, column_a, column_b) VALUES (1,2,3)"
+{
+  "Original": "insert overlap_vindex (kid, column_a, column_b) VALUES (1,2,3)",
+  "Instructions": {
+    "Opcode": "InsertSharded",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "insert into overlap_vindex(kid, column_a, column_b) values (:_kid0, :_column_a0, 3)",
+    "Values": [
+      [
+        [
+          1
+        ]
+      ],
+      [
+        [
+          2
+        ],
+        [
+          1
+        ]
+      ]
+    ],
+    "Table": "overlap_vindex",
+    "Prefix": "insert into overlap_vindex(kid, column_a, column_b) values ",
+    "Mid": [
+      "(:_kid0, :_column_a0, 3)"
+    ]
+  }
+}
+
 # insert multiple rows in a multi column vindex table
 "insert multicolvin (column_a, column_b, column_c, kid) VALUES (1,2,3,4), (5,6,7,8)"
 {
@@ -1419,7 +1756,8 @@
       1
     ],
     "Table": "multicolvin",
-    "OwnedVindexQuery": "select column_a, column_b, column_c from multicolvin where kid = 1 for update"
+    "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
+    "KsidVindex": "kid_index"
   }
 }
 
@@ -1439,13 +1777,14 @@
       1
     ],
     "ChangedVindexValues": {
-      "colb_colc_map": [
-        1,
-        2
-      ]
+      "colb_colc_map": {
+        "column_b": 1,
+        "column_c": 2
+      }
     },
     "Table": "multicolvin",
-    "OwnedVindexQuery": "select column_a, column_b, column_c from multicolvin where kid = 1 for update"
+    "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
+    "KsidVindex": "kid_index"
   }
 }
 
@@ -1465,16 +1804,17 @@
       1
     ],
     "ChangedVindexValues": {
-      "cola_map": [
-        0
-      ],
-      "colb_colc_map": [
-        1,
-        2
-      ]
+      "cola_map": {
+        "column_a": 0
+      },
+      "colb_colc_map": {
+        "column_b": 1,
+        "column_c": 2
+      }
     },
     "Table": "multicolvin",
-    "OwnedVindexQuery": "select column_a, column_b, column_c from multicolvin where kid = 1 for update"
+    "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
+    "KsidVindex": "kid_index"
   }
 }
 
@@ -1520,7 +1860,7 @@
     },
     "Query": "update /*vt+ MULTI_SHARD_AUTOCOMMIT=1 */ user_extra set val = 1",
     "Table": "user_extra",
-      "MultiShardAutocommit": true
+    "MultiShardAutocommit": true
   }
 }
 
@@ -1569,7 +1909,6 @@
     "Table": "user_extra"
   }
 }
-
 
 # update with non-unique key
 "update user_extra set val = 1 where name = 'foo'"
@@ -1730,8 +2069,8 @@
   "Instructions": {
     "Opcode": "UpdateUnsharded",
     "Keyspace": {
-      "Name":"main",
-      "Sharded":false
+      "Name": "main",
+      "Sharded": false
     },
     "Query": "update unsharded set col = (select id from unsharded_a where id = unsharded.col) where col = (select id from unsharded_b)"
   }
@@ -1763,11 +2102,227 @@
     },
     "Query": "update user set name = null where id = 1",
     "Vindex": "user_index",
-    "Values": [1],
+    "Values": [
+      1
+    ],
     "ChangedVindexValues": {
-      "name_user_map": [null]
+      "name_user_map": {
+        "Name": null
+      }
     },
     "Table": "user",
-    "OwnedVindexQuery": "select Name, Costly from user where id = 1 for update"
+    "OwnedVindexQuery": "select Id, Name, Costly from user where id = 1 for update",
+    "KsidVindex": "user_index"
+  }
+}
+
+# insert using last_insert_id
+"insert into unsharded values(last_insert_id(), 2)"
+{
+  "Original": "insert into unsharded values(last_insert_id(), 2)",
+  "Instructions": {
+    "Opcode": "InsertUnsharded",
+    "Keyspace": {
+      "Name": "main",
+      "Sharded": false
+    },
+    "Query": "insert into unsharded values (:__lastInsertId, 2)",
+    "Table": "unsharded"
+  }
+}
+
+# update vindex value to null with multiple primary keyspace id
+"update user set name = null where id in (1, 2, 3)"
+{
+  "Original": "update user set name = null where id in (1, 2, 3)",
+  "Instructions": {
+    "Opcode": "UpdateScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user set name = null where id in (1, 2, 3)",
+    "ChangedVindexValues": {
+      "name_user_map": {
+        "Name": null
+      }
+    },
+    "Table": "user",
+    "OwnedVindexQuery": "select Id, Name, Costly from user where id in (1, 2, 3) for update",
+    "KsidVindex": "user_index"
+  }
+}
+
+# update vindex value to null without a where clause
+"update user set name = null"
+{
+  "Original": "update user set name = null",
+  "Instructions": {
+    "Opcode": "UpdateScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user set name = null",
+    "ChangedVindexValues": {
+      "name_user_map": {
+        "Name": null
+      }
+    },
+    "Table": "user",
+    "OwnedVindexQuery": "select Id, Name, Costly from user for update",
+    "KsidVindex": "user_index"
+  }
+}
+
+# update vindex value to null with complex where clause
+"update user set name = null where id + 1 = 2"
+{
+  "Original": "update user set name = null where id + 1 = 2",
+  "Instructions": {
+    "Opcode": "UpdateScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user set name = null where id + 1 = 2",
+    "ChangedVindexValues": {
+      "name_user_map": {
+        "Name": null
+      }
+    },
+    "Table": "user",
+    "OwnedVindexQuery": "select Id, Name, Costly from user where id + 1 = 2 for update",
+    "KsidVindex": "user_index"
+  }
+}
+
+# delete from user by primary keyspace id with in clause
+"delete from user where id in (1, 2, 3)"
+{
+  "Original": "delete from user where id in (1, 2, 3)",
+  "Instructions": {
+    "Opcode": "DeleteScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "delete from user where id in (1, 2, 3)",
+    "Table": "user",
+    "OwnedVindexQuery": "select Id, Name, Costly from user where id in (1, 2, 3) for update",
+    "KsidVindex": "user_index"
+  }
+}
+
+# delete from user by complex expression
+"delete from user where id + 1 = 2"
+{
+  "Original": "delete from user where id + 1 = 2",
+  "Instructions": {
+    "Opcode": "DeleteScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "delete from user where id + 1 = 2",
+    "Table": "user",
+    "OwnedVindexQuery": "select Id, Name, Costly from user where id + 1 = 2 for update",
+    "KsidVindex": "user_index"
+  }
+}
+
+# delete from user without a where clause
+"delete from user"
+{
+  "Original": "delete from user",
+  "Instructions": {
+    "Opcode": "DeleteScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "delete from user",
+    "Table": "user",
+    "OwnedVindexQuery": "select Id, Name, Costly from user for update",
+    "KsidVindex": "user_index"
+  }
+}
+
+# delete with single table targets
+"delete music from music where id = 1"
+{
+  "Original": "delete music from music where id = 1",
+  "Instructions": {
+    "Opcode": "DeleteEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "delete music from music where id = 1",
+    "Vindex": "music_user_map",
+    "Values": [
+      1
+    ],
+    "Table": "music",
+    "OwnedVindexQuery": "select user_id, id from music where id = 1 for update",
+    "KsidVindex": "user_index"
+  }
+}
+
+# scatter update table with owned vindexes without changing lookup vindex
+"update user set val = 1"
+{
+  "Original": "update user set val = 1",
+  "Instructions": {
+    "Opcode": "UpdateScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update user set val = 1",
+    "Table": "user"
+  }
+}
+
+# scatter delete with owned lookup vindex
+"delete from user"
+{
+  "Original": "delete from user",
+  "Instructions": {
+    "Opcode": "DeleteScatter",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "delete from user",
+    "Table": "user",
+    "OwnedVindexQuery": "select Id, Name, Costly from user for update",
+    "KsidVindex": "user_index"
+  }
+}
+
+# update multi column vindex, without values for all the vindex columns
+"update multicolvin set column_c = 2 where kid = 1"
+{
+  "Original": "update multicolvin set column_c = 2 where kid = 1",
+  "Instructions": {
+    "Opcode": "UpdateEqual",
+    "Keyspace": {
+      "Name": "user",
+      "Sharded": true
+    },
+    "Query": "update multicolvin set column_c = 2 where kid = 1",
+    "Vindex": "kid_index",
+    "Values": [
+      1
+    ],
+    "ChangedVindexValues": {
+      "colb_colc_map": {
+        "column_c": 2
+      }
+    },
+    "Table": "multicolvin",
+    "OwnedVindexQuery": "select kid, column_a, column_b, column_c from multicolvin where kid = 1 for update",
+    "KsidVindex": "kid_index"
   }
 }

@@ -63,12 +63,22 @@ func (ms *MemorySort) RouteType() string {
 	return ms.Input.RouteType()
 }
 
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (ms *MemorySort) GetKeyspaceName() string {
+	return ms.Input.GetKeyspaceName()
+}
+
+// GetTableName specifies the table that this primitive routes to.
+func (ms *MemorySort) GetTableName() string {
+	return ms.Input.GetTableName()
+}
+
 // SetTruncateColumnCount sets the truncate column count.
 func (ms *MemorySort) SetTruncateColumnCount(count int) {
 	ms.TruncateColumnCount = count
 }
 
-// Execute satisfies the Primtive interface.
+// Execute satisfies the Primitive interface.
 func (ms *MemorySort) Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	count, err := ms.fetchCount(bindVars)
 	if err != nil {
@@ -95,7 +105,7 @@ func (ms *MemorySort) Execute(vcursor VCursor, bindVars map[string]*querypb.Bind
 	return result.Truncate(ms.TruncateColumnCount), nil
 }
 
-// StreamExecute satisfies the Primtive interface.
+// StreamExecute satisfies the Primitive interface.
 func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	count, err := ms.fetchCount(bindVars)
 	if err != nil {
@@ -145,9 +155,14 @@ func (ms *MemorySort) StreamExecute(vcursor VCursor, bindVars map[string]*queryp
 	return cb(&sqltypes.Result{Rows: sh.rows})
 }
 
-// GetFields satisfies the Primtive interface.
+// GetFields satisfies the Primitive interface.
 func (ms *MemorySort) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return ms.Input.GetFields(vcursor, bindVars)
+}
+
+// Inputs returns the input to memory sort
+func (ms *MemorySort) Inputs() []Primitive {
+	return []Primitive{ms.Input}
 }
 
 func (ms *MemorySort) fetchCount(bindVars map[string]*querypb.BindVariable) (int, error) {

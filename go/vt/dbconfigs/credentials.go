@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@ limitations under the License.
 
 package dbconfigs
 
-// This file contains logic for a plugable credentials system.
+// This file contains logic for a pluggable credentials system.
 // The default implementation is file based.
 // The flags are global, but only programs that need to access the database
 // link with this library, so we should be safe.
@@ -113,7 +113,7 @@ func (fcs *FileCredentialsServer) GetUserAndPassword(user string) (string, strin
 
 // WithCredentials returns a copy of the provided ConnParams that we can use
 // to connect, after going through the CredentialsServer.
-func WithCredentials(cp *mysql.ConnParams) (*mysql.ConnParams, error) {
+func withCredentials(cp *mysql.ConnParams) (*mysql.ConnParams, error) {
 	result := *cp
 	user, passwd, err := GetCredentialsServer().GetUserAndPassword(cp.Uname)
 	switch err {

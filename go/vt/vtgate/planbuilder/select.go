@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@ import (
 )
 
 // buildSelectPlan is the new function to build a Select plan.
-func buildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (primitive engine.Primitive, err error) {
+func buildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (engine.Primitive, error) {
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(sel)))
 	if err := pb.processSelect(sel, nil); err != nil {
 		return nil, err
@@ -69,7 +69,7 @@ func buildSelectPlan(sel *sqlparser.Select, vschema ContextVSchema) (primitive e
 // route primitive.
 //
 // The LIMIT clause is the last construct of a query. If it cannot be
-// pushed into a route, then a primitve is created on top of any
+// pushed into a route, then a primitive is created on top of any
 // of the above trees to make it discard unwanted rows.
 func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) error {
 	if err := pb.processTableExprs(sel.From); err != nil {
@@ -123,8 +123,8 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, outer *symtab) 
 // pushFilter identifies the target route for the specified bool expr,
 // pushes it down, and updates the route info if the new constraint improves
 // the primitive. This function can push to a WHERE or HAVING clause.
-func (pb *primitiveBuilder) pushFilter(boolExpr sqlparser.Expr, whereType string) error {
-	filters := splitAndExpression(nil, boolExpr)
+func (pb *primitiveBuilder) pushFilter(in sqlparser.Expr, whereType string) error {
+	filters := splitAndExpression(nil, in)
 	reorderBySubquery(filters)
 	for _, filter := range filters {
 		pullouts, origin, expr, err := pb.findOrigin(filter)
@@ -182,7 +182,7 @@ func (pb *primitiveBuilder) pushSelectExprs(sel *sqlparser.Select) error {
 	return pb.pushGroupBy(sel)
 }
 
-// pusheSelectRoutes is a convenience function that pushes all the select
+// pushSelectRoutes is a convenience function that pushes all the select
 // expressions and returns the list of resultColumns generated for it.
 func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) ([]*resultColumn, error) {
 	resultColumns := make([]*resultColumn, 0, len(selectExprs))
@@ -236,7 +236,7 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs) 
 			}
 			resultColumns = append(resultColumns, rb.PushAnonymous(node))
 		default:
-			return nil, fmt.Errorf("BUG: unexpceted select expression type: %T", node)
+			return nil, fmt.Errorf("BUG: unexpected select expression type: %T", node)
 		}
 	}
 	return resultColumns, nil
@@ -269,7 +269,7 @@ func (pb *primitiveBuilder) expandStar(inrcs []*resultColumn, expr *sqlparser.St
 			for _, col := range t.columnNames {
 				var expr *sqlparser.AliasedExpr
 				if singleTable {
-					// If there's only one table, we use unqualifed column names.
+					// If there's only one table, we use unqualified column names.
 					expr = &sqlparser.AliasedExpr{
 						Expr: &sqlparser.ColName{
 							Metadata: t.columns[col.Lowered()],

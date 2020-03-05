@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,9 +17,11 @@ limitations under the License.
 package sqlparser
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"math/rand"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -194,6 +196,8 @@ var (
 		input: "select /* parenthessis in table list 2 */ 1 from t1, (t2)",
 	}, {
 		input: "select /* use */ 1 from t1 use index (a) where b = 1",
+	}, {
+		input: "select /* use */ 1 from t1 use index () where b = 1",
 	}, {
 		input: "select /* keyword index */ 1 from t1 use index (`By`) where b = 1",
 	}, {
@@ -423,6 +427,9 @@ var (
 		input: "select /* function with many params */ 1 from t where a = b(c, d)",
 	}, {
 		input: "select /* function with distinct */ count(distinct a) from t",
+	}, {
+		input:  "select count(distinctrow(1)) from (select (1) from dual union all select 1 from dual) a",
+		output: "select count(distinct (1)) from (select (1) from dual union all select 1 from dual) as a",
 	}, {
 		input: "select /* if as func */ 1 from t where a = if(b)",
 	}, {
@@ -807,6 +814,10 @@ var (
 	}, {
 		input: "set tx_read_only = 0",
 	}, {
+		input: "set transaction_read_only = 1",
+	}, {
+		input: "set transaction_read_only = 0",
+	}, {
 		input: "set tx_isolation = 'repeatable read'",
 	}, {
 		input: "set tx_isolation = 'read committed'",
@@ -939,6 +950,12 @@ var (
 		input:  "alter table a drop spatial index idx (id)",
 		output: "alter table a",
 	}, {
+		input:  "alter table a add check ch_1",
+		output: "alter table a",
+	}, {
+		input:  "alter table a drop check ch_1",
+		output: "alter table a",
+	}, {
 		input:  "alter table a drop foreign key",
 		output: "alter table a",
 	}, {
@@ -950,6 +967,30 @@ var (
 	}, {
 		input:  "alter table a drop id",
 		output: "alter table a",
+	}, {
+		input:  "alter database d default character set = charset",
+		output: "alter database d",
+	}, {
+		input:  "alter database d character set = charset",
+		output: "alter database d",
+	}, {
+		input:  "alter database d default collate = collation",
+		output: "alter database d",
+	}, {
+		input:  "alter database d collate = collation",
+		output: "alter database d",
+	}, {
+		input:  "alter schema d default character set = charset",
+		output: "alter database d",
+	}, {
+		input:  "alter schema d character set = charset",
+		output: "alter database d",
+	}, {
+		input:  "alter schema d default collate = collation",
+		output: "alter database d",
+	}, {
+		input:  "alter schema d collate = collation",
+		output: "alter database d",
 	}, {
 		input: "create table a",
 	}, {
@@ -972,20 +1013,41 @@ var (
 	}, {
 		input: "alter vschema create vindex hash_vdx using hash",
 	}, {
+		input: "alter vschema create vindex keyspace.hash_vdx using hash",
+	}, {
 		input: "alter vschema create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
 	}, {
 		input: "alter vschema create vindex xyz_vdx using xyz with param1=hello, param2='world', param3=123",
 	}, {
 		input: "alter vschema drop vindex hash_vdx",
 	}, {
+		input: "alter vschema drop vindex ks.hash_vdx",
+	}, {
 		input: "alter vschema add table a",
+	}, {
+		input: "alter vschema add table ks.a",
+	}, {
+		input: "alter vschema add sequence a_seq",
+	}, {
+		input: "alter vschema add sequence ks.a_seq",
+	}, {
+		input: "alter vschema on a add auto_increment id using a_seq",
+	}, {
+		input: "alter vschema on ks.a add auto_increment id using a_seq",
 	}, {
 		input: "alter vschema drop table a",
 	}, {
+		input: "alter vschema drop table ks.a",
+	}, {
 		input: "alter vschema on a add vindex hash (id)",
+	}, {
+		input: "alter vschema on ks.a add vindex hash (id)",
 	}, {
 		input:  "alter vschema on a add vindex `hash` (`id`)",
 		output: "alter vschema on a add vindex hash (id)",
+	}, {
+		input:  "alter vschema on `ks`.a add vindex `hash` (`id`)",
+		output: "alter vschema on ks.a add vindex hash (id)",
 	}, {
 		input:  "alter vschema on a add vindex hash (id) using `hash`",
 		output: "alter vschema on a add vindex hash (id) using hash",
@@ -1003,6 +1065,8 @@ var (
 		output: "alter vschema on user2 add vindex name_lastname_lookup_vdx (name, lastname) using lookup with owner=user, table=name_lastname_keyspace_id_map, from=name,lastname, to=keyspace_id",
 	}, {
 		input: "alter vschema on a drop vindex hash",
+	}, {
+		input: "alter vschema on ks.a drop vindex hash",
 	}, {
 		input:  "alter vschema on a drop vindex `hash`",
 		output: "alter vschema on a drop vindex hash",
@@ -1080,13 +1144,19 @@ var (
 		output: "show charset",
 	}, {
 		input:  "show character set like '%foo'",
-		output: "show charset",
+		output: "show charset like '%foo'",
 	}, {
 		input:  "show charset",
 		output: "show charset",
 	}, {
 		input:  "show charset like '%foo'",
-		output: "show charset",
+		output: "show charset like '%foo'",
+	}, {
+		input:  "show charset where 'charset' = 'utf8'",
+		output: "show charset where 'charset' = 'utf8'",
+	}, {
+		input:  "show charset where 'charset' = '%foo'",
+		output: "show charset where 'charset' = '%foo'",
 	}, {
 		input:  "show collation",
 		output: "show collation",
@@ -1388,6 +1458,10 @@ var (
 	}, {
 		input: "select name, group_concat(distinct id, score order by id desc separator ':') from t group by name",
 	}, {
+		input: "select name, group_concat(distinct id, score order by id desc separator ':' limit 1) from t group by name",
+	}, {
+		input: "select name, group_concat(distinct id, score order by id desc separator ':' limit 10, 2) from t group by name",
+	}, {
 		input: "select * from t partition (p0)",
 	}, {
 		input: "select * from t partition (p0, p1)",
@@ -1411,6 +1485,9 @@ var (
 		input: "stream /* comment */ * from t",
 	}, {
 		input: "begin",
+	}, {
+		input:  "begin;",
+		output: "begin",
 	}, {
 		input:  "start transaction",
 		output: "begin",
@@ -1437,6 +1514,9 @@ var (
 	}, {
 		input:  "delete a.*, b.* from tbl_a a, tbl_b b where a.id = b.id and b.name = 'test'",
 		output: "delete a, b from tbl_a as a, tbl_b as b where a.id = b.id and b.name = 'test'",
+	}, {
+		input:  "select distinctrow a.* from (select (1) from dual union all select 1 from dual) a",
+		output: "select distinct a.* from (select (1) from dual union all select 1 from dual) as a",
 	}}
 )
 
@@ -1465,7 +1545,7 @@ func TestValid(t *testing.T) {
 }
 
 // Ensure there is no corruption from using a pooled yyParserImpl in Parse.
-func TestValidParallel(t *testing.T) {
+func TestParallelValid(t *testing.T) {
 	parallelism := 100
 	numIters := 1000
 
@@ -1816,6 +1896,45 @@ func TestConvert(t *testing.T) {
 		_, err := Parse(tcase.input)
 		if err == nil || err.Error() != tcase.output {
 			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
+		}
+	}
+}
+
+func TestPositionedErr(t *testing.T) {
+	invalidSQL := []struct {
+		input  string
+		output PositionedErr
+	}{{
+		input:  "select convert('abc' as date) from t",
+		output: PositionedErr{"syntax error", 24, []byte("as")},
+	}, {
+		input:  "select convert from t",
+		output: PositionedErr{"syntax error", 20, []byte("from")},
+	}, {
+		input:  "select cast('foo', decimal) from t",
+		output: PositionedErr{"syntax error", 19, nil},
+	}, {
+		input:  "select convert('abc', datetime(4+9)) from t",
+		output: PositionedErr{"syntax error", 34, nil},
+	}, {
+		input:  "select convert('abc', decimal(4+9)) from t",
+		output: PositionedErr{"syntax error", 33, nil},
+	}, {
+		input:  "set transaction isolation level 12345",
+		output: PositionedErr{"syntax error", 38, []byte("12345")},
+	}, {
+		input:  "select * from a left join b",
+		output: PositionedErr{"syntax error", 28, nil},
+	}}
+
+	for _, tcase := range invalidSQL {
+		tkn := NewStringTokenizer(tcase.input)
+		_, err := ParseNext(tkn)
+
+		if posErr, ok := err.(PositionedErr); !ok {
+			t.Errorf("%s: %v expected PositionedErr, got (%T) %v", tcase.input, err, err, tcase.output)
+		} else if posErr.Pos != tcase.output.Pos || !bytes.Equal(posErr.Near, tcase.output.Near) || err.Error() != tcase.output.Error() {
+			t.Errorf("%s: %v, want: %v", tcase.input, err, tcase.output)
 		}
 	}
 }
@@ -2509,6 +2628,25 @@ func TestSkipToEnd(t *testing.T) {
 		_, err := Parse(tcase.input)
 		if err == nil || err.Error() != tcase.output {
 			t.Errorf("%s: %v, want %s", tcase.input, err, tcase.output)
+		}
+	}
+}
+
+func TestParseDjangoQueries(t *testing.T) {
+
+	file, err := os.Open("./test_queries/django_queries.txt")
+	if err != nil {
+		t.Errorf(" Error: %v", err)
+	}
+	defer file.Close()
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+
+		_, err := Parse(string(scanner.Text()))
+		if err != nil {
+			t.Error(scanner.Text())
+			t.Errorf(" Error: %v", err)
 		}
 	}
 }

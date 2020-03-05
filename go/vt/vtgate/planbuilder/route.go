@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -490,16 +490,6 @@ func (rb *route) removeMultishardOptions() bool {
 			return true
 		}
 		return false
-	})
-}
-
-// removeShardedOptions removes all sharded options from the
-// route. It returns false if no such options exist.
-// This is used for constructs that are only supported for unsharded
-// keyspaces like last_insert_id.
-func (rb *route) removeShardedOptions() bool {
-	return rb.removeOptions(func(ro *routeOption) bool {
-		return ro.eroute.Opcode == engine.SelectUnsharded
 	})
 }
 

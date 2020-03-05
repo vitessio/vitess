@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -79,7 +79,7 @@ func init() {
 // current transaction log.
 // Endpoint: /txlogz?timeout=%d&limit=%d
 // timeout: the txlogz will keep dumping transactions until timeout
-// limit: txlogz will keep dumping transcations until it hits the limit
+// limit: txlogz will keep dumping transactions until it hits the limit
 func txlogzHandler(w http.ResponseWriter, req *http.Request) {
 	if err := acl.CheckAccessHTTP(req, acl.DEBUGGING); err != nil {
 		acl.SendError(w, err)

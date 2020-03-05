@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -48,7 +49,7 @@ type notifier func(full map[string]*Table, created, altered, dropped []string)
 // Engine stores the schema info and performs operations that
 // keep itself up-to-date.
 type Engine struct {
-	dbconfigs *dbconfigs.DBConfigs
+	cp dbconfigs.Connector
 
 	// mu protects the following fields.
 	mu         sync.Mutex
@@ -100,8 +101,8 @@ func NewEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *En
 }
 
 // InitDBConfig must be called before Open.
-func (se *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
-	se.dbconfigs = dbcfgs
+func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
+	se.cp = cp
 }
 
 // Open initializes the Engine. Calling Open on an already
@@ -113,10 +114,9 @@ func (se *Engine) Open() error {
 		return nil
 	}
 	start := time.Now()
-	defer log.Infof("Time taken to load the schema: %v", time.Since(start))
+	defer func() { log.Infof("Time taken to load the schema: %v", time.Since(start)) }()
 	ctx := tabletenv.LocalContext()
-	dbaParams := se.dbconfigs.DbaWithDB()
-	se.conns.Open(dbaParams, dbaParams, dbaParams)
+	se.conns.Open(se.cp, se.cp, se.cp)
 
 	conn, err := se.conns.Get(ctx)
 	if err != nil {
@@ -180,6 +180,11 @@ func (se *Engine) Open() error {
 	}
 	se.tables = tables
 	se.lastChange = curTime
+
+	// register message topics on the engine if necessary
+	// must run after se.tables is set
+	se.registerTopics()
+
 	se.ticks.Start(func() {
 		if err := se.Reload(ctx); err != nil {
 			log.Errorf("periodic schema reload failed: %v", err)
@@ -188,6 +193,13 @@ func (se *Engine) Open() error {
 	se.notifiers = make(map[string]notifier)
 	se.isOpen = true
 	return nil
+}
+
+// IsOpen() checks if engine is open
+func (se *Engine) IsOpen() bool {
+	se.mu.Lock()
+	defer se.mu.Unlock()
+	return se.isOpen
 }
 
 // Close shuts down Engine and is idempotent.
@@ -257,6 +269,7 @@ func (se *Engine) Reload(ctx context.Context) error {
 	// The following section requires us to hold mu.
 	rec := concurrency.AllErrorRecorder{}
 	curTables := map[string]bool{"dual": true}
+	var created, altered []string
 	for _, row := range tableData.Rows {
 		tableName := row[0].ToString()
 		curTables[tableName] = true
@@ -264,7 +277,13 @@ func (se *Engine) Reload(ctx context.Context) error {
 		// Check if we know about the table or it has been recreated.
 		if _, ok := se.tables[tableName]; !ok || createTime >= se.lastChange {
 			log.Infof("Reloading schema for table: %s", tableName)
-			rec.RecordError(se.tableWasCreatedOrAltered(ctx, tableName))
+			wasCreated, err := se.tableWasCreatedOrAltered(ctx, tableName)
+			rec.RecordError(err)
+			if wasCreated {
+				created = append(created, tableName)
+			} else {
+				altered = append(altered, tableName)
+			}
 		} else {
 			// Only update table_rows, data_length, index_length, max_data_length
 			se.tables[tableName].SetMysqlStats(row[4], row[5], row[6], row[7], row[8])
@@ -278,15 +297,31 @@ func (se *Engine) Reload(ctx context.Context) error {
 		if curTables[tableName] {
 			continue
 		}
-		delete(se.tables, tableName)
-		dropped = append(dropped, tableName)
+
+		// only keep track of non-topic table drops
+		if !se.tables[tableName].IsTopic() {
+			dropped = append(dropped, tableName)
+			delete(se.tables, tableName)
+		}
 	}
-	// We only need to broadcast dropped tables because
-	// tableWasCreatedOrAltered will broadcast the other changes.
-	if len(dropped) > 0 {
-		se.broadcast(nil, nil, dropped)
-	}
+
+	// register message topics on the engine if necessary
+	// must run after se.tables is set
+	se.registerTopics()
+
+	se.broadcast(created, altered, dropped)
 	return rec.Error()
+}
+
+// LoadTableBasic loads a table with minimal info. This is used by vstreamer
+// to load _vt.resharding_journal.
+func (se *Engine) LoadTableBasic(ctx context.Context, tableName string) (*Table, error) {
+	conn, err := se.conns.Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+	return LoadTableBasic(conn, tableName)
 }
 
 func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, error) {
@@ -306,24 +341,24 @@ func (se *Engine) mysqlTime(ctx context.Context, conn *connpool.DBConn) (int64, 
 
 // tableWasCreatedOrAltered must be called if a DDL was applied to that table.
 // the se.mu mutex _must_ be locked before entering this method
-func (se *Engine) tableWasCreatedOrAltered(ctx context.Context, tableName string) error {
+func (se *Engine) tableWasCreatedOrAltered(ctx context.Context, tableName string) (bool, error) {
 	if !se.isOpen {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "DDL called on closed schema")
+		return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "DDL called on closed schema")
 	}
 
 	conn, err := se.conns.Get(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer conn.Recycle()
 	tableData, err := conn.Exec(ctx, mysql.BaseShowTablesForTable(tableName), 1, false)
 	if err != nil {
 		tabletenv.InternalErrors.Add("Schema", 1)
-		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "tableWasCreatedOrAltered: information_schema query failed for table %s: %v", tableName, err)
+		return false, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "tableWasCreatedOrAltered: information_schema query failed for table %s: %v", tableName, err)
 	}
 	if len(tableData.Rows) != 1 {
 		// This can happen if DDLs race with each other.
-		return nil
+		return false, nil
 	}
 	row := tableData.Rows[0]
 	table, err := LoadTable(
@@ -334,25 +369,69 @@ func (se *Engine) tableWasCreatedOrAltered(ctx context.Context, tableName string
 	)
 	if err != nil {
 		tabletenv.InternalErrors.Add("Schema", 1)
-		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "tableWasCreatedOrAltered: failed to load table %s: %v", tableName, err)
+		return false, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "tableWasCreatedOrAltered: failed to load table %s: %v", tableName, err)
 	}
+
 	// table_rows, data_length, index_length, max_data_length
 	table.SetMysqlStats(row[4], row[5], row[6], row[7], row[8])
 
-	var created, altered []string
+	wasCreated := true
 	if _, ok := se.tables[tableName]; ok {
 		// If the table already exists, we overwrite it with the latest info.
 		// This also means that the query cache needs to be cleared.
 		// Otherwise, the query plans may not be in sync with the schema.
 		log.Infof("Updating table %s", tableName)
-		altered = append(altered, tableName)
-	} else {
-		created = append(created, tableName)
+		wasCreated = false
 	}
 	se.tables[tableName] = table
 	log.Infof("Initialized table: %s, type: %s", tableName, TypeNames[table.Type])
-	se.broadcast(created, altered, nil)
-	return nil
+	return wasCreated, nil
+}
+
+// registerTopics optionally connects the vt_topic metadata on a message table
+// to a map of topic strings. A table can belong to only one topic.
+func (se *Engine) registerTopics() {
+	// first drop all topics
+	for tableName, table := range se.tables {
+		if table.IsTopic() {
+			delete(se.tables, tableName)
+		}
+	}
+
+	// then register all the topics from scratch
+	for _, table := range se.tables {
+		se.registerTopic(table)
+	}
+}
+
+func (se *Engine) registerTopic(ta *Table) {
+	if ta.MessageInfo == nil || ta.MessageInfo.Topic == "" {
+		return
+	}
+
+	topicName := ta.MessageInfo.Topic
+	topicTable, ok := se.tables[topicName]
+	if !ok {
+		// initialize topic table if necessary
+		topicTable = NewTable(topicName)
+		topicTable.TopicInfo = &TopicInfo{
+			Subscribers: make([]*Table, 0, 1),
+		}
+		se.tables[topicName] = topicTable
+		log.Infof("creating topic table '%s'", topicName)
+	} else {
+		// check to see if this table is already registered to the topic
+		// so we don't double register
+		for _, t := range topicTable.TopicInfo.Subscribers {
+			if t.Name == ta.Name {
+				return
+			}
+		}
+	}
+
+	// append this table to the list of subscribed tables to the topic
+	log.Infof("subscribing message table '%s' to topic '%s'", ta.Name.String(), topicName)
+	topicTable.TopicInfo.Subscribers = append(topicTable.TopicInfo.Subscribers, ta)
 }
 
 // RegisterNotifier registers the function for schema change notification.
@@ -437,7 +516,7 @@ func (se *Engine) getTableRows() map[string]int64 {
 	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range se.tables {
-		tstats[k] = v.TableRows.Get()
+		tstats[strings.Replace(k, ".", "_", -1)] = v.TableRows.Get()
 	}
 	return tstats
 }
@@ -447,7 +526,7 @@ func (se *Engine) getDataLength() map[string]int64 {
 	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range se.tables {
-		tstats[k] = v.DataLength.Get()
+		tstats[strings.Replace(k, ".", "_", -1)] = v.DataLength.Get()
 	}
 	return tstats
 }
@@ -457,7 +536,7 @@ func (se *Engine) getIndexLength() map[string]int64 {
 	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range se.tables {
-		tstats[k] = v.IndexLength.Get()
+		tstats[strings.Replace(k, ".", "_", -1)] = v.IndexLength.Get()
 	}
 	return tstats
 }
@@ -467,7 +546,7 @@ func (se *Engine) getDataFree() map[string]int64 {
 	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range se.tables {
-		tstats[k] = v.DataFree.Get()
+		tstats[strings.Replace(k, ".", "_", -1)] = v.DataFree.Get()
 	}
 	return tstats
 }
@@ -477,7 +556,7 @@ func (se *Engine) getMaxDataLength() map[string]int64 {
 	defer se.mu.Unlock()
 	tstats := make(map[string]int64)
 	for k, v := range se.tables {
-		tstats[k] = v.MaxDataLength.Get()
+		tstats[strings.Replace(k, ".", "_", -1)] = v.MaxDataLength.Get()
 	}
 	return tstats
 }

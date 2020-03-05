@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestTimings(t *testing.T) {
@@ -76,4 +78,24 @@ func TestTimingsHook(t *testing.T) {
 	if gotv != v {
 		t.Errorf("got %#v, want %#v", gotv, v)
 	}
+}
+
+func TestTimingsCombineDimension(t *testing.T) {
+	clear()
+	*combineDimensions = "a,c"
+
+	t1 := NewTimings("timing_combine_dim1", "help", "label")
+	t1.Add("t1", 1*time.Nanosecond)
+	want := `{"TotalCount":1,"TotalTime":1,"Histograms":{"t1":{"500000":1,"1000000":1,"5000000":1,"10000000":1,"50000000":1,"100000000":1,"500000000":1,"1000000000":1,"5000000000":1,"10000000000":1,"inf":1,"Count":1,"Time":1}}}`
+	assert.Equal(t, want, t1.String())
+
+	t2 := NewTimings("timing_combine_dim2", "help", "a")
+	t2.Add("t1", 1)
+	want = `{"TotalCount":1,"TotalTime":1,"Histograms":{"all":{"500000":1,"1000000":1,"5000000":1,"10000000":1,"50000000":1,"100000000":1,"500000000":1,"1000000000":1,"5000000000":1,"10000000000":1,"inf":1,"Count":1,"Time":1}}}`
+	assert.Equal(t, want, t2.String())
+
+	t3 := NewMultiTimings("timing_combine_dim3", "help", []string{"a", "b", "c"})
+	t3.Add([]string{"c1", "c2", "c3"}, 1)
+	want = `{"TotalCount":1,"TotalTime":1,"Histograms":{"all.c2.all":{"500000":1,"1000000":1,"5000000":1,"10000000":1,"50000000":1,"100000000":1,"500000000":1,"1000000000":1,"5000000000":1,"10000000000":1,"inf":1,"Count":1,"Time":1}}}`
+	assert.Equal(t, want, t3.String())
 }

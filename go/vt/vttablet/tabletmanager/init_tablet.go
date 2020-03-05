@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -40,13 +39,12 @@ import (
 )
 
 var (
-	initDbNameOverride   = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet")
-	initKeyspace         = flag.String("init_keyspace", "", "(init parameter) keyspace to use for this tablet")
-	initShard            = flag.String("init_shard", "", "(init parameter) shard to use for this tablet")
-	initTags             flagutil.StringMapValue
-	initTabletType       = flag.String("init_tablet_type", "", "(init parameter) the tablet type to use for this tablet.")
-	initTimeout          = flag.Duration("init_timeout", 1*time.Minute, "(init parameter) timeout to use for the init phase.")
-	initPopulateMetadata = flag.Bool("init_populate_metadata", false, "(init parameter) populate metadata tables")
+	initDbNameOverride = flag.String("init_db_name_override", "", "(init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>")
+	initKeyspace       = flag.String("init_keyspace", "", "(init parameter) keyspace to use for this tablet")
+	initShard          = flag.String("init_shard", "", "(init parameter) shard to use for this tablet")
+	initTags           flagutil.StringMapValue
+	initTabletType     = flag.String("init_tablet_type", "", "(init parameter) the tablet type to use for this tablet.")
+	initTimeout        = flag.Duration("init_timeout", 1*time.Minute, "(init parameter) timeout to use for the init phase.")
 )
 
 func init() {
@@ -108,17 +106,42 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 			// There's no existing tablet record, so we can assume
 			// no one has left us a message to step down.
 			tabletType = topodatapb.TabletType_MASTER
-			// Update the TER timestamp (current value is 0) because we
+			// Update the master term start time (current value is 0) because we
 			// assume that we are actually the MASTER and in case of a tiebreak,
 			// vtgate should prefer us.
-			agent.setExternallyReparentedTime(time.Now())
+			agent.setMasterTermStartTime(time.Now())
 		case err == nil:
 			if oldTablet.Type == topodatapb.TabletType_MASTER {
 				// We're marked as master in the shard record,
 				// and our existing tablet record agrees.
 				tabletType = topodatapb.TabletType_MASTER
-				// Same comment as above. Update tiebreaking timestamp to now.
-				agent.setExternallyReparentedTime(time.Now())
+				// Read the master term start time from tablet.
+				// If it is nil, it might mean that we are upgrading, so use current time instead
+				if oldTablet.MasterTermStartTime != nil {
+					agent.setMasterTermStartTime(oldTablet.GetMasterTermStartTime())
+				} else {
+					agent.setMasterTermStartTime(time.Now())
+				}
+			}
+		default:
+			return vterrors.Wrap(err, "InitTablet failed to read existing tablet record")
+		}
+	} else {
+		oldTablet, err := agent.TopoServer.GetTablet(ctx, agent.TabletAlias)
+		switch {
+		case topo.IsErrType(err, topo.NoNode):
+			// There's no existing tablet record, so there is nothing to do
+		case err == nil:
+			if oldTablet.Type == topodatapb.TabletType_MASTER {
+				// Our existing tablet type is master, but the shard record does not agree.
+				// Only take over if our master_term_start_time is after what is in the shard record
+				oldMasterTermStartTime := oldTablet.GetMasterTermStartTime()
+				currentShardTime := si.GetMasterTermStartTime()
+				if oldMasterTermStartTime.After(currentShardTime) {
+					tabletType = topodatapb.TabletType_MASTER
+					// read the master term start time from tablet
+					agent.setMasterTermStartTime(oldMasterTermStartTime)
+				}
 			}
 		default:
 			return vterrors.Wrap(err, "InitTablet failed to read existing tablet record")
@@ -151,6 +174,19 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		log.Infof("Using detected machine hostname: %v To change this, fix your machine network configuration or override it with -tablet_hostname.", hostname)
 	}
 
+	// if we are recovering from a snapshot we set initDbNameOverride
+	// but only if it not already set
+	if *initDbNameOverride == "" {
+		keyspaceInfo, err := agent.TopoServer.GetKeyspace(ctx, *initKeyspace)
+		if err != nil {
+			return vterrors.Wrapf(err, "Error getting keyspace: %v", *initKeyspace)
+		}
+		baseKeyspace := keyspaceInfo.Keyspace.BaseKeyspace
+		if baseKeyspace != "" {
+			*initDbNameOverride = topoproto.VtDbPrefix + baseKeyspace
+		}
+	}
+
 	// create and populate tablet record
 	tablet := &topodatapb.Tablet{
 		Alias:          agent.TabletAlias,
@@ -162,6 +198,9 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		Type:           tabletType,
 		DbNameOverride: *initDbNameOverride,
 		Tags:           initTags,
+	}
+	if !agent.masterTermStartTime().IsZero() {
+		tablet.MasterTermStartTime = logutil.TimeToProto(agent.masterTermStartTime())
 	}
 	if port != 0 {
 		tablet.PortMap["vt"] = port
@@ -195,7 +234,7 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		// instance of a startup timeout). Upon running this code
 		// again, we want to fix ShardReplication.
 		if updateErr := topo.UpdateTabletReplicationData(ctx, agent.TopoServer, tablet); updateErr != nil {
-			return updateErr
+			return vterrors.Wrap(updateErr, "UpdateTabletReplicationData failed")
 		}
 
 		// Then overwrite everything, ignoring version mismatch.
@@ -206,15 +245,6 @@ func (agent *ActionAgent) InitTablet(port, gRPCPort int32) error {
 		return vterrors.Wrap(err, "CreateTablet failed")
 	}
 
-	// optionally populate metadata records
-	if *initPopulateMetadata {
-		agent.setTablet(tablet)
-		localMetadata := agent.getLocalMetadataValues(tablet.Type)
-		err := mysqlctl.PopulateMetadataTables(agent.MysqlDaemon, localMetadata, topoproto.TabletDbName(tablet))
-		if err != nil {
-			return vterrors.Wrap(err, "failed to -init_populate_metadata")
-		}
-	}
-
+	agent.setTablet(tablet)
 	return nil
 }

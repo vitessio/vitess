@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// protocol specifices which RPC client implementation should be used.
+// protocol specifics which RPC client implementation should be used.
 var protocol = flag.String("vtworker_client_protocol", "grpc", "the protocol to use to talk to the vtworker server")
 
 // Client defines the interface used to send remote vtworker commands

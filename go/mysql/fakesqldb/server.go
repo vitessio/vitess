@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -31,6 +31,9 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+
+	"vitess.io/vitess/go/vt/dbconfigs"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 const appendEntry = -1
@@ -164,7 +167,7 @@ func New(t *testing.T) *DB {
 	authServer := &mysql.AuthServerNone{}
 
 	// Start listening.
-	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0)
+	db.listener, err = mysql.NewListener("unix", socketFile, authServer, db, 0, 0, false)
 	if err != nil {
 		t.Fatalf("NewListener failed: %v", err)
 	}
@@ -203,6 +206,7 @@ func (db *DB) Close() {
 	db.listener.Close()
 	db.acceptWG.Wait()
 
+	db.WaitForClose(250 * time.Millisecond)
 	db.CloseAllConnections()
 
 	tmpDir := path.Dir(db.socketFile)
@@ -211,7 +215,7 @@ func (db *DB) Close() {
 
 // CloseAllConnections can be used to provoke MySQL client errors for open
 // connections.
-// Make sure to call WaitForShutdown() as well.
+// Make sure to call WaitForClose() as well.
 func (db *DB) CloseAllConnections() {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -254,23 +258,24 @@ func (db *DB) WaitForClose(timeout time.Duration) error {
 }
 
 // ConnParams returns the ConnParams to connect to the DB.
-func (db *DB) ConnParams() *mysql.ConnParams {
-	return &mysql.ConnParams{
+func (db *DB) ConnParams() dbconfigs.Connector {
+	return dbconfigs.New(&mysql.ConnParams{
 		UnixSocket: db.socketFile,
 		Uname:      "user1",
 		Pass:       "password1",
 		Charset:    "utf8",
-	}
+	})
+
 }
 
 // ConnParamsWithUname returns  ConnParams to connect to the DB with the Uname set to the provided value.
-func (db *DB) ConnParamsWithUname(uname string) *mysql.ConnParams {
-	return &mysql.ConnParams{
+func (db *DB) ConnParamsWithUname(uname string) dbconfigs.Connector {
+	return dbconfigs.New(&mysql.ConnParams{
 		UnixSocket: db.socketFile,
 		Uname:      uname,
 		Pass:       "password1",
 		Charset:    "utf8",
-	}
+	})
 }
 
 //
@@ -305,14 +310,14 @@ func (db *DB) ConnectionClosed(c *mysql.Conn) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	if db.t != nil {
-		db.t.Logf("ConnectionClosed(%v): client %v", db.name, c.ConnectionID)
-	}
-
 	if _, ok := db.connections[c.ConnectionID]; !ok {
-		db.t.Fatalf("BUG: Cannot delete connection from list of open connections because it is not registered. ID: %v Conn: %v", c.ConnectionID, c)
+		panic(fmt.Errorf("BUG: Cannot delete connection from list of open connections because it is not registered. ID: %v Conn: %v", c.ConnectionID, c))
 	}
 	delete(db.connections, c.ConnectionID)
+}
+
+// ComInitDB is part of the mysql.Handler interface.
+func (db *DB) ComInitDB(c *mysql.Conn, schemaName string) {
 }
 
 // ComQuery is part of the mysql.Handler interface.
@@ -430,6 +435,21 @@ func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
 		return nil, entry.Error
 	}
 	return entry.QueryResult, nil
+}
+
+// ComPrepare is part of the mysql.Handler interface.
+func (db *DB) ComPrepare(c *mysql.Conn, query string) ([]*querypb.Field, error) {
+	return nil, nil
+}
+
+// ComStmtExecute is part of the mysql.Handler interface.
+func (db *DB) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
+	return nil
+}
+
+// ComResetConnection is part of the mysql.Handler interface.
+func (db *DB) ComResetConnection(c *mysql.Conn) {
+
 }
 
 //

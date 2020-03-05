@@ -1,3 +1,19 @@
+/*
+Copyright 2019 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 // vttestserver is a native Go implementation of `run_local_server.py`.
 // It allows users to spawn a self-contained Vitess server for local testing/CI
 package main
@@ -24,50 +40,17 @@ type topoFlags struct {
 	rdonly    int
 }
 
-func (t *topoFlags) buildTopology() (*vttestpb.VTTestTopology, error) {
-	topo := &vttestpb.VTTestTopology{}
-	topo.Cells = strings.Split(t.cells, ",")
+var (
+	basePort  int
+	config    vttest.Config
+	doSeed    bool
+	mycnf     string
+	protoTopo string
+	seed      vttest.SeedConfig
+	topo      topoFlags
+)
 
-	keyspaces := strings.Split(t.keyspaces, ",")
-	shardCounts := strings.Split(t.shards, ",")
-	if len(keyspaces) != len(shardCounts) {
-		return nil, fmt.Errorf("--keyspaces must be same length as --shards")
-	}
-
-	for i := range keyspaces {
-		name := keyspaces[i]
-		numshards, err := strconv.ParseInt(shardCounts[i], 10, 32)
-		if err != nil {
-			return nil, err
-		}
-
-		ks := &vttestpb.Keyspace{
-			Name:         name,
-			ReplicaCount: int32(t.replicas),
-			RdonlyCount:  int32(t.rdonly),
-		}
-
-		for _, shardname := range vttest.GetShardNames(int(numshards)) {
-			ks.Shards = append(ks.Shards, &vttestpb.Shard{
-				Name: shardname,
-			})
-		}
-
-		topo.Keyspaces = append(topo.Keyspaces, ks)
-	}
-
-	return topo, nil
-}
-
-func parseFlags() (config vttest.Config, env vttest.Environment, err error) {
-	var seed vttest.SeedConfig
-	var topo topoFlags
-
-	var basePort int
-	var protoTopo string
-	var doSeed bool
-	var mycnf string
-
+func init() {
 	flag.IntVar(&basePort, "port", 0,
 		"Port to use for vtcombo. If this is 0, a random port will be chosen.")
 
@@ -123,12 +106,6 @@ func parseFlags() (config vttest.Config, env vttest.Environment, err error) {
 			" if --initialize_with_random_data is true. Only applies to fields"+
 			" that can contain NULL values.")
 
-	flag.StringVar(&config.WebDir, "web_dir", "",
-		"location of the vtctld web server files.")
-
-	flag.StringVar(&config.WebDir2, "web_dir2", "",
-		"location of the vtctld2 web server files.")
-
 	flag.StringVar(&config.MySQLBindHost, "mysql_bind_host", "localhost",
 		"which host to bind vtgate mysql listener to")
 
@@ -152,6 +129,49 @@ func parseFlags() (config vttest.Config, env vttest.Environment, err error) {
 	flag.StringVar(&config.TransactionMode, "transaction_mode", "MULTI", "Transaction mode MULTI (default), SINGLE or TWOPC ")
 	flag.Float64Var(&config.TransactionTimeout, "queryserver-config-transaction-timeout", 0, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
 
+	flag.StringVar(&config.TabletHostName, "tablet_hostname", "localhost", "The hostname to use for the tablet otherwise it will be derived from OS' hostname")
+
+	flag.BoolVar(&config.InitWorkflowManager, "workflow_manager_init", false, "Enable workflow manager")
+
+	flag.StringVar(&config.VSchemaDDLAuthorizedUsers, "vschema_ddl_authorized_users", "", "Comma separated list of users authorized to execute vschema ddl operations via vtgate")
+}
+
+func (t *topoFlags) buildTopology() (*vttestpb.VTTestTopology, error) {
+	topo := &vttestpb.VTTestTopology{}
+	topo.Cells = strings.Split(t.cells, ",")
+
+	keyspaces := strings.Split(t.keyspaces, ",")
+	shardCounts := strings.Split(t.shards, ",")
+	if len(keyspaces) != len(shardCounts) {
+		return nil, fmt.Errorf("--keyspaces must be same length as --shards")
+	}
+
+	for i := range keyspaces {
+		name := keyspaces[i]
+		numshards, err := strconv.ParseInt(shardCounts[i], 10, 32)
+		if err != nil {
+			return nil, err
+		}
+
+		ks := &vttestpb.Keyspace{
+			Name:         name,
+			ReplicaCount: int32(t.replicas),
+			RdonlyCount:  int32(t.rdonly),
+		}
+
+		for _, shardname := range vttest.GetShardNames(int(numshards)) {
+			ks.Shards = append(ks.Shards, &vttestpb.Shard{
+				Name: shardname,
+			})
+		}
+
+		topo.Keyspaces = append(topo.Keyspaces, ks)
+	}
+
+	return topo, nil
+}
+
+func parseFlags() (env vttest.Environment, err error) {
 	flag.Parse()
 
 	if basePort != 0 {
@@ -197,32 +217,37 @@ func parseFlags() (config vttest.Config, env vttest.Environment, err error) {
 }
 
 func main() {
-	config, env, err := parseFlags()
+	cluster, err := runCluster()
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	log.Infof("Starting local cluster...")
-	log.Infof("config: %#v", config)
-
-	cluster := vttest.LocalCluster{
-		Config: config,
-		Env:    env,
-	}
-
-	err = cluster.Setup()
 	defer cluster.TearDown()
-
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	kvconf := cluster.JSONConfig()
 	if err := json.NewEncoder(os.Stdout).Encode(kvconf); err != nil {
 		log.Fatal(err)
 	}
 
+	select {}
+}
+
+func runCluster() (vttest.LocalCluster, error) {
+	env, err := parseFlags()
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Infof("Starting local cluster...")
+	log.Infof("config: %#v", config)
+	cluster := vttest.LocalCluster{
+		Config: config,
+		Env:    env,
+	}
+	err = cluster.Setup()
+	if err != nil {
+		return cluster, err
+	}
+
 	log.Info("Local cluster started.")
 
-	select {}
+	return cluster, nil
 }

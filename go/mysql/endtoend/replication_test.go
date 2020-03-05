@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -191,93 +191,6 @@ func TestReplicationConnectionClosing(t *testing.T) {
 	wg.Wait()
 }
 
-func TestStatementReplicationWithRealDatabase(t *testing.T) {
-	conn, f := connectForReplication(t, false /* rbr */)
-	defer conn.Close()
-
-	// Create a table, insert some data in it.
-	ctx := context.Background()
-	dConn, err := mysql.Connect(ctx, &connParams)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer dConn.Close()
-	createTable := "create table replication(id int, name varchar(128), primary key(id))"
-	if _, err := dConn.ExecuteFetch(createTable, 0, false); err != nil {
-		t.Fatal(err)
-	}
-	insert := "insert into replication(id, name) values(10, 'nice name')"
-	result, err := dConn.ExecuteFetch(insert, 0, false)
-	if err != nil {
-		t.Fatalf("insert failed: %v", err)
-	}
-	if result.RowsAffected != 1 || len(result.Rows) != 0 {
-		t.Errorf("unexpected result for insert: %v", result)
-	}
-
-	// Get the new events from the binlogs.
-	// Make sure we get two GTIDs, the table creation event and the insert
-	// (with both a begin and a commit).
-	gtidCount := 0
-	gotCreateTable := false
-	gotBegin := false
-	gotInsert := false
-	gotCommit := false
-	for gtidCount < 2 || !gotCreateTable || !gotBegin || !gotInsert || !gotCommit {
-		be, err := conn.ReadBinlogEvent()
-		if err != nil {
-			t.Fatalf("ReadPacket failed: %v", err)
-		}
-		if !be.IsValid() {
-			t.Fatalf("read an invalid packet: %v", be)
-		}
-		be, _, err = be.StripChecksum(f)
-		if err != nil {
-			t.Fatalf("StripChecksum failed: %v", err)
-		}
-		switch {
-		case be.IsGTID():
-			// We expect one of these at least.
-			gtid, hasBegin, err := be.GTID(f)
-			if err != nil {
-				t.Fatalf("GTID event is broken: %v", err)
-			}
-			t.Logf("Got GTID event: %v %v", gtid, hasBegin)
-			gtidCount++
-			if hasBegin {
-				gotBegin = true
-			}
-		case be.IsQuery():
-			q, err := be.Query(f)
-			if err != nil {
-				t.Fatalf("Query event is broken: %v", err)
-			}
-			t.Logf("Got Query event: %v", q)
-			switch strings.ToLower(q.SQL) {
-			case createTable:
-				gotCreateTable = true
-			case insert:
-				gotInsert = true
-			case "begin":
-				gotBegin = true
-			case "commit":
-				gotCommit = true
-			}
-		case be.IsXID():
-			gotCommit = true
-			t.Logf("Got XID event")
-		default:
-			t.Logf("Got unrelated event: %v", be)
-		}
-	}
-
-	// Drop the table, we're done.
-	if _, err := dConn.ExecuteFetch("drop table replication", 0, false); err != nil {
-		t.Fatal(err)
-	}
-
-}
-
 func TestRowReplicationWithRealDatabase(t *testing.T) {
 	conn, f := connectForReplication(t, true /* rbr */)
 	defer conn.Close()
@@ -458,7 +371,7 @@ func TestRowReplicationWithRealDatabase(t *testing.T) {
 
 }
 
-// TestRowReplicationTypes creates a table wih all
+// TestRowReplicationTypes creates a table with all
 // supported data types. Then we insert a row in it. then we re-build
 // the SQL for the values, re-insert these. Then we select from the
 // database and make sure both rows are identical.

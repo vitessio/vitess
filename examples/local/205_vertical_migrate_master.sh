@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2018 The Vitess Authors.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,8 +17,4 @@
 # this script migrates master traffic for the customer keyspace to the
 # new master tablet
 
-set -e
-
-./lvtctl.sh MigrateServedFrom customer/0 master
-
-disown -a
+vtctlclient -server localhost:15999 MigrateServedFrom customer/0 master

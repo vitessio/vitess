@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -38,8 +38,8 @@ type Resolver struct {
 	// topoServ is the srvtopo.Server to use for topo queries.
 	topoServ Server
 
-	// stats provides the health information.
-	stats TargetStats
+	// queryService is the actual query service that will be used to execute queries.
+	queryService queryservice.QueryService
 
 	// localCell is the local cell for the queries.
 	localCell string
@@ -50,11 +50,11 @@ type Resolver struct {
 }
 
 // NewResolver creates a new Resolver.
-func NewResolver(topoServ Server, stats TargetStats, localCell string) *Resolver {
+func NewResolver(topoServ Server, queryService queryservice.QueryService, localCell string) *Resolver {
 	return &Resolver{
-		topoServ:  topoServ,
-		stats:     stats,
-		localCell: localCell,
+		topoServ:     topoServ,
+		queryService: queryService,
+		localCell:    localCell,
 	}
 }
 
@@ -130,18 +130,13 @@ func (r *Resolver) GetAllShards(ctx context.Context, keyspace string, tabletType
 			TabletType: tabletType,
 			Cell:       r.localCell,
 		}
-		_, qs, err := r.stats.GetAggregateStats(target)
-		if err != nil {
-			return nil, nil, resolverError(err, target)
-		}
-
-		// FIXME(alainjobart) we ignore the stats for now.
+		// Right now we always set the Cell to ""
 		// Later we can fallback to another cell if needed.
 		// We would then need to read the SrvKeyspace there too.
 		target.Cell = ""
 		res[i] = &ResolvedShard{
 			Target:       target,
-			QueryService: qs,
+			QueryService: r.queryService,
 		}
 	}
 	return res, srvKeyspace, nil
@@ -193,19 +188,14 @@ func (r *Resolver) ResolveDestinations(ctx context.Context, keyspace string, tab
 					TabletType: tabletType,
 					Cell:       r.localCell,
 				}
-				_, qs, err := r.stats.GetAggregateStats(target)
-				if err != nil {
-					return resolverError(err, target)
-				}
-
-				// FIXME(alainjobart) we ignore the stats for now.
+				// Right now we always set the Cell to ""
 				// Later we can fallback to another cell if needed.
 				// We would then need to read the SrvKeyspace there too.
 				target.Cell = ""
 				s = len(result)
 				result = append(result, &ResolvedShard{
 					Target:       target,
-					QueryService: qs,
+					QueryService: r.queryService,
 				})
 				if ids != nil {
 					values = append(values, nil)
@@ -246,8 +236,4 @@ func ValuesEqual(vss1, vss2 [][]*querypb.Value) bool {
 		}
 	}
 	return true
-}
-
-func resolverError(in error, target *querypb.Target) error {
-	return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "target: %s.%s.%s, no valid tablet: %v", target.Keyspace, target.Shard, topoproto.TabletTypeLString(target.TabletType), in)
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright 2017 Google Inc.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@ from mysql_flavor import mysql_flavor
 
 use_mysqlctld = False
 use_xtrabackup = False
+xtrabackup_stripes = 0
 stream_mode = 'tar'
 tablet_master = None
 tablet_replica1 = None
@@ -48,6 +49,7 @@ def setUpModule():
                    '-xtrabackup_stream_mode',
                    stream_mode,
                    '-xtrabackup_user=vt_dba',
+                   '-xtrabackup_stripes=%d' % (xtrabackup_stripes),
                    '-xtrabackup_backup_flags',
                    '--password=VtDbaPass']
 
@@ -93,7 +95,7 @@ def setUpModule():
     # Create a new init_db.sql file that sets up passwords for all users.
     # Then we use a db-credentials-file with the passwords.
     new_init_db = environment.tmproot + '/init_db_with_passwords.sql'
-    with open(environment.vttop + '/config/init_db.sql') as fd:
+    with open(environment.vtroot + '/config/init_db.sql') as fd:
       init_db = fd.read()
     with open(new_init_db, 'w') as fd:
       fd.write(init_db)
@@ -208,7 +210,7 @@ class TestBackup(unittest.TestCase):
         logging.exception('exception waiting for data to replicate')
       timeout = utils.wait_step(msg, timeout)
 
-  def _restore(self, t, tablet_type='replica'):
+  def _restore(self, t, tablet_type='replica', extra_args=[]):
     """Erase mysql/tablet dir, then start tablet with restore enabled."""
     logging.debug("restoring tablet %s",str(datetime.datetime.now()))
     self._reset_tablet_dir(t)
@@ -216,6 +218,8 @@ class TestBackup(unittest.TestCase):
     xtra_args = ['-db-credentials-file', db_credentials_file]
     if use_xtrabackup:
       xtra_args.extend(xtrabackup_args)
+
+    xtra_args.extend(extra_args)
 
     t.start_vttablet(wait_for_state='SERVING',
                      init_tablet_type=tablet_type,
@@ -232,7 +236,7 @@ class TestBackup(unittest.TestCase):
       t.check_db_var('rpl_semi_sync_slave_enabled', 'OFF')
       t.check_db_status('rpl_semi_sync_slave_status', 'OFF')
 
-  def _restore_wait_for_backup(self, t, tablet_type='replica'):
+  def _restore_wait_for_backup(self, t, tablet_type='replica', extra_args=[]):
     """Erase mysql/tablet dir, then start tablet with wait_for_restore_interval."""
     self._reset_tablet_dir(t)
 
@@ -242,6 +246,7 @@ class TestBackup(unittest.TestCase):
     ]
     if use_xtrabackup:
       xtra_args.extend(xtrabackup_args)
+    xtra_args.extend(extra_args)
 
     t.start_vttablet(wait_for_state=None,
                      init_tablet_type=tablet_type,
@@ -370,9 +375,14 @@ class TestBackup(unittest.TestCase):
       tablet_type: 'replica' or 'rdonly'.
     """
 
-    # bring up another replica concurrently, telling it to wait until a backup
+    # Bring up another replica concurrently, telling it to wait until a backup
     # is available instead of starting up empty.
-    self._restore_wait_for_backup(tablet_replica2, tablet_type=tablet_type)
+    #
+    # Override the backup engine implementation to a non-existent one for restore.
+    # This setting should only matter for taking new backups. We should be able
+    # to restore a previous backup successfully regardless of this setting.
+    self._restore_wait_for_backup(tablet_replica2, tablet_type=tablet_type,
+        extra_args=['-backup_engine_implementation', 'fake_implementation'])
 
     # insert data on master, wait for slave to get it
     tablet_master.mquery('vt_test_keyspace', self._create_vt_insert_test)
@@ -539,7 +549,7 @@ class TestBackup(unittest.TestCase):
   def test_terminated_restore(self):
     stop_restore_msg = 'Copying file 10'
     if use_xtrabackup:
-      stop_restore_msg = 'Restore: Preparing the files'
+      stop_restore_msg = 'Restore: Preparing'
     def _terminated_restore(t):
       for e in utils.vtctld_connection.execute_vtctl_command(
           ['RestoreFromBackup', t.tablet_alias]):

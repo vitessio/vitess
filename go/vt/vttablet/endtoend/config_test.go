@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/endtoend/framework"
@@ -36,7 +37,7 @@ func compareIntDiff(end map[string]interface{}, tag string, start map[string]int
 	return verifyIntValue(end, tag, framework.FetchInt(start, tag)+diff)
 }
 
-// verifyIntValue retuns an error if values[tag] != want.
+// verifyIntValue returns an error if values[tag] != want.
 func verifyIntValue(values map[string]interface{}, tag string, want int) error {
 	got := framework.FetchInt(values, tag)
 	if got != want {
@@ -51,9 +52,6 @@ func TestConfigVars(t *testing.T) {
 		tag string
 		val int
 	}{{
-		tag: "BeginTimeout",
-		val: int(tabletenv.Config.TxPoolTimeout * 1e9),
-	}, {
 		tag: "ConnPoolAvailable",
 		val: tabletenv.Config.PoolSize,
 	}, {
@@ -115,6 +113,9 @@ func TestConfigVars(t *testing.T) {
 		val: tabletenv.Config.TransactionCap,
 	}, {
 		tag: "TransactionPoolTimeout",
+		val: int(tabletenv.Config.TxPoolTimeout * 1e9),
+	}, {
+		tag: "TransactionTimeout",
 		val: int(tabletenv.Config.TransactionTimeout * 1e9),
 	}}
 	for _, tcase := range cases {
@@ -191,6 +192,79 @@ func TestDisableConsolidator(t *testing.T) {
 	noNewConsolidations := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
 	if afterOne != noNewConsolidations {
 		t.Errorf("expected no new consolidations, but got: before consolidation count: %v; after consolidation count: %v", afterOne, noNewConsolidations)
+	}
+}
+
+func TestConsolidatorReplicasOnly(t *testing.T) {
+	totalConsolidationsTag := "Waits/Histograms/Consolidations/inf"
+	initial := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		framework.NewClient().Execute("select sleep(0.5) from dual", nil)
+		wg.Done()
+	}()
+	go func() {
+		framework.NewClient().Execute("select sleep(0.5) from dual", nil)
+		wg.Done()
+	}()
+	wg.Wait()
+	afterOne := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
+	if initial+1 != afterOne {
+		t.Errorf("expected one consolidation, but got: before consolidation count: %v; after consolidation count: %v", initial, afterOne)
+	}
+
+	framework.Server.SetConsolidatorEnabled(false)
+	defer framework.Server.SetConsolidatorEnabled(true)
+	framework.Server.SetConsolidatorReplicasEnabled(true)
+	defer framework.Server.SetConsolidatorReplicasEnabled(false)
+
+	// master should not do query consolidation
+	var wg2 sync.WaitGroup
+	wg2.Add(2)
+	go func() {
+		framework.NewClient().Execute("select sleep(0.5) from dual", nil)
+		wg2.Done()
+	}()
+	go func() {
+		framework.NewClient().Execute("select sleep(0.5) from dual", nil)
+		wg2.Done()
+	}()
+	wg2.Wait()
+	noNewConsolidations := framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
+	if afterOne != noNewConsolidations {
+		t.Errorf("expected no new consolidations, but got: before consolidation count: %v; after consolidation count: %v", afterOne, noNewConsolidations)
+	}
+
+	// become a replica, where query consolidation should happen
+	client := framework.NewClientWithTabletType(topodatapb.TabletType_REPLICA)
+
+	err := client.SetServingType(topodatapb.TabletType_REPLICA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		err = client.SetServingType(topodatapb.TabletType_MASTER)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	initial = framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
+	var wg3 sync.WaitGroup
+	wg3.Add(2)
+	go func() {
+		client.Execute("select sleep(0.5) from dual", nil)
+		wg3.Done()
+	}()
+	go func() {
+		client.Execute("select sleep(0.5) from dual", nil)
+		wg3.Done()
+	}()
+	wg3.Wait()
+	afterOne = framework.FetchInt(framework.DebugVars(), totalConsolidationsTag)
+	if initial+1 != afterOne {
+		t.Errorf("expected another consolidation, but got: before consolidation count: %v; after consolidation count: %v", initial, afterOne)
 	}
 }
 
@@ -314,8 +388,7 @@ func TestMaxDMLRows(t *testing.T) {
 	want := "begin; " +
 		"select eid, id from vitess_a where eid = 3 limit 10001 for update; " +
 		"update vitess_a set foo = 'fghi' where " +
-		"(eid = 3 and id = 1) or (eid = 3 and id = 2) or (eid = 3 and id = 3) " +
-		"/* _stream vitess_a (eid id ) (3 1 ) (3 2 ) (3 3 ); */; " +
+		"(eid = 3 and id = 1) or (eid = 3 and id = 2) or (eid = 3 and id = 3); " +
 		"commit"
 	if queryInfo.RewrittenSQL() != want {
 		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
@@ -338,10 +411,8 @@ func TestMaxDMLRows(t *testing.T) {
 	want = "begin; " +
 		"select eid, id from vitess_a where eid = 3 limit 10001 for update; " +
 		"update vitess_a set eid = 2 where " +
-		"(eid = 3 and id = 1) or (eid = 3 and id = 2) " +
-		"/* _stream vitess_a (eid id ) (3 1 ) (3 2 ) (2 1 ) (2 2 ); */; " +
-		"update vitess_a set eid = 2 where (eid = 3 and id = 3) " +
-		"/* _stream vitess_a (eid id ) (3 3 ) (2 3 ); */; " +
+		"(eid = 3 and id = 1) or (eid = 3 and id = 2); " +
+		"update vitess_a set eid = 2 where (eid = 3 and id = 3); " +
 		"commit"
 	if queryInfo.RewrittenSQL() != want {
 		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
@@ -361,9 +432,8 @@ func TestMaxDMLRows(t *testing.T) {
 	want = "begin; " +
 		"select eid, id from vitess_a where eid = 2 limit 10001 for update; " +
 		"update vitess_a set foo = 'fghi' where (eid = 2 and id = 1) or " +
-		"(eid = 2 and id = 2) /* _stream vitess_a (eid id ) (2 1 ) (2 2 ); */; " +
-		"update vitess_a set foo = 'fghi' where (eid = 2 and id = 3) " +
-		"/* _stream vitess_a (eid id ) (2 3 ); */; " +
+		"(eid = 2 and id = 2); " +
+		"update vitess_a set foo = 'fghi' where (eid = 2 and id = 3); " +
 		"commit"
 	if queryInfo.RewrittenSQL() != want {
 		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)
@@ -382,10 +452,8 @@ func TestMaxDMLRows(t *testing.T) {
 	}
 	want = "begin; " +
 		"select eid, id from vitess_a where eid = 2 limit 10001 for update; " +
-		"delete from vitess_a where (eid = 2 and id = 1) or (eid = 2 and id = 2) " +
-		"/* _stream vitess_a (eid id ) (2 1 ) (2 2 ); */; " +
-		"delete from vitess_a where (eid = 2 and id = 3) " +
-		"/* _stream vitess_a (eid id ) (2 3 ); */; " +
+		"delete from vitess_a where (eid = 2 and id = 1) or (eid = 2 and id = 2); " +
+		"delete from vitess_a where (eid = 2 and id = 3); " +
 		"commit"
 	if queryInfo.RewrittenSQL() != want {
 		t.Errorf("Query info: \n%s, want \n%s", queryInfo.RewrittenSQL(), want)

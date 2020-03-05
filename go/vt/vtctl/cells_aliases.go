@@ -39,7 +39,7 @@ func init() {
 		"AddCellsAlias",
 		commandAddCellsAlias,
 		"[-cells <cell,cell2...>] <alias>",
-		"Registers a local topology service in a new cell by creating the CellsAlias with the provided parameters. An alis provides a group cells that replica/rdonly can route. By default, vitess won't route traffic cross cells for replica/rdonly tablets. Aliases provide a way to create groups where this is allowed."})
+		"Defines a group of cells within which replica/rdonly traffic can be routed across cells. Between cells that are not in the same group (alias), only master traffic can be routed."})
 
 	addCommand(cellsAliasesGroupName, command{
 		"UpdateCellsAlias",
@@ -61,7 +61,7 @@ func init() {
 }
 
 func commandAddCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	cellsString := subFlags.String("cells", "", "The address the topology server is using for that cell.")
+	cellsString := subFlags.String("cells", "", "The list of cell names that are members of this alias.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -82,7 +82,7 @@ func commandAddCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 }
 
 func commandUpdateCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	cellsString := subFlags.String("cells", "", "The address the topology server is using for that cell.")
+	cellsString := subFlags.String("cells", "", "The list of cell names that are members of this alias.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}

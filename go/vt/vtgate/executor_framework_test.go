@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -285,7 +285,7 @@ type keyRangeLookuper struct {
 func (v *keyRangeLookuper) String() string   { return "keyrange_lookuper" }
 func (*keyRangeLookuper) Cost() int          { return 0 }
 func (*keyRangeLookuper) IsUnique() bool     { return false }
-func (*keyRangeLookuper) IsFunctional() bool { return false }
+func (*keyRangeLookuper) NeedsVCursor() bool { return false }
 func (*keyRangeLookuper) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
@@ -310,7 +310,7 @@ type keyRangeLookuperUnique struct {
 func (v *keyRangeLookuperUnique) String() string   { return "keyrange_lookuper" }
 func (*keyRangeLookuperUnique) Cost() int          { return 0 }
 func (*keyRangeLookuperUnique) IsUnique() bool     { return true }
-func (*keyRangeLookuperUnique) IsFunctional() bool { return false }
+func (*keyRangeLookuperUnique) NeedsVCursor() bool { return false }
 func (*keyRangeLookuperUnique) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
@@ -385,6 +385,15 @@ func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclo
 
 func executorExec(executor *Executor, sql string, bv map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return executor.Execute(
+		context.Background(),
+		"TestExecute",
+		NewSafeSession(masterSession),
+		sql,
+		bv)
+}
+
+func executorPrepare(executor *Executor, sql string, bv map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
+	return executor.Prepare(
 		context.Background(),
 		"TestExecute",
 		NewSafeSession(masterSession),

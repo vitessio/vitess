@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,13 +18,16 @@ package planbuilder
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
@@ -42,7 +45,7 @@ type hashIndex struct{ name string }
 func (v *hashIndex) String() string   { return v.name }
 func (*hashIndex) Cost() int          { return 1 }
 func (*hashIndex) IsUnique() bool     { return true }
-func (*hashIndex) IsFunctional() bool { return true }
+func (*hashIndex) NeedsVCursor() bool { return false }
 func (*hashIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
@@ -60,7 +63,7 @@ type lookupIndex struct{ name string }
 func (v *lookupIndex) String() string   { return v.name }
 func (*lookupIndex) Cost() int          { return 2 }
 func (*lookupIndex) IsUnique() bool     { return true }
-func (*lookupIndex) IsFunctional() bool { return false }
+func (*lookupIndex) NeedsVCursor() bool { return false }
 func (*lookupIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
@@ -85,7 +88,7 @@ type multiIndex struct{ name string }
 func (v *multiIndex) String() string   { return v.name }
 func (*multiIndex) Cost() int          { return 3 }
 func (*multiIndex) IsUnique() bool     { return false }
-func (*multiIndex) IsFunctional() bool { return false }
+func (*multiIndex) NeedsVCursor() bool { return false }
 func (*multiIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
@@ -111,7 +114,7 @@ type costlyIndex struct{ name string }
 func (v *costlyIndex) String() string   { return v.name }
 func (*costlyIndex) Cost() int          { return 10 }
 func (*costlyIndex) IsUnique() bool     { return false }
-func (*costlyIndex) IsFunctional() bool { return false }
+func (*costlyIndex) NeedsVCursor() bool { return false }
 func (*costlyIndex) Verify(vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
 }
@@ -140,29 +143,30 @@ func init() {
 
 func TestPlan(t *testing.T) {
 	vschema := loadSchema(t, "schema_test.json")
-
+	testOutputTempDir, err := ioutil.TempDir("", "plan_test")
+	require.NoError(t, err)
 	// You will notice that some tests expect user.Id instead of user.id.
 	// This is because we now pre-create vindex columns in the symbol
 	// table, which come from vschema. In the test vschema,
 	// the column is named as Id. This is to make sure that
 	// column names are case-preserved, but treated as
 	// case-insensitive even if they come from the vschema.
-	testFile(t, "aggr_cases.txt", vschema)
-	testFile(t, "dml_cases.txt", vschema)
-	testFile(t, "from_cases.txt", vschema)
-	testFile(t, "filter_cases.txt", vschema)
-	testFile(t, "postprocess_cases.txt", vschema)
-	testFile(t, "select_cases.txt", vschema)
-	testFile(t, "symtab_cases.txt", vschema)
-	testFile(t, "unsupported_cases.txt", vschema)
-	testFile(t, "vindex_func_cases.txt", vschema)
-	testFile(t, "wireup_cases.txt", vschema)
-	testFile(t, "memory_sort_cases.txt", vschema)
+	testFile(t, "aggr_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "dml_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "from_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "filter_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "postprocess_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "select_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "symtab_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "unsupported_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "vindex_func_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "wireup_cases.txt", testOutputTempDir, vschema)
+	testFile(t, "memory_sort_cases.txt", testOutputTempDir, vschema)
 }
 
 func TestOne(t *testing.T) {
 	vschema := loadSchema(t, "schema_test.json")
-	testFile(t, "onecase.txt", vschema)
+	testFile(t, "onecase.txt", "", vschema)
 }
 
 func loadSchema(t *testing.T, filename string) *vindexes.VSchema {
@@ -225,35 +229,48 @@ type testPlan struct {
 	Instructions engine.Primitive `json:",omitempty"`
 }
 
-func testFile(t *testing.T, filename string, vschema *vindexes.VSchema) {
-	for tcase := range iterateExecFile(filename) {
-		t.Run(tcase.comments, func(t *testing.T) {
-			plan, err := Build(tcase.input, &vschemaWrapper{
-				v: vschema,
-			})
-			var out string
-			if err != nil {
-				out = err.Error()
-			} else {
-				bout, _ := json.Marshal(testPlan{
-					Original:     plan.Original,
-					Instructions: plan.Instructions,
+func testFile(t *testing.T, filename, tempDir string, vschema *vindexes.VSchema) {
+	t.Run(filename, func(t *testing.T) {
+		expected := &strings.Builder{}
+		fail := false
+		for tcase := range iterateExecFile(filename) {
+			t.Run(tcase.comments, func(t *testing.T) {
+				plan, err := Build(tcase.input, &vschemaWrapper{
+					v: vschema,
 				})
-				out = string(bout)
-			}
-			if out != tcase.output {
-				t.Errorf("File: %s, Line:%v\n got:\n%s, \nwant:\n%s", filename, tcase.lineno, out, tcase.output)
-				// Uncomment these lines to re-generate input files
-				if err != nil {
-					out = fmt.Sprintf("\"%s\"", out)
-				} else {
-					bout, _ := json.MarshalIndent(plan, "", "  ")
-					out = string(bout)
+
+				out := getPlanOrErrorOutput(err, plan)
+
+				if out != tcase.output {
+					fail = true
+					t.Errorf("File: %s, Line: %v\n %s", filename, tcase.lineno, cmp.Diff(out, tcase.output))
 				}
-				fmt.Printf("%s\"%s\"\n%s\n\n", tcase.comments, tcase.input, out)
-			}
-		})
+
+				if err != nil {
+					out = `"` + out + `"`
+				}
+
+				expected.WriteString(fmt.Sprintf("%s\"%s\"\n%s\n\n", tcase.comments, tcase.input, out))
+
+			})
+		}
+		if fail && tempDir != "" {
+			gotFile := fmt.Sprintf("%s/%s", tempDir, filename)
+			ioutil.WriteFile(gotFile, []byte(strings.TrimSpace(expected.String())+"\n"), 0644)
+			fmt.Println(fmt.Sprintf("Errors found in plantests. If the output is correct, run `cp %s/* testdata/` to update test expectations", tempDir))
+		}
+	})
+}
+
+func getPlanOrErrorOutput(err error, plan *engine.Plan) string {
+	if err != nil {
+		return err.Error()
 	}
+	bout, _ := json.MarshalIndent(testPlan{
+		Original:     plan.Original,
+		Instructions: plan.Instructions,
+	}, "", "  ")
+	return string(bout)
 }
 
 type testCase struct {
@@ -281,8 +298,7 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 			binput, err := r.ReadBytes('\n')
 			if err != nil {
 				if err != io.EOF {
-					fmt.Printf("Line: %d\n", lineno)
-					panic(fmt.Errorf("error reading file %s: %s", name, err.Error()))
+					panic(fmt.Errorf("error reading file %s: line %d: %s", name, lineno, err.Error()))
 				}
 				break
 			}
@@ -297,8 +313,7 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 			}
 			err = json.Unmarshal(binput, &input)
 			if err != nil {
-				fmt.Printf("Line: %d, input: %s\n", lineno, binput)
-				panic(err)
+				panic(fmt.Sprintf("Line: %d, input: %s, error: %v\n", lineno, binput, err))
 			}
 			input = strings.Trim(input, "\"")
 			var output []byte
@@ -306,19 +321,11 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 				l, err := r.ReadBytes('\n')
 				lineno++
 				if err != nil {
-					fmt.Printf("Line: %d\n", lineno)
-					panic(fmt.Errorf("error reading file %s: %s", name, err.Error()))
+					panic(fmt.Sprintf("error reading file %s line# %d: %s", name, lineno, err.Error()))
 				}
 				output = append(output, l...)
 				if l[0] == '}' {
 					output = output[:len(output)-1]
-					b := bytes.NewBuffer(make([]byte, 0, 64))
-					err := json.Compact(b, output)
-					if err == nil {
-						output = b.Bytes()
-					} else {
-						panic("Invalid JSON " + string(output) + err.Error())
-					}
 					break
 				}
 				if l[0] == '"' {

@@ -1,0 +1,200 @@
+version: "2.1"
+services:
+  consul1:
+    image: consul:latest
+    hostname: "consul1"
+    ports:
+      - "8400:8400"
+      - "8500:8500"
+      - "8600:8600"
+    command: "agent -server -bootstrap-expect 3 -ui -disable-host-node-id -client 0.0.0.0"
+  consul2:
+    image: consul:latest
+    hostname: "consul2"
+    expose:
+      - "8400"
+      - "8500"
+      - "8600"
+    command: "agent -server -retry-join consul1 -disable-host-node-id"
+    depends_on:
+      - consul1
+  consul3:
+    image: consul:latest
+    hostname: "consul3"
+    expose:
+      - "8400"
+      - "8500"
+      - "8600"
+    command: "agent -server -retry-join consul1 -disable-host-node-id"
+    depends_on:
+      - consul1
+
+  vtctld:
+    image: vitess/base
+    ports:
+      - "15000:$WEB_PORT"
+      - "$GRPC_PORT"
+    command: ["sh", "-c", " $$VTROOT/bin/vtctld \
+        $TOPOLOGY_FLAGS \
+        -cell $CELL \
+        -workflow_manager_init \
+        -workflow_manager_use_election \
+        -service_map 'grpc-vtctl' \
+        -backup_storage_implementation file \
+        -file_backup_storage_root $$VTDATAROOT/backups \
+        -logtostderr=true \
+        -port $WEB_PORT \
+        -grpc_port $GRPC_PORT \
+        -pid_file $$VTDATAROOT/tmp/vtctld.pid
+        "]
+    depends_on:
+      - consul1
+      - consul2
+      - consul3
+
+  vtgate:
+    image: vitess/base
+    ports:
+      - "15099:$WEB_PORT"
+      - "$GRPC_PORT"
+      - "15306:$MYSQL_PORT"
+    command: ["sh", "-c", "$$VTROOT/bin/vtgate \
+        $TOPOLOGY_FLAGS \
+        -logtostderr=true \
+        -port $WEB_PORT \
+        -grpc_port $GRPC_PORT \
+        -mysql_server_port $MYSQL_PORT \
+        -mysql_auth_server_impl none \
+        -cell $CELL \
+        -cells_to_watch $CELL \
+        -tablet_types_to_wait MASTER,REPLICA \
+        -gateway_implementation discoverygateway \
+        -service_map 'grpc-vtgateservice' \
+        -pid_file $$VTDATAROOT/tmp/vtgate.pid \
+        "]
+    volumes:
+      - ".:/script"
+    environment:
+      - KEYSPACE
+      - DB
+    depends_on:
+      - vtctld
+    depends_on:
+      vttablet101:
+        condition: service_healthy
+
+  schemaload:
+    image: vitess/base
+    command:
+    - sh
+    - -c
+    - /script/schemaload.sh
+    environment:
+    - TOPOLOGY_FLAGS
+    - WEB_PORT
+    - GRPC_PORT
+    - CELL
+    - KEYSPACE
+    - TARGETTAB
+    - SLEEPTIME
+    - VSCHEMA_FILE
+    - SCHEMA_FILES
+    - POST_LOAD_FILE
+    - EXTERNAL_DB
+    volumes:
+    - .:/script
+    depends_on:
+      vttablet101:
+        condition: service_healthy
+
+  vttablet101:
+    image: vitess/base
+    ports:
+      - "15101:$WEB_PORT"
+      - "$GRPC_PORT"
+      - "3306"
+    volumes:
+      - ".:/script"
+      - "./backups:/vt/vtdataroot/backups"
+    environment:
+      - TOPOLOGY_FLAGS
+      - WEB_PORT
+      - GRPC_PORT
+      - CELL
+      - KEYSPACE
+      - DB
+      - EXTERNAL_DB
+      - DB_PORT
+      - DB_HOST
+      - DB_USER
+      - DB_PASS
+      - DB_CHARSET
+      - ROLE=master
+    command: ["sh", "-c", "/script/vttablet-up.sh 101"]
+    depends_on:
+      - vtctld
+    healthcheck:
+      test: ["CMD-SHELL","curl localhost:$$WEB_PORT/debug/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 15
+
+  vttablet102:
+    image: vitess/base
+    ports:
+      - "15102:$WEB_PORT"
+      - "$GRPC_PORT"
+      - "3306"
+    volumes:
+      - ".:/script"
+      - "./backups:/vt/vtdataroot/backups"
+    environment:
+      - TOPOLOGY_FLAGS
+      - WEB_PORT
+      - GRPC_PORT
+      - CELL
+      - KEYSPACE
+      - DB
+      - EXTERNAL_DB
+      - DB_USER
+      - DB_PASS
+      - DB_CHARSET
+    command: ["sh", "-c", "/script/vttablet-up.sh 102"]
+    depends_on:
+      - vtctld
+      - vttablet101
+    healthcheck:
+      test: ["CMD-SHELL","curl localhost:$$WEB_PORT/debug/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 15
+
+  vttablet103:
+    image: vitess/base
+    ports:
+      - "15103:$WEB_PORT"
+      - "$GRPC_PORT"
+      - "3306"
+    volumes:
+      - ".:/script"
+      - "./backups:/vt/vtdataroot/backups"
+    environment:
+      - TOPOLOGY_FLAGS
+      - WEB_PORT
+      - GRPC_PORT
+      - CELL
+      - KEYSPACE
+      - DB
+      - EXTERNAL_DB
+      - DB_USER
+      - DB_PASS
+      - DB_CHARSET
+    command: ["sh", "-c", "/script/vttablet-up.sh 103"]
+    depends_on:
+      - vtctld
+      - vttablet101
+    healthcheck:
+      test: ["CMD-SHELL","curl localhost:$$WEB_PORT/debug/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 15

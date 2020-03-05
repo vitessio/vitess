@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -171,6 +171,11 @@ func (jn *Join) GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVari
 	return result, nil
 }
 
+// Inputs returns the input primitives for this join
+func (jn *Join) Inputs() []Primitive {
+	return []Primitive{jn.Left, jn.Right}
+}
+
 func joinFields(lfields, rfields []*querypb.Field, cols []int) []*querypb.Field {
 	fields := make([]*querypb.Field, len(cols))
 	for i, index := range cols {
@@ -224,6 +229,19 @@ func (code JoinOpcode) MarshalJSON() ([]byte, error) {
 // RouteType returns a description of the query routing type used by the primitive
 func (jn *Join) RouteType() string {
 	return "Join"
+}
+
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (jn *Join) GetKeyspaceName() string {
+	if jn.Left.GetKeyspaceName() == jn.Right.GetKeyspaceName() {
+		return jn.Left.GetKeyspaceName()
+	}
+	return jn.Left.GetKeyspaceName() + "_" + jn.Right.GetKeyspaceName()
+}
+
+// GetTableName specifies the table that this primitive routes to.
+func (jn *Join) GetTableName() string {
+	return jn.Left.GetTableName() + "_" + jn.Right.GetTableName()
 }
 
 func combineVars(bv1, bv2 map[string]*querypb.BindVariable) map[string]*querypb.BindVariable {

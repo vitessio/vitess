@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ type QueryCatcher struct {
 	catcher *eventCatcher
 }
 
-// NewQueryCatcher sets up the capture and retuns a QueryCatcher.
+// NewQueryCatcher sets up the capture and returns a QueryCatcher.
 // You must call Close when done.
 func NewQueryCatcher() QueryCatcher {
 	return QueryCatcher{catcher: newEventCatcher(tabletenv.StatsLogger)}

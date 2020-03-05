@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
@@ -54,8 +55,12 @@ type FakeMysqlDaemon struct {
 
 	// Replicating is updated when calling StartSlave / StopSlave
 	// (it is not used at all when calling SlaveStatus, it is the
-	// test owner responsability to have these two match)
+	// test owner responsibility to have these two match)
 	Replicating bool
+
+	// SlaveIORunning is always true except in one testcase
+	// where we want to test error handling during SetMaster
+	SlaveIORunning bool
 
 	// CurrentMasterPosition is returned by MasterPosition
 	// and SlaveStatus
@@ -63,6 +68,9 @@ type FakeMysqlDaemon struct {
 
 	// SlaveStatusError is used by SlaveStatus
 	SlaveStatusError error
+
+	// StartSlaveError is used by StartSlave
+	StartSlaveError error
 
 	// CurrentMasterHost is returned by SlaveStatus
 	CurrentMasterHost string
@@ -89,6 +97,9 @@ type FakeMysqlDaemon struct {
 	// SetMasterInput is matched against the input of SetMaster
 	// (as "%v:%v"). If it doesn't match, SetMaster will return an error.
 	SetMasterInput string
+
+	// SetMasterError is used by SetMaster
+	SetMasterError error
 
 	// WaitMasterPosition is checked by WaitMasterPos, if the
 	// same it returns nil, if different it returns an error
@@ -117,7 +128,7 @@ type FakeMysqlDaemon struct {
 	// ExecuteSuperQueryList to be called with. If it doesn't
 	// match, ExecuteSuperQueryList will return an error.
 	// Note each string is just a substring if it begins with SUB,
-	// so we support partial queries (usefull when queries contain
+	// so we support partial queries (useful when queries contain
 	// data fields like timestamps)
 	ExpectedExecuteSuperQueryList []string
 
@@ -146,8 +157,9 @@ type FakeMysqlDaemon struct {
 // 'db' can be nil if the test doesn't use a database at all.
 func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 	result := &FakeMysqlDaemon{
-		db:      db,
-		Running: true,
+		db:             db,
+		Running:        true,
+		SlaveIORunning: true,
 	}
 	if db != nil {
 		result.appPool = dbconnpool.NewConnectionPool("AppConnPool", 5, time.Minute, 0)
@@ -210,10 +222,12 @@ func (fmd *FakeMysqlDaemon) SlaveStatus() (mysql.SlaveStatus, error) {
 	return mysql.SlaveStatus{
 		Position:            fmd.CurrentMasterPosition,
 		SecondsBehindMaster: fmd.SecondsBehindMaster,
-		SlaveIORunning:      fmd.Replicating,
-		SlaveSQLRunning:     fmd.Replicating,
-		MasterHost:          fmd.CurrentMasterHost,
-		MasterPort:          fmd.CurrentMasterPort,
+		// implemented as AND to avoid changing all tests that were
+		// previously using Replicating = false
+		SlaveIORunning:  fmd.Replicating && fmd.SlaveIORunning,
+		SlaveSQLRunning: fmd.Replicating,
+		MasterHost:      fmd.CurrentMasterHost,
+		MasterPort:      fmd.CurrentMasterPort,
 	}, nil
 }
 
@@ -249,7 +263,19 @@ func (fmd *FakeMysqlDaemon) SetSuperReadOnly(on bool) error {
 
 // StartSlave is part of the MysqlDaemon interface.
 func (fmd *FakeMysqlDaemon) StartSlave(hookExtraEnv map[string]string) error {
+	if fmd.StartSlaveError != nil {
+		return fmd.StartSlaveError
+	}
 	return fmd.ExecuteSuperQueryList(context.Background(), []string{
+		"START SLAVE",
+	})
+}
+
+// RestartSlave is part of the MysqlDaemon interface.
+func (fmd *FakeMysqlDaemon) RestartSlave(hookExtraEnv map[string]string) error {
+	return fmd.ExecuteSuperQueryList(context.Background(), []string{
+		"STOP SLAVE",
+		"RESET SLAVE",
 		"START SLAVE",
 	})
 }
@@ -288,6 +314,9 @@ func (fmd *FakeMysqlDaemon) SetMaster(ctx context.Context, masterHost string, ma
 	if fmd.SetMasterInput != input {
 		return fmt.Errorf("wrong input for SetMasterCommands: expected %v got %v", fmd.SetMasterInput, input)
 	}
+	if fmd.SetMasterError != nil {
+		return fmd.SetMasterError
+	}
 	cmds := []string{}
 	if slaveStopBefore {
 		cmds = append(cmds, "STOP SLAVE")
@@ -304,7 +333,7 @@ func (fmd *FakeMysqlDaemon) WaitForReparentJournal(ctx context.Context, timeCrea
 	return nil
 }
 
-// Deprecated: use mysqld.MasterPosition() instead
+// DemoteMaster is deprecated: use mysqld.MasterPosition() instead
 func (fmd *FakeMysqlDaemon) DemoteMaster() (mysql.Position, error) {
 	return fmd.CurrentMasterPosition, nil
 }
@@ -412,8 +441,8 @@ func (fmd *FakeMysqlDaemon) GetSchema(dbName string, tables, excludeTables []str
 }
 
 // GetColumns is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) GetColumns(dbName, table string) ([]string, error) {
-	return []string{}, nil
+func (fmd *FakeMysqlDaemon) GetColumns(dbName, table string) ([]*querypb.Field, []string, error) {
+	return []*querypb.Field{}, []string{}, nil
 }
 
 // GetPrimaryKeyColumns is part of the MysqlDaemon interface

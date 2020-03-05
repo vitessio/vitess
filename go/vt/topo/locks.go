@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -41,11 +41,6 @@ var (
 	// locking a shard / keyspace.
 	// Now used only for unlock operations
 	defaultLockTimeout = 30 * time.Second
-
-	// Deprecated
-	// LockTimeout is the command line flag that introduces a shorter
-	// timeout for locking topology structures.
-	_ = flag.Duration("lock_timeout", defaultLockTimeout, "deprecated: timeout for acquiring topology locks, use remote_operation_timeout")
 
 	// RemoteOperationTimeout is used for operations where we have to
 	// call out to another process.
@@ -106,7 +101,7 @@ type locksInfo struct {
 	// lock different things.
 	mu sync.Mutex
 
-	// info contans all the locks we took. It is indexed by
+	// info contains all the locks we took. It is indexed by
 	// keyspace (for keyspaces) or keyspace/shard (for shards).
 	info map[string]*lockInfo
 }

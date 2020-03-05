@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,17 +21,19 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/sqltypes"
 )
 
 func TestPreview(t *testing.T) {
 	testcases := []struct {
 		sql  string
-		want int
+		want StatementType
 	}{
 		{"select ...", StmtSelect},
 		{"    select ...", StmtSelect},
 		{"(select ...", StmtSelect},
+		{"( select ...", StmtSelect},
 		{"insert ...", StmtInsert},
 		{"replace ....", StmtReplace},
 		{"   update ...", StmtUpdate},
@@ -48,6 +50,9 @@ func TestPreview(t *testing.T) {
 		{"begin ...", StmtUnknown},
 		{"begin /* ... */", StmtBegin},
 		{"begin /* ... *//*test*/", StmtBegin},
+		{"begin;", StmtBegin},
+		{"begin ;", StmtBegin},
+		{"begin; /*...*/", StmtBegin},
 		{"start transaction", StmtBegin},
 		{"commit", StmtCommit},
 		{"commit /*...*/", StmtCommit},
@@ -66,6 +71,8 @@ func TestPreview(t *testing.T) {
 		{"explain", StmtOther},
 		{"repair", StmtOther},
 		{"optimize", StmtOther},
+		{"grant", StmtPriv},
+		{"revoke", StmtPriv},
 		{"truncate", StmtDDL},
 		{"unknown", StmtUnknown},
 
@@ -106,6 +113,94 @@ func TestIsDML(t *testing.T) {
 	for _, tcase := range testcases {
 		if got := IsDML(tcase.sql); got != tcase.want {
 			t.Errorf("IsDML(%s): %v, want %v", tcase.sql, got, tcase.want)
+		}
+	}
+}
+
+func TestSplitAndExpression(t *testing.T) {
+	testcases := []struct {
+		sql string
+		out []string
+	}{{
+		sql: "select * from t",
+		out: nil,
+	}, {
+		sql: "select * from t where a = 1",
+		out: []string{"a = 1"},
+	}, {
+		sql: "select * from t where a = 1 and b = 1",
+		out: []string{"a = 1", "b = 1"},
+	}, {
+		sql: "select * from t where a = 1 and (b = 1 and c = 1)",
+		out: []string{"a = 1", "b = 1", "c = 1"},
+	}, {
+		sql: "select * from t where a = 1 and (b = 1 or c = 1)",
+		out: []string{"a = 1", "b = 1 or c = 1"},
+	}, {
+		sql: "select * from t where a = 1 and b = 1 or c = 1",
+		out: []string{"a = 1 and b = 1 or c = 1"},
+	}, {
+		sql: "select * from t where a = 1 and b = 1 + (c = 1)",
+		out: []string{"a = 1", "b = 1 + (c = 1)"},
+	}, {
+		sql: "select * from t where (a = 1 and ((b = 1 and c = 1)))",
+		out: []string{"a = 1", "b = 1", "c = 1"},
+	}}
+	for _, tcase := range testcases {
+		stmt, err := Parse(tcase.sql)
+		assert.NoError(t, err)
+		var expr Expr
+		if where := stmt.(*Select).Where; where != nil {
+			expr = where.Expr
+		}
+		splits := SplitAndExpression(nil, expr)
+		var got []string
+		for _, split := range splits {
+			got = append(got, String(split))
+		}
+		assert.Equal(t, tcase.out, got)
+	}
+}
+
+func TestTableFromStatement(t *testing.T) {
+	testcases := []struct {
+		in, out string
+	}{{
+		in:  "select * from t",
+		out: "t",
+	}, {
+		in:  "select * from t.t",
+		out: "t.t",
+	}, {
+		in:  "select * from t1, t2",
+		out: "table expression is complex",
+	}, {
+		in:  "select * from (t)",
+		out: "table expression is complex",
+	}, {
+		in:  "select * from t1 join t2",
+		out: "table expression is complex",
+	}, {
+		in:  "select * from (select * from t) as tt",
+		out: "table expression is complex",
+	}, {
+		in:  "update t set a=1",
+		out: "unrecognized statement: update t set a=1",
+	}, {
+		in:  "bad query",
+		out: "syntax error at position 4 near 'bad'",
+	}}
+
+	for _, tc := range testcases {
+		name, err := TableFromStatement(tc.in)
+		var got string
+		if err != nil {
+			got = err.Error()
+		} else {
+			got = String(name)
+		}
+		if got != tc.out {
+			t.Errorf("TableFromStatement('%s'): %s, want %s", tc.in, got, tc.out)
 		}
 	}
 }
@@ -471,6 +566,14 @@ func TestExtractSetValues(t *testing.T) {
 	}, {
 		sql:   "set session sql_safe_updates = 0",
 		out:   map[SetKey]interface{}{{Key: "sql_safe_updates", Scope: ImplicitStr}: int64(0)},
+		scope: SessionStr,
+	}, {
+		sql:   "set session transaction_read_only = 0",
+		out:   map[SetKey]interface{}{{Key: "transaction_read_only", Scope: ImplicitStr}: int64(0)},
+		scope: SessionStr,
+	}, {
+		sql:   "set session transaction_read_only = 1",
+		out:   map[SetKey]interface{}{{Key: "transaction_read_only", Scope: ImplicitStr}: int64(1)},
 		scope: SessionStr,
 	}, {
 		sql:   "set session sql_safe_updates = 1",

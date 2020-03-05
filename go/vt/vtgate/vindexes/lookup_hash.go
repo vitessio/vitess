@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,10 +27,10 @@ import (
 )
 
 var (
-	_ Vindex = (*LookupHash)(nil)
-	_ Lookup = (*LookupHash)(nil)
-	_ Vindex = (*LookupHashUnique)(nil)
-	_ Lookup = (*LookupHashUnique)(nil)
+	_ SingleColumn = (*LookupHash)(nil)
+	_ Lookup       = (*LookupHash)(nil)
+	_ SingleColumn = (*LookupHashUnique)(nil)
+	_ Lookup       = (*LookupHashUnique)(nil)
 )
 
 func init() {
@@ -93,9 +93,9 @@ func (lh *LookupHash) IsUnique() bool {
 	return false
 }
 
-// IsFunctional returns false since the Vindex is not functional.
-func (lh *LookupHash) IsFunctional() bool {
-	return false
+// NeedsVCursor satisfies the Vindex interface.
+func (lh *LookupHash) NeedsVCursor() bool {
+	return true
 }
 
 // Map can map ids to key.Destination objects.
@@ -249,9 +249,9 @@ func (lhu *LookupHashUnique) IsUnique() bool {
 	return true
 }
 
-// IsFunctional returns false since the Vindex is not functional.
-func (lhu *LookupHashUnique) IsFunctional() bool {
-	return false
+// NeedsVCursor satisfies the Vindex interface.
+func (lhu *LookupHashUnique) NeedsVCursor() bool {
+	return true
 }
 
 // Map can map ids to key.Destination objects.

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -29,9 +29,9 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/stats"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -56,7 +56,7 @@ type ConnectionPool struct {
 	resolutionFrequency time.Duration
 
 	// info and mysqlStats are set at Open() time
-	info      *mysql.ConnParams
+	info      dbconfigs.Connector
 	addresses []net.IP
 
 	ticker      *time.Ticker
@@ -84,6 +84,7 @@ func NewConnectionPool(name string, capacity int, idleTimeout time.Duration, dns
 	stats.NewCounterDurationFunc(name+"WaitTime", "Connection pool wait time", cp.WaitTime)
 	stats.NewGaugeDurationFunc(name+"IdleTimeout", "Connection pool idle timeout", cp.IdleTimeout)
 	stats.NewGaugeFunc(name+"IdleClosed", "Connection pool idle closed", cp.IdleClosed)
+	stats.NewCounterFunc(name+"Exhausted", "Number of times pool had zero available slots", cp.Exhausted)
 	return cp
 }
 
@@ -96,7 +97,7 @@ func (cp *ConnectionPool) pool() (p *pools.ResourcePool) {
 
 func (cp *ConnectionPool) refreshdns() {
 	cp.mu.Lock()
-	host := cp.info.Host
+	host := cp.info.Host()
 	cp.mu.Unlock()
 
 	addrs, err := net.LookupHost(host)
@@ -140,14 +141,14 @@ func (cp *ConnectionPool) validAddress(addr net.IP) bool {
 // ...
 // conn, err := pool.Get()
 // ...
-func (cp *ConnectionPool) Open(info *mysql.ConnParams, mysqlStats *stats.Timings) {
+func (cp *ConnectionPool) Open(info dbconfigs.Connector, mysqlStats *stats.Timings) {
 	cp.mu.Lock()
 	defer cp.mu.Unlock()
 	cp.info = info
 	cp.mysqlStats = mysqlStats
 	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, 0)
 	// Check if we need to resolve a hostname (The Host is not just an IP  address).
-	if cp.resolutionFrequency > 0 && net.ParseIP(info.Host) == nil {
+	if cp.resolutionFrequency > 0 && net.ParseIP(info.Host()) == nil {
 		cp.hostIsNotIP = true
 		cp.ticker = time.NewTicker(cp.resolutionFrequency)
 		cp.stop = make(chan struct{})
@@ -354,4 +355,13 @@ func (cp *ConnectionPool) IdleClosed() int64 {
 		return 0
 	}
 	return p.IdleClosed()
+}
+
+// Exhausted returns the number of times available went to zero for the pool.
+func (cp *ConnectionPool) Exhausted() int64 {
+	p := cp.pool()
+	if p == nil {
+		return 0
+	}
+	return p.Exhausted()
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -7,7 +7,7 @@ You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreedto in writing, software
+Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
@@ -115,21 +115,48 @@ message StreamTablesResponse {
   BinlogTransaction binlog_transaction = 1;
 }
 
-// Rule represents one rule.
+// Rule represents one rule in a Filter.
 message Rule {
-  // match can be a table name or a regular expression
-  // delineated by '/' and '/'.
+  // Match can be a table name or a regular expression.
+  // If it starts with a '/', it's a regular expression.
+  // For example, "t" matches a table named "t", whereas
+  // "/t.*" matches all tables that begin with 't'.
   string match = 1;
-  // filter can be an empty string or keyrange if the match
-  // is a regular expression. Otherwise, it must be a select
-  // query.
+  // Filter: If empty, all columns and rows of the matching tables
+  // are sent. If it's a keyrange like "-80", only rows that
+  // match the keyrange are sent.
+  // If Match is a table name instead of a regular expression,
+  // the Filter can also be a select expression like this:
+  // "select * from t", same as an empty Filter, or
+  // "select * from t where in_keyrange('-80')", same as "-80", or
+  // "select col1, col2 from t where in_keyrange(col1, 'hash', '-80'), or
+  // What is allowed in a select expression depends on whether
+  // it's a vstreamer or vreplication request. For more details,
+  // please refer to the specific package documentation.
+  // On the vreplication side, Filter can also accept a special
+  // "exclude" value, which will cause the matched tables
+  // to be excluded.
+  // TODO(sougou): support this on vstreamer side also.
   string filter = 2;
 }
 
-// Filter represents a list of ordered rules. First match
-// wins.
+// Filter represents a list of ordered rules. The first
+// match wins.
 message Filter {
   repeated Rule rules = 1;
+  enum FieldEventMode {
+    ERR_ON_MISMATCH = 0;
+    BEST_EFFORT = 1;
+  }
+  // FieldEventMode specifies the behavior if there is a mismatch
+  // between the current schema and the fields in the binlog. This
+  // can happen if the binlog position is before a DDL that would
+  // cause the fields to change. If vstreamer detects such 
+  // an inconsistency, the behavior depends on the FieldEventMode.
+  // If the value is ERR_ON_MISMATCH (default), then it errors out.
+  // If it's BEST_EFFORT, it sends a field event with fake column
+  // names as "@1", "@2", etc.
+  FieldEventMode fieldEventMode = 2;
 }
 
 // OnDDLAction lists the possible actions for DDLs.
@@ -141,8 +168,8 @@ enum OnDDLAction {
 }
 
 // BinlogSource specifies the source  and filter parameters for
-// Filtered Replication. It currently supports a keyrange
-// or a list of tables.
+// Filtered Replication. KeyRange and Tables are legacy. Filter
+// is the new way to specify the filtering rules.
 message BinlogSource {
   // the source keyspace
   string keyspace = 1;
@@ -153,22 +180,29 @@ message BinlogSource {
   // the source tablet type
   topodata.TabletType tablet_type = 3;
 
-  // key_range is set if the request is for a keyrange
+  // KeyRange is set if the request is for a keyrange
   topodata.KeyRange key_range = 4;
 
-  // tables is set if the request is for a list of tables
+  // Tables is set if the request is for a list of tables
   repeated string tables = 5;
 
-  // filter is set if we're using the generalized representation
+  // Filter is set if we're using the generalized representation
   // for the filter.
   Filter filter = 6;
 
-  // on_ddl specifies the action to be taken when a DDL is encountered.
+  // OnDdl specifies the action to be taken when a DDL is encountered.
   OnDDLAction on_ddl = 7;
+
+  // Source is an external mysql. This attribute should be set to the username
+  // to use in the connection
+  string external_mysql = 8;
+
+  // StopAfterCopy specifies if vreplication should be stopped
+  // after copying is done.
+  bool stop_after_copy = 9;
 }
 
-// VEventType enumerates the event types.
-// This list is comprehensive. Many of these types
+// VEventType enumerates the event types. Many of these types
 // will not be encountered in RBR mode.
 enum VEventType {
   UNKNOWN = 0;
@@ -177,59 +211,138 @@ enum VEventType {
   COMMIT = 3;
   ROLLBACK = 4;
   DDL = 5;
+  // INSERT, REPLACE, UPDATE, DELETE and SET will not be seen in RBR mode.
   INSERT = 6;
   REPLACE = 7;
   UPDATE = 8;
   DELETE = 9;
   SET = 10;
+  // OTHER is a dummy event. If encountered, the current GTID must be
+  // recorded by the client to be able to resume.
   OTHER = 11;
   ROW = 12;
   FIELD = 13;
+  // HEARTBEAT is sent if there is inactivity. If a client does not
+  // receive events beyond the hearbeat interval, it can assume that it's
+  // lost connection to the vstreamer.
   HEARTBEAT = 14;
+  // VGTID is generated by VTGate's VStream that combines multiple
+  // GTIDs.
   VGTID = 15;
+  JOURNAL = 16;
 }
 
-// RowChange represents one row change
+// RowChange represents one row change.
+// If Before is set and not After, it's a delete.
+// If After is set and not Before, it's an insert.
+// If both are set, it's an update.
 message RowChange {
   query.Row before = 1;
   query.Row after = 2;
 }
 
-// RowEvent represent row events for one table
+// RowEvent represent row events for one table.
 message RowEvent {
   string table_name = 1;
   repeated RowChange row_changes = 2;
 }
 
+// FieldEvent represents the field info for a table.
 message FieldEvent {
   string table_name = 1;
   repeated query.Field fields = 2;
 }
 
+// ShardGtid contains the GTID position for one shard.
+// It's used in a request for requesting a starting position.
+// It's used in a response to transmit the current position
+// of a shard. It's also used in a Journal to indicate the
+// list of targets and shard positions to migrate to.
 message ShardGtid {
   string keyspace = 1;
   string shard = 2;
   string gtid = 3;
 }
 
+// A VGtid is a list of ShardGtids.
 message VGtid {
   repeated ShardGtid shard_gtids = 1;
 }
 
-// VEvent represents a vstream event
+// KeyspaceShard represents a keyspace and shard.
+message KeyspaceShard {
+  string keyspace = 1;
+  string shard = 2;
+}
+
+// MigrationType specifies the type of migration for the Journal.
+enum MigrationType {
+  TABLES = 0;
+  SHARDS = 1;
+}
+
+// Journal contains the metadata for a journal event.
+// The commit of a journal event indicates the point of no return
+// for a migration.
+message Journal {
+  // Id represents a unique journal id.
+  int64 id = 1;
+  MigrationType migration_type = 2;
+  // Tables is set if the journal represents a TABLES migration.
+  repeated string tables = 3;
+  // LocalPosition is the source position at which the migration happened.
+  string local_position = 4;
+  // ShardGtids is the list of targets to which the migration took place.
+  repeated ShardGtid shard_gtids = 5;
+  // Participants is the list of source participants for a migration.
+  // Every participant is expected to have an identical journal entry.
+  // While streaming, the client must wait for the journal entry to
+  // be received from all pariticipants, and then replace them with new
+  // streams specified by ShardGtid.
+  // If a stream does not have all participants, a consistent migration
+  // is not possible.
+  repeated KeyspaceShard participants = 6;
+  // SourceWorkflows is the list of workflows in the source shard that
+  // were migrated to the target. If a migration fails after a Journal
+  // is committed, this information is used to start the target streams
+  // that were created prior to the creation of the journal.
+  repeated string source_workflows = 7;
+}
+
+// VEvent represents a vstream event.
+// A FieldEvent is sent once for every table, just before
+// the first event for that table. The client is expected
+// to cache this information and match it against the RowEvent
+// which contains the table name.
+// A GTID event always precedes a commitable event, which can be
+// COMMIT, DDL or OTHER.
+// OTHER events are non-material events that have no additional metadata.
 message VEvent {
   VEventType type = 1;
+  // Timestamp is the binlog timestamp in seconds.
+  // It's set for all events.
   int64 timestamp = 2;
+  // Gtid is set if the event type is GTID.
   string gtid = 3;
+  // Ddl is set if the event type is DDL.
   string ddl = 4;
+  // RowEvent is set if the event type is ROW.
   RowEvent row_event = 5;
+  // FieldEvent is set if the event type is FIELD.
   FieldEvent field_event = 6;
+  // Vgtid is set if the event type is VGTID.
+  // This event is only generated by VTGate's VStream function.
   VGtid vgtid = 7;
-  // current_time specifies the current time to handle clock skew.
+  // Journal is set if the event type is JOURNAL. 
+  Journal journal = 8;
+  // Dml is set if the event type is INSERT, REPLACE, UPDATE or DELETE.
+  string dml = 9;
+  // CurrentTime specifies the current time when the message was sent.
+  // This can be used to compenssate for clock skew.
   int64 current_time = 20;
 }
 
-// VStreamRequest is the payload for VStream
+// VStreamRequest is the payload for VStreamer
 message VStreamRequest {
   vtrpc.CallerID effective_caller_id = 1;
   query.VTGateCallerID immediate_caller_id = 2;
@@ -239,7 +352,7 @@ message VStreamRequest {
   Filter filter = 5;
 }
 
-// VStreamResponse is the response from VStream
+// VStreamResponse is the response from VStreamer
 message VStreamResponse {
   repeated VEvent events = 1;
 }
@@ -261,4 +374,22 @@ message VStreamRowsResponse {
   string gtid = 3;
   repeated query.Row rows = 4;
   query.Row lastpk = 5;
+}
+
+// VStreamResultsRequest is the payload for VStreamResults
+// The ids match VStreamRows, in case we decide to merge the two.
+message VStreamResultsRequest {
+  vtrpc.CallerID effective_caller_id = 1;
+  query.VTGateCallerID immediate_caller_id = 2;
+  query.Target target = 3;
+
+  string query = 4;
+}
+
+// VStreamResultsResponse is the response from VStreamResults
+// The ids match VStreamRows, in case we decide to merge the two.
+message VStreamResultsResponse {
+  repeated query.Field fields = 1;
+  string gtid = 3;
+  repeated query.Row rows = 4;
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -114,6 +114,7 @@ func (rpw *ReplicationWatcher) Process(ctx context.Context, dbconfigs *dbconfigs
 		tabletenv.LogError()
 		rpw.wg.Done()
 	}()
+
 	for {
 		log.Infof("Starting a binlog Streamer from current replication position to monitor binlogs")
 		streamer := binlog.NewStreamer(dbconfigs.DbaWithDB(), rpw.se, nil /*clientCharset*/, mysql.Position{}, 0 /*timestamp*/, func(eventToken *querypb.EventToken, statements []binlog.FullBinlogStatement) error {

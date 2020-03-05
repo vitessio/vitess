@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='vschema',
   syntax='proto3',
   serialized_options=_b('Z$vitess.io/vitess/go/vt/proto/vschema'),
-  serialized_pb=_b('\n\rvschema.proto\x12\x07vschema\x1a\x0bquery.proto\"3\n\x0cRoutingRules\x12#\n\x05rules\x18\x01 \x03(\x0b\x32\x14.vschema.RoutingRule\"4\n\x0bRoutingRule\x12\x12\n\nfrom_table\x18\x01 \x01(\t\x12\x11\n\tto_tables\x18\x02 \x03(\t\"\xfe\x01\n\x08Keyspace\x12\x0f\n\x07sharded\x18\x01 \x01(\x08\x12\x31\n\x08vindexes\x18\x02 \x03(\x0b\x32\x1f.vschema.Keyspace.VindexesEntry\x12-\n\x06tables\x18\x03 \x03(\x0b\x32\x1d.vschema.Keyspace.TablesEntry\x1a@\n\rVindexesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x1e\n\x05value\x18\x02 \x01(\x0b\x32\x0f.vschema.Vindex:\x02\x38\x01\x1a=\n\x0bTablesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x1d\n\x05value\x18\x02 \x01(\x0b\x32\x0e.vschema.Table:\x02\x38\x01\"\x81\x01\n\x06Vindex\x12\x0c\n\x04type\x18\x01 \x01(\t\x12+\n\x06params\x18\x02 \x03(\x0b\x32\x1b.vschema.Vindex.ParamsEntry\x12\r\n\x05owner\x18\x03 \x01(\t\x1a-\n\x0bParamsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xca\x01\n\x05Table\x12\x0c\n\x04type\x18\x01 \x01(\t\x12.\n\x0f\x63olumn_vindexes\x18\x02 \x03(\x0b\x32\x15.vschema.ColumnVindex\x12.\n\x0e\x61uto_increment\x18\x03 \x01(\x0b\x32\x16.vschema.AutoIncrement\x12 \n\x07\x63olumns\x18\x04 \x03(\x0b\x32\x0f.vschema.Column\x12\x0e\n\x06pinned\x18\x05 \x01(\t\x12!\n\x19\x63olumn_list_authoritative\x18\x06 \x01(\x08\"=\n\x0c\x43olumnVindex\x12\x0e\n\x06\x63olumn\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0f\n\x07\x63olumns\x18\x03 \x03(\t\"1\n\rAutoIncrement\x12\x0e\n\x06\x63olumn\x18\x01 \x01(\t\x12\x10\n\x08sequence\x18\x02 \x01(\t\"1\n\x06\x43olumn\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x19\n\x04type\x18\x02 \x01(\x0e\x32\x0b.query.Type\"\xb6\x01\n\nSrvVSchema\x12\x35\n\tkeyspaces\x18\x01 \x03(\x0b\x32\".vschema.SrvVSchema.KeyspacesEntry\x12,\n\rrouting_rules\x18\x02 \x01(\x0b\x32\x15.vschema.RoutingRules\x1a\x43\n\x0eKeyspacesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12 \n\x05value\x18\x02 \x01(\x0b\x32\x11.vschema.Keyspace:\x02\x38\x01\x42&Z$vitess.io/vitess/go/vt/proto/vschemab\x06proto3')
+  serialized_pb=_b('\n\rvschema.proto\x12\x07vschema\x1a\x0bquery.proto\"3\n\x0cRoutingRules\x12#\n\x05rules\x18\x01 \x03(\x0b\x32\x14.vschema.RoutingRule\"4\n\x0bRoutingRule\x12\x12\n\nfrom_table\x18\x01 \x01(\t\x12\x11\n\tto_tables\x18\x02 \x03(\t\"\xa0\x02\n\x08Keyspace\x12\x0f\n\x07sharded\x18\x01 \x01(\x08\x12\x31\n\x08vindexes\x18\x02 \x03(\x0b\x32\x1f.vschema.Keyspace.VindexesEntry\x12-\n\x06tables\x18\x03 \x03(\x0b\x32\x1d.vschema.Keyspace.TablesEntry\x12 \n\x18require_explicit_routing\x18\x04 \x01(\x08\x1a@\n\rVindexesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x1e\n\x05value\x18\x02 \x01(\x0b\x32\x0f.vschema.Vindex:\x02\x38\x01\x1a=\n\x0bTablesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\x1d\n\x05value\x18\x02 \x01(\x0b\x32\x0e.vschema.Table:\x02\x38\x01\"\x81\x01\n\x06Vindex\x12\x0c\n\x04type\x18\x01 \x01(\t\x12+\n\x06params\x18\x02 \x03(\x0b\x32\x1b.vschema.Vindex.ParamsEntry\x12\r\n\x05owner\x18\x03 \x01(\t\x1a-\n\x0bParamsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xca\x01\n\x05Table\x12\x0c\n\x04type\x18\x01 \x01(\t\x12.\n\x0f\x63olumn_vindexes\x18\x02 \x03(\x0b\x32\x15.vschema.ColumnVindex\x12.\n\x0e\x61uto_increment\x18\x03 \x01(\x0b\x32\x16.vschema.AutoIncrement\x12 \n\x07\x63olumns\x18\x04 \x03(\x0b\x32\x0f.vschema.Column\x12\x0e\n\x06pinned\x18\x05 \x01(\t\x12!\n\x19\x63olumn_list_authoritative\x18\x06 \x01(\x08\"=\n\x0c\x43olumnVindex\x12\x0e\n\x06\x63olumn\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x0f\n\x07\x63olumns\x18\x03 \x03(\t\"1\n\rAutoIncrement\x12\x0e\n\x06\x63olumn\x18\x01 \x01(\t\x12\x10\n\x08sequence\x18\x02 \x01(\t\"1\n\x06\x43olumn\x12\x0c\n\x04name\x18\x01 \x01(\t\x12\x19\n\x04type\x18\x02 \x01(\x0e\x32\x0b.query.Type\"\xb6\x01\n\nSrvVSchema\x12\x35\n\tkeyspaces\x18\x01 \x03(\x0b\x32\".vschema.SrvVSchema.KeyspacesEntry\x12,\n\rrouting_rules\x18\x02 \x01(\x0b\x32\x15.vschema.RoutingRules\x1a\x43\n\x0eKeyspacesEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12 \n\x05value\x18\x02 \x01(\x0b\x32\x11.vschema.Keyspace:\x02\x38\x01\x42&Z$vitess.io/vitess/go/vt/proto/vschemab\x06proto3')
   ,
   dependencies=[query__pb2.DESCRIPTOR,])
 
@@ -129,8 +129,8 @@ _KEYSPACE_VINDEXESENTRY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=274,
-  serialized_end=338,
+  serialized_start=308,
+  serialized_end=372,
 )
 
 _KEYSPACE_TABLESENTRY = _descriptor.Descriptor(
@@ -166,8 +166,8 @@ _KEYSPACE_TABLESENTRY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=340,
-  serialized_end=401,
+  serialized_start=374,
+  serialized_end=435,
 )
 
 _KEYSPACE = _descriptor.Descriptor(
@@ -198,6 +198,13 @@ _KEYSPACE = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='require_explicit_routing', full_name='vschema.Keyspace.require_explicit_routing', index=3,
+      number=4, type=8, cpp_type=7, label=1,
+      has_default_value=False, default_value=False,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -211,7 +218,7 @@ _KEYSPACE = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=147,
-  serialized_end=401,
+  serialized_end=435,
 )
 
 
@@ -248,8 +255,8 @@ _VINDEX_PARAMSENTRY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=488,
-  serialized_end=533,
+  serialized_start=522,
+  serialized_end=567,
 )
 
 _VINDEX = _descriptor.Descriptor(
@@ -292,8 +299,8 @@ _VINDEX = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=404,
-  serialized_end=533,
+  serialized_start=438,
+  serialized_end=567,
 )
 
 
@@ -358,8 +365,8 @@ _TABLE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=536,
-  serialized_end=738,
+  serialized_start=570,
+  serialized_end=772,
 )
 
 
@@ -403,8 +410,8 @@ _COLUMNVINDEX = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=740,
-  serialized_end=801,
+  serialized_start=774,
+  serialized_end=835,
 )
 
 
@@ -441,8 +448,8 @@ _AUTOINCREMENT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=803,
-  serialized_end=852,
+  serialized_start=837,
+  serialized_end=886,
 )
 
 
@@ -479,8 +486,8 @@ _COLUMN = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=854,
-  serialized_end=903,
+  serialized_start=888,
+  serialized_end=937,
 )
 
 
@@ -517,8 +524,8 @@ _SRVVSCHEMA_KEYSPACESENTRY = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1021,
-  serialized_end=1088,
+  serialized_start=1055,
+  serialized_end=1122,
 )
 
 _SRVVSCHEMA = _descriptor.Descriptor(
@@ -554,8 +561,8 @@ _SRVVSCHEMA = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=906,
-  serialized_end=1088,
+  serialized_start=940,
+  serialized_end=1122,
 )
 
 _ROUTINGRULES.fields_by_name['rules'].message_type = _ROUTINGRULE

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -32,7 +32,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -114,6 +113,29 @@ func (mysqld *Mysqld) StopSlave(hookExtraEnv map[string]string) error {
 	return mysqld.executeSuperQueryListConn(ctx, conn, []string{conn.StopSlaveCommand()})
 }
 
+// RestartSlave stops, resets and starts a slave.
+func (mysqld *Mysqld) RestartSlave(hookExtraEnv map[string]string) error {
+	h := hook.NewSimpleHook("preflight_stop_slave")
+	h.ExtraEnv = hookExtraEnv
+	if err := h.ExecuteOptional(); err != nil {
+		return err
+	}
+	ctx := context.TODO()
+	conn, err := getPoolReconnect(ctx, mysqld.dbaPool)
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	if err := mysqld.executeSuperQueryListConn(ctx, conn, conn.RestartSlaveCommands()); err != nil {
+		return err
+	}
+
+	h = hook.NewSimpleHook("postflight_start_slave")
+	h.ExtraEnv = hookExtraEnv
+	return h.ExecuteOptional()
+}
+
 // GetMysqlPort returns mysql port
 func (mysqld *Mysqld) GetMysqlPort() (int32, error) {
 	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SHOW VARIABLES LIKE 'port'")
@@ -181,6 +203,17 @@ func (mysqld *Mysqld) WaitMasterPos(ctx context.Context, targetPos mysql.Positio
 	}
 	defer conn.Recycle()
 
+	// If we are the master, WaitUntilPositionCommand will fail.
+	// But position is most likely reached. So, check the position
+	// first.
+	mpos, err := conn.MasterPosition()
+	if err != nil {
+		return fmt.Errorf("WaitMasterPos: MasterPosition failed: %v", err)
+	}
+	if mpos.AtLeast(targetPos) {
+		return nil
+	}
+
 	// Find the query to run, run it.
 	query, err := conn.WaitUntilPositionCommand(ctx, targetPos)
 	if err != nil {
@@ -242,7 +275,7 @@ func (mysqld *Mysqld) SetSlavePosition(ctx context.Context, pos mysql.Position) 
 // SetMaster makes the provided host / port the master. It optionally
 // stops replication before, and starts it after.
 func (mysqld *Mysqld) SetMaster(ctx context.Context, masterHost string, masterPort int, slaveStopBefore bool, slaveStartAfter bool) error {
-	params, err := dbconfigs.WithCredentials(mysqld.dbcfgs.Repl())
+	params, err := mysqld.dbcfgs.Repl().MysqlParams()
 	if err != nil {
 		return err
 	}
@@ -285,12 +318,9 @@ func (mysqld *Mysqld) ResetReplication(ctx context.Context) error {
 //
 // Array indices for the results of SHOW PROCESSLIST.
 const (
-	//lint:ignore U1000 needed for correct indexing of result columns
 	colConnectionID = iota
-	//lint:ignore U1000 needed for correct indexing of result columns
 	colUsername
 	colClientAddr
-	//lint:ignore U1000 needed for correct indexing of result columns
 	colDbName
 	colCommand
 )

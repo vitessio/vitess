@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,8 +19,9 @@ package vtexplain
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/require"
 	"io/ioutil"
-	"os/exec"
 	"path"
 	"strings"
 	"testing"
@@ -39,20 +40,14 @@ func defaultTestOpts() *Options {
 
 func initTest(mode string, opts *Options, t *testing.T) {
 	schema, err := ioutil.ReadFile("testdata/test-schema.sql")
-	if err != nil {
-		t.Fatalf("error: %v", err)
-	}
+	require.NoError(t, err)
 
 	vSchema, err := ioutil.ReadFile("testdata/test-vschema.json")
-	if err != nil {
-		t.Fatalf("error: %v", err)
-	}
+	require.NoError(t, err)
 
 	opts.ExecutionMode = mode
 	err = Init(string(vSchema), string(schema), opts)
-	if err != nil {
-		t.Fatalf("vtexplain Init error: %v", err)
-	}
+	require.NoError(t, err, "vtexplain Init error")
 }
 
 func testExplain(testcase string, opts *Options, t *testing.T) {
@@ -70,91 +65,67 @@ func testExplain(testcase string, opts *Options, t *testing.T) {
 }
 
 func runTestCase(testcase, mode string, opts *Options, t *testing.T) {
-	t.Logf("vtexplain test: %s mode: %s", testcase, mode)
-	initTest(mode, opts, t)
+	t.Run(testcase, func(t *testing.T) {
+		initTest(mode, opts, t)
 
-	sqlFile := fmt.Sprintf("testdata/%s-queries.sql", testcase)
-	sql, err := ioutil.ReadFile(sqlFile)
-	if err != nil {
-		t.Fatalf("vtexplain error: %v", err)
-	}
+		sqlFile := fmt.Sprintf("testdata/%s-queries.sql", testcase)
+		sql, err := ioutil.ReadFile(sqlFile)
+		require.NoError(t, err, "vtexplain error")
 
-	textOutFile := fmt.Sprintf("testdata/%s-output/%s-output.txt", mode, testcase)
-	textOut, _ := ioutil.ReadFile(textOutFile)
+		textOutFile := fmt.Sprintf("testdata/%s-output/%s-output.txt", mode, testcase)
+		expected, _ := ioutil.ReadFile(textOutFile)
 
-	explains, err := Run(string(sql))
-	if err != nil {
-		t.Fatalf("vtexplain error: %v", err)
-	}
-	if explains == nil {
-		t.Fatalf("vtexplain error running %s: no explain", string(sql))
-	}
+		explains, err := Run(string(sql))
+		require.NoError(t, err, "vtexplain error")
+		require.NotNil(t, explains, "vtexplain error running %s: no explain", string(sql))
 
-	explainText := ExplainsAsText(explains)
-	if strings.TrimSpace(string(explainText)) != strings.TrimSpace(string(textOut)) {
-		// Print the Text that was actually returned and also dump to a
-		// temp file to be able to diff the results.
-		t.Errorf("Text output did not match")
+		explainText := ExplainsAsText(explains)
+		if diff := cmp.Diff(strings.TrimSpace(string(expected)), strings.TrimSpace(explainText)); diff != "" {
+			// Print the Text that was actually returned and also dump to a
+			// temp file to be able to diff the results.
+			t.Errorf("Text output did not match (-want +got):\n%s", diff)
 
-		if testOutputTempDir == "" {
-			testOutputTempDir, err = ioutil.TempDir("", "vtexplain_output")
-			if err != nil {
-				t.Fatalf("error getting tempdir: %v", err)
+			if testOutputTempDir == "" {
+				testOutputTempDir, err = ioutil.TempDir("", "vtexplain_output")
+				require.NoError(t, err, "error getting tempdir")
 			}
+			gotFile := fmt.Sprintf("%s/%s-output.txt", testOutputTempDir, testcase)
+			ioutil.WriteFile(gotFile, []byte(explainText), 0644)
+
+			t.Logf("run the following command to update the expected output:")
+			t.Logf("cp %s/* %s", testOutputTempDir, path.Dir(textOutFile))
 		}
-		gotFile := fmt.Sprintf("%s/%s-output.txt", testOutputTempDir, testcase)
-		ioutil.WriteFile(gotFile, []byte(explainText), 0644)
+	})
+}
 
-		command := exec.Command("diff", "-u", textOutFile, gotFile)
-		out, _ := command.CombinedOutput()
-		t.Logf("diff:\n%s\n", out)
-		t.Logf("run the following command to update the expected output:")
-		t.Logf("cp %s/* %s", testOutputTempDir, path.Dir(textOutFile))
+func TestExplain(t *testing.T) {
+	type test struct {
+		name string
+		opts *Options
 	}
-}
-
-func TestUnsharded(t *testing.T) {
-	testExplain("unsharded", defaultTestOpts(), t)
-}
-
-func TestSelectSharded(t *testing.T) {
-	testExplain("selectsharded", defaultTestOpts(), t)
-}
-
-func TestInsertSharded(t *testing.T) {
-	testExplain("insertsharded", defaultTestOpts(), t)
-}
-
-func TestUpdateSharded(t *testing.T) {
-	testExplain("updatesharded", defaultTestOpts(), t)
-}
-
-func TestDeleteSharded(t *testing.T) {
-	testExplain("deletesharded", defaultTestOpts(), t)
-}
-
-func TestOptions(t *testing.T) {
-	opts := &Options{
-		ReplicationMode: "STATEMENT",
-		NumShards:       4,
-		Normalize:       false,
+	tests := []test{
+		{"unsharded", defaultTestOpts()},
+		{"selectsharded", defaultTestOpts()},
+		{"insertsharded", defaultTestOpts()},
+		{"updatesharded", defaultTestOpts()},
+		{"deletesharded", defaultTestOpts()},
+		{"comments", defaultTestOpts()},
+		{"options", &Options{
+			ReplicationMode: "STATEMENT",
+			NumShards:       4,
+			Normalize:       false,
+		}},
+		{"target", &Options{
+			ReplicationMode: "ROW",
+			NumShards:       4,
+			Normalize:       false,
+			Target:          "ks_sharded/40-80",
+		}},
 	}
 
-	testExplain("options", opts, t)
-}
-func TestTarget(t *testing.T) {
-	opts := &Options{
-		ReplicationMode: "ROW",
-		NumShards:       4,
-		Normalize:       false,
-		Target:          "ks_sharded/40-80",
+	for _, tst := range tests {
+		testExplain(tst.name, tst.opts, t)
 	}
-
-	testExplain("target", opts, t)
-}
-
-func TestComments(t *testing.T) {
-	testExplain("comments", defaultTestOpts(), t)
 }
 
 func TestErrors(t *testing.T) {
@@ -188,9 +159,8 @@ func TestErrors(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.SQL, func(t *testing.T) {
 			_, err := Run(test.SQL)
-			if err == nil || !strings.Contains(err.Error(), test.Err) {
-				t.Errorf(">> Query: %s\n>> Got: %v\nWant: %s", test.SQL, err, test.Err)
-			}
+			require.Error(t, err)
+			require.Contains(t, err.Error(), test.Err)
 		})
 	}
 }
@@ -198,20 +168,14 @@ func TestErrors(t *testing.T) {
 func TestJSONOutput(t *testing.T) {
 	sql := "select 1 from user where id = 1"
 	explains, err := Run(sql)
-	if err != nil {
-		t.Fatalf("vtexplain error: %v", err)
-	}
-	if explains == nil {
-		t.Fatalf("vtexplain error running %s: no explain", string(sql))
-	}
+	require.NoError(t, err, "vtexplain error")
+	require.NotNil(t, explains, "vtexplain error running %s: no explain", string(sql))
 
 	explainJSON := ExplainsAsJSON(explains)
 
 	var data interface{}
 	err = json.Unmarshal([]byte(explainJSON), &data)
-	if err != nil {
-		t.Errorf("error unmarshaling json: %v", err)
-	}
+	require.NoError(t, err, "error unmarshaling json")
 
 	array, ok := data.([]interface{})
 	if !ok || len(array) != 1 {
@@ -238,9 +202,7 @@ func TestJSONOutput(t *testing.T) {
 	}
 
 	actionsJSON, err := json.MarshalIndent(actions, "", "    ")
-	if err != nil {
-		t.Errorf("error in json marshal: %v", err)
-	}
+	require.NoError(t, err, "error in json marshal")
 	wantJSON := `{
     "ks_sharded/-40": {
         "MysqlQueries": [
@@ -261,7 +223,5 @@ func TestJSONOutput(t *testing.T) {
         ]
     }
 }`
-	if string(actionsJSON) != wantJSON {
-		t.Errorf("TabletActions mismatch: got:\n%v\nwant:\n%v\n", string(actionsJSON), wantJSON)
-	}
+	require.Equal(t, wantJSON, string(actionsJSON))
 }

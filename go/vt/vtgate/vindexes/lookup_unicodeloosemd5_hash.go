@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,10 +28,10 @@ import (
 )
 
 var (
-	_ Vindex = (*LookupUnicodeLooseMD5Hash)(nil)
-	_ Lookup = (*LookupUnicodeLooseMD5Hash)(nil)
-	_ Vindex = (*LookupUnicodeLooseMD5HashUnique)(nil)
-	_ Lookup = (*LookupUnicodeLooseMD5HashUnique)(nil)
+	_ SingleColumn = (*LookupUnicodeLooseMD5Hash)(nil)
+	_ Lookup       = (*LookupUnicodeLooseMD5Hash)(nil)
+	_ SingleColumn = (*LookupUnicodeLooseMD5HashUnique)(nil)
+	_ Lookup       = (*LookupUnicodeLooseMD5HashUnique)(nil)
 )
 
 func init() {
@@ -94,9 +94,9 @@ func (lh *LookupUnicodeLooseMD5Hash) IsUnique() bool {
 	return false
 }
 
-// IsFunctional returns false since the Vindex is not functional.
-func (lh *LookupUnicodeLooseMD5Hash) IsFunctional() bool {
-	return false
+// NeedsVCursor satisfies the Vindex interface.
+func (lh *LookupUnicodeLooseMD5Hash) NeedsVCursor() bool {
+	return true
 }
 
 // Map can map ids to key.Destination objects.
@@ -261,9 +261,9 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) IsUnique() bool {
 	return true
 }
 
-// IsFunctional returns false since the Vindex is not functional.
-func (lhu *LookupUnicodeLooseMD5HashUnique) IsFunctional() bool {
-	return false
+// NeedsVCursor satisfies the Vindex interface.
+func (lhu *LookupUnicodeLooseMD5HashUnique) NeedsVCursor() bool {
+	return true
 }
 
 // Map can map ids to key.Destination objects.

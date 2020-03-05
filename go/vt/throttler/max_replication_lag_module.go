@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -485,7 +485,7 @@ func (m *MaxReplicationLagModule) increaseRate(r *result, now time.Time, lagReco
 		return
 	}
 
-	// Calculate new rate based on the previous (preferrably highest good) rate.
+	// Calculate new rate based on the previous (preferably highest good) rate.
 	highestGood := m.memory.highestGood()
 	previousRateSource := "highest known good rate"
 	previousRate := float64(highestGood)

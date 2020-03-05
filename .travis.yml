@@ -17,7 +17,7 @@
 #
 # Open TODOs:
 # - Re-add travis/check_make_proto.sh, ideally as part of test/config.json.
-# - Add a presubmit which checks that vendor/vendor.json is the same as in the Docker image. This will prevent people from making changes to it without pushing new bootstrap Docker images.
+# - Add a presubmit which checks that if bootstrap has changed, and docker image is out of date.
 
 # sudo is required because we run Docker in our builds.
 # See: https://docs.travis-ci.com/user/docker/
@@ -28,7 +28,7 @@ services:
 
 language: go
 go:
-  - 1.11.x
+  - 1.12.x
 go_import_path: vitess.io/vitess
 env:
   global:
@@ -50,8 +50,6 @@ env:
     - TEST_MATRIX="-shard 0"
     - TEST_MATRIX="-shard 1"
     - TEST_MATRIX="-shard 2"
-    - TEST_MATRIX="-shard 3"
-    - TEST_MATRIX="-shard 4"
 script:
   - go run test.go $TEST_FLAGS $TEST_MATRIX
   # Uncomment the next line to verify the GOMAXPROCS value (should be 2 as of 09/2017).

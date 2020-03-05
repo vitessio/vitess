@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -42,11 +43,15 @@ func TestStreamRowsScan(t *testing.T) {
 		// No PK
 		"create table t3(id int, val varbinary(128))",
 		"insert into t3 values (1, 'aaa'), (2, 'bbb')",
+		// Three-column PK
+		"create table t4(id1 int, id2 int, id3 int, val varbinary(128), primary key(id1, id2, id3))",
+		"insert into t4 values (1, 2, 3, 'aaa'), (2, 3, 4, 'bbb')",
 	})
 	defer execStatements(t, []string{
 		"drop table t1",
 		"drop table t2",
 		"drop table t3",
+		"drop table t4",
 	})
 	engine.se.Reload(context.Background())
 
@@ -63,7 +68,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id" type:INT32 > `,
 		`rows:<lengths:1 lengths:3 values:"2bbb" > lastpk:<lengths:1 values:"2" > `,
 	}
-	wantQuery = "select id, val from t1 where (id) > (1) order by id"
+	wantQuery = "select id, val from t1 where (id > 1) order by id"
 	checkStream(t, "select * from t1", []sqltypes.Value{sqltypes.NewInt64(1)}, wantQuery, wantStream)
 
 	// t1: different column ordering
@@ -87,7 +92,7 @@ func TestStreamRowsScan(t *testing.T) {
 		`fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id1" type:INT32 > pkfields:<name:"id2" type:INT32 > `,
 		`rows:<lengths:1 lengths:1 lengths:3 values:"13bbb" > lastpk:<lengths:1 lengths:1 values:"13" > `,
 	}
-	wantQuery = "select id1, id2, val from t2 where (id1,id2) > (1,2) order by id1, id2"
+	wantQuery = "select id1, id2, val from t2 where (id1 = 1 and id2 > 2) or (id1 > 1) order by id1, id2"
 	checkStream(t, "select * from t2", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, wantQuery, wantStream)
 
 	// t3: all rows
@@ -103,8 +108,76 @@ func TestStreamRowsScan(t *testing.T) {
 		`fields:<name:"id" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id" type:INT32 > pkfields:<name:"val" type:VARBINARY > `,
 		`rows:<lengths:1 lengths:3 values:"2bbb" > lastpk:<lengths:1 lengths:3 values:"2bbb" > `,
 	}
-	wantQuery = "select id, val from t3 where (id,val) > (1,'aaa') order by id, val"
+	wantQuery = "select id, val from t3 where (id = 1 and val > 'aaa') or (id > 1) order by id, val"
 	checkStream(t, "select * from t3", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewVarBinary("aaa")}, wantQuery, wantStream)
+
+	// t4: all rows
+	wantStream = []string{
+		`fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > fields:<name:"id3" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id1" type:INT32 > pkfields:<name:"id2" type:INT32 > pkfields:<name:"id3" type:INT32 > `,
+		`rows:<lengths:1 lengths:1 lengths:1 lengths:3 values:"123aaa" > rows:<lengths:1 lengths:1 lengths:1 lengths:3 values:"234bbb" > lastpk:<lengths:1 lengths:1 lengths:1 values:"234" > `,
+	}
+	wantQuery = "select id1, id2, id3, val from t4 order by id1, id2, id3"
+	checkStream(t, "select * from t4", nil, wantQuery, wantStream)
+
+	// t4: lastpk: 1,2,3
+	wantStream = []string{
+		`fields:<name:"id1" type:INT32 > fields:<name:"id2" type:INT32 > fields:<name:"id3" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id1" type:INT32 > pkfields:<name:"id2" type:INT32 > pkfields:<name:"id3" type:INT32 > `,
+		`rows:<lengths:1 lengths:1 lengths:1 lengths:3 values:"234bbb" > lastpk:<lengths:1 lengths:1 lengths:1 values:"234" > `,
+	}
+	wantQuery = "select id1, id2, id3, val from t4 where (id1 = 1 and id2 = 2 and id3 > 3) or (id1 = 1 and id2 > 2) or (id1 > 1) order by id1, id2, id3"
+	checkStream(t, "select * from t4", []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2), sqltypes.NewInt64(3)}, wantQuery, wantStream)
+}
+
+func TestStreamRowsUnicode(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table t1(id int, val varchar(128) COLLATE utf8_unicode_ci, primary key(id))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+
+	// We need a latin1 connection.
+	conn, err := env.Mysqld.GetDbaConnection()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecuteFetch("set names latin1", 10000, false); err != nil {
+		t.Fatal(err)
+	}
+	// This will get "Mojibaked" into the utf8 column.
+	if _, err := conn.ExecuteFetch("insert into t1 values(1, '👍')", 10000, false); err != nil {
+		t.Fatal(err)
+	}
+
+	savecp := engine.cp
+	// Rowstreamer must override this to "binary"
+	params, err := engine.cp.MysqlParams()
+	if err != nil {
+		t.Fatal(err)
+	}
+	params.Charset = "latin1"
+	defer func() { engine.cp = savecp }()
+	err = engine.StreamRows(context.Background(), "select * from t1", nil, func(rows *binlogdatapb.VStreamRowsResponse) error {
+		// Skip fields.
+		if len(rows.Rows) == 0 {
+			return nil
+		}
+		got := fmt.Sprintf("%q", rows.Rows[0].Values)
+		// We should expect a "Mojibaked" version of the string.
+		want := `"1ðŸ‘\u008d"`
+		if got != want {
+			t.Errorf("rows.Rows[0].Values: %s, want %s", got, want)
+		}
+		return nil
+	})
+	require.NoError(t, err)
 }
 
 func TestStreamRowsKeyRange(t *testing.T) {
@@ -142,9 +215,9 @@ func TestStreamRowsMultiPacket(t *testing.T) {
 		t.Skip()
 	}
 
-	savedSize := *packetSize
-	*packetSize = 10
-	defer func() { *packetSize = savedSize }()
+	savedSize := *PacketSize
+	*PacketSize = 10
+	defer func() { *PacketSize = savedSize }()
 
 	execStatements(t, []string{
 		"create table t1(id int, val varbinary(128), primary key(id))",
@@ -170,9 +243,9 @@ func TestStreamRowsCancel(t *testing.T) {
 		t.Skip()
 	}
 
-	savedSize := *packetSize
-	*packetSize = 10
-	defer func() { *packetSize = savedSize }()
+	savedSize := *PacketSize
+	*PacketSize = 10
+	defer func() { *PacketSize = savedSize }()
 
 	execStatements(t, []string{
 		"create table t1(id int, val varbinary(128), primary key(id))",

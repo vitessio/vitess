@@ -65,9 +65,12 @@ import (
 	"math"
 	"math/big"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
+	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
@@ -86,13 +89,23 @@ import (
 )
 
 const (
-	backupTimestampFormat = "2006-01-02.150405"
+	// operationTimeout is the timeout for individual operations like fetching
+	// the master position. This does not impose an overall timeout on
+	// long-running processes like taking the backup. It only applies to
+	// steps along the way that should complete quickly. This ensures we don't
+	// place a hard cap on the overall time for a backup, while also not waiting
+	// forever for things that should be quick.
+	operationTimeout = 1 * time.Minute
 )
 
 var (
 	// vtbackup-specific flags
-	timeout            = flag.Duration("timeout", 2*time.Hour, "Overall timeout for this whole vtbackup run, including restoring the previous backup, waiting for replication, and uploading files")
-	replicationTimeout = flag.Duration("replication_timeout", 1*time.Hour, "The timeout for the step of waiting for replication to catch up. If progress is made before this timeout is reached, the backup will be taken anyway to save partial progress, but vtbackup will return a non-zero exit code to indicate it should be retried since not all expected data was backed up")
+	// We used to have overall timeouts, but these did more harm than good. If a backup
+	// has been going for a while, giving up and starting over from scratch is
+	// pretty much never going to help. We should just keep trying and have a
+	// system that alerts a human if it's taking longer than expected.
+	_ = flag.Duration("timeout", 2*time.Hour, "DEPRECATED AND UNUSED")
+	_ = flag.Duration("replication_timeout", 1*time.Hour, "DEPRECATED AND UNUSED")
 
 	minBackupInterval = flag.Duration("min_backup_interval", 0, "Only take a new backup if it's been at least this long since the most recent backup.")
 	minRetentionTime  = flag.Duration("min_retention_time", 0, "Keep each old backup for at least this long before removing it. Set to 0 to disable pruning of old backups.")
@@ -112,27 +125,39 @@ var (
 	mysqlSocket   = flag.String("mysql_socket", "", "path to the mysql socket")
 	mysqlTimeout  = flag.Duration("mysql_timeout", 5*time.Minute, "how long to wait for mysqld startup")
 	initDBSQLFile = flag.String("init_db_sql_file", "", "path to .sql file to run after mysql_install_db")
+	detachedMode  = flag.Bool("detach", false, "detached mode - run backups detached from the terminal")
 )
 
 func main() {
 	defer exit.Recover()
-	defer logutil.Flush()
-
 	dbconfigs.RegisterFlags(dbconfigs.All...)
 	mysqlctl.RegisterFlags()
 
 	servenv.ParseFlags("vtbackup")
+
+	if *detachedMode {
+		// this method will call os.Exit and kill this process
+		cmd.DetachFromTerminalAndExit()
+	}
+
+	defer logutil.Flush()
 
 	if *minRetentionCount < 1 {
 		log.Errorf("min_retention_count must be at least 1 to allow restores to succeed")
 		exit.Return(1)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
-	defer cancel()
+	// Catch SIGTERM and SIGINT so we get a chance to clean up.
+	ctx, cancel := context.WithCancel(context.Background())
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-sigChan
+		log.Infof("Cancelling due to signal: %v", sig)
+		cancel()
+	}()
 
 	// Open connection backup storage.
-	backupDir := fmt.Sprintf("%v/%v", *initKeyspace, *initShard)
 	backupStorage, err := backupstorage.GetBackupStorage()
 	if err != nil {
 		log.Errorf("Can't get backup storage: %v", err)
@@ -146,13 +171,14 @@ func main() {
 	// Try to take a backup, if it's been long enough since the last one.
 	// Skip pruning if backup wasn't fully successful. We don't want to be
 	// deleting things if the backup process is not healthy.
+	backupDir := mysqlctl.GetBackupDir(*initKeyspace, *initShard)
 	doBackup, err := shouldBackup(ctx, topoServer, backupStorage, backupDir)
 	if err != nil {
 		log.Errorf("Can't take backup: %v", err)
 		exit.Return(1)
 	}
 	if doBackup {
-		if err := takeBackup(ctx, topoServer, backupStorage, backupDir); err != nil {
+		if err := takeBackup(ctx, topoServer, backupStorage); err != nil {
 			log.Errorf("Failed to take backup: %v", err)
 			exit.Return(1)
 		}
@@ -165,7 +191,7 @@ func main() {
 	}
 }
 
-func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage backupstorage.BackupStorage, backupDir string) error {
+func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage backupstorage.BackupStorage) error {
 	// This is an imaginary tablet alias. The value doesn't matter for anything,
 	// except that we generate a random UID to ensure the target backup
 	// directory is unique if multiple vtbackup instances are launched for the
@@ -218,6 +244,17 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		dbName = fmt.Sprintf("vt_%s", *initKeyspace)
 	}
 
+	backupParams := mysqlctl.BackupParams{
+		Cnf:          mycnf,
+		Mysqld:       mysqld,
+		Logger:       logutil.NewConsoleLogger(),
+		Concurrency:  *concurrency,
+		HookExtraEnv: extraEnv,
+		TopoServer:   topoServer,
+		Keyspace:     *initKeyspace,
+		Shard:        *initShard,
+		TabletAlias:  topoproto.TabletAliasString(tabletAlias),
+	}
 	// In initial_backup mode, just take a backup of this empty database.
 	if *initialBackup {
 		// Take a backup of this empty DB without restoring anything.
@@ -225,26 +262,44 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		// produces a result that can be used to skip InitShardMaster entirely.
 		// This involves resetting replication (to erase any history) and then
 		// creating the main database and some Vitess system tables.
-		mysqld.ResetReplication(ctx)
+		if err := mysqld.ResetReplication(ctx); err != nil {
+			return fmt.Errorf("can't reset replication: %v", err)
+		}
 		cmds := mysqlctl.CreateReparentJournal()
 		cmds = append(cmds, fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", sqlescape.EscapeID(dbName)))
 		if err := mysqld.ExecuteSuperQueryList(ctx, cmds); err != nil {
 			return fmt.Errorf("can't initialize database: %v", err)
 		}
+		backupParams.BackupTime = time.Now()
 		// Now we're ready to take the backup.
-		name := backupName(time.Now(), tabletAlias)
-		if err := mysqlctl.Backup(ctx, mycnf, mysqld, logutil.NewConsoleLogger(), backupDir, name, *concurrency, extraEnv); err != nil {
+		if err := mysqlctl.Backup(ctx, backupParams); err != nil {
 			return fmt.Errorf("backup failed: %v", err)
 		}
 		log.Info("Initial backup successful.")
 		return nil
 	}
 
+	backupDir := mysqlctl.GetBackupDir(*initKeyspace, *initShard)
 	log.Infof("Restoring latest backup from directory %v", backupDir)
-	restorePos, err := mysqlctl.Restore(ctx, mycnf, mysqld, backupDir, *concurrency, extraEnv, map[string]string{}, logutil.NewConsoleLogger(), true, dbName)
+	params := mysqlctl.RestoreParams{
+		Cnf:                 mycnf,
+		Mysqld:              mysqld,
+		Logger:              logutil.NewConsoleLogger(),
+		Concurrency:         *concurrency,
+		HookExtraEnv:        extraEnv,
+		LocalMetadata:       map[string]string{},
+		DeleteBeforeRestore: true,
+		DbName:              dbName,
+		Keyspace:            *initKeyspace,
+		Shard:               *initShard,
+	}
+	backupManifest, err := mysqlctl.Restore(ctx, params)
+	var restorePos mysql.Position
 	switch err {
 	case nil:
 		log.Infof("Successfully restored from backup at replication position %v", restorePos)
+		// if err is nil, we expect backupManifest to be non-nil
+		restorePos = backupManifest.Position
 	case mysqlctl.ErrNoBackup:
 		// There is no backup found, but we may be taking the initial backup of a shard
 		if !*allowFirstBackup {
@@ -273,26 +328,36 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	// catch up to live changes, we'd rather take a backup of something rather
 	// than timing out.
 	tmc := tmclient.NewTabletManagerClient()
-	masterPos, err := getMasterPosition(ctx, tmc, topoServer)
+	// Keep retrying if we can't contact the master. The master might be
+	// changing, moving, or down temporarily.
+	var masterPos mysql.Position
+	err = retryOnError(ctx, func() error {
+		// Add a per-operation timeout so we re-read topo if the master is unreachable.
+		opCtx, cancel := context.WithTimeout(ctx, operationTimeout)
+		defer cancel()
+		pos, err := getMasterPosition(opCtx, tmc, topoServer)
+		if err != nil {
+			return fmt.Errorf("can't get the master replication position: %v", err)
+		}
+		masterPos = pos
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("can't get the master replication position: %v", err)
+		return err
 	}
 
 	// Remember the time when we fetched the master position, not when we caught
 	// up to it, so the timestamp on our backup is honest (assuming we make it
 	// to the goal position).
-	backupTime := time.Now()
+	backupParams.BackupTime = time.Now()
 
 	// Wait for replication to catch up.
 	waitStartTime := time.Now()
 	for {
-		time.Sleep(time.Second)
-
-		// Check if the replication context is still good.
-		if time.Since(waitStartTime) > *replicationTimeout {
-			// If we time out on this step, we still might take the backup anyway.
-			log.Errorf("Timed out waiting for replication to catch up to %v.", masterPos)
-			break
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Second):
 		}
 
 		status, statusErr := mysqld.SlaveStatus()
@@ -314,19 +379,23 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		}
 	}
 
+	// Stop replication and see where we are.
+	if err := mysqld.StopSlave(nil); err != nil {
+		return fmt.Errorf("can't stop replication: %v", err)
+	}
+
 	// Did we make any progress?
 	status, err := mysqld.SlaveStatus()
 	if err != nil {
 		return fmt.Errorf("can't get replication status: %v", err)
 	}
-	log.Infof("Replication caught up to at least %v", status.Position)
+	log.Infof("Replication caught up to %v", status.Position)
 	if !status.Position.AtLeast(masterPos) && status.Position.Equal(restorePos) {
 		return fmt.Errorf("not taking backup: replication did not make any progress from restore point: %v", restorePos)
 	}
 
 	// Now we can take a new backup.
-	name := backupName(backupTime, tabletAlias)
-	if err := mysqlctl.Backup(ctx, mycnf, mysqld, logutil.NewConsoleLogger(), backupDir, name, *concurrency, extraEnv); err != nil {
+	if err := mysqlctl.Backup(ctx, backupParams); err != nil {
 		return fmt.Errorf("error taking backup: %v", err)
 	}
 
@@ -348,7 +417,7 @@ func resetReplication(ctx context.Context, pos mysql.Position, mysqld mysqlctl.M
 		return vterrors.Wrap(err, "failed to reset slave")
 	}
 
-	// Check if we have a postion to resume from, if not reset to the beginning of time
+	// Check if we have a position to resume from, if not reset to the beginning of time
 	if !pos.IsZero() {
 		// Set the position at which to resume from the master.
 		if err := mysqld.SetSlavePosition(ctx, pos); err != nil {
@@ -379,8 +448,8 @@ func startReplication(ctx context.Context, mysqld mysqlctl.MysqlDaemon, topoServ
 		return vterrors.Wrapf(err, "Cannot read master tablet %v", si.MasterAlias)
 	}
 
-	// Set master and start slave.
-	if err := mysqld.SetMaster(ctx, topoproto.MysqlHostname(ti.Tablet), int(topoproto.MysqlPort(ti.Tablet)), false /* slaveStopBefore */, true /* slaveStartAfter */); err != nil {
+	// Stop slave (in case we're restarting), set master, and start slave.
+	if err := mysqld.SetMaster(ctx, topoproto.MysqlHostname(ti.Tablet), int(topoproto.MysqlPort(ti.Tablet)), true /* slaveStopBefore */, true /* slaveStartAfter */); err != nil {
 		return vterrors.Wrap(err, "MysqlDaemon.SetMaster failed")
 	}
 	return nil
@@ -411,8 +480,28 @@ func getMasterPosition(ctx context.Context, tmc tmclient.TabletManagerClient, ts
 	return pos, nil
 }
 
-func backupName(backupTime time.Time, tabletAlias *topodatapb.TabletAlias) string {
-	return fmt.Sprintf("%v.%v", backupTime.UTC().Format(backupTimestampFormat), topoproto.TabletAliasString(tabletAlias))
+// retryOnError keeps calling the given function until it succeeds, or the given
+// Context is done. It waits an exponentially increasing amount of time between
+// retries to avoid hot-looping. The only time this returns an error is if the
+// Context is cancelled.
+func retryOnError(ctx context.Context, fn func() error) error {
+	waitTime := 1 * time.Second
+
+	for {
+		err := fn()
+		if err == nil {
+			return nil
+		}
+		log.Errorf("Waiting %v to retry after error: %v", waitTime, err)
+
+		select {
+		case <-ctx.Done():
+			log.Errorf("Not retrying after error: %v", ctx.Err())
+			return ctx.Err()
+		case <-time.After(waitTime):
+			waitTime *= 2
+		}
+	}
 }
 
 func pruneBackups(ctx context.Context, backupStorage backupstorage.BackupStorage, backupDir string) error {
@@ -463,7 +552,7 @@ func parseBackupTime(name string) (time.Time, error) {
 	if len(parts) != 3 {
 		return time.Time{}, fmt.Errorf("backup name not in expected format (date.time.tablet-alias): %v", name)
 	}
-	backupTime, err := time.Parse(backupTimestampFormat, fmt.Sprintf("%s.%s", parts[0], parts[1]))
+	backupTime, err := time.Parse(mysqlctl.BackupTimestampFormat, fmt.Sprintf("%s.%s", parts[0], parts[1]))
 	if err != nil {
 		return time.Time{}, fmt.Errorf("can't parse timestamp from backup %q: %v", name, err)
 	}
@@ -471,13 +560,21 @@ func parseBackupTime(name string) (time.Time, error) {
 }
 
 func shouldBackup(ctx context.Context, topoServer *topo.Server, backupStorage backupstorage.BackupStorage, backupDir string) (bool, error) {
+	// Look for the most recent, complete backup.
 	backups, err := backupStorage.ListBackups(ctx, backupDir)
 	if err != nil {
 		return false, fmt.Errorf("can't list backups: %v", err)
 	}
+	lastBackup := lastCompleteBackup(ctx, backups)
 
 	// Check preconditions for initial_backup mode.
 	if *initialBackup {
+		// Check if any backups for the shard already exist in this backup storage location.
+		if lastBackup != nil {
+			log.Infof("At least one complete backup already exists, so there's no need to seed an empty backup. Doing nothing.")
+			return false, nil
+		}
+
 		// Check whether the shard exists.
 		_, shardErr := topoServer.GetShard(ctx, *initKeyspace, *initShard)
 		switch {
@@ -508,11 +605,6 @@ func shouldBackup(ctx context.Context, topoServer *topo.Server, backupStorage ba
 			return false, fmt.Errorf("failed to check whether shard %v/%v exists before doing initial backup: %v", *initKeyspace, *initShard, err)
 		}
 
-		// Check if any backups for the shard exist in this backup storage location.
-		if len(backups) > 0 {
-			log.Infof("At least one backup already exists, so there's no need to seed an empty backup. Doing nothing.")
-			return false, nil
-		}
 		log.Infof("Shard %v/%v has no existing backups. Creating initial backup.", *initKeyspace, *initShard)
 		return true, nil
 	}
@@ -521,13 +613,19 @@ func shouldBackup(ctx context.Context, topoServer *topo.Server, backupStorage ba
 	if len(backups) == 0 && !*allowFirstBackup {
 		return false, fmt.Errorf("no existing backups to restore from; backup is not possible since -initial_backup flag was not enabled")
 	}
+	if lastBackup == nil {
+		if *allowFirstBackup {
+			// There's no complete backup, but we were told to take one from scratch anyway.
+			return true, nil
+		}
+		return false, fmt.Errorf("no complete backups to restore from; backup is not possible since -initial_backup flag was not enabled")
+	}
 
-	// Has it been long enough since the last backup to need a new one?
+	// Has it been long enough since the last complete backup to need a new one?
 	if *minBackupInterval == 0 {
 		// No minimum interval is set, so always backup.
 		return true, nil
 	}
-	lastBackup := backups[len(backups)-1]
 	lastBackupTime, err := parseBackupTime(lastBackup.Name())
 	if err != nil {
 		return false, fmt.Errorf("can't check last backup time: %v", err)
@@ -540,4 +638,34 @@ func shouldBackup(ctx context.Context, topoServer *topo.Server, backupStorage ba
 	// It has been long enough.
 	log.Infof("The last backup was taken at %v, which is older than the min_backup_interval of %v.", lastBackupTime, *minBackupInterval)
 	return true, nil
+}
+
+func lastCompleteBackup(ctx context.Context, backups []backupstorage.BackupHandle) backupstorage.BackupHandle {
+	if len(backups) == 0 {
+		return nil
+	}
+
+	// Backups are sorted in ascending order by start time. Start at the end.
+	for i := len(backups) - 1; i >= 0; i-- {
+		// Check if this backup is complete by looking for the MANIFEST file,
+		// which is written at the end after all files are uploaded.
+		backup := backups[i]
+		if err := checkBackupComplete(ctx, backup); err != nil {
+			log.Warningf("Ignoring backup %v because it's incomplete: %v", backup.Name(), err)
+			continue
+		}
+		return backup
+	}
+
+	return nil
+}
+
+func checkBackupComplete(ctx context.Context, backup backupstorage.BackupHandle) error {
+	manifest, err := mysqlctl.GetBackupManifest(ctx, backup)
+	if err != nil {
+		return fmt.Errorf("can't get backup MANIFEST: %v", err)
+	}
+
+	log.Infof("Found complete backup %v taken at position %v", backup.Name(), manifest.Position.String())
+	return nil
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,33 +18,29 @@ package vindexes
 
 import (
 	"reflect"
-	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
 
-var hash Vindex
+var hash SingleColumn
 
 func init() {
 	hv, err := CreateVindex("hash", "nn", map[string]string{"Table": "t", "Column": "c"})
 	if err != nil {
 		panic(err)
 	}
-	hash = hv
+	hash = hv.(SingleColumn)
 }
 
-func TestHashCost(t *testing.T) {
-	if hash.Cost() != 1 {
-		t.Errorf("Cost(): %d, want 1", hash.Cost())
-	}
-}
-
-func TestHashString(t *testing.T) {
-	if strings.Compare("nn", hash.String()) != 0 {
-		t.Errorf("String(): %s, want hash", hash.String())
-	}
+func TestHashInfo(t *testing.T) {
+	assert.Equal(t, 1, hash.Cost())
+	assert.Equal(t, "nn", hash.String())
+	assert.True(t, hash.IsUnique())
+	assert.False(t, hash.NeedsVCursor())
 }
 
 func TestHashMap(t *testing.T) {
@@ -63,9 +59,7 @@ func TestHashMap(t *testing.T) {
 		sqltypes.NewUint64(9223372036854775807),  // 2^63 - 1
 		sqltypes.NewInt64(-9223372036854775808),  // - 2^63
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []key.Destination{
 		key.DestinationKeyspaceID([]byte("\x16k@\xb4J\xbaK\xd6")),
 		key.DestinationKeyspaceID([]byte("\x06\xe7\xea\"Βp\x8f")),
@@ -125,9 +119,7 @@ func TestHashReverseMap(t *testing.T) {
 		[]byte("\xf7}H\xaaݡ\xf1\xbb"),
 		[]byte("\x95\xf8\xa5\xe5\xdd1\xd9\x00"),
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	neg1 := int64(-1)
 	negmax := int64(-9223372036854775808)
 	want := []sqltypes.Value{

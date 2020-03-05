@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,9 +18,11 @@ package wrangler
 
 import (
 	"fmt"
+	"time"
 
 	"golang.org/x/net/context"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -70,9 +72,10 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, a
 		return fmt.Errorf("creating this tablet would override old master %v in shard %v/%v, use allow_master_override flag", topoproto.TabletAliasString(si.MasterAlias), tablet.Keyspace, tablet.Shard)
 	}
 
-	// update the shard record if needed
-	if err := wr.updateShardMaster(ctx, si, tablet.Alias, tablet.Type, allowMasterOverride); err != nil {
-		return err
+	if tablet.Type == topodatapb.TabletType_MASTER {
+		// we update master_term_start_time even if the master hasn't changed
+		// because that means a new master term with the same master
+		tablet.MasterTermStartTime = logutil.TimeToProto(time.Now())
 	}
 
 	err = wr.ts.CreateTablet(ctx, tablet)
@@ -88,7 +91,6 @@ func (wr *Wrangler) InitTablet(ctx context.Context, tablet *topodatapb.Tablet, a
 		if oldTablet.Keyspace != tablet.Keyspace || oldTablet.Shard != tablet.Shard {
 			return fmt.Errorf("old tablet has shard %v/%v. Cannot override with shard %v/%v. Delete and re-add tablet if you want to change the tablet's keyspace/shard", oldTablet.Keyspace, oldTablet.Shard, tablet.Keyspace, tablet.Shard)
 		}
-
 		*(oldTablet.Tablet) = *tablet
 		if err := wr.ts.UpdateTablet(ctx, oldTablet); err != nil {
 			return fmt.Errorf("failed updating tablet %v: %v", topoproto.TabletAliasString(tablet.Alias), err)
@@ -107,17 +109,18 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 	if err != nil {
 		return err
 	}
-	wasMaster := ti.Type == topodatapb.TabletType_MASTER
+
+	wasMaster, err := wr.isMasterTablet(ctx, ti)
+	if err != nil {
+		return err
+	}
+
 	if wasMaster && !allowMaster {
 		return fmt.Errorf("cannot delete tablet %v as it is a master, use allow_master flag", topoproto.TabletAliasString(tabletAlias))
 	}
 
-	// remove the record and its replication graph entry
-	if err := topotools.DeleteTablet(ctx, wr.ts, ti.Tablet); err != nil {
-		return err
-	}
-
 	// update the Shard object if the master was scrapped.
+	// we do this before calling DeleteTablet so that the operation can be retried in case of failure.
 	if wasMaster {
 		// We lock the shard to not conflict with reparent operations.
 		ctx, unlock, lockErr := wr.ts.LockShard(ctx, ti.Keyspace, ti.Shard, fmt.Sprintf("DeleteTablet(%v)", topoproto.TabletAliasString(tabletAlias)))
@@ -127,14 +130,20 @@ func (wr *Wrangler) DeleteTablet(ctx context.Context, tabletAlias *topodatapb.Ta
 		defer unlock(&err)
 
 		// update the shard record's master
-		_, err = wr.ts.UpdateShardFields(ctx, ti.Keyspace, ti.Shard, func(si *topo.ShardInfo) error {
+		if _, err := wr.ts.UpdateShardFields(ctx, ti.Keyspace, ti.Shard, func(si *topo.ShardInfo) error {
 			if !topoproto.TabletAliasEqual(si.MasterAlias, tabletAlias) {
 				wr.Logger().Warningf("Deleting master %v from shard %v/%v but master in Shard object was %v", topoproto.TabletAliasString(tabletAlias), ti.Keyspace, ti.Shard, topoproto.TabletAliasString(si.MasterAlias))
 				return topo.NewError(topo.NoUpdateNeeded, si.Keyspace()+"/"+si.ShardName())
 			}
 			si.MasterAlias = nil
 			return nil
-		})
+		}); err != nil {
+			return err
+		}
+	}
+
+	// remove the record and its replication graph entry
+	if err := topotools.DeleteTablet(ctx, wr.ts, ti.Tablet); err != nil {
 		return err
 	}
 
@@ -198,4 +207,35 @@ func (wr *Wrangler) VReplicationExec(ctx context.Context, tabletAlias *topodatap
 		return nil, err
 	}
 	return wr.tmc.VReplicationExec(ctx, ti.Tablet, query)
+}
+
+// isMasterTablet is a shortcut way to determine whether the current tablet
+// is a master before we allow its tablet record to be deleted. The canonical
+// way to determine the only true master in a shard is to list all the tablets
+// and find the one with the highest MasterTermStartTime among the ones that
+// claim to be master.
+// We err on the side of caution here, i.e. we should never return false for
+// a true master tablet, but it is ok to return true for a tablet that isn't
+// the true master. This can occur if someone issues a DeleteTablet while
+// the system is in transition (a reparenting event is in progress and parts of
+// the topo have not yet been updated).
+func (wr *Wrangler) isMasterTablet(ctx context.Context, ti *topo.TabletInfo) (bool, error) {
+	// Tablet record claims to be non-master, we believe it
+	if ti.Type != topodatapb.TabletType_MASTER {
+		return false, nil
+	}
+	si, err := wr.ts.GetShard(ctx, ti.Keyspace, ti.Shard)
+	if err != nil {
+		// strictly speaking it isn't correct to return false here, the tablet status is unknown
+		return false, err
+	}
+	// Tablet record claims to be master, and shard record matches
+	if topoproto.TabletAliasEqual(si.MasterAlias, ti.Tablet.Alias) {
+		return true, nil
+	}
+	// Shard record has another tablet as master, so check MasterTermStartTime
+	// If tablet record's MasterTermStartTime is later than the one in the shard record, then tablet is master
+	tabletMTST := logutil.ProtoToTime(ti.MasterTermStartTime)
+	shardMTST := logutil.ProtoToTime(si.MasterTermStartTime)
+	return tabletMTST.After(shardMTST), nil
 }

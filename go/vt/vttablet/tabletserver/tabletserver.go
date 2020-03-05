@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -46,6 +46,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/topodata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -137,7 +138,6 @@ func stateInfo(state int64) string {
 // a subcomponent. These should also be idempotent.
 type TabletServer struct {
 	QueryTimeout           sync2.AtomicDuration
-	BeginTimeout           sync2.AtomicDuration
 	TerseErrors            bool
 	enableHotRowProtection bool
 
@@ -265,7 +265,6 @@ func NewTabletServerWithNilTopoServer(config tabletenv.TabletConfig) *TabletServ
 func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
 	tsv := &TabletServer{
 		QueryTimeout:           sync2.NewAtomicDuration(time.Duration(config.QueryTimeout * 1e9)),
-		BeginTimeout:           sync2.NewAtomicDuration(time.Duration(config.TxPoolTimeout * 1e9)),
 		TerseErrors:            config.TerseErrors,
 		enableHotRowProtection: config.EnableHotRowProtection || config.EnableHotRowProtectionDryRun,
 		checkMySQLThrottler:    sync2.NewSemaphore(1, 0),
@@ -304,7 +303,6 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 		})
 		stats.NewGaugeDurationFunc("QueryTimeout", "Tablet server query timeout", tsv.QueryTimeout.Get)
 		stats.NewGaugeDurationFunc("QueryPoolTimeout", "Tablet server timeout to get a connection from the query pool", tsv.qe.connTimeout.Get)
-		stats.NewGaugeDurationFunc("BeginTimeout", "Tablet server begin timeout", tsv.BeginTimeout.Get)
 	})
 	// TODO(sougou): move this up once the stats naming problem is fixed.
 	tsv.vstreamer = vstreamer.NewEngine(srvTopoServer, tsv.se)
@@ -389,14 +387,14 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.target = target
 	tsv.dbconfigs = dbcfgs
 
-	tsv.se.InitDBConfig(tsv.dbconfigs)
+	tsv.se.InitDBConfig(tsv.dbconfigs.DbaWithDB())
 	tsv.qe.InitDBConfig(tsv.dbconfigs)
 	tsv.teCtrl.InitDBConfig(tsv.dbconfigs)
 	tsv.hw.InitDBConfig(tsv.dbconfigs)
 	tsv.hr.InitDBConfig(tsv.dbconfigs)
 	tsv.messager.InitDBConfig(tsv.dbconfigs)
 	tsv.watcher.InitDBConfig(tsv.dbconfigs)
-	tsv.vstreamer.InitDBConfig(tsv.dbconfigs)
+	tsv.vstreamer.InitDBConfig(tsv.dbconfigs.DbaWithDB())
 	return nil
 }
 
@@ -772,7 +770,7 @@ func (tsv *TabletServer) SchemaEngine() *schema.Engine {
 // Begin starts a new transaction. This is allowed only if the state is StateServing.
 func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, options *querypb.ExecuteOptions) (transactionID int64, err error) {
 	err = tsv.execRequest(
-		ctx, tsv.BeginTimeout.Get(),
+		ctx, tsv.QueryTimeout.Get(),
 		"Begin", "begin", nil,
 		target, options, true /* isBegin */, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
@@ -970,7 +968,7 @@ func (tsv *TabletServer) ConcludeTransaction(ctx context.Context, target *queryp
 	)
 }
 
-// ReadTransaction returns the metadata for the sepcified dtid.
+// ReadTransaction returns the metadata for the specified dtid.
 func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Target, dtid string) (metadata *querypb.TransactionMetadata, err error) {
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
@@ -1010,28 +1008,57 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 			if err != nil {
 				return err
 			}
-			qre := &QueryExecutor{
-				query:          query,
-				marginComments: comments,
-				bindVars:       bindVariables,
-				transactionID:  transactionID,
-				options:        options,
-				plan:           plan,
-				ctx:            ctx,
-				logStats:       logStats,
-				tsv:            tsv,
+			if plan.PlanID == planbuilder.PlanInsertTopic {
+				result, err = tsv.topicExecute(ctx, query, comments, bindVariables, transactionID, options, plan, logStats, target.GetTabletType())
+			} else {
+				result, err = tsv.qreExecute(ctx, query, comments, bindVariables, transactionID, options, plan, logStats, target.GetTabletType())
 			}
-			extras := tsv.watcher.ComputeExtras(options)
-			result, err = qre.Execute()
-			if err != nil {
-				return err
-			}
-			result.Extras = extras
-			result = result.StripMetadata(sqltypes.IncludeFieldsOrDefault(options))
-			return nil
+
+			return err
 		},
 	)
 	return result, err
+}
+
+func (tsv *TabletServer) topicExecute(ctx context.Context, query string, comments sqlparser.MarginComments, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, plan *TabletPlan, logStats *tabletenv.LogStats, tabletType topodata.TabletType) (result *sqltypes.Result, err error) {
+	for _, subscriber := range plan.Table.TopicInfo.Subscribers {
+		// replace the topic name with the subscribed message table name
+		newQuery := strings.Replace(query, plan.Table.Name.String(), subscriber.Name.String(), -1)
+		var newPlan *TabletPlan
+		newPlan, err = tsv.qe.GetPlan(ctx, logStats, newQuery, skipQueryPlanCache(options))
+		if err != nil {
+			return nil, err
+		}
+
+		// because there isn't an option to return multiple results, only the last
+		// message table result is returned
+		result, err = tsv.qreExecute(ctx, newQuery, comments, bindVariables, transactionID, options, newPlan, logStats, tabletType)
+	}
+	return result, err
+}
+
+func (tsv *TabletServer) qreExecute(ctx context.Context, query string, comments sqlparser.MarginComments, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, plan *TabletPlan, logStats *tabletenv.LogStats, tabletType topodata.TabletType) (result *sqltypes.Result, err error) {
+	qre := &QueryExecutor{
+		query:          query,
+		marginComments: comments,
+		bindVars:       bindVariables,
+		transactionID:  transactionID,
+		options:        options,
+		plan:           plan,
+		ctx:            ctx,
+		logStats:       logStats,
+		tsv:            tsv,
+		tabletType:     tabletType,
+	}
+	extras := tsv.watcher.ComputeExtras(options)
+	result, err = qre.Execute()
+	if err != nil {
+		return nil, err
+	}
+	result.Extras = extras
+	result = result.StripMetadata(sqltypes.IncludeFieldsOrDefault(options))
+
+	return result, nil
 }
 
 // StreamExecute executes the query and streams the result.
@@ -1381,9 +1408,17 @@ func (tsv *TabletServer) VStreamRows(ctx context.Context, target *querypb.Target
 	return tsv.vstreamer.StreamRows(ctx, query, row, send)
 }
 
+// VStreamResults streams rows from the specified starting point.
+func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
+	if err := tsv.verifyTarget(ctx, target); err != nil {
+		return err
+	}
+	return tsv.vstreamer.StreamResults(ctx, query, send)
+}
+
 // SplitQuery splits a query + bind variables into smaller queries that return a
 // subset of rows from the original query. This is the new version that supports multiple
-// split columns and multiple split algortihms.
+// split columns and multiple split algorithms.
 // See the documentation of SplitQueryRequest in proto/vtgate.proto for more details.
 func (tsv *TabletServer) SplitQuery(
 	ctx context.Context,
@@ -2152,6 +2187,17 @@ func (tsv *TabletServer) TxTimeout() time.Duration {
 	return tsv.te.txPool.Timeout()
 }
 
+// SetTxPoolTimeout changes the transaction pool timeout to the specified value.
+// This function should only be used for testing.
+func (tsv *TabletServer) SetTxPoolTimeout(val time.Duration) {
+	tsv.te.txPool.SetPoolTimeout(val)
+}
+
+// TxPoolTimeout returns the transaction pool timeout.
+func (tsv *TabletServer) TxPoolTimeout() time.Duration {
+	return tsv.te.txPool.PoolTimeout()
+}
+
 // SetQueryPlanCacheCap changes the pool size to the specified value.
 // This function should only be used for testing.
 func (tsv *TabletServer) SetQueryPlanCacheCap(val int) {
@@ -2262,6 +2308,13 @@ func (tsv *TabletServer) GetTxPoolWaiterCap() int64 {
 // This function should only be used for testing.
 func (tsv *TabletServer) SetConsolidatorEnabled(enabled bool) {
 	tsv.qe.enableConsolidator = enabled
+}
+
+// SetConsolidatorReplicasEnabled (true) will enable the query consolidator for replicas.
+// SetConsolidatorReplicasEnabled (false) will disable the query consolidator for replicas.
+// This function should only be used for testing.
+func (tsv *TabletServer) SetConsolidatorReplicasEnabled(enabled bool) {
+	tsv.qe.enableConsolidatorReplicas = enabled
 }
 
 // queryAsString returns a readable version of query+bind variables.

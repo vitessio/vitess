@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ import (
 	"golang.org/x/net/context"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/key"
@@ -95,9 +96,7 @@ func TestVTGateBegin(t *testing.T) {
 
 	rpcVTGate.txConn.mode = vtgatepb.TransactionMode_SINGLE
 	got, err := rpcVTGate.Begin(context.Background(), true)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantSession := &vtgatepb.Session{
 		InTransaction: true,
 		SingleDb:      true,
@@ -114,9 +113,7 @@ func TestVTGateBegin(t *testing.T) {
 
 	rpcVTGate.txConn.mode = vtgatepb.TransactionMode_MULTI
 	got, err = rpcVTGate.Begin(context.Background(), true)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{
 		InTransaction: true,
 		SingleDb:      true,
@@ -126,9 +123,7 @@ func TestVTGateBegin(t *testing.T) {
 	}
 
 	got, err = rpcVTGate.Begin(context.Background(), false)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{
 		InTransaction: true,
 	}
@@ -138,9 +133,7 @@ func TestVTGateBegin(t *testing.T) {
 
 	rpcVTGate.txConn.mode = vtgatepb.TransactionMode_TWOPC
 	got, err = rpcVTGate.Begin(context.Background(), true)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{
 		InTransaction: true,
 		SingleDb:      true,
@@ -150,9 +143,7 @@ func TestVTGateBegin(t *testing.T) {
 	}
 
 	got, err = rpcVTGate.Begin(context.Background(), false)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantSession = &vtgatepb.Session{
 		InTransaction: true,
 	}
@@ -182,9 +173,7 @@ func TestVTGateCommit(t *testing.T) {
 		InTransaction: true,
 	}
 	err = rpcVTGate.Commit(context.Background(), false, session)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	rpcVTGate.txConn.mode = vtgatepb.TransactionMode_MULTI
 	session = &vtgatepb.Session{
@@ -199,33 +188,25 @@ func TestVTGateCommit(t *testing.T) {
 		InTransaction: true,
 	}
 	err = rpcVTGate.Commit(context.Background(), false, session)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	rpcVTGate.txConn.mode = vtgatepb.TransactionMode_TWOPC
 	session = &vtgatepb.Session{
 		InTransaction: true,
 	}
 	err = rpcVTGate.Commit(context.Background(), true, session)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 
 	session = &vtgatepb.Session{
 		InTransaction: true,
 	}
 	err = rpcVTGate.Commit(context.Background(), false, session)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestVTGateRollbackNil(t *testing.T) {
 	err := rpcVTGate.Rollback(context.Background(), nil)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestVTGateExecute(t *testing.T) {
@@ -253,9 +234,7 @@ func TestVTGateExecute(t *testing.T) {
 	}
 
 	session, err := rpcVTGate.Begin(context.Background(), false)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if !session.InTransaction {
 		t.Errorf("want true, got false")
 	}
@@ -358,8 +337,8 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		"select id from none",
 		nil,
 	)
-	want = "vtgate: : target: TestUnsharded.noshard.master, no valid tablet: node doesn't exist: TestUnsharded/noshard (MASTER)"
-	if err == nil || err.Error() != want {
+	want = "TestUnsharded.noshard.master: no valid tablet"
+	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Execute: %v, want %s", err, want)
 	}
 }
@@ -1325,7 +1304,7 @@ func TestVTGateMessageStreamRetry(t *testing.T) {
 	// which should make vtgate wait for 1s (5s/5) and retry.
 	start := time.Now()
 	<-ch
-	duration := time.Since(start)
+	duration := time.Since(start).Round(time.Second)
 	if duration < 1*time.Second || duration > 2*time.Second {
 		t.Errorf("Retry duration should be around 1 second: %v", duration)
 	}
@@ -1414,7 +1393,7 @@ func TestVTGateMessageStreamFail(t *testing.T) {
 	createSandbox(ks)
 	hcVTGateTest.Reset()
 	tablet := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, ks, "0", topodatapb.TabletType_MASTER, true, 1, nil)
-	// tablet should should fail immediately if the error is not EOF or UNAVAILABLE.
+	// tablet should fail immediately if the error is not EOF or UNAVAILABLE.
 	tablet.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 1
 	err := rpcVTGate.MessageStream(context.Background(), ks, "0", nil, "msg", func(qr *sqltypes.Result) error {
 		return nil
@@ -1438,9 +1417,7 @@ func TestVTGateMessageAck(t *testing.T) {
 		Value: []byte("2"),
 	}}
 	count, err := rpcVTGate.MessageAck(context.Background(), ks, "msg", ids)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if count != 2 {
 		t.Errorf("MessageAck: %d, want 2", count)
 	}
@@ -1469,9 +1446,7 @@ func TestVTGateMessageAckKeyspaceIds(t *testing.T) {
 		},
 	}
 	count, err := rpcVTGate.MessageAckKeyspaceIds(context.Background(), ks, "msg", idKeyspaceIDs)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if count != 2 {
 		t.Errorf("MessageAck: %d, want 2", count)
 	}

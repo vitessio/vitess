@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ import (
 const (
 	sqlCreateLocalMetadataTable = `CREATE TABLE IF NOT EXISTS _vt.local_metadata (
   name VARCHAR(255) NOT NULL,
-  value VARCHAR(255) NOT NULL,
+  value MEDIUMBLOB NOT NULL,
   PRIMARY KEY (name)
   ) ENGINE=InnoDB`
 	sqlCreateShardMetadataTable = `CREATE TABLE IF NOT EXISTS _vt.shard_metadata (
@@ -46,6 +46,9 @@ var (
 	sqlAlterLocalMetadataTable = []string{
 		`ALTER TABLE _vt.local_metadata ADD COLUMN db_name VARBINARY(255) NOT NULL DEFAULT ''`,
 		`ALTER TABLE _vt.local_metadata DROP PRIMARY KEY, ADD PRIMARY KEY(name, db_name)`,
+		// VARCHAR(255) is not long enough to hold replication positions, hence changing to
+		// MEDIUMBLOB.
+		`ALTER TABLE _vt.local_metadata CHANGE value value MEDIUMBLOB NOT NULL`,
 	}
 	sqlAlterShardMetadataTable = []string{
 		`ALTER TABLE _vt.shard_metadata ADD COLUMN db_name VARBINARY(255) NOT NULL DEFAULT ''`,
@@ -58,7 +61,7 @@ var (
 // a per-tablet table that is never replicated. This allows queries
 // against local_metadata to return different values on different tablets,
 // which is used for communicating between Vitess and MySQL-level tools like
-// Orchestrator (http://github.com/github/orchestrator).
+// Orchestrator (https://github.com/github/orchestrator).
 // _vt.shard_metadata is a replicated table with per-shard information, but it's
 // created here to make it easier to create it on databases that were running
 // old version of Vitess, or databases that are getting converted to run under
@@ -88,32 +91,32 @@ func PopulateMetadataTables(mysqld MysqlDaemon, localMetadata map[string]string,
 	}
 	for _, sql := range sqlAlterLocalMetadataTable {
 		if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
-			if merr, ok := err.(*mysql.SQLError); ok && merr.Num == mysql.ERDupFieldName {
-				log.Errorf("Expected error executing %v: %v", sql, err)
-			} else {
-				log.Errorf("Unexpected error executing %v: %v", sql, err)
+			// Ignore "Duplicate column name 'db_name'" errors which can happen on every restart.
+			if merr, ok := err.(*mysql.SQLError); !ok || merr.Num != mysql.ERDupFieldName {
+				log.Errorf("Error executing %v: %v", sql, err)
 				return err
 			}
 		}
 	}
-	if _, err := conn.ExecuteFetch(fmt.Sprintf(sqlUpdateLocalMetadataTable, dbName), 0, false); err != nil {
-		return err
+	sql := fmt.Sprintf(sqlUpdateLocalMetadataTable, dbName)
+	if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
+		log.Errorf("Error executing %v: %v, continuing. Please check the data in _vt.local_metadata and take corrective action.", sql, err)
 	}
 	if _, err := conn.ExecuteFetch(sqlCreateShardMetadataTable, 0, false); err != nil {
 		return err
 	}
 	for _, sql := range sqlAlterShardMetadataTable {
 		if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
-			if merr, ok := err.(*mysql.SQLError); ok && merr.Num == mysql.ERDupFieldName {
-				log.Errorf("Expected error executing %v: %v", sql, err)
-			} else {
-				log.Errorf("Unexpected error executing %v: %v", sql, err)
+			// Ignore "Duplicate column name 'db_name'" errors which can happen on every restart.
+			if merr, ok := err.(*mysql.SQLError); !ok || merr.Num != mysql.ERDupFieldName {
+				log.Errorf("Error executing %v: %v", sql, err)
 				return err
 			}
 		}
 	}
-	if _, err := conn.ExecuteFetch(fmt.Sprintf(sqlUpdateShardMetadataTable, dbName), 0, false); err != nil {
-		return err
+	sql = fmt.Sprintf(sqlUpdateShardMetadataTable, dbName)
+	if _, err := conn.ExecuteFetch(sql, 0, false); err != nil {
+		log.Errorf("Error executing %v: %v, continuing. Please check the data in _vt.shard_metadata and take corrective action.", sql, err)
 	}
 
 	// Populate local_metadata from the passed list of values.

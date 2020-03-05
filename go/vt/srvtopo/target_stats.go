@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,35 +20,12 @@ import (
 	"fmt"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
 )
-
-// TargetStats is an interface that the srvtopo module uses to handle
-// routing of queries.
-// - discovery.TabletStatsCache will implement the discovery part of the
-//   interface, and discoverygateway will have the QueryService.
-type TargetStats interface {
-	// GetAggregateStats returns the aggregate stats for the given Target.
-	// The srvtopo module will use that information to route queries
-	// to the right cell. Also returns the QueryService to use to
-	// reach that target.
-	// Can return topo.ErrNoNode if the target has no stats.
-	GetAggregateStats(target *querypb.Target) (*querypb.AggregateStats, queryservice.QueryService, error)
-
-	// GetMasterCell returns the master location for a keyspace/shard.
-	// Since there is only one master for a shard, we only need to
-	// know its cell to complete the Target. Also returns the QueryService
-	// to use to reach that target.
-	GetMasterCell(keyspace, shard string) (cell string, qs queryservice.QueryService, err error)
-}
 
 // TargetStatsEntry has the updated information for a Target.
 type TargetStatsEntry struct {
 	// Target is what this entry applies to.
 	Target *querypb.Target
-
-	// Stats is the aggregate stats for this entry.
-	Stats *querypb.AggregateStats
 
 	// TabletExternallyReparentedTimestamp is the latest timestamp
 	// that was reported for this entry. It applies to masters only.

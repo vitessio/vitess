@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -58,11 +58,14 @@ type Route struct {
 	// Query specifies the query to be executed.
 	Query string
 
+	// TableName specifies the table to send the query to.
+	TableName string
+
 	// FieldQuery specifies the query to be executed for a GetFieldInfo request.
 	FieldQuery string
 
 	// Vindex specifies the vindex to be used.
-	Vindex vindexes.Vindex
+	Vindex vindexes.SingleColumn
 	// Values specifies the vindex values to use for routing.
 	Values []sqltypes.PlanValue
 
@@ -81,6 +84,9 @@ type Route struct {
 
 	// ScatterErrorsAsWarnings is true if results should be returned even if some shards have an error
 	ScatterErrorsAsWarnings bool
+
+	// Route does not take inputs
+	noInputs
 }
 
 // NewSimpleRoute creates a Route with the bare minimum of parameters.
@@ -126,6 +132,7 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 		TruncateColumnCount     int                  `json:",omitempty"`
 		QueryTimeout            int                  `json:",omitempty"`
 		ScatterErrorsAsWarnings bool                 `json:",omitempty"`
+		Table                   string               `json:",omitempty"`
 	}{
 		Opcode:                  route.Opcode,
 		Keyspace:                route.Keyspace,
@@ -137,6 +144,7 @@ func (route *Route) MarshalJSON() ([]byte, error) {
 		TruncateColumnCount:     route.TruncateColumnCount,
 		QueryTimeout:            route.QueryTimeout,
 		ScatterErrorsAsWarnings: route.ScatterErrorsAsWarnings,
+		Table:                   route.TableName,
 	}
 	return jsonutil.MarshalNoEscape(marshalRoute)
 }
@@ -199,6 +207,16 @@ func (code RouteOpcode) MarshalJSON() ([]byte, error) {
 // RouteType returns a description of the query routing type used by the primitive
 func (route *Route) RouteType() string {
 	return routeName[route.Opcode]
+}
+
+// GetKeyspaceName specifies the Keyspace that this primitive routes to.
+func (route *Route) GetKeyspaceName() string {
+	return route.Keyspace.Name
+}
+
+// GetTableName specifies the table that this primitive routes to.
+func (route *Route) GetTableName() string {
+	return route.TableName
 }
 
 // SetTruncateColumnCount sets the truncate column count.
@@ -316,7 +334,20 @@ func (route *Route) StreamExecute(vcursor VCursor, bindVars map[string]*querypb.
 		})
 	}
 
-	return mergeSort(vcursor, route.Query, route.OrderBy, rss, bvs, func(qr *sqltypes.Result) error {
+	// There is an order by. We have to merge-sort.
+	prims := make([]StreamExecutor, 0, len(rss))
+	for i, rs := range rss {
+		prims = append(prims, &shardRoute{
+			query: route.Query,
+			rs:    rs,
+			bv:    bvs[i],
+		})
+	}
+	ms := MergeSort{
+		Primitives: prims,
+		OrderBy:    route.OrderBy,
+	}
+	return ms.StreamExecute(vcursor, bindVars, wantfields, func(qr *sqltypes.Result) error {
 		return callback(qr.Truncate(route.TruncateColumnCount))
 	})
 }
@@ -367,7 +398,7 @@ func (route *Route) paramsSelectEqual(vcursor VCursor, bindVars map[string]*quer
 	if err != nil {
 		return nil, nil, vterrors.Wrap(err, "paramsSelectEqual")
 	}
-	rss, _, err := route.resolveShards(vcursor, []sqltypes.Value{key})
+	rss, _, err := resolveShards(vcursor, route.Vindex, route.Keyspace, []sqltypes.Value{key})
 	if err != nil {
 		return nil, nil, vterrors.Wrap(err, "paramsSelectEqual")
 	}
@@ -383,14 +414,14 @@ func (route *Route) paramsSelectIn(vcursor VCursor, bindVars map[string]*querypb
 	if err != nil {
 		return nil, nil, vterrors.Wrap(err, "paramsSelectIn")
 	}
-	rss, values, err := route.resolveShards(vcursor, keys)
+	rss, values, err := resolveShards(vcursor, route.Vindex, route.Keyspace, keys)
 	if err != nil {
 		return nil, nil, vterrors.Wrap(err, "paramsSelectIn")
 	}
 	return rss, shardVars(bindVars, values), nil
 }
 
-func (route *Route) resolveShards(vcursor VCursor, vindexKeys []sqltypes.Value) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
+func resolveShards(vcursor VCursor, vindex vindexes.SingleColumn, keyspace *vindexes.Keyspace, vindexKeys []sqltypes.Value) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error) {
 	// Convert vindexKeys to []*querypb.Value
 	ids := make([]*querypb.Value, len(vindexKeys))
 	for i, vik := range vindexKeys {
@@ -398,13 +429,13 @@ func (route *Route) resolveShards(vcursor VCursor, vindexKeys []sqltypes.Value) 
 	}
 
 	// Map using the Vindex
-	destinations, err := route.Vindex.Map(vcursor, vindexKeys)
+	destinations, err := vindex.Map(vcursor, vindexKeys)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// And use the Resolver to map to ResolvedShards.
-	return vcursor.ResolveDestinations(route.Keyspace.Name, ids, destinations)
+	return vcursor.ResolveDestinations(keyspace.Name, ids, destinations)
 }
 
 func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
@@ -448,7 +479,7 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 	return out, err
 }
 
-func resolveSingleShard(vcursor VCursor, vindex vindexes.Vindex, keyspace *vindexes.Keyspace, vindexKey sqltypes.Value) (*srvtopo.ResolvedShard, []byte, error) {
+func resolveSingleShard(vcursor VCursor, vindex vindexes.SingleColumn, keyspace *vindexes.Keyspace, vindexKey sqltypes.Value) (*srvtopo.ResolvedShard, []byte, error) {
 	destinations, err := vindex.Map(vcursor, []sqltypes.Value{vindexKey})
 	if err != nil {
 		return nil, nil, err
@@ -470,6 +501,21 @@ func resolveSingleShard(vcursor VCursor, vindex vindexes.Vindex, keyspace *vinde
 		return nil, nil, fmt.Errorf("ResolveDestinations maps to %v shards", len(rss))
 	}
 	return rss[0], ksid, nil
+}
+
+func resolveKeyspaceID(vcursor VCursor, vindex vindexes.SingleColumn, vindexKey sqltypes.Value) ([]byte, error) {
+	destinations, err := vindex.Map(vcursor, []sqltypes.Value{vindexKey})
+	if err != nil {
+		return nil, err
+	}
+	switch ksid := destinations[0].(type) {
+	case key.DestinationKeyspaceID:
+		return ksid, nil
+	case key.DestinationNone:
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("cannot map vindex to unique keyspace id: %v", destinations[0])
+	}
 }
 
 func execShard(vcursor VCursor, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard, isDML, canAutocommit bool) (*sqltypes.Result, error) {

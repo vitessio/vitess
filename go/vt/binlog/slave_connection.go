@@ -1,5 +1,5 @@
 /*
-Copyright 2017 Google Inc.
+Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@ var (
 // among actual slaves in the topology.
 type SlaveConnection struct {
 	*mysql.Conn
-	cp      *mysql.ConnParams
+	cp      dbconfigs.Connector
 	slaveID uint32
 	cancel  context.CancelFunc
 	wg      sync.WaitGroup
@@ -53,7 +53,7 @@ type SlaveConnection struct {
 // 1) No other processes are making fake slave connections to our mysqld.
 // 2) No real slave servers will have IDs in the range 1-N where N is the peak
 //    number of concurrent fake slave connections we will ever make.
-func NewSlaveConnection(cp *mysql.ConnParams) (*SlaveConnection, error) {
+func NewSlaveConnection(cp dbconfigs.Connector) (*SlaveConnection, error) {
 	conn, err := connectForReplication(cp)
 	if err != nil {
 		return nil, err
@@ -69,18 +69,12 @@ func NewSlaveConnection(cp *mysql.ConnParams) (*SlaveConnection, error) {
 }
 
 // connectForReplication create a MySQL connection ready to use for replication.
-func connectForReplication(cp *mysql.ConnParams) (*mysql.Conn, error) {
-	params, err := dbconfigs.WithCredentials(cp)
-	if err != nil {
-		return nil, err
-	}
-
+func connectForReplication(cp dbconfigs.Connector) (*mysql.Conn, error) {
 	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, params)
+	conn, err := cp.Connect(ctx)
 	if err != nil {
 		return nil, err
 	}
-
 	// Tell the server that we understand the format of events
 	// that will be used if binlog_checksum is enabled on the server.
 	if _, err := conn.ExecuteFetch("SET @master_binlog_checksum=@@global.binlog_checksum", 0, false); err != nil {
@@ -171,7 +165,7 @@ func (sc *SlaveConnection) streamEvents(ctx context.Context) chan mysql.BinlogEv
 // The startup phase will list all the binary logs, and find the one
 // that has events starting strictly before the provided timestamp. It
 // will then start from there, and stream all events. It is the
-// responsability of the calling site to filter the events more.
+// responsibility of the calling site to filter the events more.
 //
 // MySQL 5.6+ note: we need to do it that way because of the way the
 // GTIDSet works. In the previous two streaming functions, we pass in

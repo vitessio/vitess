@@ -35,7 +35,7 @@ def get_backup_storage_flags():
           os.path.join(environment.tmproot, 'backupstorage')]
 
 def get_all_extra_my_cnf(extra_my_cnf):
-    all_extra_my_cnf = [environment.vttop + '/config/mycnf/default-fast.cnf']
+    all_extra_my_cnf = [environment.vtroot + '/config/mycnf/default-fast.cnf']
     flavor_my_cnf = mysql_flavor().extra_my_cnf()
     if flavor_my_cnf:
         all_extra_my_cnf.append(flavor_my_cnf)
@@ -134,7 +134,7 @@ class Vtbackup(object):
           "-init_db_sql_file",init_db
       ])
 
-      # Pass through inital_backup flag to vtbackup                  
+      # Pass through initial_backup flag to vtbackup                  
       if initial_backup:
         args.extend(["-initial_backup"])
       

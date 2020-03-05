@@ -6,9 +6,12 @@
 # This is used in Travis to verify that the currently committed version was
 # generated with the proper version of goyacc.
 
+source build.env
+
 CUR="sql.go"
 TMP="/tmp/sql.$$.go"
 
+set -e
 
 if ! cd go/vt/sqlparser/ ; then
         echo "ERROR: $0 must be run in the root project directory"
@@ -16,7 +19,7 @@ if ! cd go/vt/sqlparser/ ; then
 fi
 
 mv $CUR $TMP
-output=`goyacc -o $CUR sql.y`
+output=$(go run golang.org/x/tools/cmd/goyacc -o $CUR sql.y)
 
 if [ -n "$output" ]; then
     echo "Expected empty output from goyacc, got:"

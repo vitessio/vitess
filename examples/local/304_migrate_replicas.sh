@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2018 The Vitess Authors.
+# Copyright 2019 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,9 +16,5 @@
 
 # this script migrates traffic for the rdonly and replica tablets
 
-set -e
-
-./lvtctl.sh MigrateServedTypes customer/0 rdonly
-./lvtctl.sh MigrateServedTypes customer/0 replica
-
-disown -a
+vtctlclient -server localhost:15999 MigrateServedTypes customer/0 rdonly
+vtctlclient -server localhost:15999 MigrateServedTypes customer/0 replica

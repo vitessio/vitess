@@ -23,7 +23,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='binlogdata',
   syntax='proto3',
   serialized_options=_b('Z\'vitess.io/vitess/go/vt/proto/binlogdata'),
-  serialized_pb=_b('\n\x10\x62inlogdata.proto\x12\nbinlogdata\x1a\x0bvtrpc.proto\x1a\x0bquery.proto\x1a\x0etopodata.proto\"7\n\x07\x43harset\x12\x0e\n\x06\x63lient\x18\x01 \x01(\x05\x12\x0c\n\x04\x63onn\x18\x02 \x01(\x05\x12\x0e\n\x06server\x18\x03 \x01(\x05\"\xb5\x03\n\x11\x42inlogTransaction\x12;\n\nstatements\x18\x01 \x03(\x0b\x32\'.binlogdata.BinlogTransaction.Statement\x12&\n\x0b\x65vent_token\x18\x04 \x01(\x0b\x32\x11.query.EventToken\x1a\xae\x02\n\tStatement\x12\x42\n\x08\x63\x61tegory\x18\x01 \x01(\x0e\x32\x30.binlogdata.BinlogTransaction.Statement.Category\x12$\n\x07\x63harset\x18\x02 \x01(\x0b\x32\x13.binlogdata.Charset\x12\x0b\n\x03sql\x18\x03 \x01(\x0c\"\xa9\x01\n\x08\x43\x61tegory\x12\x13\n\x0f\x42L_UNRECOGNIZED\x10\x00\x12\x0c\n\x08\x42L_BEGIN\x10\x01\x12\r\n\tBL_COMMIT\x10\x02\x12\x0f\n\x0b\x42L_ROLLBACK\x10\x03\x12\x15\n\x11\x42L_DML_DEPRECATED\x10\x04\x12\n\n\x06\x42L_DDL\x10\x05\x12\n\n\x06\x42L_SET\x10\x06\x12\r\n\tBL_INSERT\x10\x07\x12\r\n\tBL_UPDATE\x10\x08\x12\r\n\tBL_DELETE\x10\tJ\x04\x08\x02\x10\x03J\x04\x08\x03\x10\x04\"v\n\x15StreamKeyRangeRequest\x12\x10\n\x08position\x18\x01 \x01(\t\x12%\n\tkey_range\x18\x02 \x01(\x0b\x32\x12.topodata.KeyRange\x12$\n\x07\x63harset\x18\x03 \x01(\x0b\x32\x13.binlogdata.Charset\"S\n\x16StreamKeyRangeResponse\x12\x39\n\x12\x62inlog_transaction\x18\x01 \x01(\x0b\x32\x1d.binlogdata.BinlogTransaction\"]\n\x13StreamTablesRequest\x12\x10\n\x08position\x18\x01 \x01(\t\x12\x0e\n\x06tables\x18\x02 \x03(\t\x12$\n\x07\x63harset\x18\x03 \x01(\x0b\x32\x13.binlogdata.Charset\"Q\n\x14StreamTablesResponse\x12\x39\n\x12\x62inlog_transaction\x18\x01 \x01(\x0b\x32\x1d.binlogdata.BinlogTransaction\"%\n\x04Rule\x12\r\n\x05match\x18\x01 \x01(\t\x12\x0e\n\x06\x66ilter\x18\x02 \x01(\t\")\n\x06\x46ilter\x12\x1f\n\x05rules\x18\x01 \x03(\x0b\x32\x10.binlogdata.Rule\"\xde\x01\n\x0c\x42inlogSource\x12\x10\n\x08keyspace\x18\x01 \x01(\t\x12\r\n\x05shard\x18\x02 \x01(\t\x12)\n\x0btablet_type\x18\x03 \x01(\x0e\x32\x14.topodata.TabletType\x12%\n\tkey_range\x18\x04 \x01(\x0b\x32\x12.topodata.KeyRange\x12\x0e\n\x06tables\x18\x05 \x03(\t\x12\"\n\x06\x66ilter\x18\x06 \x01(\x0b\x32\x12.binlogdata.Filter\x12\'\n\x06on_ddl\x18\x07 \x01(\x0e\x32\x17.binlogdata.OnDDLAction\"B\n\tRowChange\x12\x1a\n\x06\x62\x65\x66ore\x18\x01 \x01(\x0b\x32\n.query.Row\x12\x19\n\x05\x61\x66ter\x18\x02 \x01(\x0b\x32\n.query.Row\"J\n\x08RowEvent\x12\x12\n\ntable_name\x18\x01 \x01(\t\x12*\n\x0brow_changes\x18\x02 \x03(\x0b\x32\x15.binlogdata.RowChange\">\n\nFieldEvent\x12\x12\n\ntable_name\x18\x01 \x01(\t\x12\x1c\n\x06\x66ields\x18\x02 \x03(\x0b\x32\x0c.query.Field\":\n\tShardGtid\x12\x10\n\x08keyspace\x18\x01 \x01(\t\x12\r\n\x05shard\x18\x02 \x01(\t\x12\x0c\n\x04gtid\x18\x03 \x01(\t\"3\n\x05VGtid\x12*\n\x0bshard_gtids\x18\x01 \x03(\x0b\x32\x15.binlogdata.ShardGtid\"\xea\x01\n\x06VEvent\x12$\n\x04type\x18\x01 \x01(\x0e\x32\x16.binlogdata.VEventType\x12\x11\n\ttimestamp\x18\x02 \x01(\x03\x12\x0c\n\x04gtid\x18\x03 \x01(\t\x12\x0b\n\x03\x64\x64l\x18\x04 \x01(\t\x12\'\n\trow_event\x18\x05 \x01(\x0b\x32\x14.binlogdata.RowEvent\x12+\n\x0b\x66ield_event\x18\x06 \x01(\x0b\x32\x16.binlogdata.FieldEvent\x12 \n\x05vgtid\x18\x07 \x01(\x0b\x32\x11.binlogdata.VGtid\x12\x14\n\x0c\x63urrent_time\x18\x14 \x01(\x03\"\xc7\x01\n\x0eVStreamRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12\x10\n\x08position\x18\x04 \x01(\t\x12\"\n\x06\x66ilter\x18\x05 \x01(\x0b\x32\x12.binlogdata.Filter\"5\n\x0fVStreamResponse\x12\"\n\x06\x65vents\x18\x01 \x03(\x0b\x32\x12.binlogdata.VEvent\"\xc8\x01\n\x12VStreamRowsRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12\r\n\x05query\x18\x04 \x01(\t\x12\"\n\x06lastpk\x18\x05 \x01(\x0b\x32\x12.query.QueryResult\"\x97\x01\n\x13VStreamRowsResponse\x12\x1c\n\x06\x66ields\x18\x01 \x03(\x0b\x32\x0c.query.Field\x12\x1e\n\x08pkfields\x18\x02 \x03(\x0b\x32\x0c.query.Field\x12\x0c\n\x04gtid\x18\x03 \x01(\t\x12\x18\n\x04rows\x18\x04 \x03(\x0b\x32\n.query.Row\x12\x1a\n\x06lastpk\x18\x05 \x01(\x0b\x32\n.query.Row*>\n\x0bOnDDLAction\x12\n\n\x06IGNORE\x10\x00\x12\x08\n\x04STOP\x10\x01\x12\x08\n\x04\x45XEC\x10\x02\x12\x0f\n\x0b\x45XEC_IGNORE\x10\x03*\xc4\x01\n\nVEventType\x12\x0b\n\x07UNKNOWN\x10\x00\x12\x08\n\x04GTID\x10\x01\x12\t\n\x05\x42\x45GIN\x10\x02\x12\n\n\x06\x43OMMIT\x10\x03\x12\x0c\n\x08ROLLBACK\x10\x04\x12\x07\n\x03\x44\x44L\x10\x05\x12\n\n\x06INSERT\x10\x06\x12\x0b\n\x07REPLACE\x10\x07\x12\n\n\x06UPDATE\x10\x08\x12\n\n\x06\x44\x45LETE\x10\t\x12\x07\n\x03SET\x10\n\x12\t\n\x05OTHER\x10\x0b\x12\x07\n\x03ROW\x10\x0c\x12\t\n\x05\x46IELD\x10\r\x12\r\n\tHEARTBEAT\x10\x0e\x12\t\n\x05VGTID\x10\x0f\x42)Z\'vitess.io/vitess/go/vt/proto/binlogdatab\x06proto3')
+  serialized_pb=_b('\n\x10\x62inlogdata.proto\x12\nbinlogdata\x1a\x0bvtrpc.proto\x1a\x0bquery.proto\x1a\x0etopodata.proto\"7\n\x07\x43harset\x12\x0e\n\x06\x63lient\x18\x01 \x01(\x05\x12\x0c\n\x04\x63onn\x18\x02 \x01(\x05\x12\x0e\n\x06server\x18\x03 \x01(\x05\"\xb5\x03\n\x11\x42inlogTransaction\x12;\n\nstatements\x18\x01 \x03(\x0b\x32\'.binlogdata.BinlogTransaction.Statement\x12&\n\x0b\x65vent_token\x18\x04 \x01(\x0b\x32\x11.query.EventToken\x1a\xae\x02\n\tStatement\x12\x42\n\x08\x63\x61tegory\x18\x01 \x01(\x0e\x32\x30.binlogdata.BinlogTransaction.Statement.Category\x12$\n\x07\x63harset\x18\x02 \x01(\x0b\x32\x13.binlogdata.Charset\x12\x0b\n\x03sql\x18\x03 \x01(\x0c\"\xa9\x01\n\x08\x43\x61tegory\x12\x13\n\x0f\x42L_UNRECOGNIZED\x10\x00\x12\x0c\n\x08\x42L_BEGIN\x10\x01\x12\r\n\tBL_COMMIT\x10\x02\x12\x0f\n\x0b\x42L_ROLLBACK\x10\x03\x12\x15\n\x11\x42L_DML_DEPRECATED\x10\x04\x12\n\n\x06\x42L_DDL\x10\x05\x12\n\n\x06\x42L_SET\x10\x06\x12\r\n\tBL_INSERT\x10\x07\x12\r\n\tBL_UPDATE\x10\x08\x12\r\n\tBL_DELETE\x10\tJ\x04\x08\x02\x10\x03J\x04\x08\x03\x10\x04\"v\n\x15StreamKeyRangeRequest\x12\x10\n\x08position\x18\x01 \x01(\t\x12%\n\tkey_range\x18\x02 \x01(\x0b\x32\x12.topodata.KeyRange\x12$\n\x07\x63harset\x18\x03 \x01(\x0b\x32\x13.binlogdata.Charset\"S\n\x16StreamKeyRangeResponse\x12\x39\n\x12\x62inlog_transaction\x18\x01 \x01(\x0b\x32\x1d.binlogdata.BinlogTransaction\"]\n\x13StreamTablesRequest\x12\x10\n\x08position\x18\x01 \x01(\t\x12\x0e\n\x06tables\x18\x02 \x03(\t\x12$\n\x07\x63harset\x18\x03 \x01(\x0b\x32\x13.binlogdata.Charset\"Q\n\x14StreamTablesResponse\x12\x39\n\x12\x62inlog_transaction\x18\x01 \x01(\x0b\x32\x1d.binlogdata.BinlogTransaction\"%\n\x04Rule\x12\r\n\x05match\x18\x01 \x01(\t\x12\x0e\n\x06\x66ilter\x18\x02 \x01(\t\"\x9c\x01\n\x06\x46ilter\x12\x1f\n\x05rules\x18\x01 \x03(\x0b\x32\x10.binlogdata.Rule\x12\x39\n\x0e\x66ieldEventMode\x18\x02 \x01(\x0e\x32!.binlogdata.Filter.FieldEventMode\"6\n\x0e\x46ieldEventMode\x12\x13\n\x0f\x45RR_ON_MISMATCH\x10\x00\x12\x0f\n\x0b\x42\x45ST_EFFORT\x10\x01\"\x8f\x02\n\x0c\x42inlogSource\x12\x10\n\x08keyspace\x18\x01 \x01(\t\x12\r\n\x05shard\x18\x02 \x01(\t\x12)\n\x0btablet_type\x18\x03 \x01(\x0e\x32\x14.topodata.TabletType\x12%\n\tkey_range\x18\x04 \x01(\x0b\x32\x12.topodata.KeyRange\x12\x0e\n\x06tables\x18\x05 \x03(\t\x12\"\n\x06\x66ilter\x18\x06 \x01(\x0b\x32\x12.binlogdata.Filter\x12\'\n\x06on_ddl\x18\x07 \x01(\x0e\x32\x17.binlogdata.OnDDLAction\x12\x16\n\x0e\x65xternal_mysql\x18\x08 \x01(\t\x12\x17\n\x0fstop_after_copy\x18\t \x01(\x08\"B\n\tRowChange\x12\x1a\n\x06\x62\x65\x66ore\x18\x01 \x01(\x0b\x32\n.query.Row\x12\x19\n\x05\x61\x66ter\x18\x02 \x01(\x0b\x32\n.query.Row\"J\n\x08RowEvent\x12\x12\n\ntable_name\x18\x01 \x01(\t\x12*\n\x0brow_changes\x18\x02 \x03(\x0b\x32\x15.binlogdata.RowChange\">\n\nFieldEvent\x12\x12\n\ntable_name\x18\x01 \x01(\t\x12\x1c\n\x06\x66ields\x18\x02 \x03(\x0b\x32\x0c.query.Field\":\n\tShardGtid\x12\x10\n\x08keyspace\x18\x01 \x01(\t\x12\r\n\x05shard\x18\x02 \x01(\t\x12\x0c\n\x04gtid\x18\x03 \x01(\t\"3\n\x05VGtid\x12*\n\x0bshard_gtids\x18\x01 \x03(\x0b\x32\x15.binlogdata.ShardGtid\"0\n\rKeyspaceShard\x12\x10\n\x08keyspace\x18\x01 \x01(\t\x12\r\n\x05shard\x18\x02 \x01(\t\"\xe7\x01\n\x07Journal\x12\n\n\x02id\x18\x01 \x01(\x03\x12\x31\n\x0emigration_type\x18\x02 \x01(\x0e\x32\x19.binlogdata.MigrationType\x12\x0e\n\x06tables\x18\x03 \x03(\t\x12\x16\n\x0elocal_position\x18\x04 \x01(\t\x12*\n\x0bshard_gtids\x18\x05 \x03(\x0b\x32\x15.binlogdata.ShardGtid\x12/\n\x0cparticipants\x18\x06 \x03(\x0b\x32\x19.binlogdata.KeyspaceShard\x12\x18\n\x10source_workflows\x18\x07 \x03(\t\"\x9d\x02\n\x06VEvent\x12$\n\x04type\x18\x01 \x01(\x0e\x32\x16.binlogdata.VEventType\x12\x11\n\ttimestamp\x18\x02 \x01(\x03\x12\x0c\n\x04gtid\x18\x03 \x01(\t\x12\x0b\n\x03\x64\x64l\x18\x04 \x01(\t\x12\'\n\trow_event\x18\x05 \x01(\x0b\x32\x14.binlogdata.RowEvent\x12+\n\x0b\x66ield_event\x18\x06 \x01(\x0b\x32\x16.binlogdata.FieldEvent\x12 \n\x05vgtid\x18\x07 \x01(\x0b\x32\x11.binlogdata.VGtid\x12$\n\x07journal\x18\x08 \x01(\x0b\x32\x13.binlogdata.Journal\x12\x0b\n\x03\x64ml\x18\t \x01(\t\x12\x14\n\x0c\x63urrent_time\x18\x14 \x01(\x03\"\xc7\x01\n\x0eVStreamRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12\x10\n\x08position\x18\x04 \x01(\t\x12\"\n\x06\x66ilter\x18\x05 \x01(\x0b\x32\x12.binlogdata.Filter\"5\n\x0fVStreamResponse\x12\"\n\x06\x65vents\x18\x01 \x03(\x0b\x32\x12.binlogdata.VEvent\"\xc8\x01\n\x12VStreamRowsRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12\r\n\x05query\x18\x04 \x01(\t\x12\"\n\x06lastpk\x18\x05 \x01(\x0b\x32\x12.query.QueryResult\"\x97\x01\n\x13VStreamRowsResponse\x12\x1c\n\x06\x66ields\x18\x01 \x03(\x0b\x32\x0c.query.Field\x12\x1e\n\x08pkfields\x18\x02 \x03(\x0b\x32\x0c.query.Field\x12\x0c\n\x04gtid\x18\x03 \x01(\t\x12\x18\n\x04rows\x18\x04 \x03(\x0b\x32\n.query.Row\x12\x1a\n\x06lastpk\x18\x05 \x01(\x0b\x32\n.query.Row\"\xa7\x01\n\x15VStreamResultsRequest\x12,\n\x13\x65\x66\x66\x65\x63tive_caller_id\x18\x01 \x01(\x0b\x32\x0f.vtrpc.CallerID\x12\x32\n\x13immediate_caller_id\x18\x02 \x01(\x0b\x32\x15.query.VTGateCallerID\x12\x1d\n\x06target\x18\x03 \x01(\x0b\x32\r.query.Target\x12\r\n\x05query\x18\x04 \x01(\t\"^\n\x16VStreamResultsResponse\x12\x1c\n\x06\x66ields\x18\x01 \x03(\x0b\x32\x0c.query.Field\x12\x0c\n\x04gtid\x18\x03 \x01(\t\x12\x18\n\x04rows\x18\x04 \x03(\x0b\x32\n.query.Row*>\n\x0bOnDDLAction\x12\n\n\x06IGNORE\x10\x00\x12\x08\n\x04STOP\x10\x01\x12\x08\n\x04\x45XEC\x10\x02\x12\x0f\n\x0b\x45XEC_IGNORE\x10\x03*\xd1\x01\n\nVEventType\x12\x0b\n\x07UNKNOWN\x10\x00\x12\x08\n\x04GTID\x10\x01\x12\t\n\x05\x42\x45GIN\x10\x02\x12\n\n\x06\x43OMMIT\x10\x03\x12\x0c\n\x08ROLLBACK\x10\x04\x12\x07\n\x03\x44\x44L\x10\x05\x12\n\n\x06INSERT\x10\x06\x12\x0b\n\x07REPLACE\x10\x07\x12\n\n\x06UPDATE\x10\x08\x12\n\n\x06\x44\x45LETE\x10\t\x12\x07\n\x03SET\x10\n\x12\t\n\x05OTHER\x10\x0b\x12\x07\n\x03ROW\x10\x0c\x12\t\n\x05\x46IELD\x10\r\x12\r\n\tHEARTBEAT\x10\x0e\x12\t\n\x05VGTID\x10\x0f\x12\x0b\n\x07JOURNAL\x10\x10*\'\n\rMigrationType\x12\n\n\x06TABLES\x10\x00\x12\n\n\x06SHARDS\x10\x01\x42)Z\'vitess.io/vitess/go/vt/proto/binlogdatab\x06proto3')
   ,
   dependencies=[vtrpc__pb2.DESCRIPTOR,query__pb2.DESCRIPTOR,topodata__pb2.DESCRIPTOR,])
 
@@ -52,8 +52,8 @@ _ONDDLACTION = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=2433,
-  serialized_end=2495,
+  serialized_start=3199,
+  serialized_end=3261,
 )
 _sym_db.RegisterEnumDescriptor(_ONDDLACTION)
 
@@ -128,15 +128,42 @@ _VEVENTTYPE = _descriptor.EnumDescriptor(
       name='VGTID', index=15, number=15,
       serialized_options=None,
       type=None),
+    _descriptor.EnumValueDescriptor(
+      name='JOURNAL', index=16, number=16,
+      serialized_options=None,
+      type=None),
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=2498,
-  serialized_end=2694,
+  serialized_start=3264,
+  serialized_end=3473,
 )
 _sym_db.RegisterEnumDescriptor(_VEVENTTYPE)
 
 VEventType = enum_type_wrapper.EnumTypeWrapper(_VEVENTTYPE)
+_MIGRATIONTYPE = _descriptor.EnumDescriptor(
+  name='MigrationType',
+  full_name='binlogdata.MigrationType',
+  filename=None,
+  file=DESCRIPTOR,
+  values=[
+    _descriptor.EnumValueDescriptor(
+      name='TABLES', index=0, number=0,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='SHARDS', index=1, number=1,
+      serialized_options=None,
+      type=None),
+  ],
+  containing_type=None,
+  serialized_options=None,
+  serialized_start=3475,
+  serialized_end=3514,
+)
+_sym_db.RegisterEnumDescriptor(_MIGRATIONTYPE)
+
+MigrationType = enum_type_wrapper.EnumTypeWrapper(_MIGRATIONTYPE)
 IGNORE = 0
 STOP = 1
 EXEC = 2
@@ -157,6 +184,9 @@ ROW = 12
 FIELD = 13
 HEARTBEAT = 14
 VGTID = 15
+JOURNAL = 16
+TABLES = 0
+SHARDS = 1
 
 
 _BINLOGTRANSACTION_STATEMENT_CATEGORY = _descriptor.EnumDescriptor(
@@ -212,6 +242,28 @@ _BINLOGTRANSACTION_STATEMENT_CATEGORY = _descriptor.EnumDescriptor(
   serialized_end=557,
 )
 _sym_db.RegisterEnumDescriptor(_BINLOGTRANSACTION_STATEMENT_CATEGORY)
+
+_FILTER_FIELDEVENTMODE = _descriptor.EnumDescriptor(
+  name='FieldEventMode',
+  full_name='binlogdata.Filter.FieldEventMode',
+  filename=None,
+  file=DESCRIPTOR,
+  values=[
+    _descriptor.EnumValueDescriptor(
+      name='ERR_ON_MISMATCH', index=0, number=0,
+      serialized_options=None,
+      type=None),
+    _descriptor.EnumValueDescriptor(
+      name='BEST_EFFORT', index=1, number=1,
+      serialized_options=None,
+      type=None),
+  ],
+  containing_type=None,
+  serialized_options=None,
+  serialized_start=1096,
+  serialized_end=1150,
+)
+_sym_db.RegisterEnumDescriptor(_FILTER_FIELDEVENTMODE)
 
 
 _CHARSET = _descriptor.Descriptor(
@@ -546,11 +598,19 @@ _FILTER = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='fieldEventMode', full_name='binlogdata.Filter.fieldEventMode', index=1,
+      number=2, type=14, cpp_type=8, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
   nested_types=[],
   enum_types=[
+    _FILTER_FIELDEVENTMODE,
   ],
   serialized_options=None,
   is_extendable=False,
@@ -558,8 +618,8 @@ _FILTER = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=993,
-  serialized_end=1034,
+  serialized_start=994,
+  serialized_end=1150,
 )
 
 
@@ -619,6 +679,20 @@ _BINLOGSOURCE = _descriptor.Descriptor(
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='external_mysql', full_name='binlogdata.BinlogSource.external_mysql', index=7,
+      number=8, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='stop_after_copy', full_name='binlogdata.BinlogSource.stop_after_copy', index=8,
+      number=9, type=8, cpp_type=7, label=1,
+      has_default_value=False, default_value=False,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
   ],
   extensions=[
   ],
@@ -631,8 +705,8 @@ _BINLOGSOURCE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1037,
-  serialized_end=1259,
+  serialized_start=1153,
+  serialized_end=1424,
 )
 
 
@@ -669,8 +743,8 @@ _ROWCHANGE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1261,
-  serialized_end=1327,
+  serialized_start=1426,
+  serialized_end=1492,
 )
 
 
@@ -707,8 +781,8 @@ _ROWEVENT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1329,
-  serialized_end=1403,
+  serialized_start=1494,
+  serialized_end=1568,
 )
 
 
@@ -745,8 +819,8 @@ _FIELDEVENT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1405,
-  serialized_end=1467,
+  serialized_start=1570,
+  serialized_end=1632,
 )
 
 
@@ -790,8 +864,8 @@ _SHARDGTID = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1469,
-  serialized_end=1527,
+  serialized_start=1634,
+  serialized_end=1692,
 )
 
 
@@ -821,8 +895,119 @@ _VGTID = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1529,
-  serialized_end=1580,
+  serialized_start=1694,
+  serialized_end=1745,
+)
+
+
+_KEYSPACESHARD = _descriptor.Descriptor(
+  name='KeyspaceShard',
+  full_name='binlogdata.KeyspaceShard',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='keyspace', full_name='binlogdata.KeyspaceShard.keyspace', index=0,
+      number=1, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='shard', full_name='binlogdata.KeyspaceShard.shard', index=1,
+      number=2, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=1747,
+  serialized_end=1795,
+)
+
+
+_JOURNAL = _descriptor.Descriptor(
+  name='Journal',
+  full_name='binlogdata.Journal',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='id', full_name='binlogdata.Journal.id', index=0,
+      number=1, type=3, cpp_type=2, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='migration_type', full_name='binlogdata.Journal.migration_type', index=1,
+      number=2, type=14, cpp_type=8, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='tables', full_name='binlogdata.Journal.tables', index=2,
+      number=3, type=9, cpp_type=9, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='local_position', full_name='binlogdata.Journal.local_position', index=3,
+      number=4, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='shard_gtids', full_name='binlogdata.Journal.shard_gtids', index=4,
+      number=5, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='participants', full_name='binlogdata.Journal.participants', index=5,
+      number=6, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='source_workflows', full_name='binlogdata.Journal.source_workflows', index=6,
+      number=7, type=9, cpp_type=9, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=1798,
+  serialized_end=2029,
 )
 
 
@@ -883,7 +1068,21 @@ _VEVENT = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='current_time', full_name='binlogdata.VEvent.current_time', index=7,
+      name='journal', full_name='binlogdata.VEvent.journal', index=7,
+      number=8, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='dml', full_name='binlogdata.VEvent.dml', index=8,
+      number=9, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='current_time', full_name='binlogdata.VEvent.current_time', index=9,
       number=20, type=3, cpp_type=2, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
@@ -901,8 +1100,8 @@ _VEVENT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1583,
-  serialized_end=1817,
+  serialized_start=2032,
+  serialized_end=2317,
 )
 
 
@@ -960,8 +1159,8 @@ _VSTREAMREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1820,
-  serialized_end=2019,
+  serialized_start=2320,
+  serialized_end=2519,
 )
 
 
@@ -991,8 +1190,8 @@ _VSTREAMRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2021,
-  serialized_end=2074,
+  serialized_start=2521,
+  serialized_end=2574,
 )
 
 
@@ -1050,8 +1249,8 @@ _VSTREAMROWSREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2077,
-  serialized_end=2277,
+  serialized_start=2577,
+  serialized_end=2777,
 )
 
 
@@ -1109,8 +1308,105 @@ _VSTREAMROWSRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2280,
-  serialized_end=2431,
+  serialized_start=2780,
+  serialized_end=2931,
+)
+
+
+_VSTREAMRESULTSREQUEST = _descriptor.Descriptor(
+  name='VStreamResultsRequest',
+  full_name='binlogdata.VStreamResultsRequest',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='effective_caller_id', full_name='binlogdata.VStreamResultsRequest.effective_caller_id', index=0,
+      number=1, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='immediate_caller_id', full_name='binlogdata.VStreamResultsRequest.immediate_caller_id', index=1,
+      number=2, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='target', full_name='binlogdata.VStreamResultsRequest.target', index=2,
+      number=3, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='query', full_name='binlogdata.VStreamResultsRequest.query', index=3,
+      number=4, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=2934,
+  serialized_end=3101,
+)
+
+
+_VSTREAMRESULTSRESPONSE = _descriptor.Descriptor(
+  name='VStreamResultsResponse',
+  full_name='binlogdata.VStreamResultsResponse',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='fields', full_name='binlogdata.VStreamResultsResponse.fields', index=0,
+      number=1, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='gtid', full_name='binlogdata.VStreamResultsResponse.gtid', index=1,
+      number=3, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='rows', full_name='binlogdata.VStreamResultsResponse.rows', index=2,
+      number=4, type=11, cpp_type=10, label=3,
+      has_default_value=False, default_value=[],
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=3103,
+  serialized_end=3197,
 )
 
 _BINLOGTRANSACTION_STATEMENT.fields_by_name['category'].enum_type = _BINLOGTRANSACTION_STATEMENT_CATEGORY
@@ -1125,6 +1421,8 @@ _STREAMKEYRANGERESPONSE.fields_by_name['binlog_transaction'].message_type = _BIN
 _STREAMTABLESREQUEST.fields_by_name['charset'].message_type = _CHARSET
 _STREAMTABLESRESPONSE.fields_by_name['binlog_transaction'].message_type = _BINLOGTRANSACTION
 _FILTER.fields_by_name['rules'].message_type = _RULE
+_FILTER.fields_by_name['fieldEventMode'].enum_type = _FILTER_FIELDEVENTMODE
+_FILTER_FIELDEVENTMODE.containing_type = _FILTER
 _BINLOGSOURCE.fields_by_name['tablet_type'].enum_type = topodata__pb2._TABLETTYPE
 _BINLOGSOURCE.fields_by_name['key_range'].message_type = topodata__pb2._KEYRANGE
 _BINLOGSOURCE.fields_by_name['filter'].message_type = _FILTER
@@ -1134,10 +1432,14 @@ _ROWCHANGE.fields_by_name['after'].message_type = query__pb2._ROW
 _ROWEVENT.fields_by_name['row_changes'].message_type = _ROWCHANGE
 _FIELDEVENT.fields_by_name['fields'].message_type = query__pb2._FIELD
 _VGTID.fields_by_name['shard_gtids'].message_type = _SHARDGTID
+_JOURNAL.fields_by_name['migration_type'].enum_type = _MIGRATIONTYPE
+_JOURNAL.fields_by_name['shard_gtids'].message_type = _SHARDGTID
+_JOURNAL.fields_by_name['participants'].message_type = _KEYSPACESHARD
 _VEVENT.fields_by_name['type'].enum_type = _VEVENTTYPE
 _VEVENT.fields_by_name['row_event'].message_type = _ROWEVENT
 _VEVENT.fields_by_name['field_event'].message_type = _FIELDEVENT
 _VEVENT.fields_by_name['vgtid'].message_type = _VGTID
+_VEVENT.fields_by_name['journal'].message_type = _JOURNAL
 _VSTREAMREQUEST.fields_by_name['effective_caller_id'].message_type = vtrpc__pb2._CALLERID
 _VSTREAMREQUEST.fields_by_name['immediate_caller_id'].message_type = query__pb2._VTGATECALLERID
 _VSTREAMREQUEST.fields_by_name['target'].message_type = query__pb2._TARGET
@@ -1151,6 +1453,11 @@ _VSTREAMROWSRESPONSE.fields_by_name['fields'].message_type = query__pb2._FIELD
 _VSTREAMROWSRESPONSE.fields_by_name['pkfields'].message_type = query__pb2._FIELD
 _VSTREAMROWSRESPONSE.fields_by_name['rows'].message_type = query__pb2._ROW
 _VSTREAMROWSRESPONSE.fields_by_name['lastpk'].message_type = query__pb2._ROW
+_VSTREAMRESULTSREQUEST.fields_by_name['effective_caller_id'].message_type = vtrpc__pb2._CALLERID
+_VSTREAMRESULTSREQUEST.fields_by_name['immediate_caller_id'].message_type = query__pb2._VTGATECALLERID
+_VSTREAMRESULTSREQUEST.fields_by_name['target'].message_type = query__pb2._TARGET
+_VSTREAMRESULTSRESPONSE.fields_by_name['fields'].message_type = query__pb2._FIELD
+_VSTREAMRESULTSRESPONSE.fields_by_name['rows'].message_type = query__pb2._ROW
 DESCRIPTOR.message_types_by_name['Charset'] = _CHARSET
 DESCRIPTOR.message_types_by_name['BinlogTransaction'] = _BINLOGTRANSACTION
 DESCRIPTOR.message_types_by_name['StreamKeyRangeRequest'] = _STREAMKEYRANGEREQUEST
@@ -1165,13 +1472,18 @@ DESCRIPTOR.message_types_by_name['RowEvent'] = _ROWEVENT
 DESCRIPTOR.message_types_by_name['FieldEvent'] = _FIELDEVENT
 DESCRIPTOR.message_types_by_name['ShardGtid'] = _SHARDGTID
 DESCRIPTOR.message_types_by_name['VGtid'] = _VGTID
+DESCRIPTOR.message_types_by_name['KeyspaceShard'] = _KEYSPACESHARD
+DESCRIPTOR.message_types_by_name['Journal'] = _JOURNAL
 DESCRIPTOR.message_types_by_name['VEvent'] = _VEVENT
 DESCRIPTOR.message_types_by_name['VStreamRequest'] = _VSTREAMREQUEST
 DESCRIPTOR.message_types_by_name['VStreamResponse'] = _VSTREAMRESPONSE
 DESCRIPTOR.message_types_by_name['VStreamRowsRequest'] = _VSTREAMROWSREQUEST
 DESCRIPTOR.message_types_by_name['VStreamRowsResponse'] = _VSTREAMROWSRESPONSE
+DESCRIPTOR.message_types_by_name['VStreamResultsRequest'] = _VSTREAMRESULTSREQUEST
+DESCRIPTOR.message_types_by_name['VStreamResultsResponse'] = _VSTREAMRESULTSRESPONSE
 DESCRIPTOR.enum_types_by_name['OnDDLAction'] = _ONDDLACTION
 DESCRIPTOR.enum_types_by_name['VEventType'] = _VEVENTTYPE
+DESCRIPTOR.enum_types_by_name['MigrationType'] = _MIGRATIONTYPE
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
 
 Charset = _reflection.GeneratedProtocolMessageType('Charset', (_message.Message,), dict(
@@ -1280,6 +1592,20 @@ VGtid = _reflection.GeneratedProtocolMessageType('VGtid', (_message.Message,), d
   ))
 _sym_db.RegisterMessage(VGtid)
 
+KeyspaceShard = _reflection.GeneratedProtocolMessageType('KeyspaceShard', (_message.Message,), dict(
+  DESCRIPTOR = _KEYSPACESHARD,
+  __module__ = 'binlogdata_pb2'
+  # @@protoc_insertion_point(class_scope:binlogdata.KeyspaceShard)
+  ))
+_sym_db.RegisterMessage(KeyspaceShard)
+
+Journal = _reflection.GeneratedProtocolMessageType('Journal', (_message.Message,), dict(
+  DESCRIPTOR = _JOURNAL,
+  __module__ = 'binlogdata_pb2'
+  # @@protoc_insertion_point(class_scope:binlogdata.Journal)
+  ))
+_sym_db.RegisterMessage(Journal)
+
 VEvent = _reflection.GeneratedProtocolMessageType('VEvent', (_message.Message,), dict(
   DESCRIPTOR = _VEVENT,
   __module__ = 'binlogdata_pb2'
@@ -1314,6 +1640,20 @@ VStreamRowsResponse = _reflection.GeneratedProtocolMessageType('VStreamRowsRespo
   # @@protoc_insertion_point(class_scope:binlogdata.VStreamRowsResponse)
   ))
 _sym_db.RegisterMessage(VStreamRowsResponse)
+
+VStreamResultsRequest = _reflection.GeneratedProtocolMessageType('VStreamResultsRequest', (_message.Message,), dict(
+  DESCRIPTOR = _VSTREAMRESULTSREQUEST,
+  __module__ = 'binlogdata_pb2'
+  # @@protoc_insertion_point(class_scope:binlogdata.VStreamResultsRequest)
+  ))
+_sym_db.RegisterMessage(VStreamResultsRequest)
+
+VStreamResultsResponse = _reflection.GeneratedProtocolMessageType('VStreamResultsResponse', (_message.Message,), dict(
+  DESCRIPTOR = _VSTREAMRESULTSRESPONSE,
+  __module__ = 'binlogdata_pb2'
+  # @@protoc_insertion_point(class_scope:binlogdata.VStreamResultsResponse)
+  ))
+_sym_db.RegisterMessage(VStreamResultsResponse)
 
 
 DESCRIPTOR._options = None
