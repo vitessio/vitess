@@ -151,7 +151,7 @@ func New(mcp *mysql.ConnParams) Connector {
 }
 
 // Connect will invoke the mysql.connect method and return a connection
-func Connect(ctx context.Context, c Connector) (*mysql.Conn, error) {
+func (c Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
 	params, err := c.MysqlParams()
 	if err != nil {
 		return nil, err

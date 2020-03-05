@@ -120,7 +120,7 @@ func NewDBConnection(info dbconfigs.Connector, mysqlStats *stats.Timings) (*DBCo
 	defer mysqlStats.Record("Connect", start)
 
 	ctx := context.Background()
-	c, err := dbconfigs.Connect(ctx, info)
+	c, err := info.Connect(ctx)
 	if err != nil {
 		mysqlStats.Record("ConnectError", start)
 	}
