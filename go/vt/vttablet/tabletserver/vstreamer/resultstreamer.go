@@ -20,10 +20,8 @@ import (
 	"context"
 	"fmt"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -129,40 +127,4 @@ func (rs *resultStreamer) Stream() error {
 	}
 
 	return nil
-}
-
-func (rs *resultStreamer) startStreaming(conn *mysql.Conn) (string, error) {
-	lockConn, err := rs.mysqlConnect()
-	if err != nil {
-		return "", err
-	}
-	// To be safe, always unlock tables, even if lock tables might fail.
-	defer func() {
-		_, err := lockConn.ExecuteFetch("unlock tables", 0, false)
-		if err != nil {
-			log.Warning("Unlock tables failed: %v", err)
-		} else {
-			log.Infof("Tables unlocked", rs.tableName)
-		}
-		lockConn.Close()
-	}()
-
-	log.Infof("Locking table %s for copying", rs.tableName)
-	if _, err := lockConn.ExecuteFetch(fmt.Sprintf("lock tables %s read", sqlparser.String(rs.tableName)), 0, false); err != nil {
-		return "", err
-	}
-	pos, err := lockConn.MasterPosition()
-	if err != nil {
-		return "", err
-	}
-
-	if err := conn.ExecuteStreamFetch(rs.query); err != nil {
-		return "", err
-	}
-
-	return mysql.EncodePosition(pos), nil
-}
-
-func (rs *resultStreamer) mysqlConnect() (*mysql.Conn, error) {
-	return rs.cp.Connect(rs.ctx)
 }
