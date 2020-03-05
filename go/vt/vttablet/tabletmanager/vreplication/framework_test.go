@@ -346,7 +346,10 @@ func (dbc *realDBClient) DBName() string {
 }
 
 func (dbc *realDBClient) Connect() error {
-	app := env.Dbcfgs.AppWithDB()
+	app, err := env.Dbcfgs.AppWithDB().MysqlParams()
+	if err != nil {
+		return err
+	}
 	app.DbName = vrepldb
 	conn, err := mysql.Connect(context.Background(), app)
 	if err != nil {

@@ -17,10 +17,9 @@ limitations under the License.
 package dbconnpool
 
 import (
+	"context"
 	"fmt"
 	"time"
-
-	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -116,20 +115,21 @@ func (dbc *DBConnection) ExecuteStreamFetch(query string, callback func(*sqltype
 
 // NewDBConnection returns a new DBConnection based on the ConnParams
 // and will use the provided stats to collect timing.
-func NewDBConnection(info *mysql.ConnParams, mysqlStats *stats.Timings) (*DBConnection, error) {
+func NewDBConnection(info dbconfigs.Connector, mysqlStats *stats.Timings) (*DBConnection, error) {
 	start := time.Now()
 	defer mysqlStats.Record("Connect", start)
-	params, err := dbconfigs.WithCredentials(info)
+
+	ctx := context.Background()
+	params, err := info.MysqlParams()
 	if err != nil {
 		return nil, err
 	}
-	ctx := context.Background()
-	if info.ConnectTimeoutMs != 0 {
+	if params.ConnectTimeoutMs != 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(info.ConnectTimeoutMs)*time.Millisecond)
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(params.ConnectTimeoutMs)*time.Millisecond)
 		defer cancel()
 	}
-	c, err := mysql.Connect(ctx, params)
+	c, err := info.Connect(ctx)
 	if err != nil {
 		mysqlStats.Record("ConnectError", start)
 	}
