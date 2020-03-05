@@ -22,6 +22,7 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -66,6 +67,9 @@ var (
 	mysqlConnReadTimeout  = flag.Duration("mysql_server_read_timeout", 0, "connection read timeout")
 	mysqlConnWriteTimeout = flag.Duration("mysql_server_write_timeout", 0, "connection write timeout")
 	mysqlQueryTimeout     = flag.Duration("mysql_server_query_timeout", 0, "mysql query timeout")
+
+	mysqlDefaultWorkloadName = flag.String("mysql_default_workload", "UNSPECIFIED", "Default session workload (OLTP, OLAP, DBA)")
+	mysqlDefaultWorkload     int32
 
 	busyConnections int32
 )
@@ -316,6 +320,7 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 		session = &vtgatepb.Session{
 			Options: &querypb.ExecuteOptions{
 				IncludedFields: querypb.ExecuteOptions_ALL,
+				Workload:       querypb.ExecuteOptions_Workload(mysqlDefaultWorkload),
 			},
 			Autocommit: true,
 		}
@@ -350,6 +355,12 @@ func initMySQLProtocol() {
 		initFn()
 	}
 	authServer := mysql.GetAuthServer(*mysqlAuthServerImpl)
+
+	// Check mysql_default_workload
+	var ok bool
+	if mysqlDefaultWorkload, ok = querypb.ExecuteOptions_Workload_value[strings.ToUpper(*mysqlDefaultWorkloadName)]; !ok {
+		log.Exitf("-mysql_default_workload must be one of [OLTP, OLAP, DBA, UNSPECIFIED]")
+	}
 
 	switch *mysqlTCPVersion {
 	case "tcp", "tcp4", "tcp6":
