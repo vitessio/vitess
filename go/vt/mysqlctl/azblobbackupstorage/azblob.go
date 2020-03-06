@@ -38,18 +38,18 @@ import (
 
 var (
 	// This is the account name
-	accountName = flag.String("azblob_backup_account_name", "", "Azure Storage account name for backups, if this flag is unset the environment paramater VITESS_AZBLOB_ACCOUNT_NAME will be used")
+	accountName = flag.String("azblob_backup_account_name", "", "Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used")
 
 	// This is the private access key
-	accountKeyFile = flag.String("azblob_backup_account_key_file", "", "A file containing the Azure Storage account key,if this flag is unset the environment paramater VITESS_AZBLOB_ACCOUNT_KEY will be used")
+	accountKeyFile = flag.String("azblob_backup_account_key_file", "", "Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path)")
 
 	// This is the name of the container that will store the backups
 	containerName = flag.String("azblob_backup_container_name", "", "Azure Blob Container Name")
 
-	// This is an optional previx to prepend to all files
-	storageRoot = flag.String("azblob_backup_storage_root", "", "Azure Blob storage root")
+	// This is an optional prefix to prepend to all files
+	storageRoot = flag.String("azblob_backup_storage_root", "", "Root prefix for all backup-related Azure Blobs; this should exclude both initial and trailing '/' (e.g. just 'a/b' not '/a/b/')")
 
-	azBlobParallelism = flag.Int("azblob_backup_parallelism", 1, "Azure blob operation parallelism (requires extra memory when increased)")
+	azBlobParallelism = flag.Int("azblob_backup_parallelism", 1, "Azure Blob operation parallelism (requires extra memory when increased)")
 )
 
 const (
@@ -63,25 +63,25 @@ const (
 // 2. Environment variables
 func azCredentials() (*azblob.SharedKeyCredential, error) {
 	actName := *accountName
-	if len(actName) == 0 {
+	if actName == "" {
 		// Check the Environmental Value
-		actName = os.Getenv("VITESS_AZBLOB_ACCOUNT_NAME")
+		actName = os.Getenv("VT_AZBLOB_ACCOUNT_NAME")
 	}
 
 	var actKey string
-	if len(*accountKeyFile) > 0 {
-		log.Infof("Getting account crednetials from file: %s", *accountKeyFile)
-		if dat, err := ioutil.ReadFile(*accountKeyFile); err == nil {
-			actKey = string(dat)
-		} else {
+	if *accountKeyFile != "" {
+		log.Infof("Getting Azure Storage Account key from file: %s", *accountKeyFile)
+		dat, err := ioutil.ReadFile(*accountKeyFile)
+		if err != nil {
 			return nil, err
 		}
+		actKey = string(dat)
 	} else {
-		actKey = os.Getenv("VITESS_AZBLOB_ACCOUNT_KEY")
+		actKey = os.Getenv("VT_AZBLOB_ACCOUNT_KEY")
 	}
 
-	if len(actName) == 0 || len(actKey) == 0 {
-		return nil, fmt.Errorf("can not get Azure Storage account credentials from CLI or Environment variables")
+	if actName == "" || actKey == "" {
+		return nil, fmt.Errorf("Azure Storage Account credentials not found in command-line flags or environment variables")
 	}
 	return azblob.NewSharedKeyCredential(actName, actKey)
 }
@@ -92,12 +92,17 @@ func azServiceURL(credentials *azblob.SharedKeyCredential) azblob.ServiceURL {
 			Policy:   azblob.RetryPolicyFixed,
 			MaxTries: defaultRetryCount,
 			// Per https://godoc.org/github.com/Azure/azure-storage-blob-go/azblob#RetryOptions
-			// This shuld be set to a very nigh number ( they claim 60s per MB ). That could end up being days so we are limiting this to four hours
+			// this should be set to a very nigh number (they claim 60s per MB).
+			// That could end up being days so we are limiting this to four hours.
 			TryTimeout: 4 * time.Hour,
 		},
 	})
-	u, _ := url.Parse(fmt.Sprintf("https://%s.blob.core.windows.net/", credentials.AccountName()))
-	return azblob.NewServiceURL(*u, pipeline)
+	u := url.URL{
+		Scheme: "https",
+		Host:   credentials.AccountName() + ".blob.core.windows.net",
+		Path:   "/",
+	}
+	return azblob.NewServiceURL(u, pipeline)
 }
 
 // AZBlobBackupHandle implements BackupHandle for Azure Blob service.
@@ -127,7 +132,7 @@ func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, file
 	}
 	// Error out if the file size it too large ( ~4.75 TB)
 	if filesize > azblob.BlockBlobMaxStageBlockBytes*azblob.BlockBlobMaxBlocks {
-		return nil, fmt.Errorf("filesize is too large to upload to az blob (max size %v)", azblob.BlockBlobMaxStageBlockBytes*azblob.BlockBlobMaxBlocks)
+		return nil, fmt.Errorf("filesize (%v) is too large to upload to az blob (max size %v)", filesize, azblob.BlockBlobMaxStageBlockBytes*azblob.BlockBlobMaxBlocks)
 	}
 
 	obj := objName(bh.dir, bh.name, filename)
@@ -227,7 +232,7 @@ func (bs *AZBlobBackupStorage) ListBackups(ctx context.Context, dir string) ([]b
 	var subdirs []string
 
 	for marker := (azblob.Marker{}); marker.NotDone(); {
-		// This returns Blobs in sorted order so we don't need to sort them a second time
+		// This returns Blobs in sorted order so we don't need to sort them a second time.
 		resp, err := containerURL.ListBlobsHierarchySegment(ctx, marker, delimiter, azblob.ListBlobsSegmentOptions{
 			Prefix:     searchPrefix,
 			MaxResults: 0,
