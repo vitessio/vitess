@@ -123,9 +123,7 @@ type receiverWithStatus struct {
 // Each addition makes sure the send loop is awakened if it's waiting.
 // The send loop continuously pulls items out of the cache and sends them.
 // After every successful send, the messages are postponed, and are
-// also removed from the cache. If a send failed, then the messages are
-// just removed from the cache. This triggers the messagesPending state explained
-// below.
+// also removed from the cache.
 // The poller wakes up periodically, loads messages that are due and adds them
 // to the cache. Most of these items are likely to be those that did not
 // receive a timely ack.
@@ -134,10 +132,9 @@ type receiverWithStatus struct {
 // This mode is a variation of the steady state mode. This mode is
 // entered when there are outstanding items in the database that need to be sent
 // but are not present in the cache. This state can be entered in one
-// of three ways:
+// of two ways:
 // 1. The poller read returns as many rows as the cache size
-// 2. The Add of a message fails (cache full).
-// 3. A send failed that caused a message to be discarded without postponement.
+// 2. The Add of a message fails (cache full). This is invoked from the vstreamer.
 // In any of the above cases, the messagesPending flag gets turned on.
 // In this phase, the send loop proactively wakes up the poller every time
 // it clears the cache.
@@ -181,8 +178,6 @@ type messageManager struct {
 	isOpen bool
 	// cond waits on curReceiver == -1 || cache.IsEmpty():
 	// No current receivers available or cache is empty.
-	// Also, messagesPending && cache.IsEmpty() should trigger
-	// the poller to fetch more messages from the database.
 	cond            sync.Cond
 	cache           *cache
 	receivers       []*receiverWithStatus
@@ -526,21 +521,6 @@ func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 	}()
 
 	if err := receiver.receiver.Send(qr); err != nil {
-		if err == io.EOF {
-			// If the receiver ended the stream, we do not postpone the message.
-			// Instead, we mark messagesPending. If the cache is already empty
-			// then we have to trigger the poller. Otherwise, it will get
-			// trigerred by runSend when it goes empty.
-			mm.mu.Lock()
-			mm.messagesPending = true
-			// Although messagesPending is not part of the condition,
-			// we broadcast to make it break out and trigger the poller
-			// to load more messages, if necessary.
-			mm.cond.Broadcast()
-			mm.mu.Unlock()
-			return
-		}
-
 		// Log the error, but we still want to postpone the message.
 		// Otherwise, if this is a chronic failure like "message too
 		// big", we'll end up spamming non-stop.
