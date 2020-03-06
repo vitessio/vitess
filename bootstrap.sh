@@ -23,7 +23,6 @@ source ./dev.env
 # 0. Initialization and helper methods.
 # 1. Installation of dependencies.
 
-BUILD_PYTHON=${BUILD_PYTHON:-1}
 BUILD_JAVA=${BUILD_JAVA:-1}
 BUILD_CONSUL=${BUILD_CONSUL:-1}
 
@@ -88,34 +87,6 @@ function install_dep() {
 function get_arch() {
   uname -m
 }
-
-# This is only needed to execute client_test testcase.
-# Install the gRPC Python library (grpcio) and the protobuf gRPC Python plugin (grpcio-tools) from PyPI.
-# Dependencies like the Python protobuf package will be installed automatically.
-function install_grpc() {
-  local version="$1"
-  local dist="$2"
-
-  # Python requires a very recent version of virtualenv.
-  # We also require a recent version of pip, as we use it to
-  # upgrade the other tools.
-  # For instance, setuptools doesn't work with pip 6.0:
-  # https://github.com/pypa/setuptools/issues/945
-  # (and setuptools is used by grpc install).
-  grpc_virtualenv="$dist/usr/local"
-  $VIRTUALENV -v "$grpc_virtualenv"
-  PIP=$grpc_virtualenv/bin/pip
-  $PIP install --upgrade pip
-  $PIP install --upgrade --ignore-installed virtualenv
-  $PIP install mysql-connector-python
-
-  grpcio_ver=$version
-  $PIP install --upgrade grpcio=="$grpcio_ver" grpcio-tools=="$grpcio_ver"
-}
-
-if [ "$BUILD_PYTHON" == 1 ] ; then
-    install_dep "gRPC" "1.16.0" "$VTROOT/dist/grpc" install_grpc
-fi
 
 # Install protoc.
 function install_protoc() {

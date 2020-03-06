@@ -31,7 +31,7 @@
 				"e2e_test_race"
 			],
 			"Manual": false,
-			"Shard": 5,
+			"Shard": -1,
 			"RetryMax": 0,
 			"Tags": []
 		},
@@ -42,7 +42,7 @@
 				"tools/unit_test_runner.sh"
 			],
 			"Manual": false,
-			"Shard": 5,
+			"Shard": -1,
 			"RetryMax": 0,
 			"Tags": []
 		},
