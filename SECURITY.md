@@ -35,7 +35,7 @@ best protect our users.
 
 #### Policy for master-only vulnerabilities
 
-If a security vulnerability only affects master, but not a stable release (i.e. Vitess 5) then the following process will apply:
+If a security vulnerability affects master, but not a currently supported branch, then the following process will apply:
 
 * The fix will land in master.
 * A courtesy email will be sent to [vitess@googlegroups.com](https://groups.google.com/forum/#!forum/vitess) along with a posted notice in #developers on Slack.
@@ -49,7 +49,7 @@ If a security vulnerability affects only a stable release which is no longer und
 
 #### Policy for supported releases 
 
-If a security vulnerability affects supported branches (i.e. Vitess 5), then a Fix Lead will be appointed and the full security process as defined below will apply.
+If a security vulnerability affects supported branches, then a Fix Lead will be appointed and the full security process as defined below will apply.
 
 ### Fix Development Process
 
