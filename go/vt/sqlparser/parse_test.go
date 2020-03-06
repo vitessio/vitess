@@ -1774,8 +1774,14 @@ func TestKeywords(t *testing.T) {
 		input:  "select status from t",
 		output: "select `status` from t",
 	}, {
+		input:  "select Status from t",
+		output: "select `Status` from t",
+	}, {
 		input:  "select variables from t",
 		output: "select `variables` from t",
+	}, {
+		input:  "select Variables from t",
+		output: "select `Variables` from t",
 	}}
 
 	for _, tcase := range validSQL {
