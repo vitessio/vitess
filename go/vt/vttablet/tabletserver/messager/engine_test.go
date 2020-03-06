@@ -26,7 +26,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -35,7 +34,7 @@ import (
 
 var meTable = &schema.Table{
 	Type:        schema.Message,
-	MessageInfo: mmTable.MessageInfo,
+	MessageInfo: newMMTable().MessageInfo,
 }
 
 func TestEngineSchemaChanged(t *testing.T) {
@@ -165,10 +164,7 @@ func newTestEngine(db *fakesqldb.DB) *Engine {
 	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 	tsv := newFakeTabletServer()
 	se := schema.NewEngine(tsv, config)
-	te := NewEngine(tsv, se, config)
-	params, _ := db.ConnParams().MysqlParams()
-	cp := *params
-	te.InitDBConfig(dbconfigs.NewTestDBConfigs(cp, cp, ""))
+	te := NewEngine(tsv, se, newFakeVStreamer(), config)
 	te.Open()
 	return te
 }
