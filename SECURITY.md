@@ -63,7 +63,7 @@ These steps should be completed within the 1-7 days of Disclosure.
 
 If the CVSS score is under 4.0 ([a low severity
 score](https://www.first.org/cvss/specification-document#i5)) the maintainers can decide to slow the
-release process down in the face of holidays, developer bandwidth, etc.
+release process down in the face of holidays, developer bandwidth and other related circumstances.
 
 ### Fix Disclosure Process
 
