@@ -18,6 +18,8 @@ package messager
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"reflect"
 	"runtime"
 	"sync"
@@ -27,7 +29,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -48,9 +49,17 @@ var (
 		Name: "message",
 		Type: sqltypes.VarBinary,
 	}}
+
+	testDBFields = []*querypb.Field{
+		{Type: sqltypes.Int64},
+		{Type: sqltypes.Int64},
+		{Type: sqltypes.Int64},
+		{Type: sqltypes.Int64},
+		{Type: sqltypes.Int64},
+		{Type: sqltypes.VarBinary},
+	}
 )
 
-// newMMTable is not a true copy, but enough to massage what we need.
 func newMMTable() *schema.Table {
 	return &schema.Table{
 		Name: sqlparser.NewTableIdent("foo"),
@@ -64,6 +73,17 @@ func newMMTable() *schema.Table {
 			PollInterval:       1 * time.Second,
 		},
 	}
+}
+
+func newMMRow(id int64) *querypb.Row {
+	return sqltypes.RowToProto3([]sqltypes.Value{
+		sqltypes.NewInt64(1),
+		sqltypes.NewInt64(0),
+		sqltypes.NewInt64(0),
+		sqltypes.NewInt64(id),
+		sqltypes.NewInt64(id * 10),
+		sqltypes.NewVarBinary(fmt.Sprintf("%v", id)),
+	})
 }
 
 type testReceiver struct {
@@ -95,8 +115,6 @@ func (tr *testReceiver) WaitForCount(n int) {
 }
 
 func TestReceiverCancel(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
 	mm := newMessageManager(newFakeTabletServer(), newFakeVStreamer(), newMMTable(), sync2.NewSemaphore(1, 0))
 	mm.Open()
 	defer mm.Close()
@@ -119,8 +137,6 @@ func TestReceiverCancel(t *testing.T) {
 }
 
 func TestMessageManagerState(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
 	mm := newMessageManager(newFakeTabletServer(), newFakeVStreamer(), newMMTable(), sync2.NewSemaphore(1, 0))
 	// Do it twice
 	for i := 0; i < 2; i++ {
@@ -137,8 +153,6 @@ func TestMessageManagerState(t *testing.T) {
 }
 
 func TestMessageManagerAdd(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
 	ti := newMMTable()
 	ti.MessageInfo.CacheSize = 1
 	mm := newMessageManager(newFakeTabletServer(), newFakeVStreamer(), ti, sync2.NewSemaphore(1, 0))
@@ -171,8 +185,6 @@ func TestMessageManagerAdd(t *testing.T) {
 }
 
 func TestMessageManagerSend(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
 	tsv := newFakeTabletServer()
 	mm := newMessageManager(tsv, newFakeVStreamer(), newMMTable(), sync2.NewSemaphore(1, 0))
 	mm.Open()
@@ -207,26 +219,29 @@ func TestMessageManagerSend(t *testing.T) {
 		t.Errorf("Postpone: %s, want %v", got, want)
 	}
 
-	// Wait while the receiver is marked as busy.
-	for {
-		mm.mu.Lock()
-		busy := mm.receivers[0].busy
-		mm.mu.Unlock()
-		if !busy {
-			break
-		}
-	}
-
 	// Verify item has been removed from cache.
 	// Need to obtain lock to prevent data race.
-	mm.cache.mu.Lock()
-	if _, ok := mm.cache.inQueue["1"]; ok {
-		t.Error("Message 1 is still present in inQueue cache")
+	// It may take some time for this to happen.
+	inQueue := true
+	inFlight := true
+	for i := 0; i < 10; i++ {
+		mm.cache.mu.Lock()
+		if _, ok := mm.cache.inQueue["1"]; !ok {
+			inQueue = false
+		}
+		if _, ok := mm.cache.inFlight["1"]; !ok {
+			inFlight = false
+		}
+		mm.cache.mu.Unlock()
+		if inQueue || inFlight {
+			runtime.Gosched()
+			time.Sleep(10 * time.Millisecond)
+			continue
+		}
+		break
 	}
-	if _, ok := mm.cache.inFlight["1"]; ok {
-		t.Error("Message 1 is still present in inFlight cache")
-	}
-	mm.cache.mu.Unlock()
+	assert.False(t, inQueue)
+	assert.False(t, inFlight)
 
 	// Test that mm stops sending to a canceled receiver.
 	r2 := newTestReceiver(1)
@@ -264,8 +279,6 @@ func TestMessageManagerSend(t *testing.T) {
 }
 
 func TestMessageManagerPostponeThrottle(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
 	tsv := newFakeTabletServer()
 	mm := newMessageManager(tsv, newFakeVStreamer(), newMMTable(), sync2.NewSemaphore(1, 0))
 	mm.Open()
@@ -314,8 +327,6 @@ func TestMessageManagerPostponeThrottle(t *testing.T) {
 }
 
 func TestMessageManagerSendError(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
 	tsv := newFakeTabletServer()
 	mm := newMessageManager(tsv, newFakeVStreamer(), newMMTable(), sync2.NewSemaphore(1, 0))
 	mm.Open()
@@ -346,10 +357,7 @@ func TestMessageManagerSendError(t *testing.T) {
 }
 
 func TestMessageManagerFieldSendError(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	tsv := newFakeTabletServer()
-	mm := newMessageManager(tsv, newFakeVStreamer(), newMMTable(), sync2.NewSemaphore(1, 0))
+	mm := newMessageManager(newFakeTabletServer(), newFakeVStreamer(), newMMTable(), sync2.NewSemaphore(1, 0))
 	mm.Open()
 	defer mm.Close()
 	ctx := context.Background()
@@ -367,8 +375,6 @@ func TestMessageManagerFieldSendError(t *testing.T) {
 }
 
 func TestMessageManagerBatchSend(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
 	ti := newMMTable()
 	ti.MessageInfo.BatchSize = 2
 	mm := newMessageManager(newFakeTabletServer(), newFakeVStreamer(), ti, sync2.NewSemaphore(1, 0))
@@ -411,47 +417,159 @@ func TestMessageManagerBatchSend(t *testing.T) {
 	}
 }
 
+func TestMessageManagerStreamerSimple(t *testing.T) {
+	fvs := newFakeVStreamer()
+	fvs.setStreamerResponse([][]*binlogdatapb.VEvent{{{
+		// Event set 1.
+		Type: binlogdatapb.VEventType_GTID,
+		Gtid: "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
+	}, {
+		Type: binlogdatapb.VEventType_OTHER,
+	}}, {{
+		// Event set 2.
+		Type: binlogdatapb.VEventType_FIELD,
+		FieldEvent: &binlogdatapb.FieldEvent{
+			TableName: "foo",
+			Fields:    testDBFields,
+		},
+	}}, {{
+		// Event set 3.
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName: "foo",
+			RowChanges: []*binlogdatapb.RowChange{{
+				After: newMMRow(1),
+			}},
+		},
+	}, {
+		Type: binlogdatapb.VEventType_GTID,
+		Gtid: "MySQL56/33333333-3333-3333-3333-333333333333:1-101",
+	}, {
+		Type: binlogdatapb.VEventType_COMMIT,
+	}}})
+	mm := newMessageManager(newFakeTabletServer(), fvs, newMMTable(), sync2.NewSemaphore(1, 0))
+	mm.Open()
+
+	r1 := newTestReceiver(1)
+	mm.Subscribe(context.Background(), r1.rcv)
+	<-r1.ch
+
+	want := &sqltypes.Result{
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(1),
+			sqltypes.NewInt64(10),
+			sqltypes.NewVarBinary("1"),
+		}},
+	}
+	if got := <-r1.ch; !reflect.DeepEqual(got, want) {
+		t.Errorf("Received: %v, want %v", got, want)
+	}
+}
+
+func TestMessageManagerStreamerAndPoller(t *testing.T) {
+	fvs := newFakeVStreamer()
+	fvs.setPollerResponse([]*binlogdatapb.VStreamResultsResponse{{
+		Fields: testDBFields,
+		Gtid:   "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
+	}})
+	mm := newMessageManager(newFakeTabletServer(), fvs, newMMTable(), sync2.NewSemaphore(1, 0))
+	mm.Open()
+
+	r1 := newTestReceiver(1)
+	mm.Subscribe(context.Background(), r1.rcv)
+	<-r1.ch
+
+	for {
+		runtime.Gosched()
+		time.Sleep(10 * time.Millisecond)
+		mm.streamMu.Lock()
+		pos := mm.lastPollPosition
+		mm.streamMu.Unlock()
+		if pos != nil {
+			break
+		}
+	}
+
+	fvs.setStreamerResponse([][]*binlogdatapb.VEvent{{{
+		// Event set 1: field info.
+		Type: binlogdatapb.VEventType_FIELD,
+		FieldEvent: &binlogdatapb.FieldEvent{
+			TableName: "foo",
+			Fields:    testDBFields,
+		},
+	}}, {{
+		// Event set 2: GTID won't be known till the first GTID event.
+		// Row will not be added.
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName: "foo",
+			RowChanges: []*binlogdatapb.RowChange{{
+				After: newMMRow(1),
+			}},
+		},
+	}, {
+		Type: binlogdatapb.VEventType_GTID,
+		Gtid: "MySQL56/33333333-3333-3333-3333-333333333333:1-99",
+	}, {
+		Type: binlogdatapb.VEventType_COMMIT,
+	}}, {{
+		// Event set 3: GTID will be known, but <= last poll.
+		// Row will not be added.
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName: "foo",
+			RowChanges: []*binlogdatapb.RowChange{{
+				After: newMMRow(2),
+			}},
+		},
+	}, {
+		Type: binlogdatapb.VEventType_GTID,
+		Gtid: "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
+	}, {
+		Type: binlogdatapb.VEventType_COMMIT,
+	}}, {{
+		// Event set 3: GTID will be > last poll.
+		// Row will be added.
+		Type: binlogdatapb.VEventType_ROW,
+		RowEvent: &binlogdatapb.RowEvent{
+			TableName: "foo",
+			RowChanges: []*binlogdatapb.RowChange{{
+				After: newMMRow(3),
+			}},
+		},
+	}, {
+		Type: binlogdatapb.VEventType_GTID,
+		Gtid: "MySQL56/33333333-3333-3333-3333-333333333333:1-101",
+	}, {
+		Type: binlogdatapb.VEventType_COMMIT,
+	}}})
+
+	want := &sqltypes.Result{
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(3),
+			sqltypes.NewInt64(30),
+			sqltypes.NewVarBinary("3"),
+		}},
+	}
+	if got := <-r1.ch; !reflect.DeepEqual(got, want) {
+		t.Errorf("Received: %v, want %v", got, want)
+	}
+}
+
 func TestMessageManagerPoller(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
 	ti := newMMTable()
 	ti.MessageInfo.BatchSize = 2
 	ti.MessageInfo.PollInterval = 20 * time.Second
 	fvs := newFakeVStreamer()
 	fvs.setPollerResponse([]*binlogdatapb.VStreamResultsResponse{{
-		Fields: []*querypb.Field{
-			{Type: sqltypes.Int64},
-			{Type: sqltypes.Int64},
-			{Type: sqltypes.Int64},
-			{Type: sqltypes.Int64},
-			{Type: sqltypes.Int64},
-			{Type: sqltypes.VarBinary},
-		},
-		Gtid: "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
+		Fields: testDBFields,
+		Gtid:   "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
 	}, {
-		Rows: sqltypes.RowsToProto3([][]sqltypes.Value{{
-			sqltypes.NewInt64(1),
-			sqltypes.NewInt64(0),
-			sqltypes.NewInt64(0),
-			sqltypes.NewInt64(1),
-			sqltypes.NewInt64(10),
-			sqltypes.NewVarBinary("01"),
-		}, {
-			sqltypes.NewInt64(2),
-			sqltypes.NewInt64(0),
-			sqltypes.NewInt64(1),
-			sqltypes.NewInt64(2),
-			sqltypes.NewInt64(20),
-			sqltypes.NewVarBinary("02"),
-		}, {
-			sqltypes.NewInt64(1),
-			sqltypes.NewInt64(1),
-			sqltypes.NewInt64(0),
-			sqltypes.NewInt64(3),
-			sqltypes.NewInt64(30),
-			sqltypes.NewVarBinary("11"),
-		}},
-		),
+		Rows: []*querypb.Row{
+			newMMRow(1),
+			newMMRow(2),
+			newMMRow(3),
+		},
 	}})
 	mm := newMessageManager(newFakeTabletServer(), fvs, ti, sync2.NewSemaphore(1, 0))
 	mm.Open()
@@ -463,17 +581,17 @@ func TestMessageManagerPoller(t *testing.T) {
 	<-r1.ch
 
 	want := [][]sqltypes.Value{{
-		sqltypes.NewInt64(2),
-		sqltypes.NewInt64(20),
-		sqltypes.NewVarBinary("02"),
-	}, {
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(10),
-		sqltypes.NewVarBinary("01"),
+		sqltypes.NewVarBinary("1"),
+	}, {
+		sqltypes.NewInt64(2),
+		sqltypes.NewInt64(20),
+		sqltypes.NewVarBinary("2"),
 	}, {
 		sqltypes.NewInt64(3),
 		sqltypes.NewInt64(30),
-		sqltypes.NewVarBinary("11"),
+		sqltypes.NewVarBinary("3"),
 	}}
 	var got [][]sqltypes.Value
 	// We should get it in 2 iterations.
@@ -481,8 +599,17 @@ func TestMessageManagerPoller(t *testing.T) {
 		qr := <-r1.ch
 		got = append(got, qr.Rows...)
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("rows:\n%+v, want\n%+v", got, want)
+	for _, gotrow := range got {
+		found := false
+		for _, wantrow := range want {
+			if reflect.DeepEqual(gotrow, wantrow) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("row: %v not found in %v", gotrow, want)
+		}
 	}
 
 	// If there are no receivers, nothing should fire.
@@ -498,8 +625,6 @@ func TestMessageManagerPoller(t *testing.T) {
 // TestMessagesPending1 tests for the case where you can't
 // add items because the cache is full.
 func TestMessagesPending1(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
 	// Set a large polling interval.
 	ti := newMMTable()
 	ti.MessageInfo.CacheSize = 2
@@ -523,25 +648,10 @@ func TestMessagesPending1(t *testing.T) {
 	assert.False(t, mm.Add(&MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("4")}}))
 
 	fvs.setPollerResponse([]*binlogdatapb.VStreamResultsResponse{{
-		Fields: []*querypb.Field{
-			{Type: sqltypes.Int64},
-			{Type: sqltypes.Int64},
-			{Type: sqltypes.Int64},
-			{Type: sqltypes.Int64},
-			{Type: sqltypes.Int64},
-			{Type: sqltypes.VarBinary},
-		},
-		Gtid: "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
+		Fields: testDBFields,
+		Gtid:   "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
 	}, {
-		Rows: sqltypes.RowsToProto3([][]sqltypes.Value{{
-			sqltypes.NewInt64(1),
-			sqltypes.NewInt64(0),
-			sqltypes.NewInt64(0),
-			sqltypes.NewInt64(5),
-			sqltypes.NewInt64(10),
-			sqltypes.NewVarBinary("01"),
-		}},
-		),
+		Rows: []*querypb.Row{newMMRow(1)},
 	}})
 
 	// Now, let's pull more than 3 items. It should
@@ -558,33 +668,16 @@ func TestMessagesPending1(t *testing.T) {
 // TestMessagesPending2 tests for the case where
 // there are more pending items than the cache size.
 func TestMessagesPending2(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
 	// Set a large polling interval.
 	ti := newMMTable()
 	ti.MessageInfo.CacheSize = 1
 	ti.MessageInfo.PollInterval = 30 * time.Second
 	fvs := newFakeVStreamer()
 	fvs.setPollerResponse([]*binlogdatapb.VStreamResultsResponse{{
-		Fields: []*querypb.Field{
-			{Type: sqltypes.Int64},
-			{Type: sqltypes.Int64},
-			{Type: sqltypes.Int64},
-			{Type: sqltypes.Int64},
-			{Type: sqltypes.Int64},
-			{Type: sqltypes.VarBinary},
-		},
-		Gtid: "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
+		Fields: testDBFields,
+		Gtid:   "MySQL56/33333333-3333-3333-3333-333333333333:1-100",
 	}, {
-		Rows: sqltypes.RowsToProto3([][]sqltypes.Value{{
-			sqltypes.NewInt64(1),
-			sqltypes.NewInt64(0),
-			sqltypes.NewInt64(0),
-			sqltypes.NewInt64(5),
-			sqltypes.NewInt64(10),
-			sqltypes.NewVarBinary("01"),
-		}},
-		),
+		Rows: []*querypb.Row{newMMRow(1)},
 	}})
 	mm := newMessageManager(newFakeTabletServer(), fvs, ti, sync2.NewSemaphore(1, 0))
 	mm.Open()
@@ -606,8 +699,6 @@ func TestMessagesPending2(t *testing.T) {
 }
 
 func TestMessageManagerPurge(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
 	tsv := newFakeTabletServer()
 
 	// Make a buffered channel so the thread doesn't block on repeated calls.
@@ -626,8 +717,6 @@ func TestMessageManagerPurge(t *testing.T) {
 }
 
 func TestMMGenerate(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
 	mm := newMessageManager(newFakeTabletServer(), newFakeVStreamer(), newMMTable(), sync2.NewSemaphore(1, 0))
 	mm.Open()
 	defer mm.Close()
@@ -721,11 +810,18 @@ func (fts *fakeTabletServer) PurgeMessages(ctx context.Context, target *querypb.
 }
 
 type fakeVStreamer struct {
-	mu             sync.Mutex
-	pollerResponse []*binlogdatapb.VStreamResultsResponse
+	mu               sync.Mutex
+	streamerResponse [][]*binlogdatapb.VEvent
+	pollerResponse   []*binlogdatapb.VStreamResultsResponse
 }
 
 func newFakeVStreamer() *fakeVStreamer { return &fakeVStreamer{} }
+
+func (fv *fakeVStreamer) setStreamerResponse(sr [][]*binlogdatapb.VEvent) {
+	fv.mu.Lock()
+	defer fv.mu.Unlock()
+	fv.streamerResponse = sr
+}
 
 func (fv *fakeVStreamer) setPollerResponse(pr []*binlogdatapb.VStreamResultsResponse) {
 	fv.mu.Lock()
@@ -734,7 +830,24 @@ func (fv *fakeVStreamer) setPollerResponse(pr []*binlogdatapb.VStreamResultsResp
 }
 
 func (fv *fakeVStreamer) Stream(ctx context.Context, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
-	return nil
+	for {
+		fv.mu.Lock()
+		sr := fv.streamerResponse
+		fv.streamerResponse = nil
+		fv.mu.Unlock()
+		for _, r := range sr {
+			if err := send(r); err != nil {
+				return err
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return io.EOF
+		default:
+		}
+		runtime.Gosched()
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func (fv *fakeVStreamer) StreamResults(ctx context.Context, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
