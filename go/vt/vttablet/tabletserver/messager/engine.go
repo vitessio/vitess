@@ -155,7 +155,16 @@ func (me *Engine) GeneratePurgeQuery(name string, timeCutoff int64) (string, map
 func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altered, dropped []string) {
 	me.mu.Lock()
 	defer me.mu.Unlock()
-	for _, name := range created {
+	for _, name := range append(dropped, altered...) {
+		mm := me.managers[name]
+		if mm == nil {
+			continue
+		}
+		mm.Close()
+		delete(me.managers, name)
+	}
+
+	for _, name := range append(created, altered...) {
 		t := tables[name]
 		if t.Type != schema.Message {
 			continue
@@ -168,16 +177,5 @@ func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altere
 		mm := newMessageManager(me.tsv, me.vs, t, me.postponeSema)
 		me.managers[name] = mm
 		mm.Open()
-	}
-
-	// TODO(sougou): Update altered tables.
-
-	for _, name := range dropped {
-		mm := me.managers[name]
-		if mm == nil {
-			continue
-		}
-		mm.Close()
-		delete(me.managers, name)
 	}
 }
