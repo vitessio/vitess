@@ -598,7 +598,10 @@ func (mm *messageManager) runOneVStream(ctx context.Context) error {
 	// and exits.
 	lastEventTime := time.Now()
 	ctx, cancel := context.WithCancel(ctx)
+	mm.wg.Add(1)
 	go func() {
+		defer mm.wg.Done()
+
 		ticker := time.NewTicker(streamEventGracePeriod)
 		defer ticker.Stop()
 
