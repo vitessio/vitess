@@ -76,8 +76,21 @@ func TestEngineSchemaChanged(t *testing.T) {
 	}
 	engine.schemaChanged(tables, []string{"t4"}, nil, []string{"t3", "t5"})
 	got = extractManagerNames(engine.managers)
-	// schemaChanged is only additive.
 	want = map[string]bool{"t1": true, "t4": true}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got: %+v, want %+v", got, want)
+	}
+	// Test update
+	tables = map[string]*schema.Table{
+		"t1": meTable,
+		"t2": meTable,
+		"t4": {
+			Type: schema.NoType,
+		},
+	}
+	engine.schemaChanged(tables, nil, []string{"t2", "t4"}, nil)
+	got = extractManagerNames(engine.managers)
+	want = map[string]bool{"t1": true, "t2": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got: %+v, want %+v", got, want)
 	}
