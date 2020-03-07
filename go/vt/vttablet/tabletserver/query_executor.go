@@ -570,11 +570,7 @@ func (qre *QueryExecutor) execInsertPK(conn *TxConnection) (*sqltypes.Result, er
 
 func (qre *QueryExecutor) execInsertMessage(conn *TxConnection) (*sqltypes.Result, error) {
 	qre.bindVars["#time_now"] = sqltypes.Int64BindVariable(time.Now().UnixNano())
-	pkRows, err := buildValueList(qre.plan.Table, qre.plan.PKValues, qre.bindVars)
-	if err != nil {
-		return nil, err
-	}
-	return qre.execInsertPKRows(conn, nil, pkRows)
+	return qre.execInsertPK(conn)
 }
 
 func (qre *QueryExecutor) execInsertSubquery(conn *TxConnection) (*sqltypes.Result, error) {

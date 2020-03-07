@@ -254,12 +254,6 @@ type TxPoolController interface {
 var tsOnce sync.Once
 var srvTopoServer srvtopo.Server
 
-// NewTabletServerWithNilTopoServer is typically used in tests that
-// don't need a topoServer member.
-func NewTabletServerWithNilTopoServer(config tabletenv.TabletConfig) *TabletServer {
-	return NewTabletServer(config, nil, topodatapb.TabletAlias{})
-}
-
 // NewTabletServer creates an instance of TabletServer. Only the first
 // instance of TabletServer will expose its state variables.
 func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletServer {
