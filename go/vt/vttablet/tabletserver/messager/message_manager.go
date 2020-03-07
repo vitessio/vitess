@@ -38,17 +38,23 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// MessageStats tracks stats for messages.
-var MessageStats = stats.NewGaugesWithMultiLabels(
-	"Messages",
-	"Stats for messages",
-	[]string{"TableName", "Metric"})
+var (
+	// MessageStats tracks stats for messages.
+	MessageStats = stats.NewGaugesWithMultiLabels(
+		"Messages",
+		"Stats for messages",
+		[]string{"TableName", "Metric"})
 
-// MessageDelayTimings records total latency from queueing to sent to clients.
-var MessageDelayTimings = stats.NewMultiTimings(
-	"MessageDelay",
-	"MessageDelayTimings records total latency from queueing to client sends",
-	[]string{"TableName"})
+	// MessageDelayTimings records total latency from queueing to sent to clients.
+	MessageDelayTimings = stats.NewMultiTimings(
+		"MessageDelay",
+		"MessageDelayTimings records total latency from queueing to client sends",
+		[]string{"TableName"})
+
+	// The following variables are changed for testing only.
+	streamEventGracePeriod = 10 * time.Second
+	vstreamRetryWait       = 5 * time.Second
+)
 
 type messageReceiver struct {
 	ctx     context.Context
@@ -134,7 +140,7 @@ type receiverWithStatus struct {
 // but are not present in the cache. This state can be entered in one
 // of two ways:
 // 1. The poller read returns as many rows as the cache size
-// 2. The Add of a message fails (cache full). This is invoked from the vstreamer.
+// 2. The Add of a message fails (cache full). This is invoked from the vstream.
 // In any of the above cases, the messagesPending flag gets turned on.
 // In this phase, the send loop proactively wakes up the poller every time
 // it clears the cache.
@@ -189,10 +195,10 @@ type messageManager struct {
 	// It prevents items from being removed from cache while the poller
 	// reads from the db and adds items to it. Otherwise, the poller
 	// might add an older snapshot of a row that was just postponed.
-	// It blocks vstreamer from receiving messages while the poller
+	// It blocks vstream from receiving messages while the poller
 	// reads a snapshot and updates lastPollPosition. Any events older than
-	// lastPollPosition must be ignored by the vstreamer. It consequently
-	// also blocks vstreamer from updating the cache while the poller is
+	// lastPollPosition must be ignored by the vstream. It consequently
+	// also blocks vstream from updating the cache while the poller is
 	// active.
 	streamMu         sync.Mutex
 	streamCancel     func()
@@ -309,6 +315,8 @@ func (mm *messageManager) Close() {
 	mm.cond.Broadcast()
 	mm.mu.Unlock()
 
+	mm.stopVStream()
+
 	mm.wg.Wait()
 }
 
@@ -336,7 +344,7 @@ func (mm *messageManager) Subscribe(ctx context.Context, send func(*sqltypes.Res
 		receiver: receiver,
 	}
 	if len(mm.receivers) == 0 {
-		mm.startVStreamer(ctx)
+		mm.startVStream()
 	}
 	mm.receivers = append(mm.receivers, withStatus)
 	MessageStats.Set([]string{mm.name.String(), "ClientCount"}, int64(len(mm.receivers)))
@@ -370,7 +378,7 @@ func (mm *messageManager) unsubscribe(receiver *messageReceiver) {
 	mm.rescanReceivers(-1)
 	// If there are no receivers. Shut down the cache.
 	if len(mm.receivers) == 0 {
-		mm.stopVStreamer()
+		mm.stopVStream()
 		mm.cache.Clear()
 	}
 }
@@ -544,17 +552,19 @@ func (mm *messageManager) postpone(tsv TabletService, name string, ackWaitTime t
 	}
 }
 
-func (mm *messageManager) startVStreamer(ctx context.Context) {
+func (mm *messageManager) startVStream() {
 	mm.streamMu.Lock()
 	defer mm.streamMu.Unlock()
 	if mm.streamCancel != nil {
 		return
 	}
-	ctx, mm.streamCancel = context.WithCancel(ctx)
-	go mm.runVStreamer(ctx)
+	var ctx context.Context
+	ctx, mm.streamCancel = context.WithCancel(tabletenv.LocalContext())
+	mm.wg.Add(1)
+	go mm.runVStream(ctx)
 }
 
-func (mm *messageManager) stopVStreamer() {
+func (mm *messageManager) stopVStream() {
 	mm.streamMu.Lock()
 	defer mm.streamMu.Unlock()
 	if mm.streamCancel != nil {
@@ -563,65 +573,11 @@ func (mm *messageManager) stopVStreamer() {
 	}
 }
 
-func (mm *messageManager) runVStreamer(ctx context.Context) {
+func (mm *messageManager) runVStream(ctx context.Context) {
+	defer mm.wg.Done()
+
 	for {
-		var curPos string
-		var fields []*querypb.Field
-		err := mm.vs.Stream(ctx, "current", mm.vsFilter, func(events []*binlogdatapb.VEvent) error {
-			mm.streamMu.Lock()
-			defer mm.streamMu.Unlock()
-
-			select {
-			case <-ctx.Done():
-				return io.EOF
-			default:
-			}
-
-			mustSkip := func() (bool, error) {
-				if mm.lastPollPosition == nil {
-					return false, nil
-				}
-				if curPos == "" {
-					return true, nil
-				}
-				cur, err := mysql.DecodePosition(curPos)
-				if err != nil {
-					return false, err
-				}
-				if cur.AtLeast(*mm.lastPollPosition) {
-					mm.lastPollPosition = nil
-					return false, nil
-				}
-				return true, nil
-			}
-			skipEvents, err := mustSkip()
-			if err != nil {
-				return err
-			}
-			var newPos string
-			for _, ev := range events {
-				switch ev.Type {
-				case binlogdatapb.VEventType_FIELD:
-					fields = ev.FieldEvent.Fields
-				case binlogdatapb.VEventType_ROW:
-					if skipEvents {
-						continue
-					}
-					if err := mm.processRowEvent(fields, ev.RowEvent); err != nil {
-						return err
-					}
-				case binlogdatapb.VEventType_GTID:
-					newPos = ev.Gtid
-				case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER:
-					curPos = newPos
-					skipEvents, err = mustSkip()
-					if err != nil {
-						return err
-					}
-				}
-			}
-			return nil
-		})
+		err := mm.runOneVStream(ctx)
 		select {
 		case <-ctx.Done():
 			log.Info("Context canceled, exiting vstream")
@@ -629,8 +585,97 @@ func (mm *messageManager) runVStreamer(ctx context.Context) {
 		default:
 		}
 		log.Infof("VStream ended: %v, retrying in 5 seconds", err)
-		time.Sleep(5 * time.Second)
+		time.Sleep(vstreamRetryWait)
 	}
+}
+
+func (mm *messageManager) runOneVStream(ctx context.Context) error {
+	var curPos string
+	var fields []*querypb.Field
+
+	// The watchdog goroutine polls lastEventTime.
+	// If it exceeds streamEventGracePeriod, it cancels the vstream
+	// and exits.
+	lastEventTime := time.Now()
+	ctx, cancel := context.WithCancel(ctx)
+	go func() {
+		ticker := time.NewTicker(streamEventGracePeriod)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+			mm.streamMu.Lock()
+			idleTime := time.Since(lastEventTime)
+			mm.streamMu.Unlock()
+			if idleTime > streamEventGracePeriod {
+				log.Infof("VStream received no events for %v, restarting", idleTime)
+				cancel()
+				return
+			}
+		}
+	}()
+
+	err := mm.vs.Stream(ctx, "current", mm.vsFilter, func(events []*binlogdatapb.VEvent) error {
+		mm.streamMu.Lock()
+		defer mm.streamMu.Unlock()
+		lastEventTime = time.Now()
+
+		select {
+		case <-ctx.Done():
+			return io.EOF
+		default:
+		}
+
+		mustSkip := func() (bool, error) {
+			if mm.lastPollPosition == nil {
+				return false, nil
+			}
+			if curPos == "" {
+				return true, nil
+			}
+			cur, err := mysql.DecodePosition(curPos)
+			if err != nil {
+				return false, err
+			}
+			if cur.AtLeast(*mm.lastPollPosition) {
+				mm.lastPollPosition = nil
+				return false, nil
+			}
+			return true, nil
+		}
+		skipEvents, err := mustSkip()
+		if err != nil {
+			return err
+		}
+		var newPos string
+		for _, ev := range events {
+			switch ev.Type {
+			case binlogdatapb.VEventType_FIELD:
+				fields = ev.FieldEvent.Fields
+			case binlogdatapb.VEventType_ROW:
+				if skipEvents {
+					continue
+				}
+				if err := mm.processRowEvent(fields, ev.RowEvent); err != nil {
+					return err
+				}
+			case binlogdatapb.VEventType_GTID:
+				newPos = ev.Gtid
+			case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER:
+				curPos = newPos
+				skipEvents, err = mustSkip()
+				if err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+	return err
 }
 
 func (mm *messageManager) processRowEvent(fields []*querypb.Field, rowEvent *binlogdatapb.RowEvent) error {
