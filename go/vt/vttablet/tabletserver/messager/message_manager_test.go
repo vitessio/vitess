@@ -449,6 +449,7 @@ func TestMessageManagerStreamerSimple(t *testing.T) {
 	}}})
 	mm := newMessageManager(newFakeTabletServer(), fvs, newMMTable(), sync2.NewSemaphore(1, 0))
 	mm.Open()
+	defer mm.Close()
 
 	r1 := newTestReceiver(1)
 	mm.Subscribe(context.Background(), r1.rcv)
@@ -474,6 +475,7 @@ func TestMessageManagerStreamerAndPoller(t *testing.T) {
 	}})
 	mm := newMessageManager(newFakeTabletServer(), fvs, newMMTable(), sync2.NewSemaphore(1, 0))
 	mm.Open()
+	defer mm.Close()
 
 	r1 := newTestReceiver(1)
 	mm.Subscribe(context.Background(), r1.rcv)
@@ -566,6 +568,7 @@ func TestMessageManagerStreamerIdleKill(t *testing.T) {
 	fvs := newFakeVStreamer()
 	mm := newMessageManager(newFakeTabletServer(), fvs, newMMTable(), sync2.NewSemaphore(1, 0))
 	mm.Open()
+	defer mm.Close()
 
 	r1 := newTestReceiver(1)
 	mm.Subscribe(context.Background(), r1.rcv)
