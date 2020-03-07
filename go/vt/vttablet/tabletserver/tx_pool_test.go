@@ -37,7 +37,6 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 )
 
 func TestTxPoolExecuteCommit(t *testing.T) {
@@ -67,7 +66,7 @@ func TestTxPoolExecuteCommit(t *testing.T) {
 	_, _ = txConn.Exec(ctx, sql, 1, true)
 	txConn.Recycle()
 
-	commitSQL, err := txPool.Commit(ctx, transactionID, &fakeMessageCommitter{})
+	commitSQL, err := txPool.Commit(ctx, transactionID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -335,7 +334,7 @@ func TestTxPoolAutocommit(t *testing.T) {
 	if beginSQL != "" {
 		t.Errorf("beginSQL got %q want ''", beginSQL)
 	}
-	commitSQL, err := txPool.Commit(ctx, txid, &fakeMessageCommitter{})
+	commitSQL, err := txPool.Commit(ctx, txid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -564,7 +563,7 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	txPool.Open(db.ConnParams(), db.ConnParams(), db.ConnParams())
 
 	id, _, err = txPool.Begin(ctx, &querypb.ExecuteOptions{})
-	if _, err := txPool.Commit(ctx, id, &fakeMessageCommitter{}); err != nil {
+	if _, err := txPool.Commit(ctx, id); err != nil {
 		t.Fatalf("got error: %v", err)
 	}
 
@@ -599,16 +598,6 @@ func TestTxPoolGetConnRecentlyRemovedTransaction(t *testing.T) {
 	txc.Recycle()
 
 	assertErrorMatch(id, "closed")
-}
-
-type fakeMessageCommitter struct {
-}
-
-func (f *fakeMessageCommitter) LockDB(newMessages map[string][]*messager.MessageRow, changedMessages map[string][]string) func() {
-	return func() {}
-}
-
-func (f *fakeMessageCommitter) UpdateCaches(newMessages map[string][]*messager.MessageRow, changedMessages map[string][]string) {
 }
 
 func TestTxPoolExecFailDueToConnFail_Errno2006(t *testing.T) {
