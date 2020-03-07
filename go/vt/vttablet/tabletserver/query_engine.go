@@ -168,6 +168,7 @@ type QueryEngine struct {
 	strictTransTables bool
 
 	enableConsolidator          bool
+	enableConsolidatorReplicas  bool
 	enableQueryPlanFieldCaching bool
 
 	// Loggers
@@ -207,6 +208,7 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		checker,
 	)
 	qe.enableConsolidator = config.EnableConsolidator
+	qe.enableConsolidatorReplicas = config.EnableConsolidatorReplicas
 	qe.enableQueryPlanFieldCaching = config.EnableQueryPlanFieldCaching
 	qe.consolidator = sync2.NewConsolidator()
 	qe.txSerializer = txserializer.New(config.EnableHotRowProtectionDryRun,
@@ -434,7 +436,7 @@ func (qe *QueryEngine) ClearQueryPlanCache() {
 
 // IsMySQLReachable returns true if we can connect to MySQL.
 func (qe *QueryEngine) IsMySQLReachable() bool {
-	conn, err := dbconnpool.NewDBConnection(qe.dbconfigs.AppWithDB(), tabletenv.MySQLStats)
+	conn, err := dbconnpool.NewDBConnection(qe.dbconfigs.DbaWithDB(), tabletenv.MySQLStats)
 	if err != nil {
 		if mysql.IsConnErr(err) {
 			return false

@@ -32,7 +32,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -276,7 +275,7 @@ func (mysqld *Mysqld) SetSlavePosition(ctx context.Context, pos mysql.Position) 
 // SetMaster makes the provided host / port the master. It optionally
 // stops replication before, and starts it after.
 func (mysqld *Mysqld) SetMaster(ctx context.Context, masterHost string, masterPort int, slaveStopBefore bool, slaveStartAfter bool) error {
-	params, err := dbconfigs.WithCredentials(mysqld.dbcfgs.Repl())
+	params, err := mysqld.dbcfgs.Repl().MysqlParams()
 	if err != nil {
 		return err
 	}

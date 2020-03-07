@@ -81,12 +81,28 @@ create table t3_id7_idx(
 	id7 bigint,
 	id6 bigint,
     primary key(id)
+) Engine=InnoDB;
+
+create table t4(
+	id1 bigint,
+	id2 varchar(10),
+	primary key(id1)
+) Engine=InnoDB;
+
+create table t4_id2_idx(
+	id2 varchar(10),
+	id1 bigint,
+	keyspace_id varbinary(50),
+    primary key(id2, id1)
 ) Engine=InnoDB;`
 
 	VSchema = `
 {
   "sharded": true,
   "vindexes": {
+    "unicode_loose_md5" : {
+	  "type": "unicode_loose_md5"
+    },
     "hash": {
       "type": "hash"
     },
@@ -117,6 +133,15 @@ create table t3_id7_idx(
         "to": "id6"
       },
       "owner": "t3"
+    },
+    "t4_id2_vdx": {
+      "type": "consistent_lookup",
+      "params": {
+        "table": "t4_id2_idx",
+        "from": "id2,id1",
+        "to": "keyspace_id"
+      },
+      "owner": "t4"
     }
   },
   "tables": {
@@ -177,6 +202,26 @@ create table t3_id7_idx(
         {
           "column": "id7",
           "name": "hash"
+        }
+      ]
+    },
+	"t4": {
+      "column_vindexes": [
+        {
+          "column": "id1",
+          "name": "hash"
+        },
+        {
+          "columns": ["id2", "id1"],
+          "name": "t4_id2_vdx"
+        }
+      ]
+    },
+    "t4_id2_idx": {
+      "column_vindexes": [
+        {
+          "column": "id2",
+          "name": "unicode_loose_md5"
         }
       ]
     },

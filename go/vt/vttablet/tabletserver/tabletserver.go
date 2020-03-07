@@ -46,6 +46,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/topodata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -1008,9 +1009,9 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 				return err
 			}
 			if plan.PlanID == planbuilder.PlanInsertTopic {
-				result, err = tsv.topicExecute(ctx, query, comments, bindVariables, transactionID, options, plan, logStats)
+				result, err = tsv.topicExecute(ctx, query, comments, bindVariables, transactionID, options, plan, logStats, target.GetTabletType())
 			} else {
-				result, err = tsv.qreExecute(ctx, query, comments, bindVariables, transactionID, options, plan, logStats)
+				result, err = tsv.qreExecute(ctx, query, comments, bindVariables, transactionID, options, plan, logStats, target.GetTabletType())
 			}
 
 			return err
@@ -1019,7 +1020,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 	return result, err
 }
 
-func (tsv *TabletServer) topicExecute(ctx context.Context, query string, comments sqlparser.MarginComments, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, plan *TabletPlan, logStats *tabletenv.LogStats) (result *sqltypes.Result, err error) {
+func (tsv *TabletServer) topicExecute(ctx context.Context, query string, comments sqlparser.MarginComments, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, plan *TabletPlan, logStats *tabletenv.LogStats, tabletType topodata.TabletType) (result *sqltypes.Result, err error) {
 	for _, subscriber := range plan.Table.TopicInfo.Subscribers {
 		// replace the topic name with the subscribed message table name
 		newQuery := strings.Replace(query, plan.Table.Name.String(), subscriber.Name.String(), -1)
@@ -1031,12 +1032,12 @@ func (tsv *TabletServer) topicExecute(ctx context.Context, query string, comment
 
 		// because there isn't an option to return multiple results, only the last
 		// message table result is returned
-		result, err = tsv.qreExecute(ctx, newQuery, comments, bindVariables, transactionID, options, newPlan, logStats)
+		result, err = tsv.qreExecute(ctx, newQuery, comments, bindVariables, transactionID, options, newPlan, logStats, tabletType)
 	}
 	return result, err
 }
 
-func (tsv *TabletServer) qreExecute(ctx context.Context, query string, comments sqlparser.MarginComments, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, plan *TabletPlan, logStats *tabletenv.LogStats) (result *sqltypes.Result, err error) {
+func (tsv *TabletServer) qreExecute(ctx context.Context, query string, comments sqlparser.MarginComments, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, plan *TabletPlan, logStats *tabletenv.LogStats, tabletType topodata.TabletType) (result *sqltypes.Result, err error) {
 	qre := &QueryExecutor{
 		query:          query,
 		marginComments: comments,
@@ -1047,6 +1048,7 @@ func (tsv *TabletServer) qreExecute(ctx context.Context, query string, comments 
 		ctx:            ctx,
 		logStats:       logStats,
 		tsv:            tsv,
+		tabletType:     tabletType,
 	}
 	extras := tsv.watcher.ComputeExtras(options)
 	result, err = qre.Execute()
@@ -2306,6 +2308,13 @@ func (tsv *TabletServer) GetTxPoolWaiterCap() int64 {
 // This function should only be used for testing.
 func (tsv *TabletServer) SetConsolidatorEnabled(enabled bool) {
 	tsv.qe.enableConsolidator = enabled
+}
+
+// SetConsolidatorReplicasEnabled (true) will enable the query consolidator for replicas.
+// SetConsolidatorReplicasEnabled (false) will disable the query consolidator for replicas.
+// This function should only be used for testing.
+func (tsv *TabletServer) SetConsolidatorReplicasEnabled(enabled bool) {
+	tsv.qe.enableConsolidatorReplicas = enabled
 }
 
 // queryAsString returns a readable version of query+bind variables.
