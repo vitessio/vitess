@@ -52,6 +52,21 @@ func NewClient() *QueryClient {
 	}
 }
 
+// NewClientWithTabletType creates a new client for Server with the provided tablet type.
+func NewClientWithTabletType(tabletType topodatapb.TabletType) *QueryClient {
+	targetCopy := Target
+	targetCopy.TabletType = tabletType
+	return &QueryClient{
+		ctx: callerid.NewContext(
+			context.Background(),
+			&vtrpcpb.CallerID{},
+			&querypb.VTGateCallerID{Username: "dev"},
+		),
+		target: targetCopy,
+		server: Server,
+	}
+}
+
 // NewClientWithContext creates a new client for Server with the provided context.
 func NewClientWithContext(ctx context.Context) *QueryClient {
 	return &QueryClient{
