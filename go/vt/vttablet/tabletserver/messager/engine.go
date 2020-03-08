@@ -160,6 +160,7 @@ func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altere
 		if mm == nil {
 			continue
 		}
+		log.Infof("Stopping messager for dropped/updated table: %v", name)
 		mm.Close()
 		delete(me.managers, name)
 	}
@@ -176,6 +177,7 @@ func (me *Engine) schemaChanged(tables map[string]*schema.Table, created, altere
 		}
 		mm := newMessageManager(me.tsv, me.vs, t, me.postponeSema)
 		me.managers[name] = mm
+		log.Infof("Starting messager for table: %v", name)
 		mm.Open()
 	}
 }
