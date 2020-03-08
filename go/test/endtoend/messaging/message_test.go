@@ -14,10 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package tabletserver
+package messaging
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -58,6 +59,7 @@ func TestMessage(t *testing.T) {
 	require.NoError(t, err)
 	defer streamConn.Close()
 
+	exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
 	exec(t, conn, createMessage)
 	defer exec(t, conn, "drop table vitess_message")
 
@@ -173,6 +175,7 @@ func TestThreeColMessage(t *testing.T) {
 	require.NoError(t, err)
 	defer streamConn.Close()
 
+	exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
 	exec(t, conn, createThreeColMessage)
 	defer exec(t, conn, "drop table vitess_message3")
 
@@ -259,6 +262,7 @@ func TestMessageTopic(t *testing.T) {
 	require.NoError(t, err)
 	defer streamConn2.Close()
 
+	exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
 	exec(t, conn, createMessageTopic1)
 	exec(t, conn, createMessageTopic2)
 	// These are failsafe drops. The test actually drops these tables during the flow.
@@ -330,7 +334,9 @@ func TestMessageTopic(t *testing.T) {
 
 	//
 	// phase 2 tests deleting one of the subscribers and making sure
-	// that inserts into a topic go to one subscribed message table
+	// that inserts into a topic go to one subscribed message table.
+	// This test takes longer because vttablet will drop and recreate
+	// vitess_topic_subscriber_2, which will make vtgate wait 5s and retry.
 	//
 
 	exec(t, conn, "drop table vitess_topic_subscriber_1")
@@ -352,7 +358,6 @@ func TestMessageTopic(t *testing.T) {
 
 	// Consume first three messages
 	// and ensure they were received promptly.
-	start = time.Now()
 	for i := 0; i < 3; i++ {
 		// make sure the second message table received all three messages
 		got2, err := streamConn2.FetchNext()
@@ -367,9 +372,6 @@ func TestMessageTopic(t *testing.T) {
 			}
 		}
 		assert.True(t, found)
-	}
-	if d := time.Since(start); d > 1*time.Second {
-		t.Errorf("messages were delayed: %v", d)
 	}
 
 	// ack the second subscriber
