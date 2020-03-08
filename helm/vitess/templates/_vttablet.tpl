@@ -171,8 +171,8 @@ spec:
 {{- $cellClean := index . 1 }}
 {{- $mysqlctld := index . 2 }}
 
-{{- $vitessTag := .vitessTag | default $mysqlctld.vitessTag -}}
-{{- $mysqlctldImage := .vtgateImage | default $mysqlctld.mysqlctldImage -}}
+{{- $vitessTag :=   $mysqlctld.vitessTag -}}
+{{- $mysqlctldImage :=  $mysqlctld.mysqlctldImage -}}
 
 - name: "init-mysql"
   image: "{{$mysqlctldImage}}:{{$vitessTag}}"
