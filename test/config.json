@@ -435,6 +435,15 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
+		"vtgate_vschema": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/tabletserver"],
+			"Command": [],
+			"Manual": false,
+			"Shard": 17,
+			"RetryMax": 0,
+			"Tags": []
+		},
 		"web_test": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtctldweb"],
