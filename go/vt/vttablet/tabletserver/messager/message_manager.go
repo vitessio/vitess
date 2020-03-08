@@ -432,12 +432,18 @@ func (mm *messageManager) runSend() {
 		tabletenv.LogError()
 		mm.wg.Done()
 	}()
+
+	mm.mu.Lock()
+	defer mm.mu.Unlock()
+
 	for {
-		var rows [][]sqltypes.Value
+		// Release and acquire the lock to avoid starving other contenders.
+		mm.mu.Unlock()
 		mm.mu.Lock()
+
+		var rows [][]sqltypes.Value
 		for {
 			if !mm.isOpen {
-				mm.mu.Unlock()
 				return
 			}
 
@@ -490,7 +496,6 @@ func (mm *messageManager) runSend() {
 		// Send the message asynchronously.
 		mm.wg.Add(1)
 		go mm.send(receiver, &sqltypes.Result{Rows: rows})
-		mm.mu.Unlock()
 	}
 }
 
@@ -595,10 +600,9 @@ func (mm *messageManager) runOneVStream(ctx context.Context) error {
 	// and exits.
 	lastEventTime := time.Now()
 	ctx, cancel := context.WithCancel(ctx)
-	mm.wg.Add(1)
-	go func() {
-		defer mm.wg.Done()
+	defer cancel()
 
+	go func() {
 		ticker := time.NewTicker(streamEventGracePeriod)
 		defer ticker.Stop()
 
