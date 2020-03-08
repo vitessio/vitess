@@ -560,7 +560,6 @@ func (mm *messageManager) startVStream() {
 	}
 	var ctx context.Context
 	ctx, mm.streamCancel = context.WithCancel(tabletenv.LocalContext())
-	mm.wg.Add(1)
 	go mm.runVStream(ctx)
 }
 
@@ -574,8 +573,6 @@ func (mm *messageManager) stopVStream() {
 }
 
 func (mm *messageManager) runVStream(ctx context.Context) {
-	defer mm.wg.Done()
-
 	for {
 		err := mm.runOneVStream(ctx)
 		select {
