@@ -309,7 +309,7 @@ func (se *Engine) Reload(ctx context.Context) error {
 	// must run after se.tables is set
 	se.registerTopics()
 
-	se.broadcast(created, altered, dropped)
+	go se.broadcast(created, altered, dropped)
 	return rec.Error()
 }
 
