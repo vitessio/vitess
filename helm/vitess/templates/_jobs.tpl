@@ -6,9 +6,9 @@
 {{- $job := index . 0 -}}
 {{- $defaultVtctlclient := index . 1 -}}
 {{- $namespace := index . 2 -}}
-{{- $repo := index . 3 -}}
 
 {{- $vitessTag := $job.vitessTag | default $defaultVtctlclient.vitessTag -}}
+{{- $vtctlclientImage := $defaultVtctlclient.vtctlclientImage -}}
 {{- $secrets := $job.secrets | default $defaultVtctlclient.secrets }}
 ---
 ###################################
@@ -31,7 +31,7 @@ spec:
       restartPolicy: OnFailure
       containers:
       - name: vtjob
-        image: "{{$repo}}/vtctlclient:{{$vitessTag}}"
+        image: "{{$vtctlclientImage}}:{{$vitessTag}}"
         volumeMounts:
 {{ include "user-secret-volumeMounts" $defaultVtctlclient.secrets | indent 10 }}
         resources:
@@ -55,9 +55,11 @@ spec:
 {{- $job := index . 0 -}}
 {{- $defaultVtworker := index . 1 -}}
 {{- $namespace := index . 2 -}}
-{{- $repo := index . 3 -}}
 
 {{- $vitessTag := $job.vitessTag | default $defaultVtworker.vitessTag -}}
+{{- $vtworkerImage := $job.vtworkerImage | default $defaultVtworker.vtworkerImage -}}
+
+
 {{- $secrets := $job.secrets | default $defaultVtworker.secrets }}
 ---
 ###################################
@@ -81,7 +83,7 @@ spec:
       restartPolicy: OnFailure
       containers:
       - name: vtjob
-        image: "{{$repo}}/vtworker:{{$vitessTag}}"
+        image: "{{$vtworkerImage}}:{{$vitessTag}}"
         volumeMounts:
 {{ include "user-secret-volumeMounts" $defaultVtworker.secrets | indent 10 }}
         resources:
