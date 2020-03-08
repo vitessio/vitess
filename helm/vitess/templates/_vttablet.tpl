@@ -48,9 +48,10 @@ spec:
 {{- $config := index . 8 -}}
 {{- $pmm := index . 9 -}}
 {{- $orc := index . 10 -}}
-{{- $repo := index . 11 -}}
+{{- $mysqlctld := index . 11 -}}
 {{- $logrotate := index . 12 -}}
 {{- $logtail := index . 13 -}}
+{{- $vtctl := index . 14 -}}
 
 # sanitize inputs for labels
 {{- $cellClean := include "clean-label" $cell.name -}}
@@ -64,6 +65,7 @@ spec:
 
 # define images to use
 {{- $vitessTag := .vitessTag | default $defaultVttablet.vitessTag -}}
+{{- $vtctlclientImage := .vtctlclientImage | default $defaultVttablet.vtctlclientImage -}}
 {{- $image := .image | default $defaultVttablet.image -}}
 {{- $mysqlImage := .mysqlImage | default $defaultVttablet.mysqlImage -}}
 {{- $mysqlImage := .mysqlImage | default $defaultVttablet.mysqlImage }}
@@ -104,17 +106,17 @@ spec:
 {{ include "vttablet-affinity" (tuple $cellClean $keyspaceClean $shardClean $cell.region) | indent 6 }}
 
       initContainers:
-{{ include "init-mysql" (tuple $vitessTag $cellClean $repo) | indent 8 }}
-{{ include "init-vttablet" (tuple $vitessTag $cell $cellClean $namespace $repo) | indent 8 }}
+{{ include "init-mysql" (tuple $vitessTag $cellClean $mysqlctld) | indent 8 }}
+{{ include "init-vttablet" (tuple $vitessTag $cell $cellClean $namespace $mysqlctld $vtctl) | indent 8 }}
 
       containers:
 {{ include "cont-mysql" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $uid) | indent 8 }}
-{{ include "cont-vttablet" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $defaultVtctlclient $vitessTag $uid $namespace $config $orc $repo) | indent 8 }}
+{{ include "cont-vttablet" (tuple $topology $cell $keyspace $shard $tablet $defaultVttablet $defaultVtctlclient $vitessTag $uid $namespace $config $orc) | indent 8 }}
 {{ include "cont-logrotate" (tuple $logrotate) | indent 8 }}
 {{ include "cont-mysql-generallog" (tuple $logrotate) | indent 8 }}
 {{ include "cont-mysql-errorlog" (tuple $logrotate) | indent 8 }}
 {{ include "cont-mysql-slowlog" (tuple $logrotate) | indent 8 }}
-{{ if $pmm.enabled }}{{ include "cont-pmm-client" (tuple $pmm $namespace $keyspace $repo $logtail) | indent 8 }}{{ end }}
+{{ if $pmm.enabled }}{{ include "cont-pmm-client" (tuple $pmm $namespace $keyspace  $logtail) | indent 8 }}{{ end }}
 
       volumes:
         - name: vt
@@ -156,7 +158,7 @@ spec:
       type: {{ $tablet.type | quote }}
 
 # conditionally add cron job
-{{ include "vttablet-backup-cron" (tuple $cellClean $keyspaceClean $shardClean $shardName $keyspace $shard $vitessTag $config.backup $namespace $defaultVtctlclient $repo) }}
+{{ include "vttablet-backup-cron" (tuple $cellClean $keyspaceClean $shardClean $shardName $keyspace $shard $vitessTag $config.backup $namespace $defaultVtctlclient) }}
 
 {{- end -}}
 {{- end -}}
@@ -167,10 +169,13 @@ spec:
 {{ define "init-mysql" -}}
 {{- $vitessTag := index . 0 -}}
 {{- $cellClean := index . 1 }}
-{{- $repo := index . 2 }}
+{{- $mysqlctld := index . 2 }}
+
+{{- $vitessTag := .vitessTag | default $mysqlctld.vitessTag -}}
+{{- $mysqlctldImage := .vtgateImage | default $mysqlctld.mysqlctldImage -}}
 
 - name: "init-mysql"
-  image: "{{$repo}}/mysqlctld:{{$vitessTag}}"
+  image: "{{$mysqlctldImage}}:{{$vitessTag}}"
   imagePullPolicy: IfNotPresent
   volumeMounts:
     - name: vtdataroot
@@ -213,10 +218,11 @@ spec:
 {{- $cell := index . 1 -}}
 {{- $cellClean := index . 2 -}}
 {{- $namespace := index . 3 }}
-{{- $repo := index . 4 }}
+{{- $vtctl := index . 4 }}
+
 
 - name: init-vttablet
-  image: "{{$repo}}/vtctl:{{$vitessTag}}"
+  image: "{{$vtctl.vtctlImage}}:{{$vitessTag}}"
   imagePullPolicy: IfNotPresent
   volumeMounts:
     - name: vtdataroot
@@ -276,13 +282,15 @@ spec:
 {{- $namespace := index . 9 -}}
 {{- $config := index . 10 -}}
 {{- $orc := index . 11 -}}
-{{- $repo := index . 12 -}}
 
 {{- $cellClean := include "clean-label" $cell.name -}}
 {{- with $tablet.vttablet }}
 
+{{- $vitessTag :=  $defaultVttablet.vitessTag -}}
+{{- $vttabletImage := $defaultVttablet.vttabletImage -}}
+
 - name: vttablet
-  image: "{{$repo}}/vttablet:{{$vitessTag}}"
+  image: "{{$vttabletImage}}:{{$vitessTag}}"
   imagePullPolicy: IfNotPresent
   readinessProbe:
     httpGet:

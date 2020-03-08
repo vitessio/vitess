@@ -7,7 +7,6 @@
 {{- $keyspace := index . 1 -}}
 {{- $defaultVtctlclient := index . 2 -}}
 {{- $namespace := index . 3 -}}
-{{- $repo := index . 4 -}}
 
 # sanitize inputs for labels
 {{- $keyspaceClean := include "clean-label" $keyspace.name -}}
@@ -16,6 +15,7 @@
 
 # define image to use
 {{- $vitessTag := .vitessTag | default $defaultVtctlclient.vitessTag -}}
+{{- $vtctlclientImage := .vtctlclientImage | default $defaultVtctlclient.vtctlclientImage -}}
 {{- $secrets := .secrets | default $defaultVtctlclient.secrets -}}
 
 {{- range $name, $schema := $keyspace.schema }}
@@ -34,7 +34,7 @@ spec:
       restartPolicy: OnFailure
       containers:
       - name: apply-schema
-        image: "{{$repo}}/vtctlclient:{{$vitessTag}}"
+        image: "{{$vtctlclientImage}}:{{$vitessTag}}"
         volumeMounts:
 {{ include "user-secret-volumeMounts" $defaultVtctlclient.secrets | indent 10 }}
 
@@ -101,7 +101,7 @@ spec:
       restartPolicy: OnFailure
       containers:
       - name: apply-vschema
-        image: "{{$repo}}/vtctlclient:{{$vitessTag}}"
+        image: "{{$vtctlclientImage}}:{{$vitessTag}}"
         volumeMounts:
 {{ include "user-secret-volumeMounts" $defaultVtctlclient.secrets | indent 10 }}
 

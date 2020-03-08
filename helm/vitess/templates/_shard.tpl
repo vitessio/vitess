@@ -9,7 +9,6 @@
 {{- $defaultVtctlclient := index . 3 -}}
 {{- $namespace := index . 4 -}}
 {{- $totalTabletCount := index . 5 -}}
-{{- $repo := index . 6 -}}
 
 {{- $cellClean := include "clean-label" $cell.name -}}
 {{- $keyspaceClean := include "clean-label" $keyspace.name -}}
@@ -19,6 +18,9 @@
 {{- with $cell.vtctld }}
 # define image to use
 {{- $vitessTag := .vitessTag | default $defaultVtctlclient.vitessTag }}
+{{- $vtctlclientImage := .vtctlclientImage | default $defaultVtctlclient.vtctlclientImage }}
+
+
 ---
 ###################################
 # InitShardMaster Job
@@ -43,7 +45,7 @@ spec:
       restartPolicy: OnFailure
       containers:
       - name: init-shard-master
-        image: "{{$repo}}/vtctlclient:{{$vitessTag}}"
+        image: "{{$vtctlclientImage}}:{{$vitessTag}}"
         volumeMounts:
 {{ include "user-secret-volumeMounts" $defaultVtctlclient.secrets | indent 10 }}
 
@@ -146,7 +148,7 @@ spec:
       restartPolicy: OnFailure
       containers:
       - name: copy-schema
-        image: "{{$repo}}/vtctlclient:{{$vitessTag}}"
+        image: "{{$vtctlclientImage}}/:{{$vitessTag}}"
         volumeMounts:
 {{ include "user-secret-volumeMounts" $defaultVtctlclient.secrets | indent 10 }}
 

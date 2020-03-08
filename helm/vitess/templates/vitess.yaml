@@ -5,7 +5,7 @@
 ---
 {{ if $.Values.pmm.enabled }}
 # create the pmm service and stateful set
-{{ include "pmm" (tuple $.Values.pmm $.Release.Namespace $.Values.repo) }}
+{{ include "pmm" (tuple $.Values.pmm $.Release.Namespace) }}
 ---
 {{ end }}
 
@@ -47,26 +47,26 @@
 {{ include "etcd" (tuple $cellClean $replicas $version $resources $clusterWide) }}
 ---
 # create one controller per cell
-{{ include "vtctld" (tuple $.Values.topology $cell $.Values.vtctld $.Release.Namespace $.Values.config $.Values.repo) }}
+{{ include "vtctld" (tuple $.Values.topology $cell $.Values.vtctld $.Release.Namespace $.Values.config) }}
 ---
 # create a pool of vtgates per cell
-{{ include "vtgate" (tuple $.Values.topology $cell $.Values.vtgate $.Release.Namespace $.Values.repo) }}
+{{ include "vtgate" (tuple $.Values.topology $cell $.Values.vtgate $.Release.Namespace) }}
 
   # Tablets for keyspaces
   {{ range $keyspace := $cell.keyspaces }}
 
     # Keyspace initializations
-    {{ include "keyspace" (tuple $cell $keyspace $.Values.vtctlclient $.Release.Namespace $.Values.repo) }}
+    {{ include "keyspace" (tuple $cell $keyspace $.Values.vtctlclient $.Release.Namespace) }}
 
     {{ range $shard := $keyspace.shards }}
 
       {{ $totalTabletCount := len (include "tablet-count" $shard.tablets) }}
       # Shard initializations
-      {{ include "shard" (tuple $cell $keyspace $shard $.Values.vtctlclient $.Release.Namespace $totalTabletCount $.Values.repo) }}
+      {{ include "shard" (tuple $cell $keyspace $shard $.Values.vtctlclient $.Release.Namespace $totalTabletCount) }}
 
       # Tablet initializations
       {{ range $tablet := $shard.tablets }}
-        {{ include "vttablet" (tuple $.Values.topology $cell $keyspace $shard $tablet $.Values.vttablet $.Values.vtctlclient $.Release.Namespace $.Values.config $.Values.pmm $.Values.orchestrator $.Values.repo $.Values.logrotate $.Values.logtail) }}
+        {{ include "vttablet" (tuple $.Values.topology $cell $keyspace $shard $tablet $.Values.vttablet $.Values.vtctlclient $.Release.Namespace $.Values.config $.Values.pmm $.Values.orchestrator $.Values.mysqlctld $.Values.logrotate $.Values.logtail $.Value.vtctl) }}
       {{ end }} # range $tablet
     {{ end }} # range $shard
   {{ end }} # range $keyspace
@@ -75,9 +75,9 @@
 
 {{ range $job := $.Values.jobs }}
   {{ if eq $job.kind "vtctlclient" }}
-    {{ include "vtctlclient-job" (tuple $job $.Values.vtctlclient $.Release.Namespace $.Values.repo) }}
+    {{ include "vtctlclient-job" (tuple $job $.Values.vtctlclient $.Release.Namespace) }}
   {{ else }}
-    {{ include "vtworker-job" (tuple $job $.Values.vtworker $.Release.Namespace $.Values.repo) }}
+    {{ include "vtworker-job" (tuple $job $.Values.vtworker $.Release.Namespace) }}
   {{ end }}
 {{ end }}
 ---
