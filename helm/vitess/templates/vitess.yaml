@@ -66,7 +66,7 @@
 
       # Tablet initializations
       {{ range $tablet := $shard.tablets }}
-        {{ include "vttablet" (tuple $.Values.topology $cell $keyspace $shard $tablet $.Values.vttablet $.Values.vtctlclient $.Release.Namespace $.Values.config $.Values.pmm $.Values.orchestrator $.Values.mysqlctld $.Values.logrotate $.Values.logtail $.Value.vtctl) }}
+        {{ include "vttablet" (tuple $.Values.topology $cell $keyspace $shard $tablet $.Values.vttablet $.Values.vtctlclient $.Release.Namespace $.Values.config $.Values.pmm $.Values.orchestrator $.Values.mysqlctld $.Values.logrotate $.Values.logtail $.Values.vtctl) }}
       {{ end }} # range $tablet
     {{ end }} # range $shard
   {{ end }} # range $keyspace

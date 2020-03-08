@@ -399,3 +399,7 @@ orchestrator:
     requests:
       cpu: 50m
       memory: 350Mi
+
+logrotate:
+  vitessTag: 3.1.1
+  image: vitess/orchestrator
