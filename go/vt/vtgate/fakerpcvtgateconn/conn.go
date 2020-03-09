@@ -63,27 +63,9 @@ type queryResponse struct {
 	err        error
 }
 
-// querySplitQuery contains all the fields we use to test SplitQuery
-type querySplitQuery struct {
-	Keyspace            string
-	SQL                 string
-	BindVariables       map[string]*querypb.BindVariable
-	SplitColumns        []string
-	SplitCount          int64
-	NumRowsPerQueryPart int64
-	Algorithm           querypb.SplitQueryRequest_Algorithm
-}
-
-type splitQueryResponse struct {
-	splitQuery *querySplitQuery
-	reply      []*vtgatepb.SplitQueryResponse_Part
-	err        error
-}
-
 // FakeVTGateConn provides a fake implementation of vtgateconn.Impl
 type FakeVTGateConn struct {
-	execMap       map[string]*queryResponse
-	splitQueryMap map[string]*splitQueryResponse
+	execMap map[string]*queryResponse
 }
 
 // RegisterFakeVTGateConnDialer registers the proper dialer for this fake,
@@ -92,8 +74,7 @@ type FakeVTGateConn struct {
 func RegisterFakeVTGateConnDialer() (*FakeVTGateConn, string) {
 	protocol := "fake"
 	impl := &FakeVTGateConn{
-		execMap:       make(map[string]*queryResponse),
-		splitQueryMap: make(map[string]*splitQueryResponse),
+		execMap: make(map[string]*queryResponse),
 	}
 	vtgateconn.RegisterDialer(protocol, func(ctx context.Context, address string) (vtgateconn.Impl, error) {
 		return impl, nil
@@ -138,35 +119,6 @@ func (conn *FakeVTGateConn) AddShardQuery(
 			NotInTransaction: notInTransaction,
 		},
 		reply: expectedResult,
-	}
-}
-
-// AddSplitQuery adds a split query and expected result.
-func (conn *FakeVTGateConn) AddSplitQuery(
-	keyspace string,
-	sql string,
-	bindVariables map[string]*querypb.BindVariable,
-	splitColumns []string,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm,
-	expectedResult []*vtgatepb.SplitQueryResponse_Part) {
-
-	reply := make([]*vtgatepb.SplitQueryResponse_Part, len(expectedResult))
-	copy(reply, expectedResult)
-	key := getSplitQueryKey(keyspace, sql, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
-	conn.splitQueryMap[key] = &splitQueryResponse{
-		splitQuery: &querySplitQuery{
-			Keyspace:            keyspace,
-			SQL:                 sql,
-			BindVariables:       bindVariables,
-			SplitColumns:        splitColumns,
-			SplitCount:          splitCount,
-			NumRowsPerQueryPart: numRowsPerQueryPart,
-			Algorithm:           algorithm,
-		},
-		reply: reply,
-		err:   nil,
 	}
 }
 
@@ -354,34 +306,6 @@ func (conn *FakeVTGateConn) MessageAckKeyspaceIds(ctx context.Context, keyspace 
 	panic("not implemented")
 }
 
-// SplitQuery please see vtgateconn.Impl.SplitQuery
-func (conn *FakeVTGateConn) SplitQuery(
-	ctx context.Context,
-	keyspace string,
-	query string,
-	bindVars map[string]*querypb.BindVariable,
-	splitColumns []string,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-
-	response, ok := conn.splitQueryMap[getSplitQueryKey(
-		keyspace, query, splitColumns, splitCount, numRowsPerQueryPart, algorithm)]
-	if !ok {
-		return nil, fmt.Errorf(
-			"no match for keyspace: %s,"+
-				" query: %v,"+
-				" splitColumns: %v,"+
-				" splitCount: %v"+
-				" numRowsPerQueryPart: %v"+
-				" algorithm: %v",
-			keyspace, query, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
-	}
-	reply := make([]*vtgatepb.SplitQueryResponse_Part, len(response.reply))
-	copy(reply, response.reply)
-	return reply, nil
-}
-
 // GetSrvKeyspace please see vtgateconn.Impl.GetSrvKeyspace
 func (conn *FakeVTGateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	return nil, fmt.Errorf("NYI")
@@ -404,23 +328,6 @@ func (conn *FakeVTGateConn) Close() {
 func getShardQueryKey(sql string, shards []string) string {
 	sort.Strings(shards)
 	return fmt.Sprintf("%s-%s", sql, strings.Join(shards, ":"))
-}
-
-func getSplitQueryKey(
-	keyspace string,
-	query string,
-	splitColumns []string,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm) string {
-	return fmt.Sprintf(
-		"%v:%v:%v:%v:%v:%v",
-		keyspace,
-		query,
-		splitColumns,
-		splitCount,
-		numRowsPerQueryPart,
-		algorithm)
 }
 
 func newSession(

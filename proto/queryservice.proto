@@ -85,10 +85,6 @@ service Query {
   // MessageAck acks messages for a table.
   rpc MessageAck(query.MessageAckRequest) returns (query.MessageAckResponse) {};
 
-  // SplitQuery is the API to facilitate MapReduce-type iterations
-  // over large data sets (like full table dumps).
-  rpc SplitQuery(query.SplitQueryRequest) returns (query.SplitQueryResponse) {};
-
   // StreamHealth runs a streaming RPC to the tablet, that returns the
   // current health of the tablet on a regular basis.
   rpc StreamHealth(query.StreamHealthRequest) returns (stream query.StreamHealthResponse) {};

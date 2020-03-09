@@ -21,7 +21,6 @@ package vtgate
 import (
 	"flag"
 	"fmt"
-	"math"
 	"net/http"
 	"time"
 
@@ -39,7 +38,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlannotation"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -846,110 +844,6 @@ handleError:
 	}
 	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecute)
 	return session, nil, err
-}
-
-// isKeyspaceRangeBasedSharded returns true if a keyspace is sharded
-// by range.  This is true when there is a ShardingColumnType defined
-// in the SrvKeyspace (that is using the range-based sharding with the
-// client specifying the sharding key), or when the VSchema for the
-// keyspace is Sharded.
-func (vtg *VTGate) isKeyspaceRangeBasedSharded(keyspace string, srvKeyspace *topodatapb.SrvKeyspace) bool {
-	if srvKeyspace.ShardingColumnType != topodatapb.KeyspaceIdType_UNSET {
-		// We are using range based sharding with the application
-		// providing the sharding key value.
-		return true
-	}
-	if vtg.executor.IsKeyspaceRangeBasedSharded(keyspace) {
-		// We are using range based sharding with the VSchema
-		// poviding the routing information
-		return true
-	}
-
-	// Not range based sharded, might be un-sharded or custom sharded.
-	return false
-}
-
-// SplitQuery implements the SplitQuery RPC. This is the new version that
-// supports multiple split-columns and multiple splitting algorithms.
-// See the documentation of SplitQueryRequest in "proto/vtgate.proto" for more
-// information.
-func (vtg *VTGate) SplitQuery(
-	ctx context.Context,
-	keyspace string,
-	sql string,
-	bindVariables map[string]*querypb.BindVariable,
-	splitColumns []string,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-
-	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v", bvErr)
-	}
-
-	// TODO(erez): Add validation of SplitQuery parameters.
-	rss, srvKeyspace, err := vtg.resolver.resolver.GetAllShards(ctx, keyspace, topodatapb.TabletType_RDONLY)
-	if err != nil {
-		return nil, err
-	}
-
-	// If the caller specified a splitCount (vs. specifying 'numRowsPerQueryPart') scale it by the
-	// number of shards (otherwise it stays 0).
-	perShardSplitCount := int64(math.Ceil(float64(splitCount) / float64(len(rss))))
-
-	// Determine whether to return SplitQueryResponse_KeyRangeParts or SplitQueryResponse_ShardParts.
-	// We return 'KeyRangeParts' for sharded keyspaces that are not custom sharded. If the
-	// keyspace is custom sharded or unsharded we return 'ShardParts'.
-	var querySplitToQueryPartFunc func(
-		querySplit *querypb.QuerySplit, rs *srvtopo.ResolvedShard) (*vtgatepb.SplitQueryResponse_Part, error)
-	if vtg.isKeyspaceRangeBasedSharded(keyspace, srvKeyspace) {
-		querySplitToQueryPartFunc = func(querySplit *querypb.QuerySplit, rs *srvtopo.ResolvedShard) (*vtgatepb.SplitQueryResponse_Part, error) {
-			// Use ValidateShardName to extract the keyrange.
-			_, kr, err := topo.ValidateShardName(rs.Target.Shard)
-			if err != nil {
-				return nil, fmt.Errorf("cannot extract keyrange from shard name %v: %v", rs.Target.Shard, err)
-			}
-			if kr == nil {
-				// Keyrange can be nil for the shard (e.g. for single-sharded keyspaces during resharding).
-				// In this case we append an empty keyrange that represents the entire keyspace.
-				kr = &topodatapb.KeyRange{
-					Start: []byte{},
-					End:   []byte{},
-				}
-			}
-			return &vtgatepb.SplitQueryResponse_Part{
-				Query: querySplit.Query,
-				KeyRangePart: &vtgatepb.SplitQueryResponse_KeyRangePart{
-					Keyspace:  keyspace,
-					KeyRanges: []*topodatapb.KeyRange{kr},
-				},
-				Size: querySplit.RowCount,
-			}, nil
-		}
-	} else {
-		// Keyspace is either unsharded or custom-sharded.
-		querySplitToQueryPartFunc = func(querySplit *querypb.QuerySplit, rs *srvtopo.ResolvedShard) (*vtgatepb.SplitQueryResponse_Part, error) {
-			return &vtgatepb.SplitQueryResponse_Part{
-				Query: querySplit.Query,
-				ShardPart: &vtgatepb.SplitQueryResponse_ShardPart{
-					Keyspace: keyspace,
-					Shards:   []string{rs.Target.Shard},
-				},
-				Size: querySplit.RowCount,
-			}, nil
-		}
-	}
-
-	return vtg.resolver.scatterConn.SplitQuery(
-		ctx,
-		sql,
-		bindVariables,
-		splitColumns,
-		perShardSplitCount,
-		numRowsPerQueryPart,
-		algorithm,
-		rss,
-		querySplitToQueryPartFunc)
 }
 
 // GetSrvKeyspace is part of the vtgate service API.

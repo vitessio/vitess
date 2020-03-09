@@ -114,10 +114,6 @@ service Vitess {
   // keyspace ids.
   rpc MessageAckKeyspaceIds(vtgate.MessageAckKeyspaceIdsRequest) returns (query.MessageAckResponse) {};
 
-  // Split a query into non-overlapping sub queries
-  // API group: Map Reduce
-  rpc SplitQuery(vtgate.SplitQueryRequest) returns (vtgate.SplitQueryResponse) {};
-
   // GetSrvKeyspace returns a SrvKeyspace object (as seen by this vtgate).
   // This method is provided as a convenient way for clients to take a
   // look at the sharding configuration for a Keyspace. Looking at the

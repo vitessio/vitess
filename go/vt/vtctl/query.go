@@ -69,11 +69,6 @@ func init() {
 		commandVtGateExecuteKeyspaceIds,
 		"-server <vtgate> -keyspace <keyspace> -keyspace_ids <ks1 in hex>,<k2 in hex>,... [-bind_variables <JSON map>] [-tablet_type <tablet type>] [-options <proto text options>] [-json] <sql>",
 		"Executes the given SQL query with the provided bound variables against the vtgate server. It is routed to the shards that contain the provided keyspace ids."})
-	addCommand(queriesGroupName, command{
-		"VtGateSplitQuery",
-		commandVtGateSplitQuery,
-		"-server <vtgate> -keyspace <keyspace> [-split_column <split_column>] -split_count <split_count> [-bind_variables <JSON map>] <sql>",
-		"Executes the SplitQuery computation for the given SQL query with the provided bound variables against the vtgate server (this is the base query for Map-Reduce workloads, and is provided here for debug / test purposes)."})
 
 	// VtTablet commands
 	addCommand(queriesGroupName, command{
@@ -317,77 +312,6 @@ func commandVtGateExecuteKeyspaceIds(ctx context.Context, wr *wrangler.Wrangler,
 	}
 	printQueryResult(loggerWriter{wr.Logger()}, qr)
 	return nil
-}
-
-func commandVtGateSplitQuery(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if !*enableQueries {
-		return fmt.Errorf("query commands are disabled (set the -enable_queries flag to enable)")
-	}
-
-	server := subFlags.String("server", "", "VtGate server to connect to")
-	bindVariables := newBindvars(subFlags)
-	splitColumnsStr := subFlags.String(
-		"split_columns",
-		"",
-		"A comma-separated list of the split columns to use to split the query."+
-			" If this is empty the table's primary key columns will be used.")
-	splitCount := subFlags.Int64("split_count", 0, "number of splits to generate.")
-	numRowsPerQueryPart := subFlags.Int64(
-		"num_rows_per_query_part", 0, "The number of rows to return in each query part.")
-	algorithmStr := subFlags.String("algorithm", "EQUAL_SPLITS", "The algorithm to"+
-		" use for splitting the query. Either 'FULL_SCAN' or 'EQUAL_SPLITS'")
-	keyspace := subFlags.String("keyspace", "", "keyspace to send query to")
-
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if (*splitCount == 0 && *numRowsPerQueryPart == 0) ||
-		(*splitCount != 0 && *numRowsPerQueryPart != 0) {
-		return fmt.Errorf("exactly one of split_count or num_rows_per_query_part"+
-			"must be nonzero. Got: split_count:%v, num_rows_per_query_part:%v",
-			*splitCount, *numRowsPerQueryPart)
-	}
-	splitColumns := []string{}
-	if *splitColumnsStr != "" {
-		splitColumns = strings.Split(*splitColumnsStr, ",")
-	}
-	var algorithm querypb.SplitQueryRequest_Algorithm
-	switch *algorithmStr {
-	case "FULL_SCAN":
-		algorithm = querypb.SplitQueryRequest_FULL_SCAN
-	case "EQUAL_SPLITS":
-		algorithm = querypb.SplitQueryRequest_EQUAL_SPLITS
-	default:
-		return fmt.Errorf("unknown split-query algorithm: %v", algorithmStr)
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("the <sql> argument is required for the VtGateSplitQuery command")
-	}
-	vtgateConn, err := vtgateconn.Dial(ctx, *server)
-	if err != nil {
-		return fmt.Errorf("error connecting to vtgate '%v': %v", *server, err)
-	}
-	defer vtgateConn.Close()
-
-	bindVars, err := sqltypes.BuildBindVariables(*bindVariables)
-	if err != nil {
-		return fmt.Errorf("BuildBindVariables failed: %v", err)
-	}
-
-	r, err := vtgateConn.SplitQuery(
-		ctx,
-		*keyspace,
-		subFlags.Arg(0),
-		bindVars,
-		splitColumns,
-		int64(*splitCount),
-		int64(*numRowsPerQueryPart),
-		algorithm,
-	)
-	if err != nil {
-		return fmt.Errorf("SplitQuery failed: %v", err)
-	}
-	return printJSON(wr.Logger(), r)
 }
 
 func commandVtTabletExecute(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {

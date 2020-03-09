@@ -58,17 +58,6 @@ type VTGateService interface {
 	MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error)
 	MessageAckKeyspaceIds(ctx context.Context, keyspace string, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error)
 
-	// Map Reduce support
-	SplitQuery(
-		ctx context.Context,
-		keyspace string,
-		sql string,
-		bindVariables map[string]*querypb.BindVariable,
-		splitColumns []string,
-		splitCount int64,
-		numRowsPerQueryPart int64,
-		algorithm querypb.SplitQueryRequest_Algorithm) ([]*vtgatepb.SplitQueryResponse_Part, error)
-
 	// Topology support
 	GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error)
 

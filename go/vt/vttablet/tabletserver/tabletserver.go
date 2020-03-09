@@ -56,12 +56,10 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/heartbeat"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/splitquery"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txserializer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler"
@@ -1402,69 +1400,6 @@ func (tsv *TabletServer) VStreamResults(ctx context.Context, target *querypb.Tar
 	return tsv.vstreamer.StreamResults(ctx, query, send)
 }
 
-// SplitQuery splits a query + bind variables into smaller queries that return a
-// subset of rows from the original query. This is the new version that supports multiple
-// split columns and multiple split algorithms.
-// See the documentation of SplitQueryRequest in proto/vtgate.proto for more details.
-func (tsv *TabletServer) SplitQuery(
-	ctx context.Context,
-	target *querypb.Target,
-	query *querypb.BoundQuery,
-	splitColumns []string,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm,
-) (splits []*querypb.QuerySplit, err error) {
-	err = tsv.execRequest(
-		ctx, 0,
-		"SplitQuery", query.Sql, query.BindVariables,
-		target, nil, false /* isBegin */, false, /* allowOnShutdown */
-		func(ctx context.Context, logStats *tabletenv.LogStats) error {
-			// SplitQuery using the Full Scan algorithm can take a while and
-			// we don't expect too many of these queries to run concurrently.
-			ciSplitColumns := make([]sqlparser.ColIdent, 0, len(splitColumns))
-			for _, s := range splitColumns {
-				ciSplitColumns = append(ciSplitColumns, sqlparser.NewColIdent(s))
-			}
-
-			if err := validateSplitQueryParameters(
-				target,
-				query,
-				splitCount,
-				numRowsPerQueryPart,
-				algorithm,
-			); err != nil {
-				return err
-			}
-			schema := tsv.se.GetSchema()
-			splitParams, err := createSplitParams(
-				query, ciSplitColumns, splitCount, numRowsPerQueryPart, schema)
-			if err != nil {
-				return err
-			}
-			defer func(start time.Time) {
-				splitTableName := splitParams.GetSplitTableName()
-				tabletenv.RecordUserQuery(ctx, splitTableName, "SplitQuery", int64(time.Since(start)))
-			}(time.Now())
-			sqlExecuter, err := newSplitQuerySQLExecuter(ctx, logStats, tsv)
-			if err != nil {
-				return err
-			}
-			defer sqlExecuter.done()
-			algorithmObject, err := createSplitQueryAlgorithmObject(algorithm, splitParams, sqlExecuter)
-			if err != nil {
-				return err
-			}
-			splits, err = splitquery.NewSplitter(splitParams, algorithmObject).Split()
-			if err != nil {
-				return err
-			}
-			return nil
-		},
-	)
-	return splits, err
-}
-
 // execRequest performs verifications, sets up the necessary environments
 // and calls the supplied function for executing the request.
 func (tsv *TabletServer) execRequest(
@@ -1737,152 +1672,6 @@ func convertErrorCode(err error) vtrpcpb.Code {
 	}
 
 	return errCode
-}
-
-// validateSplitQueryParameters perform some validations on the SplitQuery parameters
-// returns an error that can be returned to the user if a validation fails.
-func validateSplitQueryParameters(
-	target *querypb.Target,
-	query *querypb.BoundQuery,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm,
-) error {
-	// Check that the caller requested a RDONLY tablet.
-	// Since we're called by VTGate this should not normally be violated.
-	if target.TabletType != topodatapb.TabletType_RDONLY {
-		return vterrors.Errorf(
-			vtrpcpb.Code_INVALID_ARGUMENT,
-			"SplitQuery must be called with a RDONLY tablet. TableType passed is: %v",
-			target.TabletType)
-	}
-	if numRowsPerQueryPart < 0 {
-		return vterrors.Errorf(
-			vtrpcpb.Code_INVALID_ARGUMENT,
-			"splitQuery: numRowsPerQueryPart must be non-negative. Got: %v. SQL: %v",
-			numRowsPerQueryPart,
-			queryAsString(query.Sql, query.BindVariables))
-	}
-	if splitCount < 0 {
-		return vterrors.Errorf(
-			vtrpcpb.Code_INVALID_ARGUMENT,
-			"splitQuery: splitCount must be non-negative. Got: %v. SQL: %v",
-			splitCount,
-			queryAsString(query.Sql, query.BindVariables))
-	}
-	if (splitCount == 0 && numRowsPerQueryPart == 0) ||
-		(splitCount != 0 && numRowsPerQueryPart != 0) {
-		return vterrors.Errorf(
-			vtrpcpb.Code_INVALID_ARGUMENT,
-			"splitQuery: exactly one of {numRowsPerQueryPart, splitCount} must be"+
-				" non zero. Got: numRowsPerQueryPart=%v, splitCount=%v. SQL: %v",
-			numRowsPerQueryPart,
-			splitCount,
-			queryAsString(query.Sql, query.BindVariables))
-	}
-	if algorithm != querypb.SplitQueryRequest_EQUAL_SPLITS &&
-		algorithm != querypb.SplitQueryRequest_FULL_SCAN {
-		return vterrors.Errorf(
-			vtrpcpb.Code_INVALID_ARGUMENT,
-			"splitquery: unsupported algorithm: %v. SQL: %v",
-			algorithm,
-			queryAsString(query.Sql, query.BindVariables))
-	}
-	return nil
-}
-
-func createSplitParams(
-	query *querypb.BoundQuery,
-	splitColumns []sqlparser.ColIdent,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	schema map[string]*schema.Table,
-) (*splitquery.SplitParams, error) {
-	switch {
-	case numRowsPerQueryPart != 0 && splitCount == 0:
-		return splitquery.NewSplitParamsGivenNumRowsPerQueryPart(
-			query, splitColumns, numRowsPerQueryPart, schema)
-	case numRowsPerQueryPart == 0 && splitCount != 0:
-		return splitquery.NewSplitParamsGivenSplitCount(
-			query, splitColumns, splitCount, schema)
-	default:
-		panic(fmt.Errorf("exactly one of {numRowsPerQueryPart, splitCount} must be"+
-			" non zero. This should have already been caught by 'validateSplitQueryParameters' and "+
-			" returned as an error. Got: numRowsPerQueryPart=%v, splitCount=%v. SQL: %v",
-			numRowsPerQueryPart,
-			splitCount,
-			queryAsString(query.Sql, query.BindVariables)))
-	}
-}
-
-// splitQuerySQLExecuter implements splitquery.SQLExecuterInterface and allows the splitquery
-// package to send SQL statements to MySQL
-type splitQuerySQLExecuter struct {
-	queryExecutor *QueryExecutor
-	conn          *connpool.DBConn
-}
-
-// Constructs a new splitQuerySQLExecuter object. The 'done' method must be called on
-// the object after it's no longer used, to recycle the database connection.
-func newSplitQuerySQLExecuter(
-	ctx context.Context, logStats *tabletenv.LogStats, tsv *TabletServer,
-) (*splitQuerySQLExecuter, error) {
-	queryExecutor := &QueryExecutor{
-		ctx:      ctx,
-		logStats: logStats,
-		tsv:      tsv,
-	}
-	result := &splitQuerySQLExecuter{
-		queryExecutor: queryExecutor,
-	}
-	var err error
-	result.conn, err = queryExecutor.getConn()
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
-func (se *splitQuerySQLExecuter) done() {
-	se.conn.Recycle()
-}
-
-// SQLExecute is part of the SQLExecuter interface.
-func (se *splitQuerySQLExecuter) SQLExecute(
-	sql string, bindVariables map[string]*querypb.BindVariable,
-) (*sqltypes.Result, error) {
-	// We need to parse the query since we're dealing with bind-vars.
-	// TODO(erez): Add an SQLExecute() to SQLExecuterInterface that gets a parsed query so that
-	// we don't have to parse the query again here.
-	ast, err := sqlparser.Parse(sql)
-	if err != nil {
-		return nil, vterrors.Wrap(err, "splitQuerySQLExecuter: parsing sql failed with")
-	}
-	parsedQuery := sqlparser.NewParsedQuery(ast)
-
-	// We clone "bindVariables" since fullFetch() changes it.
-	return se.queryExecutor.dbConnFetch(
-		se.conn,
-		parsedQuery,
-		sqltypes.CopyBindVariables(bindVariables),
-		"",   /* buildStreamComment */
-		true, /* wantfields */
-	)
-}
-
-func createSplitQueryAlgorithmObject(
-	algorithm querypb.SplitQueryRequest_Algorithm,
-	splitParams *splitquery.SplitParams,
-	sqlExecuter splitquery.SQLExecuter) (splitquery.SplitAlgorithmInterface, error) {
-
-	switch algorithm {
-	case querypb.SplitQueryRequest_FULL_SCAN:
-		return splitquery.NewFullScanAlgorithm(splitParams, sqlExecuter)
-	case querypb.SplitQueryRequest_EQUAL_SPLITS:
-		return splitquery.NewEqualSplitsAlgorithm(splitParams, sqlExecuter)
-	default:
-		panic(fmt.Errorf("unknown algorithm enum: %+v", algorithm))
-	}
 }
 
 // StreamHealth streams the health status to callback.

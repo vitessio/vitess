@@ -160,13 +160,6 @@ func (conn *VTGateConn) Close() {
 	conn.impl = nil
 }
 
-// SplitQuery splits a query into smaller queries. It is mostly used by batch job frameworks
-// such as MapReduce. See the documentation for the vtgate.SplitQueryRequest protocol buffer message
-// in 'proto/vtgate.proto'.
-func (conn *VTGateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]*querypb.BindVariable, splitColumns []string, splitCount int64, numRowsPerQueryPart int64, algorithm querypb.SplitQueryRequest_Algorithm) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-	return conn.impl.SplitQuery(ctx, keyspace, query, bindVars, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
-}
-
 // GetSrvKeyspace returns a topo.SrvKeyspace object.
 func (conn *VTGateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	return conn.impl.GetSrvKeyspace(ctx, keyspace)
@@ -379,11 +372,6 @@ type Impl interface {
 	MessageStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, name string, callback func(*sqltypes.Result) error) error
 	MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error)
 	MessageAckKeyspaceIds(ctx context.Context, keyspace string, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error)
-
-	// SplitQuery splits a query into smaller queries. It is mostly used by batch job frameworks
-	// such as MapReduce. See the documentation for the vtgate.SplitQueryRequest protocol buffer
-	// message in 'proto/vtgate.proto'.
-	SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]*querypb.BindVariable, splitColumns []string, splitCount int64, numRowsPerQueryPart int64, algorithm querypb.SplitQueryRequest_Algorithm) ([]*vtgatepb.SplitQueryResponse_Part, error)
 
 	// GetSrvKeyspace returns a topo.SrvKeyspace.
 	GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error)

@@ -478,35 +478,6 @@ func (conn *vtgateConn) MessageAckKeyspaceIds(ctx context.Context, keyspace stri
 	return int64(r.Result.RowsAffected), nil
 }
 
-func (conn *vtgateConn) SplitQuery(
-	ctx context.Context,
-	keyspace string,
-	query string,
-	bindVars map[string]*querypb.BindVariable,
-	splitColumns []string,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-
-	request := &vtgatepb.SplitQueryRequest{
-		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
-		Keyspace: keyspace,
-		Query: &querypb.BoundQuery{
-			Sql:           query,
-			BindVariables: bindVars,
-		},
-		SplitColumn:         splitColumns,
-		SplitCount:          splitCount,
-		NumRowsPerQueryPart: numRowsPerQueryPart,
-		Algorithm:           algorithm,
-	}
-	response, err := conn.c.SplitQuery(ctx, request)
-	if err != nil {
-		return nil, vterrors.FromGRPC(err)
-	}
-	return response.Splits, nil
-}
-
 func (conn *vtgateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	request := &vtgatepb.GetSrvKeyspaceRequest{
 		Keyspace: keyspace,
