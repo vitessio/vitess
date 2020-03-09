@@ -124,10 +124,6 @@ func (c fallbackClient) VStream(ctx context.Context, tabletType topodatapb.Table
 	return c.fallback.VStream(ctx, tabletType, vgtid, filter, send)
 }
 
-func (c fallbackClient) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, callback func(*querypb.StreamEvent, int64) error) error {
-	return c.fallback.UpdateStream(ctx, keyspace, shard, keyRange, tabletType, timestamp, event, callback)
-}
-
 func (c fallbackClient) HandlePanic(err *error) {
 	c.fallback.HandlePanic(err)
 }

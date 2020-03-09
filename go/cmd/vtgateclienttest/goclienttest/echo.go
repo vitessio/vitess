@@ -99,8 +99,6 @@ var (
 	}
 	optionsEcho = "include_event_token:true compare_event_token:<" + eventTokenEcho + "> included_fields:TYPE_ONLY "
 	extrasEcho  = "event_token:<" + eventTokenEcho + "> fresher:true "
-
-	updateStreamEcho = "map[callerId:" + callerIDEcho + " event:" + eventTokenEcho + " keyRange:" + keyRangeZeroEcho + " keyspace:conn_ks shard:echo://" + query + " tabletType:REPLICA timestamp:0]"
 )
 
 // testEcho exercises the test cases provided by the "echo" service.
@@ -108,7 +106,6 @@ func testEcho(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgateconn.VTG
 	testEchoExecute(t, conn, session)
 	testEchoStreamExecute(t, conn, session)
 	testEchoTransactionExecute(t, conn)
-	testEchoUpdateStream(t, conn)
 }
 
 func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgateconn.VTGateSession) {
@@ -399,25 +396,6 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"asTransaction": "false",
 		"options":       optionsEcho,
 	})
-}
-
-func testEchoUpdateStream(t *testing.T, conn *vtgateconn.VTGateConn) {
-	var stream vtgateconn.UpdateStreamReader
-	var err error
-
-	ctx := callerid.NewContext(context.Background(), callerID, nil)
-
-	stream, err = conn.UpdateStream(ctx, "conn_ks", echoPrefix+query, keyRanges[0], tabletType, 0, eventToken)
-	if err != nil {
-		t.Fatal(err)
-	}
-	se, _, err := stream.Recv()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if se.EventToken.Position != updateStreamEcho {
-		t.Errorf("UpdateStream(0) =\n%v, want\n%v", se.EventToken.Position, updateStreamEcho)
-	}
 }
 
 // getEcho extracts the echoed field values from a query result.

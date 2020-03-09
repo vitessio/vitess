@@ -480,28 +480,6 @@ func (vtg *VTGate) VStream(request *vtgatepb.VStreamRequest, stream vtgateservic
 	return vterrors.ToGRPC(vtgErr)
 }
 
-// UpdateStream is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) UpdateStream(request *vtgatepb.UpdateStreamRequest, stream vtgateservicepb.Vitess_UpdateStreamServer) (err error) {
-	defer vtg.server.HandlePanic(&err)
-	ctx := withCallerIDContext(stream.Context(), request.CallerId)
-	vtgErr := vtg.server.UpdateStream(ctx,
-		request.Keyspace,
-		request.Shard,
-		request.KeyRange,
-		request.TabletType,
-		request.Timestamp,
-		request.Event,
-		func(event *querypb.StreamEvent, resumeTimestamp int64) error {
-			// Send is not safe to call concurrently, but vtgate
-			// guarantees that it's not.
-			return stream.Send(&vtgatepb.UpdateStreamResponse{
-				Event:           event,
-				ResumeTimestamp: resumeTimestamp,
-			})
-		})
-	return vterrors.ToGRPC(vtgErr)
-}
-
 func init() {
 	vtgate.RegisterVTGates = append(vtgate.RegisterVTGates, func(vtGate vtgateservice.VTGateService) {
 		if servenv.GRPCCheckServiceMap("vtgateservice") {

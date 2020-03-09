@@ -89,9 +89,6 @@ service Query {
   // current health of the tablet on a regular basis.
   rpc StreamHealth(query.StreamHealthRequest) returns (stream query.StreamHealthResponse) {};
 
-  // UpdateStream asks the server to return a stream of the updates that have been applied to its database.
-  rpc UpdateStream(query.UpdateStreamRequest) returns (stream query.UpdateStreamResponse) {};
-
   // VStream streams vreplication events.
   rpc VStream(binlogdata.VStreamRequest) returns (stream binlogdata.VStreamResponse) {};
 

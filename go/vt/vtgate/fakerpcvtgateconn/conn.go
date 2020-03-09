@@ -316,11 +316,6 @@ func (conn *FakeVTGateConn) VStream(ctx context.Context, tabletType topodatapb.T
 	return nil, fmt.Errorf("NYI")
 }
 
-// UpdateStream please see vtgateconn.Impl.UpdateStream
-func (conn *FakeVTGateConn) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken) (vtgateconn.UpdateStreamReader, error) {
-	return nil, fmt.Errorf("NYI")
-}
-
 // Close please see vtgateconn.Impl.Close
 func (conn *FakeVTGateConn) Close() {
 }

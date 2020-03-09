@@ -332,11 +332,6 @@ func (sbc *SandboxConn) StreamHealth(ctx context.Context, callback func(*querypb
 	return fmt.Errorf("not implemented in test")
 }
 
-// UpdateStream is part of the QueryService interface.
-func (sbc *SandboxConn) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
-	return fmt.Errorf("not implemented in test")
-}
-
 // ExpectVStreamStartPos makes the conn verify that that the next vstream request has the right startPos.
 func (sbc *SandboxConn) ExpectVStreamStartPos(startPos string) {
 	sbc.StartPos = startPos

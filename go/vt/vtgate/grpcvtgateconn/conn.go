@@ -517,37 +517,6 @@ func (conn *vtgateConn) VStream(ctx context.Context, tabletType topodatapb.Table
 	}, nil
 }
 
-type updateStreamAdapter struct {
-	stream vtgateservicepb.Vitess_UpdateStreamClient
-}
-
-func (a *updateStreamAdapter) Recv() (*querypb.StreamEvent, int64, error) {
-	r, err := a.stream.Recv()
-	if err != nil {
-		return nil, 0, vterrors.FromGRPC(err)
-	}
-	return r.Event, r.ResumeTimestamp, nil
-}
-
-func (conn *vtgateConn) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken) (vtgateconn.UpdateStreamReader, error) {
-	req := &vtgatepb.UpdateStreamRequest{
-		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
-		Keyspace:   keyspace,
-		Shard:      shard,
-		KeyRange:   keyRange,
-		TabletType: tabletType,
-		Timestamp:  timestamp,
-		Event:      event,
-	}
-	stream, err := conn.c.UpdateStream(ctx, req)
-	if err != nil {
-		return nil, vterrors.FromGRPC(err)
-	}
-	return &updateStreamAdapter{
-		stream: stream,
-	}, nil
-}
-
 func (conn *vtgateConn) Close() {
 	conn.cc.Close()
 }

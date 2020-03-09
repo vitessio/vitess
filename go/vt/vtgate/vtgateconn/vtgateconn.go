@@ -177,21 +177,6 @@ func (conn *VTGateConn) VStream(ctx context.Context, tabletType topodatapb.Table
 	return conn.impl.VStream(ctx, tabletType, vgtid, filter)
 }
 
-// UpdateStreamReader is returned by UpdateStream.
-type UpdateStreamReader interface {
-	// Recv returns the next result on the stream.
-	// It will return io.EOF if the stream ended.
-	Recv() (*querypb.StreamEvent, int64, error)
-}
-
-// UpdateStream executes a streaming query on vtgate. It returns an
-// UpdateStreamReader and an error. First check the error. Then you
-// can pull values from the UpdateStreamReader until io.EOF, or
-// another error.
-func (conn *VTGateConn) UpdateStream(ctx context.Context, keyspace, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken) (UpdateStreamReader, error) {
-	return conn.impl.UpdateStream(ctx, keyspace, shard, keyRange, tabletType, timestamp, event)
-}
-
 // VTGateSession exposes the V3 API to the clients.
 // The object maintains client-side state and is comparable to a native MySQL connection.
 // For example, if you enable autocommit on a Session object, all subsequent calls will respect this.
@@ -378,9 +363,6 @@ type Impl interface {
 
 	// VStream streams binlogevents
 	VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter) (VStreamReader, error)
-
-	// UpdateStream asks for a stream of StreamEvent.
-	UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken) (UpdateStreamReader, error)
 
 	// Close must be called for releasing resources.
 	Close()

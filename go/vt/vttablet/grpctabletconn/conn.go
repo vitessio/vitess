@@ -593,49 +593,6 @@ func (conn *gRPCQueryClient) StreamHealth(ctx context.Context, callback func(*qu
 	}
 }
 
-// UpdateStream starts a streaming query to VTTablet.
-func (conn *gRPCQueryClient) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
-	// Please see comments in StreamExecute to see how this works.
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	stream, err := func() (queryservicepb.Query_UpdateStreamClient, error) {
-		conn.mu.RLock()
-		defer conn.mu.RUnlock()
-		if conn.cc == nil {
-			return nil, tabletconn.ConnClosed
-		}
-
-		req := &querypb.UpdateStreamRequest{
-			Target:            target,
-			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
-			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-			Position:          position,
-			Timestamp:         timestamp,
-		}
-		stream, err := conn.c.UpdateStream(ctx, req)
-		if err != nil {
-			return nil, tabletconn.ErrorFromGRPC(err)
-		}
-		return stream, nil
-	}()
-	if err != nil {
-		return err
-	}
-	for {
-		r, err := stream.Recv()
-		if err != nil {
-			return tabletconn.ErrorFromGRPC(err)
-		}
-		if err := callback(r.Event); err != nil {
-			if err == nil || err == io.EOF {
-				return nil
-			}
-			return err
-		}
-	}
-}
-
 // VStream starts a VReplication stream.
 func (conn *gRPCQueryClient) VStream(ctx context.Context, target *querypb.Target, position string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	stream, err := func() (queryservicepb.Query_VStreamClient, error) {

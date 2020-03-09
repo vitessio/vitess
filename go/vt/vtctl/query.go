@@ -96,11 +96,6 @@ func init() {
 		commandVtTabletStreamHealth,
 		"[-count <count, default 1>] <tablet alias>",
 		"Executes the StreamHealth streaming query to a vttablet process. Will stop after getting <count> answers."})
-	addCommand(queriesGroupName, command{
-		"VtTabletUpdateStream",
-		commandVtTabletUpdateStream,
-		"[-count <count, default 1>] [-position <position>] [-timestamp <timestamp>] <tablet alias>",
-		"Executes the UpdateStream streaming query to a vttablet process. Will stop after getting <count> answers."})
 }
 
 type bindvars map[string]interface{}
@@ -540,61 +535,6 @@ func commandVtTabletStreamHealth(ctx context.Context, wr *wrangler.Wrangler, sub
 	i := 0
 	err = conn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
 		data, err := json.Marshal(shr)
-		if err != nil {
-			wr.Logger().Errorf2(err, "cannot json-marshal structure")
-		} else {
-			wr.Logger().Printf("%v\n", string(data))
-		}
-		i++
-		if i >= *count {
-			return io.EOF
-		}
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-	if i < *count {
-		return errors.New("stream ended early")
-	}
-	return nil
-}
-
-func commandVtTabletUpdateStream(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	if !*enableQueries {
-		return fmt.Errorf("query commands are disabled (set the -enable_queries flag to enable)")
-	}
-
-	count := subFlags.Int("count", 1, "number of responses to wait for")
-	timestamp := subFlags.Int("timestamp", 0, "timestamp to start the stream from")
-	position := subFlags.String("position", "", "position to start the stream from")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("the <tablet alias> argument is required for the VtTabletUpdateStream command")
-	}
-	tabletAlias, err := topoproto.ParseTabletAlias(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	tabletInfo, err := wr.TopoServer().GetTablet(ctx, tabletAlias)
-	if err != nil {
-		return err
-	}
-
-	conn, err := tabletconn.GetDialer()(tabletInfo.Tablet, grpcclient.FailFast(false))
-	if err != nil {
-		return fmt.Errorf("cannot connect to tablet %v: %v", tabletAlias, err)
-	}
-
-	i := 0
-	err = conn.UpdateStream(ctx, &querypb.Target{
-		Keyspace:   tabletInfo.Tablet.Keyspace,
-		Shard:      tabletInfo.Tablet.Shard,
-		TabletType: tabletInfo.Tablet.Type,
-	}, *position, int64(*timestamp), func(se *querypb.StreamEvent) error {
-		data, err := json.Marshal(se)
 		if err != nil {
 			wr.Logger().Errorf2(err, "cannot json-marshal structure")
 		} else {

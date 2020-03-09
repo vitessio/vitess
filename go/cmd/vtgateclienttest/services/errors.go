@@ -296,10 +296,3 @@ func (c *errorClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*top
 	}
 	return c.fallbackClient.GetSrvKeyspace(ctx, keyspace)
 }
-
-func (c *errorClient) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, callback func(*querypb.StreamEvent, int64) error) error {
-	if err := requestToError(shard); err != nil {
-		return err
-	}
-	return c.fallbackClient.UpdateStream(ctx, keyspace, shard, keyRange, tabletType, timestamp, event, callback)
-}

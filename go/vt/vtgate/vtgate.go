@@ -126,7 +126,6 @@ type VTGate struct {
 	logStreamExecuteKeyspaceIds *logutil.ThrottledLogger
 	logStreamExecuteKeyRanges   *logutil.ThrottledLogger
 	logStreamExecuteShards      *logutil.ThrottledLogger
-	logUpdateStream             *logutil.ThrottledLogger
 	logMessageStream            *logutil.ThrottledLogger
 }
 
@@ -199,7 +198,6 @@ func Init(ctx context.Context, hc discovery.HealthCheck, serv srvtopo.Server, ce
 		logStreamExecuteKeyspaceIds: logutil.NewThrottledLogger("StreamExecuteKeyspaceIds", 5*time.Second),
 		logStreamExecuteKeyRanges:   logutil.NewThrottledLogger("StreamExecuteKeyRanges", 5*time.Second),
 		logStreamExecuteShards:      logutil.NewThrottledLogger("StreamExecuteShards", 5*time.Second),
-		logUpdateStream:             logutil.NewThrottledLogger("UpdateStream", 5*time.Second),
 		logMessageStream:            logutil.NewThrottledLogger("MessageStream", 5*time.Second),
 	}
 
@@ -918,39 +916,6 @@ func (vtg *VTGate) MessageAckKeyspaceIds(ctx context.Context, keyspace string, n
 
 	count, err := vtg.resolver.MessageAckKeyspaceIds(ctx, keyspace, name, idKeyspaceIDs)
 	return count, formatError(err)
-}
-
-// UpdateStream is part of the vtgate service API.
-// Note we guarantee the callback will not be called concurrently
-// by multiple go routines, as the current implementation can only target
-// one shard.
-func (vtg *VTGate) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, callback func(*querypb.StreamEvent, int64) error) error {
-	startTime := time.Now()
-	ltt := topoproto.TabletTypeLString(tabletType)
-	statsKey := []string{"UpdateStream", keyspace, ltt}
-	defer vtg.timings.Record(statsKey, startTime)
-
-	err := vtg.resolver.UpdateStream(
-		ctx,
-		keyspace,
-		shard,
-		keyRange,
-		tabletType,
-		timestamp,
-		event,
-		callback,
-	)
-	if err != nil {
-		request := map[string]interface{}{
-			"Keyspace":   keyspace,
-			"Shard":      shard,
-			"KeyRange":   keyRange,
-			"TabletType": ltt,
-			"Timestamp":  timestamp,
-		}
-		recordAndAnnotateError(err, statsKey, request, vtg.logUpdateStream)
-	}
-	return formatError(err)
 }
 
 // VStream streams binlog events.
