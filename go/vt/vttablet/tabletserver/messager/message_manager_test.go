@@ -219,6 +219,16 @@ func TestMessageManagerSend(t *testing.T) {
 		t.Errorf("Postpone: %s, want %v", got, want)
 	}
 
+	// Wait while the receiver is marked as busy.
+	for {
+		mm.mu.Lock()
+		busy := mm.receivers[0].busy
+		mm.mu.Unlock()
+		if !busy {
+			break
+		}
+	}
+
 	// Verify item has been removed from cache.
 	// Need to obtain lock to prevent data race.
 	mm.cache.mu.Lock()
@@ -785,7 +795,10 @@ func (fts *fakeTabletServer) PurgeMessages(ctx context.Context, target *querypb.
 
 func newMMConnPool(db *fakesqldb.DB) *connpool.Pool {
 	pool := connpool.New("", 20, 0, time.Duration(10*time.Minute), newFakeTabletServer())
-	dbconfigs := dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "")
+	params, _ := db.ConnParams().MysqlParams()
+	cp := *params
+	dbconfigs := dbconfigs.NewTestDBConfigs(cp, cp, "")
+
 	pool.Open(dbconfigs.AppWithDB(), dbconfigs.DbaWithDB(), dbconfigs.AppDebugWithDB())
 	return pool
 }

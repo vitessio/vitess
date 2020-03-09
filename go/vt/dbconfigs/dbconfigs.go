@@ -21,6 +21,7 @@ limitations under the License.
 package dbconfigs
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -103,7 +104,7 @@ func registerBaseFlags() {
 	flag.StringVar(&baseConfig.SslCert, "db_ssl_cert", "", "connection ssl certificate")
 	flag.StringVar(&baseConfig.SslKey, "db_ssl_key", "", "connection ssl key")
 	flag.StringVar(&baseConfig.ServerName, "db_server_name", "", "server name of the DB we are connecting to.")
-
+	flag.Uint64Var(&baseConfig.ConnectTimeoutMs, "db_connect_timeout_ms", 0, "connection timeout to mysqld in milliseconds (0 for no timeout)")
 }
 
 // The flags will change the global singleton
@@ -135,69 +136,121 @@ func registerPerUserFlags(dbc *userConfig, userKey string) {
 
 }
 
+// Connector contains Connection Parameters for mysql connection
+type Connector struct {
+	connParams *mysql.ConnParams
+	dbName     string
+	host       string
+}
+
+// New initializes a ConnParams from mysql connection parameters
+func New(mcp *mysql.ConnParams) Connector {
+	return Connector{
+		connParams: mcp,
+	}
+}
+
+// Connect will invoke the mysql.connect method and return a connection
+func (c Connector) Connect(ctx context.Context) (*mysql.Conn, error) {
+	params, err := c.MysqlParams()
+	if err != nil {
+		return nil, err
+	}
+	conn, err := mysql.Connect(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
+}
+
+// MysqlParams returns the connections params
+func (c Connector) MysqlParams() (*mysql.ConnParams, error) {
+	params, err := withCredentials(c.connParams)
+	if err != nil {
+		return nil, err
+	}
+	return params, nil
+}
+
+// DBName gets the dbname from mysql.ConnParams
+func (c Connector) DBName() string {
+	params, _ := c.MysqlParams()
+	return params.DbName
+}
+
+// Host gets the host from mysql.ConnParams
+func (c Connector) Host() string {
+	params, _ := c.MysqlParams()
+	return params.Host
+}
+
 // AppWithDB returns connection parameters for app with dbname set.
-func (dbcfgs *DBConfigs) AppWithDB() *mysql.ConnParams {
+func (dbcfgs *DBConfigs) AppWithDB() Connector {
 	return dbcfgs.makeParams(App, true)
 }
 
 // AppDebugWithDB returns connection parameters for appdebug with dbname set.
-func (dbcfgs *DBConfigs) AppDebugWithDB() *mysql.ConnParams {
+func (dbcfgs *DBConfigs) AppDebugWithDB() Connector {
 	return dbcfgs.makeParams(AppDebug, true)
 }
 
 // AllPrivsWithDB returns connection parameters for appdebug with dbname set.
-func (dbcfgs *DBConfigs) AllPrivsWithDB() *mysql.ConnParams {
+func (dbcfgs *DBConfigs) AllPrivsWithDB() Connector {
 	return dbcfgs.makeParams(AllPrivs, true)
 }
 
 // Dba returns connection parameters for dba with no dbname set.
-func (dbcfgs *DBConfigs) Dba() *mysql.ConnParams {
+func (dbcfgs *DBConfigs) Dba() Connector {
 	return dbcfgs.makeParams(Dba, false)
 }
 
 // DbaWithDB returns connection parameters for appdebug with dbname set.
-func (dbcfgs *DBConfigs) DbaWithDB() *mysql.ConnParams {
+func (dbcfgs *DBConfigs) DbaWithDB() Connector {
 	return dbcfgs.makeParams(Dba, true)
 }
 
 // FilteredWithDB returns connection parameters for filtered with dbname set.
-func (dbcfgs *DBConfigs) FilteredWithDB() *mysql.ConnParams {
+func (dbcfgs *DBConfigs) FilteredWithDB() Connector {
 	return dbcfgs.makeParams(Filtered, true)
 }
 
 // Repl returns connection parameters for repl with no dbname set.
-func (dbcfgs *DBConfigs) Repl() *mysql.ConnParams {
+func (dbcfgs *DBConfigs) Repl() Connector {
 	return dbcfgs.makeParams(Repl, false)
 }
 
 // ExternalRepl returns connection parameters for repl with no dbname set.
-func (dbcfgs *DBConfigs) ExternalRepl() *mysql.ConnParams {
+func (dbcfgs *DBConfigs) ExternalRepl() Connector {
 	return dbcfgs.makeParams(ExternalRepl, true)
 }
 
 // ExternalReplWithDB returns connection parameters for repl with dbname set.
-func (dbcfgs *DBConfigs) ExternalReplWithDB() *mysql.ConnParams {
+func (dbcfgs *DBConfigs) ExternalReplWithDB() Connector {
 	params := dbcfgs.makeParams(ExternalRepl, true)
 	// TODO @rafael: This is a hack to allows to configure external databases by providing
 	// db-config-erepl-dbname.
-	if params.DeprecatedDBName != "" {
-		params.DbName = params.DeprecatedDBName
+	if params.connParams.DeprecatedDBName != "" {
+		params.connParams.DbName = params.connParams.DeprecatedDBName
 		return params
 	}
 	return params
 }
 
 // AppWithDB returns connection parameters for app with dbname set.
-func (dbcfgs *DBConfigs) makeParams(userKey string, withDB bool) *mysql.ConnParams {
+func (dbcfgs *DBConfigs) makeParams(userKey string, withDB bool) Connector {
 	orig := dbcfgs.userConfigs[userKey]
 	if orig == nil {
-		return &mysql.ConnParams{}
+		return Connector{
+			connParams: &mysql.ConnParams{},
+		}
 	}
 	result := orig.param
 	if withDB {
 		result.DbName = dbcfgs.DBName.Get()
 	}
-	return &result
+	return Connector{
+		connParams: &result,
+	}
 }
 
 // IsZero returns true if DBConfigs was uninitialized.
@@ -287,12 +340,13 @@ func Init(defaultSocketFile string) (*DBConfigs, error) {
 			uc.param.SslKey = baseConfig.SslKey
 			uc.param.ServerName = baseConfig.ServerName
 		}
+		uc.param.ConnectTimeoutMs = baseConfig.ConnectTimeoutMs
 	}
 
 	// See if the CredentialsServer is working. We do not use the
 	// result for anything, this is just a check.
 	for _, uc := range dbConfigs.userConfigs {
-		if _, err := WithCredentials(&uc.param); err != nil {
+		if _, err := withCredentials(&uc.param); err != nil {
 			return nil, fmt.Errorf("dbconfig cannot be initialized: %v", err)
 		}
 		// Check for only one.

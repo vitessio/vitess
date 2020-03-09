@@ -29,6 +29,7 @@ import (
 )
 
 // ExcludeStr is the filter value for excluding tables that match a rule.
+// TODO(sougou): support this on vstreamer side also.
 const ExcludeStr = "exclude"
 
 type tablePlanBuilder struct {
@@ -125,7 +126,7 @@ func buildReplicatorPlan(filter *binlogdatapb.Filter, tableKeys map[string][]str
 	return plan, nil
 }
 
-// MatchTable is similar to tableMatches defined in vstreamer.
+// MatchTable is similar to tableMatches and buildPlan defined in vstreamer/planbuilder.go.
 func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Rule, error) {
 	for _, rule := range filter.Rules {
 		switch {

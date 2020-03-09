@@ -17,6 +17,7 @@ MAKEFLAGS = -s
 export GOBIN=$(PWD)/bin
 export GO111MODULE=on
 export GODEBUG=tls13=0
+export REWRITER=go/vt/sqlparser/rewriter.go
 
 # Disabled parallel processing of target prerequisites to avoid that integration tests are racing each other (e.g. for ports) and may fail.
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
@@ -53,7 +54,7 @@ build_web:
 	cd web/vtctld2 && ng build -prod
 	cp -f web/vtctld2/src/{favicon.ico,plotly-latest.min.js,primeui-ng-all.min.css} web/vtctld2/dist/
 
-build: embed_config
+build:
 ifndef NOBANNER
 	echo $$(date): Building source tree
 endif
@@ -74,22 +75,25 @@ install: build
 	mkdir -p "$${PREFIX}/bin"
 	cp "$${VTROOT}/bin/"{mysqlctld,vtctld,vtctlclient,vtgate,vttablet,vtworker,vtbackup} "$${PREFIX}/bin/"
 	# config files
-	cp -R config "$${PREFIX}/"
+	mkdir -p "$${PREFIX}/src/vitess.io/vitess"
+	cp -R config "$${PREFIX}/src/vitess.io/vitess/"
+	# also symlink config files in the old location
+	ln -sf src/vitess.io/vitess/config "$${PREFIX}/config"
 	# vtctld web UI files
-	mkdir -p "$${PREFIX}/src/vitess.io/vitess/web"
-	cp -R web/vtctld "$${PREFIX}/src/vitess.io/vitess/web/"
 	mkdir -p "$${PREFIX}/src/vitess.io/vitess/web/vtctld2"
 	cp -R web/vtctld2/app "$${PREFIX}/src/vitess.io/vitess/web/vtctld2/"
 
 parser:
 	make -C go/vt/sqlparser
 
+visitor:
+	go generate go/vt/sqlparser/rewriter.go
+
 # To pass extra flags, run test.go manually.
 # For example: go run test.go -docker=false -- --extra-flag
 # For more info see: go run test.go -help
-test: build dependency_check
-	echo $$(date): Running unit tests
-	tools/unit_test_runner.sh
+test:
+	go run test.go -docker=false
 
 site_test: unit_test site_integration_test
 
@@ -97,14 +101,19 @@ clean:
 	go clean -i ./go/...
 	rm -rf third_party/acolyte
 	rm -rf go/vt/.proto.tmp
+	rm -rf ./visitorgen
 
 # Remove everything including stuff pulled down by bootstrap.sh
-cleanall:
+cleanall: clean
 	# directories created by bootstrap.sh
 	# - exclude vtdataroot and vthook as they may have data we want
 	rm -rf bin dist lib pkg
 	# Remind people to run bootstrap.sh again
 	echo "Please run 'make tools' again to setup your environment"
+
+unit_test: build dependency_check
+	echo $$(date): Running unit tests
+	tools/unit_test_runner.sh
 
 e2e_test: build
 	echo $$(date): Running endtoend tests
@@ -275,9 +284,6 @@ docker_lite_alpine:
 	chmod -R o=g *
 	docker build -f docker/lite/Dockerfile.alpine -t vitess/lite:alpine .
 
-docker_guestbook:
-	cd examples/kubernetes/guestbook && ./build.sh
-
 # This rule loads the working copy of the code into a bootstrap image,
 # and then runs the tests inside Docker.
 # Example: $ make docker_test flavor=mariadb
@@ -318,11 +324,11 @@ packages: docker_base
 
 tools:
 	echo $$(date): Installing dependencies
-	BUILD_PYTHON=0 ./bootstrap.sh
+	./bootstrap.sh
 
 minimaltools:
 	echo $$(date): Installing minimal dependencies
-	BUILD_PYTHON=0 BUILD_JAVA=0 BUILD_CONSUL=0 ./bootstrap.sh
+	BUILD_JAVA=0 BUILD_CONSUL=0 ./bootstrap.sh
 
 dependency_check:
 	./tools/dependency_check.sh

@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/vt/discovery"
@@ -603,9 +604,7 @@ func TestTxConnResolveOnPrepare(t *testing.T) {
 		}},
 	}}
 	err := sc.txConn.Resolve(context.Background(), dtid)
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	if c := sbc0.SetRollbackCount.Get(); c != 1 {
 		t.Errorf("sbc0.SetRollbackCount: %d, want 1", c)
 	}
@@ -894,9 +893,7 @@ func TestTxConnMultiGoSessions(t *testing.T) {
 	err = txc.runSessions(input, func(s *vtgatepb.Session_ShardSession) error {
 		return nil
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func TestTxConnMultiGoTargets(t *testing.T) {
@@ -932,9 +929,7 @@ func TestTxConnMultiGoTargets(t *testing.T) {
 	err = txc.runTargets(input, func(t *querypb.Target) error {
 		return nil
 	})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 }
 
 func newTestTxConnEnv(t *testing.T, name string) (sc *ScatterConn, sbc0, sbc1 *sandboxconn.SandboxConn, rss0, rss1, rss01 []*srvtopo.ResolvedShard) {

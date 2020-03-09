@@ -26,10 +26,8 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
 
+	"vitess.io/vitess/go/vt/dbconfigs"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -40,10 +38,7 @@ func TestTabletVStreamerClientOpen(t *testing.T) {
 	defer deleteTablet(tablet)
 
 	type fields struct {
-		isOpen         bool
-		tablet         *topodatapb.Tablet
-		target         *querypb.Target
-		tsQueryService queryservice.QueryService
+		tablet *topodatapb.Tablet
 	}
 	type args struct {
 		ctx context.Context
@@ -100,10 +95,7 @@ func TestTabletVStreamerClientClose(t *testing.T) {
 	defer deleteTablet(tablet)
 
 	type fields struct {
-		isOpen         bool
-		tablet         *topodatapb.Tablet
-		target         *querypb.Target
-		tsQueryService queryservice.QueryService
+		tablet *topodatapb.Tablet
 	}
 	type args struct {
 		ctx context.Context
@@ -281,7 +273,7 @@ func TestNewMySQLVStreamerClient(t *testing.T) {
 		{
 			name: "sets conn params for MySQLVStreamerClient ",
 			want: &MySQLVStreamerClient{
-				sourceConnParams: env.Dbcfgs.ExternalReplWithDB(),
+				sourceConnParams: dbcfgs.ExternalReplWithDB(),
 			},
 		},
 	}
@@ -295,9 +287,12 @@ func TestNewMySQLVStreamerClient(t *testing.T) {
 }
 
 func TestMySQLVStreamerClientOpen(t *testing.T) {
+	dbc := dbconfigs.New(&mysql.ConnParams{
+		Host: "invalidhost",
+		Port: 3306,
+	})
 	type fields struct {
-		isOpen           bool
-		sourceConnParams *mysql.ConnParams
+		sourceConnParams dbconfigs.Connector
 	}
 	type args struct {
 		ctx context.Context
@@ -311,7 +306,7 @@ func TestMySQLVStreamerClientOpen(t *testing.T) {
 		{
 			name: "initializes streamer correctly",
 			fields: fields{
-				sourceConnParams: env.Dbcfgs.ExternalReplWithDB(),
+				sourceConnParams: dbcfgs.ExternalReplWithDB(),
 			},
 			args: args{
 				ctx: context.Background(),
@@ -320,10 +315,7 @@ func TestMySQLVStreamerClientOpen(t *testing.T) {
 		{
 			name: "returns error when invalid conn params are provided",
 			fields: fields{
-				sourceConnParams: &mysql.ConnParams{
-					Host: "invalidhost",
-					Port: 3306,
-				},
+				sourceConnParams: dbc,
 			},
 			args: args{
 				ctx: context.Background(),
@@ -364,9 +356,7 @@ func TestMySQLVStreamerClientOpen(t *testing.T) {
 func TestMySQLVStreamerClientClose(t *testing.T) {
 	type fields struct {
 		isOpen           bool
-		sourceConnParams *mysql.ConnParams
-		vsEngine         *vstreamer.Engine
-		sourceSe         *schema.Engine
+		sourceConnParams dbconfigs.Connector
 	}
 	type args struct {
 		ctx context.Context
@@ -381,7 +371,7 @@ func TestMySQLVStreamerClientClose(t *testing.T) {
 		{
 			name: "closes engine correctly",
 			fields: fields{
-				sourceConnParams: env.Dbcfgs.ExternalReplWithDB(),
+				sourceConnParams: dbcfgs.ExternalReplWithDB(),
 			},
 			args: args{
 				ctx: context.Background(),
@@ -421,7 +411,7 @@ func TestMySQLVStreamerClientClose(t *testing.T) {
 
 func TestMySQLVStreamerClientVStream(t *testing.T) {
 	vsClient := &MySQLVStreamerClient{
-		sourceConnParams: env.Dbcfgs.ExternalReplWithDB(),
+		sourceConnParams: dbcfgs.ExternalReplWithDB(),
 	}
 
 	filter := &binlogdatapb.Filter{
@@ -481,7 +471,7 @@ func TestMySQLVStreamerClientVStream(t *testing.T) {
 
 func TestMySQLVStreamerClientVStreamRows(t *testing.T) {
 	vsClient := &MySQLVStreamerClient{
-		sourceConnParams: env.Dbcfgs.ExternalReplWithDB(),
+		sourceConnParams: dbcfgs.ExternalReplWithDB(),
 	}
 
 	eventsChan := make(chan *querypb.Row, 1000)

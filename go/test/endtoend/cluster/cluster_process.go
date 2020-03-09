@@ -17,14 +17,18 @@ limitations under the License.
 package cluster
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path"
 	"strconv"
+	"sync"
+	"syscall"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
@@ -37,7 +41,9 @@ const (
 )
 
 var (
-	keepData = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
+	keepData   = flag.Bool("keep-data", false, "don't delete the per-test VTDATAROOT subfolders")
+	topoFlavor = flag.String("topo-flavor", "etcd2", "choose a topo server from etcd2, zk2 or consul")
+	isCoverage = flag.Bool("is-coverage", false, "whether coverage is required")
 )
 
 // LocalProcessCluster Testcases need to use this to iniate a cluster
@@ -60,10 +66,11 @@ type LocalProcessCluster struct {
 	VtctlProcess       VtctlProcess
 
 	// background executable processes
-	TopoProcess     EtcdProcess
+	TopoProcess     TopoProcess
 	VtctldProcess   VtctldProcess
 	VtgateProcess   VtgateProcess
 	VtworkerProcess VtworkerProcess
+	VtbackupProcess VtbackupProcess
 
 	nextPortForProcess int
 
@@ -76,6 +83,29 @@ type LocalProcessCluster struct {
 	VtctldExtraArgs []string
 
 	EnableSemiSync bool
+
+	// mutex added to handle the parallel teardowns
+	mx                *sync.Mutex
+	teardownCompleted bool
+
+	context.Context
+	context.CancelFunc
+}
+
+// Vttablet stores the properties needed to start a vttablet process
+type Vttablet struct {
+	Type      string
+	TabletUID int
+	HTTPPort  int
+	GrpcPort  int
+	MySQLPort int
+	Alias     string
+	Cell      string
+
+	// background executable processes
+	MysqlctlProcess  MysqlctlProcess
+	MysqlctldProcess MysqlctldProcess
+	VttabletProcess  *VttabletProcess
 }
 
 // Keyspace : Cluster accepts keyspace to launch it
@@ -118,19 +148,18 @@ func (shard *Shard) Replica() *Vttablet {
 	return nil
 }
 
-// Vttablet stores the properties needed to start a vttablet process
-type Vttablet struct {
-	Type      string
-	TabletUID int
-	HTTPPort  int
-	GrpcPort  int
-	MySQLPort int
-	Alias     string
-	Cell      string
+// CtrlCHandler handles the teardown for the ctrl-c.
+func (cluster *LocalProcessCluster) CtrlCHandler() {
+	cluster.Context, cluster.CancelFunc = context.WithCancel(context.Background())
 
-	// background executable processes
-	MysqlctlProcess MysqlctlProcess
-	VttabletProcess *VttabletProcess
+	c := make(chan os.Signal, 2)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	select {
+	case <-c:
+		cluster.Teardown()
+		os.Exit(0)
+	case <-cluster.Done():
+	}
 }
 
 // StartTopo starts topology server
@@ -140,22 +169,25 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	}
 	cluster.TopoPort = cluster.GetAndReservePort()
 	cluster.TmpDirectory = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/tmp_%d", cluster.GetAndReservePort()))
-	cluster.TopoProcess = *EtcdProcessInstance(cluster.TopoPort, cluster.GetAndReservePort(), cluster.Hostname, "global")
-	log.Info(fmt.Sprintf("Starting etcd server on port : %d", cluster.TopoPort))
-	if err = cluster.TopoProcess.Setup(); err != nil {
+	cluster.TopoProcess = *TopoProcessInstance(cluster.TopoPort, cluster.GetAndReservePort(), cluster.Hostname, *topoFlavor, "global")
+
+	log.Info(fmt.Sprintf("Starting topo server %v on port : %d", topoFlavor, cluster.TopoPort))
+	if err = cluster.TopoProcess.Setup(*topoFlavor, cluster); err != nil {
 		log.Error(err.Error())
 		return
 	}
 
-	log.Info("Creating topo dirs")
-	if err = cluster.TopoProcess.ManageTopoDir("mkdir", "/vitess/global"); err != nil {
-		log.Error(err.Error())
-		return
-	}
+	if *topoFlavor == "etcd2" {
+		log.Info("Creating topo dirs")
+		if err = cluster.TopoProcess.ManageTopoDir("mkdir", "/vitess/global"); err != nil {
+			log.Error(err.Error())
+			return
+		}
 
-	if err = cluster.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+cluster.Cell); err != nil {
-		log.Error(err.Error())
-		return
+		if err = cluster.TopoProcess.ManageTopoDir("mkdir", "/vitess/"+cluster.Cell); err != nil {
+			log.Error(err.Error())
+			return
+		}
 	}
 
 	log.Info("Adding cell info")
@@ -165,7 +197,8 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 		return
 	}
 
-	cluster.VtctldProcess = *VtctldProcessInstance(cluster.GetAndReservePort(), cluster.GetAndReservePort(), cluster.TopoProcess.Port, cluster.Hostname, cluster.TmpDirectory)
+	cluster.VtctldProcess = *VtctldProcessInstance(cluster.GetAndReservePort(), cluster.GetAndReservePort(),
+		cluster.TopoProcess.Port, cluster.Hostname, cluster.TmpDirectory)
 	log.Info(fmt.Sprintf("Starting vtctld server on port : %d", cluster.VtctldProcess.Port))
 	cluster.VtctldHTTPPort = cluster.VtctldProcess.Port
 	if err = cluster.VtctldProcess.Setup(cluster.Cell, cluster.VtctldExtraArgs...); err != nil {
@@ -221,12 +254,12 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 			// Start Mysqlctl process
 			log.Info(fmt.Sprintf("Starting mysqlctl for table uid %d, mysql port %d", tablet.TabletUID, tablet.MySQLPort))
 			tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory)
-			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
+			proc, err := tablet.MysqlctlProcess.StartProcess()
+			if err != nil {
 				log.Error(err.Error())
 				return err
-			} else {
-				mysqlctlProcessList = append(mysqlctlProcessList, proc)
 			}
+			mysqlctlProcessList = append(mysqlctlProcessList, proc)
 
 			// start vttablet process
 			tablet.VttabletProcess = VttabletProcessInstance(tablet.HTTPPort,
@@ -393,7 +426,8 @@ func (cluster *LocalProcessCluster) GetVtgateInstance() *VtgateProcess {
 
 // NewCluster instantiates a new cluster
 func NewCluster(cell string, hostname string) *LocalProcessCluster {
-	cluster := &LocalProcessCluster{Cell: cell, Hostname: hostname}
+	cluster := &LocalProcessCluster{Cell: cell, Hostname: hostname, mx: new(sync.Mutex)}
+	go cluster.CtrlCHandler()
 	cluster.OriginalVTDATAROOT = os.Getenv("VTDATAROOT")
 	cluster.CurrentVTDATAROOT = path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("vtroot_%d", cluster.GetAndReservePort()))
 	_ = createDirectory(cluster.CurrentVTDATAROOT, 0700)
@@ -447,6 +481,15 @@ func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error
 
 // Teardown brings down the cluster by invoking teardown for individual processes
 func (cluster *LocalProcessCluster) Teardown() {
+	PanicHandler(nil)
+	cluster.mx.Lock()
+	defer cluster.mx.Unlock()
+	if cluster.teardownCompleted {
+		return
+	}
+	if cluster.CancelFunc != nil {
+		cluster.CancelFunc()
+	}
 	if err := cluster.VtgateProcess.TearDown(); err != nil {
 		log.Errorf("Error in vtgate teardown - %s", err.Error())
 	}
@@ -462,6 +505,12 @@ func (cluster *LocalProcessCluster) Teardown() {
 						mysqlctlProcessList = append(mysqlctlProcessList, proc)
 					}
 				}
+				if tablet.MysqlctldProcess.TabletUID > 0 {
+					if err := tablet.MysqlctldProcess.Stop(); err != nil {
+						log.Errorf("Error in mysqlctl teardown - %s", err.Error())
+					}
+				}
+
 				if err := tablet.VttabletProcess.TearDown(); err != nil {
 					log.Errorf("Error in vttablet teardown - %s", err.Error())
 				}
@@ -479,9 +528,11 @@ func (cluster *LocalProcessCluster) Teardown() {
 		log.Errorf("Error in vtctld teardown - %s", err.Error())
 	}
 
-	if err := cluster.TopoProcess.TearDown(cluster.Cell, cluster.OriginalVTDATAROOT, cluster.CurrentVTDATAROOT, *keepData); err != nil {
-		log.Errorf("Error in etcd teardown - %s", err.Error())
+	if err := cluster.TopoProcess.TearDown(cluster.Cell, cluster.OriginalVTDATAROOT, cluster.CurrentVTDATAROOT, *keepData, *topoFlavor); err != nil {
+		log.Errorf("Error in topo server teardown - %s", err.Error())
 	}
+
+	cluster.teardownCompleted = true
 }
 
 // StartVtworker starts a vtworker
@@ -497,6 +548,26 @@ func (cluster *LocalProcessCluster) StartVtworker(cell string, extraArgs ...stri
 		cluster.TmpDirectory)
 	cluster.VtworkerProcess.ExtraArgs = extraArgs
 	return cluster.VtworkerProcess.Setup(cell)
+
+}
+
+// StartVtbackup starts a vtbackup
+func (cluster *LocalProcessCluster) StartVtbackup(newInitDBFile string, initalBackup bool,
+	keyspace string, shard string, cell string, extraArgs ...string) error {
+	log.Info("Starting vtbackup")
+	cluster.VtbackupProcess = *VtbackupProcessInstance(
+		cluster.GetAndReserveTabletUID(),
+		cluster.GetAndReservePort(),
+		newInitDBFile,
+		keyspace,
+		shard,
+		cell,
+		cluster.Hostname,
+		cluster.TmpDirectory,
+		cluster.TopoPort,
+		initalBackup)
+	cluster.VtbackupProcess.ExtraArgs = extraArgs
+	return cluster.VtbackupProcess.Setup()
 
 }
 
@@ -573,7 +644,7 @@ func (cluster *LocalProcessCluster) GetVttabletInstance(tabletType string, UID i
 	}
 }
 
-// GetVttabletInstance creates a new vttablet object
+// GetVtprocessInstanceFromVttablet creates a new vttablet object
 func (cluster *LocalProcessCluster) GetVtprocessInstanceFromVttablet(tablet *Vttablet, shardName string, ksName string) *VttabletProcess {
 	return VttabletProcessInstance(tablet.HTTPPort,
 		tablet.GrpcPort,
@@ -611,4 +682,12 @@ func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatu
 	tablet.VttabletProcess.SupportsBackup = supportBackup
 	tablet.VttabletProcess.ServingStatus = servingStatus
 	return tablet.VttabletProcess.Setup()
+}
+
+func getCoveragePath(fileName string) string {
+	covDir := os.Getenv("COV_DIR")
+	if covDir == "" {
+		covDir = os.TempDir()
+	}
+	return path.Join(covDir, fileName)
 }

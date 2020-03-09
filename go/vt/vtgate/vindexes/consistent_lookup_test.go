@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -72,9 +73,7 @@ func TestConsistentLookupMap(t *testing.T) {
 	vc.AddResult(makeTestResult(2), nil)
 
 	got, err := lookup.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []key.Destination{
 		key.DestinationKeyspaceIDs([][]byte{
 			[]byte("1"),
@@ -106,9 +105,7 @@ func TestConsistentLookupMapWriteOnly(t *testing.T) {
 	lookup := createConsistentLookup(t, "consistent_lookup", true)
 
 	got, err := lookup.Map(nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []key.Destination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{},
@@ -129,9 +126,7 @@ func TestConsistentLookupUniqueMap(t *testing.T) {
 	vc.AddResult(makeTestResult(1), nil)
 
 	got, err := lookup.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []key.Destination{
 		key.DestinationNone{},
 		key.DestinationKeyspaceID([]byte("1")),
@@ -157,9 +152,7 @@ func TestConsistentLookupUniqueMapWriteOnly(t *testing.T) {
 	lookup := createConsistentLookup(t, "consistent_lookup_unique", true)
 
 	got, err := lookup.Map(nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []key.Destination{
 		key.DestinationKeyRange{
 			KeyRange: &topodatapb.KeyRange{},
@@ -180,9 +173,7 @@ func TestConsistentLookupMapAbsent(t *testing.T) {
 	vc.AddResult(makeTestResult(0), nil)
 
 	got, err := lookup.Map(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	want := []key.Destination{
 		key.DestinationNone{},
 		key.DestinationNone{},
@@ -203,9 +194,7 @@ func TestConsistentLookupVerify(t *testing.T) {
 	vc.AddResult(makeTestResult(1), nil)
 
 	_, err := lookup.Verify(vc, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte("test1"), []byte("test2")})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	vc.verifyLog(t, []string{
 		"ExecutePre select fromc1 from t where fromc1 = :fromc1 and toc = :toc [{fromc1 1} {toc test1}] false",
 		"ExecutePre select fromc1 from t where fromc1 = :fromc1 and toc = :toc [{fromc1 2} {toc test2}] false",
@@ -222,9 +211,7 @@ func TestConsistentLookupVerify(t *testing.T) {
 	// Test write_only.
 	lookup = createConsistentLookup(t, "consistent_lookup", true)
 	got, err := lookup.Verify(nil, []sqltypes.Value{sqltypes.NewInt64(1), sqltypes.NewInt64(2)}, [][]byte{[]byte(""), []byte("")})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	wantBools := []bool{true, true}
 	if !reflect.DeepEqual(got, wantBools) {
 		t.Errorf("lookup.Verify(writeOnly): %v, want %v", got, wantBools)
@@ -456,6 +443,41 @@ func TestConsistentLookupNoUpdate(t *testing.T) {
 		t.Error(err)
 	}
 	vc.verifyLog(t, []string{})
+}
+
+func TestConsistentLookupUpdateBecauseUncomparableTypes(t *testing.T) {
+	lookup := createConsistentLookup(t, "consistent_lookup", false)
+	vc := &loggingVCursor{}
+
+	type test struct {
+		typ querypb.Type
+		val string
+	}
+
+	tests := []test{
+		{querypb.Type_TEXT, "some string"},
+		{querypb.Type_VARCHAR, "some string"},
+		{querypb.Type_CHAR, "some string"},
+		{querypb.Type_BIT, "some string"},
+		{querypb.Type_ENUM, "some string"},
+		{querypb.Type_SET, "some string"},
+		{querypb.Type_GEOMETRY, "some string"},
+		{querypb.Type_JSON, "some string"},
+	}
+
+	for _, val := range tests {
+		t.Run(val.typ.String(), func(t *testing.T) {
+			vc.AddResult(&sqltypes.Result{}, nil)
+			vc.AddResult(&sqltypes.Result{}, nil)
+			sqlVal, err := sqltypes.NewValue(val.typ, []byte(val.val))
+			require.NoError(t, err)
+
+			err = lookup.(Lookup).Update(vc, []sqltypes.Value{sqlVal, sqlVal}, []byte("test"), []sqltypes.Value{sqlVal, sqlVal})
+			require.NoError(t, err)
+			require.NotEmpty(t, vc.log)
+			vc.log = nil
+		})
+	}
 }
 
 func createConsistentLookup(t *testing.T, name string, writeOnly bool) SingleColumn {

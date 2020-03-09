@@ -71,6 +71,8 @@ func TestPreview(t *testing.T) {
 		{"explain", StmtOther},
 		{"repair", StmtOther},
 		{"optimize", StmtOther},
+		{"grant", StmtPriv},
+		{"revoke", StmtPriv},
 		{"truncate", StmtDDL},
 		{"unknown", StmtUnknown},
 
@@ -564,6 +566,14 @@ func TestExtractSetValues(t *testing.T) {
 	}, {
 		sql:   "set session sql_safe_updates = 0",
 		out:   map[SetKey]interface{}{{Key: "sql_safe_updates", Scope: ImplicitStr}: int64(0)},
+		scope: SessionStr,
+	}, {
+		sql:   "set session transaction_read_only = 0",
+		out:   map[SetKey]interface{}{{Key: "transaction_read_only", Scope: ImplicitStr}: int64(0)},
+		scope: SessionStr,
+	}, {
+		sql:   "set session transaction_read_only = 1",
+		out:   map[SetKey]interface{}{{Key: "transaction_read_only", Scope: ImplicitStr}: int64(1)},
 		scope: SessionStr,
 	}, {
 		sql:   "set session sql_safe_updates = 1",

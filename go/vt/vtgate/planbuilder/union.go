@@ -24,16 +24,16 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
-func buildUnionPlan(union *sqlparser.Union, vschema ContextVSchema) (primitive engine.Primitive, needLastInsertID bool, needsDbName bool, err error) {
+func buildUnionPlan(union *sqlparser.Union, vschema ContextVSchema) (engine.Primitive, error) {
 	// For unions, create a pb with anonymous scope.
 	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(union)))
 	if err := pb.processUnion(union, nil); err != nil {
-		return nil, false, false, err
+		return nil, err
 	}
 	if err := pb.bldr.Wireup(pb.bldr, pb.jt); err != nil {
-		return nil, false, false, err
+		return nil, err
 	}
-	return pb.bldr.Primitive(), pb.needsLastInsertID, pb.needsDbName, nil
+	return pb.bldr.Primitive(), nil
 }
 
 func (pb *primitiveBuilder) processUnion(union *sqlparser.Union, outer *symtab) error {

@@ -16,8 +16,4 @@
 
 # this script deletes the old shard 0 which has been replaced by 2 shards
 
-set -e
-
-./lvtctl.sh DeleteShard -recursive customer/0
-
-disown -a
+vtctlclient -server localhost:15999 DeleteShard -recursive customer/0

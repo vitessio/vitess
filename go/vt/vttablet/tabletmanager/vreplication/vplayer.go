@@ -78,6 +78,7 @@ func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map
 // play is not resumable. If pausePos is set, play returns without updating the vreplication state.
 func (vp *vplayer) play(ctx context.Context) error {
 	if !vp.stopPos.IsZero() && vp.startPos.AtLeast(vp.stopPos) {
+		log.Infof("Stop position %v already reached: %v", vp.startPos, vp.stopPos)
 		if vp.saveStop {
 			return vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stop position %v already reached: %v", vp.startPos, vp.stopPos))
 		}
@@ -191,7 +192,10 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 	}
 	for _, change := range rowEvent.RowChanges {
 		_, err := tplan.applyChange(change, func(sql string) (*sqltypes.Result, error) {
-			return vp.vr.dbClient.ExecuteWithRetry(ctx, sql)
+			stats := NewVrLogStats("ROWCHANGE")
+			result, err := vp.vr.dbClient.ExecuteWithRetry(ctx, sql)
+			stats.Send(sql)
+			return result, err
 		})
 		if err != nil {
 			return err
@@ -203,7 +207,6 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts)
 	if _, err := vp.vr.dbClient.Execute(update); err != nil {
-		vp.vr.dbClient.Rollback()
 		return false, fmt.Errorf("error %v updating position", err)
 	}
 	vp.unsavedEvent = nil
@@ -211,6 +214,7 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	vp.vr.stats.SetLastPosition(vp.pos)
 	posReached = !vp.stopPos.IsZero() && vp.pos.AtLeast(vp.stopPos)
 	if posReached {
+		log.Infof("Stopped at position: %v", vp.stopPos)
 		if vp.saveStop {
 			if err := vp.vr.setState(binlogplayer.BlpStopped, fmt.Sprintf("Stopped at position %v", vp.stopPos)); err != nil {
 				return false, err
@@ -221,6 +225,8 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 }
 
 func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
+	defer vp.vr.dbClient.Rollback()
+
 	// If we're not running, set SecondsBehindMaster to be very high.
 	// TODO(sougou): if we also stored the time of the last event, we
 	// can estimate this value more accurately.
@@ -292,7 +298,7 @@ func hasAnotherCommit(items [][]*binlogdatapb.VEvent, i, j int) bool {
 			switch items[i][j].Type {
 			case binlogdatapb.VEventType_COMMIT:
 				return true
-			case binlogdatapb.VEventType_DDL:
+			case binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER, binlogdatapb.VEventType_JOURNAL:
 				return false
 			}
 			j++
@@ -304,6 +310,7 @@ func hasAnotherCommit(items [][]*binlogdatapb.VEvent, i, j int) bool {
 }
 
 func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, mustSave bool) error {
+	stats := NewVrLogStats(event.Type.String())
 	switch event.Type {
 	case binlogdatapb.VEventType_GTID:
 		pos, err := mysql.DecodePosition(event.Gtid)
@@ -349,6 +356,8 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			return err
 		}
 		vp.tablePlans[event.FieldEvent.TableName] = tplan
+		stats.Send(fmt.Sprintf("%v", event.FieldEvent))
+
 	case binlogdatapb.VEventType_INSERT, binlogdatapb.VEventType_DELETE, binlogdatapb.VEventType_UPDATE, binlogdatapb.VEventType_REPLACE:
 		// This is a player using stament based replication
 		if err := vp.vr.dbClient.Begin(); err != nil {
@@ -358,6 +367,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		if err := vp.applyStmtEvent(ctx, event); err != nil {
 			return err
 		}
+		stats.Send(fmt.Sprintf(event.Dml))
 	case binlogdatapb.VEventType_ROW:
 		// This player is configured for row based replication
 		if err := vp.vr.dbClient.Begin(); err != nil {
@@ -366,7 +376,14 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		if err := vp.applyRowEvent(ctx, event.RowEvent); err != nil {
 			return err
 		}
+		//Row event is logged AFTER RowChanges are applied so as to calculate the total elapsed time for the Row event
+		stats.Send(fmt.Sprintf("%v", event.RowEvent))
 	case binlogdatapb.VEventType_OTHER:
+		if vp.vr.dbClient.InTransaction {
+			// Unreachable
+			log.Errorf("internal error: vplayer is in a transaction on event: %v", event)
+			return fmt.Errorf("internal error: vplayer is in a transaction on event: %v", event)
+		}
 		// Just update the position.
 		posReached, err := vp.updatePos(event.Timestamp)
 		if err != nil {
@@ -377,7 +394,9 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 		}
 	case binlogdatapb.VEventType_DDL:
 		if vp.vr.dbClient.InTransaction {
-			return fmt.Errorf("unexpected state: DDL encountered in the middle of a transaction: %v", event.Ddl)
+			// Unreachable
+			log.Errorf("internal error: vplayer is in a transaction on event: %v", event)
+			return fmt.Errorf("internal error: vplayer is in a transaction on event: %v", event)
 		}
 		switch vp.vr.source.OnDdl {
 		case binlogdatapb.OnDDLAction_IGNORE:
@@ -407,6 +426,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if _, err := vp.vr.dbClient.ExecuteWithRetry(ctx, event.Ddl); err != nil {
 				return err
 			}
+			stats.Send(fmt.Sprintf("%v", event.Ddl))
 			posReached, err := vp.updatePos(event.Timestamp)
 			if err != nil {
 				return err
@@ -418,6 +438,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			if _, err := vp.vr.dbClient.ExecuteWithRetry(ctx, event.Ddl); err != nil {
 				log.Infof("Ignoring error: %v for DDL: %s", err, event.Ddl)
 			}
+			stats.Send(fmt.Sprintf("%v", event.Ddl))
 			posReached, err := vp.updatePos(event.Timestamp)
 			if err != nil {
 				return err
@@ -427,6 +448,11 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			}
 		}
 	case binlogdatapb.VEventType_JOURNAL:
+		if vp.vr.dbClient.InTransaction {
+			// Unreachable
+			log.Errorf("internal error: vplayer is in a transaction on event: %v", event)
+			return fmt.Errorf("internal error: vplayer is in a transaction on event: %v", event)
+		}
 		// Ensure that we don't have a partial set of table matches in the journal.
 		switch event.Journal.MigrationType {
 		case binlogdatapb.MigrationType_SHARDS:
@@ -466,6 +492,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			}
 			return io.EOF
 		}
+		stats.Send(fmt.Sprintf("%v", event.Journal))
 		return io.EOF
 	case binlogdatapb.VEventType_HEARTBEAT:
 		// No-op: heartbeat timings are calculated in outer loop.

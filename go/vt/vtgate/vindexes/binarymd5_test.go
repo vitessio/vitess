@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 )
@@ -80,9 +81,7 @@ func TestBinaryMD5Verify(t *testing.T) {
 func TestSQLValue(t *testing.T) {
 	val := sqltypes.NewVarBinary("Test")
 	got, err := binVindex.Map(nil, []sqltypes.Value{val})
-	if err != nil {
-		t.Error(err)
-	}
+	require.NoError(t, err)
 	out := string(got[0].(key.DestinationKeyspaceID))
 	want := "\f\xbcf\x11\xf5T\vЀ\x9a8\x8d\xc9Za["
 	if out != want {

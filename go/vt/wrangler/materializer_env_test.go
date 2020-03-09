@@ -67,10 +67,12 @@ func newTestMaterializerEnv(t *testing.T, ms *vtctldatapb.MaterializeSettings, s
 		_ = env.addTablet(tabletID, env.ms.SourceKeyspace, shard, topodatapb.TabletType_MASTER)
 		tabletID += 10
 	}
-	tabletID = 200
-	for _, shard := range targets {
-		_ = env.addTablet(tabletID, env.ms.TargetKeyspace, shard, topodatapb.TabletType_MASTER)
-		tabletID += 10
+	if ms.SourceKeyspace != ms.TargetKeyspace {
+		tabletID = 200
+		for _, shard := range targets {
+			_ = env.addTablet(tabletID, env.ms.TargetKeyspace, shard, topodatapb.TabletType_MASTER)
+			tabletID += 10
+		}
 	}
 
 	for _, ts := range ms.TableSettings {
@@ -90,7 +92,9 @@ func newTestMaterializerEnv(t *testing.T, ms *vtctldatapb.MaterializeSettings, s
 			}},
 		}
 	}
-	env.expectValidation()
+	if ms.Workflow != "" {
+		env.expectValidation()
+	}
 	return env
 }
 

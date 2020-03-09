@@ -80,8 +80,9 @@ const (
 )
 
 var (
-	tabletHostname   = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
-	demoteMasterType = flag.String("demote_master_type", "REPLICA", "the tablet type a demoted master will transition to")
+	tabletHostname       = flag.String("tablet_hostname", "", "if not empty, this hostname will be assumed instead of trying to resolve it")
+	demoteMasterType     = flag.String("demote_master_type", "REPLICA", "the tablet type a demoted master will transition to")
+	initPopulateMetadata = flag.Bool("init_populate_metadata", false, "(init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
 )
 
 // ActionAgent is the main class for the agent.
@@ -297,7 +298,7 @@ func NewActionAgent(
 
 	var mysqlHost string
 	var mysqlPort int32
-	if appConfig := dbcfgs.AppWithDB(); appConfig.Host != "" {
+	if appConfig, _ := dbcfgs.AppWithDB().MysqlParams(); appConfig.Host != "" {
 		mysqlHost = appConfig.Host
 		mysqlPort = int32(appConfig.Port)
 
@@ -323,10 +324,11 @@ func NewActionAgent(
 	vreplication.InitVStreamerClient(agent.DBConfigs)
 
 	// The db name is set by the Start function called above
+	filteredWithDBParams, _ := agent.DBConfigs.FilteredWithDB().MysqlParams()
 	agent.VREngine = vreplication.NewEngine(ts, tabletAlias.Cell, mysqld, func() binlogplayer.DBClient {
 		return binlogplayer.NewDBClient(agent.DBConfigs.FilteredWithDB())
 	},
-		agent.DBConfigs.FilteredWithDB().DbName,
+		filteredWithDBParams.DbName,
 	)
 	servenv.OnTerm(agent.VREngine.Close)
 
@@ -355,6 +357,24 @@ func NewActionAgent(
 			agent.initHealthCheck()
 		}()
 	} else {
+		// optionally populate metadata records
+		if *initPopulateMetadata {
+			// we use initialTablet here because it has the intended tabletType.
+			// the tablet returned by agent.Tablet() will have type UNKNOWN until we call
+			// refreshTablet
+			localMetadata := agent.getLocalMetadataValues(agent.initialTablet.Type)
+			if agent.Cnf != nil { // we are managing mysqld
+				// we'll use batchCtx here because we are still initializing and can't proceed unless this succeeds
+				if err := agent.MysqlDaemon.Wait(batchCtx, agent.Cnf); err != nil {
+					return nil, err
+				}
+			}
+			err := mysqlctl.PopulateMetadataTables(agent.MysqlDaemon, localMetadata, topoproto.TabletDbName(agent.initialTablet))
+			if err != nil {
+				return nil, vterrors.Wrap(err, "failed to -init_populate_metadata")
+			}
+		}
+
 		// Update our state (need the action lock).
 		if err := agent.lock(batchCtx); err != nil {
 			return nil, err
@@ -751,7 +771,11 @@ func (agent *ActionAgent) Close() {
 		tablet.PortMap = nil
 		return nil
 	}
-	if _, err := agent.TopoServer.UpdateTabletFields(context.Background(), agent.TabletAlias, f); err != nil {
+
+	updateCtx, updateCancel := context.WithTimeout(context.Background(), *topo.RemoteOperationTimeout)
+	defer updateCancel()
+
+	if _, err := agent.TopoServer.UpdateTabletFields(updateCtx, agent.TabletAlias, f); err != nil {
 		log.Warningf("Failed to update tablet record, may contain stale identifiers: %v", err)
 	}
 }

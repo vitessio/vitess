@@ -25,7 +25,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -105,6 +104,7 @@ func (w *Writer) Init(target querypb.Target) error {
 	log.Info("Initializing heartbeat table.")
 	w.dbName = sqlescape.EscapeID(w.dbconfigs.SidecarDBName.Get())
 	w.keyspaceShard = fmt.Sprintf("%s:%s", target.Keyspace, target.Shard)
+
 	err := w.initializeTables(w.dbconfigs.DbaWithDB())
 	if err != nil {
 		w.recordError(err)
@@ -155,7 +155,7 @@ func (w *Writer) Close() {
 // or master. For that reason, we use values that are common between them, such as keyspace:shard,
 // and we also execute them with an isolated connection that turns off the binlog and
 // is closed at the end.
-func (w *Writer) initializeTables(cp *mysql.ConnParams) error {
+func (w *Writer) initializeTables(cp dbconfigs.Connector) error {
 	conn, err := dbconnpool.NewDBConnection(cp, stats.NewTimings("", "", ""))
 	if err != nil {
 		return vterrors.Wrap(err, "Failed to create connection for heartbeat")

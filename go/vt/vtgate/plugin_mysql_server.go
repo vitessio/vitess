@@ -22,6 +22,8 @@ import (
 	"net"
 	"os"
 	"regexp"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -66,22 +68,38 @@ var (
 	mysqlConnWriteTimeout = flag.Duration("mysql_server_write_timeout", 0, "connection write timeout")
 	mysqlQueryTimeout     = flag.Duration("mysql_server_query_timeout", 0, "mysql query timeout")
 
+	mysqlDefaultWorkloadName = flag.String("mysql_default_workload", "UNSPECIFIED", "Default session workload (OLTP, OLAP, DBA)")
+	mysqlDefaultWorkload     int32
+
 	busyConnections int32
 )
 
 // vtgateHandler implements the Listener interface.
 // It stores the Session in the ClientData of a Connection.
 type vtgateHandler struct {
-	vtg *VTGate
+	mu sync.Mutex
+
+	vtg         *VTGate
+	connections map[*mysql.Conn]bool
 }
 
 func newVtgateHandler(vtg *VTGate) *vtgateHandler {
 	return &vtgateHandler{
-		vtg: vtg,
+		vtg:         vtg,
+		connections: make(map[*mysql.Conn]bool),
 	}
 }
 
 func (vh *vtgateHandler) NewConnection(c *mysql.Conn) {
+	vh.mu.Lock()
+	defer vh.mu.Unlock()
+	vh.connections[c] = true
+}
+
+func (vh *vtgateHandler) numConnections() int {
+	vh.mu.Lock()
+	defer vh.mu.Unlock()
+	return len(vh.connections)
 }
 
 func (vh *vtgateHandler) ComResetConnection(c *mysql.Conn) {
@@ -98,6 +116,12 @@ func (vh *vtgateHandler) ComResetConnection(c *mysql.Conn) {
 
 func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 	// Rollback if there is an ongoing transaction. Ignore error.
+	defer func() {
+		vh.mu.Lock()
+		defer vh.mu.Unlock()
+		delete(vh.connections, c)
+	}()
+
 	var ctx context.Context
 	var cancel context.CancelFunc
 	if *mysqlQueryTimeout != 0 {
@@ -296,6 +320,7 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 		session = &vtgatepb.Session{
 			Options: &querypb.ExecuteOptions{
 				IncludedFields: querypb.ExecuteOptions_ALL,
+				Workload:       querypb.ExecuteOptions_Workload(mysqlDefaultWorkload),
 			},
 			Autocommit: true,
 		}
@@ -309,6 +334,8 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 
 var mysqlListener *mysql.Listener
 var mysqlUnixListener *mysql.Listener
+
+var vtgateHandle *vtgateHandler
 
 // initiMySQLProtocol starts the mysql protocol.
 // It should be called only once in a process.
@@ -329,6 +356,12 @@ func initMySQLProtocol() {
 	}
 	authServer := mysql.GetAuthServer(*mysqlAuthServerImpl)
 
+	// Check mysql_default_workload
+	var ok bool
+	if mysqlDefaultWorkload, ok = querypb.ExecuteOptions_Workload_value[strings.ToUpper(*mysqlDefaultWorkloadName)]; !ok {
+		log.Exitf("-mysql_default_workload must be one of [OLTP, OLAP, DBA, UNSPECIFIED]")
+	}
+
 	switch *mysqlTCPVersion {
 	case "tcp", "tcp4", "tcp6":
 		// Valid flag value.
@@ -338,9 +371,9 @@ func initMySQLProtocol() {
 
 	// Create a Listener.
 	var err error
-	vh := newVtgateHandler(rpcVTGate)
+	vtgateHandle = newVtgateHandler(rpcVTGate)
 	if *mysqlServerPort >= 0 {
-		mysqlListener, err = mysql.NewListener(*mysqlTCPVersion, net.JoinHostPort(*mysqlServerBindAddress, fmt.Sprintf("%v", *mysqlServerPort)), authServer, vh, *mysqlConnReadTimeout, *mysqlConnWriteTimeout, *mysqlProxyProtocol)
+		mysqlListener, err = mysql.NewListener(*mysqlTCPVersion, net.JoinHostPort(*mysqlServerBindAddress, fmt.Sprintf("%v", *mysqlServerPort)), authServer, vtgateHandle, *mysqlConnReadTimeout, *mysqlConnWriteTimeout, *mysqlProxyProtocol)
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
 		}
@@ -369,7 +402,7 @@ func initMySQLProtocol() {
 		// Let's create this unix socket with permissions to all users. In this way,
 		// clients can connect to vtgate mysql server without being vtgate user
 		oldMask := syscall.Umask(000)
-		mysqlUnixListener, err = newMysqlUnixSocket(*mysqlServerSocketPath, authServer, vh)
+		mysqlUnixListener, err = newMysqlUnixSocket(*mysqlServerSocketPath, authServer, vtgateHandle)
 		_ = syscall.Umask(oldMask)
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
@@ -436,9 +469,36 @@ func shutdownMysqlProtocolAndDrain() {
 	}
 }
 
+func rollbackAtShutdown() {
+	defer log.Flush()
+
+	// Close all open connections. If they're waiting for reads, this will cause
+	// them to error out, which will automatically rollback open transactions.
+	func() {
+		vtgateHandle.mu.Lock()
+		defer vtgateHandle.mu.Unlock()
+		for c := range vtgateHandle.connections {
+			log.Infof("Rolling back transactions associated with connection ID: %v", c.ConnectionID)
+			c.Close()
+		}
+	}()
+
+	// If vtgate is instead busy executing a query, the number of open conns
+	// will be non-zero. Give another second for those queries to finish.
+	for i := 0; i < 100; i++ {
+		if vtgateHandle.numConnections() == 0 {
+			log.Infof("All connections have been rolled back.")
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	log.Errorf("All connections did not go idle. Shutting down anyway.")
+}
+
 func init() {
 	servenv.OnRun(initMySQLProtocol)
 	servenv.OnTermSync(shutdownMysqlProtocolAndDrain)
+	servenv.OnClose(rollbackAtShutdown)
 }
 
 var pluginInitializers []func()

@@ -114,6 +114,7 @@ func (rpw *ReplicationWatcher) Process(ctx context.Context, dbconfigs *dbconfigs
 		tabletenv.LogError()
 		rpw.wg.Done()
 	}()
+
 	for {
 		log.Infof("Starting a binlog Streamer from current replication position to monitor binlogs")
 		streamer := binlog.NewStreamer(dbconfigs.DbaWithDB(), rpw.se, nil /*clientCharset*/, mysql.Position{}, 0 /*timestamp*/, func(eventToken *querypb.EventToken, statements []binlog.FullBinlogStatement) error {

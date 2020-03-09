@@ -61,7 +61,7 @@ var (
 // a per-tablet table that is never replicated. This allows queries
 // against local_metadata to return different values on different tablets,
 // which is used for communicating between Vitess and MySQL-level tools like
-// Orchestrator (http://github.com/github/orchestrator).
+// Orchestrator (https://github.com/github/orchestrator).
 // _vt.shard_metadata is a replicated table with per-shard information, but it's
 // created here to make it easier to create it on databases that were running
 // old version of Vitess, or databases that are getting converted to run under
