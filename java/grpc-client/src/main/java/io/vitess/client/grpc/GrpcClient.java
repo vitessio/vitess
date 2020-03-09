@@ -53,8 +53,6 @@ import io.vitess.proto.Vtgate.GetSrvKeyspaceRequest;
 import io.vitess.proto.Vtgate.GetSrvKeyspaceResponse;
 import io.vitess.proto.Vtgate.RollbackRequest;
 import io.vitess.proto.Vtgate.RollbackResponse;
-import io.vitess.proto.Vtgate.SplitQueryRequest;
-import io.vitess.proto.Vtgate.SplitQueryResponse;
 import io.vitess.proto.Vtgate.StreamExecuteKeyRangesRequest;
 import io.vitess.proto.Vtgate.StreamExecuteKeyRangesResponse;
 import io.vitess.proto.Vtgate.StreamExecuteKeyspaceIdsRequest;
@@ -268,13 +266,6 @@ public class GrpcClient implements RpcClient {
       throws SQLException {
     return Futures.catchingAsync(getFutureStub(ctx).rollback(request), Exception.class,
         new ExceptionConverter<RollbackResponse>(), MoreExecutors.directExecutor());
-  }
-
-  @Override
-  public ListenableFuture<SplitQueryResponse> splitQuery(Context ctx, SplitQueryRequest request)
-      throws SQLException {
-    return Futures.catchingAsync(getFutureStub(ctx).splitQuery(request), Exception.class,
-        new ExceptionConverter<SplitQueryResponse>(), MoreExecutors.directExecutor());
   }
 
   @Override

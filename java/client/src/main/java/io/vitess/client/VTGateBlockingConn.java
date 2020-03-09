@@ -19,13 +19,11 @@ package io.vitess.client;
 import io.vitess.client.cursor.Cursor;
 import io.vitess.client.cursor.CursorWithError;
 import io.vitess.proto.Query;
-import io.vitess.proto.Query.SplitQueryRequest.Algorithm;
 import io.vitess.proto.Topodata.KeyRange;
 import io.vitess.proto.Topodata.SrvKeyspace;
 import io.vitess.proto.Topodata.TabletType;
 import io.vitess.proto.Vtgate.BoundKeyspaceIdQuery;
 import io.vitess.proto.Vtgate.BoundShardQuery;
-import io.vitess.proto.Vtgate.SplitQueryResponse;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -189,20 +187,6 @@ public class VTGateBlockingConn implements Closeable {
 
   public VTGateBlockingTx begin(Context ctx, boolean singleDB) throws SQLException {
     return new VTGateBlockingTx(conn.begin(ctx, singleDB).checkedGet());
-  }
-
-  public List<SplitQueryResponse.Part> splitQuery(
-      Context ctx,
-      String keyspace,
-      String query,
-      Map<String, ?> bindVars,
-      Iterable<String> splitColumns,
-      int splitCount,
-      int numRowsPerQueryPart,
-      Algorithm algorithm) throws SQLException {
-    return conn.splitQuery(
-        ctx, keyspace, query, bindVars, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
-        .checkedGet();
   }
 
   public SrvKeyspace getSrvKeyspace(Context ctx, String keyspace) throws SQLException {
