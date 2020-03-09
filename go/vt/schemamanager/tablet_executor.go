@@ -101,7 +101,9 @@ func (exec *TabletExecutor) Validate(ctx context.Context, sqls []string) error {
 		return fmt.Errorf("executor is closed")
 	}
 
-	parsedDDLs, err := exec.parseDDLs(sqls)
+	// We ignore DATABASE-level DDLs here because detectBigSchemaChanges doesn't
+	// look at them anyway.
+	parsedDDLs, _, err := exec.parseDDLs(sqls)
 	if err != nil {
 		return err
 	}
@@ -114,23 +116,26 @@ func (exec *TabletExecutor) Validate(ctx context.Context, sqls []string) error {
 	return err
 }
 
-func (exec *TabletExecutor) parseDDLs(sqls []string) ([]*sqlparser.DDL, error) {
-	parsedDDLs := make([]*sqlparser.DDL, 0, len(sqls))
+func (exec *TabletExecutor) parseDDLs(sqls []string) ([]*sqlparser.DDL, []*sqlparser.DBDDL, error) {
+	parsedDDLs := make([]*sqlparser.DDL, 0)
+	parsedDBDDLs := make([]*sqlparser.DBDDL, 0)
 	for _, sql := range sqls {
 		stat, err := sqlparser.Parse(sql)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse sql: %s, got error: %v", sql, err)
+			return nil, nil, fmt.Errorf("failed to parse sql: %s, got error: %v", sql, err)
 		}
-		ddl, ok := stat.(*sqlparser.DDL)
-		if !ok {
+		switch ddl := stat.(type) {
+		case *sqlparser.DDL:
+			parsedDDLs = append(parsedDDLs, ddl)
+		case *sqlparser.DBDDL:
+			parsedDBDDLs = append(parsedDBDDLs, ddl)
+		default:
 			if len(exec.tablets) != 1 {
-				return nil, fmt.Errorf("non-ddl statements can only be executed for single shard keyspaces: %s", sql)
+				return nil, nil, fmt.Errorf("non-ddl statements can only be executed for single shard keyspaces: %s", sql)
 			}
-			continue
 		}
-		parsedDDLs = append(parsedDDLs, ddl)
 	}
-	return parsedDDLs, nil
+	return parsedDDLs, parsedDBDDLs, nil
 }
 
 // a schema change that satisfies any following condition is considered

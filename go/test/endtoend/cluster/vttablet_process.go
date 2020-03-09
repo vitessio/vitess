@@ -33,7 +33,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -99,6 +98,9 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-service_map", vttablet.ServiceMap,
 		"-vtctld_addr", vttablet.VtctldAddress,
 	)
+	if *isCoverage {
+		vttablet.proc.Args = append(vttablet.proc.Args, "-test.coverprofile="+getCoveragePath("vttablet.out"))
+	}
 
 	if vttablet.SupportsBackup {
 		vttablet.proc.Args = append(vttablet.proc.Args, "-restore_from_backup")
@@ -295,20 +297,10 @@ func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
 
 // QueryTablet lets you execute a query in this tablet and get the result
 func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useDb bool) (*sqltypes.Result, error) {
-	dbParams := mysql.ConnParams{
-		Uname: "vt_dba",
+	if !useDb {
+		keyspace = ""
 	}
-	if vttablet.DbPort > 0 {
-		dbParams.Port = vttablet.DbPort
-	} else {
-		dbParams.UnixSocket = path.Join(vttablet.Directory, "mysql.sock")
-	}
-	if useDb {
-		dbParams.DbName = "vt_" + keyspace
-	}
-	if vttablet.DbPassword != "" {
-		dbParams.Pass = vttablet.DbPassword
-	}
+	dbParams := NewConnParams(vttablet.DbPort, vttablet.DbPassword, path.Join(vttablet.Directory, "mysql.sock"), keyspace)
 	return executeQuery(dbParams, query)
 }
 
@@ -318,6 +310,9 @@ func (vttablet *VttabletProcess) QueryTabletWithDB(query string, dbname string) 
 		Uname:      "vt_dba",
 		UnixSocket: path.Join(vttablet.Directory, "mysql.sock"),
 		DbName:     dbname,
+	}
+	if vttablet.DbPassword != "" {
+		dbParams.Pass = vttablet.DbPassword
 	}
 	return executeQuery(dbParams, query)
 }
@@ -329,7 +324,7 @@ func executeQuery(dbParams mysql.ConnParams, query string) (*sqltypes.Result, er
 		return nil, err
 	}
 	defer dbConn.Close()
-	return dbConn.ExecuteFetch(query, 1000, true)
+	return dbConn.ExecuteFetch(query, 10000, true)
 }
 
 // GetDBVar returns first matching database variable's value
@@ -372,8 +367,6 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 		TabletType:                  "replica",
 		CommonArg:                   *vtctl,
 		HealthCheckInterval:         5,
-		BackupStorageImplementation: "file",
-		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),
 		Port:                        port,
 		GrpcPort:                    grpcPort,
 		PidFile:                     path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/vttablet.pid", tabletUID)),
@@ -382,6 +375,8 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 		EnableSemiSync:              enableSemiSync,
 		SupportsBackup:              true,
 		ServingStatus:               "NOT_SERVING",
+		BackupStorageImplementation: "file",
+		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),
 	}
 
 	if tabletType == "rdonly" {

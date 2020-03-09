@@ -18,7 +18,6 @@ package sqlparser
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 
@@ -156,7 +155,7 @@ var keywords = map[string]int{
 	"describe":            DESCRIBE,
 	"deterministic":       UNUSED,
 	"distinct":            DISTINCT,
-	"distinctrow":         UNUSED,
+	"distinctrow":         DISTINCTROW,
 	"div":                 DIV,
 	"double":              DOUBLE,
 	"drop":                DROP,
@@ -452,15 +451,23 @@ func (tkn *Tokenizer) Lex(lval *yySymType) int {
 	return typ
 }
 
+// PositionedErr holds context related to parser errors
+type PositionedErr struct {
+	Err  string
+	Pos  int
+	Near []byte
+}
+
+func (p PositionedErr) Error() string {
+	if p.Near != nil {
+		return fmt.Sprintf("%s at position %v near '%s'", p.Err, p.Pos, p.Near)
+	}
+	return fmt.Sprintf("%s at position %v", p.Err, p.Pos)
+}
+
 // Error is called by go yacc if there's a parsing error.
 func (tkn *Tokenizer) Error(err string) {
-	buf := &bytes2.Buffer{}
-	if tkn.lastToken != nil {
-		fmt.Fprintf(buf, "%s at position %v near '%s'", err, tkn.Position, tkn.lastToken)
-	} else {
-		fmt.Fprintf(buf, "%s at position %v", err, tkn.Position)
-	}
-	tkn.LastError = errors.New(buf.String())
+	tkn.LastError = PositionedErr{Err: err, Pos: tkn.Position, Near: tkn.lastToken}
 
 	// Try and re-sync to the next statement
 	tkn.skipStatement()
@@ -654,7 +661,7 @@ func (tkn *Tokenizer) scanIdentifier(firstByte byte, isDbSystemVariable bool) (i
 	lowered := bytes.ToLower(buffer.Bytes())
 	loweredStr := string(lowered)
 	if keywordID, found := keywords[loweredStr]; found {
-		return keywordID, lowered
+		return keywordID, buffer.Bytes()
 	}
 	// dual must always be case-insensitive
 	if loweredStr == "dual" {

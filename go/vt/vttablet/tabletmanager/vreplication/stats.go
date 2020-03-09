@@ -58,11 +58,9 @@ type vrStats struct {
 func (st *vrStats) register() {
 	stats.NewGaugeFunc("VReplicationStreamCount", "Number of vreplication streams", st.numControllers)
 	stats.NewGaugeFunc("VReplicationSecondsBehindMasterMax", "Max vreplication seconds behind master", st.maxSecondsBehindMaster)
-	stats.NewCountersFuncWithMultiLabels(
+	stats.NewGaugesFuncWithMultiLabels(
 		"VReplicationSecondsBehindMaster",
 		"vreplication seconds behind master per stream",
-		// CAUTION: Always keep this label as "counts" because the Google
-		//          internal monitoring depends on this specific value.
 		[]string{"counts"},
 		func() map[string]int64 {
 			st.mu.Lock()

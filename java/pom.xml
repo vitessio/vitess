@@ -52,7 +52,7 @@
   <scm>
     <connection>scm:git:git@github.com:vitessio/vitess.git</connection>
     <developerConnection>scm:git:git@github.com:vitessio/vitess.git</developerConnection>
-    <url>http://github.com/vitessio/vitess/tree/master</url>
+    <url>https://github.com/vitessio/vitess/tree/master</url>
   </scm>
   <issueManagement>
     <system>GitHub</system>
@@ -70,8 +70,8 @@
     <grpc.version>1.16.0</grpc.version>
     <!-- NOTE Netty handler and boring SSL must be kept compatible with grpc
       https://github.com/grpc/grpc-java/blob/master/SECURITY.md#netty -->
-    <netty.handler.version>4.1.30.Final</netty.handler.version>
-    <tcnative.boring.ssl.version>2.0.17.Final</tcnative.boring.ssl.version>
+    <netty.handler.version>4.1.45.Final</netty.handler.version>
+    <tcnative.boring.ssl.version>2.0.28.Final</tcnative.boring.ssl.version>
 
     <protobuf.java.version>3.6.1</protobuf.java.version>
     <protobuf.protoc.version>3.6.1</protobuf.protoc.version>

@@ -67,6 +67,7 @@ func TestPlayerStatementModeWithFilter(t *testing.T) {
 	// It does not work when filter is enabled
 	output := []string{
 		"begin",
+		"rollback",
 		"/update _vt.vreplication set message='filter rules are not supported for SBR",
 	}
 
@@ -172,6 +173,7 @@ func TestPlayerFilters(t *testing.T) {
 		Filter:   filter,
 		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
 	}
+
 	cancel, _ := startVReplication(t, bls, "")
 	defer cancel()
 
@@ -180,6 +182,7 @@ func TestPlayerFilters(t *testing.T) {
 		output []string
 		table  string
 		data   [][]string
+		logs   []LogExpectation // logs are defined for a few testcases since they are enough to test all log events
 	}{{
 		// insert with insertNormal
 		input: "insert into src1 values(1, 'aaa')",
@@ -192,6 +195,11 @@ func TestPlayerFilters(t *testing.T) {
 		table: "dst1",
 		data: [][]string{
 			{"1", "aaa"},
+		},
+		logs: []LogExpectation{
+			{"FIELD", "/src1.*id.*INT32.*val.*VARBINARY.*"},
+			{"ROWCHANGE", "insert into dst1(id,val) values (1,'aaa')"},
+			{"ROW", "/src1.*3.*1aaa.*"},
 		},
 	}, {
 		// update with insertNormal
@@ -206,6 +214,10 @@ func TestPlayerFilters(t *testing.T) {
 		data: [][]string{
 			{"1", "bbb"},
 		},
+		logs: []LogExpectation{
+			{"ROWCHANGE", "update dst1 set val='bbb' where id=1"},
+			{"ROW", "/src1.*3.*1aaa.*"},
+		},
 	}, {
 		// delete with insertNormal
 		input: "delete from src1 where id=1",
@@ -217,6 +229,10 @@ func TestPlayerFilters(t *testing.T) {
 		},
 		table: "dst1",
 		data:  [][]string{},
+		logs: []LogExpectation{
+			{"ROWCHANGE", "delete from dst1 where id=1"},
+			{"ROW", "/src1.*3.*1bbb.*"},
+		},
 	}, {
 		// insert with insertOnDup
 		input: "insert into src2 values(1, 2, 3)",
@@ -230,6 +246,10 @@ func TestPlayerFilters(t *testing.T) {
 		data: [][]string{
 			{"1", "2", "3", "1"},
 		},
+		logs: []LogExpectation{
+			{"FIELD", "/src2.*id.*val1.*val2.*"},
+			{"ROWCHANGE", "insert into dst2(id,val1,sval2,rcount) values (1,2,ifnull(3, 0),1) on duplicate key update val1=values(val1), sval2=sval2+ifnull(values(sval2), 0), rcount=rcount+1"},
+		},
 	}, {
 		// update with insertOnDup
 		input: "update src2 set val1=5, val2=1 where id=1",
@@ -242,6 +262,10 @@ func TestPlayerFilters(t *testing.T) {
 		table: "dst2",
 		data: [][]string{
 			{"1", "5", "1", "1"},
+		},
+		logs: []LogExpectation{
+			{"ROWCHANGE", "update dst2 set val1=5, sval2=sval2-ifnull(3, 0)+ifnull(1, 0), rcount=rcount where id=1"},
+			{"ROW", "/src2.*123.*"},
 		},
 	}, {
 		// delete with insertOnDup
@@ -364,11 +388,15 @@ func TestPlayerFilters(t *testing.T) {
 		data:  [][]string{},
 	}}
 
-	for _, tcases := range testcases {
-		execStatements(t, []string{tcases.input})
-		expectDBClientQueries(t, tcases.output)
-		if tcases.table != "" {
-			expectData(t, tcases.table, tcases.data)
+	for _, tcase := range testcases {
+		if tcase.logs != nil {
+			logch := vrLogStatsLogger.Subscribe("vrlogstats")
+			defer expectLogsAndUnsubscribe(t, tcase.logs, logch)
+		}
+		execStatements(t, []string{tcase.input})
+		expectDBClientQueries(t, tcase.output)
+		if tcase.table != "" {
+			expectData(t, tcase.table, tcase.data)
 		}
 	}
 }
@@ -1218,6 +1246,114 @@ func TestPlayerStopPos(t *testing.T) {
 		// Second update is from vreplicator.
 		"/update.*'Running'",
 		"/update.*'Stopped'.*already reached",
+	})
+}
+
+func TestPlayerStopAtOther(t *testing.T) {
+	t.Skip("This test was written to verify a bug fix, but is extremely flaky. Only a manual test is possible")
+
+	defer deleteTablet(addTablet(100))
+
+	execStatements(t, []string{
+		"create table t1(id int, val varbinary(128), primary key(id))",
+		fmt.Sprintf("create table %s.t1(id int, val varbinary(128), primary key(id))", vrepldb),
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+		fmt.Sprintf("drop table %s.t1", vrepldb),
+	})
+	env.SchemaEngine.Reload(context.Background())
+
+	// Insert a source row.
+	execStatements(t, []string{
+		"insert into t1 values(1, 'aaa')",
+	})
+	startPos := masterPosition(t)
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/.*",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+		OnDdl:    binlogdatapb.OnDDLAction_IGNORE,
+	}
+	query := binlogplayer.CreateVReplicationState("test", bls, startPos, binlogplayer.BlpStopped, vrepldb)
+	qr, err := playerEngine.Exec(query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := uint32(qr.InsertID)
+	for q := range globalDBQueries {
+		if strings.HasPrefix(q, "insert into _vt.vreplication") {
+			break
+		}
+	}
+	defer func() {
+		if _, err := playerEngine.Exec(fmt.Sprintf("delete from _vt.vreplication where id = %d", id)); err != nil {
+			t.Fatal(err)
+		}
+		expectDeleteQueries(t)
+	}()
+
+	vconn := &realDBClient{nolog: true}
+	if err := vconn.Connect(); err != nil {
+		t.Error(err)
+	}
+	defer vconn.Close()
+
+	// Insert the same row on the target and lock it.
+	if _, err := vconn.ExecuteFetch("insert into t1 values(1, 'aaa')", 1); err != nil {
+		t.Error(err)
+	}
+	if _, err := vconn.ExecuteFetch("begin", 1); err != nil {
+		t.Error(err)
+	}
+	if _, err := vconn.ExecuteFetch("update t1 set val='bbb' where id=1", 1); err != nil {
+		t.Error(err)
+	}
+
+	// Start a VReplication where the first transaction updates the locked row.
+	// It will cause the apply to wait, which will cause the other two events
+	// to accumulate. The stop position will be on the grant.
+	// We're testing the behavior where an OTHER transaction is part of a batch,
+	// we have to commit its stop position correctly.
+	execStatements(t, []string{
+		"update t1 set val='ccc' where id=1",
+		"insert into t1 values(2, 'ddd')",
+		"grant select on *.* to 'vt_app'@'127.0.0.1'",
+	})
+	stopPos := masterPosition(t)
+	query = binlogplayer.StartVReplicationUntil(id, stopPos)
+	if _, err := playerEngine.Exec(query); err != nil {
+		t.Fatal(err)
+	}
+
+	// Wait for the begin. The update will be blocked.
+	expectDBClientQueries(t, []string{
+		"/update.*'Running'",
+		// Second update is from vreplicator.
+		"/update.*'Running'",
+		"begin",
+	})
+
+	// Give time for the other two transactions to reach the relay log.
+	time.Sleep(100 * time.Millisecond)
+	_, _ = vconn.ExecuteFetch("rollback", 1)
+
+	// This is approximately the expected sequence of updates.
+	expectDBClientQueries(t, []string{
+		"update t1 set val='ccc' where id=1",
+		"/update _vt.vreplication set pos=",
+		"commit",
+		"begin",
+		"insert into t1(id,val) values (2,'ddd')",
+		"/update _vt.vreplication set pos=",
+		"commit",
+		fmt.Sprintf("/update _vt.vreplication set pos='%s'", stopPos),
+		"/update.*'Stopped'",
 	})
 }
 

@@ -72,7 +72,8 @@ var (
 
 	poolDynamicHostnameResolution = flag.Duration("pool_hostname_resolve_interval", 0, "if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)")
 
-	socketFile = flag.String("mysqlctl_socket", "", "socket file to use for remote mysqlctl actions (empty for local actions)")
+	mycnfTemplateFile = flag.String("mysqlctl_mycnf_template", "", "template file to use for generating the my.cnf file during server init")
+	socketFile        = flag.String("mysqlctl_socket", "", "socket file to use for remote mysqlctl actions (empty for local actions)")
 
 	// masterConnectRetry is used in 'SET MASTER' commands
 	masterConnectRetry = flag.Duration("master_connect_retry", 10*time.Second, "how long to wait in between slave -> connection attempts. Only precise to the second.")
@@ -82,7 +83,6 @@ var (
 	appMysqlStats      = stats.NewTimings("MysqlApp", "MySQL app stats", "operation")
 
 	versionRegex = regexp.MustCompile(`Ver ([0-9]+)\.([0-9]+)\.([0-9]+)`)
-	riceBox, _   = rice.FindBox("../../../config")
 )
 
 // How many bytes from MySQL error log to sample for error messages
@@ -111,7 +111,7 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 
 	// Create and open the connection pool for dba access.
 	result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", *dbaPoolSize, *dbaIdleTimeout, *poolDynamicHostnameResolution)
-	result.dbaPool.Open(dbcfgs.Dba(), dbaMysqlStats)
+	result.dbaPool.Open(dbcfgs.DbaWithDB(), dbaMysqlStats)
 
 	// Create and open the connection pool for app access.
 	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", *appPoolSize, *appIdleTimeout, *poolDynamicHostnameResolution)
@@ -268,25 +268,13 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 		return nil
 	}
 
-	// Find mysql_upgrade. If not there, we do nothing.
-	vtMysqlRoot, err := vtenv.VtMysqlRoot()
-	if err != nil {
-		log.Warningf("VT_MYSQL_ROOT not set, skipping mysql_upgrade step: %v", err)
-		return nil
-	}
-	name, err := binaryPath(vtMysqlRoot, "mysql_upgrade")
-	if err != nil {
-		log.Warningf("mysql_upgrade binary not present, skipping it: %v", err)
-		return nil
-	}
-
 	// Since we started mysql with --skip-grant-tables, we should
 	// be able to run mysql_upgrade without any valid user or
 	// password. However, mysql_upgrade executes a 'flush
 	// privileges' right in the middle, and then subsequent
 	// commands fail if we don't use valid credentials. So let's
 	// use dba credentials.
-	params, err := dbconfigs.WithCredentials(mysqld.dbcfgs.Dba())
+	params, err := mysqld.dbcfgs.Dba().MysqlParams()
 	if err != nil {
 		return err
 	}
@@ -304,11 +292,26 @@ func (mysqld *Mysqld) RunMysqlUpgrade() error {
 		"--defaults-file=" + defaultsFile,
 		"--force", // Don't complain if it's already been upgraded.
 	}
-	cmd := exec.Command(name, args...)
-	libPath := fmt.Sprintf("LD_LIBRARY_PATH=%s/lib/mysql", vtMysqlRoot)
-	cmd.Env = []string{libPath}
-	out, err := cmd.CombinedOutput()
-	log.Infof("mysql_upgrade output: %s", out)
+
+	// Find mysql_upgrade. If not there, we do nothing.
+	vtMysqlRoot, err := vtenv.VtMysqlRoot()
+	if err != nil {
+		log.Warningf("VT_MYSQL_ROOT not set, skipping mysql_upgrade step: %v", err)
+		return nil
+	}
+	name, err := binaryPath(vtMysqlRoot, "mysql_upgrade")
+	if err != nil {
+		log.Warningf("mysql_upgrade binary not present, skipping it: %v", err)
+		return nil
+	}
+
+	env, err := buildLdPaths()
+	if err != nil {
+		log.Warningf("skipping mysql_upgrade step: %v", err)
+		return nil
+	}
+
+	_, _, err = execCmd(name, args, env, "", nil)
 	return err
 }
 
@@ -368,15 +371,17 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 		if err != nil {
 			return err
 		}
-		arg := []string{
+		args := []string{
 			"--defaults-file=" + cnf.path,
 			"--basedir=" + mysqlBaseDir,
 		}
-		arg = append(arg, mysqldArgs...)
-		libPath := fmt.Sprintf("LD_LIBRARY_PATH=%s/lib/mysql", vtMysqlRoot)
-		env := []string{libPath}
+		args = append(args, mysqldArgs...)
+		env, err := buildLdPaths()
+		if err != nil {
+			return err
+		}
 
-		cmd := exec.Command(name, arg...)
+		cmd := exec.Command(name, args...)
 		cmd.Dir = vtMysqlRoot
 		cmd.Env = env
 		log.Infof("%v %#v", ts, cmd)
@@ -436,7 +441,7 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 // will use the dba credentials to try to connect. Use wait() with
 // different credentials if needed.
 func (mysqld *Mysqld) Wait(ctx context.Context, cnf *Mycnf) error {
-	params, err := dbconfigs.WithCredentials(mysqld.dbcfgs.Dba())
+	params, err := mysqld.dbcfgs.Dba().MysqlParams()
 	if err != nil {
 		return err
 	}
@@ -526,7 +531,7 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 		if err != nil {
 			return err
 		}
-		params, err := dbconfigs.WithCredentials(mysqld.dbcfgs.Dba())
+		params, err := mysqld.dbcfgs.Dba().MysqlParams()
 		if err != nil {
 			return err
 		}
@@ -542,11 +547,11 @@ func (mysqld *Mysqld) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bo
 			"--wait=10",
 			"shutdown",
 		}
-		env := []string{
-			os.ExpandEnv("LD_LIBRARY_PATH=$VT_MYSQL_ROOT/lib/mysql"),
-		}
-		_, _, err = execCmd(name, args, env, dir, nil)
+		env, err := buildLdPaths()
 		if err != nil {
+			return err
+		}
+		if _, _, err = execCmd(name, args, env, dir, nil); err != nil {
 			return err
 		}
 	default:
@@ -667,6 +672,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	}
 
 	if initDBSQLFile == "" { // default to built-in
+		riceBox := rice.MustFindBox("../../../config")
 		sqlFile, err := riceBox.Open("init_db.sql")
 		if err != nil {
 			return fmt.Errorf("could not open built-in init_db.sql file")
@@ -793,10 +799,17 @@ func (mysqld *Mysqld) initConfig(cnf *Mycnf, outFile string) error {
 }
 
 func (mysqld *Mysqld) getMycnfTemplate() string {
-
+	if *mycnfTemplateFile != "" {
+		data, err := ioutil.ReadFile(*mycnfTemplateFile)
+		if err != nil {
+			log.Fatalf("template file specified by -mysqlctl_mycnf_template could not be read: %v", *mycnfTemplateFile)
+		}
+		return string(data) // use only specified template
+	}
 	myTemplateSource := new(bytes.Buffer)
 	myTemplateSource.WriteString("[mysqld]\n")
 
+	riceBox := rice.MustFindBox("../../../config")
 	b, err := riceBox.Bytes("mycnf/default.cnf")
 	if err != nil {
 		log.Warningf("could not open embedded default.cnf config file")
@@ -1026,8 +1039,9 @@ func (mysqld *Mysqld) executeMysqlScript(connParams *mysql.ConnParams, sql io.Re
 		"--defaults-extra-file=" + cnf,
 		"--batch",
 	}
-	env := []string{
-		"LD_LIBRARY_PATH=" + path.Join(dir, "lib/mysql"),
+	env, err := buildLdPaths()
+	if err != nil {
+		return err
 	}
 	_, _, err = execCmd(name, args, env, dir, sql)
 	if err != nil {
@@ -1045,6 +1059,7 @@ func (mysqld *Mysqld) executeMysqlScript(connParams *mysql.ConnParams, sql io.Re
 // 'defer os.Remove()' statement.
 func (mysqld *Mysqld) defaultsExtraFile(connParams *mysql.ConnParams) (string, error) {
 	var contents string
+	connParams.Pass = strings.Replace(connParams.Pass, "#", "\\#", -1)
 	if connParams.UnixSocket == "" {
 		contents = fmt.Sprintf(`
 [client]
@@ -1113,4 +1128,18 @@ func (mysqld *Mysqld) OnTerm(f func()) {
 	mysqld.mutex.Lock()
 	defer mysqld.mutex.Unlock()
 	mysqld.onTermFuncs = append(mysqld.onTermFuncs, f)
+}
+
+func buildLdPaths() ([]string, error) {
+	vtMysqlRoot, err := vtenv.VtMysqlRoot()
+	if err != nil {
+		return []string{}, err
+	}
+
+	ldPaths := []string{
+		fmt.Sprintf("LD_LIBRARY_PATH=%s/lib/mysql", vtMysqlRoot),
+		os.ExpandEnv("LD_PRELOAD=$LD_PRELOAD"),
+	}
+
+	return ldPaths, nil
 }

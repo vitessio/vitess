@@ -125,6 +125,8 @@ func createDiscoveryGateway(ctx context.Context, hc discovery.HealthCheck, serv 
 				log.Exitf("Cannot parse tablet_filters parameter: %v", err)
 			}
 			tr = fbs
+		} else if len(KeyspacesToWatch) > 0 {
+			tr = discovery.NewFilterByKeyspace(dg.hc, KeyspacesToWatch)
 		}
 
 		ctw := discovery.NewCellTabletsWatcher(ctx, topoServer, tr, c, *refreshInterval, *refreshKnownTablets, *topoReadConcurrency)

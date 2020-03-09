@@ -217,7 +217,7 @@ func createCluster() (*cluster.LocalProcessCluster, int) {
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	return qr
 }
 
@@ -230,13 +230,14 @@ func TestBufferExternalReparenting(t *testing.T) {
 }
 
 func testBufferBase(t *testing.T, isExternalParent bool) {
+	defer cluster.PanicHandler(t)
 	clusterInstance, exitCode := createCluster()
 	if exitCode != 0 {
 		os.Exit(exitCode)
 	}
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	defer conn.Close()
 
 	// Insert two rows for the later threads (critical read, update).
@@ -285,7 +286,7 @@ func testBufferBase(t *testing.T, isExternalParent bool) {
 	//At least one thread should have been buffered.
 	//This may fail if a failover is too fast. Add retries then.
 	resp, err := http.Get(clusterInstance.VtgateProcess.VerifyURL)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	label := fmt.Sprintf("%s.%s", keyspaceUnshardedName, "0")
 	inFlightMax := 0
 	masterPromotedCount := 0
@@ -334,7 +335,7 @@ func getVarFromVtgate(t *testing.T, label string, param string, resultMap map[st
 				v := object.MapIndex(key)
 				s := fmt.Sprintf("%v", v.Interface())
 				paramVal, err = strconv.Atoi(s)
-				require.NoError(t, err)
+				require.Nil(t, err)
 			}
 		}
 	}
@@ -355,7 +356,7 @@ func externalReparenting(ctx context.Context, t *testing.T, clusterInstance *clu
 	}
 
 	// Wait for replica to catch up to master.
-	waitForReplicationPos(ctx, t, master, replica, 60.0)
+	cluster.WaitForReplicationPos(t, master, replica, "localhost", 60.0)
 
 	duration := time.Since(start)
 	minUnavailabilityInS := 1.0
@@ -400,7 +401,7 @@ func waitForReplicationPos(ctx context.Context, t *testing.T, tabletA *cluster.V
 func positionAtLeast(t *testing.T, tablet *cluster.Vttablet, a string, b string) bool {
 	isAtleast := false
 	val, err := tablet.MysqlctlProcess.ExecuteCommandWithOutput("position", "at_least", a, b)
-	require.NoError(t, err)
+	require.Nil(t, err)
 	if strings.Contains(val, "true") {
 		isAtleast = true
 	}

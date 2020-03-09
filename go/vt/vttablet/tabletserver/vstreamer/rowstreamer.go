@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -39,15 +38,23 @@ type RowStreamer interface {
 }
 
 // NewRowStreamer returns a RowStreamer
-func NewRowStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, query string, lastpk []sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error) RowStreamer {
+func NewRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, send func(*binlogdatapb.VStreamRowsResponse) error) RowStreamer {
 	return newRowStreamer(ctx, cp, se, query, lastpk, &localVSchema{vschema: &vindexes.VSchema{}}, send)
 }
 
+// rowStreamer is used for copying the existing rows of a table
+// before vreplication begins streaming binlogs. The rowStreamer
+// responds to a request with the GTID position as of which it
+// streams the rows of a table. This allows vreplication to synchronize
+// its events as of the returned GTID before adding the new rows.
+// For every set of rows sent, the last pk value is also sent.
+// This allows for the streaming to be resumed based on the last
+// pk value processed.
 type rowStreamer struct {
 	ctx    context.Context
 	cancel func()
 
-	cp      *mysql.ConnParams
+	cp      dbconfigs.Connector
 	se      *schema.Engine
 	query   string
 	lastpk  []sqltypes.Value
@@ -59,7 +66,7 @@ type rowStreamer struct {
 	sendQuery string
 }
 
-func newRowStreamer(ctx context.Context, cp *mysql.ConnParams, se *schema.Engine, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error) *rowStreamer {
+func newRowStreamer(ctx context.Context, cp dbconfigs.Connector, se *schema.Engine, query string, lastpk []sqltypes.Value, vschema *localVSchema, send func(*binlogdatapb.VStreamRowsResponse) error) *rowStreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &rowStreamer{
 		ctx:     ctx,
@@ -88,7 +95,7 @@ func (rs *rowStreamer) Stream() error {
 		return err
 	}
 
-	conn, err := rs.mysqlConnect()
+	conn, err := snapshotConnect(rs.ctx, rs.cp)
 	if err != nil {
 		return err
 	}
@@ -114,6 +121,10 @@ func (rs *rowStreamer) buildPlan() error {
 		Name:    st.Name.String(),
 		Columns: st.Columns,
 	}
+	// The plan we build is identical to the one for vstreamer.
+	// This is because the row format of a read is identical
+	// to the row format of a binlog event. So, the same
+	// filtering will work.
 	rs.plan, err = buildTablePlan(ti, rs.vschema, rs.query)
 	if err != nil {
 		return err
@@ -147,6 +158,7 @@ func buildPKColumns(st *schema.Table) ([]int, error) {
 
 func (rs *rowStreamer) buildSelect() (string, error) {
 	buf := sqlparser.NewTrackedBuffer(nil)
+	// We could have used select *, but being explicit is more predictable.
 	buf.Myprintf("select ")
 	prefix := ""
 	for _, col := range rs.plan.Table.Columns {
@@ -160,6 +172,11 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 		}
 		buf.WriteString(" where ")
 		prefix := ""
+		// This loop handles the case for composite pks. For example,
+		// if lastpk was (1,2), the where clause would be:
+		// (col1 = 1 and col2 > 2) or (col1 > 1).
+		// A tuple inequality like (col1,col2) > (1,2) ends up
+		// being a full table scan for mysql.
 		for lastcol := len(rs.pkColumns) - 1; lastcol >= 0; lastcol-- {
 			buf.Myprintf("%s(", prefix)
 			prefix = " or "
@@ -182,8 +199,9 @@ func (rs *rowStreamer) buildSelect() (string, error) {
 	return buf.String(), nil
 }
 
-func (rs *rowStreamer) streamQuery(conn *mysql.Conn, send func(*binlogdatapb.VStreamRowsResponse) error) error {
-	gtid, err := rs.startStreaming(conn)
+func (rs *rowStreamer) streamQuery(conn *snapshotConn, send func(*binlogdatapb.VStreamRowsResponse) error) error {
+	log.Infof("Streaming query: %v\n", rs.sendQuery)
+	gtid, err := conn.streamWithSnapshot(rs.ctx, rs.plan.Table.Name, rs.sendQuery)
 	if err != nil {
 		return err
 	}
@@ -227,9 +245,12 @@ func (rs *rowStreamer) streamQuery(conn *mysql.Conn, send func(*binlogdatapb.VSt
 		if row == nil {
 			break
 		}
+		// Compute lastpk here, because we'll neeed it
+		// at the end after the loop exits.
 		for i, pk := range rs.pkColumns {
 			lastpk[i] = row[pk]
 		}
+		// Reuse the vstreamer's filter.
 		ok, filtered, err := rs.plan.filter(row)
 		if err != nil {
 			return err
@@ -249,7 +270,7 @@ func (rs *rowStreamer) streamQuery(conn *mysql.Conn, send func(*binlogdatapb.VSt
 			}
 			// empty the rows so we start over, but we keep the
 			// same capacity
-			response.Rows = response.Rows[:0]
+			response.Rows = nil
 			byteCount = 0
 		}
 	}
@@ -263,44 +284,4 @@ func (rs *rowStreamer) streamQuery(conn *mysql.Conn, send func(*binlogdatapb.VSt
 	}
 
 	return nil
-}
-
-func (rs *rowStreamer) startStreaming(conn *mysql.Conn) (string, error) {
-	lockConn, err := rs.mysqlConnect()
-	if err != nil {
-		return "", err
-	}
-	// To be safe, always unlock tables, even if lock tables might fail.
-	defer func() {
-		_, err := lockConn.ExecuteFetch("unlock tables", 0, false)
-		if err != nil {
-			log.Warning("Unlock tables failed: %v", err)
-		} else {
-			log.Infof("Tables unlocked", rs.plan.Table.Name)
-		}
-		lockConn.Close()
-	}()
-
-	log.Infof("Locking table %s for copying", rs.plan.Table.Name)
-	if _, err := lockConn.ExecuteFetch(fmt.Sprintf("lock tables %s read", sqlparser.String(sqlparser.NewTableIdent(rs.plan.Table.Name))), 0, false); err != nil {
-		return "", err
-	}
-	pos, err := lockConn.MasterPosition()
-	if err != nil {
-		return "", err
-	}
-
-	if err := conn.ExecuteStreamFetch(rs.sendQuery); err != nil {
-		return "", err
-	}
-
-	return mysql.EncodePosition(pos), nil
-}
-
-func (rs *rowStreamer) mysqlConnect() (*mysql.Conn, error) {
-	cp, err := dbconfigs.WithCredentials(rs.cp)
-	if err != nil {
-		return nil, err
-	}
-	return mysql.Connect(rs.ctx, cp)
 }

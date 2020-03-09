@@ -23,6 +23,7 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
@@ -256,7 +257,13 @@ func TestStreamerParseRBREvents(t *testing.T) {
 		})
 		return nil
 	}
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, se, nil, mysql.Position{}, 0, sendTransaction)
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.New(mcp)
+
+	bls := NewStreamer(dbcfgs, se, nil, mysql.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events)
@@ -498,7 +505,13 @@ func TestStreamerParseRBRNameEscapes(t *testing.T) {
 		})
 		return nil
 	}
-	bls := NewStreamer(&mysql.ConnParams{DbName: "vt_test_keyspace"}, se, nil, mysql.Position{}, 0, sendTransaction)
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.New(mcp)
+
+	bls := NewStreamer(dbcfgs, se, nil, mysql.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
 	_, err := bls.parseEvents(context.Background(), events)

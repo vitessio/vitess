@@ -17,103 +17,38 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
-
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // buildDeletePlan builds the instructions for a DELETE statement.
-func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (_ *engine.Delete, needsLastInsertID bool, needDbName bool, _ error) {
-	edel := &engine.Delete{}
-	pb := newPrimitiveBuilder(vschema, newJointab(sqlparser.GetBindvars(del)))
-	ro, err := pb.processDMLTable(del.TableExprs)
+func buildDeletePlan(del *sqlparser.Delete, vschema ContextVSchema) (*engine.Delete, error) {
+	dml, ksidVindex, ksidCol, err := buildDMLPlan(vschema, "delete", del, del.TableExprs, del.Where, del.OrderBy, del.Limit, del.Comments, del.Targets)
 	if err != nil {
-		return nil, false, false, err
+		return nil, err
 	}
-	edel.Query = generateQuery(del)
-	edel.Keyspace = ro.eroute.Keyspace
-	if !edel.Keyspace.Sharded {
-		// We only validate non-table subexpressions because the previous analysis has already validated them.
-		if !pb.finalizeUnshardedDMLSubqueries(del.Targets, del.Where, del.OrderBy, del.Limit) {
-			return nil, false, false, errors.New("unsupported: sharded subqueries in DML")
-		}
-		edel.Opcode = engine.DeleteUnsharded
-		// Generate query after all the analysis. Otherwise table name substitutions for
-		// routed tables won't happen.
-		edel.Query = generateQuery(del)
-		return edel, pb.needsLastInsertID, pb.needsDbName, nil
-	}
-	if del.Targets != nil || ro.vschemaTable == nil {
-		return nil, false, false, errors.New("unsupported: multi-table delete statement in sharded keyspace")
-	}
-	if hasSubquery(del) {
-		return nil, false, false, errors.New("unsupported: subqueries in sharded DML")
-	}
-	edel.Table = ro.vschemaTable
-	// Generate query after all the analysis. Otherwise table name substitutions for
-	// routed tables won't happen.
-	edel.Query = generateQuery(del)
-
-	directives := sqlparser.ExtractCommentDirectives(del.Comments)
-	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
-		edel.MultiShardAutocommit = true
+	edel := &engine.Delete{
+		DML: *dml,
 	}
 
-	edel.QueryTimeout = queryTimeout(directives)
-	if ro.eroute.TargetDestination != nil {
-		if ro.eroute.TargetTabletType != topodatapb.TabletType_MASTER {
-			return nil, false, false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: DELETE statement with a replica target")
-		}
-		edel.Opcode = engine.DeleteByDestination
-		edel.TargetDestination = ro.eroute.TargetDestination
-		return edel, pb.needsLastInsertID, pb.needsDbName, nil
-	}
-	edel.Vindex, edel.Values, err = getDMLRouting(del.Where, edel.Table)
-	// We couldn't generate a route for a single shard
-	// Execute a delete sharded
-	if err != nil {
-		edel.Opcode = engine.DeleteScatter
-	} else {
-		edel.Opcode = engine.DeleteEqual
+	if dml.Opcode == engine.Unsharded {
+		return edel, nil
 	}
 
-	if edel.Opcode == engine.DeleteScatter {
-		if len(edel.Table.Owned) != 0 {
-			return nil, false, false, errors.New("unsupported: multi shard delete on a table with owned lookup vindexes")
-		}
-		if del.Limit != nil {
-			return nil, false, false, errors.New("unsupported: multi shard delete with limit")
-		}
+	if len(del.Targets) > 1 {
+		return nil, vterrors.New(vtrpc.Code_UNIMPLEMENTED, "unsupported: multi-table delete statement in sharded keyspace")
 	}
 
-	edel.OwnedVindexQuery = generateDeleteSubquery(del, edel.Table)
-	return edel, pb.needsLastInsertID, pb.needsDbName, nil
-}
+	if len(del.Targets) == 1 && del.Targets[0].Name != edel.Table.Name {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "Unknown table '%s' in MULTI DELETE", del.Targets[0].Name.String())
+	}
 
-// generateDeleteSubquery generates the query to fetch the rows
-// that will be deleted. This allows VTGate to clean up any
-// owned vindexes as needed.
-func generateDeleteSubquery(del *sqlparser.Delete, table *vindexes.Table) string {
-	if len(table.Owned) == 0 {
-		return ""
+	if len(edel.Table.Owned) > 0 {
+		edel.OwnedVindexQuery = generateDMLSubquery(del.Where, del.OrderBy, del.Limit, edel.Table, ksidCol)
+		edel.KsidVindex = ksidVindex
 	}
-	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.WriteString("select ")
-	for vIdx, cv := range table.Owned {
-		for cIdx, column := range cv.Columns {
-			if cIdx == 0 && vIdx == 0 {
-				buf.Myprintf("%v", column)
-			} else {
-				buf.Myprintf(", %v", column)
-			}
-		}
-	}
-	buf.Myprintf(" from %v%v for update", table.Name, del.Where)
-	return buf.String()
+
+	return edel, nil
 }

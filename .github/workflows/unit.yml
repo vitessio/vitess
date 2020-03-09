@@ -6,7 +6,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        name: [percona56, mysql57, mariadb101, mariadb102, mariadb103]
+        name: [percona56, mysql57, mysql80, mariadb101, mariadb102, mariadb103]
 
     steps:
     - name: Set up Go
@@ -19,16 +19,24 @@ jobs:
 
     - name: Get dependencies
       run: |
+        export DEBIAN_FRONTEND="noninteractive"
         sudo apt-get update
 
         if [ ${{matrix.name}} = "mysql57" ]; then
           sudo apt-get install -y mysql-server mysql-client
         else
           # Uninstall likely installed MySQL first
-          sudo apt-get remove -y mysql-server mysql-client
-          
+          sudo systemctl stop apparmor
+          sudo DEBIAN_FRONTEND="noninteractive" apt-get remove -y --purge mysql-server mysql-client mysql-common
+          sudo apt-get -y autoremove
+          sudo apt-get -y autoclean
+          sudo deluser mysql
+          sudo rm -rf /var/lib/mysql
+          sudo rm -rf /etc/mysql
+ 
           if [ ${{matrix.name}} = "percona56" ]; then
             sudo rm -rf /var/lib/mysql
+            sudo apt install -y gnupg2
             wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
             sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
             sudo apt update
@@ -40,7 +48,11 @@ jobs:
             sudo apt-get update
             sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
           elif [ ${{matrix.name}} = "mariadb101" ]; then
-            sudo apt install -y mariadb-server mariadb-client
+            sudo apt-get install -y software-properties-common
+            sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
+            sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] http://nyc2.mirrors.digitalocean.com/mariadb/repo/10.1/ubuntu bionic main'
+            sudo apt update
+            sudo DEBIAN_FRONTEND="noninteractive" apt install -y mariadb-server
           elif [ ${{matrix.name}} = "mariadb102" ]; then
             sudo apt-get install -y software-properties-common
             sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
@@ -74,4 +86,4 @@ jobs:
 
     - name: unit
       run: |
-        eatmydata -- make test
+        eatmydata -- make unit_test

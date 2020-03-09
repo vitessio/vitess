@@ -39,11 +39,13 @@ package multi
 import (
 	"testing"
 
+	"vitess.io/vitess/go/test/endtoend/cluster"
 	sharding "vitess.io/vitess/go/test/endtoend/sharding/initialsharding"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestInitialShardingMulti(t *testing.T) {
+	defer cluster.PanicHandler(t)
 	code, err := sharding.ClusterWrapper(true)
 	if err != nil {
 		t.Errorf("setup failed with status code %d", code)
