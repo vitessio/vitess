@@ -126,6 +126,7 @@ func (stc *ScatterConn) Execute(
 	session *SafeSession,
 	notInTransaction bool,
 	options *querypb.ExecuteOptions,
+	autocommit bool,
 ) (*sqltypes.Result, error) {
 
 	// mu protects qr
@@ -140,19 +141,21 @@ func (stc *ScatterConn) Execute(
 		session,
 		notInTransaction,
 		func(rs *srvtopo.ResolvedShard, i int, shouldBegin bool, transactionID int64) (int64, error) {
-			var innerqr *sqltypes.Result
-			if shouldBegin {
-				var err error
+			var (
+				innerqr *sqltypes.Result
+				err     error
+				opts    *querypb.ExecuteOptions
+			)
+			switch {
+			case autocommit:
+				innerqr, err = stc.executeAutocommit(ctx, rs, query, bindVars, opts)
+			case shouldBegin:
 				innerqr, transactionID, err = rs.QueryService.BeginExecute(ctx, rs.Target, query, bindVars, options)
-				if err != nil {
-					return transactionID, err
-				}
-			} else {
-				var err error
+			default:
 				innerqr, err = rs.QueryService.Execute(ctx, rs.Target, query, bindVars, transactionID, options)
-				if err != nil {
-					return transactionID, err
-				}
+			}
+			if err != nil {
+				return transactionID, err
 			}
 
 			mu.Lock()
