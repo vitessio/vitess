@@ -75,7 +75,15 @@ func (topo *TopoProcess) SetupEtcd() (err error) {
 		"--initial-cluster", fmt.Sprintf("%s=%s", topo.Name, topo.PeerURL),
 	)
 
-	errFile, _ := os.Create(path.Join(topo.DataDirectory, "topo-stderr.txt"))
+	err = createDirectory(topo.DataDirectory, 0700)
+	if err != nil && !os.IsExist(err) {
+		return err
+	}
+	errFile, err := os.Create(path.Join(topo.DataDirectory, "topo-stderr.txt"))
+	if err != nil {
+		return err
+	}
+
 	topo.proc.Stderr = errFile
 
 	topo.proc.Env = append(topo.proc.Env, os.Environ()...)
