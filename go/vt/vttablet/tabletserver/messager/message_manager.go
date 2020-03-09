@@ -52,8 +52,8 @@ var (
 		[]string{"TableName"})
 
 	// The following variables are changed for testing only.
-	streamEventGracePeriod = 10 * time.Second
-	vstreamRetryWait       = 5 * time.Second
+	streamEventGracePeriod = sync2.NewAtomicDuration(10 * time.Second)
+	vstreamRetryWait       = sync2.NewAtomicDuration(5 * time.Second)
 )
 
 type messageReceiver struct {
@@ -587,7 +587,7 @@ func (mm *messageManager) runVStream(ctx context.Context) {
 		default:
 		}
 		log.Infof("VStream ended: %v, retrying in 5 seconds", err)
-		time.Sleep(vstreamRetryWait)
+		time.Sleep(vstreamRetryWait.Get())
 	}
 }
 
@@ -603,7 +603,7 @@ func (mm *messageManager) runOneVStream(ctx context.Context) error {
 	defer cancel()
 
 	go func() {
-		ticker := time.NewTicker(streamEventGracePeriod)
+		ticker := time.NewTicker(streamEventGracePeriod.Get())
 		defer ticker.Stop()
 
 		for {
@@ -615,7 +615,7 @@ func (mm *messageManager) runOneVStream(ctx context.Context) error {
 			mm.streamMu.Lock()
 			idleTime := time.Since(lastEventTime)
 			mm.streamMu.Unlock()
-			if idleTime > streamEventGracePeriod {
+			if idleTime > streamEventGracePeriod.Get() {
 				log.Infof("VStream received no events for %v, restarting", idleTime)
 				cancel()
 				return
