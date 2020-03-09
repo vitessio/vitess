@@ -108,7 +108,6 @@ func testEcho(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgateconn.VTG
 	testEchoExecute(t, conn, session)
 	testEchoStreamExecute(t, conn, session)
 	testEchoTransactionExecute(t, conn)
-	testEchoSplitQuery(t, conn)
 	testEchoUpdateStream(t, conn)
 }
 
@@ -400,26 +399,6 @@ func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
 		"asTransaction": "false",
 		"options":       optionsEcho,
 	})
-}
-
-func testEchoSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
-	want := &vtgatepb.SplitQueryResponse_Part{
-		Query: &querypb.BoundQuery{
-			Sql:           echoPrefix + query + ":[split_column1,split_column2]:123:1000:FULL_SCAN",
-			BindVariables: bindVars,
-		},
-		KeyRangePart: &vtgatepb.SplitQueryResponse_KeyRangePart{Keyspace: keyspace},
-	}
-	got, err := conn.SplitQuery(context.Background(), keyspace, echoPrefix+query, bindVars, []string{"split_column1,split_column2"}, 123, 1000, querypb.SplitQueryRequest_FULL_SCAN)
-	if err != nil {
-		t.Fatalf("SplitQuery error: %v", err)
-	}
-	// For some reason, proto.Equal() is calling them unequal even though no diffs
-	// are found.
-	gotstr, wantstr := got[0].String(), want.String()
-	if gotstr != wantstr {
-		t.Errorf("SplitQuery() = %v, want %v", gotstr, wantstr)
-	}
 }
 
 func testEchoUpdateStream(t *testing.T, conn *vtgateconn.VTGateConn) {

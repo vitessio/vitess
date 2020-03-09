@@ -181,29 +181,6 @@ func (c *callerIDClient) MessageAck(ctx context.Context, keyspace string, name s
 	return c.fallback.MessageAck(ctx, keyspace, name, ids)
 }
 
-func (c *callerIDClient) SplitQuery(
-	ctx context.Context,
-	keyspace string,
-	sql string,
-	bindVariables map[string]*querypb.BindVariable,
-	splitColumns []string,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-	if ok, err := c.checkCallerID(ctx, sql); ok {
-		return nil, err
-	}
-	return c.fallbackClient.SplitQuery(
-		ctx,
-		sql,
-		keyspace,
-		bindVariables,
-		splitColumns,
-		splitCount,
-		numRowsPerQueryPart,
-		algorithm)
-}
-
 func (c *callerIDClient) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, callback func(*querypb.StreamEvent, int64) error) error {
 	if ok, err := c.checkCallerID(ctx, shard); ok {
 		return err

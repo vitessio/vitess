@@ -125,19 +125,6 @@ func (c *terminalClient) MessageAckKeyspaceIds(ctx context.Context, keyspace str
 	return 0, errTerminal
 }
 
-func (c *terminalClient) SplitQuery(
-	ctx context.Context,
-	keyspace string,
-	sql string,
-	bindVariables map[string]*querypb.BindVariable,
-	splitColumns []string,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm,
-) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-	return nil, errTerminal
-}
-
 func (c *terminalClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	return nil, errTerminal
 }
