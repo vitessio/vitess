@@ -48,7 +48,6 @@ type FakeQueryService struct {
 	// these fields are used to simulate and synchronize on panics
 	Panics                   bool
 	StreamExecutePanicsEarly bool
-	UpdateStreamPanicsEarly  bool
 	PanicWait                chan struct{}
 
 	// ExpectedTransactionID is what transactionID to expect for Execute
@@ -703,77 +702,6 @@ func (f *FakeQueryService) StreamHealth(ctx context.Context, callback func(*quer
 		shr = TestStreamHealthStreamHealthResponse
 	}
 	callback(shr)
-	return nil
-}
-
-const (
-	// UpdateStreamPosition is a test update stream position.
-	UpdateStreamPosition = "update stream position"
-
-	// UpdateStreamTimestamp is a test update stream timestamp.
-	UpdateStreamTimestamp = 123654
-)
-
-// UpdateStreamStreamEvent1 is a test update stream event.
-var UpdateStreamStreamEvent1 = querypb.StreamEvent{
-	Statements: []*querypb.StreamEvent_Statement{
-		{
-			Category:  querypb.StreamEvent_Statement_DML,
-			TableName: "table1",
-		},
-	},
-	EventToken: &querypb.EventToken{
-		Timestamp: 789654,
-		Shard:     "shard1",
-		Position:  "streaming position 1",
-	},
-}
-
-// UpdateStreamStreamEvent2 is a test update stream event.
-var UpdateStreamStreamEvent2 = querypb.StreamEvent{
-	Statements: []*querypb.StreamEvent_Statement{
-		{
-			Category:  querypb.StreamEvent_Statement_DML,
-			TableName: "table2",
-		},
-	},
-	EventToken: &querypb.EventToken{
-		Timestamp: 789655,
-		Shard:     "shard1",
-		Position:  "streaming position 2",
-	},
-}
-
-// UpdateStream is part of the queryservice.QueryService interface
-func (f *FakeQueryService) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
-	if f.Panics && f.UpdateStreamPanicsEarly {
-		panic(fmt.Errorf("test-triggered panic early"))
-	}
-	if position != UpdateStreamPosition {
-		f.t.Errorf("invalid UpdateStream.position: got %v expected %v", position, UpdateStreamPosition)
-	}
-	if timestamp != UpdateStreamTimestamp {
-		f.t.Errorf("invalid UpdateStream.timestamp: got %v expected %v", timestamp, UpdateStreamTimestamp)
-	}
-	f.checkTargetCallerID(ctx, "UpdateStream", target)
-	if err := callback(&UpdateStreamStreamEvent1); err != nil {
-		f.t.Errorf("callback1 failed: %v", err)
-	}
-	if f.Panics && !f.UpdateStreamPanicsEarly {
-		// wait until the client gets the response, then panics
-		<-f.PanicWait
-		panic(fmt.Errorf("test-triggered panic late"))
-	}
-	if f.HasError {
-		// wait until the client has the response, since all
-		// streaming implementation may not send previous
-		// messages if an error has been triggered.
-		<-f.ErrorWait
-		return f.TabletError
-	}
-	if err := callback(&UpdateStreamStreamEvent2); err != nil {
-		f.t.Errorf("callback2 failed: %v", err)
-	}
 	return nil
 }
 

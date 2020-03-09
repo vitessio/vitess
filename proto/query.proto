@@ -799,28 +799,6 @@ message StreamHealthResponse {
   topodata.TabletAlias tablet_alias = 5;
 }
 
-// UpdateStreamRequest is the payload for UpdateStream. At most one of
-// position and timestamp can be set. If neither is set, we will start
-// streaming from the current binlog position.
-message UpdateStreamRequest {
-  vtrpc.CallerID effective_caller_id = 1;
-  VTGateCallerID immediate_caller_id = 2;
-  Target target = 3;
-
-  // If position is set, we will start the streaming from that replication
-  // position. Incompatible with timestamp.
-  string position = 4;
-
-  // If timestamp is set, we will start the streaming from the first
-  // event in the binlogs that have that timestamp. Incompatible with position.
-  int64 timestamp = 5;
-}
-
-// UpdateStreamResponse is returned by UpdateStream
-message UpdateStreamResponse {
-  StreamEvent event = 1;
-}
-
 // TransactionState represents the state of a distributed transaction.
 enum TransactionState {
   UNKNOWN = 0;

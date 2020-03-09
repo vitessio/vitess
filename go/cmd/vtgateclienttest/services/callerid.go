@@ -180,10 +180,3 @@ func (c *callerIDClient) MessageAck(ctx context.Context, keyspace string, name s
 	}
 	return c.fallback.MessageAck(ctx, keyspace, name, ids)
 }
-
-func (c *callerIDClient) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, callback func(*querypb.StreamEvent, int64) error) error {
-	if ok, err := c.checkCallerID(ctx, shard); ok {
-		return err
-	}
-	return c.fallbackClient.UpdateStream(ctx, keyspace, shard, keyRange, tabletType, timestamp, event, callback)
-}

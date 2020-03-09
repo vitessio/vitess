@@ -331,21 +331,6 @@ func (q *query) StreamHealth(request *querypb.StreamHealthRequest, stream querys
 	return vterrors.ToGRPC(err)
 }
 
-// UpdateStream is part of the queryservice.QueryServer interface
-func (q *query) UpdateStream(request *querypb.UpdateStreamRequest, stream queryservicepb.Query_UpdateStreamServer) (err error) {
-	defer q.server.HandlePanic(&err)
-	ctx := callerid.NewContext(callinfo.GRPCCallInfo(stream.Context()),
-		request.EffectiveCallerId,
-		request.ImmediateCallerId,
-	)
-	err = q.server.UpdateStream(ctx, request.Target, request.Position, request.Timestamp, func(reply *querypb.StreamEvent) error {
-		return stream.Send(&querypb.UpdateStreamResponse{
-			Event: reply,
-		})
-	})
-	return vterrors.ToGRPC(err)
-}
-
 // VStream is part of the queryservice.QueryServer interface
 func (q *query) VStream(request *binlogdatapb.VStreamRequest, stream queryservicepb.Query_VStreamServer) (err error) {
 	defer q.server.HandlePanic(&err)

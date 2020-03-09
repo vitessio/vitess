@@ -614,12 +614,6 @@ func (stc *ScatterConn) MessageAck(ctx context.Context, rss []*srvtopo.ResolvedS
 	return totalCount, allErrors.AggrError(vterrors.Aggregate)
 }
 
-// UpdateStream just sends the query to the ResolvedShard,
-// and sends the results back.
-func (stc *ScatterConn) UpdateStream(ctx context.Context, rs *srvtopo.ResolvedShard, timestamp int64, position string, callback func(*querypb.StreamEvent) error) error {
-	return rs.QueryService.UpdateStream(ctx, rs.Target, position, timestamp, callback)
-}
-
 // Close closes the underlying Gateway.
 func (stc *ScatterConn) Close() error {
 	return stc.gateway.Close(context.Background())

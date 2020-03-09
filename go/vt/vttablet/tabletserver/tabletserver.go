@@ -38,7 +38,6 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/trace"
-	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
@@ -161,16 +160,15 @@ type TabletServer struct {
 
 	// The following variables should only be accessed within
 	// the context of a startRequest-endRequest.
-	se               *schema.Engine
-	qe               *QueryEngine
-	te               *TxEngine
-	teCtrl           TxPoolController
-	hw               *heartbeat.Writer
-	hr               *heartbeat.Reader
-	watcher          *ReplicationWatcher
-	vstreamer        *vstreamer.Engine
-	messager         *messager.Engine
-	updateStreamList *binlog.StreamList
+	se        *schema.Engine
+	qe        *QueryEngine
+	te        *TxEngine
+	teCtrl    TxPoolController
+	hw        *heartbeat.Writer
+	hr        *heartbeat.Reader
+	watcher   *ReplicationWatcher
+	vstreamer *vstreamer.Engine
+	messager  *messager.Engine
 
 	// checkMySQLThrottler is used to throttle the number of
 	// requests sent to CheckMySQL.
@@ -273,7 +271,6 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 	tsv.hr = heartbeat.NewReader(tsv, config)
 	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
 	tsv.watcher = NewReplicationWatcher(tsv.se, config)
-	tsv.updateStreamList = &binlog.StreamList{}
 	// FIXME(alainjobart) could we move this to the Register method below?
 	// So that vtcombo doesn't even call it once, on the first tablet.
 	// And we can remove the tsOnce variable.
@@ -549,7 +546,6 @@ func (tsv *TabletServer) fullStart() (err error) {
 		return err
 	}
 	tsv.hr.Init(tsv.target)
-	tsv.updateStreamList.Init()
 	tsv.vstreamer.Open(tsv.target.Keyspace, tsv.alias.Cell)
 	return tsv.serveNewType()
 }
@@ -626,7 +622,6 @@ func (tsv *TabletServer) waitForShutdown() {
 	tsv.messager.Close()
 	tsv.teCtrl.StopGently()
 	tsv.qe.streamQList.TerminateAll()
-	tsv.updateStreamList.Stop()
 	tsv.watcher.Close()
 	tsv.requests.Wait()
 	tsv.txThrottler.Close()
@@ -641,7 +636,6 @@ func (tsv *TabletServer) closeAll() {
 	tsv.hw.Close()
 	tsv.teCtrl.StopGently()
 	tsv.watcher.Close()
-	tsv.updateStreamList.Stop()
 	tsv.qe.Close()
 	tsv.se.Close()
 	tsv.txThrottler.Close()
@@ -1771,47 +1765,6 @@ func (tsv *TabletServer) HeartbeatLag() (time.Duration, error) {
 // TopoServer returns the topo server.
 func (tsv *TabletServer) TopoServer() *topo.Server {
 	return tsv.topoServer
-}
-
-// UpdateStream streams binlog events.
-func (tsv *TabletServer) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
-	// Parse the position if needed.
-	var p mysql.Position
-	var err error
-	if timestamp == 0 {
-		if position != "" {
-			p, err = mysql.DecodePosition(position)
-			if err != nil {
-				return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot parse position: %v", err)
-			}
-		}
-	} else if position != "" {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "at most one of position and timestamp should be specified")
-	}
-
-	// Validate proper target is used.
-	if err = tsv.startRequest(ctx, target, false /* isBegin */, false /* allowOnShutdown */); err != nil {
-		return err
-	}
-	defer tsv.endRequest(false)
-
-	s := binlog.NewEventStreamer(tsv.dbconfigs.DbaWithDB(), tsv.se, p, timestamp, callback)
-
-	// Create a cancelable wrapping context.
-	streamCtx, streamCancel := context.WithCancel(ctx)
-	i := tsv.updateStreamList.Add(streamCancel)
-	defer tsv.updateStreamList.Delete(i)
-
-	// And stream with it.
-	err = s.Stream(streamCtx)
-	switch err {
-	case binlog.ErrBinlogUnavailable:
-		return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%v", err)
-	case nil, io.EOF:
-		return nil
-	default:
-		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "%v", err)
-	}
 }
 
 // HandlePanic is part of the queryservice.QueryService interface
