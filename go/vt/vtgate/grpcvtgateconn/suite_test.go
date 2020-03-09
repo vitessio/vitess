@@ -14,9 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package vtgateconntest provides the test methods to make sure a
-// vtgateconn/vtgateservice pair over RPC works correctly.
-package vtgateconntest
+package grpcvtgateconn
+
+// This is agnostic of grpc and was in a separate package 'vtgateconntest'.
+// This has been moved here for better readability. If we introduce
+// protocols other than grpc in the future, this will have to be
+// moved back to its own package for reusability.
 
 import (
 	"errors"
@@ -992,8 +995,8 @@ func (f *fakeVTGateService) HandlePanic(err *error) {
 	}
 }
 
-// TestSuite runs all the tests
-func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGateService) {
+// RunTests runs all the tests
+func RunTests(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGateService) {
 	vtgateconn.RegisterDialer("test", func(ctx context.Context, address string) (vtgateconn.Impl, error) {
 		return impl, nil
 	})
@@ -1055,8 +1058,8 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	fs.panics = false
 }
 
-// TestErrorSuite runs all the tests that expect errors
-func TestErrorSuite(t *testing.T, fakeServer vtgateservice.VTGateService) {
+// RunErrorTests runs all the tests that expect errors
+func RunErrorTests(t *testing.T, fakeServer vtgateservice.VTGateService) {
 	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "")
 	if err != nil {
 		t.Fatalf("Got err: %v from vtgateconn.DialProtocol", err)
