@@ -725,64 +725,6 @@ func testMessageAckPanics(t *testing.T, conn queryservice.QueryService, f *FakeQ
 	})
 }
 
-func testSplitQuery(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
-	t.Log("testSplitQuery")
-	ctx := context.Background()
-	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
-	qsl, err := conn.SplitQuery(
-		ctx,
-		TestTarget,
-		SplitQueryBoundQuery,
-		SplitQuerySplitColumns,
-		SplitQuerySplitCount,
-		SplitQueryNumRowsPerQueryPart,
-		SplitQueryAlgorithm,
-	)
-	if err != nil {
-		t.Fatalf("SplitQuery failed: %v", err)
-	}
-	if !proto.Equal(
-		&querypb.SplitQueryResponse{Queries: qsl},
-		&querypb.SplitQueryResponse{Queries: SplitQueryQuerySplitList},
-	) {
-		t.Errorf("Unexpected result from SplitQuery: got %v wanted %v", qsl, SplitQueryQuerySplitList)
-	}
-}
-
-func testSplitQueryError(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
-	t.Log("testSplitQueryError")
-	f.HasError = true
-	testErrorHelper(t, f, "SplitQuery", func(ctx context.Context) error {
-		_, err := conn.SplitQuery(
-			ctx,
-			TestTarget,
-			SplitQueryBoundQuery,
-			SplitQuerySplitColumns,
-			SplitQuerySplitCount,
-			SplitQueryNumRowsPerQueryPart,
-			SplitQueryAlgorithm,
-		)
-		return err
-	})
-	f.HasError = false
-}
-
-func testSplitQueryPanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
-	t.Log("testSplitQueryPanics")
-	testPanicHelper(t, f, "SplitQuery", func(ctx context.Context) error {
-		_, err := conn.SplitQuery(
-			ctx,
-			TestTarget,
-			SplitQueryBoundQuery,
-			SplitQuerySplitColumns,
-			SplitQuerySplitCount,
-			SplitQueryNumRowsPerQueryPart,
-			SplitQueryAlgorithm,
-		)
-		return err
-	})
-}
-
 // this test is a bit of a hack: we write something on the channel
 // upon registration, and we also return an error, so the streaming query
 // ends right there. Otherwise we have no real way to trigger a real
@@ -943,7 +885,6 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testBeginExecuteBatch,
 		testMessageStream,
 		testMessageAck,
-		testSplitQuery,
 		testUpdateStream,
 
 		// error test cases
@@ -967,7 +908,6 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testBeginExecuteBatchErrorInExecuteBatch,
 		testMessageStreamError,
 		testMessageAckError,
-		testSplitQueryError,
 		testUpdateStreamError,
 
 		// panic test cases
@@ -989,7 +929,6 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testBeginExecuteBatchPanics,
 		testMessageStreamPanics,
 		testMessageAckPanics,
-		testSplitQueryPanics,
 		testUpdateStreamPanics,
 	}
 

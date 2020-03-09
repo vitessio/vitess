@@ -92,11 +92,6 @@ type QueryService interface {
 	MessageStream(ctx context.Context, target *querypb.Target, name string, callback func(*sqltypes.Result) error) error
 	MessageAck(ctx context.Context, target *querypb.Target, name string, ids []*querypb.Value) (count int64, err error)
 
-	// SplitQuery is a MapReduce helper function
-	// This version of SplitQuery supports multiple algorithms and multiple split columns.
-	// See the documentation of SplitQueryRequest in 'proto/vtgate.proto' for more information.
-	SplitQuery(ctx context.Context, target *querypb.Target, query *querypb.BoundQuery, splitColumns []string, splitCount int64, numRowsPerQueryPart int64, algorithm querypb.SplitQueryRequest_Algorithm) ([]*querypb.QuerySplit, error)
-
 	// UpdateStream streams updates from the provided position or timestamp.
 	UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error
 

@@ -324,27 +324,6 @@ func (q *query) MessageAck(ctx context.Context, request *querypb.MessageAckReque
 	}, nil
 }
 
-// SplitQuery is part of the queryservice.QueryServer interface
-func (q *query) SplitQuery(ctx context.Context, request *querypb.SplitQueryRequest) (response *querypb.SplitQueryResponse, err error) {
-	defer q.server.HandlePanic(&err)
-	ctx = callerid.NewContext(callinfo.GRPCCallInfo(ctx),
-		request.EffectiveCallerId,
-		request.ImmediateCallerId,
-	)
-	splits, err := q.server.SplitQuery(
-		ctx,
-		request.Target,
-		request.Query,
-		request.SplitColumn,
-		request.SplitCount,
-		request.NumRowsPerQueryPart,
-		request.Algorithm)
-	if err != nil {
-		return nil, vterrors.ToGRPC(err)
-	}
-	return &querypb.SplitQueryResponse{Queries: splits}, nil
-}
-
 // StreamHealth is part of the queryservice.QueryServer interface
 func (q *query) StreamHealth(request *querypb.StreamHealthRequest, stream queryservicepb.Query_StreamHealthServer) (err error) {
 	defer q.server.HandlePanic(&err)

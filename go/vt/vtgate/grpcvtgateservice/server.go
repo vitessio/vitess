@@ -452,28 +452,6 @@ func (vtg *VTGate) MessageAckKeyspaceIds(ctx context.Context, request *vtgatepb.
 	}, nil
 }
 
-// SplitQuery is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) SplitQuery(ctx context.Context, request *vtgatepb.SplitQueryRequest) (response *vtgatepb.SplitQueryResponse, err error) {
-
-	defer vtg.server.HandlePanic(&err)
-	ctx = withCallerIDContext(ctx, request.CallerId)
-	splits, vtgErr := vtg.server.SplitQuery(
-		ctx,
-		request.Keyspace,
-		request.Query.Sql,
-		request.Query.BindVariables,
-		request.SplitColumn,
-		request.SplitCount,
-		request.NumRowsPerQueryPart,
-		request.Algorithm)
-	if vtgErr != nil {
-		return nil, vterrors.ToGRPC(vtgErr)
-	}
-	return &vtgatepb.SplitQueryResponse{
-		Splits: splits,
-	}, nil
-}
-
 // GetSrvKeyspace is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, request *vtgatepb.GetSrvKeyspaceRequest) (response *vtgatepb.GetSrvKeyspaceResponse, err error) {
 	defer vtg.server.HandlePanic(&err)

@@ -327,32 +327,6 @@ func (sbc *SandboxConn) MessageAck(ctx context.Context, target *querypb.Target, 
 // SandboxSQRowCount is the default number of fake splits returned.
 var SandboxSQRowCount = int64(10)
 
-// SplitQuery returns a single QuerySplit whose 'sql' field describes the received arguments.
-func (sbc *SandboxConn) SplitQuery(
-	ctx context.Context,
-	target *querypb.Target,
-	query *querypb.BoundQuery,
-	splitColumns []string,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm) ([]*querypb.QuerySplit, error) {
-	err := sbc.getError()
-	if err != nil {
-		return nil, err
-	}
-	splits := []*querypb.QuerySplit{
-		{
-			Query: &querypb.BoundQuery{
-				Sql: fmt.Sprintf(
-					"query:%v, splitColumns:%v, splitCount:%v,"+
-						" numRowsPerQueryPart:%v, algorithm:%v, shard:%v",
-					query, splitColumns, splitCount, numRowsPerQueryPart, algorithm, sbc.tablet.Shard),
-			},
-		},
-	}
-	return splits, nil
-}
-
 // StreamHealth is not implemented.
 func (sbc *SandboxConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
 	return fmt.Errorf("not implemented in test")

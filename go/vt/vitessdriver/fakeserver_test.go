@@ -217,20 +217,6 @@ func (f *fakeVTGateService) MessageAckKeyspaceIds(ctx context.Context, keyspace 
 	return 0, nil
 }
 
-// SplitQuery is part of the VTGateService interface
-func (f *fakeVTGateService) SplitQuery(
-	ctx context.Context,
-	keyspace string,
-	sql string,
-	bindVariables map[string]*querypb.BindVariable,
-	splitColumns []string,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm,
-) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-	return nil, nil
-}
-
 // GetSrvKeyspace is part of the VTGateService interface
 func (f *fakeVTGateService) GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	return &topodatapb.SrvKeyspace{}, nil

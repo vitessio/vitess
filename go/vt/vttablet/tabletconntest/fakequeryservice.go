@@ -19,7 +19,6 @@ package tabletconntest
 import (
 	"errors"
 	"fmt"
-	"reflect"
 	"testing"
 
 	"golang.org/x/net/context"
@@ -587,40 +586,6 @@ func (f *FakeQueryService) ExecuteBatch(ctx context.Context, target *querypb.Tar
 	return ExecuteBatchQueryResultList, nil
 }
 
-// SplitQuerySplitColumns is a test list for column splits.
-var SplitQuerySplitColumns = []string{"nice_column_to_split"}
-
-// SplitQuerySplitCount is a test split count.
-const SplitQuerySplitCount = 372
-
-// SplitQueryBoundQuery is a test query for splits.
-var SplitQueryBoundQuery = &querypb.BoundQuery{
-	Sql: "splitQuery",
-	BindVariables: map[string]*querypb.BindVariable{
-		"bind1": sqltypes.Int64BindVariable(43),
-	},
-}
-
-// SplitQueryNumRowsPerQueryPart is a test num rows for split.
-const SplitQueryNumRowsPerQueryPart = 123
-
-// SplitQueryAlgorithm is a test algorithm for splits.
-const SplitQueryAlgorithm = querypb.SplitQueryRequest_FULL_SCAN
-
-// SplitQueryQuerySplitList is a test result for splits.
-var SplitQueryQuerySplitList = []*querypb.QuerySplit{
-	{
-		Query: &querypb.BoundQuery{
-			Sql: "splitQuery",
-			BindVariables: map[string]*querypb.BindVariable{
-				"bind1":       sqltypes.Int64BindVariable(43),
-				"keyspace_id": sqltypes.Int64BindVariable(3333),
-			},
-		},
-		RowCount: 4456,
-	},
-}
-
 // BeginExecute combines Begin and Execute.
 func (f *FakeQueryService) BeginExecute(ctx context.Context, target *querypb.Target, sql string, bindVariables map[string]*querypb.BindVariable, options *querypb.ExecuteOptions) (*sqltypes.Result, int64, error) {
 	transactionID, err := f.Begin(ctx, target, options)
@@ -702,47 +667,6 @@ func (f *FakeQueryService) MessageAck(ctx context.Context, target *querypb.Targe
 		f.t.Errorf("ids: %v, want %v", ids, MessageIDs)
 	}
 	return 1, nil
-}
-
-// SplitQuery is part of the queryservice.QueryService interface
-func (f *FakeQueryService) SplitQuery(
-	ctx context.Context,
-	target *querypb.Target,
-	query *querypb.BoundQuery,
-	splitColumns []string,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm,
-) ([]*querypb.QuerySplit, error) {
-
-	if f.HasError {
-		return nil, f.TabletError
-	}
-	if f.Panics {
-		panic(fmt.Errorf("test-triggered panic"))
-	}
-	f.checkTargetCallerID(ctx, "SplitQuery", target)
-	if !proto.Equal(query, SplitQueryBoundQuery) {
-		f.t.Errorf("invalid SplitQuery.SplitQueryRequest.Query: got %v expected %v",
-			query, SplitQueryBoundQuery)
-	}
-	if !reflect.DeepEqual(splitColumns, SplitQuerySplitColumns) {
-		f.t.Errorf("invalid SplitQuery.SplitColumn: got %v expected %v",
-			splitColumns, SplitQuerySplitColumns)
-	}
-	if splitCount != SplitQuerySplitCount {
-		f.t.Errorf("invalid SplitQuery.SplitCount: got %v expected %v",
-			splitCount, SplitQuerySplitCount)
-	}
-	if numRowsPerQueryPart != SplitQueryNumRowsPerQueryPart {
-		f.t.Errorf("invalid SplitQuery.numRowsPerQueryPart: got %v expected %v",
-			numRowsPerQueryPart, SplitQueryNumRowsPerQueryPart)
-	}
-	if algorithm != SplitQueryAlgorithm {
-		f.t.Errorf("invalid SplitQuery.algorithm: got %v expected %v",
-			algorithm, SplitQueryAlgorithm)
-	}
-	return SplitQueryQuerySplitList, nil
 }
 
 // TestStreamHealthStreamHealthResponse is a test stream health response.
