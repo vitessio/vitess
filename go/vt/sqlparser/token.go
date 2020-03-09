@@ -661,7 +661,7 @@ func (tkn *Tokenizer) scanIdentifier(firstByte byte, isDbSystemVariable bool) (i
 	lowered := bytes.ToLower(buffer.Bytes())
 	loweredStr := string(lowered)
 	if keywordID, found := keywords[loweredStr]; found {
-		return keywordID, lowered
+		return keywordID, buffer.Bytes()
 	}
 	// dual must always be case-insensitive
 	if loweredStr == "dual" {
