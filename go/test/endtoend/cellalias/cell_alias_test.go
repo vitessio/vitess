@@ -238,7 +238,10 @@ func TestMain(m *testing.M) {
 
 func TestAlias(t *testing.T) {
 	defer cluster.PanicHandler(t)
+
 	insertInitialValues(t)
+	defer deleteInitialValues(t)
+
 	err := localCluster.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceName)
 	require.Nil(t, err)
 	shard1 := localCluster.Keyspaces[0].Shards[0]
@@ -267,6 +270,11 @@ func TestAlias(t *testing.T) {
 	vtgateInstance.TabletTypesToWait = "MASTER,REPLICA"
 	err = vtgateInstance.Setup()
 	require.Nil(t, err)
+
+	// Cluster teardown will not teardown vtgate because we are not
+	// actually setting this on localCluster.VtgateInstance
+	defer vtgateInstance.TearDown()
+
 	waitTillAllTabletsAreHealthyInVtgate(t, *vtgateInstance, shard1.Name, shard2.Name)
 
 	testQueriesInDifferentTabletType(t, "master", vtgateInstance.GrpcPort, false)
@@ -279,8 +287,9 @@ func TestAlias(t *testing.T) {
 	require.Nil(t, err)
 
 	// restarts the vtgate process
-	_ = vtgateInstance.TearDown()
 	vtgateInstance.TabletTypesToWait = "MASTER"
+	err = vtgateInstance.TearDown()
+	require.Nil(t, err)
 	err = vtgateInstance.Setup()
 	require.Nil(t, err)
 
@@ -289,13 +298,14 @@ func TestAlias(t *testing.T) {
 	testQueriesInDifferentTabletType(t, "replica", vtgateInstance.GrpcPort, true)
 	testQueriesInDifferentTabletType(t, "rdonly", vtgateInstance.GrpcPort, true)
 
-	deleteInitialValues(t)
-	_ = vtgateInstance.TearDown()
 }
 
 func TestAddAliasWhileVtgateUp(t *testing.T) {
 	defer cluster.PanicHandler(t)
+
 	insertInitialValues(t)
+	defer deleteInitialValues(t)
+
 	err := localCluster.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceName)
 	require.Nil(t, err)
 	shard1 := localCluster.Keyspaces[0].Shards[0]
@@ -314,6 +324,8 @@ func TestAddAliasWhileVtgateUp(t *testing.T) {
 	vtgateInstance.TabletTypesToWait = "MASTER,REPLICA,RDONLY"
 	err = vtgateInstance.Setup()
 	require.Nil(t, err)
+	defer vtgateInstance.TearDown()
+
 	waitTillAllTabletsAreHealthyInVtgate(t, *vtgateInstance, shard1.Name, shard2.Name)
 
 	// since replica and rdonly tablets of all shards in cell2, the last 2 assertion is expected to fail
@@ -335,8 +347,6 @@ func TestAddAliasWhileVtgateUp(t *testing.T) {
 	testQueriesInDifferentTabletType(t, "replica", vtgateInstance.GrpcPort, false)
 	testQueriesInDifferentTabletType(t, "rdonly", vtgateInstance.GrpcPort, false)
 
-	deleteInitialValues(t)
-	_ = vtgateInstance.TearDown()
 }
 
 func waitTillAllTabletsAreHealthyInVtgate(t *testing.T, vtgateInstance cluster.VtgateProcess, shards ...string) {
