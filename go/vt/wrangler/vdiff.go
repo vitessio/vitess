@@ -191,6 +191,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 
 	// TODO(sougou): parallelize
 	diffReports := make(map[string]*DiffReport)
+	jsonOutput := ""
 	for table, td := range df.differs {
 		// Stop the targets and record their source positions.
 		if err := df.stopTargets(ctx); err != nil {
@@ -222,11 +223,17 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 			if err != nil {
 				wr.Logger().Printf("Error converting report to json: %v", err.Error())
 			}
-			wr.Logger().Printf("%s", json)
+			if jsonOutput != "" {
+				jsonOutput += ","
+			}
+			jsonOutput += fmt.Sprintf("%s", json)
 		} else {
 			wr.Logger().Printf("Summary for %v: %+v\n", td.targetTable, *dr)
 		}
 		diffReports[table] = dr
+	}
+	if *format == "json" && jsonOutput != "" {
+		wr.logger.Printf(`[ %s ]`, jsonOutput)
 	}
 	return diffReports, nil
 }
@@ -239,7 +246,7 @@ func (df *vdiff) buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter
 		if err != nil {
 			return err
 		}
-		if rule == nil {
+		if rule == nil || rule.Filter == "exclude" {
 			continue
 		}
 		query := rule.Filter
