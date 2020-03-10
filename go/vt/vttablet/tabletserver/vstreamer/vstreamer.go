@@ -154,6 +154,15 @@ func (vs *vstreamer) Stream() error {
 	}
 	if vs.startPos == "current" {
 		vs.pos = curPos
+		vevents := []*binlogdatapb.VEvent{{
+			Type: binlogdatapb.VEventType_GTID,
+			Gtid: mysql.EncodePosition(vs.pos),
+		}, {
+			Type: binlogdatapb.VEventType_OTHER,
+		}}
+		if err := vs.send(vevents); err != nil {
+			return wrapError(err, vs.pos)
+		}
 	} else {
 		pos, err := mysql.DecodePosition(vs.startPos)
 		if err != nil {
