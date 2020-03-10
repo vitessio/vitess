@@ -128,6 +128,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE DEFAULT SET LOCK UNLOCK KEYS
 %right <bytes> UNIQUE KEY
+%token <bytes> SYSTEM_TIME
 %token <bytes> VALUES LAST_INSERT_ID
 %token <bytes> NEXT VALUE SHARE MODE
 %token <bytes> SQL_NO_CACHE SQL_CACHE
@@ -239,7 +240,7 @@ func skipToEnd(yylex interface{}) {
 %type <tableNames> table_name_list delete_table_list view_name_list
 %type <str> inner_join outer_join straight_join natural_join
 %type <tableName> table_name into_table_name delete_table_name
-%type <aliasedTableName> aliased_table_name
+%type <aliasedTableName> aliased_table_name as_opt_id
 %type <indexHints> index_hint_list
 %type <expr> where_expression_opt
 %type <expr> condition
@@ -288,7 +289,8 @@ func skipToEnd(yylex interface{}) {
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
 %type <expr> charset_value
-%type <tableIdent> table_id reserved_table_id table_alias as_opt_id
+%type <tableIdent> table_id reserved_table_id table_alias
+%type <str> as_of_opt
 %type <str> charset
 %type <str> set_session_or_global show_session_or_global
 %type <convertType> convert_type
@@ -2120,11 +2122,25 @@ table_factor:
 aliased_table_name:
 table_name as_opt_id index_hint_list
   {
-    $$ = &AliasedTableExpr{Expr:$1, As: $2, Hints: $3}
+    $$ = $2
+    $$.Expr = $1
+    $$.Hints = $3
   }
 | table_name PARTITION openb partition_list closeb as_opt_id index_hint_list
   {
-    $$ = &AliasedTableExpr{Expr:$1, Partitions: $4, As: $6, Hints: $7}
+    $$ = $6
+    $$.Expr = $1
+    $$.Partitions = $4
+    $$.Hints = $7
+  }
+
+as_of_opt:
+  {
+    $$ = ""
+  }
+| AS OF STRING
+  {
+    $$ = string($3)
   }
 
 column_list:
@@ -2197,15 +2213,31 @@ as_opt:
 
 as_opt_id:
   {
-    $$ = NewTableIdent("")
+    $$ = &AliasedTableExpr{}
+  }
+| AS OF STRING
+  {
+    $$ = &AliasedTableExpr{}
+  }
+| FOR SYSTEM_TIME AS OF STRING
+    {
+      $$ = string($1)
+    }
+| AS OF STRING table_alias
+  {
+    $$ = &AliasedTableExpr{As: $1}
+  }
+| AS OF STRING AS table_alias
+  {
+    $$ = &AliasedTableExpr{As: $2}
   }
 | table_alias
   {
-    $$ = $1
+    $$ = &AliasedTableExpr{As: $1}
   }
 | AS table_alias
   {
-    $$ = $2
+    $$ = &AliasedTableExpr{As: $2}
   }
 
 table_alias:
@@ -3113,10 +3145,10 @@ lock_opt:
   {
     $$ = ""
   }
-| FOR UPDATE
-  {
-    $$ = ForUpdateStr
-  }
+//| FOR UPDATE
+//  {
+//    $$ = ForUpdateStr
+//  }
 | LOCK IN SHARE MODE
   {
     $$ = ShareModeStr
