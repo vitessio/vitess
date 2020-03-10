@@ -320,7 +320,7 @@ message Journal {
 message VEvent {
   VEventType type = 1;
   // Timestamp is the binlog timestamp in seconds.
-  // It's set for all events.
+  // The value should be ignored if 0.
   int64 timestamp = 2;
   // Gtid is set if the event type is GTID.
   string gtid = 3;
