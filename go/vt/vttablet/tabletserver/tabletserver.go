@@ -163,7 +163,6 @@ type TabletServer struct {
 	se        *schema.Engine
 	qe        *QueryEngine
 	te        *TxEngine
-	teCtrl    TxPoolController
 	hw        *heartbeat.Writer
 	hr        *heartbeat.Reader
 	watcher   *ReplicationWatcher
@@ -207,46 +206,6 @@ func NewServer(topoServer *topo.Server, alias topodatapb.TabletAlias) *TabletSer
 	return NewTabletServer(tabletenv.Config, topoServer, alias)
 }
 
-// TxPoolController is how the tablet server interacts with the tx-pool.
-// It is responsible for keeping it's own state - knowing when different types
-// of transactions are allowed, and how to do state transitions.
-type TxPoolController interface {
-	// Stop will stop accepting any new transactions. Transactions are immediately aborted.
-	Stop() error
-
-	// Will start accepting all transactions. If transitioning from RO mode, transactions
-	// might need to be rolled back before new transactions can be accepts.
-	AcceptReadWrite() error
-
-	// Will start accepting read-only transactions, but not full read and write transactions.
-	// If the engine is currently accepting full read and write transactions, they need to
-	// given a chance to clean up before they are forcefully rolled back.
-	AcceptReadOnly() error
-
-	// InitDBConfig must be called before Init.
-	InitDBConfig(dbcfgs *dbconfigs.DBConfigs)
-
-	// Init must be called once when vttablet starts for setting
-	// up the metadata tables.
-	Init() error
-
-	// StopGently will change the state to NotServing but first wait for transactions to wrap up
-	StopGently()
-
-	// Begin begins a transaction, and returns the associated transaction id and the
-	// statement(s) used to execute the begin (if any).
-	//
-	// Subsequent statements can access the connection through the transaction id.
-	Begin(ctx context.Context, options *querypb.ExecuteOptions) (int64, string, error)
-
-	// Commit commits the specified transaction, returning the statement used to execute
-	// the commit or "" in autocommit settings.
-	Commit(ctx context.Context, transactionID int64) (string, error)
-
-	// Rollback rolls back the specified transaction.
-	Rollback(ctx context.Context, transactionID int64) error
-}
-
 var tsOnce sync.Once
 var srvTopoServer srvtopo.Server
 
@@ -266,7 +225,6 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 	tsv.se = schema.NewEngine(tsv, config)
 	tsv.qe = NewQueryEngine(tsv, tsv.se, config)
 	tsv.te = NewTxEngine(tsv, config)
-	tsv.teCtrl = tsv.te
 	tsv.hw = heartbeat.NewWriter(tsv, alias, config)
 	tsv.hr = heartbeat.NewReader(tsv, config)
 	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
@@ -378,7 +336,7 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 
 	tsv.se.InitDBConfig(tsv.dbconfigs.DbaWithDB())
 	tsv.qe.InitDBConfig(tsv.dbconfigs)
-	tsv.teCtrl.InitDBConfig(tsv.dbconfigs)
+	tsv.te.InitDBConfig(tsv.dbconfigs)
 	tsv.hw.InitDBConfig(tsv.dbconfigs)
 	tsv.hr.InitDBConfig(tsv.dbconfigs)
 	tsv.watcher.InitDBConfig(tsv.dbconfigs)
@@ -539,7 +497,7 @@ func (tsv *TabletServer) fullStart() (err error) {
 	if err := tsv.qe.Open(); err != nil {
 		return err
 	}
-	if err := tsv.teCtrl.Init(); err != nil {
+	if err := tsv.te.Init(); err != nil {
 		return err
 	}
 	if err := tsv.hw.Init(tsv.target); err != nil {
@@ -556,7 +514,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 	// transactional requests are not allowed. So, we can
 	// be sure that the tx pool won't change after the wait.
 	if tsv.target.TabletType == topodatapb.TabletType_MASTER {
-		tsv.teCtrl.AcceptReadWrite()
+		tsv.te.AcceptReadWrite()
 		if err := tsv.txThrottler.Open(tsv.target.Keyspace, tsv.target.Shard); err != nil {
 			return err
 		}
@@ -565,7 +523,7 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		tsv.hr.Close()
 		tsv.hw.Open()
 	} else {
-		tsv.teCtrl.AcceptReadOnly()
+		tsv.te.AcceptReadOnly()
 		tsv.messager.Close()
 		tsv.hr.Open()
 		tsv.hw.Close()
@@ -620,7 +578,7 @@ func (tsv *TabletServer) waitForShutdown() {
 	// will be allowed. They will enable the conclusion of outstanding
 	// transactions.
 	tsv.messager.Close()
-	tsv.teCtrl.StopGently()
+	tsv.te.StopGently()
 	tsv.qe.streamQList.TerminateAll()
 	tsv.watcher.Close()
 	tsv.requests.Wait()
@@ -634,7 +592,7 @@ func (tsv *TabletServer) closeAll() {
 	tsv.vstreamer.Close()
 	tsv.hr.Close()
 	tsv.hw.Close()
-	tsv.teCtrl.StopGently()
+	tsv.te.StopGently()
 	tsv.watcher.Close()
 	tsv.qe.Close()
 	tsv.se.Close()
@@ -766,7 +724,7 @@ func (tsv *TabletServer) Begin(ctx context.Context, target *querypb.Target, opti
 				return vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "Transaction throttled")
 			}
 			var beginSQL string
-			transactionID, beginSQL, err = tsv.teCtrl.Begin(ctx, options)
+			transactionID, beginSQL, err = tsv.te.Begin(ctx, options)
 			logStats.TransactionID = transactionID
 
 			// Record the actual statements that were executed in the logStats.
@@ -796,7 +754,7 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, tra
 			logStats.TransactionID = transactionID
 
 			var commitSQL string
-			commitSQL, err = tsv.teCtrl.Commit(ctx, transactionID)
+			commitSQL, err = tsv.te.Commit(ctx, transactionID)
 
 			// If nothing was actually executed, don't count the operation in
 			// the tablet metrics, and clear out the logStats Method so that
@@ -820,7 +778,7 @@ func (tsv *TabletServer) Rollback(ctx context.Context, target *querypb.Target, t
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			defer tabletenv.QueryStats.Record("ROLLBACK", time.Now())
 			logStats.TransactionID = transactionID
-			return tsv.teCtrl.Rollback(ctx, transactionID)
+			return tsv.te.Rollback(ctx, transactionID)
 		},
 	)
 }
