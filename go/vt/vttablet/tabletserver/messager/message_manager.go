@@ -50,10 +50,6 @@ var (
 		"MessageDelay",
 		"MessageDelayTimings records total latency from queueing to client sends",
 		[]string{"TableName"})
-
-	// The following variables are changed for testing only.
-	streamEventGracePeriod = sync2.NewAtomicDuration(10 * time.Second)
-	vstreamRetryWait       = sync2.NewAtomicDuration(5 * time.Second)
 )
 
 type messageReceiver struct {
@@ -586,8 +582,9 @@ func (mm *messageManager) runVStream(ctx context.Context) {
 			return
 		default:
 		}
+		MessageStats.Add([]string{mm.name.String(), "VStreamFailed"}, 1)
 		log.Infof("VStream ended: %v, retrying in 5 seconds", err)
-		time.Sleep(vstreamRetryWait.Get())
+		time.Sleep(5 * time.Second)
 	}
 }
 
@@ -595,38 +592,9 @@ func (mm *messageManager) runOneVStream(ctx context.Context) error {
 	var curPos string
 	var fields []*querypb.Field
 
-	// The watchdog goroutine polls lastEventTime.
-	// If it exceeds streamEventGracePeriod, it cancels the vstream
-	// and exits.
-	lastEventTime := time.Now()
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	go func() {
-		ticker := time.NewTicker(streamEventGracePeriod.Get())
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-			}
-			mm.streamMu.Lock()
-			idleTime := time.Since(lastEventTime)
-			mm.streamMu.Unlock()
-			if idleTime > streamEventGracePeriod.Get() {
-				log.Infof("VStream received no events for %v, restarting", idleTime)
-				cancel()
-				return
-			}
-		}
-	}()
-
 	err := mm.vs.Stream(ctx, "current", mm.vsFilter, func(events []*binlogdatapb.VEvent) error {
 		mm.streamMu.Lock()
 		defer mm.streamMu.Unlock()
-		lastEventTime = time.Now()
 
 		select {
 		case <-ctx.Done():
