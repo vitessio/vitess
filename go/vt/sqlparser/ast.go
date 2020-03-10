@@ -2088,6 +2088,11 @@ type AliasedTableExpr struct {
 	Partitions Partitions
 	As         TableIdent
 	Hints      *IndexHints
+	AsOf       *AsOf
+}
+
+type AsOf struct {
+	Time string
 }
 
 // Format formats the node.

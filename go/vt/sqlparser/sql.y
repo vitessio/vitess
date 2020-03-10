@@ -77,6 +77,7 @@ func skipToEnd(yylex interface{}) {
   tableName     TableName
   tableNames    TableNames
   indexHints    *IndexHints
+  asOf          *AsOf
   expr          Expr
   exprs         Exprs
   boolVal       BoolVal
@@ -290,7 +291,7 @@ func skipToEnd(yylex interface{}) {
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
 %type <expr> charset_value
 %type <tableIdent> table_id reserved_table_id table_alias as_opt_id
-%type <str> as_of_opt
+%type <asOf> as_of_opt
 %type <str> charset
 %type <str> set_session_or_global show_session_or_global
 %type <convertType> convert_type
@@ -2122,7 +2123,7 @@ table_factor:
 aliased_table_name:
 table_name partition_list_opt as_of_opt as_opt_id index_hint_list
   {
-    $$ = &AliasedTableExpr{Expr:$1, Partitions: $2, As: $4, Hints: $5}
+    $$ = &AliasedTableExpr{Expr:$1, Partitions: $2, AsOf: $3, As: $4, Hints: $5}
   }
 
 partition_list_opt:
@@ -2136,17 +2137,17 @@ partition_list_opt:
 
 as_of_opt:
   {
-    $$ = ""
+    $$ = nil
   }
 | FOR SYSTEM_TIME AS OF STRING
   {
-    $$ = string($5)
+    $$ = &AsOf{Time: string($5)}
   }
 // Non-standard oracle extension would be nice to have, but generates
 // a parser conflict on AS (for the alias).
 //| AS OF STRING
 //  {
-//    $$ = string($3)
+//    $$ = &AsOf{Time: $5}
 //  }
 
 column_list:
@@ -2219,7 +2220,7 @@ as_opt:
 
 as_opt_id:
   {
-    $$ = &AliasedTableExpr{}
+    $$ = TableIdent{}
   }
 | as_opt table_alias
   {
