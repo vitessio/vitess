@@ -29,12 +29,14 @@ func init() {
 }
 
 func TestBasicVreplicationWorkflow(t *testing.T) {
+
 	cellName := "zone1"
 
 	vc = InitCluster(t, cellName)
 	assert.NotNil(t, vc)
 
-	if false { //TODO for testing: remove before commit
+	//TODO not tearing down for testing: remove before commit
+	if false {
 		defer vc.TearDown()
 	}
 	cell = vc.Cells[cellName]
@@ -49,27 +51,36 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	defer vtgateConn.Close()
 	verifyClusterHealth(t)
 	insertInitialData(t)
-	shardCustomer(t)
+	shardCustomer(t, true)
 	shardOrders(t)
-	reshardCustomerAndOrdersManyToMany(t)
+
 	shardMerchant(t)
 	materializeProduct(t)
 	materializeMerchantOrders(t)
 	materializeSales(t)
-	//reshardOrdersToMerchant(t)  //TODO
+
+	insertMoreCustomers(t, 16)
+	reshardCustomer2to4Split(t)
+	query := "select count(*) from _vt.vreplication where workflow='sales';"
+	result := validateQuery(t, vtgateConn, "product:0", query, `[[INT64(4)]]`)
+	if result != "" {
+		t.Fatalf("Sales streams not migrated after 2to4: %s\n", result)
+	}
+	reshardCustomer3to2SplitMerge(t)
+	query = "select count(*) from _vt.vreplication where workflow='sales';"
+	result = validateQuery(t, vtgateConn, "product:0", query, `[[INT64(3)]]`)
+	if result != "" {
+		t.Fatalf("Sales streams not migrated after 3to2: %s\n", result)
+	}
+	if true {
+		reshardCustomer3to1Merge(t)
+		query = "select count(*) from _vt.vreplication where workflow='sales';"
+		result = validateQuery(t, vtgateConn, "product:0", query, `[[INT64(1)]]`)
+		if result != "" {
+			t.Fatalf("Sales streams not migrated after 3to1: %s\n", result)
+		}
+	}
 	validateAll(t)
-
-	/*
-		split, merge, split/merge
-		Reshard 1->many, many->many (reshard into -40,40-), many->one
-		Migrate 1->many, many->1, many->many (orders to merchant new vindex)
-		create lookup vindex, no owner, by order id
-		order table: order id,
-	*/
-	//vdiff one for table, one for shard (introduce corruption)
-	//TODO test reverse replication for each
-	//TODO once dry run is implemented, test dry-run for each workflow and reverse replication
-
 }
 
 func insertInitialData(t *testing.T) {
@@ -77,6 +88,7 @@ func insertInitialData(t *testing.T) {
 	lines, _ := ioutil.ReadFile("unsharded_init_data.sql")
 	execMultipleQueries(t, vtgateConn, "product:0", string(lines))
 	execVtgateQuery(t, vtgateConn, "product:0", "insert into customer_seq(id, next_id, cache) values(0, 100, 100);")
+	execVtgateQuery(t, vtgateConn, "product:0", "insert into order_seq(id, next_id, cache) values(0, 100, 100);")
 	fmt.Printf("Done inserting initial data\n")
 
 	validateCount(t, vtgateConn, "product:0", "product", 2)
@@ -85,7 +97,20 @@ func insertInitialData(t *testing.T) {
 		`[[VARCHAR("monoprice") VARCHAR("electronics")] [VARCHAR("newegg") VARCHAR("electronics")]]`)
 }
 
-func shardCustomer(t *testing.T) {
+func insertMoreCustomers(t *testing.T, numCustomers int) {
+	sql := "insert into customer (name) values "
+	i := 0
+	for i < numCustomers {
+		i += 1
+		sql += fmt.Sprintf("('customer%d')", i)
+		if i != numCustomers {
+			sql += ","
+		}
+	}
+	execVtgateQuery(t, vtgateConn, "customer", sql)
+}
+
+func shardCustomer(t *testing.T, testReverse bool) {
 	if _, err := vc.AddKeyspace(t, cell, "customer", "-80,80-", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200); err != nil {
 		t.Fatal(err)
 	}
@@ -104,14 +129,21 @@ func shardCustomer(t *testing.T) {
 	customerTab1 := vc.Cells[cell.Name].Keyspaces["customer"].Shards["-80"].Tablets["zone1-200"].Vttablet
 	customerTab2 := vc.Cells[cell.Name].Keyspaces["customer"].Shards["80-"].Tablets["zone1-300"].Vttablet
 
-	if vc.WaitForMigrateToComplete(customerTab1, "p2c", "vt_customer", 1*time.Second) != nil {
+	if vc.WaitForVReplicationToCatchup(customerTab1, "p2c", "vt_customer", 1*time.Second) != nil {
 		t.Fatal("Migrate timed out for customer.p2c -80")
 
 	}
-	if vc.WaitForMigrateToComplete(customerTab2, "p2c", "vt_customer", 1*time.Second) != nil {
+	if vc.WaitForVReplicationToCatchup(customerTab2, "p2c", "vt_customer", 1*time.Second) != nil {
 		t.Fatal("Migrate timed out for customer.p2c 80-")
 	}
 
+	productTab := vc.Cells[cell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
+	productTabReplica := vc.Cells[cell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-101"].Vttablet
+	query := "select * from customer"
+	assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", query, query))
+	insertQuery1 := "insert into customer(cid, name) values(1001, 'tempCustomer1')"
+	matchInsertQuery1 := "insert into customer(cid, name) values (:vtg1, :vtg2)"
+	assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
 	vdiff(t, "customer.p2c")
 	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("MigrateReads", "-cells="+cell.Name, "-tablet_type=rdonly", "customer.p2c"); err != nil {
 		t.Fatalf("MigrateReads error: %s\n", output)
@@ -119,31 +151,145 @@ func shardCustomer(t *testing.T) {
 	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("MigrateReads", "-cells="+cell.Name, "-tablet_type=replica", "customer.p2c"); err != nil {
 		t.Fatalf("MigrateReads error: %s\n", output)
 	}
+
+	assert.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTabReplica, "customer", query, query))
+	assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", query, query))
 	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("MigrateWrites", "customer.p2c"); err != nil {
 		t.Fatalf("MigrateWrites error: %s\n", output)
 	}
+	insertQuery2 := "insert into customer(name) values('tempCustomer2')"
+	matchInsertQuery2 := "insert into customer(name, cid) values (:vtg1, :_cid0)"
+	assert.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery2, matchInsertQuery2))
+	insertQuery2 = "insert into customer(name) values('tempCustomer3')" //ID 101, hence due to reverse_bits in shard 80-
+	assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery2, matchInsertQuery2))
+	insertQuery2 = "insert into customer(name) values('tempCustomer4')" //ID 102, hence due to reverse_bits in shard -80
+	assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery2, matchInsertQuery2))
 
-	assert.Empty(t, validateCountInTablet(t, customerTab1, "customer", "customer", 1))
-	assert.Empty(t, validateCountInTablet(t, customerTab2, "customer", "customer", 2))
-	assert.Empty(t, validateCount(t, vtgateConn, "customer", "customer.customer", 3))
-	//assert.Empty(t, validateCount(t, vtgateConn, "product:0", "customer", 3)) //TODO how do we validate blacklisted tables?
+	if testReverse {
+		//Reverse Replicate
+		if output, err := vc.VtctlClient.ExecuteCommandWithOutput("MigrateReads", "-cells="+cell.Name, "-tablet_type=rdonly", "product.p2c_reverse"); err != nil {
+			t.Fatalf("MigrateReads error: %s\n", output)
+		}
+		if output, err := vc.VtctlClient.ExecuteCommandWithOutput("MigrateReads", "-cells="+cell.Name, "-tablet_type=replica", "product.p2c_reverse"); err != nil {
+			t.Fatalf("MigrateReads error: %s\n", output)
+		}
+		if output, err := vc.VtctlClient.ExecuteCommandWithOutput("MigrateWrites", "product.p2c_reverse"); err != nil {
+			t.Fatalf("MigrateWrites error: %s\n", output)
+		}
+		insertQuery1 = "insert into customer(cid, name) values(1002, 'tempCustomer5')"
+		assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
+		insertQuery1 = "insert into customer(cid, name) values(1003, 'tempCustomer6')"
+		assert.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery1, matchInsertQuery1))
+		insertQuery1 = "insert into customer(cid, name) values(1004, 'tempCustomer7')"
+		assert.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery1, matchInsertQuery1))
 
-	query := "insert into customer.customer (name) values('george')"
-	execVtgateQuery(t, vtgateConn, "customer", query) //creates with id 100, so in -80 because of reverse_bits
-	assert.Empty(t, validateCountInTablet(t, customerTab1, "customer", "customer", 2))
-	assert.Empty(t, validateCount(t, vtgateConn, "customer", "customer.customer", 4))
-	//TODO verify with Sugu why this is needed. If this line is not present shardMerchant errors out with conflicting blacklisted tables error
+		//Go forward again
+		if output, err := vc.VtctlClient.ExecuteCommandWithOutput("MigrateReads", "-cells="+cell.Name, "-tablet_type=rdonly", "customer.p2c"); err != nil {
+			t.Fatalf("MigrateReads error: %s\n", output)
+		}
+		if output, err := vc.VtctlClient.ExecuteCommandWithOutput("MigrateReads", "-cells="+cell.Name, "-tablet_type=replica", "customer.p2c"); err != nil {
+			t.Fatalf("MigrateReads error: %s\n", output)
+		}
+		if output, err := vc.VtctlClient.ExecuteCommandWithOutput("MigrateWrites", "customer.p2c"); err != nil {
+			t.Fatalf("MigrateWrites error: %s\n", output)
+		}
+		insertQuery2 = "insert into customer(name) values('tempCustomer8')" //ID 103, hence due to reverse_bits in shard 80-
+		assert.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery2, matchInsertQuery2))
+		insertQuery2 = "insert into customer(name) values('tempCustomer9')" //ID 104, hence due to reverse_bits in shard 80-
+		assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery2, matchInsertQuery2))
+		insertQuery2 = "insert into customer(name) values('tempCustomer10')" //ID 105, hence due to reverse_bits in shard -80
+		assert.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery2, matchInsertQuery2))
+
+		execVtgateQuery(t, vtgateConn, "customer", "delete from customer where name like 'tempCustomer%'")
+		assert.Empty(t, validateCountInTablet(t, customerTab1, "customer", "customer", 1))
+		assert.Empty(t, validateCountInTablet(t, customerTab2, "customer", "customer", 2))
+		assert.Empty(t, validateCount(t, vtgateConn, "customer", "customer.customer", 3))
+
+		query = "insert into customer (name) values('george')"
+		execVtgateQuery(t, vtgateConn, "customer", query)
+		assert.Empty(t, validateCountInTablet(t, customerTab1, "customer", "customer", 2))
+		assert.Empty(t, validateCountInTablet(t, customerTab2, "customer", "customer", 2))
+		assert.Empty(t, validateCount(t, vtgateConn, "customer", "customer.customer", 4))
+	}
+	//TODO remove this when we add a cleanup command
 	removeTabletControls(t, "product/0")
 }
 
-func reshardCustomerAndOrdersManyToMany(t *testing.T) {
+func reshardCustomer2to4Split(t *testing.T) {
+	ksName := "customer"
+	//counts := map[string]int{"zone1-600":4, "zone1-700":6, "zone1-800":5, "zone1-900":5} //TODO
+	reshardCustomerManyToMany(t, ksName, "customer", "p2c2", "-80,80-", "-40,40-80,80-c0,c0-", 600, nil)
+	//TODO assert.Empty(t, validateCount(t, vtgateConn, ksName, "customer", 20))
+	//query := "insert into customer (name) values('yoko')"
+	//TODO execVtgateQuery(t, vtgateConn, ksName, query)
+	//assert.Empty(t, validateCount(t, vtgateConn, ksName, "customer", 21))
+}
 
+//TODO will have to delete redundant tablets to avoid too many processes!
+func reshardCustomer3to2SplitMerge(t *testing.T) { //-40,40-80,80-c0 => merge/split, c0- stays the same  ending up with 3
+	ksName := "customer"
+	//counts := map[string]int{"zone1-600":4, "zone1-700":6, "zone1-800":5, "zone1-900":5}
+	reshardCustomerManyToMany(t, ksName, "customer", "p2c3", "-40,40-80,80-c0", "-60,60-c0", 1000, nil)
+}
+
+func reshardCustomer3to1Merge(t *testing.T) { //to unsharded
+	ksName := "customer"
+	//counts := map[string]int{"zone1-600":4, "zone1-700":6, "zone1-800":5, "zone1-900":5}
+	reshardCustomerManyToMany(t, ksName, "customer", "p2c4", "-60,60-c0,c0-", "-", 1500, nil)
+}
+
+func reshardCustomerManyToMany(t *testing.T, ksName string, tableName string, workflow string, sourceShards string, targetShards string, tabletIDBase int, counts map[string]int) {
+	ksWorkflow := ksName + "." + workflow
+	keyspace := vc.Cells[cell.Name].Keyspaces[ksName]
+	if err := vc.AddShards(t, cell, keyspace, targetShards, defaultReplicas, defaultRdonly, tabletIDBase); err != nil {
+		t.Fatalf(err.Error())
+	}
+	arrShardNames := strings.Split(targetShards, ",")
+
+	for _, shardName := range arrShardNames {
+		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.master", ksName, shardName), 1); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := vc.VtctlClient.ExecuteCommand("Reshard", ksWorkflow, sourceShards, targetShards); err != nil {
+		t.Fatalf("Reshard command failed with %+v\n", err)
+	}
+	customerTablets := vc.getVttabletsInKeyspace(t, cell, ksName, "master")
+	targetShards = "," + targetShards + ","
+	for _, tab := range customerTablets {
+		if strings.Index(targetShards, ","+tab.Shard+",") >= 0 {
+			fmt.Printf("Waiting for vrepl to catch up on %s since it IS a target shard\n", tab.Shard)
+			if vc.WaitForVReplicationToCatchup(tab, workflow, "vt_customer", 3*time.Second) != nil {
+				t.Fatal("Migrate timed out")
+			}
+		} else {
+			fmt.Printf("Not waiting for vrepl to catch up on %s since it is NOT a target shard\n", tab.Shard)
+			continue
+		}
+	}
+	vdiff(t, ksWorkflow)
+	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("MigrateReads", "-cells="+cell.Name, "-tablet_type=rdonly", ksWorkflow); err != nil {
+		t.Fatalf("MigrateReads error: %s\n", output)
+	}
+	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("MigrateReads", "-cells="+cell.Name, "-tablet_type=replica", ksWorkflow); err != nil {
+		t.Fatalf("MigrateReads error: %s\n", output)
+	}
+	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("MigrateWrites", ksWorkflow); err != nil {
+		t.Fatalf("MigrateWrites error: %s\n", output)
+	}
+	if counts != nil {
+		for tabletName, count := range counts {
+			assert.Empty(t, validateCountInTablet(t, customerTablets[tabletName], ksName, tableName, count))
+		}
+	}
+	waitForMaterializeStreamsToCatchup(t)
 }
 
 func shardOrders(t *testing.T) {
 	if err := vc.VtctlClient.ExecuteCommand("ApplyVSchema", "-vschema", ordersVSchema, "customer"); err != nil {
 		t.Fatal(err)
 	}
+	//TODO Remove all Rebuilds and test
 	if err := vc.VtctlClient.ExecuteCommand("RebuildKeyspaceGraph", "customer"); err != nil {
 		t.Fatal(err)
 	}
@@ -153,11 +299,11 @@ func shardOrders(t *testing.T) {
 	}
 	customerTab1 := vc.Cells[cell.Name].Keyspaces["customer"].Shards["-80"].Tablets["zone1-200"].Vttablet
 	customerTab2 := vc.Cells[cell.Name].Keyspaces["customer"].Shards["80-"].Tablets["zone1-300"].Vttablet
-	if vc.WaitForMigrateToComplete(customerTab1, "o2c", "vt_customer", 1*time.Second) != nil {
+	if vc.WaitForVReplicationToCatchup(customerTab1, "o2c", "vt_customer", 1*time.Second) != nil {
 		assert.Fail(t, "Migrate timed out for customer.o2c -80")
 
 	}
-	if vc.WaitForMigrateToComplete(customerTab2, "o2c", "vt_customer", 1*time.Second) != nil {
+	if vc.WaitForVReplicationToCatchup(customerTab2, "o2c", "vt_customer", 1*time.Second) != nil {
 		assert.Fail(t, "Migrate timed out for customer.o2c 80-")
 	}
 
@@ -176,7 +322,6 @@ func shardOrders(t *testing.T) {
 	assert.Empty(t, validateCountInTablet(t, customerTab2, "customer", "orders", 2))
 	assert.Empty(t, validateCount(t, vtgateConn, "customer", "orders", 3))
 	removeTabletControls(t, "product/0")
-
 }
 
 func shardMerchant(t *testing.T) {
@@ -196,11 +341,11 @@ func shardMerchant(t *testing.T) {
 
 	merchantTab1 := vc.Cells[cell.Name].Keyspaces["merchant"].Shards["-80"].Tablets["zone1-400"].Vttablet
 	merchantTab2 := vc.Cells[cell.Name].Keyspaces["merchant"].Shards["80-"].Tablets["zone1-500"].Vttablet
-	if vc.WaitForMigrateToComplete(merchantTab1, "p2m", "vt_merchant", 1*time.Second) != nil {
+	if vc.WaitForVReplicationToCatchup(merchantTab1, "p2m", "vt_merchant", 1*time.Second) != nil {
 		t.Fatal("Migrate timed out for merchant.p2m -80")
 
 	}
-	if vc.WaitForMigrateToComplete(merchantTab2, "p2m", "vt_merchant", 1*time.Second) != nil {
+	if vc.WaitForVReplicationToCatchup(merchantTab2, "p2m", "vt_merchant", 1*time.Second) != nil {
 		t.Fatal("Migrate timed out for merchant.p2m 80-")
 	}
 
@@ -227,18 +372,23 @@ func vdiff(t *testing.T, workflow string) {
 	fmt.Printf("vdiff err: %+v, output: %+v\n", err, output)
 	assert.Nil(t, err)
 	assert.NotNil(t, output)
-	diffReports := make(map[string]*wrangler.DiffReport)
+	diffReports := make([]*wrangler.DiffReport, 0)
 	err = json.Unmarshal([]byte(output), &diffReports)
-	assert.NotNil(t, err)
+	assert.Nil(t, err)
+	//fmt.Printf("Number of diffReports is %d\n", len(diffReports))
+	if len(diffReports) < 1 {
+		t.Fatal("VDiff did not return a valid json response " + output + "\n")
+	}
 	assert.True(t, len(diffReports) > 0)
 	for key, diffReport := range diffReports {
 		if diffReport.ProcessedRows != diffReport.MatchingRows {
-			fmt.Errorf("vdiff error for %s : %#v\n", key, diffReport)
+			fmt.Errorf("vdiff error for %d : %#v\n", key, diffReport)
 		}
 	}
 }
 
 func materializeProduct(t *testing.T) {
+	workflow := "cproduct"
 	if err := vc.VtctlClient.ExecuteCommand("ApplyVSchema", "-vschema", materializeProductVSchema, "customer"); err != nil {
 		t.Fatal(err)
 	}
@@ -248,18 +398,15 @@ func materializeProduct(t *testing.T) {
 	if err := vc.VtctlClient.ExecuteCommand("Materialize", materializeProductSpec); err != nil {
 		t.Fatal(err)
 	}
-	customerTab1 := vc.Cells[cell.Name].Keyspaces["customer"].Shards["-80"].Tablets["zone1-200"].Vttablet
-	customerTab2 := vc.Cells[cell.Name].Keyspaces["customer"].Shards["80-"].Tablets["zone1-300"].Vttablet
-	if vc.WaitForMigrateToComplete(customerTab1, "cproduct", "vt_customer", 1*time.Second) != nil {
-		assert.Fail(t, "Migrate timed out for customer.cproduct -80")
-
+	customerTablets := vc.getVttabletsInKeyspace(t, cell, "customer", "master")
+	for _, tab := range customerTablets {
+		if vc.WaitForVReplicationToCatchup(tab, workflow, "vt_customer", 3*time.Second) != nil {
+			t.Fatal("Migrate timed out")
+		}
 	}
-	if vc.WaitForMigrateToComplete(customerTab2, "cproduct", "vt_customer", 1*time.Second) != nil {
-		assert.Fail(t, "Migrate timed out for customer.cproduct 80-")
+	for _, tab := range customerTablets {
+		assert.Empty(t, validateCountInTablet(t, tab, "customer", "cproduct", 2))
 	}
-	time.Sleep(2 * time.Second) //WaitForMigrate is not working here, TODO need to remove time.sleep with what?
-	assert.Empty(t, validateCountInTablet(t, customerTab1, "customer", "cproduct", 2))
-	assert.Empty(t, validateCountInTablet(t, customerTab2, "customer", "cproduct", 2))
 }
 
 func materializeSales(t *testing.T) {
@@ -273,18 +420,18 @@ func materializeSales(t *testing.T) {
 		t.Fatal(err)
 	}
 	productTab := vc.Cells[cell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
-	if vc.WaitForMigrateToComplete(productTab, "sales", "vt_product", 2*time.Second) != nil {
+	if vc.WaitForVReplicationToCatchup(productTab, "sales", "vt_product", 3*time.Second) != nil {
 		assert.Fail(t, "Migrate timed out for product.sales -80")
 
 	}
-	time.Sleep(2 * time.Second) //WaitForMigrate is not working here, TODO need to remove time.sleep with what?
 	assert.Empty(t, validateCount(t, vtgateConn, "product", "sales", 2))
-	validateQuery(t, vtgateConn, "product:0", "select kount, amount from sales",
-		`[[INT64(1) INT64(10)] [INT64(2) INT64(35)]]`)
+	assert.Empty(t, validateQuery(t, vtgateConn, "product:0", "select kount, amount from sales",
+		`[[INT32(1) INT32(10)] [INT32(2) INT32(35)]]`))
 
 }
 
 func materializeMerchantOrders(t *testing.T) {
+	workflow := "morders"
 	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("ApplyVSchema", "-vschema", merchantOrdersVSchema, "merchant"); err != nil {
 		fmt.Printf("ApplyVSchema error: %+v", output)
 		t.Fatal(err)
@@ -296,26 +443,33 @@ func materializeMerchantOrders(t *testing.T) {
 		fmt.Printf("MerchantOrders error is %+v", output)
 		t.Fatal(err)
 	}
-	merchantTab1 := vc.Cells[cell.Name].Keyspaces["merchant"].Shards["-80"].Tablets["zone1-400"].Vttablet
-	merchantTab2 := vc.Cells[cell.Name].Keyspaces["merchant"].Shards["80-"].Tablets["zone1-500"].Vttablet
-	if vc.WaitForMigrateToComplete(merchantTab1, "morders", "vt_merchant", 1*time.Second) != nil {
-		assert.Fail(t, "Migrate timed out for merchant.morders -80")
-
+	merchantTablets := vc.getVttabletsInKeyspace(t, cell, "merchant", "master")
+	for _, tab := range merchantTablets {
+		if vc.WaitForVReplicationToCatchup(tab, workflow, "vt_merchant", 1*time.Second) != nil {
+			t.Fatal("Migrate timed out")
+		}
 	}
-	if vc.WaitForMigrateToComplete(merchantTab2, "morders", "vt_merchant", 1*time.Second) != nil {
-		assert.Fail(t, "Migrate timed out for merchant.morders 80-")
-	}
-	time.Sleep(2 * time.Second) //WaitForMigrate is not working here, TODO need to remove time.sleep with what?
+	assert.Empty(t, validateCountInTablet(t, merchantTablets["zone1-400"], "merchant", "morders", 2))
+	assert.Empty(t, validateCountInTablet(t, merchantTablets["zone1-500"], "merchant", "morders", 1))
 	assert.Empty(t, validateCount(t, vtgateConn, "merchant", "morders", 3))
 }
 
-func reshardOrders(t *testing.T) {
+func waitForMaterializeStreamsToCatchup(t *testing.T) {
+	merchantTablets := vc.getVttabletsInKeyspace(t, cell, "merchant", "master")
+	for _, tab := range merchantTablets {
+		if vc.WaitForVReplicationToCatchup(tab, "morders", "vt_merchant", 1*time.Second) != nil {
+			t.Fatal("Migrate timed out")
+		}
+	}
+	productTab := vc.Cells[cell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
+	if vc.WaitForVReplicationToCatchup(productTab, "sales", "vt_product", 3*time.Second) != nil {
+		assert.Fail(t, "Migrate timed out for product.sales -80")
 
+	}
 }
 
 //run various queries to ensure that nothing is broken due to ensuing migrates
 func validateAll(t *testing.T) {
-
 }
 
 func checkVtgateHealth(t *testing.T, cell *Cell) {

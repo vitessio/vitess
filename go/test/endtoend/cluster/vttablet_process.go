@@ -61,6 +61,7 @@ type VttabletProcess struct {
 	VtctldAddress               string
 	Directory                   string
 	VerifyURL                   string
+	QueryzURL                   string
 	EnableSemiSync              bool
 	SupportsBackup              bool
 	ServingStatus               string
@@ -390,6 +391,7 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 		vttablet.TabletType = tabletType
 	}
 	vttablet.VerifyURL = fmt.Sprintf("http://%s:%d/debug/vars", hostname, port)
+	vttablet.QueryzURL = fmt.Sprintf("http://%s:%d/queryz", hostname, port)
 
 	return vttablet
 }
