@@ -221,6 +221,30 @@ var (
 	}, {
 		input: "select /* keyword table alias */ 1 from t as `By`",
 	}, {
+// ZACHMU
+		input: "select /* use */ 1 from t1 as of '2019-01-01' use index (a) where b = 1",
+	}, {
+		input: "select /* keyword index */ 1 from t1 as of '2019-01-01' use index (`By`) where b = 1",
+	}, {
+		input: "select /* ignore */ 1 from t1 as of '2019-01-01' as t2 ignore index (a), t3 use index (b) where b = 1",
+	}, {
+		input: "select /* use */ 1 from t1 as of '2019-01-01' as t2 use index (a), t3 as of '2019-01-02' use index (b) where b = 1",
+	}, {
+		input: "select /* force */ 1 from t1 as of '2019-01-01' as t2 force index (a), t3 force index (b) where b = 1",
+	}, {
+		input:  "select /* table alias */ 1 from t as of '2019-01-01' t1",
+		output: "select /* table alias */ 1 from t as of '2019-01-01' as t1",
+	}, {
+		input: "select /* table alias with as */ 1 from t as of '2019-01-01' as t1",
+	}, {
+		input:  "select /* string table alias */ 1 from t as of '2019-01-01' as 't1'",
+		output: "select /* string table alias */ 1 from t as of '2019-01-01' as t1",
+	}, {
+		input:  "select /* string table alias without as */ 1 from t as of '2019-01-01' 't1'",
+		output: "select /* string table alias without as */ 1 from t as of '2019-01-01' as t1",
+	}, {
+		input: "select /* keyword table alias */ 1 from t as of '2019-01-01' as `By`",
+	}, {
 		input: "select /* join */ 1 from t1 join t2",
 	}, {
 		input: "select /* join on */ 1 from t1 join t2 on a = b",
