@@ -1256,7 +1256,7 @@ func (m *Journal) GetSourceWorkflows() []string {
 type VEvent struct {
 	Type VEventType `protobuf:"varint,1,opt,name=type,proto3,enum=binlogdata.VEventType" json:"type,omitempty"`
 	// Timestamp is the binlog timestamp in seconds.
-	// It's set for all events.
+	// The value should be ignored if 0.
 	Timestamp int64 `protobuf:"varint,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	// Gtid is set if the event type is GTID.
 	Gtid string `protobuf:"bytes,3,opt,name=gtid,proto3" json:"gtid,omitempty"`
