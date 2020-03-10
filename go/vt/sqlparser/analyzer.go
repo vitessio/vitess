@@ -327,28 +327,37 @@ func ExtractSetValues(sql string) (keyValues map[SetKey]interface{}, scope strin
 	}
 	result := make(map[SetKey]interface{})
 	for _, expr := range setStmt.Exprs {
-		scope := ImplicitStr
+		var scope string
 		key := expr.Name.Lowered()
-		switch {
-		case strings.HasPrefix(key, "@@global."):
-			scope = GlobalStr
-			key = strings.TrimPrefix(key, "@@global.")
-		case strings.HasPrefix(key, "@@session."):
-			scope = SessionStr
-			key = strings.TrimPrefix(key, "@@session.")
-		case strings.HasPrefix(key, "@@vitess_metadata."):
-			scope = VitessMetadataStr
-			key = strings.TrimPrefix(key, "@@vitess_metadata.")
-		case strings.HasPrefix(key, "@@"):
-			key = strings.TrimPrefix(key, "@@")
-		}
 
-		if strings.HasPrefix(expr.Name.Lowered(), "@@") {
-			if setStmt.Scope != "" && scope != "" {
-				return nil, "", fmt.Errorf("unsupported in set: mixed using of variable scope")
+		switch expr.Name.at {
+		case NoAt:
+			scope = ImplicitStr
+		case SingleAt:
+			scope = VariableStr
+		case DoubleAt:
+			switch {
+			case strings.HasPrefix(key, "global."):
+				scope = GlobalStr
+				key = strings.TrimPrefix(key, "global.")
+			case strings.HasPrefix(key, "session."):
+				scope = SessionStr
+				key = strings.TrimPrefix(key, "session.")
+			case strings.HasPrefix(key, "vitess_metadata."):
+				scope = VitessMetadataStr
+				key = strings.TrimPrefix(key, "vitess_metadata.")
+			default:
+				scope = SessionStr
 			}
+
+			// This is what correctly allows us to handle queries such as "set @@session.`autocommit`=1"
+			// it will remove backticks and double quotes that might surround the part after the first period
 			_, out := NewStringTokenizer(key).Scan()
 			key = string(out)
+		}
+
+		if setStmt.Scope != "" && scope != "" {
+			return nil, "", fmt.Errorf("unsupported in set: mixed using of variable scope")
 		}
 
 		setKey := SetKey{

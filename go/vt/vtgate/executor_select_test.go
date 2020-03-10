@@ -235,6 +235,24 @@ func TestSelectLastInsertId(t *testing.T) {
 	assert.Equal(t, wantQueries, sbc1.Queries)
 }
 
+func TestSelectUserDefindVariable(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+	executor.normalize = true
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	sql := "select @foo"
+	masterSession = &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []string{"bar"})}
+	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "select :__vtudvfoo as `@foo` from dual",
+		BindVariables: map[string]*querypb.BindVariable{"__vtudvfoo": sqltypes.StringBindVariable("bar")},
+	}}
+
+	assert.Equal(t, wantQueries, sbc1.Queries)
+}
+
 func TestFoundRows(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
 	executor.normalize = true

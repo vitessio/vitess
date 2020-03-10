@@ -21,6 +21,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/require"
+
 	"github.com/stretchr/testify/assert"
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -579,19 +582,38 @@ func TestExtractSetValues(t *testing.T) {
 		sql:   "set session sql_safe_updates = 1",
 		out:   map[SetKey]interface{}{{Key: "sql_safe_updates", Scope: ImplicitStr}: int64(1)},
 		scope: SessionStr,
+	}, {
+		sql: "set @foo = 42",
+		out: map[SetKey]interface{}{
+			{Key: "foo", Scope: VariableStr}: int64(42),
+		},
+		scope: ImplicitStr,
+	}, {
+		sql: "set @foo.bar.baz = 42",
+		out: map[SetKey]interface{}{
+			{Key: "foo.bar.baz", Scope: VariableStr}: int64(42),
+		},
+		scope: ImplicitStr,
+	}, {
+		sql: "set session @foo = 42",
+		err: "unsupported in set: scope and user defined variables",
+	}, {
+		sql: "set global @foo = 42",
+		err: "unsupported in set: scope and user defined variables",
 	}}
 	for _, tcase := range testcases {
-		out, _, err := ExtractSetValues(tcase.sql)
-		if tcase.err != "" {
-			if err == nil || err.Error() != tcase.err {
-				t.Errorf("ExtractSetValues(%s): %v, want '%s'", tcase.sql, err, tcase.err)
+		t.Run(tcase.sql, func(t *testing.T) {
+			out, _, err := ExtractSetValues(tcase.sql)
+			if tcase.err != "" {
+				require.Error(t, err, tcase.err)
+			} else if err != nil {
+				require.NoError(t, err)
 			}
-		} else if err != nil {
-			t.Errorf("ExtractSetValues(%s): %v, want no error", tcase.sql, err)
-		}
-		if !reflect.DeepEqual(out, tcase.out) {
-			t.Errorf("ExtractSetValues(%s): %v, want '%v'", tcase.sql, out, tcase.out)
-		}
+
+			if diff := cmp.Diff(tcase.out, out); diff != "" {
+				t.Error(diff)
+			}
+		})
 	}
 }
 

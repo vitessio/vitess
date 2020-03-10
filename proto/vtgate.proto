@@ -111,6 +111,9 @@ message Session {
 
   // found_rows keeps track of how many rows the last query returned
   uint64 found_rows = 12;
+
+  // user_defined_variables contains all the @variables defined for this session
+  map<string, query.Value> user_defined_variables = 13;
 }
 
 // ExecuteRequest is the payload to Execute.

@@ -31,9 +31,10 @@ func PrepareAST(in Statement, bindVars map[string]*querypb.BindVariable, prefix 
 
 // BindVarNeeds represents the bind vars that need to be provided as the result of expression rewriting.
 type BindVarNeeds struct {
-	NeedLastInsertID bool
-	NeedDatabase     bool
-	NeedFoundRows    bool
+	NeedLastInsertID         bool
+	NeedDatabase             bool
+	NeedFoundRows            bool
+	NeedUserDefinedVariables bool
 }
 
 // RewriteAST rewrites the whole AST, replacing function calls and adding column aliases to queries
@@ -53,6 +54,9 @@ func RewriteAST(in Statement) (*RewriteASTResult, error) {
 	}
 	if _, ok := er.bindVars[FoundRowsName]; ok {
 		r.NeedFoundRows = true
+	}
+	if _, ok := er.bindVars[UserDefinedVariableName]; ok {
+		r.NeedUserDefinedVariables = true
 	}
 
 	return r, nil
@@ -102,10 +106,14 @@ const (
 
 	//FoundRowsName is a reserved bind var name for found_rows()
 	FoundRowsName = "__vtfrows"
+
+	//UserDefinedVariableName is what we prepend bind var names for user defined variables
+	UserDefinedVariableName = "__vtudv"
 )
 
 func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 	switch node := cursor.Node().(type) {
+	// select last_insert_id() -> select :__lastInsertId as `last_insert_id()`
 	case *AliasedExpr:
 		if node.As.IsEmpty() {
 			buf := NewTrackedBuffer(nil)
@@ -127,11 +135,11 @@ func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 			}
 			return false
 		}
-
 	case *FuncExpr:
 		switch {
+		// last_insert_id() -> :__lastInsertId
 		case node.Name.EqualString("last_insert_id"):
-			if len(node.Exprs) > 0 {
+			if len(node.Exprs) > 0 { //last_insert_id(x)
 				er.err = vterrors.New(vtrpc.Code_UNIMPLEMENTED, "Argument to LAST_INSERT_ID() not supported")
 			} else {
 				cursor.Replace(bindVarExpression(LastInsertIDName))
@@ -154,7 +162,11 @@ func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 				er.needBindVarFor(FoundRowsName)
 			}
 		}
-
+	case *ColName:
+		if node.Name.at == SingleAt {
+			cursor.Replace(bindVarExpression(UserDefinedVariableName + node.Name.val))
+			er.needBindVarFor(UserDefinedVariableName)
+		}
 	}
 	return true
 }

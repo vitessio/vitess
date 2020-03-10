@@ -494,6 +494,26 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 
 	tkn.skipBlank()
 	switch ch := tkn.lastChar; {
+	case ch == '@':
+		tokenID := AT_ID
+		tkn.next()
+		if tkn.lastChar == '@' {
+			tokenID = AT_AT_ID
+			tkn.next()
+		}
+		var tId int
+		var tBytes []byte
+		ch = tkn.lastChar
+		tkn.next()
+		if ch == '`' {
+			tId, tBytes = tkn.scanLiteralIdentifier()
+		} else {
+			tId, tBytes = tkn.scanIdentifier(byte(ch), true)
+		}
+		if tId == LEX_ERROR {
+			return tId, nil
+		}
+		return tokenID, tBytes
 	case isLetter(ch):
 		tkn.next()
 		if ch == 'X' || ch == 'x' {
@@ -508,11 +528,7 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 				return tkn.scanBitLiteral()
 			}
 		}
-		isDbSystemVariable := false
-		if ch == '@' && tkn.lastChar == '@' {
-			isDbSystemVariable = true
-		}
-		return tkn.scanIdentifier(byte(ch), isDbSystemVariable)
+		return tkn.scanIdentifier(byte(ch), false)
 	case isDigit(ch):
 		return tkn.scanNumber(false)
 	case ch == ':':
@@ -651,10 +667,10 @@ func (tkn *Tokenizer) skipBlank() {
 	}
 }
 
-func (tkn *Tokenizer) scanIdentifier(firstByte byte, isDbSystemVariable bool) (int, []byte) {
+func (tkn *Tokenizer) scanIdentifier(firstByte byte, isVariable bool) (int, []byte) {
 	buffer := &bytes2.Buffer{}
 	buffer.WriteByte(firstByte)
-	for isLetter(tkn.lastChar) || isDigit(tkn.lastChar) || (isDbSystemVariable && isCarat(tkn.lastChar)) {
+	for isLetter(tkn.lastChar) || isDigit(tkn.lastChar) || (isVariable && isCarat(tkn.lastChar)) {
 		buffer.WriteByte(byte(tkn.lastChar))
 		tkn.next()
 	}
