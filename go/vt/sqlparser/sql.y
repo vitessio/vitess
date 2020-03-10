@@ -271,7 +271,7 @@ func skipToEnd(yylex interface{}) {
 %type <limit> limit_opt
 %type <str> lock_opt
 %type <columns> ins_column_list column_list
-%type <partitions> opt_partition_clause partition_list partition_list_opt
+%type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
 %type <setExprs> set_list transaction_chars
@@ -2121,18 +2121,13 @@ table_factor:
   }
 
 aliased_table_name:
-table_name partition_list_opt as_of_opt as_opt_id index_hint_list
+table_name as_of_opt as_opt_id index_hint_list
   {
-    $$ = &AliasedTableExpr{Expr:$1, Partitions: $2, AsOf: $3, As: $4, Hints: $5}
+    $$ = &AliasedTableExpr{Expr:$1, AsOf: $2, As: $3, Hints: $4}
   }
-
-partition_list_opt:
+| table_name PARTITION openb partition_list closeb as_opt_id index_hint_list
   {
-    $$ = nil
-  }
-  PARTITION openb partition_list closeb
-  {
-    $$ = $4
+    $$ = &AliasedTableExpr{Expr:$1, Partitions: $4, As: $6, Hints: $7}
   }
 
 as_of_opt:
@@ -2220,7 +2215,7 @@ as_opt:
 
 as_opt_id:
   {
-    $$ = TableIdent{}
+    $$ = NewTableIdent("")
   }
 | as_opt table_alias
   {
