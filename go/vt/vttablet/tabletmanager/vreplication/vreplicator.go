@@ -59,7 +59,26 @@ type vreplicator struct {
 	tableKeys map[string][]string
 }
 
-// newVReplicator creates a new vreplicator
+// newVReplicator creates a new vreplicator. The valid fields from the source are:
+// Keyspce, Shard, Filter, OnDdl, ExternalMySql and StopAfterCopy.
+// The Filter consists of Rules. Each Rule has a Match and an (inner) Filter field.
+// The Match can be a table name or, if it begins with a "/", a wildcard.
+// The Filter can be empty: get all rows and columns.
+// The Filter can be a keyrange, like "-80": get all rows that are within the keyrange.
+// The Filter can be a select expression. Examples.
+//   "select * from t", same as an empty Filter,
+//   "select * from t where in_keyrange('-80')", same as "-80",
+//   "select * from t where in_keyrange(col1, 'hash', '-80')",
+//   "select col1, col2 from t where...",
+//   "select col1, keyspace_id() as ksid from t where...",
+//   "select id, count(*), sum(price) from t group by id".
+//   Only "in_keyrange" expressions are supported in the where clause.
+//   The select expressions can be any valid non-aggregate expressions,
+//   or count(*), or sum(col).
+//   If the target column name does not match the source expression, an
+//   alias like "a+b as targetcol" must be used.
+//   More advanced constructs can be used. Please see the table plan builder
+//   documentation for more info.
 func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine) *vreplicator {
 	return &vreplicator{
 		vre:             vre,
@@ -72,8 +91,38 @@ func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreame
 	}
 }
 
-// Replicate starts a vreplication stream.
+// Replicate starts a vreplication stream. It can be in one of three phases:
+// 1. Init: If a request is issued with no starting position, we assume that the
+// contents of the tables must be copied first. During this phase, the list of
+// tables to be copied is inserted into the copy_state table. A successful insert
+// gets us out of this phase.
+// 2. Copy: If the copy_state table has rows, then we are in this phase. During this
+// phase, we repeatedly invoke copyNext until all the tables are copied. After each
+// table is successfully copied, it's removed from the copy_state table. We exit this
+// phase when there are no rows left in copy_state.
+// 3. Replicate: In this phase, we replicate binlog events indefinitely, unless
+// a stop position was requested. This phase differs from the Init phase because
+// there is a replication position.
+// If a request had a starting position, then we go directly into phase 3.
+// During these phases, the state of vreplication is reported as 'Init', 'Copying',
+// or 'Running'. They all mean the same thing. The difference in the phases depends
+// on the criteria defined above. The different states reported are mainly
+// informational. The 'Stopped' state is, however, honored.
+// All phases share the same plan building framework. We leverage the fact the
+// row representation of a read (during copy) and a binlog event are identical.
+// However, there are some subtle differences, explained in the plan builder
+// code.
 func (vr *vreplicator) Replicate(ctx context.Context) error {
+	err := vr.replicate(ctx)
+	if err != nil {
+		if err := vr.setMessage(err.Error()); err != nil {
+			log.Errorf("Failed to set error state: %v", err)
+		}
+	}
+	return err
+}
+
+func (vr *vreplicator) replicate(ctx context.Context) error {
 	tableKeys, err := vr.buildTableKeys()
 	if err != nil {
 		return err
@@ -179,7 +228,18 @@ func (vr *vreplicator) setMessage(message string) error {
 }
 
 func (vr *vreplicator) setState(state, message string) error {
-	return binlogplayer.SetVReplicationState(vr.dbClient, vr.id, state, message)
+	if message != "" {
+		vr.stats.History.Add(&binlogplayer.StatsHistoryRecord{
+			Time:    time.Now(),
+			Message: message,
+		})
+	}
+	vr.stats.State.Set(state)
+	query := fmt.Sprintf("update _vt.vreplication set state='%v', message=%v where id=%v", state, encodeString(binlogplayer.MessageTruncate(message)), vr.id)
+	if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
+		return fmt.Errorf("could not set state: %v: %v", query, err)
+	}
+	return nil
 }
 
 func encodeString(in string) string {
