@@ -2092,7 +2092,7 @@ type AliasedTableExpr struct {
 }
 
 type AsOf struct {
-	Time string
+	Time Expr
 }
 
 // Format formats the node.

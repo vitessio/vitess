@@ -1542,25 +1542,27 @@ var (
 
 func TestValid(t *testing.T) {
 	for _, tcase := range validSQL {
-		if tcase.output == "" {
-			tcase.output = tcase.input
-		}
-		tree, err := Parse(tcase.input)
-		if err != nil {
-			t.Errorf("Parse(%q) err: %v, want nil", tcase.input, err)
-			continue
-		}
-		out := String(tree)
-		if out != tcase.output {
-			t.Errorf("Parse(%q) = %q, want: %q", tcase.input, out, tcase.output)
-		}
-		// This test just exercises the tree walking functionality.
-		// There's no way automated way to verify that a node calls
-		// all its children. But we can examine code coverage and
-		// ensure that all walkSubtree functions were called.
-		Walk(func(node SQLNode) (bool, error) {
-			return true, nil
-		}, tree)
+		t.Run(tcase.input, func(t *testing.T) {
+			if tcase.output == "" {
+				tcase.output = tcase.input
+			}
+			tree, err := Parse(tcase.input)
+			if err != nil {
+				t.Errorf("Parse(%q) err: %v, want nil", tcase.input, err)
+				return
+			}
+			out := String(tree)
+			if out != tcase.output {
+				t.Errorf("Parse(%q) = %q, want: %q", tcase.input, out, tcase.output)
+			}
+			// This test just exercises the tree walking functionality.
+			// There's no way automated way to verify that a node calls
+			// all its children. But we can examine code coverage and
+			// ensure that all walkSubtree functions were called.
+			Walk(func(node SQLNode) (bool, error) {
+				return true, nil
+			}, tree)
+		})
 	}
 }
 
