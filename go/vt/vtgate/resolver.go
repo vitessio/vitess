@@ -82,7 +82,7 @@ func (res *Resolver) Execute(
 	notInTransaction bool,
 	options *querypb.ExecuteOptions,
 	logStats *LogStats,
-	autocommit bool,
+	canAutocommit bool,
 ) (*sqltypes.Result, error) {
 	rss, err := res.resolver.ResolveDestination(ctx, keyspace, tabletType, destination)
 	if err != nil {
@@ -91,6 +91,10 @@ func (res *Resolver) Execute(
 	if logStats != nil {
 		logStats.ShardQueries = uint32(len(rss))
 	}
+
+	safeSession := NewSafeSession(session)
+	autocommit := len(rss) == 1 && safeSession.AutocommitApproval()
+
 	for {
 		qr, err := res.scatterConn.Execute(
 			ctx,
@@ -98,7 +102,7 @@ func (res *Resolver) Execute(
 			bindVars,
 			rss,
 			tabletType,
-			NewSafeSession(session),
+			safeSession,
 			notInTransaction,
 			options,
 			autocommit,
