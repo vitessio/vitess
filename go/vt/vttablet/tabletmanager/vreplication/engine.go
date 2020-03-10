@@ -20,6 +20,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -90,6 +91,7 @@ type Engine struct {
 type journalEvent struct {
 	journal      *binlogdatapb.Journal
 	participants map[string]int
+	shardGTIDs   map[string]*binlogdatapb.ShardGtid
 }
 
 // NewEngine creates a new Engine.
@@ -426,68 +428,91 @@ func (vre *Engine) registerJournal(journal *binlogdatapb.Journal, id int) error 
 
 	workflow := vre.controllers[id].workflow
 	key := fmt.Sprintf("%s:%d", workflow, journal.Id)
+	ks := fmt.Sprintf("%s:%s", vre.controllers[id].source.Keyspace, vre.controllers[id].source.Shard)
+	log.Infof("Journal encountered for (%s %s): %v", key, ks, journal)
 	je, ok := vre.journaler[key]
 	if !ok {
-		// First invocation. Create the entry.
-		log.Infof("Journal encountered: %v", journal)
-		controllerSources := make(map[string]bool)
-		for _, ct := range vre.controllers {
-			if ct.workflow != workflow {
-				// Only compare with streams that belong to the current workflow.
-				continue
-			}
-			ks := fmt.Sprintf("%s:%s", ct.source.Keyspace, ct.source.Shard)
-			controllerSources[ks] = true
-		}
+		log.Infof("First stream for workflow %s has joined, creating journaler entry", workflow)
 		je = &journalEvent{
 			journal:      journal,
 			participants: make(map[string]int),
-		}
-		for _, jks := range journal.Participants {
-			ks := fmt.Sprintf("%s:%s", jks.Keyspace, jks.Shard)
-			if _, ok := controllerSources[ks]; !ok {
-				return fmt.Errorf("cannot redirect on journal: not all sources are present in this workflow: missing %v", ks)
-			}
-			je.participants[ks] = 0
+			shardGTIDs:   make(map[string]*binlogdatapb.ShardGtid),
 		}
 		vre.journaler[key] = je
 	}
-
 	// Middle invocation. Register yourself
-	ks := fmt.Sprintf("%s:%s", vre.controllers[id].source.Keyspace, vre.controllers[id].source.Shard)
-	log.Infof("Registering id %v against %v", id, ks)
+	controllerSources := make(map[string]bool)
+	for _, ct := range vre.controllers {
+		if ct.workflow != workflow {
+			// Only compare with streams that belong to the current workflow.
+			continue
+		}
+		ks := fmt.Sprintf("%s:%s", ct.source.Keyspace, ct.source.Shard)
+		controllerSources[ks] = true
+	}
+	for _, jks := range journal.Participants {
+		ks := fmt.Sprintf("%s:%s", jks.Keyspace, jks.Shard)
+		if _, ok := controllerSources[ks]; !ok {
+			log.Errorf("cannot redirect on journal: not all sources are present in this workflow: missing %v", ks)
+			return fmt.Errorf("cannot redirect on journal: not all sources are present in this workflow: missing %v", ks)
+		}
+		if _, ok := je.participants[ks]; !ok {
+			log.Infof("New participant %s found for workflow %s", ks, workflow)
+			je.participants[ks] = 0
+		} else {
+			log.Infof("Participant %s:%d already exists for workflow %s", ks, je.participants[ks], workflow)
+		}
+	}
+	for _, gtid := range journal.ShardGtids {
+		je.shardGTIDs[gtid.Shard] = gtid
+	}
+
 	je.participants[ks] = id
 	// Check if all participants have joined.
-	for _, pid := range je.participants {
+	for ks, pid := range je.participants {
 		if pid == 0 {
 			// Still need to wait.
+			log.Infof("Not all participants have joined, including %s", ks)
 			return nil
 		}
 	}
-
 	// Final invocation. Perform the transition.
-	go vre.transitionJournal(key)
+	delete(vre.journaler, key)
+	go vre.transitionJournal(je)
 	return nil
 }
 
 // transitionJournal stops all existing participants, deletes their vreplication
 // entries, and creates new ones as instructed by the journal metadata.
-func (vre *Engine) transitionJournal(key string) {
+func (vre *Engine) transitionJournal(je *journalEvent) {
 	vre.mu.Lock()
 	defer vre.mu.Unlock()
 	if !vre.isOpen {
 		return
 	}
 
-	log.Infof("Transitioning for journal:workload %v", key)
-	je := vre.journaler[key]
-	defer delete(vre.journaler, key)
+	log.Infof("Transitioning for journal:workload %v", je)
+
+	//sort both participants and shardgtids
+	participants := make([]string, 0)
+	for ks := range je.participants {
+		participants = append(participants, ks)
+	}
+	sort.Strings(participants)
+	log.Infof("Participants %+v, oldParticipants %+v", participants, je.participants)
+	shardGTIDs := make([]string, 0)
+	for shard := range je.shardGTIDs {
+		shardGTIDs = append(shardGTIDs, shard)
+	}
+	sort.Strings(shardGTIDs)
+
 	// Wait for participating controllers to stop.
 	// Also collect one id reference.
 	refid := 0
-	for _, id := range je.participants {
-		refid = id
-		vre.controllers[id].Stop()
+	for id := range participants {
+		ks := participants[id]
+		refid = je.participants[ks]
+		vre.controllers[refid].Stop()
 	}
 
 	dbClient := vre.dbClientFactory()
@@ -509,7 +534,8 @@ func (vre *Engine) transitionJournal(key string) {
 		return
 	}
 	var newids []int
-	for _, sgtid := range je.journal.ShardGtids {
+	for _, shard := range shardGTIDs {
+		sgtid := je.shardGTIDs[shard]
 		bls := vre.controllers[refid].source
 		bls.Keyspace, bls.Shard = sgtid.Keyspace, sgtid.Shard
 		ig := NewInsertGenerator(binlogplayer.BlpRunning, vre.dbName)
@@ -522,7 +548,8 @@ func (vre *Engine) transitionJournal(key string) {
 		log.Infof("Created stream: %v for %v", qr.InsertID, sgtid)
 		newids = append(newids, int(qr.InsertID))
 	}
-	for _, id := range je.participants {
+	for _, ks := range participants {
+		id := je.participants[ks]
 		_, err := vre.executeFetchMaybeCreateTable(dbClient, binlogplayer.DeleteVReplication(uint32(id)), 1)
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)
@@ -535,7 +562,9 @@ func (vre *Engine) transitionJournal(key string) {
 		return
 	}
 
-	for _, id := range je.participants {
+	for id := range participants {
+		ks := participants[id]
+		id := je.participants[ks]
 		delete(vre.controllers, id)
 	}
 
@@ -552,7 +581,7 @@ func (vre *Engine) transitionJournal(key string) {
 		}
 		vre.controllers[id] = ct
 	}
-	log.Infof("Completed transition for journal:workload %v", key)
+	log.Infof("Completed transition for journal:workload %v", je)
 }
 
 // WaitForPos waits for the replication to reach the specified position.
