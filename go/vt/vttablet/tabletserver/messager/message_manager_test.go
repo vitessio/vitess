@@ -558,35 +558,6 @@ func TestMessageManagerStreamerAndPoller(t *testing.T) {
 	}
 }
 
-func TestMessageManagerStreamerIdleKill(t *testing.T) {
-	defer func(d time.Duration) { streamEventGracePeriod.Set(d) }(streamEventGracePeriod.Get())
-	streamEventGracePeriod.Set(4 * time.Millisecond)
-
-	defer func(d time.Duration) { vstreamRetryWait.Set(d) }(vstreamRetryWait.Get())
-	vstreamRetryWait.Set(1 * time.Microsecond)
-
-	fvs := newFakeVStreamer()
-	mm := newMessageManager(newFakeTabletServer(), fvs, newMMTable(), sync2.NewSemaphore(1, 0))
-	mm.Open()
-	defer mm.Close()
-
-	r1 := newTestReceiver(1)
-	mm.Subscribe(context.Background(), r1.rcv)
-	<-r1.ch
-
-	for {
-		if fvs.streamInvocations.Get() >= 1 {
-			break
-		}
-		runtime.Gosched()
-		time.Sleep(1 * time.Millisecond)
-	}
-	time.Sleep(20 * time.Millisecond)
-	if got := fvs.streamInvocations.Get(); got < 2 {
-		t.Errorf("invocations: %d, want > %d", got, 2)
-	}
-}
-
 func TestMessageManagerPoller(t *testing.T) {
 	ti := newMMTable()
 	ti.MessageInfo.BatchSize = 2
