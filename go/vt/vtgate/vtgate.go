@@ -400,7 +400,7 @@ func (vtg *VTGate) ExecuteShards(ctx context.Context, sql string, bindVariables 
 		keyspace,
 		tabletType,
 		key.DestinationShards(shards),
-		session,
+		NewSafeSession(session),
 		notInTransaction,
 		options,
 		nil,
@@ -447,7 +447,7 @@ func (vtg *VTGate) ExecuteKeyspaceIds(ctx context.Context, sql string, bindVaria
 		goto handleError
 	}
 
-	qr, err = vtg.resolver.Execute(ctx, sql, bindVariables, keyspace, tabletType, key.DestinationKeyspaceIDs(keyspaceIds), session, notInTransaction, options, nil /* LogStats */, false /* autocommit */)
+	qr, err = vtg.resolver.Execute(ctx, sql, bindVariables, keyspace, tabletType, key.DestinationKeyspaceIDs(keyspaceIds), NewSafeSession(session), notInTransaction, options, nil /* LogStats */, false /* autocommit */)
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 		return qr, nil
@@ -485,7 +485,7 @@ func (vtg *VTGate) ExecuteKeyRanges(ctx context.Context, sql string, bindVariabl
 
 	sql = sqlannotation.AnnotateIfDML(sql, nil)
 
-	qr, err = vtg.resolver.Execute(ctx, sql, bindVariables, keyspace, tabletType, key.DestinationKeyRanges(keyRanges), session, notInTransaction, options, nil /* LogStats */, false /* autocommit */)
+	qr, err = vtg.resolver.Execute(ctx, sql, bindVariables, keyspace, tabletType, key.DestinationKeyRanges(keyRanges), NewSafeSession(session), notInTransaction, options, nil /* LogStats */, false /* autocommit */)
 	if err == nil {
 		vtg.rowsReturned.Add(statsKey, int64(len(qr.Rows)))
 		return qr, nil
