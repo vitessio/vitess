@@ -109,15 +109,14 @@ func ClusterWrapper(isMulti bool) (int, error) {
 
 	if err := ClusterInstance.VtctlProcess.CreateKeyspace(keyspaceName1); err != nil {
 		return 1, err
-	} else {
-		ClusterInstance.Keyspaces = append(ClusterInstance.Keyspaces, cluster.Keyspace{Name: keyspaceName1})
 	}
+	ClusterInstance.Keyspaces = append(ClusterInstance.Keyspaces, cluster.Keyspace{Name: keyspaceName1})
+
 	if isMulti {
 		if err := ClusterInstance.VtctlProcess.CreateKeyspace(keyspaceName2); err != nil {
 			return 1, err
-		} else {
-			ClusterInstance.Keyspaces = append(ClusterInstance.Keyspaces, cluster.Keyspace{Name: keyspaceName2})
 		}
+		ClusterInstance.Keyspaces = append(ClusterInstance.Keyspaces, cluster.Keyspace{Name: keyspaceName2})
 	}
 
 	initClusterForInitialSharding(keyspaceName1, []string{"0"}, 3, true, isMulti)
@@ -439,7 +438,7 @@ func TestInitialSharding(t *testing.T, keyspace *cluster.Keyspace, keyType query
 	// Insert row 4 (provokes a delete).
 	var ksid uint64 = 0xD000000000000000
 	insertSQL := fmt.Sprintf(sharding.InsertTabletTemplateKsID, tableName, ksid, "msg4", ksid)
-	sharding.InsertToTablet(t, insertSQL, *shard22.MasterTablet(), keyspaceName, true)
+	sharding.ExecuteOnTablet(t, insertSQL, *shard22.MasterTablet(), keyspaceName, true)
 
 	_ = ClusterInstance.VtworkerProcess.ExecuteCommand("SplitClone",
 		"--exclude_tables", "unrelated",
