@@ -405,7 +405,7 @@ func (vre *Engine) fetchIDs(dbClient binlogplayer.DBClient, selector string) (id
 	return ids, bv, nil
 }
 
-// registerJounral is invoked if any of the vreplication streams encounters a journal event.
+// registerJournal is invoked if any of the vreplication streams encounters a journal event.
 // Multiple registerJournal functions collaborate to converge on the final action.
 // The first invocation creates an entry in vre.journaler. The entry is initialized
 // with the list of participants that also need to converge.
