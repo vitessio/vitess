@@ -90,6 +90,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	ct.id = uint32(id)
 	ct.workflow = params["workflow"]
 
+	blpStats.State.Set(params["state"])
 	// Nothing to do if replication is stopped.
 	if params["state"] == binlogplayer.BlpStopped {
 		ct.cancel = func() {}

@@ -28,13 +28,21 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+// This file contains just the builders for ReplicatorPlan and TablePlan.
+// ReplicatorPlan and TablePlan are in replicator_plan.go.
+// TODO(sougou): reorganize this in a better fashion.
+
 // ExcludeStr is the filter value for excluding tables that match a rule.
 // TODO(sougou): support this on vstreamer side also.
 const ExcludeStr = "exclude"
 
+// tablePlanBuilder contains the metadata needed for building a TablePlan.
 type tablePlanBuilder struct {
 	name       sqlparser.TableIdent
 	sendSelect *sqlparser.Select
+	// selColumns keeps track of the columns we want to pull from source.
+	// If Lastpk is set, we compare this list against the table's pk and
+	// add missing references.
 	selColumns map[string]bool
 	colExprs   []*colExpr
 	onInsert   insertType
@@ -43,7 +51,7 @@ type tablePlanBuilder struct {
 }
 
 // colExpr describes the processing to be performed to
-// compute the value of the target table column.
+// compute the value of one column of the target table.
 type colExpr struct {
 	colName sqlparser.ColIdent
 	// operation==opExpr: full expression is set
@@ -71,12 +79,22 @@ const (
 )
 
 // insertType describes the type of insert statement to generate.
+// Please refer to TestBuildPlayerPlan for examples.
 type insertType int
 
 // The following values are the various insert types.
 const (
+	// insertNormal is for normal selects without a group by, like
+	// "select a+b as c from t".
 	insertNormal = insertType(iota)
+	// insertOnDup is for the more traditional grouped expressions, like
+	// "select a, b, count(*) as c from t group by a". For statements
+	// like these, "insert.. on duplicate key" statements will be generated
+	// causing "b" to be updated to the latest value (last value wins).
 	insertOnDup
+	// insertIgnore is for special grouped expressions where all columns are
+	// in the group by, like "select a, b, c from t group by a, b, c".
+	// This generates "insert ignore" statements (first value wins).
 	insertIgnore
 )
 
@@ -85,6 +103,14 @@ const (
 // a table-specific rule is built to be sent to the source. We don't send the
 // original rule to the source because it may not match the same tables as the
 // target.
+// tableKeys specifies the list of primary key columns for each table.
+// copyState is a map of tables that have not been fully copied yet.
+// If a table is not present in copyState, then it has been fully copied. If so,
+// all replication events are applied. The table still has to match a Filter.Rule.
+// If it has a non-nil entry, then the value is the last primary key (lastpk)
+// that was copied.  If so, only replication events < lastpk are applied.
+// If the entry is nil, then copying of the table has not started yet. If so,
+// no events are applied.
 // The TablePlan built is a partial plan. The full plan for a table is built
 // when we receive field information from events or rows sent by the source.
 // buildExecutionPlan is the function that builds the full plan.
@@ -149,6 +175,7 @@ func MatchTable(tableName string, filter *binlogdatapb.Filter) (*binlogdatapb.Ru
 
 func buildTablePlan(tableName, filter string, tableKeys map[string][]string, lastpk *sqltypes.Result) (*TablePlan, error) {
 	query := filter
+	// generate equivalent select statement if filter is empty or a keyrange.
 	switch {
 	case filter == "":
 		buf := sqlparser.NewTrackedBuffer(nil)
@@ -170,6 +197,8 @@ func buildTablePlan(tableName, filter string, tableKeys map[string][]string, las
 	}
 
 	if expr, ok := sel.SelectExprs[0].(*sqlparser.StarExpr); ok {
+		// If it's a "select *", we return a partial plan, and complete
+		// it when we get back field info from the stream.
 		if len(sel.SelectExprs) != 1 {
 			return nil, fmt.Errorf("unexpected: %v", sqlparser.String(sel))
 		}
@@ -198,6 +227,13 @@ func buildTablePlan(tableName, filter string, tableKeys map[string][]string, las
 	if err := tpb.analyzeExprs(sel.SelectExprs); err != nil {
 		return nil, err
 	}
+	// It's possible that the target table does not materialize all
+	// the primary keys of the source table. In such situations,
+	// we still have to be able to validate the incoming event
+	// against the current lastpk. For this, we have to request
+	// the missing columns so we can compare against those values.
+	// If there is no lastpk to validate against, then we don't
+	// care.
 	if tpb.lastpk != nil {
 		for _, f := range tpb.lastpk.Fields {
 			tpb.addCol(sqlparser.NewColIdent(f.Name))
@@ -239,13 +275,13 @@ func (tpb *tablePlanBuilder) generate(tableKeys map[string][]string) *TablePlan 
 	return &TablePlan{
 		TargetName:       tpb.name.String(),
 		Lastpk:           tpb.lastpk,
-		PKReferences:     pkrefs,
 		BulkInsertFront:  tpb.generateInsertPart(sqlparser.NewTrackedBuffer(bvf.formatter)),
 		BulkInsertValues: tpb.generateValuesPart(sqlparser.NewTrackedBuffer(bvf.formatter), bvf),
 		BulkInsertOnDup:  tpb.generateOnDupPart(sqlparser.NewTrackedBuffer(bvf.formatter)),
 		Insert:           tpb.generateInsertStatement(),
 		Update:           tpb.generateUpdateStatement(),
 		Delete:           tpb.generateDeleteStatement(),
+		PKReferences:     pkrefs,
 	}
 }
 
@@ -356,6 +392,7 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 		case *sqlparser.Subquery:
 			return false, fmt.Errorf("unsupported subquery: %v", sqlparser.String(node))
 		case *sqlparser.FuncExpr:
+			// Other aggregates are not supported.
 			if node.IsAggregate() {
 				return false, fmt.Errorf("unexpected: %v", sqlparser.String(node))
 			}
@@ -369,6 +406,8 @@ func (tpb *tablePlanBuilder) analyzeExpr(selExpr sqlparser.SelectExpr) (*colExpr
 	return cexpr, nil
 }
 
+// addCol adds the specified column to the send query
+// if it's not already present.
 func (tpb *tablePlanBuilder) addCol(ident sqlparser.ColIdent) {
 	if tpb.selColumns[ident.Lowered()] {
 		return
@@ -381,6 +420,7 @@ func (tpb *tablePlanBuilder) addCol(ident sqlparser.ColIdent) {
 
 func (tpb *tablePlanBuilder) analyzeGroupBy(groupBy sqlparser.GroupBy) error {
 	if groupBy == nil {
+		// If there's no grouping, the it's an insertNormal.
 		return nil
 	}
 	for _, expr := range groupBy {
@@ -397,9 +437,11 @@ func (tpb *tablePlanBuilder) analyzeGroupBy(groupBy sqlparser.GroupBy) error {
 		}
 		cexpr.isGrouped = true
 	}
+	// If all colExprs are grouped, then it's an insertIgnore.
 	tpb.onInsert = insertIgnore
 	for _, cExpr := range tpb.colExprs {
 		if !cExpr.isGrouped {
+			// If some colExprs are not grouped, then it's an insertOnDup.
 			tpb.onInsert = insertOnDup
 			break
 		}
@@ -407,6 +449,7 @@ func (tpb *tablePlanBuilder) analyzeGroupBy(groupBy sqlparser.GroupBy) error {
 	return nil
 }
 
+// analyzePK builds tpb.pkCols.
 func (tpb *tablePlanBuilder) analyzePK(tableKeys map[string][]string) error {
 	pkcols, ok := tableKeys[tpb.name.String()]
 	if !ok {
@@ -441,9 +484,12 @@ func (tpb *tablePlanBuilder) generateInsertStatement() *sqlparser.ParsedQuery {
 
 	tpb.generateInsertPart(buf)
 	if tpb.lastpk == nil {
+		// If there's no lastpk, generate straight values.
 		buf.Myprintf(" values ", tpb.name)
 		tpb.generateValuesPart(buf, bvf)
 	} else {
+		// If there is a lastpk, generate values as a select from dual
+		// where the pks < lastpk
 		tpb.generateSelectPart(buf, bvf)
 	}
 	tpb.generateOnDupPart(buf)
@@ -478,6 +524,7 @@ func (tpb *tablePlanBuilder) generateValuesPart(buf *sqlparser.TrackedBuffer, bv
 		case opCount:
 			buf.WriteString("1")
 		case opSum:
+			// NULL values must be treated as 0 for SUM.
 			buf.Myprintf("ifnull(%v, 0)", cexpr.expr)
 		}
 	}
@@ -513,12 +560,18 @@ func (tpb *tablePlanBuilder) generateOnDupPart(buf *sqlparser.TrackedBuffer) *sq
 	buf.Myprintf(" on duplicate key update ")
 	separator := ""
 	for _, cexpr := range tpb.colExprs {
+		// We don't know of a use case where the group by columns
+		// don't match the pk of a table. But we'll allow this,
+		// and won't update the pk column with the new value if
+		// this does happen. This can be revisited if there's
+		// a legitimate use case in the future that demands
+		// a different behavior. This rule is applied uniformly
+		// for updates and deletes also.
 		if cexpr.isGrouped || cexpr.isPK {
 			continue
 		}
 		buf.Myprintf("%s%v=", separator, cexpr.colName)
 		separator = ", "
-		// TODO: What to do here?
 		switch cexpr.operation {
 		case opExpr:
 			buf.Myprintf("values(%v)", cexpr.colName)

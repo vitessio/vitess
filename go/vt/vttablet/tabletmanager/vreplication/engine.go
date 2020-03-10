@@ -405,6 +405,17 @@ func (vre *Engine) fetchIDs(dbClient binlogplayer.DBClient, selector string) (id
 	return ids, bv, nil
 }
 
+// registerJournal is invoked if any of the vreplication streams encounters a journal event.
+// Multiple registerJournal functions collaborate to converge on the final action.
+// The first invocation creates an entry in vre.journaler. The entry is initialized
+// with the list of participants that also need to converge.
+// The middle invocation happens on the first and subsequent calls: the current participant
+// marks itself as having joined the wait.
+// The final invocation happens for the last participant that joins. Having confirmed
+// that all the participants have joined, transitionJournal is invoked, which deletes
+// all current participant streams and creates new ones to replace them.
+// A unified journal event is identified by the workflow name and journal id.
+// Multiple independent journal events can go through this cycle concurrently.
 func (vre *Engine) registerJournal(journal *binlogdatapb.Journal, id int) error {
 	vre.mu.Lock()
 	defer vre.mu.Unlock()
@@ -417,6 +428,7 @@ func (vre *Engine) registerJournal(journal *binlogdatapb.Journal, id int) error 
 	key := fmt.Sprintf("%s:%d", workflow, journal.Id)
 	je, ok := vre.journaler[key]
 	if !ok {
+		// First invocation. Create the entry.
 		log.Infof("Journal encountered: %v", journal)
 		controllerSources := make(map[string]bool)
 		for _, ct := range vre.controllers {
@@ -441,19 +453,25 @@ func (vre *Engine) registerJournal(journal *binlogdatapb.Journal, id int) error 
 		vre.journaler[key] = je
 	}
 
+	// Middle invocation. Register yourself
 	ks := fmt.Sprintf("%s:%s", vre.controllers[id].source.Keyspace, vre.controllers[id].source.Shard)
 	log.Infof("Registering id %v against %v", id, ks)
 	je.participants[ks] = id
+	// Check if all participants have joined.
 	for _, pid := range je.participants {
 		if pid == 0 {
 			// Still need to wait.
 			return nil
 		}
 	}
+
+	// Final invocation. Perform the transition.
 	go vre.transitionJournal(key)
 	return nil
 }
 
+// transitionJournal stops all existing participants, deletes their vreplication
+// entries, and creates new ones as instructed by the journal metadata.
 func (vre *Engine) transitionJournal(key string) {
 	vre.mu.Lock()
 	defer vre.mu.Unlock()
@@ -484,6 +502,7 @@ func (vre *Engine) transitionJournal(key string) {
 		return
 	}
 
+	// Use the reference row to copy other fields like cell, tablet_types, etc.
 	params, err := readRow(dbClient, refid)
 	if err != nil {
 		log.Errorf("transitionJournal: %v", err)
