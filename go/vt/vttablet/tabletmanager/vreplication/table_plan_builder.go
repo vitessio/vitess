@@ -84,7 +84,7 @@ type insertType int
 
 // The following values are the various insert types.
 const (
-	// insertNormal is for normal selects without a group b, like
+	// insertNormal is for normal selects without a group by, like
 	// "select a+b as c from t".
 	insertNormal = insertType(iota)
 	// insertOnDup is for the more traditional grouped expressions, like
@@ -93,7 +93,7 @@ const (
 	// causing "b" to be updated to the latest value (last value wins).
 	insertOnDup
 	// insertIgnore is for special grouped expressions where all columns are
-	// in the group by, like "select a, b, c from to group by a, b, c".
+	// in the group by, like "select a, b, c from t group by a, b, c".
 	// This generates "insert ignore" statements (first value wins).
 	insertIgnore
 )

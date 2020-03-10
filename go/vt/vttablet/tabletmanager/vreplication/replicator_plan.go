@@ -146,12 +146,12 @@ func (rp *ReplicatorPlan) MarshalJSON() ([]byte, error) {
 // of vreplication: catchup, copy, fastforward, or regular replication.
 type TablePlan struct {
 	// TargetName, SendRule will always be initialized.
-	// Lastpk will also be initialized if it was specified, and
-	// will be used for building the final plan after field info
-	// is received.
 	TargetName string
 	SendRule   *binlogdatapb.Rule
-	Lastpk     *sqltypes.Result
+	// Lastpk will be initialized if it was specified, and
+	// will be used for building the final plan after field info
+	// is received.
+	Lastpk *sqltypes.Result
 	// BulkInsertFront, BulkInsertValues and BulkInsertOnDup are used
 	// by vcopier. These three parts are combined to build bulk insert
 	// statements. This is functionally equivalent to generating

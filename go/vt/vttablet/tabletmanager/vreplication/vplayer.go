@@ -483,7 +483,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			}
 			return io.EOF
 		case binlogdatapb.OnDDLAction_EXEC:
-			// It's impossible to save the position transactionally with the satement.
+			// It's impossible to save the position transactionally with the statement.
 			// So, we apply the DDL first, and then save the position.
 			// Manual intervention may be needed if there is a partial
 			// failure here.
