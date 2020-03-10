@@ -240,7 +240,7 @@ func skipToEnd(yylex interface{}) {
 %type <tableNames> table_name_list delete_table_list view_name_list
 %type <str> inner_join outer_join straight_join natural_join
 %type <tableName> table_name into_table_name delete_table_name
-%type <aliasedTableName> aliased_table_name as_opt_id
+%type <aliasedTableName> aliased_table_name
 %type <indexHints> index_hint_list
 %type <expr> where_expression_opt
 %type <expr> condition
@@ -270,7 +270,7 @@ func skipToEnd(yylex interface{}) {
 %type <limit> limit_opt
 %type <str> lock_opt
 %type <columns> ins_column_list column_list
-%type <partitions> opt_partition_clause partition_list
+%type <partitions> opt_partition_clause partition_list partition_list_opt
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
 %type <setExprs> set_list transaction_chars
@@ -289,7 +289,7 @@ func skipToEnd(yylex interface{}) {
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
 %type <expr> charset_value
-%type <tableIdent> table_id reserved_table_id table_alias
+%type <tableIdent> table_id reserved_table_id table_alias as_opt_id
 %type <str> as_of_opt
 %type <str> charset
 %type <str> set_session_or_global show_session_or_global
@@ -2120,28 +2120,34 @@ table_factor:
   }
 
 aliased_table_name:
-table_name as_opt_id index_hint_list
+table_name partition_list_opt as_of_opt as_opt_id index_hint_list
   {
-    $$ = $2
-    $$.Expr = $1
-    $$.Hints = $3
+    $$ = &AliasedTableExpr{Expr:$1, Partitions: $2, As: $4, Hints: $5}
   }
-| table_name PARTITION openb partition_list closeb as_opt_id index_hint_list
+
+partition_list_opt:
   {
-    $$ = $6
-    $$.Expr = $1
-    $$.Partitions = $4
-    $$.Hints = $7
+    $$ = nil
+  }
+  PARTITION openb partition_list closeb
+  {
+    $$ = $4
   }
 
 as_of_opt:
   {
     $$ = ""
   }
-| AS OF STRING
+| FOR SYSTEM_TIME AS OF STRING
   {
-    $$ = string($3)
+    $$ = string($5)
   }
+// Non-standard oracle extension would be nice to have, but generates
+// a parser conflict on AS (for the alias).
+//| AS OF STRING
+//  {
+//    $$ = string($3)
+//  }
 
 column_list:
   sql_id
@@ -2215,29 +2221,9 @@ as_opt_id:
   {
     $$ = &AliasedTableExpr{}
   }
-| AS OF STRING
+| as_opt table_alias
   {
-    $$ = &AliasedTableExpr{}
-  }
-| FOR SYSTEM_TIME AS OF STRING
-    {
-      $$ = string($1)
-    }
-| AS OF STRING table_alias
-  {
-    $$ = &AliasedTableExpr{As: $1}
-  }
-| AS OF STRING AS table_alias
-  {
-    $$ = &AliasedTableExpr{As: $2}
-  }
-| table_alias
-  {
-    $$ = &AliasedTableExpr{As: $1}
-  }
-| AS table_alias
-  {
-    $$ = &AliasedTableExpr{As: $2}
+    $$ = $2
   }
 
 table_alias:
