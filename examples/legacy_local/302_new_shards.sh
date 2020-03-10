@@ -31,3 +31,5 @@ done
 
 vtctlclient -server localhost:15999 InitShardMaster -force customer/-80 zone1-300
 vtctlclient -server localhost:15999 InitShardMaster -force customer/80- zone1-400
+vtctlclient -server localhost:15999 CopySchemaShard customer/0 customer/-80
+vtctlclient -server localhost:15999 CopySchemaShard customer/0 customer/80-

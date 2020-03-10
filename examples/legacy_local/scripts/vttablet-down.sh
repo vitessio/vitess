@@ -14,14 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this script migrates traffic for the master tablet
+# This is an example script that stops the mysqld and vttablet instances
+# created by vttablet-up.sh
 
-vtctlclient \
- -server localhost:15999 \
- -log_dir "$VTDATAROOT"/tmp \
- -alsologtostderr \
- MigrateWrites \
- customer.cust2cust
+source ./env.sh
 
-# data has been copied over to shards, and databases for the new shards are now available
+printf -v tablet_dir 'vt_%010d' $TABLET_UID
+pid=`cat $VTDATAROOT/$tablet_dir/vttablet.pid`
+
+kill $pid
+
+# Wait for vttablet to die.
+while ps -p $pid > /dev/null; do sleep 1; done
+
 

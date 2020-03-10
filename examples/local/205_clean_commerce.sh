@@ -14,14 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this script migrates traffic for the master tablet
+# this script removes the customer and corder tables from the commerce
+# keyspace
 
-vtctlclient \
- -server localhost:15999 \
- -log_dir "$VTDATAROOT"/tmp \
- -alsologtostderr \
- MigrateWrites \
- customer.cust2cust
-
-# data has been copied over to shards, and databases for the new shards are now available
-
+vtctlclient -server localhost:15999 ApplySchema -sql-file drop_commerce_tables.sql commerce
+vtctlclient -server localhost:15999 SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 rdonly
+vtctlclient -server localhost:15999 SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 replica
+vtctlclient -server localhost:15999 SetShardTabletControl -blacklisted_tables=customer,corder -remove commerce/0 master

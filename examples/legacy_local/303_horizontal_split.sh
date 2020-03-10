@@ -14,14 +14,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this script migrates traffic for the master tablet
+# this script copies the data from customer/0 to customer/-80 and customer/80-
+# each row will be copied to exactly one shard based on the vindex value
 
-vtctlclient \
- -server localhost:15999 \
+source ./env.sh
+
+vtworker \
+ $TOPOLOGY_FLAGS \
+ -cell zone1 \
  -log_dir "$VTDATAROOT"/tmp \
  -alsologtostderr \
- MigrateWrites \
- customer.cust2cust
-
-# data has been copied over to shards, and databases for the new shards are now available
-
+ -use_v3_resharding_mode \
+ SplitClone -min_healthy_rdonly_tablets=1 customer/0

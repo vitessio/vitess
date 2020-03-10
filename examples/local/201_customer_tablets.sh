@@ -14,16 +14,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this script copies the data from customer/0 to customer/-80 and customer/80-
-# each row will be copied to exactly one shard based on the vindex value
+# this script creates the tablets and initializes them for vertical
+# resharding it also splits the vschema between the two keyspaces
+# old (commerce) and new (customer)
 
 source ./env.sh
 
-vtctlclient \
-    -server localhost:15999 \
-    -log_dir "$VTDATAROOT"/tmp \
-    -alsologtostderr \
-    Reshard \
-    customer.cust2cust "0" "-80,80-"
+for i in 200 201 202; do
+ CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
+ CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./scripts/vttablet-up.sh
+done
 
-sleep 2
+vtctlclient -server localhost:15999 InitShardMaster -force customer/0 zone1-200
+vtctlclient -server localhost:15999 ApplyVSchema -vschema_file vschema_commerce_vsplit.json commerce
+vtctlclient -server localhost:15999 ApplyVSchema -vschema_file vschema_customer_vsplit.json customer
+

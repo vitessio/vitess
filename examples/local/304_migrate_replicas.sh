@@ -16,5 +16,18 @@
 
 # this script migrates traffic for the rdonly and replica tablets
 
-vtctlclient -server localhost:15999 MigrateServedTypes customer/0 rdonly
-vtctlclient -server localhost:15999 MigrateServedTypes customer/0 replica
+vtctlclient \
+ -server localhost:15999 \
+ -log_dir "$VTDATAROOT"/tmp \
+ -alsologtostderr \
+ MigrateReads \
+ -tablet_type=rdonly \
+ customer.cust2cust
+
+vtctlclient \
+ -server localhost:15999 \
+ -log_dir "$VTDATAROOT"/tmp \
+ -alsologtostderr \
+ MigrateReads \
+ -tablet_type=replica \
+ customer.cust2cust

@@ -13,15 +13,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+# this script brings down the tablets for customer/0 keyspace
 
-# this script migrates traffic for the master tablet
-
-vtctlclient \
- -server localhost:15999 \
- -log_dir "$VTDATAROOT"/tmp \
- -alsologtostderr \
- MigrateWrites \
- customer.cust2cust
-
-# data has been copied over to shards, and databases for the new shards are now available
+for i in 200 201 202; do
+ CELL=zone1 TABLET_UID=$i ./scripts/vttablet-down.sh
+ CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-down.sh
+done
 

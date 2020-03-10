@@ -22,7 +22,7 @@ source build.env
 
 set -xe
 
-cd "$VTROOT/examples/local"
+cd "$VTROOT/examples/legacy_local"
 
 unset VTROOT # ensure that the examples can run without VTROOT now.
 
@@ -30,29 +30,18 @@ unset VTROOT # ensure that the examples can run without VTROOT now.
 
 mysql -h 127.0.0.1 -P 15306 < ../common/insert_commerce_data.sql
 mysql -h 127.0.0.1 -P 15306 --table < ../common/select_commerce_data.sql
-
-./201_customer_tablets.sh
-
-for shard in "customer/0"; do
- while true; do
-  mysql -h 127.0.0.1 -P 15306 "$shard" -e 'show tables' && break || echo "waiting for shard: $shard!"
-  sleep 1
- done;
-done;
-
-./202_vertical_split.sh
-
-./203_vertical_migrate_replicas.sh
-
-./204_vertical_migrate_master.sh
-
+./201_customer_keyspace.sh
+./202_customer_tablets.sh
+./203_vertical_split.sh
 mysql -h 127.0.0.1 -P 15306 --table < ../common/select_customer0_data.sql
+
+./204_vertical_migrate_replicas.sh
+./205_vertical_migrate_master.sh
 # Expected to fail!
 mysql -h 127.0.0.1 -P 15306 --table < ../common/select_commerce_data.sql || echo "Blacklist working as expected"
-./205_clean_commerce.sh
+./206_clean_commerce.sh
 # Expected to fail!
 mysql -h 127.0.0.1 -P 15306 --table < ../common/select_commerce_data.sql || echo "Tables missing as expected"
-
 
 ./301_customer_sharded.sh
 ./302_new_shards.sh
@@ -66,13 +55,15 @@ for shard in "customer/-80" "customer/80-"; do
  done;
 done;
 
+mysql -h 127.0.0.1 -P 15306 --table < ../common/select_customer-80_data.sql
+mysql -h 127.0.0.1 -P 15306 --table < ../common/select_customer80-_data.sql
+
 ./303_horizontal_split.sh
 
 ./304_migrate_replicas.sh
 ./305_migrate_master.sh
 
 mysql -h 127.0.0.1 -P 15306 --table < ../common/select_customer-80_data.sql
-mysql -h 127.0.0.1 -P 15306 --table < ../common/select_customer80-_data.sql
 
 ./401_teardown.sh
 

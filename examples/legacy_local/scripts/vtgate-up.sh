@@ -41,7 +41,6 @@ vtgate \
   -service_map 'grpc-vtgateservice' \
   -pid_file $VTDATAROOT/tmp/vtgate.pid \
   -mysql_auth_server_impl none \
-  -tablet_refresh_interval 5s \
   > $VTDATAROOT/tmp/vtgate.out 2>&1 &
 
 # Block waiting for vtgate to be listening

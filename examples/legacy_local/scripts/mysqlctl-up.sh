@@ -14,14 +14,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this script migrates traffic for the master tablet
+# This is an example script that creates a single shard vttablet deployment.
 
-vtctlclient \
- -server localhost:15999 \
- -log_dir "$VTDATAROOT"/tmp \
- -alsologtostderr \
- MigrateWrites \
- customer.cust2cust
+source ./env.sh
 
-# data has been copied over to shards, and databases for the new shards are now available
+cell=${CELL:-'test'}
+uid=$TABLET_UID
+mysql_port=$[17000 + $uid]
+printf -v alias '%s-%010d' $cell $uid
+printf -v tablet_dir 'vt_%010d' $uid
 
+mkdir -p $VTDATAROOT/backups
+
+echo "Starting MySQL for tablet $alias..."
+action="init"
+
+if [ -d $VTDATAROOT/$tablet_dir ]; then
+ echo "Resuming from existing vttablet dir:"
+ echo "    $VTDATAROOT/$tablet_dir"
+ action='start'
+fi
+
+mysqlctl \
+ -log_dir $VTDATAROOT/tmp \
+ -tablet_uid $uid \
+ -mysql_port $mysql_port \
+ $action

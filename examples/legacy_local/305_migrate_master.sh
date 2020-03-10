@@ -16,12 +16,6 @@
 
 # this script migrates traffic for the master tablet
 
-vtctlclient \
- -server localhost:15999 \
- -log_dir "$VTDATAROOT"/tmp \
- -alsologtostderr \
- MigrateWrites \
- customer.cust2cust
-
+vtctlclient -server localhost:15999 MigrateServedTypes customer/0 master
 # data has been copied over to shards, and databases for the new shards are now available
 

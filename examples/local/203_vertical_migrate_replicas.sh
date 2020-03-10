@@ -14,14 +14,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this script migrates traffic for the master tablet
+# this script migrates traffic for the new customer keyspace to the new
+# tablets of types rdonly and replica
+
 
 vtctlclient \
  -server localhost:15999 \
  -log_dir "$VTDATAROOT"/tmp \
  -alsologtostderr \
- MigrateWrites \
- customer.cust2cust
+ MigrateReads \
+ -tablet_type=rdonly \
+ customer.commerce2customer
 
-# data has been copied over to shards, and databases for the new shards are now available
+vtctlclient \
+ -server localhost:15999 \
+ -log_dir "$VTDATAROOT"/tmp \
+ -alsologtostderr \
+ MigrateReads \
+ -tablet_type=replica \
+ customer.commerce2customer
 

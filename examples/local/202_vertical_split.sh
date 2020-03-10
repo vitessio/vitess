@@ -14,14 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this script migrates traffic for the master tablet
+# this script copies over all the data from commerce keyspace to
+# customer keyspace for the customer and corder tables
+
+source ./env.sh
 
 vtctlclient \
- -server localhost:15999 \
- -log_dir "$VTDATAROOT"/tmp \
- -alsologtostderr \
- MigrateWrites \
- customer.cust2cust
+    -server localhost:15999 \
+    -log_dir "$VTDATAROOT"/tmp \
+    -alsologtostderr \
+    Migrate \
+    -workflow=commerce2customer \
+    commerce customer customer,corder
 
-# data has been copied over to shards, and databases for the new shards are now available
-
+sleep 2

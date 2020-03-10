@@ -14,14 +14,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this script migrates traffic for the master tablet
+# This is an example script that starts vtctld.
 
-vtctlclient \
- -server localhost:15999 \
- -log_dir "$VTDATAROOT"/tmp \
- -alsologtostderr \
- MigrateWrites \
- customer.cust2cust
+source ./env.sh
 
-# data has been copied over to shards, and databases for the new shards are now available
+cell=${CELL:-'test'}
+grpc_port=15999
 
+echo "Starting vtctld..."
+# shellcheck disable=SC2086
+vtctld \
+ $TOPOLOGY_FLAGS \
+ -cell $cell \
+ -workflow_manager_init \
+ -workflow_manager_use_election \
+ -service_map 'grpc-vtctl' \
+ -backup_storage_implementation file \
+ -file_backup_storage_root $VTDATAROOT/backups \
+ -log_dir $VTDATAROOT/tmp \
+ -port $vtctld_web_port \
+ -grpc_port $grpc_port \
+ -pid_file $VTDATAROOT/tmp/vtctld.pid \
+  > $VTDATAROOT/tmp/vtctld.out 2>&1 &
