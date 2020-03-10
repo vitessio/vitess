@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2019 The Vitess Authors.
+# Copyright 2020 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,12 +14,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this script migrates master traffic for the customer keyspace to the
-# new master tablet
+# this script copies the data from customer/0 to customer/-80 and customer/80-
+# each row will be copied to exactly one shard based on the vindex value
+
+source ./env.sh
 
 vtctlclient \
- -server localhost:15999 \
- -log_dir "$VTDATAROOT"/tmp \
- -alsologtostderr \
- MigrateWrites \
- customer.commerce2customer
+    -server localhost:15999 \
+    -log_dir "$VTDATAROOT"/tmp \
+    -alsologtostderr \
+    Reshard \
+    customer.cust2cust "0" "-80,80-"
+
+sleep 2

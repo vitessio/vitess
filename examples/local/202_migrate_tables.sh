@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2019 The Vitess Authors.
+# Copyright 2020 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,23 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# this script migrates traffic for the new customer keyspace to the new
-# tablets of types rdonly and replica
+# this script copies over all the data from commerce keyspace to
+# customer keyspace for the customer and corder tables
 
-
-vtctlclient \
- -server localhost:15999 \
- -log_dir "$VTDATAROOT"/tmp \
- -alsologtostderr \
- MigrateReads \
- -tablet_type=rdonly \
- customer.commerce2customer
+source ./env.sh
 
 vtctlclient \
- -server localhost:15999 \
- -log_dir "$VTDATAROOT"/tmp \
- -alsologtostderr \
- MigrateReads \
- -tablet_type=replica \
- customer.commerce2customer
+    -server localhost:15999 \
+    -log_dir "$VTDATAROOT"/tmp \
+    -alsologtostderr \
+    Migrate \
+    -workflow=commerce2customer \
+    commerce customer customer,corder
 
+sleep 2

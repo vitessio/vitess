@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright 2019 The Vitess Authors.
+# Copyright 2020 The Vitess Authors.
 # 
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -40,11 +40,11 @@ for shard in "customer/0"; do
  done;
 done;
 
-./202_vertical_split.sh
+./202_migrate_tables.sh
 
-./203_vertical_migrate_replicas.sh
+./203_migrate_replicas.sh
 
-./204_vertical_migrate_master.sh
+./204_migrate_master.sh
 
 mysql -h 127.0.0.1 -P 15306 --table < ../common/select_customer0_data.sql
 # Expected to fail!
@@ -66,7 +66,7 @@ for shard in "customer/-80" "customer/80-"; do
  done;
 done;
 
-./303_horizontal_split.sh
+./303_reshard.sh
 
 ./304_migrate_replicas.sh
 ./305_migrate_master.sh
