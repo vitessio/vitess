@@ -91,13 +91,7 @@ var TestVTGateCallerID = &querypb.VTGateCallerID{
 
 // TestExecuteOptions is a test execute options.
 var TestExecuteOptions = &querypb.ExecuteOptions{
-	IncludedFields:    querypb.ExecuteOptions_TYPE_ONLY,
-	IncludeEventToken: true,
-	CompareEventToken: &querypb.EventToken{
-		Timestamp: 9876,
-		Shard:     "ssss",
-		Position:  "pppp",
-	},
+	IncludedFields:  querypb.ExecuteOptions_TYPE_ONLY,
 	ClientFoundRows: true,
 }
 
@@ -385,14 +379,6 @@ var ExecuteQueryResult = sqltypes.Result{
 			sqltypes.TestValue(sqltypes.Char, "row2 value2"),
 		},
 	},
-	Extras: &querypb.ResultExtras{
-		EventToken: &querypb.EventToken{
-			Timestamp: 456321,
-			Shard:     "test_shard",
-			Position:  "test_position",
-		},
-		Fresher: true,
-	},
 }
 
 // Execute is part of the queryservice.QueryService interface
@@ -528,14 +514,6 @@ var ExecuteBatchQueryResultList = []sqltypes.Result{
 			{
 				sqltypes.TestValue(sqltypes.Int8, "2"),
 			},
-		},
-		Extras: &querypb.ResultExtras{
-			EventToken: &querypb.EventToken{
-				Timestamp: 456322,
-				Shard:     "test_shard2",
-				Position:  "test_position2",
-			},
-			Fresher: true,
 		},
 	},
 	{

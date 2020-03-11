@@ -1275,7 +1275,6 @@ func testStreamExecute(t *testing.T, session *vtgateconn.VTGateSession) {
 	wantResult := *execCase.result
 	wantResult.RowsAffected = 0
 	wantResult.InsertID = 0
-	wantResult.Extras = nil
 	if !qr.Equal(&wantResult) {
 		t.Errorf("Unexpected result from StreamExecute: got %+v want %+v", qr, wantResult)
 	}
@@ -1356,7 +1355,6 @@ func testStreamExecuteShards(t *testing.T, conn *vtgateconn.VTGateConn) {
 	wantResult := *execCase.result
 	wantResult.RowsAffected = 0
 	wantResult.InsertID = 0
-	wantResult.Extras = nil
 	if !qr.Equal(&wantResult) {
 		t.Errorf("Unexpected result from StreamExecuteShards: got %+v want %+v", qr, wantResult)
 	}
@@ -1437,7 +1435,6 @@ func testStreamExecuteKeyRanges(t *testing.T, conn *vtgateconn.VTGateConn) {
 	wantResult := *execCase.result
 	wantResult.RowsAffected = 0
 	wantResult.InsertID = 0
-	wantResult.Extras = nil
 	if !qr.Equal(&wantResult) {
 		t.Errorf("Unexpected result from StreamExecuteKeyRanges: got %+v want %+v", qr, wantResult)
 	}
@@ -1518,7 +1515,6 @@ func testStreamExecuteKeyspaceIds(t *testing.T, conn *vtgateconn.VTGateConn) {
 	wantResult := *execCase.result
 	wantResult.RowsAffected = 0
 	wantResult.InsertID = 0
-	wantResult.Extras = nil
 	if !qr.Equal(&wantResult) {
 		t.Errorf("Unexpected result from StreamExecuteKeyspaceIds: got %+v want %+v", qr, wantResult)
 	}
@@ -1865,13 +1861,7 @@ var testCallerID = &vtrpcpb.CallerID{
 }
 
 var testExecuteOptions = &querypb.ExecuteOptions{
-	IncludedFields:    querypb.ExecuteOptions_TYPE_ONLY,
-	IncludeEventToken: true,
-	CompareEventToken: &querypb.EventToken{
-		Timestamp: 135,
-		Shard:     "shrd",
-		Position:  "pstn",
-	},
+	IncludedFields: querypb.ExecuteOptions_TYPE_ONLY,
 }
 
 var execMap = map[string]struct {
@@ -2196,15 +2186,6 @@ var execMap = map[string]struct {
 	},
 }
 
-var extras = querypb.ResultExtras{
-	EventToken: &querypb.EventToken{
-		Timestamp: 123,
-		Shard:     "sh",
-		Position:  "po",
-	},
-	Fresher: true,
-}
-
 var result1 = sqltypes.Result{
 	Fields: []*querypb.Field{
 		{
@@ -2228,7 +2209,6 @@ var result1 = sqltypes.Result{
 			sqltypes.NewInt32(3),
 		},
 	},
-	Extras: &extras,
 }
 
 // streamResultFields is only the fields, sent as the first packet

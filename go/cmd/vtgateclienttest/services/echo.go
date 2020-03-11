@@ -95,16 +95,6 @@ func echoQueryResult(vals map[string]interface{}) *sqltypes.Result {
 	}
 	qr.Rows = [][]sqltypes.Value{row}
 
-	if options, ok := vals["options"]; ok {
-		o := options.(*querypb.ExecuteOptions)
-		if o != nil && o.CompareEventToken != nil {
-			qr.Extras = &querypb.ResultExtras{
-				Fresher:    true,
-				EventToken: o.CompareEventToken,
-			}
-		}
-	}
-
 	return qr
 }
 
