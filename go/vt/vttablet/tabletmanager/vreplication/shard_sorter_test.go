@@ -23,7 +23,7 @@ import (
 )
 
 func TestShardSorter(t *testing.T) {
-	shardsArray := []string {
+	shardsArray := []string{
 		"c0-c180,f0-,80-c0,40-80,c180-c90,-40,c90-f0",
 		"80-,-80",
 		"-80,80-",
@@ -32,7 +32,7 @@ func TestShardSorter(t *testing.T) {
 		"-60,60-c0,c0-",
 		"0-1,55-66,1-11,66-,11-45,45-55",
 	}
-	sortedShardsArray := []string {
+	sortedShardsArray := []string{
 		"-40,40-80,80-c0,c0-c180,c180-c90,c90-f0,f0-",
 		"-80,80-",
 		"-80,80-",
