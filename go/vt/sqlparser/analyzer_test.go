@@ -68,7 +68,7 @@ func TestPreview(t *testing.T) {
 		{"analyze", StmtOther},
 		{"describe", StmtDescribe},
 		{"desc", StmtDescribe},
-		{"explain", StmtOther},
+		{"explain", StmtDescribe},
 		{"repair", StmtOther},
 		{"optimize", StmtOther},
 		{"grant", StmtPriv},

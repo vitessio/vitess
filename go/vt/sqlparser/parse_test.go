@@ -1364,7 +1364,7 @@ var (
 		output: "describe foobar",
 	}, {
 		input:  "explain foobar",
-		output: "otherread",
+		output: "describe foobar",
 	}, {
 		input:  "truncate table foo",
 		output: "truncate table foo",

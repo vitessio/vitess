@@ -2309,17 +2309,11 @@ options:PassthroughDMLs
 
 # describe
 "describe a"
-{
-  "PlanID": "OTHER_READ",
-  "TableName": ""
-}
+"invalid SQL"
 
 # explain
 "explain a"
-{
-  "PlanID": "OTHER_READ",
-  "TableName": ""
-}
+"invalid SQL"
 
 # repair
 "repair a"

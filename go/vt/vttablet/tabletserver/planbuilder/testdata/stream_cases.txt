@@ -39,11 +39,7 @@
 
 # other
 "desc foo"
-{
-  "PlanID": "SELECT_STREAM",
-  "TableName": "",
-  "FullQuery": "otherread"
-}
+"'describe foo' not allowed for streaming"
 
 # dml
 "update a set b = 1"

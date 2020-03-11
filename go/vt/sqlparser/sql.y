@@ -1758,13 +1758,13 @@ describe_statement:
   {
     $$ = &Describe{Name: $2}
   }
+| EXPLAIN table_name
+  {
+    $$ = &Describe{Name: $2}
+  }
 
 other_statement:
-EXPLAIN skip_to_end
-  {
-    $$ = &OtherRead{}
-  }
-| REPAIR skip_to_end
+  REPAIR skip_to_end
   {
     $$ = &OtherAdmin{}
   }
