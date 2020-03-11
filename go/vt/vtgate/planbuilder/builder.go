@@ -263,14 +263,14 @@ func Build(query string, vschema ContextVSchema) (*engine.Plan, error) {
 		return nil, err
 	}
 
-	return BuildFromStmt(query, result.AST, vschema, result.NeedLastInsertID, result.NeedDatabase)
+	return BuildFromStmt(query, result.AST, vschema, result.BindVarNeeds)
 }
 
 // BuildFromStmt builds a plan based on the AST provided.
 // TODO(sougou): The query input is trusted as the source
 // of the AST. Maybe this function just returns instructions
 // and engine.Plan can be built by the caller.
-func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchema, needsLastInsertID, needsDBName bool) (*engine.Plan, error) {
+func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchema, bindVarNeeds sqlparser.BindVarNeeds) (*engine.Plan, error) {
 	var err error
 	var instruction engine.Primitive
 	switch stmt := stmt.(type) {
@@ -309,10 +309,9 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 		return nil, err
 	}
 	plan := &engine.Plan{
-		Original:          query,
-		Instructions:      instruction,
-		NeedsLastInsertID: needsLastInsertID,
-		NeedsDatabaseName: needsDBName,
+		Original:     query,
+		Instructions: instruction,
 	}
+	plan.BindVarNeeds = bindVarNeeds
 	return plan, nil
 }
