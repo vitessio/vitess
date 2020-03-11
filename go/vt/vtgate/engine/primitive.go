@@ -96,8 +96,8 @@ type Plan struct {
 	Rows uint64 `json:",omitempty"`
 	// Total number of errors
 	Errors uint64 `json:",omitempty"`
-
-	sqlparser.BindVarNeeds
+	// Stores BindVars needed to be provided as part of expression rewriting
+	sqlparser.BindVarNeeds `json:"-"`
 }
 
 // AddStats updates the plan execution statistics

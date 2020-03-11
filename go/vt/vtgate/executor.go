@@ -1414,8 +1414,8 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	}
 	keyspace := vcursor.keyspace
 	planKey := keyspace + vindexes.TabletTypeSuffix[vcursor.tabletType] + ":" + sql
-	if result, ok := e.plans.Get(planKey); ok {
-		return result.(*engine.Plan), nil
+	if plan, ok := e.plans.Get(planKey); ok {
+		return plan.(*engine.Plan), nil
 	}
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
@@ -1446,8 +1446,8 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	}
 
 	planKey = keyspace + vindexes.TabletTypeSuffix[vcursor.tabletType] + ":" + normalized
-	if result, ok := e.plans.Get(planKey); ok {
-		return result.(*engine.Plan), nil
+	if plan, ok := e.plans.Get(planKey); ok {
+		return plan.(*engine.Plan), nil
 	}
 	plan, err := planbuilder.BuildFromStmt(normalized, rewrittenStatement, vcursor, result.BindVarNeeds)
 	if err != nil {
