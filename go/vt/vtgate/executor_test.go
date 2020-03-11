@@ -609,7 +609,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSession := &vtgatepb.Session{TargetString: "@master", InTransaction: true}
+	wantSession := &vtgatepb.Session{TargetString: "@master", InTransaction: true, FoundRows: 1}
 	testSession := *session.Session
 	testSession.ShardSessions = nil
 	if !proto.Equal(&testSession, wantSession) {
@@ -643,7 +643,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@master"}
+	wantSession = &vtgatepb.Session{Autocommit: true, TargetString: "@master", FoundRows: 1}
 	if !proto.Equal(session.Session, wantSession) {
 		t.Errorf("autocommit=1: %v, want %v", session.Session, wantSession)
 	}
@@ -672,7 +672,7 @@ func TestExecutorAutocommit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@master"}
+	wantSession = &vtgatepb.Session{InTransaction: true, Autocommit: true, TargetString: "@master", FoundRows: 1}
 	testSession = *session.Session
 	testSession.ShardSessions = nil
 	if !proto.Equal(&testSession, wantSession) {
