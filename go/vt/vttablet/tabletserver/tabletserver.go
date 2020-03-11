@@ -228,7 +228,6 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 	tsv.hw = heartbeat.NewWriter(tsv, alias, config)
 	tsv.hr = heartbeat.NewReader(tsv, config)
 	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
-	tsv.watcher = NewReplicationWatcher(tsv.se, config)
 	// FIXME(alainjobart) could we move this to the Register method below?
 	// So that vtcombo doesn't even call it once, on the first tablet.
 	// And we can remove the tsOnce variable.
@@ -252,6 +251,7 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 	})
 	// TODO(sougou): move this up once the stats naming problem is fixed.
 	tsv.vstreamer = vstreamer.NewEngine(srvTopoServer, tsv.se)
+	tsv.watcher = NewReplicationWatcher(tsv.vstreamer, config)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer, config)
 	return tsv
 }
@@ -339,7 +339,6 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.te.InitDBConfig(tsv.dbconfigs)
 	tsv.hw.InitDBConfig(tsv.dbconfigs)
 	tsv.hr.InitDBConfig(tsv.dbconfigs)
-	tsv.watcher.InitDBConfig(tsv.dbconfigs)
 	tsv.vstreamer.InitDBConfig(tsv.dbconfigs.DbaWithDB())
 	return nil
 }
@@ -505,6 +504,7 @@ func (tsv *TabletServer) fullStart() (err error) {
 	}
 	tsv.hr.Init(tsv.target)
 	tsv.vstreamer.Open(tsv.target.Keyspace, tsv.alias.Cell)
+	tsv.watcher.Open()
 	return tsv.serveNewType()
 }
 
@@ -518,7 +518,6 @@ func (tsv *TabletServer) serveNewType() (err error) {
 		if err := tsv.txThrottler.Open(tsv.target.Keyspace, tsv.target.Shard); err != nil {
 			return err
 		}
-		tsv.watcher.Close()
 		tsv.messager.Open()
 		tsv.hr.Close()
 		tsv.hw.Open()
@@ -562,6 +561,7 @@ func (tsv *TabletServer) StopService() {
 
 	log.Infof("Executing complete shutdown.")
 	tsv.waitForShutdown()
+	tsv.watcher.Close()
 	tsv.vstreamer.Close()
 	tsv.qe.Close()
 	tsv.se.Close()
@@ -589,6 +589,7 @@ func (tsv *TabletServer) waitForShutdown() {
 // It forcibly shuts down everything.
 func (tsv *TabletServer) closeAll() {
 	tsv.messager.Close()
+	tsv.watcher.Close()
 	tsv.vstreamer.Close()
 	tsv.hr.Close()
 	tsv.hw.Close()
@@ -986,12 +987,10 @@ func (tsv *TabletServer) qreExecute(ctx context.Context, query string, comments 
 		tsv:            tsv,
 		tabletType:     tabletType,
 	}
-	extras := tsv.watcher.ComputeExtras(options)
 	result, err = qre.Execute()
 	if err != nil {
 		return nil, err
 	}
-	result.Extras = extras
 	result = result.StripMetadata(sqltypes.IncludeFieldsOrDefault(options))
 
 	return result, nil

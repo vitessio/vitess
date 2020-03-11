@@ -104,11 +104,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	case planbuilder.PlanSelectImpossible:
 		if qre.plan.Fields != nil {
 			return &sqltypes.Result{
-				Fields:       qre.plan.Fields,
-				RowsAffected: 0,
-				InsertID:     0,
-				Rows:         nil,
-				Extras:       nil,
+				Fields: qre.plan.Fields,
 			}, nil
 		}
 	}

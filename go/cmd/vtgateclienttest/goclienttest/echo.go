@@ -85,20 +85,10 @@ var (
 	callerID     = callerid.NewEffectiveCallerID("test_principal", "test_component", "test_subcomponent")
 	callerIDEcho = "principal:\"test_principal\" component:\"test_component\" subcomponent:\"test_subcomponent\" "
 
-	eventToken = &querypb.EventToken{
-		Timestamp: 876543,
-		Shard:     shards[0],
-		Position:  "test_position",
-	}
-	eventTokenEcho = "timestamp:876543 shard:\"-80\" position:\"test_position\" "
-
 	options = &querypb.ExecuteOptions{
-		IncludedFields:    querypb.ExecuteOptions_TYPE_ONLY,
-		IncludeEventToken: true,
-		CompareEventToken: eventToken,
+		IncludedFields: querypb.ExecuteOptions_TYPE_ONLY,
 	}
-	optionsEcho = "include_event_token:true compare_event_token:<" + eventTokenEcho + "> included_fields:TYPE_ONLY "
-	extrasEcho  = "event_token:<" + eventTokenEcho + "> fresher:true "
+	optionsEcho = "included_fields:TYPE_ONLY "
 )
 
 // testEcho exercises the test cases provided by the "echo" service.
@@ -130,7 +120,6 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgatec
 		"bindVars":   bindVarsEcho,
 		"tabletType": tabletTypeEcho,
 		"options":    optionsEcho,
-		"extras":     extrasEcho,
 	})
 
 	qr, err = conn.ExecuteKeyspaceIds(ctx, echoPrefix+query, keyspace, keyspaceIDs, bindVars, tabletType, options)
@@ -142,7 +131,6 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgatec
 		"bindVars":    bindVarsEcho,
 		"tabletType":  tabletTypeEcho,
 		"options":     optionsEcho,
-		"extras":      extrasEcho,
 	})
 
 	qr, err = conn.ExecuteKeyRanges(ctx, echoPrefix+query, keyspace, keyRanges, bindVars, tabletType, options)
@@ -154,7 +142,6 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgatec
 		"bindVars":   bindVarsEcho,
 		"tabletType": tabletTypeEcho,
 		"options":    optionsEcho,
-		"extras":     extrasEcho,
 	})
 
 	qr, err = conn.ExecuteEntityIds(ctx, echoPrefix+query, keyspace, "column1", entityKeyspaceIDs, bindVars, tabletType, options)
@@ -167,7 +154,6 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgatec
 		"bindVars":         bindVarsEcho,
 		"tabletType":       tabletTypeEcho,
 		"options":          optionsEcho,
-		"extras":           extrasEcho,
 	})
 
 	var qrs []sqltypes.Result
@@ -418,13 +404,6 @@ func checkEcho(t *testing.T, name string, qr *sqltypes.Result, err error, want m
 	}
 	got := getEcho(qr)
 	for k, v := range want {
-		if k == "extras" {
-			gotExtras := qr.Extras.String()
-			if gotExtras != v {
-				t.Errorf("%v: extras = \n%q, want \n%q", name, gotExtras, v)
-			}
-			continue
-		}
 		if got[k].ToString() != v {
 			t.Errorf("%v: %v = \n%q, want \n%q", name, k, got[k], v)
 		}
