@@ -188,6 +188,10 @@ type (
 		ShowCollationFilterOpt *Expr // TODO: this should not be a pointer
 	}
 
+	Describe struct {
+		Name TableName
+	}
+
 	// Use represents a use statement.
 	Use struct {
 		DBName TableIdent
@@ -224,6 +228,7 @@ func (*Set) iStatement()               {}
 func (*DBDDL) iStatement()             {}
 func (*DDL) iStatement()               {}
 func (*Show) iStatement()              {}
+func (*Describe) iStatement()          {}
 func (*Use) iStatement()               {}
 func (*Begin) iStatement()             {}
 func (*Commit) iStatement()            {}
@@ -1198,6 +1203,12 @@ func (node *Show) Format(buf *TrackedBuffer) {
 	if node.HasTable() {
 		buf.Myprintf(" %v", node.Table)
 	}
+}
+
+// Format formats the node
+func (node *Describe) Format(buf *TrackedBuffer) {
+	tblName := node.Name
+	buf.Myprintf("describe %v", tblName.Name)
 }
 
 // Format formats the node.

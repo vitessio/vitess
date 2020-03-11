@@ -193,6 +193,10 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		safeSession.ClearWarnings()
 	}
 
+	if stmtType != sqlparser.StmtDescribe {
+		safeSession.ClearWarnings()
+	}
+
 	switch stmtType {
 	case sqlparser.StmtSelect:
 		return e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats, stmtType)
@@ -249,6 +253,8 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 		return e.handleUse(ctx, safeSession, sql, bindVars)
 	case sqlparser.StmtOther:
 		return e.handleOther(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
+	case sqlparser.StmtDescribe:
+		return e.handleDescribe(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
 	case sqlparser.StmtComment:
 		return e.handleComment(sql)
 	}
@@ -1127,6 +1133,31 @@ func (e *Executor) handleUse(ctx context.Context, safeSession *SafeSession, sql 
 	}
 	safeSession.TargetString = use.DBName.String()
 	return &sqltypes.Result{}, nil
+}
+
+func (e *Executor) handleDescribe(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
+	stmt, err := sqlparser.Parse(sql)
+	if err != nil {
+		return nil, err
+	}
+	describe, ok := stmt.(*sqlparser.Describe)
+	if !ok {
+		// This code is unreachable.
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unrecognized DESCRIBE statement: %v", sql)
+	}
+	keyspaceName := ""
+	if describe.Name.Qualifier.String() != "" {
+		keyspaceName = describe.Name.Qualifier.String()
+	} else {
+		// Search for Table name in schema
+		tbl, err := e.VSchema().FindTable(destKeyspace, describe.Name.Name.String())
+		if err != nil {
+			return nil, err
+		}
+		keyspaceName = tbl.Keyspace.Name
+	}
+	sql = fmt.Sprintf("show columns from %v.%v", keyspaceName, describe.Name.Name.String())
+	return e.handleShow(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
 }
 
 func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {

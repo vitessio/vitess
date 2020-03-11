@@ -215,7 +215,7 @@ func skipToEnd(yylex interface{}) {
 %type <statement> stream_statement insert_statement update_statement delete_statement set_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement
 %type <ddl> create_table_prefix rename_list
-%type <statement> analyze_statement show_statement use_statement other_statement
+%type <statement> analyze_statement show_statement use_statement describe_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement
 %type <bytes2> comment_opt comment_list
 %type <str> union_op insert_or_replace
@@ -351,6 +351,7 @@ command:
 | commit_statement
 | rollback_statement
 | other_statement
+| describe_statement
 | flush_statement
 | /*empty*/
 {
@@ -1748,16 +1749,18 @@ rollback_statement:
     $$ = &Rollback{}
   }
 
+describe_statement:
+  DESC table_name
+  {
+    $$ = &Describe{Name: $2}
+  }
+| DESCRIBE table_name
+  {
+    $$ = &Describe{Name: $2}
+  }
+
 other_statement:
-  DESC skip_to_end
-  {
-    $$ = &OtherRead{}
-  }
-| DESCRIBE skip_to_end
-  {
-    $$ = &OtherRead{}
-  }
-| EXPLAIN skip_to_end
+EXPLAIN skip_to_end
   {
     $$ = &OtherRead{}
   }

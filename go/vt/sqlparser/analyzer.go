@@ -53,6 +53,7 @@ const (
 	StmtUnknown
 	StmtComment
 	StmtPriv
+	StmtDescribe
 )
 
 // Preview analyzes the beginning of the query using a simpler and faster
@@ -109,10 +110,12 @@ func Preview(sql string) StatementType {
 		return StmtShow
 	case "use":
 		return StmtUse
-	case "analyze", "describe", "desc", "explain", "repair", "optimize":
+	case "analyze", "explain", "repair", "optimize":
 		return StmtOther
 	case "grant", "revoke":
 		return StmtPriv
+	case "describe", "desc":
+		return StmtDescribe
 	}
 	return StmtUnknown
 }
@@ -143,6 +146,8 @@ func (s StatementType) String() string {
 		return "SET"
 	case StmtShow:
 		return "SHOW"
+	case StmtDescribe:
+		return "DESCRIBE"
 	case StmtUse:
 		return "USE"
 	case StmtOther:

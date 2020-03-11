@@ -1258,7 +1258,6 @@ func TestExecutorOther(t *testing.T) {
 	stmts := []string{
 		"show other",
 		"analyze",
-		"describe",
 		"explain",
 		"repair",
 		"optimize",
