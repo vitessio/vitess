@@ -1358,11 +1358,10 @@ var (
 		input:  "use `ks:-80@master`",
 		output: "use `ks:-80@master`",
 	}, {
-		input:  "describe foobar",
-		output: "otherread",
+		input: "describe foobar",
 	}, {
 		input:  "desc foobar",
-		output: "otherread",
+		output: "describe foobar",
 	}, {
 		input:  "explain foobar",
 		output: "otherread",

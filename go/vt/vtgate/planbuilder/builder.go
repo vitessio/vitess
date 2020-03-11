@@ -288,6 +288,8 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 		return nil, errors.New("unsupported construct: set")
 	case *sqlparser.Show:
 		return nil, errors.New("unsupported construct: show")
+	case *sqlparser.Describe:
+		return nil, errors.New("unsupported construct: describe")
 	case *sqlparser.DDL:
 		return nil, errors.New("unsupported construct: ddl")
 	case *sqlparser.DBDDL:
