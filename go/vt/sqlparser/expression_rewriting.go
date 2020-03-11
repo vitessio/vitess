@@ -104,53 +104,6 @@ const (
 	FoundRowsName = "__vtfrows"
 )
 
-//<<<<<<< HEAD
-//=======
-//type funcRewrite struct {
-//	checkValid  func(f *FuncExpr) error
-//	bindVarName string
-//}
-//
-//var lastInsertID = funcRewrite{
-//	checkValid: func(f *FuncExpr) error {
-//		if len(f.Exprs) > 0 {
-//			return vterrors.New(vtrpc.Code_UNIMPLEMENTED, "Argument to LAST_INSERT_ID() not supported")
-//		}
-//		return nil
-//	},
-//	bindVarName: LastInsertIDName,
-//}
-//
-//var dbName = funcRewrite{
-//	checkValid: func(f *FuncExpr) error {
-//		if len(f.Exprs) > 0 {
-//			return vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Argument to DATABASE() not supported")
-//		}
-//		return nil
-//	},
-//	bindVarName: DBVarName,
-//}
-//var foundRows = funcRewrite{
-//	checkValid: func(f *FuncExpr) error {
-//		if len(f.Exprs) > 0 {
-//			return vterrors.New(vtrpc.Code_INVALID_ARGUMENT, "Argument to FOUND_ROWS() not supported")
-//		}
-//		return nil
-//	},
-//	bindVarName: FoundRowsName,
-//}
-//
-//var functions = map[string]*funcRewrite{
-//	"last_insert_id": &lastInsertID,
-//	"database":       &dbName,
-//	"schema":         &dbName,
-//	"found_rows":     &foundRows,
-//}
-//
-//// instead of creating new objects, we'll reuse this one
-//var token = struct{}{}
-//
-//>>>>>>> Add support for found_rows()
 func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 	switch node := cursor.Node().(type) {
 	case *AliasedExpr:
