@@ -145,6 +145,9 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 
 	logStats := NewLogStats(ctx, method, sql, bindVars)
 	result, err = e.execute(ctx, safeSession, sql, bindVars, logStats)
+	if err == nil {
+		safeSession.FoundRows = result.RowsAffected
+	}
 	logStats.Error = err
 	if result != nil && len(result.Rows) > *warnMemoryRows {
 		warnings.Add("ResultsExceeded", 1)
@@ -328,16 +331,20 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 		return nil, err
 	}
 
-	if plan.NeedsLastInsertID {
+	bindVarNeeds := plan.BindVarNeeds
+	if bindVarNeeds.NeedLastInsertID {
 		bindVars[sqlparser.LastInsertIDName] = sqltypes.Uint64BindVariable(safeSession.GetLastInsertId())
 	}
-	if plan.NeedsDatabaseName {
+	if bindVarNeeds.NeedDatabase {
 		keyspace, _, _, _ := e.ParseDestinationTarget(safeSession.TargetString)
 		if keyspace == "" {
 			bindVars[sqlparser.DBVarName] = sqltypes.NullBindVariable
 		} else {
 			bindVars[sqlparser.DBVarName] = sqltypes.StringBindVariable(keyspace)
 		}
+	}
+	if bindVarNeeds.NeedFoundRows {
+		bindVars[sqlparser.FoundRowsName] = sqltypes.Uint64BindVariable(safeSession.FoundRows)
 	}
 
 	qr, err := plan.Instructions.Execute(vcursor, bindVars, true)
@@ -1407,15 +1414,15 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	}
 	keyspace := vcursor.keyspace
 	planKey := keyspace + vindexes.TabletTypeSuffix[vcursor.tabletType] + ":" + sql
-	if result, ok := e.plans.Get(planKey); ok {
-		return result.(*engine.Plan), nil
+	if plan, ok := e.plans.Get(planKey); ok {
+		return plan.(*engine.Plan), nil
 	}
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
 		return nil, err
 	}
 	if !e.normalize {
-		plan, err := planbuilder.BuildFromStmt(sql, stmt, vcursor, false, false)
+		plan, err := planbuilder.BuildFromStmt(sql, stmt, vcursor, sqlparser.BindVarNeeds{})
 		if err != nil {
 			return nil, err
 		}
@@ -1439,10 +1446,10 @@ func (e *Executor) getPlan(vcursor *vcursorImpl, sql string, comments sqlparser.
 	}
 
 	planKey = keyspace + vindexes.TabletTypeSuffix[vcursor.tabletType] + ":" + normalized
-	if result, ok := e.plans.Get(planKey); ok {
-		return result.(*engine.Plan), nil
+	if plan, ok := e.plans.Get(planKey); ok {
+		return plan.(*engine.Plan), nil
 	}
-	plan, err := planbuilder.BuildFromStmt(normalized, rewrittenStatement, vcursor, result.NeedLastInsertID, result.NeedDatabase)
+	plan, err := planbuilder.BuildFromStmt(normalized, rewrittenStatement, vcursor, result.BindVarNeeds)
 	if err != nil {
 		return nil, err
 	}
