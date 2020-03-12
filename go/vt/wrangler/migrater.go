@@ -199,6 +199,11 @@ func (wr *Wrangler) MigrateWrites(ctx context.Context, targetKeyspace, workflow 
 		sourceWorkflows, err = sm.stopStreams(ctx)
 		if err != nil {
 			mi.wr.Logger().Errorf("stopStreams failed: %v", err)
+			for key, streams := range sm.streams {
+				for _, stream := range streams {
+					mi.wr.Logger().Errorf("stream in stopStreams: key %s shard %s stream %+v", key, stream.bls.Shard, stream.bls)
+				}
+			}
 			mi.cancelMigration(ctx, sm)
 			return 0, err
 		}

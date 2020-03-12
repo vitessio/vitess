@@ -252,6 +252,7 @@ func (sm *streamMigrater) syncSourceStreams(ctx context.Context) (map[string]mys
 			key := fmt.Sprintf("%s:%s", vrs.bls.Keyspace, vrs.bls.Shard)
 			pos, ok := stopPositions[key]
 			if !ok || vrs.pos.AtLeast(pos) {
+				sm.mi.wr.Logger().Infof("syncSourceStreams setting stopPositions +%s %+v %d", key, vrs.pos, vrs.id)
 				stopPositions[key] = vrs.pos
 			}
 		}
@@ -262,6 +263,7 @@ func (sm *streamMigrater) syncSourceStreams(ctx context.Context) (map[string]mys
 		for _, vrs := range tabletStreams {
 			key := fmt.Sprintf("%s:%s", vrs.bls.Keyspace, vrs.bls.Shard)
 			pos := stopPositions[key]
+			sm.mi.wr.Logger().Infof("syncSourceStreams before go func +%s %+v %d", key, pos, vrs.id)
 			if vrs.pos.Equal(pos) {
 				continue
 			}
@@ -270,7 +272,7 @@ func (sm *streamMigrater) syncSourceStreams(ctx context.Context) (map[string]mys
 				defer wg.Done()
 				sm.mi.wr.Logger().Infof("syncSourceStreams beginning of go func %s %s %+v %d", shard, vrs.bls.Shard, pos, vrs.id)
 
-				si, err := sm.mi.wr.ts.GetShard(ctx, sm.mi.sourceKeyspace, shard)
+				si, err := sm.mi.wr.ts.GetShard(ctx, sm.mi.sourceKeyspace, vrs.bls.Shard)
 				if err != nil {
 					allErrors.RecordError(err)
 					return

@@ -383,8 +383,7 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 		BackupStorageImplementation: "file",
 		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),
 		VreplicationTabletType:      "replica",
-		VreplicationTabletType: "replica",
-		TabletUID:              tabletUID,
+		TabletUID:                   tabletUID,
 	}
 
 	if tabletType == "rdonly" {
