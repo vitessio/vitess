@@ -1523,6 +1523,12 @@ var (
 	}, {
 		input:  "select distinctrow a.* from (select (1) from dual union all select 1 from dual) a",
 		output: "select distinct a.* from (select (1) from dual union all select 1 from dual) as a",
+	}, {
+		input: "select `weird function name`() from t",
+	}, {
+		input: "select status() from t", // should not escape function names that are keywords
+	}, {
+		input: "select * from `weird table name`",
 	}}
 )
 

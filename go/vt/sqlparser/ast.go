@@ -1544,9 +1544,15 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 		buf.Myprintf("%v.", node.Qualifier)
 	}
 	// Function names should not be back-quoted even
-	// if they match a reserved word. So, print the
-	// name as is.
-	buf.Myprintf("%s(%s%v)", node.Name.String(), distinct, node.Exprs)
+	// if they match a reserved word, only if they contain illegal characters
+	funcName := node.Name.String()
+
+	if containEscapableChars(funcName) {
+		writeEscapedString(buf, funcName)
+	} else {
+		buf.WriteString(funcName)
+	}
+	buf.Myprintf("(%s%v)", distinct, node.Exprs)
 }
 
 // Format formats the node
