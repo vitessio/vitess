@@ -139,7 +139,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		case planbuilder.PlanSet:
 			return qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, "", true, true)
 		case planbuilder.PlanPassSelect, planbuilder.PlanSelectLock, planbuilder.PlanSelectImpossible:
-			return qre.execDirect(conn)
+			return qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, "", true, false)
 		default:
 			// handled above:
 			// planbuilder.PlanNextval
@@ -520,19 +520,6 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 		}},
 		RowsAffected: 1,
 	}, nil
-}
-
-// execDirect is for reads inside transactions. Always send to MySQL.
-func (qre *QueryExecutor) execDirect(conn *TxConnection) (*sqltypes.Result, error) {
-	if qre.tsv.qe.enableQueryPlanFieldCaching && qre.plan.Fields != nil {
-		result, err := qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, "", true, false)
-		if err != nil {
-			return nil, err
-		}
-		result.Fields = qre.plan.Fields
-		return result, nil
-	}
-	return qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, "", true, false)
 }
 
 // execSelect sends a query to mysql only if another identical query is not running. Otherwise, it waits and
