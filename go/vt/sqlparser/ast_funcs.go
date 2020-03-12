@@ -631,26 +631,37 @@ func (node *TableIdent) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func formatID(buf *TrackedBuffer, original, lowered string) {
+func containEscapableChars(s string) bool {
 	isDbSystemVariable := false
-	if len(original) > 1 && original[:2] == "@@" {
+	if len(s) > 1 && s[:2] == "@@" {
 		isDbSystemVariable = true
 	}
 
-	for i, c := range original {
+	for i, c := range s {
 		if !isLetter(uint16(c)) && (!isDbSystemVariable || !isCarat(uint16(c))) {
 			if i == 0 || !isDigit(uint16(c)) {
-				goto mustEscape
+				return true
 			}
 		}
 	}
-	if _, ok := keywords[lowered]; ok {
-		goto mustEscape
-	}
-	buf.Myprintf("%s", original)
-	return
 
-mustEscape:
+	return false
+}
+
+func isKeyword(s string) bool {
+	_, isKeyword := keywords[s]
+	return isKeyword
+}
+
+func formatID(buf *TrackedBuffer, original, lowered string) {
+	if containEscapableChars(original) || isKeyword(lowered) {
+		writeEscapedString(buf, original)
+	} else {
+		buf.Myprintf("%s", original)
+	}
+}
+
+func writeEscapedString(buf *TrackedBuffer, original string) {
 	buf.WriteByte('`')
 	for _, c := range original {
 		buf.WriteRune(c)
