@@ -82,6 +82,7 @@ func (rpw *ReplicationWatcher) Process(ctx context.Context) {
 	}
 
 	for {
+		// VStreamer will reload the schema when it encounters a DDL.
 		err := rpw.vs.Stream(ctx, "current", filter, func(events []*binlogdatapb.VEvent) error {
 			return nil
 		})
