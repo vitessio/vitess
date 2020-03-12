@@ -393,7 +393,7 @@ func TestAutocommitTransactionStarted(t *testing.T) {
 	testCommitCount(t, "sbc1", sbc1, 0)
 }
 
-// TestAutocommitDirectTarget: no instant-commit.
+// TestAutocommitDirectTarget: instant-commit.
 func TestAutocommitDirectTarget(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 
@@ -407,12 +407,12 @@ func TestAutocommitDirectTarget(t *testing.T) {
 	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(session), sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 
-	testQueries(t, "sbclookup", sbclookup, []*querypb.BoundQuery{{
+	testBatchQuery(t, "sbclookup", sbclookup, &querypb.BoundQuery{
 		Sql:           sql + "/* vtgate:: filtered_replication_unfriendly */",
 		BindVariables: map[string]*querypb.BindVariable{},
-	}})
-	testAsTransactionCount(t, "sbclookup", sbclookup, 0)
-	testCommitCount(t, "sbclookup", sbclookup, 1)
+	})
+	testAsTransactionCount(t, "sbclookup", sbclookup, 1)
+	testCommitCount(t, "sbclookup", sbclookup, 0)
 }
 
 // TestAutocommitDirectRangeTarget: no instant-commit.
