@@ -80,7 +80,6 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 			t.Fatalf("Sales streams not migrated after 3to1: %s\n", result)
 		}
 	}
-	validateAll(t)
 }
 
 func insertInitialData(t *testing.T) {
@@ -211,31 +210,29 @@ func shardCustomer(t *testing.T, testReverse bool) {
 		assert.Empty(t, validateCountInTablet(t, customerTab2, "customer", "customer", 2))
 		assert.Empty(t, validateCount(t, vtgateConn, "customer", "customer.customer", 4))
 	}
-	//TODO remove this when we add a cleanup command
 	removeTabletControls(t, "product/0")
 }
 
 func reshardCustomer2to4Split(t *testing.T) {
 	ksName := "customer"
-	//counts := map[string]int{"zone1-600":4, "zone1-700":6, "zone1-800":5, "zone1-900":5} //TODO
-	reshardCustomerManyToMany(t, ksName, "customer", "p2c2", "-80,80-", "-40,40-80,80-c0,c0-", 600, nil)
-	//TODO assert.Empty(t, validateCount(t, vtgateConn, ksName, "customer", 20))
-	//query := "insert into customer (name) values('yoko')"
-	//TODO execVtgateQuery(t, vtgateConn, ksName, query)
-	//assert.Empty(t, validateCount(t, vtgateConn, ksName, "customer", 21))
+	counts := map[string]int{"zone1-600": 4, "zone1-700": 6, "zone1-800": 5, "zone1-900": 5}
+	reshardCustomerManyToMany(t, ksName, "customer", "p2c2", "-80,80-", "-40,40-80,80-c0,c0-", 600, counts)
+	assert.Empty(t, validateCount(t, vtgateConn, ksName, "customer", 20))
+	query := "insert into customer (name) values('yoko')"
+	execVtgateQuery(t, vtgateConn, ksName, query)
+	assert.Empty(t, validateCount(t, vtgateConn, ksName, "customer", 21))
 }
 
-//TODO will have to delete redundant tablets to avoid too many processes!
 func reshardCustomer3to2SplitMerge(t *testing.T) { //-40,40-80,80-c0 => merge/split, c0- stays the same  ending up with 3
 	ksName := "customer"
-	//counts := map[string]int{"zone1-600":4, "zone1-700":6, "zone1-800":5, "zone1-900":5}
-	reshardCustomerManyToMany(t, ksName, "customer", "p2c3", "-40,40-80,80-c0", "-60,60-c0", 1000, nil)
+	counts := map[string]int{"zone1-600": 5, "zone1-700": 6, "zone1-800": 5, "zone1-900": 5}
+	reshardCustomerManyToMany(t, ksName, "customer", "p2c3", "-40,40-80,80-c0", "-60,60-c0", 1000, counts)
 }
 
 func reshardCustomer3to1Merge(t *testing.T) { //to unsharded
 	ksName := "customer"
-	//counts := map[string]int{"zone1-600":4, "zone1-700":6, "zone1-800":5, "zone1-900":5}
-	reshardCustomerManyToMany(t, ksName, "customer", "p2c4", "-60,60-c0,c0-", "-", 1500, nil)
+	counts := map[string]int{"zone1-1500": 21}
+	reshardCustomerManyToMany(t, ksName, "customer", "p2c4", "-60,60-c0,c0-", "0", 1500, counts)
 }
 
 func reshardCustomerManyToMany(t *testing.T, ksName string, tableName string, workflow string, sourceShards string, targetShards string, tabletIDBase int, counts map[string]int) {
@@ -279,6 +276,9 @@ func reshardCustomerManyToMany(t *testing.T, ksName string, tableName string, wo
 	}
 	if counts != nil {
 		for tabletName, count := range counts {
+			if customerTablets[tabletName] == nil {
+				continue
+			}
 			assert.Empty(t, validateCountInTablet(t, customerTablets[tabletName], ksName, tableName, count))
 		}
 	}
@@ -287,10 +287,6 @@ func reshardCustomerManyToMany(t *testing.T, ksName string, tableName string, wo
 
 func shardOrders(t *testing.T) {
 	if err := vc.VtctlClient.ExecuteCommand("ApplyVSchema", "-vschema", ordersVSchema, "customer"); err != nil {
-		t.Fatal(err)
-	}
-	//TODO Remove all Rebuilds and test
-	if err := vc.VtctlClient.ExecuteCommand("RebuildKeyspaceGraph", "customer"); err != nil {
 		t.Fatal(err)
 	}
 	if err := vc.VtctlClient.ExecuteCommand("Migrate", "-cell="+cell.Name, "-workflow=o2c",
@@ -368,7 +364,7 @@ func shardMerchant(t *testing.T) {
 }
 
 func vdiff(t *testing.T, workflow string) {
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "-tablet_types", "master,replica,rdonly", "-format", "json", workflow)
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "-format", "json", workflow)
 	fmt.Printf("vdiff err: %+v, output: %+v\n", err, output)
 	assert.Nil(t, err)
 	assert.NotNil(t, output)
@@ -392,9 +388,6 @@ func materializeProduct(t *testing.T) {
 	if err := vc.VtctlClient.ExecuteCommand("ApplyVSchema", "-vschema", materializeProductVSchema, "customer"); err != nil {
 		t.Fatal(err)
 	}
-	if err := vc.VtctlClient.ExecuteCommand("RebuildKeyspaceGraph", "customer"); err != nil {
-		t.Fatal(err)
-	}
 	if err := vc.VtctlClient.ExecuteCommand("Materialize", materializeProductSpec); err != nil {
 		t.Fatal(err)
 	}
@@ -411,9 +404,6 @@ func materializeProduct(t *testing.T) {
 
 func materializeSales(t *testing.T) {
 	if err := vc.VtctlClient.ExecuteCommand("ApplyVSchema", "-vschema", materializeSalesVSchema, "product"); err != nil {
-		t.Fatal(err)
-	}
-	if err := vc.VtctlClient.ExecuteCommand("RebuildKeyspaceGraph", "product"); err != nil {
 		t.Fatal(err)
 	}
 	if err := vc.VtctlClient.ExecuteCommand("Materialize", materializeSalesSpec); err != nil {
@@ -434,9 +424,6 @@ func materializeMerchantOrders(t *testing.T) {
 	workflow := "morders"
 	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("ApplyVSchema", "-vschema", merchantOrdersVSchema, "merchant"); err != nil {
 		fmt.Printf("ApplyVSchema error: %+v", output)
-		t.Fatal(err)
-	}
-	if err := vc.VtctlClient.ExecuteCommand("RebuildKeyspaceGraph", "merchant"); err != nil {
 		t.Fatal(err)
 	}
 	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("Materialize", materializeMerchantOrdersSpec); err != nil {
@@ -466,10 +453,6 @@ func waitForMaterializeStreamsToCatchup(t *testing.T) {
 		assert.Fail(t, "Migrate timed out for product.sales -80")
 
 	}
-}
-
-//run various queries to ensure that nothing is broken due to ensuing migrates
-func validateAll(t *testing.T) {
 }
 
 func checkVtgateHealth(t *testing.T, cell *Cell) {
