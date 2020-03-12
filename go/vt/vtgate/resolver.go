@@ -92,7 +92,7 @@ func (res *Resolver) Execute(
 		logStats.ShardQueries = uint32(len(rss))
 	}
 
-	autocommit := len(rss) == 1 && session.AutocommitApproval()
+	autocommit := len(rss) == 1 && canAutocommit && session.AutocommitApproval()
 
 	for {
 		qr, err := res.scatterConn.Execute(
