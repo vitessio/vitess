@@ -90,11 +90,7 @@ func (conn *snapshotConn) startSnapshot(ctx context.Context, table string) (gtid
 	if _, err := conn.ExecuteFetch("set transaction isolation level repeatable read", 1, false); err != nil {
 		return "", err
 	}
-	if _, err := conn.ExecuteFetch("start transaction read only", 1, false); err != nil {
-		return "", err
-	}
-	// For the transaction to really start, we have to perform a read.
-	if _, err := conn.ExecuteFetch(fmt.Sprintf("select 1 from %s limit 1", tableIdent), 1, false); err != nil {
+	if _, err := conn.ExecuteFetch("start transaction with consistent snapshot", 1, false); err != nil {
 		return "", err
 	}
 	return mysql.EncodePosition(mpos), nil
