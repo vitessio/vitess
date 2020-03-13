@@ -77,6 +77,7 @@ func skipToEnd(yylex interface{}) {
   tableName     TableName
   tableNames    TableNames
   indexHints    *IndexHints
+  asOf          *AsOf
   expr          Expr
   exprs         Exprs
   boolVal       BoolVal
@@ -128,6 +129,7 @@ func skipToEnd(yylex interface{}) {
 %token <bytes> SELECT STREAM INSERT UPDATE DELETE FROM WHERE GROUP HAVING ORDER BY LIMIT OFFSET FOR
 %token <bytes> ALL DISTINCT AS EXISTS ASC DESC INTO DUPLICATE DEFAULT SET LOCK UNLOCK KEYS
 %right <bytes> UNIQUE KEY
+%token <bytes> SYSTEM_TIME
 %token <bytes> VALUES LAST_INSERT_ID
 %token <bytes> NEXT VALUE SHARE MODE
 %token <bytes> SQL_NO_CACHE SQL_CACHE
@@ -239,7 +241,7 @@ func skipToEnd(yylex interface{}) {
 %type <tableNames> table_name_list delete_table_list view_name_list
 %type <str> inner_join outer_join straight_join natural_join
 %type <tableName> table_name into_table_name delete_table_name
-%type <aliasedTableName> aliased_table_name
+%type <aliasedTableName> aliased_table_name aliased_table_options
 %type <indexHints> index_hint_list
 %type <expr> where_expression_opt
 %type <expr> condition
@@ -288,7 +290,7 @@ func skipToEnd(yylex interface{}) {
 %type <bytes> reserved_keyword non_reserved_keyword
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt
 %type <expr> charset_value
-%type <tableIdent> table_id reserved_table_id table_alias as_opt_id
+%type <tableIdent> table_id reserved_table_id table_alias
 %type <str> charset
 %type <str> set_session_or_global show_session_or_global
 %type <convertType> convert_type
@@ -2118,14 +2120,48 @@ table_factor:
   }
 
 aliased_table_name:
-table_name as_opt_id index_hint_list
+  table_name aliased_table_options
   {
-    $$ = &AliasedTableExpr{Expr:$1, As: $2, Hints: $3}
+    $$ = $2
+    $$.Expr = $1
   }
-| table_name PARTITION openb partition_list closeb as_opt_id index_hint_list
+| table_name PARTITION openb partition_list closeb aliased_table_options
   {
-    $$ = &AliasedTableExpr{Expr:$1, Partitions: $4, As: $6, Hints: $7}
+    $$ = $6
+    $$.Expr = $1
+    $$.Partitions = $4
   }
+
+// All possible combinations of qualifiers for a table alias expression, declared in a single rule to avoid
+// shift/reduce conflicts. To avoid grammar ambiguity, we can't always use optional rules that match empty
+// (such as as_opt).
+aliased_table_options:
+  index_hint_list
+  {
+    $$ = &AliasedTableExpr{Hints: $1}
+  }
+| AS OF value_expression index_hint_list
+  {
+    $$ = &AliasedTableExpr{AsOf: &AsOf{Time: $3}, Hints: $4}
+  }
+| AS OF value_expression as_opt table_alias index_hint_list
+  {
+    $$ = &AliasedTableExpr{AsOf: &AsOf{Time: $3}, As: $5, Hints: $6}
+  }
+| AS table_alias index_hint_list
+  {
+    $$ = &AliasedTableExpr{As: $2, Hints: $3}
+  }
+| table_alias index_hint_list
+  {
+    $$ = &AliasedTableExpr{As: $1, Hints: $2}
+  }
+// SQL:2011 grammar would be nice to have, but it generates
+// a parser conflict with FOR UPDATE which is hard to fix
+//| FOR SYSTEM_TIME AS OF STRING
+//  {
+//    $$ = &AsOf{Time: string($5)}
+//  }
 
 column_list:
   sql_id
@@ -2194,19 +2230,6 @@ as_opt:
   { $$ = struct{}{} }
 | AS
   { $$ = struct{}{} }
-
-as_opt_id:
-  {
-    $$ = NewTableIdent("")
-  }
-| table_alias
-  {
-    $$ = $1
-  }
-| AS table_alias
-  {
-    $$ = $2
-  }
 
 table_alias:
   table_id

@@ -2081,18 +2081,37 @@ func (*ParenTableExpr) iTableExpr()   {}
 func (*JoinTableExpr) iTableExpr()    {}
 
 // AliasedTableExpr represents a table expression
-// coupled with an optional alias or index hint.
+// coupled with an optional alias, AS OF expression, and index hints.
 // If As is empty, no alias was used.
 type AliasedTableExpr struct {
 	Expr       SimpleTableExpr
 	Partitions Partitions
 	As         TableIdent
 	Hints      *IndexHints
+	AsOf       *AsOf
+}
+
+type AsOf struct {
+	Time Expr
+}
+
+func (node *AsOf) Format(buf *TrackedBuffer) {
+	buf.Myprintf("as of %v", node.Time)
+}
+
+func (node *AsOf) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(visit, node.Time)
 }
 
 // Format formats the node.
 func (node *AliasedTableExpr) Format(buf *TrackedBuffer) {
 	buf.Myprintf("%v%v", node.Expr, node.Partitions)
+	if node.AsOf != nil {
+		buf.Myprintf(" %v", node.AsOf)
+	}
 	if !node.As.IsEmpty() {
 		buf.Myprintf(" as %v", node.As)
 	}
@@ -2109,6 +2128,7 @@ func (node *AliasedTableExpr) walkSubtree(visit Visit) error {
 	return Walk(
 		visit,
 		node.Expr,
+		node.AsOf,
 		node.As,
 		node.Hints,
 	)
