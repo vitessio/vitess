@@ -196,7 +196,10 @@ type messageManager struct {
 	// lastPollPosition must be ignored by the vstream. It consequently
 	// also blocks vstream from updating the cache while the poller is
 	// active.
-	streamMu         sync.Mutex
+	streamMu sync.Mutex
+	// streamCancel is set when a vstream is running, and is reset
+	// to nil after a cancel. This allows for startVStream and stopVstream
+	// to be idempotent.
 	streamCancel     func()
 	lastPollPosition *mysql.Position
 
@@ -433,7 +436,10 @@ func (mm *messageManager) runSend() {
 	defer mm.mu.Unlock()
 
 	for {
-		// Release and acquire the lock to avoid starving other contenders.
+		// It's theoretically possible that this loop can keep going without
+		// a wait. If so, the lock will never be released for other functions
+		// like Close to take action. So, let's release and acquire the lock
+		// to avoid starving other contenders.
 		mm.mu.Unlock()
 		mm.mu.Lock()
 
@@ -449,7 +455,7 @@ func (mm *messageManager) runSend() {
 				// Do this as a separate goroutine. Otherwise, this could cause
 				// the following deadlock:
 				// 1. runSend obtains a lock
-				// 2. Poller gets trigerred, and waits for lock.
+				// 2. Poller gets triggered, and waits for lock.
 				// 3. runSend calls this function, but the trigger will hang because
 				// this function cannot return until poller returns.
 				go mm.pollerTicks.Trigger()
@@ -506,27 +512,26 @@ func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 		ids[i] = row[0].ToString()
 	}
 
-	// This is the cleanup.
 	defer func() {
-		func() {
-			mm.mu.Lock()
-			defer mm.mu.Unlock()
+		// Hold streamMu to prevent the ids from being discarded
+		// if poller is active. Otherwise, it could have read a
+		// snapshot of a row before the postponement and requeue
+		// the message.
+		mm.streamMu.Lock()
+		defer mm.streamMu.Unlock()
+		mm.cache.Discard(ids)
+	}()
 
-			receiver.busy = false
-			// Rescan if there were no previously available receivers
-			// because the current receiver became non-busy.
-			if mm.curReceiver == -1 {
-				mm.rescanReceivers(-1)
-			}
-		}()
+	defer func() {
+		mm.mu.Lock()
+		defer mm.mu.Unlock()
 
-		func() {
-			mm.streamMu.Lock()
-			defer mm.streamMu.Unlock()
-			// Discard messages from cache only at the end. This will
-			// prevent them from being requeued while they're being postponed.
-			mm.cache.Discard(ids)
-		}()
+		receiver.busy = false
+		// Rescan if there were no previously available receivers
+		// because the current receiver became non-busy.
+		if mm.curReceiver == -1 {
+			mm.rescanReceivers(-1)
+		}
 	}()
 
 	if err := receiver.receiver.Send(qr); err != nil {
@@ -588,6 +593,13 @@ func (mm *messageManager) runVStream(ctx context.Context) {
 	}
 }
 
+// runOneVStream watches for any new rows or rows that have been modified.
+// Whether it's an insert or an update, if the new value of the
+// row indicates that the message is eligible to be sent, it's added to
+// the cache.
+// Deletes are ignored.
+// If the poller updates lastPollPosition, then all GTIDs up to that
+// point are deemed obsolete and are skipped.
 func (mm *messageManager) runOneVStream(ctx context.Context) error {
 	var curPos string
 	var fields []*querypb.Field
@@ -638,6 +650,8 @@ func (mm *messageManager) runOneVStream(ctx context.Context) error {
 			case binlogdatapb.VEventType_GTID:
 				newPos = ev.Gtid
 			case binlogdatapb.VEventType_COMMIT, binlogdatapb.VEventType_DDL, binlogdatapb.VEventType_OTHER:
+				// Update curPos only when the GTID concludes, which is through one
+				// of the above events.
 				curPos = newPos
 				skipEvents, err = mustSkip()
 				if err != nil {
@@ -666,6 +680,8 @@ func (mm *messageManager) processRowEvent(fields []*querypb.Field, rowEvent *bin
 		if err != nil {
 			return err
 		}
+		// timeNext will be zero for acked messages.
+		// So, they should not be sent.
 		if mr.TimeNext == 0 || mr.TimeNext > now {
 			continue
 		}
