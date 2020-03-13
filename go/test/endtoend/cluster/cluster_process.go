@@ -282,7 +282,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 		// wait till all mysqlctl is instantiated
 		for _, proc := range mysqlctlProcessList {
 			if err = proc.Wait(); err != nil {
-				log.Errorf("Unable to start mysql , error %v", err.Error())
+				log.Errorf("Unable to start mysql process %v, error %v", proc, err)
 				return err
 			}
 		}
