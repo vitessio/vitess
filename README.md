@@ -40,6 +40,12 @@ for low-frequency updates like new features and releases.
 
 ## Security
 
+### Reporting Security Vulnerabilities
+
+To report a security vulnerability, please email [vitess-maintainers](mailto:cncf-vitess-maintainers@lists.cncf.io).
+
+See [Security](SECURITY.md) for a full outline of the security process.
+
 ### Security Audit
 
 A third party security audit was performed by Cure53. You can see the full report [here](doc/VIT-01-report.pdf).
