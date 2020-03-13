@@ -238,7 +238,10 @@ func TestMain(m *testing.M) {
 
 func TestAlias(t *testing.T) {
 	defer cluster.PanicHandler(t)
+
 	insertInitialValues(t)
+	defer deleteInitialValues(t)
+
 	err := localCluster.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceName)
 	require.Nil(t, err)
 	shard1 := localCluster.Keyspaces[0].Shards[0]
@@ -267,11 +270,16 @@ func TestAlias(t *testing.T) {
 	vtgateInstance.TabletTypesToWait = "MASTER,REPLICA"
 	err = vtgateInstance.Setup()
 	require.Nil(t, err)
+
+	// Cluster teardown will not teardown vtgate because we are not
+	// actually setting this on localCluster.VtgateInstance
+	defer vtgateInstance.TearDown()
+
 	waitTillAllTabletsAreHealthyInVtgate(t, *vtgateInstance, shard1.Name, shard2.Name)
 
-	testQueriesInDifferentTabletType(t, "master", vtgateInstance.GrpcPort, false)
-	testQueriesInDifferentTabletType(t, "replica", vtgateInstance.GrpcPort, false)
-	testQueriesInDifferentTabletType(t, "rdonly", vtgateInstance.GrpcPort, false)
+	testQueriesOnTabletType(t, "master", vtgateInstance.GrpcPort, false)
+	testQueriesOnTabletType(t, "replica", vtgateInstance.GrpcPort, false)
+	testQueriesOnTabletType(t, "rdonly", vtgateInstance.GrpcPort, false)
 
 	// now, delete the alias, so that if we run above assertions again, it will fail for replica,rdonly target type
 	err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteCellsAlias",
@@ -279,15 +287,63 @@ func TestAlias(t *testing.T) {
 	require.Nil(t, err)
 
 	// restarts the vtgate process
-	_ = vtgateInstance.TearDown()
 	vtgateInstance.TabletTypesToWait = "MASTER"
+	err = vtgateInstance.TearDown()
+	require.Nil(t, err)
 	err = vtgateInstance.Setup()
 	require.Nil(t, err)
 
 	// since replica and rdonly tablets of all shards in cell2, the last 2 assertion is expected to fail
-	testQueriesInDifferentTabletType(t, "master", vtgateInstance.GrpcPort, false)
-	testQueriesInDifferentTabletType(t, "replica", vtgateInstance.GrpcPort, true)
-	testQueriesInDifferentTabletType(t, "rdonly", vtgateInstance.GrpcPort, true)
+	testQueriesOnTabletType(t, "master", vtgateInstance.GrpcPort, false)
+	testQueriesOnTabletType(t, "replica", vtgateInstance.GrpcPort, true)
+	testQueriesOnTabletType(t, "rdonly", vtgateInstance.GrpcPort, true)
+
+}
+
+func TestAddAliasWhileVtgateUp(t *testing.T) {
+	defer cluster.PanicHandler(t)
+
+	insertInitialValues(t)
+	defer deleteInitialValues(t)
+
+	err := localCluster.VtctlclientProcess.ExecuteCommand("RebuildKeyspaceGraph", keyspaceName)
+	require.Nil(t, err)
+	shard1 := localCluster.Keyspaces[0].Shards[0]
+	shard2 := localCluster.Keyspaces[0].Shards[1]
+	allCells := fmt.Sprintf("%s,%s", cell1, cell2)
+
+	expectedPartitions := map[topodata.TabletType][]string{}
+	expectedPartitions[topodata.TabletType_MASTER] = []string{shard1.Name, shard2.Name}
+	expectedPartitions[topodata.TabletType_REPLICA] = []string{shard1.Name, shard2.Name}
+	expectedPartitions[topodata.TabletType_RDONLY] = []string{shard1.Name, shard2.Name}
+	sharding.CheckSrvKeyspace(t, cell1, keyspaceName, "", 0, expectedPartitions, *localCluster)
+	sharding.CheckSrvKeyspace(t, cell2, keyspaceName, "", 0, expectedPartitions, *localCluster)
+
+	vtgateInstance := localCluster.GetVtgateInstance()
+	vtgateInstance.CellsToWatch = allCells
+	vtgateInstance.TabletTypesToWait = "MASTER,REPLICA,RDONLY"
+	err = vtgateInstance.Setup()
+	require.Nil(t, err)
+	defer vtgateInstance.TearDown()
+
+	waitTillAllTabletsAreHealthyInVtgate(t, *vtgateInstance, shard1.Name, shard2.Name)
+
+	// since replica and rdonly tablets of all shards in cell2, the last 2 assertion is expected to fail
+	testQueriesOnTabletType(t, "master", vtgateInstance.GrpcPort, false)
+	testQueriesOnTabletType(t, "replica", vtgateInstance.GrpcPort, true)
+	testQueriesOnTabletType(t, "rdonly", vtgateInstance.GrpcPort, true)
+
+	// Adds alias so vtgate can route to replica/rdonly tablets that are not in the same cell, but same alias
+	err = localCluster.VtctlclientProcess.ExecuteCommand("AddCellsAlias",
+		"-cells", allCells,
+		"region_east_coast")
+	require.Nil(t, err)
+
+	testQueriesOnTabletType(t, "master", vtgateInstance.GrpcPort, false)
+	// TODO(deepthi) change the following to shouldFail:false when fixing https://github.com/vitessio/vitess/issues/5911
+	testQueriesOnTabletType(t, "replica", vtgateInstance.GrpcPort, true)
+	testQueriesOnTabletType(t, "rdonly", vtgateInstance.GrpcPort, true)
+
 }
 
 func waitTillAllTabletsAreHealthyInVtgate(t *testing.T, vtgateInstance cluster.VtgateProcess, shards ...string) {
@@ -301,7 +357,7 @@ func waitTillAllTabletsAreHealthyInVtgate(t *testing.T, vtgateInstance cluster.V
 	}
 }
 
-func testQueriesInDifferentTabletType(t *testing.T, tabletType string, vtgateGrpcPort int, shouldFail bool) {
+func testQueriesOnTabletType(t *testing.T, tabletType string, vtgateGrpcPort int, shouldFail bool) {
 	output, err := localCluster.VtctlProcess.ExecuteCommandWithOutput("VtGateExecute", "-json",
 		"-server", fmt.Sprintf("%s:%d", localCluster.Hostname, vtgateGrpcPort),
 		"-target", "@"+tabletType,
@@ -319,20 +375,40 @@ func testQueriesInDifferentTabletType(t *testing.T, tabletType string, vtgateGrp
 }
 
 func insertInitialValues(t *testing.T) {
-	sharding.InsertToTablet(t,
+	sharding.ExecuteOnTablet(t,
 		fmt.Sprintf(sharding.InsertTabletTemplateKsID, tableName, 1, "msg1", 1),
 		*shard1Master,
 		keyspaceName,
 		false)
 
-	sharding.InsertToTablet(t,
+	sharding.ExecuteOnTablet(t,
 		fmt.Sprintf(sharding.InsertTabletTemplateKsID, tableName, 2, "msg2", 2),
 		*shard1Master,
 		keyspaceName,
 		false)
 
-	sharding.InsertToTablet(t,
+	sharding.ExecuteOnTablet(t,
 		fmt.Sprintf(sharding.InsertTabletTemplateKsID, tableName, 4, "msg4", 4),
+		*shard2Master,
+		keyspaceName,
+		false)
+}
+
+func deleteInitialValues(t *testing.T) {
+	sharding.ExecuteOnTablet(t,
+		fmt.Sprintf("delete from %s where id = %v", tableName, 1),
+		*shard1Master,
+		keyspaceName,
+		false)
+
+	sharding.ExecuteOnTablet(t,
+		fmt.Sprintf("delete from %s where id = %v", tableName, 2),
+		*shard1Master,
+		keyspaceName,
+		false)
+
+	sharding.ExecuteOnTablet(t,
+		fmt.Sprintf("delete from %s where id = %v", tableName, 4),
 		*shard2Master,
 		keyspaceName,
 		false)
