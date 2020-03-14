@@ -184,6 +184,17 @@ func (ta *Table) FindColumn(name sqlparser.ColIdent) int {
 	return -1
 }
 
+// FindPKColumn finds a pk column in the table. It returns the index if found.
+// Otherwise, it returns -1.
+func (ta *Table) FindPKColumn(name sqlparser.ColIdent) int {
+	for i, colnum := range ta.PKColumns {
+		if ta.Columns[colnum].Name.Equal(name) {
+			return i
+		}
+	}
+	return -1
+}
+
 // GetPKColumn returns the pk column specified by the index.
 func (ta *Table) GetPKColumn(index int) *TableColumn {
 	return &ta.Columns[ta.PKColumns[index]]
@@ -212,7 +223,7 @@ func (ta *Table) SetMysqlStats(tr, dl, il, df, mdl sqltypes.Value) {
 
 // HasPrimary returns true if the table has a primary key.
 func (ta *Table) HasPrimary() bool {
-	return len(ta.Indexes) != 0 && ta.Indexes[0].Name.EqualString("primary")
+	return len(ta.PKColumns) != 0
 }
 
 // IsTopic returns true if TopicInfo is not nil.
