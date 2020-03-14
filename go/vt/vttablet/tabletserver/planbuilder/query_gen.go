@@ -98,42 +98,38 @@ func GenerateDeleteOuterQuery(del *sqlparser.Delete, aliased *sqlparser.AliasedT
 // GenerateUpdateSubquery generates the subquery for updates.
 func GenerateUpdateSubquery(upd *sqlparser.Update, table *schema.Table, aliased *sqlparser.AliasedTableExpr) *sqlparser.ParsedQuery {
 	return GenerateSubquery(
-		table.Indexes[0].Columns,
+		table,
 		aliased,
 		upd.Where,
 		upd.OrderBy,
 		upd.Limit,
-		true,
 	)
 }
 
 // GenerateDeleteSubquery generates the subquery for deletes.
 func GenerateDeleteSubquery(del *sqlparser.Delete, table *schema.Table, aliased *sqlparser.AliasedTableExpr) *sqlparser.ParsedQuery {
 	return GenerateSubquery(
-		table.Indexes[0].Columns,
+		table,
 		aliased,
 		del.Where,
 		del.OrderBy,
 		del.Limit,
-		true,
 	)
 }
 
 // GenerateSubquery generates a subquery based on the input parameters.
-func GenerateSubquery(columns []sqlparser.ColIdent, table *sqlparser.AliasedTableExpr, where *sqlparser.Where, order sqlparser.OrderBy, limit *sqlparser.Limit, forUpdate bool) *sqlparser.ParsedQuery {
+func GenerateSubquery(table *schema.Table, tableName *sqlparser.AliasedTableExpr, where *sqlparser.Where, order sqlparser.OrderBy, limit *sqlparser.Limit) *sqlparser.ParsedQuery {
 	buf := sqlparser.NewTrackedBuffer(nil)
 	if limit == nil {
 		limit = execLimit
 	}
 	buf.WriteString("select ")
 	prefix := ""
-	for _, c := range columns {
-		buf.Myprintf("%s%v", prefix, c)
+	for _, colnum := range table.PKColumns {
+		buf.Myprintf("%s%v", prefix, table.Columns[colnum].Name)
 		prefix = ", "
 	}
-	buf.Myprintf(" from %v%v%v%v", table, where, order, limit)
-	if forUpdate {
-		buf.Myprintf(sqlparser.ForUpdateStr)
-	}
+	buf.Myprintf(" from %v%v%v%v", tableName, where, order, limit)
+	buf.Myprintf(sqlparser.ForUpdateStr)
 	return buf.ParsedQuery()
 }
