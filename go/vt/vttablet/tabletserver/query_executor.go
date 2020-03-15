@@ -128,10 +128,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 			return qre.execInsertMessage(conn)
 		case planbuilder.PlanInsertSubquery:
 			return qre.execInsertSubquery(conn)
-		case planbuilder.PlanDMLPK:
-			return qre.execDMLPK(conn)
-		case planbuilder.PlanDMLSubquery:
-			return qre.execDMLSubquery(conn)
+		case planbuilder.PlanDMLLimit:
+			return qre.execDMLLimit(conn)
 		case planbuilder.PlanOtherRead, planbuilder.PlanOtherAdmin:
 			return qre.execSQL(conn, qre.query, true)
 		case planbuilder.PlanUpsertPK:
@@ -174,9 +172,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 			fallthrough
 		case planbuilder.PlanInsertSubquery:
 			fallthrough
-		case planbuilder.PlanDMLPK:
-			fallthrough
-		case planbuilder.PlanDMLSubquery:
+		case planbuilder.PlanDMLLimit:
 			fallthrough
 		case planbuilder.PlanUpsertPK:
 			if !qre.tsv.qe.autoCommit.Get() {
@@ -278,10 +274,8 @@ func (qre *QueryExecutor) execDmlAutoCommit() (reply *sqltypes.Result, err error
 			return qre.execInsertMessage(conn)
 		case planbuilder.PlanInsertSubquery:
 			reply, err = qre.execInsertSubquery(conn)
-		case planbuilder.PlanDMLPK:
-			reply, err = qre.execDMLPK(conn)
-		case planbuilder.PlanDMLSubquery:
-			reply, err = qre.execDMLSubquery(conn)
+		case planbuilder.PlanDMLLimit:
+			reply, err = qre.execDMLLimit(conn)
 		case planbuilder.PlanUpsertPK:
 			reply, err = qre.execUpsertPK(conn)
 		default:
@@ -597,109 +591,34 @@ func (qre *QueryExecutor) execInsertPKRows(conn *TxConnection, extras map[string
 }
 
 func (qre *QueryExecutor) execUpsertPK(conn *TxConnection) (*sqltypes.Result, error) {
-	// For RBR, upserts are passed through.
-	if qre.tsv.qe.binlogFormat == connpool.BinlogFormatRow {
-		return qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, "", true, true)
-	}
-
-	// For statement or mixed mode, we have to split into two ops.
-	pkRows, err := buildValueList(qre.plan.Table, qre.plan.PKValues, qre.bindVars)
-	if err != nil {
-		return nil, err
-	}
-	// We do not need to build the secondary list for the insert part.
-	// But the part that updates will build it if it gets executed,
-	// because it's the one that can change the primary keys.
-	bsc := buildStreamComment(qre.plan.Table, pkRows, nil)
-	result, err := qre.txFetch(conn, qre.plan.OuterQuery, qre.bindVars, nil, bsc, true, true)
-	if err == nil {
-		return result, nil
-	}
-	sqlErr, ok := err.(*mysql.SQLError)
-	if !ok {
-		return result, err
-	}
-	if sqlErr.Number() != mysql.ERDupEntry {
-		return nil, err
-	}
-	// If the error didn't match pk, just return the error without updating.
-	if !strings.Contains(sqlErr.Error(), "'PRIMARY'") {
-		return nil, err
-	}
-	// At this point, we know the insert failed due to a duplicate pk row.
-	// So, we just update the row.
-	result, err = qre.execDMLPKRows(conn, qre.plan.UpsertQuery, pkRows)
-	if err != nil {
-		return nil, err
-	}
-	// Follow MySQL convention. RowsAffected must be 2 if a row was updated.
-	if result.RowsAffected == 1 {
-		result.RowsAffected = 2
-	}
-	return result, err
+	return qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, "", true, true)
 }
 
-func (qre *QueryExecutor) execDMLPK(conn *TxConnection) (*sqltypes.Result, error) {
-	pkRows, err := buildValueList(qre.plan.Table, qre.plan.PKValues, qre.bindVars)
+func (qre *QueryExecutor) execDMLLimit(conn *TxConnection) (*sqltypes.Result, error) {
+	maxrows := qre.tsv.qe.maxResultSize.Get()
+	qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
+	result, err := qre.txFetch(conn, qre.plan.FullQuery, qre.bindVars, nil, "", true, true)
 	if err != nil {
 		return nil, err
 	}
-	return qre.execDMLPKRows(conn, qre.plan.OuterQuery, pkRows)
-}
-
-func (qre *QueryExecutor) execDMLSubquery(conn *TxConnection) (*sqltypes.Result, error) {
-	innerResult, err := qre.txFetch(conn, qre.plan.Subquery, qre.bindVars, nil, "", true, false)
-	if err != nil {
+	if err := qre.verifyRowCount(int64(result.RowsAffected), maxrows); err != nil {
 		return nil, err
-	}
-	return qre.execDMLPKRows(conn, qre.plan.OuterQuery, innerResult.Rows)
-}
-
-func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.ParsedQuery, pkRows [][]sqltypes.Value) (*sqltypes.Result, error) {
-	if len(pkRows) == 0 {
-		return &sqltypes.Result{RowsAffected: 0}, nil
-	}
-	secondaryList, err := buildSecondaryList(qre.plan.Table, pkRows, qre.plan.SecondaryPKValues, qre.bindVars)
-	if err != nil {
-		return nil, err
-	}
-
-	result := &sqltypes.Result{}
-	maxRows := int(qre.tsv.qe.maxDMLRows.Get())
-	for i := 0; i < len(pkRows); i += maxRows {
-		end := i + maxRows
-		if end >= len(pkRows) {
-			end = len(pkRows)
-		}
-		pkRows := pkRows[i:end]
-		secondaryList := secondaryList
-		if secondaryList != nil {
-			secondaryList = secondaryList[i:end]
-		}
-		var bsc string
-		// Build comments only if we're not in RBR mode.
-		if qre.tsv.qe.binlogFormat != connpool.BinlogFormatRow {
-			bsc = buildStreamComment(qre.plan.Table, pkRows, secondaryList)
-		}
-		extras := map[string]sqlparser.Encodable{
-			"#pk": &sqlparser.TupleEqualityList{
-				Columns: qre.plan.Table.Indexes[0].Columns,
-				Rows:    pkRows,
-			},
-		}
-		r, err := qre.txFetch(conn, query, qre.bindVars, extras, bsc, true, true)
-		if err != nil {
-			return nil, err
-		}
-
-		// UPDATEs can return InsertID when LAST_INSERT_ID(expr) is used. In
-		// this case it should be the same for all rows.
-		result.InsertID = r.InsertID
-
-		// DMLs should all return RowsAffected.
-		result.RowsAffected += r.RowsAffected
 	}
 	return result, nil
+}
+
+func (qre *QueryExecutor) verifyRowCount(count, maxrows int64) error {
+	if count > maxrows {
+		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
+		return mysql.NewSQLError(mysql.ERVitessMaxRowsExceeded, mysql.SSUnknownSQLState, "caller id: %s: row count exceeded %d", callerID.Username, maxrows)
+	}
+	warnThreshold := qre.tsv.qe.warnResultSize.Get()
+	if warnThreshold > 0 && count > warnThreshold {
+		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
+		tabletenv.Warnings.Add("ResultsExceeded", 1)
+		log.Warningf("CallerID: %s row count %v exceeds warning threshold %v: %q", callerID.Username, count, warnThreshold, queryAsString(qre.plan.FullQuery.Query, qre.bindVars))
+	}
+	return nil
 }
 
 func (qre *QueryExecutor) execSet() (*sqltypes.Result, error) {
@@ -820,8 +739,6 @@ func (qre *QueryExecutor) streamFetch(conn *connpool.DBConn, parsedQuery *sqlpar
 }
 
 func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, bindVars map[string]*querypb.BindVariable, extras map[string]sqlparser.Encodable, buildStreamComment string) (string, string, error) {
-	bindVars["#maxLimit"] = sqltypes.Int64BindVariable(qre.getLimit(parsedQuery))
-
 	var buf strings.Builder
 	buf.WriteString(qre.marginComments.Leading)
 
