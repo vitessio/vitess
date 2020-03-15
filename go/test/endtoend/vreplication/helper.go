@@ -93,24 +93,6 @@ func validateQueryInTablet(t *testing.T, vttablet *cluster.VttabletProcess, data
 	return ""
 }
 
-//TODO
-func getShardCounts(t *testing.T, vindexType string, conn *mysql.Conn, database string, table string, pkColumn string, shards []string) {
-	if vindexType != "reverse_bits" {
-		t.Fatal("Only reverse_bits supported for getShardCounts")
-	}
-	query := fmt.Sprintf("select %s from %s", pkColumn, table)
-	qr := execVtgateQuery(t, conn, database, query)
-	assert.NotNil(t, qr)
-	assert.True(t, len(qr.Rows) > 0)
-	//var rangeStart, rangeEnd uint64
-	for _, shard := range shards {
-		if string(shard[0]) == "-" {
-			//rangeStart = 0
-		}
-	}
-	//select keyspace_id from reverse_bits where id = 102
-}
-
 func validateCountInTablet(t *testing.T, vttablet *cluster.VttabletProcess, database string, table string, want int) string {
 	query := fmt.Sprintf("select count(*) from %s", table)
 	qr, err := vttablet.QueryTablet(query, database, true)
