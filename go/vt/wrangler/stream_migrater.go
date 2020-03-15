@@ -317,7 +317,7 @@ func (sm *streamMigrater) syncSourceStreams(ctx context.Context) (map[string]mys
 				defer wg.Done()
 				sm.mi.wr.Logger().Infof("syncSourceStreams beginning of go func %s %s %+v %d", shard, vrs.bls.Shard, pos, vrs.id)
 
-				si, err := sm.mi.wr.ts.GetShard(ctx, sm.mi.sourceKeyspace, vrs.bls.Shard)
+				si, err := sm.mi.wr.ts.GetShard(ctx, sm.mi.sourceKeyspace, shard)
 				if err != nil {
 					allErrors.RecordError(err)
 					return
