@@ -1077,7 +1077,6 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	// Setting ExecuteOptions_AUTOCOMMIT will get a connection out of the
 	// pool without actually begin/commit the transaction.
 	if (options.TransactionIsolation == querypb.ExecuteOptions_DEFAULT) &&
-		tsv.qe.autoCommit.Get() &&
 		asTransaction &&
 		tsv.qe.passthroughDMLs.Get() {
 		options.TransactionIsolation = querypb.ExecuteOptions_AUTOCOMMIT
@@ -1883,12 +1882,6 @@ func (tsv *TabletServer) SetQueryPlanCacheCap(val int) {
 // QueryPlanCacheCap returns the pool size.
 func (tsv *TabletServer) QueryPlanCacheCap() int {
 	return int(tsv.qe.QueryPlanCacheCap())
-}
-
-// SetAutoCommit sets autocommit on or off.
-// This function should only be used for testing.
-func (tsv *TabletServer) SetAutoCommit(auto bool) {
-	tsv.qe.autoCommit.Set(auto)
 }
 
 // SetMaxResultSize changes the max result size to the specified value.

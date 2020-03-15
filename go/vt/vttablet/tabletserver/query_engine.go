@@ -150,7 +150,6 @@ type QueryEngine struct {
 	queryPoolWaiters   sync2.AtomicInt64
 	queryPoolWaiterCap sync2.AtomicInt64
 	binlogFormat       connpool.BinlogFormat
-	autoCommit         sync2.AtomicBool
 	maxResultSize      sync2.AtomicInt64
 	warnResultSize     sync2.AtomicInt64
 	maxDMLRows         sync2.AtomicInt64
@@ -217,7 +216,6 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		config.HotRowProtectionConcurrentTransactions)
 	qe.streamQList = NewQueryList()
 
-	qe.autoCommit.Set(config.EnableAutoCommit)
 	qe.strictTableACL = config.StrictTableACL
 	qe.enableTableACLDryRun = config.EnableTableACLDryRun
 
