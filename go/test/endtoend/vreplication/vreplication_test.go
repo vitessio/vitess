@@ -273,7 +273,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 	for _, tab := range tablets {
 		if strings.Index(targetShards, ","+tab.Shard+",") >= 0 {
 			fmt.Printf("Waiting for vrepl to catch up on %s since it IS a target shard\n", tab.Shard)
-			if vc.WaitForVReplicationToCatchup(tab, workflow, "vt_" + ksName, 3*time.Second) != nil {
+			if vc.WaitForVReplicationToCatchup(tab, workflow, "vt_"+ksName, 3*time.Second) != nil {
 				t.Fatal("Migrate timed out")
 			}
 		} else {
