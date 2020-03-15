@@ -619,3 +619,13 @@ func (qe *QueryEngine) handleHTTPConsolidations(response http.ResponseWriter, re
 		response.Write([]byte(fmt.Sprintf("%v: %s\n", v.Count, query)))
 	}
 }
+
+// unicoded returns a valid UTF-8 string that json won't reject
+func unicoded(in string) (out string) {
+	for i, v := range in {
+		if v == 0xFFFD {
+			return in[:i]
+		}
+	}
+	return in
+}

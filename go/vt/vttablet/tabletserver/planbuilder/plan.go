@@ -59,13 +59,6 @@ const (
 	PlanPassDML
 	// PlanDMLLimit is an update or delete with a limit.
 	PlanDMLLimit
-	// PlanInsertPK is insert statement where the PK value is
-	// supplied with the query.
-	PlanInsertPK
-	// PlanInsertSubquery is same as PlanDMLSubquery but for inserts.
-	PlanInsertSubquery
-	// PlanUpsertPK is for insert ... on duplicate key constructs.
-	PlanUpsertPK
 	// PlanInsertTopic is for inserting into message topics.
 	PlanInsertTopic
 	// PlanInsertMessage is for inserting into message tables.
@@ -95,9 +88,6 @@ var planName = [NumPlans]string{
 	"NEXTVAL",
 	"PASS_DML",
 	"DML_LIMIT",
-	"INSERT_PK",
-	"INSERT_SUBQUERY",
-	"UPSERT_PK",
 	"INSERT_TOPIC",
 	"INSERT_MESSAGE",
 	"SET",
@@ -185,7 +175,6 @@ func (rt ReasonType) MarshalJSON() ([]byte, error) {
 // Plan is built for selects and DMLs.
 type Plan struct {
 	PlanID PlanType
-	Reason ReasonType
 	Table  *schema.Table
 	// NewName is the new name of the table. Set for DDLs which create or change the table.
 	NewName sqlparser.TableIdent
@@ -199,32 +188,12 @@ type Plan struct {
 	// FullQuery will be set for all plans.
 	FullQuery *sqlparser.ParsedQuery
 
-	// For PK plans, only OuterQuery is set.
-	// For SUBQUERY plans, Subquery is also set.
-	OuterQuery  *sqlparser.ParsedQuery
-	Subquery    *sqlparser.ParsedQuery
-	UpsertQuery *sqlparser.ParsedQuery
-
-	// PlanInsertSubquery: columns to be inserted.
-	ColumnNumbers []int
-
-	// PKValues is an sqltypes.Value if it's sourced
-	// from the query. If it's a bind var then it's
-	// a string including the ':' prefix(es).
-	// PlanDMLPK: where clause values.
-	// PlanInsertPK: values clause.
-	// PlanNextVal: increment.
-	PKValues []sqltypes.PlanValue
-
-	// For update: set clause if pk is changing.
-	SecondaryPKValues []sqltypes.PlanValue
+	// NextCount stores the count for "select next".
+	NextCount sqltypes.PlanValue
 
 	// WhereClause is set for DMLs. It is used by the hot row protection
 	// to serialize e.g. UPDATEs going to the same row.
 	WhereClause *sqlparser.ParsedQuery
-
-	// For PlanInsertSubquery: pk columns in the subquery result.
-	SubqueryPKColumns []int
 }
 
 // TableName returns the table name for the plan.

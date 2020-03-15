@@ -30,7 +30,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -40,35 +39,24 @@ import (
 // This is only for testing.
 func (p *Plan) MarshalJSON() ([]byte, error) {
 	mplan := struct {
-		PlanID            PlanType
-		Reason            ReasonType             `json:",omitempty"`
-		TableName         sqlparser.TableIdent   `json:",omitempty"`
-		Permissions       []Permission           `json:",omitempty"`
-		FieldQuery        *sqlparser.ParsedQuery `json:",omitempty"`
-		FullQuery         *sqlparser.ParsedQuery `json:",omitempty"`
-		OuterQuery        *sqlparser.ParsedQuery `json:",omitempty"`
-		Subquery          *sqlparser.ParsedQuery `json:",omitempty"`
-		UpsertQuery       *sqlparser.ParsedQuery `json:",omitempty"`
-		ColumnNumbers     []int                  `json:",omitempty"`
-		PKValues          []sqltypes.PlanValue   `json:",omitempty"`
-		SecondaryPKValues []sqltypes.PlanValue   `json:",omitempty"`
-		WhereClause       *sqlparser.ParsedQuery `json:",omitempty"`
-		SubqueryPKColumns []int                  `json:",omitempty"`
+		PlanID      PlanType
+		TableName   sqlparser.TableIdent   `json:",omitempty"`
+		Permissions []Permission           `json:",omitempty"`
+		FieldQuery  *sqlparser.ParsedQuery `json:",omitempty"`
+		FullQuery   *sqlparser.ParsedQuery `json:",omitempty"`
+		NextCount   string                 `json:",omitempty"`
+		WhereClause *sqlparser.ParsedQuery `json:",omitempty"`
 	}{
-		PlanID:            p.PlanID,
-		Reason:            p.Reason,
-		TableName:         p.TableName(),
-		Permissions:       p.Permissions,
-		FieldQuery:        p.FieldQuery,
-		FullQuery:         p.FullQuery,
-		OuterQuery:        p.OuterQuery,
-		Subquery:          p.Subquery,
-		UpsertQuery:       p.UpsertQuery,
-		ColumnNumbers:     p.ColumnNumbers,
-		PKValues:          p.PKValues,
-		SecondaryPKValues: p.SecondaryPKValues,
-		WhereClause:       p.WhereClause,
-		SubqueryPKColumns: p.SubqueryPKColumns,
+		PlanID:      p.PlanID,
+		TableName:   p.TableName(),
+		Permissions: p.Permissions,
+		FieldQuery:  p.FieldQuery,
+		FullQuery:   p.FullQuery,
+		WhereClause: p.WhereClause,
+	}
+	if !p.NextCount.IsNull() {
+		b, _ := p.NextCount.MarshalJSON()
+		mplan.NextCount = string(b)
 	}
 	return json.Marshal(&mplan)
 }
