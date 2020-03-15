@@ -185,7 +185,7 @@ func TestFilterByPlan(t *testing.T) {
 		t.Errorf("qrs1:\n%s, want\n%s", got, want)
 	}
 
-	qrs1 = qrs.FilterByPlan("select", planbuilder.PlanInsertPK, "a")
+	qrs1 = qrs.FilterByPlan("select", planbuilder.PlanPassDML, "a")
 	want = compacted(`[{
 		"Description":"rule 3",
 		"Name":"r3",
@@ -201,7 +201,7 @@ func TestFilterByPlan(t *testing.T) {
 		t.Errorf("qrs1:\n%s, want\n%s", got, want)
 	}
 
-	qrs1 = qrs.FilterByPlan("sel", planbuilder.PlanInsertPK, "a")
+	qrs1 = qrs.FilterByPlan("sel", planbuilder.PlanPassDML, "a")
 	if qrs1.rules != nil {
 		t.Errorf("want nil, got non-nil")
 	}
@@ -220,7 +220,7 @@ func TestFilterByPlan(t *testing.T) {
 	qr5 := NewQueryRule("rule 5", "r5", QRFail)
 	qrs.Add(qr5)
 
-	qrs1 = qrs.FilterByPlan("sel", planbuilder.PlanInsertPK, "a")
+	qrs1 = qrs.FilterByPlan("sel", planbuilder.PlanPassDML, "a")
 	want = compacted(`[{
 		"Description":"rule 5",
 		"Name":"r5",
@@ -258,12 +258,12 @@ func TestQueryRule(t *testing.T) {
 	}
 
 	qr.AddPlanCond(planbuilder.PlanPassSelect)
-	qr.AddPlanCond(planbuilder.PlanInsertPK)
+	qr.AddPlanCond(planbuilder.PlanPassDML)
 
 	if qr.plans[0] != planbuilder.PlanPassSelect {
 		t.Errorf("want PASS_SELECT, got %s", qr.plans[0].String())
 	}
-	if qr.plans[1] != planbuilder.PlanInsertPK {
+	if qr.plans[1] != planbuilder.PlanPassDML {
 		t.Errorf("want INSERT_PK, got %s", qr.plans[1].String())
 	}
 

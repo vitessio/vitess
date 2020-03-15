@@ -41,7 +41,6 @@ func TestQueryzHandler(t *testing.T) {
 		Plan: &planbuilder.Plan{
 			Table:  &schema.Table{Name: sqlparser.NewTableIdent("test_table")},
 			PlanID: planbuilder.PlanPassSelect,
-			Reason: planbuilder.ReasonTable,
 		},
 	}
 	plan1.AddStats(10, 2*time.Second, 1*time.Second, 2, 0)
@@ -51,7 +50,6 @@ func TestQueryzHandler(t *testing.T) {
 		Plan: &planbuilder.Plan{
 			Table:  &schema.Table{Name: sqlparser.NewTableIdent("test_table")},
 			PlanID: planbuilder.PlanDDL,
-			Reason: planbuilder.ReasonDefault,
 		},
 	}
 	plan2.AddStats(1, 2*time.Millisecond, 1*time.Millisecond, 1, 0)
@@ -61,7 +59,6 @@ func TestQueryzHandler(t *testing.T) {
 		Plan: &planbuilder.Plan{
 			Table:  &schema.Table{Name: sqlparser.NewTableIdent("")},
 			PlanID: planbuilder.PlanOtherRead,
-			Reason: planbuilder.ReasonDefault,
 		},
 	}
 	plan3.AddStats(1, 75*time.Millisecond, 50*time.Millisecond, 1, 0)
@@ -72,7 +69,6 @@ func TestQueryzHandler(t *testing.T) {
 		Plan: &planbuilder.Plan{
 			Table:  &schema.Table{Name: sqlparser.NewTableIdent("")},
 			PlanID: planbuilder.PlanOtherRead,
-			Reason: planbuilder.ReasonDefault,
 		},
 	}
 	plan4.AddStats(1, 1*time.Millisecond, 1*time.Millisecond, 1, 0)
