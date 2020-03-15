@@ -35,8 +35,7 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	vc = InitCluster(t, cellName)
 	assert.NotNil(t, vc)
 
-	//TODO not tearing down for testing: remove before commit
-	if false {
+	if true {
 		defer vc.TearDown()
 	}
 	cell = vc.Cells[cellName]
@@ -58,27 +57,25 @@ func TestBasicVreplicationWorkflow(t *testing.T) {
 	materializeProduct(t)
 	materializeMerchantOrders(t)
 	materializeSales(t)
+	materializeMerchantSales(t)
+
+	reshardMerchant2to3SplitMerge(t)
+	reshardMerchant3to1Merge(t)
 
 	insertMoreCustomers(t, 16)
 	reshardCustomer2to4Split(t)
-	query := "select count(*) from _vt.vreplication where workflow='sales';"
-	result := validateQuery(t, vtgateConn, "product:0", query, `[[INT64(4)]]`)
+	expectNumberOfStreams(t, "Customer2to4", "sales", "product:0", 4)
+	reshardCustomer3to2SplitMerge(t)
+	expectNumberOfStreams(t, "Customer3to2", "sales", "product:0", 3)
+	reshardCustomer3to1Merge(t)
+	expectNumberOfStreams(t, "Customer3to1", "sales", "product:0", 1)
+}
+
+func expectNumberOfStreams(t *testing.T, name string, workflow string, database string, want int) {
+	query := fmt.Sprintf("select count(*) from _vt.vreplication where workflow='%s';", workflow)
+	result := validateQuery(t, vtgateConn, database, query, fmt.Sprintf(`[[INT64(%d)]]`, want))
 	if result != "" {
 		t.Fatalf("Sales streams not migrated after 2to4: %s\n", result)
-	}
-	reshardCustomer3to2SplitMerge(t)
-	query = "select count(*) from _vt.vreplication where workflow='sales';"
-	result = validateQuery(t, vtgateConn, "product:0", query, `[[INT64(3)]]`)
-	if result != "" {
-		t.Fatalf("Sales streams not migrated after 3to2: %s\n", result)
-	}
-	if true {
-		reshardCustomer3to1Merge(t)
-		query = "select count(*) from _vt.vreplication where workflow='sales';"
-		result = validateQuery(t, vtgateConn, "product:0", query, `[[INT64(1)]]`)
-		if result != "" {
-			t.Fatalf("Sales streams not migrated after 3to1: %s\n", result)
-		}
 	}
 }
 
@@ -216,26 +213,46 @@ func shardCustomer(t *testing.T, testReverse bool) {
 func reshardCustomer2to4Split(t *testing.T) {
 	ksName := "customer"
 	counts := map[string]int{"zone1-600": 4, "zone1-700": 6, "zone1-800": 5, "zone1-900": 5}
-	reshardCustomerManyToMany(t, ksName, "customer", "p2c2", "-80,80-", "-40,40-80,80-c0,c0-", 600, counts)
+	reshard(t, ksName, "customer", "c2c4", "-80,80-", "-40,40-80,80-c0,c0-", 600, counts)
 	assert.Empty(t, validateCount(t, vtgateConn, ksName, "customer", 20))
 	query := "insert into customer (name) values('yoko')"
 	execVtgateQuery(t, vtgateConn, ksName, query)
 	assert.Empty(t, validateCount(t, vtgateConn, ksName, "customer", 21))
 }
 
+func reshardMerchant2to3SplitMerge(t *testing.T) {
+	ksName := "merchant"
+	counts := map[string]int{"zone1-1600": 0, "zone1-1700": 2, "zone1-1800": 0}
+	reshard(t, ksName, "merchant", "m2m3", "-80,80-", "-40,40-c0,c0-", 1600, counts)
+	assert.Empty(t, validateCount(t, vtgateConn, ksName, "merchant", 2))
+	query := "insert into merchant (mname, category) values('amazon', 'electronics')"
+	execVtgateQuery(t, vtgateConn, ksName, query)
+	assert.Empty(t, validateCount(t, vtgateConn, ksName, "merchant", 3))
+}
+
+func reshardMerchant3to1Merge(t *testing.T) {
+	ksName := "merchant"
+	counts := map[string]int{"zone1-2000": 3}
+	reshard(t, ksName, "merchant", "m3m1", "-40,40-c0,c0-", "0", 2000, counts)
+	assert.Empty(t, validateCount(t, vtgateConn, ksName, "merchant", 3))
+	query := "insert into merchant (mname, category) values('flipkart', 'electronics')"
+	execVtgateQuery(t, vtgateConn, ksName, query)
+	assert.Empty(t, validateCount(t, vtgateConn, ksName, "merchant", 4))
+}
+
 func reshardCustomer3to2SplitMerge(t *testing.T) { //-40,40-80,80-c0 => merge/split, c0- stays the same  ending up with 3
 	ksName := "customer"
 	counts := map[string]int{"zone1-600": 5, "zone1-700": 6, "zone1-800": 5, "zone1-900": 5}
-	reshardCustomerManyToMany(t, ksName, "customer", "p2c3", "-40,40-80,80-c0", "-60,60-c0", 1000, counts)
+	reshard(t, ksName, "customer", "c4c3", "-40,40-80,80-c0", "-60,60-c0", 1000, counts)
 }
 
 func reshardCustomer3to1Merge(t *testing.T) { //to unsharded
 	ksName := "customer"
 	counts := map[string]int{"zone1-1500": 21}
-	reshardCustomerManyToMany(t, ksName, "customer", "p2c4", "-60,60-c0,c0-", "0", 1500, counts)
+	reshard(t, ksName, "customer", "c3c1", "-60,60-c0,c0-", "0", 1500, counts)
 }
 
-func reshardCustomerManyToMany(t *testing.T, ksName string, tableName string, workflow string, sourceShards string, targetShards string, tabletIDBase int, counts map[string]int) {
+func reshard(t *testing.T, ksName string, tableName string, workflow string, sourceShards string, targetShards string, tabletIDBase int, counts map[string]int) {
 	ksWorkflow := ksName + "." + workflow
 	keyspace := vc.Cells[cell.Name].Keyspaces[ksName]
 	if err := vc.AddShards(t, cell, keyspace, targetShards, defaultReplicas, defaultRdonly, tabletIDBase); err != nil {
@@ -251,12 +268,12 @@ func reshardCustomerManyToMany(t *testing.T, ksName string, tableName string, wo
 	if err := vc.VtctlClient.ExecuteCommand("Reshard", ksWorkflow, sourceShards, targetShards); err != nil {
 		t.Fatalf("Reshard command failed with %+v\n", err)
 	}
-	customerTablets := vc.getVttabletsInKeyspace(t, cell, ksName, "master")
+	tablets := vc.getVttabletsInKeyspace(t, cell, ksName, "master")
 	targetShards = "," + targetShards + ","
-	for _, tab := range customerTablets {
+	for _, tab := range tablets {
 		if strings.Index(targetShards, ","+tab.Shard+",") >= 0 {
 			fmt.Printf("Waiting for vrepl to catch up on %s since it IS a target shard\n", tab.Shard)
-			if vc.WaitForVReplicationToCatchup(tab, workflow, "vt_customer", 3*time.Second) != nil {
+			if vc.WaitForVReplicationToCatchup(tab, workflow, "vt_" + ksName, 3*time.Second) != nil {
 				t.Fatal("Migrate timed out")
 			}
 		} else {
@@ -276,13 +293,12 @@ func reshardCustomerManyToMany(t *testing.T, ksName string, tableName string, wo
 	}
 	if counts != nil {
 		for tabletName, count := range counts {
-			if customerTablets[tabletName] == nil {
+			if tablets[tabletName] == nil {
 				continue
 			}
-			assert.Empty(t, validateCountInTablet(t, customerTablets[tabletName], ksName, tableName, count))
+			assert.Empty(t, validateCountInTablet(t, tablets[tabletName], ksName, tableName, count))
 		}
 	}
-	waitForMaterializeStreamsToCatchup(t)
 }
 
 func shardOrders(t *testing.T) {
@@ -417,7 +433,23 @@ func materializeSales(t *testing.T) {
 	assert.Empty(t, validateCount(t, vtgateConn, "product", "sales", 2))
 	assert.Empty(t, validateQuery(t, vtgateConn, "product:0", "select kount, amount from sales",
 		`[[INT32(1) INT32(10)] [INT32(2) INT32(35)]]`))
+}
 
+func materializeMerchantSales(t *testing.T) {
+	workflow := "msales"
+	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("Materialize", materializeMerchantSalesSpec); err != nil {
+		fmt.Printf("Materialize MerchantSales error is %+v", output)
+		t.Fatal(err)
+	}
+	merchantTablets := vc.getVttabletsInKeyspace(t, cell, "merchant", "master")
+	for _, tab := range merchantTablets {
+		if vc.WaitForVReplicationToCatchup(tab, workflow, "vt_merchant", 1*time.Second) != nil {
+			t.Fatal("Migrate timed out")
+		}
+	}
+	assert.Empty(t, validateCountInTablet(t, merchantTablets["zone1-400"], "merchant", "msales", 1))
+	assert.Empty(t, validateCountInTablet(t, merchantTablets["zone1-500"], "merchant", "msales", 1))
+	assert.Empty(t, validateCount(t, vtgateConn, "merchant", "msales", 2))
 }
 
 func materializeMerchantOrders(t *testing.T) {
@@ -439,20 +471,6 @@ func materializeMerchantOrders(t *testing.T) {
 	assert.Empty(t, validateCountInTablet(t, merchantTablets["zone1-400"], "merchant", "morders", 2))
 	assert.Empty(t, validateCountInTablet(t, merchantTablets["zone1-500"], "merchant", "morders", 1))
 	assert.Empty(t, validateCount(t, vtgateConn, "merchant", "morders", 3))
-}
-
-func waitForMaterializeStreamsToCatchup(t *testing.T) {
-	merchantTablets := vc.getVttabletsInKeyspace(t, cell, "merchant", "master")
-	for _, tab := range merchantTablets {
-		if vc.WaitForVReplicationToCatchup(tab, "morders", "vt_merchant", 1*time.Second) != nil {
-			t.Fatal("Migrate timed out")
-		}
-	}
-	productTab := vc.Cells[cell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
-	if vc.WaitForVReplicationToCatchup(productTab, "sales", "vt_product", 3*time.Second) != nil {
-		assert.Fail(t, "Migrate timed out for product.sales -80")
-
-	}
 }
 
 func checkVtgateHealth(t *testing.T, cell *Cell) {

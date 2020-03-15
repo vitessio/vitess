@@ -191,6 +191,14 @@ create table order_seq(id int, next_id bigint, cache bigint, primary key(id)) co
 			"column": "oid",
 			"sequence": "order_seq"
 		  }
+	  	},
+	  	"msales": {
+		  "column_vindexes": [
+			{
+			  "column": "mname",
+			  "name": "md5"
+			}
+		  ]
 	  	}
       }
 }
@@ -207,6 +215,19 @@ create table order_seq(id int, next_id bigint, cache bigint, primary key(id)) co
   }]
 }
 `
+	materializeMerchantSalesSpec = `
+{
+  "workflow": "msales",
+  "sourceKeyspace": "customer",
+  "targetKeyspace": "merchant",
+  "tableSettings": [{
+    "targetTable": "msales",
+    "sourceExpression": "select mname, count(*) as kount, sum(price) as amount from orders group by mname",
+    "create_ddl": "create table msales(mname varchar(128), kount int, amount int, primary key(mname))"
+  }]
+}
+`
+
 	materializeSalesVSchema = `
 {
   "tables": {

@@ -175,7 +175,6 @@ func (vc *VitessCluster) AddTablet(t *testing.T, cell *Cell, keyspace *Keyspace,
 		nil,
 		false)
 	assert.NotNil(t, vttablet)
-	//vttablet.ServingStatus = "SERVING"
 	vttablet.SupportsBackup = false
 
 	tablet.DbServer = cluster.MysqlCtlProcessInstance(tabletID, tabletMysqlPortBase+tabletID, globalConfig.tmpDir)
@@ -339,8 +338,9 @@ func (vc *VitessCluster) TearDown() {
 							dbProcesses = append(dbProcesses, proc)
 						}
 					}
+					fmt.Printf("Stopping vttablet %s\n", tablet.Name)
 					if err := tablet.Vttablet.TearDown(); err != nil {
-						log.Errorf("Error stopping vttablet %s", err.Error())
+						fmt.Printf("Stopped vttablet %s %s\n", tablet.Name, err.Error())
 					}
 				}
 			}
@@ -349,17 +349,17 @@ func (vc *VitessCluster) TearDown() {
 
 	for _, proc := range dbProcesses {
 		if err := proc.Wait(); err != nil {
-			log.Errorf("Error waiting for mysql to stop: %s", err.Error())
+			fmt.Printf("Error waiting for mysql to stop: %s\n", err.Error())
 		}
 	}
 
 	if err := vc.Vtctld.TearDown(); err != nil {
-		log.Errorf("Error stopping Vtctld:  %s", err.Error())
+		fmt.Printf("Error stopping Vtctld:  %s\n", err.Error())
 	}
 
 	for _, cell := range vc.Cells {
 		if err := vc.Topo.TearDown(cell.Name, vtdataroot, vtdataroot, false, "etcd2"); err != nil {
-			log.Errorf("Error in etcd teardown - %s", err.Error())
+			fmt.Printf("Error in etcd teardown - %s\n", err.Error())
 		}
 	}
 }
@@ -367,15 +367,17 @@ func (vc *VitessCluster) TearDown() {
 // WaitForVReplicationToCatchup waits for "workflow" to finish copying
 func (vc *VitessCluster) WaitForVReplicationToCatchup(vttablet *cluster.VttabletProcess, workflow string, database string, duration time.Duration) error {
 	queries := [3]string{
-		fmt.Sprintf(`select 1 from _vt.vreplication where workflow = "%s" and db_name = "%s" and pos != '' limit 1`, workflow, database),
+		fmt.Sprintf(`select count(*) from _vt.vreplication where workflow = "%s" and db_name = "%s" and pos = ''`, workflow, database),
 		"select count(*) from information_schema.tables where table_schema='_vt' and table_name='copy_state' limit 1;",
 		fmt.Sprintf(`select count(*) from _vt.copy_state where vrepl_id in (select id from _vt.vreplication where workflow = "%s" and db_name = "%s" )`, workflow, database),
 	}
-	results := [3]string{"[INT64(1)]", "[INT64(1)]", "[INT64(0)]"}
+	results := [3]string{"[INT64(0)]", "[INT64(1)]", "[INT64(0)]"}
+	var lastChecked time.Time
 	for ind, query := range queries {
 		waitDuration := 100 * time.Millisecond
 		for duration > 0 {
-			//fmt.Printf("Executing query %s on %s\n", query, vttablet.Name)
+			fmt.Printf("Executing query %s on %s\n", query, vttablet.Name)
+			lastChecked = time.Now()
 			qr, err := vc.execTabletQuery(vttablet, query)
 			if err != nil {
 				return err
@@ -383,7 +385,7 @@ func (vc *VitessCluster) WaitForVReplicationToCatchup(vttablet *cluster.Vttablet
 			if qr != nil && qr.Rows != nil && len(qr.Rows) > 0 && fmt.Sprintf("%v", qr.Rows[0]) == string(results[ind]) {
 				break
 			} else {
-				fmt.Printf("In WaitForVReplicationToCatchup: %s\n", query)
+				fmt.Printf("In WaitForVReplicationToCatchup: %s %+v\n", query, qr.Rows)
 			}
 			time.Sleep(waitDuration)
 			duration -= waitDuration
@@ -393,6 +395,7 @@ func (vc *VitessCluster) WaitForVReplicationToCatchup(vttablet *cluster.Vttablet
 			return errors.New("WaitForVReplicationToCatchup timed out")
 		}
 	}
+	fmt.Printf("WaitForVReplicationToCatchup succeeded at %v\n", lastChecked)
 	return nil
 }
 
