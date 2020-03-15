@@ -57,11 +57,8 @@ const (
 	// and is valid in all replication modes.
 	// Otherwise is only allowed in row based replication mode
 	PlanPassDML
-	// PlanDMLPK is an update or delete with an equality where clause(s)
-	// on primary key(s).
-	PlanDMLPK
-	// PlanDMLSubquery is an update or delete with a subselect statement
-	PlanDMLSubquery
+	// PlanDMLLimit is an update or delete with a limit.
+	PlanDMLLimit
 	// PlanInsertPK is insert statement where the PK value is
 	// supplied with the query.
 	PlanInsertPK
@@ -97,8 +94,7 @@ var planName = [NumPlans]string{
 	"SELECT_LOCK",
 	"NEXTVAL",
 	"PASS_DML",
-	"DML_PK",
-	"DML_SUBQUERY",
+	"DML_LIMIT",
 	"INSERT_PK",
 	"INSERT_SUBQUERY",
 	"UPSERT_PK",
@@ -240,13 +236,6 @@ func (plan *Plan) TableName() sqlparser.TableIdent {
 	return tableName
 }
 
-func (plan *Plan) setTable(tableName sqlparser.TableIdent, tables map[string]*schema.Table) (*schema.Table, error) {
-	if plan.Table = tables[tableName.String()]; plan.Table == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "table %s not found in schema", tableName)
-	}
-	return plan.Table, nil
-}
-
 // Build builds a plan based on the schema.
 func Build(statement sqlparser.Statement, tables map[string]*schema.Table) (*Plan, error) {
 	var plan *Plan
@@ -314,9 +303,7 @@ func BuildStreaming(sql string, tables map[string]*schema.Table) (*Plan, error) 
 		if stmt.Lock != "" {
 			return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "select with lock not allowed for streaming")
 		}
-		if tableName := analyzeFrom(stmt.From); !tableName.IsEmpty() {
-			plan.setTable(tableName, tables)
-		}
+		plan.Table = lookupTable(stmt.From, tables)
 	case *sqlparser.OtherRead, *sqlparser.Show, *sqlparser.Union:
 		// pass
 	default:

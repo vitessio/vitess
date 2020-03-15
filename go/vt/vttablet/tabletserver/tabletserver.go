@@ -1188,7 +1188,7 @@ func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *t
 		return "", ""
 	}
 
-	if plan.PlanID != planbuilder.PlanDMLPK && plan.PlanID != planbuilder.PlanDMLSubquery {
+	if plan.PlanID != planbuilder.PlanPassDML && plan.PlanID != planbuilder.PlanDMLLimit {
 		// Serialize only UPDATE or DELETE queries.
 		return "", ""
 	}

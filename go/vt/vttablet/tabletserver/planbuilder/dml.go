@@ -28,36 +28,8 @@ import (
 
 func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan *Plan, err error) {
 	plan = &Plan{
-		PlanID:    PlanPassDML,
-		FullQuery: GenerateFullQuery(upd),
-	}
-
-	if len(upd.TableExprs) > 1 {
-		plan.Reason = ReasonMultiTable
-		return plan, nil
-	}
-
-	aliased, ok := upd.TableExprs[0].(*sqlparser.AliasedTableExpr)
-	if !ok {
-		plan.Reason = ReasonMultiTable
-		return plan, nil
-	}
-
-	tableName := sqlparser.GetTableName(aliased.Expr)
-	if tableName.IsEmpty() {
-		plan.Reason = ReasonTable
-		return plan, nil
-	}
-	table, _ := plan.setTable(tableName, tables)
-
-	// Drop to pass-through mode if table cannot be indentified.
-	if PassthroughDMLs || table == nil {
-		return plan, nil
-	}
-
-	// Updates aren't supported on topics
-	if table.IsTopic() {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "updates not allowed on topics")
+		PlanID: PlanPassDML,
+		Table:  lookupTable(upd.TableExprs, tables),
 	}
 
 	// Store the WHERE clause as string for the hot row protection (txserializer).
@@ -65,49 +37,22 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 	buf.Myprintf("%v", upd.Where)
 	plan.WhereClause = buf.ParsedQuery()
 
-	if hasPKConstraint(upd.Where, table) {
+	if PassthroughDMLs || upd.Limit != nil {
+		plan.FullQuery = GenerateFullQuery(upd)
 		return plan, nil
 	}
 
-	plan.OuterQuery = GenerateUpdateOuterQuery(upd, aliased, nil)
-
-	plan.PlanID = PlanDMLSubquery
-	plan.Subquery = GenerateUpdateSubquery(upd, table, aliased)
+	plan.PlanID = PlanDMLLimit
+	upd.Limit = execLimit
+	plan.FullQuery = GenerateFullQuery(upd)
+	upd.Limit = nil
 	return plan, nil
 }
 
 func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan *Plan, err error) {
 	plan = &Plan{
-		PlanID:    PlanPassDML,
-		FullQuery: GenerateFullQuery(del),
-	}
-
-	if len(del.TableExprs) > 1 {
-		plan.Reason = ReasonMultiTable
-		return plan, nil
-	}
-
-	aliased, ok := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
-	if !ok {
-		plan.Reason = ReasonMultiTable
-		return plan, nil
-	}
-
-	tableName := sqlparser.GetTableName(aliased.Expr)
-	if tableName.IsEmpty() {
-		plan.Reason = ReasonTable
-		return plan, nil
-	}
-	table, _ := plan.setTable(tableName, tables)
-
-	// Drop to pass-through mode if table cannot be indentified.
-	if PassthroughDMLs || table == nil {
-		return plan, nil
-	}
-
-	// Deletes aren't supported on topics
-	if table.IsTopic() {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "deletes not allowed on topics")
+		PlanID: PlanPassDML,
+		Table:  lookupTable(del.TableExprs, tables),
 	}
 
 	// Store the WHERE clause as string for the hot row protection (txserializer).
@@ -115,14 +60,14 @@ func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan
 	buf.Myprintf("%v", del.Where)
 	plan.WhereClause = buf.ParsedQuery()
 
-	if hasPKConstraint(del.Where, table) {
+	if PassthroughDMLs || del.Limit != nil {
+		plan.FullQuery = GenerateFullQuery(del)
 		return plan, nil
 	}
-
-	plan.OuterQuery = GenerateDeleteOuterQuery(del, aliased)
-
-	plan.PlanID = PlanDMLSubquery
-	plan.Subquery = GenerateDeleteSubquery(del, table, aliased)
+	plan.PlanID = PlanDMLLimit
+	del.Limit = execLimit
+	plan.FullQuery = GenerateFullQuery(del)
+	del.Limit = nil
 	return plan, nil
 }
 
@@ -136,25 +81,12 @@ func analyzeSet(set *sqlparser.Set) (plan *Plan) {
 func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan *Plan, err error) {
 	plan = &Plan{
 		PlanID:     PlanPassSelect,
+		Table:      lookupTable(sel.From, tables),
 		FieldQuery: GenerateFieldQuery(sel),
 		FullQuery:  GenerateLimitQuery(sel),
 	}
 	if sel.Lock != "" {
 		plan.PlanID = PlanSelectLock
-	}
-
-	tableName := analyzeFrom(sel.From)
-	if tableName.IsEmpty() {
-		return plan, nil
-	}
-	table, err := plan.setTable(tableName, tables)
-	if err != nil {
-		return nil, err
-	}
-
-	// Selects aren't supported on topics
-	if table.IsTopic() {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "selects not allowed on topics")
 	}
 
 	if sel.Where != nil {
@@ -167,8 +99,8 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 
 	// Check if it's a NEXT VALUE statement.
 	if nextVal, ok := sel.SelectExprs[0].(sqlparser.Nextval); ok {
-		if table.Type != schema.Sequence {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s is not a sequence", tableName)
+		if plan.Table == nil || plan.Table.Type != schema.Sequence {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s is not a sequence", sqlparser.String(sel.From))
 		}
 		plan.PlanID = PlanNextval
 		v, err := sqlparser.NewPlanValue(nextVal.Expr)
@@ -180,65 +112,6 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 		plan.FullQuery = nil
 	}
 	return plan, nil
-}
-
-func analyzeFrom(tableExprs sqlparser.TableExprs) sqlparser.TableIdent {
-	if len(tableExprs) > 1 {
-		return sqlparser.NewTableIdent("")
-	}
-	node, ok := tableExprs[0].(*sqlparser.AliasedTableExpr)
-	if !ok {
-		return sqlparser.NewTableIdent("")
-	}
-	return sqlparser.GetTableName(node.Expr)
-}
-
-func hasPKConstraint(node *sqlparser.Where, table *schema.Table) bool {
-	if node == nil || len(table.PKColumns) == 0 {
-		return false
-	}
-	conditions := splitBool(node.Expr)
-	return matchPKs(conditions, table)
-}
-
-func splitBool(node sqlparser.Expr) (conditions []*sqlparser.ComparisonExpr) {
-	switch node := node.(type) {
-	case *sqlparser.AndExpr:
-		left := splitBool(node.Left)
-		right := splitBool(node.Right)
-		return append(left, right...)
-	case *sqlparser.ParenExpr:
-		return splitBool(node.Expr)
-	case *sqlparser.ComparisonExpr:
-		switch {
-		case node.Operator == sqlparser.EqualStr:
-			if sqlparser.IsColName(node.Left) && sqlparser.IsValue(node.Right) {
-				return []*sqlparser.ComparisonExpr{node}
-			}
-		case node.Operator == sqlparser.InStr:
-			if sqlparser.IsColName(node.Left) && sqlparser.IsSimpleTuple(node.Right) {
-				return []*sqlparser.ComparisonExpr{node}
-			}
-		}
-	}
-	return nil
-}
-
-func matchPKs(conditions []*sqlparser.ComparisonExpr, table *schema.Table) bool {
-	pkValues := make([]bool, len(table.PKColumns))
-	for _, condition := range conditions {
-		index := table.FindPKColumn(condition.Left.(*sqlparser.ColName).Name)
-		if index == -1 {
-			continue
-		}
-		pkValues[index] = true
-	}
-	for _, v := range pkValues {
-		if !v {
-			return false
-		}
-	}
-	return true
 }
 
 func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan *Plan, err error) {
@@ -256,14 +129,17 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 		plan.Reason = ReasonTable
 		return plan, nil
 	}
-	table, tableErr := plan.setTable(tableName, tables)
+	plan.Table = tables[tableName.String()]
+	if plan.Table == nil {
+		return plan, nil
+	}
 
 	switch {
-	case tableErr == nil && table.Type == schema.Message:
+	case plan.Table.Type == schema.Message:
 		// message inserts need to continue being strict, even in passthrough dml mode,
 		// because field defaults are set here
 
-	case tableErr == nil && table.IsTopic():
+	case plan.Table.IsTopic():
 		plan.PlanID = PlanInsertTopic
 		plan.Reason = ReasonTopic
 		return plan, nil
@@ -272,22 +148,19 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 		// In passthrough dml mode, allow the operation even if the
 		// table is unknown in the schema.
 		return plan, nil
-
-	case tableErr != nil:
-		return nil, tableErr
 	}
 
-	if !table.HasPrimary() {
+	if !plan.Table.HasPrimary() {
 		log.Warningf("no primary key for table %s", tableName)
 		plan.Reason = ReasonTableNoIndex
 		return plan, nil
 	}
-	switch table.Type {
+	switch plan.Table.Type {
 	case schema.NoType, schema.Sequence:
 		// For now, allow sequence inserts.
-		return analyzeInsertNoType(ins, plan, table)
+		return analyzeInsertNoType(ins, plan, plan.Table)
 	case schema.Message:
-		return analyzeInsertMessage(ins, plan, table)
+		return analyzeInsertMessage(ins, plan, plan.Table)
 	}
 	panic("unreachable")
 }
@@ -570,6 +443,21 @@ func analyzeOnDupExpressions(ins *sqlparser.Insert, pkIndex *schema.Index) (pkVa
 		}
 	}
 	return pkValues, true
+}
+
+func lookupTable(tableExprs sqlparser.TableExprs, tables map[string]*schema.Table) *schema.Table {
+	if len(tableExprs) > 1 {
+		return nil
+	}
+	aliased, ok := tableExprs[0].(*sqlparser.AliasedTableExpr)
+	if !ok {
+		return nil
+	}
+	tableName := sqlparser.GetTableName(aliased.Expr)
+	if tableName.IsEmpty() {
+		return nil
+	}
+	return tables[tableName.String()]
 }
 
 // extractColumnValues extracts the values of a column into a PlanValue.
