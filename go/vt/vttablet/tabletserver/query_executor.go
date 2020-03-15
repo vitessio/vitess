@@ -135,16 +135,21 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s disallowed outside transaction", qre.plan.PlanID.String())
 	case planbuilder.PlanSet, planbuilder.PlanOtherRead:
 		return qre.execOther()
-	case planbuilder.PlanPassDML, planbuilder.PlanInsertMessage, planbuilder.PlanDMLLimit:
-		if !qre.tsv.qe.autoCommit.Get() {
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s disallowed outside transaction", qre.plan.PlanID.String())
-		}
-		return qre.execAsTransaction(qre.txConnExec)
+	case planbuilder.PlanPassDML, planbuilder.PlanInsertMessage:
+		return qre.execAsTransaction(true /* autocommit */, qre.txConnExec)
+	case planbuilder.PlanDMLLimit:
+		return qre.execAsTransaction(false /* autocommit */, qre.txConnExec)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
 }
 
-func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
+func (qre *QueryExecutor) execAsTransaction(autocommit bool, f func(conn *TxConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
+	if autocommit {
+		if qre.options == nil {
+			qre.options = &querypb.ExecuteOptions{}
+		}
+		qre.options.TransactionIsolation = querypb.ExecuteOptions_AUTOCOMMIT
+	}
 	conn, beginSQL, err := qre.tsv.te.txPool.LocalBegin(qre.ctx, qre.options)
 	if err != nil {
 		return nil, err
@@ -385,7 +390,7 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 		return result, nil
 	}
 
-	result, err := qre.execAsTransaction(func(conn *TxConnection) (*sqltypes.Result, error) {
+	result, err := qre.execAsTransaction(true /* autocommit */, func(conn *TxConnection) (*sqltypes.Result, error) {
 		return qre.execSQL(conn, sql, true)
 	})
 
@@ -410,7 +415,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 	t.SequenceInfo.Lock()
 	defer t.SequenceInfo.Unlock()
 	if t.SequenceInfo.NextVal == 0 || t.SequenceInfo.NextVal+inc > t.SequenceInfo.LastVal {
-		_, err := qre.execAsTransaction(func(conn *TxConnection) (*sqltypes.Result, error) {
+		_, err := qre.execAsTransaction(false /* autocommit */, func(conn *TxConnection) (*sqltypes.Result, error) {
 			query := fmt.Sprintf("select next_id, cache from %s where id = 0 for update", sqlparser.String(tableName))
 			qr, err := qre.execSQL(conn, query, false)
 			if err != nil {

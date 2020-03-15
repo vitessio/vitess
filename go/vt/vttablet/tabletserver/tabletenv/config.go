@@ -45,6 +45,7 @@ var (
 	// Placeholder for deprecated variable.
 	// TODO(sougou): deprecate the flag after release 7.0.
 	deprecatedMessagePoolPrefillParallelism int
+	deprecatedAutocommit                    bool
 )
 
 func init() {
@@ -82,7 +83,7 @@ func init() {
 	flag.BoolVar(&Config.TerseErrors, "queryserver-config-terse-errors", DefaultQsConfig.TerseErrors, "prevent bind vars from escaping in returned errors")
 	flag.StringVar(&Config.PoolNamePrefix, "pool-name-prefix", DefaultQsConfig.PoolNamePrefix, "pool name prefix, vttablet has several pools and each of them has a name. This config specifies the prefix of these pool names")
 	flag.BoolVar(&Config.WatchReplication, "watch_replication_stream", false, "When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to support the include_event_token ExecuteOptions.")
-	flag.BoolVar(&Config.EnableAutoCommit, "enable-autocommit", DefaultQsConfig.EnableAutoCommit, "if the flag is on, a DML outsides a transaction will be auto committed. This flag is deprecated and is unsafe. Instead, use the VTGate provided autocommit feature.")
+	flag.BoolVar(&deprecatedAutocommit, "enable-autocommit", true, "This flag is deprecated. Autocommit is always allowed.")
 	flag.BoolVar(&Config.TwoPCEnable, "twopc_enable", DefaultQsConfig.TwoPCEnable, "if the flag is on, 2pc is enabled. Other 2pc flags must be supplied.")
 	flag.StringVar(&Config.TwoPCCoordinatorAddress, "twopc_coordinator_address", DefaultQsConfig.TwoPCCoordinatorAddress, "address of the (VTGate) process(es) that will be used to notify of abandoned transactions.")
 	flag.Float64Var(&Config.TwoPCAbandonAge, "twopc_abandon_age", DefaultQsConfig.TwoPCAbandonAge, "time in seconds. Any unresolved transaction older than this time will be sent to the coordinator to be resolved.")
@@ -160,7 +161,6 @@ type TabletConfig struct {
 	TxPoolWaiterCap              int
 	StrictTableACL               bool
 	TerseErrors                  bool
-	EnableAutoCommit             bool
 	EnableTableACLDryRun         bool
 	PoolNamePrefix               string
 	TableACLExemptACL            string
@@ -237,7 +237,6 @@ var DefaultQsConfig = TabletConfig{
 	StreamBufferSize:             32 * 1024,
 	StrictTableACL:               false,
 	TerseErrors:                  false,
-	EnableAutoCommit:             false,
 	EnableTableACLDryRun:         false,
 	PoolNamePrefix:               "",
 	TableACLExemptACL:            "",
