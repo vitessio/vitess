@@ -37,14 +37,15 @@ import (
 type Plan struct {
 	Table *Table
 
-	// ColExprs is the list of column expressions to be sent
-	// in the stream.
-	ColExprs []ColExpr
-
 	// Filters is the list of filters to be applied to the columns
 	// of the table.
 	Filters []Filter
+
+	// ColExprs is the list of column expressions to be sent
+	// in the stream.
+	ColExprs []ColExpr
 }
+
 
 // Opcode enumerates the operators supported in a where clause
 type Opcode int
