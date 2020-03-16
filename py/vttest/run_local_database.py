@@ -53,6 +53,7 @@ import sys
 from google.protobuf import text_format
 
 from vtproto import vttest_pb2
+from vtdb import prefer_vtroot_imports  # pylint: disable=unused-import
 from vttest import environment
 from vttest import init_data_options
 from vttest import local_database
@@ -123,29 +124,8 @@ def main(cmdline_options):
           ' the local cluster. For example, did you forget the shutdown in'
           ' your test\'s tearDown()?\n' % os.path.basename(__file__))
 
-def _prefer_vtroot_imports():
-  """Reorder sys.path to put $VTROOT/dist before others."""
-
-  vtroot = os.environ.get('VTROOT')
-  if not vtroot:
-      # VTROOT is not set. Don't try anything.
-      return
-  dist = os.path.join(vtroot, 'dist')
-
-  dist_paths = []
-  other_paths = []
-
-  for path in sys.path:
-      if path:
-          if path.startswith(dist):
-              dist_paths.append(path)
-          else:
-              other_paths.append(path)
-
-  sys.path = [''] + dist_paths + other_paths
-
 if __name__ == '__main__':
-  _prefer_vtroot_imports()
+
   parser = optparse.OptionParser()
   parser.add_option(
       '-p', '--port', type='int',
