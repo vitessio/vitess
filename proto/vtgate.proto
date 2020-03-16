@@ -110,7 +110,7 @@ message Session {
   uint64 last_insert_id = 11;
 
   // found_rows keeps track of how many rows the last query returned
-  uint64 rows_affected = 12;
+  uint64 found_rows = 12;
 }
 
 // ExecuteRequest is the payload to Execute.
