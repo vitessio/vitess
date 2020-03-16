@@ -35,9 +35,10 @@ import (
 )
 
 var (
-	enforceTableACLConfig = flag.Bool("enforce-tableacl-config", false, "if this flag is true, vttablet will fail to start if a valid tableacl config does not exist")
-	tableACLConfig        = flag.String("table-acl-config", "", "path to table access checker config file; send SIGHUP to reload this file")
-	tabletPath            = flag.String("tablet-path", "", "tablet alias")
+	enforceTableACLConfig        = flag.Bool("enforce-tableacl-config", false, "if this flag is true, vttablet will fail to start if a valid tableacl config does not exist")
+	tableACLConfig               = flag.String("table-acl-config", "", "path to table access checker config file; send SIGHUP to reload this file")
+	tableACLConfigReloadInterval = flag.Duration("table-acl-config-reload-interval", 0, "Ticker to reload ACLs")
+	tabletPath                   = flag.String("tablet-path", "", "tablet alias")
 
 	agent *tabletmanager.ActionAgent
 )
@@ -112,7 +113,7 @@ func main() {
 		qsc.StopService()
 	})
 
-	qsc.InitACL(*tableACLConfig, *enforceTableACLConfig)
+	qsc.InitACL(*tableACLConfig, *enforceTableACLConfig, *tableACLConfigReloadInterval)
 
 	// Create mysqld and register the health reporter (needs to be done
 	// before initializing the agent, so the initial health check
