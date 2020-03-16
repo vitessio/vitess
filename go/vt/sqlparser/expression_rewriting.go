@@ -164,7 +164,7 @@ func (er *expressionRewriter) goingDown(cursor *Cursor) bool {
 		}
 	case *ColName:
 		if node.Name.at == SingleAt {
-			cursor.Replace(bindVarExpression(UserDefinedVariableName + node.Name.val))
+			cursor.Replace(bindVarExpression(UserDefinedVariableName + node.Name.CompliantName()))
 			er.needBindVarFor(UserDefinedVariableName)
 		}
 	}

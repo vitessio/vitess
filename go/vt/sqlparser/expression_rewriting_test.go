@@ -94,11 +94,11 @@ func TestRewrites(in *testing.T) {
 			expected:  "select :__vtfrows as `found_rows()`",
 			foundRows: true,
 		},
-		//{ TODO: systay We need to handle this somehow
-		//	in:        "select @`x y`",
-		//	expected:  "select :`__vtudv@x y` as `abc` from dual",
-		//	foundRows: true, udv: true,
-		//},
+		{
+			in:       "select @`x y`",
+			expected: "select :__vtudvx_y as `@``x y``` from dual",
+			udv:      true,
+		},
 		{
 			in:       "select id from t where id = @x",
 			expected: "select id from t where id = :__vtudvx",
@@ -120,7 +120,7 @@ func TestRewrites(in *testing.T) {
 			require.NoError(t, err)
 
 			expected, err := Parse(tc.expected)
-			require.NoError(t, err)
+			require.NoError(t, err, "test expectation does not parse [%s]", tc.expected)
 
 			s := String(expected)
 			require.Equal(t, s, String(result.AST))
