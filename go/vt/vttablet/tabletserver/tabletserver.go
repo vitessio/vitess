@@ -415,7 +415,7 @@ func (tsv *TabletServer) initACL(tableACLConfigFile string, enforceTableACLConfi
 }
 
 // InitACL loads the table ACL and sets up a SIGHUP handler for reloading it.
-func (tsv *TabletServer) InitACL(tableACLConfigFile string, enforceTableACLConfig bool) {
+func (tsv *TabletServer) InitACL(tableACLConfigFile string, enforceTableACLConfig bool, reloadACLConfigFileInterval time.Duration) {
 	tsv.initACL(tableACLConfigFile, enforceTableACLConfig)
 
 	sigChan := make(chan os.Signal, 1)
@@ -425,6 +425,15 @@ func (tsv *TabletServer) InitACL(tableACLConfigFile string, enforceTableACLConfi
 			tsv.initACL(tableACLConfigFile, enforceTableACLConfig)
 		}
 	}()
+
+	if reloadACLConfigFileInterval != 0 {
+		ticker := time.NewTicker(reloadACLConfigFileInterval)
+		go func() {
+			for range ticker.C {
+				sigChan <- syscall.SIGHUP
+			}
+		}()
+	}
 }
 
 // StartService is a convenience function for InitDBConfig->SetServingType
