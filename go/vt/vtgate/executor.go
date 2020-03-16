@@ -287,16 +287,12 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 			}
 			normalized := sqlparser.String(rewriteResult.AST)
 			sql = comments.Leading + normalized + comments.Trailing
-			if rewriteResult.NeedDatabase {
-				keyspace, _, _, _ := e.ParseDestinationTarget(safeSession.TargetString)
-				if keyspace == "" {
-					bindVars[sqlparser.DBVarName] = sqltypes.NullBindVariable
-				} else {
-					bindVars[sqlparser.DBVarName] = sqltypes.StringBindVariable(keyspace)
-				}
+			neededBindVariables, err := e.createNeededBindVariables(rewriteResult.BindVarNeeds, safeSession)
+			if err != nil {
+				return nil, err
 			}
-			if rewriteResult.NeedLastInsertID {
-				bindVars[sqlparser.LastInsertIDName] = sqltypes.Uint64BindVariable(safeSession.GetLastInsertId())
+			for k, v := range neededBindVariables {
+				bindVars[k] = v
 			}
 		}
 		logStats.PlanTime = execStart.Sub(logStats.StartTime)
@@ -327,20 +323,13 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 		return nil, err
 	}
 
-	bindVarNeeds := plan.BindVarNeeds
-	if bindVarNeeds.NeedLastInsertID {
-		bindVars[sqlparser.LastInsertIDName] = sqltypes.Uint64BindVariable(safeSession.GetLastInsertId())
+	neededBindVariables, err := e.createNeededBindVariables(plan.BindVarNeeds, safeSession)
+	if err != nil {
+		logStats.Error = err
+		return nil, err
 	}
-	if bindVarNeeds.NeedDatabase {
-		keyspace, _, _, _ := e.ParseDestinationTarget(safeSession.TargetString)
-		if keyspace == "" {
-			bindVars[sqlparser.DBVarName] = sqltypes.NullBindVariable
-		} else {
-			bindVars[sqlparser.DBVarName] = sqltypes.StringBindVariable(keyspace)
-		}
-	}
-	if bindVarNeeds.NeedFoundRows {
-		bindVars[sqlparser.FoundRowsName] = sqltypes.Uint64BindVariable(safeSession.FoundRows)
+	for k, v := range neededBindVariables {
+		bindVars[k] = v
 	}
 
 	qr, err := plan.Instructions.Execute(vcursor, bindVars, true)
@@ -368,6 +357,41 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 	plan.AddStats(1, time.Since(logStats.StartTime), uint64(logStats.ShardQueries), logStats.RowsAffected, errCount)
 
 	return qr, err
+}
+
+// createNeededBindVariables creates a map of bind vars that are needed by the bindvar-needs sent in
+func (e *Executor) createNeededBindVariables(bindVarNeeds sqlparser.BindVarNeeds, session *SafeSession) (map[string]*querypb.BindVariable, error) {
+	bindVars := make(map[string]*querypb.BindVariable)
+
+	if bindVarNeeds.NeedDatabase {
+		keyspace, _, _, _ := e.ParseDestinationTarget(session.TargetString)
+		if keyspace == "" {
+			bindVars[sqlparser.DBVarName] = sqltypes.NullBindVariable
+		} else {
+			bindVars[sqlparser.DBVarName] = sqltypes.StringBindVariable(keyspace)
+		}
+	}
+
+	if bindVarNeeds.NeedLastInsertID {
+		bindVars[sqlparser.LastInsertIDName] = sqltypes.Uint64BindVariable(session.GetLastInsertId())
+	}
+
+	// todo: do we need to check this map for nil?
+	if bindVarNeeds.NeedUserDefinedVariables && session.UserDefinedVariables != nil {
+		for k, v := range session.UserDefinedVariables {
+			value, err := sqltypes.NewValue(v.Type, v.Value)
+			if err != nil {
+				return nil, err
+			}
+			bindVars[sqlparser.UserDefinedVariableName+k] = sqltypes.ValueBindVariable(value)
+		}
+	}
+
+	if bindVarNeeds.NeedFoundRows {
+		bindVars[sqlparser.FoundRowsName] = sqltypes.Uint64BindVariable(session.FoundRows)
+	}
+
+	return bindVars, nil
 }
 
 func (e *Executor) destinationExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {

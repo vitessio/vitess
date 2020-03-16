@@ -501,17 +501,17 @@ func (tkn *Tokenizer) Scan() (int, []byte) {
 			tokenID = AT_AT_ID
 			tkn.next()
 		}
-		var tId int
+		var tID int
 		var tBytes []byte
 		ch = tkn.lastChar
 		tkn.next()
 		if ch == '`' {
-			tId, tBytes = tkn.scanLiteralIdentifier()
+			tID, tBytes = tkn.scanLiteralIdentifier()
 		} else {
-			tId, tBytes = tkn.scanIdentifier(byte(ch), true)
+			tID, tBytes = tkn.scanIdentifier(byte(ch), true)
 		}
-		if tId == LEX_ERROR {
-			return tId, nil
+		if tID == LEX_ERROR {
+			return tID, nil
 		}
 		return tokenID, tBytes
 	case isLetter(ch):
@@ -971,7 +971,7 @@ func (tkn *Tokenizer) reset() {
 }
 
 func isLetter(ch uint16) bool {
-	return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' || ch == '_' || ch == '@'
+	return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z' || ch == '_'
 }
 
 func isCarat(ch uint16) bool {
