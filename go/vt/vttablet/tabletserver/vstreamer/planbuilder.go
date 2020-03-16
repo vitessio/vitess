@@ -36,10 +36,30 @@ import (
 // Plan represents the plan for a table.
 type Plan struct {
 	Table *Table
+
+	// Filters is the list of filters to be applied to the columns
+	// of the table.
+	Filters []Filter
+
 	// ColExprs is the list of column expressions to be sent
 	// in the stream.
 	ColExprs []ColExpr
+}
 
+type Opcode int
+
+const (
+	Equal = Opcode(iota)
+	VindexMatch
+)
+
+// Filter contains opcodes for filtering.
+type Filter struct {
+	Opcode Opcode
+	ColNum int
+	Value  sqltypes.Value
+
+	// Parameters for VindexMatch.
 	// Vindex, VindexColumns and KeyRange, if set, will be used
 	// to filter the row.
 	// VindexColumns contains the column numbers of the table,
@@ -90,13 +110,24 @@ func (plan *Plan) fields() []*querypb.Field {
 // filter filters the row against the plan. It returns false if the row did not match.
 // If the row matched, it returns the columns to be sent.
 func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error) {
-	if plan.Vindex != nil {
-		ksid, err := getKeyspaceID(values, plan.Vindex, plan.VindexColumns)
-		if err != nil {
-			return false, nil, err
-		}
-		if !key.KeyRangeContains(plan.KeyRange, ksid) {
-			return false, nil, nil
+	for _, filter := range plan.Filters {
+		switch filter.Opcode {
+		case Equal:
+			result, err := sqltypes.NullsafeCompare(values[filter.ColNum], filter.Value)
+			if err != nil {
+				return false, nil, err
+			}
+			if result != 0 {
+				return false, nil, nil
+			}
+		case VindexMatch:
+			ksid, err := getKeyspaceID(values, filter.Vindex, filter.VindexColumns)
+			if err != nil {
+				return false, nil, err
+			}
+			if !key.KeyRangeContains(filter.KeyRange, ksid) {
+				return false, nil, nil
+			}
 		}
 	}
 
@@ -242,8 +273,11 @@ func buildREPlan(ti *Table, vschema *localVSchema, filter string) (*Plan, error)
 	if err != nil {
 		return nil, err
 	}
-	plan.Vindex = cv.Vindex
-	plan.VindexColumns, err = buildVindexColumns(plan.Table, cv.Columns)
+	whereFilter := Filter{
+		Opcode: VindexMatch,
+		Vindex: cv.Vindex,
+	}
+	whereFilter.VindexColumns, err = buildVindexColumns(plan.Table, cv.Columns)
 	if err != nil {
 		return nil, err
 	}
@@ -256,7 +290,8 @@ func buildREPlan(ti *Table, vschema *localVSchema, filter string) (*Plan, error)
 	if len(keyranges) != 1 {
 		return nil, fmt.Errorf("error parsing keyrange: %v", filter)
 	}
-	plan.KeyRange = keyranges[0]
+	whereFilter.KeyRange = keyranges[0]
+	plan.Filters = append(plan.Filters, whereFilter)
 	return plan, nil
 }
 
@@ -274,6 +309,9 @@ func buildTablePlan(ti *Table, vschema *localVSchema, query string) (*Plan, erro
 	plan := &Plan{
 		Table: ti,
 	}
+	if err := plan.analyzeWhere(vschema, sel.Where); err != nil {
+		return nil, err
+	}
 	if err := plan.analyzeExprs(vschema, sel.SelectExprs); err != nil {
 		return nil, err
 	}
@@ -282,16 +320,6 @@ func buildTablePlan(ti *Table, vschema *localVSchema, query string) (*Plan, erro
 		return plan, nil
 	}
 
-	funcExpr, ok := sel.Where.Expr.(*sqlparser.FuncExpr)
-	if !ok {
-		return nil, fmt.Errorf("unsupported where clause: %v", sqlparser.String(sel.Where))
-	}
-	if !funcExpr.Name.EqualString("in_keyrange") {
-		return nil, fmt.Errorf("unsupported where clause: %v", sqlparser.String(sel.Where))
-	}
-	if err := plan.analyzeInKeyRange(vschema, funcExpr.Exprs); err != nil {
-		return nil, err
-	}
 	return plan, nil
 }
 
@@ -316,6 +344,89 @@ func analyzeSelect(query string) (sel *sqlparser.Select, fromTable sqlparser.Tab
 		return nil, fromTable, fmt.Errorf("unsupported: %v", sqlparser.String(sel))
 	}
 	return sel, fromTable, nil
+}
+
+func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) error {
+	if where == nil {
+		return nil
+	}
+	exprs := splitAndExpression(nil, where.Expr)
+	for _, expr := range exprs {
+		switch expr := expr.(type) {
+		case *sqlparser.ComparisonExpr:
+			qualifiedName, ok := expr.Left.(*sqlparser.ColName)
+			if !ok {
+				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+			}
+			if !qualifiedName.Qualifier.IsEmpty() {
+				return fmt.Errorf("unsupported qualifier for column: %v", sqlparser.String(qualifiedName))
+			}
+			colnum, err := findColumn(plan.Table, qualifiedName.Name)
+			if err != nil {
+				return err
+			}
+			val, ok := expr.Right.(*sqlparser.SQLVal)
+			if !ok {
+				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+			}
+			if val.Type != sqlparser.IntVal {
+				return fmt.Errorf("unexpected: %v", sqlparser.String(expr))
+			}
+			pv, err := sqlparser.NewPlanValue(val)
+			if err != nil {
+				return err
+			}
+			resolved, err := pv.ResolveValue(nil)
+			if err != nil {
+				return err
+			}
+			plan.Filters = append(plan.Filters, Filter{
+				Opcode: Equal,
+				ColNum: colnum,
+				Value:  resolved,
+			})
+		case *sqlparser.FuncExpr:
+			if !expr.Name.EqualString("in_keyrange") {
+				return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))
+			}
+			if err := plan.analyzeInKeyRange(vschema, expr.Exprs); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("unsupported constraint: %v", sqlparser.String(expr))
+		}
+	}
+	return nil
+}
+
+// splitAndExpression breaks up the Expr into AND-separated conditions
+// and appends them to filters, which can be shuffled and recombined
+// as needed.
+func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlparser.Expr {
+	if node == nil {
+		return filters
+	}
+	switch node := node.(type) {
+	case *sqlparser.AndExpr:
+		filters = splitAndExpression(filters, node.Left)
+		return splitAndExpression(filters, node.Right)
+	case *sqlparser.ParenExpr:
+		// If the inner expression is AndExpr, then we can remove
+		// the parenthesis because they are unnecessary.
+		if node, ok := node.Expr.(*sqlparser.AndExpr); ok {
+			return splitAndExpression(filters, node)
+		}
+	}
+	return append(filters, node)
+}
+
+// skipParenthesis skips the parenthesis (if any) of an expression and
+// returns the innermost unparenthesized expression.
+func skipParenthesis(node sqlparser.Expr) sqlparser.Expr {
+	if node, ok := node.(*sqlparser.ParenExpr); ok {
+		return skipParenthesis(node.Expr)
+	}
+	return node
 }
 
 func (plan *Plan) analyzeExprs(vschema *localVSchema, selExprs sqlparser.SelectExprs) error {
@@ -396,6 +507,9 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.SelectExprs) error {
 	var colnames []sqlparser.ColIdent
 	var krExpr sqlparser.SelectExpr
+	whereFilter := Filter{
+		Opcode: VindexMatch,
+	}
 	switch {
 	case len(exprs) == 1:
 		cv, err := vschema.FindColVindex(plan.Table.Name)
@@ -403,7 +517,7 @@ func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.Selec
 			return err
 		}
 		colnames = cv.Columns
-		plan.Vindex = cv.Vindex
+		whereFilter.Vindex = cv.Vindex
 		krExpr = exprs[0]
 	case len(exprs) >= 3:
 		for _, expr := range exprs[:len(exprs)-2] {
@@ -425,11 +539,11 @@ func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.Selec
 		if err != nil {
 			return err
 		}
-		plan.Vindex, err = vschema.FindOrCreateVindex(vtype)
+		whereFilter.Vindex, err = vschema.FindOrCreateVindex(vtype)
 		if err != nil {
 			return err
 		}
-		if !plan.Vindex.IsUnique() {
+		if !whereFilter.Vindex.IsUnique() {
 			return fmt.Errorf("vindex must be Unique to be used for VReplication: %s", vtype)
 		}
 
@@ -438,7 +552,7 @@ func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.Selec
 		return fmt.Errorf("unexpected in_keyrange parameters: %v", sqlparser.String(exprs))
 	}
 	var err error
-	plan.VindexColumns, err = buildVindexColumns(plan.Table, colnames)
+	whereFilter.VindexColumns, err = buildVindexColumns(plan.Table, colnames)
 	if err != nil {
 		return err
 	}
@@ -453,7 +567,8 @@ func (plan *Plan) analyzeInKeyRange(vschema *localVSchema, exprs sqlparser.Selec
 	if len(keyranges) != 1 {
 		return fmt.Errorf("unexpected in_keyrange parameter: %v", sqlparser.String(krExpr))
 	}
-	plan.KeyRange = keyranges[0]
+	whereFilter.KeyRange = keyranges[0]
+	plan.Filters = append(plan.Filters, whereFilter)
 	return nil
 }
 
