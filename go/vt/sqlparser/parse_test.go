@@ -1364,6 +1364,12 @@ var (
 		input:  "use `ks:-80@master`",
 		output: "use `ks:-80@master`",
 	}, {
+		input:  "use @replica",
+		output: "use `@replica`",
+	}, {
+		input:  "use ks@replica",
+		output: "use `ks@replica`",
+	}, {
 		input:  "describe foobar",
 		output: "otherread",
 	}, {

@@ -53,11 +53,7 @@ func Walk(visit Visit, nodes ...SQLNode) error {
 			return kontinue
 		}
 		post := func(cursor *Cursor) bool {
-			if err != nil {
-				return false // now we can abort the traversal if an error was found
-			}
-
-			return true
+			return err == nil // now we can abort the traversal if an error was found
 		}
 
 		Rewrite(node, pre, post)
