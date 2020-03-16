@@ -268,7 +268,9 @@ func (sm *streamMigrater) syncSourceStreams(ctx context.Context) (map[string]mys
 			wg.Add(1)
 			go func(vrs *vrStream, shard string, pos mysql.Position) {
 				defer wg.Done()
-				si, err := sm.mi.wr.ts.GetShard(ctx, sm.mi.sourceKeyspace, vrs.bls.Shard)
+				sm.mi.wr.Logger().Infof("syncSourceStreams beginning of go func %s %s %+v %d", shard, vrs.bls.Shard, pos, vrs.id)
+
+				si, err := sm.mi.wr.ts.GetShard(ctx, sm.mi.sourceKeyspace, shard)
 				if err != nil {
 					allErrors.RecordError(err)
 					return
