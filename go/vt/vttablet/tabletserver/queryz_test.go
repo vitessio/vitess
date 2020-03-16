@@ -40,7 +40,7 @@ func TestQueryzHandler(t *testing.T) {
 	plan1 := &TabletPlan{
 		Plan: &planbuilder.Plan{
 			Table:  &schema.Table{Name: sqlparser.NewTableIdent("test_table")},
-			PlanID: planbuilder.PlanPassSelect,
+			PlanID: planbuilder.PlanSelect,
 		},
 	}
 	plan1.AddStats(10, 2*time.Second, 1*time.Second, 2, 0)

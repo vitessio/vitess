@@ -80,7 +80,7 @@ func TestQueryExecutorPlanPassDmlRBR(t *testing.T) {
 	txid := newTransaction(tsv, nil)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	tsv.qe.binlogFormat = connpool.BinlogFormatRow
-	checkPlanID(t, planbuilder.PlanPassDML, qre.plan.PlanID)
+	checkPlanID(t, planbuilder.PlanUpdate, qre.plan.PlanID)
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
@@ -121,7 +121,7 @@ func TestQueryExecutorPassthroughDml(t *testing.T) {
 	txid := newTransaction(tsv, nil)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 
-	checkPlanID(t, planbuilder.PlanPassDML, qre.plan.PlanID)
+	checkPlanID(t, planbuilder.PlanUpdate, qre.plan.PlanID)
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
@@ -172,7 +172,7 @@ func TestQueryExecutorPlanPassDmlAutoCommitRBR(t *testing.T) {
 	defer tsv.StopService()
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	tsv.qe.binlogFormat = connpool.BinlogFormatRow
-	checkPlanID(t, planbuilder.PlanPassDML, qre.plan.PlanID)
+	checkPlanID(t, planbuilder.PlanUpdate, qre.plan.PlanID)
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
@@ -205,7 +205,7 @@ func TestQueryExecutorPassthroughDmlAutoCommit(t *testing.T) {
 	tsv.qe.binlogFormat = connpool.BinlogFormatRow
 
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
-	checkPlanID(t, planbuilder.PlanPassDML, qre.plan.PlanID)
+	checkPlanID(t, planbuilder.PlanUpdate, qre.plan.PlanID)
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
@@ -244,7 +244,7 @@ func TestQueryExecutorPlanPassDmlReplaceInto(t *testing.T) {
 	txid := newTransaction(tsv, nil)
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	tsv.qe.binlogFormat = connpool.BinlogFormatRow
-	checkPlanID(t, planbuilder.PlanPassDML, qre.plan.PlanID)
+	checkPlanID(t, planbuilder.PlanInsert, qre.plan.PlanID)
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
@@ -338,7 +338,7 @@ func TestQueryExecutorPlanPassSelectWithInATransaction(t *testing.T) {
 	qre := newTestQueryExecutor(ctx, tsv, query, txid)
 	defer tsv.StopService()
 	defer testCommitHelper(t, tsv, qre)
-	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
+	checkPlanID(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
@@ -389,7 +389,7 @@ func TestQueryExecutorPlanPassSelect(t *testing.T) {
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
+	checkPlanID(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
@@ -441,7 +441,7 @@ func TestQueryExecutorPlanPassSelectSqlSelectLimit(t *testing.T) {
 		SqlSelectLimit: 20,
 	}
 	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
+	checkPlanID(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
@@ -743,7 +743,7 @@ func TestQueryExecutorTableAcl(t *testing.T) {
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
+	checkPlanID(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("got: %v, want nil", err)
@@ -787,7 +787,7 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	// without enabling Config.StrictTableAcl
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
-	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
+	checkPlanID(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("got: %v, want nil", err)
@@ -801,7 +801,7 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	tsv = newTestTabletServer(ctx, enableStrictTableACL, db)
 	qre = newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
+	checkPlanID(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	// query should fail because current user do not have read permissions
 	_, err = qre.Execute()
 	if err == nil {
@@ -898,7 +898,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
+	checkPlanID(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	// query should fail because current user do not have read permissions
 	_, err := qre.Execute()
 	if code := vterrors.Code(err); code != vtrpcpb.Code_PERMISSION_DENIED {
@@ -965,7 +965,7 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 	tableACLStatsKey := strings.Join([]string{
 		"test_table",
 		"group02",
-		planbuilder.PlanPassSelect.String(),
+		planbuilder.PlanSelect.String(),
 		username,
 	}, ".")
 	// enable Config.StrictTableAcl
@@ -973,7 +973,7 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 	tsv.qe.enableTableACLDryRun = true
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
+	checkPlanID(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	beforeCount := tabletenv.TableaclPseudoDenied.Counts()[tableACLStatsKey]
 	// query should fail because current user do not have read permissions
 	_, err := qre.Execute()
@@ -1008,7 +1008,7 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	alterRule.SetIPCond(bannedAddr)
 	alterRule.SetUserCond(bannedUser)
 	alterRule.SetQueryCond("select.*")
-	alterRule.AddPlanCond(planbuilder.PlanPassSelect)
+	alterRule.AddPlanCond(planbuilder.PlanSelect)
 	alterRule.AddTableCond("test_table")
 
 	rulesName := "blacklistedRulesQRFail"
@@ -1032,7 +1032,7 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 
-	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
+	checkPlanID(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	// execute should fail because query has been blacklisted
 	_, err := qre.Execute()
 	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
@@ -1062,7 +1062,7 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 	alterRule.SetIPCond(bannedAddr)
 	alterRule.SetUserCond(bannedUser)
 	alterRule.SetQueryCond("select.*")
-	alterRule.AddPlanCond(planbuilder.PlanPassSelect)
+	alterRule.AddPlanCond(planbuilder.PlanSelect)
 	alterRule.AddTableCond("test_table")
 
 	rulesName := "blacklistedRulesQRRetry"
@@ -1086,7 +1086,7 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 
-	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
+	checkPlanID(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	_, err := qre.Execute()
 	if code := vterrors.Code(err); code != vtrpcpb.Code_FAILED_PRECONDITION {
 		t.Fatalf("tsv.qe.queryRuleSources.SetRules: %v, want %v", code, vtrpcpb.Code_FAILED_PRECONDITION)

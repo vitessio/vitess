@@ -1187,7 +1187,9 @@ func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *t
 		return "", ""
 	}
 
-	if plan.PlanID != planbuilder.PlanPassDML && plan.PlanID != planbuilder.PlanDMLLimit {
+	switch plan.PlanID {
+	case planbuilder.PlanUpdate, planbuilder.PlanUpdateLimit,
+		planbuilder.PlanDelete, planbuilder.PlanDeleteLimit:
 		// Serialize only UPDATE or DELETE queries.
 		return "", ""
 	}

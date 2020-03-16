@@ -120,7 +120,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	}
 
 	switch qre.plan.PlanID {
-	case planbuilder.PlanPassSelect, planbuilder.PlanSelectImpossible:
+	case planbuilder.PlanSelect, planbuilder.PlanSelectImpossible:
 		maxrows := qre.getSelectLimit()
 		qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
 		qr, err := qre.execSelect()
@@ -135,9 +135,9 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s disallowed outside transaction", qre.plan.PlanID.String())
 	case planbuilder.PlanSet, planbuilder.PlanOtherRead:
 		return qre.execOther()
-	case planbuilder.PlanPassDML, planbuilder.PlanInsertMessage:
+	case planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete, planbuilder.PlanInsertMessage:
 		return qre.execAsTransaction(true /* autocommit */, qre.txConnExec)
-	case planbuilder.PlanDMLLimit:
+	case planbuilder.PlanUpdateLimit, planbuilder.PlanDeleteLimit:
 		return qre.execAsTransaction(false /* autocommit */, qre.txConnExec)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
@@ -182,16 +182,16 @@ func (qre *QueryExecutor) execAsTransaction(autocommit bool, f func(conn *TxConn
 
 func (qre *QueryExecutor) txConnExec(conn *TxConnection) (*sqltypes.Result, error) {
 	switch qre.plan.PlanID {
-	case planbuilder.PlanPassDML, planbuilder.PlanSet:
+	case planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete, planbuilder.PlanSet:
 		return qre.txFetch(conn, true)
 	case planbuilder.PlanInsertMessage:
 		qre.bindVars["#time_now"] = sqltypes.Int64BindVariable(time.Now().UnixNano())
 		return qre.txFetch(conn, true)
-	case planbuilder.PlanDMLLimit:
+	case planbuilder.PlanUpdateLimit, planbuilder.PlanDeleteLimit:
 		return qre.execDMLLimit(conn)
 	case planbuilder.PlanOtherRead, planbuilder.PlanOtherAdmin:
 		return qre.txFetch(conn, false)
-	case planbuilder.PlanPassSelect, planbuilder.PlanSelectLock, planbuilder.PlanSelectImpossible:
+	case planbuilder.PlanSelect, planbuilder.PlanSelectLock, planbuilder.PlanSelectImpossible:
 		maxrows := qre.getSelectLimit()
 		qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
 		qr, err := qre.txFetch(conn, false)

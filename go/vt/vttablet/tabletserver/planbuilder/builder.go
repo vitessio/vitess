@@ -26,7 +26,7 @@ import (
 
 func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan *Plan, err error) {
 	plan = &Plan{
-		PlanID:     PlanPassSelect,
+		PlanID:     PlanSelect,
 		Table:      lookupTable(sel.From, tables),
 		FieldQuery: GenerateFieldQuery(sel),
 		FullQuery:  GenerateLimitQuery(sel),
@@ -62,21 +62,23 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 
 func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan *Plan, err error) {
 	plan = &Plan{
-		PlanID: PlanPassDML,
+		PlanID: PlanUpdate,
 		Table:  lookupTable(upd.TableExprs, tables),
 	}
 
 	// Store the WHERE clause as string for the hot row protection (txserializer).
-	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("%v", upd.Where)
-	plan.WhereClause = buf.ParsedQuery()
+	if upd.Where != nil {
+		buf := sqlparser.NewTrackedBuffer(nil)
+		buf.Myprintf("%v", upd.Where)
+		plan.WhereClause = buf.ParsedQuery()
+	}
 
 	if PassthroughDMLs || upd.Limit != nil {
 		plan.FullQuery = GenerateFullQuery(upd)
 		return plan, nil
 	}
 
-	plan.PlanID = PlanDMLLimit
+	plan.PlanID = PlanUpdateLimit
 	upd.Limit = execLimit
 	plan.FullQuery = GenerateFullQuery(upd)
 	upd.Limit = nil
@@ -85,20 +87,22 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 
 func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan *Plan, err error) {
 	plan = &Plan{
-		PlanID: PlanPassDML,
+		PlanID: PlanDelete,
 		Table:  lookupTable(del.TableExprs, tables),
 	}
 
 	// Store the WHERE clause as string for the hot row protection (txserializer).
-	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("%v", del.Where)
-	plan.WhereClause = buf.ParsedQuery()
+	if del.Where != nil {
+		buf := sqlparser.NewTrackedBuffer(nil)
+		buf.Myprintf("%v", del.Where)
+		plan.WhereClause = buf.ParsedQuery()
+	}
 
 	if PassthroughDMLs || del.Limit != nil {
 		plan.FullQuery = GenerateFullQuery(del)
 		return plan, nil
 	}
-	plan.PlanID = PlanDMLLimit
+	plan.PlanID = PlanDeleteLimit
 	del.Limit = execLimit
 	plan.FullQuery = GenerateFullQuery(del)
 	del.Limit = nil
@@ -107,7 +111,7 @@ func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan
 
 func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan *Plan, err error) {
 	plan = &Plan{
-		PlanID:    PlanPassDML,
+		PlanID:    PlanInsert,
 		FullQuery: GenerateFullQuery(ins),
 	}
 
