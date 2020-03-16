@@ -242,7 +242,7 @@ func TestSelectUserDefindVariable(t *testing.T) {
 	defer QueryLogger.Unsubscribe(logChan)
 
 	sql := "select @foo"
-	masterSession = &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []string{"bar"})}
+	masterSession = &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{"bar"})}
 	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{

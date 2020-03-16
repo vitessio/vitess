@@ -35,10 +35,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func createMap(keys []string, values []string) map[string]*querypb.Value {
-	result := make(map[string]*querypb.Value)
+func createMap(keys []string, values []interface{}) map[string]*querypb.BindVariable {
+	result := make(map[string]*querypb.BindVariable)
 	for i, key := range keys {
-		result[key] = &querypb.Value{Type: querypb.Type_VARCHAR, Value: []byte(values[i])}
+		variable, err := sqltypes.BuildBindVariable(values[i])
+		if err != nil {
+			panic(err)
+		}
+		result[key] = variable
 	}
 	return result
 }
@@ -253,7 +257,7 @@ func TestExecutorSet(t *testing.T) {
 		err: "unexpected value for sql_safe_updates: 2",
 	}, {
 		in:  "set @foo = 'bar'",
-		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []string{"bar"}), Autocommit: true},
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{"bar"}), Autocommit: true},
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {

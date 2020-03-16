@@ -239,11 +239,11 @@ func (session *SafeSession) ClearWarnings() {
 }
 
 // SetUserDefinedVariable sets the user defined variable in the session.
-func (session *SafeSession) SetUserDefinedVariable(key string, value *querypb.Value) {
+func (session *SafeSession) SetUserDefinedVariable(key string, value *querypb.BindVariable) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	if session.UserDefinedVariables == nil {
-		session.UserDefinedVariables = make(map[string]*querypb.Value)
+		session.UserDefinedVariables = make(map[string]*querypb.BindVariable)
 	}
 	session.UserDefinedVariables[key] = value
 }

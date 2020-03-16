@@ -379,11 +379,7 @@ func (e *Executor) createNeededBindVariables(bindVarNeeds sqlparser.BindVarNeeds
 	// todo: do we need to check this map for nil?
 	if bindVarNeeds.NeedUserDefinedVariables && session.UserDefinedVariables != nil {
 		for k, v := range session.UserDefinedVariables {
-			value, err := sqltypes.NewValue(v.Type, v.Value)
-			if err != nil {
-				return nil, err
-			}
-			bindVars[sqlparser.UserDefinedVariableName+k] = sqltypes.ValueBindVariable(value)
+			bindVars[sqlparser.UserDefinedVariableName+k] = v
 		}
 	}
 
@@ -536,7 +532,7 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 		case sqlparser.VitessMetadataStr:
 			return e.handleSetVitessMetadata(ctx, safeSession, k, v)
 		case sqlparser.VariableStr:
-			err := handleSetUserDefinedFunction(safeSession, k, v)
+			err := handleSetUserDefinedVariables(safeSession, k, v)
 			if err != nil {
 				return nil, err
 			}
@@ -722,17 +718,12 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 	return &sqltypes.Result{}, nil
 }
 
-func handleSetUserDefinedFunction(session *SafeSession, k sqlparser.SetKey, v interface{}) error {
-	var value sqltypes.Value
-	switch val := v.(type) {
-	case uint64:
-		value = sqltypes.NewUint64(val)
-	case string:
-		value = sqltypes.NewVarChar(val)
-	default:
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported type in user defined variables")
+func handleSetUserDefinedVariables(session *SafeSession, k sqlparser.SetKey, v interface{}) error {
+	variable, err := sqltypes.BuildBindVariable(v)
+	if err != nil {
+		return err
 	}
-	session.SetUserDefinedVariable(k.Key, &querypb.Value{Type: value.Type(), Value: value.ToBytes()})
+	session.SetUserDefinedVariable(k.Key, variable)
 	return nil
 }
 
