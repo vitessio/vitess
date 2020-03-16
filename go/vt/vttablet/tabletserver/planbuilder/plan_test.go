@@ -161,18 +161,6 @@ func TestStreamPlan(t *testing.T) {
 	}
 }
 
-func TestDDLPlan(t *testing.T) {
-	for tcase := range iterateExecFile("ddl_cases.txt") {
-		plan := DDLParse(tcase.input)
-		expected := make(map[string]interface{})
-		err := json.Unmarshal([]byte(tcase.output), &expected)
-		if err != nil {
-			t.Fatalf("Error marshalling %v", plan)
-		}
-		matchString(t, tcase.lineno, expected["Action"], plan.Action)
-	}
-}
-
 func TestMessageStreamingPlan(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
 	plan, err := BuildMessageStreaming("msg", testSchema)

@@ -170,7 +170,7 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table) (*Pla
 	case *sqlparser.Set:
 		plan, err = analyzeSet(stmt), nil
 	case *sqlparser.DDL:
-		plan, err = analyzeDDL(stmt, tables), nil
+		plan = &Plan{PlanID: PlanDDL}
 	case *sqlparser.Show:
 		plan, err = &Plan{PlanID: PlanOtherRead}, nil
 	case *sqlparser.OtherRead:
