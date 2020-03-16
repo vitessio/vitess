@@ -458,6 +458,9 @@ func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wa
 
 // BeginAgain commits the existing transaction and begins a new one
 func (txc *TxConnection) BeginAgain(ctx context.Context) error {
+	if txc.Autocommit {
+		return nil
+	}
 	if _, err := txc.DBConn.Exec(ctx, "commit", 1, false); err != nil {
 		return err
 	}

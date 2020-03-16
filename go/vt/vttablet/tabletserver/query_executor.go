@@ -97,8 +97,6 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	}
 
 	switch qre.plan.PlanID {
-	case planbuilder.PlanDDL:
-		return qre.execDDL()
 	case planbuilder.PlanNextval:
 		return qre.execNextval()
 	case planbuilder.PlanSelectImpossible:
@@ -202,6 +200,8 @@ func (qre *QueryExecutor) txConnExec(conn *TxConnection) (*sqltypes.Result, erro
 			return nil, err
 		}
 		return qr, nil
+	case planbuilder.PlanDDL:
+		return qre.execDDL(conn)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
 }
@@ -352,20 +352,7 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 	return nil
 }
 
-func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
-	sql := qre.query
-	var err error
-	if qre.plan.FullQuery != nil {
-		sql, _, err = qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
-		if err != nil {
-			return nil, err
-		}
-	}
-	ddlPlan := planbuilder.DDLParse(sql)
-	if ddlPlan.Action == "" {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "DDL is not understood")
-	}
-
+func (qre *QueryExecutor) execDDL(conn *TxConnection) (*sqltypes.Result, error) {
 	defer func() {
 		err := qre.tsv.se.Reload(qre.ctx)
 		if err != nil {
@@ -373,31 +360,14 @@ func (qre *QueryExecutor) execDDL() (*sqltypes.Result, error) {
 		}
 	}()
 
-	if qre.transactionID != 0 {
-		conn, err := qre.tsv.te.txPool.Get(qre.transactionID, "DDL begin again")
-		if err != nil {
-			return nil, err
-		}
-		defer conn.Recycle()
-		result, err := qre.execSQL(conn, sql, true)
-		if err != nil {
-			return nil, err
-		}
-		err = conn.BeginAgain(qre.ctx)
-		if err != nil {
-			return nil, err
-		}
-		return result, nil
-	}
-
-	result, err := qre.execAsTransaction(true /* autocommit */, func(conn *TxConnection) (*sqltypes.Result, error) {
-		return qre.execSQL(conn, sql, true)
-	})
-
+	result, err := qre.execSQL(conn, qre.query, true)
 	if err != nil {
 		return nil, err
 	}
-
+	err = conn.BeginAgain(qre.ctx)
+	if err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
