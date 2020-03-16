@@ -82,6 +82,7 @@ releases
 /vthook/
 /bin/
 /vtdataroot/
+venv
 
 .scannerwork
 report
