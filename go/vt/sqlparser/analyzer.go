@@ -376,6 +376,12 @@ func ExtractSetValues(sql string) (keyValues map[SetKey]interface{}, scope strin
 					return nil, "", err
 				}
 				result[setKey] = num
+			case FloatVal:
+				num, err := strconv.ParseFloat(string(expr.Val), 64)
+				if err != nil {
+					return nil, "", err
+				}
+				result[setKey] = num
 			default:
 				return nil, "", fmt.Errorf("invalid value type: %v", String(expr))
 			}

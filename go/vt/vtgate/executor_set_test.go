@@ -258,6 +258,12 @@ func TestExecutorSet(t *testing.T) {
 	}, {
 		in:  "set @foo = 'bar'",
 		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{"bar"}), Autocommit: true},
+	}, {
+		in:  "set @foo = 2",
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{2}), Autocommit: true},
+	}, {
+		in:  "set @foo = 2.0, @bar = 'baz'",
+		out: &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo", "bar"}, []interface{}{2.0, "baz"}), Autocommit: true},
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
