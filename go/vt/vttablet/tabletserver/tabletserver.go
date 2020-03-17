@@ -169,9 +169,9 @@ type TabletServer struct {
 	teCtrl           TxPoolController
 	hw               *heartbeat.Writer
 	hr               *heartbeat.Reader
-	messager         *messager.Engine
 	watcher          *ReplicationWatcher
 	vstreamer        *vstreamer.Engine
+	messager         *messager.Engine
 	updateStreamList *binlog.StreamList
 
 	// checkMySQLThrottler is used to throttle the number of
@@ -245,7 +245,7 @@ type TxPoolController interface {
 
 	// Commit commits the specified transaction, returning the statement used to execute
 	// the commit or "" in autocommit settings.
-	Commit(ctx context.Context, transactionID int64, mc messageCommitter) (string, error)
+	Commit(ctx context.Context, transactionID int64) (string, error)
 
 	// Rollback rolls back the specified transaction.
 	Rollback(ctx context.Context, transactionID int64) error
@@ -253,12 +253,6 @@ type TxPoolController interface {
 
 var tsOnce sync.Once
 var srvTopoServer srvtopo.Server
-
-// NewTabletServerWithNilTopoServer is typically used in tests that
-// don't need a topoServer member.
-func NewTabletServerWithNilTopoServer(config tabletenv.TabletConfig) *TabletServer {
-	return NewTabletServer(config, nil, topodatapb.TabletAlias{})
-}
 
 // NewTabletServer creates an instance of TabletServer. Only the first
 // instance of TabletServer will expose its state variables.
@@ -280,7 +274,6 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 	tsv.hw = heartbeat.NewWriter(tsv, alias, config)
 	tsv.hr = heartbeat.NewReader(tsv, config)
 	tsv.txThrottler = txthrottler.CreateTxThrottlerFromTabletConfig(topoServer)
-	tsv.messager = messager.NewEngine(tsv, tsv.se, config)
 	tsv.watcher = NewReplicationWatcher(tsv.se, config)
 	tsv.updateStreamList = &binlog.StreamList{}
 	// FIXME(alainjobart) could we move this to the Register method below?
@@ -306,6 +299,7 @@ func NewTabletServer(config tabletenv.TabletConfig, topoServer *topo.Server, ali
 	})
 	// TODO(sougou): move this up once the stats naming problem is fixed.
 	tsv.vstreamer = vstreamer.NewEngine(srvTopoServer, tsv.se)
+	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer, config)
 	return tsv
 }
 
@@ -392,7 +386,6 @@ func (tsv *TabletServer) InitDBConfig(target querypb.Target, dbcfgs *dbconfigs.D
 	tsv.teCtrl.InitDBConfig(tsv.dbconfigs)
 	tsv.hw.InitDBConfig(tsv.dbconfigs)
 	tsv.hr.InitDBConfig(tsv.dbconfigs)
-	tsv.messager.InitDBConfig(tsv.dbconfigs)
 	tsv.watcher.InitDBConfig(tsv.dbconfigs)
 	tsv.vstreamer.InitDBConfig(tsv.dbconfigs.DbaWithDB())
 	return nil
@@ -645,6 +638,7 @@ func (tsv *TabletServer) waitForShutdown() {
 // It forcibly shuts down everything.
 func (tsv *TabletServer) closeAll() {
 	tsv.messager.Close()
+	tsv.vstreamer.Close()
 	tsv.hr.Close()
 	tsv.hw.Close()
 	tsv.teCtrl.StopGently()
@@ -810,7 +804,7 @@ func (tsv *TabletServer) Commit(ctx context.Context, target *querypb.Target, tra
 			logStats.TransactionID = transactionID
 
 			var commitSQL string
-			commitSQL, err = tsv.teCtrl.Commit(ctx, transactionID, tsv.messager)
+			commitSQL, err = tsv.teCtrl.Commit(ctx, transactionID)
 
 			// If nothing was actually executed, don't count the operation in
 			// the tablet metrics, and clear out the logStats Method so that
@@ -850,7 +844,6 @@ func (tsv *TabletServer) Prepare(ctx context.Context, target *querypb.Target, tr
 				ctx:      ctx,
 				logStats: logStats,
 				te:       tsv.te,
-				messager: tsv.messager,
 			}
 			return txe.Prepare(transactionID, dtid)
 		},
@@ -868,7 +861,6 @@ func (tsv *TabletServer) CommitPrepared(ctx context.Context, target *querypb.Tar
 				ctx:      ctx,
 				logStats: logStats,
 				te:       tsv.te,
-				messager: tsv.messager,
 			}
 			return txe.CommitPrepared(dtid)
 		},
@@ -886,7 +878,6 @@ func (tsv *TabletServer) RollbackPrepared(ctx context.Context, target *querypb.T
 				ctx:      ctx,
 				logStats: logStats,
 				te:       tsv.te,
-				messager: tsv.messager,
 			}
 			return txe.RollbackPrepared(dtid, originalID)
 		},
@@ -904,7 +895,6 @@ func (tsv *TabletServer) CreateTransaction(ctx context.Context, target *querypb.
 				ctx:      ctx,
 				logStats: logStats,
 				te:       tsv.te,
-				messager: tsv.messager,
 			}
 			return txe.CreateTransaction(dtid, participants)
 		},
@@ -923,7 +913,6 @@ func (tsv *TabletServer) StartCommit(ctx context.Context, target *querypb.Target
 				ctx:      ctx,
 				logStats: logStats,
 				te:       tsv.te,
-				messager: tsv.messager,
 			}
 			return txe.StartCommit(transactionID, dtid)
 		},
@@ -942,7 +931,6 @@ func (tsv *TabletServer) SetRollback(ctx context.Context, target *querypb.Target
 				ctx:      ctx,
 				logStats: logStats,
 				te:       tsv.te,
-				messager: tsv.messager,
 			}
 			return txe.SetRollback(dtid, transactionID)
 		},
@@ -961,7 +949,6 @@ func (tsv *TabletServer) ConcludeTransaction(ctx context.Context, target *queryp
 				ctx:      ctx,
 				logStats: logStats,
 				te:       tsv.te,
-				messager: tsv.messager,
 			}
 			return txe.ConcludeTransaction(dtid)
 		},
@@ -979,7 +966,6 @@ func (tsv *TabletServer) ReadTransaction(ctx context.Context, target *querypb.Ta
 				ctx:      ctx,
 				logStats: logStats,
 				te:       tsv.te,
-				messager: tsv.messager,
 			}
 			metadata, err = txe.ReadTransaction(dtid)
 			return err
@@ -2137,7 +2123,6 @@ func (tsv *TabletServer) registerTwopczHandler() {
 			ctx:      ctx,
 			logStats: tabletenv.NewLogStats(ctx, "twopcz"),
 			te:       tsv.te,
-			messager: tsv.messager,
 		}
 		twopczHandler(txe, w, r)
 	})

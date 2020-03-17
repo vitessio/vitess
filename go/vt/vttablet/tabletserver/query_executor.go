@@ -34,10 +34,8 @@ import (
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -315,7 +313,7 @@ func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltype
 		qre.logStats.AddRewrittenSQL("rollback", start)
 		return nil, err
 	}
-	commitSQL, err := qre.tsv.te.txPool.LocalCommit(qre.ctx, conn, qre.tsv.messager)
+	commitSQL, err := qre.tsv.te.txPool.LocalCommit(qre.ctx, conn)
 
 	// As above LocalCommit is a no-op for autocommmit so don't log anything.
 	if commitSQL != "" {
@@ -572,64 +570,7 @@ func (qre *QueryExecutor) execInsertPK(conn *TxConnection) (*sqltypes.Result, er
 
 func (qre *QueryExecutor) execInsertMessage(conn *TxConnection) (*sqltypes.Result, error) {
 	qre.bindVars["#time_now"] = sqltypes.Int64BindVariable(time.Now().UnixNano())
-	pkRows, err := buildValueList(qre.plan.Table, qre.plan.PKValues, qre.bindVars)
-	if err != nil {
-		return nil, err
-	}
-	qr, err := qre.execInsertPKRows(conn, nil, pkRows)
-	if err != nil {
-		return nil, err
-	}
-
-	// If an auto-inc value was generated, it could be the id column.
-	// If so, we have to populate it.
-	if qr.InsertID != 0 {
-		id := int64(qr.InsertID)
-		idPKIndex := qre.plan.Table.MessageInfo.IDPKIndex
-		for _, row := range pkRows {
-			if !row[idPKIndex].IsNull() {
-				// If a value was supplied, either it was not the auto-inc column
-				// or values were partially supplied for an auto-inc column.
-				// If it's the former, there is nothing more to do.
-				// If it's the latter, we cannot predict the values for subsequent
-				// rows. So, we still break out of this loop, and will rely on
-				// the poller to eventually pick up the rows from the database.
-				break
-			}
-			row[idPKIndex] = sqltypes.NewInt64(id)
-			id++
-		}
-	}
-
-	// Re-read the inserted rows to prime the cache.
-	extras := map[string]sqlparser.Encodable{
-		"#pk": &sqlparser.TupleEqualityList{
-			Columns: qre.plan.Table.Indexes[0].Columns,
-			Rows:    pkRows,
-		},
-	}
-	tableName := qre.plan.Table.Name.String()
-	loadMessages, err := qre.tsv.messager.GenerateLoadMessagesQuery(tableName)
-	if err != nil {
-		return nil, err
-	}
-	readback, err := qre.txFetch(conn, loadMessages, qre.bindVars, extras, "", true, false)
-	if err != nil {
-		return nil, err
-	}
-
-	// Append to the list of pending rows to be sent
-	// to the cache on successful commit.
-	mrs := conn.NewMessages[tableName]
-	for _, row := range readback.Rows {
-		mr, err := messager.BuildMessageRow(row)
-		if err != nil {
-			return nil, err
-		}
-		mrs = append(mrs, mr)
-	}
-	conn.NewMessages[tableName] = mrs
-	return qr, nil
+	return qre.execInsertPK(conn)
 }
 
 func (qre *QueryExecutor) execInsertSubquery(conn *TxConnection) (*sqltypes.Result, error) {
@@ -774,13 +715,6 @@ func (qre *QueryExecutor) execDMLPKRows(conn *TxConnection, query *sqlparser.Par
 
 		// DMLs should all return RowsAffected.
 		result.RowsAffected += r.RowsAffected
-	}
-	if qre.plan.Table.Type == schema.Message {
-		ids := conn.ChangedMessages[qre.plan.Table.Name.String()]
-		for _, pkrow := range pkRows {
-			ids = append(ids, pkrow[qre.plan.Table.MessageInfo.IDPKIndex].ToString())
-		}
-		conn.ChangedMessages[qre.plan.Table.Name.String()] = ids
 	}
 	return result, nil
 }
