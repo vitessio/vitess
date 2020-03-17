@@ -52,7 +52,6 @@ func testErrors(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgateconn.V
 	testExecuteErrors(t, conn, session)
 	testStreamExecuteErrors(t, conn, session)
 	testTransactionExecuteErrors(t, conn)
-	testUpdateStreamErrors(t, conn)
 }
 
 func testExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgateconn.VTGateSession) {
@@ -123,14 +122,6 @@ func testStreamExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn, session 
 	})
 }
 
-func testUpdateStreamErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
-	ctx := context.Background()
-
-	checkStreamExecuteErrors(t, func(query string) error {
-		return getUpdateStreamError(conn.UpdateStream(ctx, "", query, nil, tabletType, 0, nil))
-	})
-}
-
 func testTransactionExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := context.Background()
 
@@ -184,23 +175,6 @@ func getStreamError(stream sqltypes.ResultStream, err error) error {
 	}
 	for {
 		_, err := stream.Recv()
-		switch err {
-		case nil:
-			// keep going
-		case io.EOF:
-			return nil
-		default:
-			return err
-		}
-	}
-}
-
-func getUpdateStreamError(stream vtgateconn.UpdateStreamReader, err error) error {
-	if err != nil {
-		return err
-	}
-	for {
-		_, _, err := stream.Recv()
 		switch err {
 		case nil:
 			// keep going

@@ -42,8 +42,6 @@ import io.vitess.proto.Vtgate.GetSrvKeyspaceRequest;
 import io.vitess.proto.Vtgate.GetSrvKeyspaceResponse;
 import io.vitess.proto.Vtgate.RollbackRequest;
 import io.vitess.proto.Vtgate.RollbackResponse;
-import io.vitess.proto.Vtgate.SplitQueryRequest;
-import io.vitess.proto.Vtgate.SplitQueryResponse;
 import io.vitess.proto.Vtgate.StreamExecuteKeyRangesRequest;
 import io.vitess.proto.Vtgate.StreamExecuteKeyspaceIdsRequest;
 import io.vitess.proto.Vtgate.StreamExecuteRequest;
@@ -226,16 +224,6 @@ public interface RpcClient extends Closeable {
    * definition for canonical documentation on this VTGate API.
    */
   ListenableFuture<RollbackResponse> rollback(Context ctx, RollbackRequest request)
-      throws SQLException;
-
-  /**
-   * Splits a query into smaller queries.
-   *
-   * <p>See the
-   * <a href="https://github.com/vitessio/vitess/blob/master/proto/vtgateservice.proto">proto</a>
-   * definition for canonical documentation on this VTGate API.
-   */
-  ListenableFuture<SplitQueryResponse> splitQuery(Context ctx, SplitQueryRequest request)
       throws SQLException;
 
   /**

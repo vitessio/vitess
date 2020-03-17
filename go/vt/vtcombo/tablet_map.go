@@ -442,39 +442,9 @@ func (itc *internalTabletConn) Tablet() *topodatapb.Tablet {
 	return itc.topoTablet
 }
 
-// SplitQuery is part of queryservice.QueryService
-func (itc *internalTabletConn) SplitQuery(
-	ctx context.Context,
-	target *querypb.Target,
-	query *querypb.BoundQuery,
-	splitColumns []string,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm) ([]*querypb.QuerySplit, error) {
-
-	splits, err := itc.tablet.qsc.QueryService().SplitQuery(
-		ctx,
-		target,
-		query,
-		splitColumns,
-		splitCount,
-		numRowsPerQueryPart,
-		algorithm)
-	if err != nil {
-		return nil, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
-	}
-	return splits, nil
-}
-
 // StreamHealth is part of queryservice.QueryService
 func (itc *internalTabletConn) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
 	err := itc.tablet.qsc.QueryService().StreamHealth(ctx, callback)
-	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
-}
-
-// UpdateStream is part of queryservice.QueryService.
-func (itc *internalTabletConn) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
-	err := itc.tablet.qsc.QueryService().UpdateStream(ctx, target, position, timestamp, callback)
 	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 

@@ -1995,7 +1995,6 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 				mysql.DescribeTableRow("addr", "int(11)", false, "", "0"),
 			},
 		},
-		// for SplitQuery because it needs a primary key column
 		"show index from test_table": {
 			Fields:       mysql.ShowIndexFromTableFields,
 			RowsAffected: 2,

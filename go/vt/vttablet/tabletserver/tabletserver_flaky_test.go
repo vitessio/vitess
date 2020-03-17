@@ -2227,186 +2227,6 @@ func TestPurgeMessages(t *testing.T) {
 	}
 }
 
-func TestTabletServerSplitQuery(t *testing.T) {
-	db := setUpTabletServerTest(t)
-	defer db.Close()
-	db.AddQuery("SELECT MIN(pk), MAX(pk) FROM test_table", &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{Type: sqltypes.Int32},
-			{Type: sqltypes.Int32},
-		},
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.NewInt32(1),
-				sqltypes.NewInt32(100),
-			},
-		},
-	})
-	testUtils := newTestUtils()
-	config := testUtils.newQueryServiceConfig()
-	tsv := NewTabletServer(config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
-	dbcfgs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_RDONLY}
-	err := tsv.StartService(target, dbcfgs)
-	if err != nil {
-		t.Fatalf("StartService failed: %v", err)
-	}
-	defer tsv.StopService()
-	ctx := context.Background()
-	sql := "select * from test_table where count > :count"
-	splits, err := tsv.SplitQuery(
-		ctx,
-		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
-		&querypb.BoundQuery{Sql: sql},
-		[]string{}, /* splitColumns */
-		10,         /* splitCount */
-		0,          /* numRowsPerQueryPart */
-		querypb.SplitQueryRequest_EQUAL_SPLITS)
-	if err != nil {
-		t.Fatalf("TabletServer.SplitQuery should succeed: %v, but get error: %v", sql, err)
-	}
-	if len(splits) != 10 {
-		t.Fatalf("got: %v, want: %v.\nsplits: %+v", len(splits), 10, splits)
-	}
-}
-
-func TestTabletServerSplitQueryKeywords(t *testing.T) {
-	db := setUpTabletServerTest(t)
-	defer db.Close()
-	db.AddQuery("SELECT MIN(`by`), MAX(`by`) FROM `order`", &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{Type: sqltypes.Int32},
-			{Type: sqltypes.Int32},
-		},
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			{
-				sqltypes.NewInt32(1),
-				sqltypes.NewInt32(100),
-			},
-		},
-	})
-	testUtils := newTestUtils()
-	config := testUtils.newQueryServiceConfig()
-	tsv := NewTabletServer(config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
-	dbcfgs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_RDONLY}
-	err := tsv.StartService(target, dbcfgs)
-	if err != nil {
-		t.Fatalf("StartService failed: %v", err)
-	}
-	defer tsv.StopService()
-	ctx := context.Background()
-	sql := "select * from `order` where `value` > :count"
-	splits, err := tsv.SplitQuery(
-		ctx,
-		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
-		&querypb.BoundQuery{Sql: sql},
-		[]string{}, /* splitColumns */
-		10,         /* splitCount */
-		0,          /* numRowsPerQueryPart */
-		querypb.SplitQueryRequest_EQUAL_SPLITS)
-	if err != nil {
-		t.Fatalf("TabletServer.SplitQuery should succeed: %v, but get error: %v", sql, err)
-	}
-	if len(splits) != 10 {
-		t.Fatalf("got: %v, want: %v.\nsplits: %+v", len(splits), 10, splits)
-	}
-}
-
-func TestTabletServerSplitQueryInvalidQuery(t *testing.T) {
-	db := setUpTabletServerTest(t)
-	defer db.Close()
-	testUtils := newTestUtils()
-	config := testUtils.newQueryServiceConfig()
-	tsv := NewTabletServer(config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
-	dbcfgs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_RDONLY}
-	err := tsv.StartService(target, dbcfgs)
-	if err != nil {
-		t.Fatalf("StartService failed: %v", err)
-	}
-	defer tsv.StopService()
-	ctx := context.Background()
-	// SplitQuery should not support SQLs with a LIMIT clause:
-	sql := "select * from test_table where count > :count limit 10"
-	_, err = tsv.SplitQuery(
-		ctx,
-		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
-		&querypb.BoundQuery{Sql: sql},
-		[]string{}, /* splitColumns */
-		10,         /* splitCount */
-		0,          /* numRowsPerQueryPart */
-		querypb.SplitQueryRequest_EQUAL_SPLITS)
-	if err == nil {
-		t.Fatalf("TabletServer.SplitQuery should fail")
-	}
-}
-
-func TestTabletServerSplitQueryInvalidParams(t *testing.T) {
-	// Tests that SplitQuery returns an error when both numRowsPerQueryPart and splitCount are given.
-	db := setUpTabletServerTest(t)
-	defer db.Close()
-	testUtils := newTestUtils()
-	config := testUtils.newQueryServiceConfig()
-	tsv := NewTabletServer(config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
-	dbcfgs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_RDONLY}
-	err := tsv.StartService(target, dbcfgs)
-	if err != nil {
-		t.Fatalf("StartService failed: %v", err)
-	}
-	defer tsv.StopService()
-	ctx := context.Background()
-	sql := "select * from test_table where count > :count"
-	_, err = tsv.SplitQuery(
-		ctx,
-		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
-		&querypb.BoundQuery{Sql: sql},
-		[]string{}, /* splitColumns */
-		10,         /* splitCount */
-		11,         /* numRowsPerQueryPart */
-		querypb.SplitQueryRequest_EQUAL_SPLITS)
-	if err == nil {
-		t.Fatalf("TabletServer.SplitQuery should fail")
-	}
-}
-
-// Tests that using Equal Splits on a string column returns an error.
-func TestTabletServerSplitQueryEqualSplitsOnStringColumn(t *testing.T) {
-	db := setUpTabletServerTest(t)
-	defer db.Close()
-	testUtils := newTestUtils()
-	config := testUtils.newQueryServiceConfig()
-	tsv := NewTabletServer(config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
-	dbcfgs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_RDONLY}
-	err := tsv.StartService(target, dbcfgs)
-	if err != nil {
-		t.Fatalf("StartService failed: %v", err)
-	}
-	defer tsv.StopService()
-	ctx := context.Background()
-	sql := "select * from test_table"
-	_, err = tsv.SplitQuery(
-		ctx,
-		&querypb.Target{TabletType: topodatapb.TabletType_RDONLY},
-		&querypb.BoundQuery{Sql: sql},
-		// EQUAL_SPLITS should not work on a string column.
-		[]string{"name_string"}, /* splitColumns */
-		10,                      /* splitCount */
-		0,                       /* numRowsPerQueryPart */
-		querypb.SplitQueryRequest_EQUAL_SPLITS)
-	want :=
-		"using the EQUAL_SPLITS algorithm in SplitQuery" +
-			" requires having a numeric (integral or float) split-column." +
-			" Got type: {Name: 'name_string', Type: VARCHAR}"
-	if err.Error() != want {
-		t.Fatalf("got: %v, want: %v", err, want)
-	}
-}
-
 func TestHandleExecUnknownError(t *testing.T) {
 	ctx := context.Background()
 	logStats := tabletenv.NewLogStats(ctx, "TestHandleExecError")
@@ -2900,7 +2720,6 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			RowsAffected: 2,
 			Rows: [][]sqltypes.Value{
 				mysql.BaseShowTablesRow("test_table", false, ""),
-				mysql.BaseShowTablesRow("order", false, ""),
 				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 			},
 		},
@@ -2936,7 +2755,6 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				mysql.BaseShowTablesRow("test_table", false, ""),
 			},
 		},
-		// for SplitQuery because it needs a primary key column
 		"show index from test_table": {
 			Fields:       mysql.ShowIndexFromTableFields,
 			RowsAffected: 3,
@@ -2944,38 +2762,6 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false),
 				mysql.ShowIndexFromTableRow("test_table", false, "index", 1, "name", true),
 				mysql.ShowIndexFromTableRow("test_table", false, "name_string_INDEX", 1, "name_string", true),
-			},
-		},
-		// Define table that uses keywords to test SplitQuery escaping.
-		"select * from `order` where 1 != 1": {
-			Fields: []*querypb.Field{{
-				Name: "by",
-				Type: sqltypes.Int32,
-			}, {
-				Name: "value",
-				Type: sqltypes.Int32,
-			}},
-		},
-		"describe `order`": {
-			Fields:       mysql.DescribeTableFields,
-			RowsAffected: 4,
-			Rows: [][]sqltypes.Value{
-				mysql.DescribeTableRow("by", "int(11)", false, "PRI", "0"),
-				mysql.DescribeTableRow("value", "int(11)", false, "", "0"),
-			},
-		},
-		mysql.BaseShowTablesForTable("order"): {
-			Fields:       mysql.BaseShowTablesFields,
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				mysql.BaseShowTablesRow("order", false, ""),
-			},
-		},
-		"show index from `order`": {
-			Fields:       mysql.ShowIndexFromTableFields,
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				mysql.ShowIndexFromTableRow("order", true, "PRIMARY", 1, "by", false),
 			},
 		},
 		"select * from msg where 1 != 1": {
