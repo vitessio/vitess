@@ -595,6 +595,14 @@ func TestExtractSetValues(t *testing.T) {
 		},
 		scope: ImplicitStr,
 	}, {
+		sql: "set @`string` = 'abc', @`float` = 4.2, @`int` = 42",
+		out: map[SetKey]interface{}{
+			{Key: "string", Scope: VariableStr}: "abc",
+			{Key: "float", Scope: VariableStr}:  4.2,
+			{Key: "int", Scope: VariableStr}:    int64(42),
+		},
+		scope: ImplicitStr,
+	}, {
 		sql: "set session @foo = 42",
 		err: "unsupported in set: scope and user defined variables",
 	}, {

@@ -7,6 +7,9 @@ import (
 	"os"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -22,7 +25,9 @@ var (
 	sqlSchema       = `
 	create table test(
 		id bigint,
-		val varchar(16),
+		val1 varchar(16),
+		val2 int,
+		val3 float,
 		primary key(id)
 	)Engine=InnoDB;`
 
@@ -95,52 +100,64 @@ func TestSet(t *testing.T) {
 		Host: "localhost",
 		Port: clusterInstance.VtgateMySQLPort,
 	}
+	type queriesWithExpectations struct {
+		query        string
+		expectedRows string
+		rowsAffected int
+	}
+
+	queries := []queriesWithExpectations{{
+		query:        "set @foo = 'abc', @bar = 42, @baz = 30.5",
+		expectedRows: "", rowsAffected: 0,
+	}, {
+		query:        "select @foo, @bar, @baz",
+		expectedRows: `[[VARCHAR("abc") INT64(42) DECIMAL(30.5)]]`, rowsAffected: 1,
+	}, {
+		query:        "insert into test(id, val1, val2, val3) values(1, @foo, null, null), (2, null, @bar, null), (3, null, null, @baz)",
+		expectedRows: ``, rowsAffected: 3,
+	}, {
+		query:        "select id, val1, val2, val3 from test order by id",
+		expectedRows: `[[INT64(1) VARCHAR("abc") NULL NULL] [INT64(2) NULL INT32(42) NULL] [INT64(3) NULL NULL FLOAT32(30.5)]]`, rowsAffected: 3,
+	}, {
+		query:        "select id, val1 from test where val1=@foo",
+		expectedRows: `[[INT64(1) VARCHAR("abc")]]`, rowsAffected: 1,
+	}, {
+		query:        "select id, val2 from test where val2=@bar",
+		expectedRows: `[[INT64(2) INT32(42)]]`, rowsAffected: 1,
+	}, {
+		query:        "select id, val3 from test where val3=@baz",
+		expectedRows: `[[INT64(3) FLOAT32(30.5)]]`, rowsAffected: 1,
+	}, {
+		query:        "delete from test where val2 = @bar",
+		expectedRows: ``, rowsAffected: 1,
+	}, {
+		query:        "select id, val2 from test where val2=@bar",
+		expectedRows: ``, rowsAffected: 0,
+	}, {
+		query:        "update test set val2 = @bar where val1 = @foo",
+		expectedRows: ``, rowsAffected: 1,
+	}, {
+		query:        "select id, val1, val2 from test where val1=@foo",
+		expectedRows: `[[INT64(1) VARCHAR("abc") INT32(42)]]`, rowsAffected: 1,
+	}, {
+		query:        "delete from test",
+		expectedRows: ``, rowsAffected: 2,
+	}}
+
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
-	//Initialize user defined variables
-	exec(t, conn, "set @foo = 'abc', @bar = 'xyz'")
-
-	//Select user defined variables
-	qr := exec(t, conn, "select @foo, @bar")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[VARCHAR("abc") VARCHAR("xyz")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
+	for i, q := range queries {
+		t.Run(fmt.Sprintf("%d-%s", i, q.query), func(t *testing.T) {
+			qr := exec(t, conn, q.query)
+			assert.Equal(t, uint64(q.rowsAffected), qr.RowsAffected, "rows affected wrong for query: %s", q.query)
+			if q.expectedRows != "" {
+				result := fmt.Sprintf("%v", qr.Rows)
+				if diff := cmp.Diff(q.expectedRows, result); diff != "" {
+					t.Errorf("%s\nfor query: %s", diff, q.query)
+				}
+			}
+		})
 	}
-
-	//Insert into test table
-	qr = exec(t, conn, "insert into test(id, val) values(1, @foo), (2, @bar)")
-	require.Equal(t, uint64(2), qr.RowsAffected)
-
-	qr = exec(t, conn, "select id, val from test order by id")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("abc")] [INT64(2) VARCHAR("xyz")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
-
-	// Test select calls to main table and verify expected id.
-	qr = exec(t, conn, "select id, val  from test where val=@foo")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("abc")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
-
-	// Test next available seq id from cache
-	qr = exec(t, conn, "delete from test where val = @bar")
-	require.Equal(t, uint64(1), qr.RowsAffected)
-
-	//Test next_id from seq table which should be the increased by cache value(id+cache)
-	qr = exec(t, conn, "select id, val from test where val = @bar")
-	require.Empty(t, qr.Rows)
-
-	// Test insert with no auto-inc
-	qr = exec(t, conn, "update test set val=@bar where val=@foo")
-	require.Equal(t, uint64(1), qr.RowsAffected)
-
-	//Test next_id from seq table which should be the increased by cache value(id+cache)
-	qr = exec(t, conn, "select id, val from test where val=@bar")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("xyz")]]`; got != want {
-		t.Errorf("select:\n%v want\n%v", got, want)
-	}
-
-	qr = exec(t, conn, "delete from test")
-	require.Equal(t, uint64(1), qr.RowsAffected)
 }
