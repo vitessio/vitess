@@ -37,7 +37,6 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txlimiter"
 
@@ -74,11 +73,6 @@ var (
 		querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY: {setIsolationLevel: "REPEATABLE READ", openTransaction: "start transaction with consistent snapshot, read only"},
 	}
 )
-
-type messageCommitter interface {
-	UpdateCaches(newMessages map[string][]*messager.MessageRow, changedMessages map[string][]string)
-	LockDB(newMessages map[string][]*messager.MessageRow, changedMessages map[string][]string) func()
-}
 
 // TxPool is the transaction pool for the query service.
 type TxPool struct {
@@ -296,14 +290,14 @@ func (axp *TxPool) Begin(ctx context.Context, options *querypb.ExecuteOptions) (
 }
 
 // Commit commits the specified transaction.
-func (axp *TxPool) Commit(ctx context.Context, transactionID int64, mc messageCommitter) (string, error) {
+func (axp *TxPool) Commit(ctx context.Context, transactionID int64) (string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.Commit")
 	defer span.Finish()
 	conn, err := axp.Get(transactionID, "for commit")
 	if err != nil {
 		return "", err
 	}
-	return axp.LocalCommit(ctx, conn, mc)
+	return axp.LocalCommit(ctx, conn)
 }
 
 // Rollback rolls back the specified transaction.
@@ -344,14 +338,12 @@ func (axp *TxPool) LocalBegin(ctx context.Context, options *querypb.ExecuteOptio
 }
 
 // LocalCommit is the commit function for LocalBegin.
-func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection, mc messageCommitter) (string, error) {
+func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection) (string, error) {
 	span, ctx := trace.NewSpan(ctx, "TxPool.LocalCommit")
 	defer span.Finish()
 	defer conn.conclude(TxCommit, "transaction committed")
-	defer mc.LockDB(conn.NewMessages, conn.ChangedMessages)()
 
 	if conn.Autocommit {
-		mc.UpdateCaches(conn.NewMessages, conn.ChangedMessages)
 		return "", nil
 	}
 
@@ -359,7 +351,6 @@ func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection, mc messa
 		conn.Close()
 		return "", err
 	}
-	mc.UpdateCaches(conn.NewMessages, conn.ChangedMessages)
 	return "commit", nil
 }
 
@@ -428,8 +419,6 @@ type TxConnection struct {
 	StartTime         time.Time
 	EndTime           time.Time
 	Queries           []string
-	NewMessages       map[string][]*messager.MessageRow
-	ChangedMessages   map[string][]string
 	Conclusion        string
 	LogToFile         sync2.AtomicInt32
 	ImmediateCallerID *querypb.VTGateCallerID
@@ -443,8 +432,6 @@ func newTxConnection(conn *connpool.DBConn, transactionID int64, pool *TxPool, i
 		TransactionID:     transactionID,
 		pool:              pool,
 		StartTime:         time.Now(),
-		NewMessages:       make(map[string][]*messager.MessageRow),
-		ChangedMessages:   make(map[string][]string),
 		ImmediateCallerID: immediate,
 		EffectiveCallerID: effective,
 		Autocommit:        autocommit,

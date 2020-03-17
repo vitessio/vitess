@@ -102,6 +102,12 @@ func newCache(size int) *cache {
 	return mc
 }
 
+func (mc *cache) IsEmpty() bool {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	return len(mc.sendQueue) == 0
+}
+
 // Clear clears the cache.
 func (mc *cache) Clear() {
 	mc.mu.Lock()

@@ -497,16 +497,6 @@ func analyzeInsertMessage(ins *sqlparser.Insert, plan *Plan, table *schema.Table
 	if _, ok := ins.Rows.(sqlparser.SelectStatement); ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "subquery not allowed for message table: %s", table.Name.String())
 	}
-	if ins.OnDup != nil {
-		// only allow 'on duplicate key' where time_scheduled and id are not referenced
-		ts := sqlparser.NewColIdent("time_scheduled")
-		id := sqlparser.NewColIdent("id")
-		for _, updateExpr := range ins.OnDup {
-			if updateExpr.Name.Name.Equal(ts) || updateExpr.Name.Name.Equal(id) {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "'on duplicate key' cannot reference time_scheduled or id for message table: %s", table.Name.String())
-			}
-		}
-	}
 	if len(ins.Columns) == 0 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "column list must be specified for message table insert: %s", table.Name.String())
 	}
@@ -551,7 +541,7 @@ func analyzeInsertMessage(ins *sqlparser.Insert, plan *Plan, table *schema.Table
 	}
 	_ = addVal(ins, col, sqlparser.NewIntVal([]byte("0")))
 
-	// time_acked should must not be specified.
+	// time_acked should not be specified.
 	col = sqlparser.NewColIdent("time_acked")
 	if num := ins.Columns.FindColumn(col); num >= 0 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s must not be specified for message insert", col.String())
