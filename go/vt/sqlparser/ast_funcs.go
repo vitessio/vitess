@@ -755,20 +755,6 @@ func (node *Union) SetLimit(limit *Limit) {
 	node.Limit = limit
 }
 
-func needParens(op, val Expr) bool {
-	opBinding := precedenceFor(op)
-	valBinding := precedenceFor(val)
-	return !(opBinding == Syntactic || valBinding == Syntactic) && valBinding > opBinding
-}
-
-func printWithParensIfNeeded(op, val Expr, buf *TrackedBuffer) {
-	if needParens(op, val) {
-		buf.WriteString("(")
-		defer buf.WriteString(")")
-	}
-	buf.Myprintf("%v", val)
-}
-
 type atCount int
 
 const (

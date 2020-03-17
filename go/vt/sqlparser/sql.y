@@ -135,6 +135,7 @@ func skipToEnd(yylex interface{}) {
 // Some of these operators don't conflict in our situation. Nevertheless,
 // it's better to have these listed in the correct order. Also, we don't
 // support all operators yet.
+// * NOTE: If you change anything here, update precedence.go as well *
 %left <bytes> OR
 %left <bytes> AND
 %right <bytes> NOT '!'
@@ -2256,11 +2257,11 @@ condition:
   }
 | value_expression BETWEEN value_expression AND value_expression
   {
-    $$ = &RangeCond{Expr: $1, Operator: BetweenStr, From: $3, To: $5}
+    $$ = &RangeCond{Left: $1, Operator: BetweenStr, From: $3, To: $5}
   }
 | value_expression NOT BETWEEN value_expression AND value_expression
   {
-    $$ = &RangeCond{Expr: $1, Operator: NotBetweenStr, From: $4, To: $6}
+    $$ = &RangeCond{Left: $1, Operator: NotBetweenStr, From: $4, To: $6}
   }
 | EXISTS subquery
   {
