@@ -50,7 +50,7 @@ spec:
     spec:
       containers:
         - name: pmm
-          image: "percona/pmm-server:{{ $pmm.pmmTag }}"
+          image: "{{ $pmm.image}}:{{ $pmm.pmmTag }}"
 
           ports:
             - name: web
