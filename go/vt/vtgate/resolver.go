@@ -78,10 +78,11 @@ func (res *Resolver) Execute(
 	keyspace string,
 	tabletType topodatapb.TabletType,
 	destination key.Destination,
-	session *vtgatepb.Session,
+	session *SafeSession,
 	notInTransaction bool,
 	options *querypb.ExecuteOptions,
 	logStats *LogStats,
+	canAutocommit bool,
 ) (*sqltypes.Result, error) {
 	rss, err := res.resolver.ResolveDestination(ctx, keyspace, tabletType, destination)
 	if err != nil {
@@ -90,6 +91,9 @@ func (res *Resolver) Execute(
 	if logStats != nil {
 		logStats.ShardQueries = uint32(len(rss))
 	}
+
+	autocommit := len(rss) == 1 && canAutocommit && session.AutocommitApproval()
+
 	for {
 		qr, err := res.scatterConn.Execute(
 			ctx,
@@ -97,9 +101,11 @@ func (res *Resolver) Execute(
 			bindVars,
 			rss,
 			tabletType,
-			NewSafeSession(session),
+			session,
 			notInTransaction,
-			options)
+			options,
+			autocommit,
+		)
 		if isRetryableError(err) {
 			newRss, err := res.resolver.ResolveDestination(ctx, keyspace, tabletType, destination)
 			if err != nil {
