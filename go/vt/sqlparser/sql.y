@@ -311,7 +311,7 @@ func skipToEnd(yylex interface{}) {
 %type <partSpec> partition_operation
 %type <vindexParam> vindex_param
 %type <vindexParams> vindex_param_list vindex_params_opt
-%type <colIdent> new_id vindex_type vindex_type_opt
+%type <colIdent> id_or_var vindex_type vindex_type_opt
 %type <bytes> alter_object_type
 %type <ReferenceAction> fk_reference_action fk_on_delete fk_on_update
 
@@ -357,7 +357,7 @@ command:
   setParseTree(yylex, nil)
 }
 
-new_id:
+id_or_var:
   ID
   {
     $$ = NewColIdentWithAt(string($1), NoAt)
@@ -596,7 +596,7 @@ create_statement:
     $1.OptLike = $2
     $$ = $1
   }
-| CREATE constraint_opt INDEX new_id using_opt ON table_name ddl_skip_to_end
+| CREATE constraint_opt INDEX id_or_var using_opt ON table_name ddl_skip_to_end
   {
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $7}
@@ -609,11 +609,11 @@ create_statement:
   {
     $$ = &DDL{Action: CreateStr, Table: $5.ToViewName()}
   }
-| CREATE DATABASE not_exists_opt new_id ddl_skip_to_end
+| CREATE DATABASE not_exists_opt id_or_var ddl_skip_to_end
   {
     $$ = &DBDDL{Action: CreateStr, DBName: string($4.String())}
   }
-| CREATE SCHEMA not_exists_opt new_id ddl_skip_to_end
+| CREATE SCHEMA not_exists_opt id_or_var ddl_skip_to_end
   {
     $$ = &DBDDL{Action: CreateStr, DBName: string($4.String())}
   }
@@ -628,7 +628,7 @@ vindex_type_opt:
   }
 
 vindex_type:
-  new_id
+  id_or_var
   {
     $$ = $1
   }
@@ -704,7 +704,7 @@ table_column_list:
   }
 
 column_definition:
-  new_id column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt
+  id_or_var column_type null_opt column_default_opt on_update_opt auto_increment_opt column_key_opt column_comment_opt
   {
     $2.NotNull = $3
     $2.Default = $4
@@ -1038,7 +1038,7 @@ charset_opt:
   {
     $$ = ""
   }
-| CHARACTER SET new_id
+| CHARACTER SET id_or_var
   {
     $$ = string($3.String())
   }
@@ -1051,7 +1051,7 @@ collate_opt:
   {
     $$ = ""
   }
-| COLLATE new_id
+| COLLATE id_or_var
   {
     $$ = string($2.String())
   }
@@ -1111,7 +1111,7 @@ index_option_list:
   }
 
 index_option:
-  USING new_id
+  USING id_or_var
   {
     $$ = &IndexOption{Name: string($1), Using: string($2.String())}
   }
@@ -1171,7 +1171,7 @@ name_opt:
   {
     $$ = ""
   }
-| new_id
+| id_or_var
   {
     $$ = string($1.String())
   }
@@ -1193,7 +1193,7 @@ index_column:
   }
 
 constraint_definition:
-  CONSTRAINT new_id constraint_info
+  CONSTRAINT id_or_var constraint_info
   {
     $$ = &ConstraintDefinition{Name: string($2.String()), Details: $3}
   }
@@ -1329,11 +1329,11 @@ alter_statement:
   {
     $$ = &DDL{Action: AlterStr, Table: $4, PartitionSpec: $5}
   }
-| ALTER DATABASE new_id ddl_skip_to_end
+| ALTER DATABASE id_or_var ddl_skip_to_end
   {
     $$ = &DBDDL{Action: AlterStr, DBName: string($3.String())}
   }
-| ALTER SCHEMA new_id ddl_skip_to_end
+| ALTER SCHEMA id_or_var ddl_skip_to_end
   {
     $$ = &DBDDL{Action: AlterStr, DBName: string($3.String())}
   }
@@ -1475,7 +1475,7 @@ drop_statement:
     }
     $$ = &DDL{Action: DropStr, FromTables: $4, IfExists: exists}
   }
-| DROP INDEX new_id ON table_name ddl_skip_to_end
+| DROP INDEX id_or_var ON table_name ddl_skip_to_end
   {
     // Change this to an alter statement
     $$ = &DDL{Action: AlterStr, Table: $5}
@@ -1488,11 +1488,11 @@ drop_statement:
         }
     $$ = &DDL{Action: DropStr, FromTables: TableNames{$4.ToViewName()}, IfExists: exists}
   }
-| DROP DATABASE exists_opt new_id
+| DROP DATABASE exists_opt id_or_var
   {
     $$ = &DBDDL{Action: DropStr, DBName: string($4.String())}
   }
-| DROP SCHEMA exists_opt new_id
+| DROP SCHEMA exists_opt id_or_var
   {
     $$ = &DBDDL{Action: DropStr, DBName: string($4.String())}
   }
@@ -1513,7 +1513,7 @@ analyze_statement:
   }
 
 show_statement:
-  SHOW BINARY new_id ddl_skip_to_end /* SHOW BINARY LOGS */
+  SHOW BINARY id_or_var ddl_skip_to_end /* SHOW BINARY LOGS */
   {
     $$ = &Show{Type: string($2) + " " + string($3.String())}
   }
@@ -1533,7 +1533,7 @@ show_statement:
     $$ = &Show{Type: string($2) + " " + string($3)}
   }
 /* Rule to handle SHOW CREATE EVENT, SHOW CREATE FUNCTION, etc. */
-| SHOW CREATE new_id ddl_skip_to_end
+| SHOW CREATE id_or_var ddl_skip_to_end
   {
     $$ = &Show{Type: string($2) + " " + string($3.String())}
   }
@@ -1645,7 +1645,7 @@ show_statement:
  *  SHOW VITESS_SHARDS
  *  SHOW VITESS_TARGET
  */
-| SHOW new_id ddl_skip_to_end
+| SHOW id_or_var ddl_skip_to_end
   {
     $$ = &Show{Type: string($2.String())}
   }
@@ -2208,7 +2208,7 @@ default_opt:
   {
     $$ = ""
   }
-| openb new_id closeb
+| openb id_or_var closeb
   {
     $$ = string($2.String())
   }
@@ -2723,7 +2723,7 @@ match_option:
  }
 
 charset:
-  new_id
+  id_or_var
 {
     $$ = string($1.String())
 }
@@ -2741,7 +2741,7 @@ convert_type:
   {
     $$ = &ConvertType{Type: string($1), Length: $2, Charset: $3, Operator: CharacterSetStr}
   }
-| CHAR length_opt new_id
+| CHAR length_opt id_or_var
   {
     $$ = &ConvertType{Type: string($1), Length: $2, Charset: string($3.String())}
   }
@@ -3186,7 +3186,7 @@ non_add_drop_or_rename_operation:
   { $$ = struct{}{} }
 | UNUSED
   { $$ = struct{}{} }
-| new_id
+| id_or_var
   { $$ = struct{}{} }
 
 to_opt:
@@ -3215,7 +3215,7 @@ using_opt:
   { $$ = $2 }
 
 sql_id:
-  new_id
+  id_or_var
   {
     $$ = $1
   }
@@ -3232,7 +3232,7 @@ reserved_sql_id:
   }
 
 table_id:
-  new_id
+  id_or_var
   {
     $$ = NewTableIdent(string($1.String()))
   }
