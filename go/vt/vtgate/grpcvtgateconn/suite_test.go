@@ -14,9 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package vtgateconntest provides the test methods to make sure a
-// vtgateconn/vtgateservice pair over RPC works correctly.
-package vtgateconntest
+package grpcvtgateconn
+
+// This is agnostic of grpc and was in a separate package 'vtgateconntest'.
+// This has been moved here for better readability. If we introduce
+// protocols other than grpc in the future, this will have to be
+// moved back to its own package for reusability.
 
 import (
 	"errors"
@@ -819,59 +822,6 @@ func (f *fakeVTGateService) MessageAckKeyspaceIds(ctx context.Context, keyspace 
 	return messageAckRowsAffected, nil
 }
 
-// querySplitQuery contains all the fields we use to test SplitQuery
-type querySplitQuery struct {
-	Keyspace            string
-	SQL                 string
-	BindVariables       map[string]*querypb.BindVariable
-	SplitColumns        []string
-	SplitCount          int64
-	NumRowsPerQueryPart int64
-	Algorithm           querypb.SplitQueryRequest_Algorithm
-}
-
-func (q *querySplitQuery) equal(q2 *querySplitQuery) bool {
-	return q.Keyspace == q2.Keyspace &&
-		q.SQL == q2.SQL &&
-		sqltypes.BindVariablesEqual(q.BindVariables, q2.BindVariables) &&
-		reflect.DeepEqual(q.SplitColumns, q2.SplitColumns) &&
-		q.SplitCount == q2.SplitCount &&
-		q.NumRowsPerQueryPart == q2.NumRowsPerQueryPart &&
-		q.Algorithm == q2.Algorithm
-}
-
-// SplitQuery is part of the VTGateService interface
-func (f *fakeVTGateService) SplitQuery(
-	ctx context.Context,
-	keyspace string,
-	sql string,
-	bindVariables map[string]*querypb.BindVariable,
-	splitColumns []string,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-	if f.hasError {
-		return nil, errTestVtGateError
-	}
-	if f.panics {
-		panic(fmt.Errorf("test forced panic"))
-	}
-	f.checkCallerID(ctx, "SplitQuery")
-	query := &querySplitQuery{
-		Keyspace:            keyspace,
-		SQL:                 sql,
-		BindVariables:       bindVariables,
-		SplitColumns:        splitColumns,
-		SplitCount:          splitCount,
-		NumRowsPerQueryPart: numRowsPerQueryPart,
-		Algorithm:           algorithm,
-	}
-	if !query.equal(splitQueryRequest) {
-		f.t.Errorf("SplitQuery has wrong input: got %#v wanted %#v", query, splitQueryRequest)
-	}
-	return splitQueryResult, nil
-}
-
 // GetSrvKeyspace is part of the VTGateService interface
 func (f *fakeVTGateService) GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	if f.hasError {
@@ -888,83 +838,6 @@ func (f *fakeVTGateService) GetSrvKeyspace(ctx context.Context, keyspace string)
 
 func (f *fakeVTGateService) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	panic("unimplemented")
-}
-
-// queryUpdateStream contains all the fields we use to test UpdateStream
-type queryUpdateStream struct {
-	Keyspace   string
-	Shard      string
-	KeyRange   *topodatapb.KeyRange
-	TabletType topodatapb.TabletType
-	Timestamp  int64
-	Event      *querypb.EventToken
-}
-
-func (q *queryUpdateStream) equal(q2 *queryUpdateStream) bool {
-	return q.Keyspace == q2.Keyspace &&
-		q.Shard == q2.Shard &&
-		proto.Equal(q.KeyRange, q2.KeyRange) &&
-		q.TabletType == q2.TabletType &&
-		q.Timestamp == q2.Timestamp &&
-		proto.Equal(q.Event, q2.Event)
-}
-
-// UpdateStream is part of the VTGateService interface
-func (f *fakeVTGateService) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, callback func(*querypb.StreamEvent, int64) error) error {
-	if f.panics {
-		panic(fmt.Errorf("test forced panic"))
-	}
-	execCase, ok := execMap[shard]
-	if !ok {
-		return fmt.Errorf("no match for: %s", shard)
-	}
-	f.checkCallerID(ctx, "UpdateStream")
-	query := &queryUpdateStream{
-		Keyspace:   keyspace,
-		Shard:      shard,
-		KeyRange:   keyRange,
-		TabletType: tabletType,
-		Timestamp:  timestamp,
-		Event:      event,
-	}
-	if !query.equal(execCase.updateStreamQuery) {
-		f.t.Errorf("UpdateStream: %+v, want %+v", query, execCase.updateStreamQuery)
-		return nil
-	}
-	if execCase.result != nil {
-		// The first result only has statement with fields.
-		result := &querypb.StreamEvent{
-			Statements: []*querypb.StreamEvent_Statement{
-				{
-					PrimaryKeyFields: execCase.result.Fields,
-				},
-			},
-		}
-		if err := callback(result, int64(execCase.result.RowsAffected)); err != nil {
-			return err
-		}
-		if f.hasError {
-			// wait until the client has the response, since all streaming implementation may not
-			// send previous messages if an error has been triggered.
-			<-f.errorWait
-			f.errorWait = make(chan struct{}) // for next test
-			return errTestVtGateError
-		}
-		for _, row := range execCase.result.Rows {
-
-			result := &querypb.StreamEvent{
-				Statements: []*querypb.StreamEvent_Statement{
-					{
-						PrimaryKeyValues: sqltypes.RowsToProto3([][]sqltypes.Value{row}),
-					},
-				},
-			}
-			if err := callback(result, int64(execCase.result.RowsAffected)); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 // CreateFakeServer returns the fake server for the tests
@@ -992,8 +865,8 @@ func (f *fakeVTGateService) HandlePanic(err *error) {
 	}
 }
 
-// TestSuite runs all the tests
-func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGateService) {
+// RunTests runs all the tests
+func RunTests(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGateService) {
 	vtgateconn.RegisterDialer("test", func(ctx context.Context, address string) (vtgateconn.Impl, error) {
 		return impl, nil
 	})
@@ -1024,9 +897,7 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testMessageStream(t, conn)
 	testMessageAck(t, conn)
 	testMessageAckKeyspaceIds(t, conn)
-	testSplitQuery(t, conn)
 	testGetSrvKeyspace(t, conn)
-	testUpdateStream(t, conn)
 
 	// force a panic at every call, then test that works
 	fs.panics = true
@@ -1049,14 +920,12 @@ func TestSuite(t *testing.T, impl vtgateconn.Impl, fakeServer vtgateservice.VTGa
 	testMessageStreamPanic(t, conn)
 	testMessageAckPanic(t, conn)
 	testMessageAckKeyspaceIdsPanic(t, conn)
-	testSplitQueryPanic(t, conn)
 	testGetSrvKeyspacePanic(t, conn)
-	testUpdateStreamPanic(t, conn)
 	fs.panics = false
 }
 
-// TestErrorSuite runs all the tests that expect errors
-func TestErrorSuite(t *testing.T, fakeServer vtgateservice.VTGateService) {
+// RunErrorTests runs all the tests that expect errors
+func RunErrorTests(t *testing.T, fakeServer vtgateservice.VTGateService) {
 	conn, err := vtgateconn.DialProtocol(context.Background(), "test", "")
 	if err != nil {
 		t.Fatalf("Got err: %v from vtgateconn.DialProtocol", err)
@@ -1086,9 +955,7 @@ func TestErrorSuite(t *testing.T, fakeServer vtgateservice.VTGateService) {
 	testMessageStreamError(t, conn)
 	testMessageAckError(t, conn)
 	testMessageAckKeyspaceIdsError(t, conn)
-	testSplitQueryError(t, conn)
 	testGetSrvKeyspaceError(t, conn)
-	testUpdateStreamError(t, conn, fs)
 	fs.hasError = false
 }
 
@@ -1968,53 +1835,6 @@ func testMessageAckKeyspaceIdsPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	expectPanic(t, err)
 }
 
-func testSplitQuery(t *testing.T, conn *vtgateconn.VTGateConn) {
-	ctx := newContext()
-	qsl, err := conn.SplitQuery(ctx,
-		splitQueryRequest.Keyspace,
-		splitQueryRequest.SQL,
-		splitQueryRequest.BindVariables,
-		splitQueryRequest.SplitColumns,
-		splitQueryRequest.SplitCount,
-		splitQueryRequest.NumRowsPerQueryPart,
-		splitQueryRequest.Algorithm,
-	)
-	if err != nil {
-		t.Fatalf("SplitQuery failed: %v", err)
-	}
-	if !sqltypes.SplitQueryResponsePartsEqual(qsl, splitQueryResult) {
-		t.Errorf("SplitQuery returned wrong result: got %#v wanted %#v", qsl, splitQueryResult)
-	}
-}
-
-func testSplitQueryError(t *testing.T, conn *vtgateconn.VTGateConn) {
-	ctx := newContext()
-	_, err := conn.SplitQuery(ctx,
-		splitQueryRequest.Keyspace,
-		splitQueryRequest.SQL,
-		splitQueryRequest.BindVariables,
-		splitQueryRequest.SplitColumns,
-		splitQueryRequest.SplitCount,
-		splitQueryRequest.NumRowsPerQueryPart,
-		splitQueryRequest.Algorithm,
-	)
-	verifyError(t, err, "SplitQuery")
-}
-
-func testSplitQueryPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
-	ctx := newContext()
-	_, err := conn.SplitQuery(ctx,
-		splitQueryRequest.Keyspace,
-		splitQueryRequest.SQL,
-		splitQueryRequest.BindVariables,
-		splitQueryRequest.SplitColumns,
-		splitQueryRequest.SplitCount,
-		splitQueryRequest.NumRowsPerQueryPart,
-		splitQueryRequest.Algorithm,
-	)
-	expectPanic(t, err)
-}
-
 func testGetSrvKeyspace(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	sk, err := conn.GetSrvKeyspace(ctx, getSrvKeyspaceKeyspace)
@@ -2035,89 +1855,6 @@ func testGetSrvKeyspaceError(t *testing.T, conn *vtgateconn.VTGateConn) {
 func testGetSrvKeyspacePanic(t *testing.T, conn *vtgateconn.VTGateConn) {
 	ctx := newContext()
 	_, err := conn.GetSrvKeyspace(ctx, getSrvKeyspaceKeyspace)
-	expectPanic(t, err)
-}
-
-func testUpdateStream(t *testing.T, conn *vtgateconn.VTGateConn) {
-	ctx := newContext()
-	execCase := execMap["request1"]
-	stream, err := conn.UpdateStream(ctx, execCase.updateStreamQuery.Keyspace, execCase.updateStreamQuery.Shard, execCase.updateStreamQuery.KeyRange, execCase.updateStreamQuery.TabletType, execCase.updateStreamQuery.Timestamp, execCase.updateStreamQuery.Event)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var qr querypb.QueryResult
-	for {
-		packet, resumeTimestamp, err := stream.Recv()
-		if err != nil {
-			if err != io.EOF {
-				t.Error(err)
-			}
-			break
-		}
-		qr.RowsAffected = uint64(resumeTimestamp)
-		if len(packet.Statements[0].PrimaryKeyFields) != 0 {
-			qr.Fields = packet.Statements[0].PrimaryKeyFields
-		}
-		if len(packet.Statements[0].PrimaryKeyValues) != 0 {
-			qr.Rows = append(qr.Rows, packet.Statements[0].PrimaryKeyValues...)
-		}
-	}
-
-	sqr := sqltypes.Proto3ToResult(&qr)
-	wantResult := *execCase.result
-	wantResult.InsertID = 0
-	wantResult.Extras = nil
-	if !sqr.Equal(&wantResult) {
-		t.Errorf("Unexpected result from UpdateStream: got %+v want %+v", sqr, wantResult)
-	}
-
-	stream, err = conn.UpdateStream(ctx, "", "none", nil, topodatapb.TabletType_RDONLY, 0, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, _, err = stream.Recv()
-	want := "no match for: none"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("none request: %v, want %v", err, want)
-	}
-}
-
-func testUpdateStreamError(t *testing.T, conn *vtgateconn.VTGateConn, fake *fakeVTGateService) {
-	ctx := newContext()
-	execCase := execMap["request1"]
-	stream, err := conn.UpdateStream(ctx, execCase.updateStreamQuery.Keyspace, execCase.updateStreamQuery.Shard, execCase.updateStreamQuery.KeyRange, execCase.updateStreamQuery.TabletType, execCase.updateStreamQuery.Timestamp, execCase.updateStreamQuery.Event)
-	if err != nil {
-		t.Fatalf("UpdateStream failed: %v", err)
-	}
-	qr, _, err := stream.Recv()
-	if err != nil {
-		t.Fatalf("UpdateStream failed: cannot read result1: %v", err)
-	}
-
-	if !sqltypes.FieldsEqual(qr.Statements[0].PrimaryKeyFields, execCase.result.Fields) {
-		t.Errorf("Unexpected result from UpdateStream: got %#v want %#v", qr.Statements[0].PrimaryKeyFields, execCase.result.Fields)
-	}
-	// signal to the server that the first result has been received
-	close(fake.errorWait)
-	// After 1 result, we expect to get an error (no more results).
-	_, _, err = stream.Recv()
-	if err == nil {
-		t.Fatalf("UpdateStream channel wasn't closed")
-	}
-	verifyError(t, err, "UpdateStream")
-}
-
-func testUpdateStreamPanic(t *testing.T, conn *vtgateconn.VTGateConn) {
-	ctx := newContext()
-	execCase := execMap["request1"]
-	stream, err := conn.UpdateStream(ctx, execCase.updateStreamQuery.Keyspace, execCase.updateStreamQuery.Shard, execCase.updateStreamQuery.KeyRange, execCase.updateStreamQuery.TabletType, execCase.updateStreamQuery.Timestamp, execCase.updateStreamQuery.Event)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, _, err = stream.Recv()
-	if err == nil {
-		t.Fatalf("Received packets instead of panic?")
-	}
 	expectPanic(t, err)
 }
 
@@ -2145,7 +1882,6 @@ var execMap = map[string]struct {
 	entityIdsQuery       *queryExecuteEntityIds
 	batchQueryShard      *queryExecuteBatchShards
 	keyspaceIDBatchQuery *queryExecuteBatchKeyspaceIds
-	updateStreamQuery    *queryUpdateStream
 	result               *sqltypes.Result
 	outSession           *vtgatepb.Session
 	err                  error
@@ -2252,21 +1988,6 @@ var execMap = map[string]struct {
 			AsTransaction: true,
 			Session:       nil,
 		},
-		updateStreamQuery: &queryUpdateStream{
-			Keyspace: "connection_ks",
-			Shard:    "request1",
-			KeyRange: &topodatapb.KeyRange{
-				Start: []byte{0x72},
-				End:   []byte{0x90},
-			},
-			TabletType: topodatapb.TabletType_RDONLY,
-			Timestamp:  123789,
-			Event: &querypb.EventToken{
-				Timestamp: 1234567,
-				Shard:     "request1",
-				Position:  "streaming_position",
-			},
-		},
 		result:     &result1,
 		outSession: nil,
 	},
@@ -2371,21 +2092,6 @@ var execMap = map[string]struct {
 			AsTransaction: false,
 			Session:       nil,
 		},
-		updateStreamQuery: &queryUpdateStream{
-			Keyspace: "connection_ks",
-			Shard:    "errorRequst",
-			KeyRange: &topodatapb.KeyRange{
-				Start: []byte{0x72},
-				End:   []byte{0x90},
-			},
-			TabletType: topodatapb.TabletType_RDONLY,
-			Timestamp:  123789,
-			Event: &querypb.EventToken{
-				Timestamp: 1234567,
-				Shard:     "request1",
-				Position:  "streaming_position",
-			},
-		},
 		result:     nil,
 		outSession: nil,
 	},
@@ -2485,21 +2191,6 @@ var execMap = map[string]struct {
 			TabletType: topodatapb.TabletType_RDONLY,
 			Session:    session1,
 		},
-		updateStreamQuery: &queryUpdateStream{
-			Keyspace: "connection_ks",
-			Shard:    "txRequest",
-			KeyRange: &topodatapb.KeyRange{
-				Start: []byte{0x72},
-				End:   []byte{0x90},
-			},
-			TabletType: topodatapb.TabletType_RDONLY,
-			Timestamp:  123789,
-			Event: &querypb.EventToken{
-				Timestamp: 1234567,
-				Shard:     "request1",
-				Position:  "streaming_position",
-			},
-		},
 		result:     nil,
 		outSession: session2,
 	},
@@ -2569,39 +2260,6 @@ var session2 = &vtgatepb.Session{
 }
 
 var dtid2 = "aa"
-
-var splitQueryRequest = &querySplitQuery{
-	Keyspace: "ks2",
-	SQL:      "in for SplitQuery",
-	BindVariables: map[string]*querypb.BindVariable{
-		"bind2": sqltypes.Int64BindVariable(43),
-	},
-	SplitColumns:        []string{"split_column1", "split_column2"},
-	SplitCount:          145,
-	NumRowsPerQueryPart: 4000,
-	Algorithm:           querypb.SplitQueryRequest_FULL_SCAN,
-}
-
-var splitQueryResult = []*vtgatepb.SplitQueryResponse_Part{
-	{
-		Query: &querypb.BoundQuery{
-			Sql: "out for SplitQuery",
-			BindVariables: map[string]*querypb.BindVariable{
-				"bind1": sqltypes.Int64BindVariable(1114444),
-			},
-		},
-		KeyRangePart: &vtgatepb.SplitQueryResponse_KeyRangePart{
-			Keyspace: "ksout",
-			KeyRanges: []*topodatapb.KeyRange{
-				{
-					Start: []byte{'s'},
-					End:   []byte{'e'},
-				},
-			},
-		},
-		Size: 12344,
-	},
-}
 
 var getSrvKeyspaceKeyspace = "test_keyspace"
 

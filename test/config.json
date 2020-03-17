@@ -121,15 +121,6 @@
 			"RetryMax": 0,
 			"Tags": []
 		},
-		"binlog": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/binlog"],
-			"Command": [],
-			"Manual": false,
-			"Shard": 12,
-			"RetryMax": 0,
-			"Tags": []
-		},
 		"cellalias": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/cellalias"],

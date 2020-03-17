@@ -116,30 +116,12 @@ func (c fallbackClient) MessageAckKeyspaceIds(ctx context.Context, keyspace stri
 	return c.fallback.MessageAckKeyspaceIds(ctx, keyspace, name, idKeyspaceIDs)
 }
 
-func (c fallbackClient) SplitQuery(
-	ctx context.Context,
-	keyspace string,
-	sql string,
-	bindVariables map[string]*querypb.BindVariable,
-	splitColumns []string,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm,
-) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-	return c.fallback.SplitQuery(
-		ctx, sql, keyspace, bindVariables, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
-}
-
 func (c fallbackClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	return c.fallback.GetSrvKeyspace(ctx, keyspace)
 }
 
 func (c fallbackClient) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	return c.fallback.VStream(ctx, tabletType, vgtid, filter, send)
-}
-
-func (c fallbackClient) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, callback func(*querypb.StreamEvent, int64) error) error {
-	return c.fallback.UpdateStream(ctx, keyspace, shard, keyRange, tabletType, timestamp, event, callback)
 }
 
 func (c fallbackClient) HandlePanic(err *error) {
