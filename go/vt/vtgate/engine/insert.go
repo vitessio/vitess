@@ -588,15 +588,21 @@ func (ins *Insert) processUnowned(vcursor VCursor, vindexColumnsKeys [][]sqltype
 		if err != nil {
 			return err
 		}
+
+		var mismatchVindexKeys [][]sqltypes.Value
 		for i, v := range verified {
+			rowNum := verifyIndexes[i]
 			if !v {
 				if ins.Opcode != InsertShardedIgnore {
-					return fmt.Errorf("values %v for column %v does not map to keyspace ids", vindexColumnsKeys, colVindex.Columns)
+					mismatchVindexKeys = append(mismatchVindexKeys, vindexColumnsKeys[rowNum])
+					continue
 				}
 				// InsertShardedIgnore: skip the row.
 				ksids[verifyIndexes[i]] = nil
-				continue
 			}
+		}
+		if len(mismatchVindexKeys) > 0 {
+			return fmt.Errorf("values %v for column %v does not map to keyspace ids", mismatchVindexKeys, colVindex.Columns)
 		}
 	}
 	return nil
