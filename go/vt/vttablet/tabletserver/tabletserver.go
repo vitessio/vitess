@@ -1188,9 +1188,10 @@ func (tsv *TabletServer) computeTxSerializerKey(ctx context.Context, logStats *t
 	}
 
 	switch plan.PlanID {
+	// Serialize only UPDATE or DELETE queries.
 	case planbuilder.PlanUpdate, planbuilder.PlanUpdateLimit,
 		planbuilder.PlanDelete, planbuilder.PlanDeleteLimit:
-		// Serialize only UPDATE or DELETE queries.
+	default:
 		return "", ""
 	}
 
