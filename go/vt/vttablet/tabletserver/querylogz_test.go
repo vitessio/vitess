@@ -73,7 +73,7 @@ func TestQuerylogzHandler(t *testing.T) {
 		`<td>0.001</td>`,
 		`<td>0.001</td>`,
 		`<td>1e-08</td>`,
-		`<td>PASS_SELECT</td>`,
+		`<td>Select</td>`,
 		`<td>select name from test_table limit 1000</td>`,
 		`<td>1</td>`,
 		`<td>none</td>`,
@@ -103,7 +103,7 @@ func TestQuerylogzHandler(t *testing.T) {
 		`<td>0.02</td>`,
 		`<td>0.001</td>`,
 		`<td>1e-08</td>`,
-		`<td>PASS_SELECT</td>`,
+		`<td>Select</td>`,
 		`<td>select name from test_table limit 1000</td>`,
 		`<td>1</td>`,
 		`<td>none</td>`,
@@ -133,7 +133,7 @@ func TestQuerylogzHandler(t *testing.T) {
 		`<td>0.5</td>`,
 		`<td>0.001</td>`,
 		`<td>1e-08</td>`,
-		`<td>PASS_SELECT</td>`,
+		`<td>Select</td>`,
 		`<td>select name from test_table limit 1000</td>`,
 		`<td>1</td>`,
 		`<td>none</td>`,
@@ -162,6 +162,7 @@ func TestQuerylogzHandler(t *testing.T) {
 }
 
 func checkQuerylogzHasStats(t *testing.T, pattern []string, logStats *tabletenv.LogStats, page []byte) {
+	t.Helper()
 	matcher := regexp.MustCompile(strings.Join(pattern, `\s*`))
 	if !matcher.Match(page) {
 		t.Fatalf("querylogz page does not contain stats: %v, pattern: %v, page: %s", logStats, pattern, string(page))
