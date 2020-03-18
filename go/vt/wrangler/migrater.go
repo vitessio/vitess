@@ -41,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
+	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 )
 
 const (
@@ -800,7 +801,7 @@ func (mi *migrater) createJournals(ctx context.Context, sourceWorkflows []string
 		for shard := range participantMap {
 			shards = append(shards, shard)
 		}
-		sort.Strings(shards)
+		sort.Sort(vreplication.ShardSorter(shards))
 		for _, shard := range shards {
 			journal.Participants = append(journal.Participants, &binlogdatapb.KeyspaceShard{
 				Keyspace: source.si.Keyspace(),

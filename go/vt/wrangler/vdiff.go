@@ -109,7 +109,7 @@ type shardStreamer struct {
 // VDiff reports differences between the sources and targets of a vreplication workflow.
 func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceCell, targetCell, tabletTypesStr string,
 	filteredReplicationWaitTime, healthcheckTopologyRefresh, healthcheckRetryDelay, healthcheckTimeout time.Duration,
-	format *string) (map[string]*DiffReport, error) {
+	format string) (map[string]*DiffReport, error) {
 	// Assign defaults to sourceCell and targetCell if not specified.
 	if sourceCell == "" && targetCell == "" {
 		cells, err := wr.ts.GetCellInfoNames(ctx)
@@ -218,7 +218,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 		if err != nil {
 			return nil, vterrors.Wrap(err, "diff")
 		}
-		if *format == "json" {
+		if format == "json" {
 			json, err := json.MarshalIndent(*dr, "", "")
 			if err != nil {
 				wr.Logger().Printf("Error converting report to json: %v", err.Error())
@@ -232,7 +232,7 @@ func (wr *Wrangler) VDiff(ctx context.Context, targetKeyspace, workflow, sourceC
 		}
 		diffReports[table] = dr
 	}
-	if *format == "json" && jsonOutput != "" {
+	if format == "json" && jsonOutput != "" {
 		wr.logger.Printf(`[ %s ]`, jsonOutput)
 	}
 	return diffReports, nil

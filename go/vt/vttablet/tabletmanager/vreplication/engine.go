@@ -504,7 +504,7 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 	for shard := range je.shardGTIDs {
 		shardGTIDs = append(shardGTIDs, shard)
 	}
-	sort.Sort(ShardSorter(shardGTIDs))
+	sort.Strings(shardGTIDs)
 
 	// Wait for participating controllers to stop.
 	// Also collect one id reference.
