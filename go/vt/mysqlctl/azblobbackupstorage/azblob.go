@@ -113,6 +113,8 @@ type AZBlobBackupHandle struct {
 	readOnly  bool
 	waitGroup sync.WaitGroup
 	errors    concurrency.AllErrorRecorder
+	ctx       context.Context
+	cancel    context.CancelFunc
 }
 
 // Directory implements BackupHandle.
@@ -148,7 +150,7 @@ func (bh *AZBlobBackupHandle) AddFile(ctx context.Context, filename string, file
 
 	go func() {
 		defer bh.waitGroup.Done()
-		_, err := azblob.UploadStreamToBlockBlob(ctx, reader, blockBlobURL, azblob.UploadStreamToBlockBlobOptions{
+		_, err := azblob.UploadStreamToBlockBlob(bh.ctx, reader, blockBlobURL, azblob.UploadStreamToBlockBlobOptions{
 			BufferSize: azblob.BlockBlobMaxStageBlockBytes,
 			MaxBuffers: *azBlobParallelism,
 		})
@@ -175,6 +177,10 @@ func (bh *AZBlobBackupHandle) AbortBackup(ctx context.Context) error {
 	if bh.readOnly {
 		return fmt.Errorf("AbortBackup cannot be called on read-only backup")
 	}
+	// Cancel the context of any uploads.
+	bh.cancel()
+
+	// Remove the backup
 	return bh.bs.RemoveBackup(ctx, bh.dir, bh.name)
 }
 
@@ -252,11 +258,14 @@ func (bs *AZBlobBackupStorage) ListBackups(ctx context.Context, dir string) ([]b
 	}
 
 	for _, subdir := range subdirs {
+		cancelableCtx, cancel := context.WithCancel(ctx)
 		result = append(result, &AZBlobBackupHandle{
 			bs:       bs,
 			dir:      strings.Join([]string{dir, subdir}, "/"),
 			name:     subdir,
 			readOnly: true,
+			ctx:      cancelableCtx,
+			cancel:   cancel,
 		})
 	}
 
@@ -265,11 +274,14 @@ func (bs *AZBlobBackupStorage) ListBackups(ctx context.Context, dir string) ([]b
 
 // StartBackup implements BackupStorage.
 func (bs *AZBlobBackupStorage) StartBackup(ctx context.Context, dir, name string) (backupstorage.BackupHandle, error) {
+	cancelableCtx, cancel := context.WithCancel(ctx)
 	return &AZBlobBackupHandle{
 		bs:       bs,
 		dir:      dir,
 		name:     name,
 		readOnly: false,
+		ctx:      cancelableCtx,
+		cancel:   cancel,
 	}, nil
 }
 
