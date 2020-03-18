@@ -138,7 +138,6 @@ func TestLoadTableMessage(t *testing.T) {
 		Name: sqlparser.NewTableIdent("test_table"),
 		Type: Message,
 		MessageInfo: &MessageInfo{
-			IDPKIndex: 1,
 			Fields: []*querypb.Field{{
 				Name: "id",
 				Type: sqltypes.Int64,
@@ -214,7 +213,6 @@ func TestLoadTableMessageTopic(t *testing.T) {
 		Name: sqlparser.NewTableIdent("test_table"),
 		Type: Message,
 		MessageInfo: &MessageInfo{
-			IDPKIndex: 1,
 			Fields: []*querypb.Field{{
 				Name: "id",
 				Type: sqltypes.Int64,

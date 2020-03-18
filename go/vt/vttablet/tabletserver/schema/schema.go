@@ -99,12 +99,6 @@ type TopicInfo struct {
 
 // MessageInfo contains info specific to message tables.
 type MessageInfo struct {
-	// IDPKIndex is the index of the ID column
-	// in PKvalues. This is used to extract the ID
-	// value for message tables to discard items
-	// from the cache.
-	IDPKIndex int
-
 	// Fields stores the field info to be
 	// returned for subscribers.
 	Fields []*querypb.Field

@@ -1078,7 +1078,7 @@ func (tsv *TabletServer) ExecuteBatch(ctx context.Context, target *querypb.Targe
 	// pool without actually begin/commit the transaction.
 	if (options.TransactionIsolation == querypb.ExecuteOptions_DEFAULT) &&
 		asTransaction &&
-		tsv.qe.passthroughDMLs.Get() {
+		planbuilder.PassthroughDMLs {
 		options.TransactionIsolation = querypb.ExecuteOptions_AUTOCOMMIT
 	}
 
@@ -1922,14 +1922,7 @@ func (tsv *TabletServer) MaxDMLRows() int {
 // SetPassthroughDMLs changes the setting to pass through all DMLs
 // It should only be used for testing
 func (tsv *TabletServer) SetPassthroughDMLs(val bool) {
-	planbuilder.PassthroughDMLs = true
-	tsv.qe.passthroughDMLs.Set(val)
-}
-
-// SetAllowUnsafeDMLs changes the setting to allow unsafe DML statements
-// in SBR mode. It should be used only on initialization or for testing.
-func (tsv *TabletServer) SetAllowUnsafeDMLs(val bool) {
-	tsv.qe.allowUnsafeDMLs = val
+	planbuilder.PassthroughDMLs = val
 }
 
 // SetQueryPoolTimeout changes the timeout to get a connection from the

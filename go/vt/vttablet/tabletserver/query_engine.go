@@ -153,8 +153,6 @@ type QueryEngine struct {
 	maxResultSize      sync2.AtomicInt64
 	warnResultSize     sync2.AtomicInt64
 	maxDMLRows         sync2.AtomicInt64
-	passthroughDMLs    sync2.AtomicBool
-	allowUnsafeDMLs    bool
 	streamBufferSize   sync2.AtomicInt64
 	// tableaclExemptCount count the number of accesses allowed
 	// based on membership in the superuser ACL
@@ -239,8 +237,6 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 	qe.maxDMLRows = sync2.NewAtomicInt64(int64(config.MaxDMLRows))
 	qe.streamBufferSize = sync2.NewAtomicInt64(int64(config.StreamBufferSize))
 
-	qe.passthroughDMLs = sync2.NewAtomicBool(config.PassthroughDMLs)
-	qe.allowUnsafeDMLs = config.AllowUnsafeDMLs
 	planbuilder.PassthroughDMLs = config.PassthroughDMLs
 
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
