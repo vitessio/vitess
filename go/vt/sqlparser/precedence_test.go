@@ -18,7 +18,9 @@ package sqlparser
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -147,5 +149,34 @@ func TestParens(t *testing.T) {
 			out := String(stmt)
 			require.Equal(t, "select "+tc.expected+" from dual", out)
 		})
+	}
+}
+
+func TestRandom(t *testing.T) {
+	// The purpose of this test is to find discrepancies between Format and parsing. If for example our precedence rules are not consistent between the two, this test should find it.
+	// The idea is to generate random queries, and pass them through the parser and then the unparser, and one more time. The result of the first unparse should be the same as the second result.
+	seed := time.Now().UnixNano()
+	fmt.Println(fmt.Sprintf("seed is %d", seed))
+	g := generator{
+		seed: seed,
+		r:    rand.New(rand.NewSource(seed)),
+	}
+	endBy := time.Now().Add(5 * time.Second)
+
+	for {
+		if time.Now().After(endBy) {
+			break
+		}
+		// Given a random expression
+		randomExpr := g.expression()
+		inputQ := "select " + String(randomExpr) + " from t"
+
+		// When it's parsed and unparsed
+		parsedInput, err := Parse(inputQ)
+		require.NoError(t, err)
+
+		// Then the unparsing should be the same as the input query
+		outputOfParseResult := String(parsedInput)
+		require.Equal(t, outputOfParseResult, inputQ)
 	}
 }
