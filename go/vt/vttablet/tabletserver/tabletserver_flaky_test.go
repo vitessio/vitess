@@ -1283,7 +1283,6 @@ func TestTabletServerExecuteBatchSqlSucceedInTransaction(t *testing.T) {
 	db.AddRejectedQuery(sql, errRejected)
 
 	config := testUtils.newQueryServiceConfig()
-	config.EnableAutoCommit = true
 	tsv := NewTabletServer(config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}

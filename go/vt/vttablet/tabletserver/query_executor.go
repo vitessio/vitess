@@ -131,9 +131,9 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qr, nil
 	case planbuilder.PlanSelectLock:
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "%s disallowed outside transaction", qre.plan.PlanID.String())
-	case planbuilder.PlanSet, planbuilder.PlanOtherRead:
+	case planbuilder.PlanSet, planbuilder.PlanOtherRead, planbuilder.PlanOtherAdmin:
 		return qre.execOther()
-	case planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete, planbuilder.PlanInsertMessage:
+	case planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete, planbuilder.PlanInsertMessage, planbuilder.PlanDDL:
 		return qre.execAsTransaction(true /* autocommit */, qre.txConnExec)
 	case planbuilder.PlanUpdateLimit, planbuilder.PlanDeleteLimit:
 		return qre.execAsTransaction(false /* autocommit */, qre.txConnExec)
@@ -498,7 +498,7 @@ func (qre *QueryExecutor) execOther() (*sqltypes.Result, error) {
 		return nil, err
 	}
 	defer conn.Recycle()
-	return qre.dbConnFetch(conn, qre.plan.FullQuery, qre.bindVars)
+	return qre.execSQL(conn, qre.query, true)
 }
 
 func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
