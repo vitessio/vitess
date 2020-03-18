@@ -140,7 +140,7 @@ func NewTable(name string) *Table {
 // Done must be called after columns and indexes are added to
 // the table. It will build additional metadata like PKColumns.
 func (ta *Table) Done() {
-	if !ta.HasPrimary() {
+	if len(ta.Indexes) == 0 {
 		return
 	}
 	pkIndex := ta.Indexes[0]
