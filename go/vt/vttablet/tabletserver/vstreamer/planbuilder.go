@@ -37,13 +37,14 @@ import (
 type Plan struct {
 	Table *Table
 
+	// ColExprs is the list of column expressions to be sent
+	// in the stream.
+	ColExprs []ColExpr
+
 	// Filters is the list of filters to be applied to the columns
 	// of the table.
 	Filters []Filter
 
-	// ColExprs is the list of column expressions to be sent
-	// in the stream.
-	ColExprs []ColExpr
 }
 
 
@@ -386,9 +387,9 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 				return err
 			}
 			plan.Filters = append(plan.Filters, Filter{
-				Opcode: Equal,
-				ColNum: colnum,
-				Value:  resolved,
+				Opcode:        Equal,
+				ColNum:        colnum,
+				Value:         resolved,
 			})
 		case *sqlparser.FuncExpr:
 			if !expr.Name.EqualString("in_keyrange") {

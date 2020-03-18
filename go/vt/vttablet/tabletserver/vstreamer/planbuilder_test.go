@@ -245,7 +245,7 @@ func TestPlanbuilder(t *testing.T) {
 				Alias:  sqlparser.NewColIdent("val"),
 				Type:   sqltypes.VarBinary,
 			}},
-			Filters: []Filter{{
+			Filters: []Filter {{
 				Opcode:        VindexMatch,
 				ColNum:        0,
 				Value:         sqltypes.NULL,
@@ -309,7 +309,7 @@ func TestPlanbuilder(t *testing.T) {
 				Alias:  sqlparser.NewColIdent("id"),
 				Type:   sqltypes.Int64,
 			}},
-			Filters: []Filter{{
+			Filters: []Filter {{
 				Opcode:        VindexMatch,
 				ColNum:        0,
 				Value:         sqltypes.NULL,
@@ -331,7 +331,7 @@ func TestPlanbuilder(t *testing.T) {
 				Alias:  sqlparser.NewColIdent("id"),
 				Type:   sqltypes.Int64,
 			}},
-			Filters: []Filter{{
+			Filters: []Filter {{
 				Opcode:        VindexMatch,
 				ColNum:        0,
 				Value:         sqltypes.NULL,
@@ -340,7 +340,7 @@ func TestPlanbuilder(t *testing.T) {
 				KeyRange:      nil,
 			}},
 		},
-	}, {
+	},{
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select val, id from t1 where id = 1"},
 		outPlan: &Plan{
@@ -353,7 +353,7 @@ func TestPlanbuilder(t *testing.T) {
 				Alias:  sqlparser.NewColIdent("id"),
 				Type:   sqltypes.Int64,
 			}},
-			Filters: []Filter{{
+			Filters: []Filter {{
 				Opcode:        Equal,
 				ColNum:        0,
 				Value:         sqltypes.NewInt64(1),
@@ -378,12 +378,12 @@ func TestPlanbuilder(t *testing.T) {
 				Alias:  sqlparser.NewColIdent("id"),
 				Type:   sqltypes.Int64,
 			}},
-			Filters: []Filter{{
+			Filters: []Filter {{
 				Opcode:        VindexMatch,
 				ColNum:        0,
 				Value:         sqltypes.NULL,
 				Vindex:        nil,
-				VindexColumns: []int{0, 1},
+				VindexColumns: []int{0,1},
 				KeyRange:      nil,
 			}},
 		},
@@ -450,7 +450,7 @@ func TestPlanbuilder(t *testing.T) {
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select *, id from t1"},
 		outErr:  `unsupported: *, id`,
-	}, {
+	},{
 		inTable: t1,
 		inRule:  &binlogdatapb.Rule{Match: "t1", Filter: "select id, val from t1 where max(id)"},
 		outErr:  `unsupported constraint: max(id)`,
@@ -515,7 +515,7 @@ func TestPlanbuilder(t *testing.T) {
 		})
 		if plan != nil {
 			plan.Table = nil
-			for ind := range plan.Filters {
+			for ind, _ := range plan.Filters {
 				plan.Filters[ind].KeyRange = nil
 				if plan.Filters[ind].
 					Opcode == VindexMatch {
