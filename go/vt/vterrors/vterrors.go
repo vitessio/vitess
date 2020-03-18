@@ -112,6 +112,15 @@ func New(code vtrpcpb.Code, message string) error {
 	}
 }
 
+func NewWithCause(code vtrpcpb.Code, message string, cause error) error {
+	return &fundamental{
+		msg:   message,
+		code:  code,
+		cause: cause,
+		stack: callers(),
+	}
+}
+
 // NewWithoutCode returns an error when no applicable error code is available
 // It will record the stack trace when creating the error
 func NewWithoutCode(message string) error {
@@ -136,6 +145,7 @@ func Errorf(code vtrpcpb.Code, format string, args ...interface{}) error {
 // fundamental is an error that has a message and a stack, but no caller.
 type fundamental struct {
 	msg  string
+	cause error
 	code vtrpcpb.Code
 	*stack
 }
@@ -306,4 +316,34 @@ func Equals(a, b error) bool {
 // For comparing two vterrors, use Equals() instead.
 func Print(err error) string {
 	return fmt.Sprintf("%v: %v\n", Code(err), err.Error())
+}
+
+type SyntaxError struct {
+	Message string
+	Position int
+	Statement string
+}
+
+func (se SyntaxError) WithStatement(statement string) SyntaxError {
+	return SyntaxError{Message:se.Message, Position:se.Position, Statement:se.Statement}
+}
+
+func (se SyntaxError) Error() string {
+	return se.Message
+}
+
+func AsSyntaxError(err error) (SyntaxError, bool) {
+	if se, ok := err.(SyntaxError); ok {
+		return se, true
+	}
+
+	if f, ok := err.(*fundamental); ok {
+		if f.cause != nil {
+			if se, ok := f.cause.(SyntaxError); ok {
+				return se, true
+			}
+		}
+	}
+
+	return SyntaxError{}, false
 }

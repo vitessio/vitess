@@ -18,19 +18,17 @@ package sqlparser
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
-
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 const (
 	defaultBufSize = 4096
 	eofChar        = 0x100
 )
-
 // Tokenizer is the struct used to generate SQL
 // tokens for the parser.
 type Tokenizer struct {
@@ -466,7 +464,7 @@ func (tkn *Tokenizer) Error(err string) {
 	} else {
 		fmt.Fprintf(buf, "%s at position %v", err, tkn.Position)
 	}
-	tkn.LastError = errors.New(buf.String())
+	tkn.LastError = vterrors.SyntaxError{Message: buf.String(), Position: tkn.Position, Statement: string(tkn.buf)}
 
 	// Try and re-sync to the next statement
 	tkn.skipStatement()

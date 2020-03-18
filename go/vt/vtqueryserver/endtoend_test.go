@@ -422,7 +422,6 @@ func TestOther(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	testFetch(t, conn, "explain select * from test", 1)
 	testFetch(t, conn, "select table_name, table_rows from information_schema.tables where table_name='test'", 1)
 }
 

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
 
@@ -164,6 +165,10 @@ func (evs *EventStreamer) buildDMLStatement(stmt FullBinlogStatement, insertid i
 	dmlStatement.PrimaryKeyFields, err = parsePkNames(tokenizer)
 	hasNegatives := make([]bool, len(dmlStatement.PrimaryKeyFields))
 	if err != nil {
+		if se, ok := err.(vterrors.SyntaxError); ok {
+			err = se.WithStatement(sql)
+		}
+
 		return nil, insertid, err
 	}
 
@@ -175,6 +180,10 @@ func (evs *EventStreamer) buildDMLStatement(stmt FullBinlogStatement, insertid i
 			var pkTuple *querypb.Row
 			pkTuple, insertid, err = parsePkTuple(tokenizer, insertid, dmlStatement.PrimaryKeyFields, hasNegatives)
 			if err != nil {
+				if se, ok := err.(vterrors.SyntaxError); ok {
+					err = se.WithStatement(sql)
+				}
+
 				return nil, insertid, err
 			}
 			dmlStatement.PrimaryKeyValues = append(dmlStatement.PrimaryKeyValues, pkTuple)
@@ -199,7 +208,8 @@ func parsePkNames(tokenizer *sqlparser.Tokenizer) ([]*querypb.Field, error) {
 				Name: string(val),
 			})
 		default:
-			return nil, fmt.Errorf("syntax error at position: %d", tokenizer.Position)
+			msg := fmt.Sprintf("syntax error at position: %d", tokenizer.Position)
+			return nil, vterrors.SyntaxError{Message: msg, Position:tokenizer.Position}
 		}
 	}
 	return columns, nil
@@ -304,7 +314,8 @@ func parsePkTuple(tokenizer *sqlparser.Tokenizer, insertid int64, fields []*quer
 			result.Lengths = append(result.Lengths, int64(numDecoded))
 			result.Values = append(result.Values, decoded[:numDecoded]...)
 		default:
-			return nil, insertid, fmt.Errorf("syntax error at position: %d", tokenizer.Position)
+			msg := fmt.Sprintf("syntax error at position: %d", tokenizer.Position)
+			return nil, insertid, vterrors.SyntaxError{Message: msg, Position:tokenizer.Position}
 		}
 		index++
 	}

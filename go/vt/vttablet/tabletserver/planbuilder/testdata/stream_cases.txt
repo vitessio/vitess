@@ -42,7 +42,7 @@
 {
   "PlanID": "SELECT_STREAM",
   "TableName": "",
-  "FullQuery": "otherread"
+  "FullQuery": "show columns on foo"
 }
 
 # dml
