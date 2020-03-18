@@ -2595,26 +2595,6 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 		"update test_table set name_string = 'tx3' where pk = 2 and name = 1 limit 10001": {
 			RowsAffected: 1,
 		},
-		// Complex WHERE clause requires SELECT of primary key first.
-		"select pk from test_table where pk = 1 and name = 1 limit 10001 for update": {
-			Fields: []*querypb.Field{
-				{Type: sqltypes.Int64},
-			},
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{{
-				sqltypes.NewVarBinary("1"),
-			}},
-		},
-		// Complex WHERE clause requires SELECT of primary key first.
-		"select pk from test_table where pk = 2 and name = 1 limit 10001 for update": {
-			Fields: []*querypb.Field{
-				{Type: sqltypes.Int64},
-			},
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{{
-				sqltypes.NewVarBinary("2"),
-			}},
-		},
 		// queries for twopc
 		sqlTurnoffBinlog:                                  {},
 		fmt.Sprintf(sqlCreateSidecarDB, "`_vt`"):          {},
