@@ -170,25 +170,6 @@ func TestLoadTableMessage(t *testing.T) {
 		t.Errorf("newTestLoadTable: %v, want %s", err, wanterr)
 	}
 
-	// id column must be part of primary key.
-	for query, result := range getMessageTableQueries() {
-		db.AddQuery(query, result)
-	}
-	db.AddQuery(
-		"show index from test_table",
-		&sqltypes.Result{
-			Fields:       mysql.ShowIndexFromTableFields,
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "time_scheduled", false),
-			},
-		})
-	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
-	wanterr = "id column is not part of the primary key for message table: test_table"
-	if err == nil || err.Error() != wanterr {
-		t.Errorf("newTestLoadTable: %v, want %s", err, wanterr)
-	}
-
 	for query, result := range getTestLoadTableQueries() {
 		db.AddQuery(query, result)
 	}
@@ -243,25 +224,6 @@ func TestLoadTableMessageTopic(t *testing.T) {
 	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_topic=test_topic,vt_ack_wait=30", db)
 	wanterr := "not specified for message table"
 	if err == nil || !strings.Contains(err.Error(), wanterr) {
-		t.Errorf("newTestLoadTable: %v, want %s", err, wanterr)
-	}
-
-	// id column must be part of primary key.
-	for query, result := range getMessageTableQueries() {
-		db.AddQuery(query, result)
-	}
-	db.AddQuery(
-		"show index from test_table",
-		&sqltypes.Result{
-			Fields:       mysql.ShowIndexFromTableFields,
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "time_scheduled", false),
-			},
-		})
-	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_topic=test_topic,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30", db)
-	wanterr = "id column is not part of the primary key for message table: test_table"
-	if err == nil || err.Error() != wanterr {
 		t.Errorf("newTestLoadTable: %v, want %s", err, wanterr)
 	}
 

@@ -532,7 +532,7 @@ func TestImport(t *testing.T) {
 		"RequestIP": "123.123.123",
 		"User": "user",
 		"Query": "query",
-		"Plans": ["PASS_SELECT", "INSERT_PK"],
+		"Plans": ["Select", "Insert"],
 		"TableNames":["a", "b"],
 		"BindVarConds": [{
 			"Name": "bvname1",
