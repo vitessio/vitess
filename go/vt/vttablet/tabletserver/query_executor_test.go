@@ -1105,18 +1105,6 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 				{sqltypes.NewVarBinary("fakedb server")},
 			},
 		},
-		"show variables like 'binlog_format'": {
-			Fields: []*querypb.Field{{
-				Type: sqltypes.VarChar,
-			}, {
-				Type: sqltypes.VarChar,
-			}},
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{{
-				sqltypes.NewVarBinary("binlog_format"),
-				sqltypes.NewVarBinary("STATEMENT"),
-			}},
-		},
 		mysql.BaseShowTables: {
 			Fields:       mysql.BaseShowTablesFields,
 			RowsAffected: 3,

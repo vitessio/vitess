@@ -149,7 +149,6 @@ type QueryEngine struct {
 	connTimeout        sync2.AtomicDuration
 	queryPoolWaiters   sync2.AtomicInt64
 	queryPoolWaiterCap sync2.AtomicInt64
-	binlogFormat       connpool.BinlogFormat
 	maxResultSize      sync2.AtomicInt64
 	warnResultSize     sync2.AtomicInt64
 	maxDMLRows         sync2.AtomicInt64
@@ -292,7 +291,9 @@ func (qe *QueryEngine) Open() error {
 		qe.conns.Close()
 		return err
 	}
-	qe.binlogFormat, err = conn.VerifyMode(qe.strictTransTables)
+	err = conn.VerifyMode(qe.strictTransTables)
+	// Recycle needs to happen before error check.
+	// Otherwise, qe.conns.Close will hang.
 	conn.Recycle()
 
 	if err != nil {
