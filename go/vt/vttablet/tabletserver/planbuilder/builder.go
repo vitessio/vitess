@@ -73,7 +73,10 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 		plan.WhereClause = buf.ParsedQuery()
 	}
 
-	if PassthroughDMLs || upd.Limit != nil {
+	// If plan.Table==nil, it's likely a multi-table statement.
+	// MySQL doesn't allow limit clauses for multi-table dmls.
+	// If there's an explicity Limit, honor it.
+	if PassthroughDMLs || plan.Table == nil || upd.Limit != nil {
 		plan.FullQuery = GenerateFullQuery(upd)
 		return plan, nil
 	}
@@ -98,7 +101,10 @@ func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan
 		plan.WhereClause = buf.ParsedQuery()
 	}
 
-	if PassthroughDMLs || del.Limit != nil {
+	// If plan.Table==nil, it's likely a multi-table statement.
+	// MySQL doesn't allow limit clauses for multi-table dmls.
+	// If there's an explicity Limit, honor it.
+	if PassthroughDMLs || plan.Table == nil || del.Limit != nil {
 		plan.FullQuery = GenerateFullQuery(del)
 		return plan, nil
 	}

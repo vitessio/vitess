@@ -492,7 +492,7 @@ options:PassthroughDMLs
 # cross-db update
 "update a.b set foo='foo' where name in ('a', 'b')"
 {
-  "PlanID": "UpdateLimit",
+  "PlanID": "Update",
   "TableName": "",
   "Permissions": [
     {
@@ -500,14 +500,14 @@ options:PassthroughDMLs
       "Role": 1
     }
   ],
-  "FullQuery": "update a.b set foo = 'foo' where name in ('a', 'b') limit :#maxLimit",
+  "FullQuery": "update a.b set foo = 'foo' where name in ('a', 'b')",
   "WhereClause": "where name in ('a', 'b')"
 }
 
 # update unknown table
 "update bogus set name='foo' where id=1"
 {
-  "PlanID": "UpdateLimit",
+  "PlanID": "Update",
   "TableName": "",
   "Permissions": [
     {
@@ -515,7 +515,7 @@ options:PassthroughDMLs
       "Role": 1
     }
   ],
-  "FullQuery": "update bogus set name = 'foo' where id = 1 limit :#maxLimit",
+  "FullQuery": "update bogus set name = 'foo' where id = 1",
   "WhereClause": "where id = 1"
 }
 
@@ -538,7 +538,7 @@ options:PassthroughDMLs
 # multi-table update
 "update a, b set a.name = 'foo' where a.id = b.id and b.var = 'test'"
 {
-  "PlanID": "UpdateLimit",
+  "PlanID": "Update",
   "TableName": "",
   "Permissions": [
     {
@@ -550,7 +550,7 @@ options:PassthroughDMLs
       "Role": 1
     }
   ],
-  "FullQuery": "update a, b set a.name = 'foo' where a.id = b.id and b.var = 'test' limit :#maxLimit",
+  "FullQuery": "update a, b set a.name = 'foo' where a.id = b.id and b.var = 'test'",
   "WhereClause": "where a.id = b.id and b.var = 'test'"
 }
 
@@ -652,7 +652,7 @@ options:PassthroughDMLs
 # delete unknown table
 "delete from bogus"
 {
-  "PlanID": "DeleteLimit",
+  "PlanID": "Delete",
   "TableName": "",
   "Permissions": [
     {
@@ -660,7 +660,7 @@ options:PassthroughDMLs
       "Role": 1
     }
   ],
-  "FullQuery": "delete from bogus limit :#maxLimit"
+  "FullQuery": "delete from bogus"
 }
 
 # delete unknown table
@@ -677,6 +677,26 @@ options:PassthroughDMLs
   ],
   "FullQuery": "delete from bogus"
 }
+
+# multi-table delete
+"delete a, b from a, b where id = 1"
+{
+  "PlanID": "Delete",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 1
+    },
+    {
+      "TableName": "b",
+      "Role": 1
+    }
+  ],
+  "FullQuery": "delete a, b from a, b where id = 1",
+  "WhereClause": "where id = 1"
+}
+
 
 # delete with limit
 "delete from a limit 10"
