@@ -44,9 +44,7 @@ type Plan struct {
 	// Filters is the list of filters to be applied to the columns
 	// of the table.
 	Filters []Filter
-
 }
-
 
 // Opcode enumerates the operators supported in a where clause
 type Opcode int
@@ -387,9 +385,9 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 				return err
 			}
 			plan.Filters = append(plan.Filters, Filter{
-				Opcode:        Equal,
-				ColNum:        colnum,
-				Value:         resolved,
+				Opcode: Equal,
+				ColNum: colnum,
+				Value:  resolved,
 			})
 		case *sqlparser.FuncExpr:
 			if !expr.Name.EqualString("in_keyrange") {
