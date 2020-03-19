@@ -87,7 +87,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		}
 		qre.tsv.qe.AddStats(planName, tableName, 1, duration, mysqlTime, int64(reply.RowsAffected), 0)
 		qre.plan.AddStats(1, duration, mysqlTime, int64(reply.RowsAffected), 0)
-		qre.logStats.RowsAffected = int(reply.RowsAffected)
+		qre.logStats.RowsAffected = uint64(reply.RowsAffected)
 		qre.logStats.Rows = reply.Rows
 		tabletenv.ResultStats.Add(int64(len(reply.Rows)))
 	}(time.Now())
