@@ -180,5 +180,5 @@ func TestWrongTableName(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	dbo := Connect(t)
 	defer dbo.Close()
-	execWithError(t, dbo, []uint16{1105}, "select * from teseting_table;")
+	execWithError(t, dbo, []uint16{1146}, "select * from teseting_table;")
 }
