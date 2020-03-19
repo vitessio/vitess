@@ -21,10 +21,8 @@ import (
 	"io"
 	"math/rand"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"golang.org/x/net/context"
 
@@ -36,9 +34,9 @@ import (
 	"vitess.io/vitess/go/vt/callinfo/fakecallinfo"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -293,28 +291,6 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
 	db.AddQueryPattern("insert into msg\\(time_scheduled, id, message, time_next, time_created, epoch\\) values \\(1, 2, 3, 1,.*", &sqltypes.Result{})
-	db.AddQuery(
-		"select time_next, epoch, time_created, id, time_scheduled, message from msg where (time_scheduled = 1 and id = 2)",
-		&sqltypes.Result{
-			Fields: []*querypb.Field{
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-			},
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{{
-				sqltypes.NewVarBinary("1"),
-				sqltypes.NewVarBinary("0"),
-				sqltypes.NewVarBinary("10"),
-				sqltypes.NewVarBinary("1"),
-				sqltypes.NewVarBinary("10"),
-				sqltypes.NewVarBinary("2"),
-			}},
-		},
-	)
 	want := &sqltypes.Result{}
 	query := "insert into msg(time_scheduled, id, message) values(1, 2, 3)"
 	ctx := context.Background()
@@ -322,121 +298,12 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 	checkPlanID(t, planbuilder.PlanInsertMessage, qre.plan.PlanID)
-	ch1 := make(chan *sqltypes.Result)
-	count := 0
-	tsv.messager.Subscribe(context.Background(), "msg", func(qr *sqltypes.Result) error {
-		if count > 1 {
-			return io.EOF
-		}
-		count++
-		ch1 <- qr
-		return nil
-	})
-	<-ch1
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
-	}
-	mr := <-ch1
-	wantqr := &sqltypes.Result{
-		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt64(1),
-			sqltypes.NewInt64(10),
-			sqltypes.NewInt64(2),
-		}},
-	}
-	if !reflect.DeepEqual(mr, wantqr) {
-		t.Errorf("rows:\n%+v, want\n%+v", mr, wantqr)
-	}
-
-	txid := newTransaction(tsv, nil)
-	qre = newTestQueryExecutor(ctx, tsv, query, txid)
-	defer testCommitHelper(t, tsv, qre)
-	got, err = qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-}
-
-// TestQueryExecutorPlanInsertMessageAutoInc tests that the query that reads
-// back rows correctly handles auto-inc values.
-func TestQueryExecutorPlanInsertMessageAutoInc(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	db.AddQueryPattern("insert into msg\\(time_scheduled, id, message, time_next, time_created, epoch\\) values \\(1, .*", &sqltypes.Result{InsertID: 2})
-	query := "insert into msg(time_scheduled, id, message) values(1, null, 3), (1, 3, 3), (1, null, 3)"
-	// First auto-inc value should be used.
-	// But subsequent ones will not be used because value was supplied
-	// for the second row.
-	db.AddQuery(
-		"select time_next, epoch, time_created, id, time_scheduled, message from msg where (time_scheduled = 1 and id = 2) or (time_scheduled = 1 and id = 3) or (time_scheduled = 1 and id = null)",
-		&sqltypes.Result{
-			Fields: []*querypb.Field{
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-			},
-			RowsAffected: 0,
-			Rows:         [][]sqltypes.Value{},
-		},
-	)
-	want := &sqltypes.Result{InsertID: 2}
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	qre := newTestQueryExecutor(ctx, tsv, query, 0)
-	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanInsertMessage, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-}
-
-func TestQueryExecutorInsertMessageACL(t *testing.T) {
-	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int63())
-	tableacl.Register(aclName, &simpleacl.Factory{})
-	tableacl.SetDefaultACL(aclName)
-	config := &tableaclpb.Config{
-		TableGroups: []*tableaclpb.TableGroupSpec{{
-			Name:                 "group02",
-			TableNamesOrPrefixes: []string{"msg"},
-			Readers:              []string{"u2"},
-		}},
-	}
-	if err := tableacl.InitFromProto(config); err != nil {
-		t.Fatalf("unable to load tableacl config, error: %v", err)
-	}
-
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-
-	query := "insert into msg(time_scheduled, id, message) values(1, 2, 3)"
-
-	callerID := &querypb.VTGateCallerID{
-		Username: "u2",
-	}
-	ctx := callerid.NewContext(context.Background(), nil, callerID)
-
-	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
-	qre := newTestQueryExecutor(ctx, tsv, query, 0)
-	defer tsv.StopService()
-
-	_, err := qre.Execute()
-	want := `table acl error: "u2" [] cannot run INSERT_MESSAGE on table "msg"`
-	if err == nil || err.Error() != want {
-		t.Errorf("qre.Execute(insert into msg) error: %v, want %s", err, want)
 	}
 }
 
@@ -945,45 +812,6 @@ func TestQueryExecutorPlanDmlPkRBR(t *testing.T) {
 	}
 }
 
-func TestQueryExecutorPlanDmlMessage(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	query := "update msg set time_acked = 2, time_next = null where id in (1)"
-	want := &sqltypes.Result{}
-	db.AddQuery("select time_scheduled, id from msg where id in (1) limit 10001 for update", &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{Type: sqltypes.Int64},
-			{Type: sqltypes.Int64},
-		},
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{{
-			sqltypes.NewVarBinary("12"),
-			sqltypes.NewVarBinary("1"),
-		}},
-	})
-	db.AddQuery("update msg set time_acked = 2, time_next = null where (time_scheduled = 12 and id = 1) /* _stream msg (time_scheduled id ) (12 1 ); */", want)
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	txid := newTransaction(tsv, nil)
-	qre := newTestQueryExecutor(ctx, tsv, query, txid)
-	defer tsv.StopService()
-	defer testCommitHelper(t, tsv, qre)
-	checkPlanID(t, planbuilder.PlanDMLSubquery, qre.plan.PlanID)
-	_, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	conn, err := qre.tsv.te.txPool.Get(txid, "for test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantChanged := map[string][]string{"msg": {"1"}}
-	if !reflect.DeepEqual(conn.ChangedMessages, wantChanged) {
-		t.Errorf("conn.ChangedMessages: %+v, want: %+v", conn.ChangedMessages, wantChanged)
-	}
-	conn.Recycle()
-}
-
 func TestQueryExecutorPlanDmlAutoCommit(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
@@ -1490,82 +1318,6 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	}
 }
 
-func TestQueryExecutorMessageStream(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	defer tsv.StopService()
-	logStats := tabletenv.NewLogStats(ctx, "TestQueryExecutor")
-
-	plan, err := tsv.qe.GetMessageStreamPlan("msg")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// We can't call newTestQueryExecutor because there's no
-	// SQL syntax for message streaming yet.
-	qre := &QueryExecutor{
-		ctx:      ctx,
-		query:    "stream from msg",
-		plan:     plan,
-		logStats: logStats,
-		tsv:      tsv,
-	}
-	checkPlanID(t, planbuilder.PlanMessageStream, qre.plan.PlanID)
-
-	ch := make(chan *sqltypes.Result, 1)
-	done := make(chan struct{})
-	skippedField := false
-	go func() {
-		if err := qre.MessageStream(func(qr *sqltypes.Result) error {
-			// Skip first result (field info).
-			if !skippedField {
-				skippedField = true
-				return nil
-			}
-			ch <- qr
-			return io.EOF
-		}); err != nil {
-			t.Error(err)
-		}
-		close(done)
-	}()
-
-	newMessages := map[string][]*messager.MessageRow{
-		"msg": {
-			&messager.MessageRow{Row: []sqltypes.Value{sqltypes.NewVarBinary("1"), sqltypes.NULL}},
-		},
-	}
-	// We hack-push a new message into the cache, which will cause
-	// the message manager to send it.
-	// We may have to iterate a few times before the stream kicks in.
-	for {
-		runtime.Gosched()
-		time.Sleep(10 * time.Millisecond)
-		unlock := tsv.messager.LockDB(newMessages, nil)
-		tsv.messager.UpdateCaches(newMessages, nil)
-		unlock()
-		want := &sqltypes.Result{
-			Rows: [][]sqltypes.Value{{
-				sqltypes.NewVarBinary("1"),
-				sqltypes.NULL,
-			}},
-		}
-		select {
-		case got := <-ch:
-			if !want.Equal(got) {
-				t.Errorf("Stream:\n%v, want\n%v", got, want)
-			}
-		default:
-			continue
-		}
-		break
-	}
-	// This should not hang.
-	<-done
-}
-
 func TestQueryExecutorMessageStreamACL(t *testing.T) {
 	aclName := fmt.Sprintf("simpleacl-test-%d", rand.Int63())
 	tableacl.Register(aclName, &simpleacl.Factory{})
@@ -2053,7 +1805,7 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	} else {
 		config.TwoPCAbandonAge = 10
 	}
-	tsv := NewTabletServerWithNilTopoServer(config)
+	tsv := NewTabletServer(config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	testUtils := newTestUtils()
 	dbconfigs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
@@ -2243,7 +1995,6 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 				mysql.DescribeTableRow("addr", "int(11)", false, "", "0"),
 			},
 		},
-		// for SplitQuery because it needs a primary key column
 		"show index from test_table": {
 			Fields:       mysql.ShowIndexFromTableFields,
 			RowsAffected: 2,

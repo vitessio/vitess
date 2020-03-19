@@ -534,7 +534,6 @@ func newTestTxExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *fa
 		ctx:      ctx,
 		logStats: logStats,
 		te:       tsv.te,
-		messager: tsv.messager,
 	}, tsv, db
 }
 
@@ -553,7 +552,6 @@ func newShortAgeExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *
 		ctx:      ctx,
 		logStats: logStats,
 		te:       tsv.te,
-		messager: tsv.messager,
 	}, tsv, db
 }
 
@@ -567,7 +565,6 @@ func newNoTwopcExecutor(t *testing.T) (txe *TxExecutor, tsv *TabletServer, db *f
 		ctx:      ctx,
 		logStats: logStats,
 		te:       tsv.te,
-		messager: tsv.messager,
 	}, tsv, db
 }
 

@@ -340,63 +340,6 @@ func (c *echoClient) MessageAckKeyspaceIds(ctx context.Context, keyspace string,
 	return c.fallback.MessageAckKeyspaceIds(ctx, keyspace, name, idKeyspaceIDs)
 }
 
-func (c *echoClient) SplitQuery(
-	ctx context.Context,
-	keyspace string,
-	sql string,
-	bindVariables map[string]*querypb.BindVariable,
-	splitColumns []string,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-
-	if strings.HasPrefix(sql, EchoPrefix) {
-		return []*vtgatepb.SplitQueryResponse_Part{
-			{
-				Query: &querypb.BoundQuery{
-					Sql: fmt.Sprintf("%v:%v:%v:%v:%v",
-						sql, splitColumns, splitCount, numRowsPerQueryPart, algorithm),
-					BindVariables: bindVariables,
-				},
-				KeyRangePart: &vtgatepb.SplitQueryResponse_KeyRangePart{
-					Keyspace: keyspace,
-				},
-			},
-		}, nil
-	}
-	return c.fallback.SplitQuery(
-		ctx,
-		sql,
-		keyspace,
-		bindVariables,
-		splitColumns,
-		splitCount,
-		numRowsPerQueryPart,
-		algorithm)
-}
-
-func (c *echoClient) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, callback func(*querypb.StreamEvent, int64) error) error {
-	if strings.HasPrefix(shard, EchoPrefix) {
-		m := map[string]interface{}{
-			"callerId":   callerid.EffectiveCallerIDFromContext(ctx),
-			"keyspace":   keyspace,
-			"shard":      shard,
-			"keyRange":   keyRange,
-			"timestamp":  timestamp,
-			"tabletType": tabletType,
-			"event":      event,
-		}
-		bytes := printSortedMap(reflect.ValueOf(m))
-		callback(&querypb.StreamEvent{
-			EventToken: &querypb.EventToken{
-				Position: string(bytes),
-			},
-		}, 0)
-		return nil
-	}
-	return c.fallbackClient.UpdateStream(ctx, keyspace, shard, keyRange, tabletType, timestamp, event, callback)
-}
-
 func (c *echoClient) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter, callback func([]*binlogdatapb.VEvent) error) error {
 	if strings.HasPrefix(vgtid.ShardGtids[0].Shard, EchoPrefix) {
 		_ = callback([]*binlogdatapb.VEvent{

@@ -478,35 +478,6 @@ func (conn *vtgateConn) MessageAckKeyspaceIds(ctx context.Context, keyspace stri
 	return int64(r.Result.RowsAffected), nil
 }
 
-func (conn *vtgateConn) SplitQuery(
-	ctx context.Context,
-	keyspace string,
-	query string,
-	bindVars map[string]*querypb.BindVariable,
-	splitColumns []string,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-
-	request := &vtgatepb.SplitQueryRequest{
-		CallerId: callerid.EffectiveCallerIDFromContext(ctx),
-		Keyspace: keyspace,
-		Query: &querypb.BoundQuery{
-			Sql:           query,
-			BindVariables: bindVars,
-		},
-		SplitColumn:         splitColumns,
-		SplitCount:          splitCount,
-		NumRowsPerQueryPart: numRowsPerQueryPart,
-		Algorithm:           algorithm,
-	}
-	response, err := conn.c.SplitQuery(ctx, request)
-	if err != nil {
-		return nil, vterrors.FromGRPC(err)
-	}
-	return response.Splits, nil
-}
-
 func (conn *vtgateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	request := &vtgatepb.GetSrvKeyspaceRequest{
 		Keyspace: keyspace,
@@ -542,37 +513,6 @@ func (conn *vtgateConn) VStream(ctx context.Context, tabletType topodatapb.Table
 		return nil, vterrors.FromGRPC(err)
 	}
 	return &vstreamAdapter{
-		stream: stream,
-	}, nil
-}
-
-type updateStreamAdapter struct {
-	stream vtgateservicepb.Vitess_UpdateStreamClient
-}
-
-func (a *updateStreamAdapter) Recv() (*querypb.StreamEvent, int64, error) {
-	r, err := a.stream.Recv()
-	if err != nil {
-		return nil, 0, vterrors.FromGRPC(err)
-	}
-	return r.Event, r.ResumeTimestamp, nil
-}
-
-func (conn *vtgateConn) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken) (vtgateconn.UpdateStreamReader, error) {
-	req := &vtgatepb.UpdateStreamRequest{
-		CallerId:   callerid.EffectiveCallerIDFromContext(ctx),
-		Keyspace:   keyspace,
-		Shard:      shard,
-		KeyRange:   keyRange,
-		TabletType: tabletType,
-		Timestamp:  timestamp,
-		Event:      event,
-	}
-	stream, err := conn.c.UpdateStream(ctx, req)
-	if err != nil {
-		return nil, vterrors.FromGRPC(err)
-	}
-	return &updateStreamAdapter{
 		stream: stream,
 	}, nil
 }

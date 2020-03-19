@@ -14,8 +14,8 @@
   <version>5.0-SNAPSHOT</version>
   <packaging>pom</packaging>
 
-  <name>Vitess Java Client libraries and Hadoop support [Parent]</name>
-  <description>Java client libraries and Hadoop support for Vitess - a scalable clustering system for MySQL</description>
+  <name>Vitess Java Client libraries [Parent]</name>
+  <description>Java client libraries for Vitess - a scalable clustering system for MySQL</description>
   <url>http://vitess.io</url>
   <inceptionYear>2014</inceptionYear>
   <!-- NOTE: The artifactId of each module has the prefix "vitess-". For example,
@@ -24,7 +24,6 @@
     <module>client</module>
     <module>example</module>
     <module>grpc-client</module>
-    <module>hadoop</module>
     <module>jdbc</module>
   </modules>
 
@@ -196,29 +195,6 @@
         <groupId>org.apache.commons</groupId>
         <artifactId>commons-collections4</artifactId>
         <version>4.2</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.hadoop</groupId>
-        <artifactId>hadoop-client</artifactId>
-        <version>2.7.2</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.hadoop</groupId>
-        <artifactId>hadoop-common</artifactId>
-        <version>2.7.2</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.hadoop</groupId>
-        <artifactId>hadoop-mapreduce-client-core</artifactId>
-        <version>2.7.2</version>
-      </dependency>
-      <dependency>
-        <groupId>org.apache.hadoop</groupId>
-        <artifactId>hadoop-mapreduce-client-jobclient</artifactId>
-        <version>2.7.2</version>
-        <!-- Include the test jar to reuse Hadoop testing utils -->
-        <type>test-jar</type>
-        <scope>test</scope>
       </dependency>
 
       <dependency>

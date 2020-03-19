@@ -29,12 +29,9 @@ import io.vitess.client.cursor.CursorWithError;
 import io.vitess.client.cursor.SimpleCursor;
 import io.vitess.client.cursor.StreamCursor;
 import io.vitess.proto.Query;
-import io.vitess.proto.Query.SplitQueryRequest.Algorithm;
 import io.vitess.proto.Vtgate;
 import io.vitess.proto.Vtgate.ExecuteRequest;
 import io.vitess.proto.Vtgate.ExecuteResponse;
-import io.vitess.proto.Vtgate.SplitQueryRequest;
-import io.vitess.proto.Vtgate.SplitQueryResponse;
 import io.vitess.proto.Vtgate.StreamExecuteRequest;
 import io.vitess.proto.Vtgate.VStreamRequest;
 import io.vitess.proto.Vtgate.VStreamResponse;
@@ -210,48 +207,6 @@ public class VTGateConnection implements Closeable {
     }
 
     return new StreamCursor(client.streamExecute(ctx, requestBuilder.build()));
-  }
-
-  /**
-   * This method splits the query into small parts based on the splitColumn and Algorithm type
-   * provided.
-   *
-   * @param ctx Context on user and execution deadline if any.
-   * @param keyspace Keyspace to execute the query on.
-   * @param query Sql Query to be executed.
-   * @param bindVars Parameters to bind with sql.
-   * @param splitColumns Column to be used to split the data.
-   * @param splitCount Number of Partitions
-   * @param numRowsPerQueryPart Limit the number of records per query part.
-   * @param algorithm EQUAL_SPLITS or FULL_SCAN
-   * @return SQL Future with Query Parts
-   * @throws SQLException If anything fails on query execution.
-   */
-  public SQLFuture<List<SplitQueryResponse.Part>> splitQuery(Context ctx, String keyspace,
-      String query, @Nullable Map<String, ?> bindVars, Iterable<String> splitColumns,
-      int splitCount, int numRowsPerQueryPart, Algorithm algorithm) throws SQLException {
-    SplitQueryRequest.Builder requestBuilder =
-        SplitQueryRequest.newBuilder()
-            .setKeyspace(checkNotNull(keyspace))
-            .setQuery(Proto.bindQuery(checkNotNull(query), bindVars))
-            .addAllSplitColumn(splitColumns)
-            .setSplitCount(splitCount)
-            .setNumRowsPerQueryPart(numRowsPerQueryPart)
-            .setAlgorithm(algorithm);
-
-    if (ctx.getCallerId() != null) {
-      requestBuilder.setCallerId(ctx.getCallerId());
-    }
-
-    return new SQLFuture<>(
-        transformAsync(client.splitQuery(ctx, requestBuilder.build()),
-            new AsyncFunction<SplitQueryResponse, List<SplitQueryResponse.Part>>() {
-              @Override
-              public ListenableFuture<List<SplitQueryResponse.Part>> apply(
-                  SplitQueryResponse response) throws Exception {
-                return Futures.immediateFuture(response.getSplitsList());
-              }
-            }, directExecutor()));
   }
 
   /**

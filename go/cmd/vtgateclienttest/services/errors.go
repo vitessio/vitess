@@ -290,40 +290,9 @@ func (c *errorClient) MessageAckKeyspaceIds(ctx context.Context, keyspace string
 	return c.fallback.MessageAckKeyspaceIds(ctx, keyspace, name, idKeyspaceIDs)
 }
 
-func (c *errorClient) SplitQuery(
-	ctx context.Context,
-	keyspace string,
-	sql string,
-	bindVariables map[string]*querypb.BindVariable,
-	splitColumns []string,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-
-	if err := requestToError(sql); err != nil {
-		return nil, err
-	}
-	return c.fallbackClient.SplitQuery(
-		ctx,
-		sql,
-		keyspace,
-		bindVariables,
-		splitColumns,
-		splitCount,
-		numRowsPerQueryPart,
-		algorithm)
-}
-
 func (c *errorClient) GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	if err := requestToError(keyspace); err != nil {
 		return nil, err
 	}
 	return c.fallbackClient.GetSrvKeyspace(ctx, keyspace)
-}
-
-func (c *errorClient) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, callback func(*querypb.StreamEvent, int64) error) error {
-	if err := requestToError(shard); err != nil {
-		return err
-	}
-	return c.fallbackClient.UpdateStream(ctx, keyspace, shard, keyRange, tabletType, timestamp, event, callback)
 }

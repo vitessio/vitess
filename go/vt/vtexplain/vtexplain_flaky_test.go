@@ -19,12 +19,13 @@ package vtexplain
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/google/go-cmp/cmp"
-	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"path"
 	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/require"
 )
 
 var testOutputTempDir string
@@ -142,7 +143,7 @@ func TestErrors(t *testing.T) {
 
 		{
 			SQL: "SELECT * FROM THIS IS NOT SQL",
-			Err: "vtexplain execute error in 'SELECT * FROM THIS IS NOT SQL': syntax error at position 22 near 'is'",
+			Err: "vtexplain execute error in 'SELECT * FROM THIS IS NOT SQL': syntax error at position 22 near 'IS'",
 		},
 
 		{

@@ -78,10 +78,10 @@ releases
 .vagrant
 
 /dist/
-/py-vtdb
 /vthook/
 /bin/
 /vtdataroot/
+venv
 
 .scannerwork
 report

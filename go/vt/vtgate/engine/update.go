@@ -34,12 +34,15 @@ import (
 
 var _ Primitive = (*Update)(nil)
 
+// VindexValues contains changed values for a vindex.
+type VindexValues map[string]sqltypes.PlanValue
+
 // Update represents the instructions to perform an update.
 type Update struct {
 	DML
 
 	// ChangedVindexValues contains values for updated Vindexes during an update statement.
-	ChangedVindexValues map[string][]sqltypes.PlanValue
+	ChangedVindexValues map[string]VindexValues
 
 	// Update does not take inputs
 	noInputs
@@ -60,16 +63,16 @@ func (upd *Update) MarshalJSON() ([]byte, error) {
 	}
 	marshalUpdate := struct {
 		Opcode               string
-		Keyspace             *vindexes.Keyspace              `json:",omitempty"`
-		Query                string                          `json:",omitempty"`
-		Vindex               string                          `json:",omitempty"`
-		Values               []sqltypes.PlanValue            `json:",omitempty"`
-		ChangedVindexValues  map[string][]sqltypes.PlanValue `json:",omitempty"`
-		Table                string                          `json:",omitempty"`
-		OwnedVindexQuery     string                          `json:",omitempty"`
-		KsidVindex           string                          `json:",omitempty"`
-		MultiShardAutocommit bool                            `json:",omitempty"`
-		QueryTimeout         int                             `json:",omitempty"`
+		Keyspace             *vindexes.Keyspace      `json:",omitempty"`
+		Query                string                  `json:",omitempty"`
+		Vindex               string                  `json:",omitempty"`
+		Values               []sqltypes.PlanValue    `json:",omitempty"`
+		ChangedVindexValues  map[string]VindexValues `json:",omitempty"`
+		Table                string                  `json:",omitempty"`
+		OwnedVindexQuery     string                  `json:",omitempty"`
+		KsidVindex           string                  `json:",omitempty"`
+		MultiShardAutocommit bool                    `json:",omitempty"`
+		QueryTimeout         int                     `json:",omitempty"`
 	}{
 		Opcode:               upd.RouteType(),
 		Keyspace:             upd.Keyspace,
@@ -197,29 +200,35 @@ func (upd *Update) updateVindexEntries(vcursor VCursor, bindVars map[string]*que
 		return nil
 	}
 
+	fieldColNumMap := make(map[string]int)
+	for colNum, field := range subQueryResult.Fields {
+		fieldColNumMap[field.Name] = colNum
+	}
+
 	for _, row := range subQueryResult.Rows {
-		colnum := 1 // we start from the first non-vindex col
 		ksid, err := resolveKeyspaceID(vcursor, upd.KsidVindex, row[0])
 		if err != nil {
 			return err
 		}
 		for _, colVindex := range upd.Table.Owned {
-			// Fetch the column values. colnum must keep incrementing.
-			fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
-			for range colVindex.Columns {
-				fromIds = append(fromIds, row[colnum])
-				colnum++
-			}
-
 			// Update columns only if they're being changed.
-			if colValues, ok := upd.ChangedVindexValues[colVindex.Name]; ok {
+			if updColValues, ok := upd.ChangedVindexValues[colVindex.Name]; ok {
+				fromIds := make([]sqltypes.Value, 0, len(colVindex.Columns))
 				var vindexColumnKeys []sqltypes.Value
-				for _, colValue := range colValues {
-					resolvedVal, err := colValue.ResolveValue(bindVars)
-					if err != nil {
-						return err
+				for _, vCol := range colVindex.Columns {
+					// Fetch the column values.
+					origColValue := row[fieldColNumMap[vCol.String()]]
+					fromIds = append(fromIds, origColValue)
+					if colValue, exists := updColValues[vCol.String()]; exists {
+						resolvedVal, err := colValue.ResolveValue(bindVars)
+						if err != nil {
+							return err
+						}
+						vindexColumnKeys = append(vindexColumnKeys, resolvedVal)
+					} else {
+						// Set the column value to original as this column in vindex is not updated.
+						vindexColumnKeys = append(vindexColumnKeys, origColValue)
 					}
-					vindexColumnKeys = append(vindexColumnKeys, resolvedVal)
 				}
 
 				if err := colVindex.Vindex.(vindexes.Lookup).Update(vcursor, fromIds, ksid, vindexColumnKeys); err != nil {

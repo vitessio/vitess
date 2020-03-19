@@ -452,28 +452,6 @@ func (vtg *VTGate) MessageAckKeyspaceIds(ctx context.Context, request *vtgatepb.
 	}, nil
 }
 
-// SplitQuery is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) SplitQuery(ctx context.Context, request *vtgatepb.SplitQueryRequest) (response *vtgatepb.SplitQueryResponse, err error) {
-
-	defer vtg.server.HandlePanic(&err)
-	ctx = withCallerIDContext(ctx, request.CallerId)
-	splits, vtgErr := vtg.server.SplitQuery(
-		ctx,
-		request.Keyspace,
-		request.Query.Sql,
-		request.Query.BindVariables,
-		request.SplitColumn,
-		request.SplitCount,
-		request.NumRowsPerQueryPart,
-		request.Algorithm)
-	if vtgErr != nil {
-		return nil, vterrors.ToGRPC(vtgErr)
-	}
-	return &vtgatepb.SplitQueryResponse{
-		Splits: splits,
-	}, nil
-}
-
 // GetSrvKeyspace is the RPC version of vtgateservice.VTGateService method
 func (vtg *VTGate) GetSrvKeyspace(ctx context.Context, request *vtgatepb.GetSrvKeyspaceRequest) (response *vtgatepb.GetSrvKeyspaceResponse, err error) {
 	defer vtg.server.HandlePanic(&err)
@@ -497,28 +475,6 @@ func (vtg *VTGate) VStream(request *vtgatepb.VStreamRequest, stream vtgateservic
 		func(events []*binlogdatapb.VEvent) error {
 			return stream.Send(&vtgatepb.VStreamResponse{
 				Events: events,
-			})
-		})
-	return vterrors.ToGRPC(vtgErr)
-}
-
-// UpdateStream is the RPC version of vtgateservice.VTGateService method
-func (vtg *VTGate) UpdateStream(request *vtgatepb.UpdateStreamRequest, stream vtgateservicepb.Vitess_UpdateStreamServer) (err error) {
-	defer vtg.server.HandlePanic(&err)
-	ctx := withCallerIDContext(stream.Context(), request.CallerId)
-	vtgErr := vtg.server.UpdateStream(ctx,
-		request.Keyspace,
-		request.Shard,
-		request.KeyRange,
-		request.TabletType,
-		request.Timestamp,
-		request.Event,
-		func(event *querypb.StreamEvent, resumeTimestamp int64) error {
-			// Send is not safe to call concurrently, but vtgate
-			// guarantees that it's not.
-			return stream.Send(&vtgatepb.UpdateStreamResponse{
-				Event:           event,
-				ResumeTimestamp: resumeTimestamp,
 			})
 		})
 	return vterrors.ToGRPC(vtgErr)

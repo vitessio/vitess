@@ -49,7 +49,7 @@ func TestScatterConnExecute(t *testing.T) {
 			return nil, err
 		}
 
-		return sc.Execute(context.Background(), "query", nil, rss, topodatapb.TabletType_REPLICA, NewSafeSession(nil), false, nil)
+		return sc.Execute(context.Background(), "query", nil, rss, topodatapb.TabletType_REPLICA, NewSafeSession(nil), false, nil, false)
 	})
 }
 
@@ -280,7 +280,7 @@ func TestMaxMemoryRows(t *testing.T) {
 	}
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
 
-	_, err = sc.Execute(context.Background(), "query1", nil, rss, topodatapb.TabletType_REPLICA, session, true, nil)
+	_, err = sc.Execute(context.Background(), "query1", nil, rss, topodatapb.TabletType_REPLICA, session, true, nil, false)
 	want := "in-memory row count exceeded allowed limit of 3"
 	if err == nil || err.Error() != want {
 		t.Errorf("Execute(): %v, want %v", err, want)
@@ -433,8 +433,8 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 	}
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_REPLICA, session, true, nil)
-	sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_REPLICA, session, false, nil)
+	sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_REPLICA, session, true, nil, false)
+	sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_REPLICA, session, false, nil, false)
 
 	wantSession := vtgatepb.Session{
 		InTransaction: true,
@@ -483,8 +483,8 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 		t.Fatalf("ResolveDestination(1) failed: %v", err)
 	}
 
-	sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_REPLICA, session, false, nil)
-	sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_REPLICA, session, true, nil)
+	sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_REPLICA, session, false, nil, false)
+	sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_REPLICA, session, true, nil, false)
 
 	wantSession = vtgatepb.Session{
 		InTransaction: true,
@@ -533,8 +533,8 @@ func TestScatterConnQueryNotInTransaction(t *testing.T) {
 		t.Fatalf("ResolveDestination(1) failed: %v", err)
 	}
 
-	sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_REPLICA, session, false, nil)
-	sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_REPLICA, session, true, nil)
+	sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_REPLICA, session, false, nil, false)
+	sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_REPLICA, session, true, nil, false)
 
 	wantSession = vtgatepb.Session{
 		InTransaction: true,
@@ -589,18 +589,18 @@ func TestScatterConnSingleDB(t *testing.T) {
 
 	// SingleDb (legacy)
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, SingleDb: true})
-	_, err = sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_MASTER, session, false, nil)
+	_, err = sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_MASTER, session, false, nil, false)
 	require.NoError(t, err)
-	_, err = sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_MASTER, session, false, nil)
+	_, err = sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_MASTER, session, false, nil, false)
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Multi DB exec: %v, must contain %s", err, want)
 	}
 
 	// TransactionMode_SINGLE in session
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true, TransactionMode: vtgatepb.TransactionMode_SINGLE})
-	_, err = sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_MASTER, session, false, nil)
+	_, err = sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_MASTER, session, false, nil, false)
 	require.NoError(t, err)
-	_, err = sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_MASTER, session, false, nil)
+	_, err = sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_MASTER, session, false, nil, false)
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Multi DB exec: %v, must contain %s", err, want)
 	}
@@ -608,9 +608,9 @@ func TestScatterConnSingleDB(t *testing.T) {
 	// TransactionMode_SINGLE in txconn
 	sc.txConn.mode = vtgatepb.TransactionMode_SINGLE
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	_, err = sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_MASTER, session, false, nil)
+	_, err = sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_MASTER, session, false, nil, false)
 	require.NoError(t, err)
-	_, err = sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_MASTER, session, false, nil)
+	_, err = sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_MASTER, session, false, nil, false)
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("Multi DB exec: %v, must contain %s", err, want)
 	}
@@ -618,9 +618,9 @@ func TestScatterConnSingleDB(t *testing.T) {
 	// TransactionMode_MULTI in txconn. Should not fail.
 	sc.txConn.mode = vtgatepb.TransactionMode_MULTI
 	session = NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	_, err = sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_MASTER, session, false, nil)
+	_, err = sc.Execute(context.Background(), "query1", nil, rss0, topodatapb.TabletType_MASTER, session, false, nil, false)
 	require.NoError(t, err)
-	_, err = sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_MASTER, session, false, nil)
+	_, err = sc.Execute(context.Background(), "query1", nil, rss1, topodatapb.TabletType_MASTER, session, false, nil, false)
 	require.NoError(t, err)
 }
 
@@ -671,49 +671,6 @@ func TestAppendResult(t *testing.T) {
 	if len(qr.Rows) != 2 {
 		t.Errorf("want 2, got %v", len(qr.Rows))
 	}
-}
-
-// MockShuffleQueryPartsRandomGenerator implements the ShuffleQueryPartsRandomGeneratorInterface
-// and returns a canned set of responses given in 'intNResults' for successive calls to its Intn()
-// method.
-type mockShuffleQueryPartsRandomGenerator struct {
-	intNResults []int
-}
-
-func (mockRandGen *mockShuffleQueryPartsRandomGenerator) Intn(unused int) int {
-	if len(mockRandGen.intNResults) == 0 {
-		panic("MockShuffleQueryPartsRandomGenerator exhausted.")
-	}
-	result := mockRandGen.intNResults[0]
-	mockRandGen.intNResults = mockRandGen.intNResults[1:]
-	return result
-}
-
-func TestShuffleQueryParts(t *testing.T) {
-	mockRandGen := &mockShuffleQueryPartsRandomGenerator{
-		intNResults: []int{1, 0},
-	}
-	oldGen := injectShuffleQueryPartsRandomGenerator(mockRandGen)
-	queryPart1 := vtgatepb.SplitQueryResponse_Part{
-		Query: &querypb.BoundQuery{Sql: "part_1"},
-	}
-	queryPart2 := vtgatepb.SplitQueryResponse_Part{
-		Query: &querypb.BoundQuery{Sql: "part_2"},
-	}
-	queryPart3 := vtgatepb.SplitQueryResponse_Part{
-		Query: &querypb.BoundQuery{Sql: "part_3"},
-	}
-	queryParts := []*vtgatepb.SplitQueryResponse_Part{&queryPart1, &queryPart2, &queryPart3}
-	queryPartsExpectedOutput := []*vtgatepb.SplitQueryResponse_Part{
-		&queryPart3, &queryPart1, &queryPart2,
-	}
-	shuffleQueryParts(queryParts)
-	if !sqltypes.SplitQueryResponsePartsEqual(queryParts, queryPartsExpectedOutput) {
-		t.Errorf("want: %+v, got %+v", queryPartsExpectedOutput, queryParts)
-	}
-
-	// Return the generator to what it was to avoid disrupting other tests.
-	injectShuffleQueryPartsRandomGenerator(oldGen)
 }
 
 func newTestScatterConn(hc discovery.HealthCheck, serv srvtopo.Server, cell string) *ScatterConn {

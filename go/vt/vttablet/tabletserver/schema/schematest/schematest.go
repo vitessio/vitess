@@ -127,7 +127,6 @@ func Queries() map[string]*sqltypes.Result {
 				mysql.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
 			},
 		},
-		// for SplitQuery because it needs a primary key column
 		"show index from test_table_01": {
 			Fields:       mysql.ShowIndexFromTableFields,
 			RowsAffected: 1,

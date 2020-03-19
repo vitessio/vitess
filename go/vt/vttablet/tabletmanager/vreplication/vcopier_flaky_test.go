@@ -156,12 +156,12 @@ func TestPlayerCopyBigTable(t *testing.T) {
 		vstreamRowsSendHook = nil
 	}
 
-	vstreamRowsHook = func(context.Context) {
+	vstreamHook = func(context.Context) {
 		// Sleeping 50ms guarantees that the catchup wait loop executes multiple times.
 		// This is because waitRetryTime is set to 10ms.
 		time.Sleep(50 * time.Millisecond)
 		// Do this no more than once.
-		vstreamRowsHook = nil
+		vstreamHook = nil
 	}
 
 	filter := &binlogdatapb.Filter{
@@ -283,12 +283,12 @@ func TestPlayerCopyWildcardRule(t *testing.T) {
 		vstreamRowsSendHook = nil
 	}
 
-	vstreamRowsHook = func(context.Context) {
+	vstreamHook = func(context.Context) {
 		// Sleeping 50ms guarantees that the catchup wait loop executes multiple times.
 		// This is because waitRetryTime is set to 10ms.
 		time.Sleep(50 * time.Millisecond)
 		// Do this no more than once.
-		vstreamRowsHook = nil
+		vstreamHook = nil
 	}
 
 	filter := &binlogdatapb.Filter{

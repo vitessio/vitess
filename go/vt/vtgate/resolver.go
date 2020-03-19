@@ -78,10 +78,11 @@ func (res *Resolver) Execute(
 	keyspace string,
 	tabletType topodatapb.TabletType,
 	destination key.Destination,
-	session *vtgatepb.Session,
+	session *SafeSession,
 	notInTransaction bool,
 	options *querypb.ExecuteOptions,
 	logStats *LogStats,
+	canAutocommit bool,
 ) (*sqltypes.Result, error) {
 	rss, err := res.resolver.ResolveDestination(ctx, keyspace, tabletType, destination)
 	if err != nil {
@@ -90,6 +91,9 @@ func (res *Resolver) Execute(
 	if logStats != nil {
 		logStats.ShardQueries = uint32(len(rss))
 	}
+
+	autocommit := len(rss) == 1 && canAutocommit && session.AutocommitApproval()
+
 	for {
 		qr, err := res.scatterConn.Execute(
 			ctx,
@@ -97,9 +101,11 @@ func (res *Resolver) Execute(
 			bindVars,
 			rss,
 			tabletType,
-			NewSafeSession(session),
+			session,
 			notInTransaction,
-			options)
+			options,
+			autocommit,
+		)
 		if isRetryableError(err) {
 			newRss, err := res.resolver.ResolveDestination(ctx, keyspace, tabletType, destination)
 			if err != nil {
@@ -298,45 +304,6 @@ func (res *Resolver) MessageAckKeyspaceIds(ctx context.Context, keyspace, name s
 	}
 
 	return res.scatterConn.MessageAck(ctx, rss, values, name)
-}
-
-// UpdateStream streams the events.
-// TODO(alainjobart): Implement the multi-shards merge code.
-func (res *Resolver) UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken, callback func(*querypb.StreamEvent, int64) error) error {
-	var destination key.Destination
-	if shard != "" {
-		// If we pass in a shard, resolve the keyspace/shard
-		// following redirects.
-		destination = key.DestinationShard(shard)
-	} else {
-		// If we pass in a KeyRange, resolve it to one shard
-		// only for now.
-		destination = key.DestinationExactKeyRange{KeyRange: keyRange}
-	}
-	rss, err := res.resolver.ResolveDestination(ctx, keyspace, tabletType, destination)
-	if err != nil {
-		return err
-	}
-	if len(rss) != 1 {
-		return fmt.Errorf("UpdateStream only supports exactly one shard per keyrange at the moment, but provided keyrange %v maps to %v shards", keyRange, len(rss))
-	}
-
-	// Just send it to ScatterConn.  With just one connection, the
-	// timestamp to resume from is the one we get.
-	// Also use the incoming event if the shard matches.
-	position := ""
-	if event != nil && event.Shard == shard {
-		position = event.Position
-		timestamp = 0
-	}
-	return res.scatterConn.UpdateStream(ctx, rss[0], timestamp, position, func(se *querypb.StreamEvent) error {
-		var timestamp int64
-		if se.EventToken != nil {
-			timestamp = se.EventToken.Timestamp
-			se.EventToken.Shard = shard
-		}
-		return callback(se, timestamp)
-	})
 }
 
 // GetGatewayCacheStatus returns a displayable version of the Gateway cache.

@@ -22,6 +22,9 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -50,43 +53,45 @@ var (
 		index next_idx(time_next, epoch)
 		) comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
 	createUnshardedMessage = `create table unsharded_message(
-			time_scheduled bigint,
-			id bigint,
-			time_next bigint,
-			epoch bigint,
-			time_created bigint,
-			time_acked bigint,
-			message varchar(128),
-			primary key(time_scheduled, id),
-			unique index id_idx(id),
-			index next_idx(time_next, epoch)
-			) comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
+		time_scheduled bigint,
+		id bigint,
+		time_next bigint,
+		epoch bigint,
+		time_created bigint,
+		time_acked bigint,
+		message varchar(128),
+		primary key(time_scheduled, id),
+		unique index id_idx(id),
+		index next_idx(time_next, epoch)
+		) comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
 	userVschema = `{
-				  "sharded": true,
-				  "vindexes": {
-					"hash_index": {
-					  "type": "hash"
+	  "sharded": true,
+	  "vindexes": {
+			"hash_index": {
+			  "type": "hash"
+			}
+	  },
+	  "tables": {
+			"sharded_message": {
+			  "column_vindexes": [
+					{
+					  "column": "id",
+					  "name": "hash_index"
 					}
-				  },
-				  "tables": {
-					"sharded_message": {
-					  "column_vindexes": [
-						{
-						  "column": "id",
-						  "name": "hash_index"
-						}
-					  ]
-					}
-				  }
-				}`
+			  ]
+			}
+	  }
+	}`
 	lookupVschema = `{
-				  "sharded": false,
-				  "tables": {
-					"unsharded_message": {
-					  "type": "sequence"
-					}
-				  }
-				}`
+	  "sharded": false,
+	  "tables": {
+			"unsharded_message": {},
+			"vitess_message": {},
+			"vitess_message3": {},
+			"vitess_topic_subscriber_1": {},
+			"vitess_topic_subscriber_2": {}
+	  }
+	}`
 )
 
 func TestMain(m *testing.M) {
@@ -141,4 +146,11 @@ func TestMain(m *testing.M) {
 		os.Exit(exitcode)
 	}
 
+}
+
+func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
+	t.Helper()
+	qr, err := conn.ExecuteFetch(query, 1000, true)
+	require.NoError(t, err)
+	return qr
 }

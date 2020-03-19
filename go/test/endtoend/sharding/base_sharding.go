@@ -271,13 +271,14 @@ func InsertLots(t *testing.T, count uint64, vttablet cluster.Vttablet, table str
 		query1 = fmt.Sprintf(InsertTabletTemplateKsID, table, lotRange1+i, fmt.Sprintf("msg-range1-%d", 10000+i), lotRange1+i)
 		query2 = fmt.Sprintf(InsertTabletTemplateKsID, table, lotRange2+i, fmt.Sprintf("msg-range2-%d", 20000+i), lotRange2+i)
 
-		InsertToTablet(t, query1, vttablet, ks, false)
-		InsertToTablet(t, query2, vttablet, ks, false)
+		ExecuteOnTablet(t, query1, vttablet, ks, false)
+		ExecuteOnTablet(t, query2, vttablet, ks, false)
 	}
 }
 
-// InsertToTablet inserts a single row to vttablet
-func InsertToTablet(t *testing.T, query string, vttablet cluster.Vttablet, ks string, expectFail bool) {
+// ExecuteOnTablet executes a write query on specified vttablet
+// It should always be called with a master tablet for the keyspace/shard
+func ExecuteOnTablet(t *testing.T, query string, vttablet cluster.Vttablet, ks string, expectFail bool) {
 	_, _ = vttablet.VttabletProcess.QueryTablet("begin", ks, true)
 	_, err := vttablet.VttabletProcess.QueryTablet(query, ks, true)
 	if expectFail {
@@ -309,7 +310,7 @@ func InsertMultiValues(t *testing.T, tablet cluster.Vttablet, keyspaceName strin
 	queryStr += valueSQL
 	queryStr += fmt.Sprintf(" /* vtgate:: keyspace_id:%s */", keyspaceIds)
 	queryStr += fmt.Sprintf(" /* id:%s */", valueIds)
-	InsertToTablet(t, queryStr, tablet, keyspaceName, false)
+	ExecuteOnTablet(t, queryStr, tablet, keyspaceName, false)
 }
 
 // CheckLotsTimeout waits till all values are inserted
