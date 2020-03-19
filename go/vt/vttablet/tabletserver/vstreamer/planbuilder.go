@@ -44,13 +44,15 @@ type Plan struct {
 	// Filters is the list of filters to be applied to the columns
 	// of the table.
 	Filters []Filter
-
 }
 
+// Opcode enumerates the operators supported in a where clause
 type Opcode int
 
 const (
+	// Equal is used to filter an integer column on a specific value
 	Equal = Opcode(iota)
+	// VindexMatch is used for an in_keyrange() construct
 	VindexMatch
 )
 
@@ -382,9 +384,9 @@ func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) er
 				return err
 			}
 			plan.Filters = append(plan.Filters, Filter{
-				Opcode:        Equal,
-				ColNum:        colnum,
-				Value:         resolved,
+				Opcode: Equal,
+				ColNum: colnum,
+				Value:  resolved,
 			})
 		case *sqlparser.FuncExpr:
 			if !expr.Name.EqualString("in_keyrange") {
@@ -419,15 +421,6 @@ func splitAndExpression(filters []sqlparser.Expr, node sqlparser.Expr) []sqlpars
 		}
 	}
 	return append(filters, node)
-}
-
-// skipParenthesis skips the parenthesis (if any) of an expression and
-// returns the innermost unparenthesized expression.
-func skipParenthesis(node sqlparser.Expr) sqlparser.Expr {
-	if node, ok := node.(*sqlparser.ParenExpr); ok {
-		return skipParenthesis(node.Expr)
-	}
-	return node
 }
 
 func (plan *Plan) analyzeExprs(vschema *localVSchema, selExprs sqlparser.SelectExprs) error {
