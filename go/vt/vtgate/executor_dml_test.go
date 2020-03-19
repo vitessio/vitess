@@ -1601,7 +1601,7 @@ func TestKeyDestRangeQuery(t *testing.T) {
 	sbc2.Queries = nil
 
 	// it does not work for inserts
-	_, err = executorExec(executor, "INSERT INTO sharded_user_msgs(message) VALUE('test')", nil)
+	_, err = executorExec(executor, "INSERT INTO sharded_user_msgs(message) VALUES('test')", nil)
 
 	want := "range queries not supported for inserts: TestExecutor[-]"
 	if err == nil || err.Error() != want {
@@ -1686,7 +1686,7 @@ func TestKeyShardDestQuery(t *testing.T) {
 
 	// it works for inserts
 
-	sql = "INSERT INTO sharded_user_msgs(message) VALUE('test')"
+	sql = "INSERT INTO sharded_user_msgs(message) VALUES('test')"
 	_, err = executorExec(executor, sql, nil)
 
 	wantQueries = []*querypb.BoundQuery{{

@@ -185,6 +185,16 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 	stmtType := sqlparser.Preview(sql)
 	logStats.StmtType = stmtType.String()
 
+	stmt, err := sqlparser.Parse(sql)
+	if err != nil {
+		// If the DDL statement failed to be properly parsed, fall through anyway
+		if stmtType == sqlparser.StmtDDL {
+			stmt = &sqlparser.DDL{}
+		} else {
+			return nil, err
+		}
+	}
+
 	// Mysql warnings are scoped to the current session, but are
 	// cleared when a "non-diagnostic statement" is executed:
 	// https://dev.mysql.com/doc/refman/8.0/en/show-warnings.html
@@ -192,14 +202,14 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 	// To emulate this behavior, clear warnings from the session
 	// for all statements _except_ SHOW, so that SHOW WARNINGS
 	// can actually return them.
-	if stmtType != sqlparser.StmtShow {
+	if _, isShow := stmt.(*sqlparser.Show); !isShow {
 		safeSession.ClearWarnings()
 	}
 
-	switch stmtType {
-	case sqlparser.StmtSelect:
+	switch specStmt := stmt.(type) {
+	case *sqlparser.Select, *sqlparser.Union:
 		return e.handleExec(ctx, safeSession, sql, bindVars, destKeyspace, destTabletType, dest, logStats, stmtType)
-	case sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
+	case *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete:
 		safeSession := safeSession
 
 		mustCommit := false
@@ -236,24 +246,22 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 			logStats.CommitTime = time.Since(commitStart)
 		}
 		return qr, nil
-	case sqlparser.StmtDDL:
+	case *sqlparser.DDL:
 		return e.handleDDL(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
-	case sqlparser.StmtBegin:
+	case *sqlparser.Begin:
 		return e.handleBegin(ctx, safeSession, sql, bindVars, destTabletType, logStats)
-	case sqlparser.StmtCommit:
+	case *sqlparser.Commit:
 		return e.handleCommit(ctx, safeSession, sql, bindVars, logStats)
-	case sqlparser.StmtRollback:
+	case *sqlparser.Rollback:
 		return e.handleRollback(ctx, safeSession, sql, bindVars, logStats)
-	case sqlparser.StmtSet:
+	case *sqlparser.Set:
 		return e.handleSet(ctx, safeSession, sql, bindVars, logStats)
-	case sqlparser.StmtShow:
+	case *sqlparser.Show:
 		return e.handleShow(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
-	case sqlparser.StmtUse:
-		return e.handleUse(ctx, safeSession, sql, bindVars)
-	case sqlparser.StmtOther:
+	case *sqlparser.Use:
+		return e.handleUse(ctx, safeSession, sql, bindVars, specStmt)
+	case *sqlparser.OtherAdmin, *sqlparser.OtherRead:
 		return e.handleOther(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
-	case sqlparser.StmtComment:
-		return e.handleComment(sql)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }
@@ -1143,16 +1151,7 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 	return e.handleOther(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
 }
 
-func (e *Executor) handleUse(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	stmt, err := sqlparser.Parse(sql)
-	if err != nil {
-		return nil, err
-	}
-	use, ok := stmt.(*sqlparser.Use)
-	if !ok {
-		// This code is unreachable.
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unrecognized USE statement: %v", sql)
-	}
+func (e *Executor) handleUse(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, use *sqlparser.Use) (*sqltypes.Result, error) {
 	destKeyspace, destTabletType, _, err := e.ParseDestinationTarget(use.DBName.String())
 	if err != nil {
 		return nil, err
@@ -1197,12 +1196,6 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 
 	logStats.ExecuteTime = time.Since(execStart)
 	return result, err
-}
-
-func (e *Executor) handleComment(sql string) (*sqltypes.Result, error) {
-	_, _ = sqlparser.ExtractMysqlComment(sql)
-	// Not sure if this is a good idea.
-	return &sqltypes.Result{}, nil
 }
 
 // StreamExecute executes a streaming query.

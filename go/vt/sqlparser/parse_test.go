@@ -1132,7 +1132,7 @@ var (
 		output: "alter table a",
 	}, {
 		input:  "analyze table a",
-		output: "alter table a",
+		output: "otherread",
 	}, {
 		input:  "flush tables",
 		output: "flush",

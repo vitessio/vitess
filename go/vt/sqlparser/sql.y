@@ -1509,7 +1509,7 @@ truncate_statement:
 analyze_statement:
   ANALYZE TABLE table_name
   {
-    $$ = &DDL{Action: AlterStr, Table: $3}
+    $$ = &OtherRead{}
   }
 
 show_statement:

@@ -2255,14 +2255,8 @@ options:PassthroughDMLs
 # analyze
 "analyze table a"
 {
-  "PlanID": "DDL",
-  "TableName": "",
-  "Permissions": [
-    {
-      "TableName": "a",
-      "Role": 2
-    }
-  ]
+  "PlanID": "OTHER_READ",
+  "TableName": ""
 }
 
 # reorganize partition with bind
