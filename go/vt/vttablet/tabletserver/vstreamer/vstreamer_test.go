@@ -37,6 +37,59 @@ type testcase struct {
 	output [][]string
 }
 
+func TestFilteredInt(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table t1(id1 int, id2 int, val varbinary(128), primary key(id1))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select id1, val from t1 where id2 = 200",
+		}},
+	}
+
+	testcases := []testcase{{
+		input: []string{
+			"begin",
+			"insert into t1 values (1, 100, 'aaa')",
+			"insert into t1 values (2, 200, 'bbb')",
+			"insert into t1 values (3, 100, 'ccc')",
+			"insert into t1 values (4, 200, 'ddd')",
+			"insert into t1 values (5, 200, 'eee')",
+			"update t1 set val = 'newddd' where id1 = 4",
+			"update t1 set id2 = 200 where id1 = 1",
+			"update t1 set id2 = 100 where id1 = 2",
+			"update t1 set id2 = 100 where id1 = 1",
+			"update t1 set id2 = 200 where id1 = 2",
+			"commit",
+		},
+		output: [][]string{{
+			`begin`,
+			`type:FIELD field_event:<table_name:"t1" fields:<name:"id1" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 values:"2bbb" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 values:"4ddd" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 values:"5eee" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:3 values:"4ddd" > after:<lengths:1 lengths:6 values:"4newddd" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 values:"1aaa" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:3 values:"2bbb" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:3 values:"1aaa" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:3 values:"2bbb" > > > `,
+			`gtid`,
+			`commit`,
+		}},
+	}}
+	runCases(t, filter, testcases, "")
+}
+
 func TestStatements(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
