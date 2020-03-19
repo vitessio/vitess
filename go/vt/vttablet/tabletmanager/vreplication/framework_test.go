@@ -55,6 +55,11 @@ var (
 	globalDBQueries = make(chan string, 1000)
 )
 
+type LogExpectation struct {
+	Type   string
+	Detail string
+}
+
 func init() {
 	tabletconn.RegisterDialer("test", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		return &fakeTabletConn{
@@ -211,11 +216,17 @@ func (ftc *fakeTabletConn) StreamHealth(ctx context.Context, callback func(*quer
 	})
 }
 
+// vstreamHook allows you to do work just before calling VStream.
+var vstreamHook func(ctx context.Context)
+
 // VStream directly calls into the pre-initialized engine.
 func (ftc *fakeTabletConn) VStream(ctx context.Context, target *querypb.Target, startPos string, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error {
 	if target.Keyspace != "vttest" {
 		<-ctx.Done()
 		return io.EOF
+	}
+	if vstreamHook != nil {
+		vstreamHook(ctx)
 	}
 	return streamerEngine.Stream(ctx, startPos, filter, send)
 }
@@ -341,7 +352,10 @@ func (dbc *realDBClient) DBName() string {
 }
 
 func (dbc *realDBClient) Connect() error {
-	app := env.Dbcfgs.AppWithDB()
+	app, err := env.Dbcfgs.AppWithDB().MysqlParams()
+	if err != nil {
+		return err
+	}
 	app.DbName = vrepldb
 	conn, err := mysql.Connect(context.Background(), app)
 	if err != nil {
@@ -389,6 +403,45 @@ func expectDeleteQueries(t *testing.T) {
 		"/delete from _vt.copy_state",
 		"commit",
 	})
+}
+
+func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan interface{}) {
+	t.Helper()
+	defer vrLogStatsLogger.Unsubscribe(logCh)
+	failed := false
+	for i, log := range logs {
+		if failed {
+			t.Errorf("no logs received")
+			continue
+		}
+		select {
+		case data := <-logCh:
+			got, ok := data.(*VrLogStats)
+			if !ok {
+				t.Errorf("got not ok casting to VrLogStats: %v", data)
+			}
+			var match bool
+			match = (log.Type == got.Type)
+			if match {
+				if log.Detail[0] == '/' {
+					result, err := regexp.MatchString(log.Detail[1:], got.Detail)
+					if err != nil {
+						panic(err)
+					}
+					match = result
+				} else {
+					match = (got.Detail == log.Detail)
+				}
+			}
+
+			if !match {
+				t.Errorf("log:\n%q, does not match log %d:\n%q", got, i, log)
+			}
+		case <-time.After(5 * time.Second):
+			t.Errorf("no logs received, expecting %s", log)
+			failed = true
+		}
+	}
 }
 
 func expectDBClientQueries(t *testing.T, queries []string) {

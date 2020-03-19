@@ -680,7 +680,7 @@ func (c *Conn) parseStmtArgs(data []byte, typ querypb.Type, pos int) (sqltypes.V
 				strconv.Itoa(int(hour)) + ":" +
 				strconv.Itoa(int(minute)) + ":" +
 				strconv.Itoa(int(second)) + "." +
-				strconv.Itoa(int(microSecond))
+				fmt.Sprintf("%06d", microSecond)
 
 			return sqltypes.NewVarChar(val), pos, ok
 		case 0x07:
@@ -781,7 +781,7 @@ func (c *Conn) parseStmtArgs(data []byte, typ querypb.Type, pos int) (sqltypes.V
 			val += strconv.Itoa(int(hours)) + ":" +
 				strconv.Itoa(int(minute)) + ":" +
 				strconv.Itoa(int(second)) + "." +
-				strconv.Itoa(int(microSecond))
+				fmt.Sprintf("%06d", microSecond)
 
 			return sqltypes.NewVarChar(val), pos, ok
 		case 0x08:

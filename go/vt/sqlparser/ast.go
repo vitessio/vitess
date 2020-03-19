@@ -638,6 +638,7 @@ type (
 		Exprs     SelectExprs
 		OrderBy   OrderBy
 		Separator string
+		Limit     *Limit
 	}
 
 	// ValuesFuncExpr represents a function call.
@@ -801,6 +802,7 @@ type ColIdent struct {
 	// last field in the struct.
 	_            [0]struct{ _ []byte }
 	val, lowered string
+	at           atCount
 }
 
 // TableIdent is a case sensitive SQL identifier. It will be escaped with
@@ -1543,14 +1545,20 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 		buf.Myprintf("%v.", node.Qualifier)
 	}
 	// Function names should not be back-quoted even
-	// if they match a reserved word. So, print the
-	// name as is.
-	buf.Myprintf("%s(%s%v)", node.Name.String(), distinct, node.Exprs)
+	// if they match a reserved word, only if they contain illegal characters
+	funcName := node.Name.String()
+
+	if containEscapableChars(funcName, NoAt) {
+		writeEscapedString(buf, funcName)
+	} else {
+		buf.WriteString(funcName)
+	}
+	buf.Myprintf("(%s%v)", distinct, node.Exprs)
 }
 
 // Format formats the node
 func (node *GroupConcatExpr) Format(buf *TrackedBuffer) {
-	buf.Myprintf("group_concat(%s%v%v%s)", node.Distinct, node.Exprs, node.OrderBy, node.Separator)
+	buf.Myprintf("group_concat(%s%v%v%s%v)", node.Distinct, node.Exprs, node.OrderBy, node.Separator, node.Limit)
 }
 
 // Format formats the node.
@@ -1719,7 +1727,7 @@ func (node *SetExpr) Format(buf *TrackedBuffer) {
 		sqlVal := node.Expr.(*SQLVal)
 		buf.Myprintf("%s %s", node.Name.String(), strings.ToLower(string(sqlVal.Val)))
 	} else {
-		buf.Myprintf("%s = %v", node.Name.String(), node.Expr)
+		buf.Myprintf("%v = %v", node.Name, node.Expr)
 	}
 }
 
@@ -1733,10 +1741,13 @@ func (node OnDup) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node ColIdent) Format(buf *TrackedBuffer) {
-	formatID(buf, node.val, node.Lowered())
+	for i := NoAt; i < node.at; i++ {
+		buf.WriteByte('@')
+	}
+	formatID(buf, node.val, node.Lowered(), node.at)
 }
 
 // Format formats the node.
 func (node TableIdent) Format(buf *TrackedBuffer) {
-	formatID(buf, node.v, strings.ToLower(node.v))
+	formatID(buf, node.v, strings.ToLower(node.v), NoAt)
 }

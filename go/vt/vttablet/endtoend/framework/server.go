@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"time"
 
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"golang.org/x/net/context"
@@ -77,7 +78,7 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 		TabletType: topodatapb.TabletType_MASTER,
 	}
 
-	Server = tabletserver.NewTabletServerWithNilTopoServer(config)
+	Server = tabletserver.NewTabletServer(config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	Server.Register()
 	err := Server.StartService(Target, dbcfgs)
 	if err != nil {

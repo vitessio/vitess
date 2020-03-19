@@ -48,10 +48,12 @@ func TestResolverExecuteKeyspaceIds(t *testing.T) {
 			"TestResolverExecuteKeyspaceIds",
 			topodatapb.TabletType_MASTER,
 			key.DestinationKeyspaceIDs([][]byte{{0x10}, {0x25}}),
-			nil,
+			NewSafeSession(&vtgatepb.Session{}),
 			false,
 			nil,
-			nil)
+			nil,
+			false,
+		)
 	})
 }
 
@@ -63,10 +65,12 @@ func TestResolverExecuteKeyRanges(t *testing.T) {
 			"TestResolverExecuteKeyRanges",
 			topodatapb.TabletType_MASTER,
 			key.DestinationKeyRanges([]*topodatapb.KeyRange{{Start: []byte{0x10}, End: []byte{0x25}}}),
-			nil,
+			NewSafeSession(&vtgatepb.Session{}),
 			false,
 			nil,
-			nil)
+			nil,
+			false,
+		)
 	})
 }
 

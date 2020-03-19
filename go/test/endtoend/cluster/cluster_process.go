@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math/rand"
+	"net"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -282,7 +283,7 @@ func (cluster *LocalProcessCluster) StartKeyspace(keyspace Keyspace, shardNames 
 		// wait till all mysqlctl is instantiated
 		for _, proc := range mysqlctlProcessList {
 			if err = proc.Wait(); err != nil {
-				log.Errorf("Unable to start mysql , error %v", err.Error())
+				log.Errorf("Unable to start mysql process %v, error %v", proc, err)
 				return err
 			}
 		}
@@ -576,7 +577,20 @@ func (cluster *LocalProcessCluster) GetAndReservePort() int {
 	if cluster.nextPortForProcess == 0 {
 		cluster.nextPortForProcess = getPort()
 	}
-	cluster.nextPortForProcess = cluster.nextPortForProcess + 1
+	for {
+		cluster.nextPortForProcess = cluster.nextPortForProcess + 1
+		log.Errorf("Attempting to reserve port: %v", cluster.nextPortForProcess)
+		ln, err := net.Listen("tcp", fmt.Sprintf(":%v", cluster.nextPortForProcess))
+
+		if err != nil {
+			log.Errorf("Can't listen on port %v: %s, trying next port", cluster.nextPortForProcess, err)
+			continue
+		}
+
+		ln.Close()
+		log.Errorf("Port %v is available, reserving..", cluster.nextPortForProcess)
+		break
+	}
 	return cluster.nextPortForProcess
 }
 

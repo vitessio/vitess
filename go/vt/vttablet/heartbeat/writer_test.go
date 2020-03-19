@@ -111,7 +111,9 @@ func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *Writer {
 	config.HeartbeatEnable = true
 	config.PoolNamePrefix = fmt.Sprintf("Pool-%d-", randID)
 
-	dbc := dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "")
+	params, _ := db.ConnParams().MysqlParams()
+	cp := *params
+	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
 
 	tw := NewWriter(&fakeMysqlChecker{},
 		topodatapb.TabletAlias{Cell: "test", Uid: 1111},

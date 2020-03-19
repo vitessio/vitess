@@ -31,14 +31,12 @@ import io.vitess.client.cursor.Cursor;
 import io.vitess.client.cursor.Row;
 import io.vitess.proto.Query;
 import io.vitess.proto.Query.Field;
-import io.vitess.proto.Query.SplitQueryRequest.Algorithm;
 import io.vitess.proto.Topodata.KeyRange;
 import io.vitess.proto.Topodata.KeyspaceIdType;
 import io.vitess.proto.Topodata.ShardReference;
 import io.vitess.proto.Topodata.SrvKeyspace;
 import io.vitess.proto.Topodata.SrvKeyspace.KeyspacePartition;
 import io.vitess.proto.Topodata.TabletType;
-import io.vitess.proto.Vtgate.SplitQueryResponse;
 import io.vitess.proto.Vtgate.VStreamRequest;
 import io.vitess.proto.Vtgate.VStreamResponse;
 import io.vitess.proto.Vtrpc.CallerID;
@@ -457,28 +455,6 @@ public abstract class RpcClientTest {
     Assert.assertEquals(OPTIONS_ALL_FIELDS_ECHO, echo.get("options"));
 
     tx.commit(ctx);
-  }
-
-  @Test
-  public void testEchoSplitQuery() throws Exception {
-    SplitQueryResponse.Part expected = SplitQueryResponse.Part.newBuilder()
-        .setQuery(Proto.bindQuery(
-            ECHO_PREFIX + QUERY + ":[split_column1 split_column2]:123:1000:FULL_SCAN",
-            BIND_VARS))
-        .setKeyRangePart(SplitQueryResponse.KeyRangePart.newBuilder().setKeyspace(KEYSPACE).build())
-        .build();
-    SplitQueryResponse.Part actual =
-        conn.splitQuery(
-            ctx,
-            KEYSPACE,
-            ECHO_PREFIX + QUERY,
-            BIND_VARS,
-            ImmutableList.of("split_column1", "split_column2"),
-            123,
-            1000,
-            Algorithm.FULL_SCAN)
-            .get(0);
-    Assert.assertEquals(expected, actual);
   }
 
   @Test

@@ -160,13 +160,6 @@ func (conn *VTGateConn) Close() {
 	conn.impl = nil
 }
 
-// SplitQuery splits a query into smaller queries. It is mostly used by batch job frameworks
-// such as MapReduce. See the documentation for the vtgate.SplitQueryRequest protocol buffer message
-// in 'proto/vtgate.proto'.
-func (conn *VTGateConn) SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]*querypb.BindVariable, splitColumns []string, splitCount int64, numRowsPerQueryPart int64, algorithm querypb.SplitQueryRequest_Algorithm) ([]*vtgatepb.SplitQueryResponse_Part, error) {
-	return conn.impl.SplitQuery(ctx, keyspace, query, bindVars, splitColumns, splitCount, numRowsPerQueryPart, algorithm)
-}
-
 // GetSrvKeyspace returns a topo.SrvKeyspace object.
 func (conn *VTGateConn) GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error) {
 	return conn.impl.GetSrvKeyspace(ctx, keyspace)
@@ -182,21 +175,6 @@ type VStreamReader interface {
 // VStream streams binlog events.
 func (conn *VTGateConn) VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter) (VStreamReader, error) {
 	return conn.impl.VStream(ctx, tabletType, vgtid, filter)
-}
-
-// UpdateStreamReader is returned by UpdateStream.
-type UpdateStreamReader interface {
-	// Recv returns the next result on the stream.
-	// It will return io.EOF if the stream ended.
-	Recv() (*querypb.StreamEvent, int64, error)
-}
-
-// UpdateStream executes a streaming query on vtgate. It returns an
-// UpdateStreamReader and an error. First check the error. Then you
-// can pull values from the UpdateStreamReader until io.EOF, or
-// another error.
-func (conn *VTGateConn) UpdateStream(ctx context.Context, keyspace, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken) (UpdateStreamReader, error) {
-	return conn.impl.UpdateStream(ctx, keyspace, shard, keyRange, tabletType, timestamp, event)
 }
 
 // VTGateSession exposes the V3 API to the clients.
@@ -380,19 +358,11 @@ type Impl interface {
 	MessageAck(ctx context.Context, keyspace string, name string, ids []*querypb.Value) (int64, error)
 	MessageAckKeyspaceIds(ctx context.Context, keyspace string, name string, idKeyspaceIDs []*vtgatepb.IdKeyspaceId) (int64, error)
 
-	// SplitQuery splits a query into smaller queries. It is mostly used by batch job frameworks
-	// such as MapReduce. See the documentation for the vtgate.SplitQueryRequest protocol buffer
-	// message in 'proto/vtgate.proto'.
-	SplitQuery(ctx context.Context, keyspace string, query string, bindVars map[string]*querypb.BindVariable, splitColumns []string, splitCount int64, numRowsPerQueryPart int64, algorithm querypb.SplitQueryRequest_Algorithm) ([]*vtgatepb.SplitQueryResponse_Part, error)
-
 	// GetSrvKeyspace returns a topo.SrvKeyspace.
 	GetSrvKeyspace(ctx context.Context, keyspace string) (*topodatapb.SrvKeyspace, error)
 
 	// VStream streams binlogevents
 	VStream(ctx context.Context, tabletType topodatapb.TabletType, vgtid *binlogdatapb.VGtid, filter *binlogdatapb.Filter) (VStreamReader, error)
-
-	// UpdateStream asks for a stream of StreamEvent.
-	UpdateStream(ctx context.Context, keyspace string, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType, timestamp int64, event *querypb.EventToken) (UpdateStreamReader, error)
 
 	// Close must be called for releasing resources.
 	Close()

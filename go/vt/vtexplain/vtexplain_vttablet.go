@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver"
@@ -82,7 +83,7 @@ func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 	}
 
 	// XXX much of this is cloned from the tabletserver tests
-	tsv := tabletserver.NewTabletServerWithNilTopoServer(config)
+	tsv := tabletserver.NewTabletServer(config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 
 	tablet := explainTablet{db: db, tsv: tsv}
 	db.Handler = &tablet
@@ -94,7 +95,9 @@ func newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 		},
 	)
 
-	dbcfgs := dbconfigs.NewTestDBConfigs(*db.ConnParams(), *db.ConnParams(), "")
+	params, _ := db.ConnParams().MysqlParams()
+	cp := *params
+	dbcfgs := dbconfigs.NewTestDBConfigs(cp, cp, "")
 	cnf := mysqlctl.NewMycnf(22222, 6802)
 	cnf.ServerID = 33333
 
@@ -503,11 +506,11 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		}
 
 		var selStmt *sqlparser.Select
-		switch stmt.(type) {
+		switch stmt := stmt.(type) {
 		case *sqlparser.Select:
-			selStmt = stmt.(*sqlparser.Select)
+			selStmt = stmt
 		case *sqlparser.Union:
-			selStmt = stmt.(*sqlparser.Union).Right.(*sqlparser.Select)
+			selStmt = stmt.Right.(*sqlparser.Select)
 		default:
 			return fmt.Errorf("vtexplain: unsupported statement type +%v", reflect.TypeOf(stmt))
 		}

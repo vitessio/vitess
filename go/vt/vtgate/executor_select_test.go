@@ -235,6 +235,45 @@ func TestSelectLastInsertId(t *testing.T) {
 	assert.Equal(t, wantQueries, sbc1.Queries)
 }
 
+func TestSelectUserDefindVariable(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+	executor.normalize = true
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	sql := "select @foo"
+	masterSession = &vtgatepb.Session{UserDefinedVariables: createMap([]string{"foo"}, []interface{}{"bar"})}
+	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "select :__vtudvfoo as `@foo` from dual",
+		BindVariables: map[string]*querypb.BindVariable{"__vtudvfoo": sqltypes.StringBindVariable("bar")},
+	}}
+
+	assert.Equal(t, wantQueries, sbc1.Queries)
+}
+
+func TestFoundRows(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+	executor.normalize = true
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	// run this extra query so we can assert on the number of rows found
+	_, err := executorExec(executor, "select 42", map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+
+	sql := "select found_rows()"
+	_, err = executorExec(executor, sql, map[string]*querypb.BindVariable{})
+	require.NoError(t, err)
+	expected := &querypb.BoundQuery{
+		Sql:           "select :__vtfrows as `found_rows()` from dual",
+		BindVariables: map[string]*querypb.BindVariable{"__vtfrows": sqltypes.Uint64BindVariable(1)},
+	}
+
+	assert.Equal(t, expected, sbc1.Queries[1])
+}
+
 func TestSelectLastInsertIdInUnion(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
 	executor.normalize = true

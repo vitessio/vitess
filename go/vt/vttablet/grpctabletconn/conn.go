@@ -557,40 +557,6 @@ func (conn *gRPCQueryClient) MessageAck(ctx context.Context, target *querypb.Tar
 	return int64(reply.Result.RowsAffected), nil
 }
 
-// SplitQuery is the stub for TabletServer.SplitQuery RPC
-func (conn *gRPCQueryClient) SplitQuery(
-	ctx context.Context,
-	target *querypb.Target,
-	query *querypb.BoundQuery,
-	splitColumns []string,
-	splitCount int64,
-	numRowsPerQueryPart int64,
-	algorithm querypb.SplitQueryRequest_Algorithm) (queries []*querypb.QuerySplit, err error) {
-
-	conn.mu.RLock()
-	defer conn.mu.RUnlock()
-	if conn.cc == nil {
-		err = tabletconn.ConnClosed
-		return
-	}
-
-	req := &querypb.SplitQueryRequest{
-		Target:              target,
-		EffectiveCallerId:   callerid.EffectiveCallerIDFromContext(ctx),
-		ImmediateCallerId:   callerid.ImmediateCallerIDFromContext(ctx),
-		Query:               query,
-		SplitColumn:         splitColumns,
-		SplitCount:          splitCount,
-		NumRowsPerQueryPart: numRowsPerQueryPart,
-		Algorithm:           algorithm,
-	}
-	sqr, err := conn.c.SplitQuery(ctx, req)
-	if err != nil {
-		return nil, tabletconn.ErrorFromGRPC(err)
-	}
-	return sqr.Queries, nil
-}
-
 // StreamHealth starts a streaming RPC for VTTablet health status updates.
 func (conn *gRPCQueryClient) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
 	// Please see comments in StreamExecute to see how this works.
@@ -619,49 +585,6 @@ func (conn *gRPCQueryClient) StreamHealth(ctx context.Context, callback func(*qu
 			return tabletconn.ErrorFromGRPC(err)
 		}
 		if err := callback(shr); err != nil {
-			if err == nil || err == io.EOF {
-				return nil
-			}
-			return err
-		}
-	}
-}
-
-// UpdateStream starts a streaming query to VTTablet.
-func (conn *gRPCQueryClient) UpdateStream(ctx context.Context, target *querypb.Target, position string, timestamp int64, callback func(*querypb.StreamEvent) error) error {
-	// Please see comments in StreamExecute to see how this works.
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	stream, err := func() (queryservicepb.Query_UpdateStreamClient, error) {
-		conn.mu.RLock()
-		defer conn.mu.RUnlock()
-		if conn.cc == nil {
-			return nil, tabletconn.ConnClosed
-		}
-
-		req := &querypb.UpdateStreamRequest{
-			Target:            target,
-			EffectiveCallerId: callerid.EffectiveCallerIDFromContext(ctx),
-			ImmediateCallerId: callerid.ImmediateCallerIDFromContext(ctx),
-			Position:          position,
-			Timestamp:         timestamp,
-		}
-		stream, err := conn.c.UpdateStream(ctx, req)
-		if err != nil {
-			return nil, tabletconn.ErrorFromGRPC(err)
-		}
-		return stream, nil
-	}()
-	if err != nil {
-		return err
-	}
-	for {
-		r, err := stream.Recv()
-		if err != nil {
-			return tabletconn.ErrorFromGRPC(err)
-		}
-		if err := callback(r.Event); err != nil {
 			if err == nil || err == io.EOF {
 				return nil
 			}

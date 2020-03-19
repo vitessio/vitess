@@ -2,7 +2,7 @@
 
 package sqlparser
 
-//go:generate go run visitorgen/main -input=ast.go -output=rewriter.go
+//go:generate go run ./visitorgen/main -input=ast.go -output=rewriter.go
 
 import (
 	"reflect"
@@ -316,6 +316,10 @@ func (r *replaceGroupByItems) inc() {
 
 func replaceGroupConcatExprExprs(newNode, parent SQLNode) {
 	parent.(*GroupConcatExpr).Exprs = newNode.(SelectExprs)
+}
+
+func replaceGroupConcatExprLimit(newNode, parent SQLNode) {
+	parent.(*GroupConcatExpr).Limit = newNode.(*Limit)
 }
 
 func replaceGroupConcatExprOrderBy(newNode, parent SQLNode) {
@@ -998,6 +1002,7 @@ func (a *application) apply(parent, node SQLNode, replacer replacerFunc) {
 
 	case *GroupConcatExpr:
 		a.apply(node, n.Exprs, replaceGroupConcatExprExprs)
+		a.apply(node, n.Limit, replaceGroupConcatExprLimit)
 		a.apply(node, n.OrderBy, replaceGroupConcatExprOrderBy)
 
 	case *IndexDefinition:

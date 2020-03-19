@@ -22,7 +22,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 // This file contains the proto3 conversion functions for the structures
@@ -215,19 +214,6 @@ func Proto3ValuesEqual(v1, v2 []*querypb.Value) bool {
 	}
 	for i, v := range v1 {
 		if !proto.Equal(v, v2[i]) {
-			return false
-		}
-	}
-	return true
-}
-
-// SplitQueryResponsePartsEqual compares two arrays of SplitQueryResponse_Part.
-func SplitQueryResponsePartsEqual(s1, s2 []*vtgatepb.SplitQueryResponse_Part) bool {
-	if len(s1) != len(s2) {
-		return false
-	}
-	for i, s := range s1 {
-		if !proto.Equal(s, s2[i]) {
 			return false
 		}
 	}

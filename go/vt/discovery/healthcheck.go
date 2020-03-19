@@ -621,6 +621,7 @@ func (hcc *healthCheckConn) stream(ctx context.Context, hc *HealthCheckImpl, cal
 	}
 
 	if err := hcc.conn.StreamHealth(ctx, callback); err != nil {
+		log.Warningf("tablet %v healthcheck stream error: %v", hcc.tabletStats.Tablet.Alias, err)
 		hcc.setServingState(false, err.Error())
 		hcc.tabletStats.LastError = err
 		// Send nil because we intend to close the connection.

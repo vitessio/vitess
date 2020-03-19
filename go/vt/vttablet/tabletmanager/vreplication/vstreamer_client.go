@@ -23,7 +23,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -78,7 +77,7 @@ type MySQLVStreamerClient struct {
 
 	isOpen bool
 
-	sourceConnParams *mysql.ConnParams
+	sourceConnParams dbconfigs.Connector
 	sourceSe         *schema.Engine
 }
 

@@ -344,6 +344,75 @@ func TestHashLookupMultiInsertIgnore(t *testing.T) {
 	}
 }
 
+func TestConsistentLookupUpdate(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	/* Simple insert. after this dml, the tables will contain the following:
+	t4 (id1, id2):
+	1 2
+	2 2
+	3 3
+	4 3
+
+	t4_id2_idx (id2, id1, keyspace_id:id1):
+	2 1 1
+	2 2 2
+	3 3 3
+	3 4 4
+	*/
+	exec(t, conn, "insert into t4(id1, id2) values(1, '2'), (2, '2'), (3, '3'), (4, '3')")
+	qr := exec(t, conn, "select id1, id2 from t4 order by id1")
+	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("2")] [INT64(2) VARCHAR("2")] [INT64(3) VARCHAR("3")] [INT64(4) VARCHAR("3")]]`; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	/* Updating a lookup column. after this dml, the tables will contain the following:
+	t4 (id1, id2):
+	1 42
+	2 2
+	3 3
+	4 3
+
+	t4_id2_idx (id2, id1, keyspace_id:id1):
+	42 1 1
+	2 2 2
+	3 3 3
+	3 4 4
+	*/
+	exec(t, conn, "update t4 set id2 = '42' where id1 = 1")
+	qr = exec(t, conn, "select id1, id2 from t4 order by id1")
+	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1) VARCHAR("42")] [INT64(2) VARCHAR("2")] [INT64(3) VARCHAR("3")] [INT64(4) VARCHAR("3")]]`; got != want {
+		t.Errorf("select:\n%v want\n%v", got, want)
+	}
+
+	/* delete one specific keyspace id. after this dml, the tables will contain the following:
+	t4 (id1, id2):
+	2 2
+	3 3
+	4 3
+
+	t4_id2_idx (id2, id1, keyspace_id:id1):
+	2 2 2
+	3 3 3
+	3 4 4
+	*/
+	exec(t, conn, "delete from t4 where id2 = '42'")
+	qr = exec(t, conn, "select * from t4 where id2 = '42'")
+	require.Empty(t, qr.Rows)
+	qr = exec(t, conn, "select * from t4_id2_idx where id2 = '42'")
+	require.Empty(t, qr.Rows)
+
+	// delete all the rows.
+	exec(t, conn, "delete from t4")
+	qr = exec(t, conn, "select * from t4")
+	require.Empty(t, qr.Rows)
+	qr = exec(t, conn, "select * from t4_id2_idx")
+	require.Empty(t, qr.Rows)
+}
+
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
 	t.Helper()
 	qr, err := conn.ExecuteFetch(query, 1000, true)

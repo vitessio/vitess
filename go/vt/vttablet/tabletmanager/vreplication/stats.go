@@ -148,12 +148,6 @@ func (st *vrStats) status() *EngineStatus {
 	status.Controllers = make([]*ControllerStatus, len(st.controllers))
 	i := 0
 	for _, ct := range st.controllers {
-		state := "Running"
-		select {
-		case <-ct.done:
-			state = "Stopped"
-		default:
-		}
 		status.Controllers[i] = &ControllerStatus{
 			Index:               ct.id,
 			Source:              ct.source.String(),
@@ -162,7 +156,7 @@ func (st *vrStats) status() *EngineStatus {
 			SecondsBehindMaster: ct.blpStats.SecondsBehindMaster.Get(),
 			Counts:              ct.blpStats.Timings.Counts(),
 			Rates:               ct.blpStats.Rates.Get(),
-			State:               state,
+			State:               ct.blpStats.State.Get(),
 			SourceTablet:        ct.sourceTablet.Get(),
 			Messages:            ct.blpStats.MessageHistory(),
 		}

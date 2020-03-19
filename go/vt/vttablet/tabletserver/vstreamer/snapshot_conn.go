@@ -30,10 +30,10 @@ import (
 // reading a table along with a gtid snapshot.
 type snapshotConn struct {
 	*mysql.Conn
-	cp *mysql.ConnParams
+	cp dbconfigs.Connector
 }
 
-func snapshotConnect(ctx context.Context, cp *mysql.ConnParams) (*snapshotConn, error) {
+func snapshotConnect(ctx context.Context, cp dbconfigs.Connector) (*snapshotConn, error) {
 	mconn, err := mysqlConnect(ctx, cp)
 	if err != nil {
 		return nil, err
@@ -106,10 +106,6 @@ func (conn *snapshotConn) Close() {
 	conn.Conn.Close()
 }
 
-func mysqlConnect(ctx context.Context, cp *mysql.ConnParams) (*mysql.Conn, error) {
-	cp, err := dbconfigs.WithCredentials(cp)
-	if err != nil {
-		return nil, err
-	}
-	return mysql.Connect(ctx, cp)
+func mysqlConnect(ctx context.Context, cp dbconfigs.Connector) (*mysql.Conn, error) {
+	return cp.Connect(ctx)
 }

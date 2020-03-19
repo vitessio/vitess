@@ -23,6 +23,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
@@ -32,9 +33,11 @@ import (
 
 // tableData is a temporary structure to hold selected data.
 type tableData struct {
-	Msg     string
-	Data    string
-	TextCol string
+	Msg            string
+	Data           string
+	TextCol        string
+	DateTime       time.Time
+	DateTimeMicros time.Time
 }
 
 // DBInfo information about the database.
@@ -119,6 +122,7 @@ var (
 		decimal_unsigned DECIMAL,
 		t_date DATE,
 		t_datetime DATETIME,
+		t_datetime_micros DATETIME(6),
 		t_time TIME,
 		t_timestamp TIMESTAMP,
 		c8 bit(8) DEFAULT NULL,
@@ -255,7 +259,7 @@ func execErr(dbo *sql.DB, stmt string, params ...interface{}) *mysql.MySQLError 
 func selectWhere(t *testing.T, dbo *sql.DB, where string, params ...interface{}) []tableData {
 	var out []tableData
 	// prepare query
-	qry := "SELECT msg, data, text_col FROM " + tableName
+	qry := "SELECT msg, data, text_col, t_datetime, t_datetime_micros FROM " + tableName
 	if where != "" {
 		qry += " WHERE (" + where + ")"
 	}
@@ -267,7 +271,7 @@ func selectWhere(t *testing.T, dbo *sql.DB, where string, params ...interface{})
 	// prepare result
 	for r.Next() {
 		var t tableData
-		r.Scan(&t.Msg, &t.Data, &t.TextCol)
+		r.Scan(&t.Msg, &t.Data, &t.TextCol, &t.DateTime, &t.DateTimeMicros)
 		out = append(out, t)
 	}
 	return out

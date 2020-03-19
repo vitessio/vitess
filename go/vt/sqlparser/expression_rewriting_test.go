@@ -23,8 +23,8 @@ import (
 )
 
 type myTestCase struct {
-	in, expected string
-	liid, db     bool
+	in, expected             string
+	liid, db, foundRows, udv bool
 }
 
 func TestRewrites(in *testing.T) {
@@ -32,27 +32,27 @@ func TestRewrites(in *testing.T) {
 		{
 			in:       "SELECT 42",
 			expected: "SELECT 42",
-			db:       false, liid: false,
+			// no bindvar needs
 		},
 		{
 			in:       "SELECT last_insert_id()",
 			expected: "SELECT :__lastInsertId as `last_insert_id()`",
-			db:       false, liid: true,
+			liid:     true,
 		},
 		{
 			in:       "SELECT database()",
 			expected: "SELECT :__vtdbname as `database()`",
-			db:       true, liid: false,
+			db:       true,
 		},
 		{
 			in:       "SELECT database() from test",
 			expected: "SELECT database() from test",
-			db:       false, liid: false,
+			// no bindvar needs
 		},
 		{
 			in:       "SELECT last_insert_id() as test",
 			expected: "SELECT :__lastInsertId as test",
-			db:       false, liid: true,
+			liid:     true,
 		},
 		{
 			in:       "SELECT last_insert_id() + database()",
@@ -62,27 +62,52 @@ func TestRewrites(in *testing.T) {
 		{
 			in:       "select (select database()) from test",
 			expected: "select (select database() from dual) from test",
-			db:       false, liid: false,
+			// no bindvar needs
 		},
 		{
 			in:       "select (select database() from dual) from test",
 			expected: "select (select database() from dual) from test",
-			db:       false, liid: false,
+			// no bindvar needs
 		},
 		{
 			in:       "select (select database() from dual) from dual",
 			expected: "select (select :__vtdbname as `database()` from dual) as `(select database() from dual)` from dual",
-			db:       true, liid: false,
+			db:       true,
 		},
 		{
 			in:       "select id from user where database()",
 			expected: "select id from user where database()",
-			db:       false, liid: false,
+			// no bindvar needs
 		},
 		{
 			in:       "select table_name from information_schema.tables where table_schema = database()",
 			expected: "select table_name from information_schema.tables where table_schema = database()",
-			db:       false, liid: false,
+			// no bindvar needs
+		},
+		{
+			in:       "select schema()",
+			expected: "select :__vtdbname as `schema()`",
+			db:       true,
+		},
+		{
+			in:        "select found_rows()",
+			expected:  "select :__vtfrows as `found_rows()`",
+			foundRows: true,
+		},
+		{
+			in:       "select @`x y`",
+			expected: "select :__vtudvx_y as `@``x y``` from dual",
+			udv:      true,
+		},
+		{
+			in:       "select id from t where id = @x",
+			expected: "select id from t where id = :__vtudvx",
+			db:       false, udv: true,
+		},
+		{
+			in:       "insert into t(id) values(@xyx)",
+			expected: "insert into t(id) values(:__vtudvxyx)",
+			db:       false, udv: true,
 		},
 	}
 
@@ -95,12 +120,13 @@ func TestRewrites(in *testing.T) {
 			require.NoError(t, err)
 
 			expected, err := Parse(tc.expected)
-			require.NoError(t, err)
+			require.NoError(t, err, "test expectation does not parse [%s]", tc.expected)
 
 			s := String(expected)
 			require.Equal(t, s, String(result.AST))
 			require.Equal(t, tc.liid, result.NeedLastInsertID, "should need last insert id")
 			require.Equal(t, tc.db, result.NeedDatabase, "should need database name")
+			require.Equal(t, tc.foundRows, result.NeedFoundRows, "should need found rows")
 		})
 	}
 }

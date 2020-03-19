@@ -20,8 +20,8 @@ import (
 	"context"
 	"fmt"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -34,13 +34,13 @@ type resultStreamer struct {
 	ctx    context.Context
 	cancel func()
 
-	cp        *mysql.ConnParams
+	cp        dbconfigs.Connector
 	query     string
 	tableName sqlparser.TableIdent
 	send      func(*binlogdatapb.VStreamResultsResponse) error
 }
 
-func newResultStreamer(ctx context.Context, cp *mysql.ConnParams, query string, send func(*binlogdatapb.VStreamResultsResponse) error) *resultStreamer {
+func newResultStreamer(ctx context.Context, cp dbconfigs.Connector, query string, send func(*binlogdatapb.VStreamResultsResponse) error) *resultStreamer {
 	ctx, cancel := context.WithCancel(ctx)
 	return &resultStreamer{
 		ctx:    ctx,

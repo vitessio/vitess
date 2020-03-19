@@ -27,7 +27,6 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/messager"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -37,7 +36,6 @@ type TxExecutor struct {
 	ctx      context.Context
 	logStats *tabletenv.LogStats
 	te       *TxEngine
-	messager *messager.Engine
 }
 
 // Prepare performs a prepare on a connection including the redo log work.
@@ -79,7 +77,7 @@ func (txe *TxExecutor) Prepare(transactionID int64, dtid string) error {
 		return err
 	}
 
-	_, err = txe.te.txPool.LocalCommit(txe.ctx, localConn, txe.messager)
+	_, err = txe.te.txPool.LocalCommit(txe.ctx, localConn)
 	if err != nil {
 		return err
 	}
@@ -111,7 +109,7 @@ func (txe *TxExecutor) CommitPrepared(dtid string) error {
 		txe.markFailed(ctx, dtid)
 		return err
 	}
-	_, err = txe.te.txPool.LocalCommit(ctx, conn, txe.messager)
+	_, err = txe.te.txPool.LocalCommit(ctx, conn)
 	if err != nil {
 		txe.markFailed(ctx, dtid)
 		return err
@@ -142,7 +140,7 @@ func (txe *TxExecutor) markFailed(ctx context.Context, dtid string) {
 		return
 	}
 
-	if _, err = txe.te.txPool.LocalCommit(ctx, conn, txe.messager); err != nil {
+	if _, err = txe.te.txPool.LocalCommit(ctx, conn); err != nil {
 		log.Errorf("markFailed: Commit failed for dtid %s: %v", dtid, err)
 	}
 }
@@ -181,7 +179,7 @@ func (txe *TxExecutor) RollbackPrepared(dtid string, originalID int64) error {
 		goto returnConn
 	}
 
-	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn, txe.messager)
+	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn)
 
 returnConn:
 	if preparedConn := txe.te.preparedPool.FetchForRollback(dtid); preparedConn != nil {
@@ -210,7 +208,7 @@ func (txe *TxExecutor) CreateTransaction(dtid string, participants []*querypb.Ta
 	if err != nil {
 		return err
 	}
-	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn, txe.messager)
+	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn)
 	return err
 }
 
@@ -233,7 +231,7 @@ func (txe *TxExecutor) StartCommit(transactionID int64, dtid string) error {
 	if err != nil {
 		return err
 	}
-	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn, txe.messager)
+	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn)
 	return err
 }
 
@@ -261,7 +259,7 @@ func (txe *TxExecutor) SetRollback(dtid string, transactionID int64) error {
 		return err
 	}
 
-	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn, txe.messager)
+	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn)
 	if err != nil {
 		return err
 	}
@@ -287,7 +285,7 @@ func (txe *TxExecutor) ConcludeTransaction(dtid string) error {
 	if err != nil {
 		return err
 	}
-	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn, txe.messager)
+	_, err = txe.te.txPool.LocalCommit(txe.ctx, conn)
 	return err
 }
 
