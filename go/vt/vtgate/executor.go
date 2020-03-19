@@ -536,184 +536,184 @@ func (e *Executor) handleSet(ctx context.Context, safeSession *SafeSession, sql 
 			if err != nil {
 				return nil, err
 			}
-			return &sqltypes.Result{}, nil
-		}
+		case sqlparser.ImplicitStr:
+			switch k.Key {
+			case "autocommit":
+				val, err := validateSetOnOff(v, k.Key)
+				if err != nil {
+					return nil, err
+				}
 
-		switch k.Key {
-		case "autocommit":
-			val, err := validateSetOnOff(v, k.Key)
-			if err != nil {
-				return nil, err
-			}
-
-			switch val {
-			case 0:
-				safeSession.Autocommit = false
-			case 1:
-				if safeSession.InTransaction() {
-					if err := e.txConn.Commit(ctx, safeSession); err != nil {
-						return nil, err
+				switch val {
+				case 0:
+					safeSession.Autocommit = false
+				case 1:
+					if safeSession.InTransaction() {
+						if err := e.txConn.Commit(ctx, safeSession); err != nil {
+							return nil, err
+						}
 					}
+					safeSession.Autocommit = true
+				default:
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for autocommit: %d", val)
 				}
-				safeSession.Autocommit = true
-			default:
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for autocommit: %d", val)
-			}
-		case "client_found_rows":
-			val, ok := v.(int64)
-			if !ok {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for client_found_rows: %T", v)
-			}
-			if safeSession.Options == nil {
-				safeSession.Options = &querypb.ExecuteOptions{}
-			}
-			switch val {
-			case 0:
-				safeSession.Options.ClientFoundRows = false
-			case 1:
-				safeSession.Options.ClientFoundRows = true
-			default:
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for client_found_rows: %d", val)
-			}
-		case "skip_query_plan_cache":
-			val, ok := v.(int64)
-			if !ok {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for skip_query_plan_cache: %T", v)
-			}
-			if safeSession.Options == nil {
-				safeSession.Options = &querypb.ExecuteOptions{}
-			}
-			switch val {
-			case 0:
-				safeSession.Options.SkipQueryPlanCache = false
-			case 1:
-				safeSession.Options.SkipQueryPlanCache = true
-			default:
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for skip_query_plan_cache: %d", val)
-			}
-		case "sql_safe_updates":
-			val, err := validateSetOnOff(v, k.Key)
-			if err != nil {
-				return nil, err
-			}
+			case "client_found_rows":
+				val, ok := v.(int64)
+				if !ok {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for client_found_rows: %T", v)
+				}
+				if safeSession.Options == nil {
+					safeSession.Options = &querypb.ExecuteOptions{}
+				}
+				switch val {
+				case 0:
+					safeSession.Options.ClientFoundRows = false
+				case 1:
+					safeSession.Options.ClientFoundRows = true
+				default:
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for client_found_rows: %d", val)
+				}
+			case "skip_query_plan_cache":
+				val, ok := v.(int64)
+				if !ok {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for skip_query_plan_cache: %T", v)
+				}
+				if safeSession.Options == nil {
+					safeSession.Options = &querypb.ExecuteOptions{}
+				}
+				switch val {
+				case 0:
+					safeSession.Options.SkipQueryPlanCache = false
+				case 1:
+					safeSession.Options.SkipQueryPlanCache = true
+				default:
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for skip_query_plan_cache: %d", val)
+				}
+			case "sql_safe_updates":
+				val, err := validateSetOnOff(v, k.Key)
+				if err != nil {
+					return nil, err
+				}
 
-			switch val {
-			case 0, 1:
-				// no op
-			default:
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for sql_safe_updates: %d", val)
-			}
-		case "transaction_mode":
-			val, ok := v.(string)
-			if !ok {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for transaction_mode: %T", v)
-			}
-			out, ok := vtgatepb.TransactionMode_value[strings.ToUpper(val)]
-			if !ok {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid transaction_mode: %s", val)
-			}
-			safeSession.TransactionMode = vtgatepb.TransactionMode(out)
-		case sqlparser.TransactionStr:
-			// Parser ensures it's well-formed.
+				switch val {
+				case 0, 1:
+					// no op
+				default:
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for sql_safe_updates: %d", val)
+				}
+			case "transaction_mode":
+				val, ok := v.(string)
+				if !ok {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for transaction_mode: %T", v)
+				}
+				out, ok := vtgatepb.TransactionMode_value[strings.ToUpper(val)]
+				if !ok {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid transaction_mode: %s", val)
+				}
+				safeSession.TransactionMode = vtgatepb.TransactionMode(out)
+			case sqlparser.TransactionStr:
+				// Parser ensures it's well-formed.
 
-			// TODO: This is a NOP, modeled off of tx_isolation and tx_read_only.  It's incredibly
-			// dangerous that it's a NOP, but fixing that is left to. Note that vtqueryservice needs
-			// to be updated as well:
-			// https://github.com/vitessio/vitess/issues/4127
-		case "tx_isolation":
-			val, ok := v.(string)
-			if !ok {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for tx_isolation: %T", v)
-			}
-			switch val {
-			case "repeatable read", "read committed", "read uncommitted", "serializable":
-				// TODO (4127): This is a dangerous NOP.
-			default:
-				return nil, fmt.Errorf("unexpected value for tx_isolation: %v", val)
-			}
-		case "tx_read_only", "transaction_read_only":
-			val, err := validateSetOnOff(v, k.Key)
-			if err != nil {
-				return nil, err
-			}
-			switch val {
-			case 0, 1:
-				// TODO (4127): This is a dangerous NOP.
-			default:
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for %v: %d", k.Key, val)
-			}
-		case "workload":
-			val, ok := v.(string)
-			if !ok {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for workload: %T", v)
-			}
-			out, ok := querypb.ExecuteOptions_Workload_value[strings.ToUpper(val)]
-			if !ok {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid workload: %s", val)
-			}
-			if safeSession.Options == nil {
-				safeSession.Options = &querypb.ExecuteOptions{}
-			}
-			safeSession.Options.Workload = querypb.ExecuteOptions_Workload(out)
-		case "sql_select_limit":
-			var val int64
+				// TODO: This is a NOP, modeled off of tx_isolation and tx_read_only.  It's incredibly
+				// dangerous that it's a NOP, but fixing that is left to. Note that vtqueryservice needs
+				// to be updated as well:
+				// https://github.com/vitessio/vitess/issues/4127
+			case "tx_isolation":
+				val, ok := v.(string)
+				if !ok {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for tx_isolation: %T", v)
+				}
+				switch val {
+				case "repeatable read", "read committed", "read uncommitted", "serializable":
+					// TODO (4127): This is a dangerous NOP.
+				default:
+					return nil, fmt.Errorf("unexpected value for tx_isolation: %v", val)
+				}
+			case "tx_read_only", "transaction_read_only":
+				val, err := validateSetOnOff(v, k.Key)
+				if err != nil {
+					return nil, err
+				}
+				switch val {
+				case 0, 1:
+					// TODO (4127): This is a dangerous NOP.
+				default:
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for %v: %d", k.Key, val)
+				}
+			case "workload":
+				val, ok := v.(string)
+				if !ok {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for workload: %T", v)
+				}
+				out, ok := querypb.ExecuteOptions_Workload_value[strings.ToUpper(val)]
+				if !ok {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid workload: %s", val)
+				}
+				if safeSession.Options == nil {
+					safeSession.Options = &querypb.ExecuteOptions{}
+				}
+				safeSession.Options.Workload = querypb.ExecuteOptions_Workload(out)
+			case "sql_select_limit":
+				var val int64
 
-			switch cast := v.(type) {
-			case int64:
-				val = cast
-			case string:
-				if !strings.EqualFold(cast, "default") {
-					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected string value for sql_select_limit: %v", v)
+				switch cast := v.(type) {
+				case int64:
+					val = cast
+				case string:
+					if !strings.EqualFold(cast, "default") {
+						return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected string value for sql_select_limit: %v", v)
+					}
+				default:
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for sql_select_limit: %T", v)
+				}
+
+				if safeSession.Options == nil {
+					safeSession.Options = &querypb.ExecuteOptions{}
+				}
+				safeSession.Options.SqlSelectLimit = val
+			case "sql_auto_is_null":
+				val, ok := v.(int64)
+				if !ok {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for sql_auto_is_null: %T", v)
+				}
+				switch val {
+				case 0:
+					// This is the default setting for MySQL. Do nothing.
+				case 1:
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "sql_auto_is_null is not currently supported")
+				default:
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for sql_auto_is_null: %d", val)
+				}
+			case "character_set_results":
+				// This is a statement that mysql-connector-j sends at the beginning. We return a canned response for it.
+				switch v {
+				case nil, "utf8", "utf8mb4", "latin1":
+				default:
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed value for character_set_results: %v", v)
+				}
+			case "wait_timeout":
+				_, ok := v.(int64)
+				if !ok {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for wait_timeout: %T", v)
+				}
+			case "sql_mode", "net_write_timeout", "net_read_timeout", "lc_messages", "collation_connection", "foreign_key_checks", "sql_quote_show_create", "unique_checks":
+				log.Warningf("Ignored inapplicable SET %v = %v", k, v)
+				warnings.Add("IgnoredSet", 1)
+			case "charset", "names":
+				val, ok := v.(string)
+				if !ok {
+					return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for charset/names: %T", v)
+				}
+				switch val {
+				case "", "utf8", "utf8mb4", "latin1", "default":
+					break
+				default:
+					return nil, fmt.Errorf("unexpected value for charset/names: %v", val)
 				}
 			default:
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for sql_select_limit: %T", v)
+				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported construct: %s", sql)
 			}
 
-			if safeSession.Options == nil {
-				safeSession.Options = &querypb.ExecuteOptions{}
-			}
-			safeSession.Options.SqlSelectLimit = val
-		case "sql_auto_is_null":
-			val, ok := v.(int64)
-			if !ok {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for sql_auto_is_null: %T", v)
-			}
-			switch val {
-			case 0:
-				// This is the default setting for MySQL. Do nothing.
-			case 1:
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "sql_auto_is_null is not currently supported")
-			default:
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value for sql_auto_is_null: %d", val)
-			}
-		case "character_set_results":
-			// This is a statement that mysql-connector-j sends at the beginning. We return a canned response for it.
-			switch v {
-			case nil, "utf8", "utf8mb4", "latin1":
-			default:
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "disallowed value for character_set_results: %v", v)
-			}
-		case "wait_timeout":
-			_, ok := v.(int64)
-			if !ok {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for wait_timeout: %T", v)
-			}
-		case "sql_mode", "net_write_timeout", "net_read_timeout", "lc_messages", "collation_connection", "foreign_key_checks", "sql_quote_show_create", "unique_checks":
-			log.Warningf("Ignored inapplicable SET %v = %v", k, v)
-			warnings.Add("IgnoredSet", 1)
-		case "charset", "names":
-			val, ok := v.(string)
-			if !ok {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unexpected value type for charset/names: %T", v)
-			}
-			switch val {
-			case "", "utf8", "utf8mb4", "latin1", "default":
-				break
-			default:
-				return nil, fmt.Errorf("unexpected value for charset/names: %v", val)
-			}
-		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported construct: %s", sql)
 		}
 
 	}
