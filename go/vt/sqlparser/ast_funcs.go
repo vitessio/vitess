@@ -53,11 +53,7 @@ func Walk(visit Visit, nodes ...SQLNode) error {
 			return kontinue
 		}
 		post := func(cursor *Cursor) bool {
-			if err != nil {
-				return false // now we can abort the traversal if an error was found
-			}
-
-			return true
+			return err == nil // now we can abort the traversal if an error was found
 		}
 
 		Rewrite(node, pre, post)
@@ -533,6 +529,14 @@ func NewColIdent(str string) ColIdent {
 	}
 }
 
+// NewColIdentWithAt makes a new ColIdent.
+func NewColIdentWithAt(str string, at atCount) ColIdent {
+	return ColIdent{
+		val: str,
+		at:  at,
+	}
+}
+
 // IsEmpty returns true if the name is empty.
 func (node ColIdent) IsEmpty() bool {
 	return node.val == ""
@@ -543,7 +547,11 @@ func (node ColIdent) IsEmpty() bool {
 // instead. The Stringer conformance is for usage
 // in templates.
 func (node ColIdent) String() string {
-	return node.val
+	atStr := ""
+	for i := NoAt; i < node.at; i++ {
+		atStr += "@"
+	}
+	return atStr + node.val
 }
 
 // CompliantName returns a compliant id name
@@ -631,14 +639,13 @@ func (node *TableIdent) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func containEscapableChars(s string) bool {
-	isDbSystemVariable := false
-	if len(s) > 1 && s[:2] == "@@" {
-		isDbSystemVariable = true
-	}
+func containEscapableChars(s string, at atCount) bool {
+	isDbSystemVariable := at != NoAt
 
 	for i, c := range s {
-		if !isLetter(uint16(c)) && (!isDbSystemVariable || !isCarat(uint16(c))) {
+		letter := isLetter(uint16(c))
+		systemVarChar := isDbSystemVariable && isCarat(uint16(c))
+		if !(letter || systemVarChar) {
 			if i == 0 || !isDigit(uint16(c)) {
 				return true
 			}
@@ -653,8 +660,8 @@ func isKeyword(s string) bool {
 	return isKeyword
 }
 
-func formatID(buf *TrackedBuffer, original, lowered string) {
-	if containEscapableChars(original) || isKeyword(lowered) {
+func formatID(buf *TrackedBuffer, original, lowered string, at atCount) {
+	if containEscapableChars(original, at) || isKeyword(lowered) {
 		writeEscapedString(buf, original)
 	} else {
 		buf.Myprintf("%s", original)
@@ -759,3 +766,14 @@ func (node *Union) AddOrder(order *Order) {
 func (node *Union) SetLimit(limit *Limit) {
 	node.Limit = limit
 }
+
+type atCount int
+
+const (
+	// NoAt represents no @
+	NoAt atCount = iota
+	// SingleAt represents @
+	SingleAt
+	// DoubleAt represnts @@
+	DoubleAt
+)
