@@ -5095,7 +5095,7 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:1511
 		{
-			yyVAL.statement = &DDL{Action: AlterStr, Table: yyDollar[3].tableName}
+			yyVAL.statement = &OtherRead{}
 		}
 	case 265:
 		yyDollar = yyS[yypt-4 : yypt+1]
