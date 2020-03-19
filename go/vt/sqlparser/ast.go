@@ -802,6 +802,7 @@ type ColIdent struct {
 	// last field in the struct.
 	_            [0]struct{ _ []byte }
 	val, lowered string
+	at           atCount
 }
 
 // TableIdent is a case sensitive SQL identifier. It will be escaped with
@@ -1547,7 +1548,7 @@ func (node *FuncExpr) Format(buf *TrackedBuffer) {
 	// if they match a reserved word, only if they contain illegal characters
 	funcName := node.Name.String()
 
-	if containEscapableChars(funcName) {
+	if containEscapableChars(funcName, NoAt) {
 		writeEscapedString(buf, funcName)
 	} else {
 		buf.WriteString(funcName)
@@ -1726,7 +1727,7 @@ func (node *SetExpr) Format(buf *TrackedBuffer) {
 		sqlVal := node.Expr.(*SQLVal)
 		buf.Myprintf("%s %s", node.Name.String(), strings.ToLower(string(sqlVal.Val)))
 	} else {
-		buf.Myprintf("%s = %v", node.Name.String(), node.Expr)
+		buf.Myprintf("%v = %v", node.Name, node.Expr)
 	}
 }
 
@@ -1740,10 +1741,13 @@ func (node OnDup) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node ColIdent) Format(buf *TrackedBuffer) {
-	formatID(buf, node.val, node.Lowered())
+	for i := NoAt; i < node.at; i++ {
+		buf.WriteByte('@')
+	}
+	formatID(buf, node.val, node.Lowered(), node.at)
 }
 
 // Format formats the node.
 func (node TableIdent) Format(buf *TrackedBuffer) {
-	formatID(buf, node.v, strings.ToLower(node.v))
+	formatID(buf, node.v, strings.ToLower(node.v), NoAt)
 }

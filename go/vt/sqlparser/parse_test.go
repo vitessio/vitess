@@ -25,6 +25,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -830,6 +832,10 @@ var (
 	}, {
 		input: "set sql_safe_updates = 1",
 	}, {
+		input: "set @variable = 42",
+	}, {
+		input: "set @period.variable = 42",
+	}, {
 		input:  "alter ignore table a add foo",
 		output: "alter table a",
 	}, {
@@ -1358,6 +1364,12 @@ var (
 		input:  "use `ks:-80@master`",
 		output: "use `ks:-80@master`",
 	}, {
+		input:  "use @replica",
+		output: "use `@replica`",
+	}, {
+		input:  "use ks@replica",
+		output: "use `ks@replica`",
+	}, {
 		input:  "describe foobar",
 		output: "otherread",
 	}, {
@@ -1539,10 +1551,7 @@ func TestValid(t *testing.T) {
 				tcase.output = tcase.input
 			}
 			tree, err := Parse(tcase.input)
-			if err != nil {
-				t.Errorf("Parse(%q) err: %v, want nil", tcase.input, err)
-				return
-			}
+			require.NoError(t, err)
 			out := String(tree)
 			if out != tcase.output {
 				t.Errorf("Parse(%q) = %q, want: %q", tcase.input, out, tcase.output)
