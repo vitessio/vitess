@@ -1170,10 +1170,11 @@ func (f *ForeignKeyDefinition) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *Show) Format(buf *TrackedBuffer) {
-	if (node.Type == "tables" || node.Type == "columns" || node.Type == "fields") && node.ShowTablesOpt != nil {
+	nodeType := strings.ToLower(node.Type)
+	if (nodeType == "tables" || nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys") && node.ShowTablesOpt != nil {
 		opt := node.ShowTablesOpt
-		buf.Myprintf("show %s%s", opt.Full, node.Type)
-		if (node.Type == "columns" || node.Type == "fields") && node.HasOnTable() {
+		buf.Myprintf("show %s%s", opt.Full, nodeType)
+		if (nodeType == "columns" || nodeType == "fields" || nodeType == "index" || nodeType == "keys") && node.HasOnTable() {
 			buf.Myprintf(" from %v", node.OnTable)
 		}
 		if opt.DbName != "" {
@@ -1183,17 +1184,17 @@ func (node *Show) Format(buf *TrackedBuffer) {
 		return
 	}
 	if node.Scope == "" {
-		buf.Myprintf("show %s", node.Type)
+		buf.Myprintf("show %s", nodeType)
 	} else {
-		buf.Myprintf("show %s %s", node.Scope, node.Type)
+		buf.Myprintf("show %s %s", node.Scope, nodeType)
 	}
 	if node.HasOnTable() {
 		buf.Myprintf(" on %v", node.OnTable)
 	}
-	if node.Type == "collation" && node.ShowCollationFilterOpt != nil {
+	if nodeType == "collation" && node.ShowCollationFilterOpt != nil {
 		buf.Myprintf(" where %v", *node.ShowCollationFilterOpt)
 	}
-	if node.Type == "charset" && node.ShowTablesOpt != nil {
+	if nodeType == "charset" && node.ShowTablesOpt != nil {
 		buf.Myprintf("%v", node.ShowTablesOpt.Filter)
 	}
 	if node.HasTable() {

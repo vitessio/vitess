@@ -1224,14 +1224,12 @@ var (
 		input:  "show grants for 'root@localhost'",
 		output: "show grants",
 	}, {
-		input:  "show index from table",
-		output: "show index",
+		input: "show index from t",
 	}, {
 		input:  "show indexes from table",
 		output: "show indexes",
 	}, {
-		input:  "show keys from table",
-		output: "show keys",
+		input: "show keys from t",
 	}, {
 		input:  "show master status",
 		output: "show master",
@@ -1541,6 +1539,27 @@ var (
 		input: "select status() from t", // should not escape function names that are keywords
 	}, {
 		input: "select * from `weird table name`",
+	}, {
+		input:  "SHOW FULL TABLES FROM `jiradb` LIKE 'AO_E8B6CC_ISSUE_MAPPING'",
+		output: "show full tables from jiradb like 'AO_E8B6CC_ISSUE_MAPPING'",
+	}, {
+		input:  "SHOW FULL COLUMNS FROM AO_E8B6CC_ISSUE_MAPPING FROM jiradb LIKE '%'",
+		output: "show full columns from AO_E8B6CC_ISSUE_MAPPING from jiradb like '%'",
+	}, {
+		input:  "SHOW KEYS FROM `AO_E8B6CC_ISSUE_MAPPING` FROM `jiradb`",
+		output: "show keys from AO_E8B6CC_ISSUE_MAPPING from jiradb",
+	}, {
+		input:  "SHOW CREATE TABLE `jiradb`.`AO_E8B6CC_ISSUE_MAPPING`",
+		output: "show create table jiradb.AO_E8B6CC_ISSUE_MAPPING",
+	}, {
+		input:  "SHOW INDEX FROM `AO_E8B6CC_ISSUE_MAPPING` FROM `jiradb`",
+		output: "show index from AO_E8B6CC_ISSUE_MAPPING from jiradb",
+	}, {
+		input:  "SHOW FULL TABLES FROM `jiradb` LIKE '%'",
+		output: "show full tables from jiradb like '%'",
+	}, {
+		input:  "SHOW INDEX FROM `AO_E8B6CC_PROJECT_MAPPING` FROM `jiradb`",
+		output: "show index from AO_E8B6CC_PROJECT_MAPPING from jiradb",
 	}}
 )
 
