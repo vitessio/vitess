@@ -110,33 +110,13 @@ func (plan *Plan) fields() []*querypb.Field {
 	return fields
 }
 
-func resolveValue(val sqltypes.Value) (sqltypes.Value, error) {
-	pv, err := sqlparser.NewPlanValue(sqlparser.NewStrVal(val.Raw()))
-	if err != nil {
-		return sqltypes.NULL, err
-	}
-	resolved, err := pv.ResolveValue(nil)
-	if err != nil {
-		return sqltypes.NULL, err
-	}
-	return resolved, nil
-}
-
 // filter filters the row against the plan. It returns false if the row did not match.
 // If the row matched, it returns the columns to be sent.
 func (plan *Plan) filter(values []sqltypes.Value) (bool, []sqltypes.Value, error) {
 	for _, filter := range plan.Filters {
 		switch filter.Opcode {
 		case Equal:
-			filterValue, err := resolveValue(filter.Value)
-			if err != nil {
-				return false, nil, err
-			}
-			colValue, err := resolveValue(values[filter.ColNum])
-			if err != nil {
-				return false, nil, err
-			}
-			result, err := sqltypes.NullsafeCompare(colValue, filterValue)
+			result, err := sqltypes.NullsafeCompare(values[filter.ColNum], filter.Value)
 			if err != nil {
 				return false, nil, err
 			}
