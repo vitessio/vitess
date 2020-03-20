@@ -1927,10 +1927,7 @@ func TestExecutorVindexDDLACL(t *testing.T) {
 func TestExecutorUnrecognized(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
 	_, err := executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{}), "invalid statement", nil)
-	want := "syntax error at position 8 near 'invalid'"
-	if err == nil || err.Error() != want {
-		t.Errorf("show vschema tables: %v, want %v", err, want)
-	}
+	require.Error(t, err, "unrecognized statement: invalid statement'")
 }
 
 // TestVSchemaStats makes sure the building and displaying of the

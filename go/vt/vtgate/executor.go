@@ -184,16 +184,6 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 	stmtType := sqlparser.Preview(sql)
 	logStats.StmtType = stmtType.String()
 
-	stmt, err := sqlparser.Parse(sql)
-	if err != nil {
-		// If the DDL statement failed to be properly parsed, fall through anyway
-		if stmtType == sqlparser.StmtDDL {
-			stmt = &sqlparser.DDL{}
-		} else {
-			return nil, err
-		}
-	}
-
 	// Mysql warnings are scoped to the current session, but are
 	// cleared when a "non-diagnostic statement" is executed:
 	// https://dev.mysql.com/doc/refman/8.0/en/show-warnings.html
@@ -201,14 +191,14 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 	// To emulate this behavior, clear warnings from the session
 	// for all statements _except_ SHOW, so that SHOW WARNINGS
 	// can actually return them.
-	if _, isShow := stmt.(*sqlparser.Show); !isShow {
+	if stmtType != sqlparser.StmtShow {
 		safeSession.ClearWarnings()
 	}
 
-	switch specStmt := stmt.(type) {
-	case *sqlparser.Select, *sqlparser.Union:
+	switch stmtType {
+	case sqlparser.StmtSelect:
 		return e.handleExec(ctx, safeSession, sql, bindVars, logStats, stmtType)
-	case *sqlparser.Insert, *sqlparser.Update, *sqlparser.Delete:
+	case sqlparser.StmtInsert, sqlparser.StmtReplace, sqlparser.StmtUpdate, sqlparser.StmtDelete:
 		safeSession := safeSession
 
 		mustCommit := false
@@ -245,22 +235,24 @@ func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql st
 			logStats.CommitTime = time.Since(commitStart)
 		}
 		return qr, nil
-	case *sqlparser.DDL:
+	case sqlparser.StmtDDL:
 		return e.handleDDL(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
-	case *sqlparser.Begin:
+	case sqlparser.StmtBegin:
 		return e.handleBegin(ctx, safeSession, destTabletType, logStats)
-	case *sqlparser.Commit:
+	case sqlparser.StmtCommit:
 		return e.handleCommit(ctx, safeSession, logStats)
-	case *sqlparser.Rollback:
+	case sqlparser.StmtRollback:
 		return e.handleRollback(ctx, safeSession, logStats)
-	case *sqlparser.Set:
+	case sqlparser.StmtSet:
 		return e.handleSet(ctx, safeSession, sql, logStats)
-	case *sqlparser.Show:
+	case sqlparser.StmtShow:
 		return e.handleShow(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
-	case *sqlparser.Use:
-		return e.handleUse(safeSession, specStmt)
-	case *sqlparser.OtherAdmin, *sqlparser.OtherRead:
+	case sqlparser.StmtUse:
+		return e.handleUse(safeSession, sql)
+	case sqlparser.StmtOther:
 		return e.handleOther(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
+	case sqlparser.StmtComment:
+		return e.handleComment(sql)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unrecognized statement: %s", sql)
 }
@@ -1115,7 +1107,16 @@ func (e *Executor) handleShow(ctx context.Context, safeSession *SafeSession, sql
 	return e.handleOther(ctx, safeSession, sql, bindVars, dest, destKeyspace, destTabletType, logStats)
 }
 
-func (e *Executor) handleUse(safeSession *SafeSession, use *sqlparser.Use) (*sqltypes.Result, error) {
+func (e *Executor) handleUse(safeSession *SafeSession, sql string) (*sqltypes.Result, error) {
+	stmt, err := sqlparser.Parse(sql)
+	if err != nil {
+		return nil, err
+	}
+	use, ok := stmt.(*sqlparser.Use)
+	if !ok {
+		// This code is unreachable.
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unrecognized USE statement: %v", sql)
+	}
 	destKeyspace, destTabletType, _, err := e.ParseDestinationTarget(use.DBName.String())
 	if err != nil {
 		return nil, err
@@ -1160,6 +1161,12 @@ func (e *Executor) handleOther(ctx context.Context, safeSession *SafeSession, sq
 
 	logStats.ExecuteTime = time.Since(execStart)
 	return result, err
+}
+
+func (e *Executor) handleComment(sql string) (*sqltypes.Result, error) {
+	_, _ = sqlparser.ExtractMysqlComment(sql)
+	// Not sure if this is a good idea.
+	return &sqltypes.Result{}, nil
 }
 
 // StreamExecute executes a streaming query.
