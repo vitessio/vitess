@@ -240,6 +240,36 @@ func TestStreamRowsFilterInt(t *testing.T) {
 	checkStream(t, "select id1, val from t1 where id2 = 100", nil, wantQuery, wantStream)
 }
 
+func TestStreamRowsFilterVarBinary(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	if err := env.SetVSchema(shardedVSchema); err != nil {
+		t.Fatal(err)
+	}
+	defer env.SetVSchema("{}")
+
+	execStatements(t, []string{
+		"create table t1(id1 int, val varbinary(128), primary key(id1))",
+		"insert into t1 values (1,'kepler'), (2, 'newton'), (3, 'newton'), (4, 'kepler'), (5, 'newton'), (6, 'kepler')",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+
+	time.Sleep(1 * time.Second)
+
+	// Only the first row should be returned, but lastpk should be 6.
+	wantStream := []string{
+		`fields:<name:"id1" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id1" type:INT32 > `,
+		`rows:<lengths:1 lengths:6 values:"2newton" > rows:<lengths:1 lengths:6 values:"3newton" > rows:<lengths:1 lengths:6 values:"5newton" > lastpk:<lengths:1 values:"6" > `,
+	}
+	wantQuery := "select id1, val from t1 order by id1"
+	checkStream(t, "select id1, val from t1 where val = 'newton'", nil, wantQuery, wantStream)
+}
+
 func TestStreamRowsMultiPacket(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
