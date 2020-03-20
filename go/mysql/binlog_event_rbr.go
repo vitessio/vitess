@@ -447,15 +447,16 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 		return sqltypes.MakeTrusted(querypb.Type_DATETIME,
 			[]byte(fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, minute, second))), 8, nil
 	case TypeVarchar, TypeVarString:
+		// We trust that styp is compatible with the column type
 		// Length is encoded in 1 or 2 bytes.
 		if metadata > 255 {
 			l := int(uint64(data[pos]) |
 				uint64(data[pos+1])<<8)
-			return sqltypes.MakeTrusted(querypb.Type_VARCHAR,
+			return sqltypes.MakeTrusted(styp,
 				data[pos+2:pos+2+l]), l + 2, nil
 		}
 		l := int(data[pos])
-		return sqltypes.MakeTrusted(querypb.Type_VARCHAR,
+		return sqltypes.MakeTrusted(styp,
 			data[pos+1:pos+1+l]), l + 1, nil
 	case TypeBit:
 		// The contents is just the bytes, quoted.

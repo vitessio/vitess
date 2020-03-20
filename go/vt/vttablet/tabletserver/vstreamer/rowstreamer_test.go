@@ -231,7 +231,6 @@ func TestStreamRowsFilterInt(t *testing.T) {
 
 	time.Sleep(1 * time.Second)
 
-	// Only the first row should be returned, but lastpk should be 6.
 	wantStream := []string{
 		`fields:<name:"id1" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id1" type:INT32 > `,
 		`rows:<lengths:1 lengths:3 values:"1aaa" > rows:<lengths:1 lengths:3 values:"4ddd" > lastpk:<lengths:1 values:"5" > `,
@@ -261,7 +260,6 @@ func TestStreamRowsFilterVarBinary(t *testing.T) {
 
 	time.Sleep(1 * time.Second)
 
-	// Only the first row should be returned, but lastpk should be 6.
 	wantStream := []string{
 		`fields:<name:"id1" type:INT32 > fields:<name:"val" type:VARBINARY > pkfields:<name:"id1" type:INT32 > `,
 		`rows:<lengths:1 lengths:6 values:"2newton" > rows:<lengths:1 lengths:6 values:"3newton" > rows:<lengths:1 lengths:6 values:"5newton" > lastpk:<lengths:1 values:"6" > `,
