@@ -545,7 +545,7 @@ func (vs *vstreamer) buildJournalPlan(id uint64, tm *mysql.TableMap) error {
 		return err
 	}
 	if len(st.Columns) < len(tm.Types) {
-		return fmt.Errorf("cannot determine table columns for %s: event has %v, schema as %v", tm.Name, tm.Types, st.Columns)
+		return fmt.Errorf("cannot determine table columns for %s: event has %v, schema has %v", tm.Name, tm.Types, st.Columns)
 	}
 	table := &Table{
 		Name:    "_vt.resharding_journal",
@@ -620,7 +620,7 @@ func (vs *vstreamer) buildTableColumns(id uint64, tm *mysql.TableMap) ([]schema.
 
 	if len(st.Columns) < len(tm.Types) {
 		if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
-			return nil, fmt.Errorf("cannot determine table columns for %s: event has %v, schema as %v", tm.Name, tm.Types, st.Columns)
+			return nil, fmt.Errorf("cannot determine table columns for %s: event has %v, schema has %v", tm.Name, tm.Types, st.Columns)
 		}
 		return cols, nil
 	}

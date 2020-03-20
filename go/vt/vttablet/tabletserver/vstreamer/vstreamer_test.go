@@ -37,6 +37,59 @@ type testcase struct {
 	output [][]string
 }
 
+func TestFilteredVarBinary(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table t1(id1 int, val varbinary(128), primary key(id1))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select id1, val from t1 where val = 'newton'",
+		}},
+	}
+
+	testcases := []testcase{{
+		input: []string{
+			"begin",
+			"insert into t1 values (1, 'kepler')",
+			"insert into t1 values (2, 'newton')",
+			"insert into t1 values (3, 'newton')",
+			"insert into t1 values (4, 'kepler')",
+			"insert into t1 values (5, 'newton')",
+			"update t1 set val = 'newton' where id1 = 1",
+			"update t1 set val = 'kepler' where id1 = 2",
+			"update t1 set val = 'newton' where id1 = 2",
+			"update t1 set val = 'kepler' where id1 = 1",
+			"delete from t1 where id1 in (2,3)",
+			"commit",
+		},
+		output: [][]string{{
+			`begin`,
+			`type:FIELD field_event:<table_name:"t1" fields:<name:"id1" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:6 values:"2newton" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:6 values:"3newton" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:6 values:"5newton" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:6 values:"1newton" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:6 values:"2newton" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:6 values:"2newton" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:6 values:"1newton" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<before:<lengths:1 lengths:6 values:"2newton" > > row_changes:<before:<lengths:1 lengths:6 values:"3newton" > > > `,
+			`gtid`,
+			`commit`,
+		}},
+	}}
+	runCases(t, filter, testcases, "")
+}
+
 func TestFilteredInt(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
