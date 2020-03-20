@@ -307,7 +307,7 @@ func TestQueryExecutorSelectImpossible(t *testing.T) {
 	}
 }
 
-func TestQueryExecutorDMLLimitFailure(t *testing.T) {
+func TestQueryExecutorLimitFailure(t *testing.T) {
 	type dbResponse struct {
 		query  string
 		result *sqltypes.Result
@@ -316,31 +316,66 @@ func TestQueryExecutorDMLLimitFailure(t *testing.T) {
 	dmlResult := &sqltypes.Result{
 		RowsAffected: 3,
 	}
+	fields := sqltypes.MakeTestFields("a|b", "int64|varchar")
+	fieldResult := sqltypes.MakeTestResult(fields)
+	selectResult := sqltypes.MakeTestResult(fields, "1|aaa", "2|bbb", "3|ccc")
 
 	// The queries are run both in and outside a transaction.
 	testcases := []struct {
-		input       string
-		passThrough bool
-		dbResponses []dbResponse
-		planWant    string
-		logWant     string
-		inTxWant    string
+		input        string
+		dbResponses  []dbResponse
+		err          string
+		logWant      string
+		inTxWant     string
+		testRollback bool
 	}{{
+		input: "select * from t",
+		dbResponses: []dbResponse{{
+			query:  "select * from t where 1 != 1",
+			result: fieldResult,
+		}, {
+			query:  "select * from t limit 3",
+			result: selectResult,
+		}},
+		err:     "count exceeded",
+		logWant: "select * from t where 1 != 1; select * from t limit 3",
+		// Because the fields would have been cached before, the field query will
+		// not get re-executed.
+		inTxWant: "select * from t limit 3",
+	}, {
 		input: "update test_table set a=1",
 		dbResponses: []dbResponse{{
 			query:  "update test_table set a = 1 limit 3",
 			result: dmlResult,
 		}},
-		logWant:  "begin; update test_table set a = 1 limit 3; rollback",
-		inTxWant: "update test_table set a = 1 limit 3; rollback",
+		err:          "count exceeded",
+		logWant:      "begin; update test_table set a = 1 limit 3; rollback",
+		inTxWant:     "update test_table set a = 1 limit 3; rollback",
+		testRollback: true,
 	}, {
 		input: "delete from test_table",
 		dbResponses: []dbResponse{{
 			query:  "delete from test_table limit 3",
 			result: dmlResult,
 		}},
-		logWant:  "begin; delete from test_table limit 3; rollback",
-		inTxWant: "delete from test_table limit 3; rollback",
+		err:          "count exceeded",
+		logWant:      "begin; delete from test_table limit 3; rollback",
+		inTxWant:     "delete from test_table limit 3; rollback",
+		testRollback: true,
+	}, {
+		// There should be no rollback on normal failures.
+		input:       "update test_table set a=1",
+		dbResponses: nil,
+		err:         "not supported",
+		logWant:     "begin; update test_table set a = 1 limit 3; rollback",
+		inTxWant:    "update test_table set a = 1 limit 3",
+	}, {
+		// There should be no rollback on normal failures.
+		input:       "delete from test_table",
+		dbResponses: nil,
+		err:         "not supported",
+		logWant:     "begin; delete from test_table limit 3; rollback",
+		inTxWant:    "delete from test_table limit 3",
 	}}
 	for _, tcase := range testcases {
 		func() {
@@ -353,14 +388,13 @@ func TestQueryExecutorDMLLimitFailure(t *testing.T) {
 			tsv := newTestTabletServer(ctx, smallResultSize, db)
 			defer tsv.StopService()
 
-			tsv.SetPassthroughDMLs(tcase.passThrough)
+			tsv.SetPassthroughDMLs(false)
 
 			// Test outside a transaction.
 			qre := newTestQueryExecutor(ctx, tsv, tcase.input, 0)
 			_, err := qre.Execute()
-			wantErr := "caller id: d: row count exceeded 2 (errno 10001) (sqlstate HY000)"
-			if err == nil || err.Error() != wantErr {
-				t.Errorf("Execute(%v): %v, want %v", tcase.input, err, wantErr)
+			if err == nil || !strings.Contains(err.Error(), tcase.err) {
+				t.Errorf("Execute(%v): %v, must contain %v", tcase.input, err, tcase.err)
 			}
 			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
 
@@ -371,8 +405,8 @@ func TestQueryExecutorDMLLimitFailure(t *testing.T) {
 
 			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
 			_, err = qre.Execute()
-			if err == nil || err.Error() != wantErr {
-				t.Errorf("Execute(%v): %v, want %v", tcase.input, err, wantErr)
+			if err == nil || !strings.Contains(err.Error(), tcase.err) {
+				t.Errorf("Execute(%v): %v, must contain %v", tcase.input, err, tcase.err)
 			}
 			want := tcase.logWant
 			if tcase.inTxWant != "" {
@@ -380,6 +414,10 @@ func TestQueryExecutorDMLLimitFailure(t *testing.T) {
 			}
 			assert.Equal(t, want, qre.logStats.RewrittenSQL(), "in tx: %v", tcase.input)
 
+			if !tcase.testRollback {
+				return
+			}
+			// Ensure transaction was rolled back.
 			qre = newTestQueryExecutor(ctx, tsv, "update test_table set a=1", txid)
 			_, err = qre.Execute()
 			notxError := "ended at"
