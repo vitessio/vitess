@@ -1561,13 +1561,15 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW INDEX ddl_skip_to_end
+| SHOW INDEX FROM table_name from_database_opt like_or_where_opt
   {
-    $$ = &Show{Type: string($2)}
+    showTablesOpt := &ShowTablesOpt{DbName:$5, Filter:$6}
+    $$ = &Show{Type: string($2), ShowTablesOpt: showTablesOpt, OnTable: $4}
   }
-| SHOW KEYS ddl_skip_to_end
+| SHOW KEYS FROM table_name from_database_opt like_or_where_opt
   {
-    $$ = &Show{Type: string($2)}
+    showTablesOpt := &ShowTablesOpt{DbName:$5, Filter:$6}
+    $$ = &Show{Type: string($2), ShowTablesOpt: showTablesOpt, OnTable: $4}
   }
 | SHOW PLUGINS
   {
