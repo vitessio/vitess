@@ -73,12 +73,29 @@ type VCursor interface {
 	ResolveDestinations(keyspace string, ids []*querypb.Value, destinations []key.Destination) ([]*srvtopo.ResolvedShard, [][]*querypb.Value, error)
 }
 
+// PlanType indicates type of the plan generated
+type PlanType int
+
+// This contains all the plan types
+const (
+	PlanERROR PlanType = iota
+	PlanBEGIN
+	PlanCOMMIT
+	PlanROLLBACK
+	PlanSELECT
+	PlanINSERT
+	PlanUPDATE
+	PlanDELETE
+	PlanDDL
+)
+
 // Plan represents the execution strategy for a given query.
 // For now it's a simple wrapper around the real instructions.
 // An instruction (aka Primitive) is typically a tree where
 // each node does its part by combining the results of the
 // sub-nodes.
 type Plan struct {
+	Type PlanType
 	// Original is the original query.
 	Original string `json:",omitempty"`
 	// Instructions contains the instructions needed to
@@ -163,6 +180,7 @@ type Primitive interface {
 	Execute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
 	StreamExecute(vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantields bool, callback func(*sqltypes.Result) error) error
 	GetFields(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
+	NeedsTransaction() bool
 
 	// The inputs to this Primitive
 	Inputs() []Primitive
@@ -173,4 +191,16 @@ type noInputs struct{}
 // Inputs implements no inputs
 func (noInputs) Inputs() []Primitive {
 	return nil
+}
+
+type noTxNeeded struct{}
+
+func (noTxNeeded) NeedsTransaction() bool {
+	return false
+}
+
+type txNeeded struct{}
+
+func (txNeeded) NeedsTransaction() bool {
+	return true
 }

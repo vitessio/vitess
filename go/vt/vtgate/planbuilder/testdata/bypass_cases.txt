@@ -10,7 +10,7 @@
     },
     "TargetDestination": "-80",
     "Query": "select count(*), col from unsharded",
-    "NoAutoCommit": true
+    "IsDML": false
   }
 }
 
@@ -26,7 +26,7 @@
     },
     "TargetDestination": "-80",
     "Query": "update user set val = 1 where id = 18446744073709551616 and id = 1",
-    "NoAutoCommit": false
+    "IsDML": true
   }
 }
 
@@ -42,7 +42,7 @@
     },
     "TargetDestination": "-80",
     "Query": "delete from USER where ID = 42",
-    "NoAutoCommit": false
+    "IsDML": true
   }
 }
 
@@ -58,6 +58,6 @@
     },
     "TargetDestination": "-80",
     "Query": "insert into USER(ID, NAME) values (42, 'ms X')",
-    "NoAutoCommit": false
+    "IsDML": true
   }
 }

@@ -334,7 +334,14 @@ func init() {
 	vindexes.Register("keyrange_lookuper_unique", newKeyRangeLookuperUnique)
 }
 
-func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
+type executorType bool
+
+const (
+	legacy           executorType = true
+	planAllTheThings executorType = false
+)
+
+func createExecutorEnvUsing(t executorType) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck()
 	s := createSandbox("TestExecutor")
@@ -360,10 +367,20 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	bad.VSchema = badVSchema
 
 	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	executeMethodPicker := func(executor *Executor) executeMethod {
+		if t == legacy {
+			return executor
+		}
 
-	executor = NewExecutor(context.Background(), serv, cell, resolver, false, testBufferSize, testCacheSize)
+		return &planExecute{executor}
+	}
+	executor = NewTestExecutor(context.Background(), executeMethodPicker, serv, cell, resolver, false, testBufferSize, testCacheSize)
 	key.AnyShardPicker = DestinationAnyShardPickerFirstShard{}
 	return executor, sbc1, sbc2, sbclookup
+}
+
+func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
+	return createExecutorEnvUsing(legacy)
 }
 
 func createCustomExecutor(vschema string) (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {

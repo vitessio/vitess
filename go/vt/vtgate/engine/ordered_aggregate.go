@@ -313,6 +313,10 @@ func (oa *OrderedAggregate) Inputs() []Primitive {
 	return []Primitive{oa.Input}
 }
 
+func (oa *OrderedAggregate) NeedsTransaction() bool {
+	return oa.Input.NeedsTransaction()
+}
+
 func (oa *OrderedAggregate) keysEqual(row1, row2 []sqltypes.Value) (bool, error) {
 	for _, key := range oa.Keys {
 		cmp, err := sqltypes.NullsafeCompare(row1[key], row2[key])

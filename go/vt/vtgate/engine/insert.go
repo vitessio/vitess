@@ -82,6 +82,9 @@ type Insert struct {
 
 	// Insert does not take inputs
 	noInputs
+
+	// Insert needs tx handling
+	txNeeded
 }
 
 // NewQueryInsert creates an Insert with a query string.

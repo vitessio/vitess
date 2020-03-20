@@ -244,6 +244,10 @@ func (jn *Join) GetTableName() string {
 	return jn.Left.GetTableName() + "_" + jn.Right.GetTableName()
 }
 
+func (jn *Join) NeedsTransaction() bool {
+	return jn.Right.NeedsTransaction() || jn.Left.NeedsTransaction()
+}
+
 func combineVars(bv1, bv2 map[string]*querypb.BindVariable) map[string]*querypb.BindVariable {
 	out := make(map[string]*querypb.BindVariable)
 	for k, v := range bv1 {

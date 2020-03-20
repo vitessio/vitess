@@ -165,6 +165,10 @@ func (ms *MemorySort) Inputs() []Primitive {
 	return []Primitive{ms.Input}
 }
 
+func (ms *MemorySort) NeedsTransaction() bool {
+	return ms.Input.NeedsTransaction()
+}
+
 func (ms *MemorySort) fetchCount(bindVars map[string]*querypb.BindVariable) (int, error) {
 	resolved, err := ms.UpperLimit.ResolveValue(bindVars)
 	if err != nil {

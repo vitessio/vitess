@@ -166,6 +166,10 @@ func (l *Limit) Inputs() []Primitive {
 	return []Primitive{l.Input}
 }
 
+func (l *Limit) NeedsTransaction() bool {
+	return l.Input.NeedsTransaction()
+}
+
 func (l *Limit) fetchCount(bindVars map[string]*querypb.BindVariable) (int, error) {
 	resolved, err := l.Count.ResolveValue(bindVars)
 	if err != nil {
