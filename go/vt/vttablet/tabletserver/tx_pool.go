@@ -357,14 +357,19 @@ func (axp *TxPool) LocalCommit(ctx context.Context, conn *TxConnection) (string,
 // LocalConclude concludes a transaction started by LocalBegin.
 // If the transaction was not previously concluded, it's rolled back.
 func (axp *TxPool) LocalConclude(ctx context.Context, conn *TxConnection) {
+	if conn.dbConn == nil {
+		return
+	}
 	span, ctx := trace.NewSpan(ctx, "TxPool.LocalConclude")
 	defer span.Finish()
-	if conn.DBConn != nil {
-		_ = axp.localRollback(ctx, conn)
-	}
+	_ = axp.localRollback(ctx, conn)
 }
 
 func (axp *TxPool) localRollback(ctx context.Context, conn *TxConnection) error {
+	if conn.Autocommit {
+		conn.conclude(TxCommit, "returned to pool")
+		return nil
+	}
 	defer conn.conclude(TxRollback, "transaction rolled back")
 	if _, err := conn.Exec(ctx, "rollback", 1, false); err != nil {
 		conn.Close()
@@ -413,7 +418,7 @@ func (axp *TxPool) SetPoolTimeout(timeout time.Duration) {
 // the tx pool correctly. It also does not retry statements if there
 // are failures.
 type TxConnection struct {
-	*connpool.DBConn
+	dbConn            *connpool.DBConn
 	TransactionID     int64
 	pool              *TxPool
 	StartTime         time.Time
@@ -428,7 +433,7 @@ type TxConnection struct {
 
 func newTxConnection(conn *connpool.DBConn, transactionID int64, pool *TxPool, immediate *querypb.VTGateCallerID, effective *vtrpcpb.CallerID, autocommit bool) *TxConnection {
 	return &TxConnection{
-		DBConn:            conn,
+		dbConn:            conn,
 		TransactionID:     transactionID,
 		pool:              pool,
 		StartTime:         time.Now(),
@@ -438,9 +443,19 @@ func newTxConnection(conn *connpool.DBConn, transactionID int64, pool *TxPool, i
 	}
 }
 
+// Close closes the connection.
+func (txc *TxConnection) Close() {
+	if txc.dbConn != nil {
+		txc.dbConn.Close()
+	}
+}
+
 // Exec executes the statement for the current transaction.
 func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-	r, err := txc.DBConn.ExecOnce(ctx, query, maxrows, wantfields)
+	if txc.dbConn == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_ABORTED, "transaction was aborted: %v", txc.Conclusion)
+	}
+	r, err := txc.dbConn.ExecOnce(ctx, query, maxrows, wantfields)
 	if err != nil {
 		if mysql.IsConnErr(err) {
 			select {
@@ -458,13 +473,13 @@ func (txc *TxConnection) Exec(ctx context.Context, query string, maxrows int, wa
 
 // BeginAgain commits the existing transaction and begins a new one
 func (txc *TxConnection) BeginAgain(ctx context.Context) error {
-	if txc.Autocommit {
+	if txc.dbConn == nil || txc.Autocommit {
 		return nil
 	}
-	if _, err := txc.DBConn.Exec(ctx, "commit", 1, false); err != nil {
+	if _, err := txc.dbConn.Exec(ctx, "commit", 1, false); err != nil {
 		return err
 	}
-	if _, err := txc.DBConn.Exec(ctx, "begin", 1, false); err != nil {
+	if _, err := txc.dbConn.Exec(ctx, "begin", 1, false); err != nil {
 		return err
 	}
 	return nil
@@ -473,7 +488,10 @@ func (txc *TxConnection) BeginAgain(ctx context.Context) error {
 // Recycle returns the connection to the pool. The transaction remains
 // active.
 func (txc *TxConnection) Recycle() {
-	if txc.IsClosed() {
+	if txc.dbConn == nil {
+		return
+	}
+	if txc.dbConn.IsClosed() {
 		txc.conclude(TxClose, "closed")
 	} else {
 		txc.pool.activePool.Put(txc.TransactionID)
@@ -486,9 +504,12 @@ func (txc *TxConnection) RecordQuery(query string) {
 }
 
 func (txc *TxConnection) conclude(conclusion, reason string) {
+	if txc.dbConn == nil {
+		return
+	}
 	txc.pool.activePool.Unregister(txc.TransactionID, reason)
-	txc.DBConn.Recycle()
-	txc.DBConn = nil
+	txc.dbConn.Recycle()
+	txc.dbConn = nil
 	txc.pool.limiter.Release(txc.ImmediateCallerID, txc.EffectiveCallerID)
 	txc.log(conclusion)
 }
