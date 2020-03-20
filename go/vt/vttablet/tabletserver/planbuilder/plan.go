@@ -55,9 +55,12 @@ const (
 	PlanDeleteLimit
 	PlanDDL
 	PlanSet
+	// PlanOtherRead is for statements like show, etc.
 	PlanOtherRead
+	// PlanOtherAdmin is for statements like repair, lock table, etc.
 	PlanOtherAdmin
 	PlanSelectStream
+	// PlanMessageStream is for "stream" statements.
 	PlanMessageStream
 	NumPlans
 )
@@ -170,6 +173,8 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table) (*Pla
 	case *sqlparser.Set:
 		plan, err = analyzeSet(stmt), nil
 	case *sqlparser.DDL:
+		// DDLs and other statements below don't get fully parsed.
+		// We have to use the original query at the time of execution.
 		plan = &Plan{PlanID: PlanDDL}
 	case *sqlparser.Show:
 		plan, err = &Plan{PlanID: PlanOtherRead}, nil

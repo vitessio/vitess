@@ -100,6 +100,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	case planbuilder.PlanNextval:
 		return qre.execNextval()
 	case planbuilder.PlanSelectImpossible:
+		// If the fields did not get cached, we have send the query
+		// to mysql, which you can see below.
 		if qre.plan.Fields != nil {
 			return &sqltypes.Result{
 				Fields: qre.plan.Fields,
