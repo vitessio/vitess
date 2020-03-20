@@ -194,7 +194,7 @@ func TestSecureTransport(t *testing.T) {
 	err = vterrors.FromVTRPC(qr.Error)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "table acl error")
-	assert.Contains(t, err.Error(), "cannot run PASS_SELECT on table")
+	assert.Contains(t, err.Error(), "cannot run Select on table")
 
 	// now restart vtgate in the mode where we don't use SSL
 	// for client connections, but we copy effective caller id
@@ -218,7 +218,7 @@ func TestSecureTransport(t *testing.T) {
 	err = vterrors.FromVTRPC(qr.Error)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "table acl error")
-	assert.Contains(t, err.Error(), "cannot run PASS_SELECT on table")
+	assert.Contains(t, err.Error(), "cannot run Select on table")
 
 	// 'vtgate client 1' is authorized to access vt_insert_test
 	callerID := &vtrpc.CallerID{
@@ -238,7 +238,7 @@ func TestSecureTransport(t *testing.T) {
 	err = vterrors.FromVTRPC(qr.Error)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "table acl error")
-	assert.Contains(t, err.Error(), "cannot run PASS_SELECT on table")
+	assert.Contains(t, err.Error(), "cannot run Select on table")
 
 	clusterInstance.Teardown()
 }
