@@ -134,45 +134,51 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	case planbuilder.PlanSet, planbuilder.PlanOtherRead, planbuilder.PlanOtherAdmin:
 		return qre.execOther()
 	case planbuilder.PlanInsert, planbuilder.PlanUpdate, planbuilder.PlanDelete, planbuilder.PlanInsertMessage, planbuilder.PlanDDL:
-		return qre.execAsTransaction(true /* autocommit */, qre.txConnExec)
+		return qre.execAutocommit(qre.txConnExec)
 	case planbuilder.PlanUpdateLimit, planbuilder.PlanDeleteLimit:
-		return qre.execAsTransaction(false /* autocommit */, qre.txConnExec)
+		return qre.execAsTransaction(qre.txConnExec)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "%s unexpected plan type", qre.plan.PlanID.String())
 }
 
-func (qre *QueryExecutor) execAsTransaction(autocommit bool, f func(conn *TxConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
-	if autocommit {
-		if qre.options == nil {
-			qre.options = &querypb.ExecuteOptions{}
-		}
-		qre.options.TransactionIsolation = querypb.ExecuteOptions_AUTOCOMMIT
+func (qre *QueryExecutor) execAutocommit(f func(conn *TxConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
+	if qre.options == nil {
+		qre.options = &querypb.ExecuteOptions{}
 	}
+	qre.options.TransactionIsolation = querypb.ExecuteOptions_AUTOCOMMIT
+	conn, _, err := qre.tsv.te.txPool.LocalBegin(qre.ctx, qre.options)
+	if err != nil {
+		return nil, err
+	}
+	defer qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
+
+	return f(conn)
+}
+
+func (qre *QueryExecutor) execAsTransaction(f func(conn *TxConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
 	conn, beginSQL, err := qre.tsv.te.txPool.LocalBegin(qre.ctx, qre.options)
 	if err != nil {
 		return nil, err
 	}
 	defer qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
-	if beginSQL != "" {
-		qre.logStats.AddRewrittenSQL(beginSQL, time.Now())
-	}
+	qre.logStats.AddRewrittenSQL(beginSQL, time.Now())
 
 	reply, err = f(conn)
-
-	start := time.Now()
 	if err != nil {
-		qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
-		qre.logStats.AddRewrittenSQL("rollback", start)
+		// dbConn is nil, it means the transaction was aborted.
+		// If so, we should not relog the rollback.
+		// TODO(sougou): these txPool functions should take the logstats
+		// and log any statements they issue. This needs to be done as
+		// a separate refactor because it impacts lot of code.
+		if conn.dbConn != nil {
+			defer qre.logStats.AddRewrittenSQL("rollback", time.Now())
+			qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
+		}
 		return nil, err
 	}
-	commitSQL, err := qre.tsv.te.txPool.LocalCommit(qre.ctx, conn)
 
-	// As above LocalCommit is a no-op for autocommmit so don't log anything.
-	if commitSQL != "" {
-		qre.logStats.AddRewrittenSQL(commitSQL, start)
-	}
-
-	if err != nil {
+	defer qre.logStats.AddRewrittenSQL("commit", time.Now())
+	if _, err := qre.tsv.te.txPool.LocalCommit(qre.ctx, conn); err != nil {
 		return nil, err
 	}
 	return reply, nil
@@ -228,7 +234,7 @@ func (qre *QueryExecutor) Stream(callback func(*sqltypes.Result) error) error {
 			return err
 		}
 		defer txConn.Recycle()
-		conn = txConn.DBConn
+		conn = txConn.dbConn
 	} else {
 		dbConn, err := qre.getStreamConn()
 		if err != nil {
@@ -385,7 +391,7 @@ func (qre *QueryExecutor) execNextval() (*sqltypes.Result, error) {
 	t.SequenceInfo.Lock()
 	defer t.SequenceInfo.Unlock()
 	if t.SequenceInfo.NextVal == 0 || t.SequenceInfo.NextVal+inc > t.SequenceInfo.LastVal {
-		_, err := qre.execAsTransaction(false /* autocommit */, func(conn *TxConnection) (*sqltypes.Result, error) {
+		_, err := qre.execAsTransaction(func(conn *TxConnection) (*sqltypes.Result, error) {
 			query := fmt.Sprintf("select next_id, cache from %s where id = 0 for update", sqlparser.String(tableName))
 			qr, err := qre.execSQL(conn, query, false)
 			if err != nil {
@@ -473,6 +479,8 @@ func (qre *QueryExecutor) execDMLLimit(conn *TxConnection) (*sqltypes.Result, er
 		return nil, err
 	}
 	if err := qre.verifyRowCount(int64(result.RowsAffected), maxrows); err != nil {
+		defer qre.logStats.AddRewrittenSQL("rollback", time.Now())
+		qre.tsv.te.txPool.LocalConclude(qre.ctx, conn)
 		return nil, err
 	}
 	return result, nil
