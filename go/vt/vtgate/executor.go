@@ -94,7 +94,18 @@ type Executor struct {
 	plans        *cache.LRUCache
 	vschemaStats *VSchemaStats
 
+	// this is a way for us to be able to write tests with one method,
+	// and run in production with an entierly different one
+	exec executeMethod
+
 	vm VSchemaManager
+}
+
+// this interface is here to allow us to have two different implementations of the same method,
+// and use the legacy one in production until we are comfortable with the new code.
+// it's temporary and should be removed once we can do everything using the new planning strategy
+type executeMethod interface {
+	execute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (*sqltypes.Result, error)
 }
 
 var executorOnce sync.Once
@@ -115,6 +126,41 @@ func NewExecutor(ctx context.Context, serv srvtopo.Server, cell string, resolver
 		normalize:   normalize,
 		streamSize:  streamSize,
 	}
+	e.exec = e
+
+	vschemaacl.Init()
+	e.vm = VSchemaManager{e: e}
+	e.vm.watchSrvVSchema(ctx, cell)
+
+	executorOnce.Do(func() {
+		stats.NewGaugeFunc("QueryPlanCacheLength", "Query plan cache length", e.plans.Length)
+		stats.NewGaugeFunc("QueryPlanCacheSize", "Query plan cache size", e.plans.Size)
+		stats.NewGaugeFunc("QueryPlanCacheCapacity", "Query plan cache capacity", e.plans.Capacity)
+		stats.NewCounterFunc("QueryPlanCacheEvictions", "Query plan cache evictions", e.plans.Evictions)
+		stats.Publish("QueryPlanCacheOldest", stats.StringFunc(func() string {
+			return fmt.Sprintf("%v", e.plans.Oldest())
+		}))
+		http.Handle(pathQueryPlans, e)
+		http.Handle(pathScatterStats, e)
+		http.Handle(pathVSchema, e)
+	})
+	return e
+}
+
+// NewTestExecutor is only meant to be used from tests. It allows test code to inject wich `execute()` method to use
+func NewTestExecutor(ctx context.Context, strat func(executor *Executor) executeMethod, serv srvtopo.Server, cell string, resolver *Resolver, normalize bool, streamSize int, queryPlanCacheSize int64) *Executor {
+	e := &Executor{
+		serv:        serv,
+		cell:        cell,
+		resolver:    resolver,
+		scatterConn: resolver.scatterConn,
+		txConn:      resolver.scatterConn.txConn,
+		plans:       cache.NewLRUCache(queryPlanCacheSize),
+		normalize:   normalize,
+		streamSize:  streamSize,
+	}
+
+	e.exec = strat(e)
 
 	vschemaacl.Init()
 	e.vm = VSchemaManager{e: e}
@@ -143,7 +189,7 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 	defer span.Finish()
 
 	logStats := NewLogStats(ctx, method, sql, bindVars)
-	result, err = e.execute(ctx, safeSession, sql, bindVars, logStats)
+	result, err = e.exec.execute(ctx, safeSession, sql, bindVars, logStats)
 	if err == nil {
 		safeSession.FoundRows = result.RowsAffected
 	}
@@ -161,8 +207,32 @@ func (e *Executor) Execute(ctx context.Context, method string, safeSession *Safe
 	return result, err
 }
 
+func (e *Executor) parseDestinationTarget(safeSession *SafeSession) (string, topodatapb.TabletType, error) {
+	destKeyspace, destTabletType, dest, err := e.ParseDestinationTarget(safeSession.TargetString)
+	if err != nil {
+		return "", 0, err
+	}
+	if dest != nil {
+		return "", 0, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "todo - what todo?")
+	}
+
+	if safeSession.InTransaction() && destTabletType != topodatapb.TabletType_MASTER {
+		return "", 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "transactions are supported only for master tablet types, current type: %v", destTabletType)
+	}
+	return destKeyspace, destTabletType, nil
+}
+
+func (e *Executor) startTxIfNecessary(ctx context.Context, safeSession *SafeSession) error {
+	if !safeSession.Autocommit && !safeSession.InTransaction() {
+		if err := e.txConn.Begin(ctx, safeSession); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (e *Executor) execute(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *LogStats) (*sqltypes.Result, error) {
-	// Start an implicit transaction if necessary.
+	//Start an implicit transaction if necessary.
 	if !safeSession.Autocommit && !safeSession.InTransaction() {
 		if err := e.txConn.Begin(ctx, safeSession); err != nil {
 			return nil, err
@@ -276,13 +346,10 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 		return nil, err
 	}
 
-	neededBindVariables, err := e.createNeededBindVariables(plan.BindVarNeeds, safeSession)
+	err = e.addNeededBindVars(plan.BindVarNeeds, bindVars, safeSession)
 	if err != nil {
 		logStats.Error = err
 		return nil, err
-	}
-	for k, v := range neededBindVariables {
-		bindVars[k] = v
 	}
 
 	qr, err := plan.Instructions.Execute(vcursor, bindVars, true)
@@ -312,10 +379,8 @@ func (e *Executor) handleExec(ctx context.Context, safeSession *SafeSession, sql
 	return qr, err
 }
 
-// createNeededBindVariables creates a map of bind vars that are needed by the bindvar-needs sent in
-func (e *Executor) createNeededBindVariables(bindVarNeeds sqlparser.BindVarNeeds, session *SafeSession) (map[string]*querypb.BindVariable, error) {
-	bindVars := make(map[string]*querypb.BindVariable)
-
+// addNeededBindVars adds bind vars that are needed by the plan
+func (e *Executor) addNeededBindVars(bindVarNeeds sqlparser.BindVarNeeds, bindVars map[string]*querypb.BindVariable, session *SafeSession) error {
 	if bindVarNeeds.NeedDatabase {
 		keyspace, _, _, _ := e.ParseDestinationTarget(session.TargetString)
 		if keyspace == "" {
@@ -340,7 +405,7 @@ func (e *Executor) createNeededBindVariables(bindVarNeeds sqlparser.BindVarNeeds
 		bindVars[sqlparser.FoundRowsName] = sqltypes.Uint64BindVariable(session.FoundRows)
 	}
 
-	return bindVars, nil
+	return nil
 }
 
 func (e *Executor) destinationExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *LogStats) (*sqltypes.Result, error) {
@@ -1431,8 +1496,10 @@ func (e *Executor) Plans() *cache.LRUCache {
 func (e *Executor) updateQueryCounts(planType, keyspace, tableName string, shardQueries int64) {
 	queriesProcessed.Add(planType, 1)
 	queriesRouted.Add(planType, shardQueries)
-	queriesProcessedByTable.Add([]string{planType, keyspace, tableName}, 1)
-	queriesRoutedByTable.Add([]string{planType, keyspace, tableName}, shardQueries)
+	if tableName != "" {
+		queriesProcessedByTable.Add([]string{planType, keyspace, tableName}, 1)
+		queriesRoutedByTable.Add([]string{planType, keyspace, tableName}, shardQueries)
+	}
 }
 
 // VSchemaStats returns the loaded vschema stats.

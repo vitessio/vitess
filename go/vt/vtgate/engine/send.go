@@ -27,10 +27,15 @@ type Send struct {
 	// Query specifies the query to be executed.
 	Query string
 
-	// NoAutoCommit specifies if we need to check autocommit behaviour
-	NoAutoCommit bool
+	// IsDML specifies how to deal with autocommit behaviour
+	IsDML bool
 
 	noInputs
+}
+
+//NeedsTransaction implements the Primitive interface
+func (s *Send) NeedsTransaction() bool {
+	return s.IsDML
 }
 
 // MarshalJSON serializes the Send into a JSON representation.
@@ -41,12 +46,12 @@ func (s *Send) MarshalJSON() ([]byte, error) {
 		Keyspace          *vindexes.Keyspace
 		TargetDestination key.Destination
 		Query             string
-		NoAutoCommit      bool
+		IsDML             bool
 	}{
 		Opcode:            "Send",
 		Keyspace:          s.Keyspace,
 		TargetDestination: s.TargetDestination,
-		NoAutoCommit:      s.NoAutoCommit,
+		IsDML:             s.IsDML,
 		Query:             s.Query,
 	}
 
@@ -55,8 +60,8 @@ func (s *Send) MarshalJSON() ([]byte, error) {
 
 // RouteType implements Primitive interface
 func (s *Send) RouteType() string {
-	if s.NoAutoCommit {
-		return "SendNoAutoCommit"
+	if s.IsDML {
+		return "SendDML"
 	}
 
 	return "Send"
@@ -92,11 +97,11 @@ func (s *Send) Execute(vcursor VCursor, bindVars map[string]*query.BindVariable,
 	}
 
 	canAutocommit := false
-	if !s.NoAutoCommit {
+	if s.IsDML {
 		canAutocommit = len(rss) == 1 && vcursor.AutocommitApproval()
 	}
 
-	rollbackOnError := !s.NoAutoCommit // for non-dml queries, there's no need to do a rollback
+	rollbackOnError := s.IsDML // for non-dml queries, there's no need to do a rollback
 	result, errs := vcursor.ExecuteMultiShard(rss, queries, rollbackOnError, canAutocommit)
 	err = vterrors.Aggregate(errs)
 	if err != nil {

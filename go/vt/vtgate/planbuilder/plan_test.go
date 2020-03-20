@@ -165,6 +165,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "vindex_func_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "wireup_cases.txt", testOutputTempDir, vschemaWrapper)
 	testFile(t, "memory_sort_cases.txt", testOutputTempDir, vschemaWrapper)
+	testFile(t, "ddl_cases.txt", testOutputTempDir, vschemaWrapper)
 }
 
 func TestOne(t *testing.T) {
@@ -276,7 +277,7 @@ func testFile(t *testing.T, filename, tempDir string, vschema *vschemaWrapper) {
 
 				if out != tcase.output {
 					fail = true
-					t.Errorf("File: %s, Line: %v\n %s\n%s", filename, tcase.lineno, cmp.Diff(tcase.output, out), out)
+					t.Errorf("File: %s, Line: %v\n %s \n%s", filename, tcase.lineno, cmp.Diff(tcase.output, out), out)
 				}
 
 				if err != nil {

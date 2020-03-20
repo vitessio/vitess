@@ -58,6 +58,8 @@ type DML struct {
 
 	// QueryTimeout contains the optional timeout (in milliseconds) to apply to this query
 	QueryTimeout int
+
+	txNeeded
 }
 
 // DMLOpcode is a number representing the opcode

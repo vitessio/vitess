@@ -274,6 +274,7 @@ func Build(query string, vschema ContextVSchema) (*engine.Plan, error) {
 // and engine.Plan can be built by the caller.
 func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchema, bindVarNeeds sqlparser.BindVarNeeds) (*engine.Plan, error) {
 	var err error
+	var planType engine.PlanType
 	var instruction engine.Primitive
 
 	if vschema.Destination() != nil {
@@ -281,21 +282,27 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 	} else {
 		switch stmt := stmt.(type) {
 		case *sqlparser.Select:
-			instruction, err = buildSelectPlan(stmt, vschema)
-		case *sqlparser.Insert:
-			instruction, err = buildInsertPlan(stmt, vschema)
-		case *sqlparser.Update:
-			instruction, err = buildUpdatePlan(stmt, vschema)
-		case *sqlparser.Delete:
-			instruction, err = buildDeletePlan(stmt, vschema)
-		case *sqlparser.Union:
-			instruction, err = buildUnionPlan(stmt, vschema)
-		case *sqlparser.Set:
-			return nil, errors.New("unsupported construct: set")
-		case *sqlparser.Show:
-			return nil, errors.New("unsupported construct: show")
-		case *sqlparser.DDL:
-			return nil, errors.New("unsupported construct: ddl")
+			planType = engine.PlanSELECT
+		instruction, err = buildSelectPlan(stmt, vschema)
+	case *sqlparser.Insert:
+		planType = engine.PlanINSERT
+		instruction, err = buildInsertPlan(stmt, vschema)
+	case *sqlparser.Update:
+		planType = engine.PlanUPDATE
+		instruction, err = buildUpdatePlan(stmt, vschema)
+	case *sqlparser.Delete:
+		planType = engine.PlanDELETE
+		instruction, err = buildDeletePlan(stmt, vschema)
+	case *sqlparser.Union:
+		planType = engine.PlanSELECT
+		instruction, err = buildUnionPlan(stmt, vschema)
+	case *sqlparser.Set:
+		return nil, errors.New("unsupported construct: set")
+	case *sqlparser.Show:
+		return nil, errors.New("unsupported construct: show")
+	case *sqlparser.DDL:
+		planType = engine.PlanDDL
+		instruction, err = buildDDLPlan(stmt, vschema)
 		case *sqlparser.DBDDL:
 			return nil, errors.New("unsupported construct: ddl on database")
 		case *sqlparser.OtherRead:
@@ -303,11 +310,11 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 		case *sqlparser.OtherAdmin:
 			return nil, errors.New("unsupported construct: other admin")
 		case *sqlparser.Begin:
-			return nil, errors.New("unsupported construct: begin")
+			planType = engine.PlanBEGIN
 		case *sqlparser.Commit:
-			return nil, errors.New("unsupported construct: commit")
+			planType = engine.PlanCOMMIT
 		case *sqlparser.Rollback:
-			return nil, errors.New("unsupported construct: rollback")
+			planType = engine.PlanROLLBACK
 		default:
 			return nil, fmt.Errorf("BUG: unexpected statement type: %T", stmt)
 		}
@@ -316,9 +323,10 @@ func BuildFromStmt(query string, stmt sqlparser.Statement, vschema ContextVSchem
 		return nil, err
 	}
 	plan := &engine.Plan{
+		Type:         planType,
 		Original:     query,
 		Instructions: instruction,
+		BindVarNeeds: bindVarNeeds,
 	}
-	plan.BindVarNeeds = bindVarNeeds
 	return plan, nil
 }

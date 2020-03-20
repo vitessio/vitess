@@ -1,0 +1,45 @@
+# simple create table
+"create table t1(id bigint, primary key(id))"
+{
+  "Original": "create table t1(id bigint, primary key(id))",
+  "Instructions": {
+    "Type": "DDL",
+    "Keyspace": "targetString",
+    "TargetDestination": "DestinationAllShards()",
+    "Query": "create table t1 (\n\tid bigint,\n\tprimary key (id)\n)"
+  }
+}
+# simple create table with keyspace
+"create table user.t1(id bigint, primary key(id))"
+{
+  "Original": "create table user.t1(id bigint, primary key(id))",
+  "Instructions": {
+    "Type": "DDL",
+    "Keyspace": "user",
+    "TargetDestination": "DestinationAllShards()",
+    "Query": "create table t1 (\n\tid bigint,\n\tprimary key (id)\n)"
+  }
+}
+
+# DDL
+"create table a(id int)"
+{
+  "Original": "create table a(id int)",
+  "Instructions": {
+    "Type": "DDL",
+    "Keyspace": "targetString",
+    "TargetDestination": "DestinationAllShards()",
+    "Query": "create table a (\n\tid int\n)"
+  }
+}
+
+"create table a.b(id int)"
+{
+  "Original": "create table a.b(id int)",
+  "Instructions": {
+    "Type": "DDL",
+    "Keyspace": "a",
+    "TargetDestination": "DestinationAllShards()",
+    "Query": "create table b (\n\tid int\n)"
+  }
+}

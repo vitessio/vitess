@@ -138,7 +138,7 @@ func TestErrors(t *testing.T) {
 	}{
 		{
 			SQL: "INVALID SQL",
-			Err: "vtexplain execute error in 'INVALID SQL': syntax error at position 8 near 'INVALID'",
+			Err: "vtexplain execute error in 'INVALID SQL': unrecognized statement: INVALID SQL",
 		},
 
 		{

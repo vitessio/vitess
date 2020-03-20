@@ -97,6 +97,10 @@ func (ps *PulloutSubquery) GetFields(vcursor VCursor, bindVars map[string]*query
 	return ps.Underlying.GetFields(vcursor, combinedVars)
 }
 
+func (ps *PulloutSubquery) NeedsTransaction() bool {
+	return ps.Subquery.NeedsTransaction() || ps.Underlying.NeedsTransaction()
+}
+
 func (ps *PulloutSubquery) execSubquery(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (map[string]*querypb.BindVariable, error) {
 	result, err := ps.Subquery.Execute(vcursor, bindVars, false)
 	if err != nil {
