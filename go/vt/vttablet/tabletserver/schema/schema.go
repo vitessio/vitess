@@ -99,12 +99,6 @@ type TopicInfo struct {
 
 // MessageInfo contains info specific to message tables.
 type MessageInfo struct {
-	// IDPKIndex is the index of the ID column
-	// in PKvalues. This is used to extract the ID
-	// value for message tables to discard items
-	// from the cache.
-	IDPKIndex int
-
 	// Fields stores the field info to be
 	// returned for subscribers.
 	Fields []*querypb.Field
@@ -146,7 +140,7 @@ func NewTable(name string) *Table {
 // Done must be called after columns and indexes are added to
 // the table. It will build additional metadata like PKColumns.
 func (ta *Table) Done() {
-	if !ta.HasPrimary() {
+	if len(ta.Indexes) == 0 {
 		return
 	}
 	pkIndex := ta.Indexes[0]
@@ -184,6 +178,17 @@ func (ta *Table) FindColumn(name sqlparser.ColIdent) int {
 	return -1
 }
 
+// FindPKColumn finds a pk column in the table. It returns the index if found.
+// Otherwise, it returns -1.
+func (ta *Table) FindPKColumn(name sqlparser.ColIdent) int {
+	for i, colnum := range ta.PKColumns {
+		if ta.Columns[colnum].Name.Equal(name) {
+			return i
+		}
+	}
+	return -1
+}
+
 // GetPKColumn returns the pk column specified by the index.
 func (ta *Table) GetPKColumn(index int) *TableColumn {
 	return &ta.Columns[ta.PKColumns[index]]
@@ -212,7 +217,7 @@ func (ta *Table) SetMysqlStats(tr, dl, il, df, mdl sqltypes.Value) {
 
 // HasPrimary returns true if the table has a primary key.
 func (ta *Table) HasPrimary() bool {
-	return len(ta.Indexes) != 0 && ta.Indexes[0].Name.EqualString("primary")
+	return len(ta.PKColumns) != 0
 }
 
 // IsTopic returns true if TopicInfo is not nil.

@@ -387,7 +387,8 @@ func TestMessageTopic(t *testing.T) {
 
 	// this should fail because the topic doesn't exist. Any other outcome fails the test
 	_, err = conn.ExecuteFetch("insert into test_topic(id, message) values(4, 'msg4'), (5, 'msg5'), (6, 'msg6')", 1, false)
-	want := "table test_topic not found in schema"
+	// 1146: table doesn't exist.
+	want := "errno 1146"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("non-topic insert err: %v, must contain %v", err, want)
 	}

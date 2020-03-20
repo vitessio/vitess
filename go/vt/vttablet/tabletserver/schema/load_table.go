@@ -198,21 +198,6 @@ func loadMessageInfo(ta *Table, comment string) error {
 		}
 	}
 
-	// Store the position of the id column in the PK
-	// list. This is required to handle arbitrary updates.
-	// In such cases, we have to be able to identify the
-	// affected id and invalidate the message cache.
-	ta.MessageInfo.IDPKIndex = -1
-	for i, j := range ta.PKColumns {
-		if ta.Columns[j].Name.EqualString("id") {
-			ta.MessageInfo.IDPKIndex = i
-			break
-		}
-	}
-	if ta.MessageInfo.IDPKIndex == -1 {
-		return fmt.Errorf("id column is not part of the primary key for message table: %s", ta.Name.String())
-	}
-
 	// Load user-defined columns. Any "unrecognized" column is user-defined.
 	for _, c := range ta.Columns {
 		if _, ok := findCols[c.Name.Lowered()]; ok {

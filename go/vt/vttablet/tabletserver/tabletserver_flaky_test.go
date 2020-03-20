@@ -627,7 +627,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 			sqltypes.NewVarBinary("dtid0"),
 			sqltypes.NewInt64(RedoStatePrepared),
 			sqltypes.NewVarBinary(""),
-			sqltypes.NewVarBinary("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"),
+			sqltypes.NewVarBinary("update test_table set name = 2 where pk = 1 limit 10001"),
 		}},
 	})
 	turnOnTxEngine()
@@ -635,7 +635,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 1", len(tsv.te.preparedPool.conns))
 	}
 	got := tsv.te.preparedPool.conns["dtid0"].Queries
-	want := []string{"update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"}
+	want := []string{"update test_table set name = 2 where pk = 1 limit 10001"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Prepared queries: %v, want %v", got, want)
 	}
@@ -662,7 +662,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 			sqltypes.NewVarBinary("a:b:10"),
 			sqltypes.NewInt64(RedoStatePrepared),
 			sqltypes.NewVarBinary(""),
-			sqltypes.NewVarBinary("update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"),
+			sqltypes.NewVarBinary("update test_table set name = 2 where pk = 1 limit 10001"),
 		}, {
 			sqltypes.NewVarBinary("a:b:20"),
 			sqltypes.NewInt64(RedoStateFailed),
@@ -675,7 +675,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 		t.Errorf("len(tsv.te.preparedPool.conns): %d, want 1", len(tsv.te.preparedPool.conns))
 	}
 	got = tsv.te.preparedPool.conns["a:b:10"].Queries
-	want = []string{"update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"}
+	want = []string{"update test_table set name = 2 where pk = 1 limit 10001"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Prepared queries: %v, want %v", got, want)
 	}
@@ -1098,10 +1098,10 @@ func TestTabletServerExecuteBatch(t *testing.T) {
 	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2, 'addr', 'name')"
 	sqlResult := &sqltypes.Result{}
-	expanedSQL := "insert into test_table(pk, name, addr, name_string) values (1, 2, 'addr', 'name') /* _stream test_table (pk ) (1 ); */"
+	expandedSQL := "insert into test_table(pk, name, addr, name_string) values (1, 2, 'addr', 'name') /* _stream test_table (pk ) (1 ); */"
 
 	db.AddQuery(sql, sqlResult)
-	db.AddQuery(expanedSQL, sqlResult)
+	db.AddQuery(expandedSQL, sqlResult)
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := testUtils.newDBConfigs(db)
@@ -1231,14 +1231,14 @@ func TestTabletServerExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2)"
 	sqlResult := &sqltypes.Result{}
-	expanedSQL := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
+	expandedSQL := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
 
 	db.AddQuery(sql, sqlResult)
-	db.AddQuery(expanedSQL, sqlResult)
+	db.AddQuery(expandedSQL, sqlResult)
 
 	// make this query fail
 	db.AddRejectedQuery(sql, errRejected)
-	db.AddRejectedQuery(expanedSQL, errRejected)
+	db.AddRejectedQuery(expandedSQL, errRejected)
 
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
@@ -1265,41 +1265,6 @@ func TestTabletServerExecuteBatchSqlExecFailInTransaction(t *testing.T) {
 
 	if db.GetQueryCalledNum("rollback") != 1 {
 		t.Fatalf("rollback should be executed only once.")
-	}
-}
-
-func TestTabletServerExecuteBatchSqlSucceedInTransaction(t *testing.T) {
-	db := setUpTabletServerTest(t)
-	defer db.Close()
-	testUtils := newTestUtils()
-	sql := "insert into test_table values (1, 2, 'addr', 'name')"
-	sqlResult := &sqltypes.Result{}
-	expanedSQL := "insert into test_table(pk, name, addr, name_string) values (1, 2, 'addr', 'name') /* _stream test_table (pk ) (1 ); */"
-
-	db.AddQuery(sql, sqlResult)
-	db.AddQuery(expanedSQL, sqlResult)
-
-	// cause execution error for this particular sql query
-	db.AddRejectedQuery(sql, errRejected)
-
-	config := testUtils.newQueryServiceConfig()
-	config.EnableAutoCommit = true
-	tsv := NewTabletServer(config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
-	dbcfgs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	err := tsv.StartService(target, dbcfgs)
-	if err != nil {
-		t.Fatalf("StartService failed: %v", err)
-	}
-	defer tsv.StopService()
-	ctx := context.Background()
-	if _, err := tsv.ExecuteBatch(ctx, &target, []*querypb.BoundQuery{
-		{
-			Sql:           sql,
-			BindVariables: nil,
-		},
-	}, false, 0, nil); err != nil {
-		t.Fatal(err)
 	}
 }
 
@@ -1333,10 +1298,10 @@ func TestExecuteBatchNestedTransaction(t *testing.T) {
 	testUtils := newTestUtils()
 	sql := "insert into test_table values (1, 2)"
 	sqlResult := &sqltypes.Result{}
-	expanedSQL := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
+	expandedSQL := "insert into test_table values (1, 2) /* _stream test_table (pk ) (1 ); */"
 
 	db.AddQuery(sql, sqlResult)
-	db.AddQuery(expanedSQL, sqlResult)
+	db.AddQuery(expandedSQL, sqlResult)
 	config := testUtils.newQueryServiceConfig()
 	tsv := NewTabletServer(config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := testUtils.newDBConfigs(db)
@@ -1422,7 +1387,7 @@ func TestSerializeTransactionsSameRow(t *testing.T) {
 	// Make sure that tx3 could finish while tx2 could not.
 	tx3Finished := make(chan struct{})
 
-	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk in (1) /* _stream test_table (pk ) (1 ); */",
+	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and name = 1 limit 10001",
 		func() {
 			close(tx1Started)
 			if err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and name = 1", 2); err != nil {
@@ -1547,7 +1512,7 @@ func TestSerializeTransactionsSameRow_ExecuteBatchAsTransaction(t *testing.T) {
 	// Make sure that tx2 and tx3 start only after tx1 is running its Execute().
 	tx1Started := make(chan struct{})
 
-	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk in (1) /* _stream test_table (pk ) (1 ); */",
+	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and name = 1 limit 10001",
 		func() {
 			close(tx1Started)
 			if err := waitForTxSerializationPendingQueries(tsv, "test_table where pk = 1 and name = 1", 2); err != nil {
@@ -1664,7 +1629,7 @@ func TestSerializeTransactionsSameRow_ConcurrentTransactions(t *testing.T) {
 
 	tx1Started := make(chan struct{})
 	allQueriesPending := make(chan struct{})
-	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk in (1) /* _stream test_table (pk ) (1 ); */",
+	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and name = 1 limit 10001",
 		func() {
 			close(tx1Started)
 			<-allQueriesPending
@@ -1803,7 +1768,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests(t *testing.T) {
 	// Signal when tx2 is done.
 	tx2Failed := make(chan struct{})
 
-	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk in (1) /* _stream test_table (pk ) (1 ); */",
+	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and name = 1 limit 10001",
 		func() {
 			close(tx1Started)
 			<-tx2Failed
@@ -1892,7 +1857,7 @@ func TestSerializeTransactionsSameRow_TooManyPendingRequests_ExecuteBatchAsTrans
 	// Signal when tx2 is done.
 	tx2Failed := make(chan struct{})
 
-	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk in (1) /* _stream test_table (pk ) (1 ); */",
+	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and name = 1 limit 10001",
 		func() {
 			close(tx1Started)
 			<-tx2Failed
@@ -1989,7 +1954,7 @@ func TestSerializeTransactionsSameRow_RequestCanceled(t *testing.T) {
 	// Signal when tx2 is done.
 	tx2Done := make(chan struct{})
 
-	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk in (1) /* _stream test_table (pk ) (1 ); */",
+	db.SetBeforeFunc("update test_table set name_string = 'tx1' where pk = 1 and name = 1 limit 10001",
 		func() {
 			close(tx1Started)
 			// Keep blocking until tx2 was canceled.
@@ -2118,9 +2083,9 @@ func TestMessageAck(t *testing.T) {
 	}
 
 	_, err = tsv.MessageAck(ctx, &target, "msg", ids)
-	want = "query: 'select time_scheduled, id from msg where id in ('1', '2') and time_acked is null limit 10001 for update' is not supported on fakesqldb"
+	want = "query: 'update msg set time_acked"
 	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("tsv.MessageAck(invalid): %v, want %s", err, want)
+		t.Errorf("tsv.MessageAck(invalid):\n%v, want\n%s", err, want)
 	}
 
 	db.AddQuery(
@@ -2159,7 +2124,7 @@ func TestRescheduleMessages(t *testing.T) {
 	}
 
 	_, err = tsv.PostponeMessages(ctx, &target, "msg", []string{"1", "2"})
-	want = "query: 'select time_scheduled, id from msg where id in ('1', '2') and time_acked is null limit 10001 for update' is not supported"
+	want = "query: 'update msg set time_next"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("tsv.PostponeMessages(invalid):\n%v, want\n%s", err, want)
 	}
@@ -2200,7 +2165,7 @@ func TestPurgeMessages(t *testing.T) {
 	}
 
 	_, err = tsv.PurgeMessages(ctx, &target, "msg", 0)
-	want = "query: 'select time_scheduled, id from msg where time_scheduled < 0 and time_acked is not null limit 500 for update' is not supported"
+	want = "query: 'delete from msg where time_scheduled"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("tsv.PurgeMessages(invalid):\n%v, want\n%s", err, want)
 	}
@@ -2219,7 +2184,7 @@ func TestPurgeMessages(t *testing.T) {
 			}},
 		},
 	)
-	db.AddQuery("delete from msg where (time_scheduled = 1 and id = 1) /* _stream msg (time_scheduled id ) (1 1 ); */", &sqltypes.Result{RowsAffected: 1})
+	db.AddQuery("delete from msg where time_scheduled < 3 and time_acked is not null limit 500", &sqltypes.Result{RowsAffected: 1})
 	count, err := tsv.PurgeMessages(ctx, &target, "msg", 3)
 	require.NoError(t, err)
 	if count != 1 {
@@ -2572,11 +2537,6 @@ func TestConfigChanges(t *testing.T) {
 		t.Errorf("tsv.qe.QueryPlanCacheCap: %d, want %d", val, newSize)
 	}
 
-	tsv.SetAutoCommit(true)
-	if val := tsv.qe.autoCommit.Get(); !val {
-		t.Errorf("tsv.qe.autoCommit.Get: %v, want true", val)
-	}
-
 	tsv.SetMaxResultSize(newSize)
 	if val := tsv.MaxResultSize(); val != newSize {
 		t.Errorf("MaxResultSize: %d, want %d", val, newSize)
@@ -2622,38 +2582,18 @@ func checkTabletServerState(t *testing.T, tsv *TabletServer, expectState int64) 
 func getSupportedQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		// Queries for how row protection test (txserializer).
-		"update test_table set name_string = 'tx1' where pk in (1) /* _stream test_table (pk ) (1 ); */": {
+		"update test_table set name_string = 'tx1' where pk = 1 and name = 1 limit 10001": {
 			RowsAffected: 1,
 		},
-		"update test_table set name_string = 'tx2' where pk in (1) /* _stream test_table (pk ) (1 ); */": {
+		"update test_table set name_string = 'tx2' where pk = 1 and name = 1 limit 10001": {
 			RowsAffected: 1,
 		},
-		"update test_table set name_string = 'tx3' where pk in (1) /* _stream test_table (pk ) (1 ); */": {
+		"update test_table set name_string = 'tx3' where pk = 1 and name = 1 limit 10001": {
 			RowsAffected: 1,
 		},
 		// tx3, but with different primary key.
-		"update test_table set name_string = 'tx3' where pk in (2) /* _stream test_table (pk ) (2 ); */": {
+		"update test_table set name_string = 'tx3' where pk = 2 and name = 1 limit 10001": {
 			RowsAffected: 1,
-		},
-		// Complex WHERE clause requires SELECT of primary key first.
-		"select pk from test_table where pk = 1 and name = 1 limit 10001 for update": {
-			Fields: []*querypb.Field{
-				{Type: sqltypes.Int64},
-			},
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{{
-				sqltypes.NewVarBinary("1"),
-			}},
-		},
-		// Complex WHERE clause requires SELECT of primary key first.
-		"select pk from test_table where pk = 2 and name = 1 limit 10001 for update": {
-			Fields: []*querypb.Field{
-				{Type: sqltypes.Int64},
-			},
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{{
-				sqltypes.NewVarBinary("2"),
-			}},
 		},
 		// queries for twopc
 		sqlTurnoffBinlog:                                  {},
