@@ -877,7 +877,7 @@ options:PassthroughDMLs
 # analyze
 "analyze table a"
 {
-  "PlanID": "OTHER_READ",
+  "PlanID": "OtherRead",
   "TableName": ""
 }
 
