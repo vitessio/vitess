@@ -333,6 +333,7 @@ func printTimestamp(v uint32) *bytes.Buffer {
 // many bytes it takes. It only uses the querypb.Type value for the
 // signed flag.
 func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Type) (sqltypes.Value, int, error) {
+	fmt.Printf("CellValue typ %v styp %v\n", typ, styp)
 	switch typ {
 	case TypeTiny:
 		if sqltypes.IsSigned(styp) {
