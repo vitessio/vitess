@@ -167,7 +167,7 @@ func skipToEnd(yylex interface{}) {
 
 // DDL Tokens
 %token <bytes> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH MODIFY CHANGE
-%token <bytes> SCHEMA TABLE INDEX VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK
+%token <bytes> SCHEMA TABLE INDEX INDEXES VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK
 %token <bytes> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <bytes> FIRST AFTER
 %token <bytes> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE FORMAT
@@ -284,7 +284,8 @@ func skipToEnd(yylex interface{}) {
 %type <str> full_opt from_database_opt tables_or_processlist columns_or_fields
 %type <showFilter> like_or_where_opt like_opt
 %type <byt> exists_opt not_exists_opt
-%type <empty> non_add_drop_or_rename_operation index_opt constraint_opt
+%type <str> constraint constraint_opt
+%type <empty> non_add_drop_or_rename_operation
 %type <empty> to_opt to_or_as as_opt column_opt describe
 %type <empty> skip_to_end ddl_skip_to_end
 %type <bytes> reserved_keyword non_reserved_keyword
@@ -307,7 +308,8 @@ func skipToEnd(yylex interface{}) {
 %type <columnDefinition> column_definition
 %type <indexDefinition> index_definition
 %type <constraintDefinition> constraint_definition
-%type <str> index_or_key
+%type <str> index_or_key indexes_or_keys
+%type <str> from_or_in show_database_opt
 %type <str> name_opt
 %type <str> equal_opt
 %type <TableSpec> table_spec table_column_list
@@ -317,7 +319,7 @@ func skipToEnd(yylex interface{}) {
 %type <indexColumn> index_column
 %type <indexColumns> index_column_list
 %type <indexOption> index_option
-%type <indexOptions> index_option_list
+%type <indexOptions> index_option_list index_option_list_opt
 %type <constraintInfo> constraint_info
 %type <partDefs> partition_definitions
 %type <partDef> partition_definition
@@ -612,10 +614,9 @@ create_statement:
     $1.OptLike = $2
     $$ = $1
   }
-| CREATE constraint_opt INDEX ID using_opt ON table_name ddl_skip_to_end
+| CREATE constraint_opt INDEX sql_id using_opt ON table_name '(' index_column_list ')' index_option_list_opt
   {
-    // Change this to an alter statement
-    $$ = &DDL{Action: AlterStr, Table: $7}
+    $$ = &DDL{Action: AlterStr, Table: $7, IndexSpec: &IndexSpec{Action: CreateStr, ToName: $4, Using: $5, Type: $2, Columns: $9, Options: $11}}
   }
 | CREATE VIEW table_name AS lexer_position select_statement lexer_position
   {
@@ -1160,6 +1161,15 @@ index_definition:
     $$ = &IndexDefinition{Info: $1, Columns: $3}
   }
 
+index_option_list_opt:
+  {
+    $$ = nil
+  }
+| index_option_list
+  {
+    $$ = $1
+  }
+
 index_option_list:
   index_option
   {
@@ -1215,6 +1225,20 @@ index_info:
 | index_or_key name_opt
   {
     $$ = &IndexInfo{Type: string($1), Name: NewColIdent($2), Unique: false}
+  }
+
+indexes_or_keys:
+  INDEX
+  {
+    $$ = string($1)
+  }
+| INDEXES
+  {
+    $$ = string($1)
+  }
+| KEYS
+  {
+    $$ = string($1)
   }
 
 index_or_key:
@@ -1279,6 +1303,29 @@ constraint_info:
 | FOREIGN KEY '(' column_list ')' REFERENCES table_name '(' column_list ')' fk_on_delete fk_on_update
   {
     $$ = &ForeignKeyDefinition{Source: $4, ReferencedTable: $7, ReferencedColumns: $9, OnDelete: $11, OnUpdate: $12}
+  }
+
+from_or_in:
+  FROM
+  {
+    $$ = string($1)
+  }
+| IN
+  {
+    $$ = string($1)
+  }
+
+show_database_opt:
+  {
+    $$ = ""
+  }
+| FROM ID
+  {
+    $$ = string($2)
+  }
+| IN ID
+  {
+    $$ = string($2)
   }
 
 fk_on_delete:
@@ -1403,10 +1450,21 @@ alter_table_statement:
     // Change this to a rename statement
     $$ = &DDL{Action: RenameStr, FromTables: TableNames{$4}, ToTables: TableNames{$7}}
   }
-| ALTER ignore_opt TABLE table_name RENAME index_opt skip_to_end
+| ALTER ignore_opt TABLE table_name ADD index_or_key sql_id using_opt '(' index_column_list ')' index_option_list_opt
   {
-    // Rename an index can just be an alter
-    $$ = &DDL{Action: AlterStr, Table: $4}
+    $$ = &DDL{Action: AlterStr, Table: $4, IndexSpec: &IndexSpec{Action: CreateStr, ToName: $7,  Using: $8, Columns: $10, Options: $12}}
+  }
+| ALTER ignore_opt TABLE table_name ADD constraint index_or_key sql_id using_opt '(' index_column_list ')' index_option_list_opt
+  {
+    $$ = &DDL{Action: AlterStr, Table: $4, IndexSpec: &IndexSpec{Action: CreateStr, ToName: $8, Type: $6, Using: $9, Columns: $11, Options: $13}}
+  }
+| ALTER ignore_opt TABLE table_name DROP index_or_key sql_id
+  {
+    $$ = &DDL{Action: AlterStr, Table: $4, IndexSpec: &IndexSpec{Action: DropStr, ToName: $7}}
+  }
+| ALTER ignore_opt TABLE table_name RENAME index_or_key sql_id TO sql_id
+  {
+    $$ = &DDL{Action: AlterStr, Table: $4, IndexSpec: &IndexSpec{Action: RenameStr, FromName: $7, ToName: $9}}
   }
 | ALTER ignore_opt TABLE table_name MODIFY column_opt column_definition column_order_opt skip_to_end
   {
@@ -1525,13 +1583,8 @@ ignored_alter_object_type:
   CHECK
 | CONSTRAINT
 | FOREIGN
-| FULLTEXT
-| INDEX
-| KEY
 | PRIMARY
-| SPATIAL
 | PARTITION
-| UNIQUE
 
 partition_operation:
   REORGANIZE PARTITION sql_id INTO openb partition_definitions closeb
@@ -1586,10 +1639,9 @@ drop_statement:
     }
     $$ = &DDL{Action: DropStr, FromTables: $4, IfExists: exists}
   }
-| DROP INDEX ID ON table_name ddl_skip_to_end
+| DROP INDEX sql_id ON table_name ddl_skip_to_end
   {
-    // Change this to an alter statement
-    $$ = &DDL{Action: AlterStr, Table: $5}
+    $$ = &DDL{Action: AlterStr, Table: $5, IndexSpec: &IndexSpec{Action: DropStr, ToName: $3}}
   }
 | DROP VIEW exists_opt view_name_list
   {
@@ -1678,13 +1730,9 @@ show_statement:
   {
     $$ = &Show{Type: string($2)}
   }
-| SHOW INDEX ddl_skip_to_end
+| SHOW indexes_or_keys from_or_in table_name show_database_opt where_expression_opt
   {
-    $$ = &Show{Type: string($2)}
-  }
-| SHOW KEYS ddl_skip_to_end
-  {
-    $$ = &Show{Type: string($2)}
+    $$ = &Show{Type: IndexStr, Table: $4, Database: $5, ShowIndexFilterOpt: $6}
   }
 | SHOW PLUGINS
   {
@@ -3363,20 +3411,18 @@ to_opt:
 | AS
   { $$ = struct{}{} }
 
-index_opt:
-  INDEX
-  { $$ = struct{}{} }
-| KEY
-  { $$ = struct{}{} }
+constraint:
+  UNIQUE
+  { $$ = UniqueStr }
+| FULLTEXT
+  { $$ = FulltextStr }
+| SPATIAL
+  { $$ = SpatialStr }
 
 constraint_opt:
-  { $$ = struct{}{} }
-| UNIQUE
-  { $$ = struct{}{} }
-| FULLTEXT
-  { $$ = struct{}{} }
-| SPATIAL
-  { $$ = struct{}{} }
+  { $$ = "" }
+| constraint
+  { $$ = $1 }
 
 using_opt:
   { $$ = ColIdent{} }

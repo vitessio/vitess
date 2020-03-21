@@ -777,6 +777,9 @@ type DDL struct {
 
 	// AutoIncSpec is set for AddAutoIncStr.
 	AutoIncSpec *AutoIncSpec
+
+	// IndexSpec is set for all ALTER operations on an index
+	IndexSpec *IndexSpec
 }
 
 // ColumnOrder is used in some DDL statements to specify or change the order of a column in a schema.
@@ -794,10 +797,11 @@ const (
 	AddStr              = "add"
 	DropStr             = "drop"
 	RenameStr           = "rename"
-	ModifyStr					  = "modify"
+	ModifyStr           = "modify"
 	ChangeStr           = "change"
 	TruncateStr         = "truncate"
 	FlushStr            = "flush"
+	IndexStr            = "index"
 	CreateVindexStr     = "create vindex"
 	DropVindexStr       = "drop vindex"
 	AddVschemaTableStr  = "add vschema table"
@@ -806,6 +810,9 @@ const (
 	DropColVindexStr    = "on table drop vindex"
 	AddSequenceStr      = "add sequence"
 	AddAutoIncStr       = "add auto_increment"
+	UniqueStr           = "unique"
+	SpatialStr          = "spatial"
+	FulltextStr         = "fulltext"
 
 	// Vindex DDL param to specify the owner of a vindex
 	VindexOwnerStr = "owner"
@@ -877,6 +884,8 @@ func (node *DDL) Format(buf *TrackedBuffer) {
 			buf.Myprintf("%s table %v %s column %v", node.Action, node.Table, node.ColumnAction, node.Column)
 		} else if node.ColumnAction == RenameStr {
 			buf.Myprintf("%s table %v %s column %v to %v", node.Action, node.Table, node.ColumnAction, node.Column, node.ToColumn)
+		} else if node.IndexSpec != nil {
+			buf.Myprintf("%s table %v %v", node.Action, node.Table, node.IndexSpec)
 		} else {
 			buf.Myprintf("%s table %v", node.Action, node.Table)
 		}
@@ -1387,6 +1396,75 @@ func (ct *ColumnType) walkSubtree(visit Visit) error {
 	return nil
 }
 
+// IndexSpec describes an index operation in an ALTER statement
+type IndexSpec struct {
+	// Action states whether it's a CREATE, DROP, or RENAME
+	Action   string
+	// FromName states the old name when renaming
+	FromName ColIdent
+	// ToName states the name to set when renaming or references the target table
+	ToName   ColIdent
+	// Using states whether you're using BTREE, HASH, or none
+	Using    ColIdent
+	// Type specifies whether this is UNIQUE, FULLTEXT, SPATIAL, or normal (nothing)
+	Type     string
+	// Columns contains the column names when creating an index
+	Columns []*IndexColumn
+	// Options contains the index options when creating an index
+	Options []*IndexOption
+}
+
+func (idx *IndexSpec) Format(buf *TrackedBuffer) {
+	switch idx.Action {
+	case "create", "CREATE":
+		buf.Myprintf("add ")
+		if idx.Type != "" {
+			buf.Myprintf("%s ", idx.Type)
+		}
+		buf.Myprintf("index %s ", idx.ToName.val)
+		if idx.Using.val != "" {
+			buf.Myprintf("using %s ", idx.Using.val)
+		}
+		buf.Myprintf("(")
+		for i, col := range idx.Columns {
+			if i != 0 {
+				buf.Myprintf(", %s", col.Column.val)
+			} else {
+				buf.Myprintf("%s", col.Column.val)
+			}
+			if col.Length != nil {
+				buf.Myprintf("(%v)", col.Length)
+			}
+		}
+		buf.Myprintf(")")
+		for _, opt := range idx.Options {
+			buf.Myprintf(" %s", opt.Name)
+			if opt.Using != "" {
+				buf.Myprintf(" %s", opt.Using)
+			} else {
+				buf.Myprintf(" %v", opt.Value)
+			}
+		}
+	case "drop", "DROP":
+		buf.Myprintf("drop index %s", idx.ToName.val)
+	case "rename", "RENAME":
+		buf.Myprintf("rename index %s to %s", idx.FromName.val, idx.ToName.val)
+	}
+}
+
+func (idx *IndexSpec) walkSubtree(visit Visit) error {
+	if idx == nil {
+		return nil
+	}
+	for _, n := range idx.Columns {
+		if err := Walk(visit, n.Column); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // IndexDefinition describes an index in a CREATE TABLE statement
 type IndexDefinition struct {
 	Info    *IndexInfo
@@ -1717,6 +1795,7 @@ type Show struct {
 	ShowTablesOpt          *ShowTablesOpt
 	Scope                  string
 	ShowCollationFilterOpt *Expr
+	ShowIndexFilterOpt     Expr
 }
 
 // Format formats the node.
@@ -1733,7 +1812,16 @@ func (node *Show) Format(buf *TrackedBuffer) {
 		buf.Myprintf("%v", opt.Filter)
 		return
 	}
-
+	if node.Type == "index" {
+		buf.Myprintf("show index from %v", node.Table)
+		if node.Database != "" {
+			buf.Myprintf(" from %s", node.Database)
+		}
+		if node.ShowIndexFilterOpt != nil {
+			buf.Myprintf(" where %v", node.ShowIndexFilterOpt)
+		}
+		return
+	}
 	if node.Database != "" {
 		notExistsOpt := ""
 		if node.IfNotExists {

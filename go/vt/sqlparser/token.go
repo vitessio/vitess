@@ -205,6 +205,7 @@ var keywords = map[string]int{
 	"ignore":              IGNORE,
 	"in":                  IN,
 	"index":               INDEX,
+	"indexes":             INDEXES,
 	"infile":              UNUSED,
 	"inout":               UNUSED,
 	"inner":               INNER,

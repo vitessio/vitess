@@ -858,10 +858,10 @@ var (
 		output: "alter table a add column (\n\tfoo int\n)",
 	}, {
 		input:  "alter table a add spatial key foo (column1)",
-		output: "alter table a",
+		output: "alter table a add spatial index foo (column1)",
 	}, {
 		input:  "alter table a add unique key foo (column1)",
-		output: "alter table a",
+		output: "alter table a add unique index foo (column1)",
 	}, {
 		input:  "alter table `By` add foo int",
 		output: "alter table `By` add column (\n\tfoo int\n)",
@@ -903,10 +903,10 @@ var (
 		output: "rename table a to b",
 	}, {
 		input:  "alter table a rename index foo to bar",
-		output: "alter table a",
+		output: "alter table a rename index foo to bar",
 	}, {
 		input:  "alter table a rename key foo to bar",
-		output: "alter table a",
+		output: "alter table a rename index foo to bar",
 	}, {
 		input:  "alter table e auto_increment = 20",
 		output: "alter table e",
@@ -930,13 +930,13 @@ var (
 		output: "alter table a add column (\n\tid int\n)",
 	}, {
 		input:  "alter table a add index idx (id)",
-		output: "alter table a",
+		output: "alter table a add index idx (id)",
 	}, {
 		input:  "alter table a add fulltext index idx (id)",
-		output: "alter table a",
+		output: "alter table a add fulltext index idx (id)",
 	}, {
 		input:  "alter table a add spatial index idx (id)",
-		output: "alter table a",
+		output: "alter table a add spatial index idx (id)",
 	}, {
 		input:  "alter table a add foreign key",
 		output: "alter table a",
@@ -952,14 +952,8 @@ var (
 		input:  "alter table a drop partition p2712",
 		output: "alter table a",
 	}, {
-		input:  "alter table a drop index idx (id)",
-		output: "alter table a",
-	}, {
-		input:  "alter table a drop fulltext index idx (id)",
-		output: "alter table a",
-	}, {
-		input:  "alter table a drop spatial index idx (id)",
-		output: "alter table a",
+		input:  "alter table a drop index idx",
+		output: "alter table a drop index idx",
 	}, {
 		input:  "alter table a add check ch_1",
 		output: "alter table a",
@@ -1070,20 +1064,20 @@ var (
 		input:  "alter vschema on a drop vindex `add`",
 		output: "alter vschema on a drop vindex `add`",
 	}, {
-		input:  "create index a on b",
-		output: "alter table b",
+		input:  "create index a on b (id)",
+		output: "alter table b add index a (id)",
 	}, {
-		input:  "create unique index a on b",
-		output: "alter table b",
+		input:  "create unique index a on b (id)",
+		output: "alter table b add unique index a (id)",
 	}, {
-		input:  "create unique index a using foo on b",
-		output: "alter table b",
+		input:  "create unique index a using btree on b (id)",
+		output: "alter table b add unique index a using btree (id)",
 	}, {
-		input:  "create fulltext index a using foo on b",
-		output: "alter table b",
+		input:  "create fulltext index a using btree on b (id)",
+		output: "alter table b add fulltext index a using btree (id)",
 	}, {
-		input:  "create spatial index a using foo on b",
-		output: "alter table b",
+		input:  "create spatial index a using btree on b (id)",
+		output: "alter table b add spatial index a using btree (id)",
 	}, {
 		input:  "create view a as select current_timestamp()",
 		output: "create view a as select current_timestamp() from dual",
@@ -1119,7 +1113,7 @@ var (
 		output: "drop view if exists a",
 	}, {
 		input:  "drop index b on a",
-		output: "alter table a",
+		output: "alter table a drop index b",
 	}, {
 		input:  "analyze table a",
 		output: "alter table a",
@@ -1213,14 +1207,41 @@ var (
 		input:  "show grants for 'root@localhost'",
 		output: "show grants",
 	}, {
-		input:  "show index from table",
-		output: "show index",
+		input:  "show index from tbl",
 	}, {
-		input:  "show indexes from table",
-		output: "show indexes",
+		input:  "show indexes from tbl",
+		output: "show index from tbl",
 	}, {
-		input:  "show keys from table",
-		output: "show keys",
+		input:  "show keys from tbl",
+		output: "show index from tbl",
+	}, {
+		input:  "show index in tbl",
+		output: "show index from tbl",
+	}, {
+		input:  "show indexes in tbl",
+		output: "show index from tbl",
+	}, {
+		input:  "show keys in tbl",
+		output: "show index from tbl",
+	}, {
+		input:  "show index from tbl from db",
+	}, {
+		input:  "show indexes from tbl from db",
+		output: "show index from tbl from db",
+	}, {
+		input:  "show keys from tbl from db",
+		output: "show index from tbl from db",
+	}, {
+		input:  "show index in tbl in db",
+		output: "show index from tbl from db",
+	}, {
+		input:  "show indexes in tbl in db",
+		output: "show index from tbl from db",
+	}, {
+		input:  "show keys in tbl in db",
+		output: "show index from tbl from db",
+	}, {
+		input:  "show index from tbl where Key_name = 'key'",
 	}, {
 		input:  "show master status",
 		output: "show master",
@@ -1743,8 +1764,8 @@ func TestCaseSensitivity(t *testing.T) {
 		input:  "create table A (\n\t`B` int\n)",
 		output: "create table A (\n\tB int\n)",
 	}, {
-		input:  "create index b on A",
-		output: "alter table A",
+		input:  "create index b on A (ID)",
+		output: "alter table A add index b (ID)",
 	}, {
 		input:  "alter table A foo",
 		output: "alter table A",
@@ -1768,7 +1789,7 @@ func TestCaseSensitivity(t *testing.T) {
 		output: "drop table if exists B",
 	}, {
 		input:  "drop index b on A",
-		output: "alter table A",
+		output: "alter table A drop index b",
 	}, {
 		input: "select a from B",
 	}, {
