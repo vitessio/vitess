@@ -227,65 +227,45 @@ var (
 	getModeSQL    = "select @@global.sql_mode"
 	getAutocommit = "select @@autocommit"
 	getAutoIsNull = "select @@sql_auto_is_null"
-	showBinlog    = "show variables like 'binlog_format'"
 )
 
 // VerifyMode is a helper method to verify mysql is running with
 // sql_mode = STRICT_TRANS_TABLES or STRICT_ALL_TABLES and autocommit=ON.
-// It also returns the current binlog format.
-func (dbc *DBConn) VerifyMode(strictTransTables bool) (BinlogFormat, error) {
+func (dbc *DBConn) VerifyMode(strictTransTables bool) error {
 	if strictTransTables {
 		qr, err := dbc.conn.ExecuteFetch(getModeSQL, 2, false)
 		if err != nil {
-			return 0, vterrors.Wrap(err, "could not verify mode")
+			return vterrors.Wrap(err, "could not verify mode")
 		}
 		if len(qr.Rows) != 1 {
-			return 0, fmt.Errorf("incorrect rowcount received for %s: %d", getModeSQL, len(qr.Rows))
+			return fmt.Errorf("incorrect rowcount received for %s: %d", getModeSQL, len(qr.Rows))
 		}
 		sqlMode := qr.Rows[0][0].ToString()
 		if !(strings.Contains(sqlMode, "STRICT_TRANS_TABLES") || strings.Contains(sqlMode, "STRICT_ALL_TABLES")) {
-			return 0, fmt.Errorf("require sql_mode to be STRICT_TRANS_TABLES or STRICT_ALL_TABLES: got '%s'", qr.Rows[0][0].ToString())
+			return fmt.Errorf("require sql_mode to be STRICT_TRANS_TABLES or STRICT_ALL_TABLES: got '%s'", qr.Rows[0][0].ToString())
 		}
 	}
 	qr, err := dbc.conn.ExecuteFetch(getAutocommit, 2, false)
 	if err != nil {
-		return 0, vterrors.Wrap(err, "could not verify mode")
+		return vterrors.Wrap(err, "could not verify mode")
 	}
 	if len(qr.Rows) != 1 {
-		return 0, fmt.Errorf("incorrect rowcount received for %s: %d", getAutocommit, len(qr.Rows))
+		return fmt.Errorf("incorrect rowcount received for %s: %d", getAutocommit, len(qr.Rows))
 	}
 	if !strings.Contains(qr.Rows[0][0].ToString(), "1") {
-		return 0, fmt.Errorf("require autocommit to be 1: got %s", qr.Rows[0][0].ToString())
+		return fmt.Errorf("require autocommit to be 1: got %s", qr.Rows[0][0].ToString())
 	}
 	qr, err = dbc.conn.ExecuteFetch(getAutoIsNull, 2, false)
 	if err != nil {
-		return 0, vterrors.Wrap(err, "could not verify mode")
+		return vterrors.Wrap(err, "could not verify mode")
 	}
 	if len(qr.Rows) != 1 {
-		return 0, fmt.Errorf("incorrect rowcount received for %s: %d", getAutoIsNull, len(qr.Rows))
+		return fmt.Errorf("incorrect rowcount received for %s: %d", getAutoIsNull, len(qr.Rows))
 	}
 	if !strings.Contains(qr.Rows[0][0].ToString(), "0") {
-		return 0, fmt.Errorf("require sql_auto_is_null to be 0: got %s", qr.Rows[0][0].ToString())
+		return fmt.Errorf("require sql_auto_is_null to be 0: got %s", qr.Rows[0][0].ToString())
 	}
-	qr, err = dbc.conn.ExecuteFetch(showBinlog, 10, false)
-	if err != nil {
-		return 0, vterrors.Wrap(err, "could not fetch binlog format")
-	}
-	if len(qr.Rows) != 1 {
-		return 0, fmt.Errorf("incorrect rowcount received for %s: %d", showBinlog, len(qr.Rows))
-	}
-	if len(qr.Rows[0]) != 2 {
-		return 0, fmt.Errorf("incorrect column count received for %s: %d", showBinlog, len(qr.Rows[0]))
-	}
-	switch qr.Rows[0][1].ToString() {
-	case "STATEMENT":
-		return BinlogFormatStatement, nil
-	case "ROW":
-		return BinlogFormatRow, nil
-	case "MIXED":
-		return BinlogFormatMixed, nil
-	}
-	return 0, fmt.Errorf("unexpected binlog format for %s: %s", showBinlog, qr.Rows[0][1].ToString())
+	return nil
 }
 
 // Close closes the DBConn.

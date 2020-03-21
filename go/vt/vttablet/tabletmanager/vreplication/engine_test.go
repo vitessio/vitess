@@ -365,7 +365,7 @@ func TestWaitForPosError(t *testing.T) {
 
 	dbClient.ExpectRequest("select pos, state, message from _vt.vreplication where id=1", &sqltypes.Result{Rows: [][]sqltypes.Value{{}}}, nil)
 	err = vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
-	want = "unexpected result: &{[] 0 0 [[]] <nil>}"
+	want = "unexpected result: &{[] 0 0 [[]]}"
 	if err == nil || err.Error() != want {
 		t.Errorf("WaitForPos: %v, want %v", err, want)
 	}
@@ -376,7 +376,7 @@ func TestWaitForPosError(t *testing.T) {
 		sqltypes.NewVarBinary("MariaDB/0-1-1083"),
 	}}}, nil)
 	err = vre.WaitForPos(context.Background(), 1, "MariaDB/0-1-1084")
-	want = `unexpected result: &{[] 0 0 [[VARBINARY("MariaDB/0-1-1083")] [VARBINARY("MariaDB/0-1-1083")]] <nil>}`
+	want = `unexpected result: &{[] 0 0 [[VARBINARY("MariaDB/0-1-1083")] [VARBINARY("MariaDB/0-1-1083")]]}`
 	if err == nil || err.Error() != want {
 		t.Errorf("WaitForPos: %v, want %v", err, want)
 	}

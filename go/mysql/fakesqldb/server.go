@@ -287,10 +287,6 @@ func (db *DB) NewConnection(c *mysql.Conn) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
-	if db.t != nil {
-		db.t.Logf("NewConnection(%v): client %v", db.name, c.ConnectionID)
-	}
-
 	if db.isConnFail {
 		panic(fmt.Errorf("simulating a connection failure"))
 	}
@@ -336,9 +332,6 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 		return callback(&sqltypes.Result{})
 	}
 
-	if db.t != nil {
-		db.t.Logf("ComQuery(%v): client %v: %v", db.name, c.ConnectionID, query)
-	}
 	if db.orderMatters {
 		result, err := db.comQueryOrdered(query)
 		if err != nil {

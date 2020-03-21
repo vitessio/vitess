@@ -149,13 +149,9 @@ type QueryEngine struct {
 	connTimeout        sync2.AtomicDuration
 	queryPoolWaiters   sync2.AtomicInt64
 	queryPoolWaiterCap sync2.AtomicInt64
-	binlogFormat       connpool.BinlogFormat
-	autoCommit         sync2.AtomicBool
 	maxResultSize      sync2.AtomicInt64
 	warnResultSize     sync2.AtomicInt64
 	maxDMLRows         sync2.AtomicInt64
-	passthroughDMLs    sync2.AtomicBool
-	allowUnsafeDMLs    bool
 	streamBufferSize   sync2.AtomicInt64
 	// tableaclExemptCount count the number of accesses allowed
 	// based on membership in the superuser ACL
@@ -217,7 +213,6 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 		config.HotRowProtectionConcurrentTransactions)
 	qe.streamQList = NewQueryList()
 
-	qe.autoCommit.Set(config.EnableAutoCommit)
 	qe.strictTableACL = config.StrictTableACL
 	qe.enableTableACLDryRun = config.EnableTableACLDryRun
 
@@ -241,8 +236,6 @@ func NewQueryEngine(checker connpool.MySQLChecker, se *schema.Engine, config tab
 	qe.maxDMLRows = sync2.NewAtomicInt64(int64(config.MaxDMLRows))
 	qe.streamBufferSize = sync2.NewAtomicInt64(int64(config.StreamBufferSize))
 
-	qe.passthroughDMLs = sync2.NewAtomicBool(config.PassthroughDMLs)
-	qe.allowUnsafeDMLs = config.AllowUnsafeDMLs
 	planbuilder.PassthroughDMLs = config.PassthroughDMLs
 
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
@@ -298,7 +291,9 @@ func (qe *QueryEngine) Open() error {
 		qe.conns.Close()
 		return err
 	}
-	qe.binlogFormat, err = conn.VerifyMode(qe.strictTransTables)
+	err = conn.VerifyMode(qe.strictTransTables)
+	// Recycle needs to happen before error check.
+	// Otherwise, qe.conns.Close will hang.
 	conn.Recycle()
 
 	if err != nil {
@@ -618,4 +613,14 @@ func (qe *QueryEngine) handleHTTPConsolidations(response http.ResponseWriter, re
 		}
 		response.Write([]byte(fmt.Sprintf("%v: %s\n", v.Count, query)))
 	}
+}
+
+// unicoded returns a valid UTF-8 string that json won't reject
+func unicoded(in string) (out string) {
+	for i, v := range in {
+		if v == 0xFFFD {
+			return in[:i]
+		}
+	}
+	return in
 }

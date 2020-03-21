@@ -156,7 +156,6 @@ func (oa *OrderedAggregate) execute(vcursor VCursor, bindVars map[string]*queryp
 	out := &sqltypes.Result{
 		Fields: oa.convertFields(result.Fields),
 		Rows:   make([][]sqltypes.Value, 0, len(result.Rows)),
-		Extras: result.Extras,
 	}
 	// This code is similar to the one in StreamExecute.
 	var current []sqltypes.Value

@@ -194,7 +194,7 @@ func TestSelectWithUnauthorizedUser(t *testing.T) {
 	_, err = conn.ExecuteFetch("SELECT * from vt_insert_test limit 1", 1, false)
 	require.NotNilf(t, err, "error expected, got nil")
 	assert.Contains(t, err.Error(), "table acl error")
-	assert.Contains(t, err.Error(), "cannot run PASS_SELECT on table")
+	assert.Contains(t, err.Error(), "cannot run Select on table")
 }
 
 func connectDB(t *testing.T, vtParams mysql.ConnParams, params ...string) *sql.DB {

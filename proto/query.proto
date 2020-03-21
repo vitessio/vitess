@@ -234,17 +234,11 @@ message BoundQuery {
 
 // ExecuteOptions is passed around for all Execute calls.
 message ExecuteOptions {
-  // This used to be exclude_field_names, which was replaced by
+  // 1 used to be exclude_field_names, which was replaced by
   // IncludedFields enum below
-  reserved 1;
-
-  // If set, we will try to include an EventToken with the responses.
-  bool include_event_token = 2;
-
-  // If set, the fresher field may be set as a result comparison to this token.
-  // This is a shortcut so the application doesn't need to care about
-  // comparing EventTokens.
-  EventToken compare_event_token = 3;
+  // 2 used to be include_event_token
+  // 3 used to be compare_event_token
+  reserved 1, 2, 3;
 
   enum IncludedFields {
     TYPE_AND_NAME = 0;
@@ -345,18 +339,6 @@ message Row {
   bytes values = 2;
 }
 
-// ResultExtras contains optional out-of-band information. Usually the
-// extras are requested by adding ExecuteOptions flags.
-message ResultExtras {
-  // event_token is populated if the include_event_token flag is set
-  // in ExecuteOptions.
-  EventToken event_token = 1;
-
-  // If set, it means the data returned with this result is fresher
-  // than the compare_token passed in the ExecuteOptions.
-  bool fresher = 2;
-}
-
 // QueryResult is returned by Execute and ExecuteStream.
 //
 // As returned by Execute, len(fields) is always equal to len(row)
@@ -367,11 +349,13 @@ message ResultExtras {
 // len(QueryResult[0].fields) is always equal to len(row) (for each
 // row in rows for each QueryResult in QueryResult[1:]).
 message QueryResult {
+  // This used to be ResultExtras.
+  reserved 5;
+
   repeated Field fields = 1;
   uint64 rows_affected = 2;
   uint64 insert_id = 3;
   repeated Row rows = 4;
-  ResultExtras extras = 5;
 }
 
 // QueryWarning is used to convey out of band query execution warnings
