@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Copyright 2019 The Vitess Authors.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -26,8 +26,8 @@ CELL=test ./scripts/etcd-up.sh
 CELL=test ./scripts/vtctld-up.sh
 
 for i in 100 101 102; do
- CELL=test TABLET_UID=$i ./scripts/mysqlctl-up.sh
- CELL=test KEYSPACE=test_keyspace TABLET_UID=$i ./scripts/vttablet-up.sh
+	CELL=test TABLET_UID=$i ./scripts/mysqlctl-up.sh
+	CELL=test KEYSPACE=test_keyspace TABLET_UID=$i ./scripts/vttablet-up.sh
 done
 
 vtctlclient -server localhost:15999 InitShardMaster -force test_keyspace/0 test-100
@@ -51,10 +51,9 @@ $VTROOT/test/client_jdbc.sh
 ./scripts/vtgate-down.sh
 
 for i in 100 101 102; do
- CELL=test TABLET_UID=$i ./scripts/vttablet-down.sh
- CELL=test TABLET_UID=$i ./scripts/mysqlctl-down.sh
+	CELL=test TABLET_UID=$i ./scripts/vttablet-down.sh
+	CELL=test TABLET_UID=$i ./scripts/mysqlctl-down.sh
 done
 
 ./scripts/vtctld-down.sh
 CELL=test ./scripts/etcd-down.sh
-

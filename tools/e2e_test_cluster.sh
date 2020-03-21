@@ -30,9 +30,9 @@ cluster_tests=$(echo "$packages_with_tests" | grep -E "go/test/endtoend" | cut -
 echo "running cluster tests $cluster_tests"
 echo "$cluster_tests" | xargs go test -v -p=1
 if [ $? -ne 0 ]; then
-  echo "ERROR: Go cluster tests failed. See above for errors."
-  echo
-  echo "This should NOT happen. Did you introduce a flaky unit test?"
-  echo "If so, please rename it to the suffix _flaky_test.go."
-  exit 1
+	echo "ERROR: Go cluster tests failed. See above for errors."
+	echo
+	echo "This should NOT happen. Did you introduce a flaky unit test?"
+	echo "If so, please rename it to the suffix _flaky_test.go."
+	exit 1
 fi

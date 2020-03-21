@@ -19,20 +19,18 @@
 # Here we ignore any error from testcase as the purpose is to collect coverage.
 # So if there is a flaky test, it will get only chance to run, if it fails we ignore coverage from that.
 
-
 ### Execute unit testcase ###
 source build.env
 make tools
 make build
 echo "--------- executing unit testcases ---------"
 packages_with_all_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}' ./go/... | sort)
-all_except_endtoend_tests=$(echo "$packages_with_all_tests" | grep -v "endtoend" | cut -d" " -f1 )
+all_except_endtoend_tests=$(echo "$packages_with_all_tests" | grep -v "endtoend" | cut -d" " -f1)
 
 counter=0
-for pkg in $all_except_endtoend_tests
-do
-   go test -coverpkg=vitess.io/vitess/go/... -coverprofile "/tmp/unit_$counter.out" $pkg -v -p=1 || :
-   counter=$((counter+1))
+for pkg in $all_except_endtoend_tests; do
+	go test -coverpkg=vitess.io/vitess/go/... -coverprofile "/tmp/unit_$counter.out" $pkg -v -p=1 || :
+	counter=$((counter + 1))
 done
 
 ## Copy the test files to get instrumented binaries ###
@@ -45,24 +43,21 @@ cp ./tools/coverage-go/vtgate_test.go ./go/cmd/vtgate/vtgate_test.go
 cp ./tools/coverage-go/vtworker_test.go ./go/cmd/vtworker/vtworker_test.go
 cp ./tools/coverage-go/vtworkerclient_test.go ./go/cmd/vtworkerclient/vtworkerclient_test.go
 
-go test -coverpkg=vitess.io/vitess/go/...  -c vitess.io/vitess/go/cmd/vtctl -o ./bin/vtctl
-go test -coverpkg=vitess.io/vitess/go/...  -c vitess.io/vitess/go/cmd/vtctld -o ./bin/vtctld
-go test -coverpkg=vitess.io/vitess/go/...  -c vitess.io/vitess/go/cmd/mysqlctl -o ./bin/mysqlctl
-go test -coverpkg=vitess.io/vitess/go/...  -c vitess.io/vitess/go/cmd/vtctlclient -o ./bin/vtctlclient
-go test -coverpkg=vitess.io/vitess/go/...  -c vitess.io/vitess/go/cmd/vttablet -o ./bin/vttablet
-go test -coverpkg=vitess.io/vitess/go/...  -c vitess.io/vitess/go/cmd/vtgate -o ./bin/vtgate
-go test -coverpkg=vitess.io/vitess/go/...  -c vitess.io/vitess/go/cmd/vtworker -o ./bin/vtworker
-go test -coverpkg=vitess.io/vitess/go/...  -c vitess.io/vitess/go/cmd/vtworkerclient -o ./bin/vtworkerclient
+go test -coverpkg=vitess.io/vitess/go/... -c vitess.io/vitess/go/cmd/vtctl -o ./bin/vtctl
+go test -coverpkg=vitess.io/vitess/go/... -c vitess.io/vitess/go/cmd/vtctld -o ./bin/vtctld
+go test -coverpkg=vitess.io/vitess/go/... -c vitess.io/vitess/go/cmd/mysqlctl -o ./bin/mysqlctl
+go test -coverpkg=vitess.io/vitess/go/... -c vitess.io/vitess/go/cmd/vtctlclient -o ./bin/vtctlclient
+go test -coverpkg=vitess.io/vitess/go/... -c vitess.io/vitess/go/cmd/vttablet -o ./bin/vttablet
+go test -coverpkg=vitess.io/vitess/go/... -c vitess.io/vitess/go/cmd/vtgate -o ./bin/vtgate
+go test -coverpkg=vitess.io/vitess/go/... -c vitess.io/vitess/go/cmd/vtworker -o ./bin/vtworker
+go test -coverpkg=vitess.io/vitess/go/... -c vitess.io/vitess/go/cmd/vtworkerclient -o ./bin/vtworkerclient
 
 ### Execute go/test/endtoend testcase ###
 echo "--------- executing endtoend testcases ---------"
 cluster_tests=$(echo "$packages_with_all_tests" | grep -E "go/test/endtoend" | cut -d" " -f1)
 
-
 # Run cluster test sequentially
-for i in $cluster_tests
-do
-   echo "starting test for $i"
-   go test  $i -v -p=1 -is-coverage=true || :
+for i in $cluster_tests; do
+	echo "starting test for $i"
+	go test $i -v -p=1 -is-coverage=true || :
 done
-

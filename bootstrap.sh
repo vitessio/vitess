@@ -38,44 +38,43 @@ BUILD_CONSUL=${BUILD_CONSUL:-1}
 # the $dist/.installed_version file. If the version has not changed, bootstrap
 # will skip future installations.
 function install_dep() {
-  if [[ $# != 4 ]]; then
-    fail "install_dep function requires exactly 4 parameters (and not $#). Parameters: $*"
-  fi
-  local name="$1"
-  local version="$2"
-  local dist="$3"
-  local install_func="$4"
+	if [[ $# != 4 ]]; then
+		fail "install_dep function requires exactly 4 parameters (and not $#). Parameters: $*"
+	fi
+	local name="$1"
+	local version="$2"
+	local dist="$3"
+	local install_func="$4"
 
-  version_file="$dist/.installed_version"
-  if [[ -f "$version_file" && "$(cat "$version_file")" == "$version" ]]; then
-    echo "skipping $name install. remove $dist to force re-install."
-    return
-  fi
+	version_file="$dist/.installed_version"
+	if [[ -f "$version_file" && "$(cat "$version_file")" == "$version" ]]; then
+		echo "skipping $name install. remove $dist to force re-install."
+		return
+	fi
 
-  echo "installing $name $version"
+	echo "installing $name $version"
 
-  # shellcheck disable=SC2064
-  trap "fail '$name build failed'; exit 1" ERR
+	# shellcheck disable=SC2064
+	trap "fail '$name build failed'; exit 1" ERR
 
-  # Cleanup any existing data and re-create the directory.
-  rm -rf "$dist"
-  mkdir -p "$dist"
+	# Cleanup any existing data and re-create the directory.
+	rm -rf "$dist"
+	mkdir -p "$dist"
 
-  # Change $CWD to $dist before calling "install_func".
-  pushd "$dist" >/dev/null
-  # -E (same as "set -o errtrace") makes sure that "install_func" inherits the
-  # trap. If here's an error, the trap will be called which will exit this
-  # script.
-  set -E
-  $install_func "$version" "$dist"
-  set +E
-  popd >/dev/null
+	# Change $CWD to $dist before calling "install_func".
+	pushd "$dist" >/dev/null
+	# -E (same as "set -o errtrace") makes sure that "install_func" inherits the
+	# trap. If here's an error, the trap will be called which will exit this
+	# script.
+	set -E
+	$install_func "$version" "$dist"
+	set +E
+	popd >/dev/null
 
-  trap - ERR
+	trap - ERR
 
-  echo "$version" > "$version_file"
+	echo "$version" >"$version_file"
 }
-
 
 #
 # 1. Installation of dependencies.
@@ -85,137 +84,155 @@ function install_dep() {
 # available on macOS or some linuxes:
 # https://www.gnu.org/software/coreutils/manual/html_node/arch-invocation.html
 function get_arch() {
-  uname -m
+	uname -m
 }
 
 # Install protoc.
 function install_protoc() {
-  local version="$1"
-  local dist="$2"
+	local version="$1"
+	local dist="$2"
 
-  case $(uname) in
-    Linux)  local platform=linux;;
-    Darwin) local platform=osx;;
-  esac
+	case $(uname) in
+	Linux) local platform=linux ;;
+	Darwin) local platform=osx ;;
+	esac
 
-  case $(get_arch) in
-      aarch64)  local target=aarch_64;;
-      x86_64)  local target=x86_64;;
-      *)   echo "ERROR: unsupported architecture"; exit 1;;
-  esac
+	case $(get_arch) in
+	aarch64) local target=aarch_64 ;;
+	x86_64) local target=x86_64 ;;
+	*)
+		echo "ERROR: unsupported architecture"
+		exit 1
+		;;
+	esac
 
-  wget https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
-  unzip "protoc-$version-$platform-${target}.zip"
-  ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
+	wget https://github.com/protocolbuffers/protobuf/releases/download/v$version/protoc-$version-$platform-${target}.zip
+	unzip "protoc-$version-$platform-${target}.zip"
+	ln -snf "$dist/bin/protoc" "$VTROOT/bin/protoc"
 }
 protoc_ver=3.6.1
 install_dep "protoc" "$protoc_ver" "$VTROOT/dist/vt-protoc-$protoc_ver" install_protoc
 
-
 # Install Zookeeper.
 function install_zookeeper() {
-  local version="$1"
-  local dist="$2"
+	local version="$1"
+	local dist="$2"
 
-  zk="zookeeper-$version"
-  wget "https://apache.org/dist/zookeeper/$zk/$zk.tar.gz"
-  tar -xzf "$zk.tar.gz"
-  ant -f "$zk/build.xml" package
-  ant -f "$zk/zookeeper-contrib/zookeeper-contrib-fatjar/build.xml" jar
-  mkdir -p lib
-  cp "$zk/build/zookeeper-contrib/zookeeper-contrib-fatjar/zookeeper-dev-fatjar.jar" "lib/$zk-fatjar.jar"
-  zip -d "lib/$zk-fatjar.jar" 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*SF' || true # needed for >=3.4.10 <3.5
-  rm -rf "$zk" "$zk.tar.gz"
+	zk="zookeeper-$version"
+	wget "https://apache.org/dist/zookeeper/$zk/$zk.tar.gz"
+	tar -xzf "$zk.tar.gz"
+	ant -f "$zk/build.xml" package
+	ant -f "$zk/zookeeper-contrib/zookeeper-contrib-fatjar/build.xml" jar
+	mkdir -p lib
+	cp "$zk/build/zookeeper-contrib/zookeeper-contrib-fatjar/zookeeper-dev-fatjar.jar" "lib/$zk-fatjar.jar"
+	zip -d "lib/$zk-fatjar.jar" 'META-INF/*.SF' 'META-INF/*.RSA' 'META-INF/*SF' || true # needed for >=3.4.10 <3.5
+	rm -rf "$zk" "$zk.tar.gz"
 }
 
 zk_ver=${ZK_VERSION:-3.4.14}
-if [ "$BUILD_JAVA" == 1 ] ; then
-  install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist/vt-zookeeper-$zk_ver" install_zookeeper
+if [ "$BUILD_JAVA" == 1 ]; then
+	install_dep "Zookeeper" "$zk_ver" "$VTROOT/dist/vt-zookeeper-$zk_ver" install_zookeeper
 fi
 
 # Download and install etcd, link etcd binary into our root.
 function install_etcd() {
-  local version="$1"
-  local dist="$2"
+	local version="$1"
+	local dist="$2"
 
-  case $(uname) in
-    Linux)  local platform=linux; local ext=tar.gz;;
-    Darwin) local platform=darwin; local ext=zip;;
-  esac
+	case $(uname) in
+	Linux)
+		local platform=linux
+		local ext=tar.gz
+		;;
+	Darwin)
+		local platform=darwin
+		local ext=zip
+		;;
+	esac
 
-  case $(get_arch) in
-      aarch64)  local target=arm64;;
-      x86_64)  local target=amd64;;
-      *)   echo "ERROR: unsupported architecture"; exit 1;;
-  esac
+	case $(get_arch) in
+	aarch64) local target=arm64 ;;
+	x86_64) local target=amd64 ;;
+	*)
+		echo "ERROR: unsupported architecture"
+		exit 1
+		;;
+	esac
 
-  download_url=https://github.com/coreos/etcd/releases/download
-  file="etcd-${version}-${platform}-${target}.${ext}"
+	download_url=https://github.com/coreos/etcd/releases/download
+	file="etcd-${version}-${platform}-${target}.${ext}"
 
-  wget "$download_url/$version/$file"
-  if [ "$ext" = "tar.gz" ]; then
-    tar xzf "$file"
-  else
-    unzip "$file"
-  fi
-  rm "$file"
-  ln -snf "$dist/etcd-${version}-${platform}-${target}/etcd" "$VTROOT/bin/etcd"
-  ln -snf "$dist/etcd-${version}-${platform}-${target}/etcdctl" "$VTROOT/bin/etcdctl"
+	wget "$download_url/$version/$file"
+	if [ "$ext" = "tar.gz" ]; then
+		tar xzf "$file"
+	else
+		unzip "$file"
+	fi
+	rm "$file"
+	ln -snf "$dist/etcd-${version}-${platform}-${target}/etcd" "$VTROOT/bin/etcd"
+	ln -snf "$dist/etcd-${version}-${platform}-${target}/etcdctl" "$VTROOT/bin/etcdctl"
 }
 command -v etcd && echo "etcd already installed" || install_dep "etcd" "v3.3.10" "$VTROOT/dist/etcd" install_etcd
 
-
 # Download and install k3s, link k3s binary into our root
 function install_k3s() {
-  local version="$1"
-  local dist="$2"
+	local version="$1"
+	local dist="$2"
 
-  case $(uname) in
-    Linux)  local platform=linux;;
-    *)   echo "ERROR: unsupported platform. K3s only supports running on Linux"; exit 1;;
-  esac
+	case $(uname) in
+	Linux) local platform=linux ;;
+	*)
+		echo "ERROR: unsupported platform. K3s only supports running on Linux"
+		exit 1
+		;;
+	esac
 
-  case $(get_arch) in
-      aarch64)  local target="-arm64";;
-      x86_64)  local target="";;
-      *)   echo "ERROR: unsupported architecture"; exit 1;;
-  esac
+	case $(get_arch) in
+	aarch64) local target="-arm64" ;;
+	x86_64) local target="" ;;
+	*)
+		echo "ERROR: unsupported architecture"
+		exit 1
+		;;
+	esac
 
-  download_url=https://github.com/rancher/k3s/releases/download
-  file="k3s${target}"
+	download_url=https://github.com/rancher/k3s/releases/download
+	file="k3s${target}"
 
-  local dest="$dist/k3s${target}-${version}-${platform}"
-  wget -O  $dest "$download_url/$version/$file"
-  chmod +x $dest
-  ln -snf  $dest "$VTROOT/bin/k3s"
+	local dest="$dist/k3s${target}-${version}-${platform}"
+	wget -O $dest "$download_url/$version/$file"
+	chmod +x $dest
+	ln -snf $dest "$VTROOT/bin/k3s"
 }
-command -v  k3s || install_dep "k3s" "v1.0.0" "$VTROOT/dist/k3s" install_k3s
-
+command -v k3s || install_dep "k3s" "v1.0.0" "$VTROOT/dist/k3s" install_k3s
 
 # Download and install consul, link consul binary into our root.
 function install_consul() {
-  local version="$1"
-  local dist="$2"
+	local version="$1"
+	local dist="$2"
 
-  case $(uname) in
-    Linux)  local platform=linux;;
-    Darwin) local platform=darwin;;
-  esac
+	case $(uname) in
+	Linux) local platform=linux ;;
+	Darwin) local platform=darwin ;;
+	esac
 
-  case $(get_arch) in
-      aarch64)  local target=arm64;;
-      x86_64)  local target=amd64;;
-      *)   echo "ERROR: unsupported architecture"; exit 1;;
-  esac
+	case $(get_arch) in
+	aarch64) local target=arm64 ;;
+	x86_64) local target=amd64 ;;
+	*)
+		echo "ERROR: unsupported architecture"
+		exit 1
+		;;
+	esac
 
-  download_url=https://releases.hashicorp.com/consul
-  wget "${download_url}/${version}/consul_${version}_${platform}_${target}.zip"
-  unzip "consul_${version}_${platform}_${target}.zip"
-  ln -snf "$dist/consul" "$VTROOT/bin/consul"
+	download_url=https://releases.hashicorp.com/consul
+	wget "${download_url}/${version}/consul_${version}_${platform}_${target}.zip"
+	unzip "consul_${version}_${platform}_${target}.zip"
+	ln -snf "$dist/consul" "$VTROOT/bin/consul"
 }
 
-if [ "$BUILD_CONSUL" == 1 ] ; then
-  install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul
+if [ "$BUILD_CONSUL" == 1 ]; then
+	install_dep "Consul" "1.4.0" "$VTROOT/dist/consul" install_consul
 fi
 
 echo

@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Copyright 2019 The Vitess Authors.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,16 +18,16 @@
 
 # goversion_min returns true if major.minor go version is at least some value.
 function goversion_min() {
-  [[ "$(go version)" =~ go([0-9]+)\.([0-9]+) ]]
-  gotmajor=${BASH_REMATCH[1]}
-  gotminor=${BASH_REMATCH[2]}
-  [[ "$1" =~ ([0-9]+)\.([0-9]+) ]]
-  wantmajor=${BASH_REMATCH[1]}
-  wantminor=${BASH_REMATCH[2]}
-  [ "$gotmajor" -lt "$wantmajor" ] && return 1
-  [ "$gotmajor" -gt "$wantmajor" ] && return 0
-  [ "$gotminor" -lt "$wantminor" ] && return 1
-  return 0
+	[[ "$(go version)" =~ go([0-9]+)\.([0-9]+) ]]
+	gotmajor=${BASH_REMATCH[1]}
+	gotminor=${BASH_REMATCH[2]}
+	[[ "$1" =~ ([0-9]+)\.([0-9]+) ]]
+	wantmajor=${BASH_REMATCH[1]}
+	wantminor=${BASH_REMATCH[2]}
+	[ "$gotmajor" -lt "$wantmajor" ] && return 1
+	[ "$gotmajor" -gt "$wantmajor" ] && return 0
+	[ "$gotminor" -lt "$wantminor" ] && return 1
+	return 0
 }
 
 # prepend_path returns $2 prepended the colon separated path $1.
@@ -37,32 +37,31 @@ function goversion_min() {
 # and the second value has the path to add. We just end up adding it regardless
 # of its existence.
 function prepend_path() {
-  # $1 path variable
-  # $2 path to add
-  if [[ ! -d "$2" ]]; then
-    # To be added path does not exist. Ignore it and return the path variable unchanged.
-    echo "$1"
-    return
-  fi
+	# $1 path variable
+	# $2 path to add
+	if [[ ! -d "$2" ]]; then
+		# To be added path does not exist. Ignore it and return the path variable unchanged.
+		echo "$1"
+		return
+	fi
 
-  if [[ -z "$1" ]]; then
-    # path variable is empty. Set its initial value to the path to add.
-    echo "$2"
-    return
-  fi
+	if [[ -z "$1" ]]; then
+		# path variable is empty. Set its initial value to the path to add.
+		echo "$2"
+		return
+	fi
 
-  if [[ ":$1:" != *":$2:"* ]]; then
-    # path variable does not contain path to add yet. Prepend it.
-    echo "$2:$1"
-    return
-  fi
+	if [[ ":$1:" != *":$2:"* ]]; then
+		# path variable does not contain path to add yet. Prepend it.
+		echo "$2:$1"
+		return
+	fi
 
-  # Return path variable unchanged.
-  echo "$1"
+	# Return path variable unchanged.
+	echo "$1"
 }
 
 function fail() {
-  echo "ERROR: $1"
-  exit 1
+	echo "ERROR: $1"
+	exit 1
 }
-

@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Copyright 2019 The Vitess Authors.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -21,34 +21,34 @@
 # Any error is displayed to stderr, and triggers an 'exit 1'.
 
 while [[ $# -gt 1 ]]; do
-  key="$1"
+	key="$1"
 
-  case $key in
-    -operation)
-      OPERATION="$2"
-      shift # past argument
-      ;;
-    *)
-      echo "unknown command line parameter:" $key 1>&2
-      exit 1
-      ;;
-  esac
-  shift # past argument or value
+	case $key in
+	-operation)
+		OPERATION="$2"
+		shift # past argument
+		;;
+	*)
+		echo "unknown command line parameter:" $key 1>&2
+		exit 1
+		;;
+	esac
+	shift # past argument or value
 done
 
 if [ "$OPERATION" == "write" ]; then
-  echo "header"
-  echo "normal write" 1>&2
+	echo "header"
+	echo "normal write" 1>&2
 elif [ "$OPERATION" == "read" ]; then
-  read header
-  if [ "$header" != "header" ]; then
-    echo "invalid header:" $header 1>&2
-    exit 1
-  fi
-  echo "normal read" 1>&2
+	read header
+	if [ "$header" != "header" ]; then
+		echo "invalid header:" $header 1>&2
+		exit 1
+	fi
+	echo "normal read" 1>&2
 else
-  echo "invalid operation:" $OPERATION 1>&2
-  exit 1
+	echo "invalid operation:" $OPERATION 1>&2
+	exit 1
 fi
-  
+
 exec cat

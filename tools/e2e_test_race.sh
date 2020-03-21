@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Copyright 2019 The Vitess Authors.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -33,7 +33,7 @@ trap '[ -f "$temp_log_file" ] && rm $temp_log_file' EXIT
 # All endtoend Go packages with test files.
 # Output per line: <full Go package name> <all _test.go files in the package>*
 packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}' ./go/.../endtoend/... | sort)
-packages_with_tests=$(echo "$packages_with_tests" |  grep -vE "go/test/endtoend" | cut -d" " -f1)
+packages_with_tests=$(echo "$packages_with_tests" | grep -vE "go/test/endtoend" | cut -d" " -f1)
 
 # endtoend tests should be in a directory called endtoend
 all_e2e_tests=$(echo "$packages_with_tests" | cut -d" " -f1)
@@ -41,14 +41,14 @@ all_e2e_tests=$(echo "$packages_with_tests" | cut -d" " -f1)
 # Run all endtoend tests.
 echo "$all_e2e_tests" | xargs go test $VT_GO_PARALLEL -race 2>&1 | tee $temp_log_file
 if [ ${PIPESTATUS[0]} -ne 0 ]; then
-  if grep "WARNING: DATA RACE" -q $temp_log_file; then
-    echo
-    echo "ERROR: go test -race found a data race. See log above."
-    exit 2
-  fi
+	if grep "WARNING: DATA RACE" -q $temp_log_file; then
+		echo
+		echo "ERROR: go test -race found a data race. See log above."
+		exit 2
+	fi
 
-  echo "ERROR: go test -race found NO data race, but failed. See log above."
-  exit 1
+	echo "ERROR: go test -race found NO data race, but failed. See log above."
+	exit 1
 fi
 
 echo

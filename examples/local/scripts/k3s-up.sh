@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Copyright 2019 The Vitess Authors.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -25,9 +25,9 @@ script_root=$(dirname "${BASH_SOURCE[0]}")
 # shellcheck disable=SC1091
 source ./env.sh
 
-k3s server --disable-agent --data-dir "${VTDATAROOT}/k3s/" --https-listen-port "${K8S_PORT}" --write-kubeconfig "${K8S_KUBECONFIG}" > "${VTDATAROOT}"/tmp/k3s.out 2>&1 &
+k3s server --disable-agent --data-dir "${VTDATAROOT}/k3s/" --https-listen-port "${K8S_PORT}" --write-kubeconfig "${K8S_KUBECONFIG}" >"${VTDATAROOT}"/tmp/k3s.out 2>&1 &
 PID=$!
-echo $PID > "${VTDATAROOT}/tmp/k3s.pid"
+echo $PID >"${VTDATAROOT}/tmp/k3s.pid"
 disown -a
 echo "Waiting for k3s server to start"
 sleep 15
@@ -42,8 +42,8 @@ $KUBECTL create -f ../../go/vt/topo/k8stopo/VitessTopoNodes-crd.yaml
 set +e
 echo "add $cell CellInfo"
 vtctl $TOPOLOGY_FLAGS AddCellInfo \
-  -root /vitess/$cell \
-  $cell
+	-root /vitess/$cell \
+	$cell
 set -e
 
 echo "k3s start done..."

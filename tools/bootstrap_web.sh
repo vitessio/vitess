@@ -1,13 +1,13 @@
 #!/bin/bash
 
 # Copyright 2019 The Vitess Authors.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #     http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -26,31 +26,31 @@
 # Download node
 node_ver=v6.3.1
 node_dist=$VTROOT/dist/node
-if [[ -x $node_dist/bin/node && `$node_dist/bin/node -v` == "$node_ver" ]]; then
-  echo "skipping nodejs download. remove $node_dist to force redownload."
+if [[ -x $node_dist/bin/node && $($node_dist/bin/node -v) == "$node_ver" ]]; then
+	echo "skipping nodejs download. remove $node_dist to force redownload."
 else
-  echo "Downloading nodejs"
-  rm -rf $node_dist
-  node_tar="node_linux64.tar.xz"
-  curl -sL https://nodejs.org/dist/$node_ver/node-$node_ver-linux-x64.tar.xz -o $node_tar
-  tar xf $node_tar -C $VTROOT/dist
-  mv $VTROOT/dist/node-$node_ver-linux-x64 $node_dist
-  rm $node_tar
-  # Add the node directory to PATH to make sure that the Angular
-  # installation below can find the "node" binary.
-  # (dev.env does actually append it to PATH.)
-  source $VTROOT/dev.env
+	echo "Downloading nodejs"
+	rm -rf $node_dist
+	node_tar="node_linux64.tar.xz"
+	curl -sL https://nodejs.org/dist/$node_ver/node-$node_ver-linux-x64.tar.xz -o $node_tar
+	tar xf $node_tar -C $VTROOT/dist
+	mv $VTROOT/dist/node-$node_ver-linux-x64 $node_dist
+	rm $node_tar
+	# Add the node directory to PATH to make sure that the Angular
+	# installation below can find the "node" binary.
+	# (dev.env does actually append it to PATH.)
+	source $VTROOT/dev.env
 fi
 
 echo "Installing dependencies for building web UI"
 angular_cli_dir=$VTROOT/dist/angular-cli
 web_dir2=$VTROOT/web/vtctld2
 angular_cli_commit=cacaa4eff10e135016ef81076fab1086a3bce92f
-if [[ -d $angular_cli_dir && `cd $angular_cli_dir && git rev-parse HEAD` == "$angular_cli_commit" ]]; then
-  echo "skipping angular cli download. remove $angular_cli_dir to force download."
+if [[ -d $angular_cli_dir && $(cd $angular_cli_dir && git rev-parse HEAD) == "$angular_cli_commit" ]]; then
+	echo "skipping angular cli download. remove $angular_cli_dir to force download."
 else
-  cd $VTROOT/dist && git clone https://github.com/angular/angular-cli.git --quiet
-  cd $angular_cli_dir && git checkout $angular_cli_commit --quiet
+	cd $VTROOT/dist && git clone https://github.com/angular/angular-cli.git --quiet
+	cd $angular_cli_dir && git checkout $angular_cli_commit --quiet
 fi
 cd $angular_cli_dir && $node_dist/bin/npm link --silent
 cd $web_dir2 && $node_dist/bin/npm install --silent
