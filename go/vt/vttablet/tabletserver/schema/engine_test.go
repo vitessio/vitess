@@ -349,39 +349,6 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	if table == nil {
 		t.Fatalf("table: %s should exist", tableName)
 	}
-	tr1 := table.TableRows
-	dl1 := table.DataLength
-	il1 := table.IndexLength
-	df1 := table.DataFree
-	mdl1 := table.MaxDataLength
-	// Update existing table with new stats.
-	row := mysql.BaseShowTablesRow(tableName.String(), false, "")
-	row[2] = sqltypes.NewUint64(0) // smaller timestamp
-	row[4] = sqltypes.NewUint64(2) // table_rows
-	row[5] = sqltypes.NewUint64(3) // data_length
-	row[6] = sqltypes.NewUint64(4) // index_length
-	row[7] = sqltypes.NewUint64(5) // data_free
-	row[8] = sqltypes.NewUint64(6) // max_data_length
-	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
-		Fields:       mysql.BaseShowTablesFields,
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			row,
-		},
-	})
-	if err := se.Reload(ctx); err != nil {
-		t.Fatalf("se.Reload() error: %v", err)
-	}
-	table = se.GetTable(tableName)
-	tr2 := table.TableRows
-	dl2 := table.DataLength
-	il2 := table.IndexLength
-	df2 := table.DataFree
-	mdl2 := table.MaxDataLength
-	if tr1 == tr2 || dl1 == dl2 || il1 == il2 || df1 == df2 || mdl1 == mdl2 {
-		t.Logf("%v==%v %v==%v %v==%v %v==%v %v==%v", tr1, tr2, dl1, dl2, il1, il2, df1, df2, mdl1, mdl2)
-		t.Fatalf("MysqlStats() results failed to change between queries. ")
-	}
 }
 
 func TestStatsURL(t *testing.T) {
