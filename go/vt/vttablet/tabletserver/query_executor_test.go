@@ -24,6 +24,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/mysql"
@@ -36,7 +38,6 @@ import (
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -47,243 +48,383 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-func TestQueryExecutorPlanDDL(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	query := "alter table test_table add zipcode int"
-	want := &sqltypes.Result{}
-	db.AddQuery(query, want)
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	qre := newTestQueryExecutor(ctx, tsv, query, 0)
-	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanDDL, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
+func TestQueryExecutorPlans(t *testing.T) {
+	type dbResponse struct {
+		query  string
+		result *sqltypes.Result
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
+
+	dmlResult := &sqltypes.Result{
+		RowsAffected: 1,
+	}
+	fields := sqltypes.MakeTestFields("a|b", "int64|varchar")
+	fieldResult := sqltypes.MakeTestResult(fields)
+	selectResult := sqltypes.MakeTestResult(fields, "1|aaa")
+
+	// The queries are run both in and outside a transaction.
+	testcases := []struct {
+		// input is the input query.
+		input string
+		// passThrough specifies if planbuilder.PassthroughDML must be set.
+		passThrough bool
+		// dbResponses specifes the list of queries and responses to add to the fake db.
+		dbResponses []dbResponse
+		// resultWant is the result we want.
+		resultWant *sqltypes.Result
+		// planWant is the PlanType we want to see built.
+		planWant string
+		// logWant is the log of queries we expect to be executed.
+		logWant string
+		// inTxWant is the query log we expect if we're in a transation.
+		// If empty, then we should expect the same as logWant.
+		inTxWant string
+	}{{
+		input: "select * from t",
+		dbResponses: []dbResponse{{
+			query:  "select * from t where 1 != 1",
+			result: fieldResult,
+		}, {
+			query:  "select * from t limit 10001",
+			result: selectResult,
+		}},
+		resultWant: selectResult,
+		planWant:   "Select",
+		logWant:    "select * from t where 1 != 1; select * from t limit 10001",
+		// Because the fields would have been cached before, the field query will
+		// not get re-executed.
+		inTxWant: "select * from t limit 10001",
+	}, {
+		input: "select * from t limit 1",
+		dbResponses: []dbResponse{{
+			query:  "select * from t where 1 != 1",
+			result: fieldResult,
+		}, {
+			query:  "select * from t limit 1",
+			result: selectResult,
+		}},
+		resultWant: selectResult,
+		planWant:   "Select",
+		logWant:    "select * from t where 1 != 1; select * from t limit 1",
+		// Because the fields would have been cached before, the field query will
+		// not get re-executed.
+		inTxWant: "select * from t limit 1",
+	}, {
+		input: "set a=1",
+		dbResponses: []dbResponse{{
+			query:  "set a=1",
+			result: dmlResult,
+		}},
+		resultWant: dmlResult,
+		planWant:   "Set",
+		logWant:    "set a=1",
+	}, {
+		input: "show engines",
+		dbResponses: []dbResponse{{
+			query:  "show engines",
+			result: dmlResult,
+		}},
+		resultWant: dmlResult,
+		planWant:   "OtherRead",
+		logWant:    "show engines",
+	}, {
+		input: "repair t",
+		dbResponses: []dbResponse{{
+			query:  "repair t",
+			result: dmlResult,
+		}},
+		resultWant: dmlResult,
+		planWant:   "OtherAdmin",
+		logWant:    "repair t",
+	}, {
+		input: "insert into test_table(a) values(1)",
+		dbResponses: []dbResponse{{
+			query:  "insert into test_table(a) values (1)",
+			result: dmlResult,
+		}},
+		resultWant: dmlResult,
+		planWant:   "Insert",
+		logWant:    "insert into test_table(a) values (1)",
+	}, {
+		input: "replace into test_table(a) values(1)",
+		dbResponses: []dbResponse{{
+			query:  "replace into test_table(a) values (1)",
+			result: dmlResult,
+		}},
+		resultWant: dmlResult,
+		planWant:   "Insert",
+		logWant:    "replace into test_table(a) values (1)",
+	}, {
+		input: "update test_table set a=1",
+		dbResponses: []dbResponse{{
+			query:  "update test_table set a = 1 limit 10001",
+			result: dmlResult,
+		}},
+		resultWant: dmlResult,
+		planWant:   "UpdateLimit",
+		// The UpdateLimit query will not use autocommit because
+		// it needs to roll back on failure.
+		logWant:  "begin; update test_table set a = 1 limit 10001; commit",
+		inTxWant: "update test_table set a = 1 limit 10001",
+	}, {
+		input:       "update test_table set a=1",
+		passThrough: true,
+		dbResponses: []dbResponse{{
+			query:  "update test_table set a = 1",
+			result: dmlResult,
+		}},
+		resultWant: dmlResult,
+		planWant:   "Update",
+		logWant:    "update test_table set a = 1",
+	}, {
+		input: "delete from test_table",
+		dbResponses: []dbResponse{{
+			query:  "delete from test_table limit 10001",
+			result: dmlResult,
+		}},
+		resultWant: dmlResult,
+		planWant:   "DeleteLimit",
+		// The DeleteLimit query will not use autocommit because
+		// it needs to roll back on failure.
+		logWant:  "begin; delete from test_table limit 10001; commit",
+		inTxWant: "delete from test_table limit 10001",
+	}, {
+		input:       "delete from test_table",
+		passThrough: true,
+		dbResponses: []dbResponse{{
+			query:  "delete from test_table",
+			result: dmlResult,
+		}},
+		resultWant: dmlResult,
+		planWant:   "Delete",
+		logWant:    "delete from test_table",
+	}, {
+		input: "alter table test_table add zipcode int",
+		dbResponses: []dbResponse{{
+			query:  "alter table test_table add zipcode int",
+			result: dmlResult,
+		}},
+		resultWant: dmlResult,
+		planWant:   "DDL",
+		logWant:    "alter table test_table add zipcode int",
+	}}
+	for _, tcase := range testcases {
+		func() {
+			db := setUpQueryExecutorTest(t)
+			defer db.Close()
+			for _, dbr := range tcase.dbResponses {
+				db.AddQuery(dbr.query, dbr.result)
+			}
+			ctx := context.Background()
+			tsv := newTestTabletServer(ctx, noFlags, db)
+			defer tsv.StopService()
+
+			tsv.SetPassthroughDMLs(tcase.passThrough)
+
+			// Test outside a transaction.
+			qre := newTestQueryExecutor(ctx, tsv, tcase.input, 0)
+			got, err := qre.Execute()
+			require.NoError(t, err, tcase.input)
+			assert.Equal(t, tcase.resultWant, got, tcase.input)
+			assert.Equal(t, tcase.planWant, qre.logStats.PlanType, tcase.input)
+			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
+
+			// Test inside a transaction.
+			txid, err := tsv.Begin(ctx, &tsv.target, nil)
+			require.NoError(t, err)
+			defer tsv.Commit(ctx, &tsv.target, txid)
+
+			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
+			got, err = qre.Execute()
+			require.NoError(t, err, tcase.input)
+			assert.Equal(t, tcase.resultWant, got, "in tx: %v", tcase.input)
+			assert.Equal(t, tcase.planWant, qre.logStats.PlanType, "in tx: %v", tcase.input)
+			want := tcase.logWant
+			if tcase.inTxWant != "" {
+				want = tcase.inTxWant
+			}
+			assert.Equal(t, want, qre.logStats.RewrittenSQL(), "in tx: %v", tcase.input)
+		}()
 	}
 }
 
-func TestQueryExecutorPlanPassDmlRBR(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	query := "update test_table set pk = foo()"
-	want := &sqltypes.Result{}
-	db.AddQuery(query, want)
-	ctx := context.Background()
-	// RBR mode
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	defer tsv.StopService()
-	txid := newTransaction(tsv, nil)
-	qre := newTestQueryExecutor(ctx, tsv, query, txid)
-	tsv.qe.binlogFormat = connpool.BinlogFormatRow
-	checkPlanID(t, planbuilder.PlanPassDML, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-	wantqueries := []string{query}
-	gotqueries := fetchRecordedQueries(qre)
-	if !reflect.DeepEqual(gotqueries, wantqueries) {
-		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
+// TestQueryExecutorSelectImpossible is separate because it's a special case
+// because the "in transaction" case is a no-op.
+func TestQueryExecutorSelectImpossible(t *testing.T) {
+	type dbResponse struct {
+		query  string
+		result *sqltypes.Result
 	}
 
-	// Statement mode
-	tsv.qe.binlogFormat = connpool.BinlogFormatStatement
-	_, err = qre.Execute()
-	if code := vterrors.Code(err); code != vtrpcpb.Code_UNIMPLEMENTED {
-		t.Errorf("qre.Execute: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
-	}
-	testCommitHelper(t, tsv, qre)
-}
+	fields := sqltypes.MakeTestFields("a|b", "int64|varchar")
+	fieldResult := sqltypes.MakeTestResult(fields)
 
-func TestQueryExecutorPassthroughDml(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	query := "update test_table set pk = foo()"
-	want := &sqltypes.Result{}
-	db.AddQuery(query, want)
-	ctx := context.Background()
-	// RBR mode
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	defer tsv.StopService()
+	testcases := []struct {
+		input       string
+		dbResponses []dbResponse
+		resultWant  *sqltypes.Result
+		planWant    string
+		logWant     string
+		inTxWant    string
+	}{{
+		input: "select * from t where 1 != 1",
+		dbResponses: []dbResponse{{
+			query:  "select * from t where 1 != 1",
+			result: fieldResult,
+		}},
+		resultWant: fieldResult,
+		planWant:   "SelectImpossible",
+		logWant:    "select * from t where 1 != 1",
+		inTxWant:   "",
+	}}
+	for _, tcase := range testcases {
+		func() {
+			db := setUpQueryExecutorTest(t)
+			defer db.Close()
+			for _, dbr := range tcase.dbResponses {
+				db.AddQuery(dbr.query, dbr.result)
+			}
+			ctx := context.Background()
+			tsv := newTestTabletServer(ctx, noFlags, db)
+			defer tsv.StopService()
 
-	tsv.SetPassthroughDMLs(true)
-	defer tsv.SetPassthroughDMLs(false)
-	tsv.qe.binlogFormat = connpool.BinlogFormatRow
+			qre := newTestQueryExecutor(ctx, tsv, tcase.input, 0)
+			got, err := qre.Execute()
+			require.NoError(t, err, tcase.input)
+			assert.Equal(t, tcase.resultWant, got, tcase.input)
+			assert.Equal(t, tcase.planWant, qre.logStats.PlanType, tcase.input)
+			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
+			txid, err := tsv.Begin(ctx, &tsv.target, nil)
+			require.NoError(t, err)
+			defer tsv.Commit(ctx, &tsv.target, txid)
 
-	txid := newTransaction(tsv, nil)
-	qre := newTestQueryExecutor(ctx, tsv, query, txid)
-
-	checkPlanID(t, planbuilder.PlanPassDML, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-	wantqueries := []string{query}
-	gotqueries := fetchRecordedQueries(qre)
-	if !reflect.DeepEqual(gotqueries, wantqueries) {
-		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
-	}
-
-	// Statement mode also works when allowUnsafeDMLs is true
-	tsv.qe.binlogFormat = connpool.BinlogFormatStatement
-	_, err = qre.Execute()
-	if code := vterrors.Code(err); code != vtrpcpb.Code_UNIMPLEMENTED {
-		t.Errorf("qre.Execute: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
-	}
-
-	tsv.SetAllowUnsafeDMLs(true)
-	got, err = qre.Execute()
-
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-	wantqueries = []string{query, query}
-	gotqueries = fetchRecordedQueries(qre)
-	if !reflect.DeepEqual(gotqueries, wantqueries) {
-		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
-	}
-
-	testCommitHelper(t, tsv, qre)
-}
-
-func TestQueryExecutorPlanPassDmlAutoCommitRBR(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	query := "update test_table set pk = foo()"
-	want := &sqltypes.Result{}
-	db.AddQuery(query, want)
-	ctx := context.Background()
-	// RBR mode
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	defer tsv.StopService()
-	qre := newTestQueryExecutor(ctx, tsv, query, 0)
-	tsv.qe.binlogFormat = connpool.BinlogFormatRow
-	checkPlanID(t, planbuilder.PlanPassDML, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-
-	// Statement mode
-	tsv.qe.binlogFormat = connpool.BinlogFormatStatement
-	_, err = qre.Execute()
-	if code := vterrors.Code(err); code != vtrpcpb.Code_UNIMPLEMENTED {
-		t.Errorf("qre.Execute: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
+			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
+			got, err = qre.Execute()
+			require.NoError(t, err, tcase.input)
+			assert.Equal(t, tcase.resultWant, got, "in tx: %v", tcase.input)
+			assert.Equal(t, tcase.planWant, qre.logStats.PlanType, "in tx: %v", tcase.input)
+			assert.Equal(t, tcase.inTxWant, qre.logStats.RewrittenSQL(), "in tx: %v", tcase.input)
+		}()
 	}
 }
 
-func TestQueryExecutorPassthroughDmlAutoCommit(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	query := "update test_table set pk = foo()"
-	want := &sqltypes.Result{}
-	db.AddQuery(query, want)
-	ctx := context.Background()
-	// RBR mode
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	defer tsv.StopService()
-
-	tsv.SetPassthroughDMLs(true)
-	defer tsv.SetPassthroughDMLs(false)
-	tsv.qe.binlogFormat = connpool.BinlogFormatRow
-
-	qre := newTestQueryExecutor(ctx, tsv, query, 0)
-	checkPlanID(t, planbuilder.PlanPassDML, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
+func TestQueryExecutorLimitFailure(t *testing.T) {
+	type dbResponse struct {
+		query  string
+		result *sqltypes.Result
 	}
 
-	// Statement mode
-	tsv.qe.binlogFormat = connpool.BinlogFormatStatement
-	_, err = qre.Execute()
-	if code := vterrors.Code(err); code != vtrpcpb.Code_UNIMPLEMENTED {
-		t.Errorf("qre.Execute: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
+	dmlResult := &sqltypes.Result{
+		RowsAffected: 3,
 	}
+	fields := sqltypes.MakeTestFields("a|b", "int64|varchar")
+	fieldResult := sqltypes.MakeTestResult(fields)
+	selectResult := sqltypes.MakeTestResult(fields, "1|aaa", "2|bbb", "3|ccc")
 
-	tsv.SetAllowUnsafeDMLs(true)
-	got, err = qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-}
+	// The queries are run both in and outside a transaction.
+	testcases := []struct {
+		input        string
+		dbResponses  []dbResponse
+		err          string
+		logWant      string
+		inTxWant     string
+		testRollback bool
+	}{{
+		input: "select * from t",
+		dbResponses: []dbResponse{{
+			query:  "select * from t where 1 != 1",
+			result: fieldResult,
+		}, {
+			query:  "select * from t limit 3",
+			result: selectResult,
+		}},
+		err:     "count exceeded",
+		logWant: "select * from t where 1 != 1; select * from t limit 3",
+		// Because the fields would have been cached before, the field query will
+		// not get re-executed.
+		inTxWant: "select * from t limit 3",
+	}, {
+		input: "update test_table set a=1",
+		dbResponses: []dbResponse{{
+			query:  "update test_table set a = 1 limit 3",
+			result: dmlResult,
+		}},
+		err:          "count exceeded",
+		logWant:      "begin; update test_table set a = 1 limit 3; rollback",
+		inTxWant:     "update test_table set a = 1 limit 3; rollback",
+		testRollback: true,
+	}, {
+		input: "delete from test_table",
+		dbResponses: []dbResponse{{
+			query:  "delete from test_table limit 3",
+			result: dmlResult,
+		}},
+		err:          "count exceeded",
+		logWant:      "begin; delete from test_table limit 3; rollback",
+		inTxWant:     "delete from test_table limit 3; rollback",
+		testRollback: true,
+	}, {
+		// There should be no rollback on normal failures.
+		input:       "update test_table set a=1",
+		dbResponses: nil,
+		err:         "not supported",
+		logWant:     "begin; update test_table set a = 1 limit 3; rollback",
+		inTxWant:    "update test_table set a = 1 limit 3",
+	}, {
+		// There should be no rollback on normal failures.
+		input:       "delete from test_table",
+		dbResponses: nil,
+		err:         "not supported",
+		logWant:     "begin; delete from test_table limit 3; rollback",
+		inTxWant:    "delete from test_table limit 3",
+	}}
+	for _, tcase := range testcases {
+		func() {
+			db := setUpQueryExecutorTest(t)
+			defer db.Close()
+			for _, dbr := range tcase.dbResponses {
+				db.AddQuery(dbr.query, dbr.result)
+			}
+			ctx := callerid.NewContext(context.Background(), callerid.NewEffectiveCallerID("a", "b", "c"), callerid.NewImmediateCallerID("d"))
+			tsv := newTestTabletServer(ctx, smallResultSize, db)
+			defer tsv.StopService()
 
-func TestQueryExecutorPlanPassDmlReplaceInto(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	query := "replace into test_table values (1)"
-	want := &sqltypes.Result{}
-	db.AddQuery(query, want)
-	ctx := context.Background()
-	// RBR mode
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	defer tsv.StopService()
-	txid := newTransaction(tsv, nil)
-	qre := newTestQueryExecutor(ctx, tsv, query, txid)
-	tsv.qe.binlogFormat = connpool.BinlogFormatRow
-	checkPlanID(t, planbuilder.PlanPassDML, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-	wantqueries := []string{query}
-	gotqueries := fetchRecordedQueries(qre)
-	if !reflect.DeepEqual(gotqueries, wantqueries) {
-		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
-	}
+			tsv.SetPassthroughDMLs(false)
 
-	// Statement mode
-	tsv.qe.binlogFormat = connpool.BinlogFormatStatement
-	_, err = qre.Execute()
-	if code := vterrors.Code(err); code != vtrpcpb.Code_UNIMPLEMENTED {
-		t.Errorf("qre.Execute: %v, want %v", code, vtrpcpb.Code_INVALID_ARGUMENT)
-	}
-	testCommitHelper(t, tsv, qre)
-}
+			// Test outside a transaction.
+			qre := newTestQueryExecutor(ctx, tsv, tcase.input, 0)
+			_, err := qre.Execute()
+			if err == nil || !strings.Contains(err.Error(), tcase.err) {
+				t.Errorf("Execute(%v): %v, must contain %v", tcase.input, err, tcase.err)
+			}
+			assert.Equal(t, tcase.logWant, qre.logStats.RewrittenSQL(), tcase.input)
 
-func TestQueryExecutorPlanInsertPk(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	db.AddQuery("insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
-	want := &sqltypes.Result{}
-	query := "insert into test_table(pk) values(1)"
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	qre := newTestQueryExecutor(ctx, tsv, query, 0)
-	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanInsertPK, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
+			// Test inside a transaction.
+			txid, err := tsv.Begin(ctx, &tsv.target, nil)
+			require.NoError(t, err)
+			defer tsv.Commit(ctx, &tsv.target, txid)
+
+			qre = newTestQueryExecutor(ctx, tsv, tcase.input, txid)
+			_, err = qre.Execute()
+			if err == nil || !strings.Contains(err.Error(), tcase.err) {
+				t.Errorf("Execute(%v): %v, must contain %v", tcase.input, err, tcase.err)
+			}
+			want := tcase.logWant
+			if tcase.inTxWant != "" {
+				want = tcase.inTxWant
+			}
+			assert.Equal(t, want, qre.logStats.RewrittenSQL(), "in tx: %v", tcase.input)
+
+			if !tcase.testRollback {
+				return
+			}
+			// Ensure transaction was rolled back.
+			qre = newTestQueryExecutor(ctx, tsv, "update test_table set a=1", txid)
+			_, err = qre.Execute()
+			notxError := "ended at"
+			if err == nil || !strings.Contains(err.Error(), notxError) {
+				t.Errorf("Execute(%v): %v, must contain %v", tcase.input, err, notxError)
+			}
+		}()
 	}
 }
 
@@ -297,731 +438,13 @@ func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanInsertMessage, qre.plan.PlanID)
+	assert.Equal(t, planbuilder.PlanInsertMessage, qre.plan.PlanID)
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got: %v, want: %v", got, want)
-	}
-}
-
-func TestQueryExecutorPlanInsertSubQueryAutoCommmit(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	query := "insert into test_table(pk) select pk from test_table where pk = 2"
-	want := &sqltypes.Result{}
-	db.AddQuery(query, want)
-	selectQuery := "select pk from test_table where pk = 2 limit 10001"
-	db.AddQuery(selectQuery, &sqltypes.Result{
-		Fields: []*querypb.Field{{
-			Name: "pk",
-			Type: sqltypes.Int32,
-		}},
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			{sqltypes.NewInt32(2)},
-		},
-	})
-
-	insertQuery := "insert into test_table(pk) values (2) /* _stream test_table (pk ) (2 ); */"
-
-	db.AddQuery(insertQuery, &sqltypes.Result{})
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	qre := newTestQueryExecutor(ctx, tsv, query, 0)
-	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanInsertSubquery, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-}
-
-func TestQueryExecutorPlanInsertSubQuery(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	query := "insert into test_table(pk) select pk from test_table where pk = 2"
-	want := &sqltypes.Result{}
-	db.AddQuery(query, want)
-	selectQuery := "select pk from test_table where pk = 2 limit 10001"
-	db.AddQuery(selectQuery, &sqltypes.Result{
-		Fields: []*querypb.Field{{
-			Name: "pk",
-			Type: sqltypes.Int32,
-		}},
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			{sqltypes.NewInt32(2)},
-		},
-	})
-
-	insertQuery := "insert into test_table(pk) values (2) /* _stream test_table (pk ) (2 ); */"
-
-	db.AddQuery(insertQuery, &sqltypes.Result{})
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	txid := newTransaction(tsv, nil)
-	qre := newTestQueryExecutor(ctx, tsv, query, txid)
-
-	defer tsv.StopService()
-	defer testCommitHelper(t, tsv, qre)
-	checkPlanID(t, planbuilder.PlanInsertSubquery, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-	wantqueries := []string{"insert into test_table(pk) values (2) /* _stream test_table (pk ) (2 ); */"}
-	gotqueries := fetchRecordedQueries(qre)
-	if !reflect.DeepEqual(gotqueries, wantqueries) {
-		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
-	}
-}
-
-func TestQueryExecutorPlanInsertSubQueryRBR(t *testing.T) {
-	// RBR test is almost identical to the non-RBR test, except that
-	// the _stream comments are suppressed for RBR.
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	query := "insert into test_table(pk) select pk from test_table where pk = 2"
-	want := &sqltypes.Result{}
-	db.AddQuery(query, want)
-	selectQuery := "select pk from test_table where pk = 2 limit 10001"
-	db.AddQuery(selectQuery, &sqltypes.Result{
-		Fields: []*querypb.Field{{
-			Name: "pk",
-			Type: sqltypes.Int32,
-		}},
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			{sqltypes.NewInt32(2)},
-		},
-	})
-
-	insertQuery := "insert into test_table(pk) values (2)"
-
-	db.AddQuery(insertQuery, &sqltypes.Result{})
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	txid := newTransaction(tsv, nil)
-	qre := newTestQueryExecutor(ctx, tsv, query, txid)
-	tsv.qe.binlogFormat = connpool.BinlogFormatRow
-
-	defer tsv.StopService()
-	defer testCommitHelper(t, tsv, qre)
-	checkPlanID(t, planbuilder.PlanInsertSubquery, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-	wantqueries := []string{"insert into test_table(pk) values (2)"}
-	gotqueries := fetchRecordedQueries(qre)
-	if !reflect.DeepEqual(gotqueries, wantqueries) {
-		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
-	}
-}
-
-func TestQueryExecutorPlanUpsertPk(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	db.AddQuery("insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
-	want := &sqltypes.Result{}
-	query := "insert into test_table(pk) values(1) on duplicate key update val=1"
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	txid := newTransaction(tsv, nil)
-	qre := newTestQueryExecutor(ctx, tsv, query, txid)
-	defer tsv.StopService()
-	defer testCommitHelper(t, tsv, qre)
-	checkPlanID(t, planbuilder.PlanUpsertPK, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-	wantqueries := []string{"insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */"}
-	gotqueries := fetchRecordedQueries(qre)
-	if !reflect.DeepEqual(gotqueries, wantqueries) {
-		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
-	}
-
-	db.AddRejectedQuery("insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */", errRejected)
-	txid = newTransaction(tsv, nil)
-	qre = newTestQueryExecutor(ctx, tsv, query, txid)
-	defer testCommitHelper(t, tsv, qre)
-	_, err = qre.Execute()
-	wantErr := "rejected"
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Errorf("qre.Execute() = %v, want %v", err, wantErr)
-	}
-	if gotqueries = fetchRecordedQueries(qre); gotqueries != nil {
-		t.Errorf("queries: %v, want nil", gotqueries)
-	}
-
-	db.AddRejectedQuery(
-		"insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */",
-		mysql.NewSQLError(mysql.ERDupEntry, mysql.SSDupKey, "err"),
-	)
-	db.AddQuery("update test_table(pk) set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
-	txid = newTransaction(tsv, nil)
-	qre = newTestQueryExecutor(ctx, tsv, query, txid)
-	defer testCommitHelper(t, tsv, qre)
-	_, err = qre.Execute()
-	wantErr = "err (errno 1062) (sqlstate 23000)"
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Errorf("qre.Execute() = %v, want %v", err, wantErr)
-	}
-	if gotqueries = fetchRecordedQueries(qre); gotqueries != nil {
-		t.Errorf("queries: %v, want nil", gotqueries)
-	}
-
-	db.AddRejectedQuery(
-		"insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */",
-		mysql.NewSQLError(mysql.ERDupEntry, mysql.SSDupKey, "ERROR 1062 (23000): Duplicate entry '2' for key 'PRIMARY'"),
-	)
-	db.AddQuery(
-		"update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */",
-		&sqltypes.Result{RowsAffected: 1},
-	)
-	txid = newTransaction(tsv, nil)
-	qre = newTestQueryExecutor(ctx, tsv, query, txid)
-	defer testCommitHelper(t, tsv, qre)
-	got, err = qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	want = &sqltypes.Result{
-		RowsAffected: 2,
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got: %v, want: %v", got, want)
-	}
-	wantqueries = []string{"update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */"}
-	gotqueries = fetchRecordedQueries(qre)
-	if !reflect.DeepEqual(gotqueries, wantqueries) {
-		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
-	}
-
-	// Test pk change.
-	db.AddRejectedQuery(
-		"insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */",
-		mysql.NewSQLError(mysql.ERDupEntry, mysql.SSDupKey, "ERROR 1062 (23000): Duplicate entry '2' for key 'PRIMARY'"),
-	)
-	db.AddQuery(
-		"update test_table set pk = 2 where pk in (1) /* _stream test_table (pk ) (1 ) (2 ); */",
-		&sqltypes.Result{RowsAffected: 1},
-	)
-	txid = newTransaction(tsv, nil)
-	qre = newTestQueryExecutor(ctx, tsv, "insert into test_table(pk) values (1) on duplicate key update pk=2", txid)
-	defer testCommitHelper(t, tsv, qre)
-	got, err = qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	want = &sqltypes.Result{
-		RowsAffected: 2,
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got: %v, want: %v", got, want)
-	}
-	wantqueries = []string{"update test_table set pk = 2 where pk in (1) /* _stream test_table (pk ) (1 ) (2 ); */"}
-	gotqueries = fetchRecordedQueries(qre)
-	if !reflect.DeepEqual(gotqueries, wantqueries) {
-		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
-	}
-}
-
-func TestQueryExecutorPlanUpsertPkSingleUnique(t *testing.T) {
-	db := setUpQueryExecutorTestWithOneUniqueKey(t)
-	defer db.Close()
-	query := "insert into test_table(pk) values (1) on duplicate key update val = 1 /* _stream test_table (pk ) (1 ); */"
-	db.AddQuery(query, &sqltypes.Result{})
-	db.AddRejectedQuery("insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */", errRejected)
-	want := &sqltypes.Result{}
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	txid := newTransaction(tsv, nil)
-	qre := newTestQueryExecutor(ctx, tsv, query[0:strings.Index(query, " /*")], txid)
-	defer tsv.StopService()
-	defer testCommitHelper(t, tsv, qre)
-	checkPlanID(t, planbuilder.PlanInsertPK, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-	wantqueries := []string{query}
-	gotqueries := fetchRecordedQueries(qre)
-	if !reflect.DeepEqual(gotqueries, wantqueries) {
-		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
-	}
-
-	// PK changed by upsert.
-	query = "insert into test_table(pk) values (1), (2), (3) on duplicate key update pk = 5 /* _stream test_table (pk ) (1 ) (2 ) (3 ) (5 ) (5 ) (5 ); */"
-	db.AddQuery(query, &sqltypes.Result{})
-	want = &sqltypes.Result{}
-	ctx = context.Background()
-	tsv = newTestTabletServer(ctx, noFlags, db)
-	txid = newTransaction(tsv, nil)
-	qre = newTestQueryExecutor(ctx, tsv, query[0:strings.Index(query, " /*")], txid)
-	defer testCommitHelper(t, tsv, qre)
-	checkPlanID(t, planbuilder.PlanInsertPK, qre.plan.PlanID)
-	got, err = qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-	wantqueries = []string{query}
-	gotqueries = fetchRecordedQueries(qre)
-	if !reflect.DeepEqual(gotqueries, wantqueries) {
-		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
-	}
-
-	// PK changed by using values.
-	query = "insert into test_table(pk, name) values (1, 4), (2, 5), (3, 6) on duplicate key update pk = values(name) /* _stream test_table (pk ) (1 ) (2 ) (3 ) (4 ) (5 ) (6 ); */"
-	db.AddQuery(query, &sqltypes.Result{})
-	want = &sqltypes.Result{}
-	ctx = context.Background()
-	tsv = newTestTabletServer(ctx, noFlags, db)
-	txid = newTransaction(tsv, nil)
-	qre = newTestQueryExecutor(ctx, tsv, query[0:strings.Index(query, " /*")], txid)
-	defer testCommitHelper(t, tsv, qre)
-	checkPlanID(t, planbuilder.PlanInsertPK, qre.plan.PlanID)
-	got, err = qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-	wantqueries = []string{query}
-	gotqueries = fetchRecordedQueries(qre)
-	if !reflect.DeepEqual(gotqueries, wantqueries) {
-		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
-	}
-
-	query = "insert into test_table(pk) values (1), (2), (3) on duplicate key update val = 5 /* _stream test_table (pk ) (1 ) (2 ) (3 ); */"
-	db.AddQuery(query, &sqltypes.Result{})
-	want = &sqltypes.Result{}
-	ctx = context.Background()
-	tsv = newTestTabletServer(ctx, noFlags, db)
-	txid = newTransaction(tsv, nil)
-	qre = newTestQueryExecutor(ctx, tsv, query[0:strings.Index(query, " /*")], txid)
-	defer testCommitHelper(t, tsv, qre)
-	checkPlanID(t, planbuilder.PlanInsertPK, qre.plan.PlanID)
-	got, err = qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-	wantqueries = []string{query}
-	gotqueries = fetchRecordedQueries(qre)
-	if !reflect.DeepEqual(gotqueries, wantqueries) {
-		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
-	}
-}
-
-func TestQueryExecutorPlanUpsertPkRBR(t *testing.T) {
-	// For UPSERT, the query just becomes a pass-through in RBR mode.
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	query := "insert into test_table(pk) values (1) on duplicate key update val = 1"
-	db.AddQuery(query, &sqltypes.Result{})
-	want := &sqltypes.Result{}
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	txid := newTransaction(tsv, nil)
-	qre := newTestQueryExecutor(ctx, tsv, query, txid)
-	tsv.qe.binlogFormat = connpool.BinlogFormatRow
-	defer tsv.StopService()
-	defer testCommitHelper(t, tsv, qre)
-	checkPlanID(t, planbuilder.PlanUpsertPK, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-	wantqueries := []string{query}
-	gotqueries := fetchRecordedQueries(qre)
-	if !reflect.DeepEqual(gotqueries, wantqueries) {
-		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
-	}
-}
-
-func TestQueryExecutorPlanUpsertPkAutoCommit(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	db.AddQuery("insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
-	want := &sqltypes.Result{}
-	query := "insert into test_table(pk) values(1) on duplicate key update val=1"
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	qre := newTestQueryExecutor(ctx, tsv, query, 0)
-	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanUpsertPK, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-
-	db.AddRejectedQuery("insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */", errRejected)
-	_, err = qre.Execute()
-	wantErr := "rejected"
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("qre.Execute() = %v, want %v", err, wantErr)
-	}
-
-	db.AddRejectedQuery(
-		"insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */",
-		mysql.NewSQLError(mysql.ERDupEntry, mysql.SSDupKey, "err"),
-	)
-	db.AddQuery("update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */", &sqltypes.Result{})
-	_, err = qre.Execute()
-	wantErr = "err (errno 1062) (sqlstate 23000)"
-	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("qre.Execute() = %v, want %v", err, wantErr)
-	}
-
-	db.AddRejectedQuery(
-		"insert into test_table(pk) values (1) /* _stream test_table (pk ) (1 ); */",
-		mysql.NewSQLError(mysql.ERDupEntry, mysql.SSDupKey, "ERROR 1062 (23000): Duplicate entry '2' for key 'PRIMARY'"),
-	)
-	db.AddQuery(
-		"update test_table set val = 1 where pk in (1) /* _stream test_table (pk ) (1 ); */",
-		&sqltypes.Result{RowsAffected: 1},
-	)
-	got, err = qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	want = &sqltypes.Result{
-		RowsAffected: 2,
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-}
-
-func TestQueryExecutorPlanDmlPk(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	query := "update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"
-	want := &sqltypes.Result{}
-	db.AddQuery(query, want)
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	txid := newTransaction(tsv, nil)
-	qre := newTestQueryExecutor(ctx, tsv, query, txid)
-	defer tsv.StopService()
-	defer testCommitHelper(t, tsv, qre)
-	checkPlanID(t, planbuilder.PlanDMLPK, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-	wantqueries := []string{"update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"}
-	gotqueries := fetchRecordedQueries(qre)
-	if !reflect.DeepEqual(gotqueries, wantqueries) {
-		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
-	}
-}
-
-func TestQueryExecutorPlanDmlPkTransactionIsolation(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	query := "update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"
-	want := &sqltypes.Result{}
-	db.AddQuery(query, want)
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	db.AddQuery("set transaction isolation level SERIALIZABLE", &sqltypes.Result{})
-	txid := newTransaction(tsv, &querypb.ExecuteOptions{
-		TransactionIsolation: querypb.ExecuteOptions_SERIALIZABLE,
-	})
-	qre := newTestQueryExecutor(ctx, tsv, query, txid)
-	defer tsv.StopService()
-	defer testCommitHelper(t, tsv, qre)
-	checkPlanID(t, planbuilder.PlanDMLPK, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-	wantqueries := []string{"update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"}
-	gotqueries := fetchRecordedQueries(qre)
-	if !reflect.DeepEqual(gotqueries, wantqueries) {
-		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
-	}
-}
-
-func TestQueryExecutorPlanDmlPkRBR(t *testing.T) {
-	// RBR test is almost identical to the non-RBR test, except that
-	// the _stream comments are suppressed for RBR.
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	query := "update test_table set name = 2 where pk in (1)"
-	want := &sqltypes.Result{}
-	db.AddQuery(query, want)
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	txid := newTransaction(tsv, nil)
-	qre := newTestQueryExecutor(ctx, tsv, query, txid)
-	tsv.qe.binlogFormat = connpool.BinlogFormatRow
-	defer tsv.StopService()
-	defer testCommitHelper(t, tsv, qre)
-	checkPlanID(t, planbuilder.PlanDMLPK, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-	wantqueries := []string{query}
-	gotqueries := fetchRecordedQueries(qre)
-	if !reflect.DeepEqual(gotqueries, wantqueries) {
-		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
-	}
-}
-
-func TestQueryExecutorPlanDmlAutoCommit(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	query := "update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"
-	want := &sqltypes.Result{}
-	db.AddQuery(query, want)
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	qre := newTestQueryExecutor(ctx, tsv, query, 0)
-	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanDMLPK, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-}
-
-func TestQueryExecutorPlanDmlAutoCommitTransactionIsolation(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	query := "update test_table set name = 2 where pk in (1) /* _stream test_table (pk ) (1 ); */"
-	want := &sqltypes.Result{}
-	db.AddQuery(query, want)
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	qre := newTestQueryExecutor(ctx, tsv, query, 0)
-
-	qre.options = &querypb.ExecuteOptions{
-		TransactionIsolation: querypb.ExecuteOptions_READ_UNCOMMITTED,
-	}
-	db.AddQuery("set transaction isolation level READ UNCOMMITTED", &sqltypes.Result{})
-
-	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanDMLPK, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-}
-
-func TestQueryExecutorPlanDmlSubQuery(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	query := "update test_table set addr = 3 where name = 1"
-	expandedQuery := "select pk from test_table where name = 1 limit 10001 for update"
-	want := &sqltypes.Result{}
-	db.AddQuery(query, want)
-	db.AddQuery(expandedQuery, &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{Type: sqltypes.Int32},
-		},
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			{sqltypes.NewInt32(2)},
-		},
-	})
-	updateQuery := "update test_table set addr = 3 where pk in (2) /* _stream test_table (pk ) (2 ); */"
-	db.AddQuery(updateQuery, want)
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	txid := newTransaction(tsv, nil)
-	qre := newTestQueryExecutor(ctx, tsv, query, txid)
-	defer tsv.StopService()
-	defer testCommitHelper(t, tsv, qre)
-	checkPlanID(t, planbuilder.PlanDMLSubquery, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-	wantqueries := []string{updateQuery}
-	gotqueries := fetchRecordedQueries(qre)
-	if !reflect.DeepEqual(gotqueries, wantqueries) {
-		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
-	}
-}
-
-func TestQueryExecutorPlanDmlSubQueryRBR(t *testing.T) {
-	// RBR test is almost identical to the non-RBR test, except that
-	// the _stream comments are suppressed for RBR.
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	query := "update test_table set addr = 3 where name = 1"
-	expandedQuery := "select pk from test_table where name = 1 limit 10001 for update"
-	want := &sqltypes.Result{}
-	db.AddQuery(query, want)
-	db.AddQuery(expandedQuery, &sqltypes.Result{
-		Fields: []*querypb.Field{
-			{Type: sqltypes.Int32},
-		},
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			{sqltypes.NewInt32(2)},
-		},
-	})
-	updateQuery := "update test_table set addr = 3 where pk in (2)"
-	db.AddQuery(updateQuery, want)
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	txid := newTransaction(tsv, nil)
-	qre := newTestQueryExecutor(ctx, tsv, query, txid)
-	tsv.qe.binlogFormat = connpool.BinlogFormatRow
-	defer tsv.StopService()
-	defer testCommitHelper(t, tsv, qre)
-	checkPlanID(t, planbuilder.PlanDMLSubquery, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-	wantqueries := []string{updateQuery}
-	gotqueries := fetchRecordedQueries(qre)
-	if !reflect.DeepEqual(gotqueries, wantqueries) {
-		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
-	}
-}
-
-func TestQueryExecutorPlanDmlSubQueryAutoCommit(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	query := "update test_table set addr = 3 where name = 1"
-	expandedQuery := "select pk from test_table where name = 1 limit 10001 for update"
-	want := &sqltypes.Result{}
-	db.AddQuery(query, want)
-	db.AddQuery(expandedQuery, want)
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	qre := newTestQueryExecutor(ctx, tsv, query, 0)
-	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanDMLSubquery, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-}
-
-func TestQueryExecutorPlanOtherWithinATransaction(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	query := "show test_table"
-	want := &sqltypes.Result{
-		Fields: getTestTableFields(),
-	}
-	db.AddQuery(query, want)
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	txid := newTransaction(tsv, nil)
-	qre := newTestQueryExecutor(ctx, tsv, query, txid)
-	defer tsv.StopService()
-	defer testCommitHelper(t, tsv, qre)
-	checkPlanID(t, planbuilder.PlanOtherRead, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-	if gotqueries := fetchRecordedQueries(qre); gotqueries != nil {
-		t.Errorf("queries: %v, want nil", gotqueries)
-	}
-}
-
-func TestQueryExecutorPlanPassSelectWithInATransaction(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	fields := []*querypb.Field{
-		{Name: "addr", Type: sqltypes.Int32},
-	}
-	query := "select addr from test_table where pk = 1 limit 1000"
-	want := &sqltypes.Result{
-		Fields:       fields,
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			{sqltypes.NewInt32(123)},
-		},
-	}
-	db.AddQuery(query, want)
-	db.AddQuery("select addr from test_table where 1 != 1", &sqltypes.Result{
-		Fields: fields,
-	})
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	txid := newTransaction(tsv, nil)
-	qre := newTestQueryExecutor(ctx, tsv, query, txid)
-	defer tsv.StopService()
-	defer testCommitHelper(t, tsv, qre)
-	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-	if gotqueries := fetchRecordedQueries(qre); gotqueries != nil {
-		t.Errorf("queries: %v, want nil", gotqueries)
 	}
 }
 
@@ -1041,149 +464,10 @@ func TestQueryExecutorPlanPassSelectWithLockOutsideATransaction(t *testing.T) {
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanSelectLock, qre.plan.PlanID)
+	assert.Equal(t, planbuilder.PlanSelectLock, qre.plan.PlanID)
 	_, err := qre.Execute()
 	if code := vterrors.Code(err); code != vtrpcpb.Code_FAILED_PRECONDITION {
 		t.Fatalf("qre.Execute: %v, want %v", code, vtrpcpb.Code_FAILED_PRECONDITION)
-	}
-}
-
-func TestQueryExecutorPlanPassSelect(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	query := "select * from test_table limit 1000"
-	want := &sqltypes.Result{
-		Fields: getTestTableFields(),
-	}
-	db.AddQuery(query, want)
-	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
-		Fields: getTestTableFields(),
-	})
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	qre := newTestQueryExecutor(ctx, tsv, query, 0)
-	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-}
-
-func TestQueryExecutorPlanSelectImpossible(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	query := "select * from test_table where 1 != 1"
-	want := &sqltypes.Result{
-		Fields: getTestTableFields(),
-	}
-	db.AddQuery(query, want)
-	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
-		Fields: getTestTableFields(),
-	})
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	qre := newTestQueryExecutor(ctx, tsv, query, 0)
-	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanSelectImpossible, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-}
-
-func TestQueryExecutorPlanPassSelectSqlSelectLimit(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	query := "select * from test_table"
-	expandedQuery := "select * from test_table limit 20"
-	want := &sqltypes.Result{
-		Fields: getTestTableFields(),
-	}
-	db.AddQuery(query, want)
-	db.AddQuery(expandedQuery, want)
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	qre := newTestQueryExecutor(ctx, tsv, query, 0)
-	qre.options = &querypb.ExecuteOptions{
-		SqlSelectLimit: 20,
-	}
-	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-}
-
-func TestQueryExecutorPlanSet(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	setQuery := "set unknown_key = 1"
-	db.AddQuery(setQuery, &sqltypes.Result{})
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	defer tsv.StopService()
-	qre := newTestQueryExecutor(ctx, tsv, setQuery, 0)
-	checkPlanID(t, planbuilder.PlanSet, qre.plan.PlanID)
-	// Query will be delegated to MySQL and both Fields and Rows should be
-	// empty arrays in this case.
-	want := &sqltypes.Result{}
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("qre.Execute() = %v, want: %v", got, want)
-	}
-
-	// Test inside transaction.
-	txid := newTransaction(tsv, nil)
-	qre = newTestQueryExecutor(ctx, tsv, setQuery, txid)
-	got, err = qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("qre.Execute() = %v, want: %v", got, want)
-	}
-	wantqueries := []string{"set unknown_key = 1"}
-	gotqueries := fetchRecordedQueries(qre)
-	if !reflect.DeepEqual(gotqueries, wantqueries) {
-		t.Errorf("queries: %v, want %v", gotqueries, wantqueries)
-	}
-	testCommitHelper(t, tsv, qre)
-	tsv.StopService()
-}
-
-func TestQueryExecutorPlanOther(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	query := "show test_table"
-	want := &sqltypes.Result{
-		Fields: getTestTableFields(),
-	}
-	db.AddQuery(query, want)
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	qre := newTestQueryExecutor(ctx, tsv, query, 0)
-	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanOtherRead, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("got: %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("qre.Execute() = %v, want: %v", got, want)
 	}
 }
 
@@ -1208,7 +492,7 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	defer tsv.StopService()
 	qre := newTestQueryExecutor(ctx, tsv, "select next value from seq", 0)
-	checkPlanID(t, planbuilder.PlanNextval, qre.plan.PlanID)
+	assert.Equal(t, planbuilder.PlanNextval, qre.plan.PlanID)
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("qre.Execute() = %v, want nil", err)
@@ -1374,7 +658,7 @@ func TestQueryExecutorMessageStreamACL(t *testing.T) {
 		return io.EOF
 	})
 
-	want := `table acl error: "u2" [] cannot run MESSAGE_STREAM on table "msg"`
+	want := `table acl error: "u2" [] cannot run MessageStream on table "msg"`
 	if err == nil || err.Error() != want {
 		t.Errorf("qre.MessageStream(msg) error: %v, want %s", err, want)
 	}
@@ -1417,7 +701,7 @@ func TestQueryExecutorTableAcl(t *testing.T) {
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
+	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("got: %v, want nil", err)
@@ -1461,7 +745,7 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	// without enabling Config.StrictTableAcl
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
-	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
+	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	got, err := qre.Execute()
 	if err != nil {
 		t.Fatalf("got: %v, want nil", err)
@@ -1475,7 +759,7 @@ func TestQueryExecutorTableAclNoPermission(t *testing.T) {
 	tsv = newTestTabletServer(ctx, enableStrictTableACL, db)
 	qre = newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
+	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	// query should fail because current user do not have read permissions
 	_, err = qre.Execute()
 	if err == nil {
@@ -1512,7 +796,7 @@ func TestQueryExecutorTableAclDualTableExempt(t *testing.T) {
 	query := "select * from test_table where 1 != 1"
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanSelectImpossible, qre.plan.PlanID)
+	assert.Equal(t, planbuilder.PlanSelectImpossible, qre.plan.PlanID)
 	// query should fail because nobody has read access to test_table
 	_, err := qre.Execute()
 	if code := vterrors.Code(err); code != vtrpcpb.Code_PERMISSION_DENIED {
@@ -1572,7 +856,7 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	tsv := newTestTabletServer(ctx, enableStrictTableACL, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
+	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	// query should fail because current user do not have read permissions
 	_, err := qre.Execute()
 	if code := vterrors.Code(err); code != vtrpcpb.Code_PERMISSION_DENIED {
@@ -1639,7 +923,7 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 	tableACLStatsKey := strings.Join([]string{
 		"test_table",
 		"group02",
-		planbuilder.PlanPassSelect.String(),
+		planbuilder.PlanSelect.String(),
 		username,
 	}, ".")
 	// enable Config.StrictTableAcl
@@ -1647,7 +931,7 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 	tsv.qe.enableTableACLDryRun = true
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
-	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
+	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	beforeCount := tabletenv.TableaclPseudoDenied.Counts()[tableACLStatsKey]
 	// query should fail because current user do not have read permissions
 	_, err := qre.Execute()
@@ -1682,7 +966,7 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	alterRule.SetIPCond(bannedAddr)
 	alterRule.SetUserCond(bannedUser)
 	alterRule.SetQueryCond("select.*")
-	alterRule.AddPlanCond(planbuilder.PlanPassSelect)
+	alterRule.AddPlanCond(planbuilder.PlanSelect)
 	alterRule.AddTableCond("test_table")
 
 	rulesName := "blacklistedRulesQRFail"
@@ -1706,7 +990,7 @@ func TestQueryExecutorBlacklistQRFail(t *testing.T) {
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 
-	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
+	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	// execute should fail because query has been blacklisted
 	_, err := qre.Execute()
 	if code := vterrors.Code(err); code != vtrpcpb.Code_INVALID_ARGUMENT {
@@ -1736,7 +1020,7 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 	alterRule.SetIPCond(bannedAddr)
 	alterRule.SetUserCond(bannedUser)
 	alterRule.SetQueryCond("select.*")
-	alterRule.AddPlanCond(planbuilder.PlanPassSelect)
+	alterRule.AddPlanCond(planbuilder.PlanSelect)
 	alterRule.AddTableCond("test_table")
 
 	rulesName := "blacklistedRulesQRRetry"
@@ -1760,7 +1044,7 @@ func TestQueryExecutorBlacklistQRRetry(t *testing.T) {
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
 	defer tsv.StopService()
 
-	checkPlanID(t, planbuilder.PlanPassSelect, qre.plan.PlanID)
+	assert.Equal(t, planbuilder.PlanSelect, qre.plan.PlanID)
 	_, err := qre.Execute()
 	if code := vterrors.Code(err); code != vtrpcpb.Code_FAILED_PRECONDITION {
 		t.Fatalf("tsv.qe.queryRuleSources.SetRules: %v, want %v", code, vtrpcpb.Code_FAILED_PRECONDITION)
@@ -1775,6 +1059,7 @@ const (
 	smallTxPool
 	noTwopc
 	shortTwopcAge
+	smallResultSize
 )
 
 // newTestQueryExecutor uses a package level variable testTabletServer defined in tabletserver_test.go
@@ -1788,7 +1073,6 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 	} else {
 		config.TransactionCap = 100
 	}
-	config.EnableAutoCommit = true
 	if flags&enableStrictTableACL > 0 {
 		config.StrictTableACL = true
 	} else {
@@ -1804,6 +1088,9 @@ func newTestTabletServer(ctx context.Context, flags executorFlags, db *fakesqldb
 		config.TwoPCAbandonAge = 0.5
 	} else {
 		config.TwoPCAbandonAge = 10
+	}
+	if flags&smallResultSize > 0 {
+		config.MaxResultSize = 2
 	}
 	tsv := NewTabletServer(config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	testUtils := newTestUtils()
@@ -1879,16 +1166,6 @@ func getTestTableFields() []*querypb.Field {
 	}
 }
 
-func checkPlanID(
-	t *testing.T,
-	expectedPlanID planbuilder.PlanType,
-	actualPlanID planbuilder.PlanType) {
-	if expectedPlanID != actualPlanID {
-		t.Fatalf("expect to get PlanID: %s, but got %s",
-			expectedPlanID.String(), actualPlanID.String())
-	}
-}
-
 func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		// queries for twopc
@@ -1952,18 +1229,6 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("fakedb server")},
 			},
-		},
-		"show variables like 'binlog_format'": {
-			Fields: []*querypb.Field{{
-				Type: sqltypes.VarChar,
-			}, {
-				Type: sqltypes.VarChar,
-			}},
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{{
-				sqltypes.NewVarBinary("binlog_format"),
-				sqltypes.NewVarBinary("STATEMENT"),
-			}},
 		},
 		mysql.BaseShowTables: {
 			Fields:       mysql.BaseShowTablesFields,
