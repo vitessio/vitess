@@ -411,11 +411,10 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 
 		if ddl.OptLike != nil {
 			likeTable := ddl.OptLike.LikeTable.Name.String()
-			if _, ok := schemaQueries["describe "+likeTable]; !ok {
+			if _, ok := schemaQueries["select * from "+likeTable+" where 1 != 1"]; !ok {
 				return fmt.Errorf("check your schema, table[%s] doesn't exist", likeTable)
 			}
 			schemaQueries["show index from "+table] = schemaQueries["show index from "+likeTable]
-			schemaQueries["describe "+table] = schemaQueries["describe "+likeTable]
 			schemaQueries["select * from "+table+" where 1 != 1"] = schemaQueries["select * from "+likeTable+" where 1 != 1"]
 			continue
 		}
@@ -437,22 +436,11 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 			Rows:         indexRows,
 		}
 
-		describeTableRows := make([][]sqltypes.Value, 0, 4)
 		rowTypes := make([]*querypb.Field, 0, 4)
 		tableColumns[table] = make(map[string]querypb.Type)
 
 		for _, col := range ddl.TableSpec.Columns {
 			colName := strings.ToLower(col.Name.String())
-			defaultVal := ""
-			if col.Type.Default != nil {
-				defaultVal = sqlparser.String(col.Type.Default)
-			}
-			idxVal := ""
-			if pkColumns[colName] {
-				idxVal = "PRI"
-			}
-			row := mysql.DescribeTableRow(colName, col.Type.DescribeType(), !bool(col.Type.NotNull), idxVal, defaultVal)
-			describeTableRows = append(describeTableRows, row)
 
 			rowType := &querypb.Field{
 				Name: colName,
@@ -461,12 +449,6 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 			rowTypes = append(rowTypes, rowType)
 
 			tableColumns[table][colName] = col.Type.SQLType()
-		}
-
-		schemaQueries["describe "+table] = &sqltypes.Result{
-			Fields:       mysql.DescribeTableFields,
-			RowsAffected: uint64(len(describeTableRows)),
-			Rows:         describeTableRows,
 		}
 
 		schemaQueries["select * from "+table+" where 1 != 1"] = &sqltypes.Result{

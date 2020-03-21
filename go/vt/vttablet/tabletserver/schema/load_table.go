@@ -27,8 +27,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // LoadTable creates a Table from the schema info in the database.
@@ -68,41 +66,7 @@ func fetchColumns(ta *Table, conn *connpool.DBConn, sqlTableName string) error {
 	if err != nil {
 		return err
 	}
-	fieldTypes := make(map[string]querypb.Type, len(qr.Fields))
-	// TODO(sougou): Store the full field info in the schema.
-	for _, field := range qr.Fields {
-		fieldTypes[field.Name] = field.Type
-	}
-	columns, err := conn.Exec(tabletenv.LocalContext(), fmt.Sprintf("describe %s", sqlTableName), 10000, false)
-	if err != nil {
-		return err
-	}
-	for _, row := range columns.Rows {
-		name := row[0].ToString()
-		columnType, ok := fieldTypes[name]
-		if !ok {
-			// This code is unreachable.
-			log.Warningf("Table: %s, column %s not found in select list, skipping.", ta.Name, name)
-			continue
-		}
-		// BIT data type default value representation differs from how
-		// it's returned. It's represented as b'101', but returned in
-		// its binary form. Extract the binary form.
-		if columnType == querypb.Type_BIT && row[4].ToString() != "" {
-			query := fmt.Sprintf("select %s", row[4].ToString())
-			r, err := conn.Exec(tabletenv.LocalContext(), query, 10000, false)
-			if err != nil {
-				return err
-			}
-			if len(r.Rows) != 1 || len(r.Rows[0]) != 1 {
-				// This code is unreachable.
-				return fmt.Errorf("invalid rows returned from %s: %v", query, r.Rows)
-			}
-			// overwrite the original value with the new one.
-			row[4] = r.Rows[0][0]
-		}
-		ta.AddColumn(name, columnType, row[4], row[5].ToString())
-	}
+	ta.Fields = qr.Fields
 	return nil
 }
 
@@ -183,15 +147,11 @@ func loadMessageInfo(ta *Table, comment string) error {
 	}
 
 	// Load user-defined columns. Any "unrecognized" column is user-defined.
-	for _, c := range ta.Columns {
-		if _, ok := hiddenCols[c.Name.Lowered()]; ok {
+	for _, field := range ta.Fields {
+		if _, ok := hiddenCols[strings.ToLower(field.Name)]; ok {
 			continue
 		}
-
-		ta.MessageInfo.Fields = append(ta.MessageInfo.Fields, &querypb.Field{
-			Name: c.Name.String(),
-			Type: c.Type,
-		})
+		ta.MessageInfo.Fields = append(ta.MessageInfo.Fields, field)
 	}
 	return nil
 }

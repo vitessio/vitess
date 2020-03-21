@@ -20,11 +20,9 @@ package schema
 // It contains a data structure that's shared between sqlparser & tabletserver
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -45,18 +43,10 @@ var TypeNames = []string{
 	"message",
 }
 
-// TableColumn contains info about a table's column.
-type TableColumn struct {
-	Name    sqlparser.ColIdent
-	Type    querypb.Type
-	IsAuto  bool
-	Default sqltypes.Value
-}
-
 // Table contains info about a table.
 type Table struct {
 	Name      sqlparser.TableIdent
-	Columns   []TableColumn
+	Fields    []*querypb.Field
 	Indexes   []*Index
 	PKColumns []int
 	Type      int
@@ -142,28 +132,11 @@ func (ta *Table) Done() {
 	}
 }
 
-// AddColumn adds a column to the Table.
-func (ta *Table) AddColumn(name string, columnType querypb.Type, defval sqltypes.Value, extra string) {
-	index := len(ta.Columns)
-	ta.Columns = append(ta.Columns, TableColumn{Name: sqlparser.NewColIdent(name)})
-	ta.Columns[index].Type = columnType
-	if extra == "auto_increment" {
-		ta.Columns[index].IsAuto = true
-		// Ignore default value, if any
-		return
-	}
-	if defval.IsNull() {
-		return
-	}
-	// Schema values are trusted.
-	ta.Columns[index].Default = sqltypes.MakeTrusted(ta.Columns[index].Type, defval.Raw())
-}
-
 // FindColumn finds a column in the table. It returns the index if found.
 // Otherwise, it returns -1.
 func (ta *Table) FindColumn(name sqlparser.ColIdent) int {
-	for i, col := range ta.Columns {
-		if col.Name.Equal(name) {
+	for i, col := range ta.Fields {
+		if name.EqualString(col.Name) {
 			return i
 		}
 	}
@@ -174,7 +147,7 @@ func (ta *Table) FindColumn(name sqlparser.ColIdent) int {
 // Otherwise, it returns -1.
 func (ta *Table) FindPKColumn(name sqlparser.ColIdent) int {
 	for i, colnum := range ta.PKColumns {
-		if ta.Columns[colnum].Name.Equal(name) {
+		if name.EqualString(ta.Fields[colnum].Name) {
 			return i
 		}
 	}
@@ -182,8 +155,8 @@ func (ta *Table) FindPKColumn(name sqlparser.ColIdent) int {
 }
 
 // GetPKColumn returns the pk column specified by the index.
-func (ta *Table) GetPKColumn(index int) *TableColumn {
-	return &ta.Columns[ta.PKColumns[index]]
+func (ta *Table) GetPKColumn(index int) *querypb.Field {
+	return ta.Fields[ta.PKColumns[index]]
 }
 
 // AddIndex adds an index to the table.
@@ -248,9 +221,4 @@ func (idx *Index) FindColumn(name sqlparser.ColIdent) int {
 		}
 	}
 	return -1
-}
-
-// String() pretty-prints TableColumn into a string.
-func (c *TableColumn) String() string {
-	return fmt.Sprintf("{Name: '%v', Type: %v}", c.Name, c.Type)
 }
