@@ -173,11 +173,6 @@ func testBaseShowTables(t *testing.T) {
 
 	want := mysql.BaseShowTablesRow("for_base_show_tables", false, "fancy table")
 	result.Rows[0][2] = sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325875")) // unix_timestamp(create_time)
-	result.Rows[0][4] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("0"))         // table_rows
-	result.Rows[0][5] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("0"))         // data_length
-	result.Rows[0][6] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("0"))         // index_length
-	result.Rows[0][7] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("0"))         // data_free
-	result.Rows[0][8] = sqltypes.MakeTrusted(sqltypes.Uint64, []byte("0"))         // max_data_length
 	if !reflect.DeepEqual(result.Rows[0], want) {
 		t.Errorf("Row[0] returned by BaseShowTables differ from expected content: got:\n%v\nexpected:\n%v", RowString(result.Rows[0]), RowString(want))
 	}

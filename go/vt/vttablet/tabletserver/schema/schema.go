@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -70,13 +69,6 @@ type Table struct {
 
 	// TopicInfo contains info for message topics.
 	TopicInfo *TopicInfo
-
-	// These vars can be accessed concurrently.
-	TableRows     sync2.AtomicInt64
-	DataLength    sync2.AtomicInt64
-	IndexLength   sync2.AtomicInt64
-	DataFree      sync2.AtomicInt64
-	MaxDataLength sync2.AtomicInt64
 }
 
 // SequenceInfo contains info specific to sequence tabels.
@@ -199,20 +191,6 @@ func (ta *Table) AddIndex(name string, unique bool) (index *Index) {
 	index = NewIndex(name, unique)
 	ta.Indexes = append(ta.Indexes, index)
 	return index
-}
-
-// SetMysqlStats receives the values found in the mysql information_schema.tables table
-func (ta *Table) SetMysqlStats(tr, dl, il, df, mdl sqltypes.Value) {
-	v, _ := sqltypes.ToInt64(tr)
-	ta.TableRows.Set(v)
-	v, _ = sqltypes.ToInt64(dl)
-	ta.DataLength.Set(v)
-	v, _ = sqltypes.ToInt64(il)
-	ta.IndexLength.Set(v)
-	v, _ = sqltypes.ToInt64(df)
-	ta.DataFree.Set(v)
-	v, _ = sqltypes.ToInt64(mdl)
-	ta.MaxDataLength.Set(v)
 }
 
 // HasPrimary returns true if the table has a primary key.

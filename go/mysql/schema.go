@@ -320,7 +320,7 @@ func ShowIndexFromTableRow(table string, unique bool, keyName string, seqInIndex
 }
 
 // BaseShowTables is the base query used in further methods.
-const BaseShowTables = "SELECT table_name, table_type, unix_timestamp(create_time), table_comment, table_rows, data_length, index_length, data_free, max_data_length FROM information_schema.tables WHERE table_schema = database()"
+const BaseShowTables = "SELECT table_name, table_type, unix_timestamp(create_time), table_comment FROM information_schema.tables WHERE table_schema = database()"
 
 // BaseShowTablesForTable specializes BaseShowTables for a single table.
 func BaseShowTablesForTable(table string) string {
@@ -371,61 +371,6 @@ var BaseShowTablesFields = []*querypb.Field{
 		Charset:      CharacterSetUtf8,
 		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
 	},
-	{
-		Name:         "table_rows",
-		Type:         querypb.Type_UINT64,
-		Table:        "tables",
-		OrgTable:     "TABLES",
-		Database:     "information_schema",
-		OrgName:      "TABLE_ROWS",
-		ColumnLength: 21,
-		Charset:      CharacterSetBinary,
-		Flags:        uint32(querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NUM_FLAG),
-	},
-	{
-		Name:         "data_length",
-		Type:         querypb.Type_UINT64,
-		Table:        "tables",
-		OrgTable:     "TABLES",
-		Database:     "information_schema",
-		OrgName:      "DATA_LENGTH",
-		ColumnLength: 21,
-		Charset:      CharacterSetBinary,
-		Flags:        uint32(querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NUM_FLAG),
-	},
-	{
-		Name:         "index_length",
-		Type:         querypb.Type_UINT64,
-		Table:        "tables",
-		OrgTable:     "TABLES",
-		Database:     "information_schema",
-		OrgName:      "INDEX_LENGTH",
-		ColumnLength: 21,
-		Charset:      CharacterSetBinary,
-		Flags:        uint32(querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NUM_FLAG),
-	},
-	{
-		Name:         "data_free",
-		Type:         querypb.Type_UINT64,
-		Table:        "tables",
-		OrgTable:     "TABLES",
-		Database:     "information_schema",
-		OrgName:      "DATA_FREE",
-		ColumnLength: 21,
-		Charset:      CharacterSetBinary,
-		Flags:        uint32(querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NUM_FLAG),
-	},
-	{
-		Name:         "max_data_length",
-		Type:         querypb.Type_UINT64,
-		Table:        "tables",
-		OrgTable:     "TABLES",
-		Database:     "information_schema",
-		OrgName:      "MAX_DATA_LENGTH",
-		ColumnLength: 21,
-		Charset:      CharacterSetBinary,
-		Flags:        uint32(querypb.MySqlFlag_UNSIGNED_FLAG | querypb.MySqlFlag_NUM_FLAG),
-	},
 }
 
 // BaseShowTablesRow returns the fields from a BaseShowTables or
@@ -440,10 +385,5 @@ func BaseShowTablesRow(tableName string, isView bool, comment string) []sqltypes
 		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(tableType)),
 		sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325875")), // unix_timestamp(create_time)
 		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(comment)),
-		sqltypes.MakeTrusted(sqltypes.Uint64, []byte("0")), // table_rows
-		sqltypes.MakeTrusted(sqltypes.Uint64, []byte("0")), // data_length
-		sqltypes.MakeTrusted(sqltypes.Uint64, []byte("0")), // index_length
-		sqltypes.MakeTrusted(sqltypes.Uint64, []byte("0")), // data_free
-		sqltypes.MakeTrusted(sqltypes.Uint64, []byte("0")), // max_data_length
 	}
 }

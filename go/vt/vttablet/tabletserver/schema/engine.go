@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -78,11 +77,6 @@ func NewEngine(checker connpool.MySQLChecker, config tabletenv.TabletConfig) *En
 	}
 	schemaOnce.Do(func() {
 		_ = stats.NewGaugeDurationFunc("SchemaReloadTime", "vttablet keeps table schemas in its own memory and periodically refreshes it from MySQL. This config controls the reload time.", se.ticks.Interval)
-		_ = stats.NewGaugesFuncWithMultiLabels("TableRows", "table rows created in tabletserver", []string{"Table"}, se.getTableRows)
-		_ = stats.NewGaugesFuncWithMultiLabels("DataLength", "data length in tabletserver", []string{"Table"}, se.getDataLength)
-		_ = stats.NewGaugesFuncWithMultiLabels("IndexLength", "index length in tabletserver", []string{"Table"}, se.getIndexLength)
-		_ = stats.NewGaugesFuncWithMultiLabels("DataFree", "data free in tabletserver", []string{"Table"}, se.getDataFree)
-		_ = stats.NewGaugesFuncWithMultiLabels("MaxDataLength", "max data length in tabletserver", []string{"Table"}, se.getMaxDataLength)
 
 		http.Handle("/debug/schema", se)
 		http.HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {
@@ -166,7 +160,6 @@ func (se *Engine) Open() error {
 				// Skip over the table that had an error and move on to the next one
 				return
 			}
-			table.SetMysqlStats(row[4], row[5], row[6], row[7], row[8])
 			mu.Lock()
 			tables[tableName] = table
 			mu.Unlock()
@@ -195,7 +188,7 @@ func (se *Engine) Open() error {
 	return nil
 }
 
-// IsOpen() checks if engine is open
+// IsOpen checks if engine is open
 func (se *Engine) IsOpen() bool {
 	se.mu.Lock()
 	defer se.mu.Unlock()
@@ -274,19 +267,17 @@ func (se *Engine) Reload(ctx context.Context) error {
 		tableName := row[0].ToString()
 		curTables[tableName] = true
 		createTime, _ := sqltypes.ToInt64(row[2])
-		// Check if we know about the table or it has been recreated.
-		if _, ok := se.tables[tableName]; !ok || createTime >= se.lastChange {
-			log.Infof("Reloading schema for table: %s", tableName)
-			wasCreated, err := se.tableWasCreatedOrAltered(ctx, tableName)
-			rec.RecordError(err)
-			if wasCreated {
-				created = append(created, tableName)
-			} else {
-				altered = append(altered, tableName)
-			}
+		// If we know about the table and its timestamp is before our last read, skip.
+		if _, ok := se.tables[tableName]; ok && createTime < se.lastChange {
+			continue
+		}
+		log.Infof("Reloading schema for table: %s", tableName)
+		wasCreated, err := se.tableWasCreatedOrAltered(ctx, tableName)
+		rec.RecordError(err)
+		if wasCreated {
+			created = append(created, tableName)
 		} else {
-			// Only update table_rows, data_length, index_length, max_data_length
-			se.tables[tableName].SetMysqlStats(row[4], row[5], row[6], row[7], row[8])
+			altered = append(altered, tableName)
 		}
 	}
 	se.lastChange = curTime
@@ -371,9 +362,6 @@ func (se *Engine) tableWasCreatedOrAltered(ctx context.Context, tableName string
 		tabletenv.InternalErrors.Add("Schema", 1)
 		return false, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "tableWasCreatedOrAltered: failed to load table %s: %v", tableName, err)
 	}
-
-	// table_rows, data_length, index_length, max_data_length
-	table.SetMysqlStats(row[4], row[5], row[6], row[7], row[8])
 
 	wasCreated := true
 	if _, ok := se.tables[tableName]; ok {
@@ -509,56 +497,6 @@ func (se *Engine) ReloadTime() time.Duration {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	return se.reloadTime
-}
-
-func (se *Engine) getTableRows() map[string]int64 {
-	se.mu.Lock()
-	defer se.mu.Unlock()
-	tstats := make(map[string]int64)
-	for k, v := range se.tables {
-		tstats[strings.Replace(k, ".", "_", -1)] = v.TableRows.Get()
-	}
-	return tstats
-}
-
-func (se *Engine) getDataLength() map[string]int64 {
-	se.mu.Lock()
-	defer se.mu.Unlock()
-	tstats := make(map[string]int64)
-	for k, v := range se.tables {
-		tstats[strings.Replace(k, ".", "_", -1)] = v.DataLength.Get()
-	}
-	return tstats
-}
-
-func (se *Engine) getIndexLength() map[string]int64 {
-	se.mu.Lock()
-	defer se.mu.Unlock()
-	tstats := make(map[string]int64)
-	for k, v := range se.tables {
-		tstats[strings.Replace(k, ".", "_", -1)] = v.IndexLength.Get()
-	}
-	return tstats
-}
-
-func (se *Engine) getDataFree() map[string]int64 {
-	se.mu.Lock()
-	defer se.mu.Unlock()
-	tstats := make(map[string]int64)
-	for k, v := range se.tables {
-		tstats[strings.Replace(k, ".", "_", -1)] = v.DataFree.Get()
-	}
-	return tstats
-}
-
-func (se *Engine) getMaxDataLength() map[string]int64 {
-	se.mu.Lock()
-	defer se.mu.Unlock()
-	tstats := make(map[string]int64)
-	for k, v := range se.tables {
-		tstats[strings.Replace(k, ".", "_", -1)] = v.MaxDataLength.Get()
-	}
-	return tstats
 }
 
 func (se *Engine) ServeHTTP(response http.ResponseWriter, request *http.Request) {
