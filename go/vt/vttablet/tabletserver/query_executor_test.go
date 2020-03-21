@@ -428,26 +428,6 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 	}
 }
 
-func TestQueryExecutorPlanInsertMessage(t *testing.T) {
-	db := setUpQueryExecutorTest(t)
-	defer db.Close()
-	db.AddQuery("insert into msg(id, message) values (2, 3)", &sqltypes.Result{})
-	want := &sqltypes.Result{}
-	query := "insert into msg(id, message) values(2, 3)"
-	ctx := context.Background()
-	tsv := newTestTabletServer(ctx, noFlags, db)
-	qre := newTestQueryExecutor(ctx, tsv, query, 0)
-	defer tsv.StopService()
-	assert.Equal(t, planbuilder.PlanInsertMessage, qre.plan.PlanID)
-	got, err := qre.Execute()
-	if err != nil {
-		t.Fatalf("qre.Execute() = %v, want nil", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("got: %v, want: %v", got, want)
-	}
-}
-
 func TestQueryExecutorPlanPassSelectWithLockOutsideATransaction(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()

@@ -60,6 +60,7 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 	return plan, nil
 }
 
+// analyzeUpdate code is almost identical to analyzeDelete.
 func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan *Plan, err error) {
 	plan = &Plan{
 		PlanID: PlanUpdate,
@@ -73,9 +74,10 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 		plan.WhereClause = buf.ParsedQuery()
 	}
 
-	// If plan.Table==nil, it's likely a multi-table statement.
-	// MySQL doesn't allow limit clauses for multi-table dmls.
-	// If there's an explicity Limit, honor it.
+	// Situations when we pass-through:
+	// PassthroughDMLs flag is set.
+	// plan.Table==nil: it's likely a multi-table statement. MySQL doesn't allow limit clauses for multi-table dmls.
+	// If there's an explicity Limit.
 	if PassthroughDMLs || plan.Table == nil || upd.Limit != nil {
 		plan.FullQuery = GenerateFullQuery(upd)
 		return plan, nil
@@ -88,22 +90,19 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 	return plan, nil
 }
 
+// analyzeDelete code is almost identical to analyzeUpdate.
 func analyzeDelete(del *sqlparser.Delete, tables map[string]*schema.Table) (plan *Plan, err error) {
 	plan = &Plan{
 		PlanID: PlanDelete,
 		Table:  lookupTable(del.TableExprs, tables),
 	}
 
-	// Store the WHERE clause as string for the hot row protection (txserializer).
 	if del.Where != nil {
 		buf := sqlparser.NewTrackedBuffer(nil)
 		buf.Myprintf("%v", del.Where)
 		plan.WhereClause = buf.ParsedQuery()
 	}
 
-	// If plan.Table==nil, it's likely a multi-table statement.
-	// MySQL doesn't allow limit clauses for multi-table dmls.
-	// If there's an explicity Limit, honor it.
 	if PassthroughDMLs || plan.Table == nil || del.Limit != nil {
 		plan.FullQuery = GenerateFullQuery(del)
 		return plan, nil
@@ -123,38 +122,9 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 
 	tableName := sqlparser.GetTableName(ins.Table)
 	plan.Table = tables[tableName.String()]
-	if plan.Table == nil {
-		return plan, nil
-	}
-
-	switch {
-	case plan.Table.Type == schema.Message:
-		return analyzeInsertMessage(ins, plan, plan.Table)
-	case plan.Table.IsTopic():
+	if plan.Table != nil && plan.Table.IsTopic() {
 		plan.PlanID = PlanInsertTopic
-		return plan, nil
 	}
-	return plan, nil
-}
-
-func analyzeInsertMessage(ins *sqlparser.Insert, plan *Plan, table *schema.Table) (*Plan, error) {
-	if _, ok := ins.Rows.(sqlparser.SelectStatement); ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "subquery not allowed for message table: %s", table.Name.String())
-	}
-	if len(ins.Columns) == 0 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "column list must be specified for message table insert: %s", table.Name.String())
-	}
-
-	// Sanity check first so we don't have to repeat this.
-	rowList := ins.Rows.(sqlparser.Values)
-	for _, row := range rowList {
-		if len(row) != len(ins.Columns) {
-			return nil, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "column count doesn't match value count")
-		}
-	}
-
-	plan.PlanID = PlanInsertMessage
-	plan.FullQuery = GenerateFullQuery(ins)
 	return plan, nil
 }
 
