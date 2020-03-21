@@ -32,15 +32,12 @@ import (
 )
 
 var createMessage = `create table vitess_message(
-	time_scheduled bigint,
 	id bigint,
 	time_next bigint,
 	epoch bigint,
-	time_created bigint,
 	time_acked bigint,
 	message varchar(128),
-	primary key(time_scheduled, id),
-	unique index id_idx(id),
+	primary key(id),
 	index next_idx(time_next, epoch))
 comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
 
@@ -71,9 +68,6 @@ func TestMessage(t *testing.T) {
 		Name: "id",
 		Type: sqltypes.Int64,
 	}, {
-		Name: "time_scheduled",
-		Type: sqltypes.Int64,
-	}, {
 		Name: "message",
 		Type: sqltypes.VarChar,
 	}}
@@ -81,22 +75,15 @@ func TestMessage(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, wantFields, gotFields)
 
-	exec(t, conn, "insert into vitess_message(id, message) values(1, 'hello world')")
+	exec(t, conn, "insert into vitess_message(id, time_next, message) values(1, 1, 'hello world')")
 
 	// Consume first message.
 	start := time.Now().UnixNano()
 	got, err := streamConn.FetchNext()
 	require.NoError(t, err)
 
-	// Check time_scheduled separately.
-	scheduled, err := sqltypes.ToInt64(got[1])
-	require.NoError(t, err)
-	if now := time.Now().UnixNano(); now-scheduled >= int64(10*time.Second) {
-		t.Errorf("scheduled: %v, must be close to %v", scheduled, now)
-	}
 	want := []sqltypes.Value{
 		sqltypes.NewInt64(1),
-		got[1],
 		sqltypes.NewVarChar("hello world"),
 	}
 	assert.Equal(t, want, got)
@@ -147,16 +134,13 @@ func TestMessage(t *testing.T) {
 }
 
 var createThreeColMessage = `create table vitess_message3(
-	time_scheduled bigint,
 	id bigint,
 	time_next bigint,
 	epoch bigint,
-	time_created bigint,
 	time_acked bigint,
 	msg1 varchar(128),
 	msg2 bigint,
-	primary key(time_scheduled, id),
-	unique index id_idx(id),
+	primary key(id),
 	index next_idx(time_next, epoch))
 comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
 
@@ -187,9 +171,6 @@ func TestThreeColMessage(t *testing.T) {
 		Name: "id",
 		Type: sqltypes.Int64,
 	}, {
-		Name: "time_scheduled",
-		Type: sqltypes.Int64,
-	}, {
 		Name: "msg1",
 		Type: sqltypes.VarChar,
 	}, {
@@ -200,13 +181,12 @@ func TestThreeColMessage(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, wantFields, gotFields)
 
-	exec(t, conn, "insert into vitess_message3(id, msg1, msg2) values(1, 'hello world', 3)")
+	exec(t, conn, "insert into vitess_message3(id, time_next, msg1, msg2) values(1, 1, 'hello world', 3)")
 
 	got, err := streamConn.FetchNext()
 	require.NoError(t, err)
 	want := []sqltypes.Value{
 		sqltypes.NewInt64(1),
-		got[1],
 		sqltypes.NewVarChar("hello world"),
 		sqltypes.NewInt64(3),
 	}
@@ -218,28 +198,22 @@ func TestThreeColMessage(t *testing.T) {
 }
 
 var createMessageTopic1 = `create table vitess_topic_subscriber_1(
-	time_scheduled bigint,
 	id bigint,
 	time_next bigint,
 	epoch bigint,
-	time_created bigint,
 	time_acked bigint,
 	message varchar(128),
-	primary key(time_scheduled, id),
-	unique index id_idx(id),
+	primary key(id),
 	index next_idx(time_next, epoch))
 comment 'vitess_message,vt_topic=test_topic,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=1'`
 
 var createMessageTopic2 = `create table vitess_topic_subscriber_2(
-	time_scheduled bigint,
 	id bigint,
 	time_next bigint,
 	epoch bigint,
-	time_created bigint,
 	time_acked bigint,
 	message varchar(128),
-	primary key(time_scheduled, id),
-	unique index id_idx(id),
+	primary key(id),
 	index next_idx(time_next, epoch))
 comment 'vitess_message,vt_topic=test_topic,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=1'`
 
@@ -276,19 +250,16 @@ func TestMessageTopic(t *testing.T) {
 	err = streamConn2.ExecuteStreamFetch("stream * from vitess_topic_subscriber_2")
 	require.NoError(t, err)
 
-	exec(t, conn, "insert into test_topic(id, message) values(1, 'msg1'), (2, 'msg2'), (3, 'msg3')")
+	exec(t, conn, "insert into test_topic(id, time_next, message) values(1, 1, 'msg1'), (2, 1, 'msg2'), (3, 1, 'msg3')")
 
 	wantRows := [][]sqltypes.Value{{
 		sqltypes.NewInt64(1),
-		sqltypes.NULL,
 		sqltypes.NewVarChar("msg1"),
 	}, {
 		sqltypes.NewInt64(2),
-		sqltypes.NULL,
 		sqltypes.NewVarChar("msg2"),
 	}, {
 		sqltypes.NewInt64(3),
-		sqltypes.NULL,
 		sqltypes.NewVarChar("msg3"),
 	}}
 
@@ -299,7 +270,6 @@ func TestMessageTopic(t *testing.T) {
 		// make sure the first message table received all three messages
 		got1, err := streamConn1.FetchNext()
 		require.NoError(t, err)
-		got1[1] = sqltypes.NULL
 
 		// Results can come in any order.
 		found := false
@@ -313,7 +283,6 @@ func TestMessageTopic(t *testing.T) {
 		// make sure the second message table received all three messages
 		got2, err := streamConn2.FetchNext()
 		require.NoError(t, err)
-		got2[1] = sqltypes.NULL
 
 		// Results can come in any order.
 		found = false
@@ -340,19 +309,16 @@ func TestMessageTopic(t *testing.T) {
 	//
 
 	exec(t, conn, "drop table vitess_topic_subscriber_1")
-	exec(t, conn, "insert into test_topic(id, message) values(4, 'msg4'), (5, 'msg5'), (6, 'msg6')")
+	exec(t, conn, "insert into test_topic(id, time_next, message) values(4, 1, 'msg4'), (5, 1, 'msg5'), (6, 1, 'msg6')")
 
 	wantRows = [][]sqltypes.Value{{
 		sqltypes.NewInt64(4),
-		sqltypes.NULL,
 		sqltypes.NewVarChar("msg4"),
 	}, {
 		sqltypes.NewInt64(5),
-		sqltypes.NULL,
 		sqltypes.NewVarChar("msg5"),
 	}, {
 		sqltypes.NewInt64(6),
-		sqltypes.NULL,
 		sqltypes.NewVarChar("msg6"),
 	}}
 
@@ -362,7 +328,6 @@ func TestMessageTopic(t *testing.T) {
 		// make sure the second message table received all three messages
 		got2, err := streamConn2.FetchNext()
 		require.NoError(t, err)
-		got2[1] = sqltypes.NULL
 
 		// Results can come in any order.
 		found := false

@@ -142,9 +142,6 @@ func TestLoadTableMessage(t *testing.T) {
 				Name: "id",
 				Type: sqltypes.Int64,
 			}, {
-				Name: "time_scheduled",
-				Type: sqltypes.Int64,
-			}, {
 				Name: "message",
 				Type: sqltypes.VarBinary,
 			}},
@@ -196,9 +193,6 @@ func TestLoadTableMessageTopic(t *testing.T) {
 		MessageInfo: &MessageInfo{
 			Fields: []*querypb.Field{{
 				Name: "id",
-				Type: sqltypes.Int64,
-			}, {
-				Name: "time_scheduled",
 				Type: sqltypes.Int64,
 			}, {
 				Name: "message",
@@ -311,7 +305,7 @@ func getMessageTableQueries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
 		"select * from test_table where 1 != 1": {
 			Fields: []*querypb.Field{{
-				Name: "time_scheduled",
+				Name: "id",
 				Type: sqltypes.Int64,
 			}, {
 				Name: "time_next",
@@ -320,38 +314,29 @@ func getMessageTableQueries() map[string]*sqltypes.Result {
 				Name: "epoch",
 				Type: sqltypes.Int64,
 			}, {
-				Name: "time_created",
-				Type: sqltypes.Int64,
-			}, {
 				Name: "time_acked",
 				Type: sqltypes.Int64,
 			}, {
 				Name: "message",
 				Type: sqltypes.VarBinary,
-			}, {
-				Name: "id",
-				Type: sqltypes.Int64,
 			}},
 		},
 		"describe test_table": {
 			Fields:       mysql.DescribeTableFields,
 			RowsAffected: 7,
 			Rows: [][]sqltypes.Value{
-				mysql.DescribeTableRow("time_scheduled", "bigint(20)", false, "", "0"),
+				mysql.DescribeTableRow("id", "bigint(20)", false, "PRI", "0"),
 				mysql.DescribeTableRow("time_next", "bigint(20)", false, "", "0"),
 				mysql.DescribeTableRow("epoch", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("time_created", "bigint(20)", false, "", "0"),
 				mysql.DescribeTableRow("time_acked", "bigint(20)", false, "", "0"),
 				mysql.DescribeTableRow("message", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("id", "bigint(20)", false, "PRI", "0"),
 			},
 		},
 		"show index from test_table": {
 			Fields:       mysql.ShowIndexFromTableFields,
 			RowsAffected: 2,
 			Rows: [][]sqltypes.Value{
-				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "time_scheduled", false),
-				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 2, "id", false),
+				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "id", false),
 			},
 		},
 	}

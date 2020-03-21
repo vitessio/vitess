@@ -196,14 +196,6 @@ func TestMessageStreamingPlan(t *testing.T) {
 	}
 }
 
-func matchString(t *testing.T, line int, expected interface{}, actual string) {
-	if expected != nil {
-		if expected.(string) != actual {
-			t.Errorf("Line %d: expected: %v, received %s", line, expected, actual)
-		}
-	}
-}
-
 func loadSchema(name string) map[string]*schema.Table {
 	b, err := ioutil.ReadFile(locateFile(name))
 	if err != nil {

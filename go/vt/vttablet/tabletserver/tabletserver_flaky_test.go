@@ -2088,20 +2088,6 @@ func TestMessageAck(t *testing.T) {
 		t.Errorf("tsv.MessageAck(invalid):\n%v, want\n%s", err, want)
 	}
 
-	db.AddQuery(
-		"select time_scheduled, id from msg where id in ('1', '2') and time_acked is null limit 10001 for update",
-		&sqltypes.Result{
-			Fields: []*querypb.Field{
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-			},
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{{
-				sqltypes.NewVarBinary("1"),
-				sqltypes.NewVarBinary("1"),
-			}},
-		},
-	)
 	db.AddQueryPattern("update msg set time_acked = .*", &sqltypes.Result{RowsAffected: 1})
 	count, err := tsv.MessageAck(ctx, &target, "msg", ids)
 	require.NoError(t, err)
@@ -2128,21 +2114,6 @@ func TestRescheduleMessages(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("tsv.PostponeMessages(invalid):\n%v, want\n%s", err, want)
 	}
-
-	db.AddQuery(
-		"select time_scheduled, id from msg where id in ('1', '2') and time_acked is null limit 10001 for update",
-		&sqltypes.Result{
-			Fields: []*querypb.Field{
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-			},
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{{
-				sqltypes.NewVarBinary("1"),
-				sqltypes.NewVarBinary("1"),
-			}},
-		},
-	)
 	db.AddQueryPattern("update msg set time_next = .*", &sqltypes.Result{RowsAffected: 1})
 	count, err := tsv.PostponeMessages(ctx, &target, "msg", []string{"1", "2"})
 	require.NoError(t, err)
@@ -2165,26 +2136,12 @@ func TestPurgeMessages(t *testing.T) {
 	}
 
 	_, err = tsv.PurgeMessages(ctx, &target, "msg", 0)
-	want = "query: 'delete from msg where time_scheduled"
+	want = "query: 'delete from msg where time_acked"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("tsv.PurgeMessages(invalid):\n%v, want\n%s", err, want)
 	}
 
-	db.AddQuery(
-		"select time_scheduled, id from msg where time_scheduled < 3 and time_acked is not null limit 500 for update",
-		&sqltypes.Result{
-			Fields: []*querypb.Field{
-				{Type: sqltypes.Int64},
-				{Type: sqltypes.Int64},
-			},
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{{
-				sqltypes.NewVarBinary("1"),
-				sqltypes.NewVarBinary("1"),
-			}},
-		},
-	)
-	db.AddQuery("delete from msg where time_scheduled < 3 and time_acked is not null limit 500", &sqltypes.Result{RowsAffected: 1})
+	db.AddQuery("delete from msg where time_acked < 3 limit 500", &sqltypes.Result{RowsAffected: 1})
 	count, err := tsv.PurgeMessages(ctx, &target, "msg", 3)
 	require.NoError(t, err)
 	if count != 1 {
@@ -2706,9 +2663,6 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 		},
 		"select * from msg where 1 != 1": {
 			Fields: []*querypb.Field{{
-				Name: "time_scheduled",
-				Type: sqltypes.Int32,
-			}, {
 				Name: "id",
 				Type: sqltypes.Int64,
 			}, {
@@ -2716,9 +2670,6 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				Type: sqltypes.Int64,
 			}, {
 				Name: "epoch",
-				Type: sqltypes.Int64,
-			}, {
-				Name: "time_created",
 				Type: sqltypes.Int64,
 			}, {
 				Name: "time_acked",
@@ -2732,11 +2683,9 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			Fields:       mysql.DescribeTableFields,
 			RowsAffected: 4,
 			Rows: [][]sqltypes.Value{
-				mysql.DescribeTableRow("time_scheduled", "int(11)", false, "", "0"),
 				mysql.DescribeTableRow("id", "bigint(20)", false, "", "0"),
 				mysql.DescribeTableRow("time_next", "bigint(20)", false, "", "0"),
 				mysql.DescribeTableRow("epoch", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("time_created", "bigint(20)", false, "", "0"),
 				mysql.DescribeTableRow("time_acked", "bigint(20)", false, "", "0"),
 				mysql.DescribeTableRow("message", "bigint(20)", false, "", "0"),
 			},
@@ -2745,8 +2694,7 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			Fields:       mysql.ShowIndexFromTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				mysql.ShowIndexFromTableRow("msg", true, "PRIMARY", 1, "time_scheduled", false),
-				mysql.ShowIndexFromTableRow("msg", true, "PRIMARY", 2, "id", false),
+				mysql.ShowIndexFromTableRow("msg", true, "PRIMARY", 1, "id", false),
 			},
 		},
 		mysql.BaseShowTablesForTable("msg"): {

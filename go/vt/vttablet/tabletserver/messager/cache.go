@@ -28,10 +28,9 @@ import (
 // MessageRow represents a message row.
 // The first column in Row is always the "id".
 type MessageRow struct {
-	TimeNext    int64
-	Epoch       int64
-	TimeCreated int64
-	Row         []sqltypes.Value
+	TimeNext int64
+	Epoch    int64
+	Row      []sqltypes.Value
 
 	// defunct is set if the row was asked to be removed
 	// from cache.

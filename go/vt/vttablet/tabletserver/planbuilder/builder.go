@@ -153,50 +153,6 @@ func analyzeInsertMessage(ins *sqlparser.Insert, plan *Plan, table *schema.Table
 		}
 	}
 
-	// Perform message specific processing first, because we may be
-	// adding values that address the primary key.
-	timeNow := sqlparser.NewValArg([]byte(":#time_now"))
-
-	col := sqlparser.NewColIdent("time_scheduled")
-	scheduleIndex := ins.Columns.FindColumn(col)
-	if scheduleIndex == -1 {
-		scheduleIndex = addVal(ins, col, timeNow)
-	}
-
-	// time_next should be the same as time_scheduled.
-	col = sqlparser.NewColIdent("time_next")
-	num := ins.Columns.FindColumn(col)
-	if num != -1 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s must not be specified for message insert", col.String())
-	}
-	_ = copyVal(ins, col, scheduleIndex)
-
-	// time_created should always be now.
-	col = sqlparser.NewColIdent("time_created")
-	if num := ins.Columns.FindColumn(col); num >= 0 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s must not be specified for message insert", col.String())
-	}
-	_ = addVal(ins, col, timeNow)
-
-	// epoch should always be 0.
-	col = sqlparser.NewColIdent("epoch")
-	if num := ins.Columns.FindColumn(col); num >= 0 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s must not be specified for message insert", col.String())
-	}
-	_ = addVal(ins, col, sqlparser.NewIntVal([]byte("0")))
-
-	// time_acked should not be specified.
-	col = sqlparser.NewColIdent("time_acked")
-	if num := ins.Columns.FindColumn(col); num >= 0 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s must not be specified for message insert", col.String())
-	}
-
-	col = sqlparser.NewColIdent("id")
-	num = ins.Columns.FindColumn(col)
-	if num < 0 {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%s must be specified for message insert", col.String())
-	}
-
 	plan.PlanID = PlanInsertMessage
 	plan.FullQuery = GenerateFullQuery(ins)
 	return plan, nil
@@ -222,22 +178,4 @@ func lookupTable(tableExprs sqlparser.TableExprs, tables map[string]*schema.Tabl
 		return nil
 	}
 	return tables[tableName.String()]
-}
-
-func addVal(ins *sqlparser.Insert, col sqlparser.ColIdent, expr sqlparser.Expr) int {
-	ins.Columns = append(ins.Columns, col)
-	rows := ins.Rows.(sqlparser.Values)
-	for i := range rows {
-		rows[i] = append(rows[i], expr)
-	}
-	return len(ins.Columns) - 1
-}
-
-func copyVal(ins *sqlparser.Insert, col sqlparser.ColIdent, colIndex int) int {
-	ins.Columns = append(ins.Columns, col)
-	rows := ins.Rows.(sqlparser.Values)
-	for i := range rows {
-		rows[i] = append(rows[i], rows[i][colIndex])
-	}
-	return len(ins.Columns) - 1
 }
