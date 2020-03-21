@@ -1241,6 +1241,52 @@ func TestNoFutureGTID(t *testing.T) {
 	}
 }
 
+func TestFilteredMultipleWhere(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	execStatements(t, []string{
+		"create table t1(id1 int, id2 int, id3 int, val varbinary(128), primary key(id1))",
+	})
+	defer execStatements(t, []string{
+		"drop table t1",
+	})
+	engine.se.Reload(context.Background())
+
+	setVSchema(t, shardedVSchema)
+	defer env.SetVSchema("{}")
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match:  "t1",
+			Filter: "select id1, val from t1 where in_keyrange('-80') and id2 = 200 and id3 = 1000 and val = 'newton'",
+		}},
+	}
+
+	testcases := []testcase{{
+		input: []string{
+			"begin",
+			"insert into t1 values (1, 100, 1000, 'kepler')",
+			"insert into t1 values (2, 200, 1000, 'newton')",
+			"insert into t1 values (3, 100, 2000, 'kepler')",
+			"insert into t1 values (128, 200, 1000, 'newton')",
+			"insert into t1 values (5, 200, 2000, 'kepler')",
+			"insert into t1 values (129, 200, 1000, 'kepler')",
+			"commit",
+		},
+		output: [][]string{{
+			`begin`,
+			`type:FIELD field_event:<table_name:"t1" fields:<name:"id1" type:INT32 > fields:<name:"val" type:VARBINARY > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:1 lengths:6 values:"2newton" > > > `,
+			`type:ROW row_event:<table_name:"t1" row_changes:<after:<lengths:3 lengths:6 values:"128newton" > > > `,
+			`gtid`,
+			`commit`,
+		}},
+	}}
+	runCases(t, filter, testcases, "")
+}
+
 func runCases(t *testing.T, filter *binlogdatapb.Filter, testcases []testcase, position string) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
