@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 // PacketSize is the suggested packet size for VReplication streamer.
@@ -544,12 +545,12 @@ func (vs *vstreamer) buildJournalPlan(id uint64, tm *mysql.TableMap) error {
 	if err != nil {
 		return err
 	}
-	if len(st.Columns) < len(tm.Types) {
-		return fmt.Errorf("cannot determine table columns for %s: event has %v, schema as %v", tm.Name, tm.Types, st.Columns)
+	if len(st.Fields) < len(tm.Types) {
+		return fmt.Errorf("cannot determine table columns for %s: event has %v, schema as %v", tm.Name, tm.Types, st.Fields)
 	}
 	table := &Table{
-		Name:    "_vt.resharding_journal",
-		Columns: st.Columns[:len(tm.Types)],
+		Name:   "_vt.resharding_journal",
+		Fields: st.Fields[:len(tm.Types)],
 	}
 	// Build a normal table plan, which means, return all rows
 	// and columns as is. Special handling is done when we actually
@@ -573,8 +574,8 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 	}
 
 	table := &Table{
-		Name:    tm.Name,
-		Columns: cols,
+		Name:   tm.Name,
+		Fields: cols,
 	}
 	plan, err := buildPlan(table, vs.vschema, vs.filter)
 	if err != nil {
@@ -597,15 +598,15 @@ func (vs *vstreamer) buildTablePlan(id uint64, tm *mysql.TableMap) (*binlogdatap
 	}, nil
 }
 
-func (vs *vstreamer) buildTableColumns(id uint64, tm *mysql.TableMap) ([]schema.TableColumn, error) {
-	var cols []schema.TableColumn
+func (vs *vstreamer) buildTableColumns(id uint64, tm *mysql.TableMap) ([]*querypb.Field, error) {
+	var fields []*querypb.Field
 	for i, typ := range tm.Types {
 		t, err := sqltypes.MySQLToType(int64(typ), 0)
 		if err != nil {
 			return nil, fmt.Errorf("unsupported type: %d, position: %d", typ, i)
 		}
-		cols = append(cols, schema.TableColumn{
-			Name: sqlparser.NewColIdent(fmt.Sprintf("@%d", i+1)),
+		fields = append(fields, &querypb.Field{
+			Name: fmt.Sprintf("@%d", i+1),
 			Type: t,
 		})
 	}
@@ -615,26 +616,26 @@ func (vs *vstreamer) buildTableColumns(id uint64, tm *mysql.TableMap) ([]schema.
 		if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
 			return nil, fmt.Errorf("unknown table %v in schema", tm.Name)
 		}
-		return cols, nil
+		return fields, nil
 	}
 
-	if len(st.Columns) < len(tm.Types) {
+	if len(st.Fields) < len(tm.Types) {
 		if vs.filter.FieldEventMode == binlogdatapb.Filter_ERR_ON_MISMATCH {
-			return nil, fmt.Errorf("cannot determine table columns for %s: event has %v, schema as %v", tm.Name, tm.Types, st.Columns)
+			return nil, fmt.Errorf("cannot determine table columns for %s: event has %v, schema as %v", tm.Name, tm.Types, st.Fields)
 		}
-		return cols, nil
+		return fields, nil
 	}
 
 	// check if the schema returned by schema.Engine matches with row.
 	for i := range tm.Types {
-		if !sqltypes.AreTypesEquivalent(cols[i].Type, st.Columns[i].Type) {
-			return cols, nil
+		if !sqltypes.AreTypesEquivalent(fields[i].Type, st.Fields[i].Type) {
+			return fields, nil
 		}
 	}
 
 	// Columns should be truncated to match those in tm.
-	cols = st.Columns[:len(tm.Types)]
-	return cols, nil
+	fields = st.Fields[:len(tm.Types)]
+	return fields, nil
 }
 
 func (vs *vstreamer) processJounalEvent(vevents []*binlogdatapb.VEvent, plan *streamerPlan, rows mysql.Rows) ([]*binlogdatapb.VEvent, error) {
@@ -745,7 +746,7 @@ func (vs *vstreamer) extractRowAndFilter(plan *streamerPlan, data []byte, dataCo
 			valueIndex++
 			continue
 		}
-		value, l, err := mysql.CellValue(data, pos, plan.TableMap.Types[colNum], plan.TableMap.Metadata[colNum], plan.Table.Columns[colNum].Type)
+		value, l, err := mysql.CellValue(data, pos, plan.TableMap.Types[colNum], plan.TableMap.Metadata[colNum], plan.Table.Fields[colNum].Type)
 		if err != nil {
 			return false, nil, err
 		}

@@ -94,38 +94,17 @@ func Queries() map[string]*sqltypes.Result {
 				Type: sqltypes.Int32,
 			}},
 		},
-		"describe test_table_01": {
-			Fields:       mysql.DescribeTableFields,
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				mysql.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
-			},
-		},
 		"select * from test_table_02 where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
 			}},
 		},
-		"describe test_table_02": {
-			Fields:       mysql.DescribeTableFields,
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				mysql.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
-			},
-		},
 		"select * from test_table_03 where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
 			}},
-		},
-		"describe test_table_03": {
-			Fields:       mysql.DescribeTableFields,
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				mysql.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
-			},
 		},
 		"show index from test_table_01": {
 			Fields:       mysql.ShowIndexFromTableFields,
@@ -165,17 +144,6 @@ func Queries() map[string]*sqltypes.Result {
 				Name: "message",
 				Type: sqltypes.Int64,
 			}},
-		},
-		"describe msg": {
-			Fields:       mysql.DescribeTableFields,
-			RowsAffected: 7,
-			Rows: [][]sqltypes.Value{
-				mysql.DescribeTableRow("id", "bigint(20)", false, "PRI", "0"),
-				mysql.DescribeTableRow("time_next", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("epoch", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("time_acked", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("message", "bigint(20)", false, "", "0"),
-			},
 		},
 		"show index from msg": {
 			Fields:       mysql.ShowIndexFromTableFields,

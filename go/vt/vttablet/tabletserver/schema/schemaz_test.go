@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestSchamazHandler(t *testing.T) {
@@ -35,11 +36,11 @@ func TestSchamazHandler(t *testing.T) {
 	tableC := NewTable("c")
 	tableD := NewTable("c")
 
-	tableA.AddColumn("column1", sqltypes.Int64, sqltypes.NewInt32(0), "auto_increment")
+	tableA.Fields = append(tableA.Fields, &querypb.Field{Name: "column1", Type: sqltypes.Int64})
 	tableA.AddIndex("index1", true).AddColumn("index_column", 1000)
 	tableA.Type = NoType
 
-	tableB.AddColumn("column2", sqltypes.VarChar, sqltypes.NewVarBinary("NULL"), "")
+	tableB.Fields = append(tableB.Fields, &querypb.Field{Name: "column2", Type: sqltypes.VarChar})
 	tableB.AddIndex("index2", false).AddColumn("index_column2", 200)
 	tableB.Type = Sequence
 
@@ -55,7 +56,7 @@ func TestSchamazHandler(t *testing.T) {
 	body, _ := ioutil.ReadAll(resp.Body)
 	tableAPattern := []string{
 		`<td>a</td>`,
-		`<td>column1: INT64, autoinc, <br></td>`,
+		`<td>column1: INT64<br></td>`,
 		`<td>index1\(unique\): \(index_column,\), \(1000,\)<br></td>`,
 		`<td>none</td>`,
 	}
@@ -64,11 +65,11 @@ func TestSchamazHandler(t *testing.T) {
 		t.Fatalf("schemaz page does not contain table A with error: %v", err)
 	}
 	if !matched {
-		t.Fatal("schemaz page does not contain table A")
+		t.Fatalf("schemaz page does not contain table A: %s", body)
 	}
 	tableBPattern := []string{
 		`<td>b</td>`,
-		`<td>column2: VARCHAR, , NULL<br></td>`,
+		`<td>column2: VARCHAR<br></td>`,
 		`<td>index2: \(index_column2,\), \(200,\)<br></td>`,
 		`<td>sequence</td>`,
 	}

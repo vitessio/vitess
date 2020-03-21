@@ -28,56 +28,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
-// testDescribeTable makes sure the fields returned by 'describe <table>'
-// are what we expect.
-func testDescribeTable(t *testing.T) {
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &connParams)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
-
-	// Note this specific table sets a default '0' for the 'id' column.
-	// This is because without this, we have exceptions:
-	// - MariaDB and MySQL 5.6 return '0' as default.
-	// - MySQL 5.7 returns NULL as default.
-	// So we explicitly set it, to avoid having to check both cases below.
-	if _, err := conn.ExecuteFetch("create table for_describe(id int default 0, name varchar(128), primary key(id))", 0, false); err != nil {
-		t.Fatal(err)
-	}
-
-	result, err := conn.ExecuteFetch("describe for_describe", 10, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Zero-out the column lengths, because they can't be compared.
-	for i := range result.Fields {
-		result.Fields[i].ColumnLength = 0
-	}
-
-	if !sqltypes.FieldsEqual(result.Fields, mysql.DescribeTableFields) {
-		for i, f := range result.Fields {
-			if !proto.Equal(f, mysql.DescribeTableFields[i]) {
-				t.Logf("result.Fields[%v] = %v", i, f)
-				t.Logf("        expected = %v", mysql.DescribeTableFields[i])
-			}
-		}
-		t.Errorf("Fields returned by 'describe' differ from expected fields: got:\n%v\nexpected:\n%v", result.Fields, mysql.DescribeTableFields)
-	}
-
-	want := mysql.DescribeTableRow("id", "int(11)", false, "PRI", "0")
-	if !reflect.DeepEqual(result.Rows[0], want) {
-		t.Errorf("Row[0] returned by 'describe' differ from expected content: got:\n%v\nexpected:\n%v", RowString(result.Rows[0]), RowString(want))
-	}
-
-	want = mysql.DescribeTableRow("name", "varchar(128)", true, "", "")
-	if !reflect.DeepEqual(result.Rows[1], want) {
-		t.Errorf("Row[1] returned by 'describe' differ from expected content: got:\n%v\nexpected:\n%v", RowString(result.Rows[1]), RowString(want))
-	}
-}
-
 // testShowIndexFromTable makes sure the fields returned by 'show index from <table>'
 // are what we expect.
 func testShowIndexFromTable(t *testing.T) {
@@ -189,10 +139,6 @@ func RowString(row []sqltypes.Value) string {
 
 // TestSchema runs all the schema tests.
 func TestSchema(t *testing.T) {
-	t.Run("DescribeTable", func(t *testing.T) {
-		testDescribeTable(t)
-	})
-
 	t.Run("ShowIndexFromTable", func(t *testing.T) {
 		testShowIndexFromTable(t)
 	})

@@ -2635,16 +2635,6 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				Type: sqltypes.VarChar,
 			}},
 		},
-		"describe test_table": {
-			Fields:       mysql.DescribeTableFields,
-			RowsAffected: 4,
-			Rows: [][]sqltypes.Value{
-				mysql.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
-				mysql.DescribeTableRow("name", "int(11)", false, "", "0"),
-				mysql.DescribeTableRow("addr", "int(11)", false, "", "0"),
-				mysql.DescribeTableRow("name_string", "varchar(10)", false, "", "foo"),
-			},
-		},
 		mysql.BaseShowTablesForTable("test_table"): {
 			Fields:       mysql.BaseShowTablesFields,
 			RowsAffected: 1,
@@ -2678,17 +2668,6 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				Name: "message",
 				Type: sqltypes.Int64,
 			}},
-		},
-		"describe msg": {
-			Fields:       mysql.DescribeTableFields,
-			RowsAffected: 4,
-			Rows: [][]sqltypes.Value{
-				mysql.DescribeTableRow("id", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("time_next", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("epoch", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("time_acked", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("message", "bigint(20)", false, "", "0"),
-			},
 		},
 		"show index from msg": {
 			Fields:       mysql.ShowIndexFromTableFields,

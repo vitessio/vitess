@@ -1210,15 +1210,6 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 				Type: sqltypes.Int32,
 			}},
 		},
-		"describe test_table": {
-			Fields:       mysql.DescribeTableFields,
-			RowsAffected: 3,
-			Rows: [][]sqltypes.Value{
-				mysql.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
-				mysql.DescribeTableRow("name", "int(11)", false, "", "0"),
-				mysql.DescribeTableRow("addr", "int(11)", false, "", "0"),
-			},
-		},
 		"show index from test_table": {
 			Fields:       mysql.ShowIndexFromTableFields,
 			RowsAffected: 2,
@@ -1252,16 +1243,6 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 				Type: sqltypes.Int64,
 			}},
 		},
-		"describe seq": {
-			Fields:       mysql.DescribeTableFields,
-			RowsAffected: 4,
-			Rows: [][]sqltypes.Value{
-				mysql.DescribeTableRow("id", "int(11)", false, "PRI", "0"),
-				mysql.DescribeTableRow("next_id", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("cache", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("increment", "bigint(20)", false, "", "0"),
-			},
-		},
 		"show index from seq": {
 			Fields:       mysql.ShowIndexFromTableFields,
 			RowsAffected: 1,
@@ -1293,17 +1274,6 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 				Name: "message",
 				Type: sqltypes.Int64,
 			}},
-		},
-		"describe msg": {
-			Fields:       mysql.DescribeTableFields,
-			RowsAffected: 7,
-			Rows: [][]sqltypes.Value{
-				mysql.DescribeTableRow("id", "bigint(20)", false, "PRI", "0"),
-				mysql.DescribeTableRow("time_next", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("epoch", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("time_acked", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("message", "bigint(20)", false, "", "0"),
-			},
 		},
 		"show index from msg": {
 			Fields:       mysql.ShowIndexFromTableFields,

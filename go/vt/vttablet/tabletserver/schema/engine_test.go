@@ -186,13 +186,6 @@ func TestReload(t *testing.T) {
 			Type: sqltypes.Int32,
 		}},
 	})
-	db.AddQuery("describe test_table_04", &sqltypes.Result{
-		Fields:       mysql.DescribeTableFields,
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			mysql.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
-		},
-	})
 	db.AddQuery("show index from test_table_04", &sqltypes.Result{
 		Fields:       mysql.ShowIndexFromTableFields,
 		RowsAffected: 1,
@@ -324,14 +317,6 @@ func TestUpdatedMysqlStats(t *testing.T) {
 			Name: "pk",
 			Type: sqltypes.Int32,
 		}},
-	})
-	q = fmt.Sprintf("describe %s", tableName)
-	db.AddQuery(q, &sqltypes.Result{
-		Fields:       mysql.DescribeTableFields,
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			mysql.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
-		},
 	})
 	q = fmt.Sprintf("show index from %s", tableName)
 	db.AddQuery(q, &sqltypes.Result{

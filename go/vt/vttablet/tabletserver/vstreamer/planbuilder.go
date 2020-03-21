@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -71,8 +70,8 @@ type ColExpr struct {
 
 // Table contains the metadata for a table.
 type Table struct {
-	Name    string
-	Columns []schema.TableColumn
+	Name   string
+	Fields []*querypb.Field
 }
 
 // fields returns the fields for the plan.
@@ -226,10 +225,10 @@ func buildREPlan(ti *Table, vschema *localVSchema, filter string) (*Plan, error)
 	plan := &Plan{
 		Table: ti,
 	}
-	plan.ColExprs = make([]ColExpr, len(ti.Columns))
-	for i, col := range ti.Columns {
+	plan.ColExprs = make([]ColExpr, len(ti.Fields))
+	for i, col := range ti.Fields {
 		plan.ColExprs[i].ColNum = i
-		plan.ColExprs[i].Alias = col.Name
+		plan.ColExprs[i].Alias = sqlparser.NewColIdent(col.Name)
 		plan.ColExprs[i].Type = col.Type
 	}
 	if filter == "" {
@@ -331,10 +330,10 @@ func (plan *Plan) analyzeExprs(vschema *localVSchema, selExprs sqlparser.SelectE
 		if len(selExprs) != 1 {
 			return fmt.Errorf("unsupported: %v", sqlparser.String(selExprs))
 		}
-		plan.ColExprs = make([]ColExpr, len(plan.Table.Columns))
-		for i, col := range plan.Table.Columns {
+		plan.ColExprs = make([]ColExpr, len(plan.Table.Fields))
+		for i, col := range plan.Table.Fields {
 			plan.ColExprs[i].ColNum = i
-			plan.ColExprs[i].Alias = col.Name
+			plan.ColExprs[i].Alias = sqlparser.NewColIdent(col.Name)
 			plan.ColExprs[i].Type = col.Type
 		}
 	}
@@ -362,7 +361,7 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 		return ColExpr{
 			ColNum: colnum,
 			Alias:  as,
-			Type:   plan.Table.Columns[colnum].Type,
+			Type:   plan.Table.Fields[colnum].Type,
 		}, nil
 	case *sqlparser.FuncExpr:
 		if inner.Name.Lowered() != "keyspace_id" {
@@ -484,8 +483,8 @@ func buildVindexColumns(ti *Table, colnames []sqlparser.ColIdent) ([]int, error)
 }
 
 func findColumn(ti *Table, name sqlparser.ColIdent) (int, error) {
-	for i, col := range ti.Columns {
-		if name.Equal(col.Name) {
+	for i, col := range ti.Fields {
+		if name.EqualString(col.Name) {
 			return i, nil
 		}
 	}

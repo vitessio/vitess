@@ -61,7 +61,7 @@ func TestLoadTable(t *testing.T) {
 	if idx := table.Indexes[0].FindColumn(sqlparser.NewColIdent("none")); idx != -1 {
 		t.Errorf("table.Indexes[0].FindColumn(none): %d, want 0", idx)
 	}
-	if name := table.GetPKColumn(0).Name.String(); name != "pk" {
+	if name := table.GetPKColumn(0).Name; name != "pk" {
 		t.Errorf("table.GetPKColumn(0): %s, want pk", name)
 	}
 	if unique := table.Indexes[0].Unique; unique != true {
@@ -116,7 +116,7 @@ func TestLoadTableSequence(t *testing.T) {
 		Type:         Sequence,
 		SequenceInfo: &SequenceInfo{},
 	}
-	table.Columns = nil
+	table.Fields = nil
 	table.Indexes = nil
 	table.PKColumns = nil
 	if !reflect.DeepEqual(table, want) {
@@ -152,7 +152,7 @@ func TestLoadTableMessage(t *testing.T) {
 			PollInterval:       30 * time.Second,
 		},
 	}
-	table.Columns = nil
+	table.Fields = nil
 	table.Indexes = nil
 	table.PKColumns = nil
 	if !reflect.DeepEqual(table, want) {
@@ -206,7 +206,7 @@ func TestLoadTableMessageTopic(t *testing.T) {
 			Topic:              "test_topic",
 		},
 	}
-	table.Columns = nil
+	table.Fields = nil
 	table.Indexes = nil
 	table.PKColumns = nil
 	if !reflect.DeepEqual(table, want) {
@@ -228,22 +228,6 @@ func TestLoadTableMessageTopic(t *testing.T) {
 	wanterr = "missing from message table: test_table"
 	if err == nil || !strings.Contains(err.Error(), wanterr) {
 		t.Errorf("newTestLoadTable: %v, must contain %s", err, wanterr)
-	}
-}
-
-func TestLoadTableWithBitColumn(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	for query, result := range getTestLoadTableWithBitColumnQueries() {
-		db.AddQuery(query, result)
-	}
-	table, err := newTestLoadTable("USER_TABLE", "test table", db)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantValue := sqltypes.MakeTrusted(sqltypes.Bit, []byte{1, 0, 1})
-	if got, want := table.Columns[1].Default, wantValue; !reflect.DeepEqual(got, want) {
-		t.Errorf("Default bit value: %v, want %v", got, want)
 	}
 }
 
@@ -276,15 +260,6 @@ func getTestLoadTableQueries() map[string]*sqltypes.Result {
 				Name: "addr",
 				Type: sqltypes.Int32,
 			}},
-		},
-		"describe test_table": {
-			Fields:       mysql.DescribeTableFields,
-			RowsAffected: 3,
-			Rows: [][]sqltypes.Value{
-				mysql.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
-				mysql.DescribeTableRow("name", "int(11)", false, "", "0"),
-				mysql.DescribeTableRow("addr", "int(11)", false, "", "0"),
-			},
 		},
 		"show index from test_table": {
 			Fields:       mysql.ShowIndexFromTableFields,
@@ -321,58 +296,11 @@ func getMessageTableQueries() map[string]*sqltypes.Result {
 				Type: sqltypes.VarBinary,
 			}},
 		},
-		"describe test_table": {
-			Fields:       mysql.DescribeTableFields,
-			RowsAffected: 7,
-			Rows: [][]sqltypes.Value{
-				mysql.DescribeTableRow("id", "bigint(20)", false, "PRI", "0"),
-				mysql.DescribeTableRow("time_next", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("epoch", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("time_acked", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("message", "bigint(20)", false, "", "0"),
-			},
-		},
 		"show index from test_table": {
 			Fields:       mysql.ShowIndexFromTableFields,
 			RowsAffected: 2,
 			Rows: [][]sqltypes.Value{
 				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "id", false),
-			},
-		},
-	}
-}
-
-func getTestLoadTableWithBitColumnQueries() map[string]*sqltypes.Result {
-	return map[string]*sqltypes.Result{
-		"select * from test_table where 1 != 1": {
-			Fields: []*querypb.Field{{
-				Name: "pk",
-				Type: sqltypes.Int32,
-			}, {
-				Name: "flags",
-				Type: sqltypes.Bit,
-			}},
-		},
-		"describe test_table": {
-			Fields:       mysql.DescribeTableFields,
-			RowsAffected: 2,
-			Rows: [][]sqltypes.Value{
-				mysql.DescribeTableRow("pk", "int(11)", false, "PRI", "0"),
-				mysql.DescribeTableRow("flags", "int(11)", false, "", "b'101'"),
-			},
-		},
-		"show index from test_table": {
-			Fields:       mysql.ShowIndexFromTableFields,
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false),
-			},
-		},
-		"select b'101'": {
-			Fields:       sqltypes.MakeTestFields("", "varbinary"),
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				{sqltypes.MakeTrusted(sqltypes.VarBinary, []byte{1, 0, 1})},
 			},
 		},
 	}
