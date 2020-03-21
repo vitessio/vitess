@@ -312,32 +312,6 @@
   "FullQuery": "insert into test_topic(time_scheduled, id, message) values (1, 2, 'aa')"
 }
 
-# message insert with time_scheduled specified
-"insert into msg(time_scheduled, id, message) values(1, 2, 'aa')"
-{
-  "PlanID": "InsertMessage",
-  "TableName": "msg",
-  "Permissions": [
-    {
-      "TableName": "msg",
-      "Role": 1
-    } 
-  ],
-  "FullQuery": "insert into msg(time_scheduled, id, message) values (1, 2, 'aa')"
-} 
-
-# message insert subquery
-"insert into msg(time_scheduled, id, message) select * from a"
-"subquery not allowed for message table: msg"
-
-# message insert without column list
-"insert into msg values(1)"
-"column list must be specified for message table insert: msg"
-
-# message column count mismatch
-"insert into msg(id, message) values(1)"
-"column count doesn't match value count"
-
 # replace
 "replace into b (eid, id) values (1, 2), (3, 4)"
 {
