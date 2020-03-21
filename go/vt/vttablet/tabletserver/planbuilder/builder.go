@@ -77,7 +77,7 @@ func analyzeUpdate(upd *sqlparser.Update, tables map[string]*schema.Table) (plan
 	// Situations when we pass-through:
 	// PassthroughDMLs flag is set.
 	// plan.Table==nil: it's likely a multi-table statement. MySQL doesn't allow limit clauses for multi-table dmls.
-	// If there's an explicity Limit.
+	// If there's an explicit Limit.
 	if PassthroughDMLs || plan.Table == nil || upd.Limit != nil {
 		plan.FullQuery = GenerateFullQuery(upd)
 		return plan, nil
