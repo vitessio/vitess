@@ -233,7 +233,7 @@ func newMessageManager(tsv TabletService, vs VStreamer, table *schema.Table, pos
 	mm.cond.L = &mm.mu
 
 	columnList := buildSelectColumnList(table)
-	vsQuery := fmt.Sprintf("select time_next, epoch, %s from %v", columnList, mm.name)
+	vsQuery := fmt.Sprintf("select time_next, epoch, time_acked, %s from %v", columnList, mm.name)
 	mm.vsFilter = &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  table.Name.String(),
@@ -241,7 +241,7 @@ func newMessageManager(tsv TabletService, vs VStreamer, table *schema.Table, pos
 		}},
 	}
 	mm.readByTimeNext = sqlparser.BuildParsedQuery(
-		"select time_next, epoch, %s from %v where time_next < %a order by time_next desc limit %a",
+		"select time_next, epoch, time_acked, %s from %v where time_next < %a order by time_next desc limit %a",
 		columnList, mm.name, ":time_next", ":max")
 	mm.ackQuery = sqlparser.BuildParsedQuery(
 		"update %v set time_acked = %a, time_next = null where id in %a and time_acked is null",
@@ -671,9 +671,7 @@ func (mm *messageManager) processRowEvent(fields []*querypb.Field, rowEvent *bin
 		if err != nil {
 			return err
 		}
-		// timeNext will be zero for acked messages.
-		// So, they should not be sent.
-		if mr.TimeNext == 0 || mr.TimeNext > now {
+		if mr.TimeAcked != 0 || mr.TimeNext > now {
 			continue
 		}
 		mm.Add(mr)
@@ -810,7 +808,7 @@ func (mm *messageManager) GeneratePurgeQuery(timeCutoff int64) (string, map[stri
 
 // BuildMessageRow builds a MessageRow for a db row.
 func BuildMessageRow(row []sqltypes.Value) (*MessageRow, error) {
-	mr := &MessageRow{Row: row[2:]}
+	mr := &MessageRow{Row: row[3:]}
 	if !row[0].IsNull() {
 		v, err := sqltypes.ToInt64(row[0])
 		if err != nil {
@@ -824,6 +822,13 @@ func BuildMessageRow(row []sqltypes.Value) (*MessageRow, error) {
 			return nil, err
 		}
 		mr.Epoch = v
+	}
+	if !row[2].IsNull() {
+		v, err := sqltypes.ToInt64(row[2])
+		if err != nil {
+			return nil, err
+		}
+		mr.TimeAcked = v
 	}
 	return mr, nil
 }

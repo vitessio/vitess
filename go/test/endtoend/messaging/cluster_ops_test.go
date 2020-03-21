@@ -82,7 +82,7 @@ func TestRepareting(t *testing.T) {
 	assert.Equal(t, 1, getClientCount(shard0Replica))
 	assert.Equal(t, 1, getClientCount(shard1Master))
 	session := stream.Session("@master", nil)
-	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, time_next, message) values (3,1,'hello world 3')")
+	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (3,'hello world 3')")
 
 	// validate that we have received inserted message
 	stream.Next()
@@ -141,8 +141,8 @@ func TestConnection(t *testing.T) {
 	// in message stream
 	session := stream.Session("@master", nil)
 	// insert data in master
-	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, time_next, message) values (2,1,'hello world 2')")
-	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, time_next, message) values (5,1,'hello world 5')")
+	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (2,'hello world 2')")
+	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into sharded_message (id, message) values (5,'hello world 5')")
 	// validate in msg stream
 	_, err = stream.Next()
 	require.Nil(t, err)
@@ -168,8 +168,8 @@ func testMessaging(t *testing.T, name, ks string) {
 	defer stream.Close()
 
 	session := stream.Session("@master", nil)
-	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into "+name+" (id, time_next, message) values (1,1,'hello world 1')")
-	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into "+name+" (id, time_next, message) values (4,1,'hello world 4')")
+	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into "+name+" (id, message) values (1,'hello world 1')")
+	cluster.ExecuteQueriesUsingVtgate(t, session, "insert into "+name+" (id, message) values (4,'hello world 4')")
 
 	// validate fields
 	res, err := stream.MessageStream(ks, "", nil, name)
