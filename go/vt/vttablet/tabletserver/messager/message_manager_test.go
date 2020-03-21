@@ -43,16 +43,11 @@ var (
 		Name: "id",
 		Type: sqltypes.VarBinary,
 	}, {
-		Name: "time_scheduled",
-		Type: sqltypes.Int64,
-	}, {
 		Name: "message",
 		Type: sqltypes.VarBinary,
 	}}
 
 	testDBFields = []*querypb.Field{
-		{Type: sqltypes.Int64},
-		{Type: sqltypes.Int64},
 		{Type: sqltypes.Int64},
 		{Type: sqltypes.Int64},
 		{Type: sqltypes.Int64},
@@ -79,9 +74,7 @@ func newMMRow(id int64) *querypb.Row {
 	return sqltypes.RowToProto3([]sqltypes.Value{
 		sqltypes.NewInt64(1),
 		sqltypes.NewInt64(0),
-		sqltypes.NewInt64(0),
 		sqltypes.NewInt64(id),
-		sqltypes.NewInt64(id * 10),
 		sqltypes.NewVarBinary(fmt.Sprintf("%v", id)),
 	})
 }
@@ -458,7 +451,6 @@ func TestMessageManagerStreamerSimple(t *testing.T) {
 	want := &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
-			sqltypes.NewInt64(10),
 			sqltypes.NewVarBinary("1"),
 		}},
 	}
@@ -549,7 +541,6 @@ func TestMessageManagerStreamerAndPoller(t *testing.T) {
 	want := &sqltypes.Result{
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(3),
-			sqltypes.NewInt64(30),
 			sqltypes.NewVarBinary("3"),
 		}},
 	}
@@ -584,15 +575,12 @@ func TestMessageManagerPoller(t *testing.T) {
 
 	want := [][]sqltypes.Value{{
 		sqltypes.NewInt64(1),
-		sqltypes.NewInt64(10),
 		sqltypes.NewVarBinary("1"),
 	}, {
 		sqltypes.NewInt64(2),
-		sqltypes.NewInt64(20),
 		sqltypes.NewVarBinary("2"),
 	}, {
 		sqltypes.NewInt64(3),
-		sqltypes.NewInt64(30),
 		sqltypes.NewVarBinary("3"),
 	}}
 	var got [][]sqltypes.Value
@@ -740,7 +728,7 @@ func TestMMGenerate(t *testing.T) {
 	}
 
 	query, bv = mm.GeneratePostponeQuery([]string{"1", "2"})
-	wantQuery = "update foo set time_next = :time_now+(:wait_time<<epoch), epoch = epoch+1 where id in ::ids and time_acked is null"
+	wantQuery = "update foo set time_next = :time_now+(:wait_time<<ifnull(epoch, 0)), epoch = ifnull(epoch, 0)+1 where id in ::ids and time_acked is null"
 	if query != wantQuery {
 		t.Errorf("GeneratePostponeQuery query: %s, want %s", query, wantQuery)
 	}
@@ -759,12 +747,12 @@ func TestMMGenerate(t *testing.T) {
 	}
 
 	query, bv = mm.GeneratePurgeQuery(3)
-	wantQuery = "delete from foo where time_scheduled < :time_scheduled and time_acked is not null limit 500"
+	wantQuery = "delete from foo where time_acked < :time_acked limit 500"
 	if query != wantQuery {
 		t.Errorf("GeneratePurgeQuery query: %s, want %s", query, wantQuery)
 	}
 	wantbv = map[string]*querypb.BindVariable{
-		"time_scheduled": sqltypes.Int64BindVariable(3),
+		"time_acked": sqltypes.Int64BindVariable(3),
 	}
 	if !reflect.DeepEqual(bv, wantbv) {
 		t.Errorf("gotid: %v, want %v", bv, wantbv)

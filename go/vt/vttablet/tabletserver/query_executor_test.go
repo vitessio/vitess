@@ -431,9 +431,9 @@ func TestQueryExecutorLimitFailure(t *testing.T) {
 func TestQueryExecutorPlanInsertMessage(t *testing.T) {
 	db := setUpQueryExecutorTest(t)
 	defer db.Close()
-	db.AddQueryPattern("insert into msg\\(time_scheduled, id, message, time_next, time_created, epoch\\) values \\(1, 2, 3, 1,.*", &sqltypes.Result{})
+	db.AddQuery("insert into msg(id, message) values (2, 3)", &sqltypes.Result{})
 	want := &sqltypes.Result{}
-	query := "insert into msg(time_scheduled, id, message) values(1, 2, 3)"
+	query := "insert into msg(id, message) values(2, 3)"
 	ctx := context.Background()
 	tsv := newTestTabletServer(ctx, noFlags, db)
 	qre := newTestQueryExecutor(ctx, tsv, query, 0)
@@ -1125,21 +1125,9 @@ func newTestQueryExecutor(ctx context.Context, tsv *TabletServer, sql string, tx
 	}
 }
 
-func testCommitHelper(t *testing.T, tsv *TabletServer, queryExecutor *QueryExecutor) {
-	if err := tsv.Commit(queryExecutor.ctx, &tsv.target, queryExecutor.transactionID); err != nil {
-		t.Fatalf("failed to commit transaction: %d, err: %v", queryExecutor.transactionID, err)
-	}
-}
-
 func setUpQueryExecutorTest(t *testing.T) *fakesqldb.DB {
 	db := fakesqldb.New(t)
 	initQueryExecutorTestDB(db, true)
-	return db
-}
-
-func setUpQueryExecutorTestWithOneUniqueKey(t *testing.T) *fakesqldb.DB {
-	db := fakesqldb.New(t)
-	initQueryExecutorTestDB(db, false)
 	return db
 }
 
@@ -1147,15 +1135,6 @@ func initQueryExecutorTestDB(db *fakesqldb.DB, testTableHasMultipleUniqueKeys bo
 	for query, result := range getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys) {
 		db.AddQuery(query, result)
 	}
-}
-
-func fetchRecordedQueries(qre *QueryExecutor) []string {
-	conn, err := qre.tsv.te.txPool.Get(qre.transactionID, "for query")
-	if err != nil {
-		panic(err)
-	}
-	defer conn.Recycle()
-	return conn.Queries
 }
 
 func getTestTableFields() []*querypb.Field {
@@ -1319,9 +1298,6 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 		},
 		"select * from msg where 1 != 1": {
 			Fields: []*querypb.Field{{
-				Name: "time_scheduled",
-				Type: sqltypes.Int32,
-			}, {
 				Name: "id",
 				Type: sqltypes.Int64,
 			}, {
@@ -1329,9 +1305,6 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 				Type: sqltypes.Int64,
 			}, {
 				Name: "epoch",
-				Type: sqltypes.Int64,
-			}, {
-				Name: "time_created",
 				Type: sqltypes.Int64,
 			}, {
 				Name: "time_acked",
@@ -1345,11 +1318,9 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 			Fields:       mysql.DescribeTableFields,
 			RowsAffected: 7,
 			Rows: [][]sqltypes.Value{
-				mysql.DescribeTableRow("time_scheduled", "int(11)", false, "PRI", "0"),
 				mysql.DescribeTableRow("id", "bigint(20)", false, "PRI", "0"),
 				mysql.DescribeTableRow("time_next", "bigint(20)", false, "", "0"),
 				mysql.DescribeTableRow("epoch", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("time_created", "bigint(20)", false, "", "0"),
 				mysql.DescribeTableRow("time_acked", "bigint(20)", false, "", "0"),
 				mysql.DescribeTableRow("message", "bigint(20)", false, "", "0"),
 			},
@@ -1358,8 +1329,7 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 			Fields:       mysql.ShowIndexFromTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				mysql.ShowIndexFromTableRow("msg", true, "PRIMARY", 1, "time_scheduled", false),
-				mysql.ShowIndexFromTableRow("msg", true, "PRIMARY", 2, "id", false),
+				mysql.ShowIndexFromTableRow("msg", true, "PRIMARY", 1, "id", false),
 			},
 		},
 		mysql.BaseShowTablesForTable("msg"): {
