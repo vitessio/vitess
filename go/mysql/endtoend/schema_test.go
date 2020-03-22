@@ -28,66 +28,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
-// testShowIndexFromTable makes sure the fields returned by 'show index from <table>'
-// are what we expect.
-func testShowIndexFromTable(t *testing.T) {
-	ctx := context.Background()
-	conn, err := mysql.Connect(ctx, &connParams)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn.Close()
-
-	if _, err := conn.ExecuteFetch("create table for_show_index(id int, name varchar(128), zipcode varchar(5), primary key(id), unique index on_name (name), index on_zipcode (zipcode), index on_zipcode_name (zipcode, name))", 0, false); err != nil {
-		t.Fatal(err)
-	}
-
-	result, err := conn.ExecuteFetch("show index from for_show_index", 10, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !sqltypes.FieldsEqual(result.Fields, mysql.ShowIndexFromTableFields) {
-		for i, f := range result.Fields {
-			if i < len(mysql.ShowIndexFromTableFields) && !proto.Equal(f, mysql.ShowIndexFromTableFields[i]) {
-				t.Logf("result.Fields[%v] = %v", i, f)
-				t.Logf("        expected = %v", mysql.ShowIndexFromTableFields[i])
-			}
-		}
-		t.Errorf("Fields returned by 'show index from' differ from expected fields: got:\n%v\nexpected:\n%v", result.Fields, mysql.ShowIndexFromTableFields)
-	}
-
-	if len(result.Rows) != 5 {
-		t.Errorf("Got %v rows, expected 5", len(result.Rows))
-	}
-
-	want := mysql.ShowIndexFromTableRow("for_show_index", true, "PRIMARY", 1, "id", false)
-	if !reflect.DeepEqual(result.Rows[0], want) {
-		t.Errorf("Row[0] returned by 'show index from' differ from expected content: got:\n%v\nexpected:\n%v", RowString(result.Rows[0]), RowString(want))
-	}
-
-	want = mysql.ShowIndexFromTableRow("for_show_index", true, "on_name", 1, "name", true)
-	if !reflect.DeepEqual(result.Rows[1], want) {
-		t.Errorf("Row[1] returned by 'show index from' differ from expected content: got:\n%v\nexpected:\n%v", RowString(result.Rows[1]), RowString(want))
-	}
-
-	want = mysql.ShowIndexFromTableRow("for_show_index", false, "on_zipcode", 1, "zipcode", true)
-	if !reflect.DeepEqual(result.Rows[2], want) {
-		t.Errorf("Row[2] returned by 'show index from' differ from expected content: got:\n%v\nexpected:\n%v", RowString(result.Rows[2]), RowString(want))
-	}
-
-	want = mysql.ShowIndexFromTableRow("for_show_index", false, "on_zipcode_name", 1, "zipcode", true)
-	if !reflect.DeepEqual(result.Rows[3], want) {
-		t.Errorf("Row[3] returned by 'show index from' differ from expected content: got:\n%v\nexpected:\n%v", RowString(result.Rows[3]), RowString(want))
-	}
-
-	want = mysql.ShowIndexFromTableRow("for_show_index", false, "on_zipcode_name", 2, "name", true)
-	if !reflect.DeepEqual(result.Rows[4], want) {
-		t.Errorf("Row[4] returned by 'show index from' differ from expected content: got:\n%v\nexpected:\n%v", RowString(result.Rows[4]), RowString(want))
-	}
-}
-
-// testBaseShowTables makes sure the fields returned by
+// TestBaseShowTables makes sure the fields returned by
 // BaseShowTablesForTable are what we expect.
 func testBaseShowTables(t *testing.T) {
 	ctx := context.Background()
@@ -135,15 +76,4 @@ func RowString(row []sqltypes.Value) string {
 		result += fmt.Sprintf(" %v", val)
 	}
 	return result
-}
-
-// TestSchema runs all the schema tests.
-func TestSchema(t *testing.T) {
-	t.Run("ShowIndexFromTable", func(t *testing.T) {
-		testShowIndexFromTable(t)
-	})
-
-	t.Run("BaseShowTables", func(t *testing.T) {
-		testBaseShowTables(t)
-	})
 }

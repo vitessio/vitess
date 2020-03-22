@@ -294,8 +294,7 @@ func TestTabletServerSingleSchemaFailure(t *testing.T) {
 	defer db.Close()
 
 	want := &sqltypes.Result{
-		Fields:       mysql.BaseShowTablesFields,
-		RowsAffected: 2,
+		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
 			mysql.BaseShowTablesRow("test_table", false, ""),
 			// Return a table that tabletserver can't access (the mock will reject all queries to it).
@@ -327,8 +326,7 @@ func TestTabletServerAllSchemaFailure(t *testing.T) {
 	defer db.Close()
 	// Return only tables that tabletserver can't access (the mock will reject all queries to them).
 	want := &sqltypes.Result{
-		Fields:       mysql.BaseShowTablesFields,
-		RowsAffected: 2,
+		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
 			mysql.BaseShowTablesRow("rejected_table_1", false, ""),
 			mysql.BaseShowTablesRow("rejected_table_2", false, ""),
@@ -902,7 +900,6 @@ func TestTabletServerCommitTransaction(t *testing.T) {
 		Fields: []*querypb.Field{
 			{Type: sqltypes.VarBinary},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{sqltypes.NewVarBinary("row01")},
 		},
@@ -965,7 +962,6 @@ func TestTabletServerRollback(t *testing.T) {
 		Fields: []*querypb.Field{
 			{Type: sqltypes.VarBinary},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{sqltypes.NewVarBinary("row01")},
 		},
@@ -1068,7 +1064,6 @@ func TestTabletServerStreamExecute(t *testing.T) {
 		Fields: []*querypb.Field{
 			{Type: sqltypes.VarBinary},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{
 			{sqltypes.NewVarBinary("row01")},
 		},
@@ -2568,7 +2563,6 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("1427325875")},
 			},
@@ -2577,7 +2571,6 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.VarChar,
 			}},
-			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("STRICT_TRANS_TABLES")},
 			},
@@ -2586,7 +2579,6 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("1")},
 			},
@@ -2595,26 +2587,12 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("0")},
 			},
 		},
-		"show variables like 'binlog_format'": {
-			Fields: []*querypb.Field{{
-				Type: sqltypes.VarChar,
-			}, {
-				Type: sqltypes.VarChar,
-			}},
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{{
-				sqltypes.NewVarBinary("binlog_format"),
-				sqltypes.NewVarBinary("STATEMENT"),
-			}},
-		},
 		mysql.BaseShowTables: {
-			Fields:       mysql.BaseShowTablesFields,
-			RowsAffected: 2,
+			Fields: mysql.BaseShowTablesFields,
 			Rows: [][]sqltypes.Value{
 				mysql.BaseShowTablesRow("test_table", false, ""),
 				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
@@ -2636,15 +2614,13 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			}},
 		},
 		mysql.BaseShowTablesForTable("test_table"): {
-			Fields:       mysql.BaseShowTablesFields,
-			RowsAffected: 1,
+			Fields: mysql.BaseShowTablesFields,
 			Rows: [][]sqltypes.Value{
 				mysql.BaseShowTablesRow("test_table", false, ""),
 			},
 		},
 		"show index from test_table": {
-			Fields:       mysql.ShowIndexFromTableFields,
-			RowsAffected: 3,
+			Fields: mysql.ShowIndexFromTableFields,
 			Rows: [][]sqltypes.Value{
 				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false),
 				mysql.ShowIndexFromTableRow("test_table", false, "index", 1, "name", true),
@@ -2670,15 +2646,13 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 			}},
 		},
 		"show index from msg": {
-			Fields:       mysql.ShowIndexFromTableFields,
-			RowsAffected: 1,
+			Fields: mysql.ShowIndexFromTableFields,
 			Rows: [][]sqltypes.Value{
 				mysql.ShowIndexFromTableRow("msg", true, "PRIMARY", 1, "id", false),
 			},
 		},
 		mysql.BaseShowTablesForTable("msg"): {
-			Fields:       mysql.BaseShowTablesFields,
-			RowsAffected: 1,
+			Fields: mysql.BaseShowTablesFields,
 			Rows: [][]sqltypes.Value{
 				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 			},

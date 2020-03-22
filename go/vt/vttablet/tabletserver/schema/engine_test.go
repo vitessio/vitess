@@ -38,6 +38,79 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+func TestReload(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	ctx := context.Background()
+	for query, result := range schematest.Queries() {
+		db.AddQuery(query, result)
+	}
+	idleTimeout := 10 * time.Second
+	se := newEngine(10, 10*time.Second, idleTimeout, true, db)
+	se.Open()
+	defer se.Close()
+
+	// this new table does not exist
+	newTable := sqlparser.NewTableIdent("test_table_04")
+	table := se.GetTable(newTable)
+	if table != nil {
+		t.Fatalf("table: %s exists; expecting nil", newTable)
+	}
+	se.Reload(ctx)
+	table = se.GetTable(newTable)
+	if table != nil {
+		t.Fatalf("table: %s exists; expecting nil", newTable)
+	}
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		// make this query return nothing during reload
+		Fields: mysql.BaseShowTablesFields,
+	})
+	db.AddQuery(mysql.BaseShowTablesForTable(newTable.String()), &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow(newTable.String(), false, ""),
+		},
+	})
+
+	db.AddQuery("select * from test_table_04 where 1 != 1", &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "pk",
+			Type: sqltypes.Int32,
+		}},
+	})
+	db.AddQuery("show index from test_table_04", &sqltypes.Result{
+		Fields: mysql.ShowIndexFromTableFields,
+		Rows: [][]sqltypes.Value{
+			mysql.ShowIndexFromTableRow("test_table_04", true, "PRIMARY", 1, "pk", false),
+		},
+	})
+
+	se.Reload(ctx)
+	table = se.GetTable(newTable)
+	if table != nil {
+		t.Fatalf("table: %s exists; expecting nil", newTable)
+	}
+
+	// test reload with new table: test_table_04
+	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
+		Fields: mysql.BaseShowTablesFields,
+		Rows: [][]sqltypes.Value{
+			mysql.BaseShowTablesRow(newTable.String(), false, ""),
+		},
+	})
+	table = se.GetTable(newTable)
+	if table != nil {
+		t.Fatalf("table: %s exists; expecting nil", newTable)
+	}
+	if err := se.Reload(ctx); err != nil {
+		t.Fatalf("se.Reload() error: %v", err)
+	}
+	table = se.GetTable(newTable)
+	if table == nil {
+		t.Fatalf("table: %s should exist", newTable)
+	}
+}
+
 func TestOpenFailedDueToMissMySQLTime(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -121,8 +194,7 @@ func TestOpenFailedDueToTableErr(t *testing.T) {
 		db.AddQuery(query, result)
 	}
 	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
-		Fields:       mysql.BaseShowTablesFields,
-		RowsAffected: 1,
+		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
 			mysql.BaseShowTablesRow("test_table", false, ""),
 		},
@@ -143,81 +215,6 @@ func TestOpenFailedDueToTableErr(t *testing.T) {
 	want := "could not get schema for any tables"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("se.Open: %v, want %s", err, want)
-	}
-}
-
-func TestReload(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	ctx := context.Background()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
-	idleTimeout := 10 * time.Second
-	se := newEngine(10, 10*time.Second, idleTimeout, true, db)
-	se.Open()
-	defer se.Close()
-	// this new table does not exist
-	newTable := sqlparser.NewTableIdent("test_table_04")
-	table := se.GetTable(newTable)
-	if table != nil {
-		t.Fatalf("table: %s exists; expecting nil", newTable)
-	}
-	se.Reload(ctx)
-	table = se.GetTable(newTable)
-	if table != nil {
-		t.Fatalf("table: %s exists; expecting nil", newTable)
-	}
-	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
-		// make this query return nothing during reload
-		Fields: mysql.BaseShowTablesFields,
-	})
-	db.AddQuery(mysql.BaseShowTablesForTable(newTable.String()), &sqltypes.Result{
-		Fields:       mysql.BaseShowTablesFields,
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			mysql.BaseShowTablesRow(newTable.String(), false, ""),
-		},
-	})
-
-	db.AddQuery("select * from test_table_04 where 1 != 1", &sqltypes.Result{
-		Fields: []*querypb.Field{{
-			Name: "pk",
-			Type: sqltypes.Int32,
-		}},
-	})
-	db.AddQuery("show index from test_table_04", &sqltypes.Result{
-		Fields:       mysql.ShowIndexFromTableFields,
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			mysql.ShowIndexFromTableRow("test_table_04", true, "PRIMARY", 1, "pk", false),
-		},
-	})
-
-	se.Reload(ctx)
-	table = se.GetTable(newTable)
-	if table != nil {
-		t.Fatalf("table: %s exists; expecting nil", newTable)
-	}
-
-	// test reload with new table: test_table_04
-	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
-		Fields:       mysql.BaseShowTablesFields,
-		RowsAffected: 1,
-		Rows: [][]sqltypes.Value{
-			mysql.BaseShowTablesRow(newTable.String(), false, ""),
-		},
-	})
-	table = se.GetTable(newTable)
-	if table != nil {
-		t.Fatalf("table: %s exists; expecting nil", newTable)
-	}
-	if err := se.Reload(ctx); err != nil {
-		t.Fatalf("se.Reload() error: %v", err)
-	}
-	table = se.GetTable(newTable)
-	if table == nil {
-		t.Fatalf("table: %s should exist", newTable)
 	}
 }
 
@@ -253,8 +250,7 @@ func TestCreateOrUpdateTable(t *testing.T) {
 	defer se.Close()
 	existingTable := "test_table_01"
 	db.AddQuery(mysql.BaseShowTablesForTable(existingTable), &sqltypes.Result{
-		Fields:       mysql.BaseShowTablesFields,
-		RowsAffected: 1,
+		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
 			mysql.BaseShowTablesRow(existingTable, false, ""),
 		},
@@ -297,16 +293,14 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	// Add new table
 	tableName := sqlparser.NewTableIdent("mysql_stats_test_table")
 	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
-		Fields:       mysql.BaseShowTablesFields,
-		RowsAffected: 1,
+		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
 			mysql.BaseShowTablesRow(tableName.String(), false, ""),
 		},
 	})
 	// Add queries necessary for tableWasCreatedOrAltered() and NewTable()
 	db.AddQuery(mysql.BaseShowTablesForTable(tableName.String()), &sqltypes.Result{
-		Fields:       mysql.BaseShowTablesFields,
-		RowsAffected: 1,
+		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
 			mysql.BaseShowTablesRow(tableName.String(), false, ""),
 		},
@@ -320,8 +314,7 @@ func TestUpdatedMysqlStats(t *testing.T) {
 	})
 	q = fmt.Sprintf("show index from %s", tableName)
 	db.AddQuery(q, &sqltypes.Result{
-		Fields:       mysql.ShowIndexFromTableFields,
-		RowsAffected: 1,
+		Fields: mysql.ShowIndexFromTableFields,
 		Rows: [][]sqltypes.Value{
 			mysql.ShowIndexFromTableRow(tableName.String(), true, "PRIMARY", 1, "pk", false),
 		},
