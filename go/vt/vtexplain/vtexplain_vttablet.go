@@ -375,12 +375,8 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 	}
 
 	indexRows := make([][]sqltypes.Value, 0, 4)
-	for i, ddl := range ddls {
+	for _, ddl := range ddls {
 		table := sqlparser.String(ddl.Table.Name)
-		schemaQueries[mysql.BaseShowTablesForTable(table)] = &sqltypes.Result{
-			Fields: mysql.BaseShowTablesFields,
-			Rows:   [][]sqltypes.Value{showTableRows[i]},
-		}
 
 		if ddl.OptLike != nil {
 			likeTable := ddl.OptLike.LikeTable.Name.String()
