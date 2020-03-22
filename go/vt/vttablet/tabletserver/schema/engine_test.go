@@ -21,12 +21,14 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"golang.org/x/net/context"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
@@ -38,77 +40,128 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-func TestReload(t *testing.T) {
+func TestOpenAndReload(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	ctx := context.Background()
 	for query, result := range schematest.Queries() {
 		db.AddQuery(query, result)
 	}
-	idleTimeout := 10 * time.Second
-	se := newEngine(10, 10*time.Second, idleTimeout, true, db)
+
+	// pre-advance to above the default 1427325875.
+	db.AddQuery("select unix_timestamp()", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"t",
+		"int64"),
+		"1427325876",
+	))
+	se := newEngine(10, 10*time.Second, 10*time.Second, true, db)
 	se.Open()
 	defer se.Close()
 
-	// this new table does not exist
-	newTable := sqlparser.NewTableIdent("test_table_04")
-	table := se.GetTable(newTable)
-	if table != nil {
-		t.Fatalf("table: %s exists; expecting nil", newTable)
-	}
-	se.Reload(ctx)
-	table = se.GetTable(newTable)
-	if table != nil {
-		t.Fatalf("table: %s exists; expecting nil", newTable)
-	}
+	want := initialSchema()
+	assert.Equal(t, want, se.GetSchema())
+
+	// Advance time some more.
+	db.AddQuery("select unix_timestamp()", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"t",
+		"int64"),
+		"1427325877",
+	))
+	// Modify test_table_03
+	// Add test_table_04
+	// Drop msg
 	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
-		// make this query return nothing during reload
-		Fields: mysql.BaseShowTablesFields,
-	})
-	db.AddQuery(mysql.BaseShowTablesForTable(newTable.String()), &sqltypes.Result{
 		Fields: mysql.BaseShowTablesFields,
 		Rows: [][]sqltypes.Value{
-			mysql.BaseShowTablesRow(newTable.String(), false, ""),
+			mysql.BaseShowTablesRow("test_table_01", false, ""),
+			mysql.BaseShowTablesRow("test_table_02", false, ""),
+			[]sqltypes.Value{
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("test_table_03")),
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),
+				// Match the timestamp.
+				sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325877")),
+				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),
+			},
+			// test_table_04 will in spite of older timestamp because it doesn't exist yet.
+			mysql.BaseShowTablesRow("test_table_04", false, ""),
+			mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
 		},
 	})
-
+	db.AddQuery("select * from test_table_03 where 1 != 1", &sqltypes.Result{
+		Fields: []*querypb.Field{{
+			Name: "pk1",
+			Type: sqltypes.Int32,
+		}, {
+			Name: "pk2",
+			Type: sqltypes.Int32,
+		}, {
+			Name: "val",
+			Type: sqltypes.Int32,
+		}},
+	})
 	db.AddQuery("select * from test_table_04 where 1 != 1", &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name: "pk",
 			Type: sqltypes.Int32,
 		}},
 	})
-	db.AddQuery("show index from test_table_04", &sqltypes.Result{
-		Fields: mysql.ShowIndexFromTableFields,
+	db.AddQuery(mysql.BaseShowPrimary, &sqltypes.Result{
+		Fields: mysql.ShowPrimaryFields,
 		Rows: [][]sqltypes.Value{
-			mysql.ShowIndexFromTableRow("test_table_04", true, "PRIMARY", 1, "pk", false),
+			mysql.ShowPrimaryRow("test_table_01", "pk"),
+			mysql.ShowPrimaryRow("test_table_02", "pk"),
+			mysql.ShowPrimaryRow("test_table_03", "pk1"),
+			mysql.ShowPrimaryRow("test_table_03", "pk2"),
+			mysql.ShowPrimaryRow("test_table_04", "pk"),
+			mysql.ShowPrimaryRow("seq", "id"),
 		},
 	})
 
-	se.Reload(ctx)
-	table = se.GetTable(newTable)
-	if table != nil {
-		t.Fatalf("table: %s exists; expecting nil", newTable)
+	firstTime := true
+	notifier := func(full map[string]*Table, created, altered, dropped []string) {
+		if firstTime {
+			firstTime = false
+			sort.Strings(created)
+			assert.Equal(t, []string{"dual", "msg", "seq", "test_table_01", "test_table_02", "test_table_03", "topic"}, created)
+			assert.Equal(t, []string(nil), altered)
+			assert.Equal(t, []string(nil), dropped)
+		} else {
+			assert.Equal(t, []string{"test_table_04"}, created)
+			assert.Equal(t, []string{"test_table_03"}, altered)
+			sort.Strings(dropped)
+			assert.Equal(t, []string{"msg", "topic"}, dropped)
+		}
 	}
+	se.RegisterNotifier("test", notifier)
 
-	// test reload with new table: test_table_04
-	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
-		Fields: mysql.BaseShowTablesFields,
-		Rows: [][]sqltypes.Value{
-			mysql.BaseShowTablesRow(newTable.String(), false, ""),
-		},
-	})
-	table = se.GetTable(newTable)
-	if table != nil {
-		t.Fatalf("table: %s exists; expecting nil", newTable)
+	err := se.Reload(context.Background())
+	require.NoError(t, err)
+
+	want["test_table_03"] = &Table{
+		Name: sqlparser.NewTableIdent("test_table_03"),
+		Fields: []*querypb.Field{{
+			Name: "pk1",
+			Type: sqltypes.Int32,
+		}, {
+			Name: "pk2",
+			Type: sqltypes.Int32,
+		}, {
+			Name: "val",
+			Type: sqltypes.Int32,
+		}},
+		PKColumns: []int{0, 1},
 	}
-	if err := se.Reload(ctx); err != nil {
-		t.Fatalf("se.Reload() error: %v", err)
+	want["test_table_04"] = &Table{
+		Name: sqlparser.NewTableIdent("test_table_04"),
+		Fields: []*querypb.Field{{
+			Name: "pk",
+			Type: sqltypes.Int32,
+		}},
+		PKColumns: []int{0},
 	}
-	table = se.GetTable(newTable)
-	if table == nil {
-		t.Fatalf("table: %s should exist", newTable)
-	}
+	delete(want, "msg")
+	// topic should also get deleted.
+	delete(want, "topic")
+	assert.Equal(t, want, se.GetSchema())
 }
 
 func TestOpenFailedDueToMissMySQLTime(t *testing.T) {
@@ -181,7 +234,7 @@ func TestOpenFailedDueToExecErr(t *testing.T) {
 	db.AddRejectedQuery(mysql.BaseShowTables, fmt.Errorf("injected error"))
 	se := newEngine(10, 1*time.Second, 1*time.Second, false, db)
 	err := se.Open()
-	want := "could not get table list"
+	want := "injected error"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("se.Open: %v, want %s", err, want)
 	}
@@ -212,56 +265,9 @@ func TestOpenFailedDueToTableErr(t *testing.T) {
 	})
 	se := newEngine(10, 1*time.Second, 1*time.Second, false, db)
 	err := se.Open()
-	want := "could not get schema for any tables"
+	want := "Row count exceeded"
 	if err == nil || !strings.Contains(err.Error(), want) {
 		t.Errorf("se.Open: %v, want %s", err, want)
-	}
-}
-
-func TestCreateOrUpdateTableFailedDuetoExecErr(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
-	db.AddRejectedQuery(mysql.BaseShowTablesForTable("test_table"), fmt.Errorf("forced fail"))
-	se := newEngine(10, 1*time.Second, 1*time.Second, false, db)
-	se.Open()
-	defer se.Close()
-	originalSchemaErrorCount := tabletenv.InternalErrors.Counts()["Schema"]
-	// should silently fail: no errors returned, but increment a counter
-	se.tableWasCreatedOrAltered(context.Background(), "test_table")
-
-	newSchemaErrorCount := tabletenv.InternalErrors.Counts()["Schema"]
-	schemaErrorDiff := newSchemaErrorCount - originalSchemaErrorCount
-	if schemaErrorDiff != 1 {
-		t.Errorf("InternalErrors.Schema counter should have increased by 1, instead got %v", schemaErrorDiff)
-	}
-}
-
-func TestCreateOrUpdateTable(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
-	se := newEngine(10, 1*time.Second, 1*time.Second, false, db)
-	se.Open()
-	defer se.Close()
-	existingTable := "test_table_01"
-	db.AddQuery(mysql.BaseShowTablesForTable(existingTable), &sqltypes.Result{
-		Fields: mysql.BaseShowTablesFields,
-		Rows: [][]sqltypes.Value{
-			mysql.BaseShowTablesRow(existingTable, false, ""),
-		},
-	})
-
-	wasCreated, err := se.tableWasCreatedOrAltered(context.Background(), existingTable)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if wasCreated {
-		t.Error("wanted wasCreated == false")
 	}
 }
 
@@ -277,56 +283,6 @@ func TestExportVars(t *testing.T) {
 	expvar.Do(func(kv expvar.KeyValue) {
 		_ = kv.Value.String()
 	})
-}
-
-func TestUpdatedMysqlStats(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	ctx := context.Background()
-	for query, result := range schematest.Queries() {
-		db.AddQuery(query, result)
-	}
-	idleTimeout := 10 * time.Second
-	se := newEngine(10, 10*time.Second, idleTimeout, true, db)
-	se.Open()
-	defer se.Close()
-	// Add new table
-	tableName := sqlparser.NewTableIdent("mysql_stats_test_table")
-	db.AddQuery(mysql.BaseShowTables, &sqltypes.Result{
-		Fields: mysql.BaseShowTablesFields,
-		Rows: [][]sqltypes.Value{
-			mysql.BaseShowTablesRow(tableName.String(), false, ""),
-		},
-	})
-	// Add queries necessary for tableWasCreatedOrAltered() and NewTable()
-	db.AddQuery(mysql.BaseShowTablesForTable(tableName.String()), &sqltypes.Result{
-		Fields: mysql.BaseShowTablesFields,
-		Rows: [][]sqltypes.Value{
-			mysql.BaseShowTablesRow(tableName.String(), false, ""),
-		},
-	})
-	q := fmt.Sprintf("select * from %s where 1 != 1", tableName)
-	db.AddQuery(q, &sqltypes.Result{
-		Fields: []*querypb.Field{{
-			Name: "pk",
-			Type: sqltypes.Int32,
-		}},
-	})
-	q = fmt.Sprintf("show index from %s", tableName)
-	db.AddQuery(q, &sqltypes.Result{
-		Fields: mysql.ShowIndexFromTableFields,
-		Rows: [][]sqltypes.Value{
-			mysql.ShowIndexFromTableRow(tableName.String(), true, "PRIMARY", 1, "pk", false),
-		},
-	})
-
-	if err := se.Reload(ctx); err != nil {
-		t.Fatalf("se.Reload() error: %v", err)
-	}
-	table := se.GetTable(tableName)
-	if table == nil {
-		t.Fatalf("table: %s should exist", tableName)
-	}
 }
 
 func TestStatsURL(t *testing.T) {
@@ -365,4 +321,100 @@ func newDBConfigs(db *fakesqldb.DB) *dbconfigs.DBConfigs {
 	params, _ := db.ConnParams().MysqlParams()
 	cp := *params
 	return dbconfigs.NewTestDBConfigs(cp, cp, "")
+}
+
+func initialSchema() map[string]*Table {
+	return map[string]*Table{
+		"dual": &Table{
+			Name: sqlparser.NewTableIdent("dual"),
+		},
+		"test_table_01": &Table{
+			Name: sqlparser.NewTableIdent("test_table_01"),
+			Fields: []*querypb.Field{{
+				Name: "pk",
+				Type: sqltypes.Int32,
+			}},
+			PKColumns: []int{0},
+		},
+		"test_table_02": &Table{
+			Name: sqlparser.NewTableIdent("test_table_02"),
+			Fields: []*querypb.Field{{
+				Name: "pk",
+				Type: sqltypes.Int32,
+			}},
+			PKColumns: []int{0},
+		},
+		"test_table_03": &Table{
+			Name: sqlparser.NewTableIdent("test_table_03"),
+			Fields: []*querypb.Field{{
+				Name: "pk",
+				Type: sqltypes.Int32,
+			}},
+			PKColumns: []int{0},
+		},
+		"seq": &Table{
+			Name: sqlparser.NewTableIdent("seq"),
+			Type: Sequence,
+			Fields: []*querypb.Field{{
+				Name: "id",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "next_id",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "cache",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "increment",
+				Type: sqltypes.Int64,
+			}},
+			PKColumns:    []int{0},
+			SequenceInfo: &SequenceInfo{},
+		},
+		"msg": &Table{
+			Name: sqlparser.NewTableIdent("msg"),
+			Type: Message,
+			Fields: []*querypb.Field{{
+				Name: "id",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "time_next",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "epoch",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "time_acked",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "message",
+				Type: sqltypes.Int64,
+			}},
+			PKColumns: []int{0},
+			MessageInfo: &MessageInfo{
+				Fields: []*querypb.Field{{
+					Name: "id",
+					Type: sqltypes.Int64,
+				}, {
+					Name: "message",
+					Type: sqltypes.Int64,
+				}},
+				Topic:              "topic",
+				AckWaitDuration:    30 * time.Second,
+				PurgeAfterDuration: 120 * time.Second,
+				BatchSize:          1,
+				CacheSize:          10,
+				PollInterval:       30 * time.Second,
+			},
+		},
+		"topic": &Table{
+			Name: sqlparser.NewTableIdent("topic"),
+			Type: Topic,
+			TopicInfo: &TopicInfo{
+				Subscribers: []sqlparser.TableIdent{
+					sqlparser.NewTableIdent("msg"),
+				},
+			},
+		},
+	}
 }

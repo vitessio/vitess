@@ -417,7 +417,7 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 	}
 
 	schemaQueries[mysql.BaseShowPrimary] = &sqltypes.Result{
-		Fields: mysql.ShowPrimaryFields(),
+		Fields: mysql.ShowPrimaryFields,
 		Rows:   indexRows,
 	}
 

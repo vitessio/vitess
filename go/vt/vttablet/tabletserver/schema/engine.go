@@ -406,23 +406,6 @@ func (se *Engine) GetSchema() map[string]*Table {
 	return tables
 }
 
-// SetReloadTime changes how often the schema is reloaded. This
-// call also triggers an immediate reload.
-func (se *Engine) SetReloadTime(reloadTime time.Duration) {
-	se.mu.Lock()
-	defer se.mu.Unlock()
-	se.ticks.Trigger()
-	se.ticks.SetInterval(reloadTime)
-	se.reloadTime = reloadTime
-}
-
-// ReloadTime returns schema info reload time.
-func (se *Engine) ReloadTime() time.Duration {
-	se.mu.Lock()
-	defer se.mu.Unlock()
-	return se.reloadTime
-}
-
 func (se *Engine) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	if err := acl.CheckAccessHTTP(request, acl.DEBUGGING); err != nil {
 		acl.SendError(response, err)

@@ -31,7 +31,7 @@ var (
 		<tr>
 			<th>Table</th>
 			<th>Fields</th>
-			<th>Indexes</th>
+			<th>Primary Key</th>
 			<th>Type</th>
 			<th>Metadata</th>
 		</tr>
@@ -40,7 +40,7 @@ var (
 	{{$top := .}}{{with .Table}}<tr class="low">
 			<td>{{.Name}}</td>
 			<td>{{range .Fields}}{{.Name}}: {{.Type}}<br>{{end}}</td>
-			<td>{{range .Indexes}}{{.Name}}{{if .Unique}}(unique){{end}}: ({{range .Columns}}{{.}},{{end}}), ({{range .Cardinality}}{{.}},{{end}})<br>{{end}}</td>
+			<td>{{range .PKColumns}}{{with index $top.Table.Fields .}}{{.Name}}{{end}}<br>{{end}}</td>
 			<td>{{index $top.Type .Type}}</td>
 			<td>{{.SequenceInfo}}{{.MessageInfo}}{{.TopicInfo}}</td>
 		</tr>{{end}}

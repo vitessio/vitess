@@ -23,9 +23,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -46,59 +46,20 @@ func TestLoadTable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(table.PKColumns) != 1 {
-		t.Fatalf("table should have one PK column although the cardinality is invalid")
+	want := &Table{
+		Name: sqlparser.NewTableIdent("test_table"),
+		Fields: []*querypb.Field{{
+			Name: "pk",
+			Type: sqltypes.Int32,
+		}, {
+			Name: "name",
+			Type: sqltypes.Int32,
+		}, {
+			Name: "addr",
+			Type: sqltypes.Int32,
+		}},
 	}
-	if len(table.Indexes) != 3 {
-		t.Fatalf("table should have three indexes")
-	}
-	if count := table.UniqueIndexes(); count != 2 {
-		t.Errorf("table.UniqueIndexes(): %d expected 2", count)
-	}
-	if idx := table.Indexes[0].FindColumn(sqlparser.NewColIdent("pk")); idx != 0 {
-		t.Errorf("table.Indexes[0].FindColumn(pk): %d, want 0", idx)
-	}
-	if idx := table.Indexes[0].FindColumn(sqlparser.NewColIdent("none")); idx != -1 {
-		t.Errorf("table.Indexes[0].FindColumn(none): %d, want 0", idx)
-	}
-	if name := table.GetPKColumn(0).Name; name != "pk" {
-		t.Errorf("table.GetPKColumn(0): %s, want pk", name)
-	}
-	if unique := table.Indexes[0].Unique; unique != true {
-		t.Errorf("table.Indexes[0].Unique: expected true")
-	}
-	if idx := table.Indexes[1].FindColumn(sqlparser.NewColIdent("pk")); idx != 0 {
-		t.Errorf("table.Indexes[1].FindColumn(pk): %d, want 0", idx)
-	}
-	if idx := table.Indexes[1].FindColumn(sqlparser.NewColIdent("name")); idx != 1 {
-		t.Errorf("table.Indexes[1].FindColumn(name): %d, want 1", idx)
-	}
-	if idx := table.Indexes[1].FindColumn(sqlparser.NewColIdent("addr")); idx != -1 {
-		t.Errorf("table.Indexes[1].FindColumn(pk): %d, want -1", idx)
-	}
-	if unique := table.Indexes[1].Unique; unique != true {
-		t.Errorf("table.Indexes[1].Unique: expected true")
-	}
-	if idx := table.Indexes[2].FindColumn(sqlparser.NewColIdent("addr")); idx != 0 {
-		t.Errorf("table.Indexes[1].FindColumn(addr): %d, want 0", idx)
-	}
-	if unique := table.Indexes[2].Unique; unique != false {
-		t.Errorf("table.Indexes[2].Unique: expected false")
-	}
-}
-
-func TestLoadTableFailBecauseUnableToRetrieveTableIndex(t *testing.T) {
-	db := fakesqldb.New(t)
-	defer db.Close()
-	for query, result := range getTestLoadTableQueries() {
-		db.AddQuery(query, result)
-	}
-	db.AddRejectedQuery("show index from test_table", errRejected)
-	_, err := newTestLoadTable("USER_TABLE", "test table", db)
-	want := "rejected"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("LoadTable: %v, must contain %s", err, want)
-	}
+	assert.Equal(t, want, table)
 }
 
 func TestLoadTableSequence(t *testing.T) {
@@ -117,7 +78,6 @@ func TestLoadTableSequence(t *testing.T) {
 		SequenceInfo: &SequenceInfo{},
 	}
 	table.Fields = nil
-	table.Indexes = nil
 	table.PKColumns = nil
 	if !reflect.DeepEqual(table, want) {
 		t.Errorf("Table:\n%#v, want\n%#v", table, want)
@@ -137,6 +97,22 @@ func TestLoadTableMessage(t *testing.T) {
 	want := &Table{
 		Name: sqlparser.NewTableIdent("test_table"),
 		Type: Message,
+		Fields: []*querypb.Field{{
+			Name: "id",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "time_next",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "epoch",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "time_acked",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "message",
+			Type: sqltypes.VarBinary,
+		}},
 		MessageInfo: &MessageInfo{
 			Fields: []*querypb.Field{{
 				Name: "id",
@@ -152,13 +128,7 @@ func TestLoadTableMessage(t *testing.T) {
 			PollInterval:       30 * time.Second,
 		},
 	}
-	table.Fields = nil
-	table.Indexes = nil
-	table.PKColumns = nil
-	if !reflect.DeepEqual(table, want) {
-		t.Errorf("Table:\n%+v, want\n%+v", table, want)
-		t.Errorf("Table:\n%+v, want\n%+v", table.MessageInfo, want.MessageInfo)
-	}
+	assert.Equal(t, want, table)
 
 	// Missing property
 	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_ack_wait=30", db)
@@ -190,6 +160,22 @@ func TestLoadTableMessageTopic(t *testing.T) {
 	want := &Table{
 		Name: sqlparser.NewTableIdent("test_table"),
 		Type: Message,
+		Fields: []*querypb.Field{{
+			Name: "id",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "time_next",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "epoch",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "time_acked",
+			Type: sqltypes.Int64,
+		}, {
+			Name: "message",
+			Type: sqltypes.VarBinary,
+		}},
 		MessageInfo: &MessageInfo{
 			Fields: []*querypb.Field{{
 				Name: "id",
@@ -206,13 +192,7 @@ func TestLoadTableMessageTopic(t *testing.T) {
 			Topic:              "test_topic",
 		},
 	}
-	table.Fields = nil
-	table.Indexes = nil
-	table.PKColumns = nil
-	if !reflect.DeepEqual(table, want) {
-		t.Errorf("Table:\n%+v, want\n%+v", table, want)
-		t.Errorf("Table:\n%+v, want\n%+v", table.MessageInfo, want.MessageInfo)
-	}
+	assert.Equal(t, want, table)
 
 	// Missing property
 	_, err = newTestLoadTable("USER_TABLE", "vitess_message,vt_topic=test_topic,vt_ack_wait=30", db)
@@ -261,16 +241,6 @@ func getTestLoadTableQueries() map[string]*sqltypes.Result {
 				Type: sqltypes.Int32,
 			}},
 		},
-		"show index from test_table": {
-			Fields:       mysql.ShowIndexFromTableFields,
-			RowsAffected: 3,
-			Rows: [][]sqltypes.Value{
-				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false),
-				mysql.ShowIndexFromTableRow("test_table", true, "index", 1, "pk", false),
-				mysql.ShowIndexFromTableRow("test_table", true, "index", 2, "name", false),
-				mysql.ShowIndexFromTableRow("test_table", false, "index2", 1, "addr", false),
-			},
-		},
 	}
 }
 
@@ -295,13 +265,6 @@ func getMessageTableQueries() map[string]*sqltypes.Result {
 				Name: "message",
 				Type: sqltypes.VarBinary,
 			}},
-		},
-		"show index from test_table": {
-			Fields:       mysql.ShowIndexFromTableFields,
-			RowsAffected: 2,
-			Rows: [][]sqltypes.Value{
-				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "id", false),
-			},
 		},
 	}
 }
