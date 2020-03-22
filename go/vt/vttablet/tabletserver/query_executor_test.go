@@ -460,11 +460,11 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 			{Type: sqltypes.Int64},
 			{Type: sqltypes.Int64},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
 			sqltypes.NewInt64(3),
 		}},
+		RowsAffected: 1,
 	})
 	updateQuery := "update seq set next_id = 4 where id = 0"
 	db.AddQuery(updateQuery, &sqltypes.Result{})
@@ -482,14 +482,12 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 			Name: "nextval",
 			Type: sqltypes.Int64,
 		}},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(1),
 		}},
+		RowsAffected: 1,
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("qre.Execute() =\n%#v, want:\n%#v", got, want)
-	}
+	assert.Equal(t, want, got)
 
 	// At this point, NextVal==2, LastVal==4.
 	// So, a single value gen should not cause a db access.
@@ -504,10 +502,10 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 			Name: "nextval",
 			Type: sqltypes.Int64,
 		}},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(2),
 		}},
+		RowsAffected: 1,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("qre.Execute() =\n%#v, want:\n%#v", got, want)
@@ -520,11 +518,11 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 			{Type: sqltypes.Int64},
 			{Type: sqltypes.Int64},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(4),
 			sqltypes.NewInt64(3),
 		}},
+		RowsAffected: 1,
 	})
 	updateQuery = "update seq set next_id = 7 where id = 0"
 	db.AddQuery(updateQuery, &sqltypes.Result{})
@@ -538,10 +536,10 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 			Name: "nextval",
 			Type: sqltypes.Int64,
 		}},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(3),
 		}},
+		RowsAffected: 1,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("qre.Execute() =\n%#v, want:\n%#v", got, want)
@@ -554,11 +552,11 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 			{Type: sqltypes.Int64},
 			{Type: sqltypes.Int64},
 		},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(7),
 			sqltypes.NewInt64(3),
 		}},
+		RowsAffected: 2,
 	})
 	updateQuery = "update seq set next_id = 13 where id = 0"
 	db.AddQuery(updateQuery, &sqltypes.Result{})
@@ -572,10 +570,10 @@ func TestQueryExecutorPlanNextval(t *testing.T) {
 			Name: "nextval",
 			Type: sqltypes.Int64,
 		}},
-		RowsAffected: 1,
 		Rows: [][]sqltypes.Value{{
 			sqltypes.NewInt64(5),
 		}},
+		RowsAffected: 1,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("qre.Execute() =\n%#v, want:\n%#v", got, want)
@@ -805,9 +803,8 @@ func TestQueryExecutorTableAclExemptACL(t *testing.T) {
 	defer db.Close()
 	query := "select * from test_table limit 1000"
 	want := &sqltypes.Result{
-		Fields:       getTestTableFields(),
-		RowsAffected: 0,
-		Rows:         [][]sqltypes.Value{},
+		Fields: getTestTableFields(),
+		Rows:   [][]sqltypes.Value{},
 	}
 	db.AddQuery(query, want)
 	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
@@ -873,9 +870,8 @@ func TestQueryExecutorTableAclDryRun(t *testing.T) {
 	defer db.Close()
 	query := "select * from test_table limit 1000"
 	want := &sqltypes.Result{
-		Fields:       getTestTableFields(),
-		RowsAffected: 0,
-		Rows:         [][]sqltypes.Value{},
+		Fields: getTestTableFields(),
+		Rows:   [][]sqltypes.Value{},
 	}
 	db.AddQuery(query, want)
 	db.AddQuery("select * from test_table where 1 != 1", &sqltypes.Result{
@@ -1143,37 +1139,37 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewInt32(1427325875)},
 			},
+			RowsAffected: 1,
 		},
 		"select @@global.sql_mode": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.VarChar,
 			}},
-			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("STRICT_TRANS_TABLES")},
 			},
+			RowsAffected: 1,
 		},
 		"select @@autocommit": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("1")},
 			},
+			RowsAffected: 1,
 		},
 		"select @@sql_auto_is_null": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("0")},
 			},
+			RowsAffected: 1,
 		},
 		"select @@version_comment from dual where 1 != 1": {
 			Fields: []*querypb.Field{{
@@ -1184,19 +1180,28 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 			Fields: []*querypb.Field{{
 				Type: sqltypes.VarChar,
 			}},
-			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("fakedb server")},
 			},
+			RowsAffected: 1,
 		},
 		mysql.BaseShowTables: {
-			Fields:       mysql.BaseShowTablesFields,
-			RowsAffected: 3,
+			Fields: mysql.BaseShowTablesFields,
 			Rows: [][]sqltypes.Value{
 				mysql.BaseShowTablesRow("test_table", false, ""),
 				mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
 				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 			},
+			RowsAffected: 3,
+		},
+		mysql.BaseShowPrimary: {
+			Fields: mysql.ShowPrimaryFields,
+			Rows: [][]sqltypes.Value{
+				mysql.ShowPrimaryRow("test_table", "pk"),
+				mysql.ShowPrimaryRow("seq", "id"),
+				mysql.ShowPrimaryRow("msg", "id"),
+			},
+			RowsAffected: 3,
 		},
 		"select * from test_table where 1 != 1": {
 			Fields: []*querypb.Field{{
@@ -1210,24 +1215,6 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 				Type: sqltypes.Int32,
 			}},
 		},
-		"show index from test_table": {
-			Fields:       mysql.ShowIndexFromTableFields,
-			RowsAffected: 2,
-			Rows: [][]sqltypes.Value{
-				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false),
-				mysql.ShowIndexFromTableRow("test_table", testTableHasMultipleUniqueKeys, "index", 1, "name", true),
-			},
-		},
-		"begin":  {},
-		"commit": {},
-		mysql.BaseShowTablesForTable("test_table"): {
-			Fields:       mysql.BaseShowTablesFields,
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				mysql.BaseShowTablesRow("test_table", false, ""),
-			},
-		},
-		"rollback": {},
 		"select * from seq where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "id",
@@ -1242,20 +1229,6 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 				Name: "increment",
 				Type: sqltypes.Int64,
 			}},
-		},
-		"show index from seq": {
-			Fields:       mysql.ShowIndexFromTableFields,
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				mysql.ShowIndexFromTableRow("seq", true, "PRIMARY", 1, "id", false),
-			},
-		},
-		mysql.BaseShowTablesForTable("seq"): {
-			Fields:       mysql.BaseShowTablesFields,
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
-			},
 		},
 		"select * from msg where 1 != 1": {
 			Fields: []*querypb.Field{{
@@ -1275,20 +1248,9 @@ func getQueryExecutorSupportedQueries(testTableHasMultipleUniqueKeys bool) map[s
 				Type: sqltypes.Int64,
 			}},
 		},
-		"show index from msg": {
-			Fields:       mysql.ShowIndexFromTableFields,
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				mysql.ShowIndexFromTableRow("msg", true, "PRIMARY", 1, "id", false),
-			},
-		},
-		mysql.BaseShowTablesForTable("msg"): {
-			Fields:       mysql.BaseShowTablesFields,
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{
-				mysql.BaseShowTablesRow("test_table", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
-			},
-		},
+		"begin":    {},
+		"commit":   {},
+		"rollback": {},
 		fmt.Sprintf(sqlReadAllRedo, "`_vt`", "`_vt`"): {},
 	}
 }

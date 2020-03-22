@@ -308,43 +308,10 @@ func TestTabletServerSingleSchemaFailure(t *testing.T) {
 	tsv := NewTabletServer(config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
 	dbcfgs := testUtils.newDBConfigs(db)
 	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	originalSchemaErrorCount := tabletenv.InternalErrors.Counts()["Schema"]
 	err := tsv.StartService(target, dbcfgs)
 	defer tsv.StopService()
 	if err != nil {
 		t.Fatalf("TabletServer should successfully start even if a table's schema is unloadable, but got error: %v", err)
-	}
-	newSchemaErrorCount := tabletenv.InternalErrors.Counts()["Schema"]
-	schemaErrorDiff := newSchemaErrorCount - originalSchemaErrorCount
-	if schemaErrorDiff != 1 {
-		t.Errorf("InternalErrors.Schema counter should have increased by 1, instead got %v", schemaErrorDiff)
-	}
-}
-
-func TestTabletServerAllSchemaFailure(t *testing.T) {
-	db := setUpTabletServerTest(t)
-	defer db.Close()
-	// Return only tables that tabletserver can't access (the mock will reject all queries to them).
-	want := &sqltypes.Result{
-		Fields: mysql.BaseShowTablesFields,
-		Rows: [][]sqltypes.Value{
-			mysql.BaseShowTablesRow("rejected_table_1", false, ""),
-			mysql.BaseShowTablesRow("rejected_table_2", false, ""),
-		},
-	}
-	db.AddQuery(mysql.BaseShowTables, want)
-
-	testUtils := newTestUtils()
-	config := testUtils.newQueryServiceConfig()
-	tsv := NewTabletServer(config, memorytopo.NewServer(""), topodatapb.TabletAlias{})
-	dbcfgs := testUtils.newDBConfigs(db)
-	target := querypb.Target{TabletType: topodatapb.TabletType_MASTER}
-	err := tsv.StartService(target, dbcfgs)
-	defer tsv.StopService()
-	// tabletsever shouldn't start if it can't access schema for any tables
-	wantErr := "could not get schema for any tables"
-	if err == nil || err.Error() != wantErr {
-		t.Errorf("tsv.StartService: %v, want %s", err, wantErr)
 	}
 }
 
@@ -2598,6 +2565,13 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
 			},
 		},
+		mysql.BaseShowPrimary: {
+			Fields: mysql.ShowPrimaryFields,
+			Rows: [][]sqltypes.Value{
+				mysql.ShowPrimaryRow("test_table", "pk"),
+				mysql.ShowPrimaryRow("msg", "id"),
+			},
+		},
 		"select * from test_table where 1 != 1": {
 			Fields: []*querypb.Field{{
 				Name: "pk",
@@ -2612,20 +2586,6 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				Name: "name_string",
 				Type: sqltypes.VarChar,
 			}},
-		},
-		mysql.BaseShowTablesForTable("test_table"): {
-			Fields: mysql.BaseShowTablesFields,
-			Rows: [][]sqltypes.Value{
-				mysql.BaseShowTablesRow("test_table", false, ""),
-			},
-		},
-		"show index from test_table": {
-			Fields: mysql.ShowIndexFromTableFields,
-			Rows: [][]sqltypes.Value{
-				mysql.ShowIndexFromTableRow("test_table", true, "PRIMARY", 1, "pk", false),
-				mysql.ShowIndexFromTableRow("test_table", false, "index", 1, "name", true),
-				mysql.ShowIndexFromTableRow("test_table", false, "name_string_INDEX", 1, "name_string", true),
-			},
 		},
 		"select * from msg where 1 != 1": {
 			Fields: []*querypb.Field{{
@@ -2644,18 +2604,6 @@ func getSupportedQueries() map[string]*sqltypes.Result {
 				Name: "message",
 				Type: sqltypes.Int64,
 			}},
-		},
-		"show index from msg": {
-			Fields: mysql.ShowIndexFromTableFields,
-			Rows: [][]sqltypes.Value{
-				mysql.ShowIndexFromTableRow("msg", true, "PRIMARY", 1, "id", false),
-			},
-		},
-		mysql.BaseShowTablesForTable("msg"): {
-			Fields: mysql.BaseShowTablesFields,
-			Rows: [][]sqltypes.Value{
-				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
-			},
 		},
 		"begin":    {},
 		"commit":   {},

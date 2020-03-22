@@ -17,8 +17,6 @@ limitations under the License.
 package mysql
 
 import (
-	"fmt"
-
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -38,11 +36,6 @@ const (
 	// BaseShowPrimary is the base query for fetching primary key info.
 	BaseShowPrimary = "SELECT table_name, column_name FROM information_schema.key_column_usage WHERE table_schema=database() AND constraint_name='PRIMARY' ORDER BY table_name, ordinal_position"
 )
-
-// BaseShowTablesForTable specializes BaseShowTables for a single table.
-func BaseShowTablesForTable(table string) string {
-	return fmt.Sprintf("%s and table_name = '%s'", BaseShowTables, table)
-}
 
 // BaseShowTablesFields contains the fields returned by a BaseShowTables or a BaseShowTablesForTable command.
 // They are validated by the

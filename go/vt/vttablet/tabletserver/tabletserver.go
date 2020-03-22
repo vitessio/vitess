@@ -496,7 +496,7 @@ func (tsv *TabletServer) fullStart() (err error) {
 	c.Close()
 
 	if err := tsv.se.Open(); err != nil {
-		return err
+		log.Errorf("Could not load schema, but starting the query service anyways: %v", err)
 	}
 	if err := tsv.qe.Open(); err != nil {
 		return err

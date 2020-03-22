@@ -406,11 +406,10 @@
   },
   {
     "Name": "test_topic",
+    "Type": 3,
     "TopicInfo": {
       "Subscribers": [
-        {
-          "Name": "msg1_with_topic"
-        }
+        "msg1_with_topic"
       ]
     }
   },
