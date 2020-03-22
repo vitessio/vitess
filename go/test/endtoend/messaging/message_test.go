@@ -73,6 +73,13 @@ func TestMessage(t *testing.T) {
 		Type: sqltypes.VarChar,
 	}}
 	gotFields, err := streamConn.Fields()
+	for i, field := range gotFields {
+		// Remove other artifacts.
+		gotFields[i] = &querypb.Field{
+			Name: field.Name,
+			Type: field.Type,
+		}
+	}
 	require.NoError(t, err)
 	assert.Equal(t, wantFields, gotFields)
 
@@ -180,6 +187,13 @@ func TestThreeColMessage(t *testing.T) {
 		Type: sqltypes.Int64,
 	}}
 	gotFields, err := streamConn.Fields()
+	for i, field := range gotFields {
+		// Remove other artifacts.
+		gotFields[i] = &querypb.Field{
+			Name: field.Name,
+			Type: field.Type,
+		}
+	}
 	require.NoError(t, err)
 	assert.Equal(t, wantFields, gotFields)
 
