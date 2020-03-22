@@ -150,9 +150,6 @@ func Queries() map[string]*sqltypes.Result {
 		},
 		"select * from msg where 1 != 1": {
 			Fields: []*querypb.Field{{
-				Name: "time_scheduled",
-				Type: sqltypes.Int32,
-			}, {
 				Name: "id",
 				Type: sqltypes.Int64,
 			}, {
@@ -160,9 +157,6 @@ func Queries() map[string]*sqltypes.Result {
 				Type: sqltypes.Int64,
 			}, {
 				Name: "epoch",
-				Type: sqltypes.Int64,
-			}, {
-				Name: "time_created",
 				Type: sqltypes.Int64,
 			}, {
 				Name: "time_acked",
@@ -176,11 +170,9 @@ func Queries() map[string]*sqltypes.Result {
 			Fields:       mysql.DescribeTableFields,
 			RowsAffected: 7,
 			Rows: [][]sqltypes.Value{
-				mysql.DescribeTableRow("time_scheduled", "int(11)", false, "PRI", "0"),
 				mysql.DescribeTableRow("id", "bigint(20)", false, "PRI", "0"),
 				mysql.DescribeTableRow("time_next", "bigint(20)", false, "", "0"),
 				mysql.DescribeTableRow("epoch", "bigint(20)", false, "", "0"),
-				mysql.DescribeTableRow("time_created", "bigint(20)", false, "", "0"),
 				mysql.DescribeTableRow("time_acked", "bigint(20)", false, "", "0"),
 				mysql.DescribeTableRow("message", "bigint(20)", false, "", "0"),
 			},
@@ -189,8 +181,7 @@ func Queries() map[string]*sqltypes.Result {
 			Fields:       mysql.ShowIndexFromTableFields,
 			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
-				mysql.ShowIndexFromTableRow("msg", true, "PRIMARY", 1, "time_scheduled", false),
-				mysql.ShowIndexFromTableRow("msg", true, "PRIMARY", 2, "id", false),
+				mysql.ShowIndexFromTableRow("msg", true, "PRIMARY", 1, "id", false),
 			},
 		},
 		mysql.BaseShowTablesForTable("msg"): {

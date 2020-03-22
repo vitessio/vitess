@@ -174,23 +174,22 @@ func testMessaging(t *testing.T, name, ks string) {
 	// validate fields
 	res, err := stream.MessageStream(ks, "", nil, name)
 	require.Nil(t, err)
-	require.Equal(t, 3, len(res.Fields))
+	require.Equal(t, 2, len(res.Fields))
 	validateField(t, res.Fields[0], "id", query.Type_INT64)
-	validateField(t, res.Fields[1], "time_scheduled", query.Type_INT64)
-	validateField(t, res.Fields[2], "message", query.Type_VARCHAR)
+	validateField(t, res.Fields[1], "message", query.Type_VARCHAR)
 
 	// validate recieved msgs
 	resMap := make(map[string]string)
 	res, err = stream.Next()
 	require.Nil(t, err)
 	for _, row := range res.Rows {
-		resMap[row[0].ToString()] = row[2].ToString()
+		resMap[row[0].ToString()] = row[1].ToString()
 	}
 
 	res, err = stream.Next()
 	require.Nil(t, err)
 	for _, row := range res.Rows {
-		resMap[row[0].ToString()] = row[2].ToString()
+		resMap[row[0].ToString()] = row[1].ToString()
 	}
 
 	assert.Equal(t, "hello world 1", resMap["1"])
@@ -204,13 +203,13 @@ func testMessaging(t *testing.T, name, ks string) {
 	res, err = stream.Next()
 	require.Nil(t, err)
 	for _, row := range res.Rows {
-		resMap[row[0].ToString()] = row[2].ToString()
+		resMap[row[0].ToString()] = row[1].ToString()
 	}
 
 	res, err = stream.Next()
 	require.Nil(t, err)
 	for _, row := range res.Rows {
-		resMap[row[0].ToString()] = row[2].ToString()
+		resMap[row[0].ToString()] = row[1].ToString()
 	}
 
 	assert.Equal(t, "hello world 1", resMap["1"])

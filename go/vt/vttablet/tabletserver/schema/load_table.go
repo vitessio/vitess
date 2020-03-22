@@ -54,7 +54,7 @@ func LoadTable(conn *connpool.DBConn, tableName string, tableType string, commen
 	return ta, nil
 }
 
-// LoadTableBaisc creates a Table with just the column info loaded.
+// LoadTableBasic creates a Table with just the column info loaded.
 func LoadTableBasic(conn *connpool.DBConn, tableName string) (*Table, error) {
 	ta := NewTable(tableName)
 	if err := fetchColumns(ta, conn, tableName); err != nil {
@@ -133,24 +133,16 @@ func fetchIndexes(ta *Table, conn *connpool.DBConn, sqlTableName string) error {
 }
 
 func loadMessageInfo(ta *Table, comment string) error {
-	findCols := map[string]struct{}{
-		"id":             {},
-		"time_scheduled": {},
-		"time_next":      {},
-		"epoch":          {},
-		"time_created":   {},
-		"time_acked":     {},
+	hiddenCols := map[string]struct{}{
+		"time_next":  {},
+		"epoch":      {},
+		"time_acked": {},
 	}
 
-	// orderedColumns are necessary to ensure that they
-	// get added in the correct order to fields if they
-	// need to be returned with the stream.
-	orderedColumns := []string{
+	requiredCols := []string{
 		"id",
-		"time_scheduled",
 		"time_next",
 		"epoch",
-		"time_created",
 		"time_acked",
 	}
 
@@ -183,24 +175,16 @@ func loadMessageInfo(ta *Table, comment string) error {
 	if ta.MessageInfo.PollInterval, err = getDuration(keyvals, "vt_poller_interval"); err != nil {
 		return err
 	}
-	for _, col := range orderedColumns {
+	for _, col := range requiredCols {
 		num := ta.FindColumn(sqlparser.NewColIdent(col))
 		if num == -1 {
 			return fmt.Errorf("%s missing from message table: %s", col, ta.Name.String())
-		}
-
-		// id and time_scheduled must be the first two columns.
-		if col == "id" || col == "time_scheduled" {
-			ta.MessageInfo.Fields = append(ta.MessageInfo.Fields, &querypb.Field{
-				Name: ta.Columns[num].Name.String(),
-				Type: ta.Columns[num].Type,
-			})
 		}
 	}
 
 	// Load user-defined columns. Any "unrecognized" column is user-defined.
 	for _, c := range ta.Columns {
-		if _, ok := findCols[c.Name.Lowered()]; ok {
+		if _, ok := hiddenCols[c.Name.Lowered()]; ok {
 			continue
 		}
 
