@@ -541,16 +541,22 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 }
 
 func (vs *vstreamer) buildJournalPlan(id uint64, tm *mysql.TableMap) error {
-	st, err := vs.se.LoadTableBasic(vs.ctx, "_vt.resharding_journal")
+	conn, err := vs.cp.Connect(vs.ctx)
 	if err != nil {
 		return err
 	}
-	if len(st.Fields) < len(tm.Types) {
-		return fmt.Errorf("cannot determine table columns for %s: event has %v, schema as %v", tm.Name, tm.Types, st.Fields)
+	defer conn.Close()
+	qr, err := conn.ExecuteFetch("select * from _vt.resharding_journal where 1 != 1", 1, true)
+	if err != nil {
+		return err
+	}
+	fields := qr.Fields
+	if len(fields) < len(tm.Types) {
+		return fmt.Errorf("cannot determine table columns for %s: event has %v, schema as %v", tm.Name, tm.Types, fields)
 	}
 	table := &Table{
 		Name:   "_vt.resharding_journal",
-		Fields: st.Fields[:len(tm.Types)],
+		Fields: fields[:len(tm.Types)],
 	}
 	// Build a normal table plan, which means, return all rows
 	// and columns as is. Special handling is done when we actually

@@ -33,11 +33,7 @@ var (
 			<th>Fields</th>
 			<th>Indexes</th>
 			<th>Type</th>
-			<th>TableRows</th>
-			<th>DataLength</th>
-			<th>IndexLength</th>
-			<th>DataFree</th>
-			<th>MaxDataLength</th>
+			<th>Metadata</th>
 		</tr>
 	`)
 	schemazTmpl = template.Must(template.New("example").Parse(`
@@ -46,11 +42,7 @@ var (
 			<td>{{range .Fields}}{{.Name}}: {{.Type}}<br>{{end}}</td>
 			<td>{{range .Indexes}}{{.Name}}{{if .Unique}}(unique){{end}}: ({{range .Columns}}{{.}},{{end}}), ({{range .Cardinality}}{{.}},{{end}})<br>{{end}}</td>
 			<td>{{index $top.Type .Type}}</td>
-			<td>{{.TableRows.Get}}</td>
-			<td>{{.DataLength.Get}}</td>
-			<td>{{.IndexLength.Get}}</td>
-			<td>{{.DataFree.Get}}</td>
-			<td>{{.MaxDataLength.Get}}</td>
+			<td>{{.SequenceInfo}}{{.MessageInfo}}{{.TopicInfo}}</td>
 		</tr>{{end}}
 	`))
 )

@@ -22,8 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -34,9 +32,6 @@ func LoadTable(conn *connpool.DBConn, tableName string, tableType string, commen
 	ta := NewTable(tableName)
 	sqlTableName := sqlparser.String(ta.Name)
 	if err := fetchColumns(ta, conn, sqlTableName); err != nil {
-		return nil, err
-	}
-	if err := fetchIndexes(ta, conn, sqlTableName); err != nil {
 		return nil, err
 	}
 	switch {
@@ -52,47 +47,12 @@ func LoadTable(conn *connpool.DBConn, tableName string, tableType string, commen
 	return ta, nil
 }
 
-// LoadTableBasic creates a Table with just the column info loaded.
-func LoadTableBasic(conn *connpool.DBConn, tableName string) (*Table, error) {
-	ta := NewTable(tableName)
-	if err := fetchColumns(ta, conn, tableName); err != nil {
-		return nil, err
-	}
-	return ta, nil
-}
-
 func fetchColumns(ta *Table, conn *connpool.DBConn, sqlTableName string) error {
 	qr, err := conn.Exec(tabletenv.LocalContext(), fmt.Sprintf("select * from %s where 1 != 1", sqlTableName), 0, true)
 	if err != nil {
 		return err
 	}
 	ta.Fields = qr.Fields
-	return nil
-}
-
-func fetchIndexes(ta *Table, conn *connpool.DBConn, sqlTableName string) error {
-	indexes, err := conn.Exec(tabletenv.LocalContext(), fmt.Sprintf("show index from %s", sqlTableName), 10000, false)
-	if err != nil {
-		return err
-	}
-	var currentIndex *Index
-	currentName := ""
-	for _, row := range indexes.Rows {
-		indexName := row[2].ToString()
-		if currentName != indexName {
-			currentIndex = ta.AddIndex(indexName, row[1].ToString() == "0")
-			currentName = indexName
-		}
-		var cardinality uint64
-		if !row[6].IsNull() {
-			cardinality, err = sqltypes.ToUint64(row[6])
-			if err != nil {
-				log.Warningf("%s", err)
-			}
-		}
-		currentIndex.AddColumn(row[4].ToString(), cardinality)
-	}
-	ta.Done()
 	return nil
 }
 

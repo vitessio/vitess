@@ -273,7 +273,6 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewInt32(1427325875)},
 			},
@@ -282,7 +281,6 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.VarChar,
 			}},
-			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("STRICT_TRANS_TABLES")},
 			},
@@ -291,7 +289,6 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("1")},
 			},
@@ -300,93 +297,70 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 1,
 			Rows: [][]sqltypes.Value{
 				{sqltypes.NewVarBinary("0")},
 			},
-		},
-		"show variables like 'binlog_format'": {
-			Fields: []*querypb.Field{{
-				Type: sqltypes.VarChar,
-			}, {
-				Type: sqltypes.VarChar,
-			}},
-			RowsAffected: 1,
-			Rows: [][]sqltypes.Value{{
-				sqltypes.NewVarBinary("binlog_format"),
-				sqltypes.NewVarBinary(opts.ReplicationMode),
-			}},
 		},
 		"set @@session.sql_log_bin = 0": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 0,
-			Rows:         [][]sqltypes.Value{},
+			Rows: [][]sqltypes.Value{},
 		},
 		"create database if not exists `_vt`": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 0,
-			Rows:         [][]sqltypes.Value{},
+			Rows: [][]sqltypes.Value{},
 		},
 		"drop table if exists `_vt`.redo_log_transaction": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 0,
-			Rows:         [][]sqltypes.Value{},
+			Rows: [][]sqltypes.Value{},
 		},
 		"drop table if exists `_vt`.redo_log_statement": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 0,
-			Rows:         [][]sqltypes.Value{},
+			Rows: [][]sqltypes.Value{},
 		},
 		"drop table if exists `_vt`.transaction": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 0,
-			Rows:         [][]sqltypes.Value{},
+			Rows: [][]sqltypes.Value{},
 		},
 		"drop table if exists `_vt`.participant": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 0,
-			Rows:         [][]sqltypes.Value{},
+			Rows: [][]sqltypes.Value{},
 		},
 		"create table if not exists `_vt`.redo_state(\n  dtid varbinary(512),\n  state bigint,\n  time_created bigint,\n  primary key(dtid)\n\t) engine=InnoDB": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 0,
-			Rows:         [][]sqltypes.Value{},
+			Rows: [][]sqltypes.Value{},
 		},
 		"create table if not exists `_vt`.redo_statement(\n  dtid varbinary(512),\n  id bigint,\n  statement mediumblob,\n  primary key(dtid, id)\n\t) engine=InnoDB": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 0,
-			Rows:         [][]sqltypes.Value{},
+			Rows: [][]sqltypes.Value{},
 		},
 		"create table if not exists `_vt`.dt_state(\n  dtid varbinary(512),\n  state bigint,\n  time_created bigint,\n  primary key(dtid)\n\t) engine=InnoDB": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 0,
-			Rows:         [][]sqltypes.Value{},
+			Rows: [][]sqltypes.Value{},
 		},
 		"create table if not exists `_vt`.dt_participant(\n  dtid varbinary(512),\n\tid bigint,\n\tkeyspace varchar(256),\n\tshard varchar(256),\n  primary key(dtid, id)\n\t) engine=InnoDB": {
 
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
 			}},
-			RowsAffected: 0,
-			Rows:         [][]sqltypes.Value{},
+			Rows: [][]sqltypes.Value{},
 		},
 	}
 
@@ -396,17 +370,16 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 		showTableRows = append(showTableRows, mysql.BaseShowTablesRow(table, false, ""))
 	}
 	schemaQueries[mysql.BaseShowTables] = &sqltypes.Result{
-		Fields:       mysql.BaseShowTablesFields,
-		RowsAffected: uint64(len(showTableRows)),
-		Rows:         showTableRows,
+		Fields: mysql.BaseShowTablesFields,
+		Rows:   showTableRows,
 	}
 
+	indexRows := make([][]sqltypes.Value, 0, 4)
 	for i, ddl := range ddls {
 		table := sqlparser.String(ddl.Table.Name)
 		schemaQueries[mysql.BaseShowTablesForTable(table)] = &sqltypes.Result{
-			Fields:       mysql.BaseShowTablesFields,
-			RowsAffected: 1,
-			Rows:         [][]sqltypes.Value{showTableRows[i]},
+			Fields: mysql.BaseShowTablesFields,
+			Rows:   [][]sqltypes.Value{showTableRows[i]},
 		}
 
 		if ddl.OptLike != nil {
@@ -414,46 +387,38 @@ func initTabletEnvironment(ddls []*sqlparser.DDL, opts *Options) error {
 			if _, ok := schemaQueries["select * from "+likeTable+" where 1 != 1"]; !ok {
 				return fmt.Errorf("check your schema, table[%s] doesn't exist", likeTable)
 			}
-			schemaQueries["show index from "+table] = schemaQueries["show index from "+likeTable]
 			schemaQueries["select * from "+table+" where 1 != 1"] = schemaQueries["select * from "+likeTable+" where 1 != 1"]
 			continue
 		}
-		pkColumns := make(map[string]bool)
-		indexRows := make([][]sqltypes.Value, 0, 4)
 		for _, idx := range ddl.TableSpec.Indexes {
-			for i, col := range idx.Columns {
-				row := mysql.ShowIndexFromTableRow(table, idx.Info.Unique, idx.Info.Name.String(), i+1, col.Column.String(), false)
+			if !idx.Info.Primary {
+				continue
+			}
+			for _, col := range idx.Columns {
+				row := mysql.ShowPrimaryRow(table, col.Column.String())
 				indexRows = append(indexRows, row)
-				if idx.Info.Primary {
-					pkColumns[col.Column.String()] = true
-				}
 			}
 		}
 
-		schemaQueries["show index from "+table] = &sqltypes.Result{
-			Fields:       mysql.ShowIndexFromTableFields,
-			RowsAffected: uint64(len(indexRows)),
-			Rows:         indexRows,
-		}
-
-		rowTypes := make([]*querypb.Field, 0, 4)
 		tableColumns[table] = make(map[string]querypb.Type)
-
+		var rowTypes []*querypb.Field
 		for _, col := range ddl.TableSpec.Columns {
 			colName := strings.ToLower(col.Name.String())
-
 			rowType := &querypb.Field{
 				Name: colName,
 				Type: col.Type.SQLType(),
 			}
 			rowTypes = append(rowTypes, rowType)
-
 			tableColumns[table][colName] = col.Type.SQLType()
 		}
-
 		schemaQueries["select * from "+table+" where 1 != 1"] = &sqltypes.Result{
 			Fields: rowTypes,
 		}
+	}
+
+	schemaQueries[mysql.BaseShowPrimary] = &sqltypes.Result{
+		Fields: mysql.ShowPrimaryFields(),
+		Rows:   indexRows,
 	}
 
 	return nil
@@ -555,10 +520,9 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 			}
 		}
 		result = &sqltypes.Result{
-			Fields:       fields,
-			RowsAffected: 1,
-			InsertID:     0,
-			Rows:         [][]sqltypes.Value{values},
+			Fields:   fields,
+			InsertID: 0,
+			Rows:     [][]sqltypes.Value{values},
 		}
 
 		resultJSON, _ := json.MarshalIndent(result, "", "    ")

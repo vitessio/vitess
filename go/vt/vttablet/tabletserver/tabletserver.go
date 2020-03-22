@@ -964,7 +964,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 func (tsv *TabletServer) topicExecute(ctx context.Context, query string, comments sqlparser.MarginComments, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, plan *TabletPlan, logStats *tabletenv.LogStats, tabletType topodata.TabletType) (result *sqltypes.Result, err error) {
 	for _, subscriber := range plan.Table.TopicInfo.Subscribers {
 		// replace the topic name with the subscribed message table name
-		newQuery := strings.Replace(query, plan.Table.Name.String(), subscriber.Name.String(), -1)
+		newQuery := strings.Replace(query, plan.Table.Name.String(), subscriber.String(), -1)
 		var newPlan *TabletPlan
 		newPlan, err = tsv.qe.GetPlan(ctx, logStats, newQuery, skipQueryPlanCache(options))
 		if err != nil {

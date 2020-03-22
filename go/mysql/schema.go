@@ -31,188 +31,13 @@ import (
 // (using fakesqldb/ package for instance) and still be guaranteed correct
 // data.
 
-// ShowIndexFromTableFields contains the fields returned by a 'show
-// index from <table>' command. They are validated by the
-// testShowIndexFromTable test.
-var ShowIndexFromTableFields = []*querypb.Field{
-	{
-		Name:         "Table",
-		Type:         querypb.Type_VARCHAR,
-		Table:        "STATISTICS",
-		OrgTable:     "STATISTICS",
-		Database:     "information_schema",
-		OrgName:      "TABLE_NAME",
-		ColumnLength: 192,
-		Charset:      CharacterSetUtf8,
-		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
-	},
-	{
-		Name:         "Non_unique",
-		Type:         querypb.Type_INT64,
-		Table:        "STATISTICS",
-		OrgTable:     "STATISTICS",
-		Database:     "information_schema",
-		OrgName:      "NON_UNIQUE",
-		ColumnLength: 1,
-		Charset:      CharacterSetBinary,
-		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG),
-	},
-	{
-		Name:         "Key_name",
-		Type:         querypb.Type_VARCHAR,
-		Table:        "STATISTICS",
-		OrgTable:     "STATISTICS",
-		Database:     "information_schema",
-		OrgName:      "INDEX_NAME",
-		ColumnLength: 192,
-		Charset:      33,
-		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
-	},
-	{
-		Name:         "Seq_in_index",
-		Type:         querypb.Type_INT64,
-		Table:        "STATISTICS",
-		OrgTable:     "STATISTICS",
-		Database:     "information_schema",
-		OrgName:      "SEQ_IN_INDEX",
-		ColumnLength: 2,
-		Charset:      CharacterSetBinary,
-		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG | querypb.MySqlFlag_NUM_FLAG),
-	},
-	{
-		Name:         "Column_name",
-		Type:         querypb.Type_VARCHAR,
-		Table:        "STATISTICS",
-		OrgTable:     "STATISTICS",
-		Database:     "information_schema",
-		OrgName:      "COLUMN_NAME",
-		ColumnLength: 192,
-		Charset:      33,
-		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
-	},
-	{
-		Name:         "Collation",
-		Type:         querypb.Type_VARCHAR,
-		Table:        "STATISTICS",
-		OrgTable:     "STATISTICS",
-		Database:     "information_schema",
-		OrgName:      "COLLATION",
-		ColumnLength: 3,
-		Charset:      33,
-	},
-	{
-		Name:         "Cardinality",
-		Type:         querypb.Type_INT64,
-		Table:        "STATISTICS",
-		OrgTable:     "STATISTICS",
-		Database:     "information_schema",
-		OrgName:      "CARDINALITY",
-		ColumnLength: 21,
-		Charset:      CharacterSetBinary,
-		Flags:        uint32(querypb.MySqlFlag_NUM_FLAG),
-	},
-	{
-		Name:         "Sub_part",
-		Type:         querypb.Type_INT64,
-		Table:        "STATISTICS",
-		OrgTable:     "STATISTICS",
-		Database:     "information_schema",
-		OrgName:      "SUB_PART",
-		ColumnLength: 3,
-		Charset:      CharacterSetBinary,
-		Flags:        uint32(querypb.MySqlFlag_NUM_FLAG),
-	},
-	{
-		Name:         "Packed",
-		Type:         querypb.Type_VARCHAR,
-		Table:        "STATISTICS",
-		OrgTable:     "STATISTICS",
-		Database:     "information_schema",
-		OrgName:      "PACKED",
-		ColumnLength: 30,
-		Charset:      33,
-	},
-	{
-		Name:         "Null",
-		Type:         querypb.Type_VARCHAR,
-		Table:        "STATISTICS",
-		OrgTable:     "STATISTICS",
-		Database:     "information_schema",
-		OrgName:      "NULLABLE",
-		ColumnLength: 9,
-		Charset:      33,
-		Flags:        1,
-	},
-	{
-		Name:         "Index_type",
-		Type:         querypb.Type_VARCHAR,
-		Table:        "STATISTICS",
-		OrgTable:     "STATISTICS",
-		Database:     "information_schema",
-		OrgName:      "INDEX_TYPE",
-		ColumnLength: 48,
-		Charset:      33,
-		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
-	},
-	{
-		Name:         "Comment",
-		Type:         querypb.Type_VARCHAR,
-		Table:        "STATISTICS",
-		OrgTable:     "STATISTICS",
-		Database:     "information_schema",
-		OrgName:      "COMMENT",
-		ColumnLength: 48,
-		Charset:      33,
-	},
-	{
-		Name:         "Index_comment",
-		Type:         querypb.Type_VARCHAR,
-		Table:        "STATISTICS",
-		OrgTable:     "STATISTICS",
-		Database:     "information_schema",
-		OrgName:      "INDEX_COMMENT",
-		ColumnLength: 3072,
-		Charset:      33,
-		Flags:        uint32(querypb.MySqlFlag_NOT_NULL_FLAG),
-	},
-}
+const (
+	// BaseShowTables is the base query used in further methods.
+	BaseShowTables = "SELECT table_name, table_type, unix_timestamp(create_time), table_comment FROM information_schema.tables WHERE table_schema = database()"
 
-// ShowIndexFromTableRow returns the fields from a 'show index from table'
-// command.
-// 'table' is the table name.
-// 'unique' is true for unique indexes, false for non-unique indexes.
-// 'keyName' is 'PRIMARY' for PKs, otherwise the name of the index.
-// 'seqInIndex' is starting at 1 for first key in index.
-// 'columnName' is the name of the column this index applies to.
-// 'nullable' is true if this column can be null.
-func ShowIndexFromTableRow(table string, unique bool, keyName string, seqInIndex int, columnName string, nullable bool) []sqltypes.Value {
-	nonUnique := "1"
-	if unique {
-		nonUnique = "0"
-	}
-	nullableStr := ""
-	if nullable {
-		nullableStr = "YES"
-	}
-	return []sqltypes.Value{
-		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(table)),
-		sqltypes.MakeTrusted(sqltypes.Int64, []byte(nonUnique)),
-		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(keyName)),
-		sqltypes.MakeTrusted(sqltypes.Int64, []byte(fmt.Sprintf("%v", seqInIndex))),
-		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(columnName)),
-		sqltypes.MakeTrusted(sqltypes.VarChar, []byte("A")), // Collation
-		sqltypes.MakeTrusted(sqltypes.Int64, []byte("0")),   // Cardinality
-		sqltypes.NULL, // Sub_part
-		sqltypes.NULL, // Packed
-		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(nullableStr)),
-		sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BTREE")), // Index_type
-		sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),      // Comment
-		sqltypes.MakeTrusted(sqltypes.VarChar, []byte("")),      // Index_comment
-	}
-}
-
-// BaseShowTables is the base query used in further methods.
-const BaseShowTables = "SELECT table_name, table_type, unix_timestamp(create_time), table_comment FROM information_schema.tables WHERE table_schema = database()"
+	// BaseShowPrimary is the base query for fetching primary key info.
+	BaseShowPrimary = "SELECT table_name, column_name FROM information_schema.key_column_usage WHERE table_schema=database() AND constraint_name='PRIMARY' ORDER BY table_name, ordinal_position"
+)
 
 // BaseShowTablesForTable specializes BaseShowTables for a single table.
 func BaseShowTablesForTable(table string) string {
@@ -277,5 +102,24 @@ func BaseShowTablesRow(tableName string, isView bool, comment string) []sqltypes
 		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(tableType)),
 		sqltypes.MakeTrusted(sqltypes.Int64, []byte("1427325875")), // unix_timestamp(create_time)
 		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(comment)),
+	}
+}
+
+// ShowPrimaryFields returns the fields for a BaseShowPrimary.
+func ShowPrimaryFields() []*querypb.Field {
+	return []*querypb.Field{{
+		Name: "table_name",
+		Type: sqltypes.VarChar,
+	}, {
+		Name: "column_name",
+		Type: sqltypes.VarChar,
+	}}
+}
+
+// ShowPrimaryRow returns a row for a primary key column.
+func ShowPrimaryRow(tableName, colName string) []sqltypes.Value {
+	return []sqltypes.Value{
+		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(tableName)),
+		sqltypes.MakeTrusted(sqltypes.VarChar, []byte(colName)),
 	}
 }
