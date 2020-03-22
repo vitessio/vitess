@@ -26,10 +26,9 @@ import (
 )
 
 // Queries returns a default set of queries that can
-// be added to load three tables into the schema.
+// be added to load an initial set of tables into the schema.
 func Queries() map[string]*sqltypes.Result {
 	return map[string]*sqltypes.Result{
-		// queries for schema info
 		"select unix_timestamp()": {
 			Fields: []*querypb.Field{{
 				Type: sqltypes.Uint64,
@@ -68,14 +67,17 @@ func Queries() map[string]*sqltypes.Result {
 				mysql.BaseShowTablesRow("test_table_01", false, ""),
 				mysql.BaseShowTablesRow("test_table_02", false, ""),
 				mysql.BaseShowTablesRow("test_table_03", false, ""),
-				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30"),
+				mysql.BaseShowTablesRow("seq", false, "vitess_sequence"),
+				mysql.BaseShowTablesRow("msg", false, "vitess_message,vt_ack_wait=30,vt_purge_after=120,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=30,vt_topic=topic"),
 			},
 		},
 		mysql.BaseShowPrimary: {
+			Fields: mysql.ShowPrimaryFields,
 			Rows: [][]sqltypes.Value{
 				mysql.ShowPrimaryRow("test_table_01", "pk"),
 				mysql.ShowPrimaryRow("test_table_02", "pk"),
 				mysql.ShowPrimaryRow("test_table_03", "pk"),
+				mysql.ShowPrimaryRow("seq", "id"),
 				mysql.ShowPrimaryRow("msg", "id"),
 			},
 		},
@@ -95,6 +97,21 @@ func Queries() map[string]*sqltypes.Result {
 			Fields: []*querypb.Field{{
 				Name: "pk",
 				Type: sqltypes.Int32,
+			}},
+		},
+		"select * from seq where 1 != 1": {
+			Fields: []*querypb.Field{{
+				Name: "id",
+				Type: sqltypes.Int32,
+			}, {
+				Name: "next_id",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "cache",
+				Type: sqltypes.Int64,
+			}, {
+				Name: "increment",
+				Type: sqltypes.Int64,
 			}},
 		},
 		"select * from msg where 1 != 1": {

@@ -105,16 +105,14 @@ func BaseShowTablesRow(tableName string, isView bool, comment string) []sqltypes
 	}
 }
 
-// ShowPrimaryFields returns the fields for a BaseShowPrimary.
-func ShowPrimaryFields() []*querypb.Field {
-	return []*querypb.Field{{
-		Name: "table_name",
-		Type: sqltypes.VarChar,
-	}, {
-		Name: "column_name",
-		Type: sqltypes.VarChar,
-	}}
-}
+// ShowPrimaryFields contains the fields for a BaseShowPrimary.
+var ShowPrimaryFields = []*querypb.Field{{
+	Name: "table_name",
+	Type: sqltypes.VarChar,
+}, {
+	Name: "column_name",
+	Type: sqltypes.VarChar,
+}}
 
 // ShowPrimaryRow returns a row for a primary key column.
 func ShowPrimaryRow(tableName, colName string) []sqltypes.Value {
