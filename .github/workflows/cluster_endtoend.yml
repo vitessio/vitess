@@ -28,6 +28,7 @@ jobs:
         go mod download
 
     - name: sharded cluster_endtoend
+      timeout-minutes: 30
       run: |
         source build.env
         eatmydata -- go run test.go -docker=false -print-log -shard ${{matrix.name}} 
