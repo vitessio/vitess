@@ -772,12 +772,11 @@ func (mi *migrater) deleteReverseVReplication(ctx context.Context) error {
 
 func (mi *migrater) createJournals(ctx context.Context, sourceWorkflows []string) error {
 	log.Infof("In createJournals for source workflows %+v", sourceWorkflows)
-	var participants []*binlogdatapb.KeyspaceShard
 	return mi.forAllSources(func(source *miSource) error {
 		if source.journaled {
 			return nil
 		}
-		participants = make([]*binlogdatapb.KeyspaceShard, 0)
+		participants := make([]*binlogdatapb.KeyspaceShard, 0)
 		participantMap := make(map[string]bool)
 		journal := &binlogdatapb.Journal{
 			Id:              mi.id,
