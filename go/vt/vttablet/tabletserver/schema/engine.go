@@ -257,10 +257,6 @@ func (se *Engine) reload(ctx context.Context) error {
 	}
 	se.lastChange = curTime
 
-	// Register message topics on the engine if necessary.
-	// Must run after se.tables is set.
-	se.registerTopics()
-
 	se.broadcast(created, altered, dropped)
 	return nil
 }
@@ -300,52 +296,6 @@ func (se *Engine) populatePrimaryKeys(ctx context.Context, conn *connpool.DBConn
 		table.PKColumns = append(table.PKColumns, index)
 	}
 	return nil
-}
-
-// registerTopics optionally connects the vt_topic metadata on a message table
-// to a map of topic strings. A table can belong to only one topic.
-func (se *Engine) registerTopics() {
-	// first drop all topics
-	for tableName, table := range se.tables {
-		if table.Type == Topic {
-			delete(se.tables, tableName)
-		}
-	}
-
-	// then register all the topics from scratch
-	for _, table := range se.tables {
-		se.registerTopic(table)
-	}
-}
-
-func (se *Engine) registerTopic(ta *Table) {
-	if ta.MessageInfo == nil || ta.MessageInfo.Topic == "" {
-		return
-	}
-
-	topicName := ta.MessageInfo.Topic
-	topicTable, ok := se.tables[topicName]
-	if !ok {
-		// Create a new topic table.
-		topicTable = NewTable(topicName)
-		topicTable.Type = Topic
-		topicTable.TopicInfo = &TopicInfo{}
-		se.tables[topicName] = topicTable
-		log.Infof("creating topic table '%s'", topicName)
-	} else {
-		// Unreachable.
-		// Check to see if this table is already registered to the topic
-		// so we don't double register.
-		for _, t := range topicTable.TopicInfo.Subscribers {
-			if t == ta.Name {
-				return
-			}
-		}
-	}
-
-	// Append this table to the list of subscribed tables to the topic
-	log.Infof("subscribing message table '%s' to topic '%s'", ta.Name.String(), topicName)
-	topicTable.TopicInfo.Subscribers = append(topicTable.TopicInfo.Subscribers, ta.Name)
 }
 
 // RegisterNotifier registers the function for schema change notification.

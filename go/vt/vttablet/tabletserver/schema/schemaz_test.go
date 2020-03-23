@@ -50,7 +50,7 @@ func TestSchamazHandler1(t *testing.T) {
 		`<td>id: INT32<br>next_id: INT64<br>cache: INT64<br>increment: INT64<br></td>`,
 		`<td>id<br></td>`,
 		`<td>sequence</td>`,
-		`<td>{{0 0} 0 0}&lt;nil&gt;&lt;nil&gt;</td>`,
+		`<td>{{0 0} 0 0}&lt;nil&gt;</td>`,
 	}
 	matched, err = regexp.Match(strings.Join(seq, `\s*`), body)
 	require.NoError(t, err)
