@@ -44,12 +44,6 @@ var (
 		"Messages",
 		"Stats for messages",
 		[]string{"TableName", "Metric"})
-
-	// MessageDelayTimings records total latency from queueing to sent to clients.
-	MessageDelayTimings = stats.NewMultiTimings(
-		"MessageDelay",
-		"MessageDelayTimings records total latency from queueing to client sends",
-		[]string{"TableName"})
 )
 
 type messageReceiver struct {
@@ -239,7 +233,7 @@ func newMessageManager(tsv TabletService, vs VStreamer, table *schema.Table, pos
 	mm.cond.L = &mm.mu
 
 	columnList := buildSelectColumnList(table)
-	vsQuery := fmt.Sprintf("select time_next, epoch, time_created, %s from %v", columnList, mm.name)
+	vsQuery := fmt.Sprintf("select time_next, epoch, time_acked, %s from %v", columnList, mm.name)
 	mm.vsFilter = &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
 			Match:  table.Name.String(),
@@ -247,17 +241,16 @@ func newMessageManager(tsv TabletService, vs VStreamer, table *schema.Table, pos
 		}},
 	}
 	mm.readByTimeNext = sqlparser.BuildParsedQuery(
-		"select time_next, epoch, time_created, %s from %v where time_next < %a order by time_next desc limit %a",
+		"select time_next, epoch, time_acked, %s from %v where time_next < %a order by time_next desc limit %a",
 		columnList, mm.name, ":time_next", ":max")
 	mm.ackQuery = sqlparser.BuildParsedQuery(
 		"update %v set time_acked = %a, time_next = null where id in %a and time_acked is null",
 		mm.name, ":time_acked", "::ids")
 	mm.postponeQuery = sqlparser.BuildParsedQuery(
-		"update %v set time_next = %a+(%a<<epoch), epoch = epoch+1 where id in %a and time_acked is null",
+		"update %v set time_next = %a+(%a<<ifnull(epoch, 0)), epoch = ifnull(epoch, 0)+1 where id in %a and time_acked is null",
 		mm.name, ":time_now", ":wait_time", "::ids")
 	mm.purgeQuery = sqlparser.BuildParsedQuery(
-		"delete from %v where time_scheduled < %a and time_acked is not null limit 500",
-		mm.name, ":time_scheduled")
+		"delete from %v where time_acked < %a limit 500", mm.name, ":time_acked")
 	return mm
 }
 
@@ -469,7 +462,6 @@ func (mm *messageManager) runSend() {
 
 			// Fetch rows from cache.
 			lateCount := int64(0)
-			timingsKey := []string{mm.name.String()}
 			for i := 0; i < mm.batchSize; i++ {
 				mr := mm.cache.Pop()
 				if mr == nil {
@@ -478,7 +470,6 @@ func (mm *messageManager) runSend() {
 				if mr.Epoch >= 1 {
 					lateCount++
 				}
-				MessageDelayTimings.Record(timingsKey, time.Unix(0, mr.TimeCreated))
 				rows = append(rows, mr.Row)
 			}
 			MessageStats.Add([]string{mm.name.String(), "Delayed"}, lateCount)
@@ -680,9 +671,7 @@ func (mm *messageManager) processRowEvent(fields []*querypb.Field, rowEvent *bin
 		if err != nil {
 			return err
 		}
-		// timeNext will be zero for acked messages.
-		// So, they should not be sent.
-		if mr.TimeNext == 0 || mr.TimeNext > now {
+		if mr.TimeAcked != 0 || mr.TimeNext > now {
 			continue
 		}
 		mm.Add(mr)
@@ -813,34 +802,35 @@ func (mm *messageManager) GeneratePostponeQuery(ids []string) (string, map[strin
 // GeneratePurgeQuery returns the query and bind vars for purging messages.
 func (mm *messageManager) GeneratePurgeQuery(timeCutoff int64) (string, map[string]*querypb.BindVariable) {
 	return mm.purgeQuery.Query, map[string]*querypb.BindVariable{
-		"time_scheduled": sqltypes.Int64BindVariable(timeCutoff),
+		"time_acked": sqltypes.Int64BindVariable(timeCutoff),
 	}
 }
 
 // BuildMessageRow builds a MessageRow for a db row.
 func BuildMessageRow(row []sqltypes.Value) (*MessageRow, error) {
-	var timeNext int64
+	mr := &MessageRow{Row: row[3:]}
 	if !row[0].IsNull() {
-		tn, err := sqltypes.ToInt64(row[0])
+		v, err := sqltypes.ToInt64(row[0])
 		if err != nil {
 			return nil, err
 		}
-		timeNext = tn
+		mr.TimeNext = v
 	}
-	epoch, err := sqltypes.ToInt64(row[1])
-	if err != nil {
-		return nil, err
+	if !row[1].IsNull() {
+		v, err := sqltypes.ToInt64(row[1])
+		if err != nil {
+			return nil, err
+		}
+		mr.Epoch = v
 	}
-	timeCreated, err := sqltypes.ToInt64(row[2])
-	if err != nil {
-		return nil, err
+	if !row[2].IsNull() {
+		v, err := sqltypes.ToInt64(row[2])
+		if err != nil {
+			return nil, err
+		}
+		mr.TimeAcked = v
 	}
-	return &MessageRow{
-		TimeNext:    timeNext,
-		Epoch:       epoch,
-		TimeCreated: timeCreated,
-		Row:         row[3:],
-	}, nil
+	return mr, nil
 }
 
 func (mm *messageManager) receiverCount() int {

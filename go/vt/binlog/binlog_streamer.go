@@ -494,7 +494,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 			// Fill in PK indexes if necessary.
 			if bls.extractPK {
 				tce.pkNames = make([]*querypb.Field, len(tce.ti.PKColumns))
-				tce.pkIndexes = make([]int, len(tce.ti.Columns))
+				tce.pkIndexes = make([]int, len(tce.ti.Fields))
 				for i := range tce.pkIndexes {
 					// Put -1 as default in here.
 					tce.pkIndexes[i] = -1
@@ -503,10 +503,7 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 					// Patch in every PK column index.
 					tce.pkIndexes[c] = i
 					// Fill in pknames
-					tce.pkNames[i] = &querypb.Field{
-						Name: tce.ti.Columns[c].Name.String(),
-						Type: tce.ti.Columns[c].Type,
-					}
+					tce.pkNames[i] = tce.ti.Fields[c]
 				}
 			}
 		case ev.IsWriteRows():
@@ -739,7 +736,7 @@ func writeValuesAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, rs *my
 		if valueIndex > 0 {
 			sql.WriteString(", ")
 		}
-		sql.Myprintf("%v", tce.ti.Columns[c].Name)
+		sql.Myprintf("%v", sqlparser.NewColIdent(tce.ti.Fields[c].Name))
 		sql.WriteByte('=')
 
 		if rs.Rows[rowIndex].NullColumns.Bit(valueIndex) {
@@ -750,7 +747,7 @@ func writeValuesAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, rs *my
 		}
 
 		// We have real data.
-		value, l, err := mysql.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], tce.ti.Columns[c].Type)
+		value, l, err := mysql.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], tce.ti.Fields[c].Type)
 		if err != nil {
 			return keyspaceIDCell, nil, err
 		}
@@ -800,7 +797,7 @@ func writeIdentifiersAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, r
 		if valueIndex > 0 {
 			sql.WriteString(" AND ")
 		}
-		sql.Myprintf("%v", tce.ti.Columns[c].Name)
+		sql.Myprintf("%v", sqlparser.NewColIdent(tce.ti.Fields[c].Name))
 
 		if rs.Rows[rowIndex].NullIdentifyColumns.Bit(valueIndex) {
 			// This column is represented, but its value is NULL.
@@ -811,7 +808,7 @@ func writeIdentifiersAsSQL(sql *sqlparser.TrackedBuffer, tce *tableCacheEntry, r
 		sql.WriteByte('=')
 
 		// We have real data.
-		value, l, err := mysql.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], tce.ti.Columns[c].Type)
+		value, l, err := mysql.CellValue(data, pos, tce.tm.Types[c], tce.tm.Metadata[c], tce.ti.Fields[c].Type)
 		if err != nil {
 			return keyspaceIDCell, nil, err
 		}
