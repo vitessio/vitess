@@ -26,52 +26,12 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 var (
 	echoPrefix = "echo://"
 
-	query    = "test query with unicode: \u6211\u80fd\u541e\u4e0b\u73bb\u7483\u800c\u4e0d\u50b7\u8eab\u9ad4"
-	keyspace = "test_keyspace"
-
-	shards     = []string{"-80", "80-"}
-	shardsEcho = "[-80 80-]"
-
-	keyspaceIDs = [][]byte{
-		{1, 2, 3, 4},
-		{5, 6, 7, 8},
-	}
-	keyspaceIDsEcho = "[[1 2 3 4] [5 6 7 8]]"
-
-	keyRanges = []*topodatapb.KeyRange{
-		{Start: []byte{1, 2, 3, 4}, End: []byte{5, 6, 7, 8}},
-	}
-	keyRangeZeroEcho = "start:\"\\001\\002\\003\\004\" end:\"\\005\\006\\007\\010\" "
-	keyRangesEcho    = "[" + keyRangeZeroEcho + "]"
-
-	entityKeyspaceIDs = []*vtgatepb.ExecuteEntityIdsRequest_EntityId{
-		{
-			KeyspaceId: []byte{1, 2, 3},
-			Type:       sqltypes.Int64,
-			Value:      []byte("123"),
-		},
-		{
-			KeyspaceId: []byte{4, 5, 6},
-			Type:       sqltypes.Float64,
-			Value:      []byte("2"),
-		},
-		{
-			KeyspaceId: []byte{7, 8, 9},
-			Type:       sqltypes.VarBinary,
-			Value:      []byte{1, 2, 3},
-		},
-	}
-	entityKeyspaceIDsEcho = "[type:INT64 value:\"123\" keyspace_id:\"\\001\\002\\003\"  type:FLOAT64 value:\"2\" keyspace_id:\"\\004\\005\\006\"  type:VARBINARY value:\"\\001\\002\\003\" keyspace_id:\"\\007\\010\\t\" ]"
-
-	tabletType     = topodatapb.TabletType_REPLICA
-	tabletTypeEcho = topodatapb.TabletType_name[int32(tabletType)]
+	query = "test query with unicode: \u6211\u80fd\u541e\u4e0b\u73bb\u7483\u800c\u4e0d\u50b7\u8eab\u9ad4"
 
 	bindVars = map[string]*querypb.BindVariable{
 		"int":   sqltypes.Int64BindVariable(123),
@@ -80,22 +40,14 @@ var (
 	}
 	bindVarsEcho = "map[bytes:type:VARBINARY value:\"\\001\\002\\003\"  float:type:FLOAT64 value:\"2.1\"  int:type:INT64 value:\"123\" ]"
 
-	sessionEcho = "in_transaction:true "
-
 	callerID     = callerid.NewEffectiveCallerID("test_principal", "test_component", "test_subcomponent")
 	callerIDEcho = "principal:\"test_principal\" component:\"test_component\" subcomponent:\"test_subcomponent\" "
-
-	options = &querypb.ExecuteOptions{
-		IncludedFields: querypb.ExecuteOptions_TYPE_ONLY,
-	}
-	optionsEcho = "included_fields:TYPE_ONLY "
 )
 
 // testEcho exercises the test cases provided by the "echo" service.
 func testEcho(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgateconn.VTGateSession) {
 	testEchoExecute(t, conn, session)
 	testEchoStreamExecute(t, conn, session)
-	testEchoTransactionExecute(t, conn)
 }
 
 func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgateconn.VTGateSession) {
@@ -109,95 +61,6 @@ func testEchoExecute(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgatec
 		"callerId": callerIDEcho,
 		"query":    echoPrefix + query,
 		"bindVars": bindVarsEcho,
-	})
-
-	qr, err = conn.ExecuteShards(ctx, echoPrefix+query, keyspace, shards, bindVars, tabletType, options)
-	checkEcho(t, "ExecuteShards", qr, err, map[string]string{
-		"callerId":   callerIDEcho,
-		"query":      echoPrefix + query,
-		"keyspace":   keyspace,
-		"shards":     shardsEcho,
-		"bindVars":   bindVarsEcho,
-		"tabletType": tabletTypeEcho,
-		"options":    optionsEcho,
-	})
-
-	qr, err = conn.ExecuteKeyspaceIds(ctx, echoPrefix+query, keyspace, keyspaceIDs, bindVars, tabletType, options)
-	checkEcho(t, "ExecuteKeyspaceIds", qr, err, map[string]string{
-		"callerId":    callerIDEcho,
-		"query":       echoPrefix + query,
-		"keyspace":    keyspace,
-		"keyspaceIds": keyspaceIDsEcho,
-		"bindVars":    bindVarsEcho,
-		"tabletType":  tabletTypeEcho,
-		"options":     optionsEcho,
-	})
-
-	qr, err = conn.ExecuteKeyRanges(ctx, echoPrefix+query, keyspace, keyRanges, bindVars, tabletType, options)
-	checkEcho(t, "ExecuteKeyRanges", qr, err, map[string]string{
-		"callerId":   callerIDEcho,
-		"query":      echoPrefix + query,
-		"keyspace":   keyspace,
-		"keyRanges":  keyRangesEcho,
-		"bindVars":   bindVarsEcho,
-		"tabletType": tabletTypeEcho,
-		"options":    optionsEcho,
-	})
-
-	qr, err = conn.ExecuteEntityIds(ctx, echoPrefix+query, keyspace, "column1", entityKeyspaceIDs, bindVars, tabletType, options)
-	checkEcho(t, "ExecuteEntityIds", qr, err, map[string]string{
-		"callerId":         callerIDEcho,
-		"query":            echoPrefix + query,
-		"keyspace":         keyspace,
-		"entityColumnName": "column1",
-		"entityIds":        entityKeyspaceIDsEcho,
-		"bindVars":         bindVarsEcho,
-		"tabletType":       tabletTypeEcho,
-		"options":          optionsEcho,
-	})
-
-	var qrs []sqltypes.Result
-
-	qrs, err = conn.ExecuteBatchShards(ctx, []*vtgatepb.BoundShardQuery{
-		{
-			Query: &querypb.BoundQuery{
-				Sql:           echoPrefix + query,
-				BindVariables: bindVars,
-			},
-			Keyspace: keyspace,
-			Shards:   shards,
-		},
-	}, tabletType, true, options)
-	checkEcho(t, "ExecuteBatchShards", &qrs[0], err, map[string]string{
-		"callerId":      callerIDEcho,
-		"query":         echoPrefix + query,
-		"keyspace":      keyspace,
-		"shards":        shardsEcho,
-		"bindVars":      bindVarsEcho,
-		"tabletType":    tabletTypeEcho,
-		"asTransaction": "true",
-		"options":       optionsEcho,
-	})
-
-	qrs, err = conn.ExecuteBatchKeyspaceIds(ctx, []*vtgatepb.BoundKeyspaceIdQuery{
-		{
-			Query: &querypb.BoundQuery{
-				Sql:           echoPrefix + query,
-				BindVariables: bindVars,
-			},
-			Keyspace:    keyspace,
-			KeyspaceIds: keyspaceIDs,
-		},
-	}, tabletType, true, options)
-	checkEcho(t, "ExecuteBatchKeyspaceIds", &qrs[0], err, map[string]string{
-		"callerId":      callerIDEcho,
-		"query":         echoPrefix + query,
-		"keyspace":      keyspace,
-		"keyspaceIds":   keyspaceIDsEcho,
-		"bindVars":      bindVarsEcho,
-		"tabletType":    tabletTypeEcho,
-		"asTransaction": "true",
-		"options":       optionsEcho,
 	})
 }
 
@@ -217,170 +80,6 @@ func testEchoStreamExecute(t *testing.T, conn *vtgateconn.VTGateConn, session *v
 		"callerId": callerIDEcho,
 		"query":    echoPrefix + query,
 		"bindVars": bindVarsEcho,
-	})
-
-	stream, err = conn.StreamExecuteShards(ctx, echoPrefix+query, keyspace, shards, bindVars, tabletType, options)
-	if err != nil {
-		t.Fatal(err)
-	}
-	qr, err = stream.Recv()
-	checkEcho(t, "StreamExecuteShards", qr, err, map[string]string{
-		"callerId":   callerIDEcho,
-		"query":      echoPrefix + query,
-		"keyspace":   keyspace,
-		"shards":     shardsEcho,
-		"bindVars":   bindVarsEcho,
-		"tabletType": tabletTypeEcho,
-		"options":    optionsEcho,
-	})
-
-	stream, err = conn.StreamExecuteKeyspaceIds(ctx, echoPrefix+query, keyspace, keyspaceIDs, bindVars, tabletType, options)
-	if err != nil {
-		t.Fatal(err)
-	}
-	qr, err = stream.Recv()
-	checkEcho(t, "StreamExecuteKeyspaceIds", qr, err, map[string]string{
-		"callerId":    callerIDEcho,
-		"query":       echoPrefix + query,
-		"keyspace":    keyspace,
-		"keyspaceIds": keyspaceIDsEcho,
-		"bindVars":    bindVarsEcho,
-		"tabletType":  tabletTypeEcho,
-		"options":     optionsEcho,
-	})
-
-	stream, err = conn.StreamExecuteKeyRanges(ctx, echoPrefix+query, keyspace, keyRanges, bindVars, tabletType, options)
-	if err != nil {
-		t.Fatal(err)
-	}
-	qr, err = stream.Recv()
-	checkEcho(t, "StreamExecuteKeyRanges", qr, err, map[string]string{
-		"callerId":   callerIDEcho,
-		"query":      echoPrefix + query,
-		"keyspace":   keyspace,
-		"keyRanges":  keyRangesEcho,
-		"bindVars":   bindVarsEcho,
-		"tabletType": tabletTypeEcho,
-		"options":    optionsEcho,
-	})
-}
-
-func testEchoTransactionExecute(t *testing.T, conn *vtgateconn.VTGateConn) {
-	var qr *sqltypes.Result
-	var err error
-
-	ctx := callerid.NewContext(context.Background(), callerID, nil)
-
-	tx, err := conn.Begin(ctx)
-	if err != nil {
-		t.Fatalf("Begin error: %v", err)
-	}
-
-	qr, err = tx.ExecuteShards(ctx, echoPrefix+query, keyspace, shards, bindVars, tabletType, options)
-	checkEcho(t, "ExecuteShards", qr, err, map[string]string{
-		"callerId":         callerIDEcho,
-		"query":            echoPrefix + query,
-		"keyspace":         keyspace,
-		"shards":           shardsEcho,
-		"bindVars":         bindVarsEcho,
-		"tabletType":       tabletTypeEcho,
-		"session":          sessionEcho,
-		"notInTransaction": "false",
-		"options":          optionsEcho,
-	})
-
-	qr, err = tx.ExecuteKeyspaceIds(ctx, echoPrefix+query, keyspace, keyspaceIDs, bindVars, tabletType, options)
-	checkEcho(t, "ExecuteKeyspaceIds", qr, err, map[string]string{
-		"callerId":         callerIDEcho,
-		"query":            echoPrefix + query,
-		"keyspace":         keyspace,
-		"keyspaceIds":      keyspaceIDsEcho,
-		"bindVars":         bindVarsEcho,
-		"tabletType":       tabletTypeEcho,
-		"session":          sessionEcho,
-		"notInTransaction": "false",
-		"options":          optionsEcho,
-	})
-
-	qr, err = tx.ExecuteKeyRanges(ctx, echoPrefix+query, keyspace, keyRanges, bindVars, tabletType, options)
-	checkEcho(t, "ExecuteKeyRanges", qr, err, map[string]string{
-		"callerId":         callerIDEcho,
-		"query":            echoPrefix + query,
-		"keyspace":         keyspace,
-		"keyRanges":        keyRangesEcho,
-		"bindVars":         bindVarsEcho,
-		"tabletType":       tabletTypeEcho,
-		"session":          sessionEcho,
-		"notInTransaction": "false",
-		"options":          optionsEcho,
-	})
-
-	qr, err = tx.ExecuteEntityIds(ctx, echoPrefix+query, keyspace, "column1", entityKeyspaceIDs, bindVars, tabletType, options)
-	checkEcho(t, "ExecuteEntityIds", qr, err, map[string]string{
-		"callerId":         callerIDEcho,
-		"query":            echoPrefix + query,
-		"keyspace":         keyspace,
-		"entityColumnName": "column1",
-		"entityIds":        entityKeyspaceIDsEcho,
-		"bindVars":         bindVarsEcho,
-		"tabletType":       tabletTypeEcho,
-		"session":          sessionEcho,
-		"notInTransaction": "false",
-		"options":          optionsEcho,
-	})
-
-	if err := tx.Rollback(ctx); err != nil {
-		t.Fatalf("Rollback error: %v", err)
-	}
-	tx, err = conn.Begin(ctx)
-	if err != nil {
-		t.Fatalf("Begin (again) error: %v", err)
-	}
-
-	var qrs []sqltypes.Result
-
-	qrs, err = tx.ExecuteBatchShards(ctx, []*vtgatepb.BoundShardQuery{
-		{
-			Query: &querypb.BoundQuery{
-				Sql:           echoPrefix + query,
-				BindVariables: bindVars,
-			},
-			Keyspace: keyspace,
-			Shards:   shards,
-		},
-	}, tabletType, options)
-	checkEcho(t, "ExecuteBatchShards", &qrs[0], err, map[string]string{
-		"callerId":      callerIDEcho,
-		"query":         echoPrefix + query,
-		"keyspace":      keyspace,
-		"shards":        shardsEcho,
-		"bindVars":      bindVarsEcho,
-		"tabletType":    tabletTypeEcho,
-		"session":       sessionEcho,
-		"asTransaction": "false",
-		"options":       optionsEcho,
-	})
-
-	qrs, err = tx.ExecuteBatchKeyspaceIds(ctx, []*vtgatepb.BoundKeyspaceIdQuery{
-		{
-			Query: &querypb.BoundQuery{
-				Sql:           echoPrefix + query,
-				BindVariables: bindVars,
-			},
-			Keyspace:    keyspace,
-			KeyspaceIds: keyspaceIDs,
-		},
-	}, tabletType, options)
-	checkEcho(t, "ExecuteBatchKeyspaceIds", &qrs[0], err, map[string]string{
-		"callerId":      callerIDEcho,
-		"query":         echoPrefix + query,
-		"keyspace":      keyspace,
-		"keyspaceIds":   keyspaceIDsEcho,
-		"bindVars":      bindVarsEcho,
-		"tabletType":    tabletTypeEcho,
-		"session":       sessionEcho,
-		"asTransaction": "false",
-		"options":       optionsEcho,
 	})
 }
 

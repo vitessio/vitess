@@ -46,7 +46,6 @@ func TestGoClient(t *testing.T, protocol, addr string) {
 	testCallerID(t, conn, session)
 	testEcho(t, conn, session)
 	testErrors(t, conn, session)
-	testSuccess(t, conn)
 
 	// and clean up
 	conn.Close()

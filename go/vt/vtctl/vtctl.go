@@ -2555,7 +2555,7 @@ func commandApplyVSchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *f
 
 	if _, err := wr.TopoServer().GetKeyspace(ctx, keyspace); err != nil {
 		if strings.Contains(err.Error(), "node doesn't exist") {
-			return fmt.Errorf("keyspace(%s) doesn't exist, check if the keyspace is initialized.\n", keyspace)
+			return fmt.Errorf("keyspace(%s) doesn't exist, check if the keyspace is initialized", keyspace)
 		}
 		return err
 	}
