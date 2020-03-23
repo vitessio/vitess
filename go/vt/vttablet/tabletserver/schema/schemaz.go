@@ -42,7 +42,7 @@ var (
 			<td>{{range .Fields}}{{.Name}}: {{.Type}}<br>{{end}}</td>
 			<td>{{range .PKColumns}}{{with index $top.Table.Fields .}}{{.Name}}{{end}}<br>{{end}}</td>
 			<td>{{index $top.Type .Type}}</td>
-			<td>{{.SequenceInfo}}{{.MessageInfo}}{{.TopicInfo}}</td>
+			<td>{{.SequenceInfo}}{{.MessageInfo}}</td>
 		</tr>{{end}}
 	`))
 )

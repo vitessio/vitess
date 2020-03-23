@@ -74,7 +74,7 @@ func TestOpenAndReload(t *testing.T) {
 		Rows: [][]sqltypes.Value{
 			mysql.BaseShowTablesRow("test_table_01", false, ""),
 			mysql.BaseShowTablesRow("test_table_02", false, ""),
-			[]sqltypes.Value{
+			{
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("test_table_03")),
 				sqltypes.MakeTrusted(sqltypes.VarChar, []byte("BASE TABLE")),
 				// Match the timestamp.
@@ -121,14 +121,14 @@ func TestOpenAndReload(t *testing.T) {
 		if firstTime {
 			firstTime = false
 			sort.Strings(created)
-			assert.Equal(t, []string{"dual", "msg", "seq", "test_table_01", "test_table_02", "test_table_03", "topic"}, created)
+			assert.Equal(t, []string{"dual", "msg", "seq", "test_table_01", "test_table_02", "test_table_03"}, created)
 			assert.Equal(t, []string(nil), altered)
 			assert.Equal(t, []string(nil), dropped)
 		} else {
 			assert.Equal(t, []string{"test_table_04"}, created)
 			assert.Equal(t, []string{"test_table_03"}, altered)
 			sort.Strings(dropped)
-			assert.Equal(t, []string{"msg", "topic"}, dropped)
+			assert.Equal(t, []string{"msg"}, dropped)
 		}
 	}
 	se.RegisterNotifier("test", notifier)
@@ -159,8 +159,6 @@ func TestOpenAndReload(t *testing.T) {
 		PKColumns: []int{0},
 	}
 	delete(want, "msg")
-	// topic should also get deleted.
-	delete(want, "topic")
 	assert.Equal(t, want, se.GetSchema())
 }
 
@@ -325,10 +323,10 @@ func newDBConfigs(db *fakesqldb.DB) *dbconfigs.DBConfigs {
 
 func initialSchema() map[string]*Table {
 	return map[string]*Table{
-		"dual": &Table{
+		"dual": {
 			Name: sqlparser.NewTableIdent("dual"),
 		},
-		"test_table_01": &Table{
+		"test_table_01": {
 			Name: sqlparser.NewTableIdent("test_table_01"),
 			Fields: []*querypb.Field{{
 				Name: "pk",
@@ -336,7 +334,7 @@ func initialSchema() map[string]*Table {
 			}},
 			PKColumns: []int{0},
 		},
-		"test_table_02": &Table{
+		"test_table_02": {
 			Name: sqlparser.NewTableIdent("test_table_02"),
 			Fields: []*querypb.Field{{
 				Name: "pk",
@@ -344,7 +342,7 @@ func initialSchema() map[string]*Table {
 			}},
 			PKColumns: []int{0},
 		},
-		"test_table_03": &Table{
+		"test_table_03": {
 			Name: sqlparser.NewTableIdent("test_table_03"),
 			Fields: []*querypb.Field{{
 				Name: "pk",
@@ -352,7 +350,7 @@ func initialSchema() map[string]*Table {
 			}},
 			PKColumns: []int{0},
 		},
-		"seq": &Table{
+		"seq": {
 			Name: sqlparser.NewTableIdent("seq"),
 			Type: Sequence,
 			Fields: []*querypb.Field{{
@@ -371,7 +369,7 @@ func initialSchema() map[string]*Table {
 			PKColumns:    []int{0},
 			SequenceInfo: &SequenceInfo{},
 		},
-		"msg": &Table{
+		"msg": {
 			Name: sqlparser.NewTableIdent("msg"),
 			Type: Message,
 			Fields: []*querypb.Field{{
@@ -399,21 +397,11 @@ func initialSchema() map[string]*Table {
 					Name: "message",
 					Type: sqltypes.Int64,
 				}},
-				Topic:              "topic",
 				AckWaitDuration:    30 * time.Second,
 				PurgeAfterDuration: 120 * time.Second,
 				BatchSize:          1,
 				CacheSize:          10,
 				PollInterval:       30 * time.Second,
-			},
-		},
-		"topic": &Table{
-			Name: sqlparser.NewTableIdent("topic"),
-			Type: Topic,
-			TopicInfo: &TopicInfo{
-				Subscribers: []sqlparser.TableIdent{
-					sqlparser.NewTableIdent("msg"),
-				},
 			},
 		},
 	}

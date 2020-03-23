@@ -30,7 +30,6 @@ const (
 	NoType = iota
 	Sequence
 	Message
-	Topic
 )
 
 // TypeNames allows to fetch a the type name for a table.
@@ -39,7 +38,6 @@ var TypeNames = []string{
 	"none",
 	"sequence",
 	"message",
-	"topic",
 }
 
 // Table contains info about a table.
@@ -54,9 +52,6 @@ type Table struct {
 
 	// MessageInfo contains info for message tables.
 	MessageInfo *MessageInfo
-
-	// TopicInfo contains info for message topics.
-	TopicInfo *TopicInfo
 }
 
 // SequenceInfo contains info specific to sequence tabels.
@@ -70,22 +65,11 @@ type SequenceInfo struct {
 	LastVal int64
 }
 
-// TopicInfo contains info specific to message topics.
-type TopicInfo struct {
-	// Subscribers links to all the message tables
-	// subscribed to this topic
-	Subscribers []sqlparser.TableIdent
-}
-
 // MessageInfo contains info specific to message tables.
 type MessageInfo struct {
 	// Fields stores the field info to be
 	// returned for subscribers.
 	Fields []*querypb.Field
-
-	// Optional topic to subscribe to. Any messages
-	// published to the topic will be added to this table.
-	Topic string
 
 	// AckWaitDuration specifies how long to wait after
 	// the message was first sent. The back-off doubles
