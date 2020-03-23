@@ -20,8 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"reflect"
-	"testing"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -41,12 +39,6 @@ type testUtils struct{}
 
 func newTestUtils() *testUtils {
 	return &testUtils{}
-}
-
-func (util *testUtils) checkEqual(t *testing.T, expected interface{}, result interface{}) {
-	if !reflect.DeepEqual(expected, result) {
-		t.Fatalf("expect to get: %v, but got: %v", expected, result)
-	}
 }
 
 func (util *testUtils) newDBConfigs(db *fakesqldb.DB) *dbconfigs.DBConfigs {

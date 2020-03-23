@@ -19,8 +19,6 @@ package messaging
 import (
 	"context"
 	"fmt"
-	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -32,16 +30,14 @@ import (
 )
 
 var createMessage = `create table vitess_message(
-	time_scheduled bigint,
 	id bigint,
-	time_next bigint,
+	time_next bigint default 0,
 	epoch bigint,
-	time_created bigint,
 	time_acked bigint,
 	message varchar(128),
-	primary key(time_scheduled, id),
-	unique index id_idx(id),
-	index next_idx(time_next, epoch))
+	primary key(id),
+	index next_idx(time_next, epoch),
+	index ack_idx(time_acked))
 comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
 
 func TestMessage(t *testing.T) {
@@ -71,13 +67,17 @@ func TestMessage(t *testing.T) {
 		Name: "id",
 		Type: sqltypes.Int64,
 	}, {
-		Name: "time_scheduled",
-		Type: sqltypes.Int64,
-	}, {
 		Name: "message",
 		Type: sqltypes.VarChar,
 	}}
 	gotFields, err := streamConn.Fields()
+	for i, field := range gotFields {
+		// Remove other artifacts.
+		gotFields[i] = &querypb.Field{
+			Name: field.Name,
+			Type: field.Type,
+		}
+	}
 	require.NoError(t, err)
 	assert.Equal(t, wantFields, gotFields)
 
@@ -88,15 +88,8 @@ func TestMessage(t *testing.T) {
 	got, err := streamConn.FetchNext()
 	require.NoError(t, err)
 
-	// Check time_scheduled separately.
-	scheduled, err := sqltypes.ToInt64(got[1])
-	require.NoError(t, err)
-	if now := time.Now().UnixNano(); now-scheduled >= int64(10*time.Second) {
-		t.Errorf("scheduled: %v, must be close to %v", scheduled, now)
-	}
 	want := []sqltypes.Value{
 		sqltypes.NewInt64(1),
-		got[1],
 		sqltypes.NewVarChar("hello world"),
 	}
 	assert.Equal(t, want, got)
@@ -147,17 +140,15 @@ func TestMessage(t *testing.T) {
 }
 
 var createThreeColMessage = `create table vitess_message3(
-	time_scheduled bigint,
 	id bigint,
-	time_next bigint,
+	time_next bigint default 0,
 	epoch bigint,
-	time_created bigint,
 	time_acked bigint,
 	msg1 varchar(128),
 	msg2 bigint,
-	primary key(time_scheduled, id),
-	unique index id_idx(id),
-	index next_idx(time_next, epoch))
+	primary key(id),
+	index next_idx(time_next, epoch),
+	index ack_idx(time_acked))
 comment 'vitess_message,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=2,vt_cache_size=10,vt_poller_interval=1'`
 
 func TestThreeColMessage(t *testing.T) {
@@ -187,9 +178,6 @@ func TestThreeColMessage(t *testing.T) {
 		Name: "id",
 		Type: sqltypes.Int64,
 	}, {
-		Name: "time_scheduled",
-		Type: sqltypes.Int64,
-	}, {
 		Name: "msg1",
 		Type: sqltypes.VarChar,
 	}, {
@@ -197,6 +185,13 @@ func TestThreeColMessage(t *testing.T) {
 		Type: sqltypes.Int64,
 	}}
 	gotFields, err := streamConn.Fields()
+	for i, field := range gotFields {
+		// Remove other artifacts.
+		gotFields[i] = &querypb.Field{
+			Name: field.Name,
+			Type: field.Type,
+		}
+	}
 	require.NoError(t, err)
 	assert.Equal(t, wantFields, gotFields)
 
@@ -206,7 +201,6 @@ func TestThreeColMessage(t *testing.T) {
 	require.NoError(t, err)
 	want := []sqltypes.Value{
 		sqltypes.NewInt64(1),
-		got[1],
 		sqltypes.NewVarChar("hello world"),
 		sqltypes.NewInt64(3),
 	}
@@ -215,183 +209,6 @@ func TestThreeColMessage(t *testing.T) {
 	// Verify Ack.
 	qr := exec(t, conn, "update vitess_message3 set time_acked = 123, time_next = null where id = 1 and time_acked is null")
 	assert.Equal(t, uint64(1), qr.RowsAffected)
-}
-
-var createMessageTopic1 = `create table vitess_topic_subscriber_1(
-	time_scheduled bigint,
-	id bigint,
-	time_next bigint,
-	epoch bigint,
-	time_created bigint,
-	time_acked bigint,
-	message varchar(128),
-	primary key(time_scheduled, id),
-	unique index id_idx(id),
-	index next_idx(time_next, epoch))
-comment 'vitess_message,vt_topic=test_topic,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=1'`
-
-var createMessageTopic2 = `create table vitess_topic_subscriber_2(
-	time_scheduled bigint,
-	id bigint,
-	time_next bigint,
-	epoch bigint,
-	time_created bigint,
-	time_acked bigint,
-	message varchar(128),
-	primary key(time_scheduled, id),
-	unique index id_idx(id),
-	index next_idx(time_next, epoch))
-comment 'vitess_message,vt_topic=test_topic,vt_ack_wait=1,vt_purge_after=3,vt_batch_size=1,vt_cache_size=10,vt_poller_interval=1'`
-
-// TestMessageTopic tests for the case where id is an auto-inc column.
-func TestMessageTopic(t *testing.T) {
-	ctx := context.Background()
-
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer conn.Close()
-
-	streamConn1, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer streamConn1.Close()
-	streamConn2, err := mysql.Connect(ctx, &vtParams)
-	require.NoError(t, err)
-	defer streamConn2.Close()
-
-	exec(t, conn, fmt.Sprintf("use %s", lookupKeyspace))
-	exec(t, conn, createMessageTopic1)
-	exec(t, conn, createMessageTopic2)
-	// These are failsafe drops. The test actually drops these tables during the flow.
-	defer conn.ExecuteFetch("drop table vitess_topic_subscriber_1", 1, false)
-	defer conn.ExecuteFetch("drop table vitess_topic_subscriber_2", 1, false)
-
-	exec(t, streamConn1, "set workload = 'olap'")
-	err = streamConn1.ExecuteStreamFetch("stream * from vitess_topic_subscriber_1")
-	require.NoError(t, err)
-	exec(t, streamConn2, "set workload = 'olap'")
-	err = streamConn2.ExecuteStreamFetch("stream * from vitess_topic_subscriber_2")
-	require.NoError(t, err)
-
-	exec(t, conn, "insert into test_topic(id, message) values(1, 'msg1'), (2, 'msg2'), (3, 'msg3')")
-
-	wantRows := [][]sqltypes.Value{{
-		sqltypes.NewInt64(1),
-		sqltypes.NULL,
-		sqltypes.NewVarChar("msg1"),
-	}, {
-		sqltypes.NewInt64(2),
-		sqltypes.NULL,
-		sqltypes.NewVarChar("msg2"),
-	}, {
-		sqltypes.NewInt64(3),
-		sqltypes.NULL,
-		sqltypes.NewVarChar("msg3"),
-	}}
-
-	// Consume first three messages
-	// and ensure they were received promptly.
-	start := time.Now()
-	for i := 0; i < 3; i++ {
-		// make sure the first message table received all three messages
-		got1, err := streamConn1.FetchNext()
-		require.NoError(t, err)
-		got1[1] = sqltypes.NULL
-
-		// Results can come in any order.
-		found := false
-		for _, want := range wantRows {
-			if reflect.DeepEqual(got1, want) {
-				found = true
-			}
-		}
-		assert.True(t, found)
-
-		// make sure the second message table received all three messages
-		got2, err := streamConn2.FetchNext()
-		require.NoError(t, err)
-		got2[1] = sqltypes.NULL
-
-		// Results can come in any order.
-		found = false
-		for _, want := range wantRows {
-			if reflect.DeepEqual(got2, want) {
-				found = true
-			}
-		}
-		assert.True(t, found)
-	}
-	if d := time.Since(start); d > 1*time.Second {
-		t.Errorf("messages were delayed: %v", d)
-	}
-
-	// ack the first subscribers
-	_ = exec(t, conn, "update vitess_topic_subscriber_1 set time_acked = 123, time_next = null where id in (1, 2, 3) and time_acked is null")
-	_ = exec(t, conn, "update vitess_topic_subscriber_2 set time_acked = 123, time_next = null where id in (1, 2, 3) and time_acked is null")
-
-	//
-	// phase 2 tests deleting one of the subscribers and making sure
-	// that inserts into a topic go to one subscribed message table.
-	// This test takes longer because vttablet will drop and recreate
-	// vitess_topic_subscriber_2, which will make vtgate wait 5s and retry.
-	//
-
-	exec(t, conn, "drop table vitess_topic_subscriber_1")
-	exec(t, conn, "insert into test_topic(id, message) values(4, 'msg4'), (5, 'msg5'), (6, 'msg6')")
-
-	wantRows = [][]sqltypes.Value{{
-		sqltypes.NewInt64(4),
-		sqltypes.NULL,
-		sqltypes.NewVarChar("msg4"),
-	}, {
-		sqltypes.NewInt64(5),
-		sqltypes.NULL,
-		sqltypes.NewVarChar("msg5"),
-	}, {
-		sqltypes.NewInt64(6),
-		sqltypes.NULL,
-		sqltypes.NewVarChar("msg6"),
-	}}
-
-	// Consume first three messages
-	// and ensure they were received promptly.
-	for i := 0; i < 3; i++ {
-		// make sure the second message table received all three messages
-		got2, err := streamConn2.FetchNext()
-		require.NoError(t, err)
-		got2[1] = sqltypes.NULL
-
-		// Results can come in any order.
-		found := false
-		for _, want := range wantRows {
-			if reflect.DeepEqual(got2, want) {
-				found = true
-			}
-		}
-		assert.True(t, found)
-	}
-
-	// ack the second subscriber
-	_ = exec(t, conn, "update vitess_topic_subscriber_2 set time_acked = 123, time_next = null where id in (4, 5, 6) and time_acked is null")
-
-	//
-	// phase 3 tests deleting the last subscriber and making sure
-	// that inserts into a topic error out with table not found
-	//
-
-	// remove the second subscriber which should remove the topic
-	exec(t, conn, "drop table vitess_topic_subscriber_2")
-
-	// this should fail because the topic doesn't exist. Any other outcome fails the test
-	_, err = conn.ExecuteFetch("insert into test_topic(id, message) values(4, 'msg4'), (5, 'msg5'), (6, 'msg6')", 1, false)
-	// 1146: table doesn't exist.
-	want := "errno 1146"
-	if err == nil || !strings.Contains(err.Error(), want) {
-		t.Errorf("non-topic insert err: %v, must contain %v", err, want)
-	}
 }
 
 func getTimeEpoch(qr *sqltypes.Result) (int64, int64) {
