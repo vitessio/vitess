@@ -362,8 +362,7 @@ func (qre *QueryExecutor) checkAccess(authorized *tableacl.ACLResult, tableName 
 
 func (qre *QueryExecutor) execDDL(conn *TxConnection) (*sqltypes.Result, error) {
 	defer func() {
-		err := qre.tsv.se.Reload(qre.ctx)
-		if err != nil {
+		if err := qre.tsv.se.Reload(qre.ctx); err != nil {
 			log.Errorf("failed to reload schema %v", err)
 		}
 	}()
