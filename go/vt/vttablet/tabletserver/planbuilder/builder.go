@@ -122,9 +122,6 @@ func analyzeInsert(ins *sqlparser.Insert, tables map[string]*schema.Table) (plan
 
 	tableName := sqlparser.GetTableName(ins.Table)
 	plan.Table = tables[tableName.String()]
-	if plan.Table != nil && plan.Table.IsTopic() {
-		plan.PlanID = PlanInsertTopic
-	}
 	return plan, nil
 }
 

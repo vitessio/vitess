@@ -43,16 +43,13 @@ func TestStreamerParseRBREvents(t *testing.T) {
 	se := schema.NewEngineForTests()
 	se.SetTableForTests(&schema.Table{
 		Name: sqlparser.NewTableIdent("vt_a"),
-		Columns: []schema.TableColumn{
-			{
-				Name: sqlparser.NewColIdent("id"),
-				Type: querypb.Type_INT64,
-			},
-			{
-				Name: sqlparser.NewColIdent("message"),
-				Type: querypb.Type_VARCHAR,
-			},
-		},
+		Fields: []*querypb.Field{{
+			Name: "id",
+			Type: querypb.Type_INT64,
+		}, {
+			Name: "message",
+			Type: querypb.Type_VARCHAR,
+		}},
 	})
 
 	// Create a tableMap event on the table.
@@ -291,16 +288,13 @@ func TestStreamerParseRBRNameEscapes(t *testing.T) {
 	se := schema.NewEngineForTests()
 	se.SetTableForTests(&schema.Table{
 		Name: sqlparser.NewTableIdent("insert"),
-		Columns: []schema.TableColumn{
-			{
-				Name: sqlparser.NewColIdent("update"),
-				Type: querypb.Type_INT64,
-			},
-			{
-				Name: sqlparser.NewColIdent("delete"),
-				Type: querypb.Type_VARCHAR,
-			},
-		},
+		Fields: []*querypb.Field{{
+			Name: "update",
+			Type: querypb.Type_INT64,
+		}, {
+			Name: "delete",
+			Type: querypb.Type_VARCHAR,
+		}},
 	})
 
 	// Create a tableMap event on the table.

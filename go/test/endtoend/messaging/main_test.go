@@ -83,9 +83,7 @@ var (
 	  "tables": {
 			"unsharded_message": {},
 			"vitess_message": {},
-			"vitess_message3": {},
-			"vitess_topic_subscriber_1": {},
-			"vitess_topic_subscriber_2": {}
+			"vitess_message3": {}
 	  }
 	}`
 )

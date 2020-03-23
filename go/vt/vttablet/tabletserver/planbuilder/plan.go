@@ -47,7 +47,6 @@ const (
 	PlanNextval
 	PlanSelectImpossible
 	PlanInsert
-	PlanInsertTopic
 	PlanInsertMessage
 	PlanUpdate
 	PlanUpdateLimit
@@ -72,7 +71,6 @@ var planName = [NumPlans]string{
 	"Nextval",
 	"SelectImpossible",
 	"Insert",
-	"InsertTopic",
 	"InsertMessage",
 	"Update",
 	"UpdateLimit",
