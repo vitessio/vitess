@@ -165,11 +165,10 @@ endif
 
 PROTO_SRCS = $(wildcard proto/*.proto)
 PROTO_SRC_NAMES = $(basename $(notdir $(PROTO_SRCS)))
-PROTO_PY_OUTS = $(foreach name, $(PROTO_SRC_NAMES), py/vtproto/$(name)_pb2.py)
 PROTO_GO_OUTS = $(foreach name, $(PROTO_SRC_NAMES), go/vt/proto/$(name)/$(name).pb.go)
 
 # This rule rebuilds all the go and python files from the proto definitions for gRPC.
-proto: proto_banner $(PROTO_GO_OUTS) $(PROTO_PY_OUTS)
+proto: proto_banner $(PROTO_GO_OUTS)
 
 proto_banner:
 ifeq (,$(PROTOC_COMMAND))
@@ -179,9 +178,6 @@ endif
 ifndef NOBANNER
 	echo $$(date): Compiling proto definitions
 endif
-
-$(PROTO_PY_OUTS): py/vtproto/%_pb2.py: proto/%.proto
-	$(PROTOC_COMMAND) -Iproto $< --python_out=py/vtproto --grpc_python_out=py/vtproto
 
 # TODO(sougou): find a better way around this temp hack.
 VTTOP=$(VTROOT)/../../..
