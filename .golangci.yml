@@ -1,0 +1,17 @@
+linters:
+  enable:
+    - gosec
+    - errcheck
+    - gosimple
+    - bodyclose
+    - staticcheck
+  disable:
+    - ineffassign
+    - deadcode
+    - unused
+    - structcheck
+
+run:
+  skip-files:
+    - ".+_test.go"
+    - ".+_test_.+.go" 
