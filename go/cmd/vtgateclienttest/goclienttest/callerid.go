@@ -25,10 +25,6 @@ import (
 	"vitess.io/vitess/go/cmd/vtgateclienttest/services"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
-
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 )
 
 // testCallerID adds a caller ID to a context, and makes sure the server
@@ -49,49 +45,9 @@ func testCallerID(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgateconn
 	_, err = session.Execute(ctx, query, nil)
 	checkCallerIDError(t, "Execute", err)
 
-	_, err = conn.ExecuteShards(ctx, query, "", nil, nil, topodatapb.TabletType_MASTER, nil)
-	checkCallerIDError(t, "ExecuteShards", err)
-
-	_, err = conn.ExecuteKeyspaceIds(ctx, query, "", nil, nil, topodatapb.TabletType_MASTER, nil)
-	checkCallerIDError(t, "ExecuteKeyspaceIds", err)
-
-	_, err = conn.ExecuteKeyRanges(ctx, query, "", nil, nil, topodatapb.TabletType_MASTER, nil)
-	checkCallerIDError(t, "ExecuteKeyRanges", err)
-
-	_, err = conn.ExecuteEntityIds(ctx, query, "", "", nil, nil, topodatapb.TabletType_MASTER, nil)
-	checkCallerIDError(t, "ExecuteEntityIds", err)
-
-	// test ExecuteBatch calls forward the callerID
-	_, err = conn.ExecuteBatchShards(ctx, []*vtgatepb.BoundShardQuery{
-		{
-			Query: &querypb.BoundQuery{
-				Sql: query,
-			},
-		},
-	}, topodatapb.TabletType_MASTER, false, nil)
-	checkCallerIDError(t, "ExecuteBatchShards", err)
-
-	_, err = conn.ExecuteBatchKeyspaceIds(ctx, []*vtgatepb.BoundKeyspaceIdQuery{
-		{
-			Query: &querypb.BoundQuery{
-				Sql: query,
-			},
-		},
-	}, topodatapb.TabletType_MASTER, false, nil)
-	checkCallerIDError(t, "ExecuteBatchKeyspaceIds", err)
-
 	// test StreamExecute calls forward the callerID
 	err = getStreamError(session.StreamExecute(ctx, query, nil))
 	checkCallerIDError(t, "StreamExecute", err)
-
-	err = getStreamError(conn.StreamExecuteShards(ctx, query, "", nil, nil, topodatapb.TabletType_MASTER, nil))
-	checkCallerIDError(t, "StreamExecuteShards", err)
-
-	err = getStreamError(conn.StreamExecuteKeyspaceIds(ctx, query, "", nil, nil, topodatapb.TabletType_MASTER, nil))
-	checkCallerIDError(t, "StreamExecuteKeyspaceIds", err)
-
-	err = getStreamError(conn.StreamExecuteKeyRanges(ctx, query, "", nil, nil, topodatapb.TabletType_MASTER, nil))
-	checkCallerIDError(t, "StreamExecuteKeyRanges", err)
 }
 
 func checkCallerIDError(t *testing.T, name string, err error) {

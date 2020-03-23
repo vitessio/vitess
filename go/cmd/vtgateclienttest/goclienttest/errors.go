@@ -27,8 +27,6 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
@@ -51,7 +49,6 @@ var (
 func testErrors(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgateconn.VTGateSession) {
 	testExecuteErrors(t, conn, session)
 	testStreamExecuteErrors(t, conn, session)
-	testTransactionExecuteErrors(t, conn)
 }
 
 func testExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgateconn.VTGateSession) {
@@ -61,48 +58,6 @@ func testExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgat
 		_, err := session.Execute(ctx, query, bindVars)
 		return err
 	})
-	checkExecuteErrors(t, func(query string) error {
-		_, err := conn.ExecuteShards(ctx, query, keyspace, shards, bindVars, tabletType, nil)
-		return err
-	})
-	checkExecuteErrors(t, func(query string) error {
-		_, err := conn.ExecuteKeyspaceIds(ctx, query, keyspace, keyspaceIDs, bindVars, tabletType, nil)
-		return err
-	})
-	checkExecuteErrors(t, func(query string) error {
-		_, err := conn.ExecuteKeyRanges(ctx, query, keyspace, keyRanges, bindVars, tabletType, nil)
-		return err
-	})
-	checkExecuteErrors(t, func(query string) error {
-		_, err := conn.ExecuteEntityIds(ctx, query, keyspace, "column1", entityKeyspaceIDs, bindVars, tabletType, nil)
-		return err
-	})
-	checkExecuteErrors(t, func(query string) error {
-		_, err := conn.ExecuteBatchShards(ctx, []*vtgatepb.BoundShardQuery{
-			{
-				Query: &querypb.BoundQuery{
-					Sql:           query,
-					BindVariables: bindVars,
-				},
-				Keyspace: keyspace,
-				Shards:   shards,
-			},
-		}, tabletType, true, nil)
-		return err
-	})
-	checkExecuteErrors(t, func(query string) error {
-		_, err := conn.ExecuteBatchKeyspaceIds(ctx, []*vtgatepb.BoundKeyspaceIdQuery{
-			{
-				Query: &querypb.BoundQuery{
-					Sql:           query,
-					BindVariables: bindVars,
-				},
-				Keyspace:    keyspace,
-				KeyspaceIds: keyspaceIDs,
-			},
-		}, tabletType, true, nil)
-		return err
-	})
 }
 
 func testStreamExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn, session *vtgateconn.VTGateSession) {
@@ -110,62 +65,6 @@ func testStreamExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn, session 
 
 	checkStreamExecuteErrors(t, func(query string) error {
 		return getStreamError(session.StreamExecute(ctx, query, bindVars))
-	})
-	checkStreamExecuteErrors(t, func(query string) error {
-		return getStreamError(conn.StreamExecuteShards(ctx, query, keyspace, shards, bindVars, tabletType, nil))
-	})
-	checkStreamExecuteErrors(t, func(query string) error {
-		return getStreamError(conn.StreamExecuteKeyspaceIds(ctx, query, keyspace, keyspaceIDs, bindVars, tabletType, nil))
-	})
-	checkStreamExecuteErrors(t, func(query string) error {
-		return getStreamError(conn.StreamExecuteKeyRanges(ctx, query, keyspace, keyRanges, bindVars, tabletType, nil))
-	})
-}
-
-func testTransactionExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn) {
-	ctx := context.Background()
-
-	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
-		_, err := tx.ExecuteShards(ctx, query, keyspace, shards, bindVars, tabletType, nil)
-		return err
-	})
-	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
-		_, err := tx.ExecuteKeyspaceIds(ctx, query, keyspace, keyspaceIDs, bindVars, tabletType, nil)
-		return err
-	})
-	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
-		_, err := tx.ExecuteKeyRanges(ctx, query, keyspace, keyRanges, bindVars, tabletType, nil)
-		return err
-	})
-	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
-		_, err := tx.ExecuteEntityIds(ctx, query, keyspace, "column1", entityKeyspaceIDs, bindVars, tabletType, nil)
-		return err
-	})
-	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
-		_, err := tx.ExecuteBatchShards(ctx, []*vtgatepb.BoundShardQuery{
-			{
-				Query: &querypb.BoundQuery{
-					Sql:           query,
-					BindVariables: bindVars,
-				},
-				Keyspace: keyspace,
-				Shards:   shards,
-			},
-		}, tabletType, nil)
-		return err
-	})
-	checkTransactionExecuteErrors(t, conn, func(tx *vtgateconn.VTGateTx, query string) error {
-		_, err := tx.ExecuteBatchKeyspaceIds(ctx, []*vtgatepb.BoundKeyspaceIdQuery{
-			{
-				Query: &querypb.BoundQuery{
-					Sql:           query,
-					BindVariables: bindVars,
-				},
-				Keyspace:    keyspace,
-				KeyspaceIds: keyspaceIDs,
-			},
-		}, tabletType, nil)
-		return err
 	})
 }
 
@@ -200,43 +99,6 @@ func checkStreamExecuteErrors(t *testing.T, execute func(string) error) {
 	for errStr, errCode := range executeErrors {
 		query := errorPrefix + errStr
 		checkError(t, execute(query), query, errStr, errCode)
-	}
-}
-
-func checkTransactionExecuteErrors(t *testing.T, conn *vtgateconn.VTGateConn, execute func(tx *vtgateconn.VTGateTx, query string) error) {
-	ctx := context.Background()
-
-	for errStr, errCode := range executeErrors {
-		query := errorPrefix + errStr
-		tx, err := conn.Begin(ctx)
-		if err != nil {
-			t.Errorf("[%v] Begin error: %v", query, err)
-		}
-		checkError(t, execute(tx, query), query, errStr, errCode)
-
-		// Partial error where server doesn't close the session.
-		query = partialErrorPrefix + errStr
-		tx, err = conn.Begin(ctx)
-		if err != nil {
-			t.Errorf("[%v] Begin error: %v", query, err)
-		}
-		checkError(t, execute(tx, query), query, errStr, errCode)
-		// The transaction should still be usable now.
-		if err := tx.Rollback(ctx); err != nil {
-			t.Errorf("[%v] Rollback error: %v", query, err)
-		}
-
-		// Partial error where server closes the session.
-		tx, err = conn.Begin(ctx)
-		if err != nil {
-			t.Errorf("[%v] Begin error: %v", query, err)
-		}
-		query = partialErrorPrefix + errStr + "/close transaction"
-		checkError(t, execute(tx, query), query, errStr, errCode)
-		// The transaction should be unusable now.
-		if tx.Rollback(ctx) == nil {
-			t.Errorf("[%v] expected Rollback error, got nil", query)
-		}
 	}
 }
 
