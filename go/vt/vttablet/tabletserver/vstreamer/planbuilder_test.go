@@ -26,9 +26,9 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
@@ -173,42 +173,42 @@ func TestMustSendDDL(t *testing.T) {
 func TestPlanbuilder(t *testing.T) {
 	t1 := &Table{
 		Name: "t1",
-		Columns: []schema.TableColumn{{
-			Name: sqlparser.NewColIdent("id"),
+		Fields: []*querypb.Field{{
+			Name: "id",
 			Type: sqltypes.Int64,
 		}, {
-			Name: sqlparser.NewColIdent("val"),
+			Name: "val",
 			Type: sqltypes.VarBinary,
 		}},
 	}
 	// t1alt has no id column
 	t1alt := &Table{
 		Name: "t1",
-		Columns: []schema.TableColumn{{
-			Name: sqlparser.NewColIdent("val"),
+		Fields: []*querypb.Field{{
+			Name: "val",
 			Type: sqltypes.VarBinary,
 		}},
 	}
 	t2 := &Table{
 		Name: "t2",
-		Columns: []schema.TableColumn{{
-			Name: sqlparser.NewColIdent("id"),
+		Fields: []*querypb.Field{{
+			Name: "id",
 			Type: sqltypes.Int64,
 		}, {
-			Name: sqlparser.NewColIdent("val"),
+			Name: "val",
 			Type: sqltypes.VarBinary,
 		}},
 	}
 	regional := &Table{
 		Name: "regional",
-		Columns: []schema.TableColumn{{
-			Name: sqlparser.NewColIdent("region"),
+		Fields: []*querypb.Field{{
+			Name: "region",
 			Type: sqltypes.Int64,
 		}, {
-			Name: sqlparser.NewColIdent("id"),
+			Name: "id",
 			Type: sqltypes.Int64,
 		}, {
-			Name: sqlparser.NewColIdent("val"),
+			Name: "val",
 			Type: sqltypes.VarBinary,
 		}},
 	}
