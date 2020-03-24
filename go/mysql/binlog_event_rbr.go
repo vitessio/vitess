@@ -449,11 +449,9 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, styp querypb.Typ
 	case TypeVarchar, TypeVarString:
 		// We trust that styp is compatible with the column type
 		// Length is encoded in 1 or 2 bytes.
-		var typeToUse querypb.Type
-		if styp != querypb.Type_NULL_TYPE {
+		typeToUse := querypb.Type_VARCHAR
+		if styp == querypb.Type_VARBINARY {
 			typeToUse = styp
-		} else {
-			typeToUse = querypb.Type_VARCHAR
 		}
 		if metadata > 255 {
 			l := int(uint64(data[pos]) |
