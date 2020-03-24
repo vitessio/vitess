@@ -61,11 +61,13 @@ type VttabletProcess struct {
 	VtctldAddress               string
 	Directory                   string
 	VerifyURL                   string
+	QueryzURL                   string
 	EnableSemiSync              bool
 	SupportsBackup              bool
 	ServingStatus               string
 	DbPassword                  string
 	DbPort                      int
+	VreplicationTabletType      string
 	//Extra Args to be set before starting the vttablet process
 	ExtraArgs []string
 
@@ -97,6 +99,8 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		"-file_backup_storage_root", vttablet.FileBackupStorageRoot,
 		"-service_map", vttablet.ServiceMap,
 		"-vtctld_addr", vttablet.VtctldAddress,
+		"-vtctld_addr", vttablet.VtctldAddress,
+		"-vreplication_tablet_type", vttablet.VreplicationTabletType,
 	)
 	if *isCoverage {
 		vttablet.proc.Args = append(vttablet.proc.Args, "-test.coverprofile="+getCoveragePath("vttablet.out"))
@@ -324,7 +328,8 @@ func executeQuery(dbParams mysql.ConnParams, query string) (*sqltypes.Result, er
 		return nil, err
 	}
 	defer dbConn.Close()
-	return dbConn.ExecuteFetch(query, 10000, true)
+	qr, err := dbConn.ExecuteFetch(query, 10000, true)
+	return qr, err
 }
 
 // GetDBVar returns first matching database variable's value
@@ -377,12 +382,15 @@ func VttabletProcessInstance(port int, grpcPort int, tabletUID int, cell string,
 		ServingStatus:               "NOT_SERVING",
 		BackupStorageImplementation: "file",
 		FileBackupStorageRoot:       path.Join(os.Getenv("VTDATAROOT"), "/backups"),
+		VreplicationTabletType:      "replica",
+		TabletUID:                   tabletUID,
 	}
 
 	if tabletType == "rdonly" {
 		vttablet.TabletType = tabletType
 	}
 	vttablet.VerifyURL = fmt.Sprintf("http://%s:%d/debug/vars", hostname, port)
+	vttablet.QueryzURL = fmt.Sprintf("http://%s:%d/queryz", hostname, port)
 
 	return vttablet
 }

@@ -549,7 +549,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			}
 			// All were found. We must register journal.
 		}
-
+		log.Infof("Binlog event registering journal event %+v", event.Journal)
 		if err := vp.vr.vre.registerJournal(event.Journal, int(vp.vr.id)); err != nil {
 			if err := vp.vr.setState(binlogplayer.BlpStopped, err.Error()); err != nil {
 				return err

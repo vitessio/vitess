@@ -555,7 +555,7 @@ func TestVDiffUnsharded(t *testing.T) {
 		env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, tcase.source)
 		env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetMasterPosition, tcase.target)
 
-		dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute)
+		dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
 		require.NoError(t, err)
 		assert.Equal(t, tcase.dr, dr["t1"], tcase.id)
 	}
@@ -617,7 +617,7 @@ func TestVDiffSharded(t *testing.T) {
 		),
 	)
 
-	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute)
+	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
 	require.NoError(t, err)
 	wantdr := &DiffReport{
 		ProcessedRows: 3,
@@ -683,7 +683,7 @@ func TestVDiffAggregates(t *testing.T) {
 		),
 	)
 
-	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute)
+	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
 	require.NoError(t, err)
 	wantdr := &DiffReport{
 		ProcessedRows: 5,
@@ -747,7 +747,7 @@ func TestVDiffPKWeightString(t *testing.T) {
 		),
 	)
 
-	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute)
+	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
 	require.NoError(t, err)
 	wantdr := &DiffReport{
 		ProcessedRows: 4,
@@ -811,7 +811,7 @@ func TestVDiffNoPKWeightString(t *testing.T) {
 		),
 	)
 
-	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute)
+	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
 	require.NoError(t, err)
 	wantdr := &DiffReport{
 		ProcessedRows: 4,
@@ -849,11 +849,11 @@ func TestVDiffDefaults(t *testing.T) {
 	env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, source)
 	env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetMasterPosition, target)
 
-	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, "", "", "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute)
+	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, "", "", "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
 	require.NoError(t, err)
-	_, err = env.wr.VDiff(context.Background(), "target", env.workflow, "", env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute)
+	_, err = env.wr.VDiff(context.Background(), "target", env.workflow, "", env.cell, "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
 	require.NoError(t, err)
-	_, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute)
+	_, err = env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, "", "replica", 30*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
 	require.NoError(t, err)
 }
 
@@ -886,6 +886,6 @@ func TestVDiffReplicationWait(t *testing.T) {
 	env.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, source)
 	env.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetMasterPosition, target)
 
-	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 0*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute)
+	_, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 0*time.Second, 1*time.Second, 1*time.Second, 1*time.Minute, "")
 	require.EqualError(t, err, "startQueryStreams(sources): WaitForPosition for tablet cell-0000000101: context deadline exceeded")
 }
