@@ -65,12 +65,13 @@ type ConnectionPool struct {
 	hostIsNotIP bool
 
 	mysqlStats *stats.Timings
+	name       string
 }
 
 // NewConnectionPool creates a new ConnectionPool. The name is used
 // to publish stats only.
 func NewConnectionPool(name string, capacity int, idleTimeout time.Duration, dnsResolutionFrequency time.Duration) *ConnectionPool {
-	cp := &ConnectionPool{capacity: capacity, idleTimeout: idleTimeout, resolutionFrequency: dnsResolutionFrequency}
+	cp := &ConnectionPool{name: name, capacity: capacity, idleTimeout: idleTimeout, resolutionFrequency: dnsResolutionFrequency}
 	if name == "" || usedNames[name] {
 		return cp
 	}
@@ -146,7 +147,7 @@ func (cp *ConnectionPool) Open(info dbconfigs.Connector, mysqlStats *stats.Timin
 	defer cp.mu.Unlock()
 	cp.info = info
 	cp.mysqlStats = mysqlStats
-	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, 0)
+	cp.connections = pools.NewResourcePool(cp.connect, cp.capacity, cp.capacity, cp.idleTimeout, 0, cp.getLogWaitCallback())
 	// Check if we need to resolve a hostname (The Host is not just an IP  address).
 	if cp.resolutionFrequency > 0 && net.ParseIP(info.Host()) == nil {
 		cp.hostIsNotIP = true
@@ -165,6 +166,15 @@ func (cp *ConnectionPool) Open(info dbconfigs.Connector, mysqlStats *stats.Timin
 			}
 
 		}()
+	}
+}
+
+func (cp *ConnectionPool) getLogWaitCallback() func(time.Time) {
+	if cp.name == "" {
+		return func(start time.Time) {} // no op
+	}
+	return func(start time.Time) {
+		cp.mysqlStats.Record(cp.name+"ResourceWaitTime", start)
 	}
 }
 
