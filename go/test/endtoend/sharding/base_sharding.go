@@ -28,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -324,7 +326,7 @@ func CheckLotsTimeout(t *testing.T, vttablet cluster.Vttablet, count uint64, tab
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
-	println(fmt.Sprintf("expected pct %d, got pct %f", pctFound, percentFound))
+	log.Infof("expected pct %d, got pct %f", pctFound, percentFound)
 	return false
 }
 
@@ -358,7 +360,7 @@ func checkLots(t *testing.T, vttablet cluster.Vttablet, count uint64, table stri
 			totalFound++
 		}
 	}
-	println(fmt.Sprintf("Total found %d", totalFound))
+	log.Infof("Total found %d", totalFound)
 	return float64(float64(totalFound) * 100 / float64(count) / 2)
 }
 

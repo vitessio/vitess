@@ -255,7 +255,7 @@ func TestResharding(t *testing.T, useVarbinaryShardingKeyType bool) {
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
-			fmt.Println("Starting MySql for tablet ", tablet.Alias)
+			log.Infof("Starting MySql for tablet %v", tablet.Alias)
 			if proc, err := tablet.MysqlctlProcess.StartProcess(); err != nil {
 				t.Fatal(err)
 			} else {
@@ -1315,7 +1315,7 @@ func insertLots(count uint64, base uint64, vttablet cluster.Vttablet, table stri
 func insertToTabletUsingSameConn(query string, dbConn *mysql.Conn) {
 	_, err := dbConn.ExecuteFetch(query, 1000, true)
 	if err != nil {
-		fmt.Println(err)
+		log.Errorf("error inserting data into tablet, query: %v, error: %v", query, err)
 	}
 }
 

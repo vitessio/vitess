@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"vitess.io/vitess/go/mysql"
 
 	"github.com/stretchr/testify/assert"
@@ -438,7 +440,7 @@ func TestReparentFromOutsideWithNoMaster(t *testing.T) {
 
 	// We will have to restart mysql to avoid hanging/locks due to external Reparent
 	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		fmt.Println("Restarting MySql for tablet  ", tablet.Alias)
+		log.Infof("Restarting MySql for tablet %v", tablet.Alias)
 		err := tablet.MysqlctlProcess.Stop()
 		require.Nil(t, err)
 		tablet.MysqlctlProcess.InitMysql = false
@@ -900,7 +902,7 @@ func validateTopology(t *testing.T, pingTablets bool) {
 
 func killTablets(t *testing.T) {
 	for _, tablet := range []cluster.Vttablet{*tablet62344, *tablet62044, *tablet41983, *tablet31981} {
-		fmt.Println("Teardown tablet: ", tablet.Alias)
+		log.Infof("Calling TearDown on tablet %v", tablet.Alias)
 		err := tablet.VttabletProcess.TearDown()
 		require.Nil(t, err)
 
