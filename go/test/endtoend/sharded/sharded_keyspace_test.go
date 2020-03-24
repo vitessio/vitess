@@ -160,7 +160,7 @@ func TestShardedKeyspace(t *testing.T) {
 	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ValidateSchemaKeyspace", keyspaceName)
 	require.Error(t, err)
 	assert.True(t, strings.Contains(output, "schemas differ on table vt_select_test:\n"+shard1Master.Alias+": CREATE TABLE"))
-	fmt.Println(output)
+	//log.Info(output)
 
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ValidateVersionShard", fmt.Sprintf("%s/%s", keyspaceName, shard1.Name))
 	require.Nil(t, err)

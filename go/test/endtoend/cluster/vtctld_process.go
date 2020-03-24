@@ -80,7 +80,7 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 
 	vtctld.proc.Env = append(vtctld.proc.Env, os.Environ()...)
 
-	log.Infof("%v %v", strings.Join(vtctld.proc.Args, " "))
+	log.Infof("Starting vtctld with command: %v", strings.Join(vtctld.proc.Args, " "))
 
 	err = vtctld.proc.Start()
 	if err != nil {

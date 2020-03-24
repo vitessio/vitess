@@ -179,9 +179,10 @@ func TestSecureTransport(t *testing.T) {
 	ctx := context.Background()
 	request := getRequest("select * from vt_insert_test")
 	vc, err := getVitessClient(grpcAddress)
-	require.Nil(t, nil)
+	require.Nil(t, err)
 
 	qr, err := vc.Execute(ctx, request)
+	require.Nil(t, err)
 	err = vterrors.FromVTRPC(qr.Error)
 	require.Nil(t, err)
 
@@ -191,6 +192,7 @@ func TestSecureTransport(t *testing.T) {
 	vc, err = getVitessClient(grpcAddress)
 	require.Nil(t, err)
 	qr, err = vc.Execute(ctx, request)
+	require.Nil(t, err)
 	err = vterrors.FromVTRPC(qr.Error)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "table acl error")
@@ -201,7 +203,7 @@ func TestSecureTransport(t *testing.T) {
 	// into immediate caller id.
 	clusterInstance.VtGateExtraArgs = []string{"-grpc_use_effective_callerid"}
 	clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, tabletConnExtraArgs("vttablet-client-1")...)
-	err = clusterInstance.ReStartVtgate()
+	err = clusterInstance.RestartVtgate()
 	require.Nil(t, err)
 
 	grpcAddress = fmt.Sprintf("%s:%d", "localhost", clusterInstance.VtgateProcess.GrpcPort)
@@ -215,6 +217,7 @@ func TestSecureTransport(t *testing.T) {
 	// test with empty effective caller Id
 	request = getRequest("select * from vt_insert_test")
 	qr, err = vc.Execute(ctx, request)
+	require.Nil(t, err)
 	err = vterrors.FromVTRPC(qr.Error)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "table acl error")
@@ -226,6 +229,7 @@ func TestSecureTransport(t *testing.T) {
 	}
 	request = getRequestWithCallerID(callerID, "select * from vt_insert_test")
 	qr, err = vc.Execute(ctx, request)
+	require.Nil(t, err)
 	err = vterrors.FromVTRPC(qr.Error)
 	require.Nil(t, err)
 
@@ -235,6 +239,7 @@ func TestSecureTransport(t *testing.T) {
 	}
 	request = getRequestWithCallerID(callerID, "select * from vt_insert_test")
 	qr, err = vc.Execute(ctx, request)
+	require.Nil(t, err)
 	err = vterrors.FromVTRPC(qr.Error)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "table acl error")

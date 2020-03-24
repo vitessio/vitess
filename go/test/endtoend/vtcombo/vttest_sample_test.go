@@ -28,6 +28,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/log"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -40,7 +42,6 @@ var (
 	localCluster *vttest.LocalCluster
 	grpcAddress  string
 	vtctldAddr   string
-	hostname     = "localhost"
 	ks1          = "test_keyspace"
 	redirected   = "redirected"
 )
@@ -88,7 +89,7 @@ func TestMain(m *testing.M) {
 		return m.Run(), nil
 	}()
 	if err != nil {
-		fmt.Printf("%v\n", err)
+		log.Errorf("top level error: %v\n", err)
 		os.Exit(1)
 	} else {
 		os.Exit(exitcode)
@@ -104,7 +105,7 @@ func TestStandalone(t *testing.T) {
 	respByte, _ := ioutil.ReadAll(resp.Body)
 	err = json.Unmarshal(respByte, &resultMap)
 	require.Nil(t, err)
-	cmd, _ := resultMap["cmdline"]
+	cmd := resultMap["cmdline"]
 	require.NotNil(t, cmd, "cmdline is not available in debug vars")
 	tmp, _ := cmd.([]interface{})
 	require.Contains(t, tmp[0], "vtcombo")
@@ -169,7 +170,7 @@ func TestStandalone(t *testing.T) {
 
 	tmpCmd := exec.Command("vtctlclient", "-vtctl_client_protocol", "grpc", "-server", grpcAddress, "-stderrthreshold", "0", "ListAllTablets", "test")
 
-	fmt.Println(tmpCmd.Args)
+	log.Infof("Running vtctlclient with command: %v", tmpCmd.Args)
 
 	output, err := tmpCmd.CombinedOutput()
 	require.Nil(t, err)

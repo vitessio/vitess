@@ -114,7 +114,7 @@ func TestTransactionRollBackWhenShutDown(t *testing.T) {
 	exec(t, conn, "insert into buffer(id, msg) values(33,'mark')")
 
 	// Enforce a restart to enforce rollback
-	if err = clusterInstance.ReStartVtgate(); err != nil {
+	if err = clusterInstance.RestartVtgate(); err != nil {
 		t.Errorf("Fail to re-start vtgate: %v", err)
 	}
 
