@@ -43,7 +43,7 @@ func init() {
 }
 
 // TestWorkflowGenerator runs the happy path of HorizontalReshardingWorkflow.
-func TestWorfklowGenerator(t *testing.T) {
+func TestWorkflowGenerator(t *testing.T) {
 	ctx := context.Background()
 
 	// Initialize the topology.
