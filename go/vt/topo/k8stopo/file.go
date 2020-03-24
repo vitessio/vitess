@@ -17,9 +17,12 @@ limitations under the License.
 package k8stopo
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/base64"
 	"fmt"
 	"hash/fnv"
+	"io"
 	"path/filepath"
 	"strconv"
 	"time"
@@ -42,11 +45,54 @@ type NodeReference struct {
 	value string
 }
 
+func packValue(value []byte) ([]byte, error) {
+	encoded := &bytes.Buffer{}
+	encoder := base64.NewEncoder(base64.StdEncoding, encoded)
+
+	zw := gzip.NewWriter(encoder)
+	_, err := zw.Write(value)
+	if err != nil {
+		return []byte{}, fmt.Errorf("gzip write error: %s", err)
+	}
+
+	err = zw.Close()
+	if err != nil {
+		return []byte{}, fmt.Errorf("gzip close error: %s", err)
+	}
+
+	err = encoder.Close()
+	if err != nil {
+		return []byte{}, fmt.Errorf("base64 encoder close error: %s", err)
+	}
+
+	return encoded.Bytes(), nil
+}
+
+func unpackValue(value []byte) ([]byte, error) {
+	decoder := base64.NewDecoder(base64.StdEncoding, bytes.NewBuffer(value))
+
+	zr, err := gzip.NewReader(decoder)
+	if err != nil {
+		return []byte{}, fmt.Errorf("unable to create new gzip reader: %s", err)
+	}
+
+	decoded := &bytes.Buffer{}
+	if _, err := io.Copy(decoded, zr); err != nil {
+		return []byte{}, fmt.Errorf("error coppying uncompressed data: %s", err)
+	}
+
+	if err := zr.Close(); err != nil {
+		return []byte{}, fmt.Errorf("unable to close gzip reader: %s", err)
+	}
+
+	return decoded.Bytes(), nil
+}
+
 // ToData converts a nodeReference to the data type used in the VitessTopoNode
 func (n *NodeReference) ToData() vtv1beta1.VitessTopoNodeData {
 	return vtv1beta1.VitessTopoNodeData{
 		Key:   n.key,
-		Value: base64.StdEncoding.EncodeToString([]byte(n.value)),
+		Value: string(n.value),
 	}
 }
 
@@ -67,11 +113,16 @@ func (s *Server) newNodeReference(key string) *NodeReference {
 	return node
 }
 
-func (s *Server) buildFileResource(filePath string, contents []byte) *vtv1beta1.VitessTopoNode {
+func (s *Server) buildFileResource(filePath string, contents []byte) (*vtv1beta1.VitessTopoNode, error) {
 	node := s.newNodeReference(filePath)
 
+	value, err := packValue(contents)
+	if err != nil {
+		return nil, err
+	}
+
 	// create data
-	node.value = string(contents)
+	node.value = string(value)
 
 	// Create "file" object
 	return &vtv1beta1.VitessTopoNode{
@@ -80,14 +131,17 @@ func (s *Server) buildFileResource(filePath string, contents []byte) *vtv1beta1.
 			Namespace: s.namespace,
 		},
 		Data: node.ToData(),
-	}
+	}, nil
 }
 
 // Create is part of the topo.Conn interface.
 func (s *Server) Create(ctx context.Context, filePath string, contents []byte) (topo.Version, error) {
 	log.V(7).Infof("Create at '%s' Contents: '%s'", filePath, string(contents))
 
-	resource := s.buildFileResource(filePath, contents)
+	resource, err := s.buildFileResource(filePath, contents)
+	if err != nil {
+		return nil, convertError(err, filePath)
+	}
 
 	final, err := s.resourceClient.Create(resource)
 	if err != nil {
@@ -107,11 +161,14 @@ func (s *Server) Create(ctx context.Context, filePath string, contents []byte) (
 func (s *Server) Update(ctx context.Context, filePath string, contents []byte, version topo.Version) (topo.Version, error) {
 	log.V(7).Infof("Update at '%s' Contents: '%s'", filePath, string(contents))
 
-	resource := s.buildFileResource(filePath, contents)
+	resource, err := s.buildFileResource(filePath, contents)
+	if err != nil {
+		return nil, convertError(err, filePath)
+	}
 
 	var finalVersion KubernetesVersion
 
-	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+	err = retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 		result, err := s.resourceClient.Get(resource.Name, metav1.GetOptions{})
 		if err != nil && errors.IsNotFound(err) && version == nil {
 			// Update should create objects when the version is nil and the object is not found
@@ -165,9 +222,9 @@ func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version
 		return []byte{}, nil, convertError(err, filePath)
 	}
 
-	out, err := base64.StdEncoding.DecodeString(result.Data.Value)
+	out, err := unpackValue([]byte(result.Data.Value))
 	if err != nil {
-		return []byte{}, nil, convertError(fmt.Errorf("unable to decode object contents"), filePath)
+		return []byte{}, nil, convertError(err, filePath)
 	}
 
 	return out, KubernetesVersion(result.GetResourceVersion()), nil

@@ -52,13 +52,15 @@ func (s *Server) lock(ctx context.Context, nodePath, contents string, createMiss
 		}
 	}
 
-	resource := s.buildFileResource(nodePath, []byte(contents))
+	resource, err := s.buildFileResource(nodePath, []byte(contents))
+	if err != nil {
+		return nil, convertError(err, nodePath)
+	}
 
 	// mark locks as ephemeral
 	resource.Data.Ephemeral = true
 
 	var final *vtv1beta1.VitessTopoNode
-	var err error
 
 	for {
 		// Try and and create the resource. The kube api will handle the actual atomic lock creation
